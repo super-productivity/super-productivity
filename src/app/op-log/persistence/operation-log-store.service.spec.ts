@@ -1890,6 +1890,145 @@ describe('OperationLogStoreService', () => {
       expect(await service.getVectorClock()).toEqual({ testClient: 4 });
     });
 
+    describe('rebaseKept', () => {
+      const appendResolution = async (): Promise<{
+        delta: Operation;
+        successor: Operation;
+        localWin: Operation;
+        remote: Operation;
+        result: Awaited<ReturnType<typeof service.appendMixedSourceBatchSkipDuplicates>>;
+      }> => {
+        const delta = createTestOperation({
+          id: 'kept-delta',
+          vectorClock: { testClient: 5 },
+        });
+        const remote = createTestOperation({
+          id: 'remote-row',
+          clientId: 'remote',
+          vectorClock: { remote: 3 },
+        });
+        const successor = createTestOperation({
+          id: 'merged-successor',
+          vectorClock: { testClient: 5, remote: 3 },
+        });
+        const localWin = createTestOperation({
+          id: 'local-win',
+          vectorClock: { testClient: 5, remote: 3 },
+        });
+        await service.appendWithVectorClockOverwrite(delta, 'local');
+        const result = await service.appendMixedSourceBatchSkipDuplicates(
+          [
+            { ops: [remote], source: 'remote', options: { pendingApply: true } },
+            { ops: [successor, localWin], source: 'local' },
+          ],
+          {
+            rebaseKept: {
+              opIds: [delta.id],
+              successorOpIds: new Set([successor.id]),
+              clockToDominate: { remote: 3 },
+            },
+          },
+        );
+        return { delta, successor, localWin, remote, result };
+      };
+      const storedClocks = async (): Promise<Map<string, unknown>> =>
+        new Map(
+          (await service.getOpsAfterSeq(0)).map(({ op }) => [op.id, op.vectorClock]),
+        );
+
+      it('should re-clock a pending kept delta and its successor in the append commit', async () => {
+        const { delta, successor, localWin, result } = await appendResolution();
+
+        const clocks = await storedClocks();
+        expect(clocks.get(delta.id)).toEqual({ testClient: 8, remote: 3 });
+        expect(clocks.get(successor.id)).toEqual({ testClient: 9, remote: 3 });
+        // Local-win snapshots keep their append clock; only deltas recover.
+        expect(clocks.get(localWin.id)).toEqual({ testClient: 7, remote: 3 });
+        expect(
+          result.written.find(({ op }) => op.id === successor.id)?.op.vectorClock,
+        ).toEqual({ testClient: 9, remote: 3 });
+        expect(
+          (await service.getUnsynced()).find(({ op }) => op.id === delta.id)?.op
+            .vectorClock,
+        ).toEqual({ testClient: 8, remote: 3 });
+        service.clearVectorClockCache();
+        expect(await service.getVectorClock()).toEqual({ testClient: 9, remote: 3 });
+      });
+
+      it('should leave the delta stale and append nothing when the re-clock write fails', async () => {
+        const adapter = (service as unknown as { _adapter: OpLogDbAdapter })._adapter;
+        const originalTransaction = adapter.transaction.bind(adapter);
+        let armed = false;
+        spyOn(adapter, 'transaction').and.callFake(async (stores, mode, callback) =>
+          originalTransaction(stores, mode, async (tx) =>
+            callback(
+              new Proxy(tx, {
+                get: (target, property): unknown => {
+                  if (armed && property === 'put') {
+                    return async (
+                      store: string,
+                      value: unknown,
+                      key?: string | number,
+                    ) => {
+                      if (store === STORE_NAMES.OPS) {
+                        throw new Error('injected kept delta rebase failure');
+                      }
+                      return target.put(store, value, key);
+                    };
+                  }
+                  const value = Reflect.get(target, property);
+                  return typeof value === 'function' ? value.bind(target) : value;
+                },
+              }),
+            ),
+          ),
+        );
+        const original = service.appendWithVectorClockOverwrite.bind(service);
+        spyOn(service, 'appendWithVectorClockOverwrite').and.callFake(async (...args) => {
+          const seq = await original(...args);
+          armed = true;
+          return seq;
+        });
+
+        await expectAsync(appendResolution()).toBeRejectedWithError(
+          'injected kept delta rebase failure',
+        );
+
+        const clocks = await storedClocks();
+        expect([...clocks.keys()]).toEqual(['kept-delta']);
+        expect(clocks.get('kept-delta')).toEqual({ testClient: 5 });
+      });
+
+      it('should not re-clock anything once the kept delta was synced', async () => {
+        const delta = createTestOperation({
+          id: 'synced-delta',
+          vectorClock: { testClient: 5 },
+        });
+        const successor = createTestOperation({
+          id: 'unmoved-successor',
+          vectorClock: { testClient: 5, remote: 3 },
+        });
+        await service.appendWithVectorClockOverwrite(delta, 'local');
+        await service.markSynced([(await service.getOpsAfterSeq(0))[0].seq]);
+
+        const result = await service.appendMixedSourceBatchSkipDuplicates(
+          [{ ops: [successor], source: 'local' }],
+          {
+            rebaseKept: {
+              opIds: [delta.id],
+              successorOpIds: new Set([successor.id]),
+              clockToDominate: { remote: 3 },
+            },
+          },
+        );
+
+        const clocks = await storedClocks();
+        expect(clocks.get(delta.id)).toEqual({ testClient: 5 });
+        expect(clocks.get(successor.id)).toEqual({ testClient: 6, remote: 3 });
+        expect(result.written[0].op.vectorClock).toEqual({ testClient: 6, remote: 3 });
+      });
+    });
+
     it('should support atomically rejecting predecessors without appending a replacement', async () => {
       const predecessor = createTestOperation({ id: 'rejection-only-predecessor' });
       await service.append(predecessor, 'local');

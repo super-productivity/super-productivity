@@ -119,9 +119,10 @@ import {
   aggregateEntityConflict,
   fieldPatchGroups,
   keptLocalTimeDeltas,
+  keptTimeDeltasToRebase,
   rebaseKeptTimeDeltas,
+  replaceRebasedOps,
   timeDeltasSurvivingLww,
-  timeDeltasSurvivingRemoteWins,
   buildSurvivingFieldPatches,
 } from './conflict-field-patch.util';
 import { RECREATE_FALLBACK } from '../core/recreate-fallback.const';
@@ -1031,6 +1032,9 @@ export class ConflictResolutionService {
     const keptReorders = keptCommutingReorders(conflicts, pending, nonConflictingOps);
     let writtenLocalWinOps: Operation[] = [];
     const writtenMergedOpIds = new Set<string>();
+    let keptToRebase = options.rebaseKeptTimeDeltas
+      ? keptTimeDeltasToRebase(mergedResolutions, resolutions)
+      : undefined;
 
     // A multi-entity action cannot be split when different entities pick
     // different winners. Persist/apply the original remote op once, then replay
@@ -1406,8 +1410,8 @@ export class ConflictResolutionService {
 
     // ─────────────────────────────────────────────────────────────────────────
     // Atomically persist remote losers, local-win compensations, and final
-    // remote winners in live-apply order. Hydration is status-blind, so both
-    // durable ordering and the absence of crash gaps are required here.
+    // remote winners in live-apply order, re-clocking kept deltas. Hydration is
+    // status-blind, so durable ordering and no crash gaps are required here.
     // ─────────────────────────────────────────────────────────────────────────
     const resendOps = mergedResolutions.flatMap((merged) => merged.mergedOps);
     const resendIds = new Set(resendOps.map((op) => op.id));
@@ -1433,7 +1437,12 @@ export class ConflictResolutionService {
         resendOps,
         getTask: (id) => this.getCurrentEntityState('TASK', id),
       });
-      const result = await this.opLogStore.appendMixedSourceBatchSkipDuplicates(batches);
+      if (keptToRebase) options.assertFence?.('kept time delta rebase');
+      const result = await this.opLogStore.appendMixedSourceBatchSkipDuplicates(
+        batches,
+        keptToRebase && { rebaseKept: { ...keptToRebase, successorOpIds: resendIds } },
+      );
+      keptToRebase = undefined;
       nonConflictingOps = nonConflictingOps.filter((op) => !precedingOps.includes(op));
       const writtenResends = result.written.filter(
         (entry) => entry.source === 'local' && resendIds.has(entry.op.id),
@@ -1575,23 +1584,14 @@ export class ConflictResolutionService {
       }
     }
 
-    if (options.rebaseKeptTimeDeltas && keptDeltas.opIds.size > 0) {
-      const rebased = new Map(
-        (
-          await rebaseKeptTimeDeltas(
-            this.opLogStore,
-            keptLocalTimeDeltas([
-              ...mergedResolutions.map((m) => m.conflict),
-              ...timeDeltasSurvivingRemoteWins(resolutions, 'task'),
-            ]),
-            [...writtenMergedOpIds],
-            options.assertFence,
-          )
-        ).map((op) => [op.id, op]),
+    if (keptToRebase) {
+      const rebased = await rebaseKeptTimeDeltas(
+        this.opLogStore,
+        keptToRebase,
+        [...writtenMergedOpIds],
+        options.assertFence,
       );
-      for (let i = 0; i < allOpsToApply.length; i++) {
-        allOpsToApply[i] = rebased.get(allOpsToApply[i].id) ?? allOpsToApply[i];
-      }
+      replaceRebasedOps(allOpsToApply, rebased);
     }
     await rebaseKeptReorders(this.opLogStore, keptReorders, new Set(remoteOpsToReject));
 

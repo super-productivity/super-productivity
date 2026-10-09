@@ -380,6 +380,27 @@ export const rebaseKeptTimeDeltas = async (
 };
 
 /**
+ * Kept deltas SuperSync re-clocks eagerly: beside merged patches and readable
+ * remote wins. Undefined when there is none.
+ */
+export const keptTimeDeltasToRebase = (
+  merged: { conflict: EntityConflict }[],
+  resolutions: { conflict: EntityConflict; winner: 'local' | 'remote' }[],
+): { opIds: Set<string>; clockToDominate: VectorClock } | undefined => {
+  const kept = keptLocalTimeDeltas([
+    ...merged.map((m) => m.conflict),
+    ...timeDeltasSurvivingRemoteWins(resolutions, 'task'),
+  ]);
+  return kept.opIds.size > 0 ? kept : undefined;
+};
+
+/** Swaps re-clocked ops into `ops` in place, keeping apply order. */
+export const replaceRebasedOps = (ops: Operation[], rebased: Operation[]): void => {
+  const byId = new Map(rebased.map((op) => [op.id, op]));
+  for (let i = 0; i < ops.length; i++) ops[i] = byId.get(ops[i].id) ?? ops[i];
+};
+
+/**
  * Conflicts whose local time deltas survive LWW, each narrowed
  * to those deltas for `keptLocalTimeDeltas` (decision 7, D10, #10378). Every
  * op of a TASK conflict is a `syncTimeSpent` delta or writes no time field

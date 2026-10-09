@@ -1672,7 +1672,7 @@ describe('ConflictResolutionService — disjoint-field merge', () => {
       { rebaseKeptTimeDeltas: true, disableDisjointMerge: false },
       { rebaseKeptTimeDeltas: true, disableDisjointMerge: true },
     ]) {
-      it(`rebases fresh resolution clocks with recovery=${rebaseKeptTimeDeltas}, snapshot=${disableDisjointMerge}`, async () => {
+      it(`rebases fresh resolution clocks in the batch commit with recovery=${rebaseKeptTimeDeltas}, snapshot=${disableDisjointMerge}`, async () => {
         mockStore.select.and.returnValue(of({ id: 'task-1', title: 'A title' }));
         const rename = title(
           { id: 'l-rename', clientId: 'A', vectorClock: { A: 1 }, timestamp: 3000 },
@@ -1695,13 +1695,28 @@ describe('ConflictResolutionService — disjoint-field merge', () => {
           id === delta.id ? ({ source: 'local', op: delta, seq: 2 } as never) : undefined,
         );
         let rebasedSuccessor: Operation | undefined;
-        mockOpLogStore.rebasePendingLocalOps.and.callFake(async (ids, clock) => {
-          const successor = mergedOpArgs()!;
-          expect(ids).toEqual([delta.id, successor.id]);
-          expect(clock).toEqual({ B: 1 });
-          rebasedSuccessor = { ...successor, vectorClock: { A: 4, B: 1 } };
-          return [{ ...delta, vectorClock: { A: 3, B: 1 } }, rebasedSuccessor];
-        });
+        mockOpLogStore.appendMixedSourceBatchSkipDuplicates.and.callFake(
+          async (batches, options) => {
+            const written = batches.flatMap((batch) =>
+              batch.ops.map((batchOp) => ({
+                seq: ++lastSeq,
+                op: batchOp,
+                source: batch.source,
+              })),
+            );
+            const kept = options?.rebaseKept;
+            if (kept) {
+              // The store re-clocks the delta and successor in this same commit.
+              const successor = mergedOpArgs()!;
+              expect([...kept.opIds]).toEqual([delta.id]);
+              expect(kept.successorOpIds.has(successor.id)).toBeTrue();
+              expect(kept.clockToDominate).toEqual({ B: 1 });
+              rebasedSuccessor = { ...successor, vectorClock: { A: 4, B: 1 } };
+              written.find((w) => w.op.id === successor.id)!.op = rebasedSuccessor;
+            }
+            return { written, skippedCount: 0 };
+          },
+        );
         const assertFence = jasmine.createSpy('assertFence');
         await service.autoResolveConflictsLWW(
           [conflictOf([rename, delta], [remote])],
@@ -1712,8 +1727,9 @@ describe('ConflictResolutionService — disjoint-field merge', () => {
             assertFence,
           },
         );
+        expect(mockOpLogStore.rebasePendingLocalOps).not.toHaveBeenCalled();
         if (rebaseKeptTimeDeltas && !disableDisjointMerge) {
-          expect(mockOpLogStore.rebasePendingLocalOps).toHaveBeenCalledTimes(1);
+          expect(rebasedSuccessor).toBeDefined();
           expect(assertFence).toHaveBeenCalledOnceWith('kept time delta rebase');
           const applied = mockOperationApplier.applyOperations.calls.mostRecent().args[0];
           expect(applied.find((row) => row.id === rebasedSuccessor!.id)).toBe(
@@ -1723,7 +1739,7 @@ describe('ConflictResolutionService — disjoint-field merge', () => {
             VectorClockComparison.GREATER_THAN,
           );
         } else {
-          expect(mockOpLogStore.rebasePendingLocalOps).not.toHaveBeenCalled();
+          expect(rebasedSuccessor).toBeUndefined();
           expect(assertFence).not.toHaveBeenCalled();
           const rejected = mockOpLogStore.markRejected.calls.allArgs().flat(2);
           expect(rejected).not.toContain(delta.id);
