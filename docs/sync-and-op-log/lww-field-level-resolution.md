@@ -405,7 +405,7 @@ known habit trade (`noReorder:20725006`); otherwise TASK only.
 ## Implementation (PR 1)
 
 [`conflict-field-patch.util.ts`](../../src/app/op-log/sync/conflict-field-patch.util.ts)
-holds the rules; `ConflictResolutionService._tryCreateFieldPatch` builds the op.
+holds the rules; `ConflictLocalWinOpsService._tryCreateFieldPatch` builds the op.
 
 - **Overlap:** every update-vs-update conflict of a TASK, PROJECT, TAG or
   SIMPLE_COUNTER whose ops are readable resolves per field (#10422, see

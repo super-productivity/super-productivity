@@ -4,7 +4,12 @@ import { concatMap, startWith, tap } from 'rxjs/operators';
 import { SnackService } from '../../../core/snack/snack.service';
 import { IS_ANDROID_WEB_VIEW } from '../../../util/is-android-web-view';
 import { DroidLog } from '../../../core/log';
-import { androidInterface, AndroidShareData } from '../android-interface';
+import {
+  androidInterface,
+  AndroidReminderSnoozeEvent,
+  AndroidShareData,
+  parseReminderTapQueue,
+} from '../android-interface';
 import { TaskService } from '../../tasks/task.service';
 import { TaskAttachmentService } from '../../tasks/task-attachment/task-attachment.service';
 import { T } from '../../../t.const';
@@ -131,8 +136,7 @@ export class AndroidEffects {
             try {
               const snoozeQueue = androidInterface.getReminderSnoozeQueue?.();
               if (snoozeQueue) {
-                const events: { taskId: string; newRemindAt: number }[] =
-                  JSON.parse(snoozeQueue);
+                const events: AndroidReminderSnoozeEvent[] = JSON.parse(snoozeQueue);
                 // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
                 DroidLog.log('Resume: found reminder snooze queue', events);
                 for (const event of events) {
@@ -147,7 +151,7 @@ export class AndroidEffects {
               const tapTaskId = androidInterface.getReminderTapQueue?.();
               if (tapTaskId) {
                 DroidLog.log('Resume: found reminder tap queue', tapTaskId);
-                androidInterface.onReminderTap$.next(tapTaskId);
+                androidInterface.onReminderTap$.next(parseReminderTapQueue(tapTaskId));
               }
             } catch (e) {
               DroidLog.err('Failed to process reminder tap queue on resume', e);

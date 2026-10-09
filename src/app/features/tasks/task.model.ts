@@ -35,6 +35,10 @@ export enum TaskReminderOptionId {
   m15 = 'm15',
   m30 = 'm30',
   h1 = 'h1',
+  // deadline-only: long lead times for preparing ahead of a deadline
+  d1 = 'd1',
+  d3 = 'd3',
+  w1 = 'w1',
 }
 
 export interface TaskReminderOption {

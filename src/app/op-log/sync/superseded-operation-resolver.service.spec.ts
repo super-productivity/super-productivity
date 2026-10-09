@@ -7,10 +7,8 @@ import {
   OperationLogStoreService,
 } from '../persistence/operation-log-store.service';
 import { VectorClockService } from './vector-clock.service';
-import {
-  ConflictResolutionService,
-  getLatestTaskProjectMoveEntityIds,
-} from './conflict-resolution.service';
+import { ConflictResolutionService } from './conflict-resolution.service';
+import { getLatestTaskProjectMoveEntityIds } from './conflict-resolution.util';
 import { LockService } from './lock.service';
 import { SnackService } from '../../core/snack/snack.service';
 import { CLIENT_ID_PROVIDER } from '../util/client-id.provider';

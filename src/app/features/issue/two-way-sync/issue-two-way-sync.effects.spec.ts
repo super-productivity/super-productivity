@@ -1,7 +1,7 @@
 import { TestBed, fakeAsync, flushMicrotasks, tick } from '@angular/core/testing';
 import { provideMockActions } from '@ngrx/effects/testing';
 import { MockStore, provideMockStore } from '@ngrx/store/testing';
-import { of, Subject } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
 import { IssueTwoWaySyncEffects } from './issue-two-way-sync.effects';
 import { TaskService } from '../../tasks/task.service';
 import { IssueProviderService } from '../issue-provider.service';
@@ -1567,6 +1567,45 @@ describe('IssueTwoWaySyncEffects', () => {
       expect(deleteIssueSpy).toHaveBeenCalledTimes(2);
       expect(deleteIssueSpy).toHaveBeenCalledWith('issue-1', cfg);
       expect(deleteIssueSpy).toHaveBeenCalledWith('issue-2', cfg);
+
+      adapterRegistry.unregister('TEST_PROVIDER');
+    }));
+
+    it('should keep other deferred deletes alive when a provider is removed inside the window', fakeAsync(() => {
+      const deleteIssueSpy = jasmine.createSpy('deleteIssue').and.resolveTo(undefined);
+      const adapter = createMockAdapter({ deleteIssue: deleteIssueSpy });
+      adapterRegistry.register('TEST_PROVIDER', adapter);
+
+      const cfg = createMockIssueProvider();
+      issueProviderServiceSpy.getCfgOnce$.and.callFake(((issueProviderId: string) =>
+        issueProviderId === 'removed-provider'
+          ? throwError(() => new Error('No issueProvider found'))
+          : of(cfg)) as any);
+
+      const mk = (id: string, issueProviderId: string): TaskWithSubTasks => {
+        const t = createMockTask({
+          id,
+          issueType: 'TEST_PROVIDER' as any,
+          issueId: `issue-${id}`,
+          issueProviderId,
+        }) as TaskWithSubTasks;
+        (t as any).subTasks = [];
+        return t;
+      };
+
+      let isErrored = false;
+      effects.deleteIssueOnTaskDelete$.subscribe({ error: () => (isErrored = true) });
+
+      actions$.next(
+        TaskSharedActions.deleteTask({ task: mk('task-1', 'removed-provider') }),
+      );
+      tick(100);
+      actions$.next(TaskSharedActions.deleteTask({ task: mk('task-2', 'provider-1') }));
+
+      tick(REMOTE_ISSUE_DELETE_DEFER_MS);
+
+      expect(isErrored).toBe(false);
+      expect(deleteIssueSpy).toHaveBeenCalledOnceWith('issue-task-2', cfg);
 
       adapterRegistry.unregister('TEST_PROVIDER');
     }));

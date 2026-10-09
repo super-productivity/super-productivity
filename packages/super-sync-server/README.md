@@ -298,8 +298,9 @@ npx prisma generate
 
 # Set up .env
 cp env.example .env
-# Edit .env: point DATABASE_URL at your PostgreSQL instance, and set JWT_SECRET
-# and POSTGRES_PASSWORD — both ship empty and the server refuses to start without them
+# Edit .env: point DATABASE_URL at your PostgreSQL instance and set JWT_SECRET —
+# it ships empty and the server refuses to start without it (POSTGRES_PASSWORD
+# is only read by the Docker Compose stack)
 
 # Push schema to DB
 npx prisma db push

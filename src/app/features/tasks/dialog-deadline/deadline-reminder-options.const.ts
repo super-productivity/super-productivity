@@ -30,4 +30,16 @@ export const DEADLINE_REMINDER_OPTIONS: TaskReminderOption[] = [
     value: TaskReminderOptionId.h1,
     label: T.F.TASK.D_DEADLINE.RO_1H,
   },
+  {
+    value: TaskReminderOptionId.d1,
+    label: T.F.TASK.D_DEADLINE.RO_1D,
+  },
+  {
+    value: TaskReminderOptionId.d3,
+    label: T.F.TASK.D_DEADLINE.RO_3D,
+  },
+  {
+    value: TaskReminderOptionId.w1,
+    label: T.F.TASK.D_DEADLINE.RO_1W,
+  },
 ];
