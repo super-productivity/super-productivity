@@ -37,6 +37,7 @@ type LocalBackupServiceWithBackupElectron = {
 
 type LocalBackupServiceWithPlatformFlags = {
   _isAndroidWebView: boolean;
+  _isElectron: boolean;
 };
 
 describe('LocalBackupService', () => {
@@ -1319,6 +1320,35 @@ describe('LocalBackupService', () => {
 
       await (service as unknown as LocalBackupServiceWithPrivate)._backup();
 
+      expect(service.getLastBackupTime()).toBeNull();
+    });
+
+    it('records the time after a successful Electron write', async () => {
+      localStorage.removeItem(LS.LAST_LOCAL_BACKUP);
+      (service as unknown as LocalBackupServiceWithPlatformFlags)._isElectron = true;
+      spyOn(
+        service as unknown as LocalBackupServiceWithBackupElectron,
+        '_backupElectron',
+      ).and.resolveTo();
+
+      await (service as unknown as LocalBackupServiceWithPrivate)._backup();
+
+      expect(service.getLastBackupTime()).not.toBeNull();
+    });
+
+    it('does NOT record the time when the Electron write fails (#10022)', async () => {
+      localStorage.removeItem(LS.LAST_LOCAL_BACKUP);
+      (service as unknown as LocalBackupServiceWithPlatformFlags)._isElectron = true;
+      const error = new Error('BACKUP failed: Error (code: ENOSPC)');
+      spyOn(
+        service as unknown as LocalBackupServiceWithBackupElectron,
+        '_backupElectron',
+      ).and.rejectWith(error);
+
+      // The rejection reaches the trigger pipeline's catchError, which logs it.
+      await expectAsync(
+        (service as unknown as LocalBackupServiceWithPrivate)._backup(),
+      ).toBeRejectedWith(error);
       expect(service.getLastBackupTime()).toBeNull();
     });
   });

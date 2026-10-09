@@ -24,6 +24,7 @@ let handleHandlers;
 let onHandlers;
 // fileName -> mtime (ms) served by the mocked readdirSync/statSync
 let backupFiles;
+let writeFileSyncImpl;
 
 const resetModule = () => {
   delete require.cache[backupModulePath];
@@ -58,6 +59,7 @@ const installMocks = () => {
         existsSync: (p) => existingPaths.has(p),
         readdirSync: () => Array.from(backupFiles.keys()),
         statSync: (p) => ({ mtime: new Date(backupFiles.get(path.basename(p))) }),
+        writeFileSync: (...args) => writeFileSyncImpl(...args),
       };
     }
 
@@ -76,6 +78,7 @@ test.beforeEach(() => {
   handleHandlers = new Map();
   onHandlers = new Map();
   backupFiles = new Map();
+  writeFileSyncImpl = () => {};
   installMocks();
 });
 
@@ -169,4 +172,24 @@ test('Store builds fall back to the real backup dir when LocalCache is absent', 
   existingPaths.add(BACKUP_DIR);
 
   assert.equal(getBackupDirForDisplay(), BACKUP_DIR);
+});
+
+test('BACKUP rejects with a path-free error when the write fails (#10022)', () => {
+  existingPaths.add(BACKUP_DIR);
+  writeFileSyncImpl = (p) => {
+    const e = new Error(`ENOSPC: no space left on device, open '${p}'`);
+    e.code = 'ENOSPC';
+    throw e;
+  };
+  const { initBackupAdapter } = loadBackupModule();
+  initBackupAdapter();
+
+  assert.throws(
+    () => handleHandlers.get('BACKUP')({}, { data: {}, maxBackupFiles: 3 }),
+    (e) => {
+      assert.match(e.message, /^BACKUP failed: Error \(code: ENOSPC\)$/);
+      assert.equal(e.code, 'ENOSPC');
+      return true;
+    },
+  );
 });
