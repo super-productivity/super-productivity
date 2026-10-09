@@ -14,11 +14,24 @@ const fs = require('fs');
 const path = require('path');
 
 const repoRoot = path.join(__dirname, '..');
-// Above this, a full run is about as fast and avoids command-line length limits.
-const MAX_SPECS = 500;
+// Above this, a full run is about as fast; it also keeps ~80 chars per
+// --include under the ~32k command-line limit on Windows.
+const MAX_SPECS = 250;
 const SPEC_RE = /^src\/.*\.spec\.ts$/;
 const GRAPH_RE =
-  /^(src|packages\/[^/]+\/src|electron\/shared-with-frontend)\/.*\.(ts|json)$/;
+  /^((src|packages\/[^/]+\/src|electron\/shared-with-frontend)\/.*\.(ts|json)|src\/.*\.(html|scss)|electron\/.*\.d\.ts)$/;
+const TEMPLATE_URL_RE = /\b(?:templateUrl|styleUrl)\s*:\s*['"]([^'"]+)['"]/g;
+const STYLE_URLS_RE = /\bstyleUrls\s*:\s*\[([^\]]*)\]/g;
+// Their direct imports load into every spec: test.ts runs global
+// beforeEach/afterEach hooks, polyfills.ts patches globals (karma `polyfills`).
+// shortcut: direct imports only — the transitive closure pulls in most of the
+// op-log, which would turn nearly every sync change into a full run.
+const SETUP_FILES = ['src/test.ts', 'src/polyfills.ts'];
+// Non-TS sources nothing imports: global styles (karma `styles`), scss
+// partials (@use isn't tracked) and assets fetched at runtime. Translations
+// other than en.json are never loaded by specs.
+const UNTRACKED_RESOURCE_RE = /^src\/(?!assets\/i18n\/).*\.(html|json|scss)$/;
+const FLAGS = new Set(['--base', '--list']);
 // Changes here affect every spec (build/test setup) or are invisible to the graph.
 const RUN_ALL_RE =
   /^(angular\.json|package(-lock)?\.json|tsconfig[^/]*\.json|src\/(test|polyfills)\.ts|src\/karma\.conf\.js|src\/tsconfig[^/]*\.json)$/;
@@ -33,7 +46,9 @@ const stripJsonComments = (text) => text.replace(/^\s*\/\/.*$/gm, '');
 /** Builds a resolver for import specifiers, mirroring tsconfig `baseUrl: ./` + `paths`. */
 const createResolver = (fileSet, tsPaths) => {
   const tryResolve = (base) =>
-    [base, `${base}.ts`, `${base}/index.ts`].find((c) => fileSet.has(c)) || null;
+    [base, `${base}.ts`, `${base}.d.ts`, `${base}/index.ts`].find((c) =>
+      fileSet.has(c),
+    ) || null;
   return (from, spec) => {
     if (spec.startsWith('.')) {
       return tryResolve(path.posix.join(path.posix.dirname(from), spec));
@@ -44,13 +59,37 @@ const createResolver = (fileSet, tsPaths) => {
   };
 };
 
-/** Maps each file to the set of files importing it. */
+/** Import and `/// <reference path>` specifiers of a TypeScript source. */
+const listImports = (src) => {
+  const { importedFiles, referencedFiles } = require('typescript').preProcessFile(
+    src,
+    true,
+    true,
+  );
+  // reference paths are relative even without a leading ./
+  const refs = referencedFiles.map(({ fileName }) =>
+    fileName.startsWith('.') ? fileName : `./${fileName}`,
+  );
+  return [...importedFiles.map(({ fileName }) => fileName), ...refs];
+};
+
+/** Component templates/styles, as relative specifiers, so they become graph edges. */
+const extractResourceUrls = (src) => {
+  const urls = [...src.matchAll(TEMPLATE_URL_RE)].map((m) => m[1]);
+  for (const [, list] of src.matchAll(STYLE_URLS_RE)) {
+    urls.push(...[...list.matchAll(/['"]([^'"]+)['"]/g)].map((m) => m[1]));
+  }
+  return urls.map((url) => (url.startsWith('.') ? url : `./${url}`));
+};
+
+/** Maps each file to the set of files importing it (or using it as template/style). */
 const buildReverseGraph = ({ files, readFile, resolve, preProcess }) => {
   const rev = new Map();
   for (const file of files) {
     if (!file.endsWith('.ts')) continue;
-    for (const { fileName } of preProcess(readFile(file))) {
-      const target = resolve(file, fileName);
+    const src = readFile(file);
+    for (const spec of [...preProcess(src), ...extractResourceUrls(src)]) {
+      const target = resolve(file, spec);
       if (!target) continue;
       if (!rev.has(target)) rev.set(target, new Set());
       rev.get(target).add(file);
@@ -58,6 +97,20 @@ const buildReverseGraph = ({ files, readFile, resolve, preProcess }) => {
   }
   return rev;
 };
+
+const isSetupImport = (file, rev) => SETUP_FILES.some((s) => rev.get(file)?.has(s));
+
+/**
+ * Returns a changed file whose reach the graph can't show, so every spec
+ * must run: a global setup module, an ambient (never imported) .d.ts, or a
+ * non-TS resource nothing imports.
+ */
+const findGlobalEntry = (entries, rev) =>
+  entries.find(
+    (f) =>
+      isSetupImport(f, rev) ||
+      (!rev.has(f) && (f.endsWith('.d.ts') || UNTRACKED_RESOURCE_RE.test(f))),
+  ) || null;
 
 /** Returns the spec files reachable from `changed` through the reverse graph. */
 const findAffectedSpecs = (changed, rev) => {
@@ -84,12 +137,9 @@ const classifyChanges = (changed, fileSet) => {
       entries.push(file);
       continue;
     }
-    const component = file.replace(/\.(html|scss)$/, '.ts');
-    if (component !== file && fileSet.has(component)) {
-      entries.push(component);
-    } else if (file.startsWith('src/') && !/\.(ts|json|s?css|md)$/.test(file)) {
-      // e.g. assets fetched at runtime or a template without a sibling .ts;
-      // a missing .ts/.json was deleted, so its importers changed as well
+    // e.g. assets fetched at runtime; a changed path missing from fileSet with
+    // a graph extension was deleted — main() follows its stale importers
+    if (file.startsWith('src/') && !/\.(ts|json|html|s?css|md)$/.test(file)) {
       return { runAll: file, entries };
     }
   }
@@ -100,8 +150,26 @@ const classifyChanges = (changed, fileSet) => {
 const parseIncludeGlobs = (script) =>
   [...script.matchAll(/--include='([^']+)'/g)].map((m) => m[1]);
 
-const resolveBase = (explicit) => {
-  if (explicit) return explicit;
+/** Parses `--base <ref>`, `--base=<ref>` and `--list`; rejects anything else. */
+const parseArgs = (argv) => {
+  const args = { base: null, list: false };
+  for (let i = 0; i < argv.length; i++) {
+    const [flag, inline] = argv[i].split(/=(.*)/s);
+    if (!FLAGS.has(flag)) throw new Error(`unknown argument ${argv[i]}`);
+    if (flag === '--list') args.list = true;
+    if (flag !== '--base') continue;
+    args.base = inline ?? argv[++i];
+    if (!args.base || args.base.startsWith('--')) {
+      throw new Error('--base needs a git ref');
+    }
+  }
+  return args;
+};
+
+// Diff against the fork point, not the ref tip, so commits that landed on the
+// ref after branching don't count as changes.
+const resolveBase = (ref) => {
+  if (ref) return git('merge-base', 'HEAD', ref)[0];
   for (const ref of ['origin/master', 'master']) {
     try {
       return git('merge-base', 'HEAD', ref)[0];
@@ -123,14 +191,15 @@ const runNg = (tz, specs) => {
     stdio: 'inherit',
     env: { ...process.env, TZ: tz },
   });
+  if (result.error) {
+    console.error(`Could not start ng test: ${result.error.message}`);
+  }
   return result.status ?? 1;
 };
 
 const main = () => {
-  const argv = process.argv.slice(2);
-  const baseIdx = argv.indexOf('--base');
-  const base = resolveBase(baseIdx >= 0 ? argv[baseIdx + 1] : undefined);
-  const listOnly = argv.includes('--list');
+  const { base: baseRef, list: listOnly } = parseArgs(process.argv.slice(2));
+  const base = resolveBase(baseRef);
 
   const tracked = git('ls-files', '--cached', '--others', '--exclude-standard');
   const fileSet = new Set(
@@ -138,30 +207,37 @@ const main = () => {
   );
   const changed = [
     ...new Set([
-      ...git('diff', '--name-only', base),
+      // --no-renames: a rename must also list its old path as deleted
+      ...git('diff', '--name-only', '--no-renames', base),
       ...git('ls-files', '--others', '--exclude-standard'),
     ]),
   ];
   const { runAll, entries } = classifyChanges(changed, fileSet);
+  // Importers still pointing at a deleted file no longer compile, so resolve
+  // imports to it as if it existed and select their specs.
+  const deleted = changed.filter((f) => GRAPH_RE.test(f) && !fileSet.has(f));
 
   const pkg = JSON.parse(fs.readFileSync(path.join(repoRoot, 'package.json'), 'utf8'));
   const laGlobs = parseIncludeGlobs(pkg.scripts['test:tz:la:subset']);
+  if (!laGlobs.length) throw new Error('No --include globs in test:tz:la:subset');
   let specs = [];
   let reason = runAll && `${runAll} changed`;
   if (!runAll) {
-    const ts = require('typescript');
     const tsConfig = fs.readFileSync(path.join(repoRoot, 'tsconfig.base.json'), 'utf8');
     const rev = buildReverseGraph({
       files: [...fileSet],
       readFile: (f) => fs.readFileSync(path.join(repoRoot, f), 'utf8'),
       resolve: createResolver(
-        fileSet,
+        new Set([...fileSet, ...deleted]),
         JSON.parse(stripJsonComments(tsConfig)).compilerOptions.paths,
       ),
-      preProcess: (src) => ts.preProcessFile(src, true, true).importedFiles,
+      preProcess: listImports,
     });
-    specs = findAffectedSpecs(entries, rev);
-    if (specs.length > MAX_SPECS) reason = `${specs.length} affected spec files`;
+    const globalEntry =
+      findGlobalEntry(entries, rev) || deleted.find((f) => isSetupImport(f, rev));
+    specs = findAffectedSpecs([...entries, ...deleted], rev);
+    if (globalEntry) reason = `${globalEntry} changed (global effect)`;
+    else if (specs.length > MAX_SPECS) reason = `${specs.length} affected spec files`;
   }
 
   console.log(`Base ${base.slice(0, 10)}: ${changed.length} changed files`);
@@ -170,13 +246,22 @@ const main = () => {
     if (listOnly) return 0;
     return runNg('Europe/Berlin', []) || runNg('America/Los_Angeles', laGlobs);
   }
-  const laSpecs = specs.filter((s) => laGlobs.some((g) => path.matchesGlob(s, g)));
+  const laSpecs = specs.filter((s) => laGlobs.some((g) => path.posix.matchesGlob(s, g)));
   console.log(`${specs.length} affected spec files (${laSpecs.length} also run in LA)`);
+  if (entries.some((f) => f.startsWith('packages/'))) {
+    console.log('Package sources changed: also run npm run packages:test');
+  }
   if (listOnly) {
     specs.forEach((s) => console.log(`  ${s}`));
     return 0;
   }
-  if (!specs.length) return 0;
+  if (!specs.length) {
+    console.log(
+      'No Angular spec imports the changed files, so nothing was tested or compiled.' +
+        ' Run npm run checkFile on them; new services and state logic need a spec.',
+    );
+    return 0;
+  }
   return (
     runNg('Europe/Berlin', specs) ||
     (laSpecs.length && runNg('America/Los_Angeles', laSpecs))
@@ -184,7 +269,12 @@ const main = () => {
 };
 
 if (require.main === module) {
-  process.exitCode = main();
+  try {
+    process.exitCode = main();
+  } catch (error) {
+    console.error(`test:affected: ${error.message}`);
+    process.exitCode = 2;
+  }
 }
 
 module.exports = {
@@ -192,5 +282,9 @@ module.exports = {
   classifyChanges,
   createResolver,
   findAffectedSpecs,
+  findGlobalEntry,
+  isSetupImport,
+  listImports,
+  parseArgs,
   parseIncludeGlobs,
 };
