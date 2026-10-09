@@ -8,10 +8,9 @@ const http = require('node:http');
 
 require('ts-node/register/transpile-only');
 
-const {
-  LOCAL_REST_API_MAX_BODY_BYTES,
-  LOCAL_REST_API_MAX_CONCURRENT_REQUESTS,
-} = require('./shared-with-frontend/local-rest-api.model.ts');
+const { LOCAL_REST_API_MAX_BODY_BYTES, LOCAL_REST_API_MAX_CONCURRENT_REQUESTS } = require(
+  path.resolve(__dirname, 'shared-with-frontend/local-rest-api.model.ts'),
+);
 
 const originalModuleLoad = Module._load;
 const localRestApiModulePath = path.resolve(__dirname, 'local-rest-api.ts');
