@@ -57,6 +57,22 @@ npm run e2e:debug
 npm run e2e:show-report
 ```
 
+### Faster local reruns
+
+Keep the Angular dev server running to avoid restarting it for each test run:
+
+```bash
+# Terminal 1 (leave running)
+npm run startFrontend:e2e
+
+# Terminal 2
+E2E_BASE_URL=http://localhost:4242 npm run e2e:file -- e2e/tests/task-basic/task-crud.spec.ts
+```
+
+`E2E_BASE_URL` uses that server instead of starting one. The dev server rebuilds
+when source files change. Add `--grep "test name"` to run only the scenario you
+are working on. Provider tests still need their provider-specific commands.
+
 ### WebDAV Sync Tests
 
 ```bash
