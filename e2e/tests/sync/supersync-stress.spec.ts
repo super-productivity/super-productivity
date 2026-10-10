@@ -101,7 +101,9 @@ test.describe('@supersync SuperSync Stress Tests', () => {
           .first();
         await taskLocator.hover();
         await taskLocator.locator('done-toggle').click();
-        await clientA.page.waitForTimeout(100);
+        // Done is dispatched after a 200ms animation; syncing before it lands
+        // leaves that op pending behind the upload.
+        await expect(taskLocator).toHaveClass(/isDone/, { timeout: 5000 });
       }
       console.log('[BulkSync] Marked 3 tasks as done');
 
