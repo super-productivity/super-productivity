@@ -227,6 +227,10 @@ export type NativeElapsedSyncDeps = {
  * service or from the session it persisted across a process kill (#7390), and
  * however often this runs, the same time is credited exactly once.
  *
+ * The difference is booked on the logical day of the reconcile
+ * (`addTimeSpentAndSync` → `DateService.todayStr()`), not the day it was
+ * tracked: a session recovered after midnight lands on the new day.
+ *
  * Effect-independent so the spec exercises the production code.
  */
 export const syncNativeElapsedTimeForTask = async (
