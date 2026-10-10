@@ -91,10 +91,12 @@ BOOTED_BY_US=0
 
 if [[ -n "$SERIAL" ]]; then
   [[ -n "$ADB" ]] || die "ANDROID_SERIAL is set but adb was not found (PATH, ANDROID_HOME)"
+  STATE="$("$ADB" -s "$SERIAL" get-state 2>/dev/null || true)"
+  [[ "$STATE" == "device" ]] || die "device $SERIAL is not online (adb state: '${STATE:-none}')"
   log "reusing running device $SERIAL"
 else
   # Finding 1: without KVM the emulator cannot boot (the agent sandbox case).
-  if [[ "$(uname -s)" == "Linux" && ! -r /dev/kvm ]]; then
+  if [[ "$(uname -s)" == "Linux" ]] && [[ ! -r /dev/kvm || ! -w /dev/kvm ]]; then
     die "/dev/kvm is missing or not accessible — cannot boot an emulator here; run this from a normal terminal on a KVM-capable host"
   fi
   [[ -n "$ADB" ]] || die "adb not found (install platform-tools; set ANDROID_HOME)"
@@ -102,7 +104,14 @@ else
 
   # Finding 5: `-list-avds` gives the .ini name `-avd` wants, which can differ
   # from the .avd directory name.
-  AVDS="$("$EMULATOR" -list-avds 2>/dev/null || true)"
+  # Newer emulators also print "INFO | Storing crashdata ..." to stdout here;
+  # keep only lines that can be AVD names.
+  AVDS_RAW="$("$EMULATOR" -list-avds 2>/dev/null || true)"
+  AVDS=""
+  while read -r name; do
+    [[ "$name" =~ ^[A-Za-z0-9._-]+$ ]] && AVDS+="$name"$'\n'
+  done <<<"$AVDS_RAW"
+  AVDS="${AVDS%$'\n'}"
   AVD="${ANDROID_VERIFY_AVD:-}"
   if [[ -z "$AVD" ]]; then
     AVD="$(head -n1 <<<"$AVDS")"
@@ -168,7 +177,7 @@ if [[ -z "$SERIAL" ]]; then
   log "booting AVD $AVD (log: $OUT_DIR/emulator.log)"
   BEFORE="$("$ADB" devices 2>/dev/null || true)"
   "$EMULATOR" -avd "$AVD" -no-snapshot-save -no-audio -no-boot-anim \
-    >"$OUT_DIR/emulator.log" 2>&1 &
+    </dev/null >"$OUT_DIR/emulator.log" 2>&1 &
   EMULATOR_PID=$!
   BOOTED_BY_US=1
   deadline=$((SECONDS + BOOT_TIMEOUT))
@@ -194,11 +203,15 @@ if [[ -z "$SERIAL" ]]; then
 fi
 
 # Finding 4: let the IME show even if the AVD reports a hardware keyboard.
-"$ADB" -s "$SERIAL" shell settings put secure show_ime_with_hard_keyboard 1 >/dev/null
+"$ADB" -s "$SERIAL" shell settings put secure show_ime_with_hard_keyboard 1 >/dev/null ||
+  die "adb could not configure $SERIAL"
 
 # --- serve -----------------------------------------------------------------
 log "serving the app on port $PORT (log: $OUT_DIR/serve.log; a cold compile takes minutes)"
-(cd "$ROOT" && exec npm run startFrontend -- --port "$PORT") >"$OUT_DIR/serve.log" 2>&1 &
+# stdin from /dev/null: a background job that reads the terminal is stopped
+# (SIGTTIN) under `set -m`, which would look like a hang.
+(cd "$ROOT" && exec npm run startFrontend -- --port "$PORT") \
+  </dev/null >"$OUT_DIR/serve.log" 2>&1 &
 SERVE_PID=$!
 deadline=$((SECONDS + SERVE_TIMEOUT))
 until curl -sf -o /dev/null "http://localhost:$PORT/"; do
@@ -210,7 +223,8 @@ done
 
 # Finding 2: tunnel the host port and use localhost on the device; 10.0.2.2
 # made page.goto hang indefinitely.
-"$ADB" -s "$SERIAL" reverse "tcp:$PORT" "tcp:$PORT" >/dev/null
+"$ADB" -s "$SERIAL" reverse "tcp:$PORT" "tcp:$PORT" >/dev/null ||
+  die "adb reverse tcp:$PORT failed on $SERIAL"
 
 # --- run -------------------------------------------------------------------
 log "running scenario $SCENARIO on $SERIAL"

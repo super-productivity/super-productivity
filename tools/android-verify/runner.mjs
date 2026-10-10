@@ -2,8 +2,8 @@
 // and writes <out>/<scenario>.json. Invoked by run.sh, which has already booted
 // the device, served the app and set up `adb reverse`.
 //
-// Exit code: 0 pass, 1 scenario failed (including a failed harness stage such
-// as a missed tap), 2 unexpected harness error.
+// Exit code: 0 pass, 1 scenario failed (including a failed stage such as a
+// missed tap), 2 harness error (device not visible, app not reachable, crash).
 import { writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -18,6 +18,8 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const NAV_TIMEOUT_MS = 60_000;
 const APP_RENDER_TIMEOUT_MS = 180_000;
 const SCENARIO_TIMEOUT_MS = 180_000;
+/** Stages that mean the harness could not reach the app at all: exit 2, not 1. */
+const HARNESS_STAGES = new Set(['device', 'navigation']);
 
 const { values: args } = parseArgs({
   options: {
@@ -135,7 +137,7 @@ try {
   if (e instanceof StageError) {
     result.stage = e.stage;
     result.details = e.details;
-    exitCode = 1;
+    exitCode = HARNESS_STAGES.has(e.stage) ? 2 : 1;
     await shot(`fail-${e.stage}`);
   } else {
     result.stage = 'harness';

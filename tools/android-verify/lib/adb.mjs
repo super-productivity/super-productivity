@@ -27,7 +27,8 @@ export const createAdb = (serial) => {
     /** Whether the soft keyboard is up, per the input method service. */
     isImeShown: async () => {
       const dump = await run('shell', 'dumpsys', 'input_method');
-      return /mInputShown=true|isInputViewShown=true/.test(dump);
+      // `mInputShown` (system service) or `mIsInputViewShown` (IME service).
+      return /mInputShown=true|isInputViewShown=true/i.test(dump);
     },
   };
 };

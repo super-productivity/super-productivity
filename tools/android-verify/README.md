@@ -28,17 +28,17 @@ The script:
 | `ANDROID_VERIFY_SERVE_TIMEOUT` | `900`                                    | seconds                                                          |
 | `ANDROID_HOME`                 | `~/Android/Sdk`, `~/Library/Android/sdk` | where `adb` and `emulator` are found when they are not on `PATH` |
 
-Requirements: an emulator image that includes Chrome (a Google APIs or Google Play image) and an AVD with `hw.keyboard=no` (finding 4).
+Requirements: an emulator image that includes Chrome (a Google APIs or Google Play image) and an AVD with `hw.keyboard=no` (finding 4). On a non-rooted image (Google Play), Playwright's `_android` also needs **Enable command line on non-rooted devices** turned on once in Chrome's `chrome://flags`.
 
 ## Output
 
 `.tmp/android-verify/` is gitignored:
 
 - `<scenario>.json` contains `pass`, `measurements` (scenario-defined), `stage` and `error` (on failure), `details`, `screenshots`, `device`, and `durationMs`.
-- `<scenario>-final.png` is saved for every completed run. `<scenario>-fail-<stage>.png` is saved on every failure path: `navigation`, `app-not-rendered`, `calibration`, `tap-missed`, `ime-not-shown`, and any scenario stage. Screenshots are native device captures, so they include the IME.
+- `<scenario>-final.png` is saved for every completed run. `<scenario>-fail-<stage>.png` is saved on every failure path: `device`, `navigation`, `app-not-rendered`, `calibration`, `tap-missed`, `ime-not-shown`, and any scenario stage. Screenshots are native device captures, so they include the IME.
 - `emulator.log` and `serve.log` are written there too.
 
-Exit code: `0` pass, `1` scenario failed (including a failed stage such as a missed tap), `2` precondition or harness error.
+Exit code: `0` pass, `1` scenario failed (including a failed stage such as a missed tap), `2` precondition or harness error (including the `device` and `navigation` stages).
 
 ## Writing a scenario
 

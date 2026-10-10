@@ -22,7 +22,12 @@ export default async ({ page, adb, ime, probe, StageError }) => {
     throw new StageError('premise', 'body.isTouchPrimary is not set on the device');
   }
 
-  await page.locator('.tour-addBtn').first().click({ timeout: 20_000 });
+  // Below 600px the header button is absent and the bottom nav FAB opens the
+  // bar instead. Clicked via the DOM: a Playwright click is a CDP mouse event,
+  // whose pointermove flips InputIntentService to mouse and drops the premise.
+  const addBtn = page.locator('.add-task-button, .tour-addBtn').first();
+  await addBtn.waitFor({ state: 'visible', timeout: 20_000 });
+  await addBtn.evaluate((el) => el.click());
   await page.locator(INPUT).first().waitFor({ state: 'visible', timeout: 10_000 });
 
   const tap = await ime.tapAndOpen(INPUT);
@@ -42,6 +47,9 @@ export default async ({ page, adb, ime, probe, StageError }) => {
   );
 
   const viewport = await probe(tap.baseline);
+  const stillTouchPrimary = await page.evaluate(() =>
+    document.body.classList.contains('isTouchPrimary'),
+  );
   const geometry = await page.evaluate(
     ({ list, input }) => {
       const toRect = (r) => ({
@@ -80,6 +88,7 @@ export default async ({ page, adb, ime, probe, StageError }) => {
   ).length;
 
   const checks = {
+    stillTouchPrimary,
     imeCoversPage: viewport.path !== 'NO_IME',
     hasItems: geometry.itemRects.length > 0,
     listTopVisible: geometry.listRect.top >= visibleTop - SLACK,
