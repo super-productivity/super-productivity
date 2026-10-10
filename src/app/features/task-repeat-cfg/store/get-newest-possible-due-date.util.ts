@@ -124,6 +124,14 @@ export const getNewestPossibleDueDate = (
         date.setDate(Math.min(day, lastDayOfMonth));
       };
 
+      // Step whole months from the 1st: setMonth() on e.g. March 30 would
+      // overflow "February 30" into March 2, so setDateSafely would then pick
+      // a day in the wrong month (#10517).
+      const shiftMonth = (date: Date, delta: number): void => {
+        date.setDate(1);
+        date.setMonth(date.getMonth() + delta);
+      };
+
       // Start by checking if the repeat day has passed this month
       const lastDayOfCurrentMonth = new Date(
         checkDate.getFullYear(),
@@ -137,7 +145,7 @@ export const getNewestPossibleDueDate = (
 
       if (today.getDate() < adjustedDayForCurrentMonth) {
         // The repeat day hasn't occurred yet this month, so check previous month
-        checkDate.setMonth(checkDate.getMonth() - 1);
+        shiftMonth(checkDate, -1);
       }
       setDateSafely(checkDate, dayOfMonthRepeat);
 
@@ -150,7 +158,7 @@ export const getNewestPossibleDueDate = (
         if (diffInMonth % taskRepeatCfg.repeatEvery === 0) {
           return checkDate;
         }
-        checkDate.setMonth(checkDate.getMonth() - 1);
+        shiftMonth(checkDate, -1);
         setDateSafely(checkDate, dayOfMonthRepeat);
       }
       return null;

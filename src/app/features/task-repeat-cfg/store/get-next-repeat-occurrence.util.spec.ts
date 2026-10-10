@@ -262,6 +262,21 @@ describe('getNextRepeatOccurrence()', () => {
       });
       testCase(cfg, fromDate, startDate, expected);
     });
+
+    it('should not skip a shorter on-cycle month when stepping from the 31st (#10517)', () => {
+      // Every 2 months from Dec 31: January 31 is off-cycle, and stepping
+      // from it must land on February 28, not overflow into March.
+      const startDate = new Date(2025, 11, 31);
+      const lastCreation = new Date(2025, 11, 31);
+      const fromDate = new Date(2026, 0, 5);
+      const expected = new Date(2026, 1, 28);
+      const cfg = dummyRepeatable('ID1', {
+        repeatCycle: 'MONTHLY',
+        repeatEvery: 2,
+        lastTaskCreationDay: getDbDateStr(lastCreation),
+      });
+      testCase(cfg, fromDate, startDate, expected);
+    });
   });
 
   describe('MONTHLY monthlyLastDay (issue #7726)', () => {

@@ -159,6 +159,9 @@ export const getNextRepeatOccurrence = (
         ) {
           return checkDate;
         }
+        // Step from the 1st: setMonth() on e.g. January 31 would overflow
+        // "February 31" into March and skip February entirely (#10517).
+        checkDate.setDate(1);
         checkDate.setMonth(checkDate.getMonth() + 1);
         setDateSafely(checkDate, dayOfMonthRepeat);
       }
