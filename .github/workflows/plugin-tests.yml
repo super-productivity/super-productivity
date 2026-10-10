@@ -58,9 +58,10 @@ jobs:
             # Three-dot: changes on the PR branch only, ignoring commits that
             # landed on master after the PR forked.
             DIFF=$(git diff --name-only --no-renames "$BASE_SHA...$HEAD_SHA")
-            # Shared package, shared plugin build script/tsconfig/kit or workflow
-            # change → run every plugin's tests (the job also builds every plugin).
-            if grep -qE '^packages/(plugin-api|vite-plugin|plugin-dev/scripts|plugin-dev/issue-provider-kit)/|^packages/plugin-dev/tsconfig\.base\.json$|^\.github/workflows/plugin-tests\.yml$' <<< "$DIFF"; then
+            # Shared package, shared plugin build script/tsconfig/kit, the shared
+            # plugin-dev install (package.json/lockfile) or workflow change → run
+            # every plugin's tests (the job also builds every plugin).
+            if grep -qE '^packages/(plugin-api|vite-plugin|plugin-dev/scripts|plugin-dev/issue-provider-kit)/|^packages/plugin-dev/(tsconfig\.base\.json|package\.json|package-lock\.json)$|^\.github/workflows/plugin-tests\.yml$' <<< "$DIFF"; then
               CHANGED=$(printf '%s\n' "${PLUGINS[@]}")
             else
               CHANGED=""
@@ -97,13 +98,15 @@ jobs:
           persist-credentials: false
       - name: Setup Node Dependencies
         uses: ./.github/actions/setup-deps
+      # All plugins share one npm workspace (packages/plugin-dev) and lockfile.
+      # Install it whole: build:packages below builds every plugin.
+      - name: Install plugin dependencies
+        working-directory: packages/plugin-dev
+        run: npm ci --no-audit --no-fund
       # Plugins consume @super-productivity/plugin-api and vite-plugin via file:
       # references that resolve to dist/. Build those before running plugin tests.
       - name: Build shared packages
         run: npm run build:packages
-      - name: Install plugin dependencies
-        working-directory: packages/plugin-dev/${{ matrix.plugin }}
-        run: npm ci
       # Bundlers and test runners strip types without checking them.
       - name: Typecheck plugin
         working-directory: packages/plugin-dev/${{ matrix.plugin }}

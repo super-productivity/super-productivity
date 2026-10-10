@@ -6,6 +6,7 @@ const { exec } = require('child_process');
 const { promisify } = require('util');
 const fs = require('fs').promises;
 const path = require('path');
+const { ensurePluginDeps } = require('./plugin-dev/scripts/install-deps');
 
 const execAsync = promisify(exec);
 
@@ -198,32 +199,6 @@ async function buildPlugin(plugin) {
     // Run build command if specified
     if (plugin.buildCommand) {
       log(`  Building...`, colors.yellow);
-      const packageJsonPath = path.join(pluginPath, 'package.json');
-
-      // Check if package.json exists and install dependencies if needed
-      try {
-        await fs.access(packageJsonPath);
-        const nodeModulesPath = path.join(pluginPath, 'node_modules');
-        // Check if dependencies are actually installed by looking for a real package
-        // (not just .vite cache folders)
-        let needsInstall = false;
-        try {
-          await fs.access(nodeModulesPath);
-          // Check if at least one actual package exists (not a dot-folder)
-          const entries = await fs.readdir(nodeModulesPath);
-          const hasRealPackages = entries.some((e) => !e.startsWith('.'));
-          needsInstall = !hasRealPackages;
-        } catch {
-          needsInstall = true;
-        }
-        if (needsInstall) {
-          log(`  Installing dependencies...`, colors.yellow);
-          await execAsync(`cd ${pluginPath} && npm install`);
-        }
-      } catch {
-        // No package.json, skip install
-      }
-
       await execAsync(`cd ${pluginPath} && ${plugin.buildCommand}`);
     }
 
@@ -310,6 +285,10 @@ async function buildAll() {
   const startTime = Date.now();
 
   const plugins = await getPlugins();
+
+  // Shared packages use the root install. Plugins share one plugin-dev
+  // workspace install; `npm ci` there leaves every lockfile untouched.
+  ensurePluginDeps({ log: (msg) => log(msg, colors.yellow) });
 
   // Build plugins sequentially to avoid conflicts
   const results = [];
