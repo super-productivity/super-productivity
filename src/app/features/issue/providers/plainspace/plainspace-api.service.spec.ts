@@ -434,6 +434,42 @@ describe('PlainspaceApiService native token check', () => {
     expect(logged).not.toContain('plainspace.org');
   });
 
+  // OkHttp's header validation prints the whole value, e.g. for a token pasted
+  // with a trailing zero-width space.
+  it('redacts the token from a header-value error', async () => {
+    const errSpy = spyOn(Log, 'err');
+    nativeHttp.and.rejectWith(
+      Object.assign(
+        new Error('Unexpected char 0x200b at 15 in header value: Bearer pat_test​'),
+        { code: 'IllegalArgumentException' },
+      ),
+    );
+    await firstValueFrom(setup(nativeHttp).verifyToken$(cfg));
+    expect(errSpy).toHaveBeenCalledWith('Plainspace: token check failed natively', {
+      errorName: 'IllegalArgumentException',
+      errorMessage: 'Unexpected char 0x200b at 15 in header value: Bearer <token>',
+    });
+    expect(JSON.stringify(errSpy.calls.allArgs())).not.toContain('pat_test');
+  });
+
+  it('redacts a differently cased host and IP addresses', async () => {
+    const errSpy = spyOn(Log, 'err');
+    nativeHttp.and.rejectWith(
+      Object.assign(
+        new Error(
+          'failed to connect to PlainSpace.org/203.0.113.5 (port 443) from /2001:db8::7 (port 51234) after 10000ms',
+        ),
+        { code: 'SocketTimeoutException' },
+      ),
+    );
+    await firstValueFrom(setup(nativeHttp).verifyToken$(cfg));
+    expect(errSpy).toHaveBeenCalledWith('Plainspace: token check failed natively', {
+      errorName: 'SocketTimeoutException',
+      errorMessage:
+        'failed to connect to <host>/<ip> (port 443) from /<ip> (port 51234) after 10000ms',
+    });
+  });
+
   // Mirrors NetworkRetryInterceptorService, which the native call bypasses:
   // sockets can be briefly unusable right after an Android resume.
   it('retries a native rejection once before reporting unreachable', async () => {

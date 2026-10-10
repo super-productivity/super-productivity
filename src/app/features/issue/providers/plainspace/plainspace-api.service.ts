@@ -261,7 +261,7 @@ export class PlainspaceApiService {
     return defer(() => nativeHttp(opts)).pipe(
       retry({ count: 1, delay: NATIVE_RETRY_DELAY_MS }),
       map(toNativeTokenCheck),
-      catchError((err: unknown) => of(toNativeErrorTokenCheck(err, cfg.host))),
+      catchError((err: unknown) => of(toNativeErrorTokenCheck(err, cfg))),
     );
   }
 
@@ -315,20 +315,42 @@ const toNativeTokenCheck = (res: HttpResponse): PlainspaceTokenCheck => {
 // A native rejection means no HTTP response at all (DNS, TLS, timeout). The
 // Java exception class name arrives as `code` and its message as `message` — the
 // cause #9988 needs and the patched XHR hides. Exception messages can name the
-// host (e.g. UnknownHostException), so it is redacted to keep the log host-free.
+// host (e.g. UnknownHostException), resolved and local IP addresses
+// (ConnectException) or a whole header value (a token with a stray invisible
+// character fails header validation), so all of those are redacted.
 const toNativeErrorTokenCheck = (
   err: unknown,
-  host: string | null | undefined,
+  cfg: Pick<PlainspaceCfg, 'host' | 'token'>,
 ): PlainspaceTokenCheck => {
   const errorName = isRecord(err) && typeof err['code'] === 'string' ? err['code'] : null;
-  const errorMessage = redactHost(err instanceof Error ? err.message : String(err), host);
+  const errorMessage = redactNativeErrorMessage(
+    err instanceof Error ? err.message : String(err),
+    cfg,
+  );
   Log.err('Plainspace: token check failed natively', { errorName, errorMessage });
   return { status: 'unreachable' };
 };
 
-const redactHost = (message: string, host: string | null | undefined): string => {
+const escapeRegExp = (value: string): string =>
+  value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const redactNativeErrorMessage = (
+  message: string,
+  { host, token }: Pick<PlainspaceCfg, 'host' | 'token'>,
+): string => {
+  let redacted = message;
+  if (token) {
+    redacted = redacted.split(token).join('<token>');
+  }
+  // A header-validation failure prints the whole value after "value:".
+  redacted = redacted.replace(/\bBearer\s+\S+/gi, 'Bearer <token>');
   const hostname = host ? host.replace(/^[a-z]+:\/\//i, '').split(/[/:]/)[0] : '';
-  return hostname ? message.split(hostname).join('<host>') : message;
+  if (hostname) {
+    redacted = redacted.replace(new RegExp(escapeRegExp(hostname), 'gi'), '<host>');
+  }
+  return redacted
+    .replace(/\b\d{1,3}(?:\.\d{1,3}){3}\b/g, '<ip>')
+    .replace(/\b[0-9a-f]{0,4}(?::[0-9a-f]{0,4}){2,7}\b/gi, '<ip>');
 };
 
 /** A Plainspace space (project) the connected account can bind a provider to. */
