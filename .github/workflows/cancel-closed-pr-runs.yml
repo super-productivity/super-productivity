@@ -26,18 +26,21 @@ jobs:
           MERGED: ${{ github.event.pull_request.merged }}
         run: |
           set -euo pipefail
-          # Master pushes and the nightly re-run CI tests, E2E, sync E2E and
-          # CodeQL (build.yml, e2e-scheduled.yml, codeql-analysis.yml), but
-          # nothing re-runs these, so after a merge their PR run is the only
-          # signal. Keep them.
-          keep='[]'
+          # The iOS TestFlight build is a deliberate, label-triggered release
+          # build, not CI; let it finish. After a merge, master pushes re-run
+          # every other suite (build.yml, electron-smoke.yml, e2e-scheduled.yml,
+          # codeql-analysis.yml, docs-links.yml), but nothing re-runs Android
+          # Native Tests, so their PR run is the only signal. Keep it.
+          keep='["iOS TestFlight Build on Label"]'
           if [[ "$MERGED" == "true" ]]; then
-            keep='["Electron Packaging Smoke Test","Android Native Tests","SuperSync Server Tests"]'
+            keep='["iOS TestFlight Build on Label","Android Native Tests"]'
           fi
-          for id in $(gh run list --commit "$SHA" --event pull_request --limit 100 \
+          # Assigned first: a failing substitution in a for list doesn't trip set -e.
+          ids=$(gh run list --commit "$SHA" --event pull_request --limit 100 \
             --json databaseId,status,workflowName |
             jq -r --argjson keep "$keep" \
-              '.[] | select(.status != "completed" and (.workflowName as $n | $keep | index($n) | not)) | .databaseId'); do
+              '.[] | select(.status != "completed" and (.workflowName as $n | $keep | index($n) | not)) | .databaseId')
+          for id in $ids; do
             echo "PR #$PR closed (merged: $MERGED): cancelling run $id"
             # A run can finish between listing and cancelling; not fatal.
             gh run cancel "$id" || echo "::warning::Could not cancel run $id of PR #$PR"
