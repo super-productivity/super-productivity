@@ -1,4 +1,5 @@
 import { environment } from '../../../environments/environment';
+import { DEFAULT_FOCUS_MODE_SOUND_VOLUME } from '../focus-mode/focus-mode.model';
 import {
   HAS_OFFICIAL_ONEDRIVE_CLIENT_ID,
   OFFICIAL_ONEDRIVE_CLIENT_ID,
@@ -117,6 +118,7 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
     isShowPreparation: false,
     isPlayTick: false,
     focusModeSound: 'off',
+    focusModeSoundVolume: DEFAULT_FOCUS_MODE_SOUND_VOLUME,
     isPauseTrackingDuringBreak: true,
     autoStartFocusOnPlay: false,
     isManualBreakStart: false,

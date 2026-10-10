@@ -2566,6 +2566,7 @@
       "HELP": "Focus mode opens a distraction-free screen to help you focus on your current task. Time tracking and the focus session timer are always kept in sync — pausing one pauses the other.",
       "L_AUTO_START_FOCUS_ON_PLAY": "Start a focus session when I start tracking a task",
       "L_FOCUS_MODE_SOUND": "Ambient sound during focus sessions",
+      "L_FOCUS_MODE_SOUND_VOLUME": "Ambient sound volume (% of main volume)",
       "L_MANUAL_BREAK_START": "Enable Pomodoro overtime (keep timer running until manually ended)",
       "L_PAUSE_TRACKING_DURING_BREAK": "Pause task tracking during breaks",
       "L_SHOW_PREPARATION_SCREEN": "Show preparation screen before each session (rocket countdown)",

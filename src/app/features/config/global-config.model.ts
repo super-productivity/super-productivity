@@ -306,6 +306,12 @@ export type FocusModeConfig = Readonly<{
    */
   isShowPreparation?: boolean;
   focusModeSound?: 'off' | 'tick' | 'whiteNoise';
+  /**
+   * Volume of the focus-mode ambient sound (tick / white noise) in percent of
+   * the main sound volume. Absent → DEFAULT_FOCUS_MODE_SOUND_VOLUME (40), which
+   * is the fixed ratio used before this setting existed.
+   */
+  focusModeSoundVolume?: number;
   /** @deprecated Use focusModeSound instead. Kept for backward-compat validation of old data. */
   isPlayTick?: boolean;
   isPauseTrackingDuringBreak?: boolean;
