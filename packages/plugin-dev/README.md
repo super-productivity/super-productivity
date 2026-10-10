@@ -158,11 +158,11 @@ const dueDate = PluginAPI.formatDate(task.dueDate, 'short');
 
 ```bash
 npm run build
-cd dist && zip -r ../plugin.zip .
+rm -f plugin.zip && (cd dist && zip -r ../plugin.zip .)
 ```
 
-Vite plugins built from [boilerplate-solid-js](boilerplate-solid-js) also have
-`npm run package`, which creates the zip for you.
+[boilerplate-solid-js](boilerplate-solid-js) and [automations](automations) also
+have `npm run package`, which writes `<id>-v<version>.zip`.
 
 ### 2. File Size Limits
 
@@ -187,44 +187,13 @@ Optional files:
 
 ## Publishing Your Plugin
 
-### GitHub Release (Recommended)
+Build and zip the plugin here (see above) and share the zip, e.g. as a GitHub
+release asset; users install it via Settings → Plugins → Upload Plugin.
 
-1. Create a GitHub repository for your plugin
-2. Use GitHub Actions to build releases:
-
-```yaml
-name: Build Plugin
-on:
-  release:
-    types: [created]
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-node@v3
-        with:
-          node-version: 18
-      - run: npm ci
-      - run: npm run build
-      - run: cd dist && zip -r ../plugin.zip .
-      - uses: softprops/action-gh-release@v1
-        with:
-          files: plugin.zip
-```
-
-3. Users can download the `.zip` file from your releases
-
-### NPM Package
-
-You can also publish your plugin source to npm:
-
-1. Update `package.json` with your npm scope
-2. Build your plugin: `npm run build`
-3. Publish: `npm publish`
-
-Users would need to build it themselves or you can include the built files.
+Building in a separate repository needs its own build setup: the examples here
+use relative paths to the shared build script, tsconfig, `issue-provider-kit` and
+`../../plugin-api`, and the published `@super-productivity/plugin-api` npm
+package lags behind the source (it lacks the issue-provider types).
 
 ## Testing Your Plugin
 
@@ -238,10 +207,12 @@ Users would need to build it themselves or you can include the built files.
 
 ### 2. As a Bundled Plugin (repository development)
 
-`npm run build:packages` (repository root) builds every plugin here and copies
-its `dist/` to `src/assets/bundled-plugins/`. The app only loads folders listed in
-`BUNDLED_PLUGIN_PATHS` (`src/app/plugins/bundled-plugins.const.ts`); then run
-`npm run startFrontend` or `npm start`.
+`npm run build:packages` (repository root) builds the plugins here (not the
+boilerplate) and copies each `dist/` to `src/assets/bundled-plugins/<folder>/`.
+The app only loads folders listed in `BUNDLED_PLUGIN_PATHS`, and each one's
+manifest id must also be in `BUNDLED_PLUGIN_IDS` (both in
+`src/app/plugins/bundled-plugins.const.ts`; `npm run test:electron` checks they
+match); then run `npm run startFrontend` or `npm start`.
 
 ### 3. Debugging
 

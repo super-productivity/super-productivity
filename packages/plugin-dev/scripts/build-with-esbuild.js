@@ -75,16 +75,20 @@ async function buildPlugin() {
 
   // Validate before touching dist/, so a run from the wrong directory deletes nothing.
   // The repo root also has package.json and src/manifest.json, hence the location check.
-  // realpath on both sides: __dirname is resolved, cwd may not be (Windows junctions).
+  // realpath on both sides, so symlinked paths compare equal (e.g. __dirname stays
+  // unresolved under node --preserve-symlinks-main).
   const pluginsDir = fs.realpathSync(path.resolve(__dirname, '..'));
   if (path.dirname(fs.realpathSync(ROOT_DIR)) !== pluginsDir) {
     throw new Error(
-      `${ROOT_DIR} is not a folder next to scripts/ (expected ${pluginsDir}/<plugin>); ` +
-        'run the build from the plugin folder via npm run build',
+      `${ROOT_DIR} is not a plugin folder: plugins must sit directly in ${pluginsDir}; ` +
+        'run npm run build inside the plugin folder',
     );
   }
-  if (!fs.existsSync(path.join(ROOT_DIR, 'package.json')) || !manifest) {
-    throw new Error(`${ROOT_DIR} has no package.json or manifest.json`);
+  if (!fs.existsSync(path.join(ROOT_DIR, 'package.json'))) {
+    throw new Error(`${ROOT_DIR} has no package.json`);
+  }
+  if (!manifest) {
+    throw new Error(`${ROOT_DIR} has no manifest.json (in src/ or the plugin root)`);
   }
   const hasEntry = fs.existsSync(entry);
   if (entryArg && !hasEntry) {
