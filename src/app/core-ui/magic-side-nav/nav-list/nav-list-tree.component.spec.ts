@@ -1,15 +1,21 @@
 import { Component, NO_ERRORS_SCHEMA, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { provideAnimations } from '@angular/platform-browser/animations';
+import {
+  provideAnimations,
+  provideNoopAnimations,
+} from '@angular/platform-browser/animations';
 import { provideRouter } from '@angular/router';
-import { TranslateModule } from '@ngx-translate/core';
+import { provideMockStore } from '@ngrx/store/testing';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { GlobalThemeService } from '../../../core/theme/global-theme.service';
 import { DEFAULT_PROJECT } from '../../../features/project/project.const';
 import { Project } from '../../../features/project/project.model';
 import { MenuTreeKind } from '../../../features/menu-tree/store/menu-tree.model';
 import { MenuTreeService } from '../../../features/menu-tree/menu-tree.service';
+import { selectAllDoneIds } from '../../../features/tasks/store/task.selectors';
 import { TreeDndComponent } from '../../../ui/tree-dnd/tree.component';
 import { MagicNavConfigService } from '../magic-nav-config.service';
-import { NavTreeItem } from '../magic-side-nav.model';
+import { NavItem, NavTreeItem } from '../magic-side-nav.model';
 import { NavItemComponent } from '../nav-item/nav-item.component';
 import {
   getProjectVisibilityIconColor,
@@ -197,5 +203,123 @@ describe('NavListTreeComponent expand/collapse animation', () => {
     expect(getMarginSum(sampleAnimationAt(enteringEl, 0.001))).toBeLessThan(0.5);
     expect(sampleAnimationAt(enteringEl, 0.25).overflow).toBe('hidden');
     expect(sampleAnimationAt(enteringEl, 0.75).overflow).toBe('hidden');
+  });
+});
+
+@Component({
+  standalone: true,
+  imports: [NavListTreeComponent],
+  template: `<nav-list-tree
+    [item]="item()"
+    [isExpanded]="isExpanded()"
+    (itemClick)="clickedItems.push($event)"
+  ></nav-list-tree>`,
+})
+class ArchivedProjectsLinkHostComponent {
+  readonly item = signal<NavTreeItem>({
+    type: 'tree',
+    id: 'projects',
+    label: 'Projects',
+    icon: 'expand_more',
+    treeKind: MenuTreeKind.PROJECT,
+    tree: [],
+  });
+  readonly isExpanded = signal(true);
+  readonly clickedItems: NavItem[] = [];
+}
+
+describe('NavListTreeComponent archived projects link (#10473)', () => {
+  let fixture: ComponentFixture<ArchivedProjectsLinkHostComponent>;
+  const archivedProjectsCount = signal(0);
+
+  const getLink = (): HTMLAnchorElement | null =>
+    fixture.nativeElement.querySelector('.archived-projects-link a');
+  const getLabel = (): string | undefined =>
+    getLink()?.querySelector('.nav-label')?.textContent?.trim();
+
+  beforeEach(async () => {
+    archivedProjectsCount.set(2);
+    await TestBed.configureTestingModule({
+      imports: [ArchivedProjectsLinkHostComponent, TranslateModule.forRoot()],
+      providers: [
+        provideNoopAnimations(),
+        provideRouter([{ path: 'archived-projects', children: [] }]),
+        provideMockStore({ selectors: [{ selector: selectAllDoneIds, value: [] }] }),
+        { provide: GlobalThemeService, useValue: {} },
+        {
+          provide: MagicNavConfigService,
+          useValue: { allUnarchivedProjects: signal([]), archivedProjectsCount },
+        },
+        { provide: MenuTreeService, useValue: {} },
+      ],
+    })
+      .overrideComponent(NavListTreeComponent, {
+        remove: { imports: [TreeDndComponent] },
+        add: { schemas: [NO_ERRORS_SCHEMA] },
+      })
+      .compileComponents();
+
+    const translateService = TestBed.inject(TranslateService);
+    translateService.setTranslation('en', {
+      F: { PROJECT: { ARCHIVED_PROJECTS: { LINK_LABEL: 'Archived projects' } } },
+    });
+    translateService.use('en');
+
+    fixture = TestBed.createComponent(ArchivedProjectsLinkHostComponent);
+    fixture.detectChanges();
+  });
+
+  it('links to the archived projects page and shows the count', () => {
+    const link = getLink();
+
+    expect(link).not.toBeNull();
+    expect(link!.getAttribute('href')).toBe('/archived-projects');
+    expect(getLabel()).toBe('Archived projects (2)');
+  });
+
+  it('updates the count when another project is archived', () => {
+    archivedProjectsCount.set(3);
+    fixture.detectChanges();
+
+    expect(getLabel()).toBe('Archived projects (3)');
+  });
+
+  it('is not shown while no project is archived', () => {
+    archivedProjectsCount.set(0);
+    fixture.detectChanges();
+
+    expect(getLink()).toBeNull();
+  });
+
+  it('is not shown in the tags list', () => {
+    fixture.componentInstance.item.set({
+      type: 'tree',
+      id: 'tags',
+      label: 'Tags',
+      icon: 'expand_more',
+      treeKind: MenuTreeKind.TAG,
+      tree: [],
+    });
+    fixture.detectChanges();
+
+    expect(getLink()).toBeNull();
+  });
+
+  it('is hidden together with the collapsed projects list', async () => {
+    fixture.componentInstance.isExpanded.set(false);
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    expect(getLink()).toBeNull();
+  });
+
+  // magic-side-nav closes the mobile menu on itemClick; a navigation alone
+  // does not happen when the page is already open.
+  it('reports the click like the project rows do', () => {
+    getLink()!.click();
+
+    expect(fixture.componentInstance.clickedItems).toEqual([
+      jasmine.objectContaining({ type: 'route', route: '/archived-projects' }),
+    ]);
   });
 });

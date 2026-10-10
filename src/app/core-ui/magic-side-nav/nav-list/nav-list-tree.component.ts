@@ -14,13 +14,12 @@ import { CommonModule, NgStyle } from '@angular/common';
 import { MatIcon } from '@angular/material/icon';
 import { MatIconButton } from '@angular/material/button';
 import { MatTooltip } from '@angular/material/tooltip';
-import { MatDivider } from '@angular/material/divider';
 import { MatMenuModule, MatMenuTrigger } from '@angular/material/menu';
 import { TranslatePipe } from '@ngx-translate/core';
 import { TreeDndComponent } from '../../../ui/tree-dnd/tree.component';
 import { TreeNode } from '../../../ui/tree-dnd/tree.types';
 import { NavItemComponent } from '../nav-item/nav-item.component';
-import { NavItem, NavTreeItem } from '../magic-side-nav.model';
+import { NavItem, NavRouteItem, NavTreeItem } from '../magic-side-nav.model';
 import { MagicNavConfigService } from '../magic-nav-config.service';
 import { T } from '../../../t.const';
 import {
@@ -36,13 +35,20 @@ import { DEFAULT_PROJECT_ICON } from '../../../features/project/project.const';
 import { Project } from '../../../features/project/project.model';
 import { isSingleEmoji } from '../../../util/extract-first-emoji';
 import { expandCollapseAni } from '../../../ui/tree-dnd/tree.animations';
-import { Router } from '@angular/router';
 import { Log } from '../../../core/log';
 
 export const getProjectVisibilityIconColor = (project: Project): string | null =>
   isSingleEmoji(project.icon || DEFAULT_PROJECT_ICON)
     ? null
     : (project.theme?.primary ?? null);
+
+const ARCHIVED_PROJECTS_NAV_ITEM: NavRouteItem = {
+  type: 'route',
+  id: 'archived-projects',
+  label: T.F.PROJECT.ARCHIVED_PROJECTS.LINK_LABEL,
+  icon: 'archive',
+  route: '/archived-projects',
+};
 
 @Component({
   selector: 'nav-list-tree',
@@ -57,7 +63,6 @@ export const getProjectVisibilityIconColor = (project: Project): string | null =
     TranslatePipe,
     TreeDndComponent,
     NavItemComponent,
-    MatDivider,
   ],
   templateUrl: './nav-list-tree.component.html',
   styleUrls: ['./nav-list-tree.component.scss'],
@@ -71,7 +76,6 @@ export const getProjectVisibilityIconColor = (project: Project): string | null =
 export class NavListTreeComponent {
   private readonly _navConfigService = inject(MagicNavConfigService);
   private readonly _menuTreeService = inject(MenuTreeService);
-  private readonly _router = inject(Router);
 
   item = input.required<NavTreeItem>();
   showLabels = input<boolean>(true);
@@ -86,16 +90,20 @@ export class NavListTreeComponent {
   readonly isSingleEmoji = isSingleEmoji;
   readonly getProjectVisibilityIconColor = getProjectVisibilityIconColor;
   readonly MenuTreeKind = MenuTreeKind;
+  readonly ARCHIVED_PROJECTS_NAV_ITEM = ARCHIVED_PROJECTS_NAV_ITEM;
 
   // Access to service methods and data for visibility menu (includes Inbox for unhiding)
   readonly allUnarchivedProjects = this._navConfigService.allUnarchivedProjects;
-  readonly archivedProjectsCount = this._navConfigService.archivedProjectsCount;
 
   // ViewChild for visibility menu trigger to close menu after toggling
   visibilityMenuTrigger = viewChild('visibilityBtn', { read: MatMenuTrigger });
 
   readonly treeNodes = signal<TreeNode<MenuTreeViewNode>[]>([]);
   readonly treeKind = computed<MenuTreeKind>(() => this.item().treeKind);
+  readonly archivedProjectsCount = this._navConfigService.archivedProjectsCount;
+  readonly isArchivedProjectsLinkShown = computed(
+    () => this.treeKind() === MenuTreeKind.PROJECT && this.archivedProjectsCount() > 0,
+  );
   // Off for the first render, so the lists and folders that are already open
   // appear without animating in on app start.
   readonly isAnimationEnabled = signal(false);
@@ -140,11 +148,6 @@ export class NavListTreeComponent {
     this._navConfigService.toggleProjectVisibility(projectId);
     // Close menu to prevent stale positioning after DOM update (#5955)
     this.visibilityMenuTrigger()?.closeMenu();
-  }
-
-  goToArchivedProjects(): void {
-    this.visibilityMenuTrigger()?.closeMenu();
-    this._router.navigateByUrl('/archived-projects');
   }
 
   onFolderMoreButton(event: MouseEvent, node: TreeNode<MenuTreeViewNode>): void {

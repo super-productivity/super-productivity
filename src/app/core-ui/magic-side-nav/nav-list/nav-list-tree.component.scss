@@ -219,6 +219,12 @@
   }
 }
 
+// Secondary text colour, so the link does not compete with the projects above
+// it. Hover and active states keep their own tokens.
+.archived-projects-link {
+  --sidenav-text: var(--sidenav-text-secondary);
+}
+
 // Drag performance optimizations - keep these for smooth drag operations
 .drag-active .nav-child-item:not(.dragging) {
   transition: transform 200ms cubic-bezier(0.25, 0.8, 0.25, 1);

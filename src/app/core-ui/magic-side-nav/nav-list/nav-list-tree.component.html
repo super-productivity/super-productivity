@@ -153,6 +153,19 @@
         </div>
       </ng-template>
     </tree-dnd>
+
+    <!-- Outside the tree: it cannot be dragged, and nothing about it is persisted -->
+    @if (isArchivedProjectsLinkShown()) {
+      <nav-item
+        class="archived-projects-link"
+        [container]="'route'"
+        [navRoute]="ARCHIVED_PROJECTS_NAV_ITEM.route"
+        [icon]="ARCHIVED_PROJECTS_NAV_ITEM.icon"
+        [label]="`${(ARCHIVED_PROJECTS_NAV_ITEM.label | translate)} (${archivedProjectsCount()})`"
+        [showLabels]="showLabels()"
+        (clicked)="itemClick.emit(ARCHIVED_PROJECTS_NAV_ITEM)"
+      ></nav-item>
+    }
   </div>
 }
 
@@ -179,22 +192,6 @@
         >{{ projectIcon }}</mat-icon
       >
       {{ project.title }}
-    </button>
-  }
-  @if (archivedProjectsCount() > 0) {
-    <mat-divider></mat-divider>
-    <button
-      mat-menu-item
-      (click)="goToArchivedProjects()"
-    >
-      <mat-icon>archive</mat-icon>
-      <span
-        [attr.aria-label]="`${(T.F.PROJECT.ARCHIVED_PROJECTS.LINK_LABEL | translate)} (${archivedProjectsCount()})`"
-      >
-        {{ T.F.PROJECT.ARCHIVED_PROJECTS.LINK_LABEL | translate }} ({{
-          archivedProjectsCount()
-        }})
-      </span>
     </button>
   }
 </mat-menu>

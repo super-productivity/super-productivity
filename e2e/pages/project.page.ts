@@ -15,6 +15,7 @@ export class ProjectPage extends BasePage {
   readonly workCtxTitle: Locator;
   readonly projectSettingsBtn: Locator;
   readonly moveToArchiveBtn: Locator;
+  readonly archivedProjectsLink: Locator;
   readonly globalErrorAlert: Locator;
 
   constructor(page: Page, testPrefix: string = '') {
@@ -38,6 +39,8 @@ export class ProjectPage extends BasePage {
       .locator('button[aria-label="Project Settings"]')
       .or(this.workCtxMenu.locator('button').nth(3));
     this.moveToArchiveBtn = page.locator('.e2e-move-done-to-archive');
+    // Last row of the sidebar Projects list, shown while a project is archived.
+    this.archivedProjectsLink = page.locator('magic-side-nav .archived-projects-link a');
     this.globalErrorAlert = page.locator('.global-error-alert');
   }
 
