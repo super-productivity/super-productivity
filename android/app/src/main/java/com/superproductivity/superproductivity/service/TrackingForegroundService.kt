@@ -111,18 +111,19 @@ class TrackingForegroundService : Service() {
          * process's death, so getTrackingElapsed() hands the JS cold-start
          * recovery the time tracked until the kill. The in-memory state wins
          * whenever it is live, so this never re-anchors a running session.
-         * After a user-requested exit (API 30+ only) the session is marked
-         * not to resume; below API 30 the exit reason is unknown and it
-         * always resumes.
+         * After a deliberate user stop (API 34+ only) the session is marked
+         * not to resume; below that the reason is unknown or ambiguous and it
+         * always resumes. [exits] is a seam for tests: real exit records can't
+         * be faked on a device.
          */
         @Synchronized
-        fun restoreIfIdle(context: Context) {
+        fun restoreIfIdle(
+            context: Context,
+            exits: (Context) -> List<ProcessExit> = TrackingStateStore::anchorProcessExits
+        ) {
             if (isTracking) return
             val persisted = TrackingStateStore.load(context) ?: return
-            val exit = TrackingState.pickExit(
-                TrackingStateStore.anchorProcessExits(context),
-                persisted.startTimestamp
-            )
+            val exit = TrackingState.pickExit(exits(context), persisted.startTimestamp)
             val state = persisted.frozenAtExit(exit?.timestamp, System.currentTimeMillis())
             val resume = TrackingState.shouldResumeAfter(exit)
             Log.d(

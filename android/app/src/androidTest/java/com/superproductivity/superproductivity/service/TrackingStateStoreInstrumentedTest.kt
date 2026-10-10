@@ -5,6 +5,7 @@ import androidx.test.InstrumentationRegistry
 import androidx.test.runner.AndroidJUnit4
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -66,6 +67,27 @@ class TrackingStateStoreInstrumentedTest {
         TrackingStateStore.save(context, session("stale", 99_000, bootCount))
 
         assertEquals("live", TrackingForegroundService.snapshotForBridge(context)!!.taskId)
+    }
+
+    @Test
+    fun aUserStopRestoresAFrozenTotalWithoutResuming() {
+        val bootCount = TrackingStateStore.currentBootCount(context)
+        val persisted = session("task-1", 5_000, bootCount)
+        TrackingStateStore.save(context, persisted)
+        val stopAt = persisted.startTimestamp + 20_000
+
+        TrackingForegroundService.restoreIfIdle(context) {
+            listOf(ProcessExit(stopAt, userRequested = true))
+        }
+
+        val snapshot = TrackingForegroundService.snapshotForBridge(context)!!
+        assertFalse(snapshot.resume)
+        assertEquals(25_000L, snapshot.elapsedMs)
+        // Frozen: no time is counted after the stop.
+        Thread.sleep(50)
+        assertEquals(25_000L, TrackingForegroundService.snapshotForBridge(context)!!.elapsedMs)
+        // Not re-anchored on disk, so a second kill re-derives the same total.
+        assertEquals(persisted, TrackingStateStore.load(context))
     }
 
     @Test
