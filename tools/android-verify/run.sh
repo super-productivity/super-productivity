@@ -145,6 +145,7 @@ fi
 # --- cleanup ---------------------------------------------------------------
 SERVE_PID=""
 EMULATOR_PID=""
+# shellcheck disable=SC2329 # invoked by the EXIT trap below
 cleanup() {
   if [[ -n "$SERVE_PID" ]]; then
     kill -- "-$SERVE_PID" 2>/dev/null || kill "$SERVE_PID" 2>/dev/null || true
