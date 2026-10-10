@@ -569,7 +569,8 @@ async function buildAll() {
 // Run if called directly
 if (require.main === module) {
   buildAll().catch((error) => {
-    log(`\n❌ Build failed: ${error.message}`, colors.red);
+    // console.error, not log(): a failure must show even with --silent
+    console.error(`${colors.red}\n❌ Build failed: ${error.message}${colors.reset}`);
     process.exit(1);
   });
 }

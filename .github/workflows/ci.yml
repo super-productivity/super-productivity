@@ -85,7 +85,7 @@ jobs:
               echo "Examples:"
               grep '"resolved": "https\?://' "$LOCKFILE" | grep -v 'registry.npmjs.org' | head -5
               echo ""
-              echo "Please delete node_modules and $LOCKFILE, then run 'npm install' with the default registry (https://registry.npmjs.org/)."
+              echo "Rewrite those 'resolved' URLs to https://registry.npmjs.org/ (or run 'npm install --registry=https://registry.npmjs.org/' next to it). Deleting the lockfile would re-resolve every dependency."
               exit 1
             fi
           done

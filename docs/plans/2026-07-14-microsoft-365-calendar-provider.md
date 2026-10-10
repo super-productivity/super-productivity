@@ -480,7 +480,8 @@ Required assets:
 - no web/mobile client IDs and `supportedPlatforms: ["electron"]`.
 
 Likely package/tooling files: `package.json` (building via the shared
-`../scripts/build-with-esbuild.js`), `package-lock.json`, `tsconfig.json` (extending
+`../scripts/build-with-esbuild.js`; `npm install` records it in the shared
+`packages/plugin-dev/package-lock.json`), `tsconfig.json` (extending
 `../tsconfig.base.json`) and `vitest.config.ts`. Keep runtime code dependency-free; scoped
 build/test packages mirror the existing plugin. Estimate: 1 day.
 
