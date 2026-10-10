@@ -13,6 +13,11 @@ const LIST = 'mention-list ul';
 const SLACK = 1;
 
 export default async ({ page, adb, ime, probe, StageError }) => {
+  // The emulator reports `pointer: fine` (the host mouse), so the app boots as
+  // a hybrid device in mouse mode. A real touch flips InputIntentService to
+  // touch, as a user's first tap would; calibrate's tap is real and swallowed.
+  await ime.calibrate();
+
   // Premise: on a real touch device InputIntentService sets this class, which
   // pins the global add-task bar to the bottom — the #5146 layout.
   const isTouchPrimary = await page.evaluate(() =>

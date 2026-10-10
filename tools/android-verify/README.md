@@ -73,6 +73,7 @@ These came from the throwaway prototype for #5146. Each one cost a debugging rou
 6. **Shell trap:** under `set -o pipefail`, `cmd | grep -q PATTERN && die` silently never fires. `grep -q` closes the pipe, the producer takes SIGPIPE, and the pipeline status goes non-zero. Capture the output into a variable first, then match.
 7. **No new dependency.** Playwright's `_android` API drives real Chrome on the device and gives normal `page.evaluate` access. `playwright` is already a root devDependency.
 8. **Chrome on the device is not the Capacitor WebView.** `adjustResize` itself stays unverified at this tier. `src/index.html` sets `interactive-widget=resizes-content`, so Chrome is expected to report `RESIZING`. The app's WebView may report `NON_RESIZING`, which is why the app code measures `visualViewport` (`src/app/core/theme/global-theme.service.ts`). A tier 2 that installs and drives the real app is a possible follow-up.
+9. **The emulator boots the app in mouse mode.** Chrome on an emulator reports `pointer: fine` (the host mouse) next to 5 touch points, so `detect-it` classifies it as hybrid with mouse as the primary input, and `body.isTouchPrimary` is unset until the first touch (measured 2026-10, API 34 Google Play image, Chrome 113). An `adb shell input tap` arrives as `pointerType: 'touch'`, so a scenario that needs touch mode calls `ime.calibrate()` first.
 
 ## Scenarios
 
