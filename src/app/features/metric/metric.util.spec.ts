@@ -184,6 +184,49 @@ describe('metric.util', () => {
         expect(result.nrOfAllTasks).toBe(4);
       });
 
+      // A task dismissed as won't do is finished, so it belongs in the totals,
+      // but it was never accomplished and must not inflate the completion count.
+      it('should not count a task finished as wont do as completed', () => {
+        const tasks: Task[] = [
+          createTask({ id: '1', isDone: true }),
+          createTask({ id: '2', isDone: true, doneReason: 'wontDo' }),
+          createTask({ id: '3', isDone: false }),
+        ];
+        const breakNr: BreakNr = {};
+        const breakTime: BreakTime = {};
+        const worklog = createWorklog([
+          { year: 2025, months: [{ month: 1, days: [{ day: 15, timeSpent: 1000 }] }] },
+        ]);
+
+        const result = mapSimpleMetrics([breakNr, breakTime, worklog, 1000, tasks]);
+
+        expect(result.nrOfCompletedTasks).toBe(1);
+        expect(result.nrOfAllTasks).toBe(3);
+      });
+
+      // Data written before the field existed carries no `doneReason`, so it has
+      // to read as a normally completed task with no migration or heal.
+      it('should count a task stored before the reason existed', () => {
+        const legacyTask = createTask({ id: '1', isDone: true });
+        const breakNr: BreakNr = {};
+        const breakTime: BreakTime = {};
+        const worklog = createWorklog([
+          { year: 2025, months: [{ month: 1, days: [{ day: 15, timeSpent: 1000 }] }] },
+        ]);
+
+        expect('doneReason' in legacyTask).toBe(false);
+
+        const result = mapSimpleMetrics([
+          breakNr,
+          breakTime,
+          worklog,
+          1000,
+          [legacyTask],
+        ]);
+
+        expect(result.nrOfCompletedTasks).toBe(1);
+      });
+
       it('should calculate daysWorked from worklog structure', () => {
         const tasks: Task[] = [createTask()];
         const breakNr: BreakNr = {};

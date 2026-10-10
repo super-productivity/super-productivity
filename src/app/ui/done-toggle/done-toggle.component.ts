@@ -24,6 +24,8 @@ import { isMultiSelectModifierEvent } from '../../util/is-multi-select-modifier-
 })
 export class DoneToggleComponent {
   readonly isDone = input.required<boolean>();
+  /** Draws a cross instead of a checkmark. Only ever set on a done task. */
+  readonly isWontDo = input<boolean>(false);
   readonly isCurrent = input<boolean>(false);
   readonly showDoneAnimation = input<boolean>(false);
   readonly showUndoneAnimation = input<boolean>(false);

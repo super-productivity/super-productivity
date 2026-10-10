@@ -1,5 +1,5 @@
 import { Update } from '@ngrx/entity';
-import { Task, TaskState } from '../task.model';
+import { Task, TaskDoneReason, TaskState } from '../task.model';
 import { taskAdapter } from './task.adapter';
 import { initialTaskState } from './task.reducer';
 import {
@@ -42,6 +42,75 @@ describe('task.reducer.util', () => {
   });
 
   describe('updateDoneOnForTask', () => {
+    // A task finished as "won't do" is done, but it was never completed. The
+    // reason is only meaningful while `isDone` is true, so this is the single
+    // funnel that has to normalize it on every transition.
+    describe('doneReason', () => {
+      const ID = 'WD';
+
+      const reasonAfter = (
+        task: Partial<Task>,
+        changes: Partial<Task>,
+      ): TaskDoneReason | undefined => {
+        const state = createState([createTask(ID, task)]);
+        const res = updateDoneOnForTask({ id: ID, changes }, state);
+        return (res.entities[ID] as Task).doneReason;
+      };
+
+      it('should record the reason when a task is finished as wont do', () => {
+        expect(reasonAfter({}, { isDone: true, doneReason: 'wontDo' })).toBe('wontDo');
+      });
+
+      // Without this a re-completed task would still read as abandoned.
+      it('should clear a stale reason when a finished task is completed again', () => {
+        expect(
+          reasonAfter({ isDone: true, doneReason: 'wontDo' }, { isDone: true }),
+        ).toBeUndefined();
+      });
+
+      it('should drop the reason when a task is un-done', () => {
+        expect(
+          reasonAfter({ isDone: true, doneReason: 'wontDo' }, { isDone: false }),
+        ).toBeUndefined();
+      });
+
+      // Reopening has to win over a contradictory reason in the same update.
+      it('should drop the reason even if the reopening update restates it', () => {
+        expect(
+          reasonAfter(
+            { isDone: true, doneReason: 'wontDo' },
+            { isDone: false, doneReason: 'wontDo' },
+          ),
+        ).toBeUndefined();
+      });
+
+      // Both fields describe a finished task, so they have to be dropped together.
+      it('should drop doneOn together with the reason when un-done', () => {
+        const state = createState([
+          createTask(ID, { isDone: true, doneOn: 1234, doneReason: 'wontDo' }),
+        ]);
+        const res = updateDoneOnForTask({ id: ID, changes: { isDone: false } }, state);
+        const task = res.entities[ID] as Task;
+
+        expect(task.doneOn).toBeUndefined();
+        expect(task.doneReason).toBeUndefined();
+      });
+
+      it('should keep the reason for an update that does not touch isDone', () => {
+        expect(
+          reasonAfter({ isDone: true, doneReason: 'wontDo' }, { title: 'renamed' }),
+        ).toBe('wontDo');
+      });
+
+      it('should still record doneOn when finishing as wont do', () => {
+        const res = updateDoneOnForTask(
+          { id: ID, changes: { isDone: true, doneOn: 1234, doneReason: 'wontDo' } },
+          createState([createTask(ID)]),
+        );
+        expect((res.entities[ID] as Task).doneOn).toBe(1234);
+      });
+    });
+
     it('should use explicit doneOn timestamp when provided', () => {
       const state = createState([createTask('task-1')]);
       const upd: Update<Task> = {

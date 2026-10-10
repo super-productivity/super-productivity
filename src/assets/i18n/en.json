@@ -1813,6 +1813,7 @@
         "FOCUS_SESSION": "Start focus session",
         "MARK_DONE": "Mark as completed",
         "MARK_UNDONE": "Mark as not completed",
+        "MARK_WONT_DO": "Finish as won't do",
         "MOVE_TO_BACKLOG": "Move to backlog",
         "MOVE_TO_BOTTOM": "Move to bottom",
         "MOVE_TO_OTHER_PROJECT": "Move to project",

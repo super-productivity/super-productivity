@@ -48,7 +48,8 @@ export const mapSimpleMetrics = ([
       // s.timeSpent = s.timeSpent + Object.keys(task.timeSpentOnDay).reduce((acc, v) => acc + task.timeSpentOnDay [v], 0);
     }
 
-    if (task.isDone) {
+    // A task dismissed as won't do is finished, but it was never completed.
+    if (task.isDone && task.doneReason !== 'wontDo') {
       s.nrOfCompletedTasks++;
     }
   });

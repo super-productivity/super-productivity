@@ -16,6 +16,7 @@
     } @else {
       <done-toggle
         [isDone]="task().isDone"
+        [isWontDo]="task().doneReason === 'wontDo'"
         [isMultiSelectAware]="focusable()"
         [isCurrent]="isCurrent()"
         [showDoneAnimation]="showDoneAnimation()"

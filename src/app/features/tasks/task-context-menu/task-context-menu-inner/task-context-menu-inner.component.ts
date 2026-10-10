@@ -602,6 +602,11 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
     }
   }
 
+  // Finishing as won't do still marks the task done; only the reason differs.
+  setWontDo(): void {
+    this._taskService.setDone(this.task.id, 'wontDo');
+  }
+
   addToMyDay(): void {
     this._store.dispatch(
       TaskSharedActions.planTasksForToday({

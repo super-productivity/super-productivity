@@ -29,6 +29,7 @@
         } @else {
           <done-toggle
             [isDone]="t.isDone"
+            [isWontDo]="t.doneReason === 'wontDo'"
             [isMultiSelectAware]="true"
             [isCurrent]="isCurrent()"
             [showDoneAnimation]="showDoneAnimation()"

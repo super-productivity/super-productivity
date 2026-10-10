@@ -77,6 +77,9 @@ export interface IssueFieldsForTask {
 /** 1 = Low, 2 = Medium, 3 = High. Higher numbers are more important. */
 export type TaskPriority = 1 | 2 | 3;
 
+/** Why a task was finished. Only `'wontDo'` exists: it was dismissed, not completed. */
+export type TaskDoneReason = 'wontDo';
+
 // Extend the plugin Task type with app-specific fields
 // Omit issue fields from PluginTask to avoid conflict with IssueFieldsForTask
 export interface TaskCopy
@@ -152,6 +155,13 @@ export interface TaskCopy
   // Ensure type compatibility for internal fields
   modified?: number;
   doneOn?: number;
+
+  /**
+   * Optional reason a finished task was finished. `undefined` means it was
+   * actually completed, so clients predating the field show a plain done task.
+   * Only ever set together with `isDone`, and dropped whenever a task is un-done.
+   */
+  doneReason?: TaskDoneReason;
   parentId?: string;
   remindAt?: number;
   repeatCfgId?: string;

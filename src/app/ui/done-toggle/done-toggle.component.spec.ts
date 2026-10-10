@@ -7,7 +7,8 @@ import { DoneToggleComponent } from './done-toggle.component';
   imports: [DoneToggleComponent],
   template: `
     <done-toggle
-      [isDone]="false"
+      [isDone]="isDone()"
+      [isWontDo]="isWontDo()"
       [isMultiSelectAware]="isMultiSelectAware()"
       (toggled)="toggledCount = toggledCount + 1"
     ></done-toggle>
@@ -15,6 +16,8 @@ import { DoneToggleComponent } from './done-toggle.component';
 })
 class HostComponent {
   readonly isMultiSelectAware = signal(false);
+  readonly isDone = signal(false);
+  readonly isWontDo = signal(false);
   toggledCount = 0;
 }
 
@@ -50,6 +53,30 @@ describe('DoneToggleComponent', () => {
     // click reach the planner row, which opened the detail panel. Emitting
     // without stopping here would still leave that behaviour broken.
     expect(stopped).toHaveBeenCalled();
+  });
+
+  // A task finished as "won't do" is done, so it keeps the shared `done-check`
+  // styling and swaps only the glyph.
+  describe('wont do', () => {
+    const glyphFor = (isWontDo: boolean): SVGElement | null => {
+      const fixture = TestBed.createComponent(HostComponent);
+      fixture.componentInstance.isDone.set(true);
+      fixture.componentInstance.isWontDo.set(isWontDo);
+      fixture.detectChanges();
+      return fixture.nativeElement.querySelector('.done-check');
+    };
+
+    it('draws a checkmark for a normally completed task', () => {
+      const glyph = glyphFor(false);
+      expect(glyph?.tagName).toBe('polyline');
+      expect(glyph?.classList).not.toContain('done-check--cross');
+    });
+
+    it('draws a cross instead of the checkmark', () => {
+      const glyph = glyphFor(true);
+      expect(glyph?.tagName).toBe('path');
+      expect(glyph?.classList).toContain('done-check--cross');
+    });
   });
 
   it('lets a modifier click bubble untouched when the host is multi-select aware', () => {

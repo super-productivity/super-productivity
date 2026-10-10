@@ -20,9 +20,17 @@
       points="10,7 10,17 17,12"
     />
   }
-  <!-- Checkmark (shown when done) -->
-  <polyline
-    class="done-check"
-    points="6,12 10.5,16.5 18,8"
-  />
+  @if (isWontDo()) {
+    <!-- Cross (replaces the checkmark for a task finished as won't do) -->
+    <path
+      class="done-check done-check--cross"
+      d="M7,7 L17,17 M17,7 L7,17"
+    />
+  } @else {
+    <!-- Checkmark (shown when done) -->
+    <polyline
+      class="done-check"
+      points="6,12 10.5,16.5 18,8"
+    />
+  }
 </svg>

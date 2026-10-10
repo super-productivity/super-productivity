@@ -1224,8 +1224,8 @@ export class TaskService {
     return this._store.pipe(select(selectTasksByTag, { tagId }));
   }
 
-  setDone(id: string): void {
-    this.update(id, { isDone: true });
+  setDone(id: string, doneReason?: Task['doneReason']): void {
+    this.update(id, { isDone: true, ...(doneReason ? { doneReason } : {}) });
   }
 
   markIssueUpdatesAsRead(id: string): void {

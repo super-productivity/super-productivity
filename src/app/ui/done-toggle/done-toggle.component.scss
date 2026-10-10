@@ -3,9 +3,22 @@
 // approximate length of checkmark polyline
 $check-len: 18;
 
+// approximate length of ONE cross diagonal: dashing restarts per subpath, and
+// the cross is two subpaths, so both draw over the full animation
+$cross-len: 15;
+
 @keyframes draw-check {
   from {
     stroke-dashoffset: $check-len;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes draw-cross {
+  from {
+    stroke-dashoffset: $cross-len;
   }
   to {
     stroke-dashoffset: 0;
@@ -72,6 +85,13 @@ $check-len: 18;
     transition: opacity var(--transition-duration-m) var(--ani-standard-timing);
   }
 
+  // The cross shares the checkmark's stroke, opacity and hover rules. Only the
+  // dash length differs, since a diagonal is shorter than the checkmark.
+  .done-check--cross {
+    stroke-dasharray: $cross-len;
+    stroke-dashoffset: $cross-len;
+  }
+
   .play-indicator {
     fill: var(--c-accent);
     transform-origin: center;
@@ -87,6 +107,10 @@ $check-len: 18;
     .done-check {
       opacity: 0.5;
       animation: draw-check var(--transition-duration-s) ease-out forwards;
+    }
+
+    .done-check--cross {
+      animation-name: draw-cross;
     }
   }
 

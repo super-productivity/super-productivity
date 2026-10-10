@@ -491,6 +491,17 @@ describe('TaskService', () => {
         }),
       );
     });
+
+    // The task is done either way; only the reason distinguishes the two.
+    it('should update task with a wont do reason', () => {
+      service.setDone('task-1', 'wontDo');
+
+      expect(store.dispatch).toHaveBeenCalledWith(
+        TaskSharedActions.updateTask({
+          task: { id: 'task-1', changes: { isDone: true, doneReason: 'wontDo' } },
+        }),
+      );
+    });
   });
 
   describe('setUnDone', () => {

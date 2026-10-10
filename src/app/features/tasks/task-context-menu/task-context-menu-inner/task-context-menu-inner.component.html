@@ -176,6 +176,18 @@
     </button>
   }
 
+  @if (!task.isDone) {
+    <button
+      (click)="setWontDo()"
+      mat-menu-item
+    >
+      <span class="menuItemLeft">
+        <mat-icon>close</mat-icon>
+        {{ T.F.TASK.CMP.MARK_WONT_DO | translate }}
+      </span>
+    </button>
+  }
+
   @if (isAdvancedControls() && !task.isDone && (!task.parentId || isInSubTaskList)) {
     <button
       (click)="moveToTop()"

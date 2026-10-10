@@ -133,9 +133,13 @@ export const updateDoneOnForTask = (upd: Update<Task>, state: TaskState): TaskSt
     // the Today "Done" list is driven by `isDone`/`doneOn`, not `dueDay`.
     const doneOn =
       typeof upd.changes.doneOn === 'number' ? upd.changes.doneOn : Date.now();
+    // `doneReason` is taken from the update, so finishing a task without one
+    // clears any stale reason and un-doing a task always drops it. Paths that
+    // write `isDone` directly without passing through here must clear it
+    // themselves.
     const changes = {
-      ...(isToDone ? { doneOn } : {}),
-      ...(isToUnDone ? { doneOn: undefined } : {}),
+      ...(isToDone ? { doneOn, doneReason: upd.changes.doneReason } : {}),
+      ...(isToUnDone ? { doneOn: undefined, doneReason: undefined } : {}),
     };
     return taskAdapter.updateOne(
       {
@@ -160,7 +164,9 @@ export const updateStartDateForRepeatableTask = (
   if (isToDone || isToUnDone) {
     const changes = {
       ...(isToDone ? { doneOn: Date.now(), dueDay: undefined } : {}),
-      ...(isToUnDone ? { doneOn: undefined } : {}),
+      // Mirrors `updateDoneOnForTask`: an un-done task is neither done nor
+      // abandoned, so the reason goes with `doneOn`.
+      ...(isToUnDone ? { doneOn: undefined, doneReason: undefined } : {}),
     };
     return taskAdapter.updateOne(
       {
