@@ -265,17 +265,16 @@ export class TreeDndComponent<TData = unknown> {
       }
     }
 
-    // Special case: Check if hovering over the root drop zone (bottom of tree)
-    if (this._rootDropEl) {
-      const rect = this._rootDropEl.getBoundingClientRect();
-      if (this._dragService.isPointInRect(pointer, rect)) {
-        return { id: '', where: 'root', element: this._rootDropEl };
-      }
-    }
-
     // Find the actual DOM element under the mouse pointer
     const element = document.elementFromPoint(pointer.x, pointer.y) as HTMLElement | null;
     if (!element) return null;
+
+    // Special case: Check if hovering over the root drop zone (bottom of tree).
+    // Its rect alone is not enough: inside a scroll container the zone can be
+    // clipped behind other content, so it must be the element under the pointer.
+    if (this._rootDropEl?.contains(element)) {
+      return { id: '', where: 'root', element: this._rootDropEl };
+    }
 
     // Navigate up the DOM to find the nearest tree item container
     const itemEl = element.closest('.item') as HTMLElement | null;
