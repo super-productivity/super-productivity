@@ -129,7 +129,11 @@ export class SimpleCounterButtonComponent implements OnDestroy, OnInit {
     if (this.simpleCounter()?.type === SimpleCounterType.RepeatedCountdownReminder) {
       this._subs.add(
         this.countdownTime$.subscribe((countdownTime) => {
-          if (countdownTime === 0) {
+          if (countdownTime === 0 && !this.isTimeUp()) {
+            const sc = this.simpleCounter();
+            if (sc?.id && sc.isOn) {
+              this._simpleCounterService.setCounterOff(sc.id);
+            }
             this.isTimeUp.set(true);
             this._bannerService.open({
               id: BannerId.SimpleCounterCountdownComplete,
