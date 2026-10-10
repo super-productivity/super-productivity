@@ -383,8 +383,9 @@ PluginAPI.showSnack({
   msg: 'Operation completed!',
   type: 'SUCCESS', // SUCCESS, ERROR, INFO, WARNING
   ico: 'check', // Optional Material icon
-  actionStr: 'Undo', // Optional action button
-  actionFn: () => console.log('Undo clicked'),
+  // Optional action button; the snack then stays visible longer.
+  // plugin.js only: functions cannot cross the iframe message boundary.
+  action: { label: 'Undo', onClick: () => console.log('Undo clicked') },
 });
 
 // System notification

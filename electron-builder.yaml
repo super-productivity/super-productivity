@@ -216,6 +216,8 @@ mac:
   notarize: true
   extendInfo:
     ITSAppUsesNonExemptEncryption: false
+    # hardened runtime denies Apple Events without it; used by the app-auto-track plugin
+    NSAppleEventsUsageDescription: Super Productivity reads the frontmost app and window title to suggest which task to track.
   publish:
     - github
   target:

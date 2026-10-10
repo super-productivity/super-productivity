@@ -94,6 +94,16 @@ export interface SnackCfg {
   msg: string;
   type?: 'SUCCESS' | 'ERROR' | 'WARNING' | 'INFO';
   ico?: string;
+  /**
+   * Optional action button; the snack stays visible longer when set.
+   * plugin.js only — functions cannot cross the iframe postMessage boundary.
+   */
+  action?: SnackActionCfg;
+}
+
+export interface SnackActionCfg {
+  label: string;
+  onClick: () => void;
 }
 
 export type SnackCfgLimited = SnackCfg;
@@ -788,8 +798,8 @@ export interface PluginAPI {
   // download file
   downloadFile(filename: string, data: string): Promise<void>;
 
-  // node execution (Electron desktop only; currently grantable only to packaged
-  // built-in plugins with nodeExecution permission after main-process user consent)
+  // node execution (Electron desktop only; requires the nodeExecution permission and
+  // main-process user consent)
   executeNodeScript?(request: PluginNodeScriptRequest): Promise<PluginNodeScriptResult>;
 
   // action execution - dispatch NgRx actions (limited to allowed subset)
