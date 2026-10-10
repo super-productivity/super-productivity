@@ -38,6 +38,38 @@
             android:textStyle="bold" />
     </LinearLayout>
 
+    <!-- Currently tracked task (local or, via SuperSync presence, remote); gone when
+         nothing is being tracked. -->
+    <LinearLayout
+        android:id="@+id/widget_tracking_row"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingStart="6dp"
+        android:paddingEnd="6dp"
+        android:paddingBottom="8dp"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/widget_tracking_title"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="@color/widget_ink"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:maxLines="1"
+            android:ellipsize="end" />
+
+        <TextView
+            android:id="@+id/widget_tracking_device"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="@color/widget_ink_muted"
+            android:textSize="12sp"
+            android:maxLines="1"
+            android:ellipsize="end" />
+    </LinearLayout>
+
     <!-- FrameLayout, not View: plain View is not on the RemoteViews whitelist -->
     <FrameLayout
         android:layout_width="match_parent"
