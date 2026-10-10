@@ -340,6 +340,24 @@ describe('OnboardingHintService', () => {
       expect(localStorage.getItem(LS.ONBOARDING_HINTS_DONE)).toBe('true');
     });
 
+    it('ends the swipe hints once the first task is deleted', () => {
+      const service = createPhoneService();
+      addFirstTask();
+      expect(service.currentStep()).toBe('task-swipe-left');
+      setTasks([]);
+      TestBed.tick();
+      expect(service.currentStep()).toBeNull();
+      expect(localStorage.getItem(LS.ONBOARDING_HINTS_DONE)).toBe('true');
+    });
+
+    it('moves on to the Inbox when the first task is deleted and tips wait there', () => {
+      const service = createPhoneService();
+      addFirstTask([EXAMPLE_TASK]);
+      setTasks([EXAMPLE_TASK]);
+      TestBed.tick();
+      expect(service.currentStep()).toBe('explore-inbox');
+    });
+
     it('hides swipe hints while a task detail panel is open', () => {
       const service = createPhoneService();
       addFirstTask();

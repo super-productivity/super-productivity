@@ -49,7 +49,7 @@ const RETURNING_USER_MIN_PROJECTS = 3;
  *    creation path; example tasks and repeat instances do not count).
  * 2. Phones only: on the task row, "swipe left for more actions" (advances once
  *    the task menu was opened and closed), then "swipe right to mark it as done"
- *    (ends once a task is marked done).
+ *    (ends once a task is marked done or the first task is deleted).
  * 3. If the seeded example tasks are still in the Inbox, point at the Inbox once
  *    (ends when the Inbox is opened). Otherwise they are easy to never find, and
  *    they explain what else can be switched on.
@@ -127,6 +127,20 @@ export class OnboardingHintService {
         this._wasTaskMenuOpened = true;
       } else if (this._wasTaskMenuOpened) {
         this._phase.set('task-swipe-right');
+      }
+    });
+
+    // A deleted first task (e.g. from the menu the swipe tip opens) leaves
+    // nothing to swipe; the hint would otherwise stay stuck on an empty list.
+    effect(() => {
+      const phase = this._phase();
+      const id = this.firstTaskId();
+      if (
+        (phase === 'task-swipe-left' || phase === 'task-swipe-right') &&
+        id &&
+        !this._taskEntities()[id]
+      ) {
+        untracked(() => this._advanceToExplore());
       }
     });
 

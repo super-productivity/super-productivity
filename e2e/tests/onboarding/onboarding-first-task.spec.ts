@@ -5,7 +5,7 @@ import {
   attachPageErrorCollector,
   installDevErrorDialogHandler,
 } from '../../utils/runtime-errors';
-import { waitForStatePersistence } from '../../utils/waits';
+import { waitForMenuSettled, waitForStatePersistence } from '../../utils/waits';
 
 const pixel5TestOptions = { ...devices['Pixel 5'] };
 // Browser type is worker-scoped and cannot be overridden inside a describe block.
@@ -223,6 +223,47 @@ test.describe('First-run onboarding', () => {
       await task.locator('done-toggle').tap();
       await expect(hint).toHaveCount(0);
       assertNoRuntimeBrowserErrors(runtimeErrors, 'mobile onboarding');
+      await page.close();
+    });
+
+    test('deleting the first task from its menu ends the swipe tips', async ({
+      isolatedContext,
+    }) => {
+      const page = await isolatedContext.newPage();
+      const runtimeErrors = attachPageErrorCollector(page, 'onboarding delete');
+      installDevErrorDialogHandler(page, 'onboarding delete');
+
+      await openFreshApp(page, { withExamples: false });
+      await expect(page.locator('onboarding-hint')).toContainText(
+        'Tap + to add your first task',
+      );
+      await page.getByRole('button', { name: 'Add new task' }).tap();
+      const input = page.locator('add-task-bar.global .main-input');
+      await input.fill('Task to delete');
+      await input.press('Enter');
+      await expect(page.locator('add-task-bar.global')).toBeHidden();
+
+      const hint = page.locator('onboarding-hint');
+      await expect(hint).toContainText('Swipe task left for more actions');
+      const task = page.locator('task').filter({ hasText: 'Task to delete' }).first();
+      // The keyboard route to the menu that swipe-left opens.
+      await task.focus();
+      await page.keyboard.press('q');
+      await waitForMenuSettled(page);
+      await page
+        .locator('.mat-mdc-menu-content button', { hasText: 'Delete task' })
+        .tap();
+      await page.getByRole('button', { name: 'Delete', exact: true }).click();
+      await expect(page.locator('task')).toHaveCount(0);
+
+      // Nothing is left to swipe: guidance ends instead of waiting unseen.
+      await expect(hint).toHaveCount(0);
+      await expect
+        .poll(() =>
+          page.evaluate(() => localStorage.getItem('SUP_ONBOARDING_HINTS_DONE')),
+        )
+        .toBe('true');
+      assertNoRuntimeBrowserErrors(runtimeErrors, 'onboarding delete');
       await page.close();
     });
 
