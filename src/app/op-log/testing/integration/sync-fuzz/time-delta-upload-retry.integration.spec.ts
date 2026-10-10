@@ -30,6 +30,90 @@ describe('time delta upload retries', () => {
     expect(result.failures).toEqual([]);
   }, 60000);
 
+  // #10614 across tabs: B tracks t1 again while its upload is in flight, and
+  // another tab uploads that delta without acknowledging it yet. The rejection
+  // rebase moves it with the rejected one, so its re-upload differs from the
+  // stored op (INVALID_OP_ID) and the receipt check restores its clock (#10499).
+  it('recovers a delta another tab stored while the rejected upload was in flight', async () => {
+    const harness = await SyncFuzzHarness.create();
+    const [a, b, c] = [
+      await harness.addDevice('A'),
+      await harness.addDevice('B'),
+      await harness.addDevice('C'),
+    ];
+    const run = (device: FuzzDevice, intent: Intent): Promise<unknown> =>
+      harness.as(device, () => executeIntent(harness, intent));
+    const deltasOnB = (): Promise<OperationLogEntry[]> =>
+      harness.as(b, async () =>
+        (await TestBed.inject(OperationLogStoreService).getOpsAfterSeq(0)).filter(
+          ({ op }) => op.actionType === ActionType.TIME_TRACKING_SYNC_TIME_SPENT,
+        ),
+      );
+    for (const intent of SETUP_INTENTS) await run(a, intent);
+    for (const device of [a, b, c]) await harness.sync(device);
+    await run(a, ['renameTask', 't1', 'A remote']);
+    await harness.sync(a);
+    await run(b, ['track', 't1', 3000]);
+
+    const upload = b.client.uploadOps.bind(b.client);
+    const codes: (string | undefined)[] = [];
+    let inFlight: OperationLogEntry | undefined;
+    b.client.uploadOps = async (ops, clientId, lastKnownServerSeq) => {
+      const result = await upload(ops, clientId, lastKnownServerSeq);
+      codes.push(...result.results.map((r) => r.errorCode));
+      if (!inFlight) {
+        // B is the active device here, so the intent runs without `as`.
+        await executeIntent(harness, ['track', 't1', 2000]);
+        inFlight = (await TestBed.inject(OperationLogStoreService).getUnsynced()).find(
+          ({ op }) => !ops.some((sent) => sent.id === op.id),
+        );
+        const { op } = inFlight!;
+        const stored = await upload(
+          [
+            {
+              id: op.id,
+              clientId: op.clientId,
+              actionType: op.actionType,
+              opType: op.opType,
+              entityType: op.entityType,
+              entityId: op.entityId,
+              entityIds: op.entityIds,
+              payload: op.payload,
+              vectorClock: op.vectorClock,
+              timestamp: op.timestamp,
+              schemaVersion: op.schemaVersion,
+            },
+          ],
+          clientId,
+        );
+        expect(stored.results.map((r) => r.accepted)).toEqual([true]);
+      }
+      return result;
+    };
+    for (let round = 0; round < 3; round++) {
+      for (const device of [b, a, c]) await harness.sync(device);
+    }
+    b.client.uploadOps = upload;
+
+    expect(codes).toContain('CONFLICT_CONCURRENT');
+    expect(codes).toContain('INVALID_OP_ID');
+    expect(harness.events).toEqual([]);
+    const recovered = (await deltasOnB()).find(({ op }) => op.id === inFlight!.op.id);
+    expect(recovered?.syncedAt).toBeDefined();
+    expect(recovered?.rejectedAt).toBeUndefined();
+    expect(recovered?.op.vectorClock).toEqual(inFlight!.op.vectorClock);
+    for (const device of [a, b, c]) {
+      for (let restart = 0; restart < 2; restart++) {
+        const task = viewOf(await harness.as(device, () => harness.state())).tasks.find(
+          (t) => t.id === 't1',
+        );
+        expect(task?.timeSpent).toBe(5000);
+        expect(task?.title).toBe('A remote');
+        await harness.restart(device);
+      }
+    }
+  }, 60000);
+
   for (const boundary of [
     'application',
     'download',

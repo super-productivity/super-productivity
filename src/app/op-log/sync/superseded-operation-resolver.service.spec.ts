@@ -348,6 +348,8 @@ describe('SupersededOperationResolverService', () => {
       'tie local wins',
       'stale rejection',
       'unrejected snapshot',
+      // Not in the rejected upload, e.g. tracked while it was in flight (#10614).
+      'unrejected delta',
       'history gap',
       'missing suffix',
       'parent move',
@@ -460,7 +462,11 @@ describe('SupersededOperationResolverService', () => {
         mockOpLogStore.getOpsAfterSeq.and.resolveTo(tail);
         mockOpLogStore.rebasePendingLocalOps.and.resolveTo([delta]);
         const rejected =
-          variant === 'unrejected snapshot' ? [delta] : [delta, rejectedSnapshot];
+          variant === 'unrejected snapshot'
+            ? [delta]
+            : variant === 'unrejected delta'
+              ? [rejectedSnapshot]
+              : [delta, rejectedSnapshot];
         const before = JSON.stringify(pending);
         const assertFence = (): void => {
           if (
@@ -477,7 +483,10 @@ describe('SupersededOperationResolverService', () => {
           })),
           assertFence,
         );
-        const shouldRebase = variant === 'newer remote' || variant === 'tie remote wins';
+        const shouldRebase =
+          variant === 'newer remote' ||
+          variant === 'tie remote wins' ||
+          variant === 'unrejected delta';
         if (variant === 'epoch changes after retirement') {
           await expectAsync(result).toBeRejectedWithError('epoch changed');
           expect(mockOpLogStore.markRejected).toHaveBeenCalledOnceWith([snapshot.id]);
@@ -490,7 +499,9 @@ describe('SupersededOperationResolverService', () => {
         if (shouldRebase)
           expect(mockOpLogStore.rebasePendingLocalOps).toHaveBeenCalledOnceWith(
             [delta.id],
-            remote.vectorClock,
+            // Without a rejected delta no row is named; the rebase still
+            // moves it past the durable clock, which holds the applied row.
+            variant === 'unrejected delta' ? {} : remote.vectorClock,
           );
         else expect(mockOpLogStore.rebasePendingLocalOps).not.toHaveBeenCalled();
         expect(JSON.stringify(pending)).toBe(before);
