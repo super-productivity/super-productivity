@@ -113,6 +113,10 @@ object ReminderNotificationHelper {
 
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !alarmManager.canScheduleExactAlarms()) {
+                // Default on Android 14+ fresh installs. The app shows a hint where
+                // reminders are set; ExactAlarmPermissionReceiver re-registers these
+                // as exact once the user grants the permission.
+                Log.d(TAG, "Exact alarms not permitted, scheduling inexact: id=$notificationId")
                 alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMs, pendingIntent)
             } else {
                 alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMs, pendingIntent)
@@ -125,6 +129,35 @@ object ReminderNotificationHelper {
         } catch (e: Exception) {
             Log.e(TAG, "Failed to schedule reminder", e)
         }
+    }
+
+    /**
+     * Re-registers every future alarm persisted in [ReminderAlarmStore].
+     * Shared by the reboot/app-update path and the exact-alarm permission grant
+     * path; [scheduleReminder] picks exact vs. inexact delivery from the
+     * current permission state, and re-using the same request code replaces
+     * any alarm that is still pending. Past-due entries are dropped by
+     * [ReminderAlarmStore.getAll], so already-fired reminders don't re-fire.
+     *
+     * @return number of alarms re-registered
+     */
+    fun rescheduleAllFromStore(context: Context): Int {
+        val alarms = ReminderAlarmStore.getAll(context)
+        for (alarm in alarms) {
+            Log.d(TAG, "Re-scheduling alarm: id=${alarm.notificationId}")
+            scheduleReminder(
+                context,
+                alarm.notificationId,
+                alarm.reminderId,
+                alarm.relatedId,
+                alarm.title,
+                alarm.reminderType,
+                alarm.triggerAtMs,
+                alarm.useAlarmStyle,
+                alarm.isOngoing
+            )
+        }
+        return alarms.size
     }
 
     fun cancelReminder(context: Context, notificationId: Int) {

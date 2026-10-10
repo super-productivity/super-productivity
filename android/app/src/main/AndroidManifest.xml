@@ -190,6 +190,18 @@
       </intent-filter>
     </receiver>
 
+    <!-- Re-registers reminder alarms as exact when the user grants "Alarms &
+      reminders" (issue #10684). exported="true" so the system broadcast is
+      delivered; the action is a protected broadcast, so other apps can't send it. -->
+    <receiver
+      android:name=".receiver.ExactAlarmPermissionReceiver"
+      android:enabled="true"
+      android:exported="true">
+      <intent-filter>
+        <action android:name="android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED" />
+      </intent-filter>
+    </receiver>
+
     <!-- Home screen widget. exported="true" is required for APPWIDGET_UPDATE from
          the launcher; the custom click/done actions are deliberately NOT listed here —
          they are delivered via explicit-component PendingIntents, and listing them
