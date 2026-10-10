@@ -108,7 +108,7 @@ In `operation-log.effects.ts`:
 
 ### Step 2: Upload to Server
 
-In `sync.service.ts` (`processOperation`):
+In [`operation-upload.service.ts`](../../packages/super-sync-server/src/sync/services/operation-upload.service.ts) (`processOperation`):
 
 1. `ValidationService.validateOp()` sanitizes the clock (DoS cap at 2.5×MAX = 50 entries) but does **NOT** prune
 2. `detectConflict()` compares the **full unpruned** incoming clock against the existing entity clock
@@ -164,7 +164,18 @@ Implemented in `packages/sync-core/src/vector-clock.ts`. Client-side pruning is 
 
 ### Pruning is Rare
 
-With MAX=20, a user needs 21+ unique client IDs before pruning triggers. Both sides preserve the latest causal full-state author alongside their own id: the server when storing uploaded ops, the client at every site that prunes the durable clock (#9096). Preserving that boundary edge matters because `classifyOpAgainstSyncImport` rescues a post-import op from a different client via exactly one predicate — `op.vectorClock[importAuthor] >= importCounter` — and `limitVectorClockSize` never re-invents an absent entry, so an author dropped from the client's durable clock would be missing from every subsequent op permanently. Other pruned edges can still cause one extra server round-trip (false CONCURRENT → client resolves → re-uploads with >MAX clock → GREATER_THAN → accepted).
+With MAX=20, a user needs 21+ unique client IDs before pruning triggers. Both sides preserve the latest causal full-state author alongside their own id: the server when storing uploaded ops, the client at every site that prunes the durable clock (#9096). Preserving that boundary edge matters because `classifyOpAgainstSyncImport` rescues a post-import op from a different client via exactly one predicate — `op.vectorClock[importAuthor] >= importCounter` — and `limitVectorClockSize` never re-invents an absent entry, so an author dropped from the client's durable clock would be missing from every subsequent op permanently.
+
+### Pruning Can Lose Conflict Information (#8755)
+
+Comparing before pruning protects the **incoming** clock, but later uploads are compared against a **previously pruned stored** clock. Missing entries are treated as zero, so pruning can cause false ordering as well as false `CONCURRENT` results. An incoming clock can compare `CONCURRENT` against the full stored clock but `GREATER_THAN` after pruning. This could hide a conflict if that clock pair is reachable on the real sync path; an extra conflict-resolution round-trip is not a guaranteed worst case.
+
+For example, a stored clock has `{A: 2, B: 3, C: 1}` plus 18 other entries at 3 (21 entries total). Pruning to 20 while preserving B drops C. An incoming clock has `{A: 3, B: 3}` plus the same 18 entries, with C absent:
+
+- Against the original clock: `CONCURRENT` (A is ahead, C is behind).
+- Against the pruned stored clock: `GREATER_THAN` (the C edge is gone).
+
+This is a clock-comparison counterexample, not an end-to-end reproduction of missed conflicts or data loss. The real local-clock accumulation and deterministic conflict case with more than 20 clients remains an open E2E item in [#8755](https://github.com/super-productivity/super-productivity/issues/8755). The upload path already debug-logs the before/after sizes when truncation occurs.
 
 ---
 
@@ -173,12 +184,12 @@ With MAX=20, a user needs 21+ unique client IDs before pruning triggers. Both si
 ### Server-Side Flow
 
 1. Server finds the latest operation for the same entity — **two separately-indexed lookups**, a scalar `findFirst` plus a raw-SQL `MATERIALIZED` CTE over `entity_ids`, taking whichever has the higher `serverSeq`. Deliberately NOT one combined filter; see the multi-entity section below for why that caused an outage.
-2. Compares incoming clock vs existing clock using the **full unpruned** incoming clock
+2. Compares the **full unpruned** incoming clock against the existing stored clock, which may already have been pruned (§5)
 3. Possible outcomes:
-   - `GREATER_THAN` → **accept** (incoming op causally succeeds existing)
+   - `GREATER_THAN` → **accept** (treated as a causal successor; stored-clock pruning can change the comparison — §5)
    - `EQUAL` + same client → **accept** (retry of same operation)
    - `EQUAL` + different client → **reject** (suspicious clock reuse)
-   - `CONCURRENT` → **reject** (true conflict)
+   - `CONCURRENT` → **reject** (possibly a pruning artifact), except when both ops are task-time deltas
    - `LESS_THAN` → **reject** (superseded)
 4. If accepted: prune clock, then store
 
@@ -443,9 +454,12 @@ Rules that must hold for the system to be correct. Use these to verify implement
 | SYNC_IMPORT creation (sync hydration)                       | `src/app/op-log/persistence/sync-hydration.service.ts`                       |
 | SYNC_IMPORT creation (server migration)                     | `src/app/op-log/sync/server-migration.service.ts`                            |
 | REPAIR creation                                             | `src/app/op-log/validation/repair-operation.service.ts`                      |
-| Server: conflict detection + prune after comparison         | `packages/super-sync-server/src/sync/sync.service.ts`                        |
+| Server: conflict detection                                  | `packages/super-sync-server/src/sync/conflict.ts`                            |
+| Server: upload + prune after comparison                     | [operation-upload.service.ts][server-operation-upload]                       |
 | Server: DoS cap (sanitize, no pruning)                      | `packages/super-sync-server/src/sync/services/validation.service.ts`         |
 | Server: snapshot clock pruning during download optimization | `packages/super-sync-server/src/sync/services/operation-download.service.ts` |
+
+[server-operation-upload]: ../../packages/super-sync-server/src/sync/services/operation-upload.service.ts
 
 ---
 
@@ -459,8 +473,9 @@ research doc, now git-only). Load-bearing context for anyone changing
 
 **Never prune a vector clock before using it in a comparison.** Pruning removes
 information: a missing entry is ambiguous — "never knew about this client" vs
-"entry was pruned" — so a pre-pruned comparison returns CONCURRENT instead of
-EQUAL/causal. Two independent incidents established this:
+"entry was pruned" — so a pre-pruned comparison can return false CONCURRENT
+instead of EQUAL/causal, or hide a CONCURRENT comparison (§5). Two independent incidents
+established the false-CONCURRENT direction:
 
 - **Riak #613:** pruning before comparison caused "sibling explosion" — objects
   accumulated hundreds of siblings that could never resolve because pruned
@@ -471,7 +486,8 @@ EQUAL/causal. Two independent incidents established this:
   CONCURRENT, the server rejects, the client re-merges, the loop repeats.
 
 Fix in both systems: compare the **full unpruned** clock, then prune **only
-before storage**. This is the invariant in §6 and §9.
+before storage**. This is the invariant in §6 and §9; it does not restore
+information already pruned from the stored clock (§5).
 
 ### Why MAX = 20 (the 10 → 30 → 20 evolution)
 
@@ -509,8 +525,9 @@ correlates with _importance_ (a fresh import author has counter 1), not with
 _deadness_ — the heuristic behind the #9089/#9096 preserve-set bugs. Issue
 #9105 tracks the root cause: client IDs are minted per install/profile and
 retired almost never, so clocks only grow toward MAX. The decision on #9105
-was to **park** the fix — post #9089/#9102 the worst case is the benign extra
-round-trip of §5 — and record the agreed direction here.
+was to **park** the fix after #9089/#9102 and record the agreed direction here.
+That remains a parked option, not a guarantee that pruning only costs an extra
+round-trip: the theoretical missed-conflict case in §5 still applies.
 
 If pruning stops being rare in practice, evict the **stalest** entries instead
 of the lowest-counter ones. Unlike the coordinator options above, this fits
@@ -525,15 +542,13 @@ time` map, updated where remote clocks are merged (`mergeRemoteOpClocks`) —
   every merged op carries its author's ID. Needs no server support, so it
   covers WebDAV / LocalFile / Dropbox too.
 
-The safety profile is identical to today's pruning (entries are dropped either
-way; a dropped ID that returns costs at most the extra round-trip of §5), but
-victim selection is strictly better: a recently-seen ID — e.g. a fresh import
-author — survives by definition, making the preserve-set invariant of
-#9089/#9096 _emergent_ instead of hand-maintained at each prune site (the
-explicit preserve sets stay as belt-and-braces). Staleness knowledge differs
-per node, so nodes may evict different victims; that adds clock asymmetry but
-no new failure class — comparison treats missing keys as zero, and clients
-already prune with differing preserve sets.
+Staleness-informed eviction would still drop causal information and could hide
+conflicts (§5). It aims to prefer recently-seen IDs over stale ones, but does
+not establish a stronger safety guarantee; explicit preserve sets must still
+protect the full-state boundary. Staleness knowledge differs per node, so nodes
+may evict different victims. Any implementation needs to validate those
+asymmetric comparisons rather than assume a dropped ID only costs an extra
+round-trip.
 
 The supported GC today is a **full-state import**: the clock reset keeps only
 `{import author, self}` (§7), and the once-per-session pruning snack points
