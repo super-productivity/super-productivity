@@ -1,18 +1,17 @@
 export const meta = {
   name: 'issue-burndown',
   description:
-    'Screen, triage, reproduce and fix open issues per docs/plans/2026-10-10-issue-burndown.md',
+    'Triage, reproduce, fix and ship open bugs per docs/plans/2026-10-10-issue-burndown.md',
   whenToUse:
-    'Unattended issue burn-down. args: {baseSha, issues, runDir?, limit?, reproSlots?, fixPorts?} or {ship: true, ready: [{number, branch}]}',
+    'Unattended bug burn-down. args: {baseSha, issues, runDir?, limit?, ship?, reproSlots?, fixPorts?}',
   phases: [
-    { title: 'Screen', detail: 'classify issues in batches of 25' },
-    { title: 'Triage', detail: 'one agent per bug or feature candidate' },
+    { title: 'Triage', detail: 'one agent per issue' },
     { title: 'Reproduce', detail: 'failing test on BASE_SHA, worktree per issue' },
     { title: 'Fix', detail: 'leanest fix for easy candidates' },
     { title: 'Verify', detail: 'mechanical verifier and adversarial reviewer' },
-    { title: 'Finalize', detail: 'push the branch, write final.json' },
+    { title: 'Ship', detail: 'push, cgcf until ready, ready-for-review PR' },
+    { title: 'Finalize', detail: 'push repro branch, write final.json' },
     { title: 'Decide', detail: 'ordered decision list and batch actions' },
-    { title: 'Ship', detail: 'cgcf until ready, then PR (cgcf environment only)' },
   ],
 };
 
@@ -20,6 +19,7 @@ export const meta = {
 const DOC = 'docs/plans/2026-10-10-issue-burndown.md';
 const A = args || {};
 const RUN = A.runDir || '.tmp/issue-burndown';
+const SHIP_PRS = A.ship !== false;
 const SUB = { model: 'opus', effort: 'medium' };
 const MAX_PROD_FILES = 5;
 const MAX_PROD_LINES = 120;
@@ -33,17 +33,6 @@ const obj = (properties, required) => ({
   required: required || Object.keys(properties),
 });
 
-const SCREEN = obj({
-  issues: {
-    type: 'array',
-    items: obj({
-      number: NUM,
-      kind: { enum: ['bug', 'feature', 'tracker', 'question', 'unclear'] },
-      note: STR,
-    }),
-  },
-});
-
 const TRIAGE = obj({
   number: NUM,
   kind: { enum: ['bug', 'feature', 'tracker', 'question', 'unclear'] },
@@ -55,14 +44,16 @@ const TRIAGE = obj({
   platforms: { type: 'array', items: STR },
   sync: BOOL,
   userReported: BOOL,
+  platformSpecific: BOOL,
   reproducibleHere: BOOL,
-  notReproducibleReason: STR,
   clarity: { enum: ['clear', 'ok', 'missing-steps'] },
   needsDecision: BOOL,
   decisionQuestion: STR,
   harm: { type: 'integer', minimum: 1, maximum: 5 },
   reach: { type: 'integer', minimum: 1, maximum: 3 },
   demand: NUM,
+  rootCauseHypothesis: STR,
+  fixProposal: STR,
   summary: obj({ expected: STR, actual: STR, steps: STR, environment: STR }),
   needsInfoDraft: STR,
 });
@@ -70,7 +61,7 @@ const TRIAGE = obj({
 const REPRO = obj({
   number: NUM,
   status: { enum: ['reproduced', 'not-reproduced', 'not-attempted'] },
-  testType: { enum: ['unit', 'e2e', 'none'] },
+  testType: { enum: ['unit', 'e2e', 'e2e-sync', 'none'] },
   testFile: STR,
   commit: STR,
   failingAssertion: STR,
@@ -98,27 +89,21 @@ const VERDICT = obj({
 
 const FINAL = obj({
   number: NUM,
-  route: { enum: ['ready-for-cgcf', 'decision', 'batch-action', 'skipped'] },
+  route: { enum: ['shipped', 'ready-for-cgcf', 'decision', 'batch-action', 'skipped'] },
   branch: STR,
+  prUrl: STR,
   reason: STR,
 });
 
 const DECIDE = obj({
   decisions: NUM,
   batchActions: NUM,
-  readyForCgcf: NUM,
+  shipped: NUM,
   summary: STR,
 });
 
-const SHIP = obj({
-  number: NUM,
-  status: { enum: ['pr-opened', 'moved-to-decisions'] },
-  prUrl: STR,
-  reason: STR,
-});
-
-// Caps concurrent use of a scarce resource (a repro slot, a fix port) across
-// pipeline items; the workflow's own cap only limits agents overall.
+// Caps concurrent use of a scarce resource (a slot, a port) across pipeline
+// items; the workflow's own cap only limits agents overall.
 function pool(resources) {
   const free = [...resources];
   const waiting = [];
@@ -144,79 +129,30 @@ const task = (n, stage, file, extra) =>
   `Follow "${stage}" and "Ground rules" in the runbook. ${extra || ''}\n` +
   `Write your record to ${RUN}/issues/${n}/${file}.json and return the same object.`;
 
-// ---------------------------------------------------------------- Ship mode
-if (A.ship) {
-  const ready = A.ready || [];
-  const fixPool = pool(A.fixPorts || [4300, 4301]);
-  log(`Shipping ${ready.length} branches through cgcf`);
-  const shipped = await pipeline(ready, (item) =>
-    fixPool((port) =>
-      agent(
-        task(
-          item.number,
-          'Stage 7 — Ship (`cgcf` environment only)',
-          'ship',
-          `Branch: ${item.branch}. Your E2E port: ${port}.`,
-        ),
-        {
-          ...SUB,
-          phase: 'Ship',
-          label: `ship #${item.number}`,
-          isolation: 'worktree',
-          schema: SHIP,
-        },
-      ),
-    ),
-  );
-  return { shipped: shipped.filter(Boolean) };
-}
-
-// ---------------------------------------------------------------- Main run
 if (!A.baseSha)
   throw new Error('args.baseSha is required (see the runbook prerequisites)');
 const all = A.issues || [];
 const issues = A.limit ? all.slice(0, A.limit) : all;
 if (issues.length < all.length) log(`Pilot: ${issues.length} of ${all.length} issues`);
+if (!SHIP_PRS) log('ship: false, verified fixes stop at a pushed branch');
 
-const chunks = [];
-for (let i = 0; i < issues.length; i += 25) chunks.push(issues.slice(i, i + 25));
-
-const screened = [];
+// Stage 1
 const triaged = (
-  await pipeline(
-    chunks,
-    (batch) =>
-      agent(
-        `Run dir: ${RUN}. Runbook: ${DOC}. BASE_SHA=${A.baseSha}.\n` +
-          `Follow "Stage 1 — Screen" and "Ground rules". Read each issue with gh issue view.\n` +
-          `Write one record per issue to ${RUN}/issues/<N>/screen.json and return all of them.\n` +
-          batch.map((i) => `#${i.number} ${i.title}`).join('\n'),
-        { ...SUB, phase: 'Screen', label: `screen #${batch[0].number}…`, schema: SCREEN },
-      ),
-    (screen) => {
-      const list = (screen && screen.issues) || [];
-      screened.push(...list);
-      return parallel(
-        list
-          .filter((i) => i.kind === 'bug' || i.kind === 'feature')
-          .map(
-            (i) => () =>
-              agent(task(i.number, 'Stage 2 — Triage (one issue per agent)', 'triage'), {
-                ...SUB,
-                phase: 'Triage',
-                label: `triage #${i.number}`,
-                schema: TRIAGE,
-              }),
-          ),
-      );
-    },
+  await parallel(
+    issues.map(
+      (i) => () =>
+        agent(task(i.number, 'Stage 1 — Triage (one issue per agent)', 'triage'), {
+          ...SUB,
+          phase: 'Triage',
+          label: `triage #${i.number}`,
+          schema: TRIAGE,
+        }),
+    ),
   )
-)
-  .flat()
-  .filter(Boolean);
-log(`Screened ${screened.length}, triaged ${triaged.length}`);
+).filter(Boolean);
+log(`Triaged ${triaged.length} of ${issues.length}`);
 
-// Stage 3: union duplicate pairs among triaged issues; oldest open issue wins.
+// Stage 2: union duplicate pairs; the oldest open issue is canonical.
 const parent = new Map(triaged.map((t) => [t.number, t.number]));
 const find = (n) => (parent.get(n) === n ? n : find(parent.get(n)));
 for (const t of triaged) {
@@ -230,22 +166,33 @@ const canonical = triaged.filter((t) => find(t.number) === t.number);
 const duplicateOf = triaged
   .filter((t) => find(t.number) !== t.number)
   .map((t) => ({ number: t.number, canonical: find(t.number) }));
-log(`${duplicateOf.length} duplicates folded into ${canonical.length} canonical issues`);
 
+const fixed = (t) => t.alreadyFixed && t.alreadyFixed.fixed;
+const syncRepro = (t) =>
+  t.kind === 'bug' &&
+  t.sync &&
+  t.userReported &&
+  !fixed(t) &&
+  t.clarity !== 'missing-steps';
+const webRepro = (t) =>
+  t.kind === 'bug' &&
+  !t.sync &&
+  !t.platformSpecific &&
+  t.reproducibleHere &&
+  !fixed(t) &&
+  t.clarity !== 'missing-steps';
 const priority = (t) => t.harm * t.reach * 100 + (t.demand || 0);
 const toReproduce = canonical
-  .filter(
-    (t) =>
-      t.kind === 'bug' &&
-      !t.sync &&
-      t.reproducibleHere &&
-      t.clarity !== 'missing-steps' &&
-      !(t.alreadyFixed && t.alreadyFixed.fixed),
-  )
+  .filter((t) => syncRepro(t) || webRepro(t))
   .sort((a, b) => priority(b) - priority(a));
-log(`${toReproduce.length} bugs go to reproduction; the rest go to the decision list`);
+log(
+  `${duplicateOf.length} duplicates folded; ${toReproduce.length} issues go to reproduction ` +
+    `(${toReproduce.filter((t) => t.sync).length} sync); ` +
+    `${canonical.length - toReproduce.length} go straight to the decision or batch lists`,
+);
 
 const reproPool = pool(Array.from({ length: A.reproSlots || 3 }, (_, i) => i));
+const syncPool = pool([0]);
 const fixPool = pool(A.fixPorts || [4300, 4301]);
 
 const withinLimits = (f) =>
@@ -260,10 +207,10 @@ async function fixAndVerify(t) {
       agent(
         task(
           t.number,
-          'Stage 5 — Fix (easy candidates only, worktree)',
+          'Stage 4 — Fix (easy candidates only, worktree)',
           `fix-${attempt}`,
           `Start from branch repro/issue-${t.number}. Your E2E port: ${port}.` +
-            (feedback ? `\nPrevious attempt was rejected: ${feedback}` : ''),
+            (feedback ? `\nThe previous attempt was rejected: ${feedback}` : ''),
         ),
         {
           ...SUB,
@@ -274,71 +221,77 @@ async function fixAndVerify(t) {
         },
       ),
     );
-    if (!fix || fix.status !== 'fixed')
-      return { fix, verdicts: [], reason: fix ? fix.reason : 'fix agent died' };
-    if (!withinLimits(fix))
-      return { fix, verdicts: [], reason: 'exceeds easy-lane limits' };
+    if (!fix || fix.status !== 'fixed') {
+      return { fix, reason: fix ? fix.reason : 'fix agent died' };
+    }
+    if (!withinLimits(fix)) return { fix, reason: 'exceeds easy-lane limits' };
 
-    const verdicts = await parallel([
-      () =>
-        fixPool((port) =>
+    const stage = 'Stage 5 — Verify (two independent agents, fresh worktree each)';
+    const verdicts = (
+      await parallel([
+        () =>
+          fixPool((port) =>
+            agent(
+              task(
+                t.number,
+                stage,
+                `verify-mechanical-${attempt}`,
+                `You are the mechanical verifier. Branch: ${fix.branch}. Your E2E port: ${port}.`,
+              ),
+              {
+                ...SUB,
+                phase: 'Verify',
+                label: `verify #${t.number}`,
+                isolation: 'worktree',
+                schema: VERDICT,
+              },
+            ),
+          ),
+        () =>
           agent(
             task(
               t.number,
-              'Stage 6 — Verify (two independent agents, fresh worktree each)',
-              `verify-mechanical-${attempt}`,
-              `You are the mechanical verifier. Branch: ${fix.branch}. Your E2E port: ${port}.`,
+              stage,
+              `verify-review-${attempt}`,
+              `You are the adversarial reviewer. Branch: ${fix.branch}. Read the diff and code; do not build.`,
             ),
             {
               ...SUB,
               phase: 'Verify',
-              label: `verify #${t.number}`,
+              label: `review #${t.number}`,
               isolation: 'worktree',
               schema: VERDICT,
             },
           ),
-        ),
-      () =>
-        agent(
-          task(
-            t.number,
-            'Stage 6 — Verify (two independent agents, fresh worktree each)',
-            `verify-review-${attempt}`,
-            `You are the adversarial reviewer. Branch: ${fix.branch}. Do not build or run E2E; read the diff and code.`,
-          ),
-          {
-            ...SUB,
-            phase: 'Verify',
-            label: `review #${t.number}`,
-            isolation: 'worktree',
-            schema: VERDICT,
-          },
-        ),
-    ]);
-    const ok = verdicts.filter(Boolean);
-    if (ok.length === 2 && ok.every((v) => v.pass))
-      return { fix, verdicts: ok, passed: true };
-    const fixable = ok.length === 2 && ok.every((v) => v.pass || v.fixable);
+      ])
+    ).filter(Boolean);
+    if (verdicts.length === 2 && verdicts.every((v) => v.pass)) {
+      return { fix, verdicts, passed: true };
+    }
     feedback =
-      ok
+      verdicts
         .filter((v) => !v.pass)
         .map((v) => v.reason)
         .join(' | ') || 'a verifier died';
-    if (!fixable) return { fix, verdicts: ok, reason: feedback };
+    const retryable = verdicts.length === 2 && verdicts.every((v) => v.pass || v.fixable);
+    if (!retryable) return { fix, verdicts, reason: feedback };
   }
   return { reason: `rejected twice: ${feedback}` };
 }
 
+// Stages 3–6, item by item in priority order.
 const outcomes = await pipeline(
   toReproduce,
   (t) =>
-    reproPool((slot) =>
+    (t.sync ? syncPool : reproPool)((slot) =>
       agent(
         task(
           t.number,
-          'Stage 4 — Reproduce (one issue per agent, worktree)',
+          'Stage 3 — Reproduce (one issue per agent, worktree)',
           'repro',
-          `Repro slot ${slot}; use the shared server at http://localhost:4242.`,
+          t.sync
+            ? 'Use the sync slot: provider E2E scripts, never fix.'
+            : `Reproduce slot ${slot}; use the shared app at http://localhost:4242.`,
         ),
         {
           ...SUB,
@@ -350,33 +303,54 @@ const outcomes = await pipeline(
       ),
     ),
   async (repro, t) => {
-    const fixable = repro && repro.status === 'reproduced' && !t.needsDecision;
-    const result = fixable
+    const easy = repro && repro.status === 'reproduced' && !t.sync && !t.needsDecision;
+    const result = easy
       ? await fixAndVerify(t)
-      : { reason: t.needsDecision ? 'needs a product decision' : 'not reproduced' };
-    const final = await agent(
-      header(t.number) +
-        `Follow the finalize step at the end of "Stage 6 — Verify" in the runbook.\n` +
-        `Repro: ${JSON.stringify(repro)}\nFix and verification: ${JSON.stringify(result)}\n` +
-        `Write ${RUN}/issues/${t.number}/final.json and return the same object.`,
-      { ...SUB, phase: 'Finalize', label: `finalize #${t.number}`, schema: FINAL },
+      : {
+          reason: t.sync
+            ? 'sync: reproduce only'
+            : t.needsDecision
+              ? 'needs a product decision'
+              : 'not reproduced',
+        };
+    const ship = result.passed;
+    const final = await (ship ? fixPool : (fn) => fn(null))((port) =>
+      agent(
+        header(t.number) +
+          (ship
+            ? `Follow "Stage 6 — Ship or finalize", verified fix. Branch: ${result.fix.branch}. ` +
+              (SHIP_PRS ? `Your E2E port: ${port}.` : 'ship is false: push only.')
+            : `Follow "Stage 6 — Ship or finalize", the finalize part.`) +
+          `\nRepro: ${JSON.stringify(repro)}\nFix and verification: ${JSON.stringify(result)}\n` +
+          `Write ${RUN}/issues/${t.number}/final.json and return the same object.`,
+        {
+          ...SUB,
+          phase: ship ? 'Ship' : 'Finalize',
+          label: `${ship ? 'ship' : 'finalize'} #${t.number}`,
+          ...(ship && SHIP_PRS ? { isolation: 'worktree' } : {}),
+          schema: FINAL,
+        },
+      ),
     );
     return { number: t.number, repro: repro && repro.status, final };
   },
 );
 
 const done = outcomes.filter(Boolean);
-const ready = done.filter((o) => o.final && o.final.route === 'ready-for-cgcf');
+const shipped = done.filter(
+  (o) => o.final && ['shipped', 'ready-for-cgcf'].includes(o.final.route),
+);
 log(
-  `${ready.length} fixes ready for cgcf, ${done.length - ready.length} reproduced or attempted issues need a decision`,
+  `${shipped.length} fixes ${SHIP_PRS ? 'shipped' : 'pushed'}; building the decision list`,
 );
 
-phase('Decide');
+// Stage 7
 const decided = await agent(
   `Run dir: ${RUN}. Runbook: ${DOC}. BASE_SHA=${A.baseSha}.\n` +
-    `Follow "Stage 6b — Decisions list (orchestrator, \`xhigh\`)". Read every record under ${RUN}/issues/.\n` +
+    `Follow "Stage 7 — Decisions list (orchestrator, \`xhigh\`)". Read every record under ${RUN}/issues/.\n` +
+    `Issues in scope: ${JSON.stringify(issues.map((i) => i.number))}\n` +
     `Duplicates folded by the script (issue -> canonical): ${JSON.stringify(duplicateOf)}\n` +
-    `Write decisions.md, batch-actions.md and ready-for-cgcf.md in ${RUN}, then return the counts.`,
+    `Write decisions.md, batch-actions.md and summary.md in ${RUN}, then return the counts.`,
   {
     model: 'opus',
     effort: 'xhigh',
@@ -387,10 +361,13 @@ const decided = await agent(
 );
 
 return {
-  screened: screened.length,
   triaged: triaged.length,
   duplicates: duplicateOf.length,
   reproduced: done.filter((o) => o.repro === 'reproduced').length,
-  readyForCgcf: ready.map((o) => ({ number: o.number, branch: o.final.branch })),
+  shipped: shipped.map((o) => ({
+    number: o.number,
+    pr: o.final.prUrl,
+    branch: o.final.branch,
+  })),
   decided,
 };
