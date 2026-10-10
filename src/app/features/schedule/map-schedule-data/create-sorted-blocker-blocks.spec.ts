@@ -963,6 +963,42 @@ describe('createBlockerBlocks()', () => {
       expect(r[0].entries[0].type).toBe(BlockedBlockType.ScheduledRepeatProjection);
       expect(r[0].start).toEqual(getDateTimeFromClockString('10:00', oneWeekFromNow));
     });
+
+    it('places a start time before the day boundary on the late night of its day (#3378)', () => {
+      const now = new Date(2026, 5, 10, 12).getTime();
+      const cfg: TaskRepeatCfg = {
+        ...DUMMY_REPEATABLE_TASK,
+        id: 'R_LATE',
+        startTime: '02:00',
+        defaultEstimate: hours(1),
+        repeatCycle: 'DAILY',
+      };
+      // concrete instance for logical 2026-06-11, due 02:00 on the 12th
+      const instance = {
+        ...BASE_REMINDER_TASK('02:00'),
+        id: 'late-instance',
+        repeatCfgId: 'R_LATE',
+        dueWithTime: new Date(2026, 5, 12, 2).getTime(),
+      };
+
+      const r = createSortedBlockerBlocks(
+        [instance],
+        [cfg],
+        [],
+        undefined,
+        undefined,
+        now,
+        3,
+        undefined,
+        hours(5),
+      );
+
+      const projectionStarts = r
+        .flatMap((b) => b.entries)
+        .filter((e) => e.type === BlockedBlockType.ScheduledRepeatProjection)
+        .map((e) => e.start);
+      expect(projectionStarts).toEqual([new Date(2026, 5, 13, 2).getTime()]);
+    });
   });
 
   describe('icalEventMap', () => {

@@ -112,6 +112,7 @@ export class ScheduleService {
       timelineCfg?.isWorkStartEndEnabled ? createWorkStartEndCfg(timelineCfg) : undefined,
       timelineCfg?.isLunchBreakEnabled ? createLunchBreakCfg(timelineCfg) : undefined,
       realNow,
+      this._dateService.getStartOfNextDayDiffMs(),
     );
   }
 

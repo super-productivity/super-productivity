@@ -15,6 +15,7 @@ import {
 import { getTaskRepeatCfgsForExactDayCached } from '../../task-repeat-cfg/store/get-task-repeat-cfgs-for-exact-day-cached.util';
 import { isSameDay } from '../../../util/is-same-day';
 import { getDbDateStr } from '../../../util/get-db-date-str';
+import { getRepeatDueWithTime } from '../../task-repeat-cfg/store/get-repeat-due-with-time.util';
 const PROJECTION_DAYS: number = 30;
 
 export const createSortedBlockerBlocks = (
@@ -26,6 +27,7 @@ export const createSortedBlockerBlocks = (
   now: number = Date.now(),
   nrOfDays: number = PROJECTION_DAYS,
   realNow?: number,
+  startOfNextDayDiffMs: number = 0,
 ): BlockedBlock[] => {
   if (typeof now !== 'number') {
     throw new Error('No valid now given');
@@ -39,6 +41,7 @@ export const createSortedBlockerBlocks = (
       scheduledTaskRepeatCfgs,
       scheduledTasks,
       realNow,
+      startOfNextDayDiffMs,
     ),
     ...createBlockerBlocksForWorkStartEnd(now, nrOfDays, workStartEndCfg),
     ...createBlockerBlocksForLunchBreak(now, nrOfDays, lunchBreakCfg),
@@ -65,6 +68,7 @@ const createBlockerBlocksForScheduledRepeatProjections = (
   scheduledTaskRepeatCfgs: TaskRepeatCfg[],
   scheduledTasks: TaskWithDueTime[],
   realNow?: number,
+  startOfNextDayDiffMs: number = 0,
 ): BlockedBlock[] => {
   const blockedBlocks: BlockedBlock[] = [];
   // Days that already have a concrete (timed) instance of a repeat cfg, keyed
@@ -76,7 +80,10 @@ const createBlockerBlocksForScheduledRepeatProjections = (
   const concreteInstanceDays = new Set<string>();
   scheduledTasks.forEach((task) => {
     if (task.repeatCfgId) {
-      concreteInstanceDays.add(`${task.repeatCfgId}|${getDbDateStr(task.dueWithTime)}`);
+      // logical day: a late-night instance (#3378) sits on the next calendar day
+      concreteInstanceDays.add(
+        `${task.repeatCfgId}|${getDbDateStr(task.dueWithTime - startOfNextDayDiffMs)}`,
+      );
     }
   });
 
@@ -105,7 +112,11 @@ const createBlockerBlocksForScheduledRepeatProjections = (
         devError('Timeline: Invalid or missing startTime for repeat projection');
         return;
       }
-      const start = getDateTimeFromClockString(repeatCfg.startTime, currentDayTimestamp);
+      const start = getRepeatDueWithTime(
+        repeatCfg.startTime,
+        currentDayTimestamp,
+        startOfNextDayDiffMs,
+      );
       const end = start + (repeatCfg.defaultEstimate || 0);
       blockedBlocks.push({
         start,

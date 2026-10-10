@@ -24,7 +24,7 @@ import { DialogConfirmComponent } from '../../../ui/dialog-confirm/dialog-confir
 import { T } from '../../../t.const';
 import { Update } from '@ngrx/entity';
 import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
-import { getDateTimeFromClockString } from '../../../util/get-date-time-from-clock-string';
+import { getRepeatDueWithTime } from './get-repeat-due-with-time.util';
 import { isValidSplitTime } from '../../../util/is-valid-split-time';
 import { getDbDateStr } from '../../../util/get-db-date-str';
 import { TaskArchiveService } from '../../archive/task-archive.service';
@@ -77,14 +77,16 @@ export class TaskRepeatCfgEffects {
             );
 
             // Use calculated date if available, otherwise fall back to existing logic
+            const startOfNextDayDiffMs = this._dateService.getStartOfNextDayDiffMs();
             const targetDayTimestamp = calculatedTargetDate
               ? calculatedTargetDate.getTime()
               : (task.dueDay && dateStrToUtcDate(task.dueDay).getTime()) ||
-                task.dueWithTime ||
-                Date.now();
-            const dateTime = getDateTimeFromClockString(
+                (task.dueWithTime && task.dueWithTime - startOfNextDayDiffMs) ||
+                this._dateService.getLogicalTodayDate().getTime();
+            const dateTime = getRepeatDueWithTime(
               startTime as string,
               targetDayTimestamp,
+              startOfNextDayDiffMs,
             );
 
             // Only skip auto-removal from today if the task is scheduled for today
@@ -341,9 +343,10 @@ export class TaskRepeatCfgEffects {
                 // upcoming today is kept on today.
                 let targetOccurrence = firstOccurrence;
                 if (isTimedTask && targetOccurrence) {
-                  const slot = getDateTimeFromClockString(
+                  const slot = getRepeatDueWithTime(
                     fullCfg.startTime as string,
-                    targetOccurrence.getTime(),
+                    targetOccurrence,
+                    this._dateService.getStartOfNextDayDiffMs(),
                   );
                   if (slot < Date.now()) {
                     const nextOccurrence = getNextRepeatOccurrence(fullCfg, new Date());
@@ -366,10 +369,11 @@ export class TaskRepeatCfgEffects {
                 if (isTimedTask) {
                   const targetDayTimestamp = targetOccurrence
                     ? targetOccurrence.getTime()
-                    : Date.now();
-                  const dateTime = getDateTimeFromClockString(
+                    : this._dateService.getLogicalTodayDate().getTime();
+                  const dateTime = getRepeatDueWithTime(
                     fullCfg.startTime as string,
                     targetDayTimestamp,
+                    this._dateService.getStartOfNextDayDiffMs(),
                   );
                   const scheduledForToday = this._dateService.isToday(dateTime);
 
@@ -777,9 +781,12 @@ export class TaskRepeatCfgEffects {
       isValidSplitTime(completeCfg.startTime) &&
       this._dateService.isToday(task.created)
     ) {
-      const dateTime = getDateTimeFromClockString(
+      // the instance was created today, so place it on the logical day, not on
+      // the calendar date (which is already tomorrow before the day boundary)
+      const dateTime = getRepeatDueWithTime(
         completeCfg.startTime as string,
-        new Date(),
+        this._dateService.getLogicalTodayDate(),
+        this._dateService.getStartOfNextDayDiffMs(),
       );
       if (task.remindAt) {
         this._taskService.reScheduleTask({

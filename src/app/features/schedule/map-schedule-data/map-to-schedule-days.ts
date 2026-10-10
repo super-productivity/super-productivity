@@ -28,6 +28,7 @@ export const mapToScheduleDays = (
   },
   lunchBreakCfg?: ScheduleLunchBreakCfg,
   realNow?: number,
+  startOfNextDayDiffMs: number = 0,
 ): ScheduleDay[] => {
   // NOTE to use for failing test cases
   // const params = {
@@ -90,6 +91,7 @@ export const mapToScheduleDays = (
     now,
     dayDates.length,
     realNow,
+    startOfNextDayDiffMs,
   );
 
   const v = createScheduleDays(

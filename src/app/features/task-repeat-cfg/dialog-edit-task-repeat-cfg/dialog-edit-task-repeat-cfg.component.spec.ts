@@ -103,8 +103,10 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
     mockDateService = jasmine.createSpyObj('DateService', [
       'todayStr',
       'getLogicalTodayDate',
+      'getStartOfNextDayDiffMs',
     ]);
     mockDateService.todayStr.and.returnValue(MOCK_TODAY_STR);
+    mockDateService.getStartOfNextDayDiffMs.and.returnValue(0);
     mockDateService.getLogicalTodayDate.and.returnValue(new Date(MOCK_TODAY));
 
     // Set up the return value for the repeat-config lookup before creating the component
