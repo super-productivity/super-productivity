@@ -42,8 +42,11 @@ Live apply uses the returned rebased operation objects.
 
 The rejection rebase (`rebaseCommutingTimeDeltaRejections`) relies on the same
 contract for a pending delta that was not in the rejected batch, e.g. one
-tracked while that upload was in flight (#10614). Other unrejected ops still
-block it, and file providers never reach it: they return no conflict rejections.
+tracked while that upload was in flight (#10614). Like kept deltas, its clock
+is restored only if this tab re-uploads it before another tab acknowledges it;
+otherwise the local clock can differ from the stored one, and the unchanged op
+id still counts its time once. Other unrejected ops still block it, and file
+providers never reach it: they return no conflict rejections.
 
 Keeping a delta pending and rebasing it have separate eligibility rules. #10521's
 broader protection remains intact. Eager rebasing uses only merged field-patch
