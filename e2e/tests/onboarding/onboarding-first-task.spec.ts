@@ -240,6 +240,25 @@ test.describe('First-run onboarding', () => {
 
       await page.mouse.move(10, 10);
       await expect(page.locator('body')).toHaveClass(/isMousePrimary/);
+      // With a mouse the bottom nav's + is still the only add button, so the
+      // hint keeps following it, e.g. when its entrance slide ends late.
+      const addBtn = page.locator('.add-task-button');
+      const gapAboveAddBtn = async (): Promise<number> => {
+        const btn = await addBtn.boundingBox();
+        const chip = await page.locator('onboarding-hint .hint-chip').boundingBox();
+        return btn && chip ? btn.y - (chip.y + chip.height) : -1;
+      };
+      await page.evaluate(() => {
+        document.querySelector<HTMLElement>('.mobile-bottom-nav')!.style.transform =
+          'translateY(-40px)';
+        window.dispatchEvent(new Event('resize'));
+      });
+      await expect.poll(gapAboveAddBtn).toBeGreaterThanOrEqual(16);
+      await page.evaluate(() => {
+        document.querySelector<HTMLElement>('.mobile-bottom-nav')!.style.transform = '';
+        window.dispatchEvent(new Event('resize'));
+      });
+      await expect.poll(gapAboveAddBtn).toBeGreaterThanOrEqual(16);
       await page.getByRole('button', { name: 'Add new task' }).click();
 
       const composer = page.locator('add-task-bar.global');

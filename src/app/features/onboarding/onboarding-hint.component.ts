@@ -257,7 +257,9 @@ export class OnboardingHintComponent {
   }
 
   private _resolveTarget(config: StepConfig): HTMLElement | null {
-    const isMobile = isTouchActive() && this._layoutService.isShowMobileBottomNav();
+    // Keyed off the layout, not the input: the header + only exists without
+    // the bottom nav, so a mouse on a narrow window must still target the FAB.
+    const isMobile = this._layoutService.isShowMobileBottomNav();
     const selectors = config.selector(
       isMobile,
       this.onboardingHintService.swipeTargetTaskId(),
