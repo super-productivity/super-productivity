@@ -12,7 +12,7 @@
     "esbuild": "^0.28.1",
     "jsdom": "^29.0.1",
     "typescript": "^5.8.3",
-    "vitest": "^4.1.0"
+    "vitest": "^4.1.11"
   },
   "dependencies": {
     "@super-productivity/plugin-api": "file:../../plugin-api",
