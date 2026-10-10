@@ -40,7 +40,8 @@ but is experimental (the app lists it as "not recommended / no support").
 
 ### Prerequisites
 
-The supported self-hosted setup is the bundled Docker Compose stack
+Self-hosting is possible, but support for it is limited. The tested
+self-hosted setup is the bundled Docker Compose stack
 (SuperSync + PostgreSQL + Caddy), with the desktop (Electron), Android or iOS
 app as clients. It needs:
 
@@ -95,6 +96,12 @@ nano .env
 > leaves the checkout untouched. A `master-<sha>` pin works the same way with
 > `git checkout <sha>`. The deploy scripts and compose file come from the
 > checkout; migrations run from the image.
+>
+> Right after a push to `master` the image can lag behind it (the build takes
+> from several minutes to about an hour). `deploy.sh` then stops with "image
+> revision does not match" before touching the running stack: wait for the
+> [image build](https://github.com/super-productivity/super-productivity/actions/workflows/supersync-docker.yml)
+> to finish and run it again.
 
 #### Required settings
 
@@ -115,6 +122,21 @@ Leave `CORS_ORIGINS` at its default unless you also host the web app yourself
 (see [Configuration](#configuration)).
 
 #### Deploying and upgrading
+
+`./scripts/deploy.sh` is both the install and the upgrade command. Run it again
+to update, or to apply a changed `.env` (a plain `docker compose up -d` does not
+run migrations, see the upgrade note below). Your data volumes are kept. Besides
+the stack above, it also starts the optional monitoring containers from
+`docker-compose.monitoring.yml` whenever that file is in the checkout: Dozzle
+(log viewer, read-only Docker socket) on `127.0.0.1:8080` and Uptime Kuma on
+`127.0.0.1:3001`. Both listen on loopback only; reach them through an SSH
+tunnel, or delete that file to skip them.
+
+On a first install the output shows several `Error: P3018` blocks, each followed
+by `Recovering ... outside Prisma migrate`. That is the automatic handling of
+`CREATE INDEX CONCURRENTLY` migrations described below, not a failure; the
+migration step is done when it prints `All migrations have been successfully
+applied`.
 
 After a successful deploy, `deploy.sh` prints a **Monitoring status** block.
 Its warnings (for example that `health-alert.sh` is not in your crontab) are
@@ -447,8 +469,9 @@ These steps use the desktop or mobile app.
    (e.g. `https://sync.example.com`). Do this first, or the next button opens
    the official hosted server instead of yours.
 3. Click **Open Server & Get Token**. In the browser, sign up with your email,
-   then open the verification link from the email to activate the account and
-   sign in.
+   then open the verification link from the email to activate the account. The
+   page does not sign you in: choose **Return to Login** and sign in with your
+   passkey or an emailed login link.
 4. Copy the token shown after signing in, paste it into **Access Token**, and
    click **Save & Enable Sync** (**Save** if sync was already enabled).
 5. SuperSync requires end-to-end encryption. Follow the **SuperSync: Set

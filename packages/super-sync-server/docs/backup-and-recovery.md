@@ -78,12 +78,30 @@ This is the simplest and most reliable recovery method when at least one client 
 **Steps:**
 
 ```bash
-# 1. Restore accounts from backup
+# 1. Stop the server so nothing writes while you restore
+docker compose stop supersync
+
+# 2. Empty the accounts tables (and the sync data that references them). A
+#    deployed database already has these tables, and the dump contains
+#    CREATE TABLE statements.
+docker exec supersync-postgres psql -U supersync supersync \
+  -c 'TRUNCATE users, passkeys CASCADE'
+
+# 3. Restore accounts from backup. psql prints about a dozen "already exists" /
+#    "multiple primary keys" errors for the CREATE TABLE and constraint
+#    statements; they are harmless. The rows themselves are loaded by COPY.
 gunzip -c backups/supersync_accounts_YYYYMMDD_HHMMSS.sql.gz | \
   docker exec -i supersync-postgres psql -U supersync supersync
 
-# 2. That's it — clients will re-sync automatically when they connect
+# 4. Check the accounts are back, then start the server
+docker exec supersync-postgres psql -U supersync supersync -c 'SELECT count(*) FROM users'
+docker compose start supersync
+
+# 5. That's it — clients will re-sync automatically when they connect
 ```
+
+On a new host, run `./scripts/deploy.sh` first so the database schema exists,
+then follow the same steps.
 
 **Why this is preferred:**
 

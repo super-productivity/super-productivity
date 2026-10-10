@@ -164,6 +164,25 @@ describe('TaskContextMenuInnerComponent', () => {
     store.resetSelectors();
   });
 
+  describe('touch selection entry point', () => {
+    for (const [name, selectable, inDetails, expected] of [
+      ['planner card', true, false, true],
+      ['opted-out card', false, false, false],
+      ['detail panel card', true, true, false],
+    ] as const) {
+      it(`recognizes ${name}`, fakeAsync(() => {
+        const container = document.createElement(inDetails ? 'task-detail-panel' : 'div');
+        const card = document.createElement('planner-task');
+        if (selectable) card.setAttribute('data-task-selectable', 'true');
+        container.appendChild(card);
+        card.appendChild(fixture.nativeElement);
+        component.ngAfterViewInit();
+        expect(component.isInTaskRow).toBe(expected);
+        flush();
+      }));
+    }
+  });
+
   describe('enterSelectionMode()', () => {
     it('enters touch selection mode with the task selected', () => {
       const multiSelect = TestBed.inject(TaskMultiSelectService);

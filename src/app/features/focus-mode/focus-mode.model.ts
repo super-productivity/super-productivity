@@ -73,6 +73,10 @@ export const isBreakSession = (timer: TimerState): boolean => {
   return timer.purpose === 'break';
 };
 
+/** Time left until a fixed-duration session ends, never negative. */
+export const getTimerRemainingMs = (timer: TimerState): number =>
+  Math.max(0, timer.duration - timer.elapsed);
+
 /**
  * After incrementCycle, the current cycle is 1 too high for break calculation.
  * This returns the last completed session's cycle, clamped to a minimum of 1.

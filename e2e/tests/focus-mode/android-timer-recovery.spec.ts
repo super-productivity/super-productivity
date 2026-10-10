@@ -36,6 +36,7 @@ type TimerWindow = Window & {
   SUPAndroid: {
     onPause$: { next: () => void };
     onResume$: { next: () => void };
+    onFocusModeTimerComplete$: { next: (isBreak: boolean) => void };
     onFocusSkip$: { next: () => void };
     getFocusModeElapsed: () => string;
   };
@@ -122,6 +123,113 @@ const expectTaskTime = async (
 };
 
 test.describe('Android Focus timer recovery after WebView recreation', () => {
+  // Returning exactly at the end, or long after it, credits the task only up
+  // to the Pomodoro end; the overrun belongs to the break, where tracking pauses
+  // by default. The native completion may reach the WebView before the resume.
+  type ResumeCase = {
+    name: string;
+    backgroundMs: number;
+    expectedMs: number;
+    isNativeCompleteFirst?: boolean;
+    isTrackingDuringBreak?: boolean;
+    isCountdown?: boolean;
+    isManualBreakStart?: boolean;
+  };
+  const resumeCases: ResumeCase[] = [
+    { name: 'at the end', backgroundMs: 20 * 60_000, expectedMs: 25 * 60_000 },
+    { name: 'past the end', backgroundMs: 50 * 60_000, expectedMs: 25 * 60_000 },
+    {
+      name: 'past the end after the native completion',
+      backgroundMs: 50 * 60_000,
+      expectedMs: 25 * 60_000,
+      isNativeCompleteFirst: true,
+    },
+    // 25 min of Pomodoro plus the 30 min overrun, tracked into the break.
+    {
+      name: 'past the end while tracking continues during breaks',
+      backgroundMs: 50 * 60_000,
+      expectedMs: 55 * 60_000,
+      isTrackingDuringBreak: true,
+    },
+    // Countdown has no break; its session end stops tracking instead.
+    {
+      name: 'past the end of a Countdown',
+      backgroundMs: 50 * 60_000,
+      expectedMs: 25 * 60_000,
+      isCountdown: true,
+    },
+    {
+      name: 'past the end of a Countdown while tracking continues during breaks',
+      backgroundMs: 50 * 60_000,
+      expectedMs: 55 * 60_000,
+      isCountdown: true,
+      isTrackingDuringBreak: true,
+    },
+    // Manual break start keeps the session in overtime, so it records all of it.
+    {
+      name: 'past the end with manual break start',
+      backgroundMs: 50 * 60_000,
+      expectedMs: 55 * 60_000,
+      isManualBreakStart: true,
+    },
+  ];
+  for (const resumeCase of resumeCases) {
+    test(`records background Pomodoro time on resume ${resumeCase.name}`, async ({
+      page,
+      workViewPage,
+    }) => {
+      await workViewPage.waitForTaskList();
+      if (resumeCase.isTrackingDuringBreak || resumeCase.isManualBreakStart) {
+        await dispatch(page, {
+          type: '[Global Config] Update Global Config Section',
+          sectionKey: 'focusMode',
+          sectionCfg: resumeCase.isManualBreakStart
+            ? { isManualBreakStart: true }
+            : { isPauseTrackingDuringBreak: false },
+          isSkipSnack: true,
+        });
+      }
+      await workViewPage.addTask('Background Pomodoro');
+      const taskId = await startFlowtime(page);
+      await dispatch(page, {
+        type: '[FocusMode] Set Mode',
+        mode: resumeCase.isCountdown ? 'Countdown' : 'Pomodoro',
+      });
+      await dispatch(page, {
+        type: '[FocusMode] Start Session',
+        duration: 25 * 60_000,
+        taskId,
+      });
+      await page.clock.fastForward(5 * 60_000);
+      await expectTaskTime(page, taskId, 5 * 60_000);
+      await pauseAndFlush(page);
+      await page.clock.fastForward(resumeCase.backgroundMs);
+      if (resumeCase.isNativeCompleteFirst) {
+        await page.evaluate(() =>
+          (window as unknown as TimerWindow).SUPAndroid.onFocusModeTimerComplete$.next(
+            false,
+          ),
+        );
+      }
+      await resume(page);
+
+      await expect
+        .poll(async () => (await readState(page)).focusMode.timer.purpose)
+        .toBe(
+          resumeCase.isCountdown
+            ? null
+            : resumeCase.isManualBreakStart
+              ? 'work'
+              : 'break',
+        );
+      await expectTaskTime(page, taskId, resumeCase.expectedMs);
+      await pauseAndFlush(page);
+      await page.reload();
+      await workViewPage.waitForTaskList();
+      await expectTaskTime(page, taskId, resumeCase.expectedMs);
+    });
+  }
+
   test('ordinary background/resume and closing the overlay preserve recorded time', async ({
     page,
     workViewPage,
