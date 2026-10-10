@@ -711,6 +711,30 @@ describe('PlannerTaskComponent', () => {
       scope.remove();
     }));
 
+    // #8583: Enter in the delete confirm deletes the task.
+    it('focuses the confirm button of the delete dialog', () => {
+      config = {
+        ...DEFAULT_GLOBAL_CONFIG,
+        tasks: { ...DEFAULT_GLOBAL_CONFIG.tasks, isConfirmBeforeDelete: true },
+        keyboard: {
+          ...DEFAULT_GLOBAL_CONFIG.keyboard,
+          taskDelete: 'D',
+          taskToggleDone: 'C',
+        },
+      };
+      matDialogMock.open.and.returnValue({ afterClosed: () => new Subject() } as never);
+      const { component } = create(makeTask(), true);
+
+      component.onTaskShortcut(shortcutEvent('d'));
+
+      expect(matDialogMock.open).toHaveBeenCalledWith(
+        jasmine.anything(),
+        jasmine.objectContaining({
+          data: jasmine.objectContaining({ isFocusConfirm: true }),
+        }),
+      );
+    });
+
     for (const [name, expectedAction] of [
       ['up', moveTaskUpInTodayList],
       ['down', moveTaskDownInTodayList],
