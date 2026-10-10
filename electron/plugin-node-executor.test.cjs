@@ -270,6 +270,8 @@ test('does not mint a token when the sender navigates while consent is pending',
     webContents,
     'sync-md',
   );
+  // Let the persisted-consent lookup settle so the dialog is open.
+  await new Promise((resolve) => setImmediate(resolve));
   assert.equal(dialogCalls.length, 1);
 
   webContents.navigate('http://localhost:4200/after-navigation');
@@ -649,18 +651,23 @@ test('rejects prototype-pollution ids before any consent lookup or mint', async 
   assert.equal(consentStore.__records.has('constructor'), false);
 });
 
-test('built-in plugin consent is never persisted (stays per-session, regression)', async () => {
+test('built-in plugin consent is asked once and remembered with the on-disk name', async () => {
   loadModule();
   const wc1 = new FakeWebContents(25);
-  await callIpc('PLUGIN_REQUEST_NODE_EXECUTION_GRANT', wc1, 'sync-md');
+  await callIpc('PLUGIN_REQUEST_NODE_EXECUTION_GRANT', wc1, 'sync-md', {
+    name: 'spoofed',
+    version: '9.9.9',
+  });
   assert.equal(dialogCalls.length, 1);
-  // Built-in plugins keep the verified per-session prompt — nothing is written to the
-  // persisted store, so a new session prompts again.
-  assert.equal(consentStore.__records.has('sync-md'), false);
+  // The persisted record carries the verified manifest name, never renderer input.
+  const record = consentStore.__records.get('sync-md');
+  assert.ok(record);
+  assert.notEqual(record.name, 'spoofed');
 
   const wc2 = new FakeWebContents(26);
-  await callIpc('PLUGIN_REQUEST_NODE_EXECUTION_GRANT', wc2, 'sync-md');
-  assert.equal(dialogCalls.length, 2);
+  const grant = await callIpc('PLUGIN_REQUEST_NODE_EXECUTION_GRANT', wc2, 'sync-md');
+  assert.equal(typeof grant.token, 'string');
+  assert.equal(dialogCalls.length, 1);
 });
 
 test('mints the grant before persisting consent (persist is best-effort, never gates the grant)', async () => {
