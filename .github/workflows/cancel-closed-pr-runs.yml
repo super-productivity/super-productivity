@@ -32,12 +32,11 @@ jobs:
           # electron smoke, CodeQL, docs links and wiki lint, and the nightly
           # re-runs sync E2E. Nothing re-runs Android Native Tests, Plugin
           # Tests, the SuperSync Helm/Postgres checks or CI's electron/i18n/
-          # WebKit/Lighthouse checks (build.yml covers only part of CI), nor the
-          # Sync Fuzz Compare job in E2E Sync (PR Gate), so their PR run is the
-          # only signal. Keep them.
+          # WebKit/Lighthouse checks (build.yml covers only part of CI), so
+          # their PR run is the only signal. Keep them.
           keep='["iOS TestFlight Build on Label"]'
           if [[ "$MERGED" == "true" ]]; then
-            keep='["iOS TestFlight Build on Label","Android Native Tests","Plugin Tests","CI","SuperSync Server Tests","E2E Sync (PR Gate)"]'
+            keep='["iOS TestFlight Build on Label","Android Native Tests","Plugin Tests","CI","SuperSync Server Tests"]'
           fi
           # Only runs started before the close: a reopen (or a new PR on the same
           # head) queues fresh runs before this job lists them. ISO-8601 UTC
