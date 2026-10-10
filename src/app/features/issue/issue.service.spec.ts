@@ -138,7 +138,7 @@ describe('IssueService', () => {
     ]);
     pluginRegistrySpy = jasmine.createSpyObj('PluginIssueProviderRegistryService', [
       'hasProvider',
-      'getIcon',
+      'getSvgIcon',
       'getName',
       'getIssueStrings',
       'getPollIntervalMs',

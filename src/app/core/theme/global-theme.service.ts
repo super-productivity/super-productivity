@@ -70,6 +70,7 @@ import { CSS_VAR_KEYBOARD_HEIGHT } from './keyboard-css-vars.const';
 import { OverlayContainer } from '@angular/cdk/overlay';
 import { sanitizeSvgIconContent } from '../../util/sanitize-svg-icon.util';
 import { CustomThemeService, getRequiredThemeMode } from './custom-theme.service';
+import { BUILT_IN_SVG_ICONS } from './built-in-svg-icons.const';
 
 interface NavigationBarPlugin {
   setColor(options: { color: string; style: 'LIGHT' | 'DARK' }): Promise<void>;
@@ -362,38 +363,18 @@ export class GlobalThemeService {
   }
 
   private _initIcons(): void {
-    const icons: [string, string][] = [
-      ['sp', 'assets/icons/sp.svg'],
-      ['github', 'assets/icons/github.svg'],
-      ['gitlab', 'assets/icons/gitlab.svg'],
-      ['jira', 'assets/icons/jira.svg'],
-      ['caldav', 'assets/icons/caldav.svg'],
-      ['calendar', 'assets/icons/calendar.svg'],
-      ['open_project', 'assets/icons/open-project.svg'],
-      ['remove_today', 'assets/icons/remove-today-48px.svg'],
-      ['gitea', 'assets/icons/gitea.svg'],
-      ['redmine', 'assets/icons/redmine.svg'],
-      ['linear', 'assets/icons/linear.svg'],
-      ['clickup', 'assets/icons/clickup.svg'],
-      // trello icon
-      ['trello', 'assets/icons/trello.svg'],
-      ['azure_devops', 'assets/icons/azure_devops.svg'],
-      ['nextcloud_deck', 'assets/icons/nextcloud_deck.svg'],
-      ['plainspace', 'assets/icons/plainspace.svg'],
-    ];
-
     // todo test if can be removed with airplane mode and wifi without internet
-    icons.forEach(([name, path]) => {
+    BUILT_IN_SVG_ICONS.forEach(([name, path]) => {
       this._matIconRegistry.addSvgIcon(
         name,
         this._domSanitizer.bypassSecurityTrustResourceUrl(path),
       );
     });
 
-    this.preloadIcons(icons);
+    this.preloadIcons(BUILT_IN_SVG_ICONS);
   }
 
-  preloadIcons(icons: [string, string][]): Promise<void[]> {
+  preloadIcons(icons: readonly (readonly [string, string])[]): Promise<void[]> {
     // Map each icon name to a promise that fetches and registers the icon.
     const iconPromises = icons.map(([iconName, url]) => {
       // Construct the URL for the SVG file.
