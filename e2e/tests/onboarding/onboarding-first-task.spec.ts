@@ -85,7 +85,9 @@ test.describe('First-run onboarding', () => {
 
     await inboxNavItem.click();
     await expect(hint).toHaveCount(0);
-    await expect(page.locator('task').filter({ hasText: 'Go further' })).toBeVisible();
+    await expect(
+      page.locator('task').filter({ hasText: 'Optional: getting started tips' }),
+    ).toBeVisible();
     assertNoRuntimeBrowserErrors(runtimeErrors, 'onboarding inbox');
     await page.close();
   });

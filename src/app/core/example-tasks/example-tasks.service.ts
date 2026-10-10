@@ -20,22 +20,11 @@ interface ExampleTaskDef {
   notesKey: string;
 }
 
+// One optional tips task: several seeded tasks read like required homework.
 const EXAMPLE_TASK_DEFS: ExampleTaskDef[] = [
   {
-    titleKey: T.EXAMPLE_TASKS.CREATE_PROJECT.TITLE,
-    notesKey: T.EXAMPLE_TASKS.CREATE_PROJECT.NOTES,
-  },
-  {
-    titleKey: T.EXAMPLE_TASKS.SET_UP_SYNC.TITLE,
-    notesKey: T.EXAMPLE_TASKS.SET_UP_SYNC.NOTES,
-  },
-  {
-    titleKey: T.EXAMPLE_TASKS.LEARN_KEYBOARD_SHORTCUTS.TITLE,
-    notesKey: T.EXAMPLE_TASKS.LEARN_KEYBOARD_SHORTCUTS.NOTES,
-  },
-  {
-    titleKey: T.EXAMPLE_TASKS.GO_FURTHER.TITLE,
-    notesKey: T.EXAMPLE_TASKS.GO_FURTHER.NOTES,
+    titleKey: T.EXAMPLE_TASKS.GETTING_STARTED.TITLE,
+    notesKey: T.EXAMPLE_TASKS.GETTING_STARTED.NOTES,
   },
 ];
 
