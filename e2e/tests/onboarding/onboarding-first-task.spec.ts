@@ -117,6 +117,41 @@ test.describe('First-run onboarding', () => {
     await page.close();
   });
 
+  test('points at the bottom-nav + in a narrow window used with a mouse', async ({
+    isolatedContext,
+  }) => {
+    const page = await isolatedContext.newPage();
+    const runtimeErrors = attachPageErrorCollector(page, 'narrow mouse onboarding');
+    installDevErrorDialogHandler(page, 'narrow mouse onboarding');
+    // Phone-width layout (bottom nav, no header +) with a fine pointer.
+    await page.setViewportSize({ width: 400, height: 800 });
+    await openFreshApp(page, { withExamples: false });
+    await expect(page.locator('body')).toHaveClass(/isMousePrimary/);
+
+    const hint = page.locator('onboarding-hint');
+    await expect(hint).toContainText('Click + to add your first task');
+    const addBtn = page.getByRole('button', { name: 'Add new task' });
+    // The hint, arrow included, sits fully above + once the bottom nav has settled.
+    await expect
+      .poll(async () => {
+        const btn = await addBtn.boundingBox();
+        const chip = await hint.locator('.hint-chip').boundingBox();
+        const arrow = await hint.locator('.hint-arrow').boundingBox();
+        return (
+          !!btn &&
+          !!chip &&
+          !!arrow &&
+          Math.max(chip.y + chip.height, arrow.y + arrow.height) <= btn.y
+        );
+      })
+      .toBe(true);
+
+    await addBtn.click();
+    await expect(page.locator('add-task-bar.global')).toBeVisible();
+    assertNoRuntimeBrowserErrors(runtimeErrors, 'narrow mouse onboarding');
+    await page.close();
+  });
+
   test('time tracking can be switched off from the play button', async ({
     isolatedContext,
   }) => {

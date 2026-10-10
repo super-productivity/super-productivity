@@ -18,7 +18,6 @@ import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { OnboardingHintService, OnboardingStep } from './onboarding-hint.service';
 import { isTouchActive } from '../../util/input-intent';
 import { GlobalConfigService } from '../config/global-config.service';
-import { LayoutService } from '../../core-ui/layout/layout.service';
 import { T } from '../../t.const';
 import { INBOX_PROJECT } from '../project/project.const';
 
@@ -38,7 +37,7 @@ const swipeTargetSelector = (swipeTargetTaskId: string | null): string =>
 
 interface StepConfig {
   /** Candidate targets in order of preference; the first visible one is used. */
-  selector: (isMobile: boolean, swipeTargetTaskId: string | null) => string | string[];
+  selector: (swipeTargetTaskId: string | null) => string | string[];
   /** Optional heading above the message, e.g. to mark the end of guidance */
   title?: string;
   message: string;
@@ -62,7 +61,10 @@ const STEP_CONFIGS = new Map<OnboardingStep, StepConfig>([
   [
     'create-task',
     {
-      selector: (isMobile) => (isMobile ? '.add-task-button' : '.tour-addBtn'),
+      // The header + on wide layouts, the bottom-nav + at phone width. Which one
+      // exists follows the layout, not the input: a mouse in a narrow window, or a
+      // touch device that switches to a mouse, only has the bottom-nav +.
+      selector: () => ['.tour-addBtn', '.add-task-button'],
       message: T.ONBOARDING.HINTS.CREATE_TASK,
       touchMessage: T.ONBOARDING.HINTS.CREATE_TASK_TOUCH,
       showShortcut: true,
@@ -73,7 +75,7 @@ const STEP_CONFIGS = new Map<OnboardingStep, StepConfig>([
   [
     'task-swipe-left',
     {
-      selector: (_isMobile, swipeTargetTaskId) => swipeTargetSelector(swipeTargetTaskId),
+      selector: (swipeTargetTaskId) => swipeTargetSelector(swipeTargetTaskId),
       message: T.ONBOARDING.HINTS.TASK_SWIPE_LEFT_TOUCH,
       icon: 'swipe_left',
       showShortcut: false,
@@ -83,7 +85,7 @@ const STEP_CONFIGS = new Map<OnboardingStep, StepConfig>([
   [
     'task-swipe-right',
     {
-      selector: (_isMobile, swipeTargetTaskId) => swipeTargetSelector(swipeTargetTaskId),
+      selector: (swipeTargetTaskId) => swipeTargetSelector(swipeTargetTaskId),
       message: T.ONBOARDING.HINTS.TASK_SWIPE_RIGHT_TOUCH,
       icon: 'swipe_right',
       showShortcut: false,
@@ -145,7 +147,6 @@ export class OnboardingHintComponent {
   shortcutHint = signal<string | null>(null);
 
   private _globalConfigService = inject(GlobalConfigService);
-  private _layoutService = inject(LayoutService);
   private _liveAnnouncer = inject(LiveAnnouncer);
   private _translateService = inject(TranslateService);
   private _activeStep: OnboardingStep | null = null;
@@ -257,11 +258,7 @@ export class OnboardingHintComponent {
   }
 
   private _resolveTarget(config: StepConfig): HTMLElement | null {
-    const isMobile = isTouchActive() && this._layoutService.isShowMobileBottomNav();
-    const selectors = config.selector(
-      isMobile,
-      this.onboardingHintService.swipeTargetTaskId(),
-    );
+    const selectors = config.selector(this.onboardingHintService.swipeTargetTaskId());
     for (const selector of Array.isArray(selectors) ? selectors : [selectors]) {
       const el = document.querySelector<HTMLElement>(selector);
       if (el && isVisible(el)) {
