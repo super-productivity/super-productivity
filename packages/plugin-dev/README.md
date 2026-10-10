@@ -8,7 +8,7 @@ This directory contains tools and examples for developing plugins for Super Prod
 # Build all plugins
 npm run build
 
-# Install dependencies for all plugins
+# Install dependencies for all plugins (one shared npm workspace)
 npm run install:all
 
 # Clean build artifacts
@@ -17,6 +17,12 @@ npm run clean:dist
 # List available plugins
 npm run list
 ```
+
+Every plugin folder (and `issue-provider-kit`) is an npm workspace of this
+directory: one `package-lock.json` and one `node_modules` here serve all plugins.
+`npm install` from any plugin folder updates that shared lockfile; commit it with
+the plugin's `package.json`. This directory is deliberately not a workspace of
+the repository root, so plugin tooling stays out of the app's install.
 
 ## Getting Started
 

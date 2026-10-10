@@ -17,7 +17,8 @@ Start from [github-issue-provider](github-issue-provider) (issue provider) or
 ```bash
 cp -r github-issue-provider my-plugin
 cd my-plugin
-npm install
+# set a unique "name" in package.json first: every folder here is a workspace
+npm install        # installs into the shared plugin-dev workspace
 npm run build      # → dist/
 ```
 
