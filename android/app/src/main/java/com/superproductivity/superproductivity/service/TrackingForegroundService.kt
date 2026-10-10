@@ -85,22 +85,22 @@ class TrackingForegroundService : Service() {
         data class ActionSnapshot(val taskId: String, val elapsedMs: Long, val at: Long)
 
         /**
-         * Samples the task total for a notification Pause/Done tap and marks the
-         * counter stopped in the same step (#10683). Clearing the static state
-         * right away makes getTrackingElapsed() report "not tracking" before the
-         * service is torn down, so a live WebView draining the action can't
-         * read and credit the post-tap time a second time.
+         * Samples the task total for a notification Pause/Done tap and ends the
+         * session in the same locked step (#10683). Clearing memory AND the
+         * persisted session right away makes getTrackingElapsed() report "not
+         * tracking" before the service is torn down, so neither a live WebView
+         * draining the action nor a later restoreIfIdle() can credit the
+         * post-tap time a second time. Restores first, so a tap that reaches a
+         * new process after a kill still finds the session (#7390).
          * Returns null when nothing is being tracked.
          */
         @Synchronized
-        fun takeForNotificationAction(): ActionSnapshot? {
+        fun takeForNotificationAction(context: Context): ActionSnapshot? {
+            restoreIfIdle(context)
             val taskId = currentTaskId
             if (!isTracking || taskId == null) return null
             val snapshot = ActionSnapshot(taskId, getElapsedMs(), System.currentTimeMillis())
-            isTracking = false
-            currentTaskId = null
-            startTimestamp = 0
-            accumulatedMs = 0
+            clearState(context)
             return snapshot
         }
 

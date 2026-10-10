@@ -73,7 +73,7 @@ class NotificationActionReceiver : BroadcastReceiver() {
         }
 
         private fun handleTracking(context: Context, type: String) {
-            val snapshot = TrackingForegroundService.takeForNotificationAction()
+            val snapshot = TrackingForegroundService.takeForNotificationAction(context)
             if (snapshot == null) {
                 // Stale notification: nothing is tracked natively, so there is
                 // neither time to credit nor a task to act on.
