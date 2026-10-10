@@ -73,8 +73,7 @@ import { distinctUntilChanged, observeOn } from 'rxjs/operators';
         [matTooltip]="tooltipText() | translate"
         [attr.aria-label]="tooltipText() | translate"
         matTooltipPosition="below"
-        class="play-btn tour-playBtn"
-        [class.mat-elevation-z2]="!isIconButton()"
+        class="play-btn tour-playBtn mat-elevation-z3"
         [class.mat-mini-fab-icon]="isIconButton()"
         mat-mini-fab
         [disabled]="isDisabled()"
@@ -172,6 +171,7 @@ import { distinctUntilChanged, observeOn } from 'rxjs/operators';
           position: relative;
           margin-left: 0;
           z-index: 6;
+          box-shadow: var(--whiteframe-shadow-2dp);
 
           .mat-icon {
             position: relative;
