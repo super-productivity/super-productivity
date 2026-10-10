@@ -19,26 +19,26 @@ The script:
 3. serves the app with `npm run startFrontend -- --port <port>`. A cold compile takes minutes.
 4. runs `adb reverse tcp:<port> tcp:<port>`, drives Chrome on the device through Playwright's `_android` API, and runs the scenario.
 
-| Variable                       | Default                                  | Purpose                                                          |
-| ------------------------------ | ---------------------------------------- | ---------------------------------------------------------------- |
-| `ANDROID_VERIFY_AVD`           | first `emulator -list-avds`              | AVD to boot (the `.ini` name, see finding 5)                     |
-| `ANDROID_SERIAL`               | first online `emulator-*`                | device to reuse                                                  |
-| `ANDROID_VERIFY_PORT`          | `4300`                                   | dev-server port                                                  |
-| `ANDROID_VERIFY_BOOT_TIMEOUT`  | `300`                                    | seconds                                                          |
-| `ANDROID_VERIFY_SERVE_TIMEOUT` | `900`                                    | seconds                                                          |
-| `ANDROID_HOME`                 | `~/Android/Sdk`, `~/Library/Android/sdk` | where `adb` and `emulator` are found when they are not on `PATH` |
+| Variable                           | Default                                  | Purpose                                                          |
+| ---------------------------------- | ---------------------------------------- | ---------------------------------------------------------------- |
+| `ANDROID_VERIFY_AVD`               | first `emulator -list-avds`              | AVD to boot (the `.ini` name, see finding 5)                     |
+| `ANDROID_SERIAL`                   | first online `emulator-*`                | device to reuse                                                  |
+| `ANDROID_VERIFY_PORT`              | `4300`                                   | dev-server port                                                  |
+| `ANDROID_VERIFY_BOOT_TIMEOUT`      | `300`                                    | seconds                                                          |
+| `ANDROID_VERIFY_SERVE_TIMEOUT`     | `900`                                    | seconds                                                          |
+| `ANDROID_HOME`, `ANDROID_SDK_ROOT` | `~/Android/Sdk`, `~/Library/Android/sdk` | where `adb` and `emulator` are found when they are not on `PATH` |
 
-Requirements: an emulator image that includes Chrome (a Google APIs or Google Play image) and an AVD with `hw.keyboard=no` (finding 4). On a non-rooted image (Google Play), Playwright's `_android` also needs **Enable command line on non-rooted devices** turned on once in Chrome's `chrome://flags`.
+Requirements: an emulator image that includes Chrome (a Google APIs or Google Play image) and an AVD with `hw.keyboard=no` (finding 4). On a non-rooted image (Google Play), Playwright's `_android` also needs **Enable command line on non-rooted devices** turned on once in Chrome's `chrome://flags`. Without it, Chrome never opens Playwright's DevTools socket and the run fails at the `device` stage after 60 seconds.
 
 ## Output
 
 `.tmp/android-verify/` is gitignored:
 
 - `<scenario>.json` contains `pass`, `measurements` (scenario-defined), `stage` and `error` (on failure), `details`, `screenshots`, `device`, and `durationMs`.
-- `<scenario>-final.png` is saved for every completed run. `<scenario>-fail-<stage>.png` is saved on every failure path: `device`, `navigation`, `app-not-rendered`, `calibration`, `tap-missed`, `ime-not-shown`, and any scenario stage. Screenshots are native device captures, so they include the IME.
+- `<scenario>-final.png` is saved for every completed run. `<scenario>-fail-<stage>.png` is saved on every failure path once Playwright sees the device: `device`, `navigation`, `app-not-rendered`, `calibration`, `tap-target-missing`, `tap-missed`, `ime-not-shown`, `scenario-timeout`, `harness` (an unexpected error), and any scenario stage. Screenshots are native device captures, so they include the IME.
 - `emulator.log` and `serve.log` are written there too.
 
-Exit code: `0` pass, `1` scenario failed (including a failed stage such as a missed tap), `2` precondition or harness error (including the `device` and `navigation` stages).
+Exit code: `0` pass, `1` scenario failed (including a failed stage such as a missed tap), `2` precondition or harness error (including the `device`, `navigation` and `harness` stages).
 
 ## Writing a scenario
 

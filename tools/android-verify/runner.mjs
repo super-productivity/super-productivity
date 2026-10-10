@@ -16,6 +16,8 @@ import { probeViewport } from './lib/viewport.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const NAV_TIMEOUT_MS = 60_000;
+/** Bounds Playwright's adb calls: launchBrowser has no timeout of its own. */
+const DEVICE_TIMEOUT_MS = 60_000;
 const APP_RENDER_TIMEOUT_MS = 180_000;
 const SCENARIO_TIMEOUT_MS = 180_000;
 /** Stages that mean the harness could not reach the app at all: exit 2, not 1. */
@@ -87,7 +89,7 @@ const shot = async (name) => {
 };
 
 try {
-  const devices = await _android.devices();
+  const devices = await withTimeout(_android.devices(), DEVICE_TIMEOUT_MS, 'device');
   device = devices.find((d) => d.serial() === args.serial);
   if (!device) {
     throw new StageError('device', `Playwright does not see device ${args.serial}`, {
@@ -103,7 +105,17 @@ try {
     throw new Error(`scenarios/${args.scenario}.mjs has no default export function`);
   }
 
-  context = await device.launchBrowser();
+  // launchBrowser polls for Chrome's DevTools socket forever. Chrome only opens
+  // it when it reads Playwright's command line, which a non-rooted image skips
+  // unless the chrome://flags switch from the README is on.
+  context = await withTimeout(device.launchBrowser(), DEVICE_TIMEOUT_MS, 'device').catch(
+    (e) => {
+      throw new StageError(
+        'device',
+        `Chrome did not start for Playwright (${e.message}); on a Google Play image enable "Enable command line on non-rooted devices" in chrome://flags`,
+      );
+    },
+  );
   await context.addInitScript(skipOnboarding);
   const page = context.pages()[0] ?? (await context.newPage());
 
