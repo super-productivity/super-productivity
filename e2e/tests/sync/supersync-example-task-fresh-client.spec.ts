@@ -34,12 +34,7 @@ import {
  *
  * Run: npm run e2e:supersync:file e2e/tests/sync/supersync-example-task-fresh-client.spec.ts -- --retries=0
  */
-const EXAMPLE_TASK_TITLES = [
-  'Create your first project',
-  'Set up Sync',
-  'Learn the keyboard shortcuts',
-  'Go further',
-];
+const EXAMPLE_TASK_TITLES = ['Optional: getting started tips'];
 
 test.describe('@supersync Fresh-client example tasks vs incoming import (#7976)', () => {
   test('import is accepted without an example-task conflict dialog', async ({
@@ -83,7 +78,7 @@ test.describe('@supersync Fresh-client example tasks vs incoming import (#7976)'
       // EXAMPLE_TASK_TITLES.
       await expect
         .poll(() => getTaskTitles(freshClient!), {
-          message: 'INBOX should list all four example tasks before sync is configured',
+          message: 'INBOX should list the example tasks before sync is configured',
         })
         .toEqual(expect.arrayContaining(EXAMPLE_TASK_TITLES));
 
@@ -114,8 +109,8 @@ test.describe('@supersync Fresh-client example tasks vs incoming import (#7976)'
       await waitForTask(freshClient.page, realTask);
 
       // `complete` above only means the check icon showed once, not that the import has
-      // been applied: for a few hundred ms after it the real task is listed next to all
-      // four example tasks. So read the SETTLED list: poll the whole verdict, one atomic
+      // been applied: for a few hundred ms after it the real task is listed next to the
+      // example tasks. So read the SETTLED list: poll the whole verdict, one atomic
       // snapshot per attempt (a count() followed by per-row reads waits out its timeout on
       // a row that a re-render removed in between).
       await expect

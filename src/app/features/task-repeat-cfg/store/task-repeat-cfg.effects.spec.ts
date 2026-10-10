@@ -5,6 +5,7 @@ import { Action } from '@ngrx/store';
 import { TaskRepeatCfgEffects } from './task-repeat-cfg.effects';
 import { TaskService } from '../../tasks/task.service';
 import { TaskRepeatCfgService } from '../task-repeat-cfg.service';
+import { DateService } from '../../../core/date/date.service';
 import { MatDialog } from '@angular/material/dialog';
 import { TaskArchiveService } from '../../archive/task-archive.service';
 import { AddTasksForTomorrowService } from '../../add-tasks-for-tomorrow/add-tasks-for-tomorrow.service';
@@ -4126,6 +4127,50 @@ describe('TaskRepeatCfgEffects - Deterministic Date Scenarios', () => {
       // Critical: scheduleTask and reScheduleTask must NOT be called
       expect(taskService.scheduleTask).not.toHaveBeenCalled();
       expect(taskService.reScheduleTask).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Scenario: schedule edit before the day boundary (#3378)', () => {
+    it("keeps tonight's late-night instance when edited after midnight", (done) => {
+      // 01:00 on Jan 16 with a 05:00 day start is still logical Jan 15
+      jasmine.clock().mockDate(new Date(2025, 0, 16, 1, 0, 0));
+      TestBed.inject(DateService).setStartOfNextDayDiff('05:00');
+      const tonight = new Date(2025, 0, 16, 2, 0, 0).getTime();
+
+      const liveTask: Task = {
+        ...baseTask,
+        dueWithTime: tonight,
+        created: new Date(2025, 0, 15, 12, 0, 0).getTime(),
+      };
+      const cfg: TaskRepeatCfgCopy = {
+        ...baseRepeatCfg,
+        repeatCycle: 'DAILY',
+        repeatEvery: 1,
+        startDate: '2025-01-01',
+        lastTaskCreationDay: '2025-01-15',
+        startTime: '02:00',
+        remindAt: TaskReminderOptionId.AtStart,
+      };
+
+      actions$ = of(
+        updateTaskRepeatCfg({
+          taskRepeatCfg: { id: 'repeat-cfg-id', changes: { repeatEvery: 1 } },
+        }),
+      );
+      taskRepeatCfgService.getTaskRepeatCfgById$.and.returnValue(of(cfg));
+      taskService.getTasksByRepeatCfgId$.and.returnValue(of([liveTask]));
+
+      effects.rescheduleTaskOnRepeatCfgUpdate$.subscribe((result) => {
+        const scheduled = result as ReturnType<
+          typeof TaskSharedActions.scheduleTaskWithTime
+        >;
+        expect(scheduled.dueWithTime).toBe(tonight);
+        expect(taskRepeatCfgService.updateTaskRepeatCfg).toHaveBeenCalledWith(
+          'repeat-cfg-id',
+          jasmine.objectContaining({ lastTaskCreationDay: '2025-01-15' }),
+        );
+        done();
+      });
     });
   });
 });

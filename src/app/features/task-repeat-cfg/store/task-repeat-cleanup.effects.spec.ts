@@ -29,6 +29,7 @@ describe('TaskRepeatCleanupEffects', () => {
   let repeatableTasks$: BehaviorSubject<TaskWithSubTasks[]>;
   let repeatCfgs$: BehaviorSubject<TaskRepeatCfg[]>;
   let taskTimeSync: jasmine.SpyObj<TaskTimeSyncService>;
+  let startOfNextDayDiffMs: number;
 
   const DAY_MS = 24 * 60 * 60 * 1000;
   const todayMs = new Date().setHours(12, 0, 0, 0);
@@ -54,6 +55,7 @@ describe('TaskRepeatCleanupEffects', () => {
   beforeEach(() => {
     repeatableTasks$ = new BehaviorSubject<TaskWithSubTasks[]>([]);
     repeatCfgs$ = new BehaviorSubject<TaskRepeatCfg[]>([]);
+    startOfNextDayDiffMs = 0;
 
     const storeSpy = jasmine.createSpyObj<Store>('Store', ['select', 'dispatch']);
     storeSpy.select.and.callFake((selector: unknown) =>
@@ -97,7 +99,13 @@ describe('TaskRepeatCleanupEffects', () => {
         { provide: HydrationStateService, useValue: hydrationStateSpy },
         { provide: DeletedTaskIssueSidecarService, useValue: sidecarSpy },
         { provide: TaskTimeSyncService, useValue: taskTimeSync },
-        { provide: DateService, useValue: { todayStr: () => getDbDateStr(todayMs) } },
+        {
+          provide: DateService,
+          useValue: {
+            todayStr: () => getDbDateStr(todayMs),
+            getStartOfNextDayDiffMs: () => startOfNextDayDiffMs,
+          },
+        },
       ],
     });
 
@@ -399,6 +407,58 @@ describe('TaskRepeatCleanupEffects', () => {
       tick(3001);
 
       expect(getDispatchedDeleteIds()).toEqual(['timed-template-yesterday']);
+
+      sub.unsubscribe();
+    }));
+
+    it('deletes late-night overdue instances placed after the day boundary (#3378)', fakeAsync(() => {
+      startOfNextDayDiffMs = 5 * 60 * 60 * 1000;
+      repeatCfgs$.next([
+        skipOverdueCfg('cfg-late-night', '', {
+          title: 'Make the bed',
+          startTime: '02:00',
+          remindAt: TaskReminderOptionId.AtStart,
+        }),
+      ]);
+      const lateNightInstance = (id: string, logicalDayMs: number): Task => {
+        const dueWithTime = getDateTimeFromClockString('02:00', logicalDayMs + DAY_MS);
+        return {
+          ...DEFAULT_TASK,
+          projectId: 'p1',
+          id,
+          title: 'Make the bed',
+          repeatCfgId: 'cfg-late-night',
+          created: logicalDayMs,
+          dueDay: undefined,
+          dueWithTime,
+          remindAt: dueWithTime,
+          isDone: false,
+          timeSpent: 0,
+        };
+      };
+      // created for logical yesterday -> due today 02:00, still logical yesterday
+      const yesterdayInstance = lateNightInstance('late-night-yesterday', yesterdayMs);
+      // written by a client without #3378: due on the calendar day itself
+      const legacyInstance: Task = {
+        ...lateNightInstance('late-night-legacy', yesterdayMs - DAY_MS),
+        dueWithTime: getDateTimeFromClockString('02:00', yesterdayMs),
+        remindAt: getDateTimeFromClockString('02:00', yesterdayMs),
+      };
+      const todayInstance = lateNightInstance('late-night-today', todayMs);
+
+      repeatableTasks$.next([
+        wrapWithSubTasks(legacyInstance),
+        wrapWithSubTasks(yesterdayInstance),
+        wrapWithSubTasks(todayInstance),
+      ]);
+
+      const sub = effects.cleanupDuplicateRepeatInstances$.subscribe();
+      tick(3001);
+
+      expect(getDispatchedDeleteIds().sort()).toEqual([
+        'late-night-legacy',
+        'late-night-yesterday',
+      ]);
 
       sub.unsubscribe();
     }));

@@ -19,7 +19,7 @@ import {
 } from '../../schedule/schedule.model';
 import { Task, TaskCopy, TaskWithDueDay, TaskWithDueTime } from '../../tasks/task.model';
 import { TaskRepeatCfg } from '../../task-repeat-cfg/task-repeat-cfg.model';
-import { getDateTimeFromClockString } from '../../../util/get-date-time-from-clock-string';
+import { getRepeatDueWithTime } from '../../task-repeat-cfg/store/get-repeat-due-with-time.util';
 import { isValidSplitTime } from '../../../util/is-valid-split-time';
 import { devError } from '../../../util/dev-error';
 import { getTimeLeftForTask } from '../../../util/get-time-left-for-task';
@@ -195,7 +195,11 @@ const getPlannerDay = (
   const {
     repeatProjectionsForDay: allRepeatProjectionsForDay,
     noStartTimeRepeatProjections: allNoStartTimeRepeatProjections,
-  } = getAllRepeatableTasksForDay(taskRepeatCfgs, currentDayTimestamp);
+  } = getAllRepeatableTasksForDay(
+    taskRepeatCfgs,
+    currentDayTimestamp,
+    startOfNextDayDiffMs,
+  );
 
   const scheduledTaskItems = getScheduledTaskItems(plannedTasksForDay);
 
@@ -296,6 +300,7 @@ const getAllTimeSpent = (
 const getAllRepeatableTasksForDay = (
   taskRepeatCfgs: TaskRepeatCfg[],
   currentDayTimestamp: number,
+  startOfNextDayDiffMs: number,
 ): {
   repeatProjectionsForDay: ScheduleItemRepeatProjection[];
   noStartTimeRepeatProjections: NoStartTimeRepeatProjection[];
@@ -309,7 +314,11 @@ const getAllRepeatableTasksForDay = (
 
   allRepeatableTasksForDay.forEach((repeatCfg) => {
     if (repeatCfg.startTime && isValidSplitTime(repeatCfg.startTime)) {
-      const start = getDateTimeFromClockString(repeatCfg.startTime, currentDayTimestamp);
+      const start = getRepeatDueWithTime(
+        repeatCfg.startTime,
+        currentDayTimestamp,
+        startOfNextDayDiffMs,
+      );
       const end = start + (repeatCfg.defaultEstimate || 0);
       repeatProjectionsForDay.push({
         id: repeatCfg.id,

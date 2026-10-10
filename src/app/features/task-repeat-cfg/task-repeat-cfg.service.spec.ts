@@ -1407,6 +1407,65 @@ describe('TaskRepeatCfgService', () => {
     });
   });
 
+  describe('startTime before the start-of-next-day offset (#3378)', () => {
+    const OFFSET_MS = 5 * 60 * 60 * 1000;
+
+    it('schedules the instance on the late night of its logical day', async () => {
+      const dateService = TestBed.inject(DateService) as unknown as Record<
+        string,
+        unknown
+      >;
+      dateService.getStartOfNextDayDiffMs = () => OFFSET_MS;
+      dateService.isToday = (date: number | Date) =>
+        getDbDateStr(new Date(new Date(date).getTime() - OFFSET_MS)) === getDbDateStr();
+
+      const logicalToday = new Date();
+      logicalToday.setHours(12, 0, 0, 0);
+      const yesterday = new Date(logicalToday);
+      yesterday.setDate(yesterday.getDate() - 1);
+      const cfg: TaskRepeatCfg = {
+        ...DEFAULT_TASK_REPEAT_CFG,
+        id: 'late-night-cfg',
+        title: 'Make the bed',
+        projectId: 'project-A',
+        repeatCycle: 'DAILY',
+        repeatEvery: 1,
+        startDate: formatIsoDate(yesterday),
+        lastTaskCreationDay: formatIsoDate(yesterday),
+        startTime: '02:00',
+        remindAt: TaskReminderOptionId.AtStart,
+        tagIds: [],
+      };
+
+      taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(of([]));
+      taskService.createNewTaskWithDefaults.and.callFake((args: any) => ({
+        ...mockTask,
+        id: args.id || mockTask.id,
+        dueDay: args.additional?.dueDay,
+        projectId: args.additional?.projectId || mockTask.projectId,
+      }));
+
+      const actions = await service._getActionsForTaskRepeatCfg(
+        cfg,
+        logicalToday.getTime(),
+      );
+
+      const addTaskAction = actions[0] as ReturnType<typeof TaskSharedActions.addTask>;
+      expect(addTaskAction.task.id).toBe(
+        getRepeatableTaskId(cfg.id, formatIsoDate(logicalToday)),
+      );
+      const scheduleAction = actions[2] as ReturnType<
+        typeof TaskSharedActions.scheduleTaskWithTime
+      >;
+      const expectedDue = new Date(logicalToday);
+      expectedDue.setDate(expectedDue.getDate() + 1);
+      expectedDue.setHours(2, 0, 0, 0);
+      expect(scheduleAction.type).toBe(TaskSharedActions.scheduleTaskWithTime.type);
+      expect(scheduleAction.dueWithTime).toBe(expectedDue.getTime());
+      expect(scheduleAction.isSkipAutoRemoveFromToday).toBe(true);
+    });
+  });
+
   describe('Sync scenario: lastTaskCreationDay set but task missing (#6269)', () => {
     // Reproduction test: When Device A creates a task and syncs the repeat config
     // (with updated lastTaskCreationDay) but the task entity hasn't synced yet,

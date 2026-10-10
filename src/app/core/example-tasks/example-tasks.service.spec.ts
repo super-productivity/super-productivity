@@ -76,7 +76,7 @@ describe('ExampleTasksService', () => {
 
     syncReady$.next(true);
 
-    expect(taskService.createNewTaskWithDefaults).toHaveBeenCalledTimes(4);
+    expect(taskService.createNewTaskWithDefaults).toHaveBeenCalledTimes(1);
     expect(taskService.createNewTaskWithDefaults).toHaveBeenCalledWith(
       jasmine.objectContaining({
         title: jasmine.stringContaining('translated:'),
@@ -92,7 +92,7 @@ describe('ExampleTasksService', () => {
     // note arms take no such exclusion. Onboarding creating any OTHER entity
     // would silently make an empty device look like it holds user data and
     // stop the guard from ever firing. The exact call count is what pins that.
-    expect(dispatchSpy).toHaveBeenCalledTimes(4);
+    expect(dispatchSpy).toHaveBeenCalledTimes(1);
     for (const call of dispatchSpy.calls.all()) {
       const action = call.args[0];
       expect(action.type).toBe(TaskSharedActions.addTask.type);
@@ -106,9 +106,6 @@ describe('ExampleTasksService', () => {
     // Onboarding points at the Inbox only while these exact tasks exist.
     expect(JSON.parse(localStorage.getItem(LS.EXAMPLE_TASK_IDS) ?? '[]')).toEqual([
       'mock-id-0',
-      'mock-id-1',
-      'mock-id-2',
-      'mock-id-3',
     ]);
   });
 
