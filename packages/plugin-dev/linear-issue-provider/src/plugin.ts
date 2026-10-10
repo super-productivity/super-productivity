@@ -20,6 +20,7 @@ interface LinearConfig {
   apiKey?: string;
   teamId?: string;
   projectId?: string;
+  isAutoImportCurrentCycleOnly?: boolean;
 }
 
 interface LinearGraphQLResponse<T = unknown> {
@@ -66,14 +67,15 @@ const t = (key: string): string => {
 };
 
 const SEARCH_ISSUES_QUERY = `
-  query SearchIssues($first: Int!, $team: TeamFilter, $project: NullableProjectFilter) {
+  query SearchIssues($first: Int!, $team: TeamFilter, $project: NullableProjectFilter, $cycle: NullableCycleFilter) {
     viewer {
       assignedIssues(
         first: $first,
         filter: {
           state: { type: { in: ["backlog", "unstarted", "started"] } },
           team: $team,
-          project: $project
+          project: $project,
+          cycle: $cycle
         }
       ) {
         nodes {
@@ -133,9 +135,9 @@ const mapReduced = (issue: LinearRawIssueReduced): PluginSearchResult => ({
 });
 
 const searchAssignedIssues = async (
-  searchTerm: string,
   cfg: LinearConfig,
   http: PluginHttp,
+  opts: { searchTerm?: string; isCurrentCycleOnly?: boolean } = {},
 ): Promise<PluginSearchResult[]> => {
   const variables: Record<string, unknown> = { first: 50 };
   // Deliberate behavior change from the built-in provider: the old
@@ -143,11 +145,17 @@ const searchAssignedIssues = async (
   // them, so the "filter to specific team/project" config fields were inert.
   // Here we honor them as the labels promise. Empty fields = no filter (the
   // common case), so this only narrows results for users who set a value.
+  // teamId/projectId are generic filters and apply to manual search as well.
   if (cfg.teamId) {
     variables.team = { id: { eq: cfg.teamId } };
   }
   if (cfg.projectId) {
     variables.project = { id: { eq: cfg.projectId } };
+  }
+  // Cycle narrowing is auto-import only: manual search stays the escape hatch
+  // for issues without a cycle (the label and config key promise as much).
+  if (opts.isCurrentCycleOnly) {
+    variables.cycle = { isActive: { eq: true } };
   }
 
   const data = await graphql<{
@@ -155,7 +163,7 @@ const searchAssignedIssues = async (
   }>(http, SEARCH_ISSUES_QUERY, variables);
 
   let issues = data.viewer?.assignedIssues?.nodes || [];
-  const term = searchTerm.trim().toLowerCase();
+  const term = (opts.searchTerm || '').trim().toLowerCase();
   if (term) {
     issues = issues.filter(
       (issue) =>
@@ -192,6 +200,14 @@ PluginAPI.registerIssueProvider({
       label: t('CFG.PROJECT_ID'),
       advanced: true,
     },
+    {
+      key: 'isAutoImportCurrentCycleOnly',
+      type: 'checkbox',
+      label: t('CFG.AUTO_IMPORT_CURRENT_CYCLE_ONLY'),
+      description: t('CFG.AUTO_IMPORT_CURRENT_CYCLE_ONLY_DESC'),
+      advanced: true,
+      autoImportOnly: true,
+    },
   ],
 
   getHeaders(config: Record<string, unknown>): Record<string, string> {
@@ -208,7 +224,7 @@ PluginAPI.registerIssueProvider({
     config: Record<string, unknown>,
     http: PluginHttp,
   ): Promise<PluginSearchResult[]> {
-    return searchAssignedIssues(searchTerm, config as unknown as LinearConfig, http);
+    return searchAssignedIssues(config as unknown as LinearConfig, http, { searchTerm });
   },
 
   async getById(
@@ -277,7 +293,10 @@ PluginAPI.registerIssueProvider({
     config: Record<string, unknown>,
     http: PluginHttp,
   ): Promise<PluginSearchResult[]> {
-    return searchAssignedIssues('', config as unknown as LinearConfig, http);
+    const cfg = config as unknown as LinearConfig;
+    return searchAssignedIssues(cfg, http, {
+      isCurrentCycleOnly: !!cfg.isAutoImportCurrentCycleOnly,
+    });
   },
 
   issueDisplay: [

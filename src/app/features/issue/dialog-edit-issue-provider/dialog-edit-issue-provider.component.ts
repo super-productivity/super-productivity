@@ -725,6 +725,7 @@ export class DialogEditIssueProviderComponent {
     pattern?: string;
     options?: { value: string; label: string }[];
     showIf?: string;
+    autoImportOnly?: boolean;
     loadOptions?: unknown;
   }): unknown {
     if (f.type === 'link') {
@@ -748,6 +749,14 @@ export class DialogEditIssueProviderComponent {
         ? {
             hideExpression: (m: Record<string, unknown>) =>
               !(m['pluginConfig'] as Record<string, unknown> | undefined)?.[f.showIf!],
+          }
+        : {}),
+      ...(f.autoImportOnly
+        ? {
+            expressions: {
+              // eslint-disable-next-line @typescript-eslint/naming-convention
+              'props.disabled': '!model.isAutoAddToBacklog',
+            },
           }
         : {}),
       templateOptions: {

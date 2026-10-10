@@ -482,4 +482,60 @@ describe('DialogEditIssueProviderComponent', () => {
       expect(openedSnack().translateParams.errorMsg).not.toContain('SECRET-TOKEN');
     });
   });
+
+  describe('plugin config field gating', () => {
+    const createFieldProvider = (): RegisteredPluginIssueProvider =>
+      ({
+        pluginId: 'field-provider',
+        registeredKey: 'plugin:field-provider' as IssueProviderKey,
+        definition: {
+          configFields: [
+            { key: 'plain', type: 'input', label: 'Plain', advanced: true },
+            {
+              key: 'gated',
+              type: 'checkbox',
+              label: 'Gated',
+              advanced: true,
+              autoImportOnly: true,
+            },
+          ],
+          issueDisplay: [],
+          getHeaders: () => ({}),
+        },
+        name: 'Field Provider',
+        humanReadableName: 'Field Provider',
+        icon: 'extension',
+        pollIntervalMs: 0,
+        issueStrings: { singular: 'Issue', plural: 'Issues' },
+        useAgendaView: false,
+      }) as unknown as RegisteredPluginIssueProvider;
+
+    it('disables autoImportOnly fields unless auto-import is enabled', async () => {
+      const provider = createFieldProvider();
+      await setup({
+        data: { issueProviderKey: provider.registeredKey },
+        pluginProvider: provider,
+      });
+
+      const section = (
+        component as unknown as {
+          _getPluginFormSection(): {
+            items: Array<{
+              fieldGroup?: Array<{
+                key?: string;
+                expressions?: Record<string, string>;
+              }>;
+            }>;
+          };
+        }
+      )._getPluginFormSection();
+
+      const fields = section.items.flatMap((i) => i.fieldGroup ?? []);
+      const gated = fields.find((f) => f.key === 'pluginConfig.gated');
+      const plain = fields.find((f) => f.key === 'pluginConfig.plain');
+
+      expect(gated?.expressions?.['props.disabled']).toBe('!model.isAutoAddToBacklog');
+      expect(plain?.expressions).toBeUndefined();
+    });
+  });
 });
