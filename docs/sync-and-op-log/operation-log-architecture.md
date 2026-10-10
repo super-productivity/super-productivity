@@ -1126,7 +1126,10 @@ below holds:
   the server. Any other pending op may be one that another tab uploaded and has
   not marked synced yet (acknowledgements are deferred past piggyback
   processing). The move also holds the UPLOAD lock, so no other tab uploads
-  meanwhile.
+  meanwhile. A pending `syncTimeSpent` delta of this client is the exception,
+  e.g. one tracked while the rejected upload was in flight (#10614): if it was
+  stored after all, [receipt recovery](time-delta-retry-recovery.md) restores
+  its clock.
 - **Moved ops commute with every later op of the task the server already
   accepted from this client** (`isDisjointMergeEligible`). Next to a crossing
   delta the server accepts this client's own delta and then each later op, which

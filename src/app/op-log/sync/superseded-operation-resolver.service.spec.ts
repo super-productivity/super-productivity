@@ -612,7 +612,11 @@ describe('SupersededOperationResolverService', () => {
         // Tracked while the rejected upload was in flight, so not in its batch.
         const unrejected: OperationLogEntry | undefined =
           shape === 'unrejected delta'
-            ? { ...pending, seq: 2, op: { ...delta, id: 'uncertain' } }
+            ? {
+                ...pending,
+                seq: 2,
+                op: { ...delta, id: 'uncertain', vectorClock: { [TEST_CLIENT_ID]: 2 } },
+              }
             : shape === 'unrejected patch'
               ? {
                   ...pending,
@@ -626,7 +630,9 @@ describe('SupersededOperationResolverService', () => {
         mockOpLogStore.getOpsAfterSeq.and.resolveTo(
           unrejected ? [unrejected, ...tail] : tail,
         );
-        mockOpLogStore.rebasePendingLocalOps.and.resolveTo([delta]);
+        mockOpLogStore.rebasePendingLocalOps.and.resolveTo(
+          shape === 'unrejected delta' ? [delta, unrejected!.op] : [delta],
+        );
         const recovered = await service.rebaseCommutingTimeDeltaRejections([
           { opId: delta.id, op: delta, existingClock: row.vectorClock },
         ]);
@@ -634,7 +640,13 @@ describe('SupersededOperationResolverService', () => {
           shape === 'own patch' ||
           shape === 'remote patch' ||
           shape === 'unrejected delta';
-        expect([...recovered]).toEqual(allowed ? [delta.id] : []);
+        expect([...recovered]).toEqual(
+          !allowed
+            ? []
+            : shape === 'unrejected delta'
+              ? [delta.id, 'uncertain']
+              : [delta.id],
+        );
         if (allowed) {
           expect(mockOpLogStore.rebasePendingLocalOps).toHaveBeenCalledWith(
             shape === 'unrejected delta' ? [delta.id, 'uncertain'] : [delta.id],
@@ -647,6 +659,71 @@ describe('SupersededOperationResolverService', () => {
         } else {
           expect(mockOpLogStore.rebasePendingLocalOps).not.toHaveBeenCalled();
         }
+      });
+    }
+  });
+
+  describe('rejected rename beside a delta tracked while its upload was in flight', () => {
+    // 'concurrent': tracked before the remote delta was applied. 'after download':
+    // tracked once the cycle had applied it (the E2E's order), so it dominates the row.
+    for (const [timing, inFlightClock] of [
+      ['concurrent', { [TEST_CLIENT_ID]: 2 }],
+      ['after download', { [TEST_CLIENT_ID]: 2, remote: 1 }],
+    ] as const) {
+      it(`moves a ${timing} unrejected delta with the rename past the crossing remote delta (#10614)`, async () => {
+        const rename: Operation = {
+          ...createMockOperation('rename', 'TASK', 'task-1', { [TEST_CLIENT_ID]: 1 }),
+          clientId: TEST_CLIENT_ID,
+          actionType: ActionType.TASK_SHARED_UPDATE,
+          payload: { task: { id: 'task-1', changes: { title: 'A' } } },
+        };
+        const inFlight: Operation = {
+          ...createMockOperation('in-flight', 'TASK', 'task-1', inFlightClock),
+          clientId: TEST_CLIENT_ID,
+          actionType: ActionType.TIME_TRACKING_SYNC_TIME_SPENT,
+          payload: { taskId: 'task-1', date: '2026-10-03', duration: 2000 },
+        };
+        const remoteDelta: Operation = {
+          ...createMockOperation('remote-delta', 'TASK', 'task-1', { remote: 1 }),
+          clientId: 'remote',
+          actionType: ActionType.TIME_TRACKING_SYNC_TIME_SPENT,
+          payload: { taskId: 'task-1', date: '2026-10-03', duration: 3000 },
+        };
+        const renameEntry: OperationLogEntry = {
+          seq: 1,
+          op: rename,
+          source: 'local',
+          appliedAt: 1,
+        };
+        const inFlightEntry: OperationLogEntry = {
+          seq: 2,
+          op: inFlight,
+          source: 'local',
+          appliedAt: 2,
+        };
+        mockOpLogStore.getUnsynced.and.resolveTo([renameEntry, inFlightEntry]);
+        mockOpLogStore.getOpsAfterSeq.and.resolveTo([
+          inFlightEntry,
+          {
+            seq: 3,
+            op: remoteDelta,
+            source: 'remote',
+            appliedAt: 3,
+            syncedAt: 3,
+            applicationStatus: 'applied',
+          },
+        ]);
+        mockOpLogStore.rebasePendingLocalOps.and.resolveTo([rename, inFlight]);
+
+        const recovered = await service.rebaseCommutingTimeDeltaRejections([
+          { opId: rename.id, op: rename, existingClock: remoteDelta.vectorClock },
+        ]);
+
+        expect([...recovered]).toEqual([rename.id, inFlight.id]);
+        expect(mockOpLogStore.rebasePendingLocalOps).toHaveBeenCalledOnceWith(
+          [rename.id, inFlight.id],
+          remoteDelta.vectorClock,
+        );
       });
     }
   });

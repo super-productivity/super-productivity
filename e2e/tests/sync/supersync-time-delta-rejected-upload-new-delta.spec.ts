@@ -143,6 +143,9 @@ test.describe('@supersync time delta tracked while its crossing upload is reject
         await expect
           .poll(() => traffic.rejections)
           .toContain(`${loser.clientName}:CONFLICT_CONCURRENT`);
+        // The in-place rebase needs no seq-0 download; the snapshot fallback
+        // (#10614 before the fix) forced one on the rejected client.
+        expect(traffic.forcedDownloads).not.toContain(loser.clientName);
 
         await c.sync.syncAndWait();
         for (let round = 0; round < 2; round++) {
