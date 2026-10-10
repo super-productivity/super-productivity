@@ -1,4 +1,6 @@
 import { fakeAsync, TestBed, tick } from '@angular/core/testing';
+import { GlobalSectionConfig } from '../../config/global-config.model';
+import { focusModeReducer, initialState } from './focus-mode.reducer';
 import { provideMockActions } from '@ngrx/effects/testing';
 import { BehaviorSubject, Observable, of, Subject, Subscription } from 'rxjs';
 import { FocusModeEffects } from './focus-mode.effects';
@@ -29,6 +31,7 @@ import {
 import { updateGlobalConfigSection } from '../../config/store/global-config.actions';
 import { take, toArray } from 'rxjs/operators';
 import { HydrationStateService } from '../../../op-log/apply/hydration-state.service';
+import { selectCurrentTask } from '../../tasks/store/task.selectors';
 import { DEFAULT_TASK } from '../../tasks/task.model';
 import { IS_ELECTRON_TOKEN } from '../../../app.constants';
 import { Action } from '@ngrx/store';
@@ -1026,6 +1029,85 @@ describe('FocusModeEffects', () => {
           done();
         },
       });
+    });
+  });
+
+  describe('disabling focus mode', () => {
+    for (const purpose of ['work', 'break'] as const) {
+      for (const isRunning of [true, false]) {
+        it(`releases a hidden ${purpose} timer (running=${isRunning})`, () => {
+          const state = {
+            ...initialState,
+            isOverlayShown: false,
+            timer: createMockTimer({ purpose, isRunning }),
+          };
+          store.overrideSelector(selectors.selectTimer, state.timer);
+          store.overrideSelector(selectIsFocusModeEnabled, false);
+          actions$ = of(
+            updateGlobalConfigSection({
+              sectionKey: 'appFeatures',
+              sectionCfg: {
+                isFocusModeEnabled: false,
+              } as unknown as Partial<GlobalSectionConfig>,
+            }),
+          );
+          const result = collectEmissions(effects.cancelSessionWhenDisabled$);
+          expect(result.emitted).toEqual([actions.cancelFocusSession()]);
+          const nextState = focusModeReducer(state, result.emitted[0]);
+          expect(selectors.selectIsTimerActive.projector(nextState.timer)).toBeFalse();
+          expect(nextState.timer.isRunning).toBeFalse();
+          expect(selectors.selectDesktopProgress.projector(nextState.timer, null)).toBe(
+            -1,
+          );
+          result.subscription.unsubscribe();
+        });
+      }
+    }
+
+    it('keeps ordinary tracking running when cancellation follows feature disable', () => {
+      store.overrideSelector(selectIsFocusModeEnabled, false);
+      actions$ = of(actions.cancelFocusSession());
+      const result = collectEmissions(effects.cancelSession$);
+      expect(result.emitted).toEqual([]);
+      result.subscription.unsubscribe();
+    });
+
+    it('does not cancel an active session while the feature remains enabled', () => {
+      store.overrideSelector(
+        selectors.selectTimer,
+        createMockTimer({ purpose: 'work', isRunning: true }),
+      );
+      actions$ = of(
+        updateGlobalConfigSection({
+          sectionKey: 'appFeatures',
+          sectionCfg: {
+            isFocusModeEnabled: true,
+          } as unknown as Partial<GlobalSectionConfig>,
+        }),
+      );
+      const result = collectEmissions(effects.cancelSessionWhenDisabled$);
+      expect(result.emitted).toEqual([]);
+      result.subscription.unsubscribe();
+    });
+
+    it('does not cancel an idle timer or react to unrelated settings', () => {
+      store.overrideSelector(selectIsFocusModeEnabled, false);
+      actions$ = of(
+        updateGlobalConfigSection({
+          sectionKey: 'appFeatures',
+          sectionCfg: {
+            isFocusModeEnabled: false,
+          } as unknown as Partial<GlobalSectionConfig>,
+        }),
+      );
+      const idle = collectEmissions(effects.cancelSessionWhenDisabled$);
+      expect(idle.emitted).toEqual([]);
+      idle.subscription.unsubscribe();
+      store.overrideSelector(selectors.selectTimer, createMockTimer({ purpose: 'work' }));
+      actions$ = of(updateGlobalConfigSection({ sectionKey: 'misc', sectionCfg: {} }));
+      const unrelated = collectEmissions(effects.cancelSessionWhenDisabled$);
+      expect(unrelated.emitted).toEqual([]);
+      unrelated.subscription.unsubscribe();
     });
   });
 
@@ -3033,11 +3115,8 @@ describe('FocusModeEffects', () => {
       });
     });
   });
-  // The OS progress bar (taskbar/dock) has exactly one writer at a time: a
-  // *timed* session owns it and task-electron.effects stands down. When the
-  // session releases it (cancel/pause), nothing else clears the bar - the task
-  // writer only wakes on setCurrentTask, and focus mode dispatches
-  // unsetCurrentTask - so this effect must clear it on the handoff itself.
+  // The timer owns desktop progress until the session ends, including pauses
+  // and Flowtime. Cancellation clears it once before ordinary tracking resumes.
   describe('setTaskBarProgress$', () => {
     let actionsSubject: Subject<Action>;
     let setProgressBarSpy: jasmine.Spy;
@@ -3069,6 +3148,7 @@ describe('FocusModeEffects', () => {
     beforeEach(() => {
       actionsSubject = new Subject<Action>();
       actions$ = actionsSubject;
+      store.overrideSelector(selectCurrentTask, null);
       setProgressBarSpy = jasmine.createSpy('setProgressBar');
       (window as any).ea = { setProgressBar: setProgressBarSpy };
     });
@@ -3105,7 +3185,7 @@ describe('FocusModeEffects', () => {
       expect(setProgressBarSpy).toHaveBeenCalledOnceWith(NO_PROGRESS);
     }));
 
-    it('should clear the bar when a countdown session is paused', fakeAsync(() => {
+    it('should preserve progress when a countdown session is paused', fakeAsync(() => {
       setTimer(runningCountdown);
       const sub = effects.setTaskBarProgress$.subscribe();
       dispatch(actions.tick());
@@ -3115,12 +3195,32 @@ describe('FocusModeEffects', () => {
       dispatch(actions.pauseFocusSession({}));
       sub.unsubscribe();
 
-      expect(setProgressBarSpy).toHaveBeenCalledOnceWith(NO_PROGRESS);
+      expect(setProgressBarSpy).toHaveBeenCalledOnceWith({
+        progress: 0.2,
+        progressBarMode: 'pause',
+      });
     }));
 
-    // Flowtime owns nothing, so the task writer publishes instead; clearing on
-    // every tick would fight it and make the bar flicker.
-    it('should never write while a Flowtime session ticks', fakeAsync(() => {
+    it('should publish task estimate progress during Flowtime', fakeAsync(() => {
+      store.overrideSelector(selectCurrentTask, {
+        ...DEFAULT_TASK,
+        id: 'flowtime-task',
+        projectId: 'project',
+        timeSpent: 300000,
+        timeEstimate: 600000,
+      });
+      setTimer(runningFlowtime);
+      const sub = effects.setTaskBarProgress$.subscribe();
+      dispatch(actions.tick());
+      sub.unsubscribe();
+      expect(setProgressBarSpy).toHaveBeenCalledOnceWith({
+        progress: 0.5,
+        progressBarMode: 'normal',
+      });
+    }));
+
+    // An open-ended timer without a task estimate hides the bar once.
+    it('should hide progress once for Flowtime without a task estimate', fakeAsync(() => {
       setTimer(runningFlowtime);
       const sub = effects.setTaskBarProgress$.subscribe();
 
@@ -3129,7 +3229,7 @@ describe('FocusModeEffects', () => {
       dispatch(actions.tick());
       sub.unsubscribe();
 
-      expect(setProgressBarSpy).not.toHaveBeenCalled();
+      expect(setProgressBarSpy).toHaveBeenCalledOnceWith(NO_PROGRESS);
     }));
   });
 });
