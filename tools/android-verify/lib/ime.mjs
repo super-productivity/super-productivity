@@ -76,19 +76,32 @@ export const createIme = ({ page, adb }) => {
    * plausible-looking geometry, so it must fail the run instead.
    */
   const tapAndOpen = async (selector, { imeTimeoutMs = 5000 } = {}) => {
-    const baseline = await probeViewport(page);
     const off = await calibrate();
     // Drop any programmatic focus, so only the tap can make the target active.
     await page.evaluate(() => {
       const active = document.activeElement;
       if (active instanceof HTMLElement) active.blur();
     });
-    const rect = await page.evaluate((sel) => {
-      const el = document.querySelector(sel);
-      if (!el) return null;
-      const r = el.getBoundingClientRect();
-      return { x: r.x, y: r.y, width: r.width, height: r.height };
-    }, selector);
+    // The calibration tap is a user gesture, so an autofocused target can raise
+    // the IME; blurring then drops it. Measure only once it is gone and the
+    // layout is still, or the tap lands where the target sat above the keyboard.
+    await poll(async () => !(await adb.isImeShown()), imeTimeoutMs, 250);
+    const readRect = () =>
+      page.evaluate((sel) => {
+        const el = document.querySelector(sel);
+        if (!el) return null;
+        const r = el.getBoundingClientRect();
+        return { x: r.x, y: r.y, width: r.width, height: r.height };
+      }, selector);
+    let rect = await readRect();
+    for (let i = 0; i < 20; i++) {
+      await sleep(200);
+      const next = await readRect();
+      const still = JSON.stringify(next) === JSON.stringify(rect);
+      rect = next;
+      if (still) break;
+    }
+    const baseline = await probeViewport(page);
     if (!rect || rect.width === 0 || rect.height === 0) {
       throw new StageError('tap-target-missing', `no visible element for ${selector}`, {
         rect,
