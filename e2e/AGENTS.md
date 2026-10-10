@@ -51,3 +51,5 @@ Provider tests use [supersync.fixture.ts](fixtures/supersync.fixture.ts) or [web
 For a sync fix, follow the root guide's reproduction-first requirement: make the E2E test fail on the reported real-data case, then pass with the fix. Run the focused file with its matching provider command. Run `npm run checkFile <filepath>` for every changed `.ts` or `.scss` file, including specs. For browser-level test behavior, consult [Playwright configuration](playwright.config.ts) and [global setup](global-setup.ts) before changing timeouts or server startup.
 
 For product videos under `e2e/store-video/`, also read its [task-local guide](store-video/AGENTS.md).
+
+Behavior that needs a real Android IME, safe-area insets or a split visual viewport cannot be covered here; use the human-run [Android verification harness](../tools/android-verify/README.md).
