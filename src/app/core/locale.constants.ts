@@ -13,6 +13,7 @@ export enum LanguageCode {
   fa = 'fa',
   fi = 'fi',
   fr = 'fr',
+  he = 'he',
   hr = 'hr',
   id = 'id',
   it = 'it',
@@ -59,7 +60,7 @@ export const AUTO_SWITCH_LNGS: LanguageCode[] = [
   LanguageCode.tr,
 ];
 
-export const RTL_LANGUAGES: LanguageCode[] = [LanguageCode.ar, LanguageCode.fa];
+export const RTL_LANGUAGES: LanguageCode[] = [LanguageCode.ar, LanguageCode.fa, LanguageCode.he];
 
 /**
  * This is a specification used to date-time localization
@@ -122,6 +123,7 @@ export const LocaleImportFns: Record<
   fa: () => import('@angular/common/locales/fa'),
   fi: () => import('@angular/common/locales/fi'),
   fr: () => import('@angular/common/locales/fr'),
+  he: () => import('@angular/common/locales/he'),  
   id: () => import('@angular/common/locales/id'),
   it: () => import('@angular/common/locales/it'),
   pl_pl: () => import('@angular/common/locales/pl'),
