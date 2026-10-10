@@ -26,13 +26,15 @@ import {
   selectTimer,
 } from '../../focus-mode/store/focus-mode.selectors';
 import { getTimerRemainingMs, TimerState } from '../../focus-mode/focus-mode.model';
-import { combineLatest, firstValueFrom, Subject } from 'rxjs';
+import { combineLatest, firstValueFrom, merge, Subject } from 'rxjs';
 import { ANDROID_BACKGROUND_TICK_CAP_MS } from '../../../app.constants';
 import { HydrationStateService } from '../../../op-log/apply/hydration-state.service';
 import { SnackService } from '../../../core/snack/snack.service';
 import { GlobalTrackingIntervalService } from '../../../core/global-tracking-interval/global-tracking-interval.service';
 import { OperationWriteFlushService } from '../../../op-log/sync/operation-write-flush.service';
 import { CapacitorReminderService } from '../../../core/platform/capacitor-reminder.service';
+import { AndroidNotificationActionService } from '../android-notification-action.service';
+import { DataInitStateService } from '../../../core/data-init/data-init-state.service';
 
 export type NativeTrackingData = {
   taskId: string;
@@ -371,6 +373,8 @@ export class AndroidForegroundTrackingEffects {
   private _reminderService = inject(CapacitorReminderService);
   private _globalTrackingIntervalService = inject(GlobalTrackingIntervalService);
   private _operationWriteFlush = inject(OperationWriteFlushService);
+  private _notificationActions = inject(AndroidNotificationActionService);
+  private _dataInitState = inject(DataInitStateService);
 
   // Recovery requests funnel through this Subject for the cold-start path.
   //   Producers: syncTrackingToService$ tap (cold-start), syncOnResume$ tap.
@@ -546,12 +550,16 @@ export class AndroidForegroundTrackingEffects {
    * The focus-mode resume tick may complete a Pomodoro and unset the task, so
    * the task is credited only up to the session end before it (see
    * handleAndroidResume).
+   * Notification actions tapped while backgrounded are applied FIRST, for the
+   * same reason: a task paused from the notification must be credited only up
+   * to the tap, not the whole gap (#10683). The samples below see the result.
    */
   syncOnResume$ =
     IS_ANDROID_WEB_VIEW &&
     createEffect(
       () =>
         androidInterface.onResume$.pipe(
+          tap(() => void this._notificationActions.drain()),
           withLatestFrom(
             this._store.select(selectCurrentTask),
             this._store.select(selectIsTaskDataLoaded),
@@ -577,6 +585,22 @@ export class AndroidForegroundTrackingEffects {
             ),
           ),
         ),
+      { dispatch: false },
+    );
+
+  /**
+   * Apply tracking/focus notification actions (#10683) queued while the app
+   * was not running (startup) or tapped while it is alive (drain signal).
+   * Resume drains inside syncOnResume$, where the ordering matters.
+   */
+  drainNotificationActions$ =
+    IS_ANDROID_WEB_VIEW &&
+    createEffect(
+      () =>
+        merge(
+          this._dataInitState.isAllDataLoadedInitially$.pipe(filter(Boolean)),
+          androidInterface.onNotificationActionDrainRequest$,
+        ).pipe(tap(() => void this._notificationActions.drain())),
       { dispatch: false },
     );
 

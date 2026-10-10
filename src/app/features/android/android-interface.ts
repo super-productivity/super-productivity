@@ -142,6 +142,13 @@ export interface AndroidInterface {
   // Reminder done queue - get task IDs marked done from notifications
   getReminderDoneQueue?(): string | null;
 
+  // Tracking / focus-mode / remote-tracking notification actions, applied
+  // natively at tap time and queued for the store (#10683). See
+  // android-notification-action.service.ts for the formats. All clear on read.
+  getTrackingActionQueue?(): string | null;
+  getFocusActionQueue?(): string | null;
+  getRemoteTrackingStopQueue?(): string | null;
+
   // Native capture inbox (startup quick-add overlay). Non-destructive read of a
   // JSON array, or null if the inbox could not be read; see CaptureInbox.kt.
   getPendingCaptures?(): string | null;
@@ -197,6 +204,10 @@ export interface AndroidInterface {
   // start/resume drains are triggered by onResume$ instead)
   onWidgetDoneDrainRequest$: Subject<void>;
 
+  // Contentless "drain now" signal after a tracking/focus/remote-stop notification
+  // tap while the activity is alive; the actions are pulled via the queue getters
+  onNotificationActionDrainRequest$: Subject<void>;
+
   // Background sync credential bridge (for WorkManager-based reminder cancellation)
   setSuperSyncCredentials?(baseUrl: string, accessToken: string): void;
   clearSuperSyncCredentials?(): void;
@@ -236,6 +247,7 @@ if (IS_ANDROID_WEB_VIEW) {
   androidInterface.onReminderDone$ = new ReplaySubject(20);
   androidInterface.onReminderSnooze$ = new ReplaySubject(20);
   androidInterface.onWidgetDoneDrainRequest$ = new Subject();
+  androidInterface.onNotificationActionDrainRequest$ = new Subject();
   androidInterface.onShareWithAttachment$ = new ReplaySubject(1);
   androidInterface.isKeyboardShown$ = new BehaviorSubject(false);
 
