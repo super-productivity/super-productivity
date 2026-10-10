@@ -23,4 +23,11 @@
   <exclude
     domain="sharedpref"
     path="webview_compatibility.xml" />
+  <!--
+    The live tracking session (#7390) is bound to this device's boot count and
+    process ids; restored elsewhere it could resume tracking a stale task.
+  -->
+  <exclude
+    domain="sharedpref"
+    path="SuperProductivityTracking.xml" />
 </full-backup-content>

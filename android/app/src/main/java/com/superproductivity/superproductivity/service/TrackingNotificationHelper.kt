@@ -10,6 +10,7 @@ import android.os.Build
 import androidx.core.app.NotificationCompat
 import com.superproductivity.superproductivity.CapacitorMainActivity
 import com.superproductivity.superproductivity.R
+import com.superproductivity.superproductivity.receiver.NotificationActionReceiver
 
 object TrackingNotificationHelper {
     const val CHANNEL_ID = "sp_time_tracking_channel"
@@ -45,26 +46,16 @@ object TrackingNotificationHelper {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val pauseIntent = Intent(context, CapacitorMainActivity::class.java).apply {
-            action = TrackingForegroundService.ACTION_PAUSE
-            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
-        }
-        val pausePendingIntent = PendingIntent.getActivity(
+        val pausePendingIntent = NotificationActionReceiver.pendingIntent(
             context,
-            1,
-            pauseIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            TrackingForegroundService.ACTION_PAUSE,
+            1
         )
 
-        val doneIntent = Intent(context, CapacitorMainActivity::class.java).apply {
-            action = TrackingForegroundService.ACTION_DONE
-            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
-        }
-        val donePendingIntent = PendingIntent.getActivity(
+        val donePendingIntent = NotificationActionReceiver.pendingIntent(
             context,
-            2,
-            doneIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            TrackingForegroundService.ACTION_DONE,
+            2
         )
 
         // SystemUI renders the ticking elapsed time via the chronometer, so the
