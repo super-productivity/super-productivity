@@ -4,7 +4,7 @@ import { MatDialog } from '@angular/material/dialog';
 import { MatSlideToggleChange } from '@angular/material/slide-toggle';
 import { Router } from '@angular/router';
 import { Store } from '@ngrx/store';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of } from 'rxjs';
 import { GlobalConfigService } from '../../../features/config/global-config.service';
 import { SnackService } from '../../../core/snack/snack.service';
@@ -283,6 +283,64 @@ describe('PluginManagementComponent', () => {
 
     expect(routerNavigateSpy).toHaveBeenCalledWith(['/active/tasks']);
     expect(layoutToggleSpy).not.toHaveBeenCalled();
+  });
+
+  describe('getPluginLanguages', () => {
+    const pluginWithLanguages = (languages?: string[]): PluginInstance => ({
+      manifest: {
+        ...baseManifest,
+        ...(languages ? { i18n: { languages } } : {}),
+      },
+      loaded: true,
+      isEnabled: true,
+    });
+
+    it('names the languages in the UI language', () => {
+      TestBed.inject(TranslateService).use('de');
+
+      expect(component.getPluginLanguages(pluginWithLanguages(['de', 'fr']))).toBe(
+        'Deutsch, Französisch',
+      );
+    });
+
+    it('names English in the UI language for plugins without languages', () => {
+      TestBed.inject(TranslateService).use('de');
+
+      expect(component.getPluginLanguages(pluginWithLanguages())).toBe('Englisch');
+      expect(component.getPluginLanguages(pluginWithLanguages([]))).toBe('Englisch');
+      expect(component.getPluginLanguages(pluginWithLanguages(['en']))).toBe('Englisch');
+    });
+
+    it('names app locale codes with a region or script', () => {
+      TestBed.inject(TranslateService).use('en');
+
+      expect(
+        component.getPluginLanguages(
+          pluginWithLanguages(['pt-br', 'ro-md', 'zh', 'zh-tw']),
+        ),
+      ).toBe(
+        'Portuguese (Brazil), Romanian (Moldova), Chinese (Simplified), Chinese (Traditional)',
+      );
+    });
+
+    it('follows a UI language switch without recreating the component', () => {
+      const translateService = TestBed.inject(TranslateService);
+      const plugin = pluginWithLanguages(['fr']);
+
+      translateService.use('en');
+      expect(component.getPluginLanguages(plugin)).toBe('French');
+
+      translateService.use('de');
+      expect(component.getPluginLanguages(plugin)).toBe('Französisch');
+    });
+
+    it('falls back to the raw code for an invalid language code', () => {
+      TestBed.inject(TranslateService).use('de');
+
+      expect(
+        component.getPluginLanguages(pluginWithLanguages(['de', 'not a code!'])),
+      ).toBe('Deutsch, not a code!');
+    });
   });
 
   // Stubs MatDialog.open so the confirm dialog closes with `result`:

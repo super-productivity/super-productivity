@@ -5,6 +5,8 @@ import {
   inject,
   signal,
 } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
+import { map } from 'rxjs/operators';
 import { PluginService } from '../../plugin.service';
 import { PluginInstance } from '../../plugin-api.model';
 import { PluginMetaPersistenceService } from '../../plugin-meta-persistence.service';
@@ -35,7 +37,7 @@ import { PluginLog } from '../../../core/log';
 import { SnackService } from '../../../core/snack/snack.service';
 import { PluginBridgeService } from '../../plugin-bridge.service';
 import { CollapsibleComponent } from '../../../ui/collapsible/collapsible.component';
-import { LanguageCode } from '../../../core/locale.constants';
+import { DEFAULT_LANGUAGE, LanguageCode } from '../../../core/locale.constants';
 import { GlobalConfigService } from '../../../features/config/global-config.service';
 import { escapeHtml } from '../../../util/escape-html';
 import { getUploadedPluginIds } from '../../plugin-state.model';
@@ -59,6 +61,38 @@ interface CommunityPlugin {
 interface PluginManifestAuthor {
   author?: unknown;
 }
+
+/**
+ * The app's Chinese codes stand for scripts, not regions: `zh` is Simplified
+ * and `zh-tw` is Traditional. Read literally, `zh-tw` would be "Chinese (Taiwan)".
+ */
+const LANGUAGE_CODE_TO_BCP47: Readonly<Record<string, string>> = {
+  [LanguageCode.zh]: 'zh-Hans',
+  [LanguageCode.zh_tw]: 'zh-Hant',
+};
+
+const createLanguageDisplayNames = (locale: string): Intl.DisplayNames | null => {
+  try {
+    return new Intl.DisplayNames([locale], {
+      type: 'language',
+      languageDisplay: 'standard',
+    });
+  } catch {
+    return null;
+  }
+};
+
+/** Never throws: an unknown or malformed code is shown as is. */
+const getLanguageName = (
+  displayNames: Intl.DisplayNames | null,
+  code: string,
+): string => {
+  try {
+    return displayNames?.of(LANGUAGE_CODE_TO_BCP47[code] ?? code) ?? code;
+  } catch {
+    return code;
+  }
+};
 
 @Component({
   selector: 'plugin-management',
@@ -100,38 +134,16 @@ export class PluginManagementComponent {
   private readonly _snackService = inject(SnackService);
   private readonly _allIssueProviders = this._store.selectSignal(selectAllIssueProviders);
 
-  // Language code to human-readable name mapping
-  /* eslint-disable @typescript-eslint/naming-convention */
-  private readonly _languageNames: Record<string, string> = {
-    ar: 'Arabic',
-    de: 'German',
-    cs: 'Czech',
-    en: 'English',
-    es: 'Spanish',
-    fa: 'Persian',
-    fi: 'Finnish',
-    fr: 'French',
-    hr: 'Croatian',
-    id: 'Indonesian',
-    it: 'Italian',
-    ja: 'Japanese',
-    ko: 'Korean',
-    nl: 'Dutch',
-    nb: 'Norwegian',
-    pl: 'Polish',
-    pt: 'Portuguese',
-    'pt-br': 'Portuguese (Brazil)',
-    ru: 'Russian',
-    sk: 'Slovak',
-    sv: 'Swedish',
-    tr: 'Turkish',
-    uk: 'Ukrainian',
-    zh: 'Chinese (Simplified)',
-    'zh-tw': 'Chinese (Traditional)',
-    ro: 'Romanian',
-    'ro-md': 'Romanian (Moldova)',
-  } as const;
-  /* eslint-enable @typescript-eslint/naming-convention */
+  /** Current UI language; follows `TranslateService.use()` so a switch re-renders. */
+  private readonly _uiLang = toSignal(
+    this._translateService.onLangChange.pipe(map((event) => event.lang)),
+    { initialValue: this._translateService.getCurrentLang() },
+  );
+
+  /** One formatter per UI language, shared by every plugin card. */
+  private readonly _languageDisplayNames = computed(() =>
+    createLanguageDisplayNames(this._uiLang() || DEFAULT_LANGUAGE),
+  );
 
   readonly communityPlugins = signal<CommunityPlugin[]>(
     [...(COMMUNITY_PLUGINS_DATA as CommunityPlugin[])].sort((a, b) =>
@@ -556,27 +568,15 @@ export class PluginManagementComponent {
   }
 
   /**
-   * Get formatted language string for display
-   * Returns "English only" if no i18n or only English
-   * Returns comma-separated language names otherwise
+   * Comma-separated names of the plugin's languages, in the UI language.
+   * Plugins without `i18n.languages` are English-only.
    */
   getPluginLanguages(plugin: PluginInstance): string {
     const languages = plugin.manifest.i18n?.languages;
+    const codes = languages?.length ? languages : [LanguageCode.en];
+    const displayNames = this._languageDisplayNames();
 
-    if (!languages || languages.length === 0) {
-      return 'English';
-    }
-
-    if (languages.length === 1 && languages[0] === 'en') {
-      return 'English';
-    }
-
-    // Map language codes to names and join with commas
-    const languageNames = languages
-      .map((code) => this._languageNames[code] || code)
-      .join(', ');
-
-    return languageNames;
+    return codes.map((code) => getLanguageName(displayNames, code)).join(', ');
   }
 
   /**
