@@ -318,6 +318,8 @@ const editNote = async (page: Page, id: string, edit: EditName): Promise<void> =
 const openProjectWorkView = async (page: Page): Promise<void> => {
   await page.goto(`/#/project/${PROJECT}/tasks`);
   await waitForAppReady(page, { ensureRoute: false });
+  // The previous work view stays in the DOM until its :leave animation ends.
+  await expect(page.locator('.sections-wrapper')).toHaveCount(1);
   await expect(page.locator('.sections-wrapper')).toBeVisible();
 };
 const sectionHeader = (page: Page, title: string): ReturnType<Page['locator']> =>
