@@ -95,17 +95,29 @@ class TrackingForegroundService : Service() {
 
         /**
          * After a process kill the companion starts empty while the persisted
-         * session is still on disk. Load it back so getTrackingElapsed() hands
-         * the JS cold-start recovery the time tracked up to now. The in-memory
-         * state wins whenever it is live, so this never re-anchors a running
-         * session.
+         * session is still on disk (every stop clears both, so this only happens
+         * in a new process). Load it back, with the total frozen at the old
+         * process's death, so getTrackingElapsed() hands the JS cold-start
+         * recovery the time tracked until the kill. The in-memory state wins
+         * whenever it is live, so this never re-anchors a running session.
          */
         @Synchronized
         fun restoreIfIdle(context: Context) {
             if (isTracking) return
-            val state = TrackingStateStore.load(context) ?: return
-            Log.d(TAG, "Restoring persisted tracking state: taskId=${state.taskId}")
-            applyInMemory(state)
+            val persisted = TrackingStateStore.load(context) ?: return
+            val exitTimestamp = TrackingState.pickExitTimestamp(
+                TrackingStateStore.mainProcessExitTimestamps(context),
+                persisted.startTimestamp
+            )
+            val state = persisted.frozenAtExit(exitTimestamp, System.currentTimeMillis())
+            Log.d(
+                TAG,
+                "Restoring persisted tracking state: taskId=${state.taskId}, " +
+                    "exitKnown=${exitTimestamp != null}"
+            )
+            // Persist the re-anchored state too, so a second kill before JS
+            // re-anchors is measured from here rather than the old anchor.
+            setState(context, state)
         }
 
         /**

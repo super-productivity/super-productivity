@@ -1,7 +1,9 @@
 package com.superproductivity.superproductivity.service
 
+import android.app.ActivityManager
 import android.content.Context
 import android.content.SharedPreferences
+import android.os.Build
 import android.provider.Settings
 import android.util.Log
 
@@ -17,8 +19,35 @@ data class TrackingState(
     val accumulatedMs: Long,
     val bootCount: Int,
 ) {
+    /**
+     * The session as recovered in a new process: the total stops at the moment
+     * the old process died, and counting resumes from [nowMs]. Time while the
+     * app was dead is never credited — a force-stop or an app update would
+     * otherwise add everything up to the next launch, possibly days. Without a
+     * known exit time (API < 30, no matching record) only the total at the last
+     * anchor is kept, the same outcome as before persistence existed.
+     */
+    fun frozenAtExit(exitTimestamp: Long?, nowMs: Long): TrackingState {
+        val trackedUntilExit = if (exitTimestamp != null && exitTimestamp >= startTimestamp) {
+            minOf(exitTimestamp, nowMs) - startTimestamp
+        } else {
+            0L
+        }
+        return copy(
+            startTimestamp = nowMs,
+            accumulatedMs = accumulatedMs + trackedUntilExit.coerceAtLeast(0)
+        )
+    }
+
     companion object {
         const val UNKNOWN_BOOT_COUNT = -1
+
+        /**
+         * The death of the process that last anchored this session is the
+         * earliest recorded exit at or after the anchor.
+         */
+        fun pickExitTimestamp(exitTimestamps: List<Long>, startTimestamp: Long): Long? =
+            exitTimestamps.filter { it >= startTimestamp }.minOrNull()
 
         /**
          * Rebuilds a persisted session, or null when there is nothing usable.
@@ -85,6 +114,25 @@ object TrackingStateStore {
             Log.w(TAG, "Unable to read boot count", e)
             TrackingState.UNKNOWN_BOOT_COUNT
         }
+
+    /**
+     * Wall-clock times at which the app's main process died, newest first, as
+     * recorded by the system (API 30+). Empty when unavailable.
+     */
+    fun mainProcessExitTimestamps(context: Context): List<Long> {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return emptyList()
+        return try {
+            val am = context.getSystemService(ActivityManager::class.java)
+                ?: return emptyList()
+            val processName = context.applicationInfo.processName
+            am.getHistoricalProcessExitReasons(context.packageName, 0, 0)
+                .filter { it.processName == processName }
+                .map { it.timestamp }
+        } catch (e: RuntimeException) {
+            Log.w(TAG, "Unable to read process exit reasons", e)
+            emptyList()
+        }
+    }
 
     fun save(context: Context, state: TrackingState) {
         val ok = getPrefs(context).edit()

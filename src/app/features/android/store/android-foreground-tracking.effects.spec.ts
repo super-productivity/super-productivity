@@ -2131,8 +2131,9 @@ describe('getFocusAutoCompleteCapMs', () => {
 
 // Exercises the production reconcile against a fake native session that
 // behaves like TrackingForegroundService + TrackingStateStore: an anchored
-// total that survives a process kill and is re-anchored by updateTrackingService
-// (#7390).
+// total that survives a process kill (restored frozen at the kill, so the fake
+// clock below stands for time tracked before it) and is re-anchored by
+// updateTrackingService (#7390).
 describe('syncNativeElapsedTimeForTask - recovery after process death', () => {
   const MIN = 60 * 1000;
   let now: number;
@@ -2178,8 +2179,9 @@ describe('syncNativeElapsedTimeForTask - recovery after process death', () => {
     };
   });
 
-  it('credits the time tracked while the process was dead on cold-start recovery', async () => {
-    // Process killed in the background; the user reopens the app 25 min later.
+  it('credits the background time tracked before a process kill on cold-start recovery', async () => {
+    // Tracked 25 min in the background, then the process was killed; native
+    // restores that total on the next launch.
     now += 25 * MIN;
 
     const didSync = await syncNativeElapsedTimeForTask(deps, 'task-1', readNative());
