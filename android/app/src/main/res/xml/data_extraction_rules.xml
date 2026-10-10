@@ -13,6 +13,10 @@
     <exclude
       domain="sharedpref"
       path="webview_compatibility.xml" />
+    <!-- Device-bound tracking session; see backup_rules.xml. -->
+    <exclude
+      domain="sharedpref"
+      path="SuperProductivityTracking.xml" />
   </cloud-backup>
   <device-transfer>
     <!-- A transferred fresh install should select launch mode from current state. -->
@@ -27,5 +31,9 @@
     <exclude
       domain="sharedpref"
       path="webview_compatibility.xml" />
+    <!-- Device-bound tracking session; see backup_rules.xml. -->
+    <exclude
+      domain="sharedpref"
+      path="SuperProductivityTracking.xml" />
   </device-transfer>
 </data-extraction-rules>
