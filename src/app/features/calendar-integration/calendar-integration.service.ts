@@ -422,6 +422,37 @@ export class CalendarIntegrationService {
     localStorage.setItem(LS.CALENDER_EVENTS_LAST_SKIP_DAY, getDbDateStr());
   }
 
+  /**
+   * Reverses the skip that adding an iCal event as a task records (see
+   * `IssueService.addTaskFromIssue`), so the event shows up again once that
+   * task is deleted (#10641). The skip also stored the event's legacy ids, but
+   * a task only keeps the primary id, so those are looked up in the cached
+   * events.
+   */
+  unskipCalendarEvents(eventIds: string[]): void {
+    const current = this.skippedEventIds$.getValue();
+    if (!current.length || !eventIds.length) {
+      return;
+    }
+
+    const requestedIds = new Set(eventIds);
+    const idsToRemove = new Set(eventIds);
+    this._getCalProviderFromCache().forEach((entry) =>
+      entry.items.forEach((calEv) => {
+        if (requestedIds.has(calEv.id)) {
+          getCalendarEventIdCandidates(calEv).forEach((id) => idsToRemove.add(id));
+        }
+      }),
+    );
+
+    const updated = current.filter((id) => !idsToRemove.has(id));
+    if (updated.length === current.length) {
+      return;
+    }
+    this.skippedEventIds$.next(updated);
+    localStorage.setItem(LS.CALENDER_EVENTS_SKIPPED_TODAY, JSON.stringify(updated));
+  }
+
   requestEvents$(
     calProvider: IssueProviderCalendar,
     start = getStartOfDayTimestamp(),

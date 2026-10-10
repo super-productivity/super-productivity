@@ -943,6 +943,61 @@ END:VCALENDAR`;
     });
   });
 
+  describe('unskipCalendarEvents', () => {
+    const buildEvent = (
+      id: string,
+      overrides: Partial<CalendarIntegrationEvent> = {},
+    ): CalendarIntegrationEvent => ({
+      id,
+      calProviderId: 'test-provider',
+      issueProviderKey: 'ICAL',
+      title: `Event ${id}`,
+      start: Date.now(),
+      duration: 60 * 60 * 1000,
+      ...overrides,
+    });
+
+    it('should remove the event ID from the skipped list and localStorage (#10641)', () => {
+      service.skipCalendarEvent(buildEvent('evt-1'));
+      service.skipCalendarEvent(buildEvent('evt-2'));
+
+      service.unskipCalendarEvents(['evt-1']);
+
+      expect(service.skippedEventIds$.getValue()).toEqual(['evt-2']);
+      const stored = localStorage.getItem('SUP_CALENDER_EVENTS_SKIPPED_TODAY');
+      expect(JSON.parse(stored ?? '[]') as string[]).toEqual(['evt-2']);
+    });
+
+    it('should also remove the legacy IDs of the cached event', () => {
+      const event = buildEvent('series-uid_20260101T100000', {
+        legacyIds: ['series-uid'],
+      });
+      localStorage.setItem(
+        'SUP_CAL_EVENTS_CACHE',
+        JSON.stringify([{ items: [event] }] as ScheduleCalendarMapEntry[]),
+      );
+      service.skipCalendarEvent(event);
+      expect(service.skippedEventIds$.getValue()).toEqual([
+        'series-uid_20260101T100000',
+        'series-uid',
+      ]);
+
+      service.unskipCalendarEvents(['series-uid_20260101T100000']);
+
+      expect(service.skippedEventIds$.getValue()).toEqual([]);
+    });
+
+    it('should not touch localStorage when none of the IDs is skipped', () => {
+      service.skipCalendarEvent(buildEvent('evt-1'));
+      const setItemSpy = spyOn(Storage.prototype, 'setItem').and.callThrough();
+
+      service.unskipCalendarEvents(['evt-unknown']);
+
+      expect(service.skippedEventIds$.getValue()).toEqual(['evt-1']);
+      expect(setItemSpy).not.toHaveBeenCalled();
+    });
+  });
+
   describe('testConnection', () => {
     it('should return true when connection succeeds', async () => {
       const cfg = createMockProvider();

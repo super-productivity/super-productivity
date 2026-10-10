@@ -1,7 +1,15 @@
 import { Injectable, inject } from '@angular/core';
-import { createEffect } from '@ngrx/effects';
+import { createEffect, ofType } from '@ngrx/effects';
 import { Store } from '@ngrx/store';
-import { distinctUntilChanged, first, map, skip, switchMap, tap } from 'rxjs/operators';
+import {
+  distinctUntilChanged,
+  filter,
+  first,
+  map,
+  skip,
+  switchMap,
+  tap,
+} from 'rxjs/operators';
 import { BehaviorSubject, EMPTY, forkJoin, timer } from 'rxjs';
 import { GlobalTrackingIntervalService } from '../../../core/global-tracking-interval/global-tracking-interval.service';
 import { BannerService } from '../../../core/banner/banner.service';
@@ -35,11 +43,21 @@ import {
 } from '../get-calendar-event-id-candidates';
 import { getEffectiveCheckInterval } from '../../issue/providers/calendar/calendar.const';
 import { passesCalendarEventRegexFilter } from '../calendar-event-regex-filter';
+import { LOCAL_ACTIONS } from '../../../util/local-actions.token';
+import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
+import { Task } from '../../tasks/task.model';
+import { ICAL_TYPE } from '../../issue/issue.const';
 
 const CHECK_TO_SHOW_INTERVAL = 60 * 1000;
 
+const getIcalEventIds = (tasks: readonly Task[]): string[] =>
+  tasks.flatMap((task) =>
+    task.issueType === ICAL_TYPE && task.issueId ? [task.issueId] : [],
+  );
+
 @Injectable()
 export class CalendarIntegrationEffects {
+  private _localActions$ = inject(LOCAL_ACTIONS);
   private _store = inject(Store);
   private _globalTrackingIntervalService = inject(GlobalTrackingIntervalService);
   private _bannerService = inject(BannerService);
@@ -197,6 +215,32 @@ export class CalendarIntegrationEffects {
             ),
           );
         }),
+      ),
+    { dispatch: false },
+  );
+
+  /**
+   * Adding an iCal event as a task skips the event for the rest of the day (see
+   * `IssueService.addTaskFromIssue`) so its banner does not show up next to the
+   * task. Deleting the task has to lift that skip again, or the event stays
+   * hidden until tomorrow (#10641). Archived tasks keep their link to the
+   * event, so archiving is not handled here.
+   */
+  unskipEventsOfDeletedTasks$ = createEffect(
+    () =>
+      this._localActions$.pipe(
+        ofType(TaskSharedActions.deleteTask, TaskSharedActions.deleteTasks),
+        map((action) =>
+          getIcalEventIds(
+            'task' in action
+              ? [action.task, ...(action.task.subTasks ?? [])]
+              : (action.tasks ?? []),
+          ),
+        ),
+        filter((eventIds) => eventIds.length > 0),
+        tap((eventIds) =>
+          this._calendarIntegrationService.unskipCalendarEvents(eventIds),
+        ),
       ),
     { dispatch: false },
   );

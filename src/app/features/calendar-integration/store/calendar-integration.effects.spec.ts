@@ -1,6 +1,7 @@
 import { TestBed, fakeAsync, flush, tick } from '@angular/core/testing';
 import { MockStore, provideMockStore } from '@ngrx/store/testing';
-import { BehaviorSubject, of, Subscription } from 'rxjs';
+import { Action } from '@ngrx/store';
+import { BehaviorSubject, EMPTY, of, Subject, Subscription } from 'rxjs';
 import { CalendarIntegrationEffects } from './calendar-integration.effects';
 import { GlobalTrackingIntervalService } from '../../../core/global-tracking-interval/global-tracking-interval.service';
 import { BannerService } from '../../../core/banner/banner.service';
@@ -18,7 +19,9 @@ import { IssueProviderCalendar } from '../../issue/issue.model';
 import { CalendarIntegrationEvent } from '../calendar-integration.model';
 import { selectTaskFeatureState } from '../../tasks/store/task.selectors';
 import { initialTaskState } from '../../tasks/store/task.reducer';
-import { TaskState } from '../../tasks/task.model';
+import { DEFAULT_TASK, Task, TaskState, TaskWithSubTasks } from '../../tasks/task.model';
+import { LOCAL_ACTIONS } from '../../../util/local-actions.token';
+import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 
 describe('CalendarIntegrationEffects pollChanges$ startup guard', () => {
   let effects: CalendarIntegrationEffects;
@@ -148,6 +151,7 @@ describe('CalendarIntegrationEffects pollChanges$ startup guard', () => {
           provide: HydrationStateService,
           useValue: { isInSyncWindow: isInSyncWindowSpy },
         },
+        { provide: LOCAL_ACTIONS, useValue: EMPTY },
       ],
     });
 
@@ -399,4 +403,111 @@ describe('CalendarIntegrationEffects pollChanges$ startup guard', () => {
     )._currentlyShownBanners$.getValue();
     expect(banners.length).toBe(0);
   }));
+});
+
+describe('CalendarIntegrationEffects unskipEventsOfDeletedTasks$', () => {
+  let effects: CalendarIntegrationEffects;
+  let actions$: Subject<Action>;
+  let sub: Subscription;
+  let unskipCalendarEventsSpy: jasmine.Spy;
+
+  const buildTask = (id: string, overrides: Partial<Task> = {}): Task => ({
+    ...DEFAULT_TASK,
+    id,
+    title: id,
+    projectId: 'project-1',
+    ...overrides,
+  });
+
+  const icalTask = (id: string, eventId: string): Task =>
+    buildTask(id, {
+      issueType: 'ICAL',
+      issueId: eventId,
+      issueProviderId: 'ip-cal-1',
+    });
+
+  beforeEach(() => {
+    actions$ = new Subject<Action>();
+    unskipCalendarEventsSpy = jasmine.createSpy('unskipCalendarEvents');
+
+    TestBed.configureTestingModule({
+      providers: [
+        CalendarIntegrationEffects,
+        provideMockStore(),
+        { provide: LOCAL_ACTIONS, useValue: actions$ },
+        // createEffect() builds every effect eagerly, so pollChanges$ needs a source.
+        { provide: GlobalTrackingIntervalService, useValue: { todayDateStr$: EMPTY } },
+        { provide: BannerService, useValue: {} },
+        { provide: TaskService, useValue: {} },
+        { provide: LocaleDatePipe, useValue: {} },
+        {
+          provide: CalendarIntegrationService,
+          useValue: { unskipCalendarEvents: unskipCalendarEventsSpy },
+        },
+        { provide: NavigateToTaskService, useValue: {} },
+        { provide: IssueService, useValue: {} },
+        { provide: DateService, useValue: {} },
+        { provide: TranslateService, useValue: {} },
+        { provide: TranslateStore, useValue: {} },
+        { provide: SyncTriggerService, useValue: {} },
+        { provide: HydrationStateService, useValue: {} },
+      ],
+    });
+
+    effects = TestBed.inject(CalendarIntegrationEffects);
+    sub = effects.unskipEventsOfDeletedTasks$.subscribe();
+  });
+
+  afterEach(() => {
+    sub.unsubscribe();
+  });
+
+  it('unskips the event of a deleted iCal task and its iCal sub tasks (#10641)', () => {
+    const task: TaskWithSubTasks = {
+      ...icalTask('task-1', 'cal-evt-1'),
+      subTasks: [icalTask('sub-1', 'cal-evt-2'), buildTask('sub-2')],
+    };
+
+    actions$.next(TaskSharedActions.deleteTask({ task }));
+
+    expect(unskipCalendarEventsSpy).toHaveBeenCalledOnceWith(['cal-evt-1', 'cal-evt-2']);
+  });
+
+  it('handles a deleted task without a subTasks array', () => {
+    const task = icalTask('task-1', 'cal-evt-1') as TaskWithSubTasks;
+
+    actions$.next(TaskSharedActions.deleteTask({ task }));
+
+    expect(unskipCalendarEventsSpy).toHaveBeenCalledOnceWith(['cal-evt-1']);
+  });
+
+  it('unskips the events of bulk-deleted iCal tasks', () => {
+    const tasks = [
+      icalTask('task-1', 'cal-evt-1'),
+      buildTask('task-2'),
+      icalTask('task-3', 'cal-evt-3'),
+    ];
+
+    actions$.next(
+      TaskSharedActions.deleteTasks({ taskIds: tasks.map((t) => t.id), tasks }),
+    );
+
+    expect(unskipCalendarEventsSpy).toHaveBeenCalledOnceWith(['cal-evt-1', 'cal-evt-3']);
+  });
+
+  it('ignores deleted tasks that are not linked to an iCal event', () => {
+    const task: TaskWithSubTasks = {
+      ...buildTask('task-1', {
+        issueType: 'GITHUB',
+        issueId: '42',
+        issueProviderId: 'ip-gh-1',
+      }),
+      subTasks: [],
+    };
+
+    actions$.next(TaskSharedActions.deleteTask({ task }));
+    actions$.next(TaskSharedActions.deleteTasks({ taskIds: ['task-2'] }));
+
+    expect(unskipCalendarEventsSpy).not.toHaveBeenCalled();
+  });
 });
