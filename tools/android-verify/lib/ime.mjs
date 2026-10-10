@@ -29,16 +29,15 @@ const screenSize = async (adb) => {
  * tap`, and the tap is only trusted once `document.activeElement` confirms it.
  */
 export const createIme = ({ page, adb }) => {
-  let offset = null;
-
   /**
    * Maps CSS client coordinates to screen pixels by measuring one real tap:
    * tap the screen centre, read the `touchstart` client point it produced.
    * This absorbs the status bar, Chrome's toolbar and devicePixelRatio
    * without guessing any of them. The touch is swallowed so nothing reacts.
+   * Runs before every tap: Chrome's toolbar can collapse between taps and
+   * shift the offset.
    */
   const calibrate = async () => {
-    if (offset) return offset;
     const { width, height } = await screenSize(adb);
     await page.evaluate(() => {
       window.__androidVerifyTouch = null;
@@ -66,8 +65,7 @@ export const createIme = ({ page, adb }) => {
       });
     }
     const dpr = await page.evaluate(() => window.devicePixelRatio);
-    offset = { x: sx / dpr - touch.x, y: sy / dpr - touch.y, dpr };
-    return offset;
+    return { x: sx / dpr - touch.x, y: sy / dpr - touch.y, dpr };
   };
 
   /**

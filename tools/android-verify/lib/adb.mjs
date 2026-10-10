@@ -21,9 +21,16 @@ export const createAdb = (serial) => {
       run('shell', 'input', 'tap', String(Math.round(x)), String(Math.round(y))),
     /**
      * Types through the device input pipeline. `input text` treats a space as an
-     * argument separator, so spaces are sent as `%s`.
+     * argument separator, so spaces are sent as `%s`. adb joins the arguments
+     * into one device shell command, so the value is single-quoted for it.
      */
-    text: (value) => run('shell', 'input', 'text', value.replace(/ /g, '%s')),
+    text: (value) =>
+      run(
+        'shell',
+        'input',
+        'text',
+        `'${value.replace(/'/g, "'\\''").replace(/ /g, '%s')}'`,
+      ),
     /** Whether the soft keyboard is up, per the input method service. */
     isImeShown: async () => {
       const dump = await run('shell', 'dumpsys', 'input_method');

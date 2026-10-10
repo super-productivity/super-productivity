@@ -91,8 +91,6 @@ BOOTED_BY_US=0
 
 if [[ -n "$SERIAL" ]]; then
   [[ -n "$ADB" ]] || die "ANDROID_SERIAL is set but adb was not found (PATH, ANDROID_HOME)"
-  STATE="$("$ADB" -s "$SERIAL" get-state 2>/dev/null || true)"
-  [[ "$STATE" == "device" ]] || die "device $SERIAL is not online (adb state: '${STATE:-none}')"
   log "reusing running device $SERIAL"
 else
   # Finding 1: without KVM the emulator cannot boot (the agent sandbox case).
@@ -175,7 +173,6 @@ set -m
 # --- boot ------------------------------------------------------------------
 if [[ -z "$SERIAL" ]]; then
   log "booting AVD $AVD (log: $OUT_DIR/emulator.log)"
-  BEFORE="$("$ADB" devices 2>/dev/null || true)"
   "$EMULATOR" -avd "$AVD" -no-snapshot-save -no-audio -no-boot-anim \
     </dev/null >"$OUT_DIR/emulator.log" 2>&1 &
   EMULATOR_PID=$!
@@ -185,10 +182,7 @@ if [[ -z "$SERIAL" ]]; then
     kill -0 "$EMULATOR_PID" 2>/dev/null ||
       die "emulator exited during startup: $(tail -n 3 "$OUT_DIR/emulator.log" | tr '\n' ' ')"
     ((SECONDS < deadline)) || die "no emulator appeared in adb within ${BOOT_TIMEOUT}s"
-    candidate="$(online_emulator || true)"
-    if [[ -n "$candidate" && "$BEFORE" != *"$candidate"* ]]; then
-      SERIAL="$candidate"
-    fi
+    SERIAL="$(online_emulator || true)"
     sleep 2
   done
   while :; do
