@@ -358,10 +358,13 @@ describe('TaskBulkActionService', () => {
           data: jasmine.objectContaining({
             message: 'F.TASK.MULTI_SELECT.D_CONFIRM_DELETE.MSG.OTHER',
             translateParams: { count: 2 },
-            isFocusConfirm: true,
           }),
         }),
       );
+      // No undo for a bulk delete: Enter must not confirm it.
+      expect(
+        matDialog.open.calls.mostRecent().args[1]?.data.isFocusConfirm,
+      ).toBeUndefined();
       // top-level ids in one op; the lone subtask via the singular path so
       // older clients keep a consistent parent (rule 10)
       expect(taskService.removeMultipleTasks).toHaveBeenCalledWith(['parent']);

@@ -156,8 +156,10 @@ export class TaskBulkActionService {
 
   /**
    * More than one task always confirms, regardless of `isConfirmBeforeDelete`:
-   * there is no undo for a bulk delete yet. A single selected task takes the
-   * normal single-task path (setting + undo snack).
+   * there is no undo for a bulk delete yet. For the same reason that confirm
+   * keeps the default initial focus on Cancel, so Delete then Enter cannot
+   * remove a whole selection. A single selected task takes the normal
+   * single-task path (setting + undo snack).
    *
    * Top-level tasks go through `deleteTasks` in one op. A subtask whose parent
    * survives goes through the singular `deleteTask` instead: older clients'
@@ -185,7 +187,6 @@ export class TaskBulkActionService {
               tasks.length,
             ),
             translateParams: { count: tasks.length },
-            isFocusConfirm: true,
           },
         })
         .afterClosed(),
