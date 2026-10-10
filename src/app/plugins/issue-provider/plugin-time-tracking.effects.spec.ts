@@ -156,6 +156,23 @@ describe('PluginTimeTrackingEffects', () => {
     expect(await firstValueFrom(data.timeLoggedUpdate$!)).toBe(1000);
   });
 
+  it('passes no issue icon for a Material ligature provider icon (#10550)', async () => {
+    const registry = TestBed.inject(
+      PluginIssueProviderRegistryService,
+    ) as jasmine.SpyObj<PluginIssueProviderRegistryService>;
+    registry.getProvider.and.returnValue({
+      pluginId: 'third-party',
+      icon: 'confirmation_number',
+      definition: { getById, getHeaders: () => ({}), timeTracking },
+    } as never);
+    setProviders({
+      ip1: { id: 'ip1', issueProviderKey: 'REDMINE', pluginId: 'p', pluginConfig },
+    });
+    const data = await markDone();
+
+    expect(data.issueIcon).toBeUndefined();
+  });
+
   it('falls back to no activities when loading them fails', async () => {
     timeTracking.getActivities.and.rejectWith(new Error('boom'));
     setProviders({
