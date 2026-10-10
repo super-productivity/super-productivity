@@ -19,6 +19,54 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # PRs that only touch docs/** or Markdown skip the build, test and E2E jobs
+  # (Documentation Links covers them). The skip lives here rather than in
+  # paths-ignore so CI Gate still reports and can stay a required check. Same
+  # exclusions as electron-smoke.yml.
+  changes:
+    name: Detect code changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      code: ${{ steps.detect.outputs.code }}
+    steps:
+      - name: Check out Git repository
+        if: github.event_name == 'pull_request'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Detect non-docs changes
+        id: detect
+        env:
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${PR_HEAD:-}" ]; then
+            echo "Not a PR — running everything."
+            echo "code=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # HEAD is the refs/pull/N/merge commit: [base tip, PR head]. Diff the
+          # PR head against its merge-base so later base commits don't count.
+          BASE_TIP="$(git rev-parse HEAD^1)"
+          MERGE_BASE="$(git merge-base "${BASE_TIP}" "${PR_HEAD}")"
+          CHANGED_FILES="$(git diff --name-only --no-renames "${MERGE_BASE}" "${PR_HEAD}")"
+          echo "Changed files:"
+          echo "${CHANGED_FILES}"
+
+          # An empty diff runs everything rather than passing on nothing.
+          code=true
+          if [ -n "${CHANGED_FILES}" ] && ! grep -Evq '^docs/|\.md$' <<< "${CHANGED_FILES}"; then
+            code=false
+          fi
+
+          echo "→ code=${code}"
+          echo "code=${code}" >> "$GITHUB_OUTPUT"
+
   # Verify package-lock.json only uses the official npm registry.
   # Prevents contributors using mirror registries from rewriting all resolved URLs.
   check-lockfile-registry:
@@ -68,6 +116,8 @@ jobs:
   # serial job behind lint: the critical path is the slowest branch, not the sum.
   lint:
     name: Lint
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -83,6 +133,8 @@ jobs:
 
   unit-tests:
     name: Unit Tests
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -102,6 +154,8 @@ jobs:
 
   e2e-build:
     name: Build E2E Frontend
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -194,6 +248,8 @@ jobs:
   # Lighthouse is designed to audit the performance, accessibility, SEO, and other metrics of a web application.
   pwa-lighthouse:
     name: PWA & Lighthouse
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
@@ -264,6 +320,7 @@ jobs:
     name: CI Gate
     if: ${{ always() }}
     needs:
+      - changes
       - check-lockfile-registry
       - dependency-vulnerability-review
       - lint

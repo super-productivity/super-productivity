@@ -64,6 +64,15 @@ on:
 permissions:
   contents: read
 
+# Merges often land faster than a run finishes, and each run is ~200 runner
+# minutes. Pushes to one branch share a group without cancel-in-progress: the
+# running run finishes and a newer push replaces the queued one, so the latest
+# commit (a superset of the skipped ones) is always tested and a merge burst
+# can't starve every run. Scheduled and manual runs get their own group.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'push' && github.ref || github.run_id }}
+  cancel-in-progress: false
+
 jobs:
   # Job 0: Build frontend once and share artifact
   build:
@@ -101,9 +110,12 @@ jobs:
           retention-days: 1
 
   # Job 1: Regular E2E tests (excludes WebDAV and SuperSync)
+  # Skipped on push: the same `npm run e2e:ci` already ran in PR CI and runs
+  # again in build.yml on every master and release/* push.
   e2e-regular:
     name: E2E Tests (Regular)
     needs: [build]
+    if: ${{ github.event_name != 'push' }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
     env:

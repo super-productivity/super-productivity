@@ -3,8 +3,10 @@ name: PR Preview Build
 on:
   pull_request:
     types: [opened, synchronize, reopened]
+    # No app change, nothing to preview. Same exclusions as electron-smoke.yml.
     paths-ignore:
-      - 'docs/wiki/**'
+      - 'docs/**'
+      - '**/*.md'
 
 permissions:
   contents: read

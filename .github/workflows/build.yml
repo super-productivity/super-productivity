@@ -8,6 +8,15 @@ on:
 permissions:
   contents: write
 
+# Branch pushes share a group per ref without cancel-in-progress: the running
+# build finishes (a killed snap upload can't be un-submitted) and a newer push
+# replaces the queued one, so a merge burst builds and uploads only its newest
+# commit, a superset of the skipped ones. Each tag is its own ref and group, so
+# release builds are never skipped.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   create-release:
     runs-on: ubuntu-latest
