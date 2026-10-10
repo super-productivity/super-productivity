@@ -162,7 +162,15 @@ test('CLI handles deleted global resources and specs', () => {
     fs.mkdirSync(path.dirname(target), { recursive: true });
     fs.writeFileSync(target, content);
   };
-  const git = (...args) => execFileSync('git', args, { cwd: directory });
+  const env = { ...process.env };
+  for (const key of execFileSync('git', ['rev-parse', '--local-env-vars'], {
+    encoding: 'utf8',
+  })
+    .trim()
+    .split('\n')) {
+    delete env[key];
+  }
+  const git = (...args) => execFileSync('git', args, { cwd: directory, env });
   try {
     write(
       'tools/test-affected.js',
@@ -216,7 +224,7 @@ test('CLI handles deleted global resources and specs', () => {
           cwd: directory,
           encoding: 'utf8',
           env: {
-            ...process.env,
+            ...env,
             NODE_PATH: path.dirname(
               path.dirname(require.resolve('typescript/package.json')),
             ),
