@@ -1,15 +1,10 @@
 import type {
-  IssueProviderPluginDefinition,
   PluginHttp,
   PluginIssue,
   PluginSearchResult,
   PluginTimeEntry,
 } from '@super-productivity/plugin-api';
-
-declare const PluginAPI: {
-  registerIssueProvider(definition: IssueProviderPluginDefinition): void;
-  translate(key: string, params?: Record<string, string | number>): string;
-};
+import { canConnect, registerIssueProvider, t, toMs } from '../../issue-provider-kit';
 
 /* eslint-disable @typescript-eslint/naming-convention */
 
@@ -54,14 +49,6 @@ interface RedmineSearchItem {
   datetime?: string;
 }
 
-const t = (key: string, params?: Record<string, string | number>): string => {
-  try {
-    return PluginAPI.translate(key, params);
-  } catch {
-    return key;
-  }
-};
-
 const asCfg = (config: Record<string, unknown>): RedmineConfig =>
   config as unknown as RedmineConfig;
 
@@ -71,8 +58,6 @@ const getHost = (cfg: RedmineConfig): string => (cfg.host || '').replace(/\/$/, 
 // so one connection can search the whole Redmine instead of a single project.
 const projectScope = (cfg: RedmineConfig): string =>
   cfg.projectId ? `/projects/${cfg.projectId}` : '';
-
-const toMs = (date: string | undefined): number => (date ? new Date(date).getTime() : 0);
 
 const issueUrl = (cfg: RedmineConfig, id: number | string): string =>
   `${getHost(cfg)}/issues/${id}`;
@@ -143,7 +128,7 @@ const scopeParams = (cfg: RedmineConfig): Record<string, string> => {
   return {};
 };
 
-PluginAPI.registerIssueProvider({
+registerIssueProvider({
   configFields: [
     {
       key: 'host',
@@ -271,14 +256,11 @@ PluginAPI.registerIssueProvider({
     http: PluginHttp,
   ): Promise<boolean> {
     const cfg = asCfg(config);
-    try {
-      await http.get(`${getHost(cfg)}${projectScope(cfg)}/issues.json`, {
+    return canConnect(() =>
+      http.get(`${getHost(cfg)}${projectScope(cfg)}/issues.json`, {
         params: { limit: '1' },
-      });
-      return true;
-    } catch {
-      return false;
-    }
+      }),
+    );
   },
 
   async getNewIssuesForBacklog(
@@ -345,7 +327,7 @@ PluginAPI.registerIssueProvider({
       return (res?.time_entry_activities || []).map(({ id, name }) => ({ id, name }));
     },
   },
-} satisfies IssueProviderPluginDefinition as IssueProviderPluginDefinition);
+});
 
 // Redmine expects the local calendar day (YYYY-MM-DD) the work was done on
 function toLocalDateStr(ms: number): string {

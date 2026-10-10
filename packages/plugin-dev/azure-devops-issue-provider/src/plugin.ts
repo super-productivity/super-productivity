@@ -1,15 +1,18 @@
 import type {
-  IssueProviderPluginDefinition,
-  PluginFieldMapping,
   PluginHttp,
   PluginIssue,
   PluginSearchResult,
 } from '@super-productivity/plugin-api';
-
-declare const PluginAPI: {
-  registerIssueProvider(definition: IssueProviderPluginDefinition): void;
-  translate(key: string, params?: Record<string, string | number>): string;
-};
+import {
+  asConfig,
+  basicAuth,
+  canConnect,
+  isDoneMapping,
+  pickSyncValues,
+  registerIssueProvider,
+  t,
+  toMs,
+} from '../../issue-provider-kit';
 
 const API_VERSION = '6.0';
 const DEFAULT_WORK_ITEM_LIMIT = 50;
@@ -50,19 +53,6 @@ interface AzureWorkItemsResponse {
 interface AzureWiqlResponse {
   workItems?: { id: number }[];
 }
-
-const t = (key: string, params?: Record<string, string | number>): string => {
-  try {
-    return PluginAPI.translate(key, params);
-  } catch {
-    return key;
-  }
-};
-
-const toMs = (date: unknown): number => {
-  const str = typeof date === 'string' ? date : '';
-  return str ? new Date(str).getTime() : 0;
-};
 
 // Azure DevOps Server (on-prem) uses a custom host; cloud falls back to the
 // dev.azure.com/<org> URL the built-in provider built from `organization`.
@@ -197,7 +187,7 @@ const backlogQuery = (cfg: AzureDevOpsConfig): string => {
   return query;
 };
 
-PluginAPI.registerIssueProvider({
+registerIssueProvider({
   configFields: [
     {
       key: 'host',
@@ -245,23 +235,20 @@ PluginAPI.registerIssueProvider({
     },
   ],
 
-  getHeaders(config: Record<string, unknown>): Record<string, string> {
-    const cfg = config as unknown as AzureDevOpsConfig;
-    // Azure DevOps PAT auth: HTTP Basic with an empty username and the PAT as
-    // the password. Content-Type is set globally for the WIQL POST body.
-    return {
-      // eslint-disable-next-line @typescript-eslint/naming-convention
-      'Content-Type': 'application/json',
-      Authorization: `Basic ${btoa(`:${cfg.token || ''}`)}`,
-    };
-  },
+  // Azure DevOps PAT auth: HTTP Basic with an empty username and the PAT as
+  // the password. Content-Type is set globally for the WIQL POST body.
+  getHeaders: (config) => ({
+    // eslint-disable-next-line @typescript-eslint/naming-convention
+    'Content-Type': 'application/json',
+    Authorization: basicAuth('', asConfig<AzureDevOpsConfig>(config).token || ''),
+  }),
 
   async searchIssues(
     searchTerm: string,
     config: Record<string, unknown>,
     http: PluginHttp,
   ): Promise<PluginSearchResult[]> {
-    const cfg = config as unknown as AzureDevOpsConfig;
+    const cfg = asConfig<AzureDevOpsConfig>(config);
     const term = escapeWiql(searchTerm);
     const project = escapeWiql(cfg.project);
     let query =
@@ -281,7 +268,7 @@ PluginAPI.registerIssueProvider({
     config: Record<string, unknown>,
     http: PluginHttp,
   ): Promise<PluginIssue> {
-    const cfg = config as unknown as AzureDevOpsConfig;
+    const cfg = asConfig<AzureDevOpsConfig>(config);
     const item = await http.get<AzureWorkItem>(
       `${getBaseUrl(cfg)}/${cfg.project}/_apis/wit/workitems/${issueId}?api-version=${API_VERSION}`,
     );
@@ -291,7 +278,7 @@ PluginAPI.registerIssueProvider({
   // Azure DevOps work item URLs are derivable from host + project + id, so the
   // link is built without a request (the html href the API returns for an item).
   getIssueLink(issueId: string, config: Record<string, unknown>): string {
-    const cfg = config as unknown as AzureDevOpsConfig;
+    const cfg = asConfig<AzureDevOpsConfig>(config);
     const baseUrl = getBaseUrl(cfg);
     if (!baseUrl || !cfg.project) {
       return '';
@@ -299,24 +286,18 @@ PluginAPI.registerIssueProvider({
     return `${baseUrl}/${cfg.project}/_workitems/edit/${issueId}`;
   },
 
-  async testConnection(
-    config: Record<string, unknown>,
-    http: PluginHttp,
-  ): Promise<boolean> {
-    const cfg = config as unknown as AzureDevOpsConfig;
-    try {
-      await http.get(`${getBaseUrl(cfg)}/_apis/connectionData?api-version=5.1-preview`);
-      return true;
-    } catch {
-      return false;
-    }
-  },
+  testConnection: (config, http) =>
+    canConnect(() =>
+      http.get(
+        `${getBaseUrl(asConfig<AzureDevOpsConfig>(config))}/_apis/connectionData?api-version=5.1-preview`,
+      ),
+    ),
 
   async getNewIssuesForBacklog(
     config: Record<string, unknown>,
     http: PluginHttp,
   ): Promise<PluginSearchResult[]> {
-    const cfg = config as unknown as AzureDevOpsConfig;
+    const cfg = asConfig<AzureDevOpsConfig>(config);
     const query = backlogQuery(cfg);
     const items = await runWiqlAndFetch(cfg, http, query, clampLimit(cfg));
     return items.map(mapReduced);
@@ -335,21 +316,12 @@ PluginAPI.registerIssueProvider({
 
   // Read-only provider: pull-only mapping drives remote-update detection only.
   fieldMappings: [
-    {
-      taskField: 'isDone',
-      issueField: 'state',
-      defaultDirection: 'pullOnly',
-      toIssueValue: (taskValue: unknown): string => (taskValue ? 'Closed' : 'Active'),
-      toTaskValue: (issueValue: unknown): boolean =>
-        DONE_STATES.includes(String(issueValue).toLowerCase()),
-    },
-  ] satisfies PluginFieldMapping[],
+    isDoneMapping({
+      done: 'Closed',
+      open: 'Active',
+      isDone: (issueValue) => DONE_STATES.includes(String(issueValue).toLowerCase()),
+    }),
+  ],
 
-  extractSyncValues(issue: PluginIssue): Record<string, unknown> {
-    return {
-      state: issue.state,
-      title: issue.title,
-      body: issue.body,
-    };
-  },
-} satisfies IssueProviderPluginDefinition as IssueProviderPluginDefinition);
+  extractSyncValues: pickSyncValues('state', 'title', 'body'),
+});

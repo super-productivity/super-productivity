@@ -1,15 +1,18 @@
 import type {
-  IssueProviderPluginDefinition,
-  PluginFieldMapping,
   PluginHttp,
   PluginIssue,
   PluginSearchResult,
 } from '@super-productivity/plugin-api';
-
-declare const PluginAPI: {
-  registerIssueProvider(definition: IssueProviderPluginDefinition): void;
-  translate(key: string, params?: Record<string, string | number>): string;
-};
+import {
+  asConfig,
+  canConnect,
+  isDoneMapping,
+  pickSyncValues,
+  registerIssueProvider,
+  t,
+  textMapping,
+  toMs,
+} from '../../issue-provider-kit';
 
 const TRELLO_API = 'https://api.trello.com/1';
 
@@ -79,17 +82,6 @@ interface TrelloBoard {
   id: string;
   name: string;
 }
-
-const t = (key: string): string => {
-  try {
-    return PluginAPI.translate(key);
-  } catch {
-    return key;
-  }
-};
-
-const toMs = (date: string | null | undefined): number =>
-  date ? new Date(date).getTime() : 0;
 
 // Trello shows a per-board short id on cards; fall back to the shortLink.
 const cardKey = (card: TrelloCard): string =>
@@ -217,7 +209,7 @@ const loadBoards = async (
   config: Record<string, unknown>,
   http: PluginHttp,
 ): Promise<{ label: string; value: string }[]> => {
-  const cfg = config as unknown as TrelloConfig;
+  const cfg = asConfig<TrelloConfig>(config);
   if (!cfg.apiKey || !cfg.token) {
     return [];
   }
@@ -268,7 +260,7 @@ const loadLists = async (
   config: Record<string, unknown>,
   http: PluginHttp,
 ): Promise<{ label: string; value: string }[]> => {
-  const cfg = config as unknown as TrelloConfig;
+  const cfg = asConfig<TrelloConfig>(config);
   if (!cfg.apiKey || !cfg.token || !cfg.boardId) {
     return [];
   }
@@ -277,7 +269,7 @@ const loadLists = async (
   return lists.map((l) => ({ label: l.name, value: l.id }));
 };
 
-PluginAPI.registerIssueProvider({
+registerIssueProvider({
   configFields: [
     {
       key: 'apiKey',
@@ -323,16 +315,14 @@ PluginAPI.registerIssueProvider({
     },
   ],
 
-  getHeaders(config: Record<string, unknown>): Record<string, string> {
-    return trelloHeaders(config as unknown as TrelloConfig);
-  },
+  getHeaders: (config) => trelloHeaders(asConfig<TrelloConfig>(config)),
 
   async searchIssues(
     searchTerm: string,
     config: Record<string, unknown>,
     http: PluginHttp,
   ): Promise<PluginSearchResult[]> {
-    const cfg = config as unknown as TrelloConfig;
+    const cfg = asConfig<TrelloConfig>(config);
     const term = searchTerm.trim();
 
     if (!term) {
@@ -386,22 +376,17 @@ PluginAPI.registerIssueProvider({
     config: Record<string, unknown>,
     http: PluginHttp,
   ): Promise<boolean> {
-    const cfg = config as unknown as TrelloConfig;
-    try {
-      await http.get(`${TRELLO_API}/boards/${cfg.boardId}`, {
-        params: { fields: 'id' },
-      });
-      return true;
-    } catch {
-      return false;
-    }
+    const cfg = asConfig<TrelloConfig>(config);
+    return canConnect(() =>
+      http.get(`${TRELLO_API}/boards/${cfg.boardId}`, { params: { fields: 'id' } }),
+    );
   },
 
   async getNewIssuesForBacklog(
     config: Record<string, unknown>,
     http: PluginHttp,
   ): Promise<PluginSearchResult[]> {
-    const cfg = config as unknown as TrelloConfig;
+    const cfg = asConfig<TrelloConfig>(config);
     const cards = await fetchBoardCards(cfg, http, 200);
 
     if (cfg.filterUsername) {
@@ -434,22 +419,7 @@ PluginAPI.registerIssueProvider({
   ],
 
   // A Trello card counts as "done" once it is archived (closed).
-  fieldMappings: [
-    {
-      taskField: 'isDone',
-      issueField: 'state',
-      defaultDirection: 'pullOnly',
-      toIssueValue: (taskValue: unknown): string => (taskValue ? 'closed' : 'open'),
-      toTaskValue: (issueValue: unknown): boolean => issueValue === 'closed',
-    },
-    {
-      taskField: 'title',
-      issueField: 'title',
-      defaultDirection: 'pullOnly',
-      toIssueValue: (taskValue: unknown): string => (taskValue as string) ?? '',
-      toTaskValue: (issueValue: unknown): string => (issueValue as string) ?? '',
-    },
-  ] satisfies PluginFieldMapping[],
+  fieldMappings: [isDoneMapping(), textMapping('title', 'title')],
 
   async updateIssue(
     id: string,
@@ -472,7 +442,7 @@ PluginAPI.registerIssueProvider({
     config: Record<string, unknown>,
     http: PluginHttp,
   ): Promise<{ issueId: string; issueData: PluginIssue }> {
-    const cfg = config as unknown as TrelloConfig;
+    const cfg = asConfig<TrelloConfig>(config);
     let listId = cfg.defaultListId;
     if (!listId && cfg.boardId) {
       const lists = await fetchBoardLists(cfg.boardId, http);
@@ -491,10 +461,5 @@ PluginAPI.registerIssueProvider({
     };
   },
 
-  extractSyncValues(issue: PluginIssue): Record<string, unknown> {
-    return {
-      state: issue.state,
-      title: issue.title,
-    };
-  },
-} satisfies IssueProviderPluginDefinition as IssueProviderPluginDefinition);
+  extractSyncValues: pickSyncValues('state', 'title'),
+});

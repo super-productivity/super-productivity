@@ -11,7 +11,10 @@
  *   the `<!-- BUILD:SCRIPT -->` marker: the host loads index.html via iframe srcdoc,
  *   so the document must be self-contained.
  * - Copies manifest.json (required), config-schema.json, icon.svg and i18n/*.json
- *   when present, each looked up in src/ first, then the plugin root.
+ *   when present, each looked up in src/ first, then the plugin root (so a copy
+ *   in src/ wins over one in the root).
+ *
+ * Only builds plugin directories next to this script's folder (plugin-dev/<name>).
  */
 
 const fs = require('fs');
@@ -22,21 +25,25 @@ const SRC_DIR = path.join(ROOT_DIR, 'src');
 const DIST_DIR = path.join(ROOT_DIR, 'dist');
 const UI_SCRIPT_MARKER = '<!-- BUILD:SCRIPT -->';
 
-const getArg = (name) => {
-  const args = process.argv.slice(2);
-  const inline = args.find((a) => a.startsWith(`--${name}=`));
-  if (inline) {
-    return inline.slice(name.length + 3);
+const KNOWN_ARGS = ['entry', 'ui'];
+
+/** Parses `--name value` and `--name=value`; rejects unknown or empty flags. */
+const parseArgs = (argv) => {
+  const args = {};
+  for (let i = 0; i < argv.length; i++) {
+    const match = /^--([^=]+)(?:=(.*))?$/.exec(argv[i]);
+    if (!match || !KNOWN_ARGS.includes(match[1])) {
+      throw new Error(
+        `Unknown argument: ${argv[i]} (known: --${KNOWN_ARGS.join(', --')})`,
+      );
+    }
+    const value = match[2] !== undefined ? match[2] : argv[++i];
+    if (!value || value.startsWith('--')) {
+      throw new Error(`--${match[1]} needs a file path`);
+    }
+    args[match[1]] = value;
   }
-  const i = args.indexOf(`--${name}`);
-  if (i === -1) {
-    return undefined;
-  }
-  const value = args[i + 1];
-  if (!value || value.startsWith('--')) {
-    throw new Error(`--${name} needs a file path`);
-  }
-  return value;
+  return args;
 };
 
 // Resolved from the plugin, so each plugin keeps its pinned esbuild version.
@@ -59,17 +66,20 @@ const esbuildOptions = {
 };
 
 async function buildPlugin() {
-  const entryArg = getArg('entry');
-  const uiArg = getArg('ui');
-  const entry = path.join(ROOT_DIR, entryArg || 'src/plugin.ts');
+  const { entry: entryArg, ui: uiArg } = parseArgs(process.argv.slice(2));
+  const entry = path.resolve(ROOT_DIR, entryArg || 'src/plugin.ts');
   const plainPluginJs = path.join(SRC_DIR, 'plugin.js');
-  const ui = uiArg && path.join(ROOT_DIR, uiArg);
+  const ui = uiArg && path.resolve(ROOT_DIR, uiArg);
   const manifest = findAsset('manifest.json');
 
   // Validate before touching dist/, so a run from the wrong directory deletes nothing.
-  if (!fs.existsSync(path.join(ROOT_DIR, 'package.json')) || !manifest) {
+  if (
+    path.dirname(ROOT_DIR) !== path.resolve(__dirname, '..') ||
+    !fs.existsSync(path.join(ROOT_DIR, 'package.json')) ||
+    !manifest
+  ) {
     throw new Error(
-      `${ROOT_DIR} is not a plugin directory (package.json + manifest.json)`,
+      `${ROOT_DIR} is not a plugin directory (plugin-dev/<name> with package.json + manifest.json)`,
     );
   }
   const hasEntry = fs.existsSync(entry);

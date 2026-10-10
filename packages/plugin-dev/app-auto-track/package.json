@@ -6,7 +6,8 @@
   "scripts": {
     "build": "node ../scripts/build-with-esbuild.js --entry src/background.ts",
     "lint": "tsc --noEmit",
-    "test": "node scripts/test.js"
+    "test": "node scripts/test.js",
+    "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "@types/node": "^22.15.33",

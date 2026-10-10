@@ -7,7 +7,8 @@
     "build": "node scripts/build.js",
     "deploy": "npm run build && node scripts/deploy.js",
     "lint": "tsc --noEmit",
-    "test": "node scripts/test.js"
+    "test": "node scripts/test.js",
+    "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "@types/node": "^22.15.33",

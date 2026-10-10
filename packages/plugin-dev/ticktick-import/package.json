@@ -6,7 +6,8 @@
   "scripts": {
     "build": "node ../scripts/build-with-esbuild.js --ui src/ui/main.ts",
     "test": "jest",
-    "test:watch": "jest --watch"
+    "test:watch": "jest --watch",
+    "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "@types/jest": "^30.0.0",

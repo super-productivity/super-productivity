@@ -90,8 +90,13 @@ async function getPlugins() {
         await fs.access(packageJsonPath);
         const packageJson = JSON.parse(await fs.readFile(packageJsonPath, 'utf8'));
 
-        // Skip boilerplate
-        if (entry.name === 'boilerplate-solid-js') continue;
+        // Skip boilerplate and the issue-provider helper (bundled into plugins)
+        if (
+          entry.name === 'boilerplate-solid-js' ||
+          entry.name === 'issue-provider-kit'
+        ) {
+          continue;
+        }
 
         const buildScript = packageJson.scripts && packageJson.scripts.build;
         // Check if it's a real build script or just a placeholder
