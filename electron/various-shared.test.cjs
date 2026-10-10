@@ -376,3 +376,15 @@ test('focusForReminder on other platforms keeps plain showOrFocus behavior', () 
     assert.deepEqual(win.calls, ['restore', 'show'], platform);
   }
 });
+
+test('focusForReminder on win32 still runs the deferred showOrFocus focus', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const { focusForReminder } = loadModule();
+  const win = makeReminderWin({ visible: true, minimized: false, focused: false });
+
+  withPlatform('win32', () => focusForReminder(win));
+  const callsBeforeTimer = win.calls.length;
+  t.mock.timers.tick(60);
+
+  assert.deepEqual(win.calls.slice(callsBeforeTimer), ['focus']);
+});

@@ -4,7 +4,7 @@ import { LS } from '../../core/persistence/storage-keys.const';
 import { DOCUMENT } from '@angular/common';
 import { LocalUiHelperSettings } from './ui-helper.model';
 import { UI_LOCAL_HELPER_DEFAULT } from './ui-helper.const';
-import { IS_ELECTRON } from '../../app.constants';
+import { IS_ELECTRON, IS_ELECTRON_TOKEN } from '../../app.constants';
 import { fromEvent } from 'rxjs';
 import { throttleTime } from 'rxjs/operators';
 import { Log } from '../../core/log';
@@ -12,6 +12,7 @@ import { Log } from '../../core/log';
 @Injectable({ providedIn: 'root' })
 export class UiHelperService {
   private _document = inject<Document>(DOCUMENT);
+  private _isElectron = inject(IS_ELECTRON_TOKEN);
 
   initElectron(): void {
     this._initMousewheelZoomForElectron();
@@ -67,7 +68,7 @@ export class UiHelperService {
    * where focus-stealing prevention otherwise blocks it (#10410).
    */
   focusAppAfterNotification(opts?: { isReminder?: boolean }): void {
-    if (!IS_ELECTRON) {
+    if (!this._isElectron) {
       return;
     }
 
