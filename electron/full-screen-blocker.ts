@@ -11,12 +11,23 @@ export const initFullScreenBlocker = (IS_DEV: boolean): void => {
     IPC.FULL_SCREEN_BLOCKER,
     (
       ipcEvent,
-      { msg, takeABreakCfg }: { msg: string; takeABreakCfg: TakeABreakConfig },
+      {
+        msg,
+        takeABreakCfg,
+        isDismissable,
+        dismissLabel,
+      }: {
+        msg: string;
+        takeABreakCfg?: TakeABreakConfig;
+        isDismissable?: boolean;
+        dismissLabel?: string;
+      },
     ): void => {
       if (isFullScreenWindowOpen) {
         return;
       }
-      let isClosable = false;
+      // dismissable overlays (task reminders) are closed by the user, not a timer
+      let isClosable = !!isDismissable;
       // This overlay loads a local file with no preload bridge, so it was
       // relying on Electron's secure defaults. Set the boundary explicitly and
       // assert it, so a future Electron default change can't silently open it.
@@ -38,7 +49,7 @@ export const initFullScreenBlocker = (IS_DEV: boolean): void => {
         frame: false,
         webPreferences,
       });
-      const randomImgUrl = takeABreakCfg.motivationalImgs?.length
+      const randomImgUrl = takeABreakCfg?.motivationalImgs?.length
         ? takeABreakCfg.motivationalImgs[
             Math.floor(Math.random() * takeABreakCfg.motivationalImgs.length)
           ]
@@ -58,14 +69,18 @@ export const initFullScreenBlocker = (IS_DEV: boolean): void => {
       ).href;
       win.loadURL(
         overlayUrl +
-          `#msg=${encodeURIComponent(msg)}&img=${encodeURIComponent(randomImgUrl ?? '')}&time=${
-            takeABreakCfg.timedFullScreenBlockerDuration
-          }`,
+          (isDismissable
+            ? `#msg=${encodeURIComponent(msg)}&dismiss=${encodeURIComponent(dismissLabel || 'Dismiss')}`
+            : `#msg=${encodeURIComponent(msg)}&img=${encodeURIComponent(randomImgUrl ?? '')}&time=${
+                takeABreakCfg?.timedFullScreenBlockerDuration
+              }`),
       );
-      const closeTimeout = setTimeout(() => {
-        isClosable = true;
-        win.close();
-      }, takeABreakCfg.timedFullScreenBlockerDuration || 5000);
+      const closeTimeout = isDismissable
+        ? undefined
+        : setTimeout(() => {
+            isClosable = true;
+            win.close();
+          }, takeABreakCfg?.timedFullScreenBlockerDuration || 5000);
 
       win.on('close', (evI) => {
         if (isClosable) {

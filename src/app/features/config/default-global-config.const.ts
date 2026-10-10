@@ -223,6 +223,7 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
     countdownDuration: minute * 10,
     defaultTaskRemindOption: TaskReminderOptionId.AtStart, // The hard-coded default prior to this changeable setting
     isFocusWindow: false,
+    isFullScreenReminder: false,
     useAlarmStyleReminders: false,
     notifyOnDueDate: true,
     dueDateNotificationHour: 9,

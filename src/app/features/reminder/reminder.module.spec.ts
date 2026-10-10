@@ -22,6 +22,7 @@ import { T } from 'src/app/t.const';
 import { Task, TaskWithReminderData } from '../tasks/task.model';
 import { DialogViewTaskRemindersComponent } from '../tasks/dialog-view-task-reminders/dialog-view-task-reminders.component';
 import { DateService } from '../../core/date/date.service';
+import { TranslateService } from '@ngx-translate/core';
 import { getRepeatableTaskId } from '../task-repeat-cfg/get-repeatable-task-id.util';
 
 describe('ReminderModule dialog opening', () => {
@@ -49,6 +50,7 @@ describe('ReminderModule dialog opening', () => {
     TestBed.configureTestingModule({
       providers: [
         ReminderModule,
+        { provide: TranslateService, useValue: { instant: (k: string) => k } },
         {
           provide: ReminderService,
           useValue: jasmine.createSpyObj(
@@ -105,6 +107,19 @@ describe('ReminderModule dialog opening', () => {
         reminders: [reminder],
       },
     });
+  }));
+
+  it('keeps the dialog and skips the fullscreen overlay outside Electron', fakeAsync(() => {
+    TestBed.overrideProvider(GlobalConfigService, {
+      useValue: { cfg: () => ({ reminder: { isFullScreenReminder: true } }) },
+    });
+    TestBed.inject(ReminderModule);
+
+    syncDone$.next();
+    tick(1000);
+    remindersActive$.next([reminder]);
+
+    expect(matDialogSpy.open).toHaveBeenCalledTimes(1);
   }));
 });
 
@@ -166,6 +181,7 @@ describe('ReminderModule iOS notification actions', () => {
     TestBed.configureTestingModule({
       providers: [
         ReminderModule,
+        { provide: TranslateService, useValue: { instant: (k: string) => k } },
         {
           provide: ReminderService,
           useValue: jasmine.createSpyObj(
@@ -510,6 +526,7 @@ describe('ReminderModule _handleAfterDataLoaded gate (#8551)', () => {
     TestBed.configureTestingModule({
       providers: [
         ReminderModule,
+        { provide: TranslateService, useValue: { instant: (k: string) => k } },
         {
           provide: ReminderService,
           useValue: jasmine.createSpyObj('ReminderService', ['init'], {

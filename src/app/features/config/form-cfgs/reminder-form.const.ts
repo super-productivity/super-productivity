@@ -3,6 +3,7 @@ import { TASK_REMINDER_OPTIONS } from '../../planner/dialog-schedule-task/task-r
 import { T } from '../../../t.const';
 import { IS_ANDROID_WEB_VIEW } from '../../../util/is-android-web-view';
 import { IS_NATIVE_PLATFORM } from '../../../util/is-native-platform';
+import { IS_ELECTRON } from '../../../app.constants';
 
 export const REMINDER_FORM_CFG: ConfigFormSection<ReminderConfig> = {
   title: T.GCF.REMINDER.TITLE,
@@ -49,6 +50,17 @@ export const REMINDER_FORM_CFG: ConfigFormSection<ReminderConfig> = {
         label: T.GCF.REMINDER.IS_FOCUS_WINDOW,
       },
     },
+    ...(IS_ELECTRON
+      ? [
+          {
+            key: 'isFullScreenReminder' as const,
+            type: 'checkbox',
+            templateOptions: {
+              label: T.GCF.REMINDER.IS_FULL_SCREEN_REMINDER,
+            },
+          },
+        ]
+      : []),
     ...(IS_ANDROID_WEB_VIEW
       ? [
           {

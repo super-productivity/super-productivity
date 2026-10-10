@@ -2778,6 +2778,7 @@
       "HELP": "<p><strong>Important:</strong> Reminders use <strong>local notifications</strong>, not push notifications. This means the app needs to have been opened at least once on your device for reminders to be scheduled. Reminders set on another device will only appear after the app syncs on the target device.</p><p>On <strong>iOS</strong>, make sure notifications are enabled for Super Productivity in your device settings under 'Settings' > 'Notifications'.</p>",
       "IS_COUNTDOWN_BANNER_ENABLED": "Show countdown banner before reminders are due",
       "IS_FOCUS_WINDOW": "Focus application window when reminder is triggered",
+      "IS_FULL_SCREEN_REMINDER": "Show task reminders as a fullscreen overlay (desktop only)",
       "NOTIFY_ON_DUE_DATE": "Show notifications for tasks planned for today",
       "TITLE": "Reminders",
       "USE_ALARM_STYLE_REMINDERS": "Use alarm-style notifications (Android only)",

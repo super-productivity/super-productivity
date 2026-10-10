@@ -268,6 +268,8 @@ export type ReminderConfig = Readonly<{
   defaultTaskRemindOption?: TaskReminderOptionId;
   disableReminders?: boolean;
   isFocusWindow?: boolean;
+  // Electron only: also show reminders as a dismissable fullscreen overlay
+  isFullScreenReminder?: boolean;
   // Android only: use alarm-style notifications (louder, more intrusive)
   useAlarmStyleReminders?: boolean;
   notifyOnDueDate?: boolean;
