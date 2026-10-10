@@ -155,23 +155,21 @@ class PluginNodeExecutor {
         // a built-in plugin's trusted name even if its id collides with a bundled dir.
         const builtInManifest = this.tryGetVerifiedBuiltInManifest(safeId);
 
-        // Phase 2 (issue #8512): persisted, ask-once consent is scoped to UPLOADED
-        // (community) plugins only. Built-in plugins keep the per-session verified prompt
-        // — no behaviour change, so `sync-md` etc. are regression-safe. Only a prior
-        // native Allow can have written this entry (no renderer write path), and the
-        // renderer clears it on disable/uninstall/re-upload, so a re-uploaded (changed)
-        // plugin reusing the id never silently inherits it.
-        if (!builtInManifest) {
-          const persistedConsent = await getNodeExecutionConsent(safeId);
-          if (persistedConsent) {
-            // Don't mint for a sender that was destroyed or navigated away while the
-            // consent was being read (parity with the post-dialog checks below).
-            if (event.sender.isDestroyed() || event.sender.getURL() !== requestUrl) {
-              return null;
-            }
-            this.registerGrantCleanup(event.sender);
-            return this.mintGrant(safeId, webContentsId);
+        // Persisted, ask-once consent (issue #8512 Phase 2) covers uploaded AND built-in
+        // plugins: background built-ins (e.g. the foreground auto-tracker) would otherwise
+        // prompt on every launch. Only a prior native Allow can have written this entry
+        // (no renderer write path), and the renderer clears it on disable/uninstall/
+        // re-upload, so a re-uploaded (changed) plugin reusing the id never silently
+        // inherits it. Uploaded plugins cannot reuse a bundled id (BUNDLED_PLUGIN_IDS).
+        const persistedConsent = await getNodeExecutionConsent(safeId);
+        if (persistedConsent) {
+          // Don't mint for a sender that was destroyed or navigated away while the
+          // consent was being read (parity with the post-dialog checks below).
+          if (event.sender.isDestroyed() || event.sender.getURL() !== requestUrl) {
+            return null;
           }
+          this.registerGrantCleanup(event.sender);
+          return this.mintGrant(safeId, webContentsId);
         }
 
         const dialogOptions = builtInManifest
@@ -212,24 +210,25 @@ class PluginNodeExecutor {
         // for a stale webContents.
         const grant = this.mintGrant(safeId, webContentsId);
 
-        // For uploaded plugins, remember the decision so later sessions don't re-prompt
-        // (ask-once). Persisting is best-effort: a write failure only costs a re-prompt
-        // next session, never a grant the user just approved.
-        if (!builtInManifest) {
-          try {
-            // Persist exactly the name/version the user saw in the dialog.
-            await setNodeExecutionConsent(safeId, {
-              ...this.sanitizedUploadedDisplay(displayInfo),
-              grantedAt: Date.now(),
-            });
-          } catch (error) {
-            // Host diagnostic → exportable log (electron-log), distinct from the sandboxed
-            // plugin's own console output. Log only the validated id and the error code —
-            // never the raw error, whose message can embed the userData absolute path (and
-            // thus the OS username) for an fs failure.
-            const code = (error as NodeJS.ErrnoException)?.code ?? 'unknown';
-            logError(`Failed to persist nodeExecution consent for ${safeId} (${code})`);
-          }
+        // Remember the decision so later sessions don't re-prompt (ask-once). Persisting
+        // is best-effort: a write failure only costs a re-prompt next session, never a
+        // grant the user just approved.
+        try {
+          // Persist exactly the name/version the user saw in the dialog.
+          const shownDisplay = builtInManifest
+            ? { name: builtInManifest.name, version: builtInManifest.version }
+            : this.sanitizedUploadedDisplay(displayInfo);
+          await setNodeExecutionConsent(safeId, {
+            ...shownDisplay,
+            grantedAt: Date.now(),
+          });
+        } catch (error) {
+          // Host diagnostic → exportable log (electron-log), distinct from the sandboxed
+          // plugin's own console output. Log only the validated id and the error code —
+          // never the raw error, whose message can embed the userData absolute path (and
+          // thus the OS username) for an fs failure.
+          const code = (error as NodeJS.ErrnoException)?.code ?? 'unknown';
+          logError(`Failed to persist nodeExecution consent for ${safeId} (${code})`);
         }
         return grant;
       },
@@ -403,8 +402,6 @@ class PluginNodeExecutor {
 
   /**
    * Consent dialog for a verified built-in plugin (name/version read from disk).
-   * Built-in plugins are NOT persisted (Phase 2 ask-once is uploaded-only), so the copy
-   * keeps the per-session wording.
    */
   private buildVerifiedBuiltInDialog(
     pluginId: string,
@@ -418,7 +415,8 @@ class PluginNodeExecutor {
         `Plugin ID: ${pluginId}`,
         `Version: ${manifest.version}`,
         '',
-        'This permission is valid for the current app session. Node.js execution can access local files and desktop APIs. Only allow plugins you trust.',
+        'Node.js execution can access local files and desktop APIs. Only allow plugins you trust.',
+        'Your choice is remembered on this device until you disable this plugin.',
       ].join('\n'),
     };
   }

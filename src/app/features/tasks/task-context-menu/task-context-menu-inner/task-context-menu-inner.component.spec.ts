@@ -454,6 +454,21 @@ describe('TaskContextMenuInnerComponent', () => {
   });
 
   describe('deleteTask()', () => {
+    // #8583: Enter in the delete confirm deletes the task.
+    it('focuses the confirm button of the delete dialog', () => {
+      const openSpy = spyOn(TestBed.inject(MatDialog), 'open').and.callThrough();
+      component.task = { ...DEFAULT_TASK, id: 'T1', projectId: 'P1' };
+
+      void component.deleteTask();
+
+      expect(openSpy).toHaveBeenCalledWith(
+        jasmine.anything(),
+        jasmine.objectContaining({
+          data: jasmine.objectContaining({ isFocusConfirm: true }),
+        }),
+      );
+    });
+
     // #9946: the selector returns undefined for a task that is gone from the
     // store; removing an id-less stub used to wipe every top-level task.
     it('removes nothing when the task is gone from the store', fakeAsync(() => {
