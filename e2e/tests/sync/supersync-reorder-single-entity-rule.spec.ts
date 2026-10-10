@@ -944,10 +944,10 @@ test('@supersync reorder rule: project notes vs pin without causal proof keeps s
         expect(pending(all)).toEqual([]);
         expect(fullStateOps(all).every((id) => fullStateBefore.has(id))).toBe(true);
       }
-      // Known residual, as on master: the snapshot carries isPinnedToToday but
-      // not the Today list write, so B's Today list does not show the pin.
+      // The snapshot carries isPinnedToToday but not the Today list write; the
+      // receiver derives its Today order from the pin (#10659), so both agree.
       expect(finalA.other).toContain(ids[0]);
-      expect(finalB.other).not.toContain(ids[0]);
+      expect(finalB.other).toEqual(finalA.other);
     },
   );
 });
