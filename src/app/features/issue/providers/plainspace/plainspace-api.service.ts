@@ -1,8 +1,8 @@
 import { Injectable, InjectionToken, inject } from '@angular/core';
 import { HttpClient, HttpErrorResponse, HttpHeaders } from '@angular/common/http';
-import { CapacitorHttp, HttpOptions, HttpResponse } from '@capacitor/core';
-import { Observable, from, of } from 'rxjs';
-import { catchError, map } from 'rxjs/operators';
+import { Capacitor, CapacitorHttp, HttpOptions, HttpResponse } from '@capacitor/core';
+import { Observable, defer, of } from 'rxjs';
+import { catchError, map, retry } from 'rxjs/operators';
 import { SearchResultItem } from '../../issue.model';
 import { PlainspaceCfg } from './plainspace.model';
 import { PlainspaceIssue } from './plainspace-issue.model';
@@ -22,7 +22,12 @@ export const PLAINSPACE_NATIVE_HTTP = new InjectionToken<PlainspaceNativeHttp | 
   'PLAINSPACE_NATIVE_HTTP',
   {
     providedIn: 'root',
-    factory: () => (IS_ANDROID_NATIVE ? (opts) => CapacitorHttp.request(opts) : null),
+    // `IS_ANDROID_NATIVE` alone also matches the legacy online WebView, where no
+    // native bridge exists and CapacitorHttp would fall back to fetch.
+    factory: () =>
+      IS_ANDROID_NATIVE && Capacitor.isNativePlatform()
+        ? (opts) => CapacitorHttp.request(opts)
+        : null,
   },
 );
 
@@ -251,7 +256,10 @@ export class PlainspaceApiService {
       method: 'GET',
       headers: { Authorization: `Bearer ${cfg.token ?? ''}` },
     };
-    return from(nativeHttp(opts)).pipe(
+    // `defer` so the retry re-sends; one retry after a short delay mirrors
+    // NetworkRetryInterceptorService, which a direct native call bypasses.
+    return defer(() => nativeHttp(opts)).pipe(
+      retry({ count: 1, delay: NATIVE_RETRY_DELAY_MS }),
       map(toNativeTokenCheck),
       catchError((err: unknown) => of(toNativeErrorTokenCheck(err, cfg.host))),
     );
@@ -285,6 +293,8 @@ const toTokenCheck = (err: unknown): PlainspaceTokenCheck => {
     ? { status: 'invalid-token' }
     : { status: 'unreachable' };
 };
+
+const NATIVE_RETRY_DELAY_MS = 500;
 
 // CapacitorHttp resolves for every HTTP status, so the verdict comes from the
 // status code; same rules as `toTokenCheck`.

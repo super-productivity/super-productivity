@@ -434,6 +434,37 @@ describe('PlainspaceApiService native token check', () => {
     expect(logged).not.toContain('plainspace.org');
   });
 
+  // Mirrors NetworkRetryInterceptorService, which the native call bypasses:
+  // sockets can be briefly unusable right after an Android resume.
+  it('retries a native rejection once before reporting unreachable', async () => {
+    nativeHttp.and.returnValues(
+      Promise.reject(new Error('Software caused connection abort')),
+      Promise.resolve({
+        status: 200,
+        data: { email: 'a@b.c', projects: [] },
+        headers: {},
+        url: '',
+      }),
+    );
+    const res = await firstValueFrom(setup(nativeHttp).verifyToken$(cfg));
+    expect(res).toEqual({ status: 'ok', me: { email: 'a@b.c', projects: [] } });
+    expect(nativeHttp).toHaveBeenCalledTimes(2);
+  });
+
+  it('logs a rejection without an error class and redacts the host', async () => {
+    const errSpy = spyOn(Log, 'err');
+    nativeHttp.and.callFake(() =>
+      Promise.reject('Unable to resolve host "plainspace.org"'),
+    );
+    const res = await firstValueFrom(setup(nativeHttp).verifyToken$(cfg));
+    expect(res).toEqual({ status: 'unreachable' });
+    expect(nativeHttp).toHaveBeenCalledTimes(2);
+    expect(errSpy).toHaveBeenCalledWith('Plainspace: token check failed natively', {
+      errorName: null,
+      errorMessage: 'Unable to resolve host "<host>"',
+    });
+  });
+
   it('keeps the web path on HttpClient when there is no native HTTP', async () => {
     const service = setup(null);
     const p = firstValueFrom(service.verifyToken$(cfg));
