@@ -3,7 +3,7 @@
   "manifestVersion": 1,
   "name": "App Auto Track (Alpha)",
   "version": "0.1.0",
-  "description": "Desktop (macOS, Windows): suggests the task matching the app or window you work in, via your rules or issue keys like PROJ-123 in the window title.",
+  "description": "Desktop (macOS, Windows): suggests the task matching the app or window you work in, via your rules or issue keys like PROJ-123 in the window title. macOS: add Super Productivity under Privacy & Security → Accessibility to read window titles.",
   "author": "Super Productivity",
   "homepage": "https://github.com/super-productivity/super-productivity",
   "minSupVersion": "19.1.0",

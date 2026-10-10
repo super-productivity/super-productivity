@@ -12,12 +12,6 @@
           "props": { "rows": 6 }
         }
       }
-    },
-    "isAutoSwitch": {
-      "type": "boolean",
-      "title": "Switch automatically instead of suggesting",
-      "description": "Never replaces a task you started yourself.",
-      "default": false
     }
   }
 }

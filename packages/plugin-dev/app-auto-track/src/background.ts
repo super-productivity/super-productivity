@@ -1,7 +1,7 @@
 /**
  * App Auto Track background script. Polls the foreground window (desktop, macOS and
  * Windows), maps it to a task via user rules or issue keys in the title, and after a
- * dwell time suggests tracking that task — or switches automatically when enabled.
+ * dwell time suggests tracking that task. It never starts or stops tracking itself.
  *
  * Window titles are user content: they stay in memory and are never logged or stored.
  */
@@ -13,7 +13,6 @@ import {
   type PluginNodeScriptResult,
   type Task,
 } from '@super-productivity/plugin-api';
-import { decideAction } from './decide';
 import {
   INITIAL_DWELL_STATE,
   isRecentCandidate,
@@ -51,7 +50,6 @@ const SUGGESTION_MAX_AGE_MS = 10 * 60_000;
 const LOG_PREFIX = '[app-auto-track]';
 
 interface AutoTrackConfig {
-  isAutoSwitch?: boolean;
   rules?: string;
 }
 
@@ -60,8 +58,7 @@ const probeScript = buildProbeScript();
 let pollTimer: ReturnType<typeof setTimeout> | null = null;
 let isUnloaded = false;
 let dwell: DwellState = INITIAL_DWELL_STATE;
-let currentTaskId: string | null | undefined;
-let autoStartedId: string | null = null;
+let currentTaskId: string | null = null;
 let pendingSuggestionId: string | null = null;
 let configPromise: Promise<AutoTrackConfig> | null = null;
 let hasShownProbeError = false;
@@ -87,22 +84,12 @@ const getConfig = (): Promise<AutoTrackConfig> =>
     },
   ));
 
-const startTask = (taskId: string, isAuto: boolean): void => {
+const startTask = (taskId: string): void => {
   if (isUnloaded) return;
-  // A task the user accepted via the snack is theirs; auto-switch must not replace it.
-  if (isAuto) autoStartedId = taskId;
   PluginAPI.dispatchAction({ type: '[Task] SetCurrentTask', id: taskId });
 };
 
-const act = async (matchId: string): Promise<void> => {
-  const action = decideAction({
-    matchId,
-    currentTaskId,
-    autoStartedId,
-    isAutoSwitch: !!(await getConfig()).isAutoSwitch,
-  });
-  if (action === 'switch') startTask(matchId, true);
-  if (action !== 'suggest') return;
+const suggest = async (matchId: string): Promise<void> => {
   // Polls only run while SP is in the background, where a snack would go unseen; SP
   // may have gained focus during this poll's probe, though.
   pendingSuggestionId = matchId;
@@ -123,7 +110,7 @@ const showPendingSuggestion = async (): Promise<void> => {
   PluginAPI.showSnack({
     msg: t('SUGGEST', { title: escapeHtml(task.title) }),
     ico: 'timer',
-    action: { label: t('TRACK'), onClick: () => startTask(id, false) },
+    action: { label: t('TRACK'), onClick: () => startTask(id) },
   });
 };
 
@@ -176,7 +163,7 @@ const tick = async (): Promise<TickResult> => {
     DWELL_TIMING,
   );
   dwell = step.state;
-  if (step.fireId) await act(step.fireId);
+  if (step.fireId) await suggest(step.fireId);
   return 'ok';
 };
 
@@ -211,9 +198,8 @@ const onFocusChange = (isFocused: boolean): void => {
 };
 
 PluginAPI.registerHook(PluginHooks.CURRENT_TASK_CHANGE, (payload) => {
+  // Known only after the first change: the plugin may load while a task runs.
   currentTaskId = (payload as CurrentTaskChangePayload).current?.id ?? null;
-  // Any change not made by this plugin hands control back to the user.
-  if (currentTaskId !== autoStartedId) autoStartedId = null;
 });
 
 PluginAPI.onUnload?.(() => {
