@@ -4,8 +4,6 @@ on:
     branches:
       - master
       - main
-    paths-ignore:
-      - 'docs/wiki/**'
   workflow_dispatch:
     inputs: {}
   release:
@@ -21,8 +19,7 @@ concurrency:
 jobs:
   # PRs that only touch docs/** or Markdown skip the build, test and E2E jobs
   # (Documentation Links covers them). The skip lives here rather than in
-  # paths-ignore so CI Gate still reports and can stay a required check. Same
-  # exclusions as electron-smoke.yml.
+  # paths-ignore so CI Gate still reports and can stay a required check.
   changes:
     name: Detect code changes
     runs-on: ubuntu-latest
@@ -314,7 +311,8 @@ jobs:
 
   # Single stable check to mark required in branch protection, so the split
   # and sharded jobs above can change without editing the protection rules.
-  # Skipped jobs (PR-only checks on release runs) count as passing.
+  # Skipped jobs (PR-only checks on release runs, code jobs on docs-only PRs)
+  # count as passing.
   # always(), not !cancelled(): a skipped required check would count as passing.
   ci-gate:
     name: CI Gate
