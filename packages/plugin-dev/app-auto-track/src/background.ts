@@ -196,6 +196,9 @@ const schedule = (): void => {
       queueNotice('UNSUPPORTED');
       return;
     }
+    // A later successful probe (e.g. after granting the macOS prompt) makes a
+    // not-yet-shown error hint stale.
+    if (result === 'ok' && pendingNoticeKey === 'PROBE_ERROR') pendingNoticeKey = null;
     // A focused SP says nothing about the probe, so it keeps the current backoff.
     if (result !== 'skipped') {
       failureCount = result === 'failed' ? Math.min(failureCount + 1, 10) : 0;
