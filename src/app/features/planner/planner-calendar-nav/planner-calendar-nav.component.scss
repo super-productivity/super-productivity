@@ -16,7 +16,7 @@
 .day-labels,
 .week {
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
+  grid-template-columns: 24px repeat(7, 1fr);
   text-align: center;
 }
 
@@ -24,6 +24,19 @@
   font-size: 11px;
   color: var(--text-color-muted);
   padding-bottom: var(--s-quarter);
+}
+
+.week-number-cell,
+.week-number-label {
+  font-size: 10px;
+  color: var(--text-color-muted);
+  text-align: center;
+}
+
+.week-number-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .weeks {

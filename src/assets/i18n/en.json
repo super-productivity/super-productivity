@@ -2455,6 +2455,7 @@
     "TOMORROW": "Tomorrow",
     "UNDO": "Undo",
     "WITHOUT_PROJECT": "Without Project",
+    "WEEK": "Week",
     "YESTERDAY": "Yesterday"
   },
   "GCF": {
@@ -2762,7 +2763,11 @@
       "WALLPAPER": "Wallpaper",
       "WALLPAPER_BUTTON": "Set wallpaper",
       "WALLPAPER_DIALOG_TITLE": "Global wallpaper",
-      "WALLPAPER_HINT": "Shown on pages without their own background (Planner, Schedule, Boards, Settings…). Tags and projects with their own image override it."
+      "WALLPAPER_HINT": "Shown on pages without their own background (Planner, Schedule, Boards, Settings…). Tags and projects with their own image override it.",
+      "WEEK_NUMBER_SYSTEM": "Week number system",
+      "WEEK_NUMBER_SYSTEM_AUTO": "none (system default)",
+      "WEEK_NUMBER_SYSTEM_ISO": "ISO (week 1 = first week with Thursday)",
+      "WEEK_NUMBER_SYSTEM_US": "US (week 1 = first week with January 1)"
     },
     "POMODORO": {
       "BREAK_DURATION": "Short break duration",

@@ -43,6 +43,8 @@ import { fadeAnimation } from '../animations/fade.ani';
 import { getClockStringFromHours } from '../../util/get-clock-string-from-hours';
 import { IS_ELECTRON_TOKEN } from '../../app.constants';
 import { IS_ANDROID_WEB_VIEW_TOKEN } from '../../util/is-android-web-view';
+import { getWeekNumber } from '../../util/get-week-number';
+import { DEFAULT_FIRST_DAY_OF_WEEK } from '../../core/locale.constants';
 
 const DEFAULT_TIME = '09:00';
 
@@ -123,17 +125,47 @@ export class DateTimePickerComponent implements AfterViewInit {
     () => this._globalConfigService.localization() !== undefined,
   );
 
+  // Week numbers should only be shown when explicitly enabled (iso/us)
+  // null/undefined = "none (system default)" = hide week column entirely
+  readonly showWeekNumbers = computed(() => {
+    const localization = this._globalConfigService.localization();
+    const weekNumberSystem = localization?.weekNumberSystem;
+    return weekNumberSystem === 'iso' || weekNumberSystem === 'us';
+  });
+
+  // Week numbers are only meaningful beside the month grid. Year and
+  // multi-year views use the same Material table classes for months/years.
+  weekNumbers: number[] = [];
+  weekNumbersWithNulls: (number | null)[] = [];
+  calendarView: MatCalendarView = 'month';
+
   private _lastView: MatCalendarView | null = null;
   private _viewChangeEffect = effect((onCleanup) => {
     const cal = this.calendar();
     if (cal) {
+      // Track localization to re-render when config changes
+      this._globalConfigService.localization();
+
       this._lastView = cal.currentView;
+      this.calendarView = cal.currentView;
+      setTimeout(() => this._renderWeekNumbers(cal));
+
       const sub = cal.stateChanges.subscribe(() => {
-        if (cal.currentView !== this._lastView) {
-          this._lastView = cal.currentView;
+        // Track localization to re-render when config changes
+        this._globalConfigService.localization();
+
+        const viewChanged = cal.currentView !== this._lastView;
+        this._lastView = cal.currentView;
+        this.calendarView = cal.currentView;
+        if (viewChanged) {
           this.isInitialFocus = true;
-          this._cdr.markForCheck();
         }
+
+        // Material emits stateChanges before the new month rows have finished
+        // rendering. Recompute on the next task rather than observing private
+        // DOM mutations for the lifetime of the component.
+        setTimeout(() => this._renderWeekNumbers(cal));
+        this._cdr.markForCheck();
       });
       onCleanup(() => sub.unsubscribe());
     }
@@ -290,6 +322,100 @@ export class DateTimePickerComponent implements AfterViewInit {
   quickAccessBtnClick(ev: MouseEvent, val: QuickAccessId): void {
     ev.preventDefault();
     this.quickAccessClick.emit(val);
+  }
+
+  // Calculate week numbers from MatCalendar's actual month state. Do not parse
+  // aria-label text: those labels are localized and are an accessibility API,
+  // not a stable machine-readable date format.
+  private _renderWeekNumbers(cal: MatCalendar<Date>): void {
+    if (cal.currentView !== 'month') {
+      this.weekNumbers = [];
+      this._cdr.markForCheck();
+      return;
+    }
+
+    const localization = this._globalConfigService.localization();
+    const weekNumberSystem = localization?.weekNumberSystem;
+
+    // Check if week numbers should be shown
+    // null / undefined = "none (system default)" = hide week column entirely
+    // 'iso' or 'us' = show week numbers with the specified system
+    const shouldShowWeekNumbers = weekNumberSystem === 'iso' || weekNumberSystem === 'us';
+
+    if (!shouldShowWeekNumbers) {
+      this.weekNumbers = [];
+      this._cdr.markForCheck();
+      return;
+    }
+
+    const calendarEl = this._el.nativeElement.querySelector(
+      '.mat-calendar',
+    ) as HTMLElement | null;
+    const rowCount = calendarEl?.querySelectorAll('.mat-calendar-body tr').length ?? 0;
+    if (rowCount === 0) {
+      this.weekNumbers = [];
+      this.weekNumbersWithNulls = [];
+      return;
+    }
+
+    // Always use 6 rows for the week number column to ensure consistent padding
+    // regardless of how many rows the calendar actually renders
+    const targetRowCount = 6;
+
+    const firstDayOfWeek = this.getFirstDayOfWeek();
+    const monthStart = new Date(
+      cal.activeDate.getFullYear(),
+      cal.activeDate.getMonth(),
+      1,
+    );
+    const leadingDays = (monthStart.getDay() - firstDayOfWeek + 7) % 7;
+    const firstVisibleDate = new Date(monthStart);
+    firstVisibleDate.setDate(monthStart.getDate() - leadingDays);
+
+    // Calculate week numbers for all rows in the calendar (up to rowCount)
+    // weeks outside the current month will be null (empty cells)
+    const weekNumbersWithNulls = Array.from({ length: targetRowCount }, (_, index) => {
+      const weekStart = new Date(firstVisibleDate);
+      const dayOffset = index * 7;
+      weekStart.setDate(firstVisibleDate.getDate() + dayOffset);
+
+      // A week should show if it contains any dates from the current month
+      // Week ends on: weekStart + 6 days
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekStart.getDate() + 6);
+
+      // Last day of the current month
+      const lastDayOfMonth = new Date(
+        monthStart.getFullYear(),
+        monthStart.getMonth() + 1,
+        0,
+      );
+
+      // Week contains current month if weekStart <= lastDayOfMonth AND weekEnd >= firstDayOfMonth
+      const weekContainsCurrentMonth =
+        weekStart <= lastDayOfMonth && weekEnd >= monthStart;
+
+      if (!weekContainsCurrentMonth) {
+        return null;
+      }
+
+      return getWeekNumber(weekStart, firstDayOfWeek, weekNumberSystem as 'iso' | 'us');
+    });
+
+    // Store all week numbers (including nulls for empty cells)
+    // Filter only the week numbers for display (nulls will be shown as empty cells)
+    this.weekNumbers = weekNumbersWithNulls.filter((wn): wn is number => wn !== null);
+
+    // Also store all week numbers with nulls for alignment
+    this.weekNumbersWithNulls = weekNumbersWithNulls;
+
+    this._cdr.markForCheck();
+  }
+
+  // Get the first day of week from config or default
+  private getFirstDayOfWeek(): number {
+    const cfg = this._globalConfigService.localization()?.firstDayOfWeek;
+    return cfg !== null && cfg !== undefined ? cfg : DEFAULT_FIRST_DAY_OF_WEEK;
   }
 
   private _lastMouseCoords: { x: number; y: number } | null = null;

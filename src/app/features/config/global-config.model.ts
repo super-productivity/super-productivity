@@ -204,19 +204,6 @@ export type LocalBackupConfig = Readonly<{
   maxBackupFiles?: number | null;
 }>;
 
-/**
- * App localization section
- * If property value is:
- * - `undefined` - that indicates value not been setted manually yet
- * - `null` - that indicates value manually reseted to app/system default
- *
- */
-export type LocalizationConfig = Readonly<{
-  lng?: LanguageCode | null;
-  firstDayOfWeek?: number | null;
-  dateTimeLocale?: DateTimeLocale | null;
-}>;
-
 export type SoundConfig = Readonly<{
   isIncreaseDoneSoundPitch: boolean;
   doneSound: string | null;
@@ -344,6 +331,15 @@ export type DailySummaryNote = Readonly<{
   txt?: string;
   lastUpdateDayStr?: string;
 }>;
+
+export type LocalizationConfig = Readonly<{
+  lng?: LanguageCode | null;
+  firstDayOfWeek?: number | null;
+  dateTimeLocale?: DateTimeLocale | null;
+  weekNumberSystem?: 'none' | 'iso' | 'us' | null;
+}>;
+
+export type WeekNumberSystem = 'none' | 'iso' | 'us';
 
 // NOTE: config properties being undefined always means that they should be overwritten with the default value
 export type GlobalConfigState = Readonly<{

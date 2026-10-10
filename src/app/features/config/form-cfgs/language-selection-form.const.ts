@@ -14,7 +14,7 @@ export const LANGUAGE_SELECTION_FORM_FORM: ConfigFormSection<LocalizationConfig>
         options: [
           // TODO sort by popular
           // TODO add translation
-          { label: 'System default', value: null },
+          { label: 'None', value: null },
           { label: T.GCF.LANG.AR, value: LanguageCode.ar },
           { label: T.GCF.LANG.CS, value: LanguageCode.cs },
           { label: T.GCF.LANG.DE, value: LanguageCode.de },
@@ -53,7 +53,7 @@ export const LANGUAGE_SELECTION_FORM_FORM: ConfigFormSection<LocalizationConfig>
         label: T.GCF.MISC.FIRST_DAY_OF_WEEK,
         options: [
           // TODO add translation
-          { label: 'System default', value: null },
+          { label: 'None', value: null },
           { label: T.F.TASK_REPEAT.F.SUNDAY, value: 0 },
           { label: T.F.TASK_REPEAT.F.MONDAY, value: 1 },
           { label: T.F.TASK_REPEAT.F.TUESDAY, value: 2 },
@@ -95,6 +95,18 @@ export const LANGUAGE_SELECTION_FORM_FORM: ConfigFormSection<LocalizationConfig>
           { label: T.GCF.LANG.TIME_LOCALE_SK_SK, value: DateTimeLocales.sk_sk },
           { label: T.GCF.LANG.TIME_LOCALE_RO_RO, value: DateTimeLocales.ro_ro },
           { label: T.GCF.LANG.TIME_LOCALE_RO_MD, value: DateTimeLocales.ro_md },
+        ],
+      },
+    },
+    {
+      key: 'weekNumberSystem',
+      type: 'select',
+      templateOptions: {
+        label: T.GCF.MISC.WEEK_NUMBER_SYSTEM,
+        options: [
+          { label: T.GCF.MISC.WEEK_NUMBER_SYSTEM_AUTO, value: null },
+          { label: T.GCF.MISC.WEEK_NUMBER_SYSTEM_ISO, value: 'iso' },
+          { label: T.GCF.MISC.WEEK_NUMBER_SYSTEM_US, value: 'us' },
         ],
       },
     },

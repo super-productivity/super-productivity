@@ -20,6 +20,7 @@ import { GlobalConfigService } from '../../config/global-config.service';
 import { GlobalTrackingIntervalService } from '../../../core/global-tracking-interval/global-tracking-interval.service';
 import { getWeekRange } from '../../../util/get-week-range';
 import { getWeekdaysMin } from '../../../util/get-weekdays-min';
+import { getWeekNumber } from '../../../util/get-week-number';
 import { getDbDateStr } from '../../../util/get-db-date-str';
 import { parseDbDateStr } from '../../../util/parse-db-date-str';
 import {
@@ -62,6 +63,16 @@ export class PlannerCalendarNavComponent {
   private _firstDayOfWeek = computed(() => {
     const cfg = this._globalConfigService.localization()?.firstDayOfWeek;
     return cfg !== null && cfg !== undefined ? cfg : DEFAULT_FIRST_DAY_OF_WEEK;
+  });
+
+  private _weekNumberSystem = computed(() => {
+    const localization = this._globalConfigService.localization();
+    return localization?.weekNumberSystem;
+  });
+
+  showWeekNumbers = computed(() => {
+    const system = this._weekNumberSystem();
+    return system === 'iso' || system === 'us';
   });
 
   visibleDayDate = input<string | null>(null);
@@ -118,6 +129,14 @@ export class PlannerCalendarNavComponent {
       weeks.push(week);
     }
     return weeks;
+  });
+  weekNumbers = computed<number[]>(() => {
+    const firstDayOfWeek = this._firstDayOfWeek();
+    const weekNumberSystem = this._weekNumberSystem();
+    return this.weeks().map((week) => {
+      const firstDay = parseDbDateStr(week[0].dateStr);
+      return getWeekNumber(firstDay, firstDayOfWeek, weekNumberSystem as 'iso' | 'us');
+    });
   });
 
   activeWeekIndex = computed(() => {

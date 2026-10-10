@@ -38,6 +38,7 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
     lng: undefined,
     dateTimeLocale: undefined,
     firstDayOfWeek: undefined,
+    weekNumberSystem: undefined,
   },
   tasks: {
     isConfirmBeforeDelete: true,
