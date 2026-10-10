@@ -26,6 +26,12 @@
 .item {
   position: relative;
   padding-left: var(--tree-indent, 0);
+  // A `baseIndent` change (the side nav drops it in its compact rail) moves
+  // the rows along with the panel instead of snapping them at its start. A
+  // row that changes level on drop is re-rendered, so drops do not animate.
+  transition: padding-left
+    var(--sidenav-transition-duration, var(--transition-duration-m))
+    var(--sidenav-transition-timing, var(--ani-standard-timing));
 
   &.is-dragging {
     pointer-events: none;

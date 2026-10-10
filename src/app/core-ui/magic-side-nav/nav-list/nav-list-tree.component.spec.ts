@@ -199,3 +199,85 @@ describe('NavListTreeComponent expand/collapse animation', () => {
     expect(sampleAnimationAt(enteringEl, 0.75).overflow).toBe('hidden');
   });
 });
+
+@Component({
+  standalone: true,
+  imports: [NavListTreeComponent],
+  template: `<nav-list-tree
+    [item]="item"
+    [isExpanded]="true"
+    [showLabels]="showLabels()"
+  ></nav-list-tree>`,
+})
+class NavListTreeIndentHostComponent {
+  readonly item: NavTreeItem = {
+    type: 'tree',
+    id: 'projects',
+    label: 'Projects',
+    icon: 'expand_more',
+    treeKind: MenuTreeKind.PROJECT,
+    tree: [
+      { k: MenuTreeKind.PROJECT, project: createProject({ id: 'top' }) },
+      {
+        k: MenuTreeKind.FOLDER,
+        id: 'folder',
+        name: 'Folder',
+        isExpanded: true,
+        children: [{ k: MenuTreeKind.PROJECT, project: createProject({ id: 'nested' }) }],
+      },
+    ],
+  };
+  readonly showLabels = signal(true);
+}
+
+describe('NavListTreeComponent row indent (#10472)', () => {
+  let fixture: ComponentFixture<NavListTreeIndentHostComponent>;
+
+  const getIndent = (nodeId: string): string =>
+    (
+      fixture.nativeElement.querySelector(
+        `.item[data-node-id="${nodeId}"]`,
+      ) as HTMLElement
+    ).style.getPropertyValue('--tree-indent');
+
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
+      imports: [NavListTreeIndentHostComponent, TranslateModule.forRoot()],
+      providers: [
+        provideAnimations(),
+        provideRouter([]),
+        {
+          provide: MagicNavConfigService,
+          useValue: {
+            allUnarchivedProjects: signal([]),
+            archivedProjectsCount: signal(0),
+          },
+        },
+        { provide: MenuTreeService, useValue: {} },
+      ],
+    })
+      .overrideComponent(NavListTreeComponent, {
+        remove: { imports: [NavItemComponent] },
+        add: { schemas: [NO_ERRORS_SCHEMA] },
+      })
+      .compileComponents();
+
+    fixture = TestBed.createComponent(NavListTreeIndentHostComponent);
+    fixture.detectChanges();
+  });
+
+  it('indents the top-level rows one step under the section header', () => {
+    expect(getIndent('project-top')).toBe('16px');
+    expect(getIndent('folder-folder')).toBe('16px');
+    expect(getIndent('project-nested')).toBe('32px');
+  });
+
+  it('leaves the top-level rows unindented in the compact rail', () => {
+    fixture.componentInstance.showLabels.set(false);
+    fixture.detectChanges();
+
+    expect(getIndent('project-top')).toBe('0px');
+    expect(getIndent('folder-folder')).toBe('0px');
+    expect(getIndent('project-nested')).toBe('16px');
+  });
+});

@@ -45,7 +45,7 @@
   @let overInside = isOver(node.id, 'inside');
   @let overBefore = isOver(node.id, 'before');
   @let overAfter = isOver(node.id, 'after');
-  @let indentPx = level * indent();
+  @let indentPx = baseIndent() + level * indent();
 
   <div
     class="item"
