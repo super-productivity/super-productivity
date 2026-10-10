@@ -153,6 +153,9 @@ export class ShortcutService {
                 message: T.F.NOTE.D_FULLSCREEN.CONFIRM_SAVE_BEFORE_OPENING_NEW_TASK,
                 okTxt: T.G.SAVE,
                 cancelTxt: T.G.DISCARD,
+                // Discard sits in the cancel slot, which gets initial focus by
+                // default; Enter must keep the edit, not throw it away.
+                isFocusConfirm: true,
               },
             })
             .afterClosed(),

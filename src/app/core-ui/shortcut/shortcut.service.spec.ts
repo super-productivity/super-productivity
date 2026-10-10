@@ -375,6 +375,7 @@ describe('ShortcutService', () => {
           message: 'F.NOTE.D_FULLSCREEN.CONFIRM_SAVE_BEFORE_OPENING_NEW_TASK',
           okTxt: 'G.SAVE',
           cancelTxt: 'G.DISCARD',
+          isFocusConfirm: true,
         },
       });
       expect(note.close).toHaveBeenCalledWith();
@@ -512,6 +513,7 @@ describe('ShortcutService', () => {
           message: 'F.NOTE.D_FULLSCREEN.CONFIRM_SAVE_BEFORE_OPENING_NEW_TASK',
           okTxt: 'G.SAVE',
           cancelTxt: 'G.DISCARD',
+          isFocusConfirm: true,
         },
       });
       expect(editorRef.close).toHaveBeenCalledOnceWith('Edited task notes');
