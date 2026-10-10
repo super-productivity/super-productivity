@@ -68,6 +68,7 @@
       <div class="header-action-group primary-action-group">
         @if (isDataLoaded() && isTimeTrackingEnabled()) {
           <play-button
+            [isMobile]="isXs()"
             [currentTaskId]="currentTaskId()"
             [hasTrackableTasks]="hasTrackableTasks()"
           ></play-button>

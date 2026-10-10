@@ -331,6 +331,17 @@ mat-option.isDone {
   --mat-fab-small-state-layer-size: 48px;
 }
 
+// Icon appearance for mini FABs that change emphasis without replacing the
+// focused button. Keep Material's disabled foreground and interaction states.
+// Match the specificity of angular-material-css-vars' primary/accent overrides.
+:root .mat-mdc-mini-fab.mat-mini-fab-icon {
+  --mat-fab-small-foreground-color: var(--text-color);
+  --mat-fab-small-state-layer-color: var(--text-color);
+  // Themes such as Rainbow set FAB shadows with !important.
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
 .mat-mdc-icon-button.mat-mdc-icon-button.mat-mdc-icon-button {
   width: 40px;
   height: 40px;
