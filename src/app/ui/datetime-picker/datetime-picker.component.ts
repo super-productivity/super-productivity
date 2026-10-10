@@ -223,6 +223,9 @@ export class DateTimePickerComponent implements AfterViewInit {
       }
 
       if (targetDate) {
+        // mark as synced so the defaulted date doesn't pull the calendar back
+        // from the month the user is browsing (#10528)
+        this._lastSyncedDate = targetDate.getTime();
         this.dateSelected.emit(targetDate);
       }
       this.timeChanged.emit(targetTime);

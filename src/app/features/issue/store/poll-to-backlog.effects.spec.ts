@@ -97,6 +97,68 @@ describe('PollToBacklogEffects', () => {
   });
 
   describe('pollNewIssuesToBacklog$', () => {
+    it('should start polling when Linear registers after the project is activated', fakeAsync(() => {
+      const pluginRegistry = TestBed.inject(PluginIssueProviderRegistryService);
+      const provider = createMockIssueProvider({
+        id: 'linear-1',
+        issueProviderKey: 'LINEAR',
+        defaultProjectId: 'project-1',
+      });
+
+      issueServiceSpy.getPollInterval.and.callFake((key) =>
+        pluginRegistry.getPollIntervalMs(key),
+      );
+      store.overrideSelector(selectEnabledIssueProviders, [provider]);
+      store.refreshState();
+
+      const actionsSubject = new Subject<any>();
+      actions$ = actionsSubject.asObservable();
+
+      const subscription = effects.pollNewIssuesToBacklog$.subscribe();
+
+      actionsSubject.next(
+        setActiveWorkContext({
+          activeType: WorkContextType.PROJECT,
+          activeId: 'project-1',
+        }),
+      );
+
+      tick(300000);
+      expect(
+        issueServiceSpy.checkAndImportNewIssuesToBacklogForProject,
+      ).not.toHaveBeenCalled();
+
+      pluginRegistry.register({
+        pluginId: 'linear-issue-provider',
+        issueProviderKey: 'LINEAR',
+        name: 'Linear',
+        humanReadableName: 'Linear',
+        icon: 'linear',
+        pollIntervalMs: 300000,
+        issueStrings: { singular: 'Issue', plural: 'Issues' },
+        definition: {
+          configFields: [],
+          getHeaders: () => ({}),
+          searchIssues: () => Promise.resolve([]),
+          getById: () => Promise.resolve({ id: '1', title: '', body: '', url: '' }),
+          getIssueLink: () => '',
+          issueDisplay: [],
+        },
+      });
+
+      tick(10001);
+      expect(
+        issueServiceSpy.checkAndImportNewIssuesToBacklogForProject,
+      ).toHaveBeenCalledWith('LINEAR', 'linear-1', false);
+
+      tick(300000);
+      expect(
+        issueServiceSpy.checkAndImportNewIssuesToBacklogForProject,
+      ).toHaveBeenCalledTimes(2);
+
+      subscription.unsubscribe();
+    }));
+
     it('should poll when active project matches provider defaultProjectId', fakeAsync(() => {
       const provider = createMockIssueProvider({
         id: 'jira-1',

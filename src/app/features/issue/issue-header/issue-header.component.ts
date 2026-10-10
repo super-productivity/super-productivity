@@ -27,7 +27,7 @@ export class IssueHeaderComponent {
     const key = this.task().issueType as IssueProviderKey;
     if (!key) return '';
     if (this._pluginRegistry.hasProvider(key)) {
-      return this._pluginRegistry.getIcon(key);
+      return this._pluginRegistry.getSvgIcon(key);
     }
     return ISSUE_PROVIDER_ICON_MAP[key as BuiltInIssueProviderKey];
   });

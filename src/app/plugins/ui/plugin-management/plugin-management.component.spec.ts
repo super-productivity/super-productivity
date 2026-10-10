@@ -1,9 +1,11 @@
-import { signal } from '@angular/core';
+import { signal, WritableSignal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { MatDialog } from '@angular/material/dialog';
+import { MatSlideToggleChange } from '@angular/material/slide-toggle';
 import { Router } from '@angular/router';
 import { Store } from '@ngrx/store';
 import { TranslateModule } from '@ngx-translate/core';
+import { of } from 'rxjs';
 import { GlobalConfigService } from '../../../features/config/global-config.service';
 import { SnackService } from '../../../core/snack/snack.service';
 import { LayoutService } from '../../../core-ui/layout/layout.service';
@@ -11,10 +13,12 @@ import { PluginBridgeService } from '../../plugin-bridge.service';
 import { PluginCacheService } from '../../plugin-cache.service';
 import { PluginConfigService } from '../../plugin-config.service';
 import { PluginMetaPersistenceService } from '../../plugin-meta-persistence.service';
-import { PluginManifest, PluginHooks } from '../../plugin-api.model';
+import { PluginInstance, PluginManifest, PluginHooks } from '../../plugin-api.model';
 import { PluginService } from '../../plugin.service';
+import { PluginState } from '../../plugin-state.model';
 import { PluginManagementComponent } from './plugin-management.component';
 import { T } from '../../../t.const';
+import { DialogConfirmComponent } from '../../../ui/dialog-confirm/dialog-confirm.component';
 
 type PluginManifestWithAuthor = PluginManifest & { author?: string };
 
@@ -279,6 +283,244 @@ describe('PluginManagementComponent', () => {
 
     expect(routerNavigateSpy).toHaveBeenCalledWith(['/active/tasks']);
     expect(layoutToggleSpy).not.toHaveBeenCalled();
+  });
+
+  // Stubs MatDialog.open so the confirm dialog closes with `result`:
+  // true = confirmed, false = Cancel, undefined = Esc or backdrop click.
+  const stubConfirmDialog = (result: boolean | undefined): jasmine.Spy => {
+    const openSpy = jasmine
+      .createSpy('open')
+      .and.returnValue({ afterClosed: () => of(result) });
+    Object.assign(TestBed.inject(MatDialog), { open: openSpy });
+    return openSpy;
+  };
+
+  describe('clearPluginCache', () => {
+    let clearCacheSpy: jasmine.Spy;
+    let clearUploadedSpy: jasmine.Spy;
+    let pluginStates: WritableSignal<Map<string, PluginState>>;
+
+    const stateFor = (id: string, type: PluginState['type']): PluginState => ({
+      manifest: { ...baseManifest, id, name: id },
+      status: 'not-loaded',
+      path: type === 'uploaded' ? `uploaded://${id}` : `assets/bundled-plugins/${id}`,
+      type,
+      isEnabled: false,
+    });
+
+    beforeEach(() => {
+      clearCacheSpy = jasmine.createSpy('clearCache').and.resolveTo();
+      clearUploadedSpy = jasmine
+        .createSpy('clearUploadedPluginsFromMemory')
+        .and.resolveTo();
+      Object.assign(TestBed.inject(PluginCacheService), { clearCache: clearCacheSpy });
+      const pluginService = TestBed.inject(PluginService);
+      Object.assign(pluginService, { clearUploadedPluginsFromMemory: clearUploadedSpy });
+      pluginStates = pluginService.pluginStates as WritableSignal<
+        Map<string, PluginState>
+      >;
+      pluginStates.set(
+        new Map([
+          ['uploaded-a', stateFor('uploaded-a', 'uploaded')],
+          ['bundled', stateFor('bundled', 'built-in')],
+          ['uploaded-b', stateFor('uploaded-b', 'uploaded')],
+        ]),
+      );
+    });
+
+    afterEach(() => {
+      // Plugin cards are not under test and need service methods this mock lacks.
+      pluginStates.set(new Map());
+    });
+
+    it('asks in the app dialog with the number of uploaded plugins, then clears', async () => {
+      const openSpy = stubConfirmDialog(true);
+
+      await component.clearPluginCache();
+
+      expect(openSpy).toHaveBeenCalledOnceWith(DialogConfirmComponent, {
+        restoreFocus: true,
+        data: {
+          message: T.PLUGINS.CONFIRM_CLEAR_CACHE,
+          translateParams: { count: 2 },
+          okTxt: T.PLUGINS.CLEAR_PLUGIN_CACHE,
+        },
+      });
+      expect(clearCacheSpy).toHaveBeenCalledTimes(1);
+      expect(clearUploadedSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('removes nothing when the user cancels', async () => {
+      const openSpy = stubConfirmDialog(false);
+
+      await component.clearPluginCache();
+
+      expect(openSpy).toHaveBeenCalledTimes(1);
+      expect(clearCacheSpy).not.toHaveBeenCalled();
+      expect(clearUploadedSpy).not.toHaveBeenCalled();
+    });
+
+    it('removes nothing when the dialog is dismissed with Esc or the backdrop', async () => {
+      const openSpy = stubConfirmDialog(undefined);
+
+      await component.clearPluginCache();
+
+      expect(openSpy).toHaveBeenCalledTimes(1);
+      expect(clearCacheSpy).not.toHaveBeenCalled();
+      expect(clearUploadedSpy).not.toHaveBeenCalled();
+    });
+
+    it('clears the cache without asking when no uploaded plugin is installed', async () => {
+      const openSpy = stubConfirmDialog(true);
+      pluginStates.set(new Map([['bundled', stateFor('bundled', 'built-in')]]));
+
+      await component.clearPluginCache();
+
+      expect(openSpy).not.toHaveBeenCalled();
+      expect(clearCacheSpy).toHaveBeenCalledTimes(1);
+      expect(clearUploadedSpy).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('removeUploadedPlugin', () => {
+    let removeSpy: jasmine.Spy;
+
+    const uploadedPlugin = (name: string): PluginInstance => ({
+      manifest: { ...baseManifest, id: 'uploaded-a', name },
+      loaded: false,
+      isEnabled: false,
+    });
+
+    beforeEach(() => {
+      removeSpy = jasmine.createSpy('removeUploadedPlugin').and.resolveTo();
+      Object.assign(TestBed.inject(PluginService), { removeUploadedPlugin: removeSpy });
+    });
+
+    it('asks in the app dialog, then removes the plugin', async () => {
+      const openSpy = stubConfirmDialog(true);
+
+      await component.removeUploadedPlugin(uploadedPlugin('My Plugin'));
+
+      expect(openSpy).toHaveBeenCalledOnceWith(DialogConfirmComponent, {
+        restoreFocus: true,
+        data: {
+          message: T.PLUGINS.CONFIRM_REMOVE,
+          translateParams: { name: 'My Plugin' },
+          okTxt: T.PLUGINS.REMOVE,
+        },
+      });
+      expect(removeSpy).toHaveBeenCalledOnceWith('uploaded-a');
+    });
+
+    it('escapes HTML in the plugin name, which comes from the uploaded ZIP', async () => {
+      const openSpy = stubConfirmDialog(false);
+
+      await component.removeUploadedPlugin(uploadedPlugin('<b>Evil</b>'));
+
+      const config = openSpy.calls.mostRecent().args[1] as {
+        data: { translateParams: { name: string } };
+      };
+      expect(config.data.translateParams.name).toBe('&lt;b&gt;Evil&lt;/b&gt;');
+    });
+
+    it('keeps the plugin when the user cancels', async () => {
+      stubConfirmDialog(false);
+
+      await component.removeUploadedPlugin(uploadedPlugin('My Plugin'));
+
+      expect(removeSpy).not.toHaveBeenCalled();
+    });
+
+    it('keeps the plugin when the dialog is dismissed with Esc or the backdrop', async () => {
+      stubConfirmDialog(undefined);
+
+      await component.removeUploadedPlugin(uploadedPlugin('My Plugin'));
+
+      expect(removeSpy).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('disabling a plugin with attached issue providers', () => {
+    let disableSpy: jasmine.Spy;
+    let issueProviders: WritableSignal<{ id: string; pluginId?: string }[]>;
+
+    const plugin: PluginInstance = {
+      manifest: { ...baseManifest, name: '<i>GitHub</i>', type: 'issueProvider' },
+      loaded: true,
+      isEnabled: true,
+    };
+
+    // MatSlideToggle has already flipped itself off when (change) fires.
+    const toggleOffEvent = (): MatSlideToggleChange =>
+      ({ checked: false, source: { checked: false } }) as unknown as MatSlideToggleChange;
+
+    // onPluginToggle does not return the disable promise; let it settle.
+    const toggleOff = async (event: MatSlideToggleChange): Promise<void> => {
+      component.onPluginToggle(plugin, event);
+      await new Promise((resolve) => setTimeout(resolve));
+    };
+
+    beforeEach(() => {
+      disableSpy = jasmine.createSpy('disablePlugin').and.resolveTo();
+      Object.assign(TestBed.inject(PluginService), { disablePlugin: disableSpy });
+      issueProviders = signal([
+        { id: 'ip-1', pluginId: baseManifest.id },
+        { id: 'ip-2', pluginId: baseManifest.id },
+        { id: 'ip-3', pluginId: 'other-plugin' },
+      ]);
+      // The component reads the providers once at construction, so build it again
+      // with a Store that returns them.
+      Object.assign(TestBed.inject(Store), { selectSignal: () => issueProviders });
+      component = TestBed.createComponent(PluginManagementComponent).componentInstance;
+    });
+
+    it('asks in the app dialog with the provider count and escaped name, then disables', async () => {
+      const openSpy = stubConfirmDialog(true);
+      const event = toggleOffEvent();
+
+      await toggleOff(event);
+
+      expect(openSpy).toHaveBeenCalledOnceWith(DialogConfirmComponent, {
+        restoreFocus: true,
+        data: {
+          message: T.PLUGINS.CONFIRM_DISABLE_WITH_ISSUE_PROVIDERS,
+          translateParams: { count: 2, name: '&lt;i&gt;GitHub&lt;/i&gt;' },
+          okTxt: undefined,
+        },
+      });
+      expect(disableSpy).toHaveBeenCalledOnceWith(baseManifest.id);
+      expect(event.source.checked).toBe(false);
+    });
+
+    it('turns the toggle back on and keeps the plugin enabled when the user cancels', async () => {
+      stubConfirmDialog(false);
+      const event = toggleOffEvent();
+
+      await toggleOff(event);
+
+      expect(disableSpy).not.toHaveBeenCalled();
+      expect(event.source.checked).toBe(true);
+    });
+
+    it('turns the toggle back on when the dialog is dismissed with Esc or the backdrop', async () => {
+      stubConfirmDialog(undefined);
+      const event = toggleOffEvent();
+
+      await toggleOff(event);
+
+      expect(disableSpy).not.toHaveBeenCalled();
+      expect(event.source.checked).toBe(true);
+    });
+
+    it('disables without asking when no issue provider uses the plugin', async () => {
+      const openSpy = stubConfirmDialog(false);
+      issueProviders.set([{ id: 'ip-3', pluginId: 'other-plugin' }]);
+
+      await toggleOff(toggleOffEvent());
+
+      expect(openSpy).not.toHaveBeenCalled();
+      expect(disableSpy).toHaveBeenCalledOnceWith(baseManifest.id);
+    });
   });
 
   describe('openConfigDialog', () => {

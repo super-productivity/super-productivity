@@ -473,6 +473,40 @@ const restoreRecreatedNoteMembership = (
 };
 
 /**
+ * An LWW Update that replaces an existing NOTE keeps `todayOrder` in step with
+ * the winner's `isPinnedToToday`, the list `updateNote` maintains locally
+ * (#10379): a pinned note absent from it is prepended, as `updateNote` does,
+ * and an unpinned one is removed. A note that stays pinned keeps its position.
+ */
+const syncExistingNoteTodayOrder = (
+  state: RootState,
+  note: Record<string, unknown>,
+): RootState => {
+  const noteId = note['id'] as string;
+  const noteState = state[NOTE_FEATURE_NAME];
+  const isListed = noteState.todayOrder.includes(noteId);
+  if (note['isPinnedToToday'] === true && !isListed) {
+    return {
+      ...state,
+      [NOTE_FEATURE_NAME]: {
+        ...noteState,
+        todayOrder: [noteId, ...noteState.todayOrder],
+      },
+    };
+  }
+  if (note['isPinnedToToday'] === false && isListed) {
+    return {
+      ...state,
+      [NOTE_FEATURE_NAME]: {
+        ...noteState,
+        todayOrder: noteState.todayOrder.filter((id) => id !== noteId),
+      },
+    };
+  }
+  return state;
+};
+
+/**
  * Applies an LWW Update to an array-pattern feature state (BOARD, REMINDER,
  * PLUGIN_USER_DATA, PLUGIN_METADATA): items live in a plain array — the feature
  * state itself for `arrayKey: null`, else under `arrayKey` — addressed by their
@@ -991,8 +1025,10 @@ export const lwwUpdateMetaReducer: MetaReducer = (
       }
     ).entities?.[entityId];
 
-    if (entityType === 'NOTE' && !existingEntity && updatedEntity) {
-      updatedState = restoreRecreatedNoteMembership(updatedState, updatedEntity);
+    if (entityType === 'NOTE' && updatedEntity) {
+      updatedState = existingEntity
+        ? syncExistingNoteTodayOrder(updatedState, updatedEntity)
+        : restoreRecreatedNoteMembership(updatedState, updatedEntity);
     }
 
     // For TASK entities, sync related entities when relationships change

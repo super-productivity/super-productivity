@@ -10,6 +10,21 @@ import {
 } from './plugin-issue-provider.model';
 import { IssueProviderKey } from '../../features/issue/issue.model';
 import { PluginLog } from '../../core/log';
+import { BUILT_IN_SVG_ICON_NAMES } from '../../core/theme/built-in-svg-icons.const';
+
+/**
+ * Returns `icon` only if it is a registered SVG icon: the plugin's own uploaded SVG or
+ * a built-in SVG name. Anything else (e.g. a Material ligature like
+ * 'confirmation_number') would make MatIconRegistry log "Error retrieving icon", so
+ * callers get undefined and fall back to their default icon (#10550).
+ */
+export const toPluginSvgIcon = (
+  icon: string | undefined,
+  pluginId: string,
+): string | undefined =>
+  icon === `plugin-${pluginId}-icon` || (icon && BUILT_IN_SVG_ICON_NAMES.has(icon))
+    ? icon
+    : undefined;
 
 @Injectable({ providedIn: 'root' })
 export class PluginIssueProviderRegistryService {
@@ -103,8 +118,10 @@ export class PluginIssueProviderRegistryService {
     return Array.from(this._providers.values());
   }
 
-  getIcon(key: string): string {
-    return this._providers.get(key)?.icon ?? 'extension';
+  /** Provider icon usable with `mat-icon [svgIcon]`; see `toPluginSvgIcon`. */
+  getSvgIcon(key: string): string | undefined {
+    const provider = this._providers.get(key);
+    return provider && toPluginSvgIcon(provider.icon, provider.pluginId);
   }
 
   getName(key: string): string {

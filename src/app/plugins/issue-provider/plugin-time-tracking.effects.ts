@@ -22,7 +22,10 @@ import { TrackTimeDialogData } from '../../features/issue/shared/dialog-track-ti
 import { SnackService } from '../../core/snack/snack.service';
 import { getErrorTxt } from '../../util/get-error-text';
 import { T } from '../../t.const';
-import { PluginIssueProviderRegistryService } from './plugin-issue-provider-registry.service';
+import {
+  PluginIssueProviderRegistryService,
+  toPluginSvgIcon,
+} from './plugin-issue-provider-registry.service';
 import { PluginHttpService } from './plugin-http.service';
 import { withPluginOAuthTokenKey } from '../oauth/plugin-oauth-token-key.util';
 
@@ -54,7 +57,7 @@ interface TimeTrackingCtx {
   pluginConfig: Record<string, unknown>;
   http: PluginHttp;
   providerName: string;
-  icon: string;
+  icon: string | undefined;
 }
 
 @Injectable()
@@ -136,7 +139,7 @@ export class PluginTimeTrackingEffects {
       pluginConfig,
       http,
       providerName,
-      icon: provider.icon,
+      icon: toPluginSvgIcon(provider.icon, provider.pluginId),
     };
   }
 

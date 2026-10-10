@@ -57,7 +57,7 @@ Minimal manifest:
   "hooks": [],
   "issueProvider": {
     "pollIntervalMs": 600000,
-    "icon": "extension",
+    "icon": "sp",
     "humanReadableName": "Example",
     "issueStrings": {
       "singular": "Issue",
@@ -66,6 +66,12 @@ Minimal manifest:
   }
 }
 ```
+
+The provider icon is rendered as an SVG (`mat-icon [svgIcon]`). The plugin's own
+`icon.svg` takes precedence; `issueProvider.icon` is only used without one and
+must name a built-in SVG icon (`BUILT_IN_SVG_ICONS` in
+`src/app/core/theme/built-in-svg-icons.const.ts`). Material icon ligatures such as
+`extension` are not SVG icons and show no provider icon.
 
 Omit `issueProvider.issueProviderKey` for a new provider. The host assigns
 `plugin:<plugin-id>`. That field is reserved for repository-managed plugins that

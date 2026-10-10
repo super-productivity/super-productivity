@@ -7,7 +7,7 @@ import { PluginRunner } from './plugin-runner';
 import { PluginHooksService } from './plugin-hooks';
 import { PluginSecurityService } from './plugin-security';
 import { Hooks, PluginBaseCfg, PluginInstance, PluginManifest } from './plugin-api.model';
-import { PluginState } from './plugin-state.model';
+import { getUploadedPluginIds, PluginState } from './plugin-state.model';
 import { GlobalThemeService } from '../core/theme/global-theme.service';
 import { IS_ANDROID_WEB_VIEW } from '../util/is-android-web-view';
 import { IS_ELECTRON } from '../app.constants';
@@ -1513,13 +1513,7 @@ export class PluginService implements OnDestroy {
    * "replacing code under an id always re-asks" true on every removal path.
    */
   async clearUploadedPluginsFromMemory(): Promise<void> {
-    const states = this._pluginStates();
-    const uploadedIds: string[] = [];
-    for (const [pluginId, state] of states.entries()) {
-      if (state.type === 'uploaded') {
-        uploadedIds.push(pluginId);
-      }
-    }
+    const uploadedIds = getUploadedPluginIds(this._pluginStates());
     for (const pluginId of uploadedIds) {
       this._teardownPluginRuntime(pluginId);
       this._pluginPaths.delete(pluginId);

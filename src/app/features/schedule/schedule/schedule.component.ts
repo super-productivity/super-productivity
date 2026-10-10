@@ -118,9 +118,20 @@ export class ScheduleComponent {
   // True when today falls within the currently displayed range.
   // Disables the "today" reset button and suppresses navigation jumps.
   isViewingToday = computed(() => {
-    if (this._selectedDate() === null) return true;
+    const selectedDate = this._selectedDate();
+    if (selectedDate === null) return true;
     const todayStr = this._todayDateStr();
-    return todayStr ? this.daysToShow().includes(todayStr) : false;
+    if (!todayStr) return false;
+    if (this.isMonthView()) {
+      // Compare the month, not the grid: the grid's padding days can include
+      // today while showing the next month, which locked navigation (#10451)
+      const today = parseDbDateStr(todayStr);
+      return (
+        selectedDate.getFullYear() === today.getFullYear() &&
+        selectedDate.getMonth() === today.getMonth()
+      );
+    }
+    return this.daysToShow().includes(todayStr);
   });
 
   protected _todayDateStr = toSignal(this._globalTrackingIntervalService.todayDateStr$);

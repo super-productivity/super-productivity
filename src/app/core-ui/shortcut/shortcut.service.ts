@@ -7,8 +7,9 @@ import { GlobalConfigService } from '../../features/config/global-config.service
 import { ActivatedRoute, Router } from '@angular/router';
 import { LayoutService } from '../layout/layout.service';
 import { TaskService } from '../../features/tasks/task.service';
-import { MatDialog, MatDialogRef } from '@angular/material/dialog';
+import { MatDialog, MatDialogRef, MatDialogState } from '@angular/material/dialog';
 import { DialogAddNoteComponent } from '../../features/note/dialog-add-note/dialog-add-note.component';
+import { DialogFullscreenMarkdownComponent } from '../../ui/dialog-fullscreen-markdown/dialog-fullscreen-markdown.component';
 import { IPC } from '../../../../electron/shared-with-frontend/ipc-events.const';
 import { UiHelperService } from '../../features/ui-helper/ui-helper.service';
 import { WorkContextService } from '../../features/work-context/work-context.service';
@@ -120,19 +121,32 @@ export class ShortcutService {
       return;
     }
 
-    const addNoteDialogRef = this._getAddNoteDialogRef();
-    if (!addNoteDialogRef) {
+    const noteDialogRef = this._getFullscreenNoteDialogRef();
+    if (!noteDialogRef) {
       this._layoutService.showAddTaskBar();
+      return;
+    }
+
+    const noteDialog = noteDialogRef.componentInstance;
+    if (
+      noteDialogRef.getState() !== MatDialogState.OPEN ||
+      noteDialog.isDiscardConfirmOpen
+    ) {
       return;
     }
 
     this._isNoteTaskHandoffPending = true;
     try {
-      const addNoteDialog = addNoteDialogRef.componentInstance;
-      const noteContent = addNoteDialog.data?.content?.trim() || '';
-
-      if (noteContent.length > 0) {
-        const shouldSave = await firstValueFrom(
+      const needsConfirmation =
+        noteDialog instanceof DialogAddNoteComponent
+          ? noteDialog.data.content.trim().length > 0
+          : noteDialog.hasUnsavedChanges;
+      let shouldSave =
+        !(noteDialog instanceof DialogAddNoteComponent) && !needsConfirmation;
+      if (needsConfirmation) {
+        // Navigation must not save the editor behind the save/discard prompt.
+        noteDialog.isDiscardConfirmOpen = true;
+        const result = await firstValueFrom(
           this._matDialog
             .open(DialogConfirmComponent, {
               data: {
@@ -143,32 +157,38 @@ export class ShortcutService {
             })
             .afterClosed(),
         );
+        noteDialog.isDiscardConfirmOpen = false;
 
-        if (typeof shouldSave !== 'boolean') {
+        if (typeof result !== 'boolean') {
           return;
         }
-
-        if (shouldSave) {
-          addNoteDialog.close();
-        } else {
-          addNoteDialog.closeAfterConfirmedDiscard();
-        }
-      } else {
-        addNoteDialog.closeAfterConfirmedDiscard();
+        shouldSave = result;
+      }
+      if (noteDialogRef.getState() !== MatDialogState.OPEN) {
+        return;
       }
 
-      await firstValueFrom(addNoteDialogRef.afterClosed());
+      const closed = firstValueFrom(noteDialogRef.afterClosed());
+      if (shouldSave) {
+        noteDialog.close();
+      } else {
+        noteDialog.closeAfterConfirmedDiscard();
+      }
+
+      await closed;
       this._layoutService.showAddTaskBar();
     } finally {
+      noteDialog.isDiscardConfirmOpen = false;
       this._isNoteTaskHandoffPending = false;
     }
   }
 
-  private _getAddNoteDialogRef(): MatDialogRef<DialogAddNoteComponent> | null {
+  private _getFullscreenNoteDialogRef(): MatDialogRef<DialogFullscreenMarkdownComponent> | null {
     return (
       (this._matDialog.openDialogs.find(
-        (dialogRef) => dialogRef.componentInstance instanceof DialogAddNoteComponent,
-      ) as MatDialogRef<DialogAddNoteComponent> | undefined) || null
+        (dialogRef) =>
+          dialogRef.componentInstance instanceof DialogFullscreenMarkdownComponent,
+      ) as MatDialogRef<DialogFullscreenMarkdownComponent> | undefined) || null
     );
   }
 

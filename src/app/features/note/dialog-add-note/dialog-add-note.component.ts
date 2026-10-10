@@ -77,7 +77,7 @@ export class DialogAddNoteComponent extends DialogFullscreenMarkdownComponent {
     this._matDialogRef.close();
   }
 
-  closeAfterConfirmedDiscard(): void {
+  override closeAfterConfirmedDiscard(): void {
     this._clearSessionStorage();
     if (IS_MOBILE) {
       window.history.back();

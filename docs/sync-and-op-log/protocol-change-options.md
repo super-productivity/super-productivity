@@ -36,7 +36,7 @@ per signature, so rows overlap.
 | restart-changed                            | 22                           | 18              | #10381 (list order)                                                                                                 |
 | older-write-won                            | 18                           | **5**           | see below                                                                                                           |
 | stop                                       | 18                           | 12              | 10 remote habit order (kept stop, #10407); 2 local note order                                                       |
-| today-notes                                | 16                           | 13              | NOTE whole-entity LWW skips Today order (#10379)                                                                    |
+| today-notes                                | 16                           | 13              | NOTE whole-entity LWW skips Today order (#10379); fixed by #10659                                                   |
 | field-unwritten                            | 14                           | 13              | whole-entity snapshots                                                                                              |
 | recreated (accepted, decision 2)           | 6                            | 5               |                                                                                                                     |
 | validation                                 | 3                            | 0               |                                                                                                                     |

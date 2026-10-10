@@ -13,7 +13,7 @@ export interface TrackTimeDialogData {
   task: Task;
 
   // Issue display
-  issueIcon: string;
+  issueIcon?: string;
   issueLabel: string;
   issueUrl?: string;
 

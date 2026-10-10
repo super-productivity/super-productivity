@@ -1743,15 +1743,110 @@ describe('lwwUpdateMetaReducer', () => {
       expect(result[NOTE_FEATURE_NAME]!.todayOrder).toEqual([NOTE_ID]);
     });
 
-    it('leaves the lists alone when the note still exists', () => {
+    it('leaves project noteIds alone when the note still exists', () => {
       const result = run(
         createStateWithNotes([createNote()], [], []),
-        lwwNote(createNote({ isPinnedToToday: true, content: 'Edited' })),
+        lwwNote(createNote({ content: 'Edited' })),
       );
 
       expect(result[NOTE_FEATURE_NAME]!.entities[NOTE_ID]!.content).toBe('Edited');
       expect(result[PROJECT_FEATURE_NAME]!.entities[PROJECT_ID]!.noteIds).toEqual([]);
       expect(result[NOTE_FEATURE_NAME]!.todayOrder).toEqual([]);
+    });
+  });
+
+  describe('[NOTE] LWW Update of an existing note keeps todayOrder in step (#10379)', () => {
+    const NOTE_ID = 'note1';
+    const OTHER_NOTE_ID = 'note0';
+    const createNote = (overrides: Partial<Note> = {}): Note => ({
+      id: NOTE_ID,
+      content: 'Note content',
+      projectId: PROJECT_ID,
+      isPinnedToToday: false,
+      created: 100,
+      modified: 100,
+      ...overrides,
+    });
+    const stateWith = (notes: Note[], todayOrder: string[]): Partial<RootState> =>
+      ({
+        ...createMockState(),
+        [NOTE_FEATURE_NAME]: {
+          ids: notes.map((n) => n.id),
+          entities: Object.fromEntries(notes.map((n) => [n.id, n])),
+          todayOrder,
+        },
+      }) as Partial<RootState>;
+    const lwwNote = (note: Note): Action =>
+      ({
+        type: '[NOTE] LWW Update',
+        ...note,
+        meta: {
+          isPersistent: true,
+          entityType: 'NOTE',
+          entityId: note.id,
+          isRemote: true,
+          lwwUpdateMode: 'replace',
+        },
+      }) as unknown as Action;
+    const todayOrderAfter = (state: Partial<RootState>, action: Action): string[] => {
+      reducer(state, action);
+      const next = mockReducer.calls.mostRecent().args[0] as Partial<RootState>;
+      return next[NOTE_FEATURE_NAME]!.todayOrder;
+    };
+    const other = createNote({ id: OTHER_NOTE_ID, isPinnedToToday: true });
+
+    it('drops a note the winner unpinned from Today', () => {
+      const pinned = createNote({ isPinnedToToday: true });
+      expect(
+        todayOrderAfter(
+          stateWith([other, pinned], [NOTE_ID, OTHER_NOTE_ID]),
+          lwwNote(createNote({ content: 'Edited' })),
+        ),
+      ).toEqual([OTHER_NOTE_ID]);
+    });
+
+    it('lists a note the winner pinned at the top of Today, as updateNote does', () => {
+      expect(
+        todayOrderAfter(
+          stateWith([other, createNote()], [OTHER_NOTE_ID]),
+          lwwNote(createNote({ isPinnedToToday: true })),
+        ),
+      ).toEqual([NOTE_ID, OTHER_NOTE_ID]);
+    });
+
+    it('keeps the position of a note that stays pinned', () => {
+      const pinned = createNote({ isPinnedToToday: true });
+      expect(
+        todayOrderAfter(
+          stateWith([other, pinned], [OTHER_NOTE_ID, NOTE_ID]),
+          lwwNote(createNote({ isPinnedToToday: true, content: 'Edited' })),
+        ),
+      ).toEqual([OTHER_NOTE_ID, NOTE_ID]);
+    });
+
+    it('follows the merged note when an update-mode payload omits the pin', () => {
+      const pinned = createNote({ isPinnedToToday: true });
+      const partial = {
+        type: '[NOTE] LWW Update',
+        id: NOTE_ID,
+        content: 'Edited',
+        meta: {
+          isPersistent: true,
+          entityType: 'NOTE',
+          entityId: NOTE_ID,
+          isRemote: true,
+        },
+      } as unknown as Action;
+      expect(
+        todayOrderAfter(stateWith([other, pinned], [OTHER_NOTE_ID]), partial),
+      ).toEqual([NOTE_ID, OTHER_NOTE_ID]);
+    });
+
+    it('is idempotent when the same replacement is applied twice', () => {
+      const action = lwwNote(createNote({ isPinnedToToday: true }));
+      reducer(stateWith([other, createNote()], [OTHER_NOTE_ID]), action);
+      const once = mockReducer.calls.mostRecent().args[0] as Partial<RootState>;
+      expect(todayOrderAfter(once, action)).toEqual([NOTE_ID, OTHER_NOTE_ID]);
     });
   });
 

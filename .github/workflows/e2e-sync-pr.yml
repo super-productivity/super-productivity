@@ -123,7 +123,10 @@ jobs:
     name: Build Frontend
     needs: detect
     if: needs.detect.outputs.supersync == 'true' || needs.detect.outputs.webdav == 'true'
-    runs-on: ubuntu-latest
+    # Owner PRs run E2E on sponsored Blacksmith runners for faster feedback; everything else
+    # stays on GitHub. Repo variable USE_BLACKSMITH is the kill switch (unset = GitHub only);
+    # unset it if these jobs sit queued (app uninstalled or sponsorship ended).
+    runs-on: ${{ vars.USE_BLACKSMITH == 'true' && github.event.pull_request.user.login == 'johannesjo' && 'blacksmith-4vcpu-ubuntu-2404' || 'ubuntu-latest' }}
     timeout-minutes: 15
     env:
       UNSPLASH_KEY: ${{ secrets.UNSPLASH_KEY }}
@@ -160,7 +163,7 @@ jobs:
     name: SuperSync E2E ${{ matrix.shard }}/6
     needs: [detect, build]
     if: needs.detect.outputs.supersync == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.USE_BLACKSMITH == 'true' && github.event.pull_request.user.login == 'johannesjo' && 'blacksmith-4vcpu-ubuntu-2404' || 'ubuntu-latest' }}
     timeout-minutes: 40
     strategy:
       fail-fast: false
@@ -252,7 +255,7 @@ jobs:
     name: WebDAV E2E
     needs: [detect, build]
     if: needs.detect.outputs.webdav == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.USE_BLACKSMITH == 'true' && github.event.pull_request.user.login == 'johannesjo' && 'blacksmith-4vcpu-ubuntu-2404' || 'ubuntu-latest' }}
     timeout-minutes: 30
     env:
       UNSPLASH_KEY: ${{ secrets.UNSPLASH_KEY }}
