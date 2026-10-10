@@ -1,15 +1,16 @@
 import type {
-  IssueProviderPluginDefinition,
-  PluginFieldMapping,
   PluginHttp,
   PluginIssue,
   PluginSearchResult,
 } from '@super-productivity/plugin-api';
-
-declare const PluginAPI: {
-  registerIssueProvider(definition: IssueProviderPluginDefinition): void;
-  translate(key: string, params?: Record<string, string | number>): string;
-};
+import {
+  basicAuth,
+  canConnect,
+  isDoneMapping,
+  pickSyncValues,
+  registerIssueProvider,
+  t,
+} from '../../issue-provider-kit';
 
 interface DeckConfig {
   nextcloudBaseUrl?: string;
@@ -62,14 +63,6 @@ interface DeckStack {
 const STATE_DONE = 'done';
 const STATE_OPEN = 'open';
 
-const t = (key: string, params?: Record<string, string | number>): string => {
-  try {
-    return PluginAPI.translate(key, params);
-  } catch {
-    return key;
-  }
-};
-
 const asCfg = (config: Record<string, unknown>): DeckConfig =>
   config as unknown as DeckConfig;
 
@@ -86,15 +79,6 @@ const getBoardId = (cfg: DeckConfig): string => {
     throw new Error(t('ERRORS.NO_BOARD'));
   }
   return id;
-};
-
-// btoa only accepts Latin-1, so UTF-8 encode credentials first (non-ASCII passwords)
-const toBase64 = (str: string): string => {
-  let binary = '';
-  for (const byte of new TextEncoder().encode(str)) {
-    binary += String.fromCharCode(byte);
-  }
-  return btoa(binary);
 };
 
 const fetchStacks = (cfg: DeckConfig, http: PluginHttp): Promise<DeckStack[]> =>
@@ -214,7 +198,7 @@ const loadStackOptions = async (
   return stacks.map((s) => ({ label: s.title, value: String(s.id) }));
 };
 
-PluginAPI.registerIssueProvider({
+registerIssueProvider({
   configFields: [
     {
       key: 'nextcloudBaseUrl',
@@ -274,7 +258,7 @@ PluginAPI.registerIssueProvider({
   getHeaders(config: Record<string, unknown>): Record<string, string> {
     const cfg = asCfg(config);
     return {
-      Authorization: `Basic ${toBase64(`${cfg.username || ''}:${cfg.password || ''}`)}`,
+      Authorization: basicAuth(cfg.username || '', cfg.password || ''),
       // eslint-disable-next-line @typescript-eslint/naming-convention
       'Content-Type': 'application/json',
     };
@@ -327,17 +311,8 @@ PluginAPI.registerIssueProvider({
     return getCardLink(issueId, asCfg(config));
   },
 
-  async testConnection(
-    config: Record<string, unknown>,
-    http: PluginHttp,
-  ): Promise<boolean> {
-    try {
-      const boards = await http.get(`${getApiUrl(asCfg(config))}/boards`);
-      return Array.isArray(boards);
-    } catch {
-      return false;
-    }
-  },
+  testConnection: (config, http) =>
+    canConnect(() => http.get(`${getApiUrl(asCfg(config))}/boards`), Array.isArray),
 
   getNewIssuesForBacklog(
     config: Record<string, unknown>,
@@ -361,13 +336,7 @@ PluginAPI.registerIssueProvider({
   ],
 
   fieldMappings: [
-    {
-      taskField: 'isDone',
-      issueField: 'state',
-      defaultDirection: 'pullOnly',
-      toIssueValue: (taskValue: unknown): string => (taskValue ? STATE_DONE : STATE_OPEN),
-      toTaskValue: (issueValue: unknown): boolean => issueValue === STATE_DONE,
-    },
+    isDoneMapping({ done: STATE_DONE, open: STATE_OPEN }),
     {
       taskField: 'notes',
       issueField: 'body',
@@ -378,7 +347,7 @@ PluginAPI.registerIssueProvider({
       toTaskValue: (issueValue: unknown): string | undefined =>
         (issueValue as string) || undefined,
     },
-  ] satisfies PluginFieldMapping[],
+  ],
 
   // Deck's card update is a full PUT, so the current card is read first and
   // only the changed fields are replaced.
@@ -414,10 +383,5 @@ PluginAPI.registerIssueProvider({
     });
   },
 
-  extractSyncValues(issue: PluginIssue): Record<string, unknown> {
-    return {
-      state: issue.state,
-      body: issue.body,
-    };
-  },
-} satisfies IssueProviderPluginDefinition as IssueProviderPluginDefinition);
+  extractSyncValues: pickSyncValues('state', 'body'),
+});

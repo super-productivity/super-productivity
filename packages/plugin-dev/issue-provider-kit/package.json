@@ -1,0 +1,10 @@
+{
+  "name": "issue-provider-kit",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Helpers bundled into the issue-provider plugins (not part of the public PluginAPI)",
+  "type": "module",
+  "scripts": {
+    "test": "node --test index.test.ts"
+  }
+}
