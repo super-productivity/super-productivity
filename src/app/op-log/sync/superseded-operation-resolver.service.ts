@@ -327,7 +327,10 @@ export class SupersededOperationResolverService {
    * Only ops this upload got rejected move, and no other tab uploads meanwhile
    * (UPLOAD lock). Any other pending op may be one another tab uploaded and has
    * not marked synced yet; moving it would turn its re-upload into an
-   * INVALID_OP_ID.
+   * INVALID_OP_ID. A pending `syncTimeSpent` delta is the exception: receipt
+   * recovery restores its stored clock (`isRebasedTimeDeltaReceipt`), as for
+   * kept deltas, so one tracked while the upload was in flight moves too
+   * instead of forcing a whole-task snapshot (#10614).
    *
    * @param assertFence re-asserts the sync cycle's epoch before the write (#9074)
    */
@@ -444,7 +447,8 @@ export class SupersededOperationResolverService {
           (retired.size === 0 || (completeHistory && onlyDeltas)) &&
           pendingOps.every(
             (op) =>
-              rejectedOpIds.has(op.id) &&
+              (rejectedOpIds.has(op.id) ||
+                op.actionType === ActionType.TIME_TRACKING_SYNC_TIME_SPENT) &&
               op.clientId === clientId &&
               getOpEntityIds(op).length === 1,
           ) &&

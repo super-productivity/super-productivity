@@ -20,11 +20,11 @@ import { blockBackgroundSync } from '../../utils/time-preserving-resolution-help
 /**
  * #10614 path 1. B's pending delta crosses A's rename that reached the server
  * first, so the server rejects it (CONFLICT_CONCURRENT) and the rejection
- * handler rebases it in place (#10214). The rebase proof requires every
- * pending op of the task to be in the rejected upload; a delta B tracks while
- * that upload is in flight is not, so the rejected delta is folded into an
- * absolute whole-task snapshot instead. C's newer pending delta then wins
- * against that snapshot as LOCAL, which can drop B's tracked time.
+ * handler rebases it in place (#10214). A delta tracked while that upload is
+ * in flight is not in the rejected batch. It used to fail the rebase proof, so
+ * the rejected delta was folded into an absolute whole-task snapshot that C's
+ * newer pending delta then overwrote as LOCAL, dropping B's tracked time.
+ * 'rename loses' is the opposite direction: A's rename is the rejected upload.
  */
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -66,8 +66,8 @@ const recordSyncTraffic = (
 
 test.describe('@supersync time delta tracked while its crossing upload is rejected', () => {
   // 'control': the rejected upload holds every pending op of the task (#10214 rebase).
-  // 'delta during upload': B tracks more time while that upload is in flight.
-  for (const variant of ['control', 'delta during upload'] as const) {
+  // Otherwise the rejected client tracks more time while that upload is in flight.
+  for (const variant of ['control', 'delta during upload', 'rename loses'] as const) {
     test(`${variant}: all tracked time survives the rejected crossing`, async ({
       browser,
       baseURL,
@@ -102,27 +102,28 @@ test.describe('@supersync time delta tracked while its crossing upload is reject
         for (const client of clients) await client.page.evaluate(blockBackgroundSync);
         const [a, b, c] = clients;
         const traffic = recordSyncTraffic(clients);
+        const [winner, loser] = variant === 'rename loses' ? [b, a] : [a, b];
 
         await recordTaskTimeDelta(b, taskName, taskDate, deltaB);
         await renameTask(a, taskName, renamedTitle);
-        await a.sync.syncAndWait();
-        // Newer than B's delta, so it wins LWW against a snapshot that folds it.
+        await winner.sync.syncAndWait();
+        // Newer than the loser's op, so it wins LWW against a snapshot that folds it.
         await recordTaskTimeDelta(c, taskName, taskDate, deltaC);
 
         let intercepted = false;
         let interceptError: unknown;
         if (deltaDuringUpload > 0) {
-          await routeSuperSyncOps(b.page, async (route) => {
+          await routeSuperSyncOps(loser.page, async (route) => {
             if (route.request().method() !== 'POST' || intercepted) {
               return route.continue();
             }
             intercepted = true;
             try {
               // The upload already fixed its pending set; this op is not in it.
-              const before = (await readDeltas(b)).length;
-              await recordTaskTimeDelta(b, taskName, taskDate, deltaDuringUpload);
+              const before = (await readDeltas(loser)).length;
+              await recordTaskTimeDelta(loser, taskName, taskDate, deltaDuringUpload);
               await expect
-                .poll(async () => (await readDeltas(b)).length)
+                .poll(async () => (await readDeltas(loser)).length)
                 .toBe(before + 1);
             } catch (error) {
               interceptError = error;
@@ -132,14 +133,16 @@ test.describe('@supersync time delta tracked while its crossing upload is reject
             }
           });
         }
-        await b.sync.syncAndWait();
+        await loser.sync.syncAndWait();
         if (deltaDuringUpload > 0) {
-          await unrouteSuperSyncOps(b.page);
+          await unrouteSuperSyncOps(loser.page);
           if (interceptError) throw interceptError;
           expect(intercepted).toBe(true);
         }
         // The response listener parses the body asynchronously.
-        await expect.poll(() => traffic.rejections).toContain('B:CONFLICT_CONCURRENT');
+        await expect
+          .poll(() => traffic.rejections)
+          .toContain(`${loser.clientName}:CONFLICT_CONCURRENT`);
 
         await c.sync.syncAndWait();
         for (let round = 0; round < 2; round++) {
@@ -159,15 +162,6 @@ test.describe('@supersync time delta tracked while its crossing upload is reject
           },
         );
 
-        if (variant !== 'control') {
-          // REPRO #10614 path 1, unfixed: B's rejected 3000 is folded into a
-          // snapshot that C's newer delta overwrites. Pinning the lost value
-          // keeps setup or harness failures red instead of "expected".
-          // Remove this check and the mark with the fix.
-          await waitForTask(a.page, renamedTitle);
-          await expectExactTaskTime(a, taskName, expectedTime - deltaB);
-          test.fail(true, 'REPRO #10614 path 1: rejected delta folded and lost');
-        }
         for (const client of clients) {
           await waitForTask(client.page, renamedTitle);
           await expectExactTaskTime(client, taskName, expectedTime);

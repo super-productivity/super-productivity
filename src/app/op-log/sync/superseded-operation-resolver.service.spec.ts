@@ -555,6 +555,7 @@ describe('SupersededOperationResolverService', () => {
       'intervening time write',
       'missing row',
       'unrejected delta',
+      'unrejected patch',
     ] as const) {
       it(`checks the recovery proof for ${shape}`, async () => {
         const delta: Operation = {
@@ -608,22 +609,35 @@ describe('SupersededOperationResolverService', () => {
             },
           });
         }
-        mockOpLogStore.getUnsynced.and.resolveTo([
-          pending,
-          ...(shape === 'unrejected delta'
-            ? [{ ...pending, seq: 2, op: { ...delta, id: 'uncertain' } }]
-            : []),
-        ]);
-        mockOpLogStore.getOpsAfterSeq.and.resolveTo(tail);
+        // Tracked while the rejected upload was in flight, so not in its batch.
+        const unrejected: OperationLogEntry | undefined =
+          shape === 'unrejected delta'
+            ? { ...pending, seq: 2, op: { ...delta, id: 'uncertain' } }
+            : shape === 'unrejected patch'
+              ? {
+                  ...pending,
+                  seq: 2,
+                  op: { ...row, id: 'uncertain', clientId: TEST_CLIENT_ID },
+                }
+              : undefined;
+        mockOpLogStore.getUnsynced.and.resolveTo(
+          unrejected ? [pending, unrejected] : [pending],
+        );
+        mockOpLogStore.getOpsAfterSeq.and.resolveTo(
+          unrejected ? [unrejected, ...tail] : tail,
+        );
         mockOpLogStore.rebasePendingLocalOps.and.resolveTo([delta]);
         const recovered = await service.rebaseCommutingTimeDeltaRejections([
           { opId: delta.id, op: delta, existingClock: row.vectorClock },
         ]);
-        const allowed = shape === 'own patch' || shape === 'remote patch';
+        const allowed =
+          shape === 'own patch' ||
+          shape === 'remote patch' ||
+          shape === 'unrejected delta';
         expect([...recovered]).toEqual(allowed ? [delta.id] : []);
         if (allowed) {
           expect(mockOpLogStore.rebasePendingLocalOps).toHaveBeenCalledWith(
-            [delta.id],
+            shape === 'unrejected delta' ? [delta.id, 'uncertain'] : [delta.id],
             row.vectorClock,
           );
           expect(mockLockService.request.calls.allArgs().map(([name]) => name)).toEqual([
