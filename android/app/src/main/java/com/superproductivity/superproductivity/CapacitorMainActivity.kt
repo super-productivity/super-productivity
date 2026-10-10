@@ -656,25 +656,19 @@ class CapacitorMainActivity : BridgeActivity() {
      *
      * We measure the overlap natively and publish it as the `--android-status-bar-
      * overlap` CSS var, which the web side folds into `--safe-area-top` via
-     * `var(--safe-area-inset-top, max(env(...), var(--android-status-bar-overlap)))`.
+     * `var(--android-status-bar-overlap, var(--safe-area-inset-top, env(...)))`.
      * The overlap is how much of the status bar covers the WebView: `rect.top`
      * (top of the visible display frame = status-bar height, reliable on API 28,
      * the same frame the keyboard path uses) minus the WebView's top on screen
      * (`getLocationOnScreen`: 0 when edge-to-edge, == status-bar height once
      * inset). So it is the status-bar height when the WebView is NOT inset and 0
-     * once it is — `max()` never double-counts. Physical px → CSS px via display
+     * once it is — no insets are added together. Physical px → CSS px via display
      * density; deduped so the per-layout listener does not spam evaluateJavascript.
      *
-     * Shares [NativeInsetShimGate] with the keyboard shim so it never fights
-     * SystemBars; on API >= 35 the injected --safe-area-inset-top wins via var()
-     * precedence and the published var is ignored regardless.
-     *
-     * Known gap, pre-existing (follow-up, not #9316): SystemBars 8.4 also injects
-     * `--safe-area-inset-top: 0px` inline on its non-passthrough path at every API
-     * level, so the SCSS `var(--safe-area-inset-top, max(env(), var(--android-
-     * status-bar-overlap)))` fallback resolves to 0px and the var published here
-     * is shadowed on exactly the band this runs on. See the note under "header
-     * draws BEHIND the status bar" in docs/android-edge-to-edge-keyboard.md.
+     * Shares [NativeInsetShimGate] with the keyboard shim. Only where SystemBars
+     * leaves the insets unowned do we publish this override; elsewhere CSS falls
+     * back to SystemBars / env(). Giving the measurement precedence prevents
+     * SystemBars' injected 0px from shadowing it on API < 35 / WebView < 140.
      */
     private fun pushStatusBarOverlap(rect: Rect) {
         if (!shouldRunNativeInsetShim()) return
