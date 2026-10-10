@@ -404,4 +404,33 @@ test.describe('Multi-task drag', () => {
     await expect(page.locator('.no-section task').last()).toHaveCSS('opacity', '1');
     await expect(page.locator('.multi-task-drag-preview')).toHaveCount(0);
   });
+  test('reorders a selected task on its own outside project views', async ({
+    page,
+    workViewPage,
+    testPrefix,
+  }) => {
+    await workViewPage.waitForTaskList();
+    const names = ['A', 'B', 'C'].map((n) => testPrefix + '-' + n);
+    for (const name of names) await workViewPage.addTask(name);
+    const rows = page.locator('task:not(.cdk-drag-preview)');
+    const titles = rows.locator('task-title');
+    const before = await titles.allTextContents();
+    // Group drops only target project lists; in Today the dragged row must
+    // still reorder on its own instead of entering a group mode that refuses
+    // every drop.
+    await select(page, before.slice(1));
+    const from = await rows.last().boundingBox();
+    const to = await rows.first().boundingBox();
+    if (!from || !to) throw new Error('Missing drag rows');
+    const halfHeight = from.height / 2;
+    const centerY = from.y + halfHeight;
+    await page.mouse.move(from.x + 30, centerY);
+    await page.mouse.down();
+    await page.mouse.move(from.x + 30, centerY - 10, { steps: 3 });
+    await expect(page.locator('.cdk-drag-preview')).toBeVisible();
+    await page.mouse.move(to.x + 30, to.y + 5, { steps: 25 });
+    await page.mouse.up();
+    await expect(page.locator('.cdk-drag-preview')).toBeHidden();
+    await expect(titles).toHaveText([before[2], before[0], before[1]]);
+  });
 });

@@ -55,7 +55,7 @@
       @if (
         !task.parentId &&
         multiDrag.selectedIds().has(task.id) &&
-        multiDrag.selectionSize() > 1
+        multiDrag.isGroupDragAvailable()
       ) {
         <ng-template cdkDragPreview>
           <div class="multi-task-drag-preview">

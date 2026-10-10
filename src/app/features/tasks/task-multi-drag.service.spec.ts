@@ -1,5 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { signal } from '@angular/core';
+import { BehaviorSubject } from 'rxjs';
 import { Store } from '@ngrx/store';
 import { TaskMultiDragService } from './task-multi-drag.service';
 import { TaskMultiSelectService } from './task-multi-select.service';
@@ -21,6 +22,7 @@ describe('TaskMultiDragService', () => {
   let sectionService: jasmine.SpyObj<SectionService>;
   let bulk: { moveToProject: jasmine.Spy };
   let dispatch: jasmine.Spy;
+  let isProjectContext$: BehaviorSubject<boolean>;
   const task = (id: string, overrides: Partial<Task> = {}): Task => ({
     ...DEFAULT_TASK,
     id,
@@ -45,6 +47,7 @@ describe('TaskMultiDragService', () => {
     ]);
     bulk = { moveToProject: jasmine.createSpy('moveToProject').and.resolveTo() };
     dispatch = jasmine.createSpy('dispatch');
+    isProjectContext$ = new BehaviorSubject(true);
     TestBed.configureTestingModule({
       providers: [
         TaskMultiDragService,
@@ -73,6 +76,7 @@ describe('TaskMultiDragService', () => {
           useValue: {
             activeWorkContextId: 'p',
             activeWorkContextType: WorkContextType.PROJECT,
+            isActiveWorkContextProject$: isProjectContext$,
           },
         },
       ],
@@ -108,6 +112,14 @@ describe('TaskMultiDragService', () => {
     expect(service.ids()).toEqual([]);
     service.start(task('child', { parentId: 'a' }));
     expect(service.ids()).toEqual([]);
+  });
+  it('drags a selected task on its own outside project views', () => {
+    isProjectContext$.next(false);
+    start();
+    expect(service.ids()).toEqual([]);
+    expect(service.isGroupDragAvailable()).toBeFalse();
+    isProjectContext$.next(true);
+    expect(service.isGroupDragAvailable()).toBeTrue();
   });
   it('keeps touch selection on its existing menu path', () => {
     selection.enterTouchSelectionMode('a');

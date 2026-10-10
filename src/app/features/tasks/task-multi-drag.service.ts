@@ -1,4 +1,5 @@
 import { computed, DestroyRef, inject, Injectable, signal } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
 import { Store } from '@ngrx/store';
 import { TaskMultiSelectService } from './task-multi-select.service';
 import { TaskBulkActionService } from './task-bulk-action.service';
@@ -23,6 +24,13 @@ export class TaskMultiDragService {
   private readonly _tasks = this._store.selectSignal(selectTaskEntities);
   private readonly _sections = this._store.selectSignal(selectAllSections);
   private readonly _projects = this._store.selectSignal(selectProjectFeatureState);
+  // Group drops only target project lists (see canDrop); elsewhere a selected
+  // task must still drag on its own instead of entering a group mode that
+  // refuses every drop.
+  private readonly _isProjectContext = toSignal(
+    this._context.isActiveWorkContextProject$,
+    { initialValue: false },
+  );
   private readonly _ids = signal<readonly string[]>([]);
   private readonly _cancelled = signal(false);
   private _stopListening?: () => void;
@@ -55,11 +63,15 @@ export class TaskMultiDragService {
         return task && !task.parentId;
       }).length,
   );
+  readonly isGroupDragAvailable = computed(
+    () => this._isProjectContext() && this.selectionSize() > 1,
+  );
 
   start(task: Task): void {
     this.clear();
     if (
       task.parentId ||
+      !this._isProjectContext() ||
       !this._selection.has(task.id) ||
       this._selection.isTouchSelectionMode()
     )

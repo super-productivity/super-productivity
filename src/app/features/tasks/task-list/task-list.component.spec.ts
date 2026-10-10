@@ -90,6 +90,7 @@ describe('TaskListComponent', () => {
             draggedIds: () => new Set(),
             previewTasks: () => [],
             selectionSize: () => 0,
+            isGroupDragAvailable: () => false,
             start: () => {},
             clear: () => {},
             finish: () => {},
