@@ -647,6 +647,21 @@ describe('markedOptionsFactory', () => {
         expect(result).toContain('&lt;img src=x onerror=alert(1)&gt;');
       });
     });
+
+    // #10153 Case 1: a leading space after the opening paren must size the image
+    // exactly as the no-space form does, end to end through the full marked
+    // pipeline — matching what the live CodeMirror editor renders for the same
+    // synced note text.
+    describe('=WxH sizing tolerates whitespace after the paren (#10153)', () => {
+      it('renders identical width/height with or without a space before the src', () => {
+        const noSpace = parseWithFactory('![a](http://x.com/i.png =10x20)');
+        const withSpace = parseWithFactory('![a]( http://x.com/i.png =10x20)');
+        expect(noSpace).toContain('width="10"');
+        expect(noSpace).toContain('height="20"');
+        expect(withSpace).toContain('width="10"');
+        expect(withSpace).toContain('height="20"');
+      });
+    });
   });
 
   describe('paragraph renderer', () => {
@@ -782,6 +797,35 @@ describe('preprocessMarkdown', () => {
     const input = '# Header\n\n![img](url.png =50x50)\n\nParagraph';
     const result = preprocessMarkdown(input);
     expect(result).toBe('# Header\n\n![img](url.png "50|50")\n\nParagraph');
+  });
+
+  // #10153 Case 1: marked's native parser already tolerates whitespace after the
+  // opening paren of an (unsized) image destination, and the live CodeMirror
+  // editor's SIZED_IMAGE_RE does too. The =WxH preprocess must match, or the same
+  // synced note text renders a differently-sized image on the read-only card than
+  // in the live editor.
+  it('tolerates whitespace after the opening paren, matching the no-space form (#10153)', () => {
+    expect(preprocessMarkdown('![a]( u =10x20)')).toBe(
+      preprocessMarkdown('![a](u =10x20)'),
+    );
+    expect(preprocessMarkdown('![a]( u =10x20)')).toBe('![a](u "10|20")');
+  });
+
+  // #10153 Case 1 follow-up: the whitespace after the opening paren must not
+  // match a line break. A plain `\s*` would let marked join an image
+  // destination across a blank line and merge the two paragraphs, while the
+  // live editor (matching on a single-line slice) leaves it as raw text — a new
+  // parity gap in the other direction. Same-line whitespace only.
+  it('does not join an image destination across a blank line (#10153)', () => {
+    const input = '![a](\n\nu =10x20)';
+    expect(preprocessMarkdown(input)).toBe(input);
+  });
+
+  it('does not join sizing syntax across LF or CRLF line breaks (#10153)', () => {
+    for (const lineBreak of ['\n', '\r\n']) {
+      const input = `![a](u${lineBreak}=10x20)`;
+      expect(preprocessMarkdown(input)).toBe(input);
+    }
   });
 });
 

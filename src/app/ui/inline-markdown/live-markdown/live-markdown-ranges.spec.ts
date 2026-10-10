@@ -303,6 +303,18 @@ describe('image sizing', () => {
     });
   });
 
+  // #10153 Case 1: a space after the opening paren must still size the image, so
+  // the live editor and the read-only (marked) card agree on the same synced
+  // note text. The marked preprocess regex is aligned to tolerate it too.
+  it('accepts whitespace after the opening paren (#10153)', () => {
+    expect(imageOf('![a]( img.png =200x100)')?.image).toEqual({
+      alt: 'a',
+      src: 'img.png',
+      width: '200',
+      height: '100',
+    });
+  });
+
   it('accepts a width-only or height-only form', () => {
     expect(imageOf('![a](img.png =200x)')?.image).toEqual({
       alt: 'a',

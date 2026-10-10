@@ -52,8 +52,11 @@ export const parseImageDimensionsFromTitle = (
 export const preprocessMarkdown = (markdown: string): string => {
   // Match: ![alt](url =WIDTHxHEIGHT) or ![alt](url =WIDTHx) or ![alt](url =xHEIGHT)
   // Capture groups: 1=alt, 2=url, 3=width, 4=height
+  // Keep both whitespace runs on one line, matching the live editor's
+  // single-line SIZED_IMAGE_RE. Allowing `\s` here would let marked join an
+  // image destination across line breaks, reopening the render parity gap.
   return markdown.replace(
-    /!\[([^\]]*)\]\(([^\s)]+)\s+=(\d*)x(\d*)\)/g,
+    /!\[([^\]]*)\]\([^\S\r\n]*([^\s)]+)[^\S\r\n]+=(\d*)x(\d*)\)/g,
     (match, alt, url, width, height) => {
       // Create title attribute with width|height format
       const dimensions = `${width || ''}|${height || ''}`;
