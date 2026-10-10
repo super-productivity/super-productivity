@@ -1,0 +1,37 @@
+name: ⚡ Epic
+description: A large piece of work or a whole area, split into sub-issues.
+title: '⚡ '
+type: Epic
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+
+        An epic groups related issues. Track its children as GitHub sub-issues (the "Create sub-issue" button below the description), not as a checkbox list in the description. GitHub then shows progress on the epic and links every sub-issue back to it.
+
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal
+      description: What should be true once all sub-issues are done?
+      placeholder: 'e.g. The Projects and Tags lists in the left sidebar look and behave consistently.'
+    validations:
+      required: true
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: What belongs to this epic and what does not. Mention code areas that several sub-issues will touch.
+      placeholder: 'e.g. Only the sidebar lists. All changes touch `nav-list-tree.component`, so parallel work will overlap.'
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional context
+      description: Related issues, discussions, pull requests, screenshots.
+    validations:
+      required: false
