@@ -78,7 +78,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302
         with:
-          images: ghcr.io/super-productivity/supersync
+          images: ghcr.io/${{ github.repository_owner }}/supersync
           tags: |
             type=raw,value=latest
             type=sha,prefix={{branch}}-
