@@ -28,54 +28,31 @@ npm run list
 
 ### Quick Start
 
-1. **Copy the example plugin**:
-
-   ```bash
-   cp -r example-plugin my-plugin
-   cd my-plugin
-   ```
-
-2. **Install dependencies**:
-
-   ```bash
-   npm install
-   ```
-
-3. **Update plugin metadata**:
-   - Edit `manifest.json` with your plugin details
-   - Update `package.json` with your plugin name and description
-
-4. **Start development**:
-
-   ```bash
-   npm run dev
-   ```
-
-5. **Build for production**:
-   ```bash
-   npm run build
-   ```
+See [QUICK_START.md](QUICK_START.md): copy the existing plugin closest to what you
+want to build, then edit its `manifest.json` and `package.json`.
 
 ## Project Structure
 
+A TypeScript host-side plugin (e.g. [github-issue-provider](github-issue-provider)):
+
 ```
 my-plugin/
-├── package.json          # NPM package configuration
-├── tsconfig.json         # TypeScript configuration
-├── webpack.config.js     # Build configuration
-├── manifest.json         # Plugin manifest (metadata)
+├── package.json          # "build": "node ../scripts/build-with-esbuild.js"
+├── tsconfig.json         # extends ../tsconfig.base.json
+├── icon.svg              # Plugin icon
+├── i18n/                 # Translation files (en.json required)
 ├── src/
-│   └── index.ts         # Main plugin code
-├── assets/
-│   ├── index.html       # Optional UI (for iframe plugins)
-│   └── icon.svg         # Plugin icon
-├── scripts/
-│   └── package.js       # Script to create plugin.zip
-└── dist/                # Build output
-    ├── plugin.js        # Compiled plugin code (optional for iframe-only plugins)
-    ├── manifest.json    # Copied manifest
-    └── plugin.zip       # Packaged plugin
+│   ├── manifest.json     # Plugin manifest (metadata)
+│   └── plugin.ts         # Main plugin code
+└── dist/                 # Build output (plugin.js, manifest.json, icon.svg, i18n/)
 ```
+
+The shared build script and tsconfig live next to the plugins
+([scripts/build-with-esbuild.js](scripts/build-with-esbuild.js),
+[tsconfig.base.json](tsconfig.base.json)); copy them along when developing a plugin
+outside this repository. SolidJS/Vite plugins such as
+[boilerplate-solid-js](boilerplate-solid-js) use
+[`@super-productivity/vite-plugin`](../vite-plugin) instead.
 
 ## Development Workflow
 
@@ -366,16 +343,16 @@ PluginAPI.registerHook('taskUpdate', (data: unknown) => {
 ### Build issues
 
 - Delete `dist/` and rebuild
-- Check webpack.config.js for errors
+- Check the plugin's build script (`npm run build`) output for errors
 - Ensure all dependencies are installed
 
 ## Examples
 
 ### Available Examples
 
-1. **minimal-plugin** - The simplest possible plugin (10 lines)
-2. **simple-typescript-plugin** - TypeScript with minimal tooling
-3. **example-plugin** - Full featured example with webpack
+1. **yesterday-tasks-plugin** - Plain JavaScript, no build step
+2. **github-issue-provider** - TypeScript issue provider using the shared esbuild build
+3. **todoist-import** - TypeScript iframe UI inlined into `index.html`, no framework
 4. **boilerplate-solid-js** - Modern Solid.js boilerplate with i18n support
 5. **procrastination-buster** - SolidJS plugin with modern UI
 
@@ -389,15 +366,6 @@ PluginAPI.registerHook('taskUpdate', (data: unknown) => {
 - Modern component architecture
 - Plugin-to-iframe communication
 - Best practices for plugin development
-
-**example-plugin** demonstrates:
-
-- TypeScript setup with webpack
-- All API methods
-- iframe UI integration
-- State persistence
-- Hook handling
-- Build configuration
 
 **procrastination-buster** demonstrates:
 
