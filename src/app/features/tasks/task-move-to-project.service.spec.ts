@@ -118,4 +118,24 @@ describe('TaskMoveToProjectService', () => {
     expect(await service.moveToProject(t1, 'p2')).toBeFalse();
     expect(taskService.moveToProject).not.toHaveBeenCalled();
   });
+
+  // Plugin callers have no user to answer the dialog (#10489).
+  it('moves every instance without a dialog when isSkipConfirm is set', async () => {
+    const t1 = task({ id: 'a', repeatCfgId: 'cfg' });
+    const t2 = task({ id: 'b', repeatCfgId: 'cfg' });
+    repeatCfgService.getTaskRepeatCfgByIdAllowUndefined$.and.returnValue(
+      of({ id: 'cfg' } as TaskRepeatCfg),
+    );
+    taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(of([t1, t2]));
+    const dialog = TestBed.inject(MatDialog);
+    spyOn(dialog, 'open').and.callThrough();
+    dialogResult = false;
+
+    expect(await service.moveToProject(t1, 'p2', { isSkipConfirm: true })).toBeTrue();
+    expect(dialog.open).not.toHaveBeenCalled();
+    expect(repeatCfgService.updateTaskRepeatCfg).toHaveBeenCalledWith('cfg', {
+      projectId: 'p2',
+    });
+    expect(taskService.moveToProject).toHaveBeenCalledTimes(2);
+  });
 });

@@ -30,8 +30,14 @@ export class TaskMoveToProjectService {
   /**
    * @returns true when the task was moved, false when nothing changed (same
    *   project, or the user cancelled the recurring-task confirmation).
+   * @param opts.isSkipConfirm move all recurring instances without asking —
+   *   for callers with no user to answer the dialog (plugin API, #10489).
    */
-  async moveToProject(task: TaskWithSubTasks, projectId: string): Promise<boolean> {
+  async moveToProject(
+    task: TaskWithSubTasks,
+    projectId: string,
+    opts: { isSkipConfirm?: boolean } = {},
+  ): Promise<boolean> {
     if (projectId === task.projectId || task.parentId) {
       return false;
     }
@@ -74,20 +80,22 @@ export class TaskMoveToProjectService {
       return true;
     }
 
-    const isConfirm = await firstValueFrom(
-      this._matDialog
-        .open(DialogConfirmComponent, {
-          data: {
-            okTxt: T.F.TASK_REPEAT.D_CONFIRM_MOVE_TO_PROJECT.OK,
-            message: T.F.TASK_REPEAT.D_CONFIRM_MOVE_TO_PROJECT.MSG,
-            translateParams: {
-              projectName: targetProject?.title ?? _MISSING_PROJECT_,
-              tasksNr: nonArchiveInstancesWithSubTasks.length + archiveInstances.length,
+    const isConfirm =
+      opts.isSkipConfirm ||
+      (await firstValueFrom(
+        this._matDialog
+          .open(DialogConfirmComponent, {
+            data: {
+              okTxt: T.F.TASK_REPEAT.D_CONFIRM_MOVE_TO_PROJECT.OK,
+              message: T.F.TASK_REPEAT.D_CONFIRM_MOVE_TO_PROJECT.MSG,
+              translateParams: {
+                projectName: targetProject?.title ?? _MISSING_PROJECT_,
+                tasksNr: nonArchiveInstancesWithSubTasks.length + archiveInstances.length,
+              },
             },
-          },
-        })
-        .afterClosed(),
-    );
+          })
+          .afterClosed(),
+      ));
     if (!isConfirm) {
       return false;
     }

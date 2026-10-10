@@ -45,6 +45,7 @@ import {
 import { snackCfgToSnackParams } from './plugin-api-mapper';
 import { PluginHooksService } from './plugin-hooks';
 import { TaskService } from '../features/tasks/task.service';
+import { TaskMoveToProjectService } from '../features/tasks/task-move-to-project.service';
 import { getDomFocusedTaskId } from '../features/tasks/get-dom-focused-task-id';
 import { addSubTask } from '../features/tasks/store/task.actions';
 import { selectTaskFeatureState } from '../features/tasks/store/task.selectors';
@@ -922,19 +923,12 @@ export class PluginBridgeService implements OnDestroy {
         );
       }
 
-      if (taskWithSubTasks.projectId === projectId) {
-        PluginLog.log('PluginBridge: Task already in target project', {
-          taskId,
-          projectId,
-        });
-      } else {
-        this._taskService.moveToProject(taskWithSubTasks, projectId);
-
-        PluginLog.log('PluginBridge: Task moved to project successfully', {
-          taskId,
-          projectId,
-        });
-      }
+      // Same path as a UI move so a recurring task's config and instances follow
+      // it; a plugin has no user to answer the confirm dialog (#10489).
+      const isMoved = await this._injector
+        .get(TaskMoveToProjectService)
+        .moveToProject(taskWithSubTasks, projectId, { isSkipConfirm: true });
+      PluginLog.log('PluginBridge: Task move to project', { taskId, projectId, isMoved });
     }
 
     if (Object.keys(otherUpdates).length > 0) {
