@@ -254,34 +254,24 @@ export class SyncTriggerService {
     const _immediateSyncTrigger$: Observable<string> = this._isAndroidWebView
       ? // ANDROID ONLY
         merge(
-          // to update in background for widget
+          // In background: update for the widget. In foreground, file-based
+          // providers only: pick up other devices' changes while the app stays
+          // open (#10685). startWith: no resume has to arrive first.
           android.isInBackground$.pipe(
+            startWith(false),
             switchMap((isInBackground) =>
               isInBackground
                 ? timer(syncInterval, syncInterval).pipe(
                     mapTo('I_MOBILE_ONLY_BACKGROUND_TIMER'),
                   )
-                : EMPTY,
+                : useIntervalTimer
+                  ? timer(syncInterval, syncInterval).pipe(mapTo('I_INTERVAL_TIMER'))
+                  : EMPTY,
             ),
           ),
           android.onResume$.pipe(throttleTime(10000), mapTo('I_RESUME_APP')),
           android.onPause$.pipe(throttleTime(10000), mapTo('I_PAUSE_APP')),
           this._isOnlineTrigger$,
-          // Foreground counterpart of the background timer for file-based
-          // providers, so changes from other devices arrive while the app
-          // stays open (#10685). startWith: no resume has to arrive first.
-          ...(useIntervalTimer
-            ? [
-                android.isInBackground$.pipe(
-                  startWith(false),
-                  switchMap((isInBackground) =>
-                    isInBackground
-                      ? EMPTY
-                      : timer(syncInterval, syncInterval).pipe(mapTo('I_INTERVAL_TIMER')),
-                  ),
-                ),
-              ]
-            : []),
         )
       : // EVERYTHING ELSE
         merge(
