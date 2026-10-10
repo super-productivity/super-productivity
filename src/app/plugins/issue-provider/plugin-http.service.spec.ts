@@ -223,6 +223,7 @@ describe('PluginHttpService - native WebDAV/CalDAV method routing (#8558)', () =
   afterEach(() => httpMock.verify());
 
   const authHeaders = (): Record<string, string> => ({ Authorization: 'Basic abc' });
+  const GITHUB_API_VERSION_HEADER = 'X-GitHub-Api-Version';
 
   it('routes PROPFIND through the native executor (not HttpClient)', async () => {
     const http = service.createHttpHelper(authHeaders);
@@ -251,6 +252,40 @@ describe('PluginHttpService - native WebDAV/CalDAV method routing (#8558)', () =
     expect((nativeHttp.calls.mostRecent().args[0] as { method: string }).method).toBe(
       'REPORT',
     );
+  });
+
+  it('routes PATCH JSON requests through the native executor', async () => {
+    nativeHttp.and.resolveTo(
+      okResponse({
+        status: 200,
+        data: '{"id":"issue-1","title":"Updated"}',
+        url: 'https://api.github.com/repos/owner/repo/issues/1?state=open',
+      }),
+    );
+    const http = service.createHttpHelper(authHeaders);
+    const result = await http.patch<{ id: string; title: string }>(
+      'https://api.github.com/repos/owner/repo/issues/1',
+      { title: 'Updated' },
+      {
+        headers: { [GITHUB_API_VERSION_HEADER]: '2022-11-28' },
+        params: { state: 'open' },
+      },
+    );
+
+    expect(nativeHttp).toHaveBeenCalledTimes(1);
+    const cfg = nativeHttp.calls.mostRecent().args[0] as Record<string, unknown>;
+    expect(cfg['url']).toBe(
+      'https://api.github.com/repos/owner/repo/issues/1?state=open',
+    );
+    expect(cfg['method']).toBe('PATCH');
+    expect(cfg['data']).toBe('{"title":"Updated"}');
+    expect(cfg['responseType']).toBe('json');
+    expect((cfg['headers'] as Record<string, string>)['Authorization']).toBe('Basic abc');
+    expect((cfg['headers'] as Record<string, string>)[GITHUB_API_VERSION_HEADER]).toBe(
+      '2022-11-28',
+    );
+    expect(result).toEqual({ id: 'issue-1', title: 'Updated' });
+    httpMock.expectNone(() => true);
   });
 
   it('rejects with an error carrying .status on a non-2xx native response', async () => {
