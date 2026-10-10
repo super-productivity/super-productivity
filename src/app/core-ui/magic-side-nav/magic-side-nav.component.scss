@@ -357,11 +357,11 @@
   transition: background-color 0.2s ease;
 
   &.position-left {
-    right: -2px;
+    inset-inline-end: -2px;
   }
 
   &.position-right {
-    left: -2px;
+    inset-inline-start: -2px;
   }
 
   &:focus,

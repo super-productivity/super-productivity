@@ -95,7 +95,7 @@
         ) | translate
       "
     >
-      <mat-icon>chevron_left</mat-icon>
+      <mat-icon>{{ isLocaleRtl() ? 'chevron_right' : 'chevron_left' }}</mat-icon>
     </button>
 
     <button
@@ -129,7 +129,7 @@
         ) | translate
       "
     >
-      <mat-icon>chevron_right</mat-icon>
+      <mat-icon>{{ isLocaleRtl() ? 'chevron_left' : 'chevron_right' }}</mat-icon>
     </button>
   </div>
 

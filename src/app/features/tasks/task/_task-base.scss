@@ -124,12 +124,13 @@
 }
 
 .sub-tasks {
-  margin: var(--s) var(--s) var(--s) var(--s3);
+  margin-block: var(--s);
+  margin-inline: var(--s3) var(--s);
   position: relative;
 
   @include mq(xs) {
     //margin: var(--s) var(--s2) var(--s) var(--s3);
-    margin: var(--s) var(--s) var(--s) var(--s5);
+    margin-inline: var(--s5) var(--s);
   }
 
   ::ng-deep .box {

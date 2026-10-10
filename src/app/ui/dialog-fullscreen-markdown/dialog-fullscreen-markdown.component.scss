@@ -8,10 +8,10 @@
   left: 0;
   display: flex;
   flex-direction: column;
+}
 
-  :host-context([dir='rtl']) {
-    direction: rtl;
-  }
+:host-context([dir='rtl']) {
+  direction: rtl;
 }
 
 :host-context(.isMac.isElectron) {
@@ -174,7 +174,7 @@
     }
 
     .markdown-preview {
-      border-left: 2px solid;
+      border-inline-start: 2px solid;
       border-color: var(--extra-border-color);
     }
   }
@@ -199,5 +199,5 @@
   flex-grow: 0;
   flex-shrink: 0;
   margin: var(--s);
-  margin-right: auto;
+  margin-inline-end: auto;
 }

@@ -4,13 +4,13 @@
   width: 100%;
 
   tag {
-    padding-right: 0;
+    padding-inline-end: 0;
   }
 
   ::ng-deep
     .mat-mdc-standard-chip.mdc-evolution-chip--with-trailing-action
     .mdc-evolution-chip__action--primary {
-    padding-left: var(--s);
+    padding-inline-start: var(--s);
   }
 
   input {
@@ -56,7 +56,7 @@
   }
   ::ng-deep .mdc-evolution-chip__cell--trailing {
     opacity: 0.05;
-    margin-left: -4px;
+    margin-inline-start: -4px;
     transition: opacity 0.2s;
   }
 }

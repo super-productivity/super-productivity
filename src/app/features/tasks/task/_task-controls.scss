@@ -352,9 +352,11 @@ done-toggle {
 }
 
 .toggle-sub-tasks-btn.toggle-sub-tasks-btn {
+  --toggle-origin-x: left;
+
   position: absolute !important;
   transform: translateY(-50%);
-  left: -20px;
+  inset-inline-start: -20px;
   top: 50%;
   z-index: var(--z-toggle-sub-task-btn) !important;
   min-width: 0;
@@ -362,10 +364,14 @@ done-toggle {
   width: 24px !important;
   height: 24px !important;
   margin-top: -1px !important;
-  transform-origin: left top;
+  transform-origin: var(--toggle-origin-x) top;
   transition-property: opacity, transform, background, box-shadow;
   box-shadow: none;
   background: var(--bg-lighter) !important;
+
+  :host-context([dir='rtl']) & {
+    --toggle-origin-x: right;
+  }
 
   :host:hover & {
     opacity: 1;

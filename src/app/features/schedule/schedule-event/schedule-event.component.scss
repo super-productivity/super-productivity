@@ -22,7 +22,7 @@
   display: flex;
   align-items: flex-start;
   border: 1px solid var(--separator-color);
-  border-left: 3px solid var(--project-color, var(--separator-color));
+  border-inline-start: 3px solid var(--project-color, var(--separator-color));
   background: var(--schedule-event-bg);
   color: var(--text-color);
   position: relative;
@@ -283,7 +283,7 @@
   }
 
   :host.ScheduledRepeatProjection & {
-    margin-right: var(--s-quarter);
+    margin-left: var(--s-quarter);
   }
 
   mat-icon {
@@ -346,7 +346,7 @@
   line-height: 1.4;
   max-height: 100%;
   overflow: hidden;
-  text-align: left;
+  text-align: start;
 
   @include mq(xs, max) {
     --title-padding-y: var(--s-half);

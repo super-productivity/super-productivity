@@ -81,8 +81,8 @@
   max-width: 50%;
   background: var(--right-panel-bg);
   background: transparent;
-  border-left: 1px solid var(--separator-color);
-  overflow: visible; // allow overlay controls to stick out on the left edge
+  border-inline-start: 1px solid var(--separator-color);
+  overflow: visible; // allow overlay controls to stick out on the leading edge
   pointer-events: none; // Disable interactions when closed or closing
 
   @include mq(sm, max) {
@@ -132,7 +132,7 @@
   position: absolute;
   top: 0;
   bottom: 0;
-  left: -2px; // Position like magic-nav
+  inset-inline-start: -2px; // Position like magic-nav
   width: 4px;
   cursor: col-resize;
   z-index: var(--z-right-panel-resize-handle);
@@ -156,13 +156,16 @@
   top: 50%;
   // -16px (width 20px, border-box) reaches only 4px into the panel, clear of
   // the 8px margin on panel rows (was -8px, overlapping by 4px).
-  left: -16px;
+  inset-inline-start: -16px;
   width: 20px;
   height: 48px;
   transform: translateY(-50%);
   background: var(--bg-lightest);
   //border: 1px solid var(--separator-color);
-  border-radius: 3px 8px 8px 3px;
+  border-start-start-radius: 3px;
+  border-end-start-radius: 3px;
+  border-start-end-radius: 8px;
+  border-end-end-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -188,9 +191,9 @@
     content: '';
     position: absolute;
     top: 0;
-    right: -4px;
+    inset-inline-end: -4px;
     bottom: 0;
-    left: 0;
+    inset-inline-start: 0;
   }
 
   &:hover {

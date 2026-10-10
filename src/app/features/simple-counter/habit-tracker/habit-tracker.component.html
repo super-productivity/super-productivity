@@ -6,7 +6,7 @@
         (click)="prevWeek()"
         [matTooltip]="T.F.SIMPLE_COUNTER.HABIT_TRACKER.PREV_WEEK | translate"
       >
-        <mat-icon>chevron_left</mat-icon>
+        <mat-icon>{{ isLocaleRtl() ? 'chevron_right' : 'chevron_left' }}</mat-icon>
       </button>
       <span class="range-label">{{ dateRangeLabel() }}</span>
       <button
@@ -15,7 +15,7 @@
         [matTooltip]="T.F.SIMPLE_COUNTER.HABIT_TRACKER.NEXT_WEEK | translate"
         [disabled]="dayOffset() >= 0"
       >
-        <mat-icon>chevron_right</mat-icon>
+        <mat-icon>{{ isLocaleRtl() ? 'chevron_left' : 'chevron_right' }}</mat-icon>
       </button>
     </div>
     <div class="nav-controls">

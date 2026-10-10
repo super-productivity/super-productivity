@@ -27,7 +27,7 @@
   // v-margins come from the global .planner-tag-list-shared rules
   ::ng-deep .tags-container {
     // to match task title padding
-    margin-left: var(--s-half);
+    margin-inline-start: var(--s-half);
   }
 }
 
@@ -92,13 +92,13 @@ swipe-block {
 done-toggle {
   --done-toggle-size: 30px;
 
-  margin-left: var(--s-half);
+  margin-inline-start: var(--s-half);
   align-self: center;
   cursor: pointer;
 }
 
 task-priority-indicator {
-  margin-right: var(--s-half);
+  margin-inline-end: var(--s-half);
 }
 
 .wrap {
@@ -141,9 +141,9 @@ task-priority-indicator {
   align-items: flex-end;
   justify-content: center;
   flex-shrink: 0;
-  margin-left: auto;
+  margin-inline-start: auto;
   padding: 0;
-  padding-right: var(--s);
+  padding-inline-end: var(--s);
   border: 1px solid transparent;
 
   &.hasNoTimeSpentOrEstimate {
@@ -152,7 +152,7 @@ task-priority-indicator {
 
   inline-input {
     min-width: 44px;
-    text-align: right;
+    text-align: end;
   }
 
   inline-input ::ng-deep input {
@@ -170,7 +170,7 @@ task-priority-indicator {
       width: 14px;
       height: 14px;
       vertical-align: middle;
-      margin-right: var(--s-quarter);
+      margin-inline-end: var(--s-quarter);
     }
   }
 }
@@ -178,7 +178,7 @@ task-priority-indicator {
 .original-time-remaining {
   white-space: nowrap;
   font-size: 10px;
-  margin-left: -6px;
+  margin-inline-start: -6px;
 }
 
 :host ::ng-deep .due-date + .planner-time-remaining-shared {

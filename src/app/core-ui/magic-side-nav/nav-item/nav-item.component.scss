@@ -32,7 +32,7 @@
 
     // to make space for the task-count
     &.has-tasks {
-      padding-right: var(--s5);
+      padding-inline-end: var(--s5);
     }
 
     .nav-label {
@@ -77,7 +77,7 @@
   line-height: 1;
   text-align: center;
   font-size: var(--font-size-xs);
-  right: 16px;
+  inset-inline-end: 16px;
   display: flex;
   align-items: center;
   color: var(--text-color-muted);
@@ -104,7 +104,7 @@
   }
 
   button:first-of-type.has-tasks {
-    padding-right: var(--s);
+    padding-inline-end: var(--s);
   }
 }
 

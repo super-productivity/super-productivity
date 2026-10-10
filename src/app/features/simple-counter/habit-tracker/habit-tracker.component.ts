@@ -26,6 +26,7 @@ import { moveItemInArray } from '../../../util/move-item-in-array';
 import { dragDelayForTouch } from '../../../util/input-intent';
 import { LocaleDatePipe } from 'src/app/ui/pipes/locale-date.pipe';
 import { DateTimeFormatService } from 'src/app/core/date-time-format/date-time-format.service';
+import { Directionality } from '@angular/cdk/bidi';
 
 interface HabitDay {
   str: string;
@@ -64,6 +65,9 @@ export class HabitTrackerComponent {
   // Exposed so templates can pass the reactive locale to the now-pure
   // `localeDate` pipe, preserving re-render on a locale change.
   readonly locale = this._dateTimeFormatService.currentLocale;
+
+  readonly directionality = inject(Directionality);
+  readonly isLocaleRtl = computed(() => this.directionality.value === 'rtl');
 
   showDisabled = signal(false);
 

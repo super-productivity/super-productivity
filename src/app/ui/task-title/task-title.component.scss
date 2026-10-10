@@ -33,7 +33,7 @@
   align-items: center;
   text-align: start;
   outline: none;
-  margin-left: 1px;
+  margin-inline-start: 1px;
   background: inherit;
   overflow: visible;
   // needed for z-index to work
@@ -44,7 +44,8 @@
   z-index: 4;
   border: 1px solid transparent;
   transition: var(--transition-leave);
-  padding: 3px 3px 3px 5px;
+  padding-block: 3px;
+  padding-inline: 5px 3px;
   cursor: text;
 
   &:focus {

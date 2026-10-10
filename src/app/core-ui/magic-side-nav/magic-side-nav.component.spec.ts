@@ -5,6 +5,7 @@ import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { Router } from '@angular/router';
 import { DragDropRegistry } from '@angular/cdk/drag-drop';
 import { CdkTrapFocus } from '@angular/cdk/a11y';
+import { Direction, Directionality } from '@angular/cdk/bidi';
 import { By } from '@angular/platform-browser';
 import { TranslateModule } from '@ngx-translate/core';
 import { EMPTY, of } from 'rxjs';
@@ -16,6 +17,7 @@ import { TaskService } from '../../features/tasks/task.service';
 import { DataInitStateService } from '../../core/data-init/data-init-state.service';
 import { ScheduleExternalDragService } from '../../features/schedule/schedule-week/schedule-external-drag.service';
 import { NavActionItem, NavConfig, NavPluginItem } from './magic-side-nav.model';
+import { LS } from '../../core/persistence/storage-keys.const';
 
 describe('MagicSideNavComponent', () => {
   let fixture: ComponentFixture<MagicSideNavComponent>;
@@ -222,6 +224,51 @@ describe('MagicSideNavComponent', () => {
     );
 
     expect(fixture.componentInstance.showMobileMenuOverlay()).toBe(false);
+  });
+
+  describe('mode toggle arrow', () => {
+    const LEFT_ARROW = 'M13 4l-6 6 6 6';
+    const RIGHT_ARROW = 'M7 4l6 6-6 6';
+
+    const getArrow = (dir: Direction, isFullMode: boolean): string | null => {
+      TestBed.overrideProvider(Directionality, {
+        useValue: { value: dir, change: EMPTY },
+      });
+      fixture = TestBed.createComponent(MagicSideNavComponent);
+      fixture.componentInstance.isFullMode.set(isFullMode);
+      fixture.detectChanges();
+      return (
+        fixture.nativeElement.querySelector('.mode-toggle path') as SVGPathElement
+      ).getAttribute('d');
+    };
+
+    let storedExpanded: string | null;
+    beforeEach(() => {
+      storedExpanded = localStorage.getItem(LS.NAV_SIDEBAR_EXPANDED);
+    });
+    afterEach(() => {
+      if (storedExpanded === null) {
+        localStorage.removeItem(LS.NAV_SIDEBAR_EXPANDED);
+      } else {
+        localStorage.setItem(LS.NAV_SIDEBAR_EXPANDED, storedExpanded);
+      }
+    });
+
+    it('points toward the collapse direction in LTR', () => {
+      expect(getArrow('ltr', true)).toBe(LEFT_ARROW);
+    });
+
+    it('points toward the expand direction in LTR', () => {
+      expect(getArrow('ltr', false)).toBe(RIGHT_ARROW);
+    });
+
+    it('mirrors the collapse arrow in RTL', () => {
+      expect(getArrow('rtl', true)).toBe(RIGHT_ARROW);
+    });
+
+    it('mirrors the expand arrow in RTL', () => {
+      expect(getArrow('rtl', false)).toBe(LEFT_ARROW);
+    });
   });
 
   describe('onItemClick', () => {

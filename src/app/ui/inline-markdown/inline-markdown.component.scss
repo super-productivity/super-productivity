@@ -21,7 +21,7 @@
 
   .resize-to-fit {
     position: absolute;
-    right: var(--s2);
+    inset-inline-end: var(--s2);
     top: 0;
     cursor: pointer;
   }
@@ -75,7 +75,7 @@ textarea {
 .controls {
   position: absolute;
   bottom: 0;
-  right: 0;
+  inset-inline-end: 0;
   opacity: 0;
   transition: var(--transition-standard);
 
