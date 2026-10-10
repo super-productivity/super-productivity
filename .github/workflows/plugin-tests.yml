@@ -40,12 +40,12 @@ jobs:
         run: |
           set -euo pipefail
           # Derive runnable suites from package manifests so new plugin tests
-          # cannot be omitted from CI.
+          # or typechecks cannot be omitted from CI.
           PACKAGE_JSONS=(packages/plugin-dev/*/package.json)
           jq empty "${PACKAGE_JSONS[@]}"
           mapfile -t PLUGINS < <(
             for package_json in "${PACKAGE_JSONS[@]}"; do
-              if jq -e '.scripts.test? | type == "string" and length > 0' "$package_json" > /dev/null; then
+              if jq -e '[.scripts.test?, .scripts.typecheck?] | any(type == "string" and length > 0)' "$package_json" > /dev/null; then
                 plugin_dir="${package_json%/package.json}"
                 printf '%s\n' "${plugin_dir##*/}"
               fi
@@ -104,6 +104,10 @@ jobs:
       - name: Install plugin dependencies
         working-directory: packages/plugin-dev/${{ matrix.plugin }}
         run: npm ci
+      # Bundlers and test runners strip types without checking them.
+      - name: Typecheck plugin
+        working-directory: packages/plugin-dev/${{ matrix.plugin }}
+        run: npm run typecheck --if-present
       - name: Run plugin tests
         working-directory: packages/plugin-dev/${{ matrix.plugin }}
-        run: npm test
+        run: npm test --if-present
