@@ -94,7 +94,7 @@
   "EXAMPLE_TASKS": {
     "GETTING_STARTED": {
       "TITLE": "Optional: getting started tips",
-      "NOTES": "Nothing here is required. Delete this task whenever you like.\n\n- **Projects**: group tasks by topic with the **+** next to **Projects** in the sidebar.\n- **Sync**: keep your data on several devices under **Settings → Sync**.\n- **Keyboard**: open **Help → How to: Keyboard Navigation** in the sidebar menu.\n- **More features**: boards, schedule, habits, focus mode and integrations can be switched on under **Settings → App Features**. Plugins are under **Settings → Plugins**."
+      "NOTES": "Nothing here is required. Delete this task whenever you like.\n\n- **Projects**: group tasks by topic with the **+** next to **Projects** in the sidebar.\n- **Sync**: keep your data on several devices under **Settings → Sync & Backup**.\n- **Keyboard**: open **Help → How to: Keyboard Navigation** in the sidebar menu.\n- **More features**: boards, schedule, habits, focus mode and integrations can be switched on under **Settings → App Features**. Plugins are under **Settings → Plugins**."
     }
   },
   "F": {
