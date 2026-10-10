@@ -82,6 +82,61 @@ class TrackingForegroundService : Service() {
             }
         }
 
+        data class ActionSnapshot(val taskId: String, val elapsedMs: Long, val at: Long)
+
+        /**
+         * Samples the task total for a notification Pause/Done tap and marks the
+         * counter stopped in the same step (#10683). Clearing the static state
+         * right away makes getTrackingElapsed() report "not tracking" before the
+         * service is torn down, so a live WebView draining the action can't
+         * read and credit the post-tap time a second time.
+         * Returns null when nothing is being tracked.
+         */
+        @Synchronized
+        fun takeForNotificationAction(): ActionSnapshot? {
+            val taskId = currentTaskId
+            if (!isTracking || taskId == null) return null
+            val snapshot = ActionSnapshot(taskId, getElapsedMs(), System.currentTimeMillis())
+            isTracking = false
+            currentTaskId = null
+            startTimestamp = 0
+            accumulatedMs = 0
+            return snapshot
+        }
+
+        /**
+         * Stops the service without risking ForegroundServiceDidNotStartInTimeException:
+         * a start that may still be promoting is stopped through onStartCommand
+         * (ACTION_STOP) so it promotes first; otherwise stopService() is safe.
+         */
+        fun requestStop(context: Context) {
+            val intent = Intent(context, TrackingForegroundService::class.java)
+            if (isStartPending || isTracking) {
+                intent.action = ACTION_STOP
+                try {
+                    context.startService(intent)
+                } catch (e: IllegalStateException) {
+                    // App is in the background: startService() is disallowed here.
+                    // Only fall back to stopService() if no start is still pending
+                    // — stopping a not-yet-promoted service would re-trigger the
+                    // same crash. If a start IS pending, leave it: the pending
+                    // start promotes and a later foreground sync stops it cleanly.
+                    Log.d(TAG, "requestStop: app backgrounded, falling back to stopService()", e)
+                    if (!isStartPending) {
+                        context.stopService(Intent(context, TrackingForegroundService::class.java))
+                        // onDestroy never runs if no instance is alive: clear
+                        // the persisted session directly so it is never recovered.
+                        clearState(context)
+                    }
+                }
+            } else {
+                context.stopService(intent)
+                // In a fresh process after a kill nothing is in memory, but the
+                // session may still be persisted with no service to clear it.
+                clearState(context)
+            }
+        }
+
         // The state helpers below share the companion lock so a bridge-thread
         // restoreIfIdle() cannot re-load a session that a main-thread stop is
         // in the middle of clearing.

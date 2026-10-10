@@ -24,6 +24,7 @@ import com.superproductivity.superproductivity.service.RemoteTrackingNotificatio
 import com.superproductivity.superproductivity.service.SyncReminderScheduler
 import com.superproductivity.superproductivity.service.TrackingForegroundService
 import com.superproductivity.superproductivity.widget.CaptureInbox
+import com.superproductivity.superproductivity.widget.NotificationActionQueue
 import com.superproductivity.superproductivity.widget.ReminderDoneQueue
 import com.superproductivity.superproductivity.widget.ReminderSnoozeQueue
 import com.superproductivity.superproductivity.widget.ReminderTapQueue
@@ -194,36 +195,7 @@ class JavaScriptInterface(
     @JavascriptInterface
     fun stopTrackingService() {
         safeCall("Failed to stop tracking service") {
-            val intent = Intent(activity, TrackingForegroundService::class.java)
-            if (TrackingForegroundService.isStartPending || TrackingForegroundService.isTracking) {
-                // A startForegroundService() may still be promoting: stopping via
-                // stopService() now could tear it down before startForeground()
-                // runs and crash with ForegroundServiceDidNotStartInTimeException.
-                // Routing as ACTION_STOP through onStartCommand lets it promote
-                // first, then stop cleanly.
-                intent.action = TrackingForegroundService.ACTION_STOP
-                try {
-                    activity.startService(intent)
-                } catch (e: IllegalStateException) {
-                    // App is in the background: startService() is disallowed here.
-                    // Only fall back to stopService() if no start is still pending
-                    // — stopping a not-yet-promoted service would re-trigger the
-                    // same crash. If a start IS pending, leave it: the pending
-                    // start promotes and a later foreground sync stops it cleanly.
-                    Log.d(TAG, "stopTrackingService: app backgrounded, falling back to stopService()", e)
-                    if (!TrackingForegroundService.isStartPending) {
-                        activity.stopService(Intent(activity, TrackingForegroundService::class.java))
-                        // onDestroy never runs if no instance is alive: clear
-                        // the persisted session directly so it is never recovered.
-                        TrackingForegroundService.clearState(activity)
-                    }
-                }
-            } else {
-                activity.stopService(intent)
-                // In a fresh process after a kill nothing is in memory, but the
-                // session may still be persisted with no service to clear it.
-                TrackingForegroundService.clearState(activity)
-            }
+            TrackingForegroundService.requestStop(activity)
         }
     }
 
@@ -542,6 +514,33 @@ class JavaScriptInterface(
     @JavascriptInterface
     fun getReminderSnoozeQueue(): String? {
         return ReminderSnoozeQueue.getAndClear(activity)
+    }
+
+    /**
+     * Tracking notification Pause/Done taps, applied natively already (#10683).
+     * JSON array of `{type, taskId, elapsedMs, at}` or null; clears the queue.
+     */
+    @Suppress("unused")
+    @JavascriptInterface
+    fun getTrackingActionQueue(): String? {
+        return NotificationActionQueue.getAndClearTracking(activity)
+    }
+
+    /**
+     * Focus-mode notification Pause/Resume/Skip/Complete taps (#10683).
+     * JSON array of `{type, at}` or null; clears the queue.
+     */
+    @Suppress("unused")
+    @JavascriptInterface
+    fun getFocusActionQueue(): String? {
+        return NotificationActionQueue.getAndClearFocus(activity)
+    }
+
+    /** Epoch ms of the latest remote-tracking Stop tap, or null; clears it. */
+    @Suppress("unused")
+    @JavascriptInterface
+    fun getRemoteTrackingStopQueue(): String? {
+        return NotificationActionQueue.getAndClearRemoteStop(activity)
     }
 
     /**

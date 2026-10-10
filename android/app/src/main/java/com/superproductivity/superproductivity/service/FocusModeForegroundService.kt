@@ -259,6 +259,18 @@ class FocusModeForegroundService : Service() {
                 updateNotification()
             }
 
+            // Sent by NotificationActionReceiver: freeze/unfreeze the countdown
+            // and task clock at tap time so no time accrues while the WebView
+            // is gone; Angular reconciles from the queued action (#10683).
+            ACTION_PAUSE, ACTION_RESUME -> {
+                if (!isRunning) {
+                    Log.d(TAG, "Ignoring ${intent.action} - service not running")
+                    stopForegroundAndSelf()
+                    return START_NOT_STICKY
+                }
+                setPausedFromNotification(intent.action == ACTION_PAUSE)
+            }
+
             ACTION_UPDATE_TASK -> {
                 if (isRunning) {
                     taskClock.update(
@@ -403,6 +415,19 @@ class FocusModeForegroundService : Service() {
 
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
+    }
+
+    private fun setPausedFromNotification(paused: Boolean) {
+        if (paused == isPaused) return
+        // Sample before flipping isPaused: liveRemainingMs() only advances
+        // while running. Anchor before remainingMs (see ACTION_START).
+        val live = liveRemainingMs()
+        lastUpdateTimestamp = System.currentTimeMillis()
+        remainingMs = live
+        isPaused = paused
+        taskClock.setFocusPaused(paused, SystemClock.elapsedRealtime())
+        scheduleCompletionCheck()
+        updateNotification()
     }
 
     private fun updateNotification(): Boolean {

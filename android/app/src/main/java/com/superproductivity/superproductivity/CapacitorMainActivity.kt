@@ -18,13 +18,12 @@ import com.anggrayudi.storage.SimpleStorageHelper
 import com.getcapacitor.BridgeActivity
 import com.superproductivity.superproductivity.plugins.NavigationBarPlugin
 import com.superproductivity.superproductivity.plugins.SafBridgePlugin
+import com.superproductivity.superproductivity.receiver.NotificationActionReceiver
 import com.superproductivity.superproductivity.service.BackgroundSyncCredentialStore
 import com.superproductivity.superproductivity.service.FocusModeForegroundService
-import com.superproductivity.superproductivity.service.FocusModeNotificationHelper
 import com.superproductivity.superproductivity.service.ForegroundServiceFailure
 import com.superproductivity.superproductivity.service.RemoteTrackingNotificationHelper
 import com.superproductivity.superproductivity.service.SyncReminderScheduler
-import com.superproductivity.superproductivity.service.TrackingForegroundService
 import com.superproductivity.superproductivity.util.printWebViewVersion
 import com.superproductivity.superproductivity.webview.ImeWebViewHeight
 import com.superproductivity.superproductivity.webview.JavaScriptInterface
@@ -33,6 +32,7 @@ import com.superproductivity.superproductivity.webview.WebHelper
 import com.superproductivity.superproductivity.webview.WebViewBlockActivity
 import com.superproductivity.superproductivity.webview.WebViewCompatibilityChecker
 import com.superproductivity.superproductivity.webview.WebViewRecovery
+import com.superproductivity.superproductivity.widget.NotificationActionQueue
 import com.superproductivity.superproductivity.widget.ShareIntentQueue
 import com.superproductivity.superproductivity.widget.StartupOverlayManager
 import com.superproductivity.superproductivity.widget.TaskListWidgetProvider
@@ -73,6 +73,7 @@ class CapacitorMainActivity : BridgeActivity() {
     private var isTimerCompleteReceiverRegistered = false
     private var isForegroundServiceFailureReceiverRegistered = false
     private var isWidgetDoneDrainReceiverRegistered = false
+    private var isNotificationActionDrainReceiverRegistered = false
 
     private val storageHelper =
         SimpleStorageHelper(this) // for scoped storage permission management on Android 10+
@@ -94,6 +95,15 @@ class CapacitorMainActivity : BridgeActivity() {
                 // getWidgetDoneQueue(), so there is a single delivery path and no
                 // task data crosses the string-interpolated JS bridge.
                 callJSInterfaceFunctionIfExists("next", "onWidgetDoneDrainRequest$")
+            }
+        }
+    }
+
+    private val notificationActionDrainReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == NotificationActionReceiver.ACTION_DRAIN) {
+                // Contentless: Angular pulls the queued actions itself.
+                callJSInterfaceFunctionIfExists("next", "onNotificationActionDrainRequest$")
             }
         }
     }
@@ -262,6 +272,11 @@ class CapacitorMainActivity : BridgeActivity() {
             IntentFilter(TaskListWidgetProvider.ACTION_WIDGET_DONE_DRAIN)
         )
         isWidgetDoneDrainReceiverRegistered = true
+        LocalBroadcastManager.getInstance(this).registerReceiver(
+            notificationActionDrainReceiver,
+            IntentFilter(NotificationActionReceiver.ACTION_DRAIN)
+        )
+        isNotificationActionDrainReceiverRegistered = true
 
         // Show startup overlay for quick task entry while Angular loads.
         // Only on fresh cold start — not on config-change recreation.
@@ -417,47 +432,24 @@ class CapacitorMainActivity : BridgeActivity() {
             return
         }
 
-        // Handle tracking notification actions
-        when (intent.action) {
-            TrackingForegroundService.ACTION_PAUSE -> {
-                Log.d("SP_TRACKING", "Pause action received from notification")
-                callJSInterfaceFunctionIfExists("next", "onPauseTracking$")
-                return
-            }
-            TrackingForegroundService.ACTION_DONE -> {
-                Log.d("SP_TRACKING", "Done action received from notification")
-                callJSInterfaceFunctionIfExists("next", "onMarkTaskDone$")
-                return
-            }
-            // Stop tracking on ANOTHER device (remote tracking presence notification)
-            RemoteTrackingNotificationHelper.ACTION_REMOTE_STOP -> {
-                Log.d("SP_TRACKING", "Remote stop action received from notification")
-                callJSInterfaceFunctionIfExists("next", "onRemoteTrackingStop$")
-                return
-            }
-            // Handle focus mode notification actions
-            FocusModeForegroundService.ACTION_PAUSE -> {
-                Log.d("SP_FOCUS", "Pause action received from focus mode notification")
-                callJSInterfaceFunctionIfExists("next", "onFocusPause$")
-                return
-            }
-            FocusModeForegroundService.ACTION_RESUME -> {
-                Log.d("SP_FOCUS", "Resume action received from focus mode notification")
-                callJSInterfaceFunctionIfExists("next", "onFocusResume$")
-                return
-            }
-            FocusModeForegroundService.ACTION_SKIP -> {
-                Log.d("SP_FOCUS", "Skip action received from focus mode notification")
-                FocusModeNotificationHelper.cancelCompletionNotification(this)
-                callJSInterfaceFunctionIfExists("next", "onFocusSkip$")
-                return
-            }
-            FocusModeForegroundService.ACTION_COMPLETE -> {
-                Log.d("SP_FOCUS", "Complete action received from focus mode notification")
-                FocusModeNotificationHelper.cancelCompletionNotification(this)
-                callJSInterfaceFunctionIfExists("next", "onFocusComplete$")
-                return
-            }
+        // A relaunch from recents redelivers the base intent: a notification
+        // action in it was handled already and must not be queued again.
+        val isFromHistory = intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY != 0
+        // Tracking/focus buttons are broadcasts now (NotificationActionReceiver).
+        // Activity intents with these actions can only come from a notification
+        // posted by an older build; handle them the same way (#10683).
+        if (!isFromHistory && NotificationActionReceiver.handle(this, intent.action)) {
+            return
+        }
+        // Stop tracking on ANOTHER device (remote tracking presence notification).
+        // Stays an Activity intent on purpose (unlock required, see
+        // RemoteTrackingNotificationHelper.show), but is persisted: on a cold
+        // start the WebView isn't ready to receive a push yet.
+        if (!isFromHistory && intent.action == RemoteTrackingNotificationHelper.ACTION_REMOTE_STOP) {
+            Log.d("SP_TRACKING", "Remote stop action received from notification")
+            NotificationActionQueue.setRemoteStop(this, System.currentTimeMillis())
+            callJSInterfaceFunctionIfExists("next", "onNotificationActionDrainRequest$")
+            return
         }
 
         // Handle share intent
@@ -724,6 +716,12 @@ class CapacitorMainActivity : BridgeActivity() {
         if (isWidgetDoneDrainReceiverRegistered) {
             LocalBroadcastManager.getInstance(this).unregisterReceiver(widgetDoneDrainReceiver)
             isWidgetDoneDrainReceiverRegistered = false
+        }
+        if (isNotificationActionDrainReceiverRegistered) {
+            LocalBroadcastManager.getInstance(this).unregisterReceiver(
+                notificationActionDrainReceiver
+            )
+            isNotificationActionDrainReceiverRegistered = false
         }
         super.onDestroy()
     }
