@@ -20,6 +20,29 @@ function needsInstall() {
   return fs.statSync(LOCKFILE).mtimeMs > fs.statSync(HIDDEN_LOCKFILE).mtimeMs;
 }
 
+// npm reports a duplicate workspace name (e.g. a copied plugin folder) as a
+// missing lockfile, so name the colliding folders ourselves.
+function findDuplicateNames() {
+  const dirsByName = new Map();
+  for (const entry of fs.readdirSync(PLUGIN_DEV_DIR, { withFileTypes: true })) {
+    const pkgPath = path.join(PLUGIN_DEV_DIR, entry.name, 'package.json');
+    if (
+      !entry.isDirectory() ||
+      entry.name === 'node_modules' ||
+      !fs.existsSync(pkgPath)
+    ) {
+      continue;
+    }
+    try {
+      const { name } = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+      dirsByName.set(name, [...(dirsByName.get(name) || []), entry.name]);
+    } catch {
+      // npm reports unparsable package.json files itself
+    }
+  }
+  return [...dirsByName].filter(([, dirs]) => dirs.length > 1);
+}
+
 function ensurePluginDeps({ log = console.log, silent = false } = {}) {
   if (!needsInstall()) {
     return false;
@@ -34,10 +57,13 @@ function ensurePluginDeps({ log = console.log, silent = false } = {}) {
       shell: process.platform === 'win32',
     });
   } catch (e) {
-    e.message +=
-      '\nplugin-dev install failed. Every plugin folder is an npm workspace: check for ' +
-      'duplicate package.json "name"s (e.g. a copied plugin) and that package-lock.json ' +
-      'is up to date (`npm install` in packages/plugin-dev).';
+    const duplicates = findDuplicateNames();
+    e.message += duplicates.length
+      ? '\nplugin-dev install failed: every plugin folder is an npm workspace and needs a ' +
+        'unique package.json "name". Duplicates: ' +
+        duplicates.map(([name, dirs]) => `"${name}" in ${dirs.join(', ')}`).join('; ')
+      : '\nplugin-dev install failed. If a package.json changed, update the lockfile with ' +
+        '`npm install` in packages/plugin-dev.';
     throw e;
   }
   return true;

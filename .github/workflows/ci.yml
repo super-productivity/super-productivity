@@ -89,6 +89,14 @@ jobs:
               exit 1
             fi
           done
+      # npm reads no parent .npmrc inside packages/plugin-dev (its own npm
+      # project), so it carries a copy; keep the settings identical.
+      - name: Check plugin-dev .npmrc mirrors the root one
+        run: |
+          if ! diff <(grep -v '^#' .npmrc) <(grep -v '^#' packages/plugin-dev/.npmrc); then
+            echo "::error::packages/plugin-dev/.npmrc settings differ from the root .npmrc (diff above). Keep them identical."
+            exit 1
+          fi
 
   # This job will scan dependency manifest files
   # surfacing known-vulnerable versions of the packages declared or updated.
