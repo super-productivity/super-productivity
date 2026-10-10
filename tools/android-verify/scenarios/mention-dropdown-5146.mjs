@@ -36,7 +36,12 @@ export default async ({ page, adb, ime, probe, StageError }) => {
   await page.locator(INPUT).first().waitFor({ state: 'visible', timeout: 10_000 });
 
   const tap = await ime.tapAndOpen(INPUT);
-  await adb.text('test task @');
+  // Typed in one burst, Gboard is still composing the previous word when `@`
+  // arrives, and MentionDirective ignores composing keydowns. A pause after the
+  // space lets the composition end, so `@` lands as a plain keydown.
+  await adb.text('test task ');
+  await new Promise((r) => setTimeout(r, 800));
+  await adb.text('@');
 
   try {
     await page

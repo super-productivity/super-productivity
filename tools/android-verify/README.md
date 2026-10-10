@@ -74,6 +74,7 @@ These came from the throwaway prototype for #5146. Each one cost a debugging rou
 7. **No new dependency.** Playwright's `_android` API drives real Chrome on the device and gives normal `page.evaluate` access. `playwright` is already a root devDependency.
 8. **Chrome on the device is not the Capacitor WebView.** `adjustResize` itself stays unverified at this tier. `src/index.html` sets `interactive-widget=resizes-content`, so Chrome is expected to report `RESIZING`. The app's WebView may report `NON_RESIZING`, which is why the app code measures `visualViewport` (`src/app/core/theme/global-theme.service.ts`). A tier 2 that installs and drives the real app is a possible follow-up.
 9. **The emulator boots the app in mouse mode.** Chrome on an emulator reports `pointer: fine` (the host mouse) next to 5 touch points, so `detect-it` classifies it as hybrid with mouse as the primary input, and `body.isTouchPrimary` is unset until the first touch (measured 2026-10, API 34 Google Play image, Chrome 113). An `adb shell input tap` arrives as `pointerType: 'touch'`, so a scenario that needs touch mode calls `ime.calibrate()` first.
+10. **`adb.text` in one burst can type into an IME composition.** With Gboard up, `adb shell input text` keys that follow a word arrive with `isComposing: true`, and `MentionDirective` ignores composing keydowns, so `test task @` in one call never opens the dropdown. Typing `test task `, pausing 800 ms, then `@` delivers a plain keydown (measured 2026-10, same device).
 
 ## Scenarios
 
