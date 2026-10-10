@@ -10,9 +10,12 @@ describe('resolvePendingRemoteStop', () => {
     expect(resolvePendingRemoteStop(now - 1000, now, 'tracking')).toBe('apply');
   });
 
-  it('waits while the remote session is not known yet or not tracking', () => {
+  it('waits while the remote session is not known yet', () => {
     expect(resolvePendingRemoteStop(now - 1000, now, undefined)).toBe('wait');
-    expect(resolvePendingRemoteStop(now - 1000, now, 'stopped')).toBe('wait');
+  });
+
+  it('drops the stop when the remote session is already stopped', () => {
+    expect(resolvePendingRemoteStop(now - 1000, now, 'stopped')).toBe('drop');
   });
 
   it('drops a stop older than the notification timeout', () => {

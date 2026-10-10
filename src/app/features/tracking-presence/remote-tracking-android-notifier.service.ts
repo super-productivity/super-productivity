@@ -43,7 +43,12 @@ export const resolvePendingRemoteStop = (
   if (now - stopAt > REMOTE_STOP_TTL_MS) {
     return 'drop';
   }
-  return remoteState === 'tracking' ? 'apply' : 'wait';
+  // Unknown (WS not connected yet): wait. Already stopped: the tap is done —
+  // keeping it would stop a session started there within the TTL.
+  if (remoteState === undefined) {
+    return 'wait';
+  }
+  return remoteState === 'tracking' ? 'apply' : 'drop';
 };
 
 /**
