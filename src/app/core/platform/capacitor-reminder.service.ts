@@ -423,35 +423,47 @@ export class CapacitorReminderService {
   }
 
   /**
-   * Check if exact alarm permission is granted (Android 12+).
-   * Returns true on non-Android platforms or if permission is granted.
+   * Whether Android may schedule exact alarms ("Alarms & reminders", Android
+   * 12+). Never prompts. Without it AlarmManager falls back to inexact delivery,
+   * which Doze can delay considerably (issue #10684).
+   *
+   * Resolves true wherever the question doesn't apply or can't be answered
+   * (non-Android, legacy WebView without a Capacitor bridge, a failing check),
+   * so callers only ever react to an explicit denial.
    */
-  async ensureExactAlarmPermission(): Promise<boolean> {
-    if (!IS_ANDROID_WEB_VIEW) {
-      return true;
-    }
-
-    if (this._isLegacyAndroidWebView()) {
-      // Same reasoning as ensurePermissions(): no Capacitor bridge in the
-      // legacy WebView, so the LocalNotifications exact-alarm helpers throw
-      // or return stale data. AlarmManager will fall back to inexact
-      // delivery if SCHEDULE_EXACT_ALARM is denied — acceptable for
-      // reminder UX. Skip the check.
+  async isExactAlarmGranted(): Promise<boolean> {
+    if (!this._isAndroidWebView || this._isLegacyAndroidWebView()) {
+      // Legacy WebView: no Capacitor bridge, so the LocalNotifications
+      // exact-alarm helpers throw or return stale data (#7408).
       return true;
     }
 
     try {
-      const exactAlarmStatus = await LocalNotifications.checkExactNotificationSetting();
-      if (exactAlarmStatus?.exact_alarm !== 'granted') {
-        await LocalNotifications.changeExactNotificationSetting();
-        // Re-check after prompting
-        const recheck = await LocalNotifications.checkExactNotificationSetting();
-        return recheck?.exact_alarm === 'granted';
-      }
-      return true;
+      const status = await LocalNotifications.checkExactNotificationSetting();
+      return status?.exact_alarm === 'granted';
     } catch (error) {
       Log.warn('CapacitorReminderService: Exact alarm check failed', error);
-      return false;
+      return true;
+    }
+  }
+
+  /**
+   * Opens Android's "Alarms & reminders" page for this app. Only called from an
+   * explicit user action. Resolves with the permission state once the user
+   * returns; on grant the native ExactAlarmPermissionReceiver re-registers the
+   * pending alarms as exact.
+   */
+  async openExactAlarmSettings(): Promise<boolean> {
+    if (!this._isAndroidWebView || this._isLegacyAndroidWebView()) {
+      return true;
+    }
+
+    try {
+      const status = await LocalNotifications.changeExactNotificationSetting();
+      return status?.exact_alarm === 'granted';
+    } catch (error) {
+      Log.warn('CapacitorReminderService: Opening exact alarm settings failed', error);
+      return this.isExactAlarmGranted();
     }
   }
 

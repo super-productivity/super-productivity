@@ -1104,6 +1104,8 @@
           "OTHER": "<strong>{{title}}</strong> starts at <strong>{{start}}</strong>!<br> (and {{nrOfOtherBanners}} other tasks are due)"
         }
       },
+      "EXACT_ALARM_HINT": "Reminders may be delayed because \"Alarms & reminders\" is turned off for this app in Android settings.",
+      "EXACT_ALARM_OPEN_SETTINGS": "Open settings",
       "S_ACTIVE_TASK_DUE": "The task you are currently working on is now due!<br/> ({{title}})",
       "S_REMINDER_ERR": "Error for reminder interface"
     },
@@ -3009,7 +3011,6 @@
     "SUCCESS": "Migration done! Restarting app now..."
   },
   "NOTIFICATION": {
-    "EXACT_ALARM_DENIED": "Exact alarm permission denied. Reminders may be delayed by up to 15 minutes.",
     "TASK_ALREADY_COMPLETED": "Task already completed",
     "TASK_MARKED_DONE": "Task marked as done"
   },

@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { Capacitor } from '@capacitor/core';
 import { provideMockStore } from '@ngrx/store/testing';
 import { LocalNotificationsWeb } from '@capacitor/local-notifications/dist/esm/web';
 import { CapacitorReminderService } from './capacitor-reminder.service';
@@ -333,10 +334,64 @@ describe('CapacitorReminderService', () => {
     });
   });
 
-  describe('ensureExactAlarmPermission', () => {
-    it('should return true on non-Android platforms', async () => {
-      const result = await service.ensureExactAlarmPermission();
-      expect(result).toBe(true);
+  describe('exact alarm permission (issue #10684)', () => {
+    it('isExactAlarmGranted returns true on non-Android platforms', async () => {
+      await expectAsync(service.isExactAlarmGranted()).toBeResolvedTo(true);
+    });
+
+    describe('on native Android', () => {
+      let androidService: CapacitorReminderService;
+      let checkSpy: jasmine.Spy;
+      let changeSpy: jasmine.Spy;
+
+      beforeEach(() => {
+        spyOn(Capacitor, 'isNativePlatform').and.returnValue(true);
+        checkSpy = spyOn(
+          LocalNotificationsWeb.prototype,
+          'checkExactNotificationSetting',
+        );
+        changeSpy = spyOn(
+          LocalNotificationsWeb.prototype,
+          'changeExactNotificationSetting',
+        );
+        TestBed.resetTestingModule();
+        TestBed.configureTestingModule({
+          providers: [
+            CapacitorReminderService,
+            provideMockStore(),
+            { provide: CapacitorPlatformService, useValue: platformServiceSpy },
+            { provide: CapacitorNotificationService, useValue: notificationServiceSpy },
+            { provide: IS_ANDROID_WEB_VIEW_TOKEN, useValue: true },
+          ],
+        });
+        androidService = TestBed.inject(CapacitorReminderService);
+      });
+
+      it('reports denied without opening the settings page', async () => {
+        checkSpy.and.resolveTo({ exact_alarm: 'denied' });
+
+        await expectAsync(androidService.isExactAlarmGranted()).toBeResolvedTo(false);
+        expect(changeSpy).not.toHaveBeenCalled();
+      });
+
+      it('reports granted', async () => {
+        checkSpy.and.resolveTo({ exact_alarm: 'granted' });
+
+        await expectAsync(androidService.isExactAlarmGranted()).toBeResolvedTo(true);
+      });
+
+      it('treats a failing check as granted so no hint is shown on errors', async () => {
+        checkSpy.and.rejectWith(new Error('bridge gone'));
+
+        await expectAsync(androidService.isExactAlarmGranted()).toBeResolvedTo(true);
+      });
+
+      it('openExactAlarmSettings resolves with the state after the user returns', async () => {
+        changeSpy.and.resolveTo({ exact_alarm: 'granted' });
+
+        await expectAsync(androidService.openExactAlarmSettings()).toBeResolvedTo(true);
+        expect(changeSpy).toHaveBeenCalledTimes(1);
+      });
     });
   });
 
@@ -394,8 +449,8 @@ describe('CapacitorReminderService', () => {
       expect(notificationServiceSpy.ensurePermissions).not.toHaveBeenCalled();
     });
 
-    it('ensureExactAlarmPermission short-circuits without consulting Capacitor', async () => {
-      const result = await legacyService.ensureExactAlarmPermission();
+    it('isExactAlarmGranted short-circuits without consulting Capacitor', async () => {
+      const result = await legacyService.isExactAlarmGranted();
       expect(result).toBe(true);
       expect(checkExactAlarmSpy).not.toHaveBeenCalled();
     });

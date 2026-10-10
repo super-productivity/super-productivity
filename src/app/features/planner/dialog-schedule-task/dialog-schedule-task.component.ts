@@ -56,6 +56,7 @@ import { toSignal } from '@angular/core/rxjs-interop';
 import { selectTaskRepeatCfgByIdAllowUndefined } from '../../task-repeat-cfg/store/task-repeat-cfg.selectors';
 import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
 import { getTaskRepeatInfoText } from '../../tasks/task-detail-panel/get-task-repeat-info-text.util';
+import { ExactAlarmHintComponent } from '../../reminder/exact-alarm-hint/exact-alarm-hint.component';
 
 @Component({
   selector: 'dialog-schedule-task',
@@ -67,6 +68,7 @@ import { getTaskRepeatInfoText } from '../../tasks/task-detail-panel/get-task-re
     MatDialogActions,
     MatDialogContent,
     DateTimePickerComponent,
+    ExactAlarmHintComponent,
   ],
   templateUrl: './dialog-schedule-task.component.html',
   styleUrl: './dialog-schedule-task.component.scss',
@@ -107,6 +109,7 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
   );
 
   T: typeof T = T;
+  readonly DO_NOT_REMIND = TaskReminderOptionId.DoNotRemind;
   minDate = this.data.minDate === undefined ? new Date() : this.data.minDate;
 
   remindAvailableOptions: TaskReminderOption[] = TASK_REMINDER_OPTIONS;
