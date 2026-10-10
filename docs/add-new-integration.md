@@ -240,7 +240,10 @@ For a bundled provider:
    (the directory name, which can differ from the manifest id).
 3. Add the asset path to `BUNDLED_PLUGIN_PATHS` and the manifest id to
    `BUNDLED_PLUGIN_IDS` in `src/app/plugins/bundled-plugins.const.ts`, and give
-   the plugin dir a `package.json` (release builds skip dirs without one).
+   the plugin dir a `package.json` (release builds skip dirs without one). Every
+   plugin dir is a workspace of `packages/plugin-dev`: run `npm install` there
+   and commit the updated shared `packages/plugin-dev/package-lock.json`, or
+   every build's `npm ci` fails.
 4. Add only English source strings; follow existing plugin i18n packaging.
 5. Update the issue-provider comparison in `docs/wiki/` in the same change.
 

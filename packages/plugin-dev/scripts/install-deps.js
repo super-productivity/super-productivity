@@ -34,7 +34,8 @@ function findDuplicateNames() {
       continue;
     }
     try {
-      const { name } = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+      // npm names a workspace without "name" after its folder
+      const name = JSON.parse(fs.readFileSync(pkgPath, 'utf8')).name || entry.name;
       dirsByName.set(name, [...(dirsByName.get(name) || []), entry.name]);
     } catch {
       // npm reports unparsable package.json files itself

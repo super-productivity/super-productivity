@@ -93,7 +93,9 @@ jobs:
       # project), so it carries a copy; keep the settings identical.
       - name: Check plugin-dev .npmrc mirrors the root one
         run: |
-          if ! diff <(grep -v '^#' .npmrc) <(grep -v '^#' packages/plugin-dev/.npmrc); then
+          # Compare settings only: skip comments (# or ;) and blank lines.
+          settings() { grep -Ev '^[[:space:]]*([#;]|$)' "$1" | sed 's/[[:space:]]*=[[:space:]]*/=/'; }
+          if ! diff <(settings .npmrc) <(settings packages/plugin-dev/.npmrc); then
             echo "::error::packages/plugin-dev/.npmrc settings differ from the root .npmrc (diff above). Keep them identical."
             exit 1
           fi

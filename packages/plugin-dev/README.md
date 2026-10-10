@@ -36,7 +36,7 @@ the repository root, so plugin tooling stays out of the app's install.
 
 ### Prerequisites
 
-- Node.js 18 or higher
+- Node.js 20.19+ (CI uses 22; Vite 7/8 need it)
 - npm (the shared lockfile is npm's)
 - TypeScript knowledge (recommended)
 

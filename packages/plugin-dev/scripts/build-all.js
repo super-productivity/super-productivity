@@ -547,7 +547,7 @@ async function buildAll() {
   log('\n📁 Build outputs:', colors.bright);
 
   // Check for other plugin outputs
-  for (const plugin of plugins.slice(1)) {
+  for (const plugin of plugins) {
     const distPath = path.join(plugin.path, 'dist');
     if (fs.existsSync(distPath)) {
       const pluginZip = path.join(distPath, 'plugin.zip');
