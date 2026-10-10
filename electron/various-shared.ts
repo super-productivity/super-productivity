@@ -29,7 +29,17 @@ export function showOrFocus(passedWin: BrowserWindow): void {
     return;
   }
 
-  _restoreAndShow(win, false);
+  // Preserve this before restore(): its synchronous unmaximize event can clear it.
+  const wasMaximized = getWasMaximizedBeforeHide();
+  // Always show the window even if isVisible() is stale (#8448), but avoid
+  // unmaximizing an already-visible window just to bring it to the front.
+  if (!win.isVisible() || !win.isMaximized() || win.isMinimized()) {
+    win.restore();
+  }
+  win.show();
+  if (wasMaximized) win.maximize();
+
+  _hideTaskWidgetUnlessPinned();
 
   // focus window afterwards always
   setTimeout(() => {
@@ -43,21 +53,7 @@ export function showOrFocus(passedWin: BrowserWindow): void {
 }
 
 // eslint-disable-next-line prefer-arrow/prefer-arrow-functions
-function _restoreAndShow(win: BrowserWindow, isInactive: boolean): void {
-  // Preserve this before restore(): its synchronous unmaximize event can clear it.
-  const wasMaximized = getWasMaximizedBeforeHide();
-  // Always show the window even if isVisible() is stale (#8448), but avoid
-  // unmaximizing an already-visible window just to bring it to the front.
-  if (!win.isVisible() || !win.isMaximized() || win.isMinimized()) {
-    win.restore();
-  }
-  if (isInactive) {
-    win.showInactive();
-  } else {
-    win.show();
-  }
-  if (wasMaximized) win.maximize();
-
+function _hideTaskWidgetUnlessPinned(): void {
   // Hide task widget when main window is shown, unless the user explicitly
   // pinned it visible via the global shortcut.
   if (!getIsTaskWidgetAlwaysShow() && !getIsTaskWidgetUserForcedVisible()) {
@@ -84,7 +80,11 @@ export function raiseForReminder(passedWin: BrowserWindow): void {
     return;
   }
 
-  _restoreAndShow(win, true);
+  // Not restore()/maximize(): they go through SC_RESTORE/SC_MAXIMIZE, which
+  // activate. showInactive() un-minimizes via SW_SHOWNOACTIVATE and keeps a
+  // maximized window maximized (SW_SHOWNA).
+  win.showInactive();
+  _hideTaskWidgetUnlessPinned();
   win.setAlwaysOnTop(true);
   win.moveTop();
   win.setAlwaysOnTop(false);
