@@ -37,6 +37,7 @@ import { LS } from '../../core/persistence/storage-keys.const';
 import { LanguageService } from 'src/app/core/language/language.service';
 import { TranslateService } from '@ngx-translate/core';
 import { T } from '../../t.const';
+import { SnackService } from '../../core/snack/snack.service';
 import { parseDbDateStr } from '../../util/parse-db-date-str';
 
 const GROUP_OPTIONS_NO_PROJECT = OPTIONS.group.list.filter(
@@ -71,6 +72,7 @@ export class TaskViewCustomizerService {
   private _menuTreeService = inject(MenuTreeService);
   private _languageService = inject(LanguageService);
   private _translateService = inject(TranslateService);
+  private _snackService = inject(SnackService);
   private _collator: Intl.Collator | null = null;
   private _collatorLocale: string | null = null;
 
@@ -113,7 +115,7 @@ export class TaskViewCustomizerService {
       .subscribe(({ activeId, activeType }) => {
         this._currentContextKey = `${activeType}:${activeId}`;
         const stored = this._stateByContext[this._currentContextKey];
-        this.selectedSort.set(stored?.sort ?? DEFAULT_OPTIONS.sort);
+        this.selectedSort.set(this._sanitizeSort(stored?.sort));
         this.selectedGroup.set(this._sanitizeGroupForContext(stored?.group, activeType));
         this.selectedFilter.set(this._sanitizeFilter(stored?.filter));
         this.collapsedGroupIds.set(stored?.collapsedGroupIds ?? []);
@@ -205,6 +207,16 @@ export class TaskViewCustomizerService {
       preset = String(getTaskPriority(preset));
     }
     return currentFilter ? { ...currentFilter, preset } : DEFAULT_OPTIONS.filter;
+  }
+
+  // Like _sanitizeFilter, re-resolve the option so persisted labels stay current.
+  private _sanitizeSort(stored: SortOption | undefined): SortOption {
+    if (!stored) return DEFAULT_OPTIONS.sort;
+
+    const currentSort = OPTIONS.sort.list.find((option) => option.type === stored.type);
+    return currentSort
+      ? { ...currentSort, order: stored.order ?? currentSort.order }
+      : DEFAULT_OPTIONS.sort;
   }
 
   customizeUndoneTasks(
@@ -438,19 +450,18 @@ export class TaskViewCustomizerService {
           acc[key] = acc[key] || [];
           acc[key].push(task);
         } else if (groupType === GROUP_OPTION_TYPE.scheduledDate) {
-          const key =
-            task.dueDay ||
-            (task.dueWithTime ? getDbDateStr(task.dueWithTime) : 'No date');
+          const key = task.dueWithTime
+            ? getDbDateStr(task.dueWithTime)
+            : task.dueDay || 'No date';
           acc[key] = acc[key] || [];
           acc[key].push(task);
         } else if (groupType === GROUP_OPTION_TYPE.deadline) {
-          const key =
-            task.deadlineDay ||
-            (task.deadlineWithTime
-              ? getDbDateStr(task.deadlineWithTime)
-              : this._translateService.instant(
-                  T.F.TASK_VIEW.CUSTOMIZER.GROUP_DEADLINE_NONE,
-                ));
+          const key = task.deadlineWithTime
+            ? getDbDateStr(task.deadlineWithTime)
+            : task.deadlineDay ||
+              this._translateService.instant(
+                T.F.TASK_VIEW.CUSTOMIZER.GROUP_DEADLINE_NONE,
+              );
           acc[key] = acc[key] || [];
           acc[key].push(task);
         }
@@ -619,7 +630,7 @@ export class TaskViewCustomizerService {
 
     return tasks.filter((task) => {
       const [day, withTime] = getFields(task);
-      const dateStr = day ? day : withTime ? getDbDateStr(withTime) : null;
+      const dateStr = withTime ? getDbDateStr(withTime) : day ? day : null;
       if (!dateStr) return false;
 
       switch (value) {
@@ -669,13 +680,14 @@ export class TaskViewCustomizerService {
       day: string | undefined | null,
       withTime: number | undefined | null,
     ): Date | null => {
+      if (withTime) return new Date(withTime);
       if (day) {
         // A date-only value means "by the end of that day" for sorting (#9828).
         const date = parseDbDateStr(day);
         date.setHours(23, 59, 59, 999);
         return date;
       }
-      return withTime ? new Date(withTime) : null;
+      return null;
     };
 
     return tasks.sort((a, b) => {
@@ -693,15 +705,18 @@ export class TaskViewCustomizerService {
   }
 
   setSort(val: SortOption): void {
-    const current = this.selectedSort();
-    const isSame = val.type === current.type;
-    const next = {
-      ...val,
-      ...(isSame && {
-        order: current.order === SORT_ORDER.ASC ? SORT_ORDER.DESC : SORT_ORDER.ASC,
-      }),
-    };
-    this.selectedSort.set(next);
+    const nextSort = { ...val };
+    if (nextSort.type === null) {
+      this.selectedSort.set(nextSort);
+      return;
+    }
+    const isSame = nextSort.type === this.selectedSort().type;
+    if (isSame) {
+      // reverse sorting
+      nextSort.order =
+        this.selectedSort().order === SORT_ORDER.ASC ? SORT_ORDER.DESC : SORT_ORDER.ASC;
+    }
+    this.selectedSort.set(nextSort);
   }
 
   setGroup(val: GroupOption): void {
@@ -720,13 +735,10 @@ export class TaskViewCustomizerService {
 
   /**
    * Instantly save sort changes by reordering tasks in the current work context
-   * ! Saved sorting will be default
+   * The selected sort remains active so it is persisted for this context.
    */
   async saveSort(): Promise<void> {
     const selectedSort = { ...this.selectedSort() };
-
-    // Saved sorting will be default
-    this.setSort(DEFAULT_OPTIONS.sort);
 
     const workContextId = this._workContextService.activeWorkContextId;
     const workContextType = this._workContextService.activeWorkContextType;
@@ -757,7 +769,10 @@ export class TaskViewCustomizerService {
     });
 
     const isOrderChanged = allTasks.some((task, idx) => task.id !== newOrderedIds[idx]);
-    if (!isOrderChanged) return;
+    if (!isOrderChanged) {
+      this._snackService.open({ msg: T.F.TASK_VIEW.CUSTOMIZER.SAVE_SORT_NO_CHANGES });
+      return;
+    }
 
     if (workContextType === WorkContextType.PROJECT) {
       this._projectService.update(workContextId, { taskIds: newOrderedIds });
