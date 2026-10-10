@@ -1,4 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { signal } from '@angular/core';
 import { of } from 'rxjs';
 import { Store } from '@ngrx/store';
 import { MatDialog } from '@angular/material/dialog';
@@ -35,7 +36,11 @@ describe('IssuePanelComponent', () => {
         { provide: WorkContextService, useValue: { activeWorkContextId: 'ctx1' } },
         {
           provide: PluginIssueProviderRegistryService,
-          useValue: { hasProvider: () => false, getAvailableProviders: () => [] },
+          useValue: {
+            hasProvider: () => false,
+            getAvailableProviders: () => [],
+            registrationVersion: signal(0).asReadonly(),
+          },
         },
         {
           provide: PluginService,
