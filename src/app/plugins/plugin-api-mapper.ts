@@ -74,11 +74,11 @@ export const tagDataToPartialTagCopy = (updates: Partial<Tag>): Partial<TagCopy>
   return updates as Partial<TagCopy>;
 };
 
+const ACTION_SNACK_DURATION_MS = 10000;
+
 /**
  * Convert plugin API SnackCfg to internal SnackParams
  */
-const ACTION_SNACK_DURATION_MS = 10000;
-
 export const snackCfgToSnackParams = (snackCfg: SnackCfg): SnackParams => {
   // Map plugin API types to internal types
   let internalType: 'ERROR' | 'SUCCESS' | 'CUSTOM' = 'CUSTOM';

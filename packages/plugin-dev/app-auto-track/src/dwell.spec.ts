@@ -1,6 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { INITIAL_DWELL_STATE, stepDwell, type DwellState } from './dwell';
+import {
+  INITIAL_DWELL_STATE,
+  isRecentCandidate,
+  stepDwell,
+  type DwellState,
+} from './dwell';
 
 const TIMING = { dwellMs: 100, maxGapMs: 30 };
 
@@ -66,4 +71,11 @@ test('returning to a previous match after another one fires again', () => {
     fired.filter((id) => id),
     ['a', 'a'],
   );
+});
+
+test('isRecentCandidate: same candidate, seen within the max age', () => {
+  const state = { candidateId: 'a', since: 0, lastSeenAt: 100, hasFired: true };
+  assert.equal(isRecentCandidate(state, 'a', { now: 150, maxAgeMs: 50 }), true);
+  assert.equal(isRecentCandidate(state, 'a', { now: 151, maxAgeMs: 50 }), false);
+  assert.equal(isRecentCandidate(state, 'b', { now: 100, maxAgeMs: 50 }), false);
 });

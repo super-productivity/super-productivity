@@ -1,6 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { extractIssueKeys, findTaskForWindow, parseRules } from './match';
+import {
+  extractIssueKeys,
+  findTaskForWindow,
+  hasMatchCandidate,
+  parseRules,
+} from './match';
 import { makeTask } from './test-task';
 
 test('parseRules: parses lines, skips comments, blanks and malformed lines', () => {
@@ -59,6 +64,33 @@ test('findTaskForWindow: ambiguous issue keys do not match', () => {
     makeTask({ id: 'y', title: 'B #5' }),
   ];
   assert.equal(findTaskForWindow({ app: 'x', title: '#5' }, [], dupes), null);
+});
+
+test('findTaskForWindow: keys pointing at different tasks do not match', () => {
+  const sample = { app: 'x', title: 'PROJ-7 vs #42' };
+  assert.equal(findTaskForWindow(sample, [], tasks), null);
+  // several keys of the same task still match it
+  const one = [makeTask({ id: 'z', title: 'PROJ-9 #9' })];
+  assert.equal(findTaskForWindow({ app: 'x', title: 'PROJ-9 #9' }, [], one)?.id, 'z');
+});
+
+test('findTaskForWindow: a rule with duplicate task titles falls through', () => {
+  const dupes = [
+    makeTask({ id: 'x', title: 'Review' }),
+    makeTask({ id: 'y', title: 'Review' }),
+    makeTask({ id: 'k', title: 'PROJ-3 Do' }),
+  ];
+  const rules = parseRules('figma = review');
+  assert.equal(findTaskForWindow({ app: 'Figma', title: '' }, rules, dupes), null);
+  const sample = { app: 'Figma', title: 'PROJ-3' };
+  assert.equal(findTaskForWindow(sample, rules, dupes)?.id, 'k');
+});
+
+test('hasMatchCandidate: only rule hits or issue keys can match', () => {
+  const rules = parseRules('figma = landing page');
+  assert.equal(hasMatchCandidate({ app: 'Figma', title: '' }, rules), true);
+  assert.equal(hasMatchCandidate({ app: 'Slack', title: 'PROJ-1 chat' }, []), true);
+  assert.equal(hasMatchCandidate({ app: 'Slack', title: 'general' }, rules), false);
 });
 
 test('findTaskForWindow: done tasks are ignored', () => {

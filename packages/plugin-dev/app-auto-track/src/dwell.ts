@@ -52,3 +52,10 @@ export const stepDwell = (
   }
   return { state: seen, fireId: null };
 };
+
+/** Whether `id` is still the candidate and was seen within `maxAgeMs`. */
+export const isRecentCandidate = (
+  state: DwellState,
+  id: string,
+  { now, maxAgeMs }: { now: number; maxAgeMs: number },
+): boolean => state.candidateId === id && now - state.lastSeenAt <= maxAgeMs;

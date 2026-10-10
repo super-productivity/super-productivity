@@ -51,32 +51,47 @@ const escapeRegExp = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\
 
 // Matched on the title only: issue providers put the key there (`#12 Fix`, `PROJ-1 Do`),
 // while issueId formats differ per provider (GitLab `group/proj#12`, Jira internal ids).
-const isTaskForIssueKey = (task: Task, key: string): boolean =>
-  /^\d+$/.test(key)
-    ? new RegExp(`#${key}\\b`).test(task.title)
-    : new RegExp(`\\b${escapeRegExp(key)}\\b`).test(task.title);
+const issueKeyRegExp = (key: string): RegExp =>
+  /^\d+$/.test(key) ? new RegExp(`#${key}\\b`) : new RegExp(`\\b${escapeRegExp(key)}\\b`);
 
-/** Rules win over issue keys: they are the user's explicit intent. */
+const toHaystack = (sample: WindowSample): string =>
+  `${sample.app}\n${sample.title}`.toLowerCase();
+
+/** Cheap pre-check: whether a sample can match at all, before fetching any tasks. */
+export const hasMatchCandidate = (sample: WindowSample, rules: Rule[]): boolean => {
+  const haystack = toHaystack(sample);
+  return (
+    rules.some((rule) => haystack.includes(rule.pattern)) ||
+    extractIssueKeys(sample.title).length > 0
+  );
+};
+
+/**
+ * Rules win over issue keys: they are the user's explicit intent. A rule only counts
+ * when exactly one open task has its title: duplicates (e.g. an undone repeat instance
+ * from yesterday) would otherwise pick whichever task happens to come first.
+ */
 const findByRules = (sample: WindowSample, rules: Rule[], tasks: Task[]): Task | null => {
-  const haystack = `${sample.app}\n${sample.title}`.toLowerCase();
+  const haystack = toHaystack(sample);
   for (const rule of rules) {
     if (!haystack.includes(rule.pattern)) continue;
-    const task = tasks.find((t) => t.title.trim().toLowerCase() === rule.taskTitle);
-    if (task) return task;
+    const hits = tasks.filter((t) => t.title.trim().toLowerCase() === rule.taskTitle);
+    if (hits.length === 1) return hits[0];
   }
   return null;
 };
 
 /**
- * Only a unique match counts: `#12` in a chat or browser tab title would otherwise
- * point at whichever of several providers' tasks happens to come first.
+ * Only a unique match counts, across all keys in the title: `#12` in a chat or browser
+ * tab title, or `PROJ-1 vs PROJ-2`, would otherwise point at whichever task comes first.
  */
 const findByIssueKey = (sample: WindowSample, tasks: Task[]): Task | null => {
+  const hits = new Set<Task>();
   for (const key of extractIssueKeys(sample.title)) {
-    const hits = tasks.filter((t) => isTaskForIssueKey(t, key));
-    if (hits.length === 1) return hits[0];
+    const re = issueKeyRegExp(key);
+    for (const task of tasks) if (re.test(task.title)) hits.add(task);
   }
-  return null;
+  return hits.size === 1 ? [...hits][0] : null;
 };
 
 /**

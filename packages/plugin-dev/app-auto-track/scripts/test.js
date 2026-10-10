@@ -40,7 +40,7 @@ fs.mkdirSync(OUT_DIR, { recursive: true });
 // Transpile + bundle each spec to CJS. On `platform: 'node'` the built-ins
 // (`node:test`, `node:assert`) stay external; the plugin-api import is
 // type-only and is dropped, so nothing needs runtime resolution beyond the
-// bundled `doc-transform` source.
+// bundled plugin modules.
 buildSync({
   entryPoints: specs,
   outdir: OUT_DIR,

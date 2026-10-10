@@ -2071,7 +2071,7 @@ export class PluginBridgeService implements OnDestroy {
   /**
    * Track window focus state
    */
-  private _isWindowFocused = true;
+  private _isWindowFocused = document.hasFocus(); // hidden/tray start: no blur event
   private _windowFocusHandlers = new Map<string, (isFocused: boolean) => void>();
 
   // Named listener methods for proper cleanup
@@ -2086,7 +2086,7 @@ export class PluginBridgeService implements OnDestroy {
   };
 
   private _onVisibilityChange = (): void => {
-    const isFocused = !document.hidden;
+    const isFocused = !document.hidden && document.hasFocus();
     this._isWindowFocused = isFocused;
     this._notifyFocusHandlers(isFocused);
   };

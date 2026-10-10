@@ -92,9 +92,12 @@ if (process.platform === 'darwin') {
   return { platform: 'darwin', ...(await run('/usr/bin/osascript', argv, {})) };
 }
 if (process.platform === 'win32') {
-  // Windows is usually, but not always, on the profile's drive.
+  // C: first: another drive's root (a redirected or UNC home) may be user-writable, so
+  // a planted powershell.exe there must not win. The home drive is only the fallback
+  // for Windows installed elsewhere (where a user-created C:\\Windows would still win;
+  // the stripped child env offers no trusted SystemRoot).
   const psIn = (root) => path.join(root, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
-  const systemRoot = [path.join(path.parse(os.homedir()).root, 'Windows'), path.join('C:/', 'Windows')]
+  const systemRoot = [path.join('C:/', 'Windows'), path.join(path.parse(os.homedir()).root, 'Windows')]
     .find((root) => fs.existsSync(psIn(root)));
   if (!systemRoot) return { platform: 'win32', error: 'NO_POWERSHELL' };
   const temp = path.join(os.homedir(), 'AppData', 'Local', 'Temp');
