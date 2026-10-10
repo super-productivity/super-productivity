@@ -113,13 +113,13 @@ describe('TaskMultiDragService', () => {
     service.start(task('child', { parentId: 'a' }));
     expect(service.ids()).toEqual([]);
   });
-  it('drags a selected task on its own outside project views', () => {
+  it('keeps the group for sidebar drops but not list drops outside project views', () => {
     isProjectContext$.next(false);
     start();
-    expect(service.ids()).toEqual([]);
-    expect(service.isGroupDragAvailable()).toBeFalse();
+    expect(service.ids()).toEqual(['b', 'a']);
+    expect(service.isListGroupDrag()).toBeFalse();
     isProjectContext$.next(true);
-    expect(service.isGroupDragAvailable()).toBeTrue();
+    expect(service.isListGroupDrag()).toBeTrue();
   });
   it('keeps touch selection on its existing menu path', () => {
     selection.enterTouchSelectionMode('a');

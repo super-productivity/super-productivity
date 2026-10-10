@@ -24,9 +24,9 @@ export class TaskMultiDragService {
   private readonly _tasks = this._store.selectSignal(selectTaskEntities);
   private readonly _sections = this._store.selectSignal(selectAllSections);
   private readonly _projects = this._store.selectSignal(selectProjectFeatureState);
-  // Group drops only target project lists (see canDrop); elsewhere a selected
-  // task must still drag on its own instead of entering a group mode that
-  // refuses every drop.
+  // Group list drops only target project lists (see canDrop). Elsewhere the
+  // snapshot still serves sidebar project drops, while list drops reorder the
+  // dragged task alone instead of refusing every target.
   private readonly _isProjectContext = toSignal(
     this._context.isActiveWorkContextProject$,
     { initialValue: false },
@@ -63,15 +63,14 @@ export class TaskMultiDragService {
         return task && !task.parentId;
       }).length,
   );
-  readonly isGroupDragAvailable = computed(
-    () => this._isProjectContext() && this.selectionSize() > 1,
+  readonly isListGroupDrag = computed(
+    () => this._isProjectContext() && this.ids().length > 1,
   );
 
   start(task: Task): void {
     this.clear();
     if (
       task.parentId ||
-      !this._isProjectContext() ||
       !this._selection.has(task.id) ||
       this._selection.isTouchSelectionMode()
     )

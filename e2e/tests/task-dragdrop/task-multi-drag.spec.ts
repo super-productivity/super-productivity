@@ -404,6 +404,7 @@ test.describe('Multi-task drag', () => {
     await expect(page.locator('.no-section task').last()).toHaveCSS('opacity', '1');
     await expect(page.locator('.multi-task-drag-preview')).toHaveCount(0);
   });
+
   test('reorders a selected task on its own outside project views', async ({
     page,
     workViewPage,
@@ -415,9 +416,8 @@ test.describe('Multi-task drag', () => {
     const rows = page.locator('task:not(.cdk-drag-preview)');
     const titles = rows.locator('task-title');
     const before = await titles.allTextContents();
-    // Group drops only target project lists; in Today the dragged row must
-    // still reorder on its own instead of entering a group mode that refuses
-    // every drop.
+    // Group list drops only target project lists; in Today the dragged row
+    // must still reorder on its own instead of refusing every drop.
     await select(page, before.slice(1));
     const from = await rows.last().boundingBox();
     const to = await rows.first().boundingBox();
@@ -432,5 +432,41 @@ test.describe('Multi-task drag', () => {
     await page.mouse.up();
     await expect(page.locator('.cdk-drag-preview')).toBeHidden();
     await expect(titles).toHaveText([before[2], before[0], before[1]]);
+  });
+
+  test('moves all selected tasks to a sidebar project outside project views', async ({
+    page,
+    workViewPage,
+    projectPage,
+    testPrefix,
+  }) => {
+    await workViewPage.waitForTaskList();
+    await projectPage.createProject('Today target');
+    await page.goto('/#/tag/TODAY/tasks');
+    await workViewPage.waitForTaskList();
+    const names = ['A', 'B', 'Keep'].map((n) => testPrefix + '-' + n);
+    for (const name of names) await workViewPage.addTask(name);
+    const target = page
+      .locator('nav-item[data-project-id]')
+      .filter({ hasText: 'Today target' })
+      .first();
+    if (!(await target.isVisible()))
+      await page
+        .locator('nav-list-tree')
+        .filter({ hasText: 'Projects' })
+        .locator('nav-item button')
+        .first()
+        .click();
+    await select(page, [names[0], names[1]]);
+    await startDrag(
+      page,
+      page.locator('task.isMultiSelected').first().locator('done-toggle'),
+    );
+    await expect(page.locator('.multi-task-drag-preview')).toContainText('2 selected');
+    await drop(page, target);
+    await projectPage.navigateToProjectByName('Today target');
+    await expect(page.locator('task .task-title')).toHaveCount(2);
+    for (const name of names.slice(0, 2))
+      await expect(page.locator('task').filter({ hasText: name })).toHaveCount(1);
   });
 });
