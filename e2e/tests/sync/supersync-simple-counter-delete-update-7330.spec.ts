@@ -110,8 +110,9 @@ const deleteCounter = async (
 
   const dialog = client.page.locator('dialog-simple-counter-edit-settings');
   await dialog.waitFor({ state: 'visible', timeout: 10000 });
-  // The delete button is the first action button in the dialog.
-  await dialog.locator('mat-dialog-actions button').first().click();
+  // Target the delete button itself, not "the first button": it is rendered
+  // via @if, so `.first()` can resolve to Cancel before it appears.
+  await dialog.locator('mat-dialog-actions button[color="warn"]').click();
 
   const confirmBtn = client.page.locator('dialog-confirm button[e2e="confirmBtn"]');
   await confirmBtn.waitFor({ state: 'visible', timeout: 10000 });
