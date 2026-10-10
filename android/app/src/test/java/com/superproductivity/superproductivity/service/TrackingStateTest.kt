@@ -1,5 +1,6 @@
 package com.superproductivity.superproductivity.service
 
+import android.app.ApplicationExitInfo
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -87,6 +88,22 @@ class TrackingStateTest {
         )
         assertNull(TrackingState.pickExit(listOf(ProcessExit(900L, false)), 1_000))
         assertNull(TrackingState.pickExit(emptyList(), 1_000))
+    }
+
+    @Test
+    fun `counts a user-requested exit as a deliberate stop only from API 34`() {
+        // Up to API 33 an app update is also recorded as USER_REQUESTED; from
+        // API 34 it has its own reason, so only there does the reason mean a stop.
+        assertFalse(
+            TrackingState.isDeliberateStop(ApplicationExitInfo.REASON_USER_REQUESTED, 33)
+        )
+        assertTrue(
+            TrackingState.isDeliberateStop(ApplicationExitInfo.REASON_USER_REQUESTED, 34)
+        )
+        assertFalse(
+            TrackingState.isDeliberateStop(ApplicationExitInfo.REASON_PACKAGE_UPDATED, 34)
+        )
+        assertFalse(TrackingState.isDeliberateStop(ApplicationExitInfo.REASON_LOW_MEMORY, 34))
     }
 
     @Test

@@ -11,9 +11,8 @@ import android.util.Log
 
 /**
  * One recorded death of the process that wrote the persisted session.
- * [userRequested] is ApplicationExitInfo.REASON_USER_REQUESTED: a force-stop,
- * "Stop" in the Task Manager of active apps, or an OEM task killer that
- * force-stops on swipe-away — as opposed to the OS reclaiming memory.
+ * [userRequested] marks a deliberate stop as [TrackingState.isDeliberateStop]
+ * reads it, as opposed to the OS reclaiming memory or updating the app.
  */
 data class ProcessExit(val timestamp: Long, val userRequested: Boolean)
 
@@ -61,10 +60,25 @@ data class TrackingState(
             exits.filter { it.timestamp >= startTimestamp }.minByOrNull { it.timestamp }
 
         /**
+         * Whether an exit reason means the user stopped the app: a force-stop,
+         * "Stop" in the Task Manager of active apps, or an OEM task killer that
+         * force-stops on swipe-away. Only trusted from API 34: up to API 33 an
+         * app update kills through the same force-stop path and is recorded as
+         * REASON_USER_REQUESTED too (AOSP PackageFreezer → killApplication →
+         * forceStopPackageLocked); API 34 records it as REASON_PACKAGE_UPDATED.
+         * Below 34 a Play auto-update must not end tracking, so every exit
+         * resumes there.
+         */
+        fun isDeliberateStop(reason: Int, sdkInt: Int): Boolean =
+            sdkInt >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE &&
+                reason == ApplicationExitInfo.REASON_USER_REQUESTED
+
+        /**
          * A user who stopped the app deliberately also stopped tracking: the
          * time up to the stop is still credited, but the session does not go
          * on. Without a known exit (below API 30, or the record is not written
-         * yet) the session resumes, as an OS kill is the likelier cause.
+         * yet) the session resumes, as an OS kill is the likelier cause; below
+         * API 34 the reason is ambiguous and it resumes too (isDeliberateStop).
          */
         fun shouldResumeAfter(exit: ProcessExit?): Boolean = exit?.userRequested != true
 
@@ -158,7 +172,7 @@ object TrackingStateStore {
                 .map {
                     ProcessExit(
                         it.timestamp,
-                        it.reason == ApplicationExitInfo.REASON_USER_REQUESTED
+                        TrackingState.isDeliberateStop(it.reason, Build.VERSION.SDK_INT)
                     )
                 }
         } catch (e: RuntimeException) {
