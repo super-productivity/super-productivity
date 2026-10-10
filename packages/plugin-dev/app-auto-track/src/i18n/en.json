@@ -1,5 +1,6 @@
 {
   "SUGGEST": "Track \"{{title}}\"?",
   "TRACK": "Track",
-  "PROBE_ERROR": "App Auto Track can't read the active window. On macOS, allow Super Productivity under Privacy & Security → Automation and Accessibility."
+  "PROBE_ERROR": "App Auto Track can't read the active window. On macOS, allow Super Productivity under Privacy & Security → Automation and Accessibility.",
+  "UNSUPPORTED": "App Auto Track works only on macOS and Windows."
 }

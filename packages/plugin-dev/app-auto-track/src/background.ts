@@ -61,7 +61,8 @@ let dwell: DwellState = INITIAL_DWELL_STATE;
 let currentTaskId: string | null = null;
 let pendingSuggestionId: string | null = null;
 let configPromise: Promise<AutoTrackConfig> | null = null;
-let hasShownProbeError = false;
+let pendingNoticeKey: 'PROBE_ERROR' | 'UNSUPPORTED' | null = null;
+let hasQueuedNotice = false;
 let failureCount = 0;
 
 const t = (key: string, params?: Record<string, string | number>): string =>
@@ -114,13 +115,27 @@ const showPendingSuggestion = async (): Promise<void> => {
   });
 };
 
+const showPendingNotice = (): void => {
+  const key = pendingNoticeKey;
+  pendingNoticeKey = null;
+  if (!key || isUnloaded) return;
+  PluginAPI.showSnack({ msg: t(key), type: 'WARNING' });
+};
+
+// Once per session. Like suggestions, it waits until SP is focused: the failing
+// polls run while SP is in the background, where a short snack goes unseen.
+const queueNotice = (key: 'PROBE_ERROR' | 'UNSUPPORTED'): void => {
+  if (hasQueuedNotice || isUnloaded) return;
+  hasQueuedNotice = true;
+  pendingNoticeKey = key;
+  if (PluginAPI.isWindowFocused()) showPendingNotice();
+};
+
 const reportProbeError = (code: string): void => {
   if (isUnloaded) return;
   // Only the error code: probe output may contain window titles.
   console.warn(`${LOG_PREFIX} probe failed: ${code}`);
-  if (hasShownProbeError) return;
-  hasShownProbeError = true;
-  PluginAPI.showSnack({ msg: t('PROBE_ERROR'), type: 'WARNING' });
+  queueNotice('PROBE_ERROR');
 };
 
 const runProbe = async (): Promise<ProbeResult> => {
@@ -177,7 +192,10 @@ const schedule = (): void => {
     } catch (error) {
       reportProbeError(getErrorName(error));
     }
-    if (result === 'unsupported') return;
+    if (result === 'unsupported') {
+      queueNotice('UNSUPPORTED');
+      return;
+    }
     // A focused SP says nothing about the probe, so it keeps the current backoff.
     if (result !== 'skipped') {
       failureCount = result === 'failed' ? Math.min(failureCount + 1, 10) : 0;
@@ -192,6 +210,7 @@ const onFocusChange = (isFocused: boolean): void => {
     configPromise = null;
     return;
   }
+  showPendingNotice();
   showPendingSuggestion().catch((error: unknown) =>
     console.warn(`${LOG_PREFIX} suggestion failed: ${getErrorName(error)}`),
   );
