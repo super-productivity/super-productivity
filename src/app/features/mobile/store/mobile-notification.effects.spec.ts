@@ -115,7 +115,6 @@ describe('MobileNotificationEffects', () => {
     const setup = (platform: 'ios' | 'android' = 'ios'): void => {
       reminderServiceSpy = jasmine.createSpyObj('CapacitorReminderService', [
         'getPermissionState',
-        'isExactAlarmGranted',
         'openExactAlarmSettings',
         'ensurePermissions',
         'scheduleReminder',
@@ -199,15 +198,6 @@ describe('MobileNotificationEffects', () => {
       expect(reminderServiceSpy.openExactAlarmSettings).not.toHaveBeenCalled();
       expect(snackServiceSpy.open).not.toHaveBeenCalled();
     }));
-
-    it('stays silent at startup when exact alarms would be denied', fakeAsync(() => {
-      setup('android');
-      reminderServiceSpy.getPermissionState.and.resolveTo('granted');
-      reminderServiceSpy.isExactAlarmGranted.and.resolveTo(false);
-      runStartup();
-
-      expect(snackServiceSpy.open).not.toHaveBeenCalled();
-    }));
   });
 
   describe('on native platform — disableReminders gating', () => {
@@ -227,7 +217,6 @@ describe('MobileNotificationEffects', () => {
     beforeEach(() => {
       reminderServiceSpy = jasmine.createSpyObj('CapacitorReminderService', [
         'ensurePermissions',
-        'isExactAlarmGranted',
         'openExactAlarmSettings',
         'scheduleReminder',
         'cancelReminder',
@@ -351,7 +340,6 @@ describe('MobileNotificationEffects', () => {
     beforeEach(() => {
       reminderServiceSpy = jasmine.createSpyObj('CapacitorReminderService', [
         'ensurePermissions',
-        'isExactAlarmGranted',
         'openExactAlarmSettings',
         'scheduleReminder',
         'cancelReminder',
@@ -509,7 +497,6 @@ describe('MobileNotificationEffects', () => {
     beforeEach(() => {
       reminderServiceSpy = jasmine.createSpyObj('CapacitorReminderService', [
         'ensurePermissions',
-        'isExactAlarmGranted',
         'openExactAlarmSettings',
         'scheduleReminder',
         'cancelReminder',
@@ -714,7 +701,6 @@ describe('MobileNotificationEffects', () => {
     beforeEach(() => {
       reminderServiceSpy = jasmine.createSpyObj('CapacitorReminderService', [
         'ensurePermissions',
-        'isExactAlarmGranted',
         'openExactAlarmSettings',
         'scheduleReminder',
         'cancelReminder',

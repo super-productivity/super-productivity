@@ -1,5 +1,5 @@
 import { inject, Injectable, InjectionToken } from '@angular/core';
-import { EMPTY, from, merge, Observable, of, Subject } from 'rxjs';
+import { EMPTY, from, merge, Observable, of } from 'rxjs';
 import { distinctUntilChanged, map, switchMap } from 'rxjs/operators';
 import { CapacitorReminderService } from '../../core/platform/capacitor-reminder.service';
 import { IS_ANDROID_WEB_VIEW } from '../../util/is-android-web-view';
@@ -31,20 +31,16 @@ export const EXACT_ALARM_RECHECK_ON_RESUME = new InjectionToken<Observable<unkno
 export class ExactAlarmStatusService {
   private _reminderService = inject(CapacitorReminderService);
   private _resume$ = inject(EXACT_ALARM_RECHECK_ON_RESUME);
-  private _recheck$ = new Subject<void>();
 
-  readonly isDenied$: Observable<boolean> = merge(
-    of(undefined),
-    this._resume$,
-    this._recheck$,
-  ).pipe(
+  readonly isDenied$: Observable<boolean> = merge(of(undefined), this._resume$).pipe(
     switchMap(() => from(this._reminderService.isExactAlarmGranted())),
     map((isGranted) => !isGranted),
     distinctUntilChanged(),
   );
 
+  // Returning from the settings page resumes the activity, so the resume
+  // re-check above picks up the new state; no extra check needed here.
   async openSettings(): Promise<void> {
     await this._reminderService.openExactAlarmSettings();
-    this._recheck$.next();
   }
 }

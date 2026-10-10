@@ -78,17 +78,15 @@ describe('ExactAlarmStatusService', () => {
     sub.unsubscribe();
   });
 
-  it('re-checks after returning from the settings page opened by the user', async () => {
-    const values: boolean[] = [];
-    const sub = service.isDenied$.subscribe((v) => values.push(v));
+  it('opens the settings page without re-checking itself; resume does that', async () => {
+    const sub = service.isDenied$.subscribe();
     await flush();
 
-    reminderServiceSpy.isExactAlarmGranted.and.resolveTo(true);
     await service.openSettings();
     await flush();
 
     expect(reminderServiceSpy.openExactAlarmSettings).toHaveBeenCalledTimes(1);
-    expect(values).toEqual([true, false]);
+    expect(reminderServiceSpy.isExactAlarmGranted).toHaveBeenCalledTimes(1);
     sub.unsubscribe();
   });
 });
