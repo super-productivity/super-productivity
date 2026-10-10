@@ -2,12 +2,14 @@ import { inject, Injectable } from '@angular/core';
 import { createEffect } from '@ngrx/effects';
 import { Store } from '@ngrx/store';
 import {
+  concatMap,
   distinctUntilChanged,
   exhaustMap,
   filter,
   map,
   pairwise,
   startWith,
+  take,
   tap,
   withLatestFrom,
 } from 'rxjs/operators';
@@ -33,6 +35,7 @@ import { SnackService } from '../../../core/snack/snack.service';
 import { GlobalTrackingIntervalService } from '../../../core/global-tracking-interval/global-tracking-interval.service';
 import { OperationWriteFlushService } from '../../../op-log/sync/operation-write-flush.service';
 import { CapacitorReminderService } from '../../../core/platform/capacitor-reminder.service';
+import { DataInitStateService } from '../../../core/data-init/data-init-state.service';
 
 export type NativeTrackingData = {
   taskId: string;
@@ -371,6 +374,7 @@ export class AndroidForegroundTrackingEffects {
   private _reminderService = inject(CapacitorReminderService);
   private _globalTrackingIntervalService = inject(GlobalTrackingIntervalService);
   private _operationWriteFlush = inject(OperationWriteFlushService);
+  private _dataInitState = inject(DataInitStateService);
 
   // Recovery requests funnel through this Subject for the cold-start path.
   //   Producers: syncTrackingToService$ tap (cold-start), syncOnResume$ tap.
@@ -515,6 +519,13 @@ export class AndroidForegroundTrackingEffects {
    * onto a single in-flight recovery. The inner promise has its own catch so
    * a rejected recovery resolves the inner observable cleanly — exhaustMap
    * stays subscribed and ready for the next request.
+   *
+   * Startup marks tasks loaded as soon as the snapshot is in the store, before
+   * the op-log tail after it replays. Recovery credits "native total minus task
+   * time", so crediting against the snapshot would count the tail's tracked
+   * time again once it replays. Requests therefore wait for the full hydration
+   * (immediate after startup), then re-read the native counter so the wait
+   * itself is credited too.
    */
   processRecovery$ =
     IS_ANDROID_WEB_VIEW &&
@@ -522,9 +533,16 @@ export class AndroidForegroundTrackingEffects {
       () =>
         this._recoveryRequest$.pipe(
           exhaustMap(({ data, source }) =>
-            this._doRecover(data, source).catch((e) => {
-              DroidLog.err('Recovery failed', e);
-            }),
+            this._dataInitState.isAllDataLoadedInitially$.pipe(
+              take(1),
+              concatMap(() =>
+                this._doRecover(this._getNativeTrackingData() ?? data, source).catch(
+                  (e) => {
+                    DroidLog.err('Recovery failed', e);
+                  },
+                ),
+              ),
+            ),
           ),
         ),
       { dispatch: false },
