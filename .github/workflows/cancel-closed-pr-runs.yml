@@ -24,6 +24,7 @@ jobs:
           SHA: ${{ github.event.pull_request.head.sha }}
           PR: ${{ github.event.pull_request.number }}
           MERGED: ${{ github.event.pull_request.merged }}
+          CLOSED_AT: ${{ github.event.pull_request.closed_at }}
         run: |
           set -euo pipefail
           # The iOS TestFlight build is a deliberate, label-triggered release
@@ -31,17 +32,21 @@ jobs:
           # electron smoke, CodeQL, docs links and wiki lint, and the nightly
           # re-runs sync E2E. Nothing re-runs Android Native Tests, Plugin
           # Tests, the SuperSync Helm/Postgres checks or CI's electron/i18n/
-          # WebKit/Lighthouse checks (build.yml covers only part of CI), so
-          # their PR run is the only signal. Keep them.
+          # WebKit/Lighthouse checks (build.yml covers only part of CI), nor the
+          # Sync Fuzz Compare job in E2E Sync (PR Gate), so their PR run is the
+          # only signal. Keep them.
           keep='["iOS TestFlight Build on Label"]'
           if [[ "$MERGED" == "true" ]]; then
-            keep='["iOS TestFlight Build on Label","Android Native Tests","Plugin Tests","CI","SuperSync Server Tests"]'
+            keep='["iOS TestFlight Build on Label","Android Native Tests","Plugin Tests","CI","SuperSync Server Tests","E2E Sync (PR Gate)"]'
           fi
+          # Only runs started before the close: a reopen (or a new PR on the same
+          # head) queues fresh runs before this job lists them. ISO-8601 UTC
+          # timestamps compare correctly as strings.
           # Assigned first: a failing substitution in a for list doesn't trip set -e.
           ids=$(gh run list --commit "$SHA" --event pull_request --limit 100 \
-            --json databaseId,status,workflowName |
-            jq -r --argjson keep "$keep" \
-              '.[] | select(.status != "completed" and (.workflowName as $n | $keep | index($n) | not)) | .databaseId')
+            --json databaseId,status,workflowName,createdAt |
+            jq -r --argjson keep "$keep" --arg closedAt "$CLOSED_AT" \
+              '.[] | select(.status != "completed" and .createdAt <= $closedAt and (.workflowName as $n | $keep | index($n) | not)) | .databaseId')
           for id in $ids; do
             echo "PR #$PR closed (merged: $MERGED): cancelling run $id"
             # A run can finish between listing and cancelling; not fatal.
