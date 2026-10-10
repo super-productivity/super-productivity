@@ -63,8 +63,13 @@ export class PollToBacklogEffects {
     () =>
       this.pollToBacklogTriggerToProjectId$.pipe(
         switchMap((pId) =>
-          this._store.select(selectEnabledIssueProviders).pipe(
-            switchMap((enabledProviders: IssueProvider[]) => {
+          // Plugin providers report a poll interval of 0 until they register,
+          // so re-evaluate on registration changes too (#10112).
+          combineLatest([
+            this._store.select(selectEnabledIssueProviders),
+            this._pluginRegistry.registrationChanges$,
+          ]).pipe(
+            switchMap(([enabledProviders]) => {
               const matchingProviders = enabledProviders.filter(
                 (provider) =>
                   provider.defaultProjectId === pId &&
