@@ -172,11 +172,7 @@
       }
     ],
     "primary": "field-reverted:note.isLock",
-    "signatures": [
-      "divergence:.note.todayOrder.*",
-      "field-reverted:note.isLock",
-      "today-notes:listed-not-pinned"
-    ],
+    "signatures": ["field-reverted:note.isLock"],
     "rejections": []
   },
   {
@@ -228,7 +224,7 @@
   },
   {
     "class": "lww-update-skips-today-order",
-    "ref": "#10379",
+    "ref": "fixed by the #10379 LWW Update todayOrder fix",
     "name": "a note unpinned on one device and edited later on another stays pinned but out of Today there",
     "steps": [
       {
@@ -250,13 +246,12 @@
         "a": ["editNote", "n1", "content", "A4"]
       }
     ],
-    "primary": "today-notes:pinned-not-listed",
-    "signatures": ["divergence:.note.todayOrder.*", "today-notes:pinned-not-listed"],
+    "signatures": [],
     "rejections": []
   },
   {
     "class": "lww-update-skips-today-order",
-    "ref": "#10379",
+    "ref": "fixed by the #10379 LWW Update todayOrder fix",
     "name": "a note edited on one device and unpinned and edited later on another stays in Today there, unpinned",
     "steps": [
       {
@@ -281,8 +276,7 @@
         "a": ["editNote", "n1", "content", "B6"]
       }
     ],
-    "primary": "today-notes:listed-not-pinned",
-    "signatures": ["divergence:.note.todayOrder.*", "today-notes:listed-not-pinned"],
+    "signatures": [],
     "rejections": []
   },
   {
