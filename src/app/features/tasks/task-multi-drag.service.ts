@@ -1,4 +1,5 @@
 import { computed, DestroyRef, inject, Injectable, signal } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
 import { Store } from '@ngrx/store';
 import { TaskMultiSelectService } from './task-multi-select.service';
 import { TaskBulkActionService } from './task-bulk-action.service';
@@ -23,6 +24,13 @@ export class TaskMultiDragService {
   private readonly _tasks = this._store.selectSignal(selectTaskEntities);
   private readonly _sections = this._store.selectSignal(selectAllSections);
   private readonly _projects = this._store.selectSignal(selectProjectFeatureState);
+  // Group list drops only target project lists (see canDrop). Elsewhere the
+  // snapshot still serves sidebar project drops, while list drops reorder the
+  // dragged task alone instead of refusing every target.
+  private readonly _isProjectContext = toSignal(
+    this._context.isActiveWorkContextProject$,
+    { initialValue: false },
+  );
   private readonly _ids = signal<readonly string[]>([]);
   private readonly _cancelled = signal(false);
   private _stopListening?: () => void;
@@ -54,6 +62,9 @@ export class TaskMultiDragService {
         const task = this._tasks()[id];
         return task && !task.parentId;
       }).length,
+  );
+  readonly isListGroupDrag = computed(
+    () => this._isProjectContext() && this.ids().length > 1,
   );
 
   start(task: Task): void {

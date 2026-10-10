@@ -74,6 +74,8 @@ export const tagDataToPartialTagCopy = (updates: Partial<Tag>): Partial<TagCopy>
   return updates as Partial<TagCopy>;
 };
 
+const ACTION_SNACK_DURATION_MS = 10000;
+
 /**
  * Convert plugin API SnackCfg to internal SnackParams
  */
@@ -99,5 +101,14 @@ export const snackCfgToSnackParams = (snackCfg: SnackCfg): SnackParams => {
     msg: snackCfg.msg,
     type: internalType,
     ico: snackCfg.ico,
+    // typia skips function-typed props, so the callback is checked here
+    ...(typeof snackCfg.action?.onClick === 'function'
+      ? {
+          actionStr: snackCfg.action.label,
+          actionFn: snackCfg.action.onClick,
+          // the default 3s is too short to read the message and decide on the action
+          config: { duration: ACTION_SNACK_DURATION_MS },
+        }
+      : {}),
   };
 };

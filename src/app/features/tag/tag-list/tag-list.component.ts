@@ -139,8 +139,7 @@ export class TagListComponent {
         icon = builtInIcon;
         label = builtInLabel;
       } else if (this._pluginRegistry.hasProvider(t.issueType)) {
-        const pluginIcon = this._pluginRegistry.getIcon(t.issueType);
-        icon = pluginIcon !== 'extension' ? pluginIcon : undefined;
+        icon = this._pluginRegistry.getSvgIcon(t.issueType);
         label = this._pluginRegistry.getHumanReadableName(t.issueType);
       }
 

@@ -358,6 +358,7 @@ describe('TaskBulkActionService', () => {
           data: jasmine.objectContaining({
             message: 'F.TASK.MULTI_SELECT.D_CONFIRM_DELETE.MSG.OTHER',
             translateParams: { count: 2 },
+            isFocusConfirm: true,
           }),
         }),
       );
@@ -415,7 +416,10 @@ describe('TaskBulkActionService', () => {
       expect(matDialog.open).toHaveBeenCalledWith(
         jasmine.anything(),
         jasmine.objectContaining({
-          data: jasmine.objectContaining({ message: T.F.TASK.D_CONFIRM_DELETE.MSG }),
+          data: jasmine.objectContaining({
+            message: T.F.TASK.D_CONFIRM_DELETE.MSG,
+            isFocusConfirm: true,
+          }),
         }),
       );
       expect(taskService.remove).toHaveBeenCalled();

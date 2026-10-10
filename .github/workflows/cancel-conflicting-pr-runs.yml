@@ -46,8 +46,10 @@ jobs:
               sha=${row#*:}
               [[ -n "${done_shas[$sha]:-}" ]] && continue
               done_shas[$sha]=1
+              # The TestFlight build is an on-demand build, not a merge check; let it finish.
               for id in $(gh run list --commit "$sha" --event pull_request --limit 100 \
-                --json databaseId,status --jq '.[] | select(.status != "completed") | .databaseId'); do
+                --json databaseId,status,workflowName \
+                --jq '.[] | select(.status != "completed" and .workflowName != "iOS TestFlight Build on Label") | .databaseId'); do
                 echo "PR #$pr conflicts with master: cancelling run $id"
                 # A run can finish between listing and cancelling; not fatal.
                 gh run cancel "$id" || echo "::warning::Could not cancel run $id of PR #$pr"

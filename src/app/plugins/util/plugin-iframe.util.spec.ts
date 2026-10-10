@@ -465,6 +465,8 @@ describe('handlePluginMessage()', () => {
     expect(script).toContain('const bridgeGeneration = 4');
     expect(script).toContain("getSelectedTask: () => callApi('getSelectedTask')");
     expect(script).toContain("getFocusedTask: () => callApi('getFocusedTask')");
+    // a snack action callback cannot be cloned across postMessage
+    expect(script).toContain('const { action, ...rest } = cfg || {};');
     expect(script).toContain(
       "request: (url, options) => callApi('request', [url, options])",
     );

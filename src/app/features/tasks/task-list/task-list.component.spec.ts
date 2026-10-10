@@ -90,6 +90,7 @@ describe('TaskListComponent', () => {
             draggedIds: () => new Set(),
             previewTasks: () => [],
             selectionSize: () => 0,
+            isListGroupDrag: () => false,
             start: () => {},
             clear: () => {},
             finish: () => {},
@@ -786,6 +787,7 @@ describe('TaskListComponent', () => {
 
     beforeEach(() => {
       spyOn(component.multiDrag, 'ids').and.returnValue(['t1', 't2', 't3']);
+      spyOn(component.multiDrag, 'isListGroupDrag').and.returnValue(true);
       spyOn(component.multiDrag, 'canDrop').and.returnValue(true);
       spyOn(component.multiDrag, 'isPlacementUnchanged').and.returnValue(false);
       moveGroup = spyOn(component.multiDrag, 'drop').and.resolveTo();

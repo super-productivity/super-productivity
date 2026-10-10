@@ -277,6 +277,10 @@ export interface PluginTimeTracking {
 
 export interface IssueProviderManifestConfig {
   pollIntervalMs: number;
+  /** Fallback provider icon, used where the plugin's own `icon.svg` is unavailable.
+   * Must be the name of a built-in SVG icon (e.g. 'github', 'calendar');
+   * Material icon ligatures (e.g. 'confirmation_number') are not SVG icons and
+   * render no provider icon. */
   icon: string;
   /** Short human-readable name for the issue provider (e.g. 'GitHub', 'ClickUp').
    * Used in UI chips and labels. Falls back to the plugin name if not set. */

@@ -226,6 +226,43 @@ test.describe('First-run onboarding', () => {
       await page.close();
     });
 
+    test('re-anchors the hint after the nav slides in under mouse input', async ({
+      isolatedContext,
+    }) => {
+      const page = await isolatedContext.newPage();
+      // Stretch the bottom-nav entrance so the hint is placed mid-slide, as on slow CI.
+      await page.addInitScript(() => {
+        document.addEventListener('DOMContentLoaded', () => {
+          const style = document.createElement('style');
+          style.textContent =
+            '.mobile-bottom-nav.entrance { animation-duration: 3s !important; }';
+          document.head.appendChild(style);
+        });
+      });
+      await openFreshApp(page, { withExamples: false });
+      await expect(page.locator('onboarding-hint')).toContainText(
+        'Tap + to add your first task',
+      );
+
+      await page.mouse.move(10, 10);
+      await expect(page.locator('body')).toHaveClass(/isMousePrimary/);
+      // Once the nav has settled, the hint must sit clear above the + button again.
+      const addBtn = page.locator('.add-task-button');
+      await expect
+        .poll(
+          async () => {
+            const btn = await addBtn.boundingBox();
+            const chip = await page.locator('onboarding-hint .hint-chip').boundingBox();
+            return btn && chip ? btn.y - (chip.y + chip.height) : -1;
+          },
+          { timeout: 6000 },
+        )
+        .toBeGreaterThanOrEqual(16);
+      await addBtn.click();
+      await expect(page.locator('add-task-bar.global')).toBeVisible();
+      await page.close();
+    });
+
     test('keeps the composer open after a later touch task', async ({
       isolatedContext,
     }) => {

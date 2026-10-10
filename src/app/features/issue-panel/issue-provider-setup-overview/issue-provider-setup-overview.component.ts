@@ -8,7 +8,10 @@ import { Store } from '@ngrx/store';
 import { MatDialog } from '@angular/material/dialog';
 import { CalendarContextInfoTarget } from '../../issue/providers/calendar/calendar.model';
 import { selectEnabledIssueProviders } from '../../issue/store/issue-provider.selectors';
-import { PluginIssueProviderRegistryService } from '../../../plugins/issue-provider/plugin-issue-provider-registry.service';
+import {
+  PluginIssueProviderRegistryService,
+  toPluginSvgIcon,
+} from '../../../plugins/issue-provider/plugin-issue-provider-registry.service';
 import { PluginService } from '../../../plugins/plugin.service';
 import { IssueLog } from '../../../core/log';
 
@@ -31,10 +34,14 @@ export class IssueProviderSetupOverviewComponent {
   // this panel opens (plugin discovery can trail app readiness) still show up.
   private _availablePluginProviders = computed(() => {
     this._pluginRegistry.registrationVersion();
-    return this._pluginRegistry.getAvailableProviders();
+    return this._pluginRegistry
+      .getAvailableProviders()
+      .map((p) => ({ ...p, svgIcon: toPluginSvgIcon(p.icon, p.pluginId) }));
   });
   private _disabledPlugins = computed(() =>
-    this._pluginService.getDisabledIssueProviderPlugins(),
+    this._pluginService
+      .getDisabledIssueProviderPlugins()
+      .map((p) => ({ ...p, svgIcon: toPluginSvgIcon(p.icon, p.pluginId) })),
   );
   pluginProviders = computed(() =>
     this._availablePluginProviders().filter((p) => !p.useAgendaView),

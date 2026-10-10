@@ -177,4 +177,24 @@ describe('MobileBottomNavComponent', () => {
     expect(cmp.hasSidePanelMenuItems()).toBe(true);
     expect(openPanelsMenu()).toEqual(['plugin-icon']);
   });
+
+  it('shows the Planner button when the feature is enabled', async () => {
+    await render({ isPlannerEnabled: true });
+
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector(
+        'button[routerLink="/planner"]',
+      ),
+    ).toBeTruthy();
+  });
+
+  it('hides the Planner button when the feature is disabled', async () => {
+    await render({ isPlannerEnabled: false });
+
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector(
+        'button[routerLink="/planner"]',
+      ),
+    ).toBeFalsy();
+  });
 });
