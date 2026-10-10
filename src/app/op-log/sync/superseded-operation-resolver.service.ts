@@ -447,6 +447,9 @@ export class SupersededOperationResolverService {
           (retired.size === 0 || (completeHistory && onlyDeltas)) &&
           pendingOps.every(
             (op) =>
+              // A delta tracked while the upload was in flight is not in the
+              // rejected set (#10614). It moves too: left behind, its old clock
+              // would lose to the rebased ops at the server.
               (rejectedOpIds.has(op.id) ||
                 op.actionType === ActionType.TIME_TRACKING_SYNC_TIME_SPENT) &&
               op.clientId === clientId &&
