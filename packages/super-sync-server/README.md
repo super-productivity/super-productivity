@@ -139,6 +139,13 @@ connection uses `postgres:5432`; existing installs that already set
 > updates, or `./scripts/deploy.sh --build` for local image builds. The server
 > logs an error naming any missing migrations at startup, and logs the image
 > revision in its `Server started on …` line.
+>
+> **Own compose file (Ansible, Portainer, …) instead of `deploy.sh`:** apply the
+> migrations yourself after every image pull, before or right after restarting
+> the app container: `docker exec <supersync-container> sh scripts/migrate-deploy.sh`
+> (it uses the container's `DATABASE_URL`). Skipping this leaves the server
+> healthy but failing sync requests with errors such as
+> `column ... does not exist`.
 
 `deploy.sh` verifies that the pulled/built `supersync` image has an
 `org.opencontainers.image.revision` label matching the latest commit that
