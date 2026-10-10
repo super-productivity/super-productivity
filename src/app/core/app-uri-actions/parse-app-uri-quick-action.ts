@@ -7,14 +7,14 @@
  * to live — which only holds if this array is what the parser actually branches
  * on, hence the types below being derived from it rather than repeated.
  */
-export const QUICK_ACTION_HOSTS = ['add-task', 'today', 'inbox'] as const;
+export const QUICK_ACTION_HOSTS = ['add-task', 'today', 'inbox', 'search'] as const;
 
 type QuickActionHost = (typeof QUICK_ACTION_HOSTS)[number];
 
 /**
- * Everything except `add-task`, which opens UI instead of navigating. Only the
- * two never-gated work contexts are here on purpose — see NAVIGATE_ROUTES in
- * `app-uri-quick-actions.service.ts`.
+ * Everything except `add-task`, which opens UI instead of navigating. The
+ * two never-gated work contexts and global search are here on purpose — see
+ * NAVIGATE_ROUTES in `app-uri-quick-actions.service.ts`.
  */
 export type AppUriQuickActionTarget = Exclude<QuickActionHost, 'add-task'>;
 
@@ -34,17 +34,12 @@ const isQuickActionHost = (host: string): host is QuickActionHost =>
 
 /**
  * Parses the UI-only actions on the `com.super-productivity.app://` custom URL
- * scheme: `add-task` (opens the quick-add-task input bar) and the two
- * navigation actions `today` / `inbox`. These are what the iOS home
- * screen quick actions (long-press the app icon) resolve to — each
- * `UIApplicationShortcutItem` carries one of these URLs in its user info and
- * the native side just opens it, so the whole mapping lives here.
+ * navigation actions `today`, `inbox`, and `search`. The iOS Home Screen
+ * quick actions use a subset of these URLs; the Android task widget uses
+ * `add-task` and `search`. Native platforms must register each URL host.
  *
- * iOS-only in practice, despite this parser being platform-neutral: Android
- * routes custom-scheme URLs per declared host and `AndroidManifest.xml` lists
- * only `create-task`/`complete-task` (plus the OAuth callbacks), so none of
- * these hosts ever reach the app there. Adding them would mean adding intent
- * filters, deliberately out of scope here. Desktop recognizes `add-task` only,
+ * Android routes custom-scheme URLs per declared host; its manifest registers
+ * task-action and widget-action hosts. Desktop recognizes `add-task` only,
  * via its own Electron protocol handler. Documented in wiki 3.01 §4.
  *
  * Unlike `create-task`/`complete-task` (see `parse-app-uri-task-action.ts`)

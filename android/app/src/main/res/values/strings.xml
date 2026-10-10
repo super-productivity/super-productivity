@@ -38,6 +38,8 @@
   <string name="widget_description">Shows today\'s tasks with quick done action</string>
   <string name="widget_empty">No tasks for today</string>
   <string name="widget_task_done">Toggle task done</string>
+  <string name="widget_add_task">Add task</string>
+  <string name="widget_search">Search tasks</string>
 
   <!-- Startup overlay -->
   <string name="startup_overlay_add_task">Add task</string>

@@ -181,6 +181,9 @@ class TaskListWidgetProvider : AppWidgetProvider() {
         ) {
             val views = RemoteViews(context.packageName, R.layout.widget_task_list)
 
+            views.setOnClickPendingIntent(R.id.widget_add_task, quickActionPendingIntent(context, "add-task", REQUEST_OPEN_ADD_TASK))
+            views.setOnClickPendingIntent(R.id.widget_search, quickActionPendingIntent(context, "search", REQUEST_OPEN_SEARCH))
+
             views.setTextViewText(R.id.widget_header_title, header)
 
             val serviceIntent = Intent(context, TaskListWidgetService::class.java).apply {
@@ -214,5 +217,18 @@ class TaskListWidgetProvider : AppWidgetProvider() {
 
             appWidgetManager.updateAppWidget(appWidgetId, views)
         }
+
+        private fun quickActionPendingIntent(context: Context, actionHost: String, requestCode: Int): PendingIntent {
+            val intent = Intent(context, CapacitorMainActivity::class.java).apply {
+                action = Intent.ACTION_VIEW
+                data = Uri.parse("com.super-productivity.app://$actionHost")
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            }
+            return PendingIntent.getActivity(context, requestCode, intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        }
+
+        private const val REQUEST_OPEN_ADD_TASK = 103
+        private const val REQUEST_OPEN_SEARCH = 104
     }
 }

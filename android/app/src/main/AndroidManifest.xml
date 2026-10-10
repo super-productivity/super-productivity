@@ -125,10 +125,9 @@
           android:pathPrefix="/plugin-oauth-callback" />
       </intent-filter>
 
-      <!-- URL Scheme task actions (create-task / complete-task), same scheme and
-           trust model as the OAuth callbacks above. Parsed on the JS side by
-           parse-app-uri-task-action.ts via Capacitor's appUrlOpen; docs:
-           docs/wiki/3.01-API.md §4 -->
+      <!-- URL Scheme task actions and Android widget quick actions. Custom-scheme
+           URLs are matched per declared host, then routed by the single JS-side
+           Capacitor appUrlOpen handler; docs: docs/wiki/3.01-API.md §4 -->
       <intent-filter>
         <action android:name="android.intent.action.VIEW" />
         <category android:name="android.intent.category.DEFAULT" />
@@ -139,6 +138,8 @@
         <data
           android:scheme="com.super-productivity.app"
           android:host="complete-task" />
+        <data android:scheme="com.super-productivity.app" android:host="add-task" />
+        <data android:scheme="com.super-productivity.app" android:host="search" />
       </intent-filter>
     </activity>
 
