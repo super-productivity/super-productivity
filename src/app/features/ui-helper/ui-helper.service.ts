@@ -62,8 +62,11 @@ export class UiHelperService {
    *
    * The 1500ms delay gives users time to finish typing after notification appears.
    * Based on user feedback in issue #5762 where immediate focus caused unintended input.
+   *
+   * `isReminder` lets the main process force the window to the front on Windows,
+   * where focus-stealing prevention otherwise blocks it (#10410).
    */
-  focusAppAfterNotification(): void {
+  focusAppAfterNotification(opts?: { isReminder?: boolean }): void {
     if (!IS_ELECTRON) {
       return;
     }
@@ -75,7 +78,7 @@ export class UiHelperService {
     const BLUR_DELAY_MS = 100;
 
     setTimeout(() => {
-      window.ea.showOrFocus();
+      window.ea.showOrFocus(opts);
       // Blur after focus to prevent any task input from receiving keystrokes
       setTimeout(() => {
         if (document.activeElement && document.activeElement !== document.body) {

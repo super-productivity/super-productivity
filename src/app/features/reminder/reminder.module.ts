@@ -2,7 +2,7 @@ import { inject, NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ReminderService } from './reminder.service';
 import { MatDialog } from '@angular/material/dialog';
-import { IS_ELECTRON } from '../../app.constants';
+import { IS_ELECTRON, IS_ELECTRON_TOKEN } from '../../app.constants';
 import {
   IS_NATIVE_PLATFORM,
   IS_IOS_NATIVE,
@@ -70,6 +70,7 @@ export class ReminderModule {
   private readonly _capacitorReminderService = inject(CapacitorReminderService);
   private readonly _syncWrapperService = inject(SyncWrapperService);
   private readonly _dateService = inject(DateService);
+  private readonly _isElectron = inject(IS_ELECTRON_TOKEN);
 
   constructor() {
     // Initialize reminder service (runs migration in background)
@@ -147,8 +148,11 @@ export class ReminderModule {
           willShowDialog: !IS_ANDROID_NATIVE || overdueReminders.length > 0,
         });
 
-        if (IS_ELECTRON && this._globalConfigService.cfg()?.reminder?.isFocusWindow) {
-          this._uiHelperService.focusApp();
+        if (
+          this._isElectron &&
+          this._globalConfigService.cfg()?.reminder?.isFocusWindow
+        ) {
+          this._uiHelperService.focusAppAfterNotification({ isReminder: true });
         }
 
         this._showNotification(reminders);

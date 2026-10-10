@@ -22,12 +22,15 @@ import { T } from 'src/app/t.const';
 import { Task, TaskWithReminderData } from '../tasks/task.model';
 import { DialogViewTaskRemindersComponent } from '../tasks/dialog-view-task-reminders/dialog-view-task-reminders.component';
 import { DateService } from '../../core/date/date.service';
+import { IS_ELECTRON_TOKEN } from '../../app.constants';
 import { getRepeatableTaskId } from '../task-repeat-cfg/get-repeatable-task-id.util';
 
 describe('ReminderModule dialog opening', () => {
   let matDialogSpy: jasmine.SpyObj<MatDialog>;
+  let uiHelperSpy: jasmine.SpyObj<UiHelperService>;
   let remindersActive$: Subject<TaskWithReminderData[]>;
   let syncDone$: Subject<void>;
+  let isFocusWindow: boolean;
 
   const reminder = {
     id: 'task-1',
@@ -39,6 +42,11 @@ describe('ReminderModule dialog opening', () => {
     remindersActive$ = new Subject<TaskWithReminderData[]>();
     syncDone$ = new Subject<void>();
     matDialogSpy = jasmine.createSpyObj('MatDialog', ['open'], { openDialogs: [] });
+    uiHelperSpy = jasmine.createSpyObj('UiHelperService', [
+      'focusApp',
+      'focusAppAfterNotification',
+    ]);
+    isFocusWindow = false;
 
     const taskServiceSpy = jasmine.createSpyObj('TaskService', ['currentTaskId']);
     taskServiceSpy.currentTaskId.and.returnValue(null);
@@ -62,10 +70,8 @@ describe('ReminderModule dialog opening', () => {
           provide: SnackService,
           useValue: jasmine.createSpyObj('SnackService', ['open']),
         },
-        {
-          provide: UiHelperService,
-          useValue: jasmine.createSpyObj('UiHelperService', ['focusApp']),
-        },
+        { provide: UiHelperService, useValue: uiHelperSpy },
+        { provide: IS_ELECTRON_TOKEN, useValue: true },
         { provide: NotifyService, useValue: notifyServiceSpy },
         {
           provide: LayoutService,
@@ -81,7 +87,10 @@ describe('ReminderModule dialog opening', () => {
           useValue: jasmine.createSpyObj('SyncWrapperService', ['sync']),
         },
         { provide: Store, useValue: jasmine.createSpyObj('Store', ['dispatch']) },
-        { provide: GlobalConfigService, useValue: { cfg: () => ({}) } },
+        {
+          provide: GlobalConfigService,
+          useValue: { cfg: () => ({ reminder: { isFocusWindow } }) },
+        },
         {
           provide: CapacitorReminderService,
           useValue: jasmine.createSpyObj('CapacitorReminderService', ['initialize'], {
@@ -91,6 +100,30 @@ describe('ReminderModule dialog opening', () => {
       ],
     });
   });
+
+  const triggerReminder = (): void => {
+    TestBed.inject(ReminderModule);
+    syncDone$.next();
+    tick(1000);
+    remindersActive$.next([reminder]);
+  };
+
+  it('focuses the app via the delayed notification path when the setting is on (#10410)', fakeAsync(() => {
+    isFocusWindow = true;
+    triggerReminder();
+
+    expect(uiHelperSpy.focusAppAfterNotification).toHaveBeenCalledOnceWith({
+      isReminder: true,
+    });
+    expect(uiHelperSpy.focusApp).not.toHaveBeenCalled();
+  }));
+
+  it('does not focus the app when the setting is off', fakeAsync(() => {
+    triggerReminder();
+
+    expect(uiHelperSpy.focusAppAfterNotification).not.toHaveBeenCalled();
+    expect(uiHelperSpy.focusApp).not.toHaveBeenCalled();
+  }));
 
   it('opens task reminder dialog as dismissable (no disableClose)', fakeAsync(() => {
     TestBed.inject(ReminderModule);

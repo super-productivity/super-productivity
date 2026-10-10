@@ -56,6 +56,31 @@ export function showOrFocus(passedWin: BrowserWindow): void {
   }, 60);
 }
 
+/**
+ * Bring the window to the front for a reminder when the user enabled
+ * "focus window on reminder". Windows' focus-stealing prevention ignores a plain
+ * focus() from a background app (#10410), so briefly toggling always-on-top
+ * raises the window and lets it take focus. If Windows still refuses, flash the
+ * taskbar button until the user switches to the app.
+ */
+// eslint-disable-next-line prefer-arrow/prefer-arrow-functions
+export function focusForReminder(passedWin: BrowserWindow): void {
+  const win = passedWin || getWin();
+  showOrFocus(win);
+  if (!win || win.isDestroyed() || process.platform !== 'win32') {
+    return;
+  }
+
+  win.setAlwaysOnTop(true);
+  win.focus();
+  win.setAlwaysOnTop(false);
+
+  if (!win.isFocused()) {
+    win.flashFrame(true);
+    win.once('focus', () => win.flashFrame(false));
+  }
+}
+
 // One physical key press can fire this action several times in a row: Electron's
 // globalShortcut auto-repeats while the key is held (X11 XGrabKey), and a held compositor
 // key bound to `xdg-open superproductivity://toggle-visibility` spawns repeated launches.
