@@ -339,9 +339,8 @@ test('raiseForReminder on win32 raises a minimized window without focusing it an
   withPlatform('win32', () => raiseForReminder(win));
   t.mock.timers.tick(1000);
 
-  // restore()/maximize() would activate (SC_RESTORE/SC_MAXIMIZE); showInactive
-  // restores a minimized window via SW_SHOWNOACTIVATE instead.
   assert.deepEqual(win.calls, [
+    'restore',
     'showInactive',
     'setAlwaysOnTop:true',
     'moveTop',
@@ -381,6 +380,19 @@ test('raiseForReminder on win32 keeps a maximized window maximized without resto
 
   assert.ok(!win.calls.includes('restore'));
   assert.ok(!win.calls.includes('maximize'));
+});
+
+test('raiseForReminder on win32 restores a minimized maximized window without re-maximizing', () => {
+  const { raiseForReminder } = loadModule();
+  mockWasMaximizedBeforeHide = true;
+  const win = makeReminderWin({ visible: false, minimized: true, focused: false });
+
+  withPlatform('win32', () => raiseForReminder(win));
+
+  // SC_RESTORE brings an iconic window back to its pre-minimize (maximized) state.
+  assert.equal(win.calls[0], 'restore');
+  assert.ok(!win.calls.includes('maximize'));
+  assert.ok(!win.calls.includes('focus'));
 });
 
 test('raiseForReminder on win32 does not flash when the window already has focus', () => {

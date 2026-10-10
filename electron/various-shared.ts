@@ -80,9 +80,14 @@ export function raiseForReminder(passedWin: BrowserWindow): void {
     return;
   }
 
-  // Not restore()/maximize(): they go through SC_RESTORE/SC_MAXIMIZE, which
-  // activate. showInactive() un-minimizes via SW_SHOWNOACTIVATE and keeps a
-  // maximized window maximized (SW_SHOWNA).
+  // restore() (SC_RESTORE) is the only call that brings a minimized window back
+  // in its pre-minimize state, maximized included; it may try to activate, but a
+  // minimized window is in the background, where Windows' foreground lock blocks
+  // activation. Otherwise showInactive() shows without activating (SW_SHOWNA
+  // keeps a maximized window maximized); no maximize(), its SC_MAXIMIZE activates.
+  if (win.isMinimized()) {
+    win.restore();
+  }
   win.showInactive();
   _hideTaskWidgetUnlessPinned();
   win.setAlwaysOnTop(true);
