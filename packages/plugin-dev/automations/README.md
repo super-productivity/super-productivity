@@ -28,7 +28,9 @@ cp -r boilerplate-solid-js my-plugin
 cd my-plugin
 ```
 
-2. Install dependencies:
+2. Set a unique `name` in `package.json` (every folder in `plugin-dev` is an npm
+   workspace; duplicate names break the install), then install dependencies into
+   the shared plugin-dev workspace:
 
 ```bash
 npm install

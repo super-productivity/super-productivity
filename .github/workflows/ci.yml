@@ -77,15 +77,18 @@ jobs:
           persist-credentials: false
       - name: Reject non-standard registry URLs
         run: |
-          BAD_COUNT=$(grep '"resolved": "https\?://' package-lock.json | grep -cv 'registry.npmjs.org' || true)
-          if [ "$BAD_COUNT" -gt 0 ]; then
-            echo "::error::package-lock.json contains $BAD_COUNT resolved URLs pointing to a non-standard registry."
-            echo "Examples:"
-            grep '"resolved": "https\?://' package-lock.json | grep -v 'registry.npmjs.org' | head -5
-            echo ""
-            echo "Please delete node_modules and package-lock.json, then run 'npm install' with the default registry (https://registry.npmjs.org/)."
-            exit 1
-          fi
+          # The plugin-dev workspace has its own lockfile, installed by release builds.
+          for LOCKFILE in package-lock.json packages/plugin-dev/package-lock.json; do
+            BAD_COUNT=$(grep '"resolved": "https\?://' "$LOCKFILE" | grep -cv 'registry.npmjs.org' || true)
+            if [ "$BAD_COUNT" -gt 0 ]; then
+              echo "::error::$LOCKFILE contains $BAD_COUNT resolved URLs pointing to a non-standard registry."
+              echo "Examples:"
+              grep '"resolved": "https\?://' "$LOCKFILE" | grep -v 'registry.npmjs.org' | head -5
+              echo ""
+              echo "Please delete node_modules and $LOCKFILE, then run 'npm install' with the default registry (https://registry.npmjs.org/)."
+              exit 1
+            fi
+          done
 
   # This job will scan dependency manifest files
   # surfacing known-vulnerable versions of the packages declared or updated.

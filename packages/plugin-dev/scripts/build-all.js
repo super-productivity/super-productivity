@@ -546,11 +546,6 @@ async function buildAll() {
   // List outputs
   log('\n📁 Build outputs:', colors.bright);
 
-  // Check for minimal plugin zip
-  if (fs.existsSync('minimal-plugin.zip')) {
-    log(`  • minimal-plugin.zip`);
-  }
-
   // Check for other plugin outputs
   for (const plugin of plugins.slice(1)) {
     const distPath = path.join(plugin.path, 'dist');

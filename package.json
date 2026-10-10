@@ -376,12 +376,8 @@
     "@rollup/rollup-win32-x64-msvc": "4.60.2"
   },
   "workspaces": [
-    "packages/plugin-api",
-    "packages/shared-schema",
-    "packages/super-sync-server",
-    "packages/sync-core",
-    "packages/sync-providers",
-    "packages/vite-plugin"
+    "packages/*",
+    "!packages/plugin-dev"
   ],
   "publish": [
     {

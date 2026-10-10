@@ -25,12 +25,21 @@ function ensurePluginDeps({ log = console.log, silent = false } = {}) {
     return false;
   }
   log('  Installing plugin-dev workspace dependencies (npm ci)...');
-  execFileSync('npm', ['ci', '--no-audit', '--no-fund'], {
-    cwd: PLUGIN_DEV_DIR,
-    stdio: silent ? 'pipe' : 'inherit',
-    // npm is npm.cmd on Windows
-    shell: process.platform === 'win32',
-  });
+  try {
+    // Plugin build tools are devDependencies: keep them under NODE_ENV=production.
+    execFileSync('npm', ['ci', '--include=dev', '--no-audit', '--no-fund'], {
+      cwd: PLUGIN_DEV_DIR,
+      stdio: silent ? 'pipe' : 'inherit',
+      // npm is npm.cmd on Windows
+      shell: process.platform === 'win32',
+    });
+  } catch (e) {
+    e.message +=
+      '\nplugin-dev install failed. Every plugin folder is an npm workspace: check for ' +
+      'duplicate package.json "name"s (e.g. a copied plugin) and that package-lock.json ' +
+      'is up to date (`npm install` in packages/plugin-dev).';
+    throw e;
+  }
   return true;
 }
 

@@ -7,8 +7,8 @@
     "build": "node scripts/build-all.js",
     "build:all": "node scripts/build-all.js",
     "build:all:silent": "node scripts/build-all.js --silent",
-    "clean": "rm -rf node_modules */node_modules */dist minimal-plugin.zip",
-    "clean:dist": "rm -rf */dist minimal-plugin.zip",
+    "clean": "rm -rf node_modules */node_modules */dist",
+    "clean:dist": "rm -rf */dist",
     "install:all": "npm install",
     "test": "echo 'No tests configured yet'",
     "list": "echo 'Available plugins:' && ls -d */ | grep -v node_modules | grep -v scripts"
