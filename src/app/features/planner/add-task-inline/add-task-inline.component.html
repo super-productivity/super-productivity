@@ -1,18 +1,30 @@
 @if (!isShowAddTask) {
-  <div
-    style="text-align: center"
-    (click)="isShowAddTask = true"
-  >
-    <!-- Marked so keyboard focus recovery can find THIS button and never a
-         button inside the add-task-bar that replaces it while open. -->
+  @if (isListAction()) {
     <button
-      mat-button
+      type="button"
+      class="task-list-add-action"
       data-add-task-btn
+      (click)="isShowAddTask = true"
     >
-      <mat-icon>add</mat-icon>
-      {{ T.G.ADD | translate }}
+      <mat-icon aria-hidden="true">add</mat-icon>
+      {{ label() | translate }}
     </button>
-  </div>
+  } @else {
+    <div
+      style="text-align: center"
+      (click)="isShowAddTask = true"
+    >
+      <!-- Marked so keyboard focus recovery can find THIS button and never a
+         button inside the add-task-bar that replaces it while open. -->
+      <button
+        mat-button
+        data-add-task-btn
+      >
+        <mat-icon>add</mat-icon>
+        {{ label() | translate }}
+      </button>
+    </div>
+  }
 }
 @if (isShowAddTask) {
   <add-task-bar
@@ -25,5 +37,6 @@
     [additionalFields]="additionalFields()"
     [tagsToRemove]="tagsToRemove()"
     [isNoDefaults]="isNoDefaults()"
+    [isAddToBottomInitially]="isListAction() ? true : undefined"
   ></add-task-bar>
 }

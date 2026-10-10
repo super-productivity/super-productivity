@@ -18,6 +18,8 @@ import { MatDialog } from '@angular/material/dialog';
 import { MatMenuModule } from '@angular/material/menu';
 
 import { TaskService } from '../tasks/task.service';
+import { AddTaskInlineComponent } from '../planner/add-task-inline/add-task-inline.component';
+import { TaskAddEvent } from '../tasks/add-task-bar/add-task-bar.component';
 import { DialogConfirmComponent } from '../../ui/dialog-confirm/dialog-confirm.component';
 import { DialogPromptComponent } from '../../ui/dialog-prompt/dialog-prompt.component';
 import { expandAnimation, expandFadeAnimation } from '../../ui/animations/expand.ani';
@@ -133,6 +135,7 @@ const INITIAL_CUSTOMIZED_UNDONE_TASKS: CustomizedUndoneTasks = { list: [] };
     MatMiniFabButton,
     MatButton,
     TaskListComponent,
+    AddTaskInlineComponent,
     SplitComponent,
     BacklogComponent,
     AsyncPipe,
@@ -329,6 +332,18 @@ export class WorkViewComponent implements OnInit, OnDestroy {
   );
 
   // Section Logic
+  onTaskAddedToSection(section: Section, event: TaskAddEvent): void {
+    const source = this.sections().find((candidate) =>
+      candidate.taskIds.includes(event.taskId),
+    );
+    this.sectionService.addTaskToSection(
+      section.id,
+      event.taskId,
+      event.isAddToBottom ? (section.taskIds.at(-1) ?? null) : null,
+      source?.id ?? null,
+    );
+  }
+
   sections = toSignal(
     this.workContextService.activeWorkContextId$.pipe(
       switchMap((id) =>

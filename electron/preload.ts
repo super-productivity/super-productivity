@@ -195,6 +195,8 @@ const ea: ElectronAPI = {
   setDoneRegisterBeforeClose: (id) => _send('BEFORE_CLOSE_DONE', { id }),
 
   setProgressBar: (args) => _send('SET_PROGRESS_BAR', args),
+  setDueTaskBadge: (count, iconDataUrl) =>
+    _send('SET_DUE_TASK_BADGE', count, iconDataUrl),
 
   sendAppSettingsToElectron: (globalCfg) =>
     _send('TRANSFER_SETTINGS_TO_ELECTRON', globalCfg),

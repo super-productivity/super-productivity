@@ -161,6 +161,7 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
   isGlobalBarVariant = input<boolean>(false);
   isDisableAutoFocus = input<boolean>(false);
   isNoDefaults = input<boolean>(false);
+  isAddToBottomInitially = input<boolean>();
   additionalFields = input<Partial<TaskCopy>>();
   taskIdsToExclude = input<string[]>();
   isHideTagTitles = input<boolean>(false);
@@ -354,6 +355,10 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
   private _defaultTagIds: string[] = [];
 
   ngOnInit(): void {
+    const isAddToBottomInitially = this.isAddToBottomInitially();
+    if (isAddToBottomInitially !== undefined) {
+      this.isAddToBottom.set(isAddToBottomInitially);
+    }
     this._setProjectInitially();
     this._setTagInitially();
     this._setupDefaultDate();
@@ -743,6 +748,12 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
       if (planForDay) {
         await this._planTaskForCurrentDay(suggestion.taskId);
         didPlanForDay = true;
+      } else if (
+        this._workContextService.activeWorkContextType === WorkContextType.PROJECT &&
+        suggestion.projectId &&
+        suggestion.projectId === this._workContextService.activeWorkContextId
+      ) {
+        this._projectService.moveTaskToTodayList(suggestion.taskId, suggestion.projectId);
       } else {
         this._taskService.getByIdOnce$(suggestion.taskId).subscribe((task) => {
           this._taskService.moveToCurrentWorkContext(task);
@@ -780,7 +791,7 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
     if (taskId) {
       this.afterTaskAdd.emit({
         taskId,
-        isAddToBottom: false,
+        isAddToBottom: this.isAddToBottom(),
         isNewTask: !suggestion.taskId,
       });
     }

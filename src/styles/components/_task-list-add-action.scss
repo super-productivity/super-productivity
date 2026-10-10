@@ -1,0 +1,29 @@
+// Shared creation row for task lists and nested subtask lists.
+.task-list-add-action {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  width: 100%;
+  min-height: var(--task-first-line-min-height);
+  padding: var(--s) var(--s2);
+  border: 0;
+  background: transparent;
+  color: var(--text-color-muted);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+
+  mat-icon {
+    flex-shrink: 0;
+    color: var(--c-accent);
+  }
+
+  &:hover {
+    color: var(--c-accent);
+  }
+
+  &:focus-visible {
+    outline: var(--s-quarter) solid var(--c-accent);
+    outline-offset: calc(-1 * var(--s-quarter));
+  }
+}

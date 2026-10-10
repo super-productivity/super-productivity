@@ -194,6 +194,181 @@ test.describe('Sections', () => {
       .waitFor({ state: 'attached', timeout: 5000 });
   };
 
+  test('offers Add task beneath the Inbox list without named sections', async ({
+    page,
+    workViewPage,
+  }, testInfo) => {
+    await page.goto('/#/project/INBOX_PROJECT/tasks');
+    await workViewPage.waitForTaskList();
+    const inbox = page.locator('work-view-page');
+    const add = inbox.locator('add-task-inline').getByRole('button', {
+      name: 'Add task',
+      exact: true,
+    });
+    await expect(add).toBeVisible();
+    await add.click();
+    const input = inbox.locator('add-task-inline textarea.main-input');
+    await input.fill('Inbox inline task');
+    await input.press('Enter');
+    await input.fill('Another Inbox task');
+    await input.press('Enter');
+    await input.press('Escape');
+    await expect(
+      inbox.locator('task task-title').filter({ hasText: 'Inbox inline task' }),
+    ).toBeVisible();
+    await expect(
+      inbox.locator('task task-title').filter({ hasText: 'Another Inbox task' }),
+    ).toBeVisible();
+    await expect(inbox.locator('task task-title')).toContainText([
+      'Inbox inline task',
+      'Another Inbox task',
+    ]);
+    await expect(add).toBeVisible();
+    await page.reload();
+    await workViewPage.waitForTaskList();
+    await expect(add).toBeVisible();
+    await expect(
+      inbox.locator('task task-title').filter({ hasText: 'Inbox inline task' }),
+    ).toBeVisible();
+    await expect(
+      inbox.locator('task task-title').filter({ hasText: 'Another Inbox task' }),
+    ).toBeVisible();
+    await expect(inbox.locator('task task-title')).toContainText([
+      'Inbox inline task',
+      'Another Inbox task',
+    ]);
+    await page.screenshot({ path: testInfo.outputPath('inbox-add-task.png') });
+  });
+
+  for (const withNamedSection of [false, true]) {
+    test(`appends inline tasks after existing project tasks (${withNamedSection ? 'with' : 'without'} named sections)`, async ({
+      page,
+      workViewPage,
+      projectPage,
+    }) => {
+      await setupTestProject(workViewPage, projectPage);
+      await workViewPage.addTask('Existing project task');
+      if (withNamedSection) {
+        await openProjectContextMenu(page);
+        await clickAddSection(page);
+        await submitPromptDialog(page, 'Other Section');
+      }
+      const inline = page.locator('work-view-page add-task-inline').first();
+      await inline.getByRole('button', { name: 'Add task', exact: true }).click();
+      const input = inline.locator('textarea.main-input');
+      await input.fill('First appended task');
+      await input.press('Enter');
+      await input.fill('Second appended task');
+      await input.press('Enter');
+      await input.press('Escape');
+      const titles = page
+        .locator('work-view-page task-list')
+        .first()
+        .locator('task-title');
+      const expectedOrder = [
+        'Existing project task',
+        'First appended task',
+        'Second appended task',
+      ];
+      await expect(titles).toContainText(expectedOrder);
+      await page.reload();
+      await workViewPage.waitForTaskList();
+      await expect(titles).toContainText(expectedOrder);
+    });
+  }
+
+  test('creates tasks directly beneath their section and preserves placement on reload', async ({
+    page,
+    workViewPage,
+    projectPage,
+  }) => {
+    await setupTestProject(workViewPage, projectPage);
+    await openProjectContextMenu(page);
+    await clickAddSection(page);
+    await submitPromptDialog(page, 'Inline Section');
+    const section = sectionByTitle(page, 'Inline Section');
+    await section.locator('add-task-inline button').click();
+    const input = section.locator('add-task-bar textarea.main-input');
+    await input.fill('Task created in section');
+    await input.press('Enter');
+    await expect(section.locator('task task-title')).toContainText([
+      'Task created in section',
+    ]);
+    await input.fill('Second task in section');
+    await input.press('Enter');
+    await expect(section.locator('task task-title')).toContainText([
+      'Task created in section',
+      'Second task in section',
+    ]);
+
+    await section.getByRole('button', { name: /^Add to top/ }).click();
+    await input.fill('Task added to top');
+    await input.press('Enter');
+    await input.press('Escape');
+
+    const expectedOrder = [
+      'Task added to top',
+      'Task created in section',
+      'Second task in section',
+    ];
+    await expect(section.locator('task task-title')).toContainText(expectedOrder);
+    await page.reload();
+    await workViewPage.waitForTaskList();
+    await expect(section.locator('task task-title')).toContainText(expectedOrder);
+  });
+
+  test('appends an existing task chosen from suggestions inside a section', async ({
+    page,
+    workViewPage,
+    projectPage,
+  }) => {
+    await setupTestProject(workViewPage, projectPage);
+    await workViewPage.addTask('Existing suggested task');
+    await page.evaluate(() => {
+      const store = (
+        window as unknown as {
+          __e2eTestHelpers: { store: { dispatch: (action: unknown) => void } };
+        }
+      ).__e2eTestHelpers.store;
+      store.dispatch({
+        type: '[Project] Update Project',
+        project: {
+          id: window.location.hash.split('/')[2],
+          changes: { isEnableBacklog: true },
+        },
+      });
+    });
+    await page
+      .locator('task')
+      .filter({ hasText: 'Existing suggested task' })
+      .first()
+      .focus();
+    await page.keyboard.press('Shift+B');
+    await expect(
+      page.locator('work-view-page task-list').first().locator('task'),
+    ).toHaveCount(0);
+    await openProjectContextMenu(page);
+    await clickAddSection(page);
+    await submitPromptDialog(page, 'Suggestion Section');
+    const section = sectionByTitle(page, 'Suggestion Section');
+    await section.locator('add-task-inline button').click();
+    const input = section.locator('add-task-bar textarea.main-input');
+    await input.fill('Section anchor task');
+    await input.press('Enter');
+    await expect(section.locator('task task-title')).toContainText([
+      'Section anchor task',
+    ]);
+    await input.press('Control+1');
+    await input.fill('Existing suggested task');
+    await page.getByRole('option').filter({ hasText: 'Existing suggested task' }).click();
+    await page.keyboard.press('Escape');
+    const expectedOrder = ['Section anchor task', 'Existing suggested task'];
+    await expect(section.locator('task task-title')).toContainText(expectedOrder);
+    await page.reload();
+    await workViewPage.waitForTaskList();
+    await expect(section.locator('task task-title')).toContainText(expectedOrder);
+  });
+
   test('creates a section via the project context menu', async ({
     page,
     workViewPage,

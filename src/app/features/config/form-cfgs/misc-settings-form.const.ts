@@ -14,6 +14,15 @@ export const MISC_SETTINGS_FORM_CFG: ConfigFormSection<MiscConfig> = {
   key: 'misc',
   help: T.GCF.MISC.HELP,
   items: [
+    ...(IS_ELECTRON
+      ? ([
+          {
+            key: 'isShowDueTaskBadge',
+            type: 'checkbox',
+            templateOptions: { label: T.GCF.MISC.IS_SHOW_DUE_TASK_BADGE },
+          },
+        ] as LimitedFormlyFieldConfig<MiscConfig>[])
+      : []),
     ...((IS_ELECTRON
       ? [
           {

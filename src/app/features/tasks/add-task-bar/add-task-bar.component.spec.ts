@@ -26,7 +26,7 @@ import { DEFAULT_LOCALE } from 'src/app/core/locale.constants';
 import { DateService } from '../../../core/date/date.service';
 import { getDbDateStr } from '../../../util/get-db-date-str';
 import { TaskRepeatCfgService } from '../../task-repeat-cfg/task-repeat-cfg.service';
-import { SS } from '../../../core/persistence/storage-keys.const';
+import { LS, SS } from '../../../core/persistence/storage-keys.const';
 import { BodyClass } from '../../../app.constants';
 import { IosKeyboardService } from '../../../core/theme/ios-keyboard.service';
 import { IS_ANDROID_WEB_VIEW_TOKEN } from '../../../util/is-android-web-view';
@@ -197,7 +197,7 @@ describe('AddTaskBarComponent', () => {
     });
     mockProjectService = jasmine.createSpyObj(
       'ProjectService',
-      [],
+      ['moveTaskToTodayList'],
       createProjectSignals(mockProjects),
     );
     mockTagService = jasmine.createSpyObj(
@@ -281,6 +281,56 @@ describe('AddTaskBarComponent', () => {
 
     fixture = TestBed.createComponent(AddTaskBarComponent);
     component = fixture.componentInstance;
+  });
+
+  describe('initial insertion position', () => {
+    let savedPreference: string | null;
+
+    beforeEach(() => {
+      savedPreference = localStorage.getItem(LS.IS_ADD_TO_BOTTOM);
+    });
+
+    afterEach(() => {
+      if (savedPreference === null) {
+        localStorage.removeItem(LS.IS_ADD_TO_BOTTOM);
+      } else {
+        localStorage.setItem(LS.IS_ADD_TO_BOTTOM, savedPreference);
+      }
+    });
+
+    it('appends successive inline tasks without changing the saved global preference', async () => {
+      localStorage.setItem(LS.IS_ADD_TO_BOTTOM, 'false');
+      component.isAddToBottom.set(false);
+      fixture.componentRef.setInput('isAddToBottomInitially', true);
+      fixture.detectChanges();
+
+      for (const title of ['First inline task', 'Second inline task']) {
+        component.stateService.updateInputTxt(title);
+        component.stateService.updateCleanText(title);
+        await component.addTask();
+        expect(mockTaskService.add.calls.mostRecent().args[3]).toBeTrue();
+      }
+      expect(localStorage.getItem(LS.IS_ADD_TO_BOTTOM)).toBe('false');
+    });
+
+    for (const isAddToBottom of [false, true]) {
+      it(`preserves the global placement preference (${isAddToBottom}) without an override`, () => {
+        localStorage.setItem(LS.IS_ADD_TO_BOTTOM, JSON.stringify(isAddToBottom));
+        const globalFixture = TestBed.createComponent(AddTaskBarComponent);
+        globalFixture.detectChanges();
+
+        expect(globalFixture.componentInstance.isAddToBottom()).toBe(isAddToBottom);
+        globalFixture.destroy();
+      });
+    }
+
+    it('still allows toggling the insertion position after opening', () => {
+      fixture.componentRef.setInput('isAddToBottomInitially', true);
+      fixture.detectChanges();
+      component.toggleIsAddToBottom();
+
+      expect(component.isAddToBottom()).toBeFalse();
+    });
   });
 
   describe('highlightSegments', () => {
@@ -432,8 +482,70 @@ describe('AddTaskBarComponent', () => {
   });
 
   describe('onTaskSuggestionSelected', () => {
+    for (const projectId of ['project-1', 'project-2']) {
+      it(`uses the ${projectId === 'project-1' ? 'project backlog' : 'cross-project'} move for a suggestion from ${projectId}`, async () => {
+        Object.defineProperties(mockWorkContextService, {
+          activeWorkContextType: { value: WorkContextType.PROJECT },
+          activeWorkContextId: { value: 'project-1' },
+        });
+        const task = {
+          id: 'backlog-task',
+          title: 'Backlog task',
+          projectId,
+          subTaskIds: [],
+        } as Partial<TaskCopy> as TaskCopy;
+        mockTaskService.getByIdOnce$.and.returnValue(of(task));
+
+        await component.onTaskSuggestionSelected({
+          title: task.title,
+          taskId: task.id,
+          projectId,
+        });
+
+        if (projectId === 'project-1') {
+          expect(mockProjectService.moveTaskToTodayList).toHaveBeenCalledOnceWith(
+            task.id,
+            projectId,
+          );
+          expect(mockTaskService.getByIdOnce$).not.toHaveBeenCalled();
+          expect(mockTaskService.moveToCurrentWorkContext).not.toHaveBeenCalled();
+        } else {
+          expect(mockProjectService.moveTaskToTodayList).not.toHaveBeenCalled();
+          expect(mockTaskService.moveToCurrentWorkContext).toHaveBeenCalledOnceWith(task);
+        }
+      });
+    }
+
+    for (const isAddToBottom of [true, false]) {
+      it(`reports ${isAddToBottom ? 'bottom' : 'top'} placement for a selected existing task`, async () => {
+        component.isAddToBottom.set(isAddToBottom);
+        const task = {
+          id: 'task-1',
+          title: 'Existing task',
+          subTaskIds: [],
+        } as Partial<TaskCopy> as TaskCopy;
+        const suggestion: AddTaskSuggestion = {
+          title: task.title,
+          taskId: task.id,
+          projectId: 'project-1',
+        };
+        mockTaskService.getByIdOnce$.and.returnValue(of(task));
+        const emitSpy = spyOn(component.afterTaskAdd, 'emit');
+
+        await component.onTaskSuggestionSelected(suggestion);
+
+        expect(emitSpy).toHaveBeenCalledOnceWith({
+          taskId: task.id,
+          isAddToBottom,
+          isNewTask: false,
+        });
+        expect(mockTaskService.moveToCurrentWorkContext).toHaveBeenCalledOnceWith(task);
+      });
+    }
+
     it('leaves an existing task in place when defaults are disabled', async () => {
       fixture.componentRef.setInput('isNoDefaults', true);
+      component.isAddToBottom.set(false);
       fixture.detectChanges();
 
       const task = {

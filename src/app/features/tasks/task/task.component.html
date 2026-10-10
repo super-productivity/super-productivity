@@ -313,24 +313,44 @@
     @if (t.subTasks?.length || isAddSubtaskInputVisible()) {
       <div class="sub-tasks">
         @if (t.subTasks?.length) {
-          <button
-            (click)="toggleSubTaskMode()"
-            [title]="T.F.TASK.CMP.TOGGLE_SUB_TASK_VISIBILITY | translate"
-            class="toggle-sub-tasks-btn ico-btn mat-elevation-z2"
-            color=""
-            mat-mini-fab
-          >
-            @if (t._hideSubTasksMode === ShowSubTasksMode.HideAll) {
-              <mat-icon>add</mat-icon>
-            } @else {
-              <mat-icon
-                [class.isHideDoneTasks]="
-                  t._hideSubTasksMode === ShowSubTasksMode.HideDone
-                "
-                >remove
-              </mat-icon>
-            }
-          </button>
+          <div class="subtask-summary">
+            <button
+              (click)="toggleSubTaskMode()"
+              [title]="T.F.TASK.CMP.TOGGLE_SUB_TASK_VISIBILITY | translate"
+              class="toggle-sub-tasks-btn ico-btn mat-elevation-z2"
+              color=""
+              mat-mini-fab
+            >
+              @if (t._hideSubTasksMode === ShowSubTasksMode.HideAll) {
+                <mat-icon>add</mat-icon>
+              } @else {
+                <mat-icon
+                  [class.isHideDoneTasks]="
+                    t._hideSubTasksMode === ShowSubTasksMode.HideDone
+                  "
+                  >remove
+                </mat-icon>
+              }
+            </button>
+            @let sp = subtaskProgress();
+            <span
+              class="subtask-progress"
+              role="img"
+              [class.is-complete]="sp.done === sp.total"
+              [attr.aria-label]="
+                (T.F.TASK.CMP.SUBTASK_PROGRESS | translate) +
+                ': ' +
+                sp.done +
+                '/' +
+                sp.total
+              "
+            >
+              {{ sp.done }}/{{ sp.total }}
+              @if (sp.done === sp.total) {
+                <mat-icon aria-hidden="true">check</mat-icon>
+              }
+            </span>
+          </div>
           <task-list
             [@expandInOnly]
             [isHideAll]="!!t._hideSubTasksMode"
@@ -341,6 +361,21 @@
             [tasks]="t.subTasks"
             listId="SUB"
           ></task-list>
+          @if (
+            t._hideSubTasksMode !== ShowSubTasksMode.HideAll &&
+            !isAddSubtaskInputVisible()
+          ) {
+            <div class="add-subtask-action">
+              <button
+                type="button"
+                class="task-list-add-action"
+                (click)="addSubTask()"
+              >
+                <mat-icon aria-hidden="true">add</mat-icon>
+                {{ T.F.TASK.CMP.ADD_SUB_TASK | translate }}
+              </button>
+            </div>
+          }
         }
         @if (isAddSubtaskInputVisible()) {
           <add-subtask-input

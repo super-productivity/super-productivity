@@ -22,6 +22,9 @@ import { PluginBridgeService } from '../../plugins/plugin-bridge.service';
 import { ProjectService } from '../project/project.service';
 import { SectionService } from '../section/section.service';
 import { Section } from '../section/section.model';
+import { WorkContextType } from '../work-context/work-context.model';
+import { addSection, addTaskToSection } from '../section/store/section.actions';
+import { initialSectionState, sectionReducer } from '../section/store/section.reducer';
 import { SnackService } from '../../core/snack/snack.service';
 import { GlobalConfigService } from '../config/global-config.service';
 import { TaskWithSubTasks } from '../tasks/task.model';
@@ -207,6 +210,69 @@ describe('WorkViewComponent', () => {
   // randomized spec order and make their "today" assertions fail intermittently.
   afterEach(() => {
     store?.resetSelectors();
+  });
+
+  describe('inline section task placement', () => {
+    for (const isAddToBottom of [true, false]) {
+      for (const taskIds of [[], ['a', 'b']]) {
+        it(`places a task at the ${isAddToBottom ? 'bottom' : 'top'} of a ${taskIds.length ? 'nonempty' : 'empty'} section`, async () => {
+          const section: Section = {
+            id: 'target',
+            title: 'Target',
+            contextId: 'ctx',
+            contextType: WorkContextType.PROJECT,
+            taskIds,
+          };
+          // Start in another section to exercise source removal as well as
+          // the real reducer's interpretation of the placement anchor.
+          const source: Section = { ...section, id: 'source', taskIds: ['new'] };
+          let state = sectionReducer(initialSectionState, addSection({ section }));
+          state = sectionReducer(state, addSection({ section: source }));
+          const placeTask = jasmine
+            .createSpy('addTaskToSection')
+            .and.callFake(
+              (
+                sectionId: string,
+                taskId: string,
+                afterTaskId: string | null,
+                sourceSectionId: string | null,
+              ) => {
+                state = sectionReducer(
+                  state,
+                  addTaskToSection({ sectionId, taskId, afterTaskId, sourceSectionId }),
+                );
+              },
+            );
+          configureWorkViewTestBed({
+            sectionService: {
+              getSectionsByContextId$: () => of([section, source]),
+              addTaskToSection: placeTask,
+            },
+          });
+          store = TestBed.inject(MockStore);
+          overrideDefaultSelectors(store);
+          await TestBed.compileComponents();
+          const fixture = TestBed.createComponent(WorkViewComponent);
+          fixture.componentRef.setInput('undoneTasks', []);
+          fixture.componentRef.setInput('doneTasks', []);
+          fixture.componentRef.setInput('backlogTasks', []);
+          fixture.detectChanges();
+
+          fixture.componentInstance.onTaskAddedToSection(section, {
+            taskId: 'new',
+            isAddToBottom,
+            isNewTask: false,
+          });
+
+          expect(state.entities['target']?.taskIds).toEqual(
+            isAddToBottom ? [...taskIds, 'new'] : ['new', ...taskIds],
+          );
+          expect(state.entities['source']?.taskIds).toEqual([]);
+          expect(placeTask).toHaveBeenCalledTimes(1);
+          fixture.destroy();
+        });
+      }
+    }
   });
 
   describe('selected task retention effect', () => {
