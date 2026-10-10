@@ -24,7 +24,7 @@ import { blockBackgroundSync } from '../../utils/time-preserving-resolution-help
  * in flight is not in the rejected batch. It used to fail the rebase proof, so
  * the rejected delta was folded into an absolute whole-task snapshot that C's
  * newer pending delta then overwrote as LOCAL, dropping B's tracked time.
- * 'rename loses' is the opposite direction: A's rename is the rejected upload.
+ * 'rename rejected' is the opposite direction: A's rename is the rejected upload.
  */
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -67,7 +67,7 @@ const recordSyncTraffic = (
 test.describe('@supersync time delta tracked while its crossing upload is rejected', () => {
   // 'control': the rejected upload holds every pending op of the task (#10214 rebase).
   // Otherwise the rejected client tracks more time while that upload is in flight.
-  for (const variant of ['control', 'delta during upload', 'rename loses'] as const) {
+  for (const variant of ['control', 'delta during upload', 'rename rejected'] as const) {
     test(`${variant}: all tracked time survives the rejected crossing`, async ({
       browser,
       baseURL,
@@ -102,7 +102,7 @@ test.describe('@supersync time delta tracked while its crossing upload is reject
         for (const client of clients) await client.page.evaluate(blockBackgroundSync);
         const [a, b, c] = clients;
         const traffic = recordSyncTraffic(clients);
-        const [winner, loser] = variant === 'rename loses' ? [b, a] : [a, b];
+        const [winner, loser] = variant === 'rename rejected' ? [b, a] : [a, b];
 
         await recordTaskTimeDelta(b, taskName, taskDate, deltaB);
         await renameTask(a, taskName, renamedTitle);

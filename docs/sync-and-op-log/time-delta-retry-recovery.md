@@ -40,6 +40,11 @@ never included: receipt recovery covers only time deltas. Upload selection uses
 the same lock, so fresh patches cannot upload before their clocks are final.
 Live apply uses the returned rebased operation objects.
 
+The rejection rebase (`rebaseCommutingTimeDeltaRejections`) relies on the same
+contract for a pending delta that was not in the rejected batch, e.g. one
+tracked while that upload was in flight (#10614). Other unrejected ops still
+block it, and file providers never reach it: they return no conflict rejections.
+
 Keeping a delta pending and rebasing it have separate eligibility rules. #10521's
 broader protection remains intact. Eager rebasing uses only merged field-patch
 conflicts and concurrent deltas beside readable, non-time-writing remote winners.
