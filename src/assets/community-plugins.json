@@ -182,5 +182,13 @@
     "author": "BigWebstas",
     "authorUrl": "https://github.com/BigWebstas",
     "stars": 0
+  },
+  {
+    "name": "Project Progress Rainbow",
+    "shortDescription": "Portfolio fuel-gauge dashboard, per-project bars with auto milestones, click-to-track task panel (current/next/done by tag priority), detail pages (goals, sprints, times), Grid/List/Rows layouts.",
+    "url": "https://github.com/edcalderon/project-progress-rainbow",
+    "author": "edcalderon",
+    "authorUrl": "https://github.com/edcalderon",
+    "stars": 0
   }
 ]
