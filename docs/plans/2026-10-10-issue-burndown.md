@@ -244,13 +244,54 @@ Evidence: <failing assertion, commits, files, linked issues>
 Order: harm × reach, then demand, then regressions in the newest release.
 Features come after bugs, ranked by the earns-its-place verdict.
 
-**`batch-actions.md`**, grouped, one line each: closes as already fixed (commit
-and version), duplicates (canonical issue), needs-info replies (draft under five
+**`batch-actions.md`**, grouped, one unticked checkbox per action, written
+exactly as it would be applied: closes as already fixed (commit and version),
+duplicates (canonical issue), needs-info replies (full comment text, under five
 lines), set type Bug on confirmed untyped bugs, relabels (bug ↔ feature),
 `no-action-rule-15` sync issues.
 
+```
+- [ ] #<N> close as completed — comment: "Fixed in <sha>, released in v<x.y.z>."
+- [ ] #<N> close as duplicate of #<M>
+- [ ] #<N> comment: "<needs-info text>"
+- [ ] #<N> set type Bug
+```
+
 **`summary.md`:** counts per route, PRs opened, and anything that failed or was
 skipped, with why.
+
+## After the run
+
+PRs are not capped: every verified fix opens one.
+
+### Batch actions
+
+The maintainer ticks the lines to apply in `batch-actions.md` and may edit
+their text. Then, in a session:
+
+```
+Apply the ticked lines in .tmp/issue-burndown/batch-actions.md exactly as written, with gh. Skip unticked lines. Mark each applied line "(applied)" and report any that failed.
+```
+
+This is the only step that writes to issues besides the PRs' `Fixes #<N>`.
+
+### Guided decisions
+
+A session walks through `decisions.md` in order, one entry per turn:
+
+```
+Walk me through .tmp/issue-burndown/decisions.md one entry at a time, in order. For each, show the decision, options, recommendation and evidence in a few lines and wait for my answer. Record it under the entry as "Answer: …". Stop when I say stop; next time, continue at the first entry without an answer.
+```
+
+Answers become work in a second run:
+
+- **A fix with a chosen behavior:** run Stages 4–6 for the issue with the answer
+  as the spec. The easy-lane limits in Stage 4 no longer apply, because the
+  product decision is made; the sync rules still do, so a sync fix follows
+  AGENTS.md's sync PR rules instead of this runbook.
+- **Close, won't fix, needs info, relabel:** becomes a line in a new
+  `batch-actions.md`.
+- **Defer:** stays in `decisions.md` for the next run.
 
 ## Workflow driver
 
