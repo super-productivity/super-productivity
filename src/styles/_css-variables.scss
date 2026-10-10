@@ -46,16 +46,8 @@
   // Safe Areas (iOS notch, home indicator)
   // Uses env() for native iOS safe areas
   // -----------------------------
-  // `--android-status-bar-overlap` is fed natively (CapacitorMainActivity
-  // .pushStatusBarOverlap) on the API < 35 / WebView < 140 tail, where
-  // env(safe-area-inset-top) wrongly resolves to 0 under edge-to-edge (old
-  // WebViews map only display cutouts into safe-area insets, not the status bar)
-  // — #8508 / #8283. Declared 0px so the token is always defined.
-  --android-status-bar-overlap: 0px;
-  --safe-area-top: var(
-    --safe-area-inset-top,
-    max(env(safe-area-inset-top, 0px), var(--android-status-bar-overlap, 0px))
-  );
+  // Android API < 35 / WebView < 140: see :root.hasAndroidStatusBarOverlap below.
+  --safe-area-top: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
   --safe-area-bottom: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
   --safe-area-left: var(--safe-area-inset-left, env(safe-area-inset-left, 0px));
   --safe-area-right: var(--safe-area-inset-right, env(safe-area-inset-right, 0px));
@@ -358,13 +350,13 @@
   --focus-ring-color: var(--focus-ring, var(--palette-primary-500));
 }
 
-// SystemBars injects `--safe-area-inset-top: 0px` on the API < 35 / WebView <
-// 140 tail too, so the `var()` fallback above never reaches the overlap there
-// and the header draws under the status bar (Android 11 / MIUI report). The
-// native shim adds this class only on that tail, so the overlap is folded in
-// with max() (0 once the WebView is inset, so it never double-counts) without
-// touching the API >= 35 / WebView >= 140 paths. Scoped instead of global so
-// JS readers of --safe-area-top keep parsing a plain px token there.
+// Android API < 35 / WebView < 140 tail (#8508 / #8283): the WebView draws
+// under the status bar, but env(safe-area-inset-top) is 0 (old WebViews map only
+// cutouts) and SystemBars injects `--safe-area-inset-top: 0px`. The native shim
+// (CapacitorMainActivity.pushStatusBarOverlap) measures the overlap and adds
+// this class on that tail only. max(), so it never double-counts once the
+// WebView is inset (overlap 0). Scoped so JS readers of --safe-area-top
+// (parseInt) keep a plain px token on the other bands.
 :root.hasAndroidStatusBarOverlap {
   --safe-area-top: max(
     var(--safe-area-inset-top, env(safe-area-inset-top, 0px)),

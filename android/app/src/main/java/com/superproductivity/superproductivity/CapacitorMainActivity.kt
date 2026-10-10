@@ -368,10 +368,10 @@ class CapacitorMainActivity : BridgeActivity() {
         // A web-side reload (e.g. language change, PWA update, sync-conflict
         // recovery — all do window.location.reload()) re-runs the bundle and
         // re-enters here, but it also wipes the inline --android-status-bar-overlap
-        // and its class off the fresh document. Re-arm the dedupe so the next layout pass
-        // re-publishes it; otherwise the unchanged value is skipped and the
-        // header overlaps the status bar again on the WebView < 140 / API < 35
-        // tail. See pushStatusBarOverlap.
+        // and its <html> class off the fresh document. Re-arm the dedupe so the
+        // next layout pass re-publishes them; otherwise the unchanged value is
+        // skipped and the header overlaps the status bar again on the WebView <
+        // 140 / API < 35 tail. See pushStatusBarOverlap.
         lastStatusBarOverlapCssPx = -1
         pendingShareIntent?.let {
             Log.d("SP_SHARE", "Flushing pending share intent")
@@ -654,9 +654,11 @@ class CapacitorMainActivity : BridgeActivity() {
      * not the status bar) — so the web side has no top inset and content overlaps
      * the status bar.
      *
-     * We measure the overlap natively and publish it as the `--android-status-bar-
-     * overlap` CSS var, which the web side folds into `--safe-area-top` via
-     * `var(--safe-area-inset-top, max(env(...), var(--android-status-bar-overlap)))`.
+     * We measure the overlap natively, publish it as the `--android-status-bar-
+     * overlap` CSS var and add the `hasAndroidStatusBarOverlap` class to `<html>`,
+     * which switches `--safe-area-top` to `max(var(--safe-area-inset-top, env()),
+     * overlap)` (`_css-variables.scss`). A plain `var()` fallback is not enough:
+     * SystemBars injects `--safe-area-inset-top: 0px` on this band too.
      * The overlap is how much of the status bar covers the WebView: `rect.top`
      * (top of the visible display frame = status-bar height, reliable on API 28,
      * the same frame the keyboard path uses) minus the WebView's top on screen
@@ -666,16 +668,8 @@ class CapacitorMainActivity : BridgeActivity() {
      * density; deduped so the per-layout listener does not spam evaluateJavascript.
      *
      * Shares [NativeInsetShimGate] with the keyboard shim so it never fights
-     * SystemBars; on API >= 35 the injected --safe-area-inset-top wins via var()
-     * precedence and the published var is ignored regardless.
-     *
-     * SystemBars 8.4 also injects `--safe-area-inset-top: 0px` inline on its
-     * non-passthrough path at every API level, which shadows the `var()` fallback
-     * on exactly the band this runs on. So this also adds the
-     * `hasAndroidStatusBarOverlap` class to `<html>`, which switches
-     * `--safe-area-top` to `max(var(--safe-area-inset-top, env()), overlap)`
-     * (`_css-variables.scss`). Only ever added where the gate is on, so the
-     * API >= 35 / WebView >= 140 paths keep their plain var() resolution.
+     * SystemBars; the class is never added on the API >= 35 / WebView >= 140
+     * paths, which keep their plain `var()` resolution.
      */
     private fun pushStatusBarOverlap(rect: Rect) {
         if (!shouldRunNativeInsetShim()) return

@@ -771,10 +771,10 @@ export class GlobalThemeService {
     // inline style (last-writer-wins, OS/timing dependent). Each band resolves
     // them on its own (verified against the bundled SystemBars.java):
     //   - API >= 35: SystemBars *injects* the real px into --safe-area-inset-*.
-    //   - WebView >= 140 (any API): SystemBars passes the native insets through,
-    //     so the WebView's own env(safe-area-inset-*) is correct (no injection
-    //     below API 35).
-    //   - WebView < 140 / API < 35 tail: SystemBars does nothing here.
+    //   - WebView >= 140 (any API): SystemBars passes the native insets through
+    //     (env(safe-area-inset-*) is correct) and injects the same px.
+    //   - WebView < 140 / API < 35 tail: SystemBars injects 0px; the native
+    //     shim covers the top via `hasAndroidStatusBarOverlap` (_css-variables).
     // In every case the SCSS fallback `var(--safe-area-inset-*, env(...))` in
     // _css-variables.scss resolves to the injected px when present, else to
     // env(). With viewport-fit=cover env(safe-area-inset-top) equals the

@@ -340,7 +340,7 @@ edge-to-edge under the status bar" from "WebView is already inset below it" —
 `env()` is 0 in both, and adding the status-bar height blindly would double-count
 in the inset case. Native has the geometry.
 
-**Fix (native overlap → SCSS fallback) — `pushStatusBarOverlap`.** From
+**Fix (native overlap → scoped class) — `pushStatusBarOverlap`.** From
 the existing keyboard `OnGlobalLayoutListener`, measure the overlap
 `max(0, rect.top − webViewTopOnScreen)` — `rect.top` is the visible-frame top
 (= status-bar height, reliable on API 28; the same frame the keyboard path reads)
@@ -348,48 +348,43 @@ and `getLocationOnScreen` is the WebView's top (0 edge-to-edge, == status-bar
 height once inset). Publish it (physical px → CSS px, deduped) as the
 `--android-status-bar-overlap` CSS var, gated by `NativeInsetShimGate`
 (**SDK < 35 AND WebView < 140** since #9316; originally SDK < 30 — mirrors the
-keyboard shim, never fights SystemBars). The var is folded into the
-SCSS fallback (`_css-variables.scss`) — NOT written from JS, so it never races
-SystemBars on `--safe-area-inset-*`:
+keyboard shim, never fights SystemBars). It also adds the
+`hasAndroidStatusBarOverlap` class to `<html>`, and only that class folds the var
+into `--safe-area-top` (`_css-variables.scss`) — nothing is written to
+`--safe-area-inset-*` from JS, so it never races SystemBars:
 
 ```scss
---safe-area-top: var(
-  --safe-area-inset-top,
-  max(env(safe-area-inset-top, 0px), var(--android-status-bar-overlap, 0px))
-);
+:root.hasAndroidStatusBarOverlap {
+  --safe-area-top: max(
+    var(--safe-area-inset-top, env(safe-area-inset-top, 0px)),
+    var(--android-status-bar-overlap, 0px)
+  );
+}
 ```
 
 - `max()`, not a sum, so it never double-counts: WebView < 140 edge-to-edge →
   env 0, overlap = status bar → status bar; once inset → env 0, overlap 0 → 0.
-- On **API >= 35 / WebView >= 140** `--safe-area-inset-top` is set (SystemBars) or
-  env() is correct, so `var()` precedence / `max()` ignore the overlap entirely —
-  verified behavior untouched.
-- JS readers (`_patchCdkViewportForSafeArea`) still parse the `var(max(...))`
-  token to 0, so overlay positioning is unchanged — preserving #8283 scoping
+- **Why a class, not a `var()` fallback.** The first version put the overlap in
+  the fallback, `var(--safe-area-inset-top, max(env(), overlap))`. SystemBars 8.4
+  injects `--safe-area-inset-top: 0px` inline on its non-passthrough path at
+  every API level (`SystemBars.initWindowInsetsListener`: zeroed `newInsets` →
+  `injectSafeAreaCSS`, re-fired on `onPageCommitVisible`, `onDOMReady` and each
+  IME toggle), so the fallback was never consulted on exactly the band the shim
+  runs on. Reported on 19.1.0 (Android 11 / MIUI 12.5: header overlaps the status
+  bar; WebView version not confirmed). Not yet device-verified.
+- **Why scoped, not a global `max()`.** JS readers (`readPx` in
+  `cdk-safe-area-viewport.util.ts`, the bottom panel) parse the computed token
+  with `parseInt`; a global `max(...)` would turn the plain `24px` they read on
+  API >= 35 into `max(24px, 0px)` → 0. On the shim band they read 0 before and
+  after, so overlay positioning there is unchanged — preserving #8283 scoping
   (only the header padding is affected).
 - ~~Known small gap: an **API 30–34** device on an **old WebView < 140** also has
   env()==0 but is excluded by the SDK < 30 gate; rare (WebView auto-updates above
   API 30) — broaden the gate to WebView-only if it ever surfaces.~~ **It surfaced
   (#9316); the gate was broadened — see the section below.**
-- ~~**Known gap, pre-existing — follow-up, not part of #9316:** SystemBars 8.4
-  also injects `--safe-area-inset-top: 0px` inline on its non-passthrough path at
-  every API level, so the fallback above is shadowed on exactly the band the shim
-  runs on.~~ **It surfaced** (Android 11 / MIUI 12.5, 19.1.0: header overlaps the
-  status bar). Read off `SystemBars.initWindowInsetsListener` (zeroed `newInsets`
-  → `injectSafeAreaCSS`, re-fired on `onPageCommitVisible`, `onDOMReady` and
-  each IME toggle). Fix: `pushStatusBarOverlap` also adds the
-  `hasAndroidStatusBarOverlap` class to `<html>`, and
-  `:root.hasAndroidStatusBarOverlap` redefines
-  `--safe-area-top: max(var(--safe-area-inset-top, env(safe-area-inset-top, 0px)), var(--android-status-bar-overlap, 0px))`.
-  Scoped to the class rather than made global because JS readers
-  (`readPx` in `cdk-safe-area-viewport.util.ts`, the bottom panel) parse the
-  computed token with `parseInt`: a global `max(...)` would turn the plain
-  `24px` they read on API >= 35 into `max(24px, 0px)` → 0. On the shim band they
-  read 0 before and after, so overlay positioning there is unchanged. Not yet
-  device-verified.
 - The var lives only as an inline style on the document, so a web-side reload
   (`window.location.reload()` — language change, PWA update, sync-conflict
-  recovery) wipes it (and the class). The native dedupe (`lastStatusBarOverlapCssPx`) is reset in
+  recovery) wipes it and the class. The native dedupe (`lastStatusBarOverlapCssPx`) is reset in
   `flushPendingShareIntent()` (runs on every frontend (re)load) so the next layout
   pass re-publishes it; without the reset the unchanged value would be skipped and
   the overlap would regress after a reload.
