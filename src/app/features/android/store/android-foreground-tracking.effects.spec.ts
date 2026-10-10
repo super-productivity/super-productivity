@@ -11,7 +11,10 @@ import {
   getFocusAutoCompleteCapMs,
   handleAndroidResume,
   isTimeSpentJumpForNotification,
+  NativeElapsedSyncDeps,
+  NativeTrackingData,
   parseNativeTrackingData,
+  syncNativeElapsedTimeForTask,
   TIME_SPENT_JUMP_THRESHOLD_MS,
 } from './android-foreground-tracking.effects';
 import { GlobalTrackingIntervalService } from '../../../core/global-tracking-interval/global-tracking-interval.service';
@@ -2123,5 +2126,137 @@ describe('getFocusAutoCompleteCapMs', () => {
     expect(getFocusAutoCompleteCapMs(timer({ isRunning: false }), false)).toBeNull();
     expect(getFocusAutoCompleteCapMs(timer({ purpose: 'break' }), false)).toBeNull();
     expect(getFocusAutoCompleteCapMs(timer({ purpose: null }), false)).toBeNull();
+  });
+});
+
+// Exercises the production reconcile against a fake native session that
+// behaves like TrackingForegroundService + TrackingStateStore: an anchored
+// total that survives a process kill and is re-anchored by updateTrackingService
+// (#7390).
+describe('syncNativeElapsedTimeForTask - recovery after process death', () => {
+  const MIN = 60 * 1000;
+  let now: number;
+  let task: Task;
+  let nativeSession: { taskId: string; startTimestamp: number; accumulatedMs: number };
+  let deps: NativeElapsedSyncDeps;
+  let addTimeSpentAndSync: jasmine.Spy;
+  let resetTrackingStart: jasmine.Spy;
+  let showWarning: jasmine.Spy;
+
+  const readNative = (): NativeTrackingData => ({
+    taskId: nativeSession.taskId,
+    elapsedMs: nativeSession.accumulatedMs + (now - nativeSession.startTimestamp),
+  });
+
+  beforeEach(() => {
+    now = 1_000_000_000;
+    // Tracked 10 min in the foreground; flushOnPause persisted that value and
+    // re-anchored native at it when the app went to the background.
+    task = { id: 'task-1', timeSpent: 10 * MIN } as Task;
+    nativeSession = { taskId: 'task-1', startTimestamp: now, accumulatedMs: 10 * MIN };
+
+    addTimeSpentAndSync = jasmine
+      .createSpy('addTimeSpentAndSync')
+      .and.callFake((t: Task, duration: number) => {
+        task = { ...t, timeSpent: (t.timeSpent || 0) + duration };
+      });
+    resetTrackingStart = jasmine.createSpy('resetTrackingStart');
+    showWarning = jasmine.createSpy('showWarning');
+    deps = {
+      getNativeTrackingData: () => readNative(),
+      getTaskOnce: async (id) => (id === task.id ? task : undefined),
+      addTimeSpentAndSync,
+      resetTrackingStart,
+      updateTrackingService: (timeSpentMs) => {
+        nativeSession = {
+          ...nativeSession,
+          startTimestamp: now,
+          accumulatedMs: timeSpentMs,
+        };
+      },
+      showWarning,
+    };
+  });
+
+  it('credits the time tracked while the process was dead on cold-start recovery', async () => {
+    // Process killed in the background; the user reopens the app 25 min later.
+    now += 25 * MIN;
+
+    const didSync = await syncNativeElapsedTimeForTask(deps, 'task-1', readNative());
+
+    expect(didSync).toBeTrue();
+    expect(addTimeSpentAndSync).toHaveBeenCalledOnceWith(
+      jasmine.objectContaining({ id: 'task-1' }),
+      25 * MIN,
+    );
+    expect(task.timeSpent).toBe(35 * MIN);
+    expect(resetTrackingStart).toHaveBeenCalled();
+  });
+
+  it('credits the gap only once when recovery and resume both reconcile it', async () => {
+    now += 25 * MIN;
+    const snapshot = readNative();
+
+    // Recovery, then the null→task re-emission pushes the synced value back
+    // to native (updateTrackingService) ...
+    await syncNativeElapsedTimeForTask(deps, 'task-1', snapshot);
+    deps.updateTrackingService(task.timeSpent);
+    // ... then a resume reconcile and a stale duplicate of the recovery snapshot.
+    await syncNativeElapsedTimeForTask(deps, 'task-1');
+    await syncNativeElapsedTimeForTask(deps, 'task-1', snapshot);
+
+    expect(addTimeSpentAndSync).toHaveBeenCalledTimes(1);
+    expect(task.timeSpent).toBe(35 * MIN);
+  });
+
+  it('keeps counting after recovery without re-crediting the recovered gap', async () => {
+    now += 25 * MIN;
+    await syncNativeElapsedTimeForTask(deps, 'task-1', readNative());
+    deps.updateTrackingService(task.timeSpent);
+
+    now += 5 * MIN;
+    await syncNativeElapsedTimeForTask(deps, 'task-1');
+
+    expect(addTimeSpentAndSync.calls.allArgs().map(([, d]) => d)).toEqual([
+      25 * MIN,
+      5 * MIN,
+    ]);
+    expect(task.timeSpent).toBe(40 * MIN);
+  });
+
+  it('keeps the app value when the persisted total is behind it', async () => {
+    // e.g. the wall clock was moved back while the process was dead.
+    task = { ...task, timeSpent: 12 * MIN };
+    const updateTrackingService = spyOn(deps, 'updateTrackingService');
+
+    const didSync = await syncNativeElapsedTimeForTask(deps, 'task-1', readNative());
+
+    expect(didSync).toBeTrue();
+    expect(addTimeSpentAndSync).not.toHaveBeenCalled();
+    expect(updateTrackingService).toHaveBeenCalledWith(12 * MIN);
+  });
+
+  it('does not credit a persisted session for another task', async () => {
+    now += 25 * MIN;
+
+    const didSync = await syncNativeElapsedTimeForTask(deps, 'task-2', readNative());
+
+    expect(didSync).toBeFalse();
+    expect(addTimeSpentAndSync).not.toHaveBeenCalled();
+  });
+
+  it('reports failure when the persisted task no longer exists', async () => {
+    nativeSession = { ...nativeSession, taskId: 'deleted-task' };
+    now += 25 * MIN;
+
+    const didSync = await syncNativeElapsedTimeForTask(
+      deps,
+      'deleted-task',
+      readNative(),
+    );
+
+    expect(didSync).toBeFalse();
+    expect(addTimeSpentAndSync).not.toHaveBeenCalled();
+    expect(showWarning).toHaveBeenCalled();
   });
 });
