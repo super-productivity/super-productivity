@@ -71,8 +71,10 @@ export class SelectProjectComponent
   DEFAULT_PROJECT_ICON = DEFAULT_PROJECT_ICON;
   private _prevValue: string[] = [];
 
-  // Use a manual signal to bridge formControl.valueChanges
-  val = signal<string[]>([]);
+  // Use a manual signal to bridge formControl.valueChanges. A multi-select holds
+  // an array, a single select the bare project id — the type said `string[]` for
+  // both, which is why a single-select read of it type-checked as an array.
+  val = signal<string | string[]>([]);
 
   triggerLabel = computed(() => {
     const val = this.val();
@@ -89,8 +91,18 @@ export class SelectProjectComponent
           .filter((v) => !!v)
           .join(', ');
       }
+      return null;
     }
-    return null;
+    // Single select needs a trigger too: each option renders a `select-option-row`
+    // (icon + title), and without an explicit trigger Material falls back to the
+    // option's text content — which includes the mat-icon ligature, so the closed
+    // select read "list_alt My Project". Only override when a project is actually
+    // selected; the "None" option carries no icon and renders correctly by itself.
+    if (Array.isArray(val) || !val) {
+      return null;
+    }
+    const hit = this.projects().find((p) => p.id === val);
+    return hit ? hit.title : null;
   });
 
   projectFolderMap = computed(() => this._menuTreeService.projectFolderMap());
