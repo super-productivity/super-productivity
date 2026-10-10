@@ -61,12 +61,14 @@ describe('patchCdkViewportForSafeArea', () => {
   >;
   let originalMarginTop: unknown;
   let originalMarginBottom: unknown;
+  let originalPushOverlayOnScreen: unknown;
 
   const overlayContainerEl = (): HTMLElement =>
     TestBed.inject(OverlayContainer).getContainerElement();
 
   const openMenuAndMeasure = async (
     itemLabels?: string[],
+    navHeightOverride?: number,
   ): Promise<{
     panelBottom: number;
     triggerTop: number;
@@ -75,6 +77,9 @@ describe('patchCdkViewportForSafeArea', () => {
     const fixture = TestBed.createComponent(SafeAreaMenuHostComponent);
     if (itemLabels) {
       fixture.componentInstance.itemLabels = itemLabels;
+    }
+    if (navHeightOverride != null) {
+      fixture.componentInstance.navHeight = navHeightOverride;
     }
     fixture.detectChanges();
     const triggerEl = fixture.nativeElement.querySelector('button') as HTMLElement;
@@ -96,13 +101,18 @@ describe('patchCdkViewportForSafeArea', () => {
     TestBed.configureTestingModule({ providers: [provideNoopAnimations()] });
     originalMarginTop = proto['_getViewportMarginTop'];
     originalMarginBottom = proto['_getViewportMarginBottom'];
+    originalPushOverlayOnScreen = proto['_pushOverlayOnScreen'];
     patchCdkViewportForSafeArea(document, overlayContainerEl());
   });
 
   afterEach(() => {
-    // The patch mutates a shared CDK prototype; leave it as we found it.
+    // The patch mutates a shared CDK prototype; leave it as we found it. A
+    // stale `_pushOverlayOnScreen` wrapper here would otherwise keep wrapping
+    // itself deeper on every re-patch across tests/files, since it is a
+    // module-level singleton shared with every other spec in the run.
     proto['_getViewportMarginTop'] = originalMarginTop;
     proto['_getViewportMarginBottom'] = originalMarginBottom;
+    proto['_pushOverlayOnScreen'] = originalPushOverlayOnScreen;
     proto['_spSafeAreaPatched'] = false;
     document.documentElement.style.removeProperty('--safe-area-bottom');
     document.documentElement.style.removeProperty('--safe-area-top');
@@ -171,6 +181,27 @@ describe('patchCdkViewportForSafeArea', () => {
     // The menu is pushed to exactly the reserved edge (without the keyboard term
     // it lands at safeAreaTopEdge - navHeight).
     expect(panelBottom).toBeCloseTo(safeAreaTopEdge - KEYBOARD_OVERLAY_OFFSET, 0);
+  });
+
+  // The reporter's device again, but with the real measured insets (status
+  // bar 88px, nav bar 44px, gesture-nav bottom inset 24px) rather than the
+  // synthetic 48/48/56 above. Once `--safe-area-top` exceeds the trigger's
+  // own height, the "above" fallback position no longer fits inside CDK's
+  // narrowed viewport rect, so `apply()` falls through to
+  // `_pushOverlayOnScreen` instead of the bounding-box path the other tests
+  // exercise. That push computes `overflowBottom` from `viewport.height`
+  // alone (silently assuming the viewport starts at y=0), so once
+  // `_getViewportMarginTop` above makes `viewport.top` nonzero, a menu that
+  // truly fits gets pushed further up the screen by exactly the top inset,
+  // detaching it from its trigger — confirmed on-device via a live
+  // breakpoint in `_getExactOverlayY`.
+  it('keeps a bottom-anchored menu at its trigger when the top inset forces the push path', async () => {
+    document.documentElement.style.setProperty('--safe-area-top', '88px');
+    document.documentElement.style.setProperty('--safe-area-bottom', '24px');
+
+    const { panelBottom, triggerTop } = await openMenuAndMeasure(undefined, 44);
+
+    expect(panelBottom).toBeCloseTo(triggerTop, 0);
   });
 
   it('does not stack insets when applied more than once', async () => {
