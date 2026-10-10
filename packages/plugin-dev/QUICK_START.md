@@ -11,23 +11,25 @@ the files and upload them via Settings → Plugins.
 
 ## Option 2: TypeScript, host-side (issue providers, background logic)
 
-Start from [github-issue-provider](github-issue-provider) (issue provider) or
-[app-auto-track](app-auto-track) (background plugin):
+Start from [github-issue-provider](github-issue-provider):
 
 ```bash
 cp -r github-issue-provider my-plugin
 cd my-plugin
-# set a unique "name" in package.json first: every folder here is a workspace
+# in src/manifest.json: set a unique "id" and "name", delete
+# issueProvider.issueProviderKey (reserved for bundled providers; uploads using
+# it are rejected) and change humanReadableName/icon; rename package.json "name"
+# (every folder here is an npm workspace; names must be unique)
 npm install        # installs into the shared plugin-dev workspace
 npm run build      # → dist/
 ```
 
-These plugins share `../scripts/build-with-esbuild.js` (bundles `src/plugin.ts`
-and copies the manifest, icon and i18n) and `../tsconfig.base.json`. Issue
-providers also bundle helpers from `../issue-provider-kit/`. To develop outside
-this repository, copy those along with your plugin folder or inline them, and
-replace the `file:../../plugin-api` dependency with the published
-`@super-productivity/plugin-api` package.
+These plugins share `../scripts/build-with-esbuild.js` (bundles `src/plugin.ts`,
+or another file via `--entry`, and copies the manifest, icon and i18n) and
+`../tsconfig.base.json`; issue providers also bundle helpers from
+`../issue-provider-kit/`, and all of them depend on `../../plugin-api`. These are
+relative paths, so develop the plugin inside `packages/plugin-dev/`. New issue
+providers: follow [add-new-integration.md](../../docs/add-new-integration.md).
 
 For an iframe UI without a framework, see [todoist-import](todoist-import)
 (`--ui src/ui/main.ts` inlines the bundled UI into `index.html`).
@@ -39,7 +41,8 @@ built with [`@super-productivity/vite-plugin`](../vite-plugin).
 
 ## Testing your plugin
 
-1. Build it, then zip the contents of `dist/` (or the plain-JS folder).
+1. Build it, then zip the contents of `dist/` (or the plain-JS folder):
+   `rm -f plugin.zip && (cd dist && zip -r ../plugin.zip .)`.
 2. Upload the zip via Settings → Plugins.
 
 Adding a new issue provider? Read [add-new-integration.md](../../docs/add-new-integration.md).

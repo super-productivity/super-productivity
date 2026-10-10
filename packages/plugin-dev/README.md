@@ -29,7 +29,7 @@ the repository root, so plugin tooling stays out of the app's install.
 ### Prerequisites
 
 - Node.js 18 or higher
-- npm or yarn
+- npm (the shared lockfile is npm's)
 - TypeScript knowledge (recommended)
 
 ### Quick Start
@@ -55,50 +55,23 @@ my-plugin/
 
 The shared build script and tsconfig live next to the plugins
 ([scripts/build-with-esbuild.js](scripts/build-with-esbuild.js),
-[tsconfig.base.json](tsconfig.base.json)); copy them along when developing a plugin
-outside this repository. SolidJS/Vite plugins such as
+[tsconfig.base.json](tsconfig.base.json)) and are referenced by relative path, so
+develop plugins inside this folder. SolidJS/Vite plugins such as
 [boilerplate-solid-js](boilerplate-solid-js) use
 [`@super-productivity/vite-plugin`](../vite-plugin) instead.
 
 ## Development Workflow
 
-### 1. Local Development
-
-For rapid development within the Super Productivity repo:
+Scripts vary per plugin; check its `package.json`. Most TypeScript plugins have:
 
 ```bash
-# Build and install to local Super Productivity
-npm run install-local
-
-# This copies your built plugin to:
-# ../../../src/assets/my-plugin/
+npm run build       # → dist/
+npm run typecheck   # tsc --noEmit
+npm test            # if the plugin has tests
 ```
 
-Then run Super Productivity in development mode to test your plugin.
-
-### 2. Watch Mode
-
-Keep the plugin building automatically as you make changes:
-
-```bash
-npm run dev
-```
-
-### 3. Type Checking
-
-Ensure your code is type-safe:
-
-```bash
-npm run typecheck
-```
-
-### 4. Linting
-
-Check code quality:
-
-```bash
-npm run lint
-```
+Vite plugins (e.g. [boilerplate-solid-js](boilerplate-solid-js)) also have
+`npm run dev` for watch mode.
 
 ## Plugin API
 
@@ -191,10 +164,11 @@ const dueDate = PluginAPI.formatDate(task.dueDate, 'short');
 
 ```bash
 npm run build
-npm run package
+rm -f plugin.zip && (cd dist && zip -r ../plugin.zip .)
 ```
 
-This creates `dist/plugin.zip` ready for distribution.
+[boilerplate-solid-js](boilerplate-solid-js) and [automations](automations) also
+have `npm run package`, which writes `<id>-v<version>.zip`.
 
 ### 2. File Size Limits
 
@@ -219,67 +193,32 @@ Optional files:
 
 ## Publishing Your Plugin
 
-### GitHub Release (Recommended)
+Build and zip the plugin here (see above) and share the zip, e.g. as a GitHub
+release asset; users install it via Settings → Plugins → Upload Plugin.
 
-1. Create a GitHub repository for your plugin
-2. Use GitHub Actions to build releases:
-
-```yaml
-name: Build Plugin
-on:
-  release:
-    types: [created]
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-node@v3
-        with:
-          node-version: 18
-      - run: npm ci
-      - run: npm run build
-      - run: npm run package
-      - uses: softprops/action-gh-release@v1
-        with:
-          files: dist/plugin.zip
-```
-
-3. Users can download the `.zip` file from your releases
-
-### NPM Package
-
-You can also publish your plugin source to npm:
-
-1. Update `package.json` with your npm scope
-2. Build your plugin: `npm run build`
-3. Publish: `npm publish`
-
-Users would need to build it themselves or you can include the built files.
+Building in a separate repository needs its own build setup: the examples here
+use relative paths to the shared build script, tsconfig, `issue-provider-kit` and
+`../../plugin-api`, and the published `@super-productivity/plugin-api` npm
+package lags behind the source (it lacks the issue-provider types).
 
 ## Testing Your Plugin
 
-### 1. In Development Mode
+### 1. Upload
 
-```bash
-# Build your plugin
-npm run build
-
-# Copy to Super Productivity assets
-npm run install-local
-
-# Run Super Productivity in dev mode
-cd ../../.. && npm start
-```
-
-### 2. In Production Build
-
-1. Build your plugin: `npm run package`
+1. Build and zip your plugin (see above)
 2. Open Super Productivity
 3. Go to Settings → Plugins
 4. Click "Upload Plugin"
 5. Select your `plugin.zip` file
+
+### 2. As a Bundled Plugin (repository development)
+
+`npm run build:packages` (repository root) builds the plugins here (not the
+boilerplate) and copies each `dist/` to `src/assets/bundled-plugins/<folder>/`.
+The app only loads folders listed in `BUNDLED_PLUGIN_PATHS`, and each one's
+manifest id must also be in `BUNDLED_PLUGIN_IDS` (both in
+`src/app/plugins/bundled-plugins.const.ts`; `npm run test:electron` checks they
+match); then run `npm run startFrontend` or `npm start`.
 
 ### 3. Debugging
 

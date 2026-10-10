@@ -14,7 +14,8 @@
  *   when present, each looked up in src/ first, then the plugin root (so a copy
  *   in src/ wins over one in the root).
  *
- * Only builds plugin directories next to this script's folder (plugin-dev/<name>).
+ * Only builds plugin folders that sit next to this script's scripts/ folder
+ * (plugin-dev/<name>).
  */
 
 const fs = require('fs');
@@ -73,14 +74,21 @@ async function buildPlugin() {
   const manifest = findAsset('manifest.json');
 
   // Validate before touching dist/, so a run from the wrong directory deletes nothing.
-  if (
-    path.dirname(ROOT_DIR) !== path.resolve(__dirname, '..') ||
-    !fs.existsSync(path.join(ROOT_DIR, 'package.json')) ||
-    !manifest
-  ) {
+  // The repo root also has package.json and src/manifest.json, hence the location check.
+  // realpath on both sides, so symlinked paths compare equal (e.g. __dirname stays
+  // unresolved under node --preserve-symlinks-main).
+  const pluginsDir = fs.realpathSync(path.resolve(__dirname, '..'));
+  if (path.dirname(fs.realpathSync(ROOT_DIR)) !== pluginsDir) {
     throw new Error(
-      `${ROOT_DIR} is not a plugin directory (plugin-dev/<name> with package.json + manifest.json)`,
+      `${ROOT_DIR} is not a plugin folder: plugins must sit directly in ${pluginsDir}; ` +
+        'run npm run build inside the plugin folder',
     );
+  }
+  if (!fs.existsSync(path.join(ROOT_DIR, 'package.json'))) {
+    throw new Error(`${ROOT_DIR} has no package.json`);
+  }
+  if (!manifest) {
+    throw new Error(`${ROOT_DIR} has no manifest.json (in src/ or the plugin root)`);
   }
   const hasEntry = fs.existsSync(entry);
   if (entryArg && !hasEntry) {
