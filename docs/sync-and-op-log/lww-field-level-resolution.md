@@ -169,8 +169,8 @@ hydration must replay identically.
 - **Today's merge would fix both note pins** once NOTE has a
   `RECREATE_FALLBACK` entry (lock vs pin, content vs pin): their fields are
   disjoint.
-- **A clean regression pin also needs `todayOrder` upkeep** in
-  `lwwUpdateMetaReducer`. Otherwise `divergence:.note.todayOrder.*` stays.
+- **`todayOrder` upkeep in `lwwUpdateMetaReducer`**, which a clean regression
+  pin also needs, landed in #10659 (#10379).
 
 ## Released clients and graceful degradation
 
@@ -223,14 +223,14 @@ Expected outcomes are by code reading and have not been run. Each fix PR turns
 its pins into regression pins and leaves all others unchanged, including those
 of #10380 and #10381.
 
-| Pin                                                         | A (pieces 1–3)               | B                                | C                         | NOTE admission                         |
-| ----------------------------------------------------------- | ---------------------------- | -------------------------------- | ------------------------- | -------------------------------------- |
-| done status lost when both devices rename                   | fixed                        | — (superseded path unchanged)    | —                         | —                                      |
-| tracked time lost to a later concurrent rename              | fixed, via the rebased delta | —                                | with A                    | —                                      |
-| note lock lost to an unpin; note content loses to an unpin  | —                            | lock only; `todayOrder` diverges | —                         | fixed, if `todayOrder` is kept in step |
-| habit count lost to a rename; habit rename loses to a count | —                            | —                                | —                         | —                                      |
-| two devices tracking one unscheduled task (#10378)          | —                            | —                                | time, local-win direction | —                                      |
-| task rename loses to tracking (#10260)                      | —                            | —                                | —                         | —                                      |
+| Pin                                                         | A (pieces 1–3)               | B                             | C                         | NOTE admission                                 |
+| ----------------------------------------------------------- | ---------------------------- | ----------------------------- | ------------------------- | ---------------------------------------------- |
+| done status lost when both devices rename                   | fixed                        | — (superseded path unchanged) | —                         | —                                              |
+| tracked time lost to a later concurrent rename              | fixed, via the rebased delta | —                             | with A                    | —                                              |
+| note lock lost to an unpin; note content loses to an unpin  | —                            | lock only                     | —                         | fixed (`todayOrder` kept in step since #10659) |
+| habit count lost to a rename; habit rename loses to a count | —                            | —                             | —                         | —                                              |
+| two devices tracking one unscheduled task (#10378)          | —                            | —                             | time, local-win direction | —                                              |
+| task rename loses to tracking (#10260)                      | —                            | —                             | —                         | —                                              |
 
 **Start from an E2E** (rule 12: both conflict directions, both timestamp
 winners):

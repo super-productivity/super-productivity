@@ -1824,6 +1824,24 @@ describe('lwwUpdateMetaReducer', () => {
       ).toEqual([OTHER_NOTE_ID, NOTE_ID]);
     });
 
+    it('follows the merged note when an update-mode payload omits the pin', () => {
+      const pinned = createNote({ isPinnedToToday: true });
+      const partial = {
+        type: '[NOTE] LWW Update',
+        id: NOTE_ID,
+        content: 'Edited',
+        meta: {
+          isPersistent: true,
+          entityType: 'NOTE',
+          entityId: NOTE_ID,
+          isRemote: true,
+        },
+      } as unknown as Action;
+      expect(
+        todayOrderAfter(stateWith([other, pinned], [OTHER_NOTE_ID]), partial),
+      ).toEqual([NOTE_ID, OTHER_NOTE_ID]);
+    });
+
     it('is idempotent when the same replacement is applied twice', () => {
       const action = lwwNote(createNote({ isPinnedToToday: true }));
       reducer(stateWith([other, createNote()], [OTHER_NOTE_ID]), action);

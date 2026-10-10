@@ -224,7 +224,7 @@
   },
   {
     "class": "lww-update-skips-today-order",
-    "ref": "fixed by the #10379 LWW Update todayOrder fix",
+    "ref": "fixed for #10379 by #10659 (regression pin)",
     "name": "a note unpinned on one device and edited later on another stays pinned but out of Today there",
     "steps": [
       {
@@ -251,7 +251,7 @@
   },
   {
     "class": "lww-update-skips-today-order",
-    "ref": "fixed by the #10379 LWW Update todayOrder fix",
+    "ref": "fixed for #10379 by #10659 (regression pin)",
     "name": "a note edited on one device and unpinned and edited later on another stays in Today there, unpinned",
     "steps": [
       {
