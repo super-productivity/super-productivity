@@ -543,15 +543,10 @@ export const test = base.extend<ScreenshotFixtures>({
     const viewport = testInfo.project.name as ViewportName;
     const showSyncReadyState = async (): Promise<void> => {
       await page.evaluate(() => {
-        const syncBtn = document.querySelector('.sync-btn');
-        if (!syncBtn || syncBtn.querySelector('.__sp-sync-ready-check')) return;
-
-        const icon = document.createElement('span');
-        icon.className =
-          'mat-icon notranslate material-icons mat-ligature-font mat-icon-no-color sync-state-ico __sp-sync-ready-check';
-        icon.setAttribute('aria-hidden', 'true');
-        icon.textContent = 'check';
-        syncBtn.appendChild(icon);
+        // Screenshots run without a sync provider. Show the in-sync glyph
+        // instead of `sync_disabled`, as a configured install would.
+        const icon = document.querySelector('.sync-btn mat-icon');
+        if (icon) icon.textContent = 'cloud_done';
       });
     };
     const fn = async (scenario: string, name: string): Promise<void> => {

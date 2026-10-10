@@ -269,10 +269,10 @@ const readTerminalSyncState = async (
  * @param page - Playwright page
  * @param syncPage - SyncPage instance
  * @param timeout - Maximum wait time in ms (default 30000)
- * @param options.allowResponseOnlyCompletion - Require done_all by default. Conflict
- * resolution paths may opt into a stable idle state after the witnessed response
- * because those actions do not expose a reliable terminal icon. Such callers must
- * assert the exact resulting state.
+ * @param options.allowResponseOnlyCompletion - Require the remote-confirmed state
+ * by default. Conflict resolution paths may opt into a stable idle state after the
+ * witnessed response because those actions do not expose a reliable terminal
+ * state. Such callers must assert the exact resulting state.
  * @returns 'success' | 'conflict' | void
  */
 export const waitForSyncComplete = async (

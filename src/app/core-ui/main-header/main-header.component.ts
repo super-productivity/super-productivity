@@ -191,8 +191,8 @@ export class MainHeaderComponent implements OnDestroy {
   // the tooltip is the ambient counterpart to suppressing the transient
   // network snack on automatic syncs — a persistent problem stays discoverable
   // by glancing at / hovering the always-present header button.
-  // Precedence mirrors the icon @if cascade in the template (disabled →
-  // offline → error → syncing → in-sync); keep the two in sync.
+  // Precedence mirrors `syncIcon` (disabled → offline → error → syncing →
+  // in-sync); keep the two in sync.
   syncTooltip = computed(() => {
     if (!this.syncIsEnabledAndReady()) {
       return T.MH.TRIGGER_SYNC;
@@ -207,9 +207,42 @@ export class MainHeaderComponent implements OnDestroy {
       return T.MH.SYNC_STATE.SYNCING;
     }
     if (this.hasNoPendingOps()) {
-      return T.MH.SYNC_STATE.IN_SYNC;
+      return this.superSyncIsConfirmedInSync()
+        ? T.MH.SYNC_STATE.IN_SYNC_CONFIRMED
+        : T.MH.SYNC_STATE.IN_SYNC;
     }
     return T.MH.TRIGGER_SYNC;
+  });
+  // One glyph per state, nothing drawn over it. A badge inside the 24px ring
+  // collided with the arrows and could not get a backing disc, because the
+  // header background varies (#10427). Same precedence as `syncTooltip`.
+  syncIcon = computed(() => {
+    if (!this.syncIsEnabledAndReady()) {
+      return 'sync_disabled';
+    }
+    if (!this.isOnline()) {
+      return 'wifi_off';
+    }
+    if (this.syncState() === 'ERROR') {
+      return 'sync_problem';
+    }
+    if (this.isSyncInProgress()) {
+      return 'sync';
+    }
+    return this.hasNoPendingOps() ? 'cloud_done' : 'sync';
+  });
+  isSyncIconSpinning = computed(
+    () => this.syncIcon() === 'sync' && !!this.isSyncInProgress(),
+  );
+  // Test hook for the E2E sync helpers, which wait on these states. 'local':
+  // every local change is uploaded. 'remote': the remote was also checked
+  // within the last minute. Deliberately independent of the spinner and
+  // the error state, as the checkmark badges it replaces were.
+  syncConfirmation = computed(() => {
+    if (!this.syncIsEnabledAndReady() || !this.isOnline() || !this.hasNoPendingOps()) {
+      return null;
+    }
+    return this.superSyncIsConfirmedInSync() ? 'remote' : 'local';
   });
   readonly isTimeTrackingEnabled = computed(() => {
     return this.globalConfigService.appFeatures().isTimeTrackingEnabled;

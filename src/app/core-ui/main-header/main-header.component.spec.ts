@@ -31,6 +31,7 @@ import { MetricService } from '../../features/metric/metric.service';
 import { DateService } from '../../core/date/date.service';
 import { DEFAULT_GLOBAL_CONFIG } from '../../features/config/default-global-config.const';
 import { SyncStatus } from '../../op-log/sync-exports';
+import { T } from '../../t.const';
 import {
   SimpleCounter,
   SimpleCounterType,
@@ -419,6 +420,13 @@ describe('MainHeaderComponent action placement', () => {
   let pluginSidePanelButtons = signal<unknown[]>([]);
   let currentTaskId = signal<string | null>(null);
   let isShowNotes = signal(false);
+  let syncWrapperState = {
+    isEnabledAndReady: false,
+    syncState: 'IN_SYNC',
+    isSyncInProgress: false,
+    hasNoPendingOps: true,
+    isConfirmedInSync: false,
+  };
 
   const configureTestBed = (): void => {
     const cfg = {
@@ -482,11 +490,11 @@ describe('MainHeaderComponent action placement', () => {
           provide: SyncWrapperService,
           useValue: {
             sync: jasmine.createSpy('sync'),
-            isEnabledAndReady$: of(false),
-            syncState$: of('IN_SYNC'),
-            isSyncInProgress$: of(false),
-            hasNoPendingOps$: of(true),
-            superSyncIsConfirmedInSync$: of(false),
+            isEnabledAndReady$: of(syncWrapperState.isEnabledAndReady),
+            syncState$: of(syncWrapperState.syncState),
+            isSyncInProgress$: of(syncWrapperState.isSyncInProgress),
+            hasNoPendingOps$: of(syncWrapperState.hasNoPendingOps),
+            superSyncIsConfirmedInSync$: of(syncWrapperState.isConfirmedInSync),
           },
         },
         {
@@ -558,6 +566,13 @@ describe('MainHeaderComponent action placement', () => {
     pluginSidePanelButtons = signal<unknown[]>([]);
     currentTaskId = signal<string | null>(null);
     isShowNotes = signal(false);
+    syncWrapperState = {
+      isEnabledAndReady: false,
+      syncState: 'IN_SYNC',
+      isSyncInProgress: false,
+      hasNoPendingOps: true,
+      isConfirmedInSync: false,
+    };
   });
 
   afterEach(() => {
@@ -906,6 +921,105 @@ describe('MainHeaderComponent action placement', () => {
     await mountAtWidth(404);
 
     expect(fixture!.componentInstance.isAnyCounterRunning()).toBe(true);
+  });
+
+  describe('sync button state', () => {
+    const readySync = (patch: Partial<typeof syncWrapperState> = {}): void => {
+      syncWrapperState = {
+        ...syncWrapperState,
+        isEnabledAndReady: true,
+        ...patch,
+      };
+    };
+
+    it('reports a local upload until the remote was checked', () => {
+      readySync({ hasNoPendingOps: true, isConfirmedInSync: false });
+
+      component = createComponent();
+
+      expect(component.syncConfirmation()).toBe('local');
+    });
+
+    it('reports a remote-confirmed upload', () => {
+      readySync({ hasNoPendingOps: true, isConfirmedInSync: true });
+
+      component = createComponent();
+
+      expect(component.syncConfirmation()).toBe('remote');
+    });
+
+    it('reports no upload state while local changes wait for upload', () => {
+      readySync({ hasNoPendingOps: false });
+
+      component = createComponent();
+
+      expect(component.syncConfirmation()).toBeNull();
+    });
+
+    it('reports no upload state while sync is not ready', () => {
+      component = createComponent();
+
+      expect(component.syncConfirmation()).toBeNull();
+    });
+
+    it('names a recent remote check in the tooltip', () => {
+      readySync({ hasNoPendingOps: true, isConfirmedInSync: true });
+
+      component = createComponent();
+
+      expect(component.syncTooltip()).toBe(T.MH.SYNC_STATE.IN_SYNC_CONFIRMED);
+    });
+
+    it('keeps the plain in-sync tooltip until the remote was checked', () => {
+      readySync({ hasNoPendingOps: true, isConfirmedInSync: false });
+
+      component = createComponent();
+
+      expect(component.syncTooltip()).toBe(T.MH.SYNC_STATE.IN_SYNC);
+    });
+
+    it('shows the in-sync state as one glyph, with nothing drawn over it (#10427)', async () => {
+      readySync({ hasNoPendingOps: true });
+
+      const host = await mountAtWidth(1200);
+      const icons = host.querySelectorAll('button.sync-btn mat-icon');
+
+      expect(icons.length).toBe(1);
+      expect(icons[0].textContent?.trim()).toBe('cloud_done');
+    });
+
+    it('shows the plain sync glyph while local changes wait for upload', () => {
+      readySync({ hasNoPendingOps: false });
+
+      component = createComponent();
+
+      expect(component.syncIcon()).toBe('sync');
+      expect(component.isSyncIconSpinning()).toBe(false);
+    });
+
+    it('spins the sync glyph while syncing, even with nothing left to upload', () => {
+      readySync({ isSyncInProgress: true, hasNoPendingOps: true });
+
+      component = createComponent();
+
+      expect(component.syncIcon()).toBe('sync');
+      expect(component.isSyncIconSpinning()).toBe(true);
+    });
+
+    it('lets an error win over syncing, and never spins the error glyph', () => {
+      readySync({ syncState: 'ERROR', isSyncInProgress: true });
+
+      component = createComponent();
+
+      expect(component.syncIcon()).toBe('sync_problem');
+      expect(component.isSyncIconSpinning()).toBe(false);
+    });
+
+    it('shows sync_disabled while sync is not ready', () => {
+      component = createComponent();
+
+      expect(component.syncIcon()).toBe('sync_disabled');
+    });
   });
 
   it('keeps a persistent recovery action instead of showing routine sync success', async () => {

@@ -126,6 +126,18 @@ export const cssSelectors = {
   SCHEDULE_TASK_ITEM:
     'task-detail-item:has(mat-icon:text("alarm")), task-detail-item:has(mat-icon:text("today")), task-detail-item:has(mat-icon:text("schedule"))',
   TASK_SCHEDULE_BTN: '.ico-btn.schedule-btn',
+
+  // ============================================================================
+  // SYNC BUTTON SELECTORS
+  // ============================================================================
+  // Upload state of the header sync button. The current build exposes it as
+  // `data-sync-confirmation`. Released clients that the compatibility specs run
+  // (v18.14.0 to v19.1.0) render a `check` / `done_all` badge instead, so each
+  // selector lists both forms.
+  SYNC_UPLOADED:
+    'button.sync-btn[data-sync-confirmation], .sync-btn mat-icon.sync-state-ico',
+  SYNC_REMOTE_CONFIRMED:
+    'button.sync-btn[data-sync-confirmation="remote"], .sync-btn mat-icon.sync-state-ico:has-text("done_all")',
 } as const;
 
 export type SelectorKey = keyof typeof cssSelectors;
