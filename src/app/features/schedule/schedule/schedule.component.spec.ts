@@ -500,6 +500,23 @@ describe('ScheduleComponent', () => {
         expect(component.daysToShow()).toEqual(['2026-10-01']);
       });
 
+      it('goes back from October 2 to October 1 before the day starts in day view', () => {
+        mockLayoutService.selectedTimeView.set('day');
+        jasmine.clock().mockDate(new Date(2026, 9, 1, 1));
+
+        component.goToNextPeriod();
+        component.goToNextPeriod();
+        expect(component.daysToShow()).toEqual(['2026-10-02']);
+
+        component.goToPreviousPeriod();
+        expect(component['_selectedDate']()).toEqual(new Date(2026, 9, 1));
+        expect(component.daysToShow()).toEqual(['2026-10-01']);
+
+        component.goToPreviousPeriod();
+        expect(component['_selectedDate']()).toBeNull();
+        expect(component.daysToShow()).toEqual(['2026-09-30']);
+      });
+
       it('advances from the displayed September to October before the day starts', () => {
         jasmine.clock().mockDate(new Date(2026, 9, 1, 1));
         expect(component.headerTitle()).toBe('September 2026');

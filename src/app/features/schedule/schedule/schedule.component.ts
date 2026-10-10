@@ -350,8 +350,9 @@ export class ScheduleComponent {
       previousPeriod.setDate(currentDate.getDate() - daysToSkip);
       previousPeriod.setHours(0, 0, 0, 0);
 
-      // If going back would land on or before today, snap to "today view" (null)
-      const todayMidnight = new Date();
+      // If going back would land on or before today, snap to "today view" (null).
+      // Today is the logical day the today view shows, as in goToNextPeriod.
+      const todayMidnight = this._dateService.getLogicalTodayDate();
       todayMidnight.setHours(0, 0, 0, 0);
       if (previousPeriod.getTime() <= todayMidnight.getTime()) {
         this._selectedDate.set(null);
