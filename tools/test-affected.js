@@ -29,7 +29,8 @@ const STYLE_URLS_RE = /\bstyleUrls\s*:\s*\[([^\]]*)\]/g;
 const SETUP_FILES = ['src/test.ts', 'src/polyfills.ts'];
 // Non-TS sources nothing imports: global styles (karma `styles`), scss
 // partials (@use isn't tracked) and assets fetched at runtime. Translations
-// other than en.json are never loaded by specs.
+// are excluded: specs only import en.json directly, which the graph follows,
+// and never load other locales.
 const UNTRACKED_RESOURCE_RE = /^src\/(?!assets\/i18n\/).*\.(html|json|scss)$/;
 const FLAGS = new Set(['--base', '--list']);
 // Changes here affect every spec (build/test setup) or are invisible to the graph.

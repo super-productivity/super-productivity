@@ -1,3 +1,4 @@
+import { type Locator } from '@playwright/test';
 import { expect, test } from '../../fixtures/test.fixture';
 import { waitForMenuSettled } from '../../utils/waits';
 
@@ -87,5 +88,80 @@ test.describe('Task multi-select (touch)', () => {
     await expect(bar).toBeHidden();
     await expect(page.locator('task .select-ring')).toHaveCount(0);
     await expect(page.locator('.mat-mdc-menu-panel')).toHaveCount(0);
+  });
+
+  test('mobile planner swipe menu enables tap selection and pauses dragging', async ({
+    page,
+    workViewPage,
+    testPrefix,
+  }) => {
+    await workViewPage.waitForTaskList();
+    const first = `${testPrefix}-Planner One`;
+    const second = `${testPrefix}-Planner Two`;
+    await workViewPage.addTask(first);
+    await workViewPage.addTask(second);
+    await page.locator('magic-side-nav a[href="#/planner"]').click();
+    await page.setViewportSize({ width: 390, height: 844 });
+    const a = page.locator('planner-task').filter({ hasText: first });
+    const b = page.locator('planner-task').filter({ hasText: second });
+    await expect(a).toBeVisible();
+    await a.scrollIntoViewIfNeeded();
+
+    // Use native touch input for menu entry and disabled swipe behavior.
+    const swipe = async (task: Locator, direction: 'left' | 'right'): Promise<void> => {
+      await task.scrollIntoViewIfNeeded();
+      const box = await task.boundingBox();
+      if (!box) throw new Error('Planner task has no bounding box');
+      const cdp = await page.context().newCDPSession(page);
+      const sign = direction === 'left' ? -1 : 1;
+      const startOffset = box.width * (direction === 'left' ? 0.8 : 0.3);
+      const halfHeight = box.height / 2;
+      const x = box.x + startOffset;
+      const y = box.y + halfHeight;
+      await cdp.send('Input.dispatchTouchEvent', {
+        type: 'touchStart',
+        touchPoints: [{ x, y }],
+      });
+      for (let step = 1; step <= 5; step++) {
+        const distance = sign * box.width * 0.1 * step;
+        await cdp.send('Input.dispatchTouchEvent', {
+          type: 'touchMove',
+          touchPoints: [{ x: x + distance, y }],
+        });
+      }
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+      await cdp.detach();
+    };
+    await swipe(a, 'left');
+    await waitForMenuSettled(page);
+    await page
+      .locator('.mat-mdc-menu-content button', { hasText: 'Select several tasks' })
+      .tap();
+
+    const bar = page.locator(BAR);
+    await expect(bar).toContainText('1 selected');
+    await expect(a).toHaveClass(/isMultiSelected/);
+    await expect(a).toHaveClass(/cdk-drag-disabled/);
+    await expect(b).toHaveClass(/cdk-drag-disabled/);
+    await expect(a.locator('done-toggle')).toHaveCount(0);
+    await expect(b.locator('done-toggle')).toHaveCount(0);
+    await swipe(b, 'right');
+    // Swipe completion and the task-done animation dispatch after 200ms each.
+    await page.waitForTimeout(600);
+    await expect(b).not.toHaveClass(/isDone/);
+    await expect(bar).toContainText('1 selected');
+    await b.locator('.title').tap();
+    await expect(bar).toContainText('2 selected');
+    await expect(b).toHaveClass(/isMultiSelected/);
+    await expect(page.locator('task-detail-panel')).toBeHidden();
+
+    await a.locator('.title').tap();
+    await expect(bar).toContainText('1 selected');
+    await b.locator('.title').tap();
+    await expect(bar).toBeHidden();
+    await expect(a).not.toHaveClass(/cdk-drag-disabled/);
+    await expect(b).not.toHaveClass(/cdk-drag-disabled/);
+    await expect(a.locator('done-toggle')).toBeVisible();
+    await expect(page.locator('task-detail-panel')).toBeHidden();
   });
 });

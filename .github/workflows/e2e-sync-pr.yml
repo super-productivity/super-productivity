@@ -97,7 +97,7 @@ jobs:
           SYNC_UTILITY_PATHS='src/app/core/date/date\.service\.ts$|src/app/core/util/|src/app/util/(get-db-date-str|is-today\.util|start-of-next-day\.util|local-actions\.token|skip-during-sync(-window)?\.operator|wait-for-sync-window\.operator)\.ts$'
           COMMON="src/app/imex/sync/|src/app/op-log/|src/app/pfapi/|src/app/root-store/|src/app/features/[^/]+/store/|${PERSISTENT_ACTION_PATHS}|${SYNC_UTILITY_PATHS}|packages/sync-providers/|packages/sync-core/|packages/shared-schema/|docker-compose\.yaml$|e2e/tests/sync/|e2e/helpers/|e2e/pages/|e2e/fixtures/|e2e/constants/|e2e/utils/|e2e/playwright\.config\.ts$|e2e/global-setup\.ts$|\.github/workflows/e2e-sync-pr\.yml$"
           # SuperSync also depends on the server package and its compose override.
-          SUPERSYNC_PATTERN="^(${COMMON}|packages/super-sync-server/|docker-compose\.supersync\.yaml\$)"
+          SUPERSYNC_PATTERN="^(${COMMON}|packages/super-sync-server/|docker-compose\.supersync\.yaml\$|e2e/webdav-server/|scripts/wait-for-webdav\.sh\$)"
           # WebDAV also depends on its E2E server image and precondition probe.
           WEBDAV_PATTERN="^(${COMMON}|e2e/webdav-server/|scripts/wait-for-webdav\.sh\$)"
           # The sync fuzz harness runs client sync code only, not the E2E helpers.

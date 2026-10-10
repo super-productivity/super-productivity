@@ -179,6 +179,11 @@ fi
 COMPOSE_FILES="-f docker-compose.yml"
 if [ -f "docker-compose.monitoring.yml" ]; then
     COMPOSE_FILES="$COMPOSE_FILES -f docker-compose.monitoring.yml"
+    # The monitoring file declares the shared network as external, which makes
+    # the merged config external too, so compose never creates it on a new host.
+    if ! docker network inspect super-sync-server_internal >/dev/null 2>&1; then
+        docker network create super-sync-server_internal >/dev/null
+    fi
 fi
 
 # Validate Caddyfile syntax before deploying

@@ -199,8 +199,8 @@ test.describe('@supersync time delta reload mid remote apply', () => {
   }
 
   // A's newer rename beats B's pending rename (a lone delta would commute), so no
-  // resolution batch is written: the remote row and the kept-delta re-clock commit
-  // separately.
+  // resolution batch is written: the kept-delta re-clock rides the remote-winner
+  // commit instead.
   test('a kept delta survives a reload before the remote-wins-only re-clock', async ({
     browser,
     baseURL,

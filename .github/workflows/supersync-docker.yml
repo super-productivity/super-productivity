@@ -103,11 +103,12 @@ jobs:
           build-args: |
             VCS_REF=${{ steps.source-ref.outputs.revision }}
           no-cache: ${{ github.event_name == 'workflow_dispatch' && inputs.no_cache || false }}
-          platforms: linux/amd64
-          # Buildx would otherwise attach a provenance attestation, turning every push
-          # into an OCI index with an untagged child version. Nobody consumes the
-          # attestation (deploys verify the VCS_REF revision label instead), and a flat
-          # one-version-per-build graph is what makes the prune step below safe.
+          # arm64 runs under BuildKit's bundled QEMU; only the runtime stage is
+          # emulated because the builder stage pins $BUILDPLATFORM.
+          platforms: linux/amd64,linux/arm64
+          # Nobody consumes provenance attestations (deploys verify the VCS_REF
+          # revision label instead), so skip them rather than add a third untagged
+          # child per build to the index.
           provenance: false
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -115,16 +116,23 @@ jobs:
       - name: Image digest
         run: echo "Image pushed with digest ${{ steps.meta.outputs.tags }}"
 
-      # Keep the registry from accumulating a version per master push forever. 15
-      # newest versions ≈ weeks of rollback targets at the current push cadence.
-      # Safe to count naively because the build is single-arch with provenance off:
-      # one version per build, no untagged children a deletion could orphan.
+      # Keep the registry from accumulating an image per master push forever. 15
+      # newest tagged images ≈ weeks of rollback targets at the current push cadence.
+      # Each build is a multi-arch index with untagged per-arch children, so a
+      # version-counting prune could delete children of a kept index. This action
+      # counts tagged images and deletes children only with their parent.
+      # delete-untagged collects children orphaned when cancel-in-progress kills a
+      # push between the per-arch manifests and the index; validate warns if any
+      # kept index is missing a platform child.
       # Requires the package to grant this repo write access (it does — this same
       # workflow publishes it with GITHUB_TOKEN).
       - name: Prune old package versions
         if: github.event_name == 'push'
-        uses: actions/delete-package-versions@e5bc658cc4c965c472efe991f8beea3981499c55 # v5
+        uses: dataaxiom/ghcr-cleanup-action@d52806a0dc70b430571a37da1fde39733ffd640f # v1.2.2
         with:
-          package-name: supersync
-          package-type: container
-          min-versions-to-keep: 15
+          packages: supersync
+          keep-n-tagged: 15
+          delete-untagged: true
+          delete-ghost-images: true
+          delete-partial-images: true
+          validate: true

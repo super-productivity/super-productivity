@@ -79,7 +79,7 @@ export const rebaseKeptOpsInTx = async (
   tx: OpLogTx,
   args: {
     opIds: Iterable<string>;
-    successorOpIds: ReadonlySet<string>;
+    successorOpIds?: ReadonlySet<string>;
     clockToDominate: VectorClock;
     written: MixedSourceWrittenOperation[];
     clientId: string;
@@ -97,7 +97,7 @@ export const rebaseKeptOpsInTx = async (
   }
   if (pendingIds.length === 0) return undefined;
   const successorIds = args.written
-    .filter((w) => w.source === 'local' && args.successorOpIds.has(w.op.id))
+    .filter((w) => w.source === 'local' && args.successorOpIds?.has(w.op.id))
     .map((w) => w.op.id);
   const result = await rebasePendingLocalOpsInTx(tx, {
     ...args,

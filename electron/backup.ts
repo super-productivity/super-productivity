@@ -1,3 +1,4 @@
+import { createSafeIpcError } from './safe-ipc-error';
 import { app, ipcMain } from 'electron';
 import type { IpcMainInvokeEvent } from 'electron';
 import {
@@ -158,6 +159,9 @@ function backupData(
   } catch (e) {
     log('Error while backing up');
     error(e);
+    // Rejects the renderer's invoke so it doesn't record a backup that never
+    // landed (#10022); the safe error keeps the file path out of renderer logs.
+    throw createSafeIpcError(IPC.BACKUP, e);
   }
 }
 
