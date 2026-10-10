@@ -309,7 +309,7 @@ export class FocusModeEffects {
         tap(() => {
           // When the looping break-end alarm is enabled it owns the break-end
           // sound (breakEndAlarmSound$); skip the one-shot here so they don't
-          // double up. The window focus/flash still fires.
+          // double up. The window flash still fires.
           this._notifyUser(false, this._isLoopBreakEndAlarmOn());
         }),
       ),
@@ -897,7 +897,7 @@ export class FocusModeEffects {
     { dispatch: false },
   );
 
-  focusWindowOnBreakStart$ =
+  notifyOnBreakStart$ =
     IS_ELECTRON &&
     createEffect(
       () =>
@@ -980,9 +980,9 @@ export class FocusModeEffects {
       playSound(SESSION_DONE_SOUND, soundVolume);
     }
 
-    // Focus window if in Electron
-    if (IS_ELECTRON) {
-      window.ea.showOrFocus();
+    // Flash instead of focusing the window so a session or break end doesn't
+    // steal keyboard focus from whatever the user is working in (#10476)
+    if (this._isElectron) {
       window.ea.flashFrame();
       window.ea.setProgressBar({
         progress: 1,
