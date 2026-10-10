@@ -383,8 +383,9 @@ PluginAPI.showSnack({
   msg: 'Operation completed!',
   type: 'SUCCESS', // SUCCESS, ERROR, INFO, WARNING
   ico: 'check', // Optional Material icon
-  actionStr: 'Undo', // Optional action button
-  actionFn: () => console.log('Undo clicked'),
+  // Optional action button; the snack then stays visible longer.
+  // plugin.js only: functions cannot cross the iframe message boundary.
+  action: { label: 'Undo', onClick: () => console.log('Undo clicked') },
 });
 
 // System notification
@@ -675,7 +676,8 @@ Consent handling differs by plugin type:
   (forcing a fresh prompt) when you **disable**, **uninstall**, or **re-upload** the
   plugin, so replacing a plugin's code under the same id always re-asks. To revoke access
   without removing the plugin, simply disable it.
-- **Built-in plugins** (e.g. `sync-md`) keep the per-session prompt and are not persisted.
+- **Built-in plugins** (e.g. `sync-md`) use the same ask-once consent, shown with the
+  verified on-disk name. Disabling the plugin clears it.
 
 > **Plugin id constraints (for `nodeExecution`):** the consent grant keys on your
 > manifest `id`, so it must be a single safe token — no whitespace, control/bidi

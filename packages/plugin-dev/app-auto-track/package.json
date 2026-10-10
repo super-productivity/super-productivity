@@ -1,0 +1,19 @@
+{
+  "name": "app-auto-track",
+  "version": "0.1.0",
+  "description": "Suggest or switch the tracked task based on the foreground application",
+  "private": true,
+  "scripts": {
+    "build": "node scripts/build.js",
+    "lint": "tsc --noEmit",
+    "test": "node scripts/test.js"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.33",
+    "esbuild": "^0.28.1",
+    "typescript": "^5.8.3"
+  },
+  "dependencies": {
+    "@super-productivity/plugin-api": "file:../../plugin-api"
+  }
+}

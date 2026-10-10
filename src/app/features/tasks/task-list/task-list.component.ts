@@ -254,7 +254,7 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
 
   enterPredicate = (drag: CdkDrag, drop: CdkDropList): boolean => {
     // TODO this gets called very often for nested lists. Maybe there are possibilities to optimize
-    if (this.multiDrag.ids().length > 1)
+    if (this.multiDrag.isListGroupDrag())
       return this.multiDrag.canDrop(
         drop.data.listId,
         drop.data.listModelId,
@@ -445,7 +445,7 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
     }
 
     const isGroupLeaderAtSamePosition =
-      this.multiDrag.ids().length > 1 &&
+      this.multiDrag.isListGroupDrag() &&
       ev.previousContainer === ev.container &&
       ev.previousIndex === ev.currentIndex;
     const targetTask = targetListData.filteredTasks[ev.currentIndex] as TaskCopy;
@@ -456,7 +456,11 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
       throw new Error('Should not happen 2');
     }
 
-    if (!this.multiDrag.ids().length && targetTask && targetTask.id === draggedTask.id) {
+    if (
+      !this.multiDrag.isListGroupDrag() &&
+      targetTask &&
+      targetTask.id === draggedTask.id
+    ) {
       return;
     }
 
@@ -537,8 +541,9 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
       newIds: newIds.map((t) => t.id),
     });
 
-    const groupOrderedIds =
-      this.multiDrag.ids().length > 1 ? newIds.map((task) => task.id) : null;
+    const groupOrderedIds = this.multiDrag.isListGroupDrag()
+      ? newIds.map((task) => task.id)
+      : null;
     if (
       groupOrderedIds &&
       isGroupLeaderAtSamePosition &&

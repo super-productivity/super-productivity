@@ -219,7 +219,7 @@ export interface ElectronAPI {
 
   flashFrame(): void;
 
-  showOrFocus(): void;
+  showOrFocus(opts?: { isReminder?: boolean }): void;
 
   lockScreen(): void;
 

@@ -512,6 +512,7 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
           data: {
             okTxt: T.F.TASK.D_CONFIRM_DELETE.OK,
             message: T.F.TASK.D_CONFIRM_DELETE.MSG,
+            isFocusConfirm: true,
             translateParams: { title: this.task.title },
           },
         })

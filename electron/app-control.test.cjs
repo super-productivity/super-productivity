@@ -13,6 +13,7 @@ let nextIsLocked;
 let sharedState;
 let refreshIndicatorCalls;
 let localRestApiConfig;
+let focusCalls;
 
 const resetModule = () => {
   delete require.cache[appControlModulePath];
@@ -69,7 +70,12 @@ const installMocks = () => {
     if (request === '../various-shared') {
       return {
         quitApp: () => {},
-        showOrFocus: () => {},
+        showOrFocus: () => {
+          focusCalls.push('showOrFocus');
+        },
+        focusForReminder: () => {
+          focusCalls.push('focusForReminder');
+        },
       };
     }
 
@@ -153,6 +159,7 @@ test.beforeEach(() => {
   };
   refreshIndicatorCalls = 0;
   localRestApiConfig = undefined;
+  focusCalls = [];
 
   installMocks();
 });
@@ -210,4 +217,15 @@ test('settings update falls back to legacy misc tray task setting', async () => 
   assert.equal(sharedState.isTrayShowCurrentTask, true);
   assert.equal(sharedState.isTrayShowCurrentCountdown, true);
   assert.equal(refreshIndicatorCalls, 1);
+});
+
+test('SHOW_OR_FOCUS routes reminder requests to the forced focus path (#10410)', () => {
+  const { initAppControlIpc } = loadAppControlModule();
+  initAppControlIpc();
+  const showOrFocusHandler = ipcHandlers.get('SHOW_OR_FOCUS');
+
+  showOrFocusHandler({});
+  showOrFocusHandler({}, { isReminder: true });
+
+  assert.deepEqual(focusCalls, ['showOrFocus', 'focusForReminder']);
 });

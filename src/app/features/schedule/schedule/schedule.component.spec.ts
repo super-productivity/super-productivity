@@ -18,6 +18,7 @@ import { ScheduleDay } from '../schedule.model';
 import { CalendarEventActionsService } from '../../calendar-integration/calendar-event-actions.service';
 import { registerLocaleData } from '@angular/common';
 import localeSv from '@angular/common/locales/sv';
+import { DateService } from '../../../core/date/date.service';
 
 describe('ScheduleComponent', () => {
   const mockLocalization = signal({ firstDayOfWeek: 1, dateTimeLocale: 'en-US' });
@@ -466,6 +467,80 @@ describe('ScheduleComponent', () => {
   });
 
   describe('goToNextPeriod', () => {
+    describe('with a shifted day start', () => {
+      beforeEach(() => {
+        jasmine.clock().install();
+        const dateService = TestBed.inject(DateService);
+        dateService.setStartOfNextDayDiff('04:00');
+        const calendarService = {
+          _dateService: dateService,
+        } as unknown as ScheduleService;
+        mockScheduleService.getMonthDaysToShow.and.callFake((...args) =>
+          ScheduleService.prototype.getMonthDaysToShow.apply(calendarService, args),
+        );
+        mockScheduleService.getMonthWeeksToShow.and.callFake((...args) =>
+          ScheduleService.prototype.getMonthWeeksToShow.apply(calendarService, args),
+        );
+        mockScheduleService.getDaysToShow.and.callFake((...args) =>
+          ScheduleService.prototype.getDaysToShow.apply(calendarService, args),
+        );
+        mockLayoutService.selectedTimeView.set('month');
+      });
+
+      afterEach(() => jasmine.clock().uninstall());
+
+      it('advances from the displayed September 30 to October 1 before the day starts in day view', () => {
+        mockLayoutService.selectedTimeView.set('day');
+        jasmine.clock().mockDate(new Date(2026, 9, 1, 1));
+        expect(component.daysToShow()).toEqual(['2026-09-30']);
+
+        component.goToNextPeriod();
+
+        expect(component['_selectedDate']()).toEqual(new Date(2026, 9, 1));
+        expect(component.daysToShow()).toEqual(['2026-10-01']);
+      });
+
+      it('advances from the displayed September to October before the day starts', () => {
+        jasmine.clock().mockDate(new Date(2026, 9, 1, 1));
+        expect(component.headerTitle()).toBe('September 2026');
+
+        component.goToNextPeriod();
+
+        expect(component['_selectedDate']()).toEqual(new Date(2026, 9, 1));
+        expect(component.headerTitle()).toBe('October 2026');
+      });
+
+      it('advances from December to January before the first logical day of the year', () => {
+        jasmine.clock().mockDate(new Date(2027, 0, 1, 1));
+        expect(component.headerTitle()).toBe('December 2026');
+
+        component.goToNextPeriod();
+
+        expect(component['_selectedDate']()).toEqual(new Date(2027, 0, 1));
+        expect(component.headerTitle()).toBe('January 2027');
+      });
+
+      it('advances from October to November after the day starts', () => {
+        jasmine.clock().mockDate(new Date(2026, 9, 1, 5));
+        expect(component.headerTitle()).toBe('October 2026');
+
+        component.goToNextPeriod();
+
+        expect(component['_selectedDate']()).toEqual(new Date(2026, 10, 1));
+      });
+
+      it('uses an explicitly selected month without shifting it again', () => {
+        jasmine.clock().mockDate(new Date(2026, 9, 1, 1));
+        component['_selectedDate'].set(new Date(2026, 11, 1));
+
+        component.goToNextPeriod();
+
+        expect(component['_selectedDate']()).toEqual(new Date(2027, 0, 1));
+        component.goToPreviousPeriod();
+        expect(component['_selectedDate']()).toEqual(new Date(2026, 11, 1));
+      });
+    });
+
     it('should advance exactly one day in day view', () => {
       mockLayoutService.selectedTimeView.set('day');
       mockScheduleService.getDaysToShow.and.returnValue(['2027-06-15']);

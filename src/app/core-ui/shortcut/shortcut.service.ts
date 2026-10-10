@@ -247,7 +247,10 @@ export class ShortcutService {
       this._router.navigate(['/tag/' + TODAY_TAG.id + '/tasks']);
     } else if (checkKeyCombo(ev, keys.goToSettings)) {
       this._router.navigate(['/config']);
-    } else if (checkKeyCombo(ev, keys.goToScheduledView)) {
+    } else if (
+      checkKeyCombo(ev, keys.goToScheduledView) &&
+      this._configService.appFeatures().isSchedulerEnabled
+    ) {
       this._router.navigate(['/schedule']);
 
       // } else if (checkKeyCombo(ev, keys.goToDailyAgenda)) {
@@ -255,7 +258,10 @@ export class ShortcutService {
       //
       // } else if (checkKeyCombo(ev, keys.goToFocusMode)) {
       //   this._router.navigate(['/focus-view']);
-    } else if (checkKeyCombo(ev, keys.showSearchBar)) {
+    } else if (
+      checkKeyCombo(ev, keys.showSearchBar) &&
+      this._configService.appFeatures().isSearchEnabled
+    ) {
       this._router.navigate(['/search']);
       ev.preventDefault();
     } else if (checkKeyCombo(ev, keys.focusSideNav)) {

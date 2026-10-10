@@ -415,6 +415,35 @@ const plugins = [
     },
   },
   {
+    name: 'app-auto-track',
+    path: 'app-auto-track',
+    needsInstall: true,
+    copyToAssets: true,
+    buildCommand: async (pluginPath) => {
+      await execAsync(`cd ${pluginPath} && npm run build`);
+      const targetDir = path.join(
+        __dirname,
+        '../../../src/assets/bundled-plugins/app-auto-track',
+      );
+      if (!fs.existsSync(targetDir)) {
+        fs.mkdirSync(targetDir, { recursive: true });
+      }
+      const distFiles = [
+        'manifest.json',
+        'plugin.js',
+        'config-schema.json',
+        'icon.svg',
+        'i18n',
+      ];
+      for (const file of distFiles) {
+        const src = path.join(pluginPath, 'dist', file);
+        const dest = path.join(targetDir, file);
+        if (fs.existsSync(src)) copyRecursive(src, dest);
+      }
+      return 'Built and copied to assets';
+    },
+  },
+  {
     name: 'todoist-import',
     path: 'todoist-import',
     needsInstall: true,

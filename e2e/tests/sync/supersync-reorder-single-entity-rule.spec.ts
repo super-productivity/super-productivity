@@ -318,7 +318,8 @@ const editNote = async (page: Page, id: string, edit: EditName): Promise<void> =
 const openProjectWorkView = async (page: Page): Promise<void> => {
   await page.goto(`/#/project/${PROJECT}/tasks`);
   await waitForAppReady(page, { ensureRoute: false });
-  // The previous work view stays in the DOM until its :leave animation ends.
+  // The route's warpRoute animation keeps the leaving work view (e.g. Today) in
+  // the DOM next to the entering one until it finishes; wait for it to go.
   await expect(page.locator('.sections-wrapper')).toHaveCount(1);
   await expect(page.locator('.sections-wrapper')).toBeVisible();
 };
@@ -943,8 +944,8 @@ test('@supersync reorder rule: project notes vs pin without causal proof keeps s
         expect(pending(all)).toEqual([]);
         expect(fullStateOps(all).every((id) => fullStateBefore.has(id))).toBe(true);
       }
-      // The snapshot carries isPinnedToToday; applying it keeps B's Today list
-      // in step with the pin (#10659).
+      // The LWW snapshot replacement keeps note.todayOrder in step with
+      // isPinnedToToday (#10659, #10379), so B's Today list shows the pin too.
       expect(finalA.other).toContain(ids[0]);
       expect(finalB.other).toContain(ids[0]);
     },
