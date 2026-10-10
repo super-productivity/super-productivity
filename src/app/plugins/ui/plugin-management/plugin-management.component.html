@@ -239,16 +239,12 @@
 
 <mat-card class="community-plugins-card">
   <mat-card-header>
-    <mat-card-title>Community Plugins</mat-card-title>
+    <mat-card-title>{{ T.PLUGINS.COMMUNITY_PLUGINS_TITLE | translate }}</mat-card-title>
   </mat-card-header>
   <mat-card-content>
     <div class="install-warning">
       <mat-icon>warning</mat-icon>
-      <span>
-        These plugins are developed by the community and are NOT reviewed or guaranteed by
-        the Super Productivity team. Install and use them at your own risk — they might
-        contain malicious code or break your application.
-      </span>
+      <span>{{ T.PLUGINS.COMMUNITY_PLUGINS_WARNING | translate }}</span>
     </div>
 
     <div class="community-plugins-list">
@@ -263,7 +259,7 @@
           </h3>
           <p class="plugin-author">
             <span>
-              by
+              {{ communityAuthoredBy().beforeAuthor }}
               @if (plugin.authorUrl) {
                 <a
                   [href]="plugin.authorUrl"
@@ -273,11 +269,14 @@
               } @else {
                 {{ plugin.author }}
               }
+              {{ communityAuthoredBy().afterAuthor }}
             </span>
             @if (plugin.stars !== undefined) {
               <span
                 class="plugin-stars"
-                [attr.aria-label]="plugin.stars + ' stars'"
+                [attr.aria-label]="
+                  T.PLUGINS.COMMUNITY_PLUGINS_STARS | translate: { count: plugin.stars }
+                "
               >
                 <mat-icon>star</mat-icon>
                 {{ plugin.stars }}
@@ -297,7 +296,7 @@
         color="primary"
       >
         <mat-icon>add</mat-icon>
-        Get your plugin to show up here
+        {{ T.PLUGINS.COMMUNITY_PLUGINS_ADD_YOURS | translate }}
       </a>
     </div>
   </mat-card-content>

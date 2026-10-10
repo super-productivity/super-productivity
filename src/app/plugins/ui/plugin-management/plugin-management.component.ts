@@ -5,6 +5,8 @@ import {
   inject,
   signal,
 } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
+import { map } from 'rxjs/operators';
 import { PluginService } from '../../plugin.service';
 import { PluginInstance } from '../../plugin-api.model';
 import { PluginMetaPersistenceService } from '../../plugin-meta-persistence.service';
@@ -59,6 +61,25 @@ interface CommunityPlugin {
 interface PluginManifestAuthor {
   author?: unknown;
 }
+
+// Stands in for the author name in PLUGINS.AUTHORED_BY, so the community card can
+// render the name as a link while each translation keeps its own word order.
+const AUTHOR_PLACEHOLDER = '\u0000';
+
+interface AuthoredByParts {
+  beforeAuthor: string;
+  afterAuthor: string;
+}
+
+const splitAroundAuthor = (text: string): AuthoredByParts => {
+  const i = text.indexOf(AUTHOR_PLACEHOLDER);
+  return i === -1
+    ? { beforeAuthor: text, afterAuthor: '' }
+    : {
+        beforeAuthor: text.slice(0, i),
+        afterAuthor: text.slice(i + AUTHOR_PLACEHOLDER.length),
+      };
+};
 
 @Component({
   selector: 'plugin-management',
@@ -137,6 +158,13 @@ export class PluginManagementComponent {
     [...(COMMUNITY_PLUGINS_DATA as CommunityPlugin[])].sort((a, b) =>
       a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }),
     ),
+  );
+
+  readonly communityAuthoredBy = toSignal(
+    this._translateService
+      .stream(T.PLUGINS.AUTHORED_BY, { author: AUTHOR_PLACEHOLDER })
+      .pipe(map((text: unknown) => splitAroundAuthor(String(text)))),
+    { initialValue: splitAroundAuthor('') },
   );
 
   T: typeof T = T;
