@@ -245,15 +245,9 @@ class JavaScriptInterface(
         // After a process kill the companion is empty but the session may be
         // persisted; restoring it here is what lets the JS cold-start recovery
         // credit the time tracked while the process was gone (#7390).
-        TrackingForegroundService.restoreIfIdle(activity)
-        val taskId = TrackingForegroundService.currentTaskId
-        val elapsedMs = TrackingForegroundService.getElapsedMs()
-        val isTracking = TrackingForegroundService.isTracking
-        return if (isTracking && taskId != null) {
-            JSONObject().put("taskId", taskId).put("elapsedMs", elapsedMs).toString()
-        } else {
-            "null"
-        }
+        val (taskId, elapsedMs) =
+            TrackingForegroundService.snapshotForBridge(activity) ?: return "null"
+        return JSONObject().put("taskId", taskId).put("elapsedMs", elapsedMs).toString()
     }
 
     @Suppress("unused")

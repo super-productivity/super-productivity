@@ -108,6 +108,19 @@ class TrackingForegroundService : Service() {
             applyInMemory(state)
         }
 
+        /**
+         * The active session as (taskId, elapsedMs) for the JS bridge, restoring
+         * a persisted one first, or null when nothing is tracked. Read under the
+         * companion lock so a main-thread start/update/stop cannot interleave
+         * and pair one task's id with another task's total.
+         */
+        @Synchronized
+        fun snapshotForBridge(context: Context): Pair<String, Long>? {
+            restoreIfIdle(context)
+            val taskId = currentTaskId
+            return if (isTracking && taskId != null) taskId to getElapsedMs() else null
+        }
+
         private fun applyInMemory(state: TrackingState) {
             currentTaskId = state.taskId
             taskTitle = state.taskTitle
