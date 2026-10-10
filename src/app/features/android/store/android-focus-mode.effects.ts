@@ -49,6 +49,7 @@ import { DataInitStateService } from '../../../core/data-init/data-init-state.se
 import { SyncTriggerService } from '../../../imex/sync/sync-trigger.service';
 import { waitForSyncWindow } from '../../../util/wait-for-sync-window.operator';
 import { bulkApplyOperations } from '../../../op-log/apply/bulk-hydration.action';
+import { AndroidNotificationActionService } from '../android-notification-action.service';
 
 type FocusNotificationTask = Pick<Task, 'id' | 'title'> | null | undefined;
 
@@ -276,6 +277,7 @@ export class AndroidFocusModeEffects {
   private _syncTrigger = inject(SyncTriggerService);
   private _dataInitState = inject(DataInitStateService);
   private _operationWriteFlush = inject(OperationWriteFlushService);
+  private _notificationActions = inject(AndroidNotificationActionService);
   // Set on resume so the next emission checks the native service even when a
   // quick return keeps the elapsed jump below the 5s update gate (#9531).
   private _isNativeServiceCheckDue = false;
@@ -672,6 +674,8 @@ export class AndroidFocusModeEffects {
       if (task && data.isTaskTracking) {
         this._taskService.setCurrentId(task.id);
       }
+      // Skip/Complete tapped while the store had no session (#10683).
+      this._notificationActions.drainFocus(true);
       await this._operationWriteFlush.flushPendingWrites();
     } catch (error) {
       DroidLog.err('Failed to recover focus task time', error);
