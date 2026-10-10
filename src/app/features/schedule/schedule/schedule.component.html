@@ -148,6 +148,7 @@
       [daysToShow]="daysToShow()"
       [weeksToShow]="weeksToShow()"
       [firstDayOfWeek]="firstDayOfWeek()"
+      [deadlineTasksByDay]="deadlineTasksByDay()"
     ></schedule-month>
   } @else {
     <schedule-week
@@ -159,6 +160,7 @@
       [todayDateStr]="_todayDateStr()"
       [isHorizontalScrollMode]="shouldEnableHorizontalScroll()"
       [isHScrolled]="isHScrolled()"
+      [deadlineTasksByDay]="deadlineTasksByDay()"
     ></schedule-week>
   }
 </div>

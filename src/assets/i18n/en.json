@@ -1110,6 +1110,8 @@
     "SCHEDULE": {
       "CALENDAR_VISIBILITY": "Calendar visibility",
       "CLICK_TO_CREATE_TASK": "click to create task",
+      "DEADLINE_TASKS_TOOLTIP": "{{count}} tasks with deadlines: {{titles}}",
+      "DEADLINE_TASKS_TOOLTIP_ONE": "{{count}} task with a deadline: {{titles}}",
       "D_INITIAL": {
         "TEXT": "<p>The Schedule will provide you with a better picture of how one's planned tasks play out over time. It is automatically generated from your Tasks and requires only <strong>time estimates on them to work</strong>.</p><p>Two things are distinguished: <strong>Scheduled Tasks</strong>, which are shown at their planned time and <strong>Regular Tasks</strong>, which should flow around those fixed events.</p><p>If you provide a work start and end time (recommended), regular tasks will never be placed outside of these boundaries.</p>",
         "TITLE": "Schedule"

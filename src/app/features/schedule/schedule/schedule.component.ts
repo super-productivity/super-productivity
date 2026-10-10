@@ -13,6 +13,9 @@ import { fromEvent } from 'rxjs';
 import { select, Store } from '@ngrx/store';
 import { selectCalendarProviders } from '../../issue/store/issue-provider.selectors';
 import { HiddenCalendarProvidersService } from '../../calendar-integration/hidden-calendar-providers.service';
+import { groupDeadlineTasksByDay } from '../../planner/store/planner.selectors';
+import { selectMapOfAllTasksInActiveProjects } from '../../tasks/store/task.selectors';
+import { selectStartOfNextDayDiffMs } from '../../../root-store/app-state/app-state.selectors';
 import { getIssueProviderTooltip } from '../../issue/mapping-helper/get-issue-provider-tooltip';
 import { IssueProvider } from '../../issue/issue.model';
 import {
@@ -292,6 +295,18 @@ export class ScheduleComponent {
     const days = this.scheduleDays();
     return mapScheduleDaysToScheduleEvents(days, FH);
   });
+
+  private _allTasksMap = toSignal(
+    this._store.pipe(select(selectMapOfAllTasksInActiveProjects)),
+    { initialValue: new Map() },
+  );
+  private _startOfNextDayDiffMs = toSignal(
+    this._store.pipe(select(selectStartOfNextDayDiffMs)),
+    { initialValue: 0 },
+  );
+  deadlineTasksByDay = computed(() =>
+    groupDeadlineTasksByDay(this._allTasksMap().values(), this._startOfNextDayDiffMs()),
+  );
 
   private _workStartEndHours = toSignal(
     this._store.pipe(select(selectTimelineWorkStartEndHours)),

@@ -477,7 +477,7 @@ const getIcalEventsForDay = (
  * Groups all undone deadline tasks by their effective day string.
  * O(N) single pass — callers can then do O(1) map lookups per day.
  */
-const groupDeadlineTasksByDay = (
+export const groupDeadlineTasksByDay = (
   activeTasks: Iterable<Task>,
   startOfNextDayDiffMs: number = 0,
 ): Record<string, TaskCopy[]> => {
