@@ -66,7 +66,9 @@
 .title-and-tags-wrapper {
   flex-grow: 1;
   flex-shrink: 1;
-  min-width: 180px;
+  // Let this flex item shrink below the old 180px floor so long titles and tags
+  // can wrap within narrow task cards (#9829).
+  min-width: 0;
   // we cannot do this since this cuts of the box shadow of the task edit
   //overflow: hidden;
 
@@ -87,6 +89,17 @@
     // to match task title padding
     margin-left: var(--s);
     margin-bottom: var(--s-half);
+  }
+
+  // A single long tag is a flex item, so cap it at the title area and allow its
+  // text to break instead of painting beyond the task card (#9829).
+  ::ng-deep tag {
+    max-width: 100%;
+
+    .tag-title {
+      min-width: 0;
+      overflow-wrap: anywhere;
+    }
   }
 }
 
