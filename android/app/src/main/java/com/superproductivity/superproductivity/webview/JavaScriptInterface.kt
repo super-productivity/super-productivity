@@ -213,10 +213,16 @@ class JavaScriptInterface(
                     Log.d(TAG, "stopTrackingService: app backgrounded, falling back to stopService()", e)
                     if (!TrackingForegroundService.isStartPending) {
                         activity.stopService(Intent(activity, TrackingForegroundService::class.java))
+                        // onDestroy never runs if no instance is alive: clear
+                        // the persisted session directly so it is never recovered.
+                        TrackingForegroundService.clearState(activity)
                     }
                 }
             } else {
                 activity.stopService(intent)
+                // In a fresh process after a kill nothing is in memory, but the
+                // session may still be persisted with no service to clear it.
+                TrackingForegroundService.clearState(activity)
             }
         }
     }
@@ -236,11 +242,15 @@ class JavaScriptInterface(
     @Suppress("unused")
     @JavascriptInterface
     fun getTrackingElapsed(): String {
+        // After a process kill the companion is empty but the session may be
+        // persisted; restoring it here is what lets the JS cold-start recovery
+        // credit the time tracked while the process was gone (#7390).
+        TrackingForegroundService.restoreIfIdle(activity)
         val taskId = TrackingForegroundService.currentTaskId
         val elapsedMs = TrackingForegroundService.getElapsedMs()
         val isTracking = TrackingForegroundService.isTracking
         return if (isTracking && taskId != null) {
-            """{"taskId":"$taskId","elapsedMs":$elapsedMs}"""
+            JSONObject().put("taskId", taskId).put("elapsedMs", elapsedMs).toString()
         } else {
             "null"
         }
