@@ -241,6 +241,9 @@ export interface ElectronAPI {
   sendSettingsUpdate(globalCfg: GlobalConfigState): void;
 
   updateTaskWidgetSettings(cfg: TaskWidgetConfig): void;
+  updateTaskListWidget(
+    content: import('./shared-with-frontend/task-list-widget.model').TaskListWidgetContent,
+  ): void;
 
   updateTitleBarDarkMode(isDarkMode: boolean): void;
 

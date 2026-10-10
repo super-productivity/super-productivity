@@ -1,0 +1,114 @@
+/* Standalone Electron document: mirror the app's base tokens here, since the
+   Angular stylesheet is not loaded in companion windows. */
+:root {
+  --bg: #f8f8f7;
+  --text-color: rgb(44, 44, 44);
+  --text-color-muted: #666;
+  --separator-color: #ddd;
+  --focus-ring: #6495ed;
+  --s-half: 4px;
+  --s: 8px;
+  --s2: 16px;
+  --font-size-md: 14px;
+  --font-size-sm: 12px;
+}
+body.dark {
+  --bg: #131314;
+  --text-color: rgb(230, 230, 230);
+  --text-color-muted: #aaa;
+  --separator-color: #444;
+  color-scheme: dark;
+}
+* {
+  box-sizing: border-box;
+}
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+}
+body {
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  color: var(--text-color);
+  font:
+    var(--font-size-md) 'Segoe UI',
+    'Open Sans',
+    sans-serif;
+}
+header {
+  display: flex;
+  align-items: center;
+  gap: var(--s-half);
+  height: 48px;
+  flex-shrink: 0;
+  padding: var(--s);
+  -webkit-app-region: drag;
+}
+header strong {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+button,
+select {
+  -webkit-app-region: no-drag;
+  background: var(--bg);
+  color: var(--text-color);
+  font: inherit;
+  border: 1px solid var(--separator-color);
+  border-radius: var(--s-half);
+  padding: var(--s-half) var(--s);
+}
+button {
+  cursor: pointer;
+  min-width: 28px;
+}
+button:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+main {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+  padding: 0 var(--s2) var(--s2);
+  gap: var(--s);
+}
+#scroll {
+  overflow: auto;
+  min-height: 0;
+}
+#tasks {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+#tasks > li {
+  padding: var(--s) 0;
+  border-bottom: 1px solid var(--separator-color);
+  overflow-wrap: anywhere;
+}
+p {
+  margin: 0 0 var(--s-half);
+}
+small,
+#count,
+#empty {
+  color: var(--text-color-muted);
+  font-size: var(--font-size-sm);
+}
+li ul {
+  padding-left: var(--s2);
+}
+li ul li {
+  margin-top: var(--s-half);
+}
+.collapsed main {
+  display: none;
+}
