@@ -207,7 +207,8 @@ export class AndroidNotificationActionService {
         }
         // The native counter started from the task total, so whatever it is
         // ahead by is time recorded only natively. Behind (e.g. time added on
-        // another device meanwhile) means nothing is missing.
+        // another device meanwhile) means nothing is missing. Booked on the
+        // drain's logical day, like the #7390 recovery reconcile.
         const missingMs = action.elapsedMs - task.timeSpent;
         if (missingMs > 0) {
           this._taskService.addTimeSpentAndSync(task, missingMs);
