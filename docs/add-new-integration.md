@@ -29,13 +29,19 @@ A repository-owned provider normally lives under
 ```text
 <provider-name>/
 ├── package.json
-├── scripts/build.js
+├── i18n/
 ├── src/
 │   ├── manifest.json
 │   ├── plugin.ts
 │   └── icon.svg
 └── *.spec.ts
 ```
+
+Set the package's build script to the shared builder,
+`"build": "node ../scripts/build-plugin.js"`. It bundles `src/plugin.ts` into
+`dist/plugin.js` and copies `manifest.json`, `config-schema.json`, `icon.svg`
+and `i18n/*.json` when present; see
+[build-plugin.js](../packages/plugin-dev/scripts/build-plugin.js) for options.
 
 Keep provider API types and mapping logic inside the package. Do not add the
 provider to core issue-provider unions, defaults, forms, or Angular services.
