@@ -109,10 +109,21 @@ linux:
       # `-bin` value now matches nothing on either session type.
       StartupWMClass: superproductivity
   target:
-    - AppImage
-    - deb
-    - snap
-    - rpm
+    - target: AppImage
+      arch:
+        - x64
+        - arm64
+    - target: deb
+      arch:
+        - x64
+        - arm64
+    - target: rpm
+      arch:
+        - x64
+        - arm64
+    - target: snap
+      arch:
+        - x64
   publish:
     - github
 
