@@ -350,6 +350,34 @@ describe('ScheduleComponent', () => {
       component['_selectedDate'].set(new Date('2026-01-13'));
       expect(component.isViewingToday()).toBe(false);
     });
+
+    // #10451: today (Jan 20) is a leading padding day of the next month's grid
+    describe('month view with today in the padding days of the next month', () => {
+      beforeEach(() => {
+        mockLayoutService.selectedTimeView.set('month');
+        mockScheduleService.getMonthDaysToShow.and.returnValue([
+          '2026-01-19',
+          '2026-01-20',
+          '2026-01-21',
+          '2026-02-01',
+        ]);
+        component['_selectedDate'].set(new Date(2026, 1, 1)); // Feb 1, 2026
+        fixture.detectChanges();
+      });
+
+      it('should return false', () => {
+        expect(component.isViewingToday()).toBe(false);
+      });
+
+      it('should allow navigating back to the current month', () => {
+        component.goToPreviousPeriod();
+
+        const newDate = component['_selectedDate']();
+        expect(newDate?.getFullYear()).toBe(2026);
+        expect(newDate?.getMonth()).toBe(0); // January
+        expect(component.isViewingToday()).toBe(true);
+      });
+    });
   });
 
   describe('goToPreviousPeriod', () => {
@@ -424,7 +452,7 @@ describe('ScheduleComponent', () => {
     it('should go to previous year when navigating from January in month view', () => {
       // Arrange
       mockLayoutService.selectedTimeView.set('month');
-      const startDate = new Date(2026, 0, 15); // Jan 15, 2026
+      const startDate = new Date(2027, 0, 15); // Jan 15, 2027 (future → nav enabled)
       component['_selectedDate'].set(startDate);
 
       // Act
@@ -432,7 +460,7 @@ describe('ScheduleComponent', () => {
 
       // Assert
       const newDate = component['_selectedDate']();
-      expect(newDate?.getFullYear()).toBe(2025);
+      expect(newDate?.getFullYear()).toBe(2026);
       expect(newDate?.getMonth()).toBe(11); // December
     });
   });

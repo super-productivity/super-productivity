@@ -30,8 +30,8 @@
       type="button"
       (click)="openSetupDialog(provider.registeredKey)"
     >
-      @if (provider.icon && provider.icon !== 'extension') {
-        <mat-icon [svgIcon]="provider.icon"></mat-icon>
+      @if (provider.svgIcon) {
+        <mat-icon [svgIcon]="provider.svgIcon"></mat-icon>
       } @else {
         <mat-icon>calendar_month</mat-icon>
       }
@@ -44,8 +44,8 @@
       type="button"
       (click)="enablePluginAndOpenSetup(provider.pluginId, provider.issueProviderKey)"
     >
-      @if (provider.icon && provider.icon !== 'extension') {
-        <mat-icon [svgIcon]="provider.icon"></mat-icon>
+      @if (provider.svgIcon) {
+        <mat-icon [svgIcon]="provider.svgIcon"></mat-icon>
       } @else {
         <mat-icon>calendar_month</mat-icon>
       }
@@ -107,8 +107,8 @@
       type="button"
       (click)="openSetupDialog(provider.registeredKey)"
     >
-      @if (provider.icon && provider.icon !== 'extension') {
-        <mat-icon [svgIcon]="provider.icon"></mat-icon>
+      @if (provider.svgIcon) {
+        <mat-icon [svgIcon]="provider.svgIcon"></mat-icon>
       } @else {
         <mat-icon>extension</mat-icon>
       }
@@ -121,8 +121,8 @@
       type="button"
       (click)="enablePluginAndOpenSetup(provider.pluginId, provider.issueProviderKey)"
     >
-      @if (provider.icon && provider.icon !== 'extension') {
-        <mat-icon [svgIcon]="provider.icon"></mat-icon>
+      @if (provider.svgIcon) {
+        <mat-icon [svgIcon]="provider.svgIcon"></mat-icon>
       } @else {
         <mat-icon>extension</mat-icon>
       }

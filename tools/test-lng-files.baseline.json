@@ -136,7 +136,6 @@
     "F.SCHEDULE.PLAN_START_DAY": ["date"]
   },
   "vi.json": {
-    "F.FINISH_DAY_BEFORE_EXIT.C.UNARCHIVED_TASKS.OTHER": ["nr"],
     "F.SYNC.D_AUTH_CODE.TITLE": ["provider"],
     "F.SYNC.D_DATA_REPAIRED.MSG": ["count"],
     "F.SYNC.S.VECTOR_CLOCK_LIMIT_REACHED": ["maxSize", "originalSize"],

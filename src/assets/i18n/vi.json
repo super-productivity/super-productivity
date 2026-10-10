@@ -315,8 +315,8 @@
         "QUIT": "Kết thúc ngày",
         "TITLE": "Kết thúc ngày",
         "UNARCHIVED_TASKS": {
-          "ONE": "Kết thúc ngày",
-          "OTHER": "Kết thúc ngày"
+          "ONE": "1 công việc đã hoàn thành trong danh sách Hôm nay chưa được chuyển vào kho lưu trữ.",
+          "OTHER": "{{nr}} công việc đã hoàn thành trong danh sách Hôm nay chưa được chuyển vào kho lưu trữ."
         }
       }
     },
@@ -1505,7 +1505,7 @@
         },
         "PASSWORD_SET_INFO": "🔒 Đã đặt mật khẩu.",
         "SUPER_SYNC": {
-          "ACCESS_TOKEN_DESCRIPTION": "Mô tả",
+          "ACCESS_TOKEN_DESCRIPTION": "Dán token cho tài khoản SuperSync của bạn. Trên thiết bị khác, hãy dùng lại token này hoặc đăng nhập lại để lấy token mới.",
           "BTN_CHANGE_PASSWORD": "Đổi mật khẩu",
           "BTN_DISABLE_ENCRYPTION": "Tắt mã hóa",
           "BTN_ENABLE_ENCRYPTION": "Bật mã hóa",
@@ -1557,7 +1557,7 @@
           "PASSWORDS_DONT_MATCH": "Mật khẩu không khớp",
           "PRESENCE_DEVICE_NAME_DESCRIPTION": "Hiển thị trong nhãn theo dõi thời gian trên các thiết bị khác của bạn, ví dụ \"Laptop công việc\", để phân biệt hai máy tính để bàn. Được gửi kèm trạng thái theo dõi (được mã hóa khi bật mã hóa đồng bộ). Để trống để dùng tên nền tảng hiển thị sẵn.",
           "REMOVE_ENCRYPTION_WARNING": "Xóa dữ liệu máy chủ và tải lại không mã hóa.",
-          "SERVER_URL_DESCRIPTION": "Mô tả",
+          "SERVER_URL_DESCRIPTION": "Giữ nguyên để dùng máy chủ chính thức, hoặc nhập URL máy chủ tùy chỉnh",
           "SETUP_DISABLE_SUPERSYNC_BTN": "Tắt SuperSync",
           "SETUP_ENCRYPTION_BTN": "Đặt mật khẩu",
           "SETUP_ENCRYPTION_PASSWORD_WARNING": "Dùng cùng mật khẩu mọi thiết bị.",
@@ -1570,9 +1570,9 @@
           "L_LOGIN_NAME": "Tên đăng nhập / email (tùy chọn)",
           "L_SERVER_URL": "URL máy chủ Nextcloud",
           "LOGIN_NAME_DESCRIPTION": "Chỉ điền trường này nếu máy chủ yêu cầu tên đăng nhập khác với tên người dùng ở trên, ví dụ như địa chỉ email.",
-          "SERVER_URL_DESCRIPTION": "Mô tả",
+          "SERVER_URL_DESCRIPTION": "ví dụ: https://cloud.example.com hoặc https://example.com/nextcloud",
           "L_APP_PASSWORD": "Mật khẩu ứng dụng",
-          "APP_PASSWORD_DESCRIPTION": "Mô tả",
+          "APP_PASSWORD_DESCRIPTION": "Vào Nextcloud → Cài đặt → Bảo mật → Mật khẩu ứng dụng để tạo một mật khẩu",
           "L_DETECT_USER_ID": "Phát hiện ID người dùng",
           "S_DETECT_USER_ID_NEED_LOGIN": "Trước tiên, hãy nhập URL máy chủ, thông tin đăng nhập (Tên người dùng hoặc Tên đăng nhập / email) và Mật khẩu ứng dụng.",
           "S_DETECT_USER_ID_SUCCESS": "Đã tìm thấy ID người dùng Nextcloud của bạn: {{userId}}. ID này đã được điền vào trường Tên người dùng.",
@@ -1682,7 +1682,7 @@
         "RESTORE_ENCRYPTED": "Không thể khôi phục từ lịch sử máy chủ khi bật mã hóa đầu cuối. Máy chủ không thể đọc dữ liệu đã mã hóa của bạn để khôi phục trạng thái tại một thời điểm trước đó.",
         "RESTORE_ERROR": "Khôi phục thất bại",
         "RESTORE_SUCCESS": "Khôi phục thành công",
-        "SERVER_MIGRATION_VALIDATION_FAILED": "Xác thực thất bại.",
+        "SERVER_MIGRATION_VALIDATION_FAILED": "Không thể di chuyển dữ liệu lên máy chủ - xác thực dữ liệu cục bộ thất bại. Vui lòng thử nhập một bản sao lưu.",
         "SPLIT_FORMAT_ENABLE_SETTING": "Thư mục đồng bộ này đã được nâng cấp sang định dạng tệp phân tách. Hãy bật Đồng bộ phân tách trong cài đặt Đồng bộ để tiếp tục.",
         "STORAGE_QUOTA_EXCEEDED": "Đầy bộ nhớ đồng bộ!",
         "STORAGE_RECOVERED_AFTER_COMPACTION": "Đã dọn dẹp bộ nhớ.",
@@ -1712,7 +1712,7 @@
         "CREATED_SUCCESS": "Đã tạo sao lưu",
         "DELETE_FAILED": "Xóa sao lưu thất bại",
         "DELETED_SUCCESS": "Đã xóa sao lưu",
-        "DESCRIPTION": "Mô tả",
+        "DESCRIPTION": "Bản sao lưu tự động được tạo trước khi tải dữ liệu từ máy chủ từ xa trong quá trình đồng bộ. Các bản sao lưu được sắp xếp trong 4 ô thông minh: 2 bản gần đây nhất, 1 bản đầu tiên của hôm nay và 1 bản đầu tiên của ngày trước hôm nay.",
         "LAST_CHANGE_PREFIX": "Đổi cuối:",
         "LOADING": "Đang tải...",
         "NO_BACKUPS": "Chưa có sao lưu.",
@@ -3060,15 +3060,15 @@
     "PRESETS": {
       "SIMPLE_TODO": {
         "TITLE": "Bạn muốn sử dụng Super Productivity như thế nào?",
-        "DESCRIPTION": "Mô tả"
+        "DESCRIPTION": "Trình quản lý công việc gọn gàng với dự án, thẻ và ghi chú. Không có gì thừa."
       },
       "TIME_TRACKER": {
         "TITLE": "Bạn muốn sử dụng Super Productivity như thế nào?",
-        "DESCRIPTION": "Mô tả"
+        "DESCRIPTION": "Theo dõi thời gian hoàn thành công việc. Rất phù hợp để tính giờ công hoặc hiểu thời gian của bạn trôi vào đâu."
       },
       "PRODUCTIVITY_PRO": {
         "TITLE": "Bạn muốn sử dụng Super Productivity như thế nào?",
-        "DESCRIPTION": "Mô tả"
+        "DESCRIPTION": "Lên kế hoạch cho ngày của bạn, xây dựng thói quen, tập trung sâu và theo dõi thời gian. Tất cả ở một nơi."
       }
     },
     "HINTS": {
