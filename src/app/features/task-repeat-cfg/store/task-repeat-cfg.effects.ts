@@ -74,6 +74,7 @@ export class TaskRepeatCfgEffects {
             const calculatedTargetDate = clampPastTimedOccurrence(
               getFirstRepeatOccurrence(taskRepeatCfg),
               taskRepeatCfg,
+              this._dateService.todayStr(),
             );
 
             // Use calculated date if available, otherwise fall back to existing logic
@@ -159,6 +160,7 @@ export class TaskRepeatCfgEffects {
         const firstOccurrence = clampPastTimedOccurrence(
           getFirstRepeatOccurrence(taskRepeatCfg),
           taskRepeatCfg,
+          this._dateService.todayStr(),
         );
         const firstOccurrenceStr = firstOccurrence
           ? this._dateService.todayStr(firstOccurrence)
@@ -288,8 +290,13 @@ export class TaskRepeatCfgEffects {
                     // occurrence on or after today. The strictly-future variant
                     // always skipped today, stranding a still-valid daily
                     // instance on tomorrow and advancing lastTaskCreationDay past
-                    // today (#7951).
-                    getNextRepeatOccurrence(fullCfg, new Date(), { inclusive: true });
+                    // today (#7951). Logical today, so a late-night slot before
+                    // the day boundary stays on its own night (#3378).
+                    getNextRepeatOccurrence(
+                      fullCfg,
+                      this._dateService.getLogicalTodayDate(),
+                      { inclusive: true },
+                    );
 
                 if (undoneInstances.length === 0) {
                   // No live instance to reschedule. But when startDate moved
@@ -349,7 +356,10 @@ export class TaskRepeatCfgEffects {
                     this._dateService.getStartOfNextDayDiffMs(),
                   );
                   if (slot < Date.now()) {
-                    const nextOccurrence = getNextRepeatOccurrence(fullCfg, new Date());
+                    const nextOccurrence = getNextRepeatOccurrence(
+                      fullCfg,
+                      this._dateService.getLogicalTodayDate(),
+                    );
                     if (nextOccurrence) {
                       targetOccurrence = nextOccurrence;
                     }

@@ -92,7 +92,10 @@ describe('LocalRestApiTaskRepeatCfgRoutesService', () => {
     expect(repeatCfgServiceMock.deleteTaskRepeatCfg).not.toHaveBeenCalled();
   };
 
+  let startOfNextDayDiffMs: number;
+
   beforeEach(() => {
+    startOfNextDayDiffMs = 0;
     tasks = {
       t1: createTask('t1', {
         notes: 'Some notes',
@@ -102,6 +105,9 @@ describe('LocalRestApiTaskRepeatCfgRoutesService', () => {
       due: createTask('due', { dueDay: '2026-10-10' }),
       timed: createTask('timed', {
         dueWithTime: new Date(2026, 9, 6, 9, 30).getTime(),
+      }),
+      lateNight: createTask('lateNight', {
+        dueWithTime: new Date(2026, 9, 11, 2, 0).getTime(),
       }),
       parent: createTask('parent', { subTaskIds: ['sub'] }),
       sub: createTask('sub', { parentId: 'parent' }),
@@ -164,7 +170,13 @@ describe('LocalRestApiTaskRepeatCfgRoutesService', () => {
         LocalRestApiTaskRepeatCfgRoutesService,
         { provide: TaskRepeatCfgService, useValue: repeatCfgServiceMock },
         { provide: TaskService, useValue: taskServiceMock },
-        { provide: DateService, useValue: { todayStr: (): string => TODAY } },
+        {
+          provide: DateService,
+          useValue: {
+            todayStr: (): string => TODAY,
+            getStartOfNextDayDiffMs: (): number => startOfNextDayDiffMs,
+          },
+        },
         {
           provide: GlobalConfigService,
           useValue: {
@@ -282,6 +294,17 @@ describe('LocalRestApiTaskRepeatCfgRoutesService', () => {
           startTime: '9:30',
           remindAt: TaskReminderOptionId.m10,
         }),
+      );
+    });
+
+    it('starts a late-night timed task on its logical day (#3378)', async () => {
+      // 02:00 on 10-11 is the late night of logical 10-10 with a 05:00 day start
+      const hourMs = 60 * 60 * 1000;
+      startOfNextDayDiffMs = 5 * hourMs;
+      await handle(request('POST', '/task-repeat-cfgs', { taskId: 'lateNight' }));
+
+      expect(createdCfg()).toEqual(
+        jasmine.objectContaining({ startDate: '2026-10-10', startTime: '2:00' }),
       );
     });
 

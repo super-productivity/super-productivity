@@ -999,6 +999,84 @@ describe('createBlockerBlocks()', () => {
         .map((e) => e.start);
       expect(projectionStarts).toEqual([new Date(2026, 5, 13, 2).getTime()]);
     });
+
+    it('projects the next logical day while still before the day boundary (#3378)', () => {
+      // 01:00 on the 11th is still logical 2026-06-10
+      const now = new Date(2026, 5, 11, 1).getTime();
+      const cfg: TaskRepeatCfg = {
+        ...DUMMY_REPEATABLE_TASK,
+        id: 'R_LATE',
+        startTime: '02:00',
+        defaultEstimate: hours(1),
+        repeatCycle: 'DAILY',
+      };
+      // concrete instance for logical 2026-06-10, due 02:00 on the 11th
+      const instance = {
+        ...BASE_REMINDER_TASK('02:00'),
+        id: 'late-instance',
+        repeatCfgId: 'R_LATE',
+        dueWithTime: new Date(2026, 5, 11, 2).getTime(),
+      };
+
+      const r = createSortedBlockerBlocks(
+        [instance],
+        [cfg],
+        [],
+        undefined,
+        undefined,
+        now,
+        3,
+        undefined,
+        hours(5),
+      );
+
+      const projectionStarts = r
+        .flatMap((b) => b.entries)
+        .filter((e) => e.type === BlockedBlockType.ScheduledRepeatProjection)
+        .map((e) => e.start);
+      // logical 06-11..06-13 have no instance yet; 06-13's slot falls past the
+      // view, which createScheduleDays ignores
+      expect(projectionStarts).toEqual([
+        new Date(2026, 5, 12, 2).getTime(),
+        new Date(2026, 5, 13, 2).getTime(),
+        new Date(2026, 5, 14, 2).getTime(),
+      ]);
+    });
+
+    it('projects the late night of the day before a future view (#3378)', () => {
+      const realNow = new Date(2026, 5, 10, 12).getTime();
+      const viewStart = new Date(2026, 5, 20).getTime();
+      const cfg: TaskRepeatCfg = {
+        ...DUMMY_REPEATABLE_TASK,
+        id: 'R_LATE',
+        startTime: '02:00',
+        defaultEstimate: hours(1),
+        repeatCycle: 'DAILY',
+      };
+
+      const r = createSortedBlockerBlocks(
+        [],
+        [cfg],
+        [],
+        undefined,
+        undefined,
+        viewStart,
+        2,
+        realNow,
+        hours(5),
+      );
+
+      const projectionStarts = r
+        .flatMap((b) => b.entries)
+        .filter((e) => e.type === BlockedBlockType.ScheduledRepeatProjection)
+        .map((e) => e.start);
+      // 06-20 02:00 is the late night of logical 06-19, just before the view
+      expect(projectionStarts).toEqual([
+        new Date(2026, 5, 20, 2).getTime(),
+        new Date(2026, 5, 21, 2).getTime(),
+        new Date(2026, 5, 22, 2).getTime(),
+      ]);
+    });
   });
 
   describe('icalEventMap', () => {

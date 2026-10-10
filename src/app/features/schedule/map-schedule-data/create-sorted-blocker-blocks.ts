@@ -88,12 +88,19 @@ const createBlockerBlocksForScheduledRepeatProjections = (
   });
 
   const isViewingCurrentDay = realNow === undefined || isSameDay(realNow, now);
+  // Before the day boundary "today" is still the previous logical day, and the
+  // next logical day has no instance yet; one extra day keeps the view filled (#3378)
+  const firstDate = new Date(isViewingCurrentDay ? now - startOfNextDayDiffMs : now);
+  const lastI = isSameDay(firstDate.getTime(), now) ? nrOfDays : nrOfDays + 1;
   let i: number = isViewingCurrentDay ? 1 : 0;
-  while (i < nrOfDays) {
+  if (!isViewingCurrentDay && startOfNextDayDiffMs > 0) {
+    // the previous logical day's late night falls on the first viewed day
+    i = -1;
+  }
+  while (i < lastI) {
     // Calculate proper day start instead of adding 24-hour increments
-    const nowDate = new Date(now);
-    const targetDate = new Date(nowDate);
-    targetDate.setDate(nowDate.getDate() + i);
+    const targetDate = new Date(firstDate);
+    targetDate.setDate(firstDate.getDate() + i);
     targetDate.setHours(0, 0, 0, 0);
     const currentDayTimestamp = targetDate.getTime();
     const currentDayStr = getDbDateStr(currentDayTimestamp);

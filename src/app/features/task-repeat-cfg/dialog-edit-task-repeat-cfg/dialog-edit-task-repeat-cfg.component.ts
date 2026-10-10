@@ -417,7 +417,12 @@ export class DialogEditTaskRepeatCfgComponent {
         startDate:
           this._data.initialStartDate ??
           this._data.task.dueDay ??
-          getDbDateStr(this._data.task.dueWithTime || undefined),
+          // the logical day, so a late-night time keeps its night (#3378)
+          getDbDateStr(
+            this._data.task.dueWithTime
+              ? this._data.task.dueWithTime - this._dateService.getStartOfNextDayDiffMs()
+              : undefined,
+          ),
         startTime,
         remindAt: startTime
           ? (this._data.defaultRemindOption ??
