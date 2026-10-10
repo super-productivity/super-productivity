@@ -402,6 +402,12 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
       expect(fixture.componentInstance.repeatCfg().startDate).toBe('2026-06-12');
     });
 
+    it('starts an undated task on the logical today (#3378)', async () => {
+      const fixture = await setupTestBed({ task: mockTask });
+
+      expect(fixture.componentInstance.repeatCfg().startDate).toBe(MOCK_TODAY_STR);
+    });
+
     it('starts a late-night timed task on its logical day (#3378)', async () => {
       const hourMs = 60 * 60 * 1000;
       // 02:00 on 06-10 is the late night of logical 06-09 with a 05:00 day start
