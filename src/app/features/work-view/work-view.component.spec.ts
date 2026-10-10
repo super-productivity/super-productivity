@@ -103,6 +103,7 @@ const configureWorkViewTestBed = (
     activeWorkContext$: of({ id: 'ctx', type: 'PROJECT' }),
     isActiveWorkContextProject$: of(true),
     isContextChanging$: of(false),
+    isHasTasksToWorkOn$: of(true),
   };
 
   // Reset the shared mutable context: a block that switched it to TODAY would
@@ -505,6 +506,8 @@ describe('WorkViewComponent', () => {
       /** Defaults to "grouping is the only customization", as in the app. */
       isCustomized?: boolean;
       isTodayList?: boolean;
+      /** All Tasks-style page: supplies its own tasks, no Today panels. */
+      isDisableTodayPanels?: boolean;
       embedPluginId?: string | null;
     }): {
       cmp: WorkViewComponent;
@@ -563,6 +566,10 @@ describe('WorkViewComponent', () => {
       fixture.componentRef.setInput('undoneTasks', undone);
       fixture.componentRef.setInput('doneTasks', opts.doneTasks ?? []);
       fixture.componentRef.setInput('backlogTasks', []);
+      fixture.componentRef.setInput(
+        'isDisableTodayPanels',
+        opts.isDisableTodayPanels ?? false,
+      );
       fixture.detectChanges();
       return {
         cmp: fixture.componentInstance,
@@ -724,6 +731,62 @@ describe('WorkViewComponent', () => {
 
       expect(cmp.isOverdueHidden()).toBe(true);
       expect(cmp.isLaterTodayHidden()).toBe(true);
+    });
+
+    it('hides the Later Today panel when Today panels are disabled (All Tasks)', () => {
+      // All Tasks activates the Today context, so without the flag the Later
+      // Today panel renders scheduled tasks and calendar events regardless of
+      // the selected projects — a scheduled task can then appear twice.
+      const { cmp } = setup({
+        laterTodayTasks: [buildTask('later-1')],
+        isTodayList: true,
+        isDisableTodayPanels: true,
+      });
+
+      expect(cmp.isLaterTodayPanelVisible()).toBe(false);
+    });
+
+    it('still shows the Later Today panel on the normal Today list', () => {
+      const { cmp } = setup({
+        laterTodayTasks: [buildTask('later-1')],
+        isTodayList: true,
+      });
+
+      expect(cmp.isLaterTodayPanelVisible()).toBe(true);
+    });
+
+    it('derives the empty state from the supplied list on an All Tasks-style page', () => {
+      // An empty Today alongside an unscheduled project task used to render
+      // both the task and the "no tasks planned" panel: the reused view took
+      // its empty-state condition from the Today service list.
+      const { cmp } = setup({
+        undone: [buildTask('project-task')],
+        isTodayList: true,
+        isDisableTodayPanels: true,
+      });
+
+      expect(cmp.isShowNoTasksPanel()).toBe(false);
+    });
+
+    it('shows the empty state when the supplied list is empty', () => {
+      const { cmp } = setup({
+        undone: [],
+        isTodayList: true,
+        isDisableTodayPanels: true,
+      });
+
+      expect(cmp.isShowNoTasksPanel()).toBe(true);
+    });
+
+    it('keeps reading the Today source when Today panels are on', () => {
+      // The stub reports a non-empty Today list, so the empty state stays off
+      // even though the supplied list is empty — the two branches are distinct.
+      const { cmp } = setup({
+        undone: [],
+        isTodayList: true,
+      });
+
+      expect(cmp.isShowNoTasksPanel()).toBe(false);
     });
 
     it('opens only the first panel that holds the task, never all of them', () => {

@@ -23,6 +23,9 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
     isTimeTrackingEnabled: true,
     isFocusModeEnabled: true,
     isSchedulerEnabled: true,
+    // Opt-in: the All Tasks page ships off, so neither an upgrade nor a fresh
+    // install turns it on unasked (see AppFeaturesConfig.isAllTasksEnabled).
+    isAllTasksEnabled: false,
     isPlannerEnabled: true,
     isBoardsEnabled: true,
     isScheduleDayPanelEnabled: true,

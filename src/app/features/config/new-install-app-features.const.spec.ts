@@ -27,8 +27,12 @@ describe('NEW_INSTALL_APP_FEATURES', () => {
   });
 
   it('keeps filling missing keys of existing data with the full default set', () => {
-    // Existing users must not lose features they never touched.
-    expect(Object.values(DEFAULT_GLOBAL_CONFIG.appFeatures).every(Boolean)).toBeTrue();
+    // Existing users must not lose features they never touched. Opt-in
+    // features are the deliberate exception: they default to off so that
+    // neither an upgrade nor a fresh install enables them unasked.
+    const { isAllTasksEnabled, ...alwaysOnDefaults } = DEFAULT_GLOBAL_CONFIG.appFeatures;
+    expect(isAllTasksEnabled).toBe(false);
+    expect(Object.values(alwaysOnDefaults).every(Boolean)).toBeTrue();
   });
 
   it('is the initial store state outside of E2E runs', () => {

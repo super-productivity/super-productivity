@@ -101,6 +101,7 @@ export class TaskViewCustomizerService {
     Record<string, CustomizerContextState>
   >(LS.TASK_VIEW_CUSTOMIZER_BY_CONTEXT, {});
   private _currentContextKey: string | null = null;
+  private _contextKeyOverride: string | null = null;
 
   constructor() {
     this._initProjects();
@@ -111,12 +112,8 @@ export class TaskViewCustomizerService {
     this._workContextService.activeWorkContextTypeAndId$
       .pipe(takeUntilDestroyed())
       .subscribe(({ activeId, activeType }) => {
-        this._currentContextKey = `${activeType}:${activeId}`;
-        const stored = this._stateByContext[this._currentContextKey];
-        this.selectedSort.set(stored?.sort ?? DEFAULT_OPTIONS.sort);
-        this.selectedGroup.set(this._sanitizeGroupForContext(stored?.group, activeType));
-        this.selectedFilter.set(this._sanitizeFilter(stored?.filter));
-        this.collapsedGroupIds.set(stored?.collapsedGroupIds ?? []);
+        if (this._contextKeyOverride) return;
+        this._loadStateForContext(`${activeType}:${activeId}`, activeType);
       });
 
     effect(() => {
@@ -131,6 +128,33 @@ export class TaskViewCustomizerService {
       };
       lsSetJSON(LS.TASK_VIEW_CUSTOMIZER_BY_CONTEXT, this._stateByContext);
     });
+  }
+
+  /** Override the context key for pages like All Tasks that aren't tied to a work context. */
+  setContextKeyOverride(key: string | null): void {
+    this._contextKeyOverride = key;
+    if (key) {
+      this._loadStateForContext(key, null);
+    } else {
+      const activeType = this._workContextService.activeWorkContextType;
+      const activeId = this._workContextService.activeWorkContextId;
+      if (activeType && activeId) {
+        this._loadStateForContext(`${activeType}:${activeId}`, activeType);
+      }
+    }
+  }
+
+  /** Shared state-load for the constructor subscription and setContextKeyOverride (#8134). */
+  private _loadStateForContext(
+    contextKey: string,
+    activeType: WorkContextType | null,
+  ): void {
+    this._currentContextKey = contextKey;
+    const stored = this._stateByContext[contextKey];
+    this.selectedSort.set(stored?.sort ?? DEFAULT_OPTIONS.sort);
+    this.selectedGroup.set(this._sanitizeGroupForContext(stored?.group, activeType));
+    this.selectedFilter.set(this._sanitizeFilter(stored?.filter));
+    this.collapsedGroupIds.set(stored?.collapsedGroupIds ?? []);
   }
 
   toggleGroupExpansion(groupId: string): void {
@@ -172,7 +196,7 @@ export class TaskViewCustomizerService {
 
   private _sanitizeGroupForContext(
     stored: GroupOption | undefined,
-    activeType: WorkContextType,
+    activeType: WorkContextType | null,
   ): GroupOption {
     if (!stored) return DEFAULT_OPTIONS.group;
     if (
@@ -204,7 +228,16 @@ export class TaskViewCustomizerService {
     ) {
       preset = String(getTaskPriority(preset));
     }
-    return currentFilter ? { ...currentFilter, preset } : DEFAULT_OPTIONS.filter;
+    return currentFilter
+      ? {
+          ...currentFilter,
+          preset,
+          // The multi-select project filter keeps its ids here, not in
+          // `preset` — dropping them on reload would silently clear the
+          // selection and show every task again.
+          ...(stored.projectIds ? { projectIds: stored.projectIds } : {}),
+        }
+      : DEFAULT_OPTIONS.filter;
   }
 
   customizeUndoneTasks(
@@ -217,10 +250,20 @@ export class TaskViewCustomizerService {
       toObservable(this.selectedFilter),
     ]).pipe(
       map(([tasks, sort, group, filter]) => {
+        // Multi-select project filter: ids live in `projectIds` (#8134).
+        // The filtered list feeds the SAME sort/group pipeline below, so
+        // "Sort By" / "Group By" keep working while projects are selected.
+        const multiSelectIds =
+          filter.type === FILTER_OPTION_TYPE.project ? filter.projectIds : undefined;
+        const isMultiSelectFilter = multiSelectIds !== undefined;
+        const activeIds = multiSelectIds ?? [];
+
         const normalizedFilterVal = filter.preset?.trim();
         const filterValueToUse = normalizedFilterVal ?? '';
 
-        const isDefaultFilter = !filter.type || !filterValueToUse;
+        const isDefaultFilter = isMultiSelectFilter
+          ? activeIds.length === 0
+          : !filter.type || !filterValueToUse;
         const isDefaultSort = !sort.type;
         const isDefaultGroup = !group.type;
 
@@ -230,7 +273,11 @@ export class TaskViewCustomizerService {
 
         const filtered = isDefaultFilter
           ? tasks
-          : this.applyFilter(tasks, filter.type, filterValueToUse);
+          : isMultiSelectFilter
+            ? tasks.filter(
+                (task) => !!task.projectId && activeIds.includes(task.projectId),
+              )
+            : this.applyFilter(tasks, filter.type, filterValueToUse);
         const sorted = isDefaultSort
           ? filtered
           : this.applySort(filtered, sort.type, sort.order);
@@ -278,6 +325,9 @@ export class TaskViewCustomizerService {
         if (!tag) return [];
         return tasks.filter((task) => task.tagIds?.includes(tag.id));
       case FILTER_OPTION_TYPE.project:
+        // Multi-select carries ids in `filter.projectIds` and is handled in
+        // customizeUndoneTasks; this legacy path only serves the single-value
+        // (title) preset from before the All Tasks page existed.
         const project = this._allProjects.find((p) =>
           p.title.toLowerCase().includes(value.toLowerCase().trim()),
         );

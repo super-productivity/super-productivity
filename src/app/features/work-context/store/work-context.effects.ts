@@ -17,6 +17,7 @@ import { loadAllData } from '../../../root-store/meta/load-all-data.action';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { Store } from '@ngrx/store';
 import { selectActiveContextTypeAndId } from './work-context.selectors';
+import { isAllTasksUrl } from '../../../util/is-all-tasks-url';
 import { Log } from '../../../core/log';
 
 @Injectable()
@@ -58,6 +59,7 @@ export class WorkContextEffects {
       skipWhileApplyingRemoteOps(),
       filter(
         (url) =>
+          isAllTasksUrl(url) ||
           !!url.match(/(schedule)$/) ||
           !!url.match(/(planner)$/) ||
           !!url.match(/(boards)$/),

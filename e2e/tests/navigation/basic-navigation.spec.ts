@@ -62,6 +62,12 @@ test.describe('Basic Navigation', () => {
     await page.waitForLoadState('networkidle');
     await expect(page).toHaveURL(/\/#\/tag\/TODAY/);
     await expect(page.locator('task-list').first()).toBeVisible();
+
+    // Navigate to all tasks
+    await page.goto('/#/all-tasks');
+    await page.waitForLoadState('networkidle');
+    await expect(page).toHaveURL(/\/#\/all-tasks/);
+    await expect(page.locator('task-list').first()).toBeVisible();
   });
 
   test('should navigate using side nav buttons', async ({ page, workViewPage }) => {

@@ -98,6 +98,11 @@ export class MagicNavConfigService {
   private readonly isSchedulerEnabled = computed(
     () => this._configService.appFeatures().isSchedulerEnabled,
   );
+  private readonly isAllTasksEnabled = computed(
+    // Opt-in: matches DEFAULT_GLOBAL_CONFIG, and pre-All-Tasks persisted state
+    // (no key at all) therefore stays off until the user enables it.
+    () => this._configService.appFeatures().isAllTasksEnabled ?? false,
+  );
   private readonly isPlannerEnabled = computed(
     () => this._configService.appFeatures().isPlannerEnabled,
   );
@@ -411,6 +416,17 @@ export class MagicNavConfigService {
         icon: 'edit_calendar',
         route: '/planner',
         featureConfigKey: 'isPlannerEnabled',
+      });
+    }
+
+    if (this.isAllTasksEnabled()) {
+      items.push({
+        type: 'route',
+        id: 'all-tasks',
+        label: T.MH.ALL_TASKS,
+        icon: 'list_alt',
+        route: '/all-tasks',
+        featureConfigKey: 'isAllTasksEnabled',
       });
     }
 

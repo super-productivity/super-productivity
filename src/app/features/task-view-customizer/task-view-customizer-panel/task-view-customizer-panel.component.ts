@@ -1,4 +1,12 @@
-import { ChangeDetectionStrategy, Component, inject, ViewChild } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  inject,
+  Input,
+  signal,
+  ViewChild,
+} from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatSelectModule } from '@angular/material/select';
@@ -11,6 +19,12 @@ import { MatDividerModule } from '@angular/material/divider';
 import { TaskViewCustomizerService } from '../task-view-customizer.service';
 import { TranslatePipe } from '@ngx-translate/core';
 import { T } from 'src/app/t.const';
+import { toSignal } from '@angular/core/rxjs-interop';
+import { WorkContextService } from '../../work-context/work-context.service';
+import { WorkContextType } from '../../work-context/work-context.model';
+import { Store } from '@ngrx/store';
+import { selectAllProjects } from '../../project/store/project.selectors';
+import { Project } from '../../project/project.model';
 import {
   DEFAULT_OPTIONS,
   FILTER_COMMON,
@@ -47,15 +61,70 @@ import { TaskViewCustomizerMenuItemComponent } from './menu-item/menu-item.compo
 })
 export class TaskViewCustomizerPanelComponent {
   customizerService = inject(TaskViewCustomizerService);
+  private _workContextService = inject(WorkContextService);
+  private _store = inject(Store);
 
   @ViewChild('customizerMenu', { static: false })
   menu!: MatMenu;
+
+  @Input() multiSelectProject = false;
+  @Input() showSaveSort = true;
 
   readonly T = T;
   readonly DEFAULT = DEFAULT_OPTIONS;
   readonly OPTIONS = OPTIONS;
   readonly PRESETS = PRESETS;
   readonly FILTER_COMMON = FILTER_COMMON;
+
+  private _activeCtx = toSignal(this._workContextService.activeWorkContextTypeAndId$);
+  isInProjectContext = computed(
+    () => this._activeCtx()?.activeType === WorkContextType.PROJECT,
+  );
+
+  // Multi-select project filter
+  allProjects = toSignal(this._store.select(selectAllProjects), {
+    initialValue: [] as Project[],
+  });
+
+  projectSearch = signal('');
+
+  // Single source of truth: the checked ids live in the persisted filter
+  // itself (`projectIds`), the panel just derives from it (#8134 — the
+  // signal+effect JSON round-trip is gone).
+  selectedProjectIds = computed<string[]>(() => {
+    if (!this.multiSelectProject) return [];
+    const filter = this.customizerService.selectedFilter();
+    if (filter.type !== OPTIONS.filter.types.project) return [];
+    return filter.projectIds ?? [];
+  });
+
+  filteredProjects = computed(() => {
+    const search = this.projectSearch().toLowerCase();
+    return this.allProjects().filter((p) => p.title.toLowerCase().includes(search));
+  });
+
+  toggleProject(projectId: string): void {
+    const current = this.selectedProjectIds();
+    const newIds = current.includes(projectId)
+      ? current.filter((id) => id !== projectId)
+      : [...current, projectId];
+
+    if (newIds.length === 0) {
+      this.customizerService.setFilter(DEFAULT_OPTIONS.filter);
+      return;
+    }
+
+    const projectFilter = OPTIONS.filter.list.find(
+      (x) => x.type === OPTIONS.filter.types.project,
+    );
+    if (projectFilter) {
+      this.customizerService.setFilter({
+        ...projectFilter,
+        preset: null,
+        projectIds: newIds,
+      });
+    }
+  }
 
   onFilterSelect(filter: FilterOption): void {
     this.customizerService.setFilter(filter);

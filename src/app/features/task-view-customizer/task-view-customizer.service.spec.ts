@@ -1561,6 +1561,30 @@ describe('TaskViewCustomizerService', () => {
       expect(newService.selectedGroup()).toEqual(DEFAULT_OPTIONS.group);
       expect(newService.selectedFilter()).toEqual(DEFAULT_OPTIONS.filter);
     });
+
+    it('keeps the multi-select project filter across leaving and returning', (done) => {
+      // All Tasks selects projects into `projectIds`, not `preset`. Leaving the
+      // page and coming back runs the stored filter through _sanitizeFilter,
+      // which must not drop the ids — otherwise the selection silently clears
+      // and every task reappears.
+      const projectFilter: FilterOption = {
+        type: FILTER_OPTION_TYPE.project,
+        preset: null,
+        label: T.F.TASK_VIEW.CUSTOMIZER.FILTER_PROJECT,
+        projectIds: ['Project A'],
+      };
+
+      service.setContextKeyOverride('ALL_TASKS');
+      service.setFilter(projectFilter);
+
+      setTimeout(() => {
+        service.setContextKeyOverride(null);
+        service.setContextKeyOverride('ALL_TASKS');
+
+        expect(service.selectedFilter().projectIds).toEqual(['Project A']);
+        done();
+      }, 50);
+    });
   });
 
   describe('customizeUndoneTasks respects current work context (issue #7279)', () => {
@@ -1704,6 +1728,55 @@ describe('TaskViewCustomizerService', () => {
           expect(groupKeys).not.toContain('Project B');
           // The retag id-map is tag-grouping-only.
           expect(result.groupTagIdByKey).toBeUndefined();
+          done();
+        });
+      });
+    });
+
+    it('applies the sort on top of the multi-select project filter', (done) => {
+      // Both options at once: filtering to Project A must not short-circuit the
+      // sort, or the menu keeps showing "Sort By: Name" while nothing sorts.
+      const zeta: TaskWithSubTasks = {
+        ...projectATask,
+        id: 'zeta',
+        title: 'Zeta',
+        projectId: 'Project A',
+      };
+      const alpha: TaskWithSubTasks = {
+        ...projectATask,
+        id: 'alpha',
+        title: 'Alpha',
+        projectId: 'Project A',
+      };
+      const otherProject: TaskWithSubTasks = {
+        ...projectBTask,
+        id: 'other',
+        title: 'Other',
+        projectId: 'Project B',
+      };
+
+      testService.setFilter({
+        type: FILTER_OPTION_TYPE.project,
+        preset: null,
+        label: T.F.TASK_VIEW.CUSTOMIZER.FILTER_PROJECT,
+        projectIds: ['Project A'],
+      });
+      testService.setSort({
+        type: SORT_OPTION_TYPE.name,
+        order: SORT_ORDER.ASC,
+        label: 'Name',
+      });
+
+      const result$ = TestBed.runInInjectionContext(() =>
+        testService.customizeUndoneTasks(
+          of<TaskWithSubTasks[]>([zeta, alpha, otherProject]),
+        ),
+      );
+
+      requestAnimationFrame(() => {
+        result$.subscribe((result) => {
+          // Project B is filtered out; Project A's two tasks come back sorted.
+          expect(result.list.map((t) => t.id)).toEqual(['alpha', 'zeta']);
           done();
         });
       });

@@ -7,10 +7,12 @@ import {
   effect,
   ElementRef,
   afterNextRender,
+  Injector,
   inject,
   input,
   OnDestroy,
   OnInit,
+  runInInjectionContext,
   signal,
   ViewChild,
 } from '@angular/core';
@@ -26,6 +28,7 @@ import { TakeABreakService } from '../take-a-break/take-a-break.service';
 import { ActivatedRoute } from '@angular/router';
 import {
   animationFrameScheduler,
+  asapScheduler,
   from,
   fromEvent,
   Observable,
@@ -46,7 +49,7 @@ import {
   CustomizedUndoneTasks,
   TaskViewCustomizerService,
 } from '../task-view-customizer/task-view-customizer.service';
-import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
+import { takeUntilDestroyed, toObservable, toSignal } from '@angular/core/rxjs-interop';
 import { SectionService } from '../section/section.service';
 import { Section } from '../section/section.model';
 import {
@@ -83,6 +86,7 @@ import {
   isLaterTodayEntryUpcoming,
 } from '../tasks/util/later-today-window';
 import { GlobalTrackingIntervalService } from '../../core/global-tracking-interval/global-tracking-interval.service';
+import { mapEstimateRemainingFromTasks } from '../work-context/work-context.util';
 import { fastArrayCompare } from '../../util/fast-array-compare';
 import { CollapsibleComponent } from '../../ui/collapsible/collapsible.component';
 import { SnackService } from '../../core/snack/snack.service';
@@ -167,6 +171,7 @@ export class WorkViewComponent implements OnInit, OnDestroy {
   private _globalConfigService = inject(GlobalConfigService);
   private _matDialog = inject(MatDialog);
   private _destroyRef = inject(DestroyRef);
+  private _injector = inject(Injector);
   private _dateService = inject(DateService);
   private _pluginBridge = inject(PluginBridgeService);
   private _calendarIntegrationService = inject(CalendarIntegrationService);
@@ -271,10 +276,10 @@ export class WorkViewComponent implements OnInit, OnDestroy {
     { equal: fastArrayCompare },
   );
   undoneTasks = input.required<TaskWithSubTasks[]>();
-  customizedUndoneTasks = toSignal(
-    this.customizerService.customizeUndoneTasks(this.workContextService.undoneTasks$),
-    { initialValue: INITIAL_CUSTOMIZED_UNDONE_TASKS },
-  );
+  // `toObservable` needs an injection context, so it is created here in a field
+  // initializer; which source is actually used is decided in ngOnInit, where the
+  // input bindings are already in place.
+  private _undoneTasksInput$ = toObservable(this.undoneTasks);
   doneTasks = input.required<TaskWithSubTasks[]>();
   backlogTasks = input.required<TaskWithSubTasks[]>();
   isShowBacklog = input<boolean>(false);
@@ -284,14 +289,33 @@ export class WorkViewComponent implements OnInit, OnDestroy {
   todayRemainingInProject = toSignal(this.workContextService.todayRemainingInProject$, {
     initialValue: 0,
   });
-  estimateRemainingToday = toSignal(this.workContextService.estimateRemainingToday$, {
-    initialValue: 0,
+  private _estimateRemainingFromService = toSignal(
+    this.workContextService.estimateRemainingToday$,
+    { initialValue: 0 },
+  );
+  // For contexts without a backing work-context service computation (All
+  // Tasks), reuse mapEstimateRemainingFromTasks: per-task clamping and
+  // subtask estimates handled the same way as every other list (#8134).
+  estimateRemainingToday = computed(() => {
+    if (this.isDisableTodayPanels()) {
+      return mapEstimateRemainingFromTasks(this.customizedUndoneTasks().list);
+    }
+    return this._estimateRemainingFromService();
   });
   workingToday = toSignal(this.workContextService.workingToday$, { initialValue: 0 });
   breakTimeToday = toSignal(this.workContextService.breakTimeToday$, {
     initialValue: 0,
   });
   selectedTaskId = this.taskService.selectedTaskId;
+  isDisableTodayPanels = input<boolean>(false);
+  // Source is picked once in ngOnInit (below): non-All-Tasks hosts keep the
+  // work-context service stream — the source this view has always used, so
+  // their behaviour is untouched — while a page that supplies its own tasks
+  // (isDisableTodayPanels, i.e. All Tasks) uses the bound input. ngOnInit is
+  // the first point where input bindings are in place (a field initializer
+  // would only ever see the default `false`), and deciding once there keeps
+  // the synchronous wiring the focus/expansion logic and its specs rely on.
+  customizedUndoneTasks = signal(INITIAL_CUSTOMIZED_UNDONE_TASKS);
   isOnTodayList = toSignal(this.workContextService.isTodayList$, { initialValue: false });
   isDoneHidden = signal(!!localStorage.getItem(LS.DONE_TASKS_HIDDEN));
   isLaterTodayHidden = signal(!!localStorage.getItem(LS.LATER_TODAY_TASKS_HIDDEN));
@@ -373,7 +397,33 @@ export class WorkViewComponent implements OnInit, OnDestroy {
   });
 
   isShowOverduePanel = computed(
-    () => this.isOnTodayList() && this.overdueTasks().length > 0,
+    () =>
+      !this.isDisableTodayPanels() &&
+      this.isOnTodayList() &&
+      this.overdueTasks().length > 0,
+  );
+
+  /** The Later Today panel is a Today-list affordance: All Tasks reuses this
+   *  view with its own task list, so scheduled tasks and calendar events of
+   *  unrelated projects must not leak into it. */
+  isLaterTodayPanelVisible = computed(
+    () => !this.isDisableTodayPanels() && this.isOnTodayList(),
+  );
+
+  /** Today's "has tasks to work on", as a signal, so the empty state can pick
+   *  between its two sources in one place (see `isShowNoTasksPanel`). */
+  private _isHasTasksToWorkOn = toSignal(this.workContextService.isHasTasksToWorkOn$, {
+    initialValue: false,
+  });
+
+  /** All Tasks renders its own task list, so its empty state has to come from
+   *  that list — the Today service list is unrelated to what is on screen, so
+   *  an empty Today next to an unscheduled project task would render both the
+   *  task and the "no tasks planned" panel. */
+  isShowNoTasksPanel = computed(() =>
+    this.isDisableTodayPanels()
+      ? this.undoneTasks().length === 0
+      : !this._isHasTasksToWorkOn(),
   );
 
   isShowTimeWorkedWithoutBreak: boolean = true;
@@ -505,6 +555,26 @@ export class WorkViewComponent implements OnInit, OnDestroy {
   }
 
   ngOnInit(): void {
+    // Pick the undone-task source once, before the first render. Only a page
+    // that supplies its own tasks (All Tasks) uses the bound input; every other
+    // host keeps the work-context service stream it has always used.
+    // #8134: `toObservable` re-emits the input's initial value synchronously on
+    // construction; combined with the selected-task deselect effect downstream,
+    // that `[]` seed caused spurious deselects on slow context switches.
+    // `observeOn(asapScheduler)` moves that seed off the synchronous tick, while
+    // the first real value still arrives in the same microtask-queue flush (no
+    // visible flicker) and single-emission sources keep working.
+    const undoneTasks$ = this.isDisableTodayPanels()
+      ? this._undoneTasksInput$.pipe(observeOn(asapScheduler))
+      : this.workContextService.undoneTasks$;
+    this._subs.add(
+      // customizeUndoneTasks builds its pipeline with toObservable(), which
+      // needs an injection context; ngOnInit is not one, so re-enter it.
+      runInInjectionContext(this._injector, () =>
+        this.customizerService.customizeUndoneTasks(undoneTasks$),
+      ).subscribe((customized) => this.customizedUndoneTasks.set(customized)),
+    );
+
     // preload
     // TODO check
     // this._subs.add(this.workContextService.backlogTasks$.subscribe());
@@ -808,7 +878,7 @@ export class WorkViewComponent implements OnInit, OnDestroy {
     ) {
       this.isOverdueHidden.set(false);
     } else if (
-      this.isOnTodayList() &&
+      this.isLaterTodayPanelVisible() &&
       this.isLaterTodayHidden() &&
       this._hasTaskInList(this.laterTodayTasks(), taskId)
     ) {

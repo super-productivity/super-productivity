@@ -8,6 +8,7 @@ import { MatMenu, MatMenuContent, MatMenuTrigger } from '@angular/material/menu'
 import { WorkContextMenuComponent } from '../../work-context-menu/work-context-menu.component';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { T } from '../../../t.const';
+import { isAllTasksUrl } from '../../../util/is-all-tasks-url';
 import { BreakpointObserver } from '@angular/cdk/layout';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { of } from 'rxjs';
@@ -70,35 +71,60 @@ import { KeyboardConfig } from '@sp/keyboard-config';
               <mat-icon svgIcon="plainspace"></mat-icon>
             </button>
           }
-          <button
-            [mat-menu-trigger-for]="activeWorkContextMenu"
-            [matTooltip]="T.MH.PROJECT_MENU | translate"
-            [attr.aria-label]="T.MH.PROJECT_MENU | translate"
-            class="project-settings-btn"
-            mat-icon-button
-          >
-            <mat-icon>more_vert</mat-icon>
-          </button>
-          @if (isWorkViewPage()) {
+          @if (!isAllTasks()) {
             <button
-              class="task-filter-btn"
-              [class.isCustomized]="taskViewCustomizerService.isCustomized()"
-              [matMenuTriggerFor]="customizerPanel.menu"
-              [attr.aria-label]="
-                T.GCF.KEYBOARD.TOGGLE_TASK_VIEW_CUSTOMIZER_PANEL | translate
-              "
+              [mat-menu-trigger-for]="activeWorkContextMenu"
+              [matTooltip]="T.MH.PROJECT_MENU | translate"
+              [attr.aria-label]="T.MH.PROJECT_MENU | translate"
+              class="project-settings-btn"
               mat-icon-button
-              matTooltip="{{
-                T.GCF.KEYBOARD.TOGGLE_TASK_VIEW_CUSTOMIZER_PANEL | translate
-              }} {{
-                kb.toggleTaskViewCustomizerPanel
-                  ? '[' + kb.toggleTaskViewCustomizerPanel + ']'
-                  : ''
-              }}"
             >
-              <mat-icon>filter_list</mat-icon>
+              <mat-icon>more_vert</mat-icon>
             </button>
-            <!-- Inside the trigger's own block, which is a constraint rather
+          }
+          @if (isWorkViewPage()) {
+            @if (isAllTasks()) {
+              <button
+                class="task-filter-btn"
+                [class.isCustomized]="taskViewCustomizerService.isCustomized()"
+                [matMenuTriggerFor]="allTasksPanel.menu"
+                mat-icon-button
+                matTooltip="{{
+                  T.GCF.KEYBOARD.TOGGLE_TASK_VIEW_CUSTOMIZER_PANEL | translate
+                }} {{
+                  kb.toggleTaskViewCustomizerPanel
+                    ? '[' + kb.toggleTaskViewCustomizerPanel + ']'
+                    : ''
+                }}"
+              >
+                <mat-icon>filter_list</mat-icon>
+              </button>
+
+              <task-view-customizer-panel
+                #allTasksPanel
+                [multiSelectProject]="true"
+                [showSaveSort]="false"
+              ></task-view-customizer-panel>
+            } @else {
+              <button
+                class="task-filter-btn"
+                [class.isCustomized]="taskViewCustomizerService.isCustomized()"
+                [matMenuTriggerFor]="customizerPanel.menu"
+                [attr.aria-label]="
+                  T.GCF.KEYBOARD.TOGGLE_TASK_VIEW_CUSTOMIZER_PANEL | translate
+                "
+                mat-icon-button
+                matTooltip="{{
+                  T.GCF.KEYBOARD.TOGGLE_TASK_VIEW_CUSTOMIZER_PANEL | translate
+                }} {{
+                  kb.toggleTaskViewCustomizerPanel
+                    ? '[' + kb.toggleTaskViewCustomizerPanel + ']'
+                    : ''
+                }}"
+              >
+                <mat-icon>filter_list</mat-icon>
+              </button>
+              <!-- Inside the trigger's own block, which is a constraint rather
                  than a preference: a template reference declared in a sibling
                  @if is not in scope here, so moving it out silently breaks the
                  trigger's customizerPanel.menu binding. It costs the row
@@ -106,7 +132,8 @@ import { KeyboardConfig } from '@sp/keyboard-config';
                  is display: contents, so it is not a flex item and charges no
                  gap. Sharing the condition also keeps it uninstantiated on the
                  views that have no trigger for it. -->
-            <task-view-customizer-panel #customizerPanel></task-view-customizer-panel>
+              <task-view-customizer-panel #customizerPanel></task-view-customizer-panel>
+            }
           }
         </div>
       }
@@ -368,6 +395,7 @@ export class PageTitleComponent {
   // Order is irrelevant — patterns are mutually exclusive end-anchors.
   private static readonly _ROUTE_TITLE_KEYS: ReadonlyArray<readonly [RegExp, string]> = [
     [/schedule$/, T.MH.SCHEDULE],
+    [/all-tasks$/, T.MH.ALL_TASKS],
     [/planner$/, T.MH.PLANNER],
     [/boards$/, T.MH.BOARDS],
     [/habits$/, T.MH.HABITS],
@@ -382,7 +410,12 @@ export class PageTitleComponent {
     () => PageTitleComponent._ROUTE_TITLE_KEYS.find(([re]) => re.test(this._url()))?.[1],
   );
 
-  isSpecialSection = computed(() => !!this._routeTitleKey());
+  isSpecialSection = computed(
+    () => !!this._routeTitleKey() && this._routeTitleKey() !== T.MH.ALL_TASKS,
+  );
+  isAllTasks = computed(() => isAllTasksUrl(this._url()));
+  // `/all-tasks` already matches `/tasks$/`, so the extra isAllTasks() clause
+  // this used to carry was unreachable (#8134).
   isWorkViewPage = computed(() => /tasks$/.test(this._url()));
 
   displayTitle = computed(() => {
