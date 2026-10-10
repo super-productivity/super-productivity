@@ -37,7 +37,7 @@ import { CapacitorReminderService } from '../../../core/platform/capacitor-remin
 export type NativeTrackingData = {
   taskId: string;
   elapsedMs: number;
-  // false after a deliberate force-stop (Android 11+): credit the time but
+  // false after a deliberate force-stop (Android 14+): credit the time but
   // don't resume. Older native builds omit it and always resume (#7390).
   resume?: false;
 };
@@ -124,18 +124,21 @@ export const recoverNativeTracking = async (
 
   if (nativeData.resume === false) {
     // The user force-stopped the app: keep the credited time, leave tracking
-    // stopped. Stopping also clears the persisted native session.
+    // stopped. Flush first: stopping clears the persisted native session, so
+    // if the flush fails the session must still be there for the next recovery.
     DroidLog.log('Not resuming tracking after a user-requested stop', {
       taskId: nativeData.taskId,
     });
+    await deps.flushPendingOps();
     deps.stopTrackingService();
-  } else {
-    // setCurrentId synchronously re-runs the syncTrackingToService$ tap.
-    // The null → task transition there checks native data and calls
-    // updateTrackingService instead of startTrackingService when native is
-    // already tracking this task — so the native counter is preserved.
-    deps.setCurrentId(nativeData.taskId);
+    return;
   }
+
+  // setCurrentId synchronously re-runs the syncTrackingToService$ tap.
+  // The null → task transition there checks native data and calls
+  // updateTrackingService instead of startTrackingService when native is
+  // already tracking this task — so the native counter is preserved.
+  deps.setCurrentId(nativeData.taskId);
   await deps.flushPendingOps();
 };
 

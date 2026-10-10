@@ -403,7 +403,9 @@ describe('AndroidForegroundTrackingEffects - cold start tracking recovery', () =
 
     expect(syncElapsedTimeSpy).toHaveBeenCalledWith('task-1', nativeData);
     expect(setCurrentIdSpy).not.toHaveBeenCalled();
-    expect(callOrder).toEqual(['sync', 'stop', 'flush']);
+    // Persist the credit before the native session is cleared: if the flush
+    // fails, the session survives for the next recovery.
+    expect(callOrder).toEqual(['sync', 'flush', 'stop']);
   });
 
   it('should stop stale native tracking when recovery sync fails', async () => {
