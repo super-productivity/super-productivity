@@ -126,6 +126,9 @@ export class MobileBottomNavComponent {
   readonly isScheduleDayPanelEnabled = computed(
     () => this._globalConfigService.appFeatures().isScheduleDayPanelEnabled,
   );
+  readonly isPlannerEnabled = computed(
+    () => this._globalConfigService.appFeatures().isPlannerEnabled,
+  );
 
   /**
    * Below 600px this menu is the *only* route to every right-panel toggle --

@@ -406,6 +406,7 @@ export class DialogViewTaskRemindersComponent implements OnDestroy {
             data: {
               okTxt: T.F.TASK.D_CONFIRM_DELETE.OK,
               message: T.F.TASK.D_CONFIRM_DELETE.MSG,
+              isFocusConfirm: true,
               translateParams: { title: task.title },
             },
           })

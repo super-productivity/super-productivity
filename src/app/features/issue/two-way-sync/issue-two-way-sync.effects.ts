@@ -261,6 +261,9 @@ export class IssueTwoWaySyncEffects {
         // restoreDeletedTask can undo the local delete; nothing can undo the
         // remote one, so it waits out the undo window. mergeMap rather than
         // concatMap, or N deletes would queue up N windows.
+        // shortcut: in-memory timer — quitting inside the window drops the
+        // remote delete (orphaned remote item); persist pending deletes if
+        // that is reported.
         mergeMap(({ task }) =>
           timer(REMOTE_ISSUE_DELETE_DEFER_MS).pipe(
             takeUntil(

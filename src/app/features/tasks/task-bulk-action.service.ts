@@ -185,6 +185,7 @@ export class TaskBulkActionService {
               tasks.length,
             ),
             translateParams: { count: tasks.length },
+            isFocusConfirm: true,
           },
         })
         .afterClosed(),
@@ -217,6 +218,7 @@ export class TaskBulkActionService {
             data: {
               okTxt: T.F.TASK.D_CONFIRM_DELETE.OK,
               message: T.F.TASK.D_CONFIRM_DELETE.MSG,
+              isFocusConfirm: true,
               translateParams: { title: truncate(task.title) },
             },
           })

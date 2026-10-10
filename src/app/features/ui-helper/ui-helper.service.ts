@@ -4,7 +4,7 @@ import { LS } from '../../core/persistence/storage-keys.const';
 import { DOCUMENT } from '@angular/common';
 import { LocalUiHelperSettings } from './ui-helper.model';
 import { UI_LOCAL_HELPER_DEFAULT } from './ui-helper.const';
-import { IS_ELECTRON } from '../../app.constants';
+import { IS_ELECTRON, IS_ELECTRON_TOKEN } from '../../app.constants';
 import { fromEvent } from 'rxjs';
 import { throttleTime } from 'rxjs/operators';
 import { Log } from '../../core/log';
@@ -12,6 +12,7 @@ import { Log } from '../../core/log';
 @Injectable({ providedIn: 'root' })
 export class UiHelperService {
   private _document = inject<Document>(DOCUMENT);
+  private _isElectron = inject(IS_ELECTRON_TOKEN);
 
   initElectron(): void {
     this._initMousewheelZoomForElectron();
@@ -62,9 +63,12 @@ export class UiHelperService {
    *
    * The 1500ms delay gives users time to finish typing after notification appears.
    * Based on user feedback in issue #5762 where immediate focus caused unintended input.
+   *
+   * `isReminder` lets the main process force the window to the front on Windows,
+   * where focus-stealing prevention otherwise blocks it (#10410).
    */
-  focusAppAfterNotification(): void {
-    if (!IS_ELECTRON) {
+  focusAppAfterNotification(opts?: { isReminder?: boolean }): void {
+    if (!this._isElectron) {
       return;
     }
 
@@ -75,7 +79,7 @@ export class UiHelperService {
     const BLUR_DELAY_MS = 100;
 
     setTimeout(() => {
-      window.ea.showOrFocus();
+      window.ea.showOrFocus(opts);
       // Blur after focus to prevent any task input from receiving keystrokes
       setTimeout(() => {
         if (document.activeElement && document.activeElement !== document.body) {

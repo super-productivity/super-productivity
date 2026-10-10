@@ -46,6 +46,7 @@ import { DateTimeFormatService } from '../../../core/date-time-format/date-time-
 import { getWeekNumber } from '../../../util/get-week-number';
 import { parseDbDateStr } from '../../../util/parse-db-date-str';
 import { anchorContextNow } from '../anchor-context-now';
+import { DateService } from '../../../core/date/date.service';
 
 @Component({
   selector: 'schedule',
@@ -79,6 +80,7 @@ export class ScheduleComponent {
   private _globalTrackingIntervalService = inject(GlobalTrackingIntervalService);
   private _globalConfigService = inject(GlobalConfigService);
   private _dateTimeFormatService = inject(DateTimeFormatService);
+  private _dateService = inject(DateService);
   private _translate = inject(TranslateService);
   private _hiddenCalendarProviders = inject(HiddenCalendarProvidersService);
   private _elRef = inject<ElementRef<HTMLElement>>(ElementRef);
@@ -360,7 +362,7 @@ export class ScheduleComponent {
   }
 
   goToNextPeriod(): void {
-    const currentDate = this._selectedDate() || new Date();
+    const currentDate = this._selectedDate() || this._dateService.getLogicalTodayDate();
     const selectedView = this._currentTimeViewMode();
 
     if (selectedView === 'month') {

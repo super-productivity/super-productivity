@@ -210,6 +210,19 @@ test.describe('Android Focus timer recovery after WebView recreation', () => {
             false,
           ),
         );
+        // Let the queued native commands settle first: if tracking is still
+        // live, resume recovers it and restarting the task skips the break.
+        await expect
+          .poll(() =>
+            page.evaluate(
+              () =>
+                JSON.parse(sessionStorage.getItem('test-native-tracking') || 'null') ===
+                  null &&
+                JSON.parse(sessionStorage.getItem('test-native-focus') || 'null')
+                  ?.isBreak === true,
+            ),
+          )
+          .toBe(true);
       }
       await resume(page);
 

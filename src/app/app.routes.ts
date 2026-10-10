@@ -7,6 +7,7 @@ import {
   FocusOverlayOpenGuard,
   ValidProjectIdGuard,
   ValidTagIdGuard,
+  FeatureEnabledGuard,
 } from './app.guard';
 
 import { TagTaskPageComponent } from './pages/tag-task-page/tag-task-page.component';
@@ -48,8 +49,11 @@ export const APP_ROUTES: Routes = [
     path: 'search',
     loadComponent: () =>
       import('./routes/pages.routes').then((m) => m.SearchPageComponent),
-    data: { page: 'search' },
-    canActivate: [FocusOverlayOpenGuard],
+    data: {
+      page: 'search',
+      featureConfigKey: 'isSearchEnabled',
+    },
+    canActivate: [FeatureEnabledGuard, FocusOverlayOpenGuard],
   },
   {
     path: 'scheduled-list',
@@ -61,27 +65,39 @@ export const APP_ROUTES: Routes = [
   {
     path: 'planner',
     loadComponent: () => import('./routes/pages.routes').then((m) => m.PlannerComponent),
-    data: { page: 'planner' },
-    canActivate: [FocusOverlayOpenGuard],
+    data: {
+      page: 'planner',
+      featureConfigKey: 'isPlannerEnabled',
+    },
+    canActivate: [FeatureEnabledGuard, FocusOverlayOpenGuard],
   },
   {
     path: 'schedule',
     loadComponent: () => import('./routes/pages.routes').then((m) => m.ScheduleComponent),
-    data: { page: 'schedule' },
-    canActivate: [FocusOverlayOpenGuard],
+    data: {
+      page: 'schedule',
+      featureConfigKey: 'isSchedulerEnabled',
+    },
+    canActivate: [FeatureEnabledGuard, FocusOverlayOpenGuard],
   },
   {
     path: 'boards',
     loadComponent: () => import('./routes/pages.routes').then((m) => m.BoardsComponent),
-    data: { page: 'boards' },
-    canActivate: [FocusOverlayOpenGuard],
+    data: {
+      page: 'boards',
+      featureConfigKey: 'isBoardsEnabled',
+    },
+    canActivate: [FeatureEnabledGuard, FocusOverlayOpenGuard],
   },
   {
     path: 'habits',
     loadComponent: () =>
       import('./routes/pages.routes').then((m) => m.HabitPageComponent),
-    data: { page: 'habits' },
-    canActivate: [FocusOverlayOpenGuard],
+    data: {
+      page: 'habits',
+      featureConfigKey: 'isHabitsEnabled',
+    },
+    canActivate: [FeatureEnabledGuard, FocusOverlayOpenGuard],
   },
   {
     path: 'archived-projects',
@@ -94,8 +110,11 @@ export const APP_ROUTES: Routes = [
     path: 'donate',
     loadComponent: () =>
       import('./routes/pages.routes').then((m) => m.DonatePageComponent),
-    data: { page: 'donate' },
-    canActivate: [DonatePageGuard, FocusOverlayOpenGuard],
+    data: {
+      page: 'donate',
+      featureConfigKey: 'isDonatePageEnabled',
+    },
+    canActivate: [DonatePageGuard, FeatureEnabledGuard, FocusOverlayOpenGuard],
   },
   {
     path: 'contrast-test',
