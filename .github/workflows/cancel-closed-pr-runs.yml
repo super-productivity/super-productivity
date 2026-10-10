@@ -27,13 +27,14 @@ jobs:
         run: |
           set -euo pipefail
           # The iOS TestFlight build is a deliberate, label-triggered release
-          # build, not CI; let it finish. After a merge, master pushes re-run
-          # every other suite (build.yml, electron-smoke.yml, e2e-scheduled.yml,
-          # codeql-analysis.yml, docs-links.yml), but nothing re-runs Android
-          # Native Tests, so their PR run is the only signal. Keep it.
+          # build, not CI; let it finish. After a merge, master pushes or the
+          # nightly re-run electron smoke, sync E2E, CodeQL and docs links, but
+          # nothing re-runs Android Native Tests, Plugin Tests or CI's
+          # electron/i18n/WebKit/Lighthouse checks (build.yml covers only part
+          # of CI), so their PR run is the only signal. Keep them.
           keep='["iOS TestFlight Build on Label"]'
           if [[ "$MERGED" == "true" ]]; then
-            keep='["iOS TestFlight Build on Label","Android Native Tests"]'
+            keep='["iOS TestFlight Build on Label","Android Native Tests","Plugin Tests","CI"]'
           fi
           # Assigned first: a failing substitution in a for list doesn't trip set -e.
           ids=$(gh run list --commit "$SHA" --event pull_request --limit 100 \
