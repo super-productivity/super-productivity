@@ -113,8 +113,8 @@ const dayCount = (day: 'today' | 'date'): PatchShape => ({
 /**
  * Absolute single-entity patches: a replacement with current values is a local
  * no-op. Deltas, moves, deletes and every unlisted action never commute here.
- * Without causal proof a rejected patch keeps the entity LWW fallback; for a pin
- * that snapshot omits receivers' `todayOrder` write (section-conflict-replay.md).
+ * Without causal proof a rejected patch keeps the entity LWW fallback; receivers
+ * derive the pin's `todayOrder` change from it (#10379).
  */
 const PATCHES: Partial<Record<ActionType, PatchShape>> = {
   [ActionType.NOTE_UPDATE]: entityUpdate('NOTE', 'note'),

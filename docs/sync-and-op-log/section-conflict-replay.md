@@ -200,10 +200,10 @@ snapshot for habits).
 A pin or unpin without proof keeps that fallback too. Proof can be missing
 after compaction removed the conflict row, and on clock-gap rejections that no
 downloaded op explains, which need not involve a reorder at all. Stopping there
-would leave the whole-dataset replacement as the only way out. Known gap: the
-note snapshot carries `isPinnedToToday` but not receivers' `note.todayOrder`
-write, so their Today list can miss the change. A pin that wins a download-time
-LWW conflict against another edit of the same note already has the same gap.
+would leave the whole-dataset replacement as the only way out. Receivers keep
+`note.todayOrder` in step with the snapshot's `isPinnedToToday` since #10659;
+receivers released before it apply the pin without the Today list change, as
+they do for a pin that wins a download-time LWW conflict.
 
 ## State-based projection
 

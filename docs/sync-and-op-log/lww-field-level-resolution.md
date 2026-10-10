@@ -84,8 +84,8 @@ unless noted.
    - `'patch'` or any other mode, including none → `updateOne`;
    - an absent entity → `addOne` with the `RECREATE_FALLBACK` backfill. NOTE is
      added raw, and a marked `recreatesEntityAfterDelete` patch is ignored.
-   - Tasks keep their project, tag and Today lists in step. Nothing keeps
-     `note.todayOrder` in step.
+   - Tasks keep their project, tag and Today lists in step; notes keep
+     `note.todayOrder` in step with `isPinnedToToday` (#10379).
 9. The envelope is `LwwUpdatePayload`
    ([`operation.types.ts`](../../packages/sync-core/src/operation.types.ts)).
    Its flat `actionPayload` extracts as `{}`, so the merge sees a resolution op
