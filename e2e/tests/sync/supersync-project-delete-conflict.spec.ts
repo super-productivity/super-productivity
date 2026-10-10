@@ -196,7 +196,7 @@ const expectProjectAndTasksDeleted = async (
   await groupHeader.hover();
   await groupHeader
     .locator('.additional-btns button')
-    .filter({ has: page.locator('mat-icon', { hasText: 'visibility' }) })
+    .filter({ has: page.locator('mat-icon', { hasText: 'more_vert' }) })
     .click();
   await expect(
     page.locator('button[role="menuitemcheckbox"]').filter({ hasText: projectName }),

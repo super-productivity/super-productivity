@@ -14,27 +14,28 @@
     <div class="additional-btns">
       @for (btn of item().additionalButtons; track btn.id) {
         @if (!btn.hidden) {
-          @if (btn.id === 'project-visibility') {
-            <button
-              #visibilityBtn
-              class="additional-btn"
-              mat-icon-button
-              [matTooltip]="btn.tooltip | translate"
-              [matMenuTriggerFor]="visibilityMenu"
-            >
-              <mat-icon>{{ btn.icon }}</mat-icon>
-            </button>
-          } @else {
-            <button
-              class="additional-btn"
-              mat-icon-button
-              [matTooltip]="btn.tooltip | translate"
-              (click)="btn.action?.()"
-            >
-              <mat-icon>{{ btn.icon }}</mat-icon>
-            </button>
-          }
+          <button
+            class="additional-btn"
+            mat-icon-button
+            [matTooltip]="btn.tooltip | translate"
+            [attr.aria-label]="btn.tooltip | translate"
+            (click)="btn.action?.()"
+          >
+            <mat-icon>{{ btn.icon }}</mat-icon>
+          </button>
         }
+      }
+      @if (item().contextMenuItems) {
+        <button
+          #moreBtn
+          class="additional-btn"
+          mat-icon-button
+          [matTooltip]="T.G.MORE_ACTIONS | translate"
+          [attr.aria-label]="T.G.MORE_ACTIONS | translate"
+          [matMenuTriggerFor]="moreMenu"
+        >
+          <mat-icon>more_vert</mat-icon>
+        </button>
       }
     </div>
   }
@@ -156,45 +157,64 @@
   </div>
 }
 
-<!-- Project Visibility Menu -->
-<mat-menu #visibilityMenu="matMenu">
-  @for (project of allUnarchivedProjects(); track project.id) {
-    @let projectIcon = project.icon || DEFAULT_PROJECT_ICON;
-    @let isProjectIconEmoji = isSingleEmoji(projectIcon);
-    <button
-      mat-menu-item
-      role="menuitemcheckbox"
-      [attr.aria-checked]="!project.isHiddenFromMenu"
-      (click)="toggleProjectVisibility(project.id)"
-    >
-      @if (!project.isHiddenFromMenu) {
-        <mat-icon>visibility</mat-icon>
-      } @else {
-        <mat-icon>visibility_off</mat-icon>
+<!-- Section menu: entries from the nav config, plus project visibility -->
+<mat-menu #moreMenu="matMenu">
+  <ng-template matMenuContent>
+    @for (entry of item().contextMenuItems; track entry.id) {
+      <button
+        mat-menu-item
+        (click)="entry.action?.()"
+      >
+        <mat-icon>{{ entry.icon }}</mat-icon>
+        {{ entry.label | translate }}
+      </button>
+    }
+    @if (treeKind() === MenuTreeKind.PROJECT) {
+      <mat-divider></mat-divider>
+      <div
+        role="group"
+        [attr.aria-label]="T.F.PROJECT_FOLDER.TOOLTIP_VISIBILITY | translate"
+      >
+        @for (project of allUnarchivedProjects(); track project.id) {
+          @let projectIcon = project.icon || DEFAULT_PROJECT_ICON;
+          @let isProjectIconEmoji = isSingleEmoji(projectIcon);
+          <button
+            mat-menu-item
+            role="menuitemcheckbox"
+            [attr.aria-checked]="!project.isHiddenFromMenu"
+            (click)="toggleProjectVisibility(project.id)"
+          >
+            @if (!project.isHiddenFromMenu) {
+              <mat-icon>visibility</mat-icon>
+            } @else {
+              <mat-icon>visibility_off</mat-icon>
+            }
+            <mat-icon
+              class="nav-icon"
+              [class.nav-icon-emoji]="isProjectIconEmoji"
+              [style.color]="getProjectVisibilityIconColor(project)"
+              >{{ projectIcon }}</mat-icon
+            >
+            {{ project.title }}
+          </button>
+        }
+      </div>
+      @if (archivedProjectsCount() > 0) {
+        <mat-divider></mat-divider>
+        <button
+          mat-menu-item
+          (click)="goToArchivedProjects()"
+        >
+          <mat-icon>archive</mat-icon>
+          <span
+            [attr.aria-label]="`${(T.F.PROJECT.ARCHIVED_PROJECTS.LINK_LABEL | translate)} (${archivedProjectsCount()})`"
+          >
+            {{ T.F.PROJECT.ARCHIVED_PROJECTS.LINK_LABEL | translate }} ({{
+              archivedProjectsCount()
+            }})
+          </span>
+        </button>
       }
-      <mat-icon
-        class="nav-icon"
-        [class.nav-icon-emoji]="isProjectIconEmoji"
-        [style.color]="getProjectVisibilityIconColor(project)"
-        >{{ projectIcon }}</mat-icon
-      >
-      {{ project.title }}
-    </button>
-  }
-  @if (archivedProjectsCount() > 0) {
-    <mat-divider></mat-divider>
-    <button
-      mat-menu-item
-      (click)="goToArchivedProjects()"
-    >
-      <mat-icon>archive</mat-icon>
-      <span
-        [attr.aria-label]="`${(T.F.PROJECT.ARCHIVED_PROJECTS.LINK_LABEL | translate)} (${archivedProjectsCount()})`"
-      >
-        {{ T.F.PROJECT.ARCHIVED_PROJECTS.LINK_LABEL | translate }} ({{
-          archivedProjectsCount()
-        }})
-      </span>
-    </button>
-  }
+    }
+  </ng-template>
 </mat-menu>

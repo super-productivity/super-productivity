@@ -1074,6 +1074,11 @@
         "NO_PARENT": "No folder (root level)",
         "PLACEHOLDER": "Select folder"
       },
+      "S": {
+        "SORTED": "Projects sorted A–Z",
+        "SORT_UNDO_STALE": "Projects changed after sorting, so the sort can no longer be undone"
+      },
+      "SORT": "Sort projects A–Z",
       "TOOLTIP_CREATE": "Create project folder",
       "TOOLTIP_VISIBILITY": "Show/hide projects",
       "ADD_SUBFOLDER": "Add subfolder",
@@ -1711,6 +1716,11 @@
         "NO_PARENT": "No folder (root level)",
         "PLACEHOLDER": "Select folder"
       },
+      "S": {
+        "SORTED": "Tags sorted A–Z",
+        "SORT_UNDO_STALE": "Tags changed after sorting, so the sort can no longer be undone"
+      },
+      "SORT": "Sort tags A–Z",
       "TOOLTIP_CREATE": "Create tag folder",
       "ADD_SUBFOLDER": "Add subfolder",
       "ADD_TAG": "Add tag"
