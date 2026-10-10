@@ -87,6 +87,10 @@ export class PollToBacklogEffects {
                 ),
               );
             }),
+            // A switch to a tag emits no new project id, so the outer switchMap
+            // keeps this stream for the project just left; end it here, or a
+            // later provider or registration change would restart its polling.
+            takeUntil(this.pollToBacklogActions$),
           ),
         ),
       ),

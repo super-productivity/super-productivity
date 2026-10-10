@@ -1,7 +1,7 @@
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { provideMockActions } from '@ngrx/effects/testing';
 import { MockStore, provideMockStore } from '@ngrx/store/testing';
-import { Observable, of, Subject } from 'rxjs';
+import { BehaviorSubject, Observable, of, Subject } from 'rxjs';
 import { PollToBacklogEffects } from './poll-to-backlog.effects';
 import { IssueService } from '../issue.service';
 import { WorkContextService } from '../../work-context/work-context.service';
@@ -24,6 +24,7 @@ describe('PollToBacklogEffects', () => {
   let snackServiceSpy: jasmine.SpyObj<SnackService>;
   let isInSyncWindow: boolean;
   let isInitialSyncDone: boolean;
+  let isActiveProject$: BehaviorSubject<boolean>;
 
   const createMockIssueProvider = (
     overrides: Partial<IssueProvider> = {},
@@ -51,8 +52,9 @@ describe('PollToBacklogEffects', () => {
       Promise.resolve(),
     );
 
+    isActiveProject$ = new BehaviorSubject(true);
     workContextServiceSpy = jasmine.createSpyObj('WorkContextService', [], {
-      isActiveWorkContextProject$: of(true),
+      isActiveWorkContextProject$: isActiveProject$,
       activeWorkContextId$: of('project-1'),
     });
 
@@ -186,6 +188,62 @@ describe('PollToBacklogEffects', () => {
       expect(
         issueServiceSpy.checkAndImportNewIssuesToBacklogForProject,
       ).toHaveBeenCalledWith(JIRA_TYPE, 'jira-1', false);
+    }));
+
+    it('should not restart polling for a project left for a tag on a registration change', fakeAsync(() => {
+      const pluginRegistry = TestBed.inject(PluginIssueProviderRegistryService);
+      store.overrideSelector(selectEnabledIssueProviders, [
+        createMockIssueProvider({ id: 'jira-1', defaultProjectId: 'project-1' }),
+      ]);
+      store.refreshState();
+
+      const actionsSubject = new Subject<any>();
+      actions$ = actionsSubject.asObservable();
+
+      const subscription = effects.pollNewIssuesToBacklog$.subscribe();
+
+      actionsSubject.next(
+        setActiveWorkContext({
+          activeType: WorkContextType.PROJECT,
+          activeId: 'project-1',
+        }),
+      );
+      tick(10001);
+      expect(
+        issueServiceSpy.checkAndImportNewIssuesToBacklogForProject,
+      ).toHaveBeenCalledTimes(1);
+
+      isActiveProject$.next(false);
+      actionsSubject.next(
+        setActiveWorkContext({
+          activeType: WorkContextType.TAG,
+          activeId: 'TODAY',
+        }),
+      );
+      pluginRegistry.register({
+        pluginId: 'linear-issue-provider',
+        issueProviderKey: 'LINEAR',
+        name: 'Linear',
+        humanReadableName: 'Linear',
+        icon: 'linear',
+        pollIntervalMs: 300000,
+        issueStrings: { singular: 'Issue', plural: 'Issues' },
+        definition: {
+          configFields: [],
+          getHeaders: () => ({}),
+          searchIssues: () => Promise.resolve([]),
+          getById: () => Promise.resolve({ id: '1', title: '', body: '', url: '' }),
+          getIssueLink: () => '',
+          issueDisplay: [],
+        },
+      });
+
+      tick(310001);
+      expect(
+        issueServiceSpy.checkAndImportNewIssuesToBacklogForProject,
+      ).toHaveBeenCalledTimes(1);
+
+      subscription.unsubscribe();
     }));
 
     it('should NOT poll providers with pollingMode always (handled by separate effect)', fakeAsync(() => {
