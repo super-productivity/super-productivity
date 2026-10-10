@@ -28,7 +28,7 @@ The script:
 | `ANDROID_VERIFY_SERVE_TIMEOUT`     | `900`                                    | seconds                                                          |
 | `ANDROID_HOME`, `ANDROID_SDK_ROOT` | `~/Android/Sdk`, `~/Library/Android/sdk` | where `adb` and `emulator` are found when they are not on `PATH` |
 
-Requirements: an emulator image that includes Chrome (a Google APIs or Google Play image) and an AVD with `hw.keyboard=no` (finding 4). On a non-rooted image (Google Play), Playwright's `_android` also needs **Enable command line on non-rooted devices** turned on once in Chrome's `chrome://flags`. Without it, Chrome never opens Playwright's DevTools socket and the run fails at the `device` stage after 60 seconds.
+Requirements: an emulator image that includes Chrome (a Google APIs or Google Play image) and an AVD with `hw.keyboard=no` (finding 4), kept in portrait (tap calibration reads `wm size`, which reports the natural orientation). On a non-rooted image (Google Play), Playwright's `_android` also needs **Enable command line on non-rooted devices** turned on once in Chrome's `chrome://flags`. Without it, Chrome never opens Playwright's DevTools socket and the run fails at the `device` stage after 60 seconds.
 
 ## Output
 

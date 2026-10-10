@@ -173,6 +173,8 @@ set -m
 # --- boot ------------------------------------------------------------------
 if [[ -z "$SERIAL" ]]; then
   log "booting AVD $AVD (log: $OUT_DIR/emulator.log)"
+  # An emulator that is still starting is not "online" yet; never adopt it.
+  BEFORE="$("$ADB" devices 2>/dev/null || true)"
   "$EMULATOR" -avd "$AVD" -no-snapshot-save -no-audio -no-boot-anim \
     </dev/null >"$OUT_DIR/emulator.log" 2>&1 &
   EMULATOR_PID=$!
@@ -182,7 +184,10 @@ if [[ -z "$SERIAL" ]]; then
     kill -0 "$EMULATOR_PID" 2>/dev/null ||
       die "emulator exited during startup: $(tail -n 3 "$OUT_DIR/emulator.log" | tr '\n' ' ')"
     ((SECONDS < deadline)) || die "no emulator appeared in adb within ${BOOT_TIMEOUT}s"
-    SERIAL="$(online_emulator || true)"
+    candidate="$(online_emulator || true)"
+    if [[ -n "$candidate" && "$BEFORE" != *"$candidate"* ]]; then
+      SERIAL="$candidate"
+    fi
     sleep 2
   done
   while :; do
