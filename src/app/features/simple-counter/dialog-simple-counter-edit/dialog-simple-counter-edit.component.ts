@@ -38,6 +38,7 @@ import { MatDialog } from '@angular/material/dialog';
 import { DialogSimpleCounterEditSettingsComponent } from '../dialog-simple-counter-edit-settings/dialog-simple-counter-edit-settings.component';
 import { DateTimeFormatService } from 'src/app/core/date-time-format/date-time-format.service';
 import { getDbDateStr } from '../../../util/get-db-date-str';
+import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
 
 const CHART_DAYS = 28;
 const CHART_COLOR = '#4bc0c0';
@@ -259,7 +260,7 @@ export class DialogSimpleCounterEditComponent {
     const date = this.selectedDateStr();
     if (date === this.todayStr) return 'Today';
 
-    return new Date(date).toLocaleDateString(
+    return dateStrToUtcDate(date).toLocaleDateString(
       this._dateTimeFormatService.currentLocale(),
       {
         day: 'numeric',
@@ -275,7 +276,7 @@ export class DialogSimpleCounterEditComponent {
     if (!allDates.length) return [];
 
     // Fill in missing dates from first entry to today
-    const startDate = new Date(allDates[0]);
+    const startDate = dateStrToUtcDate(allDates[0]);
     const endDate = new Date();
     const dates: string[] = [];
 
@@ -288,7 +289,7 @@ export class DialogSimpleCounterEditComponent {
   }
 
   private _formatChartLabel(dateStr: string, counter: SimpleCounterCopy): string {
-    const date = new Date(dateStr);
+    const date = dateStrToUtcDate(dateStr);
     const dayOfWeek = date.getDay();
 
     const baseLabel = date.toLocaleDateString(
