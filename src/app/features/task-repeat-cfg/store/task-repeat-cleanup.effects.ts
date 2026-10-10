@@ -19,7 +19,7 @@ import { Log } from '../../../core/log';
 import { DeletedTaskIssueSidecarService } from '../../issue/two-way-sync/deleted-task-issue-sidecar.service';
 import { TODAY_TAG } from '../../tag/tag.const';
 import { isValidSplitTime } from '../../../util/is-valid-split-time';
-import { getDateTimeFromClockString } from '../../../util/get-date-time-from-clock-string';
+import { getRepeatDueWithTime } from './get-repeat-due-with-time.util';
 import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
 import { TaskTimeSyncService } from '../../tasks/task-time-sync.service';
 
@@ -45,11 +45,15 @@ const _hasTemplateSchedule = (
   task: TaskWithSubTasks,
   cfg: TaskRepeatCfg,
   dueStr: string,
+  startOfNextDayDiffMs: number,
 ): boolean => {
   if (isValidSplitTime(cfg.startTime)) {
-    const expectedDueWithTime = getDateTimeFromClockString(
+    // Must match the creation formula in TaskRepeatCfgService, or instances
+    // stop being recognized as untouched and are never reaped.
+    const expectedDueWithTime = getRepeatDueWithTime(
       cfg.startTime,
       dateStrToUtcDate(dueStr),
+      startOfNextDayDiffMs,
     );
     // remindAt is deliberately NOT compared for a TIMED instance: there it is
     // app-managed, not a user edit. Dismissing a fired reminder clears it
@@ -103,6 +107,7 @@ const _isUnmodifiedSkipOverdueInstance = (
   cfg: TaskRepeatCfg,
   newestInstanceProjectId: string,
   dueStr: string,
+  startOfNextDayDiffMs: number,
 ): boolean =>
   task.title === (cfg.title ?? '') &&
   (task.timeEstimate ?? 0) === (cfg.defaultEstimate ?? 0) &&
@@ -115,7 +120,7 @@ const _isUnmodifiedSkipOverdueInstance = (
   (cfg.projectId
     ? task.projectId === cfg.projectId
     : task.projectId === newestInstanceProjectId) &&
-  _hasTemplateSchedule(task, cfg, dueStr) &&
+  _hasTemplateSchedule(task, cfg, dueStr, startOfNextDayDiffMs) &&
   _hasNoDeadlineFields(task) &&
   _hasTemplateSubTasks(task, cfg);
 
@@ -178,6 +183,7 @@ export class TaskRepeatCleanupEffects {
                 repeatCfgs.map((c) => [c.id as string, c]),
               );
               const todayStr = this._dateService.todayStr();
+              const startOfNextDayDiffMs = this._dateService.getStartOfNextDayDiffMs();
 
               // Group parent tasks.
               // - Default configs: key by (repeatCfgId, creation day). Two
@@ -249,8 +255,10 @@ export class TaskRepeatCleanupEffects {
                   // Subtask *progress* (completion / timeSpent) is caught
                   // upstream by hasSubtaskProgress before this gate runs.
                   if (isSkipOverdueGroup) {
+                    // logical day, so a late-night instance (#3378) keys to the
+                    // day it was created for
                     const dueStr = task.dueWithTime
-                      ? getDbDateStr(task.dueWithTime)
+                      ? getDbDateStr(task.dueWithTime - startOfNextDayDiffMs)
                       : (task.dueDay ?? null);
                     if (!dueStr || dueStr >= todayStr) {
                       continue;
@@ -262,6 +270,7 @@ export class TaskRepeatCleanupEffects {
                         cfg,
                         tasks[0].projectId,
                         dueStr,
+                        startOfNextDayDiffMs,
                       )
                     ) {
                       continue;

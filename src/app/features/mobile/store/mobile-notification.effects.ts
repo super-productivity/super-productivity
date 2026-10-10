@@ -4,6 +4,7 @@ import { debounceTime, distinctUntilChanged, map, switchMap, tap } from 'rxjs/op
 import { combineLatest, Observable, timer } from 'rxjs';
 import { SnackService } from '../../../core/snack/snack.service';
 import { Log } from '../../../core/log';
+import { DateService } from '../../../core/date/date.service';
 import { generateNotificationId } from '../../android/android-notification-id.util';
 import { hasTypedReminderActions } from '../../android/android-interface';
 import { Store } from '@ngrx/store';
@@ -23,7 +24,7 @@ import {
 import { TaskRepeatCfg } from '../../task-repeat-cfg/task-repeat-cfg.model';
 import { getRepeatableTaskId } from '../../task-repeat-cfg/get-repeatable-task-id.util';
 import { isValidSplitTime } from '../../../util/is-valid-split-time';
-import { getDateTimeFromClockString } from '../../../util/get-date-time-from-clock-string';
+import { getRepeatDueWithTime } from '../../task-repeat-cfg/store/get-repeat-due-with-time.util';
 import { remindOptionToMilliseconds } from '../../tasks/util/remind-option-to-milliseconds';
 import { getDbDateStr } from '../../../util/get-db-date-str';
 import { getDueDateNotificationOffsetMs } from '../due-date-notification-offset';
@@ -64,6 +65,7 @@ export class MobileNotificationEffects {
   private _reminderService = inject(CapacitorReminderService);
   private _platformService = inject(CapacitorPlatformService);
   private _globalConfigService = inject(GlobalConfigService);
+  private _dateService = inject(DateService);
   // Single-shot guard so we don't spam the user with duplicate warnings.
   private _hasShownNotificationWarning = false;
   // Track scheduled reminder IDs to cancel removed ones
@@ -559,7 +561,7 @@ export class MobileNotificationEffects {
     const foundCfgIds = new Set<string>();
 
     // Anchor each day at noon to keep the per-day timestamp clear of DST /
-    // midnight edges; getDbDateStr/getDateTimeFromClockString only use the date.
+    // midnight edges; getDbDateStr/getRepeatDueWithTime only use the date.
     const baseDay = new Date(now);
     baseDay.setHours(12, 0, 0, 0);
 
@@ -586,7 +588,11 @@ export class MobileNotificationEffects {
           continue;
         }
 
-        const dueMs = getDateTimeFromClockString(cfg.startTime, dayMs);
+        const dueMs = getRepeatDueWithTime(
+          cfg.startTime,
+          dayMs,
+          this._dateService.getStartOfNextDayDiffMs(),
+        );
         const triggerAtMs = remindOptionToMilliseconds(dueMs, cfg.remindAt);
         if (typeof triggerAtMs !== 'number' || triggerAtMs <= now) {
           continue;

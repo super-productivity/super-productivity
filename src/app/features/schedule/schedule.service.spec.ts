@@ -4,7 +4,12 @@ import { ScheduleService } from './schedule.service';
 import { DateService } from '../../core/date/date.service';
 import { getDbDateStr } from '../../util/get-db-date-str';
 import { findSpringForwardSunday } from '../tasks/dst.test-helper';
-import { provideMockStore } from '@ngrx/store/testing';
+import { MockStore, provideMockStore } from '@ngrx/store/testing';
+import { selectStartOfNextDayDiffMs } from '../../root-store/app-state/app-state.selectors';
+import {
+  DEFAULT_TASK_REPEAT_CFG,
+  TaskRepeatCfg,
+} from '../task-repeat-cfg/task-repeat-cfg.model';
 import { selectTimelineTasks } from '../work-context/store/work-context.selectors';
 import { selectTaskRepeatCfgsWithAndWithoutStartTime } from '../task-repeat-cfg/store/task-repeat-cfg.selectors';
 import { selectTimelineConfig } from '../config/store/global-config.reducer';
@@ -422,6 +427,48 @@ describe('ScheduleService', () => {
       service.createScheduleDaysComputed(signal([dayStr]))();
 
       expect(buildSpy.calls.mostRecent().args[0].now).toBe(clock);
+    });
+
+    it('projects a repeat time before the day start into the night and follows offset changes (#3378)', () => {
+      const store = TestBed.inject(MockStore);
+      const cfg: TaskRepeatCfg = {
+        ...DEFAULT_TASK_REPEAT_CFG,
+        id: 'late-night',
+        title: 'Late night',
+        repeatCycle: 'DAILY',
+        repeatEvery: 1,
+        startDate: '2026-01-01',
+        startTime: '02:00',
+        lastTaskCreationDay: '2026-01-19',
+      };
+      store.overrideSelector(selectTaskRepeatCfgsWithAndWithoutStartTime, {
+        withStartTime: [cfg],
+        withoutStartTime: [],
+      });
+      store.overrideSelector(selectStartOfNextDayDiffMs, 0);
+      store.refreshState();
+      // 01:00 on the 21st is still logical day 20 with a 05:00 day start
+      const clock = new Date(2026, 0, 21, 1, 0).getTime();
+      spyOn(Date, 'now').and.callFake(() => clock);
+      const days = service.createScheduleDaysComputed(
+        signal(['2026-01-20', '2026-01-21']),
+      );
+      const repeatStarts = (): number[] =>
+        days()
+          .flatMap((day) => day.entries)
+          .filter((e) => e.id.includes(cfg.id))
+          .map((e) => e.start);
+
+      expect(repeatStarts()).toEqual([
+        new Date(2026, 0, 20, 2, 0).getTime(),
+        new Date(2026, 0, 21, 2, 0).getTime(),
+      ]);
+
+      store.overrideSelector(selectStartOfNextDayDiffMs, 5 * 60 * 60 * 1000);
+      store.refreshState();
+
+      // day 20's night is calendar day 21; day 21's night is out of view
+      expect(repeatStarts()).toEqual([new Date(2026, 0, 21, 2, 0).getTime()]);
     });
 
     it('falls back to the wall clock when no day is displayed', () => {

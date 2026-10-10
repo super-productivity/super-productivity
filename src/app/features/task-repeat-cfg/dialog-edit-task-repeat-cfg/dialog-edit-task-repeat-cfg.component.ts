@@ -53,7 +53,7 @@ import { DateTimeFormatService } from 'src/app/core/date-time-format/date-time-f
 import { RepeatTaskHeatmapComponent } from '../repeat-task-heatmap/repeat-task-heatmap.component';
 import { CollapsibleComponent } from '../../../ui/collapsible/collapsible.component';
 import { DialogScheduleTaskComponent } from '../../planner/dialog-schedule-task/dialog-schedule-task.component';
-import { getDateTimeFromClockString } from '../../../util/get-date-time-from-clock-string';
+import { getRepeatDueWithTime } from '../store/get-repeat-due-with-time.util';
 import { remindOptionToMilliseconds } from '../../tasks/util/remind-option-to-milliseconds';
 import { isValidSplitTime } from '../../../util/is-valid-split-time';
 import { DateService } from '../../../core/date/date.service';
@@ -182,9 +182,10 @@ export class DialogEditTaskRepeatCfgComponent {
     const hasValidTime = !!currentCfg.startTime && isValidSplitTime(currentCfg.startTime);
 
     if (currentCfg.startDate && hasValidTime) {
-      const dt = getDateTimeFromClockString(
+      const dt = getRepeatDueWithTime(
         currentCfg.startTime!,
         dateStrToUtcDate(currentCfg.startDate),
+        this._dateService.getStartOfNextDayDiffMs(),
       );
       dummyTask.dueWithTime = dt;
       if (remindAt && remindAt !== TaskReminderOptionId.DoNotRemind) {
@@ -416,7 +417,12 @@ export class DialogEditTaskRepeatCfgComponent {
         startDate:
           this._data.initialStartDate ??
           this._data.task.dueDay ??
-          getDbDateStr(this._data.task.dueWithTime || undefined),
+          // the logical day, so a late-night time keeps its night (#3378)
+          (this._data.task.dueWithTime
+            ? getDbDateStr(
+                this._data.task.dueWithTime - this._dateService.getStartOfNextDayDiffMs(),
+              )
+            : this._dateService.todayStr()),
         startTime,
         remindAt: startTime
           ? (this._data.defaultRemindOption ??

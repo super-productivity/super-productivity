@@ -231,7 +231,8 @@ export class LocalRestApiTaskRepeatCfgRoutesService implements LocalRestApiFeatu
       startDate:
         task.dueDay ??
         (task.dueWithTime
-          ? getDbDateStr(task.dueWithTime)
+          ? // the logical day, so a late-night time keeps its night (#3378)
+            getDbDateStr(task.dueWithTime - this._dateService.getStartOfNextDayDiffMs())
           : this._dateService.todayStr()),
       startTime,
       remindAt: startTime

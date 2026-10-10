@@ -106,6 +106,8 @@
 
 .hint-arrow {
   position: absolute;
+  // decorative; it can overlap the "+" FAB it points at and swallow taps
+  pointer-events: none;
   width: 8px;
   height: 8px;
   background: var(--card-bg);
