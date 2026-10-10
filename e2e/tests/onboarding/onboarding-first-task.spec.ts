@@ -269,6 +269,34 @@ test.describe('First-run onboarding', () => {
       await page.close();
     });
 
+    test('keeps + uncovered after switching to the mouse', async ({
+      isolatedContext,
+    }) => {
+      const page = await isolatedContext.newPage();
+      const runtimeErrors = attachPageErrorCollector(page, 'mouse on phone layout');
+      installDevErrorDialogHandler(page, 'mouse on phone layout');
+
+      await openFreshApp(page, { withExamples: false });
+      await expect(page.locator('onboarding-hint')).toContainText(
+        'Tap + to add your first task',
+      );
+      await page.mouse.move(10, 10);
+      await expect(page.locator('body')).toHaveClass(/isMousePrimary/);
+
+      // Moving the + button (here: a shorter viewport) must move the hint too.
+      const viewport = page.viewportSize()!;
+      await page.setViewportSize({ ...viewport, height: viewport.height - 100 });
+      await expect
+        .poll(async () => {
+          const addBtn = await page.locator('.add-task-button').boundingBox();
+          const chip = await page.locator('onboarding-hint .hint-chip').boundingBox();
+          return addBtn && chip ? addBtn.y - (chip.y + chip.height) : -1;
+        })
+        .toBeGreaterThanOrEqual(16);
+      assertNoRuntimeBrowserErrors(runtimeErrors, 'mouse on phone layout');
+      await page.close();
+    });
+
     test('keeps the composer open after a later touch task', async ({
       isolatedContext,
     }) => {

@@ -62,7 +62,9 @@ const STEP_CONFIGS = new Map<OnboardingStep, StepConfig>([
   [
     'create-task',
     {
-      selector: (isMobile) => (isMobile ? '.add-task-button' : '.tour-addBtn'),
+      // A mouse on the phone layout still adds tasks via the bottom-nav +.
+      selector: (isMobile) =>
+        isMobile ? '.add-task-button' : ['.tour-addBtn', '.add-task-button'],
       message: T.ONBOARDING.HINTS.CREATE_TASK,
       touchMessage: T.ONBOARDING.HINTS.CREATE_TASK_TOUCH,
       showShortcut: true,
