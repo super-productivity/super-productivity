@@ -368,7 +368,7 @@ class CapacitorMainActivity : BridgeActivity() {
         // A web-side reload (e.g. language change, PWA update, sync-conflict
         // recovery — all do window.location.reload()) re-runs the bundle and
         // re-enters here, but it also wipes the inline --android-status-bar-overlap
-        // off the fresh document. Re-arm the dedupe so the next layout pass
+        // and its class off the fresh document. Re-arm the dedupe so the next layout pass
         // re-publishes it; otherwise the unchanged value is skipped and the
         // header overlaps the status bar again on the WebView < 140 / API < 35
         // tail. See pushStatusBarOverlap.
@@ -669,12 +669,13 @@ class CapacitorMainActivity : BridgeActivity() {
      * SystemBars; on API >= 35 the injected --safe-area-inset-top wins via var()
      * precedence and the published var is ignored regardless.
      *
-     * Known gap, pre-existing (follow-up, not #9316): SystemBars 8.4 also injects
-     * `--safe-area-inset-top: 0px` inline on its non-passthrough path at every API
-     * level, so the SCSS `var(--safe-area-inset-top, max(env(), var(--android-
-     * status-bar-overlap)))` fallback resolves to 0px and the var published here
-     * is shadowed on exactly the band this runs on. See the note under "header
-     * draws BEHIND the status bar" in docs/android-edge-to-edge-keyboard.md.
+     * SystemBars 8.4 also injects `--safe-area-inset-top: 0px` inline on its
+     * non-passthrough path at every API level, which shadows the `var()` fallback
+     * on exactly the band this runs on. So this also adds the
+     * `hasAndroidStatusBarOverlap` class to `<html>`, which switches
+     * `--safe-area-top` to `max(var(--safe-area-inset-top, env()), overlap)`
+     * (`_css-variables.scss`). Only ever added where the gate is on, so the
+     * API >= 35 / WebView >= 140 paths keep their plain var() resolution.
      */
     private fun pushStatusBarOverlap(rect: Rect) {
         if (!shouldRunNativeInsetShim()) return
@@ -688,7 +689,8 @@ class CapacitorMainActivity : BridgeActivity() {
         lastStatusBarOverlapCssPx = overlapCssPx
         javaScriptInterface.callJavaScriptFunction(
             "document.documentElement.style.setProperty(" +
-                "'--android-status-bar-overlap','${overlapCssPx}px')"
+                "'--android-status-bar-overlap','${overlapCssPx}px');" +
+                "document.documentElement.classList.add('hasAndroidStatusBarOverlap')"
         )
         if (BuildConfig.DEBUG) {
             Log.d(

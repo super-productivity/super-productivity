@@ -47,14 +47,10 @@
   // Uses env() for native iOS safe areas
   // -----------------------------
   // `--android-status-bar-overlap` is fed natively (CapacitorMainActivity
-  // .pushStatusBarOverlapBelowApi30) on the WebView < 140 tail, where
+  // .pushStatusBarOverlap) on the API < 35 / WebView < 140 tail, where
   // env(safe-area-inset-top) wrongly resolves to 0 under edge-to-edge (old
   // WebViews map only display cutouts into safe-area insets, not the status bar)
-  // — #8508 / #8283 (Android 9 / API 28). It is 0 once the WebView is inset, so
-  // max() never double-counts; on API >= 35 / WebView >= 140 the injected
-  // --safe-area-inset-top wins via var() precedence and this fallback is ignored.
-  // Declared 0px so the token is always defined (it is only ever overridden by
-  // the native inline write on the affected tail).
+  // — #8508 / #8283. Declared 0px so the token is always defined.
   --android-status-bar-overlap: 0px;
   --safe-area-top: var(
     --safe-area-inset-top,
@@ -360,6 +356,20 @@
   // Fallback for any root-level consumer; body aliases this to the public
   // `--focus-ring` primitive below.
   --focus-ring-color: var(--focus-ring, var(--palette-primary-500));
+}
+
+// SystemBars injects `--safe-area-inset-top: 0px` on the API < 35 / WebView <
+// 140 tail too, so the `var()` fallback above never reaches the overlap there
+// and the header draws under the status bar (Android 11 / MIUI report). The
+// native shim adds this class only on that tail, so the overlap is folded in
+// with max() (0 once the WebView is inset, so it never double-counts) without
+// touching the API >= 35 / WebView >= 140 paths. Scoped instead of global so
+// JS readers of --safe-area-top keep parsing a plain px token there.
+:root.hasAndroidStatusBarOverlap {
+  --safe-area-top: max(
+    var(--safe-area-inset-top, env(safe-area-inset-top, 0px)),
+    var(--android-status-bar-overlap, 0px)
+  );
 }
 
 // ===============================
