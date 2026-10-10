@@ -507,6 +507,39 @@ describe('getNewestPossibleDueDate()', () => {
     });
   });
 
+  describe('MONTHLY month-end lookback (issue #10517)', () => {
+    it('does not return tomorrow when stepping back into a shorter month', () => {
+      // March 30 -> "February 30" must not overflow into March and resolve to
+      // March 31, a day that has not happened yet.
+      const cfg = dummyRepeatable('ID1', {
+        repeatCycle: 'MONTHLY',
+        repeatEvery: 1,
+        lastTaskCreationDay: '2026-02-28',
+      });
+      testCase(cfg, new Date(2026, 2, 30), new Date(2026, 0, 31), null);
+    });
+
+    it('returns the clamped previous month when it was not created yet', () => {
+      const cfg = dummyRepeatable('ID1', {
+        repeatCycle: 'MONTHLY',
+        repeatEvery: 1,
+        lastTaskCreationDay: '2026-01-31',
+      });
+      testCase(cfg, new Date(2026, 2, 30), new Date(2026, 0, 31), new Date(2026, 1, 28));
+    });
+
+    it('reaches an on-cycle shorter month when repeatEvery > 1', () => {
+      // Every 2 months from Dec 31: March 31 is off-cycle, so the lookback
+      // must step to February 28 instead of landing on March 31 again.
+      const cfg = dummyRepeatable('ID1', {
+        repeatCycle: 'MONTHLY',
+        repeatEvery: 2,
+        lastTaskCreationDay: '2025-12-31',
+      });
+      testCase(cfg, new Date(2026, 2, 31), new Date(2025, 11, 31), new Date(2026, 1, 28));
+    });
+  });
+
   describe('MONTHLY Nth weekday (issue #6040)', () => {
     it('returns the Nth weekday of this month when today equals it', () => {
       // 1st Thursday of Jan 2026 = Jan 1 (Thu). today = Jan 1.
