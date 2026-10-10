@@ -177,6 +177,10 @@ jobs:
               exit 1
             }
           done
+          # #10576: the app-builder-lib patch must have swapped in the guarded launcher.
+          # On tag builds the snap is already published by now; the release workflow
+          # re-checks it before the store upload.
+          bash tools/assert-snap-xdg-guard.sh "$SNAP_FILE"
 
       - name: Normalize snap file name
         if: false == startsWith(github.ref, 'refs/tags/v')

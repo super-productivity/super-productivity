@@ -431,9 +431,6 @@ body {
 }
 
 body.isDarkTheme {
-  --scheduled-date-today: #00d45a;
-  --scheduled-date-tomorrow: #ffaa00;
-  --scheduled-date-upcoming: #d580ff;
   --surface-0: var(--dark0);
   --surface-1: #131314;
   --surface-2: var(--dark3);
@@ -615,10 +612,6 @@ body.isDarkTheme {
 
 /* stylelint-disable-next-line no-duplicate-selectors -- layered token file: Cat B follows Layer 1 primitives on the same selector */
 body {
-  // Saturated text colors: deeper on light surfaces, brighter in dark mode.
-  --scheduled-date-today: #007a29;
-  --scheduled-date-tomorrow: #b45b00;
-  --scheduled-date-upcoming: #8000d0;
   // Background colors (Cat B)
   --bg-drag-col: rgb(242, 242, 242);
   --bg-slightly-lighter: var(--bg);

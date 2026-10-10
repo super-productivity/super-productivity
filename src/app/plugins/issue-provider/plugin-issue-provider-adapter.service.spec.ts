@@ -564,6 +564,35 @@ describe('PluginIssueProviderAdapterService', () => {
       });
     }
 
+    // calendar providers report 'confirmed' and declare neither doneStates nor
+    // an isDone mapping, so an edited event must not reopen a done task (#9905)
+    for (const doneStates of [undefined, []]) {
+      it(`should not touch isDone without a done concept (doneStates ${JSON.stringify(doneStates)})`, async () => {
+        const provider = createMockProvider({
+          doneStates,
+          getById: jasmine.createSpy('getById').and.resolveTo({
+            id: 'ISS-5',
+            title: 'T',
+            state: 'confirmed',
+            lastUpdated: 2000,
+          }),
+        });
+        registrySpy.getProvider.and.returnValue(provider);
+        const task = {
+          id: 'task-1',
+          issueId: 'ISS-5',
+          issueProviderId: PROVIDER_ID,
+          issueLastUpdated: 1000,
+          isDone: true,
+        } as Task;
+
+        const result = await service.getFreshDataForIssueTask(task);
+
+        expect(result!.taskChanges.title).toBe('T');
+        expect(result!.taskChanges.isDone).toBeUndefined();
+      });
+    }
+
     it('should return null when issue is not updated', async () => {
       const freshIssue: PluginIssue = {
         id: 'ISS-5',
@@ -1729,6 +1758,22 @@ describe('PluginIssueProviderAdapterService', () => {
       ]);
 
       expect(result.map((r) => r.taskChanges.isDone)).toEqual([true, false]);
+    });
+
+    it('should not set isDone on batch-fetched issues without a done concept', async () => {
+      const getByIds = jasmine.createSpy('getByIds').and.resolveTo([
+        { id: 'ISS-1', title: 'One', state: 'confirmed', lastUpdated: 5000 },
+        { id: 'ISS-2', title: 'Two', state: 'closed', lastUpdated: 5000 },
+      ] as PluginIssue[]);
+      registrySpy.getProvider.and.returnValue(createMockProvider({ getByIds }));
+
+      const result = await service.getFreshDataForIssueTasks([
+        { id: 'task-1', issueId: 'ISS-1', issueProviderId: PROVIDER_ID } as Task,
+        { id: 'task-2', issueId: 'ISS-2', issueProviderId: PROVIDER_ID } as Task,
+      ]);
+
+      expect(result.map((r) => r.taskChanges.title)).toEqual(['One', 'Two']);
+      expect(result.map((r) => r.taskChanges.isDone)).toEqual([undefined, undefined]);
     });
 
     it('should batch per provider and fall back to getById without getByIds', async () => {

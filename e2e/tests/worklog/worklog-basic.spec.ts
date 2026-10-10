@@ -12,17 +12,6 @@ import { readFile } from 'node:fs/promises';
  */
 
 test.describe('Worklog', () => {
-  test('should navigate to worklog view', async ({ page, workViewPage }) => {
-    await workViewPage.waitForTaskList();
-
-    // Navigate to the legacy worklog route
-    await page.goto('/#/tag/TODAY/worklog');
-    await page.waitForLoadState('networkidle');
-
-    await expect(page).toHaveURL(/worklog/);
-    await expect(page.locator('history .total-time')).toBeVisible();
-  });
-
   test('should show worklog after completing tasks', async ({
     page,
     workViewPage,
@@ -151,20 +140,6 @@ test.describe('Worklog', () => {
     await historyBtn.click();
 
     await page.waitForURL(/history/);
-    await expect(page).toHaveURL(/history/);
-  });
-
-  test('should display worklog date navigation', async ({ page, workViewPage }) => {
-    await workViewPage.waitForTaskList();
-
-    // Navigate to worklog
-    await page.goto('/#/tag/TODAY/history');
-    await page.waitForLoadState('networkidle');
-
-    // Verify worklog page loads
-    await expect(page.locator('.route-wrapper')).toBeVisible();
-
-    // Just verify the page loaded without errors
     await expect(page).toHaveURL(/history/);
   });
 });

@@ -43,6 +43,23 @@ jobs:
 
           mv .tmp/snap-release/*.snap .tmp/snap-release/sp.snap
 
+      # build.yml publishes a tag's snap to the GitHub release before its own
+      # payload checks run, so re-check here: this is the last gate before stable.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
+        with:
+          sparse-checkout: tools/assert-snap-xdg-guard.sh
+          sparse-checkout-cone-mode: false
+          path: repo
+          persist-credentials: false
+
+      - name: Verify release snap launcher (#10576)
+        run: |
+          if ! command -v unsquashfs > /dev/null; then
+            sudo apt-get update
+            sudo apt-get install -y --no-install-recommends squashfs-tools
+          fi
+          bash repo/tools/assert-snap-xdg-guard.sh .tmp/snap-release/sp.snap
+
       # Pulled in its own step so the image download (~10s, occasionally much
       # worse) is not charged against the upload step's store-review budget.
       - name: Pull snapcraft image

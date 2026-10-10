@@ -7,7 +7,7 @@ import { catchError, debounceTime, exhaustMap, map, switchMap } from 'rxjs/opera
 import { LOCAL_ACTIONS } from '../../util/local-actions.token';
 import { LocalBackupMeta } from './local-backup.model';
 import { IS_ANDROID_WEB_VIEW_TOKEN } from '../../util/is-android-web-view';
-import { IS_ELECTRON } from '../../app.constants';
+import { IS_ELECTRON, IS_ELECTRON_TOKEN } from '../../app.constants';
 import { androidInterface } from '../../features/android/android-interface';
 import { StateSnapshotService } from '../../op-log/backup/state-snapshot.service';
 import { BackupService } from '../../op-log/backup/backup.service';
@@ -67,6 +67,7 @@ export class LocalBackupService {
   private _platformService = inject(CapacitorPlatformService);
   private _localActions$ = inject(LOCAL_ACTIONS);
   private _isAndroidWebView = inject(IS_ANDROID_WEB_VIEW_TOKEN);
+  private _isElectron = inject(IS_ELECTRON_TOKEN);
 
   private _cfg$: Observable<LocalBackupConfig> = this._configService.cfg$.pipe(
     map((cfg) => cfg.localBackup),
@@ -417,9 +418,10 @@ export class LocalBackupService {
     }
 
     let didWrite = false;
-    if (IS_ELECTRON) {
+    if (this._isElectron) {
       // Electron has its own rotated, timestamped chain — no ring or A3 guard
-      // needed (the bug class A3 protects against doesn't apply).
+      // needed (the bug class A3 protects against doesn't apply). A failed write
+      // rejects (#10022), skipping the timestamp; the trigger's catchError logs it.
       await this._backupElectron(data);
       didWrite = true;
     }

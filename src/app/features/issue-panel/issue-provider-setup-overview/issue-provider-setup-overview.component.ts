@@ -27,26 +27,26 @@ export class IssueProviderSetupOverviewComponent {
   private _pluginService = inject(PluginService);
 
   enabledProviders$ = this._store.select(selectEnabledIssueProviders);
-  // Plugins are discovered after the initial sync, which can finish after this panel
-  // opened, so the lists follow the registry and plugin-state signals.
-  private _registeredProviders = computed(() => {
+  // Derived from the registry and plugin states so providers that finish loading after
+  // this panel opens (plugin discovery can trail app readiness) still show up.
+  private _availablePluginProviders = computed(() => {
     this._pluginRegistry.registrationVersion();
     return this._pluginRegistry.getAvailableProviders();
   });
-  private _disabledProviders = computed(() =>
+  private _disabledPlugins = computed(() =>
     this._pluginService.getDisabledIssueProviderPlugins(),
   );
   pluginProviders = computed(() =>
-    this._registeredProviders().filter((p) => !p.useAgendaView),
+    this._availablePluginProviders().filter((p) => !p.useAgendaView),
   );
   pluginCalendarProviders = computed(() =>
-    this._registeredProviders().filter((p) => p.useAgendaView),
+    this._availablePluginProviders().filter((p) => p.useAgendaView),
   );
   disabledPluginProviders = computed(() =>
-    this._disabledProviders().filter((p) => !p.useAgendaView),
+    this._disabledPlugins().filter((p) => !p.useAgendaView),
   );
   disabledPluginCalendarProviders = computed(() =>
-    this._disabledProviders().filter((p) => p.useAgendaView),
+    this._disabledPlugins().filter((p) => p.useAgendaView),
   );
 
   openSetupDialog(

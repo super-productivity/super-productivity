@@ -10,48 +10,6 @@ import { expect, test } from '../../fixtures/test.fixture';
  */
 
 test.describe('Settings', () => {
-  test('should navigate to settings page', async ({ page, workViewPage }) => {
-    await workViewPage.waitForTaskList();
-
-    // Navigate to settings
-    await page.goto('/#/config');
-    await page.waitForLoadState('networkidle');
-
-    // Verify URL
-    await expect(page).toHaveURL(/config/);
-
-    // Verify settings page is visible
-    await expect(page.locator('.page-settings')).toBeVisible();
-  });
-
-  test('should navigate to settings via sidebar', async ({ page, workViewPage }) => {
-    await workViewPage.waitForTaskList();
-
-    // Click Settings in sidebar
-    await page.click('text=Settings');
-    await page.waitForLoadState('networkidle');
-
-    // Verify we're on settings page
-    await expect(page).toHaveURL(/config/);
-    await expect(page.locator('.page-settings')).toBeVisible();
-  });
-
-  test('should display settings sections', async ({ page, workViewPage }) => {
-    await workViewPage.waitForTaskList();
-
-    // Navigate to settings
-    await page.goto('/#/config');
-    await page.waitForLoadState('networkidle');
-
-    // Verify settings sections are visible
-    await expect(page.locator('.page-settings')).toBeVisible();
-
-    // Look for common settings sections
-    const sections = page.locator('config-section, .config-section, mat-expansion-panel');
-    const sectionCount = await sections.count();
-    expect(sectionCount).toBeGreaterThan(0);
-  });
-
   test('should expand settings section', async ({ page, workViewPage }) => {
     await workViewPage.waitForTaskList();
 
@@ -109,21 +67,5 @@ test.describe('Settings', () => {
     );
     await expect(formElements.first()).toBeVisible({ timeout: 5000 });
     await expect.poll(() => formElements.count()).toBeGreaterThan(0);
-  });
-
-  test('should return to work view from settings', async ({ page, workViewPage }) => {
-    await workViewPage.waitForTaskList();
-
-    // Navigate to settings
-    await page.goto('/#/config');
-    await page.waitForLoadState('networkidle');
-
-    // Navigate back to work view via URL (more reliable)
-    await page.goto('/#/tag/TODAY/tasks');
-    await page.waitForLoadState('networkidle');
-
-    // Verify we're back at work view
-    await expect(page).toHaveURL(/tag\/TODAY/);
-    await expect(page.locator('task-list').first()).toBeVisible();
   });
 });

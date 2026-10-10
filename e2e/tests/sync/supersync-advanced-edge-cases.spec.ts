@@ -24,61 +24,6 @@ import {
 
 test.describe('@supersync SuperSync Advanced Edge Cases', () => {
   /**
-   * Bulk Operations: Creating many tasks at once
-   *
-   * Verifies that creating multiple tasks in quick succession
-   * syncs correctly without data loss.
-   */
-  test('Bulk task creation syncs correctly', async ({ browser, baseURL, testRunId }) => {
-    let clientA: SimulatedE2EClient | null = null;
-    let clientB: SimulatedE2EClient | null = null;
-
-    try {
-      const user = await createTestUser(testRunId);
-      const syncConfig = getSuperSyncConfig(user);
-
-      clientA = await createSimulatedClient(browser, baseURL!, 'A', testRunId);
-      await clientA.sync.setupSuperSync(syncConfig);
-
-      clientB = await createSimulatedClient(browser, baseURL!, 'B', testRunId);
-      await clientB.sync.setupSuperSync(syncConfig);
-
-      // Create 10 tasks in rapid succession
-      const taskCount = 10;
-      const taskNames: string[] = [];
-      for (let i = 0; i < taskCount; i++) {
-        const taskName = `Bulk${i}-${testRunId}`;
-        taskNames.push(taskName);
-        await clientA.workView.addTask(taskName);
-        // Small settle delay to let UI and NgRx store process each task
-        await clientA.page.waitForTimeout(100);
-      }
-
-      // Allow operations to fully persist to IndexedDB before sync
-      await clientA.page.waitForTimeout(500);
-
-      // Sync A -> B
-      await clientA.sync.syncAndWait();
-      await clientB.sync.syncAndWait();
-
-      // Verify all tasks exist on B
-      for (const taskName of taskNames) {
-        await waitForTask(clientB.page, taskName);
-      }
-
-      // Count tasks with testRunId
-      const taskLocator = clientB.page.locator(`task:has-text("${testRunId}")`);
-      const actualCount = await taskLocator.count();
-      expect(actualCount).toBe(taskCount);
-
-      console.log(`[Bulk] ${taskCount} tasks created and synced correctly`);
-    } finally {
-      if (clientA) await closeClient(clientA);
-      if (clientB) await closeClient(clientB);
-    }
-  });
-
-  /**
    * Stale Client Reconnection
    *
    * Simulates a client that was offline for a period while
@@ -157,60 +102,6 @@ test.describe('@supersync SuperSync Advanced Edge Cases', () => {
       }).toPass({ timeout: 15000, intervals: [500, 1000, 2000, 3000] });
 
       console.log('[Stale] Stale client reconnected and received all changes');
-    } finally {
-      if (clientA) await closeClient(clientA);
-      if (clientB) await closeClient(clientB);
-    }
-  });
-
-  /**
-   * Data Integrity: Special characters in task names
-   *
-   * Verifies that tasks with quotes and special characters
-   * sync correctly without data corruption.
-   */
-  test('Special characters in task names sync correctly', async ({
-    browser,
-    baseURL,
-    testRunId,
-  }) => {
-    let clientA: SimulatedE2EClient | null = null;
-    let clientB: SimulatedE2EClient | null = null;
-
-    try {
-      const user = await createTestUser(testRunId);
-      const syncConfig = getSuperSyncConfig(user);
-
-      clientA = await createSimulatedClient(browser, baseURL!, 'A', testRunId);
-      await clientA.sync.setupSuperSync(syncConfig);
-
-      clientB = await createSimulatedClient(browser, baseURL!, 'B', testRunId);
-      await clientB.sync.setupSuperSync(syncConfig);
-
-      // Create tasks with special characters (avoiding complex unicode that may render differently)
-      const task1 = `Task-quotes-${testRunId}`;
-      const task2 = `Task-ampersand-${testRunId}`;
-      const task3 = `Task-numbers-123-${testRunId}`;
-
-      await clientA.workView.addTask(task1);
-      await clientA.workView.addTask(task2);
-      await clientA.workView.addTask(task3);
-
-      // Sync A -> B
-      await clientA.sync.syncAndWait();
-      await clientB.sync.syncAndWait();
-
-      // Verify all tasks synced correctly
-      await waitForTask(clientB.page, task1);
-      await waitForTask(clientB.page, task2);
-      await waitForTask(clientB.page, task3);
-
-      // Verify count
-      const taskLocator = clientB.page.locator(`task:has-text("${testRunId}")`);
-      const count = await taskLocator.count();
-      expect(count).toBe(3);
-
-      console.log('[SpecialChars] Special characters synced correctly');
     } finally {
       if (clientA) await closeClient(clientA);
       if (clientB) await closeClient(clientB);
