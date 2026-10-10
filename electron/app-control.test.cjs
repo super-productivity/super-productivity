@@ -73,8 +73,8 @@ const installMocks = () => {
         showOrFocus: () => {
           focusCalls.push('showOrFocus');
         },
-        focusForReminder: () => {
-          focusCalls.push('focusForReminder');
+        raiseForReminder: () => {
+          focusCalls.push('raiseForReminder');
         },
       };
     }
@@ -219,7 +219,7 @@ test('settings update falls back to legacy misc tray task setting', async () => 
   assert.equal(refreshIndicatorCalls, 1);
 });
 
-test('SHOW_OR_FOCUS routes reminder requests to the forced focus path (#10410)', () => {
+test('SHOW_OR_FOCUS routes reminder requests to the raise-only path (#10410)', () => {
   const { initAppControlIpc } = loadAppControlModule();
   initAppControlIpc();
   const showOrFocusHandler = ipcHandlers.get('SHOW_OR_FOCUS');
@@ -227,5 +227,5 @@ test('SHOW_OR_FOCUS routes reminder requests to the forced focus path (#10410)',
   showOrFocusHandler({});
   showOrFocusHandler({}, { isReminder: true });
 
-  assert.deepEqual(focusCalls, ['showOrFocus', 'focusForReminder']);
+  assert.deepEqual(focusCalls, ['showOrFocus', 'raiseForReminder']);
 });

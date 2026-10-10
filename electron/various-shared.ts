@@ -29,21 +29,7 @@ export function showOrFocus(passedWin: BrowserWindow): void {
     return;
   }
 
-  // Preserve this before restore(): its synchronous unmaximize event can clear it.
-  const wasMaximized = getWasMaximizedBeforeHide();
-  // Always show the window even if isVisible() is stale (#8448), but avoid
-  // unmaximizing an already-visible window just to bring it to the front.
-  if (!win.isVisible() || !win.isMaximized() || win.isMinimized()) {
-    win.restore();
-  }
-  win.show();
-  if (wasMaximized) win.maximize();
-
-  // Hide task widget when main window is shown, unless the user explicitly
-  // pinned it visible via the global shortcut.
-  if (!getIsTaskWidgetAlwaysShow() && !getIsTaskWidgetUserForcedVisible()) {
-    hideTaskWidget();
-  }
+  _restoreAndShow(win, false);
 
   // focus window afterwards always
   setTimeout(() => {
@@ -56,23 +42,51 @@ export function showOrFocus(passedWin: BrowserWindow): void {
   }, 60);
 }
 
+// eslint-disable-next-line prefer-arrow/prefer-arrow-functions
+function _restoreAndShow(win: BrowserWindow, isInactive: boolean): void {
+  // Preserve this before restore(): its synchronous unmaximize event can clear it.
+  const wasMaximized = getWasMaximizedBeforeHide();
+  // Always show the window even if isVisible() is stale (#8448), but avoid
+  // unmaximizing an already-visible window just to bring it to the front.
+  if (!win.isVisible() || !win.isMaximized() || win.isMinimized()) {
+    win.restore();
+  }
+  if (isInactive) {
+    win.showInactive();
+  } else {
+    win.show();
+  }
+  if (wasMaximized) win.maximize();
+
+  // Hide task widget when main window is shown, unless the user explicitly
+  // pinned it visible via the global shortcut.
+  if (!getIsTaskWidgetAlwaysShow() && !getIsTaskWidgetUserForcedVisible()) {
+    hideTaskWidget();
+  }
+}
+
 /**
  * Bring the window to the front for a reminder when the user enabled
- * "focus window on reminder". Windows' focus-stealing prevention ignores a plain
- * focus() from a background app (#10410), so briefly toggling always-on-top
- * raises the window and lets it take focus. If Windows still refuses, flash the
- * taskbar button until the user switches to the app.
+ * "focus window on reminder", without taking keyboard focus so typing in another
+ * app doesn't land in SP. Windows' focus-stealing prevention ignores a plain
+ * raise from a background app (#10410); a brief always-on-top toggle lifts the
+ * window above others, and the taskbar button flashes until the user switches in.
+ * macOS/Linux keep the regular showOrFocus behavior.
  */
 // eslint-disable-next-line prefer-arrow/prefer-arrow-functions
-export function focusForReminder(passedWin: BrowserWindow): void {
+export function raiseForReminder(passedWin: BrowserWindow): void {
   const win = passedWin || getWin();
-  showOrFocus(win);
-  if (!win || win.isDestroyed() || process.platform !== 'win32') {
+  if (process.platform !== 'win32') {
+    showOrFocus(win);
+    return;
+  }
+  if (!win || win.isDestroyed()) {
     return;
   }
 
+  _restoreAndShow(win, true);
   win.setAlwaysOnTop(true);
-  win.focus();
+  win.moveTop();
   win.setAlwaysOnTop(false);
 
   if (!win.isFocused()) {

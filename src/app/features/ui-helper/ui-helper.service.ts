@@ -64,8 +64,8 @@ export class UiHelperService {
    * The 1500ms delay gives users time to finish typing after notification appears.
    * Based on user feedback in issue #5762 where immediate focus caused unintended input.
    *
-   * `isReminder` lets the main process force the window to the front on Windows,
-   * where focus-stealing prevention otherwise blocks it (#10410).
+   * `isReminder` makes the main process raise the window without taking focus on
+   * Windows, where focus-stealing prevention otherwise keeps it behind (#10410).
    */
   focusAppAfterNotification(opts?: { isReminder?: boolean }): void {
     if (!this._isElectron) {

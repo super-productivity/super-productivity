@@ -3,7 +3,7 @@ import { existsSync } from 'fs';
 import { dirname, join } from 'path';
 import { IPC } from '../shared-with-frontend/ipc-events.const';
 import { getWin } from '../main-window';
-import { focusForReminder, quitApp, showOrFocus } from '../various-shared';
+import { raiseForReminder, quitApp, showOrFocus } from '../various-shared';
 import {
   getIsLocked,
   setIsMinimizeToTray,
@@ -63,7 +63,7 @@ export const initAppControlIpc = (): void => {
   ipcMain.on(IPC.SHOW_OR_FOCUS, (ev, opts?: { isReminder?: boolean }) => {
     const mainWin = getWin();
     if (opts?.isReminder) {
-      focusForReminder(mainWin);
+      raiseForReminder(mainWin);
     } else {
       showOrFocus(mainWin);
     }

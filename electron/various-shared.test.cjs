@@ -311,35 +311,39 @@ const withPlatform = (platform, fn) => {
   }
 };
 
-// Windows blocks SetForegroundWindow for background apps, so focus() leaves the
-// window unfocused; extend the base mock with the APIs the reminder path uses.
-const makeReminderWin = (state, { isFocusBlocked = true } = {}) => {
+// Windows blocks SetForegroundWindow for background apps; extend the base mock
+// with the APIs the reminder raise path uses.
+const makeReminderWin = (state) => {
   const win = makeWin(state);
   const listeners = {};
-  win.focus = () => {
-    win.calls.push('focus');
-    if (!isFocusBlocked) win._state = { ...win._state, focused: true };
+  win.showInactive = () => {
+    win.calls.push('showInactive');
+    win._state = { ...win._state, visible: true, minimized: false };
   };
+  win.moveTop = () => win.calls.push('moveTop');
   win.setAlwaysOnTop = (flag) => win.calls.push(`setAlwaysOnTop:${flag}`);
   win.flashFrame = (flag) => win.calls.push(`flashFrame:${flag}`);
   win.once = (event, cb) => {
     listeners[event] = cb;
   };
   win.emit = (event) => listeners[event]?.();
+  win.webContents = { isDestroyed: () => false, focus: () => win.calls.push('wc.focus') };
   return win;
 };
 
-test('focusForReminder on win32 forces the window to the front and flashes until focused (#10410)', () => {
-  const { focusForReminder } = loadModule();
-  const win = makeReminderWin({ visible: false, minimized: true, focused: false });
+test('raiseForReminder on win32 raises a minimized window without focusing it and flashes until focused (#10410)', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const { raiseForReminder } = loadModule();
+  const win = makeReminderWin({ visible: true, minimized: true, focused: false });
 
-  withPlatform('win32', () => focusForReminder(win));
+  withPlatform('win32', () => raiseForReminder(win));
+  t.mock.timers.tick(1000);
 
   assert.deepEqual(win.calls, [
     'restore',
-    'show',
+    'showInactive',
     'setAlwaysOnTop:true',
-    'focus',
+    'moveTop',
     'setAlwaysOnTop:false',
     'flashFrame:true',
   ]);
@@ -348,43 +352,38 @@ test('focusForReminder on win32 forces the window to the front and flashes until
   assert.equal(win.calls.at(-1), 'flashFrame:false');
 });
 
-test('focusForReminder on win32 does not flash when focus succeeded', () => {
-  const { focusForReminder } = loadModule();
-  const win = makeReminderWin(
-    { visible: true, minimized: false, focused: false },
-    { isFocusBlocked: false },
-  );
+test('raiseForReminder on win32 shows a hidden window inactive', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const { raiseForReminder } = loadModule();
+  const win = makeReminderWin({ visible: false, minimized: false, focused: false });
 
-  withPlatform('win32', () => focusForReminder(win));
+  withPlatform('win32', () => raiseForReminder(win));
+  t.mock.timers.tick(1000);
 
-  assert.deepEqual(win.calls, [
-    'restore',
-    'show',
-    'setAlwaysOnTop:true',
-    'focus',
-    'setAlwaysOnTop:false',
-  ]);
+  assert.ok(win.calls.includes('showInactive'));
+  assert.ok(!win.calls.includes('show'), 'show() would activate the window');
+  assert.ok(!win.calls.includes('focus'));
+  assert.ok(!win.calls.includes('wc.focus'));
 });
 
-test('focusForReminder on other platforms keeps plain showOrFocus behavior', () => {
-  const { focusForReminder } = loadModule();
+test('raiseForReminder on win32 does not flash when the window already has focus', () => {
+  const { raiseForReminder } = loadModule();
+  const win = makeReminderWin({ visible: true, minimized: false, focused: true });
+
+  withPlatform('win32', () => raiseForReminder(win));
+
+  assert.ok(!win.calls.includes('flashFrame:true'));
+});
+
+test('raiseForReminder on other platforms keeps plain showOrFocus behavior', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const { raiseForReminder } = loadModule();
   for (const platform of ['linux', 'darwin']) {
     const win = makeReminderWin({ visible: false, minimized: true, focused: false });
 
-    withPlatform(platform, () => focusForReminder(win));
+    withPlatform(platform, () => raiseForReminder(win));
+    t.mock.timers.tick(60);
 
-    assert.deepEqual(win.calls, ['restore', 'show'], platform);
+    assert.deepEqual(win.calls, ['restore', 'show', 'focus', 'wc.focus'], platform);
   }
-});
-
-test('focusForReminder on win32 still runs the deferred showOrFocus focus', (t) => {
-  t.mock.timers.enable({ apis: ['setTimeout'] });
-  const { focusForReminder } = loadModule();
-  const win = makeReminderWin({ visible: true, minimized: false, focused: false });
-
-  withPlatform('win32', () => focusForReminder(win));
-  const callsBeforeTimer = win.calls.length;
-  t.mock.timers.tick(60);
-
-  assert.deepEqual(win.calls.slice(callsBeforeTimer), ['focus']);
 });
