@@ -3021,7 +3021,7 @@
       "EXPLORE_INBOX": "Some optional tips are waiting in your Inbox. Try them or delete them, whenever you like.",
       "GOT_IT": "Got it",
       "TASK_SWIPE_LEFT_TOUCH": "Swipe task left for more actions",
-      "TASK_SWIPE_RIGHT_TOUCH": "Swipe task right to mark it as done",
+      "TASK_SWIPE_RIGHT_TOUCH": "When you've finished a task, swipe it right to mark it done",
       "OR_PRESS": "or press",
       "SKIP_ARIA": "Close tip"
     }
