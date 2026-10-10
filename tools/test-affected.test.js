@@ -162,7 +162,12 @@ test('CLI handles deleted global resources and specs', () => {
     fs.mkdirSync(path.dirname(target), { recursive: true });
     fs.writeFileSync(target, content);
   };
-  const git = (...args) => execFileSync('git', args, { cwd: directory });
+  // Git hooks export GIT_INDEX_FILE and friends; without stripping them the fixture
+  // repo would write into the outer commit's index and break that commit.
+  const env = Object.fromEntries(
+    Object.entries(process.env).filter(([key]) => !key.startsWith('GIT_')),
+  );
+  const git = (...args) => execFileSync('git', args, { cwd: directory, env });
   try {
     write(
       'tools/test-affected.js',
@@ -216,7 +221,7 @@ test('CLI handles deleted global resources and specs', () => {
           cwd: directory,
           encoding: 'utf8',
           env: {
-            ...process.env,
+            ...env,
             NODE_PATH: path.dirname(
               path.dirname(require.resolve('typescript/package.json')),
             ),
