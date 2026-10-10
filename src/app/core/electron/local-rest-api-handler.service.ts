@@ -971,6 +971,10 @@ export class LocalRestApiHandlerService {
       return this._handleRestoreTask(requestId, taskId);
     }
 
+    if (segments.length === 3 && segments[2] === 'time' && method === 'PUT') {
+      return this._handleSetTimeSpent(requestId, taskId, body);
+    }
+
     return createErrorResponse(requestId, 404, 'NOT_FOUND', 'Route not found');
   }
 
@@ -1016,6 +1020,72 @@ export class LocalRestApiHandlerService {
     this._taskService.restoreTask(archivedTask, subTasks);
     const restoredTask = await this._getTaskById(taskId);
     return createSuccessResponse(requestId, 200, restoredTask);
+  }
+
+  /**
+   * Sets the time spent on one day the way the time estimate dialog does:
+   * the whole `timeSpentOnDay` map, with a day set to 0 removed. The reducer
+   * recomputes `timeSpent` and the parent's totals from it.
+   */
+  private async _handleSetTimeSpent(
+    requestId: string,
+    taskId: string,
+    body: unknown,
+  ): Promise<LocalRestApiResponsePayload> {
+    const invalid = (message: string, details?: unknown): LocalRestApiResponsePayload =>
+      createErrorResponse(requestId, 400, 'INVALID_INPUT', message, details);
+    if (!isRecord(body)) {
+      return invalid('Request body must be a JSON object');
+    }
+    // Rejected rather than ignored: a misspelled `date` would log on today.
+    const unsupported = Object.keys(body).filter((key) => key !== 'date' && key !== 'ms');
+    if (unsupported.length > 0) {
+      return createErrorResponse(
+        requestId,
+        400,
+        'UNSUPPORTED_FIELD',
+        `Field(s) cannot be set through this endpoint: ${unsupported.join(', ')}`,
+        { fields: unsupported },
+      );
+    }
+    const validation = typia.validate<{ date?: string; ms: number }>(body);
+    if (!validation.success) {
+      return invalid(
+        'One or more fields have an invalid type',
+        validation.errors.map(({ path, expected }) => ({ path, expected })),
+      );
+    }
+    const { ms } = validation.data;
+    if (!Number.isSafeInteger(ms) || ms < 0) {
+      return invalid('ms must be a non-negative integer');
+    }
+    // The app's current day, which respects the "start of next day" setting.
+    const date = validation.data.date ?? this._dateService.todayStr();
+    if (!isValidDBDateStr(date)) {
+      return invalid('date must be a valid YYYY-MM-DD date');
+    }
+
+    const task = await this._getTaskById(taskId);
+    if (!task) {
+      return createErrorResponse(requestId, 404, 'TASK_NOT_FOUND', 'Task not found');
+    }
+    if (task.subTaskIds.length > 0) {
+      // The app only offers the time dialog for tasks without subtasks.
+      return invalid(
+        'Time of a task with subtasks is the sum of its subtasks; set it on a subtask',
+      );
+    }
+
+    if (ms !== (task.timeSpentOnDay?.[date] ?? 0)) {
+      const timeSpentOnDay: Record<string, number> = { ...task.timeSpentOnDay };
+      if (ms > 0) {
+        timeSpentOnDay[date] = ms;
+      } else {
+        delete timeSpentOnDay[date];
+      }
+      this._taskService.update(taskId, { timeSpentOnDay });
+    }
+    return createSuccessResponse(requestId, 200, await this._getTaskById(taskId));
   }
 
   private async _handleListProjects(

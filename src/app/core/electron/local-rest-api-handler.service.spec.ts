@@ -2449,6 +2449,167 @@ describe('LocalRestApiHandlerService', () => {
         expect((response.body as any).error.code).toBe('TASK_NOT_FOUND');
       });
     });
+
+    // Day keys of timeSpentOnDay are dates.
+    /* eslint-disable @typescript-eslint/naming-convention */
+    describe('PUT /tasks/:id/time', () => {
+      let tasks: Record<string, Task>;
+
+      const putTime = (taskId: string, body: unknown): LocalRestApiRequestPayload =>
+        createRequest('PUT', `/tasks/${taskId}/time`, { body });
+
+      const errorCode = (response: LocalRestApiResponsePayload): string | undefined =>
+        response.body.ok ? undefined : response.body.error.code;
+
+      beforeEach(() => {
+        tasks = {
+          t1: createMockTask('t1', {
+            timeSpentOnDay: { '2026-05-01': 60000, '2026-05-02': 120000 },
+            timeSpent: 180000,
+          }),
+          parent: createMockTask('parent', { subTaskIds: ['sub'] }),
+          sub: createMockTask('sub', { parentId: 'parent' }),
+        };
+        // Like the store's entity lookup: a plain-object map, prototype included.
+        Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+          get: () => (id: string) => of(tasks[id]),
+        });
+        taskServiceMock.update.and.callFake((id: string, changes: Partial<Task>) => {
+          tasks = { ...tasks, [id]: { ...tasks[id], ...changes } };
+        });
+      });
+
+      it('should set the time of a day and keep the other days', async () => {
+        const response = await sendRequestAndWait(
+          putTime('t1', { date: '2026-05-02', ms: 900000 }),
+        );
+
+        expect(taskServiceMock.update).toHaveBeenCalledOnceWith('t1', {
+          timeSpentOnDay: { '2026-05-01': 60000, '2026-05-02': 900000 },
+        });
+        expect(response.status).toBe(200);
+        expect(response.body).toEqual({
+          ok: true,
+          data: jasmine.objectContaining({
+            id: 't1',
+            timeSpentOnDay: { '2026-05-01': 60000, '2026-05-02': 900000 },
+          }),
+        });
+      });
+
+      it('should add a new day', async () => {
+        await sendRequestAndWait(putTime('t1', { date: '2026-04-30', ms: 1000 }));
+
+        expect(taskServiceMock.update).toHaveBeenCalledOnceWith('t1', {
+          timeSpentOnDay: {
+            '2026-05-01': 60000,
+            '2026-05-02': 120000,
+            '2026-04-30': 1000,
+          },
+        });
+      });
+
+      it("should default to the app's current day", async () => {
+        await sendRequestAndWait(putTime('t1', { ms: 5000 }));
+
+        expect(taskServiceMock.update.calls.mostRecent().args[1].timeSpentOnDay).toEqual(
+          jasmine.objectContaining({ '2026-05-12': 5000 }),
+        );
+      });
+
+      it('should remove the day when ms is 0, as the time dialog does', async () => {
+        await sendRequestAndWait(putTime('t1', { date: '2026-05-01', ms: 0 }));
+
+        expect(taskServiceMock.update).toHaveBeenCalledOnceWith('t1', {
+          timeSpentOnDay: { '2026-05-02': 120000 },
+        });
+      });
+
+      it('should not update when the value does not change', async () => {
+        for (const body of [
+          { date: '2026-05-01', ms: 60000 },
+          { date: '2026-04-01', ms: 0 },
+        ]) {
+          const response = await sendRequestAndWait(putTime('t1', body));
+
+          expect(response.status).withContext(JSON.stringify(body)).toBe(200);
+        }
+        expect(taskServiceMock.update).not.toHaveBeenCalled();
+      });
+
+      it('should set the time of a subtask', async () => {
+        await sendRequestAndWait(putTime('sub', { date: '2026-05-01', ms: 1000 }));
+
+        expect(taskServiceMock.update).toHaveBeenCalledOnceWith('sub', {
+          timeSpentOnDay: { '2026-05-01': 1000 },
+        });
+      });
+
+      it('should reject a task with subtasks', async () => {
+        const response = await sendRequestAndWait(
+          putTime('parent', { date: '2026-05-01', ms: 1000 }),
+        );
+
+        expect(response.status).toBe(400);
+        expect(errorCode(response)).toBe('INVALID_INPUT');
+        expect(taskServiceMock.update).not.toHaveBeenCalled();
+      });
+
+      it('should return 404 TASK_NOT_FOUND for unknown and prototype ids', async () => {
+        for (const id of ['missing', '__proto__', 'constructor']) {
+          const response = await sendRequestAndWait(
+            putTime(id, { date: '2026-05-01', ms: 1000 }),
+          );
+
+          expect(response.status).withContext(id).toBe(404);
+          expect(errorCode(response)).withContext(id).toBe('TASK_NOT_FOUND');
+        }
+        expect(taskServiceMock.update).not.toHaveBeenCalled();
+      });
+
+      it('should validate before writing', async () => {
+        const cases: [unknown, string][] = [
+          [undefined, 'INVALID_INPUT'],
+          [[], 'INVALID_INPUT'],
+          [{}, 'INVALID_INPUT'],
+          [{ ms: '1000' }, 'INVALID_INPUT'],
+          [{ ms: -1 }, 'INVALID_INPUT'],
+          [{ ms: 1.5 }, 'INVALID_INPUT'],
+          [{ ms: 2 ** 53 }, 'INVALID_INPUT'],
+          [{ ms: 1000, date: 20260501 }, 'INVALID_INPUT'],
+          [{ ms: 1000, date: '2026-02-30' }, 'INVALID_INPUT'],
+          [{ ms: 1000, date: '01.05.2026' }, 'INVALID_INPUT'],
+          [{ ms: 1000, date: '__proto__' }, 'INVALID_INPUT'],
+          [{ ms: 1000, timeSpent: 5 }, 'UNSUPPORTED_FIELD'],
+          [{ ms: 1000, day: '2026-05-01' }, 'UNSUPPORTED_FIELD'],
+        ];
+        for (const [body, code] of cases) {
+          const response = await sendRequestAndWait(putTime('t1', body));
+
+          expect(response.status).withContext(JSON.stringify(body)).toBe(400);
+          expect(errorCode(response)).withContext(JSON.stringify(body)).toBe(code);
+        }
+        expect(taskServiceMock.update).not.toHaveBeenCalled();
+      });
+
+      it('should return 404 NOT_FOUND for other methods and paths', async () => {
+        for (const [method, path] of [
+          ['GET', '/tasks/t1/time'],
+          ['POST', '/tasks/t1/time'],
+          ['PUT', '/tasks/t1'],
+          ['PUT', '/tasks/t1/time/2026-05-01'],
+        ]) {
+          const response = await sendRequestAndWait(
+            createRequest(method, path, { body: { ms: 1 } }),
+          );
+
+          expect(response.status).withContext(`${method} ${path}`).toBe(404);
+          expect(errorCode(response)).withContext(`${method} ${path}`).toBe('NOT_FOUND');
+        }
+        expect(taskServiceMock.update).not.toHaveBeenCalled();
+      });
+    });
+    /* eslint-enable @typescript-eslint/naming-convention */
   });
 
   describe('task-control routes', () => {
