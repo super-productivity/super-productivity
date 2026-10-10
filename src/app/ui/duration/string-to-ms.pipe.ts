@@ -23,11 +23,9 @@ export const stringToMs = (strValue: string, args?: unknown): number => {
       case 'h':
         return amount * 1000 * 60 * 60;
       case '':
-        if (simpleFormatMatch[1].includes('.') || amount <= 8) {
-          // treat all fractional values and integers <= 8 as hours
+        if (simpleFormatMatch[1].includes('.')) {
           return amount * 1000 * 60 * 60;
         } else {
-          // treat integers > 8 as minutes
           return amount * 1000 * 60;
         }
     }

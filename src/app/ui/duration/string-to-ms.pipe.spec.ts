@@ -58,13 +58,13 @@ describe('stringToMs', () => {
   });
 
   it('should interpret numbers without unit', () => {
-    // Case: integer (greater 8) missing all units => treat as minutes
+    // Integers to minutes
     expect(stringToMs('10')).toBe(10 * 60 * 1000);
+    expect(stringToMs('8')).toBe(8 * 60 * 1000);
+    expect(stringToMs('5')).toBe(5 * 60 * 1000);
+    expect(stringToMs('1')).toBe(1 * 60 * 1000);
 
-    // Case: integer (less or equal 8) missing all units => treat as hours
-    expect(stringToMs('8')).toBe(8 * 60 * 60 * 1000);
-
-    // Case: fractional missing all units => treat as hours
+    // Fractional to hours
     expect(stringToMs('.5')).toBe(30 * 60 * 1000);
     expect(stringToMs('1.5')).toBe((60 + 30) * 60 * 1000);
     // eslint-disable-next-line no-mixed-operators
