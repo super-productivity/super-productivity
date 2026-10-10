@@ -47,10 +47,12 @@ class TrackingStateStoreInstrumentedTest {
         val snapshot = TrackingForegroundService.snapshotForBridge(context)
 
         assertNotNull(snapshot)
-        assertEquals("task-1", snapshot!!.first)
+        assertEquals("task-1", snapshot!!.taskId)
         // Frozen at the anchored total: the minute since the anchor is not
         // credited without an exit record.
-        assertTrue("elapsed=${snapshot.second}", snapshot.second in 5_000L..15_000L)
+        assertTrue("elapsed=${snapshot.elapsedMs}", snapshot.elapsedMs in 5_000L..15_000L)
+        // The writing process (this one) has no exit record, so it resumes.
+        assertTrue(snapshot.resume)
         // Re-anchored on disk, so a second kill counts from the restore.
         val persisted = TrackingStateStore.load(context)
         assertEquals(5_000L, persisted!!.accumulatedMs)
@@ -63,7 +65,7 @@ class TrackingStateStoreInstrumentedTest {
         TrackingForegroundService.setState(context, session("live", 1_000, bootCount))
         TrackingStateStore.save(context, session("stale", 99_000, bootCount))
 
-        assertEquals("live", TrackingForegroundService.snapshotForBridge(context)!!.first)
+        assertEquals("live", TrackingForegroundService.snapshotForBridge(context)!!.taskId)
     }
 
     @Test

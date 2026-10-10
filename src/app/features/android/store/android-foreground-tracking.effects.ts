@@ -37,6 +37,9 @@ import { CapacitorReminderService } from '../../../core/platform/capacitor-remin
 export type NativeTrackingData = {
   taskId: string;
   elapsedMs: number;
+  // false after a deliberate force-stop (Android 11+): credit the time but
+  // don't resume. Older native builds omit it and always resume (#7390).
+  resume?: false;
 };
 
 type RecoveryRequest = {
@@ -79,7 +82,7 @@ export const parseNativeTrackingData = (
     return null;
   }
 
-  const { taskId, elapsedMs } = parsed as Partial<NativeTrackingData>;
+  const { taskId, elapsedMs, resume } = parsed as Partial<NativeTrackingData>;
   if (
     typeof taskId !== 'string' ||
     typeof elapsedMs !== 'number' ||
@@ -91,7 +94,49 @@ export const parseNativeTrackingData = (
     return null;
   }
 
-  return { taskId, elapsedMs };
+  return resume === false ? { taskId, elapsedMs, resume } : { taskId, elapsedMs };
+};
+
+export type NativeRecoveryDeps = {
+  syncElapsedTime: (taskId: string, nativeData: NativeTrackingData) => Promise<boolean>;
+  setCurrentId: (taskId: string) => void;
+  flushPendingOps: () => Promise<void>;
+  stopTrackingService: () => void;
+};
+
+/**
+ * Credits the native session to its task, then resumes it — or stops the
+ * native service when the credit failed or native says not to resume.
+ * Exported so unit tests can exercise it without instantiating the effect.
+ */
+export const recoverNativeTracking = async (
+  nativeData: NativeTrackingData,
+  deps: NativeRecoveryDeps,
+): Promise<void> => {
+  const didSync = await deps.syncElapsedTime(nativeData.taskId, nativeData);
+  if (!didSync) {
+    DroidLog.warn('Stopping stale native tracking service after failed recovery', {
+      taskId: nativeData.taskId,
+    });
+    deps.stopTrackingService();
+    return;
+  }
+
+  if (nativeData.resume === false) {
+    // The user force-stopped the app: keep the credited time, leave tracking
+    // stopped. Stopping also clears the persisted native session.
+    DroidLog.log('Not resuming tracking after a user-requested stop', {
+      taskId: nativeData.taskId,
+    });
+    deps.stopTrackingService();
+  } else {
+    // setCurrentId synchronously re-runs the syncTrackingToService$ tap.
+    // The null → task transition there checks native data and calls
+    // updateTrackingService instead of startTrackingService when native is
+    // already tracking this task — so the native counter is preserved.
+    deps.setCurrentId(nativeData.taskId);
+  }
+  await deps.flushPendingOps();
 };
 
 /**
@@ -729,24 +774,16 @@ export class AndroidForegroundTrackingEffects {
       ...nativeData,
     });
 
-    const didSync = await this._syncElapsedTimeForTask(nativeData.taskId, nativeData);
-    if (!didSync) {
-      DroidLog.warn('Stopping stale native tracking service after failed recovery', {
-        taskId: nativeData.taskId,
-      });
-      this._safeNativeCall(
-        () => androidInterface.stopTrackingService?.(),
-        'Failed to stop stale tracking service',
-      );
-      return;
-    }
-
-    // setCurrentId synchronously re-runs the syncTrackingToService$ tap.
-    // The null → task transition there checks native data and calls
-    // updateTrackingService instead of startTrackingService when native is
-    // already tracking this task — so the native counter is preserved.
-    this._taskService.setCurrentId(nativeData.taskId);
-    await this._flushPendingOperations();
+    await recoverNativeTracking(nativeData, {
+      syncElapsedTime: (taskId, data) => this._syncElapsedTimeForTask(taskId, data),
+      setCurrentId: (taskId) => this._taskService.setCurrentId(taskId),
+      flushPendingOps: () => this._flushPendingOperations(),
+      stopTrackingService: () =>
+        this._safeNativeCall(
+          () => androidInterface.stopTrackingService?.(),
+          'Failed to stop native tracking service',
+        ),
+    });
   }
 
   /**

@@ -235,6 +235,9 @@ class JavaScriptInterface(
                 action = TrackingForegroundService.ACTION_UPDATE
                 putExtra(TrackingForegroundService.EXTRA_TIME_SPENT, timeSpentMs)
             }
+            // Plain startService is safe: the service is either already started
+            // (exempt from the background-start ban) or, after a restore in a new
+            // process, this comes from the JS recovery at launch or onResume.
             activity.startService(intent)
         }
     }
@@ -245,9 +248,12 @@ class JavaScriptInterface(
         // After a process kill the companion is empty but the session may be
         // persisted; restoring it here is what lets the JS cold-start recovery
         // credit the time tracked while the process was gone (#7390).
-        val (taskId, elapsedMs) =
-            TrackingForegroundService.snapshotForBridge(activity) ?: return "null"
-        return JSONObject().put("taskId", taskId).put("elapsedMs", elapsedMs).toString()
+        val snapshot = TrackingForegroundService.snapshotForBridge(activity) ?: return "null"
+        return JSONObject()
+            .put("taskId", snapshot.taskId)
+            .put("elapsedMs", snapshot.elapsedMs)
+            .put("resume", snapshot.resume)
+            .toString()
     }
 
     @Suppress("unused")

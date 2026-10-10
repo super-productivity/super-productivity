@@ -1,12 +1,21 @@
 package com.superproductivity.superproductivity.service
 
 import android.app.ActivityManager
+import android.app.ApplicationExitInfo
 import android.content.Context
 import android.content.SharedPreferences
 import android.os.Build
 import android.os.Process
 import android.provider.Settings
 import android.util.Log
+
+/**
+ * One recorded death of the process that wrote the persisted session.
+ * [userRequested] is ApplicationExitInfo.REASON_USER_REQUESTED: a force-stop,
+ * "Stop" in the Task Manager of active apps, or an OEM task killer that
+ * force-stops on swipe-away — as opposed to the OS reclaiming memory.
+ */
+data class ProcessExit(val timestamp: Long, val userRequested: Boolean)
 
 /**
  * One active tracking session as the native service counts it: the total at
@@ -48,8 +57,16 @@ data class TrackingState(
          * earliest recorded exit of that process (matched by pid) at or after
          * the anchor.
          */
-        fun pickExitTimestamp(exitTimestamps: List<Long>, startTimestamp: Long): Long? =
-            exitTimestamps.filter { it >= startTimestamp }.minOrNull()
+        fun pickExit(exits: List<ProcessExit>, startTimestamp: Long): ProcessExit? =
+            exits.filter { it.timestamp >= startTimestamp }.minByOrNull { it.timestamp }
+
+        /**
+         * A user who stopped the app deliberately also stopped tracking: the
+         * time up to the stop is still credited, but the session does not go
+         * on. Without a known exit (below API 30, or the record is not written
+         * yet) the session resumes, as an OS kill is the likelier cause.
+         */
+        fun shouldResumeAfter(exit: ProcessExit?): Boolean = exit?.userRequested != true
 
         /**
          * Rebuilds a persisted session, or null when there is nothing usable.
@@ -124,11 +141,11 @@ object TrackingStateStore {
         }
 
     /**
-     * Wall-clock times at which the main process that wrote the persisted
-     * session died, as recorded by the system (API 30+). Empty when unavailable
-     * or when that record is no longer in the system's history.
+     * Recorded deaths of the main process that wrote the persisted session
+     * (API 30+). Empty when unavailable or when that record is no longer in
+     * the system's history.
      */
-    fun anchorProcessExitTimestamps(context: Context): List<Long> {
+    fun anchorProcessExits(context: Context): List<ProcessExit> {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return emptyList()
         val pid = getPrefs(context).getInt(KEY_PID, 0)
         if (pid <= 0) return emptyList()
@@ -138,7 +155,12 @@ object TrackingStateStore {
             val processName = context.applicationInfo.processName
             am.getHistoricalProcessExitReasons(context.packageName, pid, 0)
                 .filter { it.pid == pid && it.processName == processName }
-                .map { it.timestamp }
+                .map {
+                    ProcessExit(
+                        it.timestamp,
+                        it.reason == ApplicationExitInfo.REASON_USER_REQUESTED
+                    )
+                }
         } catch (e: RuntimeException) {
             Log.w(TAG, "Unable to read process exit reasons", e)
             emptyList()

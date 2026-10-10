@@ -14,6 +14,7 @@ import {
   NativeElapsedSyncDeps,
   NativeTrackingData,
   parseNativeTrackingData,
+  recoverNativeTracking,
   syncNativeElapsedTimeForTask,
   TIME_SPENT_JUMP_THRESHOLD_MS,
 } from './android-foreground-tracking.effects';
@@ -284,7 +285,7 @@ describe('AndroidForegroundTrackingEffects - safeNativeCall error handling', () 
 });
 
 describe('AndroidForegroundTrackingEffects - cold start tracking recovery', () => {
-  type NativeTrackingData = { taskId: string; elapsedMs: number };
+  type NativeTrackingData = { taskId: string; elapsedMs: number; resume?: false };
 
   const handleNoCurrentTask = (
     prevTask: { id: string } | null,
@@ -300,22 +301,20 @@ describe('AndroidForegroundTrackingEffects - cold start tracking recovery', () =
     stopTrackingService();
   };
 
-  const recoverTrackingFromNative = async (
+  // The production recovery body, not a re-implementation.
+  const recoverTrackingFromNative = (
     nativeData: NativeTrackingData,
     syncElapsedTime: (taskId: string, nativeData: NativeTrackingData) => Promise<boolean>,
     setCurrentId: (taskId: string) => void,
     flushPendingOps: () => Promise<void>,
     stopTrackingService: () => void,
-  ): Promise<void> => {
-    const didSync = await syncElapsedTime(nativeData.taskId, nativeData);
-    if (!didSync) {
-      stopTrackingService();
-      return;
-    }
-
-    setCurrentId(nativeData.taskId);
-    await flushPendingOps();
-  };
+  ): Promise<void> =>
+    recoverNativeTracking(nativeData, {
+      syncElapsedTime,
+      setCurrentId,
+      flushPendingOps,
+      stopTrackingService,
+    });
 
   let recoverTrackingSpy: jasmine.Spy;
   let stopTrackingServiceSpy: jasmine.Spy;
@@ -382,6 +381,31 @@ describe('AndroidForegroundTrackingEffects - cold start tracking recovery', () =
     expect(callOrder).toEqual(['sync', 'setCurrent', 'flush']);
   });
 
+  it('should credit but not resume after a user-requested stop (#7390)', async () => {
+    const nativeData = { taskId: 'task-1', elapsedMs: 900000, resume: false as const };
+    const callOrder: string[] = [];
+    syncElapsedTimeSpy.and.callFake(async () => {
+      callOrder.push('sync');
+      return true;
+    });
+    stopTrackingServiceSpy.and.callFake(() => callOrder.push('stop'));
+    flushPendingOpsSpy.and.callFake(async () => {
+      callOrder.push('flush');
+    });
+
+    await recoverTrackingFromNative(
+      nativeData,
+      syncElapsedTimeSpy,
+      setCurrentIdSpy,
+      flushPendingOpsSpy,
+      stopTrackingServiceSpy,
+    );
+
+    expect(syncElapsedTimeSpy).toHaveBeenCalledWith('task-1', nativeData);
+    expect(setCurrentIdSpy).not.toHaveBeenCalled();
+    expect(callOrder).toEqual(['sync', 'stop', 'flush']);
+  });
+
   it('should stop stale native tracking when recovery sync fails', async () => {
     const nativeData = { taskId: 'missing-task', elapsedMs: 900000 };
     syncElapsedTimeSpy.and.resolveTo(false);
@@ -408,6 +432,19 @@ describe('parseNativeTrackingData', () => {
       JSON.stringify({ taskId: 'task-1', elapsedMs: 900000 }),
     );
     expect(result).toEqual({ taskId: 'task-1', elapsedMs: 900000 });
+  });
+
+  it('keeps resume=false and drops any other resume value', () => {
+    expect(
+      parseNativeTrackingData(
+        JSON.stringify({ taskId: 'task-1', elapsedMs: 5, resume: false }),
+      ),
+    ).toEqual({ taskId: 'task-1', elapsedMs: 5, resume: false });
+    expect(
+      parseNativeTrackingData(
+        JSON.stringify({ taskId: 'task-1', elapsedMs: 5, resume: true }),
+      ),
+    ).toEqual({ taskId: 'task-1', elapsedMs: 5 });
   });
 
   it('preserves zero elapsedMs', () => {

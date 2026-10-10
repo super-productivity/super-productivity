@@ -7,6 +7,9 @@ import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationManagerCompat
 
+/** What getTrackingElapsed() hands the JS recovery. */
+data class BridgeSnapshot(val taskId: String, val elapsedMs: Long, val resume: Boolean)
+
 class TrackingForegroundService : Service() {
 
     companion object {
@@ -46,6 +49,12 @@ class TrackingForegroundService : Service() {
         var isTracking: Boolean = false
             private set
 
+        // False only for a session restored after a user-requested exit: the
+        // JS recovery credits it, then stops tracking instead of resuming.
+        @Volatile
+        var resumeAfterRestore: Boolean = true
+            private set
+
         // Marks the window between startForegroundService() and the first
         // startForeground() inside onStartCommand(). A stop arriving in that
         // window must NOT use stopService() — tearing down a start-foreground
@@ -81,6 +90,7 @@ class TrackingForegroundService : Service() {
         internal fun setState(context: Context, state: TrackingState) {
             TrackingStateStore.save(context, state)
             applyInMemory(state)
+            resumeAfterRestore = true
         }
 
         @Synchronized
@@ -90,6 +100,7 @@ class TrackingForegroundService : Service() {
             startTimestamp = 0
             accumulatedMs = 0
             taskTitle = ""
+            resumeAfterRestore = true
             TrackingStateStore.clear(context)
         }
 
@@ -100,37 +111,53 @@ class TrackingForegroundService : Service() {
          * process's death, so getTrackingElapsed() hands the JS cold-start
          * recovery the time tracked until the kill. The in-memory state wins
          * whenever it is live, so this never re-anchors a running session.
+         * After a user-requested exit (API 30+ only) the session is marked
+         * not to resume; below API 30 the exit reason is unknown and it
+         * always resumes.
          */
         @Synchronized
         fun restoreIfIdle(context: Context) {
             if (isTracking) return
             val persisted = TrackingStateStore.load(context) ?: return
-            val exitTimestamp = TrackingState.pickExitTimestamp(
-                TrackingStateStore.anchorProcessExitTimestamps(context),
+            val exit = TrackingState.pickExit(
+                TrackingStateStore.anchorProcessExits(context),
                 persisted.startTimestamp
             )
-            val state = persisted.frozenAtExit(exitTimestamp, System.currentTimeMillis())
+            val state = persisted.frozenAtExit(exit?.timestamp, System.currentTimeMillis())
+            val resume = TrackingState.shouldResumeAfter(exit)
             Log.d(
                 TAG,
                 "Restoring persisted tracking state: taskId=${state.taskId}, " +
-                    "exitKnown=${exitTimestamp != null}"
+                    "exitKnown=${exit != null}, resume=$resume"
             )
-            // Persist the re-anchored state too, so a second kill before JS
-            // re-anchors is measured from here rather than the old anchor.
-            setState(context, state)
+            if (resume) {
+                // Persist the re-anchored state too, so a second kill before JS
+                // re-anchors is measured from here rather than the old anchor.
+                setState(context, state)
+            } else {
+                // Frozen (no anchor) so a late bridge read never credits time
+                // after the stop. The old record stays on disk, so a kill before
+                // JS stops this re-derives the same total.
+                applyInMemory(state.copy(startTimestamp = 0))
+                resumeAfterRestore = false
+            }
         }
 
         /**
-         * The active session as (taskId, elapsedMs) for the JS bridge, restoring
-         * a persisted one first, or null when nothing is tracked. Read under the
-         * companion lock so a main-thread start/update/stop cannot interleave
-         * and pair one task's id with another task's total.
+         * The active session for the JS bridge, restoring a persisted one
+         * first, or null when nothing is tracked. Read under the companion
+         * lock so a main-thread start/update/stop cannot interleave and pair
+         * one task's id with another task's total.
          */
         @Synchronized
-        fun snapshotForBridge(context: Context): Pair<String, Long>? {
+        fun snapshotForBridge(context: Context): BridgeSnapshot? {
             restoreIfIdle(context)
             val taskId = currentTaskId
-            return if (isTracking && taskId != null) taskId to getElapsedMs() else null
+            return if (isTracking && taskId != null) {
+                BridgeSnapshot(taskId, getElapsedMs(), resumeAfterRestore)
+            } else {
+                null
+            }
         }
 
         private fun applyInMemory(state: TrackingState) {

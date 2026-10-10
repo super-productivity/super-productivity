@@ -1,7 +1,9 @@
 package com.superproductivity.superproductivity.service
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class TrackingStateTest {
@@ -75,11 +77,24 @@ class TrackingStateTest {
     @Test
     fun `picks the first exit at or after the anchor`() {
         // Newest first, as the system returns them; 900 is an older process.
+        val first = ProcessExit(4_000L, userRequested = true)
         assertEquals(
-            4_000L,
-            TrackingState.pickExitTimestamp(listOf(20_000L, 4_000L, 900L), 1_000)
+            first,
+            TrackingState.pickExit(
+                listOf(ProcessExit(20_000L, false), first, ProcessExit(900L, false)),
+                1_000
+            )
         )
-        assertNull(TrackingState.pickExitTimestamp(listOf(900L), 1_000))
-        assertNull(TrackingState.pickExitTimestamp(emptyList(), 1_000))
+        assertNull(TrackingState.pickExit(listOf(ProcessExit(900L, false)), 1_000))
+        assertNull(TrackingState.pickExit(emptyList(), 1_000))
+    }
+
+    @Test
+    fun `does not resume after a user-requested exit`() {
+        assertFalse(TrackingState.shouldResumeAfter(ProcessExit(4_000L, userRequested = true)))
+        assertTrue(TrackingState.shouldResumeAfter(ProcessExit(4_000L, userRequested = false)))
+        // Below API 30, or before the exit record is written, there is no
+        // reason to go on: keep resuming as before.
+        assertTrue(TrackingState.shouldResumeAfter(null))
     }
 }
