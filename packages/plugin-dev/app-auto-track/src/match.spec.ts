@@ -47,9 +47,9 @@ test('findTaskForWindow: rules win over issue keys', () => {
   assert.equal(findTaskForWindow(sample, [], tasks)?.id, 'b');
 });
 
-test('findTaskForWindow: #number matches title or issueId', () => {
+test('findTaskForWindow: #number matches the title only', () => {
   assert.equal(findTaskForWindow({ app: 'x', title: 'PR #42' }, [], tasks)?.id, 'c');
-  assert.equal(findTaskForWindow({ app: 'x', title: 'Issue #99' }, [], tasks)?.id, 'd');
+  assert.equal(findTaskForWindow({ app: 'x', title: 'Issue #99' }, [], tasks), null);
   assert.equal(findTaskForWindow({ app: 'x', title: 'Issue #4' }, [], tasks), null);
 });
 
@@ -64,4 +64,22 @@ test('findTaskForWindow: ambiguous issue keys do not match', () => {
 test('findTaskForWindow: done tasks are ignored', () => {
   const rules = parseRules('x = done thing');
   assert.equal(findTaskForWindow({ app: 'x', title: '' }, rules, tasks), null);
+});
+
+test('findTaskForWindow: a parent resolves to its first open subtask', () => {
+  const family = [
+    makeTask({ id: 'p', title: 'PROJ-1 Epic', subTaskIds: ['s1', 's2', 's3'] }),
+    makeTask({ id: 's1', title: 'first', parentId: 'p', isDone: true }),
+    makeTask({ id: 's2', title: 'second', parentId: 'p' }),
+    makeTask({ id: 's3', title: 'third', parentId: 'p' }),
+  ];
+  assert.equal(findTaskForWindow({ app: 'x', title: 'PROJ-1' }, [], family)?.id, 's2');
+});
+
+test('findTaskForWindow: a parent with only done subtasks is not trackable', () => {
+  const family = [
+    makeTask({ id: 'p', title: 'PROJ-1 Epic', subTaskIds: ['s1'] }),
+    makeTask({ id: 's1', title: 'first', parentId: 'p', isDone: true }),
+  ];
+  assert.equal(findTaskForWindow({ app: 'x', title: 'PROJ-1' }, [], family), null);
 });

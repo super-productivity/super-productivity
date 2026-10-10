@@ -21,12 +21,13 @@ declare const PluginAPI: PluginAPI;
 
 const POLL_MS = 10_000;
 const DWELL_MS = 90_000;
-const PROBE_TIMEOUT_MS = 10_000;
+// Generous: the first Windows poll compiles a helper and the first macOS poll waits
+// on the Automation permission prompt. Polls never overlap, so this only bounds hangs.
+const PROBE_TIMEOUT_MS = 30_000;
 // Denied permissions or a broken PowerShell fail every poll; back off instead of
 // spawning two processes every 10s, but keep retrying so a later grant is picked up.
 const MAX_BACKOFF_MS = 5 * 60_000;
-// A longer gap means sleep or backoff: the old dwell clock no longer says anything.
-const MAX_SAMPLE_GAP_MS = 3 * POLL_MS;
+const DWELL_TIMING = { dwellMs: DWELL_MS, maxGapMs: 3 * POLL_MS };
 const LOG_PREFIX = '[app-auto-track]';
 
 interface AutoTrackConfig {
@@ -39,11 +40,10 @@ const probeScript = buildProbeScript();
 let pollTimer: ReturnType<typeof setTimeout> | null = null;
 let isUnloaded = false;
 let dwell: DwellState = INITIAL_DWELL_STATE;
-let currentTaskId: string | null = null;
+let currentTaskId: string | null | undefined;
 let autoStartedId: string | null = null;
 let hasShownProbeError = false;
 let failureCount = 0;
-let lastTickAt = 0;
 
 const t = (key: string, params?: Record<string, string | number>): string =>
   PluginAPI.translate(key, params);
@@ -91,10 +91,7 @@ const reportProbeError = (code: string): void => {
 type TickResult = 'ok' | 'failed' | 'unsupported';
 
 const tick = async (): Promise<TickResult> => {
-  const now = Date.now();
-  if (now - lastTickAt > MAX_SAMPLE_GAP_MS) dwell = INITIAL_DWELL_STATE;
-  lastTickAt = now;
-  // Looking at Super Productivity itself is neither a match nor a reason to reset.
+  // Super Productivity itself in front is never a match (and needs no probe).
   if (PluginAPI.isWindowFocused()) return 'ok';
 
   const res = await PluginAPI.executeNodeScript!({
@@ -119,7 +116,11 @@ const tick = async (): Promise<TickResult> => {
     await PluginAPI.getTasks(),
   );
   if (isUnloaded) return 'ok';
-  const step = stepDwell(dwell, match?.id ?? null, Date.now(), DWELL_MS);
+  const step = stepDwell(
+    dwell,
+    { matchId: match?.id ?? null, now: Date.now() },
+    DWELL_TIMING,
+  );
   dwell = step.state;
   if (step.fireId) await act(step.fireId, cfg);
   return 'ok';

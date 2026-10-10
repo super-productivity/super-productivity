@@ -2,20 +2,28 @@
  * Dwell tracking: a match only fires after it has stayed the foreground match
  * for `dwellMs`, and fires once until a different match takes over.
  *
- * Samples without a match (unmapped apps, Super Productivity itself, lock screen)
- * leave the state untouched, so a quick look at chat does not restart the clock.
+ * Unmatched samples (unmapped apps, lock screen) do not reset the candidate, so a
+ * quick look at chat keeps the clock running. A gap longer than `maxGapMs` since
+ * the candidate was last seen does restart it: a glance 30 min ago is no dwell.
  */
 export interface DwellState {
   candidateId: string | null;
   since: number;
+  lastSeenAt: number;
   hasFired: boolean;
 }
 
 export const INITIAL_DWELL_STATE: DwellState = {
   candidateId: null,
   since: 0,
+  lastSeenAt: 0,
   hasFired: false,
 };
+
+export interface DwellTiming {
+  dwellMs: number;
+  maxGapMs: number;
+}
 
 export interface DwellStep {
   state: DwellState;
@@ -25,21 +33,22 @@ export interface DwellStep {
 
 export const stepDwell = (
   state: DwellState,
-  matchId: string | null,
-  now: number,
-  dwellMs: number,
+  sample: { matchId: string | null; now: number },
+  { dwellMs, maxGapMs }: DwellTiming,
 ): DwellStep => {
+  const { matchId, now } = sample;
   if (matchId === null) {
     return { state, fireId: null };
   }
-  if (matchId !== state.candidateId) {
+  if (matchId !== state.candidateId || now - state.lastSeenAt > maxGapMs) {
     return {
-      state: { candidateId: matchId, since: now, hasFired: false },
+      state: { candidateId: matchId, since: now, lastSeenAt: now, hasFired: false },
       fireId: null,
     };
   }
+  const seen = { ...state, lastSeenAt: now };
   if (!state.hasFired && now - state.since >= dwellMs) {
-    return { state: { ...state, hasFired: true }, fireId: matchId };
+    return { state: { ...seen, hasFired: true }, fireId: matchId };
   }
-  return { state, fireId: null };
+  return { state: seen, fireId: null };
 };

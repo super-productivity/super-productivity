@@ -1,8 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { decideAction } from './decide';
+import { decideAction, type DecideInput } from './decide';
 
-const base = {
+const base: DecideInput = {
   matchId: 'm',
   currentTaskId: null,
   autoStartedId: null,
@@ -29,6 +29,13 @@ test('auto-switch acts when nothing is tracked or the plugin started the task', 
 test('auto-switch never overrides a task the user picked', () => {
   assert.equal(
     decideAction({ ...base, isAutoSwitch: true, currentTaskId: 'x' }),
+    'suggest',
+  );
+});
+
+test('auto-switch only suggests while the running task is unknown', () => {
+  assert.equal(
+    decideAction({ ...base, isAutoSwitch: true, currentTaskId: undefined }),
     'suggest',
   );
 });

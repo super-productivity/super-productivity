@@ -3,7 +3,8 @@ export type TrackAction = 'none' | 'suggest' | 'switch';
 export interface DecideInput {
   /** Task the foreground window has pointed at for the full dwell time. */
   matchId: string;
-  currentTaskId: string | null;
+  /** `undefined` until the first task-change hook: the plugin may load mid-session. */
+  currentTaskId: string | null | undefined;
   /** Task this plugin last started, as long as the user has not changed it since. */
   autoStartedId: string | null;
   isAutoSwitch: boolean;

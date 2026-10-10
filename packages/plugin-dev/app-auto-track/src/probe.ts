@@ -10,6 +10,8 @@ const MAC_APPLESCRIPT = [
   'try',
   'set winTitle to name of front window of frontProc',
   'end try',
+  // some windows report `missing value`, which would make the concatenation below throw
+  'if winTitle is missing value then set winTitle to ""',
   'end tell',
   'return appName & linefeed & winTitle',
 ];
@@ -34,7 +36,11 @@ public static class SpAutoTrackFg {
 }
 '@
   Move-Item $tmp $dll -ErrorAction SilentlyContinue
-  Remove-Item $tmp -ErrorAction SilentlyContinue
+  # The move fails if another probe won the race (drop ours) or e.g. AV holds the file
+  # (use ours this once rather than failing every poll).
+  if (Test-Path $tmp) {
+    if (Test-Path $dll) { Remove-Item $tmp -ErrorAction SilentlyContinue } else { $dll = $tmp }
+  }
 }
 # A dll that fails to load is deleted so the next poll recompiles it.
 try { Add-Type -Path $dll } catch { Remove-Item $dll -ErrorAction SilentlyContinue; throw }
@@ -43,11 +49,12 @@ $sb = New-Object System.Text.StringBuilder 1024
 [void][SpAutoTrackFg]::GetWindowText($h, $sb, $sb.Capacity)
 [uint32]$procId = 0
 [void][SpAutoTrackFg]::GetWindowThreadProcessId($h, [ref]$procId)
-$name = (Get-Process -Id $procId -ErrorAction SilentlyContinue).ProcessName
-[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-# Always one line for the app, even when the process is gone, so the title stays line 2.
-Write-Output ([string]$name)
-Write-Output $sb.ToString()
+# pid 0 is "Idle": no foreground window (lock screen, UAC desktop)
+$name = ''
+if ($procId -ne 0) { $name = [string](Get-Process -Id $procId -ErrorAction SilentlyContinue).ProcessName }
+# Base64 sidesteps console code pages, BOMs and line wrapping of the hidden console.
+$text = $name + [char]10 + $sb.ToString()
+[Console]::Out.Write([Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($text)))
 `;
 
 /** UTF-16LE base64, as `powershell -EncodedCommand` expects; avoids all quoting issues. */
@@ -73,24 +80,31 @@ const cp = require('child_process');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+// -1743: the user denied (or has not yet answered) the Automation prompt for System Events
+const errorCode = (err, stderr) =>
+  err.killed ? 'TIMEOUT' : /-1743/.test(stderr) ? 'AUTOMATION_DENIED' : String(err.code || 'EXEC_FAILED');
 const run = (file, argv, env) => new Promise((resolve) => {
-  cp.execFile(file, argv, { timeout: 8000, windowsHide: true, encoding: 'utf8', maxBuffer: 65536, env },
-    (err, stdout) => resolve(err ? { error: String(err.code || 'EXEC_FAILED') } : { stdout }));
+  cp.execFile(file, argv, { timeout: 25000, windowsHide: true, encoding: 'utf8', maxBuffer: 65536, env },
+    (err, stdout, stderr) => resolve(err ? { error: errorCode(err, String(stderr)) } : { stdout }));
 });
 if (process.platform === 'darwin') {
   const argv = ${JSON.stringify(MAC_APPLESCRIPT)}.flatMap((line) => ['-e', line]);
   return { platform: 'darwin', ...(await run('/usr/bin/osascript', argv, {})) };
 }
 if (process.platform === 'win32') {
-  const root = path.parse(os.homedir()).root;
-  const systemRoot = path.join(root, 'Windows');
+  // Windows is usually, but not always, on the profile's drive.
+  const psIn = (root) => path.join(root, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
+  const systemRoot = [path.join(path.parse(os.homedir()).root, 'Windows'), path.join('C:/', 'Windows')]
+    .find((root) => fs.existsSync(psIn(root)));
+  if (!systemRoot) return { platform: 'win32', error: 'NO_POWERSHELL' };
   const temp = path.join(os.homedir(), 'AppData', 'Local', 'Temp');
   fs.mkdirSync(temp, { recursive: true });
   const env = { SystemRoot: systemRoot, windir: systemRoot, TEMP: temp, TMP: temp };
-  const ps = path.join(systemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
   const argv = ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
     '-EncodedCommand', ${JSON.stringify(encodePowerShell(WIN_POWERSHELL))}];
-  return { platform: 'win32', ...(await run(ps, argv, env)) };
+  const res = await run(psIn(systemRoot), argv, env);
+  return { platform: 'win32', ...(res.stdout === undefined ? res
+    : { stdout: Buffer.from(res.stdout.trim(), 'base64').toString('utf8') }) };
 }
 return { platform: process.platform, unsupported: true };
 `;

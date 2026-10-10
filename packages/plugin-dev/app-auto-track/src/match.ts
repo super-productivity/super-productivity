@@ -49,14 +49,12 @@ export const extractIssueKeys = (title: string): string[] => {
 
 const escapeRegExp = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-const isTaskForIssueKey = (task: Task, key: string): boolean => {
-  if (/^\d+$/.test(key)) {
-    // Providers store the issue number as issueId (GitHub) or show `#123` in the title.
-    return task.issueId === key || new RegExp(`#${key}\\b`).test(task.title);
-  }
-  // Jira-style keys live in the title (`PROJ-123 Summary`); issueId is an internal id.
-  return new RegExp(`\\b${escapeRegExp(key)}\\b`).test(task.title);
-};
+// Matched on the title only: issue providers put the key there (`#12 Fix`, `PROJ-1 Do`),
+// while issueId formats differ per provider (GitLab `group/proj#12`, Jira internal ids).
+const isTaskForIssueKey = (task: Task, key: string): boolean =>
+  /^\d+$/.test(key)
+    ? new RegExp(`#${key}\\b`).test(task.title)
+    : new RegExp(`\\b${escapeRegExp(key)}\\b`).test(task.title);
 
 /** Rules win over issue keys: they are the user's explicit intent. */
 const findByRules = (sample: WindowSample, rules: Rule[], tasks: Task[]): Task | null => {
@@ -81,6 +79,17 @@ const findByIssueKey = (sample: WindowSample, tasks: Task[]): Task | null => {
   return null;
 };
 
+/**
+ * Starting a parent starts its first open subtask, so a parent resolves to that
+ * subtask; without one it is not trackable (SP would reopen a done subtask).
+ */
+const toTrackable = (task: Task | null, tasks: Task[]): Task | null => {
+  if (!task || !task.subTaskIds?.length) return task;
+  const byId = new Map(tasks.map((t) => [t.id, t]));
+  const firstOpen = task.subTaskIds.map((id) => byId.get(id)).find((t) => t && !t.isDone);
+  return firstOpen ?? null;
+};
+
 /** Returns the open task the foreground window points at, or null. */
 export const findTaskForWindow = (
   sample: WindowSample,
@@ -88,5 +97,6 @@ export const findTaskForWindow = (
   tasks: Task[],
 ): Task | null => {
   const openTasks = tasks.filter((t) => !t.isDone);
-  return findByRules(sample, rules, openTasks) ?? findByIssueKey(sample, openTasks);
+  const hit = findByRules(sample, rules, openTasks) ?? findByIssueKey(sample, openTasks);
+  return toTrackable(hit, openTasks);
 };
