@@ -276,7 +276,7 @@ export class DialogSimpleCounterEditComponent {
 
     // Fill in missing dates from first entry to today
     const startDate = new Date(allDates[0]);
-    const endDate = new Date();
+    const endDate = this._dateService.getLogicalTodayDate();
     const dates: string[] = [];
 
     for (const d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
