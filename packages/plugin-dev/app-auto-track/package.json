@@ -4,7 +4,7 @@
   "description": "Suggest or switch the tracked task based on the foreground application",
   "private": true,
   "scripts": {
-    "build": "node ../scripts/build-plugin.js --entry src/background.ts",
+    "build": "node ../scripts/build-with-esbuild.js --entry src/background.ts",
     "lint": "tsc --noEmit",
     "test": "node scripts/test.js"
   },

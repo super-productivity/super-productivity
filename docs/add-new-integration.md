@@ -38,10 +38,10 @@ A repository-owned provider normally lives under
 ```
 
 Set the package's build script to the shared builder,
-`"build": "node ../scripts/build-plugin.js"`. It bundles `src/plugin.ts` into
+`"build": "node ../scripts/build-with-esbuild.js"`. It bundles `src/plugin.ts` into
 `dist/plugin.js` and copies `manifest.json`, `config-schema.json`, `icon.svg`
 and `i18n/*.json` when present; see
-[build-plugin.js](../packages/plugin-dev/scripts/build-plugin.js) for options.
+[build-with-esbuild.js](../packages/plugin-dev/scripts/build-with-esbuild.js) for options.
 
 Keep provider API types and mapping logic inside the package. Do not add the
 provider to core issue-provider unions, defaults, forms, or Angular services.

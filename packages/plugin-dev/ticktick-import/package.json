@@ -4,7 +4,7 @@
   "description": "One-time import of a TickTick CSV backup into Super Productivity",
   "private": true,
   "scripts": {
-    "build": "node scripts/build.js",
+    "build": "node ../scripts/build-with-esbuild.js --ui src/ui/main.ts",
     "test": "jest",
     "test:watch": "jest --watch"
   },
