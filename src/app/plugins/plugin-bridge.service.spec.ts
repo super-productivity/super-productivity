@@ -48,6 +48,8 @@ import { Project } from '../features/project/project.model';
 import { PluginTaskContextMenuRegistryService } from './plugin-task-context-menu-registry.service';
 import { PluginManifest } from '@super-productivity/plugin-api';
 import { TaskMoveToProjectService } from '../features/tasks/task-move-to-project.service';
+import { TaskRepeatCfgService } from '../features/task-repeat-cfg/task-repeat-cfg.service';
+import { TaskRepeatCfg } from '../features/task-repeat-cfg/task-repeat-cfg.model';
 
 describe('PluginBridgeService - Counter Methods', () => {
   let service: PluginBridgeService;
@@ -1231,27 +1233,44 @@ describe('PluginBridgeService - deleteProject', () => {
 describe('PluginBridgeService - updateTask() with a new projectId', () => {
   let service: PluginBridgeService;
   let taskService: jasmine.SpyObj<TaskService>;
-  let moveService: jasmine.SpyObj<TaskMoveToProjectService>;
+  let repeatCfgService: jasmine.SpyObj<TaskRepeatCfgService>;
+  let dialogOpen: jasmine.Spy;
   let store: MockStore;
-  const task = {
-    ...DEFAULT_TASK,
-    id: 't1',
-    projectId: 'p1',
-    repeatCfgId: 'cfg',
-    subTasks: [],
-  } as TaskWithSubTasks;
+  const instance = (id: string): TaskWithSubTasks =>
+    ({
+      ...DEFAULT_TASK,
+      id,
+      projectId: 'p1',
+      repeatCfgId: 'cfg',
+      subTasks: [],
+    }) as TaskWithSubTasks;
+  const task = instance('t1');
+  const otherInstance = instance('t2');
 
   beforeEach(() => {
     taskService = jasmine.createSpyObj<TaskService>(
       'TaskService',
-      ['moveToProject', 'update'],
+      [
+        'moveToProject',
+        'update',
+        'getTasksWithSubTasksByRepeatCfgId$',
+        'getArchiveTasksForRepeatCfgId',
+        'updateArchiveTasks',
+      ],
       { allTasks$: of([]), selectedTask$: of(null) },
     );
-    moveService = jasmine.createSpyObj<TaskMoveToProjectService>(
-      'TaskMoveToProjectService',
-      ['moveToProject'],
+    taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(
+      of([task, otherInstance]),
     );
-    moveService.moveToProject.and.resolveTo(true);
+    taskService.getArchiveTasksForRepeatCfgId.and.resolveTo([]);
+    repeatCfgService = jasmine.createSpyObj<TaskRepeatCfgService>(
+      'TaskRepeatCfgService',
+      ['getTaskRepeatCfgByIdAllowUndefined$', 'updateTaskRepeatCfg'],
+    );
+    repeatCfgService.getTaskRepeatCfgByIdAllowUndefined$.and.returnValue(
+      of({ id: 'cfg' } as TaskRepeatCfg),
+    );
+    dialogOpen = jasmine.createSpy('open');
 
     TestBed.configureTestingModule({
       providers: [
@@ -1259,12 +1278,15 @@ describe('PluginBridgeService - updateTask() with a new projectId', () => {
         provideMockStore(),
         { provide: SnackService, useValue: {} },
         { provide: NotifyService, useValue: {} },
-        { provide: MatDialog, useValue: {} },
+        { provide: MatDialog, useValue: { open: dialogOpen } },
         { provide: PluginHooksService, useValue: {} },
         { provide: TaskService, useValue: taskService },
-        { provide: TaskMoveToProjectService, useValue: moveService },
+        { provide: TaskRepeatCfgService, useValue: repeatCfgService },
         { provide: WorkContextService, useValue: { activeWorkContext$: of(null) } },
-        { provide: ProjectService, useValue: { list$: of([{ id: 'p2' }]) } },
+        {
+          provide: ProjectService,
+          useValue: { list$: of([{ id: 'p2' }]), getByIdOnce$: () => of({ id: 'p2' }) },
+        },
         { provide: TagService, useValue: {} },
         { provide: PluginUserPersistenceService, useValue: {} },
         { provide: PluginConfigService, useValue: {} },
@@ -1286,11 +1308,19 @@ describe('PluginBridgeService - updateTask() with a new projectId', () => {
   });
 
   it('moves through TaskMoveToProjectService without a confirmation', async () => {
+    const moveSpy = spyOn(
+      TestBed.inject(TaskMoveToProjectService),
+      'moveToProject',
+    ).and.callThrough();
+
     await service.updateTask('t1', { projectId: 'p2' });
 
-    expect(moveService.moveToProject).toHaveBeenCalledOnceWith(task, 'p2', {
-      isSkipConfirm: true,
+    expect(moveSpy).toHaveBeenCalledOnceWith(task, 'p2', { isSkipConfirm: true });
+    expect(dialogOpen).not.toHaveBeenCalled();
+    expect(repeatCfgService.updateTaskRepeatCfg).toHaveBeenCalledOnceWith('cfg', {
+      projectId: 'p2',
     });
-    expect(taskService.moveToProject).not.toHaveBeenCalled();
+    expect(taskService.moveToProject).toHaveBeenCalledWith(task, 'p2');
+    expect(taskService.moveToProject).toHaveBeenCalledWith(otherInstance, 'p2');
   });
 });

@@ -678,6 +678,12 @@ export interface PluginAPI {
   selectTask(taskId: string): Promise<void>;
 
   reInitData(): Promise<void>;
+
+  /**
+   * Update a task. Changing `projectId` moves it like the UI does: subtasks
+   * follow, and for a recurring task the repeat config and every instance
+   * (archived ones included) move without a confirmation.
+   */
   updateTask(taskId: string, updates: Partial<Task>): Promise<void>;
 
   addTask(taskData: PluginCreateTaskData): Promise<string>;
