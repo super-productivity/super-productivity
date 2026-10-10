@@ -4,6 +4,7 @@ import android.app.ActivityManager
 import android.content.Context
 import android.content.SharedPreferences
 import android.os.Build
+import android.os.Process
 import android.provider.Settings
 import android.util.Log
 
@@ -44,7 +45,8 @@ data class TrackingState(
 
         /**
          * The death of the process that last anchored this session is the
-         * earliest recorded exit at or after the anchor.
+         * earliest recorded exit of that process (matched by pid) at or after
+         * the anchor.
          */
         fun pickExitTimestamp(exitTimestamps: List<Long>, startTimestamp: Long): Long? =
             exitTimestamps.filter { it >= startTimestamp }.minOrNull()
@@ -100,6 +102,12 @@ object TrackingStateStore {
     private const val KEY_ACCUMULATED_MS = "accumulatedMs"
     private const val KEY_BOOT_COUNT = "bootCount"
 
+    // pid of the process that wrote the session. Matching exit records by pid
+    // (not just by name) keeps a later short-lived main process — started for a
+    // widget, alarm or worker after the kill — from standing in for the real
+    // death once the system has evicted that record from its bounded history.
+    private const val KEY_PID = "pid"
+
     private fun getPrefs(context: Context): SharedPreferences =
         context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
@@ -116,17 +124,20 @@ object TrackingStateStore {
         }
 
     /**
-     * Wall-clock times at which the app's main process died, newest first, as
-     * recorded by the system (API 30+). Empty when unavailable.
+     * Wall-clock times at which the main process that wrote the persisted
+     * session died, as recorded by the system (API 30+). Empty when unavailable
+     * or when that record is no longer in the system's history.
      */
-    fun mainProcessExitTimestamps(context: Context): List<Long> {
+    fun anchorProcessExitTimestamps(context: Context): List<Long> {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return emptyList()
+        val pid = getPrefs(context).getInt(KEY_PID, 0)
+        if (pid <= 0) return emptyList()
         return try {
             val am = context.getSystemService(ActivityManager::class.java)
                 ?: return emptyList()
             val processName = context.applicationInfo.processName
-            am.getHistoricalProcessExitReasons(context.packageName, 0, 0)
-                .filter { it.processName == processName }
+            am.getHistoricalProcessExitReasons(context.packageName, pid, 0)
+                .filter { it.pid == pid && it.processName == processName }
                 .map { it.timestamp }
         } catch (e: RuntimeException) {
             Log.w(TAG, "Unable to read process exit reasons", e)
@@ -141,6 +152,7 @@ object TrackingStateStore {
             .putLong(KEY_START_TIMESTAMP, state.startTimestamp)
             .putLong(KEY_ACCUMULATED_MS, state.accumulatedMs)
             .putInt(KEY_BOOT_COUNT, state.bootCount)
+            .putInt(KEY_PID, Process.myPid())
             .commit()
         if (!ok) {
             Log.w(TAG, "Failed to persist tracking state: taskId=${state.taskId}")

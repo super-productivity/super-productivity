@@ -106,7 +106,7 @@ class TrackingForegroundService : Service() {
             if (isTracking) return
             val persisted = TrackingStateStore.load(context) ?: return
             val exitTimestamp = TrackingState.pickExitTimestamp(
-                TrackingStateStore.mainProcessExitTimestamps(context),
+                TrackingStateStore.anchorProcessExitTimestamps(context),
                 persisted.startTimestamp
             )
             val state = persisted.frozenAtExit(exitTimestamp, System.currentTimeMillis())
