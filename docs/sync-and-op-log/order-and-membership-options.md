@@ -14,7 +14,8 @@ note as the design to use if a report arrives. The one sub-class that is not
 order-only, a Today note listed on one device and not on another (13 seeds), is
 already tracked in #10379. Its cheapest fix is a read-side derivation together
 with a deterministic read-side order, as D5 asks, which needs no wire or model
-change (option B, below).
+change (option B, below). #10659 since fixes its cause, mechanism 3 below, at the
+write side.
 
 ## What was measured
 
@@ -141,7 +142,7 @@ Three mechanisms, each read on a real trace with the device op logs dumped
    `isPinnedToToday` on an existing note. `lwwUpdateMetaReducer` does not touch
    `todayOrder` for it, so devices that had applied the pin keep the note in
    Today while others don't. This is #10379's "Today note order" part,
-   confirmed there in a browser.
+   confirmed there in a browser, and fixed by #10659.
 
 **Released clients add a fourth, which the harness cannot show.** v18.15.0
 and v19.1.0 apply `updateNoteOrder` as a whole-list replace (`todayOrder: ids`
@@ -179,7 +180,7 @@ disagreement that the next sync repairs, do not qualify." So:
 
 - **Order (42 visible seeds, plus the invisible ones):** does not qualify.
   This note is design-only, and **building nothing is a valid outcome**.
-- **Today-note membership (13 seeds, #10379):** the note itself, its content
+- **Today-note membership (13 seeds, #10379; fixed by #10659):** the note itself, its content
   and its pin flag converge. Only whether Today lists it differs, and it stays
   in its project: all 13 affected notes were created in the project, and the
   app offers the pin toggle only for project notes (`note.component.html`),

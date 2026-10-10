@@ -25,11 +25,14 @@ import {
  * (a) Remote newer: the local op is rejected and never uploaded, but the local
  *     state keeps that edit.
  * (b) Local newer: the winner uploads a `[NOTE] LWW Update` carrying the full
- *     note. lwwUpdateMetaReducer replaces the entity without maintaining
- *     `note.todayOrder`, which the Today notes panel renders unfiltered.
+ *     note. lwwUpdateMetaReducer replaced the entity without maintaining
+ *     `note.todayOrder`, which the Today notes panel renders unfiltered
+ *     (fixed for #10379).
  *
  *     (c) and (d) are the same gap for a pin and for the other timestamp
- *     winner (an older pin replaced by a newer unpinned note).
+ *     winner (an older pin replaced by a newer unpinned note). (d) asserts
+ *     today's whole-note LWW outcome, the pin lost; NOTE admission (#10393)
+ *     would keep it and flip that expectation.
  *
  * Every test asserts the correct outcome (both clients agree). (a) is pending
  * (`test.fixme`): it is #10260 for notes, red on master 3 of 3 runs (2026-09).
