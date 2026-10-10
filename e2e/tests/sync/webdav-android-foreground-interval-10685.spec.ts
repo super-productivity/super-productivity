@@ -18,9 +18,10 @@ import { installAndroidTimerBridge } from '../focus-mode/android-timer-bridge';
  *
  * Client B runs with the Android bridge stub (IS_ANDROID_WEB_VIEW) and never
  * pauses, resumes or syncs manually after setup; it must pick up Client A's
- * task through the default 1-minute sync interval alone.
+ * task through its sync interval alone.
  */
-const SYNC_INTERVAL_MS = 60_000;
+// Shortened from the WebDAV setup's 5 minutes to keep the test fast.
+const SYNC_INTERVAL_MS = 15_000;
 
 test.describe('@webdav Android foreground interval sync', () => {
   test.describe.configure({ mode: 'serial' });
@@ -38,7 +39,7 @@ test.describe('@webdav Android foreground interval sync', () => {
     webdavServerUp,
   }) => {
     // Waits out real sync intervals.
-    test.setTimeout(6 * SYNC_INTERVAL_MS);
+    test.setTimeout(240_000);
     await createSyncFolder(request, SYNC_FOLDER_NAME);
 
     const clientA = await setupSyncClient(browser, baseURL);
@@ -70,10 +71,23 @@ test.describe('@webdav Android foreground interval sync', () => {
       await syncPageB.triggerSync();
       await waitForSyncComplete(clientB.page, syncPageB);
 
-      // Enabling sync starts B's trigger pipeline, whose audit path fires once
-      // a full interval later even without a periodic trigger. Let that pass
-      // so only a recurring trigger can deliver the change below.
-      await clientB.page.waitForTimeout(SYNC_INTERVAL_MS + 10_000);
+      await clientB.page.evaluate((syncInterval) => {
+        (
+          window as unknown as {
+            __e2eTestHelpers: { store: { dispatch: (a: unknown) => void } };
+          }
+        ).__e2eTestHelpers.store.dispatch({
+          type: '[Global Config] Update Global Config Section',
+          sectionKey: 'sync',
+          sectionCfg: { syncInterval },
+          isSkipSnack: true,
+        });
+      }, SYNC_INTERVAL_MS);
+
+      // A new interval restarts B's trigger pipeline, whose audit path fires
+      // once a full interval later even without a periodic trigger. Let that
+      // pass so only a recurring trigger can deliver the change below.
+      await clientB.page.waitForTimeout(2 * SYNC_INTERVAL_MS);
 
       const taskName = `AndroidFgTask-${Date.now()}`;
       await workViewPageA.addTask(taskName);
@@ -82,7 +96,7 @@ test.describe('@webdav Android foreground interval sync', () => {
       await waitForSyncComplete(clientA.page, syncPageA);
 
       await expect(clientB.page.locator(`task:has-text("${taskName}")`)).toBeVisible({
-        timeout: SYNC_INTERVAL_MS + 30_000,
+        timeout: 3 * SYNC_INTERVAL_MS,
       });
     } finally {
       await closeContextsSafely(clientA.context, contextB);
