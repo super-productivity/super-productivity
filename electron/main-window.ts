@@ -15,6 +15,7 @@ import { pathToFileURL } from 'node:url';
 import { IPC } from './shared-with-frontend/ipc-events.const';
 import { isExternalUrlSchemeAllowed } from './shared-with-frontend/is-external-url-allowed';
 import { isLocalFileUrl, openLocalPath } from './open-url';
+import { getApiUserAgent, isGitLabApiUrl } from './api-user-agent';
 import { readFileSync, watch } from 'fs';
 import { error, log } from 'electron-log/main';
 import { IS_MAC, IS_GNOME_WAYLAND } from './common.const';
@@ -247,6 +248,7 @@ export const createWindow = async ({
     // frame: true,
   });
 
+  const apiUserAgent = getApiUserAgent(app.getVersion());
   // see: https://pratikpc.medium.com/bypassing-cors-with-electron-ab7eaf331605
   mainWin.webContents.session.webRequest.onBeforeSendHeaders((details, callback) => {
     const { requestHeaders } = details;
@@ -272,6 +274,10 @@ export const createWindow = async ({
       )
     ) {
       removeKeyInAnyCase(requestHeaders, 'User-Agent');
+    } else if (isGitLabApiUrl(details.url)) {
+      // Anubis-protected instances challenge browser UAs (#10650)
+      removeKeyInAnyCase(requestHeaders, 'User-Agent');
+      requestHeaders['User-Agent'] = apiUserAgent;
     }
     // WebDavHttpAdapter marks desktop uploads because renderer fetch refuses to
     // set Connection itself. Consume the marker here; it must not reach the
