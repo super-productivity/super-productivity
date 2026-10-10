@@ -47,6 +47,8 @@
   // Uses env() for native iOS safe areas
   // -----------------------------
   // Android API < 35 / WebView < 140: see :root.hasAndroidStatusBarOverlap below.
+  // Written natively on that tail only; declared so the token always resolves.
+  --android-status-bar-overlap: 0px;
   --safe-area-top: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
   --safe-area-bottom: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
   --safe-area-left: var(--safe-area-inset-left, env(safe-area-inset-left, 0px));
