@@ -7,8 +7,8 @@
   display: flex;
   flex-flow: row;
   position: relative;
-  margin-left: var(--s);
-  margin-right: var(--s-half);
+  // no end margin: buttons reach the task's edge (#10540)
+  margin-inline-start: var(--s);
   align-items: stretch;
 
   //@include verySmallMainContainer {
@@ -23,7 +23,6 @@
   flex-direction: row;
   align-items: stretch;
   text-align: right;
-  margin-right: var(--s-quarter);
   position: relative;
 
   button {
@@ -95,7 +94,8 @@
 // own encapsulation, so no colour rule here can leak into nested sub-task rows.
 task-priority-indicator {
   align-self: center;
-  margin: 0 var(--s-quarter);
+  // end margin matches .time-wrapper: text and icons keep off the task's edge
+  margin-inline: var(--s-quarter) var(--s);
 
   @include isDoneForFirstLine {
     opacity: var(--task-is-done-dim-opacity);
@@ -123,7 +123,7 @@ task-priority-indicator {
   flex-direction: row;
   align-items: center;
   justify-content: center;
-  margin-right: var(--s);
+  margin-inline-end: var(--s);
   z-index: var(--z-time-wrapper);
   // note: fixes styles for empty time for very small mobile
   min-width: 25px;
@@ -206,7 +206,7 @@ task-priority-indicator {
 
   @include mq(xs, max) {
     @at-root .time-wrapper {
-      margin-right: 0;
+      margin-inline-end: 0;
       @include timeWrapperMinimalStyles;
 
       @include isDoneForFirstLine {
@@ -476,6 +476,13 @@ done-toggle {
   ::ng-deep span {
     font-size: 10px;
   }
+}
+
+// The last button touches the task's edge, so a badge wider than the button
+// ("11:00 PM") is aligned to the button's end instead of overflowing the task.
+.controls > button:last-of-type .time-badge {
+  inset-inline: auto 0;
+  transform: translateY(-50%);
 }
 
 .checklist-progress-btn {
