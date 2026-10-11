@@ -42,7 +42,10 @@ import { EMPTY, forkJoin, from, Observable, of as rxOf } from 'rxjs';
 import { getEffectiveLastTaskCreationDay } from './get-effective-last-task-creation-day.util';
 import { remindOptionToMilliseconds } from '../../tasks/util/remind-option-to-milliseconds';
 import { devError } from '../../../util/dev-error';
-import { getFirstRepeatOccurrence } from './get-first-repeat-occurrence.util';
+import {
+  getFirstRepeatOccurrence,
+  hasNoRepeatOccurrenceBeforeEnd,
+} from './get-first-repeat-occurrence.util';
 import { getNextRepeatOccurrence } from './get-next-repeat-occurrence.util';
 import { clampPastTimedOccurrence } from './clamp-past-timed-occurrence.util';
 import { SCHEDULE_AFFECTING_FIELDS } from './schedule-affecting-fields.const';
@@ -76,6 +79,16 @@ export class TaskRepeatCfgEffects {
               taskRepeatCfg,
               this._dateService.todayStr(),
             );
+
+            // An end day that leaves no allowed occurrence in the window is
+            // not "no first occurrence, use the task's day or now" — it is a
+            // schedule that will never fire. Scheduling a reminder for it
+            // (typically landing on today via the Date.now() fallback) drags
+            // the task off its current day. Preserve the existing instance
+            // instead (#10091).
+            if (!calculatedTargetDate && hasNoRepeatOccurrenceBeforeEnd(taskRepeatCfg)) {
+              return null;
+            }
 
             // Use calculated date if available, otherwise fall back to existing logic
             const startOfNextDayDiffMs = this._dateService.getStartOfNextDayDiffMs();
@@ -162,6 +175,28 @@ export class TaskRepeatCfgEffects {
           taskRepeatCfg,
           this._dateService.todayStr(),
         );
+
+        // A finite window ([startDate, repeatUntilDay]) that contains no
+        // allowed occurrence must not fall back to today: the fallback below
+        // would anchor lastTaskCreationDay to today and drag the task off its
+        // current day. Save the dialog's subtask templates and keep the
+        // existing instance as-is — the empty window simply never creates
+        // anything (#10091).
+        if (!firstOccurrence && hasNoRepeatOccurrenceBeforeEnd(taskRepeatCfg)) {
+          this._taskRepeatCfgService.updateTaskRepeatCfg(taskRepeatCfg.id, {
+            subTaskTemplates,
+          });
+          const changesForUpdate: Partial<TaskRepeatCfgCopy> = isTimedTask
+            ? { ...taskRepeatCfg, startTime: undefined, remindAt: undefined }
+            : taskRepeatCfg;
+          this._updateRegularTaskInstance(
+            task,
+            changesForUpdate as Partial<TaskRepeatCfgCopy>,
+            taskRepeatCfg as TaskRepeatCfgCopy,
+          );
+          return null;
+        }
+
         const firstOccurrenceStr = firstOccurrence
           ? this._dateService.todayStr(firstOccurrence)
           : this._dateService.todayStr();
@@ -229,6 +264,8 @@ export class TaskRepeatCfgEffects {
 
         return { task, isFirstOccurrenceToday_, firstOccurrenceStr, isTimedTask };
       }),
+      // Empty finite window: instance preserved, nothing to plan (#10091)
+      filter((res): res is Exclude<typeof res, null> => res !== null),
       // Skip planTaskForDay for timed tasks — addRepeatCfgToTaskUpdateTask$ handles
       // those via scheduleTaskWithTime. planTaskForDay would overwrite dueWithTime.
       filter(
@@ -329,6 +366,15 @@ export class TaskRepeatCfgEffects {
                       this._addTasksForTomorrowService.addAllDueToday();
                     }
                   }
+                  return EMPTY;
+                }
+
+                // The end date leaves no occurrence on or after today (#10091).
+                // Leave the live instance where it is — it was a real
+                // occurrence the user may still want to finish — and do not
+                // re-anchor lastTaskCreationDay, which the today-fallback below
+                // would otherwise push past the end date.
+                if (!firstOccurrence && fullCfg.repeatUntilDay) {
                   return EMPTY;
                 }
 

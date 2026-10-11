@@ -24,6 +24,39 @@ describe('TaskRepeatCfgFormConfig', () => {
     expect(remindAtField).toBeUndefined();
   });
 
+  describe('repeatUntilDay field (#10091)', () => {
+    const field = TASK_REPEAT_CFG_ADVANCED_FORM_CFG.find(
+      (f) => f.key === 'repeatUntilDay',
+    );
+    const parse = (value: unknown): unknown => (field!.parsers![0] as any)(value);
+
+    it('is an optional date field', () => {
+      expect(field?.type).toBe('date');
+      expect(field?.templateOptions?.required).toBeFalsy();
+    });
+
+    it('stores a picked Date as a local YYYY-MM-DD string', () => {
+      expect(parse(new Date(2026, 2, 5, 0, 0))).toBe('2026-03-05');
+    });
+
+    it('stores a cleared picker as undefined, never null', () => {
+      expect(parse(null)).toBeUndefined();
+      expect(parse(undefined)).toBeUndefined();
+    });
+
+    it('keeps an already-stored string untouched', () => {
+      expect(parse('2026-03-05')).toBe('2026-03-05');
+    });
+
+    it('uses the start date as the minimum', () => {
+      const minExpr = field?.expressionProperties?.['templateOptions.min'] as (
+        m: unknown,
+      ) => unknown;
+      expect(minExpr({ startDate: '2026-01-10' })).toBe('2026-01-10');
+      expect(minExpr({})).toBeUndefined();
+    });
+  });
+
   it('explains that Day of month uses the start date (#8886)', () => {
     const repeatContainer = TASK_REPEAT_CFG_ESSENTIAL_FORM_CFG.find(
       (field) => field.fieldGroupClassName === 'repeat-config-container',

@@ -366,3 +366,42 @@ describe('getTaskRepeatInfoText()', () => {
     });
   });
 });
+
+describe('getTaskRepeatInfoText() with repeatUntilDay (#10091)', () => {
+  const dailyCfg = (repeatUntilDay?: string): TaskRepeatCfg => ({
+    ...DEFAULT_TASK_REPEAT_CFG,
+    id: 'IDDD',
+    repeatEvery: 1,
+    repeatCycle: 'DAILY',
+    quickSetting: 'DAILY',
+    repeatUntilDay,
+  });
+
+  it('keeps the open-ended label when no end day is set', () => {
+    expect(
+      getTaskRepeatInfoText(dailyCfg(), 'en-US', undefined, mockTranslateService),
+    ).toEqual([T.F.TASK_REPEAT.ADD_INFO_PANEL.DAILY, { timeStr: '' }]);
+  });
+
+  it('wraps the label with the formatted end day', () => {
+    const formatDate = jasmine
+      .createSpy('formatDate')
+      .and.callFake((d: Date) => `${d.getMonth() + 1}/${d.getDate()}/${d.getFullYear()}`);
+    const dateTimeFormatService = {
+      textLocale: () => 'en',
+      formatDate,
+    } as unknown as DateTimeFormatService;
+
+    expect(
+      getTaskRepeatInfoText(
+        dailyCfg('2026-03-05'),
+        'en-US',
+        dateTimeFormatService,
+        mockTranslateService,
+      ),
+    ).toEqual([
+      T.F.TASK_REPEAT.ADD_INFO_PANEL.UNTIL,
+      { repeatStr: T.F.TASK_REPEAT.ADD_INFO_PANEL.DAILY, untilStr: '3/5/2026' },
+    ]);
+  });
+});

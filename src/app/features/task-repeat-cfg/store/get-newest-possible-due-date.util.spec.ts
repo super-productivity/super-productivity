@@ -471,6 +471,40 @@ describe('getNewestPossibleDueDate()', () => {
         });
       },
     );
+
+    it('does not return a future occurrence when stepping back from a day-31 month (#10091)', () => {
+      // Today is Mar 30; the repeat day (31) has not occurred yet this month,
+      // so the scan must step back to February. Stepping back from Mar 30
+      // directly overflows ("Feb 30" -> Mar 2), which re-landed the scan on
+      // Mar 31 — a day that has not happened yet.
+      const result = getNewestPossibleDueDate(
+        dummyRepeatable('ID1', {
+          repeatCycle: 'MONTHLY',
+          repeatEvery: 1,
+          startDate: '2026-01-31',
+          lastTaskCreationDay: '2026-01-31',
+        }),
+        new Date(2026, 2, 30, 10),
+      );
+      expect(getDbDateStr(result!)).toBe('2026-02-28');
+    });
+
+    it('keeps stepping back months from a 31st instead of overflowing forward (#10091)', () => {
+      // Every 3rd month from Jan 31: Jan 31, Apr 30, Jul 31... With today
+      // Jun 15 the scan first lands on May 31, which is not on the pattern.
+      // Stepping back from May 31 overflowed ("Apr 31" -> May 1), so the scan
+      // got stuck on May 31 and returned null instead of Apr 30.
+      const result = getNewestPossibleDueDate(
+        dummyRepeatable('ID1', {
+          repeatCycle: 'MONTHLY',
+          repeatEvery: 3,
+          startDate: '2026-01-31',
+          lastTaskCreationDay: '2025-12-31',
+        }),
+        new Date(2026, 5, 15, 10),
+      );
+      expect(getDbDateStr(result!)).toBe('2026-04-30');
+    });
   });
 
   describe('MONTHLY monthlyLastDay (issue #7726)', () => {
@@ -916,5 +950,77 @@ describe('getNewestPossibleDueDate()', () => {
         });
       },
     );
+  });
+});
+
+describe('getNewestPossibleDueDate with repeatUntilDay (#10091)', () => {
+  const daily = (fields: Partial<TaskRepeatCfg>): TaskRepeatCfg =>
+    dummyRepeatable('UNTIL', {
+      repeatCycle: 'DAILY',
+      repeatEvery: 1,
+      startDate: '2022-01-10',
+      lastTaskCreationDay: '2022-01-12',
+      ...fields,
+    });
+  const today = new Date(2022, 0, 20, 10);
+
+  it('is unaffected while today is on or before the end day', () => {
+    const result = getNewestPossibleDueDate(
+      daily({ repeatUntilDay: '2022-01-25' }),
+      today,
+    );
+    expect(getDbDateStr(result!)).toBe('2022-01-20');
+  });
+
+  it('treats the end day as inclusive', () => {
+    const result = getNewestPossibleDueDate(
+      daily({ repeatUntilDay: '2022-01-20' }),
+      today,
+    );
+    expect(getDbDateStr(result!)).toBe('2022-01-20');
+  });
+
+  it('still returns an uncreated occurrence on the end day once past it', () => {
+    const result = getNewestPossibleDueDate(
+      daily({ repeatUntilDay: '2022-01-15' }),
+      today,
+    );
+    expect(getDbDateStr(result!)).toBe('2022-01-15');
+  });
+
+  it('returns null once the last occurrence up to the end day was created', () => {
+    const result = getNewestPossibleDueDate(
+      daily({ repeatUntilDay: '2022-01-15', lastTaskCreationDay: '2022-01-15' }),
+      today,
+    );
+    expect(result).toBeNull();
+  });
+
+  it('never returns a day after the end day for weekly schedules', () => {
+    // Mondays only; end on Wed 2022-01-19 -> newest allowed Monday is 01-17.
+    const result = getNewestPossibleDueDate(
+      daily({
+        repeatCycle: 'WEEKLY',
+        monday: true,
+        repeatUntilDay: '2022-01-19',
+      }),
+      new Date(2022, 0, 31, 10),
+    );
+    expect(getDbDateStr(result!)).toBe('2022-01-17');
+  });
+
+  it('never returns a day after the end day for monthly day-31 schedules', () => {
+    // The month-step overflow re-landed the scan on Mar 31, past the Mar 30
+    // end day; Feb 28 was already created, so nothing is due anymore.
+    const result = getNewestPossibleDueDate(
+      daily({
+        repeatCycle: 'MONTHLY',
+        startDate: '2026-01-31',
+        lastTaskCreationDay: '2026-02-28',
+        repeatUntilDay: '2026-03-30',
+      }),
+      new Date(2026, 3, 1, 10),
+    );
+    expect(result).toBeNull();
   });
 });

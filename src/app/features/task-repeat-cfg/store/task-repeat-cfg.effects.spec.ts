@@ -3071,6 +3071,96 @@ describe('TaskRepeatCfgEffects - Repeatable Subtasks', () => {
         jasmine.objectContaining({ lastTaskCreationDay: expectedDayStr }),
       );
     });
+
+    // #10091: an end date that already passed leaves no occurrence on or after
+    // today. The live instance stays where it is and lastTaskCreationDay is not
+    // re-anchored to today (which would land past the end date).
+    it('leaves the live instance and anchor alone when the end date has passed (#10091)', () => {
+      const DAY_MS = 24 * 60 * 60 * 1000;
+      const today = new Date();
+      const todayStr = getDbDateStr(today);
+      const yesterdayStr = getDbDateStr(new Date(today.getTime() - DAY_MS));
+      const FIVE_DAYS_MS = 5 * DAY_MS;
+      const fiveDaysAgoStr = getDbDateStr(new Date(today.getTime() - FIVE_DAYS_MS));
+
+      const liveTask: Task = {
+        ...mockTask,
+        isDone: false,
+        dueDay: todayStr,
+        created: today.getTime(),
+      };
+      const updatedCfg: TaskRepeatCfgCopy = {
+        ...mockRepeatCfg,
+        repeatCycle: 'DAILY',
+        repeatEvery: 1,
+        startDate: fiveDaysAgoStr,
+        lastTaskCreationDay: todayStr,
+        repeatUntilDay: yesterdayStr,
+      };
+
+      actions$ = of(
+        updateTaskRepeatCfg({
+          taskRepeatCfg: {
+            id: 'repeat-cfg-id',
+            changes: { repeatUntilDay: yesterdayStr },
+          },
+        }),
+      );
+      taskRepeatCfgService.getTaskRepeatCfgById$.and.returnValue(of(updatedCfg));
+      taskService.getTasksByRepeatCfgId$.and.returnValue(of([liveTask]));
+
+      const emitted: Action[] = [];
+      effects.rescheduleTaskOnRepeatCfgUpdate$.subscribe((result) =>
+        emitted.push(result),
+      );
+
+      expect(emitted).toEqual([]);
+      expect(taskRepeatCfgService.updateTaskRepeatCfg).not.toHaveBeenCalled();
+    });
+
+    it("keeps today's instance when the end date is today (#10091)", () => {
+      const today = new Date();
+      const todayStr = getDbDateStr(today);
+
+      const liveTask: Task = {
+        ...mockTask,
+        isDone: false,
+        dueDay: todayStr,
+        created: today.getTime(),
+      };
+      const updatedCfg: TaskRepeatCfgCopy = {
+        ...mockRepeatCfg,
+        repeatCycle: 'DAILY',
+        repeatEvery: 1,
+        startDate: todayStr,
+        lastTaskCreationDay: todayStr,
+        repeatUntilDay: todayStr,
+      };
+
+      actions$ = of(
+        updateTaskRepeatCfg({
+          taskRepeatCfg: {
+            id: 'repeat-cfg-id',
+            changes: { repeatUntilDay: todayStr },
+          },
+        }),
+      );
+      taskRepeatCfgService.getTaskRepeatCfgById$.and.returnValue(of(updatedCfg));
+      taskService.getTasksByRepeatCfgId$.and.returnValue(of([liveTask]));
+
+      const emitted: Action[] = [];
+      effects.rescheduleTaskOnRepeatCfgUpdate$.subscribe((result) =>
+        emitted.push(result),
+      );
+
+      expect(emitted).toEqual([
+        PlannerActions.planTaskForDay({ task: liveTask as any, day: todayStr }),
+      ]);
+      expect(taskRepeatCfgService.updateTaskRepeatCfg).toHaveBeenCalledWith(
+        'repeat-cfg-id',
+        jasmine.objectContaining({ lastTaskCreationDay: todayStr }),
+      );
+    });
   });
 });
 
@@ -4127,6 +4217,83 @@ describe('TaskRepeatCfgEffects - Deterministic Date Scenarios', () => {
       // Critical: scheduleTask and reScheduleTask must NOT be called
       expect(taskService.scheduleTask).not.toHaveBeenCalled();
       expect(taskService.reScheduleTask).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Scenario: end day leaves no occurrence (empty window, #10091)', () => {
+    // Today is Wed 2025-01-15. The window is a single day — Thu 2025-01-30 —
+    // but the schedule is Monday-only, so the first allowed occurrence
+    // (Mon 2025-02-03) falls past the end day: the window is empty.
+    const emptyWindowCfg: TaskRepeatCfgCopy = {
+      ...baseRepeatCfg,
+      repeatCycle: 'WEEKLY',
+      repeatEvery: 1,
+      startDate: '2025-01-30',
+      repeatUntilDay: '2025-01-30',
+      monday: true,
+      tuesday: false,
+      wednesday: false,
+      thursday: false,
+      friday: false,
+      saturday: false,
+      sunday: false,
+    };
+
+    it('preserves the task day instead of falling back to today', () => {
+      const taskOnWindowDay: TaskWithSubTasks = {
+        ...baseTask,
+        dueDay: '2025-01-30',
+        subTasks: [],
+      };
+
+      const action = addTaskRepeatCfgToTask({
+        taskRepeatCfg: emptyWindowCfg,
+        taskId: 'test-task-id',
+      });
+
+      actions$ = of(action);
+      taskService.getByIdWithSubTaskData$.and.returnValue(of(taskOnWindowDay));
+      spyOn(effects as any, '_updateRegularTaskInstance');
+
+      let emitted = false;
+      effects.updateTaskAfterMakingItRepeatable$.subscribe(() => {
+        emitted = true;
+      });
+
+      expect(emitted).toBe(false); // nothing to plan
+      // The task keeps its day — no drag to today (2025-01-15)
+      expect(taskService.update).not.toHaveBeenCalled();
+      // The cfg keeps its anchor — lastTaskCreationDay must not become today
+      expect(taskRepeatCfgService.updateTaskRepeatCfg).toHaveBeenCalledTimes(1);
+      const cfgUpdate =
+        taskRepeatCfgService.updateTaskRepeatCfg.calls.mostRecent().args[1];
+      expect(Object.keys(cfgUpdate)).toEqual(['subTaskTemplates']);
+      // Dialog side effects (tags/notes sync) still apply
+      expect((effects as any)._updateRegularTaskInstance).toHaveBeenCalled();
+    });
+
+    it('does not schedule a timed task onto the empty window', () => {
+      testScheduler.run(({ hot, expectObservable }) => {
+        const timedCfg: TaskRepeatCfgCopy = {
+          ...emptyWindowCfg,
+          startTime: '10:00',
+          remindAt: TaskReminderOptionId.AtStart,
+        };
+
+        const action = addTaskRepeatCfgToTask({
+          taskRepeatCfg: timedCfg,
+          taskId: 'test-task-id',
+          startTime: '10:00',
+          remindAt: TaskReminderOptionId.AtStart,
+        });
+
+        actions$ = hot('-a', { a: action });
+        taskService.getByIdOnce$.and.returnValue(of(baseTask));
+
+        // No scheduleTaskWithTime: the Date.now() fallback would otherwise
+        // schedule the task for today despite the window never firing
+        expectObservable(effects.addRepeatCfgToTaskUpdateTask$).toBe('--');
+      });
     });
   });
 

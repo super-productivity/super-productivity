@@ -24,6 +24,7 @@ const SCHEDULE_AFFECTING_BY_FIELD: Record<keyof TaskRepeatCfgCopy, boolean> = {
   quickSetting: false,
   repeatCycle: true,
   startDate: true,
+  repeatUntilDay: true,
   repeatEvery: true,
   monday: true,
   tuesday: true,
