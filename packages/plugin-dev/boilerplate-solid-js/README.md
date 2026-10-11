@@ -384,7 +384,8 @@ Modify `src/app/App.css` to customize the appearance.
 
 - Run `npm run typecheck` to check for TypeScript errors
 - Ensure all dependencies are installed
-- Clear `node_modules` and reinstall if needed
+- Reinstall with `npm ci` in `packages/plugin-dev` (deleting only this folder's
+  `node_modules` can leave the plugin on another workspace's Vite version)
 
 ## Resources
 

@@ -7,7 +7,9 @@ within `packages/plugin-dev/`.
 
 Start from [yesterday-tasks-plugin](yesterday-tasks-plugin): `manifest.json`,
 `plugin.js`, optional `index.html`, `icon.svg` and `i18n/`. No build step — zip
-the files and upload them via Settings → Plugins.
+the files and upload them via Settings → Plugins. Every folder with a
+`package.json` here is an npm workspace: rename its `"name"` and run `npm install`,
+or delete the copied `package.json` if you only upload the zip.
 
 ## Option 2: TypeScript, host-side (issue providers, background logic)
 

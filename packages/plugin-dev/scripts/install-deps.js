@@ -1,10 +1,8 @@
-#!/usr/bin/env node
-
 // Installs the plugin-dev workspace (every plugin + issue-provider-kit) from
 // its single package-lock.json. Uses `npm ci`, so a build never rewrites the
 // lockfile; it runs only when node_modules is missing or older than the lock.
 
-const { execFileSync } = require('child_process');
+const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
@@ -25,12 +23,9 @@ function needsInstall() {
 function findDuplicateNames() {
   const dirsByName = new Map();
   for (const entry of fs.readdirSync(PLUGIN_DEV_DIR, { withFileTypes: true })) {
+    // existsSync follows symlinks (npm does too) and is false for plain files
     const pkgPath = path.join(PLUGIN_DEV_DIR, entry.name, 'package.json');
-    if (
-      !entry.isDirectory() ||
-      entry.name === 'node_modules' ||
-      !fs.existsSync(pkgPath)
-    ) {
+    if (!fs.existsSync(pkgPath)) {
       continue;
     }
     try {
@@ -51,11 +46,10 @@ function ensurePluginDeps({ log = console.log, silent = false } = {}) {
   log('  Installing plugin-dev workspace dependencies (npm ci)...');
   try {
     // Plugin build tools are devDependencies: keep them under NODE_ENV=production.
-    execFileSync('npm', ['ci', '--include=dev', '--no-audit', '--no-fund'], {
+    // A shell command resolves npm.cmd on Windows; the arguments are fixed.
+    execSync('npm ci --include=dev --no-audit --no-fund', {
       cwd: PLUGIN_DEV_DIR,
       stdio: silent ? 'pipe' : 'inherit',
-      // npm is npm.cmd on Windows
-      shell: process.platform === 'win32',
     });
   } catch (e) {
     const duplicates = findDuplicateNames();
@@ -68,10 +62,6 @@ function ensurePluginDeps({ log = console.log, silent = false } = {}) {
     throw e;
   }
   return true;
-}
-
-if (require.main === module) {
-  ensurePluginDeps();
 }
 
 module.exports = { ensurePluginDeps };

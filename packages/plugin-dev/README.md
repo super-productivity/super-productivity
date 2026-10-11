@@ -8,7 +8,7 @@ This directory contains tools and examples for developing plugins for Super Prod
 # Build all plugins
 npm run build
 
-# Install dependencies for all plugins (one shared npm workspace)
+# Install dependencies for all plugins from the shared lockfile (npm ci)
 npm run install:all
 
 # Clean build artifacts
