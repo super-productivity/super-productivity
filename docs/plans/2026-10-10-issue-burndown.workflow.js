@@ -1,24 +1,33 @@
 export const meta = {
   name: 'issue-burndown',
   description:
-    'Triage, reproduce, fix and ship open bugs per docs/plans/2026-10-10-issue-burndown.md',
+    'Triage, reproduce, fix and ship open bugs per the bug burn-down runbook copied into the run dir',
   whenToUse:
-    'Unattended bug burn-down. args: {baseSha, issues, runDir?, limit?, ship?, reproSlots?, fixPorts?}',
+    'Unattended bug burn-down. args: {baseSha, runDir, mainDir, issues: [numbers], only?, skip?, ship?, reproSlots?, fixPorts?, shipPort?}',
   phases: [
-    { title: 'Triage', detail: 'one agent per issue' },
-    { title: 'Reproduce', detail: 'failing test on BASE_SHA, worktree per issue' },
+    { title: 'Triage', detail: 'one agent per issue, read-only' },
+    { title: 'Route', detail: 'finalize issues that skip reproduction' },
+    { title: 'Reproduce', detail: 'failing or confirming test on BASE_SHA' },
     { title: 'Fix', detail: 'leanest fix for easy candidates' },
     { title: 'Verify', detail: 'mechanical verifier and adversarial reviewer' },
-    { title: 'Ship', detail: 'push, cgcf until ready, ready-for-review PR' },
+    { title: 'Ship', detail: 'draft PR, cgcf until ready, mark ready' },
     { title: 'Finalize', detail: 'push repro branch, write final.json' },
-    { title: 'Decide', detail: 'ordered decision list and batch actions' },
+    { title: 'Decide', detail: 'decision list, batch actions, summary' },
   ],
 };
 
-// All stage instructions live in the runbook; this script only orchestrates.
-const DOC = 'docs/plans/2026-10-10-issue-burndown.md';
+// Stage instructions live in the runbook copy in the run dir; this script only
+// orchestrates and routes.
 const A = args || {};
-const RUN = A.runDir || '.tmp/issue-burndown';
+const RUN = A.runDir;
+const MAIN = A.mainDir;
+const BASE = A.baseSha;
+if (!BASE || !RUN || !MAIN)
+  throw new Error('args.baseSha, runDir and mainDir are required');
+if (!RUN.startsWith('/') || !MAIN.startsWith('/')) {
+  throw new Error('runDir and mainDir must be absolute paths');
+}
+const DOC = `${RUN}/runbook.md`;
 const SHIP_PRS = A.ship !== false;
 const SUB = { model: 'opus', effort: 'medium' };
 const MAX_PROD_FILES = 5;
@@ -27,6 +36,9 @@ const MAX_PROD_LINES = 120;
 const NUM = { type: 'integer' };
 const STR = { type: 'string' };
 const BOOL = { type: 'boolean' };
+const OPT_STR = { type: ['string', 'null'] };
+const NUMS = { type: 'array', items: NUM };
+const enumOf = (...values) => ({ enum: values });
 const obj = (properties, required) => ({
   type: 'object',
   properties,
@@ -35,71 +47,102 @@ const obj = (properties, required) => ({
 
 const TRIAGE = obj({
   number: NUM,
-  kind: { enum: ['bug', 'feature', 'tracker', 'question', 'unclear'] },
-  alreadyFixed: obj({ fixed: BOOL, commit: STR, version: STR }),
-  duplicates: { type: 'array', items: NUM },
-  earnsPlace: { enum: ['yes', 'no', 'unclear', 'n/a'] },
+  kind: enumOf('bug', 'feature', 'tracker', 'question', 'unclear'),
+  fixStatus: enumOf('no', 'released', 'unreleased', 'partial', 'likely', 'superseded'),
+  fixCommit: OPT_STR,
+  fixVersion: OPT_STR,
+  regressionIn: OPT_STR,
+  existingWork: obj({
+    openPrs: NUMS,
+    claimedBy: OPT_STR,
+    maintainerAsked: BOOL,
+    maintainerRuling: OPT_STR,
+  }),
+  duplicates: NUMS,
+  related: NUMS,
+  dupSearch: enumOf('done', 'partial'),
+  earnsPlace: enumOf('yes', 'no', 'unclear', 'n/a'),
   earnsPlaceReason: STR,
   area: STR,
   platforms: { type: 'array', items: STR },
   sync: BOOL,
   userReported: BOOL,
   platformSpecific: BOOL,
-  reproducibleHere: BOOL,
-  clarity: { enum: ['clear', 'ok', 'missing-steps'] },
+  harness: enumOf('unit', 'unit-tz-la', 'e2e', 'e2e-sync', 'none', 'unknown'),
+  clarity: enumOf('clear', 'ok', 'missing-steps'),
+  evidenceUnreadable: BOOL,
   needsDecision: BOOL,
-  decisionQuestion: STR,
+  decisionQuestion: OPT_STR,
   harm: { type: 'integer', minimum: 1, maximum: 5 },
   reach: { type: 'integer', minimum: 1, maximum: 3 },
   demand: NUM,
-  rootCauseHypothesis: STR,
-  fixProposal: STR,
+  rootCauseHypothesis: OPT_STR,
+  fixProposal: OPT_STR,
   summary: obj({ expected: STR, actual: STR, steps: STR, environment: STR }),
-  needsInfoDraft: STR,
+  proposedAction: enumOf(
+    'close-fixed',
+    'close-after-release',
+    'close-dup',
+    'close-not-planned',
+    'close-stale',
+    'needs-info',
+    'set-type-bug',
+    'set-type-feature',
+    'none',
+  ),
+  needsInfoDraft: OPT_STR,
+  notes: STR,
 });
 
 const REPRO = obj({
   number: NUM,
-  status: { enum: ['reproduced', 'not-reproduced', 'not-attempted'] },
-  testType: { enum: ['unit', 'e2e', 'e2e-sync', 'none'] },
-  testFile: STR,
-  commit: STR,
-  failingAssertion: STR,
+  status: enumOf('reproduced', 'passes-on-base', 'not-reproduced', 'not-attempted'),
+  testFile: OPT_STR,
+  commit: OPT_STR,
+  output: STR,
   notes: STR,
 });
 
 const FIX = obj({
   number: NUM,
-  status: { enum: ['fixed', 'needs-decision', 'failed'] },
-  branch: STR,
-  commit: STR,
+  status: enumOf('fixed', 'needs-decision', 'failed'),
+  branch: OPT_STR,
+  commit: OPT_STR,
   rootCause: STR,
-  prodFiles: NUM,
-  prodLines: NUM,
-  protectedSurfaces: { type: 'array', items: STR },
   reason: STR,
 });
 
-const VERDICT = obj({
+const MECHANICAL = obj({
   pass: BOOL,
-  fixable: BOOL,
+  failsAtRepro: BOOL,
+  passesAtFix: BOOL,
+  checksPass: BOOL,
+  testFilesUnchanged: BOOL,
+  prodFiles: NUM,
+  prodLines: NUM,
+  touchesProtected: BOOL,
+  touched: { type: 'array', items: STR },
   reason: STR,
-  commands: { type: 'array', items: STR },
 });
+
+const REVIEW = obj({ pass: BOOL, fixable: BOOL, reason: STR });
 
 const FINAL = obj({
   number: NUM,
-  route: { enum: ['shipped', 'ready-for-cgcf', 'decision', 'batch-action', 'skipped'] },
-  branch: STR,
-  prUrl: STR,
+  route: enumOf('shipped', 'ready-for-cgcf', 'decision', 'batch-action', 'summary'),
+  branch: OPT_STR,
+  prUrl: OPT_STR,
   reason: STR,
+  decisionEntry: OPT_STR,
+  batchLines: { type: 'array', items: STR },
 });
 
 const DECIDE = obj({
   decisions: NUM,
   batchActions: NUM,
   shipped: NUM,
-  summary: STR,
+  summaryRows: NUM,
+  notes: STR,
 });
 
 // Caps concurrent use of a scarce resource (a slot, a port) across pipeline
@@ -123,233 +166,310 @@ function pool(resources) {
 }
 
 const header = (n) =>
-  `Issue #${n}. BASE_SHA=${A.baseSha}. Run dir: ${RUN}. Runbook: ${DOC}.\n`;
+  `Issue ${n}. BASE_SHA=${BASE}. RUN=${RUN}. MAIN=${MAIN}. Runbook: ${DOC}.\n`;
 const task = (n, stage, file, extra) =>
   header(n) +
   `Follow "${stage}" and "Ground rules" in the runbook. ${extra || ''}\n` +
   `Write your record to ${RUN}/issues/${n}/${file}.json and return the same object.`;
+const records = (...objs) => objs.map((o) => JSON.stringify(o)).join('\n');
 
-if (!A.baseSha)
-  throw new Error('args.baseSha is required (see the runbook prerequisites)');
-const all = A.issues || [];
-const issues = A.limit ? all.slice(0, A.limit) : all;
-if (issues.length < all.length) log(`Pilot: ${issues.length} of ${all.length} issues`);
+// ------------------------------------------------------------------ Stage 1
+const skip = new Set(A.skip || []);
+const all = (A.only || A.issues || []).filter((n) => !skip.has(n));
+if (A.only) log(`Pilot on ${all.length} hand-picked issues`);
+if (skip.size) log(`Skipping ${skip.size} issues that already have a final.json`);
 if (!SHIP_PRS) log('ship: false, verified fixes stop at a pushed branch');
 
-// Stage 1
-const triaged = (
-  await parallel(
-    issues.map(
-      (i) => () =>
-        agent(task(i.number, 'Stage 1 — Triage (one issue per agent)', 'triage'), {
+const triageResults = await parallel(
+  all.map(
+    (n) => () =>
+      agent(
+        task(
+          n,
+          'Stage 1 — Triage (one issue per agent, main checkout, read-only)',
+          'triage',
+        ),
+        {
           ...SUB,
           phase: 'Triage',
-          label: `triage #${i.number}`,
+          label: `triage ${n}`,
           schema: TRIAGE,
-        }),
-    ),
-  )
-).filter(Boolean);
-log(`Triaged ${triaged.length} of ${issues.length}`);
+        },
+      ),
+  ),
+);
+const triaged = triageResults.filter(Boolean);
+const failedTriage = all.filter((n, i) => !triageResults[i]);
+if (failedTriage.length) log(`Triage failed for ${failedTriage.join(', ')}`);
 
-// Stage 2: union duplicate pairs; the oldest open issue is canonical.
+// ------------------------------------------------------------------ Stage 2
+const byNumber = new Map(triaged.map((t) => [t.number, t]));
 const parent = new Map(triaged.map((t) => [t.number, t.number]));
 const find = (n) => (parent.get(n) === n ? n : find(parent.get(n)));
 for (const t of triaged) {
   for (const d of t.duplicates || []) {
-    if (!parent.has(d)) continue;
-    const [a, b] = [find(t.number), find(d)];
-    if (a !== b) parent.set(Math.max(a, b), Math.min(a, b));
+    if (parent.has(d)) parent.set(find(d), find(t.number));
   }
 }
-const canonical = triaged.filter((t) => find(t.number) === t.number);
-const duplicateOf = triaged
-  .filter((t) => find(t.number) !== t.number)
-  .map((t) => ({ number: t.number, canonical: find(t.number) }));
+const clarityRank = { clear: 0, ok: 1, 'missing-steps': 2 };
+const better = (a, b) =>
+  clarityRank[a.clarity] - clarityRank[b.clarity] ||
+  (a.kind === 'bug' ? 0 : 1) - (b.kind === 'bug' ? 0 : 1) ||
+  a.number - b.number;
+const groups = new Map();
+for (const t of triaged) {
+  const root = find(t.number);
+  groups.set(root, [...(groups.get(root) || []), t]);
+}
+const canonical = [];
+const duplicateOf = [];
+const bigGroups = [];
+for (const members of groups.values()) {
+  const sorted = [...members].sort(better);
+  canonical.push(sorted[0]);
+  for (const m of sorted.slice(1))
+    duplicateOf.push({ number: m.number, canonical: sorted[0].number });
+  if (members.length >= 3) bigGroups.push(members.map((m) => m.number));
+}
 
-const fixed = (t) => t.alreadyFixed && t.alreadyFixed.fixed;
-const syncRepro = (t) =>
-  t.kind === 'bug' &&
-  t.sync &&
-  t.userReported &&
-  !fixed(t) &&
-  t.clarity !== 'missing-steps';
-const webRepro = (t) =>
-  t.kind === 'bug' &&
-  !t.sync &&
-  !t.platformSpecific &&
-  t.reproducibleHere &&
-  !fixed(t) &&
-  t.clarity !== 'missing-steps';
-const priority = (t) => t.harm * t.reach * 100 + (t.demand || 0);
+function route(t) {
+  const w = t.existingWork || {};
+  if (t.fixStatus === 'released') return 'batch:close-fixed';
+  if (t.fixStatus === 'unreleased') return 'batch:close-after-release';
+  if (t.fixStatus === 'likely') return 'stage3:confirm';
+  if ((w.openPrs || []).length || w.claimedBy) return 'decision:existing-work';
+  if (w.maintainerAsked) return 'summary:awaiting-reporter';
+  if (t.evidenceUnreadable) return 'decision:evidence-unreadable';
+  if (t.clarity === 'missing-steps') return 'batch:needs-info';
+  if (t.kind === 'feature' && t.earnsPlace === 'no') return 'batch:close-not-planned';
+  if (t.kind !== 'bug') return 'decision:not-a-bug';
+  if (t.proposedAction === 'close-stale') return 'batch:close-stale';
+  if (t.sync && !t.userReported) {
+    return t.harm >= 4 || t.regressionIn === 'unreleased'
+      ? 'decision:sync-rule-15'
+      : 'summary:sync-no-action';
+  }
+  if (t.platformSpecific) return 'decision:platform';
+  if (t.sync) return 'stage3:sync';
+  if (t.needsDecision) return 'stage3:decision';
+  if (['unit', 'unit-tz-la', 'e2e'].includes(t.harness)) return 'stage3:fix';
+  return 'decision:no-harness';
+}
+
+const routes = {};
+for (const d of duplicateOf) routes[d.number] = 'batch:close-dup';
+for (const t of canonical) routes[t.number] = route(t);
+for (const n of failedTriage) routes[n] = 'summary:triage-failed';
+
+const priority = (a, b) => b.harm * b.reach - a.harm * a.reach || b.demand - a.demand;
 const toReproduce = canonical
-  .filter((t) => syncRepro(t) || webRepro(t))
-  .sort((a, b) => priority(b) - priority(a));
+  .filter((t) => routes[t.number].startsWith('stage3:'))
+  .sort(priority);
+const directly = triaged.filter((t) => !routes[t.number].startsWith('stage3:'));
 log(
-  `${duplicateOf.length} duplicates folded; ${toReproduce.length} issues go to reproduction ` +
-    `(${toReproduce.filter((t) => t.sync).length} sync); ` +
-    `${canonical.length - toReproduce.length} go straight to the decision or batch lists`,
+  `${duplicateOf.length} duplicates; ${toReproduce.length} to reproduction; ` +
+    `${directly.length} routed directly`,
 );
 
+// Finalize issues that never reach Stage 3, so each one ends with final.json.
+const routedDirectly = parallel(
+  directly.map(
+    (t) => () =>
+      agent(
+        header(t.number) +
+          `Follow "Stage 6 — Ship or finalize", the finalize part, for an issue that skips reproduction.\n` +
+          `Route: ${routes[t.number]}` +
+          (routes[t.number] === 'batch:close-dup'
+            ? ` (canonical issue ${duplicateOf.find((d) => d.number === t.number).canonical})`
+            : '') +
+          `\nTriage record: ${RUN}/issues/${t.number}/triage.json. Push nothing.\n` +
+          `Write ${RUN}/issues/${t.number}/final.json and return the same object.`,
+        { ...SUB, phase: 'Route', label: `route ${t.number}`, schema: FINAL },
+      ),
+  ),
+);
+
+// ------------------------------------------------------------- Stages 3-6
 const reproPool = pool(Array.from({ length: A.reproSlots || 3 }, (_, i) => i));
 const syncPool = pool([0]);
 const fixPool = pool(A.fixPorts || [4300, 4301]);
+const shipPool = pool([A.shipPort || 4310]);
 
-const withinLimits = (f) =>
-  f.prodFiles <= MAX_PROD_FILES &&
-  f.prodLines <= MAX_PROD_LINES &&
-  (f.protectedSurfaces || []).length === 0;
+const withinLimits = (m) =>
+  m.prodFiles <= MAX_PROD_FILES && m.prodLines <= MAX_PROD_LINES && !m.touchesProtected;
 
-async function fixAndVerify(t) {
+async function verify(t, repro, fix, attempt) {
+  const stage = 'Stage 5 — Verify (two agents, fresh worktree each)';
+  const context = `\nRecords:\n${records(t, repro, fix)}`;
+  const runMechanical = () =>
+    fixPool((port) =>
+      agent(
+        task(
+          t.number,
+          stage,
+          `verify-mechanical-${attempt}`,
+          `You are the mechanical verifier. Repro commit ${repro.commit}, fix commit ${fix.commit}. Your port: ${port}.` +
+            context,
+        ),
+        {
+          ...SUB,
+          phase: 'Verify',
+          label: `verify ${t.number}`,
+          isolation: 'worktree',
+          schema: MECHANICAL,
+        },
+      ),
+    );
+  const runReview = () =>
+    agent(
+      task(
+        t.number,
+        stage,
+        `verify-review-${attempt}`,
+        `You are the adversarial reviewer. Branch ${fix.branch}. Read the diff and code; do not build.` +
+          context,
+      ),
+      {
+        ...SUB,
+        phase: 'Verify',
+        label: `review ${t.number}`,
+        isolation: 'worktree',
+        schema: REVIEW,
+      },
+    );
+  let [mech, review] = await parallel([runMechanical, runReview]);
+  if (!mech) mech = await runMechanical();
+  if (!review) review = await runReview();
+  return { mech, review };
+}
+
+async function fixAndVerify(t, repro) {
   let feedback = '';
   for (let attempt = 1; attempt <= 2; attempt++) {
     const fix = await fixPool((port) =>
       agent(
         task(
           t.number,
-          'Stage 4 — Fix (easy candidates only, worktree)',
+          'Stage 4 — Fix (worktree, easy candidates only)',
           `fix-${attempt}`,
-          `Start from branch repro/issue-${t.number}. Your E2E port: ${port}.` +
-            (feedback ? `\nThe previous attempt was rejected: ${feedback}` : ''),
+          `Start from repro commit ${repro.commit}. Your port: ${port}.` +
+            (feedback ? `\nThe previous attempt was rejected: ${feedback}` : '') +
+            `\nRecords:\n${records(t, repro)}`,
         ),
         {
           ...SUB,
           phase: 'Fix',
-          label: `fix #${t.number} (${attempt})`,
+          label: `fix ${t.number} (${attempt})`,
           isolation: 'worktree',
           schema: FIX,
         },
       ),
     );
-    if (!fix || fix.status !== 'fixed') {
+    if (!fix || fix.status !== 'fixed')
       return { fix, reason: fix ? fix.reason : 'fix agent died' };
-    }
-    if (!withinLimits(fix)) return { fix, reason: 'exceeds easy-lane limits' };
 
-    const stage = 'Stage 5 — Verify (two independent agents, fresh worktree each)';
-    const verdicts = (
-      await parallel([
-        () =>
-          fixPool((port) =>
-            agent(
-              task(
-                t.number,
-                stage,
-                `verify-mechanical-${attempt}`,
-                `You are the mechanical verifier. Branch: ${fix.branch}. Your E2E port: ${port}.`,
-              ),
-              {
-                ...SUB,
-                phase: 'Verify',
-                label: `verify #${t.number}`,
-                isolation: 'worktree',
-                schema: VERDICT,
-              },
-            ),
-          ),
-        () =>
-          agent(
-            task(
-              t.number,
-              stage,
-              `verify-review-${attempt}`,
-              `You are the adversarial reviewer. Branch: ${fix.branch}. Read the diff and code; do not build.`,
-            ),
-            {
-              ...SUB,
-              phase: 'Verify',
-              label: `review #${t.number}`,
-              isolation: 'worktree',
-              schema: VERDICT,
-            },
-          ),
-      ])
-    ).filter(Boolean);
-    if (verdicts.length === 2 && verdicts.every((v) => v.pass)) {
-      return { fix, verdicts, passed: true };
-    }
-    feedback =
-      verdicts
-        .filter((v) => !v.pass)
-        .map((v) => v.reason)
-        .join(' | ') || 'a verifier died';
-    const retryable = verdicts.length === 2 && verdicts.every((v) => v.pass || v.fixable);
-    if (!retryable) return { fix, verdicts, reason: feedback };
+    const { mech, review } = await verify(t, repro, fix, attempt);
+    if (!mech || !review) return { fix, reason: 'a verifier died twice' };
+    if (!withinLimits(mech))
+      return { fix, mech, reason: 'exceeds the easy-lane limits as measured' };
+    if (!mech.testFilesUnchanged)
+      return { fix, mech, reason: 'the fix commit changed test files' };
+    if (mech.pass && review.pass) return { fix, mech, review, passed: true };
+    feedback = [mech.pass ? '' : mech.reason, review.pass ? '' : review.reason]
+      .filter(Boolean)
+      .join(' | ');
+    if (!review.pass && !review.fixable) return { fix, mech, review, reason: feedback };
   }
   return { reason: `rejected twice: ${feedback}` };
 }
 
-// Stages 3–6, item by item in priority order.
-const outcomes = await pipeline(
-  toReproduce,
-  (t) =>
-    (t.sync ? syncPool : reproPool)((slot) =>
-      agent(
-        task(
-          t.number,
-          'Stage 3 — Reproduce (one issue per agent, worktree)',
-          'repro',
-          t.sync
-            ? 'Use the sync slot: provider E2E scripts, never fix.'
-            : `Reproduce slot ${slot}; use the shared app at http://localhost:4242.`,
-        ),
-        {
-          ...SUB,
-          phase: 'Reproduce',
-          label: `repro #${t.number}`,
-          isolation: 'worktree',
-          schema: REPRO,
-        },
+const reproduce = (t) => {
+  const r = routes[t.number];
+  const mode =
+    r === 'stage3:sync'
+      ? 'Use the sync slot.'
+      : r === 'stage3:confirm'
+        ? 'Confirm mode: fixStatus is likely; the test is expected to pass.'
+        : `Harness: ${t.harness}.`;
+  return (r === 'stage3:sync' ? syncPool : reproPool)(() =>
+    agent(
+      task(
+        t.number,
+        'Stage 3 — Reproduce (worktree on `BASE_SHA`)',
+        'repro',
+        `${mode}\nTriage record:\n${records(t)}`,
       ),
+      {
+        ...SUB,
+        phase: 'Reproduce',
+        label: `repro ${t.number}`,
+        isolation: 'worktree',
+        schema: REPRO,
+      },
     ),
-  async (repro, t) => {
-    const easy = repro && repro.status === 'reproduced' && !t.sync && !t.needsDecision;
-    const result = easy
-      ? await fixAndVerify(t)
-      : {
-          reason: t.sync
-            ? 'sync: reproduce only'
-            : t.needsDecision
-              ? 'needs a product decision'
-              : 'not reproduced',
-        };
-    const ship = result.passed;
-    const final = await (ship ? fixPool : (fn) => fn(null))((port) =>
-      agent(
-        header(t.number) +
-          (ship
-            ? `Follow "Stage 6 — Ship or finalize", verified fix. Branch: ${result.fix.branch}. ` +
-              (SHIP_PRS ? `Your E2E port: ${port}.` : 'ship is false: push only.')
-            : `Follow "Stage 6 — Ship or finalize", the finalize part.`) +
-          `\nRepro: ${JSON.stringify(repro)}\nFix and verification: ${JSON.stringify(result)}\n` +
-          `Write ${RUN}/issues/${t.number}/final.json and return the same object.`,
-        {
-          ...SUB,
-          phase: ship ? 'Ship' : 'Finalize',
-          label: `${ship ? 'ship' : 'finalize'} #${t.number}`,
-          ...(ship && SHIP_PRS ? { isolation: 'worktree' } : {}),
-          schema: FINAL,
-        },
-      ),
-    );
-    return { number: t.number, repro: repro && repro.status, final };
-  },
-);
+  );
+};
 
+const outcomes = await pipeline(toReproduce, reproduce, async (repro, t) => {
+  const r = routes[t.number];
+  const fixable =
+    repro &&
+    repro.status === 'reproduced' &&
+    repro.commit &&
+    (r === 'stage3:fix' ||
+      (r === 'stage3:confirm' && ['unit', 'unit-tz-la', 'e2e'].includes(t.harness)));
+  const result = fixable
+    ? await fixAndVerify(t, repro)
+    : { reason: repro ? `repro ${repro.status}; route ${r}` : 'repro agent died' };
+
+  const shipping = Boolean(result.passed);
+  const shipStep = (port) =>
+    agent(
+      header(t.number) +
+        (shipping
+          ? `Follow "Stage 6 — Ship or finalize", the ship part. Branch ${result.fix.branch}.` +
+            (SHIP_PRS ? ` Your port: ${port}.` : ' ship is false: push the branch only.')
+          : `Follow "Stage 6 — Ship or finalize", the finalize part. Route ${r}.`) +
+        `\nRecords:\n${records(t, repro, result)}\n` +
+        `Write ${RUN}/issues/${t.number}/final.json and return the same object.`,
+      {
+        ...SUB,
+        phase: shipping ? 'Ship' : 'Finalize',
+        label: `${shipping ? 'ship' : 'finalize'} ${t.number}`,
+        schema: FINAL,
+        ...(shipping && SHIP_PRS
+          ? { isolation: 'worktree', agentType: 'general-purpose' }
+          : {}),
+      },
+    );
+  const final = shipping && SHIP_PRS ? await shipPool(shipStep) : await shipStep(null);
+  return { number: t.number, repro: repro && repro.status, final };
+});
+
+const direct = (await routedDirectly).filter(Boolean);
 const done = outcomes.filter(Boolean);
 const shipped = done.filter(
   (o) => o.final && ['shipped', 'ready-for-cgcf'].includes(o.final.route),
 );
 log(
-  `${shipped.length} fixes ${SHIP_PRS ? 'shipped' : 'pushed'}; building the decision list`,
+  `${shipped.length} fixes ${SHIP_PRS ? 'shipped' : 'pushed'}; writing the decision list`,
 );
 
-// Stage 7
+// ------------------------------------------------------------------ Stage 7
 const decided = await agent(
-  `Run dir: ${RUN}. Runbook: ${DOC}. BASE_SHA=${A.baseSha}.\n` +
-    `Follow "Stage 7 — Decisions list (orchestrator, \`xhigh\`)". Read every record under ${RUN}/issues/.\n` +
-    `Issues in scope: ${JSON.stringify(issues.map((i) => i.number))}\n` +
-    `Duplicates folded by the script (issue -> canonical): ${JSON.stringify(duplicateOf)}\n` +
+  `RUN=${RUN}. BASE_SHA=${BASE}. Runbook: ${DOC}.\n` +
+    `Follow "Stage 7 — Decision list (orchestrator, \`xhigh\`)". Read every final.json under ${RUN}/issues/.\n` +
+    `Issues in this run: ${JSON.stringify(all)}\n` +
+    `Routes: ${JSON.stringify(routes)}\n` +
+    `Pipeline outcomes: ${JSON.stringify(done.map((o) => ({ number: o.number, repro: o.repro, route: o.final && o.final.route })))}\n` +
+    `Duplicate groups of three or more to re-check: ${JSON.stringify(bigGroups)}\n` +
+    `Issues with no final.json because an agent died: ${JSON.stringify(
+      all.filter(
+        (n) =>
+          !direct.some((d) => d.number === n) &&
+          !done.some((o) => o.number === n && o.final),
+      ),
+    )}\n` +
     `Write decisions.md, batch-actions.md and summary.md in ${RUN}, then return the counts.`,
   {
     model: 'opus',
@@ -361,7 +481,8 @@ const decided = await agent(
 );
 
 return {
-  triaged: triaged.length,
+  issues: all.length,
+  failedTriage,
   duplicates: duplicateOf.length,
   reproduced: done.filter((o) => o.repro === 'reproduced').length,
   shipped: shipped.map((o) => ({
