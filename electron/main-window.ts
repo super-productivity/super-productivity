@@ -1,82 +1,12 @@
 import windowStateKeeper from 'electron-window-state';
-import {
-  App,
-  BrowserWindow,
-  BrowserWindowConstructorOptions,
-  ipcMain,
-  Menu,
-  nativeTheme,
-  screen,
-  shell,
-} from 'electron';
+import { App, BrowserWindow, BrowserWindowConstructorOptions, Menu } from 'electron';
 import { errorHandlerWithFrontendInform } from './error-handler-with-frontend-inform';
 import * as path from 'path';
 import { pathToFileURL } from 'node:url';
-import { IPC } from './shared-with-frontend/ipc-events.const';
-import { isExternalUrlSchemeAllowed } from './shared-with-frontend/is-external-url-allowed';
-import { isLocalFileUrl, openLocalPath } from './open-url';
-import { getApiUserAgent, isGitLabApiUrl } from './api-user-agent';
-import { readFileSync, watch } from 'fs';
-import { error, log } from 'electron-log/main';
-import { IS_MAC, IS_GNOME_WAYLAND } from './common.const';
-import {
-  destroyTaskWidget,
-  getIsTaskWidgetAlwaysShow,
-  getIsTaskWidgetUserForcedVisible,
-  hideTaskWidget,
-  showTaskWidget,
-} from './task-widget/task-widget';
-import { ensureIndicator } from './indicator';
-import { getIsMinimizeToTray, getIsQuiting, setIsQuiting } from './shared-state';
-import { createMenuTemplate } from './menu';
-import { loadSimpleStoreAll } from './simple-store';
-import { SimpleStoreKey } from './shared-with-frontend/simple-store.const';
-import {
-  getWasMaximizedBeforeHide,
-  initWasMaximizedBeforeHide,
-  isUserUnmaximize,
-  setWasMaximizedBeforeHide,
-} from './window-maximized-state';
-import {
-  clampBoundsToDisplay,
-  initRestoreBounds,
-  isSampleableBounds,
-  parseStoredBounds,
-  setRestoreBounds,
-} from './window-restore-bounds';
-import { markGpuStartupSuccess } from './gpu-startup-guard';
-import { isAppOriginUrl } from './navigation-guard';
+import { IS_MAC } from './common.const';
 import { assertSecureWebPreferences } from './web-preferences-guard';
-import { applyJiraImageAuth } from './jira-image-auth';
-
-// Long enough to outlast a resize or move gesture, so a drag records one
-// sample rather than one per frame.
-const BOUNDS_SAMPLE_DEBOUNCE_MS = 250;
 
 let mainWin: BrowserWindow;
-
-// The URL passed to `mainWin.loadURL()` — the single source of truth for
-// "what is the app's own origin?". Read by the will-navigate / will-redirect
-// guards in `initWinEventListeners`. Set in `createWindow`, before listeners
-// are wired, so the guard never sees `undefined` at runtime.
-let appLoadedUrl: string | undefined;
-
-// Compact WCO band on Win/Linux. Native button width is OS-controlled
-// (~138px total); only height is configurable. Lower values may be
-// clamped to the OS minimum (~24–28px on Win11) — Electron silently
-// floors instead of rejecting. Stays well clear of the vertical action
-// strip which positions itself --bar-height (48px) down.
-const WCO_HEIGHT = 24;
-
-/**
- * Returns theme-aware background color for titlebar overlay.
- * Semi-transparent to ensure window controls are always visible.
- */
-const getTitleBarColor = (isDark: boolean): string => {
-  // Dark: matches --bg (#131314) with 0% opacity (fully transparent)
-  // Light: matches --bg (#f8f8f7) with 0% opacity (fully transparent)
-  return isDark ? 'rgba(19, 19, 20, 0)' : 'rgba(248, 248, 247, 0)';
-};
 
 const mainWinModule: {
   win?: BrowserWindow;
@@ -93,38 +23,10 @@ export const getWin = (): BrowserWindow => {
   return mainWinModule.win;
 };
 
-// How long the "quit requested" intent survives before auto-clearing.
-// Long enough to cover normal before-close IPC (sync, finish-day prompt);
-// short enough that if the user cancels finish-day and then clicks the
-// window close button, they get their normal minimize-to-tray behavior
-// rather than being re-prompted indefinitely.
-const QUIT_REQUEST_TIMEOUT_MS = 5_000;
-
-let isQuitRequested = false;
-let quitRequestResetTimer: NodeJS.Timeout | undefined;
-
-const getIsQuitRequested = (): boolean => isQuitRequested;
-
-const setIsQuitRequested = (flag: boolean): void => {
-  if (quitRequestResetTimer) clearTimeout(quitRequestResetTimer);
-  isQuitRequested = flag;
-  quitRequestResetTimer = flag
-    ? setTimeout(() => {
-        isQuitRequested = false;
-        quitRequestResetTimer = undefined;
-      }, QUIT_REQUEST_TIMEOUT_MS)
-    : undefined;
-};
-
 export const closeWinAndQuit = (quitApp: () => void): void => {
   if (mainWin && !mainWin.isDestroyed()) {
-    // Ensure the close handler takes the real close path (not the minimize-to-tray
-    // hide branch) so the before-close IPC flow (sync, finish-day) completes.
-    setIsQuitRequested(true);
     mainWin.close();
   } else {
-    // No window to drive the IPC flow through — quit directly. No flag
-    // needed: the close handler that reads it cannot run without a window.
     quitApp();
   }
 };
@@ -146,13 +48,11 @@ export const createWindow = async ({
   app: App;
   customUrl?: string;
 }): Promise<BrowserWindow> => {
-  // make sure the main window isn't already created
   if (mainWin) {
     errorHandlerWithFrontendInform('Main window already exists');
     return mainWin;
   }
 
-  // workaround for https://github.com/electron/electron/issues/16521
   if (!IS_MAC) {
     Menu.setApplicationMenu(null);
   }
@@ -162,50 +62,6 @@ export const createWindow = async ({
     defaultHeight: 800,
   });
 
-  const simpleStore = await loadSimpleStoreAll();
-  const persistedIsUseCustomWindowTitleBar =
-    simpleStore[SimpleStoreKey.IS_USE_CUSTOM_WINDOW_TITLE_BAR];
-  const legacyIsUseObsidianStyleHeader =
-    simpleStore[SimpleStoreKey.LEGACY_IS_USE_OBSIDIAN_STYLE_HEADER];
-  const userPrefersCustomWindowTitleBar =
-    persistedIsUseCustomWindowTitleBar ??
-    legacyIsUseObsidianStyleHeader ??
-    !IS_GNOME_WAYLAND;
-  // GNOME + Wayland can't render the Window-Controls-Overlay when titleBarStyle
-  // is 'hidden', leaving the window with no min/max/close controls. Force native
-  // decorations only for that combination; GNOME-on-X11 and every other desktop
-  // honor the user's preference. Keep in sync with global-theme.service.ts.
-  const isUseCustomWindowTitleBar = IS_GNOME_WAYLAND
-    ? false
-    : userPrefersCustomWindowTitleBar;
-  // On macOS use 'hiddenInset' so AppKit positions the traffic lights at the
-  // standard inset other native apps use (Notes, Mail, VS Code) instead of
-  // crowding the top-left corner. Other platforms keep the existing logic.
-  const titleBarStyle: BrowserWindowConstructorOptions['titleBarStyle'] = IS_MAC
-    ? 'hiddenInset'
-    : isUseCustomWindowTitleBar
-      ? 'hidden'
-      : 'default';
-  // Determine initial symbol color based on system theme preference
-  const initialSymbolColor = nativeTheme.shouldUseDarkColors ? '#fff' : '#000';
-  const titleBarOverlay: BrowserWindowConstructorOptions['titleBarOverlay'] =
-    isUseCustomWindowTitleBar && !IS_MAC
-      ? {
-          color: getTitleBarColor(nativeTheme.shouldUseDarkColors),
-          symbolColor: initialSymbolColor,
-          height: WCO_HEIGHT,
-        }
-      : undefined;
-
-  // The store-screenshot pipeline forces a fixed 1280×800 window so the
-  // PNG dimensions match what the Mac App Store accepts (2560×1600 @2x).
-  // On laptop displays, menu bar + dock leave less than 800pt available
-  // below the menu bar, so by default macOS clamps `setBounds(800)` down
-  // to the available area and the captured PNG ends up 20–40 px short of
-  // the required height. Setting `enableLargerThanScreen` lets the
-  // window keep its configured 800pt outer height regardless. Gated on
-  // the env var the screenshot fixture sets so normal users still get
-  // the default screen-clamping behavior.
   const isScreenshotMode = process.env.SP_SCREENSHOT_MODE === '1';
   const webPreferences: BrowserWindowConstructorOptions['webPreferences'] = {
     scrollBounce: true,
@@ -213,22 +69,14 @@ export const createWindow = async ({
     webSecurity: true,
     preload: path.join(__dirname, 'preload.js'),
     nodeIntegration: false,
-    // make remote module work with those two settings
     contextIsolation: true,
-    // Untrusted plugin code runs in sub-frame iframes; keep node integration out
-    // of them explicitly (already the default) so the assert below has a concrete
-    // value to guard.
     nodeIntegrationInSubFrames: false,
-    // Additional settings for better Linux/Wayland compatibility
     enableBlinkFeatures: 'OverlayScrollbar',
-    // Disable spell checker to prevent connections to Google services (#5314)
-    // This maintains our "offline-first with zero data collection" promise
     spellcheck: false,
   };
-  // Fail closed if the renderer's IPC trust boundary ever silently regresses:
-  // contextIsolation/nodeIntegration are what keep require/ipcRenderer out of
-  // the main world, which every IPC gate (Jira, plugin node-exec) relies on.
+
   assertSecureWebPreferences(webPreferences, 'main');
+
   mainWin = new BrowserWindow({
     x: mainWindowState.x,
     y: mainWindowState.y,
@@ -236,152 +84,17 @@ export const createWindow = async ({
     height: mainWindowState.height,
     minHeight: 240,
     minWidth: 300,
-    title: IS_DEV ? 'Super Productivity D' : 'Super Productivity',
-    titleBarStyle,
-    titleBarOverlay,
+    title: IS_DEV ? 'Super Prod. D' : 'Super Prod.',
+    titleBarStyle: 'default', // استخدام شريط العنوان الافتراضي للنظام
     enableLargerThanScreen: isScreenshotMode,
     show: false,
     webPreferences,
     icon: ICONS_FOLDER + '/icon_256x256.png',
-    // Wayland compatibility: disable transparent/frameless features that can cause issues
     transparent: false,
-    // frame: true,
-  });
-
-  const apiUserAgent = getApiUserAgent(app.getVersion());
-  // see: https://pratikpc.medium.com/bypassing-cors-with-electron-ab7eaf331605
-  mainWin.webContents.session.webRequest.onBeforeSendHeaders((details, callback) => {
-    const { requestHeaders } = details;
-    removeKeyInAnyCase(requestHeaders, 'Origin');
-    removeKeyInAnyCase(requestHeaders, 'Referer');
-    removeKeyInAnyCase(requestHeaders, 'Cookie');
-    removeKeyInAnyCase(requestHeaders, 'sec-ch-ua');
-    removeKeyInAnyCase(requestHeaders, 'sec-ch-ua-mobile');
-    removeKeyInAnyCase(requestHeaders, 'sec-ch-ua-platform');
-    removeKeyInAnyCase(requestHeaders, 'sec-fetch-dest');
-    removeKeyInAnyCase(requestHeaders, 'sec-fetch-mode');
-    removeKeyInAnyCase(requestHeaders, 'sec-fetch-site');
-    removeKeyInAnyCase(requestHeaders, 'accept-encoding');
-    removeKeyInAnyCase(requestHeaders, 'accept-language');
-    removeKeyInAnyCase(requestHeaders, 'priority');
-    removeKeyInAnyCase(requestHeaders, 'accept');
-
-    // NOTE this is needed for GitHub api requests to work :(
-    // office365 needs a User-Agent as well (#4677)
-    if (
-      ['github.com', 'office365.com', 'outlook.live.com'].includes(
-        new URL(details.url).hostname,
-      )
-    ) {
-      removeKeyInAnyCase(requestHeaders, 'User-Agent');
-    } else if (isGitLabApiUrl(details.url)) {
-      // Anubis-protected instances challenge browser UAs (#10650)
-      removeKeyInAnyCase(requestHeaders, 'User-Agent');
-      requestHeaders['User-Agent'] = apiUserAgent;
-    }
-    // WebDavHttpAdapter marks desktop uploads because renderer fetch refuses to
-    // set Connection itself. Consume the marker here; it must not reach the
-    // server. The literal below mirrors that adapter's ELECTRON_UPLOAD_HEADER
-    // and is pinned to it by electron/webdav-connection.test.cjs — the two
-    // build targets cannot import each other.
-    const webdavUploadHeader = Object.keys(requestHeaders).find(
-      (key) => key.toLowerCase() === 'x-superproductivity-webdav-upload',
-    );
-    if (webdavUploadHeader) {
-      delete requestHeaders[webdavUploadHeader];
-      // #9985: avoid verifying on a PUT connection retaining the old file.
-      // HTTP/1.1 only — Connection is a connection-specific header that RFC 9113
-      // forbids over HTTP/2, so any conformant client drops it there. The
-      // WebdavApi verification retry budget is the cross-protocol safety net;
-      // the reported STRATO HiDrive failure was reproduced over HTTP/1.1.
-      if (details.method === 'PUT') {
-        removeKeyInAnyCase(requestHeaders, 'Connection');
-        requestHeaders.Connection = 'close';
-      }
-    }
-    applyJiraImageAuth(details.url, requestHeaders, details.resourceType);
-    callback({ requestHeaders });
-  });
-
-  mainWin.webContents.session.webRequest.onHeadersReceived((details, callback) => {
-    const { responseHeaders } = details;
-    upsertKeyValue(responseHeaders, 'Access-Control-Allow-Origin', ['*']);
-    upsertKeyValue(responseHeaders, 'Access-Control-Allow-Headers', ['*']);
-    upsertKeyValue(responseHeaders, 'Access-Control-Allow-Methods', ['*']);
-
-    // CORS preflight must return 2xx to pass the browser check. Force all
-    // OPTIONS responses to 200 OK unconditionally: some servers reject
-    // preflights with 401 (auth required, < 300) or 405 (>= 300), both of
-    // which the browser rejects even with the injected CORS headers.
-    const statusLine = details.method === 'OPTIONS' ? 'HTTP/1.1 200 OK' : undefined;
-
-    callback({
-      responseHeaders,
-      statusLine,
-    });
-  });
-
-  // Deny unnecessary permissions (webcam, microphone, geolocation, etc.)
-  // The app only needs notifications for desktop reminders
-  const allowedPermissions = ['notifications'];
-  mainWin.webContents.session.setPermissionRequestHandler(
-    (_webContents, permission, callback) => {
-      callback(allowedPermissions.includes(permission));
-    },
-  );
-  mainWin.webContents.session.setPermissionCheckHandler((_webContents, permission) => {
-    return allowedPermissions.includes(permission);
+    frame: true, // تفعيل إطار النافذة وأزرار النظام
   });
 
   mainWindowState.manage(mainWin);
-
-  // #7276: our own flag owns the maximized bit, electron-window-state only owns
-  // size/position. The library gets this bit wrong in two ways: its `closed`
-  // handler reads isMaximized() on an already-hidden window, which no longer
-  // reports the truth on every platform, and it silently drops the whole
-  // persisted state — isMaximized included — when the last un-maximized bounds
-  // no longer fit on any connected display.
-  const persistedWasMaximized = simpleStore[SimpleStoreKey.WINDOW_WAS_MAXIMIZED];
-  // First launch after this fix shipped there is no flag yet, so adopt whatever
-  // the library restored. Without this a user who is maximized at upgrade time
-  // loses it once: manage() maximizes above, before the 'maximize' listener is
-  // attached, so nothing would ever set the flag true.
-  const wasMaximized =
-    persistedWasMaximized === undefined
-      ? mainWindowState.isMaximized === true
-      : persistedWasMaximized === true;
-  initWasMaximizedBeforeHide(wasMaximized);
-
-  // #10058: the library gets the un-maximized geometry wrong the same two ways
-  // it gets the flag wrong, so our own copy owns it. Applied before the
-  // maximize below, so un-maximizing lands on these bounds and not on the
-  // full-screen ones the library may have recorded as the restore bounds.
-  const persistedBounds = parseStoredBounds(
-    simpleStore[SimpleStoreKey.WINDOW_RESTORE_BOUNDS],
-  );
-  // Clamp rather than discard. The library resets an overhanging window to
-  // the default size; nudging it onto the nearest display keeps the size the
-  // user actually chose. Tracked as the clamped value too: seeding the raw one
-  // leaves setRestoreBounds() deduping against geometry the window never had,
-  // so the correction would be re-applied on every launch instead of sticking.
-  const restoreBounds = persistedBounds
-    ? clampBoundsToDisplay(
-        persistedBounds,
-        screen.getDisplayMatching(persistedBounds).workArea,
-      )
-    : null;
-  initRestoreBounds(restoreBounds);
-  // manage() above restores full screen (electron-window-state `config.fullScreen`
-  // defaults true), and a full-screen window reports isMaximized() === false, so
-  // this has to exclude it the same way isSampleableBounds() does. The persisted
-  // flag rather than the live getter, because setFullScreen() is async on macOS.
-  if (restoreBounds && !mainWin.isMaximized() && !mainWindowState.isFullScreen) {
-    mainWin.setBounds(restoreBounds);
-  }
-
-  if (wasMaximized && !mainWin.isMaximized()) {
-    mainWin.maximize();
-  }
 
   const url = customUrl
     ? customUrl
@@ -390,117 +103,14 @@ export const createWindow = async ({
       : pathToFileURL(path.join(__dirname, '../.tmp/angular-dist/browser/index.html'))
           .href;
 
-  // Capture the loaded URL so the navigation guard (initWinEventListeners →
-  // will-navigate) can compare against the actual app origin, not a derived
-  // guess. Any URL change here automatically tightens the guard.
-  appLoadedUrl = url;
-
   mainWin.loadURL(url).then(() => {
-    // Set window title for dev mode
     if (IS_DEV) {
       mainWin.setTitle('Super Productivity D');
     }
   });
 
-  // load custom stylesheet if any, and re-apply it whenever the file changes
-  const CSS_FILE_PATH = path.join(app.getPath('userData'), 'styles.css');
-  // An inserted-stylesheet key is a counter scoped to the renderer process, so
-  // it only means anything for the document it was inserted into: after a
-  // reload the old key is inert, and after a renderer crash the counter starts
-  // over at 1 and a stale key can collide with — and silently remove — a live
-  // sheet (measured against Electron 43). So tag every key with the document it
-  // belongs to, and never touch a key from an earlier one.
-  let documentGeneration = 0;
-  let insertedCssKey: string | undefined;
-  let insertedCssGeneration = -1;
-  // Count committed navigations (`did-navigate`), not started ones: Electron
-  // emits `did-start-navigation` before `will-navigate`, and the
-  // `preventDefault()` in the navigation guard does not retract it, so a
-  // blocked navigation would bump the counter while the document stays the
-  // same — untracking the live sheet and leaking it on the next apply.
-  // `did-navigate` also doesn't fire for in-page navigations (hash routes).
-  mainWin.webContents.on('did-navigate', () => {
-    documentGeneration++;
-  });
-  // Applies are serialized through a promise chain: the key is read before and
-  // written after the `insertCSS` round-trip, which can take seconds while the
-  // renderer is still booting, so two overlapping runs would otherwise capture
-  // the same previous key and leave the sheet inserted in between untracked.
-  let cssApplyQueue: Promise<void> = Promise.resolve();
-  const applyCustomCss = (): Promise<void> => {
-    cssApplyQueue = cssApplyQueue.then(async () => {
-      if (mainWin.isDestroyed() || mainWin.webContents.isDestroyed()) {
-        return;
-      }
-      try {
-        let styles: string | undefined;
-        try {
-          styles = readFileSync(CSS_FILE_PATH, { encoding: 'utf8' });
-        } catch (readError) {
-          if ((readError as NodeJS.ErrnoException).code !== 'ENOENT') {
-            throw readError;
-          }
-        }
-        const isKeyFromCurrentDoc = insertedCssGeneration === documentGeneration;
-        const prevKey = isKeyFromCurrentDoc ? insertedCssKey : undefined;
-        if (styles === undefined) {
-          // Deleting the file un-applies it, just like emptying it does, and
-          // like removing a theme via the in-app installer.
-          insertedCssKey = undefined;
-          insertedCssGeneration = -1;
-          if (prevKey) {
-            await mainWin.webContents.removeInsertedCSS(prevKey);
-          }
-          log('No custom styles detected at ' + CSS_FILE_PATH);
-          return;
-        }
-        insertedCssKey = await mainWin.webContents.insertCSS(styles);
-        // re-read after the await: if a navigation completed while we were
-        // inserting, the sheet belongs to the document that is current now
-        insertedCssGeneration = documentGeneration;
-        if (prevKey) {
-          await mainWin.webContents.removeInsertedCSS(prevKey);
-        }
-        log('Custom styles loaded from ' + CSS_FILE_PATH);
-      } catch (cssError) {
-        error('Failed to load custom styles:', cssError);
-      }
-    });
-    return cssApplyQueue;
-  };
-  // covers the initial load as well as every renderer reload (e.g.
-  // `window.ea.reloadMainWin()`), which would otherwise drop the custom CSS
-  mainWin.webContents.on('did-finish-load', () => void applyCustomCss());
-
-  // Watch the folder rather than the file itself: the file may not exist
-  // yet, and editors often save atomically (write temp + rename), which
-  // detaches a watch bound to the original file. Debounced because a
-  // single save usually emits several events.
-  let cssReloadTimer: NodeJS.Timeout | undefined;
-  try {
-    const cssWatcher = watch(app.getPath('userData'), (_ev, fileName) => {
-      if (fileName && path.basename(fileName.toString()) !== 'styles.css') {
-        return;
-      }
-      clearTimeout(cssReloadTimer);
-      cssReloadTimer = setTimeout(() => void applyCustomCss(), 150);
-    });
-    mainWin.webContents.once('destroyed', () => {
-      clearTimeout(cssReloadTimer);
-      cssWatcher.close();
-    });
-  } catch (watchError) {
-    error('Could not watch for custom style changes:', watchError);
-  }
-
-  // show gracefully
   mainWin.once('ready-to-show', () => {
     mainWin.show();
-
-    // Workaround for Windows phantom focus bug (electron#20464):
-    // show() can silently fail to acquire keyboard focus after reboot.
-    // blur() is not supported on Wayland and limited on macOS, so only
-    // apply the blur+focus cycle on Windows.
     const IS_WINDOWS = process.platform === 'win32';
     setTimeout(() => {
       if (mainWin.isDestroyed()) return;
@@ -514,400 +124,5 @@ export const createWindow = async ({
     }, 60);
   });
 
-  initWinEventListeners(app);
-
-  if (IS_MAC) {
-    createMenu(quitApp);
-  } else {
-    mainWin.setMenu(null);
-    mainWin.setMenuBarVisibility(false);
-  }
-
-  // update prop
-  mainWinModule.win = mainWin;
-
-  // listen for app ready
-  ipcMain.on(IPC.APP_READY, () => {
-    mainWinModule.isAppReady = true;
-    // Signal the GPU startup guard that the full boot chain completed
-    // (including Angular init) — not just that the compositor painted a
-    // frame. This avoids clearing the crash counter on blank/broken
-    // renderers that still fire `ready-to-show`.
-    markGpuStartupSuccess();
-  });
-
-  // Register F11 key handler for fullscreen toggle
-  mainWin.webContents.on('before-input-event', (event, input) => {
-    if (input.type === 'keyDown' && input.key === 'F11') {
-      event.preventDefault();
-      mainWin.setFullScreen(!mainWin.isFullScreen());
-    }
-  });
-
-  // Notify renderer of fullscreen state changes (used for app border visibility)
-  mainWin.on('enter-full-screen', () => {
-    mainWin.webContents.send(IPC.ENTER_FULL_SCREEN);
-  });
-  mainWin.on('leave-full-screen', () => {
-    mainWin.webContents.send(IPC.LEAVE_FULL_SCREEN);
-  });
-  mainWin.webContents.on('did-finish-load', () => {
-    if (mainWin.isFullScreen()) {
-      mainWin.webContents.send(IPC.ENTER_FULL_SCREEN);
-    }
-  });
-
-  // Listen for theme changes to update title bar overlay color and symbol
-  if (isUseCustomWindowTitleBar && !IS_MAC) {
-    ipcMain.on(IPC.UPDATE_TITLE_BAR_DARK_MODE, (ev, isDarkMode: boolean) => {
-      try {
-        const symbolColor = isDarkMode ? '#fff' : '#000';
-        mainWin.setTitleBarOverlay({
-          color: getTitleBarColor(isDarkMode),
-          symbolColor,
-          height: WCO_HEIGHT,
-        });
-      } catch (e) {
-        // setTitleBarOverlay may not be available on all platforms
-        log('Failed to update title bar overlay:', e);
-      }
-    });
-  }
-
   return mainWin;
-};
-
-// Re-exported so `various-shared.ts` keeps importing the window helpers from the
-// window module. Implementation lives in ./window-maximized-state.
-export { getWasMaximizedBeforeHide, setWasMaximizedBeforeHide };
-
-// eslint-disable-next-line prefer-arrow/prefer-arrow-functions
-function initWinEventListeners(app: Electron.App): void {
-  const openUrlInBrowser = (url: string): void => {
-    // Defense in depth: never hand an unsafe scheme to the OS handler, even if
-    // a renderer-side guard is bypassed (e.g. a link click that falls through
-    // to navigation rather than the explicit openExternalUrl IPC). The blocked
-    // schemes are OS protocol handlers / UNC paths. See GHSA-hr87-735w-hfq3.
-    if (!isExternalUrlSchemeAllowed(url)) {
-      error('Refused to open URL with disallowed scheme via openExternal');
-      return;
-    }
-    // A local file: URL (a folder/file linked from a task) must open via
-    // openPath, not openExternal: openExternal percent-encodes the path and
-    // Windows' ShellExecute then can't resolve non-ASCII names or spaces.
-    // See openLocalPath / issue #8695.
-    if (isLocalFileUrl(url)) {
-      openLocalPath(url);
-      return;
-    }
-    // needed for mac; especially for jira urls we might have a host like this www.host.de//
-    const urlObj = new URL(url);
-    urlObj.pathname = urlObj.pathname.replace('//', '/');
-    const wellFormedUrl = urlObj.toString();
-    // shell.openExternal returns Promise<void>; surface the failure to the
-    // renderer (snack via IPC.ERROR) so users on sandboxed packagings
-    // (Flatpak without OpenURI portal, etc.) see why nothing happened.
-    shell.openExternal(wellFormedUrl).catch((err) => {
-      error('Failed to open external URL via shell.openExternal:', err);
-      // Best-effort renderer notification — guard against the case where the
-      // frontend isn't ready (e.g. during shutdown or pre-load), in which
-      // case errorHandlerWithFrontendInform throws synchronously.
-      try {
-        errorHandlerWithFrontendInform(
-          'Could not open the link in your browser. Copy the URL manually if available.',
-          err,
-        );
-      } catch (informErr) {
-        error('Could not surface open-external failure to renderer:', informErr);
-      }
-    });
-  };
-
-  // Compare the navigation target against the URL the app actually loaded
-  // (captured at loadURL time in createWindow). Anything else is treated as
-  // external and routed through the scheme-guarded `openUrlInBrowser`.
-  //
-  // The main window has Node integration via the preload bridge (`window.ea`).
-  // Allowing in-window navigation to ANY other origin — including
-  // http://127.0.0.1:<any-port> — would expose that bridge to whatever page
-  // happens to be served there (a malicious local web server, a sibling
-  // electron app, etc.). The previous host-only check accepted those.
-  //
-  // Hash-only changes do NOT fire will-navigate, so this never fires for
-  // the app's own hash routes (HashLocationStrategy in src/main.ts).
-  const guardNavigation = (
-    ev: { preventDefault: () => void },
-    url: string,
-    eventLabel: string,
-  ): void => {
-    if (appLoadedUrl && isAppOriginUrl(url, appLoadedUrl)) return;
-    ev.preventDefault();
-    log(`Blocked in-window navigation (${eventLabel})`);
-    openUrlInBrowser(url);
-  };
-
-  mainWin.webContents.on('will-navigate', (ev, url) => {
-    guardNavigation(ev, url, 'will-navigate');
-  });
-  // Defense in depth: a same-origin navigation could redirect to a different
-  // origin server-side. Re-run the same check on the redirect target so a
-  // ‘302 → http://127.0.0.1:1337’ cannot land the bridge on an attacker page.
-  mainWin.webContents.on('will-redirect', (ev, url) => {
-    guardNavigation(ev, url, 'will-redirect');
-  });
-  mainWin.webContents.setWindowOpenHandler((details) => {
-    openUrlInBrowser(details.url);
-    return { action: 'deny' };
-  });
-  // Defense in depth: setWindowOpenHandler already denies, so this should
-  // never fire. If a future code path ever enables window creation, destroy
-  // the spawned window rather than letting it inherit the preload bridge.
-  mainWin.webContents.on('did-create-window', (childWin) => {
-    error('did-create-window fired despite deny handler — destroying child');
-    try {
-      childWin.destroy();
-    } catch (e) {
-      error('Failed to destroy unexpected child window:', e);
-    }
-  });
-
-  // TODO refactor quitting mess
-  appCloseHandler(app);
-  appMinimizeHandler(app);
-
-  // Handle restore and show events to hide task widget. `getIsTaskWidgetUserForcedVisible()`
-  // keeps the widget up when the user explicitly revealed it via the global shortcut.
-  mainWin.on('restore', () => {
-    if (!getIsTaskWidgetAlwaysShow() && !getIsTaskWidgetUserForcedVisible()) {
-      hideTaskWidget();
-    }
-  });
-
-  mainWin.on('show', () => {
-    if (!getIsTaskWidgetAlwaysShow() && !getIsTaskWidgetUserForcedVisible()) {
-      hideTaskWidget();
-    }
-  });
-
-  mainWin.on('focus', () => {
-    if (
-      mainWin.isVisible() &&
-      !mainWin.isMinimized() &&
-      !getIsTaskWidgetAlwaysShow() &&
-      !getIsTaskWidgetUserForcedVisible()
-    ) {
-      hideTaskWidget();
-    }
-  });
-
-  // Handle hide event to show task widget
-  mainWin.on('hide', () => {
-    showTaskWidget();
-  });
-
-  // #10058: keep our own copy of the un-maximized geometry. Debounced because
-  // resize and move fire continuously while the user drags; only the settled
-  // value matters, and a sample lost to a crash leaves the previous one in place.
-  let boundsSampleTimeout: NodeJS.Timeout | undefined;
-  const sampleRestoreBounds = (): void => {
-    clearTimeout(boundsSampleTimeout);
-    boundsSampleTimeout = setTimeout(() => {
-      // 'closed' nulls mainWin, and a timer armed by the last resize/move can
-      // still be pending when it fires.
-      if (!mainWin || mainWin.isDestroyed()) {
-        return;
-      }
-      if (
-        !isSampleableBounds({
-          isVisible: mainWin.isVisible(),
-          isMinimized: mainWin.isMinimized(),
-          isMaximized: mainWin.isMaximized(),
-          isFullScreen: mainWin.isFullScreen(),
-        })
-      ) {
-        return;
-      }
-      setRestoreBounds(mainWin.getBounds());
-    }, BOUNDS_SAMPLE_DEBOUNCE_MS);
-  };
-  mainWin.on('resize', sampleRestoreBounds);
-  mainWin.on('move', sampleRestoreBounds);
-  // A pending sample would otherwise hold the event loop open past the close.
-  mainWin.on('closed', () => clearTimeout(boundsSampleTimeout));
-
-  // Handle maximize and unmaximize events to change wasMaximizedBeforeHide flag accordingly
-  mainWin.on('maximize', () => {
-    setWasMaximizedBeforeHide(true);
-  });
-
-  mainWin.on('unmaximize', () => {
-    // A hide()/minimize() also emits unmaximize on some platforms; that is not
-    // the user un-maximizing, and acting on it drops the flag we need (#7276).
-    if (
-      !isUserUnmaximize({
-        isVisible: mainWin.isVisible(),
-        isMinimized: mainWin.isMinimized(),
-      })
-    ) {
-      return;
-    }
-    setWasMaximizedBeforeHide(false);
-  });
-}
-
-// eslint-disable-next-line prefer-arrow/prefer-arrow-functions
-function createMenu(quitApp: () => void): void {
-  // Create application menu to enable copy & pasting on MacOS
-  const menuTpl = createMenuTemplate({
-    // hide() keeps the app running in the dock; clicking the dock icon
-    // re-shows via the 'activate' handler (showOrFocus)
-    onCloseWindow: (focusedWindow) => {
-      // only act when the main window itself is key; focusedWindow can be
-      // undefined during macOS menu tracking — treat that as "not ours"
-      if (!focusedWindow || focusedWindow !== mainWin) {
-        return;
-      }
-      if (!mainWin.isDestroyed() && mainWin.isVisible()) {
-        mainWin.hide();
-      }
-    },
-    onQuit: () => closeWinAndQuit(quitApp),
-  });
-
-  // we need to set a menu to get copy & paste working for mac os x
-  Menu.setApplicationMenu(Menu.buildFromTemplate(menuTpl));
-}
-
-// TODO this is ugly as f+ck
-const appCloseHandler = (app: App): void => {
-  let ids: string[] = [];
-
-  const _quitApp = (): void => {
-    setIsQuiting(true);
-    // Destroy task widget before closing main window to ensure window-all-closed fires
-    destroyTaskWidget();
-    mainWin.close();
-  };
-
-  ipcMain.on(IPC.REGISTER_BEFORE_CLOSE, (ev, { id }) => {
-    ids.push(id);
-  });
-  ipcMain.on(IPC.UNREGISTER_BEFORE_CLOSE, (ev, { id }) => {
-    ids = ids.filter((idIn) => idIn !== id);
-  });
-  ipcMain.on(IPC.BEFORE_CLOSE_DONE, (ev, { id }) => {
-    ids = ids.filter((idIn) => idIn !== id);
-    log(IPC.BEFORE_CLOSE_DONE, id, ids);
-    if (ids.length === 0) {
-      // Destroy task widget before closing main window
-      destroyTaskWidget();
-      // The quit request can time out while the user answers the finish-day prompt
-      setIsQuitRequested(true);
-      mainWin.close();
-    }
-  });
-
-  mainWin.on('close', (event) => {
-    // NOTE: this might not work if we run a second instance of the app
-    log('close event: isQuiting=', getIsQuiting(), 'pendingBeforeCloseIds=', ids);
-    if (!getIsQuiting()) {
-      if (getIsMinimizeToTray() && !getIsQuitRequested()) {
-        const indicator = ensureIndicator();
-        if (indicator) {
-          event.preventDefault();
-          mainWin.hide();
-          showTaskWidget();
-          return;
-        }
-      }
-
-      event.preventDefault();
-
-      if (ids.length > 0) {
-        log('Actions to wait for ', ids);
-        mainWin.webContents.send(IPC.NOTIFY_ON_CLOSE, ids);
-      } else {
-        _quitApp();
-      }
-    }
-  });
-
-  mainWin.on('closed', () => {
-    // Clear any pending reset timer so it doesn't keep the event loop alive
-    // after the window is gone.
-    setIsQuitRequested(false);
-
-    // Dereference the window object
-    mainWin = null;
-    mainWinModule.win = null;
-  });
-
-  mainWin.webContents.on('render-process-gone', (event, detailed) => {
-    log('!crashed, reason: ' + detailed.reason + ', exitCode = ' + detailed.exitCode);
-    if (detailed.reason == 'crashed') {
-      process.exit(detailed.exitCode);
-      // relaunch app
-      // app.relaunch({ args: process.argv.slice(1).concat(['--relaunch']) });
-      // app.exit(0);
-    }
-  });
-};
-
-const appMinimizeHandler = (app: App): void => {
-  if (!getIsQuiting()) {
-    // TODO find reason for the typing error
-    // @ts-ignore
-    mainWin.on('minimize', (event: Event) => {
-      if (getIsMinimizeToTray()) {
-        const indicator = ensureIndicator();
-        if (!indicator) {
-          return;
-        }
-        event.preventDefault();
-        mainWin.hide();
-        showTaskWidget();
-      } else {
-        // For regular minimize (not to tray), also show task widget
-        showTaskWidget();
-        if (IS_MAC) {
-          app.dock?.show();
-        }
-      }
-    });
-  }
-};
-
-const upsertKeyValue = <T extends Record<string, any> | undefined>(
-  obj: T,
-  keyToChange: string,
-  value: string[],
-): T => {
-  if (!obj) return obj;
-  const keyToChangeLower = keyToChange.toLowerCase();
-  for (const key of Object.keys(obj)) {
-    if (key.toLowerCase() === keyToChangeLower) {
-      // Reassign old key
-      (obj as any)[key] = value;
-      // Done
-      return obj;
-    }
-  }
-  // Insert at end instead
-  (obj as any)[keyToChange] = value;
-  return obj;
-};
-
-const removeKeyInAnyCase = <T extends Record<string, any> | undefined>(
-  obj: T,
-  keyToRemove: string,
-): T => {
-  if (!obj) return obj;
-  const keyToRemoveLower = keyToRemove.toLowerCase();
-  for (const key of Object.keys(obj)) {
-    if (key.toLowerCase() === keyToRemoveLower) {
-      delete (obj as any)[key];
-      return obj;
-    }
-  }
-  return obj;
 };
