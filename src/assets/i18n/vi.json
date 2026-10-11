@@ -312,8 +312,8 @@
       "C": {
         "DONT_QUIT": "Đừng thoát",
         "FINISH_DAY": "Kết thúc ngày",
-        "QUIT": "Kết thúc ngày",
-        "TITLE": "Kết thúc ngày",
+        "QUIT": "Thoát",
+        "TITLE": "Kết thúc ngày trước khi thoát",
         "UNARCHIVED_TASKS": {
           "ONE": "1 công việc đã hoàn thành trong danh sách Hôm nay chưa được chuyển vào kho lưu trữ.",
           "OTHER": "{{nr}} công việc đã hoàn thành trong danh sách Hôm nay chưa được chuyển vào kho lưu trữ."
