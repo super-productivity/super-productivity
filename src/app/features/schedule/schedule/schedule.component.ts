@@ -270,6 +270,12 @@ export class ScheduleComponent {
     () => this._windowSize().width < SCHEDULE_CONSTANTS.BREAKPOINTS.TABLET,
   );
 
+  showWeekNumbers = computed(() => {
+    const localization = this._globalConfigService.localization();
+    const weekNumberSystem = localization?.weekNumberSystem;
+    return weekNumberSystem === 'iso' || weekNumberSystem === 'us';
+  });
+
   headerTitle = computed(() => {
     const days = this.daysToShow();
     if (!days.length) return '';
@@ -296,13 +302,19 @@ export class ScheduleComponent {
 
     const start = parseDbDateStr(days[0]);
     const end = parseDbDateStr(days[days.length - 1]);
-    const weekNr = getWeekNumber(start); // ISO — default firstDayOfWeek=1
+    const firstDayOfWeek = this.firstDayOfWeek();
+    const weekNumberSystem = this._globalConfigService.localization()?.weekNumberSystem;
     const sameMonth =
       start.getMonth() === end.getMonth() && start.getFullYear() === end.getFullYear();
     const startStr = safeFormatDate(start, 'MMM d', locale);
     const endStr = sameMonth
       ? safeFormatDate(end, 'd', locale)
       : safeFormatDate(end, 'MMM d', locale);
+    if (!this.showWeekNumbers()) {
+      if (this._isVeryCompact()) return startStr;
+      return `${startStr} – ${endStr}`;
+    }
+    const weekNr = getWeekNumber(start, firstDayOfWeek, weekNumberSystem as 'iso' | 'us');
     const labelKey = this._isCompact()
       ? T.F.WORKLOG.CMP.WEEK_NR_SHORT
       : T.F.WORKLOG.CMP.WEEK_NR;

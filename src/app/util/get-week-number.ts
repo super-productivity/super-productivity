@@ -52,13 +52,18 @@ export const getWeekNumber = (
     }
 
     // Handle edge case: if week number is too large, it belongs to next year's week 1
-    // Check if this week contains Jan 1 of the next year
-    const nextYearJan1 = new Date(Date.UTC(year + 1, 0, 1));
-    const weekEnd = new Date(utcDate);
-    weekEnd.setDate(utcDate.getDate() + 6);
+    // Check if the week containing the date includes Jan 1 of the next year
+    // The week contains Jan 1 if: weekStart <= Jan1 < weekStart + 7 days
+    const dateDayOfWeek = utcDate.getUTCDay();
+    const daysFromWeekStartToDate = (dateDayOfWeek - firstDayOfWeek + 7) % 7;
+    const weekStart = new Date(utcDate);
+    weekStart.setUTCDate(utcDate.getUTCDate() - daysFromWeekStartToDate);
+    const weekEnd = new Date(weekStart);
+    weekEnd.setUTCDate(weekStart.getUTCDate() + 6); // weekStart + 6 days = end of week
 
-    // If the week contains next year's Jan 1, recalculate for next year
-    if (weekEnd >= nextYearJan1) {
+    const nextYearJan1 = new Date(Date.UTC(year + 1, 0, 1));
+    if (weekStart <= nextYearJan1 && weekEnd >= nextYearJan1) {
+      // This week contains Jan 1 of the next year, so use next year's week 1
       const nextYearJan1DayOfWeek = nextYearJan1.getUTCDay();
       const nextYearDaysFromWeekStartToJan1 =
         (nextYearJan1DayOfWeek - firstDayOfWeek + 7) % 7;
@@ -66,8 +71,9 @@ export const getWeekNumber = (
       nextYearWeek1Start.setUTCDate(
         nextYearJan1.getUTCDate() - nextYearDaysFromWeekStartToJan1,
       );
+      // Calculate days from next year's week 1 start to this week's start
       const nextYearDaysDiff =
-        (utcDate.getTime() - nextYearWeek1Start.getTime()) / 86400000;
+        (weekStart.getTime() - nextYearWeek1Start.getTime()) / 86400000;
       return Math.floor(nextYearDaysDiff / 7) + 1;
     }
 
