@@ -113,5 +113,15 @@ describe('getWeekNumber()', () => {
       const result = getWeekNumber(d, 0, 'us'); // Sunday first
       expect(result).toBe(1); // Week containing Jan 1
     });
+
+    it('should return week 53 for Dec 31, 2022 (Saturday) in US system', () => {
+      // Week of Dec 25, 2022 - Dec 31, 2022
+      // Dec 31, 2022 is Saturday (not Sunday)
+      // The week containing Jan 1, 2023 starts Sunday Jan 1, 2023
+      // So Dec 31, 2022 is in the last week of 2022 (week 53)
+      const d = new Date(2022, 11, 31); // December 31, 2022 (Saturday)
+      const result = getWeekNumber(d, 0, 'us'); // Sunday first
+      expect(result).toBe(53); // Last week of 2022
+    });
   });
 });

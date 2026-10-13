@@ -14,6 +14,7 @@ import {
   untracked,
   viewChild,
 } from '@angular/core';
+import { TranslatePipe } from '@ngx-translate/core';
 import { DEFAULT_FIRST_DAY_OF_WEEK } from '../../../core/locale.constants';
 import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
 import { GlobalConfigService } from '../../config/global-config.service';
@@ -30,6 +31,7 @@ import {
   ROW_HEIGHT,
   WEEKS_SHOWN,
 } from './planner-calendar-gesture-handler';
+import { T } from '../../../t.const';
 
 /** The collapse handle, which sits below the week rows and must stay tappable. */
 export const HANDLE_HEIGHT = 28;
@@ -49,8 +51,10 @@ interface CalendarDay {
   templateUrl: './planner-calendar-nav.component.html',
   styleUrl: './planner-calendar-nav.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [TranslatePipe],
 })
 export class PlannerCalendarNavComponent {
+  readonly T = T;
   private _globalConfigService = inject(GlobalConfigService);
   private _dateTimeFormatService = inject(DateTimeFormatService);
   private _globalTrackingIntervalService = inject(GlobalTrackingIntervalService);
