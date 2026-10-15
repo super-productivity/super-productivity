@@ -412,7 +412,8 @@ export class DateTimePickerComponent implements AfterViewInit {
         return null;
       }
 
-      return getWeekNumber(weekStart, firstDayOfWeek, weekNumberSystem as 'iso' | 'us');
+      // weekNumberSystem is guaranteed to be 'iso' or 'us' here due to shouldShowWeekNumbers check
+      return getWeekNumber(weekStart, firstDayOfWeek, weekNumberSystem);
     });
 
     // Store all week numbers (including nulls for empty cells)

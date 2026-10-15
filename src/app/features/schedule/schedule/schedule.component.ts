@@ -310,10 +310,11 @@ export class ScheduleComponent {
     const endStr = sameMonth
       ? safeFormatDate(end, 'd', locale)
       : safeFormatDate(end, 'MMM d', locale);
-    if (!this.showWeekNumbers()) {
+    if (!this.showWeekNumbers() || !weekNumberSystem || weekNumberSystem === 'none') {
       if (this._isVeryCompact()) return startStr;
       return `${startStr} – ${endStr}`;
     }
+    // weekNumberSystem is guaranteed to be 'iso' or 'us' here
     const weekNr = getWeekNumber(start, firstDayOfWeek, weekNumberSystem as 'iso' | 'us');
     const labelKey = this._isCompact()
       ? T.F.WORKLOG.CMP.WEEK_NR_SHORT
