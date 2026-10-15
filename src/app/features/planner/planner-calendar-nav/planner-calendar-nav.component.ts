@@ -137,8 +137,15 @@ export class PlannerCalendarNavComponent {
   weekNumbers = computed<number[]>(() => {
     const firstDayOfWeek = this._firstDayOfWeek();
     const weekNumberSystem = this._weekNumberSystem();
+    // weekNumberSystem is guaranteed to be 'iso' or 'us' here because:
+    // 1. weekNumbers is only used when showWeekNumbers() is true
+    // 2. showWeekNumbers() returns true only when weekNumberSystem is 'iso' or 'us'
     return this.weeks().map((week) => {
       const firstDay = parseDbDateStr(week[0].dateStr);
+      // Type guard to ensure we only get 'iso' or 'us' here
+      if (!weekNumberSystem || weekNumberSystem === 'none') {
+        return 0; // Dummy value, should never be reached since we guard at showWeekNumbers()
+      }
       return getWeekNumber(firstDay, firstDayOfWeek, weekNumberSystem as 'iso' | 'us');
     });
   });
