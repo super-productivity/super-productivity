@@ -277,6 +277,19 @@ describe('TagService', () => {
         }),
       );
     });
+
+    it('should pass isSkipSnack through to the action', () => {
+      const dispatchSpy = spyOn(store, 'dispatch');
+
+      service.updateTag('tag-1', { title: 'Quiet' }, true);
+
+      expect(dispatchSpy).toHaveBeenCalledWith(
+        updateTag({
+          tag: { id: 'tag-1', changes: { title: 'Quiet' } },
+          isSkipSnack: true,
+        }),
+      );
+    });
   });
 
   describe('updateColor', () => {
