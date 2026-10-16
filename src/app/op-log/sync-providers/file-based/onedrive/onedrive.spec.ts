@@ -18,15 +18,7 @@ describe('OneDrive', () => {
   >;
   const tokenExpiryMs = 5 * 60 * 1000;
 
-  const baseCfg: OneDrivePrivateCfg = {
-    clientId: 'client-id',
-    tenantId: 'common',
-    syncFolderPath: 'Super Productivity',
-    accessToken: 'access-token',
-    refreshToken: 'refresh-token',
-    tokenExpiresAt: Date.now() + tokenExpiryMs,
-    encryptKey: 'enc',
-  };
+  let baseCfg: OneDrivePrivateCfg;
 
   const noop = (): void => undefined;
   const mockDeps: OneDriveDeps = {
@@ -58,6 +50,15 @@ describe('OneDrive', () => {
   let originalFetch: typeof fetch | undefined;
 
   beforeEach(() => {
+    baseCfg = {
+      clientId: 'client-id',
+      tenantId: 'common',
+      syncFolderPath: 'Super Productivity',
+      accessToken: 'access-token',
+      refreshToken: 'refresh-token',
+      tokenExpiresAt: Date.now() + tokenExpiryMs,
+      encryptKey: 'enc',
+    };
     cfgStoreSpy = jasmine.createSpyObj('SyncCredentialStore', ['load', 'setComplete']);
     cfgStoreSpy.setComplete.and.resolveTo();
     const deps: OneDriveDeps = {
