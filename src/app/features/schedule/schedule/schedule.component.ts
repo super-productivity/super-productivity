@@ -270,12 +270,6 @@ export class ScheduleComponent {
     () => this._windowSize().width < SCHEDULE_CONSTANTS.BREAKPOINTS.TABLET,
   );
 
-  showWeekNumbers = computed(() => {
-    const localization = this._globalConfigService.localization();
-    const weekNumberSystem = localization?.weekNumberSystem;
-    return weekNumberSystem === 'iso' || weekNumberSystem === 'us';
-  });
-
   headerTitle = computed(() => {
     const days = this.daysToShow();
     if (!days.length) return '';
@@ -310,12 +304,17 @@ export class ScheduleComponent {
     const endStr = sameMonth
       ? safeFormatDate(end, 'd', locale)
       : safeFormatDate(end, 'MMM d', locale);
-    if (!this.showWeekNumbers() || !weekNumberSystem || weekNumberSystem === 'none') {
+    // For the schedule header, show week numbers by default (ISO/Monday-based) to maintain
+    // backward compatibility with the shipped v18.5.0 behavior. The setting only switches
+    // to US numbering when explicitly chosen. 'none' explicitly hides week numbers.
+    if (weekNumberSystem === 'none') {
       if (this._isVeryCompact()) return startStr;
       return `${startStr} – ${endStr}`;
     }
-    // weekNumberSystem is guaranteed to be 'iso' or 'us' here
-    const weekNr = getWeekNumber(start, firstDayOfWeek, weekNumberSystem as 'iso' | 'us');
+    // weekNumberSystem is ISO ('iso'), US ('us'), or undefined (default to ISO)
+    const effectiveSystem = weekNumberSystem || 'iso';
+    const effectiveFirstDay = effectiveSystem === 'us' ? 0 : 1; // 0=Sun, 1=Mon
+    const weekNr = getWeekNumber(start, effectiveFirstDay, effectiveSystem);
     const labelKey = this._isCompact()
       ? T.F.WORKLOG.CMP.WEEK_NR_SHORT
       : T.F.WORKLOG.CMP.WEEK_NR;

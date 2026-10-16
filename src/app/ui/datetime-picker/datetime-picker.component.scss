@@ -229,7 +229,8 @@
       font-size: 11px;
       color: var(--text-color-muted);
       text-align: center;
-      padding: 13px 0; // Increase height from 28px to 54px
+      line-height: 1;
+      padding: 4px 0; // Approximate month label row height (font-size + line-height)
       flex-shrink: 0;
     }
 
@@ -238,10 +239,7 @@
       color: var(--text-color-muted);
       text-align: center;
       line-height: 1;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex: 1; // Share space equally with calendar rows
+      display: block; // Use block layout to align with calendar rows
 
       &.blank-week {
         visibility: hidden; // Hide blank rows but preserve spacing

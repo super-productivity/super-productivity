@@ -361,19 +361,34 @@ export class DateTimePickerComponent implements AfterViewInit {
       return;
     }
 
-    const calendarEl = this._el.nativeElement.querySelector(
-      '.mat-calendar',
-    ) as HTMLElement | null;
-    const rowCount = calendarEl?.querySelectorAll('.mat-calendar-body tr').length ?? 0;
-    if (rowCount === 0) {
+    // Find the month view element directly to avoid querying from calendarEl
+    const monthViewEl = this._el.nativeElement.querySelector('.mat-month-view');
+    if (!monthViewEl) {
       this.weekNumbers = [];
       this.weekNumbersWithNulls = [];
+      this._cdr.markForCheck();
       return;
     }
 
-    // Always use 6 rows for the week number column to ensure consistent padding
-    // regardless of how many rows the calendar actually renders
-    const targetRowCount = 6;
+    // Count actual table rows in the month view body
+    const allRows = monthViewEl.querySelectorAll('.mat-calendar-body tr');
+    const rowCount = allRows.length;
+    if (rowCount === 0) {
+      this.weekNumbers = [];
+      this.weekNumbersWithNulls = [];
+      this._cdr.markForCheck();
+      return;
+    }
+
+    // The first row (index 0) is the month label row, which we skip.
+    // Actual week rows start at index 1 and end at rowCount - 1.
+    const weekRowCount = rowCount - 1; // Subtract 1 for the month label row
+    if (weekRowCount === 0) {
+      this.weekNumbers = [];
+      this.weekNumbersWithNulls = [];
+      this._cdr.markForCheck();
+      return;
+    }
 
     const firstDayOfWeek = this.getFirstDayOfWeek();
     const monthStart = new Date(
@@ -385,14 +400,14 @@ export class DateTimePickerComponent implements AfterViewInit {
     const firstVisibleDate = new Date(monthStart);
     firstVisibleDate.setDate(monthStart.getDate() - leadingDays);
 
-    // Calculate week numbers for all rows in the calendar (up to rowCount)
-    // weeks outside the current month will be null (empty cells)
-    const weekNumbersWithNulls = Array.from({ length: targetRowCount }, (_, index) => {
+    // Calculate week numbers for each week row in the calendar
+    // Week row index 0 corresponds to firstVisibleDate (the first Sunday/Monday of the view)
+    const weekNumbersWithNulls: (number | null)[] = [];
+    for (let weekRowIndex = 0; weekRowIndex < weekRowCount; weekRowIndex++) {
       const weekStart = new Date(firstVisibleDate);
-      const dayOffset = index * 7;
+      const dayOffset = weekRowIndex * 7;
       weekStart.setDate(firstVisibleDate.getDate() + dayOffset);
 
-      // A week should show if it contains any dates from the current month
       // Week ends on: weekStart + 6 days
       const weekEnd = new Date(weekStart);
       weekEnd.setDate(weekStart.getDate() + 6);
@@ -409,12 +424,15 @@ export class DateTimePickerComponent implements AfterViewInit {
         weekStart <= lastDayOfMonth && weekEnd >= monthStart;
 
       if (!weekContainsCurrentMonth) {
-        return null;
+        weekNumbersWithNulls.push(null);
+        continue;
       }
 
       // weekNumberSystem is guaranteed to be 'iso' or 'us' here due to shouldShowWeekNumbers check
-      return getWeekNumber(weekStart, firstDayOfWeek, weekNumberSystem);
-    });
+      weekNumbersWithNulls.push(
+        getWeekNumber(weekStart, firstDayOfWeek, weekNumberSystem),
+      );
+    }
 
     // Store all week numbers (including nulls for empty cells)
     // Filter only the week numbers for display (nulls will be shown as empty cells)
