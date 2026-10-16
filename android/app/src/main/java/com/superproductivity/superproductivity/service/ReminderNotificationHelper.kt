@@ -218,8 +218,8 @@ object ReminderNotificationHelper {
         // extra as a tap and dismisses the reminder, but this launch fires
         // without any user action. The activity does not show over the keyguard;
         // the system-drawn notification is what the user sees and acts on.
-        // Without USE_FULL_SCREEN_INTENT (Android 14+ via Google Play) the
-        // intent degrades to a normal heads-up.
+        // USE_FULL_SCREEN_INTENT is declared only in the fdroid flavor manifest;
+        // without it (play flavor) the intent degrades to a normal heads-up.
         val fullScreenPendingIntent = if (useAlarmStyle) {
             val fullScreenIntent = Intent(context, CapacitorMainActivity::class.java).apply {
                 action = ACTION_SHOW_REMINDER_FSI
@@ -320,9 +320,8 @@ object ReminderNotificationHelper {
                 if (nm?.canUseFullScreenIntent() == false) {
                     Log.w(
                         TAG,
-                        "USE_FULL_SCREEN_INTENT not granted (on Android 14+ Google Play " +
-                            "withholds it from non-calling/alarm apps; F-Droid and sideloaded " +
-                            "installs keep it); reminder falls back to heads-up"
+                        "USE_FULL_SCREEN_INTENT not granted (declared only in the fdroid " +
+                            "flavor, or revoked by the user); reminder falls back to heads-up"
                     )
                 }
             }

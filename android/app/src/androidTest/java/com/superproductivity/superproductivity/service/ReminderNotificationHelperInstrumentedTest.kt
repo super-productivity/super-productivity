@@ -6,6 +6,7 @@ import androidx.test.InstrumentationRegistry
 import androidx.test.rule.GrantPermissionRule
 import androidx.test.runner.AndroidJUnit4
 import androidx.core.app.NotificationManagerCompat
+import com.superproductivity.superproductivity.BuildConfig
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
@@ -28,7 +29,9 @@ import org.junit.runner.RunWith
  * which only reflects real system notification handling (channels, permission
  * gating, PendingIntent resolution).
  *
- * Run: ./gradlew :app:connectedPlayDebugAndroidTest (emulator/device required).
+ * Run: ./gradlew :app:connectedFdroidDebugAndroidTest (emulator/device required).
+ * Only fdroid declares USE_FULL_SCREEN_INTENT; CI runs the play flavor, where the
+ * full-screen intent assertions are skipped.
  */
 @RunWith(AndroidJUnit4::class)
 class ReminderNotificationHelperInstrumentedTest {
@@ -63,15 +66,18 @@ class ReminderNotificationHelperInstrumentedTest {
 
         val notification = postedNotification(alarmNotificationId)
         assertNotNull("alarm-style reminder was not posted", notification)
+        // Full content plus Done/Snooze actions must be usable on the lock screen,
+        // where this notification now appears.
+        assertEquals(Notification.VISIBILITY_PUBLIC, notification!!.visibility)
+        assertEquals(Notification.CATEGORY_ALARM, notification.category)
+        // Only fdroid declares USE_FULL_SCREEN_INTENT; without it the system may
+        // drop the intent, so the remaining checks only hold for fdroid.
+        if (BuildConfig.FLAVOR != "fdroid") return
         assertNotNull(
             "alarm-style reminders must carry a full-screen intent so Android wakes " +
                 "the screen and presents the reminder when it is off (#10071)",
-            notification!!.fullScreenIntent
+            notification.fullScreenIntent
         )
-        // Full content plus Done/Snooze actions must be usable on the lock screen,
-        // where this notification now appears.
-        assertEquals(Notification.VISIBILITY_PUBLIC, notification.visibility)
-        assertEquals(Notification.CATEGORY_ALARM, notification.category)
         // FSI and tap content intent share the request code; an equal intent filter
         // would silently merge them into one PendingIntent (extras are not part of
         // PendingIntent identity) and strip the tap intent's REMINDER_TASK_ID.
