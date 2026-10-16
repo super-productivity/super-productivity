@@ -55,6 +55,33 @@ describe('DialogWorkContextSettingsComponent', () => {
     );
   });
 
+  it('should write the default theme when cancelling on a project with an empty one', () => {
+    const entity = { ...DEFAULT_PROJECT, id: 'p1', theme: {} } as Project;
+
+    setup({ isProject: true, entity }).cancelEdit();
+
+    expect(projectService.update).toHaveBeenCalledWith(
+      'p1',
+      jasmine.objectContaining({ theme: DEFAULT_PROJECT.theme }),
+      true,
+    );
+  });
+
+  it('should write a stored partial theme back unchanged when cancelling', () => {
+    // Long-time users' Today theme predates isDisableBackgroundTint; filling in
+    // TODAY's default (true) would turn their background tint off.
+    const partialTheme = { ...TODAY_TAG.theme };
+    delete partialTheme.isDisableBackgroundTint;
+    const entity = { ...TODAY_TAG, theme: partialTheme };
+
+    setup({ isProject: false, entity }).cancelEdit();
+
+    expect(tagService.updateTag).toHaveBeenCalledWith(
+      'TODAY',
+      jasmine.objectContaining({ theme: partialTheme }),
+    );
+  });
+
   it('should write the TODAY theme when renaming the TODAY tag without one', () => {
     const entity = { ...TODAY_TAG, theme: undefined } as unknown as Tag;
     const dialog = setup({ isProject: false, entity });
