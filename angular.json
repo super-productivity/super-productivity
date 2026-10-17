@@ -54,11 +54,11 @@
               "chrono-node",
               "dayjs",
               "query-string"
-            ]
+            ],
+            "externalDependencies": ["marked-katex-extension"]
           },
           "configurations": {
             "development": {
-              "externalDependencies": ["marked-katex-extension"],
               "budgets": [
                 {
                   "type": "anyComponentStyle",
@@ -70,8 +70,7 @@
               "sourceMap": true,
               "namedChunks": false,
               "aot": false,
-              "serviceWorker": "ngsw-config.json",
-              "externalDependencies": ["marked-katex-extension"]
+              "serviceWorker": "ngsw-config.json"
             },
             "production": {
               "baseHref": "",
