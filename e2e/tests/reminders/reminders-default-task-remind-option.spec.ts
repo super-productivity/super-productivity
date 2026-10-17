@@ -28,7 +28,6 @@ test.describe('Default task reminder option', () => {
       .locator('.collapsible-panel')
       .waitFor({ state: 'visible', timeout: 5000 });
   };
-
   const changeDefaultTaskReminderOption = async (page: Page): Promise<void> => {
     await page.goto('/#/config');
     await page.locator('.page-settings').waitFor({ state: 'visible', timeout: 10000 });
@@ -50,6 +49,12 @@ test.describe('Default task reminder option', () => {
     await page.getByRole('option', { name: changedOptionText, exact: true }).click();
     await expect(reminderSelect).toContainText(changedOptionText);
     await waitForAngularStability(page).catch(() => {});
+    // across other application areas where a reminder option can be chosen
+    await selectedOption.click();
+    const option = page
+      .locator('.cdk-overlay-pane')
+      .getByRole('option', { name: new RegExp(`^${changedOptionText}$`, 'i') });
+    await option.click();
   };
 
   test('should apply when scheduling a task using the due action', async ({
