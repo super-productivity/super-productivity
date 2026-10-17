@@ -41,6 +41,9 @@ export const getStartPageUrlPath = (
       return appFeatures.isSchedulerEnabled ? '/schedule' : todayUrl;
     case DefaultStartPage.Boards:
       return appFeatures.isBoardsEnabled ? '/boards' : todayUrl;
+    case DefaultStartPage.AllTasks:
+      // Opt-in, so a missing key (state predating the flag) means off.
+      return (appFeatures.isAllTasksEnabled ?? false) ? '/all-tasks' : todayUrl;
     case DefaultStartPage.Today:
     default:
       return todayUrl;

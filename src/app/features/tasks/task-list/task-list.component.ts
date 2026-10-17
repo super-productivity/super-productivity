@@ -450,6 +450,19 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
       return;
     }
 
+    // A list with sorting disabled has no manual order to change: an All Tasks
+    // page (its order comes from a selector that no reorder action writes) and
+    // the Overdue / Later Today panels. Reordering there would dispatch an order
+    // op the view never reflects — the row snaps back — and the
+    // `setSort(DEFAULT_OPTIONS.sort)` at the end of drop() would clear the sort
+    // the user picked. Same-container drops only: a drop onto another list is a
+    // move (DONE ↔ UNDONE, sections, subtasks) and still goes through. A
+    // multi-select group drag within one list is likewise a reorder, so it is
+    // covered by the same guard.
+    if (this.isSortingDisabled() && ev.previousContainer === ev.container) {
+      return;
+    }
+
     const isGroupLeaderAtSamePosition =
       this.multiDrag.isListGroupDrag() &&
       ev.previousContainer === ev.container &&

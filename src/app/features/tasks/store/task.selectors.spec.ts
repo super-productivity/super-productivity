@@ -445,6 +445,51 @@ describe('Task Selectors', () => {
     });
   });
 
+  describe('selectAllTasksWithSubTasksInActiveProjects', () => {
+    const parentWithSubTasks = {
+      id: 'parent-1',
+      projectId: 'project1',
+      subTasks: [{ id: 'child-1' }, { id: 'child-2' }],
+    } as unknown as TaskWithSubTasks;
+    const otherProjectTask = {
+      id: 'parent-2',
+      projectId: 'project2',
+      subTasks: [],
+    } as unknown as TaskWithSubTasks;
+
+    it('keeps parents attached to their subtasks', () => {
+      const result = fromSelectors.selectAllTasksWithSubTasksInActiveProjects.projector(
+        [parentWithSubTasks, otherProjectTask],
+        new Set<string>(),
+      );
+
+      // The flat selectAllTasksInActiveProjects returns bare Task[]; this one
+      // must keep the nested children so <work-view> can render them.
+      expect(result[0].subTasks.map((s) => s.id)).toEqual(['child-1', 'child-2']);
+    });
+
+    it('excludes tasks of archived projects, keeping subtasks on the rest', () => {
+      const result = fromSelectors.selectAllTasksWithSubTasksInActiveProjects.projector(
+        [parentWithSubTasks, otherProjectTask],
+        new Set<string>(['project2']),
+      );
+
+      expect(result.map((t) => t.id)).toEqual(['parent-1']);
+      expect(result[0].subTasks.length).toBe(2);
+    });
+
+    it('returns the same reference when nothing is archived (fast path)', () => {
+      const tasks = [parentWithSubTasks];
+
+      expect(
+        fromSelectors.selectAllTasksWithSubTasksInActiveProjects.projector(
+          tasks,
+          new Set<string>(),
+        ),
+      ).toBe(tasks);
+    });
+  });
+
   // Startable tasks selectors
   describe('Startable tasks selectors', () => {
     it('should select startable tasks', () => {

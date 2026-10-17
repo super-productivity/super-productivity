@@ -99,7 +99,10 @@
         }
       } @else {
         <div class="task-list-wrapper">
-          @if (!(workContextService.isHasTasksToWorkOn$ | async)) {
+          <!-- On a page that supplies its own tasks (All Tasks) the empty state
+               has to come from that list; `isShowNoTasksPanel` picks the right
+               source. See its doc comment. -->
+          @if (isShowNoTasksPanel()) {
             <div
               @expandFade
               class="add-more-or-finish"
@@ -165,6 +168,7 @@
                     listId="PARENT"
                     listModelId="UNDONE"
                     [groupTagId]="group.tagId"
+                    [isSortingDisabled]="isDisableTodayPanels()"
                   ></task-list>
                 </collapsible>
               }
@@ -251,6 +255,7 @@
                 [tasks]="customized.list"
                 listId="PARENT"
                 listModelId="UNDONE"
+                [isSortingDisabled]="isDisableTodayPanels()"
               ></task-list>
             }
           }
@@ -302,8 +307,8 @@
           }
 
           @if (
-            (laterTodayTasks().length > 0 || laterTodayCalendarEvents().length > 0) &&
-            isOnTodayList()
+            isLaterTodayPanelVisible() &&
+            (laterTodayTasks().length > 0 || laterTodayCalendarEvents().length > 0)
           ) {
             <div
               @expand
@@ -374,6 +379,7 @@
                   [tasks]="doneTasks()"
                   listId="PARENT"
                   listModelId="DONE"
+                  [isSortingDisabled]="isDisableTodayPanels()"
                 ></task-list>
                 <div class="finish-day-button-wrapper">
                   @if (hasDoneTasks() && (!isOnTodayList() || !isFinishDayEnabled())) {

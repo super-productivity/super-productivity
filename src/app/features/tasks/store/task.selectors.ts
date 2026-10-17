@@ -420,6 +420,26 @@ export const selectAllTasksWithSubTasks = createSelector(
   _allTasksWithSubTasksMapper,
 );
 
+/**
+ * `selectAllTasksWithSubTasks` with archived projects excluded — the shape a
+ * top-level task list needs when it spans projects (All Tasks): parents keep
+ * their nested `subTasks`, unlike `selectAllTasksInActiveProjects`, which
+ * returns the flat `Task[]` and would drop child rows.
+ *
+ * Filters on the top-level entries only; subtasks are nested inside their
+ * parent and inherit its `projectId`, so they follow it.
+ */
+export const selectAllTasksWithSubTasksInActiveProjects = createSelector(
+  selectAllTasksWithSubTasks,
+  selectArchivedProjectIds,
+  // Fast path returns the same ref when no projects are archived, keeping
+  // memoization stable (mirrors selectAllTasksInActiveProjects).
+  (tasks: TaskWithSubTasks[], archivedIds: Set<string>): TaskWithSubTasks[] =>
+    archivedIds.size === 0
+      ? tasks
+      : tasks.filter((t) => !t.projectId || !archivedIds.has(t.projectId)),
+);
+
 // selectOverdueTasks (rebased): decision reads only dueDay/dueWithTime from the
 // snapshot; public re-maps ids to live Task refs. Shares the overdue comparison
 // with the isTaskOverdue util via isTaskOverdueByThreshold so the two definitions

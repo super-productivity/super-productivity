@@ -897,14 +897,18 @@ describe('TaskListComponent', () => {
       target: ListData;
       dragged: MockDragTask;
       currentIndex: number;
-    }): Parameters<TaskListComponent['drop']>[0] =>
-      ({
-        previousContainer: { data: opts.previous },
-        container: { data: opts.target },
+      /** CDK passes the SAME CdkDropList instance for a same-list reorder. */
+      sameContainer?: boolean;
+    }): Parameters<TaskListComponent['drop']>[0] => {
+      const container = { data: opts.target };
+      return {
+        previousContainer: opts.sameContainer ? container : { data: opts.previous },
+        container,
         item: { data: opts.dragged },
         previousIndex: 0,
         currentIndex: opts.currentIndex,
-      }) as unknown as Parameters<TaskListComponent['drop']>[0];
+      } as unknown as Parameters<TaskListComponent['drop']>[0];
+    };
 
     it('dispatches convertToSubTask when a top-level task is dropped into a subtask list', async () => {
       await component.drop(
@@ -1015,6 +1019,57 @@ describe('TaskListComponent', () => {
           modified: jasmine.any(Number),
         }),
       );
+    });
+
+    describe('with isSortingDisabled (All Tasks, Overdue, Later Today)', () => {
+      const undoneList = (): ListData => ({
+        listId: 'PARENT',
+        listModelId: 'UNDONE',
+        filteredTasks: [{ id: 't1' }, { id: 't2' }, { id: 't3' }],
+      });
+
+      it('ignores a same-list reorder instead of dispatching an order op', async () => {
+        // Such a list has no manual order to change: the page takes its order
+        // from a selector no reorder action writes, so the row would snap back
+        // while an order op still synced to other devices.
+        fixture.componentRef.setInput('isSortingDisabled', true);
+        const list = undoneList();
+
+        await component.drop(
+          dropEvent({
+            previous: list,
+            target: list,
+            dragged: { id: 't1', parentId: null },
+            currentIndex: 2,
+            sameContainer: true,
+          }),
+        );
+
+        expect(store.dispatch).not.toHaveBeenCalled();
+      });
+
+      it('still moves a task dropped onto a different list', async () => {
+        // The guard covers same-container reorders only: DONE <-> UNDONE,
+        // sections and subtask lists are real moves and must still go through.
+        fixture.componentRef.setInput('isSortingDisabled', true);
+
+        await component.drop(
+          dropEvent({
+            previous: {
+              listId: 'PARENT',
+              listModelId: 'UNDONE',
+              filteredTasks: [{ id: 't1' }],
+            },
+            target: { listId: 'SUB', listModelId: 'p1', filteredTasks: [{ id: 's1' }] },
+            dragged: { id: 't1', parentId: null },
+            currentIndex: 0,
+          }),
+        );
+
+        expect(store.dispatch).toHaveBeenCalledWith(
+          jasmine.objectContaining({ type: TaskSharedActions.convertToSubTask.type }),
+        );
+      });
     });
   });
 

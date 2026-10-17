@@ -10,6 +10,10 @@ export type AppFeaturesConfig = Readonly<{
   isTimeTrackingEnabled: boolean;
   isFocusModeEnabled: boolean;
   isSchedulerEnabled: boolean;
+  // Optional: added after v18.15 shipped, so persisted state from before the
+  // All Tasks page exists has no such key. Required would fail the frozen-state
+  // guard (see src/app/op-log/validation/frozen-state.spec.ts, AGENTS.md rule 11).
+  isAllTasksEnabled?: boolean;
   isPlannerEnabled: boolean;
   isBoardsEnabled: boolean;
   isScheduleDayPanelEnabled: boolean;

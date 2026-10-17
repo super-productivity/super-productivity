@@ -12,6 +12,7 @@ const features = (over: Partial<AppFeaturesConfig> = {}): AppFeaturesConfig =>
     isPlannerEnabled: true,
     isSchedulerEnabled: true,
     isBoardsEnabled: true,
+    isAllTasksEnabled: true,
     ...over,
   }) as AppFeaturesConfig;
 
@@ -80,6 +81,33 @@ describe('getStartPageUrlPath', () => {
           features({ isBoardsEnabled: false }),
           undefined,
         ),
+      ).toBe(TODAY_URL);
+    });
+
+    it('resolves All Tasks when enabled, Today when disabled', () => {
+      expect(getStartPageUrlPath(DefaultStartPage.AllTasks, features(), undefined)).toBe(
+        '/all-tasks',
+      );
+      expect(
+        getStartPageUrlPath(
+          DefaultStartPage.AllTasks,
+          features({ isAllTasksEnabled: false }),
+          undefined,
+        ),
+      ).toBe(TODAY_URL);
+    });
+
+    it('keeps All Tasks off for config predating the flag (missing key)', () => {
+      // Persisted state written before the flag existed carries no such key.
+      // The feature is opt-in, so a missing key must behave like `false`.
+      const preFlagFeatures = {
+        isPlannerEnabled: true,
+        isSchedulerEnabled: true,
+        isBoardsEnabled: true,
+      } as AppFeaturesConfig;
+
+      expect(
+        getStartPageUrlPath(DefaultStartPage.AllTasks, preFlagFeatures, undefined),
       ).toBe(TODAY_URL);
     });
 
