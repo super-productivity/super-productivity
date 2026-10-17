@@ -62,8 +62,6 @@ const PANEL_HEIGHTS = {
   CLOSE_VELOCITY_FLOOR: 0.4, // px/ms — Vaul reference value for "fast swipe"
   CLOSE_PROJECTION_MS: 250, // momentum horizon — between Android's 100 and iOS's ~499
   CLOSE_PROJECTED_DISTANCE_VH: 0.3, // projected drag must clear this fraction of viewport
-  CLOSE_ANIMATION_MIN_DURATION: 70, // ms — fast flings get near-instant dismissal
-  CLOSE_ANIMATION_MAX_DURATION: 280, // ms — slow drags still close briskly
   EXPAND_ANIMATION_DURATION: 280,
   INITIAL_ANIMATION_BLOCK_DURATION: 300,
 } as const;
@@ -156,7 +154,6 @@ export class BottomPanelContainerComponent implements AfterViewInit, OnDestroy {
   private _velocitySamples: { y: number; t: number }[] = [];
   private _velocity = 0;
   private _disableAniTimeout?: number;
-  private _closeAniTimeout?: number;
   private _expandAniTimeout?: number;
   private _cachedContainer: HTMLElement | null = null;
 
@@ -190,7 +187,6 @@ export class BottomPanelContainerComponent implements AfterViewInit, OnDestroy {
     this._removeDragListeners();
     this._removeKeyboardWatcher();
     window.clearTimeout(this._disableAniTimeout);
-    window.clearTimeout(this._closeAniTimeout);
     window.clearTimeout(this._expandAniTimeout);
     this._cachedContainer = null;
     this._bottomPanelState.isOpen.set(false);
@@ -235,6 +231,9 @@ export class BottomPanelContainerComponent implements AfterViewInit, OnDestroy {
     // would otherwise reset _startY/_startHeight to the new pointer's
     // values, corrupting the in-progress gesture.
     if (this._activePointerId !== null) return;
+    // Dismissal is committed. Regrabbing before destruction would leave
+    // text selection disabled when the pointerup listener is removed.
+    if (this._getSheetContainer()?.classList.contains('closing')) return;
 
     this._activePointerId = event.pointerId;
     // Pin subsequent move/up/cancel for this pointer to the header so the
@@ -252,10 +251,7 @@ export class BottomPanelContainerComponent implements AfterViewInit, OnDestroy {
   }
 
   private _startDrag(clientY: number): void {
-    // If a close/expand animation is still in flight, cancel its dismissal
-    // timer — the user has grabbed the panel again and the in-flight close
-    // would otherwise dismiss the sheet mid-drag.
-    window.clearTimeout(this._closeAniTimeout);
+    // A new drag takes over from an in-flight height expansion.
     window.clearTimeout(this._expandAniTimeout);
 
     this._isDragging = true;
@@ -264,9 +260,6 @@ export class BottomPanelContainerComponent implements AfterViewInit, OnDestroy {
     this._velocitySamples = [{ y: clientY, t: Date.now() }];
     const container = this._getSheetContainer();
     if (container) {
-      // Clear any residual close-animation styles from a regrab.
-      container.classList.remove('closing');
-      container.style.transform = '';
       container.style.transition = '';
 
       this._startHeight = container.offsetHeight;
@@ -381,7 +374,9 @@ export class BottomPanelContainerComponent implements AfterViewInit, OnDestroy {
         // cause a one-frame snap up to 20vh before the slide-off begins.
         container.classList.add('closing');
         container.classList.remove('dragging');
-        this._animateClose(container);
+        // Material owns the exit animation. Its retained entrance animation
+        // masks inline transforms, so a separate transition only delays dismissal.
+        this.close();
         return;
       }
     }
@@ -389,46 +384,6 @@ export class BottomPanelContainerComponent implements AfterViewInit, OnDestroy {
     // they intentionally dragged to that size. No accidental close on slow
     // drags, even long ones, and no close on hold-and-release.
     container.classList.remove('dragging');
-  }
-
-  private _animateClose(container: HTMLElement): void {
-    // Slide the panel off the bottom via translateY. The panel sits at
-    // `bottom: 0`, so translating by its current rendered height moves it
-    // exactly off-screen. Read offsetHeight directly: the inline height
-    // and CSS min-height can disagree on the actual rendered height.
-    const distance = Math.max(container.offsetHeight, 1);
-
-    // For slow / distance-only closes, keep a friendly minimum speed so
-    // the duration doesn't balloon. For real flings we use the measured
-    // velocity directly — a 4 px/ms swing closes a 600px panel in 150ms.
-    const flingSpeed = Math.abs(this._velocity);
-    const speed = Math.max(flingSpeed, 0.6);
-
-    let duration = distance / speed;
-    duration = Math.min(
-      Math.max(duration, PANEL_HEIGHTS.CLOSE_ANIMATION_MIN_DURATION),
-      PANEL_HEIGHTS.CLOSE_ANIMATION_MAX_DURATION,
-    );
-
-    // Easing: slower releases get a soft ease-out (looks natural). Fast
-    // flings use a near-linear curve so the panel actually moves at the
-    // velocity the user gave it instead of decelerating immediately.
-    const easing =
-      flingSpeed > 1.8
-        ? 'cubic-bezier(0.33, 0.0, 0.67, 1)'
-        : 'cubic-bezier(0.22, 0.61, 0.36, 1)';
-
-    // .closing keeps min-height: 0 in effect through the animation so the
-    // CSS floor doesn't snap the panel back up to 20vh between dragend and
-    // the transition starting. Caller (_handleDragEnd) already added it.
-    container.style.transition = `transform ${duration}ms ${easing}`;
-    void container.offsetHeight;
-    container.style.transform = `translateY(${distance}px)`;
-
-    window.clearTimeout(this._closeAniTimeout);
-    this._closeAniTimeout = window.setTimeout(() => {
-      this.close();
-    }, duration);
   }
 
   private _animateExpand(container: HTMLElement, viewportHeight: number): void {
