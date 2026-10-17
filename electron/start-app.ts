@@ -24,6 +24,7 @@ import { quitApp, showOrFocus } from './various-shared';
 import { closeWinAndQuit, createWindow, getIsAppReady } from './main-window';
 import { IdleTimeHandler } from './idle-time-handler';
 import { destroyTaskWidget } from './task-widget/task-widget';
+import { destroyTaskListWidget } from './task-list-widget/task-list-widget';
 import {
   initializeProtocolHandling,
   processPendingProtocolUrls,
@@ -497,6 +498,7 @@ export const startApp = (): void => {
     // isQuiting=true: all before-close IPC work is complete — safe to clean up.
     idleTimeHandler?.dispose();
     destroyTaskWidget();
+    destroyTaskListWidget();
     if (global.gc) {
       global.gc();
     }
