@@ -1053,7 +1053,7 @@
       "ARCHIVED_NOTICE": "This project is archived.",
       "ARCHIVED_PROJECTS": {
         "EMPTY": "No archived projects.",
-        "LINK_LABEL": "Archived projects",
+        "NAV_LABEL": "Archived",
         "SEARCH": "Search archived projects",
         "UNARCHIVE": "Restore project"
       }
