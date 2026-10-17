@@ -213,20 +213,37 @@ export const markedOptionsFactory = (): MarkedOptions => {
   // In marked v17, paragraph renderer receives tokens that need to be parsed
   renderer.paragraph = function ({ tokens }: { tokens: Token[] }) {
     const text = tokens ? this.parser.parseInline(tokens) : '';
-    const split = text.split('\n');
-    return split.reduce((acc, p, i) => {
-      const result = /h(\d)\./.exec(p);
+    // `breaks: true` renders every soft line break inside a paragraph as a
+    // `<br>`, so the parsed inline text holds no `\n` — the source lines are
+    // separated by `<br>`. Split on that to look at each line.
+    const lines = text.split(/<br\s*\/?>/);
+
+    // Jira-style `hN.` headings: a line like `h1. Foo` becomes an `<hN>`. The
+    // rule is anchored at the line start and limited to `[1-6]` plus a single
+    // trailing space, matching the live editor's JIRA_HEADING_RE exactly so a
+    // note renders the same on the card and in the inline editor (#10153 case
+    // 2). Non-heading lines are regrouped into `<p>` runs joined by `<br>`, so
+    // a heading mid-paragraph splits the surrounding prose as it should.
+    const html: string[] = [];
+    let paragraphRun: string[] = [];
+    const flushRun = (): void => {
+      if (paragraphRun.length) {
+        html.push(`<p>${paragraphRun.join('<br>')}</p>`);
+        paragraphRun = [];
+      }
+    };
+    for (const line of lines) {
+      const result = /^h([1-6])\.\s/.exec(line);
       if (result !== null) {
+        flushRun();
         const h = `h${result[1]}`;
-        return acc + `<${h}>${p.replace(result[0], '')}</${h}>`;
+        html.push(`<${h}>${line.replace(result[0], '')}</${h}>`);
+      } else {
+        paragraphRun.push(line);
       }
-
-      if (split.length === 1) {
-        return `<p>` + p + `</p>`;
-      }
-
-      return acc ? (split.length - 1 === i ? acc + p + `</p>` : acc + p) : `<p>` + p;
-    }, '');
+    }
+    flushRun();
+    return html.join('');
   };
 
   // NOTE: We intentionally do NOT override renderer.text for URL auto-linking.
