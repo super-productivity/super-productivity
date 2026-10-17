@@ -1,7 +1,14 @@
-import { getWidgetValidUntil, selectAndroidWidgetData } from './android-widget.selectors';
+import {
+  buildLocalCurrentTask,
+  getWidgetValidUntil,
+  resolveRemoteCurrentTask,
+  selectAndroidWidgetData,
+} from './android-widget.selectors';
 import { getDbDateStr } from '../../../util/get-db-date-str';
 import { Task } from '../../tasks/task.model';
 import { Project } from '../../project/project.model';
+import { RemoteSessionView } from '../../tracking-presence/tracking-presence.model';
+import { getDeviceLabel } from '../../tracking-presence/get-device-label.util';
 
 describe('getWidgetValidUntil', () => {
   const HOUR = 60 * 60 * 1000;
@@ -87,6 +94,7 @@ describe('selectAndroidWidgetData', () => {
       projectState([project('p1', '#ff0000')]),
       DAY,
       0,
+      null,
     );
     expect(result).toEqual({
       v: 1,
@@ -97,6 +105,7 @@ describe('selectAndroidWidgetData', () => {
         { id: 't2', title: 'Task two', isDone: true },
       ],
       projectColors: { p1: '#ff0000' },
+      currentTask: null,
     });
   });
 
@@ -107,6 +116,7 @@ describe('selectAndroidWidgetData', () => {
       projectState([]),
       DAY,
       0,
+      null,
     );
     expect(result.tasks.length).toBe(1);
     expect(result.tasks[0].id).toBe('t1');
@@ -119,6 +129,7 @@ describe('selectAndroidWidgetData', () => {
       projectState([]),
       DAY,
       0,
+      null,
     );
     expect('projectId' in result.tasks[0]).toBe(false);
   });
@@ -130,6 +141,7 @@ describe('selectAndroidWidgetData', () => {
       projectState([project('p1')]),
       DAY,
       0,
+      null,
     );
     expect(result.projectColors).toEqual({});
     expect(result.tasks[0].projectId).toBe('p1');
@@ -145,9 +157,28 @@ describe('selectAndroidWidgetData', () => {
       projectState([]),
       '2026-07-16',
       fourAmOffset,
+      null,
     );
     expect(result.dayStr).toBe('2026-07-16');
     expect(result.validUntil).toBe(new Date(2026, 6, 17).getTime() + fourAmOffset);
+  });
+
+  it('should include the local device currentTask when a task is being tracked', () => {
+    const result = selectAndroidWidgetData.projector(
+      ['t1'],
+      { t1: task('t1', { title: 'Task one', projectId: 'p1' }) },
+      projectState([project('p1', '#ff0000')]),
+      DAY,
+      0,
+      't1',
+    );
+    expect(result.currentTask).toEqual({
+      id: 't1',
+      title: 'Task one',
+      projectId: 'p1',
+      deviceLabel: getDeviceLabel(),
+      isLocal: true,
+    });
   });
 
   it('should serialize to the exact v:1 blob shape consumed by WidgetData.kt (see WidgetDataTest.kt)', () => {
@@ -160,12 +191,109 @@ describe('selectAndroidWidgetData', () => {
       projectState([project('p1', '#ff0000')]),
       DAY,
       0,
+      null,
     );
     expect(JSON.stringify(result)).toBe(
       `{"v":1,"dayStr":"${DAY}","validUntil":${VALID_UNTIL},"tasks":[` +
         '{"id":"t1","title":"Task one","isDone":false,"projectId":"p1"},' +
         '{"id":"t2","title":"Task two","isDone":true}],' +
-        '"projectColors":{"p1":"#ff0000"}}',
+        '"projectColors":{"p1":"#ff0000"},"currentTask":null}',
     );
+  });
+});
+
+describe('buildLocalCurrentTask', () => {
+  const task = (id: string, partial: Partial<Task> = {}): Task =>
+    ({
+      id,
+      title: `Task ${id}`,
+      isDone: false,
+      projectId: undefined,
+      ...partial,
+    }) as Task;
+
+  it('should return null when nothing is tracked locally', () => {
+    expect(buildLocalCurrentTask(null, {})).toBeNull();
+  });
+
+  it('should return null when the tracked id has no matching task entity', () => {
+    expect(buildLocalCurrentTask('missing', {})).toBeNull();
+  });
+
+  it('should build the current task with the device label and isLocal true', () => {
+    const result = buildLocalCurrentTask('t1', { t1: task('t1', { title: 'Write' }) });
+    expect(result).toEqual({
+      id: 't1',
+      title: 'Write',
+      deviceLabel: getDeviceLabel(),
+      isLocal: true,
+    });
+  });
+
+  it('should include projectId only when set', () => {
+    const result = buildLocalCurrentTask('t1', {
+      t1: task('t1', { projectId: 'p1' }),
+    });
+    expect(result?.projectId).toBe('p1');
+  });
+});
+
+describe('resolveRemoteCurrentTask', () => {
+  const task = (id: string, partial: Partial<Task> = {}): Task =>
+    ({
+      id,
+      title: `Task ${id}`,
+      isDone: false,
+      projectId: undefined,
+      ...partial,
+    }) as Task;
+
+  const view = (partial: {
+    isStale?: boolean;
+    state?: 'tracking' | 'stopped';
+    taskId?: string | null;
+    deviceLabel?: string;
+  }): RemoteSessionView =>
+    ({
+      isStale: partial.isStale ?? false,
+      session: {
+        payload: {
+          state: partial.state ?? 'tracking',
+          taskId: partial.taskId ?? 't1',
+          deviceLabel: partial.deviceLabel ?? 'Desktop',
+        },
+      },
+    }) as RemoteSessionView;
+
+  it('should return null when there is no remote session', () => {
+    expect(resolveRemoteCurrentTask(null, {})).toBeNull();
+  });
+
+  it('should return null when the remote session is stale', () => {
+    expect(
+      resolveRemoteCurrentTask(view({ isStale: true }), { t1: task('t1') }),
+    ).toBeNull();
+  });
+
+  it('should return null when the remote device is not actively tracking', () => {
+    expect(
+      resolveRemoteCurrentTask(view({ state: 'stopped' }), { t1: task('t1') }),
+    ).toBeNull();
+  });
+
+  it('should return null when the remote task is not known locally', () => {
+    expect(resolveRemoteCurrentTask(view({}), {})).toBeNull();
+  });
+
+  it('should resolve the remote task with its device label and isLocal false', () => {
+    const result = resolveRemoteCurrentTask(view({ deviceLabel: 'Desktop' }), {
+      t1: task('t1', { title: 'Write report' }),
+    });
+    expect(result).toEqual({
+      id: 't1',
+      title: 'Write report',
+      deviceLabel: 'Desktop',
+      isLocal: false,
+    });
   });
 });

@@ -38,6 +38,10 @@
   <string name="widget_description">Shows today\'s tasks with quick done action</string>
   <string name="widget_empty">No tasks for today</string>
   <string name="widget_task_done">Toggle task done</string>
+  <!-- Currently tracked task row; %1$s is the task title -->
+  <string name="widget_tracking_title">Tracking: %1$s</string>
+  <!-- Device currently tracking it, e.g. "on Desktop"; %1$s is the device label -->
+  <string name="widget_tracking_device">on %1$s</string>
 
   <!-- Startup overlay -->
   <string name="startup_overlay_add_task">Add task</string>
