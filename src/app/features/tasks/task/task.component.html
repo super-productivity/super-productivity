@@ -271,7 +271,7 @@
               mat-icon-button
             >
               <mat-icon>{{ cp.done === cp.total ? 'check_box' : 'checklist' }}</mat-icon>
-              <div class="checklist-progress-badge">{{ cp.done }}/{{ cp.total }}</div>
+              <div class="progress-badge">{{ cp.done }}/{{ cp.total }}</div>
             </button>
           }
 
@@ -313,15 +313,32 @@
     @if (t.subTasks?.length || isAddSubtaskInputVisible()) {
       <div class="sub-tasks">
         @if (t.subTasks?.length) {
+          @let sp = subTaskProgress();
           <button
             (click)="toggleSubTaskMode()"
-            [title]="T.F.TASK.CMP.TOGGLE_SUB_TASK_VISIBILITY | translate"
+            [title]="
+              sp
+                ? (T.F.TASK.CMP.SUB_TASK_PROGRESS
+                  | translate: { done: sp.done, total: sp.total })
+                : (T.F.TASK.CMP.TOGGLE_SUB_TASK_VISIBILITY | translate)
+            "
+            [attr.aria-label]="
+              sp
+                ? (T.F.TASK.CMP.SUB_TASK_PROGRESS
+                  | translate: { done: sp.done, total: sp.total })
+                : null
+            "
             class="toggle-sub-tasks-btn ico-btn mat-elevation-z2"
             color=""
             mat-mini-fab
           >
             @if (t._hideSubTasksMode === ShowSubTasksMode.HideAll) {
               <mat-icon>add</mat-icon>
+              @if (sp) {
+                <div class="progress-badge sub-task-progress-badge">
+                  {{ sp.done }}/{{ sp.total }}
+                </div>
+              }
             } @else {
               <mat-icon
                 [class.isHideDoneTasks]="

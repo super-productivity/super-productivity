@@ -491,7 +491,8 @@ done-toggle {
   }
 }
 
-.checklist-progress-badge {
+// done/total count overlaid on an icon button (checklist + collapsed sub tasks)
+.progress-badge {
   @include center;
   margin-top: 10px;
   font-size: 10px;

@@ -39,6 +39,7 @@ import {
   ChecklistProgress,
   getChecklistProgress,
 } from '../../markdown-checklist/get-checklist-progress';
+import { getSubTaskProgress } from '../util/get-sub-task-progress';
 import { GlobalConfigService } from '../../config/global-config.service';
 import { DoneToggleComponent } from '../../../ui/done-toggle/done-toggle.component';
 import { SwipeBlockComponent } from '../../../ui/swipe-block/swipe-block.component';
@@ -340,6 +341,14 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   checklistProgress = computed<ChecklistProgress | null>(() =>
     getChecklistProgress(this.task().notes),
   );
+
+  // Done/total badge on the toggle while sub tasks are collapsed (null = not shown). #7057
+  subTaskProgress = computed<ChecklistProgress | null>(() => {
+    const t = this.task();
+    return t._hideSubTasksMode === HideSubTasksMode.HideAll
+      ? getSubTaskProgress(t.subTasks)
+      : null;
+  });
 
   isShowRemoveFromToday = computed(() => {
     return (

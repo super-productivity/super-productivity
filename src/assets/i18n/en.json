@@ -1868,6 +1868,7 @@
         "SET_DEADLINE": "Set deadline",
         "SHOW_HIDDEN_DONE_SUB_TASKS": "+ {{nr}} completed subtasks",
         "SHOW_HIDDEN_SUB_TASKS": "+ {{nr}} subtasks",
+        "SUB_TASK_PROGRESS": "Subtasks: {{done}} of {{total}} done",
         "TIME_CONFLICT": "Overlaps with another scheduled task",
         "TOGGLE_ATTACHMENTS": "Show/hide attachments",
         "TOGGLE_DETAIL_PANEL": "Show/hide task panel",
