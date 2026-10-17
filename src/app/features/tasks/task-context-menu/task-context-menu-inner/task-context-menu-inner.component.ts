@@ -164,8 +164,8 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
   readonly isFocusModeEnabled = computed(
     () => this._globalConfigService.appFeatures().isFocusModeEnabled,
   );
-  readonly pluginTaskContextMenuEntries = computed(() =>
-    this._pluginTaskContextMenuRegistry.entriesFor(this._pluginTaskContextMenuTarget()),
+  readonly pluginTaskContextMenuGroups = computed(() =>
+    this._pluginTaskContextMenuRegistry.groupsFor(this._pluginTaskContextMenuTarget()),
   );
 
   // eslint-disable-next-line @angular-eslint/no-output-native

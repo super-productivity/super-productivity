@@ -21,7 +21,8 @@ export interface PluginTaskContextMenuContext {
 }
 
 /**
- * A plugin action shown in the task context menu's dedicated plugin submenu.
+ * A plugin action shown in the task context menu's plugin-named submenu.
+ * Older hosts that support this API show actions under "Plugin actions" instead.
  * Register from plugin.js; callback registrations are not supported in iframe
  * index.html files.
  */

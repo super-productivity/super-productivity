@@ -247,7 +247,9 @@ describe('TaskContextMenuInnerComponent', () => {
       } as Task;
       fixture.detectChanges();
 
-      expect(component.pluginTaskContextMenuEntries()).toHaveSize(1);
+      expect(
+        component.pluginTaskContextMenuGroups().flatMap((group) => group.entries),
+      ).toHaveSize(1);
       expect(onClick).not.toHaveBeenCalled();
     });
 
@@ -264,7 +266,7 @@ describe('TaskContextMenuInnerComponent', () => {
       } as Task;
 
       await component.runPluginTaskContextMenuEntry(
-        component.pluginTaskContextMenuEntries()[0],
+        component.pluginTaskContextMenuGroups().flatMap((group) => group.entries)[0],
       );
 
       expect(onClick).toHaveBeenCalledOnceWith({ taskId: 'task-1' });
@@ -293,7 +295,7 @@ describe('TaskContextMenuInnerComponent', () => {
       component.contextMenuTrigger()?.openMenu();
       fixture.detectChanges();
       tick();
-      const submenuTrigger = findMenuItem(T.PLUGINS.TASK_CONTEXT_MENU_ACTIONS);
+      const submenuTrigger = findMenuItem('plugin-a');
       expect(submenuTrigger).toBeDefined();
 
       submenuTrigger!.click();
@@ -306,6 +308,106 @@ describe('TaskContextMenuInnerComponent', () => {
       flush();
 
       expect(onClick).toHaveBeenCalledOnceWith({ taskId: 'task-1' });
+      component.contextMenuTrigger()?.closeMenu();
+      flush();
+    }));
+
+    it('updates an open submenu and removes it when its plugin unloads', fakeAsync(() => {
+      const stale = jasmine.createSpy('stale');
+      const replacement = jasmine.createSpy('replacement');
+      registry.register(
+        'plugin-a',
+        { id: 'action', label: 'Old action', onClick: stale },
+        'Task Colors',
+      );
+      component.taskSet = { ...DEFAULT_TASK, id: 'task-1' } as Task;
+      fixture.detectChanges();
+      component.contextMenuTrigger()?.openMenu();
+      fixture.detectChanges();
+      tick();
+      const findItem = (text: string): HTMLElement | undefined =>
+        Array.from(
+          document.querySelectorAll<HTMLElement>(
+            '.cdk-overlay-container [mat-menu-item]',
+          ),
+        ).find((item) => item.textContent?.includes(text));
+      findItem('Task Colors')!.click();
+      fixture.detectChanges();
+      tick();
+      registry.register(
+        'plugin-a',
+        { id: 'action', label: 'New action', onClick: replacement },
+        'Task Colors',
+      );
+      fixture.detectChanges();
+      tick();
+      expect(findItem('Old action')).toBeUndefined();
+      const action = findItem('New action');
+      expect(action).toBeDefined();
+      action!.click();
+      flush();
+      expect(stale).not.toHaveBeenCalled();
+      expect(replacement).toHaveBeenCalledOnceWith({ taskId: 'task-1' });
+
+      component.contextMenuTrigger()?.openMenu();
+      fixture.detectChanges();
+      tick();
+      registry.unregisterPlugin('plugin-a');
+      fixture.detectChanges();
+      tick();
+      expect(findItem('Task Colors')).toBeUndefined();
+      component.contextMenuTrigger()?.closeMenu();
+      flush();
+    }));
+
+    it('unloads the plugin while its submenu is open and can open a sibling', fakeAsync(() => {
+      const removed = jasmine.createSpy('removed');
+      const sibling = jasmine.createSpy('sibling');
+      registry.register(
+        'plugin-a',
+        { id: 'action', label: 'Removed action', onClick: removed },
+        'Task Colors',
+      );
+      registry.register(
+        'plugin-b',
+        { id: 'action', label: 'Sibling action', onClick: sibling },
+        'Other tools',
+      );
+      component.taskSet = { ...DEFAULT_TASK, id: 'task-1' } as Task;
+      fixture.detectChanges();
+      component.contextMenuTrigger()?.openMenu();
+      fixture.detectChanges();
+      tick();
+      const findItem = (text: string): HTMLElement | undefined =>
+        Array.from(
+          document.querySelectorAll<HTMLElement>(
+            '.cdk-overlay-container [mat-menu-item]',
+          ),
+        ).find((item) => item.textContent?.includes(text));
+      const removedTrigger = findItem('Task Colors');
+      expect(removedTrigger).toBeDefined();
+      removedTrigger!.click();
+      fixture.detectChanges();
+      tick();
+      expect(removedTrigger!.getAttribute('aria-expanded')).toBe('true');
+      expect(findItem('Removed action')).toBeDefined();
+
+      registry.unregisterPlugin('plugin-a');
+      fixture.detectChanges();
+      tick();
+      expect(findItem('Task Colors')).toBeUndefined();
+      expect(findItem('Removed action')).toBeUndefined();
+      const siblingTrigger = findItem('Other tools');
+      expect(siblingTrigger).toBeDefined();
+      siblingTrigger!.click();
+      fixture.detectChanges();
+      tick();
+      const action = findItem('Sibling action');
+      expect(action).toBeDefined();
+      action!.click();
+      flush();
+      expect(removed).not.toHaveBeenCalled();
+      expect(sibling).toHaveBeenCalledOnceWith({ taskId: 'task-1' });
       component.contextMenuTrigger()?.closeMenu();
       flush();
     }));
@@ -325,9 +427,84 @@ describe('TaskContextMenuInnerComponent', () => {
       } as Task;
 
       expect(
-        component.pluginTaskContextMenuEntries().map((entry) => entry.entryId),
+        component
+          .pluginTaskContextMenuGroups()
+          .flatMap((group) => group.entries)
+          .map((entry) => entry.entryId),
       ).toEqual(['subtask-action']);
     });
+
+    it('opens separate submenus for plugins with the same name and entry id', fakeAsync(() => {
+      const first = jasmine.createSpy('first');
+      const second = jasmine.createSpy('second');
+      registry.register(
+        'plugin-a',
+        { id: 'action', label: 'First action', onClick: first },
+        'Shared name',
+      );
+      registry.register(
+        'plugin-b',
+        { id: 'action', label: 'Second action', onClick: second },
+        'Shared name',
+      );
+      component.taskSet = { ...DEFAULT_TASK, id: 'task-1' } as Task;
+      fixture.detectChanges();
+      component.contextMenuTrigger()?.openMenu();
+      fixture.detectChanges();
+      tick();
+      const triggers = Array.from(
+        document.querySelectorAll<HTMLElement>(
+          '.cdk-overlay-container [mat-menu-item][aria-label="Shared name"]',
+        ),
+      );
+      expect(triggers).toHaveSize(2);
+      triggers[1].click();
+      fixture.detectChanges();
+      tick();
+      const items = Array.from(
+        document.querySelectorAll<HTMLElement>('.cdk-overlay-container [mat-menu-item]'),
+      );
+      expect(
+        items.some((item) => item.textContent?.includes('First action')),
+      ).toBeFalse();
+      const action = items.find((item) => item.textContent?.includes('Second action'));
+      expect(action).toBeDefined();
+      action!.click();
+      flush();
+      expect(first).not.toHaveBeenCalled();
+      expect(second).toHaveBeenCalledOnceWith({ taskId: 'task-1' });
+      component.contextMenuTrigger()?.closeMenu();
+      flush();
+    }));
+
+    it('keeps the full long plugin name accessible without repeating it on actions', fakeAsync(() => {
+      const name = 'Long task tools name '.repeat(10).trim();
+      registry.register(
+        'plugin-a',
+        { id: 'action', label: 'Run action', onClick: () => undefined },
+        name,
+      );
+      component.taskSet = { ...DEFAULT_TASK, id: 'task-1' } as Task;
+      fixture.detectChanges();
+      component.contextMenuTrigger()?.openMenu();
+      fixture.detectChanges();
+      tick();
+      const trigger = Array.from(
+        document.querySelectorAll<HTMLElement>('.cdk-overlay-container [mat-menu-item]'),
+      ).find((item) => item.getAttribute('aria-label') === name);
+      expect(trigger).toBeDefined();
+      expect(trigger!.getAttribute('title')).toBe(name);
+      trigger!.click();
+      fixture.detectChanges();
+      tick();
+      const action = Array.from(
+        document.querySelectorAll<HTMLElement>('.cdk-overlay-container [mat-menu-item]'),
+      ).find((item) => item.textContent?.trim() === 'Run action');
+      expect(action).toBeDefined();
+      expect(action!.textContent).not.toContain(name);
+      component.contextMenuTrigger()?.closeMenu();
+      flush();
+    }));
   });
 
   describe('priority submenu', () => {

@@ -477,10 +477,16 @@ PluginAPI.registerTaskContextMenuEntry({
 });
 ```
 
-Entries appear under **Plugin actions** in the task's context menu. Labels contain at
-most 80 characters; add a short plugin-specific prefix yourself when disambiguation is
-needed. Re-registering the same `id` replaces the previous entry, and all entries are
-removed when the plugin unloads.
+Entries appear in a submenu named after the plugin's manifest `name` (or its
+`id` when no manifest is available). Each plugin has its own submenu, even when
+two plugins have the same name. Only submenus with entries matching the selected
+task type appear. Action labels contain at most 80 characters and do not need to
+repeat the plugin name.
+
+Submenus are ordered by plugin ID; actions retain their registration order.
+Re-registering the same `id` replaces the previous entry in place, and all entries
+are removed when the plugin unloads. The registration API is unchanged; older hosts
+that support it show the same actions together under **Plugin actions**.
 
 #### Side Panel Button
 

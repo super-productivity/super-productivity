@@ -358,17 +358,20 @@
     </button>
   }
 
-  @if (pluginTaskContextMenuEntries().length) {
+  @for (group of pluginTaskContextMenuGroups(); track group.pluginId) {
     <button
       #pluginTaskActionsMenuTrigger="matMenuTrigger"
       [matMenuTriggerFor]="pluginTaskActionsMenu"
+      [matMenuTriggerData]="{ pluginId: group.pluginId }"
       mat-menu-item
       [menuTouchFix]="pluginTaskActionsMenuTrigger"
       (menuOpened)="focusFirstSubmenuItem(pluginTaskActionsMenu)"
+      [attr.aria-label]="group.label"
+      [title]="group.label"
     >
       <span class="menuItemLeft">
         <mat-icon>extension</mat-icon>
-        {{ T.PLUGINS.TASK_CONTEXT_MENU_ACTIONS | translate }}
+        {{ group.label }}
       </span>
     </button>
   }
@@ -390,21 +393,25 @@
 </mat-menu>
 
 <mat-menu #pluginTaskActionsMenu="matMenu">
-  <ng-template matMenuContent>
-    @for (
-      entry of pluginTaskContextMenuEntries();
-      track entry.pluginId + ':' + entry.entryId
-    ) {
-      <button
-        mat-menu-item
-        menuTouchFix
-        (click)="runPluginTaskContextMenuEntry(entry)"
-      >
-        @if (entry.icon) {
-          <mat-icon>{{ entry.icon }}</mat-icon>
+  <ng-template
+    matMenuContent
+    let-pluginId="pluginId"
+  >
+    @for (group of pluginTaskContextMenuGroups(); track group.pluginId) {
+      @if (group.pluginId === pluginId) {
+        @for (entry of group.entries; track entry.entryId) {
+          <button
+            mat-menu-item
+            menuTouchFix
+            (click)="runPluginTaskContextMenuEntry(entry)"
+          >
+            @if (entry.icon) {
+              <mat-icon>{{ entry.icon }}</mat-icon>
+            }
+            {{ entry.label }}
+          </button>
         }
-        {{ entry.label }}
-      </button>
+      }
     }
   </ng-template>
 </mat-menu>

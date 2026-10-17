@@ -39,7 +39,7 @@ PluginAPI.registerHeaderButton({
   },
 });
 
-// Add an action to task and subtask context menus
+// Add an action to the plugin-named submenu in task and subtask context menus
 PluginAPI.registerTaskContextMenuEntry({
   id: 'copy-external-link',
   label: 'Copy external link',

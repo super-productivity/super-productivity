@@ -3,11 +3,17 @@ import { TranslateService } from '@ngx-translate/core';
 import { TestBed } from '@angular/core/testing';
 import { PluginLog } from '../core/log';
 import { T } from '../t.const';
-import { PluginTaskContextMenuRegistryService } from './plugin-task-context-menu-registry.service';
+import {
+  PluginTaskContextMenuEntryView,
+  PluginTaskContextMenuRegistryService,
+} from './plugin-task-context-menu-registry.service';
 
 describe('PluginTaskContextMenuRegistryService', () => {
   let service: PluginTaskContextMenuRegistryService;
   let translateService: jasmine.SpyObj<TranslateService>;
+
+  const entriesFor = (target: 'TASK' | 'SUBTASK'): PluginTaskContextMenuEntryView[] =>
+    service.groupsFor(target).flatMap((group) => group.entries);
 
   const register = (
     pluginId: string,
@@ -63,26 +69,104 @@ describe('PluginTaskContextMenuRegistryService', () => {
   it('shows entries for tasks and subtasks by default', () => {
     register('plugin-a');
 
-    expect(service.entriesFor('TASK').map((entry) => entry.entryId)).toEqual(['action']);
-    expect(service.entriesFor('SUBTASK').map((entry) => entry.entryId)).toEqual([
-      'action',
-    ]);
+    expect(entriesFor('TASK').map((entry) => entry.entryId)).toEqual(['action']);
+    expect(entriesFor('SUBTASK').map((entry) => entry.entryId)).toEqual(['action']);
   });
 
   it('filters entries by the declarative target', () => {
     register('plugin-a', { showFor: ['SUBTASK'] });
 
-    expect(service.entriesFor('TASK')).toEqual([]);
-    expect(service.entriesFor('SUBTASK')).toHaveSize(1);
+    expect(entriesFor('TASK')).toEqual([]);
+    expect(entriesFor('SUBTASK')).toHaveSize(1);
+  });
+
+  it('groups by plugin identity, not by duplicate names or local entry ids', async () => {
+    const first = jasmine.createSpy('first');
+    const second = jasmine.createSpy('second');
+    service.register(
+      'plugin-z',
+      { id: 'action', label: 'Second', onClick: second },
+      'Same name',
+    );
+    service.register(
+      'plugin-a',
+      { id: 'action', label: 'First', onClick: first },
+      'Same name',
+    );
+
+    expect(
+      service.groupsFor('TASK').map(({ pluginId, label, entries }) => ({
+        pluginId,
+        label,
+        ids: entries.map((entry) => entry.entryId),
+      })),
+    ).toEqual([
+      { pluginId: 'plugin-a', label: 'Same name', ids: ['action'] },
+      { pluginId: 'plugin-z', label: 'Same name', ids: ['action'] },
+    ]);
+    await service.execute('plugin-z', 'action', 'task-1');
+    expect(first).not.toHaveBeenCalled();
+    expect(second).toHaveBeenCalledOnceWith({ taskId: 'task-1' });
+  });
+
+  it('uses the plugin id as the display name when no manifest name is provided', () => {
+    register('plugin-a');
+    expect(service.groupsFor('TASK')[0].label).toBe('plugin-a');
+  });
+
+  it('preserves long manifest names without adding them to action labels', () => {
+    const name = 'A very long plugin name '.repeat(10);
+    service.register(
+      'plugin-a',
+      { id: 'action', label: 'Run', onClick: () => undefined },
+      name,
+    );
+    const group = service.groupsFor('TASK')[0];
+    expect(group.label).toBe(name);
+    expect(group.entries[0].label).toBe('Run');
+  });
+
+  it('omits groups with no matching entries and filters mixed groups', () => {
+    register('plugin-a', { showFor: ['TASK'] });
+    register('plugin-b', { showFor: ['SUBTASK'] });
+    register('plugin-b', { id: 'both' });
+
+    expect(
+      service
+        .groupsFor('TASK')
+        .map((group) => [group.pluginId, group.entries.map((entry) => entry.entryId)]),
+    ).toEqual([
+      ['plugin-a', ['action']],
+      ['plugin-b', ['both']],
+    ]);
+    expect(
+      service
+        .groupsFor('SUBTASK')
+        .map((group) => [group.pluginId, group.entries.map((entry) => entry.entryId)]),
+    ).toEqual([['plugin-b', ['action', 'both']]]);
+  });
+
+  it('rebuilds a removed group with fresh metadata and no stale entries', async () => {
+    const stale = register('plugin-a', { id: 'old' });
+    service.unregisterPlugin('plugin-a');
+    expect(service.groupsFor('TASK')).toEqual([]);
+    service.register(
+      'plugin-a',
+      { id: 'new', label: 'New action', onClick: () => undefined },
+      'New name',
+    );
+    await service.execute('plugin-a', 'old', 'task-1');
+
+    expect(stale).not.toHaveBeenCalled();
+    expect(service.groupsFor('TASK')[0].label).toBe('New name');
+    expect(entriesFor('TASK').map((entry) => entry.entryId)).toEqual(['new']);
   });
 
   it('replaces the same plugin entry id and invokes only the latest callback', async () => {
     const first = register('plugin-a');
     const second = register('plugin-a', { label: 'Replacement' });
 
-    expect(service.entriesFor('TASK').map((entry) => entry.label)).toEqual([
-      'Replacement',
-    ]);
+    expect(entriesFor('TASK').map((entry) => entry.label)).toEqual(['Replacement']);
     await service.execute('plugin-a', 'action', 'task-1');
     expect(first).not.toHaveBeenCalled();
     expect(second).toHaveBeenCalledOnceWith({ taskId: 'task-1' });
@@ -92,7 +176,7 @@ describe('PluginTaskContextMenuRegistryService', () => {
     register('plugin-z');
     register('plugin-a');
 
-    expect(service.entriesFor('TASK').map((entry) => entry.pluginId)).toEqual([
+    expect(entriesFor('TASK').map((entry) => entry.pluginId)).toEqual([
       'plugin-a',
       'plugin-z',
     ]);
@@ -102,7 +186,7 @@ describe('PluginTaskContextMenuRegistryService', () => {
     register('plugin-a', { id: 'set-color' });
     register('plugin-a', { id: 'clear-color' });
 
-    expect(service.entriesFor('TASK').map((entry) => entry.entryId)).toEqual([
+    expect(entriesFor('TASK').map((entry) => entry.entryId)).toEqual([
       'set-color',
       'clear-color',
     ]);
@@ -113,10 +197,7 @@ describe('PluginTaskContextMenuRegistryService', () => {
     register('plugin-a', { id: 'second' });
     register('plugin-a', { id: 'first', label: 'Replacement' });
 
-    expect(service.entriesFor('TASK').map((entry) => entry.entryId)).toEqual([
-      'first',
-      'second',
-    ]);
+    expect(entriesFor('TASK').map((entry) => entry.entryId)).toEqual(['first', 'second']);
   });
 
   it('removes only the unloaded plugin and cannot execute its stale callback', async () => {
@@ -127,9 +208,7 @@ describe('PluginTaskContextMenuRegistryService', () => {
     await service.execute('plugin-a', 'action', 'task-1');
 
     expect(removed).not.toHaveBeenCalled();
-    expect(service.entriesFor('TASK').map((entry) => entry.pluginId)).toEqual([
-      'plugin-b',
-    ]);
+    expect(entriesFor('TASK').map((entry) => entry.pluginId)).toEqual(['plugin-b']);
   });
 
   it('contains rejected callbacks instead of returning a rejection', async () => {

@@ -16,6 +16,7 @@ const VALID_TARGETS = new Set<PluginTaskContextMenuTarget>(DEFAULT_TARGETS);
 
 interface RegisteredTaskContextMenuEntry {
   pluginId: string;
+  pluginName: string;
   id: string;
   label: string;
   icon?: string;
@@ -30,12 +31,22 @@ export interface PluginTaskContextMenuEntryView {
   readonly icon?: string;
 }
 
+export interface PluginTaskContextMenuGroupView {
+  readonly pluginId: string;
+  readonly label: string;
+  readonly entries: readonly PluginTaskContextMenuEntryView[];
+}
+
 @Injectable({ providedIn: 'root' })
 export class PluginTaskContextMenuRegistryService {
   private readonly _entries = signal<RegisteredTaskContextMenuEntry[]>([]);
   private readonly _translateService = inject(TranslateService);
 
-  register(pluginId: string, cfg: PluginTaskContextMenuEntryCfg): void {
+  register(
+    pluginId: string,
+    cfg: PluginTaskContextMenuEntryCfg,
+    pluginName: string = pluginId,
+  ): void {
     const id = typeof cfg.id === 'string' ? cfg.id.trim() : '';
     const label = typeof cfg.label === 'string' ? cfg.label.trim() : '';
     if (!ENTRY_ID_PATTERN.test(id)) {
@@ -76,6 +87,7 @@ export class PluginTaskContextMenuRegistryService {
 
     const newEntry: RegisteredTaskContextMenuEntry = {
       pluginId,
+      pluginName,
       id,
       label,
       icon: cfg.icon,
@@ -94,16 +106,28 @@ export class PluginTaskContextMenuRegistryService {
     PluginLog.log('Plugin task context menu entry registered', { pluginId, entryId: id });
   }
 
-  entriesFor(target: PluginTaskContextMenuTarget): PluginTaskContextMenuEntryView[] {
-    return this._entries()
+  groupsFor(target: PluginTaskContextMenuTarget): PluginTaskContextMenuGroupView[] {
+    const groups = new Map<
+      string,
+      { pluginId: string; label: string; entries: PluginTaskContextMenuEntryView[] }
+    >();
+    const entries = this._entries()
       .filter((entry) => entry.showFor.includes(target))
-      .sort((a, b) => a.pluginId.localeCompare(b.pluginId))
-      .map((entry) => ({
+      .sort((a, b) => a.pluginId.localeCompare(b.pluginId));
+    for (const entry of entries) {
+      let group = groups.get(entry.pluginId);
+      if (!group) {
+        group = { pluginId: entry.pluginId, label: entry.pluginName, entries: [] };
+        groups.set(entry.pluginId, group);
+      }
+      group.entries.push({
         pluginId: entry.pluginId,
         entryId: entry.id,
         label: entry.label,
         icon: entry.icon,
-      }));
+      });
+    }
+    return [...groups.values()];
   }
 
   async execute(pluginId: string, entryId: string, taskId: string): Promise<void> {

@@ -377,6 +377,17 @@ describe('PluginBridgeService - Counter Methods', () => {
       expect(taskContextMenuRegistry.register).toHaveBeenCalledOnceWith(
         manifest.id,
         entry,
+        manifest.name,
+      );
+    });
+
+    it('leaves the display-name fallback to the registry without a manifest', () => {
+      service.createBoundMethods('test-plugin').registerTaskContextMenuEntry(entry);
+
+      expect(taskContextMenuRegistry.register).toHaveBeenCalledOnceWith(
+        'test-plugin',
+        entry,
+        undefined,
       );
     });
 
