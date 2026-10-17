@@ -36,6 +36,9 @@
             android:textColor="@color/widget_ink"
             android:textSize="16sp"
             android:textStyle="bold" />
+
+        <ImageButton android:id="@+id/widget_add_task" android:layout_width="36dp" android:layout_height="36dp" android:layout_marginStart="2dp" android:background="@android:color/transparent" android:contentDescription="@string/widget_add_task" android:padding="8dp" android:src="@drawable/ic_widget_add" />
+        <ImageButton android:id="@+id/widget_search" android:layout_width="36dp" android:layout_height="36dp" android:layout_marginStart="2dp" android:background="@android:color/transparent" android:contentDescription="@string/widget_search" android:padding="8dp" android:src="@drawable/ic_widget_search" />
     </LinearLayout>
 
     <!-- FrameLayout, not View: plain View is not on the RemoteViews whitelist -->

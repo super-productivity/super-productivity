@@ -71,6 +71,11 @@ describe('AppUriQuickActionsService', () => {
     expect(router.navigateByUrl).toHaveBeenCalledOnceWith(`/tag/${TODAY_TAG.id}/tasks`);
   });
 
+  it('should navigate to task search', () => {
+    pendingAction$.next({ type: 'navigate', target: 'search' });
+    expect(router.navigateByUrl).toHaveBeenCalledOnceWith('/search');
+  });
+
   it('should navigate to the Inbox project', () => {
     pendingAction$.next({ type: 'navigate', target: 'inbox' });
 

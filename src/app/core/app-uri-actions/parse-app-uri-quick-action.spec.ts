@@ -16,6 +16,10 @@ describe('parseAppUriQuickAction', () => {
       type: 'navigate',
       target: 'inbox',
     });
+    expect(parseAppUriQuickAction(`${SCHEME}search`)).toEqual({
+      type: 'navigate',
+      target: 'search',
+    });
   });
 
   it('should cover every host listed in QUICK_ACTION_HOSTS', () => {

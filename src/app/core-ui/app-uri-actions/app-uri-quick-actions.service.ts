@@ -13,20 +13,14 @@ import {
 import { PENDING_CAPACITOR_QUICK_ACTION } from '../../core/app-uri-actions/pending-capacitor-quick-action';
 
 /**
- * Composed from the work-context consts the same way ShortcutService,
- * NavigateToTaskService and MobileBottomNavComponent do it.
- *
- * Only the two always-present work contexts are offered. Every other main-nav
- * destination (Planner, Schedule, Boards, Habits) hangs off an App Features
- * flag — and the onboarding presets ship two of the three with Boards off and
- * one with Planner off too, so a static Home Screen item pointing at one would
- * be a dead entry for a large share of users. A static item cannot be hidden
- * per user; that would need dynamic shortcut items, i.e. a native plugin.
- * Documented in wiki 3.01 §4.
+ * Maps supported navigation actions to their existing app routes. Today and
+ * Inbox use always-present work contexts; Search is a global route.
+ * Feature-gated destinations are intentionally omitted. Documented in wiki 3.01 §4.
  */
 const NAVIGATE_ROUTES: Record<AppUriQuickActionTarget, string> = {
   today: `/tag/${TODAY_TAG.id}/tasks`,
   inbox: `/project/${INBOX_PROJECT.id}/tasks`,
+  search: '/search',
 };
 
 /**
