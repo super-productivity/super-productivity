@@ -28,6 +28,7 @@ import { FormlyTagSelectionComponent } from './formly-tag-selection/formly-tag-s
 import { FormlyBtnComponent } from './formly-button/formly-btn.component';
 import { FormlyLocalRestApiSettingsComponent } from './formly-local-rest-api-settings/formly-local-rest-api-settings.component';
 import { FormlyAssistantAccessSettingsComponent } from './formly-assistant-access-settings/formly-assistant-access-settings.component';
+import { FormlyLoginItemSettingComponent } from './formly-login-item-setting/formly-login-item-setting.component';
 import { FormlyImageInputComponent } from './formly-image-input/formly-image-input.component';
 // eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import { ColorInputComponent } from '../features/config/color-input/color-input.component';
@@ -93,6 +94,11 @@ import { FormlyDatePickerComponent } from './formly-date-picker/formly-date-pick
         {
           name: 'assistant-access-settings',
           component: FormlyAssistantAccessSettingsComponent,
+          wrappers: [],
+        },
+        {
+          name: 'login-item-setting',
+          component: FormlyLoginItemSettingComponent,
           wrappers: [],
         },
         {

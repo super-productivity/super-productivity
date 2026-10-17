@@ -205,6 +205,9 @@ const ea: ElectronAPI = {
   sendAppSettingsToElectron: (globalCfg) =>
     _send('TRANSFER_SETTINGS_TO_ELECTRON', globalCfg),
   sendSettingsUpdate: (globalCfg) => _send('UPDATE_SETTINGS', globalCfg),
+  getOpenAtLogin: () => _invoke(IPC.GET_OPEN_AT_LOGIN) as Promise<boolean>,
+  setOpenAtLogin: (isOpenAtLogin: boolean) =>
+    _invoke(IPC.SET_OPEN_AT_LOGIN, isOpenAtLogin) as Promise<boolean>,
   updateTaskWidgetSettings: (cfg) => _send('UPDATE_TASK_WIDGET_SETTINGS', cfg),
   updateTitleBarDarkMode: (isDarkMode: boolean) =>
     _send('UPDATE_TITLE_BAR_DARK_MODE', isDarkMode),
