@@ -18,15 +18,19 @@ import { CdkDrag, CdkDragDrop, CdkDropList } from '@angular/cdk/drag-drop';
 import { PlannerTaskComponent } from '../../planner/planner-task/planner-task.component';
 import {
   BoardPanelCfg,
+  BoardPanelCfgDeadlineState,
   BoardPanelCfgScheduledState,
   BoardPanelCfgTaskDoneState,
   BoardPanelCfgTaskTypeFilter,
 } from '../boards.model';
 import {
+  BoardPanelTimeframeRanges,
   buildComparator,
   doesTaskMatchPanel,
+  doesTaskMatchPanelTimeframes,
   firstSpecificProjectId,
   isAllProjects,
+  resolvePanelTimeframeRanges,
   rewriteTagIdsForPanel,
 } from '../boards.util';
 import { select, Store } from '@ngrx/store';
@@ -46,7 +50,7 @@ import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions'
 import { LocalDateStrPipe } from '../../../ui/pipes/local-date-str.pipe';
 import { MatIcon } from '@angular/material/icon';
 import { MatIconButton } from '@angular/material/button';
-import { TranslatePipe } from '@ngx-translate/core';
+import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { DialogScheduleTaskComponent } from '../../planner/dialog-schedule-task/dialog-schedule-task.component';
 import { MatDialog } from '@angular/material/dialog';
 import { fastArrayCompare } from '../../../util/fast-array-compare';
@@ -77,6 +81,15 @@ import { getScheduledDateColor } from '../../tasks/util/get-scheduled-date-color
 import type { ScheduledDateColor } from '../../tasks/util/get-scheduled-date-color';
 import { GlobalTrackingIntervalService } from '../../../core/global-tracking-interval/global-tracking-interval.service';
 import { DateService } from '../../../core/date/date.service';
+import { selectStartOfNextDayDiffMs } from '../../../root-store/app-state/app-state.selectors';
+import { adjustDateToBoardRange, getBoardTaskDateStr } from '../board-date-filter.util';
+import { PlannerActions } from '../../planner/store/planner.actions';
+import { DialogDeadlineComponent } from '../../tasks/dialog-deadline/dialog-deadline.component';
+import { SnackService } from '../../../core/snack/snack.service';
+import { LocaleDatePipe } from '../../../ui/pipes/locale-date.pipe';
+import { truncate } from '../../../util/truncate';
+import { getDeadlineAutoPlanFields } from '../../tasks/util/get-deadline-auto-plan-fields';
+import { DEFAULT_FIRST_DAY_OF_WEEK } from '../../../core/locale.constants';
 
 export interface BoardPanelNavigation {
   direction: -1 | 1 | 'up' | 'down';
@@ -105,6 +118,7 @@ export interface BoardPanelNavigation {
   changeDetection: ChangeDetectionStrategy.OnPush,
   providers: [
     { provide: TASK_CARD_LIST, useExisting: forwardRef(() => BoardPanelComponent) },
+    LocaleDatePipe,
   ],
   host: {
     // Angular host bindings use template attribute syntax.
@@ -130,6 +144,9 @@ export class BoardPanelComponent implements TaskCardList {
   private _injector = inject(Injector);
   private _destroyRef = inject(DestroyRef);
   private _config = inject(GlobalConfigService);
+  private _snackService = inject(SnackService);
+  private _localeDatePipe = inject(LocaleDatePipe);
+  private _translateService = inject(TranslateService);
   private _cards = viewChildren(PlannerTaskComponent, { read: ElementRef });
   readonly isMoving = signal(false);
 
@@ -242,6 +259,21 @@ export class BoardPanelComponent implements TaskCardList {
     initialValue: [],
   });
 
+  private _startOfNextDayDiffMs = toSignal(
+    this.store.select(selectStartOfNextDayDiffMs),
+    {
+      initialValue: 0,
+    },
+  );
+
+  private _timeframeRanges = computed<BoardPanelTimeframeRanges>(() =>
+    resolvePanelTimeframeRanges(
+      this.panelCfg(),
+      this._trackingInterval.todayDateStr(),
+      this._config.localization()?.firstDayOfWeek ?? DEFAULT_FIRST_DAY_OF_WEEK,
+    ),
+  );
+
   // Use selectUnarchivedProjects (not selectUnarchivedVisibleProjects) to include
   // hidden projects and INBOX, ensuring backlog filtering works for all tasks
   allProjects$ = this.store.select(selectUnarchivedProjects);
@@ -323,8 +355,12 @@ export class BoardPanelComponent implements TaskCardList {
     // Hoist the backlog predicate out of the filter callback so it's allocated
     // once per recompute, not once per task.
     const isInBacklog = (t: Readonly<TaskCopy>): boolean => this._isTaskInBacklog(t);
-    const allFilteredTasks = this.allTasks().filter((task) =>
-      doesTaskMatchPanel(task, panelCfg, isInBacklog),
+    const ranges = this._timeframeRanges();
+    const startOfNextDayDiffMs = this._startOfNextDayDiffMs();
+    const allFilteredTasks = this.allTasks().filter(
+      (task) =>
+        doesTaskMatchPanel(task, panelCfg, isInBacklog) &&
+        doesTaskMatchPanelTimeframes(task, ranges, startOfNextDayDiffMs),
     );
 
     allFilteredTasks.forEach((task) => {
@@ -380,9 +416,18 @@ export class BoardPanelComponent implements TaskCardList {
           ),
         )
       ).filter((task): task is TaskCopy => !!task);
+      const ranges = this._timeframeRanges();
+      // A timeframe panel moves tasks into its range itself (`_applyPanelDates`);
+      // only an unrestricted panel has to ask for a date.
       const unscheduled =
-        panelCfg.scheduledState === BoardPanelCfgScheduledState.Scheduled
+        panelCfg.scheduledState === BoardPanelCfgScheduledState.Scheduled &&
+        ranges.scheduled === undefined
           ? tasks.filter((task) => !task.dueDay && !task.dueWithTime)
+          : [];
+      const withoutDeadline =
+        panelCfg.deadlineState === BoardPanelCfgDeadlineState.HasDeadline &&
+        ranges.deadline === undefined
+          ? tasks.filter((task) => !task.deadlineDay && !task.deadlineWithTime)
           : [];
       let schedule: Parameters<TaskBulkActionService['scheduleFor']>[0] | undefined;
       if (unscheduled.length) {
@@ -395,6 +440,18 @@ export class BoardPanelComponent implements TaskCardList {
         );
         if (!schedule?.date) return false;
       }
+      let deadline: Parameters<TaskBulkActionService['setDeadlineFor']>[0] | undefined;
+      if (withoutDeadline.length) {
+        deadline = await firstValueFrom(
+          this._matDialog
+            .open(DialogDeadlineComponent, {
+              autoFocus: false,
+              data: { isSelectDeadlineOnly: true },
+            })
+            .afterClosed(),
+        );
+        if (!deadline?.date) return false;
+      }
       if (this._destroyRef.destroyed) return false;
       this.multiSelect.setBulkFeedbackSuppressed(true);
       try {
@@ -403,7 +460,14 @@ export class BoardPanelComponent implements TaskCardList {
           const task = await firstValueFrom(
             this.store.select(selectTaskById, { id: original.id }),
           );
-          if (task) await this._applyPanel(task, panelCfg);
+          if (!task) continue;
+          await this._applyPanel(task, panelCfg);
+          const updated = await firstValueFrom(
+            this.store.select(selectTaskById, { id: task.id }),
+          );
+          if (updated) {
+            this._applyPanelDates(updated, panelCfg, ranges, tasks.length === 1);
+          }
         }
         // Flush captured task operations before the dependent panel-order write.
         await new Promise<void>((resolve) => setTimeout(resolve, 0));
@@ -424,6 +488,21 @@ export class BoardPanelComponent implements TaskCardList {
           await this._injector
             .get(TaskBulkActionService)
             .scheduleFor(schedule, tasksToSchedule);
+        }
+        if (deadline) {
+          const tasksForDeadline = (
+            await Promise.all(
+              withoutDeadline.map((task) =>
+                firstValueFrom(this.store.select(selectTaskById, { id: task.id })),
+              ),
+            )
+          ).filter(
+            (task): task is TaskCopy =>
+              !!task && !task.deadlineDay && !task.deadlineWithTime,
+          );
+          await this._injector
+            .get(TaskBulkActionService)
+            .setDeadlineFor(deadline, tasksForDeadline);
         }
         await new Promise<void>((resolve) => setTimeout(resolve, 0));
         this.multiSelect.reanchorAfterMove(movingIds, this.rows());
@@ -504,7 +583,81 @@ export class BoardPanelComponent implements TaskCardList {
         TaskSharedActions.unscheduleTask({ id: task.id, isSkipToast: true }),
       );
     }
+    if (
+      panelCfg.deadlineState === BoardPanelCfgDeadlineState.NoDeadline &&
+      (task.deadlineDay || task.deadlineWithTime)
+    ) {
+      this.store.dispatch(
+        TaskSharedActions.removeDeadline({ taskId: task.id, isSkipSnack: true }),
+      );
+    }
     await this._checkBacklogState(panelCfg, task.id);
+  }
+
+  /**
+   * Moves the task's scheduled day / deadline to the nearest day inside the
+   * panel's timeframe, so a dropped task stays in the panel. Only panels with a
+   * restricted timeframe do this.
+   */
+  private _applyPanelDates(
+    task: TaskCopy,
+    panelCfg: BoardPanelCfg,
+    ranges: BoardPanelTimeframeRanges,
+    isShowSnack: boolean,
+  ): void {
+    const todayStr = this._trackingInterval.todayDateStr();
+    const startOfNextDayDiffMs = this._startOfNextDayDiffMs();
+
+    if (ranges.scheduled !== undefined) {
+      const currentDay = getBoardTaskDateStr(
+        task.dueDay,
+        task.dueWithTime,
+        startOfNextDayDiffMs,
+      );
+      const day = adjustDateToBoardRange(ranges.scheduled, currentDay, todayStr);
+      if (day && day !== currentDay) {
+        this.store.dispatch(PlannerActions.planTaskForDay({ task, day }));
+        if (isShowSnack) {
+          this._showDateAdjustedSnack(task, day, T.F.TASK.S.SCHEDULED_DATE_ADJUSTED);
+        }
+      }
+    }
+
+    if (ranges.deadline !== undefined) {
+      const currentDay = getBoardTaskDateStr(
+        task.deadlineDay,
+        task.deadlineWithTime,
+        startOfNextDayDiffMs,
+      );
+      const deadlineDay = adjustDateToBoardRange(ranges.deadline, currentDay, todayStr);
+      if (deadlineDay && deadlineDay !== currentDay) {
+        this.store.dispatch(
+          TaskSharedActions.setDeadline({
+            taskId: task.id,
+            deadlineDay,
+            // Same as setting this deadline anywhere else: a deadline of today
+            // also plans the task for today.
+            ...getDeadlineAutoPlanFields(this._dateService, deadlineDay),
+            isSkipSnack: true,
+          }),
+        );
+        if (isShowSnack) {
+          this._showDateAdjustedSnack(task, deadlineDay, T.F.TASK.S.DEADLINE_ADJUSTED);
+        }
+      }
+    }
+  }
+
+  private _showDateAdjustedSnack(task: TaskCopy, day: string, msg: string): void {
+    const date =
+      day === this._trackingInterval.todayDateStr()
+        ? this._translateService.instant(T.G.TODAY_TAG_TITLE)
+        : this._localeDatePipe.transform(day, 'shortDate');
+    this._snackService.open({
+      type: 'SUCCESS',
+      msg,
+      translateParams: { title: truncate(task.title, 20), date: date || '' },
+    });
   }
 
   async afterTaskAdd({ taskId, isAddToBottom, isNewTask }: TaskAddEvent): Promise<void> {
@@ -536,8 +689,9 @@ export class BoardPanelComponent implements TaskCardList {
       }),
     );
 
-    this._checkToScheduledTask(panelCfg, taskId);
-    this._checkBacklogState(panelCfg, taskId);
+    await this._checkToScheduledTask(panelCfg, taskId);
+    await this._checkDeadlineState(panelCfg, taskId);
+    await this._checkBacklogState(panelCfg, taskId);
   }
 
   scheduledDateColor(task: TaskCopy): ScheduledDateColor {
@@ -565,16 +719,26 @@ export class BoardPanelComponent implements TaskCardList {
     });
   }
 
+  editDeadline(task: TaskCopy): void {
+    this._matDialog.open(DialogDeadlineComponent, {
+      restoreFocus: true,
+      data: { task },
+    });
+  }
+
   private async _checkToScheduledTask(
     panelCfg: BoardPanelCfg,
     taskId: string,
   ): Promise<void> {
     if (panelCfg.scheduledState === BoardPanelCfgScheduledState.Scheduled) {
-      const task = await this.store
-        .select(selectTaskById, { id: taskId })
-        .pipe(first())
-        .toPromise();
-      if (!task.dueDay && !task.dueWithTime) {
+      const task = await firstValueFrom(
+        this.store.select(selectTaskById, { id: taskId }),
+      );
+      if (!task) return;
+      const ranges = this._timeframeRanges();
+      if (ranges.scheduled !== undefined) {
+        this._applyPanelDates(task, panelCfg, { scheduled: ranges.scheduled }, true);
+      } else if (!task.dueDay && !task.dueWithTime) {
         this.scheduleTask(task);
       }
     }
@@ -585,6 +749,23 @@ export class BoardPanelComponent implements TaskCardList {
           isSkipToast: false,
         }),
       );
+    }
+  }
+
+  private async _checkDeadlineState(
+    panelCfg: BoardPanelCfg,
+    taskId: string,
+  ): Promise<void> {
+    if (panelCfg.deadlineState !== BoardPanelCfgDeadlineState.HasDeadline) {
+      return;
+    }
+    const task = await firstValueFrom(this.store.select(selectTaskById, { id: taskId }));
+    if (!task) return;
+    const ranges = this._timeframeRanges();
+    if (ranges.deadline !== undefined) {
+      this._applyPanelDates(task, panelCfg, { deadline: ranges.deadline }, true);
+    } else if (!task.deadlineDay && !task.deadlineWithTime) {
+      this.editDeadline(task);
     }
   }
 

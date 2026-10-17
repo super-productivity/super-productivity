@@ -492,6 +492,14 @@ export class TaskBulkActionService {
       await this.removeDeadline();
       return;
     }
+    await this.setDeadlineFor(pick, tasks);
+  }
+
+  async setDeadlineFor(pick: DateTimePick, tasksArg?: Task[]): Promise<void> {
+    const tasks = tasksArg ?? this._resolveInVisualOrder();
+    if (!pick.date || !tasks.length) {
+      return;
+    }
     await this._runSuppressed(() => {
       tasks.forEach((task) => {
         if (pick.time && isValidSplitTime(pick.time)) {

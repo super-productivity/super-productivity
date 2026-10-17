@@ -9,7 +9,12 @@ import {
 } from '@ngx-formly/core';
 import { BOARDS_FORM } from './boards-form.const';
 import { DEFAULT_BOARDS, DEFAULT_PANEL_CFG } from './boards.const';
-import { BoardPanelCfg } from './boards.model';
+import {
+  BoardPanelCfg,
+  BoardPanelCfgDeadlineState,
+  BoardPanelCfgScheduledState,
+} from './boards.model';
+import { BOARD_TIMEFRAME_MAX_DAYS } from './board-date-filter.util';
 
 @Component({ selector: 'noop-formly-field', template: '', standalone: true })
 class NoopFormlyFieldComponent extends FieldType {}
@@ -38,6 +43,7 @@ describe('BOARDS_FORM panel behavior (#7380)', () => {
     'tag-select',
     'project-select',
     'repeat',
+    'date',
   ].map((name) => ({ name, component: NoopFormlyFieldComponent }));
 
   let builder: FormlyFormBuilder;
@@ -75,6 +81,9 @@ describe('BOARDS_FORM panel behavior (#7380)', () => {
     fields: FormlyFieldConfig[],
     key: keyof BoardPanelCfg,
   ): FormlyFieldConfig => fields.find((f) => f.key === key)!;
+
+  const childFieldByKey = (field: FormlyFieldConfig, key: string): FormlyFieldConfig =>
+    field.fieldGroup!.find((f) => f.key === key)!;
 
   it('uses translation keys for board modal labels (#8070)', () => {
     const fields = panelFieldGroup();
@@ -155,5 +164,129 @@ describe('BOARDS_FORM panel behavior (#7380)', () => {
 
     expect(model.includedTagsMatch).toBe('all');
     expect(form.valid).toBe(true);
+  });
+
+  it('uses nested timeframe selects with extended options', () => {
+    const fields = panelFieldGroup();
+    const scheduledTimeframe = fieldByKey(fields, 'scheduledTimeframe');
+    const deadlineTimeframe = fieldByKey(fields, 'deadlineTimeframe');
+    const scheduledType = childFieldByKey(scheduledTimeframe, 'type');
+    const deadlineType = childFieldByKey(deadlineTimeframe, 'type');
+
+    expect(scheduledTimeframe.defaultValue).toEqual({ type: 'all' });
+    expect(deadlineTimeframe.defaultValue).toEqual({ type: 'all' });
+    expect((scheduledType.props?.options as { value: string }[]).map((o) => o.value))
+      .withContext('scheduled options')
+      .toEqual([
+        'all',
+        'today',
+        'tomorrow',
+        'next7Days',
+        'nextNDays',
+        'atLeastNDaysFuture',
+        'nextWeek',
+        'nextMonth',
+        'customDate',
+        'customRange',
+      ]);
+    expect((deadlineType.props?.options as { value: string }[]).map((o) => o.value))
+      .withContext('deadline options')
+      .toEqual((scheduledType.props?.options as { value: string }[]).map((o) => o.value));
+  });
+
+  it('uses number and date picker controls for timeframe details', () => {
+    const fields = panelFieldGroup();
+    const scheduledTimeframe = fieldByKey(fields, 'scheduledTimeframe');
+
+    expect(childFieldByKey(scheduledTimeframe, 'days').type).toBe('input');
+    expect(childFieldByKey(scheduledTimeframe, 'days').props?.max).toBe(
+      BOARD_TIMEFRAME_MAX_DAYS,
+    );
+    expect(childFieldByKey(scheduledTimeframe, 'customDate').type).toBe('date');
+    expect(childFieldByKey(scheduledTimeframe, 'customStart').type).toBe('date');
+    expect(childFieldByKey(scheduledTimeframe, 'customEnd').type).toBe('date');
+  });
+
+  it('stores picked custom dates as YYYY-MM-DD strings', () => {
+    // Read the un-cloned config: JSON cloning would drop the parser functions.
+    const panels = BOARDS_FORM.find((f) => f.key === 'panels')!;
+    const panelFields = (panels.fieldArray as FormlyFieldConfig).fieldGroup!;
+    const scheduledTimeframe = panelFields.find((f) => f.key === 'scheduledTimeframe')!;
+
+    for (const key of ['customDate', 'customStart', 'customEnd']) {
+      const parse = childFieldByKey(scheduledTimeframe, key).parsers![0];
+      expect(parse(new Date(2026, 2, 18)))
+        .withContext(key)
+        .toBe('2026-03-18');
+      expect(parse(null)).withContext(key).toBeUndefined();
+    }
+  });
+
+  describe('custom timeframe validation', () => {
+    const scheduledPanel = (
+      scheduledTimeframe: BoardPanelCfg['scheduledTimeframe'],
+    ): BoardPanelCfg => ({
+      ...DEFAULT_PANEL_CFG,
+      id: 'p',
+      title: 'Panel',
+      scheduledState: BoardPanelCfgScheduledState.Scheduled,
+      scheduledTimeframe,
+    });
+
+    // Regression: the groups are keyed, so a bare `model` in their hide
+    // expression is the timeframe object and the controls never showed.
+    it('shows timeframe controls only for the matching panel state', () => {
+      const visible = (panel: BoardPanelCfg): string[] => {
+        const { fields } = buildPanelForm(panel);
+        return ['scheduledTimeframe', 'deadlineTimeframe'].filter(
+          (key) => !fields.find((f) => f.key === key)!.hide,
+        );
+      };
+      expect(visible(scheduledPanel({ type: 'today' }))).toEqual(['scheduledTimeframe']);
+      expect(
+        visible({
+          ...DEFAULT_PANEL_CFG,
+          id: 'p',
+          title: 'Panel',
+          deadlineState: BoardPanelCfgDeadlineState.HasDeadline,
+        }),
+      ).toEqual(['deadlineTimeframe']);
+      expect(visible({ ...DEFAULT_PANEL_CFG, id: 'p', title: 'Panel' })).toEqual([]);
+    });
+
+    it('requires a date for custom date', () => {
+      expect(buildPanelForm(scheduledPanel({ type: 'customDate' })).form.valid).toBe(
+        false,
+      );
+      expect(
+        buildPanelForm(scheduledPanel({ type: 'customDate', customDate: '2026-03-18' }))
+          .form.valid,
+      ).toBe(true);
+    });
+
+    it('requires at least one end for custom range', () => {
+      expect(buildPanelForm(scheduledPanel({ type: 'customRange' })).form.valid).toBe(
+        false,
+      );
+      expect(
+        buildPanelForm(scheduledPanel({ type: 'customRange', customStart: '2026-03-18' }))
+          .form.valid,
+      ).toBe(true);
+      expect(
+        buildPanelForm(scheduledPanel({ type: 'customRange', customEnd: '2026-03-18' }))
+          .form.valid,
+      ).toBe(true);
+    });
+
+    it('rejects a day count above the cap', () => {
+      const { form } = buildPanelForm(
+        scheduledPanel({ type: 'nextNDays', days: BOARD_TIMEFRAME_MAX_DAYS + 1 }),
+      );
+      expect(form.valid).toBe(false);
+    });
+
+    it('does not validate custom fields while another timeframe is picked', () => {
+      expect(buildPanelForm(scheduledPanel({ type: 'today' })).form.valid).toBe(true);
+    });
   });
 });

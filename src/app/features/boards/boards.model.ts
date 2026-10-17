@@ -16,8 +16,37 @@ export enum BoardPanelCfgTaskTypeFilter {
   OnlyBacklog = 3,
 }
 
+export enum BoardPanelCfgDeadlineState {
+  All = 1,
+  HasDeadline = 2,
+  NoDeadline = 3,
+}
+
 export type BoardSortField = 'dueDate' | 'created' | 'title' | 'timeEstimate';
 export type BoardMatchMode = 'all' | 'any';
+// Closed, typia-validated union inside synced `BoardsState`. Adding a value is
+// a breaking change: released clients reject the synced config as corrupt
+// (repair dialog, can stall sync). Model a future variant outside this union,
+// e.g. as an opaque string field, instead of extending it.
+export type BoardDateTimeframeType =
+  | 'all'
+  | 'today'
+  | 'tomorrow'
+  | 'next7Days'
+  | 'nextNDays'
+  | 'atLeastNDaysFuture'
+  | 'nextWeek'
+  | 'nextMonth'
+  | 'customDate'
+  | 'customRange';
+
+export interface BoardDateTimeframeCfg {
+  type: BoardDateTimeframeType;
+  days?: number;
+  customDate?: string;
+  customStart?: string;
+  customEnd?: string;
+}
 
 export interface BoardSrcCfg {
   includedTagIds: string[];
@@ -34,6 +63,9 @@ export interface BoardSrcCfg {
   projectIds?: string[];
   taskDoneState: BoardPanelCfgTaskDoneState;
   scheduledState: BoardPanelCfgScheduledState;
+  scheduledTimeframe?: BoardDateTimeframeCfg;
+  deadlineState?: BoardPanelCfgDeadlineState;
+  deadlineTimeframe?: BoardDateTimeframeCfg;
   isParentTasksOnly: boolean;
   // Absent = manual order (user-controlled taskIds).
   sortBy?: BoardSortField;
