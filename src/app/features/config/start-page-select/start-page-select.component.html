@@ -4,6 +4,9 @@
   [formlyAttributes]="field"
   [id]="id"
 >
+  @if (selectedProjectTitle; as title) {
+    <mat-select-trigger>{{ title }}</mat-select-trigger>
+  }
   <mat-option [value]="DefaultStartPage.Today">{{
     T.G.TODAY_TAG_TITLE | translate
   }}</mat-option>
@@ -34,6 +37,13 @@
   }
 
   @for (opt of projects(); track opt.id) {
-    <mat-option [value]="opt.id">{{ opt.title }}</mat-option>
+    <mat-option [value]="opt.id">
+      <select-option-row
+        [title]="opt.title"
+        [icon]="opt.icon"
+        [defaultIcon]="DEFAULT_PROJECT_ICON"
+        [color]="opt.theme?.primary ?? undefined"
+      ></select-option-row>
+    </mat-option>
   }
 </mat-select>
