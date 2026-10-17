@@ -56,7 +56,11 @@ export class IosShareService {
             Log.err('iOS share import failed; pending captures retained', {
               reason: getCaptureImportErrorReason(e),
             });
-            this._snack.open({ type: 'ERROR', msg: 'F.IOS_SHARE.IMPORT_ERROR' });
+            // An unreadable inbox (e.g. App Group unavailable) means nothing is known
+            // to be pending, so don't alarm users who never used the Share Sheet.
+            if (!(e instanceof Error && e.message === CAPTURE_IMPORT_ERR.READ)) {
+              this._snack.open({ type: 'ERROR', msg: 'F.IOS_SHARE.IMPORT_ERROR' });
+            }
           }),
         ),
         takeUntilDestroyed(this._destroyRef),

@@ -70,7 +70,7 @@ export class NativeCaptureImporter {
   ): Promise<NativeCaptureImportResult> {
     await firstValueFrom(this._dataInit.isAllDataLoadedInitially$);
     await firstValueFrom(this._syncTrigger.afterInitialSyncDoneStrict$);
-    const captures = await source.getPending();
+    const captures = await this._wrap(() => source.getPending(), CAPTURE_IMPORT_ERR.READ);
     const receipts = this._loadPrunedReceipts(source.receiptsKey, captures);
     const saveReceipts = (): void =>
       localStorage.setItem(source.receiptsKey, JSON.stringify([...receipts]));
@@ -89,11 +89,20 @@ export class NativeCaptureImporter {
         receipts.add(capture.id);
         saveReceipts();
       }
-      await source.acknowledge(capture.id);
+      await this._wrap(() => source.acknowledge(capture.id), CAPTURE_IMPORT_ERR.ACK);
       receipts.delete(capture.id);
       saveReceipts();
     }
     return result;
+  }
+
+  /** Bridge rejections can carry arbitrary native text; keep only a fixed message. */
+  private async _wrap<R>(fn: () => Promise<R>, message: string): Promise<R> {
+    try {
+      return await fn();
+    } catch (e) {
+      throw e instanceof Error && KNOWN_ERRORS.has(e.message) ? e : new Error(message);
+    }
   }
 
   /** @returns true if a task was created, false if it already existed */

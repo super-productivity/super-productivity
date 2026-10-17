@@ -30,7 +30,11 @@ enum ShareInbox {
     }
 
     static func pending() throws -> [SharedCapture] {
-        try FileManager.default.contentsOfDirectory(at: directory(), includingPropertiesForKeys: nil)
+        // Without the App Group container the extension cannot have saved anything.
+        guard FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: group) != nil else {
+            return []
+        }
+        return try FileManager.default.contentsOfDirectory(at: directory(), includingPropertiesForKeys: nil)
             .filter { $0.pathExtension == "json" }
             .sorted { $0.lastPathComponent < $1.lastPathComponent }
             // Skip (but keep) an unreadable file so it cannot block later captures.

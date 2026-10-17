@@ -191,6 +191,6 @@ describe('AndroidCaptureImportService', () => {
     expect(getCaptureImportErrorReason(unreadable)).toBe('Could not read capture inbox');
     pending = '["Buy milk"';
     const corrupt = await service.importPending().catch((err: unknown) => err);
-    expect(getCaptureImportErrorReason(corrupt)).toBe('SyntaxError');
+    expect(getCaptureImportErrorReason(corrupt)).toBe('Could not read capture inbox');
   });
 });

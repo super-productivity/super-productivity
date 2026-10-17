@@ -244,6 +244,39 @@ describe('IosShareService', () => {
       'iOS share import failed; pending captures retained',
       { reason: 'Invalid capture entry' },
     );
+    expect(TestBed.inject(SnackService).open).toHaveBeenCalled();
+    TestBed.resetTestingModule();
+  });
+
+  it('logs a bridge read failure by stage without an error snack', async () => {
+    const logErr = spyOn(Log, 'err');
+    plugin.getPending.and.rejectWith(new Error('native secret detail'));
+    loaded.next(true);
+    service.start();
+    for (let i = 0; i < 20; i++) {
+      await Promise.resolve();
+    }
+    expect(logErr).toHaveBeenCalledOnceWith(
+      'iOS share import failed; pending captures retained',
+      { reason: 'Could not read capture inbox' },
+    );
+    expect(TestBed.inject(SnackService).open).not.toHaveBeenCalled();
+    TestBed.resetTestingModule();
+  });
+
+  it('wraps a bridge acknowledge failure and still shows the error snack', async () => {
+    const logErr = spyOn(Log, 'err');
+    plugin.acknowledge.and.rejectWith(new Error('native secret detail'));
+    loaded.next(true);
+    service.start();
+    for (let i = 0; i < 30; i++) {
+      await Promise.resolve();
+    }
+    expect(logErr).toHaveBeenCalledOnceWith(
+      'iOS share import failed; pending captures retained',
+      { reason: 'Could not acknowledge capture' },
+    );
+    expect(TestBed.inject(SnackService).open).toHaveBeenCalled();
     TestBed.resetTestingModule();
   });
 });
