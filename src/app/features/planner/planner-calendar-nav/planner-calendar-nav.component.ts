@@ -14,12 +14,14 @@ import {
   untracked,
   viewChild,
 } from '@angular/core';
+import { TranslatePipe } from '@ngx-translate/core';
 import { DEFAULT_FIRST_DAY_OF_WEEK } from '../../../core/locale.constants';
 import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
 import { GlobalConfigService } from '../../config/global-config.service';
 import { GlobalTrackingIntervalService } from '../../../core/global-tracking-interval/global-tracking-interval.service';
 import { getWeekRange } from '../../../util/get-week-range';
 import { getWeekdaysMin } from '../../../util/get-weekdays-min';
+import { getWeekNumber } from '../../../util/get-week-number';
 import { getDbDateStr } from '../../../util/get-db-date-str';
 import { parseDbDateStr } from '../../../util/parse-db-date-str';
 import {
@@ -29,6 +31,7 @@ import {
   ROW_HEIGHT,
   WEEKS_SHOWN,
 } from './planner-calendar-gesture-handler';
+import { T } from '../../../t.const';
 
 /** The collapse handle, which sits below the week rows and must stay tappable. */
 export const HANDLE_HEIGHT = 28;
@@ -48,8 +51,10 @@ interface CalendarDay {
   templateUrl: './planner-calendar-nav.component.html',
   styleUrl: './planner-calendar-nav.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [TranslatePipe],
 })
 export class PlannerCalendarNavComponent {
+  readonly T = T;
   private _globalConfigService = inject(GlobalConfigService);
   private _dateTimeFormatService = inject(DateTimeFormatService);
   private _globalTrackingIntervalService = inject(GlobalTrackingIntervalService);
@@ -62,6 +67,16 @@ export class PlannerCalendarNavComponent {
   private _firstDayOfWeek = computed(() => {
     const cfg = this._globalConfigService.localization()?.firstDayOfWeek;
     return cfg !== null && cfg !== undefined ? cfg : DEFAULT_FIRST_DAY_OF_WEEK;
+  });
+
+  private _weekNumberSystem = computed(() => {
+    const localization = this._globalConfigService.localization();
+    return localization?.weekNumberSystem;
+  });
+
+  showWeekNumbers = computed(() => {
+    const system = this._weekNumberSystem();
+    return system === 'iso' || system === 'us';
   });
 
   visibleDayDate = input<string | null>(null);
@@ -118,6 +133,21 @@ export class PlannerCalendarNavComponent {
       weeks.push(week);
     }
     return weeks;
+  });
+  weekNumbers = computed<number[]>(() => {
+    const firstDayOfWeek = this._firstDayOfWeek();
+    const weekNumberSystem = this._weekNumberSystem();
+    // weekNumberSystem is guaranteed to be 'iso' or 'us' here because:
+    // 1. weekNumbers is only used when showWeekNumbers() is true
+    // 2. showWeekNumbers() returns true only when weekNumberSystem is 'iso' or 'us'
+    return this.weeks().map((week) => {
+      const firstDay = parseDbDateStr(week[0].dateStr);
+      // Type guard to ensure we only get 'iso' or 'us' here
+      if (!weekNumberSystem || weekNumberSystem === 'none') {
+        return 0; // Dummy value, should never be reached since we guard at showWeekNumbers()
+      }
+      return getWeekNumber(firstDay, firstDayOfWeek, weekNumberSystem as 'iso' | 'us');
+    });
   });
 
   activeWeekIndex = computed(() => {

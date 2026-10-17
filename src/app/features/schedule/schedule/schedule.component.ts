@@ -246,13 +246,25 @@ export class ScheduleComponent {
 
     const start = parseDbDateStr(days[0]);
     const end = parseDbDateStr(days[days.length - 1]);
-    const weekNr = getWeekNumber(start); // ISO — default firstDayOfWeek=1
+    const firstDayOfWeek = this.firstDayOfWeek();
+    const weekNumberSystem = this._globalConfigService.localization()?.weekNumberSystem;
     const sameMonth =
       start.getMonth() === end.getMonth() && start.getFullYear() === end.getFullYear();
     const startStr = safeFormatDate(start, 'MMM d', locale);
     const endStr = sameMonth
       ? safeFormatDate(end, 'd', locale)
       : safeFormatDate(end, 'MMM d', locale);
+    // For the schedule header, show week numbers by default (ISO/Monday-based) to maintain
+    // backward compatibility with the shipped v18.5.0 behavior. The setting only switches
+    // to US numbering when explicitly chosen. 'none' explicitly hides week numbers.
+    if (weekNumberSystem === 'none') {
+      if (this._isVeryCompact()) return startStr;
+      return `${startStr} – ${endStr}`;
+    }
+    // weekNumberSystem is ISO ('iso'), US ('us'), or undefined (default to ISO)
+    const effectiveSystem = weekNumberSystem || 'iso';
+    const effectiveFirstDay = effectiveSystem === 'us' ? 0 : 1; // 0=Sun, 1=Mon
+    const weekNr = getWeekNumber(start, effectiveFirstDay, effectiveSystem);
     const labelKey = this._isCompact()
       ? T.F.WORKLOG.CMP.WEEK_NR_SHORT
       : T.F.WORKLOG.CMP.WEEK_NR;

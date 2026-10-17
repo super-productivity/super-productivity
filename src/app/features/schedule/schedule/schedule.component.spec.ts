@@ -21,7 +21,11 @@ import localeSv from '@angular/common/locales/sv';
 import { DateService } from '../../../core/date/date.service';
 
 describe('ScheduleComponent', () => {
-  const mockLocalization = signal({ firstDayOfWeek: 1, dateTimeLocale: 'en-US' });
+  const mockLocalization = signal({
+    firstDayOfWeek: 1,
+    dateTimeLocale: 'en-US',
+    weekNumberSystem: 'iso',
+  });
   let component: ScheduleComponent;
   let fixture: ComponentFixture<ScheduleComponent>;
   let mockTaskService: jasmine.SpyObj<TaskService>;
@@ -35,7 +39,11 @@ describe('ScheduleComponent', () => {
   beforeAll(() => registerLocaleData(localeSv, 'sv'));
 
   beforeEach(async () => {
-    mockLocalization.set({ firstDayOfWeek: 1, dateTimeLocale: 'en-US' });
+    mockLocalization.set({
+      firstDayOfWeek: 1,
+      dateTimeLocale: 'en-US',
+      weekNumberSystem: 'iso',
+    });
     // Create mock services
     mockTaskService = jasmine.createSpyObj('TaskService', ['currentTaskId']);
     (mockTaskService as any).currentTaskId = signal(null);
@@ -182,7 +190,11 @@ describe('ScheduleComponent', () => {
         F: { WORKLOG: { CMP: { WEEK_NR: 'Week {{nr}}' } } },
       });
       translate.use(language);
-      mockLocalization.set({ firstDayOfWeek: 1, dateTimeLocale: 'sv' });
+      mockLocalization.set({
+        firstDayOfWeek: 1,
+        dateTimeLocale: 'sv',
+        weekNumberSystem: 'iso',
+      });
     };
 
     it('uses the UI language for the ISO day heading', () => {
