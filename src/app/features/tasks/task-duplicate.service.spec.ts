@@ -93,6 +93,7 @@ describe('TaskDuplicateService', () => {
     expect(taskService.createNewTaskWithDefaults).toHaveBeenCalledWith({
       title: 'Sub task',
       additional: {
+        parentId: 'new-parent-task',
         isDone: true,
         projectId: 'project-1',
         dueDay: '2026-09-02',
@@ -103,6 +104,7 @@ describe('TaskDuplicateService', () => {
     expect(taskService.createNewTaskWithDefaults).toHaveBeenCalledWith({
       title: 'Timed sub task',
       additional: {
+        parentId: 'new-parent-task',
         isDone: false,
         projectId: 'project-1',
         dueWithTime: 1_757_000_000_000,
@@ -119,6 +121,48 @@ describe('TaskDuplicateService', () => {
     expect(store.dispatch).toHaveBeenCalledWith(
       addSubTask({
         task: newTimedSubTask,
+        parentId: 'new-parent-task',
+      }),
+    );
+  });
+
+  it('creates an undated subtask with its copied parent before applying defaults', () => {
+    const undatedSubTask: Task = {
+      ...DEFAULT_TASK,
+      id: 'undated-sub-task',
+      title: 'Undated sub task',
+      parentId: parentTask.id,
+      projectId: 'project-1',
+    };
+    taskService.add.and.returnValue('new-parent-task');
+    const newSubTask: Task = {
+      ...DEFAULT_TASK,
+      id: 'new-undated-sub-task',
+      title: undatedSubTask.title,
+      projectId: undatedSubTask.projectId,
+      parentId: 'new-parent-task',
+    };
+    taskService.createNewTaskWithDefaults.and.returnValue(newSubTask);
+
+    service.duplicate({
+      ...parentTask,
+      subTaskIds: [undatedSubTask.id],
+      subTasks: [undatedSubTask],
+    });
+
+    const additional =
+      taskService.createNewTaskWithDefaults.calls.mostRecent().args[0].additional;
+    expect(additional).toEqual(
+      jasmine.objectContaining({
+        parentId: 'new-parent-task',
+        isDone: false,
+      }),
+    );
+    expect(additional?.dueDay).toBeUndefined();
+    expect(additional?.dueWithTime).toBeUndefined();
+    expect(store.dispatch).toHaveBeenCalledOnceWith(
+      addSubTask({
+        task: newSubTask,
         parentId: 'new-parent-task',
       }),
     );
