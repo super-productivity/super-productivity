@@ -722,6 +722,37 @@ const parseProjectTracked = (
   return null;
 };
 
+// The tag regex stops at whitespace, so tags with spaces in their title
+// (as inserted by the autocomplete) are matched against the existing tags
+// first, longest title first. Matches are removed from `tracked`.
+const consumeMultiWordTags = (
+  tracked: TrackedTitle,
+  allTags: Tag[],
+  ranges: TextRange[],
+): string[] => {
+  const tagIds: string[] = [];
+  const multiWordTags = allTags
+    .filter((tag) => /\s/.test(tag.title.trim()))
+    .sort((a, b) => b.title.trim().length - a.title.trim().length);
+
+  for (const tag of multiWordTags) {
+    const escapedTitle = tag.title.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const re = new RegExp(`(^|\\s)\\${CH_TAG}${escapedTitle}(?=\\s|$)`, 'i');
+    let match = tracked.text.match(re);
+    while (match && match.index !== undefined) {
+      const start = match.index + match[1].length;
+      const end = match.index + match[0].length;
+      ranges.push(...tracked.rawRanges(start, end));
+      tracked.remove(start, end);
+      if (!tagIds.includes(tag.id)) {
+        tagIds.push(tag.id);
+      }
+      match = tracked.text.match(re);
+    }
+  }
+  return tagIds;
+};
+
 const parseTagChanges = (
   task: Partial<TaskCopy>,
   tracked: TrackedTitle,
@@ -735,10 +766,11 @@ const parseTagChanges = (
   let isTitleChanged = false;
   // only exec if previous ones are also passed
   if (Array.isArray(task.tagIds) && Array.isArray(allTags)) {
+    const multiWordTagIds = consumeMultiWordTags(tracked, allTags, ranges);
     const initialTitle = tracked.text;
-    const regexTagTitles = initialTitle.match(SHORT_SYNTAX_TAGS_REG_EX);
+    const regexTagTitles = initialTitle.match(SHORT_SYNTAX_TAGS_REG_EX) || [];
 
-    if (regexTagTitles && regexTagTitles.length) {
+    if (regexTagTitles.length || multiWordTagIds.length) {
       const regexTagTitlesTrimmedAndFiltered: string[] = regexTagTitles
         .map((title) => title.trim().replace(CH_TAG, ''))
         .filter((newTagTitle) => {
@@ -762,7 +794,7 @@ const parseTagChanges = (
           );
         });
 
-      const matchingTagIds: string[] = [];
+      const matchingTagIds: string[] = [...multiWordTagIds];
       regexTagTitlesTrimmedAndFiltered.forEach((newTagTitle) => {
         const existingTag = allTags.find(
           (tag) => newTagTitle.toLowerCase() === tag.title.toLowerCase(),
@@ -796,7 +828,7 @@ const parseTagChanges = (
         }
       }
 
-      if (regexTagTitlesTrimmedAndFiltered.length) {
+      if (regexTagTitlesTrimmedAndFiltered.length || multiWordTagIds.length) {
         regexTagTitlesTrimmedAndFiltered.forEach((tagTitle) => {
           const matchedText = `${CH_TAG}${tagTitle}`;
           const start = tracked.text.indexOf(matchedText);
