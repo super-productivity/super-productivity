@@ -988,6 +988,10 @@ export class LocalRestApiHandlerService {
                 'Destination project not found or archived',
               );
             }
+            // Move it like the UI does, so a recurring task's config and other
+            // instances follow (#10675). The update below keeps projectId, now
+            // unchanged, so the change set and its short syntax stay as sent.
+            await this._featureBridge.moveTaskToProject(taskId, targetProjectId);
           }
         }
 

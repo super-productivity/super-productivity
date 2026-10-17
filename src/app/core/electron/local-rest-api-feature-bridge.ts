@@ -22,6 +22,12 @@ export interface LocalRestApiFeatureBridge {
    * A past day is back-filled: no work start/end and no auto-plan for today.
    */
   addTimeSpentOnDay(task: object, durationMs: number, date: string): void;
+
+  /**
+   * Moves a top-level task to another project the way the UI does, so a
+   * recurring task's repeat config and instances follow it, without asking.
+   */
+  moveTaskToProject(taskId: string, projectId: string): Promise<void>;
 }
 
 export const LOCAL_REST_API_FEATURE_BRIDGE =

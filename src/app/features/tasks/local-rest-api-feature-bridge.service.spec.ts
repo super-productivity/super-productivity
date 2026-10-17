@@ -4,6 +4,7 @@ import { IssueService } from '../issue/issue.service';
 import { LocalRestApiFeatureBridgeService } from './local-rest-api-feature-bridge.service';
 import { addSubTask } from './store/task.actions';
 import { Task } from './task.model';
+import { TaskMoveToProjectService } from './task-move-to-project.service';
 import { TaskService } from './task.service';
 
 describe('LocalRestApiFeatureBridgeService', () => {
@@ -24,6 +25,7 @@ describe('LocalRestApiFeatureBridgeService', () => {
         LocalRestApiFeatureBridgeService,
         { provide: TaskService, useValue: taskServiceMock },
         { provide: IssueService, useValue: issueServiceMock },
+        { provide: TaskMoveToProjectService, useValue: {} },
         provideMockStore(),
       ],
     });
