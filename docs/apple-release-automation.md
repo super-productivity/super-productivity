@@ -60,7 +60,7 @@ A maintainer who wants outside testers to try a feature branch — e.g. one that
 touches native iOS code and so cannot be exercised in the web preview — applies
 the `ios-test-flight` label to a same-repo PR.
 `.github/workflows/build-ios-testflight.yml` builds an **unsigned** archive with
-no Apple credentials. After it completes,
+no Apple credentials (ad-hoc signed only, to carry the entitlements). After it completes,
 `.github/workflows/publish-ios-testflight.yml` runs trusted code from `master`,
 validates and repacks the archive without credentials, waits for approval through
 the protected `ios-testflight` environment, then signs and runs the

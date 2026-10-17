@@ -105,6 +105,9 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO
 
+      - name: Carry entitlements into the archive
+        run: tools/sign-ios-archive-adhoc.sh "$RUNNER_TEMP/App.xcarchive"
+
       - name: Create ExportOptions.plist
         run: |
           cat > "$RUNNER_TEMP/ExportOptions.plist" << EOF
@@ -161,6 +164,11 @@ jobs:
 
       - name: List exported files
         run: ls -la "$RUNNER_TEMP/ipa-output"
+
+      - name: Verify App Group entitlement
+        run: |
+          unzip -q "$RUNNER_TEMP"/ipa-output/*.ipa -d "$RUNNER_TEMP/ipa-check"
+          tools/assert-ios-app-group-entitlements.sh "$RUNNER_TEMP/ipa-check/Payload/App.app"
 
       - name: Upload IPA artifact
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

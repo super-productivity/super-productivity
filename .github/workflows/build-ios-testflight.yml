@@ -147,6 +147,9 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO
 
+      - name: Carry entitlements into the archive
+        run: tools/sign-ios-archive-adhoc.sh "$RUNNER_TEMP/App.xcarchive"
+
       - name: Pack unsigned archive
         run: |
           test -f "$RUNNER_TEMP/App.xcarchive/Info.plist"

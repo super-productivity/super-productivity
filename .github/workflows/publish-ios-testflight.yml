@@ -386,6 +386,11 @@ jobs:
             -exportPath "$RUNNER_TEMP/ipa-output" \
             -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist"
 
+      - name: Verify App Group entitlement
+        run: |
+          unzip -q "$RUNNER_TEMP"/ipa-output/*.ipa -d "$RUNNER_TEMP/ipa-check"
+          tools/assert-ios-app-group-entitlements.sh "$RUNNER_TEMP/ipa-check/Payload/App.app"
+
       - name: Set up Ruby and fastlane
         uses: ruby/setup-ruby@e81a8fa391b11a595c1b7ed84177cc0fe02faf83 # v1.328.0
         with:

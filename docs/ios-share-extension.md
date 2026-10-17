@@ -21,6 +21,12 @@ the app's distribution profile with the App Group entitlement and update
 `IOS_PROVISION_PROFILE`. Create a distribution profile for the extension and
 store its base64 representation in `IOS_SHARE_PROVISION_PROFILE`.
 
+The profile alone does not grant the group: the IPA's code signature must carry
+it. CI archives without signing, so `tools/sign-ios-archive-adhoc.sh` ad-hoc
+signs the archive with each target's `.entitlements` before export, and
+`tools/assert-ios-app-group-entitlements.sh` fails the export job when the IPA
+lacks the App Group (#10777).
+
 For development, select the same signing team on both Xcode targets and enable
 automatic provisioning. The app target embeds the extension. Release builds
 pass `MARKETING_VERSION` and `CURRENT_PROJECT_VERSION` to `xcodebuild archive`,
