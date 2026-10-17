@@ -1834,9 +1834,9 @@ export class PluginBridgeService implements OnDestroy {
       }
     }
 
-    // Validate tags exist if provided
+    // Validate tags exist if provided. TODAY is virtual and never goes in task.tagIds.
     if (tagIds && tagIds.length > 0) {
-      const tags = await this._tagService.tags$.pipe(first()).toPromise();
+      const tags = await this._tagService.tagsNoMyDayAndNoList$.pipe(first()).toPromise();
 
       const existingTagIds = tags?.map((tag) => tag.id) || [];
       const nonExistentTags = tagIds.filter((tagId) => !existingTagIds.includes(tagId));

@@ -28,6 +28,7 @@ import { Task, TaskCopy } from '../features/tasks/task.model';
 import { PluginCreateTaskData } from '@super-productivity/plugin-api';
 import { DEFAULT_GLOBAL_CONFIG } from '../features/config/default-global-config.const';
 import EN_TRANSLATIONS from '../../assets/i18n/en.json';
+import { TODAY_TAG } from '../features/tag/tag.const';
 
 // Covers the plugin API's subtask-creation branch, which hand-rolls task
 // construction rather than going through TaskService.addSubTaskTo(). The
@@ -54,12 +55,14 @@ describe('PluginBridgeService.addTask() — subtask creation', () => {
     taskServiceSpy.allTasks$ = of(allTasks);
 
     // 'p1' / 't1' exist so tests can pass projectId/tagIds without tripping
-    // _validateTaskReferences.
+    // _validateTaskReferences. As in the real TagService, tags$ includes the
+    // virtual TODAY tag and tagsNoMyDayAndNoList$ leaves it out.
     const projectServiceSpy = jasmine.createSpyObj('ProjectService', [], {
       list$: of([{ id: 'p1' }]),
     });
     const tagServiceSpy = jasmine.createSpyObj('TagService', [], {
-      tags$: of([{ id: 't1' }]),
+      tags$: of([TODAY_TAG, { id: 't1' }]),
+      tagsNoMyDayAndNoList$: of([{ id: 't1' }]),
     });
 
     const cfgSignal = signal({
@@ -280,6 +283,31 @@ describe('PluginBridgeService.addTask() — subtask creation', () => {
       expect(taskService.update).toHaveBeenCalledWith('parent-1', {
         title: 'renamed',
       });
+    });
+  });
+
+  // TODAY is virtual: membership comes from dueDay/dueWithTime and the id must
+  // never land in task.tagIds (ARCHITECTURE-DECISIONS.md Decision #2). getAllTags()
+  // returns it, so a plugin can easily pass it back (#10737).
+  describe('tagIds — virtual TODAY tag', () => {
+    it('addTask rejects the TODAY tag id', async () => {
+      const { service, taskService } = setup(true);
+
+      await expectAsync(
+        service.addTask({ title: 'task', tagIds: ['t1', TODAY_TAG.id] }),
+      ).toBeRejectedWithError(/TAGS_DO_NOT_EXIST.*TODAY/);
+
+      expect(taskService.add).not.toHaveBeenCalled();
+    });
+
+    it('updateTask rejects the TODAY tag id', async () => {
+      const { service, taskService } = setup(true);
+
+      await expectAsync(
+        service.updateTask('parent-1', { tagIds: ['t1', TODAY_TAG.id] }),
+      ).toBeRejectedWithError(/TAGS_DO_NOT_EXIST.*TODAY/);
+
+      expect(taskService.update).not.toHaveBeenCalled();
     });
   });
 
