@@ -610,7 +610,7 @@
         "IN_PROGRESS": "Status for starting task",
         "LOAD_SUGGESTIONS": "Load Suggestions",
         "MAP_CUSTOM_FIELDS": "Load Story Points",
-        "MAP_CUSTOM_FIELDS_INFO": "Unfortunately some of Jira's data is saved under custom fields which are different for every installation. To include this data, you need to select the proper custom field for it. Currently there is only the story points field that needs to be mapped.",
+        "MAP_CUSTOM_FIELDS_INFO": "Unfortunately some of Jira's data is saved using custom fields that are different for every installation. To include this data, you need to select the proper custom field for it. Currently there is only the story points field that needs to be mapped.",
         "OPEN": "Status for pausing task",
         "SELECT_ISSUE_FOR_TRANSITIONS": "Select issue to load available transitions",
         "STORY_POINTS": "Story Points Field Name",
@@ -728,7 +728,7 @@
       "CONFIRM_ADD_TO_SUB_TASK_NOTES": "Add the pasted Markdown list to the notes of subtask \"{{parentTaskTitle}}\"?",
       "CONFIRM_PARENT_TASKS": "Create <strong>{{tasksCount}} new tasks</strong> from the pasted Markdown list?",
       "CONFIRM_PARENT_TASKS_WITH_SUBS": "Create <strong>{{tasksCount}} new tasks and {{subTasksCount}} subtasks</strong> from the pasted Markdown list?",
-      "CONFIRM_SUB_TASKS": "Create {{tasksCount}} new subtasks from the pasted Markdown list?",
+      "CONFIRM_SUB_TASKS": "Create <strong>{{tasksCount}} new subtasks</strong> from the pasted Markdown list?",
       "CONFIRM_SUB_TASKS_WITH_PARENT": "Create <strong>{{tasksCount}} new subtasks under \"{{parentTaskTitle}}\"</strong> from the pasted Markdown list?",
       "DIALOG_TITLE": "Pasted Markdown list detected!"
     },
@@ -748,7 +748,7 @@
         "HEATMAP_SHARE_TAGLINE": "{{title}} – With the Super Productivity App",
         "HEATMAP_SHARED_TO_DEVICE": "Heatmap saved to device storage",
         "HEATMAP_SHARED_TO_PATH": "Heatmap saved to {{path}}",
-        "NO_ADDITIONAL_DATA_YET": "No additional data collected yet. Use the form on the daily summary \"Evaluation\" panel to do so.",
+        "NO_ADDITIONAL_DATA_YET": "No additional data collected yet. Please use the form on the daily summary \"Evaluation\" panel to do so.",
         "PRODUCTIVITY_BREAKDOWN_OVER_TIME": "Productivity & Sustainability over time",
         "SHARE_HEATMAP": "Share heatmap",
         "SHARE_STATS": "Share your productivity stats",
@@ -777,17 +777,17 @@
         "SCORE_BREAKDOWN_TITLE_PRODUCTIVITY": "7-Day Productivity Breakdown",
         "SCORE_BREAKDOWN_TITLE_SUSTAINABILITY": "7-Day Sustainability Breakdown",
         "STATE_DEEP_FLOW_HEADLINE": "Deep Flow: Excellent focus and sustainable pace.",
-        "STATE_DEEP_FLOW_HINT": "You’re in the sweet spot — reflect on what made this combination possible.",
+        "STATE_DEEP_FLOW_HINT": "You're in the sweet spot — reflect on what made this combination possible.",
         "STATE_DRIFT_HEADLINE": "Drift: Low focus and low energy.",
-        "STATE_DRIFT_HINT": "That’s okay. Reflect on what distracted you and adjust gently — every reset is a chance to learn.",
+        "STATE_DRIFT_HINT": "That's okay. Reflect on what distracted you and adjust gently — every reset is a chance to learn.",
         "STATE_IMPACT_MISMATCH_HEADLINE": "Low Impact: Plenty of focus, little payoff.",
         "STATE_IMPACT_MISMATCH_HINT": "You invested solid focus — now direct it toward higher-impact work to feel the difference.",
         "STATE_OVERDRIVE_HEADLINE": "Overdrive: Productive, but at a cost.",
         "STATE_OVERDRIVE_HINT": "You got a lot done — now make sure to recharge before burnout sneaks in.",
         "STATE_RECOVERY_HEADLINE": "Recovery: Resting and recharging.",
-        "STATE_RECOVERY_HINT": "You’re giving your mind space to recover. Tomorrow you’ll have the energy to dive deeper again.",
+        "STATE_RECOVERY_HINT": "You're giving your mind space to recover. Tomorrow you'll have the energy to dive deeper again.",
         "STATE_STEADY_HEADLINE": "Steady Rhythm: Consistent, sustainable progress.",
-        "STATE_STEADY_HINT": "Nice balance. You’re keeping momentum without overextending — keep nourishing what makes this pace work.",
+        "STATE_STEADY_HINT": "Nice balance. You're keeping momentum without overextending — keep nourishing what makes this pace work.",
         "SUSTAINABILITY_SCORE": "Sustainability Score",
         "SUSTAINABILITY_SCORE_TOOLTIP": "45% Energy level • 40% Reasonable work hours (0 at 10h) • 15% Focus balance (optimal at 4h)",
         "TOTAL_WORK_TIME": "Total work time today"
@@ -1144,7 +1144,7 @@
     },
     "SIMPLE_COUNTER": {
       "D_CONFIRM_REMOVE": {
-        "MSG": "Deleting a simple counter, will also delete all past data tracked on it. Are you sure you want to proceed?",
+        "MSG": "Deleting a simple counter will also delete all past data tracked on it. Are you sure you want to proceed?",
         "OK": "Do it!"
       },
       "D_EDIT": {
@@ -1224,8 +1224,8 @@
         "LOCAL": "Local",
         "LOCAL_REMOTE": "Local -> Remote",
         "NEVER": "Never",
-        "OVERWRITE_WARNING": "WARNING: The {{targetName}} data contains approximately {{targetChanges}} changes while the {{sourceName}} data only has {{sourceChanges}} changes. Are you sure you want to overwrite the {{targetName}} data with the {{sourceName}} version?",
-        "OVERWRITE_WARNING_UNKNOWN": "WARNING: The number of unsynced changes is unknown. This will replace the entire {{targetName}} dataset with the {{sourceName}} version. Changes present only in the {{targetName}} data will be lost. Are you sure?",
+        "OVERWRITE_WARNING": "<strong>WARNING:</strong> The {{targetName}} data contains approximately {{targetChanges}} changes while the {{sourceName}} data only has {{sourceChanges}} changes. Are you sure you want to overwrite the {{targetName}} data with the {{sourceName}} version?",
+        "OVERWRITE_WARNING_UNKNOWN": "<strong>WARNING:</strong> The number of unsynced changes is unknown. This will replace the entire {{targetName}} dataset with the {{sourceName}} version. Changes present only in the {{targetName}} data will be lost. Are you sure?",
         "REMOTE": "Remote",
         "RESULT": "Result",
         "TEXT": "<p>Local and remote data cannot be merged automatically. Keep local replaces all remote data with this device's data. Keep remote replaces all data on this device with the remote data. Changes present only in the replaced version will be lost. Cancel leaves sync unresolved.</p>",
@@ -1261,7 +1261,7 @@
       "D_DEVICES": {
         "BTN_SIGN_OUT_OTHERS": "Sign out other devices",
         "ERROR_LOADING": "Failed to load connected devices",
-        "ERROR_SIGN_OUT": "Signing out other devices failed. If the connection dropped mid-request it may still have taken effect — then this device also needs a newly issued token.",
+        "ERROR_SIGN_OUT": "Signing out other devices failed. If the connection dropped mid-request, it may still have taken effect — then this device also needs a newly issued token.",
         "LAST_SEEN": "Last sync: {{date}}",
         "NO_DEVICES": "No devices have synced with this account yet.",
         "PLATFORM_ANDROID": "Android",
@@ -1313,7 +1313,7 @@
       },
       "D_RESTORE": {
         "BTN_RESTORE": "Restore",
-        "CONFIRM_MSG": "Are you absolutely sure you want to restore to <strong>{{timestamp}}</strong>?<br><br>This will <strong>completely replace</strong> all your current data and <strong>cannot be undone</strong>.",
+        "CONFIRM_MSG": "<strong>WARNING:</strong> Are you absolutely sure you want to restore to <strong>{{timestamp}}</strong>?<br><br>This will <strong>completely replace</strong> all your current data and <strong>cannot be undone</strong>.",
         "CONFIRM_TITLE": "Confirm Restore",
         "ERROR_LOADING": "Failed to load restore points",
         "ERROR_RESTORE": "Failed to restore data",
@@ -1324,7 +1324,7 @@
         "TYPE_BACKUP_IMPORT": "Backup restore",
         "TYPE_REPAIR": "Auto-repair",
         "TYPE_SYNC_IMPORT": "Full sync import",
-        "WARNING": "This will replace ALL your current data with the selected backup. This action cannot be undone!"
+        "WARNING": "<strong>WARNING:</strong> This will <strong>replace ALL your current data</strong> with the selected backup. <strong>This action cannot be undone!</strong>"
       },
       "D_SERVER_MIGRATION_CONFIRM": {
         "CONFIRM": "Replace Server Data",
@@ -1335,7 +1335,7 @@
       "D_SYNC_IMPORT_CONFLICT": {
         "FILTERED_CHANGES": "Affected changes",
         "FIRST_SYNC_USE_LOCAL_CONFIRM": "This device has never synced before. \"Use My Data\" will permanently replace the data on the server with this device's local data. This cannot be undone. Continue?",
-        "FIRST_SYNC_WARNING": "This device hasn't synced before, so \"Use My Data\" would overwrite the server's existing data with this device's data.",
+        "FIRST_SYNC_WARNING": "<strong>WARNING:</strong> This device hasn't synced before, so \"Use My Data\" would overwrite the server's existing data with this device's data.",
         "IMPORT_DATE": "Import date",
         "MSG_INCOMING": "Your data was fully replaced on another device. You have {{filteredOpCount}} local changes that may not carry over.",
         "MSG_INCOMING_NO_OPS": "Your data was fully replaced on another device. This device will sync to the new state.",
@@ -1351,7 +1351,7 @@
         "TITLE": "Sync Conflict Detected",
         "USE_LOCAL": "Use My Data",
         "USE_REMOTE": "Use Server Data",
-        "USE_REMOTE_CONFIRM": "This replaces this device's data with the server's and discards {{count}} local change(s). Continue?"
+        "USE_REMOTE_CONFIRM": "<strong>WARNING:</strong> This replaces this device's data with the server's and discards {{count}} local change(s). Continue?"
       },
       "D_UNDECRYPTABLE_REMOTE": {
         "MESSAGE": "Your sync server holds at least {{count}} change(s) that this device has not applied because it could not decrypt them. They may be your work from another device, saved under a different or older encryption password.\n\nOverwriting the server deletes them permanently, and this device cannot bring them back.\n\nBefore you overwrite, sync again and try your older encryption passwords with Retry Decrypt in the Decryption Failed dialog. Only continue if you are sure you no longer need these changes.",
@@ -1378,14 +1378,14 @@
           "BTN_ENABLE_ENCRYPTION": "Enable Encryption",
           "BTN_REMOVE_ENCRYPTION": "Remove Encryption",
           "CHANGE_PASSWORD_SUCCESS": "Encryption password changed successfully",
-          "CHANGE_PASSWORD_WARNING": "WARNING: This will re-upload your data with the new password. All other devices will need the new password before syncing.",
+          "CHANGE_PASSWORD_WARNING": "<strong>WARNING:</strong> This will re-upload your data with the new password. All other devices will need the new password before syncing.",
           "DISABLE_ENCRYPTION_ITEM_1": "Your current data will be re-uploaded without encryption",
           "DISABLE_ENCRYPTION_ITEM_2": "All other devices will sync the unencrypted data",
           "DISABLE_ENCRYPTION_ITEM_3": "You can re-enable encryption at any time",
           "DISABLE_ENCRYPTION_NOTE": "Your local data will NOT be deleted.",
           "DISABLE_ENCRYPTION_SUCCESS": "Encryption disabled successfully",
           "DISABLE_ENCRYPTION_TITLE": "Disable Encryption?",
-          "DISABLE_ENCRYPTION_WARNING": "WARNING: This will re-upload your data without encryption!",
+          "DISABLE_ENCRYPTION_WARNING": "<strong>WARNING:</strong> This will re-upload your data without encryption!",
           "DISABLE_ENCRYPTION_WHAT_HAPPENS": "What will happen:",
           "ENABLE_ENCRYPTION_FILE_BASED_ONLY": "This feature is only available for file-based sync providers.",
           "ENABLE_ENCRYPTION_ITEM_1": "Your current data will be re-uploaded with encryption",
@@ -1396,7 +1396,7 @@
           "ENABLE_ENCRYPTION_PASSWORD_REQUIRED": "Please enter an encryption password first.",
           "ENABLE_ENCRYPTION_SUCCESS": "Encryption enabled successfully",
           "ENABLE_ENCRYPTION_TITLE": "Enable Encryption?",
-          "ENABLE_ENCRYPTION_WARNING": "WARNING: This will re-upload your data with encryption. If you forget your encryption password, your data cannot be recovered!",
+          "ENABLE_ENCRYPTION_WARNING": "<strong>WARNING:</strong> This will re-upload your data with encryption. If you forget your encryption password, your data cannot be recovered!",
           "ENABLE_ENCRYPTION_WHAT_HAPPENS": "What will happen:",
           "ENCRYPTION_SETUP_INTRO": "<strong>Set a password to encrypt your data before it is uploaded</strong>, so it never leaves this device unencrypted. This is optional — you can also enable or change it later.",
           "L_CHANGE_ENCRYPTION_PASSWORD": "Change Encryption Password",
@@ -1405,9 +1405,9 @@
           "L_REMOVE_ENCRYPTION": "Or Remove Encryption",
           "PASSWORD_MIN_LENGTH": "Password must be at least 8 characters",
           "PASSWORDS_DONT_MATCH": "Passwords do not match",
-          "REMOVE_ENCRYPTION_WARNING": "Removing encryption will re-upload your data without encryption. All devices will need to reconfigure.",
+          "REMOVE_ENCRYPTION_WARNING": "<strong>WARNING:</strong> Removing encryption will re-upload your data without encryption. All devices will need to reconfigure.",
           "SETUP_ENCRYPTION_BTN": "Encrypt & Continue",
-          "SETUP_ENCRYPTION_PASSWORD_WARNING": "Use the same password on all devices. If you forget it, encrypted data cannot be recovered.",
+          "SETUP_ENCRYPTION_PASSWORD_WARNING": "<strong>IMPORTANT:</strong> Use the same password on all devices. If you forget it, encrypted data cannot be recovered.",
           "SETUP_ENCRYPTION_TITLE": "Encrypt before first upload?",
           "SETUP_SKIP_ENCRYPTION_BTN": "Skip"
         },
@@ -1424,23 +1424,23 @@
           "ITEM_2": "Your imported data will be uploaded with the new encryption settings",
           "ITEM_3": "All other devices must sync and update their encryption settings to match",
           "NOTE": "If you continue, the imported data will replace your local data.",
-          "NOTE_DISABLING": "Important: Without encryption, anyone with access to your sync server can read your data.",
-          "NOTE_ENABLING": "Important: Encryption requires a password. If you forget this password, your data CANNOT be recovered!",
+          "NOTE_DISABLING": "<strong>IMPORTANT:</strong> Without encryption, anyone with access to your sync server can read your data.",
+          "NOTE_ENABLING": "<strong>IMPORTANT:</strong> Encryption requires a password. If you forget this password, your data CANNOT be recovered!",
           "TITLE": "Encryption Settings Will Change",
-          "WARNING_TEXT": "This backup uses encryption, while this account's current synced data does not. SuperSync requires encryption; continuing will replace this account's synced state on the server and permanently delete its existing sync history.",
+          "WARNING_TEXT": "<strong>WARNING:</strong> This backup uses encryption, while this account's current synced data does not. SuperSync requires encryption. Continuing will replace this account's synced state on the server and permanently delete its existing sync history.",
           "WHAT_HAPPENS": "What will happen:"
         },
         "L_ENABLE_COMPRESSION": "Enable compression (faster data transfer)",
         "L_ENABLE_ENCRYPTION": "Enable end-to-end encryption (experimental) – Keep your data private from your sync provider",
         "L_ENABLE_SYNCING": "Enable syncing",
-        "L_ENCRYPTION_NOTES": "IMPORTANT NOTES: You will need to set the same password on your other devices <strong>BEFORE</strong> the next sync for everything to work. Please select a password that is secure. Please note that <strong>you will NOT be able to access your data, if you forget this password! There is NO recovery possible</strong>, since only you have the key. The encryption will probably be good enough to thwart most attacks, but <strong>there is no guarantee.</strong>",
+        "L_ENCRYPTION_NOTES": "<strong>IMPORTANT:</strong> You will need to set the same password on your other devices <strong>BEFORE</strong> the next sync for everything to work. Please select a password that is secure. Please note that <strong>you will NOT be able to access your data, if you forget this password! There is NO recovery possible</strong>, since only you have the key. The encryption will probably be good enough to thwart most attacks, but <strong>there is no guarantee.</strong>",
         "L_ENCRYPTION_PASSWORD": "Encryption Password (DO NOT FORGET IT!)",
         "L_MANUAL_SYNC_ONLY": "Only sync manually (disable automatic sync)",
         "L_SYNC_INTERVAL": "Sync interval",
         "L_SYNC_PROVIDER": "Sync provider",
         "L_USE_SPLIT_SYNC_FILES": "Surgical sync – Faster syncing using a split ops/snapshot file layout. Turning it on upgrades this sync folder permanently. Other devices may need to turn it on too; versions before 18.14 cannot sync an upgraded folder.",
         "LOCAL_FILE": {
-          "INFO_TEXT": "<strong>Warning:</strong> Do <strong>not</strong> use file syncing tools like Syncthing, Resilio, or similar to sync this folder between devices — they <strong>will</strong> cause data corruption and conflicts. For multi-device sync, use SuperSync, Nextcloud, or Dropbox instead.",
+          "INFO_TEXT": "<strong>WARNING:</strong> Do <strong>not</strong> use file syncing tools like Syncthing, Resilio, or similar to sync this folder between devices — they <strong>will</strong> cause data corruption and conflicts. For multi-device sync, use SuperSync, Nextcloud, or Dropbox instead.",
           "L_SYNC_FILE_PATH_PERMISSION_VALIDATION": "Needs file access permission",
           "L_SYNC_FOLDER_PATH": "Sync folder path",
           "S_COMMIT_FOLDER_ERROR": "Could not save the selected sync folder. It may have been moved or deleted — please pick it again."
@@ -1457,9 +1457,9 @@
           "CAPTURE_A_COPY_URL": "Copy server URL",
           "CAPTURE_A_REVOKE": "Revoke {{name}}",
           "CAPTURE_A_REVOKE_DISCARD": "Revoke {{name}} and delete its waiting tasks",
-          "CAPTURE_OAUTH_HINT": "For Claude web: add this URL as a connector, choose Sign in now and Use Claude’s published identity, then enter a connection code. New tasks arrive after your next sync.",
+          "CAPTURE_OAUTH_HINT": "For Claude web: add this URL as a connector, choose Sign in now and Use Claude's published identity, then enter a connection code. New tasks arrive after your next sync.",
           "CAPTURE_BTN_CONNECT_CODE": "Create connection code",
-          "CAPTURE_CONNECT_CODE_WARNING": "Enter it only on a page you opened from your assistant. Works once and replaces any previous code.",
+          "CAPTURE_CONNECT_CODE_WARNING": "<strong>IMPORTANT:</strong> Enter it only on a page you opened from your assistant. Works once and replaces any previous code.",
           "CAPTURE_L_CONNECT_CODE": "Connection code",
           "CAPTURE_L_CODE_EXPIRES": "Expires at",
           "CAPTURE_BTN_REFRESH_CONNECTIONS": "Refresh connections",
@@ -1495,7 +1495,7 @@
           "CAPTURE_TITLE": "AI assistants",
           "CAPTURE_TOKEN_ONCE": "Copy it now. It is shown only once and is valid for one year.",
           "CHANGE_PASSWORD_SUCCESS": "Encryption password changed successfully",
-          "CHANGE_PASSWORD_WARNING": "WARNING: This will permanently delete ALL sync history and backups on the server! Previous versions cannot be recovered. Your current data will be re-uploaded with the new password. All other devices will need the new password.",
+          "CHANGE_PASSWORD_WARNING": "<strong>WARNING:</strong> This will permanently delete ALL sync history and backups on the server! Previous versions cannot be recovered. Your current data will be re-uploaded with the new password. All other devices will need the new password.",
           "DISABLE_ENCRYPTION_ENABLE_FIRST": "Please enable sync and save your SuperSync configuration first, then try again.",
           "DISABLE_ENCRYPTION_ITEM_1": "All sync history and backups on the server will be deleted",
           "DISABLE_ENCRYPTION_ITEM_2": "Your current data will be re-uploaded without encryption",
@@ -1505,7 +1505,7 @@
           "DISABLE_ENCRYPTION_SUCCESS": "Encryption disabled successfully",
           "DISABLE_ENCRYPTION_SUPERSYNC_ONLY": "This feature is only available for SuperSync.",
           "DISABLE_ENCRYPTION_TITLE": "Disable Encryption?",
-          "DISABLE_ENCRYPTION_WARNING": "WARNING: This will permanently delete ALL encrypted sync data on the server! This is necessary because encrypted operations cannot be mixed with unencrypted ones.",
+          "DISABLE_ENCRYPTION_WARNING": "<strong>WARNING:</strong> This will permanently delete ALL encrypted sync data on the server! This is necessary because encrypted operations cannot be mixed with unencrypted ones.",
           "DISABLE_ENCRYPTION_WHAT_HAPPENS": "What will happen:",
           "E2E_ENCRYPTION_DESCRIPTION": "Will be slower, but more secure",
           "E2E_ENCRYPTION_INFO": "Your data is end-to-end encrypted on this device with a password you choose.",
@@ -1518,11 +1518,11 @@
           "ENABLE_ENCRYPTION_SUCCESS": "Encryption enabled successfully",
           "ENABLE_ENCRYPTION_SUPERSYNC_ONLY": "This feature is only available for SuperSync.",
           "ENABLE_ENCRYPTION_TITLE": "Enable Encryption?",
-          "ENABLE_ENCRYPTION_WARNING": "WARNING: This will permanently delete ALL unencrypted sync data on the server! This is necessary because encrypted operations cannot be mixed with unencrypted ones. If you forget your encryption password, your data cannot be recovered.",
+          "ENABLE_ENCRYPTION_WARNING": "<strong>WARNING:</strong> This will permanently delete ALL unencrypted sync data on the server! This is necessary because encrypted operations cannot be mixed with unencrypted ones. If you forget your encryption password, your data cannot be recovered.",
           "ENABLE_ENCRYPTION_WHAT_HAPPENS": "What will happen:",
           "ENCRYPTION_ENCOURAGED": "Encryption is required for SuperSync. Please enable encryption to protect your data.",
           "ENCRYPTION_SETUP_INTRO": "<strong>SuperSync password-encrypts your data before it leaves your device</strong>, so the contents of your tasks and notes can't be read on the server. Technical details like IDs and timestamps are not encrypted.",
-          "ENCRYPTION_WARNING": "WARNING: If you forget your encryption password, your data cannot be recovered. This password is separate from your login password. You must use the same password on all devices.",
+          "ENCRYPTION_WARNING": "<strong>IMPORTANT:</strong> If you forget your encryption password, your data cannot be recovered. This password is separate from your login password. You must use the same password on all devices.",
           "FORCE_OVERWRITE_CONFIRM": "This will <strong>delete all data on the server</strong> and upload your local data with the new password. Unsynced local changes may be lost. Are you sure you want to continue?",
           "FORCE_OVERWRITE_INFO": "If you can't sync because you don't know the current encryption password, you can overwrite the server with your local data and a new password.",
           "FORCE_OVERWRITE_TITLE": "Overwrite Server Data?",
@@ -1540,11 +1540,11 @@
           "L_SERVER_URL": "Server URL",
           "PASSWORD_MIN_LENGTH": "Password must be at least 8 characters",
           "PASSWORDS_DONT_MATCH": "Passwords do not match",
-          "REMOVE_ENCRYPTION_WARNING": "Removing encryption will delete all server data and re-upload your data without encryption. All devices will need to reconfigure.",
+          "REMOVE_ENCRYPTION_WARNING": "<strong>WARNING:</strong> Removing encryption will delete all server data and re-upload your data without encryption. All devices will need to reconfigure.",
           "SERVER_URL_DESCRIPTION": "Leave as-is for the official server, or enter a custom server URL",
           "SETUP_DISABLE_SUPERSYNC_BTN": "Disable SuperSync",
           "SETUP_ENCRYPTION_BTN": "Set Password",
-          "SETUP_ENCRYPTION_PASSWORD_WARNING": "Use the same password on all devices. A forgotten password can be reset by overwriting remote data.",
+          "SETUP_ENCRYPTION_PASSWORD_WARNING": "<strong>IMPORTANT:</strong> Use the same password on all devices. A forgotten password can be reset by overwriting remote data.",
           "SETUP_ENCRYPTION_TITLE": "SuperSync: Set Password"
         },
         "NEXTCLOUD": {
@@ -1557,7 +1557,7 @@
           "L_APP_PASSWORD": "App Password",
           "APP_PASSWORD_DESCRIPTION": "Go to Nextcloud → Settings → Security → App passwords to generate one",
           "L_DETECT_USER_ID": "Detect user ID",
-          "S_DETECT_USER_ID_NEED_LOGIN": "Enter your Server URL, your login (Username or Login name / email), and your App Password first.",
+          "S_DETECT_USER_ID_NEED_LOGIN": "Enter your server URL, your login (username or login name / email), and your app password first.",
           "S_DETECT_USER_ID_SUCCESS": "Found your Nextcloud user ID: {{userId}}. It has been filled into the Username field.",
           "S_DETECT_USER_ID_FAIL": "Could not detect your user ID: {{error}}",
           "S_TEST_FAIL_USER_NOT_FOUND": "Connection test failed: user folder not found (404). Your login works, but \"Username\" must be your Nextcloud user ID — not your email or display name. To find it, open Files in Nextcloud, click the settings gear (bottom-left corner), and copy the <user-id> from the WebDAV URL shown there (.../remote.php/dav/files/<user-id>/). Target URL: {{url}}"
@@ -1579,7 +1579,7 @@
         "WEB_DAV": {
           "CORS_INFO": "<strong>Making it work in a web browser:</strong> You need to allow Super Productivity to make CORS requests to your server. For Nextcloud, one approach is allowing \"https://app.super-productivity.com\" via the <a href='https://apps.nextcloud.com/apps/webapppassword'>webapppassword</a> app. Refer to <a href='https://github.com/nextcloud/server/issues/3131'>this GitHub thread</a> for more information.",
           "D_SYNC_FOLDER_PATH": "Path relative to the WebDAV server root where sync files will be stored (e.g. '/super-productivity' or '/'). This is NOT your server's internal directory path.",
-          "INFO": "<strong>Warning:</strong> Generic WebDAV sync is <strong>experimental and provided as-is, without support</strong>. WebDAV implementations differ enormously between servers, and the vast majority of sync problems are caused by your provider's setup or quirks (CORS, authentication, non-standard behavior, file locking, etc.) — <strong>not by Super Productivity</strong>. We cannot debug individual WebDAV servers, so please troubleshoot such issues with your provider and do not report them to us as bugs. If you are using Nextcloud, use the dedicated Nextcloud option instead. For reliable, fully supported sync consider Dropbox or SuperSync.",
+          "INFO": "<strong>WARNING:</strong> Generic WebDAV sync is <strong>experimental and provided as-is, without support</strong>. WebDAV implementations differ enormously between servers, and the vast majority of sync problems are caused by your provider's setup or quirks (CORS, authentication, non-standard behavior, file locking, etc.) — <strong>not by Super Productivity</strong>. We cannot debug individual WebDAV servers, so please troubleshoot such issues with your provider and do not report them to us as bugs. If you are using Nextcloud, use the dedicated Nextcloud option instead. For reliable, fully supported sync consider Dropbox or SuperSync.",
           "L_BASE_URL": "Base URL",
           "L_PASSWORD": "Password",
           "L_SYNC_FOLDER_PATH": "Sync Folder Path",
@@ -1601,7 +1601,7 @@
         "BTN_FORCE_OVERWRITE": "Force Overwrite",
         "BTN_RESOLVE_CONFLICT": "Resolve…",
         "CHANGE_PASSWORD_FAILED": "Failed to change password: {{message}}",
-        "CLOCK_DRIFT_WARNING": "Your device clock appears to be off by {{minutes}} minutes. This may cause sync issues.",
+        "CLOCK_DRIFT_WARNING": "<strong>WARNING:</strong> Your device clock appears to be off by {{minutes}} minutes. This may cause sync issues.",
         "COMPACTION_FAILED": "Database cleanup failed. App may slow down.",
         "CONFLICT_DIALOG_TIMEOUT": "Sync conflict dialog timed out and was cancelled. Sync will retry on next trigger.",
         "CONFLICT_RESOLUTION_FAILED": "Sync conflict resolution failed. Please reload.",
@@ -1804,8 +1804,8 @@
         "ADD_SUB_TASK": "Add subtask",
         "ATTACHMENTS": "Links & Files ({{nr}})",
         "CHECKLIST": "Checklist",
-        "COMPLETED_ON": "Completed on",
-        "CREATED_ON": "Created on",
+        "COMPLETED_ON": "Completed",
+        "CREATED_ON": "Created",
         "DEADLINE": "Deadline",
         "DEADLINE_DUE_BY": "Deadline",
         "DEADLINE_OVERDUE": "Past deadline!",
@@ -1881,7 +1881,7 @@
       },
       "D_CONFIRM_DELETE": {
         "MSG": "Are you sure you want to delete the task \"{{title}}\"?",
-        "MSG_PLAINSPACE": "Delete the task \"{{title}}\"? It is also deleted in Plainspace for everyone in the Space.",
+        "MSG_PLAINSPACE": "Delete the task \"{{title}}\"? It will also be deleted in Plainspace for everyone in the Space.",
         "OK": "Delete"
       },
       "D_CONFIRM_SHORT_SYNTAX_NEW_TAG": {
@@ -1913,7 +1913,7 @@
         "CLEAR_ALL_REMINDERS": "Clear all reminders",
         "CLEAR_REMINDER": "Clear reminder",
         "COMPLETE": "Complete",
-        "MARK_AS_DONE": "Mark as done",
+        "MARK_AS_DONE": "Mark as completed",
         "MORE_ACTIONS": "More actions",
         "OR_DIRECTLY_FOR_ALL": "Or directly for all:",
         "SCHEDULE_FOR_TODAY": "Schedule for today",
@@ -1983,12 +1983,12 @@
         "CLEAR": "Clear selection",
         "D_CONFIRM_DELETE": {
           "MSG": {
-            "ONE": "Delete <strong>{{count}}</strong> task? Its subtasks are deleted too.",
-            "OTHER": "Delete <strong>{{count}}</strong> tasks? Subtasks are deleted too."
+            "ONE": "Delete <strong>{{count}}</strong> task? Its subtasks will be deleted too.",
+            "OTHER": "Delete <strong>{{count}}</strong> tasks? Subtasks will be deleted too."
           },
           "MSG_PLAINSPACE": {
-            "ONE": "Delete <strong>{{count}}</strong> task? Its subtasks are deleted too. It is also deleted in Plainspace for everyone in the Space.",
-            "OTHER": "Delete <strong>{{count}}</strong> tasks? Subtasks are deleted too. Plainspace tasks among them are also deleted for everyone in their Space."
+            "ONE": "Delete <strong>{{count}}</strong> task? Its subtasks will be deleted too. It will also be deleted in Plainspace for everyone in the Space.",
+            "OTHER": "Delete <strong>{{count}}</strong> tasks? Subtasks will be deleted too. Plainspace tasks among them will also be deleted for everyone in the Space."
           },
           "OK": "Delete"
         },
@@ -2002,8 +2002,8 @@
             "OTHER": "Set the deadline of {{count}} tasks to {{date}}"
           },
           "DONE": {
-            "ONE": "Marked {{count}} task as done",
-            "OTHER": "Marked {{count}} tasks as done"
+            "ONE": "Marked {{count}} task as completed",
+            "OTHER": "Marked {{count}} tasks as completed"
           },
           "ESTIMATE_CLEARED": {
             "ONE": "Cleared the estimate of {{count}} task",
@@ -2042,8 +2042,8 @@
             "OTHER": "Scheduled {{count}} tasks for {{date}}"
           },
           "UNDONE": {
-            "ONE": "Marked {{count}} task as not done",
-            "OTHER": "Marked {{count}} tasks as not done"
+            "ONE": "Marked {{count}} task as not completed",
+            "OTHER": "Marked {{count}} tasks as not completed"
           },
           "UNSCHEDULED": {
             "ONE": "Unscheduled {{count}} task",
@@ -2079,7 +2079,7 @@
         "MOVED_TO_ARCHIVE": "Moved {{nr}} tasks to archive",
         "MOVED_TO_PROJECT": "Moved task \"{{taskTitle}}\" to project \"{{projectTitle}}\"",
         "NOT_FOUND_VIA_APP_URI": "No matching task found for \"{{title}}\"",
-        "PROJECT_NOT_FOUND_VIA_APP_URI": "Project not found — task \"{{title}}\" was not added",
+        "PROJECT_NOT_FOUND_VIA_APP_URI": "Project not found. Task \"{{title}}\" was not added",
         "REMINDER_ADDED": "Scheduled <strong>\"{{title}}\"</strong> at <strong>{{date}}</strong>",
         "REMINDER_DELETED": "Deleted reminder for task",
         "REMINDER_UPDATED": "Updated reminder for task \"{{title}}\"",
@@ -2124,16 +2124,16 @@
         "YEARLY_CURRENT_DATE_AND_TIME": "Yearly {{dayAndMonthStr}}, {{timeStr}}"
       },
       "D_CONFIRM_MOVE_TO_PROJECT": {
-        "MSG": "There are {{tasksNr}} instances created for this recurring task. Do you want to move all of them to the project \"{{projectName}}\"?",
+        "MSG": "There are {{tasksNr}} instances of this recurring task. Do you want to move all of them to the project \"{{projectName}}\"?",
         "OK": "Update all instances"
       },
       "D_CONFIRM_REMOVE": {
-        "MSG": "Removing the recurring config will convert all previous instances of this task to just regular tasks. Are you sure you want to proceed?",
+        "MSG": "Removing the recurring config will convert all previous instances of this task to regular tasks. Are you sure you want to proceed?",
         "OK": "Remove completely"
       },
       "D_CONFIRM_UPDATE_INSTANCES": {
         "CANCEL": "Only future tasks",
-        "MSG": "There are {{tasksNr}} instances created for this recurring task. Do you want to update all of them with the new defaults or only update future tasks?",
+        "MSG": "There are {{tasksNr}} instances of this recurring task. Do you want to update all of them with the new defaults or only update future tasks?",
         "OK": "Update all instances"
       },
       "D_SKIP_INSTANCE": {
@@ -2147,10 +2147,10 @@
         "HEATMAP_LABEL": "Activity",
         "INHERITED_SUBTASKS": "New instances get these subtasks:",
         "NEXT_OCCURRENCE": "Next new instance: {{date}}",
-        "NEXT_OCCURRENCE_AFTER_COMPLETION": "A new instance is created as soon as the current one is done",
+        "NEXT_OCCURRENCE_AFTER_COMPLETION": "A new instance is created as soon as the current one is completed",
         "NEXT_OCCURRENCE_FROM_COMPLETION": "Next new instance: {{date}}, later if the current one is completed late",
         "NEXT_OCCURRENCE_UNSAVED": "The date of the next new instance updates after saving",
-        "NEXT_OCCURRENCE_WAIT_FOR_COMPLETION": "Next new instance: {{date}}, if the current one is done by then",
+        "NEXT_OCCURRENCE_WAIT_FOR_COMPLETION": "Next new instance: {{date}}, if the current one is completed by then",
         "TAG_LABEL": "Tags",
         "TIME_SPENT_THIS_MONTH": "This month",
         "TIME_SPENT_THIS_WEEK": "This week",
@@ -2295,7 +2295,7 @@
         "NOTES_TO_CLEAR": "Task notes to clear (older than 1 year)",
         "SUBTASKS_TO_DELETE": "Subtasks to delete (time merged to parent)",
         "TITLE": "Compress Archive",
-        "WARNING": "This operation cannot be undone. Make sure you have a backup before proceeding!"
+        "WARNING": "<strong>WARNING:</strong> This operation cannot be undone. Make sure you have a backup before proceeding!"
       },
       "D_IDLE": {
         "ADD_ENTRY": "Add entry",
@@ -2425,7 +2425,7 @@
       "SOURCE_URL_DOMAIN": "Source Domain",
       "TITLE": "Confirm Data Import from URL",
       "WARNING_MSG": "Proceeding will overwrite your current application data and configuration with the content from the specified URL. This action cannot be undone!",
-      "WARNING_TITLE": "Warning"
+      "WARNING_TITLE": "WARNING"
     },
     "EXPORT_DATA": "Export Data",
     "IMPORT_FROM_FILE": "Import from File",
@@ -2558,7 +2558,7 @@
     },
     "CALENDARS": {
       "AUTO_IMPORT_FOR_CURRENT_DAY": "Auto import events as tasks for current day",
-      "BROWSER_WARNING": "Due to cross-origin and WebView restrictions <b>this will likely NOT work with the web browser or Android app versions of Super Productivity.<br /> Please <a href=\"https://super-productivity.com/download/\">download the desktop version</a> to use this feature!</b>",
+      "BROWSER_WARNING": "<strong>WARNING:</strong> Due to cross-origin and WebView restrictions <b>this will likely NOT work with the web browser or Android app versions of Super Productivity.<br /> Please <a href=\"https://super-productivity.com/download/\">download the desktop version</a> to use this feature!</b>",
       "CAL_COLOR": "Calendar color",
       "CAL_PATH": "URL of the iCal source",
       "CHECK_UPDATES": "Check for remote updates every X",
@@ -2843,7 +2843,7 @@
       "DEFAULT_TASK_REMIND_OPTION": "Default remind option selected when creating tasks",
       "DISABLE_REMINDERS": "Disable all reminders",
       "DUE_DATE_NOTIFICATION_HOUR": "Hour to show planned-task notifications (0-23)",
-      "HELP": "<p><strong>Important:</strong> Reminders use <strong>local notifications</strong>, not push notifications. This means the app needs to have been opened at least once on your device for reminders to be scheduled. Reminders set on another device will only appear after the app syncs on the target device.</p><p>On <strong>iOS</strong>, make sure notifications are enabled for Super Productivity in your device settings under 'Settings' > 'Notifications'.</p>",
+      "HELP": "<p><strong>IMPORTANT:</strong> Reminders use <strong>local notifications</strong>, not push notifications. This means the app needs to have been opened at least once on your device for reminders to be scheduled. Reminders set on another device will only appear after the app syncs on the target device.</p><p>On <strong>iOS</strong>, make sure notifications are enabled for Super Productivity in your device settings under 'Settings' > 'Notifications'.</p>",
       "IS_COUNTDOWN_BANNER_ENABLED": "Show countdown banner before reminders are due",
       "IS_FOCUS_WINDOW": "Focus application window when reminder is triggered",
       "NOTIFY_ON_DUE_DATE": "Show notifications for tasks planned for today",
@@ -3089,7 +3089,7 @@
   },
   "NOTIFICATION": {
     "TASK_ALREADY_COMPLETED": "Task already completed",
-    "TASK_MARKED_DONE": "Task marked as done"
+    "TASK_MARKED_DONE": "Task marked as completed"
   },
   "ONBOARDING": {
     "HINTS": {
@@ -3099,7 +3099,7 @@
       "EXPLORE_INBOX": "Some optional tips are waiting in your Inbox. Try them or delete them, whenever you like.",
       "GOT_IT": "Got it",
       "TASK_SWIPE_LEFT_TOUCH": "Swipe task left for more actions",
-      "TASK_SWIPE_RIGHT_TOUCH": "When you've finished a task, swipe it right to mark it done",
+      "TASK_SWIPE_RIGHT_TOUCH": "When you've finished a task, swipe it right to mark it completed",
       "OR_PRESS": "or press",
       "SKIP_ARIA": "Close tip"
     }
@@ -3131,10 +3131,10 @@
     "ROUND_30M": "Round all tasks to 30 minutes",
     "ROUND_TIME_SPENT": "Round Time Spent",
     "ROUND_TIME_SPENT_TITLE": "Round time spent on all tasks. Be careful! You cannot undo this!",
-    "ROUND_TIME_WARNING": "!!! Be careful! This cannot be undone !!!",
-    "ROUND_UP_5M": "Round UP all tasks to 5 minutes",
-    "ROUND_UP_15M": "Round UP all tasks to 15 minutes",
-    "ROUND_UP_30M": "Round UP all tasks to 30 minutes",
+    "ROUND_TIME_WARNING": "<strong>WARNING:</strong> Be careful! This cannot be undone!",
+    "ROUND_UP_5M": "Round up all tasks to 5 minutes",
+    "ROUND_UP_15M": "Round up all tasks to 15 minutes",
+    "ROUND_UP_30M": "Round up all tasks to 30 minutes",
     "SAVE_AND_GO_HOME": "Finish the day",
     "SAVE_AND_GO_HOME_TOOLTIP": "Move all completed tasks to the archive (worklog) and optionally sync all data and close the app.",
     "START_END": "Start – End",
@@ -3215,7 +3215,7 @@
     "ELECTRON_API_NOT_AVAILABLE": "Electron API is not available",
     "ERROR": "Error",
     "ERROR_LOADING_PLUGIN": "Error loading plugin",
-    "EXPERIMENTAL_WARNING": "The plugin system is in an experimental stage and should be used with extreme caution!",
+    "EXPERIMENTAL_WARNING": "<strong>WARNING:</strong> The plugin system is in an experimental stage and should be used with extreme caution!",
     "FAILED_TO_CLEAR_CACHE": "Failed to clear plugin cache",
     "FAILED_TO_EXECUTE_SCRIPT": "Failed to execute Node.js script",
     "FAILED_TO_EXTRACT_ZIP": "Failed to extract plugin ZIP file",
@@ -3274,7 +3274,7 @@
     "RISK_MALICIOUS_CODE": "Malicious plugins could steal sensitive information or corrupt your data",
     "RISK_PERFORMANCE": "Poorly written plugins may cause performance issues or crashes",
     "RISK_SYSTEM_ACCESS": "Desktop plugins with Node.js permissions can execute system commands",
-    "SECURITY_WARNING": "Plugins have significant access to your data and system. Installing untrusted plugins poses serious security risks:",
+    "SECURITY_WARNING": "<strong>WARNING:</strong> Plugins have significant access to your data and system. Installing untrusted plugins poses serious security risks:",
     "SETUP_ISSUE_PROVIDER": "Set up in Issue Provider Panel",
     "SIDE_PANEL_LABEL_REQUIRED": "Side panel button label is required",
     "SIDE_PANEL_ONCLICK_REQUIRED": "Side panel button onClick handler is required",
@@ -3291,11 +3291,11 @@
     "VALIDATION_FAILED": "Validation failed: {{errors}}",
     "NODE_EXECUTION_BRIDGE_UNAVAILABLE": "Could not connect to the Node.js execution bridge. Please try disabling and re-enabling the plugin.",
     "PLUGIN_LOAD_FAILED": "Plugin \"{{pluginName}}\" failed to load: {{error}}",
-    "INTRO": "Plugins run inside the app without a sandbox. Built-in plugins are maintained by the Super Productivity team; plugins you upload are not reviewed and can access all your data, so only install ones you trust.",
+    "INTRO": "<strong>WARNING:</strong> Plugins run inside the app without a sandbox. Built-in plugins are maintained by the Super Productivity team; plugins you upload are not reviewed and can access all your data, so only install ones you trust.",
     "THIRD_PARTY": "Third-party",
     "DETAILS": "Details",
     "COMMUNITY_PLUGINS": "Community Plugins",
-    "COMMUNITY_WARNING": "Community plugins are not reviewed by the Super Productivity team. Install them at your own risk.",
+    "COMMUNITY_WARNING": "<strong>WARNING:</strong> Community plugins are not reviewed by the Super Productivity team. Install them at your own risk.",
     "COMMUNITY_STARS": "{{count}} stars",
     "COMMUNITY_GET_LISTED": "Get your plugin to show up here",
     "GROUP_UPLOADED": "Uploaded plugins",
