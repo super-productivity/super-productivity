@@ -1,5 +1,5 @@
 import { Injectable, inject } from '@angular/core';
-import { Store } from '@ngrx/store';
+import { Action, Store } from '@ngrx/store';
 import { createEffect, ofType } from '@ngrx/effects';
 import { EMPTY, Observable, first, firstValueFrom, from, timer } from 'rxjs';
 import { catchError, concatMap, filter, map, mergeMap, takeUntil } from 'rxjs/operators';
@@ -12,7 +12,7 @@ import { IssueProviderService } from '../issue-provider.service';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { IssueSyncAdapterRegistryService } from './issue-sync-adapter-registry.service';
 import { computePushDecisions, issueValuesEqual } from './compute-push-decisions';
-import { FieldMapping, FieldSyncConfig } from './issue-sync.model';
+import { FieldMapping, FieldPushContext, FieldSyncConfig } from './issue-sync.model';
 import { IssueSyncAdapter } from './issue-sync-adapter.interface';
 import { IssueProvider, IssueProviderKey } from '../issue.model';
 import { IssueLog } from '../../../core/log';
@@ -44,6 +44,8 @@ const SYNCABLE_TASK_FIELDS: ReadonlySet<string> = new Set([
   'notes',
   'dueWithTime',
   'dueDay',
+  'deadlineWithTime',
+  'deadlineDay',
   'timeEstimate',
   'tagIds',
 ]);
@@ -98,6 +100,23 @@ const ACTION_EXTRACTORS: Record<
     const a = action as ReturnType<typeof TaskSharedActions.unscheduleTask>;
     return { taskId: a.id, changes: { dueWithTime: undefined } };
   },
+  // Both keys, so the pushed values are read from the post-reducer task (which
+  // enforces deadlineDay/deadlineWithTime exclusivity). autoPlanToday is not
+  // forwarded: automatic planning stays out of two-way sync (#10099).
+  [TaskSharedActions.setDeadline.type]: (action) => {
+    const a = action as ReturnType<typeof TaskSharedActions.setDeadline>;
+    return {
+      taskId: a.taskId,
+      changes: { deadlineDay: a.deadlineDay, deadlineWithTime: a.deadlineWithTime },
+    };
+  },
+  [TaskSharedActions.removeDeadline.type]: (action) => {
+    const a = action as ReturnType<typeof TaskSharedActions.removeDeadline>;
+    return {
+      taskId: a.taskId,
+      changes: { deadlineDay: undefined, deadlineWithTime: undefined },
+    };
+  },
   [TaskSharedActions.updateTask.type]: (action) => {
     const a = action as ReturnType<typeof TaskSharedActions.updateTask>;
     return {
@@ -134,6 +153,13 @@ export class IssueTwoWaySyncEffects {
   private _syncOriginatedTaskIds = new Set<string>();
   private static readonly _MAX_SYNC_ORIGINATED_IDS = 1000;
 
+  /**
+   * Linked (`pushTogetherWith`) task fields whose last push an adapter held
+   * back, with the value that push tried to send, per task id. In memory only:
+   * after a restart a held-back field is re-sent only when it is edited again.
+   */
+  private _heldBackFields = new Map<string, Map<string, unknown>>();
+
   constructor() {
     const caldavAdapter = inject(CaldavSyncAdapterService);
     this._adapterRegistry.register('CALDAV', caldavAdapter);
@@ -150,11 +176,13 @@ export class IssueTwoWaySyncEffects {
           TaskSharedActions.scheduleTaskWithTime,
           TaskSharedActions.reScheduleTaskWithTime,
           TaskSharedActions.unscheduleTask,
+          TaskSharedActions.setDeadline,
+          TaskSharedActions.removeDeadline,
           TaskSharedActions.addTagToTask,
           PlannerActions.planTaskForDay,
           PlannerActions.transferTask,
         ),
-        map((action) => ACTION_EXTRACTORS[action.type](action)),
+        map((action) => ({ ...ACTION_EXTRACTORS[action.type](action), action })),
         filter(({ taskId, changes }) => {
           if (this._syncOriginatedTaskIds.delete(taskId)) {
             return false;
@@ -165,11 +193,12 @@ export class IssueTwoWaySyncEffects {
           }
           return Object.keys(changes).some((key) => SYNCABLE_TASK_FIELDS.has(key));
         }),
-        concatMap(({ taskId, changes }) =>
+        concatMap(({ taskId, changes, action }) =>
           this._taskService.getByIdOnce$(taskId).pipe(
             map((fullTask) => ({
               fullTask,
               changes,
+              action,
             })),
           ),
         ),
@@ -184,8 +213,8 @@ export class IssueTwoWaySyncEffects {
           }
           return !!this._getAdapter(fullTask.issueType);
         }),
-        concatMap(({ fullTask, changes }) =>
-          this._pushChanges$(fullTask, changes).pipe(
+        concatMap(({ fullTask, changes, action }) =>
+          this._pushChanges$(fullTask, changes, action).pipe(
             catchError((err) => {
               // Expected provider limitation (e.g. a single recurring occurrence,
               // #7492) — the local task edit stands; don't alarm the user.
@@ -213,9 +242,12 @@ export class IssueTwoWaySyncEffects {
         // Titles arrive via sidecar (set by TagService before dispatch), not
         // on the action payload — keeps user-visible tag titles out of the
         // exportable op-log.
-        map(() => this._deletedTagTitlesSidecar.consume()),
-        filter((deletedTagTitles) => deletedTagTitles.length > 0),
-        concatMap((deletedTagTitles) =>
+        map((action) => ({
+          action,
+          deletedTagTitles: this._deletedTagTitlesSidecar.consume(),
+        })),
+        filter(({ deletedTagTitles }) => deletedTagTitles.length > 0),
+        concatMap(({ action, deletedTagTitles }) =>
           this._store.select(selectAllTasks).pipe(
             first(),
             map((tasks) =>
@@ -224,9 +256,10 @@ export class IssueTwoWaySyncEffects {
               ),
             ),
             concatMap((tasks) => from(tasks)),
+            map((task) => ({ task, action })),
           ),
         ),
-        filter((task) => {
+        filter(({ task }) => {
           if (this._syncOriginatedTaskIds.delete(task.id)) {
             return false;
           }
@@ -235,8 +268,8 @@ export class IssueTwoWaySyncEffects {
           }
           return !!this._getAdapter(task.issueType);
         }),
-        concatMap((task) =>
-          this._pushChanges$(task, { tagIds: task.tagIds }).pipe(
+        concatMap(({ task, action }) =>
+          this._pushChanges$(task, { tagIds: task.tagIds }, action).pipe(
             catchError((err) => {
               if (isExpectedSyncSkipError(err)) {
                 return EMPTY;
@@ -591,7 +624,11 @@ export class IssueTwoWaySyncEffects {
       );
   }
 
-  private _pushChanges$(task: Task, changes: Partial<Task>): Observable<unknown> {
+  private _pushChanges$(
+    task: Task,
+    changes: Partial<Task>,
+    action: Action,
+  ): Observable<unknown> {
     if (!task.issueType || !task.issueProviderId || !task.issueId) {
       return EMPTY;
     }
@@ -608,13 +645,88 @@ export class IssueTwoWaySyncEffects {
         const fieldMappings = adapter.getFieldMappings();
         const syncConfig = adapter.getSyncConfig(cfg);
 
-        // Early exit: check if any changed field is pushable before fetching
-        const hasPushableField = fieldMappings.some((m) => {
-          if (!(m.taskField in changes)) {
-            return false;
-          }
+        const canPush = (m: FieldMapping): boolean => {
           const dir = syncConfig[m.taskField] ?? m.defaultDirection;
           return dir === 'pushOnly' || dir === 'both';
+        };
+
+        // A mapping can opt out of pushes from specific triggers. `task` was
+        // fetched after the triggering action ran.
+        const pushCtx: FieldPushContext = { action, task };
+        const isSkipped = (m: FieldMapping): boolean => !!m.skipPush?.(pushCtx);
+        const pushableChanges: Partial<Task> = { ...changes };
+        for (const m of fieldMappings) {
+          if (m.taskField in pushableChanges && isSkipped(m)) {
+            delete pushableChanges[m.taskField];
+            // The issue field now holds a value that must not reach the provider,
+            // so no earlier held-back value of it may be re-sent later either. This
+            // covers every task field mapped to it: a Planner move to an untimed
+            // day names only dueDay but also clears a held-back dueWithTime.
+            this._forgetHeldBack(
+              task.id,
+              fieldMappings
+                .filter((sibling) => sibling.issueField === m.issueField)
+                .map((sibling) => sibling.taskField as string),
+            );
+          }
+        }
+
+        // Fields to push: the changed ones plus held-back pushTogetherWith partners.
+        // Partners are only linked when the changed mapping itself can push, and
+        // only if an earlier push of that partner was held back and the partner
+        // still has the value held back then: an automatic change of a partner
+        // (e.g. Add to Today, a drag onto another task in the Schedule view
+        // (moveBeforeTask)) must not reach the provider.
+        const heldBack = this._heldBackFields.get(task.id);
+        // A held-back field is retried only while every held-back field feeding
+        // the same issue field (e.g. dueDay and dueWithTime for DTSTART) is
+        // unchanged; otherwise the whole group is forgotten.
+        const retryHeldBack = (field: string, source: Task): boolean => {
+          if (!heldBack?.has(field)) {
+            return false;
+          }
+          const issueFields = new Set(
+            fieldMappings.filter((m) => m.taskField === field).map((m) => m.issueField),
+          );
+          const group = fieldMappings
+            .filter((m) => issueFields.has(m.issueField) && heldBack.has(m.taskField))
+            .map((m) => m.taskField as string);
+          if (
+            group.every((f) => issueValuesEqual(source[f as keyof Task], heldBack.get(f)))
+          ) {
+            return true;
+          }
+          this._forgetHeldBack(task.id, group);
+          return false;
+        };
+        const fieldsToPush = new Set<string>(Object.keys(pushableChanges));
+        for (const m of fieldMappings) {
+          if (m.taskField in pushableChanges && canPush(m)) {
+            for (const partner of m.pushTogetherWith ?? []) {
+              if (!retryHeldBack(partner, task)) {
+                continue;
+              }
+              // The partner itself must still be push-enabled: a direction
+              // flipped to pull-only since the hold-back must not resurrect it.
+              const partnerMappings = fieldMappings.filter(
+                (pm) => pm.taskField === partner,
+              );
+              if (
+                partnerMappings.some((pm) => canPush(pm)) &&
+                !partnerMappings.some((pm) => isSkipped(pm))
+              ) {
+                fieldsToPush.add(partner);
+              }
+            }
+          }
+        }
+
+        // Early exit: check if any changed field is pushable before fetching
+        const hasPushableField = fieldMappings.some((m) => {
+          if (!fieldsToPush.has(m.taskField)) {
+            return false;
+          }
+          return canPush(m);
         });
         if (!hasPushableField) {
           return;
@@ -626,15 +738,45 @@ export class IssueTwoWaySyncEffects {
         const currentTask = await firstValueFrom(this._taskService.getByIdOnce$(task.id));
         // the snapshot predates pushes queued before it; their baseline is newer
         const syncState = currentTask ?? task;
-        const lastSyncedValues = syncState.issueLastSyncedValues ?? {};
+        const storedSyncValues = syncState.issueLastSyncedValues;
+        // A field missing from an existing baseline (e.g. mapped after the task
+        // was linked) can use the fetched value when the issue is unchanged
+        // since the last pull: that value is the one SP last saw. In memory
+        // only, so polling never writes a separate op for it.
+        const isIssueUnchangedSincePull =
+          !!adapter.getIssueLastUpdated &&
+          typeof syncState.issueLastUpdated === 'number' &&
+          adapter.getIssueLastUpdated(freshIssue) === syncState.issueLastUpdated;
+        const lastSyncedValues: Record<string, unknown> = { ...(storedSyncValues ?? {}) };
+        if (storedSyncValues && isIssueUnchangedSincePull) {
+          for (const m of fieldMappings) {
+            if (m.baselineFromUnchangedIssue && !(m.issueField in lastSyncedValues)) {
+              lastSyncedValues[m.issueField] = freshValues[m.issueField];
+            }
+          }
+        }
         const taskFieldChanges: Record<string, unknown> = {};
         for (const mapping of fieldMappings) {
-          if (mapping.taskField in changes) {
-            // Use current task value (post-parsing) not raw action value
-            taskFieldChanges[mapping.taskField] =
-              currentTask?.[mapping.taskField as keyof Task] ??
-              changes[mapping.taskField];
+          const isChanged = mapping.taskField in pushableChanges;
+          if (!isChanged && (!fieldsToPush.has(mapping.taskField) || !currentTask)) {
+            // Partners are only read from a live task.
+            continue;
           }
+          // Read from the post-reducer task whenever it exists: a `??` fallback
+          // would resurrect a value the reducer deliberately cleared (e.g. the
+          // stale time on day-only short syntax). Fall back to the action only
+          // when the task is gone.
+          // A held-back partner may have changed during the fetch: same rule as above.
+          if (
+            !isChanged &&
+            currentTask &&
+            !retryHeldBack(mapping.taskField, currentTask)
+          ) {
+            continue;
+          }
+          taskFieldChanges[mapping.taskField] = currentTask
+            ? currentTask[mapping.taskField as keyof Task]
+            : pushableChanges[mapping.taskField];
         }
 
         const parsed = parseInt(issueId, 10);
@@ -651,10 +793,12 @@ export class IssueTwoWaySyncEffects {
           // issue is unchanged since the task last saw it, its current values
           // are what the task last pulled, so the user's change can win; a
           // single missing field still means "first sync" and is skipped.
-          syncState.issueLastSyncedValues ??
-            (adapter.getIssueLastUpdated?.(freshIssue) === syncState.issueLastUpdated
+          // An existing baseline is used with the fields filled in above.
+          storedSyncValues
+            ? lastSyncedValues
+            : adapter.getIssueLastUpdated?.(freshIssue) === syncState.issueLastUpdated
               ? freshValues
-              : {}),
+              : {},
           ctx,
         );
 
@@ -665,15 +809,35 @@ export class IssueTwoWaySyncEffects {
           }
         }
 
+        const pushedDecisions = decisions.filter((d) => d.action === 'push');
+        const pushedIssueFields = new Set(pushedDecisions.map((d) => d.field));
+
         const didPush = Object.keys(toPush).length > 0;
         if (didPush) {
-          await adapter.pushChanges(issueId, toPush, cfg);
+          // Only fields actually decided to push this round: a partner present in
+          // taskFieldChanges can still have been skipped (provider-changed,
+          // direction-skip), and must be neither remembered nor forgotten then.
+          const linkedFields = fieldMappings
+            .filter(
+              (m) =>
+                m.pushTogetherWith &&
+                m.taskField in taskFieldChanges &&
+                pushedIssueFields.has(m.issueField),
+            )
+            .map((m) => m.taskField as string);
+          try {
+            await adapter.pushChanges(issueId, toPush, cfg);
+          } catch (err) {
+            if (isExpectedSyncSkipError(err) && linkedFields.length) {
+              this._rememberHeldBack(task.id, linkedFields, taskFieldChanges);
+            }
+            throw err;
+          }
+          this._forgetHeldBack(task.id, linkedFields);
         } else {
           return;
         }
 
-        const pushedDecisions = decisions.filter((d) => d.action === 'push');
-        const pushedIssueFields = new Set(pushedDecisions.map((d) => d.field));
         const hasProviderOwnedSkip = decisions.some(
           (d) =>
             d.action === 'skip' &&
@@ -745,6 +909,34 @@ export class IssueTwoWaySyncEffects {
         }
       }),
     );
+  }
+
+  private _rememberHeldBack(
+    taskId: string,
+    fields: string[],
+    values: Record<string, unknown>,
+  ): void {
+    const held = this._heldBackFields.get(taskId) ?? new Map<string, unknown>();
+    fields.forEach((f) => held.set(f, values[f]));
+    this._heldBackFields.delete(taskId);
+    this._heldBackFields.set(taskId, held);
+    if (this._heldBackFields.size > IssueTwoWaySyncEffects._MAX_SYNC_ORIGINATED_IDS) {
+      const oldest = this._heldBackFields.keys().next().value;
+      if (oldest !== undefined) {
+        this._heldBackFields.delete(oldest);
+      }
+    }
+  }
+
+  private _forgetHeldBack(taskId: string, fields: string[]): void {
+    const held = this._heldBackFields.get(taskId);
+    if (!held) {
+      return;
+    }
+    fields.forEach((f) => held.delete(f));
+    if (!held.size) {
+      this._heldBackFields.delete(taskId);
+    }
   }
 
   private _trackSyncOriginatedTask(taskId: string): void {

@@ -42,7 +42,17 @@ export const computePushDecisions = (
   const decidedIssueFields = new Set<string>();
   const mappingByTaskField = new Map(fieldMappings.map((m) => [m.taskField, m]));
 
-  for (const mapping of fieldMappings) {
+  // Handle mappings whose changed value is set before those that clear. A single
+  // change can carry a set and a clear for one mutually exclusive pair (e.g.
+  // `{ dueWithTime: undefined, dueDay: 'X' }`); in array order the clear could
+  // delete the partner or claim a shared issue field first. Array#sort is stable,
+  // so the order of everything else is unchanged.
+  const isClear = (m: FieldMapping): boolean => changedTaskFields[m.taskField] == null;
+  const orderedMappings = [...fieldMappings].sort(
+    (a, b) => Number(isClear(a)) - Number(isClear(b)),
+  );
+
+  for (const mapping of orderedMappings) {
     if (decidedIssueFields.has(mapping.issueField)) {
       continue;
     }
