@@ -341,19 +341,29 @@ export class ScheduleDayPanelComponent implements AfterViewInit, OnDestroy {
         targetTime: targetDate,
         formattedTime: this._formatTime(targetDate.getHours(), targetDate.getMinutes()),
       });
+      const isDone = !!task.isDone;
       const hasExistingSchedule = !!task.dueWithTime;
-      const hasReminder = !!(task.remindAt ?? task.reminderId);
+      const hasReminder = !isDone && !!(task.remindAt ?? task.reminderId);
       let remindAt: number | undefined;
-      if (!hasExistingSchedule && !hasReminder) {
-        remindAt = remindOptionToMilliseconds(dropTime, this._getDefaultReminderOption());
-      } else if (hasReminder) {
-        remindAt = dropTime;
+      if (!isDone) {
+        if (!hasExistingSchedule && !hasReminder) {
+          remindAt = remindOptionToMilliseconds(
+            dropTime,
+            this._getDefaultReminderOption(),
+          );
+        } else if (hasReminder) {
+          remindAt = dropTime;
+        }
       }
 
       const payload = {
         task,
         dueWithTime: dropTime,
-        ...(typeof remindAt === 'number' ? { remindAt } : {}),
+        ...(isDone
+          ? { remindAt: undefined }
+          : typeof remindAt === 'number'
+            ? { remindAt }
+            : {}),
         isMoveToBacklog: false,
       };
 

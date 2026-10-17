@@ -22,6 +22,7 @@ import {
   TaskDetailTargetPanel,
   TaskWithSubTasks,
 } from '../task.model';
+import { TaskCompletionPromptService } from '../task-completion-prompt.service';
 import { TaskService } from '../task.service';
 import { WorkContextService } from '../../work-context/work-context.service';
 import { TaskComponent } from './task.component';
@@ -1039,6 +1040,90 @@ describe('TaskComponent shortcut handling', () => {
       component.onToggleDetailPanelBtnClick();
 
       expect(taskServiceSpy.setSelectedId).toHaveBeenCalledWith(null);
+    });
+  });
+  describe('Task Completion Toggle & Orchestration Seam', () => {
+    let taskCompletionPromptService: TaskCompletionPromptService;
+
+    beforeEach(() => {
+      taskCompletionPromptService = TestBed.inject(TaskCompletionPromptService);
+      fixture.componentRef.setInput('task', {
+        ...createTopLevelTask('Task to complete'),
+        isDone: false,
+      });
+      fixture.detectChanges();
+    });
+
+    it('direct toggleTaskDone on active task delegates to TaskCompletionPromptService and sets showDoneAnimation', () => {
+      const completeTaskSpy = spyOn(
+        taskCompletionPromptService,
+        'completeTask',
+      ).and.returnValue(of(true));
+
+      component.toggleTaskDone();
+
+      expect(component.showDoneAnimation()).toBeTrue();
+      expect(completeTaskSpy).toHaveBeenCalledWith(
+        component.task(),
+        jasmine.any(Function),
+      );
+    });
+
+    it('reverts showDoneAnimation to false when prompt is cancelled', () => {
+      spyOn(taskCompletionPromptService, 'completeTask').and.callFake(
+        (task, onCancel) => {
+          onCancel?.();
+          return of(false);
+        },
+      );
+
+      component.toggleTaskDone();
+
+      expect(component.showDoneAnimation()).toBeFalse();
+    });
+
+    it('US 23: direct toggleTaskDone on an already completed task reverts without prompt (toggleTaskDoneSilent)', () => {
+      const completeTaskSpy = spyOn(taskCompletionPromptService, 'completeTask');
+      fixture.componentRef.setInput('task', {
+        ...createTopLevelTask('Completed Task'),
+        isDone: true,
+      });
+      fixture.detectChanges();
+
+      component.toggleTaskDone();
+
+      expect(completeTaskSpy).not.toHaveBeenCalled();
+      expect(taskServiceSpy.toggleDoneWithAnimation).toHaveBeenCalledWith(
+        'top-1',
+        true,
+        jasmine.any(Function),
+      );
+    });
+
+    it('toggleDoneKeyboard completes silently without calling TaskCompletionPromptService', () => {
+      const completeTaskSpy = spyOn(taskCompletionPromptService, 'completeTask');
+
+      component.toggleDoneKeyboard();
+
+      expect(completeTaskSpy).not.toHaveBeenCalled();
+      expect(taskServiceSpy.toggleDoneWithAnimation).toHaveBeenCalledWith(
+        'top-1',
+        false,
+        jasmine.any(Function),
+      );
+    });
+
+    it('toggleTaskDoneSilent completes silently without calling TaskCompletionPromptService', () => {
+      const completeTaskSpy = spyOn(taskCompletionPromptService, 'completeTask');
+
+      component.toggleTaskDoneSilent();
+
+      expect(completeTaskSpy).not.toHaveBeenCalled();
+      expect(taskServiceSpy.toggleDoneWithAnimation).toHaveBeenCalledWith(
+        'top-1',
+        false,
+        jasmine.any(Function),
+      );
     });
   });
 });

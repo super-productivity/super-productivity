@@ -97,6 +97,7 @@ import {
   PluginTaskContextMenuRegistryService,
 } from '../../../../plugins/plugin-task-context-menu-registry.service';
 import { PluginTaskContextMenuTarget } from '@super-productivity/plugin-api';
+import { TaskCompletionPromptService } from '../../task-completion-prompt.service';
 
 @Component({
   selector: 'task-context-menu-inner',
@@ -124,6 +125,7 @@ import { PluginTaskContextMenuTarget } from '@super-productivity/plugin-api';
 export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
   private readonly _datePipe = inject(LocaleDatePipe);
   private readonly _taskService = inject(TaskService);
+  private readonly _taskCompletionPromptService = inject(TaskCompletionPromptService);
   private readonly _matDialog = inject(MatDialog);
   private readonly _issueService = inject(IssueService);
   private readonly _elementRef = inject(ElementRef);
@@ -156,6 +158,7 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
   readonly DEFAULT_PROJECT_ICON = DEFAULT_PROJECT_ICON;
 
   isAdvancedControls = input<boolean>(false);
+  isFromSchedule = input<boolean>(false);
   todayList = toSignal(this._store.select(selectTodayTaskIds), { initialValue: [] });
   isOnTodayList = computed(() => this.task && this.todayList().includes(this.task.id));
   readonly isTimeTrackingEnabled = computed(
@@ -187,6 +190,7 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
   isInSubTaskList: boolean = false;
   /** Multi-select needs a rendered `<task>` row outside the detail panel. */
   isInTaskRow: boolean = false;
+  private _isFromScheduleComputed = false;
 
   private _task$: ReplaySubject<TaskWithSubTasks | Task> = new ReplaySubject(1);
   issueUrl$: Observable<string | null> = this._task$.pipe(
@@ -244,6 +248,11 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
     this.isInTaskRow =
       !!host.closest('task, planner-task[data-task-selectable="true"]') &&
       !host.closest('task-detail-panel');
+    this._isFromScheduleComputed =
+      this.isFromSchedule() ||
+      !!host.closest(
+        'schedule-event, schedule-week, schedule-month, schedule-day-panel, schedule',
+      );
 
     setTimeout(() => {
       if (!this._isOpenedFromKeyboard) {
@@ -597,7 +606,9 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
     if (this.task.isDone) {
       this._taskService.setUnDone(this.task.id);
     } else {
-      this._taskService.setDone(this.task.id);
+      this._taskCompletionPromptService.completeTask(this.task, undefined, {
+        isFromSchedule: this.isFromSchedule() || this._isFromScheduleComputed,
+      });
     }
   }
 

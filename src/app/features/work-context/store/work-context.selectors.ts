@@ -25,6 +25,9 @@ import {
   selectStartOfNextDayDiffMs,
   selectTodayStr,
 } from '../../../root-store/app-state/app-state.selectors';
+import { selectTimelineConfig } from '../../config/store/global-config.reducer';
+import { ScheduleConfig } from '../../config/global-config.model';
+import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
 
 export const WORK_CONTEXT_FEATURE_NAME = 'workContext';
 
@@ -388,17 +391,29 @@ export const selectTodayProgress = createSelector(
 export const selectTimelineTasks = createSelector(
   selectTodayTaskIds,
   selectMapOfAllTasksInActiveProjects,
+  selectTimelineConfig,
+  selectTodayStr,
   (
     todayIds,
     activeTaskMap,
+    timelineCfg?: ScheduleConfig,
+    todayStr?: string,
   ): {
     planned: TaskWithDueTime[];
     unPlanned: TaskWithSubTasks[];
   } => {
+    const isShowDoneTasks = !!timelineCfg?.isShowDoneTasksInSchedule;
     const allPlannedTasks: TaskWithDueTime[] = [];
     activeTaskMap.forEach((t) => {
       if (!t.isDone && t.dueWithTime) {
         allPlannedTasks.push(t as TaskWithDueTime);
+      } else if (isShowDoneTasks && t.isDone) {
+        if (t.dueWithTime) {
+          allPlannedTasks.push(t as TaskWithDueTime);
+        } else if (t.dueDay && t.dueDay === todayStr) {
+          const dueWithTime = dateStrToUtcDate(t.dueDay).getTime();
+          allPlannedTasks.push({ ...t, dueWithTime } as TaskWithDueTime);
+        }
       }
     });
     // Use Set for O(1) lookup instead of O(n) .includes() in filter

@@ -22,6 +22,7 @@ export class TaskContextMenuComponent {
 
   task = input.required<TaskWithSubTasks | Task>();
   isAdvancedControls = input<boolean>(false);
+  isFromSchedule = input<boolean>(false);
 
   readonly isOpen = signal(false);
 

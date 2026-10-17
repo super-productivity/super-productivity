@@ -520,5 +520,52 @@ describe('ScheduleWeekDragService', () => {
       // Task had schedule but no reminder, so remindAt should be undefined
       expect(dispatchedAction.remindAt).toBeUndefined();
     });
+
+    it('should NEVER set reminder when scheduling a completed task even if default reminder option is configured', () => {
+      setupTestBed(TaskReminderOptionId.AtStart);
+
+      const task = {
+        ...baseTask,
+        isDone: true,
+      };
+      const scheduleTime = Date.now() + ONE_HOUR_MS;
+
+      (service as any)._scheduleTask(task, scheduleTime);
+
+      expect(dispatchSpy).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          type: TaskSharedActions.scheduleTaskWithTime.type,
+          remindAt: undefined,
+        }),
+      );
+
+      const dispatchedAction = dispatchSpy.calls.mostRecent().args[0];
+      expect(dispatchedAction.remindAt).toBeUndefined();
+    });
+
+    it('should set remindAt to undefined when rescheduling a completed task that previously had a reminder', () => {
+      setupTestBed(TaskReminderOptionId.m30);
+
+      const task = {
+        ...baseTask,
+        isDone: true,
+        dueWithTime: Date.now(),
+        remindAt: Date.now(),
+        reminderId: 'existing-reminder-id',
+      };
+      const newScheduleTime = Date.now() + ONE_HOUR_MS;
+
+      (service as any)._scheduleTask(task, newScheduleTime);
+
+      expect(dispatchSpy).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          type: TaskSharedActions.reScheduleTaskWithTime.type,
+          remindAt: undefined,
+        }),
+      );
+
+      const dispatchedAction = dispatchSpy.calls.mostRecent().args[0];
+      expect(dispatchedAction.remindAt).toBeUndefined();
+    });
   });
 });

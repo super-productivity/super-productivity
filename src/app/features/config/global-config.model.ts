@@ -280,6 +280,8 @@ export type ScheduleConfig = Readonly<{
   isLunchBreakEnabled: boolean;
   lunchBreakStart: string;
   lunchBreakEnd: string;
+  isShowDoneTasksInSchedule?: boolean;
+  isPromptOnTaskDoneSchedule?: boolean;
 }>;
 
 export type ReminderConfig = Readonly<{

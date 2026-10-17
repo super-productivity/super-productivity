@@ -1,3 +1,4 @@
+import { SCHEDULE_TASK_MIN_DURATION_IN_MS } from '../schedule.const';
 import { createSortedBlockerBlocks } from './create-sorted-blocker-blocks';
 import { TaskReminderOptionId } from '../../tasks/task.model';
 import { getDateTimeFromClockString } from '../../../util/get-date-time-from-clock-string';
@@ -1812,6 +1813,72 @@ describe('createBlockerBlocks()', () => {
       expect(duration).toBeLessThan(500);
       // Should have minimal merging
       expect(result.length).toBe(blocks.length);
+    });
+  });
+
+  describe('completed tasks duration handling', () => {
+    it('should use task.timeEstimate for completed task even when timeSpent equals or exceeds timeEstimate', () => {
+      const scheduledTask: any = {
+        id: 'T_DONE_1',
+        subTaskIds: [],
+        timeSpent: hours(2),
+        timeEstimate: hours(2),
+        isDone: true,
+        title: 'Completed Task With Estimate',
+        dueWithTime: getDateTimeFromClockString('10:00', 0),
+      };
+      const r = createSortedBlockerBlocks(
+        [scheduledTask],
+        [],
+        [],
+        undefined,
+        undefined,
+        0,
+      );
+      expect(r.length).toBe(1);
+      expect(r[0].start).toBe(getDateTimeFromClockString('10:00', 0));
+      expect(r[0].end).toBe(getDateTimeFromClockString('12:00', 0));
+    });
+
+    it('should fall back to SCHEDULE_TASK_MIN_DURATION_IN_MS for completed task when timeEstimate is 0 or negative', () => {
+      const scheduledTask: any = {
+        id: 'T_DONE_2',
+        subTaskIds: [],
+        timeSpent: hours(1),
+        timeEstimate: 0,
+        isDone: true,
+        title: 'Completed Task Zero Estimate',
+        dueWithTime: getDateTimeFromClockString('10:00', 0),
+      };
+      const r = createSortedBlockerBlocks(
+        [scheduledTask],
+        [],
+        [],
+        undefined,
+        undefined,
+        0,
+      );
+      expect(r.length).toBe(1);
+      expect(r[0].start).toBe(getDateTimeFromClockString('10:00', 0));
+      expect(r[0].end).toBe(
+        getDateTimeFromClockString('10:00', 0) + SCHEDULE_TASK_MIN_DURATION_IN_MS,
+      );
+    });
+
+    it('should continue using getTimeLeftForTask for active tasks', () => {
+      const activeTask: any = {
+        id: 'T_ACTIVE_1',
+        subTaskIds: [],
+        timeSpent: hours(1),
+        timeEstimate: hours(2),
+        isDone: false,
+        title: 'Active Task',
+        dueWithTime: getDateTimeFromClockString('10:00', 0),
+      };
+      const r = createSortedBlockerBlocks([activeTask], [], [], undefined, undefined, 0);
+      expect(r.length).toBe(1);
+      expect(r[0].start).toBe(getDateTimeFromClockString('10:00', 0));
+      expect(r[0].end).toBe(getDateTimeFromClockString('11:00', 0));
     });
   });
 });

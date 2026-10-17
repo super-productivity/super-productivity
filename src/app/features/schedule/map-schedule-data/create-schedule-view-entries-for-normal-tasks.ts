@@ -4,7 +4,7 @@ import {
 } from '../../tasks/task.model';
 import { SVETask } from '../schedule.model';
 import { getTimeLeftForTask } from '../../../util/get-time-left-for-task';
-import { SVEType } from '../schedule.const';
+import { SCHEDULE_TASK_MIN_DURATION_IN_MS, SVEType } from '../schedule.const';
 
 export const createScheduleViewEntriesForNormalTasks = (
   startTime: number,
@@ -21,13 +21,24 @@ export const createScheduleViewEntriesForNormalTasks = (
 
     if (typeof lastTime === 'number') {
       if (prevTask) {
-        time = lastTime + getTimeLeftForTask(prevTask);
+        const prevDuration = prevTask.isDone
+          ? prevTask.timeEstimate > 0
+            ? prevTask.timeEstimate
+            : SCHEDULE_TASK_MIN_DURATION_IN_MS
+          : getTimeLeftForTask(prevTask);
+        time = lastTime + prevDuration;
       } else {
         throw new Error('Something weird happened');
       }
     } else {
       time = startTime;
     }
+
+    const duration = task.isDone
+      ? task.timeEstimate > 0
+        ? task.timeEstimate
+        : SCHEDULE_TASK_MIN_DURATION_IN_MS
+      : getTimeLeftForTask(task);
 
     viewEntries.push({
       id: task.id,
@@ -36,7 +47,7 @@ export const createScheduleViewEntriesForNormalTasks = (
         : SVEType.Task,
       start: time,
       data: task,
-      duration: getTimeLeftForTask(task),
+      duration,
     });
 
     lastTime = time;

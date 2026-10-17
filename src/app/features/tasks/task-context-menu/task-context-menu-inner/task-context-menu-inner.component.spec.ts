@@ -30,6 +30,7 @@ import { TaskDuplicateService } from '../../task-duplicate.service';
 import { TaskMultiSelectService } from '../../task-multi-select.service';
 import { T } from '../../../../t.const';
 import { PluginTaskContextMenuRegistryService } from '../../../../plugins/plugin-task-context-menu-registry.service';
+import { TaskCompletionPromptService } from '../../task-completion-prompt.service';
 
 const projectInTreeOrder = (id: string, title: string): Project =>
   ({
@@ -52,6 +53,7 @@ describe('TaskContextMenuInnerComponent', () => {
   let component: TaskContextMenuInnerComponent;
   let fixture: ComponentFixture<TaskContextMenuInnerComponent>;
   let taskService: jasmine.SpyObj<TaskService>;
+  let taskCompletionPromptService: jasmine.SpyObj<TaskCompletionPromptService>;
   let taskDuplicateService: jasmine.SpyObj<TaskDuplicateService>;
   let addSubtaskInputService: jasmine.SpyObj<AddSubtaskInputService>;
   let store: MockStore;
@@ -68,7 +70,14 @@ describe('TaskContextMenuInnerComponent', () => {
       'getTasksWithSubTasksByRepeatCfgId$',
       'getArchiveTasksForRepeatCfgId',
       'update',
+      'setDone',
+      'setUnDone',
     ]);
+    taskCompletionPromptService = jasmine.createSpyObj<TaskCompletionPromptService>(
+      'TaskCompletionPromptService',
+      ['completeTask'],
+    );
+    taskCompletionPromptService.completeTask.and.returnValue(of(true));
     taskService.currentTaskId.and.returnValue('some-id');
     taskDuplicateService = jasmine.createSpyObj<TaskDuplicateService>(
       'TaskDuplicateService',
@@ -90,6 +99,7 @@ describe('TaskContextMenuInnerComponent', () => {
       providers: [
         provideMockStore(),
         { provide: TaskService, useValue: taskService },
+        { provide: TaskCompletionPromptService, useValue: taskCompletionPromptService },
         { provide: TaskDuplicateService, useValue: taskDuplicateService },
         { provide: AddSubtaskInputService, useValue: addSubtaskInputService },
         {
@@ -394,6 +404,57 @@ describe('TaskContextMenuInnerComponent', () => {
       expect(taskService.update).toHaveBeenCalledWith('task-1', { priority: null });
       closeMenus();
     }));
+  });
+
+  describe('toggleTaskDone', () => {
+    it('should delegate to taskCompletionPromptService.completeTask when task is undone', () => {
+      component.task = {
+        ...DEFAULT_TASK,
+        id: 't1',
+        isDone: false,
+        projectId: 'P1',
+        subTaskIds: [],
+        tagIds: [],
+      } as unknown as Task;
+      component.toggleTaskDone();
+      expect(taskCompletionPromptService.completeTask).toHaveBeenCalledWith(
+        jasmine.objectContaining({ id: 't1', isDone: false }),
+        undefined,
+        jasmine.objectContaining({ isFromSchedule: false }),
+      );
+    });
+
+    it('should pass isFromSchedule: true when isFromSchedule input is true', () => {
+      fixture.componentRef.setInput('isFromSchedule', true);
+      component.task = {
+        ...DEFAULT_TASK,
+        id: 't1',
+        isDone: false,
+        projectId: 'P1',
+        subTaskIds: [],
+        tagIds: [],
+      } as unknown as Task;
+      component.toggleTaskDone();
+      expect(taskCompletionPromptService.completeTask).toHaveBeenCalledWith(
+        jasmine.objectContaining({ id: 't1', isDone: false }),
+        undefined,
+        jasmine.objectContaining({ isFromSchedule: true }),
+      );
+    });
+
+    it('should call taskService.setUnDone when task is already done', () => {
+      component.task = {
+        ...DEFAULT_TASK,
+        id: 't1',
+        isDone: true,
+        projectId: 'P1',
+        subTaskIds: [],
+        tagIds: [],
+      } as unknown as Task;
+      component.toggleTaskDone();
+      expect(taskService.setUnDone).toHaveBeenCalledWith('t1');
+      expect(taskCompletionPromptService.completeTask).not.toHaveBeenCalled();
+    });
   });
 
   describe('duplicate()', () => {

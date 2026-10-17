@@ -1,3 +1,4 @@
+import { SCHEDULE_TASK_MIN_DURATION_IN_MS } from '../schedule.const';
 import { TaskWithDueTime } from '../../tasks/task.model';
 
 import { getTimeLeftForTask } from '../../../util/get-time-left-for-task';
@@ -261,7 +262,12 @@ const createBlockerBlocksForScheduledTasks = (
   scheduledTasks.forEach((task) => {
     const start = task.dueWithTime;
     // const end = task.due + Math.max(getTimeLeftForTask(task), 1);
-    const end = task.dueWithTime + getTimeLeftForTask(task);
+    const duration = task.isDone
+      ? task.timeEstimate > 0
+        ? task.timeEstimate
+        : SCHEDULE_TASK_MIN_DURATION_IN_MS
+      : getTimeLeftForTask(task);
+    const end = task.dueWithTime + duration;
 
     let wasMerged = false;
     for (const blockedBlock of blockedBlocks) {

@@ -3,7 +3,7 @@
   [isDone]="t.isDone"
   [canSwipe]="!taskTitleEditEl?.isEditing() && !isTouchSelectionMode()"
   (swipeStart)="onSwipeStart()"
-  (swipeRight)="toggleTaskDone()"
+  (swipeRight)="toggleTaskDoneSilent()"
   (swipeRightTriggered)="onSwipeRightTriggered($event)"
   (swipeLeft)="openContextMenu()"
 >

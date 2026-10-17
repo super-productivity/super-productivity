@@ -2854,6 +2854,8 @@
     "SCHEDULE": {
       "HELP": "The schedule feature provides you with a quick overview over how your planned tasks play out over time. You can find it in the left hand menu under <a href='#/schedule'>'Schedule'</a>. ",
       "L_IS_LUNCH_BREAK_ENABLED": "Enable lunch break",
+      "L_IS_PROMPT_ON_TASK_DONE_SCHEDULE": "Prompt to schedule or adjust duration when completing tasks",
+      "L_IS_SHOW_DONE_TASKS_IN_SCHEDULE": "Keep completed tasks visible in the schedule view",
       "L_IS_WORK_START_END_ENABLED": "Limit unscheduled task flow to specific work times",
       "L_LUNCH_BREAK_END": "Lunch break end",
       "L_LUNCH_BREAK_START": "Lunch break start",

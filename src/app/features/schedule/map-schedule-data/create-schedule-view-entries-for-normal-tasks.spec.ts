@@ -1,3 +1,4 @@
+import { SCHEDULE_TASK_MIN_DURATION_IN_MS } from '../schedule.const';
 import { getDateTimeFromClockString } from '../../../util/get-date-time-from-clock-string';
 import { TaskWithoutReminder } from '../../tasks/task.model';
 import { createScheduleViewEntriesForNormalTasks } from './create-schedule-view-entries-for-normal-tasks';
@@ -180,5 +181,41 @@ describe('createScheduleViewEntriesForNormalTasks()', () => {
         type: 'Task',
       },
     ] as any);
+  });
+
+  it('should use timeEstimate for completed tasks even when timeSpent exceeds it, and fall back to SCHEDULE_TASK_MIN_DURATION_IN_MS when estimate is 0', () => {
+    const now = getDateTimeFromClockString('9:30', 0);
+    const fakeTasks = [
+      {
+        ...FAKE_TASK,
+        id: 'T_DONE_1',
+        timeEstimate: hours(1),
+        timeSpent: hours(1),
+        isDone: true,
+      },
+      {
+        ...FAKE_TASK,
+        id: 'T_DONE_2',
+        timeEstimate: 0,
+        timeSpent: hours(0.5),
+        isDone: true,
+      },
+      {
+        ...FAKE_TASK,
+        id: 'T_ACTIVE',
+        timeEstimate: hours(2),
+        timeSpent: hours(0.5),
+        isDone: false,
+      },
+    ] as TaskWithoutReminder[];
+    const r = createScheduleViewEntriesForNormalTasks(now, fakeTasks);
+    expect(r[0].duration).toBe(hours(1));
+    expect(r[0].start).toBe(now);
+
+    expect(r[1].duration).toBe(SCHEDULE_TASK_MIN_DURATION_IN_MS);
+    expect(r[1].start).toBe(now + hours(1));
+
+    expect(r[2].duration).toBe(hours(1.5));
+    expect(r[2].start).toBe(now + hours(1) + SCHEDULE_TASK_MIN_DURATION_IN_MS);
   });
 });

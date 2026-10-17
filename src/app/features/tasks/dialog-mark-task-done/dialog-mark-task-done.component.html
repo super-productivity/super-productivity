@@ -1,0 +1,189 @@
+<div class="dialog-container">
+  <!-- Header -->
+  <div class="mat-dialog-header">
+    <h2
+      class="mat-dialog-title"
+      mat-dialog-title
+    >
+      <mat-icon class="dialog-header-icon">event_available</mat-icon>
+      <span>Mark Task As Complete?</span>
+    </h2>
+    <button
+      class="close-btn"
+      type="button"
+      (click)="cancel()"
+      title="Close (Esc)"
+      aria-label="Close"
+    >
+      <mat-icon>close</mat-icon>
+    </button>
+  </div>
+
+  <div
+    class="dialog-body"
+    mat-dialog-content
+  >
+    <!-- Task Summary Card -->
+    <div class="task-summary-card">
+      <div class="task-title-line">
+        <mat-icon class="task-status-icon">check_circle</mat-icon>
+        <span class="task-title-text">{{ data.taskTitle }}</span>
+      </div>
+      <div class="task-meta-line">
+        Tracked: {{ timeSpentStr }} of {{ timeEstimateStr }} estimate
+      </div>
+    </div>
+
+    <!-- Row 1: Schedule Placement -->
+    <div class="pill-group-section">
+      <span class="pill-section-label">
+        <mat-icon>event</mat-icon>
+        <span>1. Schedule Placement</span>
+      </span>
+      <div
+        class="segmented-pills"
+        role="radiogroup"
+        aria-label="Schedule Placement"
+      >
+        <button
+          type="button"
+          role="radio"
+          [attr.aria-checked]="selectedPlacement === 'ALL_DAY'"
+          [attr.tabindex]="selectedPlacement === 'ALL_DAY' ? 0 : -1"
+          class="pill-button"
+          [class.active]="selectedPlacement === 'ALL_DAY'"
+          (click)="selectPlacement('ALL_DAY')"
+          (keydown)="onPlacementPillKeydown($event, 'ALL_DAY')"
+        >
+          <mat-icon>wb_sunny</mat-icon>
+          <span>12:00 AM (All Day)</span>
+        </button>
+
+        @if (isEditingTime && selectedPlacement === 'CUSTOM_TIME') {
+          <div
+            class="pill-button active"
+            (click)="$event.stopPropagation()"
+          >
+            <mat-icon>schedule</mat-icon>
+            <span class="custom-time-wrap">
+              <span
+                class="custom-time-digits"
+                style="visibility: hidden"
+                >{{ formattedCustomTime }}</span
+              >
+              <input
+                #inlineTimeInput
+                type="text"
+                class="inline-time-input"
+                [value]="formattedCustomTime"
+                (keydown)="onInlineTimeKeydown($event)"
+                (blur)="onInlineTimeBlur($event)"
+                placeholder="{{ formattedCustomTime }}"
+                autocomplete="off"
+                spellcheck="false"
+              />
+            </span>
+          </div>
+        } @else {
+          <button
+            type="button"
+            role="radio"
+            [attr.aria-checked]="selectedPlacement === 'CUSTOM_TIME'"
+            [attr.tabindex]="selectedPlacement === 'CUSTOM_TIME' ? 0 : -1"
+            class="pill-button"
+            [class.active]="selectedPlacement === 'CUSTOM_TIME'"
+            (click)="onCustomTimeClick()"
+            (keydown)="onPlacementPillKeydown($event, 'CUSTOM_TIME')"
+            [attr.title]="
+              selectedPlacement === 'CUSTOM_TIME'
+                ? 'Click digits to update time'
+                : 'Select custom time'
+            "
+          >
+            <mat-icon>schedule</mat-icon>
+            <span class="custom-time-wrap">
+              <span class="custom-time-digits">{{ formattedCustomTime }}</span>
+            </span>
+          </button>
+        }
+      </div>
+      <div class="pill-clue">{{ placementClue }}</div>
+    </div>
+
+    <!-- Row 2: Duration Adjustment (Conditional) -->
+    @if (hasDurationChoice) {
+      <div class="pill-group-section">
+        <span class="pill-section-label">
+          <mat-icon>schedule</mat-icon>
+          <span>2. Duration Adjustment</span>
+        </span>
+        <div
+          class="segmented-pills"
+          role="radiogroup"
+          aria-label="Duration Adjustment"
+        >
+          <!-- Left: Adjust to Tracked / Default min -->
+          <button
+            type="button"
+            role="radio"
+            [attr.aria-checked]="selectedDurationChoice === 'ADJUST_TO_TRACKED'"
+            [attr.tabindex]="selectedDurationChoice === 'ADJUST_TO_TRACKED' ? 0 : -1"
+            class="pill-button"
+            [class.active]="selectedDurationChoice === 'ADJUST_TO_TRACKED'"
+            (click)="selectDurationChoice('ADJUST_TO_TRACKED')"
+            (keydown)="onDurationPillKeydown($event, 'ADJUST_TO_TRACKED')"
+          >
+            <span>{{ adjustDurationLabel }}</span>
+            <span class="pill-badge">{{ adjustDurationBadge }}</span>
+          </button>
+
+          <!-- Right: Keep Estimate -->
+          <button
+            type="button"
+            role="radio"
+            [attr.aria-checked]="selectedDurationChoice === 'KEEP_ESTIMATE'"
+            [attr.tabindex]="selectedDurationChoice === 'KEEP_ESTIMATE' ? 0 : -1"
+            class="pill-button"
+            [class.active]="selectedDurationChoice === 'KEEP_ESTIMATE'"
+            (click)="selectDurationChoice('KEEP_ESTIMATE')"
+            (keydown)="onDurationPillKeydown($event, 'KEEP_ESTIMATE')"
+          >
+            <span>{{ keepDurationLabel }}</span>
+            <span class="pill-badge">Planned</span>
+          </button>
+        </div>
+        <div class="pill-clue">{{ durationClue }}</div>
+      </div>
+    }
+  </div>
+
+  <!-- Footer Actions -->
+  <div
+    class="dialog-footer"
+    mat-dialog-actions
+  >
+    <div class="keyboard-hint">
+      <span class="kbd">Enter</span> confirms &bull; <span class="kbd">Esc</span> cancels
+    </div>
+    <div class="footer-actions">
+      <button
+        class="cancel-btn"
+        mat-button
+        type="button"
+        (click)="cancel()"
+      >
+        Cancel
+      </button>
+      <button
+        class="confirm-btn"
+        mat-flat-button
+        color="primary"
+        type="button"
+        (click)="submit()"
+      >
+        <mat-icon>check</mat-icon>
+        Confirm
+      </button>
+    </div>
+  </div>
+</div>

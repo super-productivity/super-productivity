@@ -13,6 +13,7 @@ import {
 import { WorkContext, WorkContextType } from '../work-context.model';
 import { TaskCopy } from '../../tasks/task.model';
 import { getDbDateStr } from '../../../util/get-db-date-str';
+import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
 /**
  * Tests for work-context selectors.
  *
@@ -379,7 +380,12 @@ describe('workContext selectors', () => {
       } as Partial<TaskCopy> as TaskCopy;
 
       const activeTaskMap = new Map([P, SUB1, SUB_S].map((t) => [t.id, t]));
-      const result = selectTimelineTasks.projector([SUB1.id, SUB_S.id], activeTaskMap);
+      const result = selectTimelineTasks.projector(
+        [SUB1.id, SUB_S.id],
+        activeTaskMap,
+        undefined,
+        todayStr,
+      );
       expect(result).toEqual({
         unPlanned: [],
         planned: [],
@@ -403,6 +409,8 @@ describe('workContext selectors', () => {
       const result = selectTimelineTasks.projector(
         ['existing', 'missing1'],
         activeTaskMap,
+        undefined,
+        todayStr,
       );
 
       // Should only include the existing task, not crash on missing ones
@@ -424,7 +432,12 @@ describe('workContext selectors', () => {
       const activeTaskMap = new Map([[taskWithDueTime.id, taskWithDueTime]]);
 
       // This should not throw "Cannot read properties of undefined (reading 'dueWithTime')"
-      const result = selectTimelineTasks.projector(['missingTask'], activeTaskMap);
+      const result = selectTimelineTasks.projector(
+        ['missingTask'],
+        activeTaskMap,
+        undefined,
+        todayStr,
+      );
 
       expect(result.planned.length).toBe(1);
       expect(result.planned[0].id).toBe('withDueTime');
@@ -441,10 +454,95 @@ describe('workContext selectors', () => {
       } as Partial<TaskCopy> as TaskCopy;
       // Map excludes archived task (simulating selectActiveTaskMap filtering archived projects)
       const activeTaskMap = new Map([[activeTask.id, activeTask]]);
-      const result = selectTimelineTasks.projector([], activeTaskMap);
+      const result = selectTimelineTasks.projector(
+        [],
+        activeTaskMap,
+        undefined,
+        todayStr,
+      );
 
       expect(result.planned.length).toBe(1);
       expect(result.planned[0].id).toBe('active');
+    });
+
+    it('should include completed tasks when isShowDoneTasksInSchedule is true', () => {
+      const today = '2026-10-12';
+      const doneWithDueTime = {
+        id: 'done_timed',
+        subTaskIds: [],
+        tagIds: [],
+        isDone: true,
+        dueWithTime: 1700000000000,
+      } as Partial<TaskCopy> as TaskCopy;
+
+      const doneWithDueDayToday = {
+        id: 'done_today',
+        subTaskIds: [],
+        tagIds: [],
+        isDone: true,
+        dueDay: today,
+      } as Partial<TaskCopy> as TaskCopy;
+
+      const doneWithDueDayFuture = {
+        id: 'done_future',
+        subTaskIds: [],
+        tagIds: [],
+        isDone: true,
+        dueDay: '2026-10-13',
+      } as Partial<TaskCopy> as TaskCopy;
+
+      const doneUnscheduled = {
+        id: 'done_unscheduled',
+        subTaskIds: [],
+        tagIds: [],
+        isDone: true,
+      } as Partial<TaskCopy> as TaskCopy;
+
+      const activeTask = {
+        id: 'active_today',
+        subTaskIds: [],
+        tagIds: [],
+        isDone: false,
+      } as Partial<TaskCopy> as TaskCopy;
+
+      const activeTaskMap = new Map(
+        [
+          doneWithDueTime,
+          doneWithDueDayToday,
+          doneWithDueDayFuture,
+          doneUnscheduled,
+          activeTask,
+        ].map((t) => [t.id, t]),
+      );
+
+      const timelineConfig = {
+        isShowDoneTasksInSchedule: true,
+      } as any;
+
+      const result = selectTimelineTasks.projector(
+        [activeTask.id, doneUnscheduled.id, doneWithDueDayToday.id],
+        activeTaskMap,
+        timelineConfig,
+        today,
+      );
+
+      // Planned should include done task with dueWithTime, and done task with dueDay today mapped to midnight
+      expect(result.planned.find((t) => t.id === 'done_timed')).toBeDefined();
+      expect(result.planned.find((t) => t.id === 'done_timed')?.dueWithTime).toBe(
+        1700000000000,
+      );
+
+      const mappedToday = result.planned.find((t) => t.id === 'done_today');
+      expect(mappedToday).toBeDefined();
+      expect(mappedToday?.dueWithTime).toBe(dateStrToUtcDate(today).getTime());
+
+      // Future dueDay done task should not be in planned
+      expect(result.planned.find((t) => t.id === 'done_future')).toBeUndefined();
+
+      // Unscheduled done task without dates should be excluded from daytime flow (unPlanned)
+      expect(result.unPlanned.find((t) => t.id === 'done_unscheduled')).toBeUndefined();
+      // Active undone task is in unPlanned
+      expect(result.unPlanned.find((t) => t.id === 'active_today')).toBeDefined();
     });
   });
 

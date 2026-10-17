@@ -39,7 +39,26 @@ const makeTaskScheduleEvent = (overlap?: ScheduleEvent['overlap']): ScheduleEven
   startHours: 10,
   timeLeftInHours: 1,
   overlap,
-  data: { id: 'task-1', title: 'Task', timeEstimate: 3600000 } as any,
+  data: { id: 'task-1', title: 'Task', timeEstimate: 3600000, isDone: false } as any,
+});
+
+const makeDoneTaskScheduleEvent = (
+  type: SVEType = SVEType.ScheduledTask,
+  dataOverrides?: Record<string, any>,
+): ScheduleEvent => ({
+  id: 'task-done-1',
+  type,
+  style: 'grid-column: 2; grid-row: 121 / span 12',
+  startHours: 10,
+  timeLeftInHours: 1,
+  data: {
+    id: 'task-done-1',
+    title: 'Done Task Title',
+    timeEstimate: 3600000,
+    isDone: true,
+    dueWithTime: 1700000000000,
+    ...dataOverrides,
+  } as any,
 });
 
 describe('ScheduleEventComponent – isReferenceCalendar', () => {
@@ -518,6 +537,102 @@ describe('ScheduleEventComponent – isReferenceCalendar', () => {
     it('folds to 12-hour time for a 12h locale', async () => {
       const c = await setupWith24h(false);
       expect(c.scheduledClockStr()).toBe('2:00');
+    });
+  });
+
+  describe('completed task styling and icon retention (Ticket 01)', () => {
+    it('should include isDone class when task is done', () => {
+      fixture.componentRef.setInput(
+        'event',
+        makeDoneTaskScheduleEvent(SVEType.ScheduledTask),
+      );
+      fixture.detectChanges();
+
+      expect(component.cssClass()).toContain('isDone');
+      expect((fixture.nativeElement as HTMLElement).classList.contains('isDone')).toBe(
+        true,
+      );
+    });
+
+    it('should not include isDone class when task is undone', () => {
+      fixture.componentRef.setInput('event', makeTaskScheduleEvent());
+      fixture.detectChanges();
+
+      expect(component.cssClass()).not.toContain('isDone');
+      expect((fixture.nativeElement as HTMLElement).classList.contains('isDone')).toBe(
+        false,
+      );
+    });
+
+    it('should retain original icon type SCHEDULED_TASK for completed scheduled task', () => {
+      fixture.componentRef.setInput(
+        'event',
+        makeDoneTaskScheduleEvent(SVEType.ScheduledTask),
+      );
+      fixture.detectChanges();
+
+      expect(component.icoType()).toBe('SCHEDULED_TASK');
+    });
+
+    it('should retain original icon type FLOW for completed flow task', () => {
+      fixture.componentRef.setInput('event', makeDoneTaskScheduleEvent(SVEType.Task));
+      fixture.detectChanges();
+
+      expect(component.icoType()).toBe('FLOW');
+    });
+  });
+
+  describe('completed task resizing (Ticket 02)', () => {
+    it('should allow resizing for completed task even with timeEstimate = 0', () => {
+      const event = makeDoneTaskScheduleEvent(SVEType.ScheduledTask, { timeEstimate: 0 });
+      fixture.componentRef.setInput('event', event);
+      fixture.detectChanges();
+
+      expect(component.isResizable()).toBe(true);
+    });
+
+    it('should set remindAt: undefined when resizing a completed task', () => {
+      const gridContainer = document.createElement('div');
+      gridContainer.classList.add('grid-container');
+      spyOn(gridContainer, 'getBoundingClientRect').and.returnValue({
+        height: 24 * 12 * 10,
+      } as DOMRect);
+      fixture.nativeElement.parentElement?.insertBefore(
+        gridContainer,
+        fixture.nativeElement,
+      );
+      gridContainer.appendChild(fixture.nativeElement);
+
+      const store = TestBed.inject(MockStore);
+      spyOn(store, 'dispatch');
+
+      const event = makeDoneTaskScheduleEvent(SVEType.ScheduledTask, {
+        timeEstimate: 3600000,
+        remindAt: 1700000000000,
+      });
+      fixture.componentRef.setInput('event', event);
+      fixture.detectChanges();
+
+      const handle = fixture.nativeElement.querySelector('.resize-handle');
+      expect(handle).toBeTruthy();
+
+      handle.dispatchEvent(
+        new MouseEvent('mousedown', { bubbles: true, cancelable: true, clientY: 100 }),
+      );
+      document.dispatchEvent(new MouseEvent('mousemove', { clientY: 220 }));
+      document.dispatchEvent(new MouseEvent('mouseup'));
+
+      expect(store.dispatch).toHaveBeenCalledWith(
+        TaskSharedActions.updateTask({
+          task: {
+            id: 'task-done-1',
+            changes: {
+              timeEstimate: 7200000,
+              remindAt: undefined,
+            },
+          },
+        }),
+      );
     });
   });
 });

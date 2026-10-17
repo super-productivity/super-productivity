@@ -72,6 +72,14 @@
     }
   }
 
+  &.isDone {
+    opacity: var(--task-is-done-dim-opacity);
+
+    .title {
+      text-decoration: line-through;
+    }
+  }
+
   &.LunchBreak {
     display: flex;
     justify-content: center;

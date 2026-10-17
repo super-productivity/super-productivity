@@ -8,6 +8,21 @@ export const SCHEDULE_FORM_CFG: ConfigFormSection<ScheduleConfig> = {
   key: 'schedule',
   items: [
     {
+      key: 'isShowDoneTasksInSchedule',
+      type: 'checkbox',
+      templateOptions: {
+        label: T.GCF.SCHEDULE.L_IS_SHOW_DONE_TASKS_IN_SCHEDULE,
+      },
+    },
+    {
+      hideExpression: (m, v, field) => !field?.model?.isShowDoneTasksInSchedule,
+      key: 'isPromptOnTaskDoneSchedule',
+      type: 'checkbox',
+      templateOptions: {
+        label: T.GCF.SCHEDULE.L_IS_PROMPT_ON_TASK_DONE_SCHEDULE,
+      },
+    },
+    {
       key: 'isWorkStartEndEnabled',
       type: 'checkbox',
       templateOptions: {
@@ -15,7 +30,7 @@ export const SCHEDULE_FORM_CFG: ConfigFormSection<ScheduleConfig> = {
       },
     },
     {
-      hideExpression: (m, v, field) => !field?.model.isWorkStartEndEnabled,
+      hideExpression: (m, v, field) => !field?.model?.isWorkStartEndEnabled,
       key: 'workStart',
       type: 'time',
       templateOptions: {
@@ -30,7 +45,7 @@ export const SCHEDULE_FORM_CFG: ConfigFormSection<ScheduleConfig> = {
       },
     },
     {
-      hideExpression: (m, v, field) => !field?.model.isWorkStartEndEnabled,
+      hideExpression: (m, v, field) => !field?.model?.isWorkStartEndEnabled,
       key: 'workEnd',
       type: 'time',
       templateOptions: {
@@ -52,7 +67,7 @@ export const SCHEDULE_FORM_CFG: ConfigFormSection<ScheduleConfig> = {
       },
     },
     {
-      hideExpression: (m, v, field) => !field?.model.isLunchBreakEnabled,
+      hideExpression: (m, v, field) => !field?.model?.isLunchBreakEnabled,
       key: 'lunchBreakStart',
       type: 'time',
       templateOptions: {
@@ -67,7 +82,7 @@ export const SCHEDULE_FORM_CFG: ConfigFormSection<ScheduleConfig> = {
       },
     },
     {
-      hideExpression: (m, v, field) => !field?.model.isLunchBreakEnabled,
+      hideExpression: (m, v, field) => !field?.model?.isLunchBreakEnabled,
       key: 'lunchBreakEnd',
       type: 'time',
       templateOptions: {

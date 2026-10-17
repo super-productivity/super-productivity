@@ -725,13 +725,16 @@ export class ScheduleWeekDragService {
   }
 
   private _scheduleTask(task: TaskCopy, scheduleTime: number): void {
+    const isDone = !!task?.isDone;
     const hasExistingSchedule = !!task?.dueWithTime;
-    const hasReminder = !!(task?.remindAt ?? task?.reminderId);
+    const hasReminder = !isDone && !!(task?.remindAt ?? task?.reminderId);
     const defaultReminderOption = this._getDefaultReminderOption();
     // Smart reminder logic: if task is brand new to scheduling, add a reminder based on user's default setting.
     // If it already has a reminder, update it. Otherwise, leave reminders unchanged.
-    const remindAt =
-      !hasExistingSchedule && !hasReminder
+    // Completed tasks must NEVER have a reminder scheduled.
+    const remindAt = isDone
+      ? undefined
+      : !hasExistingSchedule && !hasReminder
         ? remindOptionToMilliseconds(scheduleTime, defaultReminderOption)
         : hasReminder
           ? scheduleTime
@@ -740,7 +743,11 @@ export class ScheduleWeekDragService {
     const payload = {
       task,
       dueWithTime: scheduleTime,
-      ...(typeof remindAt === 'number' ? { remindAt } : {}),
+      ...(isDone
+        ? { remindAt: undefined }
+        : typeof remindAt === 'number'
+          ? { remindAt }
+          : {}),
       isMoveToBacklog: false,
     };
 
