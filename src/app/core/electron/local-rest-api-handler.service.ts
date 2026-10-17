@@ -23,6 +23,10 @@ import { IssueLog } from '../log';
 import { LOCAL_REST_API_FEATURE_BRIDGE } from './local-rest-api-feature-bridge';
 import { LOCAL_REST_API_FEATURE_ROUTES } from './local-rest-api-feature-routes';
 import { createErrorResponse, createSuccessResponse } from './local-rest-api-response';
+import {
+  MAX_TIME_SPENT_PER_DAY_MS,
+  parseTimeSpentBody,
+} from './local-rest-api-task-time';
 
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 // eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
@@ -351,46 +355,6 @@ const ISSUE_URL_TIMEOUT_MS = 3000;
 
 const isValidTimestamp = (value: unknown): value is number =>
   typeof value === 'number' && Number.isFinite(value) && new Date(value).getTime() > 0;
-
-/** One day cannot hold more tracked time than this. */
-const MAX_TIME_SPENT_PER_DAY_MS = 24 * 60 * 60 * 1000;
-
-/**
- * Validates a `POST /tasks/:id/time` body: `{ date: 'YYYY-MM-DD', duration: ms }`.
- * Returns the parsed values, or the error code and message for a 400 response.
- */
-const parseAddTimeSpentBody = (
-  body: unknown,
-  todayStr: string,
-): { date: string; duration: number } | { code: string; error: string } => {
-  if (!isRecord(body)) {
-    const error = 'Body must be a JSON object with date and duration';
-    return { code: 'INVALID_INPUT', error };
-  }
-  const unknownField = Object.keys(body).find((k) => k !== 'date' && k !== 'duration');
-  if (unknownField) {
-    const error = `${unknownField} is not supported — only date and duration`;
-    return { code: 'UNSUPPORTED_FIELD', error };
-  }
-  const { date, duration } = body;
-  if (typeof date !== 'string' || !isValidDBDateStr(date)) {
-    return { code: 'INVALID_INPUT', error: 'date must be a valid YYYY-MM-DD date' };
-  }
-  // YYYY-MM-DD strings compare in calendar order.
-  if (date > todayStr) {
-    return { code: 'INVALID_INPUT', error: 'date must not be after today' };
-  }
-  if (
-    typeof duration !== 'number' ||
-    !Number.isInteger(duration) ||
-    duration <= 0 ||
-    duration > MAX_TIME_SPENT_PER_DAY_MS
-  ) {
-    const error = 'duration must be a positive integer of milliseconds, at most 24h';
-    return { code: 'INVALID_INPUT', error };
-  }
-  return { date, duration };
-};
 
 const isTaskInToday = (
   task: Task,
@@ -1035,8 +999,12 @@ export class LocalRestApiHandlerService {
       return createSuccessResponse(requestId, 200, { currentTaskId: taskId });
     }
 
-    if (segments.length === 3 && segments[2] === 'time' && method === 'POST') {
-      const parsed = parseAddTimeSpentBody(body, this._dateService.todayStr());
+    if (
+      segments.length === 3 &&
+      segments[2] === 'time' &&
+      (method === 'POST' || method === 'PUT')
+    ) {
+      const parsed = parseTimeSpentBody(body, this._dateService.todayStr(), method);
       if ('error' in parsed) {
         return createErrorResponse(requestId, 400, parsed.code, parsed.error);
       }
@@ -1048,6 +1016,21 @@ export class LocalRestApiHandlerService {
       if (task.subTaskIds?.length) {
         const msg = 'Task has subtasks and its time is their sum; log time on a subtask';
         return createErrorResponse(requestId, 400, 'INVALID_INPUT', msg);
+      }
+      if (method === 'PUT') {
+        const { date, duration } = parsed;
+        const previous = task.timeSpentOnDay?.[date];
+        if (duration !== (previous ?? 0) || (duration === 0 && previous !== undefined)) {
+          const timeSpentOnDay = { ...task.timeSpentOnDay };
+          if (duration === 0) {
+            delete timeSpentOnDay[date];
+          } else {
+            timeSpentOnDay[date] = duration;
+          }
+          // Same path as the time dialog: flush tracked time, then update totals.
+          this._taskService.update(taskId, { timeSpentOnDay });
+        }
+        return createSuccessResponse(requestId, 200, await this._getTaskById(taskId));
       }
       const dayTotal = (task.timeSpentOnDay?.[parsed.date] || 0) + parsed.duration;
       if (dayTotal > MAX_TIME_SPENT_PER_DAY_MS) {
