@@ -6,5 +6,6 @@ class CustomViewController: CAPBridgeViewController {
         bridge?.registerPluginInstance(WebDavHttpPlugin())
         bridge?.registerPluginInstance(StoreReviewPlugin())
         bridge?.registerPluginInstance(ShareInboxPlugin())
+        bridge?.registerPluginInstance(WidgetBridgePlugin())
     }
 }
