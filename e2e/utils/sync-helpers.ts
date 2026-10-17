@@ -136,12 +136,14 @@ export const createWebDavFolder = async (
  * @param browser - Playwright Browser instance
  * @param baseURL - Base URL for the app
  * @param acceptedConfirms - Exact extra confirmations the test deliberately triggers
+ * @param initScript - Extra init script run before the app boots, e.g. a native bridge stub
  * @returns Object with context and page
  */
 export const setupSyncClient = async (
   browser: Browser,
   baseURL: string | undefined,
   acceptedConfirms: readonly RegExp[] = [],
+  initScript?: () => void,
 ): Promise<{ context: BrowserContext; page: Page }> => {
   // A context created here does not inherit the config's user agent; the app
   // needs PLAYWRIGHT in it to start with every app feature on (as in the
@@ -163,6 +165,9 @@ export const setupSyncClient = async (
     localStorage.setItem('SUP_IS_SHOW_TOUR', 'true');
     localStorage.setItem('SUP_EXAMPLE_TASKS_CREATED', 'true');
   });
+  if (initScript) {
+    await page.addInitScript(initScript);
+  }
 
   // Auto-accept only the native confirmation for a genuinely fresh client.
   // This handler lives for the page lifetime, so broad words such as "sync" or
