@@ -46,6 +46,10 @@ export interface JiraCfg extends BaseIssueProviderCfg {
 
   isUpdateIssueFromLocal: boolean;
 
+  // Optional so providers saved before this field existed still validate (CLAUDE.md rule 11).
+  // Read sites treat a missing value as false.
+  isSyncDeadlineToJira?: boolean;
+
   isShowComponents: boolean;
 
   isCheckToReAssignTicketOnTaskStart: boolean;
