@@ -262,6 +262,35 @@ describe('taskBatchUpdateMetaReducer', () => {
       expect(task.notes).toBe('Updated notes');
     });
 
+    // Batch updates write `isDone` directly, so they normalize `isWontDo` too.
+    describe('isWontDo', () => {
+      const isWontDoAfter = (isDone: boolean): boolean | undefined => {
+        const state = createStateWithExistingTasks(['task-1']);
+        state[TASK_FEATURE_NAME].entities['task-1'] = {
+          ...(state[TASK_FEATURE_NAME].entities['task-1'] as Task),
+          isDone: true,
+          isWontDo: true,
+        };
+        const action = TaskSharedActions.batchUpdateForProject({
+          projectId: 'project1',
+          operations: [
+            { type: 'update', taskId: 'task-1', updates: { isDone } } as BatchTaskUpdate,
+          ],
+          createdTaskIds: {},
+        });
+        const result = metaReducer(state, action);
+        return (result[TASK_FEATURE_NAME].entities['task-1'] as Task).isWontDo;
+      };
+
+      it('should clear the flag when a plugin un-does a wont do task', () => {
+        expect(isWontDoAfter(false)).toBeUndefined();
+      });
+
+      it('should keep the flag when a plugin marks a wont do task done again', () => {
+        expect(isWontDoAfter(true)).toBe(true);
+      });
+    });
+
     it('should skip update for non-existent task', () => {
       const operations: BatchOperation[] = [
         {

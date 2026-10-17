@@ -32,6 +32,7 @@ import { DEFAULT_TAG_COLOR } from './work-context.const';
 import { getDefaultWorkContextTheme } from './work-context-default-theme.util';
 import { TagService } from '../tag/tag.service';
 import { ArchiveTask, Task, TaskWithSubTasks } from '../tasks/task.model';
+import { isCompletedTask } from '../tasks/util/is-wont-do-task';
 import {
   hasTasksToWorkOn,
   mapEstimateRemainingFromTasks,
@@ -455,12 +456,15 @@ export class WorkContextService {
               map(
                 (tasks) =>
                   tasks.filter(
-                    (t) => t.isDone && t.doneOn && this._dateService.isToday(t.doneOn),
+                    (t) =>
+                      isCompletedTask(t) &&
+                      t.doneOn &&
+                      this._dateService.isToday(t.doneOn),
                   ).length,
               ),
             )
         : this.mainListTasks$.pipe(
-            map((tasks) => flattenTasks(tasks).filter((t) => t.isDone).length),
+            map((tasks) => flattenTasks(tasks).filter(isCompletedTask).length),
           ),
     ),
     distinctUntilChanged(), // Only emit when count actually changes

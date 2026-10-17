@@ -16,6 +16,7 @@ import {
 import { LOCAL_ACTIONS } from '../../../util/local-actions.token';
 import { TaskService } from '../../tasks/task.service';
 import { Task } from '../../tasks/task.model';
+import { isCompletedTask } from '../../tasks/util/is-wont-do-task';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { PlannerActions } from '../../planner/store/planner.actions';
 import { PluginHttpService } from '../../../plugins/issue-provider/plugin-http.service';
@@ -454,7 +455,8 @@ export class TimeBlockSyncEffects {
         title: task.title,
         dueWithTime,
         durationMs,
-        isDone: task.isDone,
+        // A won't-do task wasn't completed, so its block gets no done marker.
+        isDone: isCompletedTask(task),
       },
       ctx.config,
       ctx.http,

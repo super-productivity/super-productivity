@@ -19,6 +19,7 @@ import {
 import {
   selectCurrentTask,
   selectCurrentTaskId,
+  selectTaskEntities,
   selectUnplannedDeadlineTasksForToday,
 } from './task.selectors';
 import { NotifyService } from '../../../core/notify/notify.service';
@@ -33,6 +34,7 @@ import { WorkContextService } from '../../work-context/work-context.service';
 import { GlobalConfigService } from '../../config/global-config.service';
 import { playDoneSound } from '../util/play-done-sound';
 import { Task } from '../task.model';
+import { isWontDoTask } from '../util/is-wont-do-task';
 import { EMPTY } from 'rxjs';
 import { selectProjectById } from '../../project/store/project.selectors';
 import { Project } from '../../project/project.model';
@@ -217,8 +219,12 @@ export class TaskUiEffects {
         withLatestFrom(
           this._workContextService.flatDoneTodayNr$,
           this._globalConfigService.sound$,
+          this._store$.select(selectTaskEntities),
         ),
-        filter(([, , soundCfg]) => !!soundCfg.doneSound),
+        filter(([{ task }, , soundCfg, entities]) => {
+          const doneTask = entities[task.id as string];
+          return !!soundCfg.doneSound && !(doneTask && isWontDoTask(doneTask));
+        }),
         tap(([, doneToday, soundCfg]) => playDoneSound(soundCfg, doneToday)),
       ),
     { dispatch: false },

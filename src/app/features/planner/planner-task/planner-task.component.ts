@@ -47,6 +47,7 @@ import { getNextWeekDayOffset } from '../../../util/get-next-week-day-offset';
 import { getDbDateStr } from '../../../util/get-db-date-str';
 import { combineDateAndTime } from '../../../util/combine-date-and-time';
 import { millisecondsDiffToRemindOption } from '../../tasks/util/remind-option-to-milliseconds';
+import { isWontDoTask } from '../../tasks/util/is-wont-do-task';
 import { PlannerActions } from '../store/planner.actions';
 import { DialogConfirmComponent } from '../../../ui/dialog-confirm/dialog-confirm.component';
 import {
@@ -130,6 +131,8 @@ export class PlannerTaskComponent implements OnInit, OnDestroy, AfterViewInit {
   readonly tagsToHide = input<string[]>();
   // Containers opt in explicitly; TASK_CARD_LIST supplies board-specific movement.
   readonly focusable = input<boolean>(false);
+  readonly isWontDo = computed<boolean>(() => isWontDoTask(this.task()));
+
   readonly isMultiSelected = computed(() =>
     this.focusable() ? this._multiSelect.selectedIds().has(this.task().id) : false,
   );

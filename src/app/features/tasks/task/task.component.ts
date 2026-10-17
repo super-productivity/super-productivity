@@ -129,6 +129,7 @@ import {
 import { AddSubtaskInputService } from '../add-subtask-input/add-subtask-input.service';
 import { getSubTaskTimeLeftForDisplay } from '../util/get-sub-task-time-left-for-display';
 import { getScheduledDateColor } from '../util/get-scheduled-date-color';
+import { isWontDoTask } from '../util/is-wont-do-task';
 
 const isInteractiveTarget = (target: EventTarget | null): boolean =>
   target instanceof Element &&
@@ -220,6 +221,7 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
 
   // Use shared signals from services to avoid creating 600+ subscriptions on initial render
   isCurrent = computed(() => this._taskService.currentTaskId() === this.task().id);
+  isWontDo = computed(() => isWontDoTask(this.task()));
   isSelected = computed(() => this._taskService.selectedTaskId() === this.task().id);
   // Part of the transient multi-selection (modifier click, Shift+Arrow, X,
   // Ctrl/Cmd+A, touch tap in selection mode).

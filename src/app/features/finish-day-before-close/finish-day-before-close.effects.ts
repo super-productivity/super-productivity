@@ -17,6 +17,7 @@ import { IS_ELECTRON } from '../../app.constants';
 import { combineLatest, EMPTY, Observable } from 'rxjs';
 import { WorkContextService } from '../work-context/work-context.service';
 import { Task } from '../tasks/task.model';
+import { isCompletedTask } from '../tasks/util/is-wont-do-task';
 import { TaskService } from '../tasks/task.service';
 import { DataInitStateService } from '../../core/data-init/data-init-state.service';
 import {
@@ -93,7 +94,7 @@ export class FinishDayBeforeCloseEffects {
     );
 
   async _handleCloseDecision(todayMainTasks: Task[]): Promise<void> {
-    const doneCount = todayMainTasks.filter((t) => t.isDone).length;
+    const doneCount = todayMainTasks.filter(isCompletedTask).length;
     if (doneCount === 0) {
       this._execBeforeCloseService.setDone(EXEC_BEFORE_CLOSE_ID);
       return;

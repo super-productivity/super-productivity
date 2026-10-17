@@ -15,6 +15,7 @@ import {
   BatchTaskUpdate,
 } from '@super-productivity/plugin-api';
 import { Log } from '../../../core/log';
+import { getNextIsWontDo } from '../../../features/tasks/util/is-wont-do-task';
 import { validateAndFixDataConsistencyAfterBatchUpdate } from './validate-and-fix-data-consistency-after-batch-update';
 
 /**
@@ -194,6 +195,15 @@ export const taskBatchUpdateMetaReducer = <T extends Partial<RootState> = RootSt
                 }
               },
             );
+
+            // `isDone` is written directly here rather than through
+            // `updateWontDoForTask`, so un-doing a won't-do task clears it here.
+            if (updates.isDone !== undefined) {
+              const task = newState[TASK_FEATURE_NAME].entities[updateOp.taskId] as Task;
+              if (getNextIsWontDo(task, updates) !== !!task.isWontDo) {
+                updates.isWontDo = undefined;
+              }
+            }
 
             // Resolve temp IDs in subTaskIds — plugins may reference newly-created
             // tasks by their temp IDs in parent subTaskIds update operations

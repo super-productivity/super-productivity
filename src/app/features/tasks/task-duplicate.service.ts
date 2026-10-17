@@ -4,6 +4,7 @@ import { TaskService } from './task.service';
 import { TaskWithSubTasks } from './task.model';
 import { addSubTask } from './store/task.actions';
 import { PlannerActions } from '../planner/store/planner.actions';
+import { isWontDoTask } from './util/is-wont-do-task';
 
 @Injectable({
   providedIn: 'root',
@@ -41,6 +42,7 @@ export class TaskDuplicateService {
         title: subTask.title,
         additional: {
           isDone: subTask.isDone,
+          ...(isWontDoTask(subTask) && { isWontDo: true }),
           projectId: subTask.projectId,
           ...(subTask.dueDay && { dueDay: subTask.dueDay }),
           ...(subTask.dueWithTime && { dueWithTime: subTask.dueWithTime }),

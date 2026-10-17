@@ -20,6 +20,7 @@ import {
   removeTaskFromParentSideEffects,
   reCalcTimesForParentIfParent,
   updateDoneOnForTask,
+  updateWontDoForTask,
   updateTimeEstimateForTask,
   updateTimeSpentForTask,
 } from '../../../features/tasks/store/task.reducer.util';
@@ -932,6 +933,7 @@ const handleUpdateTask = (
     },
     taskState,
   );
+  taskState = updateWontDoForTask(currentTask, cleanedTaskUpdate, taskState);
 
   updatedState = {
     ...updatedState,

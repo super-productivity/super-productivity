@@ -453,6 +453,84 @@ describe('TaskInternalEffects', () => {
         done();
       }, 50);
     });
+
+    it('should mark parent as done when one subtask was completed and one is wont do', (done) => {
+      const parentTask = createTask('parent', {
+        subTaskIds: ['sub1', 'sub2'],
+        isDone: false,
+      });
+      const subTask1 = createTask('sub1', { parentId: 'parent', isDone: true });
+      const subTask2 = createTask('sub2', {
+        parentId: 'parent',
+        isDone: true,
+        isWontDo: true,
+      });
+
+      store.overrideSelector(
+        selectTasksConfig,
+        createTasksConfig({ isAutoMarkParentAsDone: true }),
+      );
+      store.overrideSelector(
+        selectTaskFeatureState,
+        createTaskState([parentTask, subTask1, subTask2]),
+      );
+      store.refreshState();
+
+      effects.onAllSubTasksDone$.subscribe((action) => {
+        expect((action as any).task.id).toBe('parent');
+        expect((action as any).task.changes).toEqual({ isDone: true });
+        done();
+      });
+
+      actions$.next(
+        TaskSharedActions.updateTask({
+          task: { id: 'sub2', changes: { isDone: true, isWontDo: true } },
+        }),
+      );
+    });
+
+    it('should NOT mark parent as done when all subtasks are wont do', (done) => {
+      const parentTask = createTask('parent', {
+        subTaskIds: ['sub1', 'sub2'],
+        isDone: false,
+      });
+      const subTask1 = createTask('sub1', {
+        parentId: 'parent',
+        isDone: true,
+        isWontDo: true,
+      });
+      const subTask2 = createTask('sub2', {
+        parentId: 'parent',
+        isDone: true,
+        isWontDo: true,
+      });
+
+      store.overrideSelector(
+        selectTasksConfig,
+        createTasksConfig({ isAutoMarkParentAsDone: true }),
+      );
+      store.overrideSelector(
+        selectTaskFeatureState,
+        createTaskState([parentTask, subTask1, subTask2]),
+      );
+      store.refreshState();
+
+      let emitted = false;
+      effects.onAllSubTasksDone$.subscribe(() => {
+        emitted = true;
+      });
+
+      actions$.next(
+        TaskSharedActions.updateTask({
+          task: { id: 'sub2', changes: { isDone: true, isWontDo: true } },
+        }),
+      );
+
+      setTimeout(() => {
+        expect(emitted).toBe(false);
+        done();
+      }, 50);
+    });
   });
 
   describe('setDefaultEstimateIfNonGiven$', () => {

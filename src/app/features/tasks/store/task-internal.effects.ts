@@ -16,6 +16,7 @@ import {
   selectTasksConfig,
 } from '../../config/store/global-config.reducer';
 import { Task, TaskState } from '../task.model';
+import { isCompletedTask } from '../util/is-wont-do-task';
 import { EMPTY, of } from 'rxjs';
 import { WorkContextService } from '../../work-context/work-context.service';
 import { selectTodayTaskIds } from '../../work-context/store/work-context.selectors';
@@ -54,10 +55,9 @@ export class TaskInternalEffects {
           return false;
         }
         const parent = state.entities[task.parentId] as Task;
-        const undoneSubTasks = parent.subTaskIds.filter(
-          (id) => !(state.entities[id] as Task).isDone,
-        );
-        return undoneSubTasks.length === 0;
+        const subTasks = parent.subTaskIds.map((id) => state.entities[id] as Task);
+        // A parent whose subtasks were all finished as won't do wasn't completed.
+        return subTasks.every((t) => t.isDone) && subTasks.some(isCompletedTask);
       }),
       map(([action, miscCfg, state]) =>
         TaskSharedActions.updateTask({

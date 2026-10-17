@@ -1220,8 +1220,8 @@ export class TaskService {
     return this._store.pipe(select(selectTasksByTag, { tagId }));
   }
 
-  setDone(id: string): void {
-    this.update(id, { isDone: true });
+  setDone(id: string, isWontDo?: boolean): void {
+    this.update(id, { isDone: true, ...(isWontDo ? { isWontDo } : {}) });
   }
 
   markIssueUpdatesAsRead(id: string): void {

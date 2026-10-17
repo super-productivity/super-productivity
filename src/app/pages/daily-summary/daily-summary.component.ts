@@ -51,6 +51,7 @@ import { SimpleCounterService } from '../../features/simple-counter/simple-count
 import { TODAY_TAG } from '../../features/tag/tag.const';
 import { TaskSummaryTablesComponent } from '../../features/tasks/task-summary-tables/task-summary-tables.component';
 import { Task, TaskWithSubTasks } from '../../features/tasks/task.model';
+import { isCompletedTask } from '../../features/tasks/util/is-wont-do-task';
 import { TaskService } from '../../features/tasks/task.service';
 import { TasksByTagComponent } from '../../features/tasks/tasks-by-tag/tasks-by-tag.component';
 import { TaskArchiveService } from '../../features/archive/task-archive.service';
@@ -197,7 +198,7 @@ export class DailySummaryComponent implements OnInit, OnDestroy, AfterViewInit {
   focusSessionDuration$ = this.focusSessionSummary$.pipe(map((summary) => summary.total));
 
   nrOfDoneTasks$: Observable<number> = this.tasksWorkedOnOrDoneOrRepeatableFlat$.pipe(
-    map((tasks) => tasks && tasks.filter((task) => !!task.isDone).length),
+    map((tasks) => tasks && tasks.filter(isCompletedTask).length),
   );
 
   totalNrOfTasks$: Observable<number> = this.tasksWorkedOnOrDoneOrRepeatableFlat$.pipe(

@@ -14,6 +14,7 @@ import { Update } from '@ngrx/entity';
 import { TaskLog } from '../../../core/log';
 import { devError } from '../../../util/dev-error';
 import { sumSubTaskTimeLeft } from '../util/sum-sub-task-time-left';
+import { getNextIsWontDo } from '../util/is-wont-do-task';
 
 export const getTaskById = (taskId: string, state: TaskState): Task => {
   if (!state.entities[taskId]) {
@@ -147,6 +148,33 @@ export const updateDoneOnForTask = (upd: Update<Task>, state: TaskState): TaskSt
   } else {
     return state;
   }
+};
+
+/**
+ * Normalizes `isWontDo` once `upd` has been merged into `state`, given the task
+ * as it was before the update. Runs after the merge, so an update can never
+ * store `isWontDo` on a task that isn't done.
+ */
+export const updateWontDoForTask = (
+  taskBefore: Task,
+  upd: Update<Task>,
+  state: TaskState,
+): TaskState => {
+  if (upd.changes.isDone === undefined && upd.changes.isWontDo === undefined) {
+    return state;
+  }
+  const task = state.entities[upd.id];
+  if (!task) {
+    return state;
+  }
+  const isWontDo = getNextIsWontDo(taskBefore, upd.changes);
+  if (!!task.isWontDo === isWontDo) {
+    return state;
+  }
+  return taskAdapter.updateOne(
+    { id: task.id, changes: { isWontDo: isWontDo || undefined } },
+    state,
+  );
 };
 
 export const updateStartDateForRepeatableTask = (

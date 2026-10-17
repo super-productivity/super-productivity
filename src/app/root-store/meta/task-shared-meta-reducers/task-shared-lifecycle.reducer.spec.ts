@@ -726,6 +726,24 @@ describe('taskSharedLifecycleMetaReducer', () => {
         subTasks,
       });
 
+    // Restoring writes `isDone` directly and never reaches
+    // `updateWontDoForTask`, so this path has to drop the flag itself.
+    it('should clear isWontDo when restoring a task finished as wont do', () => {
+      const action = createRestoreAction({
+        isDone: true,
+        doneOn: 1234,
+        isWontDo: true,
+      });
+
+      metaReducer(baseState, action);
+
+      const nextState = mockReducer.calls.mostRecent().args[0] as RootState;
+      const restored = nextState[TASK_FEATURE_NAME].entities.task1 as Task;
+      expect(restored.isDone).toBe(false);
+      expect(restored.doneOn).toBeUndefined();
+      expect(restored.isWontDo).toBeUndefined();
+    });
+
     for (const unsafeTaskId of ['constructor', '__proto__']) {
       it(`should reject prototype-like restored task id ${unsafeTaskId}`, () => {
         const action = createRestoreAction({ id: unsafeTaskId });

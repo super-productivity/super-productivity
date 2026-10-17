@@ -99,7 +99,9 @@ const handleRestoreTask = (
 
   // Normalize stale refs before adding to active state
   const normalizedRestoredTask = normalizeRestoredTask(
-    { ...task, isDone: false, doneOn: undefined },
+    // A restored task is active again, so it is neither done nor abandoned.
+    // This writes `isDone` directly and never reaches `updateWontDoForTask`.
+    { ...task, isDone: false, doneOn: undefined, isWontDo: undefined },
     state,
   );
   const restoredTask = {

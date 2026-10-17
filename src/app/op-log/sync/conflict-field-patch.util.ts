@@ -188,8 +188,9 @@ export const isFieldPatchEligible = (sides: FieldPatchSides): boolean => {
  * One side's fields, op by op in order. A task done toggle also carries the
  * `doneOn` its reducer derives, as the op converter does for replay
  * (`addReplaySafeDoneFields`): the op's timestamp when it sets `isDone`
- * without one, a clear when it unsets it. A patch applies fields, not
- * reducers, so without this the resolving device and a restart would differ.
+ * without one, a clear when it unsets it. Unsetting it also clears `isWontDo`
+ * (`updateWontDoForTask`). A patch applies fields, not reducers, so without
+ * this the resolving device and a restart would differ.
  */
 const sideChanges = (
   ops: Operation[],
@@ -199,15 +200,16 @@ const sideChanges = (
   const changes: Record<string, unknown> = {};
   for (const op of fieldOps(ops)) {
     const opChanges = mergeChangedFields([op], payloadKey, entityId);
-    if (
-      op.actionType === ActionType.TASK_SHARED_UPDATE &&
-      'isDone' in opChanges &&
-      !('doneOn' in opChanges)
-    ) {
-      opChanges['doneOn'] =
-        opChanges['isDone'] === true && Number.isFinite(op.timestamp)
-          ? op.timestamp
-          : undefined;
+    if (op.actionType === ActionType.TASK_SHARED_UPDATE && 'isDone' in opChanges) {
+      if (!('doneOn' in opChanges)) {
+        opChanges['doneOn'] =
+          opChanges['isDone'] === true && Number.isFinite(op.timestamp)
+            ? op.timestamp
+            : undefined;
+      }
+      if (opChanges['isDone'] === false) {
+        opChanges['isWontDo'] = undefined;
+      }
     }
     Object.assign(changes, opChanges);
   }
@@ -492,12 +494,14 @@ export const supersededPatchFields = (
   const written = mergeChangedFields(ops, payloadKey, entityId);
   // As on the conflict path: a reminder clear keeps the whole-entity snapshot
   // (v18.15.0–v18.21.x ignore `clearedFields`, decision 3), and a done toggle
-  // carries the `doneOn` its reducer derived (`sideChanges`).
+  // carries the fields its reducer derived (`sideChanges`).
   if (REMINDER_FIELDS.some((field) => field in written && written[field] === undefined)) {
     return undefined;
   }
   const fields = Object.keys(written);
-  return 'isDone' in written && !('doneOn' in written) ? [...fields, 'doneOn'] : fields;
+  if (!('isDone' in written)) return fields;
+  const derived = written['isDone'] === false ? ['doneOn', 'isWontDo'] : ['doneOn'];
+  return [...fields, ...derived.filter((field) => !(field in written))];
 };
 
 /**
@@ -532,8 +536,10 @@ export const survivingLocalFields = (
     (field) => !NOISE_FIELDS.has(field) && deepEqual(entityState[field], written[field]),
   );
   if (surviving.length === 0) return undefined;
-  // A surviving done toggle carries its derived `doneOn` (`sideChanges`).
-  const fields = surviving.includes('isDone') ? [...surviving, 'doneOn'] : surviving;
+  // A surviving done toggle carries its derived `doneOn` and `isWontDo` (`sideChanges`).
+  const fields = surviving.includes('isDone')
+    ? [...new Set([...surviving, 'doneOn', 'isWontDo'])]
+    : surviving;
   return Object.fromEntries(fields.map((field) => [field, entityState[field]]));
 };
 

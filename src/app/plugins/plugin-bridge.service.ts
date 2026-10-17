@@ -95,12 +95,9 @@ import { pluginAssert } from './plugin-bridge-asserts';
 import { PluginTaskContextMenuRegistryService } from './plugin-task-context-menu-registry.service';
 import { formatDateForPlugin } from './plugin-i18n-date.util';
 
-/**
- * Relational fields `updateTask` refuses: they are applied to the store as
- * plain values, so writing them corrupts the parent<->child links rather than
- * moving a task. Mirrors `REJECTED_TASK_FIELDS` in the local REST API.
- */
-const REJECTED_UPDATE_FIELDS = ['parentId', 'subTaskIds'] as const;
+// Relational fields corrupt parent<->child links when applied as plain values (mirrors
+// `REJECTED_TASK_FIELDS` in the local REST API); `isWontDo` isn't in the plugin API yet.
+const REJECTED_UPDATE_FIELDS = ['parentId', 'subTaskIds', 'isWontDo'] as const;
 
 const toPluginTaskCopy = (
   task: (TaskCopy & { subTasks?: unknown }) | null | undefined,
@@ -893,9 +890,12 @@ export class PluginBridgeService implements OnDestroy {
     const rejectedField = REJECTED_UPDATE_FIELDS.find((field) => field in updates);
     if (rejectedField) {
       throw new Error(
-        this._translateService.instant(T.PLUGINS.FIELD_NOT_UPDATABLE, {
-          field: rejectedField,
-        }),
+        this._translateService.instant(
+          rejectedField === 'isWontDo'
+            ? T.PLUGINS.FIELD_NOT_IN_PLUGIN_API
+            : T.PLUGINS.FIELD_NOT_UPDATABLE,
+          { field: rejectedField },
+        ),
       );
     }
 

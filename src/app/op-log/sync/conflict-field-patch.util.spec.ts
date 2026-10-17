@@ -516,6 +516,34 @@ describe('conflict-field-patch.util', () => {
       expect(changes['doneOn']).toBeUndefined();
     });
 
+    // An undone task can't stay won't do (`updateWontDoForTask`).
+    it('clears isWontDo beside an undone toggle', () => {
+      const [{ changes }] = localWinningFieldGroups(
+        sides([edit({ isDone: false })], [edit({ title: 'b' }, { timestamp: 500 })]),
+      );
+      expect('isWontDo' in changes).toBeTrue();
+      expect(changes['isWontDo']).toBeUndefined();
+    });
+
+    // Marking a task done again keeps its won't do, which depends on state.
+    it('leaves isWontDo out beside a done toggle', () => {
+      const [{ changes }] = localWinningFieldGroups(
+        sides([edit({ isDone: true })], [edit({ title: 'b' }, { timestamp: 500 })]),
+      );
+      expect('isWontDo' in changes).toBeFalse();
+    });
+
+    it('lists isWontDo among the fields an undone toggle supersedes', () => {
+      expect(
+        supersededPatchFields(
+          [edit({ isDone: false })],
+          'TASK' as EntityType,
+          'task',
+          'task-1',
+        ),
+      ).toEqual(['isDone', 'doneOn', 'isWontDo']);
+    });
+
     it('keeps a doneOn the op carried', () => {
       expect(
         localWinningFieldGroups(
@@ -557,7 +585,18 @@ describe('conflict-field-patch.util', () => {
           { id: 'task-1', title: 'row', isDone: true, doneOn: 5 },
           'task',
         ),
-      ).toEqual({ isDone: true, doneOn: 5 });
+      ).toEqual({ isDone: true, doneOn: 5, isWontDo: undefined });
+    });
+
+    it('re-emits the stored isWontDo beside a surviving done toggle', () => {
+      const local = edit({ isDone: true }, { id: 'l' });
+      expect(
+        survivingLocalFields(
+          conflictOf([local], [lwwRow]),
+          { id: 'task-1', title: 'row', isDone: true, doneOn: 5, isWontDo: true },
+          'task',
+        ),
+      ).toEqual({ isDone: true, doneOn: 5, isWontDo: true });
     });
 
     it('re-emits nothing when the row overwrote every local field', () => {
@@ -607,6 +646,7 @@ describe('conflict-field-patch.util', () => {
       expect(createPatch).toHaveBeenCalledWith(conflict, {
         isDone: true,
         doneOn: undefined,
+        isWontDo: undefined,
       });
       expect(
         await buildSurvivingFieldPatches(

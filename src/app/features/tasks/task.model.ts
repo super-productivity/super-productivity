@@ -152,6 +152,13 @@ export interface TaskCopy
   // Ensure type compatibility for internal fields
   modified?: number;
   doneOn?: number;
+
+  /**
+   * Marks a done task as finished as "won't do" rather than completed. Only
+   * meaningful together with `isDone`, so read it through `isWontDoTask()`.
+   * Clients predating the field show a plain done task.
+   */
+  isWontDo?: boolean;
   parentId?: string;
   remindAt?: number;
   repeatCfgId?: string;

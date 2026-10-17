@@ -23,6 +23,7 @@ import { selectProjectFeatureState } from '../features/project/store/project.sel
 import { selectLocalizationConfig } from '../features/config/store/global-config.reducer';
 import { updateGlobalConfigSection } from '../features/config/store/global-config.actions';
 import { Task } from '../features/tasks/task.model';
+import { isWontDoTask } from '../features/tasks/util/is-wont-do-task';
 import { PluginService } from './plugin.service';
 import { PluginHooks } from './plugin-api.model';
 import { PluginI18nService } from './plugin-i18n.service';
@@ -75,7 +76,7 @@ export class PluginHooksEffects {
             select(selectTaskById, { id: action.task.id as string }),
             take(1),
             tap((task: Task | undefined) => {
-              if (task) {
+              if (task && !isWontDoTask(task)) {
                 this.pluginService.dispatchHook(PluginHooks.TASK_COMPLETE, {
                   taskId: task.id,
                   task,

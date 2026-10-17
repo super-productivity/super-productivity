@@ -152,6 +152,30 @@ describe('TaskDuplicateService', () => {
     expect(additionals[1]?.priority).toBeNull();
   });
 
+  it('keeps a subtask finished as wont do', () => {
+    const wontDoSubTask: Task = { ...subTask, id: 'sub-wont-do', isWontDo: true };
+    taskService.add.and.returnValue('new-parent-task');
+    taskService.createNewTaskWithDefaults.and.returnValue({
+      ...DEFAULT_TASK,
+      id: 'new-sub-task',
+      projectId: 'project-1',
+    });
+
+    service.duplicate({
+      ...parentTask,
+      subTaskIds: [wontDoSubTask.id, subTask.id],
+      subTasks: [wontDoSubTask, subTask],
+    });
+
+    const additionals = taskService.createNewTaskWithDefaults.calls
+      .allArgs()
+      .map(([arg]) => arg.additional);
+    expect(additionals[0]).toEqual(
+      jasmine.objectContaining({ isDone: true, isWontDo: true }),
+    );
+    expect(additionals[1]?.isWontDo).toBeUndefined();
+  });
+
   it('preserves legacy string priorities on parents and subtasks', () => {
     const legacySubTask: Task = { ...subTask, priority: 'high' };
     taskService.add.and.returnValue('new-parent-task');

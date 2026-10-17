@@ -1756,6 +1756,55 @@ describe('taskSharedCrudMetaReducer', () => {
       );
     });
 
+    // `isWontDo` is normalized after the update is merged, so neither a
+    // contradictory update nor a redundant done write can leave it wrong.
+    describe('isWontDo', () => {
+      const isWontDoAfter = (
+        task: Partial<Task>,
+        changes: Partial<Task>,
+      ): boolean | undefined => {
+        const testState = createStateWithExistingTasks(['task1']);
+        testState[TASK_FEATURE_NAME].entities.task1 = createMockTask({
+          id: 'task1',
+          ...task,
+        });
+        metaReducer(testState, createUpdateTaskAction('task1', changes));
+        const nextState = mockReducer.calls.mostRecent().args[0] as RootState;
+        return (nextState[TASK_FEATURE_NAME].entities.task1 as Task).isWontDo;
+      };
+
+      it('should store the flag when a task is finished as wont do', () => {
+        expect(isWontDoAfter({}, { isDone: true, isWontDo: true })).toBe(true);
+      });
+
+      it('should not store the flag from an update that un-does the task', () => {
+        expect(
+          isWontDoAfter(
+            { isDone: true, isWontDo: true },
+            { isDone: false, isWontDo: true },
+          ),
+        ).toBeUndefined();
+      });
+
+      it('should clear the flag when a wont do task is un-done', () => {
+        expect(
+          isWontDoAfter({ isDone: true, isWontDo: true }, { isDone: false }),
+        ).toBeUndefined();
+      });
+
+      it('should keep the flag when an already done task is marked done again', () => {
+        expect(isWontDoAfter({ isDone: true, isWontDo: true }, { isDone: true })).toBe(
+          true,
+        );
+      });
+
+      it('should not revive a stale flag when a task is finished normally', () => {
+        expect(
+          isWontDoAfter({ isDone: false, isWontDo: true }, { isDone: true }),
+        ).toBeUndefined();
+      });
+    });
+
     it('should atomically move a task and its subtasks to another project', () => {
       const testState = createStateWithExistingTasks(['task1'], ['subtask1']);
       testState[TASK_FEATURE_NAME].entities.task1 = createMockTask({

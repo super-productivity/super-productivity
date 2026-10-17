@@ -491,6 +491,17 @@ describe('TaskService', () => {
         }),
       );
     });
+
+    // The task is done either way; only `isWontDo` distinguishes the two.
+    it('should mark the task as wont do', () => {
+      service.setDone('task-1', true);
+
+      expect(store.dispatch).toHaveBeenCalledWith(
+        TaskSharedActions.updateTask({
+          task: { id: 'task-1', changes: { isDone: true, isWontDo: true } },
+        }),
+      );
+    });
   });
 
   describe('setUnDone', () => {

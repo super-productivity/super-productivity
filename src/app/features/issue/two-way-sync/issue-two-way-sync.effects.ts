@@ -7,6 +7,7 @@ import { LOCAL_ACTIONS } from '../../../util/local-actions.token';
 import { REMOTE_ISSUE_DELETE_DEFER_MS } from '../../../app.constants';
 import { TaskService } from '../../tasks/task.service';
 import { Task } from '../../tasks/task.model';
+import { isWontDoTask } from '../../tasks/util/is-wont-do-task';
 import { selectAllTasks } from '../../tasks/store/task.selectors';
 import { IssueProviderService } from '../issue-provider.service';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
@@ -117,6 +118,12 @@ const ACTION_EXTRACTORS: Record<
     const a = action as ReturnType<typeof PlannerActions.transferTask>;
     return { taskId: a.task.id, changes: { dueDay: a.newDay } };
   },
+};
+
+const omitIsDone = (changes: Partial<Task>): Partial<Task> => {
+  const rest = { ...changes };
+  delete rest.isDone;
+  return rest;
 };
 
 @Injectable()
@@ -591,10 +598,12 @@ export class IssueTwoWaySyncEffects {
       );
   }
 
-  private _pushChanges$(task: Task, changes: Partial<Task>): Observable<unknown> {
+  private _pushChanges$(task: Task, changesIn: Partial<Task>): Observable<unknown> {
     if (!task.issueType || !task.issueProviderId || !task.issueId) {
       return EMPTY;
     }
+    // A won't-do task was not completed, so its `isDone` is never pushed.
+    const changes = isWontDoTask(task) ? omitIsDone(changesIn) : changesIn;
     const issueType = task.issueType as IssueProviderKey;
     const issueProviderId = task.issueProviderId;
     const issueId = task.issueId;

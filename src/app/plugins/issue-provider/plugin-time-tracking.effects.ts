@@ -14,6 +14,7 @@ import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 import { LOCAL_ACTIONS } from '../../util/local-actions.token';
 import { TaskService } from '../../features/tasks/task.service';
 import { Task } from '../../features/tasks/task.model';
+import { isWontDoTask } from '../../features/tasks/util/is-wont-do-task';
 import { IssueProviderPluginType } from '../../features/issue/issue.model';
 import { selectIssueProviderState } from '../../features/issue/store/issue-provider.selectors';
 import { IssueProviderActions } from '../../features/issue/store/issue-provider.actions';
@@ -77,7 +78,7 @@ export class PluginTimeTrackingEffects {
         ofType(TaskSharedActions.updateTask),
         filter(({ task }) => task.changes.isDone === true),
         concatMap(({ task }) => this._taskService.getByIdOnce$(task.id as string)),
-        filter((task) => !!task),
+        filter((task) => !!task && !isWontDoTask(task)),
         concatMap((task) =>
           task.parentId
             ? this._taskService
