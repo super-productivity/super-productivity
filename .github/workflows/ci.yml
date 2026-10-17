@@ -120,7 +120,7 @@ jobs:
           ssh://git@github.com/
 
       - name: 'Dependency Review'
-        uses: actions/dependency-review-action@2031cfc080254a8a887f58cffee85186f0e49e48 # v4
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v4
 
   # Lint, unit tests, E2E and PWA/Lighthouse run in parallel instead of in one
   # serial job behind lint: the critical path is the slowest branch, not the sum.
