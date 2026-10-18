@@ -138,6 +138,141 @@ test.describe('Sections', () => {
     });
   }
 
+  test('inline hit areas preserve section gaps and do not reserve layout space', async ({
+    page,
+    workViewPage,
+    projectPage,
+    taskPage,
+    testPrefix,
+  }) => {
+    await setupTestProject(workViewPage, projectPage, `${testPrefix} Section Spacing`);
+    await disableAnimations(page);
+    await workViewPage.addTask('Completed task');
+    await taskPage.markFirstTaskAsDone();
+    await workViewPage.addTask('Root task');
+
+    const controls = page.locator('.add-section-inline');
+    const wrapper = page.locator('.today > div.task-list-wrapper');
+    const donePanel = wrapper.locator(':scope > .collapsible-section').first();
+    await expect(donePanel).toBeVisible();
+
+    const readLayout = async (): Promise<number[]> => [
+      (await stableBoundingBox(wrapper)).height,
+      (await stableBoundingBox(donePanel)).y,
+      ...(await page
+        .locator('.section-container')
+        .evaluateAll((sections) =>
+          sections.map((section) => section.getBoundingClientRect().y),
+        )),
+    ];
+    const expectNoReservedSpace = async (): Promise<void> => {
+      const before = await readLayout();
+      await controls.last().hover();
+      await expect(controls.last()).toHaveCSS('opacity', '1');
+      expect(await readLayout()).toEqual(before);
+      await controls.last().focus();
+      expect(await readLayout()).toEqual(before);
+      const hiddenControls = await page.addStyleTag({
+        content: '.add-section-inline { display: none !important; }',
+      });
+      expect(await readLayout()).toEqual(before);
+      await hiddenControls.evaluate((element) =>
+        element.parentNode?.removeChild(element),
+      );
+    };
+
+    // A project without sections must have exactly its original task/panel layout.
+    await expect(controls).toHaveCount(1);
+    const rootControl = await stableBoundingBox(controls.first());
+    expect(rootControl.y + rootControl.height).toBeLessThanOrEqual(
+      (await stableBoundingBox(donePanel)).y,
+    );
+    const rootList = await stableBoundingBox(page.locator('.tour-undoneList'));
+    const panelGap = await donePanel.evaluate((panel) =>
+      parseFloat(getComputedStyle(panel).getPropertyValue('--s2')),
+    );
+    expect((await stableBoundingBox(donePanel)).y - rootList.y - rootList.height).toBe(
+      panelGap,
+    );
+    await expectNoReservedSpace();
+    for (const title of ['First', 'Last']) {
+      await openProjectContextMenu(page);
+      await clickAddSection(page);
+      await submitPromptDialog(page, title);
+    }
+    await expect(controls).toHaveCount(3);
+    await expect(page.locator('.sections-wrapper')).toHaveAttribute(
+      'data-section-selection-scope',
+      '',
+    );
+    const gap = await page.locator('.section-container').evaluateAll((sections) => {
+      const first = sections[0].getBoundingClientRect();
+      const last = sections[1].getBoundingClientRect();
+      return {
+        actual: last.top - first.bottom,
+        expected: parseFloat(getComputedStyle(sections[0]).getPropertyValue('--s3')),
+      };
+    });
+    expect(gap.actual).toBeCloseTo(gap.expected, 1);
+    const root = await stableBoundingBox(page.locator('.no-section'));
+    const first = await stableBoundingBox(sectionByTitle(page, 'First'));
+    const last = await stableBoundingBox(sectionByTitle(page, 'Last'));
+    expect(first.y - root.y - root.height).toBeCloseTo(gap.expected, 1);
+    expect((await stableBoundingBox(donePanel)).y - last.y - last.height).toBeCloseTo(
+      gap.expected,
+      1,
+    );
+    await expectNoReservedSpace();
+  });
+
+  test('reorders sections in both directions with inline insertion controls', async ({
+    page,
+    workViewPage,
+    projectPage,
+    testPrefix,
+  }) => {
+    await setupTestProject(workViewPage, projectPage, `${testPrefix} Reorder Sections`);
+    await disableAnimations(page);
+    await workViewPage.addTask('Root task');
+    for (const title of ['First', 'Middle', 'Last']) {
+      await openProjectContextMenu(page);
+      await clickAddSection(page);
+      await submitPromptDialog(page, title);
+    }
+    const titles = page.locator('.section-container .collapsible-title');
+    const controls = page.locator('.add-section-inline');
+    await expect(controls).toHaveCount(4);
+    await cdkDragTo(
+      page,
+      sectionByTitle(page, 'Last').locator('.collapsible-title'),
+      sectionByTitle(page, 'First').locator('.collapsible-title'),
+    );
+    await expect(titles).toHaveText(['Last (0)', 'First (0)', 'Middle (0)']);
+    await cdkDragTo(
+      page,
+      sectionByTitle(page, 'First').locator('.collapsible-title'),
+      sectionByTitle(page, 'Middle').locator('.collapsible-title'),
+    );
+    await expect(titles).toHaveText(['Last (0)', 'Middle (0)', 'First (0)']);
+
+    // Reordered DOM nodes must retain the insertion anchor for the visible gap.
+    await controls.nth(1).click();
+    await submitPromptDialog(page, 'Inserted');
+    await expect(titles).toHaveText([
+      'Last (0)',
+      'Inserted (0)',
+      'Middle (0)',
+      'First (0)',
+    ]);
+    await page.reload();
+    await expect(titles).toHaveText([
+      'Last (0)',
+      'Inserted (0)',
+      'Middle (0)',
+      'First (0)',
+    ]);
+  });
+
   test('inserts sections before, between and after existing sections', async ({
     page,
     workViewPage,
