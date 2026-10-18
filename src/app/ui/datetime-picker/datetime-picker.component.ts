@@ -48,6 +48,7 @@ import { getClockStringFromHours } from '../../util/get-clock-string-from-hours'
 import { IS_ELECTRON_TOKEN } from '../../app.constants';
 import { IS_ANDROID_WEB_VIEW_TOKEN } from '../../util/is-android-web-view';
 import { getWeekNumber } from '../../util/get-week-number';
+import { DateAdapter } from '@angular/material/core';
 import { DEFAULT_FIRST_DAY_OF_WEEK } from '../../core/locale.constants';
 
 const DEFAULT_TIME = '09:00';
@@ -102,6 +103,7 @@ export class DateTimePickerComponent implements AfterViewInit {
   private readonly _isElectron = inject(IS_ELECTRON_TOKEN);
   private readonly _isAndroidWebView = inject(IS_ANDROID_WEB_VIEW_TOKEN);
   readonly useNativeTimeInput = inject(DateTimeFormatService).useNativeTimeInput;
+  private readonly _dateAdapter = inject(DateAdapter);
 
   // Inputs
   selectedDate = input<Date | null>(null);
@@ -337,18 +339,19 @@ export class DateTimePickerComponent implements AfterViewInit {
     this.quickAccessClick.emit(val);
   }
 
-  // Calculate week numbers from MatCalendar's actual month state. Do not parse
-  // aria-label text: those labels are localized and are an accessibility API,
-  // not a stable machine-readable date format.
+  // Calculate week numbers from MatCalendar's actual month state using
+  // the DateAdapter to properly parse locale-specific aria-label dates.
   private _renderWeekNumbers(cal: MatCalendar<Date>): void {
     if (cal.currentView !== 'month') {
       this.weekNumbers = [];
+      this.weekNumbersWithNulls = [];
       this._cdr.markForCheck();
       return;
     }
 
     const localization = this._globalConfigService.localization();
     const weekNumberSystem = localization?.weekNumberSystem;
+    const firstDayOfWeek = this.getFirstDayOfWeek();
 
     // Check if week numbers should be shown
     // null / undefined = "none (system default)" = hide week column entirely
@@ -357,81 +360,61 @@ export class DateTimePickerComponent implements AfterViewInit {
 
     if (!shouldShowWeekNumbers) {
       this.weekNumbers = [];
-      this._cdr.markForCheck();
-      return;
-    }
-
-    // Find the month view element directly to avoid querying from calendarEl
-    const monthViewEl = this._el.nativeElement.querySelector('.mat-month-view');
-    if (!monthViewEl) {
-      this.weekNumbers = [];
       this.weekNumbersWithNulls = [];
       this._cdr.markForCheck();
       return;
     }
 
-    // Count actual table rows in the month view body
-    const allRows = monthViewEl.querySelectorAll('.mat-calendar-body tr');
-    const rowCount = allRows.length;
-    if (rowCount === 0) {
-      this.weekNumbers = [];
-      this.weekNumbersWithNulls = [];
-      this._cdr.markForCheck();
-      return;
-    }
-
-    // The first row (index 0) is the month label row, which we skip.
-    // Actual week rows start at index 1 and end at rowCount - 1.
-    const weekRowCount = rowCount - 1; // Subtract 1 for the month label row
-    if (weekRowCount === 0) {
-      this.weekNumbers = [];
-      this.weekNumbersWithNulls = [];
-      this._cdr.markForCheck();
-      return;
-    }
-
-    const firstDayOfWeek = this.getFirstDayOfWeek();
-    const monthStart = new Date(
-      cal.activeDate.getFullYear(),
-      cal.activeDate.getMonth(),
-      1,
+    const calendarEl = this._el.nativeElement.querySelector(
+      '.mat-calendar',
+    ) as HTMLElement | null;
+    const allRows = calendarEl?.querySelectorAll(
+      '.mat-calendar-body tr:not([aria-hidden])',
     );
-    const leadingDays = (monthStart.getDay() - firstDayOfWeek + 7) % 7;
-    const firstVisibleDate = new Date(monthStart);
-    firstVisibleDate.setDate(monthStart.getDate() - leadingDays);
+    if (!allRows || allRows.length === 0) {
+      this.weekNumbers = [];
+      this.weekNumbersWithNulls = [];
+      this._cdr.markForCheck();
+      return;
+    }
 
-    // Calculate week numbers for each week row in the calendar
-    // Week row index 0 corresponds to firstVisibleDate (the first Sunday/Monday of the view)
+    // Calculate week numbers for each week row in the calendar.
+    // The mat-calendar body has one row per calendar week (Monday-Sunday for ISO, Sunday-Saturday for US).
+    // The aria-hidden label row (if present for _firstRowOffset < 3) is excluded from the query.
+    const weekRows = Array.from(allRows);
+
+    // Calculate week numbers for each actual week row in the calendar
     const weekNumbersWithNulls: (number | null)[] = [];
-    for (let weekRowIndex = 0; weekRowIndex < weekRowCount; weekRowIndex++) {
-      const weekStart = new Date(firstVisibleDate);
-      const dayOffset = weekRowIndex * 7;
-      weekStart.setDate(firstVisibleDate.getDate() + dayOffset);
 
-      // Week ends on: weekStart + 6 days
-      const weekEnd = new Date(weekStart);
-      weekEnd.setDate(weekStart.getDate() + 6);
-
-      // Last day of the current month
-      const lastDayOfMonth = new Date(
-        monthStart.getFullYear(),
-        monthStart.getMonth() + 1,
-        0,
-      );
-
-      // Week contains current month if weekStart <= lastDayOfMonth AND weekEnd >= firstDayOfMonth
-      const weekContainsCurrentMonth =
-        weekStart <= lastDayOfMonth && weekEnd >= monthStart;
-
-      if (!weekContainsCurrentMonth) {
+    for (const row of weekRows) {
+      // Find the first date cell in this row by looking for the first cell with an aria-label
+      // The first cell always has an aria-label with the date (e.g., "October 27, 2026")
+      // We use aria-label to get the date, then calculate the week number from it
+      const firstDateCell = row.querySelector('.mat-calendar-body-cell[aria-label]');
+      if (firstDateCell) {
+        const dateStr = (firstDateCell as HTMLElement).getAttribute('aria-label');
+        if (dateStr) {
+          // Parse the date from the aria-label using the DateAdapter
+          // The format is locale-specific (e.g., "October 4, 2026" or "4. Oktober 2026")
+          // The DateAdapter.parse method handles this based on the configured locale
+          // Pass null as the format to let the adapter infer it from the date format config
+          const parsedDate = this._dateAdapter.parse(dateStr, null);
+          if (parsedDate && !isNaN(parsedDate.getTime())) {
+            weekNumbersWithNulls.push(
+              getWeekNumber(parsedDate, firstDayOfWeek, weekNumberSystem),
+            );
+          } else {
+            // No aria-label or invalid date - this is a week outside the current month
+            weekNumbersWithNulls.push(null);
+          }
+        } else {
+          // No aria-label - this is a week outside the current month
+          weekNumbersWithNulls.push(null);
+        }
+      } else {
+        // No date cell - this is a week outside the current month
         weekNumbersWithNulls.push(null);
-        continue;
       }
-
-      // weekNumberSystem is guaranteed to be 'iso' or 'us' here due to shouldShowWeekNumbers check
-      weekNumbersWithNulls.push(
-        getWeekNumber(weekStart, firstDayOfWeek, weekNumberSystem),
-      );
     }
 
     // Store all week numbers (including nulls for empty cells)

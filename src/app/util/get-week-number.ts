@@ -80,24 +80,29 @@ export const getWeekNumber = (
     return weekNumber;
   } else {
     // ISO Week Number: Week 1 is the week containing the first Thursday
+    // ISO weeks always start on Monday (firstDayOfWeek parameter is ignored per ISO 8601)
+    // Use UTC for consistent calculation to avoid timezone/DST issues
+
     // Copy date so don't modify original
     const isoDate = new Date(
       Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()),
     );
 
-    // Set to nearest middle of week based on first day of week
-    // (if first day of week is default it will be Thursday):
-    // current date + 4 - current day number
-    // Make end of week day number 7
-    const diff = (7 - (firstDayOfWeek - 1)) % 7;
-    isoDate.setUTCDate(
-      isoDate.getUTCDate() + 4 - ((isoDate.getUTCDay() + diff) % 7 || 7),
-    );
+    // For ISO, the week always starts on Monday (day 1), so Thursday is day 4
+    // Offset to find the Thursday of the current week (to determine the ISO week)
+    // getUTCDay(): Sunday=0, Monday=1, ..., Saturday=6
+    // We want to find Thursday (day 4) of the ISO week containing this date
+    // For Sunday (getUTCDay() = 0), the Thursday of the current ISO week is 3 days ago
+    // (last Thursday), not 4 days from now (next Thursday). The formula
+    // 4 - getUTCDay() gives the correct result for Monday-Saturday, but for Sunday
+    // we need to use 7 instead of 0 to get the Thursday of the current week.
+    const daysToThursday = 4 - (isoDate.getUTCDay() === 0 ? 7 : isoDate.getUTCDay());
+    isoDate.setUTCDate(isoDate.getUTCDate() + daysToThursday);
 
     // Get first day of year
     const yearStart = new Date(Date.UTC(isoDate.getUTCFullYear(), 0, 1));
 
-    // Calculate full weeks to nearest middle of week
+    // Calculate full weeks to the Thursday
     // prettier-ignore
     const weekNo = Math.ceil((((+isoDate - +yearStart) / 86400000) + 1) / 7);
 

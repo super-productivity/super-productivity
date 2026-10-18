@@ -74,6 +74,14 @@ export class PlannerCalendarNavComponent {
     return localization?.weekNumberSystem;
   });
 
+  // For week number calculation, the first day depends on the week numbering system:
+  // - ISO (week 1 = first week with Thursday): always Monday (1)
+  // - US (week 1 = first week with January 1): always Sunday (0)
+  private _weekNumberFirstDayOfWeek = computed(() => {
+    const system = this._weekNumberSystem();
+    return system === 'us' ? 0 : 1;
+  });
+
   showWeekNumbers = computed(() => {
     const system = this._weekNumberSystem();
     return system === 'iso' || system === 'us';
@@ -135,7 +143,7 @@ export class PlannerCalendarNavComponent {
     return weeks;
   });
   weekNumbers = computed<number[]>(() => {
-    const firstDayOfWeek = this._firstDayOfWeek();
+    const firstDayOfWeek = this._weekNumberFirstDayOfWeek();
     const weekNumberSystem = this._weekNumberSystem();
     // weekNumberSystem is guaranteed to be 'iso' or 'us' here because:
     // 1. weekNumbers is only used when showWeekNumbers() is true
