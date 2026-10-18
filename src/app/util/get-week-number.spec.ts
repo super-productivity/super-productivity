@@ -13,14 +13,16 @@ describe('getWeekNumber()', () => {
     expect(result).toBe(1);
   });
 
-  it('should return a valid value for 2020-01-08 based on first day of week', () => {
-    let d = new Date(2020, 0, 8); // January 8, 2020 local time
-    let result = getWeekNumber(d);
-    expect(result).toBe(2);
+  it('should return valid ISO week for 2020-01-08 (ISO always uses Monday)', () => {
+    const d = new Date(2020, 0, 8); // January 8, 2020 is a Wednesday
+    const result = getWeekNumber(d);
+    expect(result).toBe(2); // ISO week 2 (contains first Thursday of 2020)
+  });
 
-    d = new Date(2020, 0, 8); // January 8, 2020 local time
-    result = getWeekNumber(d, 6);
-    expect(result).toBe(1);
+  it('should return valid US week for 2020-01-08 with firstDayOfWeek=6 (Saturday)', () => {
+    const d = new Date(2020, 0, 8); // January 8, 2020
+    const result = getWeekNumber(d, 6, 'us'); // Saturday first
+    expect(result).toBe(2); // Week of Jan 4-10, 2020 (Jan 1-4 is week 1)
   });
 
   it('should return a valid value for last of the year', () => {
