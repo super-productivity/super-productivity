@@ -10,7 +10,11 @@ import { SectionService } from '../section/section.service';
 import { WorkContextService } from '../work-context/work-context.service';
 import { WorkContextType } from '../work-context/work-context.model';
 import { moveTaskInTodayList } from '../work-context/store/work-context-meta.actions';
-import { getAnchorFromDragDrop } from '../work-context/store/work-context-meta.helper';
+import {
+  getMultiTaskAnchor,
+  getProjectSections,
+  getTaskSectionMap,
+} from './task-bulk-action.util';
 import { Task } from './task.model';
 
 /** A transient snapshot: drop callbacks must not depend on rows surviving a move. */
@@ -133,11 +137,8 @@ export class TaskMultiDragService {
       return false;
     return (
       modelId === 'UNDONE' ||
-      this._sections().some(
-        (section) =>
-          section.id === modelId &&
-          section.contextType === WorkContextType.PROJECT &&
-          section.contextId === projectId,
+      getProjectSections(this._sections(), projectId).some(
+        (section) => section.id === modelId,
       )
     );
   }
@@ -146,7 +147,11 @@ export class TaskMultiDragService {
     const ids = [...this.ids()];
     if (ids.length < 2) return false;
     const selected = new Set(ids);
-    const afterTaskId = this._getGroupAnchor(leaderId, orderedIds, selected);
+    const afterTaskId = getMultiTaskAnchor(
+      orderedIds,
+      selected,
+      orderedIds.indexOf(leaderId),
+    );
     const remaining = orderedIds.filter((id) => !selected.has(id));
     const anchorIndex = afterTaskId === null ? -1 : remaining.indexOf(afterTaskId);
     if (afterTaskId !== null && anchorIndex < 0) return false;
@@ -164,16 +169,13 @@ export class TaskMultiDragService {
     const ids = [...this.ids()];
     const selected = new Set(ids);
     // CDK moves one placeholder; remove the other selected rows from its anchor.
-    let afterTaskId = this._getGroupAnchor(leaderId, orderedIds, selected);
-    const sections = this._sections().filter(
-      (section) =>
-        section.contextId === projectId &&
-        section.contextType === WorkContextType.PROJECT,
+    let afterTaskId = getMultiTaskAnchor(
+      orderedIds,
+      selected,
+      orderedIds.indexOf(leaderId),
     );
-    const sourceByTask = new Map(
-      sections.flatMap((section) =>
-        section.taskIds.map((id) => [id, section.id] as const),
-      ),
+    const sourceByTask = getTaskSectionMap(
+      getProjectSections(this._sections(), projectId),
     );
     this._selection.setBulkFeedbackSuppressed(true);
     try {
@@ -212,16 +214,5 @@ export class TaskMultiDragService {
 
   moveToProject(projectId: string, ids: readonly string[]): Promise<void> {
     return this._bulk.moveToProject(projectId, ids);
-  }
-
-  private _getGroupAnchor(
-    leaderId: string,
-    orderedIds: string[],
-    selected: ReadonlySet<string>,
-  ): string | null {
-    const afterLeader = getAnchorFromDragDrop(leaderId, orderedIds);
-    let anchorIndex = afterLeader === null ? -1 : orderedIds.indexOf(afterLeader);
-    while (anchorIndex >= 0 && selected.has(orderedIds[anchorIndex])) anchorIndex--;
-    return anchorIndex < 0 ? null : orderedIds[anchorIndex];
   }
 }

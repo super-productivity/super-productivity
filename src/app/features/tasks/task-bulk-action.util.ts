@@ -1,4 +1,6 @@
 import { Task } from './task.model';
+import { Section } from '../section/section.model';
+import { WorkContextType } from '../work-context/work-context.model';
 
 /**
  * Pure helpers for bulk actions on a multi-selection. Kept free of Angular so
@@ -69,4 +71,36 @@ export const getCommonProjectId = (tasks: Task[]): string | null => {
   }
   const first = tasks[0].projectId ?? null;
   return tasks.every((t) => (t.projectId ?? null) === first) ? first : null;
+};
+
+/** Project sections only: tag sections may contain the same tasks. */
+export const getProjectSections = (
+  sections: readonly Section[],
+  projectId: string,
+): Section[] =>
+  sections.filter(
+    (section) =>
+      section.contextType === WorkContextType.PROJECT && section.contextId === projectId,
+  );
+
+/** Snapshot the source section before the first task in a group is moved. */
+export const getTaskSectionMap = (
+  sections: readonly Section[],
+): ReadonlyMap<string, string> =>
+  new Map(
+    sections.flatMap((section) => section.taskIds.map((id) => [id, section.id] as const)),
+  );
+
+/**
+ * Find the preceding task that will stay in place. Menu moves append; drag
+ * moves pass the leader's index to skip selected rows before its placeholder.
+ */
+export const getMultiTaskAnchor = (
+  orderedIds: readonly string[],
+  movingIds: ReadonlySet<string>,
+  beforeIndex = orderedIds.length,
+): string | null => {
+  let anchorIndex = beforeIndex - 1;
+  while (anchorIndex >= 0 && movingIds.has(orderedIds[anchorIndex])) anchorIndex--;
+  return anchorIndex < 0 ? null : orderedIds[anchorIndex];
 };

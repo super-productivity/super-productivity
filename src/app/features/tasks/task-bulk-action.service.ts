@@ -46,6 +46,9 @@ import { getPluralKey } from '../../util/get-plural-key';
 import {
   dedupeByRepeatCfg,
   dedupeSubtasksOfSelectedParents,
+  getMultiTaskAnchor,
+  getProjectSections,
+  getTaskSectionMap,
   orderForMarkDone,
   resolveDoneIntent,
   resolveTagIntent,
@@ -119,11 +122,7 @@ export class TaskBulkActionService {
     ) {
       return [];
     }
-    return this._sections().filter(
-      (section) =>
-        section.contextType === WorkContextType.PROJECT &&
-        section.contextId === context.activeId,
-    );
+    return getProjectSections(this._sections(), context.activeId);
   });
 
   private readonly _taskEntities = this._store.selectSignal(selectTaskEntities);
@@ -358,11 +357,7 @@ export class TaskBulkActionService {
       dedupeSubtasksOfSelectedParents(this._resolveInVisualOrder()),
     );
     const tasks = eligible.filter((task) => project.taskIds.includes(task.id));
-    const sourceByTask = new Map(
-      sections.flatMap((section) =>
-        section.taskIds.map((id) => [id, section.id] as const),
-      ),
-    );
+    const sourceByTask = getTaskSectionMap(sections);
     const moving = tasks.filter(
       (task) => (sourceByTask.get(task.id) ?? null) !== sectionId,
     );
@@ -374,7 +369,7 @@ export class TaskBulkActionService {
     const destinationIds = target
       ? target.taskIds
       : project.taskIds.filter((id) => !sourceByTask.has(id));
-    let afterTaskId = destinationIds.filter((id) => !movingIds.has(id)).at(-1) ?? null;
+    let afterTaskId = getMultiTaskAnchor(destinationIds, movingIds);
     const focusTargetId = this._getFocusTargetAfterRemoval();
     await this._runSuppressed(() => {
       for (const task of moving) {
