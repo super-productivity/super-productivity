@@ -273,15 +273,20 @@ export class ScheduleComponent {
   showWeekNumbers = computed(() => {
     const localization = this._globalConfigService.localization();
     const weekNumberSystem = localization?.weekNumberSystem;
-    return weekNumberSystem === 'iso' || weekNumberSystem === 'us';
+    // Show week numbers if explicitly set to ISO/US, OR if undefined (default)
+    // The default (undefined) shows ISO-style week numbers (Monday-based)
+    return (
+      weekNumberSystem === 'iso' ||
+      weekNumberSystem === 'us' ||
+      weekNumberSystem === undefined
+    );
   });
 
-  // For week number calculation, the first day depends on the week numbering system:
-  // - ISO (week 1 = first week with Thursday): always Monday (1)
-  // - US (week 1 = first week with January 1): always Sunday (0)
+  // For week number calculation, use the user's first day of week config
+  // The week numbering system (ISO/US) determines WHEN week 1 starts, not WHICH DAY starts the week
   private _weekNumberFirstDayOfWeek = computed(() => {
-    const weekNumberSystem = this._globalConfigService.localization()?.weekNumberSystem;
-    return weekNumberSystem === 'us' ? 0 : 1;
+    const cfg = this._globalConfigService.localization()?.firstDayOfWeek;
+    return cfg !== null && cfg !== undefined ? cfg : DEFAULT_FIRST_DAY_OF_WEEK;
   });
 
   headerTitle = computed(() => {
@@ -318,12 +323,17 @@ export class ScheduleComponent {
     const endStr = sameMonth
       ? safeFormatDate(end, 'd', locale)
       : safeFormatDate(end, 'MMM d', locale);
-    if (!this.showWeekNumbers() || !weekNumberSystem || weekNumberSystem === 'none') {
+
+    // Use user's weekNumberSystem or default to ISO
+    const effectiveSystem = weekNumberSystem || 'iso';
+
+    if (!this.showWeekNumbers()) {
       if (this._isVeryCompact()) return startStr;
       return `${startStr} – ${endStr}`;
     }
-    // weekNumberSystem is guaranteed to be 'iso' or 'us' here
-    const weekNr = getWeekNumber(start, firstDayOfWeek, weekNumberSystem as 'iso' | 'us');
+    // For undefined (default), use ISO (Monday-based)
+    // Use user's firstDayOfWeek for all week number calculations
+    const weekNr = getWeekNumber(start, firstDayOfWeek, effectiveSystem as 'iso' | 'us');
     const labelKey = this._isCompact()
       ? T.F.WORKLOG.CMP.WEEK_NR_SHORT
       : T.F.WORKLOG.CMP.WEEK_NR;
