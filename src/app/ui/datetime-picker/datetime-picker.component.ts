@@ -48,7 +48,6 @@ import { getClockStringFromHours } from '../../util/get-clock-string-from-hours'
 import { IS_ELECTRON_TOKEN } from '../../app.constants';
 import { IS_ANDROID_WEB_VIEW_TOKEN } from '../../util/is-android-web-view';
 import { getWeekNumber } from '../../util/get-week-number';
-import { DateAdapter } from '@angular/material/core';
 import { DEFAULT_FIRST_DAY_OF_WEEK } from '../../core/locale.constants';
 
 const DEFAULT_TIME = '09:00';
@@ -267,9 +266,6 @@ export class DateTimePickerComponent implements AfterViewInit {
       }
 
       if (targetDate) {
-        // mark as synced so the defaulted date doesn't pull the calendar back
-        // from the month the user is browsing (#10528)
-        this._lastSyncedDate = targetDate.getTime();
         this.dateSelected.emit(targetDate);
       }
       this.timeChanged.emit(targetTime);
@@ -339,19 +335,18 @@ export class DateTimePickerComponent implements AfterViewInit {
     this.quickAccessClick.emit(val);
   }
 
-  // Calculate week numbers from MatCalendar's actual month state using
-  // the DateAdapter to properly parse locale-specific aria-label dates.
+  // Calculate week numbers from MatCalendar's actual month state. Do not parse
+  // aria-label text: those labels are localized and are an accessibility API,
+  // not a stable machine-readable date format.
   private _renderWeekNumbers(cal: MatCalendar<Date>): void {
     if (cal.currentView !== 'month') {
       this.weekNumbers = [];
-      this.weekNumbersWithNulls = [];
       this._cdr.markForCheck();
       return;
     }
 
     const localization = this._globalConfigService.localization();
     const weekNumberSystem = localization?.weekNumberSystem;
-    const firstDayOfWeek = this.getFirstDayOfWeek();
 
     // Check if week numbers should be shown
     // null / undefined = "none (system default)" = hide week column entirely
@@ -360,74 +355,75 @@ export class DateTimePickerComponent implements AfterViewInit {
 
     if (!shouldShowWeekNumbers) {
       this.weekNumbers = [];
-      this.weekNumbersWithNulls = [];
       this._cdr.markForCheck();
       return;
     }
 
-    const calendarEl = this._el.nativeElement.querySelector(
-      '.mat-calendar',
-    ) as HTMLElement | null;
-    const allRows = calendarEl?.querySelectorAll(
-      '.mat-calendar-body tr:not([aria-hidden])',
-    );
-    if (!allRows || allRows.length === 0) {
+    // Find the month view element directly to avoid querying from calendarEl
+    const monthViewEl = this._el.nativeElement.querySelector('.mat-month-view');
+    if (!monthViewEl) {
       this.weekNumbers = [];
       this.weekNumbersWithNulls = [];
       this._cdr.markForCheck();
       return;
     }
 
-    // Calculate week numbers for each week row in the calendar.
-    // Instead of parsing localized aria-label text (which fails for non-English locales),
-    // derive dates from the calendar's activeDate (month/year) and row position.
-    // The mat-calendar body has one row per calendar week.
-    const weekRows = Array.from(allRows);
+    // Count actual table rows in the month view body
+    const allRows = monthViewEl.querySelectorAll('.mat-calendar-body tr');
+    const rowCount = allRows.length;
+    if (rowCount === 0) {
+      this.weekNumbers = [];
+      this.weekNumbersWithNulls = [];
+      this._cdr.markForCheck();
+      return;
+    }
 
-    // Get the first of the active month from the calendar parameter
-    const activeDate = cal.activeDate;
-    const year = activeDate.getFullYear();
-    const month = activeDate.getMonth();
-    const firstOfMonth = new Date(year, month, 1);
+    // Always use 6 rows for the week number column to ensure consistent padding
+    // regardless of how many rows the calendar actually renders
+    const targetRowCount = 6;
 
-    // Calculate the day of week for the first of the month (0=Sunday, 1=Monday, etc.)
-    const firstDayOffset = firstOfMonth.getDay();
+    const firstDayOfWeek = this.getFirstDayOfWeek();
+    const monthStart = new Date(
+      cal.activeDate.getFullYear(),
+      cal.activeDate.getMonth(),
+      1,
+    );
+    const leadingDays = (monthStart.getDay() - firstDayOfWeek + 7) % 7;
+    const firstVisibleDate = new Date(monthStart);
+    firstVisibleDate.setDate(monthStart.getDate() - leadingDays);
 
-    // The first week row starts on the first day of the week (configured or Monday)
-    // Calculate days to go back to reach the first day of week containing the 1st
-    const daysToWeekStart = (firstDayOffset - firstDayOfWeek + 7) % 7;
-    const firstWeekRowStart = new Date(firstOfMonth);
-    firstWeekRowStart.setDate(firstOfMonth.getDate() - daysToWeekStart);
-
-    // Calculate week numbers for each row
+    // Calculate week numbers for all rows in the calendar
+    // weeks outside the current month will be null (empty cells)
     const weekNumbersWithNulls: (number | null)[] = [];
+    for (let weekRowIndex = 0; weekRowIndex < targetRowCount; weekRowIndex++) {
+      const weekStart = new Date(firstVisibleDate);
+      const dayOffset = weekRowIndex * 7;
+      weekStart.setDate(firstVisibleDate.getDate() + dayOffset);
 
-    for (let i = 0; i < weekRows.length; i++) {
-      // Calculate the first day of this week row
-      const weekStart = new Date(firstWeekRowStart);
-      // Calculate the date by adding i weeks (7 days each)
-      const offsetDays = i * 7;
-      weekStart.setDate(firstWeekRowStart.getDate() + offsetDays);
-
-      // Handle dates from previous/next month (out of range for current month)
-      // Only show week numbers if the week row contains dates in the current month
+      // Week ends on: weekStart + 6 days
       const weekEnd = new Date(weekStart);
-      weekEnd.setDate(weekStart.getDate() + 6); // End of the week(row)
-      const weekStartMonth = weekStart.getMonth();
-      const weekEndMonth = weekEnd.getMonth();
-      const inCurrentMonth =
-        weekStartMonth === month ||
-        weekEndMonth === month ||
-        (weekStartMonth < month && weekEndMonth > month);
+      weekEnd.setDate(weekStart.getDate() + 6);
 
-      if (inCurrentMonth) {
-        weekNumbersWithNulls.push(
-          getWeekNumber(weekStart, firstDayOfWeek, weekNumberSystem),
-        );
-      } else {
-        // Week is entirely outside current month - show empty week number
+      // Last day of the current month
+      const lastDayOfMonth = new Date(
+        monthStart.getFullYear(),
+        monthStart.getMonth() + 1,
+        0,
+      );
+
+      // Week contains current month if weekStart <= lastDayOfMonth AND weekEnd >= firstDayOfMonth
+      const weekContainsCurrentMonth =
+        weekStart <= lastDayOfMonth && weekEnd >= monthStart;
+
+      if (!weekContainsCurrentMonth) {
         weekNumbersWithNulls.push(null);
+        continue;
       }
+
+      // weekNumberSystem is guaranteed to be 'iso' or 'us' here due to shouldShowWeekNumbers check
+      weekNumbersWithNulls.push(
+        getWeekNumber(weekStart, firstDayOfWeek, weekNumberSystem),
+      );
     }
 
     // Store all week numbers (including nulls for empty cells)
