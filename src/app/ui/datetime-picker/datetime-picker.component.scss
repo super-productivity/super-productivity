@@ -223,14 +223,16 @@
     flex-direction: column;
     width: 32px;
     padding-right: 8px;
-    margin-top: 36px; // Adjust for header
+    margin-top: 55px; // Adjust for header (was 36px, was 22px too high, now -3px for header alignment)
+    flex-shrink: 0;
 
     .week-number-header {
       font-size: 11px;
       color: var(--text-color-muted);
       text-align: center;
       line-height: 1;
-      padding: 13px 0; // Match month label row height
+      padding: 4px 0; // Header height ~8px
+      margin-bottom: 12px; // Spacing between header and cells
       flex-shrink: 0;
     }
 
@@ -239,10 +241,10 @@
       color: var(--text-color-muted);
       text-align: center;
       line-height: 1;
+      height: 54.85px; // Match calendar row height
       display: flex;
       align-items: center;
       justify-content: center;
-      flex: 1; // Match calendar row heights
 
       &.blank-week {
         visibility: hidden; // Hide blank rows but preserve spacing
