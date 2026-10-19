@@ -379,40 +379,53 @@ export class DateTimePickerComponent implements AfterViewInit {
     }
 
     // Calculate week numbers for each week row in the calendar.
-    // The mat-calendar body has one row per calendar week (Monday-Sunday for ISO, Sunday-Saturday for US).
-    // The aria-hidden label row (if present for _firstRowOffset < 3) is excluded from the query.
+    // Instead of parsing localized aria-label text (which fails for non-English locales),
+    // derive dates from the calendar's activeDate (month/year) and row position.
+    // The mat-calendar body has one row per calendar week.
     const weekRows = Array.from(allRows);
 
-    // Calculate week numbers for each actual week row in the calendar
+    // Get the first of the active month from the calendar parameter
+    const activeDate = cal.activeDate;
+    const year = activeDate.getFullYear();
+    const month = activeDate.getMonth();
+    const firstOfMonth = new Date(year, month, 1);
+
+    // Calculate the day of week for the first of the month (0=Sunday, 1=Monday, etc.)
+    const firstDayOffset = firstOfMonth.getDay();
+
+    // The first week row starts on the first day of the week (configured or Monday)
+    // Calculate days to go back to reach the first day of week containing the 1st
+    const daysToWeekStart = (firstDayOffset - firstDayOfWeek + 7) % 7;
+    const firstWeekRowStart = new Date(firstOfMonth);
+    firstWeekRowStart.setDate(firstOfMonth.getDate() - daysToWeekStart);
+
+    // Calculate week numbers for each row
     const weekNumbersWithNulls: (number | null)[] = [];
 
-    for (const row of weekRows) {
-      // Find the first date cell in this row by looking for the first cell with an aria-label
-      // The first cell always has an aria-label with the date (e.g., "October 27, 2026")
-      // We use aria-label to get the date, then calculate the week number from it
-      const firstDateCell = row.querySelector('.mat-calendar-body-cell[aria-label]');
-      if (firstDateCell) {
-        const dateStr = (firstDateCell as HTMLElement).getAttribute('aria-label');
-        if (dateStr) {
-          // Parse the date from the aria-label using the DateAdapter
-          // The format is locale-specific (e.g., "October 4, 2026" or "4. Oktober 2026")
-          // The DateAdapter.parse method handles this based on the configured locale
-          // Pass null as the format to let the adapter infer it from the date format config
-          const parsedDate = this._dateAdapter.parse(dateStr, null);
-          if (parsedDate && !isNaN(parsedDate.getTime())) {
-            weekNumbersWithNulls.push(
-              getWeekNumber(parsedDate, firstDayOfWeek, weekNumberSystem),
-            );
-          } else {
-            // No aria-label or invalid date - this is a week outside the current month
-            weekNumbersWithNulls.push(null);
-          }
-        } else {
-          // No aria-label - this is a week outside the current month
-          weekNumbersWithNulls.push(null);
-        }
+    for (let i = 0; i < weekRows.length; i++) {
+      // Calculate the first day of this week row
+      const weekStart = new Date(firstWeekRowStart);
+      // Calculate the date by adding i weeks (7 days each)
+      const offsetDays = i * 7;
+      weekStart.setDate(firstWeekRowStart.getDate() + offsetDays);
+
+      // Handle dates from previous/next month (out of range for current month)
+      // Only show week numbers if the week row contains dates in the current month
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekStart.getDate() + 6); // End of the week(row)
+      const weekStartMonth = weekStart.getMonth();
+      const weekEndMonth = weekEnd.getMonth();
+      const inCurrentMonth =
+        weekStartMonth === month ||
+        weekEndMonth === month ||
+        (weekStartMonth < month && weekEndMonth > month);
+
+      if (inCurrentMonth) {
+        weekNumbersWithNulls.push(
+          getWeekNumber(weekStart, firstDayOfWeek, weekNumberSystem),
+        );
       } else {
-        // No date cell - this is a week outside the current month
+        // Week is entirely outside current month - show empty week number
         weekNumbersWithNulls.push(null);
       }
     }
