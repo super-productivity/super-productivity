@@ -84,9 +84,6 @@ const VIEWPORT_MARGIN = 8;
       }
     </ul>
   `,
-  // MentionDirective sets this component's fields imperatively, so it keeps the
-  // pre-v22 default (eager) change detection.
-  // eslint-disable-next-line @angular-eslint/prefer-on-push-component-change-detection
   changeDetection: ChangeDetectionStrategy.Eager,
   standalone: true,
 })
