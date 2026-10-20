@@ -191,7 +191,9 @@ describe('AssistantCaptureService', () => {
     expect(action.taskRepeatCfg).toEqual(
       jasmine.objectContaining({
         repeatCycle: 'WEEKLY',
-        startDate: '2026-10-17',
+        // A Monday-only mask has no occurrence on the Saturday today is mocked
+        // to, so the start date is anchored to the first enabled day (#9488).
+        startDate: '2026-10-19',
         monday: true,
         tuesday: false,
         projectId: INBOX_PROJECT.id,
