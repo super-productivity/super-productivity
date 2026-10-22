@@ -1,3 +1,4 @@
+import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { Store } from '@ngrx/store';
 import { of } from 'rxjs';
@@ -71,7 +72,8 @@ describe('RemoteOpsProcessingService', () => {
   };
 
   beforeEach(() => {
-    storeSpy = jasmine.createSpyObj('Store', ['select']);
+    storeSpy = jasmine.createSpyObj('Store', ['select', 'selectSignal']);
+    storeSpy.selectSignal.and.returnValue(signal(null));
     storeSpy.select.and.returnValue(
       of({
         isEnabled: true,

@@ -21,7 +21,10 @@ describe('TaskTimeSyncService', () => {
 
   beforeEach(() => {
     TestBed.configureTestingModule({
-      providers: [TaskTimeSyncService, provideMockStore()],
+      providers: [
+        TaskTimeSyncService,
+        provideMockStore({ initialState: { tasks: initialTaskState } }),
+      ],
     });
     service = TestBed.inject(TaskTimeSyncService);
     store = TestBed.inject(MockStore);
@@ -40,6 +43,45 @@ describe('TaskTimeSyncService', () => {
     expect(action['date']).toBe('2024-01-15');
     expect(action['duration']).toBe(5000);
     expect(action['timeSpentForDay']).toBeUndefined();
+  });
+
+  it('flushes a parent batch to the first subtask that inherited its time', () => {
+    const day = '2024-01-15';
+    const parent = createTask('parent', {
+      subTaskIds: ['child'],
+      timeSpent: 5000,
+      timeSpentOnDay: { [day]: 5000 },
+    });
+    const child = createTask('child', {
+      parentId: parent.id,
+      timeSpent: 5000,
+      timeSpentOnDay: { [day]: 5000 },
+    });
+    store.setState({
+      tasks: {
+        ...initialTaskState,
+        ids: [parent.id, child.id],
+        entities: { parent, child },
+        currentTaskId: child.id,
+      },
+    });
+    service.accumulate(parent.id, 5000, day);
+    service.flush();
+    const action = dispatchSpy.calls.mostRecent().args[0];
+    expect(action.taskId).toBe(child.id);
+    const receiver = taskReducer(
+      {
+        ...initialTaskState,
+        ids: [parent.id, child.id],
+        entities: {
+          parent: { ...parent, timeSpent: 0, timeSpentOnDay: {} },
+          child: { ...child, timeSpent: 0, timeSpentOnDay: {} },
+        },
+      },
+      { ...action, meta: { ...action.meta, isRemote: true } },
+    );
+    expect(receiver.entities[child.id]!.timeSpent).toBe(5000);
+    expect(receiver.entities[parent.id]!.timeSpent).toBe(5000);
   });
 
   it('projects pending task time out of an op-log snapshot', () => {

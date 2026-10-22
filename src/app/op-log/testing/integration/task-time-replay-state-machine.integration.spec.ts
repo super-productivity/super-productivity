@@ -11,6 +11,7 @@ import {
   taskReducer,
 } from '../../../features/tasks/store/task.reducer';
 import { updateTimeSpentForTask } from '../../../features/tasks/store/task.reducer.util';
+import { selectCurrentTask } from '../../../features/tasks/store/task.selectors';
 import { AppStateSnapshot } from '../../core/types/backup.types';
 
 type ReplayEvent =
@@ -114,7 +115,10 @@ describe('Task-time replay state machine integration', () => {
 
   beforeEach(() => {
     TestBed.configureTestingModule({
-      providers: [TaskTimeSyncService, provideMockStore()],
+      providers: [
+        TaskTimeSyncService,
+        provideMockStore({ selectors: [{ selector: selectCurrentTask, value: null }] }),
+      ],
     });
     taskTimeSync = TestBed.inject(TaskTimeSyncService);
     store = TestBed.inject(MockStore);

@@ -8,6 +8,7 @@ import { AppStateSnapshot } from '../../op-log/core/types/backup.types';
 import { RootState } from '../../root-store/root-state';
 import { syncTimeSpent } from '../time-tracking/store/time-tracking.actions';
 import { TaskState } from './task.model';
+import { selectCurrentTask } from './store/task.selectors';
 import { projectPendingTimeFromTaskState } from './util/project-pending-time-from-task-state';
 
 /**
@@ -17,10 +18,16 @@ import { projectPendingTimeFromTaskState } from './util/project-pending-time-fro
 export class TaskTimeSyncService {
   private static readonly SYNC_INTERVAL_MS = 5 * 60 * 1000;
   private readonly _store = inject<Store<RootState>>(Store);
+  private readonly _currentTask = this._store.selectSignal(selectCurrentTask);
   private readonly _accumulator = new BatchedTimeSyncAccumulator(
     TaskTimeSyncService.SYNC_INTERVAL_MS,
     (taskId, date, duration) => {
-      this._store.dispatch(syncTimeSpent({ taskId, date, duration }));
+      // Adding the first subtask transfers the parent's tracked time and current
+      // task pointer to that child. The still-pending batch belongs to the child
+      // too; a parent delta would leave the receiving child's inherited time short.
+      const currentTask = this._currentTask();
+      const targetId = currentTask?.parentId === taskId ? currentTask.id : taskId;
+      this._store.dispatch(syncTimeSpent({ taskId: targetId, date, duration }));
     },
   );
 

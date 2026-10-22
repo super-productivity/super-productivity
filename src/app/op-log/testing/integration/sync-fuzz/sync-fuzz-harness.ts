@@ -323,6 +323,7 @@ const SHARED_FIELDS: Readonly<Record<string, Readonly<Record<string, string>>>> 
   TaskTimeSyncService: {
     _accumulator:
       'filled only by TaskService ticks; the track intent dispatches the flush itself',
+    _currentTask: STORE_SIGNAL,
   },
   LegacyPfDbService: { _tabId: 'the identity of the one browser tab' },
   BackupService: {
