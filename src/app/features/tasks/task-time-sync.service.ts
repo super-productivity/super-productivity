@@ -1,5 +1,7 @@
 import { inject, Injectable } from '@angular/core';
 import { Store } from '@ngrx/store';
+import { toSignal } from '@angular/core/rxjs-interop';
+import { pairwise } from 'rxjs/operators';
 import {
   BatchedTimeSyncAccumulator,
   BatchedTimeSyncEntry,
@@ -18,15 +20,24 @@ import { projectPendingTimeFromTaskState } from './util/project-pending-time-fro
 export class TaskTimeSyncService {
   private static readonly SYNC_INTERVAL_MS = 5 * 60 * 1000;
   private readonly _store = inject<Store<RootState>>(Store);
-  private readonly _currentTask = this._store.selectSignal(selectCurrentTask);
+  // Subscribe before TaskService's currentTaskId listener flushes the batch, so
+  // the callback sees both sides of the local or bulk-replayed pointer change.
+  private readonly _currentTaskChange = toSignal(
+    this._store.select(selectCurrentTask).pipe(pairwise()),
+  );
   private readonly _accumulator = new BatchedTimeSyncAccumulator(
     TaskTimeSyncService.SYNC_INTERVAL_MS,
     (taskId, date, duration) => {
-      // Adding the first subtask transfers the parent's tracked time and current
-      // task pointer to that child. The still-pending batch belongs to the child
-      // too; a parent delta would leave the receiving child's inherited time short.
-      const currentTask = this._currentTask();
-      const targetId = currentTask?.parentId === taskId ? currentTask.id : taskId;
+      const [previousTask, currentTask] = this._currentTaskChange() ?? [];
+      // addSubTask reuses the parent's per-day map only when time is inherited.
+      // Explicit pasted time also moves the pointer and recalculates the parent,
+      // so neither the pointer nor equal post-reducer totals prove inheritance.
+      const inheritedPendingTime =
+        previousTask?.id === taskId &&
+        previousTask.subTaskIds.length === 0 &&
+        currentTask?.parentId === taskId &&
+        currentTask.timeSpentOnDay === previousTask.timeSpentOnDay;
+      const targetId = inheritedPendingTime ? currentTask.id : taskId;
       this._store.dispatch(syncTimeSpent({ taskId: targetId, date, duration }));
     },
   );

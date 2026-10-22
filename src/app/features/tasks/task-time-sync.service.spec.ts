@@ -2,6 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { MockStore, provideMockStore } from '@ngrx/store/testing';
 import { AppStateSnapshot } from '../../op-log/core/types/backup.types';
 import { initialTaskState, taskReducer } from './store/task.reducer';
+import { addSubTask } from './store/task.actions';
 import { DEFAULT_TASK, Task, TaskState } from './task.model';
 import { TaskTimeSyncService } from './task-time-sync.service';
 
@@ -48,38 +49,35 @@ describe('TaskTimeSyncService', () => {
   it('flushes a parent batch to the first subtask that inherited its time', () => {
     const day = '2024-01-15';
     const parent = createTask('parent', {
-      subTaskIds: ['child'],
       timeSpent: 5000,
       timeSpentOnDay: { [day]: 5000 },
     });
-    const child = createTask('child', {
-      parentId: parent.id,
-      timeSpent: 5000,
-      timeSpentOnDay: { [day]: 5000 },
-    });
-    store.setState({
-      tasks: {
-        ...initialTaskState,
-        ids: [parent.id, child.id],
-        entities: { parent, child },
-        currentTaskId: child.id,
-      },
-    });
+    const child = createTask('child', { parentId: parent.id });
+    const before: TaskState = {
+      ...initialTaskState,
+      ids: [parent.id],
+      entities: { parent },
+      currentTaskId: parent.id,
+    };
+    store.setState({ tasks: before });
     service.accumulate(parent.id, 5000, day);
+    const addChild = addSubTask({ task: child, parentId: parent.id });
+    store.setState({ tasks: taskReducer(before, addChild) });
     service.flush();
     const action = dispatchSpy.calls.mostRecent().args[0];
     expect(action.taskId).toBe(child.id);
-    const receiver = taskReducer(
+    const receiverBefore = taskReducer(
       {
-        ...initialTaskState,
-        ids: [parent.id, child.id],
-        entities: {
-          parent: { ...parent, timeSpent: 0, timeSpentOnDay: {} },
-          child: { ...child, timeSpent: 0, timeSpentOnDay: {} },
-        },
+        ...before,
+        currentTaskId: null,
+        entities: { parent: { ...parent, timeSpent: 0, timeSpentOnDay: {} } },
       },
-      { ...action, meta: { ...action.meta, isRemote: true } },
+      addChild,
     );
+    const receiver = taskReducer(receiverBefore, {
+      ...action,
+      meta: { ...action.meta, isRemote: true },
+    });
     expect(receiver.entities[child.id]!.timeSpent).toBe(5000);
     expect(receiver.entities[parent.id]!.timeSpent).toBe(5000);
   });
