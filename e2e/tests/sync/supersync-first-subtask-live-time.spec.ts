@@ -59,10 +59,20 @@ test.describe('@supersync First subtask added while the parent is tracked', () =
       const parentName = `Parent-${testRunId}`;
       const childName = `Child-${testRunId}`;
       const clients: SimulatedE2EClient[] = [];
+      const fixedNow = Date.now();
       try {
         const config = getSuperSyncConfig(await createTestUser(testRunId));
         for (const name of ['A', 'B']) {
-          const client = await createSimulatedClient(browser, baseURL!, name, testRunId);
+          const client = await createSimulatedClient(browser, baseURL!, name, testRunId, {
+            // Install before boot so existing RxJS timers never change clocks.
+            ...(adder === 'B'
+              ? {
+                  seedBeforeBoot: async (page: Page) => {
+                    await page.clock.setFixedTime(fixedNow);
+                  },
+                }
+              : {}),
+          });
           clients.push(client);
           await client.sync.setupSuperSync(config);
           // Only the explicit syncs below may run, so A's batch stays pending.
@@ -81,14 +91,15 @@ test.describe('@supersync First subtask added while the parent is tracked', () =
         expect(parentId).toBeTruthy();
 
         // Well below the five-minute batch: the tracked time exists only on A.
-        const fixedNow = Date.now();
         if (explicitTime) {
           await a.page.clock.setFixedTime(fixedNow);
           // Let the real interval consume the baseline before tracking starts.
           await a.page.waitForTimeout(1100);
         }
         await startTimeTracking(a, parentName);
-        if (explicitTime) await a.page.clock.setFixedTime(fixedNow + 5000);
+        if (explicitTime || adder === 'B') {
+          await a.page.clock.setFixedTime(fixedNow + 5000);
+        }
         await waitForTaskTimeSpent(a, parentName);
 
         const adderClient = adder === 'A' ? a : b;
@@ -118,6 +129,22 @@ test.describe('@supersync First subtask added while the parent is tracked', () =
           .getAttribute('data-task-id');
         expect(childId).toBeTruthy();
 
+        if (adder === 'B') {
+          // Creation and an additive child delta must reach A in the SAME bulk.
+          // The child inherits A's pending 5s, then the delta replaces its map.
+          await b.page.waitForTimeout(1100);
+          const bChild = getSubtaskElement(b, childName).first();
+          await bChild.focus();
+          await bChild.press('y');
+          await expect(bChild).toHaveClass(/isCurrent/);
+          await b.page.clock.setFixedTime(fixedNow + 3000);
+          await expect
+            .poll(async () => (await readTimeSpent(b.page, childId!))!.timeSpent)
+            .toBe(3000);
+          await bChild.press('y');
+          await expect(bChild).not.toHaveClass(/isCurrent/);
+          expect((await readTimeSpent(a.page, parentId!))!.timeSpent).toBe(5000);
+        }
         if (!explicitTime) {
           await b.sync.syncAndWait();
           await a.sync.syncAndWait();
@@ -127,12 +154,16 @@ test.describe('@supersync First subtask added while the parent is tracked', () =
         await trackedChild.focus();
         await trackedChild.press('y');
         await expect(trackedChild).not.toHaveClass(/isCurrent/);
-        if (explicitTime) await a.page.clock.setSystemTime(Date.now());
+        if (explicitTime || adder === 'B') {
+          await a.page.clock.setSystemTime(Date.now());
+        }
+        if (adder === 'B') await b.page.clock.setSystemTime(Date.now());
         for (let round = 0; round < 2; round++) {
           for (const client of clients) await client.sync.syncAndWait();
         }
 
         const trackedTime = await readTimeSpent(a.page, childId!);
+        if (adder === 'B') expect(trackedTime!.timeSpent).toBe(8000);
         if (explicitTime) {
           expect(Object.values(trackedTime!.timeSpentOnDay)).toEqual([600000]);
         } else {
