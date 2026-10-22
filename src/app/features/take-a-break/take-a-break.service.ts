@@ -107,9 +107,8 @@ export class TakeABreakService {
     // session's remaining time (`getTimerRemainingMs`) as the cap to
     // `triggerWakeUpTick`, which is exactly 0 whenever a focus session sits at
     // or over its duration (android-focus-mode.effects.ts,
-    // android-foreground-tracking.effects.ts), and
-    // `consumeCurrentTick()` is unclamped, so a backwards clock step goes
-    // negative. Resetting is `_triggerReset$`'s job alone.
+    // android-foreground-tracking.effects.ts). Resetting is `_triggerReset$`'s
+    // job alone.
     filter((duration) => duration > 0),
   );
 
