@@ -496,6 +496,56 @@ describe('LocalRestApiTaskRoutesService', () => {
         );
       });
 
+      it('should map plannedAt to dueWithTime when creating a task', async () => {
+        const plannedAt = new Date('2026-07-12T10:00:00Z').getTime();
+        Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+          get: () => (_id: string) => of(createMockTask('new-task-id')),
+        });
+
+        await sendRequestAndWait(
+          createRequest('POST', '/tasks', {
+            body: { title: 'New Task', plannedAt },
+          }),
+        );
+
+        expect(taskServiceMock.add).toHaveBeenCalledWith('New Task', false, {
+          title: 'New Task',
+          dueWithTime: plannedAt,
+        });
+      });
+
+      it('should let dueWithTime override plannedAt when creating a task', async () => {
+        Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+          get: () => (_id: string) => of(createMockTask('new-task-id')),
+        });
+
+        await sendRequestAndWait(
+          createRequest('POST', '/tasks', {
+            body: { title: 'New Task', plannedAt: 1, dueWithTime: 2 },
+          }),
+        );
+
+        expect(taskServiceMock.add).toHaveBeenCalledWith('New Task', false, {
+          title: 'New Task',
+          dueWithTime: 2,
+        });
+      });
+
+      it('should report invalid plannedAt input on create', async () => {
+        const response = await sendRequestAndWait(
+          createRequest('POST', '/tasks', {
+            body: { title: 'New Task', plannedAt: 'not-a-number' },
+          }),
+        );
+
+        expect(response.body.ok).toBe(false);
+        expect(response.status).toBe(400);
+        expect((response.body as any).error.details).toContain(
+          jasmine.objectContaining({ path: '$input.plannedAt' }),
+        );
+        expect(taskServiceMock.add).not.toHaveBeenCalled();
+      });
+
       it('should set a deadline after creating the task and then read the response', async () => {
         const taskLookup = jasmine.createSpy('taskLookup').and.callFake(() => {
           expect(dispatchSpy).toHaveBeenCalled();
@@ -1661,6 +1711,74 @@ describe('LocalRestApiTaskRoutesService', () => {
         expect(taskServiceMock.update).toHaveBeenCalledWith('task-1', {
           title: 'Updated',
         });
+      });
+
+      it('should map plannedAt to dueWithTime when updating a task', async () => {
+        const plannedAt = new Date('2026-07-13T09:30:00Z').getTime();
+        const mockTask = createMockTask('task-1');
+        Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+          get: () => (_id: string) => of(mockTask),
+        });
+
+        await sendRequestAndWait(
+          createRequest('PATCH', '/tasks/task-1', { body: { plannedAt } }),
+        );
+
+        expect(taskServiceMock.update).toHaveBeenCalledWith('task-1', {
+          dueWithTime: plannedAt,
+        });
+      });
+
+      it('should let dueWithTime override plannedAt when updating a task', async () => {
+        const mockTask = createMockTask('task-1');
+        Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+          get: () => (_id: string) => of(mockTask),
+        });
+
+        await sendRequestAndWait(
+          createRequest('PATCH', '/tasks/task-1', {
+            body: { plannedAt: 1, dueWithTime: 2 },
+          }),
+        );
+
+        expect(taskServiceMock.update).toHaveBeenCalledWith('task-1', {
+          dueWithTime: 2,
+        });
+      });
+
+      it('should map null plannedAt to clearing dueWithTime when updating a task', async () => {
+        const mockTask = createMockTask('task-1', { dueWithTime: 1 });
+        Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+          get: () => (_id: string) => of(mockTask),
+        });
+
+        await sendRequestAndWait(
+          createRequest('PATCH', '/tasks/task-1', { body: { plannedAt: null } }),
+        );
+
+        expect(taskServiceMock.update).toHaveBeenCalledWith('task-1', {
+          dueWithTime: null,
+        });
+      });
+
+      it('should report invalid plannedAt input on PATCH', async () => {
+        const mockTask = createMockTask('task-1');
+        Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+          get: () => (_id: string) => of(mockTask),
+        });
+
+        const response = await sendRequestAndWait(
+          createRequest('PATCH', '/tasks/task-1', {
+            body: { plannedAt: 'not-a-number' },
+          }),
+        );
+
+        expect(response.body.ok).toBe(false);
+        expect(response.status).toBe(400);
+        expect((response.body as any).error.details).toContain(
+          jasmine.objectContaining({ path: '$input.plannedAt' }),
+        );
+        expect(taskServiceMock.update).not.toHaveBeenCalled();
       });
 
       it('should reject parentId in PATCH body with 400', async () => {
