@@ -12,6 +12,7 @@ import {
 } from '../issue.model';
 import { IssueProviderService } from '../issue-provider.service';
 import { IssueTask } from '../../tasks/task.model';
+import { IssueLog } from '../../../core/log';
 
 /**
  * Abstract base class for issue provider services.
@@ -142,10 +143,15 @@ export abstract class BaseIssueProviderService<
   ): Promise<{ task: Task; taskChanges: Partial<Task>; issue: IssueData }[]> {
     return Promise.all(
       tasks.map((task) =>
-        this.getFreshDataForIssueTask(task).then((refreshDataForTask) => ({
-          task,
-          refreshDataForTask,
-        })),
+        this.getFreshDataForIssueTask(task)
+          .then((refreshDataForTask) => ({ task, refreshDataForTask }))
+          .catch(() => {
+            // HTTP providers already show the request error. Isolate it to
+            // this task: one removed or inaccessible issue must not discard
+            // successful refreshes for every other task in the poll.
+            IssueLog.warn('Issue refresh failed', { taskId: task.id });
+            return { task, refreshDataForTask: null };
+          }),
       ),
     ).then((items) =>
       items.flatMap(({ refreshDataForTask, task }) =>
