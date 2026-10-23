@@ -11,15 +11,11 @@ import { DateService } from '../../../core/date/date.service';
 import { GlobalConfigService } from '../../config/global-config.service';
 
 /**
- * Pinning + repro tests for DialogDeadlineComponent.submit().
- *
- * The third test reproduces issue #7490 — submit() throws "Invalid clock string"
- * whenever `selectedTime` is non-empty but fails `isValidSplitTime` (e.g. an
- * `HH:MM:SS` value pasted into the time input, or a partial value committed
- * before validation). The dialog has no defensive guard around
- * getDateTimeFromClockString, so the error escapes to the global handler.
+ * Cover reminder initialization, logical-day shortcuts and submission validation.
+ * The calendar template is omitted so these tests exercise the dialog's state
+ * and dispatched values without depending on Material rendering.
  */
-describe('DialogDeadlineComponent.submit() input validation', () => {
+describe('DialogDeadlineComponent', () => {
   let store: MockStore;
   let dispatchSpy: jasmine.Spy;
   let matDialogRefSpy: jasmine.SpyObj<MatDialogRef<DialogDeadlineComponent>>;
@@ -48,24 +44,27 @@ describe('DialogDeadlineComponent.submit() input validation', () => {
     // overrides on the first inject/createComponent call.
     store = TestBed.inject(MockStore);
     dispatchSpy = spyOn(store, 'dispatch').and.callThrough();
-    return TestBed.createComponent(DialogDeadlineComponent).componentInstance;
+    const fixture = TestBed.createComponent(DialogDeadlineComponent);
+    fixture.detectChanges();
+    return fixture.componentInstance;
   };
 
   const createSelectOnlyComponent = (): DialogDeadlineComponent => {
     TestBed.overrideProvider(MAT_DIALOG_DATA, {
-      useValue: { isSelectDeadlineOnly: true },
+      useValue: {
+        isSelectDeadlineOnly: true,
+        targetDeadlineRemindOption: TaskReminderOptionId.DoNotRemind,
+      },
     });
     store = TestBed.inject(MockStore);
     dispatchSpy = spyOn(store, 'dispatch').and.callThrough();
-    return TestBed.createComponent(DialogDeadlineComponent).componentInstance;
+    const fixture = TestBed.createComponent(DialogDeadlineComponent);
+    fixture.detectChanges();
+    return fixture.componentInstance;
   };
 
   beforeEach(async () => {
     matDialogRefSpy = jasmine.createSpyObj('MatDialogRef', ['close']);
-    // ngAfterViewInit reads viewChild.required(MatCalendar). With the template
-    // stubbed there is no calendar — skip the hook and test submit() in isolation.
-    spyOn(DialogDeadlineComponent.prototype, 'ngAfterViewInit').and.stub();
-
     await TestBed.configureTestingModule({
       imports: [DialogDeadlineComponent, NoopAnimationsModule, TranslateModule.forRoot()],
       providers: [
@@ -93,10 +92,72 @@ describe('DialogDeadlineComponent.submit() input validation', () => {
       ],
     })
       // Stub the template so MatCalendar (and its DateAdapter wiring beyond
-      // what we provide) isn't instantiated. These tests only exercise
-      // submit() and never render the calendar.
+      // what we provide) isn't instantiated. Initialization and submission
+      // still run, without rendering the calendar.
       .overrideComponent(DialogDeadlineComponent, { set: { template: '' } })
       .compileComponents();
+  });
+
+  [
+    { label: 'absent', hasDeadline: true, hasReminder: false },
+    { label: 'enabled', hasDeadline: true, hasReminder: true },
+    { label: 'new deadline default', hasDeadline: false, hasReminder: false },
+  ].forEach(({ label, hasDeadline, hasReminder }) => {
+    it(`preserves the ${label} reminder choice when saving a new deadline time`, () => {
+      const deadline = new Date(2030, 5, 16, 15).getTime();
+      const component = createComponent({
+        ...buildTask(),
+        deadlineWithTime: hasDeadline ? deadline : undefined,
+        deadlineRemindAt: hasReminder ? deadline : undefined,
+      });
+      const expectedOption =
+        hasDeadline && !hasReminder
+          ? TaskReminderOptionId.DoNotRemind
+          : TaskReminderOptionId.AtStart;
+      expect(component.selectedReminderCfgId).toBe(expectedOption);
+
+      component.selectedDate = new Date(deadline);
+      component.selectedTime = '16:00';
+      component.submit();
+
+      const [action] = setDeadlineCalls();
+      expect(setDeadlineCalls().length).toBe(1);
+      expect(action.deadlineWithTime).toBe(new Date(2030, 5, 16, 16).getTime());
+      expect(action.deadlineRemindAt).toBe(
+        expectedOption === TaskReminderOptionId.DoNotRemind
+          ? undefined
+          : action.deadlineWithTime,
+      );
+    });
+  });
+
+  [
+    { now: new Date(2030, 5, 17, 2), quick: 'today', day: '2030-06-16' },
+    { now: new Date(2030, 5, 17, 2), quick: 'tomorrow', day: '2030-06-17' },
+    // Berlin's spring-forward and fall-back dates. Calendar-day advancement
+    // must still produce the right date when the elapsed day is not 24 hours.
+    { now: new Date(2030, 2, 31, 2), quick: 'tomorrow', day: '2030-03-31' },
+    { now: new Date(2030, 9, 27, 2), quick: 'tomorrow', day: '2030-10-27' },
+  ].forEach(({ now, quick, day }) => {
+    it(`saves logical ${quick} as ${day} before the 04:00 day start`, () => {
+      jasmine.clock().install();
+      jasmine.clock().mockDate(now);
+      try {
+        const dateService = new DateService();
+        dateService.setStartOfNextDayDiff('04:00');
+        TestBed.overrideProvider(DateService, { useValue: dateService });
+        const component = createComponent();
+
+        component.onQuickAccessClick(quick as 'today' | 'tomorrow');
+
+        const [action] = setDeadlineCalls();
+        expect(setDeadlineCalls().length).toBe(1);
+        expect(action.deadlineDay).toBe(day);
+        expect(action.deadlineWithTime).toBeUndefined();
+      } finally {
+        jasmine.clock().uninstall();
+      }
+    });
   });
 
   it('dispatches setDeadline with deadlineWithTime for a valid HH:MM time', () => {
