@@ -57,10 +57,19 @@ test('editing a title with date-only deadline syntax clears its prior time and r
   });
   const row = page.locator(`task[id="t-${task.id}"]`);
   await row.locator('task-title').click();
-  await expect(row.locator('textarea')).toBeFocused();
-  await page.waitForTimeout(100); // Let the component's deferred caret placement finish.
-  await row.locator('textarea').fill('Synthetic date deadline !tomorrow');
-  await row.locator('textarea').press('Tab');
+  const titleInput = row.locator('textarea');
+  await expect(titleInput).toBeFocused();
+  await expect
+    .poll(() =>
+      titleInput.evaluate(
+        (textarea: HTMLTextAreaElement) =>
+          textarea.selectionStart === textarea.value.length &&
+          textarea.selectionEnd === textarea.value.length,
+      ),
+    )
+    .toBe(true);
+  await titleInput.fill('Synthetic date deadline !tomorrow');
+  await titleInput.press('Tab');
   await expect
     .poll(async () => (await read(page)).tasks.entities[task.id]?.title)
     .toBe('Synthetic date deadline');
