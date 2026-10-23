@@ -3,6 +3,7 @@ import { EnvironmentInjector, runInInjectionContext } from '@angular/core';
 import { FocusModeTaskSelectorComponent } from './focus-mode-task-selector.component';
 import { TaskService } from '../../tasks/task.service';
 import { SelectTaskComponent } from '../../tasks/select-task/select-task.component';
+import { UntypedFormControl } from '@angular/forms';
 
 describe('FocusModeTaskSelectorComponent', () => {
   let component: FocusModeTaskSelectorComponent;
@@ -94,6 +95,39 @@ describe('FocusModeTaskSelectorComponent', () => {
       component.createAndSelectTaskFromInput();
 
       expect(mockTaskService.add).toHaveBeenCalledWith('Task with spaces', false, {});
+    });
+
+    describe('when the input is ahead of currentTaskInputText', () => {
+      const setInputValue = (value: unknown): void => {
+        component.selectTaskComponent = {
+          taskSelectCtrl: new UntypedFormControl(value),
+        } as unknown as SelectTaskComponent;
+        component.currentTaskInputText.set('Earlier draft');
+      };
+
+      it('should create the task from the text in the input', () => {
+        setInputValue('  Final draft  ');
+
+        component.createAndSelectTaskFromInput();
+
+        expect(mockTaskService.add).toHaveBeenCalledOnceWith('Final draft', false, {});
+      });
+
+      it('should not create the earlier draft when the input was cleared', () => {
+        setInputValue(null);
+
+        component.createAndSelectTaskFromInput();
+
+        expect(mockTaskService.add).not.toHaveBeenCalled();
+      });
+
+      it('should not create the earlier draft when a task was selected', () => {
+        setInputValue({ id: 'task-123', title: 'Existing task' });
+
+        component.createAndSelectTaskFromInput();
+
+        expect(mockTaskService.add).not.toHaveBeenCalled();
+      });
     });
   });
 
