@@ -142,6 +142,7 @@ describe('BoardPanelComponent - Backlog Feature', () => {
       created: Date.now(),
       subTaskIds: [],
       dueDay: '2026-09-12',
+      deadlineDay: '2026-09-20',
     } as TaskCopy,
     {
       id: mockNonBacklogTaskId,
@@ -254,6 +255,22 @@ describe('BoardPanelComponent - Backlog Feature', () => {
     expect(cards().scheduledDateColor(task)).toBe('overdue');
     expect(cards().scheduledDateColor({ ...task, isDone: true })).toBe('');
     expect(cards().scheduledDateColor({ ...task, dueWithTime: undefined })).toBe('');
+  });
+
+  it('shows the deadline next to the scheduled date', () => {
+    const interval = TestBed.inject(GlobalTrackingIntervalService) as unknown as {
+      todayDateStr: WritableSignal<string>;
+    };
+    const task = component.tasks()[0];
+    const buttons = fixture.nativeElement.querySelectorAll('.schedule-btn');
+    expect(buttons.length).toBe(2);
+    expect(buttons[1].querySelector('mat-icon').textContent).toBe('flag');
+
+    interval.todayDateStr.set('2026-09-20');
+    expect(cards().deadlineColor(task)).toBe('');
+    interval.todayDateStr.set('2026-09-21');
+    expect(cards().deadlineColor(task)).toBe('overdue');
+    expect(cards().deadlineColor({ ...task, isDone: true })).toBe('');
   });
 
   it('should only include backlog tasks when backlogState is OnlyBacklog', () => {

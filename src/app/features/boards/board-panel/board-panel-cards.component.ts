@@ -24,6 +24,7 @@ import {
   readClockUntilDue,
 } from '../../tasks/util/get-scheduled-date-color';
 import type { ScheduledDateColor } from '../../tasks/util/get-scheduled-date-color';
+import { isDeadlineOverdue } from '../../tasks/util/is-deadline-overdue';
 import { GlobalTrackingIntervalService } from '../../../core/global-tracking-interval/global-tracking-interval.service';
 import { DateService } from '../../../core/date/date.service';
 import { T } from '../../../t.const';
@@ -91,5 +92,11 @@ export class BoardPanelCardsComponent {
           )
         : 0,
     );
+  }
+
+  deadlineColor(task: TaskCopy): ScheduledDateColor {
+    return isDeadlineOverdue(task, this._trackingInterval.todayDateStr())
+      ? 'overdue'
+      : '';
   }
 }
