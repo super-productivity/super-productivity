@@ -224,14 +224,29 @@ describe('TaskViewCustomizerService', () => {
     expect(filtered.length).toBe(1);
   });
 
+  it('should filter selected tag ids with OR and AND modes', () => {
+    const orFiltered = service['_filterByTagIds'](mockTasks, ['Tag A', 'Tag B']);
+    const andFiltered = service['_filterByTagIds'](mockTasks, ['Tag A', 'Tag B'], 'AND');
+
+    expect(orFiltered).toHaveSize(3);
+    expect(andFiltered.map((task) => task.id)).toEqual(['Third Task(Tag A, Tag B)']);
+  });
+
   it('should filter by project name', () => {
+    (service as any)._allProjects = [
+      ...mockProjects,
+      { id: 'Project B Extra', title: 'Project B Extra' } as Project,
+    ];
+    const tasks = [
+      ...mockTasks,
+      { ...mockTasks[1], id: 'Beta Extra', projectId: 'Project B Extra' },
+    ];
     const filtered = service['applyFilter'](
-      mockTasks,
+      tasks,
       FILTER_OPTION_TYPE.project,
       'Project B',
     );
-    expect(filtered.length).toBe(1);
-    expect(filtered[0].id).toBe('Beta(Tag B)');
+    expect(filtered.map((task) => task.id)).toEqual(['Beta(Tag B)', 'Beta Extra']);
   });
 
   it('should filter by schedule date', () => {

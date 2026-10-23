@@ -233,7 +233,17 @@ export class TaskViewCustomizerService {
     ) {
       preset = String(getTaskPriority(preset));
     }
-    return currentFilter ? { ...currentFilter, preset } : DEFAULT_OPTIONS.filter;
+    if (!currentFilter) return DEFAULT_OPTIONS.filter;
+
+    const sanitized: FilterOption = {
+      ...currentFilter,
+      preset,
+    };
+    if (stored.type === FILTER_OPTION_TYPE.tag) {
+      if (stored.tagIds) sanitized.tagIds = stored.tagIds;
+      if (stored.tagFilterMode) sanitized.tagFilterMode = stored.tagFilterMode;
+    }
+    return sanitized;
   }
 
   customizeUndoneTasks(
@@ -251,8 +261,10 @@ export class TaskViewCustomizerService {
       map(([tasks, sort, group, filter]) => {
         const normalizedFilterVal = filter.preset?.trim();
         const filterValueToUse = normalizedFilterVal ?? '';
+        const hasTagIds =
+          filter.type === FILTER_OPTION_TYPE.tag && !!filter.tagIds?.length;
 
-        const isDefaultFilter = !filter.type || !filterValueToUse;
+        const isDefaultFilter = !filter.type || (!filterValueToUse && !hasTagIds);
         const isDefaultSort = !sort.type;
         const isDefaultGroup = !group.type;
 
@@ -262,7 +274,9 @@ export class TaskViewCustomizerService {
 
         const filtered = isDefaultFilter
           ? tasks
-          : this.applyFilter(tasks, filter.type, filterValueToUse);
+          : filter.type === FILTER_OPTION_TYPE.tag && hasTagIds
+            ? this._filterByTagIds(tasks, filter.tagIds ?? [], filter.tagFilterMode)
+            : this.applyFilter(tasks, filter.type, filterValueToUse);
         const sorted = isDefaultSort
           ? filtered
           : this.applySort(filtered, sort.type, sort.order);
@@ -314,17 +328,19 @@ export class TaskViewCustomizerService {
           return tasks.filter((t) => !t.tagIds.length);
         }
 
-        const tag = this._allTags().find((t) =>
-          t.title.toLowerCase().includes(value.toLowerCase().trim()),
+        return tasks.filter((task) =>
+          task.tagIds?.some((id) =>
+            this._allTags().some(
+              (tag) =>
+                tag.id === id && tag.title.toLowerCase().includes(value.toLowerCase()),
+            ),
+          ),
         );
-        if (!tag) return [];
-        return tasks.filter((task) => task.tagIds?.includes(tag.id));
       case FILTER_OPTION_TYPE.project:
-        const project = this._allProjects.find((p) =>
-          p.title.toLowerCase().includes(value.toLowerCase().trim()),
-        );
-        if (!project) return [];
-        return tasks.filter((task) => task.projectId === project.id);
+        const projectIds = this._allProjects
+          .filter((p) => p.title.toLowerCase().includes(value.toLowerCase().trim()))
+          .map((p) => p.id);
+        return tasks.filter((task) => projectIds.includes(task.projectId));
       case FILTER_OPTION_TYPE.scheduledDate:
         return this._filterByDateFields(tasks, value, (t) => [t.dueDay, t.dueWithTime]);
       case FILTER_OPTION_TYPE.deadline:
@@ -700,6 +716,19 @@ export class TaskViewCustomizerService {
         default:
           return true;
       }
+    });
+  }
+
+  private _filterByTagIds(
+    tasks: TaskWithSubTasks[],
+    tagIds: string[],
+    mode: 'OR' | 'AND' = 'OR',
+  ): TaskWithSubTasks[] {
+    return tasks.filter((task) => {
+      const taskTagIds = task.tagIds ?? [];
+      return mode === 'AND'
+        ? tagIds.every((tagId) => taskTagIds.includes(tagId))
+        : tagIds.some((tagId) => taskTagIds.includes(tagId));
     });
   }
 
