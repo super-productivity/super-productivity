@@ -160,7 +160,9 @@
           [innerHTML]="task.deadlineWithTime | shortPlannedAt"
         ></div>
       } @else {
-        <div class="time-badge">{{ task.deadlineDay | localDateStr }}</div>
+        <div class="time-badge">
+          {{ task.deadlineDay | localDateStr: todayDateStr() }}
+        </div>
       }
     </button>
   }
