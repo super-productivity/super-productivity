@@ -231,7 +231,7 @@ export class DialogDeadlineComponent implements AfterViewInit {
   }
 
   private _getQuickDate(option: QuickDeadline): Date {
-    const d = new Date();
+    const d = this._dateService.getLogicalTodayDate();
     d.setMinutes(0, 0, 0);
     switch (option) {
       case 'today':
