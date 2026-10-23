@@ -11,7 +11,11 @@
     "EXCLUDE_LABELS": "Exclude labels (optional)",
     "INCLUDE_PULL_REQUESTS": "Include pull requests (search and backlog return PRs alongside issues)",
     "HOW_TO_GET_TOKEN": "How to get a token?",
-    "REPO_FULL_NAME_HINT": "Leave empty to include every repository on this host that the token can see."
+    "REPO_FULL_NAME_HINT": "Leave empty to list issues created by you or assigned to you across every repository on this host (scope \"All\" is not available then). Set this up as a new provider rather than clearing the repository of an existing one: tasks already linked would no longer resolve."
+  },
+  "ERRORS": {
+    "HOST_WIDE_SCOPE": "Gitea / Forgejo: without a repository, choose the scope \"Created by me\" or \"Assigned to me\".",
+    "ID_WITHOUT_REPO": "Gitea / Forgejo: issue {{id}} belongs to the repository that was removed from this provider. Restore the repository or re-add the task from a host-wide provider."
   },
   "DISPLAY": {
     "SUMMARY": "Summary",

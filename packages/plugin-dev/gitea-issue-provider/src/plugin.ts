@@ -142,7 +142,26 @@ const parseIssueId = (
   cfg: GiteaConfig,
 ): { repo: string; number: string } => {
   const m = /^(.+)#(\d+)$/.exec(issueId);
-  return m ? { repo: m[1], number: m[2] } : { repo: repoOf(cfg), number: issueId };
+  if (m) {
+    return { repo: m[1], number: m[2] };
+  }
+  const repo = repoOf(cfg);
+  if (!repo) {
+    // Repository cleared on a provider that already has linked tasks.
+    throw new Error(t('ERRORS.ID_WITHOUT_REPO', { id: issueId }));
+  }
+  return { repo, number: issueId };
+};
+
+const isScoped = (cfg: GiteaConfig): boolean =>
+  cfg.scope === SCOPE_CREATED_BY_ME || cfg.scope === SCOPE_ASSIGNED_TO_ME;
+
+// Host-wide `/repos/issues/search` without `created`/`assigned` returns every
+// public repository on the host, not the user's; refuse that combination.
+const assertHostWideScope = (cfg: GiteaConfig): void => {
+  if (!repoOf(cfg) && !isScoped(cfg)) {
+    throw new Error(t('ERRORS.HOST_WIDE_SCOPE'));
+  }
 };
 
 /** `#12` for a single-repo provider, `owner/repo#12` for a host-wide one. */
@@ -171,9 +190,11 @@ const issuePager = (
   http: PluginHttp,
   searchTerm?: string,
 ): ((page: number) => Promise<GiteaIssue[]>) => {
+  assertHostWideScope(cfg);
   const base = baseUrl(cfg);
   const repo = repoOf(cfg);
   const includedLabels = parseLabelList(cfg.filterLabels);
+  const scoped = isScoped(cfg);
   let user: Promise<GiteaUser> | undefined;
   return async (page: number): Promise<GiteaIssue[]> => {
     const params: Record<string, string> = {
@@ -190,8 +211,6 @@ const issuePager = (
     if (includedLabels.length > 0) {
       params['labels'] = includedLabels.join(',');
     }
-    const scoped =
-      cfg.scope === SCOPE_CREATED_BY_ME || cfg.scope === SCOPE_ASSIGNED_TO_ME;
     if (repo) {
       if (scoped) {
         const me = await (user ??= http.get<GiteaUser>(`${base}/user`));
@@ -345,6 +364,7 @@ registerIssueProvider({
     http: PluginHttp,
   ): Promise<boolean> {
     const cfg = asConfig<GiteaConfig>(config);
+    assertHostWideScope(cfg);
     const repo = repoOf(cfg);
     return canConnect(() =>
       http.get(repo ? `${baseUrl(cfg)}/repos/${repo}` : `${baseUrl(cfg)}/user`),

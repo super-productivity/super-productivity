@@ -189,6 +189,41 @@ describe('Gitea Plugin - issue ids', () => {
       'https://gitea.example/a/x/issues/7',
     );
   });
+
+  // Repository cleared on an existing provider: its tasks still carry plain
+  // numeric ids that no longer resolve to any repo.
+  it('rejects a plain numeric id when no repo is configured', async () => {
+    const { http, urls } = makeHttp([]);
+
+    await expect(definition.getById('7', instanceWide, http)).rejects.toThrow(
+      'ERRORS.ID_WITHOUT_REPO',
+    );
+    expect(() => definition.getIssueLink('7', instanceWide)).toThrow(
+      'ERRORS.ID_WITHOUT_REPO',
+    );
+    expect(urls).toHaveLength(0);
+  });
+});
+
+describe('Gitea Plugin - host-wide scope guard', () => {
+  // Without owner/created/assigned, /repos/issues/search covers every public
+  // repository on the host, not the user's.
+  const hostWideAll = { host: 'https://gitea.example', scope: 'all' };
+
+  it('refuses scope "all" without a repo before any request', async () => {
+    const { http, urls } = makeHttp([[makeIssue(1, 'a/x')]]);
+
+    await expect(definition.searchIssues('x', hostWideAll, http)).rejects.toThrow(
+      'ERRORS.HOST_WIDE_SCOPE',
+    );
+    await expect(definition.getNewIssuesForBacklog!(hostWideAll, http)).rejects.toThrow(
+      'ERRORS.HOST_WIDE_SCOPE',
+    );
+    await expect(definition.testConnection!(hostWideAll, http)).rejects.toThrow(
+      'ERRORS.HOST_WIDE_SCOPE',
+    );
+    expect(urls).toHaveLength(0);
+  });
 });
 
 describe('Gitea Plugin - config', () => {
