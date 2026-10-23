@@ -114,7 +114,7 @@ export class DialogDeadlineComponent implements AfterViewInit {
             this.task.deadlineRemindAt,
           );
         } else {
-          this.selectedReminderCfgId = this._defaultTaskRemindCfgId();
+          this.selectedReminderCfgId = TaskReminderOptionId.DoNotRemind;
         }
       } else if (this.task.deadlineDay) {
         this.hasExistingDeadline = true;
