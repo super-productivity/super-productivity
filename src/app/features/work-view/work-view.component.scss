@@ -170,6 +170,20 @@ finish-day-btn,
   task-list ::ng-deep > .task-list-inner {
     min-height: 50px;
   }
+
+  .collapsed-section-drop-target {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    margin: 0 !important;
+    padding: 0;
+
+    ::ng-deep > .task-list-inner {
+      height: 100%;
+      min-height: 0;
+      padding: 0;
+    }
+  }
 }
 
 .today {

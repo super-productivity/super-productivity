@@ -31,6 +31,8 @@
     <span class="collapsible-count">{{ count() }}</span>
   }
 
+  <ng-content select="[header-drop-target]"></ng-content>
+
   <ng-content select="[actions]"></ng-content>
 
   @if (!isIconBefore()) {
