@@ -13,6 +13,7 @@ import {
 import { IssueProviderService } from '../issue-provider.service';
 import { IssueTask } from '../../tasks/task.model';
 import { IssueLog } from '../../../core/log';
+import { HANDLED_ERROR_PROP_STR } from '../../../app.constants';
 
 /**
  * Abstract base class for issue provider services.
@@ -145,11 +146,28 @@ export abstract class BaseIssueProviderService<
       tasks.map((task) =>
         this.getFreshDataForIssueTask(task)
           .then((refreshDataForTask) => ({ task, refreshDataForTask }))
-          .catch(() => {
-            // HTTP providers already show the request error. Isolate it to
-            // this task: one removed or inaccessible issue must not discard
-            // successful refreshes for every other task in the poll.
-            IssueLog.warn('Issue refresh failed', { taskId: task.id });
+          .catch((error: unknown) => {
+            // HTTP providers already show the request error. Isolate failures
+            // to this task, but retain diagnostics for unexpected exceptions.
+            const isHandled =
+              typeof error === 'object' &&
+              error !== null &&
+              HANDLED_ERROR_PROP_STR in error;
+            // Error names, messages and stacks can contain provider/user data.
+            // Use fixed classifications and a fixed operation location instead.
+            const errorType = isHandled
+              ? 'HandledError'
+              : error instanceof TypeError
+                ? 'TypeError'
+                : error instanceof Error
+                  ? 'Error'
+                  : 'UnknownError';
+            const log = isHandled ? IssueLog.warn : IssueLog.err;
+            log('Issue refresh failed in getFreshDataForIssueTask', {
+              taskId: task.id,
+              providerKey: this.providerKey,
+              errorType,
+            });
             return { task, refreshDataForTask: null };
           }),
       ),

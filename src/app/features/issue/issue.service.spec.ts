@@ -1,5 +1,9 @@
 import { Injector } from '@angular/core';
-import { fakeAsync, flushMicrotasks, TestBed } from '@angular/core/testing';
+import { fakeAsync, flushMicrotasks, TestBed, tick } from '@angular/core/testing';
+import { HttpErrorResponse } from '@angular/common/http';
+import { MatSnackBar } from '@angular/material/snack-bar';
+import { LOCAL_ACTIONS } from '../../util/local-actions.token';
+import { handleIssueProviderHttpError$ } from './handle-issue-provider-http-error';
 import { HttpClientTestingModule } from '@angular/common/http/testing';
 import { IssueService } from './issue.service';
 import { TaskService } from '../tasks/task.service';
@@ -15,7 +19,7 @@ import { TranslateService } from '@ngx-translate/core';
 import { GlobalProgressBarService } from '../../core-ui/global-progress-bar/global-progress-bar.service';
 import { NavigateToTaskService } from '../../core-ui/navigate-to-task/navigate-to-task.service';
 import { Task, TaskWithSubTasks } from '../tasks/task.model';
-import { Observable, of } from 'rxjs';
+import { EMPTY, from, Observable, of } from 'rxjs';
 import { T } from '../../t.const';
 import { TODAY_TAG } from '../tag/tag.const';
 import { ICalIssueReduced } from './providers/calendar/calendar.model';
@@ -311,6 +315,72 @@ describe('IssueService', () => {
       await expectAsync(service.addTaskFromIssue(options)).toBeResolvedTo('new-task-id');
       expect(taskServiceSpy.add).toHaveBeenCalledTimes(1);
     });
+  });
+
+  describe('automatic refresh feedback', () => {
+    for (const delayMs of [0, 150]) {
+      for (const updateCount of [1, 2]) {
+        it(`keeps a ${delayMs ? 'displayed' : 'pending'} HTTP error when ${updateCount} tasks update`, fakeAsync(() => {
+          const openFromComponent = jasmine
+            .createSpy('openFromComponent')
+            .and.returnValue({
+              afterDismissed: () => EMPTY,
+            });
+          const injector = Injector.create({
+            parent: TestBed.inject(Injector),
+            providers: [
+              SnackService,
+              { provide: LOCAL_ACTIONS, useValue: EMPTY },
+              { provide: MatSnackBar, useValue: { openFromComponent } },
+            ],
+          });
+          const snackService = injector.get(SnackService);
+          snackServiceSpy.open.and.callFake((params) => snackService.open(params));
+          const tasks = Array.from({ length: updateCount }, (_, i) =>
+            createMockTask({
+              id: `task-${i}`,
+              issueId: `issue-${i}`,
+              issueType: 'GITLAB',
+            }),
+          );
+          const updates = tasks.map((task) => ({
+            task,
+            taskChanges: { title: `Updated ${task.id}`, issueWasUpdated: true },
+            issue: { ...createMockCalendarEvent(), id: task.issueId! },
+          }));
+          commonInterfaceServiceSpy.getFreshDataForIssueTasks.and.callFake(() => {
+            // The provider shows an HTTP error before returning its successful updates.
+            from(
+              handleIssueProviderHttpError$(
+                'GITLAB',
+                snackService,
+                new HttpErrorResponse({ status: 404 }),
+              ),
+            ).subscribe({ error: () => undefined });
+            return new Promise((resolve) => setTimeout(() => resolve(updates), delayMs));
+          });
+
+          let completed = false;
+          void service
+            .refreshIssueTasks(tasks, {
+              id: 'provider',
+              issueProviderKey: 'GITLAB',
+            } as IssueProvider)
+            .then(() => {
+              completed = true;
+            });
+          tick(delayMs + 100);
+
+          expect(completed).toBeTrue();
+          expect(taskServiceSpy.update.calls.allArgs()).toEqual(
+            updates.map(({ task, taskChanges }) => [task.id, taskChanges]),
+          );
+          expect(openFromComponent).toHaveBeenCalledTimes(1);
+          expect(openFromComponent.calls.mostRecent().args[1].data.type).toBe('ERROR');
+          injector.destroy();
+        }));
+      }
+    }
   });
 
   describe('addTaskFromIssue - ICAL task already exists', () => {
