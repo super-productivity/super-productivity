@@ -101,6 +101,7 @@ describe('FocusModeTaskSelectorComponent', () => {
       const setInputValue = (value: unknown): void => {
         component.selectTaskComponent = {
           taskSelectCtrl: new UntypedFormControl(value),
+          isInCreateMode: () => true,
         } as unknown as SelectTaskComponent;
         component.currentTaskInputText.set('Earlier draft');
       };
@@ -111,6 +112,20 @@ describe('FocusModeTaskSelectorComponent', () => {
         component.createAndSelectTaskFromInput();
 
         expect(mockTaskService.add).toHaveBeenCalledOnceWith('Final draft', false, {});
+      });
+
+      it('should consume the input before emitting and ignore a second submission before rendering', () => {
+        setInputValue('  Final draft  ');
+        const taskSelectedSpy = spyOn(component.taskSelected, 'emit').and.callFake(() => {
+          expect(component.selectTaskComponent?.taskSelectCtrl.value).toBe('');
+          expect(component.currentTaskInputText()).toBe('');
+        });
+
+        component.handleEnter(new KeyboardEvent('keydown', { key: 'Enter' }));
+        component.createAndSelectTaskFromInput();
+
+        expect(mockTaskService.add).toHaveBeenCalledOnceWith('Final draft', false, {});
+        expect(taskSelectedSpy).toHaveBeenCalledOnceWith('new-task-id');
       });
 
       it('should not create the earlier draft when the input was cleared', () => {

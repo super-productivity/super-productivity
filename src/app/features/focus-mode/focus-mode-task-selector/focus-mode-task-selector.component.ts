@@ -92,8 +92,9 @@ export class FocusModeTaskSelectorComponent implements AfterViewInit {
     const taskTitle = typeof value === 'string' ? value.trim() : '';
     if (taskTitle) {
       const newTaskId = this._taskService.add(taskTitle, false, {});
-      this.taskSelected.emit(newTaskId);
+      this.selectTaskComponent?.taskSelectCtrl.setValue('');
       this.currentTaskInputText.set('');
+      this.taskSelected.emit(newTaskId);
     }
   }
 
