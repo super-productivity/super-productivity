@@ -388,6 +388,8 @@ export const SuperSyncCaptureGrantSchema = z
 export const SuperSyncCaptureGrantsResponseSchema = z
   .object({
     grants: z.array(SuperSyncCaptureGrantSchema),
+    // Optional: older servers do not send it.
+    otherPendingCount: z.number().optional(),
   })
   .passthrough();
 

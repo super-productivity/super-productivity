@@ -25,6 +25,8 @@ import com.superproductivity.superproductivity.service.ReminderNotificationHelpe
 import com.superproductivity.superproductivity.service.RemoteTrackingNotificationHelper
 import com.superproductivity.superproductivity.service.SyncReminderScheduler
 import com.superproductivity.superproductivity.service.TrackingForegroundService
+import com.superproductivity.superproductivity.share.CaptureKeyStore
+import com.superproductivity.superproductivity.share.ShareUploadWorker
 import com.superproductivity.superproductivity.widget.CaptureInbox
 import com.superproductivity.superproductivity.widget.ReminderDoneQueue
 import com.superproductivity.superproductivity.widget.ReminderSnoozeQueue
@@ -183,14 +185,22 @@ class JavaScriptInterface(
         callJavaScriptFunction(FN_PREFIX + "clearDbCallback(" + JSONObject.quote(requestId) + ")")
     }
 
+    /** The web app finished initialising, including after a reload. */
+    @Suppress("unused")
+    @JavascriptInterface
+    fun notifyFrontendReady() {
+        if (activity is com.superproductivity.superproductivity.CapacitorMainActivity) {
+            activity.runOnUiThread {
+                activity.onFrontendReady()
+            }
+        }
+    }
+
+    /** The former name of [notifyFrontendReady], still called by older web bundles. */
     @Suppress("unused")
     @JavascriptInterface
     fun triggerGetShareData() {
-        if (activity is com.superproductivity.superproductivity.CapacitorMainActivity) {
-            activity.runOnUiThread {
-                activity.flushPendingShareIntent()
-            }
-        }
+        notifyFrontendReady()
     }
 
     @Suppress("unused")
@@ -503,6 +513,41 @@ class JavaScriptInterface(
         }
     }
 
+    /**
+     * Non-destructive read of the shares the app may import, as a JSON array of
+     * v1 capture payloads with their `id`, oldest first. Takes over shares still
+     * waiting for their SuperSync upload (none in flight), since the app is
+     * open, and moves a share queued by the previous app version into the
+     * inbox first. Returns null if the inbox could not be read.
+     */
+    @Suppress("unused")
+    @JavascriptInterface
+    fun getPendingShares(): String? {
+        return try {
+            val inbox = CaptureInbox.forContext(activity)
+            ShareIntentQueue.migrateInto(activity, inbox)
+            for (id in inbox.takeOverUploads()) {
+                ShareUploadWorker.cancel(activity, id)
+            }
+            inbox.pendingSharesJson()
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to read shares from the capture inbox", e)
+            null
+        }
+    }
+
+    /**
+     * Mirrors the account's SuperSync capture public key (base64 SPKI) while
+     * capture is on; an empty string clears it and stops share uploads.
+     */
+    @Suppress("unused")
+    @JavascriptInterface
+    fun setCapturePublicKey(publicKeySpki: String) {
+        safeCall("Failed to set capture public key") {
+            CaptureKeyStore.set(activity, publicKeySpki)
+        }
+    }
+
     /** Delete one capture after the app has persisted its task. */
     @Suppress("unused")
     @JavascriptInterface
@@ -533,23 +578,6 @@ class JavaScriptInterface(
     @JavascriptInterface
     fun updateWidget() {
         TaskListWidgetProvider.refreshAll(activity)
-    }
-
-    /**
-     * Pull-based retrieval of pending share data persisted in SharedPreferences.
-     * Clears both SharedPreferences and in-memory pendingShareIntent to prevent duplicates.
-     * @return JSON string of share data, or null if none pending
-     */
-    @Suppress("unused")
-    @JavascriptInterface
-    fun getPendingShareData(): String? {
-        val data = ShareIntentQueue.getAndClear(activity)
-        if (activity is com.superproductivity.superproductivity.CapacitorMainActivity) {
-            activity.runOnUiThread {
-                activity.clearPendingShareIntent()
-            }
-        }
-        return data
     }
 
     @Suppress("unused")
@@ -584,6 +612,7 @@ class JavaScriptInterface(
     fun clearSuperSyncCredentials() {
         safeCall("Failed to clear SuperSync credentials") {
             BackgroundSyncCredentialStore.clear(activity)
+            CaptureKeyStore.set(activity, "")
             SyncReminderScheduler.cancel(activity)
         }
     }
