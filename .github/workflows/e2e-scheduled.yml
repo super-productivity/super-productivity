@@ -360,7 +360,7 @@ jobs:
           path: .tmp/angular-dist
 
       - name: Fetch Released Client Bundles
-        run: ./scripts/fetch-released-client-assets.sh .tmp/released-clients v19.1.0 v19.0.1 v18.14.0
+        run: ./scripts/fetch-released-client-assets.sh .tmp/released-clients v19.2.0 v19.1.0 v19.0.1 v18.14.0
 
       - name: Create .env file for Docker Compose
         run: |
@@ -388,9 +388,34 @@ jobs:
         env:
           E2E_REQUIRE_SUPERSYNC: 'true'
           COMPAT_OLD_ASSETS: ${{ github.workspace }}/.tmp/released-clients/v19.1.0
+          # Mixed v19.1.0/v19.2.0 fleet specs (#10916) read both bundles from here.
+          COMPAT_RELEASED_ROOT: ${{ github.workspace }}/.tmp/released-clients
           PLAYWRIGHT_JUNIT_OUTPUT_FILE: .tmp/e2e-test-results/released-clients.xml
         run: |
           npx playwright test --config e2e/playwright.config.ts --reporter=line,junit --grep "@supersync released"
+          grep -Eq '^<testsuites [^>]* tests="[1-9][0-9]*" [^>]*skipped="0" ' "$PLAYWRIGHT_JUNIT_OUTPUT_FILE" || { echo "::error::Released-client tests were skipped or none ran"; exit 1; }
+
+      # Mixed v19.1.0/v19.2.0 fleet over WebDAV (#10916): the `@webdav released` suites.
+      - name: Start WebDAV Docker Service
+        if: ${{ !cancelled() && steps.released-e2e.conclusion != 'skipped' }}
+        uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08 # v3
+        with:
+          timeout_minutes: 6
+          max_attempts: 3
+          retry_wait_seconds: 20
+          command: |
+            docker compose up -d --build webdav-e2e
+            chmod +x ./scripts/wait-for-webdav.sh
+            ./scripts/wait-for-webdav.sh
+
+      - name: Run Released-Client WebDAV E2E Tests
+        if: ${{ !cancelled() && steps.released-e2e.conclusion != 'skipped' }}
+        env:
+          E2E_REQUIRE_WEBDAV: 'true'
+          COMPAT_RELEASED_ROOT: ${{ github.workspace }}/.tmp/released-clients
+          PLAYWRIGHT_JUNIT_OUTPUT_FILE: .tmp/e2e-test-results/released-clients-webdav.xml
+        run: |
+          npx playwright test --config e2e/playwright.config.ts --reporter=line,junit --grep "@webdav released"
           grep -Eq '^<testsuites [^>]* tests="[1-9][0-9]*" [^>]*skipped="0" ' "$PLAYWRIGHT_JUNIT_OUTPUT_FILE" || { echo "::error::Released-client tests were skipped or none ran"; exit 1; }
 
       # v18.14.0 -> v19.0.1 upgrade against the current server (#9962). It uses
