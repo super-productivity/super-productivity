@@ -1,7 +1,40 @@
 import { LocaleDatePipe } from 'src/app/ui/pipes/locale-date.pipe';
 import { Log } from '../core/log';
-import { DateTimeLocale } from '../core/locale.constants';
+import { DEFAULT_LOCALE, DateTimeLocale } from '../core/locale.constants';
 import { dateTimeFormatter } from './datetime-formatter';
+
+// Jan 5: single-digit day and month reveal whether a locale pads them
+const PADDING_PROBE_DATE = new Date(2000, 0, 5);
+const monthDayFormatters = new Map<DateTimeLocale, Intl.DateTimeFormat>();
+
+/**
+ * Month/day formatter that pads exactly where the locale's own short date does
+ * ("05.01." for de, "1/5" for en-US). Intl's numeric month/day skeleton alone
+ * drops the zeros some locales use (#11081). Cached per locale: formatting
+ * runs once per task row, the probe only once per locale.
+ */
+const getMonthDayFormatter = (locale: DateTimeLocale): Intl.DateTimeFormat => {
+  const cached = monthDayFormatters.get(locale);
+  if (cached) return cached;
+
+  const shortDateParts = new Intl.DateTimeFormat([locale, DEFAULT_LOCALE], {
+    dateStyle: 'short',
+  }).formatToParts(PADDING_PROBE_DATE);
+  // Compare against unpadded output: in non-Gregorian calendars (fa) the probe
+  // date has two-digit parts anyway, which says nothing about padding
+  const numericParts = dateTimeFormatter(locale).formatToParts(PADDING_PROBE_DATE);
+  const lengthOf = (parts: Intl.DateTimeFormatPart[], type: 'day' | 'month'): number =>
+    parts.find((part) => part.type === type)?.value.length ?? 0;
+  const widthOf = (type: 'day' | 'month'): '2-digit' | 'numeric' =>
+    lengthOf(shortDateParts, type) > lengthOf(numericParts, type) ? '2-digit' : 'numeric';
+
+  const formatter = dateTimeFormatter(locale, {
+    month: widthOf('month'),
+    day: widthOf('day'),
+  });
+  monthDayFormatters.set(locale, formatter);
+  return formatter;
+};
 
 /**
  * Formats a date to show only month and day in locale-aware format.
@@ -9,9 +42,9 @@ import { dateTimeFormatter } from './datetime-formatter';
  *
  * Examples by locale:
  * - en-US: "12/25" (month/day)
- * - en-GB: "25/12" (day/month)
- * - de-DE: "25.12" (day.month)
- * - ja-JP: "12/25" (month/day, year removed from start)
+ * - en-GB: "25/12" (day/month), "05/01" (padded like its short date)
+ * - de-DE: "25.12." (day.month.), "05.01."
+ * - ja-JP: "12/25" (month/day)
  *
  * @param date The date to format
  * @param locale The locale string (e.g., 'en-US', 'de-DE')
@@ -25,11 +58,7 @@ export const formatMonthDay = (date: Date, locale: DateTimeLocale): string => {
     // Use the browser's native Intl.DateTimeFormat for proper locale support, use en-US as fallback
     // This is more reliable than LocaleDatePipe for getting locale-specific formatting
     try {
-      const formatted = dateTimeFormatter(locale).format(date);
-
-      // Remove zero-padding for consistency across all locales
-      // This ensures "05/01" becomes "5/1", "05.01" becomes "5.1", etc.
-      return formatted.replace(/\b0+(\d)/g, '$1');
+      return getMonthDayFormatter(locale).format(date);
     } catch (intlError) {
       // If Intl.DateTimeFormat fails, fall back to LocaleDatePipe approach
       Log.warn(
