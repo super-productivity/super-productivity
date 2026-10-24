@@ -1,5 +1,7 @@
+import { LocalRestApiResponsePayload } from '../../../../electron/shared-with-frontend/local-rest-api.model';
 import { isValidDBDateStr } from '../../util/get-db-date-str';
 import { isRecord } from './local-rest-api-body';
+import { createErrorResponse } from './local-rest-api-response';
 
 /** One day cannot hold more tracked time than this. */
 export const MAX_TIME_SPENT_PER_DAY_MS = 24 * 60 * 60 * 1000;
@@ -45,3 +47,16 @@ export const parseTimeSpentBody = (
   }
   return { date, duration };
 };
+
+/**
+ * `timeSpent` is the sum of `timeSpentOnDay` and is recalculated from it, so a
+ * total written on its own wouldn't last. Task create and update reject it and
+ * point to the per-day routes instead.
+ */
+export const rejectTimeSpentField = (requestId: string): LocalRestApiResponsePayload =>
+  createErrorResponse(
+    requestId,
+    400,
+    'UNSUPPORTED_FIELD',
+    'timeSpent cannot be set directly — add time to a day with POST /tasks/:id/time or replace it with PUT /tasks/:id/time',
+  );

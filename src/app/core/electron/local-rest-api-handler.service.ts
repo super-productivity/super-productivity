@@ -27,6 +27,7 @@ import { createErrorResponse, createSuccessResponse } from './local-rest-api-res
 import {
   MAX_TIME_SPENT_PER_DAY_MS,
   parseTimeSpentBody,
+  rejectTimeSpentField,
 } from './local-rest-api-task-time';
 
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
@@ -58,7 +59,6 @@ const ALLOWED_TASK_FIELDS = new Set<string>([
   'notes',
   'isDone',
   'timeEstimate',
-  'timeSpent',
   'projectId',
   'tagIds',
   'dueDay',
@@ -108,7 +108,6 @@ interface WritableTaskFields {
   notes?: string;
   isDone?: boolean;
   timeEstimate?: number;
-  timeSpent?: number;
   projectId?: string;
   tagIds?: string[];
   dueDay?: string | null;
@@ -687,6 +686,10 @@ export class LocalRestApiHandlerService {
       );
     }
 
+    if (hasOwn(body, 'timeSpent')) {
+      return rejectTimeSpentField(requestId);
+    }
+
     const shortSyntaxFlag = readIsIgnoreShortSyntax(body);
     if (!shortSyntaxFlag.ok) {
       return createErrorResponse(
@@ -869,6 +872,9 @@ export class LocalRestApiHandlerService {
             'UNSUPPORTED_FIELD',
             `${rejected} cannot be set via PATCH — re-parenting is not supported by this API`,
           );
+        }
+        if (hasOwn(body, 'timeSpent')) {
+          return rejectTimeSpentField(requestId);
         }
 
         const changes = pickAllowedFields(body);
