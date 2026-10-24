@@ -247,6 +247,12 @@ export interface ElectronAPI {
 
   sendSettingsUpdate(globalCfg: GlobalConfigState): void;
 
+  // This device's OS login item (#5572). Both resolve to what the OS reports, and
+  // to false on builds without login item support.
+  getOpenAtLogin(): Promise<boolean>;
+
+  setOpenAtLogin(isOpenAtLogin: boolean): Promise<boolean>;
+
   updateTaskWidgetSettings(cfg: TaskWidgetConfig): void;
 
   updateTitleBarDarkMode(isDarkMode: boolean): void;
