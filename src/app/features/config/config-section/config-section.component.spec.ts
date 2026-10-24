@@ -130,6 +130,7 @@ describe('ConfigSectionComponent onAction', () => {
       [isExpanded]="true"
       (isExpandedChange)="changes.push($event)"
       [section]="section"
+      [cfg]="cfg"
     ></config-section>
   `,
   imports: [ConfigSectionComponent],
@@ -138,6 +139,7 @@ class ConfigSectionHostComponent {
   section = { title: '', key: 'localization' } as ConfigFormSection<
     Record<string, unknown>
   >;
+  cfg?: Record<string, unknown>;
   changes: boolean[] = [];
 }
 
@@ -174,11 +176,12 @@ describe('ConfigSectionComponent isExpandedChange', () => {
 describe('ConfigSectionComponent exact-alarm hint', () => {
   let fixture: ComponentFixture<ConfigSectionHostComponent>;
 
-  const render = (key: string): HTMLElement => {
+  const render = (key: string, cfg?: Record<string, unknown>): HTMLElement => {
     fixture = TestBed.createComponent(ConfigSectionHostComponent);
     fixture.componentInstance.section = { title: '', key } as ConfigFormSection<
       Record<string, unknown>
     >;
+    fixture.componentInstance.cfg = cfg;
     fixture.detectChanges();
     return fixture.nativeElement;
   };
@@ -201,6 +204,12 @@ describe('ConfigSectionComponent exact-alarm hint', () => {
 
   it('shows the hint in the reminder section when exact alarms are denied', () => {
     expect(render('reminder').querySelector('exact-alarm-hint .callout')).not.toBeNull();
+  });
+
+  it('hides the hint while all reminders are disabled', () => {
+    expect(
+      render('reminder', { disableReminders: true }).querySelector('exact-alarm-hint'),
+    ).toBeNull();
   });
 
   it('does not show the hint in other sections', () => {

@@ -33,8 +33,8 @@
     </help-section>
   }
   <div class="form-wrapper {{ section?.key }}">
-    @if (section?.key === 'reminder') {
-      <!-- Users look here when reminders arrive late (#10424) -->
+    @if (section?.key === 'reminder' && !cfg?.['disableReminders']) {
+      <!-- Users look here when reminders arrive late (#10424); no hint once they opted out -->
       <exact-alarm-hint />
     }
     @if (section?.items && !section?.customSection) {
