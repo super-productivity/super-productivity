@@ -71,6 +71,17 @@ object ShareUploader {
             is CaptureInbox.UploadStart.Busy -> return Outcome.RETRY
             is CaptureInbox.UploadStart.Ready -> start.entry
         }
+        return try {
+            send(context, inbox, id, entry)
+        } catch (e: Exception) {
+            // Frees the entry for the worker's retry now, not after the lease.
+            inbox.endUploadAttempt(id)
+            throw e
+        }
+    }
+
+    /** The attempt holding [entry]; every exit leaves it acked, released or free. */
+    private fun send(context: Context, inbox: CaptureInbox, id: String, entry: JSONObject): Outcome {
         val publicKey = CaptureKeyStore.get(context)
         val credentials = BackgroundSyncCredentialStore.get(context)
         val payload = payloadOf(entry)

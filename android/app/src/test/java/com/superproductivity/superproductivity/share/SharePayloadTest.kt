@@ -65,6 +65,10 @@ class SharePayloadTest {
         assertNull(SharePayload.toLink("https://exa mple.com"))
         assertNull(SharePayload.toLink("https://example.com/" + "a".repeat(2048)))
         assertEquals("HTTPS://example.com", SharePayload.toLink("HTTPS://example.com"))
+        // Characters browsers leave unescaped, which java.net.URI rejects.
+        for (url in listOf("https://example.com/a|b", "https://example.com/s?q={x}^y", "https://example.com/%zz")) {
+            assertEquals(url, SharePayload.toLink(url))
+        }
     }
 
     @Test

@@ -394,6 +394,21 @@ describe('capture routes (PGlite)', () => {
       expect(full.json()).toEqual({ error: 'queue_full' });
     });
 
+    it("accepts the Android client's content type (OkHttp adds a charset)", async () => {
+      await api('PUT', '/key', { publicKey: key.publicKey });
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/capture/items',
+        headers: {
+          authorization: `Bearer ${syncJwt}`,
+          'content-type': 'application/json; charset=utf-8',
+        },
+        payload: JSON.stringify(item()),
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({ status: 'queued' });
+    });
+
     it('refuses with 409 while capture is off or for another key', async () => {
       const off = await api('POST', '/items', item());
       expect(off.statusCode).toBe(409);

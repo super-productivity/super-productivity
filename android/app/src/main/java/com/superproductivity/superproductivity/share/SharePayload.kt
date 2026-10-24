@@ -2,6 +2,7 @@ package com.superproductivity.superproductivity.share
 
 import org.json.JSONObject
 import java.net.URI
+import java.net.URL
 
 /**
  * Turns an Android text share into a v1 capture payload, the shape the
@@ -64,6 +65,7 @@ object SharePayload {
     }
 
     /** The text when it is exactly one http(s) URL with a host. */
+    @Suppress("DEPRECATION") // URL(String), deprecated in JDK 20 for its leniency, wanted here
     internal fun toLink(text: String): String? {
         if (text.length > LINK_MAX_CHARS || text.any { it.isWhitespace() }) return null
         if (!text.startsWith("http://", ignoreCase = true) &&
@@ -71,8 +73,10 @@ object SharePayload {
         ) {
             return null
         }
+        // java.net.URL, not URI: like the app's `new URL()`, it accepts what
+        // browsers send unescaped (`|`, `{`, `^`, a stray `%`), which URI rejects.
         return try {
-            if (URI(text).host.isNullOrEmpty()) null else text
+            if (URL(text).host.isNullOrEmpty()) null else text
         } catch (e: Exception) {
             null
         }

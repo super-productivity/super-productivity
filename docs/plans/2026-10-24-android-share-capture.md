@@ -1,7 +1,8 @@
 # Android share without opening the app
 
-Oct 24, 2026 · status: rev. 2 after a fresh-context adversarial review (findings
-and what changed: § Review)
+Oct 24, 2026 · status: implemented on `ccr-0649ff85-54rq8z`; rev. 2 after a
+fresh-context adversarial review of the plan, then a second review of the
+implementation (both: § Review)
 
 Sharing a link or text to Super Productivity on Android saves it in
 milliseconds and leaves the user in the app they shared from (M1). With
@@ -19,7 +20,9 @@ ops). Nothing in the share code is slow; the cost is booting the app.
 
 Demand: M1 fixes the reported slowness. M2 is a maintainer request (Oct 24 2026) on top of the shipped agent-capture queue; it adds no setting and only
 runs for accounts that already switched capture on. M1 ships useful on its
-own, so M2 lands as a separate commit that can be reverted alone.
+own. Both landed in one commit: the inbox upload states, the bridge and the
+activity are shared, so a split would have meant shipping intermediate
+versions of those files. M2 stays inert without capture switched on.
 
 ## Prior art
 
@@ -223,7 +226,7 @@ Body `{ id, fingerprint, ciphertext }`, `bodyLimit` 48 KiB:
 | Capture off when shared                                 | Local only, imported on next app open                                                                |
 | Account switch between share and upload                 | `key_mismatch` → local                                                                               |
 | Capture switched off after upload, before any import    | Item dropped with the others; counted in the confirm (new apps)                                      |
-| A seal no device can open                               | Stays leased until expiry (agent-capture "Gap"); prevented by the vector and live round-trip tests   |
+| A seal no device can open                               | Stays leased until expiry (agent-capture "Gap"); prevented by the shared-vector test                 |
 | Legacy online-mode install (remote bundle, same bridge) | Gets share entries only via `getPendingShares`; an older cached bundle ignores them until it updates |
 | `CaptureInbox` write fails                              | Error toast; nothing saved                                                                           |
 
@@ -232,9 +235,10 @@ Body `{ id, fingerprint, ciphertext }`, `bodyLimit` 48 KiB:
 - **Kotlin JVM** (CI `:app:test*UnitTest`): `SharePayload` (title port incl.
   readable URL, 150 cap, link detection, notes cut), `CaptureInbox` share
   entries (filtering, CAS, takeover, `ShareIntentQueue` migration),
-  `CaptureSeal` (pinned vector, short-coordinate padding, fingerprint),
-  live round trip: Kotlin seals, Node `openCapture` opens (pattern of
-  `LiveJsEncryptRoundTripTest.kt`).
+  `CaptureSeal` (the vector the server and sync-core specs pin, byte for
+  byte; short-coordinate padding; fingerprint; random seals opened by an
+  independent Kotlin open side). A live Kotlin-seals/Node-opens round trip
+  was dropped: the shared vector already pins every byte of the format.
 - **Server** (vitest + pglite): validation, idempotent retry before the cap,
   `id_conflict`, `switched_off`, `key_mismatch`, `task_id ≠ id`, re-send after
   ack gets a new task id, `otherPendingCount`.
@@ -276,7 +280,7 @@ Rev. 1 → rev. 2, fresh-context adversarial review:
   `otherPendingCount`. Hostile `link` → validated at import, type hard-coded.
   Key mirror must see remote changes and `v === 1`. Title regression →
   `buildTaskTitle` ported. Seal spec completed (info, padding, vector
-  overload, raw bytes, live round trip). Activity failure paths and no
+  overload, raw bytes). Activity failure paths and no
   Keystore on the hot path. Worker latency → first attempt from the activity,
   worker as retry, 15 s timeout. Testing section. Legacy row corrected. Old
   share path retired now with a native migration. Server row details
@@ -284,5 +288,22 @@ Rev. 1 → rev. 2, fresh-context adversarial review:
   Notes no longer cut to 8 KiB locally. A new translation key instead of
   rewording existing ones. Wiki targets.
 - **Not fixed, by decision:** demand for M2 is the maintainer's request, not
-  an issue; mitigated by shipping it as a separable commit. Acked tombstones:
+  an issue; M2 does nothing until capture is switched on. Acked tombstones:
   out of scope.
+
+Implementation review (fresh context, read the branch and diff, ran the
+Kotlin JVM, server and package checks):
+
+- **Fixed:** `toLink` used `java.net.URI`, which rejects characters browsers
+  send unescaped (`|`, `{`, `^`, a stray `%`), so such links lost their
+  attachment → lenient `java.net.URL`, matching the app's `new URL()`.
+  `docs/ios-share-extension.md` still described immutable inbox entries and
+  missed the share receipts key. Test for the uploader's real content type
+  (`application/json; charset=utf-8`). An unexpected exception during an
+  attempt now frees the entry at once instead of after the 60 s lease.
+- **Not fixed, accepted:** a cached process may be frozen during the first
+  attempt (the worker and the lease cover it; worst case the documented
+  duplicate). At cold start the key mirror may briefly send `''` before
+  config loads; a share in that window stays local. The inbox write runs on
+  the main thread (one small fsynced file). `CAPTURE_SHARE_INFO` also shows on
+  non-Android platforms, where it still describes what the switch does.
