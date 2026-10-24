@@ -7,6 +7,8 @@ files:
   - '!electron/**/*.ts'
   - '!electron/**/*.test.cjs'
   - '!electron/**/*.js.map'
+  # Installed beside the executable by afterPack for x64 Linux packages only.
+  - '!electron/bin/wayland-idle-helper'
   - .tmp/angular-dist/**/*
   - 'embedded.provisionprofile'
   # Exclude Nx binaries - they're build tools, not runtime dependencies
@@ -110,10 +112,21 @@ linux:
       # `-bin` value now matches nothing on either session type.
       StartupWMClass: superproductivity
   target:
-    - AppImage
-    - deb
-    - snap
-    - rpm
+    - target: AppImage
+      arch:
+        - x64
+        - arm64
+    - target: deb
+      arch:
+        - x64
+        - arm64
+    - target: rpm
+      arch:
+        - x64
+        - arm64
+    - target: snap
+      arch:
+        - x64
   publish:
     - github
 
