@@ -1,10 +1,11 @@
-import { Injectable, computed, inject } from '@angular/core';
+import { Injectable, Signal, computed, inject } from '@angular/core';
 import { Store } from '@ngrx/store';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { map } from 'rxjs/operators';
 import { Project } from '../project/project.model';
 import { Tag } from '../tag/tag.model';
 import { TODAY_TAG } from '../tag/tag.const';
+import { INBOX_PROJECT } from '../project/project.const';
 import {
   MenuTreeFolderNode,
   MenuTreeKind,
@@ -28,6 +29,7 @@ import {
   deleteFolder,
   updateFolder,
 } from './store/menu-tree.actions';
+import { sortMenuTreeByName } from './sort-menu-tree-by-name';
 
 @Injectable({ providedIn: 'root' })
 export class MenuTreeService {
@@ -189,6 +191,57 @@ export class MenuTreeService {
   persistTagViewTree(viewNodes: MenuTreeViewNode[]): void {
     const stored = this._viewToStoredTree(viewNodes, MenuTreeKind.TAG);
     this.setTagTree(stored);
+  }
+
+  /**
+   * One-time A–Z sort of the sidebar tree, persisted through the existing
+   * `updateProjectTree`/`updateTagTree` op like a drag-reorder, so one click is
+   * one op. Returns null and dispatches nothing when the order already matches;
+   * otherwise returns an undo (see {@link _sortTreeByName}).
+   */
+  sortProjectTreeByName(): (() => boolean) | null {
+    return this._sortTreeByName(
+      this.projectTree,
+      MenuTreeKind.PROJECT,
+      this._allProjects().filter((project) => project.id !== INBOX_PROJECT.id),
+      (tree) => this.setProjectTree(tree),
+    );
+  }
+
+  sortTagTreeByName(): (() => boolean) | null {
+    return this._sortTreeByName(
+      this.tagTree,
+      MenuTreeKind.TAG,
+      this._allTags().filter((tag) => tag.id !== TODAY_TAG.id),
+      (tree) => this.setTagTree(tree),
+    );
+  }
+
+  /**
+   * The returned undo restores the whole pre-sort tree, so it only does so
+   * while the stored tree is still the sorted one. Any later tree change (a new
+   * folder, a drag, a synced edit) replaces the stored tree reference, and undo
+   * then returns false instead of reverting that change along with the sort.
+   */
+  private _sortTreeByName(
+    tree: Signal<MenuTreeTreeNode[]>,
+    itemKind: MenuTreeKind.PROJECT | MenuTreeKind.TAG,
+    items: readonly { id: string; title: string }[],
+    setTree: (tree: MenuTreeTreeNode[]) => void,
+  ): (() => boolean) | null {
+    const previous = tree();
+    const sorted = sortMenuTreeByName(previous, itemKind, items);
+    if (JSON.stringify(sorted) === JSON.stringify(previous)) {
+      return null;
+    }
+    setTree(sorted);
+    return () => {
+      if (tree() !== sorted) {
+        return false;
+      }
+      setTree(previous);
+      return true;
+    };
   }
 
   createProjectFolder(name: string, parentFolderId?: string | null): void {
