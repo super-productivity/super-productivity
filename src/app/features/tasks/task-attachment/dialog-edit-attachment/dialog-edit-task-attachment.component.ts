@@ -60,7 +60,7 @@ export class DialogEditTaskAttachmentComponent {
 
   types: TaskAttachmentSelectType[];
   attachmentCopy: TaskAttachmentCopy;
-  isFilePickerOpen = false;
+  isFilePickerOpen = signal(false);
   filePickerError = signal(false);
   selectedFiles = signal<TaskAttachment[]>([]);
   T: typeof T = T;
@@ -85,10 +85,10 @@ export class DialogEditTaskAttachmentComponent {
   }
 
   async chooseFile(): Promise<void> {
-    if (this.isFilePickerOpen) return;
+    if (this.isFilePickerOpen()) return;
 
     this.filePickerError.set(false);
-    this.isFilePickerOpen = true;
+    this.isFilePickerOpen.set(true);
     try {
       const paths = await window.ea.showOpenDialog({
         properties: this.data.allowMultiple
@@ -120,7 +120,7 @@ export class DialogEditTaskAttachmentComponent {
     } catch {
       this.filePickerError.set(true);
     } finally {
-      this.isFilePickerOpen = false;
+      this.isFilePickerOpen.set(false);
     }
   }
 

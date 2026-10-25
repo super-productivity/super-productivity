@@ -4,6 +4,7 @@ import { TranslateModule } from '@ngx-translate/core';
 import { DialogEditTaskAttachmentComponent } from './dialog-edit-task-attachment.component';
 import { TaskAttachment } from '../task-attachment.model';
 import { IS_ELECTRON_TOKEN } from '../../../../app.constants';
+import { By } from '@angular/platform-browser';
 
 describe('DialogEditTaskAttachmentComponent', () => {
   let component: DialogEditTaskAttachmentComponent;
@@ -63,8 +64,7 @@ describe('DialogEditTaskAttachmentComponent', () => {
   describe('file picker', () => {
     it('waits for the user to press Choose file and allows removing selections before save', async () => {
       const picker = mockFilePicker(['C:\\Docs\\Rencana kerja.pdf', '/home/me/写真.png']);
-      setup(undefined, { isElectron: true, allowMultiple: true });
-      component.attachmentCopy.type = 'FILE';
+      setup({ type: 'FILE' }, { isElectron: true, allowMultiple: true });
 
       expect(picker).not.toHaveBeenCalled();
       await component.chooseFile();
@@ -101,9 +101,17 @@ describe('DialogEditTaskAttachmentComponent', () => {
       expect(component.attachmentCopy.title).toBe('Report final.pdf');
     });
 
-    it('keeps current selections when the picker is cancelled', async () => {
-      mockFilePicker(undefined);
-      setup(undefined, { isElectron: true, allowMultiple: true });
+    it('keeps current selections and re-enables the picker after cancellation', async () => {
+      let resolvePicker!: (paths: string[] | undefined) => void;
+      const pickerResult = new Promise<string[] | undefined>((resolve) => {
+        resolvePicker = resolve;
+      });
+      const bridge = jasmine.createSpyObj<typeof window.ea>('ElectronAPI', [
+        'showOpenDialog',
+      ]);
+      bridge.showOpenDialog.and.returnValue(pickerResult);
+      window.ea = bridge;
+      setup({ type: 'FILE' }, { isElectron: true, allowMultiple: true });
       component.selectedFiles.set([
         {
           id: 'file-1',
@@ -112,13 +120,25 @@ describe('DialogEditTaskAttachmentComponent', () => {
           title: 'existing.pdf',
         },
       ]);
+      fixture.detectChanges();
+      await fixture.whenStable();
 
-      await component.chooseFile();
+      const chooseFileButton = fixture.debugElement.query(By.css('.file-picker button'))
+        .nativeElement as HTMLButtonElement;
+      const chooseFilePromise = component.chooseFile();
+      fixture.detectChanges();
+
+      expect(chooseFileButton.disabled).toBeTrue();
+
+      resolvePicker(undefined);
+      await chooseFilePromise;
+      await fixture.whenStable();
 
       expect(component.selectedFiles().map(({ path }) => path)).toEqual([
         'C:\\Docs\\existing.pdf',
       ]);
       expect(component.filePickerError()).toBeFalse();
+      expect(chooseFileButton.disabled).toBeFalse();
     });
 
     it('shows an error and keeps the dialog open if the picker fails', async () => {
