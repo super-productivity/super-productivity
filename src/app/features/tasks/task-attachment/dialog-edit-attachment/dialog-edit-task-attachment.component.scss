@@ -21,3 +21,34 @@ mat-dialog-actions {
     min-width: 500px;
   }
 }
+
+.file-picker {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s);
+  min-height: var(--bar-height);
+}
+
+.file-picker-error {
+  color: var(--color-danger);
+}
+
+.selected-files {
+  width: 100%;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+
+  li {
+    display: flex;
+    align-items: center;
+    gap: var(--s);
+  }
+
+  span {
+    flex: 1;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+}

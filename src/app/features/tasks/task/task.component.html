@@ -127,17 +127,6 @@
               class="hover-controls"
             ></task-hover-controls>
           }
-          @if (t.attachments?.length || t.issueAttachmentNr) {
-            <button
-              (click)="toggleShowAttachments()"
-              [title]="T.F.TASK.CMP.TOGGLE_ATTACHMENTS | translate"
-              class="ico-btn attachment-btn"
-              color=""
-              mat-icon-button
-            >
-              <mat-icon>attach_file</mat-icon>
-            </button>
-          }
           @if (t.remindAt) {
             <button
               (click)="scheduleTask()"

@@ -92,6 +92,9 @@ import { DateService } from '../../../core/date/date.service';
 import { MenuTreeService } from '../../menu-tree/menu-tree.service';
 import { SelectOptionRowComponent } from '../../../ui/select-option-row/select-option-row.component';
 import { toPersistableRemindOption } from '../../planner/dialog-schedule-task/task-reminder-options.const';
+import { nanoid } from 'nanoid';
+import { TaskAttachment } from '../task-attachment/task-attachment.model';
+import { DialogEditTaskAttachmentComponent } from '../task-attachment/dialog-edit-attachment/dialog-edit-task-attachment.component';
 
 export interface TaskAddEvent {
   taskId: string;
@@ -185,6 +188,8 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
   activatedSuggestion$ = new BehaviorSubject<AddTaskSuggestion | null>(null);
   isMentionListShown = signal(false);
   isScheduleDialogOpen = signal(false);
+  // Separate from parsed attachments so editing short syntax cannot replace these.
+  readonly draftAttachments = signal<TaskAttachment[]>([]);
 
   // Computed signals for projects and tags
   projects = this._projectService.listInTreeOrderForUI;
@@ -522,10 +527,12 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
           : finalTagIds,
         // needs to be 0
         timeEstimate: state.estimate || 0,
-        attachments:
-          state.attachments.length > 0
+        attachments: [
+          ...(state.attachments.length > 0
             ? state.attachments
-            : additionalFields?.attachments || [],
+            : additionalFields?.attachments || []),
+          ...this.draftAttachments(),
+        ],
       };
 
       const note = this.stateService.noteTxt().trim();
@@ -1018,6 +1025,7 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
 
   private _resetAfterAdd(): void {
     this.stateService.resetAfterAdd();
+    this.draftAttachments.set([]);
     if (this._defaultTagIds.length > 0) {
       this.stateService.updateTagIds(this._defaultTagIds);
     }
@@ -1081,6 +1089,36 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
         focus();
       }
     }, 50);
+  }
+
+  addAttachment(): void {
+    this._matDialog
+      .open(DialogEditTaskAttachmentComponent, {
+        restoreFocus: true,
+        data: { attachment: {}, allowMultiple: true },
+      })
+      .afterClosed()
+      .pipe(takeUntilDestroyed(this._destroyRef))
+      .subscribe((result: TaskAttachment | TaskAttachment[] | undefined) => {
+        if (Array.isArray(result)) {
+          this.draftAttachments.update((attachments) => [
+            ...attachments,
+            ...result.map((attachment) => ({ ...attachment, id: nanoid() })),
+          ]);
+        } else if (result) {
+          this.draftAttachments.update((attachments) => [
+            ...attachments,
+            { ...result, id: nanoid() },
+          ]);
+        }
+        this.focusInput();
+      });
+  }
+
+  removeDraftAttachment(id: string | null): void {
+    this.draftAttachments.update((attachments) =>
+      attachments.filter((attachment) => attachment.id !== id),
+    );
   }
 
   toggleNote(): void {

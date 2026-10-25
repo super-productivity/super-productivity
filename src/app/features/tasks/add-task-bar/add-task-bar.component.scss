@@ -399,6 +399,24 @@
   }
 }
 
+.draft-attachments {
+  list-style: none;
+  margin: 0;
+  padding: var(--s);
+
+  li {
+    display: flex;
+    align-items: center;
+    gap: var(--s);
+  }
+
+  span {
+    flex: 1;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+}
+
 .note-input-section {
   border-top: 1px solid var(--divider-color);
   // Padding lives on the wrapper, not the textarea — same cdkTextareaAutosize

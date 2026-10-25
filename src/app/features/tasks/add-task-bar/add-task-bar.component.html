@@ -129,6 +129,17 @@
       @if (!isSearchMode()) {
         <button
           mat-icon-button
+          data-test="add-task-bar-attachment-btn"
+          (click)="addAttachment()"
+          [attr.aria-label]="T.F.TASK.ADDITIONAL_INFO.ADD_ATTACHMENT | translate"
+          [matTooltip]="T.F.TASK.ADDITIONAL_INFO.ADD_ATTACHMENT | translate"
+          matTooltipPosition="above"
+        >
+          <mat-icon>attach_file</mat-icon>
+        </button>
+
+        <button
+          mat-icon-button
           class="note-toggle-btn"
           data-test="add-task-bar-note-btn"
           [class.active]="stateService.isNoteExpanded()"
@@ -194,6 +205,26 @@
     >
       <ng-container [ngTemplateOutlet]="inlineActionControls"></ng-container>
     </add-task-bar-actions>
+
+    @if (draftAttachments().length) {
+      <ul class="draft-attachments">
+        @for (attachment of draftAttachments(); track attachment.id) {
+          <li>
+            <mat-icon>attach_file</mat-icon>
+            <span>{{ attachment.title || attachment.path }}</span>
+            <button
+              mat-icon-button
+              (click)="removeDraftAttachment(attachment.id)"
+              [attr.aria-label]="T.G.DELETE | translate"
+              [matTooltip]="T.G.DELETE | translate"
+              type="button"
+            >
+              <mat-icon>close</mat-icon>
+            </button>
+          </li>
+        }
+      </ul>
+    }
 
     @if (stateService.isNoteExpanded()) {
       <div

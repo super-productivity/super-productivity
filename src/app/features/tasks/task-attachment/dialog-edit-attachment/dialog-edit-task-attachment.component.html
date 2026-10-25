@@ -26,28 +26,70 @@
         </mat-select>
       </mat-form-field>
 
-      <mat-form-field>
-        <mat-label>{{ mapTypeToLabel(attachmentCopy.type) | translate }}</mat-label>
-        <input
-          [(ngModel)]="attachmentCopy.path"
-          [placeholder]="mapTypeToPlaceholder(attachmentCopy.type) | translate"
-          autofocus="autofocus"
-          matInput
-          name="path"
-          required
-          type="text"
-        />
-      </mat-form-field>
+      @if (attachmentCopy.type === 'FILE') {
+        <div class="file-picker">
+          <button
+            (click)="chooseFile()"
+            [disabled]="isFilePickerOpen"
+            mat-stroked-button
+            type="button"
+          >
+            <mat-icon>attach_file</mat-icon>
+            {{
+              attachmentCopy.path
+                ? attachmentCopy.title || attachmentCopy.path
+                : (T.F.ATTACHMENT.DIALOG_EDIT.CHOOSE_FILE | translate)
+            }}
+          </button>
+          @if (data.allowMultiple) {
+            <ul class="selected-files">
+              @for (file of selectedFiles(); track file.id) {
+                <li>
+                  <span>{{ file.title }}</span>
+                  <button
+                    (click)="removeSelectedFile(file.id)"
+                    [attr.aria-label]="T.G.DELETE | translate"
+                    mat-icon-button
+                    type="button"
+                  >
+                    <mat-icon>close</mat-icon>
+                  </button>
+                </li>
+              }
+            </ul>
+          }
+          @if (filePickerError()) {
+            <span class="file-picker-error">
+              {{ T.F.ATTACHMENT.FILE_PICKER_ERROR | translate }}
+            </span>
+          }
+        </div>
+      } @else {
+        <mat-form-field>
+          <mat-label>{{ mapTypeToLabel(attachmentCopy.type) | translate }}</mat-label>
+          <input
+            [(ngModel)]="attachmentCopy.path"
+            [placeholder]="mapTypeToPlaceholder(attachmentCopy.type) | translate"
+            autofocus="autofocus"
+            matInput
+            name="path"
+            required
+            type="text"
+          />
+        </mat-form-field>
+      }
 
-      <mat-form-field>
-        <mat-label>{{ T.G.TITLE | translate }}</mat-label>
-        <input
-          [(ngModel)]="attachmentCopy.title"
-          matInput
-          name="title"
-          type="text"
-        />
-      </mat-form-field>
+      @if (!(data.allowMultiple && attachmentCopy.type === 'FILE')) {
+        <mat-form-field>
+          <mat-label>{{ T.G.TITLE | translate }}</mat-label>
+          <input
+            [(ngModel)]="attachmentCopy.title"
+            matInput
+            name="title"
+            type="text"
+          />
+        </mat-form-field>
+      }
     </div>
   </mat-dialog-content>
 
@@ -61,7 +103,11 @@
     </button>
 
     <button
-      [disabled]="!form.valid"
+      [disabled]="
+        !form.valid ||
+        (attachmentCopy.type === 'FILE' &&
+          (data.allowMultiple ? !selectedFiles().length : !attachmentCopy.path))
+      "
       color="primary"
       mat-flat-button
       type="submit"

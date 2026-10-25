@@ -2,7 +2,7 @@ import { ComponentFixture, fakeAsync, flush, TestBed, tick } from '@angular/core
 import { DEFAULT_DATE_INPUT_LOCALE } from 'src/app/core/date-time-format/date-input-locale';
 import { BehaviorSubject, Observable, of } from 'rxjs';
 import { Store } from '@ngrx/store';
-import { MatDialog } from '@angular/material/dialog';
+import { MatDialog, MatDialogRef } from '@angular/material/dialog';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { AddTaskBarComponent } from './add-task-bar.component';
 import { TaskService } from '../task.service';
@@ -31,6 +31,8 @@ import { SS } from '../../../core/persistence/storage-keys.const';
 import { BodyClass } from '../../../app.constants';
 import { IosKeyboardService } from '../../../core/theme/ios-keyboard.service';
 import { IS_ANDROID_WEB_VIEW_TOKEN } from '../../../util/is-android-web-view';
+import { TaskAttachment } from '../task-attachment/task-attachment.model';
+import { DialogEditTaskAttachmentComponent } from '../task-attachment/dialog-edit-attachment/dialog-edit-task-attachment.component';
 
 type ProjectServiceSignals = {
   list$: Observable<Project[]>;
@@ -512,7 +514,187 @@ describe('AddTaskBarComponent', () => {
     });
   });
 
+  describe('attachment dialog', () => {
+    let originalEa: typeof window.ea | undefined;
+    let picker: jasmine.Spy<typeof window.ea.showOpenDialog>;
+
+    const file = (id: string, path: string, title: string): TaskAttachment => ({
+      id,
+      type: 'FILE',
+      path,
+      title,
+    });
+
+    const mockAttachmentDialog = (result?: TaskAttachment | TaskAttachment[]): void => {
+      mockMatDialog.open.and.returnValue(
+        jasmine.createSpyObj<MatDialogRef<unknown>>('AttachmentDialog', {
+          afterClosed: of(result),
+        }),
+      );
+    };
+
+    beforeEach(() => {
+      originalEa = window.ea;
+      const bridge = jasmine.createSpyObj<typeof window.ea>('ElectronAPI', [
+        'showOpenDialog',
+      ]);
+      picker = bridge.showOpenDialog;
+      window.ea = bridge;
+      spyOn(component, 'focusInput');
+    });
+
+    afterEach(() => {
+      if (originalEa === undefined) {
+        delete (window as { ea?: typeof window.ea }).ea;
+      } else {
+        window.ea = originalEa;
+      }
+    });
+
+    it('opens the attachment dialog before the file picker and adds selected files to the task', async () => {
+      const files = [
+        file('file-1', 'C:\\Docs\\Rencana kerja.pdf', 'Rencana kerja.pdf'),
+        file('file-2', '/home/me/写真.png', '写真.png'),
+      ];
+      mockAttachmentDialog(files);
+      fixture.detectChanges();
+      fixture.nativeElement
+        .querySelector('[data-test="add-task-bar-attachment-btn"]')
+        .click();
+
+      expect(mockMatDialog.open).toHaveBeenCalledWith(
+        DialogEditTaskAttachmentComponent,
+        jasmine.objectContaining({ data: { attachment: {}, allowMultiple: true } }),
+      );
+      expect(picker).not.toHaveBeenCalled();
+      expect(component.draftAttachments().map(({ path }) => path)).toEqual(
+        files.map(({ path }) => path),
+      );
+
+      const [removed] = component.draftAttachments();
+      component.removeDraftAttachment(removed.id);
+      const parsed: TaskAttachment = {
+        id: 'parsed',
+        type: 'LINK',
+        path: 'https://example.com',
+      };
+      component.stateService.updateAttachments([parsed]);
+      component.stateService.updateInputTxt('Read files');
+      component.stateService.updateCleanText('Read files');
+      await component.addTask();
+
+      expect(mockTaskService.add.calls.mostRecent().args[2]?.attachments).toEqual([
+        parsed,
+        jasmine.objectContaining({ path: '/home/me/写真.png', title: '写真.png' }),
+      ]);
+      expect(component.draftAttachments()).toEqual([]);
+    });
+
+    it('preserves draft attachments when the dialog is cancelled', () => {
+      mockAttachmentDialog();
+      const existing = file('existing', '/tmp/existing.pdf', 'existing.pdf');
+      component.draftAttachments.set([existing]);
+
+      component.addAttachment();
+
+      expect(component.draftAttachments()).toEqual([existing]);
+    });
+
+    it('adds a link returned by the dialog', () => {
+      const link: TaskAttachment = {
+        id: null,
+        type: 'LINK',
+        path: 'https://example.com',
+        title: 'Example',
+      };
+      mockAttachmentDialog(link);
+
+      component.addAttachment();
+
+      expect(component.draftAttachments()).toEqual([
+        jasmine.objectContaining({ ...link, id: jasmine.any(String) }),
+      ]);
+    });
+  });
   describe('addTask', () => {
+    const mockAttachmentDialog = (attachment?: TaskAttachment): void => {
+      mockMatDialog.open.and.returnValue(
+        jasmine.createSpyObj<MatDialogRef<unknown>>('AttachmentDialog', {
+          afterClosed: of(attachment),
+        }),
+      );
+    };
+
+    it('should create a task with dialog and parsed attachments, then clear the draft', async () => {
+      spyOn(component, 'focusInput');
+      fixture.detectChanges();
+      const attachment: TaskAttachment = {
+        id: null,
+        type: 'LINK',
+        path: 'https://example.com/brief',
+        title: 'Brief',
+      };
+      mockAttachmentDialog(attachment);
+      fixture.nativeElement
+        .querySelector('[data-test="add-task-bar-attachment-btn"]')
+        .click();
+      expect(mockMatDialog.open).toHaveBeenCalledWith(
+        DialogEditTaskAttachmentComponent,
+        jasmine.objectContaining({ data: { attachment: {}, allowMultiple: true } }),
+      );
+
+      // Short-syntax parsing can replace its attachments while the user types.
+      const parsed: TaskAttachment = {
+        id: 'parsed',
+        type: 'LINK',
+        path: 'https://example.com/other',
+      };
+      component.stateService.updateAttachments([parsed]);
+      component.stateService.updateInputTxt('Read brief');
+      component.stateService.updateCleanText('Read brief');
+      await component.addTask();
+
+      const taskData = mockTaskService.add.calls.mostRecent()
+        .args[2] as Partial<TaskCopy>;
+      expect(taskData.attachments).toEqual([
+        parsed,
+        { ...attachment, id: jasmine.any(String) },
+      ]);
+      expect(component.draftAttachments()).toEqual([]);
+
+      component.stateService.updateInputTxt('Next task');
+      component.stateService.updateCleanText('Next task');
+      await component.addTask();
+      expect(mockTaskService.add.calls.mostRecent().args[2]?.attachments).toEqual([]);
+    });
+
+    it('should leave draft attachments unchanged when the dialog is cancelled', () => {
+      spyOn(component, 'focusInput');
+      mockAttachmentDialog();
+      component.addAttachment();
+      expect(component.draftAttachments()).toEqual([]);
+    });
+
+    it('should remove a draft attachment before creating the task', async () => {
+      spyOn(component, 'focusInput');
+      mockAttachmentDialog({
+        id: null,
+        type: 'LINK',
+        path: 'https://example.com/brief',
+      });
+      component.addAttachment();
+      fixture.detectChanges();
+      expect(
+        fixture.nativeElement.querySelector('.draft-attachments').textContent,
+      ).toContain('https://example.com/brief');
+      fixture.nativeElement.querySelector('.draft-attachments button').click();
+
+      component.stateService.updateInputTxt('Task without attachment');
+      component.stateService.updateCleanText('Task without attachment');
+      await component.addTask();
+      expect(mockTaskService.add.calls.mostRecent().args[2]?.attachments).toEqual([]);
+    });
+
     it('should not add a task when the visible input is empty', async () => {
       component.stateService.updateCleanText('Stale task');
       component.stateService.updateInputTxt('   ');

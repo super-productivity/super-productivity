@@ -119,11 +119,14 @@
       "CAPTURE_IMPORT_ERROR": "Some quick-add tasks could not be added yet. They are kept and will be retried."
     },
     "ATTACHMENT": {
+      "FILE_PICKER_ERROR": "Could not open the file picker. Please try again.",
       "LOCAL_FILE_UNAVAILABLE": "This attachment is only available on the device where it was added.",
       "COMMAND_UNSUPPORTED": "Command attachments can no longer run commands.",
       "DIALOG_EDIT": {
-        "ADD_ATTACHMENT": "Add Link",
-        "EDIT_ATTACHMENT": "Edit Link",
+        "ADD_ATTACHMENT": "Add Attachment",
+        "EDIT_ATTACHMENT": "Edit Attachment",
+        "CHOOSE_FILE": "Choose file",
+        "FILE_PICKER_TITLE": "Select attachment",
         "LABELS": {
           "FILE": "File path",
           "IMG": "Image URL",
