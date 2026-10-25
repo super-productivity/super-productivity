@@ -292,8 +292,16 @@ test.describe('Quick tour', () => {
       await expect(addTagBtn).toHaveClass(/onboarding-pulse/);
       await expect(hint).toContainText('Create one with +');
       await addTagBtn.tap();
-      await page.locator('dialog-create-tag input[name="title"]').fill('Phone tag');
-      await page.getByRole('button', { name: 'Save' }).tap();
+      // Phones open dialogs without autofocus, so nothing signals that the form
+      // is ready. In run 40151758322 the title was empty after the fill (likely
+      // cleared by ngModel's initial write) and Save stayed disabled. Refill
+      // until the form has the title.
+      const saveTagBtn = page.getByRole('button', { name: 'Save' });
+      await expect(async () => {
+        await page.locator('dialog-create-tag input[name="title"]').fill('Phone tag');
+        await expect(saveTagBtn).toBeEnabled({ timeout: 1000 });
+      }).toPass();
+      await saveTagBtn.tap();
       await expect(page.locator('dialog-create-tag')).toHaveCount(0);
       await expect(hint).toContainText('Plan the next days');
       await expect(hint).toContainText('2 of 3');
