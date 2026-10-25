@@ -191,6 +191,18 @@ jobs:
           # re-checks it before the store upload.
           bash tools/assert-snap-xdg-guard.sh "$SNAP_FILE"
 
+      # #11117: the app-builder-lib patch must point the .deb desktop entry at the
+      # spaceless /usr/bin link. On tag builds the .deb is already published by now.
+      - name: Verify .deb desktop entry Exec
+        run: |
+          set -euo pipefail
+          DEB_FILE=$(find ./.tmp/app-builds -type f -name '*.deb' -print -quit)
+          if [ -z "$DEB_FILE" ]; then
+            echo "::error::no .deb produced in .tmp/app-builds"
+            exit 1
+          fi
+          bash tools/assert-deb-desktop-exec.sh "$DEB_FILE"
+
       - name: Normalize snap file name
         if: false == startsWith(github.ref, 'refs/tags/v')
         run: find ./.tmp/app-builds -type f -name '*.snap' -exec sh -c 'x="{}"; mv "$x" ".tmp/app-builds/sp.snap"' \;
