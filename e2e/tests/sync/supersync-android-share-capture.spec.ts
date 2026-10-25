@@ -206,7 +206,8 @@ test.describe('@supersync Android share capture', () => {
     const grants = await (await api(user, '/grants')).json();
     expect(grants.otherPendingCount).toBe(1);
 
-    await clientA.sync.syncAndWait();
+    // The import runs after a sync; the next sync uploads the new task.
+    await clientA.sync.startSync();
     await expectInboxTask(clientA, title);
     await expect
       .poll(async () => (await (await api(user, '/grants')).json()).otherPendingCount, {
