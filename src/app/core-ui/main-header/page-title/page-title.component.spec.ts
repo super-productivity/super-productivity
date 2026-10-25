@@ -95,6 +95,8 @@ describe('PageTitleComponent', () => {
   let pluginStates: Map<string, PluginState>;
   let editBoardSpy: jasmine.Spy;
   let setViewLayoutSpy: jasmine.Spy;
+  let langChange$: Subject<unknown>;
+  let translateInstant: (key: string) => string;
 
   // `color` is a Tag-only field not surfaced on WorkContext's type.
   const wc = (o: Partial<WorkContext> & { color?: string | null }): WorkContext =>
@@ -158,13 +160,18 @@ describe('PageTitleComponent', () => {
       : [
           {
             provide: TranslateService,
-            useValue: { instant: (key: string) => key },
+            useValue: {
+              instant: (key: string) => translateInstant(key),
+              onLangChange: langChange$,
+            },
           },
         ]),
   ];
 
   beforeEach(async () => {
     routerEvents$ = new Subject<NavigationEnd>();
+    langChange$ = new Subject<unknown>();
+    translateInstant = (key) => key;
     routerStub = { events: routerEvents$, url: '/' };
     typeAndId$ = new BehaviorSubject<{ activeId: string; activeType: WorkContextType }>({
       activeId: 'TODAY',
@@ -256,6 +263,16 @@ describe('PageTitleComponent', () => {
 
       routerEvents$.next(new NavigationEnd(2, '/config', '/config#plugins'));
       expect(c.displayTitle()).toBe(T.PS.GLOBAL_SETTINGS);
+    });
+
+    it('re-translates the section title when the language changes', () => {
+      const c = setupComponent('/config');
+
+      translateInstant = (key) => `de:${key}`;
+      langChange$.next({ lang: 'de' });
+      expect(c.displayTitle()).toBe(`de:${T.PS.GLOBAL_SETTINGS}`);
+      langChange$.next({ lang: 'es' });
+      expect(c.displayTitle()).toBe(`es:${T.PS.GLOBAL_SETTINGS}`);
     });
   });
 
