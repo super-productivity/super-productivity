@@ -123,9 +123,14 @@ test.describe('@webdav Lost upload overwritten by a stale-base writer (#10916)',
       await expect(conflictDialog).toContainText(
         'Changes this device already synced are missing',
       );
+      syncPhone.prepareForNextSyncCycle('write');
       await conflictDialog.locator('button', { hasText: /Keep local/i }).click();
       await confirmSyncConflictOverwriteIfShown(phone.page, conflictDialog);
-      expect(await waitForSyncComplete(phone.page, syncPhone)).toBe('success');
+      // Keep local exposes no reliable terminal state; the desktop sync below
+      // asserts the upload landed.
+      await waitForSyncComplete(phone.page, syncPhone, 30000, {
+        allowResponseOnlyCompletion: true,
+      });
       await phone.page.goto(INBOX_URL);
       await expect(
         phone.page.locator('task', { hasText: phoneTask }).first(),
