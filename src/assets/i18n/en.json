@@ -186,7 +186,8 @@
         "TASK_DONE_STATE": "Task Completion State",
         "TASK_DONE_STATE_ALL": "All",
         "TASK_DONE_STATE_DONE": "Completed",
-        "TASK_DONE_STATE_UNDONE": "Not Completed"
+        "TASK_DONE_STATE_UNDONE": "Not Completed",
+        "TASK_TITLE_CONTAINS": "Task title contains"
       },
       "V": {
         "ADD_NEW_BOARD": "Add new board",

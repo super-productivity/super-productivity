@@ -230,6 +230,14 @@ export const BOARDS_FORM: LimitedFormlyFieldConfig<BoardCfg>[] = [
           },
         },
         {
+          key: 'keyword',
+          type: 'input',
+          templateOptions: {
+            label: T.F.BOARDS.FORM.TASK_TITLE_CONTAINS,
+            type: 'text',
+          },
+        },
+        {
           key: 'isParentTasksOnly',
           type: 'checkbox',
           props: {

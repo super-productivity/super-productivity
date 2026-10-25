@@ -32,6 +32,8 @@ export interface BoardSrcCfg {
   // (e.g. the legacy PFAPI → op-log migration). `sanitizePanelCfg` always
   // normalizes this to a defined array before it reaches any component.
   projectIds?: string[];
+  // Optional keyword filter for task titles.
+  keyword?: string;
   taskDoneState: BoardPanelCfgTaskDoneState;
   scheduledState: BoardPanelCfgScheduledState;
   isParentTasksOnly: boolean;

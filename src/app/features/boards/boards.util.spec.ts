@@ -565,4 +565,59 @@ describe('doesTaskMatchPanel', () => {
       false,
     );
   });
+
+  describe('keyword filtering', () => {
+    it('matches a task title containing the keyword', () => {
+      const panel = mkPanel({ keyword: 'report' });
+      const task = mkTask({ title: 'Write assignment report' });
+
+      expect(match(task, panel)).toBe(true);
+    });
+
+    it('ignores uppercase and lowercase differences', () => {
+      const panel = mkPanel({ keyword: 'REPORT' });
+      const task = mkTask({ title: 'Write assignment report' });
+
+      expect(match(task, panel)).toBe(true);
+    });
+
+    it('ignores spaces around the keyword', () => {
+      const panel = mkPanel({ keyword: '  report  ' });
+      const task = mkTask({ title: 'Write assignment report' });
+
+      expect(match(task, panel)).toBe(true);
+    });
+
+    it('excludes tasks that do not match the keyword', () => {
+      const panel = mkPanel({ keyword: 'login' });
+      const task = mkTask({ title: 'Write assignment report' });
+
+      expect(match(task, panel)).toBe(false);
+    });
+
+    it('keeps tasks when the keyword is empty or missing', () => {
+      const task = mkTask({ title: 'Write assignment report' });
+
+      expect(match(task, mkPanel({ keyword: '' }))).toBe(true);
+      expect(match(task, mkPanel())).toBe(true);
+    });
+
+    it('combines keyword filtering with project and tag filters', () => {
+      const panel = mkPanel({
+        keyword: 'report',
+        projectIds: ['p1'],
+        includedTagIds: ['work'],
+      });
+
+      const matchingTask = mkTask({
+        title: 'Write report',
+        projectId: 'p1',
+        tagIds: ['work'],
+      });
+
+      expect(match(matchingTask, panel)).toBe(true);
+      expect(match({ ...matchingTask, projectId: 'p2' }, panel)).toBe(false);
+      expect(match({ ...matchingTask, tagIds: [] }, panel)).toBe(false);
+    });
+  });
 });

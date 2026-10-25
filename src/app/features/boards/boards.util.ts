@@ -188,10 +188,16 @@ export const doesTaskMatchPanel = (
     | 'projectIds'
     | 'scheduledState'
     | 'backlogState'
+    | 'keyword'
   >,
   isInBacklog: (task: Readonly<TaskCopy>) => boolean,
 ): boolean => {
   const taskTagIds = task.tagIds ?? [];
+  const keyword = panelCfg.keyword?.trim().toLowerCase();
+
+  if (keyword && !(task.title ?? '').toLowerCase().includes(keyword)) {
+    return false;
+  }
 
   if (panelCfg.includedTagIds?.length) {
     const matches =
