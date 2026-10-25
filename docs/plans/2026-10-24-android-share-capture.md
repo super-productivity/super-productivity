@@ -114,7 +114,7 @@ the URL in notes. No seal or payload version bump.
   the agent-capture helpers: `toCaptureTask` + `addInboxTaskAction`, exported
   from `super-sync-capture-source.ts`. `source === 'share'` decides, not field
   presence. Runs on start and every resume (existing effect).
-- `toCaptureTask(payload, { notesMaxChars })` gains `link`: kept only when it
+- `toCaptureTask(payload, notesMaxChars)` gains `link`: kept only when it
   parses with `new URL()`, protocol `http:`/`https:`, at most 2048 characters;
   becomes one attachment `{ type: 'LINK', icon: 'link', path, title }` inside
   the `addTask` task (one op). Notes equal to the link are dropped. The type
@@ -307,3 +307,20 @@ Kotlin JVM, server and package checks):
   config loads; a share in that window stays local. The inbox write runs on
   the main thread (one small fsynced file). `CAPTURE_SHARE_INFO` also shows on
   non-Android platforms, where it still describes what the switch does.
+
+Third review (fresh context, read the branch as a compiler would and
+compiled the Android share files against local stubs):
+
+- **Fixed:** `ShareReceiverActivity.kt` did not compile: `text/*` in its KDoc
+  opened a nested comment (CI's Android Native Tests caught it too).
+  `readableUrl` still used `java.net.URI`, so a link with unescaped
+  characters got the whole URL as its title → `java.net.URL` plus
+  `URLDecoder`, matching `decodeURIComponent`. A stale
+  `flushPendingShareIntent` reference in
+  `docs/android-edge-to-edge-keyboard.md`.
+- **Not fixed, accepted:** any installed app can call the exported share
+  activity and add Inbox tasks with only a toast (true of every share
+  target; uploads are sealed to the user's key and capped server-side). If
+  deleting the inbox file fails after a `200`, the app later imports the
+  entry too: a duplicate, needing a failed delete. The worker wakes once
+  after a successful first attempt and finds nothing to do.

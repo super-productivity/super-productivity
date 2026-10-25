@@ -26,6 +26,10 @@ class SharePayloadTest {
         assertEquals("example.com", title("https://example.com/"))
         assertEquals("example.com: a b", title("https://Example.com/a/b"))
         assertEquals("example.com: grüße welt", title("https://example.com/gr%C3%BC%C3%9Fe_welt"))
+        // Like readable-url.ts: unescaped characters still parse, `+` stays,
+        // a malformed escape keeps the whole URL.
+        assertEquals("example.com: a|b c+d", title("https://example.com/a|b/c+d?q={x}"))
+        assertEquals("https://example.com/%zz", title("https://example.com/%zz"))
     }
 
     @Test

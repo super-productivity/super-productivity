@@ -452,7 +452,7 @@ SCSS token (`_css-variables.scss`) without writing SystemBars' own
 - The var lives only as an inline style on the document, so a web-side reload
   (`window.location.reload()` — language change, PWA update, sync-conflict
   recovery) wipes it. The native dedupe (`lastStatusBarOverlapCssPx`) is reset in
-  `flushPendingShareIntent()` (runs on every frontend (re)load) so the next layout
+  `onFrontendReady()` (runs on every frontend (re)load) so the next layout
   pass re-publishes it; without the reset the unchanged value would be skipped and
   the overlap would regress after a reload.
 

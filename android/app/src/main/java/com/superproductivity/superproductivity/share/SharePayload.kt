@@ -1,8 +1,8 @@
 package com.superproductivity.superproductivity.share
 
 import org.json.JSONObject
-import java.net.URI
 import java.net.URL
+import java.net.URLDecoder
 
 /**
  * Turns an Android text share into a v1 capture payload, the shape the
@@ -83,13 +83,16 @@ object SharePayload {
     }
 
     /** Port of src/app/util/readable-url.ts: `host: path words`, or the URL. */
+    @Suppress("DEPRECATION") // URL(String), as in toLink: it accepts what URI rejects
     internal fun readableUrl(url: String): String = try {
-        val uri = URI(url)
-        val host = uri.host?.lowercase()?.removePrefix("www.")
+        val parsed = URL(url)
+        val host = parsed.host?.lowercase()?.removePrefix("www.")
         if (host.isNullOrEmpty()) {
             url
         } else {
-            val words = (uri.path ?: "").removeSuffix("/")
+            // decodeURIComponent: `+` stays, a malformed escape returns the URL.
+            val path = URLDecoder.decode((parsed.path ?: "").replace("+", "%2B"), "UTF-8")
+            val words = path.removeSuffix("/")
                 .replace(Regex("[/_-]"), " ")
                 .replace(Regex("\\s+"), " ")
                 .trim()
