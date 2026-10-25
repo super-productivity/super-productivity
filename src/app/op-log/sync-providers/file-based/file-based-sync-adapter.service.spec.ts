@@ -1795,7 +1795,7 @@ describe('FileBasedSyncAdapterService', () => {
               state: { tasks: [{ id: 'task-b' }] },
             }),
           );
-          expect(result.ownUploadsMissing).toBeUndefined();
+          expect(result.ownUploadsMissing).toBe(false);
         });
       });
 

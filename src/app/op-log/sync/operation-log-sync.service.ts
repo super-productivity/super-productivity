@@ -29,7 +29,6 @@ import {
   CaptureRacedRebuildError,
   IncompleteRemoteOperationsError,
   LocalDataConflictError,
-  OwnUploadsMissingConflictError,
 } from '../core/errors/sync-errors';
 import { SuperSyncStatusService } from './super-sync-status.service';
 import {
@@ -934,68 +933,15 @@ export class OperationLogSyncService {
       }
 
       // Only show confirmation for wholly fresh clients without any local changes
-      if (!hasLocalChanges) {
-        const isFreshClient = await this.isWhollyFreshClient();
-
-        // CRITICAL FIX: Even if op-log is empty, check if NgRx store has meaningful data.
-        // This catches data that existed before the operation-log feature was added.
-        if (
-          isFreshClient &&
-          (await this.syncLocalStateService.hasMeaningfulStoreData())
-        ) {
-          OpLog.warn(
-            'OperationLogSyncService: Fresh client detected with meaningful local data in store. ' +
-              'Throwing LocalDataConflictError for conflict resolution dialog.',
-          );
-
-          // Fresh client (no unsynced ops, no prior sync) — there is no
-          // last-synced clock, so pass null explicitly (SPAP-7).
-          throw new LocalDataConflictError(
-            0, // No unsynced ops, but we have meaningful store data
-            result.snapshotState as Record<string, unknown>,
-            result.snapshotVectorClock,
-            null,
-            result.remoteLastModified,
-          );
-        }
-
-        // #10916: nothing is pending because this device already uploaded its
-        // changes, yet the remote lost them. Hydrating would delete them here too.
-        if (!isFreshClient && result.ownUploadsMissing) {
-          OpLog.warn(
-            'OperationLogSyncService: Remote snapshot lost changes this client already ' +
-              'synced. Throwing OwnUploadsMissingConflictError for conflict resolution dialog.',
-          );
-          throw new OwnUploadsMissingConflictError(
-            0,
-            result.snapshotState as Record<string, unknown>,
-            result.snapshotVectorClock,
-            lastSyncedVectorClock,
-            result.remoteLastModified,
-          );
-        }
-
-        // Original flow for truly fresh clients (no store data)
-        if (isFreshClient) {
-          OpLog.warn(
-            'OperationLogSyncService: Fresh client detected. Requesting confirmation before accepting snapshot.',
-          );
-
-          const confirmed = this.syncLocalStateService.confirmFreshClientSync(1); // Show as "1 snapshot"
-          if (!confirmed) {
-            OpLog.normal(
-              'OperationLogSyncService: User cancelled fresh client sync. Snapshot not applied.',
-            );
-            this.snackService.open({
-              msg: T.F.SYNC.S.FRESH_CLIENT_SYNC_CANCELLED,
-            });
-            return { kind: 'cancelled' };
-          }
-
-          OpLog.normal(
-            'OperationLogSyncService: User confirmed fresh client sync. Proceeding with snapshot.',
-          );
-        }
+      if (
+        !hasLocalChanges &&
+        !(await this.syncLocalStateService.confirmSnapshotWithoutPendingOps(
+          result,
+          lastSyncedVectorClock,
+        ))
+      ) {
+        this.snackService.open({ msg: T.F.SYNC.S.FRESH_CLIENT_SYNC_CANCELLED });
+        return { kind: 'cancelled' };
       }
 
       const initialUnsyncedOpIds = new Set(unsyncedOps.map((entry) => entry.op.id));

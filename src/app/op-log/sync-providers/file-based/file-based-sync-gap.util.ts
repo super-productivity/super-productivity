@@ -51,6 +51,8 @@ export interface GapDetectionResult {
   reason?: string;
   /** The syncVersion regressed, but the causal state provably did not. */
   isCosmeticReset: boolean;
+  /** A seq-0 snapshot download lost this client's uploads (#10916). */
+  ownUploadsMissing: boolean;
 }
 
 /** The op-log reads {@link getOpLogBaselineClock} needs. */
@@ -259,7 +261,17 @@ export const detectDownloadGap = ({
               ? 'snapshot replacement with an unseen causal base'
               : undefined;
 
-  return { needsGapDetection: reason !== undefined, reason, isCosmeticReset };
+  const ownUploadsMissing =
+    sinceSeq === 0 &&
+    hasSnapshot &&
+    areOwnUploadsMissing(remote, excludeClient, lastSeenClock);
+
+  return {
+    needsGapDetection: reason !== undefined,
+    reason,
+    isCosmeticReset,
+    ownUploadsMissing,
+  };
 };
 
 /**

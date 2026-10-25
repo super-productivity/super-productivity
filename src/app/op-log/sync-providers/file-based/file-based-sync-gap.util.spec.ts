@@ -57,6 +57,16 @@ describe('detectDownloadGap', () => {
 
       expect(result.needsGapDetection).toBeFalse();
     });
+
+    it('reports own uploads missing only on the seq-0 snapshot download (#10916)', () => {
+      const remote = { vectorClock: REPLACED_CLOCK };
+      const own = { excludeClient: 'clientA' };
+
+      expect(detectDownloadGap(input(remote, own)).ownUploadsMissing).toBeFalse();
+      expect(
+        detectDownloadGap(input(remote, { ...own, sinceSeq: 0 })).ownUploadsMissing,
+      ).toBeTrue();
+    });
   });
 
   it('does not flag an ordinary dominating upload without a snapshot base', () => {

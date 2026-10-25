@@ -53,7 +53,6 @@ import {
   isSingleFileBufferPossiblyTrimmed,
   isSplitBufferPossiblyTrimmed,
   getOpLogBaselineClock,
-  areOwnUploadsMissing,
   isSnapshotBaseUnseen,
 } from './file-based-sync-gap.util';
 import { ArchiveDbAdapter } from '../../../core/persistence/archive-db-adapter.service';
@@ -1185,7 +1184,7 @@ export class FileBasedSyncAdapterService {
     }
 
     const lastSeenClock = this._lastSeenVectorClocks.get(providerKey);
-    const { needsGapDetection, reason, isCosmeticReset } = detectDownloadGap({
+    const gap = detectDownloadGap({
       remote: syncData,
       sinceSeq,
       excludeClient,
@@ -1195,16 +1194,16 @@ export class FileBasedSyncAdapterService {
       hasSnapshot: !!syncData.state,
       isPossiblyTrimmed: isSingleFileBufferPossiblyTrimmed(syncData),
     });
-    if (isCosmeticReset) {
+    if (gap.isCosmeticReset) {
       OpLog.normal(
         `FileBasedSyncAdapter: syncVersion regressed ` +
           `(${previousExpectedVersion} → ${syncData.syncVersion}) but remote vector clock is ` +
           `EQUAL to last-seen — treating reset as cosmetic (no gap).`,
       );
     }
-    if (needsGapDetection) {
+    if (gap.needsGapDetection) {
       OpLog.warn(
-        `FileBasedSyncAdapter: Gap detected - ${reason}. ` +
+        `FileBasedSyncAdapter: Gap detected - ${gap.reason}. ` +
           'Another client may have uploaded a snapshot. Signaling gap detection.',
       );
     }
@@ -1308,16 +1307,13 @@ export class FileBasedSyncAdapterService {
       // Signal gap detection when sync version was reset or snapshot was replaced.
       // This triggers the download service to re-download from seq 0, which will include
       // the snapshotState for proper state replacement.
-      gapDetected: needsGapDetection,
+      gapDetected: gap.needsGapDetection,
+      ownUploadsMissing: gap.ownUploadsMissing,
       // Include full state snapshot for fresh downloads (sinceSeq === 0)
       // This allows new clients to bootstrap with complete state, not just recent ops
       ...(snapshotStateWithArchives ? { snapshotState: snapshotStateWithArchives } : {}),
       ...(snapshotStateWithArchives
         ? { snapshotAppliedOpIds: limitedOps.map(({ op }) => op.id) }
-        : {}),
-      ...(snapshotStateWithArchives &&
-      areOwnUploadsMissing(syncData, excludeClient, lastSeenClock)
-        ? { ownUploadsMissing: true }
         : {}),
     };
   }
@@ -2645,7 +2641,7 @@ export class FileBasedSyncAdapterService {
 
     // Gap detection on the ops file (shared with the single-file logic).
     const lastSeenClock = this._lastSeenVectorClocks.get(providerKey);
-    let { needsGapDetection } = detectDownloadGap({
+    const gap = detectDownloadGap({
       remote: opsFile,
       sinceSeq,
       excludeClient,
@@ -2699,7 +2695,7 @@ export class FileBasedSyncAdapterService {
 
     let snapshotStateWithArchives: Record<string, unknown> | undefined;
     let snapshot: FileBasedStateFile | undefined;
-    if (isForceFromZero || needsGapDetection) {
+    if (isForceFromZero || gap.needsGapDetection) {
       const snap = await this._loadValidatedSnapshot(provider, cfg, encryptKey, opsFile);
       if (snap) {
         snapshot = snap;
@@ -2708,9 +2704,6 @@ export class FileBasedSyncAdapterService {
           ...(snap.archiveYoung ? { archiveYoung: snap.archiveYoung } : {}),
           ...(snap.archiveOld ? { archiveOld: snap.archiveOld } : {}),
         };
-      } else {
-        // No snapshot validates the ref ⇒ treat as gap so the caller re-syncs.
-        needsGapDetection = true;
       }
     }
 
@@ -2720,13 +2713,11 @@ export class FileBasedSyncAdapterService {
       latestSeq,
       snapshotVectorClock: snapshot?.vectorClock ?? opsFile.vectorClock,
       remoteLastModified: opsFile.lastModified,
-      gapDetected: needsGapDetection,
+      // No snapshot validates the ref ⇒ treat as gap so the caller re-syncs.
+      gapDetected: gap.needsGapDetection || (isForceFromZero && !snapshot),
+      ownUploadsMissing: gap.ownUploadsMissing,
       ...(snapshotStateWithArchives ? { snapshotState: snapshotStateWithArchives } : {}),
       ...(snapshotStateWithArchives ? { snapshotAppliedOpIds } : {}),
-      ...(snapshotStateWithArchives &&
-      areOwnUploadsMissing(opsFile, excludeClient, lastSeenClock)
-        ? { ownUploadsMissing: true }
-        : {}),
     };
   }
 

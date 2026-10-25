@@ -15,7 +15,6 @@ import {
   SyncAlreadyInProgressError,
   LockAcquisitionTimeoutError,
   LocalDataConflictError,
-  OwnUploadsMissingConflictError,
   WebCryptoNotAvailableError,
   MissingRefreshTokenAPIError,
   HttpNotOkAPIError,
@@ -1674,9 +1673,7 @@ export class SyncWrapperService {
       const localLastUpdate = vcEntry?.lastUpdate || Date.now();
 
       const conflictData: ConflictData = {
-        reason: snapshotConflict
-          ? ConflictReason.NoLastSync
-          : ConflictReason.BothNewerLastSync,
+        reason: snapshotConflict?.conflictReason ?? ConflictReason.BothNewerLastSync,
         remote: {
           lastUpdate: snapshotConflict?.remoteLastModified ?? null,
           // A user whose first encounter is a manual sync never sees the snack,
@@ -1702,9 +1699,6 @@ export class SyncWrapperService {
           lastSyncedVectorClock: snapshotConflict?.lastSyncedVectorClock ?? null,
         },
         localUnsyncedOpsCount: countUnknown ? undefined : unsyncedCount,
-        ...(error instanceof OwnUploadsMissingConflictError
-          ? { ownUploadsMissing: true }
-          : {}),
       };
 
       SyncLog.log('SyncWrapperService: Opening data conflict dialog', {

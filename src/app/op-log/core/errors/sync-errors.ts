@@ -9,6 +9,7 @@ import {
 } from '@sp/sync-providers/errors';
 import { FILE_BASED_SYNC_CONSTANTS } from '../../sync-providers/file-based/file-based-sync.types';
 import { KNOWN_ACTION_TYPES } from '../action-types.enum';
+import { ConflictReason } from '../../sync-providers/provider.const';
 
 /** Upper bound for the entity count reported in a sync diagnostic. */
 const MAX_REPORTED_ENTITY_COUNT = 9999;
@@ -89,6 +90,7 @@ export class NoSyncProviderSetError extends Error {
  */
 export class LocalDataConflictError extends Error {
   override name = 'LocalDataConflictError';
+  readonly conflictReason: ConflictReason = ConflictReason.NoLastSync;
 
   constructor(
     public readonly unsyncedCount: number,
@@ -113,10 +115,11 @@ export class LocalDataConflictError extends Error {
 /**
  * The remote snapshot lost changes this device already synced (#10916): with
  * nothing pending, hydrating it would delete them silently. Routed to the same
- * dialog as LocalDataConflictError, with an explanation.
+ * dialog as LocalDataConflictError; its reason adds an explanation.
  */
 export class OwnUploadsMissingConflictError extends LocalDataConflictError {
   override name = 'OwnUploadsMissingConflictError';
+  override readonly conflictReason = ConflictReason.OwnUploadsMissing;
 }
 
 export class SyncAlreadyInProgressError extends Error {
