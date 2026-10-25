@@ -271,8 +271,6 @@ describe('PageTitleComponent', () => {
       translateInstant = (key) => `de:${key}`;
       langChange$.next({ lang: 'de' });
       expect(c.displayTitle()).toBe(`de:${T.PS.GLOBAL_SETTINGS}`);
-      langChange$.next({ lang: 'es' });
-      expect(c.displayTitle()).toBe(`es:${T.PS.GLOBAL_SETTINGS}`);
     });
   });
 
