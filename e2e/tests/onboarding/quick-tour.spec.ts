@@ -292,8 +292,14 @@ test.describe('Quick tour', () => {
       await expect(addTagBtn).toHaveClass(/onboarding-pulse/);
       await expect(hint).toContainText('Create one with +');
       await addTagBtn.tap();
-      await page.locator('dialog-create-tag input[name="title"]').fill('Phone tag');
-      await page.getByRole('button', { name: 'Save' }).tap();
+      // A fill right after the dialog opens can be cleared by ngModel's first
+      // write (run 40151758322); refill until Save sees the title.
+      const saveTagBtn = page.getByRole('button', { name: 'Save' });
+      await expect(async () => {
+        await page.locator('dialog-create-tag input[name="title"]').fill('Phone tag');
+        await expect(saveTagBtn).toBeEnabled({ timeout: 1000 });
+      }).toPass();
+      await saveTagBtn.tap();
       await expect(page.locator('dialog-create-tag')).toHaveCount(0);
       await expect(hint).toContainText('Plan the next days');
       await expect(hint).toContainText('2 of 3');
