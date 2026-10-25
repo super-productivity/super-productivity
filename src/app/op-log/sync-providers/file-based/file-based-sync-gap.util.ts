@@ -53,6 +53,8 @@ export interface GapDetectionResult {
   isCosmeticReset: boolean;
   /** A seq-0 snapshot download lost this client's uploads (#10916). */
   ownUploadsMissing: boolean;
+  /** See {@link doesRemoteExtendLastSeen} (#10972). */
+  snapshotExtendsLastSeen: boolean;
 }
 
 /** The op-log reads {@link getOpLogBaselineClock} needs. */
@@ -271,8 +273,45 @@ export const detectDownloadGap = ({
     reason,
     isCosmeticReset,
     ownUploadsMissing,
+    snapshotExtendsLastSeen: doesRemoteExtendLastSeen(
+      remote,
+      lastSeenClock,
+      previousExpectedVersion,
+    ),
   };
 };
+
+/**
+ * #10972: whether the remote only appended to the file this client last
+ * committed, with no full-state replacement since. A seq-0 snapshot of such a
+ * file is a catch-up past trimmed ops, so pending local ops can be kept on top
+ * of it instead of asking the user to pick a side.
+ *
+ * Every normal writer merges the file clock and keeps syncVersion and the
+ * snapshot base. A replacement writes a new base (v19.2.0+); older ones leave
+ * none but reset syncVersion to 1. A legacy replacement whose tail uploads
+ * climbed back past our expected version still passes: a documented residual.
+ */
+export const doesRemoteExtendLastSeen = (
+  remote: Pick<GapDetectionRemote, 'syncVersion' | 'vectorClock' | 'snapshotBaseClock'>,
+  lastSeenClock: VectorClock | undefined,
+  previousExpectedVersion: number,
+): boolean => {
+  if (!lastSeenClock || previousExpectedVersion <= 0) return false;
+  if (remote.syncVersion < previousExpectedVersion) return false;
+  if (!remote.snapshotBaseClock && remote.syncVersion === 1) return false;
+  if (isSnapshotBaseUnseen(remote.snapshotBaseClock, lastSeenClock)) return false;
+  const comparison = compareVectorClocks(remote.vectorClock, lastSeenClock);
+  return comparison === 'GREATER_THAN' || comparison === 'EQUAL';
+};
+
+/** The gap verdicts a file download response forwards to the caller. */
+export const toSnapshotGapFlags = (
+  gap: GapDetectionResult,
+): Pick<GapDetectionResult, 'ownUploadsMissing' | 'snapshotExtendsLastSeen'> => ({
+  ownUploadsMissing: gap.ownUploadsMissing,
+  snapshotExtendsLastSeen: gap.snapshotExtendsLastSeen,
+});
 
 /**
  * #10973: single-file writers trim to exactly MAX_RECENT_OPS, so a shorter

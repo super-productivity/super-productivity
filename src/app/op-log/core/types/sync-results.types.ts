@@ -108,6 +108,8 @@ export interface FileSnapshotDownloadResult extends DownloadResultBase {
   snapshotAppliedOpIds?: string[];
   /** See `FileSnapshotOpDownloadResponse.ownUploadsMissing` (#10916). */
   ownUploadsMissing?: boolean;
+  /** See `FileSnapshotOpDownloadResponse.snapshotExtendsLastSeen` (#10972). */
+  snapshotExtendsLastSeen?: boolean;
 }
 
 export type DownloadResult =

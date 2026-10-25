@@ -3601,6 +3601,172 @@ describe('OperationLogSyncService', () => {
           expect(syncHydrationServiceSpy.hydrateFromRemoteSync).not.toHaveBeenCalled();
         });
 
+        describe('catch-up snapshot that only extends the last-seen file (#10972)', () => {
+          const pendingEntry = (opType: OpType = OpType.Update): OperationLogEntry => ({
+            seq: 1,
+            op: {
+              id: 'pending-edit',
+              clientId: 'client-A',
+              actionType: ActionType.TASK_SHARED_UPDATE,
+              opType,
+              entityType: 'TASK',
+              entityId: 'task-a',
+              payload: { task: { id: 'task-a', changes: { title: 'Offline' } } },
+              vectorClock: { clientA: 2 },
+              timestamp: 2,
+              schemaVersion: 1,
+            },
+            appliedAt: 2,
+            source: 'local',
+          });
+          const catchUpSnapshot = (
+            extra: { newOps?: Operation[]; snapshotAppliedOpIds?: string[] } = {},
+          ): void => {
+            downloadServiceSpy.downloadRemoteOps.and.resolveTo({
+              newOps: [],
+              needsFullStateUpload: false,
+              success: true,
+              providerMode: 'fileSnapshotOps',
+              failedFileCount: 0,
+              snapshotState: { task: { ids: ['remote-task'] } },
+              snapshotVectorClock: { clientA: 1, clientB: 2500 },
+              snapshotExtendsLastSeen: true,
+              latestServerSeq: 5,
+              ...extra,
+            });
+          };
+          const provider = (lastServerSeq = 2): OperationSyncCapable =>
+            ({
+              supportsOperationSync: true,
+              getLastServerSeq: () => Promise.resolve(lastServerSeq),
+              setLastServerSeq: jasmine.createSpy('setLastServerSeq').and.resolveTo(),
+            }) as unknown as OperationSyncCapable;
+          let hydrationSpy: jasmine.SpyObj<SyncHydrationService>;
+
+          beforeEach(() => {
+            hydrationSpy = TestBed.inject(
+              SyncHydrationService,
+            ) as jasmine.SpyObj<SyncHydrationService>;
+            hydrationSpy.hydrateFromRemoteSync.and.callFake(async (_s, _c, hooks) => {
+              hooks?.afterStateLoad?.();
+            });
+            operationApplierSpy.applyOperations.and.callFake(async (ops) => ({
+              appliedOps: ops,
+            }));
+          });
+
+          it('hydrates, keeps and replays the pending edit, then validates state', async () => {
+            const entry = pendingEntry();
+            opLogStoreSpy.getUnsynced.and.resolveTo([entry]);
+            catchUpSnapshot();
+
+            await expectAsync(service.downloadRemoteOps(provider())).toBeResolved();
+
+            expect(hydrationSpy.hydrateFromRemoteSync).toHaveBeenCalledOnceWith(
+              jasmine.anything(),
+              jasmine.anything(),
+              jasmine.objectContaining({ keepPendingOps: { discardOpIds: [] } }),
+            );
+            expect(operationApplierSpy.applyOperations).toHaveBeenCalledOnceWith(
+              [entry.op],
+              jasmine.objectContaining({ isLocalHydration: true }),
+            );
+            // Kept ops never went through remote-op validation.
+            expect(remoteOpsProcessingServiceSpy.validateAfterSync).toHaveBeenCalled();
+          });
+
+          it('validates kept ops even when the split suffix is fully filtered', async () => {
+            opLogStoreSpy.getUnsynced.and.resolveTo([pendingEntry()]);
+            const suffixOp = { ...pendingEntry().op, id: 'suffix-op', clientId: 'B' };
+            catchUpSnapshot({ newOps: [suffixOp], snapshotAppliedOpIds: [] });
+            // A filtered suffix returns without validating (remote-ops-processing).
+            remoteOpsProcessingServiceSpy.processRemoteOps.and.resolveTo({
+              localWinOpsCreated: 0,
+              allOpsFilteredBySyncImport: true,
+              filteredOpCount: 1,
+              isLocalUnsyncedImport: false,
+              blockedByIncompatibleOp: false,
+            });
+
+            await expectAsync(service.downloadRemoteOps(provider())).toBeResolved();
+
+            expect(remoteOpsProcessingServiceSpy.processRemoteOps).toHaveBeenCalled();
+            expect(remoteOpsProcessingServiceSpy.validateAfterSync).toHaveBeenCalled();
+          });
+
+          it('re-runs archive side effects of kept ops when the archive was replaced', async () => {
+            const entry = pendingEntry();
+            opLogStoreSpy.getUnsynced.and.resolveTo([entry]);
+            hydrationSpy.hydrateFromRemoteSync.and.callFake(async (_s, _c, hooks) => {
+              hooks?.afterStateLoad?.();
+              hooks?.afterArchiveReplacement?.();
+            });
+            catchUpSnapshot();
+
+            await expectAsync(service.downloadRemoteOps(provider())).toBeResolved();
+
+            expect(operationApplierSpy.applyOperations).toHaveBeenCalledWith(
+              [entry.op],
+              jasmine.objectContaining({ skipReducerDispatch: true }),
+            );
+          });
+
+          it('keeps an edit that became durable during the snapshot download', async () => {
+            const entry = pendingEntry();
+            const late = { ...entry, seq: 2, op: { ...entry.op, id: 'late-edit' } };
+            opLogStoreSpy.getUnsynced.and.resolveTo([entry]);
+            hydrationStateServiceSpy.startApplyingRemoteOps.and.callFake(() => {
+              opLogStoreSpy.getUnsynced.and.resolveTo([entry, late]);
+            });
+            catchUpSnapshot();
+
+            await expectAsync(service.downloadRemoteOps(provider())).toBeResolved();
+
+            // The store keeps every uncovered pending row, the late one included.
+            expect(operationApplierSpy.applyOperations).toHaveBeenCalledOnceWith(
+              [entry.op, late.op],
+              jasmine.objectContaining({ isLocalHydration: true }),
+            );
+          });
+
+          it('still shows the dialog when a backup import lands during the download', async () => {
+            const entry = pendingEntry();
+            const imported = pendingEntry(OpType.BackupImport);
+            const late = { ...imported, seq: 2, op: { ...imported.op, id: 'import' } };
+            opLogStoreSpy.getUnsynced.and.resolveTo([entry]);
+            hydrationStateServiceSpy.startApplyingRemoteOps.and.callFake(() => {
+              opLogStoreSpy.getUnsynced.and.resolveTo([late]);
+            });
+            catchUpSnapshot();
+
+            await expectAsync(
+              service.downloadRemoteOps(provider()),
+            ).toBeRejectedWithError(LocalDataConflictError);
+            expect(hydrationSpy.hydrateFromRemoteSync).not.toHaveBeenCalled();
+          });
+
+          it('still shows the dialog when a pending op is a full-state op', async () => {
+            opLogStoreSpy.getUnsynced.and.resolveTo([pendingEntry(OpType.BackupImport)]);
+            catchUpSnapshot();
+
+            await expectAsync(
+              service.downloadRemoteOps(provider()),
+            ).toBeRejectedWithError(LocalDataConflictError);
+            expect(hydrationSpy.hydrateFromRemoteSync).not.toHaveBeenCalled();
+          });
+
+          it('still shows the dialog on a never-synced client', async () => {
+            opLogStoreSpy.getUnsynced.and.resolveTo([pendingEntry()]);
+            opLogStoreSpy.hasSyncedOps.and.resolveTo(false);
+            catchUpSnapshot();
+
+            await expectAsync(
+              service.downloadRemoteOps(provider(0)),
+            ).toBeRejectedWithError(LocalDataConflictError);
+            expect(hydrationSpy.hydrateFromRemoteSync).not.toHaveBeenCalled();
+          });
+        });
+
         it('should show the conflict dialog, not hydrate, when the remote lost this client’s synced changes (#10916)', async () => {
           // Nothing pending: the client already uploaded its changes. A remote that
           // lost them must not be hydrated silently.
