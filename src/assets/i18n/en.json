@@ -1218,6 +1218,7 @@
         "LOCAL_REMOTE": "Local -> Remote",
         "NEVER": "Never",
         "OVERWRITE_WARNING": "WARNING: The {{targetName}} data contains approximately {{targetChanges}} changes while the {{sourceName}} data only has {{sourceChanges}} changes. Are you sure you want to overwrite the {{targetName}} data with the {{sourceName}} version?",
+        "OWN_UPLOADS_MISSING": "Changes this device already synced are missing from the synced data. Another device may have saved over an older copy, or the sync folder lost an update. Keep local restores them; Keep remote discards them.",
         "OVERWRITE_WARNING_UNKNOWN": "WARNING: The number of unsynced changes is unknown. This will replace the entire {{targetName}} dataset with the {{sourceName}} version. Changes present only in the {{targetName}} data will be lost. Are you sure?",
         "REMOTE": "Remote",
         "RESULT": "Result",

@@ -106,6 +106,8 @@ export interface FileSnapshotDownloadResult extends DownloadResultBase {
    * with file providers that expose a fully current snapshot.
    */
   snapshotAppliedOpIds?: string[];
+  /** See `FileSnapshotOpDownloadResponse.ownUploadsMissing` (#10916). */
+  ownUploadsMissing?: boolean;
 }
 
 export type DownloadResult =

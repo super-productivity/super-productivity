@@ -15,6 +15,7 @@ import {
   SyncAlreadyInProgressError,
   LockAcquisitionTimeoutError,
   LocalDataConflictError,
+  OwnUploadsMissingConflictError,
   WebCryptoNotAvailableError,
   MissingRefreshTokenAPIError,
   HttpNotOkAPIError,
@@ -1701,6 +1702,9 @@ export class SyncWrapperService {
           lastSyncedVectorClock: snapshotConflict?.lastSyncedVectorClock ?? null,
         },
         localUnsyncedOpsCount: countUnknown ? undefined : unsyncedCount,
+        ...(error instanceof OwnUploadsMissingConflictError
+          ? { ownUploadsMissing: true }
+          : {}),
       };
 
       SyncLog.log('SyncWrapperService: Opening data conflict dialog', {

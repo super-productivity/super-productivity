@@ -110,6 +110,15 @@ export class LocalDataConflictError extends Error {
   }
 }
 
+/**
+ * The remote snapshot lost changes this device already synced (#10916): with
+ * nothing pending, hydrating it would delete them silently. Routed to the same
+ * dialog as LocalDataConflictError, with an explanation.
+ */
+export class OwnUploadsMissingConflictError extends LocalDataConflictError {
+  override name = 'OwnUploadsMissingConflictError';
+}
+
 export class SyncAlreadyInProgressError extends Error {
   override name = 'SyncAlreadyInProgressError';
 

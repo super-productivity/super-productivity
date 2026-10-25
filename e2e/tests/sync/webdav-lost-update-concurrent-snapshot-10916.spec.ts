@@ -7,6 +7,7 @@ import {
   WEBDAV_CONFIG_TEMPLATE,
   WEBDAV_SYNC_FILE,
   closeContextsSafely,
+  confirmSyncConflictOverwriteIfShown,
   createSyncFolder,
   generateSyncFolderName,
   setupSyncClient,
@@ -14,8 +15,8 @@ import {
 } from '../../utils/sync-helpers';
 
 /**
- * #10916 hypothesis (unconfirmed provider): the sync file loses the phone's
- * upload outside the app, and the desktop then writes on that stale base.
+ * #10916: the sync file loses the phone's upload outside the app, and the
+ * desktop then writes on that stale base.
  *
  * A file shared through a cloud folder (local-file sync over iCloud, Syncthing,
  * Google Drive) or a server that ignores If-Match can do this: the desktop
@@ -26,7 +27,9 @@ import {
  * ops, hydrates the snapshot: its already-uploaded tasks are gone too.
  *
  * Restoring the pre-upload file over WebDAV stands in for the folder tool.
- * Expected: neither device loses the phone's task.
+ * Expected: the phone shows the conflict dialog instead of hydrating, and its
+ * Keep local (an intentional full replacement) then wins on the desktop
+ * without a dialog. Both conflict directions are covered (AGENTS.md rule 12).
  *
  * Run: npm run quiet -- e2e:webdav:file e2e/tests/sync/webdav-lost-update-concurrent-snapshot-10916.spec.ts --retries=0
  */
@@ -61,7 +64,7 @@ const writeRaw = async (
 };
 
 test.describe('@webdav Lost upload overwritten by a stale-base writer (#10916)', () => {
-  test('phone keeps its synced tasks when the desktop writes over a stale file', async ({
+  test('phone asks before dropping its synced tasks; its Keep local wins on the desktop', async ({
     browser,
     baseURL,
     request,
@@ -113,38 +116,30 @@ test.describe('@webdav Lost upload overwritten by a stale-base writer (#10916)',
       expect(afterDesktop).toContain(desktopTask);
       expect(afterDesktop).not.toContain(phoneTask);
 
-      phone.page.on('console', (msg) => {
-        if (/OperationLogSyncService|FileBasedSyncAdapter/.test(msg.text())) {
-          console.log(`[10916][phone] ${msg.text().slice(0, 300)}`);
-        }
-      });
-
-      // --- Phone syncs: it must not drop its own uploaded task ---
+      // --- Phone syncs: it must ask instead of dropping its uploaded task ---
       await syncPhone.triggerSync();
-      // 'conflict' (a dialog) is a different outcome from silent hydration; log it
-      // so a failure below can be told apart.
-      console.log(
-        `[10916] phone sync result: ${await waitForSyncComplete(phone.page, syncPhone)}`,
+      expect(await waitForSyncComplete(phone.page, syncPhone)).toBe('conflict');
+      const conflictDialog = phone.page.locator('dialog-sync-conflict');
+      await expect(conflictDialog).toContainText(
+        'Changes this device already synced are missing',
       );
+      await conflictDialog.locator('button', { hasText: /Keep local/i }).click();
+      await confirmSyncConflictOverwriteIfShown(phone.page, conflictDialog);
+      expect(await waitForSyncComplete(phone.page, syncPhone)).toBe('success');
       await phone.page.goto(INBOX_URL);
-      // The phone's own task first: its loss is the reported symptom.
       await expect(
         phone.page.locator('task', { hasText: phoneTask }).first(),
       ).toBeVisible();
-      await expect(
-        phone.page.locator('task', { hasText: desktopTask }).first(),
-      ).toBeVisible();
 
-      // --- Desktop syncs again and converges ---
+      // --- Desktop: the intentional replacement wins without a dialog ---
       await syncDesktop.triggerSync();
-      await waitForSyncComplete(desktop.page, syncDesktop);
+      expect(await waitForSyncComplete(desktop.page, syncDesktop)).toBe('success');
       await desktop.page.goto(INBOX_URL);
       await expect(
         desktop.page.locator('task', { hasText: phoneTask }).first(),
       ).toBeVisible();
-      await expect(
-        desktop.page.locator('task', { hasText: desktopTask }).first(),
-      ).toBeVisible();
+      // Keep local replaces all remote data, as the dialog says.
+      await expect(desktop.page.locator('task', { hasText: desktopTask })).toHaveCount(0);
     } finally {
       await closeContextsSafely(phone.context, desktop?.context);
     }

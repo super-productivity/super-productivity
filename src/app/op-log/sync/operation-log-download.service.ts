@@ -281,6 +281,7 @@ export class OperationLogDownloadService implements OnDestroy {
     let snapshotState: unknown | undefined;
     let snapshotAppliedOpIds: string[] | undefined;
     let remoteLastModified: number | undefined;
+    let ownUploadsMissing = false;
     // Track encryption state of downloaded operations for detecting encryption config mismatch.
     // When another client disables encryption, all downloaded ops will be unencrypted.
     // We track this BEFORE decryption to detect the server's actual encryption state.
@@ -452,6 +453,8 @@ export class OperationLogDownloadService implements OnDestroy {
             'snapshotAppliedOpIds' in response
               ? response.snapshotAppliedOpIds
               : undefined;
+          ownUploadsMissing =
+            'ownUploadsMissing' in response && response.ownUploadsMissing === true;
           const receivedLastModified =
             'remoteLastModified' in response ? response.remoteLastModified : undefined;
           remoteLastModified =
@@ -494,6 +497,7 @@ export class OperationLogDownloadService implements OnDestroy {
           snapshotState = undefined; // Clear snapshot state to capture fresh one after reset
           snapshotAppliedOpIds = undefined; // Clear snapshot boundary with the stale state
           remoteLastModified = undefined; // Clear timestamp belonging to the stale state
+          ownUploadsMissing = false;
           sawAnyOps = false; // Reset encryption tracking
           sawEncryptedOp = false;
           // The re-fetched key may differ (password change clean slate), so
@@ -892,6 +896,7 @@ export class OperationLogDownloadService implements OnDestroy {
         ...(snapshotState ? { snapshotState } : {}),
         ...(snapshotAppliedOpIds ? { snapshotAppliedOpIds } : {}),
         ...(remoteLastModified !== undefined ? { remoteLastModified } : {}),
+        ...(ownUploadsMissing ? { ownUploadsMissing } : {}),
       };
     }
 

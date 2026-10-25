@@ -97,6 +97,30 @@ export const isSnapshotBaseUnseen = (
 };
 
 /**
+ * Whether the remote file lost uploads this client already saw there (#10916):
+ * its own clock entry went backwards while the snapshot base is one this client
+ * has seen. A writer on a stale copy (a folder-sync tool or a server ignoring
+ * If-Match) causes this; a full-state replacement (import, repair, USE_LOCAL)
+ * writes a new base and is excluded, so it still wins silently. A file without
+ * a base (written by v19.1.0 or older) cannot tell the two apart and counts as
+ * missing: a dialog is recoverable, a silent hydration is not.
+ */
+export const areOwnUploadsMissing = (
+  remote: Pick<GapDetectionRemote, 'vectorClock' | 'snapshotBaseClock'>,
+  clientId: string | undefined,
+  lastSeenClock: VectorClock | undefined,
+): boolean => {
+  if (!clientId || !lastSeenClock) {
+    return false;
+  }
+  const lastSeenOwn = lastSeenClock[clientId] ?? 0;
+  return (
+    (remote.vectorClock[clientId] ?? 0) < lastSeenOwn &&
+    !isSnapshotBaseUnseen(remote.snapshotBaseClock, lastSeenClock)
+  );
+};
+
+/**
  * Decides whether a file-based download must fall back to a seq-0 re-download
  * so the caller re-hydrates the remote snapshot. Shared by the single-file and
  * split ("surgical sync") download paths.

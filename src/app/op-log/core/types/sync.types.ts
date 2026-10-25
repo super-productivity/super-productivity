@@ -164,6 +164,8 @@ export interface ConflictData {
    * USE_REMOTE would discard.
    */
   localUnsyncedOpsCount?: number;
+  /** The remote lost changes this device already synced (#10916). */
+  ownUploadsMissing?: boolean;
   additional?: unknown;
 }
 

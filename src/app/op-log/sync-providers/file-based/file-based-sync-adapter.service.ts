@@ -53,6 +53,7 @@ import {
   isSingleFileBufferPossiblyTrimmed,
   isSplitBufferPossiblyTrimmed,
   getOpLogBaselineClock,
+  areOwnUploadsMissing,
   isSnapshotBaseUnseen,
 } from './file-based-sync-gap.util';
 import { ArchiveDbAdapter } from '../../../core/persistence/archive-db-adapter.service';
@@ -1313,6 +1314,10 @@ export class FileBasedSyncAdapterService {
       ...(snapshotStateWithArchives ? { snapshotState: snapshotStateWithArchives } : {}),
       ...(snapshotStateWithArchives
         ? { snapshotAppliedOpIds: limitedOps.map(({ op }) => op.id) }
+        : {}),
+      ...(snapshotStateWithArchives &&
+      areOwnUploadsMissing(syncData, excludeClient, lastSeenClock)
+        ? { ownUploadsMissing: true }
         : {}),
     };
   }
@@ -2718,6 +2723,10 @@ export class FileBasedSyncAdapterService {
       gapDetected: needsGapDetection,
       ...(snapshotStateWithArchives ? { snapshotState: snapshotStateWithArchives } : {}),
       ...(snapshotStateWithArchives ? { snapshotAppliedOpIds } : {}),
+      ...(snapshotStateWithArchives &&
+      areOwnUploadsMissing(opsFile, excludeClient, lastSeenClock)
+        ? { ownUploadsMissing: true }
+        : {}),
     };
   }
 

@@ -2,6 +2,9 @@
 
 <mat-dialog-content>
   <div [innerHTML]="T.F.SYNC.D_CONFLICT.TEXT | translate"></div>
+  @if (data.ownUploadsMissing) {
+    <p>{{ T.F.SYNC.D_CONFLICT.OWN_UPLOADS_MISSING | translate }}</p>
+  }
 
   <table>
     <thead>

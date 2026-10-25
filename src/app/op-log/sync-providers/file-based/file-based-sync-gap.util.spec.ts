@@ -1,6 +1,7 @@
 import { OperationLogEntry } from '../../core/operation.types';
 import {
   appendRecentOpsAtBatchBoundary,
+  areOwnUploadsMissing,
   detectDownloadGap,
   GapDetectionInput,
   GapDetectionRemote,
@@ -335,5 +336,40 @@ describe('getOpLogBaselineClock (#10258)', () => {
     expect(
       await getOpLogBaselineClock(store({ source: 'remote' }), 3, undefined),
     ).toEqual(CLOCK);
+  });
+});
+
+describe('areOwnUploadsMissing', () => {
+  // Client A last saw its own upload at counter 5 in a file based on BASE.
+  const BASE = { clientA: 2, clientB: 1 };
+  const LAST_SEEN = { clientA: 5, clientB: 1 };
+
+  it('flags a stale-base write that dropped this client’s uploads (#10916)', () => {
+    const remote = { vectorClock: { clientA: 2, clientB: 3 }, snapshotBaseClock: BASE };
+    expect(areOwnUploadsMissing(remote, 'clientA', LAST_SEEN)).toBe(true);
+  });
+
+  it('flags a file without a base: an old writer cannot be told apart', () => {
+    const remote = { vectorClock: { clientA: 2, clientB: 3 } };
+    expect(areOwnUploadsMissing(remote, 'clientA', LAST_SEEN)).toBe(true);
+  });
+
+  it('does not flag a full-state replacement with a base this client has not seen', () => {
+    const remote = {
+      vectorClock: { clientB: 9 },
+      snapshotBaseClock: { clientB: 9 },
+    };
+    expect(areOwnUploadsMissing(remote, 'clientA', LAST_SEEN)).toBe(false);
+  });
+
+  it('does not flag a remote that still covers this client’s uploads', () => {
+    const remote = { vectorClock: { clientA: 5, clientB: 3 }, snapshotBaseClock: BASE };
+    expect(areOwnUploadsMissing(remote, 'clientA', LAST_SEEN)).toBe(false);
+  });
+
+  it('does not flag without a last-seen clock or client id', () => {
+    const remote = { vectorClock: { clientB: 3 }, snapshotBaseClock: BASE };
+    expect(areOwnUploadsMissing(remote, 'clientA', undefined)).toBe(false);
+    expect(areOwnUploadsMissing(remote, undefined, LAST_SEEN)).toBe(false);
   });
 });

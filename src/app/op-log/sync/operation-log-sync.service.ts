@@ -29,6 +29,7 @@ import {
   CaptureRacedRebuildError,
   IncompleteRemoteOperationsError,
   LocalDataConflictError,
+  OwnUploadsMissingConflictError,
 } from '../core/errors/sync-errors';
 import { SuperSyncStatusService } from './super-sync-status.service';
 import {
@@ -954,6 +955,22 @@ export class OperationLogSyncService {
             result.snapshotState as Record<string, unknown>,
             result.snapshotVectorClock,
             null,
+            result.remoteLastModified,
+          );
+        }
+
+        // #10916: nothing is pending because this device already uploaded its
+        // changes, yet the remote lost them. Hydrating would delete them here too.
+        if (!isFreshClient && result.ownUploadsMissing) {
+          OpLog.warn(
+            'OperationLogSyncService: Remote snapshot lost changes this client already ' +
+              'synced. Throwing OwnUploadsMissingConflictError for conflict resolution dialog.',
+          );
+          throw new OwnUploadsMissingConflictError(
+            0,
+            result.snapshotState as Record<string, unknown>,
+            result.snapshotVectorClock,
+            lastSyncedVectorClock,
             result.remoteLastModified,
           );
         }
