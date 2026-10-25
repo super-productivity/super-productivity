@@ -9,11 +9,11 @@ import com.superproductivity.superproductivity.R
 import com.superproductivity.superproductivity.widget.CaptureInbox
 
 /**
- * Invisible target for text shares (`SEND text/*`). Saves the share to the
- * [CaptureInbox] and finishes at once: no WebView, and the user stays in the
- * app they shared from. The app turns the entry into an Inbox task when it
- * next opens; with SuperSync capture on, [ShareUploader] also sends it to the
- * server so other devices get it first
+ * Invisible target for text shares (`ACTION_SEND` with a `text/` type).
+ * Saves the share to the [CaptureInbox] and finishes at once: no WebView, and
+ * the user stays in the app they shared from. The app turns the entry into an
+ * Inbox task when it next opens; with SuperSync capture on, [ShareUploader]
+ * also sends it to the server so other devices get it first
  * (docs/plans/2026-10-24-android-share-capture.md).
  *
  * Theme.NoDisplay: the activity must finish before onResume, so everything
