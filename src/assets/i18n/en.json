@@ -1472,7 +1472,7 @@
           "CAPTURE_CONNECTIONS": "Connected assistants",
           "CAPTURE_A_COPY_CODE": "Copy connection code",
           "CAPTURE_INFO": "Lets AI assistants add tasks to your Inbox. They can't read your tasks or sync data.",
-          "CAPTURE_SHARE_INFO": "On Android, shares to Super Productivity are also sent this way, encrypted on the phone, so your other devices get them without opening the app there.",
+          "CAPTURE_SHARE_INFO": "On Android, shares to Super Productivity are also sent this way, encrypted on the phone, so your other devices get them without the app being opened on the phone.",
           "CAPTURE_L_CLIENT_NAME": "Assistant name",
           "CAPTURE_L_MCP_URL": "Server URL for assistants (MCP)",
           "CAPTURE_L_SETUP": "Claude Code: run this in a terminal",

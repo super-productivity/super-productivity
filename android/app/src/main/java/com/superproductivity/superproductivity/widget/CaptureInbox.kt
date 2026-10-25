@@ -22,9 +22,11 @@ import java.util.UUID
  * A share entry waiting for its SuperSync upload carries `upload: "pending"`
  * and belongs to the upload ([ShareUploader]) until it is uploaded (deleted),
  * handed back ([releaseUpload]) or taken over by the app ([takeOverUploads]).
- * `sendingAt` marks a request in flight, so the app never imports an entry
- * the server may be storing at that moment. These state changes rewrite the
- * file atomically under [LOCK].
+ * `sendingAt` marks a request in flight, so the app does not import an
+ * entry while its request is open. After a client timeout the server may
+ * still have stored it; a takeover then imports it too (a documented
+ * duplicate, plan 2026-10-24). These state changes rewrite the file
+ * atomically under [LOCK].
  */
 class CaptureInbox(private val dir: File) {
 
