@@ -1687,30 +1687,6 @@ describe('OperationLogStoreService', () => {
       expect((await service.loadStateCache())?.state).toEqual({ sentinel: 'hydrated' });
     });
 
-    it('moves keepOpIds past the snapshot ops, still pending, ids unchanged (#10972)', async () => {
-      const keptLocalOp = createTestOperation({ id: 'kept-local' });
-      const includedOp = createTestOperation({ id: 'snapshot-included' });
-      await service.append(keptLocalOp, 'local');
-
-      await service.commitFileSnapshotBaseline({
-        state: { sentinel: 'hydrated' },
-        lastAppliedOpSeq: 1,
-        vectorClock: { remote: 3 },
-        compactedAt: 5,
-        snapshotIncludedOps: [includedOp],
-        keepOpIds: [keptLocalOp.id],
-      });
-
-      const log = await service.getOpsAfterSeq(0);
-      expect(log.map(({ seq, op }) => [seq, op.id])).toEqual([
-        [2, 'snapshot-included'],
-        [3, 'kept-local'],
-      ]);
-      expect((await service.getUnsynced()).map(({ op }) => op)).toEqual([keptLocalOp]);
-      // The cache stops before the kept op, so a restart replays it on top.
-      expect((await service.loadStateCache())?.lastAppliedOpSeq).toBe(2);
-    });
-
     it('does not reject rejectOpIds when the baseline commit rolls back (tail changed)', async () => {
       // The exact Finding #5 scenario: a standalone markRejected() would have
       // committed before this failing baseline, stranding the op as permanently

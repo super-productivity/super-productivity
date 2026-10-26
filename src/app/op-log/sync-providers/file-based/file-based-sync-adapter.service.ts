@@ -54,7 +54,6 @@ import {
   isSplitBufferPossiblyTrimmed,
   getOpLogBaselineClock,
   isSnapshotBaseUnseen,
-  toSnapshotGapFlags,
 } from './file-based-sync-gap.util';
 import { ArchiveDbAdapter } from '../../../core/persistence/archive-db-adapter.service';
 import { StateSnapshotService } from '../../backup/state-snapshot.service';
@@ -1309,7 +1308,7 @@ export class FileBasedSyncAdapterService {
       // This triggers the download service to re-download from seq 0, which will include
       // the snapshotState for proper state replacement.
       gapDetected: gap.needsGapDetection,
-      ...toSnapshotGapFlags(gap),
+      ownUploadsMissing: gap.ownUploadsMissing,
       // Include full state snapshot for fresh downloads (sinceSeq === 0)
       // This allows new clients to bootstrap with complete state, not just recent ops
       ...(snapshotStateWithArchives ? { snapshotState: snapshotStateWithArchives } : {}),
@@ -2716,7 +2715,7 @@ export class FileBasedSyncAdapterService {
       remoteLastModified: opsFile.lastModified,
       // No snapshot validates the ref ⇒ treat as gap so the caller re-syncs.
       gapDetected: gap.needsGapDetection || (isForceFromZero && !snapshot),
-      ...toSnapshotGapFlags(gap),
+      ownUploadsMissing: gap.ownUploadsMissing,
       ...(snapshotStateWithArchives ? { snapshotState: snapshotStateWithArchives } : {}),
       ...(snapshotStateWithArchives ? { snapshotAppliedOpIds } : {}),
     };
