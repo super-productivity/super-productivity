@@ -3765,6 +3765,19 @@ describe('OperationLogSyncService', () => {
             ).toBeRejectedWithError(LocalDataConflictError);
             expect(hydrationSpy.hydrateFromRemoteSync).not.toHaveBeenCalled();
           });
+
+          // webdav-late-snapshot.spec.ts: after a folder switch the adapter can
+          // hold a last-seen baseline of a file this client never loaded.
+          it('still shows the dialog before the first completed sync with this target', async () => {
+            opLogStoreSpy.getUnsynced.and.resolveTo([pendingEntry()]);
+            opLogStoreSpy.hasSyncedOps.and.resolveTo(true);
+            catchUpSnapshot();
+
+            await expectAsync(
+              service.downloadRemoteOps(provider(0)),
+            ).toBeRejectedWithError(LocalDataConflictError);
+            expect(hydrationSpy.hydrateFromRemoteSync).not.toHaveBeenCalled();
+          });
         });
 
         it('should show the conflict dialog, not hydrate, when the remote lost this client’s synced changes (#10916)', async () => {
