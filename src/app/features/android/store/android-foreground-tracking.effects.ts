@@ -31,13 +31,14 @@ import {
   creditResumeGap,
   getFocusAutoCompleteCapMs,
 } from '../../focus-mode/resume-gap-credit';
-import { combineLatest, firstValueFrom, Subject } from 'rxjs';
+import { combineLatest, firstValueFrom, merge, Subject } from 'rxjs';
 import { ANDROID_BACKGROUND_TICK_CAP_MS } from '../../../app.constants';
 import { HydrationStateService } from '../../../op-log/apply/hydration-state.service';
 import { SnackService } from '../../../core/snack/snack.service';
 import { GlobalTrackingIntervalService } from '../../../core/global-tracking-interval/global-tracking-interval.service';
 import { OperationWriteFlushService } from '../../../op-log/sync/operation-write-flush.service';
 import { CapacitorReminderService } from '../../../core/platform/capacitor-reminder.service';
+import { AndroidNotificationActionService } from '../android-notification-action.service';
 import { DataInitStateService } from '../../../core/data-init/data-init-state.service';
 
 export type NativeTrackingData = {
@@ -49,7 +50,6 @@ export type NativeTrackingData = {
 };
 
 type RecoveryRequest = {
-  data: NativeTrackingData;
   // Diagnostic label for issue #7390 field triage; kept narrow so callers
   // can't accidentally pass user-derived data into the log.
   source: 'cold-start' | 'resume';
@@ -178,7 +178,7 @@ export type AndroidResumeDeps = {
   taskService: TaskService;
   syncElapsedTimeForTask: (taskId: string) => Promise<boolean>;
   getNativeTrackingData: () => NativeTrackingData | null;
-  requestRecovery: (data: NativeTrackingData) => void;
+  requestRecovery: () => void;
 };
 
 /**
@@ -206,9 +206,8 @@ export const handleAndroidResume = async (
   if (currentTask) {
     await deps.syncElapsedTimeForTask(currentTask.id);
   } else {
-    const nativeData = deps.getNativeTrackingData();
-    if (nativeData) {
-      deps.requestRecovery(nativeData);
+    if (deps.getNativeTrackingData()) {
+      deps.requestRecovery();
     }
   }
 };
@@ -325,6 +324,7 @@ export class AndroidForegroundTrackingEffects {
   private _reminderService = inject(CapacitorReminderService);
   private _globalTrackingIntervalService = inject(GlobalTrackingIntervalService);
   private _operationWriteFlush = inject(OperationWriteFlushService);
+  private _notificationActions = inject(AndroidNotificationActionService);
   private _dataInitState = inject(DataInitStateService);
 
   // Recovery requests funnel through this Subject for the cold-start path.
@@ -449,7 +449,7 @@ export class AndroidForegroundTrackingEffects {
               if (!prevTask) {
                 const nativeData = this._getNativeTrackingData();
                 if (nativeData) {
-                  this._recoveryRequest$.next({ data: nativeData, source: 'cold-start' });
+                  this._recoveryRequest$.next({ source: 'cold-start' });
                   return;
                 }
               }
@@ -477,22 +477,32 @@ export class AndroidForegroundTrackingEffects {
    * time again once it replays. Requests therefore wait for the full hydration
    * (immediate after startup), then re-read the native counter so the wait
    * itself is credited too.
+   *
+   * A session that ended natively during the wait is not recovered: a
+   * notification Pause/Done tap ends it and queues its own credit (#10683), so
+   * recovering the stale request would credit that time twice and resume the
+   * task the user paused.
    */
   processRecovery$ =
     IS_ANDROID_WEB_VIEW &&
     createEffect(
       () =>
         this._recoveryRequest$.pipe(
-          exhaustMap(({ data, source }) =>
+          exhaustMap(({ source }) =>
             this._dataInitState.isAllDataLoadedInitially$.pipe(
               take(1),
-              concatMap(() =>
-                this._doRecover(this._getNativeTrackingData() ?? data, source).catch(
-                  (e) => {
-                    DroidLog.err('Recovery failed', e);
-                  },
-                ),
-              ),
+              concatMap(async () => {
+                const nativeData = this._getNativeTrackingData();
+                if (!nativeData) {
+                  DroidLog.log('Native session ended before recovery', {
+                    isColdStart: source === 'cold-start',
+                  });
+                  return;
+                }
+                await this._doRecover(nativeData, source).catch((e) => {
+                  DroidLog.err('Recovery failed', e);
+                });
+              }),
             ),
           ),
         ),
@@ -515,12 +525,16 @@ export class AndroidForegroundTrackingEffects {
    * The focus-mode resume tick may complete a Pomodoro and unset the task, so
    * the task is credited only up to the session end before it (see
    * handleAndroidResume).
+   * Notification actions tapped while backgrounded are applied FIRST, for the
+   * same reason: a task paused from the notification must be credited only up
+   * to the tap, not the whole gap (#10683). The samples below see the result.
    */
   syncOnResume$ =
     IS_ANDROID_WEB_VIEW &&
     createEffect(
       () =>
         androidInterface.onResume$.pipe(
+          tap(() => void this._notificationActions.drain()),
           withLatestFrom(
             this._store.select(selectCurrentTask),
             this._store.select(selectIsTaskDataLoaded),
@@ -538,14 +552,29 @@ export class AndroidForegroundTrackingEffects {
                 taskService: this._taskService,
                 syncElapsedTimeForTask: (taskId) => this._syncElapsedTimeForTask(taskId),
                 getNativeTrackingData: () => this._getNativeTrackingData(),
-                requestRecovery: (data) =>
-                  this._recoveryRequest$.next({ data, source: 'resume' }),
+                requestRecovery: () => this._recoveryRequest$.next({ source: 'resume' }),
               },
               currentTask,
               getFocusAutoCompleteCapMs(timer, isOvertimeEnabled),
             ),
           ),
         ),
+      { dispatch: false },
+    );
+
+  /**
+   * Apply tracking/focus notification actions (#10683) queued while the app
+   * was not running (startup) or tapped while it is alive (drain signal).
+   * Resume drains inside syncOnResume$, where the ordering matters.
+   */
+  drainNotificationActions$ =
+    IS_ANDROID_WEB_VIEW &&
+    createEffect(
+      () =>
+        merge(
+          this._dataInitState.isAllDataLoadedInitially$.pipe(filter(Boolean)),
+          androidInterface.onNotificationActionDrainRequest$,
+        ).pipe(tap(() => void this._notificationActions.drain())),
       { dispatch: false },
     );
 

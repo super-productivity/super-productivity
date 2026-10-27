@@ -148,6 +148,18 @@ export class GlobalTrackingIntervalService {
   }
 
   /**
+   * Like triggerWakeUpTick, but only credits the gap up to `untilTimestamp`
+   * (e.g. when a notification action was tapped while the app was
+   * backgrounded); the rest of the gap stays for the next tick.
+   */
+  triggerWakeUpTickUntil(untilTimestamp: number, maxDurationMs?: number): Tick {
+    const upTo = untilTimestamp - this._currentTrackingStart;
+    return this.triggerWakeUpTick(
+      typeof maxDurationMs === 'number' ? Math.min(upTo, maxDurationMs) : upTo,
+    );
+  }
+
+  /**
    * Fires when the app becomes interactive again (window focus, tab visible,
    * system resume). Chromium/Electron throttle `setInterval` for hidden tabs
    * and pause it during sleep, so timer-driven streams go stale; merging this
