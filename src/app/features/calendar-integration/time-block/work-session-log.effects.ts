@@ -1,44 +1,59 @@
 import { Injectable, inject } from '@angular/core';
 import { Store } from '@ngrx/store';
 import { createEffect } from '@ngrx/effects';
-import { EMPTY, Observable, from, merge, timer } from 'rxjs';
+import { Observable, combineLatest, defer, from, merge } from 'rxjs';
 import {
-  catchError,
   concatMap,
   distinctUntilChanged,
   filter,
-  finalize,
   first,
   map,
-  mergeMap,
   scan,
-  takeUntil,
   tap,
+  withLatestFrom,
 } from 'rxjs/operators';
-import { PluginWorkSession } from '@super-productivity/plugin-api';
 import { selectCurrentTask } from '../../tasks/store/task.selectors';
 import { selectEnabledIssueProviders } from '../../issue/store/issue-provider.selectors';
 import { PluginHttpService } from '../../../plugins/issue-provider/plugin-http.service';
 import { PluginIssueProviderRegistryService } from '../../../plugins/issue-provider/plugin-issue-provider-registry.service';
 import { SnackService } from '../../../core/snack/snack.service';
-import { ExecBeforeCloseService } from '../../../core/electron/exec-before-close.service';
-import { IS_ELECTRON } from '../../../app.constants';
-import { IssueProviderPluginType, isPluginIssueProvider } from '../../issue/issue.model';
+import { LS } from '../../../core/persistence/storage-keys.const';
+import { lsGetJSON } from '../../../util/ls-util';
+import {
+  IssueProvider,
+  IssueProviderPluginType,
+  isPluginIssueProvider,
+} from '../../issue/issue.model';
 import { getErrorTxt } from '../../../util/get-error-text';
 import { T } from '../../../t.const';
 import { Log } from '../../../core/log';
-import { createTimeBlockContext } from './time-block-context';
+import { TimeBlockContext, createTimeBlockContext } from './time-block-context';
 import {
   INITIAL_WORK_SESSION_STEP,
-  MIN_WORK_SESSION_MS,
-  WorkSessionStep,
+  StoredWorkSessions,
+  recordWorkSessionStep,
+  recoverInterruptedWorkSession,
+  removePendingWorkSession,
   stepWorkSession,
 } from './work-session.util';
 
-export const WORK_SESSION_BEFORE_CLOSE_ID = 'WORK_SESSION_LOG_BEFORE_CLOSE';
-/** How long quitting the desktop app may wait for the last session's write. */
-const MAX_CLOSE_WAIT_MS = 5000;
-const CLOSE = 'CLOSE' as const;
+const CONFIG_KEY = 'isLogWorkSessions';
+
+const loadStored = (): StoredWorkSessions => {
+  const stored = lsGetJSON<Partial<StoredWorkSessions> | null>(LS.WORK_SESSION_LOG, null);
+  return {
+    open: stored?.open ?? null,
+    pending: Array.isArray(stored?.pending) ? stored.pending : [],
+  };
+};
+
+const saveStored = (stored: StoredWorkSessions): void => {
+  const json = JSON.stringify(stored);
+  // Skip no-op writes; the current task emits on every tracking tick.
+  if (json !== localStorage.getItem(LS.WORK_SESSION_LOG)) {
+    localStorage.setItem(LS.WORK_SESSION_LOG, json);
+  }
+};
 
 /**
  * Writes each finished time-tracking session as a calendar event (#6378), through
@@ -50,12 +65,9 @@ const CLOSE = 'CLOSE' as const;
  * which is a real end, so this selector-based effect deliberately has no sync guard;
  * it never dispatches.
  *
- * Quitting the desktop app ends the running session; the quit waits (briefly) for
- * its write.
- *
- * shortcut: a session cut short by a crash, a closed browser tab or a killed mobile
- * app, or whose write fails, is not logged — persist pending sessions and retry if
- * users report gaps.
+ * The running session and unwritten ones are kept in device-local storage, so a
+ * session cut short by a quit, crash or closed tab is written at the next start,
+ * and a failed write is retried with the next session or the next start.
  */
 @Injectable()
 export class WorkSessionLogEffects {
@@ -63,96 +75,97 @@ export class WorkSessionLogEffects {
   private readonly _pluginRegistry = inject(PluginIssueProviderRegistryService);
   private readonly _pluginHttpService = inject(PluginHttpService);
   private readonly _snackService = inject(SnackService);
-  private readonly _execBeforeCloseService = inject(ExecBeforeCloseService);
-
-  /** Makes the desktop app wait for this effect on quit while the option is on. */
-  scheduleBeforeClose$ =
-    IS_ELECTRON &&
-    createEffect(
-      () =>
-        this._store.select(selectEnabledIssueProviders).pipe(
-          map((providers) =>
-            providers.some(
-              (p) =>
-                isPluginIssueProvider(p.issueProviderKey) &&
-                !!(p as IssueProviderPluginType).pluginConfig?.isLogWorkSessions,
-            ),
-          ),
-          distinctUntilChanged(),
-          tap((isOn) =>
-            isOn
-              ? this._execBeforeCloseService.schedule(WORK_SESSION_BEFORE_CLOSE_ID)
-              : this._execBeforeCloseService.unschedule(WORK_SESSION_BEFORE_CLOSE_ID),
-          ),
-        ),
-      { dispatch: false },
-    );
+  /** One warning per failure streak; every session end retries while offline. */
+  private _isFailing = false;
 
   logWorkSessions$: Observable<unknown> = createEffect(
     () =>
-      merge(
-        this._store.select(selectCurrentTask),
-        this._execBeforeCloseService.onBeforeClose$.pipe(
-          filter((ids) => ids.includes(WORK_SESSION_BEFORE_CLOSE_ID)),
-          map(() => CLOSE),
-        ),
-      ).pipe(
-        scan(
-          (step: WorkSessionStep & { isClose: boolean }, event) => {
-            const task = event === CLOSE ? null : event;
-            return {
-              ...stepWorkSession(step, task, Date.now()),
-              isClose: event === CLOSE,
-            };
-          },
-          { ...INITIAL_WORK_SESSION_STEP, isClose: false },
-        ),
-        // Writes are independent PUTs, so they may overlap; that keeps a quit from
-        // queueing behind an earlier, slow write.
-        mergeMap(({ ended, isClose }) => {
-          const log$ =
-            ended && ended.end - ended.start >= MIN_WORK_SESSION_MS
-              ? this._logWorkSession$(ended)
-              : EMPTY;
-          return isClose
-            ? log$.pipe(
-                takeUntil(timer(MAX_CLOSE_WAIT_MS)),
-                finalize(() =>
-                  this._execBeforeCloseService.setDone(WORK_SESSION_BEFORE_CLOSE_ID),
-                ),
-              )
-            : log$;
-        }),
-      ),
+      defer(() => {
+        saveStored(recoverInterruptedWorkSession(loadStored(), Date.now()));
+        const providers$ = this._store.select(selectEnabledIssueProviders);
+
+        const sessionEnded$ = this._store.select(selectCurrentTask).pipe(
+          scan(
+            (step, task) => stepWorkSession(step, task, Date.now()),
+            INITIAL_WORK_SESSION_STEP,
+          ),
+          withLatestFrom(providers$),
+          tap(([step, providers]) =>
+            saveStored(
+              recordWorkSessionStep(
+                loadStored(),
+                this._isOn(providers) ? step : INITIAL_WORK_SESSION_STEP,
+              ),
+            ),
+          ),
+          filter(([step]) => !!step.ended),
+        );
+        // Plugins register after startup; write what is pending once one can.
+        const canWrite$ = combineLatest([
+          providers$,
+          this._pluginRegistry.registrationChanges$,
+        ]).pipe(
+          map(([providers]) => !!this._createContext(providers)),
+          distinctUntilChanged(),
+          filter(Boolean),
+        );
+        return merge(canWrite$, sessionEnded$).pipe(
+          concatMap(() => this._writePending$()),
+        );
+      }),
     { dispatch: false },
   );
 
-  private _logWorkSession$(session: PluginWorkSession): Observable<unknown> {
+  private _isOn(providers: IssueProvider[]): boolean {
+    return providers.some(
+      (p) =>
+        isPluginIssueProvider(p.issueProviderKey) &&
+        !!(p as IssueProviderPluginType).pluginConfig?.[CONFIG_KEY],
+    );
+  }
+
+  private _createContext(providers: IssueProvider[]): TimeBlockContext | null {
+    const ctx = createTimeBlockContext({
+      providers,
+      configKey: CONFIG_KEY,
+      registry: this._pluginRegistry,
+      httpService: this._pluginHttpService,
+    });
+    return ctx?.definition.timeBlock?.logWorkSession ? ctx : null;
+  }
+
+  private _writePending$(): Observable<unknown> {
     return this._store.select(selectEnabledIssueProviders).pipe(
       first(),
-      concatMap((providers) => {
-        const ctx = createTimeBlockContext({
-          providers,
-          configKey: 'isLogWorkSessions',
-          registry: this._pluginRegistry,
-          httpService: this._pluginHttpService,
-        });
-        const timeBlock = ctx?.definition.timeBlock;
-        if (!ctx || !timeBlock?.logWorkSession) return EMPTY;
-        return from(timeBlock.logWorkSession(session, ctx.config, ctx.http));
-      }),
-      catchError((err) => {
+      concatMap((providers) => from(this._writePending(providers))),
+    );
+  }
+
+  /** Writes pending sessions oldest first, stopping at the first failure. */
+  private async _writePending(providers: IssueProvider[]): Promise<void> {
+    const ctx = this._createContext(providers);
+    const timeBlock = ctx?.definition.timeBlock;
+    if (!ctx || !timeBlock?.logWorkSession) return;
+    for (const session of loadStored().pending) {
+      try {
+        await timeBlock.logWorkSession(session, ctx.config, ctx.http);
+      } catch (err) {
         Log.err('[WorkSessionLog] Failed to log work session', {
           taskId: session.taskId,
           err,
         });
-        this._snackService.open({
-          type: 'ERROR',
-          msg: T.F.CALENDARS.S.WORK_SESSION_ERROR,
-          translateParams: { errTxt: getErrorTxt(err) },
-        });
-        return EMPTY;
-      }),
-    );
+        if (!this._isFailing) {
+          this._isFailing = true;
+          this._snackService.open({
+            type: 'ERROR',
+            msg: T.F.CALENDARS.S.WORK_SESSION_ERROR,
+            translateParams: { errTxt: getErrorTxt(err) },
+          });
+        }
+        return;
+      }
+      this._isFailing = false;
+      saveStored(removePendingWorkSession(loadStored(), session));
+    }
   }
 }

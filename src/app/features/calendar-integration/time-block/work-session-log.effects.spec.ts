@@ -1,14 +1,11 @@
 import { TestBed, fakeAsync, flushMicrotasks } from '@angular/core/testing';
 import { MockStore, provideMockStore } from '@ngrx/store/testing';
-import { Subject, Subscription } from 'rxjs';
-import {
-  WORK_SESSION_BEFORE_CLOSE_ID,
-  WorkSessionLogEffects,
-} from './work-session-log.effects';
+import { BehaviorSubject, Subscription } from 'rxjs';
+import { WorkSessionLogEffects } from './work-session-log.effects';
 import { PluginIssueProviderRegistryService } from '../../../plugins/issue-provider/plugin-issue-provider-registry.service';
 import { PluginHttpService } from '../../../plugins/issue-provider/plugin-http.service';
 import { SnackService } from '../../../core/snack/snack.service';
-import { ExecBeforeCloseService } from '../../../core/electron/exec-before-close.service';
+import { LS } from '../../../core/persistence/storage-keys.const';
 import { selectEnabledIssueProviders } from '../../issue/store/issue-provider.selectors';
 import { selectCurrentTask } from '../../tasks/store/task.selectors';
 import { DEFAULT_TASK, Task } from '../../tasks/task.model';
@@ -23,11 +20,11 @@ describe('WorkSessionLogEffects', () => {
   };
 
   let store: MockStore;
-  let sub: Subscription;
+  let sub: Subscription | undefined;
   let logWorkSessionSpy: jasmine.Spy;
   let snackService: jasmine.SpyObj<SnackService>;
-  let closeRequests: Subject<string[]>;
-  let setDoneSpy: jasmine.Spy;
+  let registrationChanges$: BehaviorSubject<number>;
+  let isPluginRegistered: boolean;
 
   const task = (id: string, title = `Task ${id}`, timeSpent = 0): Task => ({
     ...DEFAULT_TASK,
@@ -43,10 +40,18 @@ describe('WorkSessionLogEffects', () => {
     store.refreshState();
   };
 
+  /** Tracks task `id` from minute `from` to minute `to`, as the ticks would. */
+  const track = (id: string, from: number, to: number): void => {
+    setCurrent(task(id), minutesIn(from));
+    setCurrent(task(id, `Task ${id}`, (to - from) * MIN), minutesIn(to));
+  };
+
+  const stored = (): { open: unknown; pending: unknown[] } =>
+    JSON.parse(localStorage.getItem(LS.WORK_SESSION_LOG) || '{"open":null,"pending":[]}');
+
   const setup = (pluginConfig: Record<string, unknown>): void => {
     logWorkSessionSpy = jasmine.createSpy('logWorkSession').and.resolveTo(undefined);
-    closeRequests = new Subject<string[]>();
-    setDoneSpy = jasmine.createSpy('setDone');
+    registrationChanges$ = new BehaviorSubject(0);
     TestBed.configureTestingModule({
       providers: [
         WorkSessionLogEffects,
@@ -64,25 +69,25 @@ describe('WorkSessionLogEffects', () => {
         {
           provide: PluginIssueProviderRegistryService,
           useValue: {
-            getProvider: () => ({
-              pluginId: 'caldav-calendar-provider',
-              definition: {
-                getHeaders: () => ({}),
-                timeBlock: {
-                  upsertEvent: jasmine.createSpy(),
-                  deleteEvent: jasmine.createSpy(),
-                  logWorkSession: logWorkSessionSpy,
-                },
-              },
-              allowPrivateNetwork: true,
-            }),
+            registrationChanges$,
+            getProvider: () =>
+              isPluginRegistered
+                ? {
+                    pluginId: 'caldav-calendar-provider',
+                    definition: {
+                      getHeaders: () => ({}),
+                      timeBlock: {
+                        upsertEvent: jasmine.createSpy(),
+                        deleteEvent: jasmine.createSpy(),
+                        logWorkSession: logWorkSessionSpy,
+                      },
+                    },
+                    allowPrivateNetwork: true,
+                  }
+                : undefined,
           },
         },
         { provide: PluginHttpService, useValue: { createHttpHelper: () => ({}) } },
-        {
-          provide: ExecBeforeCloseService,
-          useValue: { onBeforeClose$: closeRequests, setDone: setDoneSpy },
-        },
         {
           provide: SnackService,
           useValue: jasmine.createSpyObj('SnackService', ['open']),
@@ -94,18 +99,24 @@ describe('WorkSessionLogEffects', () => {
     sub = TestBed.inject(WorkSessionLogEffects).logWorkSessions$.subscribe();
   };
 
-  beforeEach(() => jasmine.clock().install());
+  beforeEach(() => {
+    jasmine.clock().install();
+    jasmine.clock().mockDate(new Date(START));
+    localStorage.removeItem(LS.WORK_SESSION_LOG);
+    isPluginRegistered = true;
+    sub = undefined;
+  });
 
   afterEach(() => {
-    sub.unsubscribe();
+    sub?.unsubscribe();
     jasmine.clock().uninstall();
+    localStorage.removeItem(LS.WORK_SESSION_LOG);
   });
 
   it('logs a session with its start and end when tracking stops', fakeAsync(() => {
     setup({ isLogWorkSessions: true });
 
-    setCurrent(task('a'), START);
-    setCurrent(task('a', 'Task a', 30 * MIN), minutesIn(30));
+    track('a', 0, 30);
     setCurrent(null, minutesIn(30));
     flushMicrotasks();
 
@@ -114,6 +125,7 @@ describe('WorkSessionLogEffects', () => {
       jasmine.any(Object),
       jasmine.any(Object),
     );
+    expect(stored().pending).toEqual([]);
   }));
 
   it('ends the running session when switching tasks and keeps the latest title', fakeAsync(() => {
@@ -121,8 +133,7 @@ describe('WorkSessionLogEffects', () => {
 
     setCurrent(task('a'), START);
     setCurrent(task('a', 'Renamed', 10 * MIN), minutesIn(10));
-    setCurrent(task('b'), minutesIn(10));
-    setCurrent(task('b', 'Task b', 10 * MIN), minutesIn(20));
+    track('b', 10, 20);
     setCurrent(null, minutesIn(20));
     flushMicrotasks();
 
@@ -143,30 +154,35 @@ describe('WorkSessionLogEffects', () => {
     expect(logWorkSessionSpy).not.toHaveBeenCalled();
   }));
 
-  it('does nothing while the option is off', fakeAsync(() => {
+  it('neither logs nor stores sessions while the option is off', fakeAsync(() => {
     setup({ isAutoTimeBlock: true });
 
-    setCurrent(task('a'), START);
-    setCurrent(task('a', 'Task a', 30 * MIN), minutesIn(30));
+    track('a', 0, 30);
+    expect(stored().open).toBeNull();
     setCurrent(null, minutesIn(30));
     flushMicrotasks();
 
     expect(logWorkSessionSpy).not.toHaveBeenCalled();
+    expect(stored().pending).toEqual([]);
   }));
 
-  it('shows an error and keeps logging later sessions when a write fails', fakeAsync(() => {
+  it('keeps failed sessions and retries them with the next one, warning once', fakeAsync(() => {
     setup({ isLogWorkSessions: true });
-    logWorkSessionSpy.and.returnValues(
-      Promise.reject(new Error('offline')),
-      Promise.resolve(),
+    let calls = 0;
+    logWorkSessionSpy.and.callFake(() =>
+      ++calls <= 2 ? Promise.reject(new Error('offline')) : Promise.resolve(),
     );
 
-    setCurrent(task('a'), START);
-    setCurrent(task('a', 'Task a', 10 * MIN), minutesIn(10));
-    setCurrent(task('b'), minutesIn(10));
+    track('a', 0, 10);
+    setCurrent(null, minutesIn(10));
     flushMicrotasks();
-    setCurrent(task('b', 'Task b', 10 * MIN), minutesIn(20));
+    track('b', 10, 20);
     setCurrent(null, minutesIn(20));
+    flushMicrotasks();
+    expect(stored().pending.length).toBe(2);
+
+    track('c', 20, 30);
+    setCurrent(null, minutesIn(30));
     flushMicrotasks();
 
     expect(snackService.open).toHaveBeenCalledOnceWith(
@@ -175,72 +191,68 @@ describe('WorkSessionLogEffects', () => {
         msg: T.F.CALENDARS.S.WORK_SESSION_ERROR,
       }),
     );
-    expect(logWorkSessionSpy).toHaveBeenCalledTimes(2);
+    expect(logWorkSessionSpy.calls.allArgs().map((args) => args[0].taskId)).toEqual([
+      'a',
+      'a',
+      'a',
+      'b',
+      'c',
+    ]);
+    expect(stored().pending).toEqual([]);
   }));
 
-  describe('when the app quits', () => {
-    const requestClose = (): void =>
-      closeRequests.next(['SYNC_BEFORE_CLOSE_ID', WORK_SESSION_BEFORE_CLOSE_ID]);
+  it('logs a session cut short by a quit or crash at the next start', fakeAsync(() => {
+    localStorage.setItem(
+      LS.WORK_SESSION_LOG,
+      JSON.stringify({
+        open: {
+          taskId: 'a',
+          title: 'Task a',
+          start: START,
+          startTimeSpent: 0,
+          timeSpent: 25 * MIN,
+        },
+        pending: [],
+      }),
+    );
+    jasmine.clock().mockDate(new Date(minutesIn(600)));
 
-    it('logs the running session, then lets the app close', fakeAsync(() => {
-      setup({ isLogWorkSessions: true });
-      let resolveWrite!: () => void;
-      logWorkSessionSpy.and.returnValue(
-        new Promise<void>((resolve) => (resolveWrite = resolve)),
-      );
+    setup({ isLogWorkSessions: true });
+    flushMicrotasks();
 
-      setCurrent(task('a'), START);
-      setCurrent(task('a', 'Task a', 30 * MIN), minutesIn(30));
-      requestClose();
-      flushMicrotasks();
+    expect(logWorkSessionSpy).toHaveBeenCalledOnceWith(
+      { taskId: 'a', title: 'Task a', start: START, end: minutesIn(25) },
+      jasmine.any(Object),
+      jasmine.any(Object),
+    );
+    expect(stored()).toEqual({ open: null, pending: [] });
+  }));
 
-      expect(logWorkSessionSpy).toHaveBeenCalledOnceWith(
-        { taskId: 'a', title: 'Task a', start: START, end: minutesIn(30) },
-        jasmine.any(Object),
-        jasmine.any(Object),
-      );
-      expect(setDoneSpy).not.toHaveBeenCalled();
+  it('remembers the running session so a quit does not lose it', fakeAsync(() => {
+    setup({ isLogWorkSessions: true });
 
-      resolveWrite();
-      flushMicrotasks();
-      expect(setDoneSpy).toHaveBeenCalledOnceWith(WORK_SESSION_BEFORE_CLOSE_ID);
-    }));
+    track('a', 0, 30);
 
-    it('lets the app close at once when no session is running', fakeAsync(() => {
-      setup({ isLogWorkSessions: true });
+    expect(stored().open).toEqual(
+      jasmine.objectContaining({ taskId: 'a', start: START, timeSpent: 30 * MIN }),
+    );
+  }));
 
-      requestClose();
-      flushMicrotasks();
+  it('waits for the calendar plugin to load before writing', fakeAsync(() => {
+    isPluginRegistered = false;
+    setup({ isLogWorkSessions: true });
 
-      expect(logWorkSessionSpy).not.toHaveBeenCalled();
-      expect(setDoneSpy).toHaveBeenCalledOnceWith(WORK_SESSION_BEFORE_CLOSE_ID);
-    }));
+    track('a', 0, 30);
+    setCurrent(null, minutesIn(30));
+    flushMicrotasks();
+    expect(logWorkSessionSpy).not.toHaveBeenCalled();
+    expect(stored().pending.length).toBe(1);
 
-    it('does not hold the app open longer than a few seconds', fakeAsync(() => {
-      setup({ isLogWorkSessions: true });
-      logWorkSessionSpy.and.returnValue(new Promise<void>(() => undefined));
+    isPluginRegistered = true;
+    registrationChanges$.next(1);
+    flushMicrotasks();
 
-      setCurrent(task('a'), START);
-      setCurrent(task('a', 'Task a', 30 * MIN), minutesIn(30));
-      requestClose();
-      flushMicrotasks();
-      jasmine.clock().tick(4999);
-      expect(setDoneSpy).not.toHaveBeenCalled();
-
-      jasmine.clock().tick(1);
-      expect(setDoneSpy).toHaveBeenCalledOnceWith(WORK_SESSION_BEFORE_CLOSE_ID);
-    }));
-
-    it('ignores close requests meant for other handlers', fakeAsync(() => {
-      setup({ isLogWorkSessions: true });
-
-      setCurrent(task('a'), START);
-      setCurrent(task('a', 'Task a', 30 * MIN), minutesIn(30));
-      closeRequests.next(['SYNC_BEFORE_CLOSE_ID']);
-      flushMicrotasks();
-
-      expect(logWorkSessionSpy).not.toHaveBeenCalled();
-      expect(setDoneSpy).not.toHaveBeenCalled();
-    }));
-  });
+    expect(logWorkSessionSpy).toHaveBeenCalledTimes(1);
+    expect(stored().pending).toEqual([]);
+  }));
 });

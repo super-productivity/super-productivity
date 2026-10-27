@@ -1334,7 +1334,7 @@ PluginAPI.registerIssueProvider({
       type: 'checkbox' as const,
       label: 'Add tracked time to calendar',
       description:
-        'When you stop tracking time on a task, switch tasks or quit the desktop app, add an event with the actual start and end time. Sessions under a minute are skipped. Only the device that tracked the time adds the event.',
+        'When you stop tracking time on a task or switch tasks, add an event with the actual start and end time. Sessions under a minute are skipped. Only the device that tracked the time adds the event.',
     },
     {
       key: 'workSessionCalendarId',

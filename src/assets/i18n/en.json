@@ -275,7 +275,7 @@
         "EVENT_RESCHEDULED": "Event rescheduled",
         "EVENT_DELETED": "Event deleted",
         "TIME_BLOCK_ERROR": "Failed to sync time block: {{errTxt}}",
-        "WORK_SESSION_ERROR": "Failed to add the tracked time to your calendar: {{errTxt}}"
+        "WORK_SESSION_ERROR": "Failed to add the tracked time to your calendar. It will be tried again later: {{errTxt}}"
       }
     },
     "CLIPBOARD_IMAGE": {
