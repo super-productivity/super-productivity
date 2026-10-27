@@ -24,6 +24,7 @@ describe('Actions', () => {
       addTask: vi.fn(),
       deleteTask: vi.fn(),
       updateTask: vi.fn(),
+      getTasks: vi.fn().mockResolvedValue([]),
       getAllTags: vi.fn(),
       showSnack: vi.fn(),
       openDialog: vi.fn(),
@@ -177,6 +178,54 @@ describe('Actions', () => {
 
       await ActionRemoveTag.execute(mockContext, event, 'Urgent');
       expect(mockPlugin.updateTask).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('tag actions sharing one trigger event', () => {
+    let task: { id: string; tagIds: string[] };
+
+    beforeEach(() => {
+      (mockDataCache.getTags as any).mockResolvedValue([
+        { id: 'todo', title: 'Todo' },
+        { id: 'progress', title: 'In progress' },
+        { id: 'urgent', title: 'Urgent' },
+      ]);
+      (mockPlugin.getTasks as any).mockImplementation(async () => [task]);
+      (mockPlugin.updateTask as any).mockImplementation(
+        async (_id: string, changes: { tagIds: string[] }) => {
+          task = { ...task, ...changes };
+        },
+      );
+    });
+
+    it('should keep both tags when two addTag actions run', async () => {
+      task = { id: 'task1', tagIds: ['todo'] };
+      const event = { task: { ...task } } as unknown as TaskEvent;
+
+      await ActionAddTag.execute(mockContext, event, 'In progress');
+      await ActionAddTag.execute(mockContext, event, 'Urgent');
+
+      expect(task.tagIds).toEqual(['todo', 'progress', 'urgent']);
+    });
+
+    it('should remove both tags when two removeTag actions run', async () => {
+      task = { id: 'task1', tagIds: ['todo', 'progress', 'urgent'] };
+      const event = { task: { ...task } } as unknown as TaskEvent;
+
+      await ActionRemoveTag.execute(mockContext, event, 'Todo');
+      await ActionRemoveTag.execute(mockContext, event, 'Urgent');
+
+      expect(task.tagIds).toEqual(['progress']);
+    });
+
+    it('should swap tags when addTag and removeTag run', async () => {
+      task = { id: 'task1', tagIds: ['todo'] };
+      const event = { task: { ...task } } as unknown as TaskEvent;
+
+      await ActionAddTag.execute(mockContext, event, 'In progress');
+      await ActionRemoveTag.execute(mockContext, event, 'Todo');
+
+      expect(task.tagIds).toEqual(['progress']);
     });
   });
 
