@@ -293,7 +293,7 @@
       <input
         matInput
         [ngModel]="
-          customizerService.selectedFilter().preset === OPTIONS.filter.types.project
+          customizerService.selectedFilter().type === OPTIONS.filter.types.project
             ? customizerService.selectedFilter().preset
             : ''
         "
