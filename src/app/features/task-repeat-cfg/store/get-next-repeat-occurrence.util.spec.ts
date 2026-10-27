@@ -974,6 +974,75 @@ describe('getNextRepeatOccurrence()', () => {
     });
   });
 
+  // Exclusive mode is documented as the "strictly next future occurrence" and
+  // backs the next-occurrence previews; it must never return a day before
+  // fromDate even when lastTaskCreationDay lags a period behind.
+  describe('exclusive mode never returns a past occurrence', () => {
+    const noon = (d: Date): Date => {
+      const r = new Date(d);
+      r.setHours(12, 0, 0, 0);
+      return r;
+    };
+
+    it('skips a MONTHLY anchor that already passed this month', () => {
+      const fromDate = noon(new Date(2026, 9, 25)); // Oct 25 2026
+      const cfg = dummyRepeatable('ID1', {
+        repeatCycle: 'MONTHLY',
+        repeatEvery: 1,
+        startDate: '2026-01-10',
+        lastTaskCreationDay: '2026-09-10',
+      });
+
+      expect(getNextRepeatOccurrence(cfg, fromDate)).toEqual(
+        noon(new Date(2026, 10, 10)), // Nov 10 2026, not the past Oct 10
+      );
+    });
+
+    it('skips a YEARLY anchor that already passed this year', () => {
+      const fromDate = noon(new Date(2026, 9, 25)); // Oct 25 2026
+      const cfg = dummyRepeatable('ID1', {
+        repeatCycle: 'YEARLY',
+        repeatEvery: 1,
+        startDate: '2020-03-01',
+        lastTaskCreationDay: '2025-03-01',
+      });
+
+      expect(getNextRepeatOccurrence(cfg, fromDate)).toEqual(
+        noon(new Date(2027, 2, 1)), // Mar 1 2027, not the past Mar 1 2026
+      );
+    });
+
+    it('still returns this periods anchor when it has not passed fromDate', () => {
+      const fromDate = noon(new Date(2026, 9, 5)); // Oct 5 2026
+      const cfg = dummyRepeatable('ID1', {
+        repeatCycle: 'MONTHLY',
+        repeatEvery: 1,
+        startDate: '2026-01-10',
+        lastTaskCreationDay: '2026-09-10',
+      });
+
+      expect(getNextRepeatOccurrence(cfg, fromDate)).toEqual(
+        noon(new Date(2026, 9, 10)), // Oct 10 2026
+      );
+    });
+
+    it('MONTHLY nth-weekday also skips a passed anchor', () => {
+      const fromDate = noon(new Date(2026, 9, 25)); // Oct 25 2026
+      const cfg = dummyRepeatable('ID1', {
+        repeatCycle: 'MONTHLY',
+        repeatEvery: 1,
+        monthlyWeekOfMonth: 1,
+        monthlyWeekday: 1, // first Monday
+        startDate: '2026-01-05',
+        lastTaskCreationDay: '2026-09-07', // first Mon of Sep 2026
+      });
+
+      expect(getNextRepeatOccurrence(cfg, fromDate)).toEqual(
+        noon(new Date(2026, 10, 2)), // first Mon of Nov 2026 (Oct 5 passed)
+      );
+    });
+  });
+
   // Issue #7951: the inclusive variant is used when relocating an existing live
   // instance on a schedule edit — `fromDate` (today) must be considered instead
   // of being skipped to the day after the last creation.

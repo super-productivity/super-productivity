@@ -28,8 +28,8 @@ const getNextRepeatOccurrenceIgnoringEnd = (
   // the day after the last task creation. Used when relocating an existing live
   // instance on a schedule edit: `fromDate` (today) may still be a valid
   // occurrence and must not be skipped (#7951). The default (exclusive) keeps
-  // the "strictly next future occurrence" semantics relied on by the preview,
-  // scheduled-list and heatmap.
+  // the "strictly next future occurrence" semantics relied on by the preview
+  // and scheduled-list.
   { inclusive = false }: { inclusive?: boolean } = {},
 ): Date | null => {
   if (!Number.isInteger(taskRepeatCfg.repeatEvery) || taskRepeatCfg.repeatEvery < 1) {
@@ -53,15 +53,6 @@ const getNextRepeatOccurrenceIgnoringEnd = (
   lastTaskCreation.setHours(12, 0, 0, 0);
   startDateDate.setHours(12, 0, 0, 0);
 
-  // In inclusive mode, never resolve to an occurrence before `fromDate` itself.
-  // DAILY/WEEKLY only scan forward from `fromDate`, but the day-of-month
-  // MONTHLY and YEARLY branches jump to this period's anchor day — which may
-  // already have passed today — so they need an explicit floor (applied in
-  // their loops below). The MONTHLY nth-weekday branch enforces the same floor
-  // via its own `candidate >= checkDate` predicate (checkDate === fromDate in
-  // inclusive mode), so it does not use `fromDateFloor`.
-  const fromDateFloor = inclusive ? new Date(checkDate) : null;
-
   if (inclusive) {
     // Relocating an existing instance: ignore prior-creation gating entirely so
     // the scan starts at `fromDate` and today is considered. Neutralising
@@ -75,6 +66,15 @@ const getNextRepeatOccurrenceIgnoringEnd = (
     }
     checkDate.setDate(checkDate.getDate() + 1);
   }
+
+  // Lowest day the scan may return: `fromDate` itself in inclusive mode, the
+  // day after max(`fromDate`, `lastTaskCreation`) in exclusive mode.
+  // DAILY/WEEKLY only scan forward from `fromDate`, but the day-of-month
+  // MONTHLY and YEARLY branches jump to this period's anchor day — which may
+  // already have passed — so they need this explicit floor (applied in their
+  // loops below). The MONTHLY nth-weekday branch enforces the same floor via
+  // its own `candidate >= checkDate` predicate, so it does not use `scanFloor`.
+  const scanFloor = new Date(checkDate);
 
   switch (taskRepeatCfg.repeatCycle) {
     case 'DAILY': {
@@ -164,7 +164,7 @@ const getNextRepeatOccurrenceIgnoringEnd = (
         if (
           diffInMonth >= 0 &&
           diffInMonth % taskRepeatCfg.repeatEvery === 0 &&
-          (!fromDateFloor || checkDate >= fromDateFloor)
+          checkDate >= scanFloor
         ) {
           return checkDate;
         }
@@ -214,7 +214,7 @@ const getNextRepeatOccurrenceIgnoringEnd = (
         if (
           diffInYears >= 0 &&
           diffInYears % taskRepeatCfg.repeatEvery === 0 &&
-          (!fromDateFloor || checkDate >= fromDateFloor)
+          checkDate >= scanFloor
         ) {
           return checkDate;
         }
