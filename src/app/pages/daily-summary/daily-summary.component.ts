@@ -172,7 +172,7 @@ export class DailySummaryComponent implements OnInit, OnDestroy, AfterViewInit {
 
   tasksWorkedOnOrDoneOrRepeatableFlat$: Observable<Task[]> = this.dayStr$.pipe(
     switchMap((dayStr) => this._getDailySummaryTasksFlat$(dayStr)),
-    shareReplay(1),
+    shareReplay({ bufferSize: 1, refCount: true }),
   );
 
   isArchiveLoaded = signal(false);
