@@ -90,6 +90,7 @@ import { GlobalConfigService } from '../config/global-config.service';
 import { Store } from '@ngrx/store';
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 import { TODAY_TAG } from '../tag/tag.const';
+import { getEmptyStateHint } from './get-empty-state-hint';
 import { LS } from '../../core/persistence/storage-keys.const';
 import { FinishDayBtnComponent } from './finish-day-btn/finish-day-btn.component';
 import { ScheduledDateGroupPipe } from '../../ui/pipes/scheduled-date-group.pipe';
@@ -179,11 +180,10 @@ export class WorkViewComponent implements OnInit, OnDestroy {
     initialValue: false,
   });
 
-  private _isTodayContext = toSignal(
-    this.workContextService.activeWorkContext$.pipe(
-      map((ctx) => ctx.id === TODAY_TAG.id),
-    ),
-    { initialValue: false },
+  private _activeWorkContext = toSignal(this.workContextService.activeWorkContext$);
+
+  private _isTodayContext = computed(
+    () => this._activeWorkContext()?.id === TODAY_TAG.id,
   );
 
   /**
@@ -282,6 +282,24 @@ export class WorkViewComponent implements OnInit, OnDestroy {
   isShowBacklog = input<boolean>(false);
 
   hasDoneTasks = computed(() => this.doneTasks().length > 0);
+
+  // Only when the list is truly empty: overdue, later-today or backlog tasks
+  // on screen would contradict a sentence telling the user to add tasks.
+  emptyStateHint = computed(() => {
+    const ctx = this._activeWorkContext();
+    const hasLaterToday =
+      this.isOnTodayList() &&
+      (this.laterTodayTasks().length > 0 || this.laterTodayCalendarEvents().length > 0);
+    if (
+      !ctx ||
+      this.isShowOverduePanel() ||
+      hasLaterToday ||
+      (this.backlogTasks()?.length ?? 0) > 0
+    ) {
+      return null;
+    }
+    return getEmptyStateHint(ctx);
+  });
 
   todayRemainingInProject = toSignal(this.workContextService.todayRemainingInProject$, {
     initialValue: 0,

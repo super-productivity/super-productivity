@@ -327,3 +327,9 @@ finish-day-btn,
     }
   }
 }
+
+.empty-state-hint {
+  max-width: 420px;
+  margin: 0 auto var(--s2);
+  color: var(--text-color-muted);
+}
