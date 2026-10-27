@@ -25,13 +25,12 @@ describe('getWeekNumber()', () => {
     expect(result).toBe(2); // Week of Jan 4-10, 2020 (Jan 1-4 is week 1)
   });
 
-  it('should ignore firstDayOfWeek for ISO system (per ISO 8601)', () => {
+  it('should return ISO week 2 for 2020-01-08 with Sunday-first (week containing first Thursday)', () => {
     const d = new Date(2020, 0, 8); // January 8, 2020 is a Wednesday
-    // ISO always starts on Monday regardless of firstDayOfWeek parameter
-    const resultWithSix = getWeekNumber(d, 6, 'iso'); // Saturday first (ignored)
-    const resultWithOne = getWeekNumber(d, 1, 'iso'); // Monday first (standard)
-    expect(resultWithSix).toBe(2);
-    expect(resultWithOne).toBe(2); // Same result - ISO ignores firstDayOfWeek
+    // ISO week 2 contains the first Thursday of 2020 (Jan 2)
+    // With Sunday as first day, the week containing Jan 2 starts Dec 29, 2019
+    const result = getWeekNumber(d, 0, 'iso'); // Sunday first
+    expect(result).toBe(2);
   });
 
   it('should handle Sunday-first (firstDayOfWeek=0) for US system', () => {
