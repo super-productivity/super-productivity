@@ -39,8 +39,8 @@ import {
  * judge staleness (`now >= validUntil`), so the app's day rules never get mirrored
  * into Kotlin/Swift — see AndroidWidgetData.validUntil.
  *
- * Pure in its arguments — deliberately no Date.now(), so the selector stays
- * replay-deterministic. `new Date(y, m, d)` normalizes month/year overflow and lands
+ * Pure in its arguments — deliberately no Date.now(), so the day boundary stays
+ * deterministic (only the task order below reads the clock). `new Date(y, m, d)` normalizes month/year overflow and lands
  * on LOCAL midnight, which keeps the boundary right across DST where a naive
  * +24h would drift by an hour.
  */
@@ -119,7 +119,9 @@ export const resolveRemoteCurrentTask = (
  * entries in the panel's order (by start time), then the done ones newest-first
  * like the Done list. Membership stays today's task ids; only the order follows
  * the screen. Reusing the panel's selector and the work view's section grouping
- * keeps the two from drifting apart.
+ * keeps the two from drifting apart. Not mirrored: the per-device customizer
+ * sort/group (localStorage, not store state) and collapsed sections — the widget
+ * cannot collapse, so their tasks stay listed.
  *
  * Like the main list, only a task's OWN upcoming start moves it to the later
  * block. A parent the panel lists for a scheduled subtask shows in both lists on
