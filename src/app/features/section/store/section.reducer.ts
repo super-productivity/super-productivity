@@ -28,16 +28,30 @@ const removeTaskIdFromSection = (
 export const sectionReducer = createReducer(
   initialSectionState,
 
-  on(SectionActions.addSection, (state, { section }) =>
-    adapter.addOne(
+  on(SectionActions.addSection, (state, { section, beforeSectionId }) => {
+    const next = adapter.addOne(
       {
         ...section,
         title: sanitizeSectionTitle(section.title),
         taskIds: section.taskIds ?? [],
       },
       state,
-    ),
-  ),
+    );
+    const anchor = beforeSectionId ? state.entities[beforeSectionId] : undefined;
+    // Missing/deleted anchors fall back to append. Duplicate creates must not
+    // reposition an existing section when an operation is replayed.
+    if (
+      next === state ||
+      !anchor ||
+      anchor.contextId !== section.contextId ||
+      anchor.contextType !== section.contextType
+    ) {
+      return next;
+    }
+    const ids = (next.ids as string[]).filter((id) => id !== section.id);
+    ids.splice(ids.indexOf(anchor.id), 0, section.id);
+    return { ...next, ids };
+  }),
 
   on(SectionActions.deleteSection, (state, { id }) => adapter.removeOne(id, state)),
 
