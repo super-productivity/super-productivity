@@ -528,22 +528,30 @@ export class AndroidForegroundTrackingEffects {
    * time again once it replays. Requests therefore wait for the full hydration
    * (immediate after startup), then re-read the native counter so the wait
    * itself is credited too.
+   *
+   * A session that ended natively during the wait is not recovered: a
+   * notification Pause/Done tap ends it and queues its own credit (#10683), so
+   * recovering the stale request would credit that time twice and resume the
+   * task the user paused.
    */
   processRecovery$ =
     IS_ANDROID_WEB_VIEW &&
     createEffect(
       () =>
         this._recoveryRequest$.pipe(
-          exhaustMap(({ data, source }) =>
+          exhaustMap(({ source }) =>
             this._dataInitState.isAllDataLoadedInitially$.pipe(
               take(1),
-              concatMap(() =>
-                this._doRecover(this._getNativeTrackingData() ?? data, source).catch(
-                  (e) => {
-                    DroidLog.err('Recovery failed', e);
-                  },
-                ),
-              ),
+              concatMap(async () => {
+                const nativeData = this._getNativeTrackingData();
+                if (!nativeData) {
+                  DroidLog.log('Native session ended before recovery');
+                  return;
+                }
+                await this._doRecover(nativeData, source).catch((e) => {
+                  DroidLog.err('Recovery failed', e);
+                });
+              }),
             ),
           ),
         ),
