@@ -88,21 +88,16 @@ export const getWeekNumber = (
       Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()),
     );
 
-    // For ISO, the week always starts on Monday (day 1), so Thursday is day 4
-    // Offset to find the Thursday of the current week (to determine the ISO week)
-    // getUTCDay(): Sunday=0, Monday=1, ..., Saturday=6
-    // We want to find Thursday (day 4) of the ISO week containing this date
-    // For Sunday (getUTCDay() = 0), the Thursday of the current ISO week is 3 days ago
-    // (last Thursday), not 4 days from now (next Thursday). The formula
-    // 4 - getUTCDay() gives the correct result for Monday-Saturday, but for Sunday
-    // we need to use 7 instead of 0 to get the Thursday of the current week.
-    const daysToThursday = 4 - (isoDate.getUTCDay() === 0 ? 7 : isoDate.getUTCDay());
+    // ISO 8601: Thursday is the anchor day (week containing first Thursday = week 1)
+    // JavaScript getUTCDay(): Sunday=0, Monday=1, ..., Saturday=6
+    // Thursday = day 4, so days to Thursday = 4 - currentDay
+    const daysToThursday = 4 - isoDate.getUTCDay();
     isoDate.setUTCDate(isoDate.getUTCDate() + daysToThursday);
 
     // Get first day of year
     const yearStart = new Date(Date.UTC(isoDate.getUTCFullYear(), 0, 1));
 
-    // Calculate full weeks to the Thursday
+    // Calculate full weeks to Thursday
     // prettier-ignore
     const weekNo = Math.ceil((((+isoDate - +yearStart) / 86400000) + 1) / 7);
 
