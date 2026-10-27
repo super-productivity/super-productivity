@@ -2,17 +2,18 @@ package com.superproductivity.superproductivity.service
 
 import android.Manifest
 import android.app.Notification
-import androidx.test.InstrumentationRegistry
-import androidx.test.rule.GrantPermissionRule
-import androidx.test.runner.AndroidJUnit4
+import android.content.Context
+import android.os.Build
 import androidx.core.app.NotificationManagerCompat
+import androidx.test.platform.app.InstrumentationRegistry
+import androidx.test.runner.AndroidJUnit4
 import com.superproductivity.superproductivity.BuildConfig
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
-import org.junit.Rule
+import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 
@@ -36,14 +37,22 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class ReminderNotificationHelperInstrumentedTest {
 
-    @get:Rule
-    val grantNotifications: GrantPermissionRule =
-        GrantPermissionRule.grant(Manifest.permission.POST_NOTIFICATIONS)
-
-    private val context = InstrumentationRegistry.getTargetContext()
+    private val context: Context by lazy {
+        InstrumentationRegistry.getInstrumentation().targetContext
+    }
 
     private val alarmNotificationId = 900_001
     private val regularNotificationId = 900_002
+
+    @Before
+    fun setUp() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            InstrumentationRegistry.getInstrumentation().uiAutomation.grantRuntimePermission(
+                context.packageName,
+                Manifest.permission.POST_NOTIFICATIONS,
+            )
+        }
+    }
 
     @After
     fun cleanUp() {
