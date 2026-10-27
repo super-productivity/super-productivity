@@ -6,6 +6,7 @@
        when the screen is off → issue #10071. Declared for fdroid only: on
        Android 14+ Google Play grants it only to calling/alarm apps and requires a
        Play Console declaration, so the play flavor (Play and GitHub release APK)
-       goes without it and the intent degrades to a normal heads-up notification. -->
+       goes without it and the intent degrades to a normal heads-up notification
+       on Android 10+ (Android 7-9 predate the permission, so it is not needed there). -->
   <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
 </manifest>

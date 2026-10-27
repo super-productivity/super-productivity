@@ -4,6 +4,7 @@ import android.Manifest
 import android.app.Notification
 import android.content.Context
 import android.os.Build
+import android.os.SystemClock
 import androidx.core.app.NotificationManagerCompat
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.runner.AndroidJUnit4
@@ -62,9 +63,17 @@ class ReminderNotificationHelperInstrumentedTest {
         nm.cancel(ReminderNotificationHelper.SUMMARY_NOTIFICATION_ID)
     }
 
-    private fun postedNotification(id: Int): Notification? =
-        NotificationManagerCompat.from(context).activeNotifications
-            .firstOrNull { it.id == id }?.notification
+    // notify() is enqueued asynchronously by the system, so poll like the
+    // sibling reminder tests instead of reading the active list once.
+    private fun postedNotification(id: Int): Notification? {
+        val deadline = SystemClock.elapsedRealtime() + 5_000
+        while (true) {
+            val posted = NotificationManagerCompat.from(context).activeNotifications
+                .firstOrNull { it.id == id }?.notification
+            if (posted != null || SystemClock.elapsedRealtime() >= deadline) return posted
+            SystemClock.sleep(100)
+        }
+    }
 
     @Test
     fun alarmStyleReminderCarriesFullScreenIntent() {

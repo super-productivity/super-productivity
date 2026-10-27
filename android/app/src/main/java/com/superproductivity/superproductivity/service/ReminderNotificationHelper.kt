@@ -219,7 +219,8 @@ object ReminderNotificationHelper {
         // without any user action. The activity does not show over the keyguard;
         // the system-drawn notification is what the user sees and acts on.
         // USE_FULL_SCREEN_INTENT is declared only in the fdroid flavor manifest;
-        // without it (play flavor) the intent degrades to a normal heads-up.
+        // without it (play flavor) the intent degrades to a normal heads-up on
+        // Android 10+. Android 7-9 predate the permission, so it is not needed there.
         val fullScreenPendingIntent = if (useAlarmStyle) {
             val fullScreenIntent = Intent(context, CapacitorMainActivity::class.java).apply {
                 action = ACTION_SHOW_REMINDER_FSI
