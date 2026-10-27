@@ -16,6 +16,7 @@ import android.widget.Toast
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import com.anggrayudi.storage.SimpleStorageHelper
 import com.getcapacitor.BridgeActivity
+import com.superproductivity.superproductivity.app.LaunchUrlReplayGuard
 import com.superproductivity.superproductivity.plugins.NavigationBarPlugin
 import com.superproductivity.superproductivity.plugins.SafBridgePlugin
 import com.superproductivity.superproductivity.service.BackgroundSyncCredentialStore
@@ -143,6 +144,11 @@ class CapacitorMainActivity : BridgeActivity() {
         // clear it (mirrors the savedInstanceState guard for handleIntent below).
         if (savedInstanceState != null) {
             intent?.data = null
+        } else if (intent != null &&
+            !LaunchUrlReplayGuard.shouldDispatchFreshLaunch(this)
+        ) {
+            // The system relaunched the task after a package update (#11153).
+            intent.data = null
         }
         try {
             super.onCreate(savedInstanceState)
