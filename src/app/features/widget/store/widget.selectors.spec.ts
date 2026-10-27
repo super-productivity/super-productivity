@@ -2,11 +2,11 @@ import {
   buildLocalCurrentTask,
   getWidgetValidUntil,
   resolveRemoteCurrentTask,
-  selectAndroidWidgetData,
-} from './android-widget.selectors';
+  selectWidgetData,
+} from './widget.selectors';
 import { getDbDateStr } from '../../../util/get-db-date-str';
 import { Task } from '../../tasks/task.model';
-import { Project } from '../../project/project.model';
+import { Project, ProjectState } from '../../project/project.model';
 import {
   PRESENCE_STALE_AFTER_MS,
   RemoteSessionView,
@@ -62,10 +62,9 @@ describe('getWidgetValidUntil', () => {
   });
 });
 
-describe('selectAndroidWidgetData', () => {
+describe('selectWidgetData', () => {
   const DAY = '2026-07-17';
   const VALID_UNTIL = new Date(2026, 6, 18).getTime();
-
   const task = (id: string, partial: Partial<Task> = {}): Task =>
     ({
       id,
@@ -82,13 +81,13 @@ describe('selectAndroidWidgetData', () => {
       theme: primary ? { primary } : {},
     }) as Project;
 
-  const projectState = (projects: Project[]): any => ({
+  const projectState = (projects: Project[]): ProjectState => ({
     ids: projects.map((p) => p.id),
     entities: Object.fromEntries(projects.map((p) => [p.id, p])),
   });
 
   it('should project today tasks in order with project colors', () => {
-    const result = selectAndroidWidgetData.projector(
+    const result = selectWidgetData.projector(
       ['t1', 't2'],
       {
         t1: task('t1', { title: 'Task one', projectId: 'p1' }),
@@ -113,7 +112,7 @@ describe('selectAndroidWidgetData', () => {
   });
 
   it('should skip today ids without a task entity', () => {
-    const result = selectAndroidWidgetData.projector(
+    const result = selectWidgetData.projector(
       ['missing', 't1'],
       { t1: task('t1') },
       projectState([]),
@@ -126,7 +125,7 @@ describe('selectAndroidWidgetData', () => {
   });
 
   it('should omit projectId key entirely for project-less tasks (JSON null breaks the Kotlin parser contract)', () => {
-    const result = selectAndroidWidgetData.projector(
+    const result = selectWidgetData.projector(
       ['t1'],
       { t1: task('t1', { projectId: undefined }) },
       projectState([]),
@@ -138,7 +137,7 @@ describe('selectAndroidWidgetData', () => {
   });
 
   it('should not include colors for projects without a theme primary', () => {
-    const result = selectAndroidWidgetData.projector(
+    const result = selectWidgetData.projector(
       ['t1'],
       { t1: task('t1', { projectId: 'p1' }) },
       projectState([project('p1')]),
@@ -154,7 +153,7 @@ describe('selectAndroidWidgetData', () => {
   // raw offset — is what has to cross the wire. dayStr rides along for the label only.
   it('should stamp the boundary including a custom start-of-next-day', () => {
     const fourAmOffset = 4 * 60 * 60 * 1000;
-    const result = selectAndroidWidgetData.projector(
+    const result = selectWidgetData.projector(
       ['t1'],
       { t1: task('t1') },
       projectState([]),
@@ -167,7 +166,7 @@ describe('selectAndroidWidgetData', () => {
   });
 
   it('should include the local device currentTask when a task is being tracked', () => {
-    const result = selectAndroidWidgetData.projector(
+    const result = selectWidgetData.projector(
       ['t1'],
       { t1: task('t1', { title: 'Task one', projectId: 'p1' }) },
       projectState([project('p1', '#ff0000')]),
@@ -184,12 +183,13 @@ describe('selectAndroidWidgetData', () => {
     });
   });
 
-  it('should serialize to the exact v:1 blob shape consumed by WidgetData.kt (see WidgetDataTest.kt)', () => {
-    const result = selectAndroidWidgetData.projector(
-      ['t1', 't2'],
+  it('should serialize to the exact v:1 blob shape consumed by WidgetData.kt and WidgetData.swift (see WidgetDataTest.kt / WidgetDataTests.swift)', () => {
+    const result = selectWidgetData.projector(
+      ['t1', 't2', 't3'],
       {
         t1: task('t1', { title: 'Task one', projectId: 'p1' }),
         t2: task('t2', { title: 'Task two', isDone: true }),
+        t3: task('t3', { title: 'Task three' }),
       },
       projectState([project('p1', '#ff0000')]),
       DAY,
@@ -199,7 +199,8 @@ describe('selectAndroidWidgetData', () => {
     expect(JSON.stringify(result)).toBe(
       `{"v":1,"dayStr":"${DAY}","validUntil":${VALID_UNTIL},"tasks":[` +
         '{"id":"t1","title":"Task one","isDone":false,"projectId":"p1"},' +
-        '{"id":"t2","title":"Task two","isDone":true}],' +
+        '{"id":"t2","title":"Task two","isDone":true},' +
+        '{"id":"t3","title":"Task three","isDone":false}],' +
         '"projectColors":{"p1":"#ff0000"},"currentTask":null}',
     );
   });

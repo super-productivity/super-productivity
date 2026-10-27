@@ -12,7 +12,7 @@ state, not an independent task or calendar engine.
 
 - Angular's `WidgetDataService` is the only writer of the `widget_data` JSON
   snapshot. The TypeScript contract is
-  `src/app/features/android/android-widget.model.ts`.
+  `src/app/features/widget/widget-data.model.ts`.
 - Kotlin parses the versioned `v: 1` shape in
   `android/app/src/main/java/com/superproductivity/superproductivity/widget/WidgetData.kt`.
   Unknown versions fail closed to an empty list.
@@ -23,7 +23,7 @@ state, not an independent task or calendar engine.
   external apps must not be able to complete tasks.
 
 The serializer and Kotlin parser are locked to the same golden shape by
-`android-widget.selectors.spec.ts` and `WidgetDataTest.kt`. Update both ends and
+`widget.selectors.spec.ts` and `WidgetDataTest.kt`. Update both ends and
 both tests when the contract changes.
 
 ## Day and freshness semantics
