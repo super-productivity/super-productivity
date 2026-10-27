@@ -36,6 +36,18 @@
             android:textColor="@color/widget_ink"
             android:textSize="16sp"
             android:textStyle="bold" />
+
+        <ImageButton
+            android:id="@+id/widget_add_task"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_marginStart="2dp"
+            android:background="@android:color/transparent"
+            android:contentDescription="@string/widget_add_task"
+            android:minWidth="48dp"
+            android:minHeight="48dp"
+            android:padding="12dp"
+            android:src="@drawable/ic_widget_add" />
     </LinearLayout>
 
     <!-- Currently tracked task (local or, via SuperSync presence, remote); gone when

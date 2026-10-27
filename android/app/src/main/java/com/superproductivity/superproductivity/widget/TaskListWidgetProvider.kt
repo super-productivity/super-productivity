@@ -86,6 +86,22 @@ class TaskListWidgetProvider : AppWidgetProvider() {
         const val EXTRA_SET_DONE = "WIDGET_SET_DONE"
         const val EXTRA_OPEN_APP = "WIDGET_OPEN_APP"
 
+        private fun quickActionPendingIntent(context: Context, requestCode: Int): PendingIntent {
+            val intent = Intent(context, CapacitorMainActivity::class.java).apply {
+                action = Intent.ACTION_VIEW
+                data = Uri.parse("com.super-productivity.app://add-task")
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            }
+            return PendingIntent.getActivity(
+                context,
+                requestCode,
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+        }
+
+        private const val REQUEST_OPEN_ADD_TASK = 103
+
         private fun widgetIds(context: Context, appWidgetManager: AppWidgetManager): IntArray =
             appWidgetManager.getAppWidgetIds(
                 ComponentName(context, TaskListWidgetProvider::class.java)
@@ -183,6 +199,11 @@ class TaskListWidgetProvider : AppWidgetProvider() {
             currentTask: WidgetCurrentTask?
         ) {
             val views = RemoteViews(context.packageName, R.layout.widget_task_list)
+
+            views.setOnClickPendingIntent(
+                R.id.widget_add_task,
+                quickActionPendingIntent(context, REQUEST_OPEN_ADD_TASK)
+            )
 
             views.setTextViewText(R.id.widget_header_title, header)
 

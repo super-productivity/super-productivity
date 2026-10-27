@@ -40,7 +40,9 @@ until the app writes a current snapshot.
 
 ## Deliberate limitations
 
-- No task creation, undo, or per-task deep link.
+- The **+** button opens the app's add-task bar through
+  `com.super-productivity.app://add-task`; tasks are created in the app, not
+  natively in the widget. There is no undo or per-task deep link.
 - Native widget chrome is English-only and uses fixed styling.
 - At most 20 tasks are rendered.
 - Cross-client freshness while the app is dead requires a separate background
