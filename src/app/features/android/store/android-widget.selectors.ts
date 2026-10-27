@@ -3,7 +3,9 @@ import { Dictionary } from '@ngrx/entity';
 import { selectTodayTaskIds } from '../../work-context/store/work-context.selectors';
 import {
   selectCurrentTaskId,
+  selectLaterTodayStructure,
   selectTaskEntities,
+  SnapshotStructureEntry,
 } from '../../tasks/store/task.selectors';
 import { selectProjectFeatureState } from '../../project/store/project.selectors';
 import {
@@ -16,6 +18,7 @@ import {
   AndroidWidgetTask,
 } from '../android-widget.model';
 import { Task } from '../../tasks/task.model';
+import { sortDoneTasksByDoneDate } from '../../work-context/work-context.util';
 import { getDeviceLabel } from '../../tracking-presence/get-device-label.util';
 import {
   PRESENCE_STALE_AFTER_MS,
@@ -103,6 +106,46 @@ export const resolveRemoteCurrentTask = (
 };
 
 /**
+ * Today's tasks in the order the Today screen shows them (#11109): the main list
+ * in its stored order, then the "Later Today" panel's entries in the panel's
+ * order (by start time), then the done ones newest-first like the Done list.
+ * Membership stays today's task ids; only the order follows the screen. Reusing
+ * the panel's own selector keeps the two from drifting apart.
+ *
+ * shortcut: the panel structure is only as fresh as the last scheduling change,
+ * so an appointment whose start passes without one stays in the later block
+ * (still in time order) until the next push with changed state — re-apply the
+ * cutoff with a fresh clock at push time if that ever matters.
+ */
+const orderTodayTasksLikeTodayScreen = (
+  todayTaskIds: string[],
+  taskEntities: Dictionary<Task>,
+  laterTodayStructure: readonly SnapshotStructureEntry[],
+): Task[] => {
+  const laterTodayRank = new Map(laterTodayStructure.map((entry, i) => [entry.id, i]));
+  const mainList: Task[] = [];
+  const laterToday: Task[] = [];
+  const done: Task[] = [];
+  for (const taskId of todayTaskIds) {
+    const task = taskEntities[taskId];
+    if (!task) {
+      continue;
+    }
+    if (task.isDone) {
+      done.push(task);
+    } else if (laterTodayRank.has(task.id)) {
+      laterToday.push(task);
+    } else {
+      mainList.push(task);
+    }
+  }
+  laterToday.sort(
+    (a, b) => (laterTodayRank.get(a.id) ?? 0) - (laterTodayRank.get(b.id) ?? 0),
+  );
+  return [...mainList, ...laterToday, ...sortDoneTasksByDoneDate(done)];
+};
+
+/**
  * Projects today's tasks into the exact `widget_data` blob shape, so downstream
  * consumers get referential stability from the selector memoization and cheap
  * change detection via JSON comparison in WidgetDataService.
@@ -114,6 +157,7 @@ export const selectAndroidWidgetData = createSelector(
   selectTodayStr,
   selectStartOfNextDayDiffMs,
   selectCurrentTaskId,
+  selectLaterTodayStructure,
   (
     todayTaskIds,
     taskEntities,
@@ -121,15 +165,16 @@ export const selectAndroidWidgetData = createSelector(
     dayStr,
     startOfNextDayDiffMs,
     currentTaskId,
+    laterTodayStructure,
   ): AndroidWidgetData => {
     const tasks: AndroidWidgetTask[] = [];
     const projectColors: { [projectId: string]: string } = {};
 
-    for (const taskId of todayTaskIds) {
-      const task = taskEntities[taskId];
-      if (!task) {
-        continue;
-      }
+    for (const task of orderTodayTasksLikeTodayScreen(
+      todayTaskIds,
+      taskEntities,
+      laterTodayStructure,
+    )) {
       const widgetTask: AndroidWidgetTask = {
         id: task.id,
         title: task.title,

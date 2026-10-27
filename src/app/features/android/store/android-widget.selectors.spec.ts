@@ -12,6 +12,7 @@ import {
   RemoteSessionView,
 } from '../../tracking-presence/tracking-presence.model';
 import { getDeviceLabel } from '../../tracking-presence/get-device-label.util';
+import { selectLaterTodayStructure } from '../../tasks/store/task.selectors';
 
 describe('getWidgetValidUntil', () => {
   const HOUR = 60 * 60 * 1000;
@@ -98,6 +99,7 @@ describe('selectAndroidWidgetData', () => {
       DAY,
       0,
       null,
+      [],
     );
     expect(result).toEqual({
       v: 1,
@@ -120,6 +122,7 @@ describe('selectAndroidWidgetData', () => {
       DAY,
       0,
       null,
+      [],
     );
     expect(result.tasks.length).toBe(1);
     expect(result.tasks[0].id).toBe('t1');
@@ -133,6 +136,7 @@ describe('selectAndroidWidgetData', () => {
       DAY,
       0,
       null,
+      [],
     );
     expect('projectId' in result.tasks[0]).toBe(false);
   });
@@ -145,6 +149,7 @@ describe('selectAndroidWidgetData', () => {
       DAY,
       0,
       null,
+      [],
     );
     expect(result.projectColors).toEqual({});
     expect(result.tasks[0].projectId).toBe('p1');
@@ -161,6 +166,7 @@ describe('selectAndroidWidgetData', () => {
       '2026-07-16',
       fourAmOffset,
       null,
+      [],
     );
     expect(result.dayStr).toBe('2026-07-16');
     expect(result.validUntil).toBe(new Date(2026, 6, 17).getTime() + fourAmOffset);
@@ -174,6 +180,7 @@ describe('selectAndroidWidgetData', () => {
       DAY,
       0,
       't1',
+      [],
     );
     expect(result.currentTask).toEqual({
       id: 't1',
@@ -195,6 +202,7 @@ describe('selectAndroidWidgetData', () => {
       DAY,
       0,
       null,
+      [],
     );
     expect(JSON.stringify(result)).toBe(
       `{"v":1,"dayStr":"${DAY}","validUntil":${VALID_UNTIL},"tasks":[` +
@@ -202,6 +210,97 @@ describe('selectAndroidWidgetData', () => {
         '{"id":"t2","title":"Task two","isDone":true}],' +
         '"projectColors":{"p1":"#ff0000"},"currentTask":null}',
     );
+  });
+
+  // #11109: the widget must list today's tasks in the order the Today screen shows
+  // them — main list, then the "Later Today" panel (by start time), then done —
+  // not in the raw stored order.
+  describe('order (#11109)', () => {
+    const at = (hours: number): number => new Date(2026, 6, 17, hours).getTime();
+
+    beforeEach(() => {
+      jasmine.clock().install();
+      jasmine.clock().mockDate(new Date(2026, 6, 17, 9));
+    });
+    afterEach(() => jasmine.clock().uninstall());
+
+    // The Later Today panel's real source, so the widget is checked against the
+    // order the screen actually renders, not against a hand-written stub.
+    const laterTodayStructureFor = (
+      tasks: Task[],
+      currentTaskId: string | null,
+    ): ReturnType<typeof selectLaterTodayStructure.projector> =>
+      selectLaterTodayStructure.projector(
+        tasks.map((t) => ({
+          id: t.id,
+          isDone: t.isDone,
+          dueDay: t.dueDay ?? null,
+          dueWithTime: t.dueWithTime ?? null,
+          deadlineDay: null,
+          deadlineWithTime: null,
+          parentId: t.parentId ?? null,
+          subTaskIds: t.subTaskIds,
+        })),
+        DAY,
+        0,
+        currentTaskId,
+      );
+
+    const widgetOrder = (
+      storedOrder: string[],
+      tasks: Task[],
+      currentTaskId: string | null = null,
+    ): string[] =>
+      selectAndroidWidgetData
+        .projector(
+          storedOrder,
+          Object.fromEntries(tasks.map((t) => [t.id, t])),
+          projectState([]),
+          DAY,
+          0,
+          currentTaskId,
+          laterTodayStructureFor(tasks, currentTaskId),
+        )
+        .tasks.map((t) => t.id);
+
+    const sched = (id: string, partial: Partial<Task>): Task =>
+      task(id, { subTaskIds: [], dueDay: DAY, ...partial });
+
+    it('should list the main list first, then upcoming tasks by start time, then done', () => {
+      const tasks = [
+        sched('B', { dueDay: undefined, dueWithTime: at(15) }),
+        sched('A', { dueDay: undefined, dueWithTime: at(11) }),
+        sched('C', {}),
+        sched('D', { isDone: true, doneOn: at(8) }),
+      ];
+      expect(widgetOrder(['B', 'A', 'C', 'D'], tasks)).toEqual(['C', 'A', 'B', 'D']);
+    });
+
+    it('should keep an appointment that already started in its stored main-list place', () => {
+      const tasks = [
+        sched('B', { dueDay: undefined, dueWithTime: at(15) }),
+        sched('P', { dueDay: undefined, dueWithTime: at(8) }),
+        sched('C', {}),
+      ];
+      expect(widgetOrder(['B', 'P', 'C'], tasks)).toEqual(['P', 'C', 'B']);
+    });
+
+    it('should keep the tracked task in the main list even if it starts later', () => {
+      const tasks = [
+        sched('B', { dueDay: undefined, dueWithTime: at(15) }),
+        sched('C', {}),
+      ];
+      expect(widgetOrder(['B', 'C'], tasks, 'B')).toEqual(['B', 'C']);
+    });
+
+    it('should list done tasks newest-first like the Done list', () => {
+      const tasks = [
+        sched('D1', { isDone: true, doneOn: at(7) }),
+        sched('C', {}),
+        sched('D2', { isDone: true, doneOn: at(8) }),
+      ];
+      expect(widgetOrder(['D1', 'C', 'D2'], tasks)).toEqual(['C', 'D2', 'D1']);
+    });
   });
 });
 
