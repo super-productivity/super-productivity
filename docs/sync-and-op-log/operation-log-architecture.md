@@ -924,26 +924,6 @@ IDs deduplicate ops still in the local log, while vector clocks carry causality.
    but older writers can omit it. Masked dominating replacements written by,
    or subsequently rewritten by, those clients remain a mixed-version gap;
    the older version/lineage/trim checks still apply to files without the marker.
-   A gap that is only a trim (the file's `syncVersion` did not go backwards,
-   its base is seen, and its clock equals or dominates the last-seen one) is a
-   catch-up, not a replacement (`snapshotExtendsLastSeen`, #10972). A client
-   with a completed sync baseline and no pending full-state op then hydrates
-   the snapshot and keeps its pending ops: they move past the baseline with
-   ids and clocks unchanged, replay on top of it, and upload normally.
-   Receivers resolve any crossing on the no-pending LWW path. A pending op the
-   snapshot clock already covers (uploaded before a crash skipped
-   `markSynced`) is settled, not replayed twice. A kept op the snapshot state
-   cannot take (its project was deleted remotely) is reducer-rejected with the
-   discard snack, as receivers drop it. A full-state op that lands during the
-   download (a backup import) still asks. Known residual: once the
-   other client compacted its crossing op (`COMPACTION_RETENTION_MS`, 7
-   days), the receiver finds no local op to compare and applies the kept edit
-   even when it is older, as on the #9073 path. Second residual: a
-   replacement written before v19.2.0 leaves no snapshot base and resets only
-   `syncVersion`, so one whose later uploads climbed back past the expected
-   version reads as a catch-up; if its `SYNC_IMPORT` then filters the kept op
-   on receivers, they diverge where a dialog used to ask. Any other concurrent
-   snapshot still asks Keep local / Keep remote.
 4. **Commit:** the downloaded `rev`, vector clock, and expected synthetic
    watermark remain staged until the caller confirms that baseline and ops were
    durably applied. Cancelling a data-conflict decision does not advance the
