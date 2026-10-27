@@ -64,6 +64,9 @@ const mergeClocks = (a: VectorClock, b: VectorClock): VectorClock => {
   return merged;
 };
 
+const isAheadOf = (a: VectorClock, b: VectorClock): boolean =>
+  Object.entries(a).some(([id, counter]) => counter > (b[id] ?? 0));
+
 interface UploadBody {
   ops: Array<{ id: string; clientId: string; vectorClock: VectorClock }>;
 }
@@ -143,6 +146,7 @@ test.describe('@supersync Superseded edit with covered server clock', () => {
       let downloadedClock: VectorClock = {};
       let abortedForcedGets = 0;
       let injectedRejections = 0;
+      let injectedClocksNotAhead = 0;
       let acceptedReplacementUploads = 0;
       let mixedUploads = 0;
 
@@ -188,20 +192,24 @@ test.describe('@supersync Superseded edit with covered server clock', () => {
             mixedUploads++;
           }
           injectedRejections++;
+          const results = staleOps.map((op) => {
+            // Ahead of the op, but only by what B has already downloaded.
+            const existingClock = mergeClocks(op.vectorClock, downloadedClock);
+            if (!isAheadOf(existingClock, op.vectorClock)) {
+              injectedClocksNotAhead++;
+            }
+            return {
+              opId: op.id,
+              accepted: false,
+              error: 'Superseded operation: server has newer version of TASK',
+              errorCode: 'CONFLICT_SUPERSEDED',
+              existingClock,
+            };
+          });
           await route.fulfill({
             status: 200,
             contentType: 'application/json',
-            body: JSON.stringify({
-              results: staleOps.map((op) => ({
-                opId: op.id,
-                accepted: false,
-                error: 'Superseded operation: server has newer version of TASK',
-                errorCode: 'CONFLICT_SUPERSEDED',
-                // Ahead of the op, but only by what B has already downloaded.
-                existingClock: mergeClocks(op.vectorClock, downloadedClock),
-              })),
-              latestSeq: knownHeadSeq ?? 0,
-            }),
+            body: JSON.stringify({ results, latestSeq: knownHeadSeq ?? 0 }),
           });
           return;
         }
@@ -228,7 +236,7 @@ test.describe('@supersync Superseded edit with covered server clock', () => {
       // injected server clock was really ahead of the stale op.
       expect(injectedRejections).toBeGreaterThanOrEqual(1);
       expect(mixedUploads).toBe(0);
-      expect(Object.keys(downloadedClock).length).toBeGreaterThan(0);
+      expect(injectedClocksNotAhead).toBe(0);
 
       // 5. No forced download, and the edit was replaced and accepted in the
       //    first sync.
