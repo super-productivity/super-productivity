@@ -74,22 +74,30 @@ export interface StoredWorkSessions {
   pending: PluginWorkSession[];
 }
 
-export const NO_STORED_WORK_SESSIONS: StoredWorkSessions = { open: null, pending: [] };
-
 /** Bounds storage when writes keep failing (e.g. a long time offline). */
 export const MAX_PENDING_WORK_SESSIONS = 100;
 
+const isSameSession = (a: PluginWorkSession, b: PluginWorkSession): boolean =>
+  a.taskId === b.taskId && a.start === b.start;
+
+/**
+ * Store the step's running session and queue the one that ended. An ended session
+ * replaces a queued one with the same task and start: a blocked second browser
+ * tab recovers the running session before its single-tab check, with a partial end.
+ */
 export const recordWorkSessionStep = (
   stored: StoredWorkSessions,
   step: WorkSessionStep,
 ): StoredWorkSessions => {
   const ended = step.ended;
-  const isWorthLogging = !!ended && ended.end - ended.start >= MIN_WORK_SESSION_MS;
+  if (!ended || ended.end - ended.start < MIN_WORK_SESSION_MS) {
+    return { open: step.open, pending: stored.pending };
+  }
   return {
     open: step.open,
-    pending: isWorthLogging
-      ? [...stored.pending, ended].slice(-MAX_PENDING_WORK_SESSIONS)
-      : stored.pending,
+    pending: [...stored.pending.filter((p) => !isSameSession(p, ended)), ended].slice(
+      -MAX_PENDING_WORK_SESSIONS,
+    ),
   };
 };
 
@@ -108,12 +116,16 @@ export const recoverInterruptedWorkSession = (
       })
     : stored;
 
+/**
+ * Remove a written session. Matches the end too: while a partial copy was being
+ * written, the full session may have replaced it, and that one must stay queued.
+ */
 export const removePendingWorkSession = (
   stored: StoredWorkSessions,
   session: PluginWorkSession,
 ): StoredWorkSessions => ({
   ...stored,
   pending: stored.pending.filter(
-    (p) => p.taskId !== session.taskId || p.start !== session.start,
+    (p) => !isSameSession(p, session) || p.end !== session.end,
   ),
 });

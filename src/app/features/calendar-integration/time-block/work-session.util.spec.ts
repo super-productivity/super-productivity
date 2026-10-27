@@ -1,10 +1,10 @@
 import {
   INITIAL_WORK_SESSION_STEP,
   MAX_PENDING_WORK_SESSIONS,
-  NO_STORED_WORK_SESSIONS,
   recordWorkSessionStep,
   recoverInterruptedWorkSession,
   removePendingWorkSession,
+  StoredWorkSessions,
   stepWorkSession,
 } from './work-session.util';
 
@@ -69,6 +69,7 @@ describe('stepWorkSession', () => {
 });
 
 describe('stored work sessions', () => {
+  const NOTHING_STORED: StoredWorkSessions = { open: null, pending: [] };
   const MIN = 60 * 1000;
   const open = {
     taskId: 'a',
@@ -88,7 +89,7 @@ describe('stored work sessions', () => {
   });
 
   it('keeps the running session and queues the one that ended', () => {
-    const stored = recordWorkSessionStep(NO_STORED_WORK_SESSIONS, {
+    const stored = recordWorkSessionStep(NOTHING_STORED, {
       open,
       ended: session(0),
     });
@@ -97,7 +98,7 @@ describe('stored work sessions', () => {
 
   it('does not queue sessions shorter than a minute', () => {
     const short = { taskId: 'a', title: 'A', start: 0, end: MIN - 1 };
-    const stored = recordWorkSessionStep(NO_STORED_WORK_SESSIONS, {
+    const stored = recordWorkSessionStep(NOTHING_STORED, {
       open: null,
       ended: short,
     });
@@ -105,12 +106,23 @@ describe('stored work sessions', () => {
   });
 
   it('keeps only the newest sessions when too many are pending', () => {
-    let stored = NO_STORED_WORK_SESSIONS;
+    let stored = NOTHING_STORED;
     for (let i = 0; i <= MAX_PENDING_WORK_SESSIONS; i++) {
       stored = recordWorkSessionStep(stored, { open: null, ended: session(i * MIN) });
     }
     expect(stored.pending.length).toBe(MAX_PENDING_WORK_SESSIONS);
     expect(stored.pending[0]).toEqual(session(MIN));
+  });
+
+  it('replaces a pending session with the same task and start', () => {
+    // A blocked second browser tab recovers the running session early, with a
+    // partial end; the full session must replace it rather than sit beside it.
+    const partial = { taskId: 'a', title: 'A', start: 0, end: 5 * MIN };
+    const stored = recordWorkSessionStep(
+      { open: null, pending: [partial, session(20 * MIN)] },
+      { open: null, ended: session(0) },
+    );
+    expect(stored.pending).toEqual([session(20 * MIN), session(0)]);
   });
 
   it('turns a session cut short by a quit or crash into a pending one', () => {

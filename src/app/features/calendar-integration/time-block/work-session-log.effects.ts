@@ -68,6 +68,11 @@ const saveStored = (stored: StoredWorkSessions): void => {
  * The running session and unwritten ones are kept in device-local storage, so a
  * session cut short by a quit, crash or closed tab is written at the next start,
  * and a failed write is retried with the next session or the next start.
+ *
+ * shortcut: on Android, ticks pause in the background, so a session whose WebView
+ * is killed there ends at backgrounding; native recovery credits the rest to the
+ * task and resumes it as a new session — continue the recovered session instead
+ * if users report the gap.
  */
 @Injectable()
 export class WorkSessionLogEffects {

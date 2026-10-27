@@ -228,6 +228,37 @@ describe('WorkSessionLogEffects', () => {
     expect(stored()).toEqual({ open: null, pending: [] });
   }));
 
+  it('keeps the full session when its partial copy finishes writing later', fakeAsync(() => {
+    // A blocked second browser tab recovers the running session with a partial end.
+    const partial = { taskId: 'a', title: 'Task a', start: START, end: minutesIn(5) };
+    localStorage.setItem(
+      LS.WORK_SESSION_LOG,
+      JSON.stringify({ open: null, pending: [partial] }),
+    );
+    isPluginRegistered = false;
+    setup({ isLogWorkSessions: true });
+    let finishPartialWrite!: () => void;
+    logWorkSessionSpy.and.returnValues(
+      new Promise<void>((resolve) => (finishPartialWrite = resolve)),
+      Promise.resolve(),
+    );
+    isPluginRegistered = true;
+    registrationChanges$.next(1);
+
+    track('a', 0, 30);
+    setCurrent(null, minutesIn(30));
+    finishPartialWrite();
+    flushMicrotasks();
+
+    expect(logWorkSessionSpy.calls.mostRecent().args[0]).toEqual({
+      taskId: 'a',
+      title: 'Task a',
+      start: START,
+      end: minutesIn(30),
+    });
+    expect(stored().pending).toEqual([]);
+  }));
+
   it('remembers the running session so a quit does not lose it', fakeAsync(() => {
     setup({ isLogWorkSessions: true });
 
