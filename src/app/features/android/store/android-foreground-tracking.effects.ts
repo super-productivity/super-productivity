@@ -27,7 +27,10 @@ import {
   selectIsOvertimeEnabled,
   selectTimer,
 } from '../../focus-mode/store/focus-mode.selectors';
-import { getTimerRemainingMs, TimerState } from '../../focus-mode/focus-mode.model';
+import {
+  creditResumeGap,
+  getFocusAutoCompleteCapMs,
+} from '../../focus-mode/resume-gap-credit';
 import { combineLatest, firstValueFrom, Subject } from 'rxjs';
 import { ANDROID_BACKGROUND_TICK_CAP_MS } from '../../../app.constants';
 import { HydrationStateService } from '../../../op-log/apply/hydration-state.service';
@@ -169,48 +172,6 @@ export const isTimeSpentJumpForNotification = (
   currTimeSpent < prevTimeSpent ||
   currTimeSpent - prevTimeSpent > TIME_SPENT_JUMP_THRESHOLD_MS;
 
-/**
- * Credit the backgrounded wall-clock gap (capped at 8h) to tick$ consumers
- * (running stopwatch counters, break tracking) with one wake-up tick, and
- * flush it into a syncTimeSpent op. The 1s interval is paused while the app
- * is backgrounded (see createGlobalInterval$ — the web-layer half of the
- * #8243 battery drain), so without this the gap would never reach them.
- * resetTrackingStart() drops any over-cap remainder from the tick anchor so
- * the restarted interval can't deliver it again; for the current task the
- * native reconcile adds that remainder from the authoritative counter.
- *
- * MUST be called from syncOnResume$ BEFORE _syncElapsedTimeForTask (see the
- * effect comment) — as a separate onResume$ effect it would race the native
- * reconcile and double-count the gap in the op-log.
- *
- * Exported so the spec can exercise it without tripping the
- * IS_ANDROID_WEB_VIEW gate on createEffect.
- */
-export const creditBackgroundTickGap = (
-  globalTracking: GlobalTrackingIntervalService,
-  taskService: TaskService,
-): void => {
-  globalTracking.triggerWakeUpTick(ANDROID_BACKGROUND_TICK_CAP_MS);
-  globalTracking.resetTrackingStart();
-  taskService.flushAccumulatedTimeSpent();
-};
-
-/**
- * How much background time a resume may credit before its focus tick
- * auto-completes the running work session, or null when the tick cannot
- * complete one (Flowtime, overtime, paused/idle timer, break). The conditions
- * mirror the tick reducer's work auto-completion in focus-mode.reducer.ts; the
- * cap mirrors AndroidFocusModeEffects._completionDuration, so a resume and a
- * native completion credit the same time to the task.
- */
-export const getFocusAutoCompleteCapMs = (
-  timer: TimerState,
-  isOvertimeEnabled: boolean,
-): number | null =>
-  timer.isRunning && timer.purpose === 'work' && timer.duration > 0 && !isOvertimeEnabled
-    ? getTimerRemainingMs(timer)
-    : null;
-
 export type AndroidResumeDeps = {
   store: Store;
   globalTracking: GlobalTrackingIntervalService;
@@ -225,33 +186,23 @@ export type AndroidResumeDeps = {
  * load-bearing ordering (see the effect comment): the gap credit must run
  * synchronously BEFORE syncElapsedTimeForTask samples the task, else the
  * native reconcile re-emits the same gap as a second syncTimeSpent op and
- * remote devices double-count it on op-log replay.
+ * remote devices double-count it on op-log replay. For the current task the
+ * native reconcile adds any over-cap remainder from the authoritative counter.
  */
 export const handleAndroidResume = async (
   deps: AndroidResumeDeps,
   currentTask: Task | null,
   focusAutoCompleteCapMs: number | null = null,
 ): Promise<void> => {
-  const tickFocus = (): void => deps.store.dispatch(focusModeActions.tick());
-  if (focusAutoCompleteCapMs === null) {
-    creditBackgroundTickGap(deps.globalTracking, deps.taskService);
-    tickFocus();
-  } else {
-    // The tick may complete a Pomodoro and unset the current task. Credit that
-    // task only up to the session end; the remainder then goes to whatever the
-    // completion leaves tracked (nothing while tracking pauses during breaks).
-    const capMs = Math.min(focusAutoCompleteCapMs, ANDROID_BACKGROUND_TICK_CAP_MS);
-    const credited = deps.globalTracking.triggerWakeUpTick(capMs);
-    deps.taskService.flushAccumulatedTimeSpent();
-    tickFocus();
-    if (credited.duration < capMs) {
-      // The gap ended before the session; only the tick's own milliseconds are
-      // left, and crediting them would add a near-zero op to every resume.
-      deps.globalTracking.resetTrackingStart();
-    } else {
-      creditBackgroundTickGap(deps.globalTracking, deps.taskService);
-    }
-  }
+  creditResumeGap(
+    {
+      globalTracking: deps.globalTracking,
+      taskService: deps.taskService,
+      tickFocus: () => deps.store.dispatch(focusModeActions.tick()),
+    },
+    ANDROID_BACKGROUND_TICK_CAP_MS,
+    focusAutoCompleteCapMs,
+  );
   if (currentTask) {
     await deps.syncElapsedTimeForTask(currentTask.id);
   } else {
@@ -553,7 +504,7 @@ export class AndroidForegroundTrackingEffects {
    * to generic tick$ consumers (the 1s interval was paused, #8243), then sync
    * the current task's elapsed time from the native service.
    *
-   * ORDER IS LOAD-BEARING: creditBackgroundTickGap must run synchronously
+   * ORDER IS LOAD-BEARING: creditResumeGap must run synchronously
    * BEFORE _syncElapsedTimeForTask subscribes its task snapshot. That way the
    * native reconcile sees the already-credited timeSpent and computes only
    * the uncredited remainder (cap overflow / sub-second jitter). If the
