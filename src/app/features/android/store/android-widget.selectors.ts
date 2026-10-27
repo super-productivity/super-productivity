@@ -40,9 +40,9 @@ import {
  * into Kotlin/Swift — see AndroidWidgetData.validUntil.
  *
  * Pure in its arguments — deliberately no Date.now(), so the day boundary stays
- * deterministic (only the task order below reads the clock). `new Date(y, m, d)` normalizes month/year overflow and lands
- * on LOCAL midnight, which keeps the boundary right across DST where a naive
- * +24h would drift by an hour.
+ * deterministic (only the task order below reads the clock). `new Date(y, m, d)`
+ * normalizes month/year overflow and lands on LOCAL midnight, which keeps the
+ * boundary right across DST where a naive +24h would drift by an hour.
  */
 export const getWidgetValidUntil = (
   dayStr: string,

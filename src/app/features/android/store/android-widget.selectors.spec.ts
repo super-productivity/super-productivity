@@ -348,6 +348,42 @@ describe('selectAndroidWidgetData', () => {
       ]);
     });
 
+    it('should move an upcoming subtask whose parent is not in Today to the later block', () => {
+      const tasks = [
+        sched('X', { dueDay: '2026-07-20', subTaskIds: ['S'] }),
+        sched('S', { dueDay: undefined, dueWithTime: at(11), parentId: 'X' }),
+        sched('C', {}),
+      ];
+      expect(widgetOrder(['S', 'C'], tasks)).toEqual(['C', 'S']);
+    });
+
+    // The panel structure is memoized with the clock of its last recompute, so it
+    // can still list an appointment that has started since; the widget must
+    // re-check the start against its own clock, as the work view does.
+    it('should return a task the stale panel still lists to the main list once it started', () => {
+      const tasks = [
+        sched('B', {
+          dueDay: undefined,
+          dueWithTime: new Date(2026, 6, 17, 9, 30).getTime(),
+        }),
+        sched('C', {}),
+      ];
+      const staleStructure = laterTodayStructureFor(tasks, null);
+      jasmine.clock().mockDate(new Date(2026, 6, 17, 10));
+      const result = selectAndroidWidgetData.projector(
+        ['B', 'C'],
+        Object.fromEntries(tasks.map((t) => [t.id, t])),
+        projectState([]),
+        DAY,
+        0,
+        null,
+        staleStructure,
+        new Map(),
+      );
+      expect(staleStructure.map((e) => e.id)).toEqual(['B']);
+      expect(result.tasks.map((t) => t.id)).toEqual(['B', 'C']);
+    });
+
     it('should list done tasks newest-first like the Done list', () => {
       const tasks = [
         sched('D1', { isDone: true, doneOn: at(7) }),
