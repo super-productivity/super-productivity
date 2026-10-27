@@ -47,7 +47,6 @@ export type NativeTrackingData = {
 };
 
 type RecoveryRequest = {
-  data: NativeTrackingData;
   // Diagnostic label for issue #7390 field triage; kept narrow so callers
   // can't accidentally pass user-derived data into the log.
   source: 'cold-start' | 'resume';
@@ -218,7 +217,7 @@ export type AndroidResumeDeps = {
   taskService: TaskService;
   syncElapsedTimeForTask: (taskId: string) => Promise<boolean>;
   getNativeTrackingData: () => NativeTrackingData | null;
-  requestRecovery: (data: NativeTrackingData) => void;
+  requestRecovery: () => void;
 };
 
 /**
@@ -256,9 +255,8 @@ export const handleAndroidResume = async (
   if (currentTask) {
     await deps.syncElapsedTimeForTask(currentTask.id);
   } else {
-    const nativeData = deps.getNativeTrackingData();
-    if (nativeData) {
-      deps.requestRecovery(nativeData);
+    if (deps.getNativeTrackingData()) {
+      deps.requestRecovery();
     }
   }
 };
@@ -500,7 +498,7 @@ export class AndroidForegroundTrackingEffects {
               if (!prevTask) {
                 const nativeData = this._getNativeTrackingData();
                 if (nativeData) {
-                  this._recoveryRequest$.next({ data: nativeData, source: 'cold-start' });
+                  this._recoveryRequest$.next({ source: 'cold-start' });
                   return;
                 }
               }
@@ -545,7 +543,9 @@ export class AndroidForegroundTrackingEffects {
               concatMap(async () => {
                 const nativeData = this._getNativeTrackingData();
                 if (!nativeData) {
-                  DroidLog.log('Native session ended before recovery');
+                  DroidLog.log('Native session ended before recovery', {
+                    isColdStart: source === 'cold-start',
+                  });
                   return;
                 }
                 await this._doRecover(nativeData, source).catch((e) => {
@@ -601,8 +601,7 @@ export class AndroidForegroundTrackingEffects {
                 taskService: this._taskService,
                 syncElapsedTimeForTask: (taskId) => this._syncElapsedTimeForTask(taskId),
                 getNativeTrackingData: () => this._getNativeTrackingData(),
-                requestRecovery: (data) =>
-                  this._recoveryRequest$.next({ data, source: 'resume' }),
+                requestRecovery: () => this._recoveryRequest$.next({ source: 'resume' }),
               },
               currentTask,
               getFocusAutoCompleteCapMs(timer, isOvertimeEnabled),

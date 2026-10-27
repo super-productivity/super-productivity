@@ -2118,7 +2118,7 @@ describe('handleAndroidResume - credit-before-reconcile ordering (#8243)', () =>
 
   it('should route a no-current-task resume to recovery without a reconcile call', async () => {
     const nativeData = { taskId: 'task-native', elapsedMs: NATIVE_ELAPSED };
-    const recovered: unknown[] = [];
+    const recoverySpy = jasmine.createSpy('requestRecovery');
     const reconcileSpy = jasmine.createSpy('syncElapsedTimeForTask').and.resolveTo(true);
 
     await handleAndroidResume(
@@ -2128,14 +2128,14 @@ describe('handleAndroidResume - credit-before-reconcile ordering (#8243)', () =>
         taskService,
         syncElapsedTimeForTask: reconcileSpy,
         getNativeTrackingData: () => nativeData,
-        requestRecovery: (data) => recovered.push(data),
+        requestRecovery: recoverySpy,
       },
       null,
     );
 
     expect(globalTracking.triggerWakeUpTick).toHaveBeenCalledTimes(1);
     expect(reconcileSpy).not.toHaveBeenCalled();
-    expect(recovered).toEqual([nativeData]);
+    expect(recoverySpy).toHaveBeenCalledTimes(1);
   });
 });
 
