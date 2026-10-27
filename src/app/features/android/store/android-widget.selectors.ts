@@ -130,8 +130,9 @@ export const resolveRemoteCurrentTask = (
  * shortcut: the order is a snapshot. Memoization freezes `now` until an input
  * changes, and nothing pushes while the app is in the background, so an
  * appointment whose start passes stays in the later block (still in time order)
- * until the next push — following the clock needs start times in the blob and
- * native ordering.
+ * until a selector input changes — a push alone (pause, sync end) re-sends the
+ * memoized order. Following the clock needs start times in the blob and native
+ * ordering.
  */
 const orderTodayTasksLikeTodayScreen = (
   todayTaskIds: string[],
