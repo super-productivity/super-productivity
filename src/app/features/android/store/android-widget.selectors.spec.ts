@@ -13,6 +13,9 @@ import {
 } from '../../tracking-presence/tracking-presence.model';
 import { getDeviceLabel } from '../../tracking-presence/get-device-label.util';
 import { selectLaterTodayStructure } from '../../tasks/store/task.selectors';
+import { Section } from '../../section/section.model';
+import { TODAY_TAG } from '../../tag/tag.const';
+import { WorkContextType } from '../../work-context/work-context.model';
 
 describe('getWidgetValidUntil', () => {
   const HOUR = 60 * 60 * 1000;
@@ -100,6 +103,7 @@ describe('selectAndroidWidgetData', () => {
       0,
       null,
       [],
+      new Map(),
     );
     expect(result).toEqual({
       v: 1,
@@ -123,6 +127,7 @@ describe('selectAndroidWidgetData', () => {
       0,
       null,
       [],
+      new Map(),
     );
     expect(result.tasks.length).toBe(1);
     expect(result.tasks[0].id).toBe('t1');
@@ -137,6 +142,7 @@ describe('selectAndroidWidgetData', () => {
       0,
       null,
       [],
+      new Map(),
     );
     expect('projectId' in result.tasks[0]).toBe(false);
   });
@@ -150,6 +156,7 @@ describe('selectAndroidWidgetData', () => {
       0,
       null,
       [],
+      new Map(),
     );
     expect(result.projectColors).toEqual({});
     expect(result.tasks[0].projectId).toBe('p1');
@@ -167,6 +174,7 @@ describe('selectAndroidWidgetData', () => {
       fourAmOffset,
       null,
       [],
+      new Map(),
     );
     expect(result.dayStr).toBe('2026-07-16');
     expect(result.validUntil).toBe(new Date(2026, 6, 17).getTime() + fourAmOffset);
@@ -181,6 +189,7 @@ describe('selectAndroidWidgetData', () => {
       0,
       't1',
       [],
+      new Map(),
     );
     expect(result.currentTask).toEqual({
       id: 't1',
@@ -203,6 +212,7 @@ describe('selectAndroidWidgetData', () => {
       0,
       null,
       [],
+      new Map(),
     );
     expect(JSON.stringify(result)).toBe(
       `{"v":1,"dayStr":"${DAY}","validUntil":${VALID_UNTIL},"tasks":[` +
@@ -250,6 +260,7 @@ describe('selectAndroidWidgetData', () => {
       storedOrder: string[],
       tasks: Task[],
       currentTaskId: string | null = null,
+      todaySections: Section[] = [],
     ): string[] =>
       selectAndroidWidgetData
         .projector(
@@ -260,6 +271,7 @@ describe('selectAndroidWidgetData', () => {
           0,
           currentTaskId,
           laterTodayStructureFor(tasks, currentTaskId),
+          new Map([[TODAY_TAG.id, todaySections]]),
         )
         .tasks.map((t) => t.id);
 
@@ -291,6 +303,49 @@ describe('selectAndroidWidgetData', () => {
         sched('C', {}),
       ];
       expect(widgetOrder(['B', 'C'], tasks, 'B')).toEqual(['B', 'C']);
+    });
+
+    // The screen lists such a parent in both its main-list place and the panel;
+    // the widget has one row per task and keeps the manual main-list place.
+    it('should keep a parent that is upcoming only through a subtask in its main-list place', () => {
+      const tasks = [
+        sched('P', { subTaskIds: ['S'] }),
+        sched('S', { dueDay: undefined, dueWithTime: at(14), parentId: 'P' }),
+        sched('C', {}),
+      ];
+      expect(widgetOrder(['P', 'C'], tasks)).toEqual(['P', 'C']);
+    });
+
+    it('should keep a parent whose own start passed in its main-list place despite an upcoming subtask', () => {
+      const tasks = [
+        sched('P', { dueDay: undefined, dueWithTime: at(8), subTaskIds: ['S'] }),
+        sched('S', { dueDay: undefined, dueWithTime: at(14), parentId: 'P' }),
+        sched('C', {}),
+      ];
+      expect(widgetOrder(['P', 'C'], tasks)).toEqual(['P', 'C']);
+    });
+
+    it('should list unsectioned tasks first, then each Today section in its own order', () => {
+      const tasks = [
+        sched('X1', {}),
+        sched('N', {}),
+        sched('X2', {}),
+        sched('L', { dueDay: undefined, dueWithTime: at(11) }),
+      ];
+      const section = {
+        id: 'sec',
+        contextId: TODAY_TAG.id,
+        contextType: WorkContextType.TAG,
+        title: 'Section',
+        // the section holds an upcoming task too; it stays in the later block
+        taskIds: ['X2', 'L', 'X1'],
+      };
+      expect(widgetOrder(['X1', 'N', 'X2', 'L'], tasks, null, [section])).toEqual([
+        'N',
+        'X2',
+        'X1',
+        'L',
+      ]);
     });
 
     it('should list done tasks newest-first like the Done list', () => {

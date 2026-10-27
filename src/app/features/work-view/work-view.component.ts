@@ -49,6 +49,7 @@ import {
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { SectionService } from '../section/section.service';
 import { Section } from '../section/section.model';
+import { groupTasksBySection } from '../section/section.util';
 import {
   CdkDrag,
   CdkDragDrop,
@@ -342,37 +343,9 @@ export class WorkViewComponent implements OnInit, OnDestroy {
     { initialValue: [] as readonly Section[] },
   );
 
-  undoneTasksBySection = computed(() => {
-    const tasks = this.undoneTasks();
-    const sections = this.sections();
-
-    if (!sections.length) {
-      return { dict: {} as Record<string, TaskWithSubTasks[]>, noSection: tasks };
-    }
-
-    // section.taskIds is authoritative for in-section order — drag-drop
-    // reorders go through addTaskToSection's reducer. Walking sections
-    // first (rather than tasks first) lets us respect that order while
-    // staying defensive against stale ids and tasks that aren't yet in
-    // any section.
-    const taskById = new Map(tasks.map((t) => [t.id, t]));
-    const dict: Record<string, TaskWithSubTasks[]> = {};
-    const inSection = new Set<string>();
-    for (const s of sections) {
-      const list: TaskWithSubTasks[] = [];
-      for (const tId of s.taskIds ?? []) {
-        const t = taskById.get(tId);
-        if (t) {
-          list.push(t);
-          inSection.add(tId);
-        }
-      }
-      dict[s.id] = list;
-    }
-    const noSection = tasks.filter((t) => !inSection.has(t.id));
-
-    return { dict, noSection };
-  });
+  undoneTasksBySection = computed(() =>
+    groupTasksBySection(this.undoneTasks(), this.sections()),
+  );
 
   isShowOverduePanel = computed(
     () => this.isOnTodayList() && this.overdueTasks().length > 0,
