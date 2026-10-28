@@ -138,7 +138,8 @@ export class ConflictDetectionService {
     // drops this op on every later download (#11184). Separate args because
     // the log export truncates any arg over MAX_DATA_LENGTH; the author
     // counters lead so they survive even when a full clock does not.
-    const skipDiagnostics = [
+    // Built lazily: only the rare skip paths pay for the allocation.
+    const skipDiagnostics = (): unknown[] => [
       {
         entityKey,
         opClientId: remoteOp.clientId,
@@ -153,7 +154,7 @@ export class ConflictDetectionService {
     if (vcComparison === VectorClockComparison.GREATER_THAN) {
       OpLog.verbose(
         `ConflictResolutionService: Skipping superseded remote op (local dominates): ${remoteOp.id}`,
-        ...skipDiagnostics,
+        ...skipDiagnostics(),
       );
       return { isSupersededOrDuplicate: true, conflict: null };
     }
@@ -162,7 +163,7 @@ export class ConflictDetectionService {
     if (vcComparison === VectorClockComparison.EQUAL) {
       OpLog.verbose(
         `ConflictResolutionService: Skipping duplicate remote op: ${remoteOp.id}`,
-        ...skipDiagnostics,
+        ...skipDiagnostics(),
       );
       return { isSupersededOrDuplicate: true, conflict: null };
     }
