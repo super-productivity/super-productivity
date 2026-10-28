@@ -966,6 +966,27 @@ describe('TaskRepeatCleanupEffects', () => {
         sub.unsubscribe();
       }));
 
+      it('still reaps a 0-estimate instance created before the global default was set', fakeAsync(() => {
+        setGlobalDefaults(30 * MIN);
+        repeatCfgs$.next([
+          skipOverdueCfg('cfg-global-est', '', { title: 'Water plants' }),
+        ]);
+
+        repeatableTasks$.next([
+          wrapWithSubTasks(instance('global-est-old', yesterdayMs, 0)),
+          wrapWithSubTasks(instance('global-est-today', todayMs, 30 * MIN)),
+        ]);
+
+        const sub = effects.cleanupDuplicateRepeatInstances$.subscribe();
+        tick(3001);
+
+        expect(getDispatchedDeleteIds())
+          .withContext('the template estimate itself stays valid')
+          .toEqual(['global-est-old']);
+
+        sub.unsubscribe();
+      }));
+
       it('keeps an instance whose estimate matches neither template nor global default', fakeAsync(() => {
         setGlobalDefaults(30 * MIN);
         repeatCfgs$.next([

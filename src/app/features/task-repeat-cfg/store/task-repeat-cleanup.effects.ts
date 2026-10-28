@@ -83,12 +83,16 @@ const _hasTemplateSchedule = (
   return _isNil(task.dueWithTime) && task.dueDay === dueStr && _isNil(task.remindAt);
 };
 
-// Mirrors setDefaultEstimateIfNonGiven$: an instance created without an
-// estimate gets the global default, so that value is still the template (#10202).
-const _getTemplateEstimate = (
+// Without a template estimate, setDefaultEstimateIfNonGiven$ fills in the
+// global default on creation, so that value is still the template (#10202).
+// 0 stays valid too: instances created before the default was set keep it.
+const _isTemplateEstimate = (
+  estimate: number | undefined,
   templateEstimate: number | undefined,
   globalDefault: number | null | undefined,
-): number => templateEstimate || globalDefault || 0;
+): boolean =>
+  (estimate ?? 0) === (templateEstimate ?? 0) ||
+  (!templateEstimate && !!globalDefault && estimate === globalDefault);
 
 const _hasTemplateSubTasks = (
   task: TaskWithSubTasks,
@@ -104,11 +108,11 @@ const _hasTemplateSubTasks = (
     return (
       !!subTask &&
       subTask.title === template.title &&
-      (subTask.timeEstimate ?? 0) ===
-        _getTemplateEstimate(
-          template.timeEstimate,
-          timeTrackingCfg.defaultEstimateSubTasks,
-        ) &&
+      _isTemplateEstimate(
+        subTask.timeEstimate,
+        template.timeEstimate,
+        timeTrackingCfg.defaultEstimateSubTasks,
+      ) &&
       (subTask.notes ?? '').trim() === (template.notes ?? '').trim() &&
       (subTask.attachments?.length ?? 0) === 0 &&
       _sameStringSet(subTask.tagIds ?? [], []) &&
@@ -129,8 +133,11 @@ const _isUnmodifiedSkipOverdueInstance = (
   timeTrackingCfg: TimeTrackingConfig,
 ): boolean =>
   task.title === (cfg.title ?? '') &&
-  (task.timeEstimate ?? 0) ===
-    _getTemplateEstimate(cfg.defaultEstimate, timeTrackingCfg.defaultEstimate) &&
+  _isTemplateEstimate(
+    task.timeEstimate,
+    cfg.defaultEstimate,
+    timeTrackingCfg.defaultEstimate,
+  ) &&
   getTaskPriority(task.priority) === getTaskPriority(cfg.priority) &&
   _sameStringSet(
     task.tagIds ?? [],
