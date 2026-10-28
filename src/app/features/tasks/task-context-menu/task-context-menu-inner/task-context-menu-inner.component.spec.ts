@@ -395,7 +395,7 @@ describe('TaskContextMenuInnerComponent', () => {
       items
         .map((el) => ITEM_KEYS.find((key) => el.textContent?.includes(key)))
         .filter((key): key is string => !!key);
-    const openMenu = (): void => {
+    const openMenu = (taskOverrides: Partial<Task> = {}): void => {
       Object.assign(TestBed.inject(GlobalConfigService), {
         appFeatures: () => ({ isFocusModeEnabled: true, isTimeTrackingEnabled: true }),
       });
@@ -404,6 +404,7 @@ describe('TaskContextMenuInnerComponent', () => {
         ...DEFAULT_TASK,
         id: 'task-1',
         projectId: 'project-current',
+        ...taskOverrides,
       } as Task;
       fixture.detectChanges();
       component.contextMenuTrigger()?.openMenu();
@@ -433,13 +434,59 @@ describe('TaskContextMenuInnerComponent', () => {
       closeMenus();
     }));
 
-    it('sets the destructive actions apart with a divider', fakeAsync(() => {
+    // Groups are conditional, so an empty group leaves dividers next to each
+    // other; the .mat-menu-grouped styles must hide all but one of them.
+    const isShown = (el: Element): boolean => getComputedStyle(el).display !== 'none';
+    const shownSibling = (
+      el: Element,
+      dir: 'previousElementSibling' | 'nextElementSibling',
+    ): Element | null => {
+      let sib = el[dir];
+      while (sib && !isShown(sib)) {
+        sib = sib[dir];
+      }
+      return sib;
+    };
+    // direct children only: submenus have their own dividers
+    const shownDividers = (): Element[] =>
+      Array.from(
+        document.querySelectorAll(
+          '.cdk-overlay-container .mat-menu-grouped .mat-mdc-menu-content > .mat-divider',
+        ),
+      ).filter(isShown);
+    const expectDividersBetweenItems = (): void => {
+      const dividers = shownDividers();
+      expect(dividers.length).toBeGreaterThan(0);
+      dividers.forEach((divider) => {
+        expect(
+          shownSibling(divider, 'previousElementSibling')?.hasAttribute('mat-menu-item'),
+        ).toBeTrue();
+        expect(
+          shownSibling(divider, 'nextElementSibling')?.hasAttribute('mat-menu-item'),
+        ).toBeTrue();
+      });
+    };
+    const shownItemBefore = (key: string): Element | null => {
+      const item = overlayItems().find((el) => el.textContent?.includes(key));
+      return item ? shownSibling(item, 'previousElementSibling') : null;
+    };
+
+    it('shows one divider between groups when a group is empty', fakeAsync(() => {
       openMenu();
 
-      const wontDo = overlayItems().find((el) =>
-        el.textContent?.includes(T.F.TASK.CMP.MARK_WONT_DO),
+      expect(shownDividers().length).toBe(3);
+      expectDividersBetweenItems();
+      expect(shownItemBefore(T.F.TASK.CMP.MARK_WONT_DO)?.classList).toContain(
+        'mat-divider',
       );
-      expect(wontDo?.previousElementSibling?.tagName).toBe('MAT-DIVIDER');
+      closeMenus();
+    }));
+
+    it('shows a divider around the issue group when it is present', fakeAsync(() => {
+      openMenu({ issueId: 'issue-1', issueType: 'GITHUB' } as Partial<Task>);
+
+      expect(shownDividers().length).toBe(4);
+      expectDividersBetweenItems();
       closeMenus();
     }));
 
