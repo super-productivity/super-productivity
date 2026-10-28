@@ -11,6 +11,7 @@ import { JiraCommonInterfacesService } from '../../../providers/jira/jira-common
 import { TaskCopy } from '../../../../tasks/task.model';
 import { IssueData } from '../../../issue.model';
 import { IssueFieldConfig } from '../../issue-content.model';
+import { getByPath } from '../../get-by-path.util';
 
 @Component({
   selector: 'jira-link',
@@ -62,12 +63,6 @@ export class JiraLinkComponent {
       return field.value(issue);
     }
 
-    // Handle nested fields like 'status.name'
-    const keys = field.value.split('.');
-    let value: any = issue;
-    for (const key of keys) {
-      value = value?.[key];
-    }
-    return value;
+    return getByPath(issue, field.value);
   });
 }
