@@ -376,7 +376,12 @@ export class TaskRepeatCfgEffects {
                     // moved forward to today after the last copy was done
                     // (#11213): today's occurrence would otherwise wait for
                     // the next day change, same as #7768 Bug 2 above. Paused
-                    // configs returned early, so this is never a pause.
+                    // configs returned early, so this is never a pause. Skip
+                    // when today was already processed: the sweep would create
+                    // nothing for this series (e.g. repeat-from-completion
+                    // re-anchoring to today on every completion).
+                    (!lastCreationDay ||
+                      lastCreationDay < this._dateService.todayStr()) &&
                     firstOccurrence &&
                     this._dateService.isToday(firstOccurrence)
                   ) {

@@ -3039,6 +3039,38 @@ describe('TaskRepeatCfgEffects - Repeatable Subtasks', () => {
       }, 0);
     });
 
+    // Completing a repeat-from-completion copy re-anchors startDate and
+    // lastTaskCreationDay to today (updateStartDateOnComplete$). Today is
+    // already processed, so this must not start a full addAllDueToday sweep.
+    it('should not trigger addAllDueToday when today was already processed', (done) => {
+      const todayStr = getDbDateStr(new Date());
+      const updatedCfg: TaskRepeatCfgCopy = {
+        ...mockRepeatCfg,
+        repeatCycle: 'DAILY',
+        repeatEvery: 1,
+        repeatFromCompletionDate: true,
+        startDate: todayStr,
+        lastTaskCreationDay: todayStr,
+      };
+      actions$ = of(
+        updateTaskRepeatCfg({
+          taskRepeatCfg: {
+            id: 'repeat-cfg-id',
+            changes: { startDate: todayStr, lastTaskCreationDay: todayStr },
+          },
+        }),
+      );
+      taskRepeatCfgService.getTaskRepeatCfgById$.and.returnValue(of(updatedCfg));
+      taskService.getTasksByRepeatCfgId$.and.returnValue(of([]));
+
+      effects.rescheduleTaskOnRepeatCfgUpdate$.subscribe();
+
+      setTimeout(() => {
+        expect(addTasksForTomorrowService.addAllDueToday).not.toHaveBeenCalled();
+        done();
+      }, 0);
+    });
+
     // #3589: resuming a paused series on a scheduled day must create today's
     // copy right away, not after the next day change.
     it('should trigger addAllDueToday when a series is resumed on a scheduled day', (done) => {
