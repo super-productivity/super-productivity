@@ -1,5 +1,5 @@
 import { isValidDBDateStr } from '../../util/get-db-date-str';
-import { isRecord } from './local-rest-api-body';
+import { isRecord } from '../../core/electron/local-rest-api-body';
 
 /** One day cannot hold more tracked time than this. */
 export const MAX_TIME_SPENT_PER_DAY_MS = 24 * 60 * 60 * 1000;

@@ -75,6 +75,7 @@ export class MobileNotificationEffects {
   private _scheduledReminderIds = new Set<string>();
   // Track scheduled due-date notification IDs separately
   private _scheduledDueDateIds = new Set<string>();
+  private _hasClearedStaleDueDateAlarms = false;
   // Track scheduled deadline reminders separately: taskId → triggerAtMs, so a
   // pending alarm can be told apart from one that already fired
   private _scheduledDeadlineIds = new Map<string, number>();
@@ -367,7 +368,9 @@ export class MobileNotificationEffects {
           ),
           tap(async ([tasks, reminderCfg, isSuperSyncActive]) => {
             try {
-              const notifyOnDueDate = reminderCfg?.notifyOnDueDate ?? true;
+              // Opt-in: one notification per planned task fires at the same hour, which
+              // rang phones once per Today task every morning (2026 survey #88).
+              const notifyOnDueDate = reminderCfg?.notifyOnDueDate ?? false;
               const disableReminders = reminderCfg?.disableReminders ?? false;
               const dueDateHour = Math.floor(
                 Math.max(0, Math.min(23, reminderCfg?.dueDateNotificationHour ?? 9)),
@@ -376,6 +379,13 @@ export class MobileNotificationEffects {
               // If disabled (by master switch or per-category), cancel previously
               // scheduled due-date notifications and short-circuit.
               if (disableReminders || !notifyOnDueDate) {
+                // The tracked set is in-memory, but native alarms outlive the app,
+                // so alarms armed by an earlier run (e.g. under the old default-on)
+                // would still fire. Ids are deterministic: cancel them once per run.
+                if (!this._hasClearedStaleDueDateAlarms && tasks?.length) {
+                  tasks.forEach((t) => this._scheduledDueDateIds.add(t.id));
+                  this._hasClearedStaleDueDateAlarms = true;
+                }
                 for (const previousId of this._scheduledDueDateIds) {
                   const notificationId = generateNotificationId(previousId + '_dueday');
                   await this._reminderService.cancelReminder(notificationId);

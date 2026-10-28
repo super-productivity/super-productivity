@@ -407,11 +407,11 @@ module.exports = tseslint.config(
   // ... -- grandfathered layer-boundary debt`, so a NEW features/ import fails
   // even in those files. These directives may only ever disappear.
   //
-  // Roughly a third of them are four misplaced pieces, not stray imports:
+  // Roughly a third of them are three misplaced pieces, not stray imports:
   // GlobalConfigService (features/config, 69 importers app-wide) and
   // androidInterface (features/android) are de facto core services, while
-  // core/startup + core/electron/local-rest-api-handler are app-shell
-  // composition roots that belong above features rather than below them.
+  // core/startup is an app-shell composition root that belongs above features
+  // rather than below them.
   // The rest import 15 distinct feature areas and are genuine per-file work.
   // util/ offenders (`app-data-mock.ts` aside, which is test-fixture data) are
   // pure helpers typed against feature models (e.g. Task) — those types belong

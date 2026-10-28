@@ -1,49 +1,30 @@
 import { Injectable, inject } from '@angular/core';
-import { toSignal } from '@angular/core/rxjs-interop';
 import { Store } from '@ngrx/store';
 import { firstValueFrom } from 'rxjs';
 import typia from 'typia';
-// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
-import { TaskService } from '../../features/tasks/task.service';
-// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
-import { Task, TaskWithSubTasks } from '../../features/tasks/task.model';
-// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
-import { TaskArchiveService } from '../../features/archive/task-archive.service';
+import { TaskService } from './task.service';
+import { Task, TaskWithSubTasks } from './task.model';
+import { TaskArchiveService } from '../archive/task-archive.service';
 import { ArchiveOperationHandler } from '../../op-log/apply/archive-operation-handler.service';
-// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
-import { ProjectService } from '../../features/project/project.service';
-// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
-import { TagService } from '../../features/tag/tag.service';
-// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
-import { TODAY_TAG } from '../../features/tag/tag.const';
-import { DateService } from '../date/date.service';
-import { DataInitStateService } from '../data-init/data-init-state.service';
+import { ProjectService } from '../project/project.service';
+import { TODAY_TAG } from '../tag/tag.const';
+import { DateService } from '../../core/date/date.service';
 import { isTodayWithOffset } from '../../util/is-today.util';
 import { isValidDBDateStr } from '../../util/get-db-date-str';
-import { IssueLog } from '../log';
-import { LOCAL_REST_API_FEATURE_BRIDGE } from './local-rest-api-feature-bridge';
-import { LOCAL_REST_API_FEATURE_ROUTES } from './local-rest-api-feature-routes';
-import { createErrorResponse, createSuccessResponse } from './local-rest-api-response';
+import { IssueLog } from '../../core/log';
+import { LocalRestApiFeatureBridgeService } from './local-rest-api-feature-bridge.service';
+import { LocalRestApiFeatureRoutes } from '../../core/electron/local-rest-api-feature-routes';
+import {
+  createErrorResponse,
+  createSuccessResponse,
+} from '../../core/electron/local-rest-api-response';
 import {
   MAX_TIME_SPENT_PER_DAY_MS,
   parseTimeSpentBody,
 } from './local-rest-api-task-time';
 
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
-// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
-import { getDeadlineAutoPlanFields } from '../../features/tasks/util/get-deadline-auto-plan-fields';
-// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
-import {
-  selectCurrentCycle,
-  selectIsBreakTimeUp,
-  selectIsInOvertime,
-  selectIsLongBreak,
-  selectIsRunning,
-  selectIsSessionCompleted,
-  selectMode,
-  selectTimeRemaining,
-  selectTimer,
-} from '../../features/focus-mode/store/focus-mode.selectors';
+import { getDeadlineAutoPlanFields } from './util/get-deadline-auto-plan-fields';
 import {
   LocalRestApiRequestPayload,
   LocalRestApiResponsePayload,
@@ -368,28 +349,16 @@ const isTaskInToday = (
   return task.dueDay === todayStr;
 };
 
-@Injectable({
-  providedIn: 'root',
-})
-export class LocalRestApiHandlerService {
+/** Local REST API routes under `/status`, `/task-control` and `/tasks`. */
+@Injectable()
+export class LocalRestApiTaskRoutesService implements LocalRestApiFeatureRoutes {
   private readonly _taskService = inject(TaskService);
   private readonly _taskArchiveService = inject(TaskArchiveService);
   private readonly _archiveOperationHandler = inject(ArchiveOperationHandler);
   private readonly _projectService = inject(ProjectService);
-  private readonly _tagService = inject(TagService);
   private readonly _dateService = inject(DateService);
-  private readonly _featureBridge = inject(LOCAL_REST_API_FEATURE_BRIDGE);
-  private readonly _featureRoutes =
-    inject(LOCAL_REST_API_FEATURE_ROUTES, { optional: true }) ?? [];
+  private readonly _featureBridge = inject(LocalRestApiFeatureBridgeService);
   private readonly _store = inject(Store);
-  // The main process only knows the renderer has booted, which happens before
-  // the data is loaded — answering then would serve an empty task list as if it
-  // were the user's data, and let a write land on top of half-hydrated state.
-  private readonly _isDataLoaded = toSignal(
-    inject(DataInitStateService).isAllDataLoadedInitially$,
-    { initialValue: false },
-  );
-  private _isInitialized = false;
 
   private _dispatchDeadlineChange(taskId: string, change: DeadlineChange): void {
     if (change.type === 'clearReminder') {
@@ -418,55 +387,14 @@ export class LocalRestApiHandlerService {
     );
   }
 
-  init(): void {
-    if (this._isInitialized || !window.ea?.onLocalRestApiRequest) {
-      return;
-    }
-    this._isInitialized = true;
-
-    window.ea.onLocalRestApiRequest((payload) => {
-      void this._handleRequest(payload);
-    });
-  }
-
-  private async _handleRequest(payload: LocalRestApiRequestPayload): Promise<void> {
-    let response: LocalRestApiResponsePayload;
-
-    try {
-      response = await this._routeRequest(payload);
-    } catch (error) {
-      response = createErrorResponse(
-        payload.requestId,
-        500,
-        'INTERNAL_ERROR',
-        error instanceof Error ? error.message : 'Unknown internal error',
-      );
-    }
-
-    window.ea.sendLocalRestApiResponse(response);
-  }
-
-  private async _routeRequest(
+  async handle(
     payload: LocalRestApiRequestPayload,
-  ): Promise<LocalRestApiResponsePayload> {
+  ): Promise<LocalRestApiResponsePayload | undefined> {
     const { method, path, requestId, body, query } = payload;
     const segments = path.split('/').filter(Boolean);
 
-    if (this._isDataLoaded() !== true) {
-      return createErrorResponse(
-        requestId,
-        503,
-        'APP_NOT_READY',
-        'App data is still loading',
-      );
-    }
-
     if (method === 'GET' && path === '/status') {
       return this._handleGetStatus(requestId);
-    }
-
-    if (method === 'GET' && path === '/focus') {
-      return this._handleGetFocus(requestId);
     }
 
     if (method === 'GET' && path === '/task-control/current') {
@@ -493,22 +421,7 @@ export class LocalRestApiHandlerService {
       return this._handleTaskRoutes(method, segments, requestId, body, query);
     }
 
-    if (method === 'GET' && path === '/projects') {
-      return this._handleListProjects(requestId, query);
-    }
-
-    if (method === 'GET' && path === '/tags') {
-      return this._handleListTags(requestId, query);
-    }
-
-    for (const routes of this._featureRoutes) {
-      const response = await routes.handle(payload);
-      if (response) {
-        return response;
-      }
-    }
-
-    return createErrorResponse(requestId, 404, 'NOT_FOUND', 'Route not found');
+    return undefined;
   }
 
   private async _handleGetStatus(
@@ -523,37 +436,6 @@ export class LocalRestApiHandlerService {
       currentTask,
       currentTaskId: currentTask?.id ?? null,
       taskCount: allTasks.length,
-    });
-  }
-
-  private async _handleGetFocus(requestId: string): Promise<LocalRestApiResponsePayload> {
-    const state = await firstValueFrom(this._store);
-    const timer = selectTimer(state);
-    const mode = selectMode(state);
-    const cycle = selectCurrentCycle(state);
-    const isRunning = selectIsRunning(state);
-    const isBreakTimeUp = selectIsBreakTimeUp(state);
-    const isLongBreak = selectIsLongBreak(state);
-    const remainingMs = selectTimeRemaining(state);
-    const isSessionDone = selectIsSessionCompleted(state);
-    const isOvertime = selectIsInOvertime(state);
-
-    return createSuccessResponse(requestId, 200, {
-      mode,
-      cycle,
-      isSessionDone,
-      timer:
-        timer.purpose === null
-          ? null
-          : {
-              purpose: timer.purpose,
-              status: isRunning ? 'running' : isBreakTimeUp ? 'done' : 'paused',
-              isOvertime,
-              isLongBreak,
-              elapsedMs: timer.elapsed,
-              remainingMs,
-              durationMs: timer.duration,
-            },
     });
   }
 
@@ -1116,38 +998,6 @@ export class LocalRestApiHandlerService {
     await this._archiveOperationHandler.whenLocalOperationsSettled();
     const restoredTask = await this._getTaskById(taskId);
     return createSuccessResponse(requestId, 200, restoredTask);
-  }
-
-  private async _handleListProjects(
-    requestId: string,
-    query: Record<string, string | string[]>,
-  ): Promise<LocalRestApiResponsePayload> {
-    const queryText = getQueryParam(query, 'query');
-
-    let projects = await firstValueFrom(this._projectService.list$);
-
-    if (queryText) {
-      const lowerQuery = queryText.toLowerCase();
-      projects = projects.filter((p) => p.title.toLowerCase().includes(lowerQuery));
-    }
-
-    return createSuccessResponse(requestId, 200, projects);
-  }
-
-  private async _handleListTags(
-    requestId: string,
-    query: Record<string, string | string[]>,
-  ): Promise<LocalRestApiResponsePayload> {
-    const queryText = getQueryParam(query, 'query');
-
-    let tags = await firstValueFrom(this._tagService.tags$);
-
-    if (queryText) {
-      const lowerQuery = queryText.toLowerCase();
-      tags = tags.filter((t) => t.title.toLowerCase().includes(lowerQuery));
-    }
-
-    return createSuccessResponse(requestId, 200, tags);
   }
 
   /**
