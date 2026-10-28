@@ -12,7 +12,7 @@ import {
   REPAIR_STALE_ERROR_CODE,
 } from '../core/operation-log.const';
 import { toEntityKey } from '../util/entity-key.util';
-import { compareVectorClocks } from '../../core/util/vector-clock';
+import { compareVectorClocks, VectorClockComparison } from '../../core/util/vector-clock';
 import { RepairOperationService } from '../validation/repair-operation.service';
 import { OperationLogDownloadService } from './operation-log-download.service';
 
@@ -713,7 +713,10 @@ export class RejectedOpsHandlerService {
         return false;
       }
       const comparison = compareVectorClocks(localClock, existingClock);
-      return comparison === 'GREATER_THAN' || comparison === 'EQUAL';
+      return (
+        comparison === VectorClockComparison.GREATER_THAN ||
+        comparison === VectorClockComparison.EQUAL
+      );
     });
   }
 
