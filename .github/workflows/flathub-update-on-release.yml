@@ -2,9 +2,10 @@ name: Open Flathub Update PR on Release
 
 # Flathub's global external-data-checker opened its PR 4–41h after our
 # releases (measured 2026-09/10, v19.0.1–v19.2.0). Running the same checker on
-# release gets the PR up right away. It uses the same branch naming, so the
-# global run finds the existing PR instead of opening a duplicate, and it stays
-# enabled as a fallback.
+# release gets the PR up right away. Flathub asks custom workflows to opt out
+# of the global checker, so the manifest repo's flathub.json sets
+# disable-external-data-checker; if this run fails, re-run it via
+# workflow_dispatch.
 on:
   release:
     types: [published]
@@ -25,7 +26,7 @@ jobs:
 
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
+        uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
         with:
           egress-policy: audit
 

@@ -100,47 +100,56 @@
       } @else {
         <div class="task-list-wrapper">
           @if (!(workContextService.isHasTasksToWorkOn$ | async)) {
-            <div
-              @expandFade
-              class="add-more-or-finish"
-            >
-              <div class="no-tasks-illu-wrapper">
-                <div class="inline-block-container">
-                  <img
-                    class="show-light-only"
-                    src="assets/illu/horizon.svg"
-                    alt=""
-                  />
-                  <img
-                    class="show-dark-only"
-                    src="assets/illu/horizon-dark.svg"
-                    alt=""
-                  />
+            <!-- The archived count loads asynchronously (null until then). Wait
+                 for it, so headline and hint render once in their final form
+                 instead of flashing the "nothing planned" variant first. -->
+            @let doneTodayArchived = workContextService.doneTodayArchived$ | async;
+            @if (hasDoneTasks() || doneTodayArchived !== null) {
+              <div
+                @expandFade
+                class="add-more-or-finish"
+              >
+                @let isAllDone = hasDoneTasks() || !!doneTodayArchived;
+                <div class="no-tasks-illu-wrapper">
+                  <div class="inline-block-container">
+                    <img
+                      class="show-light-only"
+                      src="assets/illu/horizon.svg"
+                      alt=""
+                    />
+                    <img
+                      class="show-dark-only"
+                      src="assets/illu/horizon-dark.svg"
+                      alt=""
+                    />
+                  </div>
+                  <h2 class="no-tasks-label">
+                    @if (isAllDone) {
+                      {{ T.WW.NO_PLANNED_TASK_ALL_DONE | translate }}
+                    } @else {
+                      {{ T.WW.NO_PLANNED_TASKS | translate }}
+                    }
+                  </h2>
                 </div>
-                <h2 class="no-tasks-label">
-                  @if (
-                    hasDoneTasks() || (workContextService.doneTodayArchived$ | async)
-                  ) {
-                    {{ T.WW.NO_PLANNED_TASK_ALL_DONE | translate }}
-                  } @else {
-                    {{ T.WW.NO_PLANNED_TASKS | translate }}
-                  }
-                </h2>
-              </div>
 
-              @if (!overdueTasks().length) {
-                <div class="btn-wrapper">
-                  <button
-                    (click)="layoutService.showAddTaskBar()"
-                    color=""
-                    mat-stroked-button
-                  >
-                    <mat-icon>playlist_add</mat-icon>
-                    {{ T.WW.ADD_MORE | translate }}
-                  </button>
-                </div>
-              }
-            </div>
+                @if (!isAllDone && emptyStateHint(); as hint) {
+                  <p class="empty-state-hint">{{ hint | translate }}</p>
+                }
+
+                @if (!overdueTasks().length) {
+                  <div class="btn-wrapper">
+                    <button
+                      (click)="layoutService.showAddTaskBar()"
+                      color=""
+                      mat-stroked-button
+                    >
+                      <mat-icon>playlist_add</mat-icon>
+                      {{ T.WW.ADD_MORE | translate }}
+                    </button>
+                  </div>
+                }
+              </div>
+            }
           }
           <!-- Keep this @if chain and the panels below in lockstep with
                _expandCollapsedContainerFor(): the search reveal has to open

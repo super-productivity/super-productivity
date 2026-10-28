@@ -32,8 +32,10 @@ import {
 } from '../../../util/array-move';
 import { canApplyConvertToSubTask } from '../../../features/tasks/util/can-convert-task-to-sub-task';
 import {
+  addTaskToListAtAnchor,
   collectTaskAndSubTaskIds,
   enrichDeleteProjectAction,
+  getPreviousRepeatInstanceId,
   getProjectOrUndefined,
   isValidTaskProjectIdUpdate,
   parseMoveFootprint,
@@ -253,6 +255,38 @@ const handleTaskRemoval = (
   );
 };
 
+/**
+ * A new repeat instance goes into the project section that holds the previous
+ * instance, at its position (#10812). TODAY sections are not handled: the
+ * previous instance is no longer due today, so it has already left TODAY
+ * (`repairTodayTagConsistency$`) when the new one is created.
+ */
+const handleAddRepeatInstance = (state: ExtendedState, task: Task): ExtendedState => {
+  const anchorId = task.projectId ? getPreviousRepeatInstanceId(state, task) : undefined;
+  if (!anchorId) return state;
+
+  const sectionState = state[SECTION_FEATURE_NAME];
+  const updates: Update<Section>[] = [];
+  for (const id of sectionState.ids) {
+    const s = sectionState.entities[id];
+    if (
+      !s ||
+      s.contextType !== WorkContextType.PROJECT ||
+      s.contextId !== task.projectId ||
+      !s.taskIds.includes(anchorId)
+    ) {
+      continue;
+    }
+    updates.push({
+      id: s.id,
+      changes: { taskIds: addTaskToListAtAnchor(s.taskIds, task.id, anchorId, false) },
+    });
+  }
+
+  if (!updates.length) return state;
+  return withSectionStateUpdate(state, sectionAdapter.updateMany(updates, sectionState));
+};
+
 const handleSectionTaskReorder = (
   state: ExtendedState,
   workContextType: WorkContextType,
@@ -385,6 +419,10 @@ const handleRemoveTaskFromSection = (
  *   the operations array, which is non-trivial.
  */
 const ACTION_HANDLERS: Record<string, Handler> = {
+  [TaskSharedActions.addTask.type]: (state, action) => {
+    const { task } = action as ReturnType<typeof TaskSharedActions.addTask>;
+    return handleAddRepeatInstance(state, task);
+  },
   [TaskSharedActions.deleteTask.type]: (state, action) => {
     const { task } = action as ReturnType<typeof TaskSharedActions.deleteTask>;
     return handleTaskRemoval(state, [task.id]);

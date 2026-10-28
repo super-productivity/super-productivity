@@ -69,6 +69,7 @@ const ALLOWED_IFRAME_API_METHODS = new Set([
   'getAppState',
   'persistDataSynced',
   'loadPersistedData',
+  'triggerSync',
   'listSyncedDataKeys',
   'registerHook',
   'registerWorkContextHeaderButton',
@@ -456,6 +457,7 @@ export const createPluginApiScript = (config: PluginIframeConfig): string => {
           persistDataSynced: (data, key) => callApi('persistDataSynced', [data, key]),
           loadPersistedData: (key) => callApi('loadPersistedData', [key]),
           loadSyncedData: (key) => callApi('loadPersistedData', [key]), // Alias
+          triggerSync: () => callApi('triggerSync'),
           listSyncedDataKeys: (prefix) => callApi('listSyncedDataKeys', [prefix]),
 
           // Registration methods

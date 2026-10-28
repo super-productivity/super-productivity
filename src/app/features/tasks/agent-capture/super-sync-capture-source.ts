@@ -25,6 +25,7 @@ export const AGENT_CAPTURE_RECEIPTS_KEY = 'sp-agent-capture-receipts';
 // Server limits (capture.const.ts), re-checked before a payload becomes a synced task.
 const TITLE_MAX_CHARS = 500;
 const NOTES_MAX_CHARS = 8 * 1024;
+const LINK_MAX_CHARS = 2048;
 
 /** The server has no capture routes (feature off, rollback, other server). */
 export class CaptureUnsupportedError extends Error {
@@ -44,6 +45,8 @@ export interface AgentCapture {
     /** `[hours, minutes]` on `dueDay`, in this device's time zone. */
     dueTime?: [number, number];
     repeat?: CaptureRepeat;
+    /** An http(s) URL, added as the task's one LINK attachment. */
+    link?: string;
   } | null;
 }
 
@@ -182,8 +185,31 @@ const toDue = (
   return dueTime ? { dueDay, dueTime } : { dueDay };
 };
 
-/** Validates an opened payload; null when it cannot become a task. */
-export const toCaptureTask = (payload: unknown): AgentCapture['task'] => {
+/**
+ * Optional v1 field (Android share): only http(s), so a crafted capture can't
+ * add a `javascript:` or `file:` link.
+ */
+const parseLink = (value: unknown): string | undefined => {
+  if (typeof value !== 'string' || value.length > LINK_MAX_CHARS) return undefined;
+  try {
+    const url = new URL(value);
+    return (url.protocol === 'http:' || url.protocol === 'https:') && url.hostname
+      ? value
+      : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
+/**
+ * Validates an opened payload; null when it cannot become a task.
+ * `notesMaxChars`: the server's limit by default; a share from this device's
+ * own inbox may keep more.
+ */
+export const toCaptureTask = (
+  payload: unknown,
+  notesMaxChars: number = NOTES_MAX_CHARS,
+): AgentCapture['task'] => {
   const p = payload as Record<string, unknown> | null;
   if (!p || p.v !== 1 || typeof p.title !== 'string') return null;
   const title = p.title.trim();
@@ -193,20 +219,24 @@ export const toCaptureTask = (payload: unknown): AgentCapture['task'] => {
   // Code points, so a cut never splits a surrogate pair.
   const notes =
     typeof p.notes === 'string'
-      ? neutralizeAutoloadMedia([...p.notes].slice(0, NOTES_MAX_CHARS).join(''))
+      ? neutralizeAutoloadMedia([...p.notes].slice(0, notesMaxChars).join(''))
       : '';
+  const link = parseLink(p.link);
   const createdAt = typeof p.createdAt === 'number' ? p.createdAt : Date.now();
   const repeat = parseCaptureRepeat(p.repeat);
   return {
     title,
-    ...(notes ? { notes } : {}),
+    // The link alone as notes is only there for apps that predate `link`.
+    ...(notes && notes.trim() !== link ? { notes } : {}),
     createdAt,
     ...toDue(p),
     ...(repeat ? { repeat } : {}),
+    ...(link ? { link } : {}),
   };
 };
 
-const addInboxTaskAction = (
+/** One Inbox addTask for a validated capture; its link, if any, rides along. */
+export const addInboxTaskAction = (
   capture: AgentCapture,
   defaultEstimate: number,
   defaultRemindOption: TaskReminderOptionId,
@@ -222,6 +252,19 @@ const addInboxTaskAction = (
       created: task.createdAt,
       timeEstimate: defaultEstimate,
       ...toSchedule(task, defaultRemindOption),
+      // Inside the addTask, so the capture stays one op. LINK is fixed: an
+      // IMG attachment would load the URL as soon as the task is shown.
+      attachments: task.link
+        ? [
+            {
+              id: nanoid(),
+              type: 'LINK',
+              path: task.link,
+              title: task.title,
+              icon: 'link',
+            },
+          ]
+        : [],
     },
     workContextId: INBOX_PROJECT.id,
     workContextType: WorkContextType.PROJECT,

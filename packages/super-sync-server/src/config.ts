@@ -3,6 +3,7 @@ import {
   CaptureOAuthClientsSchema,
   DEFAULT_CAPTURE_OAUTH_CLIENTS,
 } from './capture/capture-oauth-clients';
+import { CaptureReviewAccess, parseCaptureReviewAccess } from './capture/capture-review';
 import { isIP } from 'net';
 import * as path from 'path';
 import { Logger } from './logger';
@@ -184,6 +185,12 @@ export interface ServerConfig {
   captureConnectorEnabled: boolean;
   captureOAuthClients: CaptureOAuthClient[];
   /**
+   * A reusable consent-page code for connector directory reviewers, bound to
+   * one demo account. Off unless CAPTURE_REVIEW_EMAIL and CAPTURE_REVIEW_CODE
+   * are both set.
+   */
+  captureReview?: CaptureReviewAccess;
+  /**
    * Test mode configuration. When enabled, provides endpoints for E2E testing.
    * NEVER enable in production!
    */
@@ -297,6 +304,18 @@ export const loadConfigFromEnv = (
   }
   if (process.env.CAPTURE_CONNECTOR_ENABLED !== undefined) {
     config.captureConnectorEnabled = process.env.CAPTURE_CONNECTOR_ENABLED === 'true';
+  }
+  const captureReview = parseCaptureReviewAccess(
+    process.env.CAPTURE_REVIEW_EMAIL,
+    process.env.CAPTURE_REVIEW_CODE,
+  );
+  if (captureReview) {
+    config.captureReview = captureReview;
+    if (!config.captureConnectorEnabled) {
+      Logger.warn(
+        'CAPTURE_REVIEW_EMAIL/CODE are set but CAPTURE_CONNECTOR_ENABLED is not true; the reviewer code has no effect.',
+      );
+    }
   }
 
   // CORS configuration

@@ -1,61 +1,34 @@
 import { TestBed } from '@angular/core/testing';
 import { MockStore, provideMockStore } from '@ngrx/store/testing';
-import { BehaviorSubject, of } from 'rxjs';
-import { LocalRestApiHandlerService } from './local-rest-api-handler.service';
-import { TaskService } from '../../features/tasks/task.service';
-import { TaskArchiveService } from '../../features/archive/task-archive.service';
-import { ProjectService } from '../../features/project/project.service';
-import { Project } from '../../features/project/project.model';
-import { TagService } from '../../features/tag/tag.service';
-import { IssueLog } from '../log';
-import {
-  LOCAL_REST_API_FEATURE_BRIDGE,
-  LocalRestApiFeatureBridge,
-} from './local-rest-api-feature-bridge';
-import {
-  LOCAL_REST_API_FEATURE_ROUTES,
-  LocalRestApiFeatureRoutes,
-} from './local-rest-api-feature-routes';
-import { TODAY_TAG } from '../../features/tag/tag.const';
-import { DateService } from '../date/date.service';
-import { DataInitStateService } from '../data-init/data-init-state.service';
-import { Task, TaskWithSubTasks, TaskArchive } from '../../features/tasks/task.model';
+import { of } from 'rxjs';
+import { LocalRestApiTaskRoutesService } from './local-rest-api-task-routes.service';
+import { TaskService } from './task.service';
+import { TaskArchiveService } from '../archive/task-archive.service';
+import { ProjectService } from '../project/project.service';
+import { Project } from '../project/project.model';
+import { IssueLog } from '../../core/log';
+import { LocalRestApiFeatureBridgeService } from './local-rest-api-feature-bridge.service';
+import { TODAY_TAG } from '../tag/tag.const';
+import { DateService } from '../../core/date/date.service';
+import { Task, TaskWithSubTasks, TaskArchive } from './task.model';
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 import {
   LocalRestApiRequestPayload,
   LocalRestApiResponsePayload,
 } from '../../../../electron/shared-with-frontend/local-rest-api.model';
-import {
-  FocusModeMode,
-  FocusModeState,
-  FocusScreen,
-  TimerState,
-} from '../../features/focus-mode/focus-mode.model';
-import * as focusModeActions from '../../features/focus-mode/store/focus-mode.actions';
-import * as focusModeSelectors from '../../features/focus-mode/store/focus-mode.selectors';
-import {
-  focusModeReducer,
-  initialState as initialFocusModeState,
-} from '../../features/focus-mode/store/focus-mode.reducer';
 import { ArchiveOperationHandler } from '../../op-log/apply/archive-operation-handler.service';
 
-describe('LocalRestApiHandlerService', () => {
-  let isDataLoaded$: BehaviorSubject<boolean>;
-  let service: LocalRestApiHandlerService;
+describe('LocalRestApiTaskRoutesService', () => {
+  let service: LocalRestApiTaskRoutesService;
   let taskServiceMock: jasmine.SpyObj<TaskService>;
   let taskArchiveServiceMock: jasmine.SpyObj<TaskArchiveService>;
   let archiveOperationHandlerMock: jasmine.SpyObj<ArchiveOperationHandler>;
   let projectServiceMock: jasmine.SpyObj<ProjectService>;
-  let tagServiceMock: jasmine.SpyObj<TagService>;
   let dateServiceMock: jasmine.SpyObj<DateService>;
-  let featureBridgeMock: jasmine.SpyObj<LocalRestApiFeatureBridge>;
-  let featureRoutes: LocalRestApiFeatureRoutes[];
+  let featureBridgeMock: jasmine.SpyObj<LocalRestApiFeatureBridgeService>;
   let store: MockStore;
   let dispatchSpy: jasmine.Spy;
   let activeProjects: Project[];
-  let requestHandler: ((payload: LocalRestApiRequestPayload) => void) | null = null;
-  let responsePromiseResolve: ((response: LocalRestApiResponsePayload) => void) | null =
-    null;
 
   const createMockTask = (id: string, overrides: Partial<Task> = {}): Task =>
     ({
@@ -81,34 +54,6 @@ describe('LocalRestApiHandlerService', () => {
     subTasks,
   });
 
-  const setFocusState = (
-    overrides: Partial<Omit<FocusModeState, 'timer'>> & {
-      timer?: Partial<TimerState>;
-    } = {},
-  ): void => {
-    const { timer: timerOverrides, ...stateOverrides } = overrides;
-    store.setState({
-      focusMode: {
-        ...initialFocusModeState,
-        ...stateOverrides,
-        timer: { ...initialFocusModeState.timer, ...timerOverrides },
-      },
-    });
-  };
-
-  const mockElectronApi = (): void => {
-    (window as any).ea = {
-      onLocalRestApiRequest: (handler: (payload: LocalRestApiRequestPayload) => void) => {
-        requestHandler = handler;
-      },
-      sendLocalRestApiResponse: (response: LocalRestApiResponsePayload) => {
-        if (responsePromiseResolve) {
-          responsePromiseResolve(response);
-        }
-      },
-    };
-  };
-
   const createRequest = (
     method: string,
     path: string,
@@ -124,14 +69,15 @@ describe('LocalRestApiHandlerService', () => {
     body: options.body,
   });
 
+  // The routes answer directly; the router's IPC round trip has its own spec.
   const sendRequestAndWait = async (
     request: LocalRestApiRequestPayload,
   ): Promise<LocalRestApiResponsePayload> => {
-    const responsePromise = new Promise<LocalRestApiResponsePayload>((resolve) => {
-      responsePromiseResolve = resolve;
-    });
-    requestHandler!(request);
-    return responsePromise;
+    const response = await service.handle(request);
+    if (!response) {
+      throw new Error(`No task route answered ${request.method} ${request.path}`);
+    }
+    return response;
   };
 
   const expectTaskIds = (
@@ -146,27 +92,7 @@ describe('LocalRestApiHandlerService', () => {
   };
 
   beforeEach(() => {
-    // Specs that call `store.overrideSelector()` without `resetSelectors()`
-    // leak into this file: `overrideSelector` runs `setResult()` on the
-    // memoized selector ITSELF - a module singleton shared by the whole Karma
-    // context - and `resetSelectors()` only clears what its own store instance
-    // registered. The GET /focus specs below read focus-mode state through
-    // those selectors, so a leaked result makes them assert against a frozen
-    // timer instead of the state they set (jasmine randomizes spec order, so
-    // it only fails in some runs). Release them before the store is built, so
-    // any override this file's own `provideMockStore` sets up survives.
-    Object.values(focusModeSelectors).forEach((selector) => {
-      if (typeof selector === 'function' && 'release' in selector) {
-        selector.release();
-        selector.clearResult();
-      }
-    });
-
-    requestHandler = null;
-    responsePromiseResolve = null;
     activeProjects = [];
-
-    mockElectronApi();
 
     taskServiceMock = jasmine.createSpyObj(
       'TaskService',
@@ -220,14 +146,6 @@ describe('LocalRestApiHandlerService', () => {
       value: (() => activeProjects) as ProjectService['list'],
     });
 
-    tagServiceMock = jasmine.createSpyObj(
-      'TagService',
-      ['addTag', 'updateTag', 'deleteTag'],
-      {
-        tags$: of([]),
-      },
-    );
-
     dateServiceMock = jasmine.createSpyObj<DateService>(
       'DateService',
       ['todayStr', 'getStartOfNextDayDiffMs'],
@@ -236,87 +154,37 @@ describe('LocalRestApiHandlerService', () => {
     dateServiceMock.todayStr.and.returnValue('2026-05-12');
     dateServiceMock.getStartOfNextDayDiffMs.and.returnValue(0);
 
-    featureBridgeMock = jasmine.createSpyObj<LocalRestApiFeatureBridge>(
-      'LocalRestApiFeatureBridge',
-      ['issueLink', 'addLiteralSubTask', 'addTimeSpentOnDay', 'moveTaskToProject'],
+    featureBridgeMock = jasmine.createSpyObj<LocalRestApiFeatureBridgeService>(
+      'LocalRestApiFeatureBridgeService',
+      [
+        'issueLink',
+        'addLiteralSubTask',
+        'addTimeSpentOnDay',
+        'moveTaskToProject',
+        'updateTaskWithDueTime',
+      ],
     );
     featureBridgeMock.issueLink.and.returnValue(Promise.resolve(''));
 
-    featureRoutes = [];
-
-    isDataLoaded$ = new BehaviorSubject<boolean>(true);
-
     TestBed.configureTestingModule({
       providers: [
-        LocalRestApiHandlerService,
+        LocalRestApiTaskRoutesService,
         { provide: TaskService, useValue: taskServiceMock },
         { provide: TaskArchiveService, useValue: taskArchiveServiceMock },
         { provide: ArchiveOperationHandler, useValue: archiveOperationHandlerMock },
         { provide: ProjectService, useValue: projectServiceMock },
-        { provide: TagService, useValue: tagServiceMock },
         { provide: DateService, useValue: dateServiceMock },
-        { provide: LOCAL_REST_API_FEATURE_BRIDGE, useValue: featureBridgeMock },
-        { provide: LOCAL_REST_API_FEATURE_ROUTES, useValue: featureRoutes },
-        {
-          provide: DataInitStateService,
-          useValue: { isAllDataLoadedInitially$: isDataLoaded$ },
-        },
-        provideMockStore({ initialState: { focusMode: initialFocusModeState } }),
+        { provide: LocalRestApiFeatureBridgeService, useValue: featureBridgeMock },
+        provideMockStore(),
       ],
     });
 
-    service = TestBed.inject(LocalRestApiHandlerService);
+    service = TestBed.inject(LocalRestApiTaskRoutesService);
     store = TestBed.inject(MockStore);
     dispatchSpy = spyOn(store, 'dispatch');
   });
 
-  afterEach(() => {
-    delete (window as any).ea;
-  });
-
-  describe('initialization', () => {
-    it('should register request handler on init', () => {
-      expect(requestHandler).toBeNull();
-      service.init();
-      expect(requestHandler).not.toBeNull();
-    });
-
-    it('should not register handler twice on multiple init calls', () => {
-      service.init();
-      const firstHandler = requestHandler;
-      service.init();
-      expect(requestHandler).toBe(firstHandler);
-    });
-  });
-
-  describe('readiness', () => {
-    beforeEach(() => {
-      service.init();
-    });
-
-    it('answers APP_NOT_READY until the app data has loaded', async () => {
-      isDataLoaded$.next(false);
-      const notReady = await sendRequestAndWait(createRequest('GET', '/tasks'));
-      expect(notReady.status).toBe(503);
-      expect(notReady.body).toEqual(
-        jasmine.objectContaining({
-          ok: false,
-          error: jasmine.objectContaining({ code: 'APP_NOT_READY' }),
-        }),
-      );
-      expect(taskServiceMock.add).not.toHaveBeenCalled();
-
-      isDataLoaded$.next(true);
-      const ready = await sendRequestAndWait(createRequest('GET', '/tasks'));
-      expect(ready.status).toBe(200);
-    });
-  });
-
   describe('GET /status', () => {
-    beforeEach(() => {
-      service.init();
-    });
-
     it('should return status with current task info', async () => {
       const mockTask = createMockTask('task-1');
       Object.defineProperty(taskServiceMock, 'currentTask$', { get: () => of(mockTask) });
@@ -329,366 +197,7 @@ describe('LocalRestApiHandlerService', () => {
     });
   });
 
-  describe('GET /focus', () => {
-    beforeEach(() => {
-      service.init();
-    });
-
-    const requestFocus = async (): Promise<LocalRestApiResponsePayload> =>
-      sendRequestAndWait(createRequest('GET', '/focus'));
-
-    const expectFocusData = (
-      response: LocalRestApiResponsePayload,
-      expected: unknown,
-    ): void => {
-      expect(response.status).toBe(200);
-      expect(response.body.ok).toBe(true);
-      if (!response.body.ok) {
-        throw new Error(`Expected success response, got ${response.body.error.code}`);
-      }
-      expect(response.body.data).toEqual(expected);
-    };
-
-    it('should return a null timer while focus mode is idle', async () => {
-      setFocusState({ mode: FocusModeMode.Countdown });
-
-      expectFocusData(await requestFocus(), {
-        mode: FocusModeMode.Countdown,
-        cycle: 1,
-        isSessionDone: false,
-        timer: null,
-      });
-    });
-
-    it('should return a running Pomodoro work timer', async () => {
-      setFocusState({
-        timer: {
-          isRunning: true,
-          startedAt: 1,
-          elapsed: 120_000,
-          duration: 1_500_000,
-          purpose: 'work',
-        },
-        mode: FocusModeMode.Pomodoro,
-        currentCycle: 2,
-      });
-
-      expectFocusData(await requestFocus(), {
-        mode: FocusModeMode.Pomodoro,
-        cycle: 2,
-        isSessionDone: false,
-        timer: {
-          purpose: 'work',
-          status: 'running',
-          isOvertime: false,
-          elapsedMs: 120_000,
-          remainingMs: 1_380_000,
-          durationMs: 1_500_000,
-          isLongBreak: false,
-        },
-      });
-    });
-
-    it('should return a paused Countdown work timer', async () => {
-      setFocusState({
-        timer: {
-          isRunning: false,
-          startedAt: 1,
-          elapsed: 90_000,
-          duration: 300_000,
-          purpose: 'work',
-        },
-        mode: FocusModeMode.Countdown,
-        currentCycle: 1,
-      });
-
-      expectFocusData(await requestFocus(), {
-        mode: FocusModeMode.Countdown,
-        cycle: 1,
-        isSessionDone: false,
-        timer: {
-          purpose: 'work',
-          status: 'paused',
-          isOvertime: false,
-          elapsedMs: 90_000,
-          remainingMs: 210_000,
-          durationMs: 300_000,
-          isLongBreak: false,
-        },
-      });
-    });
-
-    it('should return a running Countdown work timer', async () => {
-      setFocusState({
-        timer: {
-          isRunning: true,
-          startedAt: 1,
-          elapsed: 90_000,
-          duration: 300_000,
-          purpose: 'work',
-        },
-        mode: FocusModeMode.Countdown,
-      });
-
-      expectFocusData(await requestFocus(), {
-        mode: FocusModeMode.Countdown,
-        cycle: 1,
-        isSessionDone: false,
-        timer: {
-          purpose: 'work',
-          status: 'running',
-          isOvertime: false,
-          elapsedMs: 90_000,
-          remainingMs: 210_000,
-          durationMs: 300_000,
-          isLongBreak: false,
-        },
-      });
-    });
-
-    it('should return a completed work session separately from the timer', async () => {
-      setFocusState({
-        currentScreen: FocusScreen.SessionDone,
-        mode: FocusModeMode.Countdown,
-      });
-
-      expectFocusData(await requestFocus(), {
-        mode: FocusModeMode.Countdown,
-        cycle: 1,
-        isSessionDone: true,
-        timer: null,
-      });
-    });
-
-    it('should return running short and long Pomodoro breaks', async () => {
-      const timer: TimerState = {
-        isRunning: true,
-        startedAt: 1,
-        elapsed: 30_000,
-        duration: 300_000,
-        purpose: 'break',
-      };
-
-      setFocusState({ timer, mode: FocusModeMode.Pomodoro, currentCycle: 2 });
-      expectFocusData(await requestFocus(), {
-        mode: FocusModeMode.Pomodoro,
-        cycle: 2,
-        isSessionDone: false,
-        timer: {
-          purpose: 'break',
-          status: 'running',
-          isOvertime: false,
-          elapsedMs: 30_000,
-          remainingMs: 270_000,
-          durationMs: 300_000,
-          isLongBreak: false,
-        },
-      });
-
-      setFocusState({
-        timer: { ...timer, isLongBreak: true },
-        mode: FocusModeMode.Pomodoro,
-        currentCycle: 5,
-      });
-      expectFocusData(await requestFocus(), {
-        mode: FocusModeMode.Pomodoro,
-        cycle: 5,
-        isSessionDone: false,
-        timer: {
-          purpose: 'break',
-          status: 'running',
-          isOvertime: false,
-          elapsedMs: 30_000,
-          remainingMs: 270_000,
-          durationMs: 300_000,
-          isLongBreak: true,
-        },
-      });
-    });
-
-    it('should return a completed Pomodoro break as done', async () => {
-      setFocusState({
-        timer: {
-          isRunning: false,
-          startedAt: 1,
-          elapsed: 300_000,
-          duration: 300_000,
-          purpose: 'break',
-          isLongBreak: true,
-        },
-        mode: FocusModeMode.Pomodoro,
-        currentCycle: 5,
-      });
-
-      expectFocusData(await requestFocus(), {
-        mode: FocusModeMode.Pomodoro,
-        cycle: 5,
-        isSessionDone: false,
-        timer: {
-          purpose: 'break',
-          status: 'done',
-          isOvertime: false,
-          elapsedMs: 300_000,
-          remainingMs: 0,
-          durationMs: 300_000,
-          isLongBreak: true,
-        },
-      });
-    });
-
-    it('should return a stopped Pomodoro break with time remaining as paused', async () => {
-      setFocusState({
-        timer: {
-          isRunning: false,
-          startedAt: 1,
-          elapsed: 30_000,
-          duration: 300_000,
-          purpose: 'break',
-          isLongBreak: true,
-        },
-        mode: FocusModeMode.Pomodoro,
-        currentCycle: 5,
-      });
-
-      expectFocusData(await requestFocus(), {
-        mode: FocusModeMode.Pomodoro,
-        cycle: 5,
-        isSessionDone: false,
-        timer: {
-          purpose: 'break',
-          status: 'paused',
-          isOvertime: false,
-          elapsedMs: 30_000,
-          remainingMs: 270_000,
-          durationMs: 300_000,
-          isLongBreak: true,
-        },
-      });
-    });
-
-    it('should return running and paused Flowtime work timers', async () => {
-      setFocusState({
-        timer: {
-          isRunning: true,
-          startedAt: 1,
-          elapsed: 600_000,
-          duration: 0,
-          purpose: 'work',
-        },
-        mode: FocusModeMode.Flowtime,
-      });
-
-      expectFocusData(await requestFocus(), {
-        mode: FocusModeMode.Flowtime,
-        cycle: 1,
-        isSessionDone: false,
-        timer: {
-          purpose: 'work',
-          status: 'running',
-          isOvertime: false,
-          elapsedMs: 600_000,
-          remainingMs: 0,
-          durationMs: 0,
-          isLongBreak: false,
-        },
-      });
-
-      setFocusState({
-        timer: {
-          isRunning: false,
-          startedAt: 1,
-          elapsed: 600_000,
-          duration: 0,
-          purpose: 'work',
-        },
-        mode: FocusModeMode.Flowtime,
-      });
-
-      expectFocusData(await requestFocus(), {
-        mode: FocusModeMode.Flowtime,
-        cycle: 1,
-        isSessionDone: false,
-        timer: {
-          purpose: 'work',
-          status: 'paused',
-          isOvertime: false,
-          elapsedMs: 600_000,
-          remainingMs: 0,
-          durationMs: 0,
-          isLongBreak: false,
-        },
-      });
-    });
-
-    it('should retain the Pomodoro cycle after switching to Flowtime', async () => {
-      const flowtimeState = focusModeReducer(
-        {
-          ...initialFocusModeState,
-          mode: FocusModeMode.Pomodoro,
-          currentCycle: 5,
-          timer: {
-            isRunning: true,
-            startedAt: 1,
-            elapsed: 600_000,
-            duration: 1_500_000,
-            purpose: 'work',
-          },
-        },
-        focusModeActions.setFocusModeMode({ mode: FocusModeMode.Flowtime }),
-      );
-      store.setState({ focusMode: flowtimeState });
-
-      expectFocusData(await requestFocus(), {
-        mode: FocusModeMode.Flowtime,
-        cycle: 5,
-        isSessionDone: false,
-        timer: {
-          purpose: 'work',
-          status: 'running',
-          isOvertime: false,
-          elapsedMs: 600_000,
-          remainingMs: 0,
-          durationMs: 0,
-          isLongBreak: false,
-        },
-      });
-    });
-
-    it('should preserve overtime while a work timer is paused', async () => {
-      setFocusState({
-        timer: {
-          isRunning: false,
-          startedAt: 1,
-          elapsed: 1_600_000,
-          duration: 1_500_000,
-          purpose: 'work',
-        },
-        mode: FocusModeMode.Pomodoro,
-        _isOvertimeEnabled: true,
-      });
-
-      expectFocusData(await requestFocus(), {
-        mode: FocusModeMode.Pomodoro,
-        cycle: 1,
-        isSessionDone: false,
-        timer: {
-          purpose: 'work',
-          status: 'paused',
-          isOvertime: true,
-          elapsedMs: 1_600_000,
-          remainingMs: 0,
-          durationMs: 1_500_000,
-          isLongBreak: false,
-        },
-      });
-    });
-  });
-
   describe('task routes', () => {
-    beforeEach(() => {
-      service.init();
-    });
-
     describe('GET /tasks', () => {
       it('should return all active tasks by default', async () => {
         const tasks = [createMockTask('task-1'), createMockTask('task-2')];
@@ -1620,6 +1129,52 @@ describe('LocalRestApiHandlerService', () => {
           'task-1',
           jasmine.any(Object),
         );
+      });
+
+      describe('dueWithTime', () => {
+        const dueWithTime = 1_778_590_800_000;
+
+        it('should update through the bridge so the reminder follows', async () => {
+          const mockTask = createMockTask('task-1', {
+            dueWithTime,
+            remindAt: dueWithTime,
+          });
+          Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+            get: () => (_id: string) => of(mockTask),
+          });
+
+          const response = await sendRequestAndWait(
+            createRequest('PATCH', '/tasks/task-1', {
+              body: { dueWithTime: null, title: 'Unscheduled' },
+            }),
+          );
+
+          expect(response.status).toBe(200);
+          expect(featureBridgeMock.updateTaskWithDueTime).toHaveBeenCalledOnceWith(
+            mockTask,
+            { dueWithTime: null, title: 'Unscheduled' },
+          );
+          expect(taskServiceMock.update).not.toHaveBeenCalled();
+        });
+
+        it('should not go through the bridge when dueWithTime is not sent', async () => {
+          const mockTask = createMockTask('task-1', {
+            dueWithTime,
+            remindAt: dueWithTime,
+          });
+          Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+            get: () => (_id: string) => of(mockTask),
+          });
+
+          await sendRequestAndWait(
+            createRequest('PATCH', '/tasks/task-1', { body: { timeEstimate: 60000 } }),
+          );
+
+          expect(taskServiceMock.update).toHaveBeenCalledOnceWith('task-1', {
+            timeEstimate: 60000,
+          });
+          expect(featureBridgeMock.updateTaskWithDueTime).not.toHaveBeenCalled();
+        });
       });
 
       it('should set a day deadline through the deadline action', async () => {
@@ -3030,10 +2585,6 @@ describe('LocalRestApiHandlerService', () => {
   });
 
   describe('task-control routes', () => {
-    beforeEach(() => {
-      service.init();
-    });
-
     describe('GET /task-control/current', () => {
       it('should return current task', async () => {
         const mockTask = createMockTask('current-task');
@@ -3109,155 +2660,31 @@ describe('LocalRestApiHandlerService', () => {
       });
     });
   });
-
-  describe('project routes', () => {
-    beforeEach(() => {
-      service.init();
+  describe('route ownership', () => {
+    it('should leave requests outside its routes to the other route providers', async () => {
+      for (const [method, path] of [
+        ['GET', '/focus'],
+        ['GET', '/projects'],
+        ['GET', '/tags'],
+        ['GET', '/notes'],
+        ['GET', '/taskss'],
+        ['DELETE', '/tasks'],
+        ['POST', '/status'],
+        ['GET', '/task-control/unknown'],
+      ]) {
+        expect(await service.handle(createRequest(method, path)))
+          .withContext(`${method} ${path}`)
+          .toBeUndefined();
+      }
     });
 
-    describe('GET /projects', () => {
-      it('should return all projects', async () => {
-        const projects = [
-          { id: 'p1', title: 'Project 1' },
-          { id: 'p2', title: 'Project 2' },
-        ];
-        Object.defineProperty(projectServiceMock, 'list$', { get: () => of(projects) });
-
-        const response = await sendRequestAndWait(createRequest('GET', '/projects'));
-
-        expect(response.body.ok).toBe(true);
-      });
-
-      it('should filter projects by query', async () => {
-        const projects = [
-          { id: 'p1', title: 'Work' },
-          { id: 'p2', title: 'Personal' },
-        ];
-        Object.defineProperty(projectServiceMock, 'list$', { get: () => of(projects) });
-
-        const response = await sendRequestAndWait(
-          createRequest('GET', '/projects', { query: { query: 'work' } }),
-        );
-
-        expect(response.body.ok).toBe(true);
-      });
-    });
-  });
-
-  describe('tag routes', () => {
-    beforeEach(() => {
-      service.init();
-    });
-
-    describe('GET /tags', () => {
-      it('should return all tags', async () => {
-        const tags = [
-          { id: 't1', title: 'Tag 1' },
-          { id: 't2', title: 'Tag 2' },
-        ];
-        Object.defineProperty(tagServiceMock, 'tags$', { get: () => of(tags) });
-
-        const response = await sendRequestAndWait(createRequest('GET', '/tags'));
-
-        expect(response.body.ok).toBe(true);
-      });
-
-      it('should filter tags by query', async () => {
-        const tags = [
-          { id: 't1', title: 'Urgent' },
-          { id: 't2', title: 'Important' },
-        ];
-        Object.defineProperty(tagServiceMock, 'tags$', { get: () => of(tags) });
-
-        const response = await sendRequestAndWait(
-          createRequest('GET', '/tags', { query: { query: 'urgent' } }),
-        );
-
-        expect(response.body.ok).toBe(true);
-      });
-    });
-  });
-
-  describe('feature routes', () => {
-    const createFeatureRoutes = (
-      response?: LocalRestApiResponsePayload,
-    ): jasmine.SpyObj<LocalRestApiFeatureRoutes> => {
-      const routes = jasmine.createSpyObj<LocalRestApiFeatureRoutes>('FeatureRoutes', [
-        'handle',
-      ]);
-      routes.handle.and.resolveTo(response);
-      return routes;
-    };
-
-    beforeEach(() => {
-      service.init();
-    });
-
-    it('should answer with the first feature route that handles the request', async () => {
-      const featureResponse: LocalRestApiResponsePayload = {
-        requestId: 'test-request-id',
-        status: 200,
-        body: { ok: true, data: { handled: true } },
-      };
-      const notMine = createFeatureRoutes(undefined);
-      const mine = createFeatureRoutes(featureResponse);
-      const after = createFeatureRoutes(featureResponse);
-      featureRoutes.push(notMine, mine, after);
-      const request = createRequest('GET', '/feature-things');
-
-      const response = await sendRequestAndWait(request);
-
-      expect(response).toEqual(featureResponse);
-      expect(notMine.handle).toHaveBeenCalledWith(request);
-      expect(mine.handle).toHaveBeenCalledWith(request);
-      expect(after.handle).not.toHaveBeenCalled();
-    });
-
-    it('should return 404 when no feature route handles the request', async () => {
-      featureRoutes.push(createFeatureRoutes(undefined));
-
-      const response = await sendRequestAndWait(createRequest('GET', '/feature-things'));
+    it('should answer unknown routes under a task itself', async () => {
+      const response = await sendRequestAndWait(
+        createRequest('GET', '/tasks/task-1/unknown'),
+      );
 
       expect(response.status).toBe(404);
       expect((response.body as any).error.code).toBe('NOT_FOUND');
-    });
-
-    it('should not ask feature routes about core routes', async () => {
-      const routes = createFeatureRoutes(undefined);
-      featureRoutes.push(routes);
-
-      const response = await sendRequestAndWait(createRequest('GET', '/tags'));
-
-      expect(response.status).toBe(200);
-      expect(routes.handle).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('error handling', () => {
-    beforeEach(() => {
-      service.init();
-    });
-
-    it('should return 404 for unknown routes', async () => {
-      const response = await sendRequestAndWait(createRequest('GET', '/unknown-route'));
-
-      expect(response.body.ok).toBe(false);
-      expect(response.status).toBe(404);
-      expect((response.body as any).error.code).toBe('NOT_FOUND');
-    });
-
-    it('should handle internal errors gracefully', async () => {
-      Object.defineProperty(taskServiceMock, 'allTasks$', {
-        get: () => {
-          throw new Error('Test error');
-        },
-      });
-
-      const response = await sendRequestAndWait(createRequest('GET', '/tasks'));
-
-      expect(response.body.ok).toBe(false);
-      expect(response.status).toBe(500);
-      expect((response.body as any).error.code).toBe('INTERNAL_ERROR');
     });
   });
 });

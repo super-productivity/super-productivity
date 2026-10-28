@@ -97,6 +97,12 @@ are required arrays (use `[]` when unused), while `description` is optional.
 Do not rely on the installer's deliberately minimal runtime checks to infer the
 TypeScript contract.
 
+Installation and activation reject plugins whose `minSupVersion` is newer than
+the app, including uploaded plugins reloaded from cache. The error shows the
+required and current app versions. Comparison uses dotted numeric versions,
+ignoring a leading `v` and prerelease/build suffixes; missing or unparseable
+versions are not blocked by this check.
+
 Of the declared permissions, the app checks only `nodeExecution`, `http`
 together with `allowedHosts`, and `deleteProject`. The rest are shown in the
 plugin's details but not enforced; see [Security Considerations](#security-considerations).

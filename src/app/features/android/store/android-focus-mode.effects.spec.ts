@@ -28,6 +28,7 @@ import { TaskService } from '../../tasks/task.service';
 import { SyncTriggerService } from '../../../imex/sync/sync-trigger.service';
 import { DataInitStateService } from '../../../core/data-init/data-init-state.service';
 import { OperationWriteFlushService } from '../../../op-log/sync/operation-write-flush.service';
+import { AndroidNotificationActionService } from '../android-notification-action.service';
 
 const MIN = 60_000;
 const workTimer = (elapsed: number, over: Partial<TimerState> = {}): TimerState => ({
@@ -377,6 +378,7 @@ describe('AndroidFocusModeEffects: native break restart recovery', () => {
           SyncTriggerService,
           DataInitStateService,
           OperationWriteFlushService,
+          AndroidNotificationActionService,
         ].map((provide) => ({ provide, useValue: {} })),
       ],
     });

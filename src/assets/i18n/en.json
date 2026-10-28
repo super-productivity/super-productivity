@@ -274,7 +274,8 @@
         "EVENT_MOVED": "Event moved",
         "EVENT_RESCHEDULED": "Event rescheduled",
         "EVENT_DELETED": "Event deleted",
-        "TIME_BLOCK_ERROR": "Failed to sync time block: {{errTxt}}"
+        "TIME_BLOCK_ERROR": "Failed to sync time block: {{errTxt}}",
+        "WORK_SESSION_ERROR": "Failed to add the tracked time to your calendar. It will be tried again later: {{errTxt}}"
       }
     },
     "CLIPBOARD_IMAGE": {
@@ -346,6 +347,7 @@
       "BREAK_TITLE": "Break",
       "BROWSER_TITLE_BREAK": "Break",
       "BROWSER_TITLE_PAUSED": "Paused",
+      "CANCEL_SESSION": "Cancel session",
       "CLICK_TO_EDIT_DURATION": "Click to edit duration",
       "COMPLETE_FOCUS_SESSION": "Complete focus session",
       "COUNTDOWN": "Countdown",
@@ -1219,6 +1221,7 @@
         "NEVER": "Never",
         "OVERWRITE_WARNING": "WARNING: The {{targetName}} data contains approximately {{targetChanges}} changes while the {{sourceName}} data only has {{sourceChanges}} changes. Are you sure you want to overwrite the {{targetName}} data with the {{sourceName}} version?",
         "OVERWRITE_WARNING_UNKNOWN": "WARNING: The number of unsynced changes is unknown. This will replace the entire {{targetName}} dataset with the {{sourceName}} version. Changes present only in the {{targetName}} data will be lost. Are you sure?",
+        "OWN_UPLOADS_MISSING": "Changes this device already synced are missing from the synced data. Another device may have saved over an older copy, or the sync folder lost an update. Keep local restores them; Keep remote discards them.",
         "REMOTE": "Remote",
         "RESULT": "Result",
         "TEXT": "<p>Local and remote data cannot be merged automatically. Keep local replaces all remote data with this device's data. Keep remote replaces all data on this device with the remote data. Changes present only in the replaced version will be lost. Cancel leaves sync unresolved.</p>",
@@ -1472,6 +1475,7 @@
           "CAPTURE_CONNECTIONS": "Connected assistants",
           "CAPTURE_A_COPY_CODE": "Copy connection code",
           "CAPTURE_INFO": "Lets AI assistants add tasks to your Inbox. They can't read your tasks or sync data.",
+          "CAPTURE_SHARE_INFO": "On Android, shares to Super Productivity are also sent this way, encrypted on the phone, so your other devices get them without the app being opened on the phone.",
           "CAPTURE_L_CLIENT_NAME": "Assistant name",
           "CAPTURE_L_MCP_URL": "Server URL for assistants (MCP)",
           "CAPTURE_L_SETUP": "Claude Code: run this in a terminal",
@@ -2875,6 +2879,7 @@
       "ASSISTANT_ACCESS_KEY_EXISTS": "An access key is set. Replacing it disconnects assistants that use the old one.",
       "ASSISTANT_ACCESS_SETUP": "Connect an assistant",
       "ASSISTANT_ACCESS_SETUP_CLAUDE_CODE": "Claude Code: run this command",
+      "ASSISTANT_ACCESS_SETUP_CLAUDE_DESKTOP": "Claude Desktop: download the extension, open it and paste the access key when asked",
       "ASSISTANT_ACCESS_SETUP_JSON": "Other MCP clients that support HTTP servers:",
       "ASSISTANT_ACCESS_SAVE_ERROR": "Could not save the assistant access setting.",
       "IS_MINIMIZE_TO_TRAY": "Minimize to tray (desktop only)",
@@ -3204,7 +3209,7 @@
       "SEARCH": "Search everything with <kbd>{{key}}</kbd>.",
       "SEARCH_PHONE": "Search everything from ☰.",
       "SHORT_SYNTAX": "Type <code>#tag</code>, <code>+project</code> or <code>@tomorrow</code> while adding a task. Help → How to shows more.",
-      "SYNC": "Your data stays on this device. Sync and backups are in Settings.",
+      "SYNC": "Your data stays on this device. Sync, backups and import from Todoist or TickTick are in Settings.",
       "TITLE": "Want more?"
     }
   },
@@ -3565,6 +3570,10 @@
     "SECTION_OPTIONS": "Section options",
     "DONE_TASKS": "Completed Tasks",
     "DONE_TASKS_IN_ARCHIVE": "There are currently no completed tasks here, but there are some already archived.",
+    "EMPTY_HINT_INBOX": "Tasks without a project usually land here. Move them into a project when you know where they belong.",
+    "EMPTY_HINT_PROJECT": "Tasks you add here belong to this project.",
+    "EMPTY_HINT_TAG": "Tasks with this tag appear here. Tasks you add here get this tag automatically.",
+    "EMPTY_HINT_TODAY": "Today shows what you plan to do today. Add a task here, or plan one from your Inbox or the Planner.",
     "ESTIMATE_REMAINING": "Estimate remaining:",
     "FINISH_DAY": "Finish Day",
     "FINISH_DAY_TOOLTIP": "Evaluate your day, move all completed tasks to the archive (optionally) and/or plan your next day.",

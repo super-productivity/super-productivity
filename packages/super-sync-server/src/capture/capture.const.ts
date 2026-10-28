@@ -20,6 +20,17 @@ export const CAPTURE_MAX_CREATES_PER_GRANT_PER_DAY = 200;
 export const CAPTURE_MAX_PENDING_PER_USER = 500;
 
 export const CAPTURE_CLAIM_BATCH_SIZE = 50;
+
+/**
+ * Pre-sealed items from the app's own devices (Android share,
+ * docs/plans/2026-10-24-android-share-capture.md). Not a row in
+ * capture_grants: never listed or revoked as a grant, dropped by switch-off
+ * and key replacement like every item.
+ */
+export const CAPTURE_APP_SHARE_GRANT_ID = 'app-share';
+/** Decoded seal size; the worst-case share payload seals to about 13 KB. */
+export const CAPTURE_SEALED_MAX_BYTES = 32 * 1024;
+export const CAPTURE_ITEMS_BODY_LIMIT_BYTES = 48 * 1024;
 export const CAPTURE_LEASE_MS = MS_PER_DAY;
 export const CAPTURE_RETRY_WINDOW_MS = 10 * 60 * 1000;
 export const CAPTURE_TOKEN_TTL_MS = 365 * MS_PER_DAY;

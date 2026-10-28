@@ -25,7 +25,10 @@ import com.superproductivity.superproductivity.service.ReminderNotificationHelpe
 import com.superproductivity.superproductivity.service.RemoteTrackingNotificationHelper
 import com.superproductivity.superproductivity.service.SyncReminderScheduler
 import com.superproductivity.superproductivity.service.TrackingForegroundService
+import com.superproductivity.superproductivity.share.CaptureKeyStore
+import com.superproductivity.superproductivity.share.ShareUploadWorker
 import com.superproductivity.superproductivity.widget.CaptureInbox
+import com.superproductivity.superproductivity.widget.NotificationActionQueue
 import com.superproductivity.superproductivity.widget.ReminderDoneQueue
 import com.superproductivity.superproductivity.widget.ReminderSnoozeQueue
 import com.superproductivity.superproductivity.widget.ReminderTapQueue
@@ -183,14 +186,22 @@ class JavaScriptInterface(
         callJavaScriptFunction(FN_PREFIX + "clearDbCallback(" + JSONObject.quote(requestId) + ")")
     }
 
+    /** The web app finished initialising, including after a reload. */
+    @Suppress("unused")
+    @JavascriptInterface
+    fun notifyFrontendReady() {
+        if (activity is com.superproductivity.superproductivity.CapacitorMainActivity) {
+            activity.runOnUiThread {
+                activity.onFrontendReady()
+            }
+        }
+    }
+
+    /** The former name of [notifyFrontendReady], still called by older web bundles. */
     @Suppress("unused")
     @JavascriptInterface
     fun triggerGetShareData() {
-        if (activity is com.superproductivity.superproductivity.CapacitorMainActivity) {
-            activity.runOnUiThread {
-                activity.flushPendingShareIntent()
-            }
-        }
+        notifyFrontendReady()
     }
 
     @Suppress("unused")
@@ -220,36 +231,7 @@ class JavaScriptInterface(
     @JavascriptInterface
     fun stopTrackingService() {
         safeCall("Failed to stop tracking service") {
-            val intent = Intent(activity, TrackingForegroundService::class.java)
-            if (TrackingForegroundService.isStartPending || TrackingForegroundService.isTracking) {
-                // A startForegroundService() may still be promoting: stopping via
-                // stopService() now could tear it down before startForeground()
-                // runs and crash with ForegroundServiceDidNotStartInTimeException.
-                // Routing as ACTION_STOP through onStartCommand lets it promote
-                // first, then stop cleanly.
-                intent.action = TrackingForegroundService.ACTION_STOP
-                try {
-                    activity.startService(intent)
-                } catch (e: IllegalStateException) {
-                    // App is in the background: startService() is disallowed here.
-                    // Only fall back to stopService() if no start is still pending
-                    // — stopping a not-yet-promoted service would re-trigger the
-                    // same crash. If a start IS pending, leave it: the pending
-                    // start promotes and a later foreground sync stops it cleanly.
-                    Log.d(TAG, "stopTrackingService: app backgrounded, falling back to stopService()", e)
-                    if (!TrackingForegroundService.isStartPending) {
-                        activity.stopService(Intent(activity, TrackingForegroundService::class.java))
-                        // onDestroy never runs if no instance is alive: clear
-                        // the persisted session directly so it is never recovered.
-                        TrackingForegroundService.clearState(activity)
-                    }
-                }
-            } else {
-                activity.stopService(intent)
-                // In a fresh process after a kill nothing is in memory, but the
-                // session may still be persisted with no service to clear it.
-                TrackingForegroundService.clearState(activity)
-            }
+            TrackingForegroundService.requestStop(activity)
         }
     }
 
@@ -503,6 +485,41 @@ class JavaScriptInterface(
         }
     }
 
+    /**
+     * Non-destructive read of the shares the app may import, as a JSON array of
+     * v1 capture payloads with their `id`, oldest first. Takes over shares still
+     * waiting for their SuperSync upload (none in flight), since the app is
+     * open, and moves a share queued by the previous app version into the
+     * inbox first. Returns null if the inbox could not be read.
+     */
+    @Suppress("unused")
+    @JavascriptInterface
+    fun getPendingShares(): String? {
+        return try {
+            val inbox = CaptureInbox.forContext(activity)
+            ShareIntentQueue.migrateInto(activity, inbox)
+            for (id in inbox.takeOverUploads()) {
+                ShareUploadWorker.cancel(activity, id)
+            }
+            inbox.pendingSharesJson()
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to read shares from the capture inbox", e)
+            null
+        }
+    }
+
+    /**
+     * Mirrors the account's SuperSync capture public key (base64 SPKI) while
+     * capture is on; an empty string clears it and stops share uploads.
+     */
+    @Suppress("unused")
+    @JavascriptInterface
+    fun setCapturePublicKey(publicKeySpki: String) {
+        safeCall("Failed to set capture public key") {
+            CaptureKeyStore.set(activity, publicKeySpki)
+        }
+    }
+
     /** Delete one capture after the app has persisted its task. */
     @Suppress("unused")
     @JavascriptInterface
@@ -535,23 +552,6 @@ class JavaScriptInterface(
         TaskListWidgetProvider.refreshAll(activity)
     }
 
-    /**
-     * Pull-based retrieval of pending share data persisted in SharedPreferences.
-     * Clears both SharedPreferences and in-memory pendingShareIntent to prevent duplicates.
-     * @return JSON string of share data, or null if none pending
-     */
-    @Suppress("unused")
-    @JavascriptInterface
-    fun getPendingShareData(): String? {
-        val data = ShareIntentQueue.getAndClear(activity)
-        if (activity is com.superproductivity.superproductivity.CapacitorMainActivity) {
-            activity.runOnUiThread {
-                activity.clearPendingShareIntent()
-            }
-        }
-        return data
-    }
-
     @Suppress("unused")
     @JavascriptInterface
     fun getReminderTapQueue(): String? {
@@ -570,6 +570,33 @@ class JavaScriptInterface(
         return ReminderSnoozeQueue.getAndClear(activity)
     }
 
+    /**
+     * Tracking notification Pause/Done taps, applied natively already (#10683).
+     * JSON array of `{type, taskId, elapsedMs, at}` or null; clears the queue.
+     */
+    @Suppress("unused")
+    @JavascriptInterface
+    fun getTrackingActionQueue(): String? {
+        return NotificationActionQueue.getAndClearTracking(activity)
+    }
+
+    /**
+     * Focus-mode notification Pause/Resume/Skip/Complete taps (#10683).
+     * JSON array of `{type, at}` or null; clears the queue.
+     */
+    @Suppress("unused")
+    @JavascriptInterface
+    fun getFocusActionQueue(): String? {
+        return NotificationActionQueue.getAndClearFocus(activity)
+    }
+
+    /** Epoch ms of the latest remote-tracking Stop tap, or null; clears it. */
+    @Suppress("unused")
+    @JavascriptInterface
+    fun getRemoteTrackingStopQueue(): String? {
+        return NotificationActionQueue.getAndClearRemoteStop(activity)
+    }
+
     @Suppress("unused")
     @JavascriptInterface
     fun setSuperSyncCredentials(baseUrl: String, accessToken: String) {
@@ -584,6 +611,7 @@ class JavaScriptInterface(
     fun clearSuperSyncCredentials() {
         safeCall("Failed to clear SuperSync credentials") {
             BackgroundSyncCredentialStore.clear(activity)
+            CaptureKeyStore.set(activity, "")
             SyncReminderScheduler.cancel(activity)
         }
     }

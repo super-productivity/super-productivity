@@ -17,6 +17,7 @@ import { IPC } from './shared-with-frontend/ipc-events.const';
 import { initBackupAdapter } from './backup';
 import { initLocalFileSyncAdapter } from './local-file-sync';
 import { initFullScreenBlocker } from './full-screen-blocker';
+import { initLauncherShortcuts } from './launcher-shortcuts';
 import { CONFIG } from './CONFIG';
 import { lazySetInterval } from './shared-with-frontend/lazy-set-interval';
 import { initIndicator } from './indicator';
@@ -313,6 +314,7 @@ export const startApp = (): void => {
   appIN.on('ready', () => initBackupAdapter());
   appIN.on('ready', () => initLocalFileSyncAdapter());
   appIN.on('ready', () => initFullScreenBlocker(IS_DEV));
+  appIN.on('ready', () => initLauncherShortcuts(appIN, () => mainWin));
 
   if (!isDisableTray) {
     appIN.on('ready', createIndicator);
@@ -406,15 +408,12 @@ export const startApp = (): void => {
     }, CONFIG.IDLE_PING_INTERVAL);
     // --------END IDLE HANDLING---------
 
-    // Track whether window was visible before suspend/lock so we only
-    // restore keyboard focus for windows that were actually in use.
-    // Using showOrFocus() unconditionally would surface hidden/minimized
-    // windows on every wake/unlock — a UX regression.
-    let wasVisibleBeforeSuspend = false;
-
+    // Don't raise or focus the window on resume/unlock: it stole focus from the
+    // app the user was in (#10726, #10700). The OS restores the previous
+    // foreground window itself; the electron#20464 workaround that used to run
+    // here targets the post-reboot case and lives in showOrFocus()/ready-to-show.
     powerMonitor.on('suspend', () => {
       log('powerMonitor: System suspend detected');
-      wasVisibleBeforeSuspend = mainWin.isVisible() && !mainWin.isMinimized();
       setIsLocked(true);
       suspendStart = Date.now();
       mainWin.webContents.send(IPC.SUSPEND);
@@ -422,7 +421,6 @@ export const startApp = (): void => {
 
     powerMonitor.on('lock-screen', () => {
       log('powerMonitor: Screen lock detected');
-      wasVisibleBeforeSuspend = mainWin.isVisible() && !mainWin.isMinimized();
       setIsLocked(true);
       suspendStart = Date.now();
       mainWin.webContents.send(IPC.SUSPEND);
@@ -434,10 +432,6 @@ export const startApp = (): void => {
       setIsLocked(false);
       sendIdleMsgIfOverMin(idleTime);
       mainWin.webContents.send(IPC.RESUME);
-      // Restore keyboard focus only if window was visible before suspend (electron#20464)
-      if (wasVisibleBeforeSuspend) {
-        showOrFocus(mainWin);
-      }
     });
 
     powerMonitor.on('unlock-screen', () => {
@@ -446,10 +440,6 @@ export const startApp = (): void => {
       setIsLocked(false);
       sendIdleMsgIfOverMin(idleTime);
       mainWin.webContents.send(IPC.RESUME);
-      // Restore keyboard focus only if window was visible before lock (electron#20464)
-      if (wasVisibleBeforeSuspend) {
-        showOrFocus(mainWin);
-      }
     });
   });
 

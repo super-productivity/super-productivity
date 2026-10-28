@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { of } from 'rxjs';
+import { firstValueFrom, of } from 'rxjs';
 import { resolveContextTheme, WorkContextService } from './work-context.service';
 import { SYSTEM_ENTITY_THEMES } from './work-context-default-theme.util';
 import {
@@ -8,7 +8,8 @@ import {
   WORK_CONTEXT_DEFAULT_THEME,
 } from './work-context.const';
 import { DEFAULT_PROJECT, INBOX_PROJECT } from '../project/project.const';
-import { TaskWithSubTasks } from '../tasks/task.model';
+import { DEFAULT_TASK, Task, TaskWithSubTasks } from '../tasks/task.model';
+import { TASK_FEATURE_NAME } from '../tasks/store/task.reducer';
 import { MockStore, provideMockStore } from '@ngrx/store/testing';
 import { provideMockActions } from '@ngrx/effects/testing';
 import { Router } from '@angular/router';
@@ -557,6 +558,14 @@ describe('WorkContextService - getDoneTodayInArchive', () => {
     jasmine.clock().uninstall();
   });
 
+  it('doneTodayArchived$ falls back to 0 when the archive read fails', async () => {
+    taskArchiveServiceMock.loadYoung.and.returnValue(Promise.reject(new Error('idb')));
+
+    const result = await firstValueFrom(service.doneTodayArchived$);
+
+    expect(result).toBe(0);
+  });
+
   it('does not count a task done yesterday (different logical day)', async () => {
     dateServiceMock.isToday.and.returnValue(false);
     taskArchiveServiceMock.loadYoung.and.returnValue(
@@ -718,6 +727,42 @@ describe('WorkContextService - activeWorkContext$ distinctUntilChanged', () => {
 
     ttSub.unsubscribe();
     sub.unsubscribe();
+  });
+
+  it('keeps unchanged task objects when a task is added to or moved in the list', () => {
+    const tasks = ['A', 'B', 'C'].map(
+      (id): Task => ({ ...DEFAULT_TASK, id, projectId: 'P', title: id }),
+    );
+    store.setState({
+      workContext: { activeId: TODAY_TAG.id, activeType: 'TAG' },
+      tag: { entities: {}, ids: [] },
+      project: { entities: {}, ids: [] },
+      [TASK_FEATURE_NAME]: {
+        ids: tasks.map((t) => t.id),
+        entities: Object.fromEntries(tasks.map((t) => [t.id, t])),
+      },
+    });
+    const showTaskIds = (taskIds: string[]): void => {
+      store.overrideSelector(selectActiveWorkContext, { ...CTX1, taskIds });
+      store.refreshState();
+    };
+    showTaskIds(['A', 'B']);
+    const lists: TaskWithSubTasks[][] = [];
+    const sub = service.mainListTasks$.subscribe((list) => lists.push(list));
+
+    showTaskIds(['A', 'B', 'C']);
+    showTaskIds(['C', 'A', 'B']);
+    sub.unsubscribe();
+
+    expect(lists.length).toBe(3);
+    const [[a, b], added, moved] = lists;
+    expect(added.map((t) => t.id)).toEqual(['A', 'B', 'C']);
+    expect(added[0]).toBe(a);
+    expect(added[1]).toBe(b);
+    expect(moved.map((t) => t.id)).toEqual(['C', 'A', 'B']);
+    expect(moved[0]).toBe(added[2]);
+    expect(moved[1]).toBe(a);
+    expect(moved[2]).toBe(b);
   });
 });
 

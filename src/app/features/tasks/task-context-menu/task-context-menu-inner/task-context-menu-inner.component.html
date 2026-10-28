@@ -8,7 +8,7 @@
 
 <mat-menu
   #contextMenu="matMenu"
-  class="mat-menu-wide"
+  class="mat-menu-wide mat-menu-grouped"
   yPosition="below"
   xPosition="after"
   [backdropClass]="
@@ -151,6 +151,8 @@
     </button>
   }
 
+  <mat-divider></mat-divider>
+
   @if (isAdvancedControls() && !task.parentId && !task.isDone) {
     <button
       (click)="addSubTask()"
@@ -214,13 +216,30 @@
       <span class="key-i">{{ kb.taskMoveToProject }}</span>
     </button>
   }
+  <button
+    #priorityMenuTrigger="matMenuTrigger"
+    [matMenuTriggerFor]="priorityMenu"
+    mat-menu-item
+    [menuTouchFix]="priorityMenuTrigger"
+    (menuOpened)="focusCheckedSubmenuItem(priorityMenu)"
+  >
+    <span class="menuItemLeft">
+      <mat-icon>priority_high</mat-icon>
+      {{ T.F.TASK.CMP.PRIORITY | translate }}
+    </span>
+  </button>
+
+  <mat-divider></mat-divider>
+
   @if (task.parentId) {
     <button
       (click)="convertToMainTask()"
       mat-menu-item
     >
-      <mat-icon>subdirectory_arrow_left</mat-icon>
-      {{ T.F.TASK.CMP.CONVERT_TO_PARENT_TASK | translate }}
+      <span class="menuItemLeft">
+        <mat-icon>subdirectory_arrow_left</mat-icon>
+        {{ T.F.TASK.CMP.CONVERT_TO_PARENT_TASK | translate }}
+      </span>
     </button>
   }
   @if (
@@ -262,19 +281,6 @@
     </button>
   }
 
-  <button
-    #priorityMenuTrigger="matMenuTrigger"
-    [matMenuTriggerFor]="priorityMenu"
-    mat-menu-item
-    [menuTouchFix]="priorityMenuTrigger"
-    (menuOpened)="focusCheckedSubmenuItem(priorityMenu)"
-  >
-    <span class="menuItemLeft">
-      <mat-icon>priority_high</mat-icon>
-      {{ T.F.TASK.CMP.PRIORITY | translate }}
-    </span>
-  </button>
-
   @if (isAdvancedControls() && !task.isDone && (!task.parentId || isInSubTaskList)) {
     <button
       #reorderMenuTrigger="matMenuTrigger"
@@ -286,63 +292,6 @@
       <span class="menuItemLeft">
         <mat-icon>swap_vert</mat-icon>
         {{ T.F.TASK.CMP.REORDER | translate }}
-      </span>
-    </button>
-  }
-
-  <!--TODO maybe handle dynamically -->
-  @if (task.issueId && task.issueType !== ICAL_TYPE) {
-    <a
-      [href]="issueUrl$ | async"
-      mat-menu-item
-      style="color: inherit"
-      target="_blank"
-    >
-      <mat-icon [svgIcon]="task.issueType | issueIcon"></mat-icon>
-      {{ T.F.TASK.CMP.OPEN_ISSUE | translate }}
-    </a>
-  }
-  @if (task.issueId && task.issueType !== ICAL_TYPE) {
-    <button
-      (click)="updateIssueData()"
-      mat-menu-item
-    >
-      <mat-icon [svgIcon]="task.issueType | issueIcon"></mat-icon>
-      {{ T.F.TASK.CMP.UPDATE_ISSUE_DATA | translate }}
-    </button>
-  }
-  @if (isPlainspaceHandoff) {
-    <button
-      #plainspaceAssignMenuTrigger="matMenuTrigger"
-      [matMenuTriggerFor]="plainspaceAssignMenu"
-      mat-menu-item
-      [menuTouchFix]="plainspaceAssignMenuTrigger"
-      (menuOpened)="loadPlainspaceMembers()"
-    >
-      <span class="menuItemLeft">
-        <mat-icon>person_add</mat-icon>
-        {{ T.PLAINSPACE.HANDOFF.ASSIGN_TO | translate }}
-      </span>
-    </button>
-    <button
-      (click)="handOffPlainspaceTask(null)"
-      mat-menu-item
-    >
-      <mat-icon>group</mat-icon>
-      {{ T.PLAINSPACE.HANDOFF.RELEASE | translate }}
-    </button>
-  }
-  @if (pluginTaskContextMenuEntries().length) {
-    <button
-      #pluginTaskActionsMenuTrigger="matMenuTrigger"
-      [matMenuTriggerFor]="pluginTaskActionsMenu"
-      mat-menu-item
-      [menuTouchFix]="pluginTaskActionsMenuTrigger"
-      (menuOpened)="focusFirstSubmenuItem(pluginTaskActionsMenu)"
-    >
-      <span class="menuItemLeft">
-        <mat-icon>extension</mat-icon>
-        {{ T.PLUGINS.TASK_CONTEXT_MENU_ACTIONS | translate }}
       </span>
     </button>
   }
@@ -372,6 +321,73 @@
       <span class="key-i">{{ kb.taskDuplicate }}</span>
     </button>
   }
+
+  <mat-divider></mat-divider>
+
+  <!--TODO maybe handle dynamically -->
+  @if (task.issueId && task.issueType !== ICAL_TYPE) {
+    <a
+      [href]="issueUrl$ | async"
+      mat-menu-item
+      style="color: inherit"
+      target="_blank"
+    >
+      <span class="menuItemLeft">
+        <mat-icon [svgIcon]="task.issueType | issueIcon"></mat-icon>
+        {{ T.F.TASK.CMP.OPEN_ISSUE | translate }}
+      </span>
+    </a>
+  }
+  @if (task.issueId && task.issueType !== ICAL_TYPE) {
+    <button
+      (click)="updateIssueData()"
+      mat-menu-item
+    >
+      <span class="menuItemLeft">
+        <mat-icon [svgIcon]="task.issueType | issueIcon"></mat-icon>
+        {{ T.F.TASK.CMP.UPDATE_ISSUE_DATA | translate }}
+      </span>
+    </button>
+  }
+  @if (isPlainspaceHandoff) {
+    <button
+      #plainspaceAssignMenuTrigger="matMenuTrigger"
+      [matMenuTriggerFor]="plainspaceAssignMenu"
+      mat-menu-item
+      [menuTouchFix]="plainspaceAssignMenuTrigger"
+      (menuOpened)="loadPlainspaceMembers()"
+    >
+      <span class="menuItemLeft">
+        <mat-icon>person_add</mat-icon>
+        {{ T.PLAINSPACE.HANDOFF.ASSIGN_TO | translate }}
+      </span>
+    </button>
+    <button
+      (click)="handOffPlainspaceTask(null)"
+      mat-menu-item
+    >
+      <span class="menuItemLeft">
+        <mat-icon>group</mat-icon>
+        {{ T.PLAINSPACE.HANDOFF.RELEASE | translate }}
+      </span>
+    </button>
+  }
+  @if (pluginTaskContextMenuEntries().length) {
+    <button
+      #pluginTaskActionsMenuTrigger="matMenuTrigger"
+      [matMenuTriggerFor]="pluginTaskActionsMenu"
+      mat-menu-item
+      [menuTouchFix]="pluginTaskActionsMenuTrigger"
+      (menuOpened)="focusFirstSubmenuItem(pluginTaskActionsMenu)"
+    >
+      <span class="menuItemLeft">
+        <mat-icon>extension</mat-icon>
+        {{ T.PLUGINS.TASK_CONTEXT_MENU_ACTIONS | translate }}
+      </span>
+    </button>
+  }
+
+  <mat-divider></mat-divider>
 
   @if (!task.isDone) {
     <button

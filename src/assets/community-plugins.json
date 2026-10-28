@@ -197,5 +197,31 @@
       "downloadUrl": "https://github.com/SileboxUnderfined/SuperGile/releases/download/v0.1.1/supergile-0.1.1.zip",
       "sha256": "67ebf31649f745950f38da4f58f6bf43ed73e89fb43d5b1537ff626f78fbca76"
     }
+  },
+  {
+    "name": "monday.com Issue Provider",
+    "shortDescription": "Search, import, and sync monday.com board items as Super Productivity tasks, including status/done detection and item updates as comments.",
+    "url": "https://github.com/Zoriot/sp-monday",
+    "author": "Zoriot",
+    "authorUrl": "https://github.com/Zoriot",
+    "id": "monday-issue-provider",
+    "release": {
+      "version": "1.0.0",
+      "downloadUrl": "https://github.com/Zoriot/sp-monday/releases/download/v1.0.0/sp-monday-1.0.0.zip",
+      "sha256": "e4ecd2e726e9f7716e6cd526cf755bc9957f6f0ed342fd62b7df4406d331ba5d"
+    }
+  },
+  {
+    "name": "Timesheet",
+    "shortDescription": "Weekly timesheet and charts of your tracked time: days by project, a 12-week trend, daily targets, manual entries, CSV export, and hours kept after a task is deleted.",
+    "url": "https://github.com/AshrafByte/sp-timesheet",
+    "author": "AshrafByte",
+    "authorUrl": "https://github.com/AshrafByte",
+    "id": "sp-timesheet",
+    "release": {
+      "version": "2.0.1",
+      "downloadUrl": "https://github.com/AshrafByte/sp-timesheet/releases/download/v2.0.1/sp-timesheet-v2.0.1.zip",
+      "sha256": "627d56200730436d0cc70586422ad30512d49da80c041e4e6eb1cf405f4471d0"
+    }
   }
 ]

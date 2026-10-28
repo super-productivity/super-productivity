@@ -4,6 +4,7 @@ import type {
   PluginHttp,
   PluginIssue,
   PluginSearchResult,
+  PluginWorkSession,
 } from '@super-productivity/plugin-api';
 import ICAL from 'ical.js';
 
@@ -25,6 +26,8 @@ interface CaldavCalendarConfig {
   syncRangeWeeks?: string;
   isAutoTimeBlock?: boolean;
   timeBlockCalendarId?: string;
+  isLogWorkSessions?: boolean;
+  workSessionCalendarId?: string;
 }
 
 const getWriteCalendarId = (cfg: CaldavCalendarConfig): string =>
@@ -32,6 +35,9 @@ const getWriteCalendarId = (cfg: CaldavCalendarConfig): string =>
 
 const getTimeBlockCalendarId = (cfg: CaldavCalendarConfig): string =>
   cfg.timeBlockCalendarId || getWriteCalendarId(cfg);
+
+const getWorkSessionCalendarId = (cfg: CaldavCalendarConfig): string =>
+  cfg.workSessionCalendarId || getWriteCalendarId(cfg);
 
 const getReadCalendarIds = (cfg: CaldavCalendarConfig): string[] =>
   cfg.readCalendarIds?.length ? cfg.readCalendarIds : [];
@@ -1200,6 +1206,11 @@ const buildNewEventUrl = (
  * CalDAV UIDs are opaque strings with no charset restriction (unlike Google Calendar). */
 const taskIdToCaldavUid = (taskId: string): string => `sp-${taskId}@super-productivity`;
 
+/** One UID per session, so a task tracked several times gets several events.
+ * The `sp-` prefix keeps these out of read paths like time blocks (`isSpManagedUid`). */
+const workSessionToCaldavUid = (taskId: string, start: number): string =>
+  `sp-session-${taskId}-${start}@super-productivity`;
+
 /**
  * True for events SuperProductivity itself wrote as auto-time-block mirrors of a
  * local task (see `taskIdToCaldavUid`). When a read calendar overlaps the
@@ -1315,6 +1326,24 @@ PluginAPI.registerIssueProvider({
         'Which calendar to create time block events in. Use "Load Calendars" above to populate this list.',
       required: false,
       showIf: 'isAutoTimeBlock',
+      options: [],
+      loadOptions: loadCalendars,
+    },
+    {
+      key: 'isLogWorkSessions',
+      type: 'checkbox' as const,
+      label: 'Add tracked time to calendar',
+      description:
+        'When you stop tracking time on a task or switch tasks, add an event with the actual start and end time. Sessions under a minute are skipped. Only the device that tracked the time adds the event.',
+    },
+    {
+      key: 'workSessionCalendarId',
+      type: 'select' as const,
+      label: 'Tracked time calendar',
+      description:
+        'Which calendar to add tracked time to. Defaults to the default calendar for new events.',
+      required: false,
+      showIf: 'isLogWorkSessions',
       options: [],
       loadOptions: loadCalendars,
     },
@@ -1779,6 +1808,33 @@ PluginAPI.registerIssueProvider({
           if (!isHttpStatus(err, 404)) throw err;
         }
       });
+    },
+
+    async logWorkSession(
+      session: PluginWorkSession,
+      config: Record<string, unknown>,
+      http: PluginHttp,
+    ): Promise<void> {
+      const cfg = config as unknown as CaldavCalendarConfig;
+      const calendarHref = getWorkSessionCalendarId(cfg);
+      if (!calendarHref) {
+        throw new Error(
+          'No calendar configured for tracked time. Please select a calendar in the CalDAV settings.',
+        );
+      }
+      const uid = workSessionToCaldavUid(session.taskId, session.start);
+      const icalData = buildICalEvent({
+        uid,
+        summary: session.title,
+        dtstart: toIcalUtcDateTime(new Date(session.start)),
+        dtend: toIcalUtcDateTime(new Date(session.end)),
+      });
+      await withTransientRetry(() =>
+        http.put(buildNewEventUrl(cfg, calendarHref, uid), icalData, {
+          headers: { 'Content-Type': 'text/calendar; charset=utf-8' },
+          responseType: 'text',
+        }),
+      );
     },
   },
 

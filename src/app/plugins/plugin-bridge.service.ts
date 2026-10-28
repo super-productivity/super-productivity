@@ -126,7 +126,7 @@ import {
   updateSimpleCounter,
   upsertSimpleCounter,
 } from '../features/simple-counter/store/simple-counter.actions';
-import { getDbDateStr } from '../util/get-db-date-str';
+import { DateService } from '../core/date/date.service';
 import { DataInitService } from '../core/data-init/data-init.service';
 import { PluginNodeExecutionElectronApi } from '../../../electron/shared-with-frontend/plugin-node-execution.model';
 
@@ -168,6 +168,7 @@ export class PluginBridgeService implements OnDestroy {
   private _pluginSecretService = inject(PluginSecretService);
   private _dataInitService = inject(DataInitService);
   private _globalConfigService = inject(GlobalConfigService);
+  private _dateService = inject(DateService);
   private _taskContextMenuRegistry = inject(PluginTaskContextMenuRegistryService);
   readonly #nodeExecutionGrantTokens = new Map<string, string>();
   readonly #nodeExecutionApi = this._consumeNodeExecutionApi();
@@ -2122,7 +2123,7 @@ export class PluginBridgeService implements OnDestroy {
    * Gets all simple counters as { [key: string]: number }.
    */
   async getAllCounters(): Promise<{ [key: string]: number }> {
-    const today = getDbDateStr();
+    const today = this._dateService.todayStr();
     const countersArray = await this._store
       .select(selectAllSimpleCounters)
       .pipe(
@@ -2162,7 +2163,7 @@ export class PluginBridgeService implements OnDestroy {
     if (typeof value !== 'number' || !isFinite(value) || value < 0) {
       throw new Error('Invalid counter value: must be a non-negative number');
     }
-    const today = getDbDateStr();
+    const today = this._dateService.todayStr();
 
     // Check if counter already exists
     const existingCounter = await this.getSimpleCounter(id);
@@ -2287,8 +2288,7 @@ export class PluginBridgeService implements OnDestroy {
    * @param value The numeric value.
    */
   async setSimpleCounterToday(id: string, value: number): Promise<void> {
-    const today = getDbDateStr();
-    return this.setSimpleCounterDate(id, today, value);
+    return this.setSimpleCounterDate(id, this._dateService.todayStr(), value);
   }
 
   /**

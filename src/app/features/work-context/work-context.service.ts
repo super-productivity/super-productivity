@@ -1,7 +1,7 @@
 import { inject, Injectable } from '@angular/core';
 import { select, Store } from '@ngrx/store';
 import { toSignal } from '@angular/core/rxjs-interop';
-import { combineLatest, interval, Observable, of, timer } from 'rxjs';
+import { combineLatest, from, interval, Observable, of, timer } from 'rxjs';
 import {
   WorkContext,
   WorkContextAdvancedCfg,
@@ -17,6 +17,7 @@ import {
   delayWhen,
   distinctUntilChanged,
   filter,
+  catchError,
   first,
   map,
   mapTo,
@@ -44,6 +45,7 @@ import {
   selectAllTasksWithSubTasks,
   selectCurrentTaskId,
   selectTasksWithSubTasksByIdsFactory,
+  TaskWithSubTasksCache,
 } from '../tasks/store/task.selectors';
 import {
   getEndOfTodayTime,
@@ -142,6 +144,11 @@ export class WorkContextService {
   private readonly _navigationMeasureName = 'work-view-route';
   private readonly _navigationStartMark = 'work-view-route:start';
   private readonly _navigationEndMark = 'work-view-route:end';
+  // One wrapper cache per list stream. It outlives the selector that
+  // `_getTasksByIds$` mints per id-set, so adding, removing or reordering a
+  // task keeps the other rows' objects and their rows don't re-render.
+  private readonly _mainListTaskCache: TaskWithSubTasksCache = new Map();
+  private readonly _backlogTaskCache: TaskWithSubTasksCache = new Map();
 
   // here because to avoid circular dependencies
   // should be treated as private
@@ -324,7 +331,9 @@ export class WorkContextService {
 
   mainListTasks$: Observable<TaskWithSubTasks[]> = this.mainListTaskIds$.pipe(
     // tap((taskIds: string[]) => Log.log('[WorkContext] Today task IDs:', taskIds)),
-    switchMap((taskIds: string[]) => this._getTasksByIds$(taskIds)),
+    switchMap((taskIds: string[]) =>
+      this._getTasksByIds$(taskIds, this._mainListTaskCache),
+    ),
     // SPAP-19: with per-task referential stability upstream, an unchanged list
     // is length + per-element === equal, so this stops needless re-emissions
     // (and the OnPush row re-renders they trigger) every time a task ticks.
@@ -365,7 +374,7 @@ export class WorkContextService {
   );
 
   backlogTasks$: Observable<TaskWithSubTasks[]> = this.backlogTaskIds$.pipe(
-    switchMap((ids) => this._getTasksByIds$(ids)),
+    switchMap((ids) => this._getTasksByIds$(ids, this._backlogTaskCache)),
     // SPAP-19: see mainListTasks$ — suppress no-op re-emissions of an
     // unchanged (element-wise identical) backlog array.
     distinctUntilChanged(fastArrayCompare),
@@ -408,7 +417,16 @@ export class WorkContextService {
 
   doneTodayArchived$: Observable<number> =
     this._globalTrackingIntervalService.todayDateStr$.pipe(
-      switchMap(() => this.getDoneTodayInArchive()),
+      switchMap(() =>
+        from(this.getDoneTodayInArchive()).pipe(
+          // The work view waits for this count before rendering its empty
+          // state, so a failed archive read must not leave it pending forever.
+          catchError((err) => {
+            Log.err('[WorkContext] Failed to count archived tasks done today', err);
+            return of(0);
+          }),
+        ),
+      ),
     );
 
   isTodayList: boolean = false;
@@ -792,15 +810,18 @@ export class WorkContextService {
   }
 
   // we don't want a circular dependency that's why we do it here...
-  private _getTasksByIds$(ids: string[]): Observable<TaskWithSubTasks[]> {
+  private _getTasksByIds$(
+    ids: string[],
+    cache: TaskWithSubTasksCache,
+  ): Observable<TaskWithSubTasks[]> {
     if (!Array.isArray(ids)) {
       Log.log({ ids });
       throw new Error('Invalid param provided for getByIds$ :(');
     }
     // SPAP-19: mint a fresh per-id-set factory selector (called inside the
-    // switchMap at each call site) so each subscription owns its own memo and
-    // its per-task referential-stability cache.
-    return this._store$.select(selectTasksWithSubTasksByIdsFactory(ids));
+    // switchMap at each call site) so each subscription owns its own memo. The
+    // per-task referential-stability cache belongs to the calling list stream.
+    return this._store$.select(selectTasksWithSubTasksByIdsFactory(ids, cache));
   }
 
   /**

@@ -74,6 +74,105 @@ describe('handlePluginMessage()', () => {
     boundMethods,
   });
 
+  const loadGeneratedIframeApi = (
+    config: PluginIframeConfig,
+  ): {
+    frame: { PluginAPI?: { triggerSync: () => Promise<void> } };
+    parent: { postMessage: jasmine.Spy };
+    source: { postMessage: (data: unknown) => void };
+  } => {
+    const listeners = new Map<string, (event: MessageEvent) => void>();
+    const parent = { postMessage: jasmine.createSpy('postMessage') };
+    const frame: {
+      parent: typeof parent;
+      addEventListener: (name: string, listener: (event: MessageEvent) => void) => void;
+      PluginAPI?: { triggerSync: () => Promise<void> };
+    } = { parent, addEventListener: (name, listener) => listeners.set(name, listener) };
+    const wrapped = createPluginApiScript(config).trim();
+    expect(wrapped.startsWith('<script>')).toBeTrue();
+    expect(wrapped.endsWith('</script>')).toBeTrue();
+    const code = wrapped.slice('<script>'.length, -'</script>'.length);
+    new Function('window', 'setTimeout', code)(frame, window.setTimeout);
+    const source = {
+      postMessage: (data: unknown) =>
+        listeners.get('message')!({ source: parent, data } as unknown as MessageEvent),
+    };
+    return { frame, parent, source };
+  };
+
+  for (const fails of [false, true]) {
+    it(`routes generated triggerSync to the bound API and ${fails ? 'rejects' : 'resolves'} its result`, async () => {
+      let finish!: () => void;
+      let fail!: (error: Error) => void;
+      const operation = new Promise<void>((resolve, reject) => {
+        finish = resolve;
+        fail = reject;
+      });
+      const triggerSync = jasmine.createSpy('triggerSync').and.returnValue(operation);
+      const config = createConfig({
+        createBoundMethods: () => ({ triggerSync }),
+      } as unknown as PluginBridgeService);
+      const { frame, parent, source } = loadGeneratedIframeApi(config);
+      const pending = frame.PluginAPI!.triggerSync();
+      const call = parent.postMessage.calls.mostRecent().args[0];
+      expect(call.method).toBe('triggerSync');
+      const handled = handlePluginMessage(
+        { source, data: call } as unknown as MessageEvent,
+        config,
+      );
+      expect(triggerSync).toHaveBeenCalledOnceWith();
+      let settled = false;
+      pending.then(
+        () => (settled = true),
+        () => (settled = true),
+      );
+      await Promise.resolve();
+      expect(settled).toBeFalse();
+      if (fails) {
+        const rejected = expectAsync(pending).toBeRejectedWithError('sync unavailable');
+        fail(new Error('sync unavailable'));
+        await handled;
+        await rejected;
+      } else {
+        finish();
+        await handled;
+        expect(await pending).toBeUndefined();
+      }
+    });
+  }
+
+  it('does not cancel the bound sync when the generated iframe request times out', async () => {
+    let finish!: () => void;
+    let completed = false;
+    const operation = new Promise<void>((resolve) => (finish = resolve)).then(() => {
+      completed = true;
+    });
+    const triggerSync = jasmine.createSpy('triggerSync').and.returnValue(operation);
+    const config = createConfig({
+      createBoundMethods: () => ({ triggerSync }),
+    } as unknown as PluginBridgeService);
+    jasmine.clock().install();
+    try {
+      const { frame, parent, source } = loadGeneratedIframeApi(config);
+      const pending = frame.PluginAPI!.triggerSync();
+      const call = parent.postMessage.calls.mostRecent().args[0];
+      const handled = handlePluginMessage(
+        { source, data: call } as unknown as MessageEvent,
+        config,
+      );
+      const rejected = expectAsync(pending).toBeRejectedWithError('API call timeout');
+      jasmine.clock().tick(30001);
+      await rejected;
+      expect(completed).toBeFalse();
+      expect(triggerSync).toHaveBeenCalledOnceWith();
+      finish();
+      await handled;
+      expect(completed).toBeTrue();
+    } finally {
+      jasmine.clock().uninstall();
+    }
+  });
+
   it('rebuilds iframe dialog button handlers and returns the selected result', async () => {
     let bridgedDialogCfg:
       | {

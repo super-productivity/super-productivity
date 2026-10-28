@@ -742,11 +742,12 @@ describe('TaskRepeatCfgEffects - Repeatable Subtasks', () => {
       setTimeout(() => {
         expect(emitted).toBe(false);
 
-        // Should still update created (duplicate prevention)
+        // Should still update created (duplicate prevention), but NOT dueDay:
+        // scheduleTaskWithTime owns timed scheduling and clears dueDay; setting
+        // it here re-adds the task to planner.days and shows it twice (#11212)
         const firstOccurrenceStr = getDbDateStr(firstOccurrence);
         expect(taskService.update).toHaveBeenCalledWith('parent-task-id', {
           created: firstOccurrence.getTime(),
-          dueDay: firstOccurrenceStr,
         });
         // Should still update lastTaskCreationDay to the future date
         expect(taskRepeatCfgService.updateTaskRepeatCfg).toHaveBeenCalledWith(
@@ -3003,6 +3004,74 @@ describe('TaskRepeatCfgEffects - Repeatable Subtasks', () => {
       }, 0);
     });
 
+    // #11213: a yearly "on demand" series whose last copy was completed and
+    // archived is replanned by moving its startDate forward to today. Today
+    // is now an occurrence, so today's copy must appear right away instead of
+    // after the next day change.
+    it('should trigger addAllDueToday when startDate is moved forward to today and no live instance exists (#11213)', (done) => {
+      const today = new Date();
+      const todayStr = getDbDateStr(today);
+      const lastCreationStr = getDbDateStr(addDays(today, -10));
+
+      const updatedCfg: TaskRepeatCfgCopy = {
+        ...mockRepeatCfg,
+        repeatCycle: 'YEARLY',
+        repeatEvery: 1,
+        startDate: todayStr,
+        lastTaskCreationDay: lastCreationStr,
+      };
+      actions$ = of(
+        updateTaskRepeatCfg({
+          taskRepeatCfg: { id: 'repeat-cfg-id', changes: { startDate: todayStr } },
+        }),
+      );
+      taskRepeatCfgService.getTaskRepeatCfgById$.and.returnValue(of(updatedCfg));
+      taskService.getTasksByRepeatCfgId$.and.returnValue(of([]));
+
+      const emitted: unknown[] = [];
+      effects.rescheduleTaskOnRepeatCfgUpdate$.subscribe((a) => emitted.push(a));
+
+      setTimeout(() => {
+        expect(emitted).toEqual([]);
+        // The anchor is already before today; it must not be moved.
+        expect(taskRepeatCfgService.updateTaskRepeatCfg).not.toHaveBeenCalled();
+        expect(addTasksForTomorrowService.addAllDueToday).toHaveBeenCalled();
+        done();
+      }, 0);
+    });
+
+    // Completing a repeat-from-completion copy re-anchors startDate and
+    // lastTaskCreationDay to today (updateStartDateOnComplete$). Today is
+    // already processed, so this must not start a full addAllDueToday sweep.
+    it('should not trigger addAllDueToday when today was already processed', (done) => {
+      const todayStr = getDbDateStr(new Date());
+      const updatedCfg: TaskRepeatCfgCopy = {
+        ...mockRepeatCfg,
+        repeatCycle: 'DAILY',
+        repeatEvery: 1,
+        repeatFromCompletionDate: true,
+        startDate: todayStr,
+        lastTaskCreationDay: todayStr,
+      };
+      actions$ = of(
+        updateTaskRepeatCfg({
+          taskRepeatCfg: {
+            id: 'repeat-cfg-id',
+            changes: { startDate: todayStr, lastTaskCreationDay: todayStr },
+          },
+        }),
+      );
+      taskRepeatCfgService.getTaskRepeatCfgById$.and.returnValue(of(updatedCfg));
+      taskService.getTasksByRepeatCfgId$.and.returnValue(of([]));
+
+      effects.rescheduleTaskOnRepeatCfgUpdate$.subscribe();
+
+      setTimeout(() => {
+        expect(addTasksForTomorrowService.addAllDueToday).not.toHaveBeenCalled();
+        done();
+      }, 0);
+    });
+
     // #3589: resuming a paused series on a scheduled day must create today's
     // copy right away, not after the next day change.
     it('should trigger addAllDueToday when a series is resumed on a scheduled day', (done) => {
@@ -4396,10 +4465,10 @@ describe('TaskRepeatCfgEffects - Deterministic Date Scenarios', () => {
       });
 
       expect(emitted).toBe(false);
-      // Should still update created for duplicate prevention
+      // Should still update created for duplicate prevention, but not dueDay
+      // (timed scheduling clears it; #11212)
       expect(taskService.update).toHaveBeenCalledWith('test-task-id', {
         created: new Date(2025, 0, 17, 12, 0, 0, 0).getTime(),
-        dueDay: '2025-01-17',
       });
       expect(taskRepeatCfgService.updateTaskRepeatCfg).toHaveBeenCalledWith(
         'repeat-cfg-id',

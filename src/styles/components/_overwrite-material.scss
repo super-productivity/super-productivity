@@ -520,6 +520,29 @@ body .mat-mdc-button-base .mat-icon {
   max-width: none;
 }
 
+// Opt-in via `<mat-menu class="mat-menu-grouped">` for long action menus whose
+// items are split into groups by unconditional `<mat-divider>`s and wrap icon +
+// label in `.menuItemLeft`. Quiet 20px icons (same as the quick-access row) let
+// the labels lead; Material's default tracking is wider than the app's text.
+.mat-mdc-menu-panel.mat-menu-grouped {
+  --mat-menu-item-label-text-tracking: normal;
+  --mat-menu-item-icon-color: var(--text-color-muted);
+
+  .menuItemLeft > .mat-icon {
+    // Matched set — the glyph must equal its box or it decenters.
+    font-size: 20px;
+    width: 20px;
+    height: 20px;
+  }
+
+  // Groups render conditionally, so a group can be empty: drop the divider
+  // that would double up or sit right under the quick-access row's border.
+  .quick-access + .mat-divider,
+  .mat-divider + .mat-divider {
+    display: none;
+  }
+}
+
 .mat-mdc-menu-content {
   padding: 0 !important;
 }

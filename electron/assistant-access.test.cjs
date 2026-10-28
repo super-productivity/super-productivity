@@ -50,7 +50,12 @@ test('initialize echoes a supported version and advertises tools only', async ()
   assert.deepEqual(reply.body.result, {
     protocolVersion: '2025-06-18',
     capabilities: { tools: {} },
-    serverInfo: { name: 'super-productivity', version: '1.2.3' },
+    serverInfo: {
+      name: 'super-productivity',
+      title: 'Super Productivity',
+      version: '1.2.3',
+      websiteUrl: 'https://super-productivity.com',
+    },
   });
 });
 
@@ -211,6 +216,37 @@ test('only granted tools are listed', () => {
     assert.equal(tool.inputSchema.type, 'object');
     assert.equal(tool.inputSchema.additionalProperties, false);
   }
+});
+
+test('every tool has a title and explicit behaviour hints', () => {
+  const all = tools.listGrantedTools([...READ, 'tasks:read_notes', 'tasks:capture']);
+  for (const tool of all) {
+    assert.ok(tool.title, `${tool.name} needs a title`);
+    assert.equal(tool.annotations.title, tool.title);
+    for (const hint of [
+      'readOnlyHint',
+      'destructiveHint',
+      'idempotentHint',
+      'openWorldHint',
+    ]) {
+      assert.equal(typeof tool.annotations[hint], 'boolean', `${tool.name}.${hint}`);
+    }
+    assert.equal(tool.annotations.openWorldHint, false);
+    if (tool.annotations.readOnlyHint) {
+      assert.equal(tool.annotations.destructiveHint, false);
+    }
+  }
+  const readOnly = all.filter((t) => t.annotations.readOnlyHint).map((t) => t.name);
+  assert.deepEqual(readOnly, [
+    'get_status',
+    'list_tasks',
+    'get_task',
+    'list_projects',
+    'list_tags',
+  ]);
+  const capture = all.find((t) => t.name === 'create_task');
+  assert.equal(capture.annotations.destructiveHint, false);
+  assert.equal(capture.annotations.idempotentHint, false);
 });
 
 test('list_tasks returns summaries only and forwards filters', async () => {

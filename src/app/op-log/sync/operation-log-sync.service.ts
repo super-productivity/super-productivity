@@ -71,7 +71,11 @@ import {
   SyncImportConflictCoordinatorService,
 } from './sync-import-conflict-coordinator.service';
 import { isExampleTaskCreateOp } from '../validation/is-example-task-op.util';
-import { Operation, OperationLogEntry } from '../core/operation.types';
+import { isFullStateOpType, Operation, OperationLogEntry } from '../core/operation.types';
+import {
+  canKeepPendingOnSnapshot,
+  reapplyKeptPendingOps,
+} from './keep-pending-on-snapshot.util';
 import { ValidateStateService } from '../validation/validate-state.service';
 import { extractEntityKeysFromState } from '../persistence/extract-entity-keys';
 import { firstValueFrom } from 'rxjs';
@@ -827,6 +831,7 @@ export class OperationLogSyncService {
       // hydration failure doesn't permanently drop discardable startup ops
       // while leaving the user without the remote snapshot.
       let startupOpIdsToDiscard: string[] = [];
+      let keepPendingOps = false;
 
       if (hasLocalChanges) {
         // Throw LocalDataConflictError if unsynced ops contain meaningful user data
@@ -894,7 +899,11 @@ export class OperationLogSyncService {
             };
           }
 
-          if (gate === 'dialog') {
+          keepPendingOps =
+            gate === 'dialog' &&
+            (await canKeepPendingOnSnapshot(result, unsyncedOps, syncProvider));
+
+          if (gate === 'dialog' && !keepPendingOps) {
             // Client has meaningful user data and clocks can't be auto-resolved -
             // show conflict dialog.
             OpLog.warn(
@@ -917,8 +926,10 @@ export class OperationLogSyncService {
           // snapshot without a dialog by falling through to hydration below.
           startupOpIdsToDiscard = discardableStartupOpIds;
           OpLog.normal(
-            'OperationLogSyncService: Remote snapshot strictly ahead of local clock — ' +
-              'applying snapshot without conflict dialog.',
+            keepPendingOps
+              ? 'OperationLogSyncService: Catch-up snapshot — keeping pending ops on top.'
+              : 'OperationLogSyncService: Remote snapshot strictly ahead of local clock — ' +
+                  'applying snapshot without conflict dialog.',
           );
         } else {
           // Defer the markRejected call until hydration has succeeded — see
@@ -933,52 +944,15 @@ export class OperationLogSyncService {
       }
 
       // Only show confirmation for wholly fresh clients without any local changes
-      if (!hasLocalChanges) {
-        const isFreshClient = await this.isWhollyFreshClient();
-
-        // CRITICAL FIX: Even if op-log is empty, check if NgRx store has meaningful data.
-        // This catches data that existed before the operation-log feature was added.
-        if (
-          isFreshClient &&
-          (await this.syncLocalStateService.hasMeaningfulStoreData())
-        ) {
-          OpLog.warn(
-            'OperationLogSyncService: Fresh client detected with meaningful local data in store. ' +
-              'Throwing LocalDataConflictError for conflict resolution dialog.',
-          );
-
-          // Fresh client (no unsynced ops, no prior sync) — there is no
-          // last-synced clock, so pass null explicitly (SPAP-7).
-          throw new LocalDataConflictError(
-            0, // No unsynced ops, but we have meaningful store data
-            result.snapshotState as Record<string, unknown>,
-            result.snapshotVectorClock,
-            null,
-            result.remoteLastModified,
-          );
-        }
-
-        // Original flow for truly fresh clients (no store data)
-        if (isFreshClient) {
-          OpLog.warn(
-            'OperationLogSyncService: Fresh client detected. Requesting confirmation before accepting snapshot.',
-          );
-
-          const confirmed = this.syncLocalStateService.confirmFreshClientSync(1); // Show as "1 snapshot"
-          if (!confirmed) {
-            OpLog.normal(
-              'OperationLogSyncService: User cancelled fresh client sync. Snapshot not applied.',
-            );
-            this.snackService.open({
-              msg: T.F.SYNC.S.FRESH_CLIENT_SYNC_CANCELLED,
-            });
-            return { kind: 'cancelled' };
-          }
-
-          OpLog.normal(
-            'OperationLogSyncService: User confirmed fresh client sync. Proceeding with snapshot.',
-          );
-        }
+      if (
+        !hasLocalChanges &&
+        !(await this.syncLocalStateService.confirmSnapshotWithoutPendingOps(
+          result,
+          lastSyncedVectorClock,
+        ))
+      ) {
+        this.snackService.open({ msg: T.F.SYNC.S.FRESH_CLIENT_SYNC_CANCELLED });
+        return { kind: 'cancelled' };
       }
 
       const initialUnsyncedOpIds = new Set(unsyncedOps.map((entry) => entry.op.id));
@@ -1006,15 +980,15 @@ export class OperationLogSyncService {
           initialUnsyncedOpIds,
           snapshotIncludedOps,
           lastSyncedVectorClock,
+          keepPendingOps ? { discardOpIds: startupOpIdsToDiscard } : undefined,
         ),
       );
 
       // Now that the remote snapshot is applied, it's safe to drop the
       // startup ops we previously decided were obsolete. Doing this
       // after hydration ensures a hydration failure leaves the queue intact
-      // so the next attempt can retry.
-      await this._discardStartupOps(startupOpIdsToDiscard);
-
+      // so the next attempt can retry. The keep path rejected them in-transaction.
+      if (!keepPendingOps) await this._discardStartupOps(startupOpIdsToDiscard);
       let suffixProcessResult: RemoteOpsProcessingResult | undefined;
       if (postSnapshotOps.length > 0) {
         suffixProcessResult = await this._processRemoteOpsWithStartupCleanup(
@@ -1027,6 +1001,9 @@ export class OperationLogSyncService {
           return { kind: 'blocked_incompatible' };
         }
       }
+      // Kept ops were checked against the old state only; a suffix may skip
+      // validation when every op in it is filtered.
+      if (keepPendingOps) await this.remoteOpsProcessingService.validateAfterSync();
 
       // Persist lastServerSeq after hydration
       if (result.latestServerSeq !== undefined) {
@@ -1516,6 +1493,8 @@ export class OperationLogSyncService {
     // the late-durable-op conflict below classifies never-synced clients the
     // same way as the pre-hydration conflict gate (#9166).
     lastSyncedVectorClock: Record<string, number> | null,
+    // #10972: keep pending ops on top; `discardOpIds` are startup ops to drop.
+    keepPending?: { discardOpIds: readonly string[] },
   ): Promise<void> {
     let deferredActionsOverwrittenBySnapshot: ReturnType<typeof getDeferredActions> = [];
     let didReplaceArchive = false;
@@ -1534,7 +1513,9 @@ export class OperationLogSyncService {
         const lateDurableOps = pendingAtHydrationCutoff.filter(
           (entry) => !initialUnsyncedOpIds.has(entry.op.id),
         );
-        if (lateDurableOps.length > 0) {
+        const keepsLate =
+          keepPending && !lateDurableOps.some((e) => isFullStateOpType(e.op.opType));
+        if (lateDurableOps.length > 0 && !keepsLate) {
           throw new LocalDataConflictError(
             pendingAtHydrationCutoff.length,
             result.snapshotState as Record<string, unknown>,
@@ -1564,8 +1545,14 @@ export class OperationLogSyncService {
             afterArchiveReplacement: () => {
               didReplaceArchive = true;
             },
+            keepPendingOps: keepPending,
           },
         );
+        if (keepPending && didCommitStateLoad) {
+          const { opLogStore, operationApplier, snackService, tabSeqFrontier } = this;
+          const deps = { opLogStore, operationApplier, snackService, tabSeqFrontier };
+          await reapplyKeptPendingOps(deps);
+        }
       } catch (error) {
         hydrationFailed = true;
         hydrationError = error;
@@ -1598,7 +1585,8 @@ export class OperationLogSyncService {
         // Keep looping until both the deferred queue and durable archive work
         // are empty. The final queue check and remote-window close are
         // synchronous, so an action cannot land in the handoff gap.
-        const restoredLocalOpIds = new Set(initialUnsyncedOpIds);
+        // Kept pending ops lost their archive effects with the old archive too.
+        const restoredLocalOpIds = new Set(keepPending ? [] : initialUnsyncedOpIds);
         while (true) {
           while (getDeferredActions().length > 0) {
             await this._processSnapshotDeferredActionsWithRetry();

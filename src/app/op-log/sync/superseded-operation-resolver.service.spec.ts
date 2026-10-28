@@ -1830,6 +1830,54 @@ describe('SupersededOperationResolverService', () => {
           ),
           remoteOp: remoteMoveOp,
         },
+        {
+          description:
+            "cross-section move rejected behind another task's move into its destination",
+          op: {
+            ...remoteMoveOp,
+            id: 'op-section-move-behind-other-task-move',
+            clientId: 'original-client',
+            vectorClock: { original: 3 },
+            timestamp: 5000,
+          },
+          remoteOp: {
+            ...remoteMoveOp,
+            id: 'remote-other-task-move',
+            entityId: 'section-third',
+            entityIds: ['section-third', 'section-right'],
+            payload: {
+              actionPayload: {
+                sectionId: 'section-right',
+                taskId: 'task-other',
+                afterTaskId: null,
+                sourceSectionId: 'section-third',
+              },
+              entityChanges: [],
+            },
+          },
+        },
+        {
+          description: "another task's reorder rejected behind a cross-section move",
+          op: {
+            ...remoteMoveOp,
+            id: 'op-other-task-reorder-behind-move',
+            entityId: 'section-left',
+            entityIds: undefined,
+            payload: {
+              actionPayload: {
+                sectionId: 'section-left',
+                taskId: 'left-anchor',
+                afterTaskId: null,
+                sourceSectionId: 'section-left',
+              },
+              entityChanges: [],
+            },
+            clientId: 'original-client',
+            vectorClock: { original: 3 },
+            timestamp: 5000,
+          },
+          remoteOp: remoteMoveOp,
+        },
       ];
       const unrelatedPendingTaskOp = createMockOperation(
         'unrelated-pending-task',
@@ -1957,14 +2005,18 @@ describe('SupersededOperationResolverService', () => {
 
       it('should keep the LWW fallback when the retained SECTION op does not commute', async () => {
         const localRemoveOp = sectionOps[1].op;
+        // The same task moved into the section it is removed from. A move of a
+        // different task commutes (#10969).
         const nonCommutingMove: Operation = {
           ...remoteMoveOp,
+          entityId: 'section-right',
+          entityIds: ['section-right', 'section-left'],
           payload: {
             actionPayload: {
-              sectionId: 'section-right',
-              taskId: 'different-task',
-              afterTaskId: 'right-anchor',
-              sourceSectionId: 'section-left',
+              sectionId: 'section-left',
+              taskId: 'task-1',
+              afterTaskId: 'left-anchor',
+              sourceSectionId: 'section-right',
             },
             entityChanges: [],
           },

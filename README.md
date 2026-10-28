@@ -2,7 +2,7 @@
 
 <p align="center">
   <strong>
-    An advanced todo list app with timeboxing & time tracking capabilities that supports importing tasks from your calendar, Jira, GitHub and others
+    A to-do list, time tracker and daily planner for focused personal work. Private, offline-first and open source.
   </strong>
 </p>
 

@@ -37,8 +37,23 @@ export interface JsonRpcResultBody {
 
 export type JsonRpcResponseBody = JsonRpcErrorBody | JsonRpcResultBody;
 
+/**
+ * Behaviour hints clients use to decide what may run without asking: read-only
+ * tools may, destructive ones always prompt. All four are explicit, as the
+ * connector directories require. `title` repeats the tool's own title for
+ * 2025-03-26 clients, which only read it here.
+ */
+export interface McpToolAnnotations {
+  title: string;
+  readOnlyHint: boolean;
+  destructiveHint: boolean;
+  idempotentHint: boolean;
+  openWorldHint: boolean;
+}
+
 export interface McpToolDefinition {
   name: string;
+  title: string;
   description: string;
   inputSchema: {
     type: 'object';
@@ -46,6 +61,7 @@ export interface McpToolDefinition {
     required?: string[];
     additionalProperties: false;
   };
+  annotations: McpToolAnnotations;
 }
 
 export interface McpToolResult {
@@ -71,6 +87,14 @@ export interface McpHttpReply {
 }
 
 const MODERN_META_KEY = 'io.modelcontextprotocol/protocolVersion';
+
+// `title` and `websiteUrl` are 2025-11-25 fields; older clients ignore them.
+const toServerInfo = (version: string): Record<string, string> => ({
+  name: 'super-productivity',
+  title: 'Super Productivity',
+  version,
+  websiteUrl: 'https://super-productivity.com',
+});
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -166,7 +190,7 @@ export const handleMcpMessage = async (
           result: {
             protocolVersion,
             capabilities: { tools: {} },
-            serverInfo: { name: 'super-productivity', version: ctx.serverVersion },
+            serverInfo: toServerInfo(ctx.serverVersion),
           },
         },
       };

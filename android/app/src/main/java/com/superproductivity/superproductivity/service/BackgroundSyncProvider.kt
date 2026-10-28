@@ -74,12 +74,16 @@ fun scheduleReminderFromSync(context: Context, reminder: ReminderToSchedule, use
  * @param remindersToSchedule List of reminders to schedule as AlarmManager alarms
  * @param latestSeq The latest server sequence number processed
  * @param hasMore Whether more operations are available (pagination)
+ * @param unreadableTaskIds Task IDs touched by encrypted ops whose payload could
+ *   not be decrypted (e.g. no cached key for a new desktop session), so their
+ *   reminder changes are unknown
  */
 data class ReminderChangeResult(
     val taskIdsToCancel: Set<String>,
     val remindersToSchedule: List<ReminderToSchedule>,
     val latestSeq: Long,
-    val hasMore: Boolean
+    val hasMore: Boolean,
+    val unreadableTaskIds: Set<String> = emptySet(),
 ) {
     /**
      * Fire-time stale check for one alarm: was it cancelled (deleted/done/

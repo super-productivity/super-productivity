@@ -12,6 +12,7 @@ import { createBaseState, createMockTask } from './test-utils';
 import { Task } from '../../../features/tasks/task.model';
 import { WorkContextType } from '../../../features/work-context/work-context.model';
 import { TODAY_TAG } from '../../../features/tag/tag.const';
+import { getDbDateStr } from '../../../util/get-db-date-str';
 
 const sectionStateOf = (sections: Section[]): SectionState => ({
   ids: sections.map((s) => s.id),
@@ -1334,6 +1335,88 @@ describe('sectionSharedMetaReducer', () => {
       expect((result as any)[PROJECT_FEATURE_NAME]).toBe(
         (state as any)[PROJECT_FEATURE_NAME],
       );
+    });
+  });
+
+  describe('addTask for a repeat instance (#10812)', () => {
+    const DAY_MS = 24 * 60 * 60 * 1000;
+    const todayStr = getDbDateStr();
+    const yesterday = new Date(Date.now() - DAY_MS);
+    const previousInstance: Partial<Task> = {
+      repeatCfgId: 'cfg1',
+      projectId: 'project1',
+      dueDay: getDbDateStr(yesterday),
+      created: yesterday.getTime(),
+      isDone: true,
+    };
+    const projectSection = (taskIds: string[]): Section => ({
+      id: 'ps',
+      contextId: 'project1',
+      contextType: WorkContextType.PROJECT,
+      title: 'Morning',
+      taskIds,
+    });
+    const todaySection = (taskIds: string[]): Section => ({
+      id: 'ts',
+      contextId: TODAY_TAG.id,
+      contextType: WorkContextType.TAG,
+      title: 'Routine',
+      taskIds,
+    });
+    const addInstance = (
+      taskOverrides: Partial<Task> = {},
+    ): ReturnType<typeof TaskSharedActions.addTask> =>
+      TaskSharedActions.addTask({
+        task: createMockTask({
+          id: 'rpt_today',
+          repeatCfgId: 'cfg1',
+          projectId: 'project1',
+          dueDay: todayStr,
+          created: Date.now(),
+          ...taskOverrides,
+        }),
+        workContextId: 'project1',
+        workContextType: WorkContextType.PROJECT,
+        isAddToBottom: false,
+        isAddToBacklog: false,
+      });
+    const sectionsAfter = (): SectionState =>
+      (mockReducer.calls.mostRecent().args[0] as any)[
+        SECTION_FEATURE_NAME
+      ] as SectionState;
+
+    it('puts the new instance into the project section that holds the previous one, at its position', () => {
+      const state = stateWith({ a: {}, rpt_yesterday: previousInstance, b: {} }, [
+        projectSection(['a', 'rpt_yesterday', 'b']),
+      ]);
+
+      metaReducer(state, addInstance());
+
+      expect(sectionsAfter().entities['ps']?.taskIds).toEqual([
+        'a',
+        'rpt_today',
+        'rpt_yesterday',
+        'b',
+      ]);
+    });
+
+    it('leaves the sections of other contexts alone', () => {
+      const state = stateWith({ rpt_yesterday: previousInstance }, [
+        { ...projectSection(['rpt_yesterday']), contextId: 'project2' },
+        todaySection(['rpt_yesterday']),
+      ]);
+
+      metaReducer(state, addInstance());
+
+      expect(sectionsAfter()).toBe(state[SECTION_FEATURE_NAME]);
+    });
+
+    it('leaves the sections alone when the previous instance is already archived', () => {
+      const state = stateWith({ a: {} }, [projectSection(['a'])]);
+
+      metaReducer(state, addInstance());
+
+      expect(sectionsAfter()).toBe(state[SECTION_FEATURE_NAME]);
     });
   });
 });

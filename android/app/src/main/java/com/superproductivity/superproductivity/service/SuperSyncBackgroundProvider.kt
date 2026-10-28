@@ -168,6 +168,7 @@ class SuperSyncBackgroundProvider(
         // are scheduled. Ops are in server sequence order, so processing forward
         // ensures the latest op wins: dismiss-then-reschedule keeps only the reschedule.
         val taskIdsToCancel = mutableSetOf<String>()
+        val unreadableTaskIds = mutableSetOf<String>()
 
         for (i in 0 until ops.length()) {
             val serverOp = ops.getJSONObject(i)
@@ -179,6 +180,11 @@ class SuperSyncBackgroundProvider(
             extractRemindersToSchedule(op, payload, tempMap, now)
             val cancelIds = mutableSetOf<String>()
             extractReminderRelevantTaskIds(op, payload, cancelIds)
+            // Needed but undecryptable (no key for its salt yet): the alarm
+            // receiver can't trust a "not stale" answer for these tasks.
+            if (payload.isInitialized() && payload.value == null && op.opt("payload") is String) {
+                collectEntityIds(op, unreadableTaskIds)
+            }
 
             for (id in cancelIds) {
                 taskIdsToCancel.add(id)
@@ -201,7 +207,8 @@ class SuperSyncBackgroundProvider(
             taskIdsToCancel = taskIdsToCancel,
             remindersToSchedule = reminderMap.values.toList(),
             latestSeq = latestSeq,
-            hasMore = hasMore
+            hasMore = hasMore,
+            unreadableTaskIds = unreadableTaskIds,
         )
     }
 

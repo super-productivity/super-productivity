@@ -95,9 +95,9 @@ import { Log, SyncLog } from './app/core/log';
 import { setLegacyKdfWarningHandler } from '@sp/sync-core';
 import { OperationWriteFlushService } from './app/op-log/sync/operation-write-flush.service';
 import { TaskService } from './app/features/tasks/task.service';
-import { LocalRestApiFeatureBridgeService } from './app/features/tasks/local-rest-api-feature-bridge.service';
-import { LOCAL_REST_API_FEATURE_BRIDGE } from './app/core/electron/local-rest-api-feature-bridge';
 import { LOCAL_REST_API_FEATURE_ROUTES } from './app/core/electron/local-rest-api-feature-routes';
+import { LocalRestApiTaskRoutesService } from './app/features/tasks/local-rest-api-task-routes.service';
+import { LocalRestApiFocusRoutesService } from './app/features/focus-mode/local-rest-api-focus-routes.service';
 import { LocalRestApiTaskRepeatCfgRoutesService } from './app/features/task-repeat-cfg/local-rest-api-task-repeat-cfg-routes.service';
 import { LocalRestApiAssistantCaptureRoutesService } from './app/features/tasks/assistant-capture/local-rest-api-assistant-capture-routes.service';
 import { LocalRestApiNoteRoutesService } from './app/features/note/local-rest-api-note-routes.service';
@@ -245,11 +245,17 @@ bootstrapApplication(AppComponent, {
     ShortTimePipe,
     { provide: DateAdapter, useClass: CustomDateAdapter },
     { provide: MatDatepickerIntl, useClass: TranslateMatDatepickerIntl },
-    {
-      provide: LOCAL_REST_API_FEATURE_BRIDGE,
-      useClass: LocalRestApiFeatureBridgeService,
-    },
     { provide: REMOTE_APPLY_LISTENER, useExisting: RecentlyDeletedService },
+    {
+      provide: LOCAL_REST_API_FEATURE_ROUTES,
+      useClass: LocalRestApiTaskRoutesService,
+      multi: true,
+    },
+    {
+      provide: LOCAL_REST_API_FEATURE_ROUTES,
+      useClass: LocalRestApiFocusRoutesService,
+      multi: true,
+    },
     {
       provide: LOCAL_REST_API_FEATURE_ROUTES,
       useClass: LocalRestApiTaskRepeatCfgRoutesService,
