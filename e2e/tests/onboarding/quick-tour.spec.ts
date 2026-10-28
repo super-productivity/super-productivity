@@ -17,6 +17,10 @@ const openFreshApp = async (page: Page): Promise<void> => {
     localStorage.setItem('SUP_EXAMPLE_TASKS_CREATED', 'true');
   });
   await page.goto('/');
+  // The + works before the data has loaded. A task added then misses Today
+  // and the onboarding hints, which only start listening once loaded; the
+  // first tip shows that they are.
+  await expect(page.locator('onboarding-hint')).toContainText('to add your first task');
 };
 
 const addTaskViaComposer = async (page: Page, title: string): Promise<void> => {
@@ -276,6 +280,8 @@ test.describe('Quick tour', () => {
       // Part 1 on phones often ends with the task done: no task steps follow.
       await page.locator('task').first().locator('done-toggle').tap();
       await expect(hint).toContainText('under ☰');
+      // The chip slides after the done task; a tap mid-slide can miss (run 39889225439).
+      await expect(hint.locator('.hint-container')).not.toHaveClass(/is-sliding/);
       await hint.getByRole('button', { name: 'Show me more ›' }).tap();
       await expect(hint).toContainText('Projects and tags live under ☰');
       await expect(hint).toContainText('1 of 3');
@@ -286,8 +292,16 @@ test.describe('Quick tour', () => {
       await expect(addTagBtn).toHaveClass(/onboarding-pulse/);
       await expect(hint).toContainText('Create one with +');
       await addTagBtn.tap();
-      await page.locator('dialog-create-tag input[name="title"]').fill('Phone tag');
-      await page.getByRole('button', { name: 'Save' }).tap();
+      // Phones open dialogs without autofocus, so nothing signals that the form
+      // is ready. In run 40151758322 the title was empty after the fill (likely
+      // cleared by ngModel's initial write) and Save stayed disabled. Refill
+      // until the form has the title.
+      const saveTagBtn = page.getByRole('button', { name: 'Save' });
+      await expect(async () => {
+        await page.locator('dialog-create-tag input[name="title"]').fill('Phone tag');
+        await expect(saveTagBtn).toBeEnabled({ timeout: 1000 });
+      }).toPass();
+      await saveTagBtn.tap();
       await expect(page.locator('dialog-create-tag')).toHaveCount(0);
       await expect(hint).toContainText('Plan the next days');
       await expect(hint).toContainText('2 of 3');

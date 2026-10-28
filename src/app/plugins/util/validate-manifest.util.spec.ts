@@ -9,6 +9,28 @@ const baseManifest: PluginManifest = {
 } as PluginManifest;
 
 describe('validatePluginManifest', () => {
+  it('rejects only a minimum app version known to be newer than the host', () => {
+    for (const [minSupVersion, appVersion, isValid] of [
+      ['19.3.0', '19.2.0', false],
+      ['19.2.0', '19.2.0', true],
+      ['19.1.0', '19.2.0', true],
+      ['unknown', '19.2.0', true],
+      ['19.3.0', 'unknown', true],
+    ] as const) {
+      const result = validatePluginManifest(
+        { ...baseManifest, minSupVersion },
+        appVersion,
+      );
+      expect(result.isValid).withContext(String(minSupVersion)).toBe(isValid);
+      if (!isValid) {
+        const error = result.errors.join(' ');
+        expect(error).toContain(minSupVersion);
+        expect(error).toContain(appVersion);
+        expect(error).toMatch(/update/i);
+      }
+    }
+  });
+
   it('accepts a valid manifest', () => {
     const result = validatePluginManifest(baseManifest);
     expect(result.isValid).toBe(true);

@@ -163,6 +163,17 @@ describe('TaskElectronEffects', () => {
       sub.unsubscribe();
     });
 
+    it('sends nothing to the main process while the badge was never enabled', () => {
+      misc$.next({ isShowDueTaskBadge: false });
+      const counts: number[] = [];
+      const sub = effects.syncDueTaskBadge$.subscribe((count) => counts.push(count));
+      store.overrideSelector(selectTaskSchedulingSnapshot, []);
+      store.refreshState();
+      expect(counts).toEqual([]);
+      expect(window.ea.setDueTaskBadge).not.toHaveBeenCalled();
+      sub.unsubscribe();
+    });
+
     it('publishes the latest count after a sync window without another task change', () => {
       inSyncWindow$.next(true);
       initialSyncGateOpen$.next(false);

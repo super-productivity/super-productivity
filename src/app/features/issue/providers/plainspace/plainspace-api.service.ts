@@ -213,10 +213,23 @@ export class PlainspaceApiService {
   }
 
   /**
-   * Pushes completion and/or title back to Plainspace. Resolves to the echoed
-   * task, or null when the answer is not a task. HTTP errors propagate: the
-   * sync adapter tells a server too old for a field (422) apart from offline
-   * and server errors.
+   * The members of the bound space a task can be handed to (everyone but me).
+   * Errors propagate: a 404 is a server too old to hand tasks off.
+   */
+  getSpaceMembers$(cfg: PlainspaceCfg): Observable<PlainspaceMember[]> {
+    return this._http
+      .get<SPSpaceMembersResponse>(
+        `${this._base(cfg)}/spaces/${encodeURIComponent(cfg.spaceId ?? '')}/members`,
+        { headers: this._headers(cfg) },
+      )
+      .pipe(map((res) => (Array.isArray(res?.members) ? res.members : [])));
+  }
+
+  /**
+   * Pushes completion and/or title back to Plainspace, or hands the task off.
+   * Resolves to the echoed task, or null when the answer is not a task. HTTP
+   * errors propagate: the sync adapter tells a server too old for a field
+   * (422) apart from offline and server errors.
    */
   patchTask$(
     id: string,
@@ -423,6 +436,18 @@ export interface PlainspaceTaskPatch {
   title?: string;
   /** ISO instant, or null for "no time". */
   scheduledAt?: string | null;
+  /** Hands the task to this member of its space; null releases it to the space. */
+  assigneeId?: string | null;
+}
+
+/** A member of a space, as `GET /spaces/:id/members` lists them. */
+export interface PlainspaceMember {
+  id: string;
+  displayName: string;
+}
+
+interface SPSpaceMembersResponse {
+  members: PlainspaceMember[];
 }
 
 /**

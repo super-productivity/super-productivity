@@ -68,7 +68,7 @@ test.describe('Recurring task occurrence and series removal persistence', () => 
     const repeatDialog = page.locator('mat-dialog-container');
     await expect(repeatDialog).toBeVisible({ timeout: 10000 });
     await repeatDialog
-      .getByRole('button', { name: 'Skip for 16/6', exact: true })
+      .getByRole('button', { name: 'Skip for 16/06', exact: true })
       .click();
     const skipConfirmation = page
       .locator('mat-dialog-container')

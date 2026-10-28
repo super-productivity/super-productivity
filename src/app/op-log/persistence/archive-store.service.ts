@@ -224,8 +224,13 @@ export class ArchiveStoreService {
   ): Promise<boolean> {
     return this._withRetryOnClose(async () => {
       await this._ensureInit();
-      const entry = await this._adapter.get(storeName, SINGLETON_KEY);
-      return !!entry;
+      // Count rather than get: a get would deserialize the whole archive (every
+      // archived task) just to learn that it exists, on every startup.
+      const count = await this._adapter.count(storeName, {
+        lower: SINGLETON_KEY,
+        upper: SINGLETON_KEY,
+      });
+      return count > 0;
     });
   }
 

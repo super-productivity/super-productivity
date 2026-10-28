@@ -33,21 +33,24 @@ import { SyncProviderId } from '../../../op-log/sync-providers/provider.const';
 const DELAY_PERMISSIONS = 2000;
 const DELAY_SCHEDULE = 5000;
 
-// How many days ahead we pre-schedule recurring reminders for. Covers the
-// acute case (daily/weekly configs whose next occurrence is days away) while
-// keeping the number of native alarms bounded (one per config). Longer-period
-// configs (e.g. monthly) are picked up the next time the app is opened within
-// this window. See #7850.
+// How many days ahead we pre-schedule recurring reminders for. Every
+// occurrence in this window is armed (up to REPEAT_MAX_SCHEDULED), because
+// nothing re-arms the next one while the app is closed: the native side only
+// shows alarms and restores them on reboot (#10781). Longer-period configs
+// (e.g. monthly) are picked up the next time the app is opened within this
+// window. See #7850.
 const REPEAT_LOOKAHEAD_DAYS = 14;
 
 // Upper bound on how many recurring reminders we pre-schedule in one pass.
 // iOS caps pending local notifications at 64 GLOBALLY (across every reminder
-// effect), silently dropping the rest, and it keeps the soonest-firing ones.
-// We pre-schedule at most one occurrence per config, so this only bites a user
-// with an unusually large number of timed recurring tasks — but when it does we
-// want to deterministically keep the most imminent ones (matching iOS's own
-// keep-soonest behaviour) and leave headroom for the live/due-date effects,
-// rather than letting the OS choose for us. Truncation is logged, never silent.
+// effect), silently dropping the rest, and it keeps the soonest-firing ones;
+// Android allows ~500 alarms per app. Over the cap we keep every config's next
+// occurrence before any config's second (then soonest first), so a weekly
+// config is never crowded out by daily ones, and leave headroom for the
+// live/due-date effects. Truncation is logged, never silent.
+// shortcut: one cap for both platforms, so with many timed daily configs the
+// app-closed coverage shrinks to 32 / configs days (e.g. 5 configs → ~6 days)
+// — raise it on Android only if users report gaps.
 const REPEAT_MAX_SCHEDULED = 32;
 
 // Settle window for the recurring-reminder scheduler. Instance creation
@@ -543,9 +546,9 @@ export class MobileNotificationEffects {
     );
 
   /**
-   * For each active timed recurring config, find its NEXT occurrence within the
-   * lookahead window that still needs a reminder, and compute its deterministic
-   * task id + native trigger time.
+   * For each active timed recurring config, find its upcoming occurrences within
+   * the lookahead window that still need a reminder, and compute their
+   * deterministic task ids + native trigger times.
    *
    * Reuses selectTaskRepeatCfgsForExactDay's projector per day so the
    * isPaused / already-created / deletedInstanceDates / archived-project guards
@@ -557,8 +560,14 @@ export class MobileNotificationEffects {
     activeCfgs: TaskRepeatCfg[],
     now: number,
   ): { taskId: string; triggerAtMs: number; title: string }[] {
-    const result: { taskId: string; triggerAtMs: number; title: string }[] = [];
-    const foundCfgIds = new Set<string>();
+    const result: {
+      taskId: string;
+      triggerAtMs: number;
+      title: string;
+      // 0 for a config's next occurrence, 1 for the one after, …
+      rank: number;
+    }[] = [];
+    const countByCfgId = new Map<string, number>();
 
     // Anchor each day at noon to keep the per-day timestamp clear of DST /
     // midnight edges; getDbDateStr/getRepeatDueWithTime only use the date.
@@ -576,9 +585,6 @@ export class MobileNotificationEffects {
 
       for (const cfg of dueCfgs) {
         const cfgId = cfg.id as string;
-        if (foundCfgIds.has(cfgId)) {
-          continue;
-        }
         // waitForCompletion: the next instance only exists once the current one
         // is completed, so its occurrence cannot be reliably pre-scheduled.
         if (cfg.waitForCompletion) {
@@ -598,28 +604,31 @@ export class MobileNotificationEffects {
           continue;
         }
 
-        foundCfgIds.add(cfgId);
+        const rank = countByCfgId.get(cfgId) ?? 0;
+        countByCfgId.set(cfgId, rank + 1);
         result.push({
           taskId: getRepeatableTaskId(cfgId, getDbDateStr(dayMs)),
           triggerAtMs,
           title: cfg.title || '',
+          rank,
         });
       }
     }
 
-    // Keep the soonest-firing occurrences when over the cap (see
-    // REPEAT_MAX_SCHEDULED). The day loop already yields roughly ascending
-    // order, but sort explicitly so the cap is deterministic.
-    result.sort((a, b) => a.triggerAtMs - b.triggerAtMs);
+    // Over the cap, keep each config's nearer occurrences first, soonest first
+    // within a rank (see REPEAT_MAX_SCHEDULED). Sort explicitly so the cap is
+    // deterministic.
+    result.sort((a, b) => a.rank - b.rank || a.triggerAtMs - b.triggerAtMs);
     if (result.length > REPEAT_MAX_SCHEDULED) {
       Log.log('MobileEffects: capping pre-scheduled repeat reminders', {
         total: result.length,
         cap: REPEAT_MAX_SCHEDULED,
       });
-      return result.slice(0, REPEAT_MAX_SCHEDULED);
     }
 
-    return result;
+    return result
+      .slice(0, REPEAT_MAX_SCHEDULED)
+      .map(({ taskId, triggerAtMs, title }) => ({ taskId, triggerAtMs, title }));
   }
 
   private _notifyPermissionIssue(message?: string): void {

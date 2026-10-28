@@ -84,4 +84,20 @@ describe('getCalendarProviderColor', () => {
       ).toMatch(/^hsl\(/);
     }
   });
+
+  it('uses the color the calendar source reported when none is configured', () => {
+    expect(getCalendarProviderColor(pluginProvider({}), '#fbe983')).toBe('#fbe983');
+  });
+
+  it('prefers a configured color over the calendar source color', () => {
+    expect(getCalendarProviderColor(icalProvider({ color: '#4caf50' }), '#fbe983')).toBe(
+      '#4caf50',
+    );
+  });
+
+  it('ignores an unsafe calendar source color', () => {
+    expect(
+      getCalendarProviderColor(pluginProvider({}), 'url(https://evil.example/b.png)'),
+    ).toMatch(/^hsl\(/);
+  });
 });

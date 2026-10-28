@@ -452,7 +452,7 @@ SCSS token (`_css-variables.scss`) without writing SystemBars' own
 - The var lives only as an inline style on the document, so a web-side reload
   (`window.location.reload()` — language change, PWA update, sync-conflict
   recovery) wipes it. The native dedupe (`lastStatusBarOverlapCssPx`) is reset in
-  `flushPendingShareIntent()` (runs on every frontend (re)load) so the next layout
+  `onFrontendReady()` (runs on every frontend (re)load) so the next layout
   pass re-publishes it; without the reset the unchanged value would be skipped and
   the overlap would regress after a reload.
 
@@ -650,6 +650,36 @@ items to **check**, not to blind-fix — a blind fix risks re-creating #8508.
    `--safe-area-inset-top` resolves to real px there (it was 0 on Android before),
    so connected overlays clamp below the status bar. Likely more correct; re-test
    the overlay matrix.
+
+## Nav-bar overlap check
+
+For reports like "the system's back/home/recents buttons cover the app's
+buttons". `android/run-android-navbar-check.sh` installs a release (default: the
+latest; or a tag / local APK path) on the one attached emulator, switches to
+3-button navigation, captures the main screen and the opened side nav into
+`.tmp/navbar-check/<timestamp>/`, and fails if the lowest app element ends below
+the nav bar's top edge. It prints the WebView version: that, not the API level
+alone, decides SystemBars' branch (see "Capacitor 8.5.2+"), so cover one AVD per
+band. Run it outside the Claude Code sandbox (it needs `/dev/kvm` and the host adb):
+
+```bash
+~/Android/Sdk/emulator/emulator -avd API_35_Pixel_9 &
+android/run-android-navbar-check.sh v19.3.0
+```
+
+Measured 2026-10 on v19.3.0 (Capacitor 8.5.3), fresh install, default theme,
+3-button nav — no overlap on any band:
+
+| AVD                    | WebView | Branch                           | Main / side nav |
+| ---------------------- | ------- | -------------------------------- | --------------- |
+| API_34_Pixel_8a        | 113     | non-passthrough (DecorView pad)  | OK / –          |
+| API_35_Pixel_9         | 151     | passthrough, not edge-to-edge    | OK / OK         |
+| API_36_Pixel_10_Pro_XL | 149     | passthrough, forced edge-to-edge | OK / –          |
+
+Not covered by emulators: OEM skins (One UI, MIUI — ionic-team/capacitor#8622,
+#9462), non-default themes (Liquid Glass adds `--bottom-nav-extra-offset`),
+display/font scaling, and upgraded installs. Ask the reporter for device,
+Android and WebView version, theme and a screenshot before changing inset code.
 
 ## Device test matrix (required before merging IME changes)
 

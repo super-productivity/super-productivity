@@ -115,6 +115,33 @@ const syncedTitle = (page: Page): Promise<unknown> =>
     return task?.issueLastSyncedValues?.title;
   }, TASK_ID);
 
+/** The linked task's title and the fields short syntax would set. */
+const localTask = (page: Page): Promise<Record<string, unknown>> =>
+  page.evaluate((issueId) => {
+    type TaskLike = Record<string, unknown> & { issueId?: string };
+    type StoreLike = {
+      subscribe: (
+        next: (state: { tasks: { entities: Record<string, TaskLike> } }) => void,
+      ) => { unsubscribe: () => void };
+    };
+    const store = (window as unknown as { __e2eTestHelpers: { store: StoreLike } })
+      .__e2eTestHelpers.store;
+    let task: TaskLike | undefined;
+    store
+      .subscribe((state) => {
+        task = Object.values(state.tasks.entities).find((t) => t?.issueId === issueId);
+      })
+      .unsubscribe();
+    return {
+      title: task?.title,
+      tagIds: task?.tagIds,
+      dueDay: task?.dueDay ?? null,
+      dueWithTime: task?.dueWithTime ?? null,
+      timeEstimate: task?.timeEstimate,
+      projectId: task?.projectId,
+    };
+  }, TASK_ID);
+
 /** Restarts the app; the update and import polls run 8 s after load. */
 const restart = async (page: Page, server: FakePlainspace): Promise<void> => {
   const before = successfulPolls(server);
@@ -237,6 +264,51 @@ test.describe('Plainspace Release 1 sync', () => {
     await page.waitForTimeout(2000);
     // The raw tokens never reach the space.
     expect(server.patches.map((p) => p.body)).toEqual([{ title: 'Buy tent and pegs' }]);
+  });
+
+  // A shared title holds text collaborators wrote. Editing it applies short
+  // syntax only to words typed in this edit; the others stay plain text in
+  // the shared title and change no tag, date or estimate.
+  test('editing a shared title keeps the short syntax already in it as text', async ({
+    page,
+    workViewPage,
+    projectPage,
+  }) => {
+    await workViewPage.waitForTaskList();
+    const shared = 'Fix bug #123 #urgent for @fri 30m';
+    const server = await setUp(page, projectPage, shared);
+    const before = await localTask(page);
+
+    await renameTask(page, shared, 'Fix bugs #123 #urgent for @fri 30m');
+    await expect
+      .poll(() => server.tasks.get(TASK_ID)!.title, { timeout: 15000 })
+      .toBe('Fix bugs #123 #urgent for @fri 30m');
+    // Deliberate: a second write or a parse would land meanwhile.
+    await page.waitForTimeout(2000);
+    expect(server.patches.map((p) => p.body)).toEqual([
+      { title: 'Fix bugs #123 #urgent for @fri 30m' },
+    ]);
+    expect(await localTask(page)).toEqual({
+      ...before,
+      title: 'Fix bugs #123 #urgent for @fri 30m',
+    });
+    await expect(page.locator('dialog-confirm')).toHaveCount(0);
+
+    // Syntax typed in this edit still applies, and only it leaves the title.
+    await renameTask(
+      page,
+      'Fix bugs #123 #urgent for @fri 30m',
+      'Fix bugs #123 #urgent for @fri 30m 1h',
+      'Fix bugs #123 #urgent for @fri 30m',
+    );
+    await expect.poll(async () => (await localTask(page)).timeEstimate).toBe(3600000);
+    await page.waitForTimeout(2000);
+    expect(server.patches.length).toBe(1);
+    expect(await localTask(page)).toEqual({
+      ...before,
+      title: 'Fix bugs #123 #urgent for @fri 30m',
+      timeEstimate: 3600000,
+    });
   });
 
   // Found by the test above on the production build: a collaborator's rename

@@ -21,6 +21,8 @@ import {
 import { IssueLog } from '../../../core/log';
 import { getRefreshOnLook$ } from './refresh-on-look';
 import { SyncTriggerService } from '../../../imex/sync/sync-trigger.service';
+import { IS_ONLINE$ } from '../../../util/is-online.token';
+import { pollWhileOnline } from '../../../util/poll-while-online';
 
 @Injectable()
 export class PollIssueUpdatesEffects {
@@ -29,6 +31,7 @@ export class PollIssueUpdatesEffects {
   private readonly _issueService = inject(IssueService);
   private readonly _workContextService = inject(WorkContextService);
   private readonly _syncTriggerService = inject(SyncTriggerService);
+  private readonly _isOnline$ = inject(IS_ONLINE$);
 
   pollIssueTaskUpdatesActions$: Observable<unknown> = this._actions$.pipe(
     ofType(setActiveWorkContext, loadAllData),
@@ -103,12 +106,17 @@ export class PollIssueUpdatesEffects {
   );
 
   private _createUpdatePollTimer(provider: IssueProvider): Observable<unknown> {
-    return merge(
-      timer(
-        DELAY_BEFORE_ISSUE_POLLING,
-        this._issueService.getPollInterval(provider.issueProviderKey),
-      ),
-      getRefreshOnLook$(provider),
+    return pollWhileOnline(
+      this._isOnline$,
+      [
+        timer(
+          DELAY_BEFORE_ISSUE_POLLING,
+          this._issueService.getPollInterval(provider.issueProviderKey),
+        ),
+        getRefreshOnLook$(provider),
+      ],
+      // Same head start as at boot: the sync that reconnecting starts lands first.
+      DELAY_BEFORE_ISSUE_POLLING,
     ).pipe(
       switchMap(() => this._getTasksForProvider(provider)),
       switchMap((issueTasks: Task[]) => {

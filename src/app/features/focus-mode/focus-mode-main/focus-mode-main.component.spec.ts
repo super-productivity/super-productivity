@@ -955,8 +955,9 @@ describe('FocusModeMainComponent - notes panel (issue #5752)', () => {
       controls.querySelectorAll(':scope > button, :scope > a'),
     ) as HTMLElement[];
 
-    expect(buttons.length).toBe(4);
+    expect(buttons.length).toBe(3);
     expect(controls.querySelector('.secondary-actions-menu-btn')).not.toBeNull();
+    expect(controls.querySelector('.cancel-session-btn')).toBeNull();
   });
 
   it('should restore direct secondary session actions and issue points on desktop', () => {
@@ -976,6 +977,7 @@ describe('FocusModeMainComponent - notes panel (issue #5752)', () => {
     expect(controls.querySelector('.open-issue-btn')).not.toBeNull();
     expect(controls.querySelector('.show-notes-btn')).not.toBeNull();
     expect(controls.querySelector('.mini-badge')?.textContent?.trim()).toBe('5');
+    expect(buttons[buttons.length - 1].classList).toContain('cancel-session-btn');
   });
 
   it('should disable the in-session reset cycles button while on the first cycle (#9893)', () => {
@@ -1032,6 +1034,28 @@ describe('FocusModeMainComponent - notes panel (issue #5752)', () => {
     fixture.detectChanges();
 
     expect(component.isFocusNotes()).toBe(true);
+  });
+
+  it('should offer Cancel session in the mobile More menu without a task or Pomodoro', async () => {
+    modeSignal.set(FocusModeMode.Countdown);
+    currentTaskSubject.next(null);
+    fixture.detectChanges();
+
+    const trigger = fixture.nativeElement.querySelector(
+      '.secondary-actions-menu-btn',
+    ) as HTMLButtonElement;
+    trigger.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const cancelButton = Array.from(
+      document.querySelectorAll<HTMLButtonElement>('.mat-mdc-menu-panel button'),
+    ).find((button) => button.textContent?.includes('F.FOCUS_MODE.CANCEL_SESSION'));
+
+    expect(cancelButton).toBeDefined();
+    cancelButton!.click();
+
+    expect(mockStore.dispatch).toHaveBeenCalledWith(actions.cancelFocusSession());
   });
 
   it('should label every icon-only primary session action', () => {

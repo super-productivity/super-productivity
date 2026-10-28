@@ -51,6 +51,10 @@ export interface GapDetectionResult {
   reason?: string;
   /** The syncVersion regressed, but the causal state provably did not. */
   isCosmeticReset: boolean;
+  /** A seq-0 snapshot download lost this client's uploads (#10916). */
+  ownUploadsMissing: boolean;
+  /** See {@link doesRemoteExtendLastSeen} (#10972). */
+  snapshotExtendsLastSeen: boolean;
 }
 
 /** The op-log reads {@link getOpLogBaselineClock} needs. */
@@ -94,6 +98,30 @@ export const isSnapshotBaseUnseen = (
   }
   const comparison = compareVectorClocks(snapshotBaseClock, lastSeenClock);
   return comparison === 'GREATER_THAN' || comparison === 'CONCURRENT';
+};
+
+/**
+ * Whether the remote file lost uploads this client already saw there (#10916):
+ * its own clock entry went backwards while the snapshot base is one this client
+ * has seen. A writer on a stale copy (a folder-sync tool or a server ignoring
+ * If-Match) causes this; a full-state replacement (import, repair, USE_LOCAL)
+ * writes a new base and is excluded, so it still wins silently. A file without
+ * a base (written by v19.1.0 or older) cannot tell the two apart and counts as
+ * missing: a dialog is recoverable, a silent hydration is not.
+ */
+export const areOwnUploadsMissing = (
+  remote: Pick<GapDetectionRemote, 'vectorClock' | 'snapshotBaseClock'>,
+  clientId: string | undefined,
+  lastSeenClock: VectorClock | undefined,
+): boolean => {
+  if (!clientId || !lastSeenClock) {
+    return false;
+  }
+  const lastSeenOwn = lastSeenClock[clientId] ?? 0;
+  return (
+    (remote.vectorClock[clientId] ?? 0) < lastSeenOwn &&
+    !isSnapshotBaseUnseen(remote.snapshotBaseClock, lastSeenClock)
+  );
 };
 
 /**
@@ -235,8 +263,55 @@ export const detectDownloadGap = ({
               ? 'snapshot replacement with an unseen causal base'
               : undefined;
 
-  return { needsGapDetection: reason !== undefined, reason, isCosmeticReset };
+  const ownUploadsMissing =
+    sinceSeq === 0 &&
+    hasSnapshot &&
+    areOwnUploadsMissing(remote, excludeClient, lastSeenClock);
+
+  return {
+    needsGapDetection: reason !== undefined,
+    reason,
+    isCosmeticReset,
+    ownUploadsMissing,
+    snapshotExtendsLastSeen: doesRemoteExtendLastSeen(
+      remote,
+      lastSeenClock,
+      previousExpectedVersion,
+    ),
+  };
 };
+
+/**
+ * #10972: whether the remote only appended to the file this client last
+ * committed, with no full-state replacement since. A seq-0 snapshot of such a
+ * file is a catch-up past trimmed ops, so pending local ops can be kept on top
+ * of it instead of asking the user to pick a side.
+ *
+ * Every normal writer merges the file clock and keeps syncVersion and the
+ * snapshot base. A replacement writes a new base (v19.2.0+); older ones leave
+ * none but reset syncVersion to 1. A legacy replacement whose tail uploads
+ * climbed back past our expected version still passes: a documented residual.
+ */
+export const doesRemoteExtendLastSeen = (
+  remote: Pick<GapDetectionRemote, 'syncVersion' | 'vectorClock' | 'snapshotBaseClock'>,
+  lastSeenClock: VectorClock | undefined,
+  previousExpectedVersion: number,
+): boolean => {
+  if (!lastSeenClock || previousExpectedVersion <= 0) return false;
+  if (remote.syncVersion < previousExpectedVersion) return false;
+  if (!remote.snapshotBaseClock && remote.syncVersion === 1) return false;
+  if (isSnapshotBaseUnseen(remote.snapshotBaseClock, lastSeenClock)) return false;
+  const comparison = compareVectorClocks(remote.vectorClock, lastSeenClock);
+  return comparison === 'GREATER_THAN' || comparison === 'EQUAL';
+};
+
+/** The gap verdicts a file download response forwards to the caller. */
+export const toSnapshotGapFlags = (
+  gap: GapDetectionResult,
+): Pick<GapDetectionResult, 'ownUploadsMissing' | 'snapshotExtendsLastSeen'> => ({
+  ownUploadsMissing: gap.ownUploadsMissing,
+  snapshotExtendsLastSeen: gap.snapshotExtendsLastSeen,
+});
 
 /**
  * #10973: single-file writers trim to exactly MAX_RECENT_OPS, so a shorter

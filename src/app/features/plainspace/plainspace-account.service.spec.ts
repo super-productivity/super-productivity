@@ -344,4 +344,95 @@ describe('PlainspaceAccountService', () => {
       expect(store.dispatch).not.toHaveBeenCalled();
     });
   });
+
+  // A key replaced from the connect dialog: the old key is unknown to SP, so
+  // it is found among the tokens this device holds before it is revoked.
+  describe('findAccountTokens', () => {
+    const HOST = 'https://plainspace.org';
+    const hosted = [
+      { id: 'mine', issueProviderKey: 'PLAINSPACE', host: HOST, token: 'pat_mine' },
+      { id: 'mine-2', issueProviderKey: 'PLAINSPACE', host: HOST, token: 'pat_mine' },
+      { id: 'theirs', issueProviderKey: 'PLAINSPACE', host: HOST, token: 'pat_theirs' },
+      { id: 'dead', issueProviderKey: 'PLAINSPACE', host: HOST, token: 'pat_dead' },
+      {
+        id: 'elsewhere',
+        issueProviderKey: 'PLAINSPACE',
+        host: 'https://self.example',
+        token: 'pat_elsewhere',
+      },
+      { id: 'gh', issueProviderKey: 'GITHUB', host: HOST, token: 'pat_gh' },
+    ] as unknown as IssueProvider[];
+
+    beforeEach(() => {
+      store.overrideSelector(selectAllIssueProviders, hosted);
+      store.refreshState();
+    });
+
+    it('returns the tokens on this host that belong to the email', async () => {
+      const p = service.findAccountTokens(HOST, ' Me@Example.com ');
+      // The providers are read before the checks go out.
+      await new Promise((resolve) => setTimeout(resolve));
+      // Each distinct token on the host is checked once.
+      const reqs = httpMock.match(ME_URL);
+      expect(reqs.map((r) => r.request.headers.get('Authorization')).sort()).toEqual([
+        'Bearer pat_dead',
+        'Bearer pat_mine',
+        'Bearer pat_theirs',
+      ]);
+      for (const req of reqs) {
+        const auth = req.request.headers.get('Authorization');
+        if (auth === 'Bearer pat_dead') {
+          req.flush({ error: 'Invalid' }, { status: 401, statusText: 'Unauthorized' });
+        } else {
+          req.flush({
+            email: auth === 'Bearer pat_mine' ? 'me@example.com' : 'them@example.com',
+            projects: [],
+          });
+        }
+      }
+      expect(await p).toEqual(['pat_mine']);
+    });
+
+    it('replaces the found token on every provider holding it', async () => {
+      const p = service.connect('pat_new', HOST, null, ['pat_mine']);
+      httpMock.expectOne(ME_URL).flush({ email: 'me@example.com', projects: [] });
+      expect(await p).toBe('ok');
+      expect(store.dispatch).toHaveBeenCalledTimes(2);
+      for (const id of ['mine', 'mine-2']) {
+        expect(store.dispatch).toHaveBeenCalledWith(
+          IssueProviderActions.updateIssueProvider({
+            issueProvider: { id, changes: { token: 'pat_new' } },
+          }) as never,
+        );
+      }
+    });
+
+    // Review finding: a replace refused for another account's provider
+    // reconnect had already revoked the found key, so its providers broke.
+    it("still hands the new key to the found token's providers when the reconnect is refused", async () => {
+      store.overrideSelector(selectAllIssueProviders, [
+        ...hosted,
+        {
+          id: 'not-member',
+          issueProviderKey: 'PLAINSPACE',
+          host: HOST,
+          token: 'pat_rejected',
+          spaceId: 'space-x',
+        },
+      ] as unknown as IssueProvider[]);
+      store.refreshState();
+      const p = service.connect('pat_new', HOST, 'pat_rejected', ['pat_mine']);
+      httpMock.expectOne(ME_URL).flush({ email: 'me@example.com', projects: [] });
+      expect(await p).toBe('other-account');
+      expect(store.dispatch).toHaveBeenCalledTimes(2);
+      for (const id of ['mine', 'mine-2']) {
+        expect(store.dispatch).toHaveBeenCalledWith(
+          IssueProviderActions.updateIssueProvider({
+            issueProvider: { id, changes: { token: 'pat_new' } },
+          }) as never,
+        );
+      }
+      expect(service.account()).toBeNull();
+    });
+  });
 });

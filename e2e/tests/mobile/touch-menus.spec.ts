@@ -148,9 +148,10 @@ test.describe('Phone menus (touch)', () => {
     // The date shortcuts carry visible labels: tooltips never show on touch.
     await expect(menu.locator('.quick-access-label')).toHaveText([
       'Today',
-      'Tomorrow',
-      'Next week',
-      'Pick date',
+      // Short weekday names for tomorrow and the first day of next week.
+      /^\w{2,4}$/,
+      /^\w{2,4}$/,
+      'Date',
       // Added to Today, so it is scheduled and can be cleared.
       'Clear',
     ]);

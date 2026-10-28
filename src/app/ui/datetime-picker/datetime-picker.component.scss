@@ -178,7 +178,7 @@
 .form-ctrl-wrapper {
   // No bottom margin: each field already carries ~16px of trailing space, which
   // matches the gap between the stacked fields. Adding a bottom margin here would
-  // double it, leaving whatever follows (repeat button, dialog actions) sitting
+  // double it, leaving whatever follows (e.g. dialog actions) sitting
   // twice as far from the inputs as the inputs sit from each other.
   margin: 0 var(--s2);
   display: flex;
@@ -186,6 +186,26 @@
 
   mat-form-field {
     width: 100%;
+  }
+
+  // Projected controls (see the timeRowEnd slot) size themselves: emulated
+  // encapsulation keeps these styles from reaching them. The row wraps once the
+  // time field would drop below a readable width.
+  .time-row {
+    // Two inputs side by side have a wide natural width; left to it they widen
+    // the dialog surface past the host's max-width, leaving an empty strip on
+    // the right. The row just fills whatever width the rest of the dialog sets
+    // (widening it would also grow the calendar's height).
+    contain: inline-size;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: stretch;
+    column-gap: var(--s);
+
+    .time-form-field {
+      flex: 1 1 180px;
+      width: auto;
+    }
   }
 
   .time-clear-btn {

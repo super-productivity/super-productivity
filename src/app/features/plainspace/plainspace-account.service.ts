@@ -61,11 +61,16 @@ export class PlainspaceAccountService {
    * another account's token (a member of none of the Spaces that held the
    * replaced token) is refused (`other-account`), or every task of those
    * Spaces would read as no longer assigned to me.
+   *
+   * `sameAccountTokens` are further tokens proven to be this account's on this
+   * host (see {@link findAccountTokens}); providers holding them get the new
+   * one too.
    */
   async connect(
     token: string,
     host: string = DEFAULT_HOST,
     replacedToken?: string | null,
+    sameAccountTokens: readonly string[] = [],
   ): Promise<PlainspaceConnectResult> {
     const logoutVersion = this._logoutVersion;
     const previous = this._account();
@@ -93,6 +98,9 @@ export class PlainspaceAccountService {
       (ip) => !!replacedToken && ip.token === replacedToken,
     );
     if (reconnected.length && !reconnected.some(isMember)) {
+      // Replacing the key already revoked these tokens of the new token's own
+      // account: their providers still get it, or they would break too.
+      this._replaceProviderTokens(providers.filter(isMember), sameAccountTokens, token);
       return 'other-account';
     }
     const account: PlainspaceAccount = { host, token, email: res.me.email };
@@ -111,10 +119,45 @@ export class PlainspaceAccountService {
     }
     this._replaceProviderTokens(
       providers.filter(isMember),
-      [replacedToken, isSameAccount ? previous?.token : null],
+      [replacedToken, isSameAccount ? previous?.token : null, ...sameAccountTokens],
       token,
     );
     return 'ok';
+  }
+
+  /**
+   * The tokens this device holds (its account and its Plainspace providers)
+   * that still belong to `email` on `host`. Called before replacing the
+   * account's active key, while it still answers: one account has one active
+   * key, so this finds the key the replacement revokes, and the providers
+   * holding it, also synced from other devices, can get the new one (#8616).
+   */
+  async findAccountTokens(host: string, email: string): Promise<string[]> {
+    const providers = await firstValueFrom(this._store.select(selectAllIssueProviders));
+    const account = this._account();
+    const candidates = new Set(
+      [
+        account?.host === host ? account.token : null,
+        ...providers
+          .filter(
+            (ip): ip is IssueProviderPlainspace => ip.issueProviderKey === 'PLAINSPACE',
+          )
+          .filter((ip) => ip.host === host)
+          .map((ip) => ip.token),
+      ].filter((t): t is string => !!t),
+    );
+    const wanted = email.trim().toLowerCase();
+    const checks = await Promise.all(
+      [...candidates].map(async (token) => {
+        const res = await firstValueFrom(
+          this._api.verifyToken$({ ...DEFAULT_PLAINSPACE_CFG, host, token }),
+        );
+        return res.status === 'ok' && res.me.email.toLowerCase() === wanted
+          ? token
+          : null;
+      }),
+    );
+    return checks.filter((t): t is string => !!t);
   }
 
   logout(): void {
@@ -126,7 +169,7 @@ export class PlainspaceAccountService {
   /** One `updateIssueProvider` op per provider that held a replaced token. */
   private _replaceProviderTokens(
     providers: IssueProviderPlainspace[],
-    replacedTokens: (string | null | undefined)[],
+    replacedTokens: readonly (string | null | undefined)[],
     newToken: string,
   ): void {
     const oldTokens = replacedTokens.filter((t): t is string => !!t && t !== newToken);

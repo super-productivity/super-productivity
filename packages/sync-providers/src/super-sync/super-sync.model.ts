@@ -116,6 +116,8 @@ export interface SuperSyncCaptureGrantInfo {
 
 export interface SuperSyncCaptureGrantList {
   grants: SuperSyncCaptureGrantInfo[];
+  /** Pending captures no listed grant counts (Android shares); absent on older servers. */
+  otherPendingCount?: number;
 }
 
 /**

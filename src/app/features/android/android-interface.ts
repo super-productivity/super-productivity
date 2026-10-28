@@ -4,13 +4,6 @@ import { BehaviorSubject, merge, Observable, ReplaySubject, Subject } from 'rxjs
 import { mapTo } from 'rxjs/operators';
 import { DroidLog } from '../../core/log';
 
-export interface AndroidShareData {
-  title: string;
-  subject: string;
-  type: 'FILE' | 'LINK' | 'IMG' | 'COMMAND' | 'NOTE';
-  path: string;
-}
-
 /**
  * A notification tap from native. Deadline taps arrive as an object (native
  * pushes it as a JS object literal, the pull queue as JSON); all other taps
@@ -81,8 +74,8 @@ export interface AndroidInterface {
   clearDb(rId: string): void; // @deprecated
   clearDbCallback(rId: string): void;
 
-  triggerGetShareData?(): void;
-  getPendingShareData?(): string | null;
+  // Tells native the bundle has initialised (also after a reload).
+  notifyFrontendReady?(): void;
 
   // Foreground service methods for background time tracking
   startTrackingService?(taskId: string, taskTitle: string, timeSpentMs: number): void;
@@ -145,10 +138,19 @@ export interface AndroidInterface {
   // Reminder done queue - get task IDs marked done from notifications
   getReminderDoneQueue?(): string | null;
 
-  // Native capture inbox, holding captures left by the removed startup quick-add
-  // overlay of an older app version. Non-destructive read of a JSON array, or
-  // null if the inbox could not be read; see CaptureInbox.kt.
+  // Tracking / focus-mode / remote-tracking notification actions, applied
+  // natively at tap time and queued for the store (#10683). See
+  // android-notification-action.service.ts for the formats. All clear on read.
+  getTrackingActionQueue?(): string | null;
+  getFocusActionQueue?(): string | null;
+  getRemoteTrackingStopQueue?(): string | null;
+
+  // Native capture inbox (CaptureInbox.kt). Non-destructive reads of a JSON
+  // array, or null if the inbox could not be read. Title-only captures left by
+  // the removed startup quick-add overlay of an older app version:
   getPendingCaptures?(): string | null;
+  // Shares from ShareReceiverActivity, as v1 capture payloads with an `id`:
+  getPendingShares?(): string | null;
   // Delete one capture after its task is persisted. Returns false on failure.
   acknowledgeCapture?(id: string): boolean;
 
@@ -167,8 +169,6 @@ export interface AndroidInterface {
   onPause$: Subject<void>;
   isInBackground$: Observable<boolean>;
   isKeyboardShown$: Subject<boolean>;
-
-  onShareWithAttachment$: Subject<AndroidShareData>;
 
   // Notification action callbacks
   onPauseTracking$: Subject<void>;
@@ -196,12 +196,19 @@ export interface AndroidInterface {
   // start/resume drains are triggered by onResume$ instead)
   onWidgetDoneDrainRequest$: Subject<void>;
 
+  // Contentless "drain now" signal after a tracking/focus/remote-stop notification
+  // tap while the activity is alive; the actions are pulled via the queue getters
+  onNotificationActionDrainRequest$: Subject<void>;
+
   // Background sync credential bridge (for WorkManager-based reminder cancellation)
   setSuperSyncCredentials?(baseUrl: string, accessToken: string): void;
   clearSuperSyncCredentials?(): void;
   // Mirrors the E2EE password so the background worker can decrypt op payloads;
   // '' clears it. Optional: older APKs don't have it.
   setSuperSyncEncryptionPassword?(password: string): void;
+  // Mirrors the SuperSync capture public key (base64 SPKI) so shares upload
+  // sealed while the app is closed; '' clears it. Optional: older APKs.
+  setCapturePublicKey?(publicKeySpki: string): void;
   // Mirrors the reminder settings the background worker must honor when it
   // schedules alarms from synced ops. Optional: older APKs don't have it.
   setBackgroundReminderSettings?(isDisabled: boolean, useAlarmStyle: boolean): void;
@@ -238,7 +245,7 @@ if (IS_ANDROID_WEB_VIEW) {
   androidInterface.onReminderDone$ = new ReplaySubject(20);
   androidInterface.onReminderSnooze$ = new ReplaySubject(20);
   androidInterface.onWidgetDoneDrainRequest$ = new Subject();
-  androidInterface.onShareWithAttachment$ = new ReplaySubject(1);
+  androidInterface.onNotificationActionDrainRequest$ = new Subject();
   androidInterface.isKeyboardShown$ = new BehaviorSubject(false);
 
   androidInterface.isInBackground$ = merge(
@@ -303,18 +310,6 @@ if (IS_ANDROID_WEB_VIEW) {
   // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
   DroidLog.log('Android Web View interfaces initialized', androidInterface);
 
-  // Pull-based: retrieve share data persisted in SharedPreferences (survives process death)
-  try {
-    const pendingShare = androidInterface.getPendingShareData?.();
-    if (pendingShare) {
-      const parsed = JSON.parse(pendingShare);
-      DroidLog.log('Pulled pending share data from SharedPreferences');
-      androidInterface.onShareWithAttachment$.next(parsed);
-    }
-  } catch (e) {
-    DroidLog.err('Failed to parse pending share data', e);
-  }
-
   // Pull-based: retrieve queued tap task ID from notification tap (cold start)
   try {
     const tapTaskId = androidInterface.getReminderTapQueue?.();
@@ -355,6 +350,5 @@ if (IS_ANDROID_WEB_VIEW) {
     DroidLog.err('Failed to parse reminder snooze queue', e);
   }
 
-  // Push-based: sets isFrontendReady=true on native side for warm-start shares
-  androidInterface.triggerGetShareData?.();
+  androidInterface.notifyFrontendReady?.();
 }

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 const originalEnv = { ...process.env };
 
@@ -406,4 +406,36 @@ describe('loadConfigFromEnv - TRUST_PROXY parsing', () => {
       expect(() => loadConfigFromEnv()).toThrow(/Invalid TRUST_PROXY/);
     },
   );
+});
+
+describe('loadConfigFromEnv - capture reviewer code', () => {
+  beforeEach(() => {
+    resetEnv();
+    process.env.CAPTURE_REVIEW_EMAIL = 'demo@example.com';
+    process.env.CAPTURE_REVIEW_CODE = 'REVIEW-ABCD-EFGH-JKMN-PQRS';
+  });
+
+  afterEach(() => {
+    resetEnv();
+    vi.restoreAllMocks();
+  });
+
+  const reviewWarnings = async (): Promise<unknown[][]> => {
+    const { Logger } = await import('../src/logger');
+    const warn = vi.spyOn(Logger, 'warn').mockImplementation(() => undefined);
+    const { loadConfigFromEnv } = await importConfig();
+    loadConfigFromEnv();
+    return warn.mock.calls.filter((args) => String(args[0]).includes('CAPTURE_REVIEW'));
+  };
+
+  // An operator who forgets the connector flag would otherwise see the reviewer
+  // fail with no hint why.
+  it('warns when the reviewer code is set but the connector is off', async () => {
+    expect(await reviewWarnings()).toHaveLength(1);
+  });
+
+  it('does not warn when the connector is on', async () => {
+    process.env.CAPTURE_CONNECTOR_ENABLED = 'true';
+    expect(await reviewWarnings()).toHaveLength(0);
+  });
 });

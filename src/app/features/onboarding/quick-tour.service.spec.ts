@@ -43,6 +43,7 @@ describe('getQuickTourSteps', () => {
     isTimeTrackingEnabled: true,
     isPlannerEnabled: true,
     hasTask: true,
+    isTaskMenuLearned: false,
   };
 
   it('has five steps on desktop, task steps first', () => {
@@ -56,6 +57,16 @@ describe('getQuickTourSteps', () => {
       'planner',
       'want-more',
     ]);
+  });
+
+  it('drops the swipe menu step on touch once part 1 taught it', () => {
+    expect(getQuickTourSteps({ ...ctx, isTouch: true, isTaskMenuLearned: true })).toEqual(
+      ['organize', 'planner', 'want-more'],
+    );
+  });
+
+  it('keeps the desktop task steps when the swipe menu was learned', () => {
+    expect(getQuickTourSteps({ ...ctx, isTaskMenuLearned: true })).toEqual(DESKTOP_STEPS);
   });
 
   it('skips time tracking and Planner when they are switched off', () => {
@@ -311,6 +322,16 @@ describe('QuickTourService', () => {
       expect(service.currentStep()).toBe('organize');
       expect(service.stepNr()).toBe(3);
       expect(service.tourTaskId()).toBe('task-1');
+    });
+
+    it('saves whether the swipe menu was learned', () => {
+      const service = createService();
+      service.start('task-1', true);
+      expect(JSON.parse(localStorage.getItem(LS.QUICK_TOUR_STATE) ?? '')).toEqual({
+        step: 'track-time',
+        taskId: 'task-1',
+        isTaskMenuLearned: true,
+      });
     });
 
     it('ends when the saved step no longer applies', () => {

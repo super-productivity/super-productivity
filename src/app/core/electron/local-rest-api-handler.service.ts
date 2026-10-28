@@ -982,6 +982,8 @@ export class LocalRestApiHandlerService {
                 isIgnoreShortSyntax: true,
               }),
             );
+          } else if (hasOwn(changes, 'dueWithTime')) {
+            this._featureBridge.updateTaskWithDueTime(task, changes);
           } else {
             this._taskService.update(taskId, changes);
           }

@@ -601,9 +601,9 @@ export class FocusModeMainComponent {
     this._store.dispatch(resetCycles());
   }
 
-  exitToPlanning(): void {
-    // Cancelling the session clears tracking and hides the overlay, returning
-    // the user to wherever they were before focus mode (no forced navigation).
+  cancelSession(): void {
+    // Ends the session without logging it: unlike completing, it advances no
+    // Pomodoro cycle and starts no break. Clears tracking and hides the overlay.
     this._store.dispatch(cancelFocusSession());
   }
 

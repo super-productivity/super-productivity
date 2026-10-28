@@ -1,5 +1,6 @@
 import { inject, Injectable } from '@angular/core';
 import { createEffect } from '@ngrx/effects';
+import { combineLatest } from 'rxjs';
 import { distinctUntilChanged, filter, map, tap } from 'rxjs/operators';
 import { IS_ANDROID_WEB_VIEW } from '../../../util/is-android-web-view';
 import { androidInterface } from '../android-interface';
@@ -14,7 +15,7 @@ import { DroidLog } from '../../../core/log';
 import { CurrentProviderPrivateCfg } from '../../../op-log/core/types/sync.types';
 import { isShallowEqual } from '../../../util/is-shallow-equal';
 import { GlobalConfigService } from '../../config/global-config.service';
-import { ReminderConfig } from '../../config/global-config.model';
+import { CaptureKeyConfig, ReminderConfig } from '../../config/global-config.model';
 
 const isNonNull = <T>(value: T | null): value is T => value !== null;
 
@@ -75,6 +76,17 @@ export const getBackgroundReminderSettings = (
   isDisabled: !!cfg?.disableReminders,
   useAlarmStyle: !!cfg?.useAlarmStyleReminders,
 });
+
+/**
+ * The capture public key native code seals Android shares to, or '' when
+ * shares must stay on the device: no SuperSync login, capture off, or a key
+ * from a newer client whose format this version cannot know.
+ */
+export const getCapturePublicKeyForNative = (
+  key: CaptureKeyConfig | null | undefined,
+  hasSuperSyncCredentials: boolean,
+): string =>
+  hasSuperSyncCredentials && key?.v === 1 && key.publicKeySpki ? key.publicKeySpki : '';
 
 /**
  * Mirrors SuperSync credentials to native SharedPreferences so the
@@ -144,6 +156,40 @@ export class AndroidSyncBridgeEffects {
           tap(({ isDisabled, useAlarmStyle }) => {
             // Optional chaining: old APKs don't have this method yet.
             androidInterface.setBackgroundReminderSettings?.(isDisabled, useAlarmStyle);
+          }),
+        ),
+      { dispatch: false },
+    );
+
+  /**
+   * Mirrors the SuperSync capture public key, so a share made while the app is
+   * closed uploads sealed to it (ShareUploader.kt). Native only uploads while
+   * SuperSync credentials are mirrored too; clearing them clears the key.
+   *
+   * SYNC-SAFE without skipWhileApplyingRemoteOps, like the reminder settings:
+   * dispatch:false and an idempotent native call. Capture switched on or off
+   * on another device must reach native, or shares would never upload, or
+   * would keep sealing to a dropped key.
+   */
+  syncCapturePublicKeyToNative$ =
+    IS_ANDROID_WEB_VIEW &&
+    createEffect(
+      () =>
+        combineLatest([
+          this._globalConfigService.cfg$,
+          this._providerManager.currentProviderPrivateCfg$.pipe(
+            map(
+              (cfg) => !!cfg && getSuperSyncCredentialBridgeCommand(cfg).type === 'set',
+            ),
+          ),
+        ]).pipe(
+          map(([cfg, hasCredentials]) =>
+            getCapturePublicKeyForNative(cfg?.sync?.captureKey, hasCredentials),
+          ),
+          distinctUntilChanged(),
+          tap((publicKeySpki) => {
+            // Optional chaining: old APKs don't have this method yet.
+            androidInterface.setCapturePublicKey?.(publicKeySpki);
           }),
         ),
       { dispatch: false },

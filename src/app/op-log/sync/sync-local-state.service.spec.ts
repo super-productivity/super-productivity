@@ -10,6 +10,7 @@ import {
   OperationLogEntry,
   OpType,
 } from '../core/operation.types';
+import { OwnUploadsMissingConflictError } from '../core/errors/sync-errors';
 
 type StateCache = NonNullable<
   Awaited<ReturnType<OperationLogStoreService['loadStateCache']>>
@@ -399,6 +400,43 @@ describe('SyncLocalStateService', () => {
 
       confirmSpy.and.returnValue(true);
       expect(service.confirmOverwriteOfUndecryptableRemoteOps()).toBe(true);
+    });
+  });
+
+  describe('confirmSnapshotWithoutPendingOps', () => {
+    const download = {
+      snapshotState: { task: {} },
+      snapshotVectorClock: { remote: 2 },
+      remoteLastModified: 1,
+    };
+
+    it('throws OwnUploadsMissingConflictError for a synced client whose uploads the remote lost (#10916)', async () => {
+      await expectAsync(
+        service.confirmSnapshotWithoutPendingOps(
+          { ...download, ownUploadsMissing: true },
+          { clientA: 3 },
+        ),
+      ).toBeRejectedWith(jasmine.any(OwnUploadsMissingConflictError));
+    });
+
+    it('lets a synced client hydrate when its uploads are not missing', async () => {
+      expect(
+        await service.confirmSnapshotWithoutPendingOps(download, { clientA: 3 }),
+      ).toBe(true);
+    });
+
+    it('returns false when a fresh client without data declines the snapshot', async () => {
+      opLogStoreSpy.loadStateCache.and.resolveTo(null);
+      opLogStoreSpy.getLastSeq.and.resolveTo(0);
+      spyOn(service, 'hasMeaningfulStoreData').and.resolveTo(false);
+      spyOn(service, 'confirmFreshClientSync').and.returnValue(false);
+
+      expect(
+        await service.confirmSnapshotWithoutPendingOps(
+          { ...download, ownUploadsMissing: true },
+          null,
+        ),
+      ).toBe(false);
     });
   });
 });

@@ -18,6 +18,7 @@ import {
   distinctUntilChanged,
   filter,
   map,
+  skipWhile,
   startWith,
   take,
   tap,
@@ -145,6 +146,9 @@ export class TaskElectronEffects {
             : 0,
         ),
         distinctUntilChanged(),
+        // Opt-in: until a badge was ever shown there is nothing to clear, so
+        // users who never enabled it don't touch the taskbar/dock at all.
+        skipWhile((count) => count === 0),
         tap((count) => {
           if (this._isElectron) {
             const iconDataUrl =

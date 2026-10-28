@@ -63,6 +63,7 @@ export const KEYBOARD_SETTINGS_FORM_CFG: ConfigFormSection<KeyboardConfig> = {
     kbField('goToFocusMode', T.GCF.KEYBOARD.GO_TO_FOCUS_MODE),
     kbField('goToTimeline', T.GCF.KEYBOARD.GO_TO_SCHEDULE),
     kbField('goToScheduledView', T.GCF.KEYBOARD.GO_TO_SCHEDULED_VIEW),
+    kbField('goToPlanner', T.GCF.KEYBOARD.GO_TO_PLANNER),
     kbField('goToSettings', T.GCF.KEYBOARD.GO_TO_SETTINGS),
     kbField('zoomIn', T.GCF.KEYBOARD.ZOOM_IN),
     kbField('zoomOut', T.GCF.KEYBOARD.ZOOM_OUT),

@@ -1,5 +1,10 @@
 import { Page } from '@playwright/test';
 import { expect, test } from '../../fixtures/test.fixture';
+import {
+  activeProviderTab as activeTab,
+  openProviderTab,
+  providerToken,
+} from '../../utils/plainspace-fake';
 
 // Plainspace has no E2E harness in this repo, so its integration API is stubbed
 // here with a small stateful fake that answers with the real wire shapes (`SPTask`,
@@ -127,8 +132,10 @@ const readClipboard = (page: Page): Promise<string> =>
 // The dialog's input is in the DOM before its first change detection binds
 // ngModel (zoneless), and that binding writes '' over anything filled earlier.
 // The Connect label renders in the same pass, so wait for it before filling.
+// The dialog opens on email-code connect; pasting a token is its browser step.
 const connectWithToken = async (page: Page, token: string): Promise<void> => {
   const connectDialog = page.locator('plainspace-connect-dialog');
+  await connectDialog.getByRole('button', { name: 'Use the browser instead' }).click();
   const connectBtn = connectDialog.getByRole('button', { name: 'Connect', exact: true });
   await expect(connectBtn).toBeVisible();
   await connectDialog.locator('input[type="password"]').fill(token);
@@ -351,43 +358,3 @@ test.describe('Plainspace Release 0', () => {
     await expect(reconnectNotice).toHaveCount(0);
   });
 });
-
-const activeTab = (page: Page): ReturnType<Page['locator']> =>
-  page.locator('issue-panel .mat-mdc-tab-body-active issue-provider-tab');
-
-/**
- * Selects the issue panel tab whose header names the given space id. Retried as
- * a whole: right after the panel opens its provider tabs may not be rendered
- * yet (`count()` doesn't wait) and a click during the open animation can be
- * lost, which made a single pass fail on slower CI runners.
- */
-const openProviderTab = async (page: Page, spaceId: string): Promise<void> => {
-  const tabs = page.locator('issue-panel .mat-mdc-tab');
-  const header = activeTab(page).locator('header .title');
-  await expect(async () => {
-    // The last tab is the setup overview; at least one provider tab precedes it.
-    const count = await tabs.count();
-    expect(count).toBeGreaterThan(1);
-    for (let i = 0; i < count - 1; i++) {
-      await tabs.nth(i).click();
-      try {
-        await expect(header).toHaveText(spaceId, { timeout: 2000 });
-        return;
-      } catch {
-        // not this tab
-      }
-    }
-    throw new Error(`No issue panel tab for ${spaceId}`);
-  }).toPass({ timeout: 30000 });
-};
-
-/** Reads a provider's stored token from its settings dialog, then closes it. */
-const providerToken = async (page: Page, spaceId: string): Promise<string> => {
-  await openProviderTab(page, spaceId);
-  await activeTab(page).locator('header button').first().click();
-  const dialog = page.locator('dialog-edit-issue-provider');
-  const token = await dialog.locator('input[id*="token"]').inputValue();
-  await page.keyboard.press('Escape');
-  await expect(dialog).toBeHidden();
-  return token;
-};

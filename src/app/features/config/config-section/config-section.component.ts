@@ -30,6 +30,7 @@ import { ConfigFormComponent } from '../config-form/config-form.component';
 import { MatButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { Log } from '../../../core/log';
+import { ExactAlarmHintComponent } from '../../reminder/exact-alarm-hint/exact-alarm-hint.component';
 
 interface CustomFormInstance {
   cfg?: Record<string, unknown>;
@@ -50,6 +51,7 @@ interface CustomFormInstance {
     TranslatePipe,
     MatButton,
     MatIcon,
+    ExactAlarmHintComponent,
   ],
 })
 export class ConfigSectionComponent implements OnInit, OnDestroy {

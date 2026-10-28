@@ -9,6 +9,7 @@ import { ReminderConfig } from '../../config/global-config.model';
 import {
   bridgeCommandEqual,
   getBackgroundReminderSettings,
+  getCapturePublicKeyForNative,
   getSuperSyncCredentialBridgeCommand,
   SuperSyncCredentialBridgeCommand,
 } from './android-sync-bridge.effects';
@@ -253,5 +254,26 @@ describe('AndroidSyncBridgeEffects - reminder settings mirroring logic', () => {
       getBackgroundReminderSettings(reminderCfg({ useAlarmStyleReminders: true }))
         .useAlarmStyle,
     ).toBe(true);
+  });
+});
+
+describe('getCapturePublicKeyForNative', () => {
+  const key = { v: 1, privateKeyPkcs8: 'priv', publicKeySpki: 'pub' };
+
+  it('mirrors the public key while capture is on and SuperSync is logged in', () => {
+    expect(getCapturePublicKeyForNative(key, true)).toBe('pub');
+  });
+
+  it('clears it when capture is off', () => {
+    expect(getCapturePublicKeyForNative(null, true)).toBe('');
+    expect(getCapturePublicKeyForNative(undefined, true)).toBe('');
+  });
+
+  it('clears it without SuperSync credentials, so shares stay local', () => {
+    expect(getCapturePublicKeyForNative(key, false)).toBe('');
+  });
+
+  it('never mirrors a key from a newer client: its format may differ', () => {
+    expect(getCapturePublicKeyForNative({ ...key, v: 2 }, true)).toBe('');
   });
 });

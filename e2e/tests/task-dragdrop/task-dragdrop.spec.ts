@@ -117,7 +117,11 @@ test.describe('Drag Task to change project and labels', () => {
       await createTagBtn.click();
       await tagDialog.waitFor({ state: 'visible', timeout: 10000 });
       await tagNameInput.waitFor({ state: 'visible', timeout: 5000 });
-      await tagNameInput.fill(name);
+      // fill() can land before the ngModel binding is live, so re-assert.
+      await expect(async () => {
+        await tagNameInput.fill(name);
+        await expect(tagNameInput).toHaveValue(name);
+      }).toPass({ timeout: 5000 });
       const saveBtn = tagDialog.getByRole('button', { name: 'Save' });
       await saveBtn.waitFor({ state: 'visible', timeout: 5000 });
       await expect(saveBtn).toBeEnabled({ timeout: 5000 });

@@ -13,29 +13,38 @@
       (reminderChanged)="selectedReminderCfgId = $event"
       (quickAccessClick)="onQuickAccessClick($event)"
       (enterSubmit)="submit()"
-    ></datetime-picker>
+    >
+      @if (canRepeat) {
+        <!-- A read-only field rather than a button so it matches the Time and
+             Remind fields beside it; activating it opens the repeat dialog. Left
+             empty when not repeating, so the "Repeat" label alone fills it, like
+             the empty Time field; the title carries long values cut off by the
+             narrow half-width field. -->
+        <mat-form-field
+          timeRowEnd
+          class="repeat-field"
+          data-test-id="schedule-repeat-field"
+          (click)="openRepeatDialog()"
+        >
+          <mat-label>{{ T.F.TASK.D_SCHEDULE_TASK.REPEAT | translate }}</mat-label>
+          <mat-icon matPrefix>repeat</mat-icon>
+          <input
+            matInput
+            readonly
+            aria-haspopup="dialog"
+            [value]="repeatCfgLabel() ?? ''"
+            [title]="
+              repeatCfgLabel() || (T.F.TASK.D_SCHEDULE_TASK.DOES_NOT_REPEAT | translate)
+            "
+            (keydown.enter)="$event.preventDefault(); openRepeatDialog()"
+            (keydown.space)="$event.preventDefault(); openRepeatDialog()"
+          />
+        </mat-form-field>
+      }
+    </datetime-picker>
     @if (selectedTime && selectedReminderCfgId !== DO_NOT_REMIND) {
       <exact-alarm-hint />
     }
-  }
-
-  @if (canRepeat) {
-    @let repeatLabel = repeatCfgLabel();
-    <button
-      type="button"
-      mat-stroked-button
-      class="repeat-btn"
-      (click)="openRepeatDialog()"
-    >
-      <mat-icon>repeat</mat-icon>
-      {{ T.F.TASK.D_SCHEDULE_TASK.REPEAT | translate }}:
-      <span
-        class="repeat-value"
-        [class.repeat-value--empty]="!repeatLabel"
-      >
-        {{ repeatLabel || (T.F.TASK.D_SCHEDULE_TASK.DOES_NOT_REPEAT | translate) }}
-      </span>
-    </button>
   }
 
   <div class="dialog-actions-and-warnings">

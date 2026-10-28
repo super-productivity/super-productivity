@@ -25,7 +25,7 @@ describe('formatMonthDay', () => {
 
     it('should handle single digit months and days', () => {
       const result = formatMonthDay(singleDigitDate, DateTimeLocales.en_gb);
-      expect(result).toBe('5/1'); // Zero-padding removed for consistency
+      expect(result).toBe('05/01');
     });
   });
 
@@ -37,7 +37,7 @@ describe('formatMonthDay', () => {
 
     it('should handle single digit months and days', () => {
       const result = formatMonthDay(singleDigitDate, DateTimeLocales.tr_tr);
-      expect(result).toBe('5/1'); // Zero-padding removed for consistency
+      expect(result).toBe('5/01');
     });
   });
 
@@ -49,7 +49,7 @@ describe('formatMonthDay', () => {
 
     it('should handle single digit months and days', () => {
       const result = formatMonthDay(singleDigitDate, DateTimeLocales.de_de);
-      expect(result).toBe('5.1.'); // Note: German format
+      expect(result).toBe('05.01.');
     });
   });
 
@@ -61,7 +61,7 @@ describe('formatMonthDay', () => {
 
     it('should handle single digit months and days', () => {
       const result = formatMonthDay(singleDigitDate, DateTimeLocales.fr_fr);
-      expect(result).toBe('5/1'); // Zero-padding removed for consistency
+      expect(result).toBe('05/01');
     });
   });
 
@@ -85,7 +85,7 @@ describe('formatMonthDay', () => {
 
     it('should handle single digit months and days', () => {
       const result = formatMonthDay(singleDigitDate, DateTimeLocales.it_it);
-      expect(result).toBe('5/1'); // Zero-padding removed for consistency
+      expect(result).toBe('05/01');
     });
   });
 
@@ -97,7 +97,7 @@ describe('formatMonthDay', () => {
 
     it('should handle single digit months and days', () => {
       const result = formatMonthDay(singleDigitDate, DateTimeLocales.pt_br);
-      expect(result).toBe('5/1'); // Zero-padding removed for consistency
+      expect(result).toBe('05/01');
     });
   });
 
@@ -109,7 +109,7 @@ describe('formatMonthDay', () => {
 
     it('should handle single digit months and days', () => {
       const result = formatMonthDay(singleDigitDate, DateTimeLocales.ru_ru);
-      expect(result).toBe('5.1'); // Zero-padding removed for consistency
+      expect(result).toBe('05.01');
     });
   });
 
@@ -133,7 +133,15 @@ describe('formatMonthDay', () => {
 
     it('should handle single digit months and days', () => {
       const result = formatMonthDay(singleDigitDate, DateTimeLocales.ja_jp);
+      // short date "2000/01/05" pads only because it is year-first
       expect(result).toBe('1/5');
+    });
+  });
+
+  describe('Swedish locale (sv), the ISO 8601 option', () => {
+    it('should not take padding from the year-first ISO short date', () => {
+      const result = formatMonthDay(singleDigitDate, DateTimeLocales.sv);
+      expect(result).toBe('5/1');
     });
   });
 
@@ -146,6 +154,14 @@ describe('formatMonthDay', () => {
     it('should handle single digit months and days', () => {
       const result = formatMonthDay(singleDigitDate, DateTimeLocales.ko_kr);
       expect(result).toBe('1. 5.'); // No zero-padding, uses periods with spaces
+    });
+  });
+
+  describe('Persian locale (fa), non-Gregorian calendar', () => {
+    it('should not pad single digits its short date leaves unpadded', () => {
+      // Jan 21, 2000 = 1 Bahman 1378; fa short date is "۱۳۷۸/۱۱/۱"
+      const result = formatMonthDay(new Date(2000, 0, 21), DateTimeLocales.fa);
+      expect(result).toBe('۱۱/۱');
     });
   });
 
@@ -226,29 +242,25 @@ describe('formatMonthDay', () => {
       });
     });
 
-    it('should consistently remove zero-padding across all locales', () => {
-      // All locales should now have zero-padding removed for consistency
-      const allLocales = [
-        DateTimeLocales.en_us,
-        DateTimeLocales.en_gb,
+    it('should pad day and month only where the locale short date does (#11081)', () => {
+      const padded = [
         DateTimeLocales.de_de,
+        DateTimeLocales.en_gb,
         DateTimeLocales.fr_fr,
-        DateTimeLocales.es_es,
-        DateTimeLocales.it_it,
-        DateTimeLocales.pt_br,
-        DateTimeLocales.tr_tr,
         DateTimeLocales.ru_ru,
+      ];
+      const unpadded = [
+        DateTimeLocales.en_us,
+        DateTimeLocales.es_es,
         DateTimeLocales.zh_cn,
-        DateTimeLocales.ja_jp,
         DateTimeLocales.ko_kr,
       ];
 
-      allLocales.forEach((locale) => {
-        const result = formatMonthDay(singleDigitDate, locale);
-        // Should not contain zero-padded single digits at word boundaries
-        expect(result).not.toMatch(/\b0\d/); // No "05", "01", etc.
-        // Should contain the actual single digits
-        expect(result).toMatch(/[15]/); // Should contain either 1 or 5 (our test date digits)
+      padded.forEach((locale) => {
+        expect(formatMonthDay(singleDigitDate, locale)).toMatch(/05\D+01/);
+      });
+      unpadded.forEach((locale) => {
+        expect(formatMonthDay(singleDigitDate, locale)).not.toMatch(/\b0\d/);
       });
     });
   });

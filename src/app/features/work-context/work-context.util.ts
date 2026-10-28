@@ -1,4 +1,4 @@
-import { TaskWithSubTasks } from '../tasks/task.model';
+import { Task, TaskWithSubTasks } from '../tasks/task.model';
 
 /**
  * Order completed tasks by when they were completed, newest first, so the most
@@ -6,8 +6,9 @@ import { TaskWithSubTasks } from '../tasks/task.model';
  * it usually comes from a memoized selector that must not be mutated. Tasks
  * without a `doneOn` timestamp sort last.
  */
-export const sortDoneTasksByDoneDate = (tasks: TaskWithSubTasks[]): TaskWithSubTasks[] =>
-  [...tasks].sort((a, b) => (b.doneOn ?? 0) - (a.doneOn ?? 0));
+export const sortDoneTasksByDoneDate = <T extends Pick<Task, 'doneOn'>>(
+  tasks: T[],
+): T[] => [...tasks].sort((a, b) => (b.doneOn ?? 0) - (a.doneOn ?? 0));
 
 export const mapEstimateRemainingFromTasks = (tasks: TaskWithSubTasks[]): number =>
   tasks &&

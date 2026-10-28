@@ -41,9 +41,14 @@ export const selectMetricById = createSelector(
   },
 );
 
+// Do not forward each chart's props into the shared entity selector: alternating
+// click/stopwatch subscriptions otherwise evict its memoized array on every tick.
+const selectCounterItemsForCharts = (state: object): SimpleCounter[] =>
+  selectAllSimpleCounters(state);
+
 // STATISTICS
 export const selectSimpleCounterClickCounterLineChartData = createSelector(
-  selectAllSimpleCounters,
+  selectCounterItemsForCharts,
   (simpleCounterItems: SimpleCounter[], props: { howMany: number }): LineChartData => {
     const f = -1 * props.howMany;
     const chart: LineChartData = {
@@ -71,7 +76,7 @@ export const selectSimpleCounterClickCounterLineChartData = createSelector(
 );
 
 export const selectSimpleCounterStopWatchLineChartData = createSelector(
-  selectAllSimpleCounters,
+  selectCounterItemsForCharts,
   (simpleCounterItems: SimpleCounter[], props: { howMany: number }): LineChartData => {
     const f = -1 * props.howMany;
     const chart: LineChartData = {

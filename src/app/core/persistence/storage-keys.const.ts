@@ -119,6 +119,10 @@ export enum LS {
 
   // Task view customizer
   TASK_VIEW_CUSTOMIZER_BY_CONTEXT = 'SUP_TASK_VIEW_CUSTOMIZER_BY_CONTEXT',
+
+  // Tracked work sessions not yet added to the calendar. Device-local, never
+  // synced: only the device that tracked the time adds the event.
+  WORK_SESSION_LOG = 'SUP_WORK_SESSION_LOG',
 }
 
 // Prefix for device-local, never-synced note drafts (see LocalDraftService).

@@ -57,6 +57,12 @@ export class PlannerCalendarEventComponent {
 
   readonly menuTrigger = viewChild.required(MatMenuTrigger);
 
+  // Only the default `event` glyph has the dot the color is drawn on.
+  readonly hasColorDot = computed(() => {
+    const evt = this.calendarEvent();
+    return !!evt.color && (!evt.icon || evt.icon === 'event');
+  });
+
   readonly isPluginEvent = computed(() =>
     this._calEventActions.isPluginEvent(this.calendarEvent()),
   );

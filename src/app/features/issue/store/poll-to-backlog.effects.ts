@@ -26,6 +26,8 @@ import { IssueLog } from '../../../core/log';
 import { PluginIssueProviderRegistryService } from '../../../plugins/issue-provider/plugin-issue-provider-registry.service';
 import { skipDuringSyncWindow } from '../../../util/skip-during-sync-window.operator';
 import { getRefreshOnLook$ } from './refresh-on-look';
+import { IS_ONLINE$ } from '../../../util/is-online.token';
+import { pollWhileOnline } from '../../../util/poll-while-online';
 
 @Injectable()
 export class PollToBacklogEffects {
@@ -36,6 +38,7 @@ export class PollToBacklogEffects {
   private readonly _snackService = inject(SnackService);
   private readonly _store = inject(Store);
   private readonly _pluginRegistry = inject(PluginIssueProviderRegistryService);
+  private readonly _isOnline$ = inject(IS_ONLINE$);
 
   /**
    * Created here because the operator calls inject() -- the timers themselves are
@@ -140,12 +143,18 @@ export class PollToBacklogEffects {
     provider: IssueProvider,
     stopOnContextSwitch = true,
   ): Observable<unknown> {
-    const timer$ = merge(
-      timer(
-        DELAY_BEFORE_ISSUE_POLLING,
-        this._issueService.getPollInterval(provider.issueProviderKey),
-      ),
-      getRefreshOnLook$(provider),
+    const timer$ = pollWhileOnline(
+      this._isOnline$,
+      [
+        timer(
+          DELAY_BEFORE_ISSUE_POLLING,
+          this._issueService.getPollInterval(provider.issueProviderKey),
+        ),
+        getRefreshOnLook$(provider),
+      ],
+      // Reconnecting also starts a sync; give it the same head start as at boot so
+      // this tick isn't dropped by the sync-window guard below.
+      DELAY_BEFORE_ISSUE_POLLING,
     );
 
     return (

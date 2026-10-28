@@ -349,12 +349,17 @@ mat-option.isDone {
 // Icon appearance for mini FABs that change emphasis without replacing the
 // focused button. Keep Material's disabled foreground and interaction states.
 // Match the specificity of angular-material-css-vars' primary/accent overrides.
+// Muted like the header's other icon buttons, full text color on hover/focus.
 :root .mat-mdc-mini-fab.mat-mini-fab-icon {
-  --mat-fab-small-foreground-color: var(--text-color);
+  --mat-fab-small-foreground-color: var(--text-color-muted);
   --mat-fab-small-state-layer-color: var(--text-color);
   // Themes such as Rainbow set FAB shadows with !important.
   background: transparent !important;
   box-shadow: none !important;
+
+  &:is(:hover, :focus-visible):not(:disabled) {
+    --mat-fab-small-foreground-color: var(--text-color);
+  }
 }
 
 .mat-mdc-icon-button.mat-mdc-icon-button.mat-mdc-icon-button {
@@ -505,6 +510,14 @@ body .mat-mdc-button-base .mat-icon {
 // MAT MENU
 .mat-mdc-menu-panel {
   overflow-x: hidden !important;
+}
+
+// Opt-in via `<mat-menu class="mat-menu-wide">`: Material caps panels at 280px,
+// which leaves a five-button quick-access row ~56px per label ("Tomorrow"
+// wraps). Fixed width so the row's equal shares don't depend on the items.
+.mat-mdc-menu-panel.mat-menu-wide {
+  width: min(320px, calc(100vw - var(--s2)));
+  max-width: none;
 }
 
 .mat-mdc-menu-content {

@@ -35,6 +35,7 @@ describe('ScheduleComponent', () => {
   let mockLayoutService: jasmine.SpyObj<LayoutService>;
   let mockIsXs: WritableSignal<boolean>;
   let mockScheduleService: jasmine.SpyObj<ScheduleService>;
+  let calendarColorByProviderId: WritableSignal<Map<string, string>>;
   let mockMatDialog: jasmine.SpyObj<MatDialog>;
   let mockGlobalTrackingIntervalService: jasmine.SpyObj<GlobalTrackingIntervalService>;
   let mockGlobalConfigService: jasmine.SpyObj<GlobalConfigService>;
@@ -54,18 +55,23 @@ describe('ScheduleComponent', () => {
       isXs: mockIsXs,
     });
 
-    mockScheduleService = jasmine.createSpyObj('ScheduleService', [
-      'getDaysToShow',
-      'getMonthDaysToShow',
-      'getMonthWeeksToShow',
-      'buildScheduleDays',
-      'scheduleRefreshTick',
-      'getTodayStr',
-      'createScheduleDaysWithContext',
-      'getDayClass',
-      'hasEventsForDay',
-      'getEventsForDay',
-    ]);
+    calendarColorByProviderId = signal(new Map<string, string>());
+    mockScheduleService = jasmine.createSpyObj(
+      'ScheduleService',
+      [
+        'getDaysToShow',
+        'getMonthDaysToShow',
+        'getMonthWeeksToShow',
+        'buildScheduleDays',
+        'scheduleRefreshTick',
+        'getTodayStr',
+        'createScheduleDaysWithContext',
+        'getDayClass',
+        'hasEventsForDay',
+        'getEventsForDay',
+      ],
+      { calendarColorByProviderId: calendarColorByProviderId },
+    );
     mockScheduleService.getDaysToShow.and.returnValue([
       '2026-01-20',
       '2026-01-21',
@@ -1399,6 +1405,22 @@ describe('ScheduleComponent', () => {
       expect(component.calProviderRows()).toEqual([
         { id: 'ical', color: '#123456', label: 'example.com' },
         { id: 'plug', color: jasmine.stringMatching(/^hsl\(/), label: 'plugin:cal' },
+      ]);
+    });
+
+    it('uses the color the calendar source reported for a provider without one', () => {
+      const store = TestBed.inject(MockStore);
+      spyOn(
+        TestBed.inject(PluginIssueProviderRegistryService),
+        'getUseAgendaView',
+      ).and.returnValue(true);
+      store.overrideSelector(selectCalendarProviders, []);
+      store.overrideSelector(selectEnabledIssueProviders, [pluginProvider('plug')]);
+      store.refreshState();
+      calendarColorByProviderId.set(new Map([['plug', '#fbe983']]));
+      fixture.detectChanges();
+      expect(component.calProviderRows()).toEqual([
+        { id: 'plug', color: '#fbe983', label: 'plugin:cal' },
       ]);
     });
 

@@ -9,7 +9,12 @@ import { ValidateStateService } from '../validation/validate-state.service';
 import { SyncSessionValidationService } from '../sync/sync-session-validation.service';
 import { loadAllData } from '../../root-store/meta/load-all-data.action';
 import { Operation } from '../core/operation.types';
-import { incrementVectorClock, mergeVectorClocks } from '../../core/util/vector-clock';
+import {
+  compareVectorClocks,
+  incrementVectorClock,
+  mergeVectorClocks,
+  VectorClockComparison,
+} from '../../core/util/vector-clock';
 import { OpLog } from '../../core/log';
 import { AppDataComplete } from '../model/model-config';
 import { selectSyncConfig } from '../../features/config/store/global-config.reducer';
@@ -29,6 +34,12 @@ import { TaskTimeSyncService } from '../../features/tasks/task-time-sync.service
 interface SnapshotHydrationHooks {
   /** Remote operations already represented by a file-based snapshot. */
   snapshotIncludedOps?: readonly Operation[];
+  /**
+   * Keep pending local ops instead of rejecting them (#10972): they are moved
+   * past the snapshot baseline and the caller re-applies them to live state.
+   * `discardOpIds` are rejected in the same transaction instead.
+   */
+  keepPendingOps?: { discardOpIds: readonly string[] };
   /** Runs synchronously after downloaded archive replacement commits. */
   afterArchiveReplacement?: () => void;
   /** Runs synchronously after the snapshot baseline transaction commits. */
@@ -242,7 +253,17 @@ export class SyncHydrationService {
       // against it; there is no cache-only or ops-only restart state.
       {
         // Reject superseded local ops atomically with the state replacement.
-        const rejectOpIds = unsyncedOpsToReject.map((entry) => entry.op.id);
+        const pendingOpIds = unsyncedOpsToReject.map((entry) => entry.op.id);
+        // A kept op the snapshot already contains (uploaded, but not marked
+        // synced before a crash) must not be replayed on top of it again.
+        const discardOpIds = hooks?.keepPendingOps?.discardOpIds ?? [];
+        const keepOpIds = hooks?.keepPendingOps
+          ? unsyncedOpsToReject
+              .filter(({ op }) => !isOpInSnapshot(op, remoteVectorClock))
+              .filter(({ op }) => !discardOpIds.includes(op.id))
+              .map(({ op }) => op.id)
+          : [];
+        const rejectOpIds = pendingOpIds.filter((id) => !keepOpIds.includes(id));
         const appendResult = await this.opLogStore.commitFileSnapshotBaseline({
           state: dataToLoad,
           lastAppliedOpSeq: lastSeq,
@@ -250,6 +271,7 @@ export class SyncHydrationService {
           compactedAt: Date.now(),
           snapshotIncludedOps: hooks?.snapshotIncludedOps ?? [],
           ...(rejectOpIds.length ? { rejectOpIds } : {}),
+          ...(keepOpIds.length ? { keepOpIds } : {}),
           ...(downloadedArchiveYoung ? { archiveYoung: downloadedArchiveYoung } : {}),
           ...(downloadedArchiveOld ? { archiveOld: downloadedArchiveOld } : {}),
         });
@@ -268,7 +290,7 @@ export class SyncHydrationService {
         // Notify the user only after the rejection durably committed with the
         // new baseline — never before, so a failed commit leaves both the old
         // state and the still-uploadable local ops intact.
-        if (rejectOpIds.length > 0) {
+        if (rejectOpIds.length > 0 && !hooks?.keepPendingOps) {
           OpLog.normal(
             `SyncHydrationService: Rejected ${rejectOpIds.length} local pending op(s) ` +
               `(superseded after file-based sync snapshot)`,
@@ -308,3 +330,15 @@ export class SyncHydrationService {
     }
   }
 }
+
+const isOpInSnapshot = (
+  op: Operation,
+  snapshotClock?: Record<string, number>,
+): boolean => {
+  if (!snapshotClock) return false;
+  const comparison = compareVectorClocks(op.vectorClock, snapshotClock);
+  return (
+    comparison === VectorClockComparison.LESS_THAN ||
+    comparison === VectorClockComparison.EQUAL
+  );
+};

@@ -89,6 +89,20 @@ test('add-note shows the window and triggers add-note', () => {
   assert.deepEqual(win.sent, [{ channel: 'ADD_NOTE', payload: undefined }]);
 });
 
+test('today and inbox show the window and forward the URL to the renderer', () => {
+  const { processProtocolUrl } = loadModule();
+  const win = makeWin();
+
+  processProtocolUrl('superproductivity://today', win);
+  processProtocolUrl('superproductivity://Inbox', win);
+
+  assert.equal(showOrFocusCalls.length, 2);
+  assert.deepEqual(win.sent, [
+    { channel: 'APP_URI_QUICK_ACTION', payload: 'superproductivity://today' },
+    { channel: 'APP_URI_QUICK_ACTION', payload: 'superproductivity://Inbox' },
+  ]);
+});
+
 test('toggle-visibility delegates to the shared toggle helper without sending IPC', () => {
   const { processProtocolUrl } = loadModule();
   const win = makeWin();

@@ -1,7 +1,7 @@
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { provideMockActions } from '@ngrx/effects/testing';
 import { MockStore, provideMockStore } from '@ngrx/store/testing';
-import { Observable, of, Subject } from 'rxjs';
+import { BehaviorSubject, Observable, of, Subject } from 'rxjs';
 import { PollIssueUpdatesEffects } from './poll-issue-updates.effects';
 import { IssueService } from '../issue.service';
 import { WorkContextService } from '../../work-context/work-context.service';
@@ -19,6 +19,7 @@ import { IssueProvider } from '../issue.model';
 import { HttpErrorResponse } from '@angular/common/http';
 import { IssueLog } from '../../../core/log';
 import { SyncTriggerService } from '../../../imex/sync/sync-trigger.service';
+import { IS_ONLINE$ } from '../../../util/is-online.token';
 
 describe('PollIssueUpdatesEffects', () => {
   let effects: PollIssueUpdatesEffects;
@@ -27,6 +28,7 @@ describe('PollIssueUpdatesEffects', () => {
   let issueServiceSpy: jasmine.SpyObj<IssueService>;
   let workContextServiceSpy: jasmine.SpyObj<WorkContextService>;
   let initialSyncDone$: Subject<boolean>;
+  let isOnline$: BehaviorSubject<boolean>;
 
   const createMockTask = (overrides: Partial<Task> = {}): Task =>
     ({
@@ -61,6 +63,7 @@ describe('PollIssueUpdatesEffects', () => {
 
   beforeEach(() => {
     initialSyncDone$ = new Subject<boolean>();
+    isOnline$ = new BehaviorSubject<boolean>(true);
     issueServiceSpy = jasmine.createSpyObj('IssueService', [
       'getPollInterval',
       'refreshIssueTasks',
@@ -94,6 +97,7 @@ describe('PollIssueUpdatesEffects', () => {
           provide: SyncTriggerService,
           useValue: { afterInitialSyncDoneStrict$: initialSyncDone$ },
         },
+        { provide: IS_ONLINE$, useValue: isOnline$ },
       ],
     });
 
@@ -572,6 +576,34 @@ describe('PollIssueUpdatesEffects', () => {
       tick(10001);
 
       expect(logSpy).toHaveBeenCalledOnceWith(jasmine.any(String), { status: 0 });
+    }));
+
+    it('should skip polls while offline and poll once the connection is back', fakeAsync(() => {
+      const calendarProvider = createMockIssueProvider({ id: 'cal-provider-1' });
+      store.overrideSelector(selectEnabledIssueProviders, [calendarProvider]);
+      store.overrideSelector(selectAllCalendarIssueTasks, [
+        createMockTask({
+          issueId: 'cal-event-123',
+          issueType: ICAL_TYPE,
+          issueProviderId: 'cal-provider-1',
+        }),
+      ]);
+      store.refreshState();
+      const actionsSubject = new Subject<any>();
+      actions$ = actionsSubject.asObservable();
+      isOnline$.next(false);
+
+      const sub = effects.pollIssueChangesForCurrentContext$.subscribe();
+      actionsSubject.next(loadAllData({ appDataComplete: {} as any }));
+      tick(10001);
+      tick(600000);
+      expect(issueServiceSpy.refreshIssueTasks).not.toHaveBeenCalled();
+
+      isOnline$.next(true);
+      tick(8000);
+      expect(issueServiceSpy.refreshIssueTasks).toHaveBeenCalledTimes(1);
+
+      sub.unsubscribe();
     }));
 
     it('should NOT poll providers with pollingMode always (handled by separate effect)', fakeAsync(() => {

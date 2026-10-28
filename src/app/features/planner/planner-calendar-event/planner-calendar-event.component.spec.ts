@@ -97,4 +97,20 @@ describe('PlannerCalendarEventComponent', () => {
     const host = fixture.nativeElement as HTMLElement;
     expect(host.style.getPropertyValue('--cal-event-color')).toBe('');
   });
+
+  it('draws the color dot only for a colored event with the default icon', () => {
+    const hasDot = (): boolean => !!fixture.nativeElement.querySelector('.color-dot');
+    createWith(undefined, { ...EVENT, color: '#4caf50' });
+    expect(hasDot()).toBe(true);
+    fixture.componentRef.setInput('calendarEvent', {
+      ...EVENT,
+      color: '#4caf50',
+      icon: 'flag',
+    });
+    fixture.detectChanges();
+    expect(hasDot()).toBe(false);
+    fixture.componentRef.setInput('calendarEvent', EVENT);
+    fixture.detectChanges();
+    expect(hasDot()).toBe(false);
+  });
 });

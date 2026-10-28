@@ -157,7 +157,7 @@ jobs:
     # for schedule/push, so gate on the event first.
     if: ${{ github.event_name != 'workflow_dispatch' || inputs.run_webdav }}
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
     env:
       UNSPLASH_KEY: ${{ secrets.UNSPLASH_KEY }}
       UNSPLASH_CLIENT_ID: ${{ secrets.UNSPLASH_CLIENT_ID }}
@@ -226,7 +226,8 @@ jobs:
     name: E2E Tests (SuperSync ${{ matrix.shard }}/6)
     needs: [build]
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    # Shard 6/6 hit 40 min twice in a row (runs 40374994869, 40383078751).
+    timeout-minutes: 50
     strategy:
       fail-fast: false
       matrix:

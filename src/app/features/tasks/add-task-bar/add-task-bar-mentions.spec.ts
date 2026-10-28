@@ -103,6 +103,7 @@ describe('AddTaskBarComponent Mentions Integration', () => {
       listInTreeOrderForUI$: of(validProjects),
       listSortedForUI: signal(validProjects),
       listInTreeOrderForUI: signal(validProjects),
+      listInTreeOrder: signal(validProjects),
     });
     tagsSubject = new BehaviorSubject(validTags);
     const tagServiceSpy = jasmine.createSpyObj('TagService', ['addTag'], {

@@ -3,22 +3,13 @@
   margin-bottom: var(--s3);
 }
 
-.project-title {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-wrap: wrap;
-  border-bottom: 2px solid;
+// Keeps the project colour as an accent next to the collapsible heading.
+collapsible.project-section {
+  border-left: 2px solid var(--extra-border-color);
+}
 
-  border-color: var(--extra-border-color);
-
-  mat-icon {
-    margin: 0 var(--s-half);
-  }
-
-  h2,
-  h3 {
-    margin: 0;
-    padding: 0;
-  }
+.project-time {
+  white-space: nowrap;
+  font-size: var(--font-size-sm);
+  color: var(--text-color-muted);
 }

@@ -110,6 +110,37 @@ describe('PlainspaceShareService', () => {
     });
   });
 
+  // A sign-up from Share creates the account's first Space, named after the
+  // project; it is linked as is, never offered for a second create.
+  it('links the Space a sign-up created, without the picker', async () => {
+    account.logout();
+    connectResult = { createdSpaceId: 'signup-space' };
+
+    const result = await service.shareProjectOnPlainspace('p1', 'Proj');
+
+    const connectCall = matDialog.open.calls
+      .allArgs()
+      .find((a) => a[0] === PlainspaceConnectDialogComponent);
+    expect(connectCall?.[1]?.data).toEqual(
+      jasmine.objectContaining({ spaceName: 'Proj' }),
+    );
+    expect(result).toBe('signup-space');
+    expect(
+      matDialog.open.calls
+        .allArgs()
+        .some((a) => a[0] === PlainspaceSpacePickerDialogComponent),
+    ).toBe(false);
+    expect(api.createSpace$).not.toHaveBeenCalled();
+    expect(store.dispatch).toHaveBeenCalledWith(
+      jasmine.objectContaining({
+        issueProvider: jasmine.objectContaining({
+          spaceId: 'signup-space',
+          defaultProjectId: 'p1',
+        }),
+      }),
+    );
+  });
+
   it('prompts for connection again after disconnecting from the space picker', async () => {
     matDialog.open.and.callFake((comp: unknown) => {
       if (comp === PlainspaceSpacePickerDialogComponent) {

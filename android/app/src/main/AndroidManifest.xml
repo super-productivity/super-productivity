@@ -98,6 +98,24 @@
       android:taskAffinity=""
       android:theme="@android:style/Theme.NoDisplay" />
 
+    <!-- Text share target: saves the share to the capture inbox and finishes, so
+         the user stays in the app they shared from. Own empty taskAffinity and
+         noHistory, like AppShortcutActivity, so it never joins the app's task. -->
+    <activity
+      android:name=".share.ShareReceiverActivity"
+      android:excludeFromRecents="true"
+      android:exported="true"
+      android:label="@string/title_activity_fullscreen"
+      android:noHistory="true"
+      android:taskAffinity=""
+      android:theme="@android:style/Theme.NoDisplay">
+      <intent-filter>
+        <action android:name="android.intent.action.SEND" />
+        <category android:name="android.intent.category.DEFAULT" />
+        <data android:mimeType="text/*" />
+      </intent-filter>
+    </activity>
+
     <!-- All new Super-Productivity main activity, based on Capacitor to support offline use -->
     <activity
       android:name=".CapacitorMainActivity"
@@ -109,12 +127,6 @@
       android:launchMode="singleTask"
       android:theme="@style/AppTheme.NoActionBarLaunch"
       android:windowSoftInputMode="adjustResize">
-      <intent-filter>
-        <action android:name="android.intent.action.SEND" />
-        <category android:name="android.intent.category.DEFAULT" />
-        <data android:mimeType="text/*" />
-      </intent-filter>
-
       <!-- OAuth callback handler for Dropbox authentication -->
       <intent-filter>
         <action android:name="android.intent.action.VIEW" />
@@ -207,6 +219,11 @@
 
     <receiver
       android:name=".receiver.ReminderActionReceiver"
+      android:enabled="true"
+      android:exported="false" />
+
+    <receiver
+      android:name=".receiver.NotificationActionReceiver"
       android:enabled="true"
       android:exported="false" />
 

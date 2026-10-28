@@ -628,4 +628,61 @@ test.describe('@supersync Plainspace poll vs the sync window (#11034)', () => {
       }
     });
   }
+
+  // Both devices rename while neither reaches Plainspace; B's rename is the
+  // newer one and syncs first. A's push then lands first, and the baseline
+  // write re-stamps A's title after B's rename. Provider wins: the rename
+  // that reached Plainspace first is kept, on every device and in Plainspace.
+  test("A's older rename reaches Plainspace before B's newer one", async ({
+    browser,
+    baseURL,
+    testRunId,
+  }) => {
+    const THEIRS = 'Buy the blue tent';
+    let s: Setup | null = null;
+    try {
+      s = await setUp(browser, baseURL!, testRunId);
+      const { a, b, server } = s;
+
+      const patchA = await routePatchOffline(a.c.page);
+      patchA.setOffline(true);
+      await renameTask(a.c.page, T0, MINE);
+      await expect.poll(patchA.dropped, { timeout: 15000 }).toBe(1);
+
+      const patchB = await routePatchOffline(b.c.page);
+      patchB.setOffline(true);
+      await renameTask(b.c.page, T0, THEIRS);
+      await expect.poll(patchB.dropped, { timeout: 15000 }).toBe(1);
+      await b.c.sync.syncAndWait();
+
+      // A gets back online before it has B's rename; its poll pushes MINE.
+      patchA.setOffline(false);
+      await restart(a);
+      await expect
+        .poll(() => server.tasks.get(TASK_ID)!.title, { timeout: 15000 })
+        .toBe(MINE);
+      await a.c.sync.syncAndWait();
+      patchB.setOffline(false);
+      await b.c.sync.syncAndWait();
+      await a.c.sync.syncAndWait();
+      await snapshot('after both synced', s);
+
+      await restart(b);
+      await restart(a);
+      await b.c.sync.syncAndWait();
+      await a.c.sync.syncAndWait();
+      await b.c.sync.syncAndWait();
+      await snapshot('after next polls and sync', s);
+
+      expect(server.tasks.get(TASK_ID)!.title).toBe(MINE);
+      expect(titlePatches(server)).toEqual([MINE]);
+      expect((await readLinkedTask(a.c.page))?.title).toBe(MINE);
+      expect((await readLinkedTask(b.c.page))?.title).toBe(MINE);
+    } finally {
+      if (s) {
+        await closeClient(s.a.c);
+        await closeClient(s.b.c);
+      }
+    }
+  });
 });

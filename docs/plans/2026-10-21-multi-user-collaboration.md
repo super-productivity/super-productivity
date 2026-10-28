@@ -389,6 +389,21 @@ SP:
 3. **Not shared yet?** The menu entry offers to share the project first, then
    assign.
 
+**Delivered** (plainspace#42, this repo's Phase 2 PR), with these deviations:
+
+- **Not unscheduled locally.** A remote reassignment keeps the task
+  untouched, so a handoff does too: it is only marked _no longer in your
+  Plainspace list_ (the in-memory Release 1 state), and writes no op. An
+  unschedule would also be a local edit that the poll-time push (Gap 2) sends
+  as "no time" once the task is assigned back, clearing the Space's time.
+- **Not shared yet** (item 3) is not built: the entries appear only on linked
+  tasks still assigned to me. No assignee display, no further endpoints.
+- **Members list leaves out the caller** and takes the Space id or slug, since
+  SP knows neither its member id nor always the Space's UUID.
+- **Older servers:** a 404 on the members list or a 422 on an
+  `assigneeId`-only PATCH shows "Plainspace server too old to assign" once
+  per attempt. No capability negotiation.
+
 ### Phase 3: only on evidence
 
 Device-code connect (needs two endpoints, a code store and a consent screen;
@@ -420,13 +435,17 @@ gets a fix only when it is reported.
 - **Lost create response, or a crash between create and link.** One visible
   duplicate SP task (auto-imported), no data loss. Fix: `clientRef`.
 - **Old self-hosted servers** keep done-only sync until they upgrade.
-- **Titles and times that were local-only before Release 1** (a local rename,
-  a title short syntax stripped at import, a local reschedule, or a day-only
-  plan or Add to Today on a task with a Plainspace time) are pushed on the
-  first successful poll after the update; the baseline can't tell them from an
-  offline edit. A day-only plan sends "no time", so a time a collaborator set
-  is removed for everyone. Accepted by the maintainer for the beta (titles),
-  with a release note; the note must name times too.
+- **Titles and times that were local-only before this release** (a local
+  rename, a title short syntax stripped at import, a local reschedule, or a
+  day-only plan or Add to Today on a task with a Plainspace time) are pushed on
+  the first successful poll after the update; the baseline can't tell them
+  from an offline edit. The commonest trigger is the reminder dialog's "Add to
+  today" (`dialog-view-task-reminders`, `isClearScheduledTime: true`), which
+  always clears `dueWithTime` locally; plain Add to Today does the same for a
+  timed task on another day (`shouldClearDueTimeForToday`). The first poll
+  after the update then sends "no time", which removes the Space's time for
+  everyone. **Decided (Oct 23):** accepted with a release note naming times and
+  "Add to today". Revisit if users report lost times.
 - **No cross-repo real-server E2E.** Contract drift is caught by Plainspace's
   integration tests and the shared `SPTask` type.
 - **Delegated tasks** don't show their live title, done state or assignee in SP.
@@ -453,6 +472,12 @@ gets a fix only when it is reported.
   `updateTaskUi` would skip the planner and TODAY meta-reducer bookkeeping and
   needs its own design. My time edit is lost, visibly (a wrong time, no lost
   text). Revisit on a user report.
+- **Mixed fleet.** A v19.x device on the same SuperSync account still
+  overwrites a shared task's title, done state and time with Plainspace's copy
+  (its whole-row pull, with the baseline) whenever the Space item changes. An
+  edit made on an updated device that hasn't reached Plainspace yet is then
+  lost on every device. Released behaviour, transitional; the release note
+  asks users to update all devices. Revisit if reported.
 
 ## Sync and long-term cost
 

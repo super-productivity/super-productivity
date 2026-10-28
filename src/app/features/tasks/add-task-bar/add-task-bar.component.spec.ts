@@ -39,6 +39,7 @@ type ProjectServiceSignals = {
   listInTreeOrderForUI$: Observable<Project[]>;
   listSortedForUI: Signal<Project[]>;
   listInTreeOrderForUI: Signal<Project[]>;
+  listInTreeOrder: Signal<Project[]>;
   listSorted: Signal<Project[]>;
 };
 
@@ -144,6 +145,7 @@ describe('AddTaskBarComponent', () => {
       listInTreeOrderForUI$: projects$,
       listSortedForUI: signal(projects),
       listInTreeOrderForUI: signal(projects),
+      listInTreeOrder: signal(projects),
       listSorted: signal(projects),
     };
   };
