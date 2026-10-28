@@ -2,9 +2,9 @@ import { LocalRestApiResponsePayload } from '../../../../electron/shared-with-fr
 
 /**
  * Response envelope builders shared by the Local REST API route modules.
- * Kept in their own file so both the main handler service and the
- * feature-owned routes (LOCAL_REST_API_FEATURE_ROUTES) can build responses
- * without importing each other.
+ * Kept in their own file so both the router service and the feature-owned
+ * routes (LOCAL_REST_API_FEATURE_ROUTES) can build responses without
+ * importing each other.
  */
 export const createErrorResponse = (
   requestId: string,

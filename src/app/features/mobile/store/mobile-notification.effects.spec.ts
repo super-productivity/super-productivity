@@ -411,6 +411,34 @@ describe('MobileNotificationEffects', () => {
       expect(reminderServiceSpy.scheduleReminder).not.toHaveBeenCalled();
     }));
 
+    it('does not schedule due-date notifications when notifyOnDueDate was never set (opt-in)', fakeAsync(() => {
+      cfg$.next({ reminder: { disableReminders: false } });
+
+      effects = TestBed.inject(MobileNotificationEffects);
+      (
+        effects.scheduleDueDateNotifications$ as unknown as Observable<unknown>
+      ).subscribe();
+
+      tick(EFFECT_DELAY_MS + 1);
+
+      expect(reminderServiceSpy.scheduleReminder).not.toHaveBeenCalled();
+    }));
+
+    it('cancels due-date alarms a previous app run left armed when disabled at startup', fakeAsync(() => {
+      cfg$.next({ reminder: { disableReminders: false, notifyOnDueDate: false } });
+
+      effects = TestBed.inject(MobileNotificationEffects);
+      (
+        effects.scheduleDueDateNotifications$ as unknown as Observable<unknown>
+      ).subscribe();
+
+      tick(EFFECT_DELAY_MS + 1);
+
+      expect(reminderServiceSpy.cancelReminder).toHaveBeenCalledWith(
+        generateNotificationId('x_dueday'),
+      );
+    }));
+
     describe('trigger time', () => {
       const nineAm = (): number =>
         new Date(futureDueTask('x').dueDay + 'T09:00:00').getTime();
