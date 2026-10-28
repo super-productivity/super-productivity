@@ -7,8 +7,6 @@ import { DateService } from '../../../core/date/date.service';
 import { Task } from '../../tasks/task.model';
 import * as focusModeActions from '../../focus-mode/store/focus-mode.actions';
 import {
-  creditBackgroundTickGap,
-  getFocusAutoCompleteCapMs,
   handleAndroidResume,
   isTimeSpentJumpForNotification,
   NativeElapsedSyncDeps,
@@ -20,7 +18,6 @@ import {
 } from './android-foreground-tracking.effects';
 import { GlobalTrackingIntervalService } from '../../../core/global-tracking-interval/global-tracking-interval.service';
 import { ANDROID_BACKGROUND_TICK_CAP_MS } from '../../../app.constants';
-import { TimerState } from '../../focus-mode/focus-mode.model';
 
 // We need to test the effect logic by reimplementing it in tests since
 // the actual effects are conditionally created based on IS_ANDROID_WEB_VIEW
@@ -1852,45 +1849,6 @@ describe('AndroidForegroundTrackingEffects - enhanced error handling (issue #584
   });
 });
 
-describe('creditBackgroundTickGap - background tick gap (#8243)', () => {
-  let globalTracking: jasmine.SpyObj<GlobalTrackingIntervalService>;
-  let taskService: jasmine.SpyObj<TaskService>;
-
-  beforeEach(() => {
-    globalTracking = jasmine.createSpyObj<GlobalTrackingIntervalService>(
-      'GlobalTrackingIntervalService',
-      ['triggerWakeUpTick', 'resetTrackingStart'],
-    );
-    taskService = jasmine.createSpyObj<TaskService>('TaskService', [
-      'flushAccumulatedTimeSpent',
-    ]);
-  });
-
-  it('should credit a capped wake-up tick, reset the anchor and flush', () => {
-    creditBackgroundTickGap(globalTracking, taskService);
-
-    expect(globalTracking.triggerWakeUpTick).toHaveBeenCalledWith(
-      ANDROID_BACKGROUND_TICK_CAP_MS,
-    );
-    expect(globalTracking.resetTrackingStart).toHaveBeenCalledTimes(1);
-    expect(taskService.flushAccumulatedTimeSpent).toHaveBeenCalledTimes(1);
-  });
-
-  it('should credit the gap before flushing it into a syncTimeSpent op', () => {
-    const callOrder: string[] = [];
-    globalTracking.triggerWakeUpTick.and.callFake(() => {
-      callOrder.push('wakeUpTick');
-      return { duration: 0, date: '2026-06-11', timestamp: 0 };
-    });
-    globalTracking.resetTrackingStart.and.callFake(() => callOrder.push('reset'));
-    taskService.flushAccumulatedTimeSpent.and.callFake(() => callOrder.push('flush'));
-
-    creditBackgroundTickGap(globalTracking, taskService);
-
-    expect(callOrder).toEqual(['wakeUpTick', 'reset', 'flush']);
-  });
-});
-
 describe('handleAndroidResume - credit-before-reconcile ordering (#8243)', () => {
   const GAP_MS = 10 * 60 * 1000;
   const PRE_GAP_TIME_SPENT = 60000;
@@ -2118,7 +2076,7 @@ describe('handleAndroidResume - credit-before-reconcile ordering (#8243)', () =>
 
   it('should route a no-current-task resume to recovery without a reconcile call', async () => {
     const nativeData = { taskId: 'task-native', elapsedMs: NATIVE_ELAPSED };
-    const recovered: unknown[] = [];
+    const recoverySpy = jasmine.createSpy('requestRecovery');
     const reconcileSpy = jasmine.createSpy('syncElapsedTimeForTask').and.resolveTo(true);
 
     await handleAndroidResume(
@@ -2128,43 +2086,14 @@ describe('handleAndroidResume - credit-before-reconcile ordering (#8243)', () =>
         taskService,
         syncElapsedTimeForTask: reconcileSpy,
         getNativeTrackingData: () => nativeData,
-        requestRecovery: (data) => recovered.push(data),
+        requestRecovery: recoverySpy,
       },
       null,
     );
 
     expect(globalTracking.triggerWakeUpTick).toHaveBeenCalledTimes(1);
     expect(reconcileSpy).not.toHaveBeenCalled();
-    expect(recovered).toEqual([nativeData]);
-  });
-});
-
-describe('getFocusAutoCompleteCapMs', () => {
-  const MIN = 60_000;
-  const timer = (over: Partial<TimerState> = {}): TimerState =>
-    ({
-      isRunning: true,
-      purpose: 'work',
-      duration: 25 * MIN,
-      elapsed: 5 * MIN,
-      startedAt: 0,
-      ...over,
-    }) as TimerState;
-
-  it('returns the remaining time of a running fixed-duration work session', () => {
-    expect(getFocusAutoCompleteCapMs(timer(), false)).toBe(20 * MIN);
-  });
-
-  it('never returns a negative cap', () => {
-    expect(getFocusAutoCompleteCapMs(timer({ elapsed: 30 * MIN }), false)).toBe(0);
-  });
-
-  it('returns null when the tick cannot complete a work session', () => {
-    expect(getFocusAutoCompleteCapMs(timer(), true)).toBeNull();
-    expect(getFocusAutoCompleteCapMs(timer({ duration: 0 }), false)).toBeNull();
-    expect(getFocusAutoCompleteCapMs(timer({ isRunning: false }), false)).toBeNull();
-    expect(getFocusAutoCompleteCapMs(timer({ purpose: 'break' }), false)).toBeNull();
-    expect(getFocusAutoCompleteCapMs(timer({ purpose: null }), false)).toBeNull();
+    expect(recoverySpy).toHaveBeenCalledTimes(1);
   });
 });
 

@@ -17,9 +17,7 @@ import {
   selectEnabledIssueProviders,
 } from '../../issue/store/issue-provider.selectors';
 import { HiddenCalendarProvidersService } from '../../calendar-integration/hidden-calendar-providers.service';
-import { groupDeadlineTasksByDay } from '../../planner/store/planner.selectors';
-import { selectMapOfAllTasksInActiveProjects } from '../../tasks/store/task.selectors';
-import { selectStartOfNextDayDiffMs } from '../../../root-store/app-state/app-state.selectors';
+import { selectUndoneDeadlineTasksByDay } from '../../planner/store/planner.selectors';
 import {
   getIssueProviderTooltip,
   sanitizeIcalUrlForDisplay,
@@ -159,13 +157,14 @@ export class ScheduleComponent {
   };
   // Materialized once per provider-list change; method calls inside the menu
   // @for would re-run the hash and URL parsing on every change detection.
-  readonly calProviderRows = computed(() =>
-    this.enabledCalendarProviders().map((p) => ({
+  readonly calProviderRows = computed(() => {
+    const calendarColors = this.scheduleService.calendarColorByProviderId();
+    return this.enabledCalendarProviders().map((p) => ({
       id: p.id,
-      color: getCalendarProviderColor(p),
+      color: getCalendarProviderColor(p, calendarColors.get(p.id)),
       label: this.calProviderLabel(p),
-    })),
-  );
+    }));
+  });
 
   toggleCalProvider(providerId: string): void {
     this._hiddenCalendarProviders.toggle(providerId);
@@ -359,16 +358,9 @@ export class ScheduleComponent {
     return mapScheduleDaysToScheduleEvents(days, FH);
   });
 
-  private _allTasksMap = toSignal(
-    this._store.pipe(select(selectMapOfAllTasksInActiveProjects)),
-    { initialValue: new Map() },
-  );
-  private _startOfNextDayDiffMs = toSignal(
-    this._store.pipe(select(selectStartOfNextDayDiffMs)),
-    { initialValue: 0 },
-  );
-  deadlineTasksByDay = computed(() =>
-    groupDeadlineTasksByDay(this._allTasksMap().values(), this._startOfNextDayDiffMs()),
+  deadlineTasksByDay = toSignal(
+    this._store.pipe(select(selectUndoneDeadlineTasksByDay)),
+    { initialValue: {} },
   );
 
   private _workStartEndHours = toSignal(

@@ -2,7 +2,12 @@
   class="event-content"
   (click)="openMenu($event)"
 >
-  <mat-icon>{{ calendarEvent().icon || 'event' }}</mat-icon>
+  <span class="icon">
+    <mat-icon>{{ calendarEvent().icon || 'event' }}</mat-icon>
+    @if (hasColorDot()) {
+      <span class="color-dot"></span>
+    }
+  </span>
   <div class="title">
     {{ calendarEvent().title }}
   </div>

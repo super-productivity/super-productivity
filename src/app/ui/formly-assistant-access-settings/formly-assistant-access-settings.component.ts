@@ -23,8 +23,25 @@ import {
   AssistantAccessScope,
   AssistantAccessState,
 } from '../../../../electron/shared-with-frontend/assistant-access.model';
+import { ElectronDistChannel } from '../../../../electron/shared-with-frontend/get-dist-channel';
 
 const KEY_PLACEHOLDER = '<ACCESS_KEY>';
+
+/** Release asset uploaded by the tag build (tools/mcpb/README.md). */
+export const CLAUDE_DESKTOP_EXTENSION_URL =
+  'https://github.com/super-productivity/super-productivity/releases/latest/download/super-productivity.mcpb';
+
+/**
+ * Claude Desktop runs on Windows and macOS only, and a Mac App Store build
+ * cannot listen on the local port yet, so the extension is offered elsewhere.
+ */
+export const canUseClaudeDesktopExtension = (
+  channel: ElectronDistChannel | null | undefined,
+): boolean =>
+  channel === 'win-nsis' ||
+  channel === 'win-portable' ||
+  channel === 'win-store' ||
+  channel === 'mac-dmg';
 
 /**
  * Assistant (MCP) access: switch, granted permissions, access key and client
@@ -49,6 +66,10 @@ export class FormlyAssistantAccessSettingsComponent
   readonly T = T;
   readonly url = `http://${LOCAL_REST_API_HOST}:${LOCAL_REST_API_PORT}${ASSISTANT_ACCESS_PATH}`;
   readonly port = LOCAL_REST_API_PORT;
+  readonly claudeDesktopExtensionUrl = CLAUDE_DESKTOP_EXTENSION_URL;
+  readonly isClaudeDesktopOffered = canUseClaudeDesktopExtension(
+    window.ea?.getDistChannel?.(),
+  );
   readonly state = signal<AssistantAccessState | null>(null);
   readonly isBusy = signal(false);
   /** Only set right after generating; never read back from main. */

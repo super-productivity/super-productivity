@@ -264,7 +264,7 @@ Quickest adoption — add the `.focus-ring` utility class from `util.scss`, whic
 | `--z-add-task-bar`      | 999   | Add task bar             |
 | `--z-search-bar`        | 999   | Search bar               |
 | `--z-tour`              | 1001  | Tour overlay             |
-| `--z-onboarding-hint`   | 1100  | First-run hints          |
+| `--z-onboarding-hint`   | 998   | First-run hints          |
 
 ## Layout Variables
 

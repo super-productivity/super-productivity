@@ -756,6 +756,25 @@ export interface PluginAPI {
 
   loadSyncedData(key?: string): Promise<string | null>;
 
+  /**
+   * Requests normal sync with the configured provider from plugin.js or an iframe.
+   * The promise also resolves on handled errors (HANDLED_ERROR) and skipped syncs.
+   * Resolution does not confirm successful sync or publication of specific plugin
+   * data. Bridge promise rejections propagate to the caller. The iframe's 30-second
+   * timeout does not cancel sync that has already started in the host.
+   * Feature-detect this method before calling it on older hosts.
+   */
+  triggerSync(): Promise<void>;
+
+  /**
+   * Lists this plugin's sorted, non-empty keys from applied application state.
+   * Excludes the legacy unkeyed entry. The optional prefix is matched literally.
+   * New keys appear only after their writes reach applied application state.
+   * Existing keys remain listed while replacements are pending or compressing.
+   * Re-read after persistedDataChanged; this is not a disk or sync acknowledgement.
+   */
+  listSyncedDataKeys(prefix?: string): Promise<string[]>;
+
   getConfig<T = Record<string, unknown>>(): Promise<T | null>;
 
   // i18n

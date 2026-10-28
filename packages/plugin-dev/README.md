@@ -180,10 +180,10 @@ have `npm run package`, which writes `<id>-v<version>.zip`.
 
 ### 2. File Size Limits
 
-- Plugin ZIP: 50MB maximum
-- Plugin code (plugin.js): 10MB maximum
+- Plugin ZIP: 10MB maximum
+- Plugin code (plugin.js): 5MB maximum
 - Manifest: 100KB maximum
-- index.html: 100KB maximum
+- index.html: 1MB maximum
 
 ### 3. Required Files
 

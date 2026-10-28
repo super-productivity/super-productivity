@@ -3,6 +3,7 @@ import * as fromPlanner from './planner.reducer';
 import {
   selectMapOfAllTasksInActiveProjects,
   selectAllTasksInActiveProjects,
+  selectAllUndoneTasksWithDeadlineSorted,
 } from '../../tasks/store/task.selectors';
 import {
   NoStartTimeRepeatProjection,
@@ -506,3 +507,12 @@ export const groupDeadlineTasksByDay = (
   }
   return result;
 };
+
+// Built from the scheduling snapshot (SPAP-20), so a time-tracking tick does not
+// regroup every deadline the way a grouping of all active tasks does.
+export const selectUndoneDeadlineTasksByDay = createSelector(
+  selectAllUndoneTasksWithDeadlineSorted,
+  selectStartOfNextDayDiffMs,
+  (tasks, startOfNextDayDiffMs): Record<string, TaskCopy[]> =>
+    groupDeadlineTasksByDay(tasks, startOfNextDayDiffMs),
+);

@@ -153,6 +153,30 @@ describe('ShortcutService', () => {
       expect(mockRouter.navigate).not.toHaveBeenCalled();
     });
 
+    it('should navigate to planner when Shift+L is pressed and planner is enabled', () => {
+      mockConfigService.cfg.set({ keyboard: { goToPlanner: 'Shift+L' } });
+      mockConfigService.appFeatures.set({ isPlannerEnabled: true });
+
+      const ev = new KeyboardEvent('keydown', { code: 'KeyL', shiftKey: true });
+      Object.defineProperty(ev, 'target', { value: document.body });
+
+      service.handleKeyDown(ev);
+
+      expect(mockRouter.navigate).toHaveBeenCalledWith(['/planner']);
+    });
+
+    it('should NOT navigate to planner when planner is disabled', () => {
+      mockConfigService.cfg.set({ keyboard: { goToPlanner: 'Shift+L' } });
+      mockConfigService.appFeatures.set({ isPlannerEnabled: false });
+
+      const ev = new KeyboardEvent('keydown', { code: 'KeyL', shiftKey: true });
+      Object.defineProperty(ev, 'target', { value: document.body });
+
+      service.handleKeyDown(ev);
+
+      expect(mockRouter.navigate).not.toHaveBeenCalled();
+    });
+
     it('should navigate to search when Shift+F is pressed and search is enabled', () => {
       mockConfigService.appFeatures.set({
         isFocusModeEnabled: true,

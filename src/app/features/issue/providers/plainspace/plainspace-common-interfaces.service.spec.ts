@@ -7,6 +7,7 @@ import { PlainspaceIssue } from './plainspace-issue.model';
 import { IssueProviderService } from '../../issue-provider.service';
 import { Task } from '../../../tasks/task.model';
 import { PlainspaceConnectionStateService } from './plainspace-connection-state.service';
+import { IssueSyncStateService } from '../../two-way-sync/issue-sync-state.service';
 
 describe('PlainspaceCommonInterfacesService', () => {
   let service: PlainspaceCommonInterfacesService;
@@ -96,7 +97,10 @@ describe('PlainspaceCommonInterfacesService', () => {
       stubCfg();
       const task = { issueProviderId: 'p1', issueId: 't1', issueLastUpdated: 0 } as Task;
       const res = await service.getFreshDataForIssueTask(task);
-      expect(res?.taskChanges.dueWithTime).toBeUndefined();
+      expect(res?.taskChanges.dueWithTime).toBeNull();
+      // The op's JSON keeps the clear, so other devices apply it (#9776); an
+      // undefined was dropped and they kept the old time for good.
+      expect(JSON.parse(JSON.stringify(res!.taskChanges)).dueWithTime).toBeNull();
     });
 
     // Plainspace → SP completion sync: when a task is completed in Plainspace, the
@@ -182,6 +186,189 @@ describe('PlainspaceCommonInterfacesService', () => {
       ] as Task[];
       const updates = await service.getFreshDataForIssueTasks(tasks);
       expect(updates[0]?.taskChanges.isDone).toBe(true);
+    });
+  });
+
+  // Release 1, Gap 1 + 2: per-field pull against the baseline, and a quiet
+  // push of local edits the remote has not changed.
+  describe('per-field pull and pending pushes (bulk poll)', () => {
+    const UPDATED_AT = '2026-01-02T00:00:00.000Z';
+    const baseline = { isDone: false, title: 'Buy milk', scheduledAt: null };
+    let syncState: IssueSyncStateService;
+
+    beforeEach(() => {
+      syncState = TestBed.inject(IssueSyncStateService);
+      spyOn(
+        service as unknown as { _getCfgOnce$: (id: string) => unknown },
+        '_getCfgOnce$',
+      ).and.returnValue(of({ id: 'p1' }));
+      spyOn(syncState, 'requestPush');
+    });
+    const remote = (changes: Partial<PlainspaceIssue>): void => {
+      (api as unknown as { getMyTasks$: unknown }).getMyTasks$ = () =>
+        of([{ ...issue(null), ...changes }]);
+    };
+    const localTask = (changes: Partial<Task> = {}): Task =>
+      ({
+        id: 'sp-1',
+        issueProviderId: 'p1',
+        issueId: 't1',
+        title: 'Buy milk',
+        isDone: false,
+        issueLastUpdated: new Date(UPDATED_AT).getTime(),
+        issueLastSyncedValues: baseline,
+        ...changes,
+      }) as Task;
+
+    it('keeps a local rename when only completion changed remotely, and queues its push', async () => {
+      remote({ isDone: true, updatedAt: '2026-01-03T00:00:00.000Z' });
+      const updates = await service.getFreshDataForIssueTasks([
+        localTask({ title: 'Buy oat milk' }),
+      ]);
+      expect(updates[0].taskChanges.isDone).toBeTrue();
+      expect('title' in updates[0].taskChanges).toBeFalse();
+      expect(updates[0].taskChanges.issueLastSyncedValues).toEqual({
+        ...baseline,
+        isDone: true,
+      });
+      // Queued after the caller applied the pulls.
+      expect(syncState.requestPush).not.toHaveBeenCalled();
+      await new Promise((resolve) => setTimeout(resolve));
+      expect(syncState.requestPush).toHaveBeenCalledOnceWith('sp-1', true);
+    });
+
+    it('pulls a remote rename when the local title is unchanged', async () => {
+      remote({ title: 'Buy almond milk', updatedAt: '2026-01-03T00:00:00.000Z' });
+      const updates = await service.getFreshDataForIssueTasks([localTask()]);
+      expect(updates[0].taskChanges.title).toBe('Buy almond milk');
+      await new Promise((resolve) => setTimeout(resolve));
+      expect(syncState.requestPush).not.toHaveBeenCalled();
+    });
+
+    it('lets the remote win when both sides renamed, without pushing', async () => {
+      remote({ title: 'Remote name', updatedAt: '2026-01-03T00:00:00.000Z' });
+      const updates = await service.getFreshDataForIssueTasks([
+        localTask({ title: 'Local name' }),
+      ]);
+      expect(updates[0].taskChanges.title).toBe('Remote name');
+      await new Promise((resolve) => setTimeout(resolve));
+      expect(syncState.requestPush).not.toHaveBeenCalled();
+    });
+
+    it('converges when another device already sent the same rename', async () => {
+      remote({ title: 'Buy oat milk', updatedAt: '2026-01-03T00:00:00.000Z' });
+      const updates = await service.getFreshDataForIssueTasks([
+        localTask({ title: 'Buy oat milk' }),
+      ]);
+      expect(updates[0].taskChanges.title).toBe('Buy oat milk');
+      expect(updates[0].taskChanges.issueLastSyncedValues).toEqual({
+        ...baseline,
+        title: 'Buy oat milk',
+      });
+      await new Promise((resolve) => setTimeout(resolve));
+      expect(syncState.requestPush).not.toHaveBeenCalled();
+    });
+
+    it('keeps a local reschedule while the remote time is unchanged, and queues its push', async () => {
+      remote({ title: 'Renamed', updatedAt: '2026-01-03T00:00:00.000Z' });
+      const local = Date.UTC(2026, 0, 5, 9);
+      const updates = await service.getFreshDataForIssueTasks([
+        localTask({ dueWithTime: local }),
+      ]);
+      expect('dueWithTime' in updates[0].taskChanges).toBeFalse();
+      await new Promise((resolve) => setTimeout(resolve));
+      expect(syncState.requestPush).toHaveBeenCalledOnceWith('sp-1', true);
+    });
+
+    it("keeps a repeating item's local reschedule without queueing a push", async () => {
+      remote({ isRecurring: true });
+      const updates = await service.getFreshDataForIssueTasks([
+        localTask({ dueWithTime: Date.UTC(2026, 0, 5, 9) }),
+      ]);
+      expect(updates).toEqual([]);
+      // Its time is set in Plainspace: the next occurrence moves it.
+      await new Promise((resolve) => setTimeout(resolve));
+      expect(syncState.requestPush).not.toHaveBeenCalled();
+    });
+
+    it('queues a pending push even when the remote is unchanged', async () => {
+      remote({});
+      const updates = await service.getFreshDataForIssueTasks([
+        localTask({ isDone: true }),
+      ]);
+      expect(updates).toEqual([]);
+      await new Promise((resolve) => setTimeout(resolve));
+      expect(syncState.requestPush).toHaveBeenCalledOnceWith('sp-1', true);
+    });
+
+    // The marker can be "seen" while a field still differs from its baseline:
+    // our own PATCH's answer carries the server's side effects (completing a
+    // recurring item moves scheduledAt to the next occurrence) and any
+    // collaborator change that landed before it.
+    it('pulls a field that left its baseline even when the marker is unchanged (recurring completion)', async () => {
+      const next = '2026-01-03T09:00:00.000Z';
+      remote({ isDone: true, scheduledAt: next, isRecurring: true });
+      const updates = await service.getFreshDataForIssueTasks([
+        localTask({
+          isDone: true,
+          dueWithTime: Date.UTC(2026, 0, 2, 9),
+          issueLastSyncedValues: {
+            ...baseline,
+            isDone: true,
+            scheduledAt: '2026-01-02T09:00:00.000Z',
+          },
+        }),
+      ]);
+      expect(updates[0]?.taskChanges.dueWithTime).toBe(new Date(next).getTime());
+    });
+
+    it('pulls a collaborator rename carried by our own PATCH answer', async () => {
+      remote({ isDone: true, title: 'Renamed by Ann' });
+      const updates = await service.getFreshDataForIssueTasks([
+        localTask({
+          isDone: true,
+          issueLastSyncedValues: { ...baseline, isDone: true },
+        }),
+      ]);
+      expect(updates[0]?.taskChanges.title).toBe('Renamed by Ann');
+      expect(syncState.requestPush).not.toHaveBeenCalled();
+    });
+
+    it('stays quiet when the marker and every field match the baseline', async () => {
+      remote({});
+      expect(await service.getFreshDataForIssueTasks([localTask()])).toEqual([]);
+    });
+
+    it('marks a task the response lacks as no longer in my list, and clears it when it is back', async () => {
+      remote({ id: 'other' });
+      await service.getFreshDataForIssueTasks([localTask({ isDone: true })]);
+      expect(syncState.isMissing('sp-1')).toBeTrue();
+      await new Promise((resolve) => setTimeout(resolve));
+      expect(syncState.requestPush).not.toHaveBeenCalled();
+
+      remote({});
+      await service.getFreshDataForIssueTasks([localTask()]);
+      expect(syncState.isMissing('sp-1')).toBeFalse();
+    });
+
+    it('never marks tasks missing or pushes from a failed poll', async () => {
+      (api as unknown as { getMyTasks$: unknown }).getMyTasks$ = () =>
+        throwError(() => new HttpErrorResponse({ status: 0 }));
+      spyOn(syncState, 'setMissing');
+      await expectAsync(
+        service.getFreshDataForIssueTasks([localTask({ title: 'Pending rename' })]),
+      ).toBeRejected();
+      await new Promise((resolve) => setTimeout(resolve));
+      expect(syncState.setMissing).not.toHaveBeenCalled();
+      expect(syncState.missingTaskIds().size).toBe(0);
+      expect(syncState.requestPush).not.toHaveBeenCalled();
+    });
+
+    it('clears an old failure once nothing is pending', async () => {
+      syncState.reportFailure('sp-1', { text: 'offline' });
+      remote({});
+      await service.getFreshDataForIssueTasks([localTask()]);
+      expect(syncState.failures().has('sp-1')).toBeFalse();
     });
   });
 

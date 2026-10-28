@@ -26,6 +26,7 @@ import { FH, SVEType } from '../schedule.const';
 import { calculateTimeFromYPosition } from '../schedule-utils';
 import { DragDropRegistry } from '@angular/cdk/drag-drop';
 import { PlannerActions } from '../../planner/store/planner.actions';
+import { selectUndoneDeadlineTasksByDay } from '../../planner/store/planner.selectors';
 import { TaskReminderOptionId, TaskWithSubTasks } from '../../tasks/task.model';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { Log } from '../../../core/log';
@@ -183,6 +184,10 @@ export class ScheduleDayPanelComponent implements AfterViewInit, OnDestroy {
   private _workStartEndHours = toSignal(
     this._store.select(selectTimelineWorkStartEndHours),
   );
+
+  deadlineTasksByDay = toSignal(this._store.select(selectUndoneDeadlineTasksByDay), {
+    initialValue: {},
+  });
 
   workStartEnd = computed(() => {
     const v = this._workStartEndHours();

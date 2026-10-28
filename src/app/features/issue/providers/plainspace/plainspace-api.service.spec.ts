@@ -78,6 +78,14 @@ describe('PlainspaceApiService', () => {
     expect((await p).map((t) => t.id)).toEqual(['u1']);
   });
 
+  for (const body of [null, {}, { tasks: null }]) {
+    it(`getMyTasks$ rejects a 200 without a task list (${JSON.stringify(body)}) as no answer`, async () => {
+      const p = firstValueFrom(service.getMyTasks$(cfg));
+      httpMock.expectOne(`${BASE}/tasks`).flush(body);
+      await expectAsync(p).toBeRejectedWith(jasmine.objectContaining({ status: 0 }));
+    });
+  }
+
   it('getMyTasks$ matches the bound space by slug, not just the id', async () => {
     const slugCfg: PlainspaceCfg = { ...cfg, spaceId: 'my-slug' };
     const p = firstValueFrom(service.getMyTasks$(slugCfg));
@@ -117,12 +125,27 @@ describe('PlainspaceApiService', () => {
     expect(issue?.isDone).toBe(true);
   });
 
-  it('patchTask$ reports a failed completion update as null', async () => {
-    const p = firstValueFrom(service.patchTask$('a', { done: true }, cfg));
+  it('patchTask$ sends the title and maps the echoed title', async () => {
+    const p = firstValueFrom(
+      service.patchTask$('a', { done: true, title: '  Exact title ' }, cfg),
+    );
+    const req = httpMock.expectOne(`${BASE}/tasks/a`);
+    expect(req.request.body).toEqual({ done: true, title: '  Exact title ' });
+    req.flush({ task: { ...spTask('a', 'space-1', true), title: '  Exact title ' } });
+    const confirmation = await p;
+    expect(confirmation?.title).toBe('  Exact title ');
+    expect(confirmation?.updatedAt).toBe(spTask('a', 'space-1', true).updatedAt);
+  });
+
+  it('patchTask$ lets HTTP errors through so the adapter can read the status', async () => {
+    const p = firstValueFrom(service.patchTask$('a', { title: 'x' }, cfg));
     httpMock
       .expectOne(`${BASE}/tasks/a`)
-      .flush('boom', { status: 500, statusText: 'Server Error' });
-    expect(await p).toBeNull();
+      .flush(
+        { error: 'Validation failed' },
+        { status: 422, statusText: 'Unprocessable' },
+      );
+    await expectAsync(p).toBeRejectedWith(jasmine.objectContaining({ status: 422 }));
   });
 
   it('patchTask$ accepts a minimal completion confirmation', async () => {

@@ -25,6 +25,7 @@ import { Section } from '../section/section.model';
 import { SnackService } from '../../core/snack/snack.service';
 import { GlobalConfigService } from '../config/global-config.service';
 import { TaskWithSubTasks } from '../tasks/task.model';
+import { T } from '../../t.const';
 import {
   selectLaterTodayTasksWithSubTasks,
   selectOverdueTasksWithSubTasks,
@@ -951,6 +952,44 @@ describe('WorkViewComponent', () => {
 
       expect(toggleGroupExpansion).not.toHaveBeenCalled();
       expect(updateSection).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('emptyStateHint', () => {
+    const setup = async (
+      opts: {
+        backlog?: TaskWithSubTasks[];
+        isTodayList?: boolean;
+        overdue?: TaskWithSubTasks[];
+      } = {},
+    ): Promise<WorkViewComponent> => {
+      configureWorkViewTestBed({ isTodayList: opts.isTodayList });
+      store = TestBed.inject(MockStore);
+      overrideDefaultSelectors(store);
+      store.overrideSelector(selectOverdueTasksWithSubTasks, opts.overdue ?? []);
+
+      await TestBed.compileComponents();
+      const fixture = TestBed.createComponent(WorkViewComponent);
+      fixture.componentRef.setInput('undoneTasks', []);
+      fixture.componentRef.setInput('doneTasks', []);
+      fixture.componentRef.setInput('backlogTasks', opts.backlog ?? []);
+      fixture.detectChanges();
+      return fixture.componentInstance;
+    };
+
+    it('explains the list when nothing else is on screen', async () => {
+      const component = await setup();
+      expect(component.emptyStateHint()).toBe(T.WW.EMPTY_HINT_PROJECT);
+    });
+
+    it('stays hidden while the backlog holds tasks', async () => {
+      const component = await setup({ backlog: [buildTask('b1')] });
+      expect(component.emptyStateHint()).toBeNull();
+    });
+
+    it('stays hidden while the overdue panel shows tasks', async () => {
+      const component = await setup({ isTodayList: true, overdue: [buildTask('o1')] });
+      expect(component.emptyStateHint()).toBeNull();
     });
   });
 });

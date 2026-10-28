@@ -54,6 +54,7 @@ const PLANNER_TASK_PROVIDERS = [
     useFactory: () => ({
       todayDateStr: signal('2026-09-12'),
       clockTimestamp: signal(new Date(2026, 8, 12, 12).getTime()),
+      clockMinute: signal(Math.floor(new Date(2026, 8, 12, 12).getTime() / 60000)),
     }),
   },
   {

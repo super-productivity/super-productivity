@@ -3,12 +3,16 @@ import { Store } from '@ngrx/store';
 import { firstValueFrom } from 'rxjs';
 import { LocalRestApiFeatureBridge } from '../../core/electron/local-rest-api-feature-bridge';
 import { TaskLog } from '../../core/log';
+import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
+import { DEFAULT_GLOBAL_CONFIG } from '../config/default-global-config.const';
+import { GlobalConfigService } from '../config/global-config.service';
 import { IssueService } from '../issue/issue.service';
 import { IssueProviderKey } from '../issue/issue.model';
 import { addSubTask } from './store/task.actions';
 import { Task } from './task.model';
 import { TaskMoveToProjectService } from './task-move-to-project.service';
 import { TaskService } from './task.service';
+import { withRemindAtForDueChange } from './util/with-remind-at-for-due-change';
 
 /** Features-side implementation of `LOCAL_REST_API_FEATURE_BRIDGE`. */
 @Injectable()
@@ -16,6 +20,7 @@ export class LocalRestApiFeatureBridgeService implements LocalRestApiFeatureBrid
   private readonly _issueService = inject(IssueService);
   private readonly _taskService = inject(TaskService);
   private readonly _taskMoveToProjectService = inject(TaskMoveToProjectService);
+  private readonly _globalConfigService = inject(GlobalConfigService);
   private readonly _store = inject(Store);
 
   issueLink(
@@ -50,6 +55,26 @@ export class LocalRestApiFeatureBridgeService implements LocalRestApiFeatureBrid
       await this._taskMoveToProjectService.moveToProject(task, projectId, {
         isSkipConfirm: true,
       });
+    }
+  }
+
+  /**
+   * Same reminder handling as an issue-provider reschedule: the reminder keeps
+   * its offset when the time moves, and a cleared time dismisses it through
+   * its own action (see `withRemindAtForDueChange`).
+   */
+  updateTaskWithDueTime(task: Task, changesIn: Partial<Task>): void {
+    const { changes, isClearRemindAt } = withRemindAtForDueChange(
+      task,
+      changesIn,
+      this._globalConfigService.cfg()?.reminder.defaultTaskRemindOption ??
+        DEFAULT_GLOBAL_CONFIG.reminder.defaultTaskRemindOption!,
+    );
+    this._taskService.update(task.id, changes);
+    if (isClearRemindAt) {
+      this._store.dispatch(
+        TaskSharedActions.dismissReminderOnly({ id: task.id, isSkipSnack: true }),
+      );
     }
   }
 }

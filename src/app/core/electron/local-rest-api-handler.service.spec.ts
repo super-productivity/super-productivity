@@ -238,7 +238,13 @@ describe('LocalRestApiHandlerService', () => {
 
     featureBridgeMock = jasmine.createSpyObj<LocalRestApiFeatureBridge>(
       'LocalRestApiFeatureBridge',
-      ['issueLink', 'addLiteralSubTask', 'addTimeSpentOnDay', 'moveTaskToProject'],
+      [
+        'issueLink',
+        'addLiteralSubTask',
+        'addTimeSpentOnDay',
+        'moveTaskToProject',
+        'updateTaskWithDueTime',
+      ],
     );
     featureBridgeMock.issueLink.and.returnValue(Promise.resolve(''));
 
@@ -1620,6 +1626,52 @@ describe('LocalRestApiHandlerService', () => {
           'task-1',
           jasmine.any(Object),
         );
+      });
+
+      describe('dueWithTime', () => {
+        const dueWithTime = 1_778_590_800_000;
+
+        it('should update through the bridge so the reminder follows', async () => {
+          const mockTask = createMockTask('task-1', {
+            dueWithTime,
+            remindAt: dueWithTime,
+          });
+          Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+            get: () => (_id: string) => of(mockTask),
+          });
+
+          const response = await sendRequestAndWait(
+            createRequest('PATCH', '/tasks/task-1', {
+              body: { dueWithTime: null, title: 'Unscheduled' },
+            }),
+          );
+
+          expect(response.status).toBe(200);
+          expect(featureBridgeMock.updateTaskWithDueTime).toHaveBeenCalledOnceWith(
+            mockTask,
+            { dueWithTime: null, title: 'Unscheduled' },
+          );
+          expect(taskServiceMock.update).not.toHaveBeenCalled();
+        });
+
+        it('should not go through the bridge when dueWithTime is not sent', async () => {
+          const mockTask = createMockTask('task-1', {
+            dueWithTime,
+            remindAt: dueWithTime,
+          });
+          Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+            get: () => (_id: string) => of(mockTask),
+          });
+
+          await sendRequestAndWait(
+            createRequest('PATCH', '/tasks/task-1', { body: { timeEstimate: 60000 } }),
+          );
+
+          expect(taskServiceMock.update).toHaveBeenCalledOnceWith('task-1', {
+            timeEstimate: 60000,
+          });
+          expect(featureBridgeMock.updateTaskWithDueTime).not.toHaveBeenCalled();
+        });
       });
 
       it('should set a day deadline through the deadline action', async () => {

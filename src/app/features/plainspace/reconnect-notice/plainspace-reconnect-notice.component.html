@@ -12,3 +12,9 @@
     </div>
   </div>
 }
+@if (isServerTooOld()) {
+  <div class="callout callout--warning">
+    <mat-icon aria-hidden="true">update</mat-icon>
+    <p>{{ T.PLAINSPACE.SYNC.SERVER_TOO_OLD | translate }}</p>
+  </div>
+}

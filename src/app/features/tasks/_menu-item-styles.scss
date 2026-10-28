@@ -3,22 +3,27 @@
 // Shared by the task context menu and the multi-select bulk menu so the two
 // menus keep the same item layout and shortcut hint.
 .key-i {
-  font-size: 11px;
-  text-align: center;
-  border-radius: 20px;
-  max-width: 66px;
-  letter-spacing: -1px;
+  // Plain text like native menus: an outlined badge per row is noisy. Keeps
+  // the item's text color: muted grey drops below 4.5:1 on hover (#4988).
+  font-size: var(--font-size-xs);
+  max-width: 80px;
   @include truncateText();
   display: none;
 
   &:not(:empty) {
     display: block;
-    line-height: 1;
-    min-width: 20px;
-    border: 1px solid;
-    padding: var(--s-half);
-    margin-left: var(--s-half);
+    margin-left: var(--s);
+    // The global `.mat-mdc-menu-item-text span { margin-right: auto }` would
+    // split the free space with the label and strand the hint mid-row.
+    margin-right: 0;
   }
+}
+
+// Submenu triggers end in a 24px arrow slot (see Material's
+// .mat-mdc-menu-submenu-icon); reserve that slot on the other rows so all
+// hints line up in one column left of the arrows.
+button:not([aria-haspopup]) .key-i:not(:empty) {
+  margin-right: 24px;
 }
 
 .menuItemLeft {

@@ -17,7 +17,11 @@ import { isOnline } from '../../../../util/is-online';
 import { IS_ELECTRON } from '../../../../app.constants';
 import { selectPlainspaceProviderForProject } from '../../store/issue-provider.selectors';
 import { PlainspaceAccountService } from '../../../plainspace/plainspace-account.service';
-import { PlainspaceConnectDialogComponent } from '../../../plainspace/connect-dialog/plainspace-connect-dialog.component';
+import {
+  PlainspaceConnectDialogComponent,
+  PlainspaceConnectDialogData,
+  PlainspaceConnectDialogResult,
+} from '../../../plainspace/connect-dialog/plainspace-connect-dialog.component';
 import {
   PlainspaceSpaceChoice,
   PlainspaceSpacePickerDialogComponent,
@@ -61,12 +65,18 @@ export class PlainspaceShareService {
         this._snackService.open({ type: 'ERROR', msg: T.PLAINSPACE.OFFLINE });
         return null;
       }
-      if (!(await this._ensureConnected())) {
+      const connected = await this._ensureConnected(title);
+      if (!connected) {
         this._snackService.open({ type: 'ERROR', msg: T.PLAINSPACE.LOGIN_REQUIRED });
         return null;
       }
 
-      const choice = await this._chooseSpace();
+      // Signing up just created the account's first Space, named after this
+      // project: link it rather than offer to create another.
+      const choice: PlainspaceSpaceChoice | null =
+        connected === true
+          ? await this._chooseSpace()
+          : { action: 'link', spaceId: connected.createdSpaceId };
       if (!choice) {
         // User cancelled the space picker — nothing to provision.
         return null;
@@ -203,19 +213,22 @@ export class PlainspaceShareService {
   /**
    * Ensures a Plainspace account is connected, opening the guided connect dialog
    * if not. A stored token that has since gone stale is left to the space
-   * picker, which detects it and offers a reconnect.
+   * picker, which detects it and offers a reconnect. A sign-up names its first
+   * Space after the shared project (`title`) and reports it.
    */
-  private async _ensureConnected(): Promise<boolean> {
+  private async _ensureConnected(
+    title: string,
+  ): Promise<PlainspaceConnectDialogResult | null> {
     if (this._accountService.isLoggedIn()) {
       return true;
     }
+    const data: PlainspaceConnectDialogData = {
+      host: DEFAULT_PLAINSPACE_CFG.host,
+      spaceName: title,
+    };
     const connected = await firstValueFrom(
-      this._matDialog
-        .open(PlainspaceConnectDialogComponent, {
-          data: { host: DEFAULT_PLAINSPACE_CFG.host },
-        })
-        .afterClosed(),
+      this._matDialog.open(PlainspaceConnectDialogComponent, { data }).afterClosed(),
     );
-    return connected === true;
+    return connected || null;
   }
 }

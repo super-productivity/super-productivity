@@ -770,7 +770,13 @@ export class CaldavClientService {
       // lookup and the DELETE fails it instead of being deleted unseen.
       // eslint-disable-next-line @typescript-eslint/naming-convention
       const headers: Record<string, string> = task.etag ? { 'If-Match': task.etag } : {};
-      await task.delete(headers).catch((err) => this._handleNetErr(err));
+      await task.delete(headers).catch((err: { status?: number } | undefined) => {
+        // Deleted elsewhere between the lookup and the DELETE: same as above.
+        if (err?.status === 404 || err?.status === 410) {
+          return;
+        }
+        this._handleNetErr(err);
+      });
     }
   }
 

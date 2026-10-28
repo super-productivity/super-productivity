@@ -21,9 +21,12 @@ const EVENT: ScheduleFromCalendarEvent = {
 describe('PlannerCalendarEventComponent', () => {
   let fixture: ComponentFixture<PlannerCalendarEventComponent>;
 
-  const createWith = (showStartTime?: boolean): void => {
+  const createWith = (
+    showStartTime?: boolean,
+    event: ScheduleFromCalendarEvent = EVENT,
+  ): void => {
     fixture = TestBed.createComponent(PlannerCalendarEventComponent);
-    fixture.componentRef.setInput('calendarEvent', EVENT);
+    fixture.componentRef.setInput('calendarEvent', event);
     if (showStartTime !== undefined) {
       fixture.componentRef.setInput('showStartTime', showStartTime);
     }
@@ -81,5 +84,33 @@ describe('PlannerCalendarEventComponent', () => {
     expect(durationIdx).toBeGreaterThanOrEqual(0);
     expect(startTimeIdx).toBe(children.length - 1);
     expect(startTimeIdx).toBeGreaterThan(durationIdx);
+  });
+
+  it('exposes the calendar color as --cal-event-color on the host', () => {
+    createWith(undefined, { ...EVENT, color: '#4caf50' });
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.style.getPropertyValue('--cal-event-color')).toBe('#4caf50');
+  });
+
+  it('does not set --cal-event-color when the event has no color', () => {
+    createWith();
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.style.getPropertyValue('--cal-event-color')).toBe('');
+  });
+
+  it('draws the color dot only for a colored event with the default icon', () => {
+    const hasDot = (): boolean => !!fixture.nativeElement.querySelector('.color-dot');
+    createWith(undefined, { ...EVENT, color: '#4caf50' });
+    expect(hasDot()).toBe(true);
+    fixture.componentRef.setInput('calendarEvent', {
+      ...EVENT,
+      color: '#4caf50',
+      icon: 'flag',
+    });
+    fixture.detectChanges();
+    expect(hasDot()).toBe(false);
+    fixture.componentRef.setInput('calendarEvent', EVENT);
+    fixture.detectChanges();
+    expect(hasDot()).toBe(false);
   });
 });

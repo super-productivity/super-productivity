@@ -1,7 +1,9 @@
 import { OperationLogEntry } from '../../core/operation.types';
 import {
   appendRecentOpsAtBatchBoundary,
+  areOwnUploadsMissing,
   detectDownloadGap,
+  doesRemoteExtendLastSeen,
   GapDetectionInput,
   GapDetectionRemote,
   getOpLogBaselineClock,
@@ -55,6 +57,16 @@ describe('detectDownloadGap', () => {
       );
 
       expect(result.needsGapDetection).toBeFalse();
+    });
+
+    it('reports own uploads missing only on the seq-0 snapshot download (#10916)', () => {
+      const remote = { vectorClock: REPLACED_CLOCK };
+      const own = { excludeClient: 'clientA' };
+
+      expect(detectDownloadGap(input(remote, own)).ownUploadsMissing).toBeFalse();
+      expect(
+        detectDownloadGap(input(remote, { ...own, sinceSeq: 0 })).ownUploadsMissing,
+      ).toBeTrue();
     });
   });
 
@@ -135,6 +147,8 @@ describe('detectDownloadGap: oldest batch at sinceSeq+1 (#10973)', () => {
 
     expect(result.needsGapDetection).toBeTrue();
     expect(result.reason).toContain('possibly partial oldest batch');
+    // The file only grew: pending edits stay on top of the snapshot (#10972).
+    expect(result.snapshotExtendsLastSeen).toBeTrue();
   });
 
   it('trusts a writer that certified the oldest batch complete', () => {
@@ -335,5 +349,99 @@ describe('getOpLogBaselineClock (#10258)', () => {
     expect(
       await getOpLogBaselineClock(store({ source: 'remote' }), 3, undefined),
     ).toEqual(CLOCK);
+  });
+});
+
+describe('areOwnUploadsMissing', () => {
+  // Client A last saw its own upload at counter 5 in a file based on BASE.
+  const BASE = { clientA: 2, clientB: 1 };
+  const LAST_SEEN = { clientA: 5, clientB: 1 };
+
+  it('flags a stale-base write that dropped this client’s uploads (#10916)', () => {
+    const remote = { vectorClock: { clientA: 2, clientB: 3 }, snapshotBaseClock: BASE };
+    expect(areOwnUploadsMissing(remote, 'clientA', LAST_SEEN)).toBe(true);
+  });
+
+  it('flags a file without a base: an old writer cannot be told apart', () => {
+    const remote = { vectorClock: { clientA: 2, clientB: 3 } };
+    expect(areOwnUploadsMissing(remote, 'clientA', LAST_SEEN)).toBe(true);
+  });
+
+  it('does not flag a full-state replacement with a base this client has not seen', () => {
+    const remote = {
+      vectorClock: { clientB: 9 },
+      snapshotBaseClock: { clientB: 9 },
+    };
+    expect(areOwnUploadsMissing(remote, 'clientA', LAST_SEEN)).toBe(false);
+  });
+
+  it('does not flag a remote that still covers this client’s uploads', () => {
+    const remote = { vectorClock: { clientA: 5, clientB: 3 }, snapshotBaseClock: BASE };
+    expect(areOwnUploadsMissing(remote, 'clientA', LAST_SEEN)).toBe(false);
+  });
+
+  it('does not flag without a last-seen clock or client id', () => {
+    const remote = { vectorClock: { clientB: 3 }, snapshotBaseClock: BASE };
+    expect(areOwnUploadsMissing(remote, 'clientA', undefined)).toBe(false);
+    expect(areOwnUploadsMissing(remote, undefined, LAST_SEEN)).toBe(false);
+  });
+});
+
+describe('doesRemoteExtendLastSeen (#10972)', () => {
+  const LAST_SEEN = { clientA: 3, clientB: 1 };
+  const remote = (
+    over: Partial<{
+      syncVersion: number;
+      vectorClock: Record<string, number>;
+      snapshotBaseClock: Record<string, number>;
+    }> = {},
+  ): { syncVersion: number; vectorClock: Record<string, number> } => ({
+    syncVersion: 2500,
+    vectorClock: { clientA: 2503, clientB: 1 },
+    ...over,
+  });
+
+  it('is true when the file only grew past what this client saw', () => {
+    expect(doesRemoteExtendLastSeen(remote(), LAST_SEEN, 4)).toBeTrue();
+    expect(
+      doesRemoteExtendLastSeen(
+        remote({ snapshotBaseClock: { clientA: 1 } }),
+        LAST_SEEN,
+        4,
+      ),
+    ).toBeTrue();
+  });
+
+  it('is false without a baseline', () => {
+    expect(doesRemoteExtendLastSeen(remote(), undefined, 4)).toBeFalse();
+    expect(doesRemoteExtendLastSeen(remote(), LAST_SEEN, 0)).toBeFalse();
+  });
+
+  it('is false when the file version went backwards', () => {
+    expect(
+      doesRemoteExtendLastSeen(remote({ syncVersion: 3 }), LAST_SEEN, 4),
+    ).toBeFalse();
+  });
+
+  it('is false for a legacy replacement (no base clock, version reset to 1)', () => {
+    expect(
+      doesRemoteExtendLastSeen(remote({ syncVersion: 1 }), LAST_SEEN, 1),
+    ).toBeFalse();
+  });
+
+  it('is false for a replacement whose base this client has not seen', () => {
+    expect(
+      doesRemoteExtendLastSeen(
+        remote({ snapshotBaseClock: { clientA: 5, clientC: 1 } }),
+        LAST_SEEN,
+        4,
+      ),
+    ).toBeFalse();
+  });
+
+  it('is false when the file clock lost entries this client saw', () => {
+    expect(
+      doesRemoteExtendLastSeen(remote({ vectorClock: { clientA: 2503 } }), LAST_SEEN, 4),
+    ).toBeFalse();
   });
 });

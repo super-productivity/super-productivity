@@ -51,6 +51,20 @@ export class ScheduleService {
   private _calendarEvents = toSignal(this._calendarIntegrationService.calendarEvents$, {
     initialValue: [],
   });
+  // The color a calendar source reported per provider (e.g. a Google calendar's
+  // color), for per-provider legends. A provider with several calendars shows
+  // the first one found.
+  readonly calendarColorByProviderId = computed(() => {
+    const colors = new Map<string, string>();
+    for (const entry of this._calendarEvents()) {
+      for (const ev of entry.items) {
+        if (ev.calendarColor && !colors.has(ev.calProviderId)) {
+          colors.set(ev.calProviderId, ev.calendarColor);
+        }
+      }
+    }
+    return colors;
+  });
   scheduleRefreshTick = toSignal(interval(2 * 60 * 1000).pipe(startWith(0)), {
     initialValue: 0,
   });

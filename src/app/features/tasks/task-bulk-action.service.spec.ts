@@ -16,6 +16,7 @@ import { DEFAULT_TASK, Task, TaskReminderOptionId } from './task.model';
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 import { T } from '../../t.const';
 import { PLAINSPACE_TYPE } from '../issue/issue.const';
+import { IssueSyncStateService } from '../issue/two-way-sync/issue-sync-state.service';
 import { TranslateService, TranslateStore } from '@ngx-translate/core';
 import { LocaleDatePipe } from '../../ui/pipes/locale-date.pipe';
 import { PlannerActions } from '../planner/store/planner.actions';
@@ -419,6 +420,20 @@ describe('TaskBulkActionService', () => {
         jasmine.objectContaining({
           data: jasmine.objectContaining({
             message: 'F.TASK.MULTI_SELECT.D_CONFIRM_DELETE.MSG_PLAINSPACE.OTHER',
+          }),
+        }),
+      );
+    });
+
+    it('does not warn for Plainspace tasks Plainspace no longer lists for me', async () => {
+      TestBed.inject(IssueSyncStateService).setMissing(['gone'], ['gone']);
+      select([t('a'), t('gone', { issueType: PLAINSPACE_TYPE })]);
+      await service.deleteSelected();
+      expect(matDialog.open).toHaveBeenCalledWith(
+        jasmine.anything(),
+        jasmine.objectContaining({
+          data: jasmine.objectContaining({
+            message: 'F.TASK.MULTI_SELECT.D_CONFIRM_DELETE.MSG.OTHER',
           }),
         }),
       );

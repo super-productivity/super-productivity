@@ -25,6 +25,7 @@ import { getDbDateStr } from '../../../util/get-db-date-str';
 import { getDateTimeFromClockString } from '../../../util/get-date-time-from-clock-string';
 import { LS } from '../../../core/persistence/storage-keys.const';
 import { SyncProviderId } from '../../../op-log/sync-providers/provider.const';
+import { DateService } from '../../../core/date/date.service';
 
 // Matches the internal DELAY_SCHEDULE in the effects file.
 const EFFECT_DELAY_MS = 5000;
@@ -758,7 +759,7 @@ describe('MobileNotificationEffects', () => {
       // Deterministic id == the instance's eventual id → idempotent with
       // scheduleNotifications$ (same notificationId → alarm overwritten, not doubled).
       const expectedTaskId = getRepeatableTaskId('cfgDaily', dayStr(1));
-      expect(reminderServiceSpy.scheduleReminder).toHaveBeenCalledOnceWith(
+      expect(reminderServiceSpy.scheduleReminder).toHaveBeenCalledWith(
         jasmine.objectContaining({
           notificationId: generateNotificationId(expectedTaskId),
           reminderId: expectedTaskId,
@@ -793,37 +794,94 @@ describe('MobileNotificationEffects', () => {
       expect(reminderServiceSpy.scheduleReminder).not.toHaveBeenCalled();
     }));
 
-    it('schedules one alarm per config — the soonest upcoming occurrence only', fakeAsync(() => {
+    it('arms every upcoming occurrence in the lookahead in one pass, so later days fire without the app running (#10781)', fakeAsync(() => {
+      store.overrideSelector(selectActiveTaskRepeatCfgs, [mkDailyCfg()]);
+      subscribeRepeatReminders();
+
+      tick(REPEAT_SETTLE_MS + 1);
+
+      // The effect runs once; nothing re-arms day 2+ after day 1's alarm fires
+      // with the app closed, so all of them must already be armed now.
+      expect(reminderServiceSpy.scheduleReminder).toHaveBeenCalledTimes(14);
+      for (const offset of [1, 2, 3, 14]) {
+        expect(reminderServiceSpy.scheduleReminder).toHaveBeenCalledWith(
+          jasmine.objectContaining({
+            notificationId: generateNotificationId(
+              getRepeatableTaskId('cfgDaily', dayStr(offset)),
+            ),
+            triggerAtMs: triggerFor(offset, '09:00'),
+          }),
+        );
+      }
+    }));
+
+    it('under the cap, gives every config its next occurrence before any config its second', fakeAsync(() => {
+      // 20 daily configs (14 occurrences each) + one weekly config whose only
+      // in-window hits are 6 and 13 days out. Soonest-first alone would let the
+      // daily configs' day-2..6 occurrences crowd the weekly one out.
+      const dailyCfgs = Array.from({ length: 20 }, (_, i) => mkDailyCfg({ id: `d${i}` }));
+      const weekday = dayAt(6).getDay();
+      const weekdayKey = [
+        'sunday',
+        'monday',
+        'tuesday',
+        'wednesday',
+        'thursday',
+        'friday',
+        'saturday',
+      ][weekday] as keyof TaskRepeatCfg;
+      const weeklyCfg = {
+        ...mkDailyCfg({ id: 'wk', repeatCycle: 'WEEKLY' }),
+        monday: false,
+        tuesday: false,
+        wednesday: false,
+        thursday: false,
+        friday: false,
+        saturday: false,
+        sunday: false,
+        [weekdayKey]: true,
+      } as TaskRepeatCfg;
+      store.overrideSelector(selectActiveTaskRepeatCfgs, [...dailyCfgs, weeklyCfg]);
+      subscribeRepeatReminders();
+
+      tick(REPEAT_SETTLE_MS + 1);
+
+      expect(reminderServiceSpy.scheduleReminder).toHaveBeenCalledTimes(32);
+      expect(reminderServiceSpy.scheduleReminder).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          reminderId: getRepeatableTaskId('wk', dayStr(6)),
+        }),
+      );
+      for (let i = 0; i < 20; i++) {
+        expect(reminderServiceSpy.scheduleReminder).toHaveBeenCalledWith(
+          jasmine.objectContaining({
+            reminderId: getRepeatableTaskId(`d${i}`, dayStr(1)),
+          }),
+        );
+      }
+    }));
+
+    it('uses the schedule-day id and trigger the real instance gets with a non-zero start of next day', fakeAsync(() => {
+      // 4h offset: a 02:00 start belongs to the previous logical day and lands on
+      // the next calendar day (#3378). Creation keys both id and time off the
+      // schedule day via getRepeatDueWithTime, so the pre-scheduled alarm must too.
+      TestBed.inject(DateService).setStartOfNextDayDiff(4);
       store.overrideSelector(selectActiveTaskRepeatCfgs, [
-        mkDailyCfg({ id: 'a' }),
-        mkDailyCfg({ id: 'b', startTime: '10:30' }),
+        mkDailyCfg({ startTime: '02:00' }),
       ]);
       subscribeRepeatReminders();
 
       tick(REPEAT_SETTLE_MS + 1);
 
-      // Two daily configs are "due" every day in the 14-day window, but each is
-      // pre-scheduled exactly once (its next occurrence), never 14× per config.
-      expect(reminderServiceSpy.scheduleReminder).toHaveBeenCalledTimes(2);
       expect(reminderServiceSpy.scheduleReminder).toHaveBeenCalledWith(
         jasmine.objectContaining({
-          reminderId: getRepeatableTaskId('a', dayStr(1)),
-          triggerAtMs: triggerFor(1, '09:00'),
-        }),
-      );
-      expect(reminderServiceSpy.scheduleReminder).toHaveBeenCalledWith(
-        jasmine.objectContaining({
-          reminderId: getRepeatableTaskId('b', dayStr(1)),
-          triggerAtMs: triggerFor(1, '10:30'),
+          reminderId: getRepeatableTaskId('cfgDaily', dayStr(1)),
+          triggerAtMs: triggerFor(2, '02:00'),
         }),
       );
     }));
 
-    it('does not schedule a weekly config whose next occurrence is beyond the lookahead window', fakeAsync(() => {
-      // Weekly-on-this-weekday, but the only occurrence in range is today — which is
-      // already created (lastTaskCreationDay = today). The next is 7 days out and the
-      // window only spans the soonest occurrence per config, so for a far-future first
-      // hit we still schedule it; assert the in-window weekly case schedules correctly.
+    it('schedules a weekly config only on its weekday within the lookahead window', fakeAsync(() => {
       const weekday = dayAt(1).getDay();
       const weekdayKey = [
         'sunday',
@@ -852,13 +910,16 @@ describe('MobileNotificationEffects', () => {
 
       tick(REPEAT_SETTLE_MS + 1);
 
-      // Tomorrow matches the chosen weekday → its occurrence is pre-scheduled.
-      expect(reminderServiceSpy.scheduleReminder).toHaveBeenCalledOnceWith(
-        jasmine.objectContaining({
-          reminderId: getRepeatableTaskId('wk', dayStr(1)),
-          triggerAtMs: triggerFor(1, '09:00'),
-        }),
-      );
+      // Tomorrow and a week later match the chosen weekday; day 15 is outside.
+      expect(reminderServiceSpy.scheduleReminder).toHaveBeenCalledTimes(2);
+      for (const offset of [1, 8]) {
+        expect(reminderServiceSpy.scheduleReminder).toHaveBeenCalledWith(
+          jasmine.objectContaining({
+            reminderId: getRepeatableTaskId('wk', dayStr(offset)),
+            triggerAtMs: triggerFor(offset, '09:00'),
+          }),
+        );
+      }
     }));
 
     it('does not pre-schedule a paused config', fakeAsync(() => {
@@ -881,10 +942,15 @@ describe('MobileNotificationEffects', () => {
       tick(REPEAT_SETTLE_MS + 1);
 
       const expectedTaskId = getRepeatableTaskId('cfgDaily', dayStr(2));
-      expect(reminderServiceSpy.scheduleReminder).toHaveBeenCalledOnceWith(
+      expect(reminderServiceSpy.scheduleReminder).toHaveBeenCalledWith(
         jasmine.objectContaining({
           reminderId: expectedTaskId,
           triggerAtMs: triggerFor(2, '09:00'),
+        }),
+      );
+      expect(reminderServiceSpy.scheduleReminder).not.toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          reminderId: getRepeatableTaskId('cfgDaily', dayStr(1)),
         }),
       );
     }));
@@ -900,10 +966,15 @@ describe('MobileNotificationEffects', () => {
       tick(REPEAT_SETTLE_MS + 1);
 
       const expectedTaskId = getRepeatableTaskId('cfgDaily', dayStr(1));
-      expect(reminderServiceSpy.scheduleReminder).toHaveBeenCalledOnceWith(
+      expect(reminderServiceSpy.scheduleReminder).toHaveBeenCalledWith(
         jasmine.objectContaining({
           reminderId: expectedTaskId,
           triggerAtMs: triggerFor(1, '00:00'),
+        }),
+      );
+      expect(reminderServiceSpy.scheduleReminder).not.toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          reminderId: getRepeatableTaskId('cfgDaily', dayStr(0)),
         }),
       );
     }));
@@ -924,7 +995,7 @@ describe('MobileNotificationEffects', () => {
 
       tick(REPEAT_SETTLE_MS + 1);
       const tomorrowId = getRepeatableTaskId('cfgDaily', dayStr(1));
-      expect(reminderServiceSpy.scheduleReminder).toHaveBeenCalledTimes(1);
+      expect(reminderServiceSpy.scheduleReminder).toHaveBeenCalledTimes(14);
 
       // Mirror the REAL dispatch order of _getActionsForTaskRepeatCfg, all within
       // the debounce window: (1) addTask + updateTaskRepeatCfg advance the config
@@ -959,7 +1030,7 @@ describe('MobileNotificationEffects', () => {
 
       tick(REPEAT_SETTLE_MS + 1);
       const tomorrowId = getRepeatableTaskId('cfgDaily', dayStr(1));
-      expect(reminderServiceSpy.scheduleReminder).toHaveBeenCalledTimes(1);
+      expect(reminderServiceSpy.scheduleReminder).toHaveBeenCalledTimes(14);
 
       store.overrideSelector(selectActiveTaskRepeatCfgs, []);
       store.refreshState();
@@ -967,6 +1038,9 @@ describe('MobileNotificationEffects', () => {
 
       expect(reminderServiceSpy.cancelReminder).toHaveBeenCalledWith(
         generateNotificationId(tomorrowId),
+      );
+      expect(reminderServiceSpy.cancelReminder).toHaveBeenCalledWith(
+        generateNotificationId(getRepeatableTaskId('cfgDaily', dayStr(14))),
       );
     }));
 

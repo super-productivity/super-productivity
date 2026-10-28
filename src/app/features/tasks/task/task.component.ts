@@ -129,8 +129,12 @@ import {
 } from '../add-subtask-input/add-subtask-input.component';
 import { AddSubtaskInputService } from '../add-subtask-input/add-subtask-input.service';
 import { getSubTaskTimeLeftForDisplay } from '../util/get-sub-task-time-left-for-display';
-import { getScheduledDateColor } from '../util/get-scheduled-date-color';
+import {
+  getScheduledDateColor,
+  readClockUntilDue,
+} from '../util/get-scheduled-date-color';
 import { isWontDoTask } from '../util/is-wont-do-task';
+import { IssueSyncStateService } from '../../issue/two-way-sync/issue-sync-state.service';
 
 const isInteractiveTarget = (target: EventTarget | null): boolean =>
   target instanceof Element &&
@@ -209,6 +213,7 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   private readonly _addSubtaskInputService = inject(AddSubtaskInputService);
   private readonly _multiSelect = inject(TaskMultiSelectService);
   private readonly _taskMoveToProjectService = inject(TaskMoveToProjectService);
+  private readonly _issueSyncState = inject(IssueSyncStateService);
 
   readonly workContextService = inject(WorkContextService);
   readonly layoutService = inject(LayoutService);
@@ -306,8 +311,14 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
       task,
       this.globalTrackingIntervalService.todayDateStr(),
       this._dateService.getStartOfNextDayDiffMs(),
-      // Only timed tasks depend on the clock, with no per-row subscription.
-      task.dueWithTime ? this.globalTrackingIntervalService.clockTimestamp() : 0,
+      // Only timed tasks not yet due depend on the clock, with no per-row subscription.
+      task.dueWithTime
+        ? readClockUntilDue(
+            this.globalTrackingIntervalService.clockTimestamp,
+            this.globalTrackingIntervalService.clockMinute,
+            task.dueWithTime,
+          )
+        : 0,
     );
   });
   hasTimeConflict = computed(() => {
@@ -670,6 +681,9 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   }
 
   ngOnDestroy(): void {
+    if (this._taskFocusService.lastFocusedTaskComponent() === this) {
+      this._taskFocusService.lastFocusedTaskComponent.set(null);
+    }
     // Possibly no longer rendered (checked after the DOM settles, since rows
     // re-mount when they change lists and the detail panel renders copies).
     this._multiSelect.removeWhenUnrendered(
@@ -787,10 +801,17 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
     const isConfirmBeforeTaskDelete =
       this._configService.cfg()?.tasks?.isConfirmBeforeDelete ?? true;
 
-    if (isTaskDeleteConfirmRequired(this.task(), isConfirmBeforeTaskDelete)) {
+    const isNoLongerListed = this._issueSyncState.isMissing(this.task().id);
+    if (
+      isTaskDeleteConfirmRequired(
+        this.task(),
+        isConfirmBeforeTaskDelete,
+        isNoLongerListed,
+      )
+    ) {
       this._matDialog
         .open(DialogConfirmComponent, {
-          data: getTaskDeleteConfirmData(this.task()),
+          data: getTaskDeleteConfirmData(this.task(), undefined, isNoLongerListed),
         })
         .afterClosed()
         .pipe(takeUntilDestroyed(this._destroyRef))

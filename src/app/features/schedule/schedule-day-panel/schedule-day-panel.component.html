@@ -36,6 +36,7 @@
           [workStartEnd]="workStartEnd() || null"
           [currentTimeRow]="page.day === todayDateStr() ? currentTimeRow() : null"
           [isTaskDragActive]="isCurrent && isDragging()"
+          [deadlineTasksByDay]="deadlineTasksByDay()"
         >
           <button
             weekHeaderStart
