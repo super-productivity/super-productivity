@@ -3003,6 +3003,42 @@ describe('TaskRepeatCfgEffects - Repeatable Subtasks', () => {
       }, 0);
     });
 
+    // #11213: a yearly "on demand" series whose last copy was completed and
+    // archived is replanned by moving its startDate forward to today. Today
+    // is now an occurrence, so today's copy must appear right away instead of
+    // after the next day change.
+    it('should trigger addAllDueToday when startDate is moved forward to today and no live instance exists (#11213)', (done) => {
+      const today = new Date();
+      const todayStr = getDbDateStr(today);
+      const lastCreationStr = getDbDateStr(addDays(today, -10));
+
+      const updatedCfg: TaskRepeatCfgCopy = {
+        ...mockRepeatCfg,
+        repeatCycle: 'YEARLY',
+        repeatEvery: 1,
+        startDate: todayStr,
+        lastTaskCreationDay: lastCreationStr,
+      };
+      actions$ = of(
+        updateTaskRepeatCfg({
+          taskRepeatCfg: { id: 'repeat-cfg-id', changes: { startDate: todayStr } },
+        }),
+      );
+      taskRepeatCfgService.getTaskRepeatCfgById$.and.returnValue(of(updatedCfg));
+      taskService.getTasksByRepeatCfgId$.and.returnValue(of([]));
+
+      const emitted: unknown[] = [];
+      effects.rescheduleTaskOnRepeatCfgUpdate$.subscribe((a) => emitted.push(a));
+
+      setTimeout(() => {
+        expect(emitted).toEqual([]);
+        // The anchor is already before today; it must not be moved.
+        expect(taskRepeatCfgService.updateTaskRepeatCfg).not.toHaveBeenCalled();
+        expect(addTasksForTomorrowService.addAllDueToday).toHaveBeenCalled();
+        done();
+      }, 0);
+    });
+
     // #3589: resuming a paused series on a scheduled day must create today's
     // copy right away, not after the next day change.
     it('should trigger addAllDueToday when a series is resumed on a scheduled day', (done) => {

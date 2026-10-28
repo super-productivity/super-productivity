@@ -372,9 +372,11 @@ export class TaskRepeatCfgEffects {
                       this._addTasksForTomorrowService.addAllDueToday();
                     }
                   } else if (
-                    // Resumed (#3589): today's occurrence would otherwise wait
-                    // for the next day change, same as #7768 Bug 2 above.
-                    changes.isPaused === false &&
+                    // Resumed (#3589) or replanned onto today, e.g. startDate
+                    // moved forward to today after the last copy was done
+                    // (#11213): today's occurrence would otherwise wait for
+                    // the next day change, same as #7768 Bug 2 above. Paused
+                    // configs returned early, so this is never a pause.
                     firstOccurrence &&
                     this._dateService.isToday(firstOccurrence)
                   ) {
