@@ -355,6 +355,32 @@ describe('CaldavClientService.deleteTask$', () => {
     expect(snack.open).not.toHaveBeenCalled();
   });
 
+  it('treats a VTODO deleted between the lookup and the DELETE as deleted', async () => {
+    const davTask = davTodo('todo-del-1', '"etag-1"');
+    davTask.delete.and.rejectWith({ status: 404 });
+    spyOn(svc as any, '_getCalendar').and.resolveTo({ readOnly: false });
+    spyOn(CaldavClientService as any, '_findTaskByUid').and.resolveTo([davTask]);
+
+    await firstValueFrom(svc.deleteTask$(MOCK_CFG, 'todo-del-1'), {
+      defaultValue: undefined,
+    });
+
+    expect(snack.open).not.toHaveBeenCalled();
+  });
+
+  it('reports a DELETE that fails for another reason', async () => {
+    const davTask = davTodo('todo-del-1', '"etag-1"');
+    davTask.delete.and.rejectWith({ status: 412 });
+    spyOn(svc as any, '_getCalendar').and.resolveTo({ readOnly: false });
+    spyOn(CaldavClientService as any, '_findTaskByUid').and.resolveTo([davTask]);
+
+    await expectAsync(
+      firstValueFrom(svc.deleteTask$(MOCK_CFG, 'todo-del-1')),
+    ).toBeRejected();
+
+    expect(snack.open).toHaveBeenCalled();
+  });
+
   it('refuses to delete from a read-only calendar', async () => {
     const findSpy = spyOn(CaldavClientService as any, '_findTaskByUid');
     spyOn(svc as any, '_getCalendar').and.resolveTo({ readOnly: true });

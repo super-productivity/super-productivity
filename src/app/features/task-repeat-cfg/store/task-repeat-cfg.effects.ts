@@ -313,6 +313,12 @@ export class TaskRepeatCfgEffects {
                 // (getEffectiveRepeatStartDate uses lastTaskCreationDay), so
                 // editing startDate must not clear completion history.
                 const changes = taskRepeatCfg.changes as Partial<TaskRepeatCfgCopy>;
+                // A pause or resume alone moves no occurrence: the open copy
+                // stays where it is, as for an end date (#10091). Relocating
+                // it took an overdue copy out of Overdue and Today on resume.
+                const isPauseToggleOnly = SCHEDULE_AFFECTING_FIELDS.every(
+                  (field) => field === 'isPaused' || !(field in changes),
+                );
                 const lastCreationDay = getEffectiveLastTaskCreationDay(fullCfg);
                 const isStartDateMovedEarlier =
                   'startDate' in changes &&
@@ -335,7 +341,7 @@ export class TaskRepeatCfgEffects {
                       { inclusive: true },
                     );
 
-                if (undoneInstances.length === 0) {
+                if (undoneInstances.length === 0 || isPauseToggleOnly) {
                   // No live instance to reschedule. But when startDate moved
                   // earlier, the stale lastTaskCreationDay would still suppress
                   // every projected/created instance between the new startDate

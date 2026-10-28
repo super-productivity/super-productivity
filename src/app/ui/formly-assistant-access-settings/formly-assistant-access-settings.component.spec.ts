@@ -1,7 +1,11 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { FormlyModule } from '@ngx-formly/core';
 import { TranslateModule } from '@ngx-translate/core';
-import { FormlyAssistantAccessSettingsComponent } from './formly-assistant-access-settings.component';
+import {
+  canUseClaudeDesktopExtension,
+  CLAUDE_DESKTOP_EXTENSION_URL,
+  FormlyAssistantAccessSettingsComponent,
+} from './formly-assistant-access-settings.component';
 import { SnackService } from '../../core/snack/snack.service';
 import { T } from '../../t.const';
 import { AssistantAccessState } from '../../../../electron/shared-with-frontend/assistant-access.model';
@@ -178,6 +182,44 @@ describe('FormlyAssistantAccessSettingsComponent', () => {
 
     expect(readInput.checked).toBe(false);
     expect(enabledInput.checked).toBe(true);
+  });
+
+  it('offers the Claude Desktop extension only where Claude Desktop can use it', () => {
+    for (const channel of ['win-nsis', 'win-portable', 'win-store', 'mac-dmg'] as const) {
+      expect(canUseClaudeDesktopExtension(channel)).withContext(channel).toBe(true);
+    }
+    for (const channel of [
+      'mac-store',
+      'linux-appimage',
+      'linux-snap',
+      'linux-flatpak',
+      'linux-native',
+      null,
+      undefined,
+    ] as const) {
+      expect(canUseClaudeDesktopExtension(channel))
+        .withContext(String(channel))
+        .toBe(false);
+    }
+  });
+
+  it('links the Claude Desktop extension from the setup section', async () => {
+    const extensionLink = async (channel: string): Promise<HTMLAnchorElement | null> => {
+      setEa({ getDistChannel: () => channel });
+      // The channel is read once, when the component is created.
+      fixture = TestBed.createComponent(FormlyAssistantAccessSettingsComponent);
+      fixture.componentInstance.field = { props: {}, templateOptions: {} } as never;
+      fixture.detectChanges();
+      await settle();
+      return fixture.nativeElement.querySelector(
+        `a[href="${CLAUDE_DESKTOP_EXTENSION_URL}"]`,
+      );
+    };
+
+    const link = await extensionLink('mac-dmg');
+    expect(link?.target).toBe('_blank');
+    expect(link?.textContent).toContain(T.GCF.MISC.ASSISTANT_ACCESS_SETUP_CLAUDE_DESKTOP);
+    expect(await extensionLink('linux-native')).toBeNull();
   });
 
   it('does not throw when the Electron bridge is unavailable', async () => {

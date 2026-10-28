@@ -373,6 +373,9 @@ pin in `conflict-resolution.service.spec.ts`).
 Do **not** invent in-band sentinels (`null`, `0`, marker strings): remote
 reducers apply payload values verbatim, so released clients would persist the
 sentinel and fail typia state validation.
+A field whose model type already allows `null` (`Task.dueWithTime`,
+`Task.dueDay`) is not a sentinel case: `null` is a valid value there and
+survives the wire, so a pull clears it with `null` (CalDAV, Plainspace).
 
 ---
 

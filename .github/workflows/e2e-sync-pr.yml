@@ -164,7 +164,13 @@ jobs:
     needs: [detect, build]
     if: needs.detect.outputs.supersync == 'true'
     runs-on: ${{ vars.USE_BLACKSMITH == 'true' && github.event.pull_request.user.login == 'johannesjo' && 'blacksmith-4vcpu-ubuntu-2404' || 'ubuntu-latest' }}
-    timeout-minutes: 40
+    # Shards split an equal number of tests in file order, so shard 6 always
+    # gets the long time-preserving/vector-clock specs: ~31 min per job
+    # (median, max 36 of 8 passing runs, measured 2026-10). A runner ~1.9x
+    # slower per test timed it out at 40 with no failing test (#11046); 60
+    # covers that slowdown on a median run. A hung test still ends at the
+    # 180s per-test timeout.
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:

@@ -1,97 +1,112 @@
 @for (project of projects() || []; track project.id) {
-  <section class="project-section">
-    @if (project.id !== (workContextService.activeWorkContextId$ | async)) {
+  @if (project.id !== (workContextService.activeWorkContextId$ | async)) {
+    <collapsible
+      class="project-section task-section"
+      [style.border-left-color]="project.color"
+      [title]="project.title"
+      [isIconBefore]="true"
+      [isExpanded]="!collapsedProjectIds().includes(project.id)"
+      (isExpandedChange)="toggleProjectExpanded(project.id)"
+    >
       <div
-        [style.border-color]="project.color"
-        class="project-title"
+        actions
+        class="project-time"
       >
-        <h3>{{ project.title }}</h3>
-        <mat-icon>timer</mat-icon>
         @if (!isShowYesterday()) {
-          <div>{{ project.timeSpentToday | msToString }}</div>
-        }
-        @if (isShowYesterday()) {
-          <div>
-            {{ project.timeSpentToday > 0 ? (project.timeSpentToday | msToString) : '' }}
-            <!---->
-            @if (project.timeSpentYesterday && project.timeSpentYesterday > 0) {
-              ({{ project.timeSpentYesterday | msToString }}
-              {{ T.G.YESTERDAY | translate }})
-            }
-          </div>
+          {{ project.timeSpentToday | msToString }}
+        } @else {
+          {{ project.timeSpentToday > 0 ? (project.timeSpentToday | msToString) : '' }}
+          @if (project.timeSpentYesterday && project.timeSpentYesterday > 0) {
+            ({{ project.timeSpentYesterday | msToString }}
+            {{ T.G.YESTERDAY | translate }})
+          }
         }
       </div>
-    }
+      <ng-container
+        *ngTemplateOutlet="projectBody; context: { $implicit: project }"
+      ></ng-container>
+    </collapsible>
+  } @else {
+    <section class="project-section">
+      <ng-container
+        *ngTemplateOutlet="projectBody; context: { $implicit: project }"
+      ></ng-container>
+    </section>
+  }
+}
 
-    <task-summary-table
-      (updated)="onTaskSummaryEdit()"
-      [day]="dayStr()"
-      [flatTasks]="project.tasks"
-    ></task-summary-table>
-    <div style="text-align: center; margin-top: 8px; margin-bottom: 16px">
+<ng-template
+  #projectBody
+  let-project
+>
+  <task-summary-table
+    (updated)="onTaskSummaryEdit()"
+    [day]="dayStr()"
+    [flatTasks]="project.tasks"
+  ></task-summary-table>
+  <div style="text-align: center; margin-top: 8px; margin-bottom: 16px">
+    <button
+      [matMenuTriggerFor]="roundTimeActions"
+      [title]="T.PDS.ROUND_TIME_SPENT_TITLE | translate"
+      mat-button
+    >
+      <mat-icon>restore</mat-icon>
+      {{ T.PDS.ROUND_TIME_SPENT | translate }}
+    </button>
+    @if (isForToday()) {
       <button
-        [matMenuTriggerFor]="roundTimeActions"
-        [title]="T.PDS.ROUND_TIME_SPENT_TITLE | translate"
+        (click)="showExportModal(project.id)"
         mat-button
       >
-        <mat-icon>restore</mat-icon>
-        {{ T.PDS.ROUND_TIME_SPENT | translate }}
+        <mat-icon>call_made</mat-icon>
+        {{ T.PDS.EXPORT_TASK_LIST | translate }}
       </button>
-      @if (isForToday()) {
+    }
+    <mat-menu #roundTimeActions="matMenu">
+      <ng-template matMenuContent>
         <button
-          (click)="showExportModal(project.id)"
-          mat-button
+          mat-menu-item
+          style="color: red"
         >
-          <mat-icon>call_made</mat-icon>
-          {{ T.PDS.EXPORT_TASK_LIST | translate }}
+          {{ T.PDS.ROUND_TIME_WARNING | translate }}
         </button>
-      }
-      <mat-menu #roundTimeActions="matMenu">
-        <ng-template matMenuContent>
-          <button
-            mat-menu-item
-            style="color: red"
-          >
-            {{ T.PDS.ROUND_TIME_WARNING | translate }}
-          </button>
-          <button
-            (click)="roundTimeForTasks(project.id, '5M')"
-            mat-menu-item
-          >
-            {{ T.PDS.ROUND_5M | translate }}
-          </button>
-          <button
-            (click)="roundTimeForTasks(project.id, '5M', true)"
-            mat-menu-item
-          >
-            {{ T.PDS.ROUND_UP_5M | translate }}
-          </button>
-          <button
-            (click)="roundTimeForTasks(project.id, 'QUARTER')"
-            mat-menu-item
-          >
-            {{ T.PDS.ROUND_15M | translate }}
-          </button>
-          <button
-            (click)="roundTimeForTasks(project.id, 'QUARTER', true)"
-            mat-menu-item
-          >
-            {{ T.PDS.ROUND_UP_15M | translate }}
-          </button>
-          <button
-            (click)="roundTimeForTasks(project.id, 'HALF')"
-            mat-menu-item
-          >
-            {{ T.PDS.ROUND_30M | translate }}
-          </button>
-          <button
-            (click)="roundTimeForTasks(project.id, 'HALF', true)"
-            mat-menu-item
-          >
-            {{ T.PDS.ROUND_UP_30M | translate }}
-          </button>
-        </ng-template>
-      </mat-menu>
-    </div>
-  </section>
-}
+        <button
+          (click)="roundTimeForTasks(project.id, '5M')"
+          mat-menu-item
+        >
+          {{ T.PDS.ROUND_5M | translate }}
+        </button>
+        <button
+          (click)="roundTimeForTasks(project.id, '5M', true)"
+          mat-menu-item
+        >
+          {{ T.PDS.ROUND_UP_5M | translate }}
+        </button>
+        <button
+          (click)="roundTimeForTasks(project.id, 'QUARTER')"
+          mat-menu-item
+        >
+          {{ T.PDS.ROUND_15M | translate }}
+        </button>
+        <button
+          (click)="roundTimeForTasks(project.id, 'QUARTER', true)"
+          mat-menu-item
+        >
+          {{ T.PDS.ROUND_UP_15M | translate }}
+        </button>
+        <button
+          (click)="roundTimeForTasks(project.id, 'HALF')"
+          mat-menu-item
+        >
+          {{ T.PDS.ROUND_30M | translate }}
+        </button>
+        <button
+          (click)="roundTimeForTasks(project.id, 'HALF', true)"
+          mat-menu-item
+        >
+          {{ T.PDS.ROUND_UP_30M | translate }}
+        </button>
+      </ng-template>
+    </mat-menu>
+  </div>
+</ng-template>

@@ -28,7 +28,7 @@ export const openRecurDialog = async (page: Page): Promise<Locator> => {
 
   const scheduleDialog = page.locator(SCHEDULE_DIALOG);
   await scheduleDialog.waitFor({ state: 'visible', timeout: 10000 });
-  await scheduleDialog.locator('.repeat-btn').click();
+  await scheduleDialog.locator('[data-test-id="schedule-repeat-field"]').click();
 
   const dialog = page.locator(DIALOG_CONTAINER);
   await dialog.waitFor({ state: 'visible', timeout: 10000 });

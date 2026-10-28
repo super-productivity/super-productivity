@@ -45,4 +45,14 @@ describe('PlainspaceReconnectNoticeComponent', () => {
       data: { host: 'https://plainspace.example', replacedToken: 'pat_old' },
     });
   });
+
+  it('says once that the server is too old for titles', () => {
+    state.reportServerTooOld('ps-1');
+    state.reportServerTooOld('ps-1');
+    fixture.detectChanges();
+    const callouts = fixture.nativeElement.querySelectorAll('.callout');
+    expect(callouts.length).toBe(1);
+    expect(callouts[0].textContent).toContain('PLAINSPACE.SYNC.SERVER_TOO_OLD');
+    expect(button()).toBeNull();
+  });
 });

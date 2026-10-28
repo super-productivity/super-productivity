@@ -11,7 +11,11 @@ import { IssueSyncAdapterRegistryService } from '../features/issue/two-way-sync/
 import { T } from '../t.const';
 import { PluginCacheService } from './plugin-cache.service';
 import { PluginCleanupService } from './plugin-cleanup.service';
-import { MAX_PLUGIN_TRANSLATIONS_TOTAL_SIZE } from './plugin.const';
+import {
+  MAX_PLUGIN_INDEX_HTML_SIZE,
+  MAX_PLUGIN_MANIFEST_SIZE,
+  MAX_PLUGIN_TRANSLATIONS_TOTAL_SIZE,
+} from './plugin.const';
 import { PluginHooksService } from './plugin-hooks';
 import { PluginI18nService } from './plugin-i18n.service';
 import { PluginIssueProviderRegistryService } from './issue-provider/plugin-issue-provider-registry.service';
@@ -154,6 +158,22 @@ describe('PluginService loadPluginFromZip iframe-only plugins', () => {
     });
 
     service = TestBed.inject(PluginService);
+  });
+
+  it('rejects an incompatible ZIP before caching or executing a plugin', async () => {
+    const files: Record<string, string> = {};
+    files['manifest.json'] = JSON.stringify({
+      ...iframeManifest,
+      minSupVersion: '9999.0.0',
+    });
+    files['index.html'] = '<main>Plugin UI</main>';
+    const file = createZipFile(files);
+
+    await expectAsync(service.loadPluginFromZip(file)).toBeRejectedWithError(
+      T.PLUGINS.VALIDATION_FAILED,
+    );
+    expect(pluginCache.storePlugin).not.toHaveBeenCalled();
+    expect(pluginRunner.loadPlugin).not.toHaveBeenCalled();
   });
 
   it('loads an iframe plugin zip without plugin.js when index.html exists', async () => {
@@ -324,6 +344,38 @@ describe('PluginService loadPluginFromZip iframe-only plugins', () => {
     await expectAsync(service.loadPluginFromZip(file)).toBeRejectedWithError(
       T.PLUGINS.INDEX_HTML_NOT_LOADED,
     );
+  });
+
+  describe('index.html size limit', () => {
+    const createIndexHtml = (byteLength: number): string => {
+      const head = '<!doctype html><html><body>';
+      const tail = '</body></html>';
+      return head + 'x'.repeat(byteLength - head.length - tail.length) + tail;
+    };
+
+    it('accepts index.html larger than the manifest limit up to its own limit', async () => {
+      expect(MAX_PLUGIN_INDEX_HTML_SIZE).toBeGreaterThan(MAX_PLUGIN_MANIFEST_SIZE);
+      const indexHtml = createIndexHtml(MAX_PLUGIN_INDEX_HTML_SIZE);
+      const files: Record<string, string> = {};
+      files['manifest.json'] = JSON.stringify(iframeManifest);
+      files['index.html'] = indexHtml;
+
+      const result = await service.loadPluginFromZip(createZipFile(files));
+
+      expect(result.loaded).toBeTrue();
+      expect(service.getPluginIndexHtml(iframeManifest.id)).toBe(indexHtml);
+    });
+
+    it('rejects index.html over its limit before caching it', async () => {
+      const files: Record<string, string> = {};
+      files['manifest.json'] = JSON.stringify(iframeManifest);
+      files['index.html'] = createIndexHtml(MAX_PLUGIN_INDEX_HTML_SIZE + 1);
+
+      await expectAsync(
+        service.loadPluginFromZip(createZipFile(files)),
+      ).toBeRejectedWithError(T.PLUGINS.INDEX_HTML_TOO_LARGE);
+      expect(pluginCache.storePlugin).not.toHaveBeenCalled();
+    });
   });
 
   it('rejects uploaded plugin ids reserved by bundled plugins', async () => {

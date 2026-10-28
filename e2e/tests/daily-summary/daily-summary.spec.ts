@@ -57,4 +57,31 @@ test.describe('Daily Summary', () => {
     // Just check for a key part of the task name that would be present regardless of prefix
     await expect(taskElement).toContainText('hohoho', { timeout: 3000 }); // Reduced from 5s to 3s
   });
+
+  test('project tables can be collapsed and expanded', async ({ page, workViewPage }) => {
+    await page.goto('/');
+    await workViewPage.waitForTaskList();
+    await workViewPage.addTask('collapsible summary task');
+    await expect(page.locator('task')).toHaveCount(1, { timeout: 5000 });
+
+    await page.goto('/#/tag/TODAY/daily-summary');
+
+    const taskTitle = page.locator(SUMMARY_TABLE_TASK_EL);
+    await expect(taskTitle).toContainText('collapsible summary task', {
+      timeout: 10000,
+    });
+
+    const header = page.locator(
+      'task-summary-tables collapsible.project-section .collapsible-header',
+    );
+    await expect(header).toHaveAttribute('aria-expanded', 'true');
+
+    await header.click();
+    await expect(header).toHaveAttribute('aria-expanded', 'false');
+    await expect(taskTitle).toHaveCount(0);
+
+    await header.click();
+    await expect(header).toHaveAttribute('aria-expanded', 'true');
+    await expect(taskTitle).toContainText('collapsible summary task');
+  });
 });

@@ -27,7 +27,7 @@ The server uses an **append-on-write retained operation log** backed by **Postgr
 | ------------------------------ | -------------------------------------------------------------------------------------------------- |
 | **Scoped server authority**    | Server owns per-user order and accepted upload results, not app-state semantics                    |
 | **Two-part conflict handling** | Server detects upload conflicts; clients resolve rejections and download-side concurrency          |
-| **E2E encryption support**     | Optional payload encryption leaves routing and causal metadata plaintext                           |
+| **E2E encryption support**     | Client-enforced payload encryption; routing and causal metadata stay plaintext                     |
 | **Idempotent uploads**         | Durable operation-ID uniqueness is the backstop; request IDs add a five-minute process-local cache |
 
 ## Quick Start
@@ -366,6 +366,8 @@ All configuration is done via environment variables.
 | `SUPERSYNC_DEFAULT_STORAGE_QUOTA_BYTES` | `104857600` (100 MB)                 | Quota for accounts created from now on. Existing accounts keep the value stored on their row.                                                                                                                                |
 | `CAPTURE_OAUTH_CLIENTS`                 | Claude and Claude Code               | JSON array of `{ "clientId": "https://…", "name": "…", "redirectUris": ["https://…"] }`; replaces the pinned OAuth client allowlist. No dynamic registration or URL fetching.                                                |
 | `CAPTURE_CONNECTOR_ENABLED`             | `false`                              | Agent task capture: the `/mcp` endpoint and `/api/capture`. Single instance only (in-process retry window and per-grant limit).                                                                                              |
+| `CAPTURE_REVIEW_EMAIL`                  | -                                    | With `CAPTURE_REVIEW_CODE`: the one verified account the reviewer code connects to. Set both or neither. See [Capture OAuth](#capture-oauth).                                                                                |
+| `CAPTURE_REVIEW_CODE`                   | -                                    | Reusable consent-page code for connector directory reviewers: 20–32 letters, digits or dashes. Only for `CAPTURE_REVIEW_EMAIL`, only while that account has capture switched on. Unset it after review.                      |
 
 ### Legal pages
 
@@ -492,6 +494,16 @@ approval quota: invalid guesses must not block other users from connecting.
 This remains a single-instance feature. Sign-out everywhere
 and switching capture off revoke grants and invalidate unconsumed codes in one
 transaction. Apply the Prisma migration before starting the updated server.
+
+Connector directories (Claude, ChatGPT) review a connector days after
+submission, from their own infrastructure, so a 10-minute connection code from
+a running app cannot reach their reviewers. For that, set `CAPTURE_REVIEW_EMAIL`
+to a demo account with capture switched on and `CAPTURE_REVIEW_CODE` to a
+random code, and give reviewers that code. It approves only that account, can
+be reused (each approval is its own connection), is rate-limited like a
+connection code, and is never stored, only its hash. The server logs a warning
+while it is set and each approval it makes. Unset both once the review is done;
+existing connections stay until revoked in the demo account's app.
 
 The local browser test covers app code → consent → token → refresh → Inbox
 and a second device. Real Claude web reconnection must also be checked after

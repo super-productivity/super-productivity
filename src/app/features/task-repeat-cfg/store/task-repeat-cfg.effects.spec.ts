@@ -3065,6 +3065,91 @@ describe('TaskRepeatCfgEffects - Repeatable Subtasks', () => {
       }, 0);
     });
 
+    // Resuming moves no occurrence: an open overdue copy stays overdue instead
+    // of jumping to the next occurrence and out of Overdue and Today.
+    it('should leave an open overdue copy in place when a series is resumed', (done) => {
+      const today = new Date();
+      const yesterdayStr = getDbDateStr(addDays(today, -1));
+      const twoDaysAgo = addDays(today, -2);
+      const weekday = TASK_REPEAT_WEEKDAY_MAP[twoDaysAgo.getDay()];
+      const resumedCfg: TaskRepeatCfgCopy = {
+        ...mockRepeatCfg,
+        repeatCycle: 'WEEKLY',
+        repeatEvery: 1,
+        monday: false,
+        tuesday: false,
+        wednesday: false,
+        thursday: false,
+        friday: false,
+        saturday: false,
+        sunday: false,
+        [weekday]: true,
+        isPaused: false,
+        startDate: getDbDateStr(addDays(today, -30)),
+        lastTaskCreationDay: yesterdayStr,
+      };
+      const overdueCopy: Task = {
+        ...mockTask,
+        isDone: false,
+        dueDay: getDbDateStr(twoDaysAgo),
+      };
+      actions$ = of(
+        updateTaskRepeatCfg({
+          taskRepeatCfg: {
+            id: 'repeat-cfg-id',
+            changes: { isPaused: false, lastTaskCreationDay: yesterdayStr },
+          },
+        }),
+      );
+      taskRepeatCfgService.getTaskRepeatCfgById$.and.returnValue(of(resumedCfg));
+      taskService.getTasksByRepeatCfgId$.and.returnValue(of([overdueCopy]));
+
+      const emitted: unknown[] = [];
+      effects.rescheduleTaskOnRepeatCfgUpdate$.subscribe((a) => emitted.push(a));
+
+      setTimeout(() => {
+        expect(emitted).toEqual([]);
+        expect(taskRepeatCfgService.updateTaskRepeatCfg).not.toHaveBeenCalled();
+        done();
+      }, 0);
+    });
+
+    it("should still create today's copy when a series with an open copy is resumed on a scheduled day", (done) => {
+      const today = new Date();
+      const yesterdayStr = getDbDateStr(addDays(today, -1));
+      const resumedCfg: TaskRepeatCfgCopy = {
+        ...mockRepeatCfg,
+        repeatCycle: 'DAILY',
+        repeatEvery: 1,
+        isPaused: false,
+        lastTaskCreationDay: yesterdayStr,
+      };
+      const overdueCopy: Task = {
+        ...mockTask,
+        isDone: false,
+        dueDay: getDbDateStr(addDays(today, -5)),
+      };
+      actions$ = of(
+        updateTaskRepeatCfg({
+          taskRepeatCfg: {
+            id: 'repeat-cfg-id',
+            changes: { isPaused: false, lastTaskCreationDay: yesterdayStr },
+          },
+        }),
+      );
+      taskRepeatCfgService.getTaskRepeatCfgById$.and.returnValue(of(resumedCfg));
+      taskService.getTasksByRepeatCfgId$.and.returnValue(of([overdueCopy]));
+
+      const emitted: unknown[] = [];
+      effects.rescheduleTaskOnRepeatCfgUpdate$.subscribe((a) => emitted.push(a));
+
+      setTimeout(() => {
+        expect(emitted).toEqual([]);
+        expect(addTasksForTomorrowService.addAllDueToday).toHaveBeenCalled();
+        done();
+      }, 0);
+    });
+
     // Editing a monthly anchor ("2nd Tuesday" -> "3rd Tuesday", or toggling
     // last-day-of-month) changes which day the next occurrence lands on, just
     // like editing the weekly weekday booleans does -- but the monthly anchor

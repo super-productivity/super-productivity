@@ -255,6 +255,11 @@ export class ShortcutService {
       this._configService.appFeatures().isSchedulerEnabled
     ) {
       this._router.navigate(['/schedule']);
+    } else if (
+      checkKeyCombo(ev, keys.goToPlanner) &&
+      this._configService.appFeatures().isPlannerEnabled
+    ) {
+      this._router.navigate(['/planner']);
 
       // } else if (checkKeyCombo(ev, keys.goToDailyAgenda)) {
       //   this._router.navigate(['/daily-agenda']);

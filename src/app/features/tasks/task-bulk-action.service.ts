@@ -52,6 +52,7 @@ import { LocaleDatePipe } from '../../ui/pipes/locale-date.pipe';
 import { msToString } from '../../ui/duration/ms-to-string.pipe';
 import { ADD_TASK_INLINE_BTN_SELECTOR } from '../planner/add-task-inline/add-task-inline.const';
 import { getNextPlannerAddButton } from '../planner/get-next-planner-add-button';
+import { IssueSyncStateService } from '../issue/two-way-sync/issue-sync-state.service';
 
 interface DateTimePick {
   date: Date | null;
@@ -84,6 +85,7 @@ export class TaskBulkActionService {
   private readonly _workContextService = inject(WorkContextService);
   private readonly _translateService = inject(TranslateService);
   private readonly _translateStore = inject(TranslateStore);
+  private readonly _issueSyncState = inject(IssueSyncStateService);
   private readonly _datePipe = inject(LocaleDatePipe);
 
   private readonly _taskEntities = this._store.selectSignal(selectTaskEntities);
@@ -188,7 +190,12 @@ export class TaskBulkActionService {
           data: {
             okTxt: T.F.TASK.MULTI_SELECT.D_CONFIRM_DELETE.OK,
             message: this._plural(
-              tasks.some((t) => t.issueType === PLAINSPACE_TYPE)
+              // A task Plainspace no longer lists for me is only deleted here.
+              tasks.some(
+                (t) =>
+                  t.issueType === PLAINSPACE_TYPE &&
+                  !this._issueSyncState.isMissing(t.id),
+              )
                 ? 'F.TASK.MULTI_SELECT.D_CONFIRM_DELETE.MSG_PLAINSPACE'
                 : 'F.TASK.MULTI_SELECT.D_CONFIRM_DELETE.MSG',
               tasks.length,
@@ -219,11 +226,12 @@ export class TaskBulkActionService {
   private async _deleteSingle(task: Task): Promise<void> {
     const isConfirmBeforeDelete =
       this._globalConfigService.cfg()?.tasks?.isConfirmBeforeDelete ?? true;
-    if (isTaskDeleteConfirmRequired(task, isConfirmBeforeDelete)) {
+    const isNoLongerListed = this._issueSyncState.isMissing(task.id);
+    if (isTaskDeleteConfirmRequired(task, isConfirmBeforeDelete, isNoLongerListed)) {
       const isConfirm = await firstValueFrom(
         this._matDialog
           .open(DialogConfirmComponent, {
-            data: getTaskDeleteConfirmData(task, truncate(task.title)),
+            data: getTaskDeleteConfirmData(task, truncate(task.title), isNoLongerListed),
           })
           .afterClosed(),
       );

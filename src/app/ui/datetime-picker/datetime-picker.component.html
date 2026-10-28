@@ -32,35 +32,39 @@
 }
 
 <div class="form-ctrl-wrapper">
-  <mat-form-field
-    class="time-form-field"
-    subscriptSizing="dynamic"
-  >
-    <mat-label>{{ timeLabel() }}</mat-label>
-    <mat-icon matPrefix>schedule</mat-icon>
-    <!-- 12h/24h here follows the browser/OS UI locale, not our dateTimeLocale
+  <div class="time-row">
+    <mat-form-field
+      class="time-form-field"
+      subscriptSizing="dynamic"
+    >
+      <mat-label>{{ timeLabel() }}</mat-label>
+      <mat-icon matPrefix>schedule</mat-icon>
+      <!-- 12h/24h here follows the browser/OS UI locale, not our dateTimeLocale
          setting: browsers ignore `lang`, navigator.language and the ICU default
          for native time inputs, so this cannot be forced from the page (#8565). -->
-    <input
-      type="time"
-      spTimeStep
-      (focus)="onTimeFocus()"
-      [ngModel]="selectedTime()"
-      (ngModelChange)="onTimeChange($event)"
-      step="60"
-      matInput
-      (click)="onTimeInputClick($event)"
-      (keydown)="onTimeKeyDown($event)"
-    />
-    @if (selectedTime()) {
-      <mat-icon
-        class="time-clear-btn"
-        matSuffix
-        (click)="onTimeClear($event)"
-        >close
-      </mat-icon>
-    }
-  </mat-form-field>
+      <input
+        type="time"
+        spTimeStep
+        (focus)="onTimeFocus()"
+        [ngModel]="selectedTime()"
+        (ngModelChange)="onTimeChange($event)"
+        step="60"
+        matInput
+        (click)="onTimeInputClick($event)"
+        (keydown)="onTimeKeyDown($event)"
+      />
+      @if (selectedTime()) {
+        <mat-icon
+          class="time-clear-btn"
+          matSuffix
+          (click)="onTimeClear($event)"
+          >close
+        </mat-icon>
+      }
+    </mat-form-field>
+    <!-- Lets a host place a compact control (e.g. repeat) beside the time field. -->
+    <ng-content select="[timeRowEnd]" />
+  </div>
 
   @if (selectedTime()) {
     <mat-form-field

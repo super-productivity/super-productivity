@@ -16,6 +16,11 @@ import { isUpdateCheckPossible } from './is-update-check-possible.util';
 
 const RELEASES_API_URL =
   'https://api.github.com/repos/super-productivity/super-productivity/releases/latest';
+// Fixed instead of the response's html_url: openExternalUrl only checks the
+// scheme, so a forged response could otherwise point "Download" at an
+// arbitrary https host. The website page is easier for most users than the
+// GitHub release asset list.
+const DOWNLOAD_PAGE_URL = 'https://super-productivity.com/download/';
 const INITIAL_CHECK_DELAY = 30 * 1000;
 const CHECK_INTERVAL = 24 * 60 * 60 * 1000;
 const REQUEST_TIMEOUT = 15 * 1000;
@@ -109,10 +114,6 @@ export class UpdateCheckService {
   }
 
   private _showUpdateBanner(versionTag: string): void {
-    // Built locally from the validated tag instead of trusting the response's
-    // html_url: openExternalUrl only checks the scheme, so a forged response
-    // could otherwise point "Download" at an arbitrary https host.
-    const downloadUrl = `https://github.com/super-productivity/super-productivity/releases/tag/${versionTag}`;
     this._bannerService.open({
       id: BannerId.UpdateAvailable,
       msg: T.APP.B_UPDATE_AVAILABLE.MSG,
@@ -125,7 +126,7 @@ export class UpdateCheckService {
         label: T.APP.B_UPDATE_AVAILABLE.DOWNLOAD,
         fn: () => {
           this._rememberVersion(versionTag);
-          window.ea.openExternalUrl(downloadUrl);
+          window.ea.openExternalUrl(DOWNLOAD_PAGE_URL);
         },
       },
       action2: {

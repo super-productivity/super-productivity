@@ -926,6 +926,28 @@ describe('ScheduleService – calendar visibility filter', () => {
       []) as ScheduleCalendarMapEntry[];
   };
 
+  it('should map each provider to the first calendar source color', () => {
+    const withColor = (
+      entry: ScheduleCalendarMapEntry,
+      calendarColor?: string,
+    ): ScheduleCalendarMapEntry['items'][number] => ({
+      ...entry.items[0],
+      calendarColor,
+    });
+    calendarEvents$.next([
+      {
+        items: [
+          withColor(makeEntry('provider-A')),
+          withColor(makeEntry('provider-A'), '#fbe983'),
+          withColor(makeEntry('provider-A'), '#9fc6e7'),
+          withColor(makeEntry('provider-B')),
+        ],
+      },
+    ]);
+
+    expect([...service.calendarColorByProviderId()]).toEqual([['provider-A', '#fbe983']]);
+  });
+
   it('should pass all entries through when no providers are hidden', () => {
     calendarEvents$.next([makeEntry('provider-A'), makeEntry('provider-B')]);
     hiddenProviderIds.set([]);

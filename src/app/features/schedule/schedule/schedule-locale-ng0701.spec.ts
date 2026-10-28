@@ -16,8 +16,7 @@ import { GlobalTrackingIntervalService } from '../../../core/global-tracking-int
 import { GlobalConfigService } from '../../config/global-config.service';
 import { DateTimeLocales } from '../../../core/locale.constants';
 import { safeFormatDate } from '../../../util/safe-format-date';
-import { selectMapOfAllTasksInActiveProjects } from '../../tasks/store/task.selectors';
-import { selectStartOfNextDayDiffMs } from '../../../root-store/app-state/app-state.selectors';
+import { selectUndoneDeadlineTasksByDay } from '../../planner/store/planner.selectors';
 
 /**
  * Regression guard for issue #7383 (NG0701 on /schedule).
@@ -108,10 +107,7 @@ describe('issue #7383 — NG0701 race on /schedule', () => {
         providers: [
           provideMockStore({
             initialState: { issueProvider: { ids: [], entities: {} } },
-            selectors: [
-              { selector: selectMapOfAllTasksInActiveProjects, value: new Map() },
-              { selector: selectStartOfNextDayDiffMs, value: 0 },
-            ],
+            selectors: [{ selector: selectUndoneDeadlineTasksByDay, value: {} }],
           }),
           { provide: TaskService, useValue: mockTaskService },
           { provide: LayoutService, useValue: mockLayoutService },

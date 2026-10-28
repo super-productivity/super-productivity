@@ -17,13 +17,8 @@ import {
 import { MatIconButton } from '@angular/material/button';
 import { NgTemplateOutlet } from '@angular/common';
 import { isTouchActive } from '../../util/input-intent';
-import { UI_LONG_PRESS_DURATION } from '../ui.const';
+import { UI_LONG_PRESS_DURATION, UI_LONG_PRESS_MOVE_TOLERANCE_PX } from '../ui.const';
 import { performHapticFeedback } from '../../util/haptic-feedback';
-
-// Same distance and metric as the CDK's default `dragStartThreshold`: a press
-// that moves this far is a scroll or a drag, never a long-press. Because a CDK
-// drag needs the same movement to start, the two can't both begin.
-const TOUCH_MOVE_TOLERANCE_PX = 5;
 
 @Component({
   selector: 'context-menu',
@@ -129,7 +124,7 @@ export class ContextMenuComponent implements OnInit {
         }
         const t = ev.touches[0];
         const distance = Math.abs(t.clientX - start.x) + Math.abs(t.clientY - start.y);
-        if (distance >= TOUCH_MOVE_TOLERANCE_PX) {
+        if (distance >= UI_LONG_PRESS_MOVE_TOLERANCE_PX) {
           window.clearTimeout(this._longPressTimeout);
           start = undefined;
           // Holding on and then moving is a drag: let it have the gesture.

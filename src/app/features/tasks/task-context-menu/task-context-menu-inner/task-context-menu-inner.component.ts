@@ -71,7 +71,7 @@ import { PlannerActions } from '../../../planner/store/planner.actions';
 import { combineDateAndTime } from '../../../../util/combine-date-and-time';
 import { getNextWeekDayOffset } from '../../../../util/get-next-week-day-offset';
 import { DateAdapter } from '@angular/material/core';
-import { ICAL_TYPE } from '../../../issue/issue.const';
+import { ICAL_TYPE, PLAINSPACE_TYPE } from '../../../issue/issue.const';
 import { IssueIconPipe } from '../../../issue/issue-icon/issue-icon.pipe';
 import { showFocusOverlay } from '../../../focus-mode/store/focus-mode.actions';
 import { FocusModeService } from '../../../focus-mode/focus-mode.service';
@@ -98,6 +98,9 @@ import {
 } from '../../../../plugins/plugin-task-context-menu-registry.service';
 import { PluginTaskContextMenuTarget } from '@super-productivity/plugin-api';
 import { getWontDoChanges } from '../../util/is-wont-do-task';
+import { IssueSyncStateService } from '../../../issue/two-way-sync/issue-sync-state.service';
+import { PlainspaceHandoffService } from '../../../issue/providers/plainspace/plainspace-handoff.service';
+import { PlainspaceMember } from '../../../issue/providers/plainspace/plainspace-api.service';
 
 @Component({
   selector: 'task-context-menu-inner',
@@ -130,6 +133,8 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
   private readonly _snackService = inject(SnackService);
   private readonly _projectService = inject(ProjectService);
   private readonly _globalConfigService = inject(GlobalConfigService);
+  private readonly _issueSyncState = inject(IssueSyncStateService);
+  private readonly _plainspaceHandoff = inject(PlainspaceHandoffService);
   private readonly _store = inject(Store);
   private readonly _dateAdapter = inject(DateAdapter);
   private readonly _tagService = inject(TagService);
@@ -151,6 +156,14 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
 
   protected readonly isTouchActive = isTouchActive;
   protected readonly T = T;
+  // Weekday names instead of "Tomorrow"/"Next week" keep every label on one
+  // line in the narrow menu row; the tooltips keep the full wording. Matches
+  // the dates quickAccessBtnClick schedules: tomorrow and the week's first day.
+  private readonly _weekdayNames = this._dateAdapter.getDayOfWeekNames('short');
+  protected readonly tomorrowLabel =
+    this._weekdayNames[(this._dateAdapter.getDayOfWeek(new Date()) + 1) % 7];
+  protected readonly nextWeekLabel =
+    this._weekdayNames[this._dateAdapter.getFirstDayOfWeek()];
   protected readonly PRIORITY_LEVELS = TASK_PRIORITY_LEVELS;
   protected readonly PRIORITY_LABEL_KEY = TASK_PRIORITY_LABEL_KEY;
   readonly ESTIMATE_OPTIONS = ESTIMATE_OPTIONS;
@@ -184,6 +197,9 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
   priority: TaskPriority | null = null;
 
   isCurrent: boolean = false;
+  /** A linked Plainspace task still assigned to me: it can be handed off. */
+  isPlainspaceHandoff: boolean = false;
+  readonly plainspaceMembers = signal<PlainspaceMember[] | null>(null);
   isBacklog: boolean = false;
   isInSubTaskList: boolean = false;
   /** Multi-select needs a rendered `<task>` row outside the detail panel. */
@@ -232,6 +248,11 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
     this.priority = getTaskPriority(v.priority);
     this._pluginTaskContextMenuTarget.set(v.parentId ? 'SUBTASK' : 'TASK');
     this.isCurrent = this._taskService.currentTaskId() === v.id;
+    this.isPlainspaceHandoff =
+      v.issueType === PLAINSPACE_TYPE &&
+      !!v.issueId &&
+      !!v.issueProviderId &&
+      !this._issueSyncState.isMissing(v.id);
     this._task$.next(v);
   }
 
@@ -505,6 +526,21 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
     this._issueService.refreshIssueTask(this.task, true, true);
   }
 
+  async loadPlainspaceMembers(): Promise<void> {
+    this.plainspaceMembers.set(null);
+    const members = await this._plainspaceHandoff.getMembers(this.task);
+    if (members) {
+      this.plainspaceMembers.set(members);
+    } else {
+      this._closeContextMenu();
+    }
+  }
+
+  /** Hands the task to `member`, or releases it to the Space when null. */
+  handOffPlainspaceTask(member: PlainspaceMember | null): void {
+    void this._plainspaceHandoff.handOff(this.task, member);
+  }
+
   async deleteTask(): Promise<void> {
     // NOTE: prevents attempts to delete the same task multiple times
     if (this._isTaskDeleteTriggered) {
@@ -514,10 +550,11 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
     const isConfirmBeforeDelete =
       this._globalConfigService.cfg()?.tasks?.isConfirmBeforeDelete ?? true;
 
-    if (isTaskDeleteConfirmRequired(this.task, isConfirmBeforeDelete)) {
+    const isNoLongerListed = this._issueSyncState.isMissing(this.task.id);
+    if (isTaskDeleteConfirmRequired(this.task, isConfirmBeforeDelete, isNoLongerListed)) {
       this._matDialog
         .open(DialogConfirmComponent, {
-          data: getTaskDeleteConfirmData(this.task),
+          data: getTaskDeleteConfirmData(this.task, undefined, isNoLongerListed),
         })
         .afterClosed()
         .subscribe(async (isConfirm) => {

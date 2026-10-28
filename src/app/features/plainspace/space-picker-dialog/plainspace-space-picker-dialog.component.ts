@@ -113,7 +113,7 @@ export class PlainspaceSpacePickerDialogComponent {
         })
         .afterClosed(),
     );
-    if (reconnected === true) {
+    if (reconnected) {
       await this._loadSpaces();
     }
   }

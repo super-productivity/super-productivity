@@ -17,16 +17,10 @@ import { Task } from '../../tasks/task.model';
       <div class="time-wrapper">
         <div class="time">
           @if (task().timeSpent) {
-            <span
-              class="time-val"
-              [innerHTML]="task().timeSpent | msToString"
-            ></span>
+            <span class="time-val">{{ task().timeSpent | msToString }}</span>
             <span class="separator">/</span>
           }
-          <span
-            class="time-val"
-            [innerHTML]="task().timeEstimate | msToString"
-          ></span>
+          <span class="time-val">{{ task().timeEstimate | msToString }}</span>
         </div>
       </div>
     }

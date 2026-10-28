@@ -104,6 +104,8 @@
               @expandFade
               class="add-more-or-finish"
             >
+              @let isAllDone =
+                hasDoneTasks() || (workContextService.doneTodayArchived$ | async);
               <div class="no-tasks-illu-wrapper">
                 <div class="inline-block-container">
                   <img
@@ -118,15 +120,17 @@
                   />
                 </div>
                 <h2 class="no-tasks-label">
-                  @if (
-                    hasDoneTasks() || (workContextService.doneTodayArchived$ | async)
-                  ) {
+                  @if (isAllDone) {
                     {{ T.WW.NO_PLANNED_TASK_ALL_DONE | translate }}
                   } @else {
                     {{ T.WW.NO_PLANNED_TASKS | translate }}
                   }
                 </h2>
               </div>
+
+              @if (!isAllDone && emptyStateHint(); as hint) {
+                <p class="empty-state-hint">{{ hint | translate }}</p>
+              }
 
               @if (!overdueTasks().length) {
                 <div class="btn-wrapper">

@@ -1,8 +1,17 @@
 import { Injectable, inject } from '@angular/core';
 import { createEffect } from '@ngrx/effects';
 import { Store } from '@ngrx/store';
-import { distinctUntilChanged, first, map, skip, switchMap, tap } from 'rxjs/operators';
-import { BehaviorSubject, EMPTY, forkJoin, timer } from 'rxjs';
+import {
+  catchError,
+  distinctUntilChanged,
+  filter,
+  first,
+  map,
+  skip,
+  switchMap,
+  tap,
+} from 'rxjs/operators';
+import { BehaviorSubject, EMPTY, forkJoin, merge, Observable, of, timer } from 'rxjs';
 import { GlobalTrackingIntervalService } from '../../../core/global-tracking-interval/global-tracking-interval.service';
 import { BannerService } from '../../../core/banner/banner.service';
 import { LocaleDatePipe } from 'src/app/ui/pipes/locale-date.pipe';
@@ -35,6 +44,8 @@ import {
 } from '../get-calendar-event-id-candidates';
 import { getEffectiveCheckInterval } from '../../issue/providers/calendar/calendar.const';
 import { passesCalendarEventRegexFilter } from '../calendar-event-regex-filter';
+import { IS_ONLINE$ } from '../../../util/is-online.token';
+import { pollWhileOnline } from '../../../util/poll-while-online';
 
 const CHECK_TO_SHOW_INTERVAL = 60 * 1000;
 
@@ -53,6 +64,7 @@ export class CalendarIntegrationEffects {
   private _translateStore = inject(TranslateStore);
   private _syncTriggerService = inject(SyncTriggerService);
   private _hydrationStateService = inject(HydrationStateService);
+  private _isOnline$ = inject(IS_ONLINE$);
   private _taskState = this._store.selectSignal(selectTaskFeatureState);
 
   /**
@@ -97,14 +109,14 @@ export class CalendarIntegrationEffects {
 
           return forkJoin(
             activatedProviders.map((calProvider) =>
-              timer(0, getEffectiveCheckInterval(calProvider)).pipe(
-                switchMap(() =>
-                  this._calendarIntegrationService.requestEvents$(calProvider),
-                ),
-                switchMap((allEventsToday) =>
+              this._getTodayEvents$(calProvider).pipe(
+                switchMap(({ events: allEventsToday, isFromCache }) =>
                   timer(0, CHECK_TO_SHOW_INTERVAL).pipe(
                     tap(async () => {
                       const isAutoImportAllowed =
+                        // Cached events may be stale (deleted or moved remotely);
+                        // only show banners for them, never create tasks.
+                        !isFromCache &&
                         calProvider.isAutoImportForCurrentDay &&
                         this._syncTriggerService.isInitialSyncDoneSync() &&
                         !this._hydrationStateService.isInSyncWindow();
@@ -200,6 +212,43 @@ export class CalendarIntegrationEffects {
       ),
     { dispatch: false },
   );
+
+  /**
+   * Today's events of one provider, re-fetched every check interval while online.
+   * Offline ticks keep the last result; when the feed can't be reached at all
+   * (offline at start or a failed request) the cached events stand in so due
+   * event banners still show.
+   */
+  private _getTodayEvents$(
+    calProvider: IssueProviderCalendar,
+  ): Observable<{ events: CalendarIntegrationEvent[]; isFromCache: boolean }> {
+    const fromCache = (): {
+      events: CalendarIntegrationEvent[];
+      isFromCache: boolean;
+    } => ({
+      events: this._calendarIntegrationService.getCachedEvents(calProvider.id),
+      isFromCache: true,
+    });
+    return merge(
+      this._isOnline$.pipe(
+        first(),
+        filter((isOnline) => !isOnline),
+        map(fromCache),
+      ),
+      pollWhileOnline(this._isOnline$, [
+        timer(0, getEffectiveCheckInterval(calProvider)),
+      ]).pipe(
+        switchMap(() =>
+          this._calendarIntegrationService
+            .requestEvents$(calProvider, undefined, undefined, true)
+            .pipe(
+              map((events) => ({ events, isFromCache: false })),
+              catchError(() => of(fromCache())),
+            ),
+        ),
+      ),
+    );
+  }
 
   private _currentlyShownBanners$ = new BehaviorSubject<
     { id: string; calEv: CalendarIntegrationEvent; calProvider: IssueProviderCalendar }[]

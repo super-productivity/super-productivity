@@ -303,6 +303,48 @@ describe('ProjectService', () => {
       done();
     });
 
+    it('should keep projects hidden from the menu in the unfiltered tree order list', (done) => {
+      const projects = [
+        createProject({ id: 'project-1', title: 'Project 1' }),
+        createProject({ id: 'project-2', title: 'Project 2' }),
+        createProject({ id: 'project-3', title: 'Project 3', isHiddenFromMenu: true }),
+        createProject({ id: 'project-4', title: 'Project 4' }),
+      ];
+      store.overrideSelector(selectUnarchivedProjects, projects);
+      store.overrideSelector(selectMenuTreeProjectTree, [
+        {
+          id: 'folder-1',
+          k: MenuTreeKind.FOLDER,
+          name: 'Folder 1',
+          children: [
+            {
+              id: 'project-2',
+              k: MenuTreeKind.PROJECT,
+            },
+            {
+              id: 'project-3',
+              k: MenuTreeKind.PROJECT,
+            },
+          ],
+        },
+        {
+          id: 'project-1',
+          k: MenuTreeKind.PROJECT,
+        },
+      ]);
+      store.refreshState();
+
+      // isHiddenFromMenu only governs menu presence, so project pickers that assign
+      // a project must still offer project-3.
+      expect(service.listInTreeOrder().map((project) => project.id)).toEqual([
+        'project-2',
+        'project-3',
+        'project-1',
+        'project-4',
+      ]);
+      done();
+    });
+
     it('should expose move candidates in menu tree order while excluding the current project', (done) => {
       const projects = [
         createProject({ id: 'project-1', title: 'Project 1' }),

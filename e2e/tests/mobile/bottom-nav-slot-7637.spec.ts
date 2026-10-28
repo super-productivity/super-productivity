@@ -17,6 +17,9 @@ import {
 // Held past UI_LONG_PRESS_DURATION (600ms) through the real touch pipeline,
 // so the click Chromium synthesizes on release is exercised too.
 const longPress = async (page: Page, target: Locator): Promise<void> => {
+  // Raw touch events skip actionability: wait until the target has stopped
+  // moving (e.g. a drawer sliding in) and is the element at its center.
+  await target.tap({ trial: true });
   const box = await target.boundingBox();
   if (!box) {
     throw new Error('long-press target is not visible');

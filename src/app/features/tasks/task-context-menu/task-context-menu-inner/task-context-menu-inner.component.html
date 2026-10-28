@@ -8,6 +8,7 @@
 
 <mat-menu
   #contextMenu="matMenu"
+  class="mat-menu-wide"
   yPosition="below"
   xPosition="after"
   [backdropClass]="
@@ -39,7 +40,7 @@
       [matTooltip]="T.F.TASK.D_SCHEDULE_TASK.QA_TOMORROW | translate"
     >
       <mat-icon aria-hidden="true">wb_twilight</mat-icon>
-      <span class="quick-access-label">{{ T.G.TOMORROW | translate }}</span>
+      <span class="quick-access-label">{{ tomorrowLabel }}</span>
     </button>
     <button
       type="button"
@@ -47,7 +48,7 @@
       [matTooltip]="T.F.TASK.D_SCHEDULE_TASK.QA_NEXT_WEEK | translate"
     >
       <mat-icon aria-hidden="true">next_week</mat-icon>
-      <span class="quick-access-label">{{ T.G.NEXT_WEEK | translate }}</span>
+      <span class="quick-access-label">{{ nextWeekLabel }}</span>
     </button>
     <button
       type="button"
@@ -310,6 +311,27 @@
       {{ T.F.TASK.CMP.UPDATE_ISSUE_DATA | translate }}
     </button>
   }
+  @if (isPlainspaceHandoff) {
+    <button
+      #plainspaceAssignMenuTrigger="matMenuTrigger"
+      [matMenuTriggerFor]="plainspaceAssignMenu"
+      mat-menu-item
+      [menuTouchFix]="plainspaceAssignMenuTrigger"
+      (menuOpened)="loadPlainspaceMembers()"
+    >
+      <span class="menuItemLeft">
+        <mat-icon>person_add</mat-icon>
+        {{ T.PLAINSPACE.HANDOFF.ASSIGN_TO | translate }}
+      </span>
+    </button>
+    <button
+      (click)="handOffPlainspaceTask(null)"
+      mat-menu-item
+    >
+      <mat-icon>group</mat-icon>
+      {{ T.PLAINSPACE.HANDOFF.RELEASE | translate }}
+    </button>
+  }
   @if (pluginTaskContextMenuEntries().length) {
     <button
       #pluginTaskActionsMenuTrigger="matMenuTrigger"
@@ -402,6 +424,32 @@
     </span>
     <span class="key-i">{{ kb.moveTaskToBottom }}</span>
   </button>
+</mat-menu>
+
+<mat-menu #plainspaceAssignMenu="matMenu">
+  <ng-template matMenuContent>
+    @for (member of plainspaceMembers(); track member.id) {
+      <button
+        (click)="handOffPlainspaceTask(member)"
+        mat-menu-item
+        menuTouchFix
+      >
+        {{ member.displayName }}
+      </button>
+    } @empty {
+      <button
+        mat-menu-item
+        disabled
+      >
+        {{
+          (plainspaceMembers()
+            ? T.PLAINSPACE.HANDOFF.NO_MEMBERS
+            : T.PLAINSPACE.HANDOFF.LOADING
+          ) | translate
+        }}
+      </button>
+    }
+  </ng-template>
 </mat-menu>
 
 <mat-menu #pluginTaskActionsMenu="matMenu">

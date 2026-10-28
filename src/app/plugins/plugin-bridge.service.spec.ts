@@ -27,6 +27,7 @@ import { ProjectService } from '../features/project/project.service';
 import { TagService } from '../features/tag/tag.service';
 import { PluginUserPersistenceService } from './plugin-user-persistence.service';
 import { PluginConfigService } from './plugin-config.service';
+import { selectPluginUserDataFeatureState } from './store/plugin-user-data.reducer';
 import { TaskArchiveService } from '../features/archive/task-archive.service';
 import { Router } from '@angular/router';
 import { TranslateService } from '@ngx-translate/core';
@@ -57,6 +58,34 @@ describe('PluginBridgeService - Counter Methods', () => {
   let dispatchSpy: jasmine.Spy;
   let dataInitService: jasmine.SpyObj<DataInitService>;
   let taskContextMenuRegistry: jasmine.SpyObj<PluginTaskContextMenuRegistryService>;
+
+  it('lists previously unknown keys after remote state has been applied', async () => {
+    const bound = service.createBoundMethods('plugin-a');
+    const selector = store.overrideSelector(selectPluginUserDataFeatureState, []);
+    expect(await bound.listSyncedDataKeys()).toEqual([]);
+    selector.setResult([
+      { id: 'plugin-a', data: 'legacy' },
+      { id: 'plugin-ab:attachment:чужой', data: '{}' },
+      { id: 'plugin-a:attachment:task:новый-uuid', data: '{}' },
+      { id: 'plugin-a:settings', data: '{}' },
+    ]);
+    store.refreshState();
+    expect(await bound.listSyncedDataKeys('attachment:task:')).toEqual([
+      'attachment:task:новый-uuid',
+    ]);
+    expect(await service.createBoundMethods('plugin-ab').listSyncedDataKeys()).toEqual([
+      'attachment:чужой',
+    ]);
+    expect(dispatchSpy).not.toHaveBeenCalled();
+  });
+
+  it('rejects invalid prefixes through the public bridge', async () => {
+    store.overrideSelector(selectPluginUserDataFeatureState, []);
+    await expectAsync(
+      service.createBoundMethods('plugin-a').listSyncedDataKeys(4 as unknown as string),
+    ).toBeRejectedWithError(/must be a string/);
+    expect(dispatchSpy).not.toHaveBeenCalled();
+  });
 
   const mockExistingCounter: SimpleCounter = {
     ...EMPTY_SIMPLE_COUNTER,

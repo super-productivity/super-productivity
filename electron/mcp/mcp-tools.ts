@@ -25,6 +25,8 @@ import {
   RendererReply,
   ToolSpec,
   UNTRUSTED_NOTE,
+  READ_ONLY_HINTS,
+  describeTool,
   ok,
   fail,
   invalid,
@@ -60,6 +62,7 @@ export const MCP_API_VERSION = '1';
 const getStatus: ToolSpec = {
   definition: {
     name: 'get_status',
+    ...describeTool('Check connection', READ_ONLY_HINTS),
     description:
       'Reports whether Super Productivity is ready and which permissions this connection has. Returns no task data.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
@@ -80,6 +83,7 @@ const listTasks: ToolSpec = {
   scope: 'tasks:read',
   definition: {
     name: 'list_tasks',
+    ...describeTool('List tasks', READ_ONLY_HINTS),
     description:
       'Lists active (not archived) tasks as summaries, open tasks only unless includeDone is set. ' +
       'Filter by a title search, a project id or a tag id (use tagId "TODAY" for today\'s tasks). ' +
@@ -168,6 +172,7 @@ const getTask: ToolSpec = {
   scope: 'tasks:read',
   definition: {
     name: 'get_task',
+    ...describeTool('Get task', READ_ONLY_HINTS),
     description:
       'Returns one active task by id, including its subtask ids. Notes are only included when ' +
       `includeNotes is set and this connection may read notes; they are cut at ${MAX_NOTES_CHARS} characters. ` +
@@ -241,6 +246,7 @@ const getTask: ToolSpec = {
 
 const namedEntityList = (
   name: 'list_projects' | 'list_tags',
+  title: string,
   path: '/projects' | '/tags',
   key: 'projects' | 'tags',
   description: string,
@@ -248,6 +254,7 @@ const namedEntityList = (
   scope: 'tasks:read',
   definition: {
     name,
+    ...describeTool(title, READ_ONLY_HINTS),
     description,
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   },
@@ -272,6 +279,7 @@ const namedEntityList = (
 
 const listProjects = namedEntityList(
   'list_projects',
+  'List projects',
   '/projects',
   'projects',
   'Lists the ids and titles of active projects, to interpret or filter tasks. ' +
@@ -280,6 +288,7 @@ const listProjects = namedEntityList(
 
 const listTags = namedEntityList(
   'list_tags',
+  'List tags',
   '/tags',
   'tags',
   'Lists the ids and titles of tags, to interpret or filter tasks. ' + UNTRUSTED_NOTE,
@@ -300,6 +309,12 @@ const createTask: ToolSpec = {
   scope: 'tasks:capture',
   definition: {
     name: 'create_task',
+    // Adds and never overwrites; a repeated call adds another task.
+    ...describeTool('Add task to Inbox', {
+      readOnly: false,
+      destructive: false,
+      idempotent: false,
+    }),
     description:
       "Adds a new task to the user's Inbox with the given title and optional notes, exactly as written. " +
       'It gets the same defaults as a task the user adds to the Inbox by hand; no project or tag ' +

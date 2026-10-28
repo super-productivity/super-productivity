@@ -7238,18 +7238,21 @@ describe('ConflictResolutionService', () => {
       });
     });
 
-    it('should still conflict when a section move and removal target different tasks', async () => {
+    // Different tasks commute (#10969); a move of the same task into the
+    // section it is removed from does not.
+    it('should still conflict when a task moves into the section it is removed from', async () => {
       const remoteOp = createSectionMoveOp(
         'remote-move',
         'clientB',
-        'section-left',
+        'section-right',
         'task-1',
+        'section-left',
       );
       const localOp = createSectionRemoveOp(
         'local-remove',
         'clientA',
         'section-left',
-        'task-2',
+        'task-1',
       );
       const localPendingOpsByEntity = new Map<string, Operation[]>([
         ['SECTION:section-left', [localOp]],

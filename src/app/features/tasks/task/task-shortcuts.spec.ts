@@ -221,6 +221,7 @@ describe('TaskComponent shortcut handling', () => {
           useValue: jasmine.createSpyObj('GlobalTrackingIntervalService', [], {
             todayDateStr: signal('2026-05-05'),
             clockTimestamp: signal(new Date(2026, 4, 5, 12).getTime()),
+            clockMinute: signal(Math.floor(new Date(2026, 4, 5, 12).getTime() / 60000)),
           }),
         },
         {
@@ -257,6 +258,31 @@ describe('TaskComponent shortcut handling', () => {
     fixture.componentRef.setInput('isBacklog', false);
   });
 
+  describe('focused component lifetime', () => {
+    it('releases a focused component when its row is destroyed', () => {
+      const focus = TestBed.inject(TaskFocusService);
+      focus.lastFocusedTaskComponent.set(component);
+
+      fixture.destroy();
+
+      expect(focus.lastFocusedTaskComponent()).toBeNull();
+    });
+
+    it('keeps a newer focused copy of the same task when the old row is destroyed', () => {
+      const newer = TestBed.createComponent(TaskComponent);
+      newer.componentRef.setInput('task', createSubTask(''));
+      newer.componentRef.setInput('isInSubTaskList', true);
+      newer.componentRef.setInput('isBacklog', false);
+      const focus = TestBed.inject(TaskFocusService);
+      focus.lastFocusedTaskComponent.set(newer.componentInstance);
+
+      fixture.destroy();
+
+      expect(focus.lastFocusedTaskComponent()).toBe(newer.componentInstance);
+      newer.destroy();
+    });
+  });
+
   describe('scheduled-date badge colors', () => {
     beforeEach(() => {
       const dateService = TestBed.inject(DateService) as jasmine.SpyObj<DateService>;
@@ -285,6 +311,7 @@ describe('TaskComponent shortcut handling', () => {
       });
       expect(component.scheduledDateColor()).toBe('');
       (clock.clockTimestamp as WritableSignal<number>).set(scheduled);
+      (clock.clockMinute as WritableSignal<number>).set(scheduled / 60000);
       expect(component.scheduledDateColor()).toBe('overdue');
     });
 
@@ -302,6 +329,7 @@ describe('TaskComponent shortcut handling', () => {
       currentId.set('top-1');
       expect(component.scheduledDateColor()).toBe('');
       (clock.clockTimestamp as WritableSignal<number>).set(scheduled + 1);
+      (clock.clockMinute as WritableSignal<number>).set(scheduled / 60000);
       expect(component.scheduledDateColor()).toBe('');
       currentId.set(null);
       expect(component.scheduledDateColor()).toBe('overdue');
