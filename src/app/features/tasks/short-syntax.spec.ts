@@ -731,6 +731,62 @@ describe('shortSyntax', () => {
       });
     });
 
+    it('should parse an existing multi word tag as inserted by the autocomplete', async () => {
+      const t = {
+        ...TASK,
+        title: 'Write report #Multi Word Tag ',
+      };
+      const r = await shortSyntax(t, CONFIG, ALL_TAGS);
+
+      expect(r).toEqual({
+        newTagTitles: [],
+        remindAt: null,
+        repeat: null,
+        parsedRanges: expectedRanges(t.title, [['tag', '#Multi Word Tag']]),
+        projectId: undefined,
+        attachments: [],
+        taskChanges: {
+          title: 'Write report',
+          tagIds: ['multi_word_id'],
+        },
+      });
+    });
+
+    it('should parse a multi word tag case-insensitively next to other tags', async () => {
+      const t = {
+        ...TASK,
+        title: 'Write report #multi word tag #blu',
+      };
+      const r = await shortSyntax(t, CONFIG, ALL_TAGS);
+
+      expect(r).toEqual({
+        newTagTitles: [],
+        remindAt: null,
+        repeat: null,
+        parsedRanges: expectedRanges(t.title, [
+          ['tag', '#multi word tag'],
+          ['tag', '#blu'],
+        ]),
+        projectId: undefined,
+        attachments: [],
+        taskChanges: {
+          title: 'Write report',
+          tagIds: ['multi_word_id', 'blu_id'],
+        },
+      });
+    });
+
+    it('should not parse a multi word tag that continues into a longer word', async () => {
+      const t = {
+        ...TASK,
+        title: 'Write report #Multi Word Tagging',
+      };
+      const r = await shortSyntax(t, CONFIG, ALL_TAGS);
+
+      expect(r?.newTagTitles).toEqual(['Multi']);
+      expect(r?.taskChanges.tagIds).toBeUndefined();
+    });
+
     it('should not overwrite existing tags', async () => {
       const t = {
         ...TASK,
