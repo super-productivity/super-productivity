@@ -23,7 +23,7 @@
 .customizer-menu {
   .mat-mdc-menu-item {
     &.active {
-      background-color: rgba(0, 0, 0, 0.08);
+      background-color: var(--state-selected);
       font-weight: 500;
     }
   }

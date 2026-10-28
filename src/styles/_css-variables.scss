@@ -773,14 +773,6 @@ body.isDarkTheme {
   --sidenav-item-active-bg: rgba(255, 255, 255, 0.075);
 }
 
-// -----------------------------
-// State-token demo migration (this PR — scope per plan §3):
-//   * src/app/imex/sync/dialog-restore-point — `:hover` overlay + `.selected`
-//     lift now consume `--state-hover` / `--state-selected`.
-// Bulk migration of remaining ~34 ad-hoc rgba state-overlay callsites is a
-// follow-up PR (see plan §3 bulk-sweep regex).
-// -----------------------------
-
 /* stylelint-disable */
 :root {
   /* stylelint-enable */
