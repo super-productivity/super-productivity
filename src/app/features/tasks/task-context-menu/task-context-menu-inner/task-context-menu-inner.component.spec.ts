@@ -433,6 +433,16 @@ describe('TaskContextMenuInnerComponent', () => {
       closeMenus();
     }));
 
+    it('sets the destructive actions apart with a divider', fakeAsync(() => {
+      openMenu();
+
+      const wontDo = overlayItems().find((el) =>
+        el.textContent?.includes(T.F.TASK.CMP.MARK_WONT_DO),
+      );
+      expect(wontDo?.previousElementSibling?.tagName).toBe('MAT-DIVIDER');
+      closeMenus();
+    }));
+
     it('labels every date shortcut visibly', fakeAsync(() => {
       openMenu();
 
