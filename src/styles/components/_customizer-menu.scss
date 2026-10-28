@@ -21,13 +21,6 @@
 }
 
 .customizer-menu {
-  .mat-mdc-menu-item {
-    &.active {
-      background-color: var(--state-selected);
-      font-weight: 500;
-    }
-  }
-
   .current-value {
     padding-left: 16px;
     font-size: 0.875em;
