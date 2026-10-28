@@ -1,7 +1,7 @@
 import { inject, Injectable } from '@angular/core';
 import { select, Store } from '@ngrx/store';
 import { toSignal } from '@angular/core/rxjs-interop';
-import { combineLatest, interval, Observable, of, timer } from 'rxjs';
+import { combineLatest, from, interval, Observable, of, timer } from 'rxjs';
 import {
   WorkContext,
   WorkContextAdvancedCfg,
@@ -17,6 +17,7 @@ import {
   delayWhen,
   distinctUntilChanged,
   filter,
+  catchError,
   first,
   map,
   mapTo,
@@ -416,7 +417,16 @@ export class WorkContextService {
 
   doneTodayArchived$: Observable<number> =
     this._globalTrackingIntervalService.todayDateStr$.pipe(
-      switchMap(() => this.getDoneTodayInArchive()),
+      switchMap(() =>
+        from(this.getDoneTodayInArchive()).pipe(
+          // The work view waits for this count before rendering its empty
+          // state, so a failed archive read must not leave it pending forever.
+          catchError((err) => {
+            Log.err('[WorkContext] Failed to count archived tasks done today', err);
+            return of(0);
+          }),
+        ),
+      ),
     );
 
   isTodayList: boolean = false;

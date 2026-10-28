@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { of } from 'rxjs';
+import { firstValueFrom, of } from 'rxjs';
 import { resolveContextTheme, WorkContextService } from './work-context.service';
 import { SYSTEM_ENTITY_THEMES } from './work-context-default-theme.util';
 import {
@@ -556,6 +556,14 @@ describe('WorkContextService - getDoneTodayInArchive', () => {
 
     expect(result).toBe(1);
     jasmine.clock().uninstall();
+  });
+
+  it('doneTodayArchived$ falls back to 0 when the archive read fails', async () => {
+    taskArchiveServiceMock.loadYoung.and.returnValue(Promise.reject(new Error('idb')));
+
+    const result = await firstValueFrom(service.doneTodayArchived$);
+
+    expect(result).toBe(0);
   });
 
   it('does not count a task done yesterday (different logical day)', async () => {
