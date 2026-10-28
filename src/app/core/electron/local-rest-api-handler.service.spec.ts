@@ -1140,6 +1140,36 @@ describe('LocalRestApiHandlerService', () => {
         expect(taskServiceMock.add).not.toHaveBeenCalled();
       });
 
+      it('should reject a non-zero timeSpent in body with 400 and point to the time route', async () => {
+        const response = await sendRequestAndWait(
+          createRequest('POST', '/tasks', {
+            body: { title: 'New Task', timeSpent: 3600000 },
+          }),
+        );
+
+        expect(response.status).toBe(400);
+        expect((response.body as any).error.code).toBe('UNSUPPORTED_FIELD');
+        expect((response.body as any).error.message).toContain('/tasks/:id/time');
+        expect(taskServiceMock.add).not.toHaveBeenCalled();
+      });
+
+      it('should accept timeSpent 0, the total of a new task, and not pass it on', async () => {
+        Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+          get: () => (_id: string) => of(createMockTask('new-task-id')),
+        });
+
+        const response = await sendRequestAndWait(
+          createRequest('POST', '/tasks', {
+            body: { title: 'New Task', timeSpent: 0 },
+          }),
+        );
+
+        expect(response.status).toBe(201);
+        expect(taskServiceMock.add).toHaveBeenCalledWith('New Task', false, {
+          title: 'New Task',
+        });
+      });
+
       describe('isIgnoreShortSyntax', () => {
         beforeEach(() => {
           Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
@@ -2194,6 +2224,61 @@ describe('LocalRestApiHandlerService', () => {
         expect(response.status).toBe(400);
         expect((response.body as any).error.code).toBe('UNSUPPORTED_FIELD');
         expect(taskServiceMock.update).not.toHaveBeenCalled();
+      });
+
+      it('should reject a changed timeSpent in PATCH body with 400 and point to the time route', async () => {
+        const mockTask = createMockTask('task-1');
+        Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+          get: () => (_id: string) => of(mockTask),
+        });
+
+        const response = await sendRequestAndWait(
+          createRequest('PATCH', '/tasks/task-1', {
+            body: { title: 'Updated', timeSpent: 3600000 },
+          }),
+        );
+
+        expect(response.status).toBe(400);
+        expect((response.body as any).error.code).toBe('UNSUPPORTED_FIELD');
+        expect((response.body as any).error.message).toContain('/tasks/:id/time');
+        expect(taskServiceMock.update).not.toHaveBeenCalled();
+        expect(dispatchSpy).not.toHaveBeenCalled();
+      });
+
+      it('should accept an unchanged timeSpent echoed back in PATCH and not write it', async () => {
+        const mockTask = createMockTask('task-1', { timeSpent: 3600000 });
+        Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+          get: () => (_id: string) => of(mockTask),
+        });
+
+        const response = await sendRequestAndWait(
+          createRequest('PATCH', '/tasks/task-1', {
+            body: { title: 'Updated', timeSpent: 3600000 },
+          }),
+        );
+
+        expect(response.status).toBe(200);
+        expect(taskServiceMock.update).toHaveBeenCalledWith('task-1', {
+          title: 'Updated',
+        });
+      });
+
+      it('should reject a timeSpent that differs from the current total', async () => {
+        const mockTask = createMockTask('task-1', { timeSpent: 3600000 });
+        Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+          get: () => (_id: string) => of(mockTask),
+        });
+
+        const response = await sendRequestAndWait(
+          createRequest('PATCH', '/tasks/task-1', {
+            body: { title: 'Updated', timeSpent: 0 },
+          }),
+        );
+
+        expect(response.status).toBe(400);
+        expect((response.body as any).error.code).toBe('UNSUPPORTED_FIELD');
+        expect(taskServiceMock.update).not.toHaveBeenCalled();
+        expect(dispatchSpy).not.toHaveBeenCalled();
       });
 
       it('should return 400 (not dispatch) when a field has an invalid type', async () => {
