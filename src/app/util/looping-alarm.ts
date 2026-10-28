@@ -14,7 +14,7 @@ const MAX_ALARM_DURATION = 10 * 60 * 1000; // 10 minutes
 let activeSource: AudioBufferSourceNode | null = null;
 let activeGain: GainNode | null = null;
 let capTimeoutId: ReturnType<typeof setTimeout> | null = null;
-// Monotonic generation counter. Every start() and stop() bumps it, so an
+// Monotonic generation counter. Every start() and non-stale stop() bumps it, so an
 // in-flight start() whose awaits resolve late can detect that a newer start()
 // or a stop() has superseded it and bail before creating a second source. This
 // guarantees a restart can never leak an orphaned, unstoppable loop — even if
@@ -59,11 +59,12 @@ const _teardownNodes = (): void => {
  *
  * @param filePath - Path to the sound file relative to assets/snd
  * @param volume - Volume level from 0 to 100
+ * @returns This loop's token; pass it to stopLoopingAlarm() to stop only this loop
  */
 export const startLoopingAlarm = async (
   filePath: string,
   volume: number,
-): Promise<void> => {
+): Promise<number> => {
   // Claim a new generation and stop any current/previous loop synchronously,
   // before the first await, so a rapid start → start can never leave an
   // orphaned source running.
@@ -75,7 +76,7 @@ export const startLoopingAlarm = async (
     const buffer = await getAudioBuffer(`${BASE}/${filePath}`);
     // A newer start() or a stop() may have superseded us while we awaited.
     if (myToken !== startToken) {
-      return;
+      return myToken;
     }
 
     const source = ctx.createBufferSource();
@@ -91,16 +92,19 @@ export const startLoopingAlarm = async (
     activeSource = source;
     activeGain = gain;
 
-    capTimeoutId = setTimeout(() => stopLoopingAlarm(), MAX_ALARM_DURATION);
+    capTimeoutId = setTimeout(() => stopLoopingAlarm(myToken), MAX_ALARM_DURATION);
   } catch (e) {
     Log.err('Error starting looping alarm:', e);
-    if (myToken === startToken) {
-      stopLoopingAlarm();
-    }
+    stopLoopingAlarm(myToken);
   }
+  return myToken;
 };
 
-export const stopLoopingAlarm = (): void => {
+export const stopLoopingAlarm = (token?: number): void => {
+  // A token from an older start() means a newer loop owns the sound: leave it.
+  if (token !== undefined && token !== startToken) {
+    return;
+  }
   // Bump the generation so any in-flight start() bails instead of creating a
   // source after we have torn everything down.
   startToken++;

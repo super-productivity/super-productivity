@@ -75,6 +75,7 @@ export class FocusModeEffects {
   private bannerService = inject(BannerService);
   private isAndroidWebView = inject(IS_ANDROID_WEB_VIEW_TOKEN);
   private focusModeLocalSettingsService = inject(FocusModeLocalSettingsService);
+  private _breakEndAlarm: Promise<number> | null = null;
 
   // Sync: When tracking starts → resume/skip-break or auto-spawn a new session.
   //
@@ -345,9 +346,10 @@ export class FocusModeEffects {
         tap((shouldAlarm) => {
           if (shouldAlarm) {
             const soundVolume = this.globalConfigService.sound()?.volume || 0;
-            startLoopingAlarm(SESSION_DONE_SOUND, soundVolume);
+            this._breakEndAlarm = startLoopingAlarm(SESSION_DONE_SOUND, soundVolume);
           } else {
-            stopLoopingAlarm();
+            this._breakEndAlarm?.then(stopLoopingAlarm);
+            this._breakEndAlarm = null;
           }
         }),
       ),

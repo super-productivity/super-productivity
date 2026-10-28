@@ -25,6 +25,7 @@ import { DateService } from '../../core/date/date.service';
 import { IS_ELECTRON_TOKEN } from '../../app.constants';
 import { getRepeatableTaskId } from '../task-repeat-cfg/get-repeatable-task-id.util';
 import { closeAudioContext } from '../../util/audio-context';
+import { startLoopingAlarm, stopLoopingAlarm } from '../../util/looping-alarm';
 
 describe('ReminderModule dialog opening', () => {
   let matDialogSpy: jasmine.SpyObj<MatDialog>;
@@ -113,6 +114,37 @@ describe('ReminderModule dialog opening', () => {
     remindersActive$.next([reminder]);
   };
 
+  const mockAudioSources = (): jasmine.SpyObj<AudioBufferSourceNode>[] => {
+    const sources: jasmine.SpyObj<AudioBufferSourceNode>[] = [];
+    closeAudioContext();
+    spyOn(window as any, 'AudioContext').and.returnValue({
+      state: 'running',
+      destination: {},
+      close: jasmine.createSpy('close'),
+      createBufferSource: () => {
+        const source = jasmine.createSpyObj<AudioBufferSourceNode>('source', [
+          'connect',
+          'disconnect',
+          'start',
+          'stop',
+        ]);
+        sources.push(source);
+        return source;
+      },
+      createGain: () => ({
+        gain: {},
+        connect: () => undefined,
+        disconnect: () => undefined,
+      }),
+      decodeAudioData: () => Promise.resolve({}),
+    });
+    spyOn(window, 'fetch').and.resolveTo({
+      ok: true,
+      arrayBuffer: () => Promise.resolve(new ArrayBuffer(8)),
+    } as Response);
+    return sources;
+  };
+
   it('focuses the app via the delayed notification path when the setting is on (#10410)', fakeAsync(() => {
     isFocusWindow = true;
     triggerReminder();
@@ -149,29 +181,7 @@ describe('ReminderModule dialog opening', () => {
     useAlarmStyleReminders = true;
     const afterClosed$ = new Subject<void>();
     matDialogSpy.open.and.returnValue({ afterClosed: () => afterClosed$ } as never);
-    const source = jasmine.createSpyObj('source', [
-      'connect',
-      'disconnect',
-      'start',
-      'stop',
-    ]);
-    closeAudioContext();
-    spyOn(window as any, 'AudioContext').and.returnValue({
-      state: 'running',
-      destination: {},
-      close: jasmine.createSpy('close'),
-      createBufferSource: () => source,
-      createGain: () => ({
-        gain: {},
-        connect: () => undefined,
-        disconnect: () => undefined,
-      }),
-      decodeAudioData: () => Promise.resolve({}),
-    });
-    spyOn(window, 'fetch').and.resolveTo({
-      ok: true,
-      arrayBuffer: () => Promise.resolve(new ArrayBuffer(8)),
-    } as Response);
+    const sources = mockAudioSources();
 
     triggerReminder();
     flushMicrotasks();
@@ -179,12 +189,34 @@ describe('ReminderModule dialog opening', () => {
     expect(uiHelperSpy.focusAppAfterNotification).toHaveBeenCalledOnceWith({
       isReminder: true,
     });
-    expect(source.loop).toBe(true);
-    expect(source.start).toHaveBeenCalled();
+    expect(sources[0].loop).toBe(true);
+    expect(sources[0].start).toHaveBeenCalled();
 
     afterClosed$.next();
+    flushMicrotasks();
 
-    expect(source.stop).toHaveBeenCalled();
+    expect(sources[0].stop).toHaveBeenCalled();
+    closeAudioContext();
+  }));
+
+  it('keeps a newer alarm loop running when the dialog closes', fakeAsync(() => {
+    useAlarmStyleReminders = true;
+    const afterClosed$ = new Subject<void>();
+    matDialogSpy.open.and.returnValue({ afterClosed: () => afterClosed$ } as never);
+    const sources = mockAudioSources();
+
+    triggerReminder();
+    flushMicrotasks();
+    // e.g. the focus-mode break-end alarm replaces the bell
+    startLoopingAlarm('positive.mp3', 50);
+    flushMicrotasks();
+
+    afterClosed$.next();
+    flushMicrotasks();
+
+    expect(sources.length).toBe(2);
+    expect(sources[1].stop).not.toHaveBeenCalled();
+    stopLoopingAlarm();
     closeAudioContext();
   }));
 });

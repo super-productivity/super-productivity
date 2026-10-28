@@ -222,8 +222,11 @@ export class ReminderModule {
           });
           if (isAlarm) {
             // Rings until the dialog closes, however the reminders were handled.
-            startLoopingAlarm(REMINDER_ALARM_SOUND, cfg?.sound?.volume || 0);
-            dialogRef.afterClosed().subscribe(() => stopLoopingAlarm());
+            const alarm = startLoopingAlarm(
+              REMINDER_ALARM_SOUND,
+              cfg?.sound?.volume || 0,
+            );
+            dialogRef.afterClosed().subscribe(() => alarm.then(stopLoopingAlarm));
           }
         }
       });

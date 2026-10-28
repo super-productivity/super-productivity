@@ -93,6 +93,45 @@ describe('looping-alarm', () => {
     expect(createdSources.length).toBe(2);
   });
 
+  it('stops its own loop when given the active token', async () => {
+    const token = await startLoopingAlarm(SOUND, 100);
+
+    stopLoopingAlarm(token);
+
+    expect(createdSources[0].stop).toHaveBeenCalled();
+  });
+
+  it('does not stop a newer loop when given a stale token', async () => {
+    const first = await startLoopingAlarm(SOUND, 100);
+    await startLoopingAlarm(SOUND, 100);
+
+    stopLoopingAlarm(first);
+
+    expect(createdSources[1].stop).not.toHaveBeenCalled();
+  });
+
+  it('ignores a second stop with the same token', async () => {
+    const token = await startLoopingAlarm(SOUND, 100);
+    stopLoopingAlarm(token);
+    const next = startLoopingAlarm(SOUND, 100);
+
+    stopLoopingAlarm(token);
+    await next;
+
+    expect(createdSources.length).toBe(2);
+    expect(createdSources[1].stop).not.toHaveBeenCalled();
+  });
+
+  it('stops a loop whose caller stopped it before the start resolved', async () => {
+    const start = startLoopingAlarm(SOUND, 100);
+
+    await start.then(stopLoopingAlarm);
+
+    expect(createdSources.length).toBe(1);
+    expect(createdSources[0].stop).toHaveBeenCalled();
+    expect(createdSources[0].disconnect).toHaveBeenCalled();
+  });
+
   it('auto-stops after the hard safety ceiling', async () => {
     const TEN_MINUTES_MS = 10 * 60 * 1000;
     jasmine.clock().install();
