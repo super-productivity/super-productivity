@@ -17,11 +17,14 @@ const LINEAR_API_URL = 'https://api.linear.app/graphql';
 
 // Linear workflow state types that mean "done" (matches the built-in provider).
 const DONE_STATE_TYPES = ['completed', 'canceled'];
+// Open workflow state types that search and auto-import list.
+const OPEN_STATE_TYPES = ['backlog', 'unstarted', 'started'];
 
 interface LinearConfig {
   apiKey?: string;
   teamId?: string;
   projectId?: string;
+  skipBacklogOnAutoImport?: boolean;
 }
 
 interface LinearGraphQLResponse<T = unknown> {
@@ -60,12 +63,17 @@ interface LinearRawIssue extends LinearRawIssueReduced {
 }
 
 const SEARCH_ISSUES_QUERY = `
-  query SearchIssues($first: Int!, $team: TeamFilter, $project: NullableProjectFilter) {
+  query SearchIssues(
+    $first: Int!
+    $stateTypes: [String!]!
+    $team: TeamFilter
+    $project: NullableProjectFilter
+  ) {
     viewer {
       assignedIssues(
         first: $first,
         filter: {
-          state: { type: { in: ["backlog", "unstarted", "started"] } },
+          state: { type: { in: $stateTypes } },
           team: $team,
           project: $project
         }
@@ -130,8 +138,9 @@ const searchAssignedIssues = async (
   searchTerm: string,
   cfg: LinearConfig,
   http: PluginHttp,
+  stateTypes: string[] = OPEN_STATE_TYPES,
 ): Promise<PluginSearchResult[]> => {
-  const variables: Record<string, unknown> = { first: 50 };
+  const variables: Record<string, unknown> = { first: 50, stateTypes };
   // Deliberate behavior change from the built-in provider: the old
   // LinearApiService accepted teamId/projectId but its callers never passed
   // them, so the "filter to specific team/project" config fields were inert.
@@ -184,6 +193,12 @@ registerIssueProvider({
       key: 'projectId',
       type: 'input',
       label: t('CFG.PROJECT_ID'),
+      advanced: true,
+    },
+    {
+      key: 'skipBacklogOnAutoImport',
+      type: 'checkbox' as const,
+      label: t('CFG.SKIP_BACKLOG_ON_AUTO_IMPORT'),
       advanced: true,
     },
   ],
@@ -259,7 +274,12 @@ registerIssueProvider({
     config: Record<string, unknown>,
     http: PluginHttp,
   ): Promise<PluginSearchResult[]> {
-    return searchAssignedIssues('', asConfig<LinearConfig>(config), http);
+    const cfg = asConfig<LinearConfig>(config);
+    // Manual search still lists backlog issues, so one can be added on purpose.
+    const stateTypes = cfg.skipBacklogOnAutoImport
+      ? OPEN_STATE_TYPES.filter((type) => type !== 'backlog')
+      : OPEN_STATE_TYPES;
+    return searchAssignedIssues('', cfg, http, stateTypes);
   },
 
   issueDisplay: [
