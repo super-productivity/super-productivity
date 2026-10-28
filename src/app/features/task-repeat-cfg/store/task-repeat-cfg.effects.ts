@@ -219,9 +219,13 @@ export class TaskRepeatCfgEffects {
           // Also align dueDay with the first occurrence: for future occurrences
           // this removes the task from today's view (#6856); for past occurrences
           // this is a no-op when dueDay already matches (#7344 preservation).
+          // Timed tasks are skipped: addRepeatCfgToTaskUpdateTask$ schedules
+          // them via scheduleTaskWithTime, which clears dueDay. Setting it here
+          // afterwards leaves dueDay + dueWithTime and a planner.days entry, so
+          // the task renders twice in planner and schedule (#11212).
           this._taskService.update(task.id, {
             created: firstOccurrence.getTime(),
-            dueDay: firstOccurrenceStr,
+            ...(isTimedTask ? {} : { dueDay: firstOccurrenceStr }),
           });
           // planTaskForDay (below) also sets dueDay redundantly, plus handles
           // planner days and TODAY_TAG removal

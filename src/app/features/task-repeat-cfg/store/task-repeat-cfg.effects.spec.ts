@@ -742,11 +742,12 @@ describe('TaskRepeatCfgEffects - Repeatable Subtasks', () => {
       setTimeout(() => {
         expect(emitted).toBe(false);
 
-        // Should still update created (duplicate prevention)
+        // Should still update created (duplicate prevention), but NOT dueDay:
+        // scheduleTaskWithTime owns timed scheduling and clears dueDay; setting
+        // it here re-adds the task to planner.days and shows it twice (#11212)
         const firstOccurrenceStr = getDbDateStr(firstOccurrence);
         expect(taskService.update).toHaveBeenCalledWith('parent-task-id', {
           created: firstOccurrence.getTime(),
-          dueDay: firstOccurrenceStr,
         });
         // Should still update lastTaskCreationDay to the future date
         expect(taskRepeatCfgService.updateTaskRepeatCfg).toHaveBeenCalledWith(
@@ -4396,10 +4397,10 @@ describe('TaskRepeatCfgEffects - Deterministic Date Scenarios', () => {
       });
 
       expect(emitted).toBe(false);
-      // Should still update created for duplicate prevention
+      // Should still update created for duplicate prevention, but not dueDay
+      // (timed scheduling clears it; #11212)
       expect(taskService.update).toHaveBeenCalledWith('test-task-id', {
         created: new Date(2025, 0, 17, 12, 0, 0, 0).getTime(),
-        dueDay: '2025-01-17',
       });
       expect(taskRepeatCfgService.updateTaskRepeatCfg).toHaveBeenCalledWith(
         'repeat-cfg-id',
