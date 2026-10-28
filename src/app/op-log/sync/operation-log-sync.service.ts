@@ -901,7 +901,7 @@ export class OperationLogSyncService {
 
           keepPendingOps =
             gate === 'dialog' &&
-            canKeepPendingOnSnapshot(result, unsyncedOps, hasCompletedSyncBaseline);
+            (await canKeepPendingOnSnapshot(result, unsyncedOps, syncProvider));
 
           if (gate === 'dialog' && !keepPendingOps) {
             // Client has meaningful user data and clocks can't be auto-resolved -

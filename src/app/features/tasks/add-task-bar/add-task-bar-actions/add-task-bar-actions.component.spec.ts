@@ -40,6 +40,9 @@ describe('AddTaskBarActionsComponent', () => {
   let mockDialogRef: jasmine.SpyObj<MatDialogRef<DialogScheduleTaskComponent>>;
   let mockDateService: jasmine.SpyObj<DateService>;
   let mockProjectsSignal: WritableSignal<Project[]>;
+  // Kept separate from mockProjectsSignal so the menu-filtered and unfiltered lists can
+  // differ; the picker has to read the unfiltered one (#8207).
+  let mockVisibleProjectsSignal: WritableSignal<Project[]>;
 
   const mockProject: Project = {
     id: '1',
@@ -51,6 +54,13 @@ describe('AddTaskBarActionsComponent', () => {
     },
     icon: 'folder',
   } as Project;
+
+  const mockHiddenProject: Project = {
+    ...mockProject,
+    id: 'hidden-1',
+    title: 'Hidden Project',
+    isHiddenFromMenu: true,
+  };
 
   const mockTag: Tag = {
     id: '1',
@@ -162,11 +172,13 @@ describe('AddTaskBarActionsComponent', () => {
       (currentInput: string) => currentInput,
     );
 
-    mockProjectsSignal = signal([mockProject]);
+    mockProjectsSignal = signal([mockProject, mockHiddenProject]);
+    mockVisibleProjectsSignal = signal([mockProject]);
     mockProjectService = jasmine.createSpyObj('ProjectService', [], {
-      list$: of([mockProject]),
-      listSortedForUI: mockProjectsSignal,
-      listInTreeOrderForUI: mockProjectsSignal,
+      list$: of([mockProject, mockHiddenProject]),
+      listSortedForUI: mockVisibleProjectsSignal,
+      listInTreeOrderForUI: mockVisibleProjectsSignal,
+      listInTreeOrder: mockProjectsSignal,
       listSorted: mockProjectsSignal,
     });
 
@@ -240,8 +252,15 @@ describe('AddTaskBarActionsComponent', () => {
 
   describe('Component Creation', () => {
     it('should initialize with correct signals', () => {
-      expect(component.allProjects()).toEqual([mockProject]);
+      expect(component.allProjects()).toEqual([mockProject, mockHiddenProject]);
       expect(component.allTags()).toEqual([earlierTreeTag, mockTag]);
+    });
+
+    it('should offer a project that is hidden from the menu (#8207)', () => {
+      // listInTreeOrderForUI drops isHiddenFromMenu projects, so reading that list here
+      // leaves a hidden project unpickable. This fails if the picker is switched back.
+      expect(component.allProjects()).toContain(mockHiddenProject);
+      expect(mockVisibleProjectsSignal()).not.toContain(mockHiddenProject);
     });
 
     it('should handle input properties', () => {

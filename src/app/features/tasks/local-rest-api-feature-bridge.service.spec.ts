@@ -1,10 +1,14 @@
 import { TestBed } from '@angular/core/testing';
 import { MockStore, provideMockStore } from '@ngrx/store/testing';
+import { signal } from '@angular/core';
+import { GlobalConfigService } from '../config/global-config.service';
+import { GlobalConfigState } from '../config/global-config.model';
 import { of } from 'rxjs';
 import { IssueService } from '../issue/issue.service';
 import { LocalRestApiFeatureBridgeService } from './local-rest-api-feature-bridge.service';
+import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 import { addSubTask } from './store/task.actions';
-import { Task, TaskWithSubTasks } from './task.model';
+import { Task, TaskReminderOptionId, TaskWithSubTasks } from './task.model';
 import { TaskMoveToProjectService } from './task-move-to-project.service';
 import { TaskService } from './task.service';
 
@@ -20,6 +24,7 @@ describe('LocalRestApiFeatureBridgeService', () => {
       'createNewTaskWithDefaults',
       'addTimeSpentAndSync',
       'getByIdWithSubTaskData$',
+      'update',
     ]);
     issueServiceMock = jasmine.createSpyObj<IssueService>('IssueService', ['issueLink']);
     taskMoveToProjectServiceMock = jasmine.createSpyObj<TaskMoveToProjectService>(
@@ -34,6 +39,14 @@ describe('LocalRestApiFeatureBridgeService', () => {
         { provide: TaskService, useValue: taskServiceMock },
         { provide: IssueService, useValue: issueServiceMock },
         { provide: TaskMoveToProjectService, useValue: taskMoveToProjectServiceMock },
+        {
+          provide: GlobalConfigService,
+          useValue: {
+            cfg: signal({
+              reminder: { defaultTaskRemindOption: TaskReminderOptionId.m10 },
+            } as GlobalConfigState),
+          },
+        },
         provideMockStore(),
       ],
     });
@@ -113,5 +126,54 @@ describe('LocalRestApiFeatureBridgeService', () => {
     await service.moveTaskToProject('task-1', 'project-2');
 
     expect(taskMoveToProjectServiceMock.moveToProject).not.toHaveBeenCalled();
+  });
+
+  describe('updateTaskWithDueTime', () => {
+    const dueWithTime = 1_778_590_800_000;
+    const tenMinutes = 10 * 60 * 1000;
+    const oneDay = 24 * 60 * 60 * 1000;
+
+    it('should clear the reminder when dueWithTime is cleared', () => {
+      const task = { id: 'task-1', dueWithTime, remindAt: dueWithTime } as Task;
+
+      service.updateTaskWithDueTime(task, { dueWithTime: undefined });
+
+      expect(taskServiceMock.update).toHaveBeenCalledOnceWith('task-1', {
+        dueWithTime: undefined,
+      });
+      expect(dispatchSpy).toHaveBeenCalledOnceWith(
+        TaskSharedActions.dismissReminderOnly({ id: 'task-1', isSkipSnack: true }),
+      );
+    });
+
+    it('should move the reminder with dueWithTime and keep its offset', () => {
+      const task = {
+        id: 'task-1',
+        dueWithTime,
+        remindAt: dueWithTime - tenMinutes,
+      } as Task;
+      const movedDueWithTime = dueWithTime + oneDay;
+
+      service.updateTaskWithDueTime(task, { dueWithTime: movedDueWithTime });
+
+      expect(taskServiceMock.update).toHaveBeenCalledOnceWith('task-1', {
+        dueWithTime: movedDueWithTime,
+        remindAt: movedDueWithTime - tenMinutes,
+      });
+      expect(dispatchSpy).not.toHaveBeenCalled();
+    });
+
+    it('should add the default reminder when a task gets a time for the first time', () => {
+      const task = { id: 'task-1' } as Task;
+
+      service.updateTaskWithDueTime(task, { dueWithTime, title: 'Call' });
+
+      expect(taskServiceMock.update).toHaveBeenCalledOnceWith('task-1', {
+        dueWithTime,
+        title: 'Call',
+        remindAt: dueWithTime - tenMinutes,
+      });
+      expect(dispatchSpy).not.toHaveBeenCalled();
+    });
   });
 });

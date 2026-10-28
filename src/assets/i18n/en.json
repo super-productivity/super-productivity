@@ -274,7 +274,8 @@
         "EVENT_MOVED": "Event moved",
         "EVENT_RESCHEDULED": "Event rescheduled",
         "EVENT_DELETED": "Event deleted",
-        "TIME_BLOCK_ERROR": "Failed to sync time block: {{errTxt}}"
+        "TIME_BLOCK_ERROR": "Failed to sync time block: {{errTxt}}",
+        "WORK_SESSION_ERROR": "Failed to add the tracked time to your calendar. It will be tried again later: {{errTxt}}"
       }
     },
     "CLIPBOARD_IMAGE": {
@@ -346,6 +347,7 @@
       "BREAK_TITLE": "Break",
       "BROWSER_TITLE_BREAK": "Break",
       "BROWSER_TITLE_PAUSED": "Paused",
+      "CANCEL_SESSION": "Cancel session",
       "CLICK_TO_EDIT_DURATION": "Click to edit duration",
       "COMPLETE_FOCUS_SESSION": "Complete focus session",
       "COUNTDOWN": "Countdown",
@@ -3568,6 +3570,10 @@
     "SECTION_OPTIONS": "Section options",
     "DONE_TASKS": "Completed Tasks",
     "DONE_TASKS_IN_ARCHIVE": "There are currently no completed tasks here, but there are some already archived.",
+    "EMPTY_HINT_INBOX": "Tasks without a project usually land here. Move them into a project when you know where they belong.",
+    "EMPTY_HINT_PROJECT": "Tasks you add here belong to this project.",
+    "EMPTY_HINT_TAG": "Tasks with this tag appear here. Tasks you add here get this tag automatically.",
+    "EMPTY_HINT_TODAY": "Today shows what you plan to do today. Add a task here, or plan one from your Inbox or the Planner.",
     "ESTIMATE_REMAINING": "Estimate remaining:",
     "FINISH_DAY": "Finish Day",
     "FINISH_DAY_TOOLTIP": "Evaluate your day, move all completed tasks to the archive (optionally) and/or plan your next day.",

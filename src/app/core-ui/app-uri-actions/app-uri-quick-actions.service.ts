@@ -1,8 +1,9 @@
 import { Injectable, OnDestroy, inject } from '@angular/core';
 import { Router } from '@angular/router';
-import { Subscription } from 'rxjs';
+import { Subscription, merge } from 'rxjs';
 import { concatMap, map } from 'rxjs/operators';
 import { DataInitStateService } from '../../core/data-init/data-init-state.service';
+import { ipcAppUriQuickAction$ } from '../../core/ipc-events';
 import { LayoutService } from '../layout/layout.service';
 import { TODAY_TAG } from '../../features/tag/tag.const';
 import { INBOX_PROJECT } from '../../features/project/project.const';
@@ -37,6 +38,9 @@ const NAVIGATE_ROUTES: Record<AppUriQuickActionTarget, string> = {
  * resolve to: each iOS `UIApplicationShortcutItem` and Android
  * `res/xml/shortcuts.xml` entry carries one of the URLs, the native side opens
  * it, and it arrives here through the single `appUrlOpen` listener in `main.ts`.
+ * On desktop the macOS dock menu and the Windows jump list open the same URLs;
+ * the Electron protocol handler forwards `today`/`inbox` over IPC and keeps
+ * handling `add-task` itself (`IPC.SHOW_ADD_TASK_BAR`).
  *
  * Deliberately thinner than its sibling `AppUriTaskActionsService`: these
  * actions never write state, so there is nothing to validate and no snack to
@@ -57,7 +61,7 @@ export class AppUriQuickActionsService implements OnDestroy {
 
   constructor() {
     this._subs.add(
-      this._pendingQuickAction$
+      merge(ipcAppUriQuickAction$, this._pendingQuickAction$)
         .pipe(
           // `concatMap` (not `mergeMap`): two actions in quick succession must
           // stay in order, or the later one's navigation could be overtaken.

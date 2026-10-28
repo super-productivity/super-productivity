@@ -238,6 +238,15 @@ export interface IssueProviderPluginDefinition {
       config: Record<string, unknown>,
       http: PluginHttp,
     ): Promise<void>;
+    /** Optional: write a finished work session (time actually tracked on a task)
+     *  as a calendar event. The host calls it once per session, only on the device
+     *  that tracked it, and only while the well-known config key `isLogWorkSessions`
+     *  (checkbox) is on — the plugin should expose it as a config field. */
+    logWorkSession?(
+      session: PluginWorkSession,
+      config: Record<string, unknown>,
+      http: PluginHttp,
+    ): Promise<void>;
   };
   /** Optional time tracking (worklog) integration. When implemented, the host offers
    *  its track-time dialog after a linked task is marked done. The dialog is controlled
@@ -247,6 +256,16 @@ export interface IssueProviderPluginDefinition {
    *  - `timeTrackingDialogDefaultTime` (select: `AllTime` | `AllTimeMinusLogged` |
    *    `TimeToday` | `TimeYesterday`) — preselected time; the dialog can update it */
   timeTracking?: PluginTimeTracking;
+}
+
+export interface PluginWorkSession {
+  taskId: string;
+  /** Task title when the session ended */
+  title: string;
+  /** Start of the session (ms timestamp) */
+  start: number;
+  /** End of the session (ms timestamp) */
+  end: number;
 }
 
 export interface PluginTimeEntry {

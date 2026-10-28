@@ -187,7 +187,7 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
   isScheduleDialogOpen = signal(false);
 
   // Computed signals for projects and tags
-  projects = this._projectService.listInTreeOrderForUI;
+  projects = this._projectService.listInTreeOrder;
   // Observable version for compatibility with existing code
   projects$ = toObservable(this.projects);
   tags$ = this._tagService.tags$;

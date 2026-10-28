@@ -28,6 +28,12 @@ export interface LocalRestApiFeatureBridge {
    * recurring task's repeat config and instances follow it, without asking.
    */
   moveTaskToProject(taskId: string, projectId: string): Promise<void>;
+
+  /**
+   * Updates a task whose changes include `dueWithTime`, moving or clearing its
+   * reminder along with it. A plain update leaves `remindAt` where it was.
+   */
+  updateTaskWithDueTime(task: object, changes: object): void;
 }
 
 export const LOCAL_REST_API_FEATURE_BRIDGE =

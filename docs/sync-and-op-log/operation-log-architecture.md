@@ -927,8 +927,10 @@ IDs deduplicate ops still in the local log, while vector clocks carry causality.
    A gap that is only a trim (the file's `syncVersion` did not go backwards,
    its base is seen, and its clock equals or dominates the last-seen one) is a
    catch-up, not a replacement (`snapshotExtendsLastSeen`, #10972). A client
-   with a completed sync baseline and no pending full-state op then hydrates
-   the snapshot and keeps its pending ops: they move past the baseline with
+   that completed a sync with this target (seq cursor above 0) and has no
+   pending full-state op then hydrates the snapshot and keeps its pending ops
+   (after a target switch the adapter can hold a last-seen baseline staged by
+   a download it never applied, so having synced elsewhere is not enough): they move past the baseline with
    ids and clocks unchanged, replay on top of it, and upload normally.
    Receivers resolve any crossing on the no-pending LWW path. A pending op the
    snapshot clock already covers (uploaded before a crash skipped

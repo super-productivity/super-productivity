@@ -17,6 +17,7 @@ import { IPC } from './shared-with-frontend/ipc-events.const';
 import { initBackupAdapter } from './backup';
 import { initLocalFileSyncAdapter } from './local-file-sync';
 import { initFullScreenBlocker } from './full-screen-blocker';
+import { initLauncherShortcuts } from './launcher-shortcuts';
 import { CONFIG } from './CONFIG';
 import { lazySetInterval } from './shared-with-frontend/lazy-set-interval';
 import { initIndicator } from './indicator';
@@ -313,6 +314,7 @@ export const startApp = (): void => {
   appIN.on('ready', () => initBackupAdapter());
   appIN.on('ready', () => initLocalFileSyncAdapter());
   appIN.on('ready', () => initFullScreenBlocker(IS_DEV));
+  appIN.on('ready', () => initLauncherShortcuts(appIN, () => mainWin));
 
   if (!isDisableTray) {
     appIN.on('ready', createIndicator);

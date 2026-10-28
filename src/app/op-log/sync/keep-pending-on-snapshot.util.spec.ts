@@ -25,22 +25,29 @@ const entry = (seq: number, opType: OpType = OpType.Update): OperationLogEntry =
 
 describe('canKeepPendingOnSnapshot (#10972)', () => {
   const extends_ = { snapshotExtendsLastSeen: true };
-
-  it('keeps pending ops on a catch-up snapshot after a completed sync', () => {
-    expect(canKeepPendingOnSnapshot(extends_, [entry(1)], true)).toBe(true);
+  const cursorAt = (seq: number): { getLastServerSeq: () => Promise<number> } => ({
+    getLastServerSeq: () => Promise.resolve(seq),
   });
 
-  it('asks the user when the snapshot does not only extend the last-seen file', () => {
-    expect(canKeepPendingOnSnapshot({}, [entry(1)], true)).toBe(false);
+  it('keeps pending ops on a catch-up snapshot after a completed sync with this target', async () => {
+    expect(await canKeepPendingOnSnapshot(extends_, [entry(1)], cursorAt(3))).toBe(true);
   });
 
-  it('asks the user on a client that never completed a sync', () => {
-    expect(canKeepPendingOnSnapshot(extends_, [entry(1)], false)).toBe(false);
+  it('asks the user when the snapshot does not only extend the last-seen file', async () => {
+    expect(await canKeepPendingOnSnapshot({}, [entry(1)], cursorAt(3))).toBe(false);
   });
 
-  it('asks the user when a pending op replaces the whole state', () => {
+  it('asks the user before a completed sync with this target', async () => {
+    expect(await canKeepPendingOnSnapshot(extends_, [entry(1)], cursorAt(0))).toBe(false);
+  });
+
+  it('asks the user when a pending op replaces the whole state', async () => {
     expect(
-      canKeepPendingOnSnapshot(extends_, [entry(1), entry(2, OpType.SyncImport)], true),
+      await canKeepPendingOnSnapshot(
+        extends_,
+        [entry(1), entry(2, OpType.SyncImport)],
+        cursorAt(3),
+      ),
     ).toBe(false);
   });
 });

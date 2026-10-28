@@ -83,6 +83,21 @@ describe('GlobalTrackingIntervalService', () => {
     expect(service.clockTimestamp()).toBe(initial + 200);
   }));
 
+  it('changes the minute clock only when the wall-clock minute changes', fakeAsync(() => {
+    const MINUTE = 60 * 1000;
+    const service = TestBed.inject(GlobalTrackingIntervalService);
+    const initial = service.clockMinute();
+    expect(initial).toBe(Math.floor(Date.now() / MINUTE));
+    const ticksLeftInMinute = Math.floor(
+      (MINUTE - (Date.now() % MINUTE) - 1) / TRACKING_INTERVAL,
+    );
+
+    tick(ticksLeftInMinute * TRACKING_INTERVAL);
+    expect(service.clockMinute()).toBe(initial);
+    tick(TRACKING_INTERVAL);
+    expect(service.clockMinute()).toBe(initial + 1);
+  }));
+
   it('should emit elapsed wall-clock time on tick$', fakeAsync(() => {
     const service = TestBed.inject(GlobalTrackingIntervalService);
     const durations: number[] = [];
@@ -140,6 +155,25 @@ describe('GlobalTrackingIntervalService', () => {
 
     expect(wake.duration).toBe(700);
     expect(service.consumeCurrentTick().duration).toBe(0);
+  }));
+
+  it('should credit a wake-up tick only up to the given timestamp', fakeAsync(() => {
+    const service = TestBed.inject(GlobalTrackingIntervalService);
+
+    tick(500);
+    const wake = service.triggerWakeUpTickUntil(Date.now() - 200);
+
+    expect(wake.duration).toBe(300);
+    expect(service.consumeCurrentTick().duration).toBe(200);
+  }));
+
+  it('should apply both the timestamp and the cap, and never go negative', fakeAsync(() => {
+    const service = TestBed.inject(GlobalTrackingIntervalService);
+
+    tick(500);
+    expect(service.triggerWakeUpTickUntil(Date.now() - 100, 150).duration).toBe(150);
+    expect(service.triggerWakeUpTickUntil(Date.now() - 10_000).duration).toBe(0);
+    expect(service.consumeCurrentTick().duration).toBe(350);
   }));
 
   it('should push the wake-up tick onto tick$ for downstream consumers', fakeAsync(() => {

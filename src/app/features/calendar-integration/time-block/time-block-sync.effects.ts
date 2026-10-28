@@ -24,7 +24,6 @@ import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions'
 import { PlannerActions } from '../../planner/store/planner.actions';
 import { PluginHttpService } from '../../../plugins/issue-provider/plugin-http.service';
 import { PluginIssueProviderRegistryService } from '../../../plugins/issue-provider/plugin-issue-provider-registry.service';
-import { PluginHttp } from '../../../plugins/issue-provider/plugin-issue-provider.model';
 import { selectEnabledIssueProviders } from '../../issue/store/issue-provider.selectors';
 import { IssueProviderPluginType, isPluginIssueProvider } from '../../issue/issue.model';
 import { IssueProviderActions } from '../../issue/store/issue-provider.actions';
@@ -32,23 +31,11 @@ import { SnackParams } from '../../../core/snack/snack.model';
 import { SnackService } from '../../../core/snack/snack.service';
 import { getErrorTxt } from '../../../util/get-error-text';
 import { TimeBlockDeleteSidecarService } from './time-block-delete-sidecar.service';
-import { IssueProviderPluginDefinition } from '../../../plugins/issue-provider/plugin-issue-provider.model';
+import { createTimeBlockContext, TimeBlockContext } from './time-block-context';
 import { selectAllTasksWithDueTimeSorted } from '../../tasks/store/task.selectors';
 import { T } from '../../../t.const';
 import { Log } from '../../../core/log';
-import {
-  shouldScopePluginOAuth,
-  withPluginOAuthTokenKey,
-} from '../../../plugins/oauth/plugin-oauth-token-key.util';
-
-interface TimeBlockContext {
-  providerId: string;
-  issueProvider: IssueProviderPluginType;
-  pluginId: string;
-  definition: IssueProviderPluginDefinition;
-  config: Record<string, unknown>;
-  http: PluginHttp;
-}
+import { shouldScopePluginOAuth } from '../../../plugins/oauth/plugin-oauth-token-key.util';
 
 type TimeBlockOperation = 'upsert' | 'upsertIfScheduled' | 'delete';
 
@@ -418,34 +405,14 @@ export class TimeBlockSyncEffects {
     return this._store.select(selectEnabledIssueProviders).pipe(
       first(),
       concatMap((providers) => {
-        const provider = providers.find(
-          (p): p is IssueProviderPluginType =>
-            (!filterProviderId || p.id === filterProviderId) &&
-            isPluginIssueProvider(p.issueProviderKey) &&
-            !!(p as IssueProviderPluginType).pluginConfig?.['isAutoTimeBlock'],
-        );
-        if (!provider) return EMPTY;
-
-        const registered = this._pluginRegistry.getProvider(provider.issueProviderKey);
-        if (!registered?.definition.timeBlock) return EMPTY;
-
-        const pluginConfig = withPluginOAuthTokenKey(
-          registered.pluginId,
-          provider.pluginConfig,
-          provider.id,
-        );
-        const http = this._pluginHttpService.createHttpHelper(
-          () => registered.definition.getHeaders(pluginConfig),
-          { allowPrivateNetwork: registered.allowPrivateNetwork },
-        );
-        return fn({
-          providerId: provider.id,
-          issueProvider: provider,
-          pluginId: registered.pluginId,
-          definition: registered.definition,
-          config: pluginConfig,
-          http,
+        const ctx = createTimeBlockContext({
+          providers,
+          configKey: 'isAutoTimeBlock',
+          registry: this._pluginRegistry,
+          httpService: this._pluginHttpService,
+          filterProviderId,
         });
+        return ctx ? fn(ctx) : EMPTY;
       }),
     );
   }
