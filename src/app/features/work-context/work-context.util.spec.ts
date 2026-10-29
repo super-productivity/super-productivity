@@ -77,6 +77,11 @@ describe('isDoneTaskForToday', () => {
     expect(isDoneTaskForToday(task({}), TODAY, 0)).toBe(false);
   });
 
+  it('treats an invalid timestamp as not today instead of throwing', () => {
+    expect(isDoneTaskForToday(task({ doneOn: -1 }), TODAY, 0)).toBe(false);
+    expect(isDoneTaskForToday(task({ dueWithTime: 9e15 }), TODAY, 0)).toBe(false);
+  });
+
   it('respects the start-of-next-day offset', () => {
     // 01:00 on the 14th still belongs to the 13th when the day starts at 04:00
     const doneOn = new Date(2023, 5, 14, 1, 0).getTime();

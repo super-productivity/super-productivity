@@ -177,6 +177,12 @@ describe('WorkContextService - undoneTasks$ filtering', () => {
       dueDay: '2023-01-01',
       doneOn: at(0, 1, 9),
     });
+    const DUE_TIME_TODAY = createMockTask({
+      id: 'DUE_TIME_TODAY',
+      isDone: true,
+      dueWithTime: at(5, 13, 7),
+      doneOn: at(5, 12, 9),
+    });
     const UNDONE = createMockTask({ id: 'UNDONE', dueDay: '2023-06-13' });
 
     beforeEach(() => {
@@ -186,6 +192,7 @@ describe('WorkContextService - undoneTasks$ filtering', () => {
         DONE_EARLIER,
         DUE_TODAY,
         DONE_TODAY,
+        DUE_TIME_TODAY,
         UNDONE,
       ]);
       store.refreshState();
@@ -193,7 +200,11 @@ describe('WorkContextService - undoneTasks$ filtering', () => {
 
     it('lists only tasks due or completed today, newest first', async () => {
       const done = await firstValueFrom(service.doneTasks$);
-      expect(done.map((t) => t.id)).toEqual(['DUE_TODAY', 'DONE_TODAY']);
+      expect(done.map((t) => t.id)).toEqual([
+        'DUE_TODAY',
+        'DONE_TODAY',
+        'DUE_TIME_TODAY',
+      ]);
     });
 
     it('drops tasks of the previous day once the day changes', () => {
@@ -206,7 +217,7 @@ describe('WorkContextService - undoneTasks$ filtering', () => {
       ).and.returnValue(day$);
       let ids: string[] = [];
       const sub = service.doneTasks$.subscribe((tasks) => (ids = tasks.map((t) => t.id)));
-      expect(ids).toEqual(['DUE_TODAY', 'DONE_TODAY']);
+      expect(ids).toEqual(['DUE_TODAY', 'DONE_TODAY', 'DUE_TIME_TODAY']);
 
       day$.next('2023-06-14');
 
@@ -219,8 +230,25 @@ describe('WorkContextService - undoneTasks$ filtering', () => {
       expect(toArchive.map((t) => t.id)).toEqual([
         'DUE_TODAY',
         'DONE_TODAY',
+        'DUE_TIME_TODAY',
         'DONE_EARLIER',
       ]);
+    });
+
+    it('lists every done task of the context outside Today', async () => {
+      const store = TestBed.inject(MockStore);
+      store.overrideSelector(selectActiveContextId, 'project-1');
+      store.refreshState();
+      // read lazily inside switchMap, so replacing it after construction works
+      (service as unknown as { mainListTasks$: unknown }).mainListTasks$ = of([
+        DONE_EARLIER,
+        DUE_TODAY,
+        UNDONE,
+      ]);
+
+      const done = await firstValueFrom(service.doneTasks$);
+
+      expect(done.map((t) => t.id)).toEqual(['DUE_TODAY', 'DONE_EARLIER']);
     });
   });
 

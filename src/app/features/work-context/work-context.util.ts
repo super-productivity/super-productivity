@@ -11,6 +11,17 @@ export const sortDoneTasksByDoneDate = <T extends Pick<Task, 'doneOn'>>(
   tasks: T[],
 ): T[] => [...tasks].sort((a, b) => (b.doneOn ?? 0) - (a.doneOn ?? 0));
 
+// Range-guarded: `isTodayWithOffset` throws on an invalid timestamp, and one
+// corrupt task would otherwise error the whole Today Done list stream.
+const isValidTsToday = (
+  ts: number | null | undefined,
+  todayStr: string,
+  startOfNextDayDiffMs: number,
+): boolean =>
+  !!ts &&
+  new Date(ts).getTime() > 0 &&
+  isTodayWithOffset(ts, todayStr, startOfNextDayDiffMs);
+
 /**
  * Whether a done task belongs to Today's Done list: due today (by day or time)
  * or completed today. Done tasks from earlier days stay in their project's Done
@@ -22,9 +33,8 @@ export const isDoneTaskForToday = (
   startOfNextDayDiffMs: number,
 ): boolean =>
   task.dueDay === todayStr ||
-  (!!task.dueWithTime &&
-    isTodayWithOffset(task.dueWithTime, todayStr, startOfNextDayDiffMs)) ||
-  (!!task.doneOn && isTodayWithOffset(task.doneOn, todayStr, startOfNextDayDiffMs));
+  isValidTsToday(task.dueWithTime, todayStr, startOfNextDayDiffMs) ||
+  isValidTsToday(task.doneOn, todayStr, startOfNextDayDiffMs);
 
 export const mapEstimateRemainingFromTasks = (tasks: TaskWithSubTasks[]): number =>
   tasks &&
