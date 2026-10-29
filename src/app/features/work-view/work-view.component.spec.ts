@@ -87,6 +87,8 @@ const configureWorkViewTestBed = (
     isTodayList?: boolean;
     /** Plugin id embedded in the work-view body; replaces the whole task list. */
     embedPluginId?: string | null;
+    /** What "move done to archive" sweeps; may exceed the rendered Done list. */
+    doneTasksToArchive?: TaskWithSubTasks[];
   } = {},
 ): void => {
   const workContextService = {
@@ -94,6 +96,7 @@ const configureWorkViewTestBed = (
       return activeContext.id;
     },
     undoneTasks$: of([]),
+    doneTasksToArchive$: of(overrides.doneTasksToArchive ?? []),
     todayRemainingInProject$: of(0),
     estimateRemainingToday$: of(0),
     workingToday$: of(0),
@@ -363,6 +366,34 @@ describe('WorkViewComponent', () => {
       TestBed.flushEffects();
 
       expect(setSelectedId).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('moveDoneToArchive', () => {
+    it('archives every done task, not only the ones listed on Today', async () => {
+      const moveToArchive = jasmine
+        .createSpy('moveToArchive')
+        .and.returnValue(Promise.resolve());
+      const listed = buildTask('done-today');
+      const earlier = buildTask('done-earlier');
+      configureWorkViewTestBed({
+        isTodayList: true,
+        taskService: { moveToArchive },
+        doneTasksToArchive: [listed, earlier],
+      });
+      store = TestBed.inject(MockStore);
+      overrideDefaultSelectors(store);
+
+      await TestBed.compileComponents();
+      const fixture = TestBed.createComponent(WorkViewComponent);
+      fixture.componentRef.setInput('undoneTasks', []);
+      fixture.componentRef.setInput('doneTasks', [listed]);
+      fixture.componentRef.setInput('backlogTasks', []);
+      fixture.detectChanges();
+
+      await fixture.componentInstance.moveDoneToArchive();
+
+      expect(moveToArchive).toHaveBeenCalledOnceWith([listed, earlier]);
     });
   });
 

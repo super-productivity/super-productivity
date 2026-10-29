@@ -1,4 +1,5 @@
 import { Task, TaskWithSubTasks } from '../tasks/task.model';
+import { isTodayWithOffset } from '../../util/is-today.util';
 
 /**
  * Order completed tasks by when they were completed, newest first, so the most
@@ -9,6 +10,21 @@ import { Task, TaskWithSubTasks } from '../tasks/task.model';
 export const sortDoneTasksByDoneDate = <T extends Pick<Task, 'doneOn'>>(
   tasks: T[],
 ): T[] => [...tasks].sort((a, b) => (b.doneOn ?? 0) - (a.doneOn ?? 0));
+
+/**
+ * Whether a done task belongs to Today's Done list: due today (by day or time)
+ * or completed today. Done tasks from earlier days stay in their project's Done
+ * list until archived, so Today's list doesn't grow with every unarchived one.
+ */
+export const isDoneTaskForToday = (
+  task: Pick<Task, 'dueDay' | 'dueWithTime' | 'doneOn'>,
+  todayStr: string,
+  startOfNextDayDiffMs: number,
+): boolean =>
+  task.dueDay === todayStr ||
+  (!!task.dueWithTime &&
+    isTodayWithOffset(task.dueWithTime, todayStr, startOfNextDayDiffMs)) ||
+  (!!task.doneOn && isTodayWithOffset(task.doneOn, todayStr, startOfNextDayDiffMs));
 
 export const mapEstimateRemainingFromTasks = (tasks: TaskWithSubTasks[]): number =>
   tasks &&

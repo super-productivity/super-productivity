@@ -26,6 +26,7 @@ import { TakeABreakService } from '../take-a-break/take-a-break.service';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import {
   animationFrameScheduler,
+  firstValueFrom,
   from,
   fromEvent,
   Observable,
@@ -584,7 +585,9 @@ export class WorkViewComponent implements OnInit, OnDestroy {
   }
 
   async moveDoneToArchive(): Promise<void> {
-    const doneTasks = this.doneTasks();
+    // not this.doneTasks(): on Today that hides done tasks from earlier days,
+    // which should still be swept
+    const doneTasks = await firstValueFrom(this.workContextService.doneTasksToArchive$);
 
     if (!doneTasks || doneTasks.length === 0) {
       return;

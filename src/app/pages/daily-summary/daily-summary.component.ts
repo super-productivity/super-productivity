@@ -459,7 +459,9 @@ export class DailySummaryComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   private async _moveDoneToArchive(): Promise<void> {
-    const doneTasks = await this.workContextService.doneTasks$.pipe(take(1)).toPromise();
+    const doneTasks = await this.workContextService.doneTasksToArchive$
+      .pipe(take(1))
+      .toPromise();
     Log.log('[DailySummary] Moving done tasks to archive:', {
       count: doneTasks.length,
       taskIds: doneTasks.map((t) => t.id),
