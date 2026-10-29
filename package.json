@@ -240,7 +240,7 @@
     "@angular/service-worker": "^22.2.2",
     "@capacitor/android": "^8.5.3",
     "@capacitor/app": "^8.1.2",
-    "@capacitor/cli": "^8.5.3",
+    "@capacitor/cli": "^8.6.0",
     "@capacitor/core": "^8.5.3",
     "@capacitor/filesystem": "^8.1.4",
     "@capacitor/local-notifications": "^8.3.1",
