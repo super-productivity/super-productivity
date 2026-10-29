@@ -34,6 +34,11 @@ const _loadValidateFull = (): Promise<typeof import('./validation-fn').validateF
 
 /** Upper bound for deferring {@link ValidateStateService.validateStateWhenIdle}. */
 const DEFERRED_VALIDATION_IDLE_TIMEOUT_MS = 10000;
+/**
+ * Delay used where `requestIdleCallback` is missing (iOS Safari/WKWebView), so
+ * the validation still lands after the first render instead of during it.
+ */
+export const DEFERRED_VALIDATION_FALLBACK_DELAY_MS = 2000;
 
 /**
  * Result of validating application state.
@@ -295,7 +300,7 @@ export class ValidateStateService {
     if (typeof requestIdleCallback === 'function') {
       requestIdleCallback(run, { timeout: DEFERRED_VALIDATION_IDLE_TIMEOUT_MS });
     } else {
-      setTimeout(run, 0);
+      setTimeout(run, DEFERRED_VALIDATION_FALLBACK_DELAY_MS);
     }
   }
 

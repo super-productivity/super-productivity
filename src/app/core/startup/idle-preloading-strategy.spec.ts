@@ -54,6 +54,37 @@ describe('IdlePreloadingStrategy', () => {
     expect(loadC).toHaveBeenCalledTimes(1);
   }));
 
+  it('skips the load of an unsubscribed preload but keeps the shared wait', fakeAsync(() => {
+    const loadA = jasmine.createSpy('loadA').and.returnValue(of(true));
+    const loadB = jasmine.createSpy('loadB').and.returnValue(of(true));
+
+    strategy.preload({}, loadA).subscribe().unsubscribe();
+    tick(PRELOAD_DELAY_MS);
+    flushIdle();
+    expect(loadA).not.toHaveBeenCalled();
+
+    strategy.preload({}, loadB).subscribe();
+    expect(loadB).toHaveBeenCalledTimes(1);
+  }));
+
+  it('loads right after the delay without requestIdleCallback (iOS)', fakeAsync(() => {
+    const win = window as unknown as { requestIdleCallback?: unknown };
+    const original = win.requestIdleCallback;
+    win.requestIdleCallback = undefined;
+    try {
+      const load = jasmine.createSpy('load').and.returnValue(of(true));
+
+      strategy.preload({}, load).subscribe();
+      tick(PRELOAD_DELAY_MS - 1);
+      expect(load).not.toHaveBeenCalled();
+
+      tick(1);
+      expect(load).toHaveBeenCalledTimes(1);
+    } finally {
+      win.requestIdleCallback = original;
+    }
+  }));
+
   it('swallows a failed load like PreloadAllModules', fakeAsync(() => {
     const load = jasmine
       .createSpy('load')
