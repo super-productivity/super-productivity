@@ -473,7 +473,9 @@ describe('TaskListComponent', () => {
         expect(component.enterPredicate(drag, drop)).toBe(true);
       });
 
-      it('should block timed, repeating, and issue-linked parent tasks from dropping to subtask list', () => {
+      // #11027: the drop unschedules the task first (see _move), so a timed
+      // task or one with a reminder must be accepted as a drop target.
+      it('should allow timed and reminder parent tasks to drop to subtask list', () => {
         const drop = createMockDrop('some-task-id', 'SUB');
 
         expect(
@@ -483,10 +485,15 @@ describe('TaskListComponent', () => {
               parentId: null,
               subTaskIds: [],
               dueWithTime: 4070908800000,
+              remindAt: 4070908800000,
             }),
             drop,
           ),
-        ).toBe(false);
+        ).toBe(true);
+      });
+
+      it('should block repeating and issue-linked parent tasks from dropping to subtask list', () => {
+        const drop = createMockDrop('some-task-id', 'SUB');
 
         expect(
           component.enterPredicate(
@@ -686,6 +693,41 @@ describe('TaskListComponent', () => {
       expect(dispatchedAction.taskId).toBe('task1');
       expect(dispatchedAction.targetParentId).toBe('parentB');
       expect(dispatchedAction.afterTaskId).toBe('before');
+    });
+
+    it('unschedules a timed task before converting it to a subtask (#11027)', () => {
+      callMove('task1', 'UNDONE', 'parentB', 'PARENT', 'SUB', ['before', 'task1'], {
+        dueWithTime: 4070908800000,
+        remindAt: 4070908800000,
+      });
+
+      const dispatched = (store.dispatch as jasmine.Spy).calls
+        .allArgs()
+        .map((args) => args[0] as { type: string });
+      expect(dispatched).toEqual([
+        TaskSharedActions.unscheduleTask({ id: 'task1', isSkipToast: false }),
+        TaskSharedActions.convertToSubTask({
+          taskId: 'task1',
+          targetParentId: 'parentB',
+          afterTaskId: 'before',
+        }),
+      ]);
+    });
+
+    it('skips the reminder toast when unscheduling a timed task without a reminder', () => {
+      callMove('task1', 'UNDONE', 'parentB', 'PARENT', 'SUB', ['task1'], {
+        dueWithTime: 4070908800000,
+      });
+
+      expect(store.dispatch).toHaveBeenCalledWith(
+        TaskSharedActions.unscheduleTask({ id: 'task1', isSkipToast: true }),
+      );
+    });
+
+    it('does not unschedule an unscheduled task converted to a subtask', () => {
+      callMove('task1', 'UNDONE', 'parentB', 'PARENT', 'SUB');
+
+      expect(store.dispatch).toHaveBeenCalledTimes(1);
     });
 
     it('routes a subtask drop into a parent list to convertToMainTask', () => {
