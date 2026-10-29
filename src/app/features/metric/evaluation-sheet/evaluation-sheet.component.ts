@@ -31,6 +31,7 @@ export class EvaluationSheetComponent {
   private readonly _globalTrackingIntervalService = inject(GlobalTrackingIntervalService);
 
   readonly dayStr$ = input<Observable<string> | null>(null);
+  readonly isWeek = input(false);
 
   readonly T = T;
   // Internal signals

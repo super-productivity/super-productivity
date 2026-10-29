@@ -143,6 +143,11 @@ export class PlannerService {
   //   // make this more performant by sharing stream
   //   .pipe(shareReplay(1));
 
+  /** Live planner days for fixed dates, e.g. next week in Finish day. */
+  getDays$(dayStrs: string[]): Observable<PlannerDay[]> {
+    return this._selectPlannerDaysFor$(of(dayStrs));
+  }
+
   getDayOnce$(dayStr: string): Observable<PlannerDay | undefined> {
     return this._selectPlannerDaysFor$(of([dayStr])).pipe(
       map((days) => days.find((d) => d.dayDate === dayStr)),

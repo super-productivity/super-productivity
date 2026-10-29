@@ -804,12 +804,14 @@
         "PLACEHOLDER_3": "Where did focus slip - and how can you protect it?",
         "PLACEHOLDER_4": "Which task gave you energy? Which drained it?",
         "PLACEHOLDER_5": "One thing to repeat. One thing to change.",
+        "PLACEHOLDER_WEEK": "Wins? What pulled you off track? What changes next week?",
         "REMIND_LABEL": "Remind me tomorrow about this",
         "REMINDER_CREATED": "Reflection reminder scheduled for tomorrow",
         "REMINDER_ERROR": "Could not schedule the reminder",
         "REMINDER_NEEDS_TEXT": "Write a reflection before asking for a reminder",
         "REMINDER_TASK_TITLE": "Revisit reflection note",
-        "TITLE": "Reflection Note"
+        "TITLE": "Reflection Note",
+        "TITLE_WEEK": "Reflect on your week"
       }
     },
     "NOTE": {
@@ -3214,6 +3216,7 @@
     }
   },
   "PDS": {
+    "ADD_OPEN_TASKS_FROM_WEEK": "Add open tasks from this week",
     "ADD_TASKS_FROM_TODAY": "Add tasks from today",
     "ARCHIVED_TASKS": {
       "ONE": "{{count}} completed parent task has been archived",
@@ -3231,6 +3234,7 @@
     "ESTIMATE_TOTAL": "Total estimate:",
     "EVALUATE_DAY": "Evaluate Day",
     "EXPORT_TASK_LIST": "Export Task List",
+    "FINISH_WEEK": "Finish the week",
     "FOCUS_SUMMARY": "Focus Sessions",
     "NO_TASKS": "There are no tasks for this day",
     "PLAN_TOMORROW": "Plan",
@@ -3249,6 +3253,7 @@
     "START_END": "Start – End",
     "SUMMARY_FOR": "Daily Summary for {{dayStr}}",
     "TASKS_COMPLETED": "Tasks Completed",
+    "THIS_WEEK": "This week",
     "TIME_SPENT_AND_ESTIMATE_LABEL": "Time Spent / Estimated",
     "TIME_SPENT_ESTIMATE_TITLE": "Time Spent: Total time spent today. Archived tasks not included. – Time Estimated: Time estimated for tasks worked on today minus the time already spent on them on other days.",
     "TIME_SPENT_TODAY_BY_TAG": "Time Spent today by Tag",
