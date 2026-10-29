@@ -1,4 +1,5 @@
 import { IssueProvider } from '../issue.model';
+import { getPluginOptionLabel } from './plugin-option-labels';
 
 const SECRET_KEY_PATTERNS = /token|secret|key|password|apikey|api_key/i;
 
@@ -39,9 +40,12 @@ const _getSafePluginConfigString = (
   const safeEntries = Object.entries(pluginConfig).filter(
     ([k]) => !SECRET_KEY_PATTERNS.test(k),
   );
-  return safeEntries.find(([, v]) => typeof v === 'string' && v.length > 0)?.[1] as
-    | string
-    | undefined;
+  const entry = safeEntries.find(([, v]) => typeof v === 'string' && v.length > 0);
+  if (!entry) {
+    return undefined;
+  }
+  // A dropdown choice stores an opaque id; prefer the label the user picked.
+  return getPluginOptionLabel(pluginConfig, entry[0]) ?? (entry[1] as string);
 };
 
 export const getIssueProviderTooltip = (issueProvider: IssueProvider): string => {

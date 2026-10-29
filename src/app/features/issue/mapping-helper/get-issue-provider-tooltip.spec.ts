@@ -122,3 +122,31 @@ describe('CalDAV display name (#9144)', () => {
     expect(getIssueProviderInitials(caldavProvider())).toBe('DA');
   });
 });
+
+describe('plugin provider display name', () => {
+  const linearProvider = (pluginConfig: Record<string, unknown>): IssueProvider =>
+    ({
+      id: 'ip-2',
+      issueProviderKey: 'LINEAR',
+      pluginConfig: { apiKey: 'secret', ...pluginConfig },
+    }) as unknown as IssueProvider;
+
+  it('shows the label of a chosen dropdown option instead of its id', () => {
+    const provider = linearProvider({
+      teamId: '71023842-aaaa-bbbb-cccc-000000000000',
+      optionLabels: { teamId: { name: 'Edgeless (EDG)' } },
+    });
+
+    expect(getIssueProviderTooltip(provider)).toBe('Edgeless (EDG)');
+    expect(getIssueProviderInitials(provider)).toBe('ED');
+  });
+
+  it('falls back to the raw value when no label is stored', () => {
+    const provider = linearProvider({ teamId: '71023842-aaaa-bbbb-cccc-000000000000' });
+
+    expect(getIssueProviderTooltip(provider)).toBe(
+      '71023842-aaaa-bbbb-cccc-000000000000',
+    );
+    expect(getIssueProviderInitials(provider)).toBe('71');
+  });
+});
