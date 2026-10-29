@@ -40,6 +40,7 @@ interface LinearRawIssueReduced {
   updatedAt: string;
   url: string;
   state: { name: string; type: string };
+  parent?: { id: string } | null;
 }
 
 interface LinearRawIssue extends LinearRawIssueReduced {
@@ -81,6 +82,7 @@ const SEARCH_ISSUES_QUERY = `
         nodes {
           id identifier number title updatedAt url
           state { id name type }
+          parent { id }
         }
       }
     }
@@ -129,6 +131,7 @@ const mapReduced = (issue: LinearRawIssueReduced): PluginSearchResult => ({
   title: `${issue.identifier} ${issue.title}`,
   url: issue.url,
   status: issue.state?.name,
+  parentId: issue.parent?.id,
   // Provider-specific fields used for display + isDone mapping.
   identifier: issue.identifier,
   stateType: issue.state?.type,
