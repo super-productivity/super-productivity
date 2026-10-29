@@ -1,8 +1,10 @@
 import { SimpleCounterCopy } from './simple-counter.model';
 import { getDbDateStr } from '../../util/get-db-date-str';
+import { parseDbDateStr } from '../../util/parse-db-date-str';
 
 export const getSimpleCounterStreakDuration = (
   simpleCounter: SimpleCounterCopy,
+  todayStr: string,
 ): number => {
   const countOnDay = simpleCounter.countOnDay || {};
 
@@ -12,7 +14,7 @@ export const getSimpleCounterStreakDuration = (
 
   // Handle weekly frequency mode
   if (simpleCounter.streakMode === 'weekly-frequency') {
-    return calculateWeeklyFrequencyStreak(simpleCounter);
+    return calculateWeeklyFrequencyStreak(simpleCounter, todayStr);
   }
 
   // Handle specific days mode (existing logic)
@@ -21,12 +23,12 @@ export const getSimpleCounterStreakDuration = (
   }
 
   let streak = 0;
-  const date = new Date();
+  const date = parseDbDateStr(todayStr);
   // set date to last weekday set in streakWeekDays
   setDayToLastConsideredWeekday(date, simpleCounter.streakWeekDays);
 
   if (
-    getDbDateStr(date) === getDbDateStr(new Date()) &&
+    getDbDateStr(date) === todayStr &&
     (!countOnDay[getDbDateStr(date)] ||
       countOnDay[getDbDateStr(date)] < simpleCounter.streakMinValue)
   ) {
@@ -43,14 +45,17 @@ export const getSimpleCounterStreakDuration = (
   return streak;
 };
 
-const calculateWeeklyFrequencyStreak = (simpleCounter: SimpleCounterCopy): number => {
+const calculateWeeklyFrequencyStreak = (
+  simpleCounter: SimpleCounterCopy,
+  todayStr: string,
+): number => {
   const { countOnDay, streakMinValue, streakWeeklyFrequency } = simpleCounter;
 
   if (!streakWeeklyFrequency || streakWeeklyFrequency < 1) {
     return 0;
   }
 
-  const today = new Date();
+  const today = parseDbDateStr(todayStr);
   const currentWeekStart = getWeekStart(today);
 
   // Check if current week has met the frequency requirement

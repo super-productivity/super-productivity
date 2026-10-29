@@ -53,7 +53,9 @@ describe('getSimpleCounterStreakDuration()', () => {
     ];
     T1.forEach((sc: Partial<SimpleCounterCopy>) => {
       it('should return 0 if no streak', () => {
-        expect(getSimpleCounterStreakDuration(sc as SimpleCounterCopy)).toBe(0);
+        expect(
+          getSimpleCounterStreakDuration(sc as SimpleCounterCopy, getDbDateStr()),
+        ).toBe(0);
       });
     });
 
@@ -93,7 +95,9 @@ describe('getSimpleCounterStreakDuration()', () => {
 
     T2.forEach((sc: Partial<SimpleCounterCopy>) => {
       it('should return 1 if streak', () => {
-        expect(getSimpleCounterStreakDuration(sc as SimpleCounterCopy)).toBe(1);
+        expect(
+          getSimpleCounterStreakDuration(sc as SimpleCounterCopy, getDbDateStr()),
+        ).toBe(1);
       });
     });
 
@@ -134,7 +138,9 @@ describe('getSimpleCounterStreakDuration()', () => {
 
     T3.forEach((sc: Partial<SimpleCounterCopy>) => {
       it('should return 2 if streak', () => {
-        expect(getSimpleCounterStreakDuration(sc as SimpleCounterCopy)).toBe(2);
+        expect(
+          getSimpleCounterStreakDuration(sc as SimpleCounterCopy, getDbDateStr()),
+        ).toBe(2);
       });
     });
 
@@ -207,7 +213,9 @@ describe('getSimpleCounterStreakDuration()', () => {
 
     T4.forEach((sc: Partial<SimpleCounterCopy>) => {
       it('should return 14 if streak', () => {
-        expect(getSimpleCounterStreakDuration(sc as SimpleCounterCopy)).toBe(14);
+        expect(
+          getSimpleCounterStreakDuration(sc as SimpleCounterCopy, getDbDateStr()),
+        ).toBe(14);
       });
     });
 
@@ -279,7 +287,9 @@ describe('getSimpleCounterStreakDuration()', () => {
 
     T5.forEach((sc: Partial<SimpleCounterCopy>) => {
       it('should start counting at yesterday not today', () => {
-        expect(getSimpleCounterStreakDuration(sc as SimpleCounterCopy)).toBe(13);
+        expect(
+          getSimpleCounterStreakDuration(sc as SimpleCounterCopy, getDbDateStr()),
+        ).toBe(13);
       });
     });
 
@@ -350,11 +360,15 @@ describe('getSimpleCounterStreakDuration()', () => {
 
     T6.forEach((sc: Partial<SimpleCounterCopy>) => {
       it('should return 0 if streak, and 13 when edited', () => {
-        expect(getSimpleCounterStreakDuration(sc as SimpleCounterCopy)).toBe(0);
+        expect(
+          getSimpleCounterStreakDuration(sc as SimpleCounterCopy, getDbDateStr()),
+        ).toBe(0);
 
         (sc as SimpleCounterCopy).countOnDay[getDbDateStr(daysAgo(1))] = 2;
 
-        expect(getSimpleCounterStreakDuration(sc as SimpleCounterCopy)).toBe(13);
+        expect(
+          getSimpleCounterStreakDuration(sc as SimpleCounterCopy, getDbDateStr()),
+        ).toBe(13);
       });
     });
 
@@ -425,11 +439,15 @@ describe('getSimpleCounterStreakDuration()', () => {
 
     T7.forEach((sc: Partial<SimpleCounterCopy>) => {
       it('should return 13 if streak, and 0 when edited', () => {
-        expect(getSimpleCounterStreakDuration(sc as SimpleCounterCopy)).toBe(13);
+        expect(
+          getSimpleCounterStreakDuration(sc as SimpleCounterCopy, getDbDateStr()),
+        ).toBe(13);
 
         (sc as SimpleCounterCopy).countOnDay[getDbDateStr(daysAgo(1))] = 0;
 
-        expect(getSimpleCounterStreakDuration(sc as SimpleCounterCopy)).toBe(0);
+        expect(
+          getSimpleCounterStreakDuration(sc as SimpleCounterCopy, getDbDateStr()),
+        ).toBe(0);
       });
     });
   });
@@ -456,7 +474,9 @@ describe('getSimpleCounterStreakDuration()', () => {
         streakMode: 'weekly-frequency',
         streakMinValue: 1,
       };
-      expect(getSimpleCounterStreakDuration(counter as SimpleCounterCopy)).toBe(0);
+      expect(
+        getSimpleCounterStreakDuration(counter as SimpleCounterCopy, getDbDateStr()),
+      ).toBe(0);
     });
 
     it('should return 0 if current week has no completions', () => {
@@ -468,7 +488,9 @@ describe('getSimpleCounterStreakDuration()', () => {
         streakMinValue: 1,
         streakWeeklyFrequency: 3,
       };
-      expect(getSimpleCounterStreakDuration(counter as SimpleCounterCopy)).toBe(0);
+      expect(
+        getSimpleCounterStreakDuration(counter as SimpleCounterCopy, getDbDateStr()),
+      ).toBe(0);
     });
 
     it('should return 1 week streak for current week with 3 completions (frequency = 3)', () => {
@@ -484,7 +506,9 @@ describe('getSimpleCounterStreakDuration()', () => {
         streakMinValue: 1,
         streakWeeklyFrequency: 3,
       };
-      expect(getSimpleCounterStreakDuration(counter as SimpleCounterCopy)).toBe(3);
+      expect(
+        getSimpleCounterStreakDuration(counter as SimpleCounterCopy, getDbDateStr()),
+      ).toBe(3);
     });
 
     it('should return 1 for last week with 3 completions when current week is incomplete', () => {
@@ -503,7 +527,9 @@ describe('getSimpleCounterStreakDuration()', () => {
         streakMinValue: 1,
         streakWeeklyFrequency: 3,
       };
-      expect(getSimpleCounterStreakDuration(counter as SimpleCounterCopy)).toBe(4);
+      expect(
+        getSimpleCounterStreakDuration(counter as SimpleCounterCopy, getDbDateStr()),
+      ).toBe(4);
     });
 
     it('should return 5 days when previous week failed frequency (2 days) and last week met it (5 days)', () => {
@@ -525,7 +551,9 @@ describe('getSimpleCounterStreakDuration()', () => {
         streakMinValue: 1,
         streakWeeklyFrequency: 3,
       };
-      expect(getSimpleCounterStreakDuration(counter as SimpleCounterCopy)).toBe(5);
+      expect(
+        getSimpleCounterStreakDuration(counter as SimpleCounterCopy, getDbDateStr()),
+      ).toBe(5);
     });
 
     it('should return 7 days when previous week met frequency (3 days) and last week met it (4 days)', () => {
@@ -547,7 +575,9 @@ describe('getSimpleCounterStreakDuration()', () => {
         streakMinValue: 1,
         streakWeeklyFrequency: 3,
       };
-      expect(getSimpleCounterStreakDuration(counter as SimpleCounterCopy)).toBe(7);
+      expect(
+        getSimpleCounterStreakDuration(counter as SimpleCounterCopy, getDbDateStr()),
+      ).toBe(7);
     });
 
     it('should break streak if one week does not meet frequency', () => {
@@ -571,7 +601,9 @@ describe('getSimpleCounterStreakDuration()', () => {
         streakMinValue: 1,
         streakWeeklyFrequency: 3,
       };
-      expect(getSimpleCounterStreakDuration(counter as SimpleCounterCopy)).toBe(3);
+      expect(
+        getSimpleCounterStreakDuration(counter as SimpleCounterCopy, getDbDateStr()),
+      ).toBe(3);
     });
 
     it('should respect streakMinValue for completion threshold', () => {
@@ -588,7 +620,30 @@ describe('getSimpleCounterStreakDuration()', () => {
         streakMinValue: 3, // minimum value to count
         streakWeeklyFrequency: 3,
       };
-      expect(getSimpleCounterStreakDuration(counter as SimpleCounterCopy)).toBe(0);
+      expect(
+        getSimpleCounterStreakDuration(counter as SimpleCounterCopy, getDbDateStr()),
+      ).toBe(0);
+    });
+  });
+
+  describe('logical day', () => {
+    it('counts the streak from the given todayStr, not the calendar day', () => {
+      // Simulates 02:00 with a 4:00 day start: the calendar day is already
+      // tomorrow while counts are written under the logical today (yesterday).
+      const counter: Partial<SimpleCounterCopy> = {
+        id: '1',
+        countOnDay: {
+          [getDbDateStr()]: 5, // calendar today = logical tomorrow
+          [getDbDateStr(daysAgo(2))]: 5,
+          [getDbDateStr(daysAgo(3))]: 5,
+        },
+        isTrackStreaks: true,
+        streakMinValue: 2,
+        streakWeekDays: { 0: true, 1: true, 2: true, 3: true, 4: true, 5: true, 6: true },
+      };
+      // Logical today (yesterday) is unmet, so the streak is the run ending the
+      // day before — not a streak that includes the calendar-today count.
+      expect(getSimpleCounterStreakDuration(counter as SimpleCounterCopy, Y_STR)).toBe(2);
     });
   });
 });

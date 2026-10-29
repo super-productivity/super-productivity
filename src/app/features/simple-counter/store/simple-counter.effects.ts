@@ -11,7 +11,7 @@ import { TranslateService } from '@ngx-translate/core';
 import { ConfettiService } from '../../../core/confetti/confetti.service';
 import { SnackService } from '../../../core/snack/snack.service';
 import { T } from '../../../t.const';
-import { getDbDateStr } from '../../../util/get-db-date-str';
+import { DateService } from '../../../core/date/date.service';
 import { getSimpleCounterStreakDuration } from '../get-simple-counter-streak-duration';
 import {
   tickSimpleCounterLocal,
@@ -26,6 +26,7 @@ export class SimpleCounterEffects {
   private _snackService = inject(SnackService);
   private _translateService = inject(TranslateService);
   private readonly _confettiService = inject(ConfettiService);
+  private readonly _dateService = inject(DateService);
 
   successFullCountersMap: { [key: string]: boolean } = {};
 
@@ -55,8 +56,9 @@ export class SimpleCounterEffects {
         ),
         tap((sc) => {
           if (sc && !this.successFullCountersMap[sc.id] && sc.isTrackStreaks) {
-            if ((sc.countOnDay?.[getDbDateStr()] ?? 0) >= (sc.streakMinValue || 0)) {
-              const streakDuration = getSimpleCounterStreakDuration(sc);
+            const todayStr = this._dateService.todayStr();
+            if ((sc.countOnDay?.[todayStr] ?? 0) >= (sc.streakMinValue || 0)) {
+              const streakDuration = getSimpleCounterStreakDuration(sc, todayStr);
               // eslint-disable-next-line max-len
               const msg = `<strong>${sc.title}</strong> <br />${this._translateService.instant(T.F.SIMPLE_COUNTER.S.GOAL_REACHED_1)}<br /> ${this._translateService.instant(T.F.SIMPLE_COUNTER.S.GOAL_REACHED_2)} <strong>${streakDuration}🔥</strong>`;
 
