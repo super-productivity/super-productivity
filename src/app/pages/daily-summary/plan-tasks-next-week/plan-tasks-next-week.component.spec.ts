@@ -61,4 +61,14 @@ describe('PlanTasksNextWeekComponent', () => {
       PlannerActions.planTaskForDay({ day: '2026-11-02', task: task('b') }),
     );
   });
+
+  it('counts a subtask moving with its parent as part of it', () => {
+    store.overrideSelector(selectOpenWeekTasks, [
+      { ...task('sub'), parentId: 'a' },
+      task('a'),
+      { ...task('loneSub'), parentId: 'doneParent' },
+    ]);
+    const fixture = TestBed.createComponent(PlanTasksNextWeekComponent);
+    expect(fixture.componentInstance.openTaskCount()).toBe(2);
+  });
 });

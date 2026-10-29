@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { CdkDropListGroup } from '@angular/cdk/drag-drop';
 import { MatButton } from '@angular/material/button';
@@ -35,6 +35,12 @@ export class PlanTasksNextWeekComponent {
     initialValue: [],
   });
   readonly openTasks = this._store.selectSignal(selectOpenWeekTasks);
+  /** Subtasks moving with their parent don't count as extra tasks. */
+  readonly openTaskCount = computed(() => {
+    const tasks = this.openTasks();
+    const ids = new Set(tasks.map((t) => t.id));
+    return tasks.filter((t) => !t.parentId || !ids.has(t.parentId)).length;
+  });
 
   /** Puts all open tasks on next Monday; from there they can be dragged to other days. */
   planOpenTasksOnMonday(): void {

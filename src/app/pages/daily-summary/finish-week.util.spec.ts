@@ -1,4 +1,9 @@
-import { getNextWorkWeekDays, isFinishWeekDay } from './finish-week.util';
+import {
+  getNextWorkWeekDays,
+  getWorkWeekStart,
+  isFinishWeekDay,
+  isFinishWeekScope,
+} from './finish-week.util';
 import { getDbDateStr } from '../../util/get-db-date-str';
 
 describe('finish-week util', () => {
@@ -45,6 +50,32 @@ describe('finish-week util', () => {
         '2026-10-29',
         '2026-10-30',
       ]);
+    });
+  });
+
+  describe('isFinishWeekScope', () => {
+    it('is on for Fridays and for ?scope=week on other days', () => {
+      expect(isFinishWeekScope(new Date(2026, 9, 30, 18), null)).toBe(true);
+      expect(isFinishWeekScope(new Date(2026, 9, 29, 18), 'week')).toBe(true);
+    });
+
+    it('is off on other days without the param', () => {
+      expect(isFinishWeekScope(new Date(2026, 9, 29, 18), null)).toBe(false);
+      expect(isFinishWeekScope(new Date(2026, 9, 29, 18), 'day')).toBe(false);
+    });
+  });
+
+  describe('getWorkWeekStart', () => {
+    const start = (d: Date): string => getDbDateStr(getWorkWeekStart(d));
+
+    it('returns the Monday of the same week on work days', () => {
+      expect(start(new Date(2026, 9, 26, 9))).toBe('2026-10-26');
+      expect(start(new Date(2026, 9, 30, 18))).toBe('2026-10-26');
+    });
+
+    it('returns the Monday before on a weekend', () => {
+      expect(start(new Date(2026, 9, 31, 12))).toBe('2026-10-26');
+      expect(start(new Date(2026, 10, 1, 12))).toBe('2026-10-26');
     });
   });
 });

@@ -74,7 +74,7 @@ import { shareReplayUntil } from '../../util/share-replay-until';
 import { unToggleCheckboxesInMarkdownTxt } from '../../util/untoggle-checkboxes-in-markdown-txt';
 import { PlanTasksTomorrowComponent } from './plan-tasks-tomorrow/plan-tasks-tomorrow.component';
 import { PlanTasksNextWeekComponent } from './plan-tasks-next-week/plan-tasks-next-week.component';
-import { isFinishWeekDay } from './finish-week.util';
+import { isFinishWeekScope } from './finish-week.util';
 import {
   SimpleCounterSummaryItem,
   SimpleCounterSummaryItemComponent,
@@ -142,9 +142,10 @@ export class DailySummaryComponent implements OnInit, OnDestroy, AfterViewInit {
   selectedTabIndex: number = 0;
   isForToday: boolean = true;
   // `?scope=week` lets people who review on the weekend open the week version
-  readonly isFinishWeek: boolean =
-    isFinishWeekDay(this._dateService.getLogicalTodayDate()) ||
-    this._activatedRoute.snapshot.queryParamMap.get('scope') === 'week';
+  readonly isFinishWeek: boolean = isFinishWeekScope(
+    this._dateService.getLogicalTodayDate(),
+    this._activatedRoute.snapshot.queryParamMap.get('scope'),
+  );
 
   // TODO remove one?
   dayStr: string = this._dateService.todayStr();

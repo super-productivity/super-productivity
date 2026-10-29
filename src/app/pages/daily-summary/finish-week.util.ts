@@ -24,3 +24,16 @@ export const getNextWorkWeekDays = (logicalToday: Date): Date[] => {
     return d;
   });
 };
+
+/** Monday of the work week `logicalToday` is in; Saturday and Sunday belong to the week before. */
+export const getWorkWeekStart = (logicalToday: Date): Date => {
+  const d = new Date(logicalToday);
+  d.setDate(d.getDate() - ((d.getDay() - MONDAY + 7) % 7));
+  return d;
+};
+
+/** Finish day wraps up the week on Fridays, or when opened with `?scope=week`. */
+export const isFinishWeekScope = (
+  logicalToday: Date,
+  scopeParam: string | null,
+): boolean => isFinishWeekDay(logicalToday) || scopeParam === 'week';

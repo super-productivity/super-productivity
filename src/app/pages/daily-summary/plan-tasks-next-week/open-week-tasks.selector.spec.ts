@@ -83,4 +83,45 @@ describe('selectOpenWeekTasks', () => {
     );
     expect(ids(result)).toEqual(['subOverdue']);
   });
+
+  it('leaves out tasks with a time, so their time and reminder are kept', () => {
+    const result = selectOpenWeekTasks.projector(
+      ['timed', 'parent'],
+      ['timedOverdue'],
+      entities(
+        task('timed', { dueWithTime: 1, remindAt: 1 }),
+        task('timedOverdue', { dueWithTime: 1 }),
+        task('parent', { dueDay: TODAY, subTaskIds: ['timedSub'] }),
+        task('timedSub', { parentId: 'parent', dueDay: TODAY, dueWithTime: 1 }),
+      ),
+      TODAY,
+    );
+    expect(ids(result)).toEqual(['parent']);
+  });
+
+  it('leaves out tasks overdue from before this week', () => {
+    const result = selectOpenWeekTasks.projector(
+      [],
+      ['lastWeek', 'monday'],
+      entities(
+        task('lastWeek', { dueDay: '2026-10-25' }),
+        task('monday', { dueDay: '2026-10-26' }),
+      ),
+      TODAY,
+    );
+    expect(ids(result)).toEqual(['monday']);
+  });
+
+  it('leaves out overdue subtasks of a repeating-task instance', () => {
+    const result = selectOpenWeekTasks.projector(
+      [],
+      ['sub'],
+      entities(
+        task('repeat', { repeatCfgId: 'R', subTaskIds: ['sub'] }),
+        task('sub', { parentId: 'repeat', dueDay: '2026-10-28' }),
+      ),
+      TODAY,
+    );
+    expect(ids(result)).toEqual([]);
+  });
 });

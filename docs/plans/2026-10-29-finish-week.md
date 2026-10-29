@@ -56,7 +56,9 @@ and no separate page:
    existing `planner-day` component and `PlannerActions.planTaskForDay`.
    "Open tasks" means unfinished one-off tasks due Monday to Friday of this
    week, overdue ones included. Repeating-task instances are left out, because
-   next week creates its own and planning the old ones would duplicate them. On
+   next week creates its own and planning the old ones would duplicate them.
+   Tasks with a time are left out too, because planning them for a day drops
+   their time and reminder. On
    mobile the five days stack vertically, like the planner's mobile list.
 
 The finish button reads "Finish the week" and does the same thing. Tab labels
