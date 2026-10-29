@@ -294,6 +294,25 @@ describe('PluginIssueProviderAdapterService', () => {
   });
 
   describe('getAddTaskData', () => {
+    it('should set related_to from parentId so the task nests under its parent', () => {
+      const result = service.getAddTaskData({
+        id: 'ISS-11',
+        title: 'Child',
+        parentId: 'ISS-10',
+      } as PluginSearchResult);
+
+      expect(result.related_to).toBe('ISS-10');
+    });
+
+    it('should not set related_to when parentId is absent', () => {
+      const result = service.getAddTaskData({
+        id: 'ISS-10',
+        title: 'Parent',
+      } as PluginSearchResult);
+
+      expect('related_to' in result).toBe(false);
+    });
+
     it('should synthesize IssueTask from IssueDataReduced', () => {
       const issueData = { id: 'ISS-10', title: 'New Feature' } as PluginSearchResult;
 
@@ -1888,6 +1907,29 @@ describe('PluginIssueProviderAdapterService', () => {
 
       expect(result.length).toBe(2);
       expect(result.map((r) => (r as PluginSearchResult).id)).toEqual(['ISS-1', 'ISS-3']);
+    });
+
+    it('should defer a child whose parent is new in the same batch', async () => {
+      const backlogIssues: PluginSearchResult[] = [
+        { id: 'ISS-1', title: 'New parent' },
+        { id: 'ISS-2', title: 'Child of new parent', parentId: 'ISS-1' },
+        { id: 'ISS-3', title: 'Child of existing parent', parentId: 'ISS-9' },
+        { id: 'ISS-4', title: 'Child of parent not in SP', parentId: 'ISS-8' },
+      ];
+      const provider = createMockProvider({
+        getNewIssuesForBacklog: jasmine
+          .createSpy('getNewIssuesForBacklog')
+          .and.resolveTo(backlogIssues),
+      });
+      registrySpy.getProvider.and.returnValue(provider);
+
+      const result = await service.getNewIssuesToAddToBacklog!(PROVIDER_ID, ['ISS-9']);
+
+      expect(result.map((r) => (r as PluginSearchResult).id)).toEqual([
+        'ISS-1',
+        'ISS-3',
+        'ISS-4',
+      ]);
     });
 
     it('should return empty array when getNewIssuesForBacklog is not defined', async () => {

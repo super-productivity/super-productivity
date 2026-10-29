@@ -140,7 +140,10 @@ export class PluginIssueProviderAdapterService implements IssueServiceInterface 
   }
 
   getAddTaskData(issueData: IssueDataReduced): IssueTask {
-    return this._buildBaseIssueTask(issueData as PluginIssue);
+    return {
+      ...this._buildBaseIssueTask(issueData as PluginIssue),
+      ...this._getParentRelation(issueData),
+    };
   }
 
   getAddTaskDataForCfg(issueData: IssueDataReduced, cfg: unknown): IssueTask {
@@ -161,6 +164,7 @@ export class PluginIssueProviderAdapterService implements IssueServiceInterface 
     return {
       ...this._getAddTaskDataForProvider(issue, provider, syncValues),
       ...(tagIds ? { tagIds } : {}),
+      ...this._getParentRelation(issueData),
       issueLastSyncedValues: syncValues,
     };
   }
@@ -309,7 +313,14 @@ export class PluginIssueProviderAdapterService implements IssueServiceInterface 
         resolved.http,
       );
       const existingIds = new Set(allExistingIssueIds.map(String));
-      return results.filter((r) => !existingIds.has(r.id));
+      const newIssues = results.filter((r) => !existingIds.has(r.id));
+      // The import adds a batch concurrently, so a child whose parent is new in
+      // the same batch finds no parent task and lands at top level. Defer it:
+      // the next poll nests it under the parent, which exists by then.
+      const newIds = new Set(newIssues.map((r) => r.id));
+      return newIssues.filter(
+        (r) => !(typeof r.parentId === 'string' && newIds.has(r.parentId)),
+      );
     } catch (e) {
       PluginLog.err(
         `[PluginIssueAdapter] getNewIssuesToAddToBacklog failed for ${cfg.issueProviderKey}:`,
@@ -538,6 +549,12 @@ export class PluginIssueProviderAdapterService implements IssueServiceInterface 
       syncValues,
     );
     return { ...base, ...fieldValues } as IssueTask;
+  }
+
+  // Only the add paths set related_to: a refresh must not re-parent a task.
+  private _getParentRelation(issueData: IssueDataReduced): { related_to?: string } {
+    const parentId = (issueData as { parentId?: unknown }).parentId;
+    return typeof parentId === 'string' && parentId ? { related_to: parentId } : {};
   }
 
   private _buildBaseIssueTask(data: PluginIssue, doneStates?: string[]): IssueTask {
