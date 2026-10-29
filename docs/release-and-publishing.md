@@ -104,6 +104,27 @@ The desktop workflow's draft/prerelease flag detection does not use exactly the
 same rule as the Apple workflows. Before publishing a pre-release, explicitly
 confirm that GitHub marks the draft as a pre-release.
 
+### Linux AppImage differential updates
+
+Tagged Linux builds package the Electron artifacts without publishing them
+immediately. After the existing Snap and DEB checks, the Linux job:
+
+1. Repacks the AppImage with embedded AppImageUpdate information.
+2. Regenerates the electron-builder embedded blockmap.
+3. Generates a `.zsync` file matching the final AppImage bytes.
+4. Updates `latest-linux.yml` with the final size and SHA-512 checksum.
+5. Uploads the verified AppImage, `.zsync`, DEB, RPM, Snap, and
+   `latest-linux.yml` to the draft GitHub release.
+
+Stable builds embed the `latest` update channel. Releases recognized
+as pre-releases by the draft-release workflow embed `latest-pre`,
+keeping the AppImage update channel aligned with the release type.
+
+Before publishing a draft, confirm that the `.AppImage` and matching
+`.AppImage.zsync` assets are both present, and that the AppImage entry
+in `latest-linux.yml` matches the final uploaded binary. The draft
+publication step cannot recover assets after a release is published.
+
 ## Verify before publishing the draft
 
 Wait for every tag workflow to reach a terminal state. At minimum verify:

@@ -79,6 +79,10 @@ jobs:
           body_path: /tmp/release-body.md
 
   linux-bin-and-snap-release:
+    needs: [create-release]
+    # Branch builds must still run when create-release is skipped.
+    # Tag builds require the draft release to have been created successfully.
+    if: ${{ always() && (!startsWith(github.ref, 'refs/tags/v') || needs.create-release.result == 'success') }}
     runs-on: ubuntu-latest
     env:
       SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
@@ -105,6 +109,12 @@ jobs:
           # Electron 42 `npm i` no longer downloads the Electron binary;
           # electron-builder fetches its own copy when packaging.)
           command: npm i
+
+      - name: Test Linux release tooling
+        run: |
+          node --test \
+            tools/finalize-linux-appimage-metadata.test.js \
+            tools/repack-appimage-zsync.test.js
 
       - name: Install Playwright Browsers
         run: |
@@ -142,13 +152,16 @@ jobs:
       - name: Build Frontend & Electron
         run: npm run build
 
-      - name: Build/Release Electron app
+      # Build all Linux packages first. Publish only after the AppImage
+      # has been repacked and all update metadata has been verified.
+      - name: Build Linux release artifacts
         if: startsWith(github.ref, 'refs/tags/v')
         uses: johannesjo/action-electron-builder@9ea9e2d991c97668843d57337848e3e2b1ffab3d # v1
         with:
           build_script_name: empty
           github_token: ${{ secrets.github_token }}
-          release: true
+          release: false
+          args: '--publish never'
 
       # The Claude Desktop extension (tools/mcpb), linked from the app's
       # assistant access settings by its asset name. Packed here because this
@@ -215,6 +228,125 @@ jobs:
           fi
           bash tools/assert-deb-desktop-exec.sh "$DEB_FILE"
 
+      # Prepare AppImageUpdate-compatible artifacts only for tagged releases.
+      # Keep the existing Snap and DEB checks before release publication.
+      - name: Install AppImageUpdate packaging tools
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends zsync
+
+          curl -fL --retry 3 \
+            -o "$RUNNER_TEMP/appimagetool" \
+            https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage
+
+          echo "ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0  $RUNNER_TEMP/appimagetool" \
+            | sha256sum -c -
+
+          chmod +x "$RUNNER_TEMP/appimagetool"
+
+      - name: Test AppImage packaging against release build
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          APPIMAGETOOL: ${{ runner.temp }}/appimagetool
+          APPIMAGE_UPDATE_CHANNEL: ${{ (contains(github.ref, 'RC') || contains(github.ref, 'beta') || contains(github.ref, 'alpha')) && 'latest-pre' || 'latest' }}
+          APPIMAGE_TEST_INPUT: .tmp/app-builds/superProductivity-x86_64.AppImage
+        run: node --test tools/repack-appimage-zsync.test.js
+
+      - name: Prepare and verify Linux release artifacts
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          APPIMAGETOOL: ${{ runner.temp }}/appimagetool
+          APPIMAGE_UPDATE_CHANNEL: ${{ (contains(github.ref, 'RC') || contains(github.ref, 'beta') || contains(github.ref, 'alpha')) && 'latest-pre' || 'latest' }}
+        run: |
+          set -euo pipefail
+
+          build_dir=".tmp/app-builds"
+          name="superProductivity-x86_64.AppImage"
+          image="$build_dir/$name"
+          output="$RUNNER_TEMP/appimage-final"
+
+          test -s "$image"
+
+          bash tools/repack-appimage-zsync.sh "$image" "$output"
+
+          test -s "$output/$name"
+          test -s "$output/$name.zsync"
+
+          # Replace the original only after both outputs pass verification.
+          cp "$output/$name" "$image"
+          cp "$output/$name.zsync" "$build_dir/$name.zsync"
+
+          node tools/finalize-linux-appimage-metadata.js \
+            "$image" "$build_dir/latest-linux.yml"
+
+          # A release must contain exactly one artifact of each type.
+          for pattern in \
+            '*.AppImage' '*.AppImage.zsync' '*.deb' '*.rpm' '*.snap'; do
+            count=$(find "$build_dir" -maxdepth 1 -type f \
+              -name "$pattern" | wc -l)
+            if [ "$count" -ne 1 ]; then
+              echo "::error::Expected one $pattern artifact, found $count"
+              exit 1
+            fi
+          done
+
+          test -s "$build_dir/latest-linux.yml"
+          echo "PASS: Linux release artifacts prepared"
+      - name: Publish verified Linux release artifacts
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+
+          build_dir=".tmp/app-builds"
+          debs=("$build_dir"/*.deb)
+          rpms=("$build_dir"/*.rpm)
+          snaps=("$build_dir"/*.snap)
+
+          if (( ${#debs[@]} != 1 || ${#rpms[@]} != 1 || ${#snaps[@]} != 1 )); then
+            echo "::error::Expected one DEB, RPM and Snap artifact"
+            exit 1
+          fi
+
+          draft=$(gh release view "$GITHUB_REF_NAME" \
+            --repo "$GITHUB_REPOSITORY" \
+            --json isDraft --jq '.isDraft')
+
+          if [[ "$draft" != "true" ]]; then
+            echo "::error::Release is not a draft; refusing to upload"
+            exit 1
+          fi
+
+          assets=(
+            "$build_dir/superProductivity-x86_64.AppImage"
+            "$build_dir/superProductivity-x86_64.AppImage.zsync"
+            "${debs[0]}"
+            "${rpms[0]}"
+            "${snaps[0]}"
+            "$build_dir/latest-linux.yml"
+          )
+
+          for asset in "${assets[@]}"; do
+            test -s "$asset" || {
+              echo "::error::Missing or empty asset: $asset"
+              exit 1
+            }
+          done
+
+          # The draft allows safe reruns before publication.
+          gh release upload "$GITHUB_REF_NAME" "${assets[@]}" \
+            --repo "$GITHUB_REPOSITORY" --clobber
+
+          gh release view "$GITHUB_REF_NAME" \
+            --repo "$GITHUB_REPOSITORY" \
+            --json isDraft,assets \
+            --jq '{draft: .isDraft, assets: [.assets[].name]}'
+
+          echo "PASS: Verified Linux release artifacts uploaded"
       - name: Normalize snap file name
         if: false == startsWith(github.ref, 'refs/tags/v')
         run: find ./.tmp/app-builds -type f -name '*.snap' -exec sh -c 'x="{}"; mv "$x" ".tmp/app-builds/sp.snap"' \;
