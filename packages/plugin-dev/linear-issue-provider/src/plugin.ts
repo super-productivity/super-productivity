@@ -108,6 +108,11 @@ const GET_ISSUE_QUERY = `
 
 const GET_VIEWER_QUERY = `query GetViewer { viewer { id name } }`;
 
+// Archived teams and projects are excluded by default. First 250 only, no paging;
+// projects are listed workspace-wide, not per team.
+const LIST_TEAMS_QUERY = `query ListTeams { teams(first: 250) { nodes { id name key } } }`;
+const LIST_PROJECTS_QUERY = `query ListProjects { projects(first: 250) { nodes { id name } } }`;
+
 const graphql = async <T>(
   http: PluginHttp,
   query: string,
@@ -172,6 +177,40 @@ const searchAssignedIssues = async (
   return issues.map(mapReduced);
 };
 
+interface SelectOption {
+  label: string;
+  value: string;
+}
+
+// The empty value means "no filter"; a single select cannot be cleared otherwise.
+const loadOptions =
+  <N extends { id: string; name: string }>(
+    query: string,
+    listKey: 'teams' | 'projects',
+    allLabel: string,
+    toLabel: (node: N) => string,
+  ) =>
+  async (_config: Record<string, unknown>, http: PluginHttp): Promise<SelectOption[]> => {
+    const data = await graphql<Record<string, { nodes: N[] }>>(http, query, {});
+    const options = (data[listKey]?.nodes || [])
+      .map((node) => ({ label: toLabel(node), value: node.id }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+    return [{ label: t(allLabel), value: '' }, ...options];
+  };
+
+const loadTeamOptions = loadOptions<{ id: string; name: string; key: string }>(
+  LIST_TEAMS_QUERY,
+  'teams',
+  'CFG.ALL_TEAMS',
+  (team) => `${team.name} (${team.key})`,
+);
+const loadProjectOptions = loadOptions(
+  LIST_PROJECTS_QUERY,
+  'projects',
+  'CFG.ALL_PROJECTS',
+  (project) => project.name,
+);
+
 registerIssueProvider({
   configFields: [
     {
@@ -188,14 +227,18 @@ registerIssueProvider({
     },
     {
       key: 'teamId',
-      type: 'input',
+      type: 'select',
       label: t('CFG.TEAM_ID'),
+      options: [],
+      loadOptions: loadTeamOptions,
       advanced: true,
     },
     {
       key: 'projectId',
-      type: 'input',
+      type: 'select',
       label: t('CFG.PROJECT_ID'),
+      options: [],
+      loadOptions: loadProjectOptions,
       advanced: true,
     },
     {
