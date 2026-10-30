@@ -1,0 +1,18 @@
+---
+# Generated from Harper's GildedAge rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# If referring to the period of economic prosperity, the correct term is `Gilded Age`.
+extends: existence
+message: "The period of economic prosperity is called the `Gilded Age`."
+level: error
+ignorecase: true
+action:
+  name: replace
+  params:
+    - "Gilded Age"
+tokens:
+  - "guilded(?!\\s*\\n\\s*\\n)\\s+age(?!['\\x{2019}]s\\b)"

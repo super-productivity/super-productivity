@@ -1,0 +1,19 @@
+---
+# Generated from Harper's KindRegards rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Changes `kid regards` to `kind regards`.
+extends: existence
+message: "Did you mean `kind regards`?"
+level: error
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "kind regards"
+tokens:
+  - "kid(?!\\s*\\n\\s*\\n)\\s+regards(?!['\\x{2019}]s\\b)"

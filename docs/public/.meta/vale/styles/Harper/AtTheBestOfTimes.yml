@@ -1,0 +1,19 @@
+---
+# Generated from Harper's AtTheBestOfTimes rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects `in the best of times` to `at the best of times`.
+extends: existence
+message: "Did you mean `at the best of times`?"
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "at the best of times"
+tokens:
+  - "in(?!\\s*\\n\\s*\\n)\\s+the(?!\\s*\\n\\s*\\n)\\s+best(?!\\s*\\n\\s*\\n)\\s+of(?!\\s*\\n\\s*\\n)\\s+times(?!['\\x{2019}]s\\b)"

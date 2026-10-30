@@ -1,0 +1,27 @@
+---
+# Hand-written from Harper's SoughtAfter: `sort after` where `sought after` is
+# meant.
+#
+# Only the branch Harper guards with literal words is ported. Its other branch
+# accepts any adverb except four, which `sequence` cannot say -- a position can
+# require a tag or a word, not a tag and the absence of certain words.
+#
+# The qualifier list is wider than Harper's own examples: "kinda sort after",
+# "pretty sort after" and "much sort after" are all in the corpus and none of
+# them was reported. SoughtAfter2.yml asks for an adverb tag instead, and these
+# are the words that tag does not reach.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: existence
+message: "Did you mean `sought after`?"
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "sought after"
+tokens:
+  - "(?<=\\b(?:abit|are|bit|of|quiet|kinda|pretty|much|very|so|highly|really|quite|rather|extremely|widely|hugely|most|more|less|super|fairly|somewhat)\\s+)sort[\\s-]+after\\b"

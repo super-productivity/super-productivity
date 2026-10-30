@@ -1,0 +1,20 @@
+---
+# Hand-written from Harper's AdjectiveDoubleDegree: `more faster` marks the
+# comparative twice.
+#
+# The generated rule keyed on punctuation. Harper's expression is `more` or
+# `most` before an adjective that already carries a degree, which is a tag
+# rather than a word list, so this is a `sequence`.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: sequence
+message: "Did you mean the adjective on its own?"
+level: warning
+ignorecase: true
+model: harper
+tokens:
+  - pattern: 'more|most'
+    target: true
+  - tag: '^JJ[RS]$'

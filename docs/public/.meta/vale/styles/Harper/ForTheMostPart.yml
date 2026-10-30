@@ -1,0 +1,19 @@
+---
+# Generated from Harper's ForTheMostPart rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects `for most part` to `for the most part`.
+extends: existence
+message: "Use `for the most part` instead of `for most part`."
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "for the most part"
+tokens:
+  - "for(?!\\s*\\n\\s*\\n)\\s+most(?!\\s*\\n\\s*\\n)\\s+part(?!['\\x{2019}]s\\b)"

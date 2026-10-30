@@ -1,0 +1,22 @@
+---
+# Generated from Harper's OnTheSpurOfTheMoment rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Ensures the correct use of `on the spur of the moment`, avoiding nonstandard variations.
+extends: existence
+message: "Use the correct phrase for acting spontaneously."
+level: error
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "on the spur of the moment"
+tokens:
+  - "in(?!\\s*\\n\\s*\\n)\\s+the(?!\\s*\\n\\s*\\n)\\s+spurt(?!\\s*\\n\\s*\\n)\\s+of(?!\\s*\\n\\s*\\n)\\s+the(?!\\s*\\n\\s*\\n)\\s+moment(?!['\\x{2019}]s\\b)"
+  - "on(?!\\s*\\n\\s*\\n)\\s+the(?!\\s*\\n\\s*\\n)\\s+spurt(?!\\s*\\n\\s*\\n)\\s+of(?!\\s*\\n\\s*\\n)\\s+the(?!\\s*\\n\\s*\\n)\\s+moment(?!['\\x{2019}]s\\b)"
+  - "at(?!\\s*\\n\\s*\\n)\\s+the(?!\\s*\\n\\s*\\n)\\s+spur(?!\\s*\\n\\s*\\n)\\s+of(?!\\s*\\n\\s*\\n)\\s+the(?!\\s*\\n\\s*\\n)\\s+moment(?!['\\x{2019}]s\\b)"
+  - "in(?!\\s*\\n\\s*\\n)\\s+the(?!\\s*\\n\\s*\\n)\\s+spur(?!\\s*\\n\\s*\\n)\\s+of(?!\\s*\\n\\s*\\n)\\s+the(?!\\s*\\n\\s*\\n)\\s+moment(?!['\\x{2019}]s\\b)"

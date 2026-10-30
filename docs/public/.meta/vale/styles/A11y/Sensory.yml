@@ -1,0 +1,26 @@
+# WCAG 1.3.3 and 1.4.1: instructions that rely on color, shape, or position
+# alone. "The red button on the right" is nothing to a screen reader user, a
+# color-blind user, or a phone, where the right is now the bottom.
+# https://www.w3.org/WAI/WCAG22/Understanding/sensory-characteristics
+extends: existence
+message: "'%s' points by color, shape, or position. Name the control, or add a label."
+link: https://www.w3.org/WAI/WCAG22/Understanding/sensory-characteristics
+level: suggestion
+ignorecase: true
+tokens:
+  - '(?:red|green|blue|yellow|orange|purple|gr[ae]y|black|white) (?:button|link|icon|box|text|bar|arrow|dot|circle|tab)'
+  - '(?:round|square|circular|triangular) (?:button|icon)'
+  - '(?:on|to|in|at) the (?:left|right)(?:-hand)? (?:side|corner|column|pane|panel|sidebar|of the)'
+  - '(?:top|bottom|upper|lower)[- ](?:left|right)(?: corner)?'
+
+tests:
+  - name: fires
+    input: |
+      Click the red button in the top-right corner.
+    want: |
+      1:11:A11y.Sensory:'red button' points by color, shape, or position. Name the control, or add a label.
+      1:29:A11y.Sensory:'top-right corner' points by color, shape, or position. Name the control, or add a label.
+  - name: clean
+    input: |
+      Select **Save**.
+    want: ""

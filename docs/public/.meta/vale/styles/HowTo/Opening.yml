@@ -1,0 +1,27 @@
+# A how-to guide opens by saying what problem it solves: "This guide shows
+# you how to ...". Read from the paragraph after the title.
+# https://diataxis.fr/how-to-guides/#the-language-of-how-to-guides
+extends: occurrence
+message: "Open by saying what the guide shows the reader how to do."
+link: https://diataxis.fr/how-to-guides/#the-language-of-how-to-guides
+level: warning
+scope: 'text & doc(h1 + p)'
+token: "(?i)\\b(?:this (?:guide|page|document) (?:shows|explains|describes|walks)|how to\\b|to (?:deploy|set up|configure|install|migrate|enable|add|remove|run)\\b)"
+min: 1
+
+tests:
+  - name: fires
+    input: |
+      # How to deploy
+
+      The registry caches layers.
+
+    want: |
+      3:1:HowTo.Opening:Open by saying what the guide shows the reader how to do.
+  - name: clean
+    input: |
+      # How to deploy
+
+      This guide shows you how to deploy the site to production.
+
+    want: ""

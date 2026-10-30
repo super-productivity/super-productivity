@@ -1,0 +1,36 @@
+---
+# Hand-written from Harper's WillNonLemma: `will` and `shall` take the base
+# form of the verb.
+#
+# The generated rule keyed on punctuation, so "duplicate Rule IDs will exists"
+# went unreported.
+#
+# The test is a tag rather than a word list -- a verb that is not its own
+# lemma -- so this is a `sequence`. `VB` and `VBP` are the base forms and are
+# therefore the ones left out.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: sequence
+message: "`Will` and `shall` should be followed by a verb in its base form."
+level: warning
+ignorecase: true
+model: harper
+tokens:
+  # `will` is a noun more often than it is this mistake -- "the will was read",
+  # "his will stipulates", "free will tools" -- and what marks the noun is the
+  # determiner, possessive or adjective in front of it. The words are listed
+  # rather than tagged twice over: Vale offers no modal tag to test on `will`
+  # itself -- it never tags it MD, not even in "the house will be sold" -- and
+  # tagging the word before missed `his` in "Now, his will stipulates". A
+  # pronoun tag cannot be excluded wholesale here, since "they will ran" is
+  # exactly what the rule is for.
+  - pattern: '^(?:the|a|an|this|that|these|those|my|your|his|her|its|our|their|free|last|own|good|ill|political|general)$'
+    negate: true
+  - pattern: 'will|shall'
+  # Harper also drops the match on a linking verb in the simple past, which is
+  # what keeps it off "the will was read" when no determiner precedes.
+  - pattern: '^(?!(?:was|were)$).+$'
+    tag: '^VB[DGNZ]$'
+    target: true

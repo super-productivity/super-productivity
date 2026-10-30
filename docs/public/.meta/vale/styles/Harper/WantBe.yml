@@ -1,0 +1,20 @@
+---
+# Generated from Harper's WantBe rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Detects incorrect usage of `want be` and suggests `won't be` or `want to be` based on context.
+extends: existence
+message: "Did you mean `won't be` or `want to be`?"
+level: suggestion
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "won't be"
+    - "want to be"
+tokens:
+  - "want(?!\\s*\\n\\s*\\n)\\s+be(?!['\\x{2019}]s\\b)"

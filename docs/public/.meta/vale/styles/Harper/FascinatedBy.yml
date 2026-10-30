@@ -1,0 +1,28 @@
+---
+# Hand-written from Harper's FascinatedBy: `fascinated` takes `by` or `with`.
+#
+# The generated rule matched `fascinated` followed by any preposition, which is
+# what Harper's chain does -- but Harper then throws the match away when the
+# preposition is `by` or `with`, and the generated version had no way to say
+# that. So it flagged the two correct forms, and `fascinated by` is far and away
+# the most common thing anyone writes. 20 false positives, all of them correct
+# English.
+#
+# Vale's `sequence` cannot express "a preposition, but not these two": `negate`
+# applies to a token's tag and pattern together, so it would read as "not a
+# preposition and not by/with". Hence an `existence` rule over an explicit
+# preposition list -- a closed class, so listing it loses nothing -- with `by`
+# and `with` left out.
+#
+# The lookbehind keeps the alert on the preposition alone, which is the word
+# that has to change.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: existence
+message: "The correct prepositions to use with `fascinated` are `by` or `with`."
+level: warning
+ignorecase: true
+tokens:
+  - '(?<=\bfascinated\s)(?:about|above|across|after|against|along|among|amongst|around|as|at|before|behind|below|beneath|beside|besides|between|beyond|concerning|considering|despite|down|during|except|for|from|in|inside|into|like|near|of|off|on|onto|outside|over|past|regarding|round|since|through|throughout|till|to|toward|towards|under|underneath|until|unto|up|upon|via|within|without)\b'

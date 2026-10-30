@@ -1,0 +1,18 @@
+---
+# Generated from Harper's OnSecondThought rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Replaces the nonstandard `on second though` with the common idiom `on second thought` to indicate reconsideration.
+extends: substitution
+message: "Idiomatic expression: use `on second thought` instead of `on second though`"
+level: error
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+swap:
+  "my(?!\\s*\\n\\s*\\n)\\s+second(?!\\s*\\n\\s*\\n)\\s+though(?!['\\x{2019}]s\\b)": "my second thought"
+  "on(?!\\s*\\n\\s*\\n)\\s+second(?!\\s*\\n\\s*\\n)\\s+though(?!['\\x{2019}]s\\b)": "on second thought"

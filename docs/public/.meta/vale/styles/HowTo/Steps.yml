@@ -1,0 +1,28 @@
+# A how-to guide is a sequence of actions toward the goal, so it has at
+# least one numbered list.
+# https://diataxis.fr/how-to-guides/
+extends: occurrence
+message: "A how-to guide is a sequence of steps; there is no numbered list here."
+link: https://diataxis.fr/how-to-guides/
+level: warning
+scope: doc(ol)
+token: '(?s).'
+min: 1
+
+tests:
+  - name: fires
+    input: |
+      # How to deploy
+
+      Deploy it somehow.
+
+    want: |
+      1:1:HowTo.Steps:A how-to guide is a sequence of steps; there is no numbered list here.
+  - name: clean
+    input: |
+      # How to deploy
+
+      1. Build.
+      2. Push.
+
+    want: ""

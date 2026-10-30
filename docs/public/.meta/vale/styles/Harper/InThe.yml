@@ -1,0 +1,19 @@
+---
+# Generated from Harper's InThe rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Detects and corrects a spacing error where `in the` is mistakenly written as `int he`. Proper spacing is essential for readability and grammatical correctness in common phrases.
+extends: existence
+message: "Did you mean `in the`?"
+level: error
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "in the"
+tokens:
+  - "int(?!\\s*\\n\\s*\\n)\\s+he(?!['\\x{2019}]s\\b)"

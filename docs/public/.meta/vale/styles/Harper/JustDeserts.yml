@@ -1,0 +1,19 @@
+---
+# Generated from Harper's JustDeserts rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Ensures `just deserts` is used correctly, preserving its meaning of receiving an appropriate outcome for one's actions.
+extends: existence
+message: "Use the correct phrase for receiving what one deserves."
+level: error
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "just deserts"
+tokens:
+  - "just(?!\\s*\\n\\s*\\n)\\s+desserts(?!['\\x{2019}]s\\b)"

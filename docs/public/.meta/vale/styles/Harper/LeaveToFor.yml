@@ -1,0 +1,24 @@
+---
+# Generated from Harper's LeaveToFor rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# When describing travel plans that include a destination and a time frame, prefer `leave for a destination` instead of `leave to a destination`.
+extends: sequence
+message: "Use `for` when pointing a departure toward a place."
+level: warning
+ignorecase: true
+model: harper
+matchcase: true
+action:
+  name: replace
+  params:
+    - "for"
+tokens:
+  - pattern: 'leaving|leaves|leave|left'
+  - pattern: 'to'
+    target: true
+  - upos: PROPN
+  - pattern: 'tomorrow|next|soon'

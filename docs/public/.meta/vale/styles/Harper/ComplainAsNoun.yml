@@ -1,0 +1,34 @@
+---
+# Hand-written from Harper's ComplainAsNoun: the noun is `complaint`.
+#
+# The generated rule keyed on punctuation and missed every sentence that
+# carried on -- "I raise a complain about the documentation".
+#
+# A determiner before `complain` is what marks it as a noun slot: "a complain",
+# "my complain", "your complain". Harper reads possessives as determiners here,
+# so `PRP$` is included alongside `DT`.
+#
+# Harper's word set has both numbers; the plural is ComplainAsNoun2.yml,
+# separate only because the replacement differs and a `sequence` action takes
+# one fixed word.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: sequence
+message: "Did you mean the noun `complaint`?"
+level: warning
+ignorecase: true
+model: harper
+action:
+  name: replace
+  params:
+    - "complaint"
+tokens:
+  - tag: 'DT|PRP\$'
+  - pattern: 'complain'
+    target: true
+  # Harper's `but_not`: a noun just after means `complain` is modifying it
+  # rather than standing as one -- "the complain flag defined in the manifest".
+  - tag: 'NNP?S?'
+    negate: true

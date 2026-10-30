@@ -1,0 +1,23 @@
+---
+# Generated from Harper's InHindsight rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects incorrect variants of `in hindsight` to the standard phrase.
+extends: existence
+message: "Use `in hindsight` when reflecting on past events with the benefit of current knowledge."
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "in hindsight"
+tokens:
+  - "in(?!\\s*\\n\\s*\\n)\\s+hind(?!\\s*\\n\\s*\\n)\\s+sight(?!['\\x{2019}]s\\b)"
+  - "on(?!\\s*\\n\\s*\\n)\\s+hind(?!\\s*\\n\\s*\\n)\\s+sight(?!['\\x{2019}]s\\b)"
+  - "in(?!\\s*\\n\\s*\\n)\\s+hind-sight(?!['\\x{2019}]s\\b)"
+  - "on(?!\\s*\\n\\s*\\n)\\s+hind-sight(?!['\\x{2019}]s\\b)"
+  - "on(?!\\s*\\n\\s*\\n)\\s+hindsight(?!['\\x{2019}]s\\b)"

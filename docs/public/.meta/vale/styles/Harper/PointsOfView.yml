@@ -1,0 +1,19 @@
+---
+# Generated from Harper's PointsOfView rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects pluralizing the wrong noun in `point of view`.
+extends: existence
+message: "The correct plural is `points of view`."
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "points of view"
+tokens:
+  - "point(?!\\s*\\n\\s*\\n)\\s+of(?!\\s*\\n\\s*\\n)\\s+views(?!['\\x{2019}]s\\b)"

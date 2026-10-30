@@ -1,0 +1,19 @@
+---
+# Generated from Harper's InspiredBy rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects `inspired from` to `inspired by`, as `by` is the standard preposition for indicating the source of inspiration.
+extends: existence
+message: "Use `inspired by` instead of `inspired from` when citing a source of inspiration."
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "inspired by"
+tokens:
+  - "inspired(?!\\s*\\n\\s*\\n)\\s+from(?!['\\x{2019}]s\\b)"

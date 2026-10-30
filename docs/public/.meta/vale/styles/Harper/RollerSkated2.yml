@@ -1,0 +1,15 @@
+---
+# Hand-written from Harper's RollerSkated -- the sentence-initial case, which
+# the negated token in RollerSkated.yml cannot reach. See that file.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: existence
+message: "Hyphenate this verb as `roller-skated`."
+level: warning
+scope: sentence
+ignorecase: true
+nonword: true
+tokens:
+  - '^roller[^\S\n]*\s[^\S\n]*skated\b'

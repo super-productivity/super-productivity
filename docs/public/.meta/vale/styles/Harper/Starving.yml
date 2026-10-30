@@ -1,0 +1,21 @@
+---
+# Generated from Harper's Starving rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Encourages vivid writing by suggesting `starving` instead of weaker expressions like `very hungry.`
+extends: existence
+message: "A more vivid adjective would better convey intense hunger."
+level: suggestion
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "starving"
+tokens:
+  - "extremely(?!\\s*\\n\\s*\\n)\\s+hungry(?!['\\x{2019}]s\\b)"
+  - "really(?!\\s*\\n\\s*\\n)\\s+hungry(?!['\\x{2019}]s\\b)"
+  - "very(?!\\s*\\n\\s*\\n)\\s+hungry(?!['\\x{2019}]s\\b)"

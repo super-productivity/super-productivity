@@ -1,0 +1,19 @@
+---
+# Generated from Harper's AsOpposedTo rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects `as oppose to` to `as opposed to`.
+extends: existence
+message: "Did you mean `as opposed to`?"
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "as opposed to"
+tokens:
+  - "as(?!\\s*\\n\\s*\\n)\\s+oppose(?!\\s*\\n\\s*\\n)\\s+to(?!['\\x{2019}]s\\b)"

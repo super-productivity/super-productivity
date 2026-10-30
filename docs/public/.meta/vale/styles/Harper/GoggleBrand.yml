@@ -1,0 +1,51 @@
+---
+# Generated from Harper's GoggleBrand rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Replaces the misspelling `goggle` when it is paired with a well-known Google service.
+extends: substitution
+message: "You probably meant to spell the company name `Google`."
+level: error
+ignorecase: true
+action:
+  name: replace
+swap:
+  "goggle(?!\\s*\\n\\s*\\n)\\s+ads(?!['\\x{2019}]s\\b)": "Google ads"
+  "goggle(?!\\s*\\n\\s*\\n)\\s+analytics(?!['\\x{2019}]s\\b)": "Google analytics"
+  "goggle(?!\\s*\\n\\s*\\n)\\s+calendar(?!['\\x{2019}]s\\b)": "Google calendar"
+  "goggle(?!\\s*\\n\\s*\\n)\\s+chrome(?!['\\x{2019}]s\\b)": "Google chrome"
+  "goggle(?!\\s*\\n\\s*\\n)\\s+classroom(?!['\\x{2019}]s\\b)": "Google classroom"
+  "goggle(?!\\s*\\n\\s*\\n)\\s+docs(?!['\\x{2019}]s\\b)": "Google docs"
+  "goggle(?!\\s*\\n\\s*\\n)\\s+drive(?!['\\x{2019}]s\\b)": "Google drive"
+  "goggle(?!\\s*\\n\\s*\\n)\\s+forms(?!['\\x{2019}]s\\b)": "Google forms"
+  "goggle(?!\\s*\\n\\s*\\n)\\s+hangouts(?!['\\x{2019}]s\\b)": "Google hangouts"
+  "goggle(?!\\s*\\n\\s*\\n)\\s+mail(?!['\\x{2019}]s\\b)": "Google mail"
+  "goggle(?!\\s*\\n\\s*\\n)\\s+maps(?!['\\x{2019}]s\\b)": "Google maps"
+  "goggle(?!\\s*\\n\\s*\\n)\\s+news(?!['\\x{2019}]s\\b)": "Google news"
+  "goggle(?!\\s*\\n\\s*\\n)\\s+photos(?!['\\x{2019}]s\\b)": "Google photos"
+  "goggle(?!\\s*\\n\\s*\\n)\\s+search(?!['\\x{2019}]s\\b)": "Google search"
+  "goggle(?!\\s*\\n\\s*\\n)\\s+sheets(?!['\\x{2019}]s\\b)": "Google sheets"
+  "goggle(?!\\s*\\n\\s*\\n)\\s+slides(?!['\\x{2019}]s\\b)": "Google slides"
+  "goggle(?!\\s*\\n\\s*\\n)\\s+translate(?!['\\x{2019}]s\\b)": "Google translate"
+  "goggle(?!\\s*\\n\\s*\\n)\\s+workspace(?!['\\x{2019}]s\\b)": "Google workspace"
+  "googol(?!\\s*\\n\\s*\\n)\\s+ads(?!['\\x{2019}]s\\b)": "Google ads"
+  "googol(?!\\s*\\n\\s*\\n)\\s+analytics(?!['\\x{2019}]s\\b)": "Google analytics"
+  "googol(?!\\s*\\n\\s*\\n)\\s+calendar(?!['\\x{2019}]s\\b)": "Google calendar"
+  "googol(?!\\s*\\n\\s*\\n)\\s+chrome(?!['\\x{2019}]s\\b)": "Google chrome"
+  "googol(?!\\s*\\n\\s*\\n)\\s+classroom(?!['\\x{2019}]s\\b)": "Google classroom"
+  "googol(?!\\s*\\n\\s*\\n)\\s+docs(?!['\\x{2019}]s\\b)": "Google docs"
+  "googol(?!\\s*\\n\\s*\\n)\\s+drive(?!['\\x{2019}]s\\b)": "Google drive"
+  "googol(?!\\s*\\n\\s*\\n)\\s+forms(?!['\\x{2019}]s\\b)": "Google forms"
+  "googol(?!\\s*\\n\\s*\\n)\\s+hangouts(?!['\\x{2019}]s\\b)": "Google hangouts"
+  "googol(?!\\s*\\n\\s*\\n)\\s+mail(?!['\\x{2019}]s\\b)": "Google mail"
+  "googol(?!\\s*\\n\\s*\\n)\\s+maps(?!['\\x{2019}]s\\b)": "Google maps"
+  "googol(?!\\s*\\n\\s*\\n)\\s+news(?!['\\x{2019}]s\\b)": "Google news"
+  "googol(?!\\s*\\n\\s*\\n)\\s+photos(?!['\\x{2019}]s\\b)": "Google photos"
+  "googol(?!\\s*\\n\\s*\\n)\\s+search(?!['\\x{2019}]s\\b)": "Google search"
+  "googol(?!\\s*\\n\\s*\\n)\\s+sheets(?!['\\x{2019}]s\\b)": "Google sheets"
+  "googol(?!\\s*\\n\\s*\\n)\\s+slides(?!['\\x{2019}]s\\b)": "Google slides"
+  "googol(?!\\s*\\n\\s*\\n)\\s+translate(?!['\\x{2019}]s\\b)": "Google translate"
+  "googol(?!\\s*\\n\\s*\\n)\\s+workspace(?!['\\x{2019}]s\\b)": "Google workspace"

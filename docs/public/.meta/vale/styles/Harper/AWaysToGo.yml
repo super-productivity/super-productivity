@@ -1,0 +1,25 @@
+---
+# Hand-written from Harper's AWaysToGo: the idiom is `a ways to go`.
+#
+# Harper wants one of two things around it: `still` in front, or the phrase
+# ending the sentence or running into `before`, `but`, `though`, `in order to`
+# or `to be`. Without either, `ways` is the ordinary plural -- "have ways to go
+# back to the last place" is about methods, not distance. This is the `still`
+# half; AWaysToGo2 is the other.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: substitution
+message: "This idiom requires the word `a`."
+level: warning
+ignorecase: true
+matchcase: true
+nonword: true
+action:
+  name: replace
+swap:
+  '(?<=\bstill\s)having(?=\s+ways\s+to\s+go\b)': "having a"
+  '(?<=\bstill\s)have(?=\s+ways\s+to\s+go\b)': "have a"
+  '(?<=\bstill\s)has(?=\s+ways\s+to\s+go\b)': "has a"
+  '(?<=\bstill\s)had(?=\s+ways\s+to\s+go\b)': "had a"

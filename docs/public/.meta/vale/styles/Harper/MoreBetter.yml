@@ -1,0 +1,21 @@
+---
+# Generated from Harper's MoreBetter linter. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Built from the phrases the linter's own tests demonstrate, so it
+# catches those rather than everything the Rust rule matches.
+#
+# Finds redundant paring of `more` or `most` with adjectives already in the
+# comparative or superlative form.
+extends: substitution
+message: "Did you mean %s?"
+level: warning
+ignorecase: true
+action:
+  name: replace
+swap:
+  "more(?!\\s*\\n\\s*\\n)\\s+bigger(?!\\s*\\n\\s*\\n)\\s+is(?!\\s*\\n\\s*\\n)\\s+more": "Bigger is"
+  "most(?!\\s*\\n\\s*\\n)\\s+biggest": "Biggest"

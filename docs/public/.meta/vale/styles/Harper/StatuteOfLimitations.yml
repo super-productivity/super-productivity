@@ -1,0 +1,19 @@
+---
+# Generated from Harper's StatuteOfLimitations rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects `statue of limitations` to `statute of limitations`.
+extends: existence
+message: "A `statue` is a sculpture; in legal terms, the correct word is `statute`."
+level: error
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "statute of limitations"
+tokens:
+  - "statue(?!\\s*\\n\\s*\\n)\\s+of(?!\\s*\\n\\s*\\n)\\s+limitations(?!['\\x{2019}]s\\b)"

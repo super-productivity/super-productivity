@@ -1,5 +1,7 @@
 app-build
 node_modules
+# Vendored documentation tooling
+docs/public/.meta
 .idea
 .vscode
 *.env

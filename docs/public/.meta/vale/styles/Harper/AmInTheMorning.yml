@@ -1,0 +1,25 @@
+---
+# Hand-written from Harper's AmInTheMorning: "10 am in the morning".
+#
+# The AM/PM indicator already says which half of the day it is, so the phrase
+# after it repeats itself. Either half can go, which is why this reports the
+# redundancy rather than choosing a fix.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# The indicator is fenced with a letter test, not a word boundary. `\b` finds
+# no break between the digit and the letter in "4am", so every time written
+# without a space -- which is most of them -- went unreported.
+#
+# `nonword` is what makes that fence work. Without it Vale wraps the pattern
+# in word boundaries of its own, and the leading one fails between the `4`
+# and the `a` however the pattern itself is written.
+extends: existence
+message: "The time period is redundant because it repeats what's already specified by the AM/PM indicator."
+level: warning
+ignorecase: true
+nonword: true
+tokens:
+  - '(?<![A-Za-z])[ap]\.?m\.?\s+(?:in\s+the\s+(?:morning|afternoon|evening|night)|at\s+night)\b'

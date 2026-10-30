@@ -1,0 +1,23 @@
+---
+# Generated from Harper's CautionaryTale linter. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects confusion between `tale` (story) and `tail` (appendage) in common
+# phrases.
+extends: sequence
+message: "Did you mean `tale` (story)?"
+level: warning
+ignorecase: true
+model: harper
+matchcase: true
+action:
+  name: replace
+  params:
+    - "tale"
+tokens:
+  - pattern: 'inspirational|cautionary'
+  - pattern: 'tail'
+    target: true

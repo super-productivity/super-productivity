@@ -1,0 +1,28 @@
+# A how-to guide gets the reader to the goal. Explanation of why the steps
+# work slows them down; link to the explanation page.
+# https://diataxis.fr/how-to-guides/#the-language-of-how-to-guides
+extends: existence
+message: "'%s' opens an explanation. Keep the guide to the steps; link to the explanation."
+link: https://diataxis.fr/how-to-guides/#the-language-of-how-to-guides
+level: suggestion
+ignorecase: true
+tokens:
+  - this is because
+  - the reason (?:for|is|this)
+  - under the hood
+  - in theory
+  - historically
+  - the design of
+
+tests:
+  - name: fires
+    input: |
+      Push the image. This is because the registry caches layers.
+
+    want: |
+      1:17:HowTo.Explanation:'This is because' opens an explanation. Keep the guide to the steps; link to the explanation.
+  - name: clean
+    input: |
+      Push the image.
+
+    want: ""

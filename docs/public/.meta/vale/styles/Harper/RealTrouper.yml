@@ -1,0 +1,19 @@
+---
+# Generated from Harper's RealTrouper rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Ensures the correct use of `real trouper`, distinguishing it from `trooper`, which refers to a soldier or police officer.
+extends: existence
+message: "Use the correct phrase for someone who perseveres."
+level: error
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "real trouper"
+tokens:
+  - "real(?!\\s*\\n\\s*\\n)\\s+trooper(?!['\\x{2019}]s\\b)"

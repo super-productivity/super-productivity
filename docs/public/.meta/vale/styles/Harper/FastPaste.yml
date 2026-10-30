@@ -1,0 +1,20 @@
+---
+# Generated from Harper's FastPaste rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Detects incorrect usage of `fast paste` or `fast-paste` and suggests `fast-paced` as the correct phrase.
+extends: existence
+message: "Did you mean `fast-paced`?"
+level: error
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "fast-paced"
+tokens:
+  - "fast(?!\\s*\\n\\s*\\n)\\s+paste(?!['\\x{2019}]s\\b)"
+  - "fast-paste(?!['\\x{2019}]s\\b)"

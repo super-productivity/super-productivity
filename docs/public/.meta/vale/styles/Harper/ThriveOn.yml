@@ -1,0 +1,19 @@
+---
+# Hand-written from Harper's ThriveOn: you thrive on something, not off it.
+#
+# Harper takes a form of `thrive`, then `off`, then an optional `of`, and
+# replaces the lot with `on`.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: substitution
+message: "Did you mean `thrive on`?"
+level: warning
+ignorecase: true
+matchcase: true
+nonword: true
+action:
+  name: replace
+swap:
+  '(?<=\b(?:thrive|thrived|thrives|thriving)\s)off(?:\s+of)?\b': "on"
