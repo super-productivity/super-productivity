@@ -15,7 +15,7 @@ import {
   formatDuration,
   ModelEnv,
   sumEstimate,
-  toCard,
+  cardsOf,
 } from './cards';
 import { AgendaNode, BreakdownNode, buildAgenda, buildBreakdown } from './parts';
 import { rangeOfWeek, timeSpentIn } from './time';
@@ -120,7 +120,7 @@ const makeGroup = (
 ): GroupModel => ({
   key,
   label,
-  cards: tasks.map((t) => toCard(t, fields, env)),
+  cards: cardsOf(tasks, fields, env),
   estimate: sumEstimate(tasks),
 });
 

@@ -9,7 +9,7 @@ import {
   projectColor,
   sumRemaining,
   tagColor,
-  toCard,
+  cardsOf,
 } from './cards';
 import { DayRange, daysIn, rangeOfLastDays, rangeOfWeek, timeSpentIn } from './time';
 
@@ -81,7 +81,7 @@ const makeDay = (
   key,
   label,
   date,
-  cards: tasks.map((t) => toCard(t, fields, env)),
+  cards: cardsOf(tasks, fields, env),
   planned: sumRemaining(tasks),
   isOverdue: key === 'overdue',
 });
