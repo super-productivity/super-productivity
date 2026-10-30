@@ -38,7 +38,8 @@ translated on screen; verify the changed UI as well.
 
 ### Fallback Language
 
-**English (`en.json`) is the fallback language.** If a translation is missing or empty, the app automatically displays the English text.
+**English (`en.json`) is the fallback language.** If a key is missing from a locale file, the app displays the English text.
+An empty string (`""`) is not missing: it is shown as blank text, so leave untranslated keys out of the file instead.
 
 ### Suffixes for Inflected/Dative Forms (`_NTH`)
 
@@ -48,17 +49,9 @@ Some keys have duplicates with an `_NTH` suffix (e.g., `ORD_FIRST` vs `ORD_FIRST
 - `ORD_FIRST_NTH` is used inside full sentences (e.g., dative/inflected form in German or other inflected languages like "Monthly on the first Monday").
 - In languages without inflection (like English), these values are identical.
 
-### Empty Values Are Intentional
+### Untranslated Keys
 
-When you see empty strings (`""`), this is **intentional** - it triggers the English fallback. Do not copy the English text into empty fields unless you're providing an actual translation.
-
-```json
-{
-  "SOME_KEY": ""
-}
-```
-
-The above will display the English text for `SOME_KEY`.
+Leave a key out of the locale file until you have a translation for it; it then falls back to English. Do not set it to an empty string (`""`): that renders as blank text in the app, and `npm run int:test` fails on it. Do not copy the English text into the locale file either, unless it is the actual translation.
 
 ### File Format
 

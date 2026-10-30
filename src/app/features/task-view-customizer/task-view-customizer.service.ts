@@ -1,6 +1,6 @@
 import { getTaskPriority } from '../tasks/task-priority.const';
 import { computed, effect, Injectable, inject, signal } from '@angular/core';
-import { Observable, animationFrameScheduler, combineLatest, of } from 'rxjs';
+import { Observable, Subject, animationFrameScheduler, combineLatest, of } from 'rxjs';
 import { map, observeOn, switchMap, take } from 'rxjs/operators';
 import { TaskWithSubTasks } from '../tasks/task.model';
 import { selectAllProjects } from '../project/store/project.selectors';
@@ -95,6 +95,15 @@ export class TaskViewCustomizerService {
   public selectedGroup = signal<GroupOption>(DEFAULT_OPTIONS.group);
   public selectedFilter = signal<FilterOption>(DEFAULT_OPTIONS.filter);
   public collapsedGroupIds = signal<string[]>([]);
+
+  // The customizer is a menu anchored to the header's filter button, so the
+  // keyboard shortcut can only ask that button to open it.
+  private readonly _openMenuRequest$ = new Subject<void>();
+  readonly openMenuRequest$ = this._openMenuRequest$.asObservable();
+
+  requestOpenMenu(): void {
+    this._openMenuRequest$.next();
+  }
 
   isCustomized = computed(() => {
     return [

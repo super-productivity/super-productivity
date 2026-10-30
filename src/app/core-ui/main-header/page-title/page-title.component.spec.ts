@@ -12,7 +12,7 @@ import { BehaviorSubject, Subject, of } from 'rxjs';
 import { NavigationEnd, Router } from '@angular/router';
 import { BreakpointObserver } from '@angular/cdk/layout';
 import { TranslateModule, TranslatePipe, TranslateService } from '@ngx-translate/core';
-import { MatMenu } from '@angular/material/menu';
+import { MatMenu, MatMenuTrigger } from '@angular/material/menu';
 import { Store } from '@ngrx/store';
 
 import { PageTitleComponent } from './page-title.component';
@@ -50,6 +50,7 @@ describe('PageTitleComponent', () => {
   let activeWorkContext$: BehaviorSubject<WorkContext>;
   let isShared$: BehaviorSubject<boolean>;
   let isXxxs$: BehaviorSubject<{ matches: boolean }>;
+  let openMenuRequest$: Subject<void>;
   let openSpy: jasmine.Spy;
   let pluginMenuEntries: WritableSignal<PluginMenuEntryCfg[]>;
   let pluginStates: Map<string, PluginState>;
@@ -86,7 +87,7 @@ describe('PageTitleComponent', () => {
     },
     {
       provide: TaskViewCustomizerService,
-      useValue: { isCustomized: () => false },
+      useValue: { isCustomized: () => false, openMenuRequest$ },
     },
     {
       provide: PluginBridgeService,
@@ -132,6 +133,7 @@ describe('PageTitleComponent', () => {
     pluginMenuEntries = signal<PluginMenuEntryCfg[]>([]);
     pluginStates = new Map();
     isXxxs$ = new BehaviorSubject<{ matches: boolean }>({ matches: false });
+    openMenuRequest$ = new Subject<void>();
     openSpy = jasmine
       .createSpy('openProjectOnPlainspace')
       .and.returnValue(Promise.resolve());
@@ -391,11 +393,12 @@ describe('PageTitleComponent', () => {
   });
 
   // Keeps the real template — that is the whole point — but drops the
-  // directives that only decorate it. Three have to stay: `MatMenu`, because
+  // directives that only decorate it. Four have to stay: `MatMenu`, because
   // the template resolves `#activeWorkContextMenu="matMenu"` and an
   // unresolvable `exportAs` is a compile error NO_ERRORS_SCHEMA does not cover,
-  // and `MatIconButton`/`MatIcon`, because the specs below measure the boxes
-  // they draw. `RouterLink` stays out, so no `ActivatedRoute` is needed.
+  // `MatMenuTrigger`, which the filter-shortcut specs drive, and
+  // `MatIconButton`/`MatIcon`, because the specs below measure the boxes they
+  // draw. `RouterLink` stays out, so no `ActivatedRoute` is needed.
   const configureRender = async (): Promise<void> => {
     TestBed.resetTestingModule();
     await TestBed.configureTestingModule({
@@ -404,7 +407,7 @@ describe('PageTitleComponent', () => {
     })
       .overrideComponent(PageTitleComponent, {
         set: {
-          imports: [TranslatePipe, MatMenu, MatIconButton, MatIcon],
+          imports: [TranslatePipe, MatMenu, MatMenuTrigger, MatIconButton, MatIcon],
           schemas: [NO_ERRORS_SCHEMA],
         },
       })
@@ -452,6 +455,28 @@ describe('PageTitleComponent', () => {
     it('renders no actions at the smallest breakpoint', async () => {
       isXxxs$.next({ matches: true });
       expect(buttons(await renderAt('/active/tasks')).length).toBe(0);
+    });
+
+    // The filter shortcut used to toggle a layout-state side panel that no
+    // longer had anything to show; it must drive this button's menu instead.
+    describe('the filter shortcut', () => {
+      let openMenuSpy: jasmine.Spy;
+
+      beforeEach(() => {
+        openMenuSpy = spyOn(MatMenuTrigger.prototype, 'openMenu');
+      });
+
+      it('opens the filter menu on the work view', async () => {
+        await renderAt('/active/tasks');
+        openMenuRequest$.next();
+        expect(openMenuSpy).toHaveBeenCalledTimes(1);
+      });
+
+      it('does nothing where the filter button is not rendered', async () => {
+        await renderAt('/active/notes');
+        openMenuRequest$.next();
+        expect(openMenuSpy).not.toHaveBeenCalled();
+      });
     });
   });
 

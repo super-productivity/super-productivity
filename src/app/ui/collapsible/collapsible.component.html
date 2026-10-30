@@ -13,6 +13,7 @@
   @if (icon) {
     <mat-icon class="collapsible-additional-icon">{{ icon }} </mat-icon>
   }
+  <ng-content select="[before-title]"></ng-content>
 
   @if (isTitleDragHandle()) {
     <div

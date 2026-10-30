@@ -1,7 +1,10 @@
-import { TestBed } from '@angular/core/testing';
+import { fakeAsync, TestBed, tick } from '@angular/core/testing';
 import { MockStore, provideMockStore } from '@ngrx/store/testing';
 import { TranslateService } from '@ngx-translate/core';
-import { ValidateStateService } from './validate-state.service';
+import {
+  DEFERRED_VALIDATION_FALLBACK_DELAY_MS,
+  ValidateStateService,
+} from './validate-state.service';
 import { RepairOperationService } from './repair-operation.service';
 import { StateSnapshotService } from '../backup/state-snapshot.service';
 import { CLIENT_ID_PROVIDER } from '../util/client-id.provider';
@@ -292,6 +295,35 @@ describe('ValidateStateService', () => {
         jasmine.any(Error),
       );
     });
+  });
+
+  describe('validateStateWhenIdle without requestIdleCallback', () => {
+    const win = window as unknown as { requestIdleCallback?: unknown };
+    let originalRequestIdleCallback: unknown;
+
+    beforeEach(() => {
+      originalRequestIdleCallback = win.requestIdleCallback;
+      win.requestIdleCallback = undefined;
+    });
+
+    afterEach(() => {
+      win.requestIdleCallback = originalRequestIdleCallback;
+    });
+
+    it('validates after the fallback delay, not on the next macrotask', fakeAsync(() => {
+      const validateSpy = spyOn(service, 'validateState').and.resolveTo({
+        isValid: true,
+        typiaErrors: [],
+      });
+      const state = createEmptyState();
+
+      service.validateStateWhenIdle(state, 'test');
+      tick(DEFERRED_VALIDATION_FALLBACK_DELAY_MS - 1);
+      expect(validateSpy).not.toHaveBeenCalled();
+
+      tick(1);
+      expect(validateSpy).toHaveBeenCalledOnceWith(state);
+    }));
   });
 
   describe('validateAndRepairCurrentState', () => {
