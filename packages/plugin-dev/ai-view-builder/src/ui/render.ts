@@ -2,6 +2,7 @@ import type { CardModel } from '../core/cards';
 import type { NodeModel } from '../core/model';
 import { el } from './dom';
 import { BuildCtx, cardList, heading } from './render-card';
+import { agendaEl, breakdownEl } from './render-parts';
 
 // Draws the render model and animates the change (FLIP): items keep their
 // identity across redraws through data-flip keys and glide from where they
@@ -18,6 +19,7 @@ const countTasks = (node: NodeModel | null, counts: Map<string, number>): void =
   if (node.kind === 'container') node.children.forEach((c) => countTasks(c, counts));
   if (node.kind === 'taskList') node.groups.forEach((g) => add(g.cards));
   if (node.kind === 'board') node.columns.forEach((c) => add(c.cards));
+  if (node.kind === 'agenda') node.days.forEach((d) => add(d.cards));
 };
 
 const header = (
@@ -65,7 +67,7 @@ const build = (node: NodeModel, ctx: BuildCtx): HTMLElement => {
         if (!g.cards.length) return;
         if (g.label) {
           wrap.appendChild(
-            heading('h4', 'group-label', g.label, g.cards.length, g.estimate),
+            heading('group-label', g.label, g.cards.length, { estimate: g.estimate }),
           );
         }
         wrap.appendChild(cardList(g.cards, node.cid, ctx, false));
@@ -85,12 +87,24 @@ const build = (node: NodeModel, ctx: BuildCtx): HTMLElement => {
         colEl.dataset.boardCid = node.cid;
         colEl.dataset.flip = `col:${node.cid}:${col.id}`;
         colEl.appendChild(
-          heading('h4', 'col-title', col.title, col.cards.length, col.estimate),
+          heading('col-title', col.title, col.cards.length, { estimate: col.estimate }),
         );
         colEl.appendChild(cardList(col.cards, node.cid, ctx, true));
         cols.appendChild(colEl);
       });
       wrap.appendChild(cols);
+      break;
+    }
+    case 'agenda': {
+      wrap.appendChild(header(node.cid, node.title, node.problems, ctx));
+      wrap.appendChild(agendaEl(node, ctx));
+      break;
+    }
+    case 'timeBreakdown': {
+      const head = header(node.cid, node.title, node.problems, ctx);
+      head.appendChild(el('span', 'breakdown-total', `${node.total} in total`));
+      wrap.appendChild(head);
+      wrap.appendChild(breakdownEl(node));
       break;
     }
     case 'metric': {

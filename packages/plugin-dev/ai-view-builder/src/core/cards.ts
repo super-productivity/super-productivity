@@ -1,6 +1,13 @@
-import type { Task } from '@super-productivity/plugin-api';
+import type { Project, Tag, Task } from '@super-productivity/plugin-api';
 import { FieldName } from './spec';
-import { addDays, deadlineOf, dueDayOf, priorityOf, QueryEnv } from './query';
+import {
+  addDays,
+  deadlineOf,
+  dueDayOf,
+  parseDateStr,
+  priorityOf,
+  QueryEnv,
+} from './query';
 
 // What one task looks like as a card. Chips, estimate and due get their own
 // slots (like a task row in Super Productivity) instead of one line of text.
@@ -45,8 +52,7 @@ export const formatDay = (day: string, todayStr: string): string => {
   if (day === todayStr) return 'Today';
   if (day === addDays(todayStr, 1)) return 'Tomorrow';
   if (day === addDays(todayStr, -1)) return 'Yesterday';
-  const [y, m, d] = day.split('-').map(Number);
-  return new Date(y, m - 1, d).toLocaleDateString(undefined, {
+  return parseDateStr(day).toLocaleDateString(undefined, {
     weekday: 'short',
     day: 'numeric',
     month: 'short',
@@ -56,6 +62,16 @@ export const formatDay = (day: string, todayStr: string): string => {
 /** Total estimate of the tasks, or undefined when none has one. */
 export const sumEstimate = (tasks: Task[]): string | undefined => {
   const ms = tasks.reduce((acc, t) => acc + (t.timeEstimate || 0), 0);
+  return ms > 0 ? formatDuration(ms) : undefined;
+};
+
+/** Total of what is left to do on the open tasks, or undefined when nothing is. */
+export const sumRemaining = (tasks: Task[]): string | undefined => {
+  const ms = tasks.reduce(
+    (acc, t) =>
+      t.isDone ? acc : acc + Math.max(0, (t.timeEstimate || 0) - (t.timeSpent || 0)),
+    0,
+  );
   return ms > 0 ? formatDuration(ms) : undefined;
 };
 
@@ -70,22 +86,25 @@ const primaryOf = (theme: unknown): unknown =>
     ? (theme as Record<string, unknown>).primary
     : undefined;
 
+export const projectColor = (project: Project): string | undefined =>
+  safeColor(primaryOf(project.theme));
+
+export const tagColor = (tag: Tag): string | undefined =>
+  safeColor(tag.color) ?? safeColor(primaryOf(tag.theme));
+
 const chipsOf = (task: Task, fields: FieldName[], env: QueryEnv): Chip[] => {
   const chips: Chip[] = [];
   const project = fields.includes('project')
     ? env.projects.find((p) => p.id === task.projectId)
     : undefined;
   if (project) {
-    chips.push({ label: project.title, color: safeColor(primaryOf(project.theme)) });
+    chips.push({ label: project.title, color: projectColor(project) });
   }
   if (!fields.includes('tags')) return chips;
   for (const id of task.tagIds) {
     const tag = env.tags.find((t) => t.id === id);
     if (tag) {
-      chips.push({
-        label: tag.title,
-        color: safeColor(tag.color) ?? safeColor(primaryOf(tag.theme)),
-      });
+      chips.push({ label: tag.title, color: tagColor(tag) });
     }
   }
   return chips;

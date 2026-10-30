@@ -28,7 +28,7 @@ const pad = (n: number): string => String(n).padStart(2, '0');
 const toDateStr = (d: Date): string =>
   `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 
-const parseDateStr = (s: string): Date => {
+export const parseDateStr = (s: string): Date => {
   const [y, m, d] = s.split('-').map(Number);
   return new Date(y, m - 1, d);
 };
@@ -262,7 +262,16 @@ const withArchive = (env: QueryEnv): Task[] => {
   return [...env.tasks, ...(env.archivedTasks ?? []).filter((t) => !active.has(t.id))];
 };
 
-export const runQuery = (q: Query, env: QueryEnv): QueryResult => {
+export interface RunOptions {
+  /** For sums over the whole result: no limit, and an extra filter to apply first. */
+  aggregate?: { filter?: (t: Task) => boolean };
+}
+
+export const runQuery = (
+  q: Query,
+  env: QueryEnv,
+  options: RunOptions = {},
+): QueryResult => {
   const problems: string[] = [];
   const scope = scopeFilter(q.scope, env, problems);
   const tagIds = q.tags?.length ? resolveTagIds(q.tags, env.tags, problems) : [];
@@ -293,12 +302,18 @@ export const runQuery = (q: Query, env: QueryEnv): QueryResult => {
     if (t.tagIds.some((id) => notTagIds.has(id))) return false;
     if (wantedPriorities && !wantedPriorities.has(priorityOf(t))) return false;
     if (q.hasEstimate !== undefined && t.timeEstimate > 0 !== q.hasEstimate) return false;
+    if (q.hasDeadline !== undefined && !!deadlineOf(t, env.day) !== q.hasDeadline) {
+      return false;
+    }
+    if (options.aggregate?.filter && !options.aggregate.filter(t)) return false;
     if (text && !norm(t.title).includes(text)) return false;
     return true;
   });
 
-  const limit = Math.min(q.limit ?? DEFAULT_LIMIT, 500);
-  return { tasks: sortTasks(matched, q, scope.order, env).slice(0, limit), problems };
+  const sorted = sortTasks(matched, q, scope.order, env);
+  // A sum over the result must not lose tasks to the display limit.
+  if (options.aggregate) return { tasks: sorted, problems };
+  return { tasks: sorted.slice(0, Math.min(q.limit ?? DEFAULT_LIMIT, 500)), problems };
 };
 
 /** Whether a query needs archived tasks, which are loaded only when asked for. */

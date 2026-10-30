@@ -1,4 +1,14 @@
-import { DUE_TOKENS, FIELD_NAMES, GROUP_BY, MEASURES, SORT_KEYS, ViewSpec } from './spec';
+import {
+  BREAKDOWN_BY,
+  DUE_TOKENS,
+  FIELD_NAMES,
+  GROUP_BY,
+  MAX_AGENDA_DAYS,
+  MEASURES,
+  RANGES,
+  SORT_KEYS,
+  ViewSpec,
+} from './spec';
 
 // The system prompt and tools are fixed text, sent first and cached; the
 // current spec and the request follow them. Nothing here or in the request
@@ -24,13 +34,15 @@ put_component and put_query merge props into what exists. Send only what changes
 ## Components
 - stack: { children: [ids], title? }. Parts below each other.
 - columns: { children: [ids], title? }. Parts side by side; they wrap on narrow screens.
-- taskList: { query, title?, fields?, groupBy?, limit?, emptyText? }. fields: ${list(FIELD_NAMES)}. groupBy: ${list(GROUP_BY)}.
+- taskList: { query, title?, fields?, groupBy?, limit?, emptyText? }. fields: ${list(FIELD_NAMES)}; without fields a card shows project, tags, estimate and due, and [] shows none. groupBy: ${list(GROUP_BY)}.
 - board: { query, columns: [{ id, title, tags?, notTags?, isDone? }], columnsPerRow?, fields?, title? }. A column shows the query's tasks that have all of its tags, none of its notTags and the given done state. Dragging a card into a column adds its tags, removes its notTags and sets its done state, so give each column a rule that keeps it apart from the others. Tags that do not exist yet are created the first time a card is dragged into the column. columnsPerRow: 2 makes a 2×2 grid.
+- agenda: { query, days?, showOverdue?, fields?, title? }. The next days (1 to ${MAX_AGENDA_DAYS}, default 3) as columns, each task under its due day with the day's remaining estimate; showOverdue adds an Overdue column.
+- timeBreakdown: { query, by, range?, title? }. Bars of tracked time. by: ${list(BREAKDOWN_BY)}. range: ${list(RANGES)} (default thisWeek).
 - metric: { query, measure, title }. measure: ${list(MEASURES)}.
 - text: { text }. A short heading or note.
 
 ## Queries
-{ scope?, isDone?, due?, doneOn?, tags?, tagsMatch?, notTags?, priority?, hasEstimate?, parentsOnly?, text?, includeArchived?, sort?, sortDir?, limit? }
+{ scope?, isDone?, due?, doneOn?, tags?, tagsMatch?, notTags?, priority?, hasEstimate?, hasDeadline?, parentsOnly?, text?, includeArchived?, sort?, sortDir?, limit? }
 - scope: "@current" (the project or tag the person has open; use it unless they name one), "all", or a project or tag name.
 - due: ${list(DUE_TOKENS)}. Days follow the person's own start of day and first day of the week. "Today's tasks" is due: "today".
 - doneOn: today or thisWeek; only done tasks finished then. Archived tasks are included automatically.

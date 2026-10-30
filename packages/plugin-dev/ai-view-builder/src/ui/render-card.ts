@@ -118,19 +118,19 @@ export const cardList = (
   return list;
 };
 
-/** A group or column heading: name, task count and summed estimate. */
+/** A group or column heading: name, task count, summed estimate and an optional date. */
 export const heading = (
-  tag: 'h4',
   cls: string,
   label: string,
   count: number,
-  estimate?: string,
+  extra: { estimate?: string; date?: string } = {},
 ): HTMLElement => {
-  const node = el(tag, cls);
+  const node = el('h4', cls);
   node.appendChild(el('span', 'heading-name', label));
+  if (extra.date) node.appendChild(el('span', 'heading-date', extra.date));
   node.appendChild(el('span', 'heading-count', String(count)));
-  if (estimate) {
-    const sum = el('span', 'heading-sum', estimate);
+  if (extra.estimate) {
+    const sum = el('span', 'heading-sum', extra.estimate);
     sum.title = 'Estimate';
     node.appendChild(sum);
   }

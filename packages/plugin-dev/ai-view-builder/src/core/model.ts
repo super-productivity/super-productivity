@@ -17,6 +17,7 @@ import {
   sumEstimate,
   toCard,
 } from './cards';
+import { AgendaNode, BreakdownNode, buildAgenda, buildBreakdown } from './parts';
 import { rangeOfWeek, timeSpentIn } from './time';
 
 // Spec + data → a plain tree the DOM renderer draws. Kept free of the DOM so
@@ -54,6 +55,8 @@ export type NodeModel =
       columns: { id: string; title: string; cards: CardModel[]; estimate?: string }[];
       problems: string[];
     }
+  | AgendaNode
+  | BreakdownNode
   | { kind: 'metric'; cid: string; title: string; value: string; problems: string[] }
   | { kind: 'text'; cid: string; text: string }
   | { kind: 'placeholder'; cid: string; message: string };
@@ -239,12 +242,16 @@ const buildNode = (
         problems: missingQuery ? ['Being set up…'] : result.problems,
       };
     }
+    case 'agenda':
+      return buildAgenda(cid, c, query, env);
+    case 'timeBreakdown':
+      return buildBreakdown(cid, c, query, env);
     case 'metric': {
       // Time tracked on tasks archived earlier in the week still counts.
       const withArchive =
         c.measure === 'timeSpentThisWeek' ? { includeArchived: true } : {};
       const result = query
-        ? runQuery({ ...query, ...withArchive, limit: 500 }, env)
+        ? runQuery({ ...query, ...withArchive }, env, { aggregate: {} })
         : { tasks: [], problems: [] };
       return {
         kind: 'metric',
@@ -268,7 +275,9 @@ const buildNode = (
 /** Whether drawing the view needs the archive, which is loaded only when asked for. */
 export const specNeedsArchive = (spec: ViewSpec): boolean =>
   needsArchive(Object.values(spec.queries)) ||
-  Object.values(spec.components).some((c) => c.measure === 'timeSpentThisWeek');
+  Object.values(spec.components).some(
+    (c) => c.type === 'timeBreakdown' || c.measure === 'timeSpentThisWeek',
+  );
 
 export const buildModel = (spec: ViewSpec, env: ModelEnv): NodeModel | null =>
   spec.root ? buildNode(spec, spec.root, env, new Set(), 0) : null;

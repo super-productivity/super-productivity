@@ -147,3 +147,24 @@ test('parseSpec keeps unknown top-level fields; newer specs are read-only', () =
   assert.equal(isReadOnlySpec({ ...emptySpec(), specVersion: SPEC_VERSION + 1 }), true);
   assert.equal(isReadOnlySpec(emptySpec()), false);
 });
+
+test('agenda and timeBreakdown validate their own props', () => {
+  const put = (props: Record<string, unknown>): string | undefined =>
+    applyStep(emptySpec(), 'put_component', { id: 'part', props }).error;
+  assert.equal(
+    put({ type: 'agenda', query: 'q', days: 14, showOverdue: true }),
+    undefined,
+  );
+  assert.match(put({ type: 'agenda', query: 'q', days: 15 }) ?? '', /days/);
+  assert.match(
+    put({ type: 'agenda', query: 'q', showOverdue: 'yes' }) ?? '',
+    /showOverdue/,
+  );
+  assert.equal(
+    put({ type: 'timeBreakdown', query: 'q', by: 'tag', range: 'last7Days' }),
+    undefined,
+  );
+  assert.match(put({ type: 'timeBreakdown', query: 'q', by: 'week' }) ?? '', /by must/);
+  assert.match(put({ type: 'timeBreakdown', query: 'q', range: 'month' }) ?? '', /range/);
+  assert.match(put({ type: 'timeBreakdown', by: 'day' }) ?? '', /query/);
+});

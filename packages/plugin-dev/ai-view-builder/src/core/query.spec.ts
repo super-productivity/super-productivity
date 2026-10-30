@@ -159,3 +159,21 @@ test('the older scope "today" keeps working for saved views', () => {
   ];
   assert.deepEqual(ids({ scope: 'today' }, env(tasks)), ['a']);
 });
+
+test('hasDeadline keeps tasks with or without a deadline', () => {
+  const e = env([task('with', { deadlineDay: '2026-11-01' }), task('without')]);
+  assert.deepEqual(ids({ hasDeadline: true }, e), ['with']);
+  assert.deepEqual(ids({ hasDeadline: false }, e), ['without']);
+});
+
+test('an aggregate run ignores the limit and applies its own filter first', () => {
+  const tasks = Array.from({ length: 600 }, (_, i) => task(`t${i}`, { created: i }));
+  const e = env(tasks);
+  assert.equal(runQuery({ limit: 5 }, e).tasks.length, 5);
+  assert.equal(runQuery({ limit: 5 }, e, { aggregate: {} }).tasks.length, 600);
+  const only = runQuery({}, e, { aggregate: { filter: (t) => t.id === 't599' } });
+  assert.deepEqual(
+    only.tasks.map((t) => t.id),
+    ['t599'],
+  );
+});

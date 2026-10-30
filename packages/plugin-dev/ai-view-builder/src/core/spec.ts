@@ -59,11 +59,21 @@ export const SORT_KEYS = [
 ] as const;
 export type SortKey = (typeof SORT_KEYS)[number];
 
+export const BREAKDOWN_BY = ['project', 'tag', 'day'] as const;
+export type BreakdownBy = (typeof BREAKDOWN_BY)[number];
+
+export const RANGES = ['today', 'thisWeek', 'last7Days'] as const;
+export type RangeName = (typeof RANGES)[number];
+
+export const MAX_AGENDA_DAYS = 14;
+
 export const COMPONENT_TYPES = [
   'stack',
   'columns',
   'taskList',
   'board',
+  'agenda',
+  'timeBreakdown',
   'metric',
   'text',
 ] as const;
@@ -79,6 +89,7 @@ export interface Query {
   notTags?: string[];
   priority?: PriorityName[];
   hasEstimate?: boolean;
+  hasDeadline?: boolean;
   parentsOnly?: boolean;
   text?: string;
   includeArchived?: boolean;
@@ -109,6 +120,10 @@ export interface Component {
   columns?: BoardColumn[];
   columnsPerRow?: number;
   measure?: Measure;
+  days?: number;
+  showOverdue?: boolean;
+  by?: BreakdownBy;
+  range?: RangeName;
   text?: string;
   [key: string]: unknown;
 }
@@ -200,6 +215,7 @@ export const validateQuery = (q: unknown): string[] => {
     }
   }
   optionalBool(q.hasEstimate, 'hasEstimate', out);
+  optionalBool(q.hasDeadline, 'hasDeadline', out);
   optionalBool(q.parentsOnly, 'parentsOnly', out);
   optionalBool(q.includeArchived, 'includeArchived', out);
   if (q.text !== undefined && typeof q.text !== 'string') {
@@ -209,6 +225,15 @@ export const validateQuery = (q: unknown): string[] => {
   oneOf(['asc', 'desc'] as const, q.sortDir, 'sortDir', out);
   optionalCount(q.limit, 'limit', MAX_LIMIT, out);
   return out;
+};
+
+const validateFields = (fields: unknown, out: string[]): void => {
+  if (fields === undefined) return;
+  if (!Array.isArray(fields)) {
+    out.push('fields must be a list');
+  } else {
+    fields.forEach((f) => oneOf(FIELD_NAMES, f, 'fields', out));
+  }
 };
 
 const validateColumn = (c: unknown, i: number, out: string[]): void => {
@@ -250,13 +275,7 @@ export const validateComponent = (c: unknown): string[] => {
       if (!isValidId(c.query)) {
         out.push('query must be a query id');
       }
-      if (c.fields !== undefined) {
-        if (!Array.isArray(c.fields)) {
-          out.push('fields must be a list');
-        } else {
-          c.fields.forEach((f) => oneOf(FIELD_NAMES, f, 'fields', out));
-        }
-      }
+      validateFields(c.fields, out);
       oneOf(GROUP_BY, c.groupBy, 'groupBy', out);
       optionalCount(c.limit, 'limit', MAX_LIMIT, out);
       if (c.emptyText !== undefined && typeof c.emptyText !== 'string') {
@@ -276,14 +295,23 @@ export const validateComponent = (c: unknown): string[] => {
           out.push('column ids must be unique');
         }
       }
-      if (c.fields !== undefined) {
-        if (!Array.isArray(c.fields)) {
-          out.push('fields must be a list');
-        } else {
-          c.fields.forEach((f) => oneOf(FIELD_NAMES, f, 'fields', out));
-        }
-      }
+      validateFields(c.fields, out);
       optionalCount(c.columnsPerRow, 'columnsPerRow', 6, out);
+      break;
+    case 'agenda':
+      if (!isValidId(c.query)) {
+        out.push('query must be a query id');
+      }
+      validateFields(c.fields, out);
+      optionalCount(c.days, 'days', MAX_AGENDA_DAYS, out);
+      optionalBool(c.showOverdue, 'showOverdue', out);
+      break;
+    case 'timeBreakdown':
+      if (!isValidId(c.query)) {
+        out.push('query must be a query id');
+      }
+      oneOf(BREAKDOWN_BY, c.by, 'by', out);
+      oneOf(RANGES, c.range, 'range', out);
       break;
     case 'metric':
       if (!isValidId(c.query)) {
