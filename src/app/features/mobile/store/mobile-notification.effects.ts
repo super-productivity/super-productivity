@@ -29,6 +29,9 @@ import { remindOptionToMilliseconds } from '../../tasks/util/remind-option-to-mi
 import { getDbDateStr } from '../../../util/get-db-date-str';
 import { getDueDateNotificationOffsetMs } from '../due-date-notification-offset';
 import { SyncProviderId } from '../../../op-log/sync-providers/provider.const';
+import { DataInitStateService } from '../../../core/data-init/data-init-state.service';
+import { LS } from '../../../core/persistence/storage-keys.const';
+import { loadArmedIds, loadArmedTriggers, saveArmed } from '../armed-reminder-store';
 
 const DELAY_PERMISSIONS = 2000;
 const DELAY_SCHEDULE = 5000;
@@ -69,18 +72,24 @@ export class MobileNotificationEffects {
   private _platformService = inject(CapacitorPlatformService);
   private _globalConfigService = inject(GlobalConfigService);
   private _dateService = inject(DateService);
+  private _dataInitStateService = inject(DataInitStateService);
   // Single-shot guard so we don't spam the user with duplicate warnings.
   private _hasShownNotificationWarning = false;
-  // Track scheduled reminder IDs to cancel removed ones
-  private _scheduledReminderIds = new Set<string>();
+  // Track scheduled reminder IDs to cancel removed ones. Seeded from the
+  // previous run (see armed-reminder-store) so removals while closed cancel too.
+  private _scheduledReminderIds = loadArmedIds(LS.MOBILE_ARMED_REMINDER_IDS);
   // Track scheduled due-date notification IDs separately
-  private _scheduledDueDateIds = new Set<string>();
+  private _scheduledDueDateIds = loadArmedIds(LS.MOBILE_ARMED_DUE_DATE_IDS);
   private _hasClearedStaleDueDateAlarms = false;
   // Track scheduled deadline reminders separately: taskId → triggerAtMs, so a
   // pending alarm can be told apart from one that already fired
-  private _scheduledDeadlineIds = new Map<string, number>();
-  // Track pre-scheduled recurring reminder IDs (the predicted task instance IDs)
-  private _scheduledRepeatReminderIds = new Set<string>();
+  private _scheduledDeadlineIds = loadArmedTriggers(LS.MOBILE_ARMED_DEADLINE_IDS);
+  // Track pre-scheduled recurring reminders (predicted task instance id →
+  // triggerAtMs), so an alarm that already fired is not cancelled — on Android
+  // that would dismiss its shown notification before the instance exists.
+  private _scheduledRepeatReminderIds = loadArmedTriggers(
+    LS.MOBILE_ARMED_REPEAT_REMINDER_IDS,
+  );
 
   // Narrowed cfg slice so the scheduling effects only re-run on reminder-config
   // changes, not on every unrelated global-config edit (theme, sync, etc.).
@@ -91,6 +100,12 @@ export class MobileNotificationEffects {
       map((c) => c?.reminder),
       distinctUntilChanged(),
     );
+
+  // Wait for hydration: with tracking seeded from the previous run, a pass over
+  // the still-empty store would cancel every armed alarm.
+  private _afterDataLoaded$: Observable<boolean> = timer(DELAY_SCHEDULE).pipe(
+    switchMap(() => this._dataInitStateService.isAllDataLoadedInitially$),
+  );
 
   // Only SuperSync alarms run a stale-check GET on firing, so only SuperSync
   // users gain from the due-date offset — everyone else would just be delayed.
@@ -154,7 +169,7 @@ export class MobileNotificationEffects {
     this._platformService.isNative &&
     createEffect(
       () =>
-        timer(DELAY_SCHEDULE).pipe(
+        this._afterDataLoaded$.pipe(
           switchMap(() =>
             combineLatest([
               this._store.select(selectAllTasksWithReminder),
@@ -236,6 +251,8 @@ export class MobileNotificationEffects {
             } catch (error) {
               Log.err(error);
               this._notifyPermissionIssue(error?.toString());
+            } finally {
+              saveArmed(LS.MOBILE_ARMED_REMINDER_IDS, this._scheduledReminderIds);
             }
           }),
         ),
@@ -272,7 +289,7 @@ export class MobileNotificationEffects {
     this._platformService.isNative &&
     createEffect(
       () =>
-        timer(DELAY_SCHEDULE).pipe(
+        this._afterDataLoaded$.pipe(
           switchMap(() =>
             combineLatest([
               this._store.select(selectActiveTaskRepeatCfgs),
@@ -284,7 +301,7 @@ export class MobileNotificationEffects {
           tap(async ([cfgs, tasksWithReminders, reminderCfg]) => {
             try {
               if (reminderCfg?.disableReminders) {
-                for (const previousId of this._scheduledRepeatReminderIds) {
+                for (const previousId of this._scheduledRepeatReminderIds.keys()) {
                   await this._reminderService.cancelReminder(
                     generateNotificationId(previousId),
                   );
@@ -293,8 +310,9 @@ export class MobileNotificationEffects {
                 return;
               }
 
-              const upcoming = this._getUpcomingRepeatReminders(cfgs, Date.now());
-              const currentIds = new Set(upcoming.map((u) => u.taskId));
+              const now = Date.now();
+              const upcoming = this._getUpcomingRepeatReminders(cfgs, now);
+              const current = new Map(upcoming.map((u) => [u.taskId, u.triggerAtMs]));
 
               // IDs whose real instance already exists with a live reminder.
               // scheduleNotifications$ owns those alarms under the SAME
@@ -305,8 +323,12 @@ export class MobileNotificationEffects {
                 (tasksWithReminders || []).map((t) => t.id),
               );
 
-              for (const previousId of this._scheduledRepeatReminderIds) {
-                if (!currentIds.has(previousId) && !liveReminderIds.has(previousId)) {
+              for (const [previousId, triggerAtMs] of this._scheduledRepeatReminderIds) {
+                if (
+                  triggerAtMs > now &&
+                  !current.has(previousId) &&
+                  !liveReminderIds.has(previousId)
+                ) {
                   await this._reminderService.cancelReminder(
                     generateNotificationId(previousId),
                   );
@@ -335,13 +357,18 @@ export class MobileNotificationEffects {
                 });
               }
 
-              this._scheduledRepeatReminderIds = currentIds;
+              this._scheduledRepeatReminderIds = current;
 
               Log.log('MobileEffects: scheduled repeat reminders', {
                 count: upcoming.length,
               });
             } catch (error) {
               Log.err(error);
+            } finally {
+              saveArmed(
+                LS.MOBILE_ARMED_REPEAT_REMINDER_IDS,
+                this._scheduledRepeatReminderIds,
+              );
             }
           }),
         ),
@@ -358,7 +385,7 @@ export class MobileNotificationEffects {
     this._platformService.isNative &&
     createEffect(
       () =>
-        timer(DELAY_SCHEDULE).pipe(
+        this._afterDataLoaded$.pipe(
           switchMap(() =>
             combineLatest([
               this._store.select(selectUndoneTasksWithDueDayNoReminder),
@@ -451,6 +478,8 @@ export class MobileNotificationEffects {
               });
             } catch (error) {
               Log.err(error);
+            } finally {
+              saveArmed(LS.MOBILE_ARMED_DUE_DATE_IDS, this._scheduledDueDateIds);
             }
           }),
         ),
@@ -471,7 +500,7 @@ export class MobileNotificationEffects {
     this._platformService.isNative &&
     createEffect(
       () =>
-        timer(DELAY_SCHEDULE).pipe(
+        this._afterDataLoaded$.pipe(
           switchMap(() =>
             combineLatest([
               this._store.select(selectAllTasksWithDeadlineReminder),
@@ -547,6 +576,8 @@ export class MobileNotificationEffects {
               });
             } catch (error) {
               Log.err(error);
+            } finally {
+              saveArmed(LS.MOBILE_ARMED_DEADLINE_IDS, this._scheduledDeadlineIds);
             }
           }),
         ),

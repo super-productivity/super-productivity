@@ -1,7 +1,7 @@
 import { fakeAsync, TestBed, tick } from '@angular/core/testing';
 import { EffectsModule } from '@ngrx/effects';
 import { MockStore, provideMockStore } from '@ngrx/store/testing';
-import { BehaviorSubject, NEVER, Observable } from 'rxjs';
+import { BehaviorSubject, NEVER, Observable, Subscription } from 'rxjs';
 import { MobileNotificationEffects } from './mobile-notification.effects';
 import { SnackService } from '../../../core/snack/snack.service';
 import { CapacitorReminderService } from '../../../core/platform/capacitor-reminder.service';
@@ -26,6 +26,8 @@ import { getDateTimeFromClockString } from '../../../util/get-date-time-from-clo
 import { LS } from '../../../core/persistence/storage-keys.const';
 import { SyncProviderId } from '../../../op-log/sync-providers/provider.const';
 import { DateService } from '../../../core/date/date.service';
+import { DataInitStateService } from '../../../core/data-init/data-init-state.service';
+import { filter } from 'rxjs/operators';
 
 // Matches the internal DELAY_SCHEDULE in the effects file.
 const EFFECT_DELAY_MS = 5000;
@@ -42,6 +44,36 @@ type TestCfg = {
 describe('MobileNotificationEffects', () => {
   let effects: MobileNotificationEffects;
   let platformService: jasmine.SpyObj<CapacitorPlatformService>;
+  let isDataLoaded$: BehaviorSubject<boolean>;
+
+  const TRACKED_ID_KEYS = [
+    LS.MOBILE_ARMED_REMINDER_IDS,
+    LS.MOBILE_ARMED_REPEAT_REMINDER_IDS,
+    LS.MOBILE_ARMED_DUE_DATE_IDS,
+    LS.MOBILE_ARMED_DEADLINE_IDS,
+  ];
+
+  // A second instance stands in for the next app run: same device storage,
+  // fresh in-memory state, alarms from the previous run still armed natively.
+  const startNextAppRun = (): MobileNotificationEffects =>
+    TestBed.runInInjectionContext(() => new MobileNotificationEffects());
+
+  beforeEach(() => {
+    TRACKED_ID_KEYS.forEach((k) => localStorage.removeItem(k));
+    isDataLoaded$ = new BehaviorSubject<boolean>(true);
+    TestBed.configureTestingModule({
+      providers: [
+        {
+          provide: DataInitStateService,
+          useValue: { isAllDataLoadedInitially$: isDataLoaded$.pipe(filter(Boolean)) },
+        },
+      ],
+    });
+  });
+
+  afterEach(() => {
+    TRACKED_ID_KEYS.forEach((k) => localStorage.removeItem(k));
+  });
 
   describe('on non-native platform', () => {
     beforeEach(() => {
@@ -267,9 +299,11 @@ describe('MobileNotificationEffects', () => {
         remindAt: Date.now() + 600_000,
       }) as TaskWithReminder;
 
-    const subscribeScheduleNotifications = (): void => {
+    const subscribeScheduleNotifications = (): Subscription => {
       effects = TestBed.inject(MobileNotificationEffects);
-      (effects.scheduleNotifications$ as unknown as Observable<unknown>).subscribe();
+      return (
+        effects.scheduleNotifications$ as unknown as Observable<unknown>
+      ).subscribe();
     };
 
     it('schedules reminders normally when disableReminders is false', fakeAsync(() => {
@@ -324,6 +358,53 @@ describe('MobileNotificationEffects', () => {
       expect(reminderServiceSpy.cancelReminder).toHaveBeenCalledWith(
         generateNotificationId('b'),
       );
+    }));
+
+    it('cancels an alarm a previous app run armed for a task completed or deleted (e.g. by sync) before this run', fakeAsync(() => {
+      store.overrideSelector(selectAllTasksWithReminder, [futureReminder('a')]);
+      const firstRun = subscribeScheduleNotifications();
+      tick(EFFECT_DELAY_MS + 1);
+      expect(reminderServiceSpy.scheduleReminder).toHaveBeenCalledTimes(1);
+      // The app is killed; the change arrives before the next run.
+      firstRun.unsubscribe();
+
+      store.overrideSelector(selectAllTasksWithReminder, []);
+      store.refreshState();
+      const nextRun = startNextAppRun();
+      reminderServiceSpy.cancelReminder.calls.reset();
+      (nextRun.scheduleNotifications$ as unknown as Observable<unknown>).subscribe();
+      tick(EFFECT_DELAY_MS + 1);
+
+      expect(reminderServiceSpy.cancelReminder).toHaveBeenCalledWith(
+        generateNotificationId('a'),
+      );
+    }));
+
+    it('does not cancel alarms from a previous app run before the initial data load', fakeAsync(() => {
+      store.overrideSelector(selectAllTasksWithReminder, [futureReminder('a')]);
+      const firstRun = subscribeScheduleNotifications();
+      tick(EFFECT_DELAY_MS + 1);
+      // The app is killed; the change arrives before the next run.
+      firstRun.unsubscribe();
+
+      // Pre-hydration the store holds no tasks yet.
+      store.overrideSelector(selectAllTasksWithReminder, []);
+      store.refreshState();
+      isDataLoaded$.next(false);
+      reminderServiceSpy.cancelReminder.calls.reset();
+      reminderServiceSpy.scheduleReminder.calls.reset();
+      const nextRun = startNextAppRun();
+      (nextRun.scheduleNotifications$ as unknown as Observable<unknown>).subscribe();
+      tick(EFFECT_DELAY_MS + 1);
+      expect(reminderServiceSpy.scheduleReminder).not.toHaveBeenCalled();
+
+      store.overrideSelector(selectAllTasksWithReminder, [futureReminder('a')]);
+      store.refreshState();
+      isDataLoaded$.next(true);
+      tick(1);
+
+      expect(reminderServiceSpy.scheduleReminder).toHaveBeenCalled();
+      expect(reminderServiceSpy.cancelReminder).not.toHaveBeenCalled();
     }));
   });
 
@@ -432,6 +513,31 @@ describe('MobileNotificationEffects', () => {
         effects.scheduleDueDateNotifications$ as unknown as Observable<unknown>
       ).subscribe();
 
+      tick(EFFECT_DELAY_MS + 1);
+
+      expect(reminderServiceSpy.cancelReminder).toHaveBeenCalledWith(
+        generateNotificationId('x_dueday'),
+      );
+    }));
+
+    it('cancels a due-date alarm a previous app run armed for a task completed before this run', fakeAsync(() => {
+      const store = TestBed.inject(MockStore);
+      effects = TestBed.inject(MobileNotificationEffects);
+      const firstRun = (
+        effects.scheduleDueDateNotifications$ as unknown as Observable<unknown>
+      ).subscribe();
+      tick(EFFECT_DELAY_MS + 1);
+      expect(reminderServiceSpy.scheduleReminder).toHaveBeenCalledTimes(1);
+      // The app is killed; the change arrives before the next run.
+      firstRun.unsubscribe();
+
+      store.overrideSelector(selectUndoneTasksWithDueDayNoReminder, []);
+      store.refreshState();
+      reminderServiceSpy.cancelReminder.calls.reset();
+      const nextRun = startNextAppRun();
+      (
+        nextRun.scheduleDueDateNotifications$ as unknown as Observable<unknown>
+      ).subscribe();
       tick(EFFECT_DELAY_MS + 1);
 
       expect(reminderServiceSpy.cancelReminder).toHaveBeenCalledWith(
@@ -571,9 +677,9 @@ describe('MobileNotificationEffects', () => {
       store = TestBed.inject(MockStore);
     });
 
-    const subscribeDeadlineNotifications = (): void => {
+    const subscribeDeadlineNotifications = (): Subscription => {
       effects = TestBed.inject(MobileNotificationEffects);
-      (
+      return (
         effects.scheduleDeadlineNotifications$ as unknown as Observable<unknown>
       ).subscribe();
     };
@@ -651,6 +757,27 @@ describe('MobileNotificationEffects', () => {
       tick(1);
 
       expect(reminderServiceSpy.cancelReminder).toHaveBeenCalledOnceWith(
+        generateNotificationId('d1_deadline'),
+      );
+    }));
+
+    it('cancels a deadline alarm a previous app run armed for a task completed before this run', fakeAsync(() => {
+      const firstRun = subscribeDeadlineNotifications();
+      tick(EFFECT_DELAY_MS + 1);
+      expect(reminderServiceSpy.scheduleReminder).toHaveBeenCalledTimes(1);
+      // The app is killed; the change arrives before the next run.
+      firstRun.unsubscribe();
+
+      store.overrideSelector(selectAllTasksWithDeadlineReminder, []);
+      store.refreshState();
+      reminderServiceSpy.cancelReminder.calls.reset();
+      const nextRun = startNextAppRun();
+      (
+        nextRun.scheduleDeadlineNotifications$ as unknown as Observable<unknown>
+      ).subscribe();
+      tick(EFFECT_DELAY_MS + 1);
+
+      expect(reminderServiceSpy.cancelReminder).toHaveBeenCalledWith(
         generateNotificationId('d1_deadline'),
       );
     }));
@@ -773,9 +900,11 @@ describe('MobileNotificationEffects', () => {
       store = TestBed.inject(MockStore);
     });
 
-    const subscribeRepeatReminders = (): void => {
+    const subscribeRepeatReminders = (): Subscription => {
       effects = TestBed.inject(MobileNotificationEffects);
-      (effects.scheduleRepeatReminders$ as unknown as Observable<unknown>).subscribe();
+      return (
+        effects.scheduleRepeatReminders$ as unknown as Observable<unknown>
+      ).subscribe();
     };
 
     it('schedules the next occurrence of a timed daily recurring config with the same id scheduleNotifications$ would use', fakeAsync(() => {
@@ -1069,6 +1198,55 @@ describe('MobileNotificationEffects', () => {
       );
       expect(reminderServiceSpy.cancelReminder).toHaveBeenCalledWith(
         generateNotificationId(getRepeatableTaskId('cfgDaily', dayStr(14))),
+      );
+    }));
+
+    it('cancels alarms a previous app run pre-scheduled for a config deleted before this run', fakeAsync(() => {
+      store.overrideSelector(selectActiveTaskRepeatCfgs, [mkDailyCfg()]);
+      const firstRun = subscribeRepeatReminders();
+      tick(REPEAT_SETTLE_MS + 1);
+      expect(reminderServiceSpy.scheduleReminder).toHaveBeenCalled();
+      // The app is killed; the change arrives before the next run.
+      firstRun.unsubscribe();
+
+      store.overrideSelector(selectActiveTaskRepeatCfgs, []);
+      store.refreshState();
+      reminderServiceSpy.cancelReminder.calls.reset();
+      const nextRun = startNextAppRun();
+      (nextRun.scheduleRepeatReminders$ as unknown as Observable<unknown>).subscribe();
+      tick(REPEAT_SETTLE_MS + 1);
+
+      expect(reminderServiceSpy.cancelReminder).toHaveBeenCalledWith(
+        generateNotificationId(getRepeatableTaskId('cfgDaily', dayStr(1))),
+      );
+    }));
+
+    it('does not cancel a pre-scheduled alarm that already fired before its instance exists', fakeAsync(() => {
+      // On Android cancel also dismisses the shown notification; instance
+      // creation waits for the initial sync, so this pass can run first.
+      const soon = new Date(Date.now() + 120_000);
+      if (getDbDateStr(soon.getTime()) !== dayStr(0)) {
+        pending('needs two minutes left in the day');
+      }
+      const clock = `${soon.getHours()}:${String(soon.getMinutes()).padStart(2, '0')}`;
+      store.overrideSelector(selectActiveTaskRepeatCfgs, [
+        mkDailyCfg({ lastTaskCreationDay: dayStr(-1), startTime: clock }),
+      ]);
+      const firstRun = subscribeRepeatReminders();
+      tick(REPEAT_SETTLE_MS + 1);
+      const todayId = getRepeatableTaskId('cfgDaily', dayStr(0));
+      expect(reminderServiceSpy.scheduleReminder).toHaveBeenCalledWith(
+        jasmine.objectContaining({ reminderId: todayId }),
+      );
+      firstRun.unsubscribe();
+
+      tick(180_000);
+      const nextRun = startNextAppRun();
+      (nextRun.scheduleRepeatReminders$ as unknown as Observable<unknown>).subscribe();
+      tick(REPEAT_SETTLE_MS + 1);
+
+      expect(reminderServiceSpy.cancelReminder).not.toHaveBeenCalledWith(
+        generateNotificationId(todayId),
       );
     }));
 
