@@ -336,3 +336,48 @@
   font-size: 12px;
   color: var(--text-color-muted);
 }
+
+/* Placeholder while a new view is being requested. */
+.skeleton-title,
+.skeleton-card {
+  border-radius: var(--card-border-radius);
+  background: var(--bg-darker);
+  animation: skeleton-pulse 1.6s ease-in-out infinite;
+}
+
+.skeleton-title {
+  width: 30%;
+  height: 20px;
+  margin-bottom: var(--s2);
+}
+
+.skeleton-cols {
+  display: flex;
+  gap: var(--s2);
+  align-items: flex-start;
+}
+
+.skeleton-col {
+  display: flex;
+  flex: 1 0 0;
+  flex-direction: column;
+  gap: var(--s);
+  min-width: 0;
+}
+
+.skeleton-card {
+  height: 48px;
+}
+
+@keyframes skeleton-pulse {
+  50% {
+    opacity: 0.5;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-title,
+  .skeleton-card {
+    animation: none;
+  }
+}

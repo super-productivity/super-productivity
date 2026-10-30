@@ -16,6 +16,7 @@ import { EditError, MODELS, runEdit } from '../core/edit-loop';
 import { matchViewByName, parseLocalCommand } from '../core/commands';
 import { renderView } from './render';
 import { renderRecipeChips } from './recipe-chips';
+import { skeleton } from './skeleton';
 import { enableBoardDrag } from './drag';
 import { isOnDevice, isVoiceSupported, listen } from './voice';
 import {
@@ -136,6 +137,11 @@ const loadEnv = async (): Promise<void> => {
 const render = (animate: boolean, force = false): void => {
   const spec = activeSpec();
   ui.suggestions.hidden = !!spec?.root || !!state.editing;
+  if (state.editing && !spec?.root) {
+    ui.view.replaceChildren(skeleton());
+    state.lastRendered = '';
+    return;
+  }
   if (!spec || !state.env) {
     renderView(ui.view, null, { selectedId: null, canTrack, animate: false });
     state.lastRendered = '';
@@ -277,6 +283,7 @@ const submit = async (raw: string): Promise<void> => {
   state.editing = controller;
   setBusy(true);
   renderChrome();
+  render(false);
   setStatus(base.root ? 'Changing the view…' : 'Building your view…');
   try {
     await loadEnv();
@@ -322,6 +329,8 @@ const submit = async (raw: string): Promise<void> => {
     state.editing = null;
     setBusy(false);
     renderChrome();
+    // The catch path above drew while still editing; this replaces the skeleton.
+    render(false);
   }
 };
 

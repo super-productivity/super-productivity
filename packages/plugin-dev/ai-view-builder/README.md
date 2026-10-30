@@ -18,10 +18,14 @@ index.html (src/ui/*)           command bar, voice, renderer, edit loop
   (`src/core/spec.ts`). No generated code runs. The renderer draws it with
   `textContent` and a fixed set of task actions.
 - **The model only edits the spec**: tools `put_component`, `remove_component`,
-  `put_query`, `remove_query`, `set_view`, `say`. Each call is applied when its
-  block finishes streaming and the view animates to the new state (FLIP).
-  Rejected calls go back to the model as tool errors for up to 4 rounds. The
-  result is saved once; Stop or an error restores the saved spec.
+  `put_query`, `remove_query`, `set_view`, `use_recipe`, `say`. Each call is
+  applied when its block finishes streaming and the view animates to the new
+  state (FLIP). Rejected calls go back to the model as tool errors for up to 4
+  rounds. The result is saved once; Stop or an error restores the saved spec.
+  A placeholder shows from submit until the first part of a new view arrives.
+- **Ready-made views are recipes** (`src/core/recipes.ts`): ordinary steps, so
+  the chips on an empty view apply them locally with no key and no model call,
+  and the model can pick one with `use_recipe` and then adjust it.
 - **Tasks change only through the user**: check, track, open, drag between
   board columns (native board panel semantics: add the column's tags, remove
   its excluded tags, set done).

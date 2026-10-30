@@ -163,4 +163,37 @@ test.describe('AI View Builder views', () => {
     await expect(plugin.locator('.board-col')).toHaveCount(0);
     expect(requestBodies).toEqual([]);
   });
+
+  test('a placeholder fills the page until the first part of a new view arrives', async ({
+    page,
+    workViewPage,
+    testPrefix,
+  }) => {
+    test.setTimeout(90000);
+    const reply = toolStream([
+      { name: 'put_query', input: { id: 'open', props: { scope: 'all' } } },
+      {
+        name: 'put_component',
+        input: { id: 'list', props: { type: 'taskList', query: 'open' } },
+      },
+      { name: 'say', input: { text: 'Made a list.' } },
+    ]);
+    await serveTurns(page, [reply], 2500);
+    expect(await waitForPluginAssets(page)).toBe(true);
+    await workViewPage.waitForTaskList();
+    const task = `${testPrefix}-Write report`;
+    await workViewPage.addTask(task);
+
+    const plugin = await openPlugin(page);
+    await plugin.locator('#commandInput').fill('A list of what I have open');
+    await plugin.locator('#commandInput').press('Enter');
+
+    // The model has not answered yet; the page must already show something.
+    await expect(plugin.locator('.skeleton')).toBeVisible();
+    await expect(plugin.locator('#suggestions')).toBeHidden();
+    await expect(plugin.locator('.card', { hasText: task })).toBeVisible({
+      timeout: 15000,
+    });
+    await expect(plugin.locator('.skeleton')).toHaveCount(0);
+  });
 });
