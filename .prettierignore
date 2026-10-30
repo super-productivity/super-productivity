@@ -2,6 +2,7 @@ app-build
 node_modules
 # Vendored documentation tooling
 docs/public/.meta
+.agents/skills/diataxis/
 .idea
 .vscode
 *.env
