@@ -1,6 +1,8 @@
 import { Log } from '../log';
 
-const isNotificationApiAvailable = (): boolean => typeof Notification !== 'undefined';
+/** Missing e.g. in iOS Safari outside an installed web app. */
+export const isNotificationApiAvailable = (): boolean =>
+  typeof Notification !== 'undefined';
 
 /**
  * Whether the browser already allows notifications. Never prompts, so it is
