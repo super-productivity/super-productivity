@@ -4215,6 +4215,53 @@ describe('shortSyntax localized dates', () => {
     });
   });
 
+  it('should read the issue\'s "@09h00" as 09:00', async () => {
+    const r = await parseIn({ language: 'en', isDayFirst: false }, 'Task @09h00');
+    expect(r?.taskChanges.title).toBe('Task');
+    const due = dueOf(r);
+    expect(formatDateToISO(due)).toBe('2026-10-21');
+    expect(due.getHours()).toBe(9);
+    expect(due.getMinutes()).toBe(0);
+  });
+
+  it('should read "@2h" as 02:00, not in 2 hours', async () => {
+    const r = await parseIn({ language: 'en', isDayFirst: false }, 'Task @2h');
+    const due = dueOf(r);
+    expect(formatDateToISO(due)).toBe('2026-10-21');
+    expect(due.getHours()).toBe(2);
+    expect(r?.taskChanges.timeEstimate).toBeUndefined();
+  });
+
+  it('should join a day word after "@18h" to the time', async () => {
+    // 18:00 is still ahead at NOW (10:00), so only the day word moves it
+    const r = await parseIn({ language: 'fr', isDayFirst: true }, 'Task @18h demain');
+    expect(r?.taskChanges.title).toBe('Task');
+    const due = dueOf(r);
+    expect(formatDateToISO(due)).toBe('2026-10-21');
+    expect(due.getHours()).toBe(18);
+    expect(r?.parsedRanges).toEqual(
+      expectedRanges('Task @18h demain', [['due', '@18h demain']]),
+    );
+  });
+
+  it('should join a weekday after "@9h30" to the time', async () => {
+    const r = await parseIn({ language: 'en', isDayFirst: false }, 'Task @9h30 friday');
+    expect(r?.taskChanges.title).toBe('Task');
+    const due = dueOf(r);
+    expect(formatDateToISO(due)).toBe('2026-10-23');
+    expect(due.getHours()).toBe(9);
+    expect(due.getMinutes()).toBe(30);
+  });
+
+  it('should keep a non-date word after "@09h" in the title', async () => {
+    const r = await parseIn({ language: 'en', isDayFirst: false }, 'Task @09h call');
+    // removing a token mid-title keeps both neighbouring spaces
+    expect(r?.taskChanges.title).toBe('Task  call');
+    const due = dueOf(r);
+    expect(formatDateToISO(due)).toBe('2026-10-21');
+    expect(due.getHours()).toBe(9);
+  });
+
   it('should read "!09h" as a 09:00 deadline', async () => {
     const r = await parseIn(
       { language: 'fr', isDayFirst: true },

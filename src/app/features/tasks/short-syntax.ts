@@ -940,15 +940,29 @@ const parseShortSyntaxDate = async (
       return ranges;
     };
 
+    const dateParser = await loadShortSyntaxDateParser(dateLocale);
+
     // Before chrono, which reads "@09h" as "in 9 hours" (#11180)
     const hourMatch = rr[0].substring(1).match(SHORT_SYNTAX_H_TIME_REG_EX);
     if (hourMatch) {
-      const due = getNextClockTime(now, +hourMatch[1], +(hourMatch[2] ?? 0));
-      if (!due) {
+      const hours = +hourMatch[1];
+      const minutes = +(hourMatch[2] ?? 0);
+      let due = getNextClockTime(now, hours, minutes);
+      if (due === null) {
         // "@25h" is no clock time: keep it in the title rather than guess
         return null;
       }
-      const ranges = consume(rr[0].substring(0, 1 + hourMatch[0].length));
+      let consumedLength = 1 + hourMatch[0].length;
+      // A day right after the time sets the day: "@18h demain"
+      const rest = rr[0].substring(consumedLength);
+      const day = dateParser.parse(rest, now, { forwardDate: true })[0];
+      if (day && /^\s*$/.test(rest.slice(0, day.index)) && !day.start.isCertain('hour')) {
+        const date = day.start.date();
+        date.setHours(hours, minutes, 0, 0);
+        due = date.getTime();
+        consumedLength += day.index + day.text.length;
+      }
+      const ranges = consume(rr[0].substring(0, consumedLength));
       return {
         changes: isDeadline
           ? { deadlineWithTime: due, deadlineDay: null, hasDeadlineTime: true }
@@ -957,7 +971,6 @@ const parseShortSyntaxDate = async (
       };
     }
 
-    const dateParser = await loadShortSyntaxDateParser(dateLocale);
     const parsedDateArr = dateParser.parse(rr[0], now, {
       forwardDate: true,
     });
