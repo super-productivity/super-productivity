@@ -11,7 +11,8 @@ import {
 } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { GlobalConfigService } from '../../features/config/global-config.service';
-import { getChangedAppFeatures } from '../../features/config/get-changed-app-features.util';
+import { getChangedConfigFields } from '../../features/config/get-changed-config-fields.util';
+import { NEW_INSTALL_CONFIG_SECTION_KEYS } from '../../features/config/new-install-config.const';
 import { TaskWidgetSettingsService } from '../../features/config/task-widget-settings.service';
 import { FocusModeLocalSettingsService } from '../../features/config/focus-mode-local-settings.service';
 import {
@@ -27,7 +28,6 @@ import {
   GLOBAL_TASKS_FORM_CONFIG,
 } from '../../features/config/global-config-form-config.const';
 import {
-  AppFeaturesConfig,
   ConfigFormConfig,
   GenericConfigFormSection,
   GlobalConfigFormSectionKey,
@@ -428,11 +428,11 @@ export class ConfigPageComponent implements OnInit {
     // From here on we know it's a real GlobalConfigState section.
     const sectionKey = formSectionKey as GlobalConfigSectionKey;
 
-    if (sectionKey === 'appFeatures') {
-      // Sync only the switches that changed, never this device's untouched defaults.
-      const changed = getChangedAppFeatures(
-        this.configService.appFeatures(),
-        config as Partial<AppFeaturesConfig>,
+    if ((NEW_INSTALL_CONFIG_SECTION_KEYS as readonly string[]).includes(sectionKey)) {
+      // Sync only the fields that changed, never this device's untouched defaults.
+      const changed = getChangedConfigFields<Record<string, unknown>>(
+        (this.configService.cfg()?.[sectionKey] as Record<string, unknown>) ?? {},
+        config,
       );
       if (Object.keys(changed).length > 0) {
         this.configService.updateSection(sectionKey, changed);

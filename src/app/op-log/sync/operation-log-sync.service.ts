@@ -80,7 +80,7 @@ import { ValidateStateService } from '../validation/validate-state.service';
 import { extractEntityKeysFromState } from '../persistence/extract-entity-keys';
 import { firstValueFrom } from 'rxjs';
 import {
-  selectAppFeaturesConfig,
+  selectNewInstallSections,
   selectSyncConfig,
 } from '../../features/config/store/global-config.reducer';
 import { buildRemoteRebuildBaselineState } from './remote-rebuild-baseline.util';
@@ -1910,7 +1910,7 @@ export class OperationLogSyncService {
     const baselineState = buildRemoteRebuildBaselineState(
       baselineSource,
       localOnlySyncSettings,
-      await firstValueFrom(this.store.select(selectAppFeaturesConfig)),
+      await firstValueFrom(this.store.select(selectNewInstallSections)),
     );
     const archiveYoung =
       (snapshotState?.[

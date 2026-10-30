@@ -91,6 +91,10 @@ const ARCHIVE_ONLY_LEGACY_STATE = {
   archiveOld: EMPTY_ARCHIVE,
 };
 import { DEFAULT_GLOBAL_CONFIG } from '../../features/config/default-global-config.const';
+import {
+  NEW_INSTALL_IDLE_CONFIG,
+  NEW_INSTALL_TAKE_A_BREAK_CONFIG,
+} from '../../features/config/new-install-config.const';
 import { SyncProviderId } from '../sync-providers/provider.const';
 import { stripLocalOnlySyncSettingsFromAppData } from '../../features/config/local-only-sync-settings.util';
 import { RepairSyncContextService } from '../validation/repair-sync-context.service';
@@ -5466,7 +5470,12 @@ describe('OperationLogSyncService', () => {
       // State, not overrideSelector: an override sticks to the shared memoized
       // selector and leaks into later specs that derive from it.
       mockStore.setState({
-        [CONFIG_FEATURE_NAME]: { ...DEFAULT_GLOBAL_CONFIG, appFeatures: liveAppFeatures },
+        [CONFIG_FEATURE_NAME]: {
+          ...DEFAULT_GLOBAL_CONFIG,
+          appFeatures: liveAppFeatures,
+          idle: NEW_INSTALL_IDLE_CONFIG,
+          takeABreak: NEW_INSTALL_TAKE_A_BREAK_CONFIG,
+        },
       });
       const dispatchSpy = spyOn(mockStore, 'dispatch').and.callThrough();
       downloadServiceSpy.downloadRemoteOps.and.resolveTo({
@@ -5487,6 +5496,10 @@ describe('OperationLogSyncService', () => {
       const baselineState = opLogStoreSpy.runRemoteStateReplacement.calls.mostRecent()
         .args[0].baselineState as { globalConfig: GlobalConfigState };
       expect(baselineState.globalConfig.appFeatures).toEqual(liveAppFeatures);
+      expect(baselineState.globalConfig.idle).toEqual(NEW_INSTALL_IDLE_CONFIG);
+      expect(baselineState.globalConfig.takeABreak).toEqual(
+        NEW_INSTALL_TAKE_A_BREAK_CONFIG,
+      );
       // The live reset keeps the device's config, so both sides agree.
       const reset = dispatchSpy.calls
         .allArgs()
