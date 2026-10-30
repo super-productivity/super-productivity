@@ -261,8 +261,13 @@ export class TaskViewCustomizerService {
       map(([tasks, sort, group, filter]) => {
         const normalizedFilterVal = filter.preset?.trim();
         const filterValueToUse = normalizedFilterVal ?? '';
-        const hasTagIds =
-          filter.type === FILTER_OPTION_TYPE.tag && !!filter.tagIds?.length;
+        // A deleted tag stays in stored tagIds, but the chip list hides it.
+        // Keep only ids that still exist so the list matches the chips.
+        const tagIds =
+          filter.type === FILTER_OPTION_TYPE.tag
+            ? this._existingTagIds(filter.tagIds ?? [])
+            : [];
+        const hasTagIds = tagIds.length > 0;
 
         const isDefaultFilter = !filter.type || (!filterValueToUse && !hasTagIds);
         const isDefaultSort = !sort.type;
@@ -275,7 +280,7 @@ export class TaskViewCustomizerService {
         const filtered = isDefaultFilter
           ? tasks
           : filter.type === FILTER_OPTION_TYPE.tag && hasTagIds
-            ? this._filterByTagIds(tasks, filter.tagIds ?? [], filter.tagFilterMode)
+            ? this._filterByTagIds(tasks, tagIds, filter.tagFilterMode)
             : this.applyFilter(tasks, filter.type, filterValueToUse);
         const sorted = isDefaultSort
           ? filtered
@@ -717,6 +722,16 @@ export class TaskViewCustomizerService {
           return true;
       }
     });
+  }
+
+  /** Ids the chip list can still show: real tags, not Today and not deleted ones. */
+  private _existingTagIds(tagIds: string[]): string[] {
+    const known = new Set(
+      this._allTags()
+        .filter((tag) => tag.id !== TODAY_TAG.id)
+        .map((tag) => tag.id),
+    );
+    return tagIds.filter((id) => known.has(id));
   }
 
   private _filterByTagIds(

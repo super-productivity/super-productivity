@@ -71,7 +71,11 @@ export class TaskViewCustomizerPanelComponent {
 
   tagFilterIds = computed(() => {
     const filter = this.customizerService.selectedFilter();
-    return filter.type === FILTER_OPTION_TYPE.tag ? (filter.tagIds ?? []) : [];
+    if (filter.type !== FILTER_OPTION_TYPE.tag) {
+      return [];
+    }
+    const known = new Set(this.allTags().map((tag) => tag.id));
+    return (filter.tagIds ?? []).filter((id) => known.has(id));
   });
 
   tagFilterMode = computed(
