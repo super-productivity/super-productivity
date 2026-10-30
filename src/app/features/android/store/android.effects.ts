@@ -44,9 +44,8 @@ export class AndroidEffects {
     );
 
   // Import the native capture inbox (Android shares and widget quick adds) on
-  // cold start
-  // and every resume (a retry if the first import failed). concatMap keeps
-  // imports serial; startWith covers cold start.
+  // cold start and every resume (a retry if the first import failed). concatMap
+  // keeps imports serial; startWith covers cold start.
   importNativeCaptures$ =
     IS_ANDROID_WEB_VIEW &&
     createEffect(

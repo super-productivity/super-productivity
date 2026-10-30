@@ -524,12 +524,24 @@ class JavaScriptInterface(
     @Suppress("unused")
     @JavascriptInterface
     fun acknowledgeCapture(id: String): Boolean {
-        return try {
+        val isAcknowledged = try {
             CaptureInbox.forContext(activity).acknowledge(id)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to acknowledge capture", e)
             false
         }
+        // The widget lists unacknowledged quick adds as pending. Its snapshot
+        // push may run before this and is skipped when unchanged (a quick add
+        // short-syntaxed off Today), so redraw here or the pending row lingers.
+        // Separate try: a failed redraw must not report the ack as failed.
+        if (isAcknowledged) {
+            try {
+                TaskListWidgetProvider.refreshAll(activity)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to refresh widget after acknowledge", e)
+            }
+        }
+        return isAcknowledged
     }
 
     /**

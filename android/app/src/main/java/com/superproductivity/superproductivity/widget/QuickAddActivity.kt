@@ -48,7 +48,12 @@ class QuickAddActivity : AppCompatActivity() {
         // Id only, never the title: logcat ends up in bug reports.
         Log.d(TAG, "Saved quick add $id")
         // Show it in the widget now, as pending (WidgetData.withPendingCaptures).
-        TaskListWidgetProvider.refreshAll(this)
+        // Own try: the capture is already saved, so a failed redraw must not crash.
+        try {
+            TaskListWidgetProvider.refreshAll(this)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to refresh widget after quick add", e)
+        }
         toast(R.string.quick_add_saved)
         finish()
     }
