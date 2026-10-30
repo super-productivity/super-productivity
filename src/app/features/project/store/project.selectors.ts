@@ -83,9 +83,12 @@ export const selectUnarchivedProjectsWithoutCurrent = createSelector(
   selectProjectFeatureState,
   (s: ProjectState, props: { currentId: string | null }) => {
     const ids = s.ids as string[];
-    return ids
-      .filter((id) => id !== props.currentId)
-      .map((id) => exists(s.entities[id]) as Project)
-      .filter((p) => !p.isArchived && !p.isHiddenFromMenu && p.id);
+    return (
+      ids
+        .filter((id) => id !== props.currentId)
+        .map((id) => exists(s.entities[id]) as Project)
+        // isHiddenFromMenu only hides from the sidebar; move targets keep it (#11190)
+        .filter((p) => !p.isArchived && p.id)
+    );
   },
 );
