@@ -537,7 +537,9 @@ const selectOverdueTaskIdsForToday = createSelector(
         ids.push(snap.id);
         continue;
       }
-      if (!isTaskDeadlineMissedUnplanned(snap, todayStr, todayStartMs)) {
+      // Done tasks must not enter the set: selectOverdueTasksWithSubTasks would
+      // then hide their undone overdue subtasks as "nested under the parent".
+      if (snap.isDone || !isTaskDeadlineMissedUnplanned(snap, todayStr, todayStartMs)) {
         continue;
       }
       if (snap.parentId) {

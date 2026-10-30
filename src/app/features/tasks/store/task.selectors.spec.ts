@@ -845,6 +845,22 @@ describe('Task Selectors', () => {
         expect(ids).not.toContain('subC');
       });
 
+      it('should keep an overdue subtask visible when its done parent missed a deadline', () => {
+        const ids = resultIds(
+          stateWith(
+            {
+              ...baseTask,
+              id: 'doneParent',
+              isDone: true,
+              deadlineDay: yesterday,
+              subTaskIds: ['subD'],
+            },
+            { ...baseTask, id: 'subD', parentId: 'doneParent', dueDay: yesterday },
+          ),
+        );
+        expect(ids).toContain('subD');
+      });
+
       it('should not change the plan-date based selectOverdueTasks', () => {
         const state = stateWith({ ...baseTask, id: 'missedDay', deadlineDay: yesterday });
         expect(fromSelectors.selectOverdueTasks(state).map((t) => t.id)).toEqual([
