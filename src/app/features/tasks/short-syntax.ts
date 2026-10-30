@@ -346,6 +346,23 @@ const isTimeOnlyChronoMatch = (result: ParsedResult): boolean =>
     result.start.isCertain(component),
   );
 
+// French-style clock time right after the trigger: "@09h", "@14h30". Only this
+// position: a spaced "@demain 18h" stays a time estimate (see the docs).
+const SHORT_SYNTAX_H_TIME_REG_EX = /^(\d{1,2})h(\d{2})?(?=\s|$)/i;
+
+// The next occurrence of a wall-clock time from `now`, or null when it is no
+// clock time ("25h")
+const getNextClockTime = (now: Date, hours: number, minutes: number): number | null => {
+  if (hours > 23 || minutes > 59) {
+    return null;
+  }
+  const due = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hours, minutes);
+  if (due.getTime() <= now.getTime()) {
+    due.setDate(due.getDate() + 1);
+  }
+  return due.getTime();
+};
+
 const parseNthWeekdaySyntax = (
   dueMatchContent: string,
 ): NthWeekdaySyntaxResult | null => {
@@ -911,11 +928,6 @@ const parseShortSyntaxDate = async (
       );
     }
 
-    const dateParser = await loadShortSyntaxDateParser(dateLocale);
-    const parsedDateArr = dateParser.parse(rr[0], now, {
-      forwardDate: true,
-    });
-
     // Strip out the short syntax for scheduled date and given date
     const consume = (textToReplace: string): TextRange[] => {
       const removeStart = tracked.text.indexOf(textToReplace, triggerIndex);
@@ -927,6 +939,28 @@ const parseShortSyntaxDate = async (
       tracked.trim();
       return ranges;
     };
+
+    // Before chrono, which reads "@09h" as "in 9 hours" (#11180)
+    const hourMatch = rr[0].substring(1).match(SHORT_SYNTAX_H_TIME_REG_EX);
+    if (hourMatch) {
+      const due = getNextClockTime(now, +hourMatch[1], +(hourMatch[2] ?? 0));
+      if (!due) {
+        // "@25h" is no clock time: keep it in the title rather than guess
+        return null;
+      }
+      const ranges = consume(rr[0].substring(0, 1 + hourMatch[0].length));
+      return {
+        changes: isDeadline
+          ? { deadlineWithTime: due, deadlineDay: null, hasDeadlineTime: true }
+          : { dueWithTime: due, dueDay: null },
+        ranges,
+      };
+    }
+
+    const dateParser = await loadShortSyntaxDateParser(dateLocale);
+    const parsedDateArr = dateParser.parse(rr[0], now, {
+      forwardDate: true,
+    });
 
     if (parsedDateArr.length) {
       const parsedDateResult = parsedDateArr[0];

@@ -4176,6 +4176,65 @@ describe('shortSyntax localized dates', () => {
     expect(r?.taskChanges.hasPlannedTime).toBe(false);
   });
 
+  // #11180: chrono read "@09h" as "in 9 hours" (seconds included), so after
+  // 15:00 the task landed on the next day
+  [
+    { language: 'fr', isDayFirst: true },
+    { language: 'en', isDayFirst: false },
+  ].forEach((locale) => {
+    it(`should read "@09h" as 09:00 for ${locale.language}`, async () => {
+      const afternoon = new Date(2026, 9, 20, 16, 0, 0, 0);
+      const r = await shortSyntax(
+        { ...TASK, title: 'Task @09h' },
+        CONFIG,
+        [],
+        [],
+        afternoon,
+        'combine',
+        false,
+        locale,
+      );
+      expect(r?.taskChanges.title).toBe('Task');
+      expect(r?.taskChanges.timeEstimate).toBeUndefined();
+      const due = dueOf(r);
+      // 09:00 has passed at 16:00, so the next 09:00
+      expect(formatDateToISO(due)).toBe('2026-10-21');
+      expect(due.getHours()).toBe(9);
+      expect(due.getMinutes()).toBe(0);
+      expect(due.getSeconds()).toBe(0);
+      expect(r?.parsedRanges).toEqual(expectedRanges('Task @09h', [['due', '@09h']]));
+    });
+
+    it(`should read "@14h30" as 14:30 today for ${locale.language}`, async () => {
+      const r = await parseIn(locale, 'Task @14h30');
+      expect(r?.taskChanges.title).toBe('Task');
+      const due = dueOf(r);
+      expect(formatDateToISO(due)).toBe('2026-10-20');
+      expect(due.getHours()).toBe(14);
+      expect(due.getMinutes()).toBe(30);
+    });
+  });
+
+  it('should read "!09h" as a 09:00 deadline', async () => {
+    const r = await parseIn(
+      { language: 'fr', isDayFirst: true },
+      'Task !09h',
+      DEADLINE_CONFIG,
+    );
+    expect(r?.taskChanges.title).toBe('Task');
+    const deadline = new Date(r?.taskChanges.deadlineWithTime as number);
+    // 09:00 has passed at NOW (10:00), so the next 09:00
+    expect(formatDateToISO(deadline)).toBe('2026-10-21');
+    expect(deadline.getHours()).toBe(9);
+    expect(r?.taskChanges.hasDeadlineTime).toBe(true);
+  });
+
+  it('should keep an "@<n>h" that is no clock time in the title', async () => {
+    const r = await parseIn({ language: 'fr', isDayFirst: true }, 'Task @25h');
+    expect(r?.taskChanges.dueWithTime).toBeUndefined();
+    expect(r?.taskChanges.title ?? 'Task @25h').toBe('Task @25h');
+  });
+
   it('should leave a time the locale cannot join to its day word in the title', async () => {
     // chrono's Swedish locale reads only "idag"; the earlier match wins over
     // the English "18:00" further in
