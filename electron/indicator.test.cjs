@@ -198,12 +198,11 @@ test.afterEach(() => {
   resetModule();
 });
 
-// Windows tray icon GUIDs are bound to the executable path. NSIS installs to a
-// stable location, so it keeps its GUID; Store (MSIX) and portable/scoop run
-// from versioned paths where a stale GUID makes the icon silently invisible
-// (#7282), so those build the tray without a GUID.
-const NSIS_TRAY_GUID = 'a2512177-8bee-4b70-a0a8-f3d18e0eab90';
-
+// Windows binds a tray-icon GUID to the executable's path unless the exe is
+// signed. Only our installer/portable wrappers are signed; the installed app
+// exe is not, so a GUID can go stale and leave the icon silently invisible
+// (#7282 on Store/portable, #10831 on NSIS). Every channel builds the tray
+// without a GUID.
 const initIndicatorOnWindows = () => {
   Object.defineProperty(process, 'platform', {
     configurable: true,
@@ -219,12 +218,12 @@ const initIndicatorOnWindows = () => {
   });
 };
 
-test('Windows NSIS build creates the tray with a stable GUID', () => {
+test('Windows NSIS build creates the tray without a GUID', () => {
   // Neither windowsStore nor PORTABLE_EXECUTABLE_DIR set -> win-nsis.
   initIndicatorOnWindows();
 
   assert.equal(createdTrayArgs.length, 1);
-  assert.equal(createdTrayArgs[0][1], NSIS_TRAY_GUID);
+  assert.equal(createdTrayArgs[0][1], undefined);
 });
 
 test('Windows Store (MSIX) build creates the tray without a GUID', () => {

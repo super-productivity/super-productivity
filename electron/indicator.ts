@@ -9,7 +9,6 @@ import {
 } from 'electron';
 import { log } from 'electron-log/main';
 import { IPC } from './shared-with-frontend/ipc-events.const';
-import { getDistChannel } from './shared-with-frontend/get-dist-channel';
 import { getIsTrayShowCurrentTask, getIsTrayShowCurrentCountdown } from './shared-state';
 import { TaskCopy } from '../src/app/features/tasks/task.model';
 import { release } from 'os';
@@ -62,27 +61,21 @@ const IS_MAC = process.platform === 'darwin';
 const IS_LINUX = process.platform === 'linux';
 const IS_WINDOWS = process.platform === 'win32';
 
-// Stable GUID for the NSIS (installer) build only.
-// Per Electron's Tray docs, a tray-icon GUID binds to the code-signing
-// signature only when that signature carries an organization in its subject;
-// otherwise it binds to the executable's full path, and changing the path
-// breaks tray-icon creation until a new GUID is used. The GitHub NSIS build is
-// signed and installs to a fixed path, so its GUID stays valid. The Store
-// (MSIX) and portable/scoop builds run from versioned directories whose path
-// changes on every update, so the GUID goes stale and Shell_NotifyIcon(NIM_ADD)
-// fails silently (Electron raises no JS error) — leaving an invisible tray icon
-// and an unreachable window (#7282). Those builds therefore create the tray
-// without a GUID, so Windows identifies it by window handle and it stays visible.
-// WARNING: This GUID must never change once deployed; Windows would treat a new
-// value as a new icon and reset it to the overflow area.
-// Retired GUIDs (shipped in v18.10.0, now GUID-less — never reuse for a new icon):
-//   portable f7c06d50-4d3e-4f8d-b9a0-2c8e7f5a1b3d, store 19b9d3fe-aa50-4792-917e-60ada97f3088
+// No tray-icon GUID on Windows, for any channel.
+// Per Electron's Tray docs, a GUID binds to the code-signing signature only when
+// the executable is signed with an organization in its subject; otherwise it
+// binds to the executable's full path, and a stale binding makes
+// Shell_NotifyIcon(NIM_ADD) fail silently (Electron raises no JS error) —
+// leaving an invisible tray icon and an unreachable window. SignPath signs only
+// our Setup/portable wrappers; the installed `Super Productivity.exe` is unsigned
+// (verified on v19.2.0), so the GUID broke on Store/portable (#7282) and on NSIS
+// after updates (#10831). Without a GUID, Windows identifies the icon by window
+// handle and it stays visible. Revisit only if the app exe itself gets signed.
+// Retired GUIDs (never reuse for a new icon): nsis a2512177-8bee-4b70-a0a8-f3d18e0eab90
+// (until v19.2.x), portable f7c06d50-4d3e-4f8d-b9a0-2c8e7f5a1b3d, store
+// 19b9d3fe-aa50-4792-917e-60ada97f3088.
 // See https://www.electronjs.org/docs/latest/api/tray (guid) and
 //   https://learn.microsoft.com/en-us/windows/win32/api/shellapi/ns-shellapi-notifyicondataa
-const WINDOWS_TRAY_NSIS_GUID = 'a2512177-8bee-4b70-a0a8-f3d18e0eab90';
-
-const getWindowsTrayGuid = (): string | undefined =>
-  getDistChannel() === 'win-nsis' ? WINDOWS_TRAY_NSIS_GUID : undefined;
 
 export const initIndicator = ({
   showApp,
@@ -149,30 +142,7 @@ const createTray = (): Tray => {
   const suf = shouldUseDarkColors ? '-d.png' : '-l.png';
   const trayIconPath = DIR + `stopped${suf}`;
   const trayIcon = getTrayImage(trayIconPath);
-  let nextTray: Tray;
-  if (IS_WINDOWS) {
-    const guid = getWindowsTrayGuid();
-    if (guid) {
-      try {
-        nextTray = new Tray(trayIcon, guid);
-        log('Tray created on Windows with GUID:', guid);
-      } catch (e) {
-        // Log only the message, not the full error: log history is exportable
-        // and the error/stack can embed the install path (e.g. C:\Users\<name>\).
-        log(
-          'Tray creation with GUID failed, retrying without GUID:',
-          e instanceof Error ? e.message : e,
-        );
-        nextTray = new Tray(trayIcon);
-        log('Tray created on Windows without GUID');
-      }
-    } else {
-      nextTray = new Tray(trayIcon);
-      log('Tray created on Windows without GUID (versioned install path)');
-    }
-  } else {
-    nextTray = new Tray(trayIcon);
-  }
+  const nextTray = new Tray(trayIcon);
   nextTray.setContextMenu(createContextMenu());
 
   nextTray.on('click', () => {
