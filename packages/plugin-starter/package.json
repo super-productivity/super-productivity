@@ -1,0 +1,13 @@
+{
+  "name": "my-super-productivity-plugin",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A Super Productivity plugin",
+  "type": "module",
+  "scripts": {
+    "pack": "node scripts/pack.mjs"
+  },
+  "engines": {
+    "node": ">=20.15.0"
+  }
+}

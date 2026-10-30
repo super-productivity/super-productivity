@@ -51,6 +51,7 @@ module.exports = tseslint.config(
       '.tmp/**/*',
       'packages/plugin-api/**/*',
       'packages/plugin-dev/**/*',
+      'packages/plugin-starter/**/*',
       'packages/shared-schema/**/*',
       'packages/super-sync-server/**/*',
       'packages/vite-plugin/**/*',
