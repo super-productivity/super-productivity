@@ -25,6 +25,7 @@ import {
   PluginSidePanelBtnCfg,
   PluginWorkContextHeaderBtnCfg,
   ActiveWorkContext,
+  PluginDayContext,
   Project,
   SnackCfg,
   Tag,
@@ -199,6 +200,24 @@ export class PluginAPI implements PluginAPIInterface {
 
   async getActiveWorkContext(): Promise<ActiveWorkContext | null> {
     return this.#boundMethods.getActiveWorkContext();
+  }
+
+  async getDayContext(): Promise<PluginDayContext> {
+    return this.#boundMethods.getDayContext();
+  }
+
+  async getCurrentTaskId(): Promise<string | null> {
+    return this.#boundMethods.getCurrentTaskId();
+  }
+
+  async startTracking(taskId: string): Promise<void> {
+    PluginLog.log(`Plugin ${this.#pluginId} started tracking`, { taskId });
+    return this.#boundMethods.startTracking(taskId);
+  }
+
+  async stopTracking(): Promise<void> {
+    PluginLog.log(`Plugin ${this.#pluginId} stopped tracking`);
+    return this.#boundMethods.stopTracking();
   }
 
   async getTasks(): Promise<Task[]> {
