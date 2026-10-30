@@ -69,6 +69,7 @@ describe('isExternalUrlSchemeAllowed', () => {
         'webexteams:',
         'x-devonthink-item:',
         'parallelcode:',
+        'claude:',
       ]);
     });
   });
