@@ -1250,6 +1250,33 @@ describe('MobileNotificationEffects', () => {
       );
     }));
 
+    it('still cancels a fired (possibly snoozed) pre-scheduled alarm once its config is deleted', fakeAsync(() => {
+      // A native snooze re-arms the same id, so a deleted config's alarm can
+      // still be pending although its tracked trigger time has passed.
+      const soon = new Date(Date.now() + 120_000);
+      if (getDbDateStr(soon.getTime()) !== dayStr(0)) {
+        pending('needs two minutes left in the day');
+      }
+      const clock = `${soon.getHours()}:${String(soon.getMinutes()).padStart(2, '0')}`;
+      store.overrideSelector(selectActiveTaskRepeatCfgs, [
+        mkDailyCfg({ lastTaskCreationDay: dayStr(-1), startTime: clock }),
+      ]);
+      const firstRun = subscribeRepeatReminders();
+      tick(REPEAT_SETTLE_MS + 1);
+      firstRun.unsubscribe();
+
+      tick(180_000);
+      store.overrideSelector(selectActiveTaskRepeatCfgs, []);
+      store.refreshState();
+      const nextRun = startNextAppRun();
+      (nextRun.scheduleRepeatReminders$ as unknown as Observable<unknown>).subscribe();
+      tick(REPEAT_SETTLE_MS + 1);
+
+      expect(reminderServiceSpy.cancelReminder).toHaveBeenCalledWith(
+        generateNotificationId(getRepeatableTaskId('cfgDaily', dayStr(0))),
+      );
+    }));
+
     it('caps pre-scheduled reminders, keeping the soonest-firing (iOS 64-pending limit)', fakeAsync(() => {
       // More configs than the cap (REPEAT_MAX_SCHEDULED = 32 in the effect),
       // each due tomorrow at a distinct clock time 30 min apart (00:00 → 19:30).

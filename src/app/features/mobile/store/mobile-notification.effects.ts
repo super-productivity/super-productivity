@@ -323,9 +323,18 @@ export class MobileNotificationEffects {
                 (tasksWithReminders || []).map((t) => t.id),
               );
 
+              // `rpt_<cfgId>_` of each active config: an id minus its
+              // YYYY-MM-DD suffix tells whether its config still exists.
+              const activeIdPrefixes = new Set((cfgs || []).map((c) => `rpt_${c.id}_`));
               for (const [previousId, triggerAtMs] of this._scheduledRepeatReminderIds) {
+                // A fired alarm of an existing config is left alone (its
+                // instance takes over); one of a deleted config is cancelled,
+                // as a native snooze may have re-armed it under the same id.
+                const isPendingOrOrphaned =
+                  triggerAtMs > now ||
+                  !activeIdPrefixes.has(previousId.slice(0, -'YYYY-MM-DD'.length));
                 if (
-                  triggerAtMs > now &&
+                  isPendingOrOrphaned &&
                   !current.has(previousId) &&
                   !liveReminderIds.has(previousId)
                 ) {
@@ -406,9 +415,10 @@ export class MobileNotificationEffects {
               // If disabled (by master switch or per-category), cancel previously
               // scheduled due-date notifications and short-circuit.
               if (disableReminders || !notifyOnDueDate) {
-                // The tracked set is in-memory, but native alarms outlive the app,
-                // so alarms armed by an earlier run (e.g. under the old default-on)
-                // would still fire. Ids are deterministic: cancel them once per run.
+                // The persisted tracked set misses alarms armed by builds that kept
+                // it in-memory only (e.g. under the old default-on); native alarms
+                // outlive the app, so those would still fire. Ids are
+                // deterministic: cancel them once per run.
                 if (!this._hasClearedStaleDueDateAlarms && tasks?.length) {
                   tasks.forEach((t) => this._scheduledDueDateIds.add(t.id));
                   this._hasClearedStaleDueDateAlarms = true;

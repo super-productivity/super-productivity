@@ -26,6 +26,11 @@ describe('armed-reminder-store', () => {
     expect(loadArmedIds(KEY).size).toBe(0);
   });
 
+  it('does not throw when storage rejects the write', () => {
+    spyOn(localStorage, 'setItem').and.throwError('QuotaExceededError');
+    expect(() => saveArmed(KEY, new Set(['a']))).not.toThrow();
+  });
+
   it('drops malformed entries', () => {
     localStorage.setItem(KEY, JSON.stringify(['a', 1, ['b', 'x'], ['c', 5]]));
     expect(loadArmedIds(KEY)).toEqual(new Set(['a']));

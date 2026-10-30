@@ -42,5 +42,14 @@ export const loadArmedTriggers = (key: LS): Map<string, number> =>
   );
 
 export const saveArmed = (key: LS, armed: Set<string> | Map<string, number>): void => {
-  localStorage.setItem(key, JSON.stringify([...armed]));
+  try {
+    localStorage.setItem(key, JSON.stringify([...armed]));
+  } catch (e) {
+    // Called from effect `finally` blocks; a throw there is an unhandled
+    // rejection. Unsaved, the next run just falls back to empty tracking.
+    Log.err('armed-reminder-store: could not save record', {
+      storageKey: String(key),
+      error: String(e),
+    });
+  }
 };
