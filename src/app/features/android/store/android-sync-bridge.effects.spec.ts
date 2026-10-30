@@ -10,7 +10,9 @@ import {
   bridgeCommandEqual,
   getBackgroundReminderSettings,
   getCapturePublicKeyForNative,
+  getFileSyncCredentialBridgeCommand,
   getSuperSyncCredentialBridgeCommand,
+  isBackgroundFileSyncProvider,
   SuperSyncCredentialBridgeCommand,
 } from './android-sync-bridge.effects';
 
@@ -172,6 +174,70 @@ describe('AndroidSyncBridgeEffects - credential mirroring logic', () => {
         type: 'clear',
         reason: 'not-supersync',
       });
+    });
+  });
+
+  describe('file sync command (WebDAV/Nextcloud)', () => {
+    const readRequest = {
+      url: 'https://dav.example.com/sp/sync-data.json',
+      authorization: 'Basic abc',
+    };
+
+    it('only treats WebDAV and Nextcloud as background-readable file providers', () => {
+      expect(isBackgroundFileSyncProvider(SyncProviderId.WebDAV)).toBe(true);
+      expect(isBackgroundFileSyncProvider(SyncProviderId.Nextcloud)).toBe(true);
+      expect(isBackgroundFileSyncProvider(SyncProviderId.Dropbox)).toBe(false);
+      expect(isBackgroundFileSyncProvider(SyncProviderId.OneDrive)).toBe(false);
+      expect(isBackgroundFileSyncProvider(SyncProviderId.LocalFile)).toBe(false);
+      expect(isBackgroundFileSyncProvider(SyncProviderId.SuperSync)).toBe(false);
+    });
+
+    it('carries the read request and the encryption password', () => {
+      expect(
+        getFileSyncCredentialBridgeCommand(
+          { encryptKey: 'pw', isEncryptionEnabled: true },
+          readRequest,
+        ),
+      ).toEqual({
+        type: 'set-file',
+        fileUrl: readRequest.url,
+        authorization: readRequest.authorization,
+        isEncryptionExpected: true,
+        encryptionPassword: 'pw',
+      });
+    });
+
+    it('expects encryption from the key alone on configs without the flag', () => {
+      expect(
+        getFileSyncCredentialBridgeCommand({ encryptKey: 'pw' }, readRequest)
+          .isEncryptionExpected,
+      ).toBe(true);
+      expect(
+        getFileSyncCredentialBridgeCommand({}, readRequest).isEncryptionExpected,
+      ).toBe(false);
+    });
+
+    it('keeps expecting encryption when the flag is set but the key was dropped', () => {
+      const command = getFileSyncCredentialBridgeCommand(
+        { isEncryptionEnabled: true },
+        readRequest,
+      );
+      expect(command.isEncryptionExpected).toBe(true);
+      expect(command.encryptionPassword).toBe('');
+    });
+
+    it('re-emits only when the file target or credentials change', () => {
+      const a = getFileSyncCredentialBridgeCommand({}, readRequest);
+      expect(
+        bridgeCommandEqual(a, getFileSyncCredentialBridgeCommand({}, readRequest)),
+      ).toBe(true);
+      expect(
+        bridgeCommandEqual(
+          a,
+          getFileSyncCredentialBridgeCommand({}, { ...readRequest, authorization: 'x' }),
+        ),
+      ).toBe(false);
+      expect(bridgeCommandEqual(a, cmd(webdavCfg()))).toBe(false);
     });
   });
 

@@ -115,8 +115,8 @@ data class ReminderChangeResult(
  * Interface for background sync providers that can detect reminder-relevant changes.
  *
  * Currently implemented for SuperSync (lightweight operation-based API).
- * Could be extended to Dropbox/WebDAV in the future, though those would require
- * downloading the full sync file which is heavier.
+ * WebDAV/Nextcloud have no op API and read the whole sync file instead, so they
+ * diff reminder state rather than ops ([runFileSyncReminderCheck]).
  */
 interface BackgroundSyncProvider {
     /**
