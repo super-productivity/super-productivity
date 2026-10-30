@@ -230,7 +230,7 @@
   [autoActiveFirstOption]="true"
 >
   @for (
-    item of suggestions$ | async;
+    item of suggestions();
     track item.taskId || (item.issueData && item.issueData.id)
   ) {
     <mat-option [value]="item">
@@ -250,6 +250,11 @@
           [isHideTitle]="isHideTagTitles()"
         ></tag>
       }
+    </mat-option>
+  }
+  @if (isShowNoSearchMatches()) {
+    <mat-option disabled>
+      {{ T.F.TASK.ADD_TASK_BAR.NO_SEARCH_MATCHES | translate }}
     </mat-option>
   }
 </mat-autocomplete>

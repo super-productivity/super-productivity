@@ -1125,6 +1125,26 @@ describe('Task Selectors', () => {
     },
   });
 
+  describe('selectMainTasksWithoutProject', () => {
+    it('should return parent tasks of other projects only', () => {
+      const result = fromSelectors.selectMainTasksWithoutProject(mockState, {
+        projectId: 'project2',
+      });
+      const ids = result.map((t) => t.id);
+      expect(ids).toContain('task1');
+      // sub tasks of project1 are left out, as is the project's own task
+      expect(ids).not.toContain('subtask1');
+      expect(result.every((t) => t.projectId !== 'project2')).toBeTrue();
+    });
+
+    it('should exclude tasks from archived projects', () => {
+      const result = fromSelectors.selectMainTasksWithoutProject(withArchivedProject1(), {
+        projectId: 'project2',
+      });
+      expect(result.map((t) => t.id)).not.toContain('task1');
+    });
+  });
+
   describe('selectAllTasksWithDueTimeSorted', () => {
     it('should return only tasks with dueWithTime, sorted ascending', () => {
       const result = fromSelectors.selectAllTasksWithDueTimeSorted(mockState);

@@ -887,6 +887,14 @@ export const selectMainTasksWithoutTag = createSelector(
     ),
 );
 
+export const selectMainTasksWithoutProject = createSelector(
+  selectAllTasksInActiveProjects,
+  (tasks: Task[], props: { projectId: string }): Task[] =>
+    tasks.filter(
+      (task) => !!task && !task.parentId && task.projectId !== props.projectId,
+    ),
+);
+
 // intentionally unfiltered: filters out calendar events already linked to a task — must include
 // archived projects or those events would reappear in the schedule as "not yet added"
 export const selectAllCalendarTaskEventIds = createSelector(

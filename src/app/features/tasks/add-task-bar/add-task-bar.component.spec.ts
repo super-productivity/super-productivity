@@ -21,7 +21,7 @@ import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { signal, Signal } from '@angular/core';
 import { AddTaskSuggestion } from './add-task-suggestions.model';
 import { PlannerActions } from '../../planner/store/planner.actions';
-import { TaskCopy, TaskReminderOptionId } from '../task.model';
+import { TaskCopy, TaskReminderOptionId, TaskWithSubTasks } from '../task.model';
 import { DateTimeFormatService } from 'src/app/core/date-time-format/date-time-format.service';
 import { DEFAULT_LOCALE } from 'src/app/core/locale.constants';
 import { DateService } from '../../../core/date/date.service';
@@ -194,6 +194,7 @@ describe('AddTaskBarComponent', () => {
     mockTaskService = jasmine.createSpyObj('TaskService', [
       'add',
       'getByIdOnce$',
+      'getByIdWithSubTaskData$',
       'scheduleTask',
       'moveToCurrentWorkContext',
     ]);
@@ -511,6 +512,46 @@ describe('AddTaskBarComponent', () => {
         'project-2',
       );
       expect(mockTaskService.moveToCurrentWorkContext).not.toHaveBeenCalled();
+    });
+
+    it('moves a task from another project here, sub tasks included', async () => {
+      const task = {
+        id: 'task-1',
+        title: 'Other task',
+        subTaskIds: ['sub-1'],
+        subTasks: [{ id: 'sub-1' }],
+      } as Partial<TaskWithSubTasks> as TaskWithSubTasks;
+      mockWorkContextService.activeWorkContextType = WorkContextType.PROJECT;
+      mockTaskService.getByIdWithSubTaskData$.and.returnValue(of(task));
+      const emitSpy = spyOn(component.afterTaskAdd, 'emit');
+
+      await component.onTaskSuggestionSelected({
+        title: task.title,
+        taskId: task.id,
+        projectId: 'project-2',
+        isFromOtherContextAndTagOnlySearch: true,
+      } as AddTaskSuggestion);
+
+      expect(mockTaskService.moveToCurrentWorkContext).toHaveBeenCalledOnceWith(task);
+      expect(mockSnackService.open).toHaveBeenCalled();
+      expect(emitSpy).toHaveBeenCalled();
+    });
+
+    it('reports nothing when the picked task no longer exists', async () => {
+      mockWorkContextService.activeWorkContextType = WorkContextType.PROJECT;
+      mockTaskService.getByIdWithSubTaskData$.and.returnValue(of(undefined));
+      const emitSpy = spyOn(component.afterTaskAdd, 'emit');
+
+      await component.onTaskSuggestionSelected({
+        title: 'Deleted task',
+        taskId: 'task-1',
+        projectId: 'project-2',
+        isFromOtherContextAndTagOnlySearch: true,
+      } as AddTaskSuggestion);
+
+      expect(mockTaskService.moveToCurrentWorkContext).not.toHaveBeenCalled();
+      expect(mockSnackService.open).not.toHaveBeenCalled();
+      expect(emitSpy).not.toHaveBeenCalled();
     });
   });
 
