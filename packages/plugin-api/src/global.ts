@@ -9,8 +9,9 @@ declare global {
    * The API the app injects into a plugin's `plugin.js`.
    *
    * Code running inside a plugin's iframe (`index.html`) gets a filtered
-   * subset: the `register*` methods and a few others are not available there.
-   * See "Iframe API Surface" in the plugin development guide.
+   * subset: most `register*` methods (e.g. `registerHeaderButton`,
+   * `registerMenuEntry`, `registerShortcut`) are not available there. See
+   * "Iframe API Surface" in the plugin development guide.
    */
   const PluginAPI: PluginAPIType;
 }

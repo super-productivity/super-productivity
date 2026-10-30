@@ -5,15 +5,18 @@
 [`publish-plugin-api.yml`](../../.github/workflows/publish-plugin-api.yml)
 publishes this package to npm on every stable app release, with the app's
 version: `plugin-api@19.4.0` describes the plugin API of Super Productivity
-19.4.0. Plugin authors set `minSupVersion` to the version they build against.
+19.4.0, so plugin authors can tell which app version added what they use and
+set `minSupVersion` (the oldest app version a plugin installs on) accordingly.
 
 - The `version` in this folder's `package.json` is a placeholder; CI sets the
   real one from the release tag (`npm pkg set version=…`). Do not publish by
   hand.
 - Prereleases are not published.
-- To publish an older tag or re-run a failed publish, dispatch the workflow
-  from master with `release_tag` (e.g. `v19.4.0`). It builds that tag's tree and
-  skips versions already on npm.
+- To re-run a failed publish, run the workflow by hand with the release tag
+  (e.g. `v19.4.0`) selected under "Use workflow from". It builds that tag, so
+  provenance names the tag's commit, and skips versions already on npm. Tags
+  cut before this workflow existed lack the global types and are not
+  republished.
 - Authentication is npm trusted publishing (OIDC): on npmjs.com, the package's
   Settings → Trusted publisher lists this repository and `publish-plugin-api.yml`.
   No npm token is stored in the repository.
@@ -27,7 +30,8 @@ not withdrawn: third-party plugins depend on them (see
 1. Edit `src/types.ts` (or `src/issue-provider-types.ts`). The app imports these
    sources directly through `tsconfig` paths, so no build is needed for the app.
 2. Check: `npm --prefix packages/plugin-api run typecheck` and
-   `npm run plugin-starter:check` from the repository root.
+   `npm run plugin-starter:check` from the repository root. The latter packs
+   this package as npm would publish it and typechecks the starter against it.
 3. Document user-facing additions in
    [docs/plugin-development.md](../../docs/plugin-development.md) and
    [docs/wiki/3.01-API.md](../../docs/wiki/3.01-API.md).
@@ -36,7 +40,7 @@ not withdrawn: third-party plugins depend on them (see
 
 ```bash
 cd packages/plugin-api
-npm pack                       # builds dist/ and writes a .tgz
+npm pack                       # prepack builds dist/, then writes a .tgz
 cd /path/to/your-plugin
 npm install --save-dev /path/to/super-productivity-plugin-api-*.tgz
 ```

@@ -83,17 +83,21 @@ third-party code; downloading the folder does the same); a load-unpacked mode
 
 - Workflow `publish-plugin-api.yml`:
   - `release: published`, skipping prereleases (like every other on-release
-    workflow); `workflow_dispatch` takes a `release_tag` input and checks out that
-    tag, so a dispatch can never publish unreleased master under a release
-    version.
+    workflow); a manual re-run must be started on the release tag itself
+    (`startsWith(github.ref, 'refs/tags/v')`), so it can never publish
+    unreleased master under a release version and provenance names the tag's
+    commit. Tags cut before this workflow lack the global types and are not
+    backfilled.
   - npm trusted publishing: `permissions: id-token: write`, npm ≥ 11.5.1 pinned
     in the job (Node 22 bundles npm 10), `--provenance`. No token in the repo.
   - Skips a version that already exists, so re-runs are safe.
-- **Version = app version**, set in CI from the release tag (`npm version
---no-git-tag-version`); the repo copy of `packages/plugin-api/package.json`
-  keeps a placeholder version and says so. `plugin-api@19.4.0` describes the API
-  of Super Productivity 19.4.0, so `minSupVersion` = the version you build
-  against. Like `@types/vscode`, a minor version may tighten types (e.g.
+- **Version = app version**, set in CI from the release tag (`npm pkg set`;
+  `npm version` would reinstall the root workspace); the repo copy keeps its
+  `1.0.1` placeholder (renaming it would churn two lockfiles; PUBLISHING.md says
+  it is a placeholder). `plugin-api@19.4.0` describes the API of Super
+  Productivity 19.4.0. `minSupVersion` stays "the oldest app version that has
+  every method you use", not the version you build against, so plugins keep
+  installing on slower release channels. Like `@types/vscode`, a minor version may tighten types (e.g.
   `PluginHookHandler` gained typed payloads since 1.0.1); symbols are not
   withdrawn (`feature-review-guide.md` § Plugin API).
 - `vite-plugin` stays unpublished: no community plugin uses Vite, and publishing
@@ -108,7 +112,10 @@ third-party code; downloading the folder does the same); a load-unpacked mode
   (it would imply the full API in iframes). A package-root `global.d.ts` shim
   (`/// <reference path="./dist/global.d.ts" />`, added to `files`) makes
   `/// <reference types="@super-productivity/plugin-api/global" />` resolve
-  without an `exports` map (which would break deep imports that work today).
+  without an `exports` map (which would break deep imports that work today);
+  `typesVersions` maps the `global` subpath so it also resolves under
+  `node16`/`nodenext` ESM. `prepack` (not `prepublishOnly`) builds `dist/`, so a
+  local `npm pack` matches what is published.
   `index.ts` stays free of globals, so the app and existing plugins are
   unaffected.
 - Add `author?: string` to `PluginManifest` (what the plugins page already
@@ -119,25 +126,31 @@ third-party code; downloading the folder does the same); a load-unpacked mode
 
 - `packages/plugin-starter/`, excluded from the root npm workspaces (like
   `plugin-dev`), so it resolves packages the way an external project does:
-  - `plugin.js` with `// @ts-check` and the global types reference: a header
-    button and a hook, nothing else.
+  - `plugin.js`: a header button and a hook, nothing else. The types hook up
+    through `jsconfig.json`'s `include` of the installed package's `global.d.ts`,
+    not a `/// <reference>` in `plugin.js`: an unresolved reference is an error
+    even without `checkJs`, and until a 19.x package is on npm every copy would
+    show it. Authors add `// @ts-check` after installing.
   - `manifest.json`, `icon.svg`.
   - `scripts/pack.mjs`: dependency-free ZIP writer (Node `zlib`, `/` entry
     names on every OS), prints the SHA-256 a community listing needs, refuses
     a manifest without `id`/`name`/`version`.
-  - `package.json` with only `@super-productivity/plugin-api` as an optional dev
-    dependency for autocomplete — the starter packs and installs without
-    `npm install`, so it is usable before a 19.x package is on npm.
+  - `package.json` with no dependencies; the README's optional
+    `npm install --save-dev @super-productivity/plugin-api` adds autocomplete.
+    The starter packs and installs without `npm install`, so it is usable before
+    a 19.x package is on npm.
   - A GitHub release workflow (`.github/workflows/release.yml`) that packs and
     attaches `plugin.zip`, and a README with absolute links only (relative links
     break once the folder is copied out), "test on a test instance", and how to
     get listed.
-- Get it by downloading the folder (GitHub's "Download" on the folder, or
-  `git sparse-checkout`); a maintainer can mirror it as a GitHub template repo
-  later.
-- CI (plugin-tests workflow, path-filtered on the starter and `plugin-api`):
-  build `plugin-api`, typecheck `plugin.js` against it, run `pack`, and check the
-  ZIP lists `manifest.json` at its root. The boilerplate's stale hook is the
+- Get it with a shallow sparse clone (exact commands in the README and guide;
+  ~3 MB). **Maintainer follow-up:** mirror it as a GitHub template repo, which
+  makes step 1 a single click.
+- CI (plugin-tests workflow; `npm run plugin-starter:check` →
+  `tools/check-plugin-starter.js`): `npm pack` plugin-api, copy the starter to a
+  temp folder, install the tarball there, typecheck with `--checkJs`, pack, and
+  check the ZIP's root entries. Testing the tarball rather than the workspace
+  symlink also catches a broken `files` list. The boilerplate's stale hook is the
   evidence that unchecked examples rot.
 - TypeScript and iframe UI stay on the existing in-repo examples; the starter
   README links them.

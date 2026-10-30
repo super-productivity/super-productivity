@@ -4,9 +4,10 @@
 //
 //   node scripts/pack.mjs    (or: npm run pack)
 //
-// No dependencies. Everything in the folder is included except development
-// files (see EXCLUDED). The same files always produce the same ZIP, so the
-// SHA-256 only changes when the plugin does.
+// No dependencies. Everything in the folder is included except dotfiles and
+// the development files in EXCLUDED (top level only). With the same Node.js
+// version, the same files always produce the same ZIP, so the SHA-256 only
+// changes when the plugin does.
 
 import { createHash } from 'node:crypto';
 import { readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
@@ -50,13 +51,13 @@ const readManifest = () => {
 };
 
 // Paths inside the ZIP always use "/", whatever the OS: the app looks up
-// "manifest.json" and "i18n/en.json" by exact name.
+// "manifest.json" and "i18n/en.json" by exact name. statSync follows symlinks.
 const listFiles = (dir) =>
-  readdirSync(dir, { withFileTypes: true })
-    .filter((e) => !e.name.startsWith('.') && !EXCLUDED.has(e.name))
-    .flatMap((e) => {
-      const full = join(dir, e.name);
-      return e.isDirectory()
+  readdirSync(dir)
+    .filter((name) => !name.startsWith('.') && !(dir === ROOT && EXCLUDED.has(name)))
+    .flatMap((name) => {
+      const full = join(dir, name);
+      return statSync(full).isDirectory()
         ? listFiles(full)
         : [relative(ROOT, full).split(sep).join('/')];
     });

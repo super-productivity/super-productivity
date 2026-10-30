@@ -35,7 +35,7 @@ are separate checks; one does not imply the others ran.
 | shared-schema     | `npm run shared-schema:build` and `npm run shared-schema:test`                                                                                                                          |
 | super-sync-server | `npm --prefix packages/super-sync-server run build` and `npm --prefix packages/super-sync-server test` (pretest generates Prisma client; see [setup](super-sync-server/README.md))      |
 | plugin-api        | `npm --prefix packages/plugin-api run typecheck`; `npm run plugin-api:build` when consumers need updated declarations                                                                   |
-| plugin-starter    | `npm run plugin-starter:check` (builds plugin-api, typechecks `plugin.js` against it, packs `plugin.zip`)                                                                               |
+| plugin-starter    | `npm run plugin-starter:check` (packs plugin-api, typechecks the starter against the tarball in a temp copy, packs `plugin.zip`)                                                        |
 | vite-plugin       | `npm run vite-plugin:build`                                                                                                                                                             |
 | plugin-dev        | `npm --prefix packages/plugin-dev ci` once (its own workspace and lockfile), then the affected plugin's scripts via `npm --prefix packages/plugin-dev/<name> run <script>`; checks vary |
 

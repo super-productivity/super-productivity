@@ -9,6 +9,10 @@ on:
       - 'packages/plugin-api/**'
       - 'packages/vite-plugin/**'
       - 'packages/plugin-starter/**'
+      - 'tools/check-plugin-starter.js'
+      # A TypeScript bump can break the starter check.
+      - 'package.json'
+      - 'package-lock.json'
       - '.github/workflows/plugin-tests.yml'
   workflow_dispatch:
 
@@ -117,8 +121,9 @@ jobs:
         run: npm test --if-present
 
   # The starter is copied out of the repo by plugin authors, so nothing else
-  # would notice it falling behind the API. Typecheck it against the current
-  # plugin-api types and check that it packs into an installable ZIP.
+  # would notice it falling behind the API. Typecheck it against the packed
+  # plugin-api (what npm would publish) and check that it packs into an
+  # installable ZIP.
   starter:
     name: Plugin starter
     runs-on: ubuntu-latest
@@ -137,5 +142,3 @@ jobs:
         run: npm ci --workspace=@super-productivity/plugin-api --ignore-scripts --no-audit --no-fund
       - name: Typecheck and pack the starter
         run: npm run plugin-starter:check
-      - name: Check manifest.json is at the ZIP root
-        run: unzip -Z1 packages/plugin-starter/plugin.zip | grep -qx manifest.json

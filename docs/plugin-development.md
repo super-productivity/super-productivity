@@ -10,7 +10,9 @@ The complete API — every `PluginAPI` method with its signature and comments �
 published on npm as
 [`@super-productivity/plugin-api`](https://www.npmjs.com/package/@super-productivity/plugin-api).
 The npm package is versioned like the app: version X.Y.Z describes the API of
-Super Productivity X.Y.Z.
+Super Productivity X.Y.Z. Set a plugin's `minSupVersion` to the oldest app
+version that has every method it uses — not simply the newest, since people on
+slower release channels run older versions.
 
 ---
 
@@ -33,7 +35,14 @@ Your first plugin in about five minutes. You need a text editor and
 
 Copy the [plugin starter](../packages/plugin-starter) folder to a folder or
 repository of your own. It is plain JavaScript with no dependencies: a header
-button and a hook.
+button and a hook. With git:
+
+```bash
+git clone --depth 1 --filter=blob:none --sparse https://github.com/super-productivity/super-productivity.git sp-source
+git -C sp-source sparse-checkout set packages/plugin-starter
+cp -r sp-source/packages/plugin-starter my-plugin
+rm -rf sp-source
+```
 
 ### 2. Make it yours
 
@@ -69,16 +78,22 @@ the developer tools (F12 or Ctrl+Shift+I) for errors and `console.log` output.
 ### Editor autocomplete
 
 Run `npm install --save-dev @super-productivity/plugin-api` in your plugin
-folder. The starter's `plugin.js` already begins with:
+folder. The starter's `jsconfig.json` points editors such as VS Code at the
+installed types, so they autocomplete every `PluginAPI` method; add
+`// @ts-check` as the first line of `plugin.js` to have mistakes flagged too.
+
+Outside the starter, reference the global types at the top of a file:
 
 ```javascript
-// @ts-check
 /// <reference types="@super-productivity/plugin-api/global" />
 ```
 
-so editors such as VS Code autocomplete every `PluginAPI` method and flag
-typos. In TypeScript, import types instead:
-`import type { PluginAPI } from '@super-productivity/plugin-api';`.
+In TypeScript you can instead declare the global yourself:
+
+```typescript
+import type { PluginAPI as PluginAPIType } from '@super-productivity/plugin-api';
+declare const PluginAPI: PluginAPIType;
+```
 
 ### Plugin structure
 

@@ -5,9 +5,15 @@ JavaScript: a header button and a hook. No build step and no dependencies.
 
 ## Get started
 
-1. Copy this folder (`packages/plugin-starter` in the
-   [Super Productivity repository](https://github.com/super-productivity/super-productivity/tree/master/packages/plugin-starter))
-   to a new folder or repository of your own.
+1. Copy this folder to a folder of your own. With git:
+
+   ```bash
+   git clone --depth 1 --filter=blob:none --sparse https://github.com/super-productivity/super-productivity.git sp-source
+   git -C sp-source sparse-checkout set packages/plugin-starter
+   cp -r sp-source/packages/plugin-starter my-plugin
+   rm -rf sp-source
+   ```
+
 2. In `manifest.json`, set a unique `id` (letters, numbers and dashes), your
    plugin's `name`, `description` and `author`.
 3. Pack it: `node scripts/pack.mjs` (Node.js 20.15 or newer). This writes
@@ -26,24 +32,35 @@ developer tools (F12 or Ctrl+Shift+I) to see errors and `console.log` output.
 npm install --save-dev @super-productivity/plugin-api
 ```
 
-`plugin.js` starts with `// @ts-check` and a reference to the API types, so
-editors such as VS Code then autocomplete every `PluginAPI` method and flag
-mistakes. The package is versioned like the app: set `minSupVersion` in
-`manifest.json` to the version you build against.
+`jsconfig.json` already points editors such as VS Code at the installed types,
+so they then autocomplete every `PluginAPI` method. To also have mistakes
+flagged, add `// @ts-check` as the first line of `plugin.js`.
+
+## Which app versions it runs on
+
+`minSupVersion` in `manifest.json` is the oldest Super Productivity version the
+plugin installs on. Set it to the oldest version that has every `PluginAPI`
+method you use, not simply the newest: people on slower release channels run
+older versions. The npm package is versioned like the app, so its version tells
+you the newest API you are building against.
 
 ## Files
 
-| File                            | What it is                                                              |
-| ------------------------------- | ----------------------------------------------------------------------- |
-| `manifest.json`                 | Plugin id, name, version and the app version it needs (`minSupVersion`) |
-| `plugin.js`                     | Runs once when the plugin is enabled                                    |
-| `icon.svg`                      | Shown in the app's plugin list                                          |
-| `scripts/pack.mjs`              | Builds `plugin.zip` and prints its SHA-256                              |
-| `.github/workflows/release.yml` | On a `v1.2.3` tag, attaches `plugin.zip` to a GitHub release            |
+| File                            | What it is                                                   |
+| ------------------------------- | ------------------------------------------------------------ |
+| `manifest.json`                 | Plugin id, name, version and `minSupVersion`                 |
+| `plugin.js`                     | Runs once when the plugin is enabled                         |
+| `icon.svg`                      | Shown in the app's plugin list                               |
+| `scripts/pack.mjs`              | Builds `plugin.zip` and prints its SHA-256                   |
+| `jsconfig.json`                 | Editor settings for autocomplete                             |
+| `.github/workflows/release.yml` | On a `v1.2.3` tag, attaches `plugin.zip` to a GitHub release |
 
-Everything except development files (`scripts/`, `package.json`, this README,
-dotfiles, `node_modules`) goes into the ZIP, so add an `index.html`, `i18n/`
-folder or other assets next to `plugin.js` and they are included.
+The ZIP gets every file except dotfiles and, at the top level, `scripts/`,
+`node_modules/`, `package.json`, `package-lock.json`, `jsconfig.json`,
+`tsconfig.json` and this README. The app uses `manifest.json`, `plugin.js`,
+`index.html` (for a UI; set `"iFrame": true` and inline its CSS and JS),
+the icon, `i18n/<language>.json` translations and a config schema; other files
+are packed but not loaded.
 
 ## Next steps
 

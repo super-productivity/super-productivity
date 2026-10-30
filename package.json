@@ -194,7 +194,7 @@
     "vite-plugin:build": "cd packages/vite-plugin && npm run build",
     "plugins:build": "npm run plugin-api:build && npm run vite-plugin:build && cd packages/plugin-dev && npm run build:all",
     "plugins:build:silent": "npm run vite-plugin:build && cd packages/plugin-dev && npm run build:all:silent",
-    "plugin-starter:check": "npm run plugin-api:build && tsc -p packages/plugin-starter/jsconfig.json && node packages/plugin-starter/scripts/pack.mjs"
+    "plugin-starter:check": "node tools/check-plugin-starter.js"
   },
   "resolutions": {
     "sass": "1.32.6",

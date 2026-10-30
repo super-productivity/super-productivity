@@ -3,9 +3,10 @@
 Official TypeScript definitions for developing [Super Productivity](https://github.com/super-productivity/super-productivity) plugins.
 
 Versioned like the app: version X.Y.Z describes the plugin API of Super
-Productivity X.Y.Z, so set your manifest's `minSupVersion` to the version you
-install. (Versions before 19 were published separately and are outdated: if your
-`package.json` says `^1.0.1`, change it.)
+Productivity X.Y.Z. Your manifest's `minSupVersion` is the oldest app version
+your plugin installs on: set it to the oldest version that has every method you
+use, not simply the version you installed. (Versions before 19 were published
+separately and are outdated: if your `package.json` says `^1.0.1`, change it.)
 
 New to plugins? Start from the
 [plugin starter](https://github.com/super-productivity/super-productivity/tree/master/packages/plugin-starter)
@@ -41,12 +42,15 @@ see "Iframe API Surface" in the guide.
 
 ### TypeScript
 
+Declare the global yourself, or instead put
+`/// <reference types="@super-productivity/plugin-api/global" />` at the very
+top of the file and drop the `declare const` line:
+
 ```typescript
 import { PluginHooks } from '@super-productivity/plugin-api';
 import type { PluginAPI as PluginAPIType } from '@super-productivity/plugin-api';
 
 declare const PluginAPI: PluginAPIType;
-// or: /// <reference types="@super-productivity/plugin-api/global" />
 
 PluginAPI.registerHook(PluginHooks.TASK_COMPLETE, (payload) => {
   PluginAPI.showSnack({

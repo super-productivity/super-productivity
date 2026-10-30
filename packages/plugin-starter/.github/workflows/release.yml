@@ -1,6 +1,7 @@
-# Push a tag like v1.0.0 (matching "version" in manifest.json) and this
-# workflow attaches plugin.zip to a GitHub release. The release notes contain
-# the SHA-256 that a community-plugins.json listing needs.
+# Push a tag like v1.0.0 (matching "version" in manifest.json), or create a
+# release with that tag on GitHub, and this workflow attaches plugin.zip to the
+# release. The workflow log and new release notes show the SHA-256 that a
+# community-plugins.json listing needs.
 name: Release
 
 on:
@@ -33,11 +34,15 @@ jobs:
       - name: Pack
         run: node scripts/pack.mjs | tee pack.log
 
-      - name: Create release
+      - name: Attach plugin.zip to the release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           SHA=$(sed -n 's/^sha256: //p' pack.log)
-          gh release create "$GITHUB_REF_NAME" plugin.zip \
-            --title "$GITHUB_REF_NAME" \
-            --notes "Install: download plugin.zip, then Super Productivity → Settings → Plugins → Choose Plugin File. sha256: \`$SHA\`"
+          if gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" plugin.zip --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" plugin.zip \
+              --title "$GITHUB_REF_NAME" \
+              --notes "Install: download plugin.zip, then Super Productivity → Settings → Plugins → Choose Plugin File. sha256: \`$SHA\`"
+          fi

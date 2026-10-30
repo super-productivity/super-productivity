@@ -1,8 +1,6 @@
-// @ts-check
-/// <reference types="@super-productivity/plugin-api/global" />
-
 // The app runs this file once when the plugin is enabled and provides the
-// global `PluginAPI`. Full API: https://github.com/super-productivity/super-productivity/blob/master/packages/plugin-api/src/types.ts
+// global `PluginAPI`. For autocomplete, see "Autocomplete and type checking"
+// in README.md. Full API: https://github.com/super-productivity/super-productivity/blob/master/packages/plugin-api/src/types.ts
 
 // A button in the app header.
 PluginAPI.registerHeaderButton({

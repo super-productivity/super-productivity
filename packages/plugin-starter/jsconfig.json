@@ -1,6 +1,5 @@
 {
   "compilerOptions": {
-    "checkJs": true,
     "target": "ES2020",
     "module": "ESNext",
     "moduleResolution": "bundler",
@@ -8,5 +7,5 @@
     "noEmit": true,
     "strict": true
   },
-  "include": ["plugin.js"]
+  "include": ["*.js", "node_modules/@super-productivity/plugin-api/global.d.ts"]
 }
