@@ -836,6 +836,16 @@ describe('MobileNotificationEffects', () => {
       d.setDate(d.getDate() + offset);
       return d;
     };
+    // Specs arming an alarm a few minutes ahead need it to stay on today;
+    // near midnight, move the fake clock into the next day first.
+    const skipPastLateEvening = (): void => {
+      const midnight = new Date();
+      midnight.setHours(24, 0, 0, 0);
+      const msLeft = midnight.getTime() - Date.now();
+      if (msLeft < 10 * 60_000) {
+        tick(msLeft + 3_600_000);
+      }
+    };
     const dayStr = (offset: number): string => getDbDateStr(dayAt(offset).getTime());
     const triggerFor = (offset: number, clock: string): number =>
       getDateTimeFromClockString(clock, dayAt(offset).getTime());
@@ -1224,10 +1234,8 @@ describe('MobileNotificationEffects', () => {
     it('does not cancel a pre-scheduled alarm that already fired before its instance exists', fakeAsync(() => {
       // On Android cancel also dismisses the shown notification; instance
       // creation waits for the initial sync, so this pass can run first.
+      skipPastLateEvening();
       const soon = new Date(Date.now() + 120_000);
-      if (getDbDateStr(soon.getTime()) !== dayStr(0)) {
-        pending('needs two minutes left in the day');
-      }
       const clock = `${soon.getHours()}:${String(soon.getMinutes()).padStart(2, '0')}`;
       store.overrideSelector(selectActiveTaskRepeatCfgs, [
         mkDailyCfg({ lastTaskCreationDay: dayStr(-1), startTime: clock }),
@@ -1253,10 +1261,8 @@ describe('MobileNotificationEffects', () => {
     it('still cancels a fired (possibly snoozed) pre-scheduled alarm once its config is deleted', fakeAsync(() => {
       // A native snooze re-arms the same id, so a deleted config's alarm can
       // still be pending although its tracked trigger time has passed.
+      skipPastLateEvening();
       const soon = new Date(Date.now() + 120_000);
-      if (getDbDateStr(soon.getTime()) !== dayStr(0)) {
-        pending('needs two minutes left in the day');
-      }
       const clock = `${soon.getHours()}:${String(soon.getMinutes()).padStart(2, '0')}`;
       store.overrideSelector(selectActiveTaskRepeatCfgs, [
         mkDailyCfg({ lastTaskCreationDay: dayStr(-1), startTime: clock }),
