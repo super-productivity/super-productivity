@@ -159,6 +159,8 @@ export interface PluginManifest {
   version: string;
   minSupVersion: string;
   description?: string;
+  /** Shown as "by {author}" on the plugins page. */
+  author?: string;
   hooks: Hooks[];
   permissions: string[];
   /**
@@ -973,14 +975,3 @@ export enum PluginIframeMessageType {
   // Plugin lifecycle
   READY = 'plugin-ready',
 }
-
-// Global PluginAPI interface for runtime use
-// Note: This is commented out to avoid conflicts with node_modules version
-// declare global {
-//   interface Window {
-//     PluginAPI: PluginAPI;
-//   }
-//
-//   // For plugin development without window reference
-//   const PluginAPI: PluginAPI;
-// }
