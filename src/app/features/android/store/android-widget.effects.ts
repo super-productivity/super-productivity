@@ -2,7 +2,7 @@ import { inject, Injectable, Injector } from '@angular/core';
 import { toObservable } from '@angular/core/rxjs-interop';
 import { createEffect } from '@ngrx/effects';
 import { Store } from '@ngrx/store';
-import { merge } from 'rxjs';
+import { merge, Observable, of } from 'rxjs';
 import {
   concatMap,
   debounceTime,
@@ -55,6 +55,18 @@ export const getTaskDoneChangesToApply = (
     })
     .map(([id, isDone]) => ({ id, isDone: isDone as boolean }));
 };
+
+/**
+ * When to read the native widget done queue: once on startup, then on every
+ * resume and every live drain request. The startup read is needed because on a
+ * cold start the native onResume call runs before this bundle defines
+ * onResume$ and is dropped (CapacitorMainActivity.callJSInterfaceFunctionIfExists).
+ * The native read is get-and-clear, so extra triggers drain at most once.
+ */
+export const getWidgetDoneDrainTriggers = (
+  resume$: Observable<void>,
+  drainRequest$: Observable<void>,
+): Observable<void> => merge(of(undefined), resume$, drainRequest$);
 
 @Injectable()
 export class AndroidWidgetEffects {
@@ -123,15 +135,15 @@ export class AndroidWidgetEffects {
       { dispatch: false },
     );
 
-  // Single delivery path for widget done-taps: cold start and background→
-  // foreground are covered by onResume$ (ReplaySubject(1)), taps while the app
-  // is alive by the contentless native drain signal. The queue read is
-  // get-and-clear, so overlapping triggers drain at most once.
+  // Single delivery path for widget done-taps: cold start by the startup
+  // trigger, background→foreground by onResume$, taps while the app is alive by
+  // the contentless native drain signal. The queue read is get-and-clear, so
+  // overlapping triggers drain at most once.
   drainWidgetDoneQueue$ =
     IS_ANDROID_WEB_VIEW &&
     createEffect(
       () =>
-        merge(
+        getWidgetDoneDrainTriggers(
           androidInterface.onResume$,
           androidInterface.onWidgetDoneDrainRequest$,
         ).pipe(

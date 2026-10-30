@@ -1,4 +1,8 @@
-import { getTaskDoneChangesToApply } from './android-widget.effects';
+import { Subject } from 'rxjs';
+import {
+  getTaskDoneChangesToApply,
+  getWidgetDoneDrainTriggers,
+} from './android-widget.effects';
 import { Task } from '../../tasks/task.model';
 import { Dictionary } from '@ngrx/entity';
 
@@ -62,5 +66,27 @@ describe('AndroidWidgetEffects - getTaskDoneChangesToApply', () => {
 
   it('should skip non-boolean target values', () => {
     expect(getTaskDoneChangesToApply('{"a":"true"}', entities({ id: 'a' }))).toEqual([]);
+  });
+});
+
+describe('AndroidWidgetEffects - getWidgetDoneDrainTriggers', () => {
+  // On a cold start the native onResume call lands before onResume$ exists and
+  // is dropped, so taps queued while the app was dead must drain without it.
+  it('should trigger once on startup without any native signal', () => {
+    let count = 0;
+    getWidgetDoneDrainTriggers(new Subject<void>(), new Subject<void>()).subscribe(
+      () => count++,
+    );
+    expect(count).toBe(1);
+  });
+
+  it('should trigger again on resume and on drain requests', () => {
+    const resume$ = new Subject<void>();
+    const drainRequest$ = new Subject<void>();
+    let count = 0;
+    getWidgetDoneDrainTriggers(resume$, drainRequest$).subscribe(() => count++);
+    resume$.next();
+    drainRequest$.next();
+    expect(count).toBe(3);
   });
 });
