@@ -10,7 +10,7 @@ import { DialogConfirmComponent } from '../../ui/dialog-confirm/dialog-confirm.c
 import { ActivatedRoute, Router } from '@angular/router';
 import { WorklogService } from '../worklog/worklog.service';
 import { getDateRangeForMonth } from '../../util/get-date-range-for-month';
-import { getDateRangeForWeek } from '../../util/get-date-range-for-week';
+import { rangeEndWithTime } from '../../util/get-date-range-for-week';
 import { fadeInSlowAnimation } from '../../ui/animations/fade.ani';
 import { T } from '../../t.const';
 import { WorkContextService } from '../work-context/work-context.service';
@@ -36,7 +36,12 @@ import { HistoryDayMetaComponent } from './history-day-meta/history-day-meta.com
 import { DateService } from '../../core/date/date.service';
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 import { parseDbDateStr } from '../../util/parse-db-date-str';
-import { WorklogDay, WorklogMonth, WorklogYear } from '../worklog/worklog.model';
+import {
+  WorklogDay,
+  WorklogMonth,
+  WorklogWeek,
+  WorklogYear,
+} from '../worklog/worklog.model';
 import { DialogRecentlyDeletedComponent } from '../tasks/recently-deleted/dialog-recently-deleted/dialog-recently-deleted.component';
 
 @Component({
@@ -108,11 +113,13 @@ export class HistoryComponent {
     });
   }
 
-  exportData(year: string | number, month: string | number, week?: number): void {
-    const { rangeStart, rangeEnd } =
-      typeof week === 'number'
-        ? getDateRangeForWeek(+year, week, +month)
-        : getDateRangeForMonth(+year, +month);
+  exportData(year: string | number, month: string | number, week?: WorklogWeek): void {
+    const { rangeStart, rangeEnd } = week
+      ? {
+          rangeStart: new Date(+year, +month - 1, week.start),
+          rangeEnd: rangeEndWithTime(new Date(+year, +month - 1, week.end)),
+        }
+      : getDateRangeForMonth(+year, +month);
 
     this._openExportDialog(rangeStart, rangeEnd);
   }

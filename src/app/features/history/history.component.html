@@ -87,7 +87,7 @@
                             <div>{{ week.timeSpent | msToString }}</div>
                           </div>
                           <button
-                            (click)="exportData(year.key, month.key, week.weekNr)"
+                            (click)="exportData(year.key, month.key, week)"
                             [matTooltip]="
                               T.F.WORKLOG.CMP.WEEK_RANGE_TOOLTIP
                                 | translate

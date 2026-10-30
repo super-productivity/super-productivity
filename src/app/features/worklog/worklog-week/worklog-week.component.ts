@@ -11,8 +11,8 @@ import { DialogWorklogExportComponent } from '../dialog-worklog-export/dialog-wo
 import { MatDialog } from '@angular/material/dialog';
 import { expandAnimation, expandFadeAnimation } from '../../../ui/animations/expand.ani';
 import { fadeAnimation } from '../../../ui/animations/fade.ani';
-import { getDateRangeForWeek } from '../../../util/get-date-range-for-week';
-import { getWeekNumber } from '../../../util/get-week-number';
+import { rangeEndWithTime } from '../../../util/get-date-range-for-week';
+import { DateService } from '../../../core/date/date.service';
 import { Task } from '../../tasks/task.model';
 import { TaskService } from '../../tasks/task.service';
 import { T } from '../../../t.const';
@@ -60,6 +60,7 @@ export class WorklogWeekComponent {
   private readonly _matDialog = inject(MatDialog);
   private readonly _taskService = inject(TaskService);
   private _dateAdapter = inject(DateAdapter);
+  private readonly _dateService = inject(DateService);
   private readonly _metricService = inject(MetricService);
 
   // undefined while the worklog loads, null when the week has no entries
@@ -82,12 +83,14 @@ export class WorklogWeekComponent {
   }
 
   async exportData(): Promise<void> {
-    const now = new Date();
-    const year = now.getFullYear();
-    const weekNr = getWeekNumber(now, this._dateAdapter.getFirstDayOfWeek());
-
-    // get for whole week
-    const { rangeStart, rangeEnd } = getDateRangeForWeek(year, weekNr);
+    const today = this._dateService.getLogicalTodayDate();
+    const daysSinceStart =
+      (today.getDay() - this._dateAdapter.getFirstDayOfWeek() + 7) % 7;
+    const rangeStart = new Date(today);
+    rangeStart.setDate(rangeStart.getDate() - daysSinceStart);
+    rangeStart.setHours(0, 0, 0, 0);
+    const rangeEnd = rangeEndWithTime(rangeStart);
+    rangeEnd.setDate(rangeEnd.getDate() + 6);
 
     this._matDialog.open(DialogWorklogExportComponent, {
       restoreFocus: true,
