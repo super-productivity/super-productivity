@@ -17,6 +17,8 @@ const DEFAULT_FOCUS_MODE_LOCAL_CONFIG: Required<FocusModeLocalConfig> = {
  * running while the window is unfocused, but on mobile it is suspended on
  * app-background (#8243), so a single value synced across devices would behave
  * differently per device. Mirrors TaskWidgetSettingsService. See #8593.
+ * The session-end browser notification is local too: notification permission
+ * is granted per browser, so a synced flag could not work elsewhere (#7550).
  */
 @Injectable({ providedIn: 'root' })
 export class FocusModeLocalSettingsService {

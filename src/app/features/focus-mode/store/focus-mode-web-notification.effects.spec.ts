@@ -11,6 +11,7 @@ import { CapacitorPlatformService } from '../../../core/platform/capacitor-platf
 import { FocusModeLocalSettingsService } from '../../config/focus-mode-local-settings.service';
 import { HydrationStateService } from '../../../op-log/apply/hydration-state.service';
 import { T } from '../../../t.const';
+import { Log } from '../../../core/log';
 
 const timer = (partial: Partial<TimerState>): TimerState => ({
   isRunning: true,
@@ -126,6 +127,17 @@ describe('FocusModeWebNotificationEffects', () => {
     setTimer(timer({ elapsed: 30 * 60 * 1000, duration: 30 * 60 * 1000 }));
 
     expect(notifyService.notify).toHaveBeenCalledTimes(2);
+  });
+
+  // e.g. Chrome on Android without a service worker: `new Notification` throws
+  it('logs instead of leaving an unhandled rejection when notifying fails', async () => {
+    const err = new Error('Illegal constructor');
+    notifyService.notify.and.rejectWith(err);
+    const logSpy = spyOn(Log, 'err');
+    runToBreakEnd();
+    await new Promise((resolve) => setTimeout(resolve));
+
+    expect(logSpy).toHaveBeenCalledWith(jasmine.any(String), err);
   });
 
   it('skips Countdown session ends, which FocusModeEffects already notifies', () => {

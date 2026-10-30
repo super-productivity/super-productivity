@@ -11,6 +11,7 @@ import { CapacitorPlatformService } from '../../../core/platform/capacitor-platf
 import { HydrationStateService } from '../../../op-log/apply/hydration-state.service';
 import { waitForSyncWindow } from '../../../util/wait-for-sync-window.operator';
 import { T } from '../../../t.const';
+import { Log } from '../../../core/log';
 
 type TimeUpPurpose = 'work' | 'break';
 
@@ -55,12 +56,16 @@ export class FocusModeWebNotificationEffects {
         ),
         filter(() => this._isNotificationWanted()),
         tap(([purpose]) => {
-          void this._notifyService.notify({
-            title:
-              purpose === 'work'
-                ? T.F.FOCUS_MODE.POMODORO_SESSION_COMPLETED
-                : T.F.POMODORO.BREAK_IS_DONE,
-          });
+          this._notifyService
+            .notify({
+              title:
+                purpose === 'work'
+                  ? T.F.FOCUS_MODE.POMODORO_SESSION_COMPLETED
+                  : T.F.POMODORO.BREAK_IS_DONE,
+            })
+            // e.g. `new Notification` throws in Chrome on Android without a
+            // service worker; a missed notification must not surface as an error
+            .catch((e) => Log.err('Focus session end notification failed', e));
         }),
       ),
     { dispatch: false },
