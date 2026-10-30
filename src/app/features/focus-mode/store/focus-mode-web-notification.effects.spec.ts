@@ -119,6 +119,15 @@ describe('FocusModeWebNotificationEffects', () => {
     expect(notifyService.notify).toHaveBeenCalledTimes(3);
   });
 
+  it('notifies again when an overtime session is extended and reaches the new end', () => {
+    setTimer(timer({ elapsed: 25 * 60 * 1000 }));
+    // extending pushes the end past elapsed, so the session is no longer time-up
+    setTimer(timer({ elapsed: 25 * 60 * 1000, duration: 30 * 60 * 1000 }));
+    setTimer(timer({ elapsed: 30 * 60 * 1000, duration: 30 * 60 * 1000 }));
+
+    expect(notifyService.notify).toHaveBeenCalledTimes(2);
+  });
+
   it('skips Countdown session ends, which FocusModeEffects already notifies', () => {
     modeSelector.setResult(FocusModeMode.Countdown);
     setTimer(timer({ elapsed: 25 * 60 * 1000 }));
