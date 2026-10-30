@@ -7,6 +7,7 @@ import {
   getInitialNewInstallSections,
   NEW_INSTALL_APP_FEATURES,
   NEW_INSTALL_CONFIG_SECTIONS,
+  NEW_INSTALL_FOCUS_MODE_CONFIG,
   NEW_INSTALL_IDLE_CONFIG,
   NEW_INSTALL_TAKE_A_BREAK_CONFIG,
 } from './new-install-config.const';
@@ -55,17 +56,26 @@ describe('NEW_INSTALL_CONFIG_SECTIONS', () => {
     });
   });
 
+  it('keeps a Pomodoro session running until the user starts the break', () => {
+    expect(NEW_INSTALL_FOCUS_MODE_CONFIG).toEqual({
+      ...DEFAULT_GLOBAL_CONFIG.focusMode,
+      isManualBreakStart: true,
+    });
+  });
+
   it('keeps the full defaults for filling missing keys of existing data', () => {
     // Existing users must not lose features or reminders they never touched.
     expect(Object.values(DEFAULT_GLOBAL_CONFIG.appFeatures).every(Boolean)).toBeTrue();
     expect(DEFAULT_GLOBAL_CONFIG.idle.isOnlyOpenIdleWhenCurrentTask).toBeFalse();
     expect(DEFAULT_GLOBAL_CONFIG.takeABreak.isTakeABreakEnabled).toBeTrue();
+    expect(DEFAULT_GLOBAL_CONFIG.focusMode.isManualBreakStart).toBeFalse();
   });
 
   it('is the initial store state outside of E2E runs', () => {
     expect(initialGlobalConfigState.appFeatures).toEqual(NEW_INSTALL_APP_FEATURES);
     expect(initialGlobalConfigState.idle).toEqual(NEW_INSTALL_IDLE_CONFIG);
     expect(initialGlobalConfigState.takeABreak).toEqual(NEW_INSTALL_TAKE_A_BREAK_CONFIG);
+    expect(initialGlobalConfigState.focusMode).toEqual(NEW_INSTALL_FOCUS_MODE_CONFIG);
   });
 
   describe('loading stored config', () => {
@@ -76,6 +86,7 @@ describe('NEW_INSTALL_CONFIG_SECTIONS', () => {
       );
       expect(result.idle).toEqual(NEW_INSTALL_IDLE_CONFIG);
       expect(result.takeABreak).toEqual(NEW_INSTALL_TAKE_A_BREAK_CONFIG);
+      expect(result.focusMode).toEqual(NEW_INSTALL_FOCUS_MODE_CONFIG);
     });
 
     it('keeps the stored values of an existing install', () => {
@@ -83,19 +94,25 @@ describe('NEW_INSTALL_CONFIG_SECTIONS', () => {
         ...DEFAULT_GLOBAL_CONFIG,
         idle: { ...DEFAULT_GLOBAL_CONFIG.idle, isOnlyOpenIdleWhenCurrentTask: false },
         takeABreak: { ...DEFAULT_GLOBAL_CONFIG.takeABreak, isTakeABreakEnabled: true },
+        focusMode: { ...DEFAULT_GLOBAL_CONFIG.focusMode, isManualBreakStart: false },
       });
       expect(result.idle.isOnlyOpenIdleWhenCurrentTask).toBeFalse();
       expect(result.takeABreak.isTakeABreakEnabled).toBeTrue();
+      expect(result.focusMode.isManualBreakStart).toBeFalse();
     });
 
     it('fills keys or sections an existing install lacks from the old defaults', () => {
       const { isOnlyOpenIdleWhenCurrentTask, ...idleWithoutKey } =
         DEFAULT_GLOBAL_CONFIG.idle;
+      const { isManualBreakStart, ...focusModeWithoutKey } =
+        DEFAULT_GLOBAL_CONFIG.focusMode;
       const { takeABreak, ...configWithoutTakeABreak } = DEFAULT_GLOBAL_CONFIG;
       const result = loadStoredConfig({
         ...configWithoutTakeABreak,
         idle: idleWithoutKey as GlobalConfigState['idle'],
+        focusMode: focusModeWithoutKey,
       });
+      expect(result.focusMode.isManualBreakStart).toBe(isManualBreakStart);
       expect(result.idle.isOnlyOpenIdleWhenCurrentTask).toBe(
         isOnlyOpenIdleWhenCurrentTask,
       );

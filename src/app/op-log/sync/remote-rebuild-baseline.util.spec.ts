@@ -27,6 +27,9 @@ describe('buildRemoteRebuildBaselineState', () => {
     expect(baseline.globalConfig.takeABreak).toEqual(
       NEW_INSTALL_CONFIG_SECTIONS.takeABreak,
     );
+    expect(baseline.globalConfig.focusMode).toEqual(
+      NEW_INSTALL_CONFIG_SECTIONS.focusMode,
+    );
     expect(baseline.globalConfig.misc).toEqual(DEFAULT_GLOBAL_CONFIG.misc);
     expect(baseline['task']).toEqual({ ids: [], entities: {} });
   });

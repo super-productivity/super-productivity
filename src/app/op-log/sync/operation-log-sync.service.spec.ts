@@ -92,6 +92,7 @@ const ARCHIVE_ONLY_LEGACY_STATE = {
 };
 import { DEFAULT_GLOBAL_CONFIG } from '../../features/config/default-global-config.const';
 import {
+  NEW_INSTALL_FOCUS_MODE_CONFIG,
   NEW_INSTALL_IDLE_CONFIG,
   NEW_INSTALL_TAKE_A_BREAK_CONFIG,
 } from '../../features/config/new-install-config.const';
@@ -5475,6 +5476,7 @@ describe('OperationLogSyncService', () => {
           appFeatures: liveAppFeatures,
           idle: NEW_INSTALL_IDLE_CONFIG,
           takeABreak: NEW_INSTALL_TAKE_A_BREAK_CONFIG,
+          focusMode: NEW_INSTALL_FOCUS_MODE_CONFIG,
         },
       });
       const dispatchSpy = spyOn(mockStore, 'dispatch').and.callThrough();
@@ -5500,6 +5502,7 @@ describe('OperationLogSyncService', () => {
       expect(baselineState.globalConfig.takeABreak).toEqual(
         NEW_INSTALL_TAKE_A_BREAK_CONFIG,
       );
+      expect(baselineState.globalConfig.focusMode).toEqual(NEW_INSTALL_FOCUS_MODE_CONFIG);
       // The live reset keeps the device's config, so both sides agree.
       const reset = dispatchSpy.calls
         .allArgs()

@@ -112,10 +112,12 @@ export const selectNewInstallSections = createSelector(
   selectAppFeaturesConfig,
   selectIdleConfig,
   selectTakeABreakConfig,
-  (appFeatures, idle, takeABreak): NewInstallConfigSections => ({
+  selectFocusModeConfig,
+  (appFeatures, idle, takeABreak, focusMode): NewInstallConfigSections => ({
     appFeatures,
     idle,
     takeABreak,
+    focusMode,
   }),
 );
 export const selectIsFocusModeEnabled = createSelector(

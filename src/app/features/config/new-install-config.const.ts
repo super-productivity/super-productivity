@@ -2,6 +2,7 @@ import { LS } from '../../core/persistence/storage-keys.const';
 import { DEFAULT_GLOBAL_CONFIG } from './default-global-config.const';
 import {
   AppFeaturesConfig,
+  FocusModeConfig,
   GlobalConfigState,
   IdleConfig,
   TakeABreakConfig,
@@ -35,11 +36,21 @@ export const NEW_INSTALL_TAKE_A_BREAK_CONFIG: TakeABreakConfig = {
   isTakeABreakEnabled: false,
 };
 
+/**
+ * A Pomodoro session keeps running past its length until the user ends it,
+ * instead of switching into a break on its own.
+ */
+export const NEW_INSTALL_FOCUS_MODE_CONFIG: FocusModeConfig = {
+  ...DEFAULT_GLOBAL_CONFIG.focusMode,
+  isManualBreakStart: true,
+};
+
 /** Config sections where a new install starts calmer than DEFAULT_GLOBAL_CONFIG. */
 export const NEW_INSTALL_CONFIG_SECTION_KEYS = [
   'appFeatures',
   'idle',
   'takeABreak',
+  'focusMode',
 ] as const;
 
 export type NewInstallConfigSections = Pick<
@@ -56,6 +67,7 @@ export const NEW_INSTALL_CONFIG_SECTIONS: NewInstallConfigSections = {
   appFeatures: NEW_INSTALL_APP_FEATURES,
   idle: NEW_INSTALL_IDLE_CONFIG,
   takeABreak: NEW_INSTALL_TAKE_A_BREAK_CONFIG,
+  focusMode: NEW_INSTALL_FOCUS_MODE_CONFIG,
 };
 
 /**
@@ -76,6 +88,7 @@ export const getInitialNewInstallSections = (): NewInstallConfigSections => {
           appFeatures: DEFAULT_GLOBAL_CONFIG.appFeatures,
           idle: DEFAULT_GLOBAL_CONFIG.idle,
           takeABreak: DEFAULT_GLOBAL_CONFIG.takeABreak,
+          focusMode: DEFAULT_GLOBAL_CONFIG.focusMode,
         }
       : NEW_INSTALL_CONFIG_SECTIONS;
   } catch {
