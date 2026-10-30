@@ -23,6 +23,7 @@
 - [[2.21-Manage-Plugins]]
 - [[2.22-Import-from-TickTick]]
 - [[2.23-Connect-an-AI-Assistant]]
+- [[2.24-Build-Views-with-AI]]
 - [[2.13-Run-with-Docker]]
 
 ### Contributing to Super-Productivity

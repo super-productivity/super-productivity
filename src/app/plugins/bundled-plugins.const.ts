@@ -27,6 +27,7 @@ export const BUNDLED_PLUGIN_PATHS = [
   'assets/bundled-plugins/todoist-import',
   'assets/bundled-plugins/ticktick-import',
   'assets/bundled-plugins/parallel-code',
+  'assets/bundled-plugins/ai-view-builder',
 ] as const;
 
 // Reserved ids: an uploaded plugin may not reuse a bundled plugin's manifest id (it would
@@ -38,6 +39,7 @@ export const BUNDLED_PLUGIN_PATHS = [
 // Karma spec cannot read the manifests) so the two lists cannot silently drift again.
 export const BUNDLED_PLUGIN_IDS = new Set<string>([
   'ai-productivity-prompts',
+  'ai-view-builder',
   'api-test-plugin',
   'app-auto-track',
   'automations',

@@ -1,0 +1,9 @@
+{
+  "name": "ai-view-builder",
+  "version": "1.0.0",
+  "description": "AI View Builder plugin for Super Productivity",
+  "scripts": {
+    "build": "echo 'No build needed for simple plugin'",
+    "test": "node --test"
+  }
+}
