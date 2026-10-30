@@ -1,18 +1,16 @@
 # Super Productivity Plugin Development Guide
 
-This is a comprehensive documentation of the Super Productivity Plugin System. This guide covers everything you need to know about creating plugins for Super Productivity.
+Plugins add buttons, panels, shortcuts and integrations to Super Productivity.
+A plugin is a ZIP with a `manifest.json` and JavaScript (`plugin.js`) and/or an
+HTML page (`index.html`); no build step is required.
 
-These docs might not always be perfectly up to date. You find the latest typescript interfaces here:
-[types.ts](../packages/plugin-api/src/types.ts)
-
-Personally I think the best way to figure out how to write a plugin is to check out the example plugins:
-
-- [yesterday-tasks-plugin](../packages/plugin-dev/yesterday-tasks-plugin)
-- [procrastination-buster](../packages/plugin-dev/procrastination-buster)
-- [api-test-plugin](../packages/plugin-dev/api-test-plugin)
-
-If you want to build a sophisticated UI there is a boilerplate available for solidjs:
-[boilerplate-solid-js](../packages/plugin-dev/boilerplate-solid-js)
+**Source of truth.** This guide explains concepts and the most used methods.
+The complete API — every `PluginAPI` method with its signature and comments — is
+[`packages/plugin-api/src/types.ts`](../packages/plugin-api/src/types.ts),
+published on npm as
+[`@super-productivity/plugin-api`](https://www.npmjs.com/package/@super-productivity/plugin-api).
+The npm package is versioned like the app: version X.Y.Z describes the API of
+Super Productivity X.Y.Z.
 
 ---
 
@@ -28,14 +26,69 @@ If you want to build a sophisticated UI there is a boilerplate available for sol
 
 ## Quick Start
 
-### 1. Basic Plugin Structure
+Your first plugin in about five minutes. You need a text editor and
+[Node.js](https://nodejs.org) 20.15 or newer (only to pack the ZIP).
+
+### 1. Copy the starter
+
+Copy the [plugin starter](../packages/plugin-starter) folder to a folder or
+repository of your own. It is plain JavaScript with no dependencies: a header
+button and a hook.
+
+### 2. Make it yours
+
+In `manifest.json`, set a unique `id` (letters, numbers and dashes), `name`,
+`description` and `author`. Then edit `plugin.js`:
+
+```javascript
+PluginAPI.registerHeaderButton({
+  label: 'Say hello',
+  icon: 'waving_hand', // any Material icon name
+  onClick: async () => {
+    const tasks = await PluginAPI.getCurrentContextTasks();
+    PluginAPI.showSnack({ msg: `${tasks.length} tasks here`, type: 'SUCCESS' });
+  },
+});
+```
+
+### 3. Pack and install
+
+```bash
+node scripts/pack.mjs   # writes plugin.zip and prints its SHA-256
+```
+
+In the app: **Settings → Plugins → Choose Plugin File** → `plugin.zip`. Use a
+test instance, not your real data — for example
+[test-app.super-productivity.com](https://test-app.super-productivity.com).
+
+### 4. Iterate
+
+Edit, pack, and upload again: the same `id` replaces the installed plugin. Open
+the developer tools (F12 or Ctrl+Shift+I) for errors and `console.log` output.
+
+### Editor autocomplete
+
+Run `npm install --save-dev @super-productivity/plugin-api` in your plugin
+folder. The starter's `plugin.js` already begins with:
+
+```javascript
+// @ts-check
+/// <reference types="@super-productivity/plugin-api/global" />
+```
+
+so editors such as VS Code autocomplete every `PluginAPI` method and flag
+typos. In TypeScript, import types instead:
+`import type { PluginAPI } from '@super-productivity/plugin-api';`.
+
+### Plugin structure
 
 ```
 my-plugin/
 ├── manifest.json      # Plugin metadata (required)
 ├── plugin.js          # Host-side plugin code (optional for iframe-only plugins)
 ├── index.html         # UI interface (required when omitting plugin.js; requires iFrame:true in manifest)
-└── icon.svg           # Plugin icon (optional)
+├── icon.svg           # Plugin icon (optional)
+└── i18n/              # Translations (optional), see PLUGIN_I18N.md
 ```
 
 `plugin.js` is required for plugins that need host-side setup at plugin load time,
@@ -43,48 +96,15 @@ shortcuts, header buttons, background behavior, or host-side API handlers. A UI-
 iframe plugin can ship only `manifest.json` and `index.html` when the manifest sets
 `iFrame: true`.
 
-### 2. Minimal Example
+### More examples
 
-**manifest.json:**
-
-```json
-{
-  "id": "hello-world",
-  "name": "Hello World Plugin",
-  "version": "1.0.0",
-  "description": "My first Super Productivity plugin",
-  "manifestVersion": 1,
-  "minSupVersion": "14.0.0",
-  "hooks": [],
-  "permissions": []
-}
-```
-
-**plugin.js:**
-
-```javascript
-console.log('Hello World plugin loaded!');
-
-// Show a notification
-PluginAPI.showSnack({
-  msg: 'Hello from my plugin!',
-  type: 'SUCCESS',
-});
-
-// Demo a simple counter
-await PluginAPI.setCounter('hello-count', 0);
-PluginAPI.registerHeaderButton({
-  label: 'Hello (Count: 0)',
-  icon: 'waving_hand',
-  onClick: async () => {
-    const newCount = await PluginAPI.incrementCounter('hello-count');
-    PluginAPI.showSnack({
-      msg: `Button clicked! Count: ${newCount}`,
-      type: 'INFO',
-    });
-  },
-});
-```
+- [yesterday-tasks-plugin](../packages/plugin-dev/yesterday-tasks-plugin) — plain
+  JavaScript with an iframe side panel
+- [api-test-plugin](../packages/plugin-dev/api-test-plugin) — exercises most API calls
+- [procrastination-buster](../packages/plugin-dev/procrastination-buster) — TypeScript
+- [boilerplate-solid-js](../packages/plugin-dev/boilerplate-solid-js) — SolidJS UI
+  with Vite. It builds inside this repository only; see its README.
+- All bundled plugins: [packages/plugin-dev](../packages/plugin-dev)
 
 ## Plugin Manifest
 
@@ -294,6 +314,9 @@ Iframe plugins automatically receive:
 - `--is-dark-theme` — `1` if dark theme, `0` if light
 
 ## Available API Methods
+
+This section covers the most used methods. The complete list, with signatures,
+is [`types.ts`](../packages/plugin-api/src/types.ts) (`interface PluginAPI`).
 
 ### Data Operations
 
@@ -938,7 +961,8 @@ async function testAPI() {
 
 ## Resources
 
-- **Plugin API Types**: [@super-productivity/plugin-api](https://www.npmjs.com/package/@super-productivity/plugin-api)
+- **Plugin API Types**: [@super-productivity/plugin-api](https://www.npmjs.com/package/@super-productivity/plugin-api) ([source](../packages/plugin-api/src/types.ts))
+- **Plugin Starter**: [plugin-starter](../packages/plugin-starter)
 - **Plugin Boilerplate**: [boilerplate-solid-js](../packages/plugin-dev/boilerplate-solid-js)
 - **Example Plugins**: [plugin-dev](../packages/plugin-dev)
 - **Community Plugins**: [community-plugins.json](../src/assets/community-plugins.json), also listed in Settings → Plugins
@@ -1001,6 +1025,7 @@ Happy plugin development! 🚀
 - Don't test on your real world data! Use a test instance! (you can use https://test-app.super-productivity.com/ if you don't know how get one)
 - Be as specific as possible
 - Outline what APIs your plugin should use
+- Give the assistant [`types.ts`](../packages/plugin-api/src/types.ts): it is the complete, current API, while this guide only covers the most used parts
 - Test for errors (`Ctrl+Shift+i` opens the console) and iterate until it works. Don't expect that everything works on your first try.
 - Read the code! Don't trust it blindly.
 
@@ -1009,9 +1034,11 @@ Happy plugin development! 🚀
 ```md
 Can you you write me a plugin for Super Productivity that plays a beep sound every time i click on a header button (You need to add a header button via PluginAPI.registerHeaderButton).
 
-Here are the docs: https://github.com/super-productivity/super-productivity/blob/master/docs/plugin-development.md
+Here is the guide: https://github.com/super-productivity/super-productivity/blob/master/docs/plugin-development.md
+Here is the complete API (the global PluginAPI object): https://github.com/super-productivity/super-productivity/blob/master/packages/plugin-api/src/types.ts
+Start from this starter: https://github.com/super-productivity/super-productivity/tree/master/packages/plugin-starter
 
-Don't use any PluginAPI methods that are not listed in the guide.
+Don't use any PluginAPI methods that are not in types.ts.
 
 Please give me the output as flat zip file to download.
 ```
