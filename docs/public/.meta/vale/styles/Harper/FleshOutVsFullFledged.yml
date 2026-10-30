@@ -1,0 +1,32 @@
+---
+# Hand-written from Harper's FleshOutVsFullFledged: `full-fledged` but `flesh
+# out`, and `pledge` belongs to neither.
+#
+# The generated rule was a matcher over every form of all three words; which
+# one is wrong depends on which pair the word landed in, and Harper decides
+# that in code. The two directions are written out here instead.
+#
+# After `full` or `fully` the word is `fledged`; before `out` it is `fleshed`.
+# `fledged` after `full` and `fleshed` before `out` are the correct forms and
+# are the ones left out of each list.
+#
+# Each swap also has to stay out of the other's way, or the correct pairings
+# get flagged. `fully fleshed out` is right, so the first stops before an
+# `out`; `full-fledged out-of-core` is right, so the second stops after a
+# `full`. Without those two the rule invented five findings on text that was
+# already correct.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: substitution
+message: "Did you mean the other word?"
+level: warning
+ignorecase: true
+matchcase: true
+nonword: true
+action:
+  name: replace
+swap:
+  '(?<=\b(?:full|fully)[\s-])(?:fledge|flesh|fleshed|fleshes|fleshing|pledge|pledged|pledges|pledging)\b(?![\s-]+out\b)': "fledged"
+  '(?<!\b(?:full|fully)[\s-])\b(?:fledge|fledged|pledge|pledged)(?=[\s-]+out\b)': "fleshed"

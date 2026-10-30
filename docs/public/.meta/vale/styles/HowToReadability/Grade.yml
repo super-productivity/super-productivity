@@ -1,0 +1,24 @@
+# Flesch-Kincaid target for how-to guides. Formula adapted from the Readability
+# package (MIT): https://github.com/vale-cli/readability
+extends: metric
+message: "This how-to paragraph reads at grade %s. The how-to target is grade 10."
+link: https://en.wikipedia.org/wiki/Flesch%E2%80%93Kincaid_readability_tests
+level: suggestion
+scope: paragraph
+formula: round(flesch_kincaid, 1)
+condition: "> 10"
+
+tests:
+  - name: fires
+    input: |
+      # Probe
+
+      Notwithstanding the aforementioned considerations, the organization's interdepartmental reorganization initiative necessitated comprehensive reevaluation of institutional methodologies and jurisdictional responsibilities.
+    want: |
+      3:1:HowToReadability.Grade:This how-to paragraph reads at grade 39.90. The how-to target is grade 10.
+  - name: clean
+    input: |
+      # Probe
+
+      We changed how the teams work. Each team now owns one part of the product.
+    want: ""

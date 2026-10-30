@@ -1,0 +1,20 @@
+# Gunning-Fog target for reference. Formula adapted from the Readability
+# package (MIT): https://github.com/vale-cli/readability
+extends: metric
+message: "The reference Gunning-Fog index is %s. The reference target is 14."
+link: https://en.wikipedia.org/wiki/Gunning_fog_index
+level: warning
+formula: |
+  0.4 * ((words / sentences) + 100 * (complex_words / words))
+condition: "> 14"
+
+tests:
+  - name: fires
+    input: |
+      Notwithstanding the aforementioned considerations, the organization's interdepartmental reorganization initiative necessitated comprehensive reevaluation of institutional methodologies and jurisdictional responsibilities.
+    want: |
+      1:1:ReferenceReadability.GunningFog:The reference Gunning-Fog index is 38.31. The reference target is 14.
+  - name: clean
+    input: |
+      We changed how the teams work. Each team now owns one part of the product.
+    want: ""

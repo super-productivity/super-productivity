@@ -1,0 +1,28 @@
+---
+# Hand-written from Harper's NumericRangeEnDash: a range of numbers takes an
+# en dash.
+#
+# The generated rule knew eight literal ranges, copied from Harper's test
+# sentences -- `12-14`, `5-10%` -- so it fired on those and nothing else. This
+# says what a range is instead.
+#
+# The lookarounds are Harper's `is_chained_numeric_form`: a number joined to a
+# dash on either side is a date or a version, `2026-03-18` or `1-2-3`, not a
+# range. Without them `12-14` matched inside `12-14-16`.
+#
+# The classes exclude a digit as well as a dash on each side. `\d+` backtracks,
+# so guarding only against the dash let `2026-03-18` match as `2026`-`0` with
+# the `3` left over -- past a guard that was only looking for a dash.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: substitution
+message: "Use an en dash (–) in ranges of numbers. Ignore this if it is math."
+level: warning
+ignorecase: true
+nonword: true
+action:
+  name: replace
+swap:
+  '(?<![\d.\-–—])(\d+(?:\.\d+)?)[-—](\d+(?:\.\d+)?)(?![\d\-–—])(?!\.\d)': "$1–$2"

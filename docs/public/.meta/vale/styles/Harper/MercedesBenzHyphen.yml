@@ -1,0 +1,18 @@
+---
+# Generated from Harper's MercedesBenzHyphen rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Connect the separate words `Mercedes` and `Benz` whenever they appear together so the brand stays consistent with its official styling.
+extends: existence
+message: "Hyphenate the two components of this classic Mercedes-Benz trademark."
+level: error
+ignorecase: true
+action:
+  name: replace
+  params:
+    - "Mercedes-Benz"
+tokens:
+  - "Mercedes(?!\\s*\\n\\s*\\n)\\s+Benz(?!['\\x{2019}]s\\b)"

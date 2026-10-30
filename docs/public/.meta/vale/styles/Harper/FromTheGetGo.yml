@@ -1,0 +1,19 @@
+---
+# Generated from Harper's FromTheGetGo rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Ensures `from the get-go` is correctly hyphenated, preserving the idiom’s meaning of ‘from the very beginning’.
+extends: existence
+message: "Use the hyphenated form: `from the get-go`."
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "from the get-go"
+tokens:
+  - "from(?!\\s*\\n\\s*\\n)\\s+the(?!\\s*\\n\\s*\\n)\\s+get(?!\\s*\\n\\s*\\n)\\s+go(?!['\\x{2019}]s\\b)"

@@ -1,0 +1,20 @@
+---
+# Generated from Harper's ReadsAndWrites rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects inconsistent noun or verb forms when `read` and `write` are paired.
+extends: existence
+message: "Did you mean `reads and writes` or `read and write`? If they are main nouns they should probably both be plural (disk reads and writes). If they describe another noun, they should probably both be singular (read and write permissions)."
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "reads and writes"
+    - "read and write"
+tokens:
+  - "read(?!\\s*\\n\\s*\\n)\\s+and(?!\\s*\\n\\s*\\n)\\s+writes(?!['\\x{2019}]s\\b)"

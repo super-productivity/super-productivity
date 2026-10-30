@@ -1,0 +1,25 @@
+---
+# Hand-written from Harper's ForTheNthTime: `for the second time`, not `for
+# second time`.
+#
+# The generated rule was a single swap with a whole test sentence baked into it,
+# ending "...press the key for" -> "...press the key for the". Diffing that test
+# against its correction produced one enormous literal instead of the pattern, so
+# the rule matched nothing real. 12 missed findings.
+#
+# Harper requires the phrase to end the sentence, or to be followed by `and` or
+# `but` -- an `AnchorEnd` in its chain. That constraint is what keeps it off
+# "for the first time in years", where the ordinal is doing ordinary work, so it
+# is reproduced here with a sentence scope and an end-of-text lookahead.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: existence
+message: "The standard form of this construction requires the word 'the' to precede the ordinal."
+level: warning
+scope: sentence
+ignorecase: true
+nonword: true
+tokens:
+  - '\bfor\s+(?:first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|eleventh|twelfth|thirteenth|fourteenth|fifteenth|sixteenth|seventeenth|eighteenth|nineteenth|twentieth|thirtieth|fortieth|fiftieth|sixtieth|seventieth|eightieth|ninetieth|hundredth|thousandth|millionth|billionth|nth|umpteenth|zeroth|zeroeth)\s+time(?=[)\]]*[.?!]*\s*$|\s+(?:and|but)\b)'

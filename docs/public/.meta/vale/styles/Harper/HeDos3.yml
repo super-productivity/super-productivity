@@ -1,0 +1,23 @@
+---
+# Generated from Harper's HeDos rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects the misspelling `dos` after `he`, `she`, or `it`.
+extends: sequence
+message: "Did you mean `does`?"
+level: error
+ignorecase: true
+model: harper
+matchcase: true
+action:
+  name: replace
+  params:
+    - "does"
+tokens:
+  - pattern: 'it'
+  - upos: ADV
+  - pattern: 'dos'
+    target: true

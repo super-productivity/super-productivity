@@ -1,0 +1,19 @@
+---
+# Generated from Harper's CauseItIsBecause rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Normalizes informal `cause it is` to the standard subordinating form in explanatory clauses.
+extends: existence
+message: "Prefer `because it is` in this clause."
+level: suggestion
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "because it is"
+tokens:
+  - "cause(?!\\s*\\n\\s*\\n)\\s+it(?!\\s*\\n\\s*\\n)\\s+is(?!['\\x{2019}]s\\b)"

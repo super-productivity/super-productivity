@@ -1,0 +1,19 @@
+---
+# Generated from Harper's ToSomeDegree rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects `in some degree` to `to some degree`, meaning to a certain extent.
+extends: existence
+message: "The correct preposition in this phrase is 'to', not 'in'."
+level: error
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "to some degree"
+tokens:
+  - "in(?!\\s*\\n\\s*\\n)\\s+some(?!\\s*\\n\\s*\\n)\\s+degree(?!['\\x{2019}]s\\b)"

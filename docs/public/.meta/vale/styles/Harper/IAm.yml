@@ -1,0 +1,19 @@
+---
+# Generated from Harper's IAm rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Fixes the incorrect spacing in `I a m` to properly form `I am`.
+extends: existence
+message: "Did you mean `I am`?"
+level: error
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "I am"
+tokens:
+  - "I(?!\\s*\\n\\s*\\n)\\s+a(?!\\s*\\n\\s*\\n)\\s+m(?!['\\x{2019}]s\\b)"

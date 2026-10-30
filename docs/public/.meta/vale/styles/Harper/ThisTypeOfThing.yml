@@ -1,0 +1,48 @@
+---
+# Hand-written from Harper's ThisTypeOfThing: the determiner and the two nouns
+# in `this kind of thing` have to agree in number.
+#
+# The previous version of this file had the wrong intent entirely. It said
+# "Consider simplifying this phrase" and flagged every instance, so correct,
+# fully-agreeing prose -- "this kind of thing", "those types of things" -- was
+# reported, with a message telling the writer to change something already right.
+# 10 false positives.
+#
+# Harper reads the three slots, calls each singular or plural, and returns
+# nothing when all three match. Only a mismatch lints, and the alert lands on
+# whichever of the three is the odd one out:
+#
+#   this  kind  of thing    all singular  -- fine
+#   these kinds of things   all plural    -- fine
+#   these kind  of thing    determiner disagrees
+#
+# Three slots of two values each is eight combinations, two of which agree, so
+# the six below are the complete set of mismatches. Enumerating them is exact
+# where a single pattern would have to compare the slots against each other.
+#
+# Harper also accepts any plural noun in the last slot, not just `things`. That
+# is left out deliberately, as it was before: `thing` is safe because it is
+# never part of a compound noun, and widening the slot is how this rule earns
+# its false positives back.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: existence
+message: "The grammatical number of the determiner and the two nouns must agree."
+level: warning
+ignorecase: true
+nonword: true
+tokens:
+  # Singular determiner, singular type, plural thing.
+  - '\b(?:this|that)\s+(?:kind|sort|type)\s+of\s+things\b'
+  # Singular determiner, plural type, singular thing.
+  - '\b(?:this|that)\s+(?:kinds|sorts|types)\s+of\s+thing\b'
+  # Singular determiner, plural type, plural thing.
+  - '\b(?:this|that)\s+(?:kinds|sorts|types)\s+of\s+things\b'
+  # Plural determiner, singular type, singular thing.
+  - '\b(?:these|those)\s+(?:kind|sort|type)\s+of\s+thing\b'
+  # Plural determiner, singular type, plural thing.
+  - '\b(?:these|those)\s+(?:kind|sort|type)\s+of\s+things\b'
+  # Plural determiner, plural type, singular thing.
+  - '\b(?:these|those)\s+(?:kinds|sorts|types)\s+of\s+thing\b'

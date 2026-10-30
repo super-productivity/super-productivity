@@ -1,0 +1,19 @@
+---
+# Generated from Harper's AvoidAndAlso rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Reduces redundancy by replacing `and also` with `and`.
+extends: existence
+message: "Consider using just `and`."
+level: suggestion
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "and"
+tokens:
+  - "and(?!\\s*\\n\\s*\\n)\\s+also(?!['\\x{2019}]s\\b)"

@@ -1,0 +1,19 @@
+---
+# Generated from Harper's WhetYourAppetite rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Ensures `whet your appetite` is used correctly, distinguishing it from the incorrect `wet` variation.
+extends: existence
+message: "Use the correct phrase for stimulating desire."
+level: error
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "whet your appetite"
+tokens:
+  - "wet(?!\\s*\\n\\s*\\n)\\s+your(?!\\s*\\n\\s*\\n)\\s+appetite(?!['\\x{2019}]s\\b)"

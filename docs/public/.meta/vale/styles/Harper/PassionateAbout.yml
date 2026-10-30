@@ -1,0 +1,24 @@
+---
+# Hand-written from Harper's PassionateAbout: you are passionate *about*
+# something.
+#
+# The generated rule was three swaps lifted from one test sentence -- including
+# a bare `of,` -> `about,` that had nothing to do with `passionate` at all, and
+# `(of which i am passionate about)` as a literal. 10 missed findings.
+#
+# The lookbehind puts the alert on `of` alone, which is Harper's span and the
+# only word that changes.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: substitution
+message: "Use `about` instead of `of` with `passionate`"
+level: warning
+ignorecase: true
+matchcase: true
+nonword: true
+action:
+  name: replace
+swap:
+  '(?<=\bpassionate\s)of\b': "about"

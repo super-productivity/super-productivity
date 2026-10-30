@@ -1,0 +1,22 @@
+---
+# Generated from Harper's OnesOwnAccord linter. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: sequence
+message: "The correct preposition is `of`."
+level: warning
+ignorecase: true
+model: harper
+matchcase: true
+action:
+  name: replace
+  params:
+    - "of"
+tokens:
+  - pattern: 'on'
+    target: true
+  - pattern: 'they''re|theyre|one''s|their|there|it''s|ones|your|her|his|its|our|my'
+  - pattern: 'own'
+  - pattern: 'accords|accord'

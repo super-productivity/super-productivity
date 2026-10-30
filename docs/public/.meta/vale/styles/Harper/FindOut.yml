@@ -1,0 +1,24 @@
+---
+# Generated from Harper's FindOut rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Flags `find out` when a plain `find` is the better choice.
+extends: sequence
+message: "Use `find` instead of `find out` when you mean to discover something directly."
+level: suggestion
+ignorecase: true
+model: harper
+matchcase: true
+action:
+  name: replace
+  params:
+    - "find"
+tokens:
+  - pattern: 'find'
+    target: true
+  - pattern: 'out'
+    target: true
+  - pattern: '^(?!(?:through|whether|about|where|whose|from|more|that|what|when|whom|how|via|who|why|–|—|\.|\?|by|if|,|-|:|;)$)[\p{L}\p{N}].*$'

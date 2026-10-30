@@ -1,0 +1,41 @@
+---
+# Hand-written from Harper's ShootOneselfInTheFoot: a form of `shoot` + a
+# reflexive pronoun + a preposition + a determiner + a body part.
+#
+# The previous version of this file matched that shape and reported all of it,
+# including `shoot myself in the foot` -- the idiom the message asks for. 12
+# false positives.
+#
+# Harper matches the same shape and then declines to report it when the phrase
+# is already right. Reading its `match_to_lint`, it stays quiet when the
+# preposition is `in`, the determiner is `the`, and either:
+#
+#   * the body part is `foot`, whatever the pronoun; or
+#   * the pronoun and the body part are both plural -- `themselves in the feet`.
+#
+# The second clause is why `shoot themselves in the legs` is not reported: the
+# body part is plural and so is the pronoun, which satisfies Harper's test even
+# though a leg is not a foot. That is Harper's behavior, so it is reproduced
+# here rather than corrected.
+#
+# The three patterns below are the complement of those exemptions:
+#
+#   1. anything that is not `in the ...`      -- wrong preposition or determiner
+#   2. `in the leg`                           -- singular, so never exempt
+#   3. `in the feet`/`legs` with a singular pronoun
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: existence
+message: "The idiom is `shoot oneself in the foot`."
+level: warning
+ignorecase: true
+nonword: true
+tokens:
+  # A preposition other than `in`, or a determiner other than `the`.
+  - '\b(?:shoot|shooting|shoots|shot|shooted)\s+(?:myself|yourself|himself|herself|itself|oneself|ourselves|yourselves|themselves)\s+(?!in\s+the\b)(?:in|on|at|through|into|onto|over|under|around)\s+(?:the|a|an|his|her|its|their|my|your|our)\s+(?:foot|feet|leg|legs)\b'
+  # Singular `leg` is never exempt, whatever the pronoun.
+  - '\b(?:shoot|shooting|shoots|shot|shooted)\s+(?:myself|yourself|himself|herself|itself|oneself|ourselves|yourselves|themselves)\s+in\s+the\s+leg\b'
+  # A plural body part needs a plural pronoun to be exempt.
+  - '\b(?:shoot|shooting|shoots|shot|shooted)\s+(?:myself|yourself|himself|herself|itself|oneself)\s+in\s+the\s+(?:feet|legs)\b'

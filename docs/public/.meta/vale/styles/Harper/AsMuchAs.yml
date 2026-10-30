@@ -1,0 +1,19 @@
+---
+# Generated from Harper's AsMuchAs rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects `as much than` to `as much as`.
+extends: existence
+message: "This epxression requires `as` and not `than`."
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "as much as"
+tokens:
+  - "as(?!\\s*\\n\\s*\\n)\\s+much(?!\\s*\\n\\s*\\n)\\s+than(?!['\\x{2019}]s\\b)"

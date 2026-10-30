@@ -1,0 +1,36 @@
+# Words that assume a gender for a role.
+extends: substitution
+message: "Consider '%s' instead of '%s'."
+level: suggestion
+ignorecase: true
+action:
+  name: replace
+swap:
+  manpower: staff
+  man[- ]hours: person-hours
+  chairman: chair
+  chairwoman: chair
+  mankind: humanity
+  manned: staffed
+  salesman: salesperson
+  fireman: firefighter
+  policeman: police officer
+  stewardess: flight attendant
+  his or her: their
+  he or she: they
+  hi guys: hi everyone
+  hey guys: hey everyone
+  you guys: everyone
+
+tests:
+  - name: fires
+    input: |
+      Hi guys, the chairman needs more manpower.
+    want: |
+      1:1:Inclusive.Gendered:Consider 'hi everyone' instead of 'Hi guys'.
+      1:14:Inclusive.Gendered:Consider 'chair' instead of 'chairman'.
+      1:34:Inclusive.Gendered:Consider 'staff' instead of 'manpower'.
+  - name: clean
+    input: |
+      Hi everyone, the chair needs more staff.
+    want: ""

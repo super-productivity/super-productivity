@@ -1,0 +1,21 @@
+---
+# Generated from Harper's PerSe rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects common misspellings of `per se`.
+extends: existence
+message: "The correct spelling is `per se` (with no hyphen)"
+level: error
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "per se"
+tokens:
+  - "per(?!\\s*\\n\\s*\\n)\\s+say(?!['\\x{2019}]s\\b)"
+  - "per-say(?!['\\x{2019}]s\\b)"
+  - "per-se(?!['\\x{2019}]s\\b)"

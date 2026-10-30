@@ -1,0 +1,36 @@
+---
+# Hand-written companion to LaughOfAt: the possessive-determiner case.
+#
+# Harper counts `your` and `her` among the pronouns after `of`; Vale tags them
+# as determiners, so "Don't laugh of your teammate again" and "She laughs of
+# her teacher" go unreported by the rule as Harper writes it.
+#
+# Accepting determiners there cannot be done in that rule, because it would
+# also accept the noun: "The laugh of the audience shook the rafters" is
+# ordinary English and `make verify` catches it at once. What separates the two
+# is the word before `laugh` -- a determiner makes it the noun.
+#
+# That guard is why this is a second rule rather than a widened first one. It
+# needs a token before `laugh`, and Harper's "Laugh of John while he waits."
+# has none.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: sequence
+message: "Use `laugh at ...` instead of `laugh of ...` when pointing at someone."
+level: warning
+ignorecase: true
+model: harper
+matchcase: true
+action:
+  name: replace
+  params:
+    - "at"
+tokens:
+  - upos: DET
+    negate: true
+  - pattern: 'laughing|laughed|laughs|laugh'
+  - pattern: 'of'
+    target: true
+  - upos: DET

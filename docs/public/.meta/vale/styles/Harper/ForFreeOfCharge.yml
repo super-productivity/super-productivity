@@ -1,0 +1,33 @@
+---
+# Hand-written from Harper's ForFreeOfCharge: `for free` and `free of charge`
+# both work; `for free of charge` welds them together.
+#
+# Harper only objects when the phrase stands on its own -- followed by
+# punctuation, or by a word that is not a noun. Followed by a noun it reads as
+# a modifier ("for free of charge tier users") and Harper says nothing, so a
+# rule keyed on the phrase alone reported four findings Harper does not make.
+#
+# An earlier version keyed on the phrase followed by punctuation only, copied
+# out of Harper's test sentences. It could not match the phrase mid-sentence,
+# which is where it appears: 10 missed findings. The negated token gets both,
+# since punctuation is a token and is not a noun either.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: sequence
+message: "Use only either `for free` or `free of charge`"
+level: warning
+ignorecase: true
+model: harper
+tokens:
+  - pattern: 'for'
+    target: true
+  - pattern: 'free'
+    target: true
+  - pattern: 'of'
+    target: true
+  - pattern: 'charge'
+    target: true
+  - upos: NOUN|PROPN
+    negate: true

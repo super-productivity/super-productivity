@@ -1,0 +1,19 @@
+---
+# Generated from Harper's PortAuPrince rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Checks for the correct official name of the capital of Haiti.
+extends: existence
+message: "The official spelling is hyphenated."
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "Port-au-Prince"
+tokens:
+  - "Port(?!\\s*\\n\\s*\\n)\\s+au(?!\\s*\\n\\s*\\n)\\s+Prince(?!['\\x{2019}]s\\b)"

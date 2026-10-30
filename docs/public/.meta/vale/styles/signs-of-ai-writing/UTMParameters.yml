@@ -1,0 +1,10 @@
+extends: existence
+message: "ChatGPT UTM tracking parameter detected: '%s'"
+level: error
+link: https://en.wikipedia.org/wiki/Wikipedia:Signs_of_AI_writing#G15_criteria
+nonword: true
+tokens:
+  - 'utm_source=chatgpt\.com'
+  - 'utm_source=openai'
+  - '\?utm_source=(chatgpt|openai)'
+  - '&utm_source=(chatgpt|openai)'

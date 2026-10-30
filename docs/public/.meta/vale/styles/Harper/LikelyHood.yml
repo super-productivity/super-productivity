@@ -1,0 +1,19 @@
+---
+# Generated from Harper's LikelyHood rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Treat the split tokens as one compound word (`likelihood`) whenever the adjective `likely` precedes `hood`.
+extends: existence
+message: "Merge `likely hood` into the established noun `likelihood`."
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "likelihood"
+tokens:
+  - "likely(?!\\s*\\n\\s*\\n)\\s+hood(?!['\\x{2019}]s\\b)"

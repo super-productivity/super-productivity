@@ -1,0 +1,19 @@
+---
+# Generated from Harper's Alongside rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Replaces the spaced form `along side` with `alongside`.
+extends: existence
+message: "Use the single word `alongside`."
+level: suggestion
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "alongside"
+tokens:
+  - "along(?!\\s*\\n\\s*\\n)\\s+side(?!['\\x{2019}]s\\b)"

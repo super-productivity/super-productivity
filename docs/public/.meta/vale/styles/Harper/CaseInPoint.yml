@@ -1,0 +1,19 @@
+---
+# Generated from Harper's CaseInPoint rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects `case and point` to `case in point`.
+extends: existence
+message: "`Case in point` is the correct form of the phrase."
+level: error
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "case in point"
+tokens:
+  - "case(?!\\s*\\n\\s*\\n)\\s+and(?!\\s*\\n\\s*\\n)\\s+point(?!['\\x{2019}]s\\b)"

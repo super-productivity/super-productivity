@@ -1,0 +1,23 @@
+---
+# Generated from Harper's OnceOrTwice linter. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Detects the mistaken phrase `once a twice` and suggests `once or twice`.
+extends: sequence
+message: "Did you mean “or”?"
+level: warning
+ignorecase: true
+model: harper
+matchcase: true
+action:
+  name: replace
+  params:
+    - "or"
+tokens:
+  - pattern: 'once'
+  - pattern: 'a'
+    target: true
+  - pattern: 'twice'

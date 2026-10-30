@@ -1,0 +1,19 @@
+---
+# Generated from Harper's AheadAnd rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects `an` to `and` after `ahead`.
+extends: existence
+message: "Did you make a typo? Shouldn't it be `and`?"
+level: suggestion
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "ahead and"
+tokens:
+  - "ahead(?!\\s*\\n\\s*\\n)\\s+an(?!['\\x{2019}]s\\b)"

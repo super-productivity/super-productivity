@@ -1,0 +1,23 @@
+---
+# Generated from Harper's OnTopOf rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects `ontop of` and `in top of` to `on top of`.
+extends: existence
+message: "Did you mean `on top of`?"
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "on top of"
+tokens:
+  - "on(?!\\s*\\n\\s*\\n)\\s+top(?!\\s*\\n\\s*\\n)\\s+off(?!['\\x{2019}]s\\b)"
+  - "in(?!\\s*\\n\\s*\\n)\\s+top(?!\\s*\\n\\s*\\n)\\s+of(?!['\\x{2019}]s\\b)"
+  - "ontop(?!\\s*\\n\\s*\\n)\\s+off(?!['\\x{2019}]s\\b)"
+  - "on(?!\\s*\\n\\s*\\n)\\s+topof(?!['\\x{2019}]s\\b)"
+  - "ontop(?!\\s*\\n\\s*\\n)\\s+of(?!['\\x{2019}]s\\b)"
