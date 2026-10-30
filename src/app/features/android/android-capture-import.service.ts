@@ -16,7 +16,7 @@ import {
 import { GlobalConfigService } from '../config/global-config.service';
 import { DEFAULT_GLOBAL_CONFIG } from '../config/default-global-config.const';
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
-import { INBOX_PROJECT } from '../project/project.const';
+import { TODAY_TAG } from '../tag/tag.const';
 import { WorkContextType } from '../work-context/work-context.model';
 
 /** One entry of the native `CaptureInbox` (see CaptureInbox.kt). */
@@ -111,21 +111,23 @@ export class AndroidCaptureImportService {
         return parseCaptures(json);
       },
       isValid: () => true,
-      // As if typed into the Inbox's add bar (short syntax on), only the id is
-      // fixed. Not the active work context: the import runs on whatever screen
-      // the app resumes on, which the user did not pick for the capture.
+      // As if typed into Today's add bar (short syntax on), only the id is
+      // fixed. Today, because the capture came from the Today widget, which
+      // shows it as pending until now (WidgetData.withPendingCaptures). Not
+      // the active work context: the import runs on whatever screen the app
+      // resumes on, which the user did not pick for the capture.
       createTask: (capture) => {
         const task = this._taskService.createNewTaskWithDefaults({
           title: capture.title,
           id: capture.id,
-          workContextType: WorkContextType.PROJECT,
-          workContextId: INBOX_PROJECT.id,
+          workContextType: WorkContextType.TAG,
+          workContextId: TODAY_TAG.id,
         });
         this._store.dispatch(
           TaskSharedActions.addTask({
             task,
-            workContextId: INBOX_PROJECT.id,
-            workContextType: WorkContextType.PROJECT,
+            workContextId: TODAY_TAG.id,
+            workContextType: WorkContextType.TAG,
             isAddToBacklog: false,
             isAddToBottom: false,
           }),

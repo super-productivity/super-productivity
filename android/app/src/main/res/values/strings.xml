@@ -50,7 +50,7 @@
   <string name="quick_add_title">New task</string>
   <string name="quick_add_hint">Task title</string>
   <string name="quick_add_save">Add</string>
-  <string name="quick_add_saved">Saved to Inbox</string>
+  <string name="quick_add_saved">Added to Today</string>
   <string name="quick_add_failed">Could not save the task</string>
 
   <!-- Launcher shortcuts (long-press the app icon), res/xml/shortcuts.xml.

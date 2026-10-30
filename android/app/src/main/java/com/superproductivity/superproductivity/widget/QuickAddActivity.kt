@@ -11,8 +11,8 @@ import com.superproductivity.superproductivity.R
 
 /**
  * The widget's "+": a small dialog over the home screen. The title goes to the
- * [CaptureInbox] like a share, so no WebView loads; the app adds it to the
- * Inbox (short syntax applied) when it next opens.
+ * [CaptureInbox] like a share, so no WebView loads. The widget lists it at
+ * once; the app adds it to Today (short syntax applied) when it next opens.
  */
 class QuickAddActivity : AppCompatActivity() {
     private lateinit var input: EditText
@@ -47,6 +47,8 @@ class QuickAddActivity : AppCompatActivity() {
         }
         // Id only, never the title: logcat ends up in bug reports.
         Log.d(TAG, "Saved quick add $id")
+        // Show it in the widget now, as pending (WidgetData.withPendingCaptures).
+        TaskListWidgetProvider.refreshAll(this)
         toast(R.string.quick_add_saved)
         finish()
     }

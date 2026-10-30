@@ -21,6 +21,7 @@ import { selectTaskEntities } from '../tasks/store/task.selectors';
 import { TaskService } from '../tasks/task.service';
 import { DEFAULT_TASK } from '../tasks/task.model';
 import { WorkContextType } from '../work-context/work-context.model';
+import { TODAY_TAG } from '../tag/tag.const';
 
 describe('AndroidCaptureImportService', () => {
   const id = '7DCC80FA-577A-4D99-B16E-15D4B8787B62';
@@ -126,15 +127,20 @@ describe('AndroidCaptureImportService', () => {
     expect(addedTasks()).toEqual([]);
     loaded.next(true);
     expect(await imported).toBe(1);
-    // As if typed into the Inbox's add bar (short syntax on), only the id is
+    // As if typed into Today's add bar (short syntax on), only the id is
     // fixed: the import runs on whatever screen the app resumes on.
+    expect(taskService.createNewTaskWithDefaults).toHaveBeenCalledOnceWith({
+      title: 'Buy milk #shop',
+      id,
+      workContextType: WorkContextType.TAG,
+      workContextId: TODAY_TAG.id,
+    });
     expect(addedTasks().length).toBe(1);
     const action = addedTasks()[0];
     expect(action.task.id).toBe(id);
     expect(action.task.title).toBe('Buy milk #shop');
-    expect(action.task.projectId).toBe(INBOX_PROJECT.id);
-    expect(action.workContextId).toBe(INBOX_PROJECT.id);
-    expect(action.workContextType).toBe(WorkContextType.PROJECT);
+    expect(action.workContextId).toBe(TODAY_TAG.id);
+    expect(action.workContextType).toBe(WorkContextType.TAG);
     expect(action.isIgnoreShortSyntax).toBeUndefined();
     expect(flush.flushPendingWrites).toHaveBeenCalled();
     expect(acknowledge).toHaveBeenCalledOnceWith(id);

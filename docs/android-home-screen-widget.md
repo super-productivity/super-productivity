@@ -23,9 +23,12 @@ state, not an independent task or calendar engine.
   external apps must not be able to complete tasks.
 - The header's "+" opens `QuickAddActivity`, a dialog over the home screen
   that writes the typed title to `CaptureInbox` (like a share) and finishes.
-  Angular imports it on its next start or resume as one Inbox `addTask` with
-  short syntax applied. Like checkbox taps, it never touches the snapshot, so
-  the task shows in the widget only after the app has run.
+  Angular imports it on its next start or resume as one Today `addTask` with
+  short syntax applied. Like checkbox taps, it never touches the snapshot: the
+  renderer lists not-yet-imported title captures above the snapshot rows
+  (`WidgetData.withPendingCaptures`, raw title, checkbox opens the app). This
+  is a fact of the capture contract (title captures always go to Today), not
+  Today membership computed natively.
 
 The serializer and Kotlin parser are locked to the same golden shape by
 `android-widget.selectors.spec.ts` and `WidgetDataTest.kt`. Update both ends and
