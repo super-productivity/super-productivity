@@ -6,6 +6,7 @@ import type {
   Task,
 } from '@super-productivity/plugin-api';
 import { DEFAULT_LIMIT, PriorityName, Query } from './spec';
+import { tagsNamed } from './tag-aliases';
 
 export interface QueryEnv {
   tasks: Task[];
@@ -100,7 +101,7 @@ export const resolveTagIds = (
 ): string[] => {
   const ids: string[] = [];
   for (const name of names) {
-    const matches = tags.filter((t) => norm(t.title) === norm(name));
+    const matches = tagsNamed(name, tags);
     if (!matches.length) {
       problems.push(`No tag named "${name}"`);
     }

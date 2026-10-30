@@ -2,8 +2,11 @@ import path from 'node:path';
 import { expect, test } from '../../fixtures/test.fixture';
 import { waitForPluginAssets } from '../../helpers/plugin-test.helpers';
 import {
+  columnCards,
+  dragTo,
   openPlugin,
   serveTurns,
+  tagIdsOf,
   toolStream,
   ToolCall,
 } from '../../helpers/ai-view-builder.helpers';
@@ -114,6 +117,18 @@ test.describe('AI View Builder views', () => {
     await plugin.locator('#commandInput').press('Enter');
     await expect(plugin.locator('#status')).toHaveText('Made the side-by-side view.');
     await expect(plugin.locator('.c-metric .metric-value')).toHaveText('2h 25m');
+
+    // The alias is the app's own in-progress tag, so a drop shares the native
+    // Boards page's tag, which the plugin creates because it does not exist yet.
+    const review = title('Review PR');
+    await dragTo(page, plugin, review, 'Doing');
+    await expect(columnCards(plugin, 'Doing')).toHaveText([review]);
+    expect(await tagIdsOf(page, review)).toEqual(['KANBAN_IN_PROGRESS']);
+    await dragTo(page, plugin, review, 'To do');
+    await expect(columnCards(plugin, 'Doing')).toHaveCount(0);
+    expect(await tagIdsOf(page, review)).toEqual([]);
+    await dragTo(page, plugin, review, 'Doing');
+    await expect(columnCards(plugin, 'Doing')).toHaveText([review]);
     // Let the view's own entrance animation settle before the screenshot.
     await page.waitForTimeout(800);
     await page.screenshot({

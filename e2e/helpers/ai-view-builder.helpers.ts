@@ -87,3 +87,45 @@ export const openPlugin = async (page: Page): Promise<FrameLocator> => {
   await expect(plugin.locator('#keyStatus')).toHaveText('A key is saved on this device.');
   return plugin;
 };
+
+export const columnCards = (
+  plugin: FrameLocator,
+  title: string,
+): ReturnType<FrameLocator['locator']> =>
+  plugin.locator('.board-col', { hasText: title }).locator('.card-title');
+
+/** Drags a card into a board column with the mouse, as a user would. */
+export const dragTo = async (
+  page: Page,
+  plugin: FrameLocator,
+  cardTitle: string,
+  columnTitle: string,
+): Promise<void> => {
+  // Other parts of the view may show the same task; only board cards drag.
+  const card = plugin.locator('.board-col .card', { hasText: cardTitle });
+  const column = plugin.locator('.board-col', { hasText: columnTitle });
+  // Hovering waits until the cards stop sliding into place; measuring while
+  // they move grabs whichever card is passing by.
+  await card.hover();
+  await column.hover();
+  const from = await card.boundingBox();
+  const to = await column.boundingBox();
+  if (!from || !to) throw new Error('card or column not visible');
+  // Grab the card by its middle; its buttons do not start a drag.
+  const grabX = from.x + from.width / 2;
+  const grabY = from.y + from.height / 2;
+  await page.mouse.move(grabX, grabY);
+  await page.mouse.down();
+  await page.mouse.move(grabX + 20, grabY, { steps: 4 });
+  await page.mouse.move(to.x + to.width / 2, to.y + 40, { steps: 10 });
+  await page.mouse.up();
+};
+
+/** The ids of the tags a task carries, read through the plugin's own API. */
+export const tagIdsOf = async (page: Page, taskTitle: string): Promise<string[]> =>
+  page.evaluate(async (title) => {
+    const frame = document.querySelector('plugin-index iframe') as HTMLIFrameElement;
+    const api = (frame.contentWindow as unknown as { PluginAPI: any }).PluginAPI;
+    const tasks = await api.getTasks();
+    return tasks.find((t: { title: string }) => t.title === title).tagIds;
+  }, taskTitle);

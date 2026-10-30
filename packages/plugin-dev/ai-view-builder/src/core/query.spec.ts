@@ -1,8 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import type { ActiveWorkContext } from '@super-productivity/plugin-api';
+import type { ActiveWorkContext, Tag } from '@super-productivity/plugin-api';
 import { dueDayOf, logicalDayOf, needsArchive, runQuery, weekRange } from './query';
-import { at, DAY, env, task } from './test-fixtures';
+import { at, DAY, env, TAGS, task } from './test-fixtures';
 
 const ids = (q: Parameters<typeof runQuery>[0], e: ReturnType<typeof env>): string[] =>
   runQuery(q, e).tasks.map((t) => t.id);
@@ -90,6 +90,23 @@ test('tags match all by default, any on request; a missing tag matches nothing',
   const r = runQuery({ tags: ['Someday'] }, e);
   assert.deepEqual(r.tasks, []);
   assert.deepEqual(r.problems, ['No tag named "Someday"']);
+});
+
+test('@urgent and @important find the built-in tags by id, not by title', () => {
+  const builtIn = [
+    { id: 'EM_URGENT', title: 'dringend', taskIds: [] },
+    { id: 'EM_IMPORTANT', title: 'wichtig', taskIds: [] },
+  ] as unknown as Tag[];
+  const tasks = [
+    task('both', { tagIds: ['EM_URGENT', 'EM_IMPORTANT'] }),
+    task('urgent', { tagIds: ['EM_URGENT'] }),
+    task('titled', { tagIds: ['t-urgent'] }),
+  ];
+  const e = env(tasks, { tags: [...builtIn, ...TAGS] });
+  assert.deepEqual(ids({ tags: ['@urgent'] }, e), ['both', 'urgent']);
+  assert.deepEqual(ids({ tags: ['@Urgent', '@important'] }, e), ['both']);
+  assert.deepEqual(ids({ scope: '@important' }, e), ['both']);
+  assert.deepEqual(runQuery({ tags: ['@doing'] }, e).problems, ['No tag named "@doing"']);
 });
 
 test('subtasks are hidden unless asked for', () => {

@@ -15,6 +15,7 @@ interface Expect {
   firstChildType?: string;
   title?: string;
   columnsAtLeast?: number;
+  columnTags?: string[];
   columnsPerRow?: number;
   unchanged?: boolean;
   says?: boolean;
@@ -72,6 +73,14 @@ const check = (
       fails.push(`first part is not a ${e.firstChildType}`);
     }
   }
+  e.columnTags?.forEach((name) => {
+    const named = components(after).some((x) =>
+      (x.columns ?? []).some((col) =>
+        [...(col.tags ?? []), ...(col.notTags ?? [])].includes(name),
+      ),
+    );
+    if (!named) fails.push(`no column uses ${name}`);
+  });
   if (e.title && after.title !== e.title) fails.push(`title is "${after.title}"`);
   if (e.columnsAtLeast) {
     const max = Math.max(0, ...components(after).map((x) => x.columns?.length ?? 0));

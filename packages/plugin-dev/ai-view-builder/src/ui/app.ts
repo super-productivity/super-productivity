@@ -423,11 +423,11 @@ const dropInto = async (
   let write = dropWrite(task, column, env.tags);
   if (!write) return;
   await withRollback(async () => {
-    for (const title of write!.missingTags) {
-      const id = await PluginAPI.addTag({ title });
+    for (const missing of write!.missingTags) {
+      const id = await PluginAPI.addTag(missing);
       state.env!.tags = [
         ...state.env!.tags,
-        { id, title, taskIds: [] } as unknown as Tag,
+        { id, title: missing.title, taskIds: [] } as unknown as Tag,
       ];
     }
     write = dropWrite(task, column, state.env!.tags);

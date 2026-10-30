@@ -19,8 +19,8 @@
           "type": "board",
           "query": "open",
           "columns": [
-            { "id": "todo", "title": "To do", "notTags": ["Doing"], "isDone": false },
-            { "id": "doing", "title": "Doing", "tags": ["Doing"], "isDone": false },
+            { "id": "todo", "title": "To do", "notTags": ["@doing"], "isDone": false },
+            { "id": "doing", "title": "Doing", "tags": ["@doing"], "isDone": false },
             { "id": "done", "title": "Done", "isDone": true }
           ]
         }
@@ -33,13 +33,17 @@
       "id": "new-kanban",
       "start": "empty",
       "request": "A kanban board for what I have open",
-      "expect": { "types": ["board"] }
+      "expect": { "types": ["board"], "columnTags": ["@doing"] }
     },
     {
       "id": "new-eisenhower",
       "start": "empty",
       "request": "Eisenhower matrix",
-      "expect": { "types": ["board"], "columnsAtLeast": 4 }
+      "expect": {
+        "types": ["board"],
+        "columnsAtLeast": 4,
+        "columnTags": ["@urgent", "@important"]
+      }
     },
     {
       "id": "new-today-by-project",

@@ -1,6 +1,7 @@
 import type { Tag, Task } from '@super-productivity/plugin-api';
 import { BoardColumn } from './spec';
 import { resolveTagIds } from './query';
+import { aliasOf, TagAlias, tagsNamed } from './tag-aliases';
 
 // Board columns use the native board panel semantics: a column shows the tasks
 // that have all of its tags, none of its excluded tags and the done state it
@@ -20,9 +21,17 @@ export const columnMatches = (task: Task, column: BoardColumn, tags: Tag[]): boo
 
 export interface DropWrite {
   changes: { tagIds?: string[]; isDone?: boolean };
-  /** Tag names the column needs that do not exist yet; create them first. */
-  missingTags: string[];
+  /** Tags the column needs that do not exist yet; create them first. */
+  missingTags: MissingTag[];
 }
+
+/** An alias keeps the built-in id, so the tag is the one the Boards page uses. */
+export type MissingTag = Pick<TagAlias, 'title'> & Partial<Pick<TagAlias, 'id' | 'icon'>>;
+
+const missingTagOf = (name: string, tags: Tag[]): MissingTag | null => {
+  if (tagsNamed(name, tags).length) return null;
+  return aliasOf(name) ?? { title: name.trim() };
+};
 
 /** The task changes a drop into this column makes, or null when nothing changes. */
 export const dropWrite = (
@@ -30,10 +39,9 @@ export const dropWrite = (
   column: BoardColumn,
   tags: Tag[],
 ): DropWrite | null => {
-  const missingTags = (column.tags ?? []).filter(
-    (name) =>
-      !tags.some((t) => t.title.trim().toLowerCase() === name.trim().toLowerCase()),
-  );
+  const missingTags = (column.tags ?? [])
+    .map((name) => missingTagOf(name, tags))
+    .filter((tag): tag is MissingTag => !!tag);
   const add = resolveTagIds(column.tags ?? [], tags, []);
   const remove = new Set(resolveTagIds(column.notTags ?? [], tags, []));
   const nextTagIds = [

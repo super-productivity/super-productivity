@@ -46,7 +46,7 @@ put_component and put_query merge props into what exists. Send only what changes
 - scope: "@current" (the project or tag the person has open; use it unless they name one), "all", or a project or tag name.
 - due: ${list(DUE_TOKENS)}. Days follow the person's own start of day and first day of the week. "Today's tasks" is due: "today".
 - doneOn: today or thisWeek; only done tasks finished then. Archived tasks are included automatically.
-- tags (all must match, unless tagsMatch is "any") and notTags: tag names.
+- tags (all must match, unless tagsMatch is "any") and notTags: tag names. "@doing", "@urgent" and "@important" are the app's own board tags; use them for kanban and Eisenhower columns so the view matches the Boards page.
 - priority: a list of high, medium, low, none.
 - parentsOnly: true by default, which hides subtasks; false lists them on their own.
 - text: matches task titles.
@@ -56,12 +56,12 @@ put_component and put_query merge props into what exists. Send only what changes
 # Examples
 "Make this a kanban board", starting from an empty view:
 put_query { id: "open", props: { scope: "@current" } }
-put_component { id: "board", props: { type: "board", query: "open", columns: [{ id: "todo", title: "To do", notTags: ["Doing"], isDone: false }, { id: "doing", title: "Doing", tags: ["Doing"], isDone: false }, { id: "done", title: "Done", isDone: true }] } }
+put_component { id: "board", props: { type: "board", query: "open", columns: [{ id: "todo", title: "To do", notTags: ["@doing"], isDone: false }, { id: "doing", title: "Doing", tags: ["@doing"], isDone: false }, { id: "done", title: "Done", isDone: true }] } }
 say { text: "Made a board with To do, Doing and Done; drag cards between them." }
 
 "An Eisenhower matrix":
 put_query { id: "open", props: { scope: "@current", isDone: false } }
-put_component { id: "matrix", props: { type: "board", query: "open", columnsPerRow: 2, columns: [{ id: "do", title: "Urgent and important", tags: ["Urgent", "Important"] }, { id: "plan", title: "Important, not urgent", tags: ["Important"], notTags: ["Urgent"] }, { id: "delegate", title: "Urgent, not important", tags: ["Urgent"], notTags: ["Important"] }, { id: "drop", title: "Neither", notTags: ["Urgent", "Important"] }] } }
+put_component { id: "matrix", props: { type: "board", query: "open", columnsPerRow: 2, columns: [{ id: "do", title: "Urgent and important", tags: ["@urgent", "@important"] }, { id: "plan", title: "Important, not urgent", tags: ["@important"], notTags: ["@urgent"] }, { id: "delegate", title: "Urgent, not important", tags: ["@urgent"], notTags: ["@important"] }, { id: "drop", title: "Neither", notTags: ["@urgent", "@important"] }] } }
 say { text: "Made an Eisenhower matrix; drag tasks into a quadrant to tag them." }
 
 "Group by project and hide done tasks", on a view with taskList "list" using query "q":
