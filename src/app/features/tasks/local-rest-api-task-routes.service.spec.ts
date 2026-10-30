@@ -1724,9 +1724,11 @@ describe('LocalRestApiTaskRoutesService', () => {
           createRequest('PATCH', '/tasks/task-1', { body: { plannedAt } }),
         );
 
-        expect(taskServiceMock.update).toHaveBeenCalledWith('task-1', {
-          dueWithTime: plannedAt,
-        });
+        expect(featureBridgeMock.updateTaskWithDueTime).toHaveBeenCalledOnceWith(
+          mockTask,
+          { dueWithTime: plannedAt },
+        );
+        expect(taskServiceMock.update).not.toHaveBeenCalled();
       });
 
       it('should let dueWithTime override plannedAt when updating a task', async () => {
@@ -1741,9 +1743,11 @@ describe('LocalRestApiTaskRoutesService', () => {
           }),
         );
 
-        expect(taskServiceMock.update).toHaveBeenCalledWith('task-1', {
-          dueWithTime: 2,
-        });
+        expect(featureBridgeMock.updateTaskWithDueTime).toHaveBeenCalledOnceWith(
+          mockTask,
+          { dueWithTime: 2 },
+        );
+        expect(taskServiceMock.update).not.toHaveBeenCalled();
       });
 
       it('should map null plannedAt to clearing dueWithTime when updating a task', async () => {
@@ -1756,9 +1760,11 @@ describe('LocalRestApiTaskRoutesService', () => {
           createRequest('PATCH', '/tasks/task-1', { body: { plannedAt: null } }),
         );
 
-        expect(taskServiceMock.update).toHaveBeenCalledWith('task-1', {
-          dueWithTime: null,
-        });
+        expect(featureBridgeMock.updateTaskWithDueTime).toHaveBeenCalledOnceWith(
+          mockTask,
+          { dueWithTime: null },
+        );
+        expect(taskServiceMock.update).not.toHaveBeenCalled();
       });
 
       it('should report invalid plannedAt input on PATCH', async () => {
