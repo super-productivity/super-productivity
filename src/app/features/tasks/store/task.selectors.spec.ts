@@ -684,6 +684,128 @@ describe('Task Selectors', () => {
         confirmSpy.and.returnValue(true);
       }
     });
+    // #9589: a task with a past deadline and no plan date has no dueDay, so the
+    // plan-date overdue rule alone never surfaces it in Today.
+    describe('selectOverdueTasksWithSubTasks with missed deadlines (#9589)', () => {
+      const TWO_DAYS_MS = 2 * 86400000;
+      const twoDaysAgo = getDbDateStr(new Date(Date.now() - TWO_DAYS_MS));
+      const baseTask: Task = {
+        id: 'base',
+        title: 'Deadline',
+        created: Date.now(),
+        isDone: false,
+        subTaskIds: [],
+        tagIds: [],
+        projectId: 'project1',
+        timeSpentOnDay: {},
+        timeEstimate: 0,
+        timeSpent: 0,
+        attachments: [],
+      };
+      const stateWith = (...tasks: Task[]): typeof mockState => ({
+        ...mockState,
+        [TASK_FEATURE_NAME]: {
+          ...mockTaskState,
+          ids: [...mockTaskState.ids, ...tasks.map((t) => t.id)],
+          entities: {
+            ...mockTaskState.entities,
+            ...Object.fromEntries(tasks.map((t) => [t.id, t])),
+          },
+        },
+      });
+      const resultIds = (state: typeof mockState): string[] =>
+        fromSelectors.selectOverdueTasksWithSubTasks(state).map((t) => t.id);
+
+      it('should include an unplanned task whose deadlineDay is past', () => {
+        const ids = resultIds(
+          stateWith({ ...baseTask, id: 'missedDay', deadlineDay: yesterday }),
+        );
+        expect(ids).toContain('missedDay');
+      });
+
+      it('should include an unplanned task whose deadlineWithTime is past', () => {
+        const ids = resultIds(
+          stateWith({
+            ...baseTask,
+            id: 'missedTime',
+            deadlineWithTime: Date.now() - TWO_DAYS_MS,
+          }),
+        );
+        expect(ids).toContain('missedTime');
+      });
+
+      it('should not include an unplanned task whose deadline is today or later', () => {
+        const ids = resultIds(
+          stateWith(
+            { ...baseTask, id: 'deadlineToday', deadlineDay: today },
+            { ...baseTask, id: 'deadlineTomorrow', deadlineDay: tomorrow },
+          ),
+        );
+        expect(ids).not.toContain('deadlineToday');
+        expect(ids).not.toContain('deadlineTomorrow');
+      });
+
+      it('should respect a plan date over a missed deadline', () => {
+        const ids = resultIds(
+          stateWith(
+            { ...baseTask, id: 'plannedToday', deadlineDay: yesterday, dueDay: today },
+            {
+              ...baseTask,
+              id: 'plannedTomorrow',
+              deadlineDay: yesterday,
+              dueDay: tomorrow,
+            },
+          ),
+        );
+        expect(ids).not.toContain('plannedToday');
+        expect(ids).not.toContain('plannedTomorrow');
+      });
+
+      it('should exclude done tasks with a missed deadline', () => {
+        const ids = resultIds(
+          stateWith({
+            ...baseTask,
+            id: 'doneMissed',
+            isDone: true,
+            deadlineDay: yesterday,
+          }),
+        );
+        expect(ids).not.toContain('doneMissed');
+      });
+
+      it('should sort missed deadlines chronologically with plan-date overdue tasks', () => {
+        const ids = resultIds(
+          stateWith({ ...baseTask, id: 'olderMissed', deadlineDay: twoDaysAgo }),
+        );
+        // task6 is overdue by dueDay: yesterday
+        expect(ids).toEqual(['olderMissed', 'task6']);
+      });
+
+      it('should sort a planned overdue task by its plan date, not its deadline', () => {
+        const ids = resultIds(
+          stateWith(
+            { ...baseTask, id: 'olderMissed', deadlineDay: twoDaysAgo },
+            {
+              ...baseTask,
+              id: 'plannedWithOldDeadline',
+              dueDay: yesterday,
+              deadlineWithTime: Date.now() - TWO_DAYS_MS - TWO_DAYS_MS,
+            },
+          ),
+        );
+        expect(ids.indexOf('olderMissed')).toBeLessThan(
+          ids.indexOf('plannedWithOldDeadline'),
+        );
+      });
+
+      it('should not change the plan-date based selectOverdueTasks', () => {
+        const state = stateWith({ ...baseTask, id: 'missedDay', deadlineDay: yesterday });
+        expect(fromSelectors.selectOverdueTasks(state).map((t) => t.id)).toEqual([
+          'task6',
+        ]);
+      });
+    });
+
     describe('selectOverdueTasks with startOfNextDayDiffMs offset', () => {
       const FOUR_HOURS = 4 * 3600 * 1000;
 

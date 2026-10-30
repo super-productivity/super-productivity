@@ -25,6 +25,7 @@ import { getTimeConflictTaskIds } from '../util/get-time-conflict-task-ids';
 import { getEndOfTodayTime, isInLaterTodayWindow } from '../util/later-today-window';
 import {
   getLogicalTodayStartMs,
+  isTaskDeadlineMissedUnplanned,
   isTaskOverdueByThreshold,
 } from '../util/is-task-overdue';
 
@@ -518,11 +519,41 @@ export const selectOverdueTasksOnToday = createSelector(
   },
 );
 
+// Today's overdue panel: plan-date overdue tasks plus unplanned tasks whose
+// deadline passed (#9589) — those have no dueDay, so nothing else surfaces them
+// in Today. Derived only; nothing is written, so a pile of old deadlines stays
+// in the collapsible panel instead of being moved into Today.
+const selectOverdueTaskIdsForToday = createSelector(
+  selectTaskSchedulingSnapshot,
+  selectTodayStr,
+  selectStartOfNextDayDiffMs,
+  (snapshot, todayStr, startOfNextDayDiffMs): string[] => {
+    const todayStartMs = getLogicalTodayStartMs(todayStr, startOfNextDayDiffMs);
+    const ids: string[] = [];
+    for (const snap of snapshot) {
+      if (
+        isTaskOverdueByThreshold(snap, todayStr, todayStartMs) ||
+        isTaskDeadlineMissedUnplanned(snap, todayStr, todayStartMs)
+      ) {
+        ids.push(snap.id);
+      }
+    }
+    return ids;
+  },
+);
+
+const _overdueTasksForTodayMapper = createStableTaskIdMapper();
+const selectOverdueTasksForToday = createSelector(
+  selectOverdueTaskIdsForToday,
+  selectTaskEntities,
+  _overdueTasksForTodayMapper,
+);
+
 // Note: With the virtual TODAY_TAG architecture, overdue tasks (dueDay < today)
 // can never be on today's list (dueDay === today), so we don't filter by TODAY_TAG.taskIds.
 // We only filter out subtasks whose parent is also overdue (to avoid duplicates).
 export const selectOverdueTasksWithSubTasks = createSelector(
-  selectOverdueTasks,
+  selectOverdueTasksForToday,
   selectTaskFeatureState,
   (overdueTasks, taskState): TaskWithSubTasks[] => {
     const overdueIdSet = new Set(overdueTasks.map((task) => task.id));
@@ -536,12 +567,16 @@ export const selectOverdueTasksWithSubTasks = createSelector(
         // Pre-compute a chronological sort key so the comparator stays allocation-free
         // (parsing dueDay inside .sort() costs O(n log n) Date objects).
         // dueWithTime takes priority over dueDay; dueDay counts as start of that day.
+        // Unplanned missed-deadline tasks sort by their deadline the same way.
         // Use dateStrToUtcDate to avoid timezone issues.
         let sortKey = 0;
-        if (task.dueWithTime) {
-          sortKey = task.dueWithTime;
-        } else if (task.dueDay) {
-          const startOfDueDay = dateStrToUtcDate(task.dueDay);
+        const isPlanned = !!(task.dueWithTime || task.dueDay);
+        const sortWithTime = isPlanned ? task.dueWithTime : task.deadlineWithTime;
+        const sortDay = isPlanned ? task.dueDay : task.deadlineDay;
+        if (sortWithTime) {
+          sortKey = sortWithTime;
+        } else if (sortDay) {
+          const startOfDueDay = dateStrToUtcDate(sortDay);
           startOfDueDay.setHours(0, 0, 0, 0);
           const startOfDueDayMs = startOfDueDay.getTime();
           // A calendar-invalid dueDay (e.g. 2024-02-30 passes the lexical isDBDateStr
