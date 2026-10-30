@@ -13,8 +13,11 @@ export const enableBoardDrag = (
 ): void => {
   root.addEventListener('pointerdown', (down) => {
     const target = down.target as HTMLElement;
-    const cardEl = target.closest<HTMLElement>('[data-draggable="true"]');
-    if (!cardEl || down.button !== 0 || target.closest('button:not(.card-title)')) return;
+    // Only the card's own first line grabs it: its sub-tasks sit inside the
+    // same element, and dragging one would move the parent.
+    const cardEl = target.closest<HTMLElement>('.card-line')?.parentElement;
+    if (!cardEl?.matches('[data-draggable="true"]') || down.button !== 0) return;
+    if (target.closest('button, input, textarea')) return;
     const sourceCol = cardEl.closest<HTMLElement>('.board-col');
     if (!sourceCol) return;
 

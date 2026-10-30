@@ -1,0 +1,108 @@
+/* The inline editors of a row and its context menu: what a gesture opens on top of the row. */
+
+/* inline editors */
+.card-input {
+  width: 100%;
+  padding: 3px 3px 3px 5px;
+  border: 1px solid var(--card-ring);
+  border-radius: 8px;
+  background: var(--bg-lighter);
+  font: inherit;
+  font-weight: 500;
+  line-height: 21px;
+  /* a board card sits in a draggable that turns selection off */
+  user-select: text;
+}
+
+.card .card-input:focus {
+  border: 1px solid var(--card-ring);
+  outline: none;
+}
+
+.card-input.is-invalid {
+  border-color: var(--color-danger, var(--c-warn));
+}
+
+.card-estimate-input {
+  width: 90px;
+  text-align: right;
+}
+
+.sub-task-add {
+  display: flex;
+  align-items: center;
+  min-height: 48px;
+  padding: 4px 8px 4px 48px;
+}
+
+/* the context menu */
+.card-menu {
+  position: fixed;
+  z-index: 100;
+  min-width: 220px;
+  max-width: min(320px, calc(100vw - 16px));
+  max-height: calc(100vh - 16px);
+  overflow-y: auto;
+  padding: 8px 0;
+  border-radius: 4px;
+  background: var(--bg-lighter);
+  box-shadow: var(--whiteframe-shadow-4dp);
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  min-height: 48px;
+  padding: 0 16px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.card-menu .menu-item:hover,
+.card-menu .menu-item:focus-visible {
+  background: var(--select-hover-bg);
+}
+
+.menu-item .ico {
+  width: 24px;
+  height: 24px;
+  color: var(--text-color-muted);
+}
+
+.menu-label {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.menu-hint {
+  color: var(--text-color-muted);
+  font-size: 12px;
+}
+
+.menu-item.is-danger,
+.menu-item.is-danger .ico {
+  color: var(--color-danger, var(--c-warn));
+}
+
+.menu-item.has-sub-menu .ico:last-child,
+.menu-item .menu-check {
+  width: 18px;
+  height: 18px;
+}
+
+.menu-sep {
+  height: 0;
+  margin: 8px 0;
+  border-top: 1px solid var(--divider-color);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card.task,
+  .card-menu {
+    transition: none;
+    animation: none;
+  }
+}

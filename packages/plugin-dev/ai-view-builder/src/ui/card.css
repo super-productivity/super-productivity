@@ -1,0 +1,393 @@
+/*
+ * A task row, after Super Productivity's own (task.component.scss and
+ * _task-base.scss): flush rows with hairlines, a 40px done toggle, title with
+ * chips under it, time on the right. Sizes are the app's; colors come from the
+ * theme variables the host injects, with fallbacks for the few it does not.
+ */
+body {
+  /* The app's --task-separator is not injected; this is the same grey. */
+  --card-sep: color-mix(in srgb, var(--text-color) 22%, transparent);
+  --card-ring: var(--c-primary);
+}
+
+.cards {
+  display: flex;
+  flex-direction: column;
+  min-height: 24px;
+}
+
+.cards:not(.sub-cards) {
+  border-bottom: 1px solid var(--card-sep);
+}
+
+/* The UI kit's .card is a raised panel; a row is flush, so its look is reset. */
+.card.task {
+  position: relative;
+  display: block;
+  padding: 0;
+  background: var(--task-c-bg, transparent);
+  border: 0;
+  border-top: 1px solid var(--card-sep);
+  border-radius: 0;
+  box-shadow: none;
+  outline: none;
+}
+
+.card.task:focus-visible {
+  z-index: 3;
+  outline: 2px solid var(--card-ring);
+  outline-offset: -2px;
+}
+
+.sub-cards > .card.task {
+  border-top: 0;
+  background: var(--sub-task-c-bg, transparent);
+}
+
+.sub-cards > .card.task + .card.task {
+  border-top: 1px solid var(--card-sep);
+}
+
+.card.task.is-done {
+  background: var(--task-c-bg-done, transparent);
+}
+
+.card.task.is-selected {
+  background: var(--task-c-selected-bg);
+  box-shadow: var(--task-selected-shadow, none);
+}
+
+.card.task.is-tracking {
+  position: sticky;
+  top: 8px;
+  z-index: 2;
+  background: var(--task-c-current-bg);
+  box-shadow: var(--task-current-shadow);
+}
+
+/* The UI kit styles bare buttons; inside a row they are plain. */
+.card button,
+.card-menu button {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  filter: none;
+}
+
+.card button:hover,
+.card-menu button:hover {
+  background: none;
+  border-color: transparent;
+}
+
+.card button:focus-visible,
+.card-menu button:focus-visible {
+  outline: 2px solid var(--card-ring);
+  outline-offset: -2px;
+}
+
+.ico {
+  width: 1em;
+  height: 1em;
+  flex: none;
+}
+
+/* first line */
+.card-line {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-height: 48px;
+  padding: 4px 0;
+}
+
+.card-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.card-title {
+  margin-left: 1px;
+  padding: 3px 3px 3px 5px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  font-weight: 500;
+  line-height: 21px;
+  overflow-wrap: anywhere;
+  cursor: text;
+}
+
+.card.is-done > .card-line .card-title {
+  text-decoration: line-through;
+}
+
+.card.is-done > .card-line .card-main,
+.card.is-done > .card-line .card-side {
+  opacity: var(--task-is-done-dim-opacity, 0.3);
+}
+
+/* done toggle */
+.done-toggle {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  margin-left: 8px;
+  cursor: pointer;
+}
+
+.done-svg {
+  width: 22px;
+  height: 22px;
+  overflow: visible;
+}
+
+.done-shape,
+.done-check {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.done-shape {
+  opacity: 0.3;
+}
+
+.done-check,
+.done-play {
+  opacity: 0;
+}
+
+.done-play {
+  fill: var(--c-accent);
+}
+
+.done-toggle:hover .done-shape {
+  opacity: 0.6;
+}
+
+.card.is-done > .card-line .done-shape {
+  opacity: 0.5;
+}
+
+.card.is-done > .card-line .done-check {
+  opacity: 0.5;
+}
+
+.card.is-tracking > .card-line .done-shape {
+  stroke: var(--c-accent);
+  opacity: 0.8;
+}
+
+.card.is-tracking > .card-line .done-play {
+  opacity: 1;
+}
+
+/* chips under the title */
+.card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin: 0 0 4px 8px;
+  color: var(--text-color-muted);
+  font-size: 12px;
+  line-height: 13.8px;
+}
+
+.card-tag {
+  display: flex;
+  align-items: center;
+  padding: 0 8px 0 0;
+}
+
+.tag-ico {
+  width: 13px;
+  height: 13px;
+  margin-right: 3px;
+  color: var(--chip, var(--text-color-muted));
+}
+
+.tag-dot {
+  width: 9px;
+  height: 9px;
+  margin-right: 4px;
+  border-radius: 50%;
+  background: var(--chip, var(--text-color-muted));
+}
+
+.card-repeat {
+  width: 13px;
+  height: 13px;
+}
+
+/* right side */
+.card-side {
+  display: flex;
+  flex: none;
+  align-items: center;
+  margin: 0 4px 0 8px;
+  color: var(--text-color-muted);
+}
+
+.card-time {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  min-width: 25px;
+  margin-right: 8px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.card-time.is-editable {
+  cursor: pointer;
+}
+
+.time-val {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  line-height: 21px;
+}
+
+.time-val .ico {
+  width: 14px;
+  height: 14px;
+}
+
+.time-sep {
+  align-self: stretch;
+  height: 0;
+  margin: 0 4px;
+  border-top: 1px solid var(--divider-color);
+}
+
+.card-due {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-right: 8px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.card-due .ico {
+  width: 14px;
+  height: 14px;
+}
+
+.card-due.is-overdue {
+  color: var(--color-danger, var(--c-warn));
+}
+
+.card-ind,
+.card-more {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  font-size: 20px;
+  opacity: var(--task-icon-default-opacity, 0.7);
+  cursor: pointer;
+}
+
+/* hover controls replace the time while they are mounted, as in the app */
+.card-line:has(> .hover-controls) > .card-side {
+  visibility: hidden;
+}
+
+.hover-controls {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  bottom: 4px;
+  display: flex;
+  align-items: center;
+  padding-left: 4px;
+  border-left: 1px solid var(--divider-color);
+  border-radius: 8px;
+  background: var(--bg);
+}
+
+.hover-btn {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  margin: 0 1px;
+  border-radius: 50%;
+  font-size: 24px;
+  opacity: var(--task-icon-default-opacity, 0.7);
+  cursor: pointer;
+}
+
+.card .hover-btn:hover {
+  background: var(--select-hover-bg);
+  opacity: 1;
+}
+
+/* tracked time against the estimate */
+.card-progress {
+  height: 3px;
+}
+
+.card-progress-fill {
+  display: block;
+  height: 100%;
+  background: var(--c-accent);
+}
+
+/* sub-tasks */
+.sub-tasks {
+  position: relative;
+  margin: 8px 8px 8px 40px;
+}
+
+.sub-tasks.is-collapsed {
+  min-height: 24px;
+}
+
+.toggle-sub-tasks {
+  position: absolute;
+  top: 50%;
+  left: -20px;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  margin-top: -12px;
+  border-radius: 50%;
+  background: var(--bg-lighter);
+  box-shadow: var(--whiteframe-shadow-2dp, 0 1px 3px rgba(0, 0, 0, 0.2));
+  font-size: 18px;
+  opacity: var(--task-icon-default-opacity, 0.7);
+  cursor: pointer;
+}
+
+.card .toggle-sub-tasks {
+  background: var(--bg-lighter);
+}
+
+.card .toggle-sub-tasks:hover {
+  background: var(--bg-lighter);
+  opacity: 1;
+}
+
+.sub-badge {
+  position: absolute;
+  left: 100%;
+  margin-left: 6px;
+  color: var(--text-color-muted);
+  font-size: 10px;
+  white-space: nowrap;
+}

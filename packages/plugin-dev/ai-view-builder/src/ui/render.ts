@@ -1,5 +1,6 @@
 import type { CardModel } from '../core/cards';
 import type { NodeModel } from '../core/model';
+import type { AddInputs } from './add-inputs';
 import { el } from './dom';
 import { BuildCtx, cardList, heading } from './render-card';
 import { agendaEl, breakdownEl } from './render-parts';
@@ -15,7 +16,10 @@ const MAX_ANIMATIONS = 300;
 const countTasks = (node: NodeModel | null, counts: Map<string, number>): void => {
   if (!node) return;
   const add = (cards: CardModel[]): void =>
-    cards.forEach((c) => counts.set(c.id, (counts.get(c.id) ?? 0) + 1));
+    cards.forEach((c) => {
+      counts.set(c.id, (counts.get(c.id) ?? 0) + 1);
+      add(c.subTasks);
+    });
   if (node.kind === 'container') node.children.forEach((c) => countTasks(c, counts));
   if (node.kind === 'taskList') node.groups.forEach((g) => add(g.cards));
   if (node.kind === 'board') node.columns.forEach((c) => add(c.cards));
@@ -186,9 +190,15 @@ const animate = (root: HTMLElement, before: Map<string, DOMRect>): void => {
 
 export interface RenderOptions {
   selectedId: string | null;
+  selectedTaskId: string | null;
+  collapsed: ReadonlySet<string>;
+  adds: AddInputs;
   canTrack: boolean;
   animate: boolean;
 }
+
+const isTouchDevice = (): boolean =>
+  typeof matchMedia === 'function' && matchMedia('(hover: none)').matches;
 
 export const renderView = (
   root: HTMLElement,
@@ -201,8 +211,12 @@ export const renderView = (
   countTasks(model, taskCounts);
   const ctx: BuildCtx = {
     selectedId: opts.selectedId,
+    selectedTaskId: opts.selectedTaskId,
     taskCounts,
     canTrack: opts.canTrack,
+    collapsed: opts.collapsed,
+    adds: opts.adds,
+    isTouch: isTouchDevice(),
   };
   const focused = document.activeElement as HTMLElement | null;
   const focusKey = focused && root.contains(focused) ? focusSignature(focused) : null;
@@ -219,8 +233,10 @@ export const renderView = (
   }
 };
 
-// Focus survives a redraw: the same control on the same task or part.
+// Focus survives a redraw: the same control on the same task or part, or the
+// same add input.
 const focusSignature = (node: HTMLElement): string => {
+  if (node.dataset.focusId) return `focus:${node.dataset.focusId}`;
   const cardEl = node.closest<HTMLElement>('[data-tid]');
   return [
     cardEl?.dataset.tid ?? '',
@@ -230,6 +246,13 @@ const focusSignature = (node: HTMLElement): string => {
 };
 
 const restoreFocus = (root: HTMLElement, key: string): void => {
+  if (key.startsWith('focus:')) {
+    const id = CSS.escape(key.slice('focus:'.length));
+    root
+      .querySelector<HTMLElement>(`[data-focus-id="${id}"]`)
+      ?.focus({ preventScroll: true });
+    return;
+  }
   const [tid, action, cid] = key.split('|');
   const cardEl = tid
     ? root.querySelector<HTMLElement>(`[data-tid="${CSS.escape(tid)}"]`)

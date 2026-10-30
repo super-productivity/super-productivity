@@ -15,6 +15,7 @@ import { applyRecipe, RecipeName, RECIPES } from '../core/recipes';
 import { EditError, MODELS, runEdit } from '../core/edit-loop';
 import { matchViewByName, parseLocalCommand } from '../core/commands';
 import { renderView } from './render';
+import { setupCards } from './card-setup';
 import { renderRecipeChips } from './recipe-chips';
 import { skeleton } from './skeleton';
 import { enableBoardDrag } from './drag';
@@ -69,6 +70,8 @@ const state = {
   isDraft: false,
   preview: null as ViewSpec | null,
   selectedId: null as string | null,
+  /** The task open in the host's detail panel. */
+  selectedTaskId: null as string | null,
   editing: null as AbortController | null,
   listening: null as { stop: () => void } | null,
   undo: new Map<string, ViewSpec[]>(),
@@ -112,14 +115,19 @@ const fallbackDay = (): PluginDayContext => {
 const activeSpec = (): ViewSpec | null => state.preview ?? state.current?.spec ?? null;
 
 const loadEnv = async (): Promise<void> => {
-  const [tasks, projects, tags, context, day, currentTaskId] = await Promise.all([
-    PluginAPI.getTasks(),
-    PluginAPI.getAllProjects() as Promise<Project[]>,
-    PluginAPI.getAllTags() as Promise<Tag[]>,
-    PluginAPI.getActiveWorkContext() as Promise<ActiveWorkContext | null>,
-    PluginAPI.getDayContext ? PluginAPI.getDayContext() : Promise.resolve(fallbackDay()),
-    PluginAPI.getCurrentTaskId ? PluginAPI.getCurrentTaskId() : Promise.resolve(null),
-  ]);
+  const [tasks, projects, tags, context, day, currentTaskId, selected] =
+    await Promise.all([
+      PluginAPI.getTasks(),
+      PluginAPI.getAllProjects() as Promise<Project[]>,
+      PluginAPI.getAllTags() as Promise<Tag[]>,
+      PluginAPI.getActiveWorkContext() as Promise<ActiveWorkContext | null>,
+      PluginAPI.getDayContext
+        ? PluginAPI.getDayContext()
+        : Promise.resolve(fallbackDay()),
+      PluginAPI.getCurrentTaskId ? PluginAPI.getCurrentTaskId() : Promise.resolve(null),
+      PluginAPI.getSelectedTask ? PluginAPI.getSelectedTask() : Promise.resolve(null),
+    ]);
+  state.selectedTaskId = selected?.id ?? null;
   const spec = activeSpec();
   let archivedTasks: Task[] | undefined;
   if (spec && specNeedsArchive(spec)) {
@@ -143,16 +151,39 @@ const render = (animate: boolean, force = false): void => {
     return;
   }
   if (!spec || !state.env) {
-    renderView(ui.view, null, { selectedId: null, canTrack, animate: false });
+    renderView(ui.view, null, {
+      selectedId: null,
+      selectedTaskId: null,
+      collapsed: cards.collapsed,
+      adds: cards.adds,
+      canTrack,
+      animate: false,
+    });
     state.lastRendered = '';
     return;
   }
+  // A redraw while a title is being typed would throw it away.
+  if (cards.gate.holds()) return;
   const model = buildModel(spec, state.env);
   // The tracked task updates once a second; skip redraws that change nothing.
-  const signature = JSON.stringify([model, state.selectedId]);
+  const folded = [...cards.collapsed];
+  const signature = JSON.stringify([
+    model,
+    state.selectedId,
+    state.selectedTaskId,
+    folded,
+  ]);
   if (!force && signature === state.lastRendered) return;
   state.lastRendered = signature;
-  renderView(ui.view, model, { selectedId: state.selectedId, canTrack, animate });
+  renderView(ui.view, model, {
+    selectedId: state.selectedId,
+    selectedTaskId: state.selectedTaskId,
+    collapsed: cards.collapsed,
+    adds: cards.adds,
+    canTrack,
+    animate,
+  });
+  cards.events.remountHover();
 };
 
 const renderChrome = (): void => {
@@ -393,24 +424,6 @@ const withRollback = async (action: () => Promise<unknown>): Promise<void> => {
   }
 };
 
-const toggleDone = (taskId: string): void => {
-  const task = state.env?.tasks.find((t) => t.id === taskId);
-  if (!task) return;
-  patchTask(taskId, { isDone: !task.isDone });
-  render(true);
-  void withRollback(() => PluginAPI.updateTask(taskId, { isDone: !task.isDone }));
-};
-
-const toggleTracking = (taskId: string): void => {
-  if (!state.env || !canTrack) return;
-  const isTracking = state.env.currentTaskId === taskId;
-  state.env = { ...state.env, currentTaskId: isTracking ? null : taskId };
-  render(true);
-  void withRollback(() =>
-    isTracking ? PluginAPI.stopTracking!() : PluginAPI.startTracking!(taskId),
-  );
-};
-
 const dropInto = async (
   taskId: string,
   boardCid: string,
@@ -462,6 +475,24 @@ const moveWithKeyboard = (cardEl: HTMLElement, direction: -1 | 1): void => {
     });
   }
 };
+
+// ---------- cards (their gestures live in card-setup.ts) ----------
+
+const cards = setupCards({
+  root: ui.view,
+  canTrack,
+  env: () => state.env,
+  patch: patchTask,
+  setCurrent: (taskId) => {
+    if (state.env) state.env = { ...state.env, currentTaskId: taskId };
+  },
+  setSelected: (taskId) => {
+    state.selectedTaskId = taskId;
+    render(false);
+  },
+  render: (animate, force) => render(animate, force),
+  run: withRollback,
+});
 
 // ---------- background messaging ----------
 
@@ -590,28 +621,13 @@ ui.deleteViewBtn.addEventListener('click', async () => {
 });
 
 ui.view.addEventListener('click', (e) => {
-  const target = (e.target as HTMLElement).closest<HTMLElement>('[data-action]');
+  const target = (e.target as HTMLElement).closest<HTMLElement>('[data-action="select"]');
   if (!target) return;
-  const taskId = target.closest<HTMLElement>('[data-tid]')?.dataset.tid;
-  switch (target.dataset.action) {
-    case 'done':
-      if (taskId) toggleDone(taskId);
-      break;
-    case 'track':
-      if (taskId) toggleTracking(taskId);
-      break;
-    case 'open':
-      if (taskId) void PluginAPI.selectTask(taskId);
-      break;
-    case 'select': {
-      const cid = target.dataset.cid ?? null;
-      state.selectedId = state.selectedId === cid ? null : cid;
-      renderChrome();
-      render(false);
-      if (state.selectedId) ui.commandInput.focus();
-      break;
-    }
-  }
+  const cid = target.dataset.cid ?? null;
+  state.selectedId = state.selectedId === cid ? null : cid;
+  renderChrome();
+  render(false);
+  if (state.selectedId) ui.commandInput.focus();
 });
 
 ui.view.addEventListener('keydown', (e) => {
