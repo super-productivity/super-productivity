@@ -87,5 +87,5 @@ This updates all `{lang}.json` files to include any new keys from `en.json`, pla
 ## Notes
 
 - The script preserves the order of keys to match `en.json`.
-- Empty strings in translation files trigger English fallback.
+- An empty string (`""`) in a translation file renders as blank text, not as the English fallback; leave untranslated keys out instead.
 - WIP files are temporary and will be deleted by the merge command.

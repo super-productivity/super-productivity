@@ -1538,6 +1538,22 @@ describe('AddTaskBarComponent', () => {
     });
   });
 
+  describe('deadline button', () => {
+    const getDeadlineBtn = (): HTMLElement | null =>
+      fixture.nativeElement.querySelector('[data-test="add-task-bar-deadline-btn"]');
+
+    it('is shown with the default config', () => {
+      fixture.detectChanges();
+      expect(getDeadlineBtn()).not.toBeNull();
+    });
+
+    it('is hidden when planForDay is set', () => {
+      fixture.componentRef.setInput('planForDay', '2024-05-20');
+      fixture.detectChanges();
+      expect(getDeadlineBtn()).toBeNull();
+    });
+  });
+
   // cdkTextareaAutosize measures a present placeholder by temporarily swapping
   // it into textarea.value, and each swap resets the caret to the end — so the
   // placeholder must be detached whenever the field has text (the only time a

@@ -372,16 +372,18 @@
                 [isIconBefore]="true"
                 [isGroup]="true"
               >
-                <task-list
-                  class="tour-doneList"
-                  [noTasksMsg]="
-                    (nrOfDoneArchived ? T.WW.DONE_TASKS_IN_ARCHIVE : T.WW.NO_DONE_TASKS)
-                      | translate
-                  "
-                  [tasks]="doneTasks()"
-                  listId="PARENT"
-                  listModelId="DONE"
-                ></task-list>
+                @if (isDoneListBuilt()) {
+                  <task-list
+                    class="tour-doneList"
+                    [noTasksMsg]="
+                      (nrOfDoneArchived ? T.WW.DONE_TASKS_IN_ARCHIVE : T.WW.NO_DONE_TASKS)
+                        | translate
+                    "
+                    [tasks]="doneTasks()"
+                    listId="PARENT"
+                    listModelId="DONE"
+                  ></task-list>
+                }
                 <div class="finish-day-button-wrapper">
                   @if (hasDoneTasks() && (!isOnTodayList() || !isFinishDayEnabled())) {
                     <button

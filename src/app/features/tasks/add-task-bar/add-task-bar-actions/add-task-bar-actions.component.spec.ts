@@ -279,6 +279,53 @@ describe('AddTaskBarActionsComponent', () => {
     });
   });
 
+  describe('Deadline button', () => {
+    const getDeadlineBtn = (): HTMLElement | null =>
+      fixture.nativeElement.querySelector('[data-test="add-task-bar-deadline-btn"]');
+    const getClearDeadlineBtn = (): HTMLElement | null =>
+      fixture.nativeElement.querySelector(
+        '[data-test="add-task-bar-clear-deadline-btn"]',
+      );
+
+    it('is shown per default', () => {
+      fixture.detectChanges();
+      expect(getDeadlineBtn()).not.toBeNull();
+      expect(getDeadlineBtn()!.classList).not.toContain('has-value');
+      expect(getClearDeadlineBtn()).toBeNull();
+    });
+
+    it('hides the deadline button when isHideDeadlineBtn is set', () => {
+      fixture.componentRef.setInput('isHideDeadlineBtn', true);
+      fixture.detectChanges();
+
+      expect(getDeadlineBtn()).toBeNull();
+    });
+
+    it('shows the deadline and clear button once a deadline is set', () => {
+      (mockStateService as any)._mockStateSignal.set({
+        ...mockState,
+        deadlineDate: '2199-12-12',
+      });
+      fixture.detectChanges();
+
+      expect(getDeadlineBtn()!.classList).toContain('has-value');
+      expect(getDeadlineBtn()!.classList).toContain('deadline-chip');
+      expect(getClearDeadlineBtn()).not.toBeNull();
+    });
+
+    it('keeps a set deadline visible even when the button is hidden', () => {
+      fixture.componentRef.setInput('isHideDeadlineBtn', true);
+      (mockStateService as any)._mockStateSignal.set({
+        ...mockState,
+        deadlineDate: '2199-12-12',
+      });
+      fixture.detectChanges();
+
+      expect(getDeadlineBtn()).not.toBeNull();
+      expect(getClearDeadlineBtn()).not.toBeNull();
+    });
+  });
+
   describe('Computed Properties', () => {
     it('should translate the default inbox project title in the action button', () => {
       mockProjectsSignal.set([INBOX_PROJECT]);

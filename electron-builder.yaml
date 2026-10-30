@@ -119,7 +119,12 @@ linux:
 
 rpm:
   # Fix for issue #5368: Prevent /usr/lib/.build-id/ collisions with other Electron apps
-  fpm: ['--rpm-rpmbuild-define=_build_id_links none']
+  # Fix for issue #11136: the desktop entry Exec is /usr/bin/superproductivity
+  # (patches/app-builder-lib+*.patch); this re-creates that link after the old
+  # package's %postun removes it on upgrade.
+  fpm:
+    - '--rpm-rpmbuild-define=_build_id_links none'
+    - '--rpm-posttrans=build/linux/rpm-posttrans.sh'
 # leads to Error: Please specify executable name as linux.executableName instead of linux.desktop.Exec
 #  desktop:
 #    Name: Super Productivity

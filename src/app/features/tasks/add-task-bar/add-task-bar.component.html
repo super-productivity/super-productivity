@@ -190,6 +190,7 @@
     <add-task-bar-actions
       [isHideTagBtn]="!!planForDay()"
       [isHideDueBtn]="!!planForDay()"
+      [isHideDeadlineBtn]="!!planForDay()"
       (refocus)="focusInput()"
       (scheduleDialogOpenChange)="onScheduleDialogOpenChange($event)"
     >

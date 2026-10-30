@@ -90,6 +90,7 @@ export class AddTaskBarActionsComponent {
   // Inputs
   isHideDueBtn = input<boolean>(false);
   isHideTagBtn = input<boolean>(false);
+  isHideDeadlineBtn = input<boolean>(false);
 
   // Outputs
   estimateChanged = output<string>();
