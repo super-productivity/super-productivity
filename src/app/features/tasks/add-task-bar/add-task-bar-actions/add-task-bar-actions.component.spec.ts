@@ -176,7 +176,6 @@ describe('AddTaskBarActionsComponent', () => {
     mockVisibleProjectsSignal = signal([mockProject]);
     mockProjectService = jasmine.createSpyObj('ProjectService', [], {
       list$: of([mockProject, mockHiddenProject]),
-      listSortedForUI: mockVisibleProjectsSignal,
       listInTreeOrderForUI: mockVisibleProjectsSignal,
       listInTreeOrder: mockProjectsSignal,
       listSorted: mockProjectsSignal,

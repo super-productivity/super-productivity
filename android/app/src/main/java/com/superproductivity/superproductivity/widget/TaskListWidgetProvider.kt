@@ -230,6 +230,16 @@ class TaskListWidgetProvider : AppWidgetProvider() {
             views.setOnClickPendingIntent(R.id.widget_empty, openAppPendingIntent)
             views.setOnClickPendingIntent(R.id.widget_tracking_row, openAppPendingIntent)
 
+            // "+" → quick add dialog; the app itself stays closed.
+            val quickAddIntent = Intent(context, QuickAddActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+            val quickAddPendingIntent = PendingIntent.getActivity(
+                context, 0, quickAddIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            views.setOnClickPendingIntent(R.id.widget_add, quickAddPendingIntent)
+
             appWidgetManager.updateAppWidget(appWidgetId, views)
         }
     }

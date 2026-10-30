@@ -60,3 +60,21 @@ export const isTaskOverdue = (
     todayStr,
     getLogicalTodayStartMs(todayStr, startOfNextDayDiffMs),
   );
+
+/**
+ * A task with no plan date whose deadline has passed (#9589). Kept separate from
+ * the plan-date overdue rule: only Today's overdue panel uses it, so the Planner
+ * (which lists missed deadlines on their own) does not show such tasks twice.
+ * A plan date always wins — the user already decided when to do the task.
+ */
+export const isTaskDeadlineMissedUnplanned = (
+  task: Pick<Task, 'dueDay' | 'dueWithTime' | 'deadlineDay' | 'deadlineWithTime'>,
+  todayStr: string,
+  todayStartMs: number,
+): boolean =>
+  !task.dueDay &&
+  !task.dueWithTime &&
+  !!(
+    (task.deadlineDay && isDBDateStr(task.deadlineDay) && task.deadlineDay < todayStr) ||
+    (task.deadlineWithTime && task.deadlineWithTime < todayStartMs)
+  );

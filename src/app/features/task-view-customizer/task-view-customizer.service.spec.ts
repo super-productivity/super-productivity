@@ -725,6 +725,38 @@ describe('TaskViewCustomizerService', () => {
     expect(grouped['Work'].map((t) => t.id)).toEqual(['task-work-1', 'task-work-2']);
   });
 
+  describe('group by tag inside a tag view (#9630)', () => {
+    beforeEach(() => {
+      tagsInTreeOrder.set([
+        { id: 'Tag A', title: 'Tag A' } as Tag,
+        { id: 'Tag B', title: 'Tag B' } as Tag,
+      ]);
+    });
+
+    it('omits the active tag and puts tasks with no other tag into "No tag"', () => {
+      mockWorkContextService.activeWorkContextId = 'Tag A';
+      mockWorkContextService.activeWorkContextType = WorkContextType.TAG;
+
+      const grouped = service['applyGrouping'](mockTasks, GROUP_OPTION_TYPE.tag);
+
+      expect(Object.keys(grouped)).toEqual(['Tag B', 'No tag']);
+      expect(grouped['Tag B'].map((t) => t.id)).toEqual([
+        'Beta(Tag B)',
+        'Third Task(Tag A, Tag B)',
+      ]);
+      expect(grouped['No tag'].map((t) => t.id)).toEqual(['Alpha(Tag A)', 'Zebra(-)']);
+    });
+
+    it('keeps every tag group in a project view', () => {
+      mockWorkContextService.activeWorkContextId = 'Tag A';
+      mockWorkContextService.activeWorkContextType = WorkContextType.PROJECT;
+
+      const grouped = service['applyGrouping'](mockTasks, GROUP_OPTION_TYPE.tag);
+
+      expect(Object.keys(grouped)).toEqual(['Tag A', 'Tag B', 'No tag']);
+    });
+  });
+
   it('should group by scheduledDate using dueDay', () => {
     const grouped = service['applyGrouping'](mockTasks, GROUP_OPTION_TYPE.scheduledDate);
     expect(Object.keys(grouped)).toContain(todayStr);

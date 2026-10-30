@@ -479,12 +479,18 @@ bootstrapApplication(AppComponent, {
   // focus button), which cannot happen before idle callback fires. Restoring a
   // session killed in the background waits for data load, so it is not raced either.
   const registerLazyEffects = async (): Promise<void> => {
-    const [{ FocusModeEffects }, sessionPersistence] = await Promise.all([
-      import('./app/features/focus-mode/store/focus-mode.effects'),
-      IS_IOS_NATIVE
-        ? import('./app/features/focus-mode/store/focus-mode-session-persistence.effects')
-        : null,
-    ]);
+    const [{ FocusModeEffects }, webNotification, sessionPersistence] = await Promise.all(
+      [
+        import('./app/features/focus-mode/store/focus-mode.effects'),
+        // Web only: desktop and mobile alert through their own paths (#7550)
+        !IS_ELECTRON && !IS_NATIVE_PLATFORM
+          ? import('./app/features/focus-mode/store/focus-mode-web-notification.effects')
+          : null,
+        IS_IOS_NATIVE
+          ? import('./app/features/focus-mode/store/focus-mode-session-persistence.effects')
+          : null,
+      ],
+    );
     const envInjector = appRef.injector.get(EnvironmentInjector);
     createEnvironmentInjector(
       [
@@ -495,6 +501,7 @@ bootstrapApplication(AppComponent, {
           // on desktop a closed app means the user ended the session.
           EffectsModule.forFeature([
             FocusModeEffects,
+            ...(webNotification ? [webNotification.FocusModeWebNotificationEffects] : []),
             ...(sessionPersistence
               ? [sessionPersistence.FocusModeSessionPersistenceEffects]
               : []),

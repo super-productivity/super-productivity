@@ -605,14 +605,22 @@ export class TaskViewCustomizerService {
     const groupedByTagId = new Map<string, TaskWithSubTasks[]>();
     const unknownTagTasks: TaskWithSubTasks[] = [];
     const noTagTasks: TaskWithSubTasks[] = [];
+    // Inside a tag's own view every task carries that tag, so its group would
+    // just repeat the whole list (#9630). TODAY is virtual and never in tagIds,
+    // so this is a no-op there.
+    const contextTagId =
+      this._workContextService.activeWorkContextType === WorkContextType.TAG
+        ? this._workContextService.activeWorkContextId
+        : undefined;
 
     tasks.forEach((task) => {
-      if (!task.tagIds?.length) {
+      const tagIds = (task.tagIds ?? []).filter((tagId) => tagId !== contextTagId);
+      if (!tagIds.length) {
         noTagTasks.push(task);
         return;
       }
 
-      task.tagIds.forEach((tagId) => {
+      tagIds.forEach((tagId) => {
         if (tagById.has(tagId)) {
           const tagTasks = groupedByTagId.get(tagId) ?? [];
           tagTasks.push(task);

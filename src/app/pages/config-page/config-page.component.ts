@@ -60,6 +60,7 @@ import { ThemeSelectorComponent } from '../../core/theme/theme-selector/theme-se
 import { Log } from '../../core/log';
 import { DialogLogsComponent } from '../../ui/dialog-logs/dialog-logs.component';
 import { SnackService } from '../../core/snack/snack.service';
+import { requestBrowserNotificationPermission } from '../../core/notify/browser-notification-permission';
 import { ShareService } from '../../core/share/share.service';
 import { SyncWrapperService } from '../../imex/sync/sync-wrapper.service';
 import { MatDialog } from '@angular/material/dialog';
@@ -421,7 +422,14 @@ export class ConfigPageComponent implements OnInit {
 
     // focusModeLocal is per-instance (not synced) — handled by a dedicated service
     if (formSectionKey === 'focusModeLocal') {
-      this.focusModeLocalSettingsService.update(config as Partial<FocusModeLocalConfig>);
+      const localCfg = config as Partial<FocusModeLocalConfig>;
+      const wasNotifyOn =
+        this.focusModeLocalSettingsService.settings().isNotifyOnSessionEnd;
+      this.focusModeLocalSettingsService.update(localCfg);
+      // Prompt only on the opt-in click: browsers ignore prompts without a gesture
+      if (localCfg.isNotifyOnSessionEnd && !wasNotifyOn) {
+        void this._ensureFocusNotificationPermission();
+      }
       return;
     }
 
@@ -541,6 +549,18 @@ export class ConfigPageComponent implements OnInit {
       width: '600px',
       maxWidth: '95vw',
       data: { logs: Log.exportLogHistory() },
+    });
+  }
+
+  private async _ensureFocusNotificationPermission(): Promise<void> {
+    if (await requestBrowserNotificationPermission()) {
+      return;
+    }
+    // Revert so the checkbox reflects that nothing will be shown
+    this.focusModeLocalSettingsService.update({ isNotifyOnSessionEnd: false });
+    this._snackService.open({
+      type: 'ERROR',
+      msg: T.GCF.FOCUS_MODE_LOCAL.S_NOTIFICATION_PERMISSION_DENIED,
     });
   }
 

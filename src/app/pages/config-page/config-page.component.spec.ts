@@ -29,6 +29,7 @@ import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { ConfigSectionComponent } from '../../features/config/config-section/config-section.component';
 import { CollapsibleComponent } from '../../ui/collapsible/collapsible.component';
 import { WorkContextService } from '../../features/work-context/work-context.service';
+import { FocusModeLocalSettingsService } from '../../features/config/focus-mode-local-settings.service';
 
 describe('ConfigPageComponent', () => {
   let component: ConfigPageComponent;
@@ -170,6 +171,66 @@ describe('ConfigPageComponent', () => {
       expect(configService.updateSection).toHaveBeenCalledOnceWith('idle', {
         minIdleTime: 600000,
       } as Partial<IdleConfig>);
+    });
+  });
+
+  describe('focus session end notifications (#7550)', () => {
+    let localSettings: FocusModeLocalSettingsService;
+    let snackService: jasmine.SpyObj<SnackService>;
+    let requestPermissionSpy: jasmine.Spy;
+
+    // a macrotask turn runs every queued microtask of the permission flow
+    const flushPromises = (): Promise<void> =>
+      new Promise((resolve) => setTimeout(resolve));
+
+    const enableNotifications = (): void =>
+      component.saveGlobalCfg({
+        sectionKey: 'focusModeLocal',
+        config: { isLoopBreakEndAlarm: false, isNotifyOnSessionEnd: true },
+      });
+
+    beforeEach(() => {
+      localStorage.removeItem('sp_focus_mode_local_settings');
+      localSettings = TestBed.inject(FocusModeLocalSettingsService);
+      localSettings.update({ isNotifyOnSessionEnd: false });
+      snackService = TestBed.inject(SnackService) as jasmine.SpyObj<SnackService>;
+      spyOnProperty(Notification, 'permission', 'get').and.returnValue('default');
+      requestPermissionSpy = spyOn(Notification, 'requestPermission');
+    });
+
+    afterEach(() => {
+      localStorage.removeItem('sp_focus_mode_local_settings');
+    });
+
+    it('asks for permission when turned on and keeps it on when granted', async () => {
+      requestPermissionSpy.and.resolveTo('granted');
+      enableNotifications();
+      await flushPromises();
+
+      expect(requestPermissionSpy).toHaveBeenCalledTimes(1);
+      expect(localSettings.settings().isNotifyOnSessionEnd).toBe(true);
+      expect(snackService.open).not.toHaveBeenCalled();
+    });
+
+    it('turns the setting back off and informs the user when denied', async () => {
+      requestPermissionSpy.and.resolveTo('denied');
+      enableNotifications();
+      await flushPromises();
+
+      expect(localSettings.settings().isNotifyOnSessionEnd).toBe(false);
+      expect(snackService.open).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          type: 'ERROR',
+          msg: T.GCF.FOCUS_MODE_LOCAL.S_NOTIFICATION_PERMISSION_DENIED,
+        }),
+      );
+    });
+
+    it('does not ask again when saving with the setting already on', () => {
+      localSettings.update({ isNotifyOnSessionEnd: true });
+      enableNotifications();
+
+      expect(requestPermissionSpy).not.toHaveBeenCalled();
     });
   });
 

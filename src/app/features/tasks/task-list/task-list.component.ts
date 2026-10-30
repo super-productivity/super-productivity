@@ -833,7 +833,8 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
   /**
    * Reassign tags when a task is dragged across tag-group boundaries in the
    * grouped-by-tag work view:
-   * - target is the {@link NO_TAG_GROUP_ID} bucket → clear all tags;
+   * - target is the {@link NO_TAG_GROUP_ID} bucket → clear all tags (except
+   *   the active context tag in a tag view);
    * - otherwise move semantics: drop the source group's tag (when the drag
    *   started from a real tag group) and add the target group's tag.
    * `updateTags` de-dupes, so a task that already carries the target tag is fine.
@@ -850,7 +851,14 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
     task: TaskWithSubTasks,
   ): void {
     if (targetTagId === NO_TAG_GROUP_ID) {
-      this._taskService.updateTags(task, []);
+      // In a tag view, "No tag" means "no tag besides this one" (#9630);
+      // clearing it too would drop the task out of the current view.
+      const { activeWorkContextId, activeWorkContextType } = this._workContextService;
+      const keptTagIds = (task.tagIds ?? []).filter(
+        (id) =>
+          activeWorkContextType === WorkContextType.TAG && id === activeWorkContextId,
+      );
+      this._taskService.updateTags(task, keptTagIds);
       return;
     }
     const nextTagIds = [

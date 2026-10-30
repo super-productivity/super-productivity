@@ -1767,11 +1767,12 @@
         "DEADLINE_BUTTON": "Deadline",
         "DUE_BUTTON": "Schedule",
         "ESTIMATE_BUTTON": "Estimate",
+        "NO_SEARCH_MATCHES": "No matching tasks or issues",
         "NOTE_PLACEHOLDER": "Add a note… (Ctrl+Enter to add task)",
         "PLACEHOLDER_CREATE": "A task title #tag @16:00 t25m",
         "PLACEHOLDER_SEARCH": "Add existing task or issues...",
         "REPEAT_BUTTON": "Repeat",
-        "SEARCH_INFO_TEXT": "Search and add issues and tasks from archive and other projects",
+        "SEARCH_INFO_TEXT": "Search issues and existing tasks to add here",
         "TAGS_BUTTON": "Tags",
         "TODAY": "Today",
         "TOGGLE_ADD_TOP_OR_BOTTOM": "Toggle adding task to top & bottom of list",
@@ -2697,6 +2698,8 @@
     "FOCUS_MODE_LOCAL": {
       "HELP": "These settings apply only to this device and are not synced.",
       "L_IS_LOOP_BREAK_END_ALARM": "Loop the break-end sound until I dismiss the break (this device only)",
+      "L_IS_NOTIFY_ON_SESSION_END": "Show a browser notification when a Pomodoro session or break ends",
+      "S_NOTIFICATION_PERMISSION_DENIED": "Notifications are not allowed for this site. Allow them in your browser to use this option.",
       "TITLE": "Focus Mode (this device)"
     },
     "TASK_WIDGET": {

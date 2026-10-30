@@ -1296,6 +1296,28 @@ describe('shortSyntax', () => {
       });
     });
 
+    // isHiddenFromMenu only hides from the sidebar; +project must still assign it (#11190)
+    it('should work for a project hidden from the menu but not an archived one', async () => {
+      const ps = [
+        { title: 'HiddenProj', id: 'HiddenID', isHiddenFromMenu: true },
+        { title: 'ArchivedProj', id: 'ArchivedID', isArchived: true },
+      ] as Project[];
+      const hidden = await shortSyntax(
+        { ...TASK, title: 'Fun title +HiddenProj' },
+        CONFIG,
+        [],
+        ps,
+      );
+      const archived = await shortSyntax(
+        { ...TASK, title: 'Fun title +ArchivedProj' },
+        CONFIG,
+        [],
+        ps,
+      );
+      expect(hidden?.projectId).toBe('HiddenID');
+      expect(archived?.projectId).toBeUndefined();
+    });
+
     it("shouldn't work when disabled", async () => {
       const t = {
         ...TASK,
@@ -4174,6 +4196,112 @@ describe('shortSyntax localized dates', () => {
     expect(r?.taskChanges.timeEstimate).toBe(18 * 60 * 60 * 1000);
     expect(formatDateToISO(dueOf(r))).toBe('2026-10-21');
     expect(r?.taskChanges.hasPlannedTime).toBe(false);
+  });
+
+  // #11180: chrono read "@09h" as "in 9 hours" (seconds included), so after
+  // 15:00 the task landed on the next day
+  [
+    { language: 'fr', isDayFirst: true },
+    { language: 'en', isDayFirst: false },
+  ].forEach((locale) => {
+    it(`should read "@09h" as 09:00 for ${locale.language}`, async () => {
+      const afternoon = new Date(2026, 9, 20, 16, 0, 0, 0);
+      const r = await shortSyntax(
+        { ...TASK, title: 'Task @09h' },
+        CONFIG,
+        [],
+        [],
+        afternoon,
+        'combine',
+        false,
+        locale,
+      );
+      expect(r?.taskChanges.title).toBe('Task');
+      expect(r?.taskChanges.timeEstimate).toBeUndefined();
+      const due = dueOf(r);
+      // 09:00 has passed at 16:00, so the next 09:00
+      expect(formatDateToISO(due)).toBe('2026-10-21');
+      expect(due.getHours()).toBe(9);
+      expect(due.getMinutes()).toBe(0);
+      expect(due.getSeconds()).toBe(0);
+      expect(r?.parsedRanges).toEqual(expectedRanges('Task @09h', [['due', '@09h']]));
+    });
+
+    it(`should read "@14h30" as 14:30 today for ${locale.language}`, async () => {
+      const r = await parseIn(locale, 'Task @14h30');
+      expect(r?.taskChanges.title).toBe('Task');
+      const due = dueOf(r);
+      expect(formatDateToISO(due)).toBe('2026-10-20');
+      expect(due.getHours()).toBe(14);
+      expect(due.getMinutes()).toBe(30);
+    });
+  });
+
+  it('should read the issue\'s "@09h00" as 09:00', async () => {
+    const r = await parseIn({ language: 'en', isDayFirst: false }, 'Task @09h00');
+    expect(r?.taskChanges.title).toBe('Task');
+    const due = dueOf(r);
+    expect(formatDateToISO(due)).toBe('2026-10-21');
+    expect(due.getHours()).toBe(9);
+    expect(due.getMinutes()).toBe(0);
+  });
+
+  it('should read "@2h" as 02:00, not in 2 hours', async () => {
+    const r = await parseIn({ language: 'en', isDayFirst: false }, 'Task @2h');
+    const due = dueOf(r);
+    expect(formatDateToISO(due)).toBe('2026-10-21');
+    expect(due.getHours()).toBe(2);
+    expect(r?.taskChanges.timeEstimate).toBeUndefined();
+  });
+
+  it('should join a day word after "@18h" to the time', async () => {
+    // 18:00 is still ahead at NOW (10:00), so only the day word moves it
+    const r = await parseIn({ language: 'fr', isDayFirst: true }, 'Task @18h demain');
+    expect(r?.taskChanges.title).toBe('Task');
+    const due = dueOf(r);
+    expect(formatDateToISO(due)).toBe('2026-10-21');
+    expect(due.getHours()).toBe(18);
+    expect(r?.parsedRanges).toEqual(
+      expectedRanges('Task @18h demain', [['due', '@18h demain']]),
+    );
+  });
+
+  it('should join a weekday after "@9h30" to the time', async () => {
+    const r = await parseIn({ language: 'en', isDayFirst: false }, 'Task @9h30 friday');
+    expect(r?.taskChanges.title).toBe('Task');
+    const due = dueOf(r);
+    expect(formatDateToISO(due)).toBe('2026-10-23');
+    expect(due.getHours()).toBe(9);
+    expect(due.getMinutes()).toBe(30);
+  });
+
+  it('should keep a non-date word after "@09h" in the title', async () => {
+    const r = await parseIn({ language: 'en', isDayFirst: false }, 'Task @09h call');
+    // removing a token mid-title keeps both neighbouring spaces
+    expect(r?.taskChanges.title).toBe('Task  call');
+    const due = dueOf(r);
+    expect(formatDateToISO(due)).toBe('2026-10-21');
+    expect(due.getHours()).toBe(9);
+  });
+
+  it('should read "!09h" as a 09:00 deadline', async () => {
+    const r = await parseIn(
+      { language: 'fr', isDayFirst: true },
+      'Task !09h',
+      DEADLINE_CONFIG,
+    );
+    expect(r?.taskChanges.title).toBe('Task');
+    const deadline = new Date(r?.taskChanges.deadlineWithTime as number);
+    // 09:00 has passed at NOW (10:00), so the next 09:00
+    expect(formatDateToISO(deadline)).toBe('2026-10-21');
+    expect(deadline.getHours()).toBe(9);
+    expect(r?.taskChanges.hasDeadlineTime).toBe(true);
+  });
+
+  it('should keep an "@<n>h" that is no clock time in the title', async () => {
+    const r = await parseIn({ language: 'fr', isDayFirst: true }, 'Task @25h');
+    // nothing parsed, so the title is left as typed
+    expect(r).toBeUndefined();
   });
 
   it('should leave a time the locale cannot join to its day word in the title', async () => {

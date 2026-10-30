@@ -112,7 +112,12 @@
   // scaled enter animation paints outside the box and the browser corrects by scrolling
   // the wrapper — a transient nudge on route enter. See #9873, #9837.
   overflow: clip;
-  -webkit-app-region: no-drag !important;
+  // No `-webkit-app-region` here. Since Electron 44 (Chromium 152) it is
+  // inherited, and Chromium emits each box's unclipped border box: a no-drag
+  // here made every routed box a no-drag region, so content scrolled up behind
+  // the header (the Schedule opens scrolled to now) killed the title-bar drag
+  // (#10170). No drag region overlaps this box, and buttons/links stay no-drag
+  // via `page.scss`.
   height: 100%;
   container-type: inline-size;
   container-name: main-content;
