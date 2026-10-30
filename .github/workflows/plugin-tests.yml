@@ -131,8 +131,10 @@ jobs:
         with:
           node-version-file: .nvmrc
       # plugin-api's own dependencies only; the starter needs no others.
+      # --ignore-scripts skips the root install scripts, whose tools this
+      # partial install does not include.
       - name: Install plugin-api dependencies
-        run: npm ci --workspace=@super-productivity/plugin-api --no-audit --no-fund
+        run: npm ci --workspace=@super-productivity/plugin-api --ignore-scripts --no-audit --no-fund
       - name: Typecheck and pack the starter
         run: npm run plugin-starter:check
       - name: Check manifest.json is at the ZIP root

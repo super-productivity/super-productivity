@@ -95,10 +95,11 @@ jobs:
         env:
           VERSION: ${{ steps.tag.outputs.version }}
         # plugin-api is a root workspace: npm ci here installs only its own
-        # dependencies from the root lockfile. `npm pkg set`, unlike
-        # `npm version`, does not trigger a workspace reinstall.
+        # dependencies from the root lockfile. --ignore-scripts skips the root's
+        # install scripts (patch-package is not installed in this mode).
+        # `npm pkg set`, unlike `npm version`, does not trigger a reinstall.
         run: |
-          npm ci --no-audit --no-fund
+          npm ci --ignore-scripts --no-audit --no-fund
           npm pkg set version="$VERSION"
           # prepublishOnly cleans and builds dist/.
           npm publish --provenance --access public
