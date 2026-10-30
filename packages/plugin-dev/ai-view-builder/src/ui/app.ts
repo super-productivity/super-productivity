@@ -8,7 +8,8 @@ import {
   type Task,
 } from '@super-productivity/plugin-api';
 import { emptySpec, isReadOnlySpec, ViewSpec } from '../core/spec';
-import { buildModel, ModelEnv, specNeedsArchive } from '../core/model';
+import type { ModelEnv } from '../core/cards';
+import { buildModel, specNeedsArchive } from '../core/model';
 import { dropWrite } from '../core/board';
 import { EditError, MODELS, runEdit } from '../core/edit-loop';
 import { matchViewByName, parseLocalCommand } from '../core/commands';

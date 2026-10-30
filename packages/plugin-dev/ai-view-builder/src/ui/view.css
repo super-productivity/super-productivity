@@ -1,0 +1,263 @@
+/* parts of a view */
+.c {
+  min-width: 0;
+  border-radius: var(--card-border-radius);
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+}
+
+.c.is-selected {
+  outline-color: var(--c-primary);
+}
+
+.c-children {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+}
+
+.layout-columns > .c-children {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+
+.layout-columns > .c-children > .c {
+  flex: 1 1 240px;
+}
+
+.c-head {
+  margin-bottom: var(--s);
+}
+
+.c-title {
+  background: none;
+  border: none;
+  padding: 0;
+  font-weight: 700;
+  font-size: 1.1em;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  min-height: 1em;
+}
+
+.c-title:hover {
+  color: var(--c-primary);
+  background: none;
+}
+
+.c-problems {
+  font-size: 12px;
+  margin-top: var(--s-quarter);
+}
+
+.group-label,
+.col-title {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-half);
+  margin: var(--s) 0 var(--s-half);
+  font-size: 0.9em;
+}
+
+.col-title {
+  margin: 0 0 var(--s);
+}
+
+.heading-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-weight: 700;
+  color: var(--text-color);
+}
+
+.heading-count,
+.heading-sum {
+  font-size: 0.85em;
+  color: var(--text-color-muted);
+}
+
+.heading-sum {
+  margin-left: auto;
+}
+
+.cards {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-half);
+  min-height: 24px;
+}
+
+.card.task {
+  display: flex;
+  align-items: center;
+  gap: var(--s);
+  padding: var(--s-half) var(--s);
+  background: var(--card-bg);
+  border: 1px solid var(--divider-color);
+  border-radius: var(--card-border-radius);
+}
+
+.card.task.is-tracking {
+  border-color: var(--c-primary);
+}
+
+.card.task.is-done .card-title {
+  text-decoration: line-through;
+  color: var(--text-color-muted);
+}
+
+.card-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.card-title {
+  background: none;
+  border: none;
+  padding: 0;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.card-title:hover {
+  background: none;
+  color: var(--c-primary);
+}
+
+.card-sub {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-quarter) var(--s-half);
+  margin-top: var(--s-quarter);
+}
+
+.card-meta {
+  font-size: 12px;
+  color: var(--text-color-muted);
+}
+
+/* The chip's own color comes from the project or tag, set as --chip. */
+.tag-chip {
+  padding: 0 var(--s-half);
+  border-radius: var(--card-border-radius);
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--text-color);
+  background: var(--bg-lighter);
+  border: 1px solid var(--divider-color);
+  background: color-mix(in srgb, var(--chip, transparent) 18%, var(--bg-lighter));
+  border-color: color-mix(in srgb, var(--chip, var(--divider-color)) 55%, transparent);
+}
+
+.card-aside {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  font-size: 12px;
+  color: var(--text-color-muted);
+}
+
+.card-due.is-overdue {
+  color: var(--color-danger, var(--c-warn));
+}
+
+.icon-btn {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border-radius: 50%;
+  font-size: 11px;
+  line-height: 1;
+}
+
+.done-btn {
+  border-radius: 50%;
+}
+
+[data-draggable='true'] {
+  cursor: grab;
+  user-select: none;
+}
+
+.is-drag-source {
+  opacity: 0.35;
+}
+
+.drag-ghost {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 10;
+  pointer-events: none;
+  box-shadow: var(--whiteframe-shadow-8dp);
+}
+
+.board-cols {
+  display: flex;
+  gap: var(--s2);
+  align-items: flex-start;
+  overflow-x: auto;
+}
+
+.board-cols.is-grid {
+  display: grid;
+  overflow-x: visible;
+}
+
+.board-col {
+  flex: 1 0 220px;
+  min-width: 0;
+  padding: var(--s);
+  border-radius: var(--card-border-radius);
+  background: var(--bg-darker);
+  border: 2px dashed transparent;
+}
+
+.board-col.is-drop-target {
+  border-color: var(--c-primary);
+}
+
+.c-metric {
+  padding: var(--s) var(--s2);
+  background: var(--card-bg);
+  border: 1px solid var(--divider-color);
+}
+
+.metric-value {
+  font-size: 1.8em;
+  font-weight: 700;
+}
+
+.c-metric .c-head {
+  margin: 0;
+}
+
+.c-metric .c-title {
+  font-weight: 400;
+  font-size: 0.9em;
+  color: var(--text-color-muted);
+}
+
+.text-block {
+  margin: 0;
+}
+
+.empty,
+.placeholder {
+  margin: var(--s-half) 0;
+  font-size: 13px;
+}
+
+@media (max-width: 600px) {
+  .board-cols.is-grid {
+    grid-template-columns: 1fr !important;
+  }
+}

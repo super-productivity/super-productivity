@@ -5,7 +5,7 @@ import type {
   Tag,
   Task,
 } from '@super-productivity/plugin-api';
-import type { ModelEnv } from './model';
+import type { ModelEnv } from './cards';
 
 // Shared fixtures for the core specs. Thursday 2026-10-29 is "today", the
 // day starts at 04:00 and weeks start on Monday.

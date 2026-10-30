@@ -2,33 +2,32 @@ import type { Task } from '@super-productivity/plugin-api';
 import { Component, FieldName, ViewSpec } from './spec';
 import {
   addDays,
-  deadlineOf,
   dueDayOf,
   needsArchive,
   priorityOf,
-  QueryEnv,
   runQuery,
   weekRange,
 } from './query';
 import { columnMatches } from './board';
+import {
+  CardModel,
+  fieldsFor,
+  formatDuration,
+  ModelEnv,
+  sumEstimate,
+  toCard,
+} from './cards';
 import { rangeOfWeek, timeSpentIn } from './time';
 
 // Spec + data → a plain tree the DOM renderer draws. Kept free of the DOM so
 // it is testable and so two models can be compared to skip redundant redraws.
 
-export interface CardModel {
-  id: string;
-  title: string;
-  isDone: boolean;
-  isTracking: boolean;
-  isSubTask: boolean;
-  meta: string[];
-}
-
 export interface GroupModel {
   key: string;
   label: string | null;
   cards: CardModel[];
+  /** Summed estimate of the cards; absent when none has one. */
+  estimate?: string;
 }
 
 export type NodeModel =
@@ -52,84 +51,74 @@ export type NodeModel =
       cid: string;
       title?: string;
       columnsPerRow: number | null;
-      columns: { id: string; title: string; cards: CardModel[] }[];
+      columns: { id: string; title: string; cards: CardModel[]; estimate?: string }[];
       problems: string[];
     }
   | { kind: 'metric'; cid: string; title: string; value: string; problems: string[] }
   | { kind: 'text'; cid: string; text: string }
   | { kind: 'placeholder'; cid: string; message: string };
 
-export interface ModelEnv extends QueryEnv {
-  currentTaskId: string | null;
-}
-
 const MAX_DEPTH = 8;
 
-export const formatDuration = (ms: number): string => {
-  const minutes = Math.round(ms / 60000);
-  if (minutes < 60) return `${minutes}m`;
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  return m ? `${h}h ${m}m` : `${h}h`;
-};
+interface GroupKey {
+  key: string;
+  label: string;
+}
 
-const formatDay = (day: string, env: ModelEnv): string => {
-  const today = env.day.todayStr;
-  if (day === today) return 'Today';
-  if (day === addDays(today, 1)) return 'Tomorrow';
-  if (day === addDays(today, -1)) return 'Yesterday';
-  return day;
-};
-
-const cardMeta = (task: Task, fields: FieldName[], env: ModelEnv): string[] => {
-  const out: string[] = [];
-  for (const field of fields) {
-    switch (field) {
-      case 'project': {
-        const p = env.projects.find((x) => x.id === task.projectId);
-        if (p) out.push(p.title);
-        break;
-      }
-      case 'tags': {
-        const names = task.tagIds
-          .map((id) => env.tags.find((t) => t.id === id)?.title)
-          .filter((n): n is string => !!n);
-        if (names.length) out.push(names.map((n) => `#${n}`).join(' '));
-        break;
-      }
-      case 'estimate':
-        if (task.timeEstimate > 0) out.push(`est. ${formatDuration(task.timeEstimate)}`);
-        break;
-      case 'timeSpent':
-        if (task.timeSpent > 0) out.push(`${formatDuration(task.timeSpent)} spent`);
-        break;
-      case 'due': {
-        const d = dueDayOf(task, env.day);
-        if (d) out.push(`due ${formatDay(d, env)}`);
-        break;
-      }
-      case 'deadline': {
-        const d = deadlineOf(task, env.day);
-        if (d) out.push(`deadline ${formatDay(d, env)}`);
-        break;
-      }
-      case 'priority': {
-        const p = priorityOf(task);
-        if (p !== 'none') out.push(`${p} priority`);
-        break;
-      }
+/** The groups a task belongs to; a tag grouping can list a task several times. */
+const groupKeysOf = (
+  t: Task,
+  groupBy: NonNullable<Component['groupBy']>,
+  env: ModelEnv,
+): GroupKey[] => {
+  switch (groupBy) {
+    case 'project': {
+      const p = env.projects.find((x) => x.id === t.projectId);
+      return [{ key: p?.id ?? 'none', label: p?.title ?? 'No project' }];
     }
+    case 'tag': {
+      const tags = t.tagIds
+        .map((id) => env.tags.find((x) => x.id === id))
+        .filter((x): x is NonNullable<typeof x> => !!x);
+      return tags.length
+        ? tags.map((tag) => ({ key: tag.id, label: tag.title }))
+        : [{ key: 'none', label: 'No tag' }];
+    }
+    case 'priority': {
+      const p = priorityOf(t);
+      return [
+        {
+          key: p,
+          label: p === 'none' ? 'No priority' : `${p[0].toUpperCase()}${p.slice(1)}`,
+        },
+      ];
+    }
+    case 'due': {
+      const d = dueDayOf(t, env.day);
+      const today = env.day.todayStr;
+      if (!d) return [{ key: '5-none', label: 'No date' }];
+      if (d < today) return [{ key: '0-overdue', label: 'Overdue' }];
+      if (d === today) return [{ key: '1-today', label: 'Today' }];
+      if (d === addDays(today, 1)) return [{ key: '2-tomorrow', label: 'Tomorrow' }];
+      if (d <= weekRange(env.day).end) return [{ key: '3-week', label: 'This week' }];
+      return [{ key: '4-later', label: 'Later' }];
+    }
+    default:
+      return [{ key: 'all', label: '' }];
   }
-  return out;
 };
 
-const toCard = (task: Task, fields: FieldName[], env: ModelEnv): CardModel => ({
-  id: task.id,
-  title: task.title,
-  isDone: task.isDone,
-  isTracking: env.currentTaskId === task.id,
-  isSubTask: !!task.parentId,
-  meta: cardMeta(task, fields, env),
+const makeGroup = (
+  key: string,
+  label: string | null,
+  tasks: Task[],
+  fields: FieldName[],
+  env: ModelEnv,
+): GroupModel => ({
+  key,
+  label,
+  cards: tasks.map((t) => toCard(t, fields, env)),
+  estimate: sumEstimate(tasks),
 });
 
 const groupTasks = (
@@ -138,56 +127,22 @@ const groupTasks = (
   fields: FieldName[],
   env: ModelEnv,
 ): GroupModel[] => {
-  const card = (t: Task): CardModel => toCard(t, fields, env);
   if (!groupBy || groupBy === 'none') {
-    return [{ key: 'all', label: null, cards: tasks.map(card) }];
+    return [makeGroup('all', null, tasks, fields, env)];
   }
-  const groups = new Map<string, GroupModel>();
-  const add = (key: string, label: string, task: Task): void => {
-    if (!groups.has(key)) groups.set(key, { key, label, cards: [] });
-    groups.get(key)!.cards.push(card(task));
-  };
+  const groups = new Map<string, { label: string; tasks: Task[] }>();
   for (const t of tasks) {
-    switch (groupBy) {
-      case 'project': {
-        const p = env.projects.find((x) => x.id === t.projectId);
-        add(p?.id ?? 'none', p?.title ?? 'No project', t);
-        break;
-      }
-      case 'tag': {
-        const tagTitles = t.tagIds
-          .map((id) => env.tags.find((x) => x.id === id))
-          .filter((x): x is NonNullable<typeof x> => !!x);
-        if (!tagTitles.length) add('none', 'No tag', t);
-        tagTitles.forEach((tag) => add(tag.id, tag.title, t));
-        break;
-      }
-      case 'priority': {
-        const p = priorityOf(t);
-        add(p, p === 'none' ? 'No priority' : `${p[0].toUpperCase()}${p.slice(1)}`, t);
-        break;
-      }
-      case 'due': {
-        const d = dueDayOf(t, env.day);
-        const today = env.day.todayStr;
-        const { end } = weekRange(env.day);
-        if (!d) add('5-none', 'No date', t);
-        else if (d < today) add('0-overdue', 'Overdue', t);
-        else if (d === today) add('1-today', 'Today', t);
-        else if (d === addDays(today, 1)) add('2-tomorrow', 'Tomorrow', t);
-        else if (d <= end) add('3-week', 'This week', t);
-        else add('4-later', 'Later', t);
-        break;
-      }
+    for (const { key, label } of groupKeysOf(t, groupBy, env)) {
+      if (!groups.has(key)) groups.set(key, { label, tasks: [] });
+      groups.get(key)!.tasks.push(t);
     }
   }
-  const list = [...groups.values()];
-  if (groupBy === 'due' || groupBy === 'priority') {
-    const rank: Record<string, number> = { high: 0, medium: 1, low: 2, none: 3 };
-    list.sort((a, b) =>
-      groupBy === 'due' ? a.key.localeCompare(b.key) : rank[a.key] - rank[b.key],
-    );
-  }
+  const list = [...groups].map(([key, g]) =>
+    makeGroup(key, g.label, g.tasks, fields, env),
+  );
+  const rank: Record<string, number> = { high: 0, medium: 1, low: 2, none: 3 };
+  if (groupBy === 'due') list.sort((a, b) => a.key.localeCompare(b.key));
+  if (groupBy === 'priority') list.sort((a, b) => rank[a.key] - rank[b.key]);
   return list;
 };
 
@@ -216,9 +171,6 @@ const measureValue = (
       return String(tasks.length);
   }
 };
-
-const fieldsOf = (c: Component): FieldName[] =>
-  Array.isArray(c.fields) ? (c.fields as FieldName[]) : [];
 
 const buildNode = (
   spec: ViewSpec,
@@ -256,29 +208,34 @@ const buildNode = (
     case 'taskList': {
       const result = query ? runQuery(query, env) : { tasks: [], problems: [] };
       const limited = c.limit ? result.tasks.slice(0, c.limit) : result.tasks;
+      const fields = fieldsFor(c.fields, query?.scope, env);
       return {
         kind: 'taskList',
         cid,
         title: c.title,
-        groups: groupTasks(limited, c.groupBy, fieldsOf(c), env),
+        groups: groupTasks(limited, c.groupBy, fields, env),
         emptyText: c.emptyText || 'Nothing here.',
         problems: missingQuery ? ['Being set up…'] : result.problems,
       };
     }
     case 'board': {
       const result = query ? runQuery(query, env) : { tasks: [], problems: [] };
+      const fields = fieldsFor(c.fields, query?.scope, env);
       return {
         kind: 'board',
         cid,
         title: c.title,
         columnsPerRow: typeof c.columnsPerRow === 'number' ? c.columnsPerRow : null,
-        columns: (c.columns ?? []).map((col) => ({
-          id: col.id,
-          title: col.title,
-          cards: result.tasks
-            .filter((t) => columnMatches(t, col, env.tags))
-            .map((t) => toCard(t, fieldsOf(c), env)),
-        })),
+        columns: (c.columns ?? []).map((col) => {
+          const { cards, estimate } = makeGroup(
+            col.id,
+            col.title,
+            result.tasks.filter((t) => columnMatches(t, col, env.tags)),
+            fields,
+            env,
+          );
+          return { id: col.id, title: col.title, cards, estimate };
+        }),
         problems: missingQuery ? ['Being set up…'] : result.problems,
       };
     }

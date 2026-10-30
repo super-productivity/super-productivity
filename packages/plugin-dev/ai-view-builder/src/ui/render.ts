@@ -1,4 +1,7 @@
-import type { CardModel, NodeModel } from '../core/model';
+import type { CardModel } from '../core/cards';
+import type { NodeModel } from '../core/model';
+import { el } from './dom';
+import { BuildCtx, cardList, heading } from './render-card';
 
 // Draws the render model and animates the change (FLIP): items keep their
 // identity across redraws through data-flip keys and glide from where they
@@ -8,17 +11,6 @@ import type { CardModel, NodeModel } from '../core/model';
 const ANIMATION_MS = 320;
 const MAX_ANIMATIONS = 300;
 
-const el = <K extends keyof HTMLElementTagNameMap>(
-  tag: K,
-  cls?: string,
-  text?: string,
-): HTMLElementTagNameMap[K] => {
-  const node = document.createElement(tag);
-  if (cls) node.className = cls;
-  if (text !== undefined) node.textContent = text;
-  return node;
-};
-
 const countTasks = (node: NodeModel | null, counts: Map<string, number>): void => {
   if (!node) return;
   const add = (cards: CardModel[]): void =>
@@ -27,12 +19,6 @@ const countTasks = (node: NodeModel | null, counts: Map<string, number>): void =
   if (node.kind === 'taskList') node.groups.forEach((g) => add(g.cards));
   if (node.kind === 'board') node.columns.forEach((c) => add(c.cards));
 };
-
-interface BuildCtx {
-  selectedId: string | null;
-  taskCounts: Map<string, number>;
-  canTrack: boolean;
-}
 
 const header = (
   cid: string,
@@ -52,74 +38,6 @@ const header = (
     head.appendChild(el('div', 'c-problems text-muted', problems.join(' · ')));
   }
   return head;
-};
-
-const card = (
-  c: CardModel,
-  cid: string,
-  ctx: BuildCtx,
-  draggable: boolean,
-): HTMLElement => {
-  const node = el(
-    'div',
-    `card task${c.isDone ? ' is-done' : ''}${c.isTracking ? ' is-tracking' : ''}`,
-  );
-  // A task shown once keeps one key everywhere, so it glides between parts;
-  // a task shown twice gets a key per part, so the two copies do not clash.
-  node.dataset.flip =
-    (ctx.taskCounts.get(c.id) ?? 0) > 1 ? `t:${cid}:${c.id}` : `t:${c.id}`;
-  node.dataset.tid = c.id;
-  node.dataset.cid = cid;
-  node.setAttribute('role', 'listitem');
-  if (draggable && !c.isSubTask) {
-    node.tabIndex = 0;
-    node.dataset.draggable = 'true';
-    node.setAttribute(
-      'aria-roledescription',
-      'draggable task; Alt+Left or Alt+Right moves it',
-    );
-  }
-  const done = el('button', 'icon-btn done-btn', c.isDone ? '✓' : '');
-  done.type = 'button';
-  done.dataset.action = 'done';
-  done.setAttribute(
-    'aria-label',
-    c.isDone ? `Mark "${c.title}" not done` : `Mark "${c.title}" done`,
-  );
-  node.appendChild(done);
-
-  const body = el('div', 'card-body');
-  const title = el('button', 'card-title', c.title);
-  title.type = 'button';
-  title.dataset.action = 'open';
-  body.appendChild(title);
-  if (c.meta.length)
-    body.appendChild(el('div', 'card-meta text-muted', c.meta.join(' · ')));
-  node.appendChild(body);
-
-  if (ctx.canTrack && !c.isDone) {
-    const track = el('button', 'icon-btn track-btn', c.isTracking ? '❚❚' : '▶');
-    track.type = 'button';
-    track.dataset.action = 'track';
-    track.setAttribute(
-      'aria-label',
-      c.isTracking ? 'Stop tracking time' : 'Start tracking time',
-    );
-    node.appendChild(track);
-  }
-  return node;
-};
-
-const cardList = (
-  cards: CardModel[],
-  cid: string,
-  ctx: BuildCtx,
-  draggable: boolean,
-): HTMLElement => {
-  const list = el('div', 'cards');
-  list.setAttribute('role', 'list');
-  cards.forEach((c) => list.appendChild(card(c, cid, ctx, draggable)));
-  return list;
 };
 
 const build = (node: NodeModel, ctx: BuildCtx): HTMLElement => {
@@ -145,8 +63,11 @@ const build = (node: NodeModel, ctx: BuildCtx): HTMLElement => {
       }
       node.groups.forEach((g) => {
         if (!g.cards.length) return;
-        if (g.label)
-          wrap.appendChild(el('h4', 'group-label', `${g.label} (${g.cards.length})`));
+        if (g.label) {
+          wrap.appendChild(
+            heading('h4', 'group-label', g.label, g.cards.length, g.estimate),
+          );
+        }
         wrap.appendChild(cardList(g.cards, node.cid, ctx, false));
       });
       break;
@@ -163,7 +84,9 @@ const build = (node: NodeModel, ctx: BuildCtx): HTMLElement => {
         colEl.dataset.colId = col.id;
         colEl.dataset.boardCid = node.cid;
         colEl.dataset.flip = `col:${node.cid}:${col.id}`;
-        colEl.appendChild(el('h4', 'col-title', `${col.title} (${col.cards.length})`));
+        colEl.appendChild(
+          heading('h4', 'col-title', col.title, col.cards.length, col.estimate),
+        );
         colEl.appendChild(cardList(col.cards, node.cid, ctx, true));
         cols.appendChild(colEl);
       });

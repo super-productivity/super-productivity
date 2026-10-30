@@ -53,10 +53,13 @@ async function buildPlugin() {
   // interpreted as replace() back-references. Also escape any literal
   // `</script>` inside the JS so the HTML parser doesn't close the tag early.
   const safeAppJs = appJs.replace(/<\/script>/gi, '<\\/script>');
-  const inlinedHtml = rawHtml.replace(
-    /<script src="app\.js"><\/script>/,
-    () => `<script>${safeAppJs}</script>`,
-  );
+  const viewCss = fs.readFileSync(path.join(SRC_DIR, 'ui', 'view.css'), 'utf8');
+  const inlinedHtml = rawHtml
+    .replace(
+      /<link\s+rel="stylesheet"\s+href="view\.css"\s*\/>/,
+      () => `<style>${viewCss}</style>`,
+    )
+    .replace(/<script src="app\.js"><\/script>/, () => `<script>${safeAppJs}</script>`);
   fs.writeFileSync(path.join(DIST_DIR, 'index.html'), inlinedHtml);
   fs.copyFileSync(
     path.join(SRC_DIR, 'manifest.json'),
