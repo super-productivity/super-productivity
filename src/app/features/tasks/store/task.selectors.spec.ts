@@ -798,6 +798,53 @@ describe('Task Selectors', () => {
         );
       });
 
+      it('should not list a missed-deadline subtask whose parent is planned', () => {
+        const ids = resultIds(
+          stateWith(
+            { ...baseTask, id: 'plannedParent', dueDay: today, subTaskIds: ['subA'] },
+            {
+              ...baseTask,
+              id: 'subA',
+              parentId: 'plannedParent',
+              deadlineDay: yesterday,
+            },
+          ),
+        );
+        expect(ids).not.toContain('subA');
+      });
+
+      it('should list a missed-deadline subtask whose parent is unplanned', () => {
+        const ids = resultIds(
+          stateWith(
+            { ...baseTask, id: 'unplannedParent', subTaskIds: ['subB'] },
+            {
+              ...baseTask,
+              id: 'subB',
+              parentId: 'unplannedParent',
+              deadlineDay: yesterday,
+            },
+          ),
+        );
+        expect(ids).toContain('subB');
+        expect(ids).not.toContain('unplannedParent');
+      });
+
+      it('should nest a missed-deadline subtask under its missed-deadline parent', () => {
+        const ids = resultIds(
+          stateWith(
+            {
+              ...baseTask,
+              id: 'missedParent',
+              deadlineDay: yesterday,
+              subTaskIds: ['subC'],
+            },
+            { ...baseTask, id: 'subC', parentId: 'missedParent', deadlineDay: yesterday },
+          ),
+        );
+        expect(ids).toContain('missedParent');
+        expect(ids).not.toContain('subC');
+      });
+
       it('should not change the plan-date based selectOverdueTasks', () => {
         const state = stateWith({ ...baseTask, id: 'missedDay', deadlineDay: yesterday });
         expect(fromSelectors.selectOverdueTasks(state).map((t) => t.id)).toEqual([

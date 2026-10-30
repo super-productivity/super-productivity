@@ -530,13 +530,26 @@ const selectOverdueTaskIdsForToday = createSelector(
   (snapshot, todayStr, startOfNextDayDiffMs): string[] => {
     const todayStartMs = getLogicalTodayStartMs(todayStr, startOfNextDayDiffMs);
     const ids: string[] = [];
+    // built lazily: only needed for missed-deadline subtasks, which are rare
+    let byId: Map<string, SchedulingSnapshot> | undefined;
     for (const snap of snapshot) {
-      if (
-        isTaskOverdueByThreshold(snap, todayStr, todayStartMs) ||
-        isTaskDeadlineMissedUnplanned(snap, todayStr, todayStartMs)
-      ) {
+      if (isTaskOverdueByThreshold(snap, todayStr, todayStartMs)) {
         ids.push(snap.id);
+        continue;
       }
+      if (!isTaskDeadlineMissedUnplanned(snap, todayStr, todayStartMs)) {
+        continue;
+      }
+      if (snap.parentId) {
+        byId ??= new Map(snapshot.map((s) => [s.id, s]));
+        const parent = byId.get(snap.parentId);
+        // A planned parent wins: the subtask already shows nested under it, and
+        // listing it here would let "Add all to My Day" plan it a second time.
+        if (parent && (parent.dueDay || parent.dueWithTime)) {
+          continue;
+        }
+      }
+      ids.push(snap.id);
     }
     return ids;
   },
