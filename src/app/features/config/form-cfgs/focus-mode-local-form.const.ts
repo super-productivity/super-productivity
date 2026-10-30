@@ -4,6 +4,7 @@ import {
   LimitedFormlyFieldConfig,
 } from '../global-config.model';
 import { T } from '../../../t.const';
+import { IS_ELECTRON } from '../../../app.constants';
 
 export const FOCUS_MODE_LOCAL_FORM_CFG: ConfigFormSection<FocusModeLocalConfig> = {
   title: T.GCF.FOCUS_MODE_LOCAL.TITLE,
@@ -15,6 +16,16 @@ export const FOCUS_MODE_LOCAL_FORM_CFG: ConfigFormSection<FocusModeLocalConfig> 
       type: 'checkbox',
       templateOptions: {
         label: T.GCF.FOCUS_MODE_LOCAL.L_IS_LOOP_BREAK_END_ALARM,
+      },
+    },
+    {
+      key: 'isNotifyOnSessionEnd',
+      type: 'checkbox',
+      // Web only: desktop flashes the window frame and native mobile is
+      // excluded from this whole section (#7550)
+      hideExpression: () => IS_ELECTRON,
+      templateOptions: {
+        label: T.GCF.FOCUS_MODE_LOCAL.L_IS_NOTIFY_ON_SESSION_END,
       },
     },
   ] as LimitedFormlyFieldConfig<FocusModeLocalConfig>[],

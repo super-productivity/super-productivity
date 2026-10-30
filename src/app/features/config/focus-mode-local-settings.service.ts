@@ -6,6 +6,7 @@ const STORAGE_KEY = 'sp_focus_mode_local_settings';
 
 const DEFAULT_FOCUS_MODE_LOCAL_CONFIG: Required<FocusModeLocalConfig> = {
   isLoopBreakEndAlarm: false,
+  isNotifyOnSessionEnd: false,
 };
 
 /**

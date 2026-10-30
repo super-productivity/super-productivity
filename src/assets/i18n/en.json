@@ -2697,6 +2697,8 @@
     "FOCUS_MODE_LOCAL": {
       "HELP": "These settings apply only to this device and are not synced.",
       "L_IS_LOOP_BREAK_END_ALARM": "Loop the break-end sound until I dismiss the break (this device only)",
+      "L_IS_NOTIFY_ON_SESSION_END": "Show a browser notification when a Pomodoro session or break ends",
+      "S_NOTIFICATION_PERMISSION_DENIED": "The browser blocked notifications. Allow them in the site settings to use this option.",
       "TITLE": "Focus Mode (this device)"
     },
     "TASK_WIDGET": {
