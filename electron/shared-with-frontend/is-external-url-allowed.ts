@@ -120,8 +120,12 @@ export const isExternalUrlSchemeAllowed = (url: unknown): boolean => {
   // Only allow claude:// links pointing strictly to chats or projects,
   // rejecting pre-filled prompts or path initializers
   if (parsed.protocol === 'claude:') {
+    // Disallow URLs with non-`claude.ai` hostnames or with query params
+    if (parsed.host !== 'claude.ai' || parsed.searchParams.size > 0) {
+      return false;
+    }
     const path = parsed.pathname;
-    return path.startsWith('/claude.ai/chat/') || path.startsWith('/claude.ai/project/');
+    return path.startsWith('/chat/') || path.startsWith('/project/');
   }
   if (parsed.protocol === 'file:') {
     // Allow ONLY the canonical local form `file:///<path>`. Anything with an

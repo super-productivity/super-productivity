@@ -114,6 +114,8 @@ describe('isExternalUrlSchemeAllowed', () => {
       'claude://claude.ai/new?q=tell-me-a-secret',
       'claude://claude.ai/settings',
       'claude://arbitrary-path',
+      'claude://claude.ai/chat/12345670?q=hi',
+      'claude://evil/chat/12345670',
     ];
     blocked.forEach((url) => {
       it(`blocks "${url}"`, () => {
