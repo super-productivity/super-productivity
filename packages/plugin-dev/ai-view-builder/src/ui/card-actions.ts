@@ -1,5 +1,6 @@
-import type { PluginAPI, Task } from '@super-productivity/plugin-api';
+import type { PluginAPI, Tag, Task } from '@super-productivity/plugin-api';
 import type { ModelEnv } from '../core/cards';
+import { newTaskData, type Creation } from '../core/creation';
 import {
   estimateChange,
   subTaskData,
@@ -17,6 +18,8 @@ export interface ActionDeps {
   env(): ModelEnv | null;
   patch(id: string, changes: Partial<Task>): void;
   setCurrent(taskId: string | null): void;
+  /** A tag this view just created, known before the next data refresh. */
+  registerTag(tag: Tag): void;
   /** The host shows this task in its detail panel now. */
   setSelected(taskId: string): void;
   /** Draws the view again from the patched data. */
@@ -34,6 +37,7 @@ export interface CardActions {
   toggleTag(id: string, tagId: string): void;
   moveToProject(id: string, projectId: string): void;
   addSubTask(parentId: string, text: string): void;
+  addInLane(creation: Creation, text: string): void;
   open(id: string): void;
   remove(id: string): void;
 }
@@ -78,6 +82,9 @@ export const createCardActions = (deps: ActionDeps): CardActions => {
       // The new row arrives with the next data refresh; nothing to patch.
       void deps.run(() => PluginAPI.addTask(data));
     },
+    addInLane: (creation, text) =>
+      // The new row arrives with the next data refresh, like a sub-task.
+      void deps.run(() => addTaskIn(creation, text, deps)),
     open: (id) =>
       void deps.run(async () => {
         await PluginAPI.selectTask(id);
@@ -85,6 +92,22 @@ export const createCardActions = (deps: ActionDeps): CardActions => {
       }),
     remove: (id) => void confirmDelete(id, taskOf(id)?.title ?? '', deps),
   };
+};
+
+// A built-in board tag the lane needs may not exist yet; it is created first,
+// as dropping a card on the column would. One Enter is still one addTask.
+const addTaskIn = async (
+  creation: Creation,
+  text: string,
+  deps: ActionDeps,
+): Promise<void> => {
+  let tagIds = creation.tagIds;
+  for (const missing of creation.missingTags) {
+    const id = await PluginAPI.addTag(missing);
+    tagIds = tagIds.map((t) => (t === missing.id ? id : t));
+    deps.registerTag({ id, title: missing.title, taskIds: [] } as unknown as Tag);
+  }
+  await PluginAPI.addTask(newTaskData({ ...creation, tagIds }, text));
 };
 
 const confirmDelete = async (

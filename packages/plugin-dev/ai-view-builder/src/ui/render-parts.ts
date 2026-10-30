@@ -1,4 +1,5 @@
 import type { AgendaNode, BreakdownNode } from '../core/parts';
+import { laneAddRow } from './add-inputs';
 import { el } from './dom';
 import { BuildCtx, cardList, heading } from './render-card';
 
@@ -20,6 +21,9 @@ export const agendaEl = (node: AgendaNode, ctx: BuildCtx): HTMLElement => {
     } else {
       col.appendChild(el('p', 'empty text-muted', 'Nothing planned.'));
     }
+    // At the bottom of the day, where the app's planner has it.
+    const add = laneAddRow(day.add, day.label, ctx.adds);
+    if (add) col.appendChild(add);
     days.appendChild(col);
   }
   return days;

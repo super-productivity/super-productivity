@@ -11,6 +11,7 @@ import {
   tagColor,
   cardsOf,
 } from './cards';
+import { addTargetFor, type AddTarget } from './creation';
 import { DayRange, daysIn, rangeOfLastDays, rangeOfWeek, timeSpentIn } from './time';
 
 // The two parts that are not a plain list of cards: an agenda of the coming
@@ -26,6 +27,8 @@ export interface AgendaDay {
   /** What is left to do that day, from the estimates of its open tasks. */
   planned?: string;
   isOverdue: boolean;
+  /** Absent when a task added to this day would not show up in it. */
+  add?: AddTarget;
 }
 
 export interface AgendaNode {
@@ -112,7 +115,9 @@ export const buildAgenda = (
       day: 'numeric',
       month: 'short',
     });
-    return makeDay(day, dayLabel(day, i), date, byDay.get(day) ?? [], fields, env);
+    const made = makeDay(day, dayLabel(day, i), date, byDay.get(day) ?? [], fields, env);
+    const add = addTargetFor(cid, day, query, { dueDay: day }, env);
+    return add ? { ...made, add } : made;
   });
   if (overdue.length)
     days.unshift(makeDay('overdue', 'Overdue', '', overdue, fields, env));

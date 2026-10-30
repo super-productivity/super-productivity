@@ -1,7 +1,8 @@
-/* The inline editors of a row and its context menu: what a gesture opens on top of the row. */
+/* The inline editors of a row, the Add task rows and the context menu: what a gesture opens on top of the list. */
 
 /* inline editors */
-.card-input {
+.card-input,
+.add-input {
   width: 100%;
   padding: 3px 3px 3px 5px;
   border: 1px solid var(--card-ring);
@@ -14,7 +15,8 @@
   user-select: text;
 }
 
-.card .card-input:focus {
+.card .card-input:focus,
+.add-row .add-input:focus {
   border: 1px solid var(--card-ring);
   outline: none;
 }
@@ -33,6 +35,48 @@
   align-items: center;
   min-height: 48px;
   padding: 4px 8px 4px 48px;
+}
+
+/* add a task in a lane, a day or a group: a quiet button, then the input */
+.lane-add {
+  display: flex;
+  align-items: center;
+  min-height: 40px;
+}
+
+.lane-add .add-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 40px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  filter: none;
+  color: var(--text-color-muted);
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.lane-add .add-btn:hover {
+  background: none;
+  color: var(--text-color);
+}
+
+.lane-add .add-btn:focus-visible {
+  outline: 2px solid var(--card-ring);
+  outline-offset: -2px;
+}
+
+.lane-add .ico {
+  width: 18px;
+  height: 18px;
+  flex: none;
 }
 
 /* the context menu */

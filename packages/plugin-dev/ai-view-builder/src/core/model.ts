@@ -1,5 +1,5 @@
 import type { Task } from '@super-productivity/plugin-api';
-import { Component, FieldName, ViewSpec } from './spec';
+import { Component, FieldName, Query, ViewSpec } from './spec';
 import {
   addDays,
   dueDayOf,
@@ -9,6 +9,7 @@ import {
   weekRange,
 } from './query';
 import { columnMatches } from './board';
+import { addTargetFor, groupLane, type AddTarget } from './creation';
 import {
   CardModel,
   fieldsFor,
@@ -29,6 +30,16 @@ export interface GroupModel {
   cards: CardModel[];
   /** Summed estimate of the cards; absent when none has one. */
   estimate?: string;
+  /** Absent when a task added to this group would not show up in it. */
+  add?: AddTarget;
+}
+
+export interface BoardColumnModel {
+  id: string;
+  title: string;
+  cards: CardModel[];
+  estimate?: string;
+  add?: AddTarget;
 }
 
 export type NodeModel =
@@ -52,7 +63,7 @@ export type NodeModel =
       cid: string;
       title?: string;
       columnsPerRow: number | null;
-      columns: { id: string; title: string; cards: CardModel[]; estimate?: string }[];
+      columns: BoardColumnModel[];
       problems: string[];
     }
   | AgendaNode
@@ -149,6 +160,14 @@ const groupTasks = (
   return list;
 };
 
+const withAdd =
+  (cid: string, query: Query | undefined, groupBy: Component['groupBy'], env: ModelEnv) =>
+  (group: GroupModel): GroupModel => {
+    const lane = groupLane(groupBy, group.key, env);
+    const add = lane && addTargetFor(cid, group.key, query, lane, env);
+    return add ? { ...group, add } : group;
+  };
+
 const measureValue = (
   tasks: Task[],
   measure: Component['measure'],
@@ -216,7 +235,9 @@ const buildNode = (
         kind: 'taskList',
         cid,
         title: c.title,
-        groups: groupTasks(limited, c.groupBy, fields, env),
+        groups: groupTasks(limited, c.groupBy, fields, env).map(
+          withAdd(cid, query, c.groupBy, env),
+        ),
         emptyText: c.emptyText || 'Nothing here.',
         problems: missingQuery ? ['Being set up…'] : result.problems,
       };
@@ -237,7 +258,14 @@ const buildNode = (
             fields,
             env,
           );
-          return { id: col.id, title: col.title, cards, estimate };
+          const add = addTargetFor(cid, col.id, query, col, env);
+          return {
+            id: col.id,
+            title: col.title,
+            cards,
+            estimate,
+            ...(add ? { add } : {}),
+          };
         }),
         problems: missingQuery ? ['Being set up…'] : result.problems,
       };

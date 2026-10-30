@@ -26,9 +26,14 @@ index.html (src/ui/*)           command bar, voice, renderer, edit loop
 - **Ready-made views are recipes** (`src/core/recipes.ts`): ordinary steps, so
   the chips on an empty view apply them locally with no key and no model call,
   and the model can pick one with `use_recipe` and then adjust it.
-- **Tasks change only through the user**: check, track, open, drag between
+- **Tasks change only through the user**: check, track, open, rename, set an
+  estimate, tag, move to a project, delete, add a sub-task, drag between
   board columns (native board panel semantics: add the column's tags, remove
-  its excluded tags, set done).
+  its excluded tags, set done). Each is one gesture and one API call.
+- **Add task** appears on a board column, agenda day or list group only when
+  a new task would show up there (`src/core/creation.ts`): it gets the lane's
+  tags, the query's single project, the day's due date. Done lanes, overdue,
+  text and priority filters get no button.
 - **Sent to Anthropic**: system prompt, tools, the current spec, the selected
   component id and the request. Never tasks, projects, tags or notes.
 

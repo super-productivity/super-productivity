@@ -1,6 +1,8 @@
-import type { Task } from '@super-productivity/plugin-api';
+import type { Tag, Task } from '@super-productivity/plugin-api';
 import type { ModelEnv } from '../core/cards';
-import { createAddInputs, wireAddInputs, type AddInputs } from './add-inputs';
+import { findAddTarget } from '../core/creation';
+import type { NodeModel } from '../core/model';
+import { createAddInputs, openAddRow, wireAddInputs, type AddInputs } from './add-inputs';
 import { createCardActions } from './card-actions';
 import { createCardController } from './card-controller';
 import { wireCardEvents, type CardEvents } from './card-events';
@@ -13,6 +15,9 @@ export interface SetupDeps {
   root: HTMLElement;
   canTrack: boolean;
   env(): ModelEnv | null;
+  /** What is on screen now: an add input finds its lane here. */
+  model(): NodeModel | null;
+  registerTag(tag: Tag): void;
   patch(id: string, changes: Partial<Task>): void;
   setCurrent(taskId: string | null): void;
   setSelected(taskId: string): void;
@@ -38,6 +43,7 @@ export const setupCards = (deps: SetupDeps): CardSetup => {
     env: deps.env,
     patch: deps.patch,
     setCurrent: deps.setCurrent,
+    registerTag: deps.registerTag,
     setSelected: deps.setSelected,
     repaint: () => deps.render(true),
     run: deps.run,
@@ -56,7 +62,16 @@ export const setupCards = (deps: SetupDeps): CardSetup => {
   wireAddInputs(root, adds, {
     onAdd: (key, text) => {
       if (key.startsWith('sub:')) actions.addSubTask(key.slice('sub:'.length), text);
+      const target = key.startsWith('lane:') ? findAddTarget(deps.model(), key) : null;
+      if (target) actions.addInLane(target.creation, text);
     },
+  });
+  // The cards' own click handling needs a card around the target.
+  root.addEventListener('click', (e) => {
+    const button = (e.target as HTMLElement).closest<HTMLElement>(
+      '[data-action="add-open"]',
+    );
+    if (button) openAddRow(button, adds);
   });
   return {
     adds,

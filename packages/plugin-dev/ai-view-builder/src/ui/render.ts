@@ -1,6 +1,6 @@
 import type { CardModel } from '../core/cards';
 import type { NodeModel } from '../core/model';
-import type { AddInputs } from './add-inputs';
+import { laneAddRow, type AddInputs } from './add-inputs';
 import { el } from './dom';
 import { BuildCtx, cardList, heading } from './render-card';
 import { agendaEl, breakdownEl } from './render-parts';
@@ -46,6 +46,10 @@ const header = (
   return head;
 };
 
+const appendIf = (parent: HTMLElement, child: HTMLElement | null): void => {
+  if (child) parent.appendChild(child);
+};
+
 const build = (node: NodeModel, ctx: BuildCtx): HTMLElement => {
   const wrap = el('section', `c c-${node.kind}`);
   wrap.dataset.flip = `c:${node.cid}`;
@@ -64,6 +68,9 @@ const build = (node: NodeModel, ctx: BuildCtx): HTMLElement => {
     case 'taskList': {
       wrap.appendChild(header(node.cid, node.title, node.problems, ctx));
       const total = node.groups.reduce((n, g) => n + g.cards.length, 0);
+      // Add sits under the header, as on the app's board panels.
+      const whole = node.groups.find((g) => !g.label);
+      appendIf(wrap, laneAddRow(whole?.add, node.title, ctx.adds));
       if (!total) {
         wrap.appendChild(el('p', 'empty text-muted', node.emptyText));
       }
@@ -73,6 +80,7 @@ const build = (node: NodeModel, ctx: BuildCtx): HTMLElement => {
           wrap.appendChild(
             heading('group-label', g.label, g.cards.length, { estimate: g.estimate }),
           );
+          appendIf(wrap, laneAddRow(g.add, g.label, ctx.adds));
         }
         wrap.appendChild(cardList(g.cards, node.cid, ctx, false));
       });
@@ -93,6 +101,7 @@ const build = (node: NodeModel, ctx: BuildCtx): HTMLElement => {
         colEl.appendChild(
           heading('col-title', col.title, col.cards.length, { estimate: col.estimate }),
         );
+        appendIf(colEl, laneAddRow(col.add, col.title, ctx.adds));
         colEl.appendChild(cardList(col.cards, node.cid, ctx, true));
         cols.appendChild(colEl);
       });

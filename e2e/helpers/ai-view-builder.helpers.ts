@@ -184,3 +184,11 @@ export const LIST_VIEW: ToolCall[] = [
   { name: 'set_view', input: { title: 'Tasks' } },
   { name: 'say', input: { text: 'Made a list.' } },
 ];
+
+/** The app's "today" (it follows the start-of-day setting), as the plugin sees it. */
+export const todayOf = async (page: Page): Promise<string> =>
+  page.evaluate(async () => {
+    const frame = document.querySelector('plugin-index iframe') as HTMLIFrameElement;
+    const api = (frame.contentWindow as unknown as { PluginAPI: any }).PluginAPI;
+    return (await api.getDayContext()).todayStr;
+  });

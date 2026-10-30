@@ -1,7 +1,8 @@
+import type { AddTarget } from '../core/creation';
 import { el } from './dom';
 import { icon } from './icons';
 
-// "Add" inputs (a sub-task under a row, later a task in a lane or day). Their
+// "Add" inputs (a sub-task under a row, a task in a lane, a day or a group). Their
 // state is data, not DOM: a redraw from a data refresh rebuilds the input with
 // the same draft and focus, so adding several in a row is not interrupted.
 
@@ -77,6 +78,24 @@ export const addRow = (opts: AddRowOptions, adds: AddInputs, cls = ''): HTMLElem
   paint(row, adds);
   return row;
 };
+
+/** The "Add task" button of a lane; nothing when a new task would not show up there. */
+export const laneAddRow = (
+  add: AddTarget | undefined,
+  where: string | undefined,
+  adds: AddInputs,
+): HTMLElement | null =>
+  add
+    ? addRow(
+        {
+          key: add.key,
+          label: where ? `New task in ${where}` : 'New task',
+          buttonText: 'Add task',
+        },
+        adds,
+        'lane-add',
+      )
+    : null;
 
 const rowOf = (target: EventTarget | null): HTMLElement | null =>
   (target as HTMLElement | null)?.closest<HTMLElement>('.add-row') ?? null;

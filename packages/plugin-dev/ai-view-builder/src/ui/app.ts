@@ -9,7 +9,7 @@ import {
 } from '@super-productivity/plugin-api';
 import { emptySpec, isReadOnlySpec, ViewSpec } from '../core/spec';
 import type { ModelEnv } from '../core/cards';
-import { buildModel, specNeedsArchive } from '../core/model';
+import { buildModel, specNeedsArchive, type NodeModel } from '../core/model';
 import { dropWrite } from '../core/board';
 import { applyRecipe, RecipeName, RECIPES } from '../core/recipes';
 import { EditError, MODELS, runEdit } from '../core/edit-loop';
@@ -77,6 +77,8 @@ const state = {
   undo: new Map<string, ViewSpec[]>(),
   redo: new Map<string, ViewSpec[]>(),
   env: null as ModelEnv | null,
+  /** What the view shows now; add inputs read their lane from it. */
+  model: null as NodeModel | null,
   archive: null as { tasks: Task[]; at: number } | null,
   lastRendered: '',
 };
@@ -147,6 +149,7 @@ const render = (animate: boolean, force = false): void => {
   ui.suggestions.hidden = !!spec?.root || !!state.editing;
   if (state.editing && !spec?.root) {
     ui.view.replaceChildren(skeleton());
+    state.model = null;
     state.lastRendered = '';
     return;
   }
@@ -159,12 +162,14 @@ const render = (animate: boolean, force = false): void => {
       canTrack,
       animate: false,
     });
+    state.model = null;
     state.lastRendered = '';
     return;
   }
   // A redraw while a title is being typed would throw it away.
   if (cards.gate.holds()) return;
   const model = buildModel(spec, state.env);
+  state.model = model;
   // The tracked task updates once a second; skip redraws that change nothing.
   const folded = [...cards.collapsed];
   const signature = JSON.stringify([
@@ -482,6 +487,10 @@ const cards = setupCards({
   root: ui.view,
   canTrack,
   env: () => state.env,
+  model: () => state.model,
+  registerTag: (tag) => {
+    if (state.env) state.env = { ...state.env, tags: [...state.env.tags, tag] };
+  },
   patch: patchTask,
   setCurrent: (taskId) => {
     if (state.env) state.env = { ...state.env, currentTaskId: taskId };
