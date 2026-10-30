@@ -53,6 +53,12 @@ updates:
         patterns:
           - '@typescript-eslint/*'
           - 'typescript-eslint'
+      # The prisma CLI must generate for the exact @prisma/client version
+      # (Dockerfile pins both); a client-only bump breaks `prisma generate`.
+      prisma:
+        patterns:
+          - 'prisma'
+          - '@prisma/*'
 
   # ==========================================
   # GitHub Actions (Weekly Updates - SECURITY)
