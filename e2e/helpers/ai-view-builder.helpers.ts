@@ -146,3 +146,41 @@ export const tagsOf = async (
       title: tags.find((t: { id: string }) => t.id === id)?.title,
     }));
   }, taskTitle);
+
+export type TaskFacts = {
+  id: string;
+  title: string;
+  isDone: boolean;
+  parentId?: string | null;
+  tagIds: string[];
+  projectId?: string | null;
+  timeEstimate: number;
+  dueDay?: string | null;
+};
+
+/** The task with this title, read through the plugin's own API. */
+export const taskOf = async (page: Page, title: string): Promise<TaskFacts | null> =>
+  page.evaluate(async (wanted) => {
+    const frame = document.querySelector('plugin-index iframe') as HTMLIFrameElement;
+    const api = (frame.contentWindow as unknown as { PluginAPI: any }).PluginAPI;
+    const tasks = await api.getTasks();
+    return tasks.find((t: { title: string }) => t.title === wanted) ?? null;
+  }, title);
+
+/** The id of the task being tracked, or null. */
+export const trackedTaskId = async (page: Page): Promise<string | null> =>
+  page.evaluate(async () => {
+    const frame = document.querySelector('plugin-index iframe') as HTMLIFrameElement;
+    const api = (frame.contentWindow as unknown as { PluginAPI: any }).PluginAPI;
+    return (await api.getCurrentTaskId()) ?? null;
+  });
+
+export const LIST_VIEW: ToolCall[] = [
+  { name: 'put_query', input: { id: 'all', props: { scope: 'all' } } },
+  {
+    name: 'put_component',
+    input: { id: 'list', props: { type: 'taskList', query: 'all' } },
+  },
+  { name: 'set_view', input: { title: 'Tasks' } },
+  { name: 'say', input: { text: 'Made a list.' } },
+];
