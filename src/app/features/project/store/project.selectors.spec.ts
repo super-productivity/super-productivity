@@ -2,8 +2,9 @@ import {
   selectArchivedProjects,
   selectArchivedProjectIds,
   selectArrayOfArchivedProjectIds,
+  selectUnarchivedProjectsWithoutCurrent,
 } from './project.selectors';
-import { Project } from '../project.model';
+import { Project, ProjectState } from '../project.model';
 
 const p = (o: Partial<Project>): Project => ({ ...o }) as Project;
 
@@ -35,5 +36,27 @@ describe('project.selectors (completion)', () => {
     expect(idSet.has('done')).toBe(true);
     expect(idSet.has('archived')).toBe(true);
     expect(idSet.has('active')).toBe(false);
+  });
+});
+
+describe('selectUnarchivedProjectsWithoutCurrent', () => {
+  // Feeds every "move to project" picker (task context menu, multi-select bar, task row).
+  // isHiddenFromMenu only hides a project from the sidebar, so it must stay a target (#11190).
+  it('offers projects hidden from the menu but not archived or current ones', () => {
+    const state = {
+      ids: ['current', 'visible', 'hidden', 'archived'],
+      entities: {
+        current: p({ id: 'current' }),
+        visible: p({ id: 'visible' }),
+        hidden: p({ id: 'hidden', isHiddenFromMenu: true }),
+        archived: p({ id: 'archived', isArchived: true }),
+      },
+    } as unknown as ProjectState;
+
+    const result = selectUnarchivedProjectsWithoutCurrent.projector(state, {
+      currentId: 'current',
+    });
+
+    expect(result.map((x) => x.id)).toEqual(['visible', 'hidden']);
   });
 });

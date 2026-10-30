@@ -783,6 +783,128 @@ describe('round-time conflict convergence integration (#8944)', () => {
     });
   }
 
+  // #10614 path 1: A tracks time while the upload that gets its crossing op
+  // rejected is in flight. That delta is pending but not rejected; it must move
+  // with the rejected op, or the rejected op falls back to a whole-task
+  // snapshot that a newer concurrent delta overwrites.
+  // 'before the row': the upload response carries the crossing row, so the new
+  // delta is concurrent with it; 'after the row': a download applied it first.
+  for (const [rejectedShape, tracked] of [
+    ['delta', 'after the row'],
+    ['delta', 'before the row'],
+    ['rename', 'after the row'],
+    ['rename', 'before the row'],
+  ] as const) {
+    it(`rebases a delta tracked ${tracked} during the rejected ${rejectedShape} upload with it (#10614)`, async () => {
+      const capture = TestBed.inject(OperationCaptureService);
+      const server = new MockSyncServer();
+      const clientA = new TestClient(CLIENT_A);
+      const clientB = new TestClient(CLIENT_B);
+      const trackOnA = async (minutes: number, timestamp: number): Promise<void> => {
+        // The timer already wrote the time to A's store; the op carries the delta.
+        const duration = minutes * MINUTE;
+        const { timeSpent, timeSpentOnDay } = getTask(localState, TASK_X);
+        localState = updateTaskEntity(localState, TASK_X, {
+          timeSpent: timeSpent + duration,
+          timeSpentOnDay: { [DAY]: (timeSpentOnDay[DAY] ?? 0) + duration },
+        });
+        const action = syncTimeSpent({
+          taskId: TASK_X,
+          date: DAY,
+          duration,
+        }) as PersistentAction;
+        localState = reducer(localState, action);
+        await opLogStore.appendWithVectorClockOverwrite(
+          captureOperation(action, clientA, capture, timestamp),
+          'local',
+        );
+      };
+
+      if (rejectedShape === 'delta') {
+        await trackOnA(2, 1_000);
+      } else {
+        const rename = TaskSharedActions.updateTask({
+          task: { id: TASK_X, changes: { title: 'A' } },
+        }) as PersistentAction;
+        localState = reducer(localState, rename);
+        await opLogStore.appendWithVectorClockOverwrite(
+          captureOperation(rename, clientA, capture, 1_000),
+          'local',
+        );
+      }
+      const remoteOp = captureOperation(
+        (rejectedShape === 'delta'
+          ? TaskSharedActions.updateTask({
+              task: { id: TASK_X, changes: { title: 'B' } },
+            })
+          : syncTimeSpent({
+              taskId: TASK_X,
+              date: DAY,
+              duration: 3 * MINUTE,
+            })) as PersistentAction,
+        clientB,
+        capture,
+        2_000,
+      );
+      let remoteState = reducer(initialState, convertOpToAction(remoteOp));
+      expect(uploadLikeServer(server, [remoteOp], CLIENT_B)).toEqual([]);
+      const applyRow = async (): Promise<void> => {
+        await opLogStore.append(remoteOp, 'remote');
+        await opLogStore.mergeRemoteOpClocks([remoteOp]);
+        localState = reducer(localState, convertOpToAction(remoteOp));
+      };
+      if (tracked === 'after the row') await applyRow();
+
+      const uploaded = (await opLogStore.getUnsynced()).map(({ op }) => op);
+      const rejected = uploadLikeServer(server, uploaded, CLIENT_A);
+      expect(rejected.map(({ id }) => id)).toEqual(uploaded.map(({ id }) => id));
+      // Tracked after the upload fixed its op set, so not in the rejected batch.
+      await trackOnA(1, 3_000);
+      if (tracked === 'before the row') await applyRow();
+      const pendingBefore = await opLogStore.getUnsynced();
+      expect(pendingBefore.length).toBe(2);
+
+      const rebased = await TestBed.inject(
+        SupersededOperationResolverService,
+      ).rebaseCommutingTimeDeltaRejections(
+        rejected.map((op) => ({ opId: op.id, op, existingClock: remoteOp.vectorClock })),
+      );
+      expect([...rebased]).toEqual(pendingBefore.map(({ op }) => op.id));
+      const pendingAfter = await opLogStore.getUnsynced();
+      expect(pendingAfter.map(({ seq, op }) => [seq, op.id, op.payload])).toEqual(
+        pendingBefore.map(({ seq, op }) => [seq, op.id, op.payload]),
+      );
+
+      expect(
+        uploadLikeServer(
+          server,
+          pendingAfter.map(({ op }) => op),
+          CLIENT_A,
+        ),
+      ).toEqual([]);
+      for (const { op } of server.downloadOps(1, CLIENT_B).ops) {
+        remoteState = reducer(remoteState, convertOpToAction(op as Operation));
+      }
+      // Every device's time counts once: 10 + 2 + 1, or 10 + 3 + 1.
+      expect(getTask(localState, TASK_X).timeSpent).toBe(
+        (rejectedShape === 'delta' ? 13 : 14) * MINUTE,
+      );
+      expect(getTask(localState, TASK_X).title).toBe(
+        rejectedShape === 'delta' ? 'B' : 'A',
+      );
+      expect(taskSyncProjection(remoteState, TASK_X)).toEqual(
+        taskSyncProjection(localState, TASK_X),
+      );
+      let restartedState = initialState;
+      for (const entry of await opLogStore.getOpsAfterSeq(0)) {
+        restartedState = reducer(restartedState, convertOpToAction(entry.op));
+      }
+      expect(taskSyncProjection(restartedState, TASK_X)).toEqual(
+        taskSyncProjection(localState, TASK_X),
+      );
+    });
+  }
+
   // The server accepts A's delta next to B's (two deltas commute) and then
   // every later op of A, which dominates it, while it rejects A's earlier
   // rename. Receivers apply the rebased rename after those accepted ops, so it

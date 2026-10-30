@@ -24,6 +24,18 @@ import type { WebdavPrivateCfg } from './webdav.model';
  */
 const STRONG_ETAG_RE = /^"[\x21\x23-\x7e\x80-\xff]*"$/;
 
+/**
+ * Content-coding suffix Apache appends to the strong ETag it serves on a
+ * compressed response (`mod_deflate`'s default `DeflateAlterETag AddSuffix`,
+ * `mod_brotli` likewise). The DAV backend keeps comparing `If-Match` against
+ * the bare tag, so echoing the served tag fails with 412 on every upload
+ * (#9154, #10808). Such a tag is treated like a weak one: it never drives
+ * `If-Match`, and the rev falls back to the content hash. The bare spelling is
+ * never derived from it, so no rewritten tag can match a concurrent revision;
+ * see `_canonicalTagBehindRewrittenEtag` for the tag the server does supply.
+ */
+const CONTENT_CODING_ETAG_SUFFIX_RE = /-(?:gzip|br|deflate)"$/;
+
 export interface WebdavApiDeps {
   logger: SyncLogger;
   /**
@@ -78,11 +90,36 @@ export class WebdavApi {
     headers: Record<string, string>,
     headerName: string,
   ): string | undefined {
-    const entry = Object.entries(headers).find(
-      ([name]) => name.toLowerCase() === headerName,
-    );
-    const etag = entry?.[1]?.trim();
-    return etag && STRONG_ETAG_RE.test(etag) ? etag : undefined;
+    const etag = this._readHeader(headers, headerName);
+    return etag && this._isConditionalEtag(etag) ? etag : undefined;
+  }
+
+  private _readHeader(
+    headers: Record<string, string>,
+    headerName: string,
+  ): string | undefined {
+    return Object.entries(headers)
+      .find(([name]) => name.toLowerCase() === headerName)?.[1]
+      ?.trim();
+  }
+
+  /**
+   * ownCloud and Nextcloud, which the generic provider also serves, send their
+   * canonical tag as `OC-ETag` next to an `ETag` that mod_deflate rewrote
+   * (#10808; verified on ownCloud 10.15 and Nextcloud 35 in their stock
+   * images). Read from the response whose body just passed the content-hash
+   * check, it makes the following PUT conditional and narrows the GET→PUT race:
+   * these servers keep the same tag for two writes within one second, so a
+   * write in that second still slips through. For the same reason the rev
+   * stays the content hash, which catches those writes before the PUT.
+   */
+  private _canonicalTagBehindRewrittenEtag(
+    headers: Record<string, string>,
+  ): string | undefined {
+    const etag = this._readHeader(headers, 'etag') ?? '';
+    return CONTENT_CODING_ETAG_SUFFIX_RE.test(etag)
+      ? this._readStrongEtag(headers, 'oc-etag')
+      : undefined;
   }
 
   /**
@@ -94,7 +131,8 @@ export class WebdavApi {
    * extension; generic WebDAV entity tags are opaque and must never be
    * rewritten. If browser CORS hides `OC-ETag`, Nextcloud falls back to the
    * existing content-hash check instead of trusting a potentially rewritten
-   * HTTP `ETag`.
+   * HTTP `ETag`. A generic `ETag` carrying a content-coding suffix likewise
+   * falls back to the content hash (see `CONTENT_CODING_ETAG_SUFFIX_RE`).
    */
   private _readStrongRevision(headers: Record<string, string>): string | undefined {
     if (this._deps.useCanonicalOcEtag) {
@@ -104,8 +142,9 @@ export class WebdavApi {
     return this._readStrongEtag(headers, 'etag');
   }
 
-  private _isStrongEtag(value: string): boolean {
-    return STRONG_ETAG_RE.test(value);
+  /** A strong tag the server can be expected to compare `If-Match` against. */
+  private _isConditionalEtag(value: string): boolean {
+    return STRONG_ETAG_RE.test(value) && !CONTENT_CODING_ETAG_SUFFIX_RE.test(value);
   }
 
   private _isHttpStatus(error: unknown, status: number): boolean {
@@ -224,12 +263,16 @@ export class WebdavApi {
     const expectedHash = await this._computeContentHash(data);
 
     try {
+      // A `-gzip` tag stored by an earlier version is not conditional either. A
+      // normal cycle's download already replaces it with a hash rev; an upload
+      // keyed on the stored rev (e.g. the REPAIR snapshot) mismatches once instead.
       const strongExpectedRev =
-        expectedRev && this._isStrongEtag(expectedRev) ? expectedRev : undefined;
+        expectedRev && this._isConditionalEtag(expectedRev) ? expectedRev : undefined;
 
       // Servers without a strong ETag retain the legacy content-hash check. This
       // detects stale writers but cannot close the GET→PUT race; strong ETags do
       // close it through the HTTP precondition attached to the PUT below.
+      let canonicalIfMatch: string | undefined;
       if (!isForceOverwrite && expectedRev && !strongExpectedRev) {
         try {
           const currentResponse = await this._makeRequest({
@@ -240,6 +283,9 @@ export class WebdavApi {
           if (currentHash !== expectedRev) {
             throw this._remoteChanged(path);
           }
+          canonicalIfMatch = this._canonicalTagBehindRewrittenEtag(
+            currentResponse.headers,
+          );
         } catch (e) {
           // A revision was supplied, so disappearance is itself a conflicting
           // remote change. Proceeding would silently recreate over that change.
@@ -256,6 +302,8 @@ export class WebdavApi {
       };
       if (!isForceOverwrite && strongExpectedRev) {
         headers[WebDavHttpHeader.IF_MATCH] = strongExpectedRev;
+      } else if (!isForceOverwrite && canonicalIfMatch) {
+        headers[WebDavHttpHeader.IF_MATCH] = canonicalIfMatch;
       } else if (!isForceOverwrite && expectedRev === null) {
         headers[WebDavHttpHeader.IF_NONE_MATCH] = '*';
       }
@@ -338,7 +386,7 @@ export class WebdavApi {
 
   /**
    * #9030: some servers serve strong ETags but PUT unconditionally, ignoring
-   * `If-Match` (e.g. hacdias/webdav v5, our E2E server), which would silently
+   * `If-Match` (e.g. hacdias/webdav v5, our self-hosting compose), which would silently
    * clobber a concurrent write. This best-effort pre-check narrows that to the
    * PROPFIND→PUT window; on compliant servers `If-Match` still closes it.
    */

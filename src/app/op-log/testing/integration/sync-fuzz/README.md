@@ -83,6 +83,8 @@ npm run test:file -- 'src/app/op-log/testing/integration/sync-fuzz/*.spec.ts'
 
 For a comparison, run `sync-fuzz-signature-report.benchmark.ts` on the old and
 new oracle with the same profiles/seeds, or use `npm run sync-fuzz:compare`.
+CI runs that comparison against the base on PRs that touch client sync code
+(`Sync Fuzz Compare` in `e2e-sync-pr.yml`, informational).
 The report benchmark deliberately calls `fail()` to export its JSON; its
 nonzero exit is expected and is **not** a passing test suite. Compare original
 executed steps and values before classifying changed signatures. The standard

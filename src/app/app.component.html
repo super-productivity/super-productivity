@@ -91,7 +91,8 @@
 }
 <!-- -->
 
-@if (onboardingHintService.currentStep()) {
+<!-- One host for part 1 and the tour, so the chip can slide from one into the other. -->
+@if (onboardingHintService.currentStep() || quickTourService.currentStep()) {
   <onboarding-hint></onboarding-hint>
 }
 

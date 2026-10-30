@@ -1,0 +1,88 @@
+/* Standalone server page: uses the public auth site's colors and components. */
+.capture-consent {
+  --s: 1rem;
+  --s-half: 0.5rem;
+  --s-large: 1.5rem;
+  max-width: 480px;
+}
+.capture-consent .card {
+  text-align: left;
+  margin-bottom: var(--s);
+}
+.consent-brand {
+  color: var(--primary);
+  font-weight: 600;
+  margin-bottom: var(--s-large);
+}
+.capture-consent h1 {
+  font-size: 1.75rem;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+.consent-subtitle,
+.consent-note,
+.consent-return,
+.consent-privacy {
+  color: var(--text-light);
+}
+.consent-subtitle {
+  margin-top: var(--s-half);
+}
+.consent-permissions {
+  padding: var(--s);
+  margin-block: var(--s-large);
+  background: var(--bg);
+  border-radius: var(--radius);
+  font-size: 0.9rem;
+}
+.consent-note,
+.consent-return,
+.consent-privacy {
+  font-size: 0.875rem;
+}
+.consent-note,
+.consent-privacy p {
+  margin-top: var(--s-half);
+}
+.capture-consent input {
+  font-family: ui-monospace, monospace;
+  font-size: 1.25rem;
+}
+.capture-consent :is(input, button, summary):focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 3px;
+}
+.capture-consent .btn.text-only {
+  margin-top: 0;
+}
+.capture-consent .btn:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+.capture-consent #status {
+  margin-top: var(--s);
+  color: var(--error);
+}
+.capture-consent #status:empty {
+  display: none;
+}
+.consent-privacy {
+  border-top: 1px solid var(--border);
+  padding-top: var(--s);
+  margin-top: var(--s);
+}
+.consent-privacy summary {
+  cursor: pointer;
+}
+.consent-return {
+  overflow-wrap: anywhere;
+}
+@media (max-width: 480px) {
+  .capture-consent .card {
+    padding: var(--s-large);
+  }
+}
+
+.capture-consent .btn {
+  overflow-wrap: anywhere;
+}

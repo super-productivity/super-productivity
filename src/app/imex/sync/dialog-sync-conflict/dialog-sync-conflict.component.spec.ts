@@ -3,10 +3,12 @@ import { MAT_DIALOG_DATA, MatDialog, MatDialogRef } from '@angular/material/dial
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { TranslateModule } from '@ngx-translate/core';
 import { provideMockStore } from '@ngrx/store/testing';
+import { of } from 'rxjs';
 
 import { DialogSyncConflictComponent } from './dialog-sync-conflict.component';
 import { ConflictData, ConflictReason, VectorClock } from '../../../op-log/sync-exports';
 import { T } from '../../../t.const';
+import { SyncLocalStateService } from '../../../op-log/sync/sync-local-state.service';
 
 const buildConflictData = (overrides: {
   localVectorClock?: VectorClock;
@@ -46,9 +48,17 @@ describe('DialogSyncConflictComponent', () => {
     return fixture.componentInstance;
   };
 
+  let mockSyncLocalStateService: jasmine.SpyObj<SyncLocalStateService>;
+
   beforeEach(async () => {
     const mockDialogRef = jasmine.createSpyObj('MatDialogRef', ['close']);
     const mockDialog = jasmine.createSpyObj('MatDialog', ['open']);
+    mockSyncLocalStateService = jasmine.createSpyObj('SyncLocalStateService', [
+      'confirmOverwriteOfUndecryptableRemoteOps',
+    ]);
+    mockSyncLocalStateService.confirmOverwriteOfUndecryptableRemoteOps.and.returnValue(
+      true,
+    );
 
     await TestBed.configureTestingModule({
       imports: [
@@ -61,8 +71,38 @@ describe('DialogSyncConflictComponent', () => {
         { provide: MatDialogRef, useValue: mockDialogRef },
         { provide: MatDialog, useValue: mockDialog },
         { provide: MAT_DIALOG_DATA, useValue: buildConflictData({}) },
+        { provide: SyncLocalStateService, useValue: mockSyncLocalStateService },
       ],
     }).compileComponents();
+  });
+
+  // #9256: Keep local's clean slate deletes remote ops this device could not
+  // decrypt; declining the warning must keep the dialog open.
+  describe('close() undecryptable remote ops guard', () => {
+    it('does not close with USE_LOCAL when the user declines the warning', () => {
+      mockSyncLocalStateService.confirmOverwriteOfUndecryptableRemoteOps.and.returnValue(
+        false,
+      );
+      const component = createComponent(buildConflictData({}));
+
+      component.close('USE_LOCAL');
+
+      expect(TestBed.inject(MatDialogRef).close).not.toHaveBeenCalled();
+      expect(TestBed.inject(MatDialog).open).not.toHaveBeenCalled();
+    });
+
+    it('does not ask for USE_REMOTE', () => {
+      const component = createComponent(buildConflictData({}));
+      (TestBed.inject(MatDialog).open as jasmine.Spy).and.returnValue({
+        afterClosed: () => of(false),
+      });
+
+      component.close('USE_REMOTE');
+
+      expect(
+        mockSyncLocalStateService.confirmOverwriteOfUndecryptableRemoteOps,
+      ).not.toHaveBeenCalled();
+    });
   });
 
   describe('timestamp highlighting', () => {

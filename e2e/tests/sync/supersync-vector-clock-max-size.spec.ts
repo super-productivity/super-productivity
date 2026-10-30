@@ -133,8 +133,8 @@ test.describe('@supersync Concurrent Batch and Multi-Client Convergence', () => 
       }
 
       // No error snackbars
-      const errorSnackA = clientA.page.locator('simple-snack-bar.error');
-      const errorSnackB = clientB.page.locator('simple-snack-bar.error');
+      const errorSnackA = clientA.page.locator('snack-custom .wrapper.error');
+      const errorSnackB = clientB.page.locator('snack-custom .wrapper.error');
       await expect(errorSnackA).not.toBeVisible(ERROR_SNACK_TIMEOUT);
       await expect(errorSnackB).not.toBeVisible(ERROR_SNACK_TIMEOUT);
 
@@ -231,8 +231,8 @@ test.describe('@supersync Concurrent Batch and Multi-Client Convergence', () => 
       console.log('[TODAY] Verifying state');
 
       // No error snackbars
-      const errorSnackA = clientA.page.locator('simple-snack-bar.error');
-      const errorSnackB = clientB.page.locator('simple-snack-bar.error');
+      const errorSnackA = clientA.page.locator('snack-custom .wrapper.error');
+      const errorSnackB = clientB.page.locator('snack-custom .wrapper.error');
       await expect(errorSnackA).not.toBeVisible(ERROR_SNACK_TIMEOUT);
       await expect(errorSnackB).not.toBeVisible(ERROR_SNACK_TIMEOUT);
 
@@ -355,7 +355,7 @@ test.describe('@supersync Concurrent Batch and Multi-Client Convergence', () => 
 
       // No error snackbars on any client
       for (const client of allClients) {
-        const errorSnack = client.page.locator('simple-snack-bar.error');
+        const errorSnack = client.page.locator('snack-custom .wrapper.error');
         await expect(errorSnack).not.toBeVisible(ERROR_SNACK_TIMEOUT);
       }
 

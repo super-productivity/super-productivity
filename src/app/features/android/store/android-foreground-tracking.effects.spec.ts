@@ -1,14 +1,19 @@
 import { TestBed, fakeAsync } from '@angular/core/testing';
+import { Store } from '@ngrx/store';
 import { provideMockStore, MockStore } from '@ngrx/store/testing';
 import { BehaviorSubject } from 'rxjs';
 import { TaskService } from '../../tasks/task.service';
 import { DateService } from '../../../core/date/date.service';
 import { Task } from '../../tasks/task.model';
+import * as focusModeActions from '../../focus-mode/store/focus-mode.actions';
 import {
-  creditBackgroundTickGap,
   handleAndroidResume,
   isTimeSpentJumpForNotification,
+  NativeElapsedSyncDeps,
+  NativeTrackingData,
   parseNativeTrackingData,
+  recoverNativeTracking,
+  syncNativeElapsedTimeForTask,
   TIME_SPENT_JUMP_THRESHOLD_MS,
 } from './android-foreground-tracking.effects';
 import { GlobalTrackingIntervalService } from '../../../core/global-tracking-interval/global-tracking-interval.service';
@@ -277,7 +282,7 @@ describe('AndroidForegroundTrackingEffects - safeNativeCall error handling', () 
 });
 
 describe('AndroidForegroundTrackingEffects - cold start tracking recovery', () => {
-  type NativeTrackingData = { taskId: string; elapsedMs: number };
+  type NativeTrackingData = { taskId: string; elapsedMs: number; resume?: false };
 
   const handleNoCurrentTask = (
     prevTask: { id: string } | null,
@@ -293,22 +298,20 @@ describe('AndroidForegroundTrackingEffects - cold start tracking recovery', () =
     stopTrackingService();
   };
 
-  const recoverTrackingFromNative = async (
+  // The production recovery body, not a re-implementation.
+  const recoverTrackingFromNative = (
     nativeData: NativeTrackingData,
     syncElapsedTime: (taskId: string, nativeData: NativeTrackingData) => Promise<boolean>,
     setCurrentId: (taskId: string) => void,
     flushPendingOps: () => Promise<void>,
     stopTrackingService: () => void,
-  ): Promise<void> => {
-    const didSync = await syncElapsedTime(nativeData.taskId, nativeData);
-    if (!didSync) {
-      stopTrackingService();
-      return;
-    }
-
-    setCurrentId(nativeData.taskId);
-    await flushPendingOps();
-  };
+  ): Promise<void> =>
+    recoverNativeTracking(nativeData, {
+      syncElapsedTime,
+      setCurrentId,
+      flushPendingOps,
+      stopTrackingService,
+    });
 
   let recoverTrackingSpy: jasmine.Spy;
   let stopTrackingServiceSpy: jasmine.Spy;
@@ -375,6 +378,33 @@ describe('AndroidForegroundTrackingEffects - cold start tracking recovery', () =
     expect(callOrder).toEqual(['sync', 'setCurrent', 'flush']);
   });
 
+  it('should credit but not resume after a user-requested stop (#7390)', async () => {
+    const nativeData = { taskId: 'task-1', elapsedMs: 900000, resume: false as const };
+    const callOrder: string[] = [];
+    syncElapsedTimeSpy.and.callFake(async () => {
+      callOrder.push('sync');
+      return true;
+    });
+    stopTrackingServiceSpy.and.callFake(() => callOrder.push('stop'));
+    flushPendingOpsSpy.and.callFake(async () => {
+      callOrder.push('flush');
+    });
+
+    await recoverTrackingFromNative(
+      nativeData,
+      syncElapsedTimeSpy,
+      setCurrentIdSpy,
+      flushPendingOpsSpy,
+      stopTrackingServiceSpy,
+    );
+
+    expect(syncElapsedTimeSpy).toHaveBeenCalledWith('task-1', nativeData);
+    expect(setCurrentIdSpy).not.toHaveBeenCalled();
+    // Persist the credit before the native session is cleared: if the flush
+    // fails, the session survives for the next recovery.
+    expect(callOrder).toEqual(['sync', 'flush', 'stop']);
+  });
+
   it('should stop stale native tracking when recovery sync fails', async () => {
     const nativeData = { taskId: 'missing-task', elapsedMs: 900000 };
     syncElapsedTimeSpy.and.resolveTo(false);
@@ -401,6 +431,19 @@ describe('parseNativeTrackingData', () => {
       JSON.stringify({ taskId: 'task-1', elapsedMs: 900000 }),
     );
     expect(result).toEqual({ taskId: 'task-1', elapsedMs: 900000 });
+  });
+
+  it('keeps resume=false and drops any other resume value', () => {
+    expect(
+      parseNativeTrackingData(
+        JSON.stringify({ taskId: 'task-1', elapsedMs: 5, resume: false }),
+      ),
+    ).toEqual({ taskId: 'task-1', elapsedMs: 5, resume: false });
+    expect(
+      parseNativeTrackingData(
+        JSON.stringify({ taskId: 'task-1', elapsedMs: 5, resume: true }),
+      ),
+    ).toEqual({ taskId: 'task-1', elapsedMs: 5 });
   });
 
   it('preserves zero elapsedMs', () => {
@@ -1806,54 +1849,17 @@ describe('AndroidForegroundTrackingEffects - enhanced error handling (issue #584
   });
 });
 
-describe('creditBackgroundTickGap - background tick gap (#8243)', () => {
-  let globalTracking: jasmine.SpyObj<GlobalTrackingIntervalService>;
-  let taskService: jasmine.SpyObj<TaskService>;
-
-  beforeEach(() => {
-    globalTracking = jasmine.createSpyObj<GlobalTrackingIntervalService>(
-      'GlobalTrackingIntervalService',
-      ['triggerWakeUpTick', 'resetTrackingStart'],
-    );
-    taskService = jasmine.createSpyObj<TaskService>('TaskService', [
-      'flushAccumulatedTimeSpent',
-    ]);
-  });
-
-  it('should credit a capped wake-up tick, reset the anchor and flush', () => {
-    creditBackgroundTickGap(globalTracking, taskService);
-
-    expect(globalTracking.triggerWakeUpTick).toHaveBeenCalledWith(
-      ANDROID_BACKGROUND_TICK_CAP_MS,
-    );
-    expect(globalTracking.resetTrackingStart).toHaveBeenCalledTimes(1);
-    expect(taskService.flushAccumulatedTimeSpent).toHaveBeenCalledTimes(1);
-  });
-
-  it('should credit the gap before flushing it into a syncTimeSpent op', () => {
-    const callOrder: string[] = [];
-    globalTracking.triggerWakeUpTick.and.callFake(() => {
-      callOrder.push('wakeUpTick');
-      return { duration: 0, date: '2026-06-11', timestamp: 0 };
-    });
-    globalTracking.resetTrackingStart.and.callFake(() => callOrder.push('reset'));
-    taskService.flushAccumulatedTimeSpent.and.callFake(() => callOrder.push('flush'));
-
-    creditBackgroundTickGap(globalTracking, taskService);
-
-    expect(callOrder).toEqual(['wakeUpTick', 'reset', 'flush']);
-  });
-});
-
 describe('handleAndroidResume - credit-before-reconcile ordering (#8243)', () => {
   const GAP_MS = 10 * 60 * 1000;
   const PRE_GAP_TIME_SPENT = 60000;
   const NATIVE_ELAPSED = PRE_GAP_TIME_SPENT + GAP_MS;
 
+  let store: jasmine.SpyObj<Store>;
   let globalTracking: jasmine.SpyObj<GlobalTrackingIntervalService>;
   let taskService: jasmine.SpyObj<TaskService>;
 
   beforeEach(() => {
+    store = jasmine.createSpyObj<Store>('Store', ['dispatch']);
     globalTracking = jasmine.createSpyObj<GlobalTrackingIntervalService>(
       'GlobalTrackingIntervalService',
       ['triggerWakeUpTick', 'resetTrackingStart'],
@@ -1868,8 +1874,12 @@ describe('handleAndroidResume - credit-before-reconcile ordering (#8243)', () =>
     ]);
   });
 
-  it('should credit the gap BEFORE the native reconcile samples the task', async () => {
+  it('should credit and flush the gap before focus completion and native reconciliation', async () => {
     const order: string[] = [];
+    taskService.flushAccumulatedTimeSpent.and.callFake(() => order.push('flush'));
+    (store.dispatch as jasmine.Spy).and.callFake(() => {
+      order.push('tick');
+    });
     globalTracking.triggerWakeUpTick.and.callFake(() => {
       order.push('credit');
       return { duration: GAP_MS, date: '2026-06-11', timestamp: 0 };
@@ -1877,6 +1887,7 @@ describe('handleAndroidResume - credit-before-reconcile ordering (#8243)', () =>
 
     await handleAndroidResume(
       {
+        store,
         globalTracking,
         taskService,
         syncElapsedTimeForTask: (taskId) => {
@@ -1889,7 +1900,46 @@ describe('handleAndroidResume - credit-before-reconcile ordering (#8243)', () =>
       { id: 'task-1' } as Task,
     );
 
-    expect(order).toEqual(['credit', 'reconcile:task-1']);
+    expect(order).toEqual(['credit', 'flush', 'tick', 'reconcile:task-1']);
+    expect(store.dispatch).toHaveBeenCalledOnceWith(focusModeActions.tick());
+  });
+
+  it('should credit the task only up to the session end before a completing focus tick', async () => {
+    const CAP_MS = 4 * 60 * 1000;
+    const order: string[] = [];
+    taskService.flushAccumulatedTimeSpent.and.callFake(() => order.push('flush'));
+    (store.dispatch as jasmine.Spy).and.callFake(() => {
+      order.push('tick');
+    });
+    globalTracking.triggerWakeUpTick.and.callFake((maxMs?: number) => {
+      order.push('credit:' + maxMs);
+      return { duration: maxMs ?? 0, date: '2026-06-11', timestamp: 0 };
+    });
+
+    await handleAndroidResume(
+      {
+        store,
+        globalTracking,
+        taskService,
+        syncElapsedTimeForTask: (taskId) => {
+          order.push('reconcile:' + taskId);
+          return Promise.resolve(true);
+        },
+        getNativeTrackingData: () => null,
+        requestRecovery: () => order.push('recovery'),
+      },
+      { id: 'task-1' } as Task,
+      CAP_MS,
+    );
+
+    expect(order).toEqual([
+      'credit:' + CAP_MS,
+      'flush',
+      'tick',
+      'credit:' + ANDROID_BACKGROUND_TICK_CAP_MS,
+      'flush',
+      'reconcile:task-1',
+    ]);
   });
 
   it('should produce exactly ONE syncTimeSpent op for the gap (reconcile sees post-credit state)', async () => {
@@ -1912,6 +1962,7 @@ describe('handleAndroidResume - credit-before-reconcile ordering (#8243)', () =>
 
     await handleAndroidResume(
       {
+        store,
         globalTracking,
         taskService,
         // mirrors _syncElapsedTimeForTask's delta logic against live state
@@ -1931,24 +1982,251 @@ describe('handleAndroidResume - credit-before-reconcile ordering (#8243)', () =>
     expect(emittedOps).toEqual([GAP_MS]);
   });
 
+  it('should split a capped gap into two disjoint syncTimeSpent ops that sum to the gap', async () => {
+    // Models the real service: each wake tick credits min(uncredited gap, maxMs)
+    // and advances the tracking start, so the remainder credit after the focus
+    // tick must not re-credit the part already flushed up to the session end.
+    const CAP_MS = 4 * 60 * 1000;
+    let timeSpent = PRE_GAP_TIME_SPENT;
+    let uncreditedMs = GAP_MS;
+    let pendingMs = 0;
+    const emittedOps: number[] = [];
+
+    globalTracking.triggerWakeUpTick.and.callFake((maxMs?: number) => {
+      const duration = Math.min(uncreditedMs, maxMs ?? uncreditedMs);
+      uncreditedMs -= duration;
+      pendingMs += duration;
+      timeSpent += duration;
+      return { duration, date: '2026-06-11', timestamp: 0 };
+    });
+    taskService.flushAccumulatedTimeSpent.and.callFake(() => {
+      if (pendingMs > 0) {
+        emittedOps.push(pendingMs);
+        pendingMs = 0;
+      }
+    });
+
+    await handleAndroidResume(
+      {
+        store,
+        globalTracking,
+        taskService,
+        syncElapsedTimeForTask: () => {
+          const duration = NATIVE_ELAPSED - timeSpent;
+          if (duration > 0) {
+            emittedOps.push(duration);
+          }
+          return Promise.resolve(true);
+        },
+        getNativeTrackingData: () => null,
+        requestRecovery: () => {},
+      },
+      { id: 'task-1' } as Task,
+      CAP_MS,
+    );
+
+    expect(emittedOps).toEqual([CAP_MS, GAP_MS - CAP_MS]);
+  });
+
+  it('should emit one syncTimeSpent op when the gap ends before the session does', async () => {
+    // The focus tick's synchronous completion chain takes real milliseconds;
+    // re-crediting them after an uncapped first credit would add a near-zero op
+    // to every mid-session resume.
+    const ONE_MINUTE_MS = 60 * 1000;
+    const CAP_MS = GAP_MS + ONE_MINUTE_MS;
+    let uncreditedMs = GAP_MS;
+    let pendingMs = 0;
+    const emittedOps: number[] = [];
+
+    globalTracking.triggerWakeUpTick.and.callFake((maxMs?: number) => {
+      const duration = Math.min(uncreditedMs, maxMs ?? uncreditedMs);
+      uncreditedMs -= duration;
+      pendingMs += duration;
+      return { duration, date: '2026-06-11', timestamp: 0 };
+    });
+    globalTracking.resetTrackingStart.and.callFake(() => {
+      uncreditedMs = 0;
+    });
+    taskService.flushAccumulatedTimeSpent.and.callFake(() => {
+      if (pendingMs > 0) {
+        emittedOps.push(pendingMs);
+        pendingMs = 0;
+      }
+    });
+    (store.dispatch as jasmine.Spy).and.callFake(() => {
+      uncreditedMs += 2;
+    });
+
+    await handleAndroidResume(
+      {
+        store,
+        globalTracking,
+        taskService,
+        syncElapsedTimeForTask: () => Promise.resolve(true),
+        getNativeTrackingData: () => null,
+        requestRecovery: () => {},
+      },
+      { id: 'task-1' } as Task,
+      CAP_MS,
+    );
+
+    expect(emittedOps).toEqual([GAP_MS]);
+    expect(globalTracking.resetTrackingStart).toHaveBeenCalled();
+  });
+
   it('should route a no-current-task resume to recovery without a reconcile call', async () => {
     const nativeData = { taskId: 'task-native', elapsedMs: NATIVE_ELAPSED };
-    const recovered: unknown[] = [];
+    const recoverySpy = jasmine.createSpy('requestRecovery');
     const reconcileSpy = jasmine.createSpy('syncElapsedTimeForTask').and.resolveTo(true);
 
     await handleAndroidResume(
       {
+        store,
         globalTracking,
         taskService,
         syncElapsedTimeForTask: reconcileSpy,
         getNativeTrackingData: () => nativeData,
-        requestRecovery: (data) => recovered.push(data),
+        requestRecovery: recoverySpy,
       },
       null,
     );
 
     expect(globalTracking.triggerWakeUpTick).toHaveBeenCalledTimes(1);
     expect(reconcileSpy).not.toHaveBeenCalled();
-    expect(recovered).toEqual([nativeData]);
+    expect(recoverySpy).toHaveBeenCalledTimes(1);
+  });
+});
+
+// Exercises the production reconcile against a fake native session that
+// behaves like TrackingForegroundService + TrackingStateStore: an anchored
+// total that survives a process kill (restored frozen at the kill, so the fake
+// clock below stands for time tracked before it) and is re-anchored by
+// updateTrackingService (#7390).
+describe('syncNativeElapsedTimeForTask - recovery after process death', () => {
+  const MIN = 60 * 1000;
+  let now: number;
+  let task: Task;
+  let nativeSession: { taskId: string; startTimestamp: number; accumulatedMs: number };
+  let deps: NativeElapsedSyncDeps;
+  let addTimeSpentAndSync: jasmine.Spy;
+  let resetTrackingStart: jasmine.Spy;
+  let showWarning: jasmine.Spy;
+
+  const readNative = (): NativeTrackingData => ({
+    taskId: nativeSession.taskId,
+    elapsedMs: nativeSession.accumulatedMs + (now - nativeSession.startTimestamp),
+  });
+
+  beforeEach(() => {
+    now = 1_000_000_000;
+    // Tracked 10 min in the foreground; flushOnPause persisted that value and
+    // re-anchored native at it when the app went to the background.
+    task = { id: 'task-1', timeSpent: 10 * MIN } as Task;
+    nativeSession = { taskId: 'task-1', startTimestamp: now, accumulatedMs: 10 * MIN };
+
+    addTimeSpentAndSync = jasmine
+      .createSpy('addTimeSpentAndSync')
+      .and.callFake((t: Task, duration: number) => {
+        task = { ...t, timeSpent: (t.timeSpent || 0) + duration };
+      });
+    resetTrackingStart = jasmine.createSpy('resetTrackingStart');
+    showWarning = jasmine.createSpy('showWarning');
+    deps = {
+      getNativeTrackingData: () => readNative(),
+      getTaskOnce: async (id) => (id === task.id ? task : undefined),
+      addTimeSpentAndSync,
+      resetTrackingStart,
+      updateTrackingService: (timeSpentMs) => {
+        nativeSession = {
+          ...nativeSession,
+          startTimestamp: now,
+          accumulatedMs: timeSpentMs,
+        };
+      },
+      showWarning,
+    };
+  });
+
+  it('credits the background time tracked before a process kill on cold-start recovery', async () => {
+    // Tracked 25 min in the background, then the process was killed; native
+    // restores that total on the next launch.
+    now += 25 * MIN;
+
+    const didSync = await syncNativeElapsedTimeForTask(deps, 'task-1', readNative());
+
+    expect(didSync).toBeTrue();
+    expect(addTimeSpentAndSync).toHaveBeenCalledOnceWith(
+      jasmine.objectContaining({ id: 'task-1' }),
+      25 * MIN,
+    );
+    expect(task.timeSpent).toBe(35 * MIN);
+    expect(resetTrackingStart).toHaveBeenCalled();
+  });
+
+  it('credits the gap only once when recovery and resume both reconcile it', async () => {
+    now += 25 * MIN;
+    const snapshot = readNative();
+
+    // Recovery, then the null→task re-emission pushes the synced value back
+    // to native (updateTrackingService) ...
+    await syncNativeElapsedTimeForTask(deps, 'task-1', snapshot);
+    deps.updateTrackingService(task.timeSpent);
+    // ... then a resume reconcile and a stale duplicate of the recovery snapshot.
+    await syncNativeElapsedTimeForTask(deps, 'task-1');
+    await syncNativeElapsedTimeForTask(deps, 'task-1', snapshot);
+
+    expect(addTimeSpentAndSync).toHaveBeenCalledTimes(1);
+    expect(task.timeSpent).toBe(35 * MIN);
+  });
+
+  it('keeps counting after recovery without re-crediting the recovered gap', async () => {
+    now += 25 * MIN;
+    await syncNativeElapsedTimeForTask(deps, 'task-1', readNative());
+    deps.updateTrackingService(task.timeSpent);
+
+    now += 5 * MIN;
+    await syncNativeElapsedTimeForTask(deps, 'task-1');
+
+    expect(addTimeSpentAndSync.calls.allArgs().map(([, d]) => d)).toEqual([
+      25 * MIN,
+      5 * MIN,
+    ]);
+    expect(task.timeSpent).toBe(40 * MIN);
+  });
+
+  it('keeps the app value when the persisted total is behind it', async () => {
+    // e.g. the wall clock was moved back while the process was dead.
+    task = { ...task, timeSpent: 12 * MIN };
+    const updateTrackingService = spyOn(deps, 'updateTrackingService');
+
+    const didSync = await syncNativeElapsedTimeForTask(deps, 'task-1', readNative());
+
+    expect(didSync).toBeTrue();
+    expect(addTimeSpentAndSync).not.toHaveBeenCalled();
+    expect(updateTrackingService).toHaveBeenCalledWith(12 * MIN);
+  });
+
+  it('does not credit a persisted session for another task', async () => {
+    now += 25 * MIN;
+
+    const didSync = await syncNativeElapsedTimeForTask(deps, 'task-2', readNative());
+
+    expect(didSync).toBeFalse();
+    expect(addTimeSpentAndSync).not.toHaveBeenCalled();
+  });
+
+  it('reports failure when the persisted task no longer exists', async () => {
+    nativeSession = { ...nativeSession, taskId: 'deleted-task' };
+    now += 25 * MIN;
+
+    const didSync = await syncNativeElapsedTimeForTask(
+      deps,
+      'deleted-task',
+      readNative(),
+    );
+
+    expect(didSync).toBeFalse();
+    expect(addTimeSpentAndSync).not.toHaveBeenCalled();
+    expect(showWarning).toHaveBeenCalled();
   });
 });

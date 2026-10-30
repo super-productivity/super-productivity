@@ -31,9 +31,12 @@
   (cdkDropListDropped)="drop($event)"
   [attr.data-list-id]="listId()"
   [@taskList]="
-    (dropListService.isBlockAniAfterDrop$ | async) ? 'BLOCK' : filteredTasks()?.length
+    (dropListService.isBlockAniAfterDrop$ | async)
+      ? 'BLOCK'
+      : $safeNavigationMigration(filteredTasks()?.length)
   "
   [attr.data-id]="listModelId()"
+  [class.is-multi-dragging]="multiDrag.isListGroupDrag()"
   class="task-list-inner"
 >
   @for (task of filteredTasks(); track trackByFn($index, task); let i = $index) {
@@ -46,10 +49,35 @@
       [cdkDragLockAxis]="isXs() ? 'y' : ''"
       [cdkDragDisabled]="listModelId() === 'LATER_TODAY' || isTouchSelectionMode()"
       [cdkDragData]="task"
+      [class.multi-drag-source]="
+        multiDrag.isListGroupDrag() && multiDrag.draggedIds().has(task.id)
+      "
       (pointerdown)="onDragPointerDown(task, $event)"
       (cdkDragStarted)="onDragStarted(task, $event)"
       (cdkDragEnded)="onDragEnded()"
     >
+      @if (
+        !task.parentId &&
+        multiDrag.selectedIds().has(task.id) &&
+        multiDrag.selectionSize() > 1
+      ) {
+        <ng-template cdkDragPreview>
+          <div class="multi-task-drag-preview">
+            <div class="multi-task-drag-preview-count">
+              {{
+                T.F.TASK.MULTI_SELECT.SELECTED_COUNT
+                  | translate
+                    : { count: multiDrag.ids().length || multiDrag.selectionSize() }
+              }}
+            </div>
+            <div class="multi-task-drag-preview-tasks">
+              @for (draggedTask of multiDrag.previewTasks(); track draggedTask.id) {
+                <div class="multi-task-drag-preview-row">{{ draggedTask.title }}</div>
+              }
+            </div>
+          </div>
+        </ng-template>
+      }
     </task>
   }
 </div>

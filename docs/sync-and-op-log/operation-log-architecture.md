@@ -17,6 +17,23 @@ cross-version migration is active.
 > unified client operation-log pipeline; use the field guide and its focused
 > source map for current behavior.
 
+**Sections:**
+
+- [Introduction: The Core Architecture](#introduction-the-core-architecture)
+- [Overview](#overview)
+- [Why this architecture: rejected alternatives](#why-this-architecture-rejected-alternatives)
+- [Part A: Local Persistence](#part-a-local-persistence): [A.1 Database Architecture](#a1-database-architecture) · [A.2 Write Path](#a2-write-path) · [A.3 Read Path (Hydration)](#a3-read-path-hydration) · [A.4 Compaction](#a4-compaction) · [A.5 Multi-Tab Coordination](#a5-multi-tab-coordination) · [A.6 LOCAL_ACTIONS Token for Effects](#a6-local_actions-token-for-effects) · [A.6.1 Disaster Recovery](#a61-disaster-recovery) · [A.7 Schema Migrations](#a7-schema-migrations)
+- [Part B: File-Based Sync](#part-b-file-based-sync): [B.1 Two Current Wire Formats](#b1-two-current-wire-formats) · [B.2 Bootstrap, Incremental Catch-up, and Gaps](#b2-bootstrap-incremental-catch-up-and-gaps) · [B.3 Archive Boundary](#b3-archive-boundary) · [B.4 Executable Owners](#b4-executable-owners)
+- [Part C: Server Sync](#part-c-server-sync): [C.1 How Server Sync Differs from File-Based](#c1-how-server-sync-differs-from-file-based) · [C.2 Operation Sync Protocol](#c2-operation-sync-protocol) · [C.3 Full-State Operations via Snapshot Endpoint](#c3-full-state-operations-via-snapshot-endpoint) · [C.4 Conflict Detection](#c4-conflict-detection) · [C.5 Conflict Resolution (LWW Auto-Resolution)](#c5-conflict-resolution-lww-auto-resolution) · [C.6 Full-State Filtering](#c6-full-state-filtering)
+- [Part D: Data Validation & Repair](#part-d-data-validation--repair): [D.1 Validation Architecture](#d1-validation-architecture) · [D.2 REPAIR Operation Type](#d2-repair-operation-type) · [D.3 Checkpoint A: Payload Validation](#d3-checkpoint-a-payload-validation) · [D.4 Checkpoints B & C: Hydration Validation](#d4-checkpoints-b--c-hydration-validation) · [D.5 Checkpoint D: Post-Sync Validation](#d5-checkpoint-d-post-sync-validation) · [D.6 Executable Owners](#d6-executable-owners)
+- [Operational Boundaries](#operational-boundaries)
+- [Part E: Smart Archive Handling](#part-e-smart-archive-handling): [E.1 The Problem with Syncing Archives](#e1-the-problem-with-syncing-archives) · [E.2 New Strategy: Deterministic Local Side Effects](#e2-new-strategy-deterministic-local-side-effects) · [E.6 Time Tracking Sync Semantics](#e6-time-tracking-sync-semantics) · [E.7 Archive Payload Boundary](#e7-archive-payload-boundary)
+- [Part F: Atomic State Consistency](#part-f-atomic-state-consistency): [F.1 The Problem: Effects Create Non-Atomic Changes](#f1-the-problem-effects-create-non-atomic-changes) · [F.2 The Solution: Meta-Reducers for Atomic Changes](#f2-the-solution-meta-reducers-for-atomic-changes) · [F.3 Multi-Entity Operation Capture](#f3-multi-entity-operation-capture) · [F.4 When to Use Meta-Reducers vs Effects](#f4-when-to-use-meta-reducers-vs-effects) · [F.5 Board-Style Hybrid Pattern](#f5-board-style-hybrid-pattern) · [F.6 Guidelines for New Features](#f6-guidelines-for-new-features)
+- [Source Map](#source-map)
+- [References](#references)
+
+Line numbers: `rg -n '^#{1,3} ' <this file>`, then read one section with `sed -n`.
+
 ---
 
 ## Introduction: The Core Architecture
@@ -770,7 +787,14 @@ fallbacks:
 - WebDAV/Nextcloud can enforce atomic replacement when a read returns a strong
   ETag, which the upload sends as `If-Match`. Without a strong ETag, `rev` falls
   back to a content hash; the pre-upload GET detects an already-stale writer but
-  cannot close the GET→PUT race, so concurrency protection is best effort.
+  cannot close the GET→PUT race, so concurrency protection is best effort. A
+  strong generic-WebDAV ETag with a content-coding suffix (`-gzip`, `-br`,
+  `-deflate`) counts as missing: the origin compares `If-Match` against the bare
+  tag, and deriving that tag could match a different revision (#9251, #10808).
+  When the pre-upload GET also carries ownCloud/Nextcloud's `OC-ETag`, the PUT
+  sends that as `If-Match`, narrowing the race. Those servers keep the same tag
+  for two writes within one second, so the content-hash check stays, and a
+  write landing in that same second can still slip through.
 - LocalFile also uses a content hash and a read/check/write sequence with no
   cross-process CAS. It is a single-writer, backup-only transport, not a safe
   concurrent multi-device writer.
@@ -817,6 +841,9 @@ IDs deduplicate ops still in the local log, while vector clocks carry causality.
    committed revision (#10239). The next cycle downloads/applies that baseline
    before retrying; rejection does not acknowledge local ops, write the file, or
    advance the cursor. Warm-cache uploads retain the conditional PUT check.
+   An empty revision (OneDrive reports `''` without an ETag) never counts as a
+   match. Whether OneDrive's content-response ETag equals its metadata `eTag`
+   for one file version is unverified; a mismatch would repeatedly defer upload.
    V2 and v3 ops uploads only extend a file this client applied, with or without
    retained ops: an unapplied migration probe or a cold read without a matching
    committed revision defers before dedup acknowledgements or compaction
@@ -857,6 +884,19 @@ IDs deduplicate ops still in the local log, while vector clocks carry causality.
 3. **Gap:** a version reset, snapshot replacement, or trimmed operation needed by
    this client signals a gap. The caller retries from seq 0 and installs the
    causal baseline instead of pretending the remaining buffer is complete.
+   One upload is one batch under one `syncVersion`, so trimming cuts only at a
+   batch boundary: a partial oldest batch at `sinceSeq + 1` would look
+   contiguous to a client whose cursor sits just before it, and that client
+   would never receive the batch's head (#10973). Writers since #10973 drop the
+   rest of a batch the cap would cut into (a newest batch larger than the cap
+   stays whole until the next upload drops it) and set the optional
+   envelope field `oldestBatchComplete`. Released writers trimmed per op and
+   omit the field, so a reader treats an uncertified oldest batch at
+   `sinceSeq + 1` as a gap when the buffer may have been trimmed: a v2 buffer
+   at `MAX_RECENT_OPS`, or a v3 batch at or below the compaction snapshot's
+   `syncVersion`. Released readers need no change for fixed writers' files: a
+   dropped batch shows as `oldestOpSyncVersion > sinceSeq + 1`. Buffers trimmed
+   by pre-v18.14 writers (cap 500) are not detected.
    A replacement's tail ops can advance the watermark back past this client's
    and refill the buffer, hiding all three. So the file's vector clock must
    also equal or dominate the last-seen one, which is persisted and also
@@ -884,6 +924,28 @@ IDs deduplicate ops still in the local log, while vector clocks carry causality.
    but older writers can omit it. Masked dominating replacements written by,
    or subsequently rewritten by, those clients remain a mixed-version gap;
    the older version/lineage/trim checks still apply to files without the marker.
+   A gap that is only a trim (the file's `syncVersion` did not go backwards,
+   its base is seen, and its clock equals or dominates the last-seen one) is a
+   catch-up, not a replacement (`snapshotExtendsLastSeen`, #10972). A client
+   that completed a sync with this target (seq cursor above 0) and has no
+   pending full-state op then hydrates the snapshot and keeps its pending ops
+   (after a target switch the adapter can hold a last-seen baseline staged by
+   a download it never applied, so having synced elsewhere is not enough): they move past the baseline with
+   ids and clocks unchanged, replay on top of it, and upload normally.
+   Receivers resolve any crossing on the no-pending LWW path. A pending op the
+   snapshot clock already covers (uploaded before a crash skipped
+   `markSynced`) is settled, not replayed twice. A kept op the snapshot state
+   cannot take (its project was deleted remotely) is reducer-rejected with the
+   discard snack, as receivers drop it. A full-state op that lands during the
+   download (a backup import) still asks. Known residual: once the
+   other client compacted its crossing op (`COMPACTION_RETENTION_MS`, 7
+   days), the receiver finds no local op to compare and applies the kept edit
+   even when it is older, as on the #9073 path. Second residual: a
+   replacement written before v19.2.0 leaves no snapshot base and resets only
+   `syncVersion`, so one whose later uploads climbed back past the expected
+   version reads as a catch-up; if its `SYNC_IMPORT` then filters the kept op
+   on receivers, they diverge where a dialog used to ask. Any other concurrent
+   snapshot still asks Keep local / Keep remote.
 4. **Commit:** the downloaded `rev`, vector clock, and expected synthetic
    watermark remain staged until the caller confirms that baseline and ops were
    durably applied. Cancelling a data-conflict decision does not advance the
@@ -1109,7 +1171,12 @@ below holds:
   the server. Any other pending op may be one that another tab uploaded and has
   not marked synced yet (acknowledgements are deferred past piggyback
   processing). The move also holds the UPLOAD lock, so no other tab uploads
-  meanwhile.
+  meanwhile. A pending `syncTimeSpent` delta of this client is the exception,
+  e.g. one tracked while the rejected upload was in flight (#10614): if it was
+  stored after all and this tab re-uploads it first,
+  [receipt recovery](time-delta-retry-recovery.md) restores its clock. If the
+  uploading tab acknowledges it first, the local clock can differ from the
+  stored one; the op id is unchanged, so its time still counts once.
 - **Moved ops commute with every later op of the task the server already
   accepted from this client** (`isDisjointMergeEligible`). Next to a crossing
   delta the server accepts this client's own delta and then each later op, which
@@ -1395,6 +1462,34 @@ migration source: the first read on a not-yet-migrated device copies the id
 forward (`ClientIdService`). The clientId is non-regenerable (it keys the vector
 clock), so a transient IndexedDB read failure propagates rather than minting a
 fresh id.
+
+### Full-State Replacement Transactions
+
+Five store methods replace durable state, each with its own policy:
+`commitFileSnapshotBaseline` (exact `lastAppliedOpSeq` tail check),
+`runRemoteStateReplacement` (raw-rebuild marker that resumes after a crash),
+`runDestructiveStateReplacement` (backup restore and clean slate; rotates
+`client_id`), `replaceRejectedRepair` (stale-repair rebase) and the
+genesis/recovery anchors for legacy data. They share only the adapter
+transaction wrapper and are deliberately not merged: a common helper would need
+a policy switch per invariant. Re-audit before proposing one.
+
+- **Acknowledgement must not lead durable work.** A provider cursor may lag
+  durable state (redelivery is deduplicated by retained op ids, and after
+  pruning by cursor plus author-clock coverage) but never run ahead of it.
+- **Multi-commit flows are not one transaction.** Raw rebuild keeps
+  `rawRebuildIncomplete` until the replay finishes, so a crash forces another
+  raw download; the original safety backup is reused, not overwritten.
+- **Locks do not extend the IDB transaction.** The operation-log lock
+  serializes writers; NgRx state, localStorage cursors and other databases are
+  outside it.
+- **Archive retry is at least once**; assert final state and additive totals,
+  not call or row counts.
+- **Originating repair persists both archive partitions with the `REPAIR` row**
+  (inside the mixed-source append). Empty incoming partitions never clear a
+  nonempty archive, matching released receivers. The `state_cache` write is
+  optional: if it fails, the live repair still completes and restart recovers
+  from the retained `REPAIR` tail.
 
 ### Compaction During Active Sync
 

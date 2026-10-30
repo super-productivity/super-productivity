@@ -16,7 +16,7 @@ export const useLocalStorage = <T>(key: string, defaultValue: T) => {
   const setValue = (value: T | ((prev: T) => T)) => {
     try {
       const valueToStore = value instanceof Function ? value(storedValue()) : value;
-      setStoredValue(valueToStore);
+      setStoredValue(() => valueToStore);
       localStorage.setItem(key, JSON.stringify(valueToStore));
     } catch (error) {
       console.error(`Error setting localStorage key "${key}":`, error);

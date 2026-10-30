@@ -1,10 +1,17 @@
 import type {
-  IssueProviderPluginDefinition,
-  PluginFieldMapping,
   PluginHttp,
   PluginIssue,
   PluginSearchResult,
 } from '@super-productivity/plugin-api';
+import {
+  asConfig,
+  canConnect,
+  isDoneMapping,
+  pickSyncValues,
+  registerIssueProvider,
+  t,
+  textMapping,
+} from '../../issue-provider-kit';
 import {
   API_BASE,
   ClickUpConfig,
@@ -18,28 +25,12 @@ import {
   searchTasksInTeam,
 } from './clickup-api';
 
-declare const PluginAPI: {
-  registerIssueProvider(definition: IssueProviderPluginDefinition): void;
-  translate(key: string, params?: Record<string, string | number>): string;
-};
-
-const t = (key: string): string => {
-  try {
-    return PluginAPI.translate(key);
-  } catch {
-    return key;
-  }
-};
-
-const asConfig = (config: Record<string, unknown>): ClickUpConfig =>
-  config as unknown as ClickUpConfig;
-
 const fetchTasks = async (
   searchTerm: string,
   config: Record<string, unknown>,
   http: PluginHttp,
 ): Promise<PluginSearchResult[]> => {
-  const cfg = asConfig(config);
+  const cfg = asConfig<ClickUpConfig>(config);
   const teamIds = await getTeamIds(cfg, http);
 
   if (teamIds.length === 0) return [];
@@ -60,14 +51,13 @@ const fetchTasks = async (
 
   return settled
     .filter(
-      (r): r is PromiseFulfilledResult<ClickUpTaskReduced[]> =>
-        r.status === 'fulfilled',
+      (r): r is PromiseFulfilledResult<ClickUpTaskReduced[]> => r.status === 'fulfilled',
     )
     .flatMap((r) => r.value)
     .map(mapSearchResult);
 };
 
-PluginAPI.registerIssueProvider({
+registerIssueProvider({
   configFields: [
     {
       key: 'apiKey',
@@ -97,13 +87,10 @@ PluginAPI.registerIssueProvider({
     },
   ],
 
-  getHeaders(config: Record<string, unknown>): Record<string, string> {
-    const cfg = asConfig(config);
-    return {
-      'Content-Type': 'application/json',
-      Authorization: cfg.apiKey || '',
-    };
-  },
+  getHeaders: (config) => ({
+    'Content-Type': 'application/json',
+    Authorization: asConfig<ClickUpConfig>(config).apiKey || '',
+  }),
 
   searchIssues: (searchTerm, config, http) => fetchTasks(searchTerm, config, http),
 
@@ -126,17 +113,8 @@ PluginAPI.registerIssueProvider({
     return `https://app.clickup.com/t/${issueId}`;
   },
 
-  async testConnection(
-    _config: Record<string, unknown>,
-    http: PluginHttp,
-  ): Promise<boolean> {
-    try {
-      await getWithRetry<ClickUpUserResponse>(http, `${API_BASE}/user`);
-      return true;
-    } catch {
-      return false;
-    }
-  },
+  testConnection: (_config, http) =>
+    canConnect(() => getWithRetry<ClickUpUserResponse>(http, `${API_BASE}/user`)),
 
   getNewIssuesForBacklog: (config, http) => fetchTasks('', config, http),
 
@@ -150,26 +128,9 @@ PluginAPI.registerIssueProvider({
   ],
 
   fieldMappings: [
-    {
-      taskField: 'isDone',
-      issueField: 'statusType',
-      defaultDirection: 'pullOnly',
-      toIssueValue: (taskValue: unknown): string => (taskValue ? 'closed' : 'open'),
-      toTaskValue: (issueValue: unknown): boolean => issueValue === 'closed',
-    },
-    {
-      taskField: 'title',
-      issueField: 'title',
-      defaultDirection: 'pullOnly',
-      toIssueValue: (taskValue: unknown): string => (taskValue as string) ?? '',
-      toTaskValue: (issueValue: unknown): string => (issueValue as string) ?? '',
-    },
-  ] satisfies PluginFieldMapping[],
+    isDoneMapping({ issueField: 'statusType' }),
+    textMapping('title', 'title'),
+  ],
 
-  extractSyncValues(issue: PluginIssue): Record<string, unknown> {
-    return {
-      statusType: issue['statusType'],
-      title: issue.title,
-    };
-  },
+  extractSyncValues: pickSyncValues('statusType', 'title'),
 });

@@ -5,9 +5,10 @@
 > - [Release and publishing](release-and-publishing.md)
 > - [Mac App Store signing](mac-app-store-code-signing-guide.md)
 
-This rotation updates the certificate bundle and provisioning profiles used by
-the macOS GitHub Actions runners. Perform it on a Mac with access to the Apple
-Developer team.
+This rotation updates the signing identities and provisioning profiles used by
+the macOS GitHub Actions runners. The Keychain Access steps below use a Mac;
+certificate requests and PKCS#12 exports can also be prepared with OpenSSL on
+Linux, then tested on the existing macOS runners.
 
 Keep the currently working identities valid until the replacement bundle has
 passed local and CI signing checks. Revoking first creates an avoidable release
@@ -26,7 +27,7 @@ outage and can destroy the only usable private-key pairing.
    Certificates** to an encrypted PKCS#12 backup. Store it in the team's secure
    credential storage.
 3. Record the active certificate expiration dates and the profile names used by
-   `mas_provision_profile` and `dl_provision_profile`.
+   `MAC_APP_STORE_PROFILE` and `dl_provision_profile`.
 
 If Apple's certificate quota prevents creating a replacement alongside the
 working certificate, confirm the backup can be imported and schedule a
@@ -73,21 +74,29 @@ dynamic verification procedure is in
 
 ## 4. Export and update CI secrets
 
-1. In Keychain Access, export the replacement identities and their private keys
-   as one password-protected `all-certs.p12`. Use a newly generated password.
+1. Export each replacement identity and its private key as a separate,
+   password-protected PKCS#12 bundle. Include the Apple WWDR G3 intermediate in
+   the Apple Distribution bundle. Preserve the existing direct-download bundle.
 2. Verify that the bundle imports into a temporary keychain before uploading it.
 3. Base64-encode the bundle and profiles:
 
    ```bash
-   base64 -i all-certs.p12 -o all-certs.b64
+   base64 -i apple-distribution.p12 -o apple-distribution.b64
+   base64 -i mac-installer.p12 -o mac-installer.b64
    base64 -i tools/mac-profiles/mas.provisionprofile -o mas-profile.b64
    base64 -i tools/mac-profiles/dl.provisionprofile -o dmg-profile.b64
    ```
 
 4. Update the GitHub Actions secrets referenced by the workflows:
-   - `mac_certs` and `mac_certs_password`
-   - `mas_provision_profile`
-   - `dl_provision_profile`
+   - `APPLE_DISTRIBUTION_CERT` and `APPLE_DISTRIBUTION_CERT_PASSWORD`: Apple
+     Distribution identity shared by Mac App Store and iOS builds.
+   - `MAC_INSTALLER_CERT` and `MAC_INSTALLER_CERT_PASSWORD`: Mac Installer
+     Distribution identity used only by Mac App Store packaging.
+   - `MAC_APP_STORE_PROFILE`: matching Mac App Store profile.
+   - `IOS_APP_STORE_PROFILE`, `IOS_SHARE_APP_STORE_PROFILE`, and
+     `IOS_WIDGET_APP_STORE_PROFILE`: matching iOS app and extension profiles.
+   - `mac_certs`, `mac_certs_password`, and `dl_provision_profile`: existing
+     Developer ID signing material for direct downloads; rotate separately.
 
 The workflow files are authoritative for secret names and whether a profile is
 still required. Never commit PKCS#12 files, encoded secret files, or passwords.
@@ -133,14 +142,17 @@ still required. Never commit PKCS#12 files, encoded secret files, or passwords.
    xcrun stapler validate "<path-to-dmg>"
    ```
 
-4. Run the macOS signing workflow that exercises the updated secrets and confirm
-   its certificate/profile diagnostics match.
+4. Run the Mac Store and iOS release workflows with `build_only=true` to check
+   signing without uploading to App Store Connect. Confirm the package
+   fingerprint and exported app profiles match the replacements.
 
 ## 6. Retire old material
 
 Only after both replacement build paths pass:
 
-1. Revoke the superseded certificates in the Apple Developer portal.
+1. Keep old certificates available until every consumer has migrated. Do not
+   automatically revoke Developer ID certificates: revocation can affect
+   previously distributed software.
 2. Remove the old identities from the local keychain.
 3. Delete local unencrypted and base64 working files after confirming the secure
    backup and GitHub secrets are usable.

@@ -46,7 +46,7 @@ jobs:
             > "$RUNNER_TEMP/request/metadata.json"
 
       - name: Upload request metadata
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ios-testflight-request-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/request/metadata.json
@@ -60,17 +60,18 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Restore trusted version helper
+      - name: Restore trusted helpers
         run: |
-          # The PR's frozen base commit can predate this helper, and the PR's own
-          # copy is untrusted. Take the helper and the version inputs from the
-          # default branch, which is where this workflow is defined.
+          # The PR's frozen base commit can predate these helpers, and the PR's
+          # own copies are untrusted. Take the helpers and the version inputs
+          # from the default branch, which is where this workflow is defined.
           if ! TRUSTED_SHA=$(git rev-parse --verify --quiet origin/master); then
             git fetch --force --tags origin master
             TRUSTED_SHA=$(git rev-parse FETCH_HEAD)
           fi
           git cat-file -e "$TRUSTED_SHA:tools/ios-testflight-version.js"
-          git checkout "$TRUSTED_SHA" -- tools/ios-testflight-version.js
+          git checkout "$TRUSTED_SHA" -- tools/ios-testflight-version.js \
+            tools/sign-ios-archive-adhoc.sh
           git show "$TRUSTED_SHA:package.json" > "$RUNNER_TEMP/trusted-package.json"
           echo "TRUSTED_SHA=$TRUSTED_SHA" >> "$GITHUB_ENV"
 
@@ -85,9 +86,9 @@ jobs:
           xcrun --show-sdk-version
           xcodebuild -showsdks | grep -E "(iOS|iphoneos)"
 
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v6
         with:
-          node-version: 22
+          node-version-file: .nvmrc
 
       # work around for npm installs from git+https://github.com/johannesjo/J2M.git
       - name: Reconfigure git to use HTTP authentication
@@ -147,6 +148,9 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO
 
+      - name: Carry entitlements into the archive
+        run: tools/sign-ios-archive-adhoc.sh "$RUNNER_TEMP/App.xcarchive"
+
       - name: Pack unsigned archive
         run: |
           test -f "$RUNNER_TEMP/App.xcarchive/Info.plist"
@@ -154,7 +158,7 @@ jobs:
             -C "$RUNNER_TEMP" App.xcarchive
 
       - name: Upload unsigned archive
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ios-testflight-unsigned-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/App.xcarchive.tar.gz

@@ -18,6 +18,72 @@ export const getTaskRepeatInfoText = (
   dateTimeFormatService: DateTimeFormatService | undefined,
   translateService: TranslateService,
 ): [string, { [key: string]: string | number }] => {
+  const [key, params] = getOpenEndedRepeatInfoText(
+    repeatCfg,
+    locale,
+    dateTimeFormatService,
+    translateService,
+  );
+  if (!repeatCfg.repeatUntilDay) {
+    return [key, params];
+  }
+  // An end date must not read as an open-ended repeat (#10091).
+  const untilDate = dateStrToUtcDate(repeatCfg.repeatUntilDay);
+  const untilStr = dateTimeFormatService
+    ? dateTimeFormatService.formatDate(untilDate)
+    : untilDate.toLocaleDateString(locale);
+  return [
+    T.F.TASK_REPEAT.ADD_INFO_PANEL.UNTIL,
+    { repeatStr: translateService.instant(key, params), untilStr },
+  ];
+};
+
+// "N weeks after I complete it" is stored as 7N days (toStoredRepeatCfg in the
+// repeat dialog), so whole weeks read as weeks again.
+const AFTER_COMPLETION_KEYS = {
+  DAY: [
+    T.F.TASK_REPEAT.ADD_INFO_PANEL.AFTER_COMPLETION_DAY,
+    T.F.TASK_REPEAT.ADD_INFO_PANEL.AFTER_COMPLETION_X_DAYS,
+  ],
+  WEEK: [
+    T.F.TASK_REPEAT.ADD_INFO_PANEL.AFTER_COMPLETION_WEEK,
+    T.F.TASK_REPEAT.ADD_INFO_PANEL.AFTER_COMPLETION_X_WEEKS,
+  ],
+  MONTH: [
+    T.F.TASK_REPEAT.ADD_INFO_PANEL.AFTER_COMPLETION_MONTH,
+    T.F.TASK_REPEAT.ADD_INFO_PANEL.AFTER_COMPLETION_X_MONTHS,
+  ],
+  YEAR: [
+    T.F.TASK_REPEAT.ADD_INFO_PANEL.AFTER_COMPLETION_YEAR,
+    T.F.TASK_REPEAT.ADD_INFO_PANEL.AFTER_COMPLETION_X_YEARS,
+  ],
+} as const;
+
+const getAfterCompletionInfoText = (
+  repeatCfg: TaskRepeatCfg,
+): [string, { [key: string]: string | number }] => {
+  const isWholeWeeks =
+    repeatCfg.repeatCycle === 'DAILY' && repeatCfg.repeatEvery % 7 === 0;
+  const unit = isWholeWeeks
+    ? 'WEEK'
+    : repeatCfg.repeatCycle === 'DAILY'
+      ? 'DAY'
+      : repeatCfg.repeatCycle === 'WEEKLY'
+        ? 'WEEK'
+        : repeatCfg.repeatCycle === 'MONTHLY'
+          ? 'MONTH'
+          : 'YEAR';
+  const x = isWholeWeeks ? repeatCfg.repeatEvery / 7 : repeatCfg.repeatEvery;
+  const [oneKey, xKey] = AFTER_COMPLETION_KEYS[unit];
+  return [x === 1 ? oneKey : xKey, { x }];
+};
+
+const getOpenEndedRepeatInfoText = (
+  repeatCfg: TaskRepeatCfg,
+  locale: string | undefined,
+  dateTimeFormatService: DateTimeFormatService | undefined,
+  translateService: TranslateService,
+): [string, { [key: string]: string | number }] => {
   // Spelled-out weekday names follow the UI language under the ISO 8601 option
   // (the `sv` sentinel would otherwise leak Swedish, e.g. "mån"); numeric day/
   // month below stay on `locale` so ISO day-first ordering is kept. #8987 f/u.
@@ -36,6 +102,16 @@ export const getTaskRepeatInfoText = (
           })
       : '';
 
+  if (repeatCfg.repeatFromCompletionDate) {
+    const [key, params] = getAfterCompletionInfoText(repeatCfg);
+    return timeStr
+      ? [
+          T.F.TASK_REPEAT.ADD_INFO_PANEL.WITH_TIME,
+          { repeatStr: translateService.instant(key, params), timeStr },
+        ]
+      : [key, params];
+  }
+
   if (repeatCfg.repeatEvery !== 1) {
     switch (repeatCfg.repeatCycle) {
       case 'DAILY':
@@ -45,6 +121,18 @@ export const getTaskRepeatInfoText = (
             : T.F.TASK_REPEAT.ADD_INFO_PANEL.EVERY_X_DAILY,
           { timeStr, x: repeatCfg.repeatEvery },
         ];
+      case 'WEEKLY': {
+        const localWeekDays = getWeekdaysMin(weekdayLocale);
+        const daysStr = TASK_REPEAT_WEEKDAY_MAP.filter((day) => repeatCfg[day])
+          .map((day) => localWeekDays[TASK_REPEAT_WEEKDAY_MAP.indexOf(day)])
+          .join(', ');
+        return [
+          timeStr
+            ? T.F.TASK_REPEAT.ADD_INFO_PANEL.EVERY_X_WEEKLY_AND_TIME
+            : T.F.TASK_REPEAT.ADD_INFO_PANEL.EVERY_X_WEEKLY,
+          { timeStr, x: repeatCfg.repeatEvery, daysStr },
+        ];
+      }
       case 'MONTHLY':
         return [
           timeStr

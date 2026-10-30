@@ -9,3 +9,8 @@ export { HabitPageComponent } from '../pages/habit-page/habit-page.component';
 export { DonatePageComponent } from '../pages/donate-page/donate-page.component';
 export { ContrastTestComponent } from '../pages/contrast-test/contrast-test.component';
 export { PluginIndexComponent } from '../plugins/ui/plugin-index/plugin-index.component';
+// Dialogs opened from always-rendered header buttons. Importing them through
+// this (preloaded) barrel keeps their code in the existing pages chunk; a
+// separate dynamic import would split shared deps into extra startup chunks.
+export { DialogFocusSessionEditComponent } from '../features/metric/dialog-focus-session-edit/dialog-focus-session-edit.component';
+export { DialogSimpleCounterEditComponent } from '../features/simple-counter/dialog-simple-counter-edit/dialog-simple-counter-edit.component';

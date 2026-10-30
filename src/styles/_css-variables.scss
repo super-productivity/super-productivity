@@ -46,37 +46,30 @@
   // Safe Areas (iOS notch, home indicator)
   // Uses env() for native iOS safe areas
   // -----------------------------
-  // `--android-status-bar-overlap` is fed natively (CapacitorMainActivity
-  // .pushStatusBarOverlapBelowApi30) on the WebView < 140 tail, where
-  // env(safe-area-inset-top) wrongly resolves to 0 under edge-to-edge (old
-  // WebViews map only display cutouts into safe-area insets, not the status bar)
-  // — #8508 / #8283 (Android 9 / API 28). It is 0 once the WebView is inset, so
-  // max() never double-counts; on API >= 35 / WebView >= 140 the injected
-  // --safe-area-inset-top wins via var() precedence and this fallback is ignored.
-  // Declared 0px so the token is always defined (it is only ever overridden by
-  // the native inline write on the affected tail).
-  --android-status-bar-overlap: 0px;
+  // CapacitorMainActivity.pushStatusBarOverlap measures the top overlap on
+  // API < 35 / WebView < 140. Prefer it over SystemBars' injected 0px, which
+  // hid the status-bar padding on those devices up to Capacitor 8.5.1
+  // (#8508 / #8283); from 8.5.2 SystemBars pads natively there and it reads 0.
+  // Leave it invalid until native code publishes a measurement: `initial`
+  // enables the var() fallback on other platforms and modern WebViews.
+  --android-status-bar-overlap: initial;
   --safe-area-top: var(
-    --safe-area-inset-top,
-    max(env(safe-area-inset-top, 0px), var(--android-status-bar-overlap, 0px))
+    --android-status-bar-overlap,
+    var(--safe-area-inset-top, env(safe-area-inset-top, 0px))
   );
   --safe-area-bottom: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
   --safe-area-left: var(--safe-area-inset-left, env(safe-area-inset-left, 0px));
   --safe-area-right: var(--safe-area-inset-right, env(safe-area-inset-right, 0px));
 
   // Bottom clearance reserved by the mobile bottom nav and everything stacked
-  // above it (scroll content, snackbars). Half the inset by default: iOS's home
-  // indicator is thin and translucent, so a full inset reads as an oversized gap.
-  // Native Android's system bars (3-button / gesture) are opaque and must be
-  // cleared in full or the nav buttons draw under them (#8792) — overridden to
-  // the full inset for native Android in styles.scss. Reads through the shared
-  // --safe-area-bottom (not raw env()) so this tracks the same source as the
-  // header/side-nav/body insets and all bottom-inset UI behaves uniformly across
-  // SystemBars WebView bands. Caveat: on the narrow API >= 35 / WebView < 140
-  // band the shared source can double-count vs SystemBars' native padding (a
-  // cosmetic gap, not an overlap — see the device-matrix risks in
-  // docs/android-edge-to-edge-keyboard.md).
-  --bottom-nav-safe-area: calc(var(--safe-area-bottom) / 2);
+  // above it (scroll content, snackbars): the full inset on every platform. iOS
+  // reserves a system-gesture region well above the drawn home indicator, and
+  // taps landing in it can be swallowed; Android's system bars are opaque
+  // (#8792). Reads through the shared --safe-area-bottom (not raw env()) so it
+  // tracks the same source as the other insets. Where SystemBars pads natively
+  // (WebView < 140) it writes 0px into the source, so the two do not stack — see
+  // docs/android-edge-to-edge-keyboard.md ("Capacitor 8.5.2+").
+  --bottom-nav-safe-area: var(--safe-area-bottom);
 
   // Keyboard geometry. Android / mobile web write `--keyboard-height` here from
   // JS (GlobalThemeService). On iOS these are fallbacks only: the live values
@@ -175,9 +168,9 @@
   --mat-mini-fab-size: 48px;
   --mac-title-bar-padding: 20px;
   --vertical-action-bar-width: 48px;
-  // Matches WCO_HEIGHT in electron/main-window.ts. Keep in sync so the
-  // vertical action strip clears the WCO band by exactly this much on
-  // Win/Linux with custom title bar.
+  // Fallback for env(titlebar-area-height), which reports the real WCO band
+  // (WCO_HEIGHT in electron/main-window.ts: 24px Windows, 32px Linux) and is
+  // unset while the overlay is hidden, e.g. in fullscreen.
   --wco-height: 24px;
 
   // Radius scale — use tokens below; legacy aliases kept for existing rules.
@@ -208,7 +201,8 @@
   --z-right-panel-edge-handle: 66;
   --z-vertical-action-bar: 70;
   --z-tour: 1001;
-  --z-onboarding-hint: 1100;
+  // Below cdk-overlay (1000): menus and dialogs cover the hint, not vice versa.
+  --z-onboarding-hint: 998;
   --z-dragged-nav-item: 1002;
   --z-bg-overlay: 1;
 
@@ -431,9 +425,6 @@ body {
 }
 
 body.isDarkTheme {
-  --scheduled-date-today: #00d45a;
-  --scheduled-date-tomorrow: #ffaa00;
-  --scheduled-date-upcoming: #d580ff;
   --surface-0: var(--dark0);
   --surface-1: #131314;
   --surface-2: var(--dark3);
@@ -615,10 +606,6 @@ body.isDarkTheme {
 
 /* stylelint-disable-next-line no-duplicate-selectors -- layered token file: Cat B follows Layer 1 primitives on the same selector */
 body {
-  // Saturated text colors: deeper on light surfaces, brighter in dark mode.
-  --scheduled-date-today: #007a29;
-  --scheduled-date-tomorrow: #b45b00;
-  --scheduled-date-upcoming: #8000d0;
   // Background colors (Cat B)
   --bg-drag-col: rgb(242, 242, 242);
   --bg-slightly-lighter: var(--bg);

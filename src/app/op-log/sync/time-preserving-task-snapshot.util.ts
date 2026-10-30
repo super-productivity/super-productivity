@@ -27,6 +27,7 @@ const OPTIONAL_TASK_FIELDS = Object.keys({
   notes: true,
   updated: true,
   doneOn: true,
+  wontDoOn: true,
   parentId: true,
   remindAt: true,
   repeatCfgId: true,
@@ -50,6 +51,12 @@ const OPTIONAL_TASK_FIELDS = Object.keys({
   reminderId: true,
   modified: true,
 } satisfies Record<OptionalKeys<TaskCopy>, true>);
+
+/**
+ * Optional fields added after v19.2.0. Snapshots from released clients don't
+ * list them in `clearedFields`, so they're cleared but not required below.
+ */
+const OPTIONAL_TASK_FIELDS_AFTER_V19_2 = new Set(['wontDoOn']);
 
 /** Resolution rows are inspected by their keys only, never merged by value. */
 export const isTimelessTaskPatch = (op: Operation, entityId: string): boolean => {
@@ -106,7 +113,11 @@ export const isTimePreservingTaskSnapshot = (op: Operation): boolean => {
     ...(Array.isArray(op.payload.clearedFields) ? op.payload.clearedFields : []),
   ]);
   return [...Object.keys(DEFAULT_TASK), 'projectId', ...OPTIONAL_TASK_FIELDS]
-    .filter((key) => !SYNC_TIME_SPENT_FIELDS.includes(key))
+    .filter(
+      (key) =>
+        !SYNC_TIME_SPENT_FIELDS.includes(key) &&
+        !OPTIONAL_TASK_FIELDS_AFTER_V19_2.has(key),
+    )
     .every((key) => keys.has(key));
 };
 

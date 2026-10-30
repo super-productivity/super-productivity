@@ -348,6 +348,35 @@ test.describe('Sections', () => {
     ).toHaveCount(0);
   });
 
+  test('snaps a section dragged onto the Done list back without an error (#10866)', async ({
+    page,
+    workViewPage,
+    projectPage,
+    taskPage,
+  }) => {
+    // The fixture fails the test on any page error, which is how the
+    // TypeError drop() threw on `groupTagId` showed.
+    await setupTestProject(workViewPage, projectPage);
+    await workViewPage.addTask('Finished');
+    await taskPage.markTaskAsDone(page.locator('task').filter({ hasText: 'Finished' }));
+    const doneList = page.locator('task-list.tour-doneList');
+    await expect(doneList.locator('task').filter({ hasText: 'Finished' })).toBeVisible();
+
+    await openProjectContextMenu(page);
+    await clickAddSection(page);
+    await submitPromptDialog(page, 'Dragged');
+    const section = sectionByTitle(page, 'Dragged');
+    await expect(section).toBeVisible();
+
+    await cdkDragTo(page, section.locator('.collapsible-title'), doneList);
+    // The drag has ended once CDK has animated its preview away.
+    await expect(page.locator('.cdk-drag-preview, .cdk-drag-placeholder')).toHaveCount(0);
+
+    await expect(section).toBeVisible();
+    await expect(page.locator('.section-container')).toHaveCount(1);
+    await expect(doneList.locator('task')).toHaveCount(1);
+  });
+
   test('reorders tasks within a section via drag and drop', async ({
     page,
     workViewPage,
@@ -506,6 +535,90 @@ test.describe('Sections', () => {
       timeout: 5000,
     });
     await expect(section.locator('task').filter({ hasText: 'Roundtrip' })).toHaveCount(0);
+  });
+
+  test('moves a task to the top and bottom of its section via keyboard (#8049)', async ({
+    page,
+    workViewPage,
+    testPrefix,
+  }) => {
+    await workViewPage.waitForTaskList();
+    const names = ['Alpha', 'Beta', 'Gamma'].map((name) => `${testPrefix}-${name}`);
+    for (const name of names) {
+      await workViewPage.addTask(name);
+    }
+
+    // Seed the section through the store so the starting order is exact:
+    // dragging into a section is not deterministic under headless CDK.
+    const sectionId = `${testPrefix}-section`;
+    const isSeeded = await page.evaluate(
+      ({ id, titles }) => {
+        type TaskLike = { id: string; title: string };
+        type StoreLike = {
+          dispatch: (action: unknown) => void;
+          subscribe: (next: (state: unknown) => void) => { unsubscribe: () => void };
+        };
+        const store = (window as unknown as { __e2eTestHelpers?: { store?: StoreLike } })
+          .__e2eTestHelpers?.store;
+        if (!store) return false;
+        let state: { tasks?: { entities?: Record<string, TaskLike | undefined> } } = {};
+        store.subscribe((value) => (state = value as typeof state)).unsubscribe();
+        const tasks = Object.values(state.tasks?.entities ?? {});
+        const taskIds = titles.map((title) => tasks.find((t) => t?.title === title)?.id);
+        if (taskIds.some((taskId) => !taskId)) return false;
+
+        store.dispatch({
+          type: '[Section] Add Section',
+          section: {
+            id,
+            contextId: 'TODAY',
+            contextType: 'TAG',
+            title: 'Box',
+            isExpanded: true,
+            taskIds: [],
+          },
+          meta: {
+            isPersistent: true,
+            entityType: 'SECTION',
+            entityId: id,
+            opType: 'CRT',
+          },
+        });
+        taskIds.forEach((taskId, i) =>
+          store.dispatch({
+            type: '[Section] Add Task to Section',
+            sectionId: id,
+            taskId,
+            afterTaskId: i ? taskIds[i - 1] : null,
+            sourceSectionId: null,
+            meta: {
+              isPersistent: true,
+              entityType: 'SECTION',
+              entityId: id,
+              opType: 'MOV',
+            },
+          }),
+        );
+        return true;
+      },
+      { id: sectionId, titles: names },
+    );
+    expect(isSeeded).toBe(true);
+
+    const section = sectionByTitle(page, 'Box');
+    const sectionTitles = section.locator('task task-title');
+    await expect(sectionTitles).toHaveText([/Alpha/, /Beta/, /Gamma/]);
+
+    const gamma = section.locator('task').filter({ hasText: names[2] });
+    await gamma.focus();
+    await expect(gamma).toBeFocused();
+    await page.keyboard.press('Control+Alt+ArrowUp');
+    await expect(sectionTitles).toHaveText([/Gamma/, /Alpha/, /Beta/]);
+
+    // the component re-focuses the moved task asynchronously
+    await expect(gamma).toBeFocused();
+    await page.keyboard.press('Control+Alt+ArrowDown');
+    await expect(sectionTitles).toHaveText([/Alpha/, /Beta/, /Gamma/]);
   });
 
   test('sections persist across a page reload', async ({

@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Launcher shortcuts (long-press the app icon), mirroring the iOS Home Screen
+  quick actions in ios/App/App/Info.plist. Each one opens a
+  com.super-productivity.app://<host> URL that parse-app-uri-quick-action.ts
+  handles; tools/verify-android-shortcuts.test.js checks the hosts, targets and
+  labels against the parser, the manifest and strings.xml.
+
+  They go through AppShortcutActivity rather than CapacitorMainActivity because
+  static shortcuts are always launched with FLAG_ACTIVITY_CLEAR_TASK — see the
+  comment on that class. targetPackage can't be a placeholder here; it is the
+  applicationId, which no build variant changes.
+-->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+  <shortcut
+    android:shortcutId="add-task"
+    android:enabled="true"
+    android:icon="@drawable/ic_shortcut_add_task"
+    android:shortcutShortLabel="@string/shortcut_add_task">
+    <intent
+      android:action="android.intent.action.VIEW"
+      android:data="com.super-productivity.app://add-task"
+      android:targetClass="com.superproductivity.superproductivity.AppShortcutActivity"
+      android:targetPackage="com.superproductivity.superproductivity" />
+  </shortcut>
+  <shortcut
+    android:shortcutId="today"
+    android:enabled="true"
+    android:icon="@drawable/ic_shortcut_today"
+    android:shortcutShortLabel="@string/shortcut_today">
+    <intent
+      android:action="android.intent.action.VIEW"
+      android:data="com.super-productivity.app://today"
+      android:targetClass="com.superproductivity.superproductivity.AppShortcutActivity"
+      android:targetPackage="com.superproductivity.superproductivity" />
+  </shortcut>
+  <shortcut
+    android:shortcutId="inbox"
+    android:enabled="true"
+    android:icon="@drawable/ic_shortcut_inbox"
+    android:shortcutShortLabel="@string/shortcut_inbox">
+    <intent
+      android:action="android.intent.action.VIEW"
+      android:data="com.super-productivity.app://inbox"
+      android:targetClass="com.superproductivity.superproductivity.AppShortcutActivity"
+      android:targetPackage="com.superproductivity.superproductivity" />
+  </shortcut>
+</shortcuts>

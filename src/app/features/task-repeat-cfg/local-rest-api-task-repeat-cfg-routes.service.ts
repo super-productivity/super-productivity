@@ -1,10 +1,14 @@
 import { Injectable, inject } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
-import typia, { IValidation } from 'typia';
+import typia from 'typia';
 import {
   LocalRestApiRequestPayload,
   LocalRestApiResponsePayload,
 } from '../../../../electron/shared-with-frontend/local-rest-api.model';
+import {
+  LocalRestApiResult,
+  parseLocalRestApiBody,
+} from '../../core/electron/local-rest-api-body';
 import { LocalRestApiFeatureRoutes } from '../../core/electron/local-rest-api-feature-routes';
 import {
   createErrorResponse,
@@ -19,8 +23,10 @@ import { DEFAULT_GLOBAL_CONFIG } from '../config/default-global-config.const';
 import { GlobalConfigService } from '../config/global-config.service';
 import { Task } from '../tasks/task.model';
 import { TaskService } from '../tasks/task.service';
+import { getTaskPriority } from '../tasks/task-priority.const';
 import { getDefaultSkipOverdue } from './dialog-edit-task-repeat-cfg/get-default-skip-overdue';
 import { getQuickSettingUpdates } from './dialog-edit-task-repeat-cfg/get-quick-setting-updates';
+import { getResumeCursorChanges } from './dialog-edit-task-repeat-cfg/get-resume-cursor-changes';
 import { getTaskRepeatCfgChanges } from './dialog-edit-task-repeat-cfg/get-task-repeat-cfg-changes';
 import { TaskRepeatCfgService } from './task-repeat-cfg.service';
 import {
@@ -90,13 +96,6 @@ const MAX_REPEAT_EVERY = 1000;
  * with a four-digit year.
  */
 const MIN_START_DATE = '1000-01-01';
-
-type Result<T> =
-  | { ok: true; value: T }
-  | { ok: false; response: LocalRestApiResponsePayload };
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
 
 const getQueryParam = (
   query: Record<string, string | string[]>,
@@ -179,8 +178,12 @@ export class LocalRestApiTaskRepeatCfgRoutesService implements LocalRestApiFeatu
     requestId: string,
     body: unknown,
   ): Promise<LocalRestApiResponsePayload> {
-    const parsed = this._parseBody(requestId, body, CREATE_KEYS, (b) =>
-      typia.validate<CreateRepeatCfgFields>(b),
+    const parsed = parseLocalRestApiBody(
+      requestId,
+      body,
+      CREATE_KEYS,
+      (b) => typia.validate<CreateRepeatCfgFields>(b),
+      'repeat config',
     );
     if (!parsed.ok) {
       return parsed.response;
@@ -222,7 +225,7 @@ export class LocalRestApiTaskRepeatCfgRoutesService implements LocalRestApiFeatu
     }
 
     // Like the repeat dialog for a task: defaults, the task's day and time,
-    // and title, notes, tags and estimate copied from the task.
+    // and title, notes, tags, estimate and priority copied from the task.
     const startTime = task.dueWithTime
       ? clockStringFromDate(task.dueWithTime)
       : undefined;
@@ -231,7 +234,8 @@ export class LocalRestApiTaskRepeatCfgRoutesService implements LocalRestApiFeatu
       startDate:
         task.dueDay ??
         (task.dueWithTime
-          ? getDbDateStr(task.dueWithTime)
+          ? // the logical day, so a late-night time keeps its night (#3378)
+            getDbDateStr(task.dueWithTime - this._dateService.getStartOfNextDayDiffMs())
           : this._dateService.todayStr()),
       startTime,
       remindAt: startTime
@@ -243,6 +247,7 @@ export class LocalRestApiTaskRepeatCfgRoutesService implements LocalRestApiFeatu
       notes: task.notes || undefined,
       tagIds: unique(task.tagIds),
       defaultEstimate: task.timeEstimate,
+      priority: getTaskPriority(task.priority),
     };
 
     const built = this._applySchedule(requestId, initial, {
@@ -274,8 +279,12 @@ export class LocalRestApiTaskRepeatCfgRoutesService implements LocalRestApiFeatu
     cfgId: string,
     body: unknown,
   ): Promise<LocalRestApiResponsePayload> {
-    const parsed = this._parseBody(requestId, body, UPDATE_KEYS, (b) =>
-      typia.validate<UpdateRepeatCfgFields>(b),
+    const parsed = parseLocalRestApiBody(
+      requestId,
+      body,
+      UPDATE_KEYS,
+      (b) => typia.validate<UpdateRepeatCfgFields>(b),
+      'repeat config',
     );
     if (!parsed.ok) {
       return parsed.response;
@@ -312,12 +321,19 @@ export class LocalRestApiTaskRepeatCfgRoutesService implements LocalRestApiFeatu
 
     // Only the fields that really change: the reschedule effect reacts to
     // every schedule key present in the update (#7373).
-    const changes = getTaskRepeatCfgChanges(cfg, final);
+    const logicalYesterday = new Date(this._dateService.getLogicalTodayDate());
+    logicalYesterday.setDate(logicalYesterday.getDate() - 1);
+    const changes = {
+      ...getTaskRepeatCfgChanges(cfg, final),
+      // Resuming must not add the dates missed while paused (same op), as in
+      // the dialog
+      ...getResumeCursorChanges(cfg, final, getDbDateStr(logicalYesterday)),
+    };
     if (Object.keys(changes).length > 0) {
       // `false`, as the dialog passes for these fields: it only asks to
       // update all instances (in a confirmation dialog) when title, notes,
-      // tags, estimate, time or reminder change, which this route does not
-      // accept.
+      // tags, priority, estimate, time or reminder change, which this route
+      // does not accept.
       this._taskRepeatCfgService.updateTaskRepeatCfg(cfgId, changes, false);
     }
 
@@ -349,7 +365,7 @@ export class LocalRestApiTaskRepeatCfgRoutesService implements LocalRestApiFeatu
     requestId: string,
     base: Omit<TaskRepeatCfgCopy, 'id'>,
     schedule: ScheduleFields & { quickSetting: RepeatQuickSetting },
-  ): Result<Omit<TaskRepeatCfgCopy, 'id'>> {
+  ): LocalRestApiResult<Omit<TaskRepeatCfgCopy, 'id'>> {
     const { quickSetting, startDate, ...custom } = schedule;
     const customKeys = Object.keys(custom);
     if (quickSetting !== 'CUSTOM' && customKeys.length > 0) {
@@ -434,47 +450,6 @@ export class LocalRestApiTaskRepeatCfgRoutesService implements LocalRestApiFeatu
       };
     }
     return { ok: true, value: result };
-  }
-
-  private _parseBody<T>(
-    requestId: string,
-    body: unknown,
-    allowedKeys: ReadonlySet<string>,
-    validate: (body: Record<string, unknown>) => IValidation<T>,
-  ): Result<T> {
-    if (!isRecord(body)) {
-      return {
-        ok: false,
-        response: this._invalid(requestId, 'Request body must be a JSON object'),
-      };
-    }
-
-    const unsupported = Object.keys(body).filter((key) => !allowedKeys.has(key));
-    if (unsupported.length > 0) {
-      return {
-        ok: false,
-        response: createErrorResponse(
-          requestId,
-          400,
-          'UNSUPPORTED_FIELD',
-          `Field(s) cannot be set through this endpoint: ${unsupported.join(', ')}`,
-          { fields: unsupported },
-        ),
-      };
-    }
-
-    const validation = validate(body);
-    if (!validation.success) {
-      return {
-        ok: false,
-        response: this._invalid(
-          requestId,
-          'One or more repeat config fields have an invalid type',
-          validation.errors.map(({ path, expected }) => ({ path, expected })),
-        ),
-      };
-    }
-    return { ok: true, value: validation.data };
   }
 
   /**

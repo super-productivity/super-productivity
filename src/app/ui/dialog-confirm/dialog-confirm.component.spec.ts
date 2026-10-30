@@ -123,6 +123,33 @@ describe('DialogConfirmComponent', () => {
     });
   });
 
+  // #10319: positive tabindex pulled the buttons out of the natural tab order.
+  describe('focus and tab order', () => {
+    const confirmBtn = (): HTMLButtonElement =>
+      fixture.debugElement.query(By.css('button[e2e="confirmBtn"]')).nativeElement;
+
+    it('should not set a positive tabindex on any button', async () => {
+      await createComponent({ message: 'Test Message' });
+
+      const buttons = fixture.debugElement.queryAll(By.css('button'));
+      buttons.forEach((btn) =>
+        expect(btn.nativeElement.getAttribute('tabindex')).toBeNull(),
+      );
+    });
+
+    it('should mark the confirm button as initial focus when isFocusConfirm is set', async () => {
+      await createComponent({ message: 'Test Message', isFocusConfirm: true });
+
+      expect(confirmBtn().hasAttribute('cdkFocusInitial')).toBe(true);
+    });
+
+    it('should not mark any button as initial focus by default', async () => {
+      await createComponent({ message: 'Test Message' });
+
+      expect(fixture.nativeElement.querySelector('[cdkFocusInitial]')).toBeNull();
+    });
+  });
+
   describe('title icon', () => {
     it('should show title icon when provided', async () => {
       await createComponent({

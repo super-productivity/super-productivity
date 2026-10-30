@@ -8,6 +8,15 @@ on:
 permissions:
   contents: write
 
+# Branch pushes share a group per ref without cancel-in-progress: the running
+# build finishes (a killed snap upload can't be un-submitted) and a newer push
+# replaces the queued one, so a merge burst builds and uploads only its newest
+# commit, a superset of the skipped ones. Each tag is its own ref and group, so
+# release builds are never skipped.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   create-release:
     runs-on: ubuntu-latest
@@ -86,7 +95,7 @@ jobs:
         uses: ./.github/actions/setup-electron-build
 
       - name: Install npm Packages
-        uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08 # v3
+        uses: nick-fields/retry@ad984534de44a9489a53aefd81eb77f87c70dc60 # v4.0.0
         with:
           timeout_minutes: 10
           max_attempts: 3
@@ -108,7 +117,7 @@ jobs:
         run: npm run lint
 
       - name: Test Unit
-        run: npm run test
+        run: npm run test:ci
 
       - name: Build Frontend for E2E
         run: npm run buildFrontend:e2e
@@ -123,7 +132,7 @@ jobs:
 
       - name: 'Upload E2E results on failure'
         if: ${{ failure() }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: e2eResults
           path: .tmp/e2e-test-results/**/*.*
@@ -140,6 +149,18 @@ jobs:
           build_script_name: empty
           github_token: ${{ secrets.github_token }}
           release: true
+
+      # The Claude Desktop extension (tools/mcpb), linked from the app's
+      # assistant access settings by its asset name. Packed here because this
+      # job has the dependencies installed; it joins the same draft release.
+      - name: Attach Claude Desktop extension to the release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          node tools/mcpb/pack.js
+          gh release upload "$GITHUB_REF_NAME" dist/super-productivity.mcpb \
+            --repo "$GITHUB_REPOSITORY" --clobber
 
       - name: Build Electron app
         if: false == startsWith(github.ref, 'refs/tags/v')
@@ -177,6 +198,33 @@ jobs:
               exit 1
             }
           done
+          # #10576: the app-builder-lib patch must have swapped in the guarded launcher.
+          # On tag builds the snap is already published by now; the release workflow
+          # re-checks it before the store upload.
+          bash tools/assert-snap-xdg-guard.sh "$SNAP_FILE"
+
+      # #11117: the app-builder-lib patch must point the .deb desktop entry at the
+      # spaceless /usr/bin link. On tag builds the .deb is already published by now.
+      - name: Verify .deb desktop entry Exec
+        run: |
+          set -euo pipefail
+          DEB_FILE=$(find ./.tmp/app-builds -type f -name '*.deb' -print -quit)
+          if [ -z "$DEB_FILE" ]; then
+            echo "::error::no .deb produced in .tmp/app-builds"
+            exit 1
+          fi
+          bash tools/assert-deb-desktop-exec.sh "$DEB_FILE"
+
+      # #11136: same for the .rpm, plus the %posttrans that keeps the link on upgrade.
+      - name: Verify .rpm desktop entry Exec
+        run: |
+          set -euo pipefail
+          RPM_FILE=$(find ./.tmp/app-builds -type f -name '*.rpm' -print -quit)
+          if [ -z "$RPM_FILE" ]; then
+            echo "::error::no .rpm produced in .tmp/app-builds"
+            exit 1
+          fi
+          bash tools/assert-rpm-desktop-exec.sh "$RPM_FILE"
 
       - name: Normalize snap file name
         if: false == startsWith(github.ref, 'refs/tags/v')
@@ -482,7 +530,7 @@ jobs:
       # no longer downloads the Electron binary; electron-builder fetches its
       # own copy when packaging.)
       - name: Install npm Packages
-        uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08 # v3
+        uses: nick-fields/retry@ad984534de44a9489a53aefd81eb77f87c70dc60 # v4.0.0
         with:
           timeout_minutes: 10
           max_attempts: 3
@@ -531,6 +579,10 @@ jobs:
           mac_certs: ${{ secrets.mac_certs }}
           mac_certs_password: ${{ secrets.mac_certs_password }}
           release: ${{ startsWith(github.ref, 'refs/tags/v') }}
+          # Stapling calls Apple's CloudKit, whose dropped connections failed
+          # v19.3.1 after x64/arm64 uploaded; the retry re-uploads those to the
+          # draft, which electron-builder overwrites.
+          max_attempts: 2
           # macOS notarization API key
         env:
           API_KEY_ID: ${{ secrets.mac_api_key_id }}
@@ -572,7 +624,7 @@ jobs:
       # the Electron binary; electron-builder fetches its own copy when
       # packaging.)
       - name: Install npm Packages
-        uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08 # v3
+        uses: nick-fields/retry@ad984534de44a9489a53aefd81eb77f87c70dc60 # v4.0.0
         with:
           timeout_minutes: 10
           max_attempts: 3
@@ -594,7 +646,7 @@ jobs:
         run: npm run lint
 
       - name: Test Unit
-        run: npm run test
+        run: npm run test:ci
 
       - name: Build Frontend & Electron
         run: npm run build
@@ -652,7 +704,7 @@ jobs:
 
       - name: Upload unsigned executables for SignPath
         id: upload-unsigned
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: unsigned-windows-executables
           path: .tmp/app-builds/*.exe

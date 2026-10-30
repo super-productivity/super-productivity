@@ -30,7 +30,9 @@ test.describe('App Features', () => {
       locator: (page: Page) => page.getByRole('menuitem', { name: 'Boards' }),
     },
     {
-      label: 'Schedule day panel',
+      // the day panel button follows the Schedule switch
+      label: 'Schedule',
+      title: 'Schedule (day panel button)',
       locator: (page: Page) => page.locator('.e2e-toggle-schedule-day-panel'),
     },
     {
@@ -46,16 +48,12 @@ test.describe('App Features', () => {
       locator: (page: Page) => page.locator('.sync-btn'),
     },
   ].forEach((feature) => {
-    test(`Element assigned with App feature ${feature.label} is only visible if feature is enabled`, async ({
+    test(`Element assigned with App feature ${feature.title ?? feature.label} is only visible if feature is enabled`, async ({
       page,
     }) => {
       const featureElement = feature.locator(page);
 
       // elements on settings page
-      // Use .first() because there may be multiple "App Features" sections (global and project-specific)
-      const appFeaturesSection = page
-        .locator('collapsible', { hasText: 'App Features' })
-        .first();
       const featureSwitch = page.getByRole('switch', {
         name: feature.label,
         exact: true,
@@ -64,8 +62,7 @@ test.describe('App Features', () => {
       // Go to settings page
       await goToConfig(page);
 
-      // expand "App Features" and wait for switch to be visible
-      await appFeaturesSection.click();
+      // "App Features" is open by default; wait for the switch
       await expect(featureSwitch).toBeVisible();
 
       // Ensure feature is enabled (all features are enabled by default)
@@ -84,8 +81,7 @@ test.describe('App Features', () => {
       // Re-enable the feature
       await goToConfig(page);
 
-      // expand "App Features" and wait for switch to be visible and interactable
-      await appFeaturesSection.click();
+      // "App Features" is open by default; wait for the switch
       await expect(featureSwitch).toBeVisible();
 
       // Click toggle button to enable and verify state change
@@ -102,10 +98,6 @@ test.describe('App Features', () => {
     page,
   }) => {
     await page.setViewportSize({ width: 390, height: 844 });
-
-    const appFeaturesSection = page
-      .locator('collapsible', { hasText: 'App Features' })
-      .first();
     const featureSwitch = page.getByRole('switch', {
       name: 'Issues panel',
       exact: true,
@@ -123,7 +115,6 @@ test.describe('App Features', () => {
     await page.keyboard.press('Escape');
 
     await goToConfig(page);
-    await appFeaturesSection.click();
     await expect(featureSwitch).toBeVisible();
     await expect(featureSwitch).toBeChecked();
     await featureSwitch.click();

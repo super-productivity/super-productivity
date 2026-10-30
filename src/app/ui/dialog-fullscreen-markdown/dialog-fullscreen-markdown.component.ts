@@ -380,6 +380,14 @@ export class DialogFullscreenMarkdownComponent implements OnInit, AfterViewInit 
     this._contentChanges$.next(content);
   }
 
+  get hasUnsavedChanges(): boolean {
+    return (this.data.content || '') !== this._initialContent;
+  }
+
+  closeAfterConfirmedDiscard(): void {
+    this._matDialogRef.close({ action: 'DISCARD' });
+  }
+
   close(isSkipSave: boolean = false): void {
     // When the "Discard" button is hit by the user, the note is closed without saving
     // (after confirmation if the content was modified). The explicit result lets
@@ -391,7 +399,7 @@ export class DialogFullscreenMarkdownComponent implements OnInit, AfterViewInit 
       // shared dialog. The "Close" action was renamed to "Discard" (more final),
       // so confirming is the matching guard. _confirmDiscardIfNeeded no-ops when
       // nothing was modified, so an unmodified close still closes instantly.
-      this._confirmDiscardIfNeeded(() => this._matDialogRef.close({ action: 'DISCARD' }));
+      this._confirmDiscardIfNeeded(() => this.closeAfterConfirmedDiscard());
       // When the note is made empty manually by the user and the "Save" button is hit, the note is automatically deleted instead of being left blank.
     } else if (!this.data?.content && this.data.content.trim().length < 1) {
       this._matDialogRef.close({ action: 'DELETE' });
@@ -402,7 +410,7 @@ export class DialogFullscreenMarkdownComponent implements OnInit, AfterViewInit 
   }
 
   protected _confirmDiscardIfNeeded(onDiscard: () => void): void {
-    if ((this.data?.content || '') === this._initialContent) {
+    if (!this.hasUnsavedChanges) {
       onDiscard();
       return;
     }

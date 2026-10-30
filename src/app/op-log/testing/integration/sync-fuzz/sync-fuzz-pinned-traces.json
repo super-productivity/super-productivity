@@ -172,11 +172,7 @@
       }
     ],
     "primary": "field-reverted:note.isLock",
-    "signatures": [
-      "divergence:.note.todayOrder.*",
-      "field-reverted:note.isLock",
-      "today-notes:listed-not-pinned"
-    ],
+    "signatures": ["field-reverted:note.isLock"],
     "rejections": []
   },
   {
@@ -228,7 +224,7 @@
   },
   {
     "class": "lww-update-skips-today-order",
-    "ref": "#10379",
+    "ref": "fixed for #10379 by #10659 (regression pin)",
     "name": "a note unpinned on one device and edited later on another stays pinned but out of Today there",
     "steps": [
       {
@@ -250,13 +246,12 @@
         "a": ["editNote", "n1", "content", "A4"]
       }
     ],
-    "primary": "today-notes:pinned-not-listed",
-    "signatures": ["divergence:.note.todayOrder.*", "today-notes:pinned-not-listed"],
+    "signatures": [],
     "rejections": []
   },
   {
     "class": "lww-update-skips-today-order",
-    "ref": "#10379",
+    "ref": "fixed for #10379 by #10659 (regression pin)",
     "name": "a note edited on one device and unpinned and edited later on another stays in Today there, unpinned",
     "steps": [
       {
@@ -281,8 +276,7 @@
         "a": ["editNote", "n1", "content", "B6"]
       }
     ],
-    "primary": "today-notes:listed-not-pinned",
-    "signatures": ["divergence:.note.todayOrder.*", "today-notes:listed-not-pinned"],
+    "signatures": [],
     "rejections": []
   },
   {
@@ -466,9 +460,9 @@
     "rejections": []
   },
   {
-    "class": "delete-vs-delta-recreate",
-    "ref": "#10380",
-    "name": "a task deleted while another device tracks it comes back without the time, with the delta arguments as fields",
+    "class": "list-order-divergence",
+    "ref": "#10381, order only: the recreated task is appended to the task ids where the delete ran. Its time and fields are fixed for #10380: the recreate adds the winning delta",
+    "name": "a task deleted while another device tracks it comes back with the tracked time",
     "steps": [
       {
         "d": "A",
@@ -480,16 +474,103 @@
         "s": 1
       }
     ],
-    "primary": "divergence:.task.entities.*.taskId",
-    "signatures": [
-      "divergence:.task.entities.*.date",
-      "divergence:.task.entities.*.duration",
-      "divergence:.task.entities.*.subTasks",
-      "divergence:.task.entities.*.taskId",
-      "divergence:.task.entities.*.timeSpent",
-      "divergence:.task.entities.*.timeSpentOnDay",
-      "divergence:.task.ids.*"
+    "primary": "divergence:.task.ids.*",
+    "signatures": ["divergence:.task.ids.*"],
+    "rejections": []
+  },
+  {
+    "class": "list-order-divergence",
+    "ref": "#10381, order only, as above. Fixed for #10380: every converted winner carries all winners of the task",
+    "name": "a task deleted while another device tracks it twice and renames it keeps all three edits",
+    "steps": [
+      {
+        "d": "A",
+        "a": ["deleteTask", "t1"]
+      },
+      {
+        "d": "B",
+        "a": ["track", "t1", 2000]
+      },
+      {
+        "d": "B",
+        "a": ["renameTask", "t1", "B1"]
+      },
+      {
+        "d": "B",
+        "a": ["track", "t1", 1500],
+        "s": 1
+      }
     ],
+    "primary": "divergence:.task.ids.*",
+    "signatures": ["divergence:.task.ids.*"],
+    "rejections": []
+  },
+  {
+    "class": "delete-vs-delta-recreate",
+    "ref": "regression pin for #10380: winners after a restore apply to the restored task, not folded onto the deleted one",
+    "name": "a task deleted on one device and done, archived, restored and renamed on another keeps the restored state",
+    "steps": [
+      {
+        "d": "A",
+        "a": ["deleteTask", "t1"]
+      },
+      {
+        "d": "B",
+        "a": ["doneTask", "t1", true]
+      },
+      {
+        "d": "B",
+        "a": ["archiveTask", "t1"]
+      },
+      {
+        "d": "B",
+        "a": ["restoreTask", "t1"]
+      },
+      {
+        "d": "B",
+        "a": ["renameTask", "t1", "R"],
+        "s": 1
+      }
+    ],
+    "signatures": [],
+    "rejections": []
+  },
+  {
+    "class": "delete-vs-delta-recreate",
+    "ref": "regression pin for #10380: deltas on both sides of an archive and restore",
+    "name": "a task deleted on one device and tracked, done, archived, restored, tracked and renamed on another keeps all of it",
+    "steps": [
+      {
+        "d": "A",
+        "a": ["deleteTask", "t1"]
+      },
+      {
+        "d": "B",
+        "a": ["track", "t1", 2000]
+      },
+      {
+        "d": "B",
+        "a": ["doneTask", "t1", true]
+      },
+      {
+        "d": "B",
+        "a": ["archiveTask", "t1"]
+      },
+      {
+        "d": "B",
+        "a": ["restoreTask", "t1"]
+      },
+      {
+        "d": "B",
+        "a": ["track", "t1", 1500]
+      },
+      {
+        "d": "B",
+        "a": ["renameTask", "t1", "R"],
+        "s": 1
+      }
+    ],
+    "signatures": [],
     "rejections": []
   },
   {

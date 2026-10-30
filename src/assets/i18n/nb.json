@@ -86,6 +86,10 @@
     "INTRO_2": "Hvis du verdsetter denne tilnærmingen og ønsker å holde prosjektet sunt og i utvikling, er en frivillig donasjon svært verdsatt."
   },
   "EXAMPLE_TASKS": {
+    "GETTING_STARTED": {
+      "TITLE": "Valgfritt: tips for å komme i gang",
+      "NOTES": "Ingenting her er obligatorisk. Slett denne oppgaven når du vil.\n\n- **I dag og Innboks**: I dag viser hva som er planlagt for i dag. Oppgaver uten et eget prosjekt blir liggende i Innboks. En oppgave kan vises i begge listene.\n- **Prosjekter**: grupper oppgaver etter tema med **+** ved siden av **Prosjekter** i sidemenyen.\n- **Synk**: ha dataene dine på flere enheter under **Innstillinger → Synk og sikkerhetskopi**.\n- **Kommer du fra Todoist eller TickTick?** Importer oppgavene dine under **Innstillinger → Synk og sikkerhetskopi → Import Eksport**.\n- **Turer**: **Hjelp → Hurtigtur** i sidemenyen viser deg det grunnleggende på din egen oppgave, og **Hjelp → Slik gjør du det** viser kort syntaks og tastaturnavigasjon steg for steg. Lukk en tur når du vil.\n- **Gjør det til ditt**: velg et tema eller mørk modus, og slå funksjoner som brett, tidsplan, vaner, fokusmodus eller integrasjoner av og på under **Innstillinger → Generell**. Plugins gir enda mer."
+    },
     "LEARN_KEYBOARD_SHORTCUTS": {
       "TITLE": "Lær hurtigtastene",
       "NOTES": "Super Productivity er laget for å brukes med tastaturet. Lær hurtigtastene for å jobbe raskere.\n\n**Slik kommer du i gang:**\n1. Åpne **sidefeltmenyen**\n2. Gå til **Hjelp**\n3. Klikk på **Tastaturnavigasjonstur**"
@@ -208,7 +212,7 @@
         "POLL_INTERVAL_MINUTES": "Pollingsintervall (minutter)"
       },
       "FORM_SECTION": {
-        "HELP": "<p>Her kan du konfigurere SuperProductivity til å liste ufullførte CalDav-oppgaver for et spesifikt prosjekt i opprettingspanelet for oppgaver i den daglige planleggingsvisningen. De vil bli listet som forslag og vil gi en lenke til oppgaven samt mer informasjon om den.</p> <p>I tillegg kan du automatisk legge til og synkronisere alle ufullførte oppgaver til oppgavelisten din.</p><p>For at det skal fungere for Nextcloud i nettappen, må du kanskje hviteliste \"https:\\/\\/app.super-productivity.com\" via Nextcloud-appen <a href='https:\\/\\/apps.nextcloud.com\\/apps\\/webapppassword'>webapppassword<a>.</p>"
+        "HELP": "<p>Her kan du konfigurere SuperProductivity til å liste ufullførte CalDav-oppgaver for et spesifikt prosjekt i opprettingspanelet for oppgaver i den daglige planleggingsvisningen. De vil bli listet som forslag og vil gi en lenke til oppgaven samt mer informasjon om den.</p> <p>I tillegg kan du automatisk legge til og synkronisere alle ufullførte oppgaver til oppgavelisten din.</p><p>For at det skal fungere for Nextcloud i nettappen, må du kanskje hviteliste \"https://app.super-productivity.com\" via Nextcloud-appen <a href='https://apps.nextcloud.com/apps/webapppassword'>webapppassword</a>.</p>"
       },
       "ISSUE_CONTENT": {
         "DESCRIPTION": "Beskrivelse",
@@ -537,7 +541,8 @@
         "OAUTH_FAILED": "Autentisering mislyktes.",
         "OAUTH_FAILED_WITH_DETAIL": "Autentisering mislyktes: {{detail}}",
         "REMOTE_ISSUE_DELETED": "Den eksterne saken ble slettet. Vil du slette den tilknyttede oppgaven «{{taskTitle}}»?",
-        "REMOTE_ISSUE_DELETED_WITH_TIME": "Den eksterne saken ble slettet, men oppgaven «{{taskTitle}}» har registrert tid. Vil du slette den likevel?"
+        "REMOTE_ISSUE_DELETED_WITH_TIME": "Den eksterne saken ble slettet, men oppgaven «{{taskTitle}}» har registrert tid. Vil du slette den likevel?",
+        "POST_TIME_SUCCESS": "{{providerName}}: Tidsoppføring opprettet for {{issueTitle}}"
       },
       "TWO_WAY_SYNC": {
         "OFF": "Av",
@@ -566,6 +571,15 @@
         "POLLING_MODE_ALWAYS": "Alltid (i bakgrunnen)",
         "POLLING_MODE_DESCRIPTION": "Når det skal polles: bare mens det relevante prosjektet eller merket er åpent, eller alltid i bakgrunnen",
         "POLLING_MODE_WHEN_PROJECT_OPEN": "Når konteksten er åpen"
+      },
+      "DIALOG_TRACK_TIME": {
+        "ACTIVITY": "Aktivitet",
+        "STARTED": "Startet",
+        "TIME_SPENT": "Brukt tid",
+        "INVALID_DATE": "Den angitte verdien er ikke en dato!",
+        "POST_TIME": "Registrer tid",
+        "SUBMIT_TIME_FOR": "Send tid til {{providerName}} for",
+        "TITLE": "{{providerName}}: Send tidslogg"
       }
     },
     "ISSUE_PANEL": {
@@ -789,33 +803,6 @@
         "REMINDER_NEEDS_TEXT": "Skriv en refleksjon før du ber om en påminnelse",
         "REMINDER_TASK_TITLE": "Gå gjennom refleksjonsnotatet igjen",
         "TITLE": "Refleksjonsnotat"
-      }
-    },
-    "NEXTCLOUD_DECK": {
-      "ISSUE_CONTENT": {
-        "LABELS": "Etiketter",
-        "ASSIGNED_USERS": "Tildelte brukere",
-        "DECK_DESCRIPTION": "Deck-beskrivelse",
-        "STACK": "Stabel"
-      },
-      "FORM": {
-        "BASE_URL": "Nextcloud base-URL",
-        "FILTER_BY_ASSIGNEE": "Importer kun kort tildelt meg",
-        "IS_TRANSITION_ISSUES_ENABLED": "Synkroniser fullføringsstatus og tittel tilbake til Nextcloud Deck",
-        "PASSWORD": "Ditt Nextcloud-apppassord",
-        "POLL_INTERVAL_MINUTES": "Pollingsintervall (minutter)",
-        "TITLE_TEMPLATE": "Mal for oppgavetittel",
-        "TITLE_TEMPLATE_DESCRIPTION": "Variabler: {CARD_TITLE}, {BOARD}, {COLUMN}, {ID}, {LABELS}. Eksempel: [{BOARD}: {COLUMN}] {CARD_TITLE}. La stå tomt for kun korttittel.",
-        "USERNAME": "Ditt Nextcloud-brukernavn"
-      },
-      "FORM_SECTION": {
-        "HELP": "Konfigurer Nextcloud Deck-integrasjonen for å importere kort som oppgaver. Bruk et apppassord for autentisering."
-      },
-      "S": {
-        "BOARD_NOT_FOUND": "Nextcloud Deck: Tavle ikke funnet",
-        "CARD_NOT_FOUND": "Nextcloud Deck: Kortet \"{{issueId}}\" ser ut til å være slettet fra serveren.",
-        "ERR_CREDENTIALS_MISSING": "Fyll inn Nextcloud-URL, brukernavn og passord først.",
-        "ERR_LOAD_BOARDS": "Kunne ikke laste Deck-tavler. Sjekk legitimasjonen din."
       }
     },
     "NOTE": {
@@ -1076,44 +1063,6 @@
       "NO_DATA": "Ingen data for inneværende år",
       "PAGE_TITLE": "Rask historie",
       "WEEK_TITLE": "Uke {{nr}} ({{timeSpent}})"
-    },
-    "REDMINE": {
-      "DIALOG_TRACK_TIME": {
-        "ACTIVITY": "Aktivitet",
-        "STARTED": "Startet",
-        "TIME_SPENT": "Brukt tid",
-        "INVALID_DATE": "Den angitte verdien er ikke en dato!",
-        "POST_TIME": "Registrer tid",
-        "SUBMIT_TIME_FOR": "Send tid til Redmine for",
-        "TITLE": "Redmine: Send tidslogg"
-      },
-      "FORM": {
-        "API_KEY": "API-tilgangsnøkkel",
-        "HOST": "Vert (f.eks.: https://redmine.org)",
-        "PROJECT_ID": "Prosjektidentifikator",
-        "PROJECT_ID_DESCRIPTION": "Kan finnes som en del av URL-en når du ser på prosjektet i nettleseren.",
-        "SCOPE": "Omfang",
-        "SCOPE_ALL": "Alle",
-        "SCOPE_ASSIGNED": "Tildelt meg",
-        "SCOPE_CREATED": "Opprettet av meg",
-        "IS_SHOW_TIME_TRACKING_DIALOG": "Vis tidsregistreringsdialog for rapportering til Redmine",
-        "IS_SHOW_TIME_TRACKING_DIALOG_DESCRIPTION": "Krever at tidsregistreringsmodulen er aktivert for Redmine-prosjektet",
-        "IS_SHOW_TIME_TRACKING_DIALOG_FOR_EACH_SUB_TASK": "Vis tidsregistreringsdialog når deloppgaver fullføres"
-      },
-      "FORM_SECTION": {
-        "HELP": "<p>Her kan du konfigurere SuperProductivity til å liste åpne Redmine (enten det er den nettbaserte versjonen eller en selvhostet instans) problemer for et spesifikt prosjekt i opprettingspanelet for oppgaver i den daglige planleggingsvisningen. De vil bli listet som forslag og vil gi en lenke til problemet samt mer informasjon om det.</p><p>I tillegg kan du automatisk importere alle åpne problemer.</p>",
-        "TITLE": "Redmine"
-      },
-      "ISSUE_CONTENT": {
-        "AUTHOR": "Forfatter",
-        "DESCRIPTION": "Beskrivelse",
-        "MARK_AS_CHECKED": "Merk oppdateringer som sjekket",
-        "PRIORITY": "Prioritet",
-        "STATUS": "Status"
-      },
-      "S": {
-        "POST_TIME_SUCCESS": "Redmine: Tidsoppføring opprettet for {{issueTitle}}"
-      }
     },
     "REFLECTION_NOTE": {
       "ACTION_DISMISS": "Avvis",
@@ -1459,7 +1408,7 @@
         },
         "TITLE": "Synkroniser",
         "WEB_DAV": {
-          "CORS_INFO": "<strong>Få det til å fungere i nettleseren:</strong> For å få dette til å fungere i nettleseren må du hviteliste Super Productivity for CORS-forespørselene til din Nextcloud-instans. Dette kan ha negative sikkerhetsimplikasjoner! Vennligst <a href='https:\\/\\/github.com\\/nextcloud\\/server\\/issues\\/3131'>se denne tråden for mer informasjon</a>. En tilnærming for å få dette til å fungere på mobil er å hviteliste \"https:\\/\\/app.super-productivity.com\" via Nextcloud-appen <a href='https:\\/\\/apps.nextcloud.com\\/apps\\/webapppassword'>webapppassword<a>. Bruk på egen risiko!</p>",
+          "CORS_INFO": "<strong>Få det til å fungere i nettleseren:</strong> For å få dette til å fungere i nettleseren må du hviteliste Super Productivity for CORS-forespørselene til din Nextcloud-instans. Dette kan ha negative sikkerhetsimplikasjoner! Vennligst <a href='https://github.com/nextcloud/server/issues/3131'>se denne tråden for mer informasjon</a>. En tilnærming for å få dette til å fungere på mobil er å hviteliste \"https://app.super-productivity.com\" via Nextcloud-appen <a href='https://apps.nextcloud.com/apps/webapppassword'>webapppassword</a>. Bruk på egen risiko!</p>",
           "D_SYNC_FOLDER_PATH": "Sti relativ til WebDAV-serverens rot hvor synkroniseringsfiler vil bli lagret (f.eks. '/super-productivity' eller '/'). Dette er IKKE serverens interne katalogsti.",
           "INFO": "WebDAV-implementeringer varierer dessverre mye. Super Productivity er kjent for å fungere godt med Nextcloud, <strong>men det kan hende det ikke fungerer med din leverandør</strong>.",
           "L_BASE_URL": "Base URL",
@@ -1545,7 +1494,7 @@
         "ERROR_DATA_IS_CURRENTLY_WRITTEN": "Eksterne data skrives for tiden",
         "ERROR_PERMISSION": "Filtilgang nektet. Vennligst sjekk filsystemtillatelsene dine.",
         "ERROR_PERMISSION_FLATPAK": "Filtilgang nektet. Gi filsystemtillatelse via Flatseal eller bruk en sti innenfor ~/.var/app/",
-        "ERROR_PERMISSION_SNAP": "Filtilgang nektet. Kjør 'snap connect super-productivity:home' eller bruk en sti innenfor ~\\/snap\\/super-productivity\\/common\\/",
+        "ERROR_PERMISSION_SNAP": "Filtilgang nektet. Kjør 'snap connect super-productivity:home' eller bruk en sti innenfor ~/snap/super-productivity/common/",
         "ERROR_REMOTE_RESPONSE_NOT_SYNC_DATA": "Synkroniseringsserveren svarte med en nettside i stedet for synkroniseringsdataene dine (f.eks. en innloggings-, proxy- eller feilside). Fjerndataene dine er sannsynligvis intakte — sjekk server-URL, påloggingsdetaljer og nettverk, og prøv igjen. Hvis problemet vedvarer, kan du overskrive fjerndataene via Synkroniseringsinnstillinger → Tving overskriving.",
         "INCOMPLETE_CFG": "Autentisering for synkronisering mislyktes. Vennligst sjekk konfigurasjonen din!",
         "REMOTE_NOT_ENCRYPTED": "De synkroniserte dataene er ikke krypterte, men kryptering er slått på for denne enheten, så de ble avvist. Hvis du slo av krypteringen på en annen enhet, slå den av her også i synkroniseringsinnstillingene for å fortsette.",
@@ -2911,8 +2860,17 @@
     },
     "SOUND": {
       "BREAK_REMINDER_SOUND": "Ta en pause-påminnelseslyd",
+      "DING": "Bjelle",
       "DONE_SOUND": "Oppgavelyd",
       "IS_INCREASE_DONE_PITCH": "Øk tonehøyde for hver oppgave",
+      "SMALL_DING": "Liten bjelle",
+      "SOUND_1": "Lyd 1",
+      "SOUND_2": "Lyd 2",
+      "SOUND_3": "Lyd 3",
+      "SOUND_4": "Lyd 4",
+      "SOUND_5": "Lyd 5",
+      "SOUND_6": "Lyd 6",
+      "SOUND_7": "Lyd 7",
       "TITLE": "Lyd",
       "TRACK_TIME_SOUND": "Spor tidspåminnelseslyd",
       "VOLUME": "Volum"
@@ -3049,6 +3007,7 @@
       "CONTRIBUTE": "Bidra",
       "GET_HELP_ONLINE": "Få hjelp på nettet",
       "KEYBOARD": "Slik gjør du det: Avansert tastatur",
+      "QUICK_TOUR": "Hurtigtur",
       "REDDIT_COMMUNITY": "Reddit-fellesskapet",
       "REPORT_A_PROBLEM": "Rapporter et problem",
       "SEND_FEEDBACK": "Send tilbakemelding",
@@ -3139,13 +3098,50 @@
     "HINTS": {
       "CREATE_TASK": "Klikk + for å legge til din første oppgave",
       "CREATE_TASK_TOUCH": "Trykk + for å legge til din første oppgave",
+      "DECLINED": "Ikke noe problem. Du finner den under Hjelp → Hurtigtur når du vil.",
+      "MORE_FALLBACK": "Det er allerede mer slått på: prosjekter, tidssporing, Planlegger…",
+      "NO_THANKS": "Nei takk",
+      "SHOW_ME_MORE": "Vis meg mer ›",
       "EXPLORE": "Klikk deg gjerne rundt og utforsk! Du finner hjelp i sidepanelet.",
       "EXPLORE_TOUCH": "Trykk deg gjerne rundt og utforsk! Du finner hjelp i menyen.",
       "TASK_TAP_TOUCH": "Trykk på en oppgave for å åpne detaljene.",
       "TASK_SWIPE_LEFT_TOUCH": "Sveip oppgaven mot venstre for flere handlinger",
+      "TODAY_AND_INBOX": "Denne oppgaven er planlagt for i dag, så den vises i {{todayIcon}} <b>I dag</b>. Oppgaver uten et eget prosjekt blir liggende i {{inboxIcon}} <b>Innboks</b>.",
+      "TODAY_AND_INBOX_PHONE": "Denne oppgaven er planlagt for i dag, så den vises i {{todayIcon}} <b>I dag</b>. Oppgaver uten et eget prosjekt blir liggende i {{inboxIcon}} <b>Innboks</b>, under ☰.",
       "TASK_SWIPE_RIGHT_TOUCH": "Sveip oppgaven mot høyre for å markere den som fullført",
       "OR_PRESS": "eller trykk",
       "SKIP_ARIA": "Lukk hint"
+    },
+    "TOUR": {
+      "ADD_SUBTASK": "Del den opp: høyreklikk på oppgaven og velg {{subtaskIcon}} <b>Legg til underoppgave</b>",
+      "COUNTER": "{{nr}} av {{total}}",
+      "NEXT": "Neste ›",
+      "ORGANIZE": "Lag et eget <b>prosjekt</b> for å gruppere oppgaver, eller en <b>merkelapp</b> for å merke dem. Lag ett med +",
+      "ORGANIZE_COLLAPSED": "Lag et eget <b>prosjekt</b> for å gruppere oppgaver, eller en <b>merkelapp</b> for å merke dem. Utvid sidemenyen med {{expandIcon}} for å lage ett",
+      "ORGANIZE_PHONE": "Prosjekter og merkelapper finner du under ☰. Lag et eget <b>prosjekt</b> for å gruppere oppgaver, eller en <b>merkelapp</b> for å merke dem",
+      "PLANNER": "Planlegg de neste dagene i {{plannerIcon}} <b>Planlegger</b>",
+      "TASK_MENU_TOUCH": "Sveip en oppgave mot venstre for menyen: {{playIcon}} <b>Begynn å spore tid</b>, {{subtaskIcon}} <b>Legg til underoppgave</b>",
+      "TASK_MENU_TOUCH_NO_TRACKING": "Sveip en oppgave mot venstre for menyen, f.eks. {{subtaskIcon}} <b>Legg til underoppgave</b>",
+      "TIMER_RUNNING": "Tidtakeren går. Trykk {{playIcon}} igjen eller <kbd>{{key}}</kbd> for å pause.",
+      "TIMER_RUNNING_TOUCH": "Tidtakeren går. Trykk på {{playIcon}} øverst for å pause.",
+      "TRACK_TIME": "Hold musepekeren over oppgaven og trykk {{playIcon}} for å spore tid"
+    },
+    "WANT_MORE": {
+      "BOARDS": "<b>Brett</b> · Kanban-kolonner for oppgavene dine",
+      "DONE": "Ferdig",
+      "FINISH_DAY": "<b>Avslutt dagen</b> · gå gjennom og avslutt dagen",
+      "FOCUS_MODE": "<b>Fokusmodus</b> · pomodoro og arbeid uten forstyrrelser",
+      "FOOTER": "Du finner dette igjen under Hjelp → Hurtigtur.",
+      "HABITS": "<b>Vaner</b> · følg rutinene dag for dag",
+      "INTRO": "Super Productivity starter rolig. Mer finnes når du trenger det:",
+      "OPEN_SETTINGS": "Åpne innstillinger ›",
+      "PLUGINS": "<b>Plugins og integrasjoner</b> · Jira, GitHub, CalDAV og mer",
+      "SCHEDULE": "<b>Tidsplan</b> · dagen din på en tidslinje",
+      "SEARCH": "Søk i alt med <kbd>{{key}}</kbd>.",
+      "SEARCH_PHONE": "Søk i alt fra ☰.",
+      "SHORT_SYNTAX": "Skriv <code>#tag</code>, <code>+project</code> eller <code>@tomorrow</code> når du legger til en oppgave. Hjelp → Slik gjør du det viser mer.",
+      "SYNC": "Dataene dine blir på denne enheten. Synkronisering og sikkerhetskopier finner du i innstillinger.",
+      "TITLE": "Vil du ha mer?"
     },
     "SYNC_CTA": "Bruker du allerede Super Productivity på en annen enhet?",
     "SYNC_CTA_LINK": "Sett opp synkronisering"

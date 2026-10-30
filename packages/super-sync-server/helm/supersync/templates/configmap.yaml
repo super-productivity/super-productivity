@@ -66,3 +66,6 @@ data:
   {{- if .Values.supersync.defaultStorageQuotaBytes }}
   SUPERSYNC_DEFAULT_STORAGE_QUOTA_BYTES: {{ .Values.supersync.defaultStorageQuotaBytes | int | quote }}
   {{- end }}
+  {{- if .Values.supersync.captureConnectorEnabled }}
+  CAPTURE_CONNECTOR_ENABLED: "true"
+  {{- end }}

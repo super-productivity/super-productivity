@@ -35,6 +35,12 @@ echo "Using $ANDROID_SERIAL"
 # soft keyboard hidden, the IME never opens and the test cannot tell a working
 # shim from one that never ran.
 adb shell settings put secure show_ime_with_hard_keyboard 1
+# A freshly booted emulator can ANR the launcher; its "isn't responding" dialog
+# keeps window focus, so the app window never gains it and the IME never serves
+# the WebView ("Ignoring showSoftInput() ... is not served", run 39156328714).
+# Suppress such dialogs for the run and close one that is already up.
+adb shell settings put global hide_error_dialogs 1
+adb shell am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS > /dev/null || true
 # Which band this image is actually in — the test branches on it and logs the
 # same, but the dumpsys line is the reading to compare a reporter's device to.
 adb shell dumpsys webviewupdate | grep -i 'Current WebView package' || true
@@ -48,7 +54,7 @@ timeout 480 ./gradlew :app:connectedPlayDebugAndroidTest \
   -Pandroid.testInstrumentationRunnerArguments.expectShim=true
 status=$?
 if [ "$status" -eq 124 ]; then
-  echo "::error::ImeInsetShimInstrumentedTest exceeded 8 minutes on API 34 — see the android-instrumentation-diagnostics artifact"
+  echo "::error::IME inset check exceeded 8 minutes on API 34 — see the android-instrumentation-diagnostics artifact"
 fi
 if [ "$status" -ne 0 ]; then
   adb logcat -d > "$DIAG/logcat.txt" 2>&1 || true
@@ -59,4 +65,4 @@ fi
 # On green, echo what the test measured so the job log documents which owner
 # insetted the WebView and by how much — geometry and versions only.
 echo "IME inset shim check passed on API 34:"
-adb logcat -d -s SUPKeyboardTest | tail -n 8 || true
+adb logcat -d -s SUPKeyboardTest | tail -n 12 || true

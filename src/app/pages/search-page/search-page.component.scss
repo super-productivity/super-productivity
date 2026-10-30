@@ -80,6 +80,10 @@
               font-style: italic;
             }
 
+            .task-deleted {
+              color: var(--text-color-muted);
+            }
+
             .subtask-icon {
               font-size: 1.2rem;
               width: 1.2rem;
@@ -111,6 +115,14 @@
 
               .archive-icon {
                 color: var(--text-color-muted);
+              }
+
+              .deleted-label {
+                display: inline-flex;
+                align-items: center;
+                gap: var(--s-half);
+                color: var(--text-color-muted);
+                font-size: var(--font-size-sm);
               }
 
               .view-details-btn {

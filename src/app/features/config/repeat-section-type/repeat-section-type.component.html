@@ -1,5 +1,5 @@
 <div
-  [@standardList]="field.fieldGroup?.length"
+  [@standardList]="$safeNavigationMigration(field.fieldGroup?.length)"
   class="list-wrapper"
 >
   @for (

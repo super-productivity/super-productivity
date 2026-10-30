@@ -11,7 +11,12 @@ import { CollapsibleComponent } from './collapsible.component';
     <collapsible
       [title]="'Group One'"
       [isGroup]="true"
-    ></collapsible>
+    >
+      <button
+        actions
+        class="header-action"
+      ></button>
+    </collapsible>
     <collapsible
       [title]="'Group Two'"
       [isGroup]="true"
@@ -112,6 +117,44 @@ describe('CollapsibleComponent', () => {
     header.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
     fixture.detectChanges();
 
+    expect(collapsible.isExpanded).toBe(false);
+  });
+
+  it('should leave keys from a header action to that action', () => {
+    const actionBtn: HTMLElement = fixture.nativeElement.querySelector('.header-action');
+    const collapsible = collapsibleInstances[0];
+    const ev = new KeyboardEvent('keydown', {
+      key: 'Enter',
+      bubbles: true,
+      cancelable: true,
+    });
+
+    actionBtn.dispatchEvent(ev);
+    fixture.detectChanges();
+
+    expect(collapsible.isExpanded).toBe(false);
+    expect(ev.defaultPrevented).toBe(false);
+  });
+
+  it('makes every header a keyboard button, groups or not', () => {
+    headerElements.forEach((header) => {
+      expect(header.getAttribute('tabindex')).toBe('0');
+      expect(header.getAttribute('role')).toBe('button');
+      expect(header.getAttribute('aria-expanded')).toBe('false');
+    });
+  });
+
+  it('should toggle a non-group collapsible with Enter and Space', () => {
+    const header = headerElements[2];
+    const collapsible = collapsibleInstances[2];
+
+    header.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    fixture.detectChanges();
+    expect(collapsible.isExpanded).toBe(true);
+    expect(header.getAttribute('aria-expanded')).toBe('true');
+
+    header.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+    fixture.detectChanges();
     expect(collapsible.isExpanded).toBe(false);
   });
 

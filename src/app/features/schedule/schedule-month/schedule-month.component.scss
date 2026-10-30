@@ -1,6 +1,7 @@
 @use 'angular-material-css-vars' as mat-css-vars;
 @use '@angular/cdk' as cdk;
 @use '../../../../styles/_globals.scss' as *;
+@use '../schedule-deadline' as schedule-deadline;
 
 @include cdk.a11y-visually-hidden();
 
@@ -129,6 +130,18 @@
   }
 }
 
+.deadline-badge {
+  @include schedule-deadline.badge(var(--bg));
+}
+
+.deadline-badge .deadline-icon {
+  @include schedule-deadline.badge-icon;
+}
+
+.deadline-count {
+  @include schedule-deadline.badge-count(var(--bg));
+}
+
 .month-day-events {
   flex: 1;
   padding: var(--s-half);
@@ -216,7 +229,7 @@
     white-space: nowrap;
   }
 
-  ::ng-deep schedule-event .ico-wrapper {
+  :host ::ng-deep schedule-event .ico-wrapper {
     display: none;
   }
 }

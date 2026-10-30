@@ -28,7 +28,9 @@ cp -r boilerplate-solid-js my-plugin
 cd my-plugin
 ```
 
-2. Install dependencies:
+2. Set a unique `name` in `package.json` (every folder in `plugin-dev` is an npm
+   workspace; duplicate names break the install), then install dependencies into
+   the shared plugin-dev workspace:
 
 ```bash
 npm install
@@ -286,7 +288,8 @@ Modify `src/app/App.css` to customize the appearance.
 
 - Run `npm run typecheck` to check for TypeScript errors
 - Ensure all dependencies are installed
-- Clear `node_modules` and reinstall if needed
+- Reinstall with `npm ci` in `packages/plugin-dev` (deleting only this folder's
+  `node_modules` can leave the plugin on another workspace's Vite version)
 
 ## Resources
 

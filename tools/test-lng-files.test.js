@@ -377,7 +377,7 @@ test('hasBlockingDefects is false for a clean report with an empty baseline', ()
 // direction of the change shows in the diff; it should only ever go down. The
 // baseline records translations that already dropped a placeholder when the
 // check was introduced (#10006) and may only shrink.
-const BASELINE_PLACEHOLDER_COUNT = 120;
+const BASELINE_PLACEHOLDER_COUNT = 113;
 
 test('no shipped locale drops an English placeholder outside the baseline, and the baseline only shrinks', () => {
   const baseline = readBaselineFile(join(__dirname, 'test-lng-files.baseline.json'));
@@ -445,6 +445,64 @@ test('no shipped locale value has broken or unexpected placeholders', () => {
   assert.deepEqual(offenders, []);
 });
 
+test('inspectTranslationDirectory flags empty values on shared keys as blocking', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'test-lng-files-'));
+
+  try {
+    const writeJson = (file, value) => {
+      writeFileSync(join(directory, file), JSON.stringify(value));
+    };
+
+    writeJson('en.json', { msg: { empty: 'Save', filled: 'Cancel', space: 'Close' } });
+    writeJson('xx.json', {
+      msg: { empty: '', filled: 'Abbrechen', space: ' ' },
+      // not in en.json, never rendered: must not count
+      extra: { unused: '' },
+    });
+
+    const report = inspectTranslationDirectory(directory);
+    assert.deepEqual(report.files[0].emptyKeys, ['msg.empty']);
+    assert.equal(report.totalEmpty, 1);
+    assert.equal(hasBlockingDefects(report), true);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('no shipped locale value is an empty string', () => {
+  // "" renders blank instead of falling back to English (#11189).
+  const report = inspectTranslationDirectory(
+    join(__dirname, '..', 'src', 'assets', 'i18n'),
+  );
+  const offenders = report.files
+    .filter((file) => file.emptyKeys.length > 0)
+    .map((file) => `${file.file}: ${file.emptyKeys.join(', ')}`);
+
+  assert.deepEqual(offenders, []);
+});
+
+test('no shipped locale value contains an escaped slash or a bare <a> tag', () => {
+  // A literal "\/" renders as text and breaks URLs; a bare <a> was meant to
+  // close a link (#10515).
+  const i18nDirectory = join(__dirname, '..', 'src', 'assets', 'i18n');
+  const offenders = readdirSync(i18nDirectory)
+    .filter((file) => file.endsWith('.json'))
+    .sort()
+    .flatMap((file) => {
+      const locale = JSON.parse(readFileSync(join(i18nDirectory, file), 'utf8'));
+      return collectLeafKeys(locale)
+        .filter((key) => {
+          const value = getValueAtPath(locale, key);
+          return (
+            typeof value === 'string' && (value.includes('\\/') || value.includes('<a>'))
+          );
+        })
+        .map((key) => `${file}: ${key}`);
+    });
+
+  assert.deepEqual(offenders, []);
+});
+
 test('inspectTranslationDirectory compares every locale with deterministic order and totals', () => {
   const directory = mkdtempSync(join(tmpdir(), 'test-lng-files-'));
 
@@ -500,6 +558,7 @@ test('inspectTranslationDirectory compares every locale with deterministic order
           staleBaselineKeys: [],
           unexpectedPlaceholderKeys: [],
           malformedKeys: [],
+          emptyKeys: [],
         },
         {
           file: 'fr.json',
@@ -511,6 +570,7 @@ test('inspectTranslationDirectory compares every locale with deterministic order
           staleBaselineKeys: [],
           unexpectedPlaceholderKeys: [],
           malformedKeys: [],
+          emptyKeys: [],
         },
         {
           file: 'zh.json',
@@ -522,6 +582,7 @@ test('inspectTranslationDirectory compares every locale with deterministic order
           staleBaselineKeys: [],
           unexpectedPlaceholderKeys: [],
           malformedKeys: [],
+          emptyKeys: [],
         },
       ],
       totalMissing: 3,
@@ -530,6 +591,7 @@ test('inspectTranslationDirectory compares every locale with deterministic order
       totalPlaceholderMismatches: 0,
       totalUnexpectedPlaceholders: 0,
       totalMalformed: 0,
+      totalEmpty: 0,
       totalNewDroppedPlaceholders: 0,
       totalStaleBaseline: 0,
     });
@@ -578,6 +640,7 @@ test('inspectTranslationDirectory ignores .json directories and checks locale fi
           staleBaselineKeys: [],
           unexpectedPlaceholderKeys: [],
           malformedKeys: [],
+          emptyKeys: [],
         },
       ],
       totalMissing: 1,
@@ -586,6 +649,7 @@ test('inspectTranslationDirectory ignores .json directories and checks locale fi
       totalPlaceholderMismatches: 0,
       totalUnexpectedPlaceholders: 0,
       totalMalformed: 0,
+      totalEmpty: 0,
       totalNewDroppedPlaceholders: 0,
       totalStaleBaseline: 0,
     });
@@ -613,6 +677,7 @@ test('printReport keeps adversarial values on inert output lines', (t) => {
         staleBaselineKeys: [],
         unexpectedPlaceholderKeys: [],
         malformedKeys: [],
+        emptyKeys: [],
       },
     ],
     totalMissing: 1,
@@ -621,6 +686,7 @@ test('printReport keeps adversarial values on inert output lines', (t) => {
     totalPlaceholderMismatches: 0,
     totalUnexpectedPlaceholders: 0,
     totalMalformed: 0,
+    totalEmpty: 0,
     totalNewDroppedPlaceholders: 0,
     totalStaleBaseline: 0,
   });
@@ -658,6 +724,7 @@ test('printReport bounds keys while retaining three examples and the remainder',
         staleBaselineKeys: [],
         unexpectedPlaceholderKeys: [],
         malformedKeys: [],
+        emptyKeys: [],
       },
     ],
     totalMissing: 5,
@@ -666,6 +733,7 @@ test('printReport bounds keys while retaining three examples and the remainder',
     totalPlaceholderMismatches: 0,
     totalUnexpectedPlaceholders: 0,
     totalMalformed: 0,
+    totalEmpty: 0,
     totalNewDroppedPlaceholders: 0,
     totalStaleBaseline: 0,
   });

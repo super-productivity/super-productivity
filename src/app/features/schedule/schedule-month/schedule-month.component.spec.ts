@@ -13,6 +13,7 @@ import { ScheduleEvent } from '../schedule.model';
 import { SVEType } from '../schedule.const';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { firstValueFrom } from 'rxjs';
+import { DEFAULT_TASK, TaskCopy } from '../../tasks/task.model';
 
 describe('ScheduleMonthComponent', () => {
   let component: ScheduleMonthComponent;
@@ -709,4 +710,93 @@ const createTaskScheduleEvent = (id: string, plannedForDay: string): ScheduleEve
     id,
   } as ScheduleEvent['data'],
   plannedForDay,
+});
+
+describe('ScheduleMonthComponent deadline badges', () => {
+  let component: ScheduleMonthComponent;
+  let fixture: ComponentFixture<ScheduleMonthComponent>;
+  let mockScheduleService: jasmine.SpyObj<ScheduleService>;
+  let mockDateTimeFormatService: jasmine.SpyObj<DateTimeFormatService>;
+
+  beforeEach(async () => {
+    mockScheduleService = jasmine.createSpyObj('ScheduleService', [
+      'getDayClass',
+      'getEventsForDay',
+      'getEventDayStr',
+    ]);
+    mockScheduleService.getDayClass.and.returnValue('');
+    mockScheduleService.getEventsForDay.and.returnValue([]);
+    mockScheduleService.getEventDayStr.and.returnValue(null);
+
+    mockDateTimeFormatService = jasmine.createSpyObj('DateTimeFormatService', ['-'], {
+      currentLocale: () => 'sv',
+      isoTextLocale: () => 'de',
+    });
+
+    await TestBed.configureTestingModule({
+      imports: [ScheduleMonthComponent, TranslateModule.forRoot()],
+      providers: [
+        { provide: ScheduleService, useValue: mockScheduleService },
+        { provide: DateTimeFormatService, useValue: mockDateTimeFormatService },
+      ],
+    }).compileComponents();
+
+    const translateService = TestBed.inject(TranslateService);
+    translateService.setTranslation('en', {
+      F: {
+        SCHEDULE: {
+          DEADLINE_TASKS_TOOLTIP_ONE: '{{count}} deadline: {{titles}}',
+          DEADLINE_TASKS_TOOLTIP: '{{count}} deadlines: {{titles}}',
+        },
+      },
+    });
+    translateService.use('en');
+
+    fixture = TestBed.createComponent(ScheduleMonthComponent);
+    component = fixture.componentInstance;
+  });
+
+  it('should compute the count and tooltip for a day with deadlines', () => {
+    const deadlineTasks: TaskCopy[] = [
+      { ...DEFAULT_TASK, id: 'task-1', projectId: 'project-1', title: 'Deadline 1' },
+      { ...DEFAULT_TASK, id: 'task-2', projectId: 'project-1', title: 'Deadline 2' },
+    ];
+    fixture.componentRef.setInput('daysToShow', ['2026-01-15']);
+    fixture.componentRef.setInput('deadlineTasksByDay', {
+      ['2026-01-15']: deadlineTasks,
+    });
+
+    expect(component.deadlineBadgesByDay()['2026-01-15']).toEqual({
+      count: 2,
+      tooltip: '2 deadlines: Deadline 1, Deadline 2',
+    });
+  });
+
+  it('should render an icon and subscript count instead of deadline cards', () => {
+    fixture.componentRef.setInput('daysToShow', ['2026-01-15']);
+    fixture.componentRef.setInput('deadlineTasksByDay', {
+      ['2026-01-15']: [
+        { ...DEFAULT_TASK, id: 'task-1', projectId: 'project-1', title: 'Deadline 1' },
+        { ...DEFAULT_TASK, id: 'task-2', projectId: 'project-1', title: 'Deadline 2' },
+      ],
+    });
+
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('.deadline-icon')).toBeTruthy();
+    expect(
+      fixture.nativeElement.querySelector('.deadline-count')?.textContent.trim(),
+    ).toBe('2');
+    expect(fixture.nativeElement.querySelector('planner-deadline-task')).toBeNull();
+  });
+
+  it('should not create a badge when deadlineTasksByDay is null', () => {
+    fixture.componentRef.setInput('daysToShow', ['2026-01-15']);
+    fixture.componentRef.setInput('deadlineTasksByDay', null);
+
+    fixture.detectChanges();
+
+    expect(component.deadlineBadgesByDay()).toEqual({});
+    expect(fixture.nativeElement.querySelector('.deadline-badge')).toBeNull();
+  });
 });

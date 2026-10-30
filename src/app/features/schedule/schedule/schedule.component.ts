@@ -6,22 +6,37 @@ import {
   effect,
   ElementRef,
   inject,
+  Signal,
   signal,
   viewChild,
 } from '@angular/core';
-import { fromEvent } from 'rxjs';
+import { combineLatest, fromEvent } from 'rxjs';
 import { select, Store } from '@ngrx/store';
-import { selectCalendarProviders } from '../../issue/store/issue-provider.selectors';
+import {
+  selectCalendarProviders,
+  selectEnabledIssueProviders,
+} from '../../issue/store/issue-provider.selectors';
 import { HiddenCalendarProvidersService } from '../../calendar-integration/hidden-calendar-providers.service';
-import { getIssueProviderTooltip } from '../../issue/mapping-helper/get-issue-provider-tooltip';
-import { IssueProvider } from '../../issue/issue.model';
+import { selectUndoneDeadlineTasksByDay } from '../../planner/store/planner.selectors';
+import {
+  getIssueProviderTooltip,
+  sanitizeIcalUrlForDisplay,
+} from '../../issue/mapping-helper/get-issue-provider-tooltip';
+import { getCalendarProviderColor } from '../../issue/mapping-helper/get-calendar-provider-color';
+import {
+  IssueProvider,
+  IssueProviderPluginType,
+  isPluginIssueProvider,
+} from '../../issue/issue.model';
+import { PluginIssueProviderRegistryService } from '../../../plugins/issue-provider/plugin-issue-provider-registry.service';
 import {
   MatMenu,
   MatMenuContent,
   MatMenuItem,
   MatMenuTrigger,
 } from '@angular/material/menu';
-import { debounceTime, map, startWith } from 'rxjs/operators';
+import { debounceTime, distinctUntilChanged, map, startWith } from 'rxjs/operators';
+import { fastArrayCompare } from '../../../util/fast-array-compare';
 import { safeFormatDate } from '../../../util/safe-format-date';
 import { TaskService } from '../../tasks/task.service';
 import { LayoutService } from '../../../core-ui/layout/layout.service';
@@ -46,12 +61,25 @@ import { DateTimeFormatService } from '../../../core/date-time-format/date-time-
 import { getWeekNumber } from '../../../util/get-week-number';
 import { parseDbDateStr } from '../../../util/parse-db-date-str';
 import { anchorContextNow } from '../anchor-context-now';
+import {
+  SwipePagerComponent,
+  SwipePagerPageDirective,
+} from '../../../ui/swipe-pager/swipe-pager.component';
+import {
+  ScheduleDayPage,
+  scheduleDayPageKey,
+  shiftDayStr,
+  toScheduleDayPage,
+} from '../schedule-day-page';
+import { DateService } from '../../../core/date/date.service';
 
 @Component({
   selector: 'schedule',
   imports: [
     ScheduleWeekComponent,
     ScheduleMonthComponent,
+    SwipePagerComponent,
+    SwipePagerPageDirective,
     MatIconButton,
     MatIcon,
     MatTooltip,
@@ -79,16 +107,33 @@ export class ScheduleComponent {
   private _globalTrackingIntervalService = inject(GlobalTrackingIntervalService);
   private _globalConfigService = inject(GlobalConfigService);
   private _dateTimeFormatService = inject(DateTimeFormatService);
+  private _dateService = inject(DateService);
   private _translate = inject(TranslateService);
   private _hiddenCalendarProviders = inject(HiddenCalendarProvidersService);
   private _elRef = inject<ElementRef<HTMLElement>>(ElementRef);
+  private _pluginIssueProviderRegistry = inject(PluginIssueProviderRegistryService);
 
   readonly hiddenCalendarProviderIds = this._hiddenCalendarProviders.hiddenProviderIds;
   readonly enabledCalendarProviders = toSignal(
-    this._store
-      .select(selectCalendarProviders)
-      .pipe(map((ps) => ps.filter((p) => p.isEnabled))),
-    { initialValue: [] },
+    combineLatest([
+      this._store
+        .select(selectCalendarProviders)
+        .pipe(distinctUntilChanged(fastArrayCompare)),
+      combineLatest([
+        this._store.select(selectEnabledIssueProviders),
+        this._pluginIssueProviderRegistry.registrationChanges$,
+      ]).pipe(
+        map(([providers]) =>
+          providers.filter(
+            (p): p is IssueProviderPluginType =>
+              isPluginIssueProvider(p.issueProviderKey) &&
+              this._pluginIssueProviderRegistry.getUseAgendaView(p.issueProviderKey),
+          ),
+        ),
+        distinctUntilChanged(fastArrayCompare),
+      ),
+    ]).pipe(map(([ical, plugin]): IssueProvider[] => [...ical, ...plugin])),
+    { initialValue: [] as IssueProvider[] },
   );
   // Show the button with multiple providers, OR with a single provider that
   // is currently hidden — otherwise the user has no UI to re-enable the only
@@ -99,7 +144,27 @@ export class ScheduleComponent {
     const hidden = this.hiddenCalendarProviderIds();
     return providers.some((p) => hidden.includes(p.id));
   });
-  readonly calProviderLabel = (p: IssueProvider): string => getIssueProviderTooltip(p);
+  // Plugin labels come from the first non-secret config string, which may be a
+  // URL (credentials in the path) or an opaque scheme; reuse the iCal sanitizer
+  // so neither is rendered verbatim.
+  readonly calProviderLabel = (p: IssueProvider): string => {
+    const raw = getIssueProviderTooltip(p);
+    if (!/^[a-z][a-z0-9+.-]*:\S/i.test(raw)) return raw;
+    const sanitized = sanitizeIcalUrlForDisplay(raw);
+    return sanitized === 'iCal' && p.issueProviderKey !== 'ICAL'
+      ? p.issueProviderKey
+      : sanitized;
+  };
+  // Materialized once per provider-list change; method calls inside the menu
+  // @for would re-run the hash and URL parsing on every change detection.
+  readonly calProviderRows = computed(() => {
+    const calendarColors = this.scheduleService.calendarColorByProviderId();
+    return this.enabledCalendarProviders().map((p) => ({
+      id: p.id,
+      color: getCalendarProviderColor(p, calendarColors.get(p.id)),
+      label: this.calProviderLabel(p),
+    }));
+  });
 
   toggleCalProvider(providerId: string): void {
     this._hiddenCalendarProviders.toggle(providerId);
@@ -118,9 +183,20 @@ export class ScheduleComponent {
   // True when today falls within the currently displayed range.
   // Disables the "today" reset button and suppresses navigation jumps.
   isViewingToday = computed(() => {
-    if (this._selectedDate() === null) return true;
+    const selectedDate = this._selectedDate();
+    if (selectedDate === null) return true;
     const todayStr = this._todayDateStr();
-    return todayStr ? this.daysToShow().includes(todayStr) : false;
+    if (!todayStr) return false;
+    if (this.isMonthView()) {
+      // Compare the month, not the grid: the grid's padding days can include
+      // today while showing the next month, which locked navigation (#10451)
+      const today = parseDbDateStr(todayStr);
+      return (
+        selectedDate.getFullYear() === today.getFullYear() &&
+        selectedDate.getMonth() === today.getMonth()
+      );
+    }
+    return this.daysToShow().includes(todayStr);
   });
 
   protected _todayDateStr = toSignal(this._globalTrackingIntervalService.todayDateStr$);
@@ -282,6 +358,11 @@ export class ScheduleComponent {
     return mapScheduleDaysToScheduleEvents(days, FH);
   });
 
+  deadlineTasksByDay = toSignal(
+    this._store.pipe(select(selectUndoneDeadlineTasksByDay)),
+    { initialValue: {} },
+  );
+
   private _workStartEndHours = toSignal(
     this._store.pipe(select(selectTimelineWorkStartEndHours)),
   );
@@ -301,12 +382,7 @@ export class ScheduleComponent {
   beyondBudget = computed(() => this._eventsAndBeyondBudget().beyondBudgetDays);
   monthEvents = computed(() => this.events().concat(...this.beyondBudget()));
 
-  currentTimeRow = computed(() => {
-    // Only show current time indicator when viewing today
-    if (!this.isViewingToday()) {
-      return null;
-    }
-
+  nowRow = computed(() => {
     // Trigger re-computation every 2 minutes
     this.scheduleService.scheduleRefreshTick();
     const now = new Date();
@@ -316,6 +392,84 @@ export class ScheduleComponent {
     const hoursToday = hours + minutes / 60;
     return Math.round(hoursToday * FH);
   });
+
+  // Only show current time indicator when viewing today
+  currentTimeRow = computed(() => (this.isViewingToday() ? this.nowRow() : null));
+
+  // Day view pages through days by swiping (SwipePagerComponent). Neighbouring
+  // days are only computed once the pager is warm: when idle on a touch device,
+  // on first touch, or when the prev/next buttons animate through it.
+  isPagerWarm = signal(false);
+  readonly dayPageKey = scheduleDayPageKey;
+  private _dayPager = viewChild(SwipePagerComponent);
+
+  currentDayPage = computed<ScheduleDayPage | undefined>(() => {
+    const day = this.daysToShow()[0];
+    return day ? toScheduleDayPage(day, this.scheduleDays()) : undefined;
+  });
+  // Like goToPreviousPeriod, never pages into the past.
+  prevDayPage = this._createDayPage(
+    computed(() => {
+      const day = this.daysToShow()[0];
+      return day && this.isDayView() && this.isPagerWarm() && !this.isViewingToday()
+        ? shiftDayStr(day, -1)
+        : undefined;
+    }),
+  );
+  nextDayPage = this._createDayPage(
+    computed(() => {
+      const day = this.daysToShow()[0];
+      return day && this.isDayView() && this.isPagerWarm()
+        ? shiftDayStr(day, 1)
+        : undefined;
+    }),
+  );
+
+  onDayPagerNavigate(page: ScheduleDayPage): void {
+    // Like goToPreviousPeriod, landing on (logical) today is the "today" mode.
+    const today = this._todayDateStr();
+    this._selectedDate.set(today && page.day > today ? parseDbDateStr(page.day) : null);
+  }
+
+  // The nav buttons slide the day view like a swipe does.
+  navigatePrevious(): void {
+    const pager = this._dayPager();
+    if (this.isDayView() && pager) {
+      pager.go(-1);
+    } else {
+      this.goToPreviousPeriod();
+    }
+  }
+
+  navigateNext(): void {
+    const pager = this._dayPager();
+    if (this.isDayView() && pager) {
+      pager.go(1);
+    } else {
+      this.goToNextPeriod();
+    }
+  }
+
+  // Same inputs as scheduleDays for a single day, anchored to the day the same
+  // way _contextNow is. Only the "now" for today's page can differ, by up to
+  // the 2-minute refresh tick that _contextNow is cached for.
+  private _createDayPage(
+    day: Signal<string | undefined>,
+  ): Signal<ScheduleDayPage | undefined> {
+    return computed(() => {
+      const d = day();
+      if (!d) {
+        return undefined;
+      }
+      const scheduleDays = this.scheduleService.createScheduleDaysWithContext({
+        daysToShow: [d],
+        contextNow: anchorContextNow(d, Date.now()),
+        realNow: Date.now(),
+        currentTaskId: this.taskService.currentTaskId() ?? null,
+      });
+      return toScheduleDayPage(d, scheduleDays);
+    });
+  }
 
   goToPreviousPeriod(): void {
     // Never navigate into the past — the displayed range must include today or later
@@ -337,8 +491,9 @@ export class ScheduleComponent {
       previousPeriod.setDate(currentDate.getDate() - daysToSkip);
       previousPeriod.setHours(0, 0, 0, 0);
 
-      // If going back would land on or before today, snap to "today view" (null)
-      const todayMidnight = new Date();
+      // If going back would land on or before today, snap to "today view" (null).
+      // Today is the logical day the today view shows, as in goToNextPeriod.
+      const todayMidnight = this._dateService.getLogicalTodayDate();
       todayMidnight.setHours(0, 0, 0, 0);
       if (previousPeriod.getTime() <= todayMidnight.getTime()) {
         this._selectedDate.set(null);
@@ -349,7 +504,7 @@ export class ScheduleComponent {
   }
 
   goToNextPeriod(): void {
-    const currentDate = this._selectedDate() || new Date();
+    const currentDate = this._selectedDate() || this._dateService.getLogicalTodayDate();
     const selectedView = this._currentTimeViewMode();
 
     if (selectedView === 'month') {
@@ -411,11 +566,12 @@ export class ScheduleComponent {
   // is in flight overshoots by the animation's current scale.
   //
   // The lookup is scoped to this component's own element: the right panel
-  // embeds a second schedule-week that renders its own #current-time.
+  // embeds a second schedule-week that renders its own #current-time. The day
+  // view's swipe pager renders neighbouring days too; those are inert.
   private _scrollAnchorToTop(elementId: string): void {
-    const element = this._elRef.nativeElement.querySelector(
-      `#${elementId}`,
-    ) as HTMLElement | null;
+    const element = Array.from(
+      this._elRef.nativeElement.querySelectorAll<HTMLElement>(`#${elementId}`),
+    ).find((el) => !el.closest('[inert]'));
 
     element?.scrollIntoView({ block: 'start', inline: 'start', behavior: 'instant' });
   }
@@ -429,7 +585,10 @@ export class ScheduleComponent {
     const preservedView = localStorage.getItem(LS.SELECTED_TIME_VIEW);
     if (preservedView === 'month') return 'month';
     if (preservedView === 'day') return 'day';
-    return 'week';
+    if (preservedView === 'week') return 'week';
+    // No saved choice yet: a phone fits under three of the week's seven columns,
+    // so it starts on one readable day instead.
+    return this.layoutService.isXs() ? 'day' : 'week';
   }
 
   constructor() {

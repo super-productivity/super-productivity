@@ -57,7 +57,7 @@ export class TaskDetailItemComponent {
   readonly afterExpand = output<void>();
   readonly editActionTriggered = output<void>();
 
-  @HostBinding('tabindex') readonly tabindex: number = 3;
+  @HostBinding('tabindex') readonly tabindex: number = 0;
 
   @HostListener('keydown', ['$event']) onKeyDown(ev: KeyboardEvent): void {
     // Skip handling inside input elements

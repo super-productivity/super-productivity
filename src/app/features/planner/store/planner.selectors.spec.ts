@@ -10,6 +10,10 @@ import { TASK_FEATURE_NAME } from '../../tasks/store/task.reducer';
 import { PROJECT_FEATURE_NAME } from '../../project/store/project.reducer';
 import { appStateFeatureKey } from '../../../root-store/app-state/app-state.reducer';
 import { getDbDateStr } from '../../../util/get-db-date-str';
+import {
+  DEFAULT_TASK_REPEAT_CFG,
+  TaskRepeatCfg,
+} from '../../task-repeat-cfg/task-repeat-cfg.model';
 
 const DAY_DURATION_MS = 24 * 60 * 60 * 1000;
 
@@ -767,6 +771,36 @@ describe('Planner Selectors - selectPlannerDays', () => {
       expect(days).toEqual(['2026-09-30']);
     });
   });
+
+  it('should place a repeat time before the day boundary on the late night of its day (#3378)', () => {
+    const repeatCfg: TaskRepeatCfg = {
+      ...DEFAULT_TASK_REPEAT_CFG,
+      id: 'late-night-repeat',
+      repeatCycle: 'DAILY',
+      repeatEvery: 1,
+      startDate: '2026-01-01',
+      startTime: '02:00',
+    };
+    const selector = fromSelectors.selectPlannerDays(
+      ['2099-06-10'],
+      [repeatCfg],
+      [],
+      [],
+      [],
+      today,
+    );
+    const fiveHoursMs = 5 * 60 * 60 * 1000;
+    const result = selector.projector(
+      createTasksMapFromTasksArray([]),
+      emptyPlannerState,
+      defaultScheduleConfig,
+      fiveHoursMs,
+    );
+
+    expect(result[0].scheduledIItems.map((item) => item.start)).toEqual([
+      new Date(2099, 5, 11, 2).getTime(),
+    ]);
+  });
 });
 
 describe('Planner Selectors - selectAllTasksDueToday', () => {
@@ -1228,5 +1262,80 @@ describe('Planner Selectors - selectPlannerDays across several days with offset'
       ['E3'],
       [],
     ]);
+  });
+});
+
+describe('Planner Selectors - selectUndoneDeadlineTasksByDay', () => {
+  const createTask = (overrides: Partial<Task> & { id: string }): Task => ({
+    title: `Task ${overrides.id}`,
+    created: 0,
+    isDone: false,
+    subTaskIds: [],
+    tagIds: [],
+    projectId: 'project1',
+    timeSpentOnDay: {},
+    timeEstimate: 0,
+    timeSpent: 0,
+    attachments: [],
+    ...overrides,
+  });
+
+  const createState = (
+    tasks: Task[],
+    startOfNextDayDiffMs = 0,
+    // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
+  ) => ({
+    [appStateFeatureKey]: { todayStr: '2026-01-19', startOfNextDayDiffMs },
+    [TASK_FEATURE_NAME]: {
+      ids: tasks.map((t) => t.id),
+      entities: Object.fromEntries(tasks.map((t) => [t.id, t])),
+      currentTaskId: null,
+      selectedTaskId: null,
+      lastCurrentTaskId: null,
+      isDataLoaded: true,
+      taskDetailTargetPanel: null,
+    } as TaskState,
+    [PROJECT_FEATURE_NAME]: { ids: [], entities: {} },
+  });
+
+  it('groups undone tasks by their deadline day', () => {
+    const result = fromSelectors.selectUndoneDeadlineTasksByDay(
+      createState([
+        createTask({ id: 'a', deadlineDay: '2026-01-20' }),
+        createTask({ id: 'b', deadlineWithTime: getLocalTime(2026, 1, 21, 15) }),
+        createTask({ id: 'done', deadlineDay: '2026-01-20', isDone: true }),
+        createTask({ id: 'none' }),
+      ]),
+    );
+
+    expect(Object.keys(result).sort()).toEqual(['2026-01-20', '2026-01-21']);
+    expect(result['2026-01-20'].map((t) => t.id)).toEqual(['a']);
+    expect(result['2026-01-21'].map((t) => t.id)).toEqual(['b']);
+  });
+
+  it('keys a timed deadline before the day boundary to the previous day', () => {
+    const result = fromSelectors.selectUndoneDeadlineTasksByDay(
+      createState(
+        [createTask({ id: 'late', deadlineWithTime: getLocalTime(2026, 1, 21, 2) })],
+        4 * 60 * 60 * 1000,
+      ),
+    );
+
+    expect(result['2026-01-20'].map((t) => t.id)).toEqual(['late']);
+  });
+
+  // A tracked task's timeSpent changes every second; the schedule must not
+  // regroup and re-render every deadline badge for it
+  it('keeps its result when only a tracked time changes', () => {
+    const deadlineTask = createTask({ id: 'a', deadlineDay: '2026-01-20' });
+    const tracked = createTask({ id: 'tracked', timeSpent: 1000 });
+    const first = fromSelectors.selectUndoneDeadlineTasksByDay(
+      createState([deadlineTask, tracked]),
+    );
+    const second = fromSelectors.selectUndoneDeadlineTasksByDay(
+      createState([deadlineTask, { ...tracked, timeSpent: 2000 }]),
+    );
+
+    expect(second).toBe(first);
   });
 });

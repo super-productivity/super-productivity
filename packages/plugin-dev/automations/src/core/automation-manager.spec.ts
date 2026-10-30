@@ -181,7 +181,7 @@ describe('AutomationManager', () => {
         type: 'taskUpdated',
         task: { id: 't1', title: 'MoveMe task' },
         changes: { title: 'MoveMe task' },
-      } as TaskEvent;
+      } as unknown as TaskEvent;
       await manager.onTaskEvent(event2);
 
       expect(mockActionExecutor.executeAll).not.toHaveBeenCalled();

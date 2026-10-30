@@ -90,6 +90,7 @@ export class AddTaskBarActionsComponent {
   // Inputs
   isHideDueBtn = input<boolean>(false);
   isHideTagBtn = input<boolean>(false);
+  isHideDeadlineBtn = input<boolean>(false);
 
   // Outputs
   estimateChanged = output<string>();
@@ -108,7 +109,7 @@ export class AddTaskBarActionsComponent {
   isAutoDetected = computed(() => this.stateService.isAutoDetected());
 
   // Signals for projects and tags
-  allProjects = this._projectService.listInTreeOrderForUI;
+  allProjects = this._projectService.listInTreeOrder;
   projectFolderMap = computed(() => this._menuTreeService.projectFolderMap());
   selectedProject = computed(() =>
     this.allProjects().find((p) => p.id === this.state().projectId),

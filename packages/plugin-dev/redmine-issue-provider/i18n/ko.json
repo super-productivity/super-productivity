@@ -1,0 +1,33 @@
+{
+  "CFG": {
+    "HOST": "호스트(예: https://redmine.org)",
+    "API_KEY": "API 액세스 키",
+    "PROJECT_ID": "프로젝트 식별자",
+    "PROJECT_ID_DESC": "브라우저에서 프로젝트를 볼 때, URL의 일부로 찾을 수 있습니다.",
+    "SCOPE": "범위",
+    "SCOPE_ALL": "모두",
+    "SCOPE_CREATED": "내가 만든",
+    "SCOPE_ASSIGNED": "나에게 할당됨",
+    "IS_SHOW_TIME_TRACKING_DIALOG": "Redmine에 보고하기 위한 시간 추적 대화상자 표시",
+    "IS_SHOW_TIME_TRACKING_DIALOG_DESC": "Redmine 프로젝트에서 시간 추적 모듈이 활성화되어 있어야 합니다",
+    "IS_SHOW_TIME_TRACKING_DIALOG_FOR_EACH_SUB_TASK": "하위 작업 완료 시 시간 추적 대화상자 표시",
+    "DEFAULT_TIME": "대화의 기본 시간 값",
+    "DEFAULT_TIME_ALL_TIME": "작업에 소요된 모든 시간 입력",
+    "DEFAULT_TIME_ALL_TIME_MINUS_LOGGED": "모든 소요 시간에서 기록 시간을 뺀 값을 입력하세요.",
+    "DEFAULT_TIME_TODAY": "오늘 보낸 시간만 채우세요",
+    "DEFAULT_TIME_YESTERDAY": "어제 보낸 시간만 채우기"
+  },
+  "DISPLAY": {
+    "SUMMARY": "요약",
+    "STATUS": "상태",
+    "PRIORITY": "우선순위",
+    "AUTHOR": "저자",
+    "ASSIGNEE": "담당자",
+    "CATEGORY": "범주",
+    "VERSION": "버전",
+    "DUE_DATE": "마감일",
+    "TIME_SPENT": "소요 시간",
+    "DESCRIPTION": "설명"
+  },
+  "FORM_HELP": "<p>여기에서 일일 계획 보기의 작업 만들기 패널에서 특정 프로젝트에 대해 열려 있는 Redmine(온라인 버전 또는 자체 호스팅 인스턴스) 이슈를 나열하도록 SuperProductivity를 구성할 수 있습니다. 이슈는 제안 사항으로 나열되며 이슈에 대한 링크와 자세한 정보를 제공합니다.</p><p>또한 열려 있는 모든 이슈를 자동으로 가져올 수 있습니다.</p>"
+}

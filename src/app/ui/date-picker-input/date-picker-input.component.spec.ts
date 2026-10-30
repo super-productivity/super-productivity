@@ -133,4 +133,22 @@ describe('DatePickerInputComponent', () => {
       expect(component.innerValue()).toBeNull();
     });
   });
+
+  describe('hint', () => {
+    // A formly `date` field's description (e.g. "The last day is included."
+    // for the repeat dialog's end date) is shown through this input.
+    it('should show the hint below the field', () => {
+      const fixture = TestBed.createComponent(DatePickerInputComponent);
+      fixture.componentRef.setInput('hint', 'The last day is included.');
+      fixture.detectChanges();
+      const hint = (fixture.nativeElement as HTMLElement).querySelector('mat-hint');
+      expect(hint?.textContent?.trim()).toBe('The last day is included.');
+    });
+
+    it('should render no hint without one', () => {
+      const fixture = TestBed.createComponent(DatePickerInputComponent);
+      fixture.detectChanges();
+      expect((fixture.nativeElement as HTMLElement).querySelector('mat-hint')).toBeNull();
+    });
+  });
 });

@@ -1,4 +1,4 @@
-import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClient, withXhr } from '@angular/common/http';
 import { TestBed } from '@angular/core/testing';
 import { Action, provideStore, Store } from '@ngrx/store';
 import { firstValueFrom, Subject, Subscription } from 'rxjs';
@@ -70,7 +70,7 @@ describe('PluginOAuthLifecycleEffects', () => {
     completed$ = new Subject<void>();
     TestBed.configureTestingModule({
       providers: [
-        provideHttpClient(),
+        provideHttpClient(withXhr()),
         provideStore(
           { issueProvider: issueProviderReducer },
           {

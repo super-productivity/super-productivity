@@ -5,6 +5,10 @@ import {
 } from '@sp/sync-providers/onedrive';
 import { OneDrivePrivateCfg } from './onedrive.model';
 import type { SyncCredentialStorePort } from '@sp/sync-providers/credential-store';
+import {
+  NoRevAPIError,
+  UploadRevToMatchMismatchAPIError,
+} from '@sp/sync-providers/errors';
 
 describe('OneDrive', () => {
   let provider: PackageOneDrive;
@@ -14,15 +18,10 @@ describe('OneDrive', () => {
   >;
   const tokenExpiryMs = 5 * 60 * 1000;
 
-  const baseCfg: OneDrivePrivateCfg = {
-    clientId: 'client-id',
-    tenantId: 'common',
-    syncFolderPath: 'Super Productivity',
-    accessToken: 'access-token',
-    refreshToken: 'refresh-token',
-    tokenExpiresAt: Date.now() + tokenExpiryMs,
-    encryptKey: 'enc',
-  };
+  // Built per test: an expiry computed once at load time runs out (minus the
+  // 60 s refresh skew) four minutes into a full suite run, and every later
+  // OneDrive spec then sees an expiring token and gets a refresh request.
+  let baseCfg: OneDrivePrivateCfg;
 
   const noop = (): void => undefined;
   const mockDeps: OneDriveDeps = {
@@ -54,6 +53,15 @@ describe('OneDrive', () => {
   let originalFetch: typeof fetch | undefined;
 
   beforeEach(() => {
+    baseCfg = {
+      clientId: 'client-id',
+      tenantId: 'common',
+      syncFolderPath: 'Super Productivity',
+      accessToken: 'access-token',
+      refreshToken: 'refresh-token',
+      tokenExpiresAt: Date.now() + tokenExpiryMs,
+      encryptKey: 'enc',
+    };
     cfgStoreSpy = jasmine.createSpyObj('SyncCredentialStore', ['load', 'setComplete']);
     cfgStoreSpy.setComplete.and.resolveTo();
     const deps: OneDriveDeps = {
@@ -512,18 +520,14 @@ describe('OneDrive', () => {
 
   it('should map 412 responses to UploadRevToMatchMismatchAPIError', async () => {
     cfgStoreSpy.load.and.resolveTo(baseCfg);
-
-    fetchSpy.and.resolveTo({
-      ok: false,
-      status: 412,
-      text: async () =>
-        JSON.stringify({
-          error: {
-            code: 'preconditionFailed',
-            message: 'ETag does not match',
-          },
-        }),
-    } as Response);
+    let uploads = 0;
+    fetchSpy.and.callFake(async (_url: string, init?: RequestInit) => {
+      if (init?.method === 'GET') return Response.json({ id: 'folder' });
+      expect(init?.method).toBe('PUT');
+      expect(new Headers(init?.headers).get('If-Match')).toBe('rev-old');
+      uploads++;
+      return Response.json({ error: { code: 'preconditionFailed' } }, { status: 412 });
+    });
 
     try {
       await provider.uploadFile('test.json', '{"a":1}', 'rev-old');
@@ -531,6 +535,82 @@ describe('OneDrive', () => {
     } catch (e) {
       expect((e as Error).name).toBe('UploadRevToMatchMismatchAPIError');
     }
+    expect(uploads).toBe(1);
+  });
+
+  for (const hasContentETag of [true, false]) {
+    it(`preserves a concurrent remote write when the content response ${hasContentETag ? 'has' : 'lacks'} an ETag`, async () => {
+      cfgStoreSpy.load.and.resolveTo(baseCfg);
+      const oldBody = 'original content';
+      const concurrentBody = 'content written by the other device';
+      let remoteBody = oldBody;
+      let remoteRev = '"rev-1"';
+      let concurrentWriteOccurred = false;
+      fetchSpy.and.callFake(async (url: string, init?: RequestInit) => {
+        if (init?.method === 'GET' && url.endsWith('/content')) {
+          const body = remoteBody;
+          const rev = remoteRev;
+          // The other device commits after the content read, before a separate
+          // metadata read. The origin honours conditional PUTs faithfully.
+          if (!concurrentWriteOccurred) {
+            remoteBody = concurrentBody;
+            remoteRev = '"rev-2"';
+            concurrentWriteOccurred = true;
+          }
+          return new Response(body, {
+            headers: hasContentETag ? { ETag: rev } : {},
+          });
+        }
+        if (init?.method === 'GET') return Response.json({ eTag: remoteRev });
+        if (init?.method === 'PUT') {
+          if (new Headers(init.headers).get('If-Match') !== remoteRev) {
+            return Response.json(
+              { error: { code: 'preconditionFailed' } },
+              { status: 412 },
+            );
+          }
+          remoteBody = String(init.body);
+          return Response.json({ eTag: '"rev-3"', size: remoteBody.length });
+        }
+        throw new Error(`Unexpected OneDrive request: ${init?.method}`);
+      });
+
+      try {
+        const downloaded = await provider.downloadFile('test.json');
+        await provider.uploadFile('test.json', downloaded.dataStr, downloaded.rev);
+      } catch (error) {
+        // Refusing the raced read/write is safe; returning a consistent newer
+        // body/revision pair is also safe. Other failures must fail the test.
+        expect(error).toBeInstanceOf(UploadRevToMatchMismatchAPIError);
+      }
+      expect(concurrentWriteOccurred).toBeTrue();
+      expect(remoteBody).toBe(concurrentBody);
+    });
+  }
+
+  it('downloads content without an ETag when the metadata revision stays unchanged', async () => {
+    cfgStoreSpy.load.and.resolveTo(baseCfg);
+    fetchSpy.and.callFake(async (url: string) =>
+      url.endsWith('/content')
+        ? new Response('unchanged content')
+        : Response.json({ eTag: '"rev-1"' }),
+    );
+
+    await expectAsync(provider.downloadFile('test.json')).toBeResolvedTo({
+      dataStr: 'unchanged content',
+      rev: '"rev-1"',
+    });
+  });
+
+  it('rejects a download when neither content nor metadata supplies a revision', async () => {
+    cfgStoreSpy.load.and.resolveTo(baseCfg);
+    fetchSpy.and.callFake(async (url: string) =>
+      url.endsWith('/content') ? new Response('content') : Response.json({}),
+    );
+
+    await expectAsync(provider.downloadFile('test.json')).toBeRejectedWithError(
+      NoRevAPIError,
+    );
   });
 
   it('should deduplicate concurrent token refresh requests', async () => {

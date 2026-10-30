@@ -12,6 +12,9 @@ import { getDbDateStr } from '../../../util/get-db-date-str';
 import { selectTodayTaskIds } from '../../work-context/store/work-context.selectors';
 import { DateService } from '../../../core/date/date.service';
 import { TimeTrackingActions } from '../../time-tracking/store/time-tracking.actions';
+import { moveProjectTaskToRegularList } from '../../project/store/project.actions';
+import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
+import { selectTaskEntities } from './task.selectors';
 
 describe('TaskRelatedModelEffects', () => {
   let effects: TaskRelatedModelEffects;
@@ -105,6 +108,31 @@ describe('TaskRelatedModelEffects', () => {
 
       dispatchAddTimeSpent(task);
     });
+
+    it('should NOT dispatch planTasksForToday for time back-filled on a past day', fakeAsync(() => {
+      const task = createTask('task-1', {
+        dueDay: undefined,
+        dueWithTime: undefined,
+      });
+      let emitted = false;
+      const subscription = effects.autoAddTodayTagOnTracking.subscribe(() => {
+        emitted = true;
+      });
+
+      actions$.next(
+        TimeTrackingActions.addTimeSpent({
+          task,
+          date: '2020-01-01',
+          duration: 1000,
+          isFromTrackingReminder: false,
+          isBackfill: true,
+        }),
+      );
+      tick();
+
+      expect(emitted).toBe(false);
+      subscription.unsubscribe();
+    }));
 
     it('should NOT dispatch planTasksForToday when tracked task has an existing dueDay', fakeAsync(() => {
       const task = createTask('task-1', {
@@ -250,6 +278,43 @@ describe('TaskRelatedModelEffects', () => {
         expect(emissions.length).toBe(0);
         subscription.unsubscribe();
       });
+    });
+  });
+
+  describe('moveTaskToDone$', () => {
+    const dropFromBacklogOnDone = (task: Task): Action[] => {
+      store.overrideSelector(selectTaskEntities, { [task.id]: task });
+      store.refreshState();
+      const emissions: Action[] = [];
+      const subscription = effects.moveTaskToDone$.subscribe((action) =>
+        emissions.push(action),
+      );
+      actions$.next(
+        moveProjectTaskToRegularList({
+          taskId: task.id,
+          afterTaskId: null,
+          workContextId: 'project-1',
+          src: 'BACKLOG',
+          target: 'DONE',
+        }),
+      );
+      subscription.unsubscribe();
+      return emissions;
+    };
+
+    it('marks an open backlog task done', () => {
+      expect(dropFromBacklogOnDone(createTask('task-1'))).toEqual([
+        TaskSharedActions.updateTask({
+          task: { id: 'task-1', changes: { isDone: true } },
+        }),
+      ]);
+    });
+
+    // A new `doneOn` stamp would turn a won't-do task into a completed one.
+    it('leaves a done backlog task alone', () => {
+      const wontDo = createTask('task-1', { isDone: true, doneOn: 5, wontDoOn: 5 });
+
+      expect(dropFromBacklogOnDone(wontDo)).toEqual([]);
     });
   });
 });

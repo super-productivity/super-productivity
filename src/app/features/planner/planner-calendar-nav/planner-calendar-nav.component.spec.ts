@@ -15,6 +15,7 @@ import {
 import { parseDbDateStr } from '../../../util/parse-db-date-str';
 import { getWeekRange } from '../../../util/get-week-range';
 import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
+import { getWeekdaysMin } from '../../../util/get-weekdays-min';
 
 // The app locale the component must follow. Deliberately NOT the browser's:
 // monthLabel used to pass no locale at all, so a German browser rendered
@@ -580,6 +581,14 @@ describe('PlannerCalendarNavComponent', () => {
       expect(labels.length).toBe(7);
       const unique = new Set(labels);
       expect(unique.size).toBe(7);
+    });
+
+    it('should name the days in the app locale, not the browser locale', () => {
+      mockLocalization.set({ firstDayOfWeek: 1 });
+      fixture.detectChanges();
+
+      const fr = getWeekdaysMin(MOCK_TEXT_LOCALE);
+      expect(component.dayLabels()).toEqual([...fr.slice(1), fr[0]]);
     });
 
     it('should use default first day of week when localization config is undefined', () => {

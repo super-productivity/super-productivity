@@ -4,6 +4,8 @@ This document tracks significant architectural decisions and patterns in the Sup
 
 It is also the **index** of accepted decisions: a decision recorded somewhere else — because it is long enough to stand alone, or because it is enforced as a contributor rule — must still be listed under [Decisions Recorded Elsewhere](#decisions-recorded-elsewhere).
 
+**Decisions:** [1. dueDay/dueWithTime Mutual Exclusivity Pattern](#1-duedayduewithtime-mutual-exclusivity-pattern) · [2. TODAY_TAG Virtual Tag Pattern](#2-today_tag-virtual-tag-pattern) · [3. Sync Package Boundary Direction](#3-sync-package-boundary-direction) · [4. Upload Conflict Safety via the lastSeq Row Lock Under RepeatableRead](#4-upload-conflict-safety-via-the-lastseq-row-lock-under-repeatableread) · [5. Project Completion: Decoupled Resolution over Atomic Multi-Entity Op](#5-project-completion-decoupled-resolution-over-atomic-multi-entity-op) · [6. Passkeys Stay Pending Until Email Verification](#6-passkeys-stay-pending-until-email-verification) · [7. Versioned Delete-Wins Semantics for Project Deletion](#7-versioned-delete-wins-semantics-for-project-deletion) · [8. Additive Data-Model Evolution over Schema Bumps](#8-additive-data-model-evolution-over-schema-bumps) · [9. Calendar Writes Live in Plugins, Behind Per-Provider Opt-In](#9-calendar-writes-live-in-plugins-behind-per-provider-opt-in) · [10. Vector Clocks over Server-Side Entity Versioning](#10-vector-clocks-over-server-side-entity-versioning)
+
 ## Active Patterns & Decisions
 
 ### 1. dueDay/dueWithTime Mutual Exclusivity Pattern
@@ -93,11 +95,12 @@ sync primitives.
 
 - ESLint rejects Angular, NgRx, app, shared-schema, sync-core deep imports, and
   dynamic imports inside package sources
-- `@sp/sync-core` has no runtime dependencies and owns vector-clock algorithms
-  used by client/server compatibility paths
-- `packages/shared-schema` compatibility-re-exports generic vector-clock
-  algorithms from `@sp/sync-core`; `@sp/sync-core` must not import
-  `@sp/shared-schema`
+- `@sp/sync-core` owns the vector-clock algorithms that the app and the
+  SuperSync server import directly; its only runtime dependencies are
+  `@noble/ciphers` and `hash-wasm`, used by its encryption primitives
+- `packages/shared-schema` owns schema contracts and validators shared by app
+  and server and has no dependency on `@sp/sync-core`; `@sp/sync-core` must
+  not import `@sp/shared-schema`
 - `@sp/sync-providers` depends on public `@sp/sync-core` plus provider runtime
   helpers, while app factories inject credentials, platform bridges, validators,
   OAuth routing, and config
@@ -466,10 +469,13 @@ The boundary today:
 
 **Implementation**:
 
-- Contract: `timeBlock: { upsertEvent, deleteEvent }` in
+- Contract: `timeBlock: { upsertEvent, deleteEvent, logWorkSession? }` in
   [`packages/plugin-api/src/issue-provider-types.ts`](packages/plugin-api/src/issue-provider-types.ts)
 - Driver: [`time-block-sync.effects.ts`](src/app/features/calendar-integration/time-block/time-block-sync.effects.ts),
   registered in [`feature-stores.module.ts`](src/app/root-store/feature-stores.module.ts)
+- Tracked work sessions (#6378, append-only, written only by the tracking device;
+  unwritten sessions wait in device-local `LS.WORK_SESSION_LOG`, never synced):
+  [`work-session-log.effects.ts`](src/app/features/calendar-integration/time-block/work-session-log.effects.ts)
 - Manual per-event actions (reschedule, delete): [`calendar-event-actions.service.ts`](src/app/features/calendar-integration/calendar-event-actions.service.ts)
 - Events themselves are **not** op-log entities — a converted task is an ordinary
   task with a derived stable id

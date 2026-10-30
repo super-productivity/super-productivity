@@ -118,3 +118,19 @@ describe('Azure DevOps Plugin - work item fetch (#9473)', () => {
     expect(results[0].dueWithTime).toBeUndefined();
   });
 });
+
+describe('Azure DevOps Plugin - done states (#9774)', () => {
+  const isDoneMapping = () =>
+    definition.fieldMappings!.find((m) => m.taskField === 'isDone')!;
+
+  it('declares Closed, Done and Removed as done states, but not Resolved', () => {
+    expect(definition.doneStates).toEqual(['closed', 'done', 'removed']);
+  });
+
+  it('does not mark a Resolved work item done', () => {
+    const ctx = { issueId: '1' };
+    expect(isDoneMapping().toTaskValue('Resolved', ctx)).toBe(false);
+    expect(isDoneMapping().toTaskValue('Closed', ctx)).toBe(true);
+    expect(isDoneMapping().toTaskValue('Removed', ctx)).toBe(true);
+  });
+});

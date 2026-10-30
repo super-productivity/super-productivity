@@ -1,5 +1,4 @@
 import {
-  ComponentFactoryResolver,
   Directive,
   ElementRef,
   EventEmitter,
@@ -170,7 +169,6 @@ export class MentionDirective implements OnChanges {
   private lastKeyCode: number = 0;
 
   private readonly _element = inject(ElementRef);
-  private readonly _componentResolver = inject(ComponentFactoryResolver);
   private readonly _viewContainerRef = inject(ViewContainerRef);
 
   ngOnChanges(changes: SimpleChanges): void {
@@ -506,9 +504,7 @@ export class MentionDirective implements OnChanges {
     this.listShownChange.emit(true);
 
     if (this.searchList == null) {
-      const componentFactory =
-        this._componentResolver.resolveComponentFactory(MentionListComponent);
-      const componentRef = this._viewContainerRef.createComponent(componentFactory);
+      const componentRef = this._viewContainerRef.createComponent(MentionListComponent);
       this.searchList = componentRef.instance;
       this.searchList.itemTemplate = this.mentionListTemplate;
       componentRef.instance['itemClick'].subscribe(() => {

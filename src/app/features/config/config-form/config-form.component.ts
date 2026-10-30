@@ -3,6 +3,7 @@ import {
   Component,
   computed,
   input,
+  linkedSignal,
   output,
 } from '@angular/core';
 import { FormlyFieldConfig, FormlyFormOptions, FormlyModule } from '@ngx-formly/core';
@@ -13,6 +14,7 @@ import { T } from '../../../t.const';
 import { exists } from '../../../util/exists';
 import { adjustToLiveFormlyForm } from '../../../util/adjust-to-live-formly-form';
 import { Log } from '../../../core/log';
+import { isShallowEqual } from '../../../util/is-shallow-equal';
 
 @Component({
   selector: 'config-form',
@@ -27,6 +29,16 @@ export class ConfigFormComponent {
   formCfg = input.required<FormlyFieldConfig[]>();
   sectionKey = input<GlobalConfigFormSectionKey | ProjectCfgFormKey>();
   fields = computed(() => adjustToLiveFormlyForm(this.formCfg()));
+  // formly (`immutable: true`) re-creates every field, dropping focus, unless
+  // [model] is the object it last emitted. The store hands a saved section back
+  // as a fresh but equal object, so keep the current model then (#8447).
+  model = linkedSignal<Record<string, unknown>, Record<string, unknown>>({
+    source: this.cfg,
+    computation: (cfg, previous) =>
+      cfg && previous?.value && isShallowEqual(cfg, previous.value)
+        ? previous.value
+        : cfg,
+  });
 
   save = output<{
     sectionKey: GlobalConfigFormSectionKey | ProjectCfgFormKey;
@@ -39,6 +51,7 @@ export class ConfigFormComponent {
     if (!cfg) {
       throw new Error('No config for ' + this.sectionKey());
     }
+    this.model.set(cfg);
 
     // Mark all fields as touched to show validation errors
     this.form.markAllAsTouched();

@@ -18,6 +18,9 @@
 <!---->
 
 @if (ip.isEnabled) {
+  @if (ip.issueProviderKey === 'PLAINSPACE') {
+    <plainspace-reconnect-notice [issueProvider]="ip"></plainspace-reconnect-notice>
+  }
   <!---->
   @if (
     ip.issueProviderKey === 'JIRA' &&
@@ -121,7 +124,7 @@
   } @else {
     <div
       class="item-list"
-      [@standardList]="issueItems()?.length"
+      [@standardList]="$safeNavigationMigration(issueItems()?.length)"
     >
       <!--  (cdkDropListDropped)="drop($event)"-->
 

@@ -20,6 +20,7 @@ import { SyncProviderId } from '../../../op-log/sync-providers/provider.const';
 import { SyncConfig } from '../../../features/config/global-config.model';
 import { SnackService } from '../../../core/snack/snack.service';
 import { T } from '../../../t.const';
+import { SyncLocalStateService } from '../../../op-log/sync/sync-local-state.service';
 
 describe('DialogSyncCfgComponent', () => {
   let component: DialogSyncCfgComponent;
@@ -31,6 +32,7 @@ describe('DialogSyncCfgComponent', () => {
   let mockGlobalConfigService: jasmine.SpyObj<GlobalConfigService>;
   let mockSnackService: jasmine.SpyObj<SnackService>;
   let mockMatDialog: jasmine.SpyObj<MatDialog>;
+  let mockSyncLocalStateService: jasmine.SpyObj<SyncLocalStateService>;
 
   const baseSyncConfig: SyncConfig = {
     isEnabled: false,
@@ -56,8 +58,15 @@ describe('DialogSyncCfgComponent', () => {
       'configuredAuthForSyncProviderIfNecessary',
       'sync',
       'markPromptEncryptionAfterSetupSync',
+      'forceUpload',
     ]);
     mockSyncWrapperService.sync.and.resolveTo();
+    mockSyncLocalStateService = jasmine.createSpyObj('SyncLocalStateService', [
+      'confirmOverwriteOfUndecryptableRemoteOps',
+    ]);
+    mockSyncLocalStateService.confirmOverwriteOfUndecryptableRemoteOps.and.returnValue(
+      true,
+    );
 
     mockProviderManager = jasmine.createSpyObj('SyncProviderManager', [
       'getProviderById',
@@ -90,6 +99,7 @@ describe('DialogSyncCfgComponent', () => {
         { provide: GlobalConfigService, useValue: mockGlobalConfigService },
         { provide: SnackService, useValue: mockSnackService },
         { provide: MatDialog, useValue: mockMatDialog },
+        { provide: SyncLocalStateService, useValue: mockSyncLocalStateService },
       ],
     });
     // Replace the Formly-based template with a minimal placeholder so we can
@@ -691,6 +701,9 @@ describe('DialogSyncCfgComponent', () => {
         encryptKey: 'stale-super-sync-key',
         isEncryptionEnabled: true,
       };
+      // The setup-encryption dialog is lazy-loaded with a native import(),
+      // which fakeAsync cannot flush; skipping it is not what this test covers.
+      spyOn(component as any, '_collectFileBasedSetupEncryptionKey').and.resolveTo(null);
 
       component.ngAfterViewInit();
       tick();
@@ -1005,6 +1018,29 @@ describe('DialogSyncCfgComponent', () => {
 
       expect(setComplete).toHaveBeenCalled();
       expect(mockProviderManager.notifyProviderTargetChanged).not.toHaveBeenCalled();
+    });
+  });
+
+  // #9256: Force Overwrite's clean slate deletes remote ops this device could
+  // not decrypt, and a device holding a kept prefix counts as synced.
+  describe('forceOverwrite() undecryptable remote ops guard', () => {
+    it('does not force upload when the user declines the warning', () => {
+      mockSyncLocalStateService.confirmOverwriteOfUndecryptableRemoteOps.and.returnValue(
+        false,
+      );
+
+      component.forceOverwrite();
+
+      expect(mockSyncWrapperService.forceUpload).not.toHaveBeenCalled();
+    });
+
+    it('force uploads when nothing is at stake or the user confirms', () => {
+      component.forceOverwrite();
+
+      expect(
+        mockSyncLocalStateService.confirmOverwriteOfUndecryptableRemoteOps,
+      ).toHaveBeenCalled();
+      expect(mockSyncWrapperService.forceUpload).toHaveBeenCalled();
     });
   });
 });

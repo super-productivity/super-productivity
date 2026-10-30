@@ -242,6 +242,17 @@ test.describe('@supersync time delta upload identity', () => {
         // The server already stored the original: this changed clock must use
         // receipt recovery on retry, rather than an unchanged duplicate upload.
         if (accepted) expect((await readDeltas(b))[0].op.v).not.toEqual(original.v);
+        // The time check passes mid-cycle. Let the cycle finish (its upload fails
+        // offline) so the reload below does not interrupt remote-op application.
+        await expect
+          .poll(async () =>
+            (await readStoredOps(b)).some(
+              ({ source, applicationStatus }) =>
+                source === 'remote' && applicationStatus !== 'applied',
+            ),
+          )
+          .toBe(false);
+        await expect(b.sync.syncSpinner).not.toBeVisible();
         await unrouteSuperSyncOps(b.page);
 
         // Reload across the durable conflict-resolution / upload-ack boundary.

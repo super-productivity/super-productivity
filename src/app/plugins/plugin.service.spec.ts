@@ -1,4 +1,4 @@
-import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { MatDialog } from '@angular/material/dialog';
@@ -93,7 +93,7 @@ describe('PluginService', () => {
     TestBed.configureTestingModule({
       providers: [
         PluginService,
-        provideHttpClient(),
+        provideHttpClient(withXhr()),
         provideHttpClientTesting(),
         provideMockStore(),
         {
@@ -114,7 +114,7 @@ describe('PluginService', () => {
           useValue: jasmine.createSpyObj<PluginSecurityService>('PluginSecurityService', [
             'analyzePluginCode',
             'hasElevatedPermissions',
-            'getPermissionDescriptions',
+            'getDeclaredApiAccess',
             'sanitizeHtml',
           ]),
         },

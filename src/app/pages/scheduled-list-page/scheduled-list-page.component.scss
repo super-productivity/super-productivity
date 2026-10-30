@@ -5,74 +5,6 @@
   padding: 0 !important;
 }
 
-:host planner-task {
-  margin-bottom: var(--s);
-  cursor: pointer;
-
-  &:active {
-    cursor: pointer;
-  }
-}
-
-:host planner-task ::ng-deep .drag-handle-ico {
-  visibility: hidden;
-}
-
-.due-date {
-  border-radius: var(--card-border-radius);
-  display: flex;
-  font-style: italic;
-  flex-direction: column;
-  align-items: center;
-  cursor: pointer;
-  padding-left: var(--s);
-  padding-right: var(--s);
-  min-height: var(--mat-mini-fab-size);
-  text-align: right;
-  opacity: 0.9;
-  overflow: hidden;
-  white-space: nowrap;
-  //flex: 1 0 auto;
-  flex-shrink: 0;
-
-  @include mq(xs) {
-    margin: 0 var(--s2);
-    margin-right: var(--s);
-    flex-direction: row;
-  }
-
-  @include mq(xs, max) {
-    font-size: 13px;
-    margin-right: calc(-1 * var(--s));
-  }
-
-  .time-left {
-    opacity: 0.9;
-  }
-
-  &:hover {
-    opacity: 1;
-  }
-
-  .date-and-time-left {
-    margin-top: auto;
-    margin-bottom: auto;
-    margin-right: var(--s2);
-  }
-
-  mat-icon {
-    display: none;
-    @include mq(xs) {
-      display: block;
-      opacity: 0.8;
-    }
-  }
-
-  &:hover mat-icon {
-    opacity: 1;
-  }
-}
-
 .repeat-task-cfg {
   margin-bottom: var(--s);
   padding: var(--s-half) var(--s2);
@@ -156,19 +88,6 @@
   }
 }
 
-.next-occurrence {
-  color: var(--text-color-muted);
-}
-
-.project {
-  margin-top: var(--s-half);
-  // to align with task title
-  margin-left: var(--s);
-  font-size: 11px;
-  display: flex;
-  align-items: center;
-}
-
 .no-scheduled-tasks {
   margin: var(--s);
   margin-top: var(--s2);
@@ -177,16 +96,4 @@
 .task-title {
   // to account for the task titles inner padding
   margin-top: -8px;
-}
-
-.action-btn {
-  display: block;
-
-  :host-context(.isNoTouchOnly) & {
-    opacity: 0.7;
-
-    &:hover {
-      opacity: 1;
-    }
-  }
 }

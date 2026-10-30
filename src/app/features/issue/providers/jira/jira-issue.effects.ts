@@ -15,6 +15,7 @@ import { JiraApiService } from './jira-api.service';
 import { JiraIssueReduced } from './jira-issue.model';
 import { SnackService } from '../../../../core/snack/snack.service';
 import { Task, TaskCopy } from '../../../tasks/task.model';
+import { isWontDoTask } from '../../../tasks/util/is-wont-do-task';
 import { TaskService } from '../../../tasks/task.service';
 import { EMPTY, from, Observable, of, throwError, timer } from 'rxjs';
 import { MatDialog } from '@angular/material/dialog';
@@ -54,7 +55,7 @@ export class JiraIssueEffects {
         ofType(TaskSharedActions.updateTask),
         filter(({ task }) => task.changes.isDone === true),
         concatMap(({ task }) => this._taskService.getByIdOnce$(task.id.toString())),
-        filter((task) => !!task),
+        filter((task) => !!task && !isWontDoTask(task)),
         concatMap((task) =>
           task.parentId
             ? this._taskService
@@ -244,7 +245,9 @@ export class JiraIssueEffects {
         // Guard against missing id and load full entity
         filter(({ task }) => task.id != null && task.id !== undefined),
         concatMap(({ task }) => this._taskService.getByIdOnce$(String(task.id))),
-        filter((task: Task) => task && task.issueType === JIRA_TYPE),
+        filter(
+          (task: Task) => task && task.issueType === JIRA_TYPE && !isWontDoTask(task),
+        ),
         concatMap((task: Task) => {
           if (!task.issueProviderId) {
             // Log warning but don't crash - task has issue data but no provider ID

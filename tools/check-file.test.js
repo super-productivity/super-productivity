@@ -7,8 +7,8 @@ const { spawnSync } = require('node:child_process');
 const repoRoot = path.join(__dirname, '..');
 const checkFile = path.join(__dirname, 'check-file.js');
 const tempFile = (name) => path.join(repoRoot, 'src/app/util', name);
-const run = (file) =>
-  spawnSync(process.execPath, [checkFile, file], {
+const run = (...files) =>
+  spawnSync(process.execPath, [checkFile, ...files], {
     cwd: repoRoot,
     encoding: 'utf8',
   });
@@ -52,5 +52,45 @@ test('checkFile propagates an actual lint failure', () => {
     assert.doesNotMatch(result.stdout, /All checks passed/);
   } finally {
     fs.rmSync(file, { force: true });
+  }
+});
+
+test('checkFile checks several files in one run', () => {
+  const valid = tempFile(`check-file-multi-valid-${process.pid}.ts`);
+  const valid2 = tempFile(`check-file-multi-valid2-${process.pid}.ts`);
+  const invalid = tempFile(`check-file-multi-invalid-${process.pid}.ts`);
+  try {
+    fs.writeFileSync(valid, 'export const checkFileMultiValue = 1;\n');
+    fs.writeFileSync(valid2, 'export const checkFileMultiValue2 = 1;\n');
+    fs.writeFileSync(invalid, 'const unusedMultiValue = 1;\n');
+
+    const passing = run(valid, valid2);
+    assert.equal(passing.status, 0, passing.stdout + passing.stderr);
+    assert.match(passing.stdout, /All checks passed/);
+
+    const failing = run(valid, invalid);
+    assert.notEqual(failing.status, 0, failing.stdout + failing.stderr);
+    assert.match(failing.stderr, /no-unused-vars/);
+    assert.match(failing.stderr, new RegExp(path.basename(invalid)));
+    assert.doesNotMatch(failing.stdout, /All checks passed/);
+  } finally {
+    fs.rmSync(valid, { force: true });
+    fs.rmSync(valid2, { force: true });
+    fs.rmSync(invalid, { force: true });
+  }
+});
+
+test('checkFile names a file prettier cannot parse in a multi-file run', () => {
+  const valid = tempFile(`check-file-syntax-valid-${process.pid}.ts`);
+  const broken = tempFile(`check-file-syntax-broken-${process.pid}.ts`);
+  try {
+    fs.writeFileSync(valid, 'export const checkFileSyntaxValue = 1;\n');
+    fs.writeFileSync(broken, 'const = ;\n');
+    const result = run(valid, broken);
+    assert.notEqual(result.status, 0, result.stdout + result.stderr);
+    assert.match(result.stderr, new RegExp(path.basename(broken)));
+  } finally {
+    fs.rmSync(valid, { force: true });
+    fs.rmSync(broken, { force: true });
   }
 });

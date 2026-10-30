@@ -51,6 +51,7 @@ import { SimpleCounterService } from '../../features/simple-counter/simple-count
 import { TODAY_TAG } from '../../features/tag/tag.const';
 import { TaskSummaryTablesComponent } from '../../features/tasks/task-summary-tables/task-summary-tables.component';
 import { Task, TaskWithSubTasks } from '../../features/tasks/task.model';
+import { isCompletedTask } from '../../features/tasks/util/is-wont-do-task';
 import { TaskService } from '../../features/tasks/task.service';
 import { TasksByTagComponent } from '../../features/tasks/tasks-by-tag/tasks-by-tag.component';
 import { TaskArchiveService } from '../../features/archive/task-archive.service';
@@ -72,6 +73,8 @@ import { getPluralKey } from '../../util/get-plural-key';
 import { shareReplayUntil } from '../../util/share-replay-until';
 import { unToggleCheckboxesInMarkdownTxt } from '../../util/untoggle-checkboxes-in-markdown-txt';
 import { PlanTasksTomorrowComponent } from './plan-tasks-tomorrow/plan-tasks-tomorrow.component';
+import { PlanTasksNextWeekComponent } from './plan-tasks-next-week/plan-tasks-next-week.component';
+import { isFinishWeekScope } from './finish-week.util';
 import {
   SimpleCounterSummaryItem,
   SimpleCounterSummaryItemComponent,
@@ -95,6 +98,7 @@ export const FINISH_DAY_FINAL_SYNC_TIMEOUT_MS = SYNC_WAIT_TIMEOUT_MS;
     MatTab,
     MatProgressSpinner,
     PlanTasksTomorrowComponent,
+    PlanTasksNextWeekComponent,
     MatButton,
     MatTooltip,
     AsyncPipe,
@@ -137,6 +141,11 @@ export class DailySummaryComponent implements OnInit, OnDestroy, AfterViewInit {
   readonly isIncludeYesterday: boolean;
   selectedTabIndex: number = 0;
   isForToday: boolean = true;
+  // `?scope=week` lets people who review on the weekend open the week version
+  readonly isFinishWeek: boolean = isFinishWeekScope(
+    this._dateService.getLogicalTodayDate(),
+    this._activatedRoute.snapshot.queryParamMap.get('scope'),
+  );
 
   // TODO remove one?
   dayStr: string = this._dateService.todayStr();
@@ -165,7 +174,10 @@ export class DailySummaryComponent implements OnInit, OnDestroy, AfterViewInit {
   simpleCounterSummaryItems: Signal<SimpleCounterSummaryItem[]> = computed(() => {
     return this._enabledSimpleCounters().map((sc) => ({
       ...sc,
-      streakDuration: getSimpleCounterStreakDuration(sc),
+      streakDuration: getSimpleCounterStreakDuration(
+        sc,
+        this._dateService.getStartOfNextDayDiffMs(),
+      ),
     }));
   });
 
@@ -197,7 +209,7 @@ export class DailySummaryComponent implements OnInit, OnDestroy, AfterViewInit {
   focusSessionDuration$ = this.focusSessionSummary$.pipe(map((summary) => summary.total));
 
   nrOfDoneTasks$: Observable<number> = this.tasksWorkedOnOrDoneOrRepeatableFlat$.pipe(
-    map((tasks) => tasks && tasks.filter((task) => !!task.isDone).length),
+    map((tasks) => tasks && tasks.filter(isCompletedTask).length),
   );
 
   totalNrOfTasks$: Observable<number> = this.tasksWorkedOnOrDoneOrRepeatableFlat$.pipe(
@@ -458,7 +470,9 @@ export class DailySummaryComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   private async _moveDoneToArchive(): Promise<void> {
-    const doneTasks = await this.workContextService.doneTasks$.pipe(take(1)).toPromise();
+    const doneTasks = await this.workContextService.doneTasksToArchive$
+      .pipe(take(1))
+      .toPromise();
     Log.log('[DailySummary] Moving done tasks to archive:', {
       count: doneTasks.length,
       taskIds: doneTasks.map((t) => t.id),

@@ -1,8 +1,7 @@
 import { inject, Injectable, WritableSignal } from '@angular/core';
-import { combineLatest, forkJoin, from, Observable, of } from 'rxjs';
+import { combineLatest, forkJoin, from, Observable, of, timer } from 'rxjs';
 import {
   catchError,
-  debounceTime,
   first,
   map,
   switchMap,
@@ -10,6 +9,7 @@ import {
   tap,
   withLatestFrom,
 } from 'rxjs/operators';
+import { Store } from '@ngrx/store';
 import { TaskService } from '../task.service';
 import { WorkContextService } from '../../work-context/work-context.service';
 import { TagService } from '../../tag/tag.service';
@@ -25,6 +25,7 @@ import { T } from '../../../t.const';
 import { IssueService } from '../../issue/issue.service';
 import { assertTruthy } from '../../../util/assert-truthy';
 import { TaskLog } from '../../../core/log';
+import { selectMainTasksWithoutProject } from '../store/task.selectors';
 
 @Injectable({
   providedIn: 'root',
@@ -37,6 +38,7 @@ export class AddTaskBarIssueSearchService {
   private _globalConfigService = inject(GlobalConfigService);
   private _snackService = inject(SnackService);
   private _issueService = inject(IssueService);
+  private _store = inject(Store);
 
   getFilteredIssueSuggestions$(
     inputText$: Observable<string>,
@@ -47,54 +49,59 @@ export class AddTaskBarIssueSearchService {
       tap(() => {
         isLoading.set(false);
       }),
-      debounceTime(300),
-      tap(() => {
-        isLoading.set(true);
-      }),
-      withLatestFrom(this._workContextService.activeWorkContextTypeAndId$),
-      switchMap(([searchTerm, { activeType, activeId }]) =>
-        isSearchIssueProviders$.pipe(
-          switchMap((isSearchMode) => {
-            if (!isSearchMode) {
-              // When search mode is OFF, don't search anything
-              return of([]);
-            }
-
-            if (!searchTerm?.length) {
-              return of([]);
-            }
-
-            // When search mode is ON, search both archived tasks and issues
-            const archivedTasksSearch$ =
-              activeType === WorkContextType.PROJECT
-                ? this._searchForProject$(searchTerm, activeId)
-                : this._searchForTag$(searchTerm, activeId);
-
-            const issueSearch$ = this._issueService
-              .searchAllEnabledIssueProviders$(searchTerm)
-              .pipe(
-                map((issueSuggestions) =>
-                  issueSuggestions.map(
-                    (issueSuggestion) =>
-                      ({
-                        title: issueSuggestion.title,
-                        titleHighlighted: issueSuggestion.titleHighlighted,
-                        issueData: issueSuggestion.issueData,
-                        issueType: issueSuggestion.issueType,
-                        issueProviderId: issueSuggestion.issueProviderId,
-                      }) as AddTaskSuggestion,
-                  ),
-                ),
-                catchError((err) => {
-                  TaskLog.warn('Issue provider search failed', err);
-                  return of([]);
-                }),
-              );
-
-            return combineLatest([archivedTasksSearch$, issueSearch$]).pipe(
-              map(([tasks, issues]) => [...tasks, ...issues]),
-            );
+      // Debounce inside switchMap so a keystroke also cancels a search still in
+      // flight: a slow result for an older term can never land on newer input.
+      switchMap((searchTerm) =>
+        timer(300).pipe(
+          tap(() => {
+            isLoading.set(true);
           }),
+          withLatestFrom(this._workContextService.activeWorkContextTypeAndId$),
+          switchMap(([, { activeType, activeId }]) =>
+            isSearchIssueProviders$.pipe(
+              switchMap((isSearchMode) => {
+                if (!isSearchMode) {
+                  // When search mode is OFF, don't search anything
+                  return of([]);
+                }
+
+                if (!searchTerm?.length) {
+                  return of([]);
+                }
+
+                // When search mode is ON, search both existing tasks and issues
+                const tasksSearch$ =
+                  activeType === WorkContextType.PROJECT
+                    ? this._searchForProject$(searchTerm, activeId)
+                    : this._searchForTag$(searchTerm, activeId);
+
+                const issueSearch$ = this._issueService
+                  .searchAllEnabledIssueProviders$(searchTerm)
+                  .pipe(
+                    map((issueSuggestions) =>
+                      issueSuggestions.map(
+                        (issueSuggestion) =>
+                          ({
+                            title: issueSuggestion.title,
+                            titleHighlighted: issueSuggestion.titleHighlighted,
+                            issueData: issueSuggestion.issueData,
+                            issueType: issueSuggestion.issueType,
+                            issueProviderId: issueSuggestion.issueProviderId,
+                          }) as AddTaskSuggestion,
+                      ),
+                    ),
+                    catchError((err) => {
+                      TaskLog.warn('Issue provider search failed', err);
+                      return of([]);
+                    }),
+                  );
+
+                return combineLatest([tasksSearch$, issueSearch$]).pipe(
+                  map(([tasks, issues]) => [...tasks, ...issues]),
+                );
+              }),
+            ),
+          ),
         ),
       ),
       tap(() => {
@@ -205,7 +212,7 @@ export class AddTaskBarIssueSearchService {
     projectId: string,
   ): Observable<AddTaskSuggestion[]> {
     if (searchTerm && searchTerm.length > 0) {
-      return this._workContextService.backlogTasks$.pipe(
+      const backlog$ = this._workContextService.backlogTasks$.pipe(
         map((tasks) =>
           tasks
             .filter((task) => this._filterBacklog(searchTerm, task))
@@ -218,6 +225,13 @@ export class AddTaskBarIssueSearchService {
             })),
         ),
       );
+      const otherProjects$ = this._searchOtherContext$(
+        searchTerm,
+        this._store.select(selectMainTasksWithoutProject, { projectId }),
+      );
+      return combineLatest([backlog$, otherProjects$]).pipe(
+        map(([backlog, other]) => [...backlog, ...other]),
+      );
     } else {
       return of([]);
     }
@@ -228,45 +242,55 @@ export class AddTaskBarIssueSearchService {
     currentTagId: string,
   ): Observable<AddTaskSuggestion[]> {
     if (searchTerm && searchTerm.length > 0) {
-      return this._taskService.getAllParentWithoutTag$(currentTagId).pipe(
-        take(1),
-        map((tasks) =>
-          tasks
-            .filter((task) => this._filterBacklog(searchTerm, task))
-            .map((task) => ({
-              title: task.title,
-              taskId: task.id,
-              taskIssueId: task.issueId || undefined,
-              issueType: task.issueType || undefined,
-              projectId: task.projectId,
-              isFromOtherContextAndTagOnlySearch: true,
-              tagIds: task.tagIds,
-            })),
-        ),
-        switchMap((tasks) =>
-          !!tasks.length
-            ? forkJoin(
-                tasks.map((task) => {
-                  return from(this._getCtxForTaskSuggestion(task)).pipe(
-                    first(),
-                    map((ctx) => ({
-                      ...task,
-                      ctx: ctx
-                        ? {
-                            ...ctx,
-                            icon: ctx.icon || null,
-                          }
-                        : undefined,
-                    })),
-                  );
-                }),
-              )
-            : of([]),
-        ),
+      return this._searchOtherContext$(
+        searchTerm,
+        this._taskService.getAllParentWithoutTag$(currentTagId),
       );
     } else {
       return of([]);
     }
+  }
+
+  private _searchOtherContext$(
+    searchTerm: string,
+    tasks$: Observable<Task[]>,
+  ): Observable<AddTaskSuggestion[]> {
+    return tasks$.pipe(
+      take(1),
+      map((tasks) =>
+        tasks
+          .filter((task) => this._filterBacklog(searchTerm, task))
+          .map((task) => ({
+            title: task.title,
+            taskId: task.id,
+            taskIssueId: task.issueId || undefined,
+            issueType: task.issueType || undefined,
+            projectId: task.projectId,
+            isFromOtherContextAndTagOnlySearch: true,
+            tagIds: task.tagIds,
+          })),
+      ),
+      switchMap((tasks) =>
+        !!tasks.length
+          ? forkJoin(
+              tasks.map((task) => {
+                return from(this._getCtxForTaskSuggestion(task)).pipe(
+                  first(),
+                  map((ctx) => ({
+                    ...task,
+                    ctx: ctx
+                      ? {
+                          ...ctx,
+                          icon: ctx.icon || null,
+                        }
+                      : undefined,
+                  })),
+                );
+              }),
+            )
+          : of([]),
+      ),
+    );
   }
 
   private _filterBacklog(searchText: string, task: Task): boolean {

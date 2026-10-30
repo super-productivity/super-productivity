@@ -18,6 +18,10 @@ import { ActionType, isLwwUpdatePayload, OpType } from '../core/operation.types'
 import type { EntityConflict, Operation } from '../core/operation.types';
 import type { EntityType } from '../core/operation.types';
 import { RECREATE_FALLBACK } from '../core/recreate-fallback.const';
+import type {
+  MixedSourceWrittenOperation,
+  OperationLogStoreService,
+} from '../persistence/operation-log-store.service';
 import {
   compareVectorClocks,
   mergeVectorClocks,
@@ -293,6 +297,50 @@ export const fieldPatchGroups = (
 };
 
 /**
+ * Types without a RECREATE_FALLBACK whose per-field resolution re-sends ONE
+ * full `'replace'` snapshot of the merged entity instead of `'patch'` rows
+ * (#10958). Every released client (v18.15.0 on) already receives whole-entity
+ * replace snapshots for these types and applies them with `setOne`, or
+ * `addOne` when it applied a concurrent delete, so the entity it recreates is
+ * whole: a partial patch would be added raw, invalid, with no repair rule.
+ *
+ * Admission needs a user-reported loss (fix intake), an adapter entity, and
+ * no derived upkeep on LWW apply: NOTE stays out (#10393 decision 4).
+ */
+export const MERGED_SNAPSHOT_TYPES: ReadonlySet<EntityType> = new Set<EntityType>([
+  'TASK_REPEAT_CFG',
+]);
+
+/**
+ * The entity a `MERGED_SNAPSHOT_TYPES` resolution re-sends, or undefined for
+ * whole-entity LWW: the state on the resolving device after the remote ops
+ * apply and the local fields that won are patched on top, without cleared
+ * fields (a replace drops them).
+ *
+ * The remote side must be readable ops only: an LWW row's values are never
+ * read (#10393 decision 5), so the snapshot could not carry them and would
+ * overwrite them on every device.
+ */
+export const mergedSnapshotState = (
+  current: Record<string, unknown>,
+  sides: FieldPatchSides,
+  groups: ReturnType<typeof localWinningFieldGroups>,
+): Record<string, unknown> | undefined => {
+  const { remoteOps, payloadKey, entityId } = sides;
+  if (groups.length === 0 || remoteOps.some((op) => isLwwUpdatePayload(op.payload))) {
+    return undefined;
+  }
+  const merged: Record<string, unknown> = {
+    ...current,
+    ...mergeChangedFields(fieldOps(remoteOps), payloadKey, entityId),
+    ...Object.assign({}, ...groups.map(({ changes }) => changes)),
+  };
+  return Object.fromEntries(
+    Object.entries(merged).filter(([, value]) => value !== undefined),
+  );
+};
+
+/**
  * One conflict per entity: detection emits one conflict per remote op, all
  * sharing the entity's pending local ops. Two resolvers with staggered
  * batches must build a patch from the SAME two sides, so an entity's
@@ -333,50 +381,50 @@ export const keptLocalTimeDeltas = (
 };
 
 /**
- * SuperSync only: move kept pending deltas and newly written field patches past
- * durable remote rows. Caller holds OPERATION_LOG, preventing upload selection
- * of the fresh patches until their clocks are final. Never include local-win
- * snapshots: their stale fields could then dominate newer remote edits. Older
- * pending patches are also excluded: only deltas have receipt recovery.
+ * Kept deltas SuperSync re-clocks eagerly: beside merged patches and readable
+ * remote wins. Undefined when there is none.
  */
-export const rebaseKeptTimeDeltas = async (
-  store: {
-    getOpById: (opId: string) => Promise<
-      | {
-          source: string;
-          syncedAt?: number;
-          rejectedAt?: number;
-          reducerRejectedAt?: number;
-        }
-      | undefined
-    >;
-    rebasePendingLocalOps: (
-      opIds: readonly string[],
-      clockToDominate: VectorClock,
-    ) => Promise<Operation[]>;
-  },
-  kept: { opIds: Set<string>; clockToDominate: VectorClock },
-  successorIds: string[],
-  assertFence?: (context: string) => void,
-): Promise<Operation[]> => {
-  const pendingDeltaIds: string[] = [];
-  for (const opId of kept.opIds) {
-    const entry = await store.getOpById(opId);
-    if (
-      entry?.source === 'local' &&
-      entry.syncedAt === undefined &&
-      entry.rejectedAt === undefined &&
-      entry.reducerRejectedAt === undefined
-    ) {
-      pendingDeltaIds.push(opId);
-    }
+export const keptTimeDeltasToRebase = (
+  merged: { conflict: EntityConflict }[],
+  resolutions: { conflict: EntityConflict; winner: 'local' | 'remote' }[],
+): { opIds: Set<string>; clockToDominate: VectorClock } | undefined => {
+  const kept = keptLocalTimeDeltas([
+    ...merged.map((m) => m.conflict),
+    ...timeDeltasSurvivingRemoteWins(resolutions, 'task'),
+  ]);
+  return kept.opIds.size > 0 ? kept : undefined;
+};
+
+type OpLogAppender = Pick<
+  OperationLogStoreService,
+  'appendBatchSkipDuplicates' | 'appendMixedSourceBatchSkipDuplicates'
+>;
+type RebaseKept = NonNullable<
+  Parameters<OperationLogStoreService['appendMixedSourceBatchSkipDuplicates']>[1]
+>['rebaseKept'];
+
+/**
+ * Writes LWW remote winners as pending rows. With `rebaseKept`, the kept deltas
+ * re-clock in the same commit: a crash between two commits would leave a stale
+ * delta that the server rejects and folds into an absolute update (#10614).
+ */
+export const appendRemoteWinners = async (
+  store: OpLogAppender,
+  ops: Operation[],
+  rebaseKept: RebaseKept,
+): Promise<MixedSourceWrittenOperation[]> => {
+  const options = { pendingApply: true };
+  if (rebaseKept) {
+    const batch = { ops, source: 'remote' as const, options };
+    return (await store.appendMixedSourceBatchSkipDuplicates([batch], { rebaseKept }))
+      .written;
   }
-  if (pendingDeltaIds.length === 0) return [];
-  assertFence?.('kept time delta rebase');
-  return store.rebasePendingLocalOps(
-    [...pendingDeltaIds, ...successorIds],
-    kept.clockToDominate,
+  const { writtenOps, seqs } = await store.appendBatchSkipDuplicates(
+    ops,
+    'remote',
+    options,
   );
+  return writtenOps.map((op, i) => ({ op, seq: seqs[i], source: 'remote' }));
 };
 
 /**

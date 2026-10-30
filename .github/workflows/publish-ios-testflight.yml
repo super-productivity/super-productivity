@@ -58,7 +58,7 @@ jobs:
 
       - name: Download request metadata
         if: steps.request.outputs.requested == 'true'
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v4
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v4
         with:
           name: ios-testflight-request-${{ github.event.workflow_run.id }}-${{ github.event.workflow_run.run_attempt }}
           path: ${{ runner.temp }}/request
@@ -148,7 +148,7 @@ jobs:
           persist-credentials: false
 
       - name: Download unsigned archive
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v4
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v4
         with:
           name: ios-testflight-unsigned-${{ github.event.workflow_run.id }}-${{ github.event.workflow_run.run_attempt }}
           path: ${{ runner.temp }}/raw
@@ -271,7 +271,7 @@ jobs:
           echo "validated=true" >> "$GITHUB_OUTPUT"
 
       - name: Upload validated archive
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ios-testflight-validated-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/App.xcarchive.tar.gz
@@ -311,7 +311,7 @@ jobs:
           persist-credentials: false
 
       - name: Download validated archive
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v4
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v4
         with:
           name: ios-testflight-validated-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/validated
@@ -327,11 +327,11 @@ jobs:
       - name: Configure iOS signing
         uses: ./.github/actions/setup-ios-signing
         with:
-          mac_certs: ${{ secrets.mac_certs }}
-          mac_certs_password: ${{ secrets.mac_certs_password }}
-          ios_provision_profile: ${{ secrets.IOS_PROVISION_PROFILE }}
-          ios_share_provision_profile: ${{ secrets.IOS_SHARE_PROVISION_PROFILE }}
-          ios_widget_provision_profile: ${{ secrets.IOS_WIDGET_PROVISION_PROFILE }}
+          mac_certs: ${{ secrets.apple_distribution_cert }}
+          mac_certs_password: ${{ secrets.apple_distribution_cert_password }}
+          ios_provision_profile: ${{ secrets.IOS_APP_STORE_PROFILE }}
+          ios_share_provision_profile: ${{ secrets.IOS_SHARE_APP_STORE_PROFILE }}
+          ios_widget_provision_profile: ${{ secrets.IOS_WIDGET_APP_STORE_PROFILE }}
 
       - name: Create ExportOptions.plist
         run: |
@@ -386,8 +386,13 @@ jobs:
             -exportPath "$RUNNER_TEMP/ipa-output" \
             -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist"
 
+      - name: Verify App Group entitlement
+        run: |
+          unzip -q "$RUNNER_TEMP"/ipa-output/*.ipa -d "$RUNNER_TEMP/ipa-check"
+          tools/assert-ios-app-group-entitlements.sh "$RUNNER_TEMP/ipa-check/Payload/App.app"
+
       - name: Set up Ruby and fastlane
-        uses: ruby/setup-ruby@14594264cd68ce8a2345dd349bc3d138a4ef85c8 # v1.327.0
+        uses: ruby/setup-ruby@26e5b7d197ebf60545ee9667bcbace0be11ccaec # v1.334.0
         with:
           ruby-version: '3.3'
           bundler-cache: true

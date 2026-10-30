@@ -352,6 +352,54 @@ export const SuperSyncDeleteAllDataResponseSchema = z
   })
   .passthrough();
 
+/**
+ * Agent task capture (`/api/capture/*`). Only fields the app consumes are
+ * required; the rest pass through (see SuperSyncReplaceTokenResponseSchema).
+ * `status` stays a loose string so a newer server status reads as "nothing
+ * to do" instead of a validation failure.
+ */
+export const SuperSyncCaptureItemSchema = z
+  .object({
+    itemId: z.string().min(1),
+    taskId: z.string().min(1),
+    ciphertext: z.string().min(1),
+    createdAt: z.number(),
+  })
+  .passthrough();
+
+export const SuperSyncCaptureClaimResponseSchema = z
+  .object({
+    status: z.string(),
+    items: z.array(SuperSyncCaptureItemSchema).optional(),
+  })
+  .passthrough();
+
+export const SuperSyncCaptureGrantSchema = z
+  .object({
+    id: z.string().min(1),
+    clientName: z.string(),
+    createdAt: z.number(),
+    lastUsedAt: z.number().nullable(),
+    expiresAt: z.number(),
+    pendingCount: z.number(),
+  })
+  .passthrough();
+
+export const SuperSyncCaptureGrantsResponseSchema = z
+  .object({
+    grants: z.array(SuperSyncCaptureGrantSchema),
+    // Optional: older servers do not send it.
+    otherPendingCount: z.number().optional(),
+  })
+  .passthrough();
+
+export const SuperSyncCaptureTokenResponseSchema = z
+  .object({
+    token: z.string().min(1),
+    grant: SuperSyncCaptureGrantSchema,
+  })
+  .passthrough();
+
 export type SuperSyncOpType = (typeof SUPER_SYNC_OP_TYPES)[number];
 export type SuperSyncImportReason = (typeof SUPER_SYNC_IMPORT_REASONS)[number];
 export type SuperSyncSnapshotReason = (typeof SUPER_SYNC_SNAPSHOT_REASONS)[number];
@@ -388,4 +436,25 @@ export type SuperSyncRestoreSnapshotResponse = z.infer<
 >;
 export type SuperSyncDeleteAllDataResponse = z.infer<
   typeof SuperSyncDeleteAllDataResponseSchema
+>;
+export type SuperSyncCaptureItem = z.infer<typeof SuperSyncCaptureItemSchema>;
+export type SuperSyncCaptureClaimResponse = z.infer<
+  typeof SuperSyncCaptureClaimResponseSchema
+>;
+export type SuperSyncCaptureGrant = z.infer<typeof SuperSyncCaptureGrantSchema>;
+export type SuperSyncCaptureGrantsResponse = z.infer<
+  typeof SuperSyncCaptureGrantsResponseSchema
+>;
+export type SuperSyncCaptureTokenResponse = z.infer<
+  typeof SuperSyncCaptureTokenResponseSchema
+>;
+
+export const SuperSyncCaptureConnectCodeResponseSchema = z
+  .object({
+    code: z.string().regex(/^[0-9A-HJKMNP-TV-Z]{5}-[0-9A-HJKMNP-TV-Z]{5}$/),
+    expiresAt: z.number().int().positive(),
+  })
+  .loose();
+export type SuperSyncCaptureConnectCodeResponse = z.infer<
+  typeof SuperSyncCaptureConnectCodeResponseSchema
 >;

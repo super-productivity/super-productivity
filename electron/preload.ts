@@ -14,7 +14,13 @@ import {
 import {
   LocalRestApiRequestPayload,
   LocalRestApiResponsePayload,
+  LocalRestApiState,
 } from './shared-with-frontend/local-rest-api.model';
+import {
+  AssistantAccessCredentialResult,
+  AssistantAccessScope,
+  AssistantAccessState,
+} from './shared-with-frontend/assistant-access.model';
 import {
   createJiraPreloadApiConsumer,
   toPayloadOnlyIpcListener,
@@ -165,7 +171,7 @@ const ea: ElectronAPI = {
   relaunch: () => _send('RELAUNCH'),
   exit: () => _send('EXIT'),
   flashFrame: () => _send('FLASH_FRAME'),
-  showOrFocus: () => _send('SHOW_OR_FOCUS'),
+  showOrFocus: (opts?: { isReminder?: boolean }) => _send('SHOW_OR_FOCUS', opts),
   lockScreen: () => _send('LOCK_SCREEN'),
   shutdownNow: () => _send('SHUTDOWN_NOW'),
   reloadMainWin: () => _send('RELOAD_MAIN_WIN'),
@@ -195,6 +201,8 @@ const ea: ElectronAPI = {
   setDoneRegisterBeforeClose: (id) => _send('BEFORE_CLOSE_DONE', { id }),
 
   setProgressBar: (args) => _send('SET_PROGRESS_BAR', args),
+  setDueTaskBadge: (count, iconDataUrl) =>
+    _send('SET_DUE_TASK_BADGE', count, iconDataUrl),
 
   sendAppSettingsToElectron: (globalCfg) =>
     _send('TRANSFER_SETTINGS_TO_ELECTRON', globalCfg),
@@ -296,6 +304,20 @@ const ea: ElectronAPI = {
   getLocalRestApiToken: () => _invoke(IPC.LOCAL_REST_API_GET_TOKEN) as Promise<string>,
   regenerateLocalRestApiToken: () =>
     _invoke(IPC.LOCAL_REST_API_REGENERATE_TOKEN) as Promise<string>,
+  getLocalRestApiState: () =>
+    _invoke(IPC.LOCAL_REST_API_GET_STATE) as Promise<LocalRestApiState>,
+  setLocalRestApiEnabled: (isEnabled: boolean) =>
+    _invoke(IPC.LOCAL_REST_API_SET_ENABLED, isEnabled) as Promise<LocalRestApiState>,
+  getAssistantAccessState: () =>
+    _invoke(IPC.ASSISTANT_ACCESS_GET_STATE) as Promise<AssistantAccessState>,
+  setAssistantAccessEnabled: (isEnabled: boolean) =>
+    _invoke(IPC.ASSISTANT_ACCESS_SET_ENABLED, isEnabled) as Promise<AssistantAccessState>,
+  setAssistantAccessScopes: (scopes: AssistantAccessScope[]) =>
+    _invoke(IPC.ASSISTANT_ACCESS_SET_SCOPES, scopes) as Promise<AssistantAccessState>,
+  rotateAssistantAccessCredential: () =>
+    _invoke(
+      IPC.ASSISTANT_ACCESS_ROTATE_CREDENTIAL,
+    ) as Promise<AssistantAccessCredentialResult>,
 };
 
 // Expose ea to window for ipc-event.ts using contextBridge for context isolation

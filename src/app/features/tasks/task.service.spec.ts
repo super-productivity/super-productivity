@@ -1078,6 +1078,46 @@ describe('TaskService', () => {
       expect(addCall![0].date).toBe(syncCall![0].date);
     });
 
+    it('should not mark time for today as back-filled', () => {
+      const task = createMockTask('task-1');
+
+      service.addTimeSpentAndSync(task, 5000, '2026-01-05');
+
+      expect(store.dispatch).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          type: '[TimeTracking] Add time spent',
+          date: '2026-01-05',
+          isBackfill: false,
+        }),
+      );
+    });
+
+    it('should add and sync time for a past day as back-filled', () => {
+      const task = createMockTask('task-1');
+      const flushOneSpy = spyOn(taskTimeSync, 'flushOne');
+
+      service.addTimeSpentAndSync(task, 5000, '2026-01-02');
+
+      expect(flushOneSpy).toHaveBeenCalledWith('task-1');
+      expect(store.dispatch).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          type: '[TimeTracking] Add time spent',
+          task,
+          duration: 5000,
+          date: '2026-01-02',
+          isBackfill: true,
+        }),
+      );
+      expect(store.dispatch).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          type: '[TimeTracking] Sync time spent',
+          taskId: 'task-1',
+          duration: 5000,
+          date: '2026-01-02',
+        }),
+      );
+    });
+
     it('should not dispatch when duration is zero', () => {
       const task = createMockTask('task-1');
       (store.dispatch as jasmine.Spy).calls.reset();
@@ -1126,6 +1166,25 @@ describe('TaskService', () => {
 
   // Note: convertToMainTask requires complex selector mocking that doesn't work well
   // with the current test setup. It's better tested via integration tests.
+
+  describe('focusLastFocusedTask', () => {
+    it('restores the same connected row even when another copy has the same id', () => {
+      const original = document.createElement('task');
+      const duplicate = document.createElement('task');
+      original.id = duplicate.id = 't-focus-lifetime';
+      original.tabIndex = duplicate.tabIndex = 0;
+      document.body.append(original, duplicate);
+      try {
+        original.focus();
+        original.blur();
+        service.focusLastFocusedTask();
+        expect(document.activeElement).toBe(original);
+      } finally {
+        original.remove();
+        duplicate.remove();
+      }
+    });
+  });
 
   describe('focusTaskById', () => {
     let created: HTMLElement[];

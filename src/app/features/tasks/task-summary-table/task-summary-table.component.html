@@ -121,11 +121,20 @@
             class="undo"
             >undo
           </mat-icon>
-          <mat-icon
-            aria-label="Mark as done"
-            class="check"
-            >check
-          </mat-icon>
+          <!-- Keeps the check class so the done styling applies unchanged. -->
+          @if (isWontDoTask(task)) {
+            <mat-icon
+              aria-label="Finished as won't do"
+              class="check"
+              >close
+            </mat-icon>
+          } @else {
+            <mat-icon
+              aria-label="Mark as done"
+              class="check"
+              >check
+            </mat-icon>
+          }
         </button>
       </td>
     </ng-container>

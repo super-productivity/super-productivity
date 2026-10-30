@@ -13,6 +13,40 @@ import {
 } from './plugin-iframe.util';
 
 describe('handlePluginMessage()', () => {
+  it('routes iframe key listing to the owning plugin API', async () => {
+    const listSyncedDataKeys = jasmine
+      .createSpy('listSyncedDataKeys')
+      .and.resolveTo(['attachment:task:file']);
+    const source = jasmine.createSpyObj<{ postMessage: jasmine.Spy }>('iframe', [
+      'postMessage',
+    ]);
+    const bridge = {
+      createBoundMethods: () => ({ listSyncedDataKeys }),
+    } as unknown as PluginBridgeService;
+    await handlePluginMessage(
+      {
+        source,
+        data: {
+          type: PluginIframeMessageType.API_CALL,
+          bridgeToken: 'test-bridge-token',
+          bridgeGeneration: 4,
+          method: 'listSyncedDataKeys',
+          callId: 45,
+          args: ['attachment:task:'],
+        },
+      } as unknown as MessageEvent,
+      createConfig(bridge),
+    );
+    expect(listSyncedDataKeys).toHaveBeenCalledOnceWith('attachment:task:');
+    expect(source.postMessage).toHaveBeenCalledWith(
+      {
+        type: PluginIframeMessageType.API_RESPONSE,
+        callId: 45,
+        result: ['attachment:task:file'],
+      },
+      '*',
+    );
+  });
   const createConfig = (
     pluginBridge: PluginBridgeService,
     boundMethods?: PluginIframeConfig['boundMethods'],
@@ -38,6 +72,105 @@ describe('handlePluginMessage()', () => {
     bridgeToken: 'test-bridge-token',
     bridgeGeneration: 4,
     boundMethods,
+  });
+
+  const loadGeneratedIframeApi = (
+    config: PluginIframeConfig,
+  ): {
+    frame: { PluginAPI?: { triggerSync: () => Promise<void> } };
+    parent: { postMessage: jasmine.Spy };
+    source: { postMessage: (data: unknown) => void };
+  } => {
+    const listeners = new Map<string, (event: MessageEvent) => void>();
+    const parent = { postMessage: jasmine.createSpy('postMessage') };
+    const frame: {
+      parent: typeof parent;
+      addEventListener: (name: string, listener: (event: MessageEvent) => void) => void;
+      PluginAPI?: { triggerSync: () => Promise<void> };
+    } = { parent, addEventListener: (name, listener) => listeners.set(name, listener) };
+    const wrapped = createPluginApiScript(config).trim();
+    expect(wrapped.startsWith('<script>')).toBeTrue();
+    expect(wrapped.endsWith('</script>')).toBeTrue();
+    const code = wrapped.slice('<script>'.length, -'</script>'.length);
+    new Function('window', 'setTimeout', code)(frame, window.setTimeout);
+    const source = {
+      postMessage: (data: unknown) =>
+        listeners.get('message')!({ source: parent, data } as unknown as MessageEvent),
+    };
+    return { frame, parent, source };
+  };
+
+  for (const fails of [false, true]) {
+    it(`routes generated triggerSync to the bound API and ${fails ? 'rejects' : 'resolves'} its result`, async () => {
+      let finish!: () => void;
+      let fail!: (error: Error) => void;
+      const operation = new Promise<void>((resolve, reject) => {
+        finish = resolve;
+        fail = reject;
+      });
+      const triggerSync = jasmine.createSpy('triggerSync').and.returnValue(operation);
+      const config = createConfig({
+        createBoundMethods: () => ({ triggerSync }),
+      } as unknown as PluginBridgeService);
+      const { frame, parent, source } = loadGeneratedIframeApi(config);
+      const pending = frame.PluginAPI!.triggerSync();
+      const call = parent.postMessage.calls.mostRecent().args[0];
+      expect(call.method).toBe('triggerSync');
+      const handled = handlePluginMessage(
+        { source, data: call } as unknown as MessageEvent,
+        config,
+      );
+      expect(triggerSync).toHaveBeenCalledOnceWith();
+      let settled = false;
+      pending.then(
+        () => (settled = true),
+        () => (settled = true),
+      );
+      await Promise.resolve();
+      expect(settled).toBeFalse();
+      if (fails) {
+        const rejected = expectAsync(pending).toBeRejectedWithError('sync unavailable');
+        fail(new Error('sync unavailable'));
+        await handled;
+        await rejected;
+      } else {
+        finish();
+        await handled;
+        expect(await pending).toBeUndefined();
+      }
+    });
+  }
+
+  it('does not cancel the bound sync when the generated iframe request times out', async () => {
+    let finish!: () => void;
+    let completed = false;
+    const operation = new Promise<void>((resolve) => (finish = resolve)).then(() => {
+      completed = true;
+    });
+    const triggerSync = jasmine.createSpy('triggerSync').and.returnValue(operation);
+    const config = createConfig({
+      createBoundMethods: () => ({ triggerSync }),
+    } as unknown as PluginBridgeService);
+    jasmine.clock().install();
+    try {
+      const { frame, parent, source } = loadGeneratedIframeApi(config);
+      const pending = frame.PluginAPI!.triggerSync();
+      const call = parent.postMessage.calls.mostRecent().args[0];
+      const handled = handlePluginMessage(
+        { source, data: call } as unknown as MessageEvent,
+        config,
+      );
+      const rejected = expectAsync(pending).toBeRejectedWithError('API call timeout');
+      jasmine.clock().tick(30001);
+      await rejected;
+      expect(completed).toBeFalse();
+      expect(triggerSync).toHaveBeenCalledOnceWith();
+      finish();
+      await handled;
+      expect(completed).toBeTrue();
+    } finally {
+      jasmine.clock().uninstall();
+    }
   });
 
   it('rebuilds iframe dialog button handlers and returns the selected result', async () => {
@@ -460,11 +593,16 @@ describe('handlePluginMessage()', () => {
 
     expect(script).toContain('Promise.resolve()');
     expect(script).toContain('.then(() => handler())');
+    expect(script).toContain(
+      "listSyncedDataKeys: (prefix) => callApi('listSyncedDataKeys', [prefix])",
+    );
     expect(script).toContain('Unknown dialog button error');
     expect(script).toContain('const bridgeToken = "test-bridge-token"');
     expect(script).toContain('const bridgeGeneration = 4');
     expect(script).toContain("getSelectedTask: () => callApi('getSelectedTask')");
     expect(script).toContain("getFocusedTask: () => callApi('getFocusedTask')");
+    // a snack action callback cannot be cloned across postMessage
+    expect(script).toContain('const { action, ...rest } = cfg || {};');
     expect(script).toContain(
       "request: (url, options) => callApi('request', [url, options])",
     );

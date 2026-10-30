@@ -1,6 +1,7 @@
 import { computed, effect, inject, Injectable, signal, untracked } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { ofType } from '@ngrx/effects';
+import { NavigationEnd, Router } from '@angular/router';
 import { Action, Store } from '@ngrx/store';
 import { Observable, Subscription } from 'rxjs';
 import { concatMap, filter, first } from 'rxjs/operators';
@@ -13,29 +14,26 @@ import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 import { GlobalConfigService } from '../config/global-config.service';
 import { ProjectService } from '../project/project.service';
 import { INBOX_PROJECT } from '../project/project.const';
+import { TODAY_TAG } from '../tag/tag.const';
 import { TaskService } from '../tasks/task.service';
 import { TaskFocusService } from '../tasks/task-focus.service';
 import { selectTaskEntities } from '../tasks/store/task.selectors';
 import { WorkContextService } from '../work-context/work-context.service';
+import { QuickTourService } from './quick-tour.service';
 
 export type OnboardingStep =
   | 'create-task'
   | 'task-swipe-left'
-  | 'task-swipe-right'
-  | 'explore-inbox';
+  | 'today-and-inbox'
+  // Shown once on the next page when the user left Today on the last tip.
+  | 'quick-tour-offer'
+  // "No thanks": names the way back, then guidance ends.
+  | 'quick-tour-declined';
+
+/** How long the "It's under Help → Quick tour" line stays after No thanks. */
+export const QUICK_TOUR_DECLINED_MS = 2500;
 
 type OnboardingPhase = 'idle' | 'await-first-task' | OnboardingStep;
-
-const readExampleTaskIds = (): string[] => {
-  try {
-    const ids: unknown = JSON.parse(localStorage.getItem(LS.EXAMPLE_TASK_IDS) ?? '[]');
-    return Array.isArray(ids)
-      ? ids.filter((id): id is string => typeof id === 'string')
-      : [];
-  } catch {
-    return [];
-  }
-};
 
 /** More projects than the default ones means this is not a new user. */
 const RETURNING_USER_MIN_PROJECTS = 3;
@@ -48,13 +46,19 @@ const RETURNING_USER_MIN_PROJECTS = 3;
  * 1. Point at "+" until the user creates their first real task (any local
  *    creation path; example tasks and repeat instances do not count).
  * 2. Phones only: on the task row, "swipe left for more actions" (advances once
- *    the task menu was opened and closed), then "swipe right to mark it as done"
- *    (ends once a task is marked done).
- * 3. If the seeded example tasks are still in the Inbox, point at the Inbox once
- *    (ends when the Inbox is opened). Otherwise they are easy to never find, and
- *    they explain what else can be switched on.
+ *    the task menu was opened and closed, a task is marked done or the first
+ *    task is deleted).
+ * 3. Point at the first task's "Inbox" label and explain it (#8824): it shows
+ *    in Today because it is planned for today, and lives in the Inbox because
+ *    it has no project. Only shown while that is true.
  *
- * No step advances on a timer. Reloading after the first task ends guidance.
+ * The last tip offers the quick tour (Show me more / No thanks). Leaving Today
+ * while it shows offers it once more on the next page; leaving again, ✕ or an
+ * earlier tip closed ends guidance without it. Help → Quick tour always works.
+ *
+ * Starting a Help tour ends guidance, so only one of them is ever on screen.
+ * No step advances on a timer; only the No thanks line goes away on its own.
+ * Reloading after the first task ends guidance.
  */
 @Injectable({ providedIn: 'root' })
 export class OnboardingHintService {
@@ -64,9 +68,11 @@ export class OnboardingHintService {
   private _taskFocusService = inject(TaskFocusService);
   private _projectService = inject(ProjectService);
   private _globalConfigService = inject(GlobalConfigService);
+  private _router = inject(Router);
   private _workContextService = inject(WorkContextService);
   private _store = inject(Store);
   private _localActions$: Observable<Action> = inject(LOCAL_ACTIONS);
+  private _quickTourService = inject(QuickTourService);
 
   private _phase = signal<OnboardingPhase>('idle');
   private _wasTaskMenuOpened = false;
@@ -74,6 +80,8 @@ export class OnboardingHintService {
   private _startSub: Subscription | null = null;
   private _taskAddSub: Subscription | null = null;
   private _taskDoneSub: Subscription | null = null;
+  private _navigationSub: Subscription | null = null;
+  private _declinedTimeout: ReturnType<typeof setTimeout> | null = null;
   private _taskEntities = this._store.selectSignal(selectTaskEntities);
   private _activeWorkContextId = toSignal(this._workContextService.activeWorkContextId$, {
     initialValue: null,
@@ -88,16 +96,23 @@ export class OnboardingHintService {
     return task && !task.isDone ? task.id : null;
   });
 
-  /** Hints hide while the composer, a task panel or task menu is open. */
+  /**
+   * Hints hide while the composer, the phone menu, a task panel or task menu is
+   * open. They sit above the phone menu otherwise.
+   */
   readonly currentStep = computed<OnboardingStep | null>(() => {
     const phase = this._phase();
-    if (phase === 'idle' || this._layoutService.isShowAddTaskBar()) {
+    if (
+      phase === 'idle' ||
+      this._layoutService.isShowAddTaskBar() ||
+      this._layoutService.isMobileSideNavOpen()
+    ) {
       return null;
     }
     if (phase === 'await-first-task') {
       return 'create-task';
     }
-    if (phase === 'task-swipe-left' || phase === 'task-swipe-right') {
+    if (phase === 'task-swipe-left' || phase === 'today-and-inbox') {
       const isTaskUiOpen =
         this._taskFocusService.isTaskContextMenuOpen() ||
         this._taskService.selectedTaskId() !== null;
@@ -126,16 +141,31 @@ export class OnboardingHintService {
       if (isMenuOpen) {
         this._wasTaskMenuOpened = true;
       } else if (this._wasTaskMenuOpened) {
-        this._phase.set('task-swipe-right');
+        untracked(() => this._advanceToLastStep());
       }
     });
 
-    // The Inbox tip is done once the Inbox is open.
+    // A deleted first task leaves nothing to swipe or explain; the hint would
+    // otherwise stay stuck on an empty list. The task menu closes before the
+    // delete is confirmed, so this also covers the last step.
+    // Moving to a project can leave the row on Today, but invalidates the Inbox tip.
     effect(() => {
+      const phase = this._phase();
+      const id = this.firstTaskId();
       if (
-        this._phase() === 'explore-inbox' &&
-        this._activeWorkContextId() === INBOX_PROJECT.id
+        (phase === 'task-swipe-left' || phase === 'today-and-inbox') &&
+        id &&
+        (!this._taskEntities()[id] ||
+          (phase === 'today-and-inbox' &&
+            this._taskEntities()[id]?.projectId !== INBOX_PROJECT.id))
       ) {
+        untracked(() => this._markDone());
+      }
+    });
+
+    // Help → Quick tour during guidance: only one of them is on screen.
+    effect(() => {
+      if (this._quickTourService.isActive() && untracked(this._phase) !== 'idle') {
         untracked(() => this._markDone());
       }
     });
@@ -176,16 +206,28 @@ export class OnboardingHintService {
       )
       .subscribe(({ task }) => this._onFirstTaskCandidate(task.id));
 
-    // Marking a task done (swipe right, checkbox, ...) completes the swipe hints.
+    // The last tip is done once the user moves on to any page, e.g. the Inbox;
+    // the tour is offered there once more, and leaving again ends it.
+    this._navigationSub = this._router.events
+      .pipe(filter((event) => event instanceof NavigationEnd))
+      .subscribe(() => {
+        const phase = this._phase();
+        if (phase === 'today-and-inbox') {
+          this._phase.set('quick-tour-offer');
+        } else if (phase === 'quick-tour-offer' || phase === 'quick-tour-declined') {
+          this._markDone();
+        }
+      });
+
+    // Marking a task done (swipe right, checkbox, ...) completes the swipe hint.
     this._taskDoneSub = this._localActions$
       .pipe(
         ofType(TaskSharedActions.updateTask),
         filter(({ task }) => task.changes.isDone === true),
       )
       .subscribe(() => {
-        const phase = this._phase();
-        if (phase === 'task-swipe-left' || phase === 'task-swipe-right') {
-          this._advanceToExplore();
+        if (this._phase() === 'task-swipe-left') {
+          this._advanceToLastStep();
         }
       });
   }
@@ -218,8 +260,23 @@ export class OnboardingHintService {
     return isTouchActive() && this._layoutService.isShowMobileBottomNav();
   }
 
+  /** ✕ / Esc: ends guidance quietly, without offering the tour. */
   skip(): void {
     this._markDone();
+  }
+
+  /** Show me more: the tour continues on the task the last tip explained. */
+  showMeMore(): void {
+    const taskId = this.firstTaskId();
+    this._markDone();
+    this._quickTourService.start(taskId, this._wasTaskMenuOpened);
+  }
+
+  /** No thanks: say where the tour lives, then go. */
+  decline(): void {
+    this._phase.set('quick-tour-declined');
+    this._clearDeclinedTimeout();
+    this._declinedTimeout = setTimeout(() => this._markDone(), QUICK_TOUR_DECLINED_MS);
   }
 
   private _onFirstTaskCandidate(taskId: string): void {
@@ -234,21 +291,33 @@ export class OnboardingHintService {
       this._wasTaskMenuOpened = false;
       this._phase.set('task-swipe-left');
     } else {
-      this._advanceToExplore();
+      this._advanceToLastStep();
     }
   }
 
-  /** Point at the Inbox only while the seeded example tasks are still there. */
-  private _advanceToExplore(): void {
-    const entities = this._taskEntities();
-    const hasExampleTasksInInbox = readExampleTaskIds().some((id) => {
-      const task = entities[id];
-      return !!task && task.projectId === INBOX_PROJECT.id && !task.isDone;
-    });
-    if (hasExampleTasksInInbox && this._activeWorkContextId() !== INBOX_PROJECT.id) {
-      this._phase.set('explore-inbox');
+  /**
+   * The last tip explains the first task's own place, so it only shows where
+   * that holds: in the Inbox and on Today. A task created in a project or
+   * elsewhere, or already deleted, ends guidance instead, so there is no place
+   * to offer the tour; Help → Quick tour still has it.
+   */
+  private _advanceToLastStep(): void {
+    const id = this.firstTaskId();
+    const task = id ? this._taskEntities()[id] : undefined;
+    if (
+      task?.projectId === INBOX_PROJECT.id &&
+      this._activeWorkContextId() === TODAY_TAG.id
+    ) {
+      this._phase.set('today-and-inbox');
     } else {
       this._markDone();
+    }
+  }
+
+  private _clearDeclinedTimeout(): void {
+    if (this._declinedTimeout !== null) {
+      clearTimeout(this._declinedTimeout);
+      this._declinedTimeout = null;
     }
   }
 
@@ -261,6 +330,9 @@ export class OnboardingHintService {
     this._taskAddSub = null;
     this._taskDoneSub?.unsubscribe();
     this._taskDoneSub = null;
+    this._navigationSub?.unsubscribe();
+    this._navigationSub = null;
+    this._clearDeclinedTimeout();
     this.firstTaskId.set(null);
     this._phase.set('idle');
   }

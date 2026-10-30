@@ -18,7 +18,7 @@
  *   password\t<base64 utf-8 password>
  *   entry\t<name>\t<base64 utf-8 plaintext>\t<ciphertext, already base64>
  */
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { clearSessionKeyCache, encrypt } from '../packages/sync-core/dist/index.mjs';
 
@@ -43,6 +43,21 @@ const ENTRIES = [
     `{"actionPayload":{"task":{"id":"t2","notes":"${'lorem ipsum '.repeat(700)}"}},"entityChanges":[]}`,
   ],
 ];
+
+// Op payloads the app really produces (pinned by background-reminder-ops.spec.ts),
+// consumed by BackgroundReminderOpFixturesTest.kt. The name prefix must match it.
+const reminderOps = JSON.parse(
+  await readFile(
+    new URL(
+      '../android/app/src/test/resources/background-reminder-ops.json',
+      import.meta.url,
+    ),
+    'utf8',
+  ),
+);
+for (const { name, op } of reminderOps) {
+  ENTRIES.push([`reminder-op:${name}`, JSON.stringify(op.payload)]);
+}
 
 const outFile = resolve(process.argv[2] ?? 'android/app/build/live-crypto-fixtures.tsv');
 const b64 = (s) => Buffer.from(s, 'utf8').toString('base64');

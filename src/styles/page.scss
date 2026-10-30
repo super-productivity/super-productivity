@@ -249,7 +249,7 @@ body {
 }
 
 blockquote {
-  border-left: 4px solid rgba(var(--c-accent), 1);
+  border-left: 4px solid var(--c-accent);
   margin: 20px 0;
   padding: 1px 20px;
 }

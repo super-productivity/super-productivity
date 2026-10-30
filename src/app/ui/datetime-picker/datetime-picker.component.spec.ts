@@ -294,6 +294,24 @@ describe('DateTimePickerComponent', () => {
     expect(calendar.activeDate).toEqual(differentDate);
   });
 
+  it('should keep the browsed month when time focus defaults the date to today (#10528)', () => {
+    const calendar = component.calendar()!;
+    const browsedDate = new Date();
+    browsedDate.setMonth(browsedDate.getMonth() + 2, 1);
+    browsedDate.setHours(0, 0, 0, 0);
+    calendar.activeDate = browsedDate;
+
+    let emittedDate: Date | undefined;
+    component.dateSelected.subscribe((d) => (emittedDate = d));
+    component.onTimeFocus();
+
+    // parent dialog feeds the defaulted date back in
+    fixture.componentRef.setInput('selectedDate', new Date(emittedDate!));
+    fixture.detectChanges();
+
+    expect(calendar.activeDate).toEqual(browsedDate);
+  });
+
   it('should not update activeDate when calendar is focused', () => {
     const calendar = component.calendar()!;
     const initialDate = new Date(2026, 4, 6);

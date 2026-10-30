@@ -5,8 +5,11 @@ import { CurrentProviderPrivateCfg } from '../../../op-log/core/types/sync.types
 import type { SuperSyncPrivateCfg } from '@sp/sync-providers/super-sync';
 import type { DropboxPrivateCfg } from '@sp/sync-providers/dropbox';
 import type { WebdavPrivateCfg } from '@sp/sync-providers/webdav';
+import { ReminderConfig } from '../../config/global-config.model';
 import {
   bridgeCommandEqual,
+  getBackgroundReminderSettings,
+  getCapturePublicKeyForNative,
   getSuperSyncCredentialBridgeCommand,
   SuperSyncCredentialBridgeCommand,
 } from './android-sync-bridge.effects';
@@ -223,5 +226,54 @@ describe('AndroidSyncBridgeEffects - credential mirroring logic', () => {
 
       sub.unsubscribe();
     });
+  });
+});
+
+describe('AndroidSyncBridgeEffects - reminder settings mirroring logic', () => {
+  const reminderCfg = (overrides: Partial<ReminderConfig>): ReminderConfig => ({
+    isCountdownBannerEnabled: true,
+    countdownDuration: 60000,
+    ...overrides,
+  });
+
+  it('defaults to enabled, non-alarm-style when the config is missing', () => {
+    expect(getBackgroundReminderSettings(undefined)).toEqual({
+      isDisabled: false,
+      useAlarmStyle: false,
+    });
+  });
+
+  it('mirrors disabled reminders', () => {
+    expect(
+      getBackgroundReminderSettings(reminderCfg({ disableReminders: true })).isDisabled,
+    ).toBe(true);
+  });
+
+  it('mirrors alarm-style reminders', () => {
+    expect(
+      getBackgroundReminderSettings(reminderCfg({ useAlarmStyleReminders: true }))
+        .useAlarmStyle,
+    ).toBe(true);
+  });
+});
+
+describe('getCapturePublicKeyForNative', () => {
+  const key = { v: 1, privateKeyPkcs8: 'priv', publicKeySpki: 'pub' };
+
+  it('mirrors the public key while capture is on and SuperSync is logged in', () => {
+    expect(getCapturePublicKeyForNative(key, true)).toBe('pub');
+  });
+
+  it('clears it when capture is off', () => {
+    expect(getCapturePublicKeyForNative(null, true)).toBe('');
+    expect(getCapturePublicKeyForNative(undefined, true)).toBe('');
+  });
+
+  it('clears it without SuperSync credentials, so shares stay local', () => {
+    expect(getCapturePublicKeyForNative(key, false)).toBe('');
+  });
+
+  it('never mirrors a key from a newer client: its format may differ', () => {
+    expect(getCapturePublicKeyForNative({ ...key, v: 2 }, true)).toBe('');
   });
 });

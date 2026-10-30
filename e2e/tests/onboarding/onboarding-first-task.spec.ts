@@ -5,15 +5,19 @@ import {
   attachPageErrorCollector,
   installDevErrorDialogHandler,
 } from '../../utils/runtime-errors';
-import { waitForStatePersistence } from '../../utils/waits';
+import { waitForMenuSettled, waitForStatePersistence } from '../../utils/waits';
 
 const pixel5TestOptions = { ...devices['Pixel 5'] };
 // Browser type is worker-scoped and cannot be overridden inside a describe block.
 Reflect.deleteProperty(pixel5TestOptions, 'defaultBrowserType');
 
-const INBOX_TIP = 'Some optional tips are waiting in your Inbox.';
+// Up to the inline icons, whose ligature names are part of the text content.
+const MODEL_TIP = 'This task is planned for today, so it shows in';
+const INBOX_TIP = 'Tasks without a project of your own stay in';
 const INBOX_NAV_ITEM =
   'magic-side-nav nav-item[data-project-id="INBOX_PROJECT"] .nav-link';
+const TODAY_NAV_ITEM = 'magic-side-nav nav-item[data-tag-id="TODAY"] .nav-link';
+const MORE_FALLBACK = "There's more already switched on";
 
 /** First run; `withExamples: false` skips seeding the Inbox example tasks. */
 const openFreshApp = async (
@@ -26,6 +30,35 @@ const openFreshApp = async (
     });
   }
   await page.goto('/');
+};
+
+/** The last tip sits below the task's "Inbox" chip, its arrow pointing at it. */
+const expectHintOnInboxChip = async (page: Page, taskTitle: string): Promise<void> => {
+  const chipTarget = page
+    .locator('task')
+    .filter({ hasText: taskTitle })
+    .first()
+    .locator('tag-list tag')
+    .first();
+  const hint = page.locator('onboarding-hint');
+  await expect(chipTarget).toContainText('Inbox');
+  await expect
+    .poll(async () => {
+      const target = await chipTarget.boundingBox();
+      const chip = await hint.locator('.hint-chip').boundingBox();
+      const arrow = await hint.locator('.hint-arrow').boundingBox();
+      if (!target || !chip || !arrow) {
+        return false;
+      }
+      const halfArrow = arrow.width / 2;
+      const arrowCenter = arrow.x + halfArrow;
+      return (
+        chip.y >= target.y + target.height &&
+        arrowCenter >= target.x &&
+        arrowCenter <= target.x + target.width
+      );
+    })
+    .toBe(true);
 };
 
 const addTaskViaComposer = async (page: Page, title: string): Promise<void> => {
@@ -59,7 +92,7 @@ test.describe('First-run onboarding', () => {
     await page.close();
   });
 
-  test('ends by pointing at the Inbox, where the example tasks wait', async ({
+  test('ends by explaining Today and the Inbox, where the example tasks wait', async ({
     isolatedContext,
   }) => {
     const page = await isolatedContext.newPage();
@@ -70,22 +103,20 @@ test.describe('First-run onboarding', () => {
       'Click + to add your first task',
     );
 
-    await addTaskViaComposer(page, `Inbox tip task ${Date.now()}`);
+    const title = `Inbox tip task ${Date.now()}`;
+    await addTaskViaComposer(page, title);
 
     const hint = page.locator('onboarding-hint');
+    await expect(hint).toContainText(MODEL_TIP);
     await expect(hint).toContainText(INBOX_TIP);
-    const inboxNavItem = page.locator(INBOX_NAV_ITEM);
-    await expect
-      .poll(async () => {
-        const target = await inboxNavItem.boundingBox();
-        const chip = await hint.locator('.hint-chip').boundingBox();
-        return !!target && !!chip && chip.y > target.y + target.height;
-      })
-      .toBe(true);
+    await expect(hint).not.toContainText('☰');
+    await expectHintOnInboxChip(page, title);
 
-    await inboxNavItem.click();
-    await expect(hint).toHaveCount(0);
-    await expect(page.locator('task').filter({ hasText: 'Go further' })).toBeVisible();
+    await page.locator(INBOX_NAV_ITEM).click();
+    await expect(hint).toContainText(MORE_FALLBACK);
+    await expect(
+      page.locator('task').filter({ hasText: 'Optional: getting started tips' }),
+    ).toBeVisible();
     assertNoRuntimeBrowserErrors(runtimeErrors, 'onboarding inbox');
     await page.close();
   });
@@ -105,8 +136,7 @@ test.describe('First-run onboarding', () => {
     // Focus returns to + after the composer closes; move it so the + tooltip
     // does not sit on top of the hint's close button.
     await page.mouse.click(640, 600);
-    await expect(hint).toContainText("You're all set");
-    await hint.getByRole('button', { name: 'Got it' }).click();
+    await hint.getByRole('button', { name: 'Close tip' }).click();
     await expect(hint).toHaveCount(0);
 
     await waitForStatePersistence(page);
@@ -114,6 +144,78 @@ test.describe('First-run onboarding', () => {
     await expect(page.locator('task-list').first()).toBeVisible();
     await expect(page.locator('onboarding-hint')).toHaveCount(0);
     assertNoRuntimeBrowserErrors(runtimeErrors, 'onboarding dismiss');
+    await page.close();
+  });
+
+  test('the last tip follows its task and ends once the task is out of view', async ({
+    isolatedContext,
+  }) => {
+    const page = await isolatedContext.newPage();
+    const runtimeErrors = attachPageErrorCollector(page, 'onboarding follow');
+    installDevErrorDialogHandler(page, 'onboarding follow');
+    await openFreshApp(page, { withExamples: false });
+    const title = `Followed tip task ${Date.now()}`;
+    await addTaskViaComposer(page, title);
+    const hint = page.locator('onboarding-hint');
+    await expect(hint).toContainText(MODEL_TIP);
+    const task = page.locator('task').filter({ hasText: title }).first();
+
+    // Menus open on the very row the tip points at: the tip steps aside.
+    await task.click({ button: 'right' });
+    await expect(page.locator('.mat-mdc-menu-content')).toBeVisible();
+    await expect(hint).toHaveCount(0);
+    // A click during the open animation does not close the menu.
+    await waitForMenuSettled(page);
+    await page.mouse.click(900, 650);
+    await expect(page.locator('.mat-mdc-menu-content')).toHaveCount(0);
+    await expect(hint).toContainText(MODEL_TIP);
+
+    // Done moves the row to the completed list; the tip moves with it.
+    await task.locator('done-toggle').click();
+    await expectHintOnInboxChip(page, title);
+
+    // Once its task is out of view the tip ends instead of pointing at nothing.
+    await page.getByText('Completed Tasks', { exact: false }).first().click();
+    await expect(hint).toHaveCount(0);
+    await expect
+      .poll(() => page.evaluate(() => localStorage.getItem('SUP_ONBOARDING_HINTS_DONE')))
+      .toBe('true');
+    assertNoRuntimeBrowserErrors(runtimeErrors, 'onboarding follow');
+    await page.close();
+  });
+
+  test('points at the bottom-nav + in a narrow window used with a mouse', async ({
+    isolatedContext,
+  }) => {
+    const page = await isolatedContext.newPage();
+    const runtimeErrors = attachPageErrorCollector(page, 'narrow mouse onboarding');
+    installDevErrorDialogHandler(page, 'narrow mouse onboarding');
+    // Phone-width layout (bottom nav, no header +) with a fine pointer.
+    await page.setViewportSize({ width: 400, height: 800 });
+    await openFreshApp(page, { withExamples: false });
+    await expect(page.locator('body')).toHaveClass(/isMousePrimary/);
+
+    const hint = page.locator('onboarding-hint');
+    await expect(hint).toContainText('Click + to add your first task');
+    const addBtn = page.getByRole('button', { name: 'Add new task' });
+    // The hint, arrow included, sits fully above + once the bottom nav has settled.
+    await expect
+      .poll(async () => {
+        const btn = await addBtn.boundingBox();
+        const chip = await hint.locator('.hint-chip').boundingBox();
+        const arrow = await hint.locator('.hint-arrow').boundingBox();
+        return (
+          !!btn &&
+          !!chip &&
+          !!arrow &&
+          Math.max(chip.y + chip.height, arrow.y + arrow.height) <= btn.y
+        );
+      })
+      .toBe(true);
+
+    await addBtn.click();
+    await expect(page.locator('add-task-bar.global')).toBeVisible();
+    assertNoRuntimeBrowserErrors(runtimeErrors, 'narrow mouse onboarding');
     await page.close();
   });
 
@@ -172,10 +274,60 @@ test.describe('First-run onboarding', () => {
     await page.close();
   });
 
+  test('explains Today and the Inbox even when no tips were seeded', async ({
+    isolatedContext,
+  }) => {
+    const page = await isolatedContext.newPage();
+    const runtimeErrors = attachPageErrorCollector(page, 'onboarding model');
+    installDevErrorDialogHandler(page, 'onboarding model');
+    await openFreshApp(page, { withExamples: false });
+    await addTaskViaComposer(page, `Model tip task ${Date.now()}`);
+
+    const hint = page.locator('onboarding-hint');
+    await expect(hint).toContainText(MODEL_TIP);
+    await expect(hint).toContainText(INBOX_TIP);
+
+    // Moving on offers the quick tour once more; moving on again ends guidance.
+    await page.locator(INBOX_NAV_ITEM).click();
+    await expect(hint).toContainText(MORE_FALLBACK);
+    await page.locator(TODAY_NAV_ITEM).click();
+    await expect(hint).toHaveCount(0);
+    await expect
+      .poll(() => page.evaluate(() => localStorage.getItem('SUP_ONBOARDING_HINTS_DONE')))
+      .toBe('true');
+    assertNoRuntimeBrowserErrors(runtimeErrors, 'onboarding model');
+    await page.close();
+  });
+
+  test('a tour from the Help menu replaces the hints and can be closed', async ({
+    isolatedContext,
+  }) => {
+    const page = await isolatedContext.newPage();
+    const runtimeErrors = attachPageErrorCollector(page, 'onboarding tour');
+    installDevErrorDialogHandler(page, 'onboarding tour');
+    await openFreshApp(page, { withExamples: true });
+    const hint = page.locator('onboarding-hint');
+    await expect(hint).toContainText('Click + to add your first task');
+
+    await page.locator('magic-side-nav').getByText('Help', { exact: true }).click();
+    await page.getByText('How to: Create a task', { exact: true }).click();
+
+    const tourStep = page.locator('.shepherd-element');
+    await expect(tourStep).toContainText('Create a task');
+    await expect(hint).toHaveCount(0);
+
+    // Every step has a close button.
+    await tourStep.locator('.shepherd-cancel-icon').click();
+    await expect(tourStep).toHaveCount(0);
+    await expect(hint).toHaveCount(0);
+    assertNoRuntimeBrowserErrors(runtimeErrors, 'onboarding tour');
+    await page.close();
+  });
+
   test.describe('mobile', () => {
     test.use(pixel5TestOptions);
 
-    test('keeps + uncovered, then teaches the swipe gestures', async ({
+    test('keeps + uncovered, then teaches swiping and the Inbox', async ({
       isolatedContext,
     }) => {
       const page = await isolatedContext.newPage();
@@ -219,10 +371,108 @@ test.describe('First-run onboarding', () => {
         })
         .toBe(true);
 
-      // Marking the task done (swipe right or checkbox) completes guidance.
+      // Marking the task done (swipe right or checkbox) leads to the last tip,
+      // on the task's "Inbox" chip, saying where the Inbox is on phones.
       await task.locator('done-toggle').tap();
+      await expect(hint).toContainText(MODEL_TIP);
+      await expect(hint).toContainText('Inbox, under ☰');
+      await expectHintOnInboxChip(page, 'My first mobile task');
+      // The tip would sit above the opened menu: it steps aside until it closes.
+      await page.locator('mobile-bottom-nav nav > button:last-of-type').tap();
+      await expect(page.locator(INBOX_NAV_ITEM)).toBeVisible();
+      await expect(hint).toHaveCount(0);
+      await page.locator('.mobile-menu-close').tap();
+      await expect(page.locator(INBOX_NAV_ITEM)).toBeHidden();
+      await expect(hint).toContainText(INBOX_TIP);
+      await expect(hint).toContainText('Inbox, under ☰');
+      await hint.getByRole('button', { name: 'Close tip' }).tap();
       await expect(hint).toHaveCount(0);
       assertNoRuntimeBrowserErrors(runtimeErrors, 'mobile onboarding');
+      await page.close();
+    });
+
+    test('deleting the first task from its menu ends the swipe tips', async ({
+      isolatedContext,
+    }) => {
+      const page = await isolatedContext.newPage();
+      const runtimeErrors = attachPageErrorCollector(page, 'onboarding delete');
+      installDevErrorDialogHandler(page, 'onboarding delete');
+
+      await openFreshApp(page, { withExamples: false });
+      await expect(page.locator('onboarding-hint')).toContainText(
+        'Tap + to add your first task',
+      );
+      await page.getByRole('button', { name: 'Add new task' }).tap();
+      const input = page.locator('add-task-bar.global .main-input');
+      await input.fill('Task to delete');
+      await input.press('Enter');
+      await expect(page.locator('add-task-bar.global')).toBeHidden();
+
+      const hint = page.locator('onboarding-hint');
+      await expect(hint).toContainText('Swipe task left for more actions');
+      const task = page.locator('task').filter({ hasText: 'Task to delete' }).first();
+      // The keyboard route to the menu that swipe-left opens.
+      await task.focus();
+      await page.keyboard.press('q');
+      await waitForMenuSettled(page);
+      await page
+        .locator('.mat-mdc-menu-content button', { hasText: 'Delete task' })
+        .tap();
+      await page.getByRole('button', { name: 'Delete', exact: true }).click();
+      await expect(page.locator('task')).toHaveCount(0);
+
+      // Nothing is left to swipe or explain: guidance ends instead of waiting unseen.
+      await expect(hint).toHaveCount(0);
+      await expect
+        .poll(() =>
+          page.evaluate(() => localStorage.getItem('SUP_ONBOARDING_HINTS_DONE')),
+        )
+        .toBe('true');
+      assertNoRuntimeBrowserErrors(runtimeErrors, 'onboarding delete');
+      await page.close();
+    });
+
+    test('re-anchors the hint after the nav slides in under mouse input', async ({
+      isolatedContext,
+    }) => {
+      const page = await isolatedContext.newPage();
+      // Stretch the bottom-nav entrance so the hint is placed mid-slide, as on slow CI.
+      await page.addInitScript(() => {
+        document.addEventListener('DOMContentLoaded', () => {
+          const style = document.createElement('style');
+          style.textContent =
+            '.mobile-bottom-nav.entrance { animation-duration: 3s !important; }';
+          document.head.appendChild(style);
+        });
+      });
+      await openFreshApp(page, { withExamples: false });
+      await expect(page.locator('onboarding-hint')).toContainText(
+        'Tap + to add your first task',
+      );
+
+      const addBtn = page.locator('.add-task-button');
+      const expectHintClearOfAddBtn = (): Promise<void> =>
+        expect
+          .poll(
+            async () => {
+              const btn = await addBtn.boundingBox();
+              const chip = await page.locator('onboarding-hint .hint-chip').boundingBox();
+              return btn && chip ? btn.y - (chip.y + chip.height) : -1;
+            },
+            { timeout: 6000 },
+          )
+          .toBeGreaterThanOrEqual(16);
+      // AppComponent drops the entrance class after 1.5s, cutting the stretched
+      // slide short (animationcancel, no animationend); the hint must follow.
+      await expect(page.locator('.mobile-bottom-nav')).not.toHaveClass(/entrance/);
+      await expectHintClearOfAddBtn();
+
+      await page.mouse.move(10, 10);
+      await expect(page.locator('body')).toHaveClass(/isMousePrimary/);
+      // Once the nav has settled, the hint must sit clear above the + button again.
+      await expectHintClearOfAddBtn();
+      await addBtn.click();
+      await expect(page.locator('add-task-bar.global')).toBeVisible();
       await page.close();
     });
 

@@ -193,6 +193,9 @@ DOCKER_OK=true
 # here because the probe lives behind the Docker gate: under `set -u` a Docker-down run
 # would otherwise abort at the body-assembly line below.
 DB_PROBE_DETAIL=""
+# Set when a failed probe is excused by a running backup dump; such a run verified nothing,
+# so it must not count toward recovery.
+DB_PROBE_EXCUSED=false
 
 # 0. Check Docker daemon is accessible
 if ! docker info >/dev/null 2>&1; then
@@ -472,18 +475,29 @@ NODE
       ! [[ "$LONGEST" =~ ^[0-9]+$ ]] ||
       ! [[ "$POOL_IN_USE" =~ ^[0-9]+$ ]]; then
       DB_RESULTS_OK=false
-      # The status separates a timeout or kill (124/137) from a broken exec (126/127), a
-      # probe error (1) and incomplete output (0). Not the probe's stderr: PROBLEMS is the
-      # dedupe hash input, so text that varies per run would re-alert every five minutes.
-      # The stderr goes into the mail BODY instead, below.
-      PROBLEMS="${PROBLEMS}Database monitoring checks failed (exit ${DB_STATUS})\n"
-      # Read only on failure. Compose can print malformed datasource URLs containing
-      # whitespace in credentials, so redact from ANY scheme through the end of its line.
-      # Redact before truncating, so the byte limit cannot cut inside a credential.
-      DB_PROBE_DETAIL=$(LC_ALL=C sed -E 's#[a-zA-Z][a-zA-Z0-9+.-]*://.*#<redacted-url>#' \
-        "$DB_ERRFILE" 2>/dev/null | strip_control_chars "$DB_PROBE_ERR_MAX_BYTES")
-      # Empty stderr is possible after a timeout, silent failure or malformed output.
-      : "${DB_PROBE_DETAIL:=(no stderr captured)}"
+      # A running backup dump starves this probe on a slow-disk host: it timed out on
+      # every night of the dump (2026-08-25, ~112 min; 2026-10-05..08, ~200 min, 13 mails)
+      # while check 4 -- /health, a SELECT 1 through the app -- stayed 200. Check 4 still
+      # covers database liveness, so only a FAILED probe is excused; one that answers is
+      # used in full. Same 6h expiry as the long-query exemption, so a wedged dump stops
+      # masking anything. A ps without -C (busybox) matches nothing and keeps paging.
+      if ! ps -C pg_dump -o etimes= 2>/dev/null |
+        awk '$1 < 21600 { found = 1 } END { exit !found }'; then
+        # The status separates a timeout or kill (124/137) from a broken exec (126/127), a
+        # probe error (1) and incomplete output (0). Not the probe's stderr: PROBLEMS is the
+        # dedupe hash input, so text that varies per run would re-alert every five minutes.
+        # The stderr goes into the mail BODY instead, below.
+        PROBLEMS="${PROBLEMS}Database monitoring checks failed (exit ${DB_STATUS})\n"
+        # Read only on failure. Compose can print malformed datasource URLs containing
+        # whitespace in credentials, so redact from ANY scheme through the end of its line.
+        # Redact before truncating, so the byte limit cannot cut inside a credential.
+        DB_PROBE_DETAIL=$(LC_ALL=C sed -E 's#[a-zA-Z][a-zA-Z0-9+.-]*://.*#<redacted-url>#' \
+          "$DB_ERRFILE" 2>/dev/null | strip_control_chars "$DB_PROBE_ERR_MAX_BYTES")
+        # Empty stderr is possible after a timeout, silent failure or malformed output.
+        : "${DB_PROBE_DETAIL:=(no stderr captured)}"
+      else
+        DB_PROBE_EXCUSED=true
+      fi
     fi
     rm -f "$DB_ERRFILE"
 
@@ -708,7 +722,7 @@ else
   # Only meaningful while a recovery is pending; a healthy retry also proves mail works
   # again and clears a sticky failure marker.
   RECOVERED=false
-  if [ -f "$ALERT_STATE_FILE" ] || [ -f "$MAIL_FAILED_FILE" ]; then
+  if ! $DB_PROBE_EXCUSED && { [ -f "$ALERT_STATE_FILE" ] || [ -f "$MAIL_FAILED_FILE" ]; }; then
     if [ -f "$CLEAN_RUN_SEEN_FILE" ]; then
       RECOVERED=true
     else

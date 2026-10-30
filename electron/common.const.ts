@@ -31,5 +31,6 @@ export const isGnomeWaylandEnv = (
 ): boolean => isGnomeDesktopEnv(platform, env) && isWaylandEnv(platform, env);
 
 export const IS_MAC = process.platform === 'darwin';
+export const IS_LINUX = process.platform === 'linux';
 export const IS_GNOME_DESKTOP = isGnomeDesktopEnv(process.platform, process.env);
 export const IS_GNOME_WAYLAND = isGnomeWaylandEnv(process.platform, process.env);

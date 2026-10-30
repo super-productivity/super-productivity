@@ -6,9 +6,10 @@ import { FuzzFailure, FuzzResult, runFuzz } from './sync-fuzz-runner';
 import { keepKarmaAlive, shrinkTrace } from './sync-fuzz-shrink';
 
 /**
- * Random-seed entry point of the sync fuzz harness, for a nightly job or a
- * manual bug hunt. Like the other `*.benchmark.ts` files it compiles with the
- * specs but runs only when named:
+ * Random-seed entry point of the sync fuzz harness, for a manual bug hunt
+ * (no CI job runs it; PRs get `npm run sync-fuzz:compare` instead). Like
+ * the other `*.benchmark.ts` files it compiles with the specs but runs only
+ * when named:
  *
  *   npm run test:file src/app/op-log/testing/integration/sync-fuzz/sync-fuzz-seeds.benchmark.ts
  *

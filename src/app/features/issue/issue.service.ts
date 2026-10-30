@@ -24,8 +24,6 @@ import {
   DEFAULT_ISSUE_STRS,
   JIRA_TYPE,
   OPEN_PROJECT_TYPE,
-  REDMINE_TYPE,
-  NEXTCLOUD_DECK_TYPE,
   PLAINSPACE_TYPE,
 } from './issue.const';
 import { TaskService } from '../tasks/task.service';
@@ -43,11 +41,11 @@ import { GitlabCommonInterfacesService } from './providers/gitlab/gitlab-common-
 import { CaldavCommonInterfacesService } from './providers/caldav/caldav-common-interfaces.service';
 import { OpenProjectCommonInterfacesService } from './providers/open-project/open-project-common-interfaces.service';
 // Gitea is now a plugin — no built-in service needed
-import { RedmineCommonInterfacesService } from './providers/redmine/redmine-common-interfaces.service';
+// Redmine is now a plugin — no built-in service needed
 // Linear is now a plugin — no built-in service needed
 // ClickUp is now a plugin — no built-in service needed
 // Azure DevOps is now a plugin — no built-in service needed
-import { NextcloudDeckCommonInterfacesService } from './providers/nextcloud-deck/nextcloud-deck-common-interfaces.service';
+// Nextcloud Deck is now a plugin — no built-in service needed
 import { PlainspaceCommonInterfacesService } from './providers/plainspace/plainspace-common-interfaces.service';
 import { SnackService } from '../../core/snack/snack.service';
 import { T } from '../../t.const';
@@ -59,6 +57,7 @@ import { WorkContextService } from '../work-context/work-context.service';
 import { ProjectService } from '../project/project.service';
 import { _MISSING_PROJECT_ } from '../project/project.const';
 import { IssueProviderService } from './issue-provider.service';
+import { PendingRemoteIssueDeleteService } from './two-way-sync/pending-remote-issue-delete.service';
 import { CalendarIntegrationService } from '../calendar-integration/calendar-integration.service';
 import { getCalendarEventIdCandidates } from '../calendar-integration/get-calendar-event-id-candidates';
 import { Store } from '@ngrx/store';
@@ -93,14 +92,11 @@ const isIssueAwaitingNextOccurrence = (
 })
 export class IssueService {
   private _taskService = inject(TaskService);
+  private _pendingRemoteIssueDelete = inject(PendingRemoteIssueDeleteService);
   private _jiraCommonInterfacesService = inject(JiraCommonInterfacesService);
   private _gitlabCommonInterfacesService = inject(GitlabCommonInterfacesService);
   private _caldavCommonInterfaceService = inject(CaldavCommonInterfacesService);
   private _openProjectInterfaceService = inject(OpenProjectCommonInterfacesService);
-  private _redmineInterfaceService = inject(RedmineCommonInterfacesService);
-  private _nextcloudDeckCommonInterfaceService = inject(
-    NextcloudDeckCommonInterfacesService,
-  );
   private _plainspaceCommonInterfaceService = inject(PlainspaceCommonInterfacesService);
   private _calendarCommonInterfaceService = inject(CalendarCommonInterfacesService);
   private _issueProviderService = inject(IssueProviderService);
@@ -121,9 +117,7 @@ export class IssueService {
     [JIRA_TYPE]: this._jiraCommonInterfacesService,
     [CALDAV_TYPE]: this._caldavCommonInterfaceService,
     [OPEN_PROJECT_TYPE]: this._openProjectInterfaceService,
-    [REDMINE_TYPE]: this._redmineInterfaceService,
     [ICAL_TYPE]: this._calendarCommonInterfaceService,
-    [NEXTCLOUD_DECK_TYPE]: this._nextcloudDeckCommonInterfaceService,
     [PLAINSPACE_TYPE]: this._plainspaceCommonInterfaceService,
   };
 
@@ -286,14 +280,27 @@ export class IssueService {
 
     const allExistingIssueIds: string[] | number[] =
       await this._taskService.getAllIssueIdsForProviderEverywhere(issueProviderId);
-    const potentialIssuesToAdd = await service.getNewIssuesToAddToBacklog!(
-      issueProviderId,
-      allExistingIssueIds,
+    // A task whose remote delete is still to come is no longer among them, but
+    // its item is about to be deleted remotely: not new. Pending before the
+    // request too, as a delete that completes while it is in flight leaves the
+    // item in a list read before it.
+    const pendingBefore = this._pendingRemoteIssueDelete.issueIds(issueProviderId);
+    const potentialIssuesToAdd = (
+      await service.getNewIssuesToAddToBacklog!(issueProviderId, allExistingIssueIds)
+    ).filter(
+      (issue) =>
+        !pendingBefore.has(String(issue.id)) &&
+        !this._pendingRemoteIssueDelete.has(issueProviderId, String(issue.id)),
     );
 
+    // Compare as strings: task.issueId is stored as a string, but some providers
+    // (OpenProject) return numeric ids, which never matched and were re-imported
+    // on every poll (#11223).
+    const existingIssueIds = new Set<string>(
+      (allExistingIssueIds as (string | number)[]).map(String),
+    );
     const issuesToAdd: IssueDataReduced[] = potentialIssuesToAdd.filter(
-      (issue: IssueDataReduced): boolean =>
-        !(allExistingIssueIds as string[]).includes(issue.id as string),
+      (issue: IssueDataReduced): boolean => !existingIssueIds.has(String(issue.id)),
     );
 
     // Already-imported recurring issues whose task may sit in the archive: those
@@ -301,7 +308,7 @@ export class IssueService {
     // Kept out of `issuesToAdd` so the import snack below still counts imports.
     const reactivationCandidates: IssueDataReduced[] = potentialIssuesToAdd.filter(
       (issue: IssueDataReduced): boolean =>
-        (allExistingIssueIds as string[]).includes(issue.id as string) &&
+        existingIssueIds.has(String(issue.id)) &&
         isIssueAwaitingNextOccurrence(providerKey, issue),
     );
     if (reactivationCandidates.length) {
@@ -675,9 +682,25 @@ export class IssueService {
 
     // add new task (also fallback when parent id of subtask is not found)
     if (!taskId) {
+      // A Plainspace title is shared and syncs both ways: short syntax would
+      // strip "#tag", "1h" or "@tomorrow" from it, and that edit would be
+      // pushed to everyone in the Space. Other providers keep parsing.
+      const isIgnoreShortSyntax = issueProviderKey === PLAINSPACE_TYPE;
       taskId = taskData.dueWithTime
-        ? await this._taskService.addAndSchedule(title, taskData, taskData.dueWithTime)
-        : this._taskService.add(title, isAddToBacklog, taskData);
+        ? await this._taskService.addAndSchedule(
+            title,
+            taskData,
+            taskData.dueWithTime,
+            undefined,
+            isIgnoreShortSyntax,
+          )
+        : this._taskService.add(
+            title,
+            isAddToBacklog,
+            taskData,
+            false,
+            isIgnoreShortSyntax,
+          );
 
       // TODO more elegant solution for skipped calendar events
       if (issueProviderKey === ICAL_TYPE) {
@@ -955,7 +978,12 @@ export class IssueService {
    * devices (#9776), so the clear goes through `dismissReminderOnly`, whose
    * reducer sets it deterministically. Rare enough that the extra op is fine.
    */
-  private _updateTaskFromPoll(task: Task, taskChanges: Partial<Task>): void {
+  private _updateTaskFromPoll(task: Task, taskChangesIn: Partial<Task>): void {
+    // A done write to a task that is already done would only stamp a new
+    // `doneOn`: it moves the completion date and turns a won't-do task into a
+    // completed one (`isWontDoTask`).
+    const { isDone, ...rest } = taskChangesIn;
+    const taskChanges = isDone === true && task.isDone ? rest : taskChangesIn;
     const { changes, isClearRemindAt } = withRemindAtForDueChange(
       task,
       taskChanges,
@@ -979,9 +1007,9 @@ export class IssueService {
     return this.ISSUE_SERVICE_MAP[key];
   }
 
-  private _getProviderIcon(key: IssueProviderKey): string {
+  private _getProviderIcon(key: IssueProviderKey): string | undefined {
     if (this._pluginRegistry.hasProvider(key)) {
-      return this._pluginRegistry.getIcon(key);
+      return this._pluginRegistry.getSvgIcon(key);
     }
     return ISSUE_PROVIDER_ICON_MAP[key as BuiltInIssueProviderKey];
   }

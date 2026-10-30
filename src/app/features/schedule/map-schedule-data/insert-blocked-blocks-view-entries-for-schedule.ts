@@ -48,11 +48,22 @@ export const insertBlockedBlocksViewEntriesForSchedule = (
         veIndex += viewEntriesToAddForBB.length;
         break;
       }
-      // block starts before task and lasts until after it starts
+      // block starts before task and lasts until after it starts,
+      // or only a tiny slice of the task would fit before the block
       // => move all following
-      else if (blockedBlock.start <= viewEntry.start) {
+      else if (
+        blockedBlock.start <= viewEntry.start ||
+        isSliceBeforeBlockTooShort(viewEntry, blockedBlock)
+      ) {
         const currentListTaskStart = viewEntry.start;
-        moveEntries(viewEntries, blockedBlock.end - currentListTaskStart, veIndex);
+        // NOTE: time-based, as a split task's earlier segments can sit at a
+        // higher index than its continued segment (see below); entries before
+        // veIndex are placed already, incl. zero-length ones at the same start
+        moveAllEntriesAfterTime(
+          viewEntries.slice(veIndex),
+          blockedBlock.end - currentListTaskStart,
+          currentListTaskStart,
+        );
         viewEntries.splice(veIndex, 0, ...viewEntriesToAddForBB);
         veIndex += viewEntriesToAddForBB.length;
         break;
@@ -257,6 +268,19 @@ export const insertBlockedBlocksViewEntriesForSchedule = (
     }
   });
 };
+
+// The card of a slice this short keeps its min height and covers the block
+// it precedes (#10194), so the task starts after the block instead.
+// shortcut: fixed duration, so zooming far out can still overlap — derive it
+// from the row height if that gets reported.
+const MIN_SLICE_BEFORE_BLOCK_MS = 10 * 60 * 1000;
+
+const isSliceBeforeBlockTooShort = (
+  viewEntry: SVE,
+  blockedBlock: BlockedBlock,
+): boolean =>
+  blockedBlock.start < viewEntry.start + viewEntry.duration &&
+  blockedBlock.start - viewEntry.start < MIN_SLICE_BEFORE_BLOCK_MS;
 
 const moveAllEntriesAfterTime = (
   viewEntries: SVE[],

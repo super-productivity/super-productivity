@@ -18,6 +18,8 @@ import { Tag } from '../../features/tag/tag.model';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { TranslateModule } from '@ngx-translate/core';
 import { SearchItem } from './search-page.model';
+import { RecentlyDeletedService } from '../../features/tasks/recently-deleted/recently-deleted.service';
+import { RecentlyDeletedEntry } from '../../features/tasks/recently-deleted/recently-deleted.util';
 
 // Minimal stub task matching the Task interface shape
 const createTask = (overrides: Partial<Task> = {}): Task =>
@@ -70,6 +72,8 @@ describe('SearchPageComponent', () => {
   let navigateToTaskServiceSpy: jasmine.SpyObj<NavigateToTaskService>;
   let routerSpy: jasmine.SpyObj<Router>;
   let layoutServiceSpy: jasmine.SpyObj<LayoutService>;
+  let deletedEntries: RecentlyDeletedEntry[];
+  let recentlyDeletedSpy: jasmine.SpyObj<RecentlyDeletedService>;
 
   beforeEach(async () => {
     allTasks$ = new BehaviorSubject<Task[]>([]);
@@ -93,6 +97,14 @@ describe('SearchPageComponent', () => {
     routerSpy = jasmine.createSpyObj('Router', ['navigate']);
     routerSpy.navigate.and.returnValue(Promise.resolve(true));
 
+    deletedEntries = [];
+    recentlyDeletedSpy = jasmine.createSpyObj('RecentlyDeletedService', [
+      'getEntries',
+      'restore',
+    ]);
+    recentlyDeletedSpy.getEntries.and.callFake(() => Promise.resolve(deletedEntries));
+    recentlyDeletedSpy.restore.and.resolveTo();
+
     layoutServiceSpy = jasmine.createSpyObj('LayoutService', ['toggleNotes'], {
       isShowNotes: signal(false),
     });
@@ -113,6 +125,7 @@ describe('SearchPageComponent', () => {
         { provide: NoteService, useValue: { notes$ } },
         { provide: Router, useValue: routerSpy },
         { provide: LayoutService, useValue: layoutServiceSpy },
+        { provide: RecentlyDeletedService, useValue: recentlyDeletedSpy },
         {
           provide: MenuTreeService,
           useValue: {
@@ -255,8 +268,10 @@ describe('SearchPageComponent', () => {
     ]);
     initAndFlush();
     typeAndFlush('Project');
-    expect(latestResults.length).toBe(1);
-    expect(latestResults[0].ctx.title).toBe('My Project');
+    // 'Project' now also matches the project result itself (#10223), so assert
+    // on the task item specifically.
+    const taskItem = latestResults.find((r) => r.id === 't1');
+    expect(taskItem?.ctx.title).toBe('My Project');
   }));
 
   it('should use tag context for tasks without projectId', fakeAsync(() => {
@@ -271,8 +286,10 @@ describe('SearchPageComponent', () => {
     ]);
     initAndFlush();
     typeAndFlush('Tag');
-    expect(latestResults.length).toBe(1);
-    expect(latestResults[0].ctx.title).toBe('My Tag');
+    // 'Tag' now also matches the tag result itself (#10223), so assert on the
+    // task item specifically.
+    const taskItem = latestResults.find((r) => r.id === 't1');
+    expect(taskItem?.ctx.title).toBe('My Tag');
   }));
 
   it('should reflect isDone state on the result item (#7807)', fakeAsync(() => {
@@ -352,6 +369,112 @@ describe('SearchPageComponent', () => {
     expect(latestResults.length).toBe(1);
     expect(latestResults[0].isArchiveTask).toBe(true);
   }));
+
+  describe('Recently deleted tasks (#2778)', () => {
+    const deletedEntry = (
+      task: Partial<Task>,
+      subTasks: Task[] = [],
+    ): RecentlyDeletedEntry => {
+      const t = createTask(task);
+      return { id: t.id, deletedAt: 1, task: t, subTasks };
+    };
+
+    it('are found without "include completed", marked as deleted', fakeAsync(() => {
+      deletedEntries = [deletedEntry({ id: 'gone', title: 'Lost Report' })];
+      initAndFlush();
+      typeAndFlush('lost');
+      expect(latestResults.map((r) => r.id)).toEqual(['gone']);
+      expect(latestResults[0].deletedEntry).toBeTruthy();
+    }));
+
+    it('are found by a subtask title', fakeAsync(() => {
+      deletedEntries = [
+        deletedEntry({ id: 'gone', title: 'Parent' }, [
+          createTask({ id: 'sub', title: 'Hidden Child', parentId: 'gone' }),
+        ]),
+      ];
+      initAndFlush();
+      typeAndFlush('hidden child');
+      expect(latestResults.map((r) => r.id)).toEqual(['gone']);
+    }));
+
+    it('are not listed once the task is live again', fakeAsync(() => {
+      allTasks$.next([createTask({ id: 'back', title: 'Back Again' })]);
+      deletedEntries = [deletedEntry({ id: 'back', title: 'Back Again' })];
+      initAndFlush();
+      typeAndFlush('back');
+      expect(latestResults.length).toBe(1);
+      expect(latestResults[0].deletedEntry).toBeFalsy();
+    }));
+
+    it('selecting one restores it and then navigates to it', fakeAsync(() => {
+      const entry = deletedEntry({ id: 'gone', title: 'Lost Report' });
+      deletedEntries = [entry];
+      const calls: string[] = [];
+      recentlyDeletedSpy.restore.and.callFake(async () => {
+        calls.push('restore');
+      });
+      navigateToTaskServiceSpy.navigate.and.callFake(async () => {
+        calls.push('navigate');
+      });
+      initAndFlush();
+      typeAndFlush('lost');
+
+      component.navigateToItem(latestResults[0]);
+      tick();
+
+      expect(recentlyDeletedSpy.restore).toHaveBeenCalledOnceWith(entry);
+      expect(navigateToTaskServiceSpy.navigate).toHaveBeenCalledWith('gone', false, {
+        isFromSearch: true,
+      });
+      expect(calls).toEqual(['restore', 'navigate']);
+    }));
+
+    it('the Restore button does not also trigger the row', fakeAsync(() => {
+      deletedEntries = [deletedEntry({ id: 'gone', title: 'Lost Report' })];
+      initAndFlush();
+      typeAndFlush('lost');
+      const event = jasmine.createSpyObj<MouseEvent>('MouseEvent', ['stopPropagation']);
+
+      void component.restoreDeletedItem(latestResults[0], event);
+      tick();
+
+      expect(event.stopPropagation).toHaveBeenCalled();
+      expect(recentlyDeletedSpy.restore).toHaveBeenCalledTimes(1);
+    }));
+
+    it('a stale row whose task is live again just navigates', fakeAsync(() => {
+      deletedEntries = [deletedEntry({ id: 'gone', title: 'Lost Report' })];
+      initAndFlush();
+      typeAndFlush('lost');
+      const staleItem = latestResults[0];
+      // Restored elsewhere (e.g. by sync) before the click lands.
+      allTasks$.next([createTask({ id: 'gone', title: 'Lost Report' })]);
+      tick(150);
+
+      void component.restoreDeletedItem(staleItem);
+      tick();
+
+      expect(recentlyDeletedSpy.restore).not.toHaveBeenCalled();
+      expect(navigateToTaskServiceSpy.navigate).toHaveBeenCalledWith('gone', false, {
+        isFromSearch: true,
+      });
+    }));
+
+    it('keep a few result slots even when live matches fill the limit', fakeAsync(() => {
+      allTasks$.next(
+        Array.from({ length: 60 }, (_, i) =>
+          createTask({ id: `live${i}`, title: `Meeting ${i}` }),
+        ),
+      );
+      deletedEntries = [deletedEntry({ id: 'gone', title: 'Meeting prep' })];
+      initAndFlush();
+      typeAndFlush('meeting');
+
+      expect(latestResults.length).toBe(50);
+      expect(latestResults.some((r) => r.id === 'gone' && !!r.deletedEntry)).toBeTrue();
+    }));
+  });
 
   it('should call NavigateToTaskService.navigate on navigateToItem', () => {
     const item = {
@@ -553,6 +676,49 @@ describe('SearchPageComponent', () => {
     tick(150); // combineLatest debounce
     expect(latestResults[0].ctx.title).toBe('Folder 1 > Subfolder A > My Project');
   }));
+
+  // --- Projects and tags as results (#10223) ---
+
+  it('should find a project by its title and mark it isProject', fakeAsync(() => {
+    projectList$.next([createProject({ id: 'proj-x', title: 'Marketing' })]);
+    initAndFlush();
+    typeAndFlush('Marketing');
+    const projectItem = latestResults.find((r) => r.id === 'proj-x');
+    expect(projectItem).toBeDefined();
+    expect(projectItem?.isProject).toBe(true);
+    expect(projectItem?.title).toBe('Marketing');
+  }));
+
+  it('should find a tag by its title and mark it isTag', fakeAsync(() => {
+    tags$.next([createTag({ id: 'tag-x', title: 'Urgent' })]);
+    initAndFlush();
+    typeAndFlush('Urgent');
+    const tagItem = latestResults.find((r) => r.id === 'tag-x');
+    expect(tagItem).toBeDefined();
+    expect(tagItem?.isTag).toBe(true);
+    expect(tagItem?.title).toBe('Urgent');
+  }));
+
+  it('should show projects and tags even when completed/archived are not included', fakeAsync(() => {
+    projectList$.next([createProject({ id: 'proj-x', title: 'Zephyr' })]);
+    tags$.next([createTag({ id: 'tag-x', title: 'Zephyr' })]);
+    initAndFlush();
+    // includeCompleted stays false (the default)
+    typeAndFlush('Zephyr');
+    const ids = latestResults.map((r) => r.id);
+    expect(ids).toContain('proj-x');
+    expect(ids).toContain('tag-x');
+  }));
+
+  it('should navigate to the project task list on navigateToItem', () => {
+    component.navigateToItem({ id: 'proj-x', isProject: true } as SearchItem);
+    expect(routerSpy.navigate).toHaveBeenCalledWith(['/project/proj-x/tasks']);
+  });
+
+  it('should navigate to the tag task list on navigateToItem', () => {
+    component.navigateToItem({ id: 'tag-x', isTag: true } as SearchItem);
+    expect(routerSpy.navigate).toHaveBeenCalledWith(['/tag/tag-x/tasks']);
+  });
 
   it('should update folder path reactively for ARCHIVED tasks when projectFolderMap changes after init', fakeAsync(() => {
     const archiveTask = createTask({

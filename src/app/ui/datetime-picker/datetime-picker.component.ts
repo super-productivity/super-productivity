@@ -38,6 +38,7 @@ import {
 // eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import { TASK_REMINDER_OPTIONS } from '../../features/planner/dialog-schedule-task/task-reminder-options.const';
 import { TimeStepDirective } from '../time-step/time-step.directive';
+import { TimeHourTypeaheadDirective } from '../time-hour-typeahead/time-hour-typeahead.directive';
 import { expandFadeAnimation } from '../animations/expand.ani';
 import { fadeAnimation } from '../animations/fade.ani';
 import { getClockStringFromHours } from '../../util/get-clock-string-from-hours';
@@ -78,6 +79,7 @@ const QUICK_ACCESS_ITEMS = [
     TranslateModule,
     TranslatePipe,
     TimeStepDirective,
+    TimeHourTypeaheadDirective,
   ],
   templateUrl: './datetime-picker.component.html',
   styleUrl: './datetime-picker.component.scss',
@@ -223,6 +225,9 @@ export class DateTimePickerComponent implements AfterViewInit {
       }
 
       if (targetDate) {
+        // mark as synced so the defaulted date doesn't pull the calendar back
+        // from the month the user is browsing (#10528)
+        this._lastSyncedDate = targetDate.getTime();
         this.dateSelected.emit(targetDate);
       }
       this.timeChanged.emit(targetTime);

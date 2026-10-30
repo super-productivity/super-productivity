@@ -92,6 +92,11 @@ swipe-block {
 done-toggle {
   --done-toggle-size: 30px;
 
+  // Same hit box as the task list on touch; the glyph keeps its size.
+  @include touchOnlyDevice {
+    --done-toggle-size: 40px;
+  }
+
   margin-left: var(--s-half);
   align-self: center;
   cursor: pointer;

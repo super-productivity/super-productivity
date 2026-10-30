@@ -30,6 +30,11 @@ import { truncate } from '../../util/truncate';
 import { remindOptionToMilliseconds } from './util/remind-option-to-milliseconds';
 import { getDeadlineAutoPlanFields } from './util/get-deadline-auto-plan-fields';
 import { playDoneSound } from './util/play-done-sound';
+import {
+  getTaskDeleteConfirmData,
+  isTaskDeleteConfirmRequired,
+} from './util/get-task-delete-confirm';
+import { PLAINSPACE_TYPE } from '../issue/issue.const';
 import { DEFAULT_GLOBAL_CONFIG } from '../config/default-global-config.const';
 import { TranslateService, TranslateStore } from '@ngx-translate/core';
 import { getPluralKey } from '../../util/get-plural-key';
@@ -47,6 +52,7 @@ import { LocaleDatePipe } from '../../ui/pipes/locale-date.pipe';
 import { msToString } from '../../ui/duration/ms-to-string.pipe';
 import { ADD_TASK_INLINE_BTN_SELECTOR } from '../planner/add-task-inline/add-task-inline.const';
 import { getNextPlannerAddButton } from '../planner/get-next-planner-add-button';
+import { IssueSyncStateService } from '../issue/two-way-sync/issue-sync-state.service';
 
 interface DateTimePick {
   date: Date | null;
@@ -79,6 +85,7 @@ export class TaskBulkActionService {
   private readonly _workContextService = inject(WorkContextService);
   private readonly _translateService = inject(TranslateService);
   private readonly _translateStore = inject(TranslateStore);
+  private readonly _issueSyncState = inject(IssueSyncStateService);
   private readonly _datePipe = inject(LocaleDatePipe);
 
   private readonly _taskEntities = this._store.selectSignal(selectTaskEntities);
@@ -156,8 +163,10 @@ export class TaskBulkActionService {
 
   /**
    * More than one task always confirms, regardless of `isConfirmBeforeDelete`:
-   * there is no undo for a bulk delete yet. A single selected task takes the
-   * normal single-task path (setting + undo snack).
+   * there is no undo for a bulk delete yet. For the same reason that confirm
+   * keeps the default initial focus on Cancel, so Delete then Enter cannot
+   * remove a whole selection. A single selected task takes the normal
+   * single-task path (setting + undo snack).
    *
    * Top-level tasks go through `deleteTasks` in one op. A subtask whose parent
    * survives goes through the singular `deleteTask` instead: older clients'
@@ -181,7 +190,14 @@ export class TaskBulkActionService {
           data: {
             okTxt: T.F.TASK.MULTI_SELECT.D_CONFIRM_DELETE.OK,
             message: this._plural(
-              'F.TASK.MULTI_SELECT.D_CONFIRM_DELETE.MSG',
+              // A task Plainspace no longer lists for me is only deleted here.
+              tasks.some(
+                (t) =>
+                  t.issueType === PLAINSPACE_TYPE &&
+                  !this._issueSyncState.isMissing(t.id),
+              )
+                ? 'F.TASK.MULTI_SELECT.D_CONFIRM_DELETE.MSG_PLAINSPACE'
+                : 'F.TASK.MULTI_SELECT.D_CONFIRM_DELETE.MSG',
               tasks.length,
             ),
             translateParams: { count: tasks.length },
@@ -210,15 +226,12 @@ export class TaskBulkActionService {
   private async _deleteSingle(task: Task): Promise<void> {
     const isConfirmBeforeDelete =
       this._globalConfigService.cfg()?.tasks?.isConfirmBeforeDelete ?? true;
-    if (isConfirmBeforeDelete) {
+    const isNoLongerListed = this._issueSyncState.isMissing(task.id);
+    if (isTaskDeleteConfirmRequired(task, isConfirmBeforeDelete, isNoLongerListed)) {
       const isConfirm = await firstValueFrom(
         this._matDialog
           .open(DialogConfirmComponent, {
-            data: {
-              okTxt: T.F.TASK.D_CONFIRM_DELETE.OK,
-              message: T.F.TASK.D_CONFIRM_DELETE.MSG,
-              translateParams: { title: truncate(task.title) },
-            },
+            data: getTaskDeleteConfirmData(task, truncate(task.title), isNoLongerListed),
           })
           .afterClosed(),
       );
@@ -238,9 +251,14 @@ export class TaskBulkActionService {
 
   // ---- PROJECT ----------------------------------------------------------
 
-  async moveToProject(projectId: string): Promise<void> {
+  async moveToProject(projectId: string, taskIds?: readonly string[]): Promise<void> {
+    const resolved = taskIds
+      ? taskIds
+          .map((id) => this._taskEntities()[id])
+          .filter((task): task is Task => !!task)
+      : this._resolveInVisualOrder();
     const { eligible, skippedSubtasks } = splitParentOnly(
-      dedupeSubtasksOfSelectedParents(this._resolveInVisualOrder()),
+      dedupeSubtasksOfSelectedParents(resolved),
     );
     const tasks = dedupeByRepeatCfg(eligible.filter((t) => t.projectId !== projectId));
     if (!tasks.length) {

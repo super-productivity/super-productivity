@@ -1,6 +1,6 @@
 name: 'Setup Electron Build'
 description: >
-  Shared setup for Electron build/package jobs: Node 22, the git-over-HTTPS
+  Shared setup for Electron build/package jobs: Node from .nvmrc, the git-over-HTTPS
   workaround, and the npm + electron-binary caches. Does NOT run `npm i` —
   callers run it themselves (with a retry) because some jobs install platform
   workarounds immediately before it.
@@ -10,7 +10,7 @@ runs:
   steps:
     - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
       with:
-        node-version: 22
+        node-version-file: .nvmrc
 
     # work around for npm installs from git+https://github.com/johannesjo/J2M.git
     - name: Reconfigure git to use HTTP authentication

@@ -39,10 +39,25 @@ export const skipOnboardingForE2E = (): void => {
  * that must be dismissed before the app shell becomes interactive.
  */
 const dismissBlockingDialogs = async (page: Page, maxAttempts = 3): Promise<void> => {
+  const dialogConfirmBtn = page.locator('dialog-confirm button[e2e="confirmBtn"]');
+  // A rendered route without a loader or confirmation dialog needs no grace period.
+  // Require routed content: the empty shell can appear before startup dialogs.
+  const readyRoute = page.locator(
+    'body:not(:has(.loading-full-page-wrapper:visible)):not(:has(dialog-confirm:visible)) ' +
+      '.route-wrapper > :not(router-outlet):visible',
+  );
   for (let i = 0; i < maxAttempts; i++) {
     try {
-      const dialogConfirmBtn = page.locator('dialog-confirm button[e2e="confirmBtn"]');
-      await dialogConfirmBtn.waitFor({ state: 'visible', timeout: 2000 });
+      // After dismissing a dialog, preserve the grace period for chained dialogs.
+      const nextReadyElement =
+        i === 0
+          ? dialogConfirmBtn.filter({ visible: true }).or(readyRoute)
+          : dialogConfirmBtn;
+      await nextReadyElement.first().waitFor({
+        state: 'visible',
+        timeout: 2000,
+      });
+      if (!(await dialogConfirmBtn.isVisible())) return;
       await dialogConfirmBtn.click();
       await page.waitForTimeout(500);
     } catch {
@@ -165,25 +180,6 @@ export const waitForAppReady = async (
 };
 
 /**
- * Wait for UI to settle after an action (e.g., adding a task).
- * Uses Angular stability as the primary signal rather than fixed timeouts.
- * Falls back to a minimal timeout if Angular stability check fails.
- */
-export const waitForUISettle = async (page: Page): Promise<void> => {
-  if (page.isClosed()) {
-    return;
-  }
-  try {
-    await waitForAngularStability(page, 2000);
-  } catch {
-    // Fall back to minimal fixed timeout if stability check fails
-    if (!page.isClosed()) {
-      await page.waitForTimeout(200);
-    }
-  }
-};
-
-/**
  * Wait for local state changes to persist before triggering sync.
  * This ensures IndexedDB writes have completed after UI state changes.
  * Uses Angular stability + networkidle as indicators that async operations have settled.
@@ -209,6 +205,25 @@ export const waitForStatePersistence = async (page: Page): Promise<void> => {
   if (!page.isClosed()) {
     await page.waitForTimeout(200);
   }
+};
+
+/**
+ * Wait until every captured op is written to IndexedDB. Ops are written
+ * asynchronously, so a reload right after a change can drop the last ones.
+ * Needs the E2E helpers that non-production builds expose in `main.ts`.
+ */
+export const flushPendingWrites = async (page: Page): Promise<void> => {
+  await page.evaluate(async () => {
+    const helpers = (
+      window as unknown as {
+        __e2eTestHelpers?: { flushPendingWrites: () => Promise<unknown> };
+      }
+    ).__e2eTestHelpers;
+    if (!helpers) {
+      throw new Error('E2E test helpers are not exposed');
+    }
+    await helpers.flushPendingWrites();
+  });
 };
 
 /**

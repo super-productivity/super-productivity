@@ -110,6 +110,9 @@ export class DialogEnterEncryptionPasswordComponent {
         this._syncLocalStateService.warnNothingWorthUploading();
         return;
       }
+      if (!this._syncLocalStateService.confirmOverwriteOfUndecryptableRemoteOps()) {
+        return;
+      }
 
       const confirmed = await firstValueFrom(
         this._matDialog

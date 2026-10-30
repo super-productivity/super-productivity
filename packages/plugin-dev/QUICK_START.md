@@ -1,55 +1,50 @@
 # Plugin Development Quick Start
 
-## Option 1: Plain JavaScript (Simplest)
+Pick the existing plugin closest to what you want to build and copy its folder
+within `packages/plugin-dev/`.
+
+## Option 1: Plain JavaScript (simplest)
+
+Start from [yesterday-tasks-plugin](yesterday-tasks-plugin): `manifest.json`,
+`plugin.js`, optional `index.html`, `icon.svg` and `i18n/`. No build step — zip
+the files and upload them via Settings → Plugins. Every folder with a
+`package.json` here is an npm workspace: rename its `"name"` and run `npm install`,
+or delete the copied `package.json` if you only upload the zip.
+
+## Option 2: TypeScript, host-side (issue providers, background logic)
+
+Start from [github-issue-provider](github-issue-provider):
 
 ```bash
-cd minimal-plugin
-# Edit plugin.js
-# Zip the files and upload
+cp -r github-issue-provider my-plugin
+cd my-plugin
+# in src/manifest.json: set a unique "id" and "name", delete
+# issueProvider.issueProviderKey (reserved for bundled providers; uploads using
+# it are rejected) and change humanReadableName/icon; rename package.json "name"
+# (every folder here is an npm workspace; names must be unique)
+npm install        # installs into the shared plugin-dev workspace
+npm run build      # → dist/
 ```
 
-**Pros:** No build step, instant feedback
-**Cons:** No TypeScript, no bundling
+These plugins share `../scripts/build-with-esbuild.js` (bundles `src/plugin.ts`,
+or another file via `--entry`, and copies the manifest, icon and i18n) and
+`../tsconfig.base.json`; issue providers also bundle helpers from
+`../issue-provider-kit/`, and all of them depend on `../../plugin-api`. These are
+relative paths, so develop the plugin inside `packages/plugin-dev/`. New issue
+providers: follow [add-new-integration.md](../../docs/add-new-integration.md).
 
-## Option 2: Simple TypeScript (Recommended)
+For an iframe UI without a framework, see [todoist-import](todoist-import)
+(`--ui src/ui/main.ts` inlines the bundled UI into `index.html`).
 
-```bash
-cd simple-typescript-plugin
-npm install
-npm run build
-# Find plugin.zip in dist/
-```
+## Option 3: SolidJS UI (complex iframe UI)
 
-**Pros:** TypeScript support, simple build
-**Cons:** Limited to single file
+Start from [boilerplate-solid-js](boilerplate-solid-js): Vite, SolidJS and i18n,
+built with [`@super-productivity/vite-plugin`](../vite-plugin).
 
-## Option 3: Full TypeScript + Webpack (Advanced)
+## Testing your plugin
 
-```bash
-cd example-plugin
-npm install
-npm run build
-npm run package
-```
+1. Build it, then zip the contents of `dist/` (or the plain-JS folder):
+   `rm -f plugin.zip && (cd dist && zip -r ../plugin.zip .)`.
+2. Upload the zip via Settings → Plugins.
 
-**Pros:** Multiple files, full tooling
-**Cons:** More complex setup
-
-## Which Should I Use?
-
-- **Just testing?** → Use minimal-plugin
-- **Want TypeScript?** → Use simple-typescript-plugin
-- **Building complex plugin?** → Use example-plugin
-
-## Development Tips
-
-1. Start with minimal-plugin to understand the API
-2. Move to TypeScript when you need type safety
-3. Only use webpack if you need multiple source files
-
-## Testing Your Plugin
-
-1. Copy files to `src/assets/my-plugin/` for local testing
-2. Or zip and upload via Settings → Plugins
-
-That's it! 🚀
+Adding a new issue provider? Read [add-new-integration.md](../../docs/add-new-integration.md).

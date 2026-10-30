@@ -783,6 +783,12 @@ describe('preprocessMarkdown', () => {
     const result = preprocessMarkdown(input);
     expect(result).toBe('# Header\n\n![img](url.png "50|50")\n\nParagraph');
   });
+
+  it('should handle a leading space before the url, like the live editor does (#10153)', () => {
+    const input = '![alt]( url.png =10x20)';
+    const result = preprocessMarkdown(input);
+    expect(result).toBe('![alt](url.png "10|20")');
+  });
 });
 
 describe('escapeHtmlAttr', () => {

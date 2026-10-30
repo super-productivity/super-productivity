@@ -6,7 +6,8 @@
       [value]="task().title || ''"
       class="task-title"
     ></task-title>
-    @if (layoutService.isXs() && !isDialogMode()) {
+    <!-- Touch devices have no right-click/hover menu at any width (#10835) -->
+    @if ((layoutService.isXs() || IS_TOUCH_PRIMARY) && !isDialogMode()) {
       <button
         mat-icon-button
         class="task-detail-more-btn"
@@ -38,7 +39,7 @@
         @if (task().subTasks?.length) {
           <span>{{
             T.F.TASK.ADDITIONAL_INFO.SUB_TASKS
-              | translate: { nr: task().subTasks?.length }
+              | translate: { nr: $safeNavigationMigration(task().subTasks?.length) }
           }}</span>
         } @else {
           <span>{{ T.F.TASK.ADDITIONAL_INFO.SUB_TASKS_EMPTY | translate }}</span>
@@ -116,13 +117,10 @@
       </ng-container>
       <ng-container input-value>
         <span class="time-val">
-          <span [innerHTML]="task().timeSpent || 0 | msToString"></span>
+          <span>{{ task().timeSpent || 0 | msToString }}</span>
         </span>
         <span class="separator">/</span>
-        <span
-          [innerHTML]="task().timeEstimate || 0 | msToString"
-          class="time-val"
-        ></span>
+        <span class="time-val">{{ task().timeEstimate || 0 | msToString }}</span>
       </ng-container>
       <ng-container input-additional>
         <progress-bar [progress]="progress()"></progress-bar>
@@ -218,6 +216,7 @@
         <issue-header [task]="task()"></issue-header>
       </ng-container>
       <ng-container panel-content>
+        <issue-sync-state [task]="task()"></issue-sync-state>
         @if (!isIssueDataLoadedForCurrentType()) {
           <mat-progress-bar [mode]="'indeterminate'"></mat-progress-bar>
         }

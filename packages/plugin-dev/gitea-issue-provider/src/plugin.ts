@@ -1,15 +1,21 @@
 import type {
-  IssueProviderPluginDefinition,
-  PluginFieldMapping,
   PluginHttp,
   PluginHttpOptions,
   PluginIssue,
   PluginSearchResult,
 } from '@super-productivity/plugin-api';
+import {
+  asConfig,
+  canConnect,
+  COMMENTS_CONFIG,
+  isDoneMapping,
+  pickSyncValues,
+  registerIssueProvider,
+  t,
+  tokenAuth,
+} from '../../issue-provider-kit';
 
 declare const PluginAPI: {
-  registerIssueProvider(definition: IssueProviderPluginDefinition): void;
-  translate(key: string, params?: Record<string, string | number>): string;
   log: {
     err: (...args: unknown[]) => void;
   };
@@ -77,14 +83,6 @@ interface GiteaComment {
   user: GiteaUser | null;
 }
 
-const t = (key: string): string => {
-  try {
-    return PluginAPI.translate(key);
-  } catch {
-    return key;
-  }
-};
-
 const baseUrl = (cfg: GiteaConfig): string => {
   const host = (cfg.host || '').replace(/\/+$/, '');
   if (!host) {
@@ -95,13 +93,10 @@ const baseUrl = (cfg: GiteaConfig): string => {
 
 // Auth is sent as `Authorization: token <token>` (a Gitea-supported scheme),
 // which keeps the token out of request URLs / logs.
-const giteaHeaders = (cfg: GiteaConfig): Record<string, string> => {
-  const headers: Record<string, string> = { accept: 'application/json' };
-  if (cfg.token) {
-    headers['Authorization'] = `token ${cfg.token}`;
-  }
-  return headers;
-};
+const giteaHeaders = (cfg: GiteaConfig): Record<string, string> => ({
+  accept: 'application/json',
+  ...tokenAuth(cfg.token),
+});
 
 const parseLabelList = (raw: string | undefined): string[] =>
   (raw ?? '')
@@ -146,7 +141,7 @@ const mapSearchResult = (issue: GiteaIssue): PluginSearchResult => ({
   labels: (issue.labels ?? []).map((l) => l.name),
 });
 
-PluginAPI.registerIssueProvider({
+registerIssueProvider({
   configFields: [
     {
       key: 'host',
@@ -197,16 +192,14 @@ PluginAPI.registerIssueProvider({
     },
   ],
 
-  getHeaders(config: Record<string, unknown>): Record<string, string> {
-    return giteaHeaders(config as unknown as GiteaConfig);
-  },
+  getHeaders: (config) => giteaHeaders(asConfig<GiteaConfig>(config)),
 
   async searchIssues(
     searchTerm: string,
     config: Record<string, unknown>,
     http: PluginHttp,
   ): Promise<PluginSearchResult[]> {
-    const cfg = config as unknown as GiteaConfig;
+    const cfg = asConfig<GiteaConfig>(config);
     const base = baseUrl(cfg);
     const includedLabels = parseLabelList(cfg.filterLabels);
     const excludedLabels = parseLabelList(cfg.excludeLabels);
@@ -240,7 +233,7 @@ PluginAPI.registerIssueProvider({
     config: Record<string, unknown>,
     http: PluginHttp,
   ): Promise<PluginIssue> {
-    const cfg = config as unknown as GiteaConfig;
+    const cfg = asConfig<GiteaConfig>(config);
     const base = baseUrl(cfg);
     const issueUrl = `${base}/repos/${cfg.repoFullname}/issues/${issueId}`;
     const issue = await http.get<GiteaIssue>(issueUrl);
@@ -280,7 +273,7 @@ PluginAPI.registerIssueProvider({
   },
 
   getIssueLink(issueId: string, config: Record<string, unknown>): string {
-    const cfg = config as unknown as GiteaConfig;
+    const cfg = asConfig<GiteaConfig>(config);
     const host = (cfg.host || '').replace(/\/+$/, '');
     return `${host}/${cfg.repoFullname}/issues/${issueId}`;
   },
@@ -289,20 +282,15 @@ PluginAPI.registerIssueProvider({
     config: Record<string, unknown>,
     http: PluginHttp,
   ): Promise<boolean> {
-    const cfg = config as unknown as GiteaConfig;
-    try {
-      await http.get(`${baseUrl(cfg)}/repos/${cfg.repoFullname}`);
-      return true;
-    } catch {
-      return false;
-    }
+    const cfg = asConfig<GiteaConfig>(config);
+    return canConnect(() => http.get(`${baseUrl(cfg)}/repos/${cfg.repoFullname}`));
   },
 
   async getNewIssuesForBacklog(
     config: Record<string, unknown>,
     http: PluginHttp,
   ): Promise<PluginSearchResult[]> {
-    const cfg = config as unknown as GiteaConfig;
+    const cfg = asConfig<GiteaConfig>(config);
     const base = baseUrl(cfg);
     const includedLabels = parseLabelList(cfg.filterLabels);
     const excludedLabels = parseLabelList(cfg.excludeLabels);
@@ -368,29 +356,10 @@ PluginAPI.registerIssueProvider({
     { field: 'body', label: t('DISPLAY.DESCRIPTION'), type: 'markdown' },
   ],
 
-  commentsConfig: {
-    authorField: 'author',
-    bodyField: 'body',
-    createdField: 'created',
-    avatarField: 'avatarUrl',
-  },
+  commentsConfig: COMMENTS_CONFIG,
 
   // Read-only provider: pull-only mappings drive remote-update detection only.
-  fieldMappings: [
-    {
-      taskField: 'isDone',
-      issueField: 'state',
-      defaultDirection: 'pullOnly',
-      toIssueValue: (taskValue: unknown): string => (taskValue ? 'closed' : 'open'),
-      toTaskValue: (issueValue: unknown): boolean => issueValue === 'closed',
-    },
-  ] satisfies PluginFieldMapping[],
+  fieldMappings: [isDoneMapping()],
 
-  extractSyncValues(issue: PluginIssue): Record<string, unknown> {
-    return {
-      state: issue.state,
-      title: issue.title,
-      body: issue.body,
-    };
-  },
+  extractSyncValues: pickSyncValues('state', 'title', 'body'),
 });

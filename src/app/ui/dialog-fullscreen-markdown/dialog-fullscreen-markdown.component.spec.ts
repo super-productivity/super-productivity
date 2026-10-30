@@ -395,6 +395,38 @@ describe('DialogFullscreenMarkdownComponent', () => {
   });
 
   describe('close with discard', () => {
+    it('detects changes against the original content, including clearing and reverting', () => {
+      const original = component.data.content;
+      expect(component.hasUnsavedChanges).toBe(false);
+
+      component.data.content = '';
+      expect(component.hasUnsavedChanges).toBe(true);
+
+      component.data.content = original;
+      expect(component.hasUnsavedChanges).toBe(false);
+    });
+
+    it('treats a recovered draft as unsaved even before further editing', () => {
+      dialogData.originalContent = 'Persisted note';
+      const recoveredComponent = TestBed.createComponent(
+        DialogFullscreenMarkdownComponent,
+      ).componentInstance;
+
+      expect(recoveredComponent.hasUnsavedChanges).toBe(true);
+    });
+
+    it('closes an already-confirmed discard without opening another confirmation', () => {
+      const confirmDialogSpy = spyOn(component['_matDialog'], 'open');
+      component.data.content = 'Edited note';
+
+      component.closeAfterConfirmedDiscard();
+
+      expect(confirmDialogSpy).not.toHaveBeenCalled();
+      expect(component._matDialogRef.close).toHaveBeenCalledOnceWith({
+        action: 'DISCARD',
+      });
+    });
+
     it('should close without confirmation when the content is unmodified', () => {
       const confirmDialogSpy = spyOn(component['_matDialog'], 'open');
 

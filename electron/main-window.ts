@@ -15,9 +15,10 @@ import { pathToFileURL } from 'node:url';
 import { IPC } from './shared-with-frontend/ipc-events.const';
 import { isExternalUrlSchemeAllowed } from './shared-with-frontend/is-external-url-allowed';
 import { isLocalFileUrl, openLocalPath } from './open-url';
+import { getApiUserAgent, isGitLabApiUrl } from './api-user-agent';
 import { readFileSync, watch } from 'fs';
 import { error, log } from 'electron-log/main';
-import { IS_MAC, IS_GNOME_WAYLAND } from './common.const';
+import { IS_MAC, IS_LINUX, IS_GNOME_WAYLAND } from './common.const';
 import {
   destroyTaskWidget,
   getIsTaskWidgetAlwaysShow,
@@ -61,11 +62,17 @@ let mainWin: BrowserWindow;
 let appLoadedUrl: string | undefined;
 
 // Compact WCO band on Win/Linux. Native button width is OS-controlled
-// (~138px total); only height is configurable. Lower values may be
-// clamped to the OS minimum (~24–28px on Win11) — Electron silently
-// floors instead of rejecting. Stays well clear of the vertical action
-// strip which positions itself --bar-height (48px) down.
-const WCO_HEIGHT = 24;
+// (~138px total on Windows); only height is configurable. Lower values may
+// be clamped to the OS minimum (~24–28px on Win11) — Electron silently
+// floors instead of rejecting.
+// Since Electron 44, Linux draws theme-styled round buttons (24px circles
+// for Adwaita, 18px for Breeze) centered in the band and capped at its
+// height, so a 24px band makes the Adwaita circles touch the window's top
+// edge. 32px is Electron's own default band for them: 4px above and below
+// a 24px circle. Not taller: the strip behind the buttons is a native drag
+// region for the full band height, and with the right panel open it covers
+// the panel's top-right corner, swallowing clicks on the controls there.
+const WCO_HEIGHT = IS_LINUX ? 32 : 24;
 
 /**
  * Returns theme-aware background color for titlebar overlay.
@@ -247,6 +254,7 @@ export const createWindow = async ({
     // frame: true,
   });
 
+  const apiUserAgent = getApiUserAgent(app.getVersion());
   // see: https://pratikpc.medium.com/bypassing-cors-with-electron-ab7eaf331605
   mainWin.webContents.session.webRequest.onBeforeSendHeaders((details, callback) => {
     const { requestHeaders } = details;
@@ -272,6 +280,10 @@ export const createWindow = async ({
       )
     ) {
       removeKeyInAnyCase(requestHeaders, 'User-Agent');
+    } else if (isGitLabApiUrl(details.url)) {
+      // Anubis-protected instances challenge browser UAs (#10650)
+      removeKeyInAnyCase(requestHeaders, 'User-Agent');
+      requestHeaders['User-Agent'] = apiUserAgent;
     }
     // WebDavHttpAdapter marks desktop uploads because renderer fetch refuses to
     // set Connection itself. Consume the marker here; it must not reach the
@@ -817,7 +829,9 @@ const appCloseHandler = (app: App): void => {
 
       event.preventDefault();
 
-      if (ids.length > 0) {
+      // A gone renderer (killed, oom, ...) never answers, so waiting for it
+      // would leave no way to quit.
+      if (ids.length > 0 && !mainWin.webContents.isCrashed()) {
         log('Actions to wait for ', ids);
         mainWin.webContents.send(IPC.NOTIFY_ON_CLOSE, ids);
       } else {

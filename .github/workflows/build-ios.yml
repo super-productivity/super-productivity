@@ -4,23 +4,31 @@ on:
     tags:
       - v*
   workflow_dispatch:
-    inputs: {}
+    inputs:
+      build_only:
+        description: 'Build and export IPA without uploading to App Store Connect'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
 
 jobs:
   ios-app-store-release:
     runs-on: macos-26
+    timeout-minutes: 45
     env:
       UNSPLASH_KEY: ${{ secrets.UNSPLASH_KEY }}
       UNSPLASH_CLIENT_ID: ${{ secrets.UNSPLASH_CLIENT_ID }}
 
     steps:
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
-        with:
-          node-version: 22
       - name: Check out Git repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
         with:
           persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v6
+        with:
+          node-version-file: .nvmrc
 
       # work around for npm installs from git+https://github.com/johannesjo/J2M.git
       - name: Reconfigure git to use HTTP authentication
@@ -31,11 +39,11 @@ jobs:
       - name: Configure iOS signing
         uses: ./.github/actions/setup-ios-signing
         with:
-          mac_certs: ${{ secrets.mac_certs }}
-          mac_certs_password: ${{ secrets.mac_certs_password }}
-          ios_provision_profile: ${{ secrets.IOS_PROVISION_PROFILE }}
-          ios_share_provision_profile: ${{ secrets.IOS_SHARE_PROVISION_PROFILE }}
-          ios_widget_provision_profile: ${{ secrets.IOS_WIDGET_PROVISION_PROFILE }}
+          mac_certs: ${{ secrets.apple_distribution_cert }}
+          mac_certs_password: ${{ secrets.apple_distribution_cert_password }}
+          ios_provision_profile: ${{ secrets.IOS_APP_STORE_PROFILE }}
+          ios_share_provision_profile: ${{ secrets.IOS_SHARE_APP_STORE_PROFILE }}
+          ios_widget_provision_profile: ${{ secrets.IOS_WIDGET_APP_STORE_PROFILE }}
 
       - name: Get npm cache directory
         id: npm-cache-dir
@@ -97,6 +105,9 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO
 
+      - name: Carry entitlements into the archive
+        run: tools/sign-ios-archive-adhoc.sh "$RUNNER_TEMP/App.xcarchive"
+
       - name: Create ExportOptions.plist
         run: |
           cat > "$RUNNER_TEMP/ExportOptions.plist" << EOF
@@ -154,8 +165,13 @@ jobs:
       - name: List exported files
         run: ls -la "$RUNNER_TEMP/ipa-output"
 
+      - name: Verify App Group entitlement
+        run: |
+          unzip -q "$RUNNER_TEMP"/ipa-output/*.ipa -d "$RUNNER_TEMP/ipa-check"
+          tools/assert-ios-app-group-entitlements.sh "$RUNNER_TEMP/ipa-check/Payload/App.app"
+
       - name: Upload IPA artifact
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: sup-ios-release
           path: ${{ runner.temp }}/ipa-output/*.ipa
@@ -165,7 +181,7 @@ jobs:
         # .ruby-version file in the repo the action errors out rather than
         # using system Ruby. bundler-cache runs `bundle install` and caches the
         # ~210-gem fastlane tree so it isn't reinstalled each run.
-        uses: ruby/setup-ruby@14594264cd68ce8a2345dd349bc3d138a4ef85c8 # v1.327.0
+        uses: ruby/setup-ruby@26e5b7d197ebf60545ee9667bcbace0be11ccaec # v1.334.0
         with:
           ruby-version: '3.3'
           bundler-cache: true
@@ -179,6 +195,7 @@ jobs:
       # build (TestFlight). The "-" check is case-insensitive by construction,
       # unlike contains(...,'RC'); the repo's RC tags are mostly lowercase.
       - name: Upload to App Store Connect and submit for review
+        if: ${{ !inputs.build_only }}
         env:
           ASC_KEY_ID: ${{ secrets.mac_api_key_id }}
           ASC_ISSUER_ID: ${{ secrets.mac_api_key_issuer_id }}

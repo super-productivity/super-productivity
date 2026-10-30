@@ -59,9 +59,7 @@ const syncOutcome = async (client: SimulatedE2EClient): Promise<string> => {
           : (await client.sync.hasSyncError())
             ? 'error'
             : !(await client.sync.syncSpinner.isVisible()) &&
-                (await client.sync.syncCheckIcon
-                  .filter({ hasText: /^done_all$/ })
-                  .isVisible())
+                (await client.sync.syncConfirmedIcon.isVisible())
               ? 'in-sync'
               : 'pending';
         return outcome;

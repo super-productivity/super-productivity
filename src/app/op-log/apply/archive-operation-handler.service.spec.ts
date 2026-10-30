@@ -203,6 +203,82 @@ describe('ArchiveOperationHandler', () => {
     service = TestBed.inject(ArchiveOperationHandler);
   });
 
+  describe('local operation queue', () => {
+    const createLocalRestoreAction = (taskId: string): PersistentAction =>
+      ({
+        type: TaskSharedActions.restoreTask.type,
+        task: createMockTask(taskId),
+        subTasks: [],
+        meta: { isPersistent: true },
+      }) as unknown as PersistentAction;
+
+    const createDeferred = (): { promise: Promise<void>; resolve: () => void } => {
+      let resolve!: () => void;
+      const promise = new Promise<void>((r) => (resolve = r));
+      return { promise, resolve };
+    };
+
+    it('should run enqueued operations one at a time, in order', async () => {
+      const first = createDeferred();
+      mockTaskArchiveService.deleteTasks.and.callFake((taskIds: string[]) =>
+        taskIds[0] === 'task-1' ? first.promise : Promise.resolve(),
+      );
+
+      const firstRun = service.enqueueLocalOperation(createLocalRestoreAction('task-1'));
+      const secondRun = service.enqueueLocalOperation(createLocalRestoreAction('task-2'));
+      await new Promise((resolve) => setTimeout(resolve));
+
+      expect(mockTaskArchiveService.deleteTasks.calls.allArgs()).toEqual([
+        [['task-1'], {}],
+      ]);
+
+      first.resolve();
+      await Promise.all([firstRun, secondRun]);
+
+      expect(mockTaskArchiveService.deleteTasks.calls.allArgs()).toEqual([
+        [['task-1'], {}],
+        [['task-2'], {}],
+      ]);
+    });
+
+    it('should settle only after every operation enqueued so far has finished', async () => {
+      const removal = createDeferred();
+      mockTaskArchiveService.deleteTasks.and.returnValue(removal.promise);
+      let isSettled = false;
+
+      void service.enqueueLocalOperation(createLocalRestoreAction('task-1'));
+      const settled = service.whenLocalOperationsSettled().then(() => {
+        isSettled = true;
+      });
+      await new Promise((resolve) => setTimeout(resolve));
+
+      expect(isSettled).toBe(false);
+
+      removal.resolve();
+      await settled;
+
+      expect(isSettled).toBe(true);
+    });
+
+    it('should reject only the failing operation and keep the queue running', async () => {
+      mockTaskArchiveService.deleteTasks.and.callFake((taskIds: string[]) =>
+        taskIds[0] === 'task-1'
+          ? Promise.reject(new Error('Archive write failed'))
+          : Promise.resolve(),
+      );
+
+      const failingRun = service.enqueueLocalOperation(
+        createLocalRestoreAction('task-1'),
+      );
+      const nextRun = service.enqueueLocalOperation(createLocalRestoreAction('task-2'));
+
+      await expectAsync(failingRun).toBeRejectedWithError('Archive write failed');
+      await expectAsync(nextRun).toBeResolved();
+      await expectAsync(service.whenLocalOperationsSettled()).toBeResolved();
+      expect(mockTaskArchiveService.deleteTasks).toHaveBeenCalledWith(['task-2'], {});
+    });
+  });
+
   describe('handleOperation', () => {
     it('should expose archive side effects through ArchiveSideEffectPort without mutating action meta', async () => {
       const port: ArchiveSideEffectPort<PersistentAction> = service;

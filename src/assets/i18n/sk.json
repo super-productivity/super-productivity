@@ -86,6 +86,10 @@
     "INTRO_2": "Ak si vážite tento prístup a chcete, aby projekt zostal zdravý a vyvíjal sa, dobrovoľný príspevok je veľmi ocenený."
   },
   "EXAMPLE_TASKS": {
+    "GETTING_STARTED": {
+      "TITLE": "Voliteľné: tipy na začiatok",
+      "NOTES": "Nič z toho tu nie je povinné. Túto úlohu môžete kedykoľvek odstrániť.\n\n- **Dnes a Doručená pošta**: Dnes zobrazuje, čo je naplánované na dnes. Úlohy bez vlastného projektu zostávajú v časti Doručená pošta. Úloha sa môže zobraziť v oboch zoznamoch.\n- **Projekty**: zoskupujte úlohy podľa témy pomocou **+** vedľa položky **Projekty** v bočnom paneli.\n- **Synchronizácia**: majte svoje dáta na viacerých zariadeniach v **Nastavenia → Synchronizácia a záloha**.\n- **Prichádzate z Todoistu alebo TickTicku?** Importujte svoje úlohy v **Nastavenia → Synchronizácia a záloha → Import/Export**.\n- **Prehliadky**: **Pomoc → Rýchla prehliadka** v ponuke bočného panela vás prevedie základmi na vašej vlastnej úlohe a **Pomoc → Ako na to** krok za krokom ukáže krátku syntax a ovládanie klávesnicou. Prehliadku môžete kedykoľvek zavrieť.\n- **Prispôsobte si to**: vyberte motív alebo tmavý režim a funkcie ako tabule, plán, návyky, režim zamerania či integrácie zapínajte a vypínajte v **Nastavenia → Všeobecné**. Pluginy pridávajú ešte viac."
+    },
     "LEARN_KEYBOARD_SHORTCUTS": {
       "TITLE": "Naučte sa klávesové skratky",
       "NOTES": "Super Productivity je navrhnuté na ovládanie klávesnicou. Naučte sa skratky, aby ste pracovali rýchlejšie.\n\n**Ako začať:**\n1. Otvorte **bočné menu**\n2. Prejdite na **Pomoc**\n3. Kliknite na **Prehliadka klávesovej navigácie**"
@@ -208,7 +212,7 @@
         "POLL_INTERVAL_MINUTES": "Interval zisťovania zmien (v minútach)"
       },
       "FORM_SECTION": {
-        "HELP": "<p>Here you can configure SuperProductivity to list uncompleted CalDav todos for a specific project in the task creation panel in the daily planning view. They will be listed as suggestions and will provide a link to the todo as well as more information about it.</p> <p>In addition you can automatically add and sync all uncompleted todos to your task backlog.</p><p>To make it work for nextcloud on mobile and web, you might need to whitelist \"https://app.super-productivity.com\" via the nextcloud app <a href='https://apps.nextcloud.com/apps/webapppassword'>webapppassword<a>.</p>"
+        "HELP": "<p>Here you can configure SuperProductivity to list uncompleted CalDav todos for a specific project in the task creation panel in the daily planning view. They will be listed as suggestions and will provide a link to the todo as well as more information about it.</p> <p>In addition you can automatically add and sync all uncompleted todos to your task backlog.</p><p>To make it work for nextcloud on mobile and web, you might need to whitelist \"https://app.super-productivity.com\" via the nextcloud app <a href='https://apps.nextcloud.com/apps/webapppassword'>webapppassword</a>.</p>"
       },
       "ISSUE_CONTENT": {
         "DESCRIPTION": "Popis",
@@ -537,7 +541,8 @@
         "OAUTH_FAILED": "Overenie zlyhalo.",
         "OAUTH_FAILED_WITH_DETAIL": "Overenie zlyhalo: {{detail}}",
         "REMOTE_ISSUE_DELETED": "Vzdialený problém bol odstránený. Odstrániť prepojenú úlohu \"{{taskTitle}}\"?",
-        "REMOTE_ISSUE_DELETED_WITH_TIME": "Vzdialený problém bol odstránený, ale pri úlohe \"{{taskTitle}}\" je sledovaný čas. Napriek tomu ju odstrániť?"
+        "REMOTE_ISSUE_DELETED_WITH_TIME": "Vzdialený problém bol odstránený, ale pri úlohe \"{{taskTitle}}\" je sledovaný čas. Napriek tomu ju odstrániť?",
+        "POST_TIME_SUCCESS": "{{providerName}}: Záznam času pre {{issueTitle}} bol úspešne vytvorený"
       },
       "TWO_WAY_SYNC": {
         "AUTO_CREATE_ISSUES": "Automaticky vytvárať úlohy pre nové úlohy",
@@ -566,6 +571,15 @@
         "POLLING_MODE_DESCRIPTION": "Kedy zisťovať zmeny: iba ak je otvorený príslušný projekt alebo značka, alebo vždy na pozadí",
         "POLLING_MODE_WHEN_PROJECT_OPEN": "Keď je kontext otvorený",
         "POLLING_MODE_ALWAYS": "Vždy (na pozadí)"
+      },
+      "DIALOG_TRACK_TIME": {
+        "ACTIVITY": "Aktivita",
+        "TIME_SPENT": "Strávený čas",
+        "INVALID_DATE": "Zadaná hodnota nie je dátum\\!",
+        "POST_TIME": "Odoslať čas",
+        "STARTED": "Začaté",
+        "SUBMIT_TIME_FOR": "Odoslať čas do {{providerName}} pre",
+        "TITLE": "{{providerName}}: Odoslať záznam práce"
       }
     },
     "ISSUE_PANEL": {
@@ -789,33 +803,6 @@
         "REMINDER_NEEDS_TEXT": "Napíšte reflexiu predtým, než požiadate o pripomienku",
         "REMINDER_TASK_TITLE": "Znovu navštívte poznámku reflexie",
         "TITLE": "Poznámka reflexie"
-      }
-    },
-    "NEXTCLOUD_DECK": {
-      "ISSUE_CONTENT": {
-        "LABELS": "Štítky",
-        "ASSIGNED_USERS": "Priradení používatelia",
-        "DECK_DESCRIPTION": "Popis karty Deck",
-        "STACK": "Zásobník"
-      },
-      "FORM": {
-        "BASE_URL": "Základná URL adresa Nextcloud",
-        "FILTER_BY_ASSIGNEE": "Importovať len karty priradené mne",
-        "IS_TRANSITION_ISSUES_ENABLED": "Synchronizovať stav dokončenia a názov späť do Nextcloud Deck",
-        "PASSWORD": "Vaše heslo aplikácie Nextcloud",
-        "POLL_INTERVAL_MINUTES": "Interval kontroly (minúty)",
-        "TITLE_TEMPLATE": "Šablóna názvu úlohy",
-        "TITLE_TEMPLATE_DESCRIPTION": "Premenné: {CARD_TITLE}, {BOARD}, {COLUMN}, {ID}, {LABELS}. Príklad: [{BOARD}: {COLUMN}] {CARD_TITLE}. Nechajte prázdne pre samotný názov karty.",
-        "USERNAME": "Vaše používateľské meno Nextcloud"
-      },
-      "FORM_SECTION": {
-        "HELP": "Nakonfigurujte integráciu Nextcloud Deck na import kariet ako úloh. Na autentifikáciu použite heslo aplikácie."
-      },
-      "S": {
-        "BOARD_NOT_FOUND": "Nextcloud Deck: Nástenka nebola nájdená",
-        "CARD_NOT_FOUND": "Nextcloud Deck: Karta \"{{issueId}}\" bola zrejme odstránená zo servera.",
-        "ERR_CREDENTIALS_MISSING": "Najprv zadajte URL adresu Nextcloud, používateľské meno a heslo.",
-        "ERR_LOAD_BOARDS": "Nepodarilo sa načítať nástenky Deck. Skontrolujte prihlasovacie údaje."
       }
     },
     "NOTE": {
@@ -1076,44 +1063,6 @@
       "NO_DATA": "Žiadne údaje za aktuálny rok",
       "PAGE_TITLE": "Rýchla história",
       "WEEK_TITLE": "Týždeň {{nr}} ({{timeSpent}})"
-    },
-    "REDMINE": {
-      "DIALOG_TRACK_TIME": {
-        "ACTIVITY": "Aktivita",
-        "TIME_SPENT": "Strávený čas",
-        "INVALID_DATE": "Zadaná hodnota nie je dátum\\!",
-        "POST_TIME": "Odoslať čas",
-        "STARTED": "Začaté",
-        "SUBMIT_TIME_FOR": "Odoslať čas do Redmine pre",
-        "TITLE": "Redmine: Odoslať záznam práce"
-      },
-      "FORM": {
-        "API_KEY": "Prístupový kľúč API",
-        "HOST": "Hostiteľ (napr.: https://redmine.org)",
-        "PROJECT_ID": "Identifikátor projektu",
-        "PROJECT_ID_DESCRIPTION": "Môže sa nájsť ako súčasť URL, keď sa projekt zobrazuje v prehliadači.",
-        "SCOPE": "Rozsah",
-        "SCOPE_ALL": "Všetky",
-        "SCOPE_ASSIGNED": "Priradené mne",
-        "SCOPE_CREATED": "Vytvorené mnou",
-        "IS_SHOW_TIME_TRACKING_DIALOG": "Zobraziť dialóg sledovania času pre hlásenie do Redmine",
-        "IS_SHOW_TIME_TRACKING_DIALOG_DESCRIPTION": "Vyžaduje povolený modul sledovania času v projekte Redmine",
-        "IS_SHOW_TIME_TRACKING_DIALOG_FOR_EACH_SUB_TASK": "Zobraziť dialóg sledovania času pri dokončení podúloh"
-      },
-      "FORM_SECTION": {
-        "HELP": "<p>Tu môžete nakonfigurovať program SuperProductivity tak, aby na paneli vytvárania úloh v zobrazení denného plánovania zobrazoval zoznam otvorených problémov Redmine (buď jeho online verzie, alebo samostatne hostovanej inštancie) pre konkrétny projekt. Budú uvedené ako návrhy a budú obsahovať odkaz na problém, ako aj ďalšie informácie o ňom.</p><p>Okrem toho môžete automaticky importovať všetky otvorené problémy.</p>",
-        "TITLE": "Redmine"
-      },
-      "ISSUE_CONTENT": {
-        "AUTHOR": "Autor",
-        "DESCRIPTION": "Popis",
-        "MARK_AS_CHECKED": "Označiť aktualizácie ako skontrolované",
-        "PRIORITY": "Priorita",
-        "STATUS": "Stav"
-      },
-      "S": {
-        "POST_TIME_SUCCESS": "Redmine: Záznam času pre {{issueTitle}} bol úspešne vytvorený"
-      }
     },
     "REFLECTION_NOTE": {
       "ACTION_DISMISS": "Zrušiť",
@@ -1454,7 +1403,7 @@
         },
         "TITLE": "Synchronizácia",
         "WEB_DAV": {
-          "CORS_INFO": "<strong>Making it work on MOBILE and in the browser:</strong> To make this work for mobile or the browser you need to whitelist Super Productivity for CORS requests for your Nextcloud instance. This can have negative security implications! Please <a href='https://github.com/nextcloud/server/issues/3131'>refer to this thread for more information</a>. One approach to make this work on mobile is whitelisting \"https://app.super-productivity.com\" via the nextcloud app <a href='https://apps.nextcloud.com/apps/webapppassword'>webapppassword<a>. Use at your own risk!</p>",
+          "CORS_INFO": "<strong>Making it work on MOBILE and in the browser:</strong> To make this work for mobile or the browser you need to whitelist Super Productivity for CORS requests for your Nextcloud instance. This can have negative security implications! Please <a href='https://github.com/nextcloud/server/issues/3131'>refer to this thread for more information</a>. One approach to make this work on mobile is whitelisting \"https://app.super-productivity.com\" via the nextcloud app <a href='https://apps.nextcloud.com/apps/webapppassword'>webapppassword</a>. Use at your own risk!</p>",
           "D_SYNC_FOLDER_PATH": "Cesta relatívna k koreňu WebDAV servera, kde budú uložené synchronizačné súbory (napr. ' /super-productivity' alebo ' /'). Toto NIE je interná cesta vášho servera.",
           "INFO": "Implementácie WebDAV sa bohužiaľ veľmi líšia. Super Productivity je známy tým, že dobre funguje s Nextcloud, <strong>ale nemusí fungovať s vaším poskytovateľom</strong>.",
           "L_BASE_URL": "Základná URL adresa",
@@ -1539,8 +1488,8 @@
         "ERROR_CORS": "Chyba synchronizácie WebDAV: Sieťová požiadavka zlyhala.\n\nMôže to byť problém s CORS. Prosím, uistite sa:\n Vaše WebDAV server umožňuje požiadavky z rôznych zdrojov\n URL servera je správna a prístupná\n Máte funkčné internetové pripojenie",
         "ERROR_DATA_IS_CURRENTLY_WRITTEN": "Vzdialené dáta sa momentálne zapisujú",
         "ERROR_PERMISSION": "Prístup k súboru zamietnutý. Skontrolujte, prosím, oprávnenia súborového systému.",
-        "ERROR_PERMISSION_FLATPAK": "Prístup k súboru zamietnutý. Udeľte oprávnenie k súborovému systému cez Flatseal alebo použite cestu v rámci ~\\/var\\/app\\/",
-        "ERROR_PERMISSION_SNAP": "Prístup k súboru zamietnutý. Spustite 'snap connect super-productivity:home' alebo použite cestu v rámci ~\\/snap\\/super-productivity\\/common\\/",
+        "ERROR_PERMISSION_FLATPAK": "Prístup k súboru zamietnutý. Udeľte oprávnenie k súborovému systému cez Flatseal alebo použite cestu v rámci ~/var/app/",
+        "ERROR_PERMISSION_SNAP": "Prístup k súboru zamietnutý. Spustite 'snap connect super-productivity:home' alebo použite cestu v rámci ~/snap/super-productivity/common/",
         "ERROR_REMOTE_RESPONSE_NOT_SYNC_DATA": "Synchronizačný server odpovedal webovou stránkou namiesto tvojich synchronizačných údajov (napr. prihlasovacou, proxy alebo chybovou stránkou). Vzdialené údaje sú pravdepodobne v poriadku — skontroluj URL servera, prihlasovacie údaje a sieť a skús to znova. Ak problém pretrváva, môžeš vzdialené údaje prepísať cez Nastavenia synchronizácie → Vynútiť prepísanie.",
         "INCOMPLETE_CFG": "Overenie pre synchronizáciu zlyhalo. Prosím, skontrolujte svoju konfiguráciu!",
         "REMOTE_NOT_ENCRYPTED": "Synchronizované údaje nie sú šifrované, ale na tomto zariadení je šifrovanie zapnuté, takže boli odmietnuté. Ak si šifrovanie vypol na inom zariadení, vypni ho pre pokračovanie aj tu v nastaveniach synchronizácie.",
@@ -2912,8 +2861,17 @@
     },
     "SOUND": {
       "BREAK_REMINDER_SOUND": "Zvuk pripomínajúci prestávku",
+      "DING": "Zvonček",
       "DONE_SOUND": "Zvuk dokončenia úlohy",
       "IS_INCREASE_DONE_PITCH": "Zvýšiť výšku tónu za každú vykonanú úlohu",
+      "SMALL_DING": "Malý zvonček",
+      "SOUND_1": "Zvuk 1",
+      "SOUND_2": "Zvuk 2",
+      "SOUND_3": "Zvuk 3",
+      "SOUND_4": "Zvuk 4",
+      "SOUND_5": "Zvuk 5",
+      "SOUND_6": "Zvuk 6",
+      "SOUND_7": "Zvuk 7",
       "TITLE": "Zvuk",
       "TRACK_TIME_SOUND": "Zvuk pripomenutia času skladby",
       "VOLUME": "Volume"
@@ -3050,6 +3008,7 @@
       "CONTRIBUTE": "Prispieť na",
       "GET_HELP_ONLINE": "Získajte pomoc online",
       "KEYBOARD": "Ako na to: Pokročilá klávesnica",
+      "QUICK_TOUR": "Rýchla prehliadka",
       "REDDIT_COMMUNITY": "Komunita Reddit",
       "REPORT_A_PROBLEM": "Nahlásiť problém",
       "SEND_FEEDBACK": "Poslať spätnú väzbu",
@@ -3140,13 +3099,50 @@
     "HINTS": {
       "CREATE_TASK": "Kliknite na + pre pridanie prvej úlohy",
       "CREATE_TASK_TOUCH": "Ťuknite na + pre pridanie prvej úlohy",
+      "DECLINED": "V poriadku. Nájdete to kedykoľvek v Pomoc → Rýchla prehliadka.",
+      "MORE_FALLBACK": "Viac je už zapnuté: projekty, sledovanie času, Plánovač…",
+      "NO_THANKS": "Nie, ďakujem",
+      "SHOW_ME_MORE": "Ukáž mi viac ›",
       "EXPLORE": "Kľudne klikajte a objavujte! Pomoc nájdete v bočnom paneli.",
       "EXPLORE_TOUCH": "Kľudne objavujte! Pomoc nájdete v menu.",
       "TASK_TAP_TOUCH": "Ťuknite na úlohu a otvorte jej podrobnosti.",
       "TASK_SWIPE_LEFT_TOUCH": "Potiahnite úlohu doľava pre ďalšie akcie",
+      "TODAY_AND_INBOX": "Táto úloha je naplánovaná na dnes, a preto sa zobrazuje v {{todayIcon}} <b>Dnes</b>. Úlohy bez vlastného projektu zostávajú v {{inboxIcon}} <b>Doručená pošta</b>.",
+      "TODAY_AND_INBOX_PHONE": "Táto úloha je naplánovaná na dnes, a preto sa zobrazuje v {{todayIcon}} <b>Dnes</b>. Úlohy bez vlastného projektu zostávajú v {{inboxIcon}} <b>Doručená pošta</b>, pod ☰.",
       "TASK_SWIPE_RIGHT_TOUCH": "Potiahnite úlohu doprava a označte ju ako hotovú",
       "OR_PRESS": "alebo stlačte",
       "SKIP_ARIA": "Zavrieť nápovedu"
+    },
+    "TOUR": {
+      "ADD_SUBTASK": "Rozdeľte ju: kliknite na úlohu pravým tlačidlom a vyberte {{subtaskIcon}} <b>Pridať podúlohu</b>",
+      "COUNTER": "{{nr}} z {{total}}",
+      "NEXT": "Ďalej ›",
+      "ORGANIZE": "Vytvorte si vlastný <b>projekt</b> na zoskupenie úloh alebo <b>štítok</b> na ich označenie. Vytvoríte ho pomocou +",
+      "ORGANIZE_COLLAPSED": "Vytvorte si vlastný <b>projekt</b> na zoskupenie úloh alebo <b>štítok</b> na ich označenie. Rozbaľte bočný panel pomocou {{expandIcon}} a vytvorte ho",
+      "ORGANIZE_PHONE": "Projekty a štítky nájdete pod ☰. Vytvorte si vlastný <b>projekt</b> na zoskupenie úloh alebo <b>štítok</b> na ich označenie",
+      "PLANNER": "Naplánujte ďalšie dni v {{plannerIcon}} <b>Plánovač</b>",
+      "TASK_MENU_TOUCH": "Potiahnutím úlohy doľava otvoríte jej ponuku: {{playIcon}} <b>Začať sledovanie času</b>, {{subtaskIcon}} <b>Pridať podúlohu</b>",
+      "TASK_MENU_TOUCH_NO_TRACKING": "Potiahnutím úlohy doľava otvoríte jej ponuku, napr. {{subtaskIcon}} <b>Pridať podúlohu</b>",
+      "TIMER_RUNNING": "Časovač beží. Na pozastavenie znova stlačte {{playIcon}} alebo <kbd>{{key}}</kbd>.",
+      "TIMER_RUNNING_TOUCH": "Časovač beží. Na pozastavenie ťuknite hore na {{playIcon}}.",
+      "TRACK_TIME": "Prejdite myšou nad úlohu a stlačením {{playIcon}} spustite sledovanie času"
+    },
+    "WANT_MORE": {
+      "BOARDS": "<b>Tabule</b> · stĺpce v štýle Kanban pre vaše úlohy",
+      "DONE": "Hotovo",
+      "FINISH_DAY": "<b>Ukončiť deň</b> · prejdite si a uzavrite svoj deň",
+      "FOCUS_MODE": "<b>Režim zamerania</b> · pomodoro a práca bez vyrušovania",
+      "FOOTER": "Nájdete to znova v Pomoc → Rýchla prehliadka.",
+      "HABITS": "<b>Návyky</b> · sledujte rutiny deň po dni",
+      "INTRO": "Super Productivity začína pokojne. Viac je poruke, keď to budete potrebovať:",
+      "OPEN_SETTINGS": "Otvoriť nastavenia ›",
+      "PLUGINS": "<b>Pluginy a integrácie</b> · Jira, GitHub, CalDAV a ďalšie",
+      "SCHEDULE": "<b>Plán</b> · váš deň na časovej osi",
+      "SEARCH": "Vyhľadávajte všetko pomocou <kbd>{{key}}</kbd>.",
+      "SEARCH_PHONE": "Vyhľadávajte všetko cez ☰.",
+      "SHORT_SYNTAX": "Pri pridávaní úlohy napíšte <code>#tag</code>, <code>+project</code> alebo <code>@tomorrow</code>. Viac ukáže Pomoc → Ako na to.",
+      "SYNC": "Vaše dáta zostávajú v tomto zariadení. Synchronizácia a zálohy sú v nastaveniach.",
+      "TITLE": "Chcete viac?"
     },
     "SYNC_CTA": "Používate už Super Productivity v inom zariadení?",
     "SYNC_CTA_LINK": "Nastaviť synchronizáciu"

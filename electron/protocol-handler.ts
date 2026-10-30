@@ -159,6 +159,13 @@ export const processProtocolUrl = (url: string, mainWin: BrowserWindow | null): 
         showOrFocus(mainWin);
         mainWin.webContents.send(IPC.SHOW_ADD_TASK_BAR);
         break;
+      // Opened, like `add-task`, by the dock menu / jump list (launcher-shortcuts.ts).
+      // The renderer navigates through the same AppUriQuickActionsService as iOS/Android.
+      case 'today':
+      case 'inbox':
+        showOrFocus(mainWin);
+        mainWin.webContents.send(IPC.APP_URI_QUICK_ACTION, url);
+        break;
       default:
         log('Unknown protocol action:', action);
     }

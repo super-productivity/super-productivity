@@ -16,11 +16,15 @@
     } @else {
       <done-toggle
         [isDone]="task().isDone"
+        [isWontDo]="isWontDo()"
         [isMultiSelectAware]="focusable()"
         [isCurrent]="isCurrent()"
         [showDoneAnimation]="showDoneAnimation()"
         [showUndoneAnimation]="showUndoneAnimation()"
-        [attr.aria-label]="T.F.TASK.CMP.TOGGLE_DONE | translate"
+        [attr.aria-label]="
+          (isWontDo() ? T.F.TASK.CMP.TOGGLE_DONE_WONT_DO : T.F.TASK.CMP.TOGGLE_DONE)
+            | translate
+        "
         (toggled)="toggleTaskDone()"
       ></done-toggle>
     }

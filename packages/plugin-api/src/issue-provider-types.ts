@@ -21,6 +21,10 @@ export interface PluginSearchResult {
   isAllDay?: boolean;
   /** Event description / body text */
   description?: string;
+  /** Color of the event's calendar, used to tell calendars apart in agenda views:
+   *  hex, rgb(a), hsl(a) or a color name (e.g. '#fbe983'); other values are
+   *  ignored. A color the user set on the provider takes precedence. */
+  color?: string;
   /** Provider-specific fields used by issue display and field mappings */
   [key: string]: unknown;
 }
@@ -30,6 +34,13 @@ export interface PluginIssue {
   title: string;
   body?: string;
   url?: string;
+  /**
+   * Without an `isDone` field mapping, a state listed in `doneStates` marks
+   * the task done on add; any other value marks it not done. A refresh only
+   * re-applies this when the provider declares a non-empty `doneStates`.
+   * Leave it unset when done-ness is unknown; a refresh then keeps the
+   * task's done state.
+   */
   state?: string;
   lastUpdated?: number;
   assignee?: string;
@@ -164,6 +175,16 @@ export interface IssueProviderPluginDefinition {
     config: Record<string, unknown>,
     http: PluginHttp,
   ): Promise<PluginIssue>;
+  /**
+   * Optional batch variant of `getById`, used when refreshing many tasks at
+   * once. Implement it when the API can return several issues in one request.
+   * Ids missing from the result are skipped (not treated as deleted).
+   */
+  getByIds?(
+    issueIds: string[],
+    config: Record<string, unknown>,
+    http: PluginHttp,
+  ): Promise<PluginIssue[]>;
   getIssueLink(issueId: string, config: Record<string, unknown>): string;
   testConnection?(config: Record<string, unknown>, http: PluginHttp): Promise<boolean>;
   getNewIssuesForBacklog?(
@@ -192,6 +213,10 @@ export interface IssueProviderPluginDefinition {
   ): Promise<void>;
   /** Issue states that indicate the issue was deleted remotely (e.g. ['cancelled'] for Google Calendar) */
   deletedStates?: string[];
+  /** Issue states that mark the task as done, matched case-insensitively (e.g. ['closed', 'done']).
+   *  Defaults to 'closed', 'done', 'completed' and 'resolved' on add; an empty list means no state counts as done.
+   *  Only a non-empty list makes a refresh update the task's done state; leave it unset (or map `isDone`) otherwise. */
+  doneStates?: string[];
   /** Optional time-block integration. Plugins that implement this allow SP tasks
    *  to automatically create/update/delete calendar events when scheduled to a specific time. */
   timeBlock?: {
@@ -213,11 +238,72 @@ export interface IssueProviderPluginDefinition {
       config: Record<string, unknown>,
       http: PluginHttp,
     ): Promise<void>;
+    /** Optional: write a finished work session (time actually tracked on a task)
+     *  as a calendar event. The host calls it once per session, only on the device
+     *  that tracked it, and only while the well-known config key `isLogWorkSessions`
+     *  (checkbox) is on — the plugin should expose it as a config field. */
+    logWorkSession?(
+      session: PluginWorkSession,
+      config: Record<string, unknown>,
+      http: PluginHttp,
+    ): Promise<void>;
   };
+  /** Optional time tracking (worklog) integration. When implemented, the host offers
+   *  its track-time dialog after a linked task is marked done. The dialog is controlled
+   *  by these well-known config keys, which the plugin should expose as config fields:
+   *  - `isShowTimeTrackingDialog` (checkbox) — show the dialog when a task is done
+   *  - `isShowTimeTrackingDialogForEachSubTask` (checkbox) — show it per subtask instead
+   *  - `timeTrackingDialogDefaultTime` (select: `AllTime` | `AllTimeMinusLogged` |
+   *    `TimeToday` | `TimeYesterday`) — preselected time; the dialog can update it */
+  timeTracking?: PluginTimeTracking;
+}
+
+export interface PluginWorkSession {
+  taskId: string;
+  /** Task title when the session ended */
+  title: string;
+  /** Start of the session (ms timestamp) */
+  start: number;
+  /** End of the session (ms timestamp) */
+  end: number;
+}
+
+export interface PluginTimeEntry {
+  /** Start of the logged work (ms timestamp) */
+  started: number;
+  timeSpentMs: number;
+  comment: string;
+  /** Selected activity id, when the plugin provides activities */
+  activityId?: number;
+}
+
+export interface PluginTimeTracking {
+  /** Create a time entry for the issue. Throw to keep the dialog open. */
+  logTime(
+    issueId: string,
+    entry: PluginTimeEntry,
+    config: Record<string, unknown>,
+    http: PluginHttp,
+  ): Promise<void>;
+  /** Time already logged on the issue by the current user (ms) */
+  getTimeLogged?(
+    issueId: string,
+    config: Record<string, unknown>,
+    http: PluginHttp,
+  ): Promise<number>;
+  /** Activities (e.g. "Development") the user can pick for a time entry */
+  getActivities?(
+    config: Record<string, unknown>,
+    http: PluginHttp,
+  ): Promise<{ id: number; name: string }[]>;
 }
 
 export interface IssueProviderManifestConfig {
   pollIntervalMs: number;
+  /** Fallback provider icon, used where the plugin's own `icon.svg` is unavailable.
+   * Must be the name of a built-in SVG icon (e.g. 'github', 'calendar');
+   * Material icon ligatures (e.g. 'confirmation_number') are not SVG icons and
+   * render no provider icon. */
   icon: string;
   /** Short human-readable name for the issue provider (e.g. 'GitHub', 'ClickUp').
    * Used in UI chips and labels. Falls back to the plugin name if not set. */

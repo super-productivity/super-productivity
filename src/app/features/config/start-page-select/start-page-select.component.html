@@ -34,6 +34,13 @@
   }
 
   @for (opt of projects(); track opt.id) {
-    <mat-option [value]="opt.id">{{ opt.title }}</mat-option>
+    <mat-option [value]="opt.id">
+      <select-option-row
+        [title]="opt.title"
+        [icon]="opt.icon"
+        [defaultIcon]="DEFAULT_PROJECT_ICON"
+        [color]="opt.theme?.primary ?? undefined"
+      ></select-option-row>
+    </mat-option>
   }
 </mat-select>

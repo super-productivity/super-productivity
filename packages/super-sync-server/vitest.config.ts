@@ -32,6 +32,7 @@ export default defineConfig({
       'tests/integration/migrate-deploy-db-timeout.integration.spec.ts',
       'tests/integration/migrate-deploy-lock-retry.integration.spec.ts',
       'tests/integration/migrate-deploy-orphan-cleanup.integration.spec.ts',
+      'tests/integration/capture-claim-race.integration.spec.ts',
     ],
   },
 });

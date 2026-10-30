@@ -20,22 +20,11 @@ interface ExampleTaskDef {
   notesKey: string;
 }
 
+// One optional tips task: several seeded tasks read like required homework.
 const EXAMPLE_TASK_DEFS: ExampleTaskDef[] = [
   {
-    titleKey: T.EXAMPLE_TASKS.CREATE_PROJECT.TITLE,
-    notesKey: T.EXAMPLE_TASKS.CREATE_PROJECT.NOTES,
-  },
-  {
-    titleKey: T.EXAMPLE_TASKS.SET_UP_SYNC.TITLE,
-    notesKey: T.EXAMPLE_TASKS.SET_UP_SYNC.NOTES,
-  },
-  {
-    titleKey: T.EXAMPLE_TASKS.LEARN_KEYBOARD_SHORTCUTS.TITLE,
-    notesKey: T.EXAMPLE_TASKS.LEARN_KEYBOARD_SHORTCUTS.NOTES,
-  },
-  {
-    titleKey: T.EXAMPLE_TASKS.GO_FURTHER.TITLE,
-    notesKey: T.EXAMPLE_TASKS.GO_FURTHER.NOTES,
+    titleKey: T.EXAMPLE_TASKS.GETTING_STARTED.TITLE,
+    notesKey: T.EXAMPLE_TASKS.GETTING_STARTED.NOTES,
   },
 ];
 
@@ -91,7 +80,6 @@ export class ExampleTasksService {
         ) {
           return;
         }
-        const taskIds: string[] = [];
         for (const def of EXAMPLE_TASK_DEFS) {
           const task = this._taskService.createNewTaskWithDefaults({
             title: translations[def.titleKey],
@@ -105,9 +93,7 @@ export class ExampleTasksService {
               isExampleTask: true,
             }),
           );
-          taskIds.push(task.id);
         }
-        localStorage.setItem(LS.EXAMPLE_TASK_IDS, JSON.stringify(taskIds));
         localStorage.setItem(LS.EXAMPLE_TASKS_CREATED, 'true');
       });
   }

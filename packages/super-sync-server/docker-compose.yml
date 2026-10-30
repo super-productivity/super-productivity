@@ -24,8 +24,8 @@ x-logging-app: &app-logging
 
 services:
   supersync:
-    # Only `latest` and `master-<sha>` are published, both built from master — there
-    # are no release tags. Pin SUPERSYNC_IMAGE to a master-<sha> for a fixed version.
+    # `latest` and `master-<sha>` are built from master; published releases also get
+    # `vX.Y.Z`. Pin SUPERSYNC_IMAGE to the tag you have checked out for a fixed version.
     image: ${SUPERSYNC_IMAGE:-ghcr.io/super-productivity/supersync:latest}
     container_name: supersync-server
     restart: unless-stopped
@@ -72,6 +72,7 @@ services:
       - PRIVACY_DATA_REGION=${PRIVACY_DATA_REGION:-}
       - ALLOWED_EMAILS=${ALLOWED_EMAILS:-}
       - SUPERSYNC_DEFAULT_STORAGE_QUOTA_BYTES=${SUPERSYNC_DEFAULT_STORAGE_QUOTA_BYTES:-}
+      - CAPTURE_CONNECTOR_ENABLED=${CAPTURE_CONNECTOR_ENABLED:-false}
       - OLD_OPS_CLEANUP_DELETE_BATCH_SIZE=${OLD_OPS_CLEANUP_DELETE_BATCH_SIZE:-5000}
       - OLD_OPS_CLEANUP_MAX_DELETED_PER_RUN=${OLD_OPS_CLEANUP_MAX_DELETED_PER_RUN:-25000}
       - OLD_OPS_CLEANUP_HOUR_UTC=${OLD_OPS_CLEANUP_HOUR_UTC:-}

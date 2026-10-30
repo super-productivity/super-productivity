@@ -15,7 +15,6 @@ test.describe('App Features - Time Tracking', () => {
     const mainPlayButton = page.locator('play-button .play-btn');
 
     // elements on settings page
-    const appFeaturesSection = page.locator('collapsible', { hasText: 'App Features' });
     const timeTrackingSwitch = page.getByRole('switch', {
       name: 'Stopwatch Time Tracking',
     });
@@ -28,9 +27,6 @@ test.describe('App Features - Time Tracking', () => {
 
     // Go to settings page
     await page.goto('/#/config');
-
-    // expand "App Features"
-    await appFeaturesSection.click();
 
     // Ensure timeTracking is enabled (default value)
     await expect(timeTrackingSwitch).toBeChecked();
@@ -56,9 +52,6 @@ test.describe('App Features - Time Tracking', () => {
 
     // Re-enable the feature
     await page.goto('/#/config');
-
-    // expand "App Features"
-    await appFeaturesSection.click();
 
     // click toggle button to enable
     await timeTrackingSwitch.click();

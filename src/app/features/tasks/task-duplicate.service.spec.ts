@@ -93,6 +93,7 @@ describe('TaskDuplicateService', () => {
     expect(taskService.createNewTaskWithDefaults).toHaveBeenCalledWith({
       title: 'Sub task',
       additional: {
+        parentId: 'new-parent-task',
         isDone: true,
         projectId: 'project-1',
         dueDay: '2026-09-02',
@@ -103,6 +104,7 @@ describe('TaskDuplicateService', () => {
     expect(taskService.createNewTaskWithDefaults).toHaveBeenCalledWith({
       title: 'Timed sub task',
       additional: {
+        parentId: 'new-parent-task',
         isDone: false,
         projectId: 'project-1',
         dueWithTime: 1_757_000_000_000,
@@ -119,6 +121,48 @@ describe('TaskDuplicateService', () => {
     expect(store.dispatch).toHaveBeenCalledWith(
       addSubTask({
         task: newTimedSubTask,
+        parentId: 'new-parent-task',
+      }),
+    );
+  });
+
+  it('creates an undated subtask with its copied parent before applying defaults', () => {
+    const undatedSubTask: Task = {
+      ...DEFAULT_TASK,
+      id: 'undated-sub-task',
+      title: 'Undated sub task',
+      parentId: parentTask.id,
+      projectId: 'project-1',
+    };
+    taskService.add.and.returnValue('new-parent-task');
+    const newSubTask: Task = {
+      ...DEFAULT_TASK,
+      id: 'new-undated-sub-task',
+      title: undatedSubTask.title,
+      projectId: undatedSubTask.projectId,
+      parentId: 'new-parent-task',
+    };
+    taskService.createNewTaskWithDefaults.and.returnValue(newSubTask);
+
+    service.duplicate({
+      ...parentTask,
+      subTaskIds: [undatedSubTask.id],
+      subTasks: [undatedSubTask],
+    });
+
+    const additional =
+      taskService.createNewTaskWithDefaults.calls.mostRecent().args[0].additional;
+    expect(additional).toEqual(
+      jasmine.objectContaining({
+        parentId: 'new-parent-task',
+        isDone: false,
+      }),
+    );
+    expect(additional?.dueDay).toBeUndefined();
+    expect(additional?.dueWithTime).toBeUndefined();
+    expect(store.dispatch).toHaveBeenCalledOnceWith(
+      addSubTask({
+        task: newSubTask,
         parentId: 'new-parent-task',
       }),
     );
@@ -150,6 +194,36 @@ describe('TaskDuplicateService', () => {
     expect(additionals[0]).toEqual(jasmine.objectContaining({ priority: 3 }));
     expect(additionals[1]).not.toEqual(jasmine.objectContaining({ priority: 3 }));
     expect(additionals[1]?.priority).toBeNull();
+  });
+
+  it('keeps a subtask finished as wont do', () => {
+    const wontDoSubTask: Task = {
+      ...subTask,
+      id: 'sub-wont-do',
+      isDone: true,
+      doneOn: 5,
+      wontDoOn: 5,
+    };
+    taskService.add.and.returnValue('new-parent-task');
+    taskService.createNewTaskWithDefaults.and.returnValue({
+      ...DEFAULT_TASK,
+      id: 'new-sub-task',
+      projectId: 'project-1',
+    });
+
+    service.duplicate({
+      ...parentTask,
+      subTaskIds: [wontDoSubTask.id, subTask.id],
+      subTasks: [wontDoSubTask, subTask],
+    });
+
+    const additionals = taskService.createNewTaskWithDefaults.calls
+      .allArgs()
+      .map(([arg]) => arg.additional);
+    expect(additionals[0]).toEqual(
+      jasmine.objectContaining({ isDone: true, doneOn: 5, wontDoOn: 5 }),
+    );
+    expect(additionals[1]?.wontDoOn).toBeUndefined();
   });
 
   it('preserves legacy string priorities on parents and subtasks', () => {

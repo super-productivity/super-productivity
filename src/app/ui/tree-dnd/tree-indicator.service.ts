@@ -44,6 +44,7 @@ export class TreeIndicatorService {
     where: DropWhere,
     container: HTMLElement,
     indent: number,
+    baseIndent: number,
   ): void {
     const sameTarget =
       this._lastTarget?.element === element && this._lastTarget?.where === where;
@@ -80,8 +81,9 @@ export class TreeIndicatorService {
       left = itemRect.left - containerRect.left + paddingLeft + extraIndent;
       width = Math.max(0, containerRect.width - left);
     } else if (where === 'root') {
-      left = 0;
-      width = containerRect.width;
+      // The root drop zone is not a row, so line up with the top-level rows.
+      left = baseIndent;
+      width = Math.max(0, containerRect.width - left);
     }
 
     this._indicatorTop.set(Math.round(y));

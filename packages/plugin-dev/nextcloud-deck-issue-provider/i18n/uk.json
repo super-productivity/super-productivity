@@ -1,0 +1,28 @@
+{
+  "CFG": {
+    "BASE_URL": "Базова URL-адреса Nextcloud",
+    "USERNAME": "Ваше ім'я користувача Nextcloud",
+    "PASSWORD": "Пароль додатка Nextcloud",
+    "BOARD": "Board",
+    "IMPORT_STACKS": "Import from stacks (leave empty for all)",
+    "DONE_STACK": "Done stack (cards are moved here on completion)",
+    "STACKS_DESC": "Select a board first, then use the load button to list its stacks.",
+    "NONE": "None",
+    "FILTER_BY_ASSIGNEE": "Імпортувати лише картки, призначені мені",
+    "TITLE_TEMPLATE": "Шаблон назви завдання",
+    "TITLE_TEMPLATE_DESC": "Змінні: {CARD_TITLE}, {BOARD}, {COLUMN}, {ID}, {LABELS}. Приклад: [{BOARD}: {COLUMN}] {CARD_TITLE}. Залиште порожнім для використання лише назви картки."
+  },
+  "DISPLAY": {
+    "SUMMARY": "Підсумок",
+    "DESCRIPTION": "Опис Deck",
+    "STACK": "Стек",
+    "DUE_DATE": "Термін виконання",
+    "ASSIGNED_USERS": "Призначені користувачі",
+    "LABELS": "Мітки"
+  },
+  "ERRORS": {
+    "NO_BOARD": "Nextcloud Deck: No board selected",
+    "CARD_NOT_FOUND": "Nextcloud Deck: Card not found on the selected board"
+  },
+  "FORM_HELP": "Налаштуйте інтеграцію Nextcloud Deck для імпорту карток як завдань. Для автентифікації використовуйте пароль додатка."
+}

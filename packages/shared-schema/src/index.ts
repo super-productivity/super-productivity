@@ -63,6 +63,12 @@ export {
   SuperSyncRestorePointsResponseSchema,
   SuperSyncRestoreSnapshotResponseSchema,
   SuperSyncDeleteAllDataResponseSchema,
+  SuperSyncCaptureItemSchema,
+  SuperSyncCaptureClaimResponseSchema,
+  SuperSyncCaptureGrantSchema,
+  SuperSyncCaptureGrantsResponseSchema,
+  SuperSyncCaptureTokenResponseSchema,
+  SuperSyncCaptureConnectCodeResponseSchema,
 } from './supersync-http-contract';
 export type {
   SuperSyncOpType,
@@ -88,4 +94,10 @@ export type {
   SuperSyncRestorePointsResponse,
   SuperSyncRestoreSnapshotResponse,
   SuperSyncDeleteAllDataResponse,
+  SuperSyncCaptureItem,
+  SuperSyncCaptureClaimResponse,
+  SuperSyncCaptureGrant,
+  SuperSyncCaptureGrantsResponse,
+  SuperSyncCaptureTokenResponse,
+  SuperSyncCaptureConnectCodeResponse,
 } from './supersync-http-contract';

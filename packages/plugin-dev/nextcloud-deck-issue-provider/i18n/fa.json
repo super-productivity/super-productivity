@@ -1,0 +1,28 @@
+{
+  "CFG": {
+    "BASE_URL": "آدرس پایه",
+    "USERNAME": "نام کاربری",
+    "PASSWORD": "رمز عبور",
+    "BOARD": "Board",
+    "IMPORT_STACKS": "Import from stacks (leave empty for all)",
+    "DONE_STACK": "Done stack (cards are moved here on completion)",
+    "STACKS_DESC": "Select a board first, then use the load button to list its stacks.",
+    "NONE": "None",
+    "FILTER_BY_ASSIGNEE": "فیلتر بر اساس مسئول",
+    "TITLE_TEMPLATE": "الگوی عنوان",
+    "TITLE_TEMPLATE_DESC": "متغیرها: {CARD_TITLE}، {BOARD}، {COLUMN}، {ID}، {LABELS}. مثال: [{BOARD}: {COLUMN}] {CARD_TITLE}. برای استفاده از عنوان کارت به‌تنهایی خالی بگذار."
+  },
+  "DISPLAY": {
+    "SUMMARY": "خلاصه",
+    "DESCRIPTION": "توضیحات Deck",
+    "STACK": "ستون",
+    "DUE_DATE": "سررسید",
+    "ASSIGNED_USERS": "کاربران اختصاص داده شده",
+    "LABELS": "برچسب‌ها"
+  },
+  "ERRORS": {
+    "NO_BOARD": "Nextcloud Deck: No board selected",
+    "CARD_NOT_FOUND": "Nextcloud Deck: Card not found on the selected board"
+  },
+  "FORM_HELP": "راهنما"
+}

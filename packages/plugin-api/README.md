@@ -133,10 +133,18 @@ hook for subsequent changes. There is no replay-on-register, no
 per-key discrimination in the event, and no guaranteed ordering across
 rapid changes. Handlers must be idempotent.
 
-### 2. Required Permissions
+### 2. Permissions
 
-Add these to your manifest.json based on what your plugin needs:
+List the permissions your plugin uses in manifest.json. The app checks only
+three of them: `nodeExecution` (a desktop consent prompt), `http` together with
+`allowedHosts` (gates `PluginAPI.request` only) and `deleteProject` (gates that
+call only). The others are shown in the plugin's details but not enforced.
+Plugins are not sandboxed, so no permission limits what plugin code can read or
+change; see
+[Security Considerations](https://github.com/super-productivity/super-productivity/blob/master/docs/plugin-development.md#security-considerations).
 
+- `nodeExecution` - Run Node.js scripts (desktop only, after the user allows it)
+- `http` - Send `PluginAPI.request` calls to the hosts listed in `allowedHosts`
 - `showSnack` - Show notifications
 - `notify` - System notifications
 - `showIndexHtmlAsView` - Display plugin UI

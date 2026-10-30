@@ -34,7 +34,8 @@
               "src/favicon.ico",
               "src/assets",
               "src/manifest.json",
-              "src/static"
+              "src/static",
+              "src/sw.js"
             ],
             "styles": ["src/styles.scss"],
             "scripts": [],
@@ -53,7 +54,8 @@
               "chrono-node",
               "dayjs",
               "query-string"
-            ]
+            ],
+            "externalDependencies": ["marked-katex-extension"]
           },
           "configurations": {
             "development": {
@@ -232,7 +234,7 @@
           }
         },
         "test": {
-          "builder": "@angular-devkit/build-angular:karma",
+          "builder": "@angular/build:karma",
           "options": {
             "main": "src/test.ts",
             "polyfills": ["zone.js", "zone.js/testing", "src/polyfills.ts"],

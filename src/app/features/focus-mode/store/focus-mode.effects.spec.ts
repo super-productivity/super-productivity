@@ -23,6 +23,7 @@ import { openIdleDialog } from '../../idle/store/idle.actions';
 import { selectLastCurrentTask, selectTaskById } from '../../tasks/store/task.selectors';
 import {
   selectFocusModeConfig,
+  selectSoundConfig,
   selectIsFocusModeEnabled,
   selectPomodoroConfig,
 } from '../../config/store/global-config.reducer';
@@ -140,6 +141,7 @@ describe('FocusModeEffects', () => {
             },
             { selector: selectPomodoroConfig, value: { duration: 25 * 60 * 1000 } },
             { selector: selectIsFocusModeEnabled, value: true },
+            { selector: selectSoundConfig, value: { volume: 75 } },
             { selector: selectLastCurrentTask, value: null },
           ],
         }),
@@ -3131,5 +3133,50 @@ describe('FocusModeEffects', () => {
 
       expect(setProgressBarSpy).not.toHaveBeenCalled();
     }));
+  });
+
+  // #10476: a session or break ending must not steal focus from the app the
+  // user is typing or drawing in; the sound, flash and progress bar are enough.
+  describe('_notifyUser', () => {
+    let eaMock: jasmine.SpyObj<{
+      showOrFocus: () => void;
+      flashFrame: () => void;
+      setProgressBar: (args: unknown) => void;
+    }>;
+
+    beforeEach(() => {
+      globalConfigServiceMock.sound.and.returnValue({ volume: 0 });
+      eaMock = jasmine.createSpyObj('ea', [
+        'showOrFocus',
+        'flashFrame',
+        'setProgressBar',
+      ]);
+      (window as any).ea = eaMock;
+    });
+
+    afterEach(() => {
+      delete (window as any).ea;
+    });
+
+    it('should flash the frame and fill the progress bar without focusing the window', () => {
+      (effects as any)._notifyUser();
+
+      expect(eaMock.showOrFocus).not.toHaveBeenCalled();
+      expect(eaMock.flashFrame).toHaveBeenCalled();
+      expect(eaMock.setProgressBar).toHaveBeenCalledWith({
+        progress: 1,
+        progressBarMode: 'normal',
+      });
+    });
+
+    it('should hide the progress bar when asked to', () => {
+      (effects as any)._notifyUser(true);
+
+      expect(eaMock.showOrFocus).not.toHaveBeenCalled();
+      expect(eaMock.setProgressBar).toHaveBeenCalledWith({
+        progress: 1,
+        progressBarMode: 'none',
+      });
+    });
   });
 });

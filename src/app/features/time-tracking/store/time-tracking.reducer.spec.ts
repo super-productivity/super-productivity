@@ -40,6 +40,26 @@ describe('TimeTracking Reducer', () => {
   });
 
   describe('addTimeSpent', () => {
+    it('should leave work start/end untouched for back-filled time', () => {
+      const task = { projectId: '1', tagIds: ['2'] } as Partial<TaskCopy> as TaskCopy;
+      const date = '2023-01-01';
+      const state = {
+        ...initialTimeTrackingState,
+        project: { ['1']: { [date]: { s: 1000, e: 2000 } } },
+      };
+      const action = TimeTrackingActions.addTimeSpent({
+        task,
+        date,
+        duration: 223,
+        isFromTrackingReminder: false,
+        isBackfill: true,
+      });
+      const result = timeTrackingReducer(state, action);
+      expect(result).toBe(state);
+      expect(result.project['1'][date]).toEqual({ s: 1000, e: 2000 });
+      expect(result.tag['2']).toBeUndefined();
+    });
+
     it('should add time spent for project and single tag', () => {
       const task = { projectId: '1', tagIds: ['2'] } as Partial<TaskCopy> as TaskCopy;
       const date = '2023-01-01';
@@ -159,6 +179,100 @@ describe('TimeTracking Reducer', () => {
       expect(state2.project['proj-1'][date].s).toBe(firstStartTime);
       // End time should be updated (greater than or equal to start)
       expect(state2.project['proj-1'][date].e).toBeGreaterThanOrEqual(firstStartTime!);
+    });
+
+    describe('per-second ticks', () => {
+      const task = {
+        projectId: 'proj-1',
+        tagIds: ['tag-1'],
+      } as Partial<TaskCopy> as TaskCopy;
+      const date = '2024-01-15';
+      const trackOneSecond = (
+        trackedTask: TaskCopy = task,
+      ): ReturnType<typeof TimeTrackingActions.addTimeSpent> =>
+        TimeTrackingActions.addTimeSpent({
+          task: trackedTask,
+          date,
+          duration: 1000,
+          isFromTrackingReminder: false,
+        });
+
+      beforeEach(() => {
+        jasmine.clock().install();
+        jasmine.clock().mockDate(new Date(2024, 0, 15, 10, 0, 10));
+      });
+
+      afterEach(() => {
+        jasmine.clock().uninstall();
+      });
+
+      it('should keep the state reference while the rounded start/end stay the same', () => {
+        const state1 = timeTrackingReducer(initialTimeTrackingState, trackOneSecond());
+
+        jasmine.clock().tick(1000);
+        const state2 = timeTrackingReducer(state1, trackOneSecond());
+
+        expect(state2).toBe(state1);
+      });
+
+      it('should keep the state reference for a task without a project', () => {
+        const noProjectTask = { ...task, projectId: null as unknown as string };
+        const state1 = timeTrackingReducer(
+          initialTimeTrackingState,
+          trackOneSecond(noProjectTask),
+        );
+
+        jasmine.clock().tick(1000);
+        const state2 = timeTrackingReducer(state1, trackOneSecond(noProjectTask));
+
+        expect(state2).toBe(state1);
+      });
+
+      it('should update the end once the rounded minute moves on', () => {
+        const state1 = timeTrackingReducer(initialTimeTrackingState, trackOneSecond());
+
+        jasmine.clock().tick(60_000);
+        const state2 = timeTrackingReducer(state1, trackOneSecond());
+
+        expect(state2).not.toBe(state1);
+        expect(state2.project['proj-1'][date].e).toBe(
+          state1.project['proj-1'][date].e! + 60_000,
+        );
+        expect(state2.project['proj-1'][date].s).toBe(state1.project['proj-1'][date].s);
+        expect(state2.tag['tag-1'][date].e).toBe(state1.tag['tag-1'][date].e! + 60_000);
+        expect(state2.tag['TODAY'][date].e).toBe(state1.tag['TODAY'][date].e! + 60_000);
+      });
+
+      it('should stamp a context the task newly belongs to within the same minute', () => {
+        const state1 = timeTrackingReducer(initialTimeTrackingState, trackOneSecond());
+
+        const state2 = timeTrackingReducer(
+          state1,
+          trackOneSecond({ ...task, tagIds: ['tag-1', 'tag-2'] }),
+        );
+
+        expect(state2).not.toBe(state1);
+        expect(state2.tag['tag-2'][date]).toEqual(state1.tag['tag-1'][date]);
+        expect(state2.project['proj-1'][date]).toEqual(state1.project['proj-1'][date]);
+      });
+
+      it('should still round a start that was stored unrounded', () => {
+        const unrounded = new Date(2024, 0, 15, 9, 30, 20).getTime();
+        const state1 = timeTrackingReducer(initialTimeTrackingState, trackOneSecond());
+        const state2 = {
+          ...state1,
+          project: {
+            'proj-1': { [date]: { ...state1.project['proj-1'][date], s: unrounded } },
+          },
+        };
+
+        const state3 = timeTrackingReducer(state2, trackOneSecond());
+
+        expect(state3).not.toBe(state2);
+        expect(state3.project['proj-1'][date].s).toBe(
+          new Date(2024, 0, 15, 9, 30, 0).getTime(),
+        );
+      });
     });
 
     it('should work for task without projectId (only tags)', () => {

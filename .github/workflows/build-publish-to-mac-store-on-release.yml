@@ -4,18 +4,26 @@ on:
     tags:
       - v*
   workflow_dispatch:
-    inputs: {}
+    inputs:
+      build_only:
+        description: 'Build and verify signing without uploading to App Store Connect'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
 
 jobs:
   mac-store-release:
     runs-on: macos-15
+    timeout-minutes: 60
     env:
       UNSPLASH_KEY: ${{ secrets.UNSPLASH_KEY }}
       UNSPLASH_CLIENT_ID: ${{ secrets.UNSPLASH_CLIENT_ID }}
 
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
         with:
           egress-policy: audit
           allowed-endpoints: >
@@ -31,13 +39,13 @@ jobs:
             contentdelivery.itunes.apple.com:443
             idmsa.apple.com:443
 
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
-        with:
-          node-version: 22
       - name: Check out Git repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
         with:
           persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v6
+        with:
+          node-version-file: .nvmrc
       # work around for npm installs from git+https://github.com/johannesjo/J2M.git
       - name: Reconfigure git to use HTTP authentication
         run: >
@@ -63,9 +71,14 @@ jobs:
 
       - name: Configure signing keychain
         env:
-          MAC_CERTS: ${{ secrets.mac_certs }}
-          MAC_CERTS_PASSWORD: ${{ secrets.mac_certs_password }}
+          MAC_CERTS: ${{ secrets.apple_distribution_cert }}
+          MAC_CERTS_PASSWORD: ${{ secrets.apple_distribution_cert_password }}
+          MAC_INSTALLER_CERT: ${{ secrets.mac_installer_cert }}
+          MAC_INSTALLER_CERT_PASSWORD: ${{ secrets.mac_installer_cert_password }}
         run: |
+          set -euo pipefail
+          : "${MAC_INSTALLER_CERT:?Missing mac_installer_cert secret}"
+          : "${MAC_INSTALLER_CERT_PASSWORD:?Missing mac_installer_cert_password secret}"
           CERT_PATH="$RUNNER_TEMP/mac-certs.p12"
           KEYCHAIN_NAME="build.keychain"
           KEYCHAIN_PATH="$HOME/Library/Keychains/${KEYCHAIN_NAME}-db"
@@ -79,6 +92,10 @@ jobs:
           curl -fsSL https://www.apple.com/certificateauthority/AppleWWDRCAG4.cer -o "$RUNNER_TEMP/AppleWWDRCAG4.cer"
           security import "$RUNNER_TEMP/AppleWWDRCAG4.cer" -k "$KEYCHAIN_PATH" -T /usr/bin/codesign
           security import "$CERT_PATH" -k "$KEYCHAIN_PATH" -P "$MAC_CERTS_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security -T /usr/bin/pkgbuild -T /usr/bin/productbuild
+          INSTALLER_CERT_PATH="$RUNNER_TEMP/mac-installer.p12"
+          printf '%s' "$MAC_INSTALLER_CERT" | base64 --decode > "$INSTALLER_CERT_PATH"
+          # The app signing bundle includes the G3 intermediate for both identities.
+          security import "$INSTALLER_CERT_PATH" -k "$KEYCHAIN_PATH" -P "$MAC_INSTALLER_CERT_PASSWORD" -T /usr/bin/security -T /usr/bin/pkgbuild -T /usr/bin/productbuild
           security list-keychains -s "$KEYCHAIN_PATH" "$HOME/Library/Keychains/login.keychain-db"
           security default-keychain -s "$KEYCHAIN_PATH"
           security set-key-partition-list -S apple-tool:,apple: -k "" "$KEYCHAIN_PATH"
@@ -86,8 +103,7 @@ jobs:
           security find-identity -v -p macappstore "$KEYCHAIN_PATH"
           {
             echo "CSC_KEYCHAIN=$KEYCHAIN_PATH"
-            echo "CSC_LINK=file://$CERT_PATH"
-            echo "CSC_KEY_PASSWORD=$MAC_CERTS_PASSWORD"
+            # Use the keychain containing both app and installer identities.
           } >> "$GITHUB_ENV"
 
       - name: List available signing identities codesigning
@@ -106,7 +122,7 @@ jobs:
       - run: 'echo "$PROVISION_PROFILE" | base64 --decode > embedded.provisionprofile'
         shell: bash
         env:
-          PROVISION_PROFILE: ${{secrets.mas_provision_profile}}
+          PROVISION_PROFILE: ${{secrets.MAC_APP_STORE_PROFILE}}
 
       - name: Verify provisioning profile certificate
         run: |
@@ -153,6 +169,14 @@ jobs:
       - name: Build Electron app
         run: npm run dist:mac:mas:buildOnly
 
+      - name: Verify installer signature
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          pkgs=(.tmp/app-builds/mas-universal/super*.pkg)
+          test "${#pkgs[@]}" -eq 1
+          pkgutil --check-signature "${pkgs[0]}"
+
       - name: Verify code signing used in built app
         run: |
           echo "=== Checking code signature of main executable ==="
@@ -182,7 +206,7 @@ jobs:
         # .ruby-version file in the repo the action errors out rather than
         # using system Ruby. bundler-cache runs `bundle install` and caches the
         # ~210-gem fastlane tree so it isn't reinstalled each run.
-        uses: ruby/setup-ruby@14594264cd68ce8a2345dd349bc3d138a4ef85c8 # v1.327.0
+        uses: ruby/setup-ruby@26e5b7d197ebf60545ee9667bcbace0be11ccaec # v1.334.0
         with:
           ruby-version: '3.3'
           bundler-cache: true
@@ -196,6 +220,7 @@ jobs:
       # upload the build. The "-" check is case-insensitive by construction,
       # unlike contains(...,'RC'); the repo's RC tags are mostly lowercase.
       - name: Upload to App Store Connect and submit for review
+        if: ${{ !inputs.build_only }}
         env:
           ASC_KEY_ID: ${{ secrets.mac_api_key_id }}
           ASC_ISSUER_ID: ${{ secrets.mac_api_key_issuer_id }}

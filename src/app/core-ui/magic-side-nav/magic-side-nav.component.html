@@ -28,11 +28,15 @@
   ></div>
 }
 
-@if (!isMobile() || showMobileMenuOverlay()) {
+<!-- On mobile the drawer is rendered on first open and then kept: rebuilding its
+     rows on every open is what made the menu button feel unresponsive (#10820). -->
+@if (!isMobile() || isMobileNavRendered()) {
   <!-- Main Navigation Sidebar -->
   <nav
     class="nav-sidenav"
-    [@mobileNavRight]="isMobile() ? 'visible' : 'desktop'"
+    [@mobileNavRight]="
+      isMobile() ? (showMobileMenuOverlay() ? 'visible' : 'hidden') : 'desktop'
+    "
     [class.fullMode]="isFullMode() || isMobile()"
     [class.compactMode]="!isFullMode() && !isMobile()"
     [class.mobile]="isMobile()"
@@ -41,12 +45,14 @@
     [class.resizing]="isResizing()"
     [style.width.px]="sidenavWidth()"
     [attr.aria-label]="T.MH.PROJECT_MENU | translate"
-    [cdkTrapFocus]="isMobile()"
-    [cdkTrapFocusAutoCapture]="isMobile()"
+    [attr.aria-hidden]="isMobile() && !showMobileMenuOverlay() ? 'true' : null"
+    [cdkTrapFocus]="isMobileNavOpen()"
+    [cdkTrapFocusAutoCapture]="isMobileNavOpen()"
     (keydown)="onNavKeyDown($event)"
     (swiperight)="onMobileNavSwipeRight()"
     swipeGesture
-    [swipeEnabled]="swipeEnabled()"
+    [swipeEnabled]="!isOpeningMobileNav()"
+    [style.pointer-events]="isOpeningMobileNav() ? 'none' : null"
   >
     @if (isMobile()) {
       <button
@@ -213,6 +219,16 @@
       </ul>
     }
   </nav>
+}
+
+<!-- Window drag strip: covers the empty area above the nav content. On macOS the
+     traffic lights are drawn over it, but the nav itself is a `no-drag` region,
+     so without this the window could not be moved by its top-left corner. -->
+@if (!isMobile()) {
+  <div
+    class="title-bar-drag-strip"
+    aria-hidden="true"
+  ></div>
 }
 
 <!-- Resize Handle (moved outside scrolling container) -->

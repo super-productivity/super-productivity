@@ -68,6 +68,7 @@
       <div class="header-action-group primary-action-group">
         @if (isDataLoaded() && isTimeTrackingEnabled()) {
           <play-button
+            [isMobile]="isXs()"
             [currentTaskId]="currentTaskId()"
             [hasTrackableTasks]="hasTrackableTasks()"
           ></play-button>
@@ -131,27 +132,16 @@
             (click)="onSyncButtonClick()"
             (longPress)="setupSync()"
             (contextmenu)="$event.preventDefault(); setupSync()"
+            [attr.data-sync-confirmation]="syncConfirmation()"
             mat-icon-button
           >
-            @if (syncIsEnabledAndReady()) {
-              @if (isOnline()) {
-                @if (syncState() === 'ERROR') {
-                  <mat-icon>sync_problem</mat-icon>
-                } @else {
-                  <mat-icon [class.spin]="isSyncInProgress()">sync</mat-icon>
-                }
-                @if (hasNoPendingOps()) {
-                  @if (superSyncIsConfirmedInSync()) {
-                    <mat-icon class="sync-state-ico">done_all</mat-icon>
-                  } @else {
-                    <mat-icon class="sync-state-ico">check</mat-icon>
-                  }
-                }
-              } @else {
-                <mat-icon>wifi_off</mat-icon>
-              }
+            @if (syncIcon() === 'wifi_off') {
+              <mat-icon>wifi_off</mat-icon>
             } @else {
-              <mat-icon>sync_disabled</mat-icon>
+              <mat-icon
+                [svgIcon]="syncIcon()"
+                [class.spin]="isSyncIconSpinning()"
+              ></mat-icon>
             }
           </button>
         }
@@ -162,7 +152,8 @@
         <plugin-header-btns class="secondary-header-action"></plugin-header-btns>
 
         <!-- One action, one home: below 600px the bottom nav's panels menu
-             lists these, so the header must not render them as well. Rendering
+             lists these (or shows a lone one as a nav button), so the header
+             must not render them as well. Rendering
              both put the same plugin button in two places on a phone at once. -->
         @if (!hasBottomNav()) {
           <plugin-side-panel-btns

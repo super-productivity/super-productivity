@@ -1,5 +1,7 @@
 import { mapToScheduleDays } from './map-to-schedule-days';
+import { SVEType } from '../schedule.const';
 import { getDbDateStr } from '../../../util/get-db-date-str';
+import { DEFAULT_TASK, Task } from '../../tasks/task.model';
 
 // Helper function to conditionally skip tests that are timezone-dependent
 // These tests were written with hardcoded expectations for Europe/Berlin timezone
@@ -245,5 +247,57 @@ describe('mapToScheduleDays()', () => {
       ],
       isToday: false,
     } as any);
+  });
+});
+
+// #10194: a task that would only get a few minutes before work end starts after
+// it instead of rendering a tiny card on top of the work-end boundary
+describe('mapToScheduleDays() tiny slice before work end', () => {
+  const now = new Date(2026, 0, 20, 16, 55).getTime();
+  const today = getDbDateStr(now);
+  const tomorrow = getDbDateStr(new Date(2026, 0, 21));
+
+  const map = (task: Task): ReturnType<typeof mapToScheduleDays> =>
+    mapToScheduleDays(
+      now,
+      [today, tomorrow],
+      [task],
+      [],
+      [],
+      [],
+      [],
+      null,
+      {},
+      { startTime: '9:00', endTime: '17:00' },
+      undefined,
+      now,
+    );
+
+  const task = (add: Partial<Task> = {}): Task =>
+    ({
+      ...DEFAULT_TASK,
+      id: 'T',
+      title: 'T',
+      projectId: 'p',
+      timeEstimate: 60 * 60 * 1000,
+      ...add,
+    }) as Task;
+
+  it('should move an undated task whole to the next workday', () => {
+    const [todayDay, tomorrowDay] = map(task());
+
+    expect(todayDay.entries).toEqual([]);
+    expect(tomorrowDay.entries.length).toBe(1);
+    expect(tomorrowDay.entries[0].type).toBe(SVEType.Task);
+    expect(tomorrowDay.entries[0].start).toBe(new Date(2026, 0, 21, 9, 0).getTime());
+    expect(tomorrowDay.entries[0].duration).toBe(60 * 60 * 1000);
+  });
+
+  it('should keep a task due today on its day as beyond budget', () => {
+    const [todayDay, tomorrowDay] = map(task({ dueDay: today }));
+
+    expect(todayDay.entries).toEqual([]);
+    expect(todayDay.beyondBudgetTasks.map((t) => t.id)).toEqual(['T']);
+    expect(tomorrowDay.entries).toEqual([]);
   });
 });

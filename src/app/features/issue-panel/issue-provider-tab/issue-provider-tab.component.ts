@@ -43,6 +43,7 @@ import { DialogEditIssueProviderComponent } from '../../issue/dialog-edit-issue-
 import { MatDialog } from '@angular/material/dialog';
 import { getErrorTxt } from '../../../util/get-error-text';
 import { ErrorCardComponent } from '../../../ui/error-card/error-card.component';
+import { PlainspaceReconnectNoticeComponent } from '../../plainspace/reconnect-notice/plainspace-reconnect-notice.component';
 import { selectProjectById } from '../../project/store/project.selectors';
 import { HelperClasses, IS_WEB_BROWSER } from '../../../app.constants';
 import { IssueProviderActions } from '../../issue/store/issue-provider.actions';
@@ -79,6 +80,7 @@ import { IssueProviderJira } from '../../issue/issue.model';
     MatPrefix,
     MatTooltip,
     MatProgressSpinner,
+    PlainspaceReconnectNoticeComponent,
   ],
   templateUrl: './issue-provider-tab.component.html',
   styleUrl: './issue-provider-tab.component.scss',

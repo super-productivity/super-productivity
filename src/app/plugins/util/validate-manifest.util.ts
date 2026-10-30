@@ -1,5 +1,7 @@
 import { PluginManifest } from '../plugin-api.model';
 import { SUPPORTED_LANGUAGE_CODES } from '../../core/locale.constants';
+import { environment } from '../../../environments/environment';
+import { compareVersions } from './community-plugin.util';
 
 const MAX_REPORTED_INVALID_LANGUAGES = 10;
 const MAX_REPORTED_LANGUAGE_LENGTH = 20;
@@ -10,6 +12,7 @@ const MAX_REPORTED_LANGUAGE_LENGTH = 20;
  */
 export const validatePluginManifest = (
   manifest: PluginManifest,
+  appVersion = environment.version,
 ): {
   isValid: boolean;
   errors: string[];
@@ -38,6 +41,15 @@ export const validatePluginManifest = (
 
   if (!manifest?.version) {
     errors.push('Plugin version is required');
+  }
+
+  if (
+    typeof manifest?.minSupVersion === 'string' &&
+    compareVersions(manifest.minSupVersion, appVersion) === 1
+  ) {
+    errors.push(
+      `Plugin requires Super Productivity ${manifest.minSupVersion} or newer (current: ${appVersion}). Please update Super Productivity.`,
+    );
   }
 
   // Validate allowedHosts if present (host-only exact allowlist for PluginAPI.request)

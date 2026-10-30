@@ -9,8 +9,7 @@ import {
   OpenProjectWorkPackage,
   OpenProjectWorkPackageReduced,
 } from './providers/open-project/open-project-issue.model';
-import { RedmineCfg } from './providers/redmine/redmine.model';
-import { RedmineIssue } from './providers/redmine/redmine-issue.model';
+// Redmine is now a plugin — no built-in Cfg/Issue types needed
 // Trello is now a plugin — no built-in Cfg/Issue types needed
 import { EntityState } from '@ngrx/entity';
 import {
@@ -19,11 +18,7 @@ import {
   ICalIssueReduced,
 } from './providers/calendar/calendar.model';
 // Azure DevOps is now a plugin — no built-in Cfg/Issue types needed
-import { NextcloudDeckCfg } from './providers/nextcloud-deck/nextcloud-deck.model';
-import {
-  NextcloudDeckIssue,
-  NextcloudDeckIssueReduced,
-} from './providers/nextcloud-deck/nextcloud-deck-issue.model';
+// Nextcloud Deck is now a plugin — no built-in Cfg/Issue types needed
 import { PlainspaceCfg } from './providers/plainspace/plainspace.model';
 import { PlainspaceIssue } from './providers/plainspace/plainspace-issue.model';
 import {
@@ -46,8 +41,6 @@ export type BuiltInIssueProviderKey =
   | 'CALDAV'
   | 'ICAL'
   | 'OPEN_PROJECT'
-  | 'REDMINE'
-  | 'NEXTCLOUD_DECK'
   | 'PLAINSPACE';
 
 // Keys migrated from built-in to plugin — still valid as IssueProviderKey
@@ -57,7 +50,9 @@ export type MigratedIssueProviderKey =
   | 'GITEA'
   | 'LINEAR'
   | 'TRELLO'
-  | 'AZURE_DEVOPS';
+  | 'AZURE_DEVOPS'
+  | 'REDMINE'
+  | 'NEXTCLOUD_DECK';
 
 // Plugin issue provider keys use a 'plugin:' prefix to avoid collision
 export type PluginIssueProviderKey = `plugin:${string}`;
@@ -80,8 +75,6 @@ const BUILT_IN_KEYS: ReadonlySet<string> = new Set<BuiltInIssueProviderKey>([
   'CALDAV',
   'ICAL',
   'OPEN_PROJECT',
-  'REDMINE',
-  'NEXTCLOUD_DECK',
   'PLAINSPACE',
 ]);
 
@@ -92,6 +85,8 @@ const MIGRATED_KEYS: ReadonlySet<string> = new Set<MigratedIssueProviderKey>([
   'LINEAR',
   'TRELLO',
   'AZURE_DEVOPS',
+  'REDMINE',
+  'NEXTCLOUD_DECK',
 ]);
 
 export const isValidIssueProviderKey = (key: string): key is IssueProviderKey => {
@@ -104,8 +99,6 @@ export type IssueIntegrationCfg =
   | CaldavCfg
   | CalendarProviderCfg
   | OpenProjectCfg
-  | RedmineCfg
-  | NextcloudDeckCfg
   | PlainspaceCfg;
 
 export enum IssueLocalState {
@@ -121,8 +114,6 @@ export interface IssueIntegrationCfgs {
   CALDAV?: CaldavCfg;
   CALENDAR?: CalendarProviderCfg;
   OPEN_PROJECT?: OpenProjectCfg;
-  REDMINE?: RedmineCfg;
-  NEXTCLOUD_DECK?: NextcloudDeckCfg;
   PLAINSPACE?: PlainspaceCfg;
 }
 
@@ -132,8 +123,6 @@ export type IssueData =
   | CaldavIssue
   | ICalIssue
   | OpenProjectWorkPackage
-  | RedmineIssue
-  | NextcloudDeckIssue
   | PlainspaceIssue
   | PluginIssue;
 
@@ -143,8 +132,6 @@ export type IssueDataReduced =
   | OpenProjectWorkPackageReduced
   | CaldavIssueReduced
   | ICalIssueReduced
-  | RedmineIssue
-  | NextcloudDeckIssueReduced
   | PlainspaceIssue
   | PluginSearchResult;
 
@@ -159,17 +146,13 @@ export type IssueDataReducedMap = {
           ? ICalIssueReduced
           : K extends 'OPEN_PROJECT'
             ? OpenProjectWorkPackageReduced
-            : K extends 'REDMINE'
-              ? RedmineIssue
-              : K extends 'NEXTCLOUD_DECK'
-                ? NextcloudDeckIssueReduced
-                : K extends 'PLAINSPACE'
-                  ? PlainspaceIssue
-                  : K extends MigratedIssueProviderKey
-                    ? PluginSearchResult
-                    : K extends PluginIssueProviderKey
-                      ? PluginSearchResult
-                      : never;
+            : K extends 'PLAINSPACE'
+              ? PlainspaceIssue
+              : K extends MigratedIssueProviderKey
+                ? PluginSearchResult
+                : K extends PluginIssueProviderKey
+                  ? PluginSearchResult
+                  : never;
 };
 
 // TODO: add issue model to the IssueDataReducedMap
@@ -243,8 +226,10 @@ export interface IssueProviderGitea extends IssueProviderBase {
   pluginConfig: Record<string, unknown>;
 }
 
-export interface IssueProviderRedmine extends IssueProviderBase, RedmineCfg {
+export interface IssueProviderRedmine extends IssueProviderBase {
   issueProviderKey: 'REDMINE';
+  pluginId: string;
+  pluginConfig: Record<string, unknown>;
 }
 
 export interface IssueProviderCalendar extends IssueProviderBase, CalendarProviderCfg {
@@ -269,8 +254,10 @@ export interface IssueProviderAzureDevOps extends IssueProviderBase {
   pluginConfig: Record<string, unknown>;
 }
 
-export interface IssueProviderNextcloudDeck extends IssueProviderBase, NextcloudDeckCfg {
+export interface IssueProviderNextcloudDeck extends IssueProviderBase {
   issueProviderKey: 'NEXTCLOUD_DECK';
+  pluginId: string;
+  pluginConfig: Record<string, unknown>;
 }
 
 export interface IssueProviderPlainspace extends IssueProviderBase, PlainspaceCfg {

@@ -98,6 +98,20 @@ describe('searchSettings', () => {
     expect(hit.tabIndex).toBe(0);
   });
 
+  it('should find the Todoist and TickTick importers and expand Import/Export', () => {
+    // Pad to the real tab count: the importer targets live on Sync & Backup (index 5).
+    const allTabs: SettingsSearchTab[] = [0, 1, 2, 3, 4, 5].map((i) => ({
+      labelKey: `PS.TABS.Tab ${i}`,
+      sections: [],
+    }));
+    for (const query of ['todoist', 'TickTick']) {
+      const [hit] = searchSettings(allTabs, query, translate);
+      expect(hit.tabIndex).toBe(5);
+      expect(hit.sectionKey).toBe('IMEX_YEAH');
+      expect(hit.scrollSelector).toBe('.section-IMEX_YEAH');
+    }
+  });
+
   it('should return an empty array when nothing matches', () => {
     expect(searchSettings(TABS, 'zzz', translate)).toEqual([]);
   });

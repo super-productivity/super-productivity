@@ -16,7 +16,7 @@ import { MatIcon } from '@angular/material/icon';
 import { MatTooltip } from '@angular/material/tooltip';
 import { TagListComponent } from '../../tag/tag-list/tag-list.component';
 import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
-import { getNextRepeatOccurrence } from '../store/get-next-repeat-occurrence.util';
+import { getNextCreatedOccurrence } from '../store/get-next-created-occurrence.util';
 import { formatMonthDay } from '../../../util/format-month-day.util';
 import { Log } from '../../../core/log';
 
@@ -43,7 +43,7 @@ export class RepeatCfgPreviewComponent {
   nextDueTooltip = computed(() => {
     const cfg = this.repeatCfg();
     try {
-      const nextDate = getNextRepeatOccurrence(cfg, new Date());
+      const nextDate = getNextCreatedOccurrence(cfg, new Date());
       if (!nextDate) {
         return '';
       }

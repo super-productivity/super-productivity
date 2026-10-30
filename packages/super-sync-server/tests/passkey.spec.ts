@@ -906,6 +906,7 @@ describe('Passkey Authentication', () => {
       const txPasskeyDeleteMany = vi.fn().mockResolvedValue({ count: 1 });
       const txPasskeyCreate = vi.fn().mockResolvedValue({});
       const txUserUpdateMany = vi.fn().mockResolvedValue({ count: 1 });
+      const txExecuteRaw = vi.fn().mockResolvedValue(0);
       mockPrisma.$transaction.mockImplementation(
         async (callback: RecoveryTransactionCallback) => {
           const tx = {
@@ -916,6 +917,8 @@ describe('Passkey Authentication', () => {
             user: {
               updateMany: txUserUpdateMany,
             },
+            // Capture grant revocation runs in the same transaction.
+            $executeRaw: txExecuteRaw,
           };
           return callback(tx);
         },
@@ -948,6 +951,9 @@ describe('Passkey Authentication', () => {
 
       expect(result.message).toContain('reset successfully');
       expect(mockPrisma.$transaction).toHaveBeenCalled();
+      expect(String(txExecuteRaw.mock.calls[0][0].join('?'))).toContain(
+        'UPDATE capture_grants SET revoked_at',
+      );
       expect(txUserUpdateMany).toHaveBeenCalledWith({
         where: {
           id: 1,

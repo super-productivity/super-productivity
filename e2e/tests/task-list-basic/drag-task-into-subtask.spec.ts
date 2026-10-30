@@ -106,4 +106,103 @@ test.describe('Drag task into subtask list', () => {
     });
     await expect(subTasks).toHaveCount(2);
   });
+
+  // #11027: a task scheduled for today with a time used to be rejected by the
+  // drop predicate. The drop now clears its schedule and nests it.
+  test('converts a task scheduled for today with a time to a subtask', async ({
+    page,
+    workViewPage,
+  }) => {
+    await workViewPage.waitForTaskList();
+
+    await workViewPage.addTask('TimedParent');
+    const parent = page.locator('task').filter({ hasText: 'TimedParent' }).first();
+    await workViewPage.addSubTask(parent, 'TimedExistingSub');
+    await parent.locator('.sub-tasks task').first().waitFor({ state: 'visible' });
+
+    await workViewPage.addTask('TimedMover');
+    const mover = page.locator('task').filter({ hasText: 'TimedMover' }).first();
+    await expect(mover).toBeVisible();
+
+    // Schedule a moment in the past, so the task stays in the main list
+    // (future times move it to the non-draggable "Later today" panel).
+    // No remindAt: a due reminder would open its dialog over the list.
+    const readMover = (): Promise<{
+      dueWithTime?: number;
+      parentId?: string;
+    } | null> =>
+      page.evaluate(() => {
+        const store = (
+          window as unknown as {
+            __e2eTestHelpers: {
+              store: {
+                subscribe: (cb: (s: unknown) => void) => { unsubscribe: () => void };
+              };
+            };
+          }
+        ).__e2eTestHelpers.store;
+        let state: {
+          tasks: {
+            entities: Record<
+              string,
+              { title: string; dueWithTime?: number; parentId?: string }
+            >;
+          };
+        } | null = null;
+        store.subscribe((s) => (state = s as typeof state)).unsubscribe();
+        const task = Object.values(state!.tasks.entities).find((t) =>
+          t.title.endsWith('TimedMover'),
+        );
+        return task ? { dueWithTime: task.dueWithTime, parentId: task.parentId } : null;
+      });
+
+    await page.evaluate(() => {
+      const store = (
+        window as unknown as {
+          __e2eTestHelpers: {
+            store: {
+              dispatch: (a: unknown) => void;
+              subscribe: (cb: (s: unknown) => void) => { unsubscribe: () => void };
+            };
+          };
+        }
+      ).__e2eTestHelpers.store;
+      let state: { tasks: { entities: Record<string, { title: string }> } } | null = null;
+      store.subscribe((s) => (state = s as typeof state)).unsubscribe();
+      const task = Object.values(state!.tasks.entities).find((t) =>
+        t.title.endsWith('TimedMover'),
+      );
+      store.dispatch({
+        type: '[Task Shared] scheduleTaskWithTime',
+        task,
+        dueWithTime: Date.now() - 1000,
+        isMoveToBacklog: false,
+        meta: {
+          isPersistent: true,
+          entityType: 'TASK',
+          entityId: (task as unknown as { id: string }).id,
+          opType: 'UPD',
+        },
+      });
+    });
+    await expect.poll(async () => (await readMover())?.dueWithTime).toBeTruthy();
+    await expect(mover).toBeVisible();
+
+    await disableAnimations(page);
+
+    const subRow = parent
+      .locator('.sub-tasks task')
+      .filter({ hasText: 'TimedExistingSub' })
+      .first();
+    await cdkDragTo(page, mover.locator('done-toggle').first(), subRow);
+
+    const subTasks = parent.locator('.sub-tasks task');
+    await expect(subTasks.filter({ hasText: 'TimedMover' })).toBeVisible({
+      timeout: 5000,
+    });
+    await expect(subTasks).toHaveCount(2);
+    const moved = await readMover();
+    expect(moved?.parentId).toBeTruthy();
+    expect(moved?.dueWithTime).toBeFalsy();
+  });
 });

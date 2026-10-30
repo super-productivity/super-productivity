@@ -1,11 +1,6 @@
 name: Manual Build Windows Release & Mac
 on:
   workflow_dispatch:
-    inputs:
-      branch:
-        description: 'Define branch name'
-        required: true
-        default: 'master'
 
 permissions:
   contents: write
@@ -32,7 +27,7 @@ jobs:
       # the Electron binary; electron-builder fetches its own copy when
       # packaging.)
       - name: Install npm Packages
-        uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08 # v3
+        uses: nick-fields/retry@ad984534de44a9489a53aefd81eb77f87c70dc60 # v4.0.0
         with:
           timeout_minutes: 10
           max_attempts: 3
@@ -51,7 +46,7 @@ jobs:
           release: false
 
       - name: 'Upload Artifact'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: WinBuildStuff
           path: .tmp/app-builds/*.exe
@@ -82,7 +77,7 @@ jobs:
       # no longer downloads the Electron binary; electron-builder fetches its
       # own copy when packaging.)
       - name: Install npm Packages
-        uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08 # v3
+        uses: nick-fields/retry@ad984534de44a9489a53aefd81eb77f87c70dc60 # v4.0.0
         with:
           timeout_minutes: 10
           max_attempts: 3
@@ -107,7 +102,7 @@ jobs:
         run: npm run lint
 
       # Unit tests are the platform-independent Angular/Karma suite; they already
-      # gate every PR on Linux (ci.yml → test-on-linux) and run in headless Chrome,
+      # gate every PR on Linux (ci.yml → unit-tests) and run in headless Chrome,
       # whose JS behavior is identical across OSes. Re-running them on the slow,
       # expensive macOS runner adds no coverage and only surfaces timing-sensitive
       # flakes. This Mac job's value is the signed DMG build, not the unit suite.
@@ -144,7 +139,7 @@ jobs:
       #  if: always()
       # run: ls -la && cat notarization-error.log
       - name: 'Upload Artifact'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: dmg
           path: .tmp/app-builds/*.dmg

@@ -46,6 +46,7 @@
 
 <mat-menu
   #bulkMenu="matMenu"
+  class="mat-menu-grouped"
   (closed)="onMenuClosed()"
 >
   <div class="menu-title">
@@ -304,7 +305,7 @@
             [title]="project.title"
             [icon]="project.icon"
             [defaultIcon]="DEFAULT_PROJECT_ICON"
-            [color]="project.theme?.primary"
+            [color]="$safeNavigationMigration(project.theme?.primary)"
             [folderPath]="projectFolderMap().get(project.id)"
           ></select-option-row>
         </button>

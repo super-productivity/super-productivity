@@ -1,4 +1,7 @@
-import { getFirstRepeatOccurrence } from './get-first-repeat-occurrence.util';
+import {
+  getFirstRepeatOccurrence,
+  hasNoRepeatOccurrenceBeforeEnd,
+} from './get-first-repeat-occurrence.util';
 import { DEFAULT_TASK_REPEAT_CFG, TaskRepeatCfg } from '../task-repeat-cfg.model';
 
 const mkCfg = (overrides: Partial<TaskRepeatCfg> = {}): TaskRepeatCfg => ({
@@ -347,5 +350,92 @@ describe('getFirstRepeatOccurrence', () => {
       expect(result!.getHours()).toBe(12);
       expect(result!.getMinutes()).toBe(0);
     });
+  });
+});
+
+describe('getFirstRepeatOccurrence with repeatUntilDay (#10091)', () => {
+  const weeklyFriday = (repeatUntilDay?: string): TaskRepeatCfg =>
+    mkCfg({
+      repeatCycle: 'WEEKLY',
+      repeatEvery: 1,
+      // Wed 2025-01-15; first Friday is 2025-01-17
+      startDate: '2025-01-15',
+      // DEFAULT enables Mon–Fri; keep Friday only
+      monday: false,
+      tuesday: false,
+      wednesday: false,
+      thursday: false,
+      friday: true,
+      repeatUntilDay,
+    });
+
+  it('returns the first occurrence when it is on the end day', () => {
+    const result = getFirstRepeatOccurrence(weeklyFriday('2025-01-17'));
+    expect(result!.getDate()).toBe(17);
+  });
+
+  it('returns null when the first occurrence falls after the end day', () => {
+    expect(getFirstRepeatOccurrence(weeklyFriday('2025-01-16'))).toBeNull();
+  });
+});
+
+describe('hasNoRepeatOccurrenceBeforeEnd (#10091)', () => {
+  it('is true when the first allowed occurrence falls past the end day', () => {
+    // Monday-only weekly starting Thu 2025-01-30: first Monday is 2025-02-03,
+    // past an end day of 2025-01-30 — the window is empty.
+    expect(
+      hasNoRepeatOccurrenceBeforeEnd(
+        mkCfg({
+          repeatCycle: 'WEEKLY',
+          repeatEvery: 1,
+          startDate: '2025-01-30',
+          monday: true,
+          tuesday: false,
+          wednesday: false,
+          thursday: false,
+          friday: false,
+          repeatUntilDay: '2025-01-30',
+        }),
+      ),
+    ).toBeTrue();
+  });
+
+  it('is false when the window contains an occurrence', () => {
+    expect(
+      hasNoRepeatOccurrenceBeforeEnd(
+        mkCfg({
+          repeatCycle: 'WEEKLY',
+          repeatEvery: 1,
+          startDate: '2025-01-30',
+          monday: true,
+          tuesday: false,
+          wednesday: false,
+          thursday: false,
+          friday: false,
+          repeatUntilDay: '2025-02-10',
+        }),
+      ),
+    ).toBeFalse();
+  });
+
+  it('is false when the config is invalid rather than empty', () => {
+    // No weekday enabled: the ignoring-end scan finds nothing, which is a
+    // misconfiguration, not an empty window — callers keep the today
+    // fallback for this case.
+    expect(
+      hasNoRepeatOccurrenceBeforeEnd(
+        mkCfg({
+          repeatCycle: 'WEEKLY',
+          repeatEvery: 1,
+          startDate: '2025-01-30',
+          monday: false,
+          tuesday: false,
+          wednesday: false,
+          thursday: false,
+          friday: false,
+          repeatUntilDay: '2025-02-10',
+        }),
+      ),
+    ).toBeFalse();
   });
 });

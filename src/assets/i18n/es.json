@@ -86,6 +86,10 @@
     "INTRO_2": "Si valoras este enfoque y quieres mantener el proyecto saludable y en evolución, se agradece enormemente una donación voluntaria."
   },
   "EXAMPLE_TASKS": {
+    "GETTING_STARTED": {
+      "TITLE": "Opcional: consejos para empezar",
+      "NOTES": "Nada de esto es obligatorio. Borra esta tarea cuando quieras.\n\n- **Hoy y Bandeja de entrada**: Hoy muestra lo planificado para hoy. Las tareas sin un proyecto propio se quedan en Bandeja de entrada. Una tarea puede aparecer en ambas listas.\n- **Proyectos**: agrupa las tareas por tema con el **+** junto a **Proyectos** en la barra lateral.\n- **Sincronización**: mantén tus datos en varios dispositivos en **Ajustes → Sincronización y respaldo**.\n- **¿Vienes de Todoist o TickTick?** Importa tus tareas en **Ajustes → Sincronización y respaldo → Importar/Exportar**.\n- **Tours**: **Ayuda → Tour rápido** en el menú de la barra lateral te guía por lo básico con tu propia tarea, y **Ayuda → Tutorial** muestra paso a paso la sintaxis corta y la navegación con teclado. Cierra un tour cuando quieras.\n- **Hazlo tuyo**: elige un tema o el modo oscuro y activa o desactiva funciones como tableros, cronograma, hábitos, modo concentración o integraciones en **Ajustes → General**. Los plugins añaden aún más."
+    },
     "LEARN_KEYBOARD_SHORTCUTS": {
       "TITLE": "Aprende los atajos de teclado",
       "NOTES": "Super Productivity está diseñado para usarse con el teclado. Aprende los atajos para trabajar más rápido.\n\n**Cómo empezar:**\n1. Abre el **menú de la barra lateral**\n2. Ve a **Ayuda**\n3. Haz clic en **Tour de navegación con teclado**"
@@ -214,7 +218,7 @@
         "IS_ADD_SUB_TASKS": "Importar también subtareas cuando se añada una tarea"
       },
       "FORM_SECTION": {
-        "HELP": "<p>Aquí puedes configurar SuperProductivity para listar tareas de CalDav no completadas para un proyecto específico en el panel de creación de tareas en la vista de planificación diaria. Se listarán como sugerencias y proporcionarán un enlace a la tarea así como más información sobre ella.</p> <p>Además puedes añadir y sincronizar automáticamente todas las tareas no completadas a tu backlog de tareas.</p><p>Para que funcione con nextcloud en la aplicación web, es posible que necesites poner en la lista blanca \"https://app.super-productivity.com\" a través de la aplicación de nextcloud <a href='https://apps.nextcloud.com/apps/webapppassword'>webapppassword<a>.</p>"
+        "HELP": "<p>Aquí puedes configurar SuperProductivity para listar tareas de CalDav no completadas para un proyecto específico en el panel de creación de tareas en la vista de planificación diaria. Se listarán como sugerencias y proporcionarán un enlace a la tarea así como más información sobre ella.</p> <p>Además puedes añadir y sincronizar automáticamente todas las tareas no completadas a tu backlog de tareas.</p><p>Para que funcione con nextcloud en la aplicación web, es posible que necesites poner en la lista blanca \"https://app.super-productivity.com\" a través de la aplicación de nextcloud <a href='https://apps.nextcloud.com/apps/webapppassword'>webapppassword</a>.</p>"
       },
       "ISSUE_CONTENT": {
         "DESCRIPTION": "Descripción",
@@ -548,7 +552,8 @@
         "OAUTH_DISCONNECTED": "Cuenta OAuth desconectada.",
         "OAUTH_FAILED": "Error de autenticación.",
         "REMOTE_ISSUE_DELETED": "El issue remoto se eliminó. ¿Eliminar la tarea vinculada \"{{taskTitle}}\"?",
-        "REMOTE_ISSUE_DELETED_WITH_TIME": "El issue remoto se eliminó, pero la tarea \"{{taskTitle}}\" tiene tiempo registrado. ¿Eliminar de todos modos?"
+        "REMOTE_ISSUE_DELETED_WITH_TIME": "El issue remoto se eliminó, pero la tarea \"{{taskTitle}}\" tiene tiempo registrado. ¿Eliminar de todos modos?",
+        "POST_TIME_SUCCESS": "{{providerName}}: Entrada de tiempo creada exitosamente para {{issueTitle}}"
       },
       "TWO_WAY_SYNC": {
         "OFF": "Desactivado",
@@ -577,6 +582,15 @@
         "POLLING_MODE_DESCRIPTION": "Cuándo sondear: solo mientras el proyecto o la etiqueta relevantes estén abiertos, o siempre en segundo plano",
         "POLLING_MODE_WHEN_PROJECT_OPEN": "Cuando el contexto esté abierto",
         "POLLING_MODE_ALWAYS": "Siempre (en segundo plano)"
+      },
+      "DIALOG_TRACK_TIME": {
+        "ACTIVITY": "Actividad",
+        "STARTED": "Iniciado",
+        "TIME_SPENT": "Tiempo dedicado",
+        "INVALID_DATE": "¡El valor ingresado no es una fecha!",
+        "POST_TIME": "Registrar tiempo",
+        "SUBMIT_TIME_FOR": "Enviar tiempo a {{providerName}} para",
+        "TITLE": "{{providerName}}: Enviar registro de trabajo"
       }
     },
     "ISSUE_PANEL": {
@@ -800,33 +814,6 @@
         "REMINDER_ERROR": "No se pudo programar el recordatorio",
         "REMINDER_NEEDS_TEXT": "Escriba una reflexión antes de solicitar un recordatorio",
         "REMINDER_TASK_TITLE": "Revisar nota de reflexión"
-      }
-    },
-    "NEXTCLOUD_DECK": {
-      "FORM": {
-        "BASE_URL": "URL base de Nextcloud",
-        "FILTER_BY_ASSIGNEE": "Solo importar tarjetas asignadas a mí",
-        "IS_TRANSITION_ISSUES_ENABLED": "Sincronizar estado de finalización y título de vuelta a Nextcloud Deck",
-        "PASSWORD": "Su contraseña de aplicación de Nextcloud",
-        "POLL_INTERVAL_MINUTES": "Intervalo de consulta (minutos)",
-        "TITLE_TEMPLATE": "Plantilla de título de tarea",
-        "TITLE_TEMPLATE_DESCRIPTION": "Variables: {CARD_TITLE}, {BOARD}, {COLUMN}, {ID}, {LABELS}. Ejemplo: [{BOARD}: {COLUMN}] {CARD_TITLE}. Dejar vacío para solo el título de la tarjeta.",
-        "USERNAME": "Su nombre de usuario de Nextcloud"
-      },
-      "FORM_SECTION": {
-        "HELP": "Configure su integración de Nextcloud Deck para importar tarjetas como tareas. Use una contraseña de aplicación para la autenticación."
-      },
-      "ISSUE_CONTENT": {
-        "ASSIGNED_USERS": "Usuarios asignados",
-        "DECK_DESCRIPTION": "Descripción de Deck",
-        "LABELS": "Etiquetas",
-        "STACK": "Pila"
-      },
-      "S": {
-        "BOARD_NOT_FOUND": "Nextcloud Deck: Tablero no encontrado",
-        "CARD_NOT_FOUND": "Nextcloud Deck: La tarjeta \"{{issueId}}\" parece haber sido eliminada del servidor.",
-        "ERR_CREDENTIALS_MISSING": "Ingrese primero la URL de Nextcloud, nombre de usuario y contraseña.",
-        "ERR_LOAD_BOARDS": "Error al cargar tableros de Deck. Verifique sus credenciales."
       }
     },
     "NOTE": {
@@ -1087,44 +1074,6 @@
       "NO_DATA": "Sin datos para el año actual",
       "PAGE_TITLE": "Historial Rápido",
       "WEEK_TITLE": "Semana {{nr}} ({{timeSpent}})"
-    },
-    "REDMINE": {
-      "DIALOG_TRACK_TIME": {
-        "ACTIVITY": "Actividad",
-        "STARTED": "Iniciado",
-        "TIME_SPENT": "Tiempo dedicado",
-        "INVALID_DATE": "¡El valor ingresado no es una fecha!",
-        "POST_TIME": "Registrar tiempo",
-        "SUBMIT_TIME_FOR": "Enviar tiempo a Redmine para",
-        "TITLE": "Redmine: Enviar registro de trabajo"
-      },
-      "FORM": {
-        "API_KEY": "Clave de acceso a la API",
-        "HOST": "Host (por ejemplo: https://redmine.org)",
-        "PROJECT_ID": "Identificador del proyecto",
-        "PROJECT_ID_DESCRIPTION": "Se puede encontrar como parte de la URL al ver el proyecto en el navegador.",
-        "SCOPE": "Alcance",
-        "SCOPE_ALL": "Todo",
-        "SCOPE_ASSIGNED": "Asignado a mí",
-        "SCOPE_CREATED": "Creado por mí",
-        "IS_SHOW_TIME_TRACKING_DIALOG": "Mostrar diálogo de seguimiento de tiempo para reportar a Redmine",
-        "IS_SHOW_TIME_TRACKING_DIALOG_DESCRIPTION": "Requiere que el módulo de seguimiento de tiempo esté habilitado en el proyecto Redmine",
-        "IS_SHOW_TIME_TRACKING_DIALOG_FOR_EACH_SUB_TASK": "Mostrar diálogo de seguimiento de tiempo al completar subtareas"
-      },
-      "FORM_SECTION": {
-        "HELP": "<p>Aquí puedes configurar SuperProductivity para listar los problemas abiertos de Redmine (ya sea la versión en línea o una instancia autohospedada) para un proyecto específico en el panel de creación de tareas en la vista de planificación diaria. Se mostrarán como sugerencias y proporcionarán un enlace al problema así como más información sobre el mismo.</p><p>Además, puedes importar automáticamente todos los problemas abiertos.</p>",
-        "TITLE": "Redmine"
-      },
-      "ISSUE_CONTENT": {
-        "AUTHOR": "Autor",
-        "DESCRIPTION": "Descripción",
-        "MARK_AS_CHECKED": "Marcar actualizaciones como revisadas",
-        "PRIORITY": "Prioridad",
-        "STATUS": "Estado"
-      },
-      "S": {
-        "POST_TIME_SUCCESS": "Redmine: Entrada de tiempo creada exitosamente para {{issueTitle}}"
-      }
     },
     "REFLECTION_NOTE": {
       "ACTION_DISMISS": "Descartar",
@@ -1616,7 +1565,7 @@
         "WEB_DAV": {
           "CONDITIONAL_HEADER_WARNING_MSG": "Tu servidor WebDAV no soporta cabeceras condicionales. Super Productivity no puede detectar cambios concurrentes durante la subida.<br><br>La sincronización funcionará, pero hay un pequeño riesgo de conflictos si cambias datos en varios dispositivos a la vez.",
           "CONDITIONAL_HEADER_WARNING_TITLE": "Seguridad de sincronización reducida",
-          "CORS_INFO": "<strong>Hacerlo funcionar en el navegador:</strong> Para hacer que esto funcione en el navegador necesitas poner en la lista blanca a Super Productivity para solicitudes CORS en tu servidor webdav. ¡Esto puede tener implicaciones negativas de seguridad! Para nextcloud por favor <a href='https://github.com/nextcloud/server/issues/3131'>consulta este hilo para más información</a>. Un enfoque para hacer que esto funcione en el móvil es poner en la lista blanca \"https://app.super-productivity.com\" a través de la app nextcloud <a href='https://apps.nextcloud.com/apps/webapppassword'>webapppassword<a>. ¡Úsalo bajo tu propio riesgo!</p>",
+          "CORS_INFO": "<strong>Hacerlo funcionar en el navegador:</strong> Para hacer que esto funcione en el navegador necesitas poner en la lista blanca a Super Productivity para solicitudes CORS en tu servidor webdav. ¡Esto puede tener implicaciones negativas de seguridad! Para nextcloud por favor <a href='https://github.com/nextcloud/server/issues/3131'>consulta este hilo para más información</a>. Un enfoque para hacer que esto funcione en el móvil es poner en la lista blanca \"https://app.super-productivity.com\" a través de la app nextcloud <a href='https://apps.nextcloud.com/apps/webapppassword'>webapppassword</a>. ¡Úsalo bajo tu propio riesgo!</p>",
           "D_SYNC_FOLDER_PATH": "Ruta relativa a la raíz del servidor WebDAV donde se almacenarán los archivos de sincronización (por ejemplo, '/super-productivity' o '/'). Esta NO es la ruta interna de su servidor.",
           "INFO": "Las implementaciones de WebDAV difieren mucho desafortunadamente. Se sabe que Super Productivity funciona bien con Nextcloud, <strong>pero podría no funcionar con tu proveedor</strong>.",
           "L_BASE_URL": "URL Base",
@@ -1670,8 +1619,8 @@
         "ERROR_DATA_IS_CURRENTLY_WRITTEN": "Los datos remotos se están escribiendo actualmente",
         "ERROR_PAYLOAD_TOO_LARGE": "Error de sincronización: Tus datos son demasiado grandes para subir.\n\nEsto pasa cuando tienes muchas tareas archivadas. ¡Tus datos NO se sincronizaron!\n\nContacta soporte para ayuda.",
         "ERROR_PERMISSION": "Acceso al archivo denegado. Por favor, verifique los permisos del sistema de archivos.",
-        "ERROR_PERMISSION_FLATPAK": "Acceso al archivo denegado. Conceda permiso al sistema de archivos mediante Flatseal o use una ruta dentro de ~\\/var\\/app\\/",
-        "ERROR_PERMISSION_SNAP": "Acceso al archivo denegado. Ejecute 'snap connect super-productivity:home' o use una ruta dentro de ~\\/snap\\/super-productivity\\/common\\/",
+        "ERROR_PERMISSION_FLATPAK": "Acceso al archivo denegado. Conceda permiso al sistema de archivos mediante Flatseal o use una ruta dentro de ~/var/app/",
+        "ERROR_PERMISSION_SNAP": "Acceso al archivo denegado. Ejecute 'snap connect super-productivity:home' o use una ruta dentro de ~/snap/super-productivity/common/",
         "ERROR_REMOTE_RESPONSE_NOT_SYNC_DATA": "El servidor de sincronización respondió con una página web en lugar de tus datos de sincronización (p. ej. una página de inicio de sesión, de proxy o de error). Es probable que tus datos remotos estén intactos: comprueba la URL del servidor, las credenciales y la red, y vuelve a intentarlo. Si el problema continúa, puedes sobrescribir los datos remotos en Ajustes de sincronización → Forzar sobrescritura.",
         "ERROR_UNABLE_TO_READ_REMOTE_DATA": "Error al sincronizar. No se pueden leer datos remotos. ¿Quizás habilitaste el cifrado y tu contraseña local no coincide con la remota?",
         "FINISH_DAY_SYNC_ERROR": "Error de sincronización al finalizar el día. Inténtalo de nuevo.",
@@ -2912,8 +2861,17 @@
     },
     "SOUND": {
       "BREAK_REMINDER_SOUND": "Sonido de recordatorio de tomar un descanso",
+      "DING": "Campana",
       "DONE_SOUND": "Sonido de tarea marcada como hecha",
       "IS_INCREASE_DONE_PITCH": "Aumentar tono por cada tarea hecha",
+      "SMALL_DING": "Campanilla",
+      "SOUND_1": "Sonido 1",
+      "SOUND_2": "Sonido 2",
+      "SOUND_3": "Sonido 3",
+      "SOUND_4": "Sonido 4",
+      "SOUND_5": "Sonido 5",
+      "SOUND_6": "Sonido 6",
+      "SOUND_7": "Sonido 7",
       "TITLE": "Sonido",
       "TRACK_TIME_SOUND": "Sonido de recordatorio de tiempo de seguimiento",
       "VOLUME": "Volumen"
@@ -3057,6 +3015,7 @@
       "CREATE_TASK": "Cómo crear una tarea",
       "GET_HELP_ONLINE": "Obtener ayuda online",
       "KEYBOARD": "Tutorial: Teclado Avanzado",
+      "QUICK_TOUR": "Tour rápido",
       "REDDIT_COMMUNITY": "Comunidad de Reddit",
       "REPORT_A_PROBLEM": "Reportar un problema",
       "SEND_FEEDBACK": "Enviar comentarios",
@@ -3142,13 +3101,50 @@
     "HINTS": {
       "CREATE_TASK": "Haz clic en + para añadir tu primera tarea",
       "CREATE_TASK_TOUCH": "Toca + para añadir tu primera tarea",
+      "DECLINED": "Sin problema. Lo encontrarás en Ayuda → Tour rápido cuando quieras.",
+      "MORE_FALLBACK": "Ya hay más activado: proyectos, seguimiento de tiempo, Planificador…",
+      "NO_THANKS": "No, gracias",
+      "SHOW_ME_MORE": "Muéstrame más ›",
       "EXPLORE": "¡Explora libremente haciendo clic por aquí! Puedes encontrar ayuda en la barra lateral.",
       "EXPLORE_TOUCH": "¡Explora libremente tocando por aquí! Puedes encontrar ayuda en el menú.",
       "TASK_TAP_TOUCH": "Toca una tarea para abrir sus detalles.",
       "TASK_SWIPE_LEFT_TOUCH": "Desliza la tarea a la izquierda para ver más acciones",
+      "TODAY_AND_INBOX": "Esta tarea está planificada para hoy, por eso aparece en {{todayIcon}} <b>Hoy</b>. Las tareas sin un proyecto propio se quedan en {{inboxIcon}} <b>Bandeja de entrada</b>.",
+      "TODAY_AND_INBOX_PHONE": "Esta tarea está planificada para hoy, por eso aparece en {{todayIcon}} <b>Hoy</b>. Las tareas sin un proyecto propio se quedan en {{inboxIcon}} <b>Bandeja de entrada</b>, en ☰.",
       "TASK_SWIPE_RIGHT_TOUCH": "Desliza la tarea a la derecha para marcarla como hecha",
       "OR_PRESS": "o pulsa",
       "SKIP_ARIA": "Cerrar indicación"
+    },
+    "TOUR": {
+      "ADD_SUBTASK": "Divídela: haz clic derecho en la tarea y elige {{subtaskIcon}} <b>Añadir subtarea</b>",
+      "COUNTER": "{{nr}} de {{total}}",
+      "NEXT": "Siguiente ›",
+      "ORGANIZE": "Crea un <b>proyecto</b> propio para agrupar tareas, o una <b>etiqueta</b> para marcarlas. Crea uno con +",
+      "ORGANIZE_COLLAPSED": "Crea un <b>proyecto</b> propio para agrupar tareas, o una <b>etiqueta</b> para marcarlas. Expande la barra lateral con {{expandIcon}} para crear uno",
+      "ORGANIZE_PHONE": "Los proyectos y las etiquetas están en ☰. Crea un <b>proyecto</b> propio para agrupar tareas, o una <b>etiqueta</b> para marcarlas",
+      "PLANNER": "Planifica los próximos días en {{plannerIcon}} <b>Planificador</b>",
+      "TASK_MENU_TOUCH": "Desliza una tarea a la izquierda para ver su menú: {{playIcon}} <b>Iniciar seguimiento de tiempo</b>, {{subtaskIcon}} <b>Añadir subtarea</b>",
+      "TASK_MENU_TOUCH_NO_TRACKING": "Desliza una tarea a la izquierda para ver su menú, p. ej. {{subtaskIcon}} <b>Añadir subtarea</b>",
+      "TIMER_RUNNING": "El temporizador está en marcha. Pulsa {{playIcon}} de nuevo o <kbd>{{key}}</kbd> para pausar.",
+      "TIMER_RUNNING_TOUCH": "El temporizador está en marcha. Toca {{playIcon}} arriba para pausar.",
+      "TRACK_TIME": "Pasa el ratón sobre la tarea y pulsa {{playIcon}} para registrar el tiempo"
+    },
+    "WANT_MORE": {
+      "BOARDS": "<b>Tableros</b> · columnas estilo kanban para tus tareas",
+      "DONE": "Hecho",
+      "FINISH_DAY": "<b>Finalizar día</b> · repasa y cierra tu día",
+      "FOCUS_MODE": "<b>Modo concentración</b> · pomodoro y trabajo sin distracciones",
+      "FOOTER": "Lo encontrarás de nuevo en Ayuda → Tour rápido.",
+      "HABITS": "<b>Hábitos</b> · sigue tus rutinas día a día",
+      "INTRO": "Super Productivity empieza tranquilo. Hay más cuando lo necesites:",
+      "OPEN_SETTINGS": "Abrir ajustes ›",
+      "PLUGINS": "<b>Plugins e integraciones</b> · Jira, GitHub, CalDAV y más",
+      "SCHEDULE": "<b>Cronograma</b> · tu día en una línea de tiempo",
+      "SEARCH": "Busca en todo con <kbd>{{key}}</kbd>.",
+      "SEARCH_PHONE": "Busca en todo desde ☰.",
+      "SHORT_SYNTAX": "Escribe <code>#tag</code>, <code>+project</code> o <code>@tomorrow</code> al añadir una tarea. Ayuda → Tutorial muestra más.",
+      "SYNC": "Tus datos se quedan en este dispositivo. La sincronización y las copias de seguridad están en Ajustes.",
+      "TITLE": "¿Quieres más?"
     }
   },
   "PDS": {

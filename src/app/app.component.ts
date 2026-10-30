@@ -81,6 +81,7 @@ import { StartupService } from './core/startup/startup.service';
 import { DataInitStateService } from './core/data-init/data-init-state.service';
 import { AppUriTaskActionsService } from './features/tasks/app-uri-actions/app-uri-task-actions.service';
 import { IosShareService } from './features/tasks/ios-share/ios-share.service';
+import { AgentCaptureService } from './features/tasks/agent-capture/agent-capture.service';
 import { ExampleTasksService } from './core/example-tasks/example-tasks.service';
 import { KeyboardLayoutService } from './core/keyboard-layout/keyboard-layout.service';
 import { setKeyboardLayoutService } from './util/check-key-combo';
@@ -88,6 +89,7 @@ import { TaskMultiSelectBarComponent } from './features/tasks/task-multi-select-
 import { TaskMultiSelectService } from './features/tasks/task-multi-select.service';
 import { OnboardingHintComponent } from './features/onboarding/onboarding-hint.component';
 import { OnboardingHintService } from './features/onboarding/onboarding-hint.service';
+import { QuickTourService } from './features/onboarding/quick-tour.service';
 import { MaterialIconsLoaderService } from './ui/material-icons-loader.service';
 import { BrowserTitleService } from './core/browser-title/browser-title.service';
 
@@ -169,7 +171,9 @@ export class AppComponent implements OnDestroy, AfterViewInit {
   // cold-launch add-task/complete-task URL action is never missed.
   private _appUriTaskActionsService = inject(AppUriTaskActionsService);
   private _iosShareService = inject(IosShareService);
+  private _agentCaptureService = inject(AgentCaptureService);
   readonly onboardingHintService = inject(OnboardingHintService);
+  readonly quickTourService = inject(QuickTourService);
 
   private _syncTriggerService = inject(SyncTriggerService);
   readonly workContextService = inject(WorkContextService);
@@ -232,6 +236,7 @@ export class AppComponent implements OnDestroy, AfterViewInit {
   constructor() {
     this._startupService.init();
     this._iosShareService.start();
+    this._agentCaptureService.start();
     void this._materialIconsLoaderService.ensureFontReady();
 
     // Clear app entrance animation after it completes

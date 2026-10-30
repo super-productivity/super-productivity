@@ -194,9 +194,7 @@ const sync = async (client: SimulatedE2EClient): Promise<void> => {
     if (await client.sync.conflictDialog.isVisible()) return 'conflict-dialog';
     if (await client.sync.hasSyncError()) return 'error';
     const spinning = await client.sync.syncSpinner.isVisible();
-    const checked = await client.sync.syncCheckIcon
-      .filter({ hasText: /^done_all$/ })
-      .isVisible();
+    const checked = await client.sync.syncConfirmedIcon.isVisible();
     return !spinning && checked ? 'in-sync' : 'pending';
   };
   let observed = 'pending';
@@ -217,6 +215,8 @@ const habitOrder = (page: Page): Promise<string[]> =>
 
 /** Exercise the CDK drop handler, including its enabled-only footprint. */
 const dragHabit = async (page: Page): Promise<void> => {
+  // warpRoute enters at scale(1.2); boxes read mid-animation miss the rows.
+  await expect(page.locator('.ng-animating')).toHaveCount(0);
   const before = await habitOrder(page);
   const from = await page.locator('.habit-row').last().boundingBox();
   const to = await page.locator('.habit-row').first().boundingBox();

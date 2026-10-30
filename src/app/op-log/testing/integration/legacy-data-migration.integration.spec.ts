@@ -75,6 +75,7 @@ describe('Legacy Data Migration Integration', () => {
     });
 
     migrationService = TestBed.inject(OperationLogMigrationService);
+    migrationService.completionDisplayMs = 0;
     opLogStore = TestBed.inject(OperationLogStoreService);
 
     await opLogStore.init();

@@ -279,6 +279,9 @@ export class IndexedDbOpLogAdapter implements OpLogDbAdapter {
       } catch {
         // Already aborted/committed — nothing to undo.
       }
+      // Observe the abort rejection even when the body failed before awaiting
+      // tx.done, while preserving the original error (e.g. QuotaExceededError).
+      await tx.done.catch(() => undefined);
       throw e;
     }
   }

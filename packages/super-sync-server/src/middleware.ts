@@ -5,6 +5,7 @@ import { verifyToken } from './auth';
 export interface AuthUser {
   userId: number;
   email: string;
+  tokenVersion: number;
 }
 
 // Extend FastifyRequest to include optional user (before auth)
@@ -41,5 +42,9 @@ export const authenticate = async (
     return reply.code(401).send({ error: result.reason });
   }
 
-  req.user = { userId: result.userId, email: result.email };
+  req.user = {
+    userId: result.userId,
+    email: result.email,
+    tokenVersion: result.tokenVersion,
+  };
 };

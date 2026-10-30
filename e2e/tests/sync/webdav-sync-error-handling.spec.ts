@@ -75,7 +75,7 @@ test.describe('@webdav WebDAV Sync Error Handling', () => {
 
       // Check for error icon on sync button
       const errorIcon = syncPageA.syncBtn.locator(
-        'mat-icon.error, mat-icon:text("error"), mat-icon:text("sync_problem")',
+        'mat-icon.error, mat-icon:text("error"), mat-icon:text("sync_problem"), mat-icon[data-mat-icon-name="sync_error"]',
       );
       if (await errorIcon.isVisible({ timeout: 500 }).catch(() => false)) {
         errorFound = true;

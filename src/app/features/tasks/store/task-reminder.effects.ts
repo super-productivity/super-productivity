@@ -20,6 +20,18 @@ import { PlannerActions } from '../../planner/store/planner.actions';
 import { TaskLog } from '../../../core/log';
 import { TaskMultiSelectService } from '../task-multi-select.service';
 
+/**
+ * Native alarm slot to cancel for an unschedule-type action. Deadline actions
+ * leave the task's own reminder untouched, so only the deadline slot goes
+ * (a deadline tap must not kill the task alarm).
+ */
+export const nativeReminderIdToCancel = (
+  action: { id: string } | { taskId: string },
+): number =>
+  'taskId' in action
+    ? generateNotificationId(action.taskId + '_deadline')
+    : generateNotificationId(action.id);
+
 @Injectable()
 export class TaskReminderEffects {
   private _localActions$ = inject(LOCAL_ACTIONS);
@@ -227,15 +239,8 @@ export class TaskReminderEffects {
         ),
         filter(() => this._isAndroidWebView),
         tap((action) => {
-          const taskId = 'id' in action ? action.id : action.taskId;
           try {
-            const notificationId = generateNotificationId(taskId);
-            androidInterface.cancelNativeReminder?.(notificationId);
-            // Also cancel the deadline-specific notification if it exists
-            if ('taskId' in action) {
-              const deadlineNotificationId = generateNotificationId(taskId + '_deadline');
-              androidInterface.cancelNativeReminder?.(deadlineNotificationId);
-            }
+            androidInterface.cancelNativeReminder?.(nativeReminderIdToCancel(action));
           } catch (e) {
             TaskLog.err('Failed to cancel native reminder:', e);
           }

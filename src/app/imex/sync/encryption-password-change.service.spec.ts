@@ -7,6 +7,7 @@ import { SyncProviderId } from '../../op-log/sync-providers/provider.const';
 import { SyncWrapperService } from './sync-wrapper.service';
 import { OperationLogStoreService } from '../../op-log/persistence/operation-log-store.service';
 import { WrappedProviderService } from '../../op-log/sync-providers/wrapped-provider.service';
+import { OperationLogDownloadService } from '../../op-log/sync/operation-log-download.service';
 import { OpType } from '../../op-log/core/operation.types';
 
 describe('EncryptionPasswordChangeService', () => {
@@ -17,6 +18,7 @@ describe('EncryptionPasswordChangeService', () => {
   let mockSyncWrapper: jasmine.SpyObj<SyncWrapperService>;
   let mockOpLogStore: jasmine.SpyObj<OperationLogStoreService>;
   let mockSyncProvider: jasmine.SpyObj<any>;
+  let mockDownloadService: jasmine.SpyObj<OperationLogDownloadService>;
 
   const TEST_PASSWORD = 'new-secure-password-123';
 
@@ -87,6 +89,10 @@ describe('EncryptionPasswordChangeService', () => {
       }
     });
 
+    mockDownloadService = jasmine.createSpyObj('OperationLogDownloadService', [
+      'clearUndecryptableRemoteOps',
+    ]);
+
     TestBed.configureTestingModule({
       providers: [
         EncryptionPasswordChangeService,
@@ -95,6 +101,7 @@ describe('EncryptionPasswordChangeService', () => {
         { provide: OperationLogUploadService, useValue: mockUploadService },
         { provide: SyncWrapperService, useValue: mockSyncWrapper },
         { provide: OperationLogStoreService, useValue: mockOpLogStore },
+        { provide: OperationLogDownloadService, useValue: mockDownloadService },
         {
           // Pass-through: the real service wraps the provider in the #9074
           // epoch-guard delegate; identity keeps existing expectations.
@@ -352,6 +359,14 @@ describe('EncryptionPasswordChangeService', () => {
       await expectAsync(service.changePassword(TEST_PASSWORD)).toBeRejectedWithError(
         /Clean slate upload was rejected by server: Server rejected/,
       );
+      // #9256: the server was not replaced, so the undecryptable ops remain.
+      expect(mockDownloadService.clearUndecryptableRemoteOps).not.toHaveBeenCalled();
+    });
+
+    it('retires the undecryptable remote ops warning once the clean slate is accepted', async () => {
+      await service.changePassword(TEST_PASSWORD);
+
+      expect(mockDownloadService.clearUndecryptableRemoteOps).toHaveBeenCalled();
     });
 
     it('should execute steps in correct order', async () => {

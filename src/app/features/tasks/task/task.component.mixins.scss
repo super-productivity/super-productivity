@@ -23,9 +23,14 @@
   opacity: var(--task-icon-default-opacity);
   transition: transform var(--transition-fast);
 
+  // Not `:hover`/`:focus` alone: on touch both stick to the last tapped
+  // button, leaving it at full opacity until the next tap elsewhere.
   .isCurrent &,
-  &:hover,
-  &:focus {
+  &:focus-visible {
+    opacity: 1;
+  }
+
+  @include hoverWithPointer {
     opacity: 1;
   }
 }

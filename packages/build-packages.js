@@ -6,6 +6,7 @@ const { exec } = require('child_process');
 const { promisify } = require('util');
 const fs = require('fs').promises;
 const path = require('path');
+const { ensurePluginDeps } = require('./plugin-dev/scripts/install-deps');
 
 const execAsync = promisify(exec);
 
@@ -90,8 +91,13 @@ async function getPlugins() {
         await fs.access(packageJsonPath);
         const packageJson = JSON.parse(await fs.readFile(packageJsonPath, 'utf8'));
 
-        // Skip boilerplate
-        if (entry.name === 'boilerplate-solid-js') continue;
+        // Skip boilerplate and the issue-provider helper (bundled into plugins)
+        if (
+          entry.name === 'boilerplate-solid-js' ||
+          entry.name === 'issue-provider-kit'
+        ) {
+          continue;
+        }
 
         const buildScript = packageJson.scripts && packageJson.scripts.build;
         // Check if it's a real build script or just a placeholder
@@ -193,32 +199,6 @@ async function buildPlugin(plugin) {
     // Run build command if specified
     if (plugin.buildCommand) {
       log(`  Building...`, colors.yellow);
-      const packageJsonPath = path.join(pluginPath, 'package.json');
-
-      // Check if package.json exists and install dependencies if needed
-      try {
-        await fs.access(packageJsonPath);
-        const nodeModulesPath = path.join(pluginPath, 'node_modules');
-        // Check if dependencies are actually installed by looking for a real package
-        // (not just .vite cache folders)
-        let needsInstall = false;
-        try {
-          await fs.access(nodeModulesPath);
-          // Check if at least one actual package exists (not a dot-folder)
-          const entries = await fs.readdir(nodeModulesPath);
-          const hasRealPackages = entries.some((e) => !e.startsWith('.'));
-          needsInstall = !hasRealPackages;
-        } catch {
-          needsInstall = true;
-        }
-        if (needsInstall) {
-          log(`  Installing dependencies...`, colors.yellow);
-          await execAsync(`cd ${pluginPath} && npm install`);
-        }
-      } catch {
-        // No package.json, skip install
-      }
-
       await execAsync(`cd ${pluginPath} && ${plugin.buildCommand}`);
     }
 
@@ -308,7 +288,16 @@ async function buildAll() {
 
   // Build plugins sequentially to avoid conflicts
   const results = [];
+  let pluginDepsReady = false;
   for (const plugin of plugins) {
+    // Shared packages use the root install. Plugins share one plugin-dev
+    // workspace install (`npm ci`, so no lockfile is rewritten). Install it
+    // only after plugin-api and vite-plugin are built: npm < 9.4 copies their
+    // `file:` links instead of symlinking them, so they must have dist/.
+    if (!pluginDepsReady && plugin.path.startsWith('packages/plugin-dev/')) {
+      ensurePluginDeps({ log: (msg) => log(msg, colors.yellow) });
+      pluginDepsReady = true;
+    }
     const result = await buildPlugin(plugin);
     results.push(result);
   }

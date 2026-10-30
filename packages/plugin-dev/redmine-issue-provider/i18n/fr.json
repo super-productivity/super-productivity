@@ -1,0 +1,33 @@
+{
+  "CFG": {
+    "HOST": "Hôte (ex : https://redmine.org)",
+    "API_KEY": "clé d'accès à l'API",
+    "PROJECT_ID": "Identifiant du projet",
+    "PROJECT_ID_DESC": "Peut être trouvé dans une partie de l'URL, lors de la visualisation du projet dans le navigateur.",
+    "SCOPE": "Portée",
+    "SCOPE_ALL": "Tout",
+    "SCOPE_CREATED": "Créé par moi",
+    "SCOPE_ASSIGNED": "Assigné à moi-même",
+    "IS_SHOW_TIME_TRACKING_DIALOG": "Afficher la boîte de dialogue de suivi du temps pour Redmine",
+    "IS_SHOW_TIME_TRACKING_DIALOG_DESC": "Nécessite que le module de suivi du temps soit activé pour le projet Redmine",
+    "IS_SHOW_TIME_TRACKING_DIALOG_FOR_EACH_SUB_TASK": "Afficher la boîte de dialogue de suivi du temps à la fin des sous-tâches",
+    "DEFAULT_TIME": "Valeur de temps par défaut pour le dialogue",
+    "DEFAULT_TIME_ALL_TIME": "Remplissez tout le temps passé sur la tâche",
+    "DEFAULT_TIME_ALL_TIME_MINUS_LOGGED": "Remplissez tout le temps passé moins le temps enregistré",
+    "DEFAULT_TIME_TODAY": "Ne remplissez que le temps passé aujourd'hui",
+    "DEFAULT_TIME_YESTERDAY": "Remplir uniquement le temps passé hier"
+  },
+  "DISPLAY": {
+    "SUMMARY": "Résumé",
+    "STATUS": "Statut",
+    "PRIORITY": "Priorité",
+    "AUTHOR": "Auteur",
+    "ASSIGNEE": "Bénéficiaire",
+    "CATEGORY": "Catégorie",
+    "VERSION": "Version",
+    "DUE_DATE": "Date d'échéance",
+    "TIME_SPENT": "Temps passé",
+    "DESCRIPTION": "Description"
+  },
+  "FORM_HELP": "<p>Ici, vous pouvez configurer SuperProductivity pour répertorier les tickets Redmine ouverts (soit la version en ligne, soit une instance auto-hébergée) pour un projet spécifique dans le panneau de création de tâches de la vue de planification quotidienne. Ils seront répertoriés sous forme de suggestions et fourniront un lien vers le problème ainsi que plus d'informations à ce sujet.</p><p>Vous pouvez aussi importer automatiquement tous les problèmes ouverts.</p>"
+}

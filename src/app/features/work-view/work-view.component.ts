@@ -9,6 +9,7 @@ import {
   afterNextRender,
   inject,
   input,
+  linkedSignal,
   OnDestroy,
   OnInit,
   signal,
@@ -23,9 +24,10 @@ import { DialogPromptComponent } from '../../ui/dialog-prompt/dialog-prompt.comp
 import { expandAnimation, expandFadeAnimation } from '../../ui/animations/expand.ani';
 import { LayoutService } from '../../core-ui/layout/layout.service';
 import { TakeABreakService } from '../take-a-break/take-a-break.service';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 import {
   animationFrameScheduler,
+  firstValueFrom,
   from,
   fromEvent,
   Observable,
@@ -49,6 +51,7 @@ import {
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { SectionService } from '../section/section.service';
 import { Section } from '../section/section.model';
+import { groupTasksBySection } from '../section/section.util';
 import {
   CdkDrag,
   CdkDragDrop,
@@ -59,7 +62,7 @@ import {
 import { CdkScrollable } from '@angular/cdk/scrolling';
 import { MatTooltip } from '@angular/material/tooltip';
 import { MatIcon } from '@angular/material/icon';
-import { MatButton, MatMiniFabButton } from '@angular/material/button';
+import { MatButton, MatIconButton, MatMiniFabButton } from '@angular/material/button';
 import { TaskListComponent } from '../tasks/task-list/task-list.component';
 import { SplitComponent } from './split/split.component';
 import { BacklogComponent } from './backlog/backlog.component';
@@ -90,6 +93,7 @@ import { GlobalConfigService } from '../config/global-config.service';
 import { Store } from '@ngrx/store';
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 import { TODAY_TAG } from '../tag/tag.const';
+import { getEmptyStateHint } from './get-empty-state-hint';
 import { LS } from '../../core/persistence/storage-keys.const';
 import { FinishDayBtnComponent } from './finish-day-btn/finish-day-btn.component';
 import { ScheduledDateGroupPipe } from '../../ui/pipes/scheduled-date-group.pipe';
@@ -132,6 +136,8 @@ const INITIAL_CUSTOMIZED_UNDONE_TASKS: CustomizedUndoneTasks = { list: [] };
     MatIcon,
     MatMiniFabButton,
     MatButton,
+    MatIconButton,
+    RouterLink,
     TaskListComponent,
     SplitComponent,
     BacklogComponent,
@@ -177,11 +183,10 @@ export class WorkViewComponent implements OnInit, OnDestroy {
     initialValue: false,
   });
 
-  private _isTodayContext = toSignal(
-    this.workContextService.activeWorkContext$.pipe(
-      map((ctx) => ctx.id === TODAY_TAG.id),
-    ),
-    { initialValue: false },
+  private _activeWorkContext = toSignal(this.workContextService.activeWorkContext$);
+
+  private _isTodayContext = computed(
+    () => this._activeWorkContext()?.id === TODAY_TAG.id,
   );
 
   /**
@@ -281,6 +286,24 @@ export class WorkViewComponent implements OnInit, OnDestroy {
 
   hasDoneTasks = computed(() => this.doneTasks().length > 0);
 
+  // Only when the list is truly empty: overdue, later-today or backlog tasks
+  // on screen would contradict a sentence telling the user to add tasks.
+  emptyStateHint = computed(() => {
+    const ctx = this._activeWorkContext();
+    const hasLaterToday =
+      this.isOnTodayList() &&
+      (this.laterTodayTasks().length > 0 || this.laterTodayCalendarEvents().length > 0);
+    if (
+      !ctx ||
+      this.isShowOverduePanel() ||
+      hasLaterToday ||
+      (this.backlogTasks()?.length ?? 0) > 0
+    ) {
+      return null;
+    }
+    return getEmptyStateHint(ctx);
+  });
+
   todayRemainingInProject = toSignal(this.workContextService.todayRemainingInProject$, {
     initialValue: 0,
   });
@@ -294,6 +317,13 @@ export class WorkViewComponent implements OnInit, OnDestroy {
   selectedTaskId = this.taskService.selectedTaskId;
   isOnTodayList = toSignal(this.workContextService.isTodayList$, { initialValue: false });
   isDoneHidden = signal(!!localStorage.getItem(LS.DONE_TASKS_HIDDEN));
+  // Projected content is built even while its collapsible is closed, so the Done
+  // list is created on first expand only; it is kept afterwards so collapsing
+  // animates the rows out and re-expanding is free.
+  isDoneListBuilt = linkedSignal<boolean, boolean>({
+    source: this.isDoneHidden,
+    computation: (isHidden, previous) => !!previous?.value || !isHidden,
+  });
   isLaterTodayHidden = signal(!!localStorage.getItem(LS.LATER_TODAY_TASKS_HIDDEN));
   isOverdueHidden = signal(!!localStorage.getItem(LS.OVERDUE_TASKS_HIDDEN));
   isRepeatCfgsHidden = signal(!!localStorage.getItem(LS.REPEAT_CFGS_HIDDEN));
@@ -340,37 +370,9 @@ export class WorkViewComponent implements OnInit, OnDestroy {
     { initialValue: [] as readonly Section[] },
   );
 
-  undoneTasksBySection = computed(() => {
-    const tasks = this.undoneTasks();
-    const sections = this.sections();
-
-    if (!sections.length) {
-      return { dict: {} as Record<string, TaskWithSubTasks[]>, noSection: tasks };
-    }
-
-    // section.taskIds is authoritative for in-section order — drag-drop
-    // reorders go through addTaskToSection's reducer. Walking sections
-    // first (rather than tasks first) lets us respect that order while
-    // staying defensive against stale ids and tasks that aren't yet in
-    // any section.
-    const taskById = new Map(tasks.map((t) => [t.id, t]));
-    const dict: Record<string, TaskWithSubTasks[]> = {};
-    const inSection = new Set<string>();
-    for (const s of sections) {
-      const list: TaskWithSubTasks[] = [];
-      for (const tId of s.taskIds ?? []) {
-        const t = taskById.get(tId);
-        if (t) {
-          list.push(t);
-          inSection.add(tId);
-        }
-      }
-      dict[s.id] = list;
-    }
-    const noSection = tasks.filter((t) => !inSection.has(t.id));
-
-    return { dict, noSection };
-  });
+  undoneTasksBySection = computed(() =>
+    groupTasksBySection(this.undoneTasks(), this.sections()),
+  );
 
   isShowOverduePanel = computed(
     () => this.isOnTodayList() && this.overdueTasks().length > 0,
@@ -591,7 +593,9 @@ export class WorkViewComponent implements OnInit, OnDestroy {
   }
 
   async moveDoneToArchive(): Promise<void> {
-    const doneTasks = this.doneTasks();
+    // not this.doneTasks(): on Today that hides done tasks from earlier days,
+    // which should still be swept
+    const doneTasks = await firstValueFrom(this.workContextService.doneTasksToArchive$);
 
     if (!doneTasks || doneTasks.length === 0) {
       return;

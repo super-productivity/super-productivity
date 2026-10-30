@@ -92,6 +92,10 @@
     "INTRO_2": "Om du värderar detta tillvägagångssätt och vill att projektet ska förbli hälsosamt och utvecklas, uppskattas en frivillig donation mycket."
   },
   "EXAMPLE_TASKS": {
+    "GETTING_STARTED": {
+      "TITLE": "Valfritt: tips för att komma igång",
+      "NOTES": "Inget här är obligatoriskt. Ta bort den här uppgiften när du vill.\n\n- **Idag och Inkorgen**: Idag visar det som är planerat för idag. Uppgifter utan ett eget projekt ligger kvar i Inkorgen. En uppgift kan synas i båda listorna.\n- **Projekt**: gruppera uppgifter efter ämne med **+** bredvid **Projekt** i sidofältet.\n- **Synk**: ha dina data på flera enheter under **Inställningar → Synk och säkerhetskopia**.\n- **Kommer du från Todoist eller TickTick?** Importera dina uppgifter under **Inställningar → Synk och säkerhetskopia → Importera/exportera**.\n- **Turer**: **Hjälp → Snabbtur** i sidofältsmenyn går igenom grunderna med din egen uppgift, och **Hjälp → Guide** visar kort syntax och tangentbordsnavigering steg för steg. Stäng en tur när du vill.\n- **Gör det till ditt**: välj ett tema eller mörkt läge och slå på eller av funktioner som tavlor, schema, vanor, fokusläge eller integrationer under **Inställningar → Allmänt**. Tillägg ger ännu mer."
+    },
     "LEARN_KEYBOARD_SHORTCUTS": {
       "TITLE": "Lär dig tangentbordsgenvägarna",
       "NOTES": "Super Productivity är utformat för att användas med tangentbordet. Lär dig genvägarna för att arbeta snabbare.\n\n**Så här börjar du:**\n1. Öppna **sidofältsmenyn**\n2. Gå till **Hjälp**\n3. Klicka på **Tangentbordsnavigationstur**"
@@ -220,7 +224,7 @@
         "TWO_WAY_SYNC_TITLE": "Synkroniseringsriktning för titel"
       },
       "FORM_SECTION": {
-        "HELP": "<p>Här kan du konfigurera SuperProductivity till att lista icke slutförda CalDav-uppgifter för ett specifikt projekt på panelen för uppgiftsskapande i den dagliga planeringsvyn. De kommer att listas som förslag och kommer att länka till uppgiften samt mer information om den.</p> <p>Dessutom kan du automatiskt lägga till och synkronisera alla icke slutförda uppgifter med din lista med eftersläpande uppgifter.</p><p>För att det ska fungera med Nextcloud i webbappen kan du behöva vitlista \"https://app.super-productivity.com\" via Nextcloud-appen <a href='https://apps.nextcloud.com/apps/webapppassword'>webapppassword<a>.</p>"
+        "HELP": "<p>Här kan du konfigurera SuperProductivity till att lista icke slutförda CalDav-uppgifter för ett specifikt projekt på panelen för uppgiftsskapande i den dagliga planeringsvyn. De kommer att listas som förslag och kommer att länka till uppgiften samt mer information om den.</p> <p>Dessutom kan du automatiskt lägga till och synkronisera alla icke slutförda uppgifter med din lista med eftersläpande uppgifter.</p><p>För att det ska fungera med Nextcloud i webbappen kan du behöva vitlista \"https://app.super-productivity.com\" via Nextcloud-appen <a href='https://apps.nextcloud.com/apps/webapppassword'>webapppassword</a>.</p>"
       },
       "ISSUE_CONTENT": {
         "DESCRIPTION": "Beskrivning",
@@ -544,7 +548,8 @@
         "OAUTH_FAILED_WITH_DETAIL": "Autentiseringen misslyckades: {{detail}}",
         "REMOTE_ISSUE_DELETED": "Fjärrärendet togs bort. Vill du ta bort den länkade uppgiften ”{{taskTitle}}”?",
         "REMOTE_ISSUE_DELETED_WITH_TIME": "Fjärrärendet togs bort men uppgiften ”{{taskTitle}}” har spårad tid. Vill du ta bort den ändå?",
-        "TWO_WAY_SYNC_PUSH_FAILED": "Tvåvägssynkronisering (sändning) misslyckades: {{errorMsg}}"
+        "TWO_WAY_SYNC_PUSH_FAILED": "Tvåvägssynkronisering (sändning) misslyckades: {{errorMsg}}",
+        "POST_TIME_SUCCESS": "{{providerName}}: Tidsinmatning skapad för {{issueTitle}}"
       },
       "TWO_WAY_SYNC": {
         "AUTO_CREATE_ISSUES": "Skapa ärenden automatiskt för nya uppgifter",
@@ -580,6 +585,15 @@
         "RELOAD_OPTIONS": "Läs in alternativ igen",
         "SETUP_TITLE": "Konfigurera {{title}}",
         "TEST_CONNECTION": "Testa anslutning"
+      },
+      "DIALOG_TRACK_TIME": {
+        "ACTIVITY": "Aktivitet",
+        "INVALID_DATE": "Det angivna värdet är inte ett datum!",
+        "POST_TIME": "Registrera tid",
+        "STARTED": "Startad",
+        "SUBMIT_TIME_FOR": "Skicka tid till {{providerName}} för",
+        "TIME_SPENT": "Tid spenderad",
+        "TITLE": "{{providerName}}: Skicka tidslogg"
       }
     },
     "ISSUE_PANEL": {
@@ -803,33 +817,6 @@
         "REMINDER_NEEDS_TEXT": "Skriv en reflektion innan du ber om en påminnelse",
         "REMINDER_TASK_TITLE": "Återbesök reflektionsanteckning",
         "TITLE": "Reflektionsanteckning"
-      }
-    },
-    "NEXTCLOUD_DECK": {
-      "FORM": {
-        "BASE_URL": "Nextcloud bas-URL",
-        "FILTER_BY_ASSIGNEE": "Importera endast kort tilldelade till mig",
-        "IS_TRANSITION_ISSUES_ENABLED": "Synkronisera slutförandestatus och titel tillbaka till Nextcloud Deck",
-        "PASSWORD": "Ditt Nextcloud-applösenord",
-        "POLL_INTERVAL_MINUTES": "Pollningsintervall (minuter)",
-        "TITLE_TEMPLATE": "Mall för uppgiftstitel",
-        "TITLE_TEMPLATE_DESCRIPTION": "Variabler: {CARD_TITLE}, {BOARD}, {COLUMN}, {ID}, {LABELS}. Exempel: [{BOARD}: {COLUMN}] {CARD_TITLE}. Lämna tomt för enbart korttitel.",
-        "USERNAME": "Ditt Nextcloud-användarnamn"
-      },
-      "FORM_SECTION": {
-        "HELP": "Konfigurera din Nextcloud Deck-integration för att importera kort som uppgifter. Använd ett applösenord för autentisering."
-      },
-      "ISSUE_CONTENT": {
-        "ASSIGNED_USERS": "Tilldelade användare",
-        "DECK_DESCRIPTION": "Deck-beskrivning",
-        "LABELS": "Etiketter",
-        "STACK": "Stapel"
-      },
-      "S": {
-        "BOARD_NOT_FOUND": "Nextcloud Deck: Tavla hittades inte",
-        "CARD_NOT_FOUND": "Nextcloud Deck: Kortet \"{{issueId}}\" verkar vara borttaget från servern.",
-        "ERR_CREDENTIALS_MISSING": "Ange Nextcloud-URL, användarnamn och lösenord först.",
-        "ERR_LOAD_BOARDS": "Kunde inte ladda Deck-tavlor. Kontrollera dina autentiseringsuppgifter."
       }
     },
     "NOTE": {
@@ -1085,44 +1072,6 @@
       "TOOLTIP_VISIBILITY": "Visa/dölj projekt",
       "ADD_SUBFOLDER": "Lägg till undermapp",
       "ADD_PROJECT": "Lägg till projekt"
-    },
-    "REDMINE": {
-      "DIALOG_TRACK_TIME": {
-        "ACTIVITY": "Aktivitet",
-        "INVALID_DATE": "Det angivna värdet är inte ett datum!",
-        "POST_TIME": "Registrera tid",
-        "STARTED": "Startad",
-        "SUBMIT_TIME_FOR": "Skicka tid till Redmine för",
-        "TIME_SPENT": "Tid spenderad",
-        "TITLE": "Redmine: Skicka tidslogg"
-      },
-      "FORM": {
-        "API_KEY": "API-åtkomstnyckel",
-        "HOST": "Värd (t.ex.: https://redmine.org)",
-        "IS_SHOW_TIME_TRACKING_DIALOG": "Visa tidsregistreringsdialog för rapportering till Redmine",
-        "IS_SHOW_TIME_TRACKING_DIALOG_DESCRIPTION": "Kräver att tidsregistreringsmodulen är aktiverad för Redmine-projektet",
-        "IS_SHOW_TIME_TRACKING_DIALOG_FOR_EACH_SUB_TASK": "Visa tidsregistreringsdialog när deluppgifter slutförs",
-        "PROJECT_ID": "Projektidentifierare",
-        "PROJECT_ID_DESCRIPTION": "Finns som en del av webbadressen när du visar projektet i webbläsaren.",
-        "SCOPE": "Omfattning",
-        "SCOPE_ALL": "Alla",
-        "SCOPE_ASSIGNED": "Tilldelad mig",
-        "SCOPE_CREATED": "Skapad av mig"
-      },
-      "FORM_SECTION": {
-        "HELP": "<p>Här kan du konfigurera SuperProductivity så att öppna Redmine-ärenden (antingen onlineversionen eller en egenhostad instans) för ett specifikt projekt listas i panelen för uppgiftskapande i den dagliga planeringsvyn. De listas som förslag och innehåller en länk till ärendet samt mer information om det.</p><p>Dessutom kan du automatiskt importera alla öppna ärenden.</p>",
-        "TITLE": "Redmine"
-      },
-      "ISSUE_CONTENT": {
-        "AUTHOR": "Författare",
-        "DESCRIPTION": "Beskrivning",
-        "MARK_AS_CHECKED": "Markera uppdateringar som kontrollerade",
-        "PRIORITY": "Prioritet",
-        "STATUS": "Status"
-      },
-      "S": {
-        "POST_TIME_SUCCESS": "Redmine: Tidsinmatning skapad för {{issueTitle}}"
-      }
     },
     "REFLECTION_NOTE": {
       "ACTION_DISMISS": "Avvisa",
@@ -1626,7 +1575,7 @@
         },
         "TITLE": "Synkronisera",
         "WEB_DAV": {
-          "CORS_INFO": "<strong>Få det att fungera i webbläsaren:</strong> För att detta ska fungera i webbläsaren måste du vitlista Super Productivity för CORS-förfrågningar för din webdav-server. Detta kan ha negativa säkerhetskonsekvenser! För nextcloud, <a href=’https://github.com/nextcloud/server/issues/3131’>se denna tråd för mer information</a>. Ett sätt att få detta att fungera på mobilen är att vitlista \"https://app.super-productivity.com\" via Nextcloud-appen <a href='https://apps.nextcloud.com/apps/webapppassword'>webapppassword<a>. Använd på egen risk!</p>",
+          "CORS_INFO": "<strong>Få det att fungera i webbläsaren:</strong> För att detta ska fungera i webbläsaren måste du vitlista Super Productivity för CORS-förfrågningar för din webdav-server. Detta kan ha negativa säkerhetskonsekvenser! För nextcloud, <a href=’https://github.com/nextcloud/server/issues/3131’>se denna tråd för mer information</a>. Ett sätt att få detta att fungera på mobilen är att vitlista \"https://app.super-productivity.com\" via Nextcloud-appen <a href='https://apps.nextcloud.com/apps/webapppassword'>webapppassword</a>. Använd på egen risk!</p>",
           "D_SYNC_FOLDER_PATH": "Sökväg relativt till WebDAV-serverns rot där synkfiler lagras (t.ex. '/super-productivity' eller '/'). Detta är INTE din servers interna katalogsökväg.",
           "INFO": "WebDAV-implementeringar skiljer sig tyvärr mycket åt. Super Productivity fungerar bra med Nextcloud, <strong>men kanske inte med din leverantör</strong>.",
           "L_BASE_URL": "Bas-URL",
@@ -2869,8 +2818,17 @@
     },
     "SOUND": {
       "BREAK_REMINDER_SOUND": "Påminnelseljud för paus",
+      "DING": "Pling",
       "DONE_SOUND": "Ljud för uppgift markerad som klar",
       "IS_INCREASE_DONE_PITCH": "Öka takten för varje utförd uppgift",
+      "SMALL_DING": "Litet pling",
+      "SOUND_1": "Ljud 1",
+      "SOUND_2": "Ljud 2",
+      "SOUND_3": "Ljud 3",
+      "SOUND_4": "Ljud 4",
+      "SOUND_5": "Ljud 5",
+      "SOUND_6": "Ljud 6",
+      "SOUND_7": "Ljud 7",
       "TITLE": "Ljud",
       "TRACK_TIME_SOUND": "Ljud för påminnelse om spårningstid",
       "VOLUME": "Volym"
@@ -2997,6 +2955,7 @@
       "CREATE_TASK": "Guide: skapa en uppgift",
       "GET_HELP_ONLINE": "Få hjälp online",
       "KEYBOARD": "Hur man gör: Avancerat tangentbord",
+      "QUICK_TOUR": "Snabbtur",
       "REDDIT_COMMUNITY": "Reddit-community",
       "REPORT_A_PROBLEM": "Rapportera ett problem",
       "SEND_FEEDBACK": "Skicka feedback",
@@ -3083,13 +3042,50 @@
     "HINTS": {
       "CREATE_TASK": "Klicka på + för att lägga till din första uppgift",
       "CREATE_TASK_TOUCH": "Tryck på + för att lägga till din första uppgift",
+      "DECLINED": "Inga problem. Du hittar den under Hjälp → Snabbtur när du vill.",
+      "MORE_FALLBACK": "Mer är redan påslaget: projekt, tidsspårning, Planerare…",
+      "NO_THANKS": "Nej tack",
+      "SHOW_ME_MORE": "Visa mig mer ›",
       "EXPLORE": "Klicka runt och utforska fritt! Du hittar hjälp i sidopanelen.",
       "EXPLORE_TOUCH": "Tryck runt och utforska fritt! Du hittar hjälp i menyn.",
       "TASK_TAP_TOUCH": "Tryck på en uppgift för att öppna detaljerna.",
       "TASK_SWIPE_LEFT_TOUCH": "Svep uppgiften åt vänster för fler åtgärder",
+      "TODAY_AND_INBOX": "Den här uppgiften är planerad för idag, så den visas i {{todayIcon}} <b>Idag</b>. Uppgifter utan ett eget projekt ligger kvar i {{inboxIcon}} <b>Inkorgen</b>.",
+      "TODAY_AND_INBOX_PHONE": "Den här uppgiften är planerad för idag, så den visas i {{todayIcon}} <b>Idag</b>. Uppgifter utan ett eget projekt ligger kvar i {{inboxIcon}} <b>Inkorgen</b>, under ☰.",
       "TASK_SWIPE_RIGHT_TOUCH": "Svep uppgiften åt höger för att markera den som klar",
       "OR_PRESS": "eller tryck",
       "SKIP_ARIA": "Stäng ledtråd"
+    },
+    "TOUR": {
+      "ADD_SUBTASK": "Dela upp den: högerklicka på uppgiften och välj {{subtaskIcon}} <b>Lägg till underuppgift</b>",
+      "COUNTER": "{{nr}} av {{total}}",
+      "NEXT": "Nästa ›",
+      "ORGANIZE": "Skapa ett eget <b>projekt</b> för att gruppera uppgifter, eller en <b>tagg</b> för att märka dem. Skapa ett med +",
+      "ORGANIZE_COLLAPSED": "Skapa ett eget <b>projekt</b> för att gruppera uppgifter, eller en <b>tagg</b> för att märka dem. Fäll ut sidofältet med {{expandIcon}} för att skapa ett",
+      "ORGANIZE_PHONE": "Projekt och taggar finns under ☰. Skapa ett eget <b>projekt</b> för att gruppera uppgifter, eller en <b>tagg</b> för att märka dem",
+      "PLANNER": "Planera de kommande dagarna i {{plannerIcon}} <b>Planerare</b>",
+      "TASK_MENU_TOUCH": "Svep en uppgift åt vänster för dess meny: {{playIcon}} <b>Börja spåra tid</b>, {{subtaskIcon}} <b>Lägg till underuppgift</b>",
+      "TASK_MENU_TOUCH_NO_TRACKING": "Svep en uppgift åt vänster för dess meny, t.ex. {{subtaskIcon}} <b>Lägg till underuppgift</b>",
+      "TIMER_RUNNING": "Timern går. Tryck på {{playIcon}} igen eller <kbd>{{key}}</kbd> för att pausa.",
+      "TIMER_RUNNING_TOUCH": "Timern går. Tryck på {{playIcon}} högst upp för att pausa.",
+      "TRACK_TIME": "Håll muspekaren över uppgiften och tryck på {{playIcon}} för att spåra tid"
+    },
+    "WANT_MORE": {
+      "BOARDS": "<b>Tavlor</b> · kanban-kolumner för dina uppgifter",
+      "DONE": "Klar",
+      "FINISH_DAY": "<b>Avsluta dagen</b> · gå igenom och avsluta din dag",
+      "FOCUS_MODE": "<b>Fokusläge</b> · pomodoro och störningsfritt arbete",
+      "FOOTER": "Du hittar det här igen under Hjälp → Snabbtur.",
+      "HABITS": "<b>Vanor</b> · följ dina rutiner dag för dag",
+      "INTRO": "Super Productivity börjar lugnt. Mer finns när du behöver det:",
+      "OPEN_SETTINGS": "Öppna inställningar ›",
+      "PLUGINS": "<b>Tillägg och integrationer</b> · Jira, GitHub, CalDAV och mer",
+      "SCHEDULE": "<b>Schema</b> · din dag på en tidslinje",
+      "SEARCH": "Sök i allt med <kbd>{{key}}</kbd>.",
+      "SEARCH_PHONE": "Sök i allt från ☰.",
+      "SHORT_SYNTAX": "Skriv <code>#tag</code>, <code>+project</code> eller <code>@tomorrow</code> när du lägger till en uppgift. Hjälp → Guide visar mer.",
+      "SYNC": "Dina data stannar på den här enheten. Synk och säkerhetskopior finns under inställningar.",
+      "TITLE": "Vill du ha mer?"
     }
   },
   "PDS": {

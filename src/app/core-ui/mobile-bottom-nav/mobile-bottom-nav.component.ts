@@ -1,22 +1,22 @@
 import {
   ChangeDetectionStrategy,
   Component,
-  DestroyRef,
   computed,
-  effect,
+  ElementRef,
   inject,
   input,
   output,
   signal,
+  viewChild,
 } from '@angular/core';
-import { RouterModule } from '@angular/router';
+import { NavigationEnd, Router, RouterModule } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { MatMenuModule } from '@angular/material/menu';
+import { MatMenuModule, MatMenuTrigger } from '@angular/material/menu';
 import { TranslateModule } from '@ngx-translate/core';
 import { toSignal } from '@angular/core/rxjs-interop';
-import { map } from 'rxjs/operators';
+import { filter, map } from 'rxjs/operators';
 
 import { LayoutService } from '../layout/layout.service';
 import { PluginBridgeService } from '../../plugins/plugin-bridge.service';
@@ -30,12 +30,17 @@ import {
 import { TODAY_TAG } from '../../features/tag/tag.const';
 import { T } from '../../t.const';
 import { WorkContextService } from '../../features/work-context/work-context.service';
-import { IS_ANDROID_NATIVE } from '../../util/is-native-platform';
 import { GlobalConfigService } from '../../features/config/global-config.service';
-
-// Latches true after the first cold-start entrance fires in this JS session,
-// so resume/back/remount paths never re-hide the FAB.
-let _hasFiredColdStartEntrance = false;
+import { LongPressDirective } from '../../ui/longpress/longpress.directive';
+import { performHapticFeedback } from '../../util/haptic-feedback';
+import {
+  BottomNavSlotOption,
+  getAvailableBottomNavSlotOptions,
+  isBottomNavSlotActive,
+  readStoredBottomNavSlot,
+  resolveBottomNavSlot,
+  writeStoredBottomNavSlot,
+} from './mobile-bottom-nav-slot';
 
 @Component({
   selector: 'mobile-bottom-nav',
@@ -48,6 +53,7 @@ let _hasFiredColdStartEntrance = false;
     MatMenuModule,
     TranslateModule,
     PluginIconComponent,
+    LongPressDirective,
   ],
   templateUrl: './mobile-bottom-nav.component.html',
   styleUrls: ['./mobile-bottom-nav.component.scss'],
@@ -59,40 +65,9 @@ export class MobileBottomNavComponent {
   private readonly _store = inject(Store);
   private readonly _workContextService = inject(WorkContextService);
   private readonly _globalConfigService = inject(GlobalConfigService);
+  private readonly _router = inject(Router);
 
   isEntrance = input(false);
-  readonly isAndroid = IS_ANDROID_NATIVE;
-
-  // Tracks whether the slide-up entrance animation is actively running.
-  // On Android, the web FAB is hidden only during this animation, and only on
-  // a true cold start — remounts from back/resume/focus-mode toggle must not
-  // re-trigger the hide.
-  readonly isEntranceAnimating = signal(false);
-  private _entranceAnimationTimeout: ReturnType<typeof setTimeout> | undefined;
-
-  constructor() {
-    inject(DestroyRef).onDestroy(() => clearTimeout(this._entranceAnimationTimeout));
-
-    effect(() => {
-      if (!_hasFiredColdStartEntrance && this.isAndroid && this.isEntrance()) {
-        _hasFiredColdStartEntrance = true;
-        this.isEntranceAnimating.set(true);
-        // Safety fallback: clear if animationend doesn't fire
-        // (e.g. prefers-reduced-motion: reduce → animation: none).
-        // Timeout = 250ms delay + 400ms duration + 50ms buffer = 700ms
-        this._entranceAnimationTimeout = setTimeout(() => {
-          this.isEntranceAnimating.set(false);
-        }, 700);
-      }
-    });
-  }
-
-  onEntranceAnimationEnd(event: AnimationEvent): void {
-    if (event.animationName === 'slide-up-from-bottom') {
-      this.isEntranceAnimating.set(false);
-      clearTimeout(this._entranceAnimationTimeout);
-    }
-  }
 
   readonly T = T;
   readonly TODAY_TAG = TODAY_TAG;
@@ -124,8 +99,39 @@ export class MobileBottomNavComponent {
     () => this._globalConfigService.appFeatures().isProjectNotesEnabled,
   );
   readonly isScheduleDayPanelEnabled = computed(
-    () => this._globalConfigService.appFeatures().isScheduleDayPanelEnabled,
+    () => this._globalConfigService.appFeatures().isSchedulerEnabled,
   );
+
+  // Second slot: configurable destination, Planner by default (#7637).
+  private readonly _storedSlotId = signal(readStoredBottomNavSlot());
+  readonly slotOptions = computed(() =>
+    getAvailableBottomNavSlotOptions(
+      this._globalConfigService.appFeatures(),
+      this._pluginBridge.menuEntries(),
+    ),
+  );
+  readonly slot = computed(() =>
+    resolveBottomNavSlot(
+      this._storedSlotId(),
+      this._globalConfigService.appFeatures(),
+      this._pluginBridge.menuEntries(),
+    ),
+  );
+  private readonly _url = toSignal(
+    this._router.events.pipe(
+      filter((ev): ev is NavigationEnd => ev instanceof NavigationEnd),
+      map((ev) => ev.urlAfterRedirects),
+    ),
+    { initialValue: this._router.url },
+  );
+  readonly isSlotActive = computed(() => isBottomNavSlotActive(this.slot(), this._url()));
+  private readonly _slotMenuTrigger = viewChild('slotMenuTrigger', {
+    read: MatMenuTrigger,
+  });
+  // `read` is required: on a mat-button the bare ref is the MatButton instance.
+  private readonly _slotButton = viewChild('slotButton', { read: ElementRef });
+  // A long-press must not also navigate when the press ends in a click.
+  private _isSlotMenuGesture = false;
 
   /**
    * Below 600px this menu is the *only* route to every right-panel toggle --
@@ -134,13 +140,16 @@ export class MobileBottomNavComponent {
    * schedule was in neither, and `toggleScheduleDayPanel()` has no other
    * caller and no keyboard shortcut, so the panel was simply unreachable on a
    * phone.
+   *
+   * With exactly one entry the menu is skipped and that entry is rendered as
+   * the nav button itself.
    */
-  readonly hasSidePanelMenuItems = computed(
+  readonly sidePanelItemCount = computed(
     () =>
-      this.sidePanelButtons().length > 0 ||
-      this.isScheduleDayPanelEnabled() ||
-      this.isIssuesPanelEnabled() ||
-      this.isProjectNotesEnabled(),
+      this.sidePanelButtons().length +
+      (this.isScheduleDayPanelEnabled() ? 1 : 0) +
+      (this.isIssuesPanelEnabled() ? 1 : 0) +
+      (this.isProjectNotesEnabled() ? 1 : 0),
   );
 
   // Navigation methods
@@ -150,6 +159,51 @@ export class MobileBottomNavComponent {
 
   toggleMobileNav(): void {
     this.toggleMobileNavEvent.emit();
+  }
+
+  onSlotPointerDown(): void {
+    this._isSlotMenuGesture = false;
+  }
+
+  onSlotLongPress(): void {
+    performHapticFeedback('longPress');
+    this.openSlotMenu();
+  }
+
+  onSlotTouchEnd(ev: TouchEvent): void {
+    // Lifting the finger would otherwise synthesize a click on the menu's
+    // backdrop, which closes the menu that just opened.
+    if (this._isSlotMenuGesture && ev.cancelable) {
+      ev.preventDefault();
+    }
+  }
+
+  openSlotMenu(): void {
+    this._isSlotMenuGesture = true;
+    this._slotMenuTrigger()?.openMenu();
+  }
+
+  onSlotClick(slot: BottomNavSlotOption): void {
+    if (this._isSlotMenuGesture) {
+      this._isSlotMenuGesture = false;
+      return;
+    }
+    if (slot.kind === 'route') {
+      this._router.navigateByUrl(slot.route);
+    } else {
+      slot.onClick();
+    }
+  }
+
+  onSlotMenuClosed(): void {
+    this._isSlotMenuGesture = false;
+    // The trigger is a hidden anchor, so focus goes back to the slot itself.
+    this._slotButton()?.nativeElement.focus();
+  }
+
+  selectSlot(id: string): void {
+    this._storedSlotId.set(id);
+    writeStoredBottomNavSlot(id);
   }
 
   // Panel methods

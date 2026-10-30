@@ -152,7 +152,7 @@
     "@sp/sync-core": "*",
     "@xmldom/xmldom": "^0.9.12",
     "tsup": "^8.0.0",
-    "typescript": "^5.0.0",
+    "typescript": "^5.0.0 || ^6.0.0",
     "vitest": "^5.0.3"
   }
 }

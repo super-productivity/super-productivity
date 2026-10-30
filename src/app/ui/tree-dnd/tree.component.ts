@@ -61,6 +61,8 @@ export class TreeDndComponent<TData = unknown> {
   // === PUBLIC INPUTS/OUTPUTS/MODELS ===
   readonly nodes = model.required<readonly TreeNode<TData>[]>();
   readonly indent = input(TREE_CONSTANTS.DEFAULT_INDENT);
+  /** Indent of the top-level rows in px; each nesting level adds `indent` on top. */
+  readonly baseIndent = input(0);
   readonly canDrop = input<CanDropPredicate<TData>>(() => true);
   readonly moved = output<MoveInstruction>();
 
@@ -430,6 +432,7 @@ export class TreeDndComponent<TData = unknown> {
       target.where,
       this._treeRootEl,
       this.indent(),
+      this.baseIndent(),
     );
   }
 

@@ -17,4 +17,9 @@
     <color name="widget_separator">#1F000000</color>
     <color name="widget_brand">#8B4A9D</color>
 
+    <!-- Launcher shortcut icons (res/xml/shortcuts.xml): same blue as the
+         launcher icon background so they read as part of the app. -->
+    <color name="shortcut_icon_background">@color/ic_launcher_background</color>
+    <color name="shortcut_icon_glyph">#FFFFFF</color>
+
 </resources>

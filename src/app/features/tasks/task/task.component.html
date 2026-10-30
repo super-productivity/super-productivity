@@ -29,12 +29,16 @@
         } @else {
           <done-toggle
             [isDone]="t.isDone"
+            [isWontDo]="isWontDo()"
             [isMultiSelectAware]="true"
             [isCurrent]="isCurrent()"
             [showDoneAnimation]="showDoneAnimation()"
             [showUndoneAnimation]="showUndoneAnimation()"
             (toggled)="toggleTaskDone()"
-            [attr.aria-label]="T.F.TASK.CMP.TOGGLE_DONE | translate"
+            [attr.aria-label]="
+              (isWontDo() ? T.F.TASK.CMP.TOGGLE_DONE_WONT_DO : T.F.TASK.CMP.TOGGLE_DONE)
+                | translate
+            "
           ></done-toggle>
         }
 
@@ -46,6 +50,7 @@
           }
 
           <task-title
+            (click)="clearSelectionOnTitleClick($event)"
             [resetToLastExternalValueTrigger]="t"
             [style.pointer-events]="isTouchActive() && t.title.length ? 'none' : 'auto'"
             [readonly]="isTouchSelectionMode()"
@@ -82,14 +87,11 @@
             <div class="time">
               @if (t.timeSpent) {
                 <div class="time-val">
-                  <span [innerHTML]="t.timeSpent | msToString"></span>
+                  <span>{{ t.timeSpent | msToString }}</span>
                 </div>
                 <div class="separator">/</div>
               }
-              <div
-                [innerHTML]="t.timeEstimate | msToString"
-                class="time-val"
-              ></div>
+              <div class="time-val">{{ t.timeEstimate | msToString }}</div>
             </div>
           }
           @if (t.subTasks?.length) {
@@ -102,7 +104,7 @@
                     style="margin-top: -6px"
                     >functions
                   </mat-icon>
-                  <span [innerHTML]="subTaskTimeSpent | msToString"></span>
+                  <span>{{ subTaskTimeSpent | msToString }}</span>
                 </div>
                 <div class="separator">/</div>
                 <div class="time-val">
@@ -270,7 +272,7 @@
               mat-icon-button
             >
               <mat-icon>{{ cp.done === cp.total ? 'check_box' : 'checklist' }}</mat-icon>
-              <div class="checklist-progress-badge">{{ cp.done }}/{{ cp.total }}</div>
+              <div class="progress-badge">{{ cp.done }}/{{ cp.total }}</div>
             </button>
           }
 
@@ -312,15 +314,32 @@
     @if (t.subTasks?.length || isAddSubtaskInputVisible()) {
       <div class="sub-tasks">
         @if (t.subTasks?.length) {
+          @let sp = subTaskProgress();
           <button
             (click)="toggleSubTaskMode()"
-            [title]="T.F.TASK.CMP.TOGGLE_SUB_TASK_VISIBILITY | translate"
+            [title]="
+              sp
+                ? (T.F.TASK.CMP.SUB_TASK_PROGRESS
+                  | translate: { done: sp.done, total: sp.total })
+                : (T.F.TASK.CMP.TOGGLE_SUB_TASK_VISIBILITY | translate)
+            "
+            [attr.aria-label]="
+              sp
+                ? (T.F.TASK.CMP.SUB_TASK_PROGRESS
+                  | translate: { done: sp.done, total: sp.total })
+                : null
+            "
             class="toggle-sub-tasks-btn ico-btn mat-elevation-z2"
             color=""
             mat-mini-fab
           >
             @if (t._hideSubTasksMode === ShowSubTasksMode.HideAll) {
               <mat-icon>add</mat-icon>
+              @if (sp) {
+                <div class="progress-badge sub-task-progress-badge">
+                  {{ sp.done }}/{{ sp.total }}
+                </div>
+              }
             } @else {
               <mat-icon
                 [class.isHideDoneTasks]="
@@ -391,7 +410,7 @@
               [title]="project.title"
               [icon]="project.icon"
               [defaultIcon]="DEFAULT_PROJECT_ICON"
-              [color]="project.theme?.primary"
+              [color]="$safeNavigationMigration(project.theme?.primary)"
               [folderPath]="projectFolderMap().get(project.id)"
             ></select-option-row>
           </button>
