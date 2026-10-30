@@ -4231,8 +4231,8 @@ describe('shortSyntax localized dates', () => {
 
   it('should keep an "@<n>h" that is no clock time in the title', async () => {
     const r = await parseIn({ language: 'fr', isDayFirst: true }, 'Task @25h');
-    expect(r?.taskChanges.dueWithTime).toBeUndefined();
-    expect(r?.taskChanges.title ?? 'Task @25h').toBe('Task @25h');
+    // nothing parsed, so the title is left as typed
+    expect(r).toBeUndefined();
   });
 
   it('should leave a time the locale cannot join to its day word in the title', async () => {
