@@ -114,6 +114,12 @@ export const isExternalUrlSchemeAllowed = (url: unknown): boolean => {
   if (!ALLOWED_EXTERNAL_URL_SCHEMES.includes(parsed.protocol)) {
     return false;
   }
+  // Only allow claude:// links pointing strictly to chats or projects,
+  // rejecting pre-filled prompts or path initializers
+  if (parsed.protocol === 'claude:') {
+    const path = parsed.pathname;
+    return path.startsWith('/claude.ai/chat/') || path.startsWith('/claude.ai/project/');
+  }
   if (parsed.protocol === 'file:') {
     // Allow ONLY the canonical local form `file:///<path>`. Anything with an
     // authority (`file://host/…`) or a path-based UNC (`file:////host`) is a
