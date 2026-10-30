@@ -1,8 +1,8 @@
 # Generative views: say what you want, watch the view rearrange
 
-Oct 30, 2026 · rev. 2 (after independent review, § Review) · status: Phase 1
-implemented on branch `claude/generative-ui-todo-app-h4o6e8`; latency and
-step validity not yet measured (needs an API key, §8).
+Oct 30, 2026 · rev. 3 (after research, a native spike, the first eval and an
+adversarial review; § Review) · status: Phase 1 implemented on branch
+`claude/generative-ui-todo-app-h4o6e8`; Phase 1b (P-plus, §6.12) in progress.
 
 People will increasingly shape their own to-do tools instead of adapting to one.
 The goal is that they do it inside Super Productivity (SP): say or type what
@@ -17,10 +17,11 @@ changes, and says which part ships now.
    id, named queries) whose concepts map one-to-one onto SP's native building
    blocks (board panels, task lists, the work-view customizer). The model only
    ever edits the spec; only user gestures change tasks.
-2. The **end state is host-native rendering**: SP renders specs with its own
-   task rows and board panels, and plugins supply the intelligence. Phase 1
-   renders in the plugin as a deliberately small bridge so the loop can be
-   proven before the spec becomes a host contract.
+2. **Rendering stays in the plugin for now** (rev. 3). Phase 1b improves it
+   (P-plus, §6.12) and ends with a side-by-side against a native spike; whether
+   SP renders specs with its own components is decided then, on that evidence
+   ([research](../research/generative-views/README.md) §5 and §8). The spec
+   stays renderer-agnostic either way.
 3. Edits are **atomic steps by id** (put or remove a component or query), sent
    as tool calls, validated as they arrive and animated one by one (FLIP). The
    view saves once per request; Stop or an error rolls back.
@@ -59,9 +60,12 @@ changes, and says which part ships now.
 | Undo                           | Instant, local, no model call                                                |
 | Changes from elsewhere         | Edits in the Planner, another view or another device show up within a second |
 
-Unmeasured: this session has no API key. §8 ships an eval harness so the first
-person with a key can measure time-to-first-step and validity per model and
-effort, and pick the defaults from that.
+Measured Oct 30, 2026 (eval harness, 20 cases, default effort, two runs per
+model, warm prompt cache): first change p50 1.2-1.5 s on Opus, Sonnet and Haiku
+5.5; total p50 2.8-3.0 s (Opus), 2.1-2.4 s (Sonnet), 1.6-1.8 s (Haiku). Passes
+18-19 of 20 on every model. Slow tail: a new weekly review takes up to 9.9 s on
+Opus. The default model stays Opus until a per-case eval with at least five
+runs justifies a per-request choice.
 
 ## 3. Where the prototype stands
 
@@ -120,10 +124,13 @@ code.
 | C. Spec, rendered by the host with native task rows and panels | Fast         | Native                  | High                                                          | High     |
 | D. The model writes native `BoardCfg`s                         | Fast         | Native                  | High, but boards only, and every streamed step is a synced op | Low      |
 
-**Path: B now, C next.** B proves the loop (spec shape, step protocol, model
-reliability, latency) with no new host contract for the spec. C then reuses the
-spec unchanged; `board-panel` (`panelCfg` input) and `task-list` (`tasks` input)
-are already input-driven. D is rejected as the main path because live editing
+**Path: B now, improved (P-plus), then decide C.** B proves the loop (spec
+shape, step protocol, model reliability, latency) with no new host contract for
+the spec. A native spike rendered `board-panel`, `planner-day` and `lazy-chart`
+from one spec with zero ops while viewing, but skipped the costly parts (task
+rows, streamed edits, query-driven lanes) and was compared against a plugin
+rendering without card fields; C stays an option, decided after a fair
+side-by-side (§6.12 step 7). D is rejected as the main path because live editing
 would write a synced op per step, against "one user intent = one op".
 
 ## 6. Design
@@ -312,14 +319,70 @@ sync-wire change. Undo history stays on the device.
   task data, project or tag lists, or notes.
 - The key stays in plugin secret storage on the device.
 
+### 6.12 P-plus: close the visible gap in the plugin (rev. 3)
+
+Plugin-only: no host change, no new plugin API, no new persisted app model.
+Each step is paired with its check.
+
+1. **Eval and engine fixes.** One way to say "due today" (`due: "today"`;
+   `scope: "today"` stays readable for saved specs but leaves the prompt).
+   `doneOn` loads the archive itself, so a weekly review cannot silently miss
+   tasks archived earlier in the week. New measure `timeSpentThisWeek` from
+   `timeSpentOnDay` on the logical week (today `timeSpent` is a lifetime sum).
+   → verify: unit tests; next eval run passes `new-today-by-project` and
+   `new-weekly-review` on all models.
+2. **Card fidelity.** A `taskList` or `board` without `fields` shows project,
+   tags, estimate and due. Project and tag chips in their own colors; group and
+   column headers show count and estimate sum. → verify: model-layer unit tests;
+   screenshot.
+3. **Two components.** `agenda` (`days` 1-14 from the logical today, tasks by
+   their due day, optional overdue row, estimate per day) and `timeBreakdown`
+   (`by` project, tag or day; `range` today, thisWeek or last7Days; bars in
+   plain HTML and CSS, no chart library). → verify: unit tests for grouping and
+   sums on the logical day; screenshot.
+4. **SP's own board tags.** Aliases `@doing`, `@urgent`, `@important` resolve to
+   the built-in tags `KANBAN_IN_PROGRESS`, `EM_URGENT`, `EM_IMPORTANT`, so
+   generated kanbans and Eisenhower matrices share tags with native Boards. A
+   lane stays a predicate and a drop applies it (`tags`, `notTags`, `isDone`);
+   the prompt says so. Missing built-in tags show the existing inline note.
+   → verify: unit tests for alias resolution; E2E drag writes
+   `KANBAN_IN_PROGRESS`.
+5. **Ready-made views.** About ten recipes as pure spec builders (kanban,
+   Eisenhower, today by project, weekly review, plan my week, deadline radar,
+   time this week, focus, overdue, waiting). Suggestion chips apply them locally
+   (no model call, no key). The model gets a `use_recipe { name, params }` tool
+   that the plugin expands into steps, then adjusts with ordinary steps.
+   → verify: every recipe passes the validator in a unit test; eval cases per
+   recipe; new-view latency in the next eval.
+6. **Instant feedback.** A skeleton appears on submit until the first step.
+   → verify: E2E with a delayed recorded stream.
+7. **Side-by-side.** The same seeded tasks as the native spike E2E, rendered by
+   the plugin (kanban, agenda, time breakdown, metric), screenshot next to
+   `spike-native.png`; the maintainer uses both and the decision on C is
+   recorded here. → verify: decision written into this plan.
+
+Out of Phase 1b, with the reason:
+
+- **Moving a task to a day by drop**: `updateTask({ dueDay })` is a plain field
+  update (`plugin-bridge.service.ts:919-921`) that bypasses the Planner's own
+  semantics (time-of-day, reminders, ordering); needs a host API first.
+- **Roles with id pinning and a picker**: names already resolve on the device;
+  pinning is the additive field from §9.4.
+- **App-wide rules** ("when tag X is added, do Y"): the automations plugin's
+  domain. Its update trigger has no previous state yet (`automations`
+  `src/plugin.ts:56`), so "tag added" is not expressible; an AI rule composer
+  there would reuse this plan's pattern (rule as data, model never sees data).
+- **Custom HTML components** and a **model default change** (see §2).
+
 ## 7. Phases
 
-| Phase   | Scope                                                                                                                                                                                                                                          |
-| ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1 (now) | Host API additions (§6.8); plugin in TS: spec v1, validator, query engine, renderer with FLIP and board drops, step loop with rollback and undo, text plus dictation hint, web push-to-talk, work-context placement, eval harness, docs, tests |
-| 2       | Host speech service with its packaging checklist; escape-hatch code block (prototype sandbox, own storage key); `agenda`, `bar`, `focus`, `addTask` components                                                                                 |
-| 3       | Host-native renderer of the same specs (ADR first): real task rows, board panels, customizer semantics                                                                                                                                         |
-| Later   | Pinned ids for names; local model provider; A2UI export; sharing a view as a file                                                                                                                                                              |
+| Phase    | Scope                                                                                                                                                                                                                                          |
+| -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1 (done) | Host API additions (§6.8); plugin in TS: spec v1, validator, query engine, renderer with FLIP and board drops, step loop with rollback and undo, text plus dictation hint, web push-to-talk, work-context placement, eval harness, docs, tests |
+| 1b (now) | P-plus (§6.12): eval and engine fixes, card fidelity, `agenda`, `timeBreakdown`, SP board tag aliases, recipes with local apply, skeleton, side-by-side                                                                                        |
+| 2        | Host speech service with its packaging checklist; escape-hatch code block (prototype sandbox, own storage key); `focus` and `addTask` components; moving tasks to a day (host API)                                                             |
+| 3        | Only if the Phase 1b side-by-side shows it is needed: host-native renderer of the same specs (ADR first), smallest slice first (task rows)                                                                                                     |
+| Later    | Pinned ids for names; local model provider; A2UI export; sharing a view as a file                                                                                                                                                              |
 
 ## 8. Testing
 
@@ -339,7 +402,8 @@ sync-wire change. Undo history stays on the device.
 
 ## 9. Risks and open questions
 
-1. Latency and step validity are unmeasured until the eval runs.
+1. Latency is within target at p50 (§2); the tail (new complex views) and
+   cold-cache latency are not; recipes (§6.12 step 5) address the tail.
 2. Desktop voice waits for Phase 2; system dictation is the bridge.
 3. The plugin renderer is disposable by design; keep it small so Phase 3 has
    less to replace.
@@ -366,3 +430,20 @@ what changed:
 | No demand section; prior art missing domain apps and in-repo features             | Fixed (§1, §4)                                                                                                                                           |
 | Typed tracking methods instead of an internal action string                       | Fixed (§6.8)                                                                                                                                             |
 | Code blocks in Phase 1                                                            | Deferred to Phase 2 as suggested                                                                                                                         |
+
+### Rev. 3 (Oct 30, 2026)
+
+Inputs: four research reports and a native spike
+([research](../research/generative-views/README.md)), the first eval run (§2),
+and an adversarial fresh-context review of the recommendation to go native.
+
+| Finding                                                                                                           | Outcome                                                                                        |
+| ----------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| Maintainer: "not useful or magical"; the model should define forms that data flows through, not see data          | Kept (§6.1); causes are a thin catalog and vocabulary and sparse cards, not missing data       |
+| Native spike vs plugin comparison was skewed: plugin board had no card fields, other scope, one component vs four | Fixed: decision on native rendering deferred to a fair side-by-side (§6.12 step 7)             |
+| Spike skipped task rows, streamed edits, query-driven lanes, archive                                              | Accepted: native cost estimate (1.5-2.5k lines in core) stays unproven; Phase 3 is conditional |
+| No demand evidence for a permanent native-view plugin API; no second consumer                                     | Accepted: no host API in Phase 1b                                                              |
+| Spike's ephemeral board mode misses the edit button and same-column drops                                         | Not applicable: the spike stays unmerged; listed for Phase 3                                   |
+| Latency is not the main cause at p50                                                                              | Accepted (§2); recipes target the slow tail                                                    |
+| `new-today-by-project` fails on every model: `scope: "today"` and `due: "today"` mean the same                    | Fixed in §6.12 step 1                                                                          |
+| Weekly review misses archived tasks unless `includeArchived` is set; no time-this-week measure                    | Fixed in §6.12 step 1                                                                          |
