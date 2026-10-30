@@ -53,6 +53,9 @@ export const ALLOWED_EXTERNAL_URL_SCHEMES = [
   // handler accepts only `new-task?spTaskId=<opaque id>` and merely pre-fills a
   // form; remove it if that handler ever takes a path, URL or command.
   'parallelcode:',
+  // Claude Desktop app. Restricted below in `isExternalUrlSchemeAllowed` to
+  // only permit deep-links to explicit chat or project timelines, blocking arbitrary
+  // prompt pre-fills or local folder initialization routes.
   'claude:',
 ];
 
