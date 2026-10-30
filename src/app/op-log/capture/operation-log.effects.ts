@@ -7,6 +7,7 @@ import { concatMap, filter, map, startWith, tap } from 'rxjs/operators';
 import { LockService } from '../sync/lock.service';
 import {
   LockAcquisitionTimeoutError,
+  OperationWriteCutoffError,
   PermanentDeferredWriteError,
 } from '../core/errors/sync-errors';
 import { OperationLogStoreService } from '../persistence/operation-log-store.service';
@@ -510,6 +511,12 @@ export class OperationLogEffects implements DeferredLocalActionsPort {
         this.inMemoryCompactionCounter = 0;
       })
       .catch((e) => {
+        if (e instanceof OperationWriteCutoffError) {
+          // Transient, not a failure: the counter stays at the threshold, so
+          // the next write retries once the dispatch burst settles.
+          OpLog.warn('OperationLogEffects: Compaction deferred by dispatch activity');
+          return;
+        }
         OpLog.err('OperationLogEffects: Compaction failed', e);
         devError('Compaction failed: ' + e);
         this.compactionFailures++;
