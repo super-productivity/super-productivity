@@ -1215,6 +1215,19 @@ describe('TaskListComponent', () => {
       expect(store.dispatch).not.toHaveBeenCalled();
     });
 
+    it('keeps the active tag when dropping onto "No tag" inside that tag view (#9630)', async () => {
+      await component.drop(
+        dropEvent({
+          previous: undoneGroup('tagA'),
+          target: undoneGroup(NO_TAG_GROUP_ID),
+          dragged: { id: 't1', parentId: null, tagIds: ['test-context', 'tagA'] },
+        }),
+      );
+
+      const [, newTags] = taskService.updateTags.calls.mostRecent().args;
+      expect(newTags).toEqual(['test-context']);
+    });
+
     it('appends the target tag even if the task already has it (relies on updateTags de-dupe)', async () => {
       // _retagAcrossGroups does not de-dupe itself — it trusts updateTags' unique().
       await component.drop(
