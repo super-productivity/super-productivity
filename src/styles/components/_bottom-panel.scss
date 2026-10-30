@@ -68,7 +68,7 @@
     touch-action: none;
     // Better visual feedback
     &:active {
-      background-color: rgba(0, 0, 0, 0.04);
+      background-color: var(--state-pressed);
     }
   }
 }

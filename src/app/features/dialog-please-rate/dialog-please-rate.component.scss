@@ -47,7 +47,7 @@ mat-dialog-content {
     border-color 0.15s;
 
   &:hover {
-    background-color: rgba(127, 127, 127, 0.08);
+    background-color: var(--state-hover);
     border-color: rgba(127, 127, 127, 0.5);
   }
 
