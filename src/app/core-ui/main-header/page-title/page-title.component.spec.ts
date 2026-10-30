@@ -267,6 +267,7 @@ describe('PageTitleComponent', () => {
 
     it('re-translates the section title when the language changes', () => {
       const c = setupComponent('/config');
+      expect(c.displayTitle()).toBe(T.PS.GLOBAL_SETTINGS);
 
       translateInstant = (key) => `de:${key}`;
       langChange$.next({ lang: 'de' });
