@@ -390,24 +390,13 @@ describe('PluginManagementComponent', () => {
     });
   });
 
-  describe('build-your-own invitation', () => {
-    const guideLink = (): HTMLAnchorElement | null =>
-      fixture.nativeElement.querySelector(
-        '.install-card a[href$="/docs/plugin-development.md"]',
-      );
+  it('links the plugin guide from the install card', () => {
+    fixture.detectChanges();
+    const guideLink = fixture.nativeElement.querySelector(
+      '.install-card a[href$="/docs/plugin-development.md"]',
+    );
 
-    it('links the plugin guide from the install card', () => {
-      fixture.detectChanges();
-
-      expect(guideLink()?.textContent?.trim()).toBe('PLUGINS.BUILD_YOUR_OWN_LINK');
-    });
-
-    it('is hidden on phones, where nobody builds a plugin', () => {
-      (component as { IS_NATIVE_PLATFORM: boolean }).IS_NATIVE_PLATFORM = true;
-      fixture.detectChanges();
-
-      expect(guideLink()).toBeNull();
-    });
+    expect(guideLink?.textContent?.trim()).toBe('PLUGINS.BUILD_YOUR_OWN_LINK');
   });
 
   it('navigates to the work view and opens the issue panel', async () => {

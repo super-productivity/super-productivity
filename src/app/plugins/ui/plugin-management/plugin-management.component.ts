@@ -52,7 +52,6 @@ import { PluginApiAccess, PluginSecurityService } from '../../plugin-security';
 import { DEV_ONLY_BUNDLED_PLUGIN_IDS } from '../../bundled-plugins.const';
 import { environment } from '../../../../environments/environment';
 import { Capacitor } from '@capacitor/core';
-import { IS_NATIVE_PLATFORM } from '../../../util/is-native-platform';
 import {
   CommunityPlugin,
   CommunityPluginDownloadError,
@@ -197,7 +196,6 @@ export class PluginManagementComponent {
 
   T: typeof T = T;
   readonly IS_ELECTRON = IS_ELECTRON;
-  readonly IS_NATIVE_PLATFORM = IS_NATIVE_PLATFORM;
   /**
    * The web app cannot download from release hosts that send no CORS headers
    * (GitHub, Codeberg), so it links to the ZIP for a manual install instead.

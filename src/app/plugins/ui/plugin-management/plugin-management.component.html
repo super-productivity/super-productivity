@@ -336,17 +336,14 @@
         {{ uploadError() }}
       </mat-error>
     }
-    <!-- Building a plugin needs a computer, so phones skip the invitation. -->
-    @if (!IS_NATIVE_PLATFORM) {
-      <p>
-        {{ T.PLUGINS.BUILD_YOUR_OWN | translate }}
-        <a
-          href="https://github.com/super-productivity/super-productivity/blob/master/docs/plugin-development.md"
-          target="_blank"
-          >{{ T.PLUGINS.BUILD_YOUR_OWN_LINK | translate }}</a
-        >
-      </p>
-    }
+    <p>
+      {{ T.PLUGINS.BUILD_YOUR_OWN | translate }}
+      <a
+        href="https://github.com/super-productivity/super-productivity/blob/master/docs/plugin-development.md"
+        target="_blank"
+        >{{ T.PLUGINS.BUILD_YOUR_OWN_LINK | translate }}</a
+      >
+    </p>
   </mat-card-content>
 </mat-card>
 

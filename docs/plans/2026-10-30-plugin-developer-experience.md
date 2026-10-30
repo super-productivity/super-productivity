@@ -175,7 +175,8 @@ third-party code; downloading the folder does the same); a load-unpacked mode
 
 - In the "Install plugin" card, one quiet sentence with a plain link: "Want to
   build your own? Read the plugin guide." No banner, no nag, no setting, no new
-  styles.
+  styles. Shown on every platform: phones can install plugins too (e.g. a ZIP
+  an AI assistant wrote), and the guide is worth reading anywhere.
 - Link the guide file (no `#anchor`: anchors rot silently; `check-doc-links`
   validates the path).
 - English only (`en.json`, then `npm run int`); no placeholders.
