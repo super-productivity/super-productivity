@@ -21,6 +21,11 @@ state, not an independent task or calendar engine.
   applies those intents. Native code must never rewrite the snapshot.
 - Keep the explicit-component PendingIntent and exported-receiver restrictions;
   external apps must not be able to complete tasks.
+- The header's "+" opens `QuickAddActivity`, a dialog over the home screen
+  that writes the typed title to `CaptureInbox` (like a share) and finishes.
+  Angular imports it on its next start or resume as one Inbox `addTask` with
+  short syntax applied. Like checkbox taps, it never touches the snapshot, so
+  the task shows in the widget only after the app has run.
 
 The serializer and Kotlin parser are locked to the same golden shape by
 `android-widget.selectors.spec.ts` and `WidgetDataTest.kt`. Update both ends and
@@ -40,7 +45,8 @@ until the app writes a current snapshot.
 
 ## Deliberate limitations
 
-- No task creation, undo, or per-task deep link.
+- No undo or per-task deep link. Quick add takes a title only (short syntax
+  covers project, tags and dates); no list picker or configurable list.
 - Native widget chrome is English-only and uses fixed styling.
 - At most 20 tasks are rendered.
 - Cross-client freshness while the app is dead requires a separate background

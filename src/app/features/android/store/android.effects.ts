@@ -43,8 +43,8 @@ export class AndroidEffects {
       { dispatch: false },
     );
 
-  // Import the native capture inbox (Android shares, and tasks left by the
-  // removed startup quick-add overlay of an older app version) on cold start
+  // Import the native capture inbox (Android shares and widget quick adds) on
+  // cold start
   // and every resume (a retry if the first import failed). concatMap keeps
   // imports serial; startWith covers cold start.
   importNativeCaptures$ =

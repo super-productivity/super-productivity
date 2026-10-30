@@ -20,6 +20,7 @@ import { OperationWriteFlushService } from '../../op-log/sync/operation-write-fl
 import { selectTaskEntities } from '../tasks/store/task.selectors';
 import { TaskService } from '../tasks/task.service';
 import { DEFAULT_TASK } from '../tasks/task.model';
+import { WorkContextType } from '../work-context/work-context.model';
 
 describe('AndroidCaptureImportService', () => {
   const id = '7DCC80FA-577A-4D99-B16E-15D4B8787B62';
@@ -80,8 +81,15 @@ describe('AndroidCaptureImportService', () => {
       ],
     });
     store = TestBed.inject(MockStore);
+    spyOn(store, 'dispatch');
     service = TestBed.inject(AndroidCaptureImportService);
   };
+
+  const addedTasks = (): ReturnType<typeof TaskSharedActions.addTask>[] =>
+    (store.dispatch as jasmine.Spy).calls
+      .allArgs()
+      .map((args) => args[0] as ReturnType<typeof TaskSharedActions.addTask>)
+      .filter((action) => action.type === TaskSharedActions.addTask.type);
 
   const entries = (...list: { id: string; title: string }[]): string =>
     JSON.stringify(list.map((e, i) => ({ v: 1, ...e, createdAt: i, source: 'overlay' })));
@@ -89,7 +97,13 @@ describe('AndroidCaptureImportService', () => {
   beforeEach(() => {
     pending = entries({ id, title: 'Buy milk #shop' });
     acknowledge = jasmine.createSpy('acknowledgeCapture').and.returnValue(true);
-    taskService = jasmine.createSpyObj('TaskService', ['add']);
+    taskService = jasmine.createSpyObj('TaskService', ['createNewTaskWithDefaults']);
+    taskService.createNewTaskWithDefaults.and.callFake(({ title, id: taskId }) => ({
+      ...DEFAULT_TASK,
+      id: taskId as string,
+      title: title as string,
+      projectId: INBOX_PROJECT.id,
+    }));
     flush = jasmine.createSpyObj('Flush', ['flushPendingWrites']);
     flush.flushPendingWrites.and.resolveTo();
     capture = jasmine.createSpyObj('Capture', ['hasUnrecoveredPersistFailure']);
@@ -109,11 +123,19 @@ describe('AndroidCaptureImportService', () => {
   it('waits for data load, creates the task with the capture id, then acknowledges', async () => {
     const imported = service.importPending();
     await Promise.resolve();
-    expect(taskService.add).not.toHaveBeenCalled();
+    expect(addedTasks()).toEqual([]);
     loaded.next(true);
     expect(await imported).toBe(1);
-    // Same as the in-app add bar (short syntax on), only the id is fixed.
-    expect(taskService.add).toHaveBeenCalledOnceWith('Buy milk #shop', false, { id });
+    // As if typed into the Inbox's add bar (short syntax on), only the id is
+    // fixed: the import runs on whatever screen the app resumes on.
+    expect(addedTasks().length).toBe(1);
+    const action = addedTasks()[0];
+    expect(action.task.id).toBe(id);
+    expect(action.task.title).toBe('Buy milk #shop');
+    expect(action.task.projectId).toBe(INBOX_PROJECT.id);
+    expect(action.workContextId).toBe(INBOX_PROJECT.id);
+    expect(action.workContextType).toBe(WorkContextType.PROJECT);
+    expect(action.isIgnoreShortSyntax).toBeUndefined();
     expect(flush.flushPendingWrites).toHaveBeenCalled();
     expect(acknowledge).toHaveBeenCalledOnceWith(id);
   });
@@ -130,7 +152,7 @@ describe('AndroidCaptureImportService', () => {
     for (let i = 0; i < 10; i++) {
       await Promise.resolve();
     }
-    expect(taskService.add).toHaveBeenCalledTimes(1);
+    expect(addedTasks().length).toBe(1);
     expect(acknowledge).not.toHaveBeenCalled();
     finish();
     await imported;
@@ -151,7 +173,7 @@ describe('AndroidCaptureImportService', () => {
     store.refreshState();
     loaded.next(true);
     expect(await service.importPending()).toBe(0);
-    expect(taskService.add).not.toHaveBeenCalled();
+    expect(addedTasks()).toEqual([]);
     expect(acknowledge).toHaveBeenCalledWith(id);
   });
 
@@ -162,7 +184,7 @@ describe('AndroidCaptureImportService', () => {
     // The user may delete the task before the retry; the receipt still covers it.
     acknowledge.and.returnValue(true);
     expect(await service.importPending()).toBe(0);
-    expect(taskService.add).toHaveBeenCalledTimes(1);
+    expect(addedTasks().length).toBe(1);
     expect(acknowledge).toHaveBeenCalledTimes(2);
     expect(localStorage.getItem(ANDROID_CAPTURE_RECEIPTS_KEY)).toBe('[]');
   });
@@ -174,10 +196,10 @@ describe('AndroidCaptureImportService', () => {
     for (let i = 0; i < 10; i++) {
       await Promise.resolve();
     }
-    expect(taskService.add).not.toHaveBeenCalled();
+    expect(addedTasks()).toEqual([]);
     syncWindow.next(false);
     await imported;
-    expect(taskService.add).toHaveBeenCalledTimes(1);
+    expect(addedTasks().length).toBe(1);
   });
 
   it('imports several captures in order and skips malformed entries', async () => {
@@ -189,14 +211,14 @@ describe('AndroidCaptureImportService', () => {
     ]);
     loaded.next(true);
     expect(await service.importPending()).toBe(2);
-    expect(taskService.add.calls.allArgs().map((a) => a[0])).toEqual(['First', 'Second']);
+    expect(addedTasks().map((a) => a.task.title)).toEqual(['First', 'Second']);
   });
 
   it('fails without acknowledging when the native inbox cannot be read', async () => {
     pending = null;
     loaded.next(true);
     await expectAsync(service.importPending()).toBeRejected();
-    expect(taskService.add).not.toHaveBeenCalled();
+    expect(addedTasks()).toEqual([]);
     expect(acknowledge).not.toHaveBeenCalled();
   });
 
@@ -231,7 +253,6 @@ describe('AndroidCaptureImportService', () => {
       shares = JSON.stringify(list);
       TestBed.resetTestingModule();
       setup();
-      spyOn(store, 'dispatch');
       loaded.next(true);
     };
     const addedTask = (): ReturnType<typeof TaskSharedActions.addTask> =>
@@ -268,7 +289,6 @@ describe('AndroidCaptureImportService', () => {
         }),
       ]);
       expect(acknowledge).toHaveBeenCalledOnceWith(shareId);
-      expect(taskService.add).not.toHaveBeenCalled();
     });
 
     it('keeps shared text as notes, beyond the server limit', async () => {
@@ -303,7 +323,10 @@ describe('AndroidCaptureImportService', () => {
       reset([share({ title: 'Shared', notes: 'Shared' })]);
       pending = entries({ id, title: 'Typed' });
       expect(await service.importPending()).toBe(2);
-      expect(taskService.add).toHaveBeenCalledOnceWith('Typed', false, { id });
+      expect(addedTasks().map((a) => [a.task.title, !!a.isIgnoreShortSyntax])).toEqual([
+        ['Typed', false],
+        ['Shared', true],
+      ]);
       expect(acknowledge.calls.allArgs()).toEqual([[id], [shareId]]);
     });
 
