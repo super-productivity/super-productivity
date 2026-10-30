@@ -514,6 +514,8 @@ export class OperationLogEffects implements DeferredLocalActionsPort {
         if (e instanceof OperationWriteCutoffError) {
           // Transient, not a failure: the counter stays at the threshold, so
           // the next write retries once the dispatch burst settles.
+          // shortcut: dispatch that never settles never warns the user — count
+          // consecutive deferrals if that ever shows up in logs.
           OpLog.warn('OperationLogEffects: Compaction deferred by dispatch activity');
           return;
         }
