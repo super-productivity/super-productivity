@@ -52,6 +52,7 @@ import { PluginApiAccess, PluginSecurityService } from '../../plugin-security';
 import { DEV_ONLY_BUNDLED_PLUGIN_IDS } from '../../bundled-plugins.const';
 import { environment } from '../../../../environments/environment';
 import { Capacitor } from '@capacitor/core';
+import { IS_NATIVE_PLATFORM } from '../../../util/is-native-platform';
 import {
   CommunityPlugin,
   CommunityPluginDownloadError,
@@ -68,10 +69,6 @@ const COMMUNITY_DOWNLOAD_ERROR_KEYS: Record<CommunityPluginDownloadFailure, stri
   hashMismatch: T.PLUGINS.COMMUNITY_HASH_MISMATCH,
   manifestMismatch: T.PLUGINS.COMMUNITY_MANIFEST_MISMATCH,
 };
-
-interface PluginManifestAuthor {
-  author?: unknown;
-}
 
 /**
  * The app's Chinese codes stand for scripts, not regions: `zh` is Simplified
@@ -200,6 +197,7 @@ export class PluginManagementComponent {
 
   T: typeof T = T;
   readonly IS_ELECTRON = IS_ELECTRON;
+  readonly IS_NATIVE_PLATFORM = IS_NATIVE_PLATFORM;
   /**
    * The web app cannot download from release hosts that send no CORS headers
    * (GitHub, Codeberg), so it links to the ZIP for a manual install instead.
@@ -369,7 +367,8 @@ export class PluginManagementComponent {
   }
 
   getPluginAuthor(plugin: PluginInstance): string | null {
-    const author = (plugin.manifest as PluginManifestAuthor).author;
+    // Manifests are third-party JSON: the declared type is not a guarantee.
+    const author: unknown = plugin.manifest.author;
     return typeof author === 'string' && author.trim().length > 0 ? author.trim() : null;
   }
 
