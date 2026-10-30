@@ -20,8 +20,8 @@ android {
         minSdkVersion 24
         targetSdkVersion 36
         compileSdk 36
-        versionCode 19_01_00_9000
-        versionName "19.1.0"
+        versionCode 19_03_01_9000
+        versionName "19.3.1"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         manifestPlaceholders = [
                 hostName       : "app.super-productivity.com",
@@ -144,6 +144,15 @@ android {
         buildConfig = true
     }
 
+    // The background reminder op fixture (pinned to the app's real ops by
+    // background-reminder-ops.spec.ts) is shared with the instrumented tests,
+    // which read it as an asset of the test APK.
+    sourceSets {
+        androidTest {
+            assets.srcDirs += 'src/test/resources'
+        }
+    }
+
     namespace "com.superproductivity.superproductivity"
 }
 
@@ -188,6 +197,9 @@ dependencies {
     androidTestImplementation "com.android.support.test:runner:1.0.2"
     androidTestImplementation "com.android.support.test.espresso:espresso-core:3.0.2"
     androidTestImplementation "com.squareup.okhttp3:mockwebserver:4.12.0"
+    // Runs SyncReminderWorker directly (TestListenableWorkerBuilder); same
+    // version as work-runtime-ktx above.
+    androidTestImplementation "androidx.work:work-testing:2.10.0"
 }
 
 // The live crypto fixtures are generated outside Gradle

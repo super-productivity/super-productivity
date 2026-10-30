@@ -9,6 +9,20 @@ const ORDINAL_KEYS = [
   T.F.TASK_REPEAT.F.ORD_FOURTH_NTH,
 ];
 
+// One icon per cadence, so the presets can be told apart at a glance. The
+// monthly variants share one; their labels tell them apart.
+export const REPEAT_QUICK_SETTING_ICON: Record<RepeatQuickSetting, string> = {
+  DAILY: 'today',
+  MONDAY_TO_FRIDAY: 'work',
+  WEEKLY_CURRENT_WEEKDAY: 'calendar_view_week',
+  MONTHLY_CURRENT_DATE: 'calendar_month',
+  MONTHLY_FIRST_DAY: 'calendar_month',
+  MONTHLY_LAST_DAY: 'calendar_month',
+  MONTHLY_NTH_WEEKDAY: 'calendar_month',
+  YEARLY_CURRENT_DATE: 'cake',
+  CUSTOM: 'tune',
+};
+
 export const buildRepeatQuickSettingOptions = (
   refDate: Date,
   locale: string,
@@ -19,7 +33,7 @@ export const buildRepeatQuickSettingOptions = (
   // it here renders the weekday in Swedish (#8987). Numeric day/month below keep
   // `locale` so ISO day-first ordering is preserved.
   weekdayLocale: string,
-): { value: RepeatQuickSetting; label: string }[] => {
+): { value: RepeatQuickSetting; label: string; icon: string }[] => {
   // Guard against an invalid Date slipping through (e.g. a non-DB date string).
   // An invalid date makes the weekOfMonth math NaN, so ORDINAL_KEYS[NaN-1] is
   // undefined and translate's `instant(undefined)` throws, crashing the whole
@@ -37,7 +51,7 @@ export const buildRepeatQuickSettingOptions = (
   const weekOfMonth = Math.min(Math.floor((safeRefDate.getDate() - 1) / 7) + 1, 4);
   const ordinalStr = translateService.instant(ORDINAL_KEYS[weekOfMonth - 1]);
 
-  return [
+  const options: { value: RepeatQuickSetting; label: string }[] = [
     {
       value: 'DAILY',
       label: translateService.instant(T.F.TASK_REPEAT.F.Q_DAILY),
@@ -84,4 +98,5 @@ export const buildRepeatQuickSettingOptions = (
       label: translateService.instant(T.F.TASK_REPEAT.F.Q_CUSTOM),
     },
   ];
+  return options.map((o) => ({ ...o, icon: REPEAT_QUICK_SETTING_ICON[o.value] }));
 };

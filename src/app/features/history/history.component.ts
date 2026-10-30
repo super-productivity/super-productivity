@@ -20,7 +20,7 @@ import { Store } from '@ngrx/store';
 import { selectAllProjectColorsAndTitles } from '../project/store/project.selectors';
 import { FullPageSpinnerComponent } from '../../ui/full-page-spinner/full-page-spinner.component';
 import { KeyValue, KeyValuePipe } from '@angular/common';
-import { MatMiniFabButton } from '@angular/material/button';
+import { MatButton, MatMiniFabButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { MatTooltip } from '@angular/material/tooltip';
 import { MsToClockStringPipe } from '../../ui/duration/ms-to-clock-string.pipe';
@@ -37,6 +37,7 @@ import { DateService } from '../../core/date/date.service';
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 import { parseDbDateStr } from '../../util/parse-db-date-str';
 import { WorklogDay, WorklogMonth, WorklogYear } from '../worklog/worklog.model';
+import { DialogRecentlyDeletedComponent } from '../tasks/recently-deleted/dialog-recently-deleted/dialog-recently-deleted.component';
 
 @Component({
   selector: 'history',
@@ -46,6 +47,7 @@ import { WorklogDay, WorklogMonth, WorklogYear } from '../worklog/worklog.model'
   animations: [expandFadeAnimation, fadeInSlowAnimation],
   imports: [
     FullPageSpinnerComponent,
+    MatButton,
     MatMiniFabButton,
     MatIcon,
     MatTooltip,
@@ -145,6 +147,10 @@ export class HistoryComponent {
         rangeEnd,
       },
     });
+  }
+
+  openRecentlyDeleted(): void {
+    this._matDialog.open(DialogRecentlyDeletedComponent, { restoreFocus: true });
   }
 
   viewTaskDetails(task: Task): void {

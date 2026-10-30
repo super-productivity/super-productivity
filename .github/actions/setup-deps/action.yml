@@ -1,0 +1,25 @@
+name: 'Setup Node Dependencies'
+description: 'Shared setup for jobs that need the root workspace installed: Node from .nvmrc, npm cache, retried npm install'
+
+# Callers must check out the repository first (the action lives in it).
+runs:
+  using: 'composite'
+  steps:
+    - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v6
+      with:
+        node-version-file: .nvmrc
+        cache: npm
+        cache-dependency-path: package-lock.json
+
+    # Use `npm i`, not `npm ci`: the root lockfile's
+    # `overrides.app-builder-lib.minimatch` pin is considered out-of-sync by
+    # npm 10 (bundled with Node 22). npm i runs Prisma's postinstall, which
+    # downloads engine binaries from a CDN; a transient ECONNRESET there fails
+    # the whole job. Retry to absorb it.
+    - name: Install npm Packages
+      uses: nick-fields/retry@ad984534de44a9489a53aefd81eb77f87c70dc60 # v4.0.0
+      with:
+        timeout_minutes: 10
+        max_attempts: 3
+        retry_wait_seconds: 20
+        command: npm i

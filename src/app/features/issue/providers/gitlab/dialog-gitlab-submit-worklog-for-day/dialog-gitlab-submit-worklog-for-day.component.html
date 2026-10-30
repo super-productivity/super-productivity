@@ -107,7 +107,9 @@
         | translate
           : {
               totalTimeToSubmit: totalTimeToSubmit$ | async | msToString,
-              nrOfTasksToSubmit: (tmpTasksToTrack$ | async)?.length,
+              nrOfTasksToSubmit: $safeNavigationMigration(
+                (tmpTasksToTrack$ | async)?.length
+              ),
             }
     "
   ></div>

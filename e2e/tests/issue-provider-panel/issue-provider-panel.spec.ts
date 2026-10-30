@@ -4,6 +4,24 @@ import { expectNoGlobalError } from '../../utils/assertions';
 const PANEL_BTN = '.e2e-toggle-issue-provider-panel';
 
 test.describe('Issue Provider Panel', () => {
+  test('should render after reload without waiting for browser idle', async ({
+    page,
+    workViewPage,
+  }) => {
+    // Reproduce idle starvation matching the empty sidebar in run 39134085117:
+    // the panel opens after reload before the browser grants an idle callback.
+    await page.addInitScript(() => {
+      let nextId = 0;
+      window.requestIdleCallback = () => ++nextId;
+      window.cancelIdleCallback = () => {};
+    });
+    await page.reload();
+    await workViewPage.waitForTaskList();
+    await page.locator(`${PANEL_BTN}:visible`).click();
+    await expect(page.locator('issue-panel')).toBeVisible();
+    await expect(page.locator('issue-provider-setup-overview')).toBeVisible();
+  });
+
   test('should open all dialogs without error', async ({ page, workViewPage }) => {
     // Wait for work view to be ready
     await workViewPage.waitForTaskList();

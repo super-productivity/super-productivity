@@ -12,6 +12,7 @@ import {
   MatFormField,
   MatLabel,
   MatError,
+  MatHint,
   MatSuffix,
 } from '@angular/material/form-field';
 import { MatInput } from '@angular/material/input';
@@ -46,6 +47,7 @@ export const DATE_PICKER_MAX_DEFAULT = '2999-12-31';
     MatSuffix,
     MatDatepicker,
     MatError,
+    MatHint,
     TranslatePipe,
   ],
   templateUrl: './date-picker-input.component.html',
@@ -69,6 +71,7 @@ export class DatePickerInputComponent implements ControlValueAccessor {
   required = input<boolean>(false);
   isInvalid = input<boolean | undefined>(undefined); // boolean - validation control by parent, undefined - internal validation
   errorMessage = input<string | undefined>(undefined); // instead of default error message
+  hint = input<string | undefined>(undefined);
 
   innerValue = signal<DateValue>(null);
   private _cd = inject(ChangeDetectorRef);

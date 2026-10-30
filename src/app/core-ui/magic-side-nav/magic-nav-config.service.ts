@@ -8,6 +8,7 @@ import { WorkContextService } from '../../features/work-context/work-context.ser
 import { TagService } from '../../features/tag/tag.service';
 import { ShepherdService } from '../../features/shepherd/shepherd.service';
 import { TourId } from '../../features/shepherd/shepherd-steps.const';
+import { QuickTourService } from '../../features/onboarding/quick-tour.service';
 import { T } from '../../t.const';
 import { LS } from '../../core/persistence/storage-keys.const';
 import { getGithubErrorUrl } from '../../core/error-handler/global-error-handler.util';
@@ -24,6 +25,7 @@ import {
 } from '../../features/project/store/project.selectors';
 import { toggleHideFromMenu } from '../../features/project/store/project.actions';
 import { NavConfig, NavItem } from './magic-side-nav.model';
+import { NAV_SECTION_ICON } from './nav-section-icons.const';
 import { PluginBridgeService } from '../../plugins/plugin-bridge.service';
 import { PluginService } from '../../plugins/plugin.service';
 import { lsGetBoolean, lsSetItem } from '../../util/ls-util';
@@ -45,6 +47,7 @@ export class MagicNavConfigService {
   private readonly _workContextService = inject(WorkContextService);
   private readonly _tagService = inject(TagService);
   private readonly _shepherdService = inject(ShepherdService);
+  private readonly _quickTourService = inject(QuickTourService);
   private readonly _matDialog = inject(MatDialog);
   private readonly _store = inject(Store);
   private readonly _pluginBridge = inject(PluginBridgeService);
@@ -237,19 +240,12 @@ export class MagicNavConfigService {
               type: 'route',
               id: 'search',
               label: T.MH.SEARCH,
-              icon: 'search',
+              icon: NAV_SECTION_ICON.SEARCH,
               route: '/search',
               featureConfigKey: 'isSearchEnabled',
             } as NavItem,
           ]
         : []),
-      {
-        type: 'route',
-        id: 'scheduled-list',
-        label: T.MH.ALL_PLANNED_LIST,
-        icon: 'list',
-        route: '/scheduled-list',
-      },
 
       // Help Menu (rendered as mat-menu)
       // Donation links are disabled on native iOS and every macOS desktop build
@@ -260,7 +256,7 @@ export class MagicNavConfigService {
               type: 'route',
               id: 'donate',
               label: T.MH.DONATE,
-              icon: 'favorite',
+              icon: NAV_SECTION_ICON.DONATE,
               route: '/donate',
               featureConfigKey: 'isDonatePageEnabled',
             } as NavItem,
@@ -315,6 +311,13 @@ export class MagicNavConfigService {
           },
           {
             type: 'action',
+            id: 'help-quick-tour',
+            label: T.MH.HM.QUICK_TOUR,
+            icon: 'explore',
+            action: () => this._startQuickTour(),
+          },
+          {
+            type: 'action',
             id: 'tour-create-task',
             label: T.MH.HM.CREATE_TASK,
             icon: 'add_task',
@@ -334,7 +337,7 @@ export class MagicNavConfigService {
         type: 'route',
         id: 'settings',
         label: T.MH.SETTINGS,
-        icon: 'settings',
+        icon: NAV_SECTION_ICON.SETTINGS,
         route: '/config',
         tourClass: 'tour-settingsMenuBtn',
       },
@@ -408,9 +411,10 @@ export class MagicNavConfigService {
         type: 'route',
         id: 'planner',
         label: T.MH.PLANNER,
-        icon: 'edit_calendar',
+        icon: NAV_SECTION_ICON.PLANNER,
         route: '/planner',
         featureConfigKey: 'isPlannerEnabled',
+        tourClass: 'tour-planner',
       });
     }
 
@@ -419,7 +423,7 @@ export class MagicNavConfigService {
         type: 'route',
         id: 'schedule',
         label: T.MH.SCHEDULE,
-        icon: 'schedule',
+        icon: NAV_SECTION_ICON.SCHEDULE,
         route: '/schedule',
         featureConfigKey: 'isSchedulerEnabled',
       });
@@ -430,7 +434,7 @@ export class MagicNavConfigService {
         type: 'route',
         id: 'boards',
         label: T.MH.BOARDS,
-        icon: 'grid_view',
+        icon: NAV_SECTION_ICON.BOARDS,
         route: '/boards',
         featureConfigKey: 'isBoardsEnabled',
       });
@@ -441,7 +445,7 @@ export class MagicNavConfigService {
         type: 'route',
         id: 'habits',
         label: T.MH.HABITS,
-        icon: 'heart_check',
+        icon: NAV_SECTION_ICON.HABITS,
         route: '/habits',
         featureConfigKey: 'isHabitsEnabled',
       });
@@ -581,6 +585,14 @@ export class MagicNavConfigService {
 
   private _openBugReport(): void {
     window.open(getGithubErrorUrl('', undefined, true), '_blank');
+  }
+
+  private _startQuickTour(): void {
+    // Here, not in QuickTourService: ShepherdService already injects it.
+    if (this._shepherdService.isActive) {
+      this._shepherdService.cancel();
+    }
+    this._quickTourService.start();
   }
 
   private _startTour(tourId: TourId): void {

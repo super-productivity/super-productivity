@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
-import { ChartConfiguration, ChartData, ChartType } from 'chart.js';
+import { ChartConfiguration, ChartType } from 'chart.js';
 import { MetricService } from './metric.service';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { fadeAnimation } from '../../ui/animations/fade.ani';
@@ -16,13 +16,9 @@ import { ActivityHeatmapComponent } from './activity-heatmap/activity-heatmap.co
 import { ShareButtonComponent } from '../../core/share/share-button/share-button.component';
 import { ShareFormatter } from '../../core/share/share-formatter';
 import { SharePayload } from '../../core/share/share.model';
-import { map } from 'rxjs/operators';
-import { calculateSustainabilityScore } from './metric-scoring.util';
 import { TODAY_TAG } from '../tag/tag.const';
 import { LocaleDatePipe } from '../../ui/pipes/locale-date.pipe';
 import { DateTimeFormatService } from '../../core/date-time-format/date-time-format.service';
-
-const FULL_PRODUCTIVITY_BREAKDOWN_CHART_RANGE = Number.MAX_SAFE_INTEGER;
 
 @Component({
   selector: 'metric',
@@ -77,64 +73,7 @@ export class MetricComponent {
 
   focusSessionData = toSignal(this.metricService.getFocusSessionMetrics$());
 
-  productivityBreakdownChartData = toSignal<ChartData<
-    'line',
-    (number | null)[],
-    string
-  > | null>(
-    this.metricService
-      .getProductivityBreakdown$(FULL_PRODUCTIVITY_BREAKDOWN_CHART_RANGE)
-      .pipe(
-        map((breakdown) => {
-          if (!breakdown.length) {
-            return null;
-          }
-
-          const labels = breakdown.map((item) => item.day);
-          const productivityScores = breakdown.map((item) =>
-            item.score != null ? item.score : null,
-          );
-          const sustainabilityScores = breakdown.map((item) =>
-            item.energyCheckin != null
-              ? calculateSustainabilityScore(
-                  item.focusedMinutes,
-                  item.totalWorkMinutes,
-                  item.energyCheckin,
-                )
-              : null,
-          );
-
-          const hasData =
-            productivityScores.some((score) => score != null) ||
-            sustainabilityScores.some((score) => score != null);
-
-          if (!hasData) {
-            return null;
-          }
-
-          return {
-            labels,
-            datasets: [
-              {
-                label: 'Productivity Score',
-                data: productivityScores,
-                borderColor: 'rgb(75, 192, 192)',
-                backgroundColor: 'rgba(75, 192, 192, 0.2)',
-                tension: 0.1,
-              },
-              {
-                label: 'Sustainability Score',
-                data: sustainabilityScores,
-                borderColor: 'rgb(153, 102, 255)',
-                backgroundColor: 'rgba(153, 102, 255, 0.2)',
-                tension: 0.1,
-              },
-            ],
-          } as ChartData<'line', (number | null)[], string>;
-        }),
-      ),
-    { initialValue: null },
-  );
+  evaluationData = toSignal(this.metricService.getEvaluationMetrics$());
 
   lineChartOptions: ChartConfiguration<
     'line',
@@ -146,6 +85,23 @@ export class MetricComponent {
       y: {
         ticks: {
           precision: 0,
+        },
+      },
+    },
+  };
+  // Fixed 0-4 axis so the 1-4 impact and 1-3 energy ratings read on the same scale.
+  evaluationChartOptions: ChartConfiguration<
+    'line',
+    (number | undefined)[],
+    string
+  >['options'] = {
+    responsive: true,
+    scales: {
+      y: {
+        min: 0,
+        max: 4,
+        ticks: {
+          stepSize: 1,
         },
       },
     },

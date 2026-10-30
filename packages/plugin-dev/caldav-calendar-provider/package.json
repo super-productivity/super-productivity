@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "build": "node scripts/build.js",
+    "build": "node ../scripts/build-with-esbuild.js",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "lint": "tsc --noEmit"
@@ -12,7 +12,7 @@
     "esbuild": "^0.28.1",
     "jsdom": "^29.0.1",
     "typescript": "^5.8.3",
-    "vitest": "^4.1.0"
+    "vitest": "^4.1.12"
   },
   "dependencies": {
     "@super-productivity/plugin-api": "file:../../plugin-api",

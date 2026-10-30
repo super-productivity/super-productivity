@@ -86,6 +86,10 @@
     "INTRO_2": "如果您認同這種做法並希望讓專案保持健康發展，非常感謝您的自願贊助。"
   },
   "EXAMPLE_TASKS": {
+    "GETTING_STARTED": {
+      "TITLE": "選用：入門小提示",
+      "NOTES": "這裡的內容都不是必要的。你可以隨時刪除這個任務。\n\n- **今天與收件匣**：今天會顯示今天規劃的任務。沒有自己專案的任務會留在收件匣。一個任務可以同時出現在兩個清單中。\n- **專案**：使用側邊欄中**專案**旁的 **+**，依主題將任務分組。\n- **同步**：在**設定 → 同步與備份**中，讓你的資料保存在多部裝置上。\n- **從 Todoist 或 TickTick 轉過來？** 在**設定 → 同步與備份 → 匯入/匯出**中匯入你的任務。\n- **導覽**：側邊欄選單中的**說明 → 快速導覽**會用你自己的任務帶你了解基本操作，而**說明 → 操作指南**則會逐步說明簡短語法與鍵盤操作。你可以隨時關閉導覽。\n- **打造專屬設定**：選擇主題或深色模式，並在**設定 → 一般**中開啟或關閉看板、時間軸、習慣、專注模式或整合等功能。外掛還能帶來更多。"
+    },
     "LEARN_KEYBOARD_SHORTCUTS": {
       "TITLE": "學習鍵盤快捷鍵",
       "NOTES": "Super Productivity 專為鍵盤操作而設計。學習快捷鍵可以讓您更有效率地工作。\n\n**如何開始：**\n1. 開啟**側邊欄選單**\n2. 前往**說明**\n3. 點擊**鍵盤導覽教學**"
@@ -542,7 +546,8 @@
         "OAUTH_DISCONNECTED": "OAuth 帳戶已中斷連線。",
         "OAUTH_FAILED": "驗證失敗。",
         "REMOTE_ISSUE_DELETED": "遠端議題已被刪除。要刪除連結的任務「{{taskTitle}}」嗎？",
-        "REMOTE_ISSUE_DELETED_WITH_TIME": "遠端議題已被刪除，但任務「{{taskTitle}}」已有追蹤時間。仍要刪除嗎？"
+        "REMOTE_ISSUE_DELETED_WITH_TIME": "遠端議題已被刪除，但任務「{{taskTitle}}」已有追蹤時間。仍要刪除嗎？",
+        "POST_TIME_SUCCESS": "{{providerName}}：已成功為 {{issueTitle}} 建立時間紀錄"
       },
       "TWO_WAY_SYNC": {
         "AUTO_CREATE_ISSUES": "自動為新任務建立議題",
@@ -571,6 +576,15 @@
         "POLLING_MODE_DESCRIPTION": "何時輪詢：僅在相關專案或標籤開啟時，或一律在背景中",
         "POLLING_MODE_WHEN_PROJECT_OPEN": "當內容開啟時",
         "POLLING_MODE_ALWAYS": "一律（背景）"
+      },
+      "DIALOG_TRACK_TIME": {
+        "ACTIVITY": "活動",
+        "INVALID_DATE": "輸入的值不是日期！",
+        "POST_TIME": "提交時間",
+        "STARTED": "開始時間",
+        "SUBMIT_TIME_FOR": "向 {{providerName}} 提交時間：",
+        "TIME_SPENT": "花費時間",
+        "TITLE": "{{providerName}}：提交工作日誌"
       }
     },
     "ISSUE_PANEL": {
@@ -794,33 +808,6 @@
         "REMINDER_NEEDS_TEXT": "請先寫下反思再要求提醒",
         "REMINDER_TASK_TITLE": "重新檢視反思筆記",
         "TITLE": "反思筆記"
-      }
-    },
-    "NEXTCLOUD_DECK": {
-      "FORM": {
-        "BASE_URL": "Nextcloud 基礎 URL",
-        "FILTER_BY_ASSIGNEE": "只匯入指派給我的卡片",
-        "IS_TRANSITION_ISSUES_ENABLED": "將完成狀態和標題同步回 Nextcloud Deck",
-        "PASSWORD": "您的 Nextcloud 應用程式密碼",
-        "POLL_INTERVAL_MINUTES": "輪詢間隔（分鐘）",
-        "TITLE_TEMPLATE": "任務標題範本",
-        "TITLE_TEMPLATE_DESCRIPTION": "變數：{CARD_TITLE}、{BOARD}、{COLUMN}、{ID}、{LABELS}。範例：[{BOARD}: {COLUMN}] {CARD_TITLE}。留空則僅使用卡片標題。",
-        "USERNAME": "您的 Nextcloud 使用者名稱"
-      },
-      "FORM_SECTION": {
-        "HELP": "設定您的 Nextcloud Deck 整合以將卡片匯入為任務。請使用應用程式密碼進行驗證。"
-      },
-      "ISSUE_CONTENT": {
-        "ASSIGNED_USERS": "已指派使用者",
-        "DECK_DESCRIPTION": "Deck 描述",
-        "LABELS": "標籤",
-        "STACK": "堆疊"
-      },
-      "S": {
-        "BOARD_NOT_FOUND": "Nextcloud Deck：找不到看板",
-        "CARD_NOT_FOUND": "Nextcloud Deck：卡片「{{issueId}}」似乎已從伺服器上刪除。",
-        "ERR_CREDENTIALS_MISSING": "請先輸入 Nextcloud URL、使用者名稱和密碼。",
-        "ERR_LOAD_BOARDS": "無法載入 Deck 看板。請檢查您的認證資訊。"
       }
     },
     "NOTE": {
@@ -1081,44 +1068,6 @@
       "NO_DATA": "本年度無資料",
       "PAGE_TITLE": "快速歷史記錄",
       "WEEK_TITLE": "第 {{nr}} 週（{{timeSpent}}）"
-    },
-    "REDMINE": {
-      "DIALOG_TRACK_TIME": {
-        "ACTIVITY": "活動",
-        "INVALID_DATE": "輸入的值不是日期！",
-        "POST_TIME": "提交時間",
-        "STARTED": "開始時間",
-        "SUBMIT_TIME_FOR": "向 Redmine 提交時間：",
-        "TIME_SPENT": "花費時間",
-        "TITLE": "Redmine：提交工作日誌"
-      },
-      "FORM": {
-        "API_KEY": "API 存取金鑰",
-        "HOST": "主機位址（例如：https://redmine.org）",
-        "IS_SHOW_TIME_TRACKING_DIALOG": "顯示向 Redmine 報告的時間追蹤對話方塊",
-        "IS_SHOW_TIME_TRACKING_DIALOG_DESCRIPTION": "需要在 Redmine 專案中啟用時間追蹤模組",
-        "IS_SHOW_TIME_TRACKING_DIALOG_FOR_EACH_SUB_TASK": "完成子任務時顯示時間追蹤對話方塊",
-        "PROJECT_ID": "專案識別碼",
-        "PROJECT_ID_DESCRIPTION": "可在瀏覽器中檢視專案時，從網址中找到。",
-        "SCOPE": "範圍",
-        "SCOPE_ALL": "全部",
-        "SCOPE_ASSIGNED": "指派給我",
-        "SCOPE_CREATED": "由我建立"
-      },
-      "FORM_SECTION": {
-        "HELP": "<p>在此您可以設定 Super Productivity 在每日規劃檢視的工作建立面板中列出特定專案的開放 Redmine（線上版本或自架實例）議題。它們將作為建議列出，並提供議題的連結以及更多相關資訊。</p><p>此外，您可以自動匯入所有開放議題。</p>",
-        "TITLE": "Redmine"
-      },
-      "ISSUE_CONTENT": {
-        "AUTHOR": "作者",
-        "DESCRIPTION": "描述",
-        "MARK_AS_CHECKED": "標記更新為已檢查",
-        "PRIORITY": "優先順序",
-        "STATUS": "狀態"
-      },
-      "S": {
-        "POST_TIME_SUCCESS": "Redmine：已成功為 {{issueTitle}} 建立時間紀錄"
-      }
     },
     "REFLECTION_NOTE": {
       "ACTION_DISMISS": "關閉",
@@ -2911,8 +2860,17 @@
     },
     "SOUND": {
       "BREAK_REMINDER_SOUND": "休息提醒音效",
+      "DING": "鈴鐺聲",
       "DONE_SOUND": "工作完成音效",
       "IS_INCREASE_DONE_PITCH": "每完成一個工作增加音高",
+      "SMALL_DING": "小鈴鐺聲",
+      "SOUND_1": "音效 1",
+      "SOUND_2": "音效 2",
+      "SOUND_3": "音效 3",
+      "SOUND_4": "音效 4",
+      "SOUND_5": "音效 5",
+      "SOUND_6": "音效 6",
+      "SOUND_7": "音效 7",
       "TITLE": "音效",
       "TRACK_TIME_SOUND": "追蹤時間提醒音效",
       "VOLUME": "音量"
@@ -3052,6 +3010,7 @@
       "CONTRIBUTE": "貢獻",
       "GET_HELP_ONLINE": "線上尋求協助",
       "KEYBOARD": "如何：進階鍵盤",
+      "QUICK_TOUR": "快速導覽",
       "REDDIT_COMMUNITY": "Reddit 社群",
       "REPORT_A_PROBLEM": "回報問題",
       "SEND_FEEDBACK": "提供意見",
@@ -3144,13 +3103,50 @@
     "HINTS": {
       "CREATE_TASK": "點擊 + 新增你的第一個任務",
       "CREATE_TASK_TOUCH": "點按 + 新增你的第一個任務",
+      "DECLINED": "沒問題。你隨時可以在說明 → 快速導覽找到它。",
+      "MORE_FALLBACK": "還有更多功能已經啟用：專案、時間追蹤、規劃工具…",
+      "NO_THANKS": "不用了",
+      "SHOW_ME_MORE": "顯示更多 ›",
       "EXPLORE": "隨意點擊探索吧！你可以在側邊欄找到說明。",
       "EXPLORE_TOUCH": "隨意點按探索吧！你可以在選單中找到說明。",
       "TASK_TAP_TOUCH": "點按任務以開啟詳細資訊。",
       "TASK_SWIPE_LEFT_TOUCH": "向左滑動任務以查看更多操作",
+      "TODAY_AND_INBOX": "這個任務已規劃在今天，所以會顯示在{{todayIcon}} <b>今天</b>。沒有自己專案的任務會留在{{inboxIcon}} <b>收件匣</b>。",
+      "TODAY_AND_INBOX_PHONE": "這個任務已規劃在今天，所以會顯示在{{todayIcon}} <b>今天</b>。沒有自己專案的任務會留在{{inboxIcon}} <b>收件匣</b>，位於 ☰ 之下。",
       "TASK_SWIPE_RIGHT_TOUCH": "向右滑動任務以將其標記為完成",
       "OR_PRESS": "或按",
       "SKIP_ARIA": "關閉提示"
+    },
+    "TOUR": {
+      "ADD_SUBTASK": "把它拆開：在任務上按一下滑鼠右鍵，選擇{{subtaskIcon}} <b>新增子工作</b>",
+      "COUNTER": "{{nr}} / {{total}}",
+      "NEXT": "下一步 ›",
+      "ORGANIZE": "建立你自己的<b>專案</b>來分組任務，或建立<b>標籤</b>來標記任務。按 + 即可建立",
+      "ORGANIZE_COLLAPSED": "建立你自己的<b>專案</b>來分組任務，或建立<b>標籤</b>來標記任務。按 {{expandIcon}} 展開側邊欄即可建立",
+      "ORGANIZE_PHONE": "專案與標籤都在 ☰ 之下。建立你自己的<b>專案</b>來分組任務，或建立<b>標籤</b>來標記任務",
+      "PLANNER": "在{{plannerIcon}} <b>規劃工具</b>中規劃接下來幾天",
+      "TASK_MENU_TOUCH": "向左滑動任務以開啟選單：{{playIcon}} <b>開始追蹤時間</b>、{{subtaskIcon}} <b>新增子工作</b>",
+      "TASK_MENU_TOUCH_NO_TRACKING": "向左滑動任務以開啟選單，例如{{subtaskIcon}} <b>新增子工作</b>",
+      "TIMER_RUNNING": "計時器正在執行。再按一次{{playIcon}}或 <kbd>{{key}}</kbd> 即可暫停。",
+      "TIMER_RUNNING_TOUCH": "計時器正在執行。點選上方的{{playIcon}}即可暫停。",
+      "TRACK_TIME": "將游標移到任務上，按下{{playIcon}}即可追蹤時間"
+    },
+    "WANT_MORE": {
+      "BOARDS": "<b>看板</b> · 為你的任務提供看板式欄位",
+      "DONE": "完成",
+      "FINISH_DAY": "<b>結束一天</b> · 回顧並收尾你的一天",
+      "FOCUS_MODE": "<b>專注模式</b> · 番茄鐘與無干擾工作",
+      "FOOTER": "之後可在說明 → 快速導覽再次找到。",
+      "HABITS": "<b>習慣</b> · 逐日追蹤你的日常習慣",
+      "INTRO": "Super Productivity 一開始很簡潔。需要時，還有更多功能：",
+      "OPEN_SETTINGS": "開啟設定 ›",
+      "PLUGINS": "<b>外掛與整合</b> · Jira、GitHub、CalDAV 等",
+      "SCHEDULE": "<b>時間軸</b> · 以時間軸呈現你的一天",
+      "SEARCH": "按 <kbd>{{key}}</kbd> 即可搜尋所有內容。",
+      "SEARCH_PHONE": "從 ☰ 即可搜尋所有內容。",
+      "SHORT_SYNTAX": "新增任務時輸入 <code>#tag</code>、<code>+project</code> 或 <code>@tomorrow</code>。說明 → 操作指南中有更多說明。",
+      "SYNC": "你的資料會留在這部裝置上。同步與備份在設定中。",
+      "TITLE": "想要更多嗎？"
     },
     "SYNC_CTA": "您已在另一台裝置上使用 Super Productivity？",
     "SYNC_CTA_LINK": "設定同步"

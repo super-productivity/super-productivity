@@ -1,4 +1,4 @@
-import { fakeAsync, TestBed, tick } from '@angular/core/testing';
+import { fakeAsync, flushMicrotasks, TestBed, tick } from '@angular/core/testing';
 import { MatDialog } from '@angular/material/dialog';
 import { Store } from '@ngrx/store';
 import { NEVER, Observable, of, ReplaySubject, Subject } from 'rxjs';
@@ -22,12 +22,18 @@ import { T } from 'src/app/t.const';
 import { Task, TaskWithReminderData } from '../tasks/task.model';
 import { DialogViewTaskRemindersComponent } from '../tasks/dialog-view-task-reminders/dialog-view-task-reminders.component';
 import { DateService } from '../../core/date/date.service';
+import { IS_ELECTRON_TOKEN } from '../../app.constants';
 import { getRepeatableTaskId } from '../task-repeat-cfg/get-repeatable-task-id.util';
+import { closeAudioContext } from '../../util/audio-context';
+import { startLoopingAlarm, stopLoopingAlarm } from '../../util/looping-alarm';
 
 describe('ReminderModule dialog opening', () => {
   let matDialogSpy: jasmine.SpyObj<MatDialog>;
+  let uiHelperSpy: jasmine.SpyObj<UiHelperService>;
   let remindersActive$: Subject<TaskWithReminderData[]>;
   let syncDone$: Subject<void>;
+  let isFocusWindow: boolean;
+  let useAlarmStyleReminders: boolean;
 
   const reminder = {
     id: 'task-1',
@@ -39,6 +45,12 @@ describe('ReminderModule dialog opening', () => {
     remindersActive$ = new Subject<TaskWithReminderData[]>();
     syncDone$ = new Subject<void>();
     matDialogSpy = jasmine.createSpyObj('MatDialog', ['open'], { openDialogs: [] });
+    uiHelperSpy = jasmine.createSpyObj('UiHelperService', [
+      'focusApp',
+      'focusAppAfterNotification',
+    ]);
+    isFocusWindow = false;
+    useAlarmStyleReminders = false;
 
     const taskServiceSpy = jasmine.createSpyObj('TaskService', ['currentTaskId']);
     taskServiceSpy.currentTaskId.and.returnValue(null);
@@ -62,10 +74,8 @@ describe('ReminderModule dialog opening', () => {
           provide: SnackService,
           useValue: jasmine.createSpyObj('SnackService', ['open']),
         },
-        {
-          provide: UiHelperService,
-          useValue: jasmine.createSpyObj('UiHelperService', ['focusApp']),
-        },
+        { provide: UiHelperService, useValue: uiHelperSpy },
+        { provide: IS_ELECTRON_TOKEN, useValue: true },
         { provide: NotifyService, useValue: notifyServiceSpy },
         {
           provide: LayoutService,
@@ -81,7 +91,12 @@ describe('ReminderModule dialog opening', () => {
           useValue: jasmine.createSpyObj('SyncWrapperService', ['sync']),
         },
         { provide: Store, useValue: jasmine.createSpyObj('Store', ['dispatch']) },
-        { provide: GlobalConfigService, useValue: { cfg: () => ({}) } },
+        {
+          provide: GlobalConfigService,
+          useValue: {
+            cfg: () => ({ reminder: { isFocusWindow, useAlarmStyleReminders } }),
+          },
+        },
         {
           provide: CapacitorReminderService,
           useValue: jasmine.createSpyObj('CapacitorReminderService', ['initialize'], {
@@ -91,6 +106,61 @@ describe('ReminderModule dialog opening', () => {
       ],
     });
   });
+
+  const triggerReminder = (): void => {
+    TestBed.inject(ReminderModule);
+    syncDone$.next();
+    tick(1000);
+    remindersActive$.next([reminder]);
+  };
+
+  const mockAudioSources = (): jasmine.SpyObj<AudioBufferSourceNode>[] => {
+    const sources: jasmine.SpyObj<AudioBufferSourceNode>[] = [];
+    closeAudioContext();
+    spyOn(window as any, 'AudioContext').and.returnValue({
+      state: 'running',
+      destination: {},
+      close: jasmine.createSpy('close'),
+      createBufferSource: () => {
+        const source = jasmine.createSpyObj<AudioBufferSourceNode>('source', [
+          'connect',
+          'disconnect',
+          'start',
+          'stop',
+        ]);
+        sources.push(source);
+        return source;
+      },
+      createGain: () => ({
+        gain: {},
+        connect: () => undefined,
+        disconnect: () => undefined,
+      }),
+      decodeAudioData: () => Promise.resolve({}),
+    });
+    spyOn(window, 'fetch').and.resolveTo({
+      ok: true,
+      arrayBuffer: () => Promise.resolve(new ArrayBuffer(8)),
+    } as Response);
+    return sources;
+  };
+
+  it('focuses the app via the delayed notification path when the setting is on (#10410)', fakeAsync(() => {
+    isFocusWindow = true;
+    triggerReminder();
+
+    expect(uiHelperSpy.focusAppAfterNotification).toHaveBeenCalledOnceWith({
+      isReminder: true,
+    });
+    expect(uiHelperSpy.focusApp).not.toHaveBeenCalled();
+  }));
+
+  it('does not focus the app when the setting is off', fakeAsync(() => {
+    triggerReminder();
+
+    expect(uiHelperSpy.focusAppAfterNotification).not.toHaveBeenCalled();
+    expect(uiHelperSpy.focusApp).not.toHaveBeenCalled();
+  }));
 
   it('opens task reminder dialog as dismissable (no disableClose)', fakeAsync(() => {
     TestBed.inject(ReminderModule);
@@ -105,6 +175,49 @@ describe('ReminderModule dialog opening', () => {
         reminders: [reminder],
       },
     });
+  }));
+
+  it('loops the alarm and focuses the app until the dialog closes when alarm-style is on', fakeAsync(() => {
+    useAlarmStyleReminders = true;
+    const afterClosed$ = new Subject<void>();
+    matDialogSpy.open.and.returnValue({ afterClosed: () => afterClosed$ } as never);
+    const sources = mockAudioSources();
+
+    triggerReminder();
+    flushMicrotasks();
+
+    expect(uiHelperSpy.focusAppAfterNotification).toHaveBeenCalledOnceWith({
+      isReminder: true,
+    });
+    expect(sources[0].loop).toBe(true);
+    expect(sources[0].start).toHaveBeenCalled();
+
+    afterClosed$.next();
+    flushMicrotasks();
+
+    expect(sources[0].stop).toHaveBeenCalled();
+    closeAudioContext();
+  }));
+
+  it('keeps a newer alarm loop running when the dialog closes', fakeAsync(() => {
+    useAlarmStyleReminders = true;
+    const afterClosed$ = new Subject<void>();
+    matDialogSpy.open.and.returnValue({ afterClosed: () => afterClosed$ } as never);
+    const sources = mockAudioSources();
+
+    triggerReminder();
+    flushMicrotasks();
+    // e.g. the focus-mode break-end alarm replaces the bell
+    startLoopingAlarm('positive.mp3', 50);
+    flushMicrotasks();
+
+    afterClosed$.next();
+    flushMicrotasks();
+
+    expect(sources.length).toBe(2);
+    expect(sources[1].stop).not.toHaveBeenCalled();
+    stopLoopingAlarm();
+    closeAudioContext();
   }));
 });
 
@@ -297,6 +410,71 @@ describe('ReminderModule iOS notification actions', () => {
       }),
     );
     expect(taskServiceSpy.focusTask).toHaveBeenCalledOnceWith('task-1');
+  });
+
+  type AndroidHandlers = {
+    _handleSnoozeAction: (
+      taskId: string,
+      newRemindAt: number,
+      reminderType?: string,
+    ) => Promise<void>;
+    _handleTapAction: (taskId: string, reminderType?: string) => Promise<void>;
+  };
+
+  it('moves only the deadline reminder for an Android deadline snooze', async () => {
+    await (module as unknown as AndroidHandlers)._handleSnoozeAction(
+      'task-1',
+      9_000,
+      'DEADLINE',
+    );
+
+    expect(storeSpy.dispatch).toHaveBeenCalledOnceWith(
+      jasmine.objectContaining({
+        type: TaskSharedActions.setDeadline.type,
+        taskId: 'task-1',
+        deadlineWithTime: 456,
+        deadlineRemindAt: 9_000,
+        // A snooze leaves the deadline as is, so no "Deadline set" snack.
+        isSkipSnack: true,
+      }),
+    );
+  });
+
+  it('ignores a deadline snooze when the deadline was removed meanwhile', async () => {
+    // Without a deadline, setDeadline would store an orphan deadlineRemindAt.
+    taskServiceSpy.getByIdOnce$.and.returnValue(
+      of({ id: 'task-1', title: 'Task 1', isDone: false } as Task),
+    );
+
+    await (module as unknown as AndroidHandlers)._handleSnoozeAction(
+      'task-1',
+      9_000,
+      'DEADLINE',
+    );
+
+    expect(storeSpy.dispatch).not.toHaveBeenCalled();
+  });
+
+  it('keeps rescheduling the task reminder for an untyped Android snooze', async () => {
+    await (module as unknown as AndroidHandlers)._handleSnoozeAction('task-1', 9_000);
+
+    expect(storeSpy.dispatch).toHaveBeenCalledOnceWith(
+      jasmine.objectContaining({
+        type: TaskSharedActions.reScheduleTaskWithTime.type,
+        remindAt: 9_000,
+      }),
+    );
+  });
+
+  it('clears the deadline reminder when tapping an Android deadline notification', async () => {
+    await (module as unknown as AndroidHandlers)._handleTapAction('task-1', 'DEADLINE');
+
+    expect(storeSpy.dispatch).toHaveBeenCalledOnceWith(
+      jasmine.objectContaining({
+        type: TaskSharedActions.clearDeadlineReminder.type,
+        taskId: 'task-1',
+      }),
+    );
   });
 
   it('does not dismiss regular reminders when tapping an iOS due-date notification', async () => {

@@ -650,13 +650,13 @@ body.isDarkTheme
   }
 }
 
-/* Task hover-controls share the schedule-event surface (fill-5) so the swing-
-   in panel reads as the same translucent material as the row it attaches to,
-   instead of an opaque warm-black patch (the default --task-c-bg). Override
-   spans every state since the controls aren't differentiating task state —
-   they just need to look like an interactive surface. */
+/* Hover controls composite fill-5 over an opaque --bg underlay. The tint
+   still matches the schedule-event surface, and the page color underneath
+   stops a long title showing through the icons. One override for every
+   state: the controls are a single interactive surface. */
 body.isDarkTheme .first-line:hover task-hover-controls {
-  background: var(--velvet-fill-5) !important;
+  background:
+    linear-gradient(var(--velvet-fill-5), var(--velvet-fill-5)), var(--bg) !important;
 }
 
 /* Currently-running task — leave the original component styling alone

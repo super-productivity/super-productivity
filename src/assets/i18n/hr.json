@@ -93,6 +93,10 @@
     "INTRO_2": "Ako ti se sviđa ovaj pristup i želiš da projekt ostane živ i razvija se, dobrovoljna donacija je itekako dobrodošla."
   },
   "EXAMPLE_TASKS": {
+    "GETTING_STARTED": {
+      "TITLE": "Neobavezno: savjeti za početak",
+      "NOTES": "Ništa ovdje nije obavezno. Izbriši ovaj zadatak kad god želiš.\n\n- **Danas i Ulazni pretinac**: Danas prikazuje što je planirano za danas. Zadaci bez vlastitog projekta ostaju u pretincu Ulazni pretinac. Zadatak se može pojaviti na oba popisa.\n- **Projekti**: grupiraj zadatke po temi pomoću **+** pored **Projekti** u bočnoj traci.\n- **Sinkronizacija**: čuvaj svoje podatke na više uređaja u **Postavke → Sinkronizacija i sigurnosne kopije**.\n- **Dolaziš iz Todoista ili TickTicka?** Uvezi svoje zadatke u **Postavke → Sinkronizacija i sigurnosne kopije → Uvoz/izvoz**.\n- **Ture**: **Pomoć → Brza tura** u izborniku bočne trake provest će te kroz osnove na tvom vlastitom zadatku, a **Pomoć → Kako** korak po korak prikazuje kratku sintaksu i navigaciju tipkovnicom. Zatvori turu kad god želiš.\n- **Prilagodi po svom**: odaberi temu ili tamni način i uključi ili isključi značajke poput ploča, termina, navika, modusa fokusa ili integracija u **Postavke → Općenito**. Dodaci donose još više."
+    },
     "LEARN_KEYBOARD_SHORTCUTS": {
       "TITLE": "Nauči tipkovničke prečace",
       "NOTES": "Super Productivity je napravljen da se koristi tipkovnicom. Nauči prečace za brži rad.\n\n**Kako krenuti:**\n1. Otvori **izbornik u bočnoj traci**\n2. Idi na **Pomoć**\n3. Klikni **Vodič za navigaciju putem tipkovnice**"
@@ -541,7 +545,8 @@
         "OAUTH_FAILED_WITH_DETAIL": "Autentifikacija nije uspjela: {{detail}}",
         "REMOTE_ISSUE_DELETED": "Udaljeni zadatak je izbrisan. Izbrisati povezani zadatak \"{{taskTitle}}\"?",
         "REMOTE_ISSUE_DELETED_WITH_TIME": "Udaljeni zadatak je izbrisan, ali \"{{taskTitle}}\" ima zabilježeno vrijeme. Svejedno izbrisati?",
-        "TWO_WAY_SYNC_PUSH_FAILED": "Dvosmjerna sinkronizacija (push) nije uspjela: {{errorMsg}}"
+        "TWO_WAY_SYNC_PUSH_FAILED": "Dvosmjerna sinkronizacija (push) nije uspjela: {{errorMsg}}",
+        "POST_TIME_SUCCESS": "{{providerName}}: Uspješno stvoren zapis vremena za {{issueTitle}}"
       },
       "TWO_WAY_SYNC": {
         "AUTO_CREATE_ISSUES": "Automatski stvori probleme za nove zadatke",
@@ -577,6 +582,15 @@
         "LOAD_OPTIONS_FIRST": "Najprije učitaj opcije",
         "NO_OPTIONS_FOUND_HELP": "Nisu pronađene opcije. Provjeri podatke veze i ponovno učitaj opcije.",
         "OAUTH_UNAVAILABLE_WEB": "Dostupno u aplikacijama za računala i mobilne uređaje. Sinkronizirane postavke ostaju spremljene, ali se podaci uživo ne mogu učitati u web-aplikaciji."
+      },
+      "DIALOG_TRACK_TIME": {
+        "ACTIVITY": "Aktivnost",
+        "INVALID_DATE": "Unesena vrijednost nije datum!",
+        "POST_TIME": "Pošalji vrijeme",
+        "STARTED": "Započeto",
+        "SUBMIT_TIME_FOR": "Pošalji vrijeme u {{providerName}} za",
+        "TIME_SPENT": "Utrošeno vrijeme",
+        "TITLE": "{{providerName}}: Slanje dnevnika rada"
       }
     },
     "ISSUE_PANEL": {
@@ -800,33 +814,6 @@
         "REMINDER_NEEDS_TEXT": "Napiši jedno razmišljanje prije nego zatražiš podsjetnika",
         "REMINDER_TASK_TITLE": "Vrati se na bilješku razmišljanja",
         "TITLE": "Bilješka razmišljanja"
-      }
-    },
-    "NEXTCLOUD_DECK": {
-      "FORM": {
-        "BASE_URL": "Osnovni URL za Nextcloud",
-        "FILTER_BY_ASSIGNEE": "Uvezi samo kartice dodijeljene meni",
-        "IS_TRANSITION_ISSUES_ENABLED": "Sinkroniziraj status završetka i naslov nazad u Nextcloud Deck",
-        "PASSWORD": "Tvoja lozinka za Nextcloud aplikaciju",
-        "POLL_INTERVAL_MINUTES": "Interval provjere (minute)",
-        "TITLE_TEMPLATE": "Predložak naslova zadataka",
-        "TITLE_TEMPLATE_DESCRIPTION": "Varijable: {CARD_TITLE}, {BOARD}, {COLUMN}, {ID}, {LABELS}. Primjer: [{BOARD}: {COLUMN}] {CARD_TITLE}. Ostavi prazno za samo naslov kartice.",
-        "USERNAME": "Tvoje Nextcloud korisničko ime"
-      },
-      "FORM_SECTION": {
-        "HELP": "Podesi integraciju s Nextcloud Deckom da uvozi kartice kao zadatke. Koristi lozinku aplikacije za prijavu."
-      },
-      "ISSUE_CONTENT": {
-        "ASSIGNED_USERS": "Dodijeljeni korisnici",
-        "DECK_DESCRIPTION": "Opis u Decku",
-        "LABELS": "Labeli",
-        "STACK": "Stupac"
-      },
-      "S": {
-        "BOARD_NOT_FOUND": "Nextcloud Deck: Ploča nije pronađena",
-        "CARD_NOT_FOUND": "Nextcloud Deck: Čini se da je kartica \"{{issueId}}\" izbrisana na serveru.",
-        "ERR_CREDENTIALS_MISSING": "Najprije unesi Nextcloud URL, korisničko ime i lozinku.",
-        "ERR_LOAD_BOARDS": "Neuspjelo učitavanje Deck ploča. Provjeri podatke za prijavu."
       }
     },
     "NOTE": {
@@ -1087,44 +1074,6 @@
       "NO_DATA": "Još nema praćenog rada ove godine. Završi zadatke za prikaz povijesti ovdje.",
       "PAGE_TITLE": "Brza povijest",
       "WEEK_TITLE": "Tjedan {{nr}} ({{timeSpent}})"
-    },
-    "REDMINE": {
-      "DIALOG_TRACK_TIME": {
-        "ACTIVITY": "Aktivnost",
-        "INVALID_DATE": "Unesena vrijednost nije datum!",
-        "POST_TIME": "Pošalji vrijeme",
-        "STARTED": "Započeto",
-        "SUBMIT_TIME_FOR": "Pošalji vrijeme u Redmine za",
-        "TIME_SPENT": "Utrošeno vrijeme",
-        "TITLE": "Redmine: Slanje dnevnika rada"
-      },
-      "FORM": {
-        "API_KEY": "API ključ",
-        "HOST": "Host (npr. https://redmine.org)",
-        "IS_SHOW_TIME_TRACKING_DIALOG": "Prikaži dijalog za praćenje vremena za Redmine",
-        "IS_SHOW_TIME_TRACKING_DIALOG_DESCRIPTION": "Zahtijeva uključen time tracking modul u Redmine projektu",
-        "IS_SHOW_TIME_TRACKING_DIALOG_FOR_EACH_SUB_TASK": "Prikaži dijalog za svaki podzadatak",
-        "PROJECT_ID": "ID projekta",
-        "PROJECT_ID_DESCRIPTION": "Može se naći u URL-u kad otvoriš projekt u browseru.",
-        "SCOPE": "Opseg",
-        "SCOPE_ALL": "Sve",
-        "SCOPE_ASSIGNED": "Dodijeljeno meni",
-        "SCOPE_CREATED": "Stvoreno od mene"
-      },
-      "FORM_SECTION": {
-        "HELP": "<p>Ovdje možeš podesiti Super Productivity da prikazuje otvorene Redmine probleme (online ili vlastiti hosting) za određeni projekt u ploči za stvaranje zadataka u dnevnom planiranju. Prikazat će se kao prijedlozi s poveznicom i dodatnim informacijama.</p><p>Također možeš automatski uvesti sve otvorene probleme.</p>",
-        "TITLE": "Redmine"
-      },
-      "ISSUE_CONTENT": {
-        "AUTHOR": "Autor",
-        "DESCRIPTION": "Opis",
-        "MARK_AS_CHECKED": "Označi aktualiziranja kao pročitana",
-        "PRIORITY": "Prioritet",
-        "STATUS": "Status"
-      },
-      "S": {
-        "POST_TIME_SUCCESS": "Redmine: Uspješno stvoren zapis vremena za {{issueTitle}}"
-      }
     },
     "REFLECTION_NOTE": {
       "ACTION_DISMISS": "Odbaci",
@@ -2899,8 +2848,17 @@
     },
     "SOUND": {
       "BREAK_REMINDER_SOUND": "Zvuk podsjetnika za pauzu",
+      "DING": "Zvuk zvona",
       "DONE_SOUND": "Zvuk završetka zadatka",
       "IS_INCREASE_DONE_PITCH": "Povećaj ton za svaki završeni zadatak",
+      "SMALL_DING": "Zvuk malog zvona",
+      "SOUND_1": "Zvuk 1",
+      "SOUND_2": "Zvuk 2",
+      "SOUND_3": "Zvuk 3",
+      "SOUND_4": "Zvuk 4",
+      "SOUND_5": "Zvuk 5",
+      "SOUND_6": "Zvuk 6",
+      "SOUND_7": "Zvuk 7",
       "TITLE": "Zvuk",
       "TRACK_TIME_SOUND": "Zvuk podsjetnika praćenja vremena",
       "VOLUME": "Glasnoća"
@@ -3035,6 +2993,7 @@
       "CONTRIBUTE": "Doprinos",
       "GET_HELP_ONLINE": "Pomoć online",
       "KEYBOARD": "Kako: Napredna tipkovnica",
+      "QUICK_TOUR": "Brza tura",
       "REDDIT_COMMUNITY": "Reddit zajednica",
       "REPORT_A_PROBLEM": "Prijavi problem",
       "SEND_FEEDBACK": "Pošalji povratnu informaciju",
@@ -3126,13 +3085,50 @@
     "HINTS": {
       "CREATE_TASK": "Klikni + za dodavanje prvog zadatka",
       "CREATE_TASK_TOUCH": "Dodirni + za dodavanje prvog zadatka",
+      "DECLINED": "Nema problema. Nalazi se u Pomoć → Brza tura kad god želiš.",
+      "MORE_FALLBACK": "Više je već uključeno: projekti, praćenje vremena, Planer…",
+      "NO_THANKS": "Ne, hvala",
+      "SHOW_ME_MORE": "Pokaži mi više ›",
       "EXPLORE": "Slobodno klikaj i istražuj! Pomoć možeš pronaći u bočnoj traci.",
       "EXPLORE_TOUCH": "Slobodno istražuj. Pomoć možeš pronaći u bočnoj traci.",
       "TASK_TAP_TOUCH": "Dodirni zadatak za otvaranje njegovih detalja.",
       "TASK_SWIPE_LEFT_TOUCH": "Povuci zadatak lijevo za više akcija",
+      "TODAY_AND_INBOX": "Ovaj zadatak je planiran za danas, pa se prikazuje u {{todayIcon}} <b>Danas</b>. Zadaci bez vlastitog projekta ostaju u {{inboxIcon}} <b>Ulazni pretinac</b>.",
+      "TODAY_AND_INBOX_PHONE": "Ovaj zadatak je planiran za danas, pa se prikazuje u {{todayIcon}} <b>Danas</b>. Zadaci bez vlastitog projekta ostaju u {{inboxIcon}} <b>Ulazni pretinac</b>, pod ☰.",
       "TASK_SWIPE_RIGHT_TOUCH": "Povuci zadatak desno da ga označiš kao završen",
       "OR_PRESS": "ili pritisni",
       "SKIP_ARIA": "Zanemari upute"
+    },
+    "TOUR": {
+      "ADD_SUBTASK": "Razdvoji ga: desni klik na zadatak i odaberi {{subtaskIcon}} <b>Dodaj podzadatak</b>",
+      "COUNTER": "{{nr}} od {{total}}",
+      "NEXT": "Sljedeće ›",
+      "ORGANIZE": "Napravi vlastiti <b>projekt</b> za grupiranje zadataka ili <b>oznaku</b> za njihovo označavanje. Napravi ga pomoću +",
+      "ORGANIZE_COLLAPSED": "Napravi vlastiti <b>projekt</b> za grupiranje zadataka ili <b>oznaku</b> za njihovo označavanje. Proširi bočnu traku pomoću {{expandIcon}} da ga napraviš",
+      "ORGANIZE_PHONE": "Projekti i oznake nalaze se pod ☰. Napravi vlastiti <b>projekt</b> za grupiranje zadataka ili <b>oznaku</b> za njihovo označavanje",
+      "PLANNER": "Planiraj sljedeće dane u {{plannerIcon}} <b>Planer</b>",
+      "TASK_MENU_TOUCH": "Povuci zadatak ulijevo za njegov izbornik: {{playIcon}} <b>Pokreni praćenje vremena</b>, {{subtaskIcon}} <b>Dodaj podzadatak</b>",
+      "TASK_MENU_TOUCH_NO_TRACKING": "Povuci zadatak ulijevo za njegov izbornik, npr. {{subtaskIcon}} <b>Dodaj podzadatak</b>",
+      "TIMER_RUNNING": "Mjerač vremena radi. Ponovno pritisni {{playIcon}} ili <kbd>{{key}}</kbd> za pauzu.",
+      "TIMER_RUNNING_TOUCH": "Mjerač vremena radi. Dodirni {{playIcon}} na vrhu za pauzu.",
+      "TRACK_TIME": "Pređi mišem preko zadatka i pritisni {{playIcon}} za praćenje vremena"
+    },
+    "WANT_MORE": {
+      "BOARDS": "<b>Ploče</b> · kanban stupci za tvoje zadatke",
+      "DONE": "Gotovo",
+      "FINISH_DAY": "<b>Završi dan</b> · pregledaj i zaokruži svoj dan",
+      "FOCUS_MODE": "<b>Modus fokusa</b> · pomodoro i rad bez ometanja",
+      "FOOTER": "Ovo ponovno možeš naći u Pomoć → Brza tura.",
+      "HABITS": "<b>Navike</b> · prati rutine iz dana u dan",
+      "INTRO": "Super Productivity počinje mirno. Više ti je na raspolaganju kad zatreba:",
+      "OPEN_SETTINGS": "Otvori postavke ›",
+      "PLUGINS": "<b>Dodaci i integracije</b> · Jira, GitHub, CalDAV i više",
+      "SCHEDULE": "<b>Raspored</b> · tvoj dan na vremenskoj crti",
+      "SEARCH": "Pretraži sve pomoću <kbd>{{key}}</kbd>.",
+      "SEARCH_PHONE": "Pretraži sve iz ☰.",
+      "SHORT_SYNTAX": "Upiši <code>#tag</code>, <code>+project</code> ili <code>@tomorrow</code> dok dodaješ zadatak. Pomoć → Kako prikazuje više.",
+      "SYNC": "Tvoji podaci ostaju na ovom uređaju. Sinkronizacija i sigurnosne kopije nalaze se u postavke.",
+      "TITLE": "Želiš više?"
     },
     "SYNC_CTA": "Već koristiš Super Productivity na drugom uređaju?",
     "SYNC_CTA_LINK": "Postavi sinkronizaciju"

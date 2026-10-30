@@ -16,7 +16,10 @@ export interface NativeCaptureSource<T extends { id: string }> {
   getPending(): Promise<T[]>;
   /** Invalid entries are skipped and kept on disk so they cannot block later ones. */
   isValid(capture: T): boolean;
-  /** Dispatches exactly one addTask whose task id is `capture.id`. */
+  /**
+   * Dispatches exactly one addTask whose task id is `capture.id`, plus at most
+   * the addTaskRepeatCfgToTask that makes that task recurring.
+   */
   createTask(capture: T): void;
   /** Deletes one entry; rejects if it could not be deleted. */
   acknowledge(id: string): Promise<void>;

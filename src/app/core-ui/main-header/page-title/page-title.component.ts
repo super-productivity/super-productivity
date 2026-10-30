@@ -1,4 +1,10 @@
-import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  inject,
+  viewChild,
+} from '@angular/core';
 import { NavigationEnd, Router, RouterLink } from '@angular/router';
 import { MatRipple } from '@angular/material/core';
 import { MatTooltip } from '@angular/material/tooltip';
@@ -9,13 +15,14 @@ import { WorkContextMenuComponent } from '../../work-context-menu/work-context-m
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { T } from '../../../t.const';
 import { BreakpointObserver } from '@angular/cdk/layout';
-import { toSignal } from '@angular/core/rxjs-interop';
+import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { of } from 'rxjs';
 import { filter, map, switchMap } from 'rxjs/operators';
 import { Store } from '@ngrx/store';
 import { WorkContextService } from '../../../features/work-context/work-context.service';
 import { WorkContextType } from '../../../features/work-context/work-context.model';
 import { DEFAULT_PROJECT_ICON } from '../../../features/project/project.const';
+import { NAV_SECTION_ICON } from '../../magic-side-nav/nav-section-icons.const';
 import { isSingleEmoji } from '../../../util/extract-first-emoji';
 import { selectIsProjectSharedOnPlainspace } from '../../../features/issue/store/issue-provider.selectors';
 import { PlainspaceShareService } from '../../../features/issue/providers/plainspace/plainspace-share.service';
@@ -23,6 +30,9 @@ import { TaskViewCustomizerService } from '../../../features/task-view-customize
 import { TaskViewCustomizerPanelComponent } from '../../../features/task-view-customizer/task-view-customizer-panel/task-view-customizer-panel.component';
 import { GlobalConfigService } from '../../../features/config/global-config.service';
 import { KeyboardConfig } from '@sp/keyboard-config';
+import { PluginBridgeService } from '../../../plugins/plugin-bridge.service';
+import { PluginService } from '../../../plugins/plugin.service';
+import { PluginIconComponent } from '../../../plugins/ui/plugin-icon/plugin-icon.component';
 
 @Component({
   selector: 'page-title',
@@ -39,6 +49,7 @@ import { KeyboardConfig } from '@sp/keyboard-config';
     WorkContextMenuComponent,
     TaskViewCustomizerPanelComponent,
     TranslatePipe,
+    PluginIconComponent,
   ],
   template: `
     @if (activeWorkContextTypeAndId()) {
@@ -48,7 +59,18 @@ import { KeyboardConfig } from '@sp/keyboard-config';
         mat-ripple
         routerLink="/active/tasks"
       >
-        @if (!isSpecialSection() && activeWorkContext()) {
+        @if (sectionIcon(); as icon) {
+          <!-- Same icon the side nav shows for this section; it inherits the
+               title color, as the nav's route icons inherit theirs. -->
+          <mat-icon class="page-title-icon">{{ icon }}</mat-icon>
+        } @else if (pluginId(); as id) {
+          <plugin-icon
+            class="page-title-icon"
+            [pluginId]="id"
+            [size]="20"
+            [fallbackIcon]="pluginFallbackIcon()"
+          ></plugin-icon>
+        } @else if (activeWorkContext()) {
           <mat-icon
             class="page-title-icon"
             [class.page-title-icon--emoji]="isContextEmojiIcon()"
@@ -81,6 +103,7 @@ import { KeyboardConfig } from '@sp/keyboard-config';
           </button>
           @if (isWorkViewPage()) {
             <button
+              #customizerMenuTrigger
               class="task-filter-btn"
               [class.isCustomized]="taskViewCustomizerService.isCustomized()"
               [matMenuTriggerFor]="customizerPanel.menu"
@@ -217,7 +240,7 @@ import { KeyboardConfig } from '@sp/keyboard-config';
         min-width: 0;
       }
 
-      /* Mirrors the side-nav work-context icon so the same project/tag reads
+      /* Mirrors the side-nav icon so the same project/tag or section reads
          identically in the nav and the header (icon value, emoji handling and
          theme/tag color). See nav-item.component. */
       /* One source for the size: the title's floor has to add this box on top
@@ -327,8 +350,22 @@ export class PageTitleComponent {
   private _translateService = inject(TranslateService);
   private _store = inject(Store);
   private _plainspaceShareService = inject(PlainspaceShareService);
+  private _pluginBridge = inject(PluginBridgeService);
+  private _pluginService = inject(PluginService);
 
   readonly T = T;
+
+  // Absent off the work view (and on xxxs screens), where the shortcut then
+  // does nothing — matching the button not being there to click.
+  private _customizerMenuTrigger = viewChild('customizerMenuTrigger', {
+    read: MatMenuTrigger,
+  });
+
+  constructor() {
+    this.taskViewCustomizerService.openMenuRequest$
+      .pipe(takeUntilDestroyed())
+      .subscribe(() => this._customizerMenuTrigger()?.openMenu());
+  }
 
   // Get data directly from services instead of inputs
   activeWorkContextTitle = toSignal(this._workContextService.activeWorkContextTitle$);
@@ -364,30 +401,61 @@ export class PageTitleComponent {
     initialValue: this._router.url.split(/[?#]/, 1)[0],
   });
 
-  // Routes that get their own title and have no work-context menu.
+  // Routes that get their own title and icon and have no work-context menu.
   // Order is irrelevant — patterns are mutually exclusive end-anchors.
-  private static readonly _ROUTE_TITLE_KEYS: ReadonlyArray<readonly [RegExp, string]> = [
-    [/schedule$/, T.MH.SCHEDULE],
-    [/planner$/, T.MH.PLANNER],
-    [/boards$/, T.MH.BOARDS],
-    [/habits$/, T.MH.HABITS],
-    [/search$/, T.MH.SEARCH],
-    [/scheduled-list$/, T.MH.ALL_PLANNED_LIST],
-    [/donate$/, T.MH.DONATE],
-    [/config$/, T.PS.GLOBAL_SETTINGS],
-    [/archived-projects$/, T.MH.ARCHIVED_PROJECTS],
+  private static readonly _ROUTE_SECTIONS: ReadonlyArray<
+    readonly [RegExp, string, string]
+  > = [
+    [/schedule$/, T.MH.SCHEDULE, NAV_SECTION_ICON.SCHEDULE],
+    [/planner$/, T.MH.PLANNER, NAV_SECTION_ICON.PLANNER],
+    [/boards$/, T.MH.BOARDS, NAV_SECTION_ICON.BOARDS],
+    [/habits$/, T.MH.HABITS, NAV_SECTION_ICON.HABITS],
+    [/search$/, T.MH.SEARCH, NAV_SECTION_ICON.SEARCH],
+    [/scheduled-list$/, T.WW.RECURRING_TASKS, NAV_SECTION_ICON.RECURRING_TASKS],
+    [/donate$/, T.MH.DONATE, NAV_SECTION_ICON.DONATE],
+    [/config$/, T.PS.GLOBAL_SETTINGS, NAV_SECTION_ICON.SETTINGS],
+    [/archived-projects$/, T.MH.ARCHIVED_PROJECTS, NAV_SECTION_ICON.ARCHIVED_PROJECTS],
   ];
 
-  private _routeTitleKey = computed(
-    () => PageTitleComponent._ROUTE_TITLE_KEYS.find(([re]) => re.test(this._url()))?.[1],
+  private _routeSection = computed(() =>
+    PageTitleComponent._ROUTE_SECTIONS.find(([re]) => re.test(this._url())),
   );
+  private _routeTitleKey = computed(() => this._routeSection()?.[1]);
+  sectionIcon = computed(() => this._routeSection()?.[2]);
 
-  isSpecialSection = computed(() => !!this._routeTitleKey());
+  // Plugin pages are titled like the built-in sections, with the label and
+  // icon of the plugin's nav entry.
+  pluginId = computed(() => this._url().match(/^\/plugins\/([^/]+)\/index$/)?.[1]);
+  private _pluginMenuEntry = computed(() => {
+    const id = this.pluginId();
+    return id
+      ? this._pluginBridge.menuEntries().find((e) => e.pluginId === id)
+      : undefined;
+  });
+  pluginFallbackIcon = computed(() => {
+    const icon = this._pluginMenuEntry()?.icon;
+    // An SVG path is not a Material icon name.
+    return icon && !/\.svg$/i.test(icon) ? icon : 'extension';
+  });
+
+  isSpecialSection = computed(() => !!this._routeSection() || !!this.pluginId());
   isWorkViewPage = computed(() => /tasks$/.test(this._url()));
 
   displayTitle = computed(() => {
     const key = this._routeTitleKey();
-    return key ? this._translateService.instant(key) : this.activeWorkContextTitle();
+    if (key) {
+      return this._translateService.instant(key);
+    }
+    const pluginId = this.pluginId();
+    if (pluginId) {
+      // No menu entry when the manifest sets isSkipMenuEntry.
+      return (
+        this._pluginMenuEntry()?.label ??
+        this._pluginService.getAllPluginStates().get(pluginId)?.manifest.name ??
+        pluginId
+      );
+    }
+    return this.activeWorkContextTitle();
   });
 
   // Icon shown next to the title, defaulting the same way the nav does

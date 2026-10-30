@@ -18,6 +18,16 @@ npm run e2e:webdav:file e2e/tests/sync/webdav-conflict-use-remote-restore-8107.s
 
 For the full SuperSync and WebDAV suites, manually dispatch [E2E Tests (Scheduled)](../.github/workflows/e2e-scheduled.yml) on the branch. Its `grep` input filters SuperSync; `webdav_grep` filters WebDAV, and `run_webdav` can omit that job. Local focused runs use the npm scripts above.
 
+### Agent sessions
+
+Several agent sessions share one machine, so keep local runs small:
+
+- Prefix local runs with `E2E_WORKERS=2` (an integer); the local default starts up to 12 browsers per run. A `--workers` flag overrides it, and the provider scripts already pin their own.
+- Run only focused files. Never run `npm run e2e` or `e2e:all` locally; dispatch the scheduled workflow instead.
+- The first run in a fresh worktree builds the bundled plugins and cold-compiles Angular, which can take several minutes. Give it a long command timeout or run it in the background.
+- A sandboxed Linux session cannot run the provider `:file` scripts: the sandbox has its own network namespace, so their Docker servers are unreachable (measured 2026-10). Push the branch, then dispatch the scheduled workflow with a narrow filter, e.g. `gh workflow run e2e-scheduled.yml --ref <branch> -f grep="<test name>" -f run_webdav=false -f run_released_clients=false`, then confirm in the job log that the intended tests ran rather than skipped.
+- `http://localhost:4242 is already used` means another session on a shared network (macOS or unsandboxed) is running E2E. Wait and retry; never kill a process you did not start.
+
 ## Author tests
 
 Regular UI tests import `test` and `expect` from [test.fixture.ts](fixtures/test.fixture.ts). A test in `e2e/tests/feature/` uses `../../fixtures/test.fixture`; a deeper directory needs another `../`. The fixture creates an isolated browser context per test, skips onboarding, and waits for the app to load. Its `workViewPage`, `taskPage`, `projectPage`, `settingsPage`, `dialogPage`, `plannerPage`, `syncPage`, `tagPage`, `notePage`, and `sideNavPage` fixtures wrap common UI actions. It also provides `testPrefix` for isolated names.
@@ -41,3 +51,5 @@ Provider tests use [supersync.fixture.ts](fixtures/supersync.fixture.ts) or [web
 For a sync fix, follow the root guide's reproduction-first requirement: make the E2E test fail on the reported real-data case, then pass with the fix. Run the focused file with its matching provider command. Run `npm run checkFile <filepath>` for every changed `.ts` or `.scss` file, including specs. For browser-level test behavior, consult [Playwright configuration](playwright.config.ts) and [global setup](global-setup.ts) before changing timeouts or server startup.
 
 For product videos under `e2e/store-video/`, also read its [task-local guide](store-video/AGENTS.md).
+
+Behavior that needs a real Android IME, safe-area insets or a split visual viewport cannot be covered here; use the human-run [Android verification harness](../tools/android-verify/README.md).

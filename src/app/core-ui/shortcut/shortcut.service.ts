@@ -7,8 +7,9 @@ import { GlobalConfigService } from '../../features/config/global-config.service
 import { ActivatedRoute, Router } from '@angular/router';
 import { LayoutService } from '../layout/layout.service';
 import { TaskService } from '../../features/tasks/task.service';
-import { MatDialog, MatDialogRef } from '@angular/material/dialog';
+import { MatDialog, MatDialogRef, MatDialogState } from '@angular/material/dialog';
 import { DialogAddNoteComponent } from '../../features/note/dialog-add-note/dialog-add-note.component';
+import { DialogFullscreenMarkdownComponent } from '../../ui/dialog-fullscreen-markdown/dialog-fullscreen-markdown.component';
 import { IPC } from '../../../../electron/shared-with-frontend/ipc-events.const';
 import { UiHelperService } from '../../features/ui-helper/ui-helper.service';
 import { WorkContextService } from '../../features/work-context/work-context.service';
@@ -23,6 +24,7 @@ import { PluginBridgeService } from '../../plugins/plugin-bridge.service';
 import { TaskShortcutService } from '../../features/tasks/task-shortcut.service';
 import { TODAY_TAG } from '../../features/tag/tag.const';
 import { DialogConfirmComponent } from '../../ui/dialog-confirm/dialog-confirm.component';
+import { TaskViewCustomizerService } from '../../features/task-view-customizer/task-view-customizer.service';
 
 // NOTE: Relying on Angular CDK overlay CSS class names keeps shortcut suppression simple.
 // If CDK changes these class names we only need to adjust the helpers below.
@@ -70,6 +72,7 @@ export class ShortcutService {
   private _taskShortcutService = inject(TaskShortcutService);
   private _overlayContainer = inject(OverlayContainer);
   private _isNoteTaskHandoffPending = false;
+  private _taskViewCustomizerService = inject(TaskViewCustomizerService);
 
   isCtrlPressed$: Observable<boolean> = fromEvent(document, 'keydown').pipe(
     switchMap((ev: Event) => {
@@ -120,55 +123,77 @@ export class ShortcutService {
       return;
     }
 
-    const addNoteDialogRef = this._getAddNoteDialogRef();
-    if (!addNoteDialogRef) {
+    const noteDialogRef = this._getFullscreenNoteDialogRef();
+    if (!noteDialogRef) {
       this._layoutService.showAddTaskBar();
+      return;
+    }
+
+    const noteDialog = noteDialogRef.componentInstance;
+    if (
+      noteDialogRef.getState() !== MatDialogState.OPEN ||
+      noteDialog.isDiscardConfirmOpen
+    ) {
       return;
     }
 
     this._isNoteTaskHandoffPending = true;
     try {
-      const addNoteDialog = addNoteDialogRef.componentInstance;
-      const noteContent = addNoteDialog.data?.content?.trim() || '';
-
-      if (noteContent.length > 0) {
-        const shouldSave = await firstValueFrom(
+      const needsConfirmation =
+        noteDialog instanceof DialogAddNoteComponent
+          ? noteDialog.data.content.trim().length > 0
+          : noteDialog.hasUnsavedChanges;
+      let shouldSave =
+        !(noteDialog instanceof DialogAddNoteComponent) && !needsConfirmation;
+      if (needsConfirmation) {
+        // Navigation must not save the editor behind the save/discard prompt.
+        noteDialog.isDiscardConfirmOpen = true;
+        const result = await firstValueFrom(
           this._matDialog
             .open(DialogConfirmComponent, {
               data: {
                 message: T.F.NOTE.D_FULLSCREEN.CONFIRM_SAVE_BEFORE_OPENING_NEW_TASK,
                 okTxt: T.G.SAVE,
                 cancelTxt: T.G.DISCARD,
+                // Discard sits in the cancel slot, which gets initial focus by
+                // default; Enter must keep the edit, not throw it away.
+                isFocusConfirm: true,
               },
             })
             .afterClosed(),
         );
+        noteDialog.isDiscardConfirmOpen = false;
 
-        if (typeof shouldSave !== 'boolean') {
+        if (typeof result !== 'boolean') {
           return;
         }
-
-        if (shouldSave) {
-          addNoteDialog.close();
-        } else {
-          addNoteDialog.closeAfterConfirmedDiscard();
-        }
-      } else {
-        addNoteDialog.closeAfterConfirmedDiscard();
+        shouldSave = result;
+      }
+      if (noteDialogRef.getState() !== MatDialogState.OPEN) {
+        return;
       }
 
-      await firstValueFrom(addNoteDialogRef.afterClosed());
+      const closed = firstValueFrom(noteDialogRef.afterClosed());
+      if (shouldSave) {
+        noteDialog.close();
+      } else {
+        noteDialog.closeAfterConfirmedDiscard();
+      }
+
+      await closed;
       this._layoutService.showAddTaskBar();
     } finally {
+      noteDialog.isDiscardConfirmOpen = false;
       this._isNoteTaskHandoffPending = false;
     }
   }
 
-  private _getAddNoteDialogRef(): MatDialogRef<DialogAddNoteComponent> | null {
+  private _getFullscreenNoteDialogRef(): MatDialogRef<DialogFullscreenMarkdownComponent> | null {
     return (
       (this._matDialog.openDialogs.find(
-        (dialogRef) => dialogRef.componentInstance instanceof DialogAddNoteComponent,
-      ) as MatDialogRef<DialogAddNoteComponent> | undefined) || null
+        (dialogRef) =>
+          dialogRef.componentInstance instanceof DialogFullscreenMarkdownComponent,
+      ) as MatDialogRef<DialogFullscreenMarkdownComponent> | undefined) || null
     );
   }
 
@@ -227,15 +252,26 @@ export class ShortcutService {
       this._router.navigate(['/tag/' + TODAY_TAG.id + '/tasks']);
     } else if (checkKeyCombo(ev, keys.goToSettings)) {
       this._router.navigate(['/config']);
-    } else if (checkKeyCombo(ev, keys.goToScheduledView)) {
+    } else if (
+      checkKeyCombo(ev, keys.goToScheduledView) &&
+      this._configService.appFeatures().isSchedulerEnabled
+    ) {
       this._router.navigate(['/schedule']);
+    } else if (
+      checkKeyCombo(ev, keys.goToPlanner) &&
+      this._configService.appFeatures().isPlannerEnabled
+    ) {
+      this._router.navigate(['/planner']);
 
       // } else if (checkKeyCombo(ev, keys.goToDailyAgenda)) {
       //   this._router.navigate(['/daily-agenda']);
       //
       // } else if (checkKeyCombo(ev, keys.goToFocusMode)) {
       //   this._router.navigate(['/focus-view']);
-    } else if (checkKeyCombo(ev, keys.showSearchBar)) {
+    } else if (
+      checkKeyCombo(ev, keys.showSearchBar) &&
+      this._configService.appFeatures().isSearchEnabled
+    ) {
       this._router.navigate(['/search']);
       ev.preventDefault();
     } else if (checkKeyCombo(ev, keys.focusSideNav)) {
@@ -288,7 +324,7 @@ export class ShortcutService {
       this._layoutService.toggleNotes();
     } else if (checkKeyCombo(ev, keys.toggleTaskViewCustomizerPanel)) {
       ev.preventDefault();
-      this._layoutService.toggleTaskViewCustomizerPanel();
+      this._taskViewCustomizerService.requestOpenMenu();
     } else if (checkKeyCombo(ev, keys.toggleIssuePanel)) {
       ev.preventDefault();
       this._layoutService.toggleAddTaskPanel();

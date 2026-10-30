@@ -31,7 +31,15 @@
 
   // Show additional buttons on focus/hover (desktop)
   //&:focus-within .additional-btns,
-  &:hover .additional-btns {
+  @include hoverWithPointer {
+    .additional-btns {
+      visibility: visible;
+      pointer-events: auto;
+    }
+  }
+
+  // The quick tour points at a + without a hover to reveal it.
+  .additional-btn.onboarding-pulse {
     visibility: visible;
     pointer-events: auto;
   }
@@ -89,8 +97,7 @@
     padding: var(--s-half) !important;
   }
 
-  &:focus,
-  &:hover {
+  @include interactiveHighlight {
     background-color: var(--sidenav-hover-bg);
     color: var(--sidenav-text-hover);
   }
@@ -217,6 +224,17 @@
     // Minimize repaint
     transform: translateZ(0);
   }
+}
+
+// Secondary text colour, so the link does not compete with the projects above
+// it. Hover and active states keep their own tokens.
+.archived-projects-link {
+  --sidenav-text: var(--sidenav-text-secondary);
+  // Not a tree row, so it takes the top-level rows' indent itself and moves
+  // with them when the panel collapses (see `.item` in tree-dnd).
+  transition: padding-left
+    var(--sidenav-transition-duration, var(--transition-duration-m))
+    var(--sidenav-transition-timing, var(--ani-standard-timing));
 }
 
 // Drag performance optimizations - keep these for smooth drag operations

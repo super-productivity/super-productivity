@@ -119,7 +119,7 @@ describe('FocusMode Bug #7856: in-app timer drifts from notification after backg
     expect(state.lastCompletedDuration).toBe(34 * MIN);
   });
 
-  // The resume re-sync effect (AndroidFocusModeEffects.resyncFocusTimerOnResume$)
+  // The Android resume handler (handleAndroidResume in android-foreground-tracking.effects)
   // dispatches `tick()` unconditionally. These two guarantee that is safe — the
   // reducer must NOT advance a paused or idle timer.
   it('D: a resume tick must NOT advance a PAUSED session (paused time is not lost)', () => {

@@ -154,7 +154,9 @@ export const backupStrHasSyncEnabled = (str: string | null | undefined): boolean
  * empty/corrupt (e.g. a half-written eviction artifact) — NOT to second-guess a
  * legitimately smaller newer backup (a bulk-archive or delete makes the newer
  * generation smaller, and silently restoring the older/larger one would
- * resurrect data the user removed). See issue #7901.
+ * resurrect data the user removed). See issue #7901. Note the previous slot is
+ * not always one cycle older: `shouldKeepPrevBackupSlot` can hold an older,
+ * larger generation there.
  */
 export const selectBestBackupStr = (
   primary: string | null | undefined,
@@ -169,4 +171,24 @@ export const selectBestBackupStr = (
   // Neither slot is usable — return any non-empty raw blob so the caller can
   // still try to parse/surface it; treat empty strings as "no backup" (null).
   return primary || prev || null;
+};
+
+/**
+ * Write-path rule for the two-generation mobile ring (#7892): keep the previous
+ * slot instead of promoting the primary into it while the primary holds less
+ * than half the previous slot's tasks (a corrupt primary counts as empty).
+ * Newest-first rotation otherwise pushes a good backup out two writes after
+ * the store restarts near-empty without being restored. Trade-off: after a
+ * deliberate large delete the previous slot stays at the older, larger
+ * generation until the data grows back.
+ */
+export const shouldKeepPrevBackupSlot = (
+  primary: string | null | undefined,
+  prev: string | null | undefined,
+): boolean => {
+  const prevTaskCount = countAllTasksInBackupStr(prev);
+  if (!prevTaskCount) {
+    return false;
+  }
+  return (countAllTasksInBackupStr(primary) ?? 0) * 2 < prevTaskCount;
 };

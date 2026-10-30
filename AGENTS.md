@@ -21,6 +21,7 @@ Read by section, not whole: the long sync docs open with a **Sections** index an
 - Sync, op-log, vector clocks → [sync index](docs/sync-and-op-log/README.md), then only the relevant contracts. Effects/reducers/bulk dispatch touching synced state → [`contributor-sync-model.md`](docs/sync-and-op-log/contributor-sync-model.md). Judging whether a sync bug is real / how severe → [`sync-severity-triage.md`](docs/sync-and-op-log/sync-severity-triage.md)
 - E2E tests → [`e2e/AGENTS.md`](e2e/AGENTS.md); marketing videos → [`e2e/store-video/AGENTS.md`](e2e/store-video/AGENTS.md)
 - Load-bearing decisions → [`ARCHITECTURE-DECISIONS.md`](ARCHITECTURE-DECISIONS.md)
+- Designing a user-facing feature or writing its plan → [`docs/feature-review-guide.md`](docs/feature-review-guide.md) § Does it earn its place? and § Prior art
 - Reviewing a feature or PR → [`docs/feature-review-guide.md`](docs/feature-review-guide.md); editing a type in `packages/plugin-api/`, `packages/shared-schema/`, `packages/sync-core/`, `src/app/op-log/core/`, or a model a `MODEL_CONFIGS` slice persists → its § Long-term cost of a change
 
 ## Core commands
@@ -31,7 +32,8 @@ Read by section, not whole: the long sync docs open with a **Sections** index an
 npm run checkFile <files...>   # prettier + lint
 npm run prettier               # multi-file format
 npm run lint                   # multi-file lint
-npm test                       # shared packages + release tooling + Angular specs (Berlin/LA)
+npm test                       # shared packages + release tooling + Angular specs (Berlin, LA subset; CI: test:ci, full LA)
+npm run test:affected          # Angular specs importing files changed vs master (Berlin + LA subset); `-- --list` to preview
 npm run test:file <filepath>   # single Angular spec; package tests use package scripts
 npm run test:electron          # main-process tests are electron/*.test.cjs; a .spec.ts there never runs
 npm run e2e                    # browser E2E, excludes SuperSync/WebDAV
@@ -42,6 +44,10 @@ npm start                      # Electron dev
 npm run startFrontend          # web dev, generates environment constants first
 npm run dist                   # validated Electron distribution for the host platform
 ```
+
+**Wrap test, lint and E2E runs in `npm run quiet -- <script> [args]`** (e.g. `npm run quiet -- test:affected`, `npm run quiet -- e2e:file <path> --retries=0`): the full output goes to `.tmp/logs/`, and only the pass line (with test counts where the runner prints them), or the last 60 log lines on failure, reach your context. `rg` the printed log path for more.
+
+While iterating on app code, use `npm run test:affected` instead of a full `npm test`. It covers Angular specs only: after editing `packages/*` also run that package's tests, and run `npm test` before opening a PR. It follows static imports, templates and styles; test setup, configs and unimported assets/styles trigger a full run. "Nothing to run" means nothing was tested. CI runs everything (`test:ci`).
 
 For full provider suites prefer the [scheduled E2E workflow](.github/workflows/e2e-scheduled.yml) (`grep` filters SuperSync; `webdav_grep` + `run_webdav` for WebDAV); focused local runs and provider-switch prerequisites are in [e2e/AGENTS.md](e2e/AGENTS.md) (they need both servers and both flags, else they silently skip). Skipped tests do not validate a fix.
 

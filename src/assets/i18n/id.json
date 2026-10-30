@@ -86,6 +86,10 @@
     "INTRO_2": "Jika Anda menghargai pendekatan ini dan ingin menjaga proyek tetap sehat dan berkembang, donasi sukarela sangat dihargai."
   },
   "EXAMPLE_TASKS": {
+    "GETTING_STARTED": {
+      "TITLE": "Opsional: tips memulai",
+      "NOTES": "Tidak ada yang wajib di sini. Hapus tugas ini kapan saja.\n\n- **Hari ini dan Kotak masuk**: Hari ini menampilkan apa yang direncanakan untuk hari ini. Tugas tanpa proyek sendiri tetap berada di Kotak masuk. Satu tugas bisa muncul di kedua daftar.\n- **Proyek**: kelompokkan tugas berdasarkan topik dengan **+** di samping **Proyek** pada bilah samping.\n- **Sinkronisasi**: simpan data Anda di beberapa perangkat melalui **Pengaturan → Sinkronisasi & Cadangan**.\n- **Pindahan dari Todoist atau TickTick?** Impor tugas Anda melalui **Pengaturan → Sinkronisasi & Cadangan → Impor/Ekspor**.\n- **Tur**: **Bantuan → Tur singkat** di menu bilah samping memandu Anda memahami dasar-dasarnya dengan tugas Anda sendiri, dan **Bantuan → Cara** menunjukkan sintaks singkat dan navigasi keyboard langkah demi langkah. Tutup tur kapan saja.\n- **Sesuaikan sendiri**: pilih tema atau mode gelap, lalu aktifkan atau nonaktifkan fitur seperti papan, jadwal, kebiasaan, mode fokus, atau integrasi di **Pengaturan → Umum**. Plugin menambahkan lebih banyak lagi."
+    },
     "LEARN_KEYBOARD_SHORTCUTS": {
       "TITLE": "Pelajari pintasan keyboard",
       "NOTES": "Super Productivity dirancang untuk digunakan dengan keyboard. Pelajari pintasan agar bekerja lebih cepat.\n\n**Cara memulai:**\n1. Buka **menu sidebar**\n2. Buka **Bantuan**\n3. Klik **Tur Navigasi Keyboard**"
@@ -537,7 +541,8 @@
         "OAUTH_DISCONNECTED": "Akun OAuth terputus.",
         "OAUTH_FAILED": "Autentikasi gagal.",
         "REMOTE_ISSUE_DELETED": "Issue jarak jauh telah dihapus. Hapus tugas tertaut \"{{taskTitle}}\"?",
-        "REMOTE_ISSUE_DELETED_WITH_TIME": "Issue jarak jauh telah dihapus, tetapi tugas \"{{taskTitle}}\" memiliki waktu terlacak. Tetap hapus?"
+        "REMOTE_ISSUE_DELETED_WITH_TIME": "Issue jarak jauh telah dihapus, tetapi tugas \"{{taskTitle}}\" memiliki waktu terlacak. Tetap hapus?",
+        "POST_TIME_SUCCESS": "{{providerName}}: Berhasil membuat entri waktu untuk {{issueTitle}}"
       },
       "TWO_WAY_SYNC": {
         "AUTO_CREATE_ISSUES": "Buat isu otomatis untuk tugas baru",
@@ -566,6 +571,15 @@
         "POLLING_MODE_DESCRIPTION": "Kapan polling dilakukan: hanya saat proyek atau tag terkait terbuka, atau selalu di latar belakang",
         "POLLING_MODE_WHEN_PROJECT_OPEN": "Saat konteks terbuka",
         "POLLING_MODE_ALWAYS": "Selalu (di latar belakang)"
+      },
+      "DIALOG_TRACK_TIME": {
+        "TIME_SPENT": "Waktu yang dihabiskan",
+        "ACTIVITY": "Aktivitas",
+        "INVALID_DATE": "Nilai yang dimasukkan bukan tanggal!",
+        "POST_TIME": "Kirim Waktu",
+        "STARTED": "Dimulai",
+        "SUBMIT_TIME_FOR": "Kirim waktu ke {{providerName}} untuk",
+        "TITLE": "{{providerName}}: Kirim Catatan Kerja"
       }
     },
     "ISSUE_PANEL": {
@@ -789,33 +803,6 @@
         "REMINDER_NEEDS_TEXT": "Tulis refleksi sebelum meminta pengingat",
         "REMINDER_TASK_TITLE": "Kunjungi kembali catatan refleksi",
         "TITLE": "Catatan Refleksi"
-      }
-    },
-    "NEXTCLOUD_DECK": {
-      "ISSUE_CONTENT": {
-        "LABELS": "Label",
-        "ASSIGNED_USERS": "Pengguna yang Ditugaskan",
-        "DECK_DESCRIPTION": "Deskripsi Deck",
-        "STACK": "Tumpukan"
-      },
-      "FORM": {
-        "BASE_URL": "URL Dasar Nextcloud",
-        "FILTER_BY_ASSIGNEE": "Hanya impor kartu yang ditugaskan ke saya",
-        "IS_TRANSITION_ISSUES_ENABLED": "Sinkronkan status penyelesaian dan judul kembali ke Nextcloud Deck",
-        "PASSWORD": "Kata sandi aplikasi Nextcloud Anda",
-        "POLL_INTERVAL_MINUTES": "Interval polling (menit)",
-        "TITLE_TEMPLATE": "Template judul tugas",
-        "TITLE_TEMPLATE_DESCRIPTION": "Variabel: {CARD_TITLE}, {BOARD}, {COLUMN}, {ID}, {LABELS}. Contoh: [{BOARD}: {COLUMN}] {CARD_TITLE}. Kosongkan untuk judul kartu saja.",
-        "USERNAME": "Nama pengguna Nextcloud Anda"
-      },
-      "FORM_SECTION": {
-        "HELP": "Konfigurasikan integrasi Nextcloud Deck Anda untuk mengimpor kartu sebagai tugas. Gunakan kata sandi aplikasi untuk autentikasi."
-      },
-      "S": {
-        "BOARD_NOT_FOUND": "Nextcloud Deck: Papan tidak ditemukan",
-        "CARD_NOT_FOUND": "Nextcloud Deck: Kartu \"{{issueId}}\" tampaknya telah dihapus di server.",
-        "ERR_CREDENTIALS_MISSING": "Masukkan URL Nextcloud, nama pengguna, dan kata sandi terlebih dahulu.",
-        "ERR_LOAD_BOARDS": "Gagal memuat papan Deck. Periksa kredensial Anda."
       }
     },
     "NOTE": {
@@ -1076,44 +1063,6 @@
       "NO_DATA": "Tidak ada data untuk tahun ini",
       "PAGE_TITLE": "Riwayat Cepat",
       "WEEK_TITLE": "Minggu {{nr}} ({{timeSpent}})"
-    },
-    "REDMINE": {
-      "DIALOG_TRACK_TIME": {
-        "TIME_SPENT": "Waktu yang dihabiskan",
-        "ACTIVITY": "Aktivitas",
-        "INVALID_DATE": "Nilai yang dimasukkan bukan tanggal!",
-        "POST_TIME": "Kirim Waktu",
-        "STARTED": "Dimulai",
-        "SUBMIT_TIME_FOR": "Kirim waktu ke Redmine untuk",
-        "TITLE": "Redmine: Kirim Catatan Kerja"
-      },
-      "FORM": {
-        "API_KEY": "Akses kunci API",
-        "HOST": "Host (contoh.: https://redmine.org)",
-        "PROJECT_ID": "Pengidentifikasi Proyek",
-        "PROJECT_ID_DESCRIPTION": "Dapat ditemukan sebagai bagian dari URL, saat melihat proyek di Browser.",
-        "SCOPE": "Cakupan",
-        "SCOPE_ALL": "Semua",
-        "SCOPE_ASSIGNED": "Ditugaskan kepada saya",
-        "SCOPE_CREATED": "Dibuat oleh saya",
-        "IS_SHOW_TIME_TRACKING_DIALOG": "Tampilkan dialog pelacakan waktu untuk melaporkan ke Redmine",
-        "IS_SHOW_TIME_TRACKING_DIALOG_DESCRIPTION": "Memerlukan modul pelacakan waktu diaktifkan untuk proyek Redmine",
-        "IS_SHOW_TIME_TRACKING_DIALOG_FOR_EACH_SUB_TASK": "Tampilkan dialog pelacakan waktu saat subtugas diselesaikan"
-      },
-      "FORM_SECTION": {
-        "HELP": "<p>Di sini Anda dapat mengonfigurasi SuperProductivity untuk mencantumkan open Redmine issues (baik versi online atau yang dihosting sendiri) untuk proyek tertentu di panel pembuatan tugas dalam tampilan perencanaan harian. Mereka akan dicantumkan sebagai saran dan akan memberikan tautan ke issues tersebut serta informasi lebih lanjut tentangnya.</p><p>Selain itu, Anda dapat secara otomatis menambahkan dan menyinkronkan semua masalah yang terbuka ke backlog tugas Anda.</p>",
-        "TITLE": "Redmine"
-      },
-      "ISSUE_CONTENT": {
-        "AUTHOR": "Penulis",
-        "DESCRIPTION": "Deskripsi",
-        "MARK_AS_CHECKED": "Tandai pembaruan sebagai dicentang",
-        "PRIORITY": "Prioritas",
-        "STATUS": "Status"
-      },
-      "S": {
-        "POST_TIME_SUCCESS": "Redmine: Berhasil membuat entri waktu untuk {{issueTitle}}"
-      }
     },
     "REFLECTION_NOTE": {
       "ACTION_DISMISS": "Tutup",
@@ -2911,8 +2860,17 @@
     },
     "SOUND": {
       "BREAK_REMINDER_SOUND": "Mengambil suara pengingat istirahat",
+      "DING": "Denting lonceng",
       "DONE_SOUND": "Suara tugas selesai",
       "IS_INCREASE_DONE_PITCH": "Tingkatkan nada untuk setiap tugas yang diselesaikan",
+      "SMALL_DING": "Denting lonceng kecil",
+      "SOUND_1": "Suara 1",
+      "SOUND_2": "Suara 2",
+      "SOUND_3": "Suara 3",
+      "SOUND_4": "Suara 4",
+      "SOUND_5": "Suara 5",
+      "SOUND_6": "Suara 6",
+      "SOUND_7": "Suara 7",
       "TITLE": "Suara",
       "TRACK_TIME_SOUND": "Lacak suara pengingat waktu",
       "VOLUME": "Volume"
@@ -3049,6 +3007,7 @@
       "CONTRIBUTE": "Berkontribusi",
       "GET_HELP_ONLINE": "Dapatkan bantuan secara online",
       "KEYBOARD": "Howto: Papan Ketik Tingkat Lanjut",
+      "QUICK_TOUR": "Tur singkat",
       "REDDIT_COMMUNITY": "Komunitas Reddit",
       "REPORT_A_PROBLEM": "Laporkan masalah",
       "SEND_FEEDBACK": "Kirim masukan",
@@ -3139,13 +3098,50 @@
     "HINTS": {
       "CREATE_TASK": "Klik + untuk menambahkan tugas pertama Anda",
       "CREATE_TASK_TOUCH": "Ketuk + untuk menambahkan tugas pertama Anda",
+      "DECLINED": "Tidak masalah. Anda bisa menemukannya di Bantuan → Tur singkat kapan saja.",
+      "MORE_FALLBACK": "Masih ada lagi yang sudah aktif: proyek, pelacakan waktu, Perencana…",
+      "NO_THANKS": "Tidak, terima kasih",
+      "SHOW_ME_MORE": "Tampilkan lebih banyak ›",
       "EXPLORE": "Silakan klik-klik dan jelajahi! Bantuan bisa ditemukan di bilah samping.",
       "EXPLORE_TOUCH": "Silakan jelajahi! Bantuan bisa ditemukan di menu.",
       "TASK_TAP_TOUCH": "Ketuk tugas untuk membuka detailnya.",
       "TASK_SWIPE_LEFT_TOUCH": "Geser tugas ke kiri untuk tindakan lainnya",
+      "TODAY_AND_INBOX": "Tugas ini dijadwalkan untuk hari ini, jadi muncul di {{todayIcon}} <b>Hari ini</b>. Tugas tanpa proyek sendiri tetap berada di {{inboxIcon}} <b>Kotak masuk</b>.",
+      "TODAY_AND_INBOX_PHONE": "Tugas ini dijadwalkan untuk hari ini, jadi muncul di {{todayIcon}} <b>Hari ini</b>. Tugas tanpa proyek sendiri tetap berada di {{inboxIcon}} <b>Kotak masuk</b>, di bawah ☰.",
       "TASK_SWIPE_RIGHT_TOUCH": "Geser tugas ke kanan untuk menandainya selesai",
       "OR_PRESS": "atau tekan",
       "SKIP_ARIA": "Tutup petunjuk"
+    },
+    "TOUR": {
+      "ADD_SUBTASK": "Pecah menjadi bagian kecil: klik kanan tugas dan pilih {{subtaskIcon}} <b>Tambah Subtugas</b>",
+      "COUNTER": "{{nr}} dari {{total}}",
+      "NEXT": "Berikutnya ›",
+      "ORGANIZE": "Buat <b>proyek</b> sendiri untuk mengelompokkan tugas, atau <b>tag</b> untuk melabelinya. Buat dengan +",
+      "ORGANIZE_COLLAPSED": "Buat <b>proyek</b> sendiri untuk mengelompokkan tugas, atau <b>tag</b> untuk melabelinya. Buka bilah samping dengan {{expandIcon}} untuk membuatnya",
+      "ORGANIZE_PHONE": "Proyek dan tag ada di bawah ☰. Buat <b>proyek</b> sendiri untuk mengelompokkan tugas, atau <b>tag</b> untuk melabelinya",
+      "PLANNER": "Rencanakan beberapa hari ke depan di {{plannerIcon}} <b>Perencana</b>",
+      "TASK_MENU_TOUCH": "Geser tugas ke kiri untuk menu: {{playIcon}} <b>Mulai waktu pelacakan</b>, {{subtaskIcon}} <b>Tambah Subtugas</b>",
+      "TASK_MENU_TOUCH_NO_TRACKING": "Geser tugas ke kiri untuk menu, mis. {{subtaskIcon}} <b>Tambah Subtugas</b>",
+      "TIMER_RUNNING": "Timer sedang berjalan. Tekan {{playIcon}} lagi atau <kbd>{{key}}</kbd> untuk menjeda.",
+      "TIMER_RUNNING_TOUCH": "Timer sedang berjalan. Ketuk {{playIcon}} di bagian atas untuk menjeda.",
+      "TRACK_TIME": "Arahkan kursor ke tugas dan tekan {{playIcon}} untuk melacak waktu"
+    },
+    "WANT_MORE": {
+      "BOARDS": "<b>Papan</b> · kolom bergaya Kanban untuk tugas Anda",
+      "DONE": "Selesai",
+      "FINISH_DAY": "<b>Akhiri hari</b> · tinjau dan tutup hari Anda",
+      "FOCUS_MODE": "<b>Mode Fokus</b> · Pomodoro dan kerja tanpa gangguan",
+      "FOOTER": "Temukan ini lagi di Bantuan → Tur singkat.",
+      "HABITS": "<b>Kebiasaan</b> · pantau rutinitas hari demi hari",
+      "INTRO": "Super Productivity dimulai dengan tenang. Masih ada lagi saat Anda membutuhkannya:",
+      "OPEN_SETTINGS": "Buka pengaturan ›",
+      "PLUGINS": "<b>Plugin & integrasi</b> · Jira, GitHub, CalDAV, dan lainnya",
+      "SCHEDULE": "<b>Jadwal</b> · hari Anda dalam lini masa",
+      "SEARCH": "Cari apa saja dengan <kbd>{{key}}</kbd>.",
+      "SEARCH_PHONE": "Cari apa saja dari ☰.",
+      "SHORT_SYNTAX": "Ketik <code>#tag</code>, <code>+project</code> atau <code>@tomorrow</code> saat menambahkan tugas. Bantuan → Cara menampilkan lebih banyak.",
+      "SYNC": "Data Anda tetap berada di perangkat ini. Sinkronisasi dan pencadangan ada di pengaturan.",
+      "TITLE": "Ingin lebih?"
     },
     "SYNC_CTA": "Sudah menggunakan Super Productivity di perangkat lain?",
     "SYNC_CTA_LINK": "Siapkan sinkronisasi"

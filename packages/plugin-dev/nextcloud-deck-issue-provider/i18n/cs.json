@@ -1,0 +1,28 @@
+{
+  "CFG": {
+    "BASE_URL": "Základní URL Nextcloud",
+    "USERNAME": "Vaše uživatelské jméno Nextcloud",
+    "PASSWORD": "Vaše heslo aplikace Nextcloud",
+    "BOARD": "Board",
+    "IMPORT_STACKS": "Import from stacks (leave empty for all)",
+    "DONE_STACK": "Done stack (cards are moved here on completion)",
+    "STACKS_DESC": "Select a board first, then use the load button to list its stacks.",
+    "NONE": "None",
+    "FILTER_BY_ASSIGNEE": "Importovat pouze karty přiřazené mně",
+    "TITLE_TEMPLATE": "Šablona názvu úkolu",
+    "TITLE_TEMPLATE_DESC": "Proměnné: {CARD_TITLE}, {BOARD}, {COLUMN}, {ID}, {LABELS}. Příklad: [{BOARD}: {COLUMN}] {CARD_TITLE}. Ponechte prázdné pro pouze název karty."
+  },
+  "DISPLAY": {
+    "SUMMARY": "Shrnutí",
+    "DESCRIPTION": "Popis Deck",
+    "STACK": "Zásobník",
+    "DUE_DATE": "Termín",
+    "ASSIGNED_USERS": "Přiřazení uživatelé",
+    "LABELS": "Štítky"
+  },
+  "ERRORS": {
+    "NO_BOARD": "Nextcloud Deck: No board selected",
+    "CARD_NOT_FOUND": "Nextcloud Deck: Card not found on the selected board"
+  },
+  "FORM_HELP": "Nakonfigurujte integraci Nextcloud Deck pro import karet jako úkolů. Pro ověření použijte heslo aplikace."
+}

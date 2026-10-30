@@ -1,5 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { Component, signal } from '@angular/core';
+import { By } from '@angular/platform-browser';
 import { DoneToggleComponent } from './done-toggle.component';
 
 @Component({
@@ -7,7 +8,8 @@ import { DoneToggleComponent } from './done-toggle.component';
   imports: [DoneToggleComponent],
   template: `
     <done-toggle
-      [isDone]="false"
+      [isDone]="isDone()"
+      [isWontDo]="isWontDo()"
       [isMultiSelectAware]="isMultiSelectAware()"
       (toggled)="toggledCount = toggledCount + 1"
     ></done-toggle>
@@ -15,6 +17,8 @@ import { DoneToggleComponent } from './done-toggle.component';
 })
 class HostComponent {
   readonly isMultiSelectAware = signal(false);
+  readonly isDone = signal(false);
+  readonly isWontDo = signal(false);
   toggledCount = 0;
 }
 
@@ -52,6 +56,30 @@ describe('DoneToggleComponent', () => {
     expect(stopped).toHaveBeenCalled();
   });
 
+  // A task finished as "won't do" is done, so it keeps the shared `done-check`
+  // styling and swaps only the glyph.
+  describe('wont do', () => {
+    const glyphFor = (isWontDo: boolean): SVGElement | null => {
+      const fixture = TestBed.createComponent(HostComponent);
+      fixture.componentInstance.isDone.set(true);
+      fixture.componentInstance.isWontDo.set(isWontDo);
+      fixture.detectChanges();
+      return fixture.nativeElement.querySelector('.done-check');
+    };
+
+    it('draws a checkmark for a normally completed task', () => {
+      const glyph = glyphFor(false);
+      expect(glyph?.tagName).toBe('polyline');
+      expect(glyph?.classList).not.toContain('done-check--cross');
+    });
+
+    it('draws a cross instead of the checkmark', () => {
+      const glyph = glyphFor(true);
+      expect(glyph?.tagName).toBe('path');
+      expect(glyph?.classList).toContain('done-check--cross');
+    });
+  });
+
   it('lets a modifier click bubble untouched when the host is multi-select aware', () => {
     const fixture = TestBed.createComponent(HostComponent);
     fixture.componentInstance.isMultiSelectAware.set(true);
@@ -66,5 +94,75 @@ describe('DoneToggleComponent', () => {
     el.dispatchEvent(ev);
     expect(fixture.componentInstance.toggledCount).toBe(0);
     expect(stopped).not.toHaveBeenCalled();
+  });
+
+  describe('haptic feedback', () => {
+    const win = window as { SUPAndroid?: unknown };
+    let original: unknown;
+    let haptic: jasmine.Spy;
+
+    beforeEach(() => {
+      original = win.SUPAndroid;
+      haptic = jasmine.createSpy('performHapticFeedback');
+      win.SUPAndroid = { performHapticFeedback: haptic };
+    });
+
+    afterEach(() => {
+      win.SUPAndroid = original;
+    });
+
+    const setup = (
+      opts: { isTouch: boolean; isDone?: boolean; isMultiSelectAware?: boolean } = {
+        isTouch: true,
+      },
+    ): { host: HostComponent; el: HTMLElement } => {
+      const fixture = TestBed.createComponent(HostComponent);
+      fixture.componentInstance.isDone.set(!!opts.isDone);
+      fixture.componentInstance.isMultiSelectAware.set(!!opts.isMultiSelectAware);
+      fixture.detectChanges();
+      const de = fixture.debugElement.query(By.directive(DoneToggleComponent));
+      spyOn(de.componentInstance as DoneToggleComponent, 'isTouchActive').and.returnValue(
+        opts.isTouch,
+      );
+      return { host: fixture.componentInstance, el: de.nativeElement as HTMLElement };
+    };
+
+    const click = (el: HTMLElement, init: MouseEventInit = {}): void => {
+      el.dispatchEvent(new MouseEvent('click', { bubbles: true, ...init }));
+    };
+
+    it('confirms completing a task by tap', () => {
+      const { host, el } = setup({ isTouch: true });
+      click(el);
+      expect(haptic).toHaveBeenCalledOnceWith('confirm');
+      expect(host.toggledCount).toBe(1);
+    });
+
+    it('stays silent when undoing a done task', () => {
+      const { host, el } = setup({ isTouch: true, isDone: true });
+      click(el);
+      expect(haptic).not.toHaveBeenCalled();
+      expect(host.toggledCount).toBe(1);
+    });
+
+    it('stays silent for a mouse click', () => {
+      const { el } = setup({ isTouch: false });
+      click(el);
+      expect(haptic).not.toHaveBeenCalled();
+    });
+
+    it('stays silent for a keyboard toggle', () => {
+      const { host, el } = setup({ isTouch: true });
+      el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      expect(host.toggledCount).toBe(1);
+      expect(haptic).not.toHaveBeenCalled();
+    });
+
+    it('stays silent for a multi-select modifier click', () => {
+      const { host, el } = setup({ isTouch: true, isMultiSelectAware: true });
+      click(el, { ctrlKey: true });
+      expect(host.toggledCount).toBe(0);
+      expect(haptic).not.toHaveBeenCalled();
+    });
   });
 });

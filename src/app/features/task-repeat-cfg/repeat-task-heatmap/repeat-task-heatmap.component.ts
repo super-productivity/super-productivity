@@ -57,11 +57,15 @@ export class RepeatTaskHeatmapComponent {
     if (!tasks || tasks.length === 0) {
       return null;
     }
+    // Counts that are zero are left out rather than shown as "-".
     const summary = calcRepeatTaskSeriesTimeSpent(tasks);
+    if (!summary.total) {
+      return null;
+    }
     return {
       total: msToString(summary.total),
-      thisWeek: msToString(summary.thisWeek),
-      thisMonth: msToString(summary.thisMonth),
+      thisWeek: summary.thisWeek ? msToString(summary.thisWeek) : null,
+      thisMonth: summary.thisMonth ? msToString(summary.thisMonth) : null,
     };
   });
 

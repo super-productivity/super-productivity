@@ -1,0 +1,28 @@
+{
+  "CFG": {
+    "BASE_URL": "Nextcloud Basis-URL",
+    "USERNAME": "Je Nextcloud gebruikersnaam",
+    "PASSWORD": "Je Nextcloud app-wachtwoord",
+    "BOARD": "Board",
+    "IMPORT_STACKS": "Import from stacks (leave empty for all)",
+    "DONE_STACK": "Done stack (cards are moved here on completion)",
+    "STACKS_DESC": "Select a board first, then use the load button to list its stacks.",
+    "NONE": "None",
+    "FILTER_BY_ASSIGNEE": "Alleen aan mij toegewezen kaarten importeren",
+    "TITLE_TEMPLATE": "Taaktitelsjabloon",
+    "TITLE_TEMPLATE_DESC": "Variabelen: {CARD_TITLE}, {BOARD}, {COLUMN}, {ID}, {LABELS}. Voorbeeld: [{BOARD}: {COLUMN}] {CARD_TITLE}. Laat leeg voor alleen de kaarttitel."
+  },
+  "DISPLAY": {
+    "SUMMARY": "Samenvatting",
+    "DESCRIPTION": "Deck-beschrijving",
+    "STACK": "Stapel",
+    "DUE_DATE": "Vervaldatum",
+    "ASSIGNED_USERS": "Toegewezen gebruikers",
+    "LABELS": "Labels"
+  },
+  "ERRORS": {
+    "NO_BOARD": "Nextcloud Deck: No board selected",
+    "CARD_NOT_FOUND": "Nextcloud Deck: Card not found on the selected board"
+  },
+  "FORM_HELP": "Configureer je Nextcloud Deck-integratie om kaarten als taken te importeren. Gebruik een app-wachtwoord voor authenticatie."
+}

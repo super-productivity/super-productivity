@@ -4,9 +4,18 @@
     "loggingBehavior says otherwise, and the r8Test APK is release-configured,",
     "so without this the SP_SMOKE markers never reach logcat and the smoke can",
     "only time out. Installed by .github/workflows/android-tests.yml; nothing",
-    "else writes this file in CI. Nothing here has to match capacitor.config.ts."
+    "else writes this file in CI. plugins.SystemBars mirrors capacitor.config.ts",
+    "so the inset instrumented tests run in the SystemBars branch production",
+    "runs in — keep it in sync. Nothing else here has to match."
   ],
   "android": {
     "loggingBehavior": "production"
+  },
+  "plugins": {
+    "SystemBars": {
+      "insetsHandling": "css",
+      "initialViewportFitValueHint": "cover",
+      "style": "DARK"
+    }
   }
 }

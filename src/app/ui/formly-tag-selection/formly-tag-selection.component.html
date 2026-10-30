@@ -1,9 +1,13 @@
-<tag-edit
-  [isShowMyDayTag]="true"
-  [tagIds]="value"
-  [excludedTagIds]="field.templateOptions?.excludedTagIds"
-  (tagUpdate)="formControl.setValue($event)"
-></tag-edit>
+<!-- deferred: this formly type is registered app-wide, but tag-edit (chips,
+autocomplete) is only needed once a form with a tag field renders -->
+@defer (on immediate) {
+  <tag-edit
+    [isShowMyDayTag]="true"
+    [tagIds]="value"
+    [excludedTagIds]="$safeNavigationMigration(field.templateOptions?.excludedTagIds)"
+    (tagUpdate)="formControl.setValue($event)"
+  ></tag-edit>
+}
 
 <!--<pre><code>{{value|json}}</code></pre>-->
 <!--<pre><code>{{field|json}}</code></pre>-->

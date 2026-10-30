@@ -8,6 +8,7 @@ import { loadConfigFromEnv, isConsentRequired } from './config';
 import { Prisma } from '@prisma/client';
 import { authCache } from './auth-cache';
 import { getDefaultStorageQuotaBytes } from './sync/services/storage-quota.service';
+import { revokeAllCaptureGrants } from './capture/capture-grant.store';
 
 // Auth constants
 const MIN_JWT_SECRET_LENGTH = 32;
@@ -139,9 +140,12 @@ export const verifyEmail = async (token: string): Promise<boolean> => {
 export const revokeAllTokens = async (userId: number): Promise<void> => {
   // AUTH_CACHE_INVALIDATION: keep adjacent to tokenVersion writes.
   authCache.invalidate(userId);
-  await prisma.user.update({
-    where: { id: userId },
-    data: { tokenVersion: { increment: 1 } },
+  await prisma.$transaction(async (tx) => {
+    await tx.user.update({
+      where: { id: userId },
+      data: { tokenVersion: { increment: 1 } },
+    });
+    await revokeAllCaptureGrants(tx, userId);
   });
   // AUTH_CACHE_INVALIDATION: keep adjacent to tokenVersion writes.
   authCache.invalidate(userId);
@@ -166,6 +170,7 @@ export const replaceToken = async (
       data: { tokenVersion: { increment: 1 } },
       select: { tokenVersion: true },
     });
+    await revokeAllCaptureGrants(tx, userId);
     return user.tokenVersion;
   });
   // AUTH_CACHE_INVALIDATION: keep adjacent to tokenVersion writes.
@@ -181,7 +186,7 @@ export const replaceToken = async (
 };
 
 export type TokenVerificationResult =
-  | { valid: true; userId: number; email: string }
+  | { valid: true; userId: number; email: string; tokenVersion: number }
   | { valid: false; reason: string };
 
 export const verifyToken = async (token: string): Promise<TokenVerificationResult> => {
@@ -200,7 +205,7 @@ export const verifyToken = async (token: string): Promise<TokenVerificationResul
     const tokenVersion = payload.tokenVersion ?? 0;
     const cachedUser = authCache.get(payload.userId);
     if (cachedUser && cachedUser.isVerified && cachedUser.tokenVersion === tokenVersion) {
-      return { valid: true, userId: payload.userId, email: payload.email };
+      return { valid: true, userId: payload.userId, email: payload.email, tokenVersion };
     }
     const cacheVersionBeforeRead = authCache.getInvalidationVersion(payload.userId);
 
@@ -241,7 +246,7 @@ export const verifyToken = async (token: string): Promise<TokenVerificationResul
     }
 
     authCache.setIfCurrent(payload.userId, currentVersion, true, cacheVersionBeforeRead);
-    return { valid: true, userId: payload.userId, email: payload.email };
+    return { valid: true, userId: payload.userId, email: payload.email, tokenVersion };
   } catch (err) {
     if (err instanceof TokenExpiredError) {
       return {

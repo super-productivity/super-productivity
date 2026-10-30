@@ -1,55 +1,35 @@
 name: 'Setup E2E Environment'
 description: 'Shared setup for E2E test jobs: Node, npm install, Playwright browsers'
 
+inputs:
+  browsers:
+    description: 'Space-separated Playwright browsers to install'
+    required: false
+    default: 'chromium'
+
 runs:
   using: 'composite'
   steps:
-    - uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6
-      with:
-        node-version: 22
-    - name: Reconfigure git to use HTTP authentication
-      shell: bash
-      run: >
-        git config --global url."https://github.com/".insteadOf
-        ssh://git@github.com/
-
-    - name: Get npm cache directory
-      id: npm-cache-dir
-      shell: bash
-      run: |
-        echo "dir=$(npm config get cache)" >> $GITHUB_OUTPUT
-
-    - uses: actions/cache@8b402f58fbc84540c8b491a91e594a4576fec3d7 # v5
-      id: npm-cache
-      with:
-        path: ${{ steps.npm-cache-dir.outputs.dir }}
-        key: ${{ runner.os }}-node22-${{ hashFiles('**/package-lock.json') }}
-        restore-keys: |
-          ${{ runner.os }}-node22-
-
-    # npm i runs Prisma's postinstall, which downloads engine binaries from a
-    # CDN; a transient ECONNRESET there fails the whole job. Retry to absorb it.
-    - name: Install npm Packages
-      uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08 # v3
-      with:
-        timeout_minutes: 10
-        max_attempts: 3
-        retry_wait_seconds: 20
-        command: npm i
+    - name: Setup Node Dependencies
+      uses: ./.github/actions/setup-deps
 
     - name: Cache Playwright Browsers
       uses: actions/cache@8b402f58fbc84540c8b491a91e594a4576fec3d7 # v5
       id: playwright-cache
       with:
         path: ~/.cache/ms-playwright
-        key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+        key: playwright-${{ runner.os }}-${{ inputs.browsers }}-${{ hashFiles('package-lock.json') }}
 
     - name: Install Playwright Browsers
       if: steps.playwright-cache.outputs.cache-hit != 'true'
       shell: bash
-      run: npx playwright install --with-deps chromium
+      env:
+        BROWSERS: ${{ inputs.browsers }}
+      run: npx playwright install --with-deps $BROWSERS
 
     - name: Install Playwright Dependencies (on cache hit)
       if: steps.playwright-cache.outputs.cache-hit == 'true'
       shell: bash
-      run: npx playwright install-deps chromium
+      env:
+        BROWSERS: ${{ inputs.browsers }}
+      run: npx playwright install-deps $BROWSERS

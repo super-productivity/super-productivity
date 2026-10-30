@@ -9,6 +9,7 @@ import {
   DateTimeLocales,
 } from 'src/app/core/locale.constants';
 import { TranslateService } from '@ngx-translate/core';
+import { DateInputLocale, isDayFirstDateFormat } from './date-input-locale';
 
 @Injectable({
   providedIn: 'root',
@@ -94,6 +95,18 @@ export class DateTimeFormatService {
       humanReadable: localizedDate.format.toUpperCase(),
     };
   });
+
+  /**
+   * How typed dates (`@`/`!` short syntax) are read: the UI language's date
+   * words on top of English, and `3/1` in the order the app displays dates, so
+   * typing matches what the user sees. The order follows the date format, not
+   * the UI language: an English UI cannot tell en-US (3/1 = March 1) from
+   * en-GB (3/1 = 3 January); the date format can (#9340).
+   */
+  readonly dateInputLocale = computed<DateInputLocale>(() => ({
+    language: this._uiLangSig() || DEFAULT_LANGUAGE,
+    isDayFirst: isDayFirstDateFormat(this.dateFormat().raw),
+  }));
 
   constructor() {
     // This effect is the single owner of the date adapter locale: it resolves

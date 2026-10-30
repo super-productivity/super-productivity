@@ -15,6 +15,7 @@ import { Logger } from './logger';
 import { randomBytes } from 'crypto';
 import { sendPasskeyRecoveryEmail, sendVerificationEmail } from './email';
 import { getWsConnectionService } from './sync/services/websocket-connection.service';
+import { revokeAllCaptureGrants } from './capture/capture-grant.store';
 import { Prisma } from '@prisma/client';
 import { loadConfigFromEnv, isConsentRequired } from './config';
 import {
@@ -624,6 +625,8 @@ export const completePasskeyRecovery = async (
     }
 
     await tx.passkey.deleteMany({ where: { userId: user.id } });
+    // Recovery signs every session out; capture tokens are sessions too.
+    await revokeAllCaptureGrants(tx, user.id);
 
     await tx.passkey.create({
       data: {

@@ -85,6 +85,10 @@
     "INTRO_2": "Se você valoriza essa abordagem e quer manter o projeto saudável e em evolução, uma doação voluntária é imensamente apreciada."
   },
   "EXAMPLE_TASKS": {
+    "GETTING_STARTED": {
+      "TITLE": "Opcional: dicas para começar",
+      "NOTES": "Nada aqui é obrigatório. Exclua esta tarefa quando quiser.\n\n- **Hoje e Entrada**: Hoje mostra o que está planejado para hoje. Tarefas sem um projeto seu ficam em Entrada. Uma tarefa pode aparecer nas duas listas.\n- **Projetos**: agrupe tarefas por assunto com o **+** ao lado de **Projetos** na barra lateral.\n- **Sincronização**: mantenha seus dados em vários dispositivos em **Configurações → Sincronização e Backup**.\n- **Vindo do Todoist ou do TickTick?** Importe suas tarefas em **Configurações → Sincronização e Backup → Importar/Exportar**.\n- **Tours**: **Ajuda → Tour rápido** no menu da barra lateral apresenta o básico com a sua própria tarefa, e **Ajuda → Como fazer** mostra passo a passo a sintaxe curta e a navegação pelo teclado. Feche um tour quando quiser.\n- **Deixe do seu jeito**: escolha um tema ou o modo escuro e ative ou desative recursos como quadros, agenda, hábitos, modo foco ou integrações em **Configurações → Geral**. Os plugins acrescentam ainda mais."
+    },
     "LEARN_KEYBOARD_SHORTCUTS": {
       "TITLE": "Aprender os atalhos de teclado",
       "NOTES": "O Super Productivity foi projetado para ser usado com o teclado. Aprenda os atalhos para trabalhar mais rápido.\n\n**Como começar:**\n1. Abra o **menu lateral**\n2. Vá em **Ajuda**\n3. Clique em **Tour de Navegação por Teclado**"
@@ -542,7 +546,8 @@
         "REMOTE_ISSUE_DELETED": "A issue remota foi excluída. Excluir tarefa vinculada \"{{taskTitle}}\"?",
         "REMOTE_ISSUE_DELETED_WITH_TIME": "A issue remota foi excluída, mas a tarefa \"{{taskTitle}}\" possui tempo registrado. Excluir mesmo assim?",
         "TWO_WAY_SYNC_PUSH_FAILED": "Falha no push da sincronização de duas vias: {{errorMsg}}",
-        "OAUTH_FAILED_WITH_DETAIL": "Falha na autenticação: {{detail}}"
+        "OAUTH_FAILED_WITH_DETAIL": "Falha na autenticação: {{detail}}",
+        "POST_TIME_SUCCESS": "{{providerName}}: Entrada de tempo criada com sucesso para {{issueTitle}}"
       },
       "TWO_WAY_SYNC": {
         "AUTO_CREATE_ISSUES": "Criar issues automaticamente para novas tarefas",
@@ -578,6 +583,15 @@
         "LOAD_OPTIONS_FIRST": "Carregar opções primeiro",
         "NO_OPTIONS_FOUND_HELP": "Nenhuma opção encontrada. Verifique os detalhes da conexão e recarregue as opções.",
         "OAUTH_UNAVAILABLE_WEB": "Disponível nos aplicativos desktop e móvel. As configurações sincronizadas continuam salvas, mas os dados em tempo real não podem ser carregados no aplicativo web."
+      },
+      "DIALOG_TRACK_TIME": {
+        "ACTIVITY": "Atividade",
+        "INVALID_DATE": "O valor inserido não é uma data!",
+        "POST_TIME": "Lançar Tempo",
+        "STARTED": "Iniciado",
+        "SUBMIT_TIME_FOR": "Enviar tempo para o {{providerName}} para",
+        "TIME_SPENT": "Tempo Trabalhado",
+        "TITLE": "{{providerName}}: Enviar Registro de Trabalho"
       }
     },
     "ISSUE_PANEL": {
@@ -807,33 +821,6 @@
         "REMINDER_NEEDS_TEXT": "Escreva uma reflexão antes de solicitar um lembrete",
         "REMINDER_TASK_TITLE": "Revisitar nota de reflexão",
         "TITLE": "Nota de Reflexão"
-      }
-    },
-    "NEXTCLOUD_DECK": {
-      "FORM": {
-        "BASE_URL": "URL Base do Nextcloud",
-        "FILTER_BY_ASSIGNEE": "Importar apenas cartões atribuídos a mim",
-        "IS_TRANSITION_ISSUES_ENABLED": "Sincronizar status de conclusão e título de volta ao Nextcloud Deck",
-        "PASSWORD": "Sua senha de aplicativo do Nextcloud",
-        "POLL_INTERVAL_MINUTES": "Intervalo de verificação (minutos)",
-        "TITLE_TEMPLATE": "Modelo de título da tarefa",
-        "TITLE_TEMPLATE_DESCRIPTION": "Variáveis: {CARD_TITLE}, {BOARD}, {COLUMN}, {ID}, {LABELS}. Exemplo: [{BOARD}: {COLUMN}] {CARD_TITLE}. Deixe vazio para usar apenas o título do cartão.",
-        "USERNAME": "Seu nome de usuário do Nextcloud"
-      },
-      "FORM_SECTION": {
-        "HELP": "Configure sua integração com o Nextcloud Deck para importar cartões como tarefas. Use uma senha de aplicativo para autenticação."
-      },
-      "ISSUE_CONTENT": {
-        "ASSIGNED_USERS": "Usuários Atribuídos",
-        "DECK_DESCRIPTION": "Descrição do Deck",
-        "LABELS": "Etiquetas",
-        "STACK": "Lista (Stack)"
-      },
-      "S": {
-        "BOARD_NOT_FOUND": "Nextcloud Deck: Quadro não encontrado",
-        "CARD_NOT_FOUND": "Nextcloud Deck: O cartão \"{{issueId}}\" parece ter sido excluído no servidor.",
-        "ERR_CREDENTIALS_MISSING": "Insira a URL, usuário e senha do Nextcloud primeiro.",
-        "ERR_LOAD_BOARDS": "Falha ao carregar os quadros do Deck! Verifique suas credenciais."
       }
     },
     "NOTE": {
@@ -1099,44 +1086,6 @@
       "NO_DATA": "Nenhum trabalho registrado este ano ainda. Conclua tarefas para ver seu histórico aqui.",
       "PAGE_TITLE": "Histórico Rápido",
       "WEEK_TITLE": "Semana {{nr}} ({{timeSpent}})"
-    },
-    "REDMINE": {
-      "DIALOG_TRACK_TIME": {
-        "ACTIVITY": "Atividade",
-        "INVALID_DATE": "O valor inserido não é uma data!",
-        "POST_TIME": "Lançar Tempo",
-        "STARTED": "Iniciado",
-        "SUBMIT_TIME_FOR": "Enviar tempo para o Redmine para",
-        "TIME_SPENT": "Tempo Trabalhado",
-        "TITLE": "Redmine: Enviar Registro de Trabalho"
-      },
-      "FORM": {
-        "API_KEY": "Chave de acesso à API",
-        "HOST": "Servidor (ex: https://redmine.org)",
-        "IS_SHOW_TIME_TRACKING_DIALOG": "Mostrar diálogo de registro de trabalho para reportar ao Redmine",
-        "IS_SHOW_TIME_TRACKING_DIALOG_DESCRIPTION": "Requer que o módulo de registro de trabalho esteja ativado no projeto do Redmine",
-        "IS_SHOW_TIME_TRACKING_DIALOG_FOR_EACH_SUB_TASK": "Mostrar diálogo de registro de trabalho quando as subtarefas forem concluídas",
-        "PROJECT_ID": "Identificador do Projeto",
-        "PROJECT_ID_DESCRIPTION": "Pode ser encontrado como parte da URL ao visualizar o projeto em um navegador.",
-        "SCOPE": "Escopo",
-        "SCOPE_ALL": "Todos",
-        "SCOPE_ASSIGNED": "Atribuído a mim",
-        "SCOPE_CREATED": "Criado por mim"
-      },
-      "FORM_SECTION": {
-        "HELP": "<p>Aqui você pode configurar o Super Productivity para listar issues abertas do Redmine (seja a versão online ou uma instância auto-hospedada) para um projeto específico no painel de criação de tarefas na visualização de planejador. Elas serão listadas como sugestões e fornecerão um link para a issue, bem como mais informações sobre ela.</p><p>Além disso, você pode importar automaticamente todas as issues abertas.</p>",
-        "TITLE": "Redmine"
-      },
-      "ISSUE_CONTENT": {
-        "AUTHOR": "Autor",
-        "DESCRIPTION": "Descrição",
-        "MARK_AS_CHECKED": "Marcar atualizações como verificadas",
-        "PRIORITY": "Prioridade",
-        "STATUS": "Status"
-      },
-      "S": {
-        "POST_TIME_SUCCESS": "Redmine: Entrada de tempo criada com sucesso para {{issueTitle}}"
-      }
     },
     "REFLECTION_NOTE": {
       "ACTION_DISMISS": "Dispensar",
@@ -2943,8 +2892,17 @@
     },
     "SOUND": {
       "BREAK_REMINDER_SOUND": "Som do lembrete de pausa",
+      "DING": "Sino",
       "DONE_SOUND": "Som de tarefa concluída",
       "IS_INCREASE_DONE_PITCH": "Aumentar tom para cada tarefa concluída",
+      "SMALL_DING": "Sino pequeno",
+      "SOUND_1": "Som 1",
+      "SOUND_2": "Som 2",
+      "SOUND_3": "Som 3",
+      "SOUND_4": "Som 4",
+      "SOUND_5": "Som 5",
+      "SOUND_6": "Som 6",
+      "SOUND_7": "Som 7",
       "TITLE": "Som",
       "TRACK_TIME_SOUND": "Som do lembrete de registro de trabalho",
       "VOLUME": "Volume"
@@ -3090,6 +3048,7 @@
       "CONTRIBUTE": "Contribuir",
       "GET_HELP_ONLINE": "Obter ajuda online",
       "KEYBOARD": "Como fazer: Teclado avançado",
+      "QUICK_TOUR": "Tour rápido",
       "REDDIT_COMMUNITY": "Comunidade no Reddit",
       "REPORT_A_PROBLEM": "Relatar um problema",
       "SEND_FEEDBACK": "Enviar feedback",
@@ -3182,6 +3141,10 @@
     "HINTS": {
       "CREATE_TASK": "Clique em + para adicionar sua primeira tarefa",
       "CREATE_TASK_TOUCH": "Toque em + para adicionar sua primeira tarefa",
+      "DECLINED": "Sem problema. Está em Ajuda → Tour rápido sempre que quiser.",
+      "MORE_FALLBACK": "Já há mais coisas ativadas: projetos, registro de tempo, Planejador…",
+      "NO_THANKS": "Não, obrigado",
+      "SHOW_ME_MORE": "Mostrar mais ›",
       "DONE_TITLE": "Tudo pronto",
       "EXPLORE_INBOX": "Algumas dicas opcionais estão esperando na sua Entrada. Experimente ou exclua quando quiser.",
       "GOT_IT": "Entendi",
@@ -3189,9 +3152,42 @@
       "EXPLORE_TOUCH": "Sinta-se à vontade para explorar. Você pode encontrar ajuda na barra lateral.",
       "TASK_TAP_TOUCH": "Toque em uma tarefa para abrir os detalhes.",
       "TASK_SWIPE_LEFT_TOUCH": "Deslize a tarefa para a esquerda para mais ações",
+      "TODAY_AND_INBOX": "Esta tarefa está planejada para hoje, por isso aparece em {{todayIcon}} <b>Hoje</b>. Tarefas sem um projeto seu ficam em {{inboxIcon}} <b>Entrada</b>.",
+      "TODAY_AND_INBOX_PHONE": "Esta tarefa está planejada para hoje, por isso aparece em {{todayIcon}} <b>Hoje</b>. Tarefas sem um projeto seu ficam em {{inboxIcon}} <b>Entrada</b>, em ☰.",
       "TASK_SWIPE_RIGHT_TOUCH": "Deslize a tarefa para a direita para marcá-la como concluída",
       "OR_PRESS": "ou pressione",
       "SKIP_ARIA": "Dispensar dica"
+    },
+    "TOUR": {
+      "ADD_SUBTASK": "Divida em partes: clique com o botão direito na tarefa e escolha {{subtaskIcon}} <b>Adicionar subtarefa</b>",
+      "COUNTER": "{{nr}} de {{total}}",
+      "NEXT": "Próximo ›",
+      "ORGANIZE": "Crie um <b>projeto</b> seu para agrupar tarefas ou uma <b>etiqueta</b> para marcá-las. Crie um com +",
+      "ORGANIZE_COLLAPSED": "Crie um <b>projeto</b> seu para agrupar tarefas ou uma <b>etiqueta</b> para marcá-las. Expanda a barra lateral com {{expandIcon}} para criar um",
+      "ORGANIZE_PHONE": "Projetos e etiquetas ficam em ☰. Crie um <b>projeto</b> seu para agrupar tarefas ou uma <b>etiqueta</b> para marcá-las",
+      "PLANNER": "Planeje os próximos dias em {{plannerIcon}} <b>Planejador</b>",
+      "TASK_MENU_TOUCH": "Deslize uma tarefa para a esquerda para ver o menu: {{playIcon}} <b>Iniciar registro de trabalho</b>, {{subtaskIcon}} <b>Adicionar subtarefa</b>",
+      "TASK_MENU_TOUCH_NO_TRACKING": "Deslize uma tarefa para a esquerda para ver o menu, p. ex. {{subtaskIcon}} <b>Adicionar subtarefa</b>",
+      "TIMER_RUNNING": "O cronômetro está rodando. Pressione {{playIcon}} novamente ou <kbd>{{key}}</kbd> para pausar.",
+      "TIMER_RUNNING_TOUCH": "O cronômetro está rodando. Toque em {{playIcon}} no topo para pausar.",
+      "TRACK_TIME": "Passe o mouse sobre a tarefa e pressione {{playIcon}} para registrar o tempo"
+    },
+    "WANT_MORE": {
+      "BOARDS": "<b>Quadros</b> · colunas estilo Kanban para suas tarefas",
+      "DONE": "Concluído",
+      "FINISH_DAY": "<b>Encerrar dia</b> · revise e feche o seu dia",
+      "FOCUS_MODE": "<b>Modo foco</b> · Pomodoro e trabalho sem distrações",
+      "FOOTER": "Encontre isto de novo em Ajuda → Tour rápido.",
+      "HABITS": "<b>Hábitos</b> · acompanhe suas rotinas dia a dia",
+      "INTRO": "O Super Productivity começa tranquilo. Há mais quando você precisar:",
+      "OPEN_SETTINGS": "Abrir configurações ›",
+      "PLUGINS": "<b>Plugins e integrações</b> · Jira, GitHub, CalDAV e mais",
+      "SCHEDULE": "<b>Agenda</b> · seu dia em uma linha do tempo",
+      "SEARCH": "Pesquise tudo com <kbd>{{key}}</kbd>.",
+      "SEARCH_PHONE": "Pesquise tudo em ☰.",
+      "SHORT_SYNTAX": "Digite <code>#tag</code>, <code>+project</code> ou <code>@tomorrow</code> ao adicionar uma tarefa. Ajuda → Como fazer mostra mais.",
+      "SYNC": "Seus dados ficam neste dispositivo. Sincronização e backups estão em Configurações.",
+      "TITLE": "Quer mais?"
     },
     "SYNC_CTA": "Já usa o Super Productivity em outro dispositivo?",
     "SYNC_CTA_LINK": "Configurar sincronização"

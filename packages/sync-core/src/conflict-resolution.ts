@@ -5,7 +5,7 @@ import {
   isLwwUpdatePayload,
   OpType,
 } from './operation.types';
-import type { EntityConflict, Operation } from './operation.types';
+import type { EntityConflict, LwwUpdatePayload, Operation } from './operation.types';
 import { NOOP_SYNC_LOGGER } from './sync-logger';
 import type { SyncLogger } from './sync-logger';
 
@@ -54,6 +54,23 @@ export interface LocalDeleteRemoteUpdateConversionOptions<
   payloadKey: string | ((entityType: string) => string);
   toLwwUpdateActionType: (entityType: string) => string;
   isSingletonEntityId?: (entityId: string) => boolean;
+  /**
+   * Turns the entity carried by the local DELETE into the base to recreate
+   * from, e.g. dropping a denormalized child list that is not an entity field.
+   */
+  toBaseEntity?: (
+    entity: Record<string, unknown>,
+    entityType: string,
+  ) => Record<string, unknown>;
+  /**
+   * Applies an additive UPDATE (one whose payload holds arguments such as a
+   * delta, not field values) to `entity`, or returns undefined when `op` is
+   * not additive. Without it, every payload is read as field values.
+   */
+  applyAdditiveUpdate?: (
+    entity: Record<string, unknown>,
+    op: TOperation,
+  ) => Record<string, unknown> | undefined;
   onMissingBaseEntity?: (ctx: {
     conflict: EntityConflictLike<TOperation>;
     localDeleteOp: TOperation | undefined;
@@ -117,6 +134,13 @@ const getPayloadKeys = (payload: unknown): string[] | undefined => {
  * Rewrites winning remote UPDATE ops as host LWW update ops when a local DELETE
  * loses. The host supplies payload-key resolution, LWW action-type conversion,
  * and singleton-id semantics so the core remains domain-agnostic.
+ *
+ * The remote ops are applied in order onto the deleted entity, and every
+ * converted op replaces it with the state after all of them. Each op is
+ * stored and replayed, so built from the delete payload alone, whichever
+ * applied last would erase the others (#10380); carrying the same final state
+ * also leaves their apply order irrelevant. An additive op (see
+ * `applyAdditiveUpdate`) is applied by the host, never read as fields.
  */
 export const convertLocalDeleteRemoteUpdatesToLww = <
   TOperation extends Operation<string> = Operation,
@@ -131,61 +155,80 @@ export const convertLocalDeleteRemoteUpdatesToLww = <
   }
 
   const payloadKey = resolvePayloadKey(conflict.entityType, options.payloadKey);
-  const baseEntity = extractEntityFromPayload(
+  const deletedEntity = extractEntityFromPayload(
     localDeleteOp.payload,
     payloadKey,
     conflict.entityId,
   );
+  const lwwPayloadOf = (op: TOperation): LwwUpdatePayload | undefined =>
+    op.actionType === options.toLwwUpdateActionType(op.entityType) &&
+    isLwwUpdatePayload(op.payload)
+      ? op.payload
+      : undefined;
+  const updateOps = conflict.remoteOps.filter((op) => op.opType === OpType.Update);
+
+  // The entity after every remote op; undefined while no base is known.
+  let entity =
+    deletedEntity && options.toBaseEntity
+      ? options.toBaseEntity(deletedEntity, conflict.entityType)
+      : deletedEntity;
+  for (const remoteOp of updateOps) {
+    const lwwPayload = lwwPayloadOf(remoteOp);
+    if (lwwPayload?.lwwUpdateMode === 'replace') {
+      // Only folded onto a deleted entity: without one, nothing is folded.
+      if (entity) entity = { ...extractActionPayload(lwwPayload) };
+      continue;
+    }
+    if (!entity) continue;
+    const updateChanges = lwwPayload
+      ? extractActionPayload(lwwPayload)
+      : (options.applyAdditiveUpdate?.(entity, remoteOp) ??
+        extractUpdateChanges(
+          remoteOp.payload,
+          resolvePayloadKey(remoteOp.entityType, options.payloadKey),
+          conflict.entityId,
+        ));
+    // NOTE (#9256): this still classifies "is a singleton" by `entityId === '*'`,
+    // the same conflation the host fixed by switching to a storage-pattern check
+    // (see isLwwPayloadIdCanonical). A singleton with a COMPOSITE conflict id
+    // (e.g. TIME_TRACKING) would fall into the else branch and get `id` injected
+    // into its whole-slice payload — and the host's LWW reducer would then
+    // replace the WHOLE feature slice with that merged shape.
+    //
+    // Unreachable today, but NOT because "singletons never emit deletes": they
+    // do — menuTreeDeleteFolder emits MENU_TREE + OpType.Delete with a folderId
+    // entityId. The actual guard is `entity` above: extractEntityFromPayload
+    // finds nothing in that delete payload (no `menuTree` key, no id-matching
+    // array element, no top-level `id` — the field is named `folderId`), so this
+    // branch is skipped. That means renaming such a payload field to `id`, or
+    // adding a singleton delete that carries its entity, ARMS this line. Migrate
+    // to a storage-pattern predicate before either happens.
+    entity = options.isSingletonEntityId?.(conflict.entityId)
+      ? { ...entity, ...updateChanges }
+      : { ...entity, ...updateChanges, id: conflict.entityId };
+  }
 
   return conflict.remoteOps.map((remoteOp) => {
     if (remoteOp.opType !== OpType.Update) {
       return remoteOp;
     }
 
-    const lwwActionType = options.toLwwUpdateActionType(remoteOp.entityType);
-    const existingLwwPayload =
-      remoteOp.actionType === lwwActionType && isLwwUpdatePayload(remoteOp.payload)
-        ? remoteOp.payload
-        : undefined;
-    if (existingLwwPayload?.lwwUpdateMode === 'replace') {
+    const lwwPayload = lwwPayloadOf(remoteOp);
+    // A lone replacement already is the final state, and without a deleted
+    // entity a replacement is all there is: keep its payload as is.
+    if (lwwPayload?.lwwUpdateMode === 'replace' && (updateOps.length === 1 || !entity)) {
       return {
         ...remoteOp,
-        payload: {
-          ...existingLwwPayload,
-          recreatesEntityAfterDelete: true,
-        },
+        payload: { ...lwwPayload, recreatesEntityAfterDelete: true },
       } as TOperation;
     }
 
-    if (baseEntity) {
-      const remotePayloadKey = resolvePayloadKey(remoteOp.entityType, options.payloadKey);
-      const updateChanges = existingLwwPayload
-        ? extractActionPayload(existingLwwPayload)
-        : extractUpdateChanges(remoteOp.payload, remotePayloadKey, conflict.entityId);
-      // NOTE (#9256): this still classifies "is a singleton" by `entityId === '*'`,
-      // the same conflation the host fixed by switching to a storage-pattern check
-      // (see isLwwPayloadIdCanonical). A singleton with a COMPOSITE conflict id
-      // (e.g. TIME_TRACKING) would fall into the else branch and get `id` injected
-      // into its whole-slice payload — and the host's LWW reducer would then
-      // replace the WHOLE feature slice with that merged shape.
-      //
-      // Unreachable today, but NOT because "singletons never emit deletes": they
-      // do — menuTreeDeleteFolder emits MENU_TREE + OpType.Delete with a folderId
-      // entityId. The actual guard is `baseEntity` above: extractEntityFromPayload
-      // finds nothing in that delete payload (no `menuTree` key, no id-matching
-      // array element, no top-level `id` — the field is named `folderId`), so this
-      // branch is skipped. That means renaming such a payload field to `id`, or
-      // adding a singleton delete that carries its entity, ARMS this line. Migrate
-      // to a storage-pattern predicate before either happens.
-      const mergedEntity = options.isSingletonEntityId?.(conflict.entityId)
-        ? { ...baseEntity, ...updateChanges }
-        : { ...baseEntity, ...updateChanges, id: conflict.entityId };
-
+    if (entity) {
       return {
         ...remoteOp,
-        actionType: lwwActionType,
+        actionType: options.toLwwUpdateActionType(remoteOp.entityType),
         payload: {
-          actionPayload: mergedEntity,
+          actionPayload: entity,
           entityChanges: [],
           lwwUpdateMode: 'replace',
           recreatesEntityAfterDelete: true,

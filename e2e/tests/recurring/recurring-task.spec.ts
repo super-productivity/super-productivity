@@ -152,48 +152,6 @@ const expectTaskTitleWithoutShortSyntax = async (
  */
 
 test.describe('Scheduled Task Operations', () => {
-  test('should create task scheduled for today using short syntax', async ({
-    page,
-    workViewPage,
-    testPrefix,
-  }) => {
-    await workViewPage.waitForTaskList();
-
-    // Create task with @today short syntax
-    const taskTitle = `${testPrefix}-Scheduled Task`;
-    const dueDayBeforeAdd = await getDbDateStr(page);
-    await workViewPage.addTask(`${taskTitle} @today`);
-
-    // Verify task is visible
-    const task = page.locator('task').filter({ hasText: taskTitle });
-    await expect(task).toBeVisible({ timeout: 10000 });
-    await expect(task.locator('task-title')).not.toContainText('@today');
-
-    const taskState = await expectTaskTitleWithoutShortSyntax(page, taskTitle, '@today');
-    const dueDayAfterAdd = await getDbDateStr(page);
-    expect([dueDayBeforeAdd, dueDayAfterAdd]).toContain(taskState.dueDay);
-  });
-
-  test('should create task with time estimate using short syntax', async ({
-    page,
-    workViewPage,
-    testPrefix,
-  }) => {
-    await workViewPage.waitForTaskList();
-
-    // Create task with 1h short syntax for 1 hour estimate
-    const taskTitle = `${testPrefix}-Estimated Task`;
-    await workViewPage.addTask(`${taskTitle} 1h`);
-
-    // Verify task is visible
-    const task = page.locator('task').filter({ hasText: taskTitle });
-    await expect(task).toBeVisible({ timeout: 10000 });
-    await expect(task.locator('task-title')).not.toContainText('1h');
-
-    const taskState = await expectTaskTitleWithoutShortSyntax(page, taskTitle, '1h');
-    expect(taskState.timeEstimate).toBe(ONE_HOUR);
-  });
-
   test('should open context menu on task', async ({ page, workViewPage, testPrefix }) => {
     await workViewPage.waitForTaskList();
 

@@ -30,7 +30,9 @@ This document provides step-by-step instructions for completing the security har
 
    ✅ Require status checks to pass before merging
       ✅ Require branches to be up to date before merging
-      ✅ Status checks (select): test-on-linux
+      ✅ Status checks (select): CI Gate
+         (ci.yml skips PRs that only touch docs/wiki/**, so those never
+         report CI Gate and need an admin merge)
 
    ✅ Require conversation resolution before merging
 

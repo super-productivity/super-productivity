@@ -514,4 +514,54 @@ describe('DateTimeFormatService', () => {
       expect(adapter.format(testDate, TIME_FORMAT)).toBe('14:00');
     });
   });
+  describe('dateInputLocale for short syntax (#9340)', () => {
+    const setup = (dateTimeLocale: string): DateTimeFormatService => {
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        imports: [MatNativeDateModule],
+        providers: [
+          DateTimeFormatService,
+          { provide: DateAdapter, useClass: CustomDateAdapter },
+          {
+            provide: TranslateService,
+            useValue: { currentLang: 'en', defaultLang: 'en' },
+          },
+          provideMockStore({
+            initialState: {
+              globalConfig: {
+                ...DEFAULT_GLOBAL_CONFIG,
+                localization: { ...DEFAULT_GLOBAL_CONFIG.localization, dateTimeLocale },
+              },
+            },
+          }),
+        ],
+      });
+      return TestBed.inject(DateTimeFormatService);
+    };
+
+    it('reads dates day-first for a day-first date format', () => {
+      const s = setup(DateTimeLocales.en_gb);
+      TestBed.flushEffects();
+      expect(s.dateInputLocale()).toEqual({ language: 'en', isDayFirst: true });
+    });
+
+    it('reads dates month-first for a US date format', () => {
+      const s = setup(DateTimeLocales.en_us);
+      TestBed.flushEffects();
+      expect(s.dateInputLocale()).toEqual({ language: 'en', isDayFirst: false });
+    });
+
+    it('reads dates month-first for the year-first ISO format', () => {
+      const s = setup(DateTimeLocales.sv);
+      TestBed.flushEffects();
+      expect(s.dateInputLocale().isDayFirst).toBe(false);
+    });
+
+    it('follows the UI language for date words, independent of the date format', () => {
+      const s = setup(DateTimeLocales.en_us);
+      s.setUiLanguage('de');
+      TestBed.flushEffects();
+      expect(s.dateInputLocale()).toEqual({ language: 'de', isDayFirst: false });
+    });
+  });
 });

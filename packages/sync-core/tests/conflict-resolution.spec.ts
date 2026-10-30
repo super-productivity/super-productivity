@@ -1273,6 +1273,125 @@ describe('convertLocalDeleteRemoteUpdatesToLww', () => {
       }),
     ).toEqual([remoteCreate]);
   });
+
+  describe('several winners and additive ops (#10380)', () => {
+    const DELTA = '[Test] Delta';
+    const deleteOp = createOp({
+      id: 'local-delete',
+      opType: OpType.Delete,
+      payload: {
+        task: { id: 'task-1', title: 'Deleted', time: 5, subTasks: [{ id: 'sub' }] },
+      },
+    });
+    const delta = (id: string, amount: number): Operation =>
+      createOp({ id, actionType: DELTA, payload: { taskId: 'task-1', amount } });
+    const rename = (id: string, title: string): Operation =>
+      createOp({ id, payload: { task: { id: 'task-1', changes: { title } } } });
+    const options = {
+      payloadKey: 'task',
+      toLwwUpdateActionType,
+      toBaseEntity: (entity: Record<string, unknown>): Record<string, unknown> => {
+        const rest = { ...entity };
+        delete rest['subTasks'];
+        return rest;
+      },
+      applyAdditiveUpdate: (
+        entity: Record<string, unknown>,
+        op: Operation,
+      ): Record<string, unknown> | undefined =>
+        op.actionType === DELTA
+          ? {
+              ...entity,
+              time:
+                (entity['time'] as number) +
+                ((op.payload as { amount: number }).amount ?? 0),
+            }
+          : undefined,
+    };
+    const states = (ops: Operation[]): unknown[] =>
+      ops.map((op) => (op.payload as { actionPayload: unknown }).actionPayload);
+
+    it('applies an additive op instead of reading its arguments as fields', () => {
+      const result = convertLocalDeleteRemoteUpdatesToLww(
+        createConflict([deleteOp], [delta('d1', 2)]),
+        options,
+      );
+
+      expect(states(result)).toEqual([{ id: 'task-1', title: 'Deleted', time: 7 }]);
+      expect(result[0].payload).toEqual(
+        expect.objectContaining({
+          lwwUpdateMode: 'replace',
+          recreatesEntityAfterDelete: true,
+        }),
+      );
+    });
+
+    it('gives every converted op the state after all winners, applied in order', () => {
+      const result = convertLocalDeleteRemoteUpdatesToLww(
+        createConflict(
+          [deleteOp],
+          [delta('d1', 2), rename('r1', 'Renamed'), delta('d2', 3)],
+        ),
+        options,
+      );
+
+      expect(result.map((op) => op.id)).toEqual(['d1', 'r1', 'd2']);
+      const final = { id: 'task-1', title: 'Renamed', time: 10 };
+      expect(states(result)).toEqual([final, final, final]);
+    });
+
+    it('folds nothing without a deleted entity: a replacement stays, the rest cannot recreate', () => {
+      const replacement = createOp({
+        id: 'remote-lww',
+        actionType: '[TASK] LWW Update',
+        payload: {
+          actionPayload: { id: 'task-1', title: 'Snapshot', time: 1 },
+          entityChanges: [],
+          lwwUpdateMode: 'replace',
+        },
+      });
+      const later = rename('r1', 'Renamed');
+      const missing: string[] = [];
+      const result = convertLocalDeleteRemoteUpdatesToLww(
+        createConflict(
+          [createOp({ id: 'local-delete', opType: OpType.Delete, payload: {} })],
+          [replacement, later],
+        ),
+        { ...options, onMissingBaseEntity: ({ remoteOp }) => missing.push(remoteOp.id) },
+      );
+
+      expect(result).toEqual([
+        {
+          ...replacement,
+          payload: {
+            ...(replacement.payload as object),
+            recreatesEntityAfterDelete: true,
+          },
+        },
+        later,
+      ]);
+      expect(missing).toEqual(['r1']);
+    });
+
+    it('lets a replacement winner reset the state the later winners build on', () => {
+      const replacement = createOp({
+        id: 'remote-lww',
+        actionType: '[TASK] LWW Update',
+        payload: {
+          actionPayload: { id: 'task-1', title: 'Snapshot', time: 1 },
+          entityChanges: [],
+          lwwUpdateMode: 'replace',
+        },
+      });
+      const result = convertLocalDeleteRemoteUpdatesToLww(
+        createConflict([deleteOp], [delta('d0', 4), replacement, delta('d1', 2)]),
+        options,
+      );
+
+      const final = { id: 'task-1', title: 'Snapshot', time: 3 };
+      expect(states(result)).toEqual([final, final, final]);
+    });
+  });
 });
 
 describe('buildEntityFrontier', () => {

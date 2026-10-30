@@ -4,6 +4,9 @@ How the global add-task bar is positioned over the keyboard, and the full #8508
 saga. **Read this before touching anything keyboard/IME-related on Android — this
 area has regressed repeatedly (#8295, then #8508).**
 
+> **Capacitor 8.5.2+ changed the inset contract** — see the next section first;
+> what follows the banners below predates it.
+
 > **Update (2026-06-22): migrated off `@capawesome/...edge-to-edge-support` to
 > Capacitor's built-in `SystemBars`** (`insetsHandling: 'css'`). Edge-to-edge
 > insets + IME padding are now handled by SystemBars on **WebView ≥ 140** (or
@@ -21,6 +24,81 @@ area has regressed repeatedly (#8295, then #8508).**
 > Android 16 phone) still resize the window for the keyboard. Insetting on top of
 > that double-counts and squashes the WebView. See #8508 below. Any future inset
 > must _detect_ whether the window already resized.
+
+## Capacitor 8.5.2+ — SystemBars pads the DecorView
+
+**Read this before trusting anything below about who insets what.** Capacitor
+8.5.2 rewrote `SystemBars` (ionic-team/capacitor#8535); the sections further
+down describe the 8.4/8.5.1 contract and are kept as history. Read off the
+bundled `SystemBars.java`, 8.4.1 vs 8.5.3:
+
+| What                    | ≤ 8.5.1                                                    | ≥ 8.5.2                                                                        |
+| ----------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| Listener installed on   | the WebView's parent                                       | the window's **DecorView** (holds `android.R.id.content`)                      |
+| Non-passthrough padding | system bars + IME, **API ≥ 35 only**                       | system bars + IME, **every API level**                                         |
+| Passthrough padding     | IME only (WebView parent)                                  | IME only (DecorView)                                                           |
+| `viewport-fit` detected | `onDOMReady` (JS interface)                                | `onPageCommitVisible`, or `initialViewportFitValueHint` up front               |
+| Initial CSS injection   | real px once at load (API ≥ 35), then the listener's value | none; only the listener writes `--safe-area-inset-*` (0px outside passthrough) |
+
+Passthrough is still `WebView major >= 140 && viewport-fit=cover`. Per band, with
+`initialViewportFitValueHint: 'cover'` (set in `capacitor.config.ts`):
+
+| Band                    | WebView position                                       | `--safe-area-inset-*`                | Our shims (`NativeInsetShimGate`)                                  |
+| ----------------------- | ------------------------------------------------------ | ------------------------------------ | ------------------------------------------------------------------ |
+| any API, WebView ≥ 140  | edge-to-edge; DecorView padded by the IME only         | real px (bottom 0px while IME is up) | off                                                                |
+| API ≥ 35, WebView < 140 | inside DecorView padded by system bars + IME           | 0px                                  | off                                                                |
+| API < 35, WebView < 140 | inside DecorView padded by system bars + IME (**new**) | 0px                                  | on, but measure the inset that is already there and change nothing |
+
+Measured on the CI emulators (2026-10, 640 px root, density 1.0;
+`SUPOverlayTest` / `SUPKeyboardTest` logcat lines — "before fix" from Actions run
+38891696163 on 3730e05, "after fix" from run 38892553227 on 072cacf):
+
+| Emulator            | Branch      | DecorView padding (rest → IME up) | Overlay before fix                  | Overlay after fix                                  |
+| ------------------- | ----------- | --------------------------------- | ----------------------------------- | -------------------------------------------------- |
+| API 35, WebView 124 | non-passth. | `0,24,0,24` → `0,24,0,259`        | FAB bottom 586, expected 610 (−24)  | FAB 610; bar 339 above keyboard top 381; 574 after |
+| API 34, WebView 113 | non-passth. | `0,24,0,0` → `0,24,0,235`         | (not reached — API 35 failed first) | FAB 634; bar 363 above keyboard top 405; 598 after |
+
+Neither CI image reaches passthrough (WebView ≥ 140), the branch current
+devices take — that one is on the device checklist.
+
+Consequences we handled:
+
+- **Startup overlay was lifted twice.** `StartupOverlayManager` added the nav-bar
+  inset and the keyboard height as its own margins inside `android.R.id.content`,
+  which the DecorView padding now already lifts. It was fixed to measure its
+  container against the window's visible display frame. The native startup
+  overlay (and `StartupOverlayInsetInstrumentedTest`) has since been removed:
+  its placeholder FAB never matched the themed web FAB it handed off to (#7098).
+- **Startup layout jump.** Without the hint, WebView ≥ 140 started in the
+  non-passthrough branch (DecorView padded) until the page committed, then
+  jumped. `initialViewportFitValueHint: 'cover'` starts it in passthrough; it
+  must change together with the `viewport-fit=cover` tag in `src/index.html`.
+- **Shims became no-ops in their band.** `adjustWebViewHeightForKeyboard` and
+  `pushStatusBarOverlap` are absolute measurements, so with the DecorView already
+  padded they write the height the WebView already has and publish 0px. Kept as
+  the fallback for a Capacitor pin back to ≤ 8.5.1 until real devices in the band
+  confirm the new branch; see `NativeInsetShimGate`.
+- **Not handled, check on a device:** the listener now sits on the DecorView, so
+  it replaces `DecorView.onApplyWindowInsets`, where the framework updates its
+  status/nav-bar colour views. The padded bar strips show the window background
+  instead — the theme colour once `NavigationBarPlugin.setWebViewBackgroundColor`
+  has run, `@color/windowBackground` before boot. Check the bar colours at cold
+  start on API 28–34.
+- The **"API ≥ 35 + WebView < 140 double-count"** risk below is gone by
+  construction: outside passthrough the vars are 0px, and there is no initial
+  real-px injection any more.
+
+Open upstream reports to watch (not reproduced here — the emulators CI can boot
+are API 34/35; a WebView ≥ 107 the app accepts does not ship on an API < 30 image):
+
+- ionic-team/capacitor#8603 — bottom inset 0 on API < 30. Needs
+  `LAYOUT_HIDE_NAVIGATION` (e.g. androidx `EdgeToEdge.enable()`), which this app
+  does not set: the StatusBar plugin sets only `LAYOUT_STABLE | LAYOUT_FULLSCREEN`,
+  so the window does not extend under the nav bar there. Check API 28/29 on a
+  device anyway.
+- ionic-team/capacitor#8622 — passthrough IME resize short or doubled on some
+  OEM builds (Xiaomi/MIUI, One UI) and API 36. Reported back to 8.3.0, so not
+  introduced by 8.5.2, but it is the passthrough path every current device takes.
 
 ## How the bar is positioned
 
@@ -349,45 +427,32 @@ height once inset). Publish it (physical px → CSS px, deduped) as the
 `--android-status-bar-overlap` CSS var, gated by `NativeInsetShimGate`
 (**SDK < 35 AND WebView < 140** since #9316; originally SDK < 30 — mirrors the
 keyboard shim, never fights SystemBars). The var is folded into the
-SCSS fallback (`_css-variables.scss`) — NOT written from JS, so it never races
-SystemBars on `--safe-area-inset-*`:
+SCSS token (`_css-variables.scss`) without writing SystemBars' own
+`--safe-area-inset-*` properties:
 
 ```scss
+--android-status-bar-overlap: initial;
 --safe-area-top: var(
-  --safe-area-inset-top,
-  max(env(safe-area-inset-top, 0px), var(--android-status-bar-overlap, 0px))
+  --android-status-bar-overlap,
+  var(--safe-area-inset-top, env(safe-area-inset-top, 0px))
 );
 ```
 
-- `max()`, not a sum, so it never double-counts: WebView < 140 edge-to-edge →
-  env 0, overlap = status bar → status bar; once inset → env 0, overlap 0 → 0.
-- On **API >= 35 / WebView >= 140** `--safe-area-inset-top` is set (SystemBars) or
-  env() is correct, so `var()` precedence / `max()` ignore the overlap entirely —
-  verified behavior untouched.
-- JS readers (`_patchCdkViewportForSafeArea`) still parse the `var(max(...))`
-  token to 0, so overlay positioning is unchanged — preserving #8283 scoping
-  (only the header padding is affected).
-- ~~Known small gap: an **API 30–34** device on an **old WebView < 140** also has
-  env()==0 but is excluded by the SDK < 30 gate; rare (WebView auto-updates above
-  API 30) — broaden the gate to WebView-only if it ever surfaces.~~ **It surfaced
-  (#9316); the gate was broadened — see the section below.**
-- **Known gap, pre-existing — follow-up, not part of #9316:** SystemBars 8.4 also
-  injects `--safe-area-inset-top: 0px` _inline_ on its non-passthrough path at
-  **every** API level (`SystemBars.initWindowInsetsListener`: zeroed `newInsets` →
-  `injectSafeAreaCSS`, re-fired on `onPageCommitVisible`, `onDOMReady` and each
-  IME toggle). `var(--safe-area-inset-top, …)` therefore resolves to `0px` and the
-  `max(env(), var(--android-status-bar-overlap))` fallback is never consulted — the
-  overlap var published by `pushStatusBarOverlap` is shadowed on exactly the band
-  the shim runs on, so the header fix above is most likely inert there. Not yet
-  device-verified. To settle it: log
-  `getComputedStyle(document.documentElement).getPropertyValue('--safe-area-top')`
-  on the API 34 emulator; if `0px`, move the overlap out of the fallback, e.g.
-  `max(var(--safe-area-inset-top, env(safe-area-inset-top, 0px)), var(--android-status-bar-overlap, 0px))`
-  (safe: the var is only ever written where the gate is on).
+- On the shim's API < 35 / WebView < 140 path, the measured overlap takes
+  precedence, including 0 when the WebView is already inset. No insets are added.
+- Elsewhere, `initial` leaves the custom property invalid, so the fallback keeps
+  SystemBars / env() in charge. The resolved injected px value also stays numeric
+  for JS readers such as `patchCdkViewportForSafeArea`.
+- SystemBars injects `--safe-area-inset-top: 0px` even below API 35 on its
+  non-passthrough path. Previously this shadowed the native measurement inside
+  the fallback. The Android 11 / MIUI 12.5.8 status-bar overlap report prompted
+  fixing that precedence; browser verification covers the injected-zero case,
+  but the reporter's device still needs confirmation.
+- The original API < 30 shim gate was broadened for #9316; see below.
 - The var lives only as an inline style on the document, so a web-side reload
   (`window.location.reload()` — language change, PWA update, sync-conflict
   recovery) wipes it. The native dedupe (`lastStatusBarOverlapCssPx`) is reset in
-  `flushPendingShareIntent()` (runs on every frontend (re)load) so the next layout
+  `onFrontendReady()` (runs on every frontend (re)load) so the next layout
   pass re-publishes it; without the reset the unchanged value would be skipped and
   the overlap would regress after a reload.
 
@@ -556,13 +621,15 @@ detecting** whether the system already resized.
 Carried over from the 2026-06 SystemBars migration review. These are device-matrix
 items to **check**, not to blind-fix — a blind fix risks re-creating #8508.
 
-1. **API >= 35 + WebView < 140 double-count (narrow band).** In SystemBars'
+1. ~~**API >= 35 + WebView < 140 double-count (narrow band).**~~ **Gone from
+   Capacitor 8.5.2:** outside passthrough SystemBars writes only 0px into the
+   vars (see "Capacitor 8.5.2+"). Original note: In SystemBars'
    non-passthrough branch (API >= 35) it `setPadding`s the WebView parent _and_
    injects `--safe-area-inset-*`. If the web also pads via `var(--safe-area-*)`,
    that double-counts. The common API 36 case is WebView >= 140 = passthrough (no
    static parent padding, so no double-count), making this the stale-WebView
-   corner. This is what `--bottom-nav-safe-area` in `src/styles/_css-variables.scss`
-   halves the inset for. Verify on an API 35/36 device with an old WebView; if it
+   corner. `--bottom-nav-safe-area` in `src/styles/_css-variables.scss` reserves
+   the full inset and carries this caveat. Verify on an API 35/36 device with an old WebView; if it
    is real, gate the web padding off on that band rather than removing it globally.
 2. **`env(safe-area-inset-bottom)` vs `var(--safe-area-bottom)` consumers diverge
    on API >= 35.** Some SCSS reads raw `env()`, other SCSS reads
@@ -583,6 +650,36 @@ items to **check**, not to blind-fix — a blind fix risks re-creating #8508.
    `--safe-area-inset-top` resolves to real px there (it was 0 on Android before),
    so connected overlays clamp below the status bar. Likely more correct; re-test
    the overlay matrix.
+
+## Nav-bar overlap check
+
+For reports like "the system's back/home/recents buttons cover the app's
+buttons". `android/run-android-navbar-check.sh` installs a release (default: the
+latest; or a tag / local APK path) on the one attached emulator, switches to
+3-button navigation, captures the main screen and the opened side nav into
+`.tmp/navbar-check/<timestamp>/`, and fails if the lowest app element ends below
+the nav bar's top edge. It prints the WebView version: that, not the API level
+alone, decides SystemBars' branch (see "Capacitor 8.5.2+"), so cover one AVD per
+band. Run it outside the Claude Code sandbox (it needs `/dev/kvm` and the host adb):
+
+```bash
+~/Android/Sdk/emulator/emulator -avd API_35_Pixel_9 &
+android/run-android-navbar-check.sh v19.3.0
+```
+
+Measured 2026-10 on v19.3.0 (Capacitor 8.5.3), fresh install, default theme,
+3-button nav — no overlap on any band:
+
+| AVD                    | WebView | Branch                           | Main / side nav |
+| ---------------------- | ------- | -------------------------------- | --------------- |
+| API_34_Pixel_8a        | 113     | non-passthrough (DecorView pad)  | OK / –          |
+| API_35_Pixel_9         | 151     | passthrough, not edge-to-edge    | OK / OK         |
+| API_36_Pixel_10_Pro_XL | 149     | passthrough, forced edge-to-edge | OK / –          |
+
+Not covered by emulators: OEM skins (One UI, MIUI — ionic-team/capacitor#8622,
+#9462), non-default themes (Liquid Glass adds `--bottom-nav-extra-offset`),
+display/font scaling, and upgraded installs. Ask the reporter for device,
+Android and WebView version, theme and a screenshot before changing inset code.
 
 ## Device test matrix (required before merging IME changes)
 

@@ -209,11 +209,12 @@ export const initClipboardImageHandlers = (): void => {
     IPC.CLIPBOARD_READ_IMAGE,
     createValidatedHandler(
       async ({ basePath }: { basePath: string }) => {
-        const image = clipboard.readImage();
-
-        if (image.isEmpty()) {
+        const items = await clipboard.read();
+        const imageItem = items.find((item) => item.types.includes('image/png'));
+        if (!imageItem) {
           return null;
         }
+        const pngBlob = await imageItem.getType('image/png');
 
         ensureDir(basePath);
 
@@ -222,9 +223,7 @@ export const initClipboardImageHandlers = (): void => {
         const fileName = `${id}.png`;
         const filePath = path.join(basePath, fileName);
 
-        // Save as PNG
-        const pngBuffer = image.toPNG();
-        await fsPromises.writeFile(filePath, new Uint8Array(pngBuffer));
+        await fsPromises.writeFile(filePath, new Uint8Array(await pngBlob.arrayBuffer()));
 
         const stats = await fsPromises.stat(filePath);
 
@@ -246,10 +245,10 @@ export const initClipboardImageHandlers = (): void => {
         const filePaths: string[] = [];
 
         // Note: Electron's clipboard API on Windows doesn't reliably read file paths
-        // when files are copied. clipboard.readImage() is used as fallback.
+        // when files are copied. Reading the clipboard image is used as fallback.
 
         // Try reading plain text (sometimes contains file paths)
-        const plainText = clipboard.readText();
+        const plainText = await clipboard.readText();
         if (plainText && plainText.startsWith('file://')) {
           const lines = plainText.split('\n');
           for (const line of lines) {

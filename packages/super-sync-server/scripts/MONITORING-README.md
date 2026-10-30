@@ -353,7 +353,13 @@ Checks 0–5 detect the outage once containers or `/health` fail. Checks 6–8 i
 the database through the app container and catch the precursor while the server
 can still answer. This also works when `POSTGRES_SERVICE=` selects an external
 database. A failed/malformed probe and a missing `connection_limit` are themselves
-alertable problems, so the new checks cannot silently become inert.
+alertable problems, so the new checks cannot silently become inert. One exception:
+a failed probe is not alerted while a `pg_dump` younger than 6h runs on the host
+(`ps -C pg_dump`). On a slow disk the nightly backup starves the probe into a
+timeout while `/health` (check 4, a `SELECT 1` through the app) stays green, and
+check 4 still covers database liveness during the dump. The price: checks 6–8 are
+blind while the probe keeps failing, and such a run does not count toward recovery,
+so an open incident stays open until the probe answers again.
 
 Check 7 counts connections that are **busy** — `active`, or holding an open
 transaction — not connections the pool has open. Prisma keeps its connections

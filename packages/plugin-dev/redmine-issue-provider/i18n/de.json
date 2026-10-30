@@ -1,0 +1,33 @@
+{
+  "CFG": {
+    "HOST": "Host (z. B.: https://redmine.org)",
+    "API_KEY": "API-Zugriffsschlüssel",
+    "PROJECT_ID": "Projekt-Identifier",
+    "PROJECT_ID_DESC": "Kann als Teil der URL gefunden werden, wenn das Projekt im Browser angezeigt wird.",
+    "SCOPE": "Umfang",
+    "SCOPE_ALL": "Alle",
+    "SCOPE_CREATED": "Von mir erstellt",
+    "SCOPE_ASSIGNED": "Mir zugewiesen",
+    "IS_SHOW_TIME_TRACKING_DIALOG": "Zeiterfassungsdialog für Redmine anzeigen",
+    "IS_SHOW_TIME_TRACKING_DIALOG_DESC": "Erfordert, dass das Zeiterfassungsmodul für das Redmine-Projekt aktiviert ist",
+    "IS_SHOW_TIME_TRACKING_DIALOG_FOR_EACH_SUB_TASK": "Zeiterfassungsdialog beim Abschließen von Unteraufgaben anzeigen",
+    "DEFAULT_TIME": "Standardzeitwert für Dialog",
+    "DEFAULT_TIME_ALL_TIME": "Gib die gesamte Zeit ein, die für die Aufgabe aufgewendet wurde",
+    "DEFAULT_TIME_ALL_TIME_MINUS_LOGGED": "Gib die gesamte aufgewendete Zeit abzüglich der protokollierten Zeit ein",
+    "DEFAULT_TIME_TODAY": "Gib nur die heute verbrachte Zeit an",
+    "DEFAULT_TIME_YESTERDAY": "Gib nur die Zeit an, die du gestern verbracht hast"
+  },
+  "DISPLAY": {
+    "SUMMARY": "Zusammenfassung",
+    "STATUS": "Status",
+    "PRIORITY": "Priorität",
+    "AUTHOR": "Autor",
+    "ASSIGNEE": "Zuständiger",
+    "CATEGORY": "Kategorie",
+    "VERSION": "Version",
+    "DUE_DATE": "Fälligkeitsdatum",
+    "TIME_SPENT": "Aufgewendete Zeit",
+    "DESCRIPTION": "Beschreibung"
+  },
+  "FORM_HELP": "<p>Hier kannst du SuperProductivity so konfigurieren, dass offene Redmine-Issues (entweder die Online-Version oder eine selbst gehostete Instanz) für ein bestimmtes Projekt im Aufgabenerstellungsfenster in der Tagesplanungsansicht aufgelistet werden. Sie werden als Vorschläge angezeigt und enthalten einen Link zum Issue sowie weitere Informationen dazu.</p><p> Darüber hinaus kannst du alle offenen Issues automatisch importieren.</p>"
+}

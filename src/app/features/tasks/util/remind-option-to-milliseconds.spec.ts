@@ -14,6 +14,9 @@ describe('remindOptionToMilliseconds roundtrip', () => {
     TaskReminderOptionId.m15,
     TaskReminderOptionId.m30,
     TaskReminderOptionId.h1,
+    TaskReminderOptionId.d1,
+    TaskReminderOptionId.d3,
+    TaskReminderOptionId.w1,
   ];
 
   options.forEach((optId) => {
@@ -51,6 +54,45 @@ describe('remindOptionToMilliseconds roundtrip', () => {
     const m1 = 1 * 60 * 1000;
     const remindAt1m = DUE_DATE - m1;
     expect(millisecondsDiffToRemindOption(DUE_DATE, remindAt1m)).toBe(
+      TaskReminderOptionId.AtStart,
+    );
+  });
+});
+
+describe('millisecondsDiffToRemindOption long lead times', () => {
+  const DUE = new Date('2026-01-10T12:00:00Z').getTime();
+  const HOUR = 60 * 60 * 1000;
+  const DAY = 24 * HOUR;
+  const TWO_HOURS = 2 * HOUR;
+  const TWENTY_HOURS = 20 * HOUR;
+  const TWO_AND_HALF_DAYS = 2.5 * DAY;
+  const TWO_DAYS = 2 * DAY;
+  const SIX_DAYS = 6 * DAY;
+
+  it('should snap in-between diffs to the nearest long-lead bucket', () => {
+    expect(millisecondsDiffToRemindOption(DUE, DUE - TWO_HOURS)).toBe(
+      TaskReminderOptionId.h1,
+    );
+    expect(millisecondsDiffToRemindOption(DUE, DUE - TWENTY_HOURS)).toBe(
+      TaskReminderOptionId.d1,
+    );
+    expect(millisecondsDiffToRemindOption(DUE, DUE - TWO_AND_HALF_DAYS)).toBe(
+      TaskReminderOptionId.d3,
+    );
+    expect(millisecondsDiffToRemindOption(DUE, DUE - SIX_DAYS)).toBe(
+      TaskReminderOptionId.w1,
+    );
+  });
+
+  it('should return DoNotRemind without a reminder', () => {
+    expect(millisecondsDiffToRemindOption(DUE, undefined)).toBe(
+      TaskReminderOptionId.DoNotRemind,
+    );
+  });
+
+  it('should keep a reminder after the due time at start', () => {
+    // a snoozed reminder can lie after the due time
+    expect(millisecondsDiffToRemindOption(DUE, DUE + TWO_DAYS)).toBe(
       TaskReminderOptionId.AtStart,
     );
   });

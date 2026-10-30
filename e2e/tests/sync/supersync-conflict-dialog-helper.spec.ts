@@ -56,6 +56,9 @@ const archiveTasks = async (
 const restoreFromArchive = async (page: Page, title: string): Promise<void> => {
   await page.goto('/#/tag/TODAY/history');
   await page.locator('history .week-row .day-toggle').first().click();
+  // The expanding ancestors can still clip the restore button even when its own
+  // bounding box is stable enough for Playwright to click.
+  await expect(page.locator('history .ng-animating')).toHaveCount(0);
   const row = page.locator('.task-summary-table tr', { hasText: title });
   await row.getByRole('button', { name: 'Restore task from archive' }).click();
   await page.getByRole('button', { name: 'Do it!' }).click();

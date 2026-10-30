@@ -26,6 +26,7 @@ import { IDBFactory } from 'fake-indexeddb';
 import { asyncScheduler } from 'rxjs';
 import { clearDeferredActions } from './app/op-log/capture/operation-capture.meta-reducer';
 import { _resetDevErrorState } from './app/util/dev-error';
+import { loadIcalModule } from './app/features/schedule/ical/ical-lazy-loader';
 import { MockStore } from '@ngrx/store/testing';
 
 import { getTestBed, TestBed } from '@angular/core/testing';
@@ -87,6 +88,13 @@ if (asyncActionProto && typeof asyncActionProto.execute === 'function') {
 
 beforeAll(() => {
   jasmine.DEFAULT_TIMEOUT_INTERVAL = 2000;
+});
+
+// loadIcalModule() lazy-loads ical.js with a native import(), which fakeAsync
+// cannot flush. Warm its cache once so fakeAsync specs that parse iCal pass in
+// any spec order, not only after an async spec happened to load it first.
+beforeAll(async () => {
+  await loadIcalModule();
 });
 
 beforeEach(() => {

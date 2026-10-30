@@ -28,7 +28,6 @@ import {
   loadFromSessionStorage,
   saveToSessionStorage,
 } from '../../../../core/persistence/local-storage';
-import { RedmineCfg } from '../../../issue/providers/redmine/redmine.model';
 import { T } from '../../../../t.const';
 import { WORK_CONTEXT_THEME_CONFIG_FORM_CONFIG } from '../../../work-context/work-context.const';
 import { GitlabCfg } from 'src/app/features/issue/providers/gitlab/gitlab.model';
@@ -73,7 +72,6 @@ export class DialogCreateProjectComponent implements OnInit, OnDestroy {
   gitlabCfg?: GitlabCfg;
   caldavCfg?: CaldavCfg;
   openProjectCfg?: OpenProjectCfg;
-  redmineCfg?: RedmineCfg;
 
   formBasic: UntypedFormGroup = new UntypedFormGroup({});
   formTheme: UntypedFormGroup = new UntypedFormGroup({});

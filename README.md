@@ -2,12 +2,12 @@
 
 <p align="center">
   <strong>
-    An advanced todo list app with timeboxing & time tracking capabilities that supports importing tasks from your calendar, Jira, GitHub and others
+    A to-do list, time tracker and daily planner for focused personal work. Private, offline-first and open source.
   </strong>
 </p>
 
 <p align="center">
-  :globe_with_meridians: <a href="https://app.super-productivity.com">Open Web App</a> or :computer: <a href="https://github.com/super-productivity/super-productivity/wiki/2.01-Downloads-and-Install">Download</a>
+  :globe_with_meridians: <a href="https://app.super-productivity.com">Open Web App</a> or :computer: <a href="https://super-productivity.com/download/">Download</a>
 </p>
 
 <br/>
@@ -42,7 +42,7 @@
   <a href='//www.microsoft.com/store/apps/9NHFVG8361TW?cid=storebadge&ocid=badge' target="_blank"><img src='https://developer.microsoft.com/store/badges/images/English_get-it-from-MS.png' alt='Get it from Microsoft Store' height="30"/></a>
   <a href='https://play.google.com/store/apps/details?id=com.superproductivity.superproductivity&amp;referrer=utm_source%3Dgithub%26utm_medium%3Downed%26utm_campaign%3Dreadme' target="_blank"><img src='docs/screens/google-play-badge.svg' alt='Play Store Badge' height="30"/></a>
   <a href='//f-droid.org/en/packages/com.superproductivity.superproductivity' target="_blank"><img src='https://f-droid.org/assets/fdroid-logo-text_S0MUfk_FsnAYL7n2MQye-34IoSNm6QM6xYjDnMqkufo=.svg' alt='F-Droid Badge' height="30"/></a>
-  <a href='http://apps.obtainium.imranr.dev/redirect.html?r=obtainium://add/https://github.com/super-productivity/super-productivity/releases'><img src='https://raw.githubusercontent.com/ImranR98/Obtainium/main/assets/graphics/badge_obtainium.png' alt='Get it on Obtainium' height="30"/></a>
+  <a href='https://apps.obtainium.imranr.dev/redirect?r=obtainium%3A%2F%2Fadd%2Fhttps%3A%2F%2Fgithub.com%2Fsuper-productivity%2Fsuper-productivity%2Freleases'><img src='https://raw.githubusercontent.com/ImranR98/Obtainium/main/assets/graphics/badge_obtainium.png' alt='Get it on Obtainium' height="30"/></a>
   <a href='//apps.apple.com/app/super-productivity/id1482572463?l=en' target="_blank"><img src='docs/screens/app-store-badge.svg' alt='App Store Badge' height="30"/></a>
 </p>
 
@@ -90,7 +90,7 @@
   - **Collect personal metrics** to see, which of your work routines need adjustments.
 - Integrate with **Jira**, **Trello**, **GitHub**, **GitLab**, **Gitea**, **OpenProject**, **Linear**, **ClickUp**, **Redmine**, **Nextcloud Deck** and **Azure DevOps**. Auto import tasks assigned to you, plan the details locally, automatically create work logs, and get notified immediately, when something changes.
 - Basic **CalDAV** integration.
-- Back up and synchronize your data across multiple devices with **SuperSync**, **Dropbox** and **WebDAV** support. SuperSync is our own end-to-end encrypted sync service, which you can also [host yourself](https://github.com/super-productivity/super-productivity/tree/master/packages/super-sync-server).
+- Back up and synchronize your data across multiple devices with **SuperSync**, **Dropbox** and **WebDAV** support. SuperSync is our own sync service, end-to-end encrypted with a password only you hold, which you can also [host yourself](https://github.com/super-productivity/super-productivity/tree/master/packages/super-sync-server).
 - Attach context information to tasks and projects. Create **notes**, attach **files** or create **project-level bookmarks** for links, files, and even commands.
 - Super Productivity **respects your privacy** and **does NOT collect any data**. No account or registration is required. **You decide where you store your data!**
 - Extend and restyle the app with **[plugins](https://github.com/super-productivity/super-productivity/wiki/2.15-Develop-a-Plugin)** and **[custom themes](https://github.com/super-productivity/super-productivity/wiki/3.09-Theming)**.
@@ -177,6 +177,9 @@ Before opening a pull request, read [CONTRIBUTING.md](CONTRIBUTING.md) and follo
 A big thank you to all our sponsors!
 
 - **[SignPath.io](https://signpath.io?utm_source=foundation&utm_medium=github&utm_campaign=super-productivity)**: free code signing for our Windows binaries, with a certificate by [SignPath Foundation](https://signpath.org?utm_source=foundation&utm_medium=github&utm_campaign=super-productivity).
+- **[Blacksmith](https://www.blacksmith.sh)**: covers all our CI runner minutes for GitHub Actions.
+
+  <a href="https://www.blacksmith.sh"><img alt="CI powered by Blacksmith" src="docs/screens/blacksmith-powered-wob.png" height="60"/></a>
 
 _(If you are, intend to or have been a sponsor and want to be shown here, [please let me know](mailto:contact@super-productivity.com)!)_
 

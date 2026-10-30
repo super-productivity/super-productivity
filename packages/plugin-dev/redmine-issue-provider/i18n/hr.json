@@ -1,0 +1,33 @@
+{
+  "CFG": {
+    "HOST": "Host (npr. https://redmine.org)",
+    "API_KEY": "API ključ",
+    "PROJECT_ID": "ID projekta",
+    "PROJECT_ID_DESC": "Može se naći u URL-u kad otvoriš projekt u browseru.",
+    "SCOPE": "Opseg",
+    "SCOPE_ALL": "Sve",
+    "SCOPE_CREATED": "Stvoreno od mene",
+    "SCOPE_ASSIGNED": "Dodijeljeno meni",
+    "IS_SHOW_TIME_TRACKING_DIALOG": "Prikaži dijalog za praćenje vremena za Redmine",
+    "IS_SHOW_TIME_TRACKING_DIALOG_DESC": "Zahtijeva uključen time tracking modul u Redmine projektu",
+    "IS_SHOW_TIME_TRACKING_DIALOG_FOR_EACH_SUB_TASK": "Prikaži dijalog za svaki podzadatak",
+    "DEFAULT_TIME": "Zadani modus vremena",
+    "DEFAULT_TIME_ALL_TIME": "Popuni sve vrijeme rada",
+    "DEFAULT_TIME_ALL_TIME_MINUS_LOGGED": "Popuni vrijeme minus već prijavljeno",
+    "DEFAULT_TIME_TODAY": "Popuni samo današnje vrijeme",
+    "DEFAULT_TIME_YESTERDAY": "Popuni samo jučerašnje vrijeme"
+  },
+  "DISPLAY": {
+    "SUMMARY": "Sažetak",
+    "STATUS": "Status",
+    "PRIORITY": "Prioritet",
+    "AUTHOR": "Autor",
+    "ASSIGNEE": "Dodijeljeno",
+    "CATEGORY": "Kategorija",
+    "VERSION": "Verzija",
+    "DUE_DATE": "Rok",
+    "TIME_SPENT": "Utrošeno vrijeme",
+    "DESCRIPTION": "Opis"
+  },
+  "FORM_HELP": "<p>Ovdje možeš podesiti Super Productivity da prikazuje otvorene Redmine probleme (online ili vlastiti hosting) za određeni projekt u ploči za stvaranje zadataka u dnevnom planiranju. Prikazat će se kao prijedlozi s poveznicom i dodatnim informacijama.</p><p>Također možeš automatski uvesti sve otvorene probleme.</p>"
+}

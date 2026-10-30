@@ -9,12 +9,12 @@ import { JIRA_ISSUE_CONTENT_CONFIG } from '../providers/jira/jira-issue-content.
 import { GITLAB_ISSUE_CONTENT_CONFIG } from '../providers/gitlab/gitlab-issue-content.const';
 import { CALDAV_ISSUE_CONTENT_CONFIG } from '../providers/caldav/caldav-issue-content.const';
 // Gitea is now a plugin — content config lives in the plugin's issueDisplay
-import { REDMINE_ISSUE_CONTENT_CONFIG } from '../providers/redmine/redmine-issue-content.const';
+// Redmine is now a plugin — content config lives in the plugin's issueDisplay
 import { OPEN_PROJECT_ISSUE_CONTENT_CONFIG } from '../providers/open-project/open-project-issue-content.const';
 // Trello is now a plugin — content config lives in the plugin's issueDisplay
 // Linear is now a plugin — content config lives in the plugin's issueDisplay
 // Azure DevOps is now a plugin — content config lives in the plugin's issueDisplay
-import { NEXTCLOUD_DECK_ISSUE_CONTENT_CONFIG } from '../providers/nextcloud-deck/nextcloud-deck-issue-content.const';
+// Nextcloud Deck is now a plugin — content config lives in the plugin's issueDisplay
 import { PLAINSPACE_ISSUE_CONTENT_CONFIG } from '../providers/plainspace/plainspace-issue-content.const';
 
 // Re-export types for backwards compatibility
@@ -27,9 +27,7 @@ export const ISSUE_CONTENT_CONFIGS: Record<
   GITLAB: GITLAB_ISSUE_CONTENT_CONFIG,
   JIRA: JIRA_ISSUE_CONTENT_CONFIG,
   CALDAV: CALDAV_ISSUE_CONTENT_CONFIG,
-  REDMINE: REDMINE_ISSUE_CONTENT_CONFIG,
   OPEN_PROJECT: OPEN_PROJECT_ISSUE_CONTENT_CONFIG,
-  NEXTCLOUD_DECK: NEXTCLOUD_DECK_ISSUE_CONTENT_CONFIG,
   PLAINSPACE: PLAINSPACE_ISSUE_CONTENT_CONFIG,
   ICAL: {
     issueType: 'ICAL',

@@ -83,6 +83,53 @@ class WidgetDataTest {
         assertNull(WidgetData.parse(json)[0].projectColor)
     }
 
+    // --- parseCurrentTask: the "which task, which device" contract ---
+
+    private val NOW = 1_700_000_000_000L
+
+    @Test
+    fun parsesCurrentTask() {
+        val json =
+            """{"v":1,"tasks":[],"currentTask":{"id":"t1","title":"Write report","deviceLabel":"Desktop","isLocal":false}}"""
+        assertEquals(WidgetCurrentTask("Write report", "Desktop"), WidgetData.parseCurrentTask(json, NOW))
+    }
+
+    @Test
+    fun nullCurrentTaskParsesToNull() {
+        assertNull(WidgetData.parseCurrentTask("""{"v":1,"tasks":[],"currentTask":null}""", NOW))
+    }
+
+    @Test
+    fun missingCurrentTaskParsesToNull() {
+        assertNull(WidgetData.parseCurrentTask("""{"v":1,"tasks":[]}""", NOW))
+    }
+
+    @Test
+    fun currentTaskUnknownVersionParsesToNull() {
+        val json =
+            """{"v":2,"tasks":[],"currentTask":{"id":"t1","title":"X","deviceLabel":"Desktop","isLocal":false}}"""
+        assertNull(WidgetData.parseCurrentTask(json, NOW))
+    }
+
+    @Test
+    fun remoteCurrentTaskIsShownBeforeItsExpiry() {
+        val json =
+            """{"v":1,"tasks":[],"currentTask":{"id":"t1","title":"X","deviceLabel":"Desktop","isLocal":false,"expiresAt":${NOW + 1}}}"""
+        assertEquals(WidgetCurrentTask("X", "Desktop"), WidgetData.parseCurrentTask(json, NOW))
+    }
+
+    @Test
+    fun expiredRemoteCurrentTaskParsesToNull() {
+        val json =
+            """{"v":1,"tasks":[],"currentTask":{"id":"t1","title":"X","deviceLabel":"Desktop","isLocal":false,"expiresAt":$NOW}}"""
+        assertNull(WidgetData.parseCurrentTask(json, NOW))
+    }
+
+    @Test
+    fun currentTaskUnparseableBlobDegradesInsteadOfThrowing() {
+        assertNull(WidgetData.parseCurrentTask("not json", NOW))
+    }
+
     @Test
     fun parsesStalenessStamp() {
         val meta = WidgetData.parseMeta(blob)

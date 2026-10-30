@@ -19,6 +19,7 @@ import { WorkContextService } from '../work-context/work-context.service';
 import { Task } from '../tasks/task.model';
 import { TaskService } from '../tasks/task.service';
 import { DataInitStateService } from '../../core/data-init/data-init-state.service';
+import { UiHelperService } from '../ui-helper/ui-helper.service';
 import {
   DialogFinishDayBeforeCloseComponent,
   FinishDayBeforeCloseChoice,
@@ -36,6 +37,8 @@ export class FinishDayBeforeCloseEffects {
   private _workContextService = inject(WorkContextService);
   private _matDialog = inject(MatDialog);
   private _router = inject(Router);
+  private _uiHelperService = inject(UiHelperService);
+  private _isPromptOpen = false;
 
   isEnabled$: Observable<boolean> =
     this._dataInitStateService.isAllDataLoadedInitially$.pipe(
@@ -93,13 +96,27 @@ export class FinishDayBeforeCloseEffects {
     );
 
   async _handleCloseDecision(todayMainTasks: Task[]): Promise<void> {
+    // Finish Day archives every done task, won't-do ones too.
     const doneCount = todayMainTasks.filter((t) => t.isDone).length;
     if (doneCount === 0) {
       this._execBeforeCloseService.setDone(EXEC_BEFORE_CLOSE_ID);
       return;
     }
 
-    const choice = await this._showDialog(doneCount);
+    // Quitting from the tray can leave the window hidden, and the prompt must
+    // be seen for the quit to go on.
+    this._uiHelperService.focusApp();
+    // A repeated Quit while the prompt is open only brings it to the front.
+    if (this._isPromptOpen) {
+      return;
+    }
+    this._isPromptOpen = true;
+    let choice: FinishDayBeforeCloseChoice;
+    try {
+      choice = await this._showDialog(doneCount);
+    } finally {
+      this._isPromptOpen = false;
+    }
     if (choice === 'quit') {
       this._execBeforeCloseService.setDone(EXEC_BEFORE_CLOSE_ID);
     } else if (choice === 'finish-day') {

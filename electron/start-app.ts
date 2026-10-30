@@ -17,6 +17,7 @@ import { IPC } from './shared-with-frontend/ipc-events.const';
 import { initBackupAdapter } from './backup';
 import { initLocalFileSyncAdapter } from './local-file-sync';
 import { initFullScreenBlocker } from './full-screen-blocker';
+import { initLauncherShortcuts } from './launcher-shortcuts';
 import { CONFIG } from './CONFIG';
 import { lazySetInterval } from './shared-with-frontend/lazy-set-interval';
 import { initIndicator } from './indicator';
@@ -29,7 +30,6 @@ import {
   processPendingProtocolUrls,
 } from './protocol-handler';
 import { getIsQuiting, setIsLocked } from './shared-state';
-import { clearStaleLevelDbLocks } from './clear-stale-idb-locks';
 import { evaluateGpuStartupGuard } from './gpu-startup-guard';
 import * as fs from 'fs';
 
@@ -51,7 +51,6 @@ let isShowDevTools: boolean = IS_DEV;
 let customUrl: string;
 let isDisableTray = false;
 let forceDarkTray = false;
-let wasUserDataDirSet = false;
 
 if (IS_DEV) {
   log('Starting in DEV Mode!!!');
@@ -134,7 +133,6 @@ export const startApp = (): void => {
         .replace(/[\/\\]+$/, ''); // Remove trailing slashes
       log('Using custom directory for user data', customUserDir);
       app.setPath('userData', customUserDir);
-      wasUserDataDirSet = true;
     }
 
     if (val && val.includes('--custom-url=')) {
@@ -147,26 +145,8 @@ export const startApp = (): void => {
     }
   });
 
-  // TODO remove at one point in the future and only leave the directory setting part
-  // Special handling for snaps, since default user folder will cause problems when updating
-  if (
-    !wasUserDataDirSet &&
-    process.platform === 'linux' &&
-    process.env.SNAP &&
-    process.env.SNAP_USER_COMMON
-  ) {
-    // COPY LEGACY SNAP DATA TO COMMON DIRECTORY
-    // -----------------------------------------
-    const appName = app.getName();
-    const commonDir = process.env.SNAP_USER_COMMON;
-    const newPath = join(commonDir, '.config', appName);
-
-    // SET COMMON DIRECTORY AS USER DATA DIRECTORY
-    // -------------------------------------------
-    // set userDa dir to common data to avoid the data being accessed by the update process
-    app.setPath('userData', newPath);
-    app.setAppLogsPath();
-  }
+  // On snap, main.ts already moved userData to the common dir, before the
+  // single-instance lock (#11049).
 
   if (process.platform === 'linux') {
     // Pin the .desktop filename rather than letting Electron infer it. Since
@@ -334,6 +314,7 @@ export const startApp = (): void => {
   appIN.on('ready', () => initBackupAdapter());
   appIN.on('ready', () => initLocalFileSyncAdapter());
   appIN.on('ready', () => initFullScreenBlocker(IS_DEV));
+  appIN.on('ready', () => initLauncherShortcuts(appIN, () => mainWin));
 
   if (!isDisableTray) {
     appIN.on('ready', createIndicator);
@@ -427,15 +408,12 @@ export const startApp = (): void => {
     }, CONFIG.IDLE_PING_INTERVAL);
     // --------END IDLE HANDLING---------
 
-    // Track whether window was visible before suspend/lock so we only
-    // restore keyboard focus for windows that were actually in use.
-    // Using showOrFocus() unconditionally would surface hidden/minimized
-    // windows on every wake/unlock — a UX regression.
-    let wasVisibleBeforeSuspend = false;
-
+    // Don't raise or focus the window on resume/unlock: it stole focus from the
+    // app the user was in (#10726, #10700). The OS restores the previous
+    // foreground window itself; the electron#20464 workaround that used to run
+    // here targets the post-reboot case and lives in showOrFocus()/ready-to-show.
     powerMonitor.on('suspend', () => {
       log('powerMonitor: System suspend detected');
-      wasVisibleBeforeSuspend = mainWin.isVisible() && !mainWin.isMinimized();
       setIsLocked(true);
       suspendStart = Date.now();
       mainWin.webContents.send(IPC.SUSPEND);
@@ -443,7 +421,6 @@ export const startApp = (): void => {
 
     powerMonitor.on('lock-screen', () => {
       log('powerMonitor: Screen lock detected');
-      wasVisibleBeforeSuspend = mainWin.isVisible() && !mainWin.isMinimized();
       setIsLocked(true);
       suspendStart = Date.now();
       mainWin.webContents.send(IPC.SUSPEND);
@@ -455,10 +432,6 @@ export const startApp = (): void => {
       setIsLocked(false);
       sendIdleMsgIfOverMin(idleTime);
       mainWin.webContents.send(IPC.RESUME);
-      // Restore keyboard focus only if window was visible before suspend (electron#20464)
-      if (wasVisibleBeforeSuspend) {
-        showOrFocus(mainWin);
-      }
     });
 
     powerMonitor.on('unlock-screen', () => {
@@ -467,10 +440,6 @@ export const startApp = (): void => {
       setIsLocked(false);
       sendIdleMsgIfOverMin(idleTime);
       mainWin.webContents.send(IPC.RESUME);
-      // Restore keyboard focus only if window was visible before lock (electron#20464)
-      if (wasVisibleBeforeSuspend) {
-        showOrFocus(mainWin);
-      }
     });
   });
 
@@ -546,7 +515,10 @@ export const startApp = (): void => {
     initIndicator({
       app,
       showApp,
-      quitApp,
+      // Same path as the app menu's Quit: run the before-close work (sync,
+      // finish-day) first. Calling quitApp() directly set isQuiting, so the
+      // close handler skipped the pending before-close ids (#11049).
+      quitApp: () => closeWinAndQuit(quitApp),
       ICONS_FOLDER,
       forceDarkTray,
     });
@@ -554,10 +526,6 @@ export const startApp = (): void => {
 
   // eslint-disable-next-line prefer-arrow/prefer-arrow-functions
   async function createMainWin(): Promise<void> {
-    // Remove stale LevelDB LOCK files before the renderer opens IndexedDB.
-    // Orphaned locks from unclean session shutdowns block the backing store open.
-    await clearStaleLevelDbLocks(app.getPath('userData'));
-
     mainWin = await createWindow({
       app,
       IS_DEV,

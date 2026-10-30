@@ -1,8 +1,9 @@
 import { Injectable, OnDestroy, inject } from '@angular/core';
 import { Router } from '@angular/router';
-import { Subscription } from 'rxjs';
+import { Subscription, merge } from 'rxjs';
 import { concatMap, map } from 'rxjs/operators';
 import { DataInitStateService } from '../../core/data-init/data-init-state.service';
+import { ipcAppUriQuickAction$ } from '../../core/ipc-events';
 import { LayoutService } from '../layout/layout.service';
 import { TODAY_TAG } from '../../features/tag/tag.const';
 import { INBOX_PROJECT } from '../../features/project/project.const';
@@ -22,6 +23,7 @@ import { PENDING_CAPACITOR_QUICK_ACTION } from '../../core/app-uri-actions/pendi
  * one with Planner off too, so a static Home Screen item pointing at one would
  * be a dead entry for a large share of users. A static item cannot be hidden
  * per user; that would need dynamic shortcut items, i.e. a native plugin.
+ * The Android launcher shortcuts are static for the same reason.
  * Documented in wiki 3.01 §4.
  */
 const NAVIGATE_ROUTES: Record<AppUriQuickActionTarget, string> = {
@@ -31,10 +33,14 @@ const NAVIGATE_ROUTES: Record<AppUriQuickActionTarget, string> = {
 
 /**
  * Handles the UI-only actions on the app's custom URL scheme — `add-task`
- * (open the quick-add bar) and the `today`/`inbox` navigation actions. On iOS these are what the home screen quick actions (long-press the
- * app icon) resolve to: each `UIApplicationShortcutItem` carries one of the
- * URLs, the native side opens it, and it arrives here through the single
- * `appUrlOpen` listener in `main.ts`.
+ * (open the quick-add bar) and the `today`/`inbox` navigation actions. On iOS
+ * and Android these are what the launcher shortcuts (long-press the app icon)
+ * resolve to: each iOS `UIApplicationShortcutItem` and Android
+ * `res/xml/shortcuts.xml` entry carries one of the URLs, the native side opens
+ * it, and it arrives here through the single `appUrlOpen` listener in `main.ts`.
+ * On desktop the macOS dock menu and the Windows jump list open the same URLs;
+ * the Electron protocol handler forwards `today`/`inbox` over IPC and keeps
+ * handling `add-task` itself (`IPC.SHOW_ADD_TASK_BAR`).
  *
  * Deliberately thinner than its sibling `AppUriTaskActionsService`: these
  * actions never write state, so there is nothing to validate and no snack to
@@ -55,7 +61,7 @@ export class AppUriQuickActionsService implements OnDestroy {
 
   constructor() {
     this._subs.add(
-      this._pendingQuickAction$
+      merge(ipcAppUriQuickAction$, this._pendingQuickAction$)
         .pipe(
           // `concatMap` (not `mergeMap`): two actions in quick succession must
           // stay in order, or the later one's navigation could be overtaken.

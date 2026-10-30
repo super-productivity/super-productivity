@@ -250,6 +250,17 @@
         </div>
       }
     </div>
+    <div class="recently-deleted">
+      <button
+        mat-button
+        type="button"
+        class="recently-deleted-btn"
+        (click)="openRecentlyDeleted()"
+      >
+        <mat-icon>delete_outline</mat-icon>
+        {{ T.F.TASK.D_RECENTLY_DELETED.LINK | translate }}
+      </button>
+    </div>
   </div>
 } @else {
   <full-page-spinner></full-page-spinner>

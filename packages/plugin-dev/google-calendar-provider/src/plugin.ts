@@ -304,17 +304,73 @@ const fetchEventsForCalendar = async (
     .map((e) => mapEventToSearchResult(e, calendarId));
 };
 
+/** Calendar colors rarely change; reuse them across agenda polls. */
+const CALENDAR_COLORS_TTL_MS = 60 * 60 * 1000;
+// Per provider instance (each has its own OAuth token key), so two connected
+// Google accounts never share colors.
+const calendarColorsCache = new Map<
+  string,
+  { colors: Map<string, string>; fetchedAt: number }
+>();
+
+/**
+ * Each calendar's color as set in Google Calendar, keyed by calendar id ('primary'
+ * included). Only the first calendarList page is read, and per-event colors
+ * (`colorId`) are not used. Colors are cosmetic: a failed lookup keeps the last
+ * known colors, or none, and the host falls back to its own color.
+ */
+const fetchCalendarColors = async (
+  http: PluginHttp,
+  cfg: GoogleCalendarConfig,
+): Promise<Map<string, string>> => {
+  const cacheKey = cfg[SP_OAUTH_TOKEN_KEY_CFG_KEY] ?? '';
+  const cached = calendarColorsCache.get(cacheKey);
+  if (cached && Date.now() - cached.fetchedAt < CALENDAR_COLORS_TTL_MS) {
+    return cached.colors;
+  }
+  try {
+    const res = await http.get<{
+      items?: { id: string; primary?: boolean; backgroundColor?: string }[];
+    }>(`${GOOGLE_CALENDAR_API}/users/me/calendarList`, {
+      params: { fields: 'items(id,primary,backgroundColor)' },
+    });
+    const colors = new Map<string, string>();
+    for (const cal of res.items || []) {
+      if (!cal.backgroundColor) continue;
+      colors.set(cal.id, cal.backgroundColor);
+      if (cal.primary) colors.set('primary', cal.backgroundColor);
+    }
+    calendarColorsCache.set(cacheKey, { colors, fetchedAt: Date.now() });
+    return colors;
+  } catch {
+    return cached?.colors ?? new Map();
+  }
+};
+
+/** Test-only: forget cached calendar colors. */
+export const _resetCalendarColorsCache = (): void => {
+  calendarColorsCache.clear();
+};
+
 /** Fetch events from all read calendars, merged and sorted by start time. */
 const fetchEvents = async (
   http: PluginHttp,
   cfg: GoogleCalendarConfig,
-  opts?: { query?: string; maxResults?: string },
+  opts?: { query?: string; maxResults?: string; withColors?: boolean },
 ): Promise<PluginSearchResult[]> => {
   const calendarIds = getReadCalendarIds(cfg);
-  const results = await Promise.all(
-    calendarIds.map((calId) => fetchEventsForCalendar(http, calId, cfg, opts)),
-  );
-  return results.flat().sort((a, b) => (a.start ?? 0) - (b.start ?? 0));
+  const [results, colors] = await Promise.all([
+    Promise.all(
+      calendarIds.map((calId) => fetchEventsForCalendar(http, calId, cfg, opts)),
+    ),
+    opts?.withColors ? fetchCalendarColors(http, cfg) : undefined,
+  ]);
+  return results
+    .flatMap((events, i) => {
+      const color = colors?.get(calendarIds[i]);
+      return color ? events.map((e) => ({ ...e, color })) : events;
+    })
+    .sort((a, b) => (a.start ?? 0) - (b.start ?? 0));
 };
 
 // --- Load calendar list helpers ---
@@ -489,7 +545,10 @@ PluginAPI.registerIssueProvider({
     config: Record<string, unknown>,
     http: PluginHttp,
   ): Promise<PluginSearchResult[]> {
-    return fetchEvents(http, migrateConfig(config), { maxResults: '100' });
+    return fetchEvents(http, migrateConfig(config), {
+      maxResults: '100',
+      withColors: true,
+    });
   },
 
   issueDisplay: [

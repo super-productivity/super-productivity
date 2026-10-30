@@ -1,5 +1,4 @@
 <div class="finish-day-button-wrapper">
-  <!-- NOTE: tabindex is same as for tasks -->
   <!--
     One element, appearance bound: an @if/@else swap between a flat and a
     stroked button re-creates the node whenever hasDoneTasks() flips, and a
@@ -14,7 +13,6 @@
     [color]="hasDoneTasks() ? 'primary' : ''"
     [matTooltip]="T.WW.FINISH_DAY_TOOLTIP | translate"
     routerLink="/active/daily-summary"
-    tabindex="1"
     class="e2e-finish-day"
   >
     <mat-icon>done_all</mat-icon>

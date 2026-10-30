@@ -20,21 +20,6 @@ export const safeIsVisible = async (
 };
 
 /**
- * Safely checks if an element is enabled, returning false on any error.
- * Use this instead of `.isEnabled().catch(() => false)` pattern.
- *
- * @param locator - Playwright locator to check
- * @returns Promise<boolean> - true if enabled, false otherwise
- */
-export const safeIsEnabled = async (locator: Locator): Promise<boolean> => {
-  try {
-    return await locator.isEnabled();
-  } catch {
-    return false;
-  }
-};
-
-/**
  * Ensures the global add task bar is open and returns the input locator.
  * If the bar is closed, it will click the add button to open it.
  * Uses proper condition-based waiting to avoid race conditions.

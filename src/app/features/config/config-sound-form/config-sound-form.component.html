@@ -29,13 +29,13 @@
       <mat-label>{{ T.GCF.SOUND.DONE_SOUND | translate }}</mat-label>
       <mat-select formControlName="doneSound">
         @for (sound of soundOpts; track sound) {
-          <mat-option [value]="sound.value">{{ sound.label }}</mat-option>
+          <mat-option [value]="sound.value">{{ sound.label | translate }}</mat-option>
         }
       </mat-select>
     </mat-form-field>
     <mat-slide-toggle
       class="width100"
-      [checked]="this.config?.isIncreaseDoneSoundPitch"
+      [checked]="$safeNavigationMigration(this.config?.isIncreaseDoneSoundPitch)"
       formControlName="isIncreaseDoneSoundPitch"
       >{{ T.GCF.SOUND.IS_INCREASE_DONE_PITCH | translate }}</mat-slide-toggle
     >
@@ -43,7 +43,7 @@
       <mat-label>{{ T.GCF.SOUND.BREAK_REMINDER_SOUND | translate }}</mat-label>
       <mat-select formControlName="breakReminderSound">
         @for (sound of soundOpts; track sound) {
-          <mat-option [value]="sound.value">{{ sound.label }}</mat-option>
+          <mat-option [value]="sound.value">{{ sound.label | translate }}</mat-option>
         }
       </mat-select>
     </mat-form-field>
@@ -51,7 +51,7 @@
       <mat-label>{{ T.GCF.SOUND.TRACK_TIME_SOUND | translate }}</mat-label>
       <mat-select formControlName="trackTimeSound">
         @for (sound of soundOpts; track sound) {
-          <mat-option [value]="sound.value">{{ sound.label }}</mat-option>
+          <mat-option [value]="sound.value">{{ sound.label | translate }}</mat-option>
         }
       </mat-select>
     </mat-form-field>

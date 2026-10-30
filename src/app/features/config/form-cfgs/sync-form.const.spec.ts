@@ -213,6 +213,57 @@ describe('SYNC_FORM encryption action visibility (#9268)', () => {
     ).toBeFalse();
   });
 
+  it('shows the optional AI assistants block during SuperSync setup', () => {
+    const setup: EncryptionVisibilityModel = {
+      syncProvider: SyncProviderId.SuperSync,
+      isEncryptionEnabled: false,
+      _isInitialSetup: true,
+      _activeProviderId: null,
+    };
+    expect(isFieldHidden('e2e-agent-capture', setup)).toBeFalse();
+    expect(
+      isFieldHidden('e2e-agent-capture', {
+        ...setup,
+        syncProvider: SyncProviderId.WebDAV,
+      }),
+    ).toBeTrue();
+  });
+
+  it('fills the get-token button only during first-time setup', () => {
+    const path = findFieldPath(
+      SYNC_FORM.items as FormlyFieldConfig[],
+      'e2e-get-token-btn',
+    );
+    if (!path) {
+      throw new Error('e2e-get-token-btn not found in SYNC_FORM');
+    }
+    const btnStyle = (model: EncryptionVisibilityModel): unknown => {
+      let field: FormlyFieldConfig = { model };
+      for (const fieldConfig of path) {
+        field = { ...fieldConfig, model, parent: field };
+      }
+      const expression = field.expressions?.['props.btnStyle'];
+      if (typeof expression !== 'function') {
+        throw new Error('e2e-get-token-btn has no btnStyle expression');
+      }
+      return expression(field);
+    };
+    const setup: EncryptionVisibilityModel = {
+      syncProvider: SyncProviderId.SuperSync,
+      isEncryptionEnabled: false,
+      _isInitialSetup: true,
+      _activeProviderId: null,
+    };
+    expect(btnStyle(setup)).toBe('flat');
+    expect(
+      btnStyle({
+        ...setup,
+        _isInitialSetup: false,
+        _activeProviderId: SyncProviderId.SuperSync,
+      }),
+    ).toBe('stroked');
+  });
+
   it('hides active-provider encryption actions during an unsaved switch', () => {
     const switchedFileProvider: EncryptionVisibilityModel = {
       syncProvider: SyncProviderId.Dropbox,

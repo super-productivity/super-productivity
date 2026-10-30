@@ -74,6 +74,7 @@ import { distinctUntilChanged, observeOn } from 'rxjs/operators';
         [attr.aria-label]="tooltipText() | translate"
         matTooltipPosition="below"
         class="play-btn tour-playBtn mat-elevation-z3"
+        [class.mat-mini-fab-icon]="isIconButton()"
         mat-mini-fab
         [disabled]="isDisabled()"
       >
@@ -198,6 +199,8 @@ export class PlayButtonComponent implements OnInit, OnDestroy {
   readonly taskService = inject(TaskService);
 
   readonly currentTaskId = input<string | null>();
+  readonly isMobile = input(false);
+  readonly isIconButton = computed(() => this.isMobile() && !this.currentTaskId());
   readonly hasTrackableTasks = input<boolean>(true);
   readonly circleSvg = viewChild<ElementRef<SVGCircleElement>>('circleSvg');
   readonly featureMenuTrigger = viewChild(MatMenuTrigger);

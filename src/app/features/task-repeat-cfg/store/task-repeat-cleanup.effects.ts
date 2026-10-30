@@ -19,9 +19,12 @@ import { Log } from '../../../core/log';
 import { DeletedTaskIssueSidecarService } from '../../issue/two-way-sync/deleted-task-issue-sidecar.service';
 import { TODAY_TAG } from '../../tag/tag.const';
 import { isValidSplitTime } from '../../../util/is-valid-split-time';
-import { getDateTimeFromClockString } from '../../../util/get-date-time-from-clock-string';
+import { getRepeatDueWithTime } from './get-repeat-due-with-time.util';
 import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
 import { TaskTimeSyncService } from '../../tasks/task-time-sync.service';
+import { getTaskPriority } from '../../tasks/task-priority.const';
+import { selectConfigFeatureState } from '../../config/store/global-config.reducer';
+import { TimeTrackingConfig } from '../../config/global-config.model';
 
 const _sameStringSet = (a: readonly string[], b: readonly string[]): boolean => {
   if (a.length !== b.length) {
@@ -45,11 +48,15 @@ const _hasTemplateSchedule = (
   task: TaskWithSubTasks,
   cfg: TaskRepeatCfg,
   dueStr: string,
+  startOfNextDayDiffMs: number,
 ): boolean => {
   if (isValidSplitTime(cfg.startTime)) {
-    const expectedDueWithTime = getDateTimeFromClockString(
+    // Must match the creation formula in TaskRepeatCfgService, or instances
+    // stop being recognized as untouched and are never reaped.
+    const expectedDueWithTime = getRepeatDueWithTime(
       cfg.startTime,
       dateStrToUtcDate(dueStr),
+      startOfNextDayDiffMs,
     );
     // remindAt is deliberately NOT compared for a TIMED instance: there it is
     // app-managed, not a user edit. Dismissing a fired reminder clears it
@@ -76,7 +83,22 @@ const _hasTemplateSchedule = (
   return _isNil(task.dueWithTime) && task.dueDay === dueStr && _isNil(task.remindAt);
 };
 
-const _hasTemplateSubTasks = (task: TaskWithSubTasks, cfg: TaskRepeatCfg): boolean => {
+// Without a template estimate, setDefaultEstimateIfNonGiven$ fills in the
+// global default on creation, so that value is still the template (#10202).
+// 0 stays valid too: instances created before the default was set keep it.
+const _isTemplateEstimate = (
+  estimate: number | undefined,
+  templateEstimate: number | undefined,
+  globalDefault: number | null | undefined,
+): boolean =>
+  (estimate ?? 0) === (templateEstimate ?? 0) ||
+  (!templateEstimate && !!globalDefault && estimate === globalDefault);
+
+const _hasTemplateSubTasks = (
+  task: TaskWithSubTasks,
+  cfg: TaskRepeatCfg,
+  timeTrackingCfg: TimeTrackingConfig,
+): boolean => {
   const templates = cfg.shouldInheritSubtasks ? (cfg.subTaskTemplates ?? []) : [];
   if (task.subTasks.length !== templates.length) {
     return false;
@@ -86,7 +108,11 @@ const _hasTemplateSubTasks = (task: TaskWithSubTasks, cfg: TaskRepeatCfg): boole
     return (
       !!subTask &&
       subTask.title === template.title &&
-      (subTask.timeEstimate ?? 0) === (template.timeEstimate ?? 0) &&
+      _isTemplateEstimate(
+        subTask.timeEstimate,
+        template.timeEstimate,
+        timeTrackingCfg.defaultEstimateSubTasks,
+      ) &&
       (subTask.notes ?? '').trim() === (template.notes ?? '').trim() &&
       (subTask.attachments?.length ?? 0) === 0 &&
       _sameStringSet(subTask.tagIds ?? [], []) &&
@@ -103,9 +129,16 @@ const _isUnmodifiedSkipOverdueInstance = (
   cfg: TaskRepeatCfg,
   newestInstanceProjectId: string,
   dueStr: string,
+  startOfNextDayDiffMs: number,
+  timeTrackingCfg: TimeTrackingConfig,
 ): boolean =>
   task.title === (cfg.title ?? '') &&
-  (task.timeEstimate ?? 0) === (cfg.defaultEstimate ?? 0) &&
+  _isTemplateEstimate(
+    task.timeEstimate,
+    cfg.defaultEstimate,
+    timeTrackingCfg.defaultEstimate,
+  ) &&
+  getTaskPriority(task.priority) === getTaskPriority(cfg.priority) &&
   _sameStringSet(
     task.tagIds ?? [],
     (cfg.tagIds ?? []).filter((tagId) => tagId !== TODAY_TAG.id),
@@ -115,9 +148,9 @@ const _isUnmodifiedSkipOverdueInstance = (
   (cfg.projectId
     ? task.projectId === cfg.projectId
     : task.projectId === newestInstanceProjectId) &&
-  _hasTemplateSchedule(task, cfg, dueStr) &&
+  _hasTemplateSchedule(task, cfg, dueStr, startOfNextDayDiffMs) &&
   _hasNoDeadlineFields(task) &&
-  _hasTemplateSubTasks(task, cfg);
+  _hasTemplateSubTasks(task, cfg, timeTrackingCfg);
 
 @Injectable()
 export class TaskRepeatCleanupEffects {
@@ -171,13 +204,15 @@ export class TaskRepeatCleanupEffects {
               forkJoin([
                 this._store.select(selectAllRepeatableTaskWithSubTasks).pipe(first()),
                 this._store.select(selectAllTaskRepeatCfgs).pipe(first()),
+                this._store.select(selectConfigFeatureState).pipe(first()),
               ]),
             ),
-            switchMap(([repeatableTasks, repeatCfgs]) => {
+            switchMap(([repeatableTasks, repeatCfgs, globalCfg]) => {
               const cfgById = new Map<string, TaskRepeatCfg>(
                 repeatCfgs.map((c) => [c.id as string, c]),
               );
               const todayStr = this._dateService.todayStr();
+              const startOfNextDayDiffMs = this._dateService.getStartOfNextDayDiffMs();
 
               // Group parent tasks.
               // - Default configs: key by (repeatCfgId, creation day). Two
@@ -249,8 +284,10 @@ export class TaskRepeatCleanupEffects {
                   // Subtask *progress* (completion / timeSpent) is caught
                   // upstream by hasSubtaskProgress before this gate runs.
                   if (isSkipOverdueGroup) {
+                    // logical day, so a late-night instance (#3378) keys to the
+                    // day it was created for
                     const dueStr = task.dueWithTime
-                      ? getDbDateStr(task.dueWithTime)
+                      ? getDbDateStr(task.dueWithTime - startOfNextDayDiffMs)
                       : (task.dueDay ?? null);
                     if (!dueStr || dueStr >= todayStr) {
                       continue;
@@ -262,6 +299,8 @@ export class TaskRepeatCleanupEffects {
                         cfg,
                         tasks[0].projectId,
                         dueStr,
+                        startOfNextDayDiffMs,
+                        globalCfg.timeTracking,
                       )
                     ) {
                       continue;

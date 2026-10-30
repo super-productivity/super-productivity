@@ -1,9 +1,9 @@
 import { Component, ChangeDetectionStrategy } from '@angular/core';
 import { FieldType, FieldTypeConfig } from '@ngx-formly/core';
-import { MatSliderModule } from '@angular/material/slider';
+import { MatSlider, MatSliderThumb } from '@angular/material/slider';
 import { ReactiveFormsModule } from '@angular/forms';
 import { FormlyFieldProps } from '@ngx-formly/material/form-field';
-import { MatInputModule } from '@angular/material/input';
+import { MatFormField, MatHint, MatInput, MatLabel } from '@angular/material/input';
 
 interface SliderProps extends FormlyFieldProps {
   displayWith?: (value: number) => string;
@@ -15,32 +15,44 @@ interface SliderProps extends FormlyFieldProps {
 @Component({
   selector: 'formly-field-mat-slider',
   standalone: true,
-  imports: [MatSliderModule, ReactiveFormsModule, MatInputModule],
+  imports: [
+    MatSlider,
+    MatSliderThumb,
+    ReactiveFormsModule,
+    MatFormField,
+    MatLabel,
+    MatHint,
+    MatInput,
+  ],
   template: `
-    <mat-form-field>
-      @if (props.label) {
-        <mat-label>{{ props.label }}</mat-label>
-      }
-      <mat-slider
-        [min]="props.min ?? 0"
-        [max]="props.max ?? 100"
-        [step]="props.step ?? 1"
-        [discrete]="props.discrete ?? props.thumbLabel ?? true"
-        [showTickMarks]="props.showTickMarks ?? false"
-        [displayWith]="props.displayWith ?? defaultDisplayWith"
-      >
-        <input
-          style="height: 100%"
-          matSliderThumb
-          matInput
-          [value]="formControl.value"
-          (change)="onChange($event)"
-        />
-      </mat-slider>
-      @if (props.description) {
-        <mat-hint>{{ props.description }}</mat-hint>
-      }
-    </mat-form-field>
+    <!-- deferred: this formly type is registered app-wide, but MatSlider is only
+    needed once a settings form with a slider renders -->
+    @defer (on immediate) {
+      <mat-form-field>
+        @if (props.label) {
+          <mat-label>{{ props.label }}</mat-label>
+        }
+        <mat-slider
+          [min]="props.min ?? 0"
+          [max]="props.max ?? 100"
+          [step]="props.step ?? 1"
+          [discrete]="props.discrete ?? props.thumbLabel ?? true"
+          [showTickMarks]="props.showTickMarks ?? false"
+          [displayWith]="props.displayWith ?? defaultDisplayWith"
+        >
+          <input
+            style="height: 100%"
+            matSliderThumb
+            matInput
+            [value]="formControl.value"
+            (change)="onChange($event)"
+          />
+        </mat-slider>
+        @if (props.description) {
+          <mat-hint>{{ props.description }}</mat-hint>
+        }
+      </mat-form-field>
+    }
   `,
   styles: [
     `

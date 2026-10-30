@@ -2,6 +2,8 @@ import { Component, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MatMenu, MatMenuItem } from '@angular/material/menu';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
+import { By } from '@angular/platform-browser';
+import { provideRouter } from '@angular/router';
 import { provideMockStore } from '@ngrx/store/testing';
 import { TranslateModule } from '@ngx-translate/core';
 
@@ -9,6 +11,7 @@ import { NavItemComponent } from './nav-item.component';
 import { GlobalThemeService } from '../../../core/theme/global-theme.service';
 import { MagicNavConfigService } from '../magic-nav-config.service';
 import { selectAllDoneIds } from '../../../features/tasks/store/task.selectors';
+import { ContextMenuComponent } from '../../../ui/context-menu/context-menu.component';
 
 @Component({
   template: `
@@ -78,5 +81,55 @@ describe('NavItemComponent group header', () => {
     fixture.detectChanges();
 
     expect(headerBtn().getAttribute('aria-expanded')).toBe('true');
+  });
+});
+
+@Component({
+  template: `
+    <nav-item
+      [container]="'route'"
+      [navRoute]="'/planner'"
+      [label]="'Planner'"
+      [icon]="'edit_calendar'"
+      [featureConfigKey]="'isPlannerEnabled'"
+    ></nav-item>
+  `,
+  imports: [NavItemComponent],
+})
+class FeatureRowHostComponent {}
+
+describe('NavItemComponent row menu', () => {
+  let fixture: ComponentFixture<FeatureRowHostComponent>;
+
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
+      imports: [FeatureRowHostComponent, NoopAnimationsModule, TranslateModule.forRoot()],
+      providers: [
+        provideRouter([]),
+        provideMockStore({ selectors: [{ selector: selectAllDoneIds, value: [] }] }),
+        { provide: GlobalThemeService, useValue: { registerSvgIcon: () => undefined } },
+        { provide: MagicNavConfigService, useValue: {} },
+      ],
+    }).compileComponents();
+
+    fixture = TestBed.createComponent(FeatureRowHostComponent);
+    fixture.detectChanges();
+  });
+
+  // On touch the "more" button is hidden, so the row itself must open the menu.
+  it('opts its row menu into touch long-press', () => {
+    const contextMenu = fixture.debugElement
+      .query(By.directive(ContextMenuComponent))
+      .injector.get(ContextMenuComponent);
+
+    expect(contextMenu.isTouchLongPress()).toBeTrue();
+  });
+
+  // The button stays in the DOM (and the tab order) for keyboard and
+  // screen-reader users; only touch styling takes it out of sight.
+  it('keeps the more-actions button in the DOM', () => {
+    const btn: HTMLButtonElement = fixture.nativeElement.querySelector('.additional-btn');
+    expect(btn).not.toBeNull();
+    expect(btn.getAttribute('aria-label')).toBeTruthy();
   });
 });

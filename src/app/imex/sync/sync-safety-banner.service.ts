@@ -18,7 +18,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const MIN_DAYS_SINCE_FIRST_USE = 7;
 
 // ...and there must be a non-trivial amount of data actually worth protecting:
-// a fresh install seeds only 4 example tasks, so this keeps us from nudging an
+// a fresh install seeds only 1 example task, so this keeps us from nudging an
 // empty/dormant app even after the time threshold passes.
 const MIN_TASKS = 20;
 

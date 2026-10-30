@@ -31,7 +31,9 @@
               [issueProviderId]="issueProvider().id"
               [itemData]="item"
               [customTitleStr]="
-                (item.issueData?.start | shortTime) + ' – ' + item.issueData?.title
+                ($safeNavigationMigration(item.issueData?.start) | shortTime) +
+                ' – ' +
+                $safeNavigationMigration(item.issueData?.title)
               "
               (addIssue)="addIssue($event)"
             ></issue-preview-item>

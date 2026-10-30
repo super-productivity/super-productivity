@@ -20,6 +20,7 @@ import { NavActionItem, NavConfig, NavPluginItem } from './magic-side-nav.model'
 describe('MagicSideNavComponent', () => {
   let fixture: ComponentFixture<MagicSideNavComponent>;
   let isXs: ReturnType<typeof signal<boolean>>;
+  let isMobileSideNavOpen: ReturnType<typeof signal<boolean>>;
   let browserMatches: boolean;
   let navConfigServiceMock: {
     navConfig: ReturnType<typeof signal<NavConfig>>;
@@ -43,6 +44,7 @@ describe('MagicSideNavComponent', () => {
 
   beforeEach(async () => {
     isXs = signal(false);
+    isMobileSideNavOpen = signal(false);
     browserMatches = false;
     navConfigServiceMock = {
       navConfig: signal(navConfig),
@@ -84,6 +86,7 @@ describe('MagicSideNavComponent', () => {
             isXs,
             focusSideNavTrigger: signal(0),
             toggleSideNavModeTrigger: signal(0),
+            isMobileSideNavOpen,
           },
         },
         {
@@ -122,6 +125,22 @@ describe('MagicSideNavComponent', () => {
     fixture = TestBed.createComponent(MagicSideNavComponent);
 
     expect(fixture.componentInstance.isMobile()).toBe(true);
+  });
+
+  it('reports the open mobile drawer to the layout service', () => {
+    isXs.set(true);
+    browserMatches = true;
+    fixture = TestBed.createComponent(MagicSideNavComponent);
+    fixture.detectChanges();
+    expect(isMobileSideNavOpen()).toBe(false);
+
+    fixture.componentInstance.toggleMobileNav();
+    fixture.detectChanges();
+    expect(isMobileSideNavOpen()).toBe(true);
+
+    fixture.componentInstance.toggleMobileNav();
+    fixture.detectChanges();
+    expect(isMobileSideNavOpen()).toBe(false);
   });
 
   it('exposes the open mobile drawer as labelled navigation with a focus trap', () => {

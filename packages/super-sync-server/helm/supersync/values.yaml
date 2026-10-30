@@ -7,10 +7,10 @@ image:
   repository: ghcr.io/super-productivity/supersync
   # -- Image pull policy
   pullPolicy: IfNotPresent
-  # -- Image tag to deploy. Defaults to "latest" because CI publishes only `latest`
-  # and `master-<sha>` — the chart appVersion has never been published as a tag, so
-  # falling back to it produced ImagePullBackOff on a default install.
-  # Pin this to a specific tag for reproducible deploys.
+  # -- Image tag to deploy. Defaults to "latest" because the chart appVersion has
+  # never been published as a tag, so falling back to it produced ImagePullBackOff
+  # on a default install. CI publishes `latest`, `master-<sha>` and, for published
+  # releases, `vX.Y.Z`. Pin this to a release tag for reproducible deploys.
   tag: "latest"
 
 # -- Docker registry pull secrets
@@ -106,6 +106,9 @@ supersync:
   # -- Per-user storage quota in bytes for accounts created from now on.
   # Empty uses the built-in default (104857600 = 100 MB).
   defaultStorageQuotaBytes: ""
+  # -- Agent task capture: the /mcp endpoint and /api/capture. Keep false on a
+  # multi-replica deployment; the retry window and per-grant limit are in-process.
+  captureConnectorEnabled: false
   persistence:
     # -- Enable persistent storage for /app/data
     enabled: true

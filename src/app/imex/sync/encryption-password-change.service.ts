@@ -11,6 +11,7 @@ import { SyncWrapperService } from './sync-wrapper.service';
 import { OperationLogStoreService } from '../../op-log/persistence/operation-log-store.service';
 import { isFullStateOpType } from '../../op-log/core/operation.types';
 import { WrappedProviderService } from '../../op-log/sync-providers/wrapped-provider.service';
+import { OperationLogDownloadService } from '../../op-log/sync/operation-log-download.service';
 
 /**
  * Service for changing the encryption password for SuperSync.
@@ -30,6 +31,7 @@ export class EncryptionPasswordChangeService {
   private _syncWrapper = inject(SyncWrapperService);
   private _opLogStore = inject(OperationLogStoreService);
   private _wrappedProvider = inject(WrappedProviderService);
+  private _downloadService = inject(OperationLogDownloadService);
 
   /**
    * Changes the encryption password using the clean slate approach.
@@ -158,6 +160,8 @@ export class EncryptionPasswordChangeService {
           );
         }
 
+        // The clean slate deleted the server ops this device could not decrypt.
+        this._downloadService.clearUndecryptableRemoteOps();
         SyncLog.normal('EncryptionPasswordChangeService: Password change complete!');
       } catch (uploadError) {
         // IMPORTANT: Do NOT revert the password config on upload failure.

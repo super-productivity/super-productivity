@@ -1,7 +1,7 @@
 import { inject, Injectable } from '@angular/core';
 import { select, Store } from '@ngrx/store';
 import { toSignal } from '@angular/core/rxjs-interop';
-import { combineLatest, interval, Observable, of, timer } from 'rxjs';
+import { combineLatest, from, interval, Observable, of, timer } from 'rxjs';
 import {
   WorkContext,
   WorkContextAdvancedCfg,
@@ -17,6 +17,7 @@ import {
   delayWhen,
   distinctUntilChanged,
   filter,
+  catchError,
   first,
   map,
   mapTo,
@@ -32,9 +33,11 @@ import { DEFAULT_TAG_COLOR } from './work-context.const';
 import { getDefaultWorkContextTheme } from './work-context-default-theme.util';
 import { TagService } from '../tag/tag.service';
 import { ArchiveTask, Task, TaskWithSubTasks } from '../tasks/task.model';
+import { isCompletedTask } from '../tasks/util/is-wont-do-task';
 import {
   hasTasksToWorkOn,
   mapEstimateRemainingFromTasks,
+  isDoneTaskForToday,
   sortDoneTasksByDoneDate,
 } from './work-context.util';
 import {
@@ -43,6 +46,7 @@ import {
   selectAllTasksWithSubTasks,
   selectCurrentTaskId,
   selectTasksWithSubTasksByIdsFactory,
+  TaskWithSubTasksCache,
 } from '../tasks/store/task.selectors';
 import {
   getEndOfTodayTime,
@@ -141,6 +145,11 @@ export class WorkContextService {
   private readonly _navigationMeasureName = 'work-view-route';
   private readonly _navigationStartMark = 'work-view-route:start';
   private readonly _navigationEndMark = 'work-view-route:end';
+  // One wrapper cache per list stream. It outlives the selector that
+  // `_getTasksByIds$` mints per id-set, so adding, removing or reordering a
+  // task keeps the other rows' objects and their rows don't re-render.
+  private readonly _mainListTaskCache: TaskWithSubTasksCache = new Map();
+  private readonly _backlogTaskCache: TaskWithSubTasksCache = new Map();
 
   // here because to avoid circular dependencies
   // should be treated as private
@@ -323,7 +332,9 @@ export class WorkContextService {
 
   mainListTasks$: Observable<TaskWithSubTasks[]> = this.mainListTaskIds$.pipe(
     // tap((taskIds: string[]) => Log.log('[WorkContext] Today task IDs:', taskIds)),
-    switchMap((taskIds: string[]) => this._getTasksByIds$(taskIds)),
+    switchMap((taskIds: string[]) =>
+      this._getTasksByIds$(taskIds, this._mainListTaskCache),
+    ),
     // SPAP-19: with per-task referential stability upstream, an unchanged list
     // is length + per-element === equal, so this stops needless re-emissions
     // (and the OnPush row re-renders they trigger) every time a task ticks.
@@ -364,7 +375,7 @@ export class WorkContextService {
   );
 
   backlogTasks$: Observable<TaskWithSubTasks[]> = this.backlogTaskIds$.pipe(
-    switchMap((ids) => this._getTasksByIds$(ids)),
+    switchMap((ids) => this._getTasksByIds$(ids, this._backlogTaskCache)),
     // SPAP-19: see mainListTasks$ — suppress no-op re-emissions of an
     // unchanged (element-wise identical) backlog array.
     distinctUntilChanged(fastArrayCompare),
@@ -407,7 +418,16 @@ export class WorkContextService {
 
   doneTodayArchived$: Observable<number> =
     this._globalTrackingIntervalService.todayDateStr$.pipe(
-      switchMap(() => this.getDoneTodayInArchive()),
+      switchMap(() =>
+        from(this.getDoneTodayInArchive()).pipe(
+          // The work view waits for this count before rendering its empty
+          // state, so a failed archive read must not leave it pending forever.
+          catchError((err) => {
+            Log.err('[WorkContext] Failed to count archived tasks done today', err);
+            return of(0);
+          }),
+        ),
+      ),
     );
 
   isTodayList: boolean = false;
@@ -455,12 +475,15 @@ export class WorkContextService {
               map(
                 (tasks) =>
                   tasks.filter(
-                    (t) => t.isDone && t.doneOn && this._dateService.isToday(t.doneOn),
+                    (t) =>
+                      isCompletedTask(t) &&
+                      t.doneOn &&
+                      this._dateService.isToday(t.doneOn),
                   ).length,
               ),
             )
         : this.mainListTasks$.pipe(
-            map((tasks) => flattenTasks(tasks).filter((t) => t.isDone).length),
+            map((tasks) => flattenTasks(tasks).filter(isCompletedTask).length),
           ),
     ),
     distinctUntilChanged(), // Only emit when count actually changes
@@ -491,17 +514,39 @@ export class WorkContextService {
     distinctUntilChanged(),
   );
 
-  doneTasks$: Observable<TaskWithSubTasks[]> = this.isTodayList$.pipe(
-    // Perf note: the isToday branch hydrates EVERY task in the workspace, not
-    // just today's, so this is O(all tasks) whenever Today is the active
-    // context. Tracking done IDs per context (Today included) would avoid the
-    // workspace-wide scan.
+  // Every unarchived done task, workspace-wide on Today. Finish Day and "move
+  // done to archive" sweep this, so done tasks from earlier days that no longer
+  // show in Today's Done list still get archived instead of piling up unseen.
+  doneTasksToArchive$: Observable<TaskWithSubTasks[]> = this.isTodayList$.pipe(
     switchMap((isToday) =>
       isToday ? this._store$.select(selectAllTasksWithSubTasks) : this.mainListTasks$,
     ),
     // Show completed tasks newest-first (by completion time) so the task you
     // just finished is at the top of the Done list.
     map((tasks) => sortDoneTasksByDoneDate(tasks.filter((task) => task && task.isDone))),
+  );
+
+  // On Today only done tasks due or completed today are listed: rendering every
+  // unarchived done task made cold start grow ~linearly with their number.
+  // Re-evaluated on day change so yesterday's tasks drop out after rollover.
+  // Perf note: the source still maps every task in the workspace on each store
+  // emission (O(all tasks)); tracking done IDs per context would avoid the scan.
+  doneTasks$: Observable<TaskWithSubTasks[]> = this.isTodayList$.pipe(
+    switchMap((isToday) =>
+      isToday
+        ? combineLatest([
+            this.doneTasksToArchive$,
+            this._globalTrackingIntervalService.todayDateStr$,
+          ]).pipe(
+            map(([tasks, todayStr]) => {
+              const startOfNextDayDiffMs = this._dateService.getStartOfNextDayDiffMs();
+              return tasks.filter((task) =>
+                isDoneTaskForToday(task, todayStr, startOfNextDayDiffMs),
+              );
+            }),
+          )
+        : this.doneTasksToArchive$,
+    ),
   );
 
   constructor() {
@@ -788,15 +833,18 @@ export class WorkContextService {
   }
 
   // we don't want a circular dependency that's why we do it here...
-  private _getTasksByIds$(ids: string[]): Observable<TaskWithSubTasks[]> {
+  private _getTasksByIds$(
+    ids: string[],
+    cache: TaskWithSubTasksCache,
+  ): Observable<TaskWithSubTasks[]> {
     if (!Array.isArray(ids)) {
       Log.log({ ids });
       throw new Error('Invalid param provided for getByIds$ :(');
     }
     // SPAP-19: mint a fresh per-id-set factory selector (called inside the
-    // switchMap at each call site) so each subscription owns its own memo and
-    // its per-task referential-stability cache.
-    return this._store$.select(selectTasksWithSubTasksByIdsFactory(ids));
+    // switchMap at each call site) so each subscription owns its own memo. The
+    // per-task referential-stability cache belongs to the calling list stream.
+    return this._store$.select(selectTasksWithSubTasksByIdsFactory(ids, cache));
   }
 
   /**

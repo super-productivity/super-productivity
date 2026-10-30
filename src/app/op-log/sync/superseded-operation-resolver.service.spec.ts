@@ -7,10 +7,8 @@ import {
   OperationLogStoreService,
 } from '../persistence/operation-log-store.service';
 import { VectorClockService } from './vector-clock.service';
-import {
-  ConflictResolutionService,
-  getLatestTaskProjectMoveEntityIds,
-} from './conflict-resolution.service';
+import { ConflictResolutionService } from './conflict-resolution.service';
+import { getLatestTaskProjectMoveEntityIds } from './conflict-resolution.util';
 import { LockService } from './lock.service';
 import { SnackService } from '../../core/snack/snack.service';
 import { CLIENT_ID_PROVIDER } from '../util/client-id.provider';
@@ -350,6 +348,8 @@ describe('SupersededOperationResolverService', () => {
       'tie local wins',
       'stale rejection',
       'unrejected snapshot',
+      // Not in the rejected upload, e.g. tracked while it was in flight (#10614).
+      'unrejected delta',
       'history gap',
       'missing suffix',
       'parent move',
@@ -462,7 +462,11 @@ describe('SupersededOperationResolverService', () => {
         mockOpLogStore.getOpsAfterSeq.and.resolveTo(tail);
         mockOpLogStore.rebasePendingLocalOps.and.resolveTo([delta]);
         const rejected =
-          variant === 'unrejected snapshot' ? [delta] : [delta, rejectedSnapshot];
+          variant === 'unrejected snapshot'
+            ? [delta]
+            : variant === 'unrejected delta'
+              ? [rejectedSnapshot]
+              : [delta, rejectedSnapshot];
         const before = JSON.stringify(pending);
         const assertFence = (): void => {
           if (
@@ -479,7 +483,10 @@ describe('SupersededOperationResolverService', () => {
           })),
           assertFence,
         );
-        const shouldRebase = variant === 'newer remote' || variant === 'tie remote wins';
+        const shouldRebase =
+          variant === 'newer remote' ||
+          variant === 'tie remote wins' ||
+          variant === 'unrejected delta';
         if (variant === 'epoch changes after retirement') {
           await expectAsync(result).toBeRejectedWithError('epoch changed');
           expect(mockOpLogStore.markRejected).toHaveBeenCalledOnceWith([snapshot.id]);
@@ -492,7 +499,9 @@ describe('SupersededOperationResolverService', () => {
         if (shouldRebase)
           expect(mockOpLogStore.rebasePendingLocalOps).toHaveBeenCalledOnceWith(
             [delta.id],
-            remote.vectorClock,
+            // Without a rejected delta no row is named; the rebase still
+            // moves it past the durable clock, which holds the applied row.
+            variant === 'unrejected delta' ? {} : remote.vectorClock,
           );
         else expect(mockOpLogStore.rebasePendingLocalOps).not.toHaveBeenCalled();
         expect(JSON.stringify(pending)).toBe(before);
@@ -557,6 +566,7 @@ describe('SupersededOperationResolverService', () => {
       'intervening time write',
       'missing row',
       'unrejected delta',
+      'unrejected patch',
     ] as const) {
       it(`checks the recovery proof for ${shape}`, async () => {
         const delta: Operation = {
@@ -610,22 +620,47 @@ describe('SupersededOperationResolverService', () => {
             },
           });
         }
-        mockOpLogStore.getUnsynced.and.resolveTo([
-          pending,
-          ...(shape === 'unrejected delta'
-            ? [{ ...pending, seq: 2, op: { ...delta, id: 'uncertain' } }]
-            : []),
-        ]);
-        mockOpLogStore.getOpsAfterSeq.and.resolveTo(tail);
-        mockOpLogStore.rebasePendingLocalOps.and.resolveTo([delta]);
+        // Tracked while the rejected upload was in flight, so not in its batch.
+        const unrejected: OperationLogEntry | undefined =
+          shape === 'unrejected delta'
+            ? {
+                ...pending,
+                seq: 2,
+                op: { ...delta, id: 'uncertain', vectorClock: { [TEST_CLIENT_ID]: 2 } },
+              }
+            : shape === 'unrejected patch'
+              ? {
+                  ...pending,
+                  seq: 2,
+                  op: { ...row, id: 'uncertain', clientId: TEST_CLIENT_ID },
+                }
+              : undefined;
+        mockOpLogStore.getUnsynced.and.resolveTo(
+          unrejected ? [pending, unrejected] : [pending],
+        );
+        mockOpLogStore.getOpsAfterSeq.and.resolveTo(
+          unrejected ? [unrejected, ...tail] : tail,
+        );
+        mockOpLogStore.rebasePendingLocalOps.and.resolveTo(
+          shape === 'unrejected delta' ? [delta, unrejected!.op] : [delta],
+        );
         const recovered = await service.rebaseCommutingTimeDeltaRejections([
           { opId: delta.id, op: delta, existingClock: row.vectorClock },
         ]);
-        const allowed = shape === 'own patch' || shape === 'remote patch';
-        expect([...recovered]).toEqual(allowed ? [delta.id] : []);
+        const allowed =
+          shape === 'own patch' ||
+          shape === 'remote patch' ||
+          shape === 'unrejected delta';
+        expect([...recovered]).toEqual(
+          !allowed
+            ? []
+            : shape === 'unrejected delta'
+              ? [delta.id, 'uncertain']
+              : [delta.id],
+        );
         if (allowed) {
           expect(mockOpLogStore.rebasePendingLocalOps).toHaveBeenCalledWith(
-            [delta.id],
+            shape === 'unrejected delta' ? [delta.id, 'uncertain'] : [delta.id],
             row.vectorClock,
           );
           expect(mockLockService.request.calls.allArgs().map(([name]) => name)).toEqual([
@@ -637,6 +672,133 @@ describe('SupersededOperationResolverService', () => {
         }
       });
     }
+  });
+
+  describe('rejected rename beside a delta tracked while its upload was in flight', () => {
+    // 'concurrent': tracked before the remote delta was applied. 'after download':
+    // tracked once the cycle had applied it (the E2E's order), so it dominates the row.
+    for (const [timing, inFlightClock, inFlightSeq, remoteSeq] of [
+      ['concurrent', { [TEST_CLIENT_ID]: 2 }, 2, 3],
+      ['after download', { [TEST_CLIENT_ID]: 2, remote: 1 }, 3, 2],
+    ] as const) {
+      it(`moves a ${timing} unrejected delta with the rename past the crossing remote delta (#10614)`, async () => {
+        const rename: Operation = {
+          ...createMockOperation('rename', 'TASK', 'task-1', { [TEST_CLIENT_ID]: 1 }),
+          clientId: TEST_CLIENT_ID,
+          actionType: ActionType.TASK_SHARED_UPDATE,
+          payload: { task: { id: 'task-1', changes: { title: 'A' } } },
+        };
+        const inFlight: Operation = {
+          ...createMockOperation('in-flight', 'TASK', 'task-1', inFlightClock),
+          clientId: TEST_CLIENT_ID,
+          actionType: ActionType.TIME_TRACKING_SYNC_TIME_SPENT,
+          payload: { taskId: 'task-1', date: '2026-10-03', duration: 2000 },
+        };
+        const remoteDelta: Operation = {
+          ...createMockOperation('remote-delta', 'TASK', 'task-1', { remote: 1 }),
+          clientId: 'remote',
+          actionType: ActionType.TIME_TRACKING_SYNC_TIME_SPENT,
+          payload: { taskId: 'task-1', date: '2026-10-03', duration: 3000 },
+        };
+        const renameEntry: OperationLogEntry = {
+          seq: 1,
+          op: rename,
+          source: 'local',
+          appliedAt: 1,
+        };
+        const inFlightEntry: OperationLogEntry = {
+          seq: inFlightSeq,
+          op: inFlight,
+          source: 'local',
+          appliedAt: inFlightSeq,
+        };
+        const remoteEntry: OperationLogEntry = {
+          seq: remoteSeq,
+          op: remoteDelta,
+          source: 'remote',
+          appliedAt: remoteSeq,
+          syncedAt: remoteSeq,
+          applicationStatus: 'applied',
+        };
+        mockOpLogStore.getUnsynced.and.resolveTo([renameEntry, inFlightEntry]);
+        mockOpLogStore.getOpsAfterSeq.and.resolveTo(
+          [inFlightEntry, remoteEntry].sort((x, y) => x.seq - y.seq),
+        );
+        mockOpLogStore.rebasePendingLocalOps.and.resolveTo([rename, inFlight]);
+
+        const recovered = await service.rebaseCommutingTimeDeltaRejections([
+          { opId: rename.id, op: rename, existingClock: remoteDelta.vectorClock },
+        ]);
+
+        expect([...recovered]).toEqual([rename.id, inFlight.id]);
+        expect(mockOpLogStore.rebasePendingLocalOps).toHaveBeenCalledOnceWith(
+          [rename.id, inFlight.id],
+          remoteDelta.vectorClock,
+        );
+      });
+    }
+
+    it('moves an in-flight delta tracked after the crossing rename was applied (#10614)', async () => {
+      const rejected: Operation = {
+        ...createMockOperation('rejected', 'TASK', 'task-1', { [TEST_CLIENT_ID]: 1 }),
+        clientId: TEST_CLIENT_ID,
+        actionType: ActionType.TIME_TRACKING_SYNC_TIME_SPENT,
+        payload: { taskId: 'task-1', date: '2026-10-03', duration: 3000 },
+      };
+      const rename: Operation = {
+        ...createMockOperation('rename', 'TASK', 'task-1', { remote: 1 }),
+        clientId: 'remote',
+        payload: {
+          lwwUpdateMode: 'patch',
+          actionPayload: { title: 'A' },
+          entityChanges: [],
+        },
+      };
+      const inFlight: Operation = {
+        ...createMockOperation('in-flight', 'TASK', 'task-1', {
+          [TEST_CLIENT_ID]: 2,
+          remote: 1,
+        }),
+        clientId: TEST_CLIENT_ID,
+        actionType: ActionType.TIME_TRACKING_SYNC_TIME_SPENT,
+        payload: { taskId: 'task-1', date: '2026-10-03', duration: 2000 },
+      };
+      const rejectedEntry: OperationLogEntry = {
+        seq: 1,
+        op: rejected,
+        source: 'local',
+        appliedAt: 1,
+      };
+      const inFlightEntry: OperationLogEntry = {
+        seq: 3,
+        op: inFlight,
+        source: 'local',
+        appliedAt: 3,
+      };
+      mockOpLogStore.getUnsynced.and.resolveTo([rejectedEntry, inFlightEntry]);
+      mockOpLogStore.getOpsAfterSeq.and.resolveTo([
+        {
+          seq: 2,
+          op: rename,
+          source: 'remote',
+          appliedAt: 2,
+          syncedAt: 2,
+          applicationStatus: 'applied',
+        },
+        inFlightEntry,
+      ]);
+      mockOpLogStore.rebasePendingLocalOps.and.resolveTo([rejected, inFlight]);
+
+      const recovered = await service.rebaseCommutingTimeDeltaRejections([
+        { opId: rejected.id, op: rejected, existingClock: rename.vectorClock },
+      ]);
+
+      expect([...recovered]).toEqual([rejected.id, inFlight.id]);
+      expect(mockOpLogStore.rebasePendingLocalOps).toHaveBeenCalledOnceWith(
+        [rejected.id, inFlight.id],
+        rename.vectorClock,
+      );
+    });
   });
 
   describe('resolveSupersededLocalOps', () => {
@@ -1489,6 +1651,29 @@ describe('SupersededOperationResolverService', () => {
         timestamp: 900,
         schemaVersion: 1,
       };
+      // #10969: a collapse or rename writes no section task list.
+      const sectionUpdateOp = (
+        id: string,
+        sectionId: string,
+        changes: Record<string, unknown>,
+        clientId: string,
+        vectorClock: VectorClock,
+        timestamp: number,
+      ): Operation => ({
+        id,
+        actionType: ActionType.SECTION_UPDATE,
+        opType: OpType.Update,
+        entityType: 'SECTION',
+        entityId: sectionId,
+        payload: {
+          actionPayload: { section: { id: sectionId, changes } },
+          entityChanges: [],
+        },
+        clientId,
+        vectorClock,
+        timestamp,
+        schemaVersion: 1,
+      });
       const asPendingEntries = (...ops: Operation[]): OperationLogEntry[] =>
         ops.map((op, index) => ({
           seq: index + 1,
@@ -1584,6 +1769,114 @@ describe('SupersededOperationResolverService', () => {
             timestamp: 4000,
           },
           remoteOp: remoteOrderOp,
+        },
+        {
+          description: 'cross-section move rejected behind a collapse of its source',
+          op: {
+            ...remoteMoveOp,
+            id: 'op-section-move-behind-source-collapse',
+            clientId: 'original-client',
+            vectorClock: { original: 3 },
+            timestamp: 5000,
+          },
+          remoteOp: sectionUpdateOp(
+            'remote-source-collapse',
+            'section-left',
+            { isExpanded: false },
+            'remote-client',
+            { remote: 4 },
+            900,
+          ),
+        },
+        {
+          description: 'cross-section move rejected behind a rename of its destination',
+          op: {
+            ...remoteMoveOp,
+            id: 'op-section-move-behind-destination-rename',
+            clientId: 'original-client',
+            vectorClock: { original: 3 },
+            timestamp: 5000,
+          },
+          remoteOp: sectionUpdateOp(
+            'remote-destination-rename',
+            'section-right',
+            { title: 'Renamed' },
+            'remote-client',
+            { remote: 4 },
+            900,
+          ),
+        },
+        {
+          description: 'source section rename rejected behind a cross-section move',
+          op: sectionUpdateOp(
+            'op-source-rename-behind-move',
+            'section-left',
+            { title: 'Left' },
+            'original-client',
+            { original: 3 },
+            6000,
+          ),
+          remoteOp: remoteMoveOp,
+        },
+        {
+          description: 'destination section rename rejected behind a cross-section move',
+          op: sectionUpdateOp(
+            'op-destination-rename-behind-move',
+            'section-right',
+            { title: 'Right' },
+            'original-client',
+            { original: 3 },
+            6000,
+          ),
+          remoteOp: remoteMoveOp,
+        },
+        {
+          description:
+            "cross-section move rejected behind another task's move into its destination",
+          op: {
+            ...remoteMoveOp,
+            id: 'op-section-move-behind-other-task-move',
+            clientId: 'original-client',
+            vectorClock: { original: 3 },
+            timestamp: 5000,
+          },
+          remoteOp: {
+            ...remoteMoveOp,
+            id: 'remote-other-task-move',
+            entityId: 'section-third',
+            entityIds: ['section-third', 'section-right'],
+            payload: {
+              actionPayload: {
+                sectionId: 'section-right',
+                taskId: 'task-other',
+                afterTaskId: null,
+                sourceSectionId: 'section-third',
+              },
+              entityChanges: [],
+            },
+          },
+        },
+        {
+          description: "another task's reorder rejected behind a cross-section move",
+          op: {
+            ...remoteMoveOp,
+            id: 'op-other-task-reorder-behind-move',
+            entityId: 'section-left',
+            entityIds: undefined,
+            payload: {
+              actionPayload: {
+                sectionId: 'section-left',
+                taskId: 'left-anchor',
+                afterTaskId: null,
+                sourceSectionId: 'section-left',
+              },
+              entityChanges: [],
+            },
+            clientId: 'original-client',
+            vectorClock: { original: 3 },
+            timestamp: 5000,
+          },
+          remoteOp: remoteMoveOp,
         },
       ];
       const unrelatedPendingTaskOp = createMockOperation(
@@ -1712,14 +2005,18 @@ describe('SupersededOperationResolverService', () => {
 
       it('should keep the LWW fallback when the retained SECTION op does not commute', async () => {
         const localRemoveOp = sectionOps[1].op;
+        // The same task moved into the section it is removed from. A move of a
+        // different task commutes (#10969).
         const nonCommutingMove: Operation = {
           ...remoteMoveOp,
+          entityId: 'section-right',
+          entityIds: ['section-right', 'section-left'],
           payload: {
             actionPayload: {
-              sectionId: 'section-right',
-              taskId: 'different-task',
-              afterTaskId: 'right-anchor',
-              sourceSectionId: 'section-left',
+              sectionId: 'section-left',
+              taskId: 'task-1',
+              afterTaskId: 'left-anchor',
+              sourceSectionId: 'section-right',
             },
             entityChanges: [],
           },

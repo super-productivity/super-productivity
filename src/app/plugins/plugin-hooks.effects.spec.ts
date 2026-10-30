@@ -134,6 +134,42 @@ describe('PluginHooksEffects', () => {
     store.resetSelectors();
   });
 
+  describe('taskComplete$', () => {
+    const completeTask = (task: TaskWithSubTasks): void => {
+      store.overrideSelector(selectTaskById, task);
+      store.refreshState();
+      actions$ = of(
+        TaskSharedActions.updateTask({
+          task: {
+            id: task.id,
+            changes: { isDone: true, doneOn: task.doneOn, wontDoOn: task.wontDoOn },
+          },
+        }),
+      );
+      effects.taskComplete$.subscribe();
+    };
+
+    it('should dispatch TASK_COMPLETE when a task is completed', () => {
+      const task = createMockTask({ isDone: true });
+
+      completeTask(task);
+
+      expect(pluginServiceMock.dispatchHook).toHaveBeenCalledWith(
+        PluginHooks.TASK_COMPLETE,
+        { taskId: task.id, task },
+      );
+    });
+
+    it("should not dispatch TASK_COMPLETE for a task finished as won't do", () => {
+      completeTask(createMockTask({ isDone: true, doneOn: 5, wontDoOn: 5 }));
+
+      expect(pluginServiceMock.dispatchHook).not.toHaveBeenCalledWith(
+        PluginHooks.TASK_COMPLETE,
+        jasmine.anything(),
+      );
+    });
+  });
+
   describe('taskUpdate$', () => {
     it('should dispatch TASK_UPDATE hook on updateTask action', (done) => {
       const changes = { title: 'Updated Title' };

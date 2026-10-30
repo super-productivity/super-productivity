@@ -19,6 +19,7 @@ import { moveTaskInTodayList } from '../../work-context/store/work-context-meta.
 import { WorkContextType } from '../../work-context/work-context.model';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { Task } from '../task.model';
+import { Section } from '../../section/section.model';
 
 describe('TaskListComponent', () => {
   let component: TaskListComponent;
@@ -90,6 +91,7 @@ describe('TaskListComponent', () => {
             draggedIds: () => new Set(),
             previewTasks: () => [],
             selectionSize: () => 0,
+            isListGroupDrag: () => false,
             start: () => {},
             clear: () => {},
             finish: () => {},
@@ -145,6 +147,35 @@ describe('TaskListComponent', () => {
   });
 
   describe('enterPredicate', () => {
+    describe('a dragged section', () => {
+      // Sections are dragged by their header from the sections wrapper, whose
+      // drop list carries no list data; letting one into a task list made
+      // drop() read `groupTagId` of undefined (#10866).
+      const section: Section = {
+        id: 'section1',
+        contextId: 'project1',
+        contextType: WorkContextType.PROJECT,
+        title: 'Section',
+        taskIds: [],
+      };
+      const sectionDrag = { data: section } as unknown as CdkDrag;
+
+      for (const [listModelId, listId] of [
+        ['DONE', 'PARENT'],
+        ['UNDONE', 'PARENT'],
+        ['BACKLOG', 'PARENT'],
+        ['ADD_TASK_PANEL', 'PARENT'],
+        ['other-section', 'PARENT'],
+        ['parent-task', 'SUB'],
+      ] as const) {
+        it(`is rejected by the ${listModelId} ${listId} list`, () => {
+          expect(
+            component.enterPredicate(sectionDrag, createMockDrop(listModelId, listId)),
+          ).toBe(false);
+        });
+      }
+    });
+
     describe('subtasks in parent-level DONE/UNDONE lists', () => {
       it('should allow subtask to reorder within UNDONE', () => {
         const subtask = { id: 'sub1', parentId: 'parent1' };
@@ -442,7 +473,9 @@ describe('TaskListComponent', () => {
         expect(component.enterPredicate(drag, drop)).toBe(true);
       });
 
-      it('should block timed, repeating, and issue-linked parent tasks from dropping to subtask list', () => {
+      // #11027: the drop unschedules the task first (see _move), so a timed
+      // task or one with a reminder must be accepted as a drop target.
+      it('should allow timed and reminder parent tasks to drop to subtask list', () => {
         const drop = createMockDrop('some-task-id', 'SUB');
 
         expect(
@@ -452,10 +485,15 @@ describe('TaskListComponent', () => {
               parentId: null,
               subTaskIds: [],
               dueWithTime: 4070908800000,
+              remindAt: 4070908800000,
             }),
             drop,
           ),
-        ).toBe(false);
+        ).toBe(true);
+      });
+
+      it('should block repeating and issue-linked parent tasks from dropping to subtask list', () => {
+        const drop = createMockDrop('some-task-id', 'SUB');
 
         expect(
           component.enterPredicate(
@@ -611,6 +649,7 @@ describe('TaskListComponent', () => {
       srcListId: 'PARENT' | 'SUB',
       targetListId: 'PARENT' | 'SUB',
       newOrderedIds: string[] = [taskId],
+      taskOverrides: Partial<TaskWithSubTasks> = {},
     ): void => {
       (
         component as unknown as {
@@ -627,6 +666,7 @@ describe('TaskListComponent', () => {
       )._move(taskId, src, target, srcListId, targetListId, newOrderedIds, {
         id: taskId,
         parentId: srcListId === 'SUB' ? src : undefined,
+        ...taskOverrides,
       } as TaskWithSubTasks);
     };
 
@@ -655,6 +695,41 @@ describe('TaskListComponent', () => {
       expect(dispatchedAction.afterTaskId).toBe('before');
     });
 
+    it('unschedules a timed task before converting it to a subtask (#11027)', () => {
+      callMove('task1', 'UNDONE', 'parentB', 'PARENT', 'SUB', ['before', 'task1'], {
+        dueWithTime: 4070908800000,
+        remindAt: 4070908800000,
+      });
+
+      const dispatched = (store.dispatch as jasmine.Spy).calls
+        .allArgs()
+        .map((args) => args[0] as { type: string });
+      expect(dispatched).toEqual([
+        TaskSharedActions.unscheduleTask({ id: 'task1', isSkipToast: false }),
+        TaskSharedActions.convertToSubTask({
+          taskId: 'task1',
+          targetParentId: 'parentB',
+          afterTaskId: 'before',
+        }),
+      ]);
+    });
+
+    it('skips the reminder toast when unscheduling a timed task without a reminder', () => {
+      callMove('task1', 'UNDONE', 'parentB', 'PARENT', 'SUB', ['task1'], {
+        dueWithTime: 4070908800000,
+      });
+
+      expect(store.dispatch).toHaveBeenCalledWith(
+        TaskSharedActions.unscheduleTask({ id: 'task1', isSkipToast: true }),
+      );
+    });
+
+    it('does not unschedule an unscheduled task converted to a subtask', () => {
+      callMove('task1', 'UNDONE', 'parentB', 'PARENT', 'SUB');
+
+      expect(store.dispatch).toHaveBeenCalledTimes(1);
+    });
+
     it('routes a subtask drop into a parent list to convertToMainTask', () => {
       callMove('sub1', 'parentA', 'UNDONE', 'SUB', 'PARENT', ['before', 'sub1']);
 
@@ -666,6 +741,32 @@ describe('TaskListComponent', () => {
       expect(dispatchedAction.task.parentId).toBe('parentA');
       expect(dispatchedAction.afterTaskId).toBe('before');
       expect(dispatchedAction.isDone).toBe(false);
+    });
+
+    // A won't-do task is one whose `wontDoOn` equals its `doneOn`: a new stamp
+    // would turn it into a completion.
+    it("keeps the done stamp of a won't-do subtask dropped on DONE", () => {
+      callMove('sub1', 'parentA', 'DONE', 'SUB', 'PARENT', ['sub1'], {
+        isDone: true,
+        doneOn: 5,
+        wontDoOn: 5,
+      });
+
+      const dispatchedAction = (store.dispatch as jasmine.Spy).calls.mostRecent()
+        .args[0] as ReturnType<typeof TaskSharedActions.convertToMainTask>;
+      expect(dispatchedAction.isDone).toBe(true);
+      expect(dispatchedAction.doneOn).toBe(5);
+    });
+
+    it('stamps a completed subtask dropped on DONE as done now', () => {
+      callMove('sub1', 'parentA', 'DONE', 'SUB', 'PARENT', ['sub1'], {
+        isDone: true,
+        doneOn: 5,
+      });
+
+      const dispatchedAction = (store.dispatch as jasmine.Spy).calls.mostRecent()
+        .args[0] as ReturnType<typeof TaskSharedActions.convertToMainTask>;
+      expect(dispatchedAction.doneOn).toBeGreaterThan(5);
     });
 
     it('routes a parent drop into a section drop-list (PARENT + non-reserved id) to addTaskToSection', () => {
@@ -786,6 +887,7 @@ describe('TaskListComponent', () => {
 
     beforeEach(() => {
       spyOn(component.multiDrag, 'ids').and.returnValue(['t1', 't2', 't3']);
+      spyOn(component.multiDrag, 'isListGroupDrag').and.returnValue(true);
       spyOn(component.multiDrag, 'canDrop').and.returnValue(true);
       spyOn(component.multiDrag, 'isPlacementUnchanged').and.returnValue(false);
       moveGroup = spyOn(component.multiDrag, 'drop').and.resolveTo();

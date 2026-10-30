@@ -238,3 +238,9 @@
     border-radius: var(--card-border-radius);
   }
 }
+
+.recently-deleted {
+  display: flex;
+  justify-content: center;
+  margin: var(--s4) 0 var(--s2);
+}

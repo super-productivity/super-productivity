@@ -1,0 +1,33 @@
+{
+  "CFG": {
+    "HOST": "Hostitel (např.: https://redmine.org)",
+    "API_KEY": "API klíč přístupu",
+    "PROJECT_ID": "Identifikátor projektu",
+    "PROJECT_ID_DESC": "Lze nalézt jako část adresy URL při prohlížení projektu v prohlížeči.",
+    "SCOPE": "Rozsah",
+    "SCOPE_ALL": "Všechny",
+    "SCOPE_CREATED": "Vytvořeno mnou",
+    "SCOPE_ASSIGNED": "Přiřazeno mně",
+    "IS_SHOW_TIME_TRACKING_DIALOG": "Zobrazit dialog sledování času pro Redmine",
+    "IS_SHOW_TIME_TRACKING_DIALOG_DESC": "Vyžaduje povolený modul sledování času v projektu Redmine",
+    "IS_SHOW_TIME_TRACKING_DIALOG_FOR_EACH_SUB_TASK": "Zobrazit dialog sledování času při dokončení podúkolů",
+    "DEFAULT_TIME": "Výchozí hodnota času pro dialog",
+    "DEFAULT_TIME_ALL_TIME": "Vyplnit všechny strávené časy na úkolu",
+    "DEFAULT_TIME_ALL_TIME_MINUS_LOGGED": "Vyplnit všechny strávené časy mínus zaznamenaný čas",
+    "DEFAULT_TIME_TODAY": "Vyplnit pouze čas strávený dnes",
+    "DEFAULT_TIME_YESTERDAY": "Vyplnit pouze čas strávený včera"
+  },
+  "DISPLAY": {
+    "SUMMARY": "Shrnutí",
+    "STATUS": "Stav",
+    "PRIORITY": "Priorita",
+    "AUTHOR": "Autor",
+    "ASSIGNEE": "Přiřazený",
+    "CATEGORY": "Kategorie",
+    "VERSION": "Verze",
+    "DUE_DATE": "Termín",
+    "TIME_SPENT": "Strávený čas",
+    "DESCRIPTION": "Popis"
+  },
+  "FORM_HELP": "<p>Zde můžete nakonfigurovat SuperProductivity tak, aby zobrazoval otevřené problémy Redmine (buď online verze, nebo samonosné instance) pro konkrétní projekt v panelu vytváření úkolů v denním plánovacím zobrazení. Budou uvedeny jako návrhy a poskytnou odkaz na problém a další informace o něm.</p><p>Kromě toho můžete automaticky importovat všechny otevřené problémy.</p>"
+}

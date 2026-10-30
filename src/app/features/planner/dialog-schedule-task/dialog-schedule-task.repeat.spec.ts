@@ -4,7 +4,7 @@ import { MAT_DIALOG_DATA, MatDialog, MatDialogRef } from '@angular/material/dial
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { TranslateModule, TranslateService, TranslateStore } from '@ngx-translate/core';
 import { MockStore, provideMockStore } from '@ngrx/store/testing';
-import { BehaviorSubject, Observable, of } from 'rxjs';
+import { BehaviorSubject, Observable, of, Subject } from 'rxjs';
 import { SnackService } from '../../../core/snack/snack.service';
 import { LocaleDatePipe } from 'src/app/ui/pipes/locale-date.pipe';
 import { TaskService } from '../../tasks/task.service';
@@ -27,7 +27,7 @@ import { getDbDateStr } from '../../../util/get-db-date-str';
  * seeding from the LIVE task (regression guard against creating a duplicate cfg when
  * re-opened after a repeat was just added).
  */
-describe('DialogScheduleTaskComponent — repeat button', () => {
+describe('DialogScheduleTaskComponent — repeat field', () => {
   let matDialogSpy: jasmine.SpyObj<MatDialog>;
 
   const baseTask = (partial: Partial<TaskCopy> = {}): TaskCopy =>
@@ -228,6 +228,22 @@ describe('DialogScheduleTaskComponent — repeat button', () => {
         data: { isRemoveConfirmationRequired: boolean };
       };
       expect(dialogArg.data.isRemoveConfirmationRequired).toBeFalse();
+    });
+
+    it('opens one dialog when triggered twice at once, again once it closes', async () => {
+      const c = await setup({ task: baseTask() });
+      const closed$ = new Subject<string | undefined>();
+      matDialogSpy.open.and.returnValue({
+        afterClosed: () => closed$,
+      } as unknown as MatDialogRef<unknown, string | undefined>);
+
+      // A click on the field's label also reaches its input: two calls, one click.
+      await Promise.all([c.openRepeatDialog(), c.openRepeatDialog()]);
+      expect(matDialogSpy.open).toHaveBeenCalledTimes(1);
+
+      closed$.next(undefined);
+      await c.openRepeatDialog();
+      expect(matDialogSpy.open).toHaveBeenCalledTimes(2);
     });
 
     it('keeps remove confirmation when the task was already repeating on open', async () => {

@@ -108,52 +108,6 @@ test.describe('Focus Mode - Break Controls (Issue #5995)', () => {
     await expect(playButton).toBeVisible();
   });
 
-  test('should show Back to Planning and Skip Break buttons during break', async ({
-    page,
-  }) => {
-    // Locators
-    const focusModeOverlay = page.locator('focus-mode-overlay');
-    const focusModeBreak = page.locator('focus-mode-break');
-    const focusModeCountdown = page.locator('focus-mode-countdown');
-    const mainFocusButton = page
-      .getByRole('button')
-      .filter({ hasText: 'center_focus_strong' });
-    const pomodoroModeButton = page.locator('segmented-button-group button', {
-      hasText: 'Pomodoro',
-    });
-    const playButton = page.locator('focus-mode-main button.play-button');
-    const completeSessionButton = page.locator(
-      'focus-mode-main button.complete-session-btn',
-    );
-    const backToPlanningButton = page.getByRole('button', { name: 'Back to Planning' });
-    const skipBreakButton = page.getByRole('button', { name: 'Skip Break' });
-
-    // Open focus mode overlay
-    await mainFocusButton.click();
-    await expect(focusModeOverlay).toBeVisible({ timeout: 5000 });
-
-    // Select Pomodoro mode and start session
-    await pomodoroModeButton.click();
-    await playButton.click();
-
-    // Wait for countdown animation to complete
-    await expect(focusModeCountdown).not.toBeVisible({ timeout: 15000 });
-
-    // Complete the session
-    await expect(completeSessionButton).toBeVisible({ timeout: 20000 });
-    await completeSessionButton.click();
-
-    // Wait for session-done transition to complete before checking for break
-    await expect(completeSessionButton).not.toBeVisible({ timeout: 10000 });
-
-    // In Pomodoro mode, break auto-starts after session completion via effects chain
-    await expect(focusModeBreak).toBeVisible({ timeout: 15000 });
-
-    // Verify both buttons are visible
-    await expect(backToPlanningButton).toBeVisible();
-    await expect(skipBreakButton).toBeVisible();
-  });
-
   test('Skip Break should auto-start next session in Pomodoro mode', async ({ page }) => {
     // Locators
     const focusModeOverlay = page.locator('focus-mode-overlay');

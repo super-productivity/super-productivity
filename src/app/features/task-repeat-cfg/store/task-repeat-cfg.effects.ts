@@ -24,7 +24,7 @@ import { DialogConfirmComponent } from '../../../ui/dialog-confirm/dialog-confir
 import { T } from '../../../t.const';
 import { Update } from '@ngrx/entity';
 import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
-import { getDateTimeFromClockString } from '../../../util/get-date-time-from-clock-string';
+import { getRepeatDueWithTime } from './get-repeat-due-with-time.util';
 import { isValidSplitTime } from '../../../util/is-valid-split-time';
 import { getDbDateStr } from '../../../util/get-db-date-str';
 import { TaskArchiveService } from '../../archive/task-archive.service';
@@ -42,7 +42,10 @@ import { EMPTY, forkJoin, from, Observable, of as rxOf } from 'rxjs';
 import { getEffectiveLastTaskCreationDay } from './get-effective-last-task-creation-day.util';
 import { remindOptionToMilliseconds } from '../../tasks/util/remind-option-to-milliseconds';
 import { devError } from '../../../util/dev-error';
-import { getFirstRepeatOccurrence } from './get-first-repeat-occurrence.util';
+import {
+  getFirstRepeatOccurrence,
+  hasNoRepeatOccurrenceBeforeEnd,
+} from './get-first-repeat-occurrence.util';
 import { getNextRepeatOccurrence } from './get-next-repeat-occurrence.util';
 import { clampPastTimedOccurrence } from './clamp-past-timed-occurrence.util';
 import { SCHEDULE_AFFECTING_FIELDS } from './schedule-affecting-fields.const';
@@ -74,17 +77,30 @@ export class TaskRepeatCfgEffects {
             const calculatedTargetDate = clampPastTimedOccurrence(
               getFirstRepeatOccurrence(taskRepeatCfg),
               taskRepeatCfg,
+              this._dateService.todayStr(),
             );
 
+            // An end day that leaves no allowed occurrence in the window is
+            // not "no first occurrence, use the task's day or now" — it is a
+            // schedule that will never fire. Scheduling a reminder for it
+            // (typically landing on today via the Date.now() fallback) drags
+            // the task off its current day. Preserve the existing instance
+            // instead (#10091).
+            if (!calculatedTargetDate && hasNoRepeatOccurrenceBeforeEnd(taskRepeatCfg)) {
+              return null;
+            }
+
             // Use calculated date if available, otherwise fall back to existing logic
+            const startOfNextDayDiffMs = this._dateService.getStartOfNextDayDiffMs();
             const targetDayTimestamp = calculatedTargetDate
               ? calculatedTargetDate.getTime()
               : (task.dueDay && dateStrToUtcDate(task.dueDay).getTime()) ||
-                task.dueWithTime ||
-                Date.now();
-            const dateTime = getDateTimeFromClockString(
+                (task.dueWithTime && task.dueWithTime - startOfNextDayDiffMs) ||
+                this._dateService.getLogicalTodayDate().getTime();
+            const dateTime = getRepeatDueWithTime(
               startTime as string,
               targetDayTimestamp,
+              startOfNextDayDiffMs,
             );
 
             // Only skip auto-removal from today if the task is scheduled for today
@@ -157,7 +173,30 @@ export class TaskRepeatCfgEffects {
         const firstOccurrence = clampPastTimedOccurrence(
           getFirstRepeatOccurrence(taskRepeatCfg),
           taskRepeatCfg,
+          this._dateService.todayStr(),
         );
+
+        // A finite window ([startDate, repeatUntilDay]) that contains no
+        // allowed occurrence must not fall back to today: the fallback below
+        // would anchor lastTaskCreationDay to today and drag the task off its
+        // current day. Save the dialog's subtask templates and keep the
+        // existing instance as-is — the empty window simply never creates
+        // anything (#10091).
+        if (!firstOccurrence && hasNoRepeatOccurrenceBeforeEnd(taskRepeatCfg)) {
+          this._taskRepeatCfgService.updateTaskRepeatCfg(taskRepeatCfg.id, {
+            subTaskTemplates,
+          });
+          const changesForUpdate: Partial<TaskRepeatCfgCopy> = isTimedTask
+            ? { ...taskRepeatCfg, startTime: undefined, remindAt: undefined }
+            : taskRepeatCfg;
+          this._updateRegularTaskInstance(
+            task,
+            changesForUpdate as Partial<TaskRepeatCfgCopy>,
+            taskRepeatCfg as TaskRepeatCfgCopy,
+          );
+          return null;
+        }
+
         const firstOccurrenceStr = firstOccurrence
           ? this._dateService.todayStr(firstOccurrence)
           : this._dateService.todayStr();
@@ -180,9 +219,13 @@ export class TaskRepeatCfgEffects {
           // Also align dueDay with the first occurrence: for future occurrences
           // this removes the task from today's view (#6856); for past occurrences
           // this is a no-op when dueDay already matches (#7344 preservation).
+          // Timed tasks are skipped: addRepeatCfgToTaskUpdateTask$ schedules
+          // them via scheduleTaskWithTime, which clears dueDay. Setting it here
+          // afterwards leaves dueDay + dueWithTime and a planner.days entry, so
+          // the task renders twice in planner and schedule (#11212).
           this._taskService.update(task.id, {
             created: firstOccurrence.getTime(),
-            dueDay: firstOccurrenceStr,
+            ...(isTimedTask ? {} : { dueDay: firstOccurrenceStr }),
           });
           // planTaskForDay (below) also sets dueDay redundantly, plus handles
           // planner days and TODAY_TAG removal
@@ -225,6 +268,8 @@ export class TaskRepeatCfgEffects {
 
         return { task, isFirstOccurrenceToday_, firstOccurrenceStr, isTimedTask };
       }),
+      // Empty finite window: instance preserved, nothing to plan (#10091)
+      filter((res): res is Exclude<typeof res, null> => res !== null),
       // Skip planTaskForDay for timed tasks — addRepeatCfgToTaskUpdateTask$ handles
       // those via scheduleTaskWithTime. planTaskForDay would overwrite dueWithTime.
       filter(
@@ -272,6 +317,12 @@ export class TaskRepeatCfgEffects {
                 // (getEffectiveRepeatStartDate uses lastTaskCreationDay), so
                 // editing startDate must not clear completion history.
                 const changes = taskRepeatCfg.changes as Partial<TaskRepeatCfgCopy>;
+                // A pause or resume alone moves no occurrence: the open copy
+                // stays where it is, as for an end date (#10091). Relocating
+                // it took an overdue copy out of Overdue and Today on resume.
+                const isPauseToggleOnly = SCHEDULE_AFFECTING_FIELDS.every(
+                  (field) => field === 'isPaused' || !(field in changes),
+                );
                 const lastCreationDay = getEffectiveLastTaskCreationDay(fullCfg);
                 const isStartDateMovedEarlier =
                   'startDate' in changes &&
@@ -286,10 +337,15 @@ export class TaskRepeatCfgEffects {
                     // occurrence on or after today. The strictly-future variant
                     // always skipped today, stranding a still-valid daily
                     // instance on tomorrow and advancing lastTaskCreationDay past
-                    // today (#7951).
-                    getNextRepeatOccurrence(fullCfg, new Date(), { inclusive: true });
+                    // today (#7951). Logical today, so a late-night slot before
+                    // the day boundary stays on its own night (#3378).
+                    getNextRepeatOccurrence(
+                      fullCfg,
+                      this._dateService.getLogicalTodayDate(),
+                      { inclusive: true },
+                    );
 
-                if (undoneInstances.length === 0) {
+                if (undoneInstances.length === 0 || isPauseToggleOnly) {
                   // No live instance to reschedule. But when startDate moved
                   // earlier, the stale lastTaskCreationDay would still suppress
                   // every projected/created instance between the new startDate
@@ -319,7 +375,31 @@ export class TaskRepeatCfgEffects {
                     if (this._dateService.isToday(firstOccurrence)) {
                       this._addTasksForTomorrowService.addAllDueToday();
                     }
+                  } else if (
+                    // Resumed (#3589) or replanned onto today, e.g. startDate
+                    // moved forward to today after the last copy was done
+                    // (#11213): today's occurrence would otherwise wait for
+                    // the next day change, same as #7768 Bug 2 above. Paused
+                    // configs returned early, so this is never a pause. Skip
+                    // when today was already processed: the sweep would create
+                    // nothing for this series (e.g. repeat-from-completion
+                    // re-anchoring to today on every completion).
+                    (!lastCreationDay ||
+                      lastCreationDay < this._dateService.todayStr()) &&
+                    firstOccurrence &&
+                    this._dateService.isToday(firstOccurrence)
+                  ) {
+                    this._addTasksForTomorrowService.addAllDueToday();
                   }
+                  return EMPTY;
+                }
+
+                // The end date leaves no occurrence on or after today (#10091).
+                // Leave the live instance where it is — it was a real
+                // occurrence the user may still want to finish — and do not
+                // re-anchor lastTaskCreationDay, which the today-fallback below
+                // would otherwise push past the end date.
+                if (!firstOccurrence && fullCfg.repeatUntilDay) {
                   return EMPTY;
                 }
 
@@ -341,14 +421,24 @@ export class TaskRepeatCfgEffects {
                 // upcoming today is kept on today.
                 let targetOccurrence = firstOccurrence;
                 if (isTimedTask && targetOccurrence) {
-                  const slot = getDateTimeFromClockString(
+                  const slot = getRepeatDueWithTime(
                     fullCfg.startTime as string,
-                    targetOccurrence.getTime(),
+                    targetOccurrence,
+                    this._dateService.getStartOfNextDayDiffMs(),
                   );
                   if (slot < Date.now()) {
-                    const nextOccurrence = getNextRepeatOccurrence(fullCfg, new Date());
+                    const nextOccurrence = getNextRepeatOccurrence(
+                      fullCfg,
+                      this._dateService.getLogicalTodayDate(),
+                    );
                     if (nextOccurrence) {
                       targetOccurrence = nextOccurrence;
+                    } else if (fullCfg.repeatUntilDay) {
+                      // Today's slot was the last one before the end date and
+                      // has passed: leave the instance as it is, like the
+                      // no-occurrence case above, instead of rescheduling it
+                      // into the past (#10091).
+                      return EMPTY;
                     }
                   }
                 }
@@ -366,10 +456,11 @@ export class TaskRepeatCfgEffects {
                 if (isTimedTask) {
                   const targetDayTimestamp = targetOccurrence
                     ? targetOccurrence.getTime()
-                    : Date.now();
-                  const dateTime = getDateTimeFromClockString(
+                    : this._dateService.getLogicalTodayDate().getTime();
+                  const dateTime = getRepeatDueWithTime(
                     fullCfg.startTime as string,
                     targetDayTimestamp,
+                    this._dateService.getStartOfNextDayDiffMs(),
                   );
                   const scheduledForToday = this._dateService.isToday(dateTime);
 
@@ -728,6 +819,9 @@ export class TaskRepeatCfgEffects {
                     //     });
                     //   }
                     // }
+                    if ('priority' in changes) {
+                      changesForArchiveTask.priority = changes.priority ?? null;
+                    }
                     if (changes.tagIds) {
                       changesForArchiveTask.tagIds = changes.tagIds;
                     }
@@ -777,9 +871,12 @@ export class TaskRepeatCfgEffects {
       isValidSplitTime(completeCfg.startTime) &&
       this._dateService.isToday(task.created)
     ) {
-      const dateTime = getDateTimeFromClockString(
+      // the instance was created today, so place it on the logical day, not on
+      // the calendar date (which is already tomorrow before the day boundary)
+      const dateTime = getRepeatDueWithTime(
         completeCfg.startTime as string,
-        new Date(),
+        this._dateService.getLogicalTodayDate(),
+        this._dateService.getStartOfNextDayDiffMs(),
       );
       if (task.remindAt) {
         this._taskService.reScheduleTask({
@@ -795,8 +892,9 @@ export class TaskRepeatCfgEffects {
     if (changes.tagIds) {
       this._taskService.updateTags(task, changes.tagIds);
     }
-    if (changes.title || changes.notes) {
+    if (changes.title || changes.notes || 'priority' in changes) {
       this._taskService.update(task.id, {
+        ...('priority' in changes ? { priority: changes.priority ?? null } : {}),
         ...(changes.title
           ? {
               title: changes.title,

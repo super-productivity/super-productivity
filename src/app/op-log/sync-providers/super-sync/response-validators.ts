@@ -1,4 +1,8 @@
 import {
+  SuperSyncCaptureClaimResponseSchema,
+  SuperSyncCaptureGrantsResponseSchema,
+  SuperSyncCaptureTokenResponseSchema,
+  SuperSyncCaptureConnectCodeResponseSchema,
   SuperSyncDeleteAllDataResponseSchema,
   SuperSyncDevicesResponseSchema,
   SuperSyncDownloadOpsResponseSchema,
@@ -9,6 +13,10 @@ import {
   SuperSyncUploadOpsResponseSchema,
 } from '@sp/shared-schema';
 import type {
+  SuperSyncCaptureClaimResult,
+  SuperSyncCaptureGrantList,
+  SuperSyncCaptureTokenResult,
+  SuperSyncCaptureConnectCodeResult,
   SuperSyncDeviceListResponse,
   SuperSyncReplaceTokenResult,
 } from '@sp/sync-providers/super-sync';
@@ -163,3 +171,38 @@ export const validateReplaceTokenResponse = (
     data,
     'ReplaceTokenResponse',
   ) as SuperSyncReplaceTokenResult;
+
+/** Validates the capture claim response; unknown statuses pass through. */
+export const validateCaptureClaimResponse = (
+  data: unknown,
+): SuperSyncCaptureClaimResult =>
+  parseResponse(
+    SuperSyncCaptureClaimResponseSchema,
+    data,
+    'CaptureClaimResponse',
+  ) as SuperSyncCaptureClaimResult;
+
+export const validateCaptureGrantsResponse = (data: unknown): SuperSyncCaptureGrantList =>
+  parseResponse(
+    SuperSyncCaptureGrantsResponseSchema,
+    data,
+    'CaptureGrantsResponse',
+  ) as SuperSyncCaptureGrantList;
+
+export const validateCaptureTokenResponse = (
+  data: unknown,
+): SuperSyncCaptureTokenResult =>
+  parseResponse(
+    SuperSyncCaptureTokenResponseSchema,
+    data,
+    'CaptureTokenResponse',
+  ) as SuperSyncCaptureTokenResult;
+
+export const validateCaptureConnectCodeResponse = (
+  data: unknown,
+): SuperSyncCaptureConnectCodeResult =>
+  parseResponse(
+    SuperSyncCaptureConnectCodeResponseSchema,
+    data,
+    'CaptureConnectCodeResponse',
+  ) as SuperSyncCaptureConnectCodeResult;

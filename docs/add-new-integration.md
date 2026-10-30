@@ -29,7 +29,8 @@ A repository-owned provider normally lives under
 ```text
 <provider-name>/
 ├── package.json
-├── scripts/build.js
+├── tsconfig.json        # extends ../tsconfig.base.json
+├── i18n/
 ├── src/
 │   ├── manifest.json
 │   ├── plugin.ts
@@ -37,8 +38,19 @@ A repository-owned provider normally lives under
 └── *.spec.ts
 ```
 
-Keep provider API types and mapping logic inside the package. Do not add the
-provider to core issue-provider unions, defaults, forms, or Angular services.
+Set the package's build script to the shared builder,
+`"build": "node ../scripts/build-with-esbuild.js"`. It bundles `src/plugin.ts` into
+`dist/plugin.js` and copies `manifest.json`, `config-schema.json`, `icon.svg`
+and `i18n/*.json` when present; see
+[build-with-esbuild.js](../packages/plugin-dev/scripts/build-with-esbuild.js) for options.
+
+Keep provider API types and mapping logic inside the package. For the parts every
+provider repeats (auth headers, connection test, `t()`, done/text field mappings,
+sync value picking), import the helpers from
+[issue-provider-kit](../packages/plugin-dev/issue-provider-kit/index.ts) by
+relative path; they are bundled into the plugin, not part of the public plugin
+API. Do not add the provider to core issue-provider unions, defaults, forms, or
+Angular services.
 
 Minimal manifest:
 
@@ -57,7 +69,7 @@ Minimal manifest:
   "hooks": [],
   "issueProvider": {
     "pollIntervalMs": 600000,
-    "icon": "extension",
+    "icon": "sp",
     "humanReadableName": "Example",
     "issueStrings": {
       "singular": "Issue",
@@ -66,6 +78,12 @@ Minimal manifest:
   }
 }
 ```
+
+The provider icon is rendered as an SVG (`mat-icon [svgIcon]`). The plugin's own
+`icon.svg` takes precedence; `issueProvider.icon` is only used without one and
+must name a built-in SVG icon (`BUILT_IN_SVG_ICONS` in
+`src/app/core/theme/built-in-svg-icons.const.ts`). Material icon ligatures such as
+`extension` are not SVG icons and show no provider icon.
 
 Omit `issueProvider.issueProviderKey` for a new provider. The host assigns
 `plugin:<plugin-id>`. That field is reserved for repository-managed plugins that
@@ -137,8 +155,9 @@ PluginAPI.registerIssueProvider({
 
 The required contract is `configFields`, `getHeaders`, `searchIssues`, `getById`,
 `getIssueLink`, and `issueDisplay`. Optional capabilities include connection
-testing, comments, backlog import, field mappings, create/update/delete, and
-calendar time-block operations. Add only capabilities the provider actually
+testing, comments, backlog import, batch refresh (`getByIds`), field mappings,
+create/update/delete, time logging (`timeTracking`), and calendar time-block
+operations. Add only capabilities the provider actually
 supports.
 
 Use the `PluginHttp` argument for provider requests. It returns Promises, applies
@@ -221,7 +240,10 @@ For a bundled provider:
    (the directory name, which can differ from the manifest id).
 3. Add the asset path to `BUNDLED_PLUGIN_PATHS` and the manifest id to
    `BUNDLED_PLUGIN_IDS` in `src/app/plugins/bundled-plugins.const.ts`, and give
-   the plugin dir a `package.json` (release builds skip dirs without one).
+   the plugin dir a `package.json` (release builds skip dirs without one). Every
+   plugin dir is a workspace of `packages/plugin-dev`: run `npm install` (in the
+   plugin dir or in `packages/plugin-dev`) and commit the updated shared `packages/plugin-dev/package-lock.json`, or
+   every build's `npm ci` fails.
 4. Add only English source strings; follow existing plugin i18n packaging.
 5. Update the issue-provider comparison in `docs/wiki/` in the same change.
 

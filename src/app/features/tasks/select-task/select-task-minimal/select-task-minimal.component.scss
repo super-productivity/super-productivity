@@ -36,7 +36,7 @@ input {
 }
 
 ::ng-deep {
-  .mat-mdc-autocomplete-panel {
+  .mat-mdc-autocomplete-panel.select-task-minimal-panel {
     max-height: 200px;
     border: 1px solid var(--extra-border-color);
     border-radius: var(--card-border-radius);

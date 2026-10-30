@@ -172,6 +172,13 @@ export class MagicSideNavComponent implements OnDestroy, AfterViewInit {
       }
     });
 
+    // Lets app-level overlays (onboarding tips) step aside while the menu is open.
+    effect(() => {
+      this._layoutService.isMobileSideNavOpen.set(
+        this.isMobile() && this.showMobileMenuOverlay(),
+      );
+    });
+
     // Sync history state with mobile menu visibility status
     effect(() => {
       this.syncMobileNavHistory(this.showMobileMenuOverlay());

@@ -1,4 +1,4 @@
-import { Task, TaskCopy } from './task.model';
+import { Task, TaskCopy, TaskPriority } from './task.model';
 import { getDbDateStr } from '../../util/get-db-date-str';
 import { stringToMs } from '../../ui/duration/string-to-ms.pipe';
 import { Tag } from '../tag/tag.model';
@@ -8,7 +8,12 @@ import { isImageUrlSimple } from '../../util/is-image-url';
 import { formatTimeHHmm } from '../../util/format-time-hhmm';
 import { TaskAttachment } from './task-attachment/task-attachment.model';
 import { nanoid } from 'nanoid';
-import type { Chrono, ParsingContext, ParsingResult } from 'chrono-node';
+import type { ParsedResult } from 'chrono-node';
+import { loadShortSyntaxDateParser } from './short-syntax-date-parser';
+import {
+  DateInputLocale,
+  DEFAULT_DATE_INPUT_LOCALE,
+} from '../../core/date-time-format/date-input-locale';
 import {
   RepeatCycleOption,
   RepeatQuickSetting,
@@ -29,6 +34,7 @@ export type ShortSyntaxTokenType =
   | 'due'
   | 'deadline'
   | 'estimate'
+  | 'priority'
   | 'tag'
   | 'project'
   | 'url';
@@ -68,54 +74,6 @@ const CH_TAG = '#';
 const CH_DUE = '@';
 const CH_DEADLINE = '!';
 const ALL_SPECIAL = `(\\${CH_PRO}|\\${CH_TAG}|\\${CH_DUE}|\\${CH_DEADLINE})`;
-
-let customDateParserPromise: Promise<Chrono> | null = null;
-let customDateParserCache: Chrono | null = null;
-
-const loadCustomDateParser = (): Promise<Chrono> => {
-  if (customDateParserCache) {
-    return Promise.resolve(customDateParserCache);
-  }
-  if (!customDateParserPromise) {
-    customDateParserPromise = import('chrono-node').then(({ casual }) => {
-      const parser = casual.clone();
-      parser.refiners.push({
-        refine: (context: ParsingContext, results: ParsingResult[]) => {
-          results.forEach((result) => {
-            const { refDate, text, start } = result;
-            const regex = / [5-9][0-9]$/;
-            const yearIndex = text.search(regex);
-            // The year pattern in Chrono's source code is (?:[1-9][0-9]{0,3}\\s{0,2}(?:BE|AD|BC|BCE|CE)|[1-2][0-9]{3}|[5-9][0-9]|2[0-5]).
-            // This means any two-digit numeric value from 50 to 99 will be considered a year.
-            // Link: https://github.com/wanasit/chrono/blob/54e7ff12f9185e735ee860c25922b2ab2367d40b/src/locales/en/constants.ts#L234C30-L234C108
-            // When someone creates a task like "Test @25/4 90m", Chrono will return
-            // the year as 1990, which is an undesirable behaviour in most cases.
-            if (yearIndex !== -1) {
-              result.text = text.slice(0, yearIndex);
-              const current = new Date();
-              let year = current.getFullYear();
-              const impliedDate = start.get('day');
-              const impliedMonth = start.get('month');
-              if (
-                (impliedMonth && impliedMonth < refDate.getMonth() + 1) ||
-                (impliedMonth === refDate.getMonth() + 1 &&
-                  impliedDate &&
-                  impliedDate < refDate.getDate())
-              ) {
-                year += 1;
-              }
-              result.start.assign('year', year);
-            }
-          });
-          return results;
-        },
-      });
-      customDateParserCache = parser;
-      return parser;
-    });
-  }
-  return customDateParserPromise;
-};
 
 // The following project name extraction pattern attempts to improve on the
 // previous version by not immediately terminating upon encountering a short
@@ -354,6 +312,74 @@ const getNextDayOfMonthDate = (now: Date, dayOfMonth: number): Date | null => {
   }
   return null;
 };
+
+// An nth weekday ("@2monday", "@2 mon", "@4TUE") at the start of a due match:
+// `n` counts occurrences from today, 1..5, where 1 is the next one — so
+// "@1monday" is exactly "@monday". "every" is deliberately absent from the
+// grammar, which is what keeps "@every 2 fridays" on the recurrence path: this
+// parser only runs once no recurrence matched. A trailing "m" ("@2m") is left
+// alone too, so the estimate grammar keeps the token. Glued out-of-range counts
+// still match (the token is consumed) but yield no date, which stops the
+// numeric-hour fallback turning "@9monday" into 09:00 with "monday" left in the
+// title. The spaced form only claims a single digit 1..5: "@10 fri" is an hour
+// plus a weekday, which chrono reads as Friday 10:00.
+const SHORT_SYNTAX_NTH_WEEKDAY_REG_EX = new RegExp(
+  `^(\\d{1,2})(\\s*)(${WEEKDAY_UNIT_SOURCE})(?![\\w])`,
+  'i',
+);
+
+interface NthWeekdaySyntaxResult {
+  nth: number;
+  weekday: number;
+  // Remainder after the phrase, fed to chrono for an optional trailing time
+  // ("3pm" in "@2monday 3pm")
+  chronoText: string;
+  // Chars of the due match consumed by the phrase itself
+  consumedLength: number;
+}
+
+// A chrono match that carries a clock time and no date of its own ("3pm", not
+// "tomorrow 3pm")
+const isTimeOnlyChronoMatch = (result: ParsedResult): boolean =>
+  result.start.isCertain('hour') &&
+  !(['day', 'month', 'year', 'weekday'] as const).some((component) =>
+    result.start.isCertain(component),
+  );
+
+const parseNthWeekdaySyntax = (
+  dueMatchContent: string,
+): NthWeekdaySyntaxResult | null => {
+  const m = dueMatchContent.match(SHORT_SYNTAX_NTH_WEEKDAY_REG_EX);
+  if (!m || (m[2] && !/^[1-5]$/.test(m[1]))) {
+    return null;
+  }
+  // All group 3 alternatives are unit words handled by weekdayOfUnit; the
+  // trailing "m" case ("@2m") is excluded by the lookahead, so no minute-check
+  // is needed here.
+  const weekday = weekdayOfUnit(m[3].toLowerCase());
+  if (weekday === undefined) {
+    return null;
+  }
+  return {
+    nth: +m[1],
+    weekday,
+    chronoText: dueMatchContent.slice(m[0].length),
+    consumedLength: m[0].length,
+  };
+};
+
+// Todoist-style priority: "p1" is the most important, so it maps to the
+// highest of SP's levels. Only a whole, whitespace-delimited, lowercase word
+// counts, which keeps "mp3", "p10", "#p1", "+p1", "p1." and "P1" out — the
+// syntax is on by default, and an uppercase "P1" is far more often part of a
+// title ("Fix P1 incident") than typed as syntax. "p4" is deliberately not a
+// token: in Todoist it means "no priority", which is what a new task already
+// has, and on a title edit it would silently clear a priority the user set.
+const SHORT_SYNTAX_PRIORITY_REG_EX = /(?:^|\s)p([1-3])(?=\s|$)/;
+/* eslint-disable @typescript-eslint/naming-convention */
+const PRIORITY_FOR_TOKEN_NR: Record<string, TaskPriority> = { 1: 3, 2: 2, 3: 1 };
+/* eslint-enable @typescript-eslint/naming-convention */
+
 const SHORT_SYNTAX_DEADLINE_REG_EX = new RegExp(
   `\\${CH_DEADLINE}[^${ALL_SPECIAL}]+`,
   'gi',
@@ -398,6 +424,10 @@ export const shortSyntax = async (
   // can be created for the result — the add-task bar. Title edits of existing
   // tasks keep parsing it as a plain date.
   isParseRepeat: boolean = false,
+  // Date words of the UI language and the day/month order of `3/1`
+  // (DateTimeFormatService.dateInputLocale). English-only, month-first when
+  // left out.
+  dateLocale: DateInputLocale = DEFAULT_DATE_INPUT_LOCALE,
 ): Promise<
   | {
       taskChanges: Partial<Task> & ShortSyntaxMarkers;
@@ -432,14 +462,28 @@ export const shortSyntax = async (
     ranges.forEach((r) => parsedRanges.push({ type, ...r }));
   };
 
+  // First, so the due stage never sees the token: "@someday p1" would
+  // otherwise hand its "1" to the numeric-hour fallback. Not for issue tasks:
+  // imported titles like "p1 crash on save" would get an unasked-for priority.
+  // On unless explicitly disabled, so a config without the key (e.g. one
+  // passed in before loadAllData merged in DEFAULT_GLOBAL_CONFIG) stays on.
+  if (config.isEnablePriority !== false && !task.issueId) {
+    const priorityResult = parsePriorityTracked(tracked);
+    if (priorityResult) {
+      taskChanges = { ...taskChanges, priority: priorityResult.priority };
+      pushRanges('priority', priorityResult.ranges);
+      isTitleChanged = true;
+    }
+  }
+
   if (config.isEnableDue) {
     const timeResult = parseTimeSpentTracked(task, tracked);
     if (timeResult) {
-      taskChanges = { ...timeResult.changes };
+      taskChanges = { ...taskChanges, ...timeResult.changes };
       pushRanges('estimate', timeResult.ranges);
       isTitleChanged = true;
     }
-    const dueResult = await parseScheduledDate(tracked, now, isParseRepeat);
+    const dueResult = await parseScheduledDate(tracked, now, isParseRepeat, dateLocale);
     if (dueResult) {
       repeat = dueResult.repeat || null;
       taskChanges = { ...taskChanges, ...dueResult.changes };
@@ -451,7 +495,7 @@ export const shortSyntax = async (
   // don't allow for issue tasks: imported titles like "Crash on save !3"
   // would otherwise get an unasked-for deadline
   if (config.isEnableDeadline && !task.issueId) {
-    const deadlineResult = await parseDeadlineDate(tracked, now);
+    const deadlineResult = await parseDeadlineDate(tracked, now, dateLocale);
     if (deadlineResult) {
       taskChanges = { ...taskChanges, ...deadlineResult.changes };
       pushRanges('deadline', deadlineResult.ranges);
@@ -666,6 +710,54 @@ const parseProjectTracked = (
   return null;
 };
 
+const isTokenBoundary = (ch: string): boolean => ch === '' || /\s/.test(ch);
+
+// The tag regex stops at whitespace, but the autocomplete inserts full titles
+// ("#Deep Work"). So existing tags with whitespace in their title are matched
+// literally first, longest title first ("Deep Work" beats "Deep"); only exact
+// titles of existing tags count, so "#work meeting notes" stays a single tag.
+// Matches are removed from `tracked`; everything else is left to the regex.
+const consumeMultiWordTags = (
+  tracked: TrackedTitle,
+  allTags: Tag[],
+  ranges: TextRange[],
+): string[] => {
+  const tagIds: string[] = [];
+  const multiWordTags = allTags
+    .map((tag) => ({ id: tag.id, title: tag.title.trim() }))
+    .filter((tag) => /\s/.test(tag.title))
+    .sort((a, b) => b.title.length - a.title.length);
+  if (!multiWordTags.length) {
+    return tagIds;
+  }
+
+  let start = tracked.text.indexOf(CH_TAG);
+  while (start !== -1) {
+    const text = tracked.text;
+    const titleStart = start + CH_TAG.length;
+    const tag = isTokenBoundary(text.charAt(start - 1))
+      ? multiWordTags.find(
+          (t) =>
+            text.slice(titleStart, titleStart + t.title.length).toLowerCase() ===
+              t.title.toLowerCase() &&
+            isTokenBoundary(text.charAt(titleStart + t.title.length)),
+        )
+      : undefined;
+    if (tag) {
+      const end = titleStart + tag.title.length;
+      ranges.push(...tracked.rawRanges(start, end));
+      tracked.remove(start, end);
+      if (!tagIds.includes(tag.id)) {
+        tagIds.push(tag.id);
+      }
+      start = tracked.text.indexOf(CH_TAG, start);
+    } else {
+      start = text.indexOf(CH_TAG, start + 1);
+    }
+  }
+  return tagIds;
+};
+
 const parseTagChanges = (
   task: Partial<TaskCopy>,
   tracked: TrackedTitle,
@@ -679,10 +771,11 @@ const parseTagChanges = (
   let isTitleChanged = false;
   // only exec if previous ones are also passed
   if (Array.isArray(task.tagIds) && Array.isArray(allTags)) {
+    const multiWordTagIds = consumeMultiWordTags(tracked, allTags, ranges);
     const initialTitle = tracked.text;
-    const regexTagTitles = initialTitle.match(SHORT_SYNTAX_TAGS_REG_EX);
+    const regexTagTitles = initialTitle.match(SHORT_SYNTAX_TAGS_REG_EX) || [];
 
-    if (regexTagTitles && regexTagTitles.length) {
+    if (regexTagTitles.length || multiWordTagIds.length) {
       const regexTagTitlesTrimmedAndFiltered: string[] = regexTagTitles
         .map((title) => title.trim().replace(CH_TAG, ''))
         .filter((newTagTitle) => {
@@ -706,7 +799,7 @@ const parseTagChanges = (
           );
         });
 
-      const matchingTagIds: string[] = [];
+      const matchingTagIds: string[] = [...multiWordTagIds];
       regexTagTitlesTrimmedAndFiltered.forEach((newTagTitle) => {
         const existingTag = allTags.find(
           (tag) => newTagTitle.toLowerCase() === tag.title.toLowerCase(),
@@ -740,7 +833,7 @@ const parseTagChanges = (
         }
       }
 
-      if (regexTagTitlesTrimmedAndFiltered.length) {
+      if (regexTagTitlesTrimmedAndFiltered.length || multiWordTagIds.length) {
         regexTagTitlesTrimmedAndFiltered.forEach((tagTitle) => {
           const matchedText = `${CH_TAG}${tagTitle}`;
           const start = tracked.text.indexOf(matchedText);
@@ -776,7 +869,8 @@ const parseShortSyntaxDate = async (
   now: Date,
   regEx: RegExp,
   isDeadline: boolean,
-  isParseRepeat: boolean = false,
+  isParseRepeat: boolean,
+  dateLocale: DateInputLocale,
 ): Promise<DateStageResult | null> => {
   if (!tracked.text) {
     return null;
@@ -798,11 +892,26 @@ const parseShortSyntaxDate = async (
     if (!isDeadline && isParseRepeat) {
       const repeatResult = parseRepeatSyntax(rr[0].substring(1));
       if (repeatResult) {
-        return await applyRepeatSyntax(tracked, now, rr[0], repeatResult);
+        return await applyRepeatSyntax(tracked, now, rr[0], repeatResult, dateLocale);
       }
     }
 
-    const dateParser = await loadCustomDateParser();
+    // Before chrono and before the numeric-hour fallback: "@2monday" is a plain
+    // date, not 02:00 with a leftover weekday (see parseNthWeekdaySyntax).
+    const nthWeekdayResult = parseNthWeekdaySyntax(rr[0].substring(1));
+    if (nthWeekdayResult) {
+      return await applyNthWeekdaySyntax(
+        tracked,
+        now,
+        rr[0],
+        triggerIndex,
+        nthWeekdayResult,
+        isDeadline,
+        dateLocale,
+      );
+    }
+
+    const dateParser = await loadShortSyntaxDateParser(dateLocale);
     const parsedDateArr = dateParser.parse(rr[0], now, {
       forwardDate: true,
     });
@@ -949,10 +1058,11 @@ const applyRepeatSyntax = async (
   now: Date,
   dueMatch: string,
   repeatResult: RepeatSyntaxResult,
+  dateLocale: DateInputLocale,
 ): Promise<DateStageResult> => {
   const { repeat, chronoText, consumedLength, weekday, dayOfMonth } = repeatResult;
   const anchorCycle = anchorCycleOf(repeat);
-  const dateParser = await loadCustomDateParser();
+  const dateParser = await loadShortSyntaxDateParser(dateLocale);
   const parsedDateArr = chronoText
     ? dateParser.parse(chronoText, now, { forwardDate: true })
     : [];
@@ -1096,18 +1206,201 @@ const applyRepeatSyntax = async (
   return { changes: {}, repeat, ranges };
 };
 
+// Resolves an nth-weekday token ("@2monday 3pm") into a one-off due date. The
+// date itself is computed from the weekday and n; the remainder is fed to chrono
+// only for an optional trailing time, mirroring applyRepeatSyntax's DST-safe
+// handling: when the resolved day is a spring-forward day the typed time does
+// not exist and only dueTimeStr can carry it. An occurrence whose explicit time
+// or implied noon anchor has passed advances to the next matching weekday,
+// keeping nth = 1 equivalent to chrono's forwardDate behavior for plain weekdays.
+const applyNthWeekdaySyntax = async (
+  tracked: TrackedTitle,
+  now: Date,
+  dueMatch: string,
+  triggerIndex: number,
+  nthWeekdayResult: NthWeekdaySyntaxResult,
+  isDeadline: boolean,
+  dateLocale: DateInputLocale,
+): Promise<DateStageResult> => {
+  const { nth, weekday, chronoText, consumedLength } = nthWeekdayResult;
+  const dateParser = await loadShortSyntaxDateParser(dateLocale);
+  let parsedDateArr = chronoText
+    ? dateParser.parse(chronoText, now, { forwardDate: true })
+    : [];
+  if (chronoText && !parsedDateArr.length) {
+    // Chrono rejects a clock time that falls in today's DST gap, even when
+    // the nth weekday is a different day on which that time exists. Recover
+    // only a time-only match on the previous day; the actual target date and
+    // any DST normalization are handled below. Disable forwardDate here so a
+    // past clock time cannot slide back onto today's gap during this retry.
+    const timeReference = new Date(now);
+    timeReference.setDate(timeReference.getDate() - 1);
+    timeReference.setHours(12, 0, 0, 0);
+    const fallback = dateParser.parse(chronoText, timeReference, {
+      forwardDate: false,
+    })[0];
+    if (fallback && isTimeOnlyChronoMatch(fallback)) {
+      parsedDateArr = [fallback];
+    }
+  }
+  // Only absorb a time-only chrono match that directly follows the phrase
+  // ("@2monday 3pm"); anything further into the remainder belongs to the title.
+  // The date comes from the phrase, so a trailing date ("@2fri tomorrow") is
+  // left in the title instead of being consumed and ignored.
+  const parsedDateResult =
+    parsedDateArr.length &&
+    /^\s*$/.test(chronoText.slice(0, parsedDateArr[0].index)) &&
+    isTimeOnlyChronoMatch(parsedDateArr[0])
+      ? parsedDateArr[0]
+      : null;
+  const consumedTotal =
+    1 +
+    consumedLength +
+    (parsedDateResult ? parsedDateResult.index + parsedDateResult.text.length : 0);
+  const textToReplace = dueMatch.substring(0, consumedTotal);
+  // Anchor at the selected match, like the chrono branch's consume(): the same
+  // token text can appear earlier in the title ("wow!2monday !2monday"), where
+  // the deadline scanner skips a "!" glued to a word — an unanchored indexOf
+  // would remove and highlight that earlier copy instead of the selected one.
+  const tokenStart = tracked.text.indexOf(textToReplace, triggerIndex);
+  if (tokenStart === -1) {
+    return { changes: {}, ranges: [] };
+  }
+  const tokenEnd = tokenStart + textToReplace.length;
+  const ranges = tracked.rawRanges(tokenStart, tokenEnd);
+  const head = tracked.text.slice(0, tokenStart);
+  const tail = tracked.text.slice(tokenEnd);
+  // Same punctuation / whitespace cleanup as applyRepeatSyntax so the consumed
+  // token leaves no stranded punctuation or double space behind.
+  if (/^[.,;:!?]/.test(tail)) {
+    let wsStart = tokenStart;
+    while (wsStart > 0 && /\s/.test(tracked.text[wsStart - 1])) {
+      wsStart--;
+    }
+    tracked.remove(wsStart, tokenEnd);
+  } else if (/\s$/.test(head) && /^\s/.test(tail)) {
+    const tailWs = tail.match(/^\s+/);
+    tracked.remove(tokenStart, tokenEnd + (tailWs ? tailWs[0].length : 0));
+  } else {
+    tracked.remove(tokenStart, tokenEnd);
+  }
+  tracked.trim();
+
+  // 1..5 per the grammar; outside it the token is still consumed (above) but
+  // resolves to no date, which stops the numeric-hour fallback from turning
+  // "@9monday" into 09:00 with the weekday left in the title.
+  if (nth < 1 || nth > 5) {
+    return { changes: {}, ranges };
+  }
+
+  const hasTime = !!parsedDateResult;
+  const parsedTime = parsedDateResult ? parsedDateResult.start.date() : null;
+  let typedTimeStr: string | undefined;
+  // setDate retains the normalized hour from a DST gap, so the typed clock time
+  // is re-applied after every day shift: a later weekday must use it again once
+  // that time exists.
+  const applyTypedTime = (date: Date): void => {
+    if (parsedTime) {
+      date.setHours(parsedTime.getHours(), parsedTime.getMinutes(), 0, 0);
+    }
+  };
+  // The first occurrence (nth = 1), identical to "@monday": anchored at 12:00
+  // without a time so the downstream dueWithTime/dueDay conversion and
+  // `hasPlannedTime: false` behave the same.
+  const dueDate = getNextWeekdayDate(now, weekday);
+  if (parsedTime) {
+    // Captured before setHours: on a spring-forward day the wall-clock time does
+    // not exist and the Date can only hold the shifted hour (see dueTimeStr).
+    typedTimeStr = formatTimeHHmm(parsedTime);
+    applyTypedTime(dueDate);
+  }
+  // Match chrono's strict forwardDate comparison for both explicit times and
+  // the implied noon anchor of all-day dates; an occurrence exactly at now
+  // still counts as today.
+  if (dueDate.getTime() < now.getTime()) {
+    dueDate.setDate(dueDate.getDate() + 7);
+    applyTypedTime(dueDate);
+  }
+  // Higher counts continue from that first occurrence, org-mode style, so n is
+  // strictly increasing: on a Monday afternoon "@1monday" is next Monday and
+  // "@2monday" the one after it.
+  if (nth > 1) {
+    const extraDays = (nth - 1) * 7;
+    dueDate.setDate(dueDate.getDate() + extraDays);
+    applyTypedTime(dueDate);
+  }
+  if (isDeadline) {
+    return {
+      changes: {
+        deadlineWithTime: dueDate.getTime(),
+        deadlineDay: null,
+        hasDeadlineTime: hasTime,
+      },
+      ranges,
+    };
+  }
+  return {
+    changes: {
+      dueWithTime: dueDate.getTime(),
+      dueDay: null,
+      ...(hasTime ? { dueTimeStr: typedTimeStr } : { hasPlannedTime: false }),
+    },
+    ranges,
+  };
+};
+
 const parseScheduledDate = (
   tracked: TrackedTitle,
   now: Date,
-  isParseRepeat: boolean = false,
+  isParseRepeat: boolean,
+  dateLocale: DateInputLocale,
 ): Promise<DateStageResult | null> =>
-  parseShortSyntaxDate(tracked, now, SHORT_SYNTAX_DUE_REG_EX, false, isParseRepeat);
+  parseShortSyntaxDate(
+    tracked,
+    now,
+    SHORT_SYNTAX_DUE_REG_EX,
+    false,
+    isParseRepeat,
+    dateLocale,
+  );
 
 const parseDeadlineDate = (
   tracked: TrackedTitle,
   now: Date,
+  dateLocale: DateInputLocale,
 ): Promise<DateStageResult | null> =>
-  parseShortSyntaxDate(tracked, now, SHORT_SYNTAX_DEADLINE_REG_EX, true);
+  parseShortSyntaxDate(
+    tracked,
+    now,
+    SHORT_SYNTAX_DEADLINE_REG_EX,
+    true,
+    false,
+    dateLocale,
+  );
+
+// Every token is consumed and the last one wins ("p3 ... p1" is High): a
+// token left in the title would be parsed again by the add-task effect, which
+// re-runs short syntax on the add bar's already-cleaned title.
+const parsePriorityTracked = (
+  tracked: TrackedTitle,
+): { priority: TaskPriority; ranges: TextRange[] } | null => {
+  let priority: TaskPriority | null = null;
+  const ranges: TextRange[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = SHORT_SYNTAX_PRIORITY_REG_EX.exec(tracked.text))) {
+    // The match may start with the whitespace before the token
+    const start = m.index + m[0].length - 2;
+    const end = start + 2;
+    ranges.push(...tracked.rawRanges(start, end));
+    // Take one adjacent space with the token so a mid-title removal leaves no
+    // double space behind ("Fix p1 login" → "Fix login")
+    const hasSpaceAfter = /\s/.test(tracked.text.charAt(end));
+    tracked.remove(start, hasSpaceAfter ? end + 1 : end);
+    tracked.trim();
+    priority = PRIORITY_FOR_TOKEN_NR[m[1]];
+  }
+  return priority ? { priority, ranges } : null;
+};
 
 const parseTimeSpentTracked = (
   task: Partial<TaskCopy>,

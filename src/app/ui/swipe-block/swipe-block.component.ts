@@ -13,6 +13,7 @@ import {
 import { MatIcon } from '@angular/material/icon';
 import { PanDirective, PanEvent } from '../swipe-gesture/pan.directive';
 import { isTouchActive } from '../../util/input-intent';
+import { performHapticFeedback } from '../../util/haptic-feedback';
 
 /** Scale factor so the swipe block reaches full width at 50% pan distance */
 const PAN_SCALE_FACTOR = 2;
@@ -74,7 +75,7 @@ export class SwipeBlockComponent implements OnDestroy {
   }
 
   onPanStart(ev: PanEvent): void {
-    if (!isTouchActive() || !this.canSwipe()) {
+    if (!this.isTouchActive() || !this.canSwipe()) {
       return;
     }
     this._resetAfterPan();
@@ -97,7 +98,11 @@ export class SwipeBlockComponent implements OnDestroy {
   }
 
   onPanEnd(): void {
-    if (!isTouchActive() || (!this._isLockPanLeft && !this._isLockPanRight)) {
+    if (!this.canSwipe()) {
+      this._resetAfterPan();
+      return;
+    }
+    if (!this.isTouchActive() || (!this._isLockPanLeft && !this._isLockPanRight)) {
       return;
     }
     this.isPreventPointerEventsWhilePanning.set(false);
@@ -121,7 +126,7 @@ export class SwipeBlockComponent implements OnDestroy {
   }
 
   handlePan(ev: PanEvent): void {
-    if (!isTouchActive()) {
+    if (!this.isTouchActive() || !this.canSwipe()) {
       return;
     }
     if (!this.innerWrapperEl()) {
@@ -148,6 +153,7 @@ export class SwipeBlockComponent implements OnDestroy {
       if (!this._isActionTriggered) {
         this._isActionTriggered = true;
         this.swipeRightTriggered.emit(true);
+        performHapticFeedback('threshold');
       }
     } else {
       if (this._isActionTriggered) {
@@ -220,6 +226,9 @@ export class SwipeBlockComponent implements OnDestroy {
     const scale = this._calcScale(ev.deltaX);
 
     if (scale > 0.5) {
+      if (!this._isActionTriggered) {
+        performHapticFeedback('threshold');
+      }
       this._isActionTriggered = true;
       this._renderer.addClass(blockRightElRef.nativeElement, 'isActive');
     } else {

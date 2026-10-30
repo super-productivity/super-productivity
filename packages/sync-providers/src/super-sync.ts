@@ -2,6 +2,13 @@ export {
   PROVIDER_ID_SUPER_SYNC,
   SUPER_SYNC_DEFAULT_BASE_URL,
   isSuperSyncWebSocketAccess,
+  type SuperSyncCaptureClaimResult,
+  type SuperSyncCaptureGrantInfo,
+  type SuperSyncCaptureGrantList,
+  type SuperSyncCaptureItemInfo,
+  type SuperSyncCaptureKeyResult,
+  type SuperSyncCaptureTokenResult,
+  type SuperSyncCaptureConnectCodeResult,
   type SuperSyncDeviceInfo,
   type SuperSyncDeviceListResponse,
   type SuperSyncPrivateCfg,
@@ -10,6 +17,7 @@ export {
 } from './super-sync/super-sync.model';
 export {
   SUPER_SYNC_CLIENT_UPDATE_REQUIRED_CODE,
+  SuperSyncCaptureUnsupportedError,
   SuperSyncProvider,
   type SuperSyncDeps,
 } from './super-sync/super-sync';

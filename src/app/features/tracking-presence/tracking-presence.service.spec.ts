@@ -10,7 +10,10 @@ import {
 import { SyncProviderManager } from '../../op-log/sync-providers/provider-manager.service';
 import { OperationEncryptionService } from '../../op-log/sync/operation-encryption.service';
 import { SnackService } from '../../core/snack/snack.service';
-import { selectCurrentTaskId } from '../tasks/store/task.selectors';
+import { BannerService } from '../../core/banner/banner.service';
+import { BannerId } from '../../core/banner/banner.model';
+import { T } from '../../t.const';
+import { selectCurrentTaskId, selectTaskEntities } from '../tasks/store/task.selectors';
 import { selectIsIdle } from '../idle/store/idle.selectors';
 import {
   selectCurrentCycle,
@@ -29,6 +32,7 @@ import { getDeviceLabel } from './get-device-label.util';
 describe('TrackingPresenceService', () => {
   let service: TrackingPresenceService;
   let store: MockStore;
+  let bannerService: BannerService;
   let presenceMessage$: Subject<PresenceWsMessage>;
   let sendPresenceSpy: jasmine.Spy;
   let snackOpenSpy: jasmine.Spy;
@@ -123,6 +127,10 @@ describe('TrackingPresenceService', () => {
         provideMockStore({
           selectors: [
             { selector: selectCurrentTaskId, value: null },
+            {
+              selector: selectTaskEntities,
+              value: { ['task-1']: { title: 'Write report' } },
+            },
             { selector: selectIsIdle, value: false },
             { selector: selectIsSessionRunning, value: false },
             { selector: selectCurrentCycle, value: 1 },
@@ -160,6 +168,7 @@ describe('TrackingPresenceService', () => {
 
     service = TestBed.inject(TrackingPresenceService);
     store = TestBed.inject(MockStore);
+    bannerService = TestBed.inject(BannerService);
     dispatchSpy = spyOn(store, 'dispatch').and.callThrough();
   });
 
@@ -636,7 +645,6 @@ describe('TrackingPresenceService', () => {
       receiveRemoteState({ sinceTs: Date.now() + 10_000 }, { ordinal: 2 });
 
       expect(dispatchSpy).toHaveBeenCalledWith(setCurrentTask({ id: null }));
-      expect(snackOpenSpy).toHaveBeenCalled();
       expect(service.remoteSession()).toBeTruthy();
 
       // the resulting local stopped transition must NOT broadcast — it would
@@ -646,6 +654,106 @@ describe('TrackingPresenceService', () => {
       service.stop();
       flush();
     }));
+
+    describe('moved banner', () => {
+      const takeOver = (): void => {
+        service.start();
+        tick();
+        setLocalTaskId('task-1');
+        receiveRemoteState({ sinceTs: Date.now() + 10_000 }, { ordinal: 2 });
+        // the real reducer clears the current task synchronously on dispatch
+        setLocalTaskId(null);
+        flushEffects();
+      };
+      const movedBanner = (): ReturnType<BannerService['activeBanner']> =>
+        bannerService.isShown(BannerId.TrackingMovedToOtherDevice)
+          ? bannerService.activeBanner()
+          : null;
+
+      it('names the device and the stopped task, and stays open', fakeAsync(() => {
+        takeOver();
+
+        expect(movedBanner()).toEqual(
+          jasmine.objectContaining({
+            msg: T.F.TRACKING_PRESENCE.B.MOVED_TO,
+            translateParams: { device: 'Android', title: 'Write report' },
+          }),
+        );
+        expect(snackOpenSpy).not.toHaveBeenCalled();
+        tick(PRESENCE_HEARTBEAT_MS);
+        flushEffects();
+        expect(movedBanner()).toBeTruthy();
+        service.stop();
+        flush();
+      }));
+
+      it('takes tracking back to the stopped task', fakeAsync(() => {
+        takeOver();
+        dispatchSpy.calls.reset();
+
+        movedBanner()!.action!.fn();
+
+        expect(dispatchSpy).toHaveBeenCalledWith(setCurrentTask({ id: 'task-1' }));
+        service.stop();
+        flush();
+      }));
+
+      it('hides once this device tracks again', fakeAsync(() => {
+        takeOver();
+
+        setLocalTaskId('task-2');
+        flushEffects();
+
+        expect(movedBanner()).toBeNull();
+        service.stop();
+        flush();
+      }));
+
+      it('hides once the other device stops tracking', fakeAsync(() => {
+        takeOver();
+
+        receiveRemoteState({ state: 'stopped', seq: 2 }, { ordinal: 3 });
+        flushEffects();
+
+        expect(movedBanner()).toBeNull();
+        service.stop();
+        flush();
+      }));
+
+      it('outlives a disconnect of the other device (backgrounded phone)', fakeAsync(() => {
+        takeOver();
+
+        receiveRemoteState({ seq: 2 }, { ordinal: 3, producerConnected: false });
+        flushEffects();
+        expect(movedBanner()).toBeTruthy();
+
+        tick(PRESENCE_HIDE_STALE_AFTER_MS);
+        flushEffects();
+        expect(movedBanner()).toBeNull();
+        service.stop();
+        flush();
+      }));
+
+      it('shows for an already disconnected winner and still hides once this device tracks again', fakeAsync(() => {
+        service.start();
+        tick();
+        setLocalTaskId('task-1');
+        receiveRemoteState(
+          { sinceTs: Date.now() + 10_000 },
+          { ordinal: 2, producerConnected: false },
+        );
+        setLocalTaskId(null);
+        flushEffects();
+        expect(movedBanner()).toBeTruthy();
+
+        setLocalTaskId('task-2');
+        flushEffects();
+
+        expect(movedBanner()).toBeNull();
+        service.stop();
+        flush();
+      }));
+    });
 
     it('rebroadcasts its own state and ignores the remote one when local is newer', fakeAsync(() => {
       service.start();

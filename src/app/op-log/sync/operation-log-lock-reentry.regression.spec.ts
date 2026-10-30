@@ -44,7 +44,7 @@ import { T } from '../../t.const';
  * seconds instead of 90s. All behaviour (Web Locks path, fallback mutex,
  * cleanup) is otherwise untouched.
  */
-const SHORT_TIMEOUT_MS = 1000;
+const SHORT_TIMEOUT_MS = 250;
 
 class ShortTimeoutLockService extends LockService {
   override request<T>(
@@ -217,7 +217,7 @@ describe('regression #7700: operation-log lock reentry', () => {
     bufferDeferredAction(createDeferredAction());
 
     // Hold the lock comfortably longer than the full retry budget:
-    // 3 attempts × ~1000ms timeout + 100ms + 200ms backoffs ≈ 3300ms.
+    // 3 attempts × ~250ms timeout + 100ms + 200ms backoffs ≈ 1050ms.
     // 10000ms is generous.
     await expectAsync(
       lockService.request(

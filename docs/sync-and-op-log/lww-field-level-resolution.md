@@ -5,7 +5,7 @@ implemented (see [Implementation](#implementation-pr-1)); "How it works today"
 below describes the code before it. Tracker: #10393, queue item 1. Findings:
 #10382.
 
-**Sections:** [Problem](#problem) · [How it works today](#how-it-works-today) · [Options](#options) · [Released clients and graceful degradation](#released-clients-and-graceful-degradation) · [Fuzz pins and E2E proof](#fuzz-pins-and-e2e-proof) · [Recommendation](#recommendation) · [Decisions for @johannesjo](#decisions-for-johannesjo) · [Outcome](#outcome) · [Implementation (PR 1)](#implementation-pr-1) · [Per-field winners (#10422)](#per-field-winners-10422)
+**Sections:** [Problem](#problem) · [How it works today](#how-it-works-today) · [Options](#options) · [Released clients and graceful degradation](#released-clients-and-graceful-degradation) · [Fuzz pins and E2E proof](#fuzz-pins-and-e2e-proof) · [Recommendation](#recommendation) · [Decisions for @johannesjo](#decisions-for-johannesjo) · [Outcome](#outcome) · [Implementation (PR 1)](#implementation-pr-1) · [Per-field winners (#10422)](#per-field-winners-10422) · [Merged snapshot types (#10958)](#merged-snapshot-types-10958)
 
 Line numbers: `rg -n '^#{1,3} ' <this file>`, then read one section with `sed -n`.
 
@@ -84,8 +84,8 @@ unless noted.
    - `'patch'` or any other mode, including none → `updateOne`;
    - an absent entity → `addOne` with the `RECREATE_FALLBACK` backfill. NOTE is
      added raw, and a marked `recreatesEntityAfterDelete` patch is ignored.
-   - Tasks keep their project, tag and Today lists in step. Nothing keeps
-     `note.todayOrder` in step.
+   - Tasks keep their project, tag and Today lists in step; notes keep
+     `note.todayOrder` in step with `isPinnedToToday` (#10379).
 9. The envelope is `LwwUpdatePayload`
    ([`operation.types.ts`](../../packages/sync-core/src/operation.types.ts)).
    Its flat `actionPayload` extracts as `{}`, so the merge sees a resolution op
@@ -169,8 +169,8 @@ hydration must replay identically.
 - **Today's merge would fix both note pins** once NOTE has a
   `RECREATE_FALLBACK` entry (lock vs pin, content vs pin): their fields are
   disjoint.
-- **A clean regression pin also needs `todayOrder` upkeep** in
-  `lwwUpdateMetaReducer`. Otherwise `divergence:.note.todayOrder.*` stays.
+- **`todayOrder` upkeep in `lwwUpdateMetaReducer`**, which a clean regression
+  pin also needs, landed in #10659 (#10379).
 
 ## Released clients and graceful degradation
 
@@ -223,14 +223,14 @@ Expected outcomes are by code reading and have not been run. Each fix PR turns
 its pins into regression pins and leaves all others unchanged, including those
 of #10380 and #10381.
 
-| Pin                                                         | A (pieces 1–3)               | B                                | C                         | NOTE admission                         |
-| ----------------------------------------------------------- | ---------------------------- | -------------------------------- | ------------------------- | -------------------------------------- |
-| done status lost when both devices rename                   | fixed                        | — (superseded path unchanged)    | —                         | —                                      |
-| tracked time lost to a later concurrent rename              | fixed, via the rebased delta | —                                | with A                    | —                                      |
-| note lock lost to an unpin; note content loses to an unpin  | —                            | lock only; `todayOrder` diverges | —                         | fixed, if `todayOrder` is kept in step |
-| habit count lost to a rename; habit rename loses to a count | —                            | —                                | —                         | —                                      |
-| two devices tracking one unscheduled task (#10378)          | —                            | —                                | time, local-win direction | —                                      |
-| task rename loses to tracking (#10260)                      | —                            | —                                | —                         | —                                      |
+| Pin                                                         | A (pieces 1–3)               | B                             | C                         | NOTE admission                                 |
+| ----------------------------------------------------------- | ---------------------------- | ----------------------------- | ------------------------- | ---------------------------------------------- |
+| done status lost when both devices rename                   | fixed                        | — (superseded path unchanged) | —                         | —                                              |
+| tracked time lost to a later concurrent rename              | fixed, via the rebased delta | —                             | with A                    | —                                              |
+| note lock lost to an unpin; note content loses to an unpin  | —                            | lock only                     | —                         | fixed (`todayOrder` kept in step since #10659) |
+| habit count lost to a rename; habit rename loses to a count | —                            | —                             | —                         | —                                              |
+| two devices tracking one unscheduled task (#10378)          | —                            | —                             | time, local-win direction | —                                              |
+| task rename loses to tracking (#10260)                      | —                            | —                             | —                         | —                                              |
 
 **Start from an E2E** (rule 12: both conflict directions, both timestamp
 winners):
@@ -405,7 +405,7 @@ known habit trade (`noReorder:20725006`); otherwise TASK only.
 ## Implementation (PR 1)
 
 [`conflict-field-patch.util.ts`](../../src/app/op-log/sync/conflict-field-patch.util.ts)
-holds the rules; `ConflictResolutionService._tryCreateFieldPatch` builds the op.
+holds the rules; `ConflictLocalWinOpsService._tryCreateFieldPatch` builds the op.
 
 - **Overlap:** every update-vs-update conflict of a TASK, PROJECT, TAG or
   SIMPLE_COUNTER whose ops are readable resolves per field (#10422, see
@@ -629,3 +629,53 @@ against any row; it now meets rows stamped at their fields' own, older times.
   side has already applied, so the whole-entity fallback re-resolves over
   that state; a local-win snapshot then carries the remote values of the
   shared fields. Before #10422 the remote ops stayed unapplied for it.
+
+## Merged snapshot types (#10958)
+
+**The report.** Enabling a repeat config's `skipOverdue` on one device was
+reverted when another device's repeat generation wrote `lastTaskCreation*`
+to the same config concurrently. TASK_REPEAT_CFG has no
+`RECREATE_FALLBACK` entry, so the crossing took whole-entity LWW, and the
+later generation's replace snapshot carried the stale `skipOverdue`.
+
+**The rule.** A type in `MERGED_SNAPSHOT_TYPES`
+([`conflict-field-patch.util.ts`](../../src/app/op-log/sync/conflict-field-patch.util.ts),
+today only TASK_REPEAT_CFG) decides per field like the types above, but
+re-sends ONE full `'replace'` snapshot instead of `'patch'` rows
+(`mergedSnapshotState`): the resolving device's entity, then every remote
+write, then the local fields that won, without cleared fields. It is stamped
+at the newest local write that won. A remote LWW row on the remote side
+keeps whole-entity LWW, since its values are never read (decision 5).
+
+**Why not a `RECREATE_FALLBACK` entry.** Every released client lacks an
+entry for this type. One that applied a concurrent `deleteTaskRepeatCfg` and
+loses to a patch adds the partial config raw; it fails validation and data
+repair has no rule for it. A replace snapshot is the shape every released
+client already receives for this type, so it recreates the config whole
+(`lww-update.meta-reducer.spec.ts`, "merged snapshot on a receiver").
+
+**What it leaves (residuals):**
+
+- The snapshot claims every field at its timestamp. A third device's
+  concurrent edit of another field that is older than the snapshot loses to
+  it, as it lost to the whole-entity snapshot before.
+- Like every local-win snapshot, it is read before the batch's other ops
+  apply (#10385 class), so a same-batch undeclared write to the config, such
+  as a tag delete's `tagIds` cleanup, is overwritten. The only such writers
+  are `deleteTag(s)` and `deleteProject`: the config keeps the deleted id or
+  comes back, the same on every device. A task it generates then fails
+  validation and data repair drops the id from that task; repair clears a
+  stale `projectId` on the config but not stale `tagIds`. No data is lost.
+  On master only the local-win direction had this.
+- A released device that resolves the crossing still uses whole-entity LWW.
+- A device that receives the snapshot while it holds its own pending edit of
+  the config meets a row, so it resolves whole-entity (decision 5). If its
+  edit is newer, its snapshot of its pre-batch config carries the old values
+  again, as on master. Two devices suffice: when the editing device resolved,
+  the other device's next-day generation reverts the edit if it runs before
+  that device downloads the snapshot (offline, or a sync that fails or
+  outlasts the 30s `waitForSyncWindow` wait). Reading the row's values would
+  need a new decision (#11003).
+
+Admitting another type needs a reported loss (fix intake), an adapter
+entity, and no derived upkeep on LWW apply (NOTE stays out, decision 4).

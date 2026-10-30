@@ -3,9 +3,13 @@ name: Test macOS DMG Build
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   build-and-verify-dmg:
     runs-on: macos-15
+    timeout-minutes: 60
     env:
       UNSPLASH_KEY: ${{ secrets.UNSPLASH_KEY }}
       UNSPLASH_CLIENT_ID: ${{ secrets.UNSPLASH_CLIENT_ID }}
@@ -23,7 +27,7 @@ jobs:
       # no longer downloads the Electron binary; electron-builder fetches its
       # own copy when packaging.)
       - name: Install npm packages
-        uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08 # v3
+        uses: nick-fields/retry@ad984534de44a9489a53aefd81eb77f87c70dc60 # v4.0.0
         with:
           timeout_minutes: 10
           max_attempts: 3
@@ -109,7 +113,7 @@ jobs:
           fi
 
       - name: Upload DMG artifact
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: mac-dmg-build
           path: .tmp/app-builds/*.dmg

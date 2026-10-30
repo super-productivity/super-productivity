@@ -1,6 +1,9 @@
 import { TestBed } from '@angular/core/testing';
-import { signal } from '@angular/core';
-import { TaskViewCustomizerService } from './task-view-customizer.service';
+import { signal, type WritableSignal } from '@angular/core';
+import {
+  CustomizedUndoneTasks,
+  TaskViewCustomizerService,
+} from './task-view-customizer.service';
 import { Project } from '../project/project.model';
 import { Tag } from '../tag/tag.model';
 import { TaskWithSubTasks } from '../tasks/task.model';
@@ -55,8 +58,10 @@ describe('TaskViewCustomizerService', () => {
   let projectUpdateSpy: jasmine.Spy;
   let tagUpdateSpy: jasmine.Spy;
   // Stand-in for the sidebar (menu-tree) order. Defaults to identity so tags keep
-  // their _allTags order; individual tests override it to assert a custom order.
+  // their tagsInTreeOrder order; individual tests override it to assert a custom order.
   let menuTreeFlattenFn: (tags: Tag[]) => Tag[];
+  // The service reads tags straight from this signal (TagService.tagsInTreeOrder).
+  let tagsInTreeOrder: WritableSignal<Tag[]>;
   const mockLanguageService = { detect: () => DEFAULT_LOCALE };
 
   const todayStr = getDbDateStr(new Date());
@@ -171,7 +176,10 @@ describe('TaskViewCustomizerService', () => {
         { provide: ProjectService, useValue: { update: projectUpdateSpy } },
         {
           provide: TagService,
-          useValue: { updateTag: tagUpdateSpy, tagsInTreeOrder: signal(mockTags) },
+          useValue: {
+            updateTag: tagUpdateSpy,
+            tagsInTreeOrder: (tagsInTreeOrder = signal(mockTags)),
+          },
         },
         {
           provide: MenuTreeService,
@@ -184,7 +192,6 @@ describe('TaskViewCustomizerService', () => {
     });
     service = TestBed.inject(TaskViewCustomizerService);
     (service as any)._allProjects = mockProjects;
-    (service as any)._allTags = mockTags;
   });
 
   it('should filter by tag name', () => {
@@ -497,10 +504,10 @@ describe('TaskViewCustomizerService', () => {
   });
 
   it('should sort by primary-tag sidebar order, keeping manual order within a tag', () => {
-    (service as unknown as { _allTags: Tag[] })._allTags = [
+    tagsInTreeOrder.set([
       { id: 'Tag B', title: 'Tag B' } as Tag,
       { id: 'Tag A', title: 'Tag A' } as Tag,
-    ];
+    ]);
     const extra: TaskWithSubTasks[] = [
       {
         id: 'Aardvark(-)',
@@ -556,10 +563,10 @@ describe('TaskViewCustomizerService', () => {
   });
 
   it('should sort tasks with unknown tag ids after known tree-ordered tags', () => {
-    (service as unknown as { _allTags: Tag[] })._allTags = [
+    tagsInTreeOrder.set([
       { id: 'Tag B', title: 'Tag B' } as Tag,
       { id: 'Tag A', title: 'Tag A' } as Tag,
-    ];
+    ]);
     const tasks: TaskWithSubTasks[] = [
       {
         id: 'unknown-tag',
@@ -671,10 +678,10 @@ describe('TaskViewCustomizerService', () => {
   });
 
   it('should group by tag', () => {
-    (service as unknown as { _allTags: Tag[] })._allTags = [
+    tagsInTreeOrder.set([
       { id: 'Tag B', title: 'Tag B' } as Tag,
       { id: 'Tag A', title: 'Tag A' } as Tag,
-    ];
+    ]);
     const grouped = service['applyGrouping'](mockTasks, GROUP_OPTION_TYPE.tag);
     expect(Object.keys(grouped)).toEqual(['Tag B', 'Tag A', 'No tag']);
     expect(grouped['Tag A'][0].id).toBe('Alpha(Tag A)');
@@ -703,10 +710,10 @@ describe('TaskViewCustomizerService', () => {
     // Two different tag entities can carry the same title; their tasks must all
     // land in the single title-keyed bucket instead of one tag overwriting the
     // other (regression: the second tag used to clobber the first's tasks).
-    (service as unknown as { _allTags: Tag[] })._allTags = [
+    tagsInTreeOrder.set([
       { id: 'work-1', title: 'Work' } as Tag,
       { id: 'work-2', title: 'Work' } as Tag,
-    ];
+    ]);
     const tasks = [
       { ...mockTasks[0], id: 'task-work-1', tagIds: ['work-1'] },
       { ...mockTasks[0], id: 'task-work-2', tagIds: ['work-2'] },
@@ -802,22 +809,123 @@ describe('TaskViewCustomizerService', () => {
       ]);
     });
 
+    const orderGroupKeys = (
+      grouped: Record<string, TaskWithSubTasks[]>,
+      type: GroupOption['type'],
+    ): string[] =>
+      (
+        service as unknown as {
+          _orderGroupKeys: (
+            g: Record<string, TaskWithSubTasks[]>,
+            t: GroupOption['type'],
+          ) => string[];
+        }
+      )._orderGroupKeys(grouped, type);
+
     it('should order tag group headers by sidebar order with untagged last', () => {
       service.selectedGroup.set({ type: GROUP_OPTION_TYPE.tag } as GroupOption);
       const grouped = service['applyGrouping'](mockTasks, GROUP_OPTION_TYPE.tag);
 
-      expect(service.getOrderedGroupKeys(grouped)).toEqual(['Tag B', 'Tag A', 'No tag']);
+      expect(orderGroupKeys(grouped, GROUP_OPTION_TYPE.tag)).toEqual([
+        'Tag B',
+        'Tag A',
+        'No tag',
+      ]);
     });
 
     it('should keep non-tag group headers in ascending order', () => {
       service.selectedGroup.set({ type: GROUP_OPTION_TYPE.project } as GroupOption);
       const grouped = service['applyGrouping'](mockTasks, GROUP_OPTION_TYPE.project);
 
-      expect(service.getOrderedGroupKeys(grouped)).toEqual([
+      expect(orderGroupKeys(grouped, GROUP_OPTION_TYPE.project)).toEqual([
         'No project',
         'Project A',
         'Project B',
       ]);
+    });
+  });
+
+  describe('precomputed groups', () => {
+    const nextFrame = (): Promise<void> =>
+      new Promise((resolve) => requestAnimationFrame(() => resolve()));
+
+    const collect = (): { emissions: CustomizedUndoneTasks[] } => {
+      const sink = { emissions: [] as CustomizedUndoneTasks[] };
+      TestBed.runInInjectionContext(() =>
+        service.customizeUndoneTasks(of(mockTasks)),
+      ).subscribe((result) => sink.emissions.push(result));
+      return sink;
+    };
+
+    const groupKeys = (result: CustomizedUndoneTasks | undefined): string[] =>
+      (result?.groups ?? []).map((group) => group.key);
+
+    it('emits tag groups in sidebar order with their retag targets', async () => {
+      service.setGroup({ type: GROUP_OPTION_TYPE.tag, label: 'Tag' });
+      const sink = collect();
+      TestBed.tick();
+      await nextFrame();
+
+      const result = sink.emissions[sink.emissions.length - 1];
+      expect(result.groups).toEqual([
+        { key: 'Tag A', tasks: result.grouped!['Tag A'], tagId: 'Tag A' },
+        { key: 'Tag B', tasks: result.grouped!['Tag B'], tagId: 'Tag B' },
+        { key: 'No tag', tasks: result.grouped!['No tag'], tagId: NO_TAG_GROUP_ID },
+      ]);
+    });
+
+    // `null`, not `undefined`: `TaskMultiDragService.canDrop` only treats
+    // `undefined` as a droppable list, so `undefined` here would let multi-select
+    // drops into these groups strip the tasks' sections.
+    it('emits non-tag groups in ascending order with a null retag target', async () => {
+      service.setGroup({ type: GROUP_OPTION_TYPE.project, label: 'Project' });
+      const sink = collect();
+      TestBed.tick();
+      await nextFrame();
+
+      const result = sink.emissions[sink.emissions.length - 1];
+      expect(groupKeys(result)).toEqual(['No project', 'Project A', 'Project B']);
+      expect(result.groups!.every((group) => group.tagId === null)).toBeTrue();
+    });
+
+    // The group order used to be recomputed in the template on every change
+    // detection pass. Now that it is computed in the stream, a sidebar reorder
+    // must re-emit on its own — the tasks don't change.
+    it('re-emits reordered groups when the sidebar tag order changes', async () => {
+      service.setGroup({ type: GROUP_OPTION_TYPE.tag, label: 'Tag' });
+      const sink = collect();
+      TestBed.tick();
+      await nextFrame();
+      expect(groupKeys(sink.emissions[sink.emissions.length - 1])).toEqual([
+        'Tag A',
+        'Tag B',
+        'No tag',
+      ]);
+
+      tagsInTreeOrder.set([mockTags[1], mockTags[0]]);
+      TestBed.tick();
+      await nextFrame();
+
+      expect(groupKeys(sink.emissions[sink.emissions.length - 1])).toEqual([
+        'Tag B',
+        'Tag A',
+        'No tag',
+      ]);
+    });
+
+    it('does not re-run for tag updates that keep order and titles', async () => {
+      service.setGroup({ type: GROUP_OPTION_TYPE.tag, label: 'Tag' });
+      const sink = collect();
+      TestBed.tick();
+      await nextFrame();
+      const count = sink.emissions.length;
+
+      // e.g. a task reorder inside a tag only rewrites its taskIds
+      tagsInTreeOrder.set(mockTags.map((tag) => ({ ...tag, taskIds: ['x'] })));
+      TestBed.tick();
+      await nextFrame();
+
+      expect(sink.emissions.length).toBe(count);
     });
   });
 
@@ -840,14 +948,14 @@ describe('TaskViewCustomizerService', () => {
       )._buildGroupTagIdByKey(grouped);
 
     it('maps each real tag-title group to its tagId', () => {
-      (service as unknown as { _allTags: Tag[] })._allTags = mockTags;
+      tagsInTreeOrder.set(mockTags);
       const res = build(groupedOf('Tag A', 'Tag B'));
       expect(res['Tag A']).toBe('Tag A');
       expect(res['Tag B']).toBe('Tag B');
     });
 
     it('maps the No-tag bucket to the clear-tags sentinel and Unknown-tag to null', () => {
-      (service as unknown as { _allTags: Tag[] })._allTags = mockTags;
+      tagsInTreeOrder.set(mockTags);
       const res = build(groupedOf('Tag A', 'No tag', 'Unknown tag'));
       expect(res['Tag A']).toBe('Tag A');
       expect(res['No tag']).toBe(NO_TAG_GROUP_ID);
@@ -855,11 +963,11 @@ describe('TaskViewCustomizerService', () => {
     });
 
     it('maps a title shared by multiple tags to null (ambiguous, cannot retag)', () => {
-      (service as unknown as { _allTags: Tag[] })._allTags = [
+      tagsInTreeOrder.set([
         { id: 'id1', title: 'Dup' } as Tag,
         { id: 'id2', title: 'Dup' } as Tag,
         { id: 'id3', title: 'Unique' } as Tag,
-      ];
+      ]);
       const res = build(groupedOf('Dup', 'Unique'));
       expect(res['Dup']).toBeNull();
       expect(res['Unique']).toBe('id3');
@@ -867,9 +975,7 @@ describe('TaskViewCustomizerService', () => {
 
     it('prefers a real tag titled "No tag" over the clear-tags sentinel', () => {
       // Guards against silently clearing tags when a user names a tag "No tag".
-      (service as unknown as { _allTags: Tag[] })._allTags = [
-        { id: 'real-no-tag', title: 'No tag' } as Tag,
-      ];
+      tagsInTreeOrder.set([{ id: 'real-no-tag', title: 'No tag' } as Tag]);
       const res = build(groupedOf('No tag'));
       expect(res['No tag']).toBe('real-no-tag');
     });
@@ -1420,7 +1526,10 @@ describe('TaskViewCustomizerService', () => {
           { provide: ProjectService, useValue: { update: projectUpdateSpy } },
           {
             provide: TagService,
-            useValue: { updateTag: tagUpdateSpy, tagsInTreeOrder: signal(mockTags) },
+            useValue: {
+              updateTag: tagUpdateSpy,
+              tagsInTreeOrder: (tagsInTreeOrder = signal(mockTags)),
+            },
           },
           {
             provide: MenuTreeService,
@@ -1637,7 +1746,10 @@ describe('TaskViewCustomizerService', () => {
           { provide: ProjectService, useValue: { update: projectUpdateSpy } },
           {
             provide: TagService,
-            useValue: { updateTag: tagUpdateSpy, tagsInTreeOrder: signal(mockTags) },
+            useValue: {
+              updateTag: tagUpdateSpy,
+              tagsInTreeOrder: (tagsInTreeOrder = signal(mockTags)),
+            },
           },
           {
             provide: MenuTreeService,
@@ -1656,7 +1768,6 @@ describe('TaskViewCustomizerService', () => {
       });
       testService = TestBed.inject(TaskViewCustomizerService);
       (testService as any)._allProjects = allProjects;
-      (testService as any)._allTags = mockTags;
     });
 
     it('should only group tasks from the current project when group by tag is selected', (done) => {

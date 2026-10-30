@@ -20,6 +20,10 @@
 
   <mat-datepicker #picker />
 
+  @if (hint()) {
+    <mat-hint>{{ hint() }}</mat-hint>
+  }
+
   <!-- If controlled by parent or internal validation -->
   @if (isInvalid() === true || isInvalid() === undefined) {
     <mat-error>{{ errorMessage() || (T.V.E_DATETIME | translate) }}</mat-error>

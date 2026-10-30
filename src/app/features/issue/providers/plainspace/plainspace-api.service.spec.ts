@@ -4,7 +4,13 @@ import {
 } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { firstValueFrom } from 'rxjs';
-import { PlainspaceApiService } from './plainspace-api.service';
+import type { HttpOptions } from '@capacitor/core';
+import {
+  PLAINSPACE_NATIVE_HTTP,
+  PlainspaceApiService,
+  PlainspaceNativeHttp,
+} from './plainspace-api.service';
+import { Log } from '../../../../core/log';
 import { PlainspaceCfg } from './plainspace.model';
 import { DEFAULT_PLAINSPACE_CFG } from './plainspace-cfg-form.const';
 
@@ -72,6 +78,14 @@ describe('PlainspaceApiService', () => {
     expect((await p).map((t) => t.id)).toEqual(['u1']);
   });
 
+  for (const body of [null, {}, { tasks: null }]) {
+    it(`getMyTasks$ rejects a 200 without a task list (${JSON.stringify(body)}) as no answer`, async () => {
+      const p = firstValueFrom(service.getMyTasks$(cfg));
+      httpMock.expectOne(`${BASE}/tasks`).flush(body);
+      await expectAsync(p).toBeRejectedWith(jasmine.objectContaining({ status: 0 }));
+    });
+  }
+
   it('getMyTasks$ matches the bound space by slug, not just the id', async () => {
     const slugCfg: PlainspaceCfg = { ...cfg, spaceId: 'my-slug' };
     const p = firstValueFrom(service.getMyTasks$(slugCfg));
@@ -111,12 +125,27 @@ describe('PlainspaceApiService', () => {
     expect(issue?.isDone).toBe(true);
   });
 
-  it('patchTask$ reports a failed completion update as null', async () => {
-    const p = firstValueFrom(service.patchTask$('a', { done: true }, cfg));
+  it('patchTask$ sends the title and maps the echoed title', async () => {
+    const p = firstValueFrom(
+      service.patchTask$('a', { done: true, title: '  Exact title ' }, cfg),
+    );
+    const req = httpMock.expectOne(`${BASE}/tasks/a`);
+    expect(req.request.body).toEqual({ done: true, title: '  Exact title ' });
+    req.flush({ task: { ...spTask('a', 'space-1', true), title: '  Exact title ' } });
+    const confirmation = await p;
+    expect(confirmation?.title).toBe('  Exact title ');
+    expect(confirmation?.updatedAt).toBe(spTask('a', 'space-1', true).updatedAt);
+  });
+
+  it('patchTask$ lets HTTP errors through so the adapter can read the status', async () => {
+    const p = firstValueFrom(service.patchTask$('a', { title: 'x' }, cfg));
     httpMock
       .expectOne(`${BASE}/tasks/a`)
-      .flush('boom', { status: 500, statusText: 'Server Error' });
-    expect(await p).toBeNull();
+      .flush(
+        { error: 'Validation failed' },
+        { status: 422, statusText: 'Unprocessable' },
+      );
+    await expectAsync(p).toBeRejectedWith(jasmine.objectContaining({ status: 422 }));
   });
 
   it('patchTask$ accepts a minimal completion confirmation', async () => {
@@ -129,6 +158,23 @@ describe('PlainspaceApiService', () => {
     const p = firstValueFrom(service.patchTask$('a', { done: true }, cfg));
     httpMock.expectOne(`${BASE}/tasks/a`).flush({ task: { id: 'a', done: 'yes' } });
     expect(await p).toBeNull();
+  });
+
+  it('deleteTask$ DELETEs the task', async () => {
+    const p = firstValueFrom(service.deleteTask$('a', cfg));
+    const req = httpMock.expectOne(`${BASE}/tasks/a`);
+    expect(req.request.method).toBe('DELETE');
+    expect(req.request.headers.get('Authorization')).toBe('Bearer pat_test');
+    req.flush(null, { status: 204, statusText: 'No Content' });
+    await expectAsync(p).toBeResolved();
+  });
+
+  it('deleteTask$ propagates failures so the delete effect can report them', async () => {
+    const p = firstValueFrom(service.deleteTask$('a', cfg));
+    httpMock
+      .expectOne(`${BASE}/tasks/a`)
+      .flush('boom', { status: 500, statusText: 'Server Error' });
+    await expectAsync(p).toBeRejectedWith(jasmine.objectContaining({ status: 500 }));
   });
 
   // #9988: the connect dialog must be able to tell "the server rejected this
@@ -330,12 +376,201 @@ describe('PlainspaceApiService', () => {
     expect(res[0].issueType).toBe('PLAINSPACE');
   });
 
-  it('reads fail soft to [] on a network error', async () => {
-    const p = firstValueFrom(service.getMyTasks$(cfg));
-    httpMock
-      .expectOne(`${BASE}/tasks`)
-      .flush('boom', { status: 500, statusText: 'Server Error' });
-    expect(await p).toEqual([]);
+  // Gap 3: a failed poll must never read as "no tasks" / "task missing".
+  [0, 401, 500].forEach((status) => {
+    it(`getMyTasks$ propagates a ${status} instead of returning []`, async () => {
+      const p = firstValueFrom(service.getMyTasks$(cfg));
+      const req = httpMock.expectOne(`${BASE}/tasks`);
+      if (status === 0) {
+        req.error(new ProgressEvent('error'), { status: 0 });
+      } else {
+        req.flush('boom', { status, statusText: 'Error' });
+      }
+      await expectAsync(p).toBeRejectedWith(
+        jasmine.objectContaining({ status }) as unknown as Error,
+      );
+    });
+
+    it(`getById$ propagates a ${status} instead of returning null`, async () => {
+      const p = firstValueFrom(service.getById$('a', cfg));
+      const req = httpMock.expectOne(`${BASE}/tasks/a`);
+      if (status === 0) {
+        req.error(new ProgressEvent('error'), { status: 0 });
+      } else {
+        req.flush('boom', { status, statusText: 'Error' });
+      }
+      await expectAsync(p).toBeRejectedWith(
+        jasmine.objectContaining({ status }) as unknown as Error,
+      );
+    });
+  });
+});
+
+// #9988: on Android the WebView's patched XHR turns every native failure into a
+// bare status 0. The token check calls native HTTP directly so the native
+// exception (e.g. a TLS trust failure) reaches the log.
+describe('PlainspaceApiService native token check', () => {
+  const cfg: PlainspaceCfg = {
+    ...DEFAULT_PLAINSPACE_CFG,
+    host: 'https://plainspace.org',
+    token: 'pat_test',
+  };
+  let nativeHttp: jasmine.Spy<PlainspaceNativeHttp>;
+  let httpMock: HttpTestingController;
+
+  const setup = (native: PlainspaceNativeHttp | null): PlainspaceApiService => {
+    TestBed.configureTestingModule({
+      imports: [HttpClientTestingModule],
+      providers: [{ provide: PLAINSPACE_NATIVE_HTTP, useValue: native }],
+    });
+    httpMock = TestBed.inject(HttpTestingController);
+    return TestBed.inject(PlainspaceApiService);
+  };
+
+  beforeEach(() => {
+    nativeHttp = jasmine.createSpy('nativeHttp');
+  });
+
+  afterEach(() => httpMock.verify());
+
+  it('sends GET /me with the PAT through native HTTP, not HttpClient', async () => {
+    nativeHttp.and.resolveTo({
+      status: 200,
+      data: { email: 'a@b.c', projects: [] },
+      headers: {},
+      url: '',
+    });
+    const service = setup(nativeHttp);
+    const res = await firstValueFrom(service.verifyToken$(cfg));
+    expect(res).toEqual({ status: 'ok', me: { email: 'a@b.c', projects: [] } });
+    const opts = nativeHttp.calls.mostRecent().args[0] as HttpOptions;
+    expect(opts.url).toBe('https://plainspace.org/api/integration/me');
+    expect(opts.method).toBe('GET');
+    expect(opts.headers).toEqual({ Authorization: 'Bearer pat_test' });
+  });
+
+  [401, 403].forEach((status) => {
+    it(`reports invalid-token on a native ${status}`, async () => {
+      nativeHttp.and.resolveTo({ status, data: 'nope', headers: {}, url: '' });
+      const res = await firstValueFrom(setup(nativeHttp).verifyToken$(cfg));
+      expect(res).toEqual({ status: 'invalid-token' });
+    });
+  });
+
+  it('reports unreachable on a native 200 with an empty body', async () => {
+    nativeHttp.and.resolveTo({ status: 200, data: '', headers: {}, url: '' });
+    const res = await firstValueFrom(setup(nativeHttp).verifyToken$(cfg));
+    expect(res).toEqual({ status: 'unreachable' });
+  });
+
+  it('reports unreachable on a native 500 and logs the status', async () => {
+    const errSpy = spyOn(Log, 'err');
+    nativeHttp.and.resolveTo({ status: 500, data: 'boom', headers: {}, url: '' });
+    const res = await firstValueFrom(setup(nativeHttp).verifyToken$(cfg));
+    expect(res).toEqual({ status: 'unreachable' });
+    expect(errSpy).toHaveBeenCalledWith('Plainspace: token check failed', {
+      status: 500,
+    });
+  });
+
+  it('logs the native error class and message, never the token or host', async () => {
+    const errSpy = spyOn(Log, 'err');
+    nativeHttp.and.rejectWith(
+      Object.assign(
+        new Error(
+          'Chain validation failed for plainspace.org: Trust anchor for certification path not found.',
+        ),
+        { code: 'SSLHandshakeException' },
+      ),
+    );
+    const res = await firstValueFrom(setup(nativeHttp).verifyToken$(cfg));
+    expect(res).toEqual({ status: 'unreachable' });
+    expect(errSpy).toHaveBeenCalledWith('Plainspace: token check failed natively', {
+      errorName: 'SSLHandshakeException',
+      errorMessage:
+        'Chain validation failed for <host>: Trust anchor for certification path not found.',
+    });
+    const logged = JSON.stringify(errSpy.calls.allArgs());
+    expect(logged).not.toContain('pat_test');
+    expect(logged).not.toContain('plainspace.org');
+  });
+
+  // OkHttp's header validation prints the whole value, e.g. for a token pasted
+  // with a trailing zero-width space.
+  it('redacts the token from a header-value error', async () => {
+    const errSpy = spyOn(Log, 'err');
+    nativeHttp.and.rejectWith(
+      Object.assign(
+        new Error('Unexpected char 0x200b at 15 in header value: Bearer pat_test​'),
+        { code: 'IllegalArgumentException' },
+      ),
+    );
+    await firstValueFrom(setup(nativeHttp).verifyToken$(cfg));
+    expect(errSpy).toHaveBeenCalledWith('Plainspace: token check failed natively', {
+      errorName: 'IllegalArgumentException',
+      errorMessage: 'Unexpected char 0x200b at 15 in header value: Bearer <token>',
+    });
+    expect(JSON.stringify(errSpy.calls.allArgs())).not.toContain('pat_test');
+  });
+
+  it('redacts a differently cased host and IP addresses', async () => {
+    const errSpy = spyOn(Log, 'err');
+    nativeHttp.and.rejectWith(
+      Object.assign(
+        new Error(
+          'failed to connect to PlainSpace.org/203.0.113.5 (port 443) from /2001:db8::7 (port 51234) after 10000ms',
+        ),
+        { code: 'SocketTimeoutException' },
+      ),
+    );
+    await firstValueFrom(setup(nativeHttp).verifyToken$(cfg));
+    expect(errSpy).toHaveBeenCalledWith('Plainspace: token check failed natively', {
+      errorName: 'SocketTimeoutException',
+      errorMessage:
+        'failed to connect to <host>/<ip> (port 443) from /<ip> (port 51234) after 10000ms',
+    });
+  });
+
+  // Mirrors NetworkRetryInterceptorService, which the native call bypasses:
+  // sockets can be briefly unusable right after an Android resume.
+  it('retries a native rejection once before reporting unreachable', async () => {
+    nativeHttp.and.returnValues(
+      Promise.reject(new Error('Software caused connection abort')),
+      Promise.resolve({
+        status: 200,
+        data: { email: 'a@b.c', projects: [] },
+        headers: {},
+        url: '',
+      }),
+    );
+    const res = await firstValueFrom(setup(nativeHttp).verifyToken$(cfg));
+    expect(res).toEqual({ status: 'ok', me: { email: 'a@b.c', projects: [] } });
+    expect(nativeHttp).toHaveBeenCalledTimes(2);
+  });
+
+  it('logs a rejection without an error class and redacts the host', async () => {
+    const errSpy = spyOn(Log, 'err');
+    nativeHttp.and.callFake(() =>
+      Promise.reject('Unable to resolve host "plainspace.org"'),
+    );
+    const res = await firstValueFrom(setup(nativeHttp).verifyToken$(cfg));
+    expect(res).toEqual({ status: 'unreachable' });
+    expect(nativeHttp).toHaveBeenCalledTimes(2);
+    expect(errSpy).toHaveBeenCalledWith('Plainspace: token check failed natively', {
+      errorName: null,
+      errorMessage: 'Unable to resolve host "<host>"',
+    });
+  });
+
+  it('keeps the web path on HttpClient when there is no native HTTP', async () => {
+    const service = setup(null);
+    const p = firstValueFrom(service.verifyToken$(cfg));
+    httpMock.expectOne('https://plainspace.org/api/integration/me').flush({
+      email: 'a@b.c',
+      projects: [],
+    });
+    expect(await p).toEqual({ status: 'ok', me: { email: 'a@b.c', projects: [] } });
+    expect(nativeHttp).not.toHaveBeenCalled();
   });
 });
 

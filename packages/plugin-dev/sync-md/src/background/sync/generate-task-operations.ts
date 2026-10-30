@@ -92,7 +92,6 @@ export const generateTaskOperations = (
   // Create maps for easier lookup
   const spById = new Map<string, Task>();
   const spByTitle = new Map<string, Task>();
-  const mdById = new Map<string, ParsedTask>();
   const mdByTitle = new Map<string, ParsedTask>();
 
   // Build SP maps
@@ -118,7 +117,6 @@ export const generateTaskOperations = (
         );
       } else {
         firstOccurrence.set(checkId, mdTask.line);
-        mdById.set(checkId, mdTask);
       }
     }
     if (!mdByTitle.has(mdTask.title)) {

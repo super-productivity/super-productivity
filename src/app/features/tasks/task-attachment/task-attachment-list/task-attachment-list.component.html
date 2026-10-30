@@ -1,5 +1,5 @@
 <ul
-  [@standardList]="attachments()?.length"
+  [@standardList]="$safeNavigationMigration(attachments()?.length)"
   class="attachments"
 >
   @for (

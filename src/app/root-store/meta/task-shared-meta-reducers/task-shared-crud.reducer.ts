@@ -40,9 +40,10 @@ import { moveItemAfterAnchor } from '../../../features/work-context/store/work-c
 import { canApplyConvertToSubTask } from '../../../features/tasks/util/can-convert-task-to-sub-task';
 import {
   ActionHandlerMap,
-  addTaskToList,
+  addTaskToListAtAnchor,
   addTaskToPlannerDay,
   collectTaskAndSubTaskIds,
+  getPreviousRepeatInstanceId,
   getProject,
   getTag,
   hasInvalidTodayTag,
@@ -80,6 +81,8 @@ const handleAddTask = (
   // Membership is determined by task.dueDay, TODAY_TAG.taskIds only stores ordering
   // See: ARCHITECTURE-DECISIONS.md Decision #2
   const taskTagIds = task.tagIds.filter((id) => id !== TODAY_TAG.id);
+  // A repeat instance takes the place of the previous one (#10812)
+  const anchorId = getPreviousRepeatInstanceId(state, task);
 
   const newTask: Task = {
     ...DEFAULT_TASK,
@@ -104,7 +107,12 @@ const handleAddTask = (
       isAddToBacklog && project.isEnableBacklog ? 'backlogTaskIds' : 'taskIds';
 
     updatedState = updateProject(updatedState, task.projectId, {
-      [targetList]: addTaskToList(project[targetList], task.id, isAddToBottom),
+      [targetList]: addTaskToListAtAnchor(
+        project[targetList],
+        task.id,
+        anchorId,
+        isAddToBottom,
+      ),
     });
   }
 
@@ -120,9 +128,10 @@ const handleAddTask = (
     (tagId): Update<Tag> => ({
       id: tagId,
       changes: {
-        taskIds: addTaskToList(
+        taskIds: addTaskToListAtAnchor(
           getTag(updatedState, tagId).taskIds,
           task.id,
+          anchorId,
           isAddToBottom,
         ),
       },

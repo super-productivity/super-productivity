@@ -1,6 +1,8 @@
 import { test, expect } from '../../fixtures/test.fixture';
+import type { Page } from '@playwright/test';
 import * as path from 'path';
 import { cssSelectors } from '../../constants/selectors';
+import { waitForPluginManagementInit } from '../../helpers/plugin-test.helpers';
 
 const { SETTINGS_BTN } = cssSelectors;
 
@@ -9,8 +11,15 @@ const UPLOAD_PLUGIN_BTN = 'plugin-management button[mat-raised-button]'; // The 
 const FILE_INPUT = 'input[type="file"][accept=".zip"]';
 const PLUGIN_CARD = 'plugin-management mat-card.ng-star-inserted';
 
-// Test plugin details
-const TEST_PLUGIN_ID = 'test-upload-plugin';
+// Test plugin details (cards are matched by name: the id sits in the collapsed details)
+const TEST_PLUGIN_NAME = 'Test Upload Plugin';
+
+// Uploading asks for confirmation (risk warning) before the plugin is installed.
+const confirmInstall = async (page: Page): Promise<void> => {
+  const confirmDialog = page.locator('dialog-confirm');
+  await confirmDialog.locator('button[e2e="confirmBtn"]').click();
+  await expect(confirmDialog).toBeHidden();
+};
 
 test.describe.serial('Plugin Upload', () => {
   test.beforeEach(async ({ workViewPage }) => {
@@ -87,6 +96,7 @@ test.describe.serial('Plugin Upload', () => {
     });
 
     await page.locator(FILE_INPUT).setInputFiles(testPluginPath);
+    await confirmInstall(page);
 
     // Wait for uploaded plugin to appear in list
     await page.waitForFunction(
@@ -94,7 +104,7 @@ test.describe.serial('Plugin Upload', () => {
         const cards = Array.from(document.querySelectorAll('plugin-management mat-card'));
         return cards.some((card) => card.textContent?.includes(pluginId));
       },
-      TEST_PLUGIN_ID,
+      TEST_PLUGIN_NAME,
       { timeout: 15000 },
     );
 
@@ -104,7 +114,7 @@ test.describe.serial('Plugin Upload', () => {
     const pluginExists = await page.evaluate((pluginName: string) => {
       const cards = Array.from(document.querySelectorAll('plugin-management mat-card'));
       return cards.some((card) => card.textContent?.includes(pluginName));
-    }, TEST_PLUGIN_ID);
+    }, TEST_PLUGIN_NAME);
 
     expect(pluginExists).toBeTruthy();
 
@@ -119,7 +129,7 @@ test.describe.serial('Plugin Upload', () => {
         return toggleButton?.getAttribute('aria-checked') === 'true';
       }
       return null;
-    }, TEST_PLUGIN_ID);
+    }, TEST_PLUGIN_NAME);
 
     expect(initialStatus).toBe(false);
 
@@ -137,7 +147,7 @@ test.describe.serial('Plugin Upload', () => {
         }
       }
       return false;
-    }, TEST_PLUGIN_ID);
+    }, TEST_PLUGIN_NAME);
 
     expect(enableResult).toBeTruthy();
 
@@ -154,7 +164,7 @@ test.describe.serial('Plugin Upload', () => {
         }
         return false;
       },
-      TEST_PLUGIN_ID,
+      TEST_PLUGIN_NAME,
       { timeout: 10000 },
     );
 
@@ -169,7 +179,7 @@ test.describe.serial('Plugin Upload', () => {
         return toggleButton?.getAttribute('aria-checked') === 'true';
       }
       return null;
-    }, TEST_PLUGIN_ID);
+    }, TEST_PLUGIN_NAME);
 
     expect(enabledStatus).toBe(true);
 
@@ -187,7 +197,7 @@ test.describe.serial('Plugin Upload', () => {
         }
       }
       return false;
-    }, TEST_PLUGIN_ID);
+    }, TEST_PLUGIN_NAME);
 
     expect(disableResult).toBeTruthy();
 
@@ -204,7 +214,7 @@ test.describe.serial('Plugin Upload', () => {
         }
         return false;
       },
-      TEST_PLUGIN_ID,
+      TEST_PLUGIN_NAME,
       { timeout: 10000 },
     );
 
@@ -219,7 +229,7 @@ test.describe.serial('Plugin Upload', () => {
         return toggleButton?.getAttribute('aria-checked') === 'true';
       }
       return null;
-    }, TEST_PLUGIN_ID);
+    }, TEST_PLUGIN_NAME);
 
     expect(disabledStatus).toBe(false);
 
@@ -237,7 +247,7 @@ test.describe.serial('Plugin Upload', () => {
         }
       }
       return false;
-    }, TEST_PLUGIN_ID);
+    }, TEST_PLUGIN_NAME);
 
     expect(reEnableResult).toBeTruthy();
 
@@ -254,7 +264,7 @@ test.describe.serial('Plugin Upload', () => {
         }
         return false;
       },
-      TEST_PLUGIN_ID,
+      TEST_PLUGIN_NAME,
       { timeout: 10000 },
     );
 
@@ -269,16 +279,11 @@ test.describe.serial('Plugin Upload', () => {
         return toggleButton?.getAttribute('aria-checked') === 'true';
       }
       return null;
-    }, TEST_PLUGIN_ID);
+    }, TEST_PLUGIN_NAME);
 
     expect(reEnabledStatus).toBe(true);
 
     // Remove uploaded plugin
-    // Handle confirmation dialog - set up before triggering the dialog
-    page.once('dialog', async (dialog) => {
-      await dialog.accept();
-    });
-
     await page.evaluate((pluginId: string) => {
       const items = Array.from(document.querySelectorAll('plugin-management mat-card'));
       const pluginCard = items.find((item) => item.textContent?.includes(pluginId));
@@ -290,7 +295,13 @@ test.describe.serial('Plugin Upload', () => {
         }
       }
       return false;
-    }, TEST_PLUGIN_ID);
+    }, TEST_PLUGIN_NAME);
+
+    // Confirm in the app's confirmation dialog
+    const confirmDialog = page.locator('dialog-confirm');
+    await confirmDialog.waitFor({ state: 'visible', timeout: 5000 });
+    await confirmDialog.locator('button[e2e="confirmBtn"]').click();
+    await confirmDialog.waitFor({ state: 'hidden', timeout: 5000 });
 
     // Wait for plugin to be removed from the list
     await page.waitForFunction(
@@ -298,7 +309,7 @@ test.describe.serial('Plugin Upload', () => {
         const items = Array.from(document.querySelectorAll('plugin-management mat-card'));
         return !items.some((item) => item.textContent?.includes(pluginId));
       },
-      TEST_PLUGIN_ID,
+      TEST_PLUGIN_NAME,
       { timeout: 15000 },
     );
 
@@ -311,9 +322,41 @@ test.describe.serial('Plugin Upload', () => {
         totalCards: items.length,
         cardTexts: items.map((item) => item.textContent?.trim().substring(0, 50)),
       };
-    }, TEST_PLUGIN_ID);
+    }, TEST_PLUGIN_NAME);
 
     // console.log('Removal verification:', removalResult);
     expect(removalResult.removed).toBeTruthy();
+  });
+
+  test('remove all uploaded plugins asks before removing them', async ({ page }) => {
+    test.setTimeout(process.env.CI ? 90000 : 60000);
+    expect(await waitForPluginManagementInit(page)).toBe(true);
+
+    await page
+      .locator(FILE_INPUT)
+      .setInputFiles(path.resolve(__dirname, '../../../src/assets/test-plugin.zip'));
+    await confirmInstall(page);
+    const uploadedCard = page.locator('plugin-management mat-card', {
+      hasText: TEST_PLUGIN_NAME,
+    });
+    await expect(uploadedCard).toBeVisible({ timeout: 15000 });
+
+    const clearCacheBtn = page.locator('plugin-management button', {
+      hasText: 'Remove all uploaded plugins',
+    });
+    const confirmDialog = page.locator('dialog-confirm');
+
+    // Cancel keeps the uploaded plugin
+    await clearCacheBtn.click();
+    await expect(confirmDialog).toContainText('Remove uploaded plugins (1)?');
+    await confirmDialog.locator('button', { hasText: 'Cancel' }).click();
+    await expect(confirmDialog).toBeHidden();
+    await expect(uploadedCard).toBeVisible();
+
+    // Confirm removes it
+    await clearCacheBtn.click();
+    await confirmDialog.locator('button[e2e="confirmBtn"]').click();
+    await expect(confirmDialog).toBeHidden();
+    await expect(uploadedCard).toHaveCount(0, { timeout: 15000 });
   });
 });

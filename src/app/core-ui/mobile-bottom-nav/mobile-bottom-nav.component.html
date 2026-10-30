@@ -1,7 +1,6 @@
 <nav
   class="mobile-bottom-nav"
   [class.entrance]="isEntrance()"
-  (animationend)="onEntranceAnimationEnd($event)"
 >
   <button
     mat-button
@@ -13,22 +12,49 @@
   >
     <mat-icon>wb_sunny</mat-icon>
   </button>
-
-  <button
-    mat-button
-    class="nav-button"
-    routerLink="/planner"
-    routerLinkActive="active"
-    [attr.aria-label]="T.MH.PLANNER | translate"
-  >
-    <mat-icon>edit_calendar</mat-icon>
-  </button>
-
+  @if (slot(); as slot) {
+    <!-- Tap navigates; long-press or contextmenu (right click, menu key) picks
+         the destination. The anchor only positions the menu; its
+         matButtonIcon/iconPositionEnd attributes project it into the button
+         itself rather than the zero-width label. -->
+    <button
+      #slotButton
+      mat-button
+      class="nav-button e2e-bottom-nav-slot"
+      [class.tour-planner]="slot.id === 'planner'"
+      [class.active]="isSlotActive()"
+      [attr.aria-label]="slot.kind === 'route' ? (slot.labelKey | translate) : slot.label"
+      [attr.aria-description]="T.BN.SLOT_CHANGE_HINT | translate"
+      (pointerdown)="onSlotPointerDown()"
+      (longPress)="onSlotLongPress()"
+      (touchend)="onSlotTouchEnd($event)"
+      (contextmenu)="$event.preventDefault(); openSlotMenu()"
+      (click)="onSlotClick(slot)"
+    >
+      @if (slot.kind === 'route') {
+        <mat-icon>{{ slot.icon }}</mat-icon>
+      } @else {
+        <plugin-icon
+          [pluginId]="slot.pluginId"
+          [fallbackIcon]="slot.icon"
+        ></plugin-icon>
+      }
+      <span
+        class="slot-menu-anchor"
+        matButtonIcon
+        iconPositionEnd
+        aria-hidden="true"
+        #slotMenuTrigger="matMenuTrigger"
+        [matMenuTriggerFor]="slotMenu"
+        [matMenuTriggerRestoreFocus]="false"
+        (menuClosed)="onSlotMenuClosed()"
+      ></span>
+    </button>
+  }
   <button
     mat-fab
     class="add-task-button"
     [class.smaller]="hasProjectBacklog()"
-    [class.hide-for-native]="isEntranceAnimating()"
     color="primary"
     (click)="showAddTaskBar()"
     [attr.aria-label]="T.GCF.KEYBOARD.GLOBAL_ADD_TASK | translate"
@@ -36,7 +62,57 @@
     <mat-icon>add</mat-icon>
   </button>
 
-  @if (hasSidePanelMenuItems()) {
+  @if (sidePanelItemCount() === 1) {
+    <!-- A menu with a single entry is just an extra tap: show the entry itself. -->
+    @if (sidePanelButtons()[0]; as button) {
+      <button
+        mat-button
+        class="nav-button"
+        [class.active]="activePluginId() === button.pluginId && isShowPluginPanel()"
+        [attr.aria-pressed]="activePluginId() === button.pluginId && isShowPluginPanel()"
+        (click)="onPluginButtonClick(button)"
+        [attr.aria-label]="button.label"
+      >
+        <plugin-icon
+          [pluginId]="button.pluginId"
+          [fallbackIcon]="button.icon || 'extension'"
+        ></plugin-icon>
+      </button>
+    } @else if (isScheduleDayPanelEnabled()) {
+      <button
+        mat-button
+        class="nav-button e2e-toggle-schedule-day-panel"
+        [class.active]="isShowScheduleDayPanel()"
+        [attr.aria-pressed]="isShowScheduleDayPanel()"
+        (click)="toggleScheduleDayPanel()"
+        [attr.aria-label]="T.BN.SHOW_SCHEDULE | translate"
+      >
+        <mat-icon>schedule</mat-icon>
+      </button>
+    } @else if (isIssuesPanelEnabled()) {
+      <button
+        mat-button
+        class="nav-button e2e-toggle-issue-provider-panel"
+        [class.active]="isShowIssuePanel()"
+        [attr.aria-pressed]="isShowIssuePanel()"
+        (click)="toggleIssuePanel()"
+        [attr.aria-label]="T.BN.SHOW_ISSUE_PANEL | translate"
+      >
+        <mat-icon>webhook</mat-icon>
+      </button>
+    } @else if (isProjectNotesEnabled()) {
+      <button
+        mat-button
+        class="nav-button e2e-toggle-notes-btn"
+        [class.active]="isShowNotes()"
+        [attr.aria-pressed]="isShowNotes()"
+        (click)="toggleNotes()"
+        [attr.aria-label]="T.BN.SHOW_NOTES | translate"
+      >
+        <mat-icon>comment</mat-icon>
+      </button>
+    }
+  } @else if (sidePanelItemCount() > 1) {
     <button
       mat-button
       class="nav-button"
@@ -49,7 +125,7 @@
 
   <button
     mat-button
-    class="nav-button"
+    class="nav-button tour-navMenuBtn"
     (click)="toggleMobileNav()"
     [attr.aria-label]="T.MH.PROJECT_MENU | translate"
   >
@@ -68,6 +144,7 @@
       [class.active]="activePluginId() === button.pluginId && isShowPluginPanel()"
     >
       <plugin-icon
+        matMenuItemIcon
         [pluginId]="button.pluginId"
         [fallbackIcon]="button.icon || 'extension'"
       ></plugin-icon>
@@ -108,6 +185,37 @@
     >
       <mat-icon>comment</mat-icon>
       <span>{{ T.BN.SHOW_NOTES | translate }}</span>
+    </button>
+  }
+</mat-menu>
+
+<mat-menu
+  #slotMenu="matMenu"
+  yPosition="above"
+  class="mobile-bottom-nav-slot-menu"
+  [ariaLabel]="T.BN.SLOT_MENU_LABEL | translate"
+>
+  @for (option of slotOptions(); track option.id) {
+    <button
+      mat-menu-item
+      role="menuitemradio"
+      [attr.aria-checked]="option.id === slot()?.id"
+      (click)="selectSlot(option.id)"
+    >
+      @if (option.kind === 'route') {
+        <mat-icon>{{ option.icon }}</mat-icon>
+        <span>{{ option.labelKey | translate }}</span>
+      } @else {
+        <plugin-icon
+          matMenuItemIcon
+          [pluginId]="option.pluginId"
+          [fallbackIcon]="option.icon"
+        ></plugin-icon>
+        <span>{{ option.label }}</span>
+      }
+      @if (option.id === slot()?.id) {
+        <div><mat-icon>check</mat-icon></div>
+      }
     </button>
   }
 </mat-menu>

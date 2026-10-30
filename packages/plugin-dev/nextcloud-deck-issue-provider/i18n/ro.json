@@ -1,0 +1,28 @@
+{
+  "CFG": {
+    "BASE_URL": "URL de bază Nextcloud",
+    "USERNAME": "Numele tău de utilizator Nextcloud",
+    "PASSWORD": "Parola ta de aplicație Nextcloud",
+    "BOARD": "Board",
+    "IMPORT_STACKS": "Import from stacks (leave empty for all)",
+    "DONE_STACK": "Done stack (cards are moved here on completion)",
+    "STACKS_DESC": "Select a board first, then use the load button to list its stacks.",
+    "NONE": "None",
+    "FILTER_BY_ASSIGNEE": "Importă doar cardurile atribuite mie",
+    "TITLE_TEMPLATE": "Șablon titlu sarcină",
+    "TITLE_TEMPLATE_DESC": "Variabile: {CARD_TITLE}, {BOARD}, {COLUMN}, {ID}, {LABELS}. Exemplu: [{BOARD}: {COLUMN}] {CARD_TITLE}. Lasă gol pentru doar titlul cardului."
+  },
+  "DISPLAY": {
+    "SUMMARY": "Sumar",
+    "DESCRIPTION": "Descriere Deck",
+    "STACK": "Stivă",
+    "DUE_DATE": "Data scadentă",
+    "ASSIGNED_USERS": "Utilizatori atribuiți",
+    "LABELS": "Etichete"
+  },
+  "ERRORS": {
+    "NO_BOARD": "Nextcloud Deck: No board selected",
+    "CARD_NOT_FOUND": "Nextcloud Deck: Card not found on the selected board"
+  },
+  "FORM_HELP": "Configurează integrarea Nextcloud Deck pentru a importa carduri ca sarcini. Utilizează o parolă de aplicație pentru autentificare."
+}

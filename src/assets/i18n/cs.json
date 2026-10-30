@@ -94,6 +94,10 @@
     "INTRO_2": "Pokud si tohoto přístupu vážíte a chcete projekt udržet zdravý a vyvíjející se, dobrovolný dar velmi oceníme."
   },
   "EXAMPLE_TASKS": {
+    "GETTING_STARTED": {
+      "TITLE": "Nepovinné: tipy pro začátek",
+      "NOTES": "Nic z toho není povinné. Tento úkol můžete kdykoli smazat.\n\n- **Dnes a Příchozí**: Dnes ukazuje, co je naplánováno na dnes. Úkoly bez vlastního projektu zůstávají v části Příchozí. Úkol se může objevit v obou seznamech.\n- **Projekty**: seskupujte úkoly podle tématu pomocí **+** vedle položky **Projekty** v postranním panelu.\n- **Synchronizace**: mějte svá data na více zařízeních v **Nastavení → Synchronizace a záloha**.\n- **Přicházíte z Todoistu nebo TickTicku?** Importujte své úkoly v **Nastavení → Synchronizace a záloha → Import/Export**.\n- **Prohlídky**: **Nápověda → Rychlá prohlídka** v menu postranního panelu vás provede základy na vašem vlastním úkolu a **Nápověda → Návod** krok za krokem ukáže krátkou syntaxi a ovládání klávesnicí. Prohlídku můžete kdykoli zavřít.\n- **Přizpůsobte si to**: vyberte motiv nebo tmavý režim a funkce jako nástěnky, časovou osu, návyky, režim zaměření nebo integrace zapínejte a vypínejte v **Nastavení → Obecné**. Pluginy přidávají ještě víc."
+    },
     "LEARN_KEYBOARD_SHORTCUTS": {
       "TITLE": "Naučte se klávesové zkratky",
       "NOTES": "Super Productivity je navržena pro ovládání klávesnicí. Naučte se zkratky, abyste pracovali rychleji.\n\n**Jak začít:**\n1. Otevřete **postranní menu**\n2. Přejděte na **Nápověda**\n3. Klikněte na **Prohlídka klávesové navigace**"
@@ -573,7 +577,8 @@
         "PLUGIN_NOT_INSTALLED": "Požadovaný plugin \"{{pluginName}}\" není nainstalován.",
         "REMOTE_ISSUE_DELETED": "Vzdálený problém byl smazán. Smazat propojený úkol „{{taskTitle}}“?",
         "REMOTE_ISSUE_DELETED_WITH_TIME": "Vzdálený problém byl smazán, ale u úkolu „{{taskTitle}}“ je sledovaný čas. Přesto jej smazat?",
-        "TWO_WAY_SYNC_PUSH_FAILED": "Odesílání obousměrné synchronizace selhalo: {{errorMsg}}"
+        "TWO_WAY_SYNC_PUSH_FAILED": "Odesílání obousměrné synchronizace selhalo: {{errorMsg}}",
+        "POST_TIME_SUCCESS": "{{providerName}}: Záznam času pro {{issueTitle}} úspěšně vytvořen"
       },
       "DIALOG": {
         "ADVANCED_CONFIG": "Pokročilá konfigurace",
@@ -609,6 +614,15 @@
         "TAGS": "Směr synchronizace štítků / kategorií",
         "TIME_ESTIMATE": "Odhad času",
         "TITLE": "Směr synchronizace názvu"
+      },
+      "DIALOG_TRACK_TIME": {
+        "ACTIVITY": "Aktivita",
+        "INVALID_DATE": "Zadaná hodnota není datum!",
+        "POST_TIME": "Odeslat čas",
+        "STARTED": "Zahájeno",
+        "SUBMIT_TIME_FOR": "Odeslat čas do {{providerName}} pro",
+        "TIME_SPENT": "Strávený čas",
+        "TITLE": "{{providerName}}: Odeslat pracovní výkaz"
       }
     },
     "ISSUE_PANEL": {
@@ -1092,44 +1106,6 @@
       "NO_DATA": "Za aktuální rok nejsou k dispozici žádná data",
       "PAGE_TITLE": "Rychlá historie",
       "WEEK_TITLE": "Týden {{nr}} ({{timeSpent}})"
-    },
-    "REDMINE": {
-      "FORM": {
-        "API_KEY": "API klíč přístupu",
-        "HOST": "Hostitel (např.: https://redmine.org)",
-        "PROJECT_ID": "Identifikátor projektu",
-        "PROJECT_ID_DESCRIPTION": "Lze nalézt jako část adresy URL při prohlížení projektu v prohlížeči.",
-        "SCOPE": "Rozsah",
-        "SCOPE_ALL": "Všechny",
-        "SCOPE_ASSIGNED": "Přiřazeno mně",
-        "SCOPE_CREATED": "Vytvořeno mnou",
-        "IS_SHOW_TIME_TRACKING_DIALOG": "Zobrazit dialog sledování času pro Redmine",
-        "IS_SHOW_TIME_TRACKING_DIALOG_DESCRIPTION": "Vyžaduje povolený modul sledování času v projektu Redmine",
-        "IS_SHOW_TIME_TRACKING_DIALOG_FOR_EACH_SUB_TASK": "Zobrazit dialog sledování času při dokončení podúkolů"
-      },
-      "FORM_SECTION": {
-        "HELP": "<p>Zde můžete nakonfigurovat SuperProductivity tak, aby zobrazoval otevřené problémy Redmine (buď online verze, nebo samonosné instance) pro konkrétní projekt v panelu vytváření úkolů v denním plánovacím zobrazení. Budou uvedeny jako návrhy a poskytnou odkaz na problém a další informace o něm.</p><p>Kromě toho můžete automaticky importovat všechny otevřené problémy.</p>",
-        "TITLE": "Redmine"
-      },
-      "ISSUE_CONTENT": {
-        "AUTHOR": "Autor",
-        "DESCRIPTION": "Popis",
-        "MARK_AS_CHECKED": "Označit změny jako zkontrolované",
-        "PRIORITY": "Priorita",
-        "STATUS": "Status"
-      },
-      "DIALOG_TRACK_TIME": {
-        "ACTIVITY": "Aktivita",
-        "INVALID_DATE": "Zadaná hodnota není datum!",
-        "POST_TIME": "Odeslat čas",
-        "STARTED": "Zahájeno",
-        "SUBMIT_TIME_FOR": "Odeslat čas do Redmine pro",
-        "TIME_SPENT": "Strávený čas",
-        "TITLE": "Redmine: Odeslat pracovní výkaz"
-      },
-      "S": {
-        "POST_TIME_SUCCESS": "Redmine: Záznam času pro {{issueTitle}} úspěšně vytvořen"
-      }
     },
     "REFLECTION_NOTE": {
       "ACTION_DISMISS": "Zavřít",
@@ -2457,33 +2433,6 @@
       "PASTE_SUCCESS": "Obrázek úspěšně vložen",
       "SIZE_EXCEEDED": "Velikost obrázku ({{actualSize}}) překračuje maximální povolenou velikost ({{maxSize}})",
       "STORAGE_QUOTA_EXCEEDED": "Kvóta úložiště překročena. Uvolněte prostor nebo zmenšete obrázky."
-    },
-    "NEXTCLOUD_DECK": {
-      "FORM": {
-        "BASE_URL": "Základní URL Nextcloud",
-        "FILTER_BY_ASSIGNEE": "Importovat pouze karty přiřazené mně",
-        "IS_TRANSITION_ISSUES_ENABLED": "Synchronizovat stav dokončení a název zpět do Nextcloud Deck",
-        "PASSWORD": "Vaše heslo aplikace Nextcloud",
-        "POLL_INTERVAL_MINUTES": "Interval dotazování (minuty)",
-        "TITLE_TEMPLATE": "Šablona názvu úkolu",
-        "TITLE_TEMPLATE_DESCRIPTION": "Proměnné: {CARD_TITLE}, {BOARD}, {COLUMN}, {ID}, {LABELS}. Příklad: [{BOARD}: {COLUMN}] {CARD_TITLE}. Ponechte prázdné pro pouze název karty.",
-        "USERNAME": "Vaše uživatelské jméno Nextcloud"
-      },
-      "FORM_SECTION": {
-        "HELP": "Nakonfigurujte integraci Nextcloud Deck pro import karet jako úkolů. Pro ověření použijte heslo aplikace."
-      },
-      "ISSUE_CONTENT": {
-        "ASSIGNED_USERS": "Přiřazení uživatelé",
-        "DECK_DESCRIPTION": "Popis Deck",
-        "LABELS": "Štítky",
-        "STACK": "Zásobník"
-      },
-      "S": {
-        "BOARD_NOT_FOUND": "Nextcloud Deck: Nástěnka nenalezena",
-        "CARD_NOT_FOUND": "Nextcloud Deck: Karta \"{{issueId}}\" zřejmě byla ze serveru smazána.",
-        "ERR_CREDENTIALS_MISSING": "Nejprve zadejte URL Nextcloud, uživatelské jméno a heslo.",
-        "ERR_LOAD_BOARDS": "Načtení nástěnek Deck selhalo. Zkontrolujte přihlašovací údaje."
-      }
     }
   },
   "FILE_IMEX": {
@@ -2927,8 +2876,17 @@
     },
     "SOUND": {
       "BREAK_REMINDER_SOUND": "Zvuk připomenutí přestávky",
+      "DING": "Cinknutí zvonku",
       "DONE_SOUND": "Zvuk označení úkolu jako hotového",
       "IS_INCREASE_DONE_PITCH": "Zvýšit výšku tónu po každém dokončeném úkolu",
+      "SMALL_DING": "Cinknutí malého zvonku",
+      "SOUND_1": "Zvuk 1",
+      "SOUND_2": "Zvuk 2",
+      "SOUND_3": "Zvuk 3",
+      "SOUND_4": "Zvuk 4",
+      "SOUND_5": "Zvuk 5",
+      "SOUND_6": "Zvuk 6",
+      "SOUND_7": "Zvuk 7",
       "TITLE": "Zvuk",
       "TRACK_TIME_SOUND": "Zvuk připomenutí sledování času",
       "VOLUME": "Hlasitost"
@@ -3082,6 +3040,7 @@
       "CREATE_TASK": "Návod: Vytvoření úkolu",
       "GET_HELP_ONLINE": "Získat pomoc online",
       "KEYBOARD": "Návod: Pokročilá klávesnice",
+      "QUICK_TOUR": "Rychlá prohlídka",
       "REDDIT_COMMUNITY": "Komunita Reddit",
       "REPORT_A_PROBLEM": "Nahlásit problém",
       "SEND_FEEDBACK": "Poslat zpětnou vazbu",
@@ -3154,13 +3113,50 @@
     "HINTS": {
       "CREATE_TASK": "Klikněte na + pro přidání prvního úkolu",
       "CREATE_TASK_TOUCH": "Klepněte na + pro přidání prvního úkolu",
+      "DECLINED": "V pořádku. Najdete to kdykoli v Nápověda → Rychlá prohlídka.",
+      "MORE_FALLBACK": "Víc je už zapnuto: projekty, sledování času, Plánovač…",
+      "NO_THANKS": "Ne, děkuji",
+      "SHOW_ME_MORE": "Ukaž mi víc ›",
       "EXPLORE": "Klidně klikejte a prozkoumávejte! Nápovědu najdete v postranním panelu.",
       "EXPLORE_TOUCH": "Klidně prozkoumávejte! Nápovědu najdete v menu.",
       "TASK_TAP_TOUCH": "Klepnutím na úkol otevřete jeho podrobnosti.",
       "TASK_SWIPE_LEFT_TOUCH": "Přejeďte úkol doleva pro další akce",
+      "TODAY_AND_INBOX": "Tento úkol je naplánován na dnes, takže se zobrazuje v {{todayIcon}} <b>Dnes</b>. Úkoly bez vlastního projektu zůstávají v {{inboxIcon}} <b>Příchozí</b>.",
+      "TODAY_AND_INBOX_PHONE": "Tento úkol je naplánován na dnes, takže se zobrazuje v {{todayIcon}} <b>Dnes</b>. Úkoly bez vlastního projektu zůstávají v {{inboxIcon}} <b>Příchozí</b>, pod ☰.",
       "TASK_SWIPE_RIGHT_TOUCH": "Přejeďte úkol doprava a označte ho jako hotový",
       "OR_PRESS": "nebo stiskněte",
       "SKIP_ARIA": "Zavřít nápovědu"
+    },
+    "TOUR": {
+      "ADD_SUBTASK": "Rozdělte ho: klikněte na úkol pravým tlačítkem a vyberte {{subtaskIcon}} <b>Přidat podúkol</b>",
+      "COUNTER": "{{nr}} z {{total}}",
+      "NEXT": "Další ›",
+      "ORGANIZE": "Vytvořte si vlastní <b>projekt</b> pro seskupení úkolů nebo <b>štítek</b> pro jejich označení. Vytvoříte ho pomocí +",
+      "ORGANIZE_COLLAPSED": "Vytvořte si vlastní <b>projekt</b> pro seskupení úkolů nebo <b>štítek</b> pro jejich označení. Rozbalte postranní panel pomocí {{expandIcon}} a vytvořte ho",
+      "ORGANIZE_PHONE": "Projekty a štítky najdete pod ☰. Vytvořte si vlastní <b>projekt</b> pro seskupení úkolů nebo <b>štítek</b> pro jejich označení",
+      "PLANNER": "Naplánujte další dny v {{plannerIcon}} <b>Plánovač</b>",
+      "TASK_MENU_TOUCH": "Přejetím úkolu doleva otevřete jeho menu: {{playIcon}} <b>Začít sledovat čas</b>, {{subtaskIcon}} <b>Přidat podúkol</b>",
+      "TASK_MENU_TOUCH_NO_TRACKING": "Přejetím úkolu doleva otevřete jeho menu, např. {{subtaskIcon}} <b>Přidat podúkol</b>",
+      "TIMER_RUNNING": "Časovač běží. Znovu stiskněte {{playIcon}} nebo <kbd>{{key}}</kbd> pro pozastavení.",
+      "TIMER_RUNNING_TOUCH": "Časovač běží. Pro pozastavení klepněte nahoře na {{playIcon}}.",
+      "TRACK_TIME": "Najeďte na úkol a stisknutím {{playIcon}} spusťte sledování času"
+    },
+    "WANT_MORE": {
+      "BOARDS": "<b>Nástěnky</b> · sloupce ve stylu Kanbanu pro vaše úkoly",
+      "DONE": "Hotovo",
+      "FINISH_DAY": "<b>Dokončení dne</b> · projděte a uzavřete svůj den",
+      "FOCUS_MODE": "<b>Režim zaměření</b> · pomodoro a práce bez vyrušení",
+      "FOOTER": "Najdete to znovu v Nápověda → Rychlá prohlídka.",
+      "HABITS": "<b>Návyky</b> · sledujte rutiny den po dni",
+      "INTRO": "Super Productivity začíná v klidu. Víc je po ruce, až to budete potřebovat:",
+      "OPEN_SETTINGS": "Otevřít nastavení ›",
+      "PLUGINS": "<b>Pluginy a integrace</b> · Jira, GitHub, CalDAV a další",
+      "SCHEDULE": "<b>Časová osa</b> · váš den na časové ose",
+      "SEARCH": "Vyhledávejte všechno pomocí <kbd>{{key}}</kbd>.",
+      "SEARCH_PHONE": "Vyhledávejte všechno z ☰.",
+      "SHORT_SYNTAX": "Při přidávání úkolu napište <code>#tag</code>, <code>+project</code> nebo <code>@tomorrow</code>. Další ukáže Nápověda → Návod.",
+      "SYNC": "Vaše data zůstávají v tomto zařízení. Synchronizace a zálohy jsou v Nastavení.",
+      "TITLE": "Chcete víc?"
     }
   },
   "PDS": {

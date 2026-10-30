@@ -21,6 +21,12 @@ export interface PluginState {
   icon?: string;
 }
 
+/** Ids of uploaded (ZIP-installed) plugins; bundled plugins are excluded. */
+export const getUploadedPluginIds = (
+  states: ReadonlyMap<string, PluginState>,
+): string[] =>
+  [...states].filter(([, state]) => state.type === 'uploaded').map(([id]) => id);
+
 export interface PluginLoadResult {
   success: boolean;
   instance?: PluginInstance;

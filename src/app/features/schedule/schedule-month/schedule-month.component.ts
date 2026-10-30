@@ -13,6 +13,10 @@ import { DateTimeFormatService } from 'src/app/core/date-time-format/date-time-f
 import { parseDbDateStr } from 'src/app/util/parse-db-date-str';
 import { TranslatePipe, TranslateService, TranslateStore } from '@ngx-translate/core';
 import { getPluralKey } from '../../../util/get-plural-key';
+import { TaskCopy } from '../../tasks/task.model';
+import { MatIcon } from '@angular/material/icon';
+import { MatTooltip } from '@angular/material/tooltip';
+import { T } from '../../../t.const';
 
 // `grid-template-rows` repeats `var(--nr-of-weeks)`, which otherwise resolves to
 // the static 6 declared on `schedule`. At 5 weeks that leaves a sixth, empty row
@@ -25,7 +29,7 @@ const HOST_BINDINGS = {
 
 @Component({
   selector: 'schedule-month',
-  imports: [ScheduleEventComponent, TranslatePipe],
+  imports: [ScheduleEventComponent, TranslatePipe, MatIcon, MatTooltip],
   templateUrl: './schedule-month.component.html',
   styleUrl: './schedule-month.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -42,6 +46,7 @@ export class ScheduleMonthComponent {
   readonly daysToShow = input<string[]>([]);
   readonly weeksToShow = input<number>(6);
   readonly firstDayOfWeek = input<number>(1);
+  readonly deadlineTasksByDay = input<Record<string, TaskCopy[]> | null>(null);
 
   // Generate weekday headers based on firstDayOfWeek setting
   readonly weekdayHeaders = computed(() => {
@@ -80,6 +85,33 @@ export class ScheduleMonthComponent {
       map[day] = safeFormatDate(day, 'd', locale);
     }
     return map;
+  });
+
+  readonly deadlineBadgesByDay = computed<
+    Record<string, { count: number; tooltip: string }>
+  >(() => {
+    const deadlinesByDay = this.deadlineTasksByDay() || {};
+    const badges: Record<string, { count: number; tooltip: string }> = {};
+
+    for (const day of this.daysToShow()) {
+      const tasks = deadlinesByDay[day] || [];
+      if (tasks.length === 0) continue;
+
+      badges[day] = {
+        count: tasks.length,
+        tooltip: this._translateService.instant(
+          tasks.length === 1
+            ? T.F.SCHEDULE.DEADLINE_TASKS_TOOLTIP_ONE
+            : T.F.SCHEDULE.DEADLINE_TASKS_TOOLTIP,
+          {
+            count: tasks.length,
+            titles: tasks.map((task) => task.title).join(', '),
+          },
+        ),
+      };
+    }
+
+    return badges;
   });
 
   // Determine the reference month from the displayed days

@@ -92,6 +92,10 @@
     "INTRO_2": "Wenn du diesen Ansatz schätzt und das Projekt gesund und weiterentwickelt halten möchtest, wird eine freiwillige Spende sehr geschätzt."
   },
   "EXAMPLE_TASKS": {
+    "GETTING_STARTED": {
+      "TITLE": "Optional: Tipps für den Einstieg",
+      "NOTES": "Nichts hier ist Pflicht. Lösche diese Aufgabe, wann du willst.\n\n- **Heute und Eingang**: Heute zeigt, was für heute geplant ist. Aufgaben ohne eigenes Projekt bleiben im Eingang. Eine Aufgabe kann in beiden Listen erscheinen.\n- **Projekte**: Gruppiere Aufgaben nach Thema mit dem **+** neben **Projekte** in der Seitenleiste.\n- **Sync**: Halte deine Daten auf mehreren Geräten aktuell unter **Einstellungen → Sync & Backup**.\n- **Du kommst von Todoist oder TickTick?** Importiere deine Aufgaben unter **Einstellungen → Sync & Backup → Import Export**.\n- **Touren**: **Hilfe → Kurztour** im Seitenleistenmenü führt dich an deiner eigenen Aufgabe durch die Grundlagen, und **Hilfe → Anleitung** zeigt dir Kurzsyntax und Tastaturnavigation Schritt für Schritt. Schließe eine Tour, wann du willst.\n- **Mach es zu deinem**: Wähle ein Theme oder den Dunkelmodus und schalte Funktionen wie Boards, Zeitplan, Gewohnheiten, Fokus-Modus oder Integrationen unter **Einstellungen → Allgemein** ein oder aus. Plugins bringen noch mehr."
+    },
     "LEARN_KEYBOARD_SHORTCUTS": {
       "TITLE": "Tastenkürzel lernen",
       "NOTES": "Super Productivity ist für die Bedienung mit der Tastatur konzipiert. Lerne die Tastenkürzel, um schneller zu arbeiten.\n\n**So fängst du an:**\n1. Öffne das **Seitenleistenmenü**\n2. Gehe zu **Hilfe**\n3. Klicke auf **Tastaturnavigations-Tour**"
@@ -547,7 +551,8 @@
         "OAUTH_FAILED_WITH_DETAIL": "Authentifizierung fehlgeschlagen: {{detail}}",
         "REMOTE_ISSUE_DELETED": "Remote-Issue wurde gelöscht. Verknüpfte Aufgabe \"{{taskTitle}}\" löschen?",
         "REMOTE_ISSUE_DELETED_WITH_TIME": "Remote-Issue wurde gelöscht, aber Aufgabe \"{{taskTitle}}\" hat erfasste Zeit. Trotzdem löschen?",
-        "TWO_WAY_SYNC_PUSH_FAILED": "Zwei-Wege-Synchronisation Senden fehlgeschlagen: {{errorMsg}}"
+        "TWO_WAY_SYNC_PUSH_FAILED": "Zwei-Wege-Synchronisation Senden fehlgeschlagen: {{errorMsg}}",
+        "POST_TIME_SUCCESS": "{{providerName}}: Zeiteintrag für {{issueTitle}} erfolgreich erstellt"
       },
       "TWO_WAY_SYNC": {
         "AUTO_CREATE_ISSUES": "Issues automatisch für neue Aufgaben erstellen",
@@ -583,6 +588,15 @@
         "RELOAD_OPTIONS": "Optionen neu laden",
         "SETUP_TITLE": "{{title}}-Konfiguration einrichten",
         "TEST_CONNECTION": "Verbindung testen"
+      },
+      "DIALOG_TRACK_TIME": {
+        "ACTIVITY": "Aktivität",
+        "INVALID_DATE": "Der eingegebene Wert ist kein Datum!",
+        "POST_TIME": "Zeit erfassen",
+        "STARTED": "Gestartet",
+        "SUBMIT_TIME_FOR": "Zeit an {{providerName}} übermitteln für",
+        "TIME_SPENT": "Aufgewendete Zeit",
+        "TITLE": "{{providerName}}: Arbeitsprotokoll übermitteln"
       }
     },
     "ISSUE_PANEL": {
@@ -806,33 +820,6 @@
         "REMINDER_NEEDS_TEXT": "Schreibe eine Reflexion, bevor du um eine Erinnerung bittest",
         "REMINDER_TASK_TITLE": "Reflexionsnotiz erneut ansehen",
         "TITLE": "Reflexionsnotiz"
-      }
-    },
-    "NEXTCLOUD_DECK": {
-      "FORM": {
-        "BASE_URL": "Nextcloud Basis-URL",
-        "FILTER_BY_ASSIGNEE": "Nur mir zugewiesene Karten importieren",
-        "IS_TRANSITION_ISSUES_ENABLED": "Abschlussstatus und Titel zurück zu Nextcloud Deck synchronisieren",
-        "PASSWORD": "Dein Nextcloud App-Passwort",
-        "POLL_INTERVAL_MINUTES": "Abfrageintervall (Minuten)",
-        "TITLE_TEMPLATE": "Aufgabentitel-Vorlage",
-        "TITLE_TEMPLATE_DESCRIPTION": "Variablen: {CARD_TITLE}, {BOARD}, {COLUMN}, {ID}, {LABELS}. Beispiel: [{BOARD}: {COLUMN}] {CARD_TITLE}. Leer lassen für nur den Kartentitel.",
-        "USERNAME": "Dein Nextcloud Benutzername"
-      },
-      "FORM_SECTION": {
-        "HELP": "Konfiguriere deine Nextcloud Deck Integration, um Karten als Aufgaben zu importieren. Verwende ein App-Passwort zur Authentifizierung."
-      },
-      "ISSUE_CONTENT": {
-        "ASSIGNED_USERS": "Zugewiesene Benutzer",
-        "DECK_DESCRIPTION": "Deck-Beschreibung",
-        "LABELS": "Labels",
-        "STACK": "Stapel"
-      },
-      "S": {
-        "BOARD_NOT_FOUND": "Nextcloud Deck: Board nicht gefunden",
-        "CARD_NOT_FOUND": "Nextcloud Deck: Karte \"{{issueId}}\" scheint vom Server gelöscht worden zu sein.",
-        "ERR_CREDENTIALS_MISSING": "Gib zuerst Nextcloud-URL, Benutzername und Passwort ein.",
-        "ERR_LOAD_BOARDS": "Deck-Boards konnten nicht geladen werden. Überprüfe deine Anmeldedaten."
       }
     },
     "NOTE": {
@@ -1088,44 +1075,6 @@
       "TOOLTIP_VISIBILITY": "Projekte anzeigen/ausblenden",
       "ADD_SUBFOLDER": "Unterordner hinzufügen",
       "ADD_PROJECT": "Projekt hinzufügen"
-    },
-    "REDMINE": {
-      "DIALOG_TRACK_TIME": {
-        "ACTIVITY": "Aktivität",
-        "INVALID_DATE": "Der eingegebene Wert ist kein Datum!",
-        "POST_TIME": "Zeit erfassen",
-        "STARTED": "Gestartet",
-        "SUBMIT_TIME_FOR": "Zeit an Redmine übermitteln für",
-        "TIME_SPENT": "Aufgewendete Zeit",
-        "TITLE": "Redmine: Arbeitsprotokoll übermitteln"
-      },
-      "FORM": {
-        "API_KEY": "API-Zugriffsschlüssel",
-        "HOST": "Host (z. B.: https://redmine.org)",
-        "IS_SHOW_TIME_TRACKING_DIALOG": "Zeiterfassungsdialog für Redmine anzeigen",
-        "IS_SHOW_TIME_TRACKING_DIALOG_DESCRIPTION": "Erfordert, dass das Zeiterfassungsmodul für das Redmine-Projekt aktiviert ist",
-        "IS_SHOW_TIME_TRACKING_DIALOG_FOR_EACH_SUB_TASK": "Zeiterfassungsdialog beim Abschließen von Unteraufgaben anzeigen",
-        "PROJECT_ID": "Projekt-Identifier",
-        "PROJECT_ID_DESCRIPTION": "Kann als Teil der URL gefunden werden, wenn das Projekt im Browser angezeigt wird.",
-        "SCOPE": "Umfang",
-        "SCOPE_ALL": "Alle",
-        "SCOPE_ASSIGNED": "Mir zugewiesen",
-        "SCOPE_CREATED": "Von mir erstellt"
-      },
-      "FORM_SECTION": {
-        "HELP": "<p>Hier kannst du SuperProductivity so konfigurieren, dass offene Redmine-Issues (entweder die Online-Version oder eine selbst gehostete Instanz) für ein bestimmtes Projekt im Aufgabenerstellungsfenster in der Tagesplanungsansicht aufgelistet werden. Sie werden als Vorschläge angezeigt und enthalten einen Link zum Issue sowie weitere Informationen dazu.</p><p> Darüber hinaus kannst du alle offenen Issues automatisch importieren.</p>",
-        "TITLE": "Redmine"
-      },
-      "ISSUE_CONTENT": {
-        "AUTHOR": "Autor",
-        "DESCRIPTION": "Beschreibung",
-        "MARK_AS_CHECKED": "Markiere Updates als überprüft",
-        "PRIORITY": "Priorität",
-        "STATUS": "Status"
-      },
-      "S": {
-        "POST_TIME_SUCCESS": "Redmine: Zeiteintrag für {{issueTitle}} erfolgreich erstellt"
-      }
     },
     "REFLECTION_NOTE": {
       "ACTION_DISMISS": "Verwerfen",
@@ -2896,8 +2845,17 @@
     },
     "SOUND": {
       "BREAK_REMINDER_SOUND": "Erinnerungston für die Pause",
+      "DING": "Glocke",
       "DONE_SOUND": "Aufgabe erledigt Ton",
       "IS_INCREASE_DONE_PITCH": "Erhöht die Tonhöhe für jede erledigte Aufgabe",
+      "SMALL_DING": "Kleine Glocke",
+      "SOUND_1": "Ton 1",
+      "SOUND_2": "Ton 2",
+      "SOUND_3": "Ton 3",
+      "SOUND_4": "Ton 4",
+      "SOUND_5": "Ton 5",
+      "SOUND_6": "Ton 6",
+      "SOUND_7": "Ton 7",
       "TITLE": "Sound",
       "TRACK_TIME_SOUND": "Ton der Zeiterinnerung verfolgen",
       "VOLUME": "Volumen"
@@ -3024,6 +2982,7 @@
       "CREATE_TASK": "Anleitung: Eine Aufgabe erstellen",
       "GET_HELP_ONLINE": "Online-Hilfe aufrufen",
       "KEYBOARD": "Howto: Erweiterte Tastatursteuerung",
+      "QUICK_TOUR": "Kurztour",
       "REDDIT_COMMUNITY": "Reddit-Gemeinschaft",
       "REPORT_A_PROBLEM": "Ein Problem melden",
       "SEND_FEEDBACK": "Feedback senden",
@@ -3110,13 +3069,50 @@
     "HINTS": {
       "CREATE_TASK": "Klicke auf +, um deine erste Aufgabe hinzuzufügen",
       "CREATE_TASK_TOUCH": "Tippe auf +, um deine erste Aufgabe hinzuzufügen",
+      "DECLINED": "Kein Problem. Du findest sie jederzeit unter Hilfe → Kurztour.",
+      "MORE_FALLBACK": "Mehr ist schon aktiv: Projekte, Zeiterfassung, Planer…",
+      "NO_THANKS": "Nein, danke",
+      "SHOW_ME_MORE": "Zeig mir mehr ›",
       "EXPLORE": "Klick dich ruhig durch und entdecke alles! Hilfe findest du in der Seitenleiste.",
       "EXPLORE_TOUCH": "Tipp dich ruhig durch und entdecke alles! Hilfe findest du im Menü.",
       "TASK_TAP_TOUCH": "Tippe auf eine Aufgabe, um ihre Details zu öffnen.",
       "TASK_SWIPE_LEFT_TOUCH": "Wische die Aufgabe nach links für weitere Aktionen",
+      "TODAY_AND_INBOX": "Diese Aufgabe ist für heute geplant, deshalb erscheint sie in {{todayIcon}} <b>Heute</b>. Aufgaben ohne eigenes Projekt bleiben im {{inboxIcon}} <b>Eingang</b>.",
+      "TODAY_AND_INBOX_PHONE": "Diese Aufgabe ist für heute geplant, deshalb erscheint sie in {{todayIcon}} <b>Heute</b>. Aufgaben ohne eigenes Projekt bleiben im {{inboxIcon}} <b>Eingang</b>, unter ☰.",
       "TASK_SWIPE_RIGHT_TOUCH": "Wische die Aufgabe nach rechts, um sie als erledigt zu markieren",
       "OR_PRESS": "oder drücke",
       "SKIP_ARIA": "Hinweis schließen"
+    },
+    "TOUR": {
+      "ADD_SUBTASK": "Teile sie auf: Rechtsklick auf die Aufgabe und {{subtaskIcon}} <b>Unteraufgabe hinzufügen</b> wählen",
+      "COUNTER": "{{nr}} von {{total}}",
+      "NEXT": "Weiter ›",
+      "ORGANIZE": "Lege ein eigenes <b>Projekt</b> an, um Aufgaben zu gruppieren, oder ein <b>Stichwort</b>, um sie zu markieren. Erstelle eines mit +",
+      "ORGANIZE_COLLAPSED": "Lege ein eigenes <b>Projekt</b> an, um Aufgaben zu gruppieren, oder ein <b>Stichwort</b>, um sie zu markieren. Klappe die Seitenleiste mit {{expandIcon}} aus, um eines zu erstellen",
+      "ORGANIZE_PHONE": "Projekte und Stichworte findest du unter ☰. Lege ein eigenes <b>Projekt</b> an, um Aufgaben zu gruppieren, oder ein <b>Stichwort</b>, um sie zu markieren",
+      "PLANNER": "Plane die nächsten Tage im {{plannerIcon}} <b>Planer</b>",
+      "TASK_MENU_TOUCH": "Wische eine Aufgabe nach links für ihr Menü: {{playIcon}} <b>Starte die Erfassung der Zeit</b>, {{subtaskIcon}} <b>Unteraufgabe hinzufügen</b>",
+      "TASK_MENU_TOUCH_NO_TRACKING": "Wische eine Aufgabe nach links für ihr Menü, z. B. {{subtaskIcon}} <b>Unteraufgabe hinzufügen</b>",
+      "TIMER_RUNNING": "Der Timer läuft. Drücke {{playIcon}} erneut oder <kbd>{{key}}</kbd>, um zu pausieren.",
+      "TIMER_RUNNING_TOUCH": "Der Timer läuft. Tippe oben auf {{playIcon}}, um zu pausieren.",
+      "TRACK_TIME": "Fahre mit der Maus über die Aufgabe und drücke {{playIcon}}, um die Zeit zu erfassen"
+    },
+    "WANT_MORE": {
+      "BOARDS": "<b>Boards</b> · Kanban-Spalten für deine Aufgaben",
+      "DONE": "Erledigt",
+      "FINISH_DAY": "<b>Tag abschließen</b> · Tag durchgehen und abschließen",
+      "FOCUS_MODE": "<b>Fokus-Modus</b> · Pomodoro und ablenkungsfreies Arbeiten",
+      "FOOTER": "Du findest das wieder unter Hilfe → Kurztour.",
+      "HABITS": "<b>Gewohnheiten</b> · Routinen Tag für Tag verfolgen",
+      "INTRO": "Super Productivity startet ruhig. Mehr ist da, wenn du es brauchst:",
+      "OPEN_SETTINGS": "Einstellungen öffnen ›",
+      "PLUGINS": "<b>Plugins & Integrationen</b> · Jira, GitHub, CalDAV und mehr",
+      "SCHEDULE": "<b>Zeitplan</b> · Dein Tag auf einer Zeitleiste",
+      "SEARCH": "Durchsuche alles mit <kbd>{{key}}</kbd>.",
+      "SEARCH_PHONE": "Durchsuche alles über ☰.",
+      "SHORT_SYNTAX": "Tippe <code>#tag</code>, <code>+project</code> oder <code>@tomorrow</code>, während du eine Aufgabe hinzufügst. Hilfe → Anleitung zeigt mehr.",
+      "SYNC": "Deine Daten bleiben auf diesem Gerät. Sync und Backups findest du unter Einstellungen.",
+      "TITLE": "Mehr gewünscht?"
     }
   },
   "PDS": {

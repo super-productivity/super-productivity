@@ -118,6 +118,16 @@
   display: flex;
   flex-direction: column;
   position: relative;
+  // Win/Linux Electron with custom title bar: the window controls overlay the
+  // window's top-right corner, which is this panel's while it is open
+  // (main-header drops its reserve for them then). Start the content below the
+  // overlay band, so the controls cover none of it and the native drag region
+  // behind them swallows no clicks. Padded here rather than on `.side-inner`,
+  // whose padding would scroll away with the content. Needs no platform
+  // scoping: the env() is set only while Electron draws the overlay (not on
+  // macOS, web or mobile, with the native frame, or in fullscreen). A Linux
+  // button layout with every control on the left leaves this strip empty.
+  padding-top: env(titlebar-area-height, 0px);
 
   plugin-panel-container {
     flex: 1;

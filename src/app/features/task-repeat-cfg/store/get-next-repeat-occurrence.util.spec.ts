@@ -262,6 +262,33 @@ describe('getNextRepeatOccurrence()', () => {
       });
       testCase(cfg, fromDate, startDate, expected);
     });
+
+    // #10902: stepping month by month from the 31st must not skip short months
+    it('should not skip February for every 4 months from Oct 31', () => {
+      const startDate = new Date(2026, 9, 31);
+      const lastCreation = new Date(2026, 9, 31);
+      const fromDate = new Date(2026, 10, 1);
+      const expected = new Date(2027, 1, 28);
+      const cfg = dummyRepeatable('ID1', {
+        repeatCycle: 'MONTHLY',
+        repeatEvery: 4,
+        lastTaskCreationDay: getDbDateStr(lastCreation),
+      });
+      testCase(cfg, fromDate, startDate, expected);
+    });
+
+    it('should not skip a 30-day month for every 4 months from Oct 31', () => {
+      const startDate = new Date(2026, 9, 31);
+      const lastCreation = new Date(2027, 1, 28);
+      const fromDate = new Date(2027, 2, 1);
+      const expected = new Date(2027, 5, 30);
+      const cfg = dummyRepeatable('ID1', {
+        repeatCycle: 'MONTHLY',
+        repeatEvery: 4,
+        lastTaskCreationDay: getDbDateStr(lastCreation),
+      });
+      testCase(cfg, fromDate, startDate, expected);
+    });
   });
 
   describe('MONTHLY monthlyLastDay (issue #7726)', () => {
@@ -396,6 +423,25 @@ describe('getNextRepeatOccurrence()', () => {
         lastTaskCreationDay: getDbDateStr(lastCreation),
       });
       testCase(cfg, fromDate, startDate, expected);
+    });
+
+    it('uses calendar-year intervals for a leap-day repeat every 2 years', () => {
+      const cfg = dummyRepeatable('ID-10679', {
+        repeatCycle: 'YEARLY',
+        repeatEvery: 2,
+        startDate: '2024-02-29',
+        lastTaskCreationDay: '2024-02-29',
+      });
+
+      expect(getNextRepeatOccurrence(cfg, new Date(2024, 2, 1))).toEqual(
+        new Date(2026, 1, 28, 12),
+      );
+      expect(
+        getNextRepeatOccurrence(
+          { ...cfg, lastTaskCreationDay: '2026-02-28' },
+          new Date(2026, 2, 1),
+        ),
+      ).toEqual(new Date(2028, 1, 29, 12));
     });
 
     it('should handle leap year date (Feb 29)', () => {
@@ -1021,6 +1067,20 @@ describe('getNextRepeatOccurrence()', () => {
       );
     });
 
+    it('does not skip February when the 30th already passed this month (#10902)', () => {
+      const fromDate = noon(new Date(2027, 0, 31)); // Sun Jan 31 2027
+      const cfg = dummyRepeatable('ID1', {
+        repeatCycle: 'MONTHLY',
+        repeatEvery: 1,
+        startDate: '2026-09-30',
+        lastTaskCreationDay: '2026-12-30',
+      });
+
+      expect(getNextRepeatOccurrence(cfg, fromDate, { inclusive: true })).toEqual(
+        noon(new Date(2027, 1, 28)), // Feb 28 2027
+      );
+    });
+
     it('returns today for a YEARLY repeat whose month and day are today', () => {
       const today = noon(new Date());
       const cfg = dummyRepeatable('ID1', {
@@ -1083,5 +1143,42 @@ describe('getNextRepeatOccurrence()', () => {
 
       expect(getNextRepeatOccurrence(cfg, today, { inclusive: true })).toEqual(tomorrow);
     });
+  });
+});
+
+describe('getNextRepeatOccurrence with repeatUntilDay (#10091)', () => {
+  const cfg = (repeatUntilDay?: string): TaskRepeatCfg => ({
+    ...DUMMY_REPEATABLE_TASK,
+    repeatCycle: 'DAILY',
+    repeatEvery: 1,
+    startDate: '2022-01-10',
+    lastTaskCreationDay: '2022-01-10',
+    repeatUntilDay,
+  });
+  const from = new Date(2022, 0, 14, 10);
+
+  it('returns the next day when no end day is set', () => {
+    expect(getDbDateStr(getNextRepeatOccurrence(cfg(), from)!)).toBe('2022-01-15');
+  });
+
+  it('allows an occurrence on the end day itself', () => {
+    expect(getDbDateStr(getNextRepeatOccurrence(cfg('2022-01-15'), from)!)).toBe(
+      '2022-01-15',
+    );
+  });
+
+  it('returns null when the next occurrence is after the end day', () => {
+    expect(getNextRepeatOccurrence(cfg('2022-01-14'), from)).toBeNull();
+  });
+
+  it('respects the end day for inclusive lookups too', () => {
+    expect(
+      getDbDateStr(
+        getNextRepeatOccurrence(cfg('2022-01-14'), from, { inclusive: true })!,
+      ),
+    ).toBe('2022-01-14');
+    expect(
+      getNextRepeatOccurrence(cfg('2022-01-13'), from, { inclusive: true }),
+    ).toBeNull();
   });
 });

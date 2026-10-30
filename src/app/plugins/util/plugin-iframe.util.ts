@@ -69,6 +69,8 @@ const ALLOWED_IFRAME_API_METHODS = new Set([
   'getAppState',
   'persistDataSynced',
   'loadPersistedData',
+  'triggerSync',
+  'listSyncedDataKeys',
   'registerHook',
   'registerWorkContextHeaderButton',
   'executeNodeScript',
@@ -435,7 +437,12 @@ export const createPluginApiScript = (config: PluginIframeConfig): string => {
           reorderTasks: (taskIds, contextId, contextType) => callApi('reorderTasks', [taskIds, contextId, contextType]),
 
           // UI methods
-          showSnack: (cfg) => callApi('showSnack', [cfg]),
+          // A snack action's onClick cannot cross postMessage (DataCloneError would drop
+          // the whole snack); show the message without the button instead.
+          showSnack: (cfg) => {
+            const { action, ...rest } = cfg || {};
+            return callApi('showSnack', [rest]);
+          },
           notify: (cfg) => callApi('notify', [cfg]),
           request: (url, options) => callApi('request', [url, options]),
           openDialog: (cfg) => callApi('openDialog', [cfg]),
@@ -450,6 +457,8 @@ export const createPluginApiScript = (config: PluginIframeConfig): string => {
           persistDataSynced: (data, key) => callApi('persistDataSynced', [data, key]),
           loadPersistedData: (key) => callApi('loadPersistedData', [key]),
           loadSyncedData: (key) => callApi('loadPersistedData', [key]), // Alias
+          triggerSync: () => callApi('triggerSync'),
+          listSyncedDataKeys: (prefix) => callApi('listSyncedDataKeys', [prefix]),
 
           // Registration methods
           registerHook: (hook, handler) => callApi('registerHook', [hook, handler]),

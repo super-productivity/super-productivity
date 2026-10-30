@@ -46,6 +46,7 @@ describe('PlannerTaskComponent', () => {
   let multiSelectMock: {
     selectedIds: WritableSignal<Set<string>>;
     isActive: WritableSignal<boolean>;
+    isTouchSelectionMode: WritableSignal<boolean>;
     toggle: jasmine.Spy;
     selectRange: jasmine.Spy;
     clear: jasmine.Spy;
@@ -95,6 +96,7 @@ describe('PlannerTaskComponent', () => {
     multiSelectMock = {
       selectedIds: signal(new Set<string>()),
       isActive: signal(false),
+      isTouchSelectionMode: signal(false),
       toggle: jasmine.createSpy('toggle'),
       selectRange: jasmine.createSpy('selectRange'),
       clear: jasmine.createSpy('clear'),
@@ -709,6 +711,30 @@ describe('PlannerTaskComponent', () => {
       scope.remove();
     }));
 
+    // #8583: Enter in the delete confirm deletes the task.
+    it('focuses the confirm button of the delete dialog', () => {
+      config = {
+        ...DEFAULT_GLOBAL_CONFIG,
+        tasks: { ...DEFAULT_GLOBAL_CONFIG.tasks, isConfirmBeforeDelete: true },
+        keyboard: {
+          ...DEFAULT_GLOBAL_CONFIG.keyboard,
+          taskDelete: 'D',
+          taskToggleDone: 'C',
+        },
+      };
+      matDialogMock.open.and.returnValue({ afterClosed: () => new Subject() } as never);
+      const { component } = create(makeTask(), true);
+
+      component.onTaskShortcut(shortcutEvent('d'));
+
+      expect(matDialogMock.open).toHaveBeenCalledWith(
+        jasmine.anything(),
+        jasmine.objectContaining({
+          data: jasmine.objectContaining({ isFocusConfirm: true }),
+        }),
+      );
+    });
+
     for (const [name, expectedAction] of [
       ['up', moveTaskUpInTodayList],
       ['down', moveTaskDownInTodayList],
@@ -755,6 +781,56 @@ describe('PlannerTaskComponent', () => {
         scope.remove();
       });
     }
+  });
+
+  describe('touch selection', () => {
+    it('selects planner cards by tapping their title or host without opening details', () => {
+      const { fixture, component } = create(makeTask(), true);
+      multiSelectMock.isTouchSelectionMode.set(true);
+      fixture.detectChanges();
+
+      expect(component.isTouchSelecting()).toBeTrue();
+      expect(fixture.nativeElement.querySelector('done-toggle')).toBeNull();
+      expect(fixture.nativeElement.querySelector('swipe-block').canSwipe).toBeFalse();
+
+      for (const target of [
+        fixture.nativeElement.querySelector('.title'),
+        fixture.nativeElement,
+      ]) {
+        multiSelectMock.toggle.calls.reset();
+        target.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        expect(multiSelectMock.toggle).toHaveBeenCalledOnceWith('t1');
+      }
+      fixture.nativeElement.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+      expect(TestBed.inject(TaskService).setSelectedId).not.toHaveBeenCalled();
+      expect(taskServiceMock.toggleDoneWithAnimation).not.toHaveBeenCalled();
+
+      multiSelectMock.isTouchSelectionMode.set(false);
+      fixture.detectChanges();
+      expect(fixture.nativeElement.querySelector('done-toggle')).not.toBeNull();
+      expect(fixture.nativeElement.querySelector('swipe-block').canSwipe).toBeTrue();
+    });
+
+    it('does not open details when tapping the host deselects the last task', () => {
+      multiSelectMock.isTouchSelectionMode.set(true);
+      multiSelectMock.toggle.and.callFake(() =>
+        multiSelectMock.isTouchSelectionMode.set(false),
+      );
+      const { fixture } = create(makeTask(), true);
+      fixture.nativeElement.click();
+      expect(multiSelectMock.toggle).toHaveBeenCalledOnceWith('t1');
+      expect(TestBed.inject(TaskService).setSelectedId).not.toHaveBeenCalled();
+    });
+
+    it('keeps opted-out cards outside touch selection mode', () => {
+      multiSelectMock.isTouchSelectionMode.set(true);
+      const { fixture, component } = create(makeTask());
+      expect(component.isTouchSelecting()).toBeFalse();
+      expect(fixture.nativeElement.querySelector('done-toggle')).not.toBeNull();
+      fixture.nativeElement.querySelector('.title').click();
+      expect(multiSelectMock.toggle).not.toHaveBeenCalled();
+      expect(TestBed.inject(TaskService).setSelectedId).toHaveBeenCalledWith('t1');
+    });
   });
 
   it('intercepts a modifier click before an embedded control activates', () => {

@@ -94,6 +94,16 @@ export interface SnackCfg {
   msg: string;
   type?: 'SUCCESS' | 'ERROR' | 'WARNING' | 'INFO';
   ico?: string;
+  /**
+   * Optional action button; the snack stays visible longer when set.
+   * plugin.js only — functions cannot cross the iframe postMessage boundary.
+   */
+  action?: SnackActionCfg;
+}
+
+export interface SnackActionCfg {
+  label: string;
+  onClick: () => void;
 }
 
 export type SnackCfgLimited = SnackCfg;
@@ -678,6 +688,12 @@ export interface PluginAPI {
   selectTask(taskId: string): Promise<void>;
 
   reInitData(): Promise<void>;
+
+  /**
+   * Update a task. Changing `projectId` moves it like the UI does: subtasks
+   * follow, and for a recurring task the repeat config and every instance
+   * (archived ones included) move without a confirmation.
+   */
   updateTask(taskId: string, updates: Partial<Task>): Promise<void>;
 
   addTask(taskData: PluginCreateTaskData): Promise<string>;
@@ -740,6 +756,25 @@ export interface PluginAPI {
 
   loadSyncedData(key?: string): Promise<string | null>;
 
+  /**
+   * Requests normal sync with the configured provider from plugin.js or an iframe.
+   * The promise also resolves on handled errors (HANDLED_ERROR) and skipped syncs.
+   * Resolution does not confirm successful sync or publication of specific plugin
+   * data. Bridge promise rejections propagate to the caller. The iframe's 30-second
+   * timeout does not cancel sync that has already started in the host.
+   * Feature-detect this method before calling it on older hosts.
+   */
+  triggerSync(): Promise<void>;
+
+  /**
+   * Lists this plugin's sorted, non-empty keys from applied application state.
+   * Excludes the legacy unkeyed entry. The optional prefix is matched literally.
+   * New keys appear only after their writes reach applied application state.
+   * Existing keys remain listed while replacements are pending or compressing.
+   * Re-read after persistedDataChanged; this is not a disk or sync acknowledgement.
+   */
+  listSyncedDataKeys(prefix?: string): Promise<string[]>;
+
   getConfig<T = Record<string, unknown>>(): Promise<T | null>;
 
   // i18n
@@ -788,8 +823,8 @@ export interface PluginAPI {
   // download file
   downloadFile(filename: string, data: string): Promise<void>;
 
-  // node execution (Electron desktop only; currently grantable only to packaged
-  // built-in plugins with nodeExecution permission after main-process user consent)
+  // node execution (Electron desktop only; requires the nodeExecution permission and
+  // main-process user consent)
   executeNodeScript?(request: PluginNodeScriptRequest): Promise<PluginNodeScriptResult>;
 
   // action execution - dispatch NgRx actions (limited to allowed subset)

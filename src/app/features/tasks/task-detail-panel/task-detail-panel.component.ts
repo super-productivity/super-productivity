@@ -67,6 +67,8 @@ import { ProgressBarComponent } from '../../../ui/progress-bar/progress-bar.comp
 import { IssueHeaderComponent } from '../../issue/issue-header/issue-header.component';
 import { MatProgressBar } from '@angular/material/progress-bar';
 import { IssueContentComponent } from '../../issue/issue-content/issue-content.component';
+import { IssueSyncStateComponent } from '../../issue/issue-sync-state/issue-sync-state.component';
+import { IssueSyncStateService } from '../../issue/two-way-sync/issue-sync-state.service';
 import { InlineMarkdownComponent } from '../../../ui/inline-markdown/inline-markdown.component';
 import { TaskAttachmentListComponent } from '../task-attachment/task-attachment-list/task-attachment-list.component';
 import { TagEditComponent } from '../../tag/tag-edit/tag-edit.component';
@@ -93,6 +95,7 @@ import {
 } from '../add-subtask-input/add-subtask-input.component';
 import { findNextTaskAfterSubtree } from '../../../util/find-adjacent-focusable';
 import { TaskContextMenuComponent } from '../task-context-menu/task-context-menu.component';
+import { isWontDoTask } from '../util/is-wont-do-task';
 
 @Component({
   selector: 'task-detail-panel',
@@ -117,6 +120,7 @@ import { TaskContextMenuComponent } from '../task-context-menu/task-context-menu
     IssueHeaderComponent,
     MatProgressBar,
     IssueContentComponent,
+    IssueSyncStateComponent,
     InlineMarkdownComponent,
     TaskAttachmentListComponent,
     TagEditComponent,
@@ -143,6 +147,7 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
   private _taskRepeatCfgService = inject(TaskRepeatCfgService);
   private _matDialog = inject(MatDialog);
   private _store = inject(Store);
+  private readonly _issueSyncState = inject(IssueSyncStateService);
   private _translateService = inject(TranslateService);
   private _destroyRef = inject(DestroyRef);
   private _dateTimeFormatService = inject(DateTimeFormatService);
@@ -331,8 +336,14 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
   });
 
   // Panel expansion computed signals
+  // Open on a sync notice too: a task Plainspace no longer lists has no issue
+  // data to load, and the notice is the reason to look.
   isExpandedIssuePanel = computed(() => {
-    return !this.layoutService.isXs() && !!this.issueData();
+    const taskId = this.task().id;
+    const hasSyncNotice =
+      this._issueSyncState.missingTaskIds().has(taskId) ||
+      this._issueSyncState.failures().has(taskId);
+    return !this.layoutService.isXs() && (!!this.issueData() || hasSyncNotice);
   });
 
   isExpandedNotesPanel = computed(() => {
@@ -761,7 +772,13 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
 
     dialogRef.afterClosed().subscribe((doneOn) => {
       if (typeof doneOn === 'number') {
-        this.taskService.update(this.task().id, { doneOn });
+        // A won't-do task is one whose `wontDoOn` matches its `doneOn`, so a
+        // new date moves both; moving `doneOn` alone would complete it.
+        const task = this.task();
+        this.taskService.update(task.id, {
+          doneOn,
+          ...(isWontDoTask(task) && { wontDoOn: doneOn }),
+        });
       }
     });
   }

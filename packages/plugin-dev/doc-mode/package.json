@@ -7,7 +7,8 @@
     "build": "node scripts/build.js",
     "deploy": "npm run build && node scripts/deploy.js",
     "lint": "tsc --noEmit",
-    "test": "node scripts/test.js"
+    "test": "node scripts/test.js",
+    "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "@types/node": "^22.15.33",
@@ -16,11 +17,10 @@
   },
   "dependencies": {
     "@super-productivity/plugin-api": "file:../../plugin-api",
-    "@tiptap/core": "^2.10.0",
-    "@tiptap/extension-bubble-menu": "^2.27.2",
-    "@tiptap/extension-floating-menu": "^2.27.2",
-    "@tiptap/extension-placeholder": "^2.10.0",
-    "@tiptap/starter-kit": "^2.10.0",
-    "@tiptap/suggestion": "^2.10.0"
+    "@tiptap/core": "^3.31.4",
+    "@tiptap/extension-bubble-menu": "^3.31.4",
+    "@tiptap/extensions": "^3.31.4",
+    "@tiptap/pm": "^3.31.4",
+    "@tiptap/starter-kit": "^3.31.4"
   }
 }

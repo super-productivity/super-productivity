@@ -25,14 +25,18 @@ import {
  * (a) Remote newer: the local op is rejected and never uploaded, but the local
  *     state keeps that edit.
  * (b) Local newer: the winner uploads a `[NOTE] LWW Update` carrying the full
- *     note. lwwUpdateMetaReducer replaces the entity without maintaining
- *     `note.todayOrder`, which the Today notes panel renders unfiltered.
+ *     note. lwwUpdateMetaReducer replaced the entity without maintaining
+ *     `note.todayOrder`, which the Today notes panel renders unfiltered
+ *     (fixed for #10379).
  *
- * Both tests assert the correct outcome (both clients agree). They are pending
- * (`test.fixme`) because both divergences exist on master: confirmed 3 of 3
- * runs each (2026-09). The PR that fixes one enables its test. (a) is #10260
- * for notes; (b) is part of #10379. The sync fuzz harness pins both in
- * sync-fuzz-pinned-traces.json. All edits go through the real UI.
+ *     (c) and (d) are the same gap for a pin and for the other timestamp
+ *     winner (an older pin replaced by a newer unpinned note). (d) asserts
+ *     today's whole-note LWW outcome, the pin lost; NOTE admission (#10393)
+ *     would keep it and flip that expectation.
+ *
+ * Every test asserts the correct outcome (both clients agree). (a) is pending
+ * (`test.fixme`): it is #10260 for notes, red on master 3 of 3 runs (2026-09).
+ * (b)-(d) are #10379. All edits go through the real UI.
  */
 
 type OpRow = CompactOperationLogEntry;
@@ -218,12 +222,16 @@ const createClient = async (
   return client;
 };
 
-/** A creates a project note and pins it to Today; B then joins. Both see it pinned. */
-const setupSharedPinnedNote = async (
+/**
+ * A creates a project note and, if `pinned`, pins it to Today; B then joins.
+ * Both see the same pin state.
+ */
+const setupSharedNote = async (
   browser: Browser,
   baseURL: string | undefined,
   request: APIRequestContext,
   contexts: BrowserContext[],
+  pinned = true,
 ): Promise<{ a: Client; b: Client; noteId: string }> => {
   const folder = generateSyncFolderName('e2e-note-pin-divergence');
   await createSyncFolder(request, folder);
@@ -247,18 +255,18 @@ const setupSharedPinnedNote = async (
     projectId: PROJECT_ID,
     isPinnedToToday: false,
   });
-  await setPinnedToToday(a, noteId, true);
+  if (pinned) await setPinnedToToday(a, noteId, true);
   await syncClient(a);
 
   const b = await createClient(browser, baseURL, 'B', config, contexts);
-  const pinnedEverywhere: NoteView = {
+  const sameEverywhere: NoteView = {
     content: ORIGINAL,
-    isPinnedToToday: true,
-    inTodayOrder: true,
-    listedInTodayPanel: true,
+    isPinnedToToday: pinned,
+    inTodayOrder: pinned,
+    listedInTodayPanel: pinned,
   };
   for (const client of [a, b]) {
-    expect(await observe(client, noteId)).toEqual(pinnedEverywhere);
+    expect(await observe(client, noteId)).toEqual(sameEverywhere);
     expect((await noteOps(client, noteId)).filter(isPending)).toEqual([]);
   }
   return { a, b, noteId };
@@ -294,12 +302,7 @@ test.describe('@webdav note pin divergence after a crossing', () => {
     test.slow();
     const contexts: BrowserContext[] = [];
     try {
-      const { a, b, noteId } = await setupSharedPinnedNote(
-        browser,
-        baseURL,
-        request,
-        contexts,
-      );
+      const { a, b, noteId } = await setupSharedNote(browser, baseURL, request, contexts);
       const aEdit = 'Content edited on A (newer)';
 
       // B unpins first; A edits the content later. Neither has synced.
@@ -330,7 +333,7 @@ test.describe('@webdav note pin divergence after a crossing', () => {
     }
   });
 
-  test.fixme('(b) local-newer unpin: the LWW replacement must also update the Today list', async ({
+  test('(b) local-newer unpin: the LWW replacement must also update the Today list', async ({
     browser,
     baseURL,
     request,
@@ -340,12 +343,7 @@ test.describe('@webdav note pin divergence after a crossing', () => {
     test.slow();
     const contexts: BrowserContext[] = [];
     try {
-      const { a, b, noteId } = await setupSharedPinnedNote(
-        browser,
-        baseURL,
-        request,
-        contexts,
-      );
+      const { a, b, noteId } = await setupSharedNote(browser, baseURL, request, contexts);
       const bEdit = 'Content edited on B (older)';
 
       // B edits the content first; A unpins later. Neither has synced.
@@ -369,6 +367,97 @@ test.describe('@webdav note pin divergence after a crossing', () => {
         (await noteOps(a, noteId)).some((row) => row.op.a === '[NOTE] LWW Update'),
       ).toBe(true);
       expect(views.B, 'A and B must agree on the shared note').toEqual(views.A);
+    } finally {
+      await closeContextsSafely(...contexts);
+    }
+  });
+
+  test('(c) local-newer pin: the LWW replacement must also update the Today list', async ({
+    browser,
+    baseURL,
+    request,
+    webdavServerUp,
+  }) => {
+    void webdavServerUp;
+    test.slow();
+    const contexts: BrowserContext[] = [];
+    try {
+      const { a, b, noteId } = await setupSharedNote(
+        browser,
+        baseURL,
+        request,
+        contexts,
+        false,
+      );
+      const bEdit = 'Content edited on B (older)';
+
+      // B edits the content first; A pins later. Neither has synced.
+      await editContent(b, noteId, bEdit);
+      const bContent = await pendingNoteOp(b, noteId);
+      await a.page.waitForTimeout(LWW_GAP_MS);
+      await setPinnedToToday(a, noteId, true);
+      const aPin = await pendingNoteOp(a, noteId);
+      expect(aPin.op.t).toBeGreaterThan(bContent.op.t);
+
+      await syncClient(b); // uploads the content edit
+      await syncClient(a); // local is newer: A emits a [NOTE] LWW Update
+      await syncClient(b); // B applies the whole-note replacement
+      await syncClient(a);
+      await syncClient(b);
+
+      const views = await report(a, b, noteId, 'scenario-c');
+      // The crossing really synced: only A's replacement can pin the note on B.
+      expect(views.B.isPinnedToToday).toBe(true);
+      expect(
+        (await noteOps(a, noteId)).some((row) => row.op.a === '[NOTE] LWW Update'),
+      ).toBe(true);
+      expect(views.B, 'A and B must agree on the shared note').toEqual(views.A);
+    } finally {
+      await closeContextsSafely(...contexts);
+    }
+  });
+
+  test('(d) remote-newer content edit replaces an older pin: the Today list follows', async ({
+    browser,
+    baseURL,
+    request,
+    webdavServerUp,
+  }) => {
+    void webdavServerUp;
+    test.slow();
+    const contexts: BrowserContext[] = [];
+    try {
+      const { a, b, noteId } = await setupSharedNote(
+        browser,
+        baseURL,
+        request,
+        contexts,
+        false,
+      );
+      const bEdit = 'Content edited on B (newer)';
+
+      // A pins first; B edits the content later. Neither has synced.
+      await setPinnedToToday(a, noteId, true);
+      const aPin = await pendingNoteOp(a, noteId);
+      await b.page.waitForTimeout(LWW_GAP_MS);
+      await editContent(b, noteId, bEdit);
+      const bContent = await pendingNoteOp(b, noteId);
+      expect(bContent.op.t).toBeGreaterThan(aPin.op.t);
+
+      await syncClient(a); // uploads the pin
+      await syncClient(b); // local is newer: B emits a [NOTE] LWW Update
+      await syncClient(a); // A applies the whole-note replacement (unpinned)
+      await syncClient(b);
+      await syncClient(a);
+
+      const views = await report(a, b, noteId, 'scenario-d');
+      // The crossing really synced: A received B's content in the replacement.
+      expect(views.A.content).toBe(bEdit);
+      expect(views.A.isPinnedToToday).toBe(false);
+      expect(
+        (await noteOps(b, noteId)).some((row) => row.op.a === '[NOTE] LWW Update'),
+      ).toBe(true);
+      expect(views.A, 'A and B must agree on the shared note').toEqual(views.B);
     } finally {
       await closeContextsSafely(...contexts);
     }

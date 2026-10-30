@@ -1,6 +1,6 @@
 import { getTaskPriority } from '../tasks/task-priority.const';
 import { computed, effect, Injectable, inject, signal } from '@angular/core';
-import { Observable, animationFrameScheduler, combineLatest, of } from 'rxjs';
+import { Observable, Subject, animationFrameScheduler, combineLatest, of } from 'rxjs';
 import { map, observeOn, switchMap, take } from 'rxjs/operators';
 import { TaskWithSubTasks } from '../tasks/task.model';
 import { selectAllProjects } from '../project/store/project.selectors';
@@ -48,10 +48,27 @@ const GROUP_OPTIONS_NO_PROJECT = OPTIONS.group.list.filter(
 const NO_TAG_GROUP_KEY = 'No tag';
 const UNKNOWN_TAG_GROUP_KEY = 'Unknown tag';
 
+/** One group header of a grouped work view, in display order. */
+export interface CustomizedTaskGroup {
+  key: string;
+  tasks: TaskWithSubTasks[];
+  /**
+   * Drag-to-retag target for tag groups, see `groupTagIdByKey`. `null` for every
+   * other grouping: `task-list` treats only `undefined` as "not a group list",
+   * so `TaskMultiDragService.canDrop` must keep rejecting group drops here.
+   */
+  tagId: string | null;
+}
+
 /** Result of {@link TaskViewCustomizerService.customizeUndoneTasks}. */
 export interface CustomizedUndoneTasks {
   list: TaskWithSubTasks[];
   grouped?: Record<string, TaskWithSubTasks[]>;
+  /**
+   * `grouped` in display order, computed once per emission so the template
+   * doesn't re-sort the group keys on every change-detection pass.
+   */
+  groups?: CustomizedTaskGroup[];
   /**
    * Tag grouping only: group-header title → its tagId, or `null` for buckets
    * with no single tag ('No tag', 'Unknown tag', or a title shared by several
@@ -79,6 +96,15 @@ export class TaskViewCustomizerService {
   public selectedFilter = signal<FilterOption>(DEFAULT_OPTIONS.filter);
   public collapsedGroupIds = signal<string[]>([]);
 
+  // The customizer is a menu anchored to the header's filter button, so the
+  // keyboard shortcut can only ask that button to open it.
+  private readonly _openMenuRequest$ = new Subject<void>();
+  readonly openMenuRequest$ = this._openMenuRequest$.asObservable();
+
+  requestOpenMenu(): void {
+    this._openMenuRequest$.next();
+  }
+
   isCustomized = computed(() => {
     return [
       this.selectedSort().type,
@@ -104,7 +130,6 @@ export class TaskViewCustomizerService {
 
   constructor() {
     this._initProjects();
-    this._initTags();
 
     // Load stored customizations for the active work context, and reset to
     // defaults when switching contexts so filters don't leak across them.
@@ -144,8 +169,23 @@ export class TaskViewCustomizerService {
 
   private _allProjects: Project[] = [];
   private _projectsLoaded = false;
-  private _allTags: Tag[] = [];
-  private _tagsLoaded = false;
+
+  /**
+   * Changes only when the tags' sidebar order or titles change — not on every
+   * tag update (e.g. its `taskIds` when tasks are reordered), so it can drive
+   * re-customization without re-running it for unrelated tag writes.
+   */
+  private _tagOrderKey = computed(() =>
+    this._tagService
+      .tagsInTreeOrder()
+      .map((tag) => `${tag.id}\u0000${tag.title}`)
+      .join('\u0001'),
+  );
+
+  /** Read straight from the signal so it's always current inside the stream. */
+  private _allTags(): Tag[] {
+    return this._tagService.tagsInTreeOrder();
+  }
 
   private _initProjects(): void {
     if (!this._projectsLoaded) {
@@ -156,17 +196,6 @@ export class TaskViewCustomizerService {
           this._allProjects = projects;
         });
       this._projectsLoaded = true;
-    }
-  }
-
-  private _initTags(): void {
-    if (!this._tagsLoaded) {
-      toObservable(this._tagService.tagsInTreeOrder)
-        .pipe(takeUntilDestroyed())
-        .subscribe((tags) => {
-          this._allTags = tags;
-        });
-      this._tagsLoaded = true;
     }
   }
 
@@ -215,6 +244,9 @@ export class TaskViewCustomizerService {
       toObservable(this.selectedSort),
       toObservable(this.selectedGroup),
       toObservable(this.selectedFilter),
+      // Tag filtering, tag grouping and group order all read the tags; re-run
+      // when their sidebar order or titles change, not only when tasks do.
+      toObservable(this._tagOrderKey),
     ]).pipe(
       map(([tasks, sort, group, filter]) => {
         const normalizedFilterVal = filter.preset?.trim();
@@ -241,8 +273,18 @@ export class TaskViewCustomizerService {
           grouped && group.type === GROUP_OPTION_TYPE.tag
             ? this._buildGroupTagIdByKey(grouped)
             : undefined;
+        const groups = grouped
+          ? this._orderGroupKeys(grouped, group.type).map((key) => ({
+              key,
+              tasks: grouped[key],
+              tagId: groupTagIdByKey?.[key] ?? null,
+            }))
+          : undefined;
 
-        return { result: { list: sorted, grouped, groupTagIdByKey }, isDefault: false };
+        return {
+          result: { list: sorted, grouped, groups, groupTagIdByKey },
+          isDefault: false,
+        };
       }),
       // Emit the default (uncustomized) list synchronously, but keep the
       // customized path on the animation-frame scheduler. The customized branch
@@ -272,7 +314,7 @@ export class TaskViewCustomizerService {
           return tasks.filter((t) => !t.tagIds.length);
         }
 
-        const tag = this._allTags.find((t) =>
+        const tag = this._allTags().find((t) =>
           t.title.toLowerCase().includes(value.toLowerCase().trim()),
         );
         if (!tag) return [];
@@ -466,11 +508,14 @@ export class TaskViewCustomizerService {
    * natural ascending order the keyvalue pipe used previously. Special tag
    * buckets ('No tag', 'Unknown tag') sort after the real tags.
    */
-  getOrderedGroupKeys(grouped: Record<string, TaskWithSubTasks[]>): string[] {
+  private _orderGroupKeys(
+    grouped: Record<string, TaskWithSubTasks[]>,
+    groupType: GroupOption['type'],
+  ): string[] {
     const keys = Object.keys(grouped);
     const ascending = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
 
-    if (this.selectedGroup().type !== GROUP_OPTION_TYPE.tag) {
+    if (groupType !== GROUP_OPTION_TYPE.tag) {
       return keys.sort(ascending);
     }
 
@@ -492,7 +537,7 @@ export class TaskViewCustomizerService {
    */
   private _tagsInSidebarOrder(): Tag[] {
     return this._menuTreeService.buildTagListInTreeOrder(
-      this._allTags.filter((t) => t.id !== TODAY_TAG.id),
+      this._allTags().filter((t) => t.id !== TODAY_TAG.id),
     );
   }
 
@@ -556,7 +601,7 @@ export class TaskViewCustomizerService {
   }
 
   private _groupByTag(tasks: TaskWithSubTasks[]): Record<string, TaskWithSubTasks[]> {
-    const tagById = new Map(this._allTags.map((tag) => [tag.id, tag]));
+    const tagById = new Map(this._allTags().map((tag) => [tag.id, tag]));
     const groupedByTagId = new Map<string, TaskWithSubTasks[]>();
     const unknownTagTasks: TaskWithSubTasks[] = [];
     const noTagTasks: TaskWithSubTasks[] = [];
@@ -579,7 +624,7 @@ export class TaskViewCustomizerService {
     });
 
     const grouped: Record<string, TaskWithSubTasks[]> = {};
-    this._allTags.forEach((tag) => {
+    this._allTags().forEach((tag) => {
       const tagTasks = groupedByTagId.get(tag.id);
       if (tagTasks?.length) {
         // Distinct tags can share a title; merge their tasks into the same

@@ -60,7 +60,11 @@ updates:
   # Automatically updates pinned action SHAs when new versions release
   # This is critical for security: keeps SHA pins up-to-date with patches
   - package-ecosystem: 'github-actions'
-    directory: '/'
+    # '/' only covers .github/workflows; the composite actions need their own
+    # entries, or their pins drift behind the workflows'.
+    directories:
+      - '/'
+      - '/.github/actions/*'
     schedule:
       interval: 'weekly'
       day: 'monday'

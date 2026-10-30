@@ -210,7 +210,7 @@ test.describe('@supersync @regression Superseded Clock Regression', () => {
 
       // Check for sync error indicators
       // The snack bar would show if there were rejected ops
-      const errorSnack = clientB.page.locator('simple-snack-bar.error');
+      const errorSnack = clientB.page.locator('snack-custom .wrapper.error');
       await expect(errorSnack).not.toBeVisible({ timeout: 2000 });
       console.log('[Superseded Clock] No sync errors on Client B');
 
@@ -295,7 +295,7 @@ test.describe('@supersync @regression Superseded Clock Regression', () => {
         await clientB.sync.syncAndWait();
 
         // Check for errors
-        const errorSnack = clientB.page.locator('simple-snack-bar.error');
+        const errorSnack = clientB.page.locator('snack-custom .wrapper.error');
         const isErrorVisible = await errorSnack.isVisible().catch(() => false);
         if (isErrorVisible) {
           throw new Error(

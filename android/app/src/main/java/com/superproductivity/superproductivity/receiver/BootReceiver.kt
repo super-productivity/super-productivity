@@ -5,7 +5,6 @@ import android.content.Context
 import android.content.Intent
 import android.util.Log
 import com.superproductivity.superproductivity.service.BackgroundSyncCredentialStore
-import com.superproductivity.superproductivity.service.ReminderAlarmStore
 import com.superproductivity.superproductivity.service.ReminderNotificationHelper
 import com.superproductivity.superproductivity.service.SyncReminderScheduler
 
@@ -29,28 +28,8 @@ class BootReceiver : BroadcastReceiver() {
 
         Log.d(TAG, "Received $action, re-registering alarms")
 
-        val alarms = ReminderAlarmStore.getAll(context)
-        if (alarms.isEmpty()) {
-            Log.d(TAG, "No alarms to re-register")
-            return
-        }
-
-        for (alarm in alarms) {
-            Log.d(TAG, "Re-scheduling alarm: id=${alarm.notificationId}")
-            ReminderNotificationHelper.scheduleReminder(
-                context,
-                alarm.notificationId,
-                alarm.reminderId,
-                alarm.relatedId,
-                alarm.title,
-                alarm.reminderType,
-                alarm.triggerAtMs,
-                alarm.useAlarmStyle,
-                alarm.isOngoing
-            )
-        }
-
-        Log.d(TAG, "Re-registered ${alarms.size} alarms")
+        val count = ReminderNotificationHelper.rescheduleAllFromStore(context)
+        Log.d(TAG, "Re-registered $count alarms")
 
         // Re-schedule the background sync worker if credentials are configured
         if (BackgroundSyncCredentialStore.get(context) != null) {

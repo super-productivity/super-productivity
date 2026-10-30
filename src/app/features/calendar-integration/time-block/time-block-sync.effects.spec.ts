@@ -1,3 +1,7 @@
+import { MatDialog } from '@angular/material/dialog';
+import { PluginBridgeService } from '../../../plugins/plugin-bridge.service';
+import { DialogEditIssueProviderComponent } from '../../issue/dialog-edit-issue-provider/dialog-edit-issue-provider.component';
+import { T } from '../../../t.const';
 import { TestBed, fakeAsync, tick, flush, flushMicrotasks } from '@angular/core/testing';
 import { provideMockActions } from '@ngrx/effects/testing';
 import { MockStore, provideMockStore } from '@ngrx/store/testing';
@@ -31,6 +35,8 @@ describe('TimeBlockSyncEffects', () => {
   let store: MockStore;
   let provider: TestProvider;
   let bulkDeleteSidecarIds: string[];
+  let oauthTokensSpy: jasmine.Spy;
+  let configFields: Array<{ type: string }>;
 
   const createTask = (id: string, partial: Partial<Task> = {}): Task => ({
     ...DEFAULT_TASK,
@@ -57,6 +63,8 @@ describe('TimeBlockSyncEffects', () => {
       pluginConfig: { isAutoTimeBlock: true },
     };
     bulkDeleteSidecarIds = [];
+    oauthTokensSpy = jasmine.createSpy('restoreAndCheckOAuthTokens').and.resolveTo(true);
+    configFields = [{ type: 'oauthButton' }];
 
     TestBed.configureTestingModule({
       providers: [
@@ -68,11 +76,18 @@ describe('TimeBlockSyncEffects', () => {
             { selector: selectAllTasksWithDueTimeSorted, value: [] },
           ],
         }),
+        { provide: MatDialog, useValue: jasmine.createSpyObj('MatDialog', ['open']) },
+        {
+          provide: PluginBridgeService,
+          useValue: { restoreAndCheckOAuthTokens: oauthTokensSpy },
+        },
         { provide: TaskService, useValue: { getByIdOnce$: getByIdOnce$Spy } },
         {
           provide: PluginIssueProviderRegistryService,
           useValue: {
+            getConfigFields: () => configFields,
             getProvider: () => ({
+              pluginId: 'google-calendar-provider',
               definition: {
                 getHeaders: () => ({}),
                 timeBlock: {
@@ -110,6 +125,54 @@ describe('TimeBlockSyncEffects', () => {
   afterEach(() => {
     sub?.unsubscribe();
   });
+
+  it('offers Connect for missing provider credentials and opens that provider settings', fakeAsync(() => {
+    oauthTokensSpy.and.resolveTo(false);
+    upsertEventSpy.and.rejectWith(new Error('Not authenticated'));
+    actions$.next(
+      TaskSharedActions.updateTask({ task: { id: 'task-1', changes: { title: 'New' } } }),
+    );
+    tick(COALESCE_MS);
+
+    const snack = (TestBed.inject(SnackService).open as jasmine.Spy).calls.mostRecent()
+      .args[0];
+    expect(snack.actionStr).toEqual(jasmine.any(String));
+    expect(oauthTokensSpy).toHaveBeenCalledOnceWith(
+      'google-calendar-provider',
+      provider.id,
+    );
+    snack.actionFn();
+    expect(TestBed.inject(MatDialog).open).toHaveBeenCalledOnceWith(
+      DialogEditIssueProviderComponent,
+      {
+        restoreFocus: true,
+        data: { issueProvider: provider },
+      },
+    );
+    flush();
+  }));
+
+  for (const hasOAuth of [true, false]) {
+    it(`keeps the plain error for ${hasOAuth ? 'an authenticated' : 'a non-OAuth'} provider`, fakeAsync(() => {
+      if (!hasOAuth) configFields = [];
+      upsertEventSpy.and.rejectWith(new Error('API failure'));
+      actions$.next(
+        TaskSharedActions.updateTask({
+          task: { id: 'task-1', changes: { title: 'New' } },
+        }),
+      );
+      tick(COALESCE_MS);
+
+      expect(TestBed.inject(SnackService).open).toHaveBeenCalledOnceWith({
+        type: 'ERROR',
+        msg: T.F.CALENDARS.S.TIME_BLOCK_ERROR,
+        translateParams: { errTxt: 'API failure' },
+      });
+      expect(TestBed.inject(MatDialog).open).not.toHaveBeenCalled();
+      if (!hasOAuth) expect(oauthTokensSpy).not.toHaveBeenCalled();
+      flush();
+    }));
+  }
 
   it('coalesces a burst of changes for one task into a single upsert', fakeAsync(() => {
     const task = createTask('task-1');

@@ -15,6 +15,8 @@ import { WorkContextService } from '../work-context/work-context.service';
 import { DEFAULT_TASK, Task, TaskReminderOptionId } from './task.model';
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 import { T } from '../../t.const';
+import { PLAINSPACE_TYPE } from '../issue/issue.const';
+import { IssueSyncStateService } from '../issue/two-way-sync/issue-sync-state.service';
 import { TranslateService, TranslateStore } from '@ngx-translate/core';
 import { LocaleDatePipe } from '../../ui/pipes/locale-date.pipe';
 import { PlannerActions } from '../planner/store/planner.actions';
@@ -361,6 +363,10 @@ describe('TaskBulkActionService', () => {
           }),
         }),
       );
+      // No undo for a bulk delete: Enter must not confirm it.
+      expect(
+        matDialog.open.calls.mostRecent().args[1]?.data.isFocusConfirm,
+      ).toBeUndefined();
       // top-level ids in one op; the lone subtask via the singular path so
       // older clients keep a consistent parent (rule 10)
       expect(taskService.removeMultipleTasks).toHaveBeenCalledWith(['parent']);
@@ -389,6 +395,71 @@ describe('TaskBulkActionService', () => {
       expect(taskService.removeMultipleTasks).not.toHaveBeenCalled();
     });
 
+    it('always confirms a single Plainspace task, warning it is deleted for the Space', async () => {
+      isConfirmBeforeDelete = false;
+      select([t('shared', { issueType: PLAINSPACE_TYPE })]);
+      await service.deleteSelected();
+      expect(matDialog.open).toHaveBeenCalledWith(
+        jasmine.anything(),
+        jasmine.objectContaining({
+          data: jasmine.objectContaining({
+            message: T.F.TASK.D_CONFIRM_DELETE.MSG_PLAINSPACE,
+          }),
+        }),
+      );
+      expect(taskService.remove).toHaveBeenCalledWith(
+        jasmine.objectContaining({ id: 'shared' }),
+      );
+    });
+
+    it('warns in the bulk confirm when the selection includes a Plainspace task', async () => {
+      select([t('a'), t('shared', { issueType: PLAINSPACE_TYPE })]);
+      await service.deleteSelected();
+      expect(matDialog.open).toHaveBeenCalledWith(
+        jasmine.anything(),
+        jasmine.objectContaining({
+          data: jasmine.objectContaining({
+            message: 'F.TASK.MULTI_SELECT.D_CONFIRM_DELETE.MSG_PLAINSPACE.OTHER',
+          }),
+        }),
+      );
+    });
+
+    it('does not warn for Plainspace tasks Plainspace no longer lists for me', async () => {
+      TestBed.inject(IssueSyncStateService).setMissing(['gone'], ['gone']);
+      select([t('a'), t('gone', { issueType: PLAINSPACE_TYPE })]);
+      await service.deleteSelected();
+      expect(matDialog.open).toHaveBeenCalledWith(
+        jasmine.anything(),
+        jasmine.objectContaining({
+          data: jasmine.objectContaining({
+            message: 'F.TASK.MULTI_SELECT.D_CONFIRM_DELETE.MSG.OTHER',
+          }),
+        }),
+      );
+    });
+
+    it('warns with the singular Plainspace message for a Plainspace parent selected with its subtask', async () => {
+      spyOn(TestBed.inject(TranslateStore), 'getTranslations').and.returnValue({
+        F: {
+          TASK: { MULTI_SELECT: { D_CONFIRM_DELETE: { MSG_PLAINSPACE: { ONE: 'x' } } } },
+        },
+      });
+      select([
+        t('shared', { issueType: PLAINSPACE_TYPE, subTaskIds: ['s1'] }),
+        t('s1', { parentId: 'shared' }),
+      ]);
+      await service.deleteSelected();
+      expect(matDialog.open).toHaveBeenCalledWith(
+        jasmine.anything(),
+        jasmine.objectContaining({
+          data: jasmine.objectContaining({
+            message: 'F.TASK.MULTI_SELECT.D_CONFIRM_DELETE.MSG_PLAINSPACE.ONE',
+          }),
+        }),
+      );
+    });
+
     it('confirms as a bulk delete when a parent and its subtasks are selected', async () => {
       isConfirmBeforeDelete = false;
       select([
@@ -415,7 +486,10 @@ describe('TaskBulkActionService', () => {
       expect(matDialog.open).toHaveBeenCalledWith(
         jasmine.anything(),
         jasmine.objectContaining({
-          data: jasmine.objectContaining({ message: T.F.TASK.D_CONFIRM_DELETE.MSG }),
+          data: jasmine.objectContaining({
+            message: T.F.TASK.D_CONFIRM_DELETE.MSG,
+            isFocusConfirm: true,
+          }),
         }),
       );
       expect(taskService.remove).toHaveBeenCalled();

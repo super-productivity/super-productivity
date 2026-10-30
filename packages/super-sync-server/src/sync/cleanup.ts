@@ -2,6 +2,12 @@ import { getSyncService } from './sync.service';
 import { Logger } from '../logger';
 import { DEFAULT_SYNC_CONFIG, MS_PER_DAY } from './sync.types';
 import { MIN_CHECKPOINT_SAFE_APP_VERSION } from './checkpoint-gate';
+import {
+  deleteDeadCaptureGrants,
+  deleteExpiredCaptures,
+  pruneCaptureRateLimits,
+  pruneRetryWindow,
+} from '../capture';
 
 let cleanupTimer: NodeJS.Timeout | null = null;
 let initialCleanupTimer: NodeJS.Timeout | null = null;
@@ -114,6 +120,22 @@ const runDailyCleanup = async (): Promise<void> => {
     }
   } catch (error) {
     Logger.error(`Cleanup [unverified-users] failed: ${error}`);
+  }
+
+  // 7. Agent task capture: items no device claimed within retention, grants
+  // that can never authenticate again, stale retry-window entries and expired
+  // rate-limit counters (which hold IP addresses). The
+  // tables are empty unless CAPTURE_CONNECTOR_ENABLED, so this is a no-op then.
+  try {
+    const items = await deleteExpiredCaptures(cutoffTime);
+    const grants = await deleteDeadCaptureGrants(Date.now());
+    pruneRetryWindow();
+    pruneCaptureRateLimits();
+    if (items > 0 || grants > 0) {
+      Logger.info(`Cleanup [capture]: removed ${items} items, ${grants} grants`);
+    }
+  } catch (error) {
+    Logger.error(`Cleanup [capture] failed: ${error}`);
   }
 };
 

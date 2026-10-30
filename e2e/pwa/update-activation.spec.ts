@@ -46,7 +46,7 @@ test.describe('Production PWA update activation', () => {
           }),
         { timeout: 30000 },
       )
-      .toMatch(/\/ngsw-worker\.js$/);
+      .toMatch(/\/sw\.js$/);
 
     const manifestRequestsBeforeControlledReload = await getManifestRequestCount(
       page.request,
@@ -78,7 +78,7 @@ test.describe('Production PWA update activation', () => {
       .poll(() =>
         page.evaluate(() => navigator.serviceWorker.controller?.scriptURL ?? null),
       )
-      .toMatch(/\/ngsw-worker\.js$/);
+      .toMatch(/\/sw\.js$/);
     await expect(page.locator('meta[name="pwa-e2e-version"]')).toHaveCount(0);
 
     await expect
@@ -128,7 +128,7 @@ test.describe('Production PWA update activation', () => {
         .poll(() =>
           page.evaluate(() => navigator.serviceWorker.controller?.scriptURL ?? null),
         )
-        .toMatch(/\/ngsw-worker\.js$/);
+        .toMatch(/\/sw\.js$/);
       await expectNoGlobalError(page);
     } finally {
       await isolatedContext.setOffline(false);

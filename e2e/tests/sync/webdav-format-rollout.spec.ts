@@ -556,7 +556,7 @@ test.describe('@webdav automatic file format rollout', () => {
         { useProductFormatDefault: true },
       );
       await expect.poll(() => failedProbe).toBe(true);
-      await expect(sync.syncBtn.locator('mat-icon')).toHaveText('sync_problem');
+      await expect(sync.syncErrorIcon).toBeVisible();
       expect(writes).toEqual([]);
       await expect(a.page.locator('task').filter({ hasText: title })).toBeVisible();
       for (const file of ['sync-data.json', 'sync-ops.json', 'sync-state.json']) {

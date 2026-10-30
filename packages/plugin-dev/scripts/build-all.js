@@ -4,6 +4,7 @@ const { exec } = require('child_process');
 const { promisify } = require('util');
 const fs = require('fs');
 const path = require('path');
+const { ensurePluginDeps } = require('./install-deps');
 
 const execAsync = promisify(exec);
 
@@ -52,7 +53,6 @@ const plugins = [
   {
     name: 'procrastination-buster',
     path: 'procrastination-buster',
-    needsInstall: true,
     copyToAssets: true,
     buildCommand: async (pluginPath) => {
       await execAsync(`cd ${pluginPath} && npm run build`);
@@ -90,7 +90,6 @@ const plugins = [
   {
     name: 'api-test-plugin',
     path: 'api-test-plugin',
-    needsInstall: true,
     copyToAssets: true,
     buildCommand: async (pluginPath) => {
       // Copy to assets directory
@@ -121,7 +120,6 @@ const plugins = [
   {
     name: 'sync-md',
     path: 'sync-md',
-    needsInstall: true,
     copyToAssets: true,
     buildCommand: async (pluginPath) => {
       try {
@@ -156,7 +154,6 @@ const plugins = [
   {
     name: 'yesterday-tasks-plugin',
     path: 'yesterday-tasks-plugin',
-    needsInstall: true,
     copyToAssets: true,
     buildCommand: async (pluginPath) => {
       // Copy to assets directory
@@ -185,7 +182,6 @@ const plugins = [
   {
     name: 'ai-productivity-prompts',
     path: 'ai-productivity-prompts',
-    needsInstall: true,
     copyToAssets: true,
     buildCommand: async (pluginPath) => {
       await execAsync(`cd ${pluginPath} && npm run build`);
@@ -212,7 +208,6 @@ const plugins = [
   {
     name: 'automations',
     path: 'automations',
-    needsInstall: true,
     copyToAssets: true,
     buildCommand: async (pluginPath) => {
       await execAsync(`cd ${pluginPath} && npm run build`);
@@ -239,7 +234,6 @@ const plugins = [
   {
     name: 'github-issue-provider',
     path: 'github-issue-provider',
-    needsInstall: true,
     copyToAssets: true,
     buildCommand: async (pluginPath) => {
       await execAsync(`cd ${pluginPath} && npm run build`);
@@ -265,7 +259,6 @@ const plugins = [
   {
     name: 'voice-reminder',
     path: 'voice-reminder',
-    needsInstall: false,
     copyToAssets: true,
     buildCommand: async (pluginPath) => {
       const targetDir = path.join(
@@ -294,7 +287,6 @@ const plugins = [
   {
     name: 'parallel-code',
     path: 'parallel-code',
-    needsInstall: false,
     copyToAssets: true,
     buildCommand: async (pluginPath) => {
       const targetDir = path.join(
@@ -315,7 +307,6 @@ const plugins = [
   {
     name: 'clickup-issue-provider',
     path: 'clickup-issue-provider',
-    needsInstall: true,
     copyToAssets: true,
     buildCommand: async (pluginPath) => {
       await execAsync(`cd ${pluginPath} && npm run build`);
@@ -341,7 +332,6 @@ const plugins = [
   {
     name: 'google-calendar-provider',
     path: 'google-calendar-provider',
-    needsInstall: true,
     copyToAssets: true,
     buildCommand: async (pluginPath) => {
       await execAsync(`cd ${pluginPath} && npm run build`);
@@ -367,7 +357,6 @@ const plugins = [
   {
     name: 'caldav-calendar-provider',
     path: 'caldav-calendar-provider',
-    needsInstall: true,
     copyToAssets: true,
     buildCommand: async (pluginPath) => {
       await execAsync(`cd ${pluginPath} && npm run build`);
@@ -393,7 +382,6 @@ const plugins = [
   {
     name: 'doc-mode',
     path: 'doc-mode',
-    needsInstall: true,
     copyToAssets: true,
     buildCommand: async (pluginPath) => {
       await execAsync(`cd ${pluginPath} && npm run build`);
@@ -415,9 +403,36 @@ const plugins = [
     },
   },
   {
+    name: 'app-auto-track',
+    path: 'app-auto-track',
+    copyToAssets: true,
+    buildCommand: async (pluginPath) => {
+      await execAsync(`cd ${pluginPath} && npm run build`);
+      const targetDir = path.join(
+        __dirname,
+        '../../../src/assets/bundled-plugins/app-auto-track',
+      );
+      if (!fs.existsSync(targetDir)) {
+        fs.mkdirSync(targetDir, { recursive: true });
+      }
+      const distFiles = [
+        'manifest.json',
+        'plugin.js',
+        'config-schema.json',
+        'icon.svg',
+        'i18n',
+      ];
+      for (const file of distFiles) {
+        const src = path.join(pluginPath, 'dist', file);
+        const dest = path.join(targetDir, file);
+        if (fs.existsSync(src)) copyRecursive(src, dest);
+      }
+      return 'Built and copied to assets';
+    },
+  },
+  {
     name: 'todoist-import',
     path: 'todoist-import',
-    needsInstall: true,
     copyToAssets: true,
     buildCommand: async (pluginPath) => {
       await execAsync(`cd ${pluginPath} && npm run build`);
@@ -443,6 +458,34 @@ const plugins = [
       return 'Built and copied to assets';
     },
   },
+  {
+    name: 'ticktick-import',
+    path: 'ticktick-import',
+    copyToAssets: true,
+    buildCommand: async (pluginPath) => {
+      await execAsync(`cd ${pluginPath} && npm run build`);
+      const targetDir = path.join(
+        __dirname,
+        '../../../src/assets/bundled-plugins/ticktick-import',
+      );
+      if (!fs.existsSync(targetDir)) {
+        fs.mkdirSync(targetDir, { recursive: true });
+      }
+      const distPath = path.join(pluginPath, 'dist');
+      if (fs.existsSync(distPath)) {
+        const files = fs.readdirSync(distPath);
+        for (const file of files) {
+          copyRecursive(path.join(distPath, file), path.join(targetDir, file));
+        }
+      }
+      assertFilesExist(
+        targetDir,
+        ['manifest.json', 'plugin.js', 'index.html', 'icon.svg', 'i18n/en.json'],
+        'ticktick-import',
+      );
+      return 'Built and copied to assets';
+    },
+  },
 ];
 
 async function buildPlugin(plugin) {
@@ -453,30 +496,6 @@ async function buildPlugin(plugin) {
     // Check if plugin directory exists
     if (!fs.existsSync(plugin.path)) {
       throw new Error(`Plugin directory not found: ${plugin.path}`);
-    }
-
-    // Install dependencies if needed
-    if (plugin.needsInstall) {
-      const packageJsonPath = path.join(plugin.path, 'package.json');
-      const nodeModulesPath = path.join(plugin.path, 'node_modules');
-
-      if (fs.existsSync(packageJsonPath)) {
-        log(`  Installing dependencies...`, colors.yellow);
-        try {
-          // Try to install dependencies
-          await execAsync(`cd ${plugin.path} && npm install --include=dev`);
-        } catch (installError) {
-          // If install fails, check if node_modules exists and continue
-          if (fs.existsSync(nodeModulesPath)) {
-            log(
-              `  Using existing dependencies (install failed but node_modules exists)`,
-              colors.yellow,
-            );
-          } else {
-            throw installError;
-          }
-        }
-      }
     }
 
     // Run build command
@@ -505,6 +524,9 @@ async function buildAll() {
   log('\n🚀 Building all plugins...', colors.bright);
   const startTime = Date.now();
 
+  // One install for the whole plugin-dev workspace; plugins build in parallel.
+  ensurePluginDeps({ log, silent: process.argv.includes('--silent') });
+
   // Build plugins in parallel
   const results = await Promise.all(plugins.map(buildPlugin));
 
@@ -524,13 +546,8 @@ async function buildAll() {
   // List outputs
   log('\n📁 Build outputs:', colors.bright);
 
-  // Check for minimal plugin zip
-  if (fs.existsSync('minimal-plugin.zip')) {
-    log(`  • minimal-plugin.zip`);
-  }
-
   // Check for other plugin outputs
-  for (const plugin of plugins.slice(1)) {
+  for (const plugin of plugins) {
     const distPath = path.join(plugin.path, 'dist');
     if (fs.existsSync(distPath)) {
       const pluginZip = path.join(distPath, 'plugin.zip');
@@ -552,7 +569,8 @@ async function buildAll() {
 // Run if called directly
 if (require.main === module) {
   buildAll().catch((error) => {
-    log(`\n❌ Build failed: ${error.message}`, colors.red);
+    // console.error, not log(): a failure must show even with --silent
+    console.error(`${colors.red}\n❌ Build failed: ${error.message}${colors.reset}`);
     process.exit(1);
   });
 }

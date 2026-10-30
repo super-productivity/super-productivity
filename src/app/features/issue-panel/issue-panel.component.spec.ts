@@ -35,7 +35,11 @@ describe('IssuePanelComponent', () => {
         { provide: WorkContextService, useValue: { activeWorkContextId: 'ctx1' } },
         {
           provide: PluginIssueProviderRegistryService,
-          useValue: { hasProvider: () => false, getAvailableProviders: () => [] },
+          useValue: {
+            hasProvider: () => false,
+            getAvailableProviders: () => [],
+            registrationVersion: () => 0,
+          },
         },
         {
           provide: PluginService,

@@ -28,7 +28,7 @@ test.describe('Production PWA offline reload', () => {
           }),
         { timeout: 30000 },
       )
-      .toMatch(/\/ngsw-worker\.js$/);
+      .toMatch(/\/sw\.js$/);
 
     // The first document can install the worker without being controlled by it.
     await page.reload({ waitUntil: 'domcontentloaded' });
@@ -37,7 +37,7 @@ test.describe('Production PWA offline reload', () => {
       .poll(() =>
         page.evaluate(() => navigator.serviceWorker.controller?.scriptURL ?? null),
       )
-      .toMatch(/\/ngsw-worker\.js$/);
+      .toMatch(/\/sw\.js$/);
 
     await workViewPage.waitForTaskList();
     const taskTitle = `${testPrefix}-PWA offline reload`;
@@ -54,7 +54,7 @@ test.describe('Production PWA offline reload', () => {
         .poll(() =>
           page.evaluate(() => navigator.serviceWorker.controller?.scriptURL ?? null),
         )
-        .toMatch(/\/ngsw-worker\.js$/);
+        .toMatch(/\/sw\.js$/);
       await expectTaskVisible(taskPage, taskTitle);
       await expect(
         page.getByRole('menuitem').filter({ hasText: 'Today' }).first(),

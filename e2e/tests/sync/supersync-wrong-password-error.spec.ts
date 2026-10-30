@@ -1,4 +1,6 @@
+import type { Dialog } from '@playwright/test';
 import { test, expect } from '../../fixtures/supersync.fixture';
+import { normalizeDialogMessage, translationRegex } from '../../utils/i18n-strings';
 import {
   createTestUser,
   getSuperSyncConfig,
@@ -290,8 +292,32 @@ test.describe('@supersync @encryption Wrong Password Error Handling', () => {
 
       // The deliberate path: a new password re-encrypts this device's data and
       // replaces the server copy (clean slate).
+      // #9256: B failed to decrypt the server's ops, and the clean slate deletes
+      // them for good, so the change asks for a second, explicit confirmation.
+      // Accept it like a user who has lost the old password and starts over.
+      const undecryptableConfirm = translationRegex(
+        'F.SYNC.D_UNDECRYPTABLE_REMOTE.TITLE',
+        'F.SYNC.D_UNDECRYPTABLE_REMOTE.MESSAGE',
+      );
+      const seenConfirms: string[] = [];
+      const acceptUndecryptableConfirm = async (dialog: Dialog): Promise<void> => {
+        if (dialog.type() !== 'confirm') return;
+        const message = normalizeDialogMessage(dialog.message());
+        seenConfirms.push(message);
+        if (undecryptableConfirm.test(message)) {
+          await dialog.accept().catch(() => {});
+        } else {
+          await dialog.dismiss().catch(() => {});
+        }
+      };
+      clientB.page.on('dialog', acceptUndecryptableConfirm);
       const newPassword = `overwrite-pass-${uniqueId}`;
-      await clientB.sync.changeEncryptionPassword(newPassword);
+      try {
+        await clientB.sync.changeEncryptionPassword(newPassword);
+      } finally {
+        clientB.page.off('dialog', acceptUndecryptableConfirm);
+      }
+      expect(seenConfirms).toEqual([expect.stringMatching(undecryptableConfirm)]);
       await waitForTask(clientB.page, taskB);
 
       // A fresh client is the remote oracle: it must hydrate B's replacement

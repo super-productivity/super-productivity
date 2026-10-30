@@ -17,6 +17,9 @@ Update these alongside the behavior or workflow they describe:
 - [Plugin development](plugin-development.md)
 - [Adding an issue integration](add-new-integration.md)
 - [Feature and PR review guide](feature-review-guide.md)
+- [Market position](market/README.md) — where SP must be best, the competitor set
+  and the monthly refresh; its [scorecard](market/scorecard.md) is a dated
+  snapshot that the refresh updates
 - [Styling guide](styling-guide.md) and [theming contract](theming-contract.md)
 - [Android edge-to-edge and keyboard behavior](android-edge-to-edge-keyboard.md)
 - [Android home-screen widget](android-home-screen-widget.md)
@@ -53,6 +56,9 @@ not current behavior. Every active plan should start with:
 - owner and tracking issue or pull request;
 - date last verified against the code;
 - completion or removal condition.
+
+A plan for a user-facing interaction also includes a **Prior art** section →
+[feature review guide § Prior art](feature-review-guide.md#prior-art).
 
 When implementation lands, move enduring contracts or limitations into a
 maintained guide, package README, code comment, or decision record, then delete

@@ -59,30 +59,52 @@
   :host-context(.first-line:hover) & {
     display: flex;
 
-    background: var(--task-c-bg);
+    // The row token stays the top layer (it may be transparent). The underlay
+    // underneath is what actually covers the title.
+    background:
+      linear-gradient(var(--task-c-bg), var(--task-c-bg)),
+      var(--task-hover-underlay, var(--bg));
+
+    :host-context(.isMultiSelected) & {
+      background:
+        linear-gradient(var(--task-c-multi-selected-bg), var(--task-c-multi-selected-bg)),
+        var(--task-hover-underlay, var(--bg));
+    }
 
     :host-context(.isLightTheme .isSelected) & {
-      background: var(--task-c-selected-bg);
+      background:
+        linear-gradient(var(--task-c-selected-bg), var(--task-c-selected-bg)),
+        var(--task-hover-underlay, var(--bg));
     }
 
     :host-context(.isDarkTheme .isSelected) & {
-      background: var(--task-c-selected-bg);
+      background:
+        linear-gradient(var(--task-c-selected-bg), var(--task-c-selected-bg)),
+        var(--task-hover-underlay, var(--bg));
     }
 
     :host-context(.isCurrent) & {
-      background: var(--task-c-current-bg);
+      background:
+        linear-gradient(var(--task-c-current-bg), var(--task-c-current-bg)),
+        var(--task-hover-underlay, var(--bg));
     }
 
     :host-context(.isDarkTheme .sub-tasks.sub-tasks) ::ng-deep & {
-      background: var(--sub-task-c-bg);
+      background:
+        linear-gradient(var(--sub-task-c-bg), var(--sub-task-c-bg)),
+        var(--task-hover-underlay, var(--bg));
     }
 
     :host-context(.isDarkTheme .sub-tasks.sub-tasks .isSelected) ::ng-deep & {
-      background: var(--task-c-selected-bg);
+      background:
+        linear-gradient(var(--task-c-selected-bg), var(--task-c-selected-bg)),
+        var(--task-hover-underlay, var(--bg));
     }
 
     :host-context(.sub-tasks.sub-tasks .isCurrent) ::ng-deep & {
-      background: var(--task-c-current-bg);
+      background:
+        linear-gradient(var(--task-c-current-bg), var(--task-c-current-bg)),
+        var(--task-hover-underlay, var(--bg));
     }
   }
 

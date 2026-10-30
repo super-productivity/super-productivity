@@ -119,4 +119,33 @@ describe('DialogTrackTimeComponent', () => {
       JiraWorklogExportDefaultTime.TimeYesterday,
     );
   });
+
+  describe('saving the default time', () => {
+    const checkDefaultTime = (): void => {
+      component.defaultTimeCheckboxContent = {
+        label: 'label',
+        value: JiraWorklogExportDefaultTime.TimeToday,
+        isChecked: true,
+      };
+    };
+
+    it('should write the config key on the provider when no callback is given', async () => {
+      checkDefaultTime();
+      await component.submit();
+
+      expect(TestBed.inject(Store).dispatch).toHaveBeenCalledTimes(1);
+    });
+
+    it('should use saveDefaultTime instead of the store when given', async () => {
+      const saveDefaultTime = jasmine.createSpy('saveDefaultTime');
+      component.data.saveDefaultTime = saveDefaultTime;
+      checkDefaultTime();
+      await component.submit();
+
+      expect(saveDefaultTime).toHaveBeenCalledWith(
+        JiraWorklogExportDefaultTime.TimeToday,
+      );
+      expect(TestBed.inject(Store).dispatch).not.toHaveBeenCalled();
+    });
+  });
 });

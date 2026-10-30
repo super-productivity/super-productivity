@@ -66,7 +66,9 @@
 .title-and-tags-wrapper {
   flex-grow: 1;
   flex-shrink: 1;
-  min-width: 180px;
+  // Let this flex item shrink below the old 180px floor so long titles and tags
+  // can wrap within narrow task cards (#9829).
+  min-width: 0;
   // we cannot do this since this cuts of the box shadow of the task edit
   //overflow: hidden;
 
@@ -87,6 +89,17 @@
     // to match task title padding
     margin-left: var(--s);
     margin-bottom: var(--s-half);
+  }
+
+  // A single long tag is a flex item, so cap it at the title area and allow its
+  // text to break instead of painting beyond the task card (#9829).
+  ::ng-deep tag {
+    max-width: 100%;
+
+    .tag-title {
+      min-width: 0;
+      overflow-wrap: anywhere;
+    }
   }
 }
 
@@ -139,8 +152,7 @@ task-priority-indicator {
   &.isEditable {
     cursor: pointer;
 
-    &:hover,
-    &:focus-visible {
+    @include hoverWithPointer {
       .time {
         color: var(--text-color);
       }
@@ -150,6 +162,10 @@ task-priority-indicator {
       outline: var(--focus-ring-width) solid var(--focus-ring-color);
       outline-offset: var(--focus-ring-offset);
       border-radius: var(--radius-xs);
+
+      .time {
+        color: var(--text-color);
+      }
     }
   }
 
@@ -367,8 +383,10 @@ done-toggle {
   box-shadow: none;
   background: var(--bg-lighter) !important;
 
-  :host:hover & {
-    opacity: 1;
+  @media (hover: hover) {
+    :host:hover & {
+      opacity: 1;
+    }
   }
 
   mat-icon {
@@ -414,34 +432,15 @@ done-toggle {
   position: relative;
 }
 
-// One semantic color drives the scheduled-date icon and its text badge.
+// Only overdue schedules are colored; all other dates keep the default color.
 .schedule-btn[data-scheduled-date-color='overdue'] {
-  --scheduled-date-color: var(--c-warn);
-}
-
-.schedule-btn[data-scheduled-date-color='today'] {
-  --scheduled-date-color: var(--scheduled-date-today);
-}
-
-.schedule-btn[data-scheduled-date-color='tomorrow'] {
-  --scheduled-date-color: var(--scheduled-date-tomorrow);
-}
-
-.schedule-btn[data-scheduled-date-color='upcoming'] {
-  --scheduled-date-color: var(--scheduled-date-upcoming);
-}
-
-.schedule-btn[data-scheduled-date-color='overdue'],
-.schedule-btn[data-scheduled-date-color='today'],
-.schedule-btn[data-scheduled-date-color='tomorrow'],
-.schedule-btn[data-scheduled-date-color='upcoming'] {
   mat-icon {
-    // The schedule state takes precedence over Material's icon-color token.
-    color: var(--scheduled-date-color) !important;
+    // The overdue state takes precedence over Material's icon-color token.
+    color: var(--c-warn) !important;
   }
 
   .time-badge {
-    color: var(--scheduled-date-color);
+    color: var(--c-warn);
   }
 }
 
@@ -505,7 +504,8 @@ done-toggle {
   }
 }
 
-.checklist-progress-badge {
+// done/total count overlaid on an icon button (checklist + collapsed sub tasks)
+.progress-badge {
   @include center;
   margin-top: 10px;
   font-size: 10px;

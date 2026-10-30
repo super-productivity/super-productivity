@@ -1,0 +1,33 @@
+{
+  "CFG": {
+    "HOST": "主机（例如：https://redmine.org）",
+    "API_KEY": "API 访问密钥",
+    "PROJECT_ID": "项目标识符",
+    "PROJECT_ID_DESC": "在浏览器中查看项目时，可以找到作为 URL 的一部分。",
+    "SCOPE": "范围",
+    "SCOPE_ALL": "全部",
+    "SCOPE_CREATED": "由我创建",
+    "SCOPE_ASSIGNED": "分配给我",
+    "IS_SHOW_TIME_TRACKING_DIALOG": "显示时间跟踪对话框以报告给 Redmine",
+    "IS_SHOW_TIME_TRACKING_DIALOG_DESC": "需在 Redmine 项目中启用时间跟踪模块",
+    "IS_SHOW_TIME_TRACKING_DIALOG_FOR_EACH_SUB_TASK": "子任务完成时显示时间跟踪对话框",
+    "DEFAULT_TIME": "对话框的默认值",
+    "DEFAULT_TIME_ALL_TIME": "填写在任务上花费的所有时间",
+    "DEFAULT_TIME_ALL_TIME_MINUS_LOGGED": "填写花费的时间减去记录的时间",
+    "DEFAULT_TIME_TODAY": "仅填写今天花费的时间",
+    "DEFAULT_TIME_YESTERDAY": "仅填写昨天花费的时间"
+  },
+  "DISPLAY": {
+    "SUMMARY": "摘要",
+    "STATUS": "状态",
+    "PRIORITY": "优先级",
+    "AUTHOR": "作者",
+    "ASSIGNEE": "负责人",
+    "CATEGORY": "类别",
+    "VERSION": "版本",
+    "DUE_DATE": "到期日期",
+    "TIME_SPENT": "花费时间",
+    "DESCRIPTION": "描述"
+  },
+  "FORM_HELP": "<p>在这里，您可以将 SuperProductivity 配置为在每日规划视图的任务创建看板中列出特定项目的未结 Redmine（无论是在线版本还是自托管实例）问题。它们将列为建议，并提供指向问题的链接以及有关它的更多信息。</p><p>此外，您还可以自动导入所有未结问题。</p>"
+}

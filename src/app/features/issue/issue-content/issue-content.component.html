@@ -127,7 +127,11 @@
               </div>
             }
           } @else {
-            @for (comment of comments() | sort: cfg.comments?.sortField; track $index) {
+            @for (
+              comment of comments()
+                | sort: $safeNavigationMigration(cfg.comments?.sortField);
+              track $index
+            ) {
               <div class="comment">
                 @if (getCommentAvatar(comment, cfg); as avatar) {
                   <img

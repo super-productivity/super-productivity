@@ -38,13 +38,19 @@ describe('OperationLogDownloadService', () => {
   let mockEncryptionService: jasmine.SpyObj<OperationEncryptionService>;
   let mockSuperSyncStatusService: jasmine.SpyObj<SuperSyncStatusService>;
   let mockClientIdProvider: { loadClientId: jasmine.Spy };
-  let mockProviderManager: { configEpoch: number };
+  let mockProviderManager: {
+    configEpoch: number;
+    syncEpoch?: number;
+    getActiveProvider: () => { id: string } | null;
+  };
+  let activeProvider: { id: string } | null;
 
   beforeEach(() => {
     mockOpLogStore = jasmine.createSpyObj('OperationLogStoreService', [
       'getAppliedOpIds',
       'hasSyncedOps',
       'getVectorClock',
+      'loadStateCache',
     ]);
     mockLockService = jasmine.createSpyObj('LockService', ['request']);
     mockSnackService = jasmine.createSpyObj('SnackService', ['open']);
@@ -60,7 +66,8 @@ describe('OperationLogDownloadService', () => {
         .and.returnValue(Promise.resolve('test-client-id')),
     };
 
-    mockProviderManager = { configEpoch: 0 };
+    activeProvider = { id: 'SuperSync' };
+    mockProviderManager = { configEpoch: 0, getActiveProvider: () => activeProvider };
 
     // Mock OpLog
     spyOn(OpLog, 'warn');
@@ -74,6 +81,8 @@ describe('OperationLogDownloadService', () => {
     mockOpLogStore.getAppliedOpIds.and.returnValue(Promise.resolve(new Set<string>()));
     mockOpLogStore.hasSyncedOps.and.returnValue(Promise.resolve(false));
     mockOpLogStore.getVectorClock.and.returnValue(Promise.resolve(null));
+    // A synced baseline by default, so the stored cursor is trusted (#11099).
+    mockOpLogStore.loadStateCache.and.resolveTo({} as never);
 
     TestBed.configureTestingModule({
       providers: [
@@ -130,6 +139,38 @@ describe('OperationLogDownloadService', () => {
         await service.downloadRemoteOps(mockApiProvider);
 
         expect(mockApiProvider.downloadOps).toHaveBeenCalled();
+      });
+
+      describe('cursor that outlived the op log (#11099)', () => {
+        beforeEach(() => {
+          mockApiProvider.getLastServerSeq.and.resolveTo(7);
+        });
+
+        it('downloads from seq 0 when the op log has never synced', async () => {
+          mockOpLogStore.hasSyncedOps.and.resolveTo(false);
+          mockOpLogStore.loadStateCache.and.resolveTo(null);
+
+          await service.downloadRemoteOps(mockApiProvider);
+
+          expect(mockApiProvider.downloadOps.calls.first().args[0]).toBe(0);
+        });
+
+        it('keeps the cursor when the op log holds synced ops', async () => {
+          mockOpLogStore.hasSyncedOps.and.resolveTo(true);
+          mockOpLogStore.loadStateCache.and.resolveTo(null);
+
+          await service.downloadRemoteOps(mockApiProvider);
+
+          expect(mockApiProvider.downloadOps.calls.first().args[0]).toBe(7);
+        });
+
+        it('keeps the cursor when compaction or a snapshot left a state cache', async () => {
+          mockOpLogStore.hasSyncedOps.and.resolveTo(false);
+
+          await service.downloadRemoteOps(mockApiProvider);
+
+          expect(mockApiProvider.downloadOps.calls.first().args[0]).toBe(7);
+        });
       });
 
       it('should hand an op with an unknown opType to the receiver instead of failing the page (#8764)', async () => {
@@ -471,18 +512,131 @@ describe('OperationLogDownloadService', () => {
             decryptedOpsInEarlierBatches: 0,
             passwordEvidence: 'confirmed-for-some-operations',
             failureCount: 1,
+            // The fixture payloads are not base64, so no salt is readable.
+            decryptedSaltCount: 0,
           },
           {
             opId: 'op-corrupt',
             encryptedBatchIndex: 1,
             stage: 'decrypt',
             serverSeq: 42,
+            clientId: 'c1',
+            payloadLength: 'private-encrypted-payload'.length,
           },
         );
         const serializedLogCalls = JSON.stringify(errorSpy.calls.allArgs());
         expect(serializedLogCalls).not.toContain('private-earlier-encrypted-payload');
         expect(serializedLogCalls).not.toContain('private-encrypted-payload');
         expect(serializedLogCalls).not.toContain('private-encryption-key');
+      });
+
+      // #9256: destructive overwrites must be able to name the remote ops this
+      // device could not decrypt, which the clean slate would delete.
+      describe('undecryptable remote ops marker', () => {
+        const encryptedOp = (
+          serverSeq: number,
+          id: string,
+        ): { serverSeq: number; receivedAt: number; op: SyncOperation } => ({
+          serverSeq,
+          receivedAt: Date.now(),
+          op: {
+            id,
+            clientId: 'c1',
+            actionType: '[Task] Add' as ActionType,
+            opType: OpType.Create,
+            entityType: 'TASK',
+            payload: `ciphertext-${id}`,
+            isPayloadEncrypted: true,
+            vectorClock: {},
+            timestamp: Date.now(),
+            schemaVersion: 1,
+          },
+        });
+        const failingPage = {
+          ops: [encryptedOp(5, 'op-x'), encryptedOp(6, 'op-y')],
+          hasMore: false,
+          latestSeq: 6,
+        };
+        const decryptFailure = new OperationDecryptionError({
+          encryptedOperationCount: 2,
+          decryptedCount: 0,
+          parsedCount: 0,
+          passwordEvidence: 'no-operation-decrypted',
+          failures: [{ operationId: 'op-x', encryptedBatchIndex: 0, stage: 'decrypt' }],
+        });
+
+        beforeEach(() => {
+          spyOn(OpLog, 'error');
+          mockApiProvider.getEncryptKey = jasmine
+            .createSpy('getEncryptKey')
+            .and.resolveTo('key');
+          mockApiProvider.getLastServerSeq.and.resolveTo(4);
+        });
+
+        it('is set by a failed decrypt with the failing page op count', async () => {
+          expect(service.getUndecryptableRemoteOps()).toBeNull();
+          mockApiProvider.downloadOps.and.resolveTo(failingPage);
+          mockEncryptionService.decryptOperations.and.rejectWith(decryptFailure);
+
+          await expectAsync(service.downloadRemoteOps(mockApiProvider)).toBeRejected();
+
+          expect(service.getUndecryptableRemoteOps()).toEqual({ opCount: 2 });
+        });
+
+        it('is retired by a later download that reaches the server head', async () => {
+          mockApiProvider.downloadOps.and.resolveTo(failingPage);
+          mockEncryptionService.decryptOperations.and.rejectWith(decryptFailure);
+          await expectAsync(service.downloadRemoteOps(mockApiProvider)).toBeRejected();
+
+          mockEncryptionService.decryptOperations.and.callFake(async (ops) =>
+            ops.map((op) => ({ ...op, payload: {}, isPayloadEncrypted: false })),
+          );
+          await service.downloadRemoteOps(mockApiProvider);
+
+          expect(service.getUndecryptableRemoteOps()).toBeNull();
+        });
+
+        it('survives a sync-epoch bump that left the server untouched (#10864)', async () => {
+          // "Sign out all other devices" and an overwrite that failed after its
+          // bump both move the epoch; the undecryptable ops are still there.
+          mockApiProvider.downloadOps.and.resolveTo(failingPage);
+          mockEncryptionService.decryptOperations.and.rejectWith(decryptFailure);
+          await expectAsync(service.downloadRemoteOps(mockApiProvider)).toBeRejected();
+
+          mockProviderManager.syncEpoch = 4;
+
+          expect(service.getUndecryptableRemoteOps()).toEqual({ opCount: 2 });
+        });
+
+        it('is retired when the active provider changes', async () => {
+          mockApiProvider.downloadOps.and.resolveTo(failingPage);
+          mockEncryptionService.decryptOperations.and.rejectWith(decryptFailure);
+          await expectAsync(service.downloadRemoteOps(mockApiProvider)).toBeRejected();
+
+          activeProvider = { id: 'WebDAV' };
+
+          expect(service.getUndecryptableRemoteOps()).toBeNull();
+        });
+
+        it('is retired once a clean slate replaced the server', async () => {
+          mockApiProvider.downloadOps.and.resolveTo(failingPage);
+          mockEncryptionService.decryptOperations.and.rejectWith(decryptFailure);
+          await expectAsync(service.downloadRemoteOps(mockApiProvider)).toBeRejected();
+
+          service.clearUndecryptableRemoteOps();
+
+          expect(service.getUndecryptableRemoteOps()).toBeNull();
+        });
+
+        it('is not set for file-based providers', async () => {
+          mockApiProvider.providerMode = 'fileSnapshotOps';
+          mockApiProvider.downloadOps.and.resolveTo(failingPage);
+          mockEncryptionService.decryptOperations.and.rejectWith(decryptFailure);
+
+          await expectAsync(service.downloadRemoteOps(mockApiProvider)).toBeRejected();
+
+          expect(service.getUndecryptableRemoteOps()).toBeNull();
+        });
       });
 
       it('carries decrypted ops from earlier pages as run-level password evidence', async () => {
@@ -563,6 +717,8 @@ describe('OperationLogDownloadService', () => {
             encryptedBatchIndex: 0,
             stage: 'decrypt',
             serverSeq: 3,
+            clientId: 'c1',
+            payloadLength: 'ciphertext-op-final'.length,
           },
         );
       });
@@ -731,6 +887,19 @@ describe('OperationLogDownloadService', () => {
             jasmine.objectContaining({ decryptedOpsInEarlierBatches: 2 }),
             jasmine.objectContaining({ opId: 'op-bad' }),
           );
+        });
+
+        it('arms the undecryptable remote ops marker for a kept prefix', async () => {
+          spyOn(OpLog, 'error');
+          serveGoodPageThenBadPage();
+
+          const result = await service.downloadRemoteOps(mockApiProvider, {
+            keepDecryptedPrefix: true,
+          });
+
+          expect(result.success && result.decryptErrorAfterKeptPrefix).toBeTruthy();
+          // The prefix stopped short of the head, so it must not retire the marker.
+          expect(service.getUndecryptableRemoteOps()).toEqual({ opCount: 1 });
         });
 
         it('still throws when the failing page is the first page of the run', async () => {

@@ -7,6 +7,7 @@ import {
 } from '@playwright/test';
 import { BasePage } from './base.page';
 import { WEBDAV_SYNC_FORMAT } from '../utils/sync-helpers';
+import { cssSelectors } from '../constants/selectors';
 
 type SyncCycleIntent = 'any' | 'read' | 'write';
 
@@ -38,11 +39,11 @@ export class SyncPage extends BasePage {
     this.syncFolderInput = page.locator('.e2e-syncFolderPath input');
     this.saveBtn = page.locator('mat-dialog-actions button[mat-flat-button]');
     this.syncSpinner = page.locator('.sync-btn mat-icon.spin');
-    this.syncCheckIcon = page.locator('.sync-btn mat-icon.sync-state-ico');
-    this.syncConfirmedIcon = this.syncCheckIcon.filter({ hasText: 'done_all' });
-    this.syncErrorIcon = page
-      .locator('.sync-btn mat-icon')
-      .filter({ hasText: 'sync_problem' });
+    // Every local change uploaded / the server checked too. Both selectors
+    // also match the badge that released clients render.
+    this.syncCheckIcon = page.locator(cssSelectors.SYNC_UPLOADED);
+    this.syncConfirmedIcon = page.locator(cssSelectors.SYNC_REMOTE_CONFIRMED);
+    this.syncErrorIcon = page.locator(cssSelectors.SYNC_ERROR);
     // Encryption-related locators
     // Note: encryptionPasswordInput is no longer used directly - password is entered in a dialog
     this.encryptionPasswordInput = page.locator(
@@ -435,12 +436,12 @@ export class SyncPage extends BasePage {
     await this.waitForTriggeredSyncResponse(20000);
 
     if (await this.syncErrorIcon.isVisible().catch(() => false)) {
-      throw new Error('Sync failed: sync_problem icon is visible');
+      throw new Error('Sync failed: sync error icon is visible');
     }
 
     // Wait for sync spinner to disappear
     await this.syncSpinner.waitFor({ state: 'hidden', timeout: 20000 });
-    // Require the remote-confirmed double check, not the local-only check icon.
+    // Require the remote-confirmed state, not the local-only one.
     await this.syncConfirmedIcon.waitFor({ state: 'visible' });
     this.completeTriggeredSyncCycle();
   }
@@ -648,8 +649,8 @@ export class SyncPage extends BasePage {
    * This ensures the provider config has been loaded from IndexedDB.
    */
   async waitForSyncReady(): Promise<void> {
-    // Wait for sync button to show the check icon (indicates provider is ready)
-    // The sync button shows a plain sync icon when not ready, and check/done_all when ready
+    // Wait for the sync button to report an upload state (provider is ready).
+    // It reports none while sync is not ready.
     await this.syncCheckIcon.waitFor({ state: 'visible', timeout: 10000 });
   }
 
