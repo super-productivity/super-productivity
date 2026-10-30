@@ -1,5 +1,13 @@
 [
   {
+    "name": "Recipe Book",
+    "shortDescription": "Family recipe library with recipe import, cook mode, meal planning, and shopping lists.",
+    "url": "https://codeberg.org/bradyinfinity/super-productivity-recipe-book",
+    "author": "bradyinfinity",
+    "authorUrl": "https://codeberg.org/bradyinfinity",
+    "id": "recipe-book"
+  },
+  {
     "name": "Date Range Reporter Plugin",
     "shortDescription": "Generates reports of completed tasks and tasks with work logs within a specified date range.",
     "url": "https://github.com/dougcooper/sp-reporter",
