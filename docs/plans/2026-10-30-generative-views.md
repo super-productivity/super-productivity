@@ -1,8 +1,8 @@
 # Generative views: say what you want, watch the view rearrange
 
-Oct 30, 2026 · rev. 2 (after independent review, § Review) · builds on the AI
-View Builder prototype (commit `8c1a83f`, branch
-`claude/generative-ui-todo-app-h4o6e8`).
+Oct 30, 2026 · rev. 2 (after independent review, § Review) · status: Phase 1
+implemented on branch `claude/generative-ui-todo-app-h4o6e8`; latency and
+step validity not yet measured (needs an API key, §8).
 
 People will increasingly shape their own to-do tools instead of adapting to one.
 The goal is that they do it inside Super Productivity (SP): say or type what

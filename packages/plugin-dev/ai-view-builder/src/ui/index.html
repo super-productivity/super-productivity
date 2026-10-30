@@ -1,0 +1,518 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>AI View Builder</title>
+    <style>
+      html,
+      body {
+        height: 100%;
+      }
+
+      body {
+        display: flex;
+        flex-direction: column;
+        background: var(--bg);
+        color: var(--text-color);
+        font-family: var(--font-primary-stack, inherit);
+      }
+
+      [hidden] {
+        display: none !important;
+      }
+
+      .top {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: var(--s);
+        padding: var(--s) var(--s2) 0;
+      }
+
+      .top select {
+        min-width: 0;
+        max-width: 260px;
+      }
+
+      .spacer {
+        flex: 1;
+      }
+
+      .panel {
+        margin: var(--s) var(--s2) 0;
+        padding: var(--s2);
+        border-radius: var(--card-border-radius);
+        background: var(--bg-darker);
+      }
+
+      .panel label {
+        display: block;
+        margin-bottom: var(--s-half);
+      }
+
+      .panel .field {
+        margin-bottom: var(--s2);
+      }
+
+      .panel input,
+      .panel select {
+        width: 100%;
+        max-width: 420px;
+      }
+
+      .row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: var(--s);
+        margin-top: var(--s);
+      }
+
+      .note {
+        font-size: 12px;
+        max-width: 640px;
+      }
+
+      .command {
+        display: flex;
+        align-items: center;
+        gap: var(--s);
+        margin: var(--s) var(--s2) 0;
+      }
+
+      .command input {
+        flex: 1;
+        min-width: 0;
+        font-size: 15px;
+        padding: var(--s) var(--s2);
+      }
+
+      .mic {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        padding: 0;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .mic.is-listening {
+        background: var(--c-warn);
+        border-color: var(--c-warn);
+        color: #fff;
+      }
+
+      .chip {
+        font-size: 12px;
+      }
+
+      .hint,
+      .status {
+        margin: var(--s-half) var(--s2) 0;
+        font-size: 12px;
+        min-height: 16px;
+      }
+
+      .status.is-error {
+        color: var(--color-danger, var(--c-warn));
+      }
+
+      .chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--s-half);
+        margin: var(--s) var(--s2) 0;
+      }
+
+      .view {
+        flex: 1;
+        min-height: 0;
+        overflow: auto;
+        padding: var(--s2);
+      }
+
+      .view[aria-busy='true'] .c {
+        transition: outline-color 0.2s;
+      }
+
+      /* parts of a view */
+      .c {
+        min-width: 0;
+        border-radius: var(--card-border-radius);
+        outline: 2px solid transparent;
+        outline-offset: 2px;
+      }
+
+      .c.is-selected {
+        outline-color: var(--c-primary);
+      }
+
+      .c-children {
+        display: flex;
+        flex-direction: column;
+        gap: var(--s2);
+      }
+
+      .layout-columns > .c-children {
+        flex-direction: row;
+        flex-wrap: wrap;
+        align-items: flex-start;
+      }
+
+      .layout-columns > .c-children > .c {
+        flex: 1 1 240px;
+      }
+
+      .c-head {
+        margin-bottom: var(--s);
+      }
+
+      .c-title {
+        background: none;
+        border: none;
+        padding: 0;
+        font-weight: 700;
+        font-size: 1.1em;
+        color: inherit;
+        text-align: left;
+        cursor: pointer;
+        min-height: 1em;
+      }
+
+      .c-title:hover {
+        color: var(--c-primary);
+        background: none;
+      }
+
+      .c-problems {
+        font-size: 12px;
+        margin-top: var(--s-quarter);
+      }
+
+      .group-label {
+        margin: var(--s) 0 var(--s-half);
+        font-size: 0.9em;
+        color: var(--text-color-muted);
+      }
+
+      .cards {
+        display: flex;
+        flex-direction: column;
+        gap: var(--s-half);
+        min-height: 24px;
+      }
+
+      .card.task {
+        display: flex;
+        align-items: center;
+        gap: var(--s);
+        padding: var(--s-half) var(--s);
+        background: var(--card-bg);
+        border: 1px solid var(--divider-color);
+        border-radius: var(--card-border-radius);
+      }
+
+      .card.task.is-tracking {
+        border-color: var(--c-primary);
+      }
+
+      .card.task.is-done .card-title {
+        text-decoration: line-through;
+        color: var(--text-color-muted);
+      }
+
+      .card-body {
+        flex: 1;
+        min-width: 0;
+      }
+
+      .card-title {
+        background: none;
+        border: none;
+        padding: 0;
+        color: inherit;
+        text-align: left;
+        cursor: pointer;
+        width: 100%;
+        overflow-wrap: anywhere;
+      }
+
+      .card-title:hover {
+        background: none;
+        color: var(--c-primary);
+      }
+
+      .card-meta {
+        font-size: 12px;
+      }
+
+      .icon-btn {
+        flex: none;
+        width: 24px;
+        height: 24px;
+        padding: 0;
+        border-radius: 50%;
+        font-size: 11px;
+        line-height: 1;
+      }
+
+      .done-btn {
+        border-radius: 50%;
+      }
+
+      [data-draggable='true'] {
+        cursor: grab;
+        user-select: none;
+      }
+
+      .is-drag-source {
+        opacity: 0.35;
+      }
+
+      .drag-ghost {
+        position: fixed;
+        top: 0;
+        left: 0;
+        z-index: 10;
+        pointer-events: none;
+        box-shadow: var(--whiteframe-shadow-8dp);
+      }
+
+      .board-cols {
+        display: flex;
+        gap: var(--s2);
+        align-items: flex-start;
+        overflow-x: auto;
+      }
+
+      .board-cols.is-grid {
+        display: grid;
+        overflow-x: visible;
+      }
+
+      .board-col {
+        flex: 1 0 220px;
+        min-width: 0;
+        padding: var(--s);
+        border-radius: var(--card-border-radius);
+        background: var(--bg-darker);
+        border: 2px dashed transparent;
+      }
+
+      .board-col.is-drop-target {
+        border-color: var(--c-primary);
+      }
+
+      .col-title {
+        margin: 0 0 var(--s);
+        font-size: 0.95em;
+      }
+
+      .c-metric {
+        padding: var(--s) var(--s2);
+        background: var(--card-bg);
+        border: 1px solid var(--divider-color);
+      }
+
+      .metric-value {
+        font-size: 1.8em;
+        font-weight: 700;
+      }
+
+      .c-metric .c-head {
+        margin: 0;
+      }
+
+      .c-metric .c-title {
+        font-weight: 400;
+        font-size: 0.9em;
+        color: var(--text-color-muted);
+      }
+
+      .text-block {
+        margin: 0;
+      }
+
+      .empty,
+      .placeholder {
+        margin: var(--s-half) 0;
+        font-size: 13px;
+      }
+
+      @media (max-width: 600px) {
+        .board-cols.is-grid {
+          grid-template-columns: 1fr !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="top">
+      <select
+        id="viewSelect"
+        aria-label="View"
+      ></select>
+      <button
+        id="newViewBtn"
+        type="button"
+      >
+        New view
+      </button>
+      <span class="spacer"></span>
+      <button
+        id="undoBtn"
+        type="button"
+        title="Undo (Ctrl+Z)"
+        aria-label="Undo"
+      >
+        ↶
+      </button>
+      <button
+        id="redoBtn"
+        type="button"
+        title="Redo (Ctrl+Shift+Z)"
+        aria-label="Redo"
+      >
+        ↷
+      </button>
+      <button
+        id="settingsBtn"
+        type="button"
+      >
+        Settings
+      </button>
+    </header>
+
+    <section
+      id="settingsPanel"
+      class="panel"
+      hidden
+    >
+      <div class="field">
+        <label for="apiKeyInput">Anthropic API key</label>
+        <input
+          id="apiKeyInput"
+          type="password"
+          autocomplete="off"
+          spellcheck="false"
+          placeholder="sk-ant-…"
+        />
+        <div class="row">
+          <button
+            id="saveKeyBtn"
+            type="button"
+            class="btn-primary"
+          >
+            Save key
+          </button>
+          <button
+            id="clearKeyBtn"
+            type="button"
+          >
+            Remove key
+          </button>
+          <span
+            id="keyStatus"
+            class="note text-muted"
+          ></span>
+        </div>
+      </div>
+      <div class="field">
+        <label for="modelSelect">Model</label>
+        <select id="modelSelect"></select>
+      </div>
+      <p class="note text-muted">
+        Your request and the layout of the view you are changing are sent to Anthropic's
+        API with your key; each request is billed to your Anthropic account. Your tasks,
+        projects, tags and notes are never sent: the view reads them on this device.
+        Claude only changes how the view looks, never your tasks. The key stays on this
+        device and is not synced.
+      </p>
+      <div class="row">
+        <button
+          id="deleteViewBtn"
+          type="button"
+        >
+          Delete this view
+        </button>
+      </div>
+    </section>
+
+    <form
+      id="commandForm"
+      class="command"
+      autocomplete="off"
+    >
+      <button
+        id="micBtn"
+        type="button"
+        class="mic"
+        aria-label="Speak"
+        aria-pressed="false"
+        hidden
+      >
+        <svg
+          width="18"
+          height="18"
+          viewBox="0 0 24 24"
+          fill="currentColor"
+          aria-hidden="true"
+        >
+          <path
+            d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2z"
+          />
+        </svg>
+      </button>
+      <input
+        id="commandInput"
+        type="text"
+        aria-label="What should the view show?"
+        placeholder="Describe the view you want…"
+      />
+      <button
+        id="selectionChip"
+        type="button"
+        class="chip"
+        title="Stop changing only this part"
+        hidden
+      ></button>
+      <button
+        id="sendBtn"
+        type="submit"
+        class="btn-primary"
+      >
+        Go
+      </button>
+      <button
+        id="stopBtn"
+        type="button"
+        hidden
+      >
+        Stop
+      </button>
+    </form>
+    <div
+      id="hint"
+      class="hint text-muted"
+    ></div>
+    <div
+      id="status"
+      class="status text-muted"
+      role="status"
+      aria-live="polite"
+    ></div>
+    <div
+      id="suggestions"
+      class="chips"
+      hidden
+    ></div>
+
+    <main
+      id="view"
+      class="view"
+    ></main>
+
+    <script src="app.js"></script>
+  </body>
+</html>

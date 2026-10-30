@@ -1,0 +1,164 @@
+{
+  "starts": {
+    "list": {
+      "specVersion": 1,
+      "title": "My tasks",
+      "root": "main",
+      "components": {
+        "main": { "type": "stack", "children": ["list"] },
+        "list": { "type": "taskList", "query": "q", "title": "Tasks" }
+      },
+      "queries": { "q": { "scope": "@current" } }
+    },
+    "kanban": {
+      "specVersion": 1,
+      "title": "Kanban",
+      "root": "board",
+      "components": {
+        "board": {
+          "type": "board",
+          "query": "open",
+          "columns": [
+            { "id": "todo", "title": "To do", "notTags": ["Doing"], "isDone": false },
+            { "id": "doing", "title": "Doing", "tags": ["Doing"], "isDone": false },
+            { "id": "done", "title": "Done", "isDone": true }
+          ]
+        }
+      },
+      "queries": { "open": { "scope": "@current" } }
+    }
+  },
+  "cases": [
+    {
+      "id": "new-kanban",
+      "start": "empty",
+      "request": "A kanban board for what I have open",
+      "expect": { "types": ["board"] }
+    },
+    {
+      "id": "new-eisenhower",
+      "start": "empty",
+      "request": "Eisenhower matrix",
+      "expect": { "types": ["board"], "columnsAtLeast": 4 }
+    },
+    {
+      "id": "new-today-by-project",
+      "start": "empty",
+      "request": "Today's tasks grouped by project",
+      "expect": {
+        "types": ["taskList"],
+        "groupBy": "project",
+        "queryHas": { "due": "today" }
+      }
+    },
+    {
+      "id": "new-weekly-review",
+      "start": "empty",
+      "request": "Weekly review: time spent this week, what I finished this week, and what's overdue",
+      "expect": {
+        "types": ["metric", "taskList"],
+        "queryHas": { "includeArchived": true }
+      }
+    },
+    {
+      "id": "new-focus",
+      "start": "empty",
+      "request": "Just the three most important things for today, nothing else",
+      "expect": { "types": ["taskList"], "queryHas": { "limit": 3 } }
+    },
+    {
+      "id": "new-german",
+      "start": "empty",
+      "request": "Zeig mir meine überfälligen Aufgaben, nach Priorität sortiert",
+      "expect": {
+        "types": ["taskList"],
+        "queryHas": { "due": "overdue", "sort": "priority" }
+      }
+    },
+    {
+      "id": "group-project",
+      "start": "list",
+      "request": "Group by project",
+      "expect": { "groupBy": "project" }
+    },
+    {
+      "id": "hide-done",
+      "start": "list",
+      "request": "Hide done tasks",
+      "expect": { "queryHas": { "isDone": false } }
+    },
+    {
+      "id": "show-estimates",
+      "start": "list",
+      "request": "Show estimates and tags on each task",
+      "expect": { "fieldsInclude": ["estimate", "tags"] }
+    },
+    {
+      "id": "sort-due",
+      "start": "list",
+      "request": "Sort by due date, latest first",
+      "expect": { "queryHas": { "sort": "due", "sortDir": "desc" } }
+    },
+    {
+      "id": "add-metric",
+      "start": "list",
+      "request": "Add how much time I tracked today at the top",
+      "expect": { "types": ["metric", "taskList"], "firstChildType": "metric" }
+    },
+    {
+      "id": "to-board",
+      "start": "list",
+      "request": "Turn this into a board with columns Waiting and Active by tag",
+      "expect": { "types": ["board"] }
+    },
+    {
+      "id": "rename",
+      "start": "list",
+      "request": "Call this view Morning",
+      "expect": { "title": "Morning" }
+    },
+    {
+      "id": "selected-only",
+      "start": "list",
+      "selected": "list",
+      "request": "Only high priority here",
+      "expect": { "queryHas": { "priority": ["high"] } }
+    },
+    {
+      "id": "kanban-add-column",
+      "start": "kanban",
+      "request": "Add a Blocked column between Doing and Done",
+      "expect": { "columnsAtLeast": 4 }
+    },
+    {
+      "id": "kanban-subtasks",
+      "start": "kanban",
+      "request": "Show subtasks as their own cards",
+      "expect": { "queryHas": { "parentsOnly": false } }
+    },
+    {
+      "id": "kanban-grid",
+      "start": "kanban",
+      "request": "Lay the columns out in a grid, two per row",
+      "expect": { "columnsPerRow": 2 }
+    },
+    {
+      "id": "kanban-project",
+      "start": "kanban",
+      "request": "Only my Work project",
+      "expect": { "queryHas": { "scope": "Work" } }
+    },
+    {
+      "id": "task-change",
+      "start": "list",
+      "request": "Mark all my tasks as done",
+      "expect": { "unchanged": true }
+    },
+    {
+      "id": "unsupported",
+      "start": "list",
+      "request": "Show my tasks on a map",
+      "expect": { "says": true }
+    }
+  ]
+}

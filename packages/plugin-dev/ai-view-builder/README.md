@@ -1,77 +1,78 @@
 # AI View Builder
 
-Bundled plugin, off by default. Users describe a view ("a kanban board by tag"),
-Claude writes it as a single HTML document, and the plugin runs it against the
-user's real data. User docs: [Build Views with AI](../../../docs/wiki/2.24-Build-Views-with-AI.md).
-
-No build step: `manifest.json`, `plugin.js`, `index.html` and `icon.svg` are copied
-as they are.
+Bundled plugin, off by default. The user says or types the view they want ("a
+kanban board", "group by project", "add today's tracked time on top") and the
+view rearranges while Claude answers. Design and rationale:
+[generative views plan](../../../docs/plans/2026-10-30-generative-views.md).
+User docs: [Build Views with AI](../../../docs/wiki/2.24-Build-Views-with-AI.md).
 
 ## How it fits together
 
 ```
-app (host)
-└─ plugin iframe: index.html          same-origin, filtered PluginAPI
-   ├─ calls api.anthropic.com         streaming fetch, user's own key
-   └─ view iframe (sandbox="allow-scripts", opaque origin, CSP: no network)
-      └─ generated view, talks only to `sp` → postMessage → plugin iframe → PluginAPI
-plugin.js                              holds the API key in secret storage
+plugin.js (src/background.ts)   API key in secret storage; work-context button
+index.html (src/ui/*)           command bar, voice, renderer, edit loop
+  └─ src/core/*                 pure: view spec, steps, queries, board rules, model loop
 ```
 
-- **Key:** iframes cannot use secret storage, so `plugin.js` keeps the key
-  (`setSecret`, local only) and hands it to the UI over the plugin message channel.
-- **Generation:** raw HTTP from the plugin iframe. `PluginAPI.request` cannot stream
-  and stops after 120 s, which a full view can exceed. The request carries only the
-  prompt, the current view source and the earlier prompts, never app data.
-- **Running a view:** the plugin builds the view document with a CSP meta tag and
-  the `sp` runtime ahead of the generated markup, and renders it in a nested
-  `sandbox="allow-scripts"` iframe. The plugin document's own `frame-src 'none'`
-  stops a view from navigating its frame to an outside URL; if a view tries, the
-  plugin puts it back once and shows an error.
+- **A view is data**: a versioned spec of components by id and named queries
+  (`src/core/spec.ts`). No generated code runs. The renderer draws it with
+  `textContent` and a fixed set of task actions.
+- **The model only edits the spec**: tools `put_component`, `remove_component`,
+  `put_query`, `remove_query`, `set_view`, `say`. Each call is applied when its
+  block finishes streaming and the view animates to the new state (FLIP).
+  Rejected calls go back to the model as tool errors for up to 4 rounds. The
+  result is saved once; Stop or an error restores the saved spec.
+- **Tasks change only through the user**: check, track, open, drag between
+  board columns (native board panel semantics: add the column's tags, remove
+  its excluded tags, set done).
+- **Sent to Anthropic**: system prompt, tools, the current spec, the selected
+  component id and the request. Never tasks, projects, tags or notes.
 
-## The `sp` contract
+## The spec contract
 
-`AVB.VIEW_API_METHODS` in `index.html` is the whole surface a view can call; each
-name maps to a handler in `viewApi`, and the system prompt documents each one
-(`test/core.test.cjs` checks all three stay in step). Generated views are user
-data that outlives plugin releases, so treat `sp` like a public API:
+Specs are synced user data that outlive plugin releases:
 
-- Add methods freely. Removing or changing one breaks saved views.
-- A breaking change needs a new `VIEW_API_VERSION`; views store the version they
-  were built against (`apiVersion`), so the runtime can keep serving the old shape.
-- Not exposed on purpose: project deletion, settings, secrets, network access,
-  `executeNodeScript`, raw `dispatchAction`.
+- The validator keeps unknown fields and component types; steps merge into
+  components, so an older device never strips a newer device's fields. Unknown
+  types render as a placeholder.
+- Additive changes (new component types, fields, query keys) need no version
+  bump. A breaking change bumps `SPEC_VERSION` with a migration; a spec from a
+  newer version opens read-only.
+- Concepts map onto SP's native building blocks (board panels, the work-view
+  customizer) so a host-native renderer can draw the same specs later.
 
 ## Stored data
 
-All under this plugin's id, synced like other plugin data:
+| Key         | Content                               | Bound                                           |
+| ----------- | ------------------------------------- | ----------------------------------------------- |
+| `view:<id>` | `{ id, spec, requests, updatedAt }`   | one per user-created view, ≤ 64 KB, 10 requests |
+| `settings`  | `{ model, voiceConsent? }`            | fixed                                           |
+| `embeds`    | context ids that show a view in place | one id per project or tag the user toggled      |
 
-| Key         | Content                                               | Bound                                                |
-| ----------- | ----------------------------------------------------- | ---------------------------------------------------- |
-| `view:<id>` | `{ id, title, html, prompts, apiVersion, updatedAt }` | one per user-created view, ≤ 200 KB, last 10 prompts |
-| `data:<id>` | the view's own `sp.saveData` value                    | ≤ 100 KB per view                                    |
-| `settings`  | `{ model }`                                           | fixed                                                |
+Undo history stays on the device.
 
-Deleting a view writes empty entries, which drop out of `listSyncedDataKeys`.
-Concurrent edits of the same view on two devices resolve last-writer-wins per key.
+## Host APIs it relies on
 
-## Security notes
+`dataChanged` and `dayChange` hooks, `getDayContext()`, `getCurrentTaskId()`,
+`startTracking()`, `stopTracking()`; feature-detected, with fallbacks to the
+older hooks and the calendar day.
 
-- The plugin iframe is same-origin with the app (see `PLUGIN_IFRAME_SANDBOX`), so
-  the plugin itself is trusted code like any bundled plugin. The boundary that
-  matters is the nested view iframe: opaque origin, no `allow-same-origin`, CSP
-  `default-src 'none'`.
-- Known gaps: the CSP does not cover WebRTC, and a view can make the host do what
-  `sp` allows (for example delete tasks). The model never sees app data, which keeps
-  prompt injection from task content out of the picture.
-- Opaque-origin iframes did not paint on Windows desktop builds in #8467. Verified
-  rendering on Linux Chromium and Linux Electron 44 over `file://`; Windows needs a
-  manual check.
-- On Android and iOS the request uses `CapacitorWebFetch` (the WebView's fetch)
-  so it can stream; the API answers CORS for any origin. Not yet run on a device.
+## Voice
 
-## Tests
+Push-to-talk only in the web build (Web Speech API, on-device when the browser
+reports it, otherwise after a one-time notice). Elsewhere the prompt box takes
+the system's dictation. A host speech service for every platform is Phase 2 of
+the plan.
+
+## Commands
 
 ```bash
-npm test   # node --test: pure helpers in <script id="avb-core">
+npm run build      # esbuild → dist/ (index.html with the UI bundle inlined)
+npm test           # node --test over src/**/*.spec.ts
+npm run typecheck
+ANTHROPIC_API_KEY=... npm run eval   # billed: latency and step validity per model
 ```
+
+The eval (`eval/cases.json`) reports time to the first change, total time,
+rejected steps and loosely checked outcomes. Pick model and effort defaults
+from it; `EVAL_MODELS` and `EVAL_EFFORTS` narrow a run.

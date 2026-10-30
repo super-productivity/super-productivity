@@ -2,8 +2,19 @@
   "name": "ai-view-builder",
   "version": "1.0.0",
   "description": "AI View Builder plugin for Super Productivity",
+  "private": true,
   "scripts": {
-    "build": "echo 'No build needed for simple plugin'",
-    "test": "node --test"
+    "build": "node scripts/build.js",
+    "test": "node scripts/test.js",
+    "typecheck": "tsc --noEmit",
+    "eval": "node scripts/eval.js"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.33",
+    "esbuild": "^0.28.1",
+    "typescript": "^5.8.3"
+  },
+  "dependencies": {
+    "@super-productivity/plugin-api": "file:../../plugin-api"
   }
 }
