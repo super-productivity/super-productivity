@@ -1296,6 +1296,28 @@ describe('shortSyntax', () => {
       });
     });
 
+    // isHiddenFromMenu only hides from the sidebar; +project must still assign it (#11190)
+    it('should work for a project hidden from the menu but not an archived one', async () => {
+      const ps = [
+        { title: 'HiddenProj', id: 'HiddenID', isHiddenFromMenu: true },
+        { title: 'ArchivedProj', id: 'ArchivedID', isArchived: true },
+      ] as Project[];
+      const hidden = await shortSyntax(
+        { ...TASK, title: 'Fun title +HiddenProj' },
+        CONFIG,
+        [],
+        ps,
+      );
+      const archived = await shortSyntax(
+        { ...TASK, title: 'Fun title +ArchivedProj' },
+        CONFIG,
+        [],
+        ps,
+      );
+      expect(hidden?.projectId).toBe('HiddenID');
+      expect(archived?.projectId).toBeUndefined();
+    });
+
     it("shouldn't work when disabled", async () => {
       const t = {
         ...TASK,

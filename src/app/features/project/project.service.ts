@@ -137,12 +137,6 @@ export class ProjectService {
   );
   listSorted = toSignal(this.listSorted$, { initialValue: [] });
 
-  // Filtered and sorted list for UI (excludes archived and hidden projects)
-  listSortedForUI$: Observable<Project[]> = this.listSorted$.pipe(
-    map((projects) => projects.filter((p) => !p.isArchived && !p.isHiddenFromMenu)),
-  );
-  listSortedForUI = toSignal(this.listSortedForUI$, { initialValue: [] });
-
   listInTreeOrderForUI = computed(() =>
     this.listInTreeOrder().filter((p) => !p.isArchived && !p.isHiddenFromMenu),
   );

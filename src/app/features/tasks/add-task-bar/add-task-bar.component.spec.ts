@@ -35,9 +35,7 @@ import { IS_ANDROID_WEB_VIEW_TOKEN } from '../../../util/is-android-web-view';
 type ProjectServiceSignals = {
   list$: Observable<Project[]>;
   listSorted$: Observable<Project[]>;
-  listSortedForUI$: Observable<Project[]>;
   listInTreeOrderForUI$: Observable<Project[]>;
-  listSortedForUI: Signal<Project[]>;
   listInTreeOrderForUI: Signal<Project[]>;
   listInTreeOrder: Signal<Project[]>;
   listSorted: Signal<Project[]>;
@@ -141,9 +139,7 @@ describe('AddTaskBarComponent', () => {
     return {
       list$: projects$,
       listSorted$: projects$,
-      listSortedForUI$: projects$,
       listInTreeOrderForUI$: projects$,
-      listSortedForUI: signal(projects),
       listInTreeOrderForUI: signal(projects),
       listInTreeOrder: signal(projects),
       listSorted: signal(projects),

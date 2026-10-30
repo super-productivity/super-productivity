@@ -507,7 +507,8 @@ export const shortSyntax = async (
     const projectResult = parseProjectTracked(
       task,
       tracked,
-      allProjects?.filter((p) => !p.isArchived && !p.isHiddenFromMenu),
+      // isHiddenFromMenu only hides from the sidebar; +project still assigns it (#11190)
+      allProjects?.filter((p) => !p.isArchived),
     );
     if (projectResult) {
       projectId = projectResult.projectId;
