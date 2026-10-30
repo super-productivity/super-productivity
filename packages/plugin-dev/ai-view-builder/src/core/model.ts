@@ -4,12 +4,14 @@ import {
   addDays,
   deadlineOf,
   dueDayOf,
+  needsArchive,
   priorityOf,
   QueryEnv,
   runQuery,
   weekRange,
 } from './query';
 import { columnMatches } from './board';
+import { rangeOfWeek, timeSpentIn } from './time';
 
 // Spec + data → a plain tree the DOM renderer draws. Kept free of the DOM so
 // it is testable and so two models can be compared to skip redundant redraws.
@@ -198,6 +200,8 @@ const measureValue = (
   switch (measure) {
     case 'timeSpentToday':
       return formatDuration(sum((t) => t.timeSpentOnDay?.[env.day.todayStr] ?? 0));
+    case 'timeSpentThisWeek':
+      return formatDuration(sum((t) => timeSpentIn(t, rangeOfWeek(env.day))));
     case 'timeSpent':
       return formatDuration(sum((t) => t.timeSpent || 0));
     case 'estimate':
@@ -279,8 +283,11 @@ const buildNode = (
       };
     }
     case 'metric': {
+      // Time tracked on tasks archived earlier in the week still counts.
+      const withArchive =
+        c.measure === 'timeSpentThisWeek' ? { includeArchived: true } : {};
       const result = query
-        ? runQuery({ ...query, limit: 500 }, env)
+        ? runQuery({ ...query, ...withArchive, limit: 500 }, env)
         : { tasks: [], problems: [] };
       return {
         kind: 'metric',
@@ -300,6 +307,11 @@ const buildNode = (
       };
   }
 };
+
+/** Whether drawing the view needs the archive, which is loaded only when asked for. */
+export const specNeedsArchive = (spec: ViewSpec): boolean =>
+  needsArchive(Object.values(spec.queries)) ||
+  Object.values(spec.components).some((c) => c.measure === 'timeSpentThisWeek');
 
 export const buildModel = (spec: ViewSpec, env: ModelEnv): NodeModel | null =>
   spec.root ? buildNode(spec, spec.root, env, new Set(), 0) : null;

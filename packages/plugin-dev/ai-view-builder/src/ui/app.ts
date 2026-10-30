@@ -8,8 +8,7 @@ import {
   type Task,
 } from '@super-productivity/plugin-api';
 import { emptySpec, isReadOnlySpec, ViewSpec } from '../core/spec';
-import { buildModel, ModelEnv } from '../core/model';
-import { needsArchive } from '../core/query';
+import { buildModel, ModelEnv, specNeedsArchive } from '../core/model';
 import { dropWrite } from '../core/board';
 import { EditError, MODELS, runEdit } from '../core/edit-loop';
 import { matchViewByName, parseLocalCommand } from '../core/commands';
@@ -141,7 +140,7 @@ const loadEnv = async (): Promise<void> => {
   ]);
   const spec = activeSpec();
   let archivedTasks: Task[] | undefined;
-  if (spec && needsArchive(Object.values(spec.queries))) {
+  if (spec && specNeedsArchive(spec)) {
     // The archive is large and changes only on Finish Day; reuse it for a minute.
     if (!state.archive || Date.now() - state.archive.at > 60_000) {
       state.archive = { tasks: await PluginAPI.getArchivedTasks(), at: Date.now() };

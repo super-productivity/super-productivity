@@ -251,6 +251,17 @@ const sortTasks = (
 
 // ---------- query ----------
 
+/** Done tasks leave the active list when the day is finished, so asking for
+ * what was done in a period must look in the archive too. */
+export const loadsArchive = (q: Query): boolean =>
+  q.includeArchived === true || q.doneOn !== undefined;
+
+const withArchive = (env: QueryEnv): Task[] => {
+  const active = new Set(env.tasks.map((t) => t.id));
+  // A task can be in both for a moment while the archive cache is refreshed.
+  return [...env.tasks, ...(env.archivedTasks ?? []).filter((t) => !active.has(t.id))];
+};
+
 export const runQuery = (q: Query, env: QueryEnv): QueryResult => {
   const problems: string[] = [];
   const scope = scopeFilter(q.scope, env, problems);
@@ -261,9 +272,7 @@ export const runQuery = (q: Query, env: QueryEnv): QueryResult => {
   const wantedPriorities = q.priority?.length ? new Set(q.priority) : null;
   const text = q.text?.trim() ? norm(q.text) : null;
   const parentsOnly = q.parentsOnly !== false;
-  const source = q.includeArchived
-    ? [...env.tasks, ...(env.archivedTasks ?? [])]
-    : env.tasks;
+  const source = loadsArchive(q) ? withArchive(env) : env.tasks;
 
   const matched = source.filter((t) => {
     if (parentsOnly && t.parentId) return false;
@@ -293,5 +302,4 @@ export const runQuery = (q: Query, env: QueryEnv): QueryResult => {
 };
 
 /** Whether a query needs archived tasks, which are loaded only when asked for. */
-export const needsArchive = (queries: Query[]): boolean =>
-  queries.some((q) => q.includeArchived === true);
+export const needsArchive = (queries: Query[]): boolean => queries.some(loadsArchive);

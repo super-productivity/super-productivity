@@ -11,6 +11,7 @@ interface Expect {
   groupBy?: string;
   queryHas?: Record<string, unknown>;
   fieldsInclude?: string[];
+  measures?: string[];
   firstChildType?: string;
   title?: string;
   columnsAtLeast?: number;
@@ -60,6 +61,9 @@ const check = (
   e.fieldsInclude?.forEach((f) => {
     if (!components(after).some((x) => x.fields?.includes(f as never)))
       fails.push(`no field ${f}`);
+  });
+  e.measures?.forEach((m) => {
+    if (!components(after).some((x) => x.measure === m)) fails.push(`no ${m} metric`);
   });
   if (e.firstChildType) {
     const root = after.root ? after.components[after.root] : undefined;

@@ -24,6 +24,7 @@ export type GroupBy = (typeof GROUP_BY)[number];
 export const MEASURES = [
   'count',
   'timeSpentToday',
+  'timeSpentThisWeek',
   'timeSpent',
   'estimate',
   'remaining',

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildModel, formatDuration, NodeModel } from './model';
+import { buildModel, formatDuration, NodeModel, specNeedsArchive } from './model';
 import { ViewSpec } from './spec';
 import { env, task } from './test-fixtures';
 
@@ -111,4 +111,32 @@ test('durations read naturally', () => {
   assert.equal(formatDuration(45 * 60000), '45m');
   assert.equal(formatDuration(120 * 60000), '2h');
   assert.equal(formatDuration(135 * 60000), '2h 15m');
+});
+
+test('time spent this week sums the logical week, archived tasks included', () => {
+  const week = spec({
+    components: { main: { type: 'metric', query: 'all', measure: 'timeSpentThisWeek' } },
+  });
+  const model = buildModel(
+    week,
+    env(
+      [
+        task('a', {
+          timeSpentOnDay: { '2026-10-29': 30 * 60000, '2026-10-25': 5 * 60000 * 60 },
+        }),
+      ],
+      {
+        archivedTasks: [
+          task('old', {
+            isDone: true,
+            timeSpentOnDay: { '2026-10-26': 60 * 60000, '2026-11-02': 99 * 60000 },
+          }),
+        ],
+      },
+    ),
+  ) as Extract<NodeModel, { kind: 'metric' }>;
+  // Mon 26 to Sun 1: the 25th and the 2nd are outside the week.
+  assert.equal(model.value, '1h 30m');
+  assert.equal(specNeedsArchive(week), true);
+  assert.equal(specNeedsArchive(spec({ queries: { all: {} } })), false);
 });

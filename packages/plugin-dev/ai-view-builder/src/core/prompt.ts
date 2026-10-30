@@ -31,13 +31,14 @@ put_component and put_query merge props into what exists. Send only what changes
 
 ## Queries
 { scope?, isDone?, due?, doneOn?, tags?, tagsMatch?, notTags?, priority?, hasEstimate?, parentsOnly?, text?, includeArchived?, sort?, sortDir?, limit? }
-- scope: "@current" (the project or tag the person has open; use it unless they name one), "all", "today", or a project or tag name.
-- due: ${list(DUE_TOKENS)}. Days follow the person's own start of day and first day of the week.
-- doneOn: today or thisWeek; only done tasks finished then. Finishing the day archives done tasks, so anything about earlier days needs includeArchived: true.
+- scope: "@current" (the project or tag the person has open; use it unless they name one), "all", or a project or tag name.
+- due: ${list(DUE_TOKENS)}. Days follow the person's own start of day and first day of the week. "Today's tasks" is due: "today".
+- doneOn: today or thisWeek; only done tasks finished then. Archived tasks are included automatically.
 - tags (all must match, unless tagsMatch is "any") and notTags: tag names.
 - priority: a list of high, medium, low, none.
 - parentsOnly: true by default, which hides subtasks; false lists them on their own.
 - text: matches task titles.
+- includeArchived: true adds older archived tasks; rarely needed.
 - sort: ${list(SORT_KEYS)}. "context" is the project's or Today's own order and the default. sortDir: asc or desc. limit: 1 to 500.
 
 # Examples

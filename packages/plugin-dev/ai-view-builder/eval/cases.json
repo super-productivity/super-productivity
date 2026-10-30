@@ -57,7 +57,8 @@
       "request": "Weekly review: time spent this week, what I finished this week, and what's overdue",
       "expect": {
         "types": ["metric", "taskList"],
-        "queryHas": { "includeArchived": true }
+        "measures": ["timeSpentThisWeek"],
+        "queryHas": { "doneOn": "thisWeek" }
       }
     },
     {

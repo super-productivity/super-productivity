@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { ActiveWorkContext } from '@super-productivity/plugin-api';
-import { dueDayOf, logicalDayOf, runQuery, weekRange } from './query';
+import { dueDayOf, logicalDayOf, needsArchive, runQuery, weekRange } from './query';
 import { at, DAY, env, task } from './test-fixtures';
 
 const ids = (q: Parameters<typeof runQuery>[0], e: ReturnType<typeof env>): string[] =>
@@ -114,12 +114,14 @@ test('priority accepts numbers and the older string form', () => {
   assert.deepEqual(ids({ sort: 'priority' }, e), ['high', 'legacy-high', 'low', 'none']);
 });
 
-test('doneOn uses the logical day and archived tasks only when included', () => {
+test('doneOn uses the logical day and looks in the archive by itself', () => {
   const tasks = [task('today', { isDone: true, doneOn: at('2026-10-30', 1) })];
   const archived = [task('monday', { isDone: true, doneOn: at('2026-10-26', 12) })];
   const e = env(tasks, { archivedTasks: archived });
   assert.deepEqual(ids({ doneOn: 'today' }, e), ['today']);
-  assert.deepEqual(ids({ doneOn: 'thisWeek' }, e), ['today']);
+  // Changed on purpose: doneOn used to need includeArchived, so a weekly
+  // review silently missed what was archived earlier in the week.
+  assert.deepEqual(ids({ doneOn: 'thisWeek' }, e), ['today', 'monday']);
   assert.deepEqual(ids({ doneOn: 'thisWeek', includeArchived: true }, e), [
     'today',
     'monday',
@@ -136,4 +138,24 @@ test('sorting, direction and limit', () => {
   assert.deepEqual(ids({ sort: 'title' }, e), ['a', 'b', 'c']);
   assert.deepEqual(ids({ sort: 'estimate', sortDir: 'desc' }, e), ['a', 'b', 'c']);
   assert.deepEqual(ids({ sort: 'title', limit: 2 }, e), ['a', 'b']);
+});
+
+test('the archive is loaded for doneOn and includeArchived, not otherwise', () => {
+  assert.equal(needsArchive([{ doneOn: 'thisWeek' }]), true);
+  assert.equal(needsArchive([{ includeArchived: true }]), true);
+  assert.equal(needsArchive([{ isDone: true }]), false);
+});
+
+test('a task in both lists is counted once', () => {
+  const done = task('a', { isDone: true, doneOn: at('2026-10-29', 10) });
+  const e = env([done], { archivedTasks: [done] });
+  assert.deepEqual(ids({ doneOn: 'today' }, e), ['a']);
+});
+
+test('the older scope "today" keeps working for saved views', () => {
+  const tasks = [
+    task('a', { dueDay: '2026-10-29' }),
+    task('b', { dueDay: '2026-10-30' }),
+  ];
+  assert.deepEqual(ids({ scope: 'today' }, env(tasks)), ['a']);
 });
