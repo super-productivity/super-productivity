@@ -61,7 +61,7 @@
     "@types/node": "^24.19.0",
     "@types/nodemailer": "^7.0.5",
     "@types/supertest": "^7.2.0",
-    "@types/ws": "^8.18.1",
+    "@types/ws": "^8.18.2",
     "nodemon": "^3.1.11",
     "prisma": "5.22.0",
     "supertest": "^7.1.4",
