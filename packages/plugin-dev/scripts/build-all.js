@@ -232,6 +232,27 @@ const plugins = [
     },
   },
   {
+    name: 'ai-view-builder',
+    path: 'ai-view-builder',
+    copyToAssets: true,
+    buildCommand: async (pluginPath) => {
+      await execAsync(`cd ${pluginPath} && npm run build`);
+      const targetDir = path.join(
+        __dirname,
+        '../../../src/assets/bundled-plugins/ai-view-builder',
+      );
+      if (!fs.existsSync(targetDir)) {
+        fs.mkdirSync(targetDir, { recursive: true });
+      }
+      // app.js is already inlined into index.html; skip the duplicate
+      const files = ['manifest.json', 'plugin.js', 'index.html', 'icon.svg'];
+      for (const file of files) {
+        copyRecursive(path.join(pluginPath, 'dist', file), path.join(targetDir, file));
+      }
+      return 'Built and copied to assets';
+    },
+  },
+  {
     name: 'github-issue-provider',
     path: 'github-issue-provider',
     copyToAssets: true,
