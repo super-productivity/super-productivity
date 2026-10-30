@@ -5,7 +5,17 @@
         <tag [tag]="chip"></tag>
       }
       @for (tag of tags(); track tag.id) {
-        <tag [tag]="tag"></tag>
+        @if (tag.id === projectId() && isProjectTagClickable()) {
+          <!-- preventDefault on mousedown keeps focus off the row: its focusin re-targets an open detail panel. openProject blurs instead. -->
+          <tag
+            class="project-tag"
+            [tag]="tag"
+            (mousedown)="$event.preventDefault()"
+            (click)="openProject($event, tag.id)"
+          ></tag>
+        } @else {
+          <tag [tag]="tag"></tag>
+        }
       }
     </div>
   </div>
