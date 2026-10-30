@@ -1,8 +1,9 @@
 # Narrow mobile background sync: push on pause and on notification actions
 
-> **Status: Proposed**, design only; nothing scheduled
+> **Status: Step 0 in progress** (§ 5); steps 1–2 and § 14 are parked for
+> later investigation (§ 16)
 >
-> **Owner / tracking:** Unassigned; open an issue before any implementation.
+> **Owner / tracking:** Unassigned; no tracking issue yet. Open one before the PR.
 > Each implementation step is a sync PR (AGENTS.md sync rules 15–16).
 >
 > **Last verified against the code:** 2026-10-30 (`ed27bd1e95`)
@@ -74,7 +75,9 @@ op-log writers (option C, declined).
 
 ## 2. What already exists
 
-Most of items 2 and 3 already exist. The gaps are timing and delivery.
+Most of items 2 and 3 already exist. The gaps are timing and delivery. The
+table shows the code before step 0 (`ed27bd1e95`); § 5 "As implemented"
+covers what step 0 changed.
 
 | Need                          | Current code                                                                                                                                                                                                                                                                                                                                  | Gap                                                                                                                                                                                                                                                                                                                                                                                 |
 | ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -122,7 +125,8 @@ change to any persisted format.
    same awaited path the scheduler contract reserves for initial and
    before-close syncs (`background-sync-scheduler.service.ts:31-34`). Race it
    against a budget (about 20 s on iOS, below the 30 s expiry so `finish()`
-   is always called; iOS terminates apps that overrun). Drop
+   is called by us; the plugin's expiration handler would end the task
+   anyway, `BackgroundTask.swift:14-18`, but mid-push). Drop
    `I_PAUSE_APP`, and on iOS `I_VISIBILITY_HIDDEN`, so the same event does
    not cause two syncs. Skip the call if a sync is already running (the
    cycle guard already does this) or if offline.
@@ -148,6 +152,41 @@ doing step 1.
 
 The cost is two small app-side changes plus E2E tests. It touches the sync
 trigger path, so it is a sync PR.
+
+As implemented:
+
+- `BackgroundExitSyncService.flushAndPush()` (`src/app/imex/sync/`) persists
+  pending ops, then calls `sync()`; both race a 20 s budget, so a hung write
+  still lets iOS reach `finish()`. It skips the
+  push when offline, without a ready provider, before the initial sync, with
+  "only sync manually" on, for a file provider with its sync interval off
+  (the same gate SyncEffects applies to the triggers this replaces), with no
+  unsynced op, or under `__SP_E2E_BLOCK_AUTO_SYNC`. While another
+  sync is running it waits for it to settle, inside the same budget, because
+  a scheduler rerun would hit the floor again. It yields a
+  microtask before `sync()` so a finishing sync unwinds first, and waits
+  again if a side channel claims the cycle during that hop.
+- **Android** calls it at the end of
+  `AndroidForegroundTrackingEffects.flushOnPause$` on the native `onPause$`,
+  after the tracked time is dispatched, so the push includes that op. It
+  replaces `I_PAUSE_APP`, and runs even when a flush step fails. It does not
+  use `beforeExit`: the plugin's Android `beforeExit` runs its callback at once
+  but grants no extra time (`BackgroundTaskPlugin.java`, "No-op for now"), and
+  it would not order the push after the time flush. The Android flush in
+  `main.ts` stays: it is a second, harmless flush.
+- **iOS** calls it from the existing `beforeExit` callback on
+  `appStateChange` (inactive) in `main.ts`, after the tracked-time dispatch,
+  replacing that callback's flush-only body and `I_VISIBILITY_HIDDEN` on iOS
+  native (web keeps it). Not on `pause` (didEnterBackground): that arrives
+  later, possibly after the earlier task finished and iOS suspended the
+  WebView. `appStateChange` also fires on willResignActive (Control Center,
+  notification shade); the unsynced-op gate makes those usually cost no sync.
+  `I_RESUME_APP` now fires on `iosInterface.onWillEnterForeground$`
+  (`resume`), not on didBecomeActive, so closing Control Center does not sync.
+- E2E 1 is `e2e/tests/sync/supersync-android-pause-push.spec.ts`. iOS has no
+  E2E harness: the background body is unit-tested (`handleIosBackground`, in
+  `src/app/features/ios/`), but not its event wiring in `main.ts` or the
+  `SyncTriggerService` resume trigger.
 
 ### Step 1: Android, push notification actions taken while the app is alive
 
@@ -258,16 +297,16 @@ ops pending
 
 ## 9. Failure modes
 
-| Failure                                            | Behavior (must hold)                                                                                                                                                                                                                                                               |
-| -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Offline at pause or tap                            | No sync attempt (the existing offline filter, `sync.effects.ts:222-225`). The op stays durable and pending; resume or `I_IS_ONLINE` pushes it.                                                                                                                                     |
-| Auth expired (`AuthFailSPError`, 401/403)          | Pending ops are kept. No dialog while backgrounded: the error surfaces on the next foreground sync, as it does today. Do not retry in the background.                                                                                                                              |
-| Key missing or wrong password                      | Fail closed; no plaintext upload; ops stay pending. The recovery dialog appears in the foreground only.                                                                                                                                                                            |
-| OS suspends or kills mid-sync                      | Crash-equivalent, as the [epoch fence](../sync-and-op-log/contributor-sync-model.md#the-sync-epoch-fence-9074) already requires: deferred acks re-upload, a behind cursor re-downloads with dedup. iOS must call `finish()` before expiry (budget race), or the app is terminated. |
-| Suspended with the sync window open                | The `openSyncWindow()` failsafe closes it; check that day-change and `TODAY_TAG` repair effects run after resume (`skipDuringSyncWindow()`).                                                                                                                                       |
-| Tap drained before the initial sync gate           | Stays queued (`_handleAfterDataLoaded`, #8551); not acknowledged until applied.                                                                                                                                                                                                    |
-| Provider or account switched between tap and drain | The cycle's epoch fence aborts the stale sync. The intent applies to whatever state is local, like a UI tap.                                                                                                                                                                       |
-| Battery                                            | One extra sync per pause, replacing `I_PAUSE_APP` and `I_VISIBILITY_HIDDEN`. One per notification tap. No timers added.                                                                                                                                                            |
+| Failure                                            | Behavior (must hold)                                                                                                                                                                                                                                                                                                                                         |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Offline at pause or tap                            | No sync attempt (the exit path's own `IS_ONLINE$` gate in `BackgroundExitSyncService._canPush`). The op stays durable and pending; resume or `I_IS_ONLINE` pushes it.                                                                                                                                                                                        |
+| Auth expired (`AuthFailSPError`, 401/403)          | Pending ops are kept. No dialog while backgrounded: the error surfaces on the next foreground sync, as it does today. Do not retry in the background.                                                                                                                                                                                                        |
+| Key missing or wrong password                      | Fail closed; no plaintext upload; ops stay pending. The recovery dialog appears in the foreground only.                                                                                                                                                                                                                                                      |
+| OS suspends or kills mid-sync                      | Crash-equivalent, as the [epoch fence](../sync-and-op-log/contributor-sync-model.md#the-sync-epoch-fence-9074) already requires: deferred acks re-upload, a behind cursor re-downloads with dedup. On iOS the budget race calls `finish()` before expiry; past it, the plugin ends the task and the app is suspended mid-push.                               |
+| Suspended with the sync window open                | `sync()` opens it with the failsafe off (`openSyncWindow(0)`, `sync-wrapper.service.ts:346-349`), so it stays open until the in-flight request settles after resume, as on the scheduler path; check that day-change and `TODAY_TAG` repair effects run after that (`skipDuringSyncWindow()`).                                                               |
+| Tap drained before the initial sync gate           | Stays queued (`_handleAfterDataLoaded`, #8551); not acknowledged until applied.                                                                                                                                                                                                                                                                              |
+| Provider or account switched between tap and drain | The cycle's epoch fence aborts the stale sync. The intent applies to whatever state is local, like a UI tap.                                                                                                                                                                                                                                                 |
+| Battery                                            | At most one sync per pause, replacing `I_PAUSE_APP` and `I_VISIBILITY_HIDDEN`, and only when an op is unsynced. The Android path drops their 10 s throttle, but a pause with nothing to push (file picker, permission dialog after a sync) costs no sync. A pause during a running sync waits for it, then syncs. One per notification tap. No timers added. |
 
 ## 10. Data-loss risks
 
@@ -288,6 +327,8 @@ ops pending
   makes it more frequent (WebDAV on iOS rarely fits the budget). Check the
   Nextcloud/WebDAV E2E for the interruption case before shipping step 0 for
   file providers. If it is not clean, run step 0 as flush-only for them.
+  Not checked yet: the step 0 branch pushes for every provider, so this
+  check gates its PR leaving draft (§ 16).
 - **R4: stale intent** (§ 7). This is a content override, not loss, and it
   already exists.
 - **Persisted formats.** No persisted model, sync wire, schema version or
@@ -306,16 +347,19 @@ Each sync step starts with a failing reproduction (sync-correctness rules,
 `window.SUPAndroid` bridge (`e2e/tests/focus-mode/android-timer-bridge.ts`;
 `IS_ANDROID_WEB_VIEW` is `!!window.SUPAndroid`,
 `src/app/util/is-android-web-view.ts:3`). Simulate suspension with Chromium's
-CDP `Page.setWebLifecycleState({ state: 'frozen' })`; a fixed delay would not
-model it.
+CDP `Debugger.pause`; a fixed delay would not model it. Not
+`Page.setWebLifecycleState({ state: 'frozen' })`: on a visible page it lets
+timers run (measured 2026-10, local headless Chromium).
 
-1. **Pause push within the floor (step 0)** — `@supersync` and `@webdav`.
-   Client A syncs, adds a task within 5 s, then pauses. A is frozen about
-   2 s after the pause event. Client B syncs and must see the task. Today it
-   fails: the scheduler floor defers the request past the freeze.
-2. **iOS resume sync (step 0)** — `mobile-webkit` project. Make a change on
-   B, then hide and show A. A must show it without a touch. Today it fails:
-   there is no resume trigger.
+1. **Pause push within the floor (step 0)** — `@supersync` written; `@webdav` parked (§ 16).
+   Client A syncs, adds a task within 3.5 s, then pauses. A is frozen 4.7 s
+   after its last sync response, before the floor's deferred run. Client B
+   syncs and must see the task. Without the fix it fails: the floor defers the
+   request past the freeze.
+2. **iOS resume sync (step 0)**: not written. `IS_IOS_NATIVE` checks the
+   Capacitor platform, so the `mobile-webkit` project never takes the iOS
+   path; it needs a device check (§ 16). The plan was: make a change on B,
+   then hide and show A, and A must show it without a touch.
 3. **Done while paused (step 1)** — A is paused (fake bridge `onPause$`).
    The fake queue receives a done entry and the drain signal fires. B sees
    the task as done without A resuming. Today it fails: no drain signal.
@@ -401,9 +445,30 @@ like `ShareUploadWorker`), not periodic full sync.
 
 ## 15. Recommendation
 
-Build step 0 first, as one sync PR with E2Es 1 and 2. Build step 1 only if
+Build step 0 first, as one sync PR with E2E 1 (E2E 2 became a device check,
+§ 11). Build step 1 only if
 reports persist after a release, with ack-after-persist in the same PR (E2Es
 3–5). Build step 2 only if a device test shows R2. Keep WorkManager periodic
 sync and A.2 parked as in § 13. Document the remaining limit in the wiki:
 an action taken while the app is closed reaches other devices on the next
 launch.
+
+## 16. Investigate later
+
+Parked while step 0 ships. Revisit after one release with step 0:
+
+- [ ] Re-check new reports shaped like #25/#88/#89. Persisting reports
+      decide step 1 (§ 5).
+- [ ] Step 1: Android notification actions while the app is alive, with
+      ack-after-persist (R1, E2Es 3–5).
+- [ ] Step 2: iOS non-foreground actions, only if a device test shows R2.
+- [ ] R3 (§ 10) was not checked before step 0: file providers push on
+      pause too (only with an unsynced op and their interval on, as their
+      old pause/hidden triggers did). Run the WebDAV interruption case; if it is not clean, make
+      the exit path flush-only for file providers on iOS (Q4). Add the
+      `@webdav` variant of E2E 1 (§ 11).
+- [ ] Q1–Q6 (§ 14), in particular Q3 (cold E2EE key derivation inside the
+      iOS budget) and Q4 (WebDAV inside the budget).
+- [ ] Device-check step 0 on Android: does the push finish before the
+      freezer stops JS (Q1)? On iOS: does `finish()` always come before
+      expiry?
