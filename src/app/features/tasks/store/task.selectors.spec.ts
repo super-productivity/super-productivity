@@ -879,6 +879,36 @@ describe('Task Selectors', () => {
         return d.getTime();
       };
 
+      it('should use the offset-adjusted today start for missed deadlineWithTime (#9589)', () => {
+        // today starts at Feb 15 4AM: 3:59AM is missed, 4:00AM is not
+        const stateWithOffset = {
+          ...mockState,
+          [appStateFeatureKey]: {
+            todayStr: '2026-02-15',
+            startOfNextDayDiffMs: FOUR_HOURS,
+          },
+          [TASK_FEATURE_NAME]: taskAdapter.setAll(
+            [
+              {
+                ...DEFAULT_TASK,
+                id: 'missedBeforeStart',
+                deadlineWithTime: makeTime('2026-02-15', 3, 59),
+              } as Task,
+              {
+                ...DEFAULT_TASK,
+                id: 'deadlineAtStart',
+                deadlineWithTime: makeTime('2026-02-15', 4),
+              } as Task,
+            ],
+            taskAdapter.getInitialState(),
+          ),
+        };
+        const ids = fromSelectors
+          .selectOverdueTasksWithSubTasks(stateWithOffset as any)
+          .map((t) => t.id);
+        expect(ids).toEqual(['missedBeforeStart']);
+      });
+
       it('should NOT consider a task overdue if dueWithTime is within offset-adjusted today', () => {
         // With 4h offset and todayStr='2026-02-15', "today" runs from Feb 15 4AM to Feb 16 4AM
         // A task at Feb 15 5AM is within today => not overdue
