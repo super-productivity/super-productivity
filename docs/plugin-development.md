@@ -306,6 +306,14 @@ Iframe plugins automatically receive:
 - `getFocusedTask()` - Get the currently focused task row, or `null`. Task-row focus is cleared when focus moves elsewhere, including into iframe side panels; use `getSelectedTask()` for persistent side-panel task context.
 - `addTask(task)` - Create a new task
 - `updateTask(taskId, updates)` - Update existing task
+- `getCurrentTaskId()` - Id of the task whose time is being tracked, or `null`
+- `startTracking(taskId)` / `stopTracking()` - Start or stop time tracking, as the task's play button does. Rejects for an unknown or done task.
+
+#### Day and Week
+
+- `getDayContext()` - `{ todayStr, startOfNextDayDiffMs, firstDayOfWeek }`. `todayStr` is the user's logical day (YYYY-MM-DD): before the configured start of the next day it is still the previous calendar day. To find a timestamp's logical day, subtract `startOfNextDayDiffMs` before taking its local date. `firstDayOfWeek` is 0 (Sunday) to 6 (Saturday). Re-read it on `DAY_CHANGE`.
+
+Feature-detect `getDayContext`, `getCurrentTaskId`, `startTracking` and `stopTracking` on older hosts.
 
 #### Application State
 
@@ -532,8 +540,21 @@ const hooks = {
   LANGUAGE_CHANGE: 'languageChange',
   PERSISTED_DATA_CHANGED: 'persistedDataChanged',
   ACTION: 'action',
+  DATA_CHANGED: 'dataChanged',
+  DAY_CHANGE: 'dayChange',
 };
 ```
+
+`DATA_CHANGED` fires after tasks, projects or tags change from any source:
+the user, another plugin, planning, archiving, imports and remote sync. It
+carries no payload; re-read what you display. Bursts (a sync batch, a bulk
+action) are coalesced into one call; while a task is tracked it fires about
+once a second, so compare what you render before redrawing. Prefer it over
+`ANY_TASK_UPDATE` for keeping a view current: that hook sees only local
+actions from a short list.
+
+`DAY_CHANGE` fires with `{ todayStr }` when the user's logical day rolls
+over while the app runs.
 
 `PERSISTED_DATA_CHANGED` fires whenever this plugin's persisted data
 changes — local writes, remote sync deliveries, and bulk imports —

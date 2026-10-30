@@ -50,6 +50,8 @@ export enum PluginHooks {
   ANY_TASK_UPDATE = 'anyTaskUpdate',
   PROJECT_LIST_UPDATE = 'projectListUpdate',
   WORK_CONTEXT_CHANGE = 'workContextChange',
+  DATA_CHANGED = 'dataChanged',
+  DAY_CHANGE = 'dayChange',
 }
 
 export type Hooks = PluginHooks;
@@ -289,6 +291,28 @@ export interface ActiveWorkContext {
  */
 export type WorkContextChangePayload = ActiveWorkContext;
 
+/**
+ * Payload for DAY_CHANGE: the new logical day, which honours the user's
+ * "start of next day" setting. Fires when the day rolls over while the app runs.
+ */
+export interface DayChangePayload {
+  todayStr: string;
+}
+
+/**
+ * The user's logical day, for plugins that bucket tasks by date.
+ * `todayStr` is the logical day as YYYY-MM-DD: before the configured start of
+ * the next day, it is still the previous calendar day. To find a timestamp's
+ * logical day, subtract `startOfNextDayDiffMs` before taking its local date.
+ * `firstDayOfWeek` is 0 (Sunday) to 6 (Saturday), from the user's settings or
+ * locale.
+ */
+export interface PluginDayContext {
+  todayStr: string;
+  startOfNextDayDiffMs: number;
+  firstDayOfWeek: number;
+}
+
 // Map hook types to their payload types
 export interface HookPayloadMap {
   [PluginHooks.TASK_CREATED]: TaskCreatedPayload;
@@ -303,6 +327,8 @@ export interface HookPayloadMap {
   [PluginHooks.ANY_TASK_UPDATE]: AnyTaskUpdatePayload;
   [PluginHooks.PROJECT_LIST_UPDATE]: ProjectListUpdatePayload;
   [PluginHooks.WORK_CONTEXT_CHANGE]: WorkContextChangePayload;
+  [PluginHooks.DATA_CHANGED]: void;
+  [PluginHooks.DAY_CHANGE]: DayChangePayload;
 }
 
 // Generic hook handler with typed payload
@@ -324,6 +350,15 @@ export interface Task {
   created: number;
   updated?: number;
   subTaskIds: string[];
+  /**
+   * 1 = low, 2 = medium, 3 = high. Older data may hold the string forms;
+   * `undefined` and `null` both mean no priority.
+   */
+  priority?: 1 | 2 | 3 | 'low' | 'medium' | 'high' | null;
+  /** Deadline date as YYYY-MM-DD; cleared when `deadlineWithTime` is set. */
+  deadlineDay?: string | null;
+  /** Deadline as a timestamp (ms); cleared when `deadlineDay` is set. */
+  deadlineWithTime?: number | null;
 
   // Additional fields for internal use (plugins can read but shouldn't modify)
   timeSpentOnDay?: { [key: string]: number };
@@ -598,6 +633,24 @@ export interface PluginAPI {
    * only if the app has not finished its initial data load.
    */
   getActiveWorkContext(): Promise<ActiveWorkContext | null>;
+
+  /**
+   * The user's logical day and week settings. Re-read it on the DAY_CHANGE hook.
+   * Feature-detect on older hosts.
+   */
+  getDayContext?(): Promise<PluginDayContext>;
+
+  /** Id of the task whose time is being tracked, or null. Feature-detect on older hosts. */
+  getCurrentTaskId?(): Promise<string | null>;
+
+  /**
+   * Start tracking time on a task, as the task's play button does. Rejects for an
+   * unknown or done task. Feature-detect on older hosts.
+   */
+  startTracking?(taskId: string): Promise<void>;
+
+  /** Stop time tracking. Feature-detect on older hosts. */
+  stopTracking?(): Promise<void>;
 
   /**
    * Mount this plugin's index.html inside the work-view body, in place of
