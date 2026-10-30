@@ -12,6 +12,7 @@ the report with the evidence.
 | [C. Native vs plugin](c-native-vs-plugin.md)                 | Can SP's own components render for a plugin, and at what cost |
 | [D. Plugin ceiling and magic](d-plugin-ceiling-and-magic.md) | How good a plugin iframe can get; what makes it feel magical  |
 | [E. Native spike](e-native-spike.md)                         | SP's own components rendering one spec; ops written           |
+| [F. Use cases](f-use-cases.md)                               | What people could build; what works, what is missing          |
 
 ## 1. The maintainer's direction
 
