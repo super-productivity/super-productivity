@@ -6,7 +6,7 @@ import {
   dragTo,
   openPlugin,
   serveTurns,
-  tagIdsOf,
+  tagsOf,
   toolStream,
   ToolCall,
 } from '../../helpers/ai-view-builder.helpers';
@@ -123,10 +123,10 @@ test.describe('AI View Builder views', () => {
     const review = title('Review PR');
     await dragTo(page, plugin, review, 'Doing');
     await expect(columnCards(plugin, 'Doing')).toHaveText([review]);
-    expect(await tagIdsOf(page, review)).toEqual(['KANBAN_IN_PROGRESS']);
+    expect((await tagsOf(page, review)).map((t) => t.id)).toEqual(['KANBAN_IN_PROGRESS']);
     await dragTo(page, plugin, review, 'To do');
     await expect(columnCards(plugin, 'Doing')).toHaveCount(0);
-    expect(await tagIdsOf(page, review)).toEqual([]);
+    expect(await tagsOf(page, review)).toEqual([]);
     await dragTo(page, plugin, review, 'Doing');
     await expect(columnCards(plugin, 'Doing')).toHaveText([review]);
     // Let the view's own entrance animation settle before the screenshot.
@@ -135,5 +135,32 @@ test.describe('AI View Builder views', () => {
       path: path.join(OUT_DIR, 'spike-plugin-plus.png'),
       fullPage: true,
     });
+  });
+
+  test('a ready-made view needs neither a key nor a model call', async ({
+    page,
+    workViewPage,
+    testPrefix,
+  }) => {
+    test.setTimeout(90000);
+    const requestBodies = await serveTurns(page, []);
+    expect(await waitForPluginAssets(page)).toBe(true);
+    await workViewPage.waitForTaskList();
+    const task = `${testPrefix}-Write report`;
+    await workViewPage.addTask(task);
+
+    const plugin = await openPlugin(page, false);
+    await plugin.locator('#suggestions button', { hasText: 'Kanban board' }).click();
+    await expect(plugin.locator('#viewSelect option:checked')).toHaveText('Kanban board');
+    await expect(columnCards(plugin, 'To do')).toHaveText([task]);
+
+    await dragTo(page, plugin, task, 'Doing');
+    await expect(columnCards(plugin, 'Doing')).toHaveText([task]);
+    expect((await tagsOf(page, task)).map((t) => t.id)).toEqual(['KANBAN_IN_PROGRESS']);
+
+    // The recipe is an ordinary view: undo is local, and nothing went out.
+    await plugin.locator('#undoBtn').click();
+    await expect(plugin.locator('.board-col')).toHaveCount(0);
+    expect(requestBodies).toEqual([]);
   });
 });

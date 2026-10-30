@@ -1,49 +1,17 @@
-import type { FrameLocator, Page } from '@playwright/test';
 import { expect, test } from '../../fixtures/test.fixture';
 import {
-  enablePluginWithVerification,
   getCITimeoutMultiplier,
   waitForPluginAssets,
-  waitForPluginInMenu,
-  waitForPluginManagementInit,
 } from '../../helpers/plugin-test.helpers';
-
-const PLUGIN_NAME = 'AI View Builder';
-const PLUGIN_IFRAME = 'plugin-index iframe';
-
-type ToolCall = { name: string; input: Record<string, unknown> };
-
-// A streamed model turn as the Messages API sends it: each tool call's JSON
-// arrives in pieces, and the plugin applies it when the block completes.
-const toolStream = (calls: ToolCall[]): string => {
-  const events: Record<string, unknown>[] = [
-    { type: 'message_start', message: { id: 'msg_e2e', role: 'assistant', content: [] } },
-  ];
-  calls.forEach((call, index) => {
-    const json = JSON.stringify(call.input);
-    events.push({
-      type: 'content_block_start',
-      index,
-      content_block: {
-        type: 'tool_use',
-        id: `tool_${index}`,
-        name: call.name,
-        input: {},
-      },
-    });
-    for (let i = 0; i < json.length; i += 40) {
-      events.push({
-        type: 'content_block_delta',
-        index,
-        delta: { type: 'input_json_delta', partial_json: json.slice(i, i + 40) },
-      });
-    }
-    events.push({ type: 'content_block_stop', index });
-  });
-  events.push({ type: 'message_delta', delta: { stop_reason: 'tool_use' } });
-  events.push({ type: 'message_stop' });
-  return events.map((e) => `event: ${e.type}\ndata: ${JSON.stringify(e)}\n\n`).join('');
-};
+import {
+  columnCards,
+  dragTo,
+  openPlugin,
+  serveTurns,
+  tagsOf,
+  toolStream,
+  ToolCall,
+} from '../../helpers/ai-view-builder.helpers';
 
 const KANBAN: ToolCall[] = [
   { name: 'put_query', input: { id: 'open', props: { scope: '@current' } } },
@@ -74,34 +42,6 @@ const AS_LIST: ToolCall[] = [
   },
   { name: 'say', input: { text: 'Now a list grouped by project.' } },
 ];
-
-const columnCards = (
-  plugin: FrameLocator,
-  title: string,
-): ReturnType<FrameLocator['locator']> =>
-  plugin.locator('.board-col', { hasText: title }).locator('.card-title');
-
-const dragTo = async (
-  page: Page,
-  plugin: FrameLocator,
-  cardTitle: string,
-  columnTitle: string,
-): Promise<void> => {
-  const from = await plugin.locator('.card', { hasText: cardTitle }).boundingBox();
-  const to = await plugin.locator('.board-col', { hasText: columnTitle }).boundingBox();
-  if (!from || !to) throw new Error('card or column not visible');
-  // Grab the card by its title, as a user would; its buttons do not start a drag.
-  const halfCardWidth = from.width / 2;
-  const halfCardHeight = from.height / 2;
-  const halfColumnWidth = to.width / 2;
-  const grabX = from.x + halfCardWidth;
-  const grabY = from.y + halfCardHeight;
-  await page.mouse.move(grabX, grabY);
-  await page.mouse.down();
-  await page.mouse.move(grabX + 20, grabY, { steps: 4 });
-  await page.mouse.move(to.x + halfColumnWidth, to.y + 40, { steps: 10 });
-  await page.mouse.up();
-};
 
 test.describe('AI View Builder plugin', () => {
   test('builds a view from a request, writes drops, edits by voice and undoes', async ({
@@ -141,45 +81,21 @@ test.describe('AI View Builder plugin', () => {
         FakeRecognition;
     });
 
-    const turns = [toolStream(KANBAN), toolStream(AS_LIST)];
-    const requestBodies: string[] = [];
-    await page.route('https://api.anthropic.com/v1/messages', async (route) => {
-      const cors: [string, string][] = [
-        ['access-control-allow-origin', '*'],
-        ['access-control-allow-headers', '*'],
-        ['access-control-allow-methods', 'POST'],
-      ];
-      if (route.request().method() === 'OPTIONS') {
-        await route.fulfill({ status: 200, headers: Object.fromEntries(cors) });
-        return;
-      }
-      requestBodies.push(route.request().postData() || '');
-      await route.fulfill({
-        status: 200,
-        headers: Object.fromEntries([...cors, ['content-type', 'text/event-stream']]),
-        body: turns.shift() ?? toolStream([]),
-      });
-    });
+    const requestBodies = await serveTurns(page, [
+      toolStream(KANBAN),
+      toolStream(AS_LIST),
+    ]);
 
     expect(await waitForPluginAssets(page)).toBe(true);
     await workViewPage.waitForTaskList();
     await workViewPage.addTask(first);
     await workViewPage.addTask(second);
 
-    expect(await waitForPluginManagementInit(page)).toBe(true);
-    expect(await enablePluginWithVerification(page, PLUGIN_NAME)).toBe(true);
-    expect(await waitForPluginInMenu(page, PLUGIN_NAME)).toBe(true);
+    const plugin = await openPlugin(page);
 
-    await page.goto('/#/plugins/ai-view-builder/index');
-    const plugin = page.frameLocator(PLUGIN_IFRAME);
-    await plugin.locator('#apiKeyInput').fill('sk-ant-e2e-key');
-    await plugin.locator('#saveKeyBtn').click();
-    await expect(plugin.locator('#keyStatus')).toHaveText(
-      'A key is saved on this device.',
-    );
-
-    // A suggestion sends its request; the board streams in and both tasks start in To do.
-    await plugin.locator('#suggestions button', { hasText: 'Kanban board' }).click();
+    // A typed request is sent; the board streams in and both tasks start in To do.
+    await plugin.locator('#commandInput').fill('A kanban board for what I have open');
+    await plugin.locator('#commandInput').press('Enter');
     await expect(plugin.locator('#status')).toHaveText(
       'Made a board with To do, Doing and Done.',
     );
@@ -219,15 +135,7 @@ test.describe('AI View Builder plugin', () => {
     }
 
     // The tag the drop created is a real tag on the real task.
-    const tagged = await page.evaluate(async (title) => {
-      const frame = document.querySelector('plugin-index iframe') as HTMLIFrameElement;
-      const api = (frame.contentWindow as unknown as { PluginAPI: any }).PluginAPI;
-      const [tasks, tags] = await Promise.all([api.getTasks(), api.getAllTags()]);
-      const task = tasks.find((t: { title: string }) => t.title === title);
-      return task.tagIds.map(
-        (id: string) => tags.find((t: { id: string }) => t.id === id)?.title,
-      );
-    }, first);
-    expect(tagged).toEqual(['Doing']);
+    const tags = await tagsOf(page, first);
+    expect(tags.map((t) => t.title)).toEqual(['Doing']);
   });
 });

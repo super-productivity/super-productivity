@@ -11,9 +11,11 @@ import { emptySpec, isReadOnlySpec, ViewSpec } from '../core/spec';
 import type { ModelEnv } from '../core/cards';
 import { buildModel, specNeedsArchive } from '../core/model';
 import { dropWrite } from '../core/board';
+import { applyRecipe, RecipeName, RECIPES } from '../core/recipes';
 import { EditError, MODELS, runEdit } from '../core/edit-loop';
 import { matchViewByName, parseLocalCommand } from '../core/commands';
 import { renderView } from './render';
+import { renderRecipeChips } from './recipe-chips';
 import { enableBoardDrag } from './drag';
 import { isOnDevice, isVoiceSupported, listen } from './voice';
 import {
@@ -28,28 +30,6 @@ import {
 } from './store';
 
 declare const PluginAPI: PluginAPI;
-
-const SUGGESTIONS: { label: string; request: string }[] = [
-  {
-    label: 'Kanban board',
-    request: 'A kanban board with To do, Doing and Done for what I have open.',
-  },
-  {
-    label: 'Eisenhower matrix',
-    request:
-      'An Eisenhower matrix of my open tasks, using the tags Urgent and Important.',
-  },
-  {
-    label: 'Today, by project',
-    request:
-      "Today's open tasks grouped by project, with how much time I tracked today at the top.",
-  },
-  {
-    label: 'Weekly review',
-    request:
-      'A weekly review: time spent and tasks done this week at the top, then what I finished this week grouped by project, then what is overdue.',
-  },
-];
 
 // ---------- DOM ----------
 
@@ -343,6 +323,26 @@ const submit = async (raw: string): Promise<void> => {
     setBusy(false);
     renderChrome();
   }
+};
+
+/** A ready-made view from a chip: applied here, so it needs no key and no model. */
+const applyLocalRecipe = async (name: RecipeName): Promise<void> => {
+  if (state.editing) return;
+  if (!state.current) startDraft();
+  const base = state.current!.spec;
+  const result = applyRecipe(base, { name });
+  if (result.error) {
+    setStatus(result.error, true);
+    return;
+  }
+  pushHistory(state.undo, state.current!.id, base);
+  state.redo.delete(state.current!.id);
+  await commitSpec(result.spec, RECIPES[name].label);
+  state.selectedId = null;
+  setStatus(RECIPES[name].said);
+  renderChrome();
+  await loadEnv();
+  render(true, true);
 };
 
 const undoRedo = async (kind: 'undo' | 'redo'): Promise<void> => {
@@ -682,16 +682,7 @@ PluginAPI.registerHook(PluginHooks.PERSISTED_DATA_CHANGED, async () => {
 
 // ---------- start ----------
 
-for (const s of SUGGESTIONS) {
-  const button = document.createElement('button');
-  button.type = 'button';
-  button.textContent = s.label;
-  button.addEventListener('click', () => {
-    ui.commandInput.value = s.request;
-    void submit(s.request);
-  });
-  ui.suggestions.appendChild(button);
-}
+renderRecipeChips(ui.suggestions, (name) => void applyLocalRecipe(name));
 for (const m of MODELS) {
   const option = document.createElement('option');
   option.value = m.id;

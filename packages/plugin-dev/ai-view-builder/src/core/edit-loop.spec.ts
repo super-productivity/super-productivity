@@ -79,6 +79,8 @@ const fakeFetch = (bodies: string[], requests: Record<string, unknown>[]): typeo
     });
   }) as typeof fetch;
 
+const SAY: ToolCall = { id: 's1', name: 'say', input: { text: 'Done.' } };
+
 const BOARD_STEPS: ToolCall[] = [
   { id: 't1', name: 'put_query', input: { id: 'open', props: { scope: '@current' } } },
   {
@@ -256,4 +258,27 @@ test('a newer view cannot be edited by this version', async () => {
     }),
     /newer version/,
   );
+});
+
+test('a recipe call builds the whole view and answers with the ids it made', async () => {
+  const requests: Record<string, unknown>[] = [];
+  const recipe: ToolCall = { id: 'r1', name: 'use_recipe', input: { name: 'kanban' } };
+  const tweak: ToolCall = {
+    id: 'r2',
+    name: 'put_component',
+    input: { id: 'board', props: { columnsPerRow: 2 } },
+  };
+  const result = await runEdit({
+    fetchFn: fakeFetch([turn([recipe]), turn([tweak, SAY])], requests),
+    apiKey: 'k',
+    model: 'claude-sonnet-5-5',
+    spec: emptySpec(),
+    request: 'A kanban board in a grid',
+  });
+  assert.equal(result.rejectedSteps, 0);
+  assert.equal(result.rounds, 2);
+  assert.equal(result.spec.components.board.columnsPerRow, 2);
+  assert.equal(result.spec.title, 'Kanban board');
+  const second = requests[1].messages as { content: { content?: string }[] }[];
+  assert.match(second[2].content[0].content ?? '', /^ok\. .*board \(board\)/);
 });

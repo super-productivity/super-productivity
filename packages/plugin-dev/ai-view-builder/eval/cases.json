@@ -81,6 +81,56 @@
       }
     },
     {
+      "id": "recipe-kanban-project",
+      "start": "empty",
+      "request": "A kanban board for my Work project",
+      "expect": {
+        "types": ["board"],
+        "columnTags": ["@doing"],
+        "queryHas": { "scope": "Work" }
+      }
+    },
+    {
+      "id": "recipe-plan-week",
+      "start": "empty",
+      "request": "Help me plan my week",
+      "expect": { "types": ["agenda"] }
+    },
+    {
+      "id": "recipe-agenda-days",
+      "start": "empty",
+      "request": "What is due on each of the next 5 days, and what is overdue?",
+      "expect": { "types": ["agenda"] }
+    },
+    {
+      "id": "recipe-deadlines",
+      "start": "empty",
+      "request": "Which of my tasks have a deadline coming up?",
+      "expect": { "types": ["taskList"], "queryHas": { "hasDeadline": true } }
+    },
+    {
+      "id": "recipe-time-week",
+      "start": "empty",
+      "request": "Where did my time go this week, by project and by day?",
+      "expect": { "types": ["timeBreakdown"] }
+    },
+    {
+      "id": "recipe-waiting",
+      "start": "empty",
+      "request": "Everything I am waiting on",
+      "expect": { "types": ["taskList"], "queryHas": { "tags": ["Waiting"] } }
+    },
+    {
+      "id": "recipe-today-german",
+      "start": "empty",
+      "request": "Heute fällige Aufgaben, nach Projekt gruppiert",
+      "expect": {
+        "types": ["taskList"],
+        "groupBy": "project",
+        "queryHas": { "due": "today" }
+      }
+    },
+    {
       "id": "group-project",
       "start": "list",
       "request": "Group by project",

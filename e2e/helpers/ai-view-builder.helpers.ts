@@ -75,16 +75,23 @@ export const serveTurns = async (
   return requestBodies;
 };
 
-/** Enables the plugin, opens its page and saves a fake key. Tasks go in first. */
-export const openPlugin = async (page: Page): Promise<FrameLocator> => {
+/**
+ * Enables the plugin and opens its page, with a fake API key saved unless
+ * `withKey` is false. Tasks go in first.
+ */
+export const openPlugin = async (page: Page, withKey = true): Promise<FrameLocator> => {
   expect(await waitForPluginManagementInit(page)).toBe(true);
   expect(await enablePluginWithVerification(page, PLUGIN_NAME)).toBe(true);
   expect(await waitForPluginInMenu(page, PLUGIN_NAME)).toBe(true);
   await page.goto('/#/plugins/ai-view-builder/index');
   const plugin = page.frameLocator(PLUGIN_IFRAME);
-  await plugin.locator('#apiKeyInput').fill('sk-ant-e2e-key');
-  await plugin.locator('#saveKeyBtn').click();
-  await expect(plugin.locator('#keyStatus')).toHaveText('A key is saved on this device.');
+  if (withKey) {
+    await plugin.locator('#apiKeyInput').fill('sk-ant-e2e-key');
+    await plugin.locator('#saveKeyBtn').click();
+    await expect(plugin.locator('#keyStatus')).toHaveText(
+      'A key is saved on this device.',
+    );
+  }
   return plugin;
 };
 
@@ -112,20 +119,30 @@ export const dragTo = async (
   const to = await column.boundingBox();
   if (!from || !to) throw new Error('card or column not visible');
   // Grab the card by its middle; its buttons do not start a drag.
-  const grabX = from.x + from.width / 2;
-  const grabY = from.y + from.height / 2;
+  const halfCardWidth = from.width / 2;
+  const halfCardHeight = from.height / 2;
+  const halfColumnWidth = to.width / 2;
+  const grabX = from.x + halfCardWidth;
+  const grabY = from.y + halfCardHeight;
   await page.mouse.move(grabX, grabY);
   await page.mouse.down();
   await page.mouse.move(grabX + 20, grabY, { steps: 4 });
-  await page.mouse.move(to.x + to.width / 2, to.y + 40, { steps: 10 });
+  await page.mouse.move(to.x + halfColumnWidth, to.y + 40, { steps: 10 });
   await page.mouse.up();
 };
 
-/** The ids of the tags a task carries, read through the plugin's own API. */
-export const tagIdsOf = async (page: Page, taskTitle: string): Promise<string[]> =>
+/** The tags a task carries, read through the plugin's own API. */
+export const tagsOf = async (
+  page: Page,
+  taskTitle: string,
+): Promise<{ id: string; title: string }[]> =>
   page.evaluate(async (title) => {
     const frame = document.querySelector('plugin-index iframe') as HTMLIFrameElement;
     const api = (frame.contentWindow as unknown as { PluginAPI: any }).PluginAPI;
-    const tasks = await api.getTasks();
-    return tasks.find((t: { title: string }) => t.title === title).tagIds;
+    const [tasks, tags] = await Promise.all([api.getTasks(), api.getAllTags()]);
+    const task = tasks.find((t: { title: string }) => t.title === title);
+    return task.tagIds.map((id: string) => ({
+      id,
+      title: tags.find((t: { id: string }) => t.id === id)?.title,
+    }));
   }, taskTitle);

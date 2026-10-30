@@ -1,5 +1,4 @@
 import {
-  applyStep,
   finalizeSpec,
   findDanglingRefs,
   isReadOnlySpec,
@@ -7,6 +6,7 @@ import {
   ViewSpec,
 } from './spec';
 import { buildUserText, SYSTEM_PROMPT, TOOLS } from './prompt';
+import { applyToolCall } from './recipes';
 
 // One request = one edit: stream the model's tool calls, apply each one to a
 // working copy as soon as it is complete, answer them, and repeat for a few
@@ -282,7 +282,7 @@ export const runEdit = async (opts: EditOptions): Promise<EditResult> => {
     let roundSaid = false;
     const assembler = createMessageAssembler((block) => {
       const name = String(block.name);
-      const result = applyStep(spec, name, block.input);
+      const result = applyToolCall(spec, name, block.input);
       steps++;
       if (firstStepMs === null && name !== 'say') firstStepMs = now() - started;
       if (result.error) {
@@ -303,7 +303,7 @@ export const runEdit = async (opts: EditOptions): Promise<EditResult> => {
         toolResults.push({
           type: 'tool_result',
           tool_use_id: String(block.id),
-          content: 'ok',
+          content: result.summary ? `ok. ${result.summary}` : 'ok',
         });
       }
       opts.onStep?.({ name, input: block.input, result, spec });

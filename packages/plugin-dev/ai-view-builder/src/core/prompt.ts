@@ -9,6 +9,7 @@ import {
   SORT_KEYS,
   ViewSpec,
 } from './spec';
+import { RECIPE_NAMES, RECIPES } from './recipes';
 
 // The system prompt and tools are fixed text, sent first and cached; the
 // current spec and the request follow them. Nothing here or in the request
@@ -52,6 +53,10 @@ put_component and put_query merge props into what exists. Send only what changes
 - text: matches task titles.
 - includeArchived: true adds older archived tasks; rarely needed.
 - sort: ${list(SORT_KEYS)}. "context" is the project's or Today's own order and the default. sortDir: asc or desc. limit: 1 to 500.
+
+# Ready-made views
+use_recipe { name, params? } replaces the whole view with one of these. Use it when the request is one of them, and make further changes with the other calls. params: { scope?, tag? }, where scope is a project or tag name in place of the default.
+${RECIPE_NAMES.map((name) => `- ${name} (scope ${RECIPES[name].defaultScope}): ${RECIPES[name].hint}`).join('\n')}
 
 # Examples
 "Make this a kanban board", starting from an empty view:
@@ -117,6 +122,22 @@ export const TOOLS = [
     input_schema: {
       type: 'object',
       properties: { title: { type: 'string' }, root: idProp },
+    },
+  },
+  {
+    name: 'use_recipe',
+    description:
+      'Replace the whole view with a ready-made one. Returns the ids it made, for further changes.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', enum: [...RECIPE_NAMES] },
+        params: {
+          type: 'object',
+          properties: { scope: { type: 'string' }, tag: { type: 'string' } },
+        },
+      },
+      required: ['name'],
     },
   },
   {
