@@ -73,6 +73,14 @@ export const startApp = (): void => {
 
   app.commandLine.appendSwitch('enable-speech-dispatcher');
 
+  // Timers must keep their rate while the window is hidden: the tracking tick,
+  // tray title, reminders and focus sessions all run on them (#2028). Chromium
+  // otherwise slows a hidden page's timers to once per minute after 5 minutes
+  // and lowers the renderer's process priority. The windows keep
+  // `backgroundThrottling` on, so rendering still stops while hidden.
+  app.commandLine.appendSwitch('disable-background-timer-throttling');
+  app.commandLine.appendSwitch('disable-renderer-backgrounding');
+
   // work around for #4375
   // https://github.com/super-productivity/super-productivity/issues/4375#issuecomment-2883838113
   // https://github.com/electron/electron/issues/46538#issuecomment-2808806722

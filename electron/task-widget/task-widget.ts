@@ -214,7 +214,8 @@ const createTaskWidgetWindowForGeneration = async (
     disableDialogs: true,
     webSecurity: true,
     allowRunningInsecureContent: false,
-    backgroundThrottling: false, // Prevent throttling when hidden
+    // Stop rendering while hidden; see main-window.ts.
+    backgroundThrottling: true,
     // Also disabled session-wide in start-app; this is the layer that holds if
     // that call is skipped or this window ever gets its own session.
     spellcheck: false,
