@@ -1,3 +1,4 @@
+import { INBOX_PROJECT } from '../../project/project.const';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { BoardPanelComponent } from './board-panel.component';
 import { BoardPanelCfg, BoardPanelCfgTaskTypeFilter } from '../boards.model';
@@ -1276,6 +1277,101 @@ describe('BoardPanelComponent - drop()', () => {
       );
     });
 
+    it('moves a row past the section edge into the next section, also when sorted', async () => {
+      await setup(['a', 'b', 'done'].map((id) => mkTask({ id, isDone: id === 'done' })));
+      fixture.componentRef.setInput('panelCfg', listPanel({ sortBy: 'title' }));
+      fixture.componentRef.setInput('isListLayout', true);
+      fixture.componentRef.setInput('isSection', true);
+      fixture.detectChanges();
+      const emitted: unknown[] = [];
+      component.adjacentPanel.subscribe((ev) => emitted.push(ev));
+
+      expect(component.moveRow('b', 'down')).toBeTrue();
+      expect(component.moveRow('a', 'up')).toBeTrue();
+      expect(emitted).toEqual([
+        { direction: 'down', rowIndex: 0, taskIds: ['b'], focusTaskId: 'b' },
+        { direction: 'up', rowIndex: 0, taskIds: ['a'], focusTaskId: 'a' },
+      ]);
+      // Sorted: no reorder inside the section. Done rows stay in their section.
+      expect(component.moveRow('a', 'down')).toBeFalse();
+      expect(component.moveRow('done', 'down')).toBeFalse();
+      expect(emitted.length).toBe(2);
+      expect(dispatchSpy).not.toHaveBeenCalled();
+    });
+
+    it('keeps a row in a single-panel list at its edge', async () => {
+      await setup(['a', 'b'].map((id) => mkTask({ id })));
+      fixture.componentRef.setInput('panelCfg', listPanel({ taskIds: ['a', 'b'] }));
+      fixture.componentRef.setInput('isListLayout', true);
+      fixture.detectChanges();
+      const emit = spyOn(component.adjacentPanel, 'emit');
+
+      expect(component.moveRow('a', 'up')).toBeFalse();
+      expect(emit).not.toHaveBeenCalled();
+      expect(dispatchSpy).not.toHaveBeenCalled();
+    });
+
+    it('shows an open subtask of a done parent among the open rows', async () => {
+      await setup([
+        mkTask({ id: 'parent', isDone: true, subTaskIds: ['open', 'closed'] }),
+        mkTask({ id: 'open', parentId: 'parent' }),
+        mkTask({ id: 'closed', parentId: 'parent', isDone: true }),
+      ]);
+      fixture.componentRef.setInput('panelCfg', listPanel());
+      fixture.componentRef.setInput('isListLayout', true);
+      fixture.detectChanges();
+
+      expect(component.mainRows().map((row) => row.id)).toEqual(['open']);
+      expect(component.doneRows().map((row) => row.id)).toEqual(['parent']);
+      expect(component.isRow('open')).toBeTrue();
+      expect(component.isRow('closed')).toBeFalse();
+    });
+
+    it('gives the add-task bar an explicit project, and nothing for unreachable rules', async () => {
+      await setup([]);
+      fixture.componentRef.setInput('panelCfg', listPanel({ priorityRule: '3' }));
+      fixture.componentRef.setInput('isListLayout', true);
+      fixture.detectChanges();
+
+      expect(component.newTaskTarget()).toEqual({
+        additionalFields: { priority: 3, projectId: INBOX_PROJECT.id },
+        tagsToRemove: [],
+        taskIdsToExclude: [],
+      });
+
+      fixture.componentRef.setInput('panelCfg', listPanel({ dueState: 'overdue' }));
+      fixture.detectChanges();
+      expect(component.newTaskTarget()).toBeNull();
+    });
+
+    it('builds a collapsed section without its rows', async () => {
+      await setup([mkTask({ id: 'a' })]);
+      fixture.componentRef.setInput('panelCfg', listPanel({ title: 'Later' }));
+      fixture.componentRef.setInput('isListLayout', true);
+      fixture.componentRef.setInput('isSection', true);
+      fixture.detectChanges();
+      const el = fixture.nativeElement as HTMLElement;
+      expect(el.querySelector('collapsible')).not.toBeNull();
+      expect(el.querySelector('task-list')).not.toBeNull();
+      expect(el.querySelector('header')).toBeNull();
+
+      component.isSectionExpanded.set(false);
+      fixture.detectChanges();
+      expect(el.querySelector('task-list')).toBeNull();
+      expect(el.querySelector('add-task-inline')).toBeNull();
+    });
+
+    it('has no header or inline add row as the only list of a view', async () => {
+      await setup([mkTask({ id: 'a' })]);
+      fixture.componentRef.setInput('panelCfg', listPanel());
+      fixture.componentRef.setInput('isListLayout', true);
+      fixture.detectChanges();
+      const el = fixture.nativeElement as HTMLElement;
+      expect(el.querySelector('header')).toBeNull();
+      expect(el.querySelector('add-task-inline')).toBeNull();
+      expect(el.querySelector('.list-status')?.textContent).toContain('1');
+    });
+
     it("leaves a sorted column's order alone", async () => {
       await setup(['a', 'b'].map((id) => mkTask({ id })));
       fixture.componentRef.setInput('panelCfg', listPanel({ sortBy: 'title' }));
@@ -1459,8 +1555,8 @@ describe('BoardPanelComponent - drop()', () => {
       fixture.detectChanges();
 
       const drag = (task: TaskCopy): any => ({ data: task });
-      expect(component.canEnter(drag(mkTask({ dueDay: '2026-09-01' })))).toBeTrue();
-      expect(component.canEnter(drag(mkTask({ dueDay: '2026-09-12' })))).toBeFalse();
+      expect(component.canEnterCard(drag(mkTask({ dueDay: '2026-09-01' })))).toBeTrue();
+      expect(component.canEnterCard(drag(mkTask({ dueDay: '2026-09-12' })))).toBeFalse();
       expect(component.isAddTaskHidden()).toBeTrue();
     });
   });

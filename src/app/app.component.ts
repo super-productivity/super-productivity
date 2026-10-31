@@ -92,6 +92,7 @@ import { OnboardingHintService } from './features/onboarding/onboarding-hint.ser
 import { QuickTourService } from './features/onboarding/quick-tour.service';
 import { MaterialIconsLoaderService } from './ui/material-icons-loader.service';
 import { BrowserTitleService } from './core/browser-title/browser-title.service';
+import { ViewTaskListRegistry } from './features/tasks/view-task-list-registry.service';
 
 const ENTRANCE_ANIMATION_DURATION = 1500;
 
@@ -178,6 +179,12 @@ export class AppComponent implements OnDestroy, AfterViewInit {
   private _syncTriggerService = inject(SyncTriggerService);
   readonly workContextService = inject(WorkContextService);
   readonly layoutService = inject(LayoutService);
+  private readonly _viewTaskListRegistry = inject(ViewTaskListRegistry);
+  // On a view shown as a task list, the add-task bar adds into the view (its
+  // rules applied) instead of the project or tag that was open before.
+  readonly viewAddTarget = computed(
+    () => this._viewTaskListRegistry.addTarget()?.newTaskTarget() ?? null,
+  );
   readonly globalThemeService = inject(GlobalThemeService);
   readonly _store = inject(Store);
   private _sectionService = inject(SectionService);
@@ -425,7 +432,10 @@ export class AppComponent implements OnDestroy, AfterViewInit {
     return this._activeWorkContextId() ?? null;
   }
 
-  onTaskAdded({ taskId }: TaskAddEvent): void {
+  onTaskAdded(ev: TaskAddEvent): void {
+    // Read when the task is added: the view may have closed meanwhile.
+    void this._viewTaskListRegistry.addTarget()?.afterTaskAdd(ev);
+    const { taskId } = ev;
     this.layoutService.setPendingFocusTaskId(taskId);
     this.layoutService.scrollToNewTask(taskId);
     if (this.onboardingHintService.shouldAutoCloseFirstTaskComposer(taskId)) {

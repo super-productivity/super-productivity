@@ -1,74 +1,120 @@
-<header>
-  <div class="title">{{ panelCfg().title | translate }}</div>
-  @if (headerCount()) {
-    <div class="tasks-total-estimate">
-      @if (totalEstimate()) {
-        <!-- placeholder hidden: the pipe renders '-' for any sub-minute total -->
-        <span>{{ totalEstimate() | msToString: false : true }}</span>
-      }
-      <mat-icon>task_alt</mat-icon>{{ headerCount() }}
-    </div>
-  }
-  <button
-    mat-icon-button
-    (click)="editBoard.emit()"
-    [attr.aria-label]="T.G.EDIT | translate"
-  >
-    <mat-icon>edit</mat-icon>
-  </button>
-
-  <!--        <button mat-icon-button>-->
-  <!--          <mat-icon>more_vert</mat-icon>-->
-  <!--        </button>-->
-</header>
-
-@if (!isAddTaskHidden()) {
-  <add-task-inline
-    style="margin-bottom: 8px"
-    [additionalFields]="additionalTaskFields()"
-    [tagsToRemove]="tagsToRemoveForInlineCreate()"
-    [taskIdsToExclude]="panelCfg().taskIds"
-    [isNoDefaults]="true"
-    (afterTaskAdd)="afterTaskAdd($event)"
-  ></add-task-inline>
-}
-
 @if (isListLayout()) {
-  <!-- Rows reorder the view through VIEW_TASK_LIST (see BoardPanelComponent). -->
-  <task-list
-    class="view-task-list"
-    [tasks]="mainRows()"
-    listId="PARENT"
-    listModelId="VIEW"
-    [isSortingDisabled]="!isManualOrder()"
-    [noTasksMsg]="
-      doneRows().length ? undefined : (T.F.BOARDS.V.NO_TASKS_IN_VIEW | translate)
-    "
-  ></task-list>
-  @if (doneRows().length) {
+  @if (isSection()) {
+    <!-- One section of a sectioned view list: header like Today's sections.
+         The body is built only while expanded (projected content would be
+         created even when collapsed). -->
     <collapsible
-      [title]="(T.WW.DONE_TASKS | translate) + ' (' + doneRows().length + ')'"
+      class="task-section"
+      [title]="(panelCfg().title | translate) + ' (' + headerCount() + ')'"
       [isIconBefore]="true"
-      [isExpanded]="isDoneListExpanded()"
-      (isExpandedChange)="isDoneListExpanded.set($event)"
+      [isGroup]="true"
+      [isExpanded]="isSectionExpanded()"
+      (isExpandedChange)="isSectionExpanded.set($event)"
     >
-      @if (isDoneListExpanded()) {
-        <task-list
-          [tasks]="doneRows()"
-          listId="PARENT"
-          listModelId="VIEW_DONE"
-          [isSortingDisabled]="true"
-        ></task-list>
+      @if (totalEstimate()) {
+        <span
+          actions
+          class="tasks-total-estimate"
+          >{{ totalEstimate() | msToString: false : true }}</span
+        >
+      }
+      @if (isSectionExpanded()) {
+        @if (!isAddTaskHidden()) {
+          <add-task-inline
+            [additionalFields]="additionalTaskFields()"
+            [tagsToRemove]="tagsToRemoveForInlineCreate()"
+            [taskIdsToExclude]="panelCfg().taskIds"
+            [isNoDefaults]="true"
+            (afterTaskAdd)="afterTaskAdd($event)"
+          ></add-task-inline>
+        }
+        <ng-container [ngTemplateOutlet]="listBody"></ng-container>
       }
     </collapsible>
+  } @else {
+    <!-- The view's title and menu are in the title bar; tasks are added with
+         the regular add-task bar (ViewTaskListRegistry). -->
+    @if (headerCount()) {
+      <div class="list-status">
+        @if (totalEstimate()) {
+          <!-- placeholder hidden: the pipe renders '-' for any sub-minute total -->
+          <span>~{{ totalEstimate() | msToString: false : true }}</span>
+        }
+        <span class="count"><mat-icon>task_alt</mat-icon>{{ headerCount() }}</span>
+      </div>
+    }
+    <ng-container [ngTemplateOutlet]="listBody"></ng-container>
   }
+  <ng-template #listBody>
+    <!-- Rows reorder the view through VIEW_TASK_LIST (see BoardPanelComponent). -->
+    <task-list
+      [tasks]="mainRows()"
+      listId="PARENT"
+      listModelId="VIEW"
+      [isSortingDisabled]="!isManualOrder()"
+      [noTasksMsg]="
+        doneRows().length
+          ? undefined
+          : ((isSection() ? T.F.PLANNER.NO_TASKS : T.F.BOARDS.V.NO_TASKS_IN_VIEW)
+            | translate)
+      "
+    ></task-list>
+    @if (doneRows().length) {
+      <collapsible
+        [title]="(T.WW.DONE_TASKS | translate) + ' (' + doneRows().length + ')'"
+        [isIconBefore]="true"
+        [isExpanded]="isDoneListExpanded()"
+        (isExpandedChange)="isDoneListExpanded.set($event)"
+      >
+        @if (isDoneListExpanded()) {
+          <task-list
+            [tasks]="doneRows()"
+            listId="PARENT"
+            listModelId="VIEW_DONE"
+            [isSortingDisabled]="true"
+          ></task-list>
+        }
+      </collapsible>
+    }
+  </ng-template>
 } @else {
+  <header>
+    <div class="title">{{ panelCfg().title | translate }}</div>
+    @if (headerCount()) {
+      <div class="tasks-total-estimate">
+        @if (totalEstimate()) {
+          <!-- placeholder hidden: the pipe renders '-' for any sub-minute total -->
+          <span>{{ totalEstimate() | msToString: false : true }}</span>
+        }
+        <mat-icon>task_alt</mat-icon>{{ headerCount() }}
+      </div>
+    }
+    <button
+      mat-icon-button
+      (click)="editBoard.emit()"
+      [attr.aria-label]="T.G.EDIT | translate"
+    >
+      <mat-icon>edit</mat-icon>
+    </button>
+  </header>
+
+  @if (!isAddTaskHidden()) {
+    <add-task-inline
+      style="margin-bottom: 8px"
+      [additionalFields]="additionalTaskFields()"
+      [tagsToRemove]="tagsToRemoveForInlineCreate()"
+      [taskIdsToExclude]="panelCfg().taskIds"
+      [isNoDefaults]="true"
+      (afterTaskAdd)="afterTaskAdd($event)"
+    ></add-task-inline>
+  }
+
   <div
     class="task-items"
     cdkDropList
     [cdkDropListData]="tasks()"
     [cdkDropListSortingDisabled]="!isManualOrder()"
-    [cdkDropListEnterPredicate]="canEnter"
+    [cdkDropListEnterPredicate]="canEnterCard"
     (cdkDropListDropped)="drop($event)"
   >
     @for (task of tasks(); track task.id) {

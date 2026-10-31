@@ -922,9 +922,12 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
     if (!this._viewTaskList?.isRow(id)) {
       return false;
     }
-    this._viewTaskList.moveRow(id, to);
-    setTimeout(() => this.focusSelf());
-    setTimeout(() => this.focusSelf(), 10);
+    // A row that moved into another section is leaving: the target section
+    // focuses its new row instead.
+    if (!this._viewTaskList.moveRow(id, to)) {
+      setTimeout(() => this.focusSelf());
+      setTimeout(() => this.focusSelf(), 10);
+    }
     return true;
   }
 

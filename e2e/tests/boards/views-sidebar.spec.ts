@@ -102,8 +102,9 @@ test.describe('Views in the side menu', () => {
 
     const panels = page.locator('boards board-panel');
     await expect(panels).toHaveCount(3);
+    // One column: the panels are sections of one task list.
     const card = (panelIndex: number): Locator =>
-      panels.nth(panelIndex).locator('planner-task').filter({ hasText: taskTitle });
+      panels.nth(panelIndex).locator('task').filter({ hasText: taskTitle });
     await expect(card(0)).toHaveCount(1);
     await expect(card(1)).toHaveCount(0);
     // No date makes a task overdue, so that column has no add row.

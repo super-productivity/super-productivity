@@ -3,6 +3,8 @@ import {
   ChangeDetectionStrategy,
   Component,
   computed,
+  DestroyRef,
+  effect,
   ElementRef,
   inject,
   input,
@@ -29,6 +31,7 @@ import {
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { BoardsService } from '../boards.service';
 import { T } from '../../../t.const';
+import { ViewTaskListRegistry } from '../../tasks/view-task-list-registry.service';
 
 @Component({
   selector: 'board',
@@ -41,6 +44,7 @@ import { T } from '../../../t.const';
     '[style.--cols]': 'missingTagIds().length === 0 && boardCfg().cols',
     // One column reads like a task list: list width, centered.
     '[class.isSingleColumn]': 'boardCfg().cols <= 1',
+    '[class.isListLayout]': 'isListLayout()',
   },
 })
 export class BoardComponent {
@@ -86,12 +90,23 @@ export class BoardComponent {
     target.focusRow(event.rowIndex, event.focusTaskId ?? event.taskIds?.[0]);
   }
 
-  // A view with one column and one panel reads like a task list: task rows
-  // instead of cards. Boards with several panels keep their cards (and their
-  // keyboard moves between panels), however many columns they have.
-  readonly isListLayout = computed(
-    () => this.boardCfg().cols <= 1 && this.boardCfg().panels.length === 1,
+  // A one-column view reads like a task list: task rows instead of cards,
+  // its stacked panels being sections of that list (rows move between them
+  // by drag and keyboard as cards did). Boards with columns keep their cards.
+  readonly isListLayout = computed(() => this.boardCfg().cols <= 1);
+  readonly isSectioned = computed(
+    () => this.isListLayout() && this.boardCfg().panels.length > 1,
   );
+
+  constructor() {
+    // The open view list's columns, in display order: the add-task bar adds
+    // into the first one that accepts new tasks.
+    const registry = inject(ViewTaskListRegistry);
+    effect(() => {
+      registry.set(this, this.isListLayout() ? this._panels() : []);
+    });
+    inject(DestroyRef).onDestroy(() => registry.clear(this));
+  }
 
   allExistingTagIds = toSignal(this._store.select(selectAllTagIds), { initialValue: [] });
 

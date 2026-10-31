@@ -15,6 +15,7 @@ import {
   viewChildren,
 } from '@angular/core';
 import { CdkDrag, CdkDragDrop, CdkDropList } from '@angular/cdk/drag-drop';
+import { NgTemplateOutlet } from '@angular/common';
 import { PlannerTaskComponent } from '../../planner/planner-task/planner-task.component';
 import { BoardPanelCfg, BoardPanelCfgTaskDoneState } from '../boards.model';
 import {
@@ -45,7 +46,12 @@ import {
 } from '../../tasks/store/task.selectors';
 import { TaskListComponent } from '../../tasks/task-list/task-list.component';
 import { CollapsibleComponent } from '../../../ui/collapsible/collapsible.component';
-import { VIEW_TASK_LIST, ViewTaskListHost } from '../../tasks/view-task-list.token';
+import {
+  VIEW_TASK_LIST,
+  ViewNewTaskTarget,
+  ViewTaskListHost,
+} from '../../tasks/view-task-list.token';
+import { INBOX_PROJECT } from '../../project/project.const';
 import { selectAllTags } from '../../tag/store/tag.reducer';
 import { getDeadlineAutoPlanFields } from '../../tasks/util/get-deadline-auto-plan-fields';
 import { Store } from '@ngrx/store';
@@ -128,6 +134,7 @@ export interface BoardPanelNavigation {
     MsToStringPipe,
     TaskListComponent,
     CollapsibleComponent,
+    NgTemplateOutlet,
   ],
   templateUrl: './board-panel.component.html',
   styleUrl: './board-panel.component.scss',
@@ -142,6 +149,8 @@ export interface BoardPanelNavigation {
     // drops the board scope, so multi-select scopes to its task list.
     // eslint-disable-next-line @typescript-eslint/naming-convention
     '[attr.data-board-selection-scope]': 'isListLayout() ? null : panelCfg().id',
+    // eslint-disable-next-line @typescript-eslint/naming-convention
+    '[class.isListLayout]': 'isListLayout()',
   },
 })
 export class BoardPanelComponent implements TaskCardList, ViewTaskListHost {
@@ -151,6 +160,8 @@ export class BoardPanelComponent implements TaskCardList, ViewTaskListHost {
   panelCfg = input.required<BoardPanelCfg>();
   // One-column views show task rows (`task-list`) instead of cards.
   isListLayout = input<boolean>(false);
+  // List layout with several panels: this panel is one section of the list.
+  isSection = input<boolean>(false);
   editBoard = output<void>();
   adjacentPanel = output<BoardPanelNavigation>();
 
@@ -192,12 +203,23 @@ export class BoardPanelComponent implements TaskCardList, ViewTaskListHost {
     isCriteriaUnreachableForNewTasks(this.criteria()),
   );
 
+  /** Whether a change of the task can make it match (refused moves stay put). */
+  canEnter(task: TaskCopy): boolean {
+    return getChangesToMatch(task, this.criteria(), this.criteriaCtx()) !== null;
+  }
+
   // CDK only passes the dragged item; `moveTasks` checks the whole selection.
-  readonly canEnter = (drag: CdkDrag<TaskCopy>): boolean =>
-    !drag.data ||
-    getChangesToMatch(drag.data, this.criteria(), this.criteriaCtx()) !== null;
+  readonly canEnterCard = (drag: CdkDrag<TaskCopy>): boolean =>
+    !drag.data || this.canEnter(drag.data);
 
   rows(): HTMLElement[] {
+    if (this.isListLayout()) {
+      // Top-level task rows of this panel (not nested subtasks). Rows of a
+      // task shown in two sections are told apart by their panel.
+      return Array.from(
+        this._element.nativeElement.querySelectorAll<HTMLElement>('task[data-task-id]'),
+      ).filter((row) => !row.parentElement?.closest('task'));
+    }
     return this._cards().map((card) => card.nativeElement as HTMLElement);
   }
 
@@ -206,6 +228,18 @@ export class BoardPanelComponent implements TaskCardList, ViewTaskListHost {
   }
 
   focusRow(index: number, taskId?: string): void {
+    if (this.isListLayout()) {
+      // A section a row was moved into may be collapsed; rows render later.
+      this.isSectionExpanded.set(true);
+      afterNextRender(() => this._focusRowNow(index, taskId), {
+        injector: this._injector,
+      });
+      return;
+    }
+    this._focusRowNow(index, taskId);
+  }
+
+  private _focusRowNow(index: number, taskId?: string): void {
     const rows = this.rows();
     const target =
       (taskId && rows.find((row) => row.dataset.taskId === taskId)) ||
@@ -370,6 +404,7 @@ export class BoardPanelComponent implements TaskCardList, ViewTaskListHost {
   additionalTaskFields = computed(() => {
     const panelCfg = this.panelCfg();
     const tagsToAdd = this.tagsToAddForInlineCreate();
+    const priority = this.criteria().priority;
     const firstProjectId = isAllProjects(panelCfg.projectIds)
       ? undefined
       : firstSpecificProjectId(panelCfg.projectIds);
@@ -383,9 +418,7 @@ export class BoardPanelComponent implements TaskCardList, ViewTaskListHost {
         ? { isDone: false }
         : {}),
       ...(firstProjectId ? { projectId: firstProjectId } : {}),
-      ...(typeof this.criteria().priority === 'number'
-        ? { priority: this.criteria().priority }
-        : {}),
+      ...(typeof priority === 'number' ? { priority } : {}),
       // Dates, deadline and backlog are applied after creation (afterTaskAdd).
     };
   });
@@ -740,9 +773,15 @@ export class BoardPanelComponent implements TaskCardList, ViewTaskListHost {
   private readonly _rowIds = computed(
     () => {
       const tasks = this.tasks();
-      const matching = new Set(tasks.map((task) => task.id));
+      const matchingById = new Map(tasks.map((task) => [task.id, task]));
+      const isDoneSplit = this._isDoneSplit();
       return tasks
-        .filter((task) => !task.parentId || !matching.has(task.parentId))
+        .filter((task) => {
+          const parent = task.parentId && matchingById.get(task.parentId);
+          // An open subtask of a done parent stays visible among the open rows
+          // instead of hiding in the collapsed done section.
+          return !parent || (isDoneSplit && parent.isDone && !task.isDone);
+        })
         .map((task) => task.id);
     },
     { equal: fastArrayCompare },
@@ -774,6 +813,8 @@ export class BoardPanelComponent implements TaskCardList, ViewTaskListHost {
   // Local only, never synced: built on first expand (a view across all
   // projects can hold many done tasks).
   readonly isDoneListExpanded = signal(false);
+  // Local only, never synced, like the done section.
+  readonly isSectionExpanded = signal(true);
   readonly tagsToHide = computed(() => this.panelCfg().includedTagIds ?? []);
   readonly headerCount = computed(() =>
     this.isListLayout() ? this.mainRows().length : this.tasks().length,
@@ -802,18 +843,21 @@ export class BoardPanelComponent implements TaskCardList, ViewTaskListHost {
     }
   }
 
-  moveRow(taskId: string, to: 'up' | 'down' | 'top' | 'bottom'): void {
-    if (!this.isManualOrder()) {
-      return;
-    }
+  moveRow(taskId: string, to: 'up' | 'down' | 'top' | 'bottom'): boolean {
     const task = this._rows().find((row) => row.id === taskId);
-    // Rows move within their section (open or done).
-    const rows = (
-      task?.isDone && this._isDoneSplit() ? this.doneRows() : this.mainRows()
-    ).map((row) => row.id);
+    const isDoneRow = !!task?.isDone && this._isDoneSplit();
+    // Rows move within their part of the section (open or done).
+    const rows = (isDoneRow ? this.doneRows() : this.mainRows()).map((row) => row.id);
     const i = rows.indexOf(taskId);
     if (i === -1) {
-      return;
+      return false;
+    }
+    const isEdge = (to === 'up' && i === 0) || (to === 'down' && i === rows.length - 1);
+    if (isEdge) {
+      return this._moveToAdjacentSection(taskId, to, isDoneRow);
+    }
+    if (!this.isManualOrder()) {
+      return false;
     }
     const others = rows.filter((id) => id !== taskId);
     const targetIndex =
@@ -822,11 +866,59 @@ export class BoardPanelComponent implements TaskCardList, ViewTaskListHost {
         : to === 'bottom'
           ? others.length
           : Math.max(0, Math.min(others.length, i + (to === 'up' ? -1 : 1)));
-    if (targetIndex === i) {
-      return;
+    if (targetIndex !== i) {
+      this.placeRow(taskId, targetIndex > 0 ? others[targetIndex - 1] : null);
     }
-    this.placeRow(taskId, targetIndex > 0 ? others[targetIndex - 1] : null);
+    return false;
   }
+
+  /**
+   * Past a section's first or last open row, a row (or the selection it is
+   * part of) moves into the previous or next section through that section's
+   * rules, like a card moves between stacked panels. Done rows stay.
+   */
+  private _moveToAdjacentSection(
+    taskId: string,
+    direction: 'up' | 'down',
+    isDoneRow: boolean,
+  ): boolean {
+    if (!this.isSection() || isDoneRow) {
+      return false;
+    }
+    const taskIds = this._taskIdsToMove(taskId, this.mainRows());
+    if (!taskIds.length) {
+      return false;
+    }
+    this.adjacentPanel.emit({ direction, rowIndex: 0, taskIds, focusTaskId: taskId });
+    return true;
+  }
+
+  // The regular add-task bar adds into the first column that has this
+  // (ViewTaskListRegistry). The project is always explicit: without it the bar
+  // would use the project that was open before the view.
+  readonly newTaskTarget = computed<ViewNewTaskTarget | null>(() => {
+    if (this.isAddTaskHidden()) {
+      return null;
+    }
+    const fields = this.additionalTaskFields();
+    return {
+      additionalFields: {
+        ...fields,
+        projectId: fields.projectId ?? this._defaultProjectId(),
+      },
+      tagsToRemove: this.tagsToRemoveForInlineCreate(),
+      taskIdsToExclude: this.panelCfg().taskIds,
+    };
+  });
+
+  // Like the add-task bar outside a project: the configured default project,
+  // else the Inbox.
+  private readonly _defaultProjectId = computed(() => {
+    const id = this._config.cfg()?.tasks?.defaultProjectId;
+    return id && this.allProjects().some((project) => project.id === id)
+      ? id
+      : INBOX_PROJECT.id;
+  });
 
   _isTaskInBacklog(task: Readonly<TaskCopy>): boolean {
     return this.allBacklogTaskIds().has(task.parentId || task.id);

@@ -245,6 +245,8 @@ test.describe('Board keyboard navigation', () => {
       await expect(titles).toHaveCount(i + 2);
       await titles.last().fill(name);
     }
+    // Two columns keep cards (a one-column view lists task rows).
+    await form.getByRole('spinbutton', { name: 'Columns' }).fill('2');
     await createDialog.getByRole('button', { name: 'Save', exact: true }).click();
     const panels = page.locator('board-panel');
     const first = panels.nth(0).locator('planner-task');

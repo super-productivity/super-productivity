@@ -152,16 +152,35 @@ describe('TaskListComponent', () => {
         dropContainer: { data: { listId: 'PARENT', listModelId: sourceModelId } },
       }) as unknown as CdkDrag;
 
-    it('accepts rows of a view, subtasks shown on their own included', () => {
+    // A drag within one list: its own drop container.
+    const dragWithin = (task: MockDragTask, drop: CdkDropList): CdkDrag =>
+      ({ data: task, dropContainer: drop }) as unknown as CdkDrag;
+
+    it('accepts rows of its own list, subtasks shown on their own included', () => {
+      const drop = createMockDrop('VIEW');
+      expect(component.enterPredicate(dragWithin({ id: 'a' }, drop), drop)).toBe(true);
       expect(
-        component.enterPredicate(dragFrom({ id: 'a' }, 'VIEW'), createMockDrop('VIEW')),
+        component.enterPredicate(dragWithin({ id: 'sub', parentId: 'p' }, drop), drop),
       ).toBe(true);
+    });
+
+    it("accepts another section's row only where the section's rules can make it match", () => {
+      const canEnter = jasmine
+        .createSpy('canEnter')
+        .and.callFake((task: { id: string }) => task.id === 'fits');
+      (component as unknown as { _viewTaskList: unknown })._viewTaskList = { canEnter };
       expect(
         component.enterPredicate(
-          dragFrom({ id: 'sub', parentId: 'p' }, 'VIEW'),
+          dragFrom({ id: 'fits' }, 'VIEW'),
           createMockDrop('VIEW'),
         ),
       ).toBe(true);
+      expect(
+        component.enterPredicate(
+          dragFrom({ id: 'overdue-only' }, 'VIEW'),
+          createMockDrop('VIEW'),
+        ),
+      ).toBe(false);
     });
 
     it('rejects drags from other lists, issue items and anything into done rows', () => {

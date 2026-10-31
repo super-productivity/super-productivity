@@ -1109,6 +1109,24 @@ describe('TaskComponent shortcut handling', () => {
       destroy();
     });
 
+    it('refocuses a row that stays, not one that left for another section', fakeAsync(() => {
+      const { component: inView, destroy } = createInView({
+        isRow: () => true,
+        moveRow: (_id: string, to: string) => to === 'down',
+      });
+      const focusSelf = spyOn(inView, 'focusSelf');
+
+      inView.moveTaskUp();
+      tick(20);
+      expect(focusSelf).toHaveBeenCalledTimes(2);
+
+      focusSelf.calls.reset();
+      inView.moveTaskDown();
+      tick(20);
+      expect(focusSelf).not.toHaveBeenCalled();
+      destroy();
+    }));
+
     it('never treats the view as the Today list and has no backlog key', () => {
       const { component: inView, destroy } = createInView({ isRow: () => true });
       expect(inView.isTodayListActive()).toBeFalse();

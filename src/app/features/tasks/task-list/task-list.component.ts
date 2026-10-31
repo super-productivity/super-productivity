@@ -278,9 +278,12 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
     if (drop.data.listModelId === 'VIEW_DONE') return false;
     if (drop.data.listModelId === 'VIEW') {
       const selected = this._taskMultiSelectService.selectedIds();
+      const isFromOtherSection = drag.dropContainer !== drop;
       return (
         drag.dropContainer?.data?.listModelId === 'VIEW' &&
-        !(selected.size > 1 && selected.has(drag.data?.id))
+        !(selected.size > 1 && selected.has(drag.data?.id)) &&
+        // Another section's row only where its rules can make it match.
+        (!isFromOtherSection || !drag.data || !!this._viewTaskList?.canEnter(drag.data))
       );
     }
     if (this._isListGroupDrag())

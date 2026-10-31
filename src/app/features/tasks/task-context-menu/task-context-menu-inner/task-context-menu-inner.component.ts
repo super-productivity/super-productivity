@@ -31,7 +31,8 @@ import {
 import { MatDivider } from '@angular/material/divider';
 import { ESTIMATE_OPTIONS } from '../../add-task-bar/add-task-bar.const';
 import { Task, TaskPriority, TaskWithSubTasks } from '../../task.model';
-import { VIEW_TASK_LIST } from '../../view-task-list.token';
+import { VIEW_TASK_LIST, ViewTaskListHost } from '../../view-task-list.token';
+import { ViewTaskListRegistry } from '../../view-task-list-registry.service';
 import { from, Observable, of, ReplaySubject, Subject } from 'rxjs';
 import {
   delay,
@@ -228,6 +229,7 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
 
   // In a view the active context is stale and there's no backlog of its own.
   private readonly _viewTaskList = inject(VIEW_TASK_LIST, { optional: true });
+  private readonly _viewTaskListRegistry = inject(ViewTaskListRegistry);
   isShowMoveFromAndToBacklogBtns$: Observable<boolean> = this._viewTaskList
     ? of(false)
     : this._workContextService.activeWorkContext$.pipe(
@@ -626,19 +628,30 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
   }
 
   moveToTop(): void {
-    if (this._viewTaskList?.isRow(this.task.id)) {
-      this._viewTaskList.moveRow(this.task.id, 'top');
+    const view = this._viewHostForRow();
+    if (view) {
+      view.moveRow(this.task.id, 'top');
       return;
     }
     this._taskService.moveToTop(this.task.id, this.task.parentId, this.isBacklog);
   }
 
   moveToBottom(): void {
-    if (this._viewTaskList?.isRow(this.task.id)) {
-      this._viewTaskList.moveRow(this.task.id, 'bottom');
+    const view = this._viewHostForRow();
+    if (view) {
+      view.moveRow(this.task.id, 'bottom');
       return;
     }
     this._taskService.moveToBottom(this.task.id, this.task.parentId, this.isBacklog);
+  }
+
+  // The row's own view column, or, from outside the rows (the task detail
+  // panel), the open view's column showing it.
+  private _viewHostForRow(): ViewTaskListHost | null {
+    if (this._viewTaskList) {
+      return this._viewTaskList.isRow(this.task.id) ? this._viewTaskList : null;
+    }
+    return this._viewTaskListRegistry.hostForRow(this.task.id);
   }
 
   @throttle(200, { leading: true, trailing: false })

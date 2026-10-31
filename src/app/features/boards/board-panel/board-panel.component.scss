@@ -34,6 +34,45 @@
   }
 }
 
+// Part of one task list (the view's only list, or one of its sections): no
+// box of its own, the page scrolls.
+:host(.isListLayout) {
+  border: 0;
+  border-radius: 0;
+  min-height: 0;
+  max-height: none;
+  overflow: visible;
+}
+
+.list-status {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: var(--s);
+  padding: 0 var(--s) var(--s-half);
+  font-size: var(--font-size-sm);
+  color: var(--text-color-muted);
+
+  .count {
+    display: flex;
+    align-items: center;
+    gap: var(--s-quarter);
+  }
+
+  mat-icon {
+    font-size: 14px;
+    line-height: 14px;
+    height: 14px;
+    width: 14px;
+  }
+}
+
+.task-section .tasks-total-estimate {
+  margin-left: auto;
+  font-size: var(--font-size-sm);
+  color: var(--text-color-muted);
+}
+
 header {
   padding: var(--s-half) var(--s2);
   padding-right: var(--s-half);
