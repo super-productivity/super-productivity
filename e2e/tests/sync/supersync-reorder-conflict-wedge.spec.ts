@@ -102,7 +102,8 @@ const editContent = async (
   edit: PersistentAction,
 ): Promise<void> => {
   if (family !== 'boards') return dispatch(page, edit);
-  // The editor saves the full board config, even for a rename.
+  // A real editor save: one `updateBoard` carrying only the changed fields
+  // (`title`, `cols`), a content UPD on this board crossing the reorder.
   await page.goto(`/#/boards/${edit.id as string}`);
   await page.locator('board:visible button').filter({ hasText: 'edit' }).click();
   const dialog = page.locator('dialog-board-edit');
@@ -334,9 +335,10 @@ const fixture = (
         }),
       ),
       reorder: action('[Boards] Sort Boards', 'BOARD', ids, 'MOV', { ids }),
+      // What the editor dispatches in `editContent` (only the changed fields).
       edit: action('[Boards] Update Board', 'BOARD', a, 'UPD', {
         id: a,
-        updates: { id: a, title: 'edited concurrently', cols: 3, panels: [] },
+        updates: { title: 'edited concurrently', cols: 3 },
       }),
     };
   }
