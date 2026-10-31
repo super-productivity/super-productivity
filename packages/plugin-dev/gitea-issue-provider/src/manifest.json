@@ -1,10 +1,10 @@
 {
   "id": "gitea-issue-provider",
-  "name": "Gitea Issues",
+  "name": "Gitea / Forgejo Issues",
   "version": "1.0.0",
   "manifestVersion": 1,
   "minSupVersion": "13.0.0",
-  "description": "Gitea issue provider plugin",
+  "description": "Gitea and Forgejo (incl. Codeberg) issue provider plugin",
   "author": "Super Productivity",
   "type": "issueProvider",
   "icon": "icon.svg",
@@ -46,7 +46,7 @@
   "issueProvider": {
     "pollIntervalMs": 300000,
     "icon": "gitea",
-    "humanReadableName": "Gitea",
+    "humanReadableName": "Gitea / Forgejo",
     "issueProviderKey": "GITEA",
     "allowPrivateNetwork": true,
     "issueStrings": {

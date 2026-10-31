@@ -1,15 +1,20 @@
 {
   "CFG": {
-    "HOST": "Host (e.g. https://try.gitea.io)",
+    "HOST": "Host (e.g. https://codeberg.org)",
     "TOKEN": "Access Token",
-    "REPO_FULL_NAME": "Username or Organization name/repository",
+    "REPO_FULL_NAME": "Repository (owner/repo, optional)",
     "SCOPE": "Scope",
     "SCOPE_ALL": "All",
     "SCOPE_CREATED": "Created by me",
     "SCOPE_ASSIGNED": "Assigned to me",
     "FILTER_LABELS": "Filter by labels (optional)",
     "EXCLUDE_LABELS": "Exclude labels (optional)",
-    "HOW_TO_GET_TOKEN": "How to get a token?"
+    "HOW_TO_GET_TOKEN": "How to get a token?",
+    "REPO_FULL_NAME_HINT": "Leave empty to list issues created by you or assigned to you across every repository on this host (scope \"All\" is not available then). Set this up as a new provider rather than clearing the repository of an existing one: tasks already linked would no longer resolve."
+  },
+  "ERRORS": {
+    "HOST_WIDE_SCOPE": "Gitea / Forgejo: without a repository, choose the scope \"Created by me\" or \"Assigned to me\".",
+    "ID_WITHOUT_REPO": "Gitea / Forgejo: issue {{id}} belongs to the repository that was removed from this provider. Restore the repository or re-add the task from a host-wide provider."
   },
   "DISPLAY": {
     "SUMMARY": "Summary",
@@ -18,5 +23,5 @@
     "LABELS": "Labels",
     "DESCRIPTION": "Description"
   },
-  "FORM_HELP": "<p>Here you can configure Super Productivity to list open Gitea issues for a specific repository in the task creation panel in the daily planning view. They will be listed as suggestions and will provide a link to the issue as well as more information about it.</p><p>In addition, you can automatically add and import all open issues.</p><p>To get by usage limits and gain access, you can provide an access token."
+  "FORM_HELP": "<p>Here you can configure Super Productivity to list open issues from a Gitea or Forgejo host (for example Codeberg) in the task creation panel in the daily planning view. Enter a repository as owner/repo, or leave it empty to work across all repositories you can access. Issues will be listed as suggestions and provide a link to the issue as well as more information about it.</p><p>In addition, you can automatically add and import all open issues.</p><p>To get by usage limits and gain access, you can provide an access token."
 }
