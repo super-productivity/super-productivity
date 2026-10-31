@@ -60,7 +60,7 @@ describe('NavViewGroupComponent', () => {
 
   it('links each view to its route, with a list or board icon', () => {
     expect(component.rows().map((row) => [row.route, row.icon])).toEqual([
-      ['/boards/a', 'filter_list'],
+      ['/boards/a', 'view_list'],
       ['/boards/b', 'view_kanban'],
     ]);
   });

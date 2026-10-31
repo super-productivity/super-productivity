@@ -54,7 +54,7 @@ interface CachedCount {
 }
 
 const LAYOUT_OPTIONS: readonly SegmentedButtonOption[] = [
-  { id: 'list', labelKey: T.F.BOARDS.EDITOR.LAYOUT_LIST, icon: 'filter_list' },
+  { id: 'list', labelKey: T.F.BOARDS.EDITOR.LAYOUT_LIST, icon: 'view_list' },
   { id: 'board', labelKey: T.F.BOARDS.EDITOR.LAYOUT_BOARD, icon: 'view_kanban' },
 ];
 

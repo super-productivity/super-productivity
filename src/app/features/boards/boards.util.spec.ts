@@ -1025,8 +1025,8 @@ describe('criteriaToPanelFields', () => {
 
 describe('getViewIcon', () => {
   it('follows the layout: a list for one column, a board for several', () => {
-    expect(getViewIcon({ cols: 1 })).toBe('filter_list');
-    expect(getViewIcon({ cols: 0 })).toBe('filter_list');
+    expect(getViewIcon({ cols: 1 })).toBe('view_list');
+    expect(getViewIcon({ cols: 0 })).toBe('view_list');
     expect(getViewIcon({ cols: 2 })).toBe('view_kanban');
   });
 });

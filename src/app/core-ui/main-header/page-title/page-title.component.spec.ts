@@ -173,7 +173,7 @@ describe('PageTitleComponent', () => {
       const c = setupComponent('/boards/v1');
       expect(c.displayTitle()).toBe('Quick wins');
       // The view's own icon: a list for a one-column view.
-      expect(c.sectionIcon()).toBe('filter_list');
+      expect(c.sectionIcon()).toBe('view_list');
       expect(c.viewBoard()?.id).toBe('v1');
     });
 

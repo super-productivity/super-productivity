@@ -271,7 +271,7 @@ export const panelToCriteria = (panel: BoardPanelCfg): TaskCriteria => {
 
 /** A view's icon: a list for one column, a board for several (its layout). */
 export const getViewIcon = (board: Pick<BoardCfg, 'cols'>): string =>
-  board.cols > 1 ? 'view_kanban' : 'filter_list';
+  board.cols > 1 ? 'view_kanban' : 'view_list';
 
 /** The tasks a panel's rules match, in the order given (no sort). */
 export const matchPanelTasks = (
