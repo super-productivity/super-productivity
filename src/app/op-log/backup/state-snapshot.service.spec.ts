@@ -85,11 +85,17 @@ describe('StateSnapshotService', () => {
     archiveDbAdapterSpy = jasmine.createSpyObj('ArchiveDbAdapter', [
       'loadArchiveYoung',
       'loadArchiveOld',
+      'loadArchivesForSnapshot',
     ]);
     archiveDbAdapterSpy.loadArchiveYoung.and.returnValue(
       Promise.resolve(mockArchiveYoung),
     );
     archiveDbAdapterSpy.loadArchiveOld.and.returnValue(Promise.resolve(mockArchiveOld));
+    archiveDbAdapterSpy.loadArchivesForSnapshot.and.resolveTo({
+      archiveYoung: mockArchiveYoung,
+      archiveOld: mockArchiveOld,
+      taskDataUnmodified: true,
+    });
 
     TestBed.configureTestingModule({
       providers: [
@@ -347,6 +353,29 @@ describe('StateSnapshotService', () => {
 
       expect((snapshot.task as TaskState).ids).toEqual(['task1']);
     });
+  });
+
+  it('captures state before integrity I/O and preserves a failed archive-integrity result', async () => {
+    let finish!: (
+      value: Awaited<ReturnType<ArchiveDbAdapter['loadArchivesForSnapshot']>>,
+    ) => void;
+    archiveDbAdapterSpy.loadArchivesForSnapshot.and.returnValue(
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+    );
+    const pending = service.getStateSnapshotWithArchiveIntegrity();
+    store.overrideSelector(selectTaskFeatureState, {
+      ...mockTaskState,
+      ids: ['later'],
+    } as unknown as TaskState);
+    store.refreshState();
+    finish({ archiveYoung: undefined, archiveOld: undefined, taskDataUnmodified: false });
+    const result = await pending;
+    expect((result.snapshot.task as TaskState).ids).toEqual(['task1']);
+    expect(result.taskDataUnmodified).toBeFalse();
+    expect(result.snapshot.archiveYoung.task.ids).toEqual([]);
+    expect(result.snapshot.archiveOld.task.ids).toEqual([]);
   });
 
   describe('backward compatibility aliases', () => {

@@ -35,6 +35,7 @@ import { StateSnapshotService } from '../../backup/state-snapshot.service';
 import { DEFAULT_GLOBAL_CONFIG } from '../../../features/config/default-global-config.const';
 import { SnackService } from '../../../core/snack/snack.service';
 import { EncryptAndCompressHandlerService } from '../../encryption/encrypt-and-compress-handler.service';
+import { captureFileState } from './captured-file-state';
 
 describe('FileBasedSyncAdapterService', () => {
   let service: FileBasedSyncAdapterService;
@@ -242,6 +243,64 @@ describe('FileBasedSyncAdapterService', () => {
         files.set(path, data);
         return { rev: path + '-rev' };
       });
+    });
+
+    it('uses a conservative synchronous archive hint until the remote format is known', async () => {
+      const hint = (): boolean | undefined => adapter.requiresTaskArchiveSnapshot?.();
+      expect(hint()).toBeTrue();
+      expect(mockProvider.getFileRev).not.toHaveBeenCalled();
+      expect(mockProvider.downloadFile).not.toHaveBeenCalled();
+      splitSyncEnabled = true;
+      expect(hint()).toBeFalse();
+      await adapter.uploadOps([createMockSyncOp()], 'client1');
+      splitSyncEnabled = undefined;
+      await adapter.downloadOps(0);
+      expect(hint()).toBeFalse();
+      splitSyncEnabled = false;
+      expect(hint()).toBeTrue();
+      splitSyncEnabled = undefined;
+      service.invalidateAllTargets();
+      expect(hint()).toBeTrue();
+    });
+
+    it('does not grant proof if a split hint is followed by a raw v2 upload', async () => {
+      splitSyncEnabled = true;
+      const hint = adapter.requiresTaskArchiveSnapshot;
+      expect(hint?.()).toBeFalse();
+      const raw = mockStateSnapshotService.getStateSnapshotForOperationLog();
+      splitSyncEnabled = false;
+
+      await adapter.uploadOps([createMockSyncOp()], 'client1', 0, raw);
+
+      const published = parseWithPrefix(files.get(C.SYNC_FILE)!);
+      expect(published.archiveYoung).toEqual(mockArchiveYoung);
+      expect(Object.hasOwn(published, 'taskArchiveSnapshotVersion')).toBeFalse();
+    });
+
+    it('keeps legacy archive reads for raw split compaction and skips them for the next append', async () => {
+      splitSyncEnabled = true;
+      const raw = mockStateSnapshotService.getStateSnapshotForOperationLog();
+      await adapter.uploadOps([createMockSyncOp()], 'client1', 0, raw);
+      const state = parseWithPrefix(files.get(C.STATE_FILE)!);
+      expect(state.archiveYoung).toEqual(mockArchiveYoung);
+      expect(state.archiveOld).toEqual(mockArchiveOld);
+      expect(Object.hasOwn(state, 'taskArchiveSnapshotVersion')).toBeFalse();
+      expect(mockArchiveDbAdapter.loadArchiveYoung).toHaveBeenCalledTimes(1);
+      expect(mockArchiveDbAdapter.loadArchiveOld).toHaveBeenCalledTimes(1);
+      const downloaded = await adapter.downloadOps(0);
+      await adapter.setLastServerSeq(downloaded.latestSeq);
+      mockArchiveDbAdapter.loadArchiveYoung.calls.reset();
+      mockArchiveDbAdapter.loadArchiveOld.calls.reset();
+
+      await adapter.uploadOps(
+        [createMockSyncOp({ id: 'next-op' })],
+        'client1',
+        downloaded.latestSeq,
+        raw,
+      );
+
+      expect(mockArchiveDbAdapter.loadArchiveYoung).not.toHaveBeenCalled();
+      expect(mockArchiveDbAdapter.loadArchiveOld).not.toHaveBeenCalled();
     });
 
     it('creates v2 from an absent setting and reuses discovery for later polls', async () => {
@@ -2302,6 +2361,108 @@ describe('FileBasedSyncAdapterService', () => {
   });
 
   describe('archive handling', () => {
+    for (const state of [undefined, { tasks: [] }]) {
+      it(`does not inherit proof from a remote envelope for ${state ? 'raw' : 'uncaptured'} upload`, async () => {
+        const existing = createMockSyncData({ taskArchiveSnapshotVersion: 1 });
+        mockProvider.downloadFile.and.resolveTo({
+          dataStr: addPrefix(existing),
+          rev: 'old-rev',
+        });
+        await adapter.downloadOps(0);
+        await adapter.setLastServerSeq(1);
+        mockProvider.uploadFile.and.callFake(async () => ({ rev: 'new-rev' }));
+
+        await adapter.uploadOps([createMockSyncOp()], 'client1', 1, state);
+
+        const primary = mockProvider.uploadFile.calls
+          .allArgs()
+          .find(([path]) => path === 'sync-data.json');
+        expect(primary).toBeDefined();
+        expect(
+          Object.hasOwn(parseWithPrefix(primary![1]), 'taskArchiveSnapshotVersion'),
+        ).toBeFalse();
+      });
+    }
+
+    it('does not grant proof to a normalized capture or a force-uploaded full state', async () => {
+      mockProvider.downloadFile.and.rejectWith(
+        new RemoteFileNotFoundAPIError('empty folder'),
+      );
+      mockProvider.uploadFile.and.callFake(async () => ({ rev: 'r1' }));
+      const snapshot = {
+        ...mockStateSnapshotService.getStateSnapshotForOperationLog(),
+        archiveYoung: mockArchiveYoung,
+        archiveOld: mockArchiveOld,
+      };
+      await adapter.uploadOps(
+        [createMockSyncOp()],
+        'client1',
+        0,
+        captureFileState(snapshot, false),
+      );
+      let primary = mockProvider.uploadFile.calls
+        .allArgs()
+        .find(([path]) => path === 'sync-data.json');
+      expect(
+        Object.hasOwn(parseWithPrefix(primary![1]), 'taskArchiveSnapshotVersion'),
+      ).toBeFalse();
+
+      mockProvider.uploadFile.calls.reset();
+      await adapter.uploadSnapshot(
+        snapshot,
+        'client1',
+        'recovery',
+        { client1: 1 },
+        1,
+        undefined,
+        'full-op',
+      );
+      primary = mockProvider.uploadFile.calls
+        .allArgs()
+        .find(([path]) => path === 'sync-data.json');
+      expect(
+        Object.hasOwn(parseWithPrefix(primary![1]), 'taskArchiveSnapshotVersion'),
+      ).toBeFalse();
+    });
+
+    for (const split of [false, true]) {
+      it(`keeps captured archives after restore before ${split ? 'split' : 'v2'} upload`, async () => {
+        splitSyncEnabled = split;
+        mockProvider.downloadFile.and.rejectWith(
+          new RemoteFileNotFoundAPIError('empty folder'),
+        );
+        const captured = captureFileState(
+          {
+            ...mockStateSnapshotService.getStateSnapshotForOperationLog(),
+            archiveYoung: mockArchiveYoung,
+            archiveOld: mockArchiveOld,
+          },
+          true,
+        );
+        // The live archive no longer contains the restored owner. Upload must
+        // still use the archive matching the captured active-state cutoff.
+        mockArchiveDbAdapter.loadArchiveYoung.and.resolveTo(undefined);
+        mockArchiveDbAdapter.loadArchiveOld.and.resolveTo(undefined);
+        mockProvider.uploadFile.and.callFake(async () => ({ rev: 'new-rev' }));
+
+        await adapter.uploadOps([createMockSyncOp()], 'client1', 0, captured);
+
+        const payloads = mockProvider.uploadFile.calls
+          .allArgs()
+          .map((args) => parseWithPrefix(args[1]));
+        const uploaded = payloads.find((data) => data.archiveYoung !== undefined);
+        expect(uploaded).toBeDefined();
+        expect(uploaded!.archiveYoung).toEqual(mockArchiveYoung);
+        expect(uploaded!.archiveOld).toEqual(mockArchiveOld);
+        expect(uploaded!.taskArchiveSnapshotVersion).toBe(split ? undefined : 1);
+        expect(uploaded!.state).toEqual(jasmine.objectContaining({ tasks: [] }));
+        expect(uploaded!.state).not.toEqual(
+          jasmine.objectContaining({ kind: 'capturedFileState' }),
+        );
+        expect(mockArchiveDbAdapter.loadArchiveYoung).not.toHaveBeenCalled();
+        expect(mockArchiveDbAdapter.loadArchiveOld).not.toHaveBeenCalled();
+      });
+    }
     describe('uploadOps', () => {
       it('should include archiveYoung and archiveOld in upload', async () => {
         mockProvider.downloadFile.and.throwError(
@@ -2320,6 +2481,7 @@ describe('FileBasedSyncAdapterService', () => {
         const uploadedData = parseWithPrefix(uploadedDataStr);
         expect(uploadedData.archiveYoung).toEqual(mockArchiveYoung);
         expect(uploadedData.archiveOld).toEqual(mockArchiveOld);
+        expect(uploadedData.taskArchiveSnapshotVersion).toBeUndefined();
         expect(mockArchiveDbAdapter.loadArchiveYoung).toHaveBeenCalled();
         expect(mockArchiveDbAdapter.loadArchiveOld).toHaveBeenCalled();
       });
@@ -2378,6 +2540,7 @@ describe('FileBasedSyncAdapterService', () => {
         const uploadedData = parseWithPrefix(uploadedDataStr);
         expect(uploadedData.archiveYoung).toEqual(mockArchiveYoung);
         expect(uploadedData.archiveOld).toEqual(mockArchiveOld);
+        expect(uploadedData.taskArchiveSnapshotVersion).toBeUndefined();
       });
     });
 

@@ -17,8 +17,14 @@ import { SupersededOperationResolverService } from './superseded-operation-resol
 import { SnackService } from '../../core/snack/snack.service';
 import { provideMockStore } from '@ngrx/store/testing';
 import { StateSnapshotService } from '../backup/state-snapshot.service';
+import { ArchiveModel } from '../../features/time-tracking/time-tracking.model';
 
 describe('OperationLogUploadService', () => {
+  const DEFAULT_ARCHIVE: ArchiveModel = {
+    task: { ids: [], entities: {} },
+    timeTracking: { project: {}, tag: {} },
+    lastTimeTrackingFlush: 0,
+  };
   let service: OperationLogUploadService;
   let mockOpLogStore: jasmine.SpyObj<OperationLogStoreService>;
   let mockLockService: jasmine.SpyObj<LockService>;
@@ -60,10 +66,21 @@ describe('OperationLogUploadService', () => {
     mockLockService = jasmine.createSpyObj('LockService', ['request']);
     mockStateSnapshotService = jasmine.createSpyObj('StateSnapshotService', [
       'getStateSnapshotForOperationLog',
+      'getStateSnapshotWithArchiveIntegrity',
     ]);
     mockStateSnapshotService.getStateSnapshotForOperationLog.and.returnValue({
       task: { ids: [], entities: {} },
     } as any);
+    mockStateSnapshotService.getStateSnapshotWithArchiveIntegrity.and.callFake(
+      async () => ({
+        snapshot: {
+          ...mockStateSnapshotService.getStateSnapshotForOperationLog(),
+          archiveYoung: DEFAULT_ARCHIVE,
+          archiveOld: DEFAULT_ARCHIVE,
+        },
+        taskDataUnmodified: true,
+      }),
+    );
 
     // Default mock implementations
     mockLockService.request.and.callFake(async <T>(_name: string, fn: () => Promise<T>) =>
@@ -449,6 +466,34 @@ describe('OperationLogUploadService', () => {
       });
 
       it('should capture and pass file state under the operation-log lock', async () => {
+        const heldLocks: string[] = [];
+        mockLockService.request.and.callFake(
+          async <T>(name: string, fn: () => Promise<T>) => {
+            heldLocks.push(name);
+            try {
+              return await fn();
+            } finally {
+              heldLocks.pop();
+            }
+          },
+        );
+        mockStateSnapshotService.getStateSnapshotWithArchiveIntegrity.and.callFake(
+          async () => {
+            expect(heldLocks).toEqual([
+              'sp_op_log_upload',
+              'sp_op_log',
+              'sp_task_archive',
+            ]);
+            return {
+              snapshot: {
+                ...mockStateSnapshotService.getStateSnapshotForOperationLog(),
+                archiveYoung: DEFAULT_ARCHIVE,
+                archiveOld: DEFAULT_ARCHIVE,
+              },
+              taskDataUnmodified: true,
+            };
+          },
+        );
         mockApiProvider.providerMode = 'fileSnapshotOps';
         mockOpLogStore.getUnsynced.and.returnValue(
           Promise.resolve([createMockEntry(1, 'op-1', 'client-1')]),
@@ -468,11 +513,75 @@ describe('OperationLogUploadService', () => {
           .find(([name]) => name === 'sp_op_log');
         expect(operationLockCall).toBeDefined();
         expect(
-          mockStateSnapshotService.getStateSnapshotForOperationLog,
+          mockStateSnapshotService.getStateSnapshotWithArchiveIntegrity,
         ).toHaveBeenCalled();
         expect(mockApiProvider.uploadOps.calls.mostRecent().args[3]).toEqual({
-          task: { ids: [], entities: {} },
-        } as any);
+          kind: 'capturedFileState',
+          taskArchiveSnapshotVersion: 1,
+          state: { task: { ids: [], entities: {} } },
+          archiveYoung: DEFAULT_ARCHIVE,
+          archiveOld: DEFAULT_ARCHIVE,
+        });
+      });
+
+      it('skips file state and archive capture when there are no pending ops', async () => {
+        mockApiProvider.providerMode = 'fileSnapshotOps';
+
+        await service.uploadPendingOps(mockApiProvider);
+
+        expect(
+          mockStateSnapshotService.getStateSnapshotForOperationLog,
+        ).not.toHaveBeenCalled();
+        expect(
+          mockStateSnapshotService.getStateSnapshotWithArchiveIntegrity,
+        ).not.toHaveBeenCalled();
+        expect(
+          mockLockService.request.calls.allArgs().map(([name]) => name),
+        ).not.toContain('sp_task_archive');
+      });
+
+      it('keeps the raw active cutoff without reading archives for a split upload hint', async () => {
+        mockApiProvider.providerMode = 'fileSnapshotOps';
+        Object.assign(mockApiProvider, { requiresTaskArchiveSnapshot: () => false });
+        mockOpLogStore.getUnsynced.and.resolveTo([
+          createMockEntry(1, 'op-1', 'client-1'),
+        ]);
+        const raw = mockStateSnapshotService.getStateSnapshotForOperationLog();
+        mockStateSnapshotService.getStateSnapshotForOperationLog.calls.reset();
+        mockStateSnapshotService.getStateSnapshotForOperationLog.and.callFake(() => {
+          expect(mockLockService.request.calls.mostRecent().args[0]).toBe('sp_op_log');
+          return raw;
+        });
+
+        await service.uploadPendingOps(mockApiProvider);
+
+        expect(
+          mockStateSnapshotService.getStateSnapshotWithArchiveIntegrity,
+        ).not.toHaveBeenCalled();
+        expect(
+          mockStateSnapshotService.getStateSnapshotForOperationLog,
+        ).toHaveBeenCalledTimes(1);
+        expect(mockApiProvider.uploadOps.calls.mostRecent().args[3]).toBe(raw);
+      });
+
+      it('keeps coherent capture when the file upload hint explicitly requires it', async () => {
+        mockApiProvider.providerMode = 'fileSnapshotOps';
+        Object.assign(mockApiProvider, { requiresTaskArchiveSnapshot: () => true });
+        mockOpLogStore.getUnsynced.and.resolveTo([
+          createMockEntry(1, 'op-1', 'client-1'),
+        ]);
+
+        await service.uploadPendingOps(mockApiProvider);
+
+        expect(
+          mockStateSnapshotService.getStateSnapshotWithArchiveIntegrity,
+        ).toHaveBeenCalledTimes(1);
+        expect(mockApiProvider.uploadOps.calls.mostRecent().args[3]).toEqual(
+          jasmine.objectContaining({
+            kind: 'capturedFileState',
+            taskArchiveSnapshotVersion: 1,
+          }),
+        );
       });
 
       it('should return empty result when no pending ops', async () => {

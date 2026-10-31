@@ -7,6 +7,16 @@ import {
   PluginHttpOptions,
 } from './issue-provider-types';
 
+/** Проверенный опубликованный v2 primary. Это наблюдение, а не блокировка. */
+export interface PluginPublishedSnapshot {
+  format: 'file-v2';
+  revision: string;
+  clock: Record<string, number>;
+  tasks: { id: string; location: 'active' | 'archive'; isDone: boolean | null }[];
+  /** Только данные вызывающего плагина. Пустой ключ обозначает legacy entry. */
+  pluginData: { key: string; value: string }[];
+}
+
 export interface PluginMenuEntryCfg {
   pluginId: string;
   label: string;
@@ -755,6 +765,17 @@ export interface PluginAPI {
   persistDataSynced(dataStr: string, key?: string): Promise<void>;
 
   loadSyncedData(key?: string): Promise<string | null>;
+
+  /**
+   * Читает текущий primary файловой синхронизации с согласованным срезом задач
+   * и архивов. Не запускает синхронизацию и не использует backup. Требует v2
+   * multi-file provider и подтверждение writer. Другие форматы, повреждение,
+   * смена ревизии или конфигурации приводят к отказу, а не к пустому списку.
+   * Не подтверждает публикацию локальной записи и не разрешает удалить файл.
+   * Плагин проверяет своё владение, незавершённые операции и актуальную
+   * опубликованную привязку отдельно.
+   */
+  readPublishedSnapshot(): Promise<PluginPublishedSnapshot>;
 
   /**
    * Requests normal sync with the configured provider from plugin.js or an iframe.

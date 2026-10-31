@@ -48,6 +48,12 @@ import { INBOX_PROJECT } from '../features/project/project.const';
 import { Project } from '../features/project/project.model';
 import { PluginTaskContextMenuRegistryService } from './plugin-task-context-menu-registry.service';
 import { PluginManifest } from '@super-productivity/plugin-api';
+import { SyncProviderManager } from '../op-log/sync-providers/provider-manager.service';
+import { SyncProviderId } from '../op-log/sync-providers/provider.const';
+import { FileSyncProvider } from '../op-log/sync-providers/provider.interface';
+import { RemoteFileNotFoundAPIError } from '../op-log/core/errors/sync-errors';
+import { EncryptAndCompressHandlerService } from '../op-log/encryption/encrypt-and-compress-handler.service';
+import { CURRENT_SCHEMA_VERSION } from '@sp/shared-schema';
 import { TaskMoveToProjectService } from '../features/tasks/task-move-to-project.service';
 import { TaskRepeatCfgService } from '../features/task-repeat-cfg/task-repeat-cfg.service';
 import { TaskRepeatCfg } from '../features/task-repeat-cfg/task-repeat-cfg.model';
@@ -132,6 +138,15 @@ describe('PluginBridgeService - Counter Methods', () => {
         { provide: TranslateService, useValue: {} },
         { provide: SyncWrapperService, useValue: {} },
         {
+          provide: SyncProviderManager,
+          useValue: {
+            getActiveProvider: () => null,
+            getEncryptAndCompressCfg: () => ({ isEncrypt: false, isCompress: false }),
+            configEpoch: 0,
+            syncEpoch: 0,
+          },
+        },
+        {
           provide: GlobalThemeService,
           useValue: jasmine.createSpyObj('GlobalThemeService', ['hasPluginIcon']),
         },
@@ -170,6 +185,51 @@ describe('PluginBridgeService - Counter Methods', () => {
 
   afterEach(() => {
     store?.resetSelectors();
+  });
+
+  it('limits published plugin data to the namespace bound by the host', async () => {
+    const encoded = await new EncryptAndCompressHandlerService().compressAndEncryptData(
+      { isCompress: false, isEncrypt: false },
+      undefined,
+      {
+        version: 2,
+        taskArchiveSnapshotVersion: 1,
+        schemaVersion: CURRENT_SCHEMA_VERSION,
+        syncVersion: 1,
+        vectorClock: { fixture: 1 },
+        clientId: 'fixture',
+        lastModified: 1,
+        recentOps: [],
+        state: {
+          task: { ids: [], entities: {} },
+          pluginUserData: [
+            { id: 'plugin-a:own', data: 'a' },
+            { id: 'plugin-ab:other', data: 'b' },
+          ],
+        },
+        archiveYoung: { task: { ids: [], entities: {} } },
+        archiveOld: { task: { ids: [], entities: {} } },
+      },
+      2,
+    );
+    const provider = {
+      id: SyncProviderId.WebDAV,
+      privateCfg: { load: async () => ({ baseUrl: 'https://fixture.invalid/dav' }) },
+      downloadFile: async () => ({ dataStr: encoded, rev: 'r1' }),
+      getFileRev: async (path: string) => {
+        if (path === 'sync-ops.json') throw new RemoteFileNotFoundAPIError('missing');
+        return { rev: 'r1' };
+      },
+    } as unknown as FileSyncProvider<SyncProviderId>;
+    spyOn(TestBed.inject(SyncProviderManager), 'getActiveProvider').and.returnValue(
+      provider,
+    );
+    expect(
+      (await service.createBoundMethods('plugin-a').readPublishedSnapshot()).pluginData,
+    ).toEqual([{ key: 'own', value: 'a' }]);
+    expect(
+      (await service.createBoundMethods('plugin-ab').readPublishedSnapshot()).pluginData,
+    ).toEqual([{ key: 'other', value: 'b' }]);
   });
 
   describe('setCounter', () => {
