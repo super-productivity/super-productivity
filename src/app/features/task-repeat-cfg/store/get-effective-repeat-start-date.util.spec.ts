@@ -13,6 +13,17 @@ describe('getEffectiveRepeatStartDate', () => {
     expect(result).toBe('2025-08-01');
   });
 
+  it('should return startDate if repeatOnComplete is true and startDate is later than lastTaskCreationDay (#11266)', () => {
+    const cfg = {
+      repeatFromCompletionDate: true,
+      lastTaskCreationDay: '2026-05-01',
+      startDate: '2026-05-11',
+    } as TaskRepeatCfg;
+
+    const result = getEffectiveRepeatStartDate(cfg);
+    expect(result).toBe('2026-05-11');
+  });
+
   it('should return startDate if repeatOnComplete is true but lastTaskCreationDay is not set', () => {
     const cfg = {
       repeatFromCompletionDate: true,
