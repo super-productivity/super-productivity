@@ -82,4 +82,20 @@ describe('Gitea Plugin - getNewIssuesForBacklog', () => {
     expect(urls.every((u) => !u.includes('/user'))).toBe(true);
     expect(urls.every((u) => u.includes('type=issues'))).toBe(true);
   });
+
+  it('drops the type filter when pull requests are included', async () => {
+    const { http, urls } = makeHttp([[makeIssue(1)], [], []]);
+    const cfg = {
+      host: 'https://gitea.example',
+      repoFullname: 'org/repo',
+      scope: 'all',
+      includePullRequests: true,
+    };
+
+    await definition.getNewIssuesForBacklog!(cfg, http);
+    await definition.searchIssues('x', cfg, http);
+
+    expect(urls.length).toBeGreaterThan(0);
+    expect(urls.every((u) => !u.includes('type='))).toBe(true);
+  });
 });
