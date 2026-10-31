@@ -952,7 +952,7 @@ If you create a useful plugin, consider:
 
 ### Get Listed in the App
 
-Settings → Plugins shows a **Community Plugins** list read from
+The **Community** tab of Settings → Plugins shows a **Community Plugins** list read from
 [community-plugins.json](../src/assets/community-plugins.json), which ships with
 the app. To be listed, open a PR that adds an entry:
 
@@ -973,7 +973,7 @@ the app. To be listed, open a PR that adds an entry:
 ```
 
 - `id` and `release` are optional. Without them the entry links to your page and
-  users install the ZIP by hand (Settings → Plugins → Choose Plugin File).
+  users install the ZIP by hand (Settings → Plugins → Community → Install from file).
 - `id` must equal the `id` in your `manifest.json`. With it, the list shows
   **Installed** for users who have the plugin.
 - With `release`, the list shows an **Install** button. The app downloads

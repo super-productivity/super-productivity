@@ -362,8 +362,8 @@ Modify `src/app/App.css` to customize the appearance.
 2. Package it: `npm run package`
 3. Upload the ZIP file to Super Productivity:
    - Open Super Productivity
-   - Go to Settings → Plugins
-   - Click "Upload Plugin"
+   - Go to Settings → Plugins → Community
+   - Click "Install from file"
    - Select your ZIP file
 
 ## Troubleshooting

@@ -11,8 +11,8 @@ import {
 const { SIDENAV } = cssSelectors;
 
 // Plugin-related selectors
-const PLUGIN_CARD = 'plugin-management mat-card.ng-star-inserted';
-const PLUGIN_ITEM = `${PLUGIN_CARD}`;
+const PLUGIN_ROW = 'plugin-management .plugin-row';
+const PLUGIN_ITEM = `${PLUGIN_ROW}`;
 const PLUGIN_NAV_ENTRIES = `${SIDENAV} nav-item button`;
 const PLUGIN_IFRAME = 'plugin-index iframe';
 
@@ -38,9 +38,11 @@ test.describe.serial('Plugin Loading', () => {
 
     // Enable the plugin
     const enableResult = await page.evaluate((pluginName: string) => {
-      const cards = Array.from(document.querySelectorAll('plugin-management mat-card'));
+      const cards = Array.from(
+        document.querySelectorAll('plugin-management .plugin-row'),
+      );
       const targetCard = cards.find((card) => {
-        const title = card.querySelector('mat-card-title')?.textContent || '';
+        const title = card.querySelector('.plugin-row-name')?.textContent || '';
         return title.includes(pluginName);
       });
 
@@ -74,10 +76,10 @@ test.describe.serial('Plugin Loading', () => {
       await page.waitForFunction(
         (name) => {
           const cards = Array.from(
-            document.querySelectorAll('plugin-management mat-card'),
+            document.querySelectorAll('plugin-management .plugin-row'),
           );
           const targetCard = cards.find((card) => {
-            const title = card.querySelector('mat-card-title')?.textContent || '';
+            const title = card.querySelector('.plugin-row-name')?.textContent || '';
             return title.includes(name);
           });
           const toggle = targetCard?.querySelector(
@@ -99,17 +101,19 @@ test.describe.serial('Plugin Loading', () => {
     });
 
     // Navigate to plugin management - check for attachment first
-    await expect(page.locator(PLUGIN_CARD).first()).toBeAttached({ timeout: 20000 });
+    await expect(page.locator(PLUGIN_ROW).first()).toBeAttached({ timeout: 20000 });
 
     // Check example plugin is loaded and enabled
     const pluginCardsResult = await page.evaluate(() => {
-      const cards = Array.from(document.querySelectorAll('plugin-management mat-card'));
+      const cards = Array.from(
+        document.querySelectorAll('plugin-management .plugin-row'),
+      );
       const pluginCards = cards.filter((card) => card.querySelector('mat-slide-toggle'));
       return {
         totalCards: cards.length,
         pluginCardsCount: pluginCards.length,
         pluginTitles: pluginCards.map(
-          (card) => card.querySelector('mat-card-title')?.textContent?.trim() || '',
+          (card) => card.querySelector('.plugin-row-name')?.textContent?.trim() || '',
         ),
       };
     });

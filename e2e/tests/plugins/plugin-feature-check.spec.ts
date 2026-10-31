@@ -14,11 +14,18 @@ test.describe.serial('Plugin Management Feature Check', () => {
 
     const pluginMgmt = page.locator('plugin-management');
     await expect(pluginMgmt).toBeVisible({ timeout: 10000 });
+    // Feature plugins open by default; installing lives in the "Community" tab.
+    await expect(pluginMgmt.getByRole('tab', { name: 'Features' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    await pluginMgmt.getByRole('tab', { name: 'Community' }).click();
     await expect(
-      pluginMgmt.getByRole('button', { name: /Choose Plugin File/i }),
+      pluginMgmt.getByRole('button', { name: /Install from file/i }),
     ).toBeVisible();
+    await pluginMgmt.getByRole('button', { name: 'More actions' }).click();
     await expect(
-      pluginMgmt.getByRole('button', { name: /Remove all uploaded plugins/i }),
+      page.getByRole('menuitem', { name: /Remove all uploaded plugins/i }),
     ).toBeVisible();
   });
 
@@ -33,9 +40,10 @@ test.describe.serial('Plugin Management Feature Check', () => {
 
     const pluginManagement = page.locator('plugin-management');
     await expect(pluginManagement).toBeVisible({ timeout: 10000 });
+    await pluginManagement.getByRole('tab', { name: 'Community' }).click();
     await expect(
-      pluginManagement.locator('.community-plugins-card mat-card-title'),
-    ).toContainText('Community Plugins');
+      pluginManagement.getByRole('heading', { name: 'Community Plugins' }),
+    ).toBeVisible();
     await expect(
       pluginManagement.locator('.community-plugin-item').first(),
     ).toBeVisible();

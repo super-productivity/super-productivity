@@ -1,217 +1,78 @@
-<p class="intro">
-  <mat-icon>info</mat-icon>
-  <span>{{ T.PLUGINS.INTRO | translate }}</span>
-</p>
+<mat-tab-group
+  class="plugin-tabs"
+  [(selectedIndex)]="selectedTabIndex"
+  [mat-stretch-tabs]="false"
+  animationDuration="0ms"
+>
+  <mat-tab [label]="T.PLUGINS.TAB_FEATURES | translate">
+    <ng-container
+      *ngTemplateOutlet="builtInPluginList; context: { $implicit: featurePlugins() }"
+    ></ng-container>
+  </mat-tab>
 
-@if (allPlugins().length === 0) {
-  <mat-card>
-    <mat-card-content class="empty-state">
-      <mat-icon>extension_off</mat-icon>
-      <p>{{ T.PS.NO_PLUGINS_INSTALLED | translate }}</p>
-    </mat-card-content>
-  </mat-card>
-}
+  <mat-tab [label]="T.PLUGINS.GROUP_INTEGRATIONS | translate">
+    <ng-container
+      *ngTemplateOutlet="builtInPluginList; context: { $implicit: integrationPlugins() }"
+    ></ng-container>
+  </mat-tab>
 
-@for (group of pluginGroups(); track group.titleKey) {
-  <h3 class="group-title">{{ group.titleKey | translate }}</h3>
-  @for (plugin of group.plugins; track plugin.manifest.id) {
-    <mat-card>
-      <mat-card-header>
-        <div mat-card-avatar>
-          <plugin-icon
-            [pluginId]="plugin.manifest.id"
-            [size]="40"
-            fallbackIcon="extension"
-          ></plugin-icon>
-        </div>
-        <mat-card-title>{{ plugin.manifest.name }}</mat-card-title>
-        <mat-card-subtitle>
-          <span>v{{ plugin.manifest.version }}</span>
-          @if (getPluginAuthor(plugin); as author) {
-            <span class="plugin-author">
-              {{ T.PLUGINS.AUTHORED_BY | translate: { author } }}
-            </span>
-          }
-          @if (isUploadedPlugin(plugin)) {
-            <mat-chip>{{ T.PLUGINS.THIRD_PARTY | translate }}</mat-chip>
-          }
-          @if (isPluginLoading(plugin)) {
-            <mat-chip color="accent">
-              <mat-icon class="loading-icon">autorenew</mat-icon>
-              {{ T.PLUGINS.LOADING_PLUGIN | translate }}
-            </mat-chip>
-          }
-        </mat-card-subtitle>
-        <div class="plugin-controls">
-          @if (plugin.manifest?.jsonSchemaCfg && plugin.isEnabled) {
-            <button
-              mat-icon-button
-              (click)="openConfigDialog(plugin)"
-              [disabled]="isPluginLoading(plugin)"
-              [matTooltip]="T.PLUGINS.CONFIGURE | translate"
-            >
-              <mat-icon>settings</mat-icon>
-            </button>
-          } @else if (hasConfigHandler(plugin) && plugin.isEnabled) {
-            <button
-              mat-icon-button
-              (click)="openPluginConfig(plugin)"
-              [disabled]="isPluginLoading(plugin)"
-              [matTooltip]="T.PLUGINS.CONFIGURE | translate"
-            >
-              <mat-icon>settings</mat-icon>
-            </button>
-          }
-          <mat-slide-toggle
-            [checked]="plugin.isEnabled"
-            [disabled]="!canEnablePlugin(plugin) || isPluginLoading(plugin)"
-            (change)="onPluginToggle(plugin, $event)"
-            [attr.aria-label]="
-              T.PLUGINS.TOGGLE_PLUGIN | translate: { pluginName: plugin.manifest.name }
-            "
+  <mat-tab [label]="T.PLUGINS.TAB_COMMUNITY | translate">
+    <!-- The warning takes the free width; the buttons wrap below it when it runs out. -->
+    <div class="community-header">
+      <p class="community-warning">{{ T.PLUGINS.COMMUNITY_WARNING | translate }}</p>
+      <div class="community-header-actions">
+        <input
+          #fileInput
+          type="file"
+          accept=".zip"
+          (change)="onFileSelected($event)"
+          hidden
+        />
+        <button
+          mat-stroked-button
+          (click)="fileInput.click()"
+          [disabled]="isUploading()"
+        >
+          <mat-icon>upload</mat-icon>
+          {{
+            isUploading()
+              ? (T.PLUGINS.INSTALLING | translate)
+              : (T.PLUGINS.INSTALL_FROM_FILE | translate)
+          }}
+        </button>
+        <button
+          mat-icon-button
+          class="community-menu-btn"
+          [matMenuTriggerFor]="communityMenu"
+          [matTooltip]="T.G.MORE_ACTIONS | translate"
+          [attr.aria-label]="T.G.MORE_ACTIONS | translate"
+        >
+          <mat-icon>more_vert</mat-icon>
+        </button>
+        <mat-menu #communityMenu="matMenu">
+          <button
+            mat-menu-item
+            (click)="clearPluginCache()"
+            [disabled]="isUploading()"
           >
-          </mat-slide-toggle>
-        </div>
-      </mat-card-header>
+            <mat-icon>delete_sweep</mat-icon>
+            <span>{{ T.PLUGINS.REMOVE_ALL_UPLOADED_PLUGINS | translate }}</span>
+          </button>
+        </mat-menu>
+      </div>
+    </div>
+    @if (uploadError()) {
+      <mat-error class="upload-error">{{ uploadError() }}</mat-error>
+    }
 
-      <mat-card-content>
-        <p>{{ getPluginDescription(plugin) }}</p>
+    @if (uploadedPlugins().length > 0) {
+      <h3 class="group-title">{{ T.PLUGINS.GROUP_UPLOADED | translate }}</h3>
+      <ng-container
+        *ngTemplateOutlet="pluginList; context: { $implicit: uploadedPlugins() }"
+      ></ng-container>
+    }
 
-        @if (plugin.error) {
-          <mat-error>
-            <mat-icon>error</mat-icon>
-            {{ plugin.error }}
-          </mat-error>
-        }
-
-        @if (requiresNodeExecution(plugin) && !IS_ELECTRON) {
-          <mat-error style="margin-top: 8px">
-            <mat-icon>desktop_windows</mat-icon>
-            {{ getNodeExecutionMessage() }}
-          </mat-error>
-        }
-
-        <collapsible [title]="getDetailsTitle(plugin)">
-          <table>
-            <tr>
-              <th>{{ T.PLUGINS.ID | translate }}</th>
-              <td>{{ plugin.manifest.id }}</td>
-            </tr>
-            <tr>
-              <th>{{ T.PLUGINS.LANGUAGES | translate }}</th>
-              <td>{{ getPluginLanguages(plugin) }}</td>
-            </tr>
-          </table>
-          @if (getApiAccess(plugin); as apiAccess) {
-            @if (apiAccess.length > 0) {
-              <div class="plugin-info-section">
-                <div class="label">{{ T.PLUGINS.DECLARED_ACCESS | translate }}:</div>
-                <ul class="api-access">
-                  @for (access of apiAccess; track access.permission) {
-                    <li>{{ access.key | translate: access.params }}</li>
-                  }
-                </ul>
-              </div>
-            }
-          }
-          @if (getOtherPermissions(plugin); as otherPermissions) {
-            @if (otherPermissions.length > 0) {
-              <div class="plugin-info-section">
-                <div class="label">{{ T.PLUGINS.OTHER_PERMISSIONS | translate }}:</div>
-                <mat-chip-set>
-                  @for (permission of otherPermissions; track permission) {
-                    <mat-chip>{{ permission }}</mat-chip>
-                  }
-                </mat-chip-set>
-              </div>
-            }
-          }
-          @if (plugin.manifest.hooks && plugin.manifest.hooks.length > 0) {
-            <div class="plugin-info-section">
-              <div class="label">{{ T.PLUGINS.HOOKS | translate }}:</div>
-              <mat-chip-set>
-                @for (hook of plugin.manifest.hooks; track hook) {
-                  <mat-chip>{{ hook }}</mat-chip>
-                }
-              </mat-chip-set>
-            </div>
-          }
-        </collapsible>
-      </mat-card-content>
-
-      @if (
-        (isIssueProviderPlugin(plugin) && plugin.isEnabled) || isUploadedPlugin(plugin)
-      ) {
-        <mat-card-actions [align]="'end'">
-          @if (isIssueProviderPlugin(plugin) && plugin.isEnabled) {
-            <button
-              mat-button
-              color="primary"
-              (click)="goToIssuePanel()"
-              [disabled]="isPluginLoading(plugin)"
-            >
-              <mat-icon>arrow_forward</mat-icon>
-              {{ T.PLUGINS.SETUP_ISSUE_PROVIDER | translate }}
-            </button>
-          }
-          @if (communityUpdates().get(plugin.manifest.id); as update) {
-            @if (isInAppInstall) {
-              <button
-                mat-button
-                color="primary"
-                (click)="installCommunityPlugin(update.plugin)"
-                [disabled]="isUploading()"
-              >
-                <mat-icon>update</mat-icon>
-                {{
-                  T.PLUGINS.COMMUNITY_UPDATE
-                    | translate: { version: update.release.version }
-                }}
-              </button>
-            } @else {
-              <a
-                mat-button
-                color="primary"
-                [href]="update.release.downloadUrl"
-                target="_blank"
-              >
-                <mat-icon>download</mat-icon>
-                {{
-                  T.PLUGINS.COMMUNITY_DOWNLOAD
-                    | translate: { version: update.release.version }
-                }}
-              </a>
-            }
-          }
-          @if (isUploadedPlugin(plugin)) {
-            <button
-              mat-button
-              color="warn"
-              (click)="removeUploadedPlugin(plugin)"
-              [disabled]="isUploading()"
-            >
-              <mat-icon>delete</mat-icon>
-              {{ T.PLUGINS.REMOVE | translate }}
-            </button>
-          }
-        </mat-card-actions>
-      }
-    </mat-card>
-  }
-}
-
-<mat-card class="community-plugins-card">
-  <mat-card-header>
-    <!-- A heading at the group level, so its items (h4) nest under it. -->
-    <mat-card-title
-      role="heading"
-      aria-level="3"
-      >{{ T.PLUGINS.COMMUNITY_PLUGINS | translate }}</mat-card-title
-    >
-  </mat-card-header>
-  <mat-card-content>
-    <p class="community-warning">{{ T.PLUGINS.COMMUNITY_WARNING | translate }}</p>
-
+    <h3 class="group-title">{{ T.PLUGINS.COMMUNITY_PLUGINS | translate }}</h3>
     <div class="community-plugins-list">
       @for (row of communityPluginRows(); track row.plugin.name) {
         @let plugin = row.plugin;
@@ -281,7 +142,7 @@
       }
     </div>
 
-    <div style="margin-top: 16px; text-align: center">
+    <div class="community-get-listed">
       <a
         href="https://github.com/super-productivity/super-productivity/blob/master/docs/plugin-development.md#get-listed-in-the-app"
         target="_blank"
@@ -292,51 +153,255 @@
         {{ T.PLUGINS.COMMUNITY_GET_LISTED | translate }}
       </a>
     </div>
-  </mat-card-content>
-</mat-card>
+  </mat-tab>
+</mat-tab-group>
 
-<mat-card class="install-card">
-  <mat-card-header>
-    <mat-card-title>{{ T.PLUGINS.INSTALL_PLUGIN | translate }}</mat-card-title>
-  </mat-card-header>
-  <mat-card-content>
-    <p>{{ T.PLUGINS.UPLOAD_PLUGIN_INSTRUCTION | translate }}</p>
-    <input
-      #fileInput
-      type="file"
-      accept=".zip"
-      (change)="onFileSelected($event)"
-      style="display: none"
-    />
-    <div class="install-actions">
-      <button
-        mat-raised-button
-        color="primary"
-        (click)="fileInput.click()"
-        [disabled]="isUploading()"
-      >
-        <mat-icon>upload</mat-icon>
-        {{
-          isUploading()
-            ? (T.PLUGINS.INSTALLING | translate)
-            : (T.PLUGINS.CHOOSE_PLUGIN_FILE | translate)
-        }}
-      </button>
-      <button
-        mat-button
-        (click)="clearPluginCache()"
-        [disabled]="isUploading()"
-      >
-        <mat-icon>delete_sweep</mat-icon>
-        {{ T.PLUGINS.REMOVE_ALL_UPLOADED_PLUGINS | translate }}
-      </button>
+<ng-template
+  #builtInPluginList
+  let-plugins
+>
+  @if (plugins.length > 0) {
+    <ng-container
+      *ngTemplateOutlet="pluginList; context: { $implicit: plugins }"
+    ></ng-container>
+  } @else {
+    <div class="empty-state">
+      <mat-icon>extension_off</mat-icon>
+      <p>{{ T.PS.NO_PLUGINS_INSTALLED | translate }}</p>
     </div>
-    @if (uploadError()) {
-      <mat-error style="margin-top: 8px; display: block">
-        {{ uploadError() }}
-      </mat-error>
-    }
-  </mat-card-content>
-</mat-card>
+  }
+</ng-template>
 
-<div class="bottom-bar"></div>
+<ng-template
+  #pluginList
+  let-plugins
+>
+  <ul class="plugin-list">
+    @for (plugin of plugins; track plugin.manifest.id) {
+      @let pluginId = plugin.manifest.id;
+      @let isExpanded = expandedPluginIds().has(pluginId);
+      @let isLoading = isPluginLoading(plugin);
+      <li
+        #pluginRow
+        class="plugin-row"
+        [attr.data-plugin-id]="pluginId"
+        [class.isExpanded]="isExpanded"
+        [class.isHighlighted]="highlightedPluginId() === pluginId"
+      >
+        <div class="plugin-row-main">
+          <plugin-icon
+            [pluginId]="pluginId"
+            [size]="24"
+            fallbackIcon="extension"
+          ></plugin-icon>
+
+          <!-- The whole summary toggles the details, so the row needs no extra button. -->
+          <button
+            type="button"
+            class="plugin-summary"
+            [attr.aria-expanded]="isExpanded"
+            [attr.aria-controls]="isExpanded ? 'plugin-details-' + pluginId : null"
+            (click)="toggleDetails(plugin)"
+          >
+            <span class="plugin-summary-text">
+              <span class="plugin-title-line">
+                <span class="plugin-row-name">{{ plugin.manifest.name }}</span>
+                <span class="plugin-row-meta">
+                  v{{ plugin.manifest.version }}
+                  @if (getPluginAuthor(plugin); as author) {
+                    · {{ T.PLUGINS.AUTHORED_BY | translate: { author } }}
+                  }
+                </span>
+              </span>
+              <span class="plugin-row-desc">{{ getPluginDescription(plugin) }}</span>
+            </span>
+            <mat-icon class="expand-icon">expand_more</mat-icon>
+          </button>
+
+          <div class="plugin-controls">
+            <!-- Holds the settings button's place even while it is hidden, so turning
+            a plugin on or off never re-wraps its description. While the plugin loads,
+            its settings cannot be opened anyway, so the loading icon takes the slot. -->
+            <span class="control-slot">
+              @if (isLoading) {
+                <mat-icon
+                  class="loading-icon"
+                  role="img"
+                  aria-hidden="false"
+                  [attr.aria-label]="T.PLUGINS.LOADING_PLUGIN | translate"
+                  [matTooltip]="T.PLUGINS.LOADING_PLUGIN | translate"
+                  >autorenew</mat-icon
+                >
+              } @else if (plugin.isEnabled) {
+                @if (plugin.manifest?.jsonSchemaCfg) {
+                  <button
+                    mat-icon-button
+                    (click)="openConfigDialog(plugin)"
+                    [disabled]="isLoading"
+                    [matTooltip]="T.PLUGINS.CONFIGURE | translate"
+                    [attr.aria-label]="T.PLUGINS.CONFIGURE | translate"
+                  >
+                    <mat-icon>settings</mat-icon>
+                  </button>
+                } @else if (hasConfigHandler(plugin)) {
+                  <button
+                    mat-icon-button
+                    (click)="openPluginConfig(plugin)"
+                    [disabled]="isLoading"
+                    [matTooltip]="T.PLUGINS.CONFIGURE | translate"
+                    [attr.aria-label]="T.PLUGINS.CONFIGURE | translate"
+                  >
+                    <mat-icon>settings</mat-icon>
+                  </button>
+                }
+              }
+            </span>
+            @if (isUploadedPlugin(plugin)) {
+              <button
+                mat-icon-button
+                class="more-actions-btn"
+                [matMenuTriggerFor]="pluginMenu"
+                [matTooltip]="T.G.MORE_ACTIONS | translate"
+                [attr.aria-label]="T.G.MORE_ACTIONS | translate"
+              >
+                <mat-icon>more_vert</mat-icon>
+              </button>
+              <mat-menu #pluginMenu="matMenu">
+                <button
+                  mat-menu-item
+                  class="remove-plugin-btn"
+                  (click)="removeUploadedPlugin(plugin)"
+                  [disabled]="isUploading()"
+                >
+                  <mat-icon>delete</mat-icon>
+                  <span>{{ T.PLUGINS.REMOVE | translate }}</span>
+                </button>
+              </mat-menu>
+            }
+            <mat-slide-toggle
+              [checked]="plugin.isEnabled"
+              [disabled]="!canEnablePlugin(plugin) || isLoading"
+              (change)="onPluginToggle(plugin, $event)"
+              [attr.aria-label]="
+                T.PLUGINS.TOGGLE_PLUGIN | translate: { pluginName: plugin.manifest.name }
+              "
+            >
+            </mat-slide-toggle>
+          </div>
+        </div>
+
+        @if (plugin.error) {
+          <mat-error class="plugin-row-note">
+            <mat-icon>error</mat-icon>
+            {{ plugin.error }}
+          </mat-error>
+        }
+
+        @if (requiresNodeExecution(plugin) && !IS_ELECTRON) {
+          <mat-error class="plugin-row-note">
+            <mat-icon>desktop_windows</mat-icon>
+            {{ getNodeExecutionMessage() }}
+          </mat-error>
+        }
+
+        @if (isIssueProviderPlugin(plugin) && plugin.isEnabled) {
+          <div class="plugin-row-action">
+            <button
+              mat-button
+              color="primary"
+              (click)="goToIssuePanel()"
+              [disabled]="isLoading"
+            >
+              <mat-icon>arrow_forward</mat-icon>
+              {{ T.PLUGINS.SETUP_ISSUE_PROVIDER | translate }}
+            </button>
+          </div>
+        }
+
+        @if (communityUpdates().get(pluginId); as update) {
+          <div class="plugin-row-action">
+            @if (isInAppInstall) {
+              <button
+                mat-button
+                color="primary"
+                (click)="installCommunityPlugin(update.plugin)"
+                [disabled]="isUploading()"
+              >
+                <mat-icon>update</mat-icon>
+                {{
+                  T.PLUGINS.COMMUNITY_UPDATE
+                    | translate: { version: update.release.version }
+                }}
+              </button>
+            } @else {
+              <a
+                mat-button
+                color="primary"
+                [href]="update.release.downloadUrl"
+                target="_blank"
+              >
+                <mat-icon>download</mat-icon>
+                {{
+                  T.PLUGINS.COMMUNITY_DOWNLOAD
+                    | translate: { version: update.release.version }
+                }}
+              </a>
+            }
+          </div>
+        }
+
+        @if (isExpanded) {
+          <div
+            class="plugin-details plugin-row-note"
+            [id]="'plugin-details-' + pluginId"
+          >
+            <table>
+              <tr>
+                <th>{{ T.PLUGINS.ID | translate }}</th>
+                <td>{{ pluginId }}</td>
+              </tr>
+              <tr>
+                <th>{{ T.PLUGINS.LANGUAGES | translate }}</th>
+                <td>{{ getPluginLanguages(plugin) }}</td>
+              </tr>
+            </table>
+            @if (getApiAccess(plugin); as apiAccess) {
+              @if (apiAccess.length > 0) {
+                <div class="plugin-info-section">
+                  <div class="label">{{ T.PLUGINS.DECLARED_ACCESS | translate }}:</div>
+                  <ul class="api-access">
+                    @for (access of apiAccess; track access.permission) {
+                      <li>{{ access.key | translate: access.params }}</li>
+                    }
+                  </ul>
+                </div>
+              }
+            }
+            @if (getOtherPermissions(plugin); as otherPermissions) {
+              @if (otherPermissions.length > 0) {
+                <div class="plugin-info-section">
+                  <div class="label">{{ T.PLUGINS.OTHER_PERMISSIONS | translate }}:</div>
+                  <mat-chip-set>
+                    @for (permission of otherPermissions; track permission) {
+                      <mat-chip>{{ permission }}</mat-chip>
+                    }
+                  </mat-chip-set>
+                </div>
+              }
+            }
+            @if (plugin.manifest.hooks && plugin.manifest.hooks.length > 0) {
+              <div class="plugin-info-section">
+                <div class="label">{{ T.PLUGINS.HOOKS | translate }}:</div>
+                <mat-chip-set>
+                  @for (hook of plugin.manifest.hooks; track hook) {
+                    <mat-chip>{{ hook }}</mat-chip>
+                  }
+                </mat-chip-set>
+              </div>
+            }
+          </div>
+        }
+      </li>
+    }
+  </ul>
+</ng-template>

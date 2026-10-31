@@ -67,3 +67,25 @@ export const BUNDLED_PLUGIN_IDS = new Set<string>([
 export const DEV_ONLY_BUNDLED_PLUGIN_IDS: ReadonlySet<string> = new Set([
   'api-test-plugin',
 ]);
+
+export type BundledPluginTab = 'features' | 'integrations';
+
+// The Settings → Plugins tab of every bundled plugin that is not an issue provider (those
+// always go to Integrations). Integrations takes the ones that connect to another app or
+// a file. electron/bundled-plugin-ids.test.cjs fails when a bundled plugin is missing
+// here, so each new one is placed on purpose.
+export const BUNDLED_PLUGIN_TABS: ReadonlyMap<string, BundledPluginTab> = new Map([
+  ['ai-productivity-prompts', 'features'],
+  ['api-test-plugin', 'features'],
+  ['app-auto-track', 'features'],
+  ['automations', 'features'],
+  ['brain-dump', 'features'],
+  ['doc-mode', 'features'],
+  ['parallel-code', 'integrations'],
+  ['procrastination-buster', 'features'],
+  ['sync-md', 'integrations'],
+  ['ticktick-import', 'integrations'],
+  ['todoist-import', 'integrations'],
+  ['voice-reminder', 'features'],
+  ['yesterday-tasks', 'features'],
+]);

@@ -24,9 +24,11 @@ test.describe('Doc Mode bundled plugin', () => {
     // Manifest declares the user-visible name as "Doc Mode (Alpha)".
     // Match on the prefix so a future Alpha→Beta label change doesn't break.
     const titles = await page.evaluate(() => {
-      const cards = Array.from(document.querySelectorAll('plugin-management mat-card'));
+      const cards = Array.from(
+        document.querySelectorAll('plugin-management .plugin-row'),
+      );
       return cards
-        .map((card) => card.querySelector('mat-card-title')?.textContent?.trim() ?? '')
+        .map((card) => card.querySelector('.plugin-row-name')?.textContent?.trim() ?? '')
         .filter(Boolean);
     });
 

@@ -1,58 +1,29 @@
+@use '../../../../styles/_globals.scss' as *;
+
+// The bottom is one step short: the last row or the "get listed" link adds the other `--s`.
 :host {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  display: block;
+  padding: var(--s2) var(--s2) var(--s);
 }
 
 th {
   text-align: left;
+  vertical-align: top;
   padding-left: 0;
+  padding-right: var(--s2);
+  white-space: nowrap;
 }
 
 td {
   padding-right: 0;
 }
 
-mat-card {
-  margin: var(--s);
-}
+.group-title {
+  margin: var(--s3) 0 var(--s-half);
 
-mat-card-header {
-  mat-slide-toggle {
-    margin-left: auto;
+  &:first-child {
+    margin-top: 0;
   }
-
-  .plugin-controls {
-    display: flex;
-    align-items: center;
-    gap: var(--s);
-    margin-left: auto;
-  }
-}
-
-plugin-icon {
-  width: 40px;
-  height: 40px;
-  margin-right: var(--s);
-}
-
-.label {
-  font-weight: bold;
-  margin-top: 12px;
-}
-
-mat-card-subtitle {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--s);
-
-  mat-chip {
-    margin-left: var(--s);
-  }
-}
-
-.plugin-author {
-  overflow-wrap: anywhere;
 }
 
 .empty-state {
@@ -68,11 +39,208 @@ mat-card-subtitle {
   }
 }
 
+// A toolbar between two lines: the tab bar above and its own bottom line. The extra
+// space on top makes up for the active tab and its indicator, which make an equal gap
+// look tighter above than below. The content below starts as far from the bottom line
+// as it does from the tab bar in the other tabs.
+.community-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s) var(--s2);
+  padding-top: var(--s-half);
+  padding-bottom: var(--s2);
+  border-bottom: 1px solid var(--separator-color);
+}
+
+.community-header + .group-title {
+  margin-top: var(--s2);
+}
+
+.community-header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--s-half);
+}
+
+.community-get-listed {
+  margin: var(--s2) 0 var(--s);
+  text-align: center;
+}
+
+.plugin-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  // Settings makes tab bodies `overflow: visible`, so without this the one-line
+  // descriptions would size the whole tab to their full, unwrapped width.
+  contain: inline-size;
+}
+
+// Indented under its group heading, so the rows read as part of that group.
+.group-title + .plugin-list {
+  padding-inline-start: var(--s2);
+}
+
+// Icon, content and controls columns. Everything under the summary (errors,
+// actions, details) goes in the content column, so it is exactly as wide as the
+// summary and never runs under the controls.
+.plugin-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: var(--s);
+  padding: var(--s) 0;
+  border-bottom: 1px solid var(--separator-color);
+
+  &:last-child {
+    border-bottom: 0;
+  }
+
+  // Marks a just-installed plugin for a few seconds, like a task revealed by search.
+  // Inset from the row's top and bottom so it stays clear of the group heading and
+  // the next row, and widened into the list's side padding so it does not touch
+  // the icon or the toggle.
+  &.isHighlighted::after {
+    content: '';
+    position: absolute;
+    inset: var(--s-half) calc(-1 * var(--s));
+    border: var(--focus-ring-width) solid var(--c-accent);
+    border-radius: var(--radius-sm);
+    pointer-events: none;
+  }
+}
+
+.plugin-row-main {
+  display: contents;
+}
+
+plugin-icon {
+  flex: none;
+  width: 24px;
+  height: 24px;
+}
+
+.plugin-summary {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--s);
+  padding: var(--s-half);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+
+  &:hover {
+    background: var(--state-hover);
+  }
+
+  &:focus-visible {
+    outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  }
+}
+
+.plugin-summary-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-quarter);
+}
+
+.plugin-title-line {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  column-gap: var(--s);
+}
+
+.plugin-row-name {
+  font-weight: var(--font-weight-semibold);
+  overflow-wrap: anywhere;
+}
+
+.plugin-row-meta {
+  font-size: var(--font-size-sm);
+  color: var(--text-color-muted);
+  overflow-wrap: anywhere;
+}
+
+.expand-icon {
+  flex: none;
+  font-size: 18px;
+  width: 18px;
+  height: 18px;
+  color: var(--text-color-muted);
+  transition: transform var(--transition-fast);
+
+  .isExpanded & {
+    transform: rotate(180deg);
+  }
+}
+
+// One line while collapsed; the details show the full text.
+.plugin-row-desc {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--text-color-muted);
+
+  .isExpanded & {
+    white-space: normal;
+  }
+}
+
+.plugin-controls {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--s-half);
+}
+
+// As wide as an icon button, so rows keep their width whether or not it is shown.
+.control-slot {
+  flex: none;
+  display: flex;
+  justify-content: center;
+  width: var(--s5);
+}
+
+// Lines below the summary share its column and padding, so their text lines up
+// with the summary text on both sides.
+.plugin-row-note {
+  grid-column: 2;
+  padding-inline: var(--s-half);
+}
+
+// A text button's icon sits one `--s` of padding inside it; pull the button back
+// by that much so the icon, not the button edge, lines up with the text above.
+.plugin-row-action {
+  grid-column: 2;
+  margin-inline-start: calc(var(--s-half) - var(--s));
+}
+
+// On a phone the content column is too narrow for details, so everything under
+// the summary also takes the width below the controls, which sit in the first line.
+@include mq(xs, max) {
+  .plugin-row-note,
+  .plugin-row-action {
+    grid-column: 2 / -1;
+  }
+}
+
 mat-error {
   display: flex;
   align-items: center;
   gap: var(--s);
-  margin: var(--s2) 0;
+  margin-top: var(--s-half);
 
   mat-icon {
     font-size: 18px;
@@ -81,18 +249,32 @@ mat-error {
   }
 }
 
-.intro {
-  grid-column: 1 / -1;
-  display: flex;
-  align-items: center;
-  gap: var(--s);
-  margin: var(--s);
-  color: var(--text-color-muted);
+.plugin-details {
+  padding-top: var(--s);
+
+  table {
+    border-collapse: collapse;
+  }
+
+  .label {
+    font-weight: bold;
+    margin-top: var(--s);
+  }
 }
 
-// Loading animation for plugins
+// Most plugins load in a blink; the icon only fades in when loading takes longer,
+// so a quick toggle does not flash it.
 .loading-icon {
-  animation: spin 1s linear infinite;
+  opacity: 0;
+  animation:
+    loading-icon-appear var(--transition-duration-s) var(--transition-duration-l) forwards,
+    spin 1s linear infinite;
+}
+
+@keyframes loading-icon-appear {
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes spin {
@@ -105,31 +287,17 @@ mat-error {
   }
 }
 
-.group-title,
-.community-plugins-card,
-.install-card {
-  grid-column: 1 / -1;
-}
-
-.group-title {
-  margin: var(--s2) var(--s) 0;
-}
-
 .community-warning {
+  flex: 1 1 240px;
+  margin: 0;
   color: var(--text-color-muted);
-}
-
-.install-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--s);
 }
 
 .community-plugins-list {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
   gap: var(--s2);
-  margin-top: var(--s2);
+  margin-top: var(--s);
 }
 
 .community-plugin-item {
@@ -216,11 +384,5 @@ mat-error {
 
   &:last-child {
     margin-bottom: 0;
-  }
-}
-
-collapsible {
-  ::ng-deep .collapsible-title {
-    font-size: 14px;
   }
 }

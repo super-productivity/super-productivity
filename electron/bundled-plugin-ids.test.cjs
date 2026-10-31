@@ -173,3 +173,62 @@ test('every BUNDLED_PLUGIN_PATHS plugin has a package.json so release builds inc
       'packages/build-packages.js skips them, so release builds would ship without the plugin.',
   );
 });
+
+// Settings → Plugins splits bundled plugins into the Features and Integrations tabs.
+// Issue providers always go to Integrations; every other bundled plugin needs an entry
+// in BUNDLED_PLUGIN_TABS, so a new plugin is placed on purpose instead of falling into
+// Features by default (observed once, for `parallel-code`, which connects to another app).
+test('every bundled plugin that is not an issue provider has a BUNDLED_PLUGIN_TABS entry', () => {
+  const source = fs.readFileSync(BUNDLED_PLUGINS_CONST_PATH, 'utf8');
+  const bundledIds = new Set(
+    extractStringLiteralList(source, 'BUNDLED_PLUGIN_IDS = new Set<string>([', ']'),
+  );
+
+  const tabsDecl =
+    'BUNDLED_PLUGIN_TABS: ReadonlyMap<string, BundledPluginTab> = new Map([';
+  const tabsStart = source.indexOf(tabsDecl);
+  assert.notEqual(
+    tabsStart,
+    -1,
+    `Could not find "${tabsDecl}" in bundled-plugins.const.ts — update this test.`,
+  );
+  const tabsEnd = source.indexOf(']);', tabsStart);
+  const tabEntries = [
+    ...source
+      .slice(tabsStart + tabsDecl.length, tabsEnd)
+      .matchAll(/\[\s*['"]([^'"]+)['"]\s*,\s*['"]([^'"]+)['"]\s*\]/g),
+  ].map((m) => [m[1], m[2]]);
+  assert.ok(tabEntries.length > 0, 'Parsed zero entries from BUNDLED_PLUGIN_TABS.');
+  const tabs = new Map(tabEntries);
+
+  const manifestTypes = new Map();
+  for (const dirName of fs.readdirSync(PLUGIN_DEV_DIR)) {
+    const manifestPath = findManifestPath(dirName);
+    if (manifestPath) {
+      const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+      manifestTypes.set(manifest.id, manifest.type);
+    }
+  }
+
+  const unplaced = [...bundledIds].filter(
+    (id) => manifestTypes.get(id) !== 'issueProvider' && !tabs.has(id),
+  );
+  assert.deepEqual(
+    unplaced,
+    [],
+    `Bundled plugin(s) without a BUNDLED_PLUGIN_TABS entry: ${unplaced.join(', ')}. ` +
+      "Add each to src/app/plugins/bundled-plugins.const.ts as 'features' or 'integrations'.",
+  );
+
+  const stale = [...tabs].filter(
+    ([id, tab]) =>
+      !bundledIds.has(id) ||
+      manifestTypes.get(id) === 'issueProvider' ||
+      (tab !== 'features' && tab !== 'integrations'),
+  );
+  assert.deepEqual(
+    stale,
+    [],
+    'BUNDLED_PLUGIN_TABS entries that are not bundled, are issue providers or name an unknown tab.',
+  );
+});

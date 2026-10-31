@@ -1,21 +1,30 @@
 import { test, expect } from '../../fixtures/test.fixture';
-import type { Page } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
 import * as path from 'path';
-import { cssSelectors } from '../../constants/selectors';
 import { waitForPluginManagementInit } from '../../helpers/plugin-test.helpers';
 
-const { SETTINGS_BTN } = cssSelectors;
+const FILE_INPUT = 'plugin-management input[type="file"][accept=".zip"]';
+const TEST_PLUGIN_ZIP = path.resolve(__dirname, '../../../src/assets/test-plugin.zip');
 
-// Plugin-related selectors
-const UPLOAD_PLUGIN_BTN = 'plugin-management button[mat-raised-button]'; // The "Choose Plugin File" button
-const FILE_INPUT = 'input[type="file"][accept=".zip"]';
-const PLUGIN_CARD = 'plugin-management mat-card.ng-star-inserted';
-
-// Test plugin details (cards are matched by name: the id sits in the collapsed details)
+// Rows are matched by name: the id sits in the collapsed details
 const TEST_PLUGIN_NAME = 'Test Upload Plugin';
 
+const openTab = async (
+  page: Page,
+  name: 'Features' | 'Integrations' | 'Community',
+): Promise<void> => {
+  const tab = page.locator('plugin-management').getByRole('tab', { name });
+  await tab.click();
+  await expect(tab).toHaveAttribute('aria-selected', 'true');
+};
+
+const pluginRow = (page: Page): Locator =>
+  page.locator('plugin-management .plugin-row', { hasText: TEST_PLUGIN_NAME });
+
 // Uploading asks for confirmation (risk warning) before the plugin is installed.
-const confirmInstall = async (page: Page): Promise<void> => {
+const uploadTestPlugin = async (page: Page): Promise<void> => {
+  await openTab(page, 'Community');
+  await page.locator(FILE_INPUT).setInputFiles(TEST_PLUGIN_ZIP);
   const confirmDialog = page.locator('dialog-confirm');
   await confirmDialog.locator('button[e2e="confirmBtn"]').click();
   await expect(confirmDialog).toBeHidden();
@@ -26,337 +35,74 @@ test.describe.serial('Plugin Upload', () => {
     await workViewPage.waitForTaskList();
   });
 
-  test('upload and manage plugin lifecycle', async ({ page, workViewPage }) => {
+  test('upload and manage plugin lifecycle', async ({ page }) => {
     // Give the plugin pipeline more breathing room on slower machines/CI
     test.setTimeout(process.env.CI ? 90000 : 60000);
-    // Navigate to plugin management
-    await page.click(SETTINGS_BTN);
-    await page
-      .locator('.page-settings')
-      .first()
-      .waitFor({ state: 'visible', timeout: 10000 });
+    expect(await waitForPluginManagementInit(page)).toBe(true);
 
-    // Navigate to Plugins tab first
-    await page.evaluate(() => {
-      const pluginsTab = Array.from(
-        document.querySelectorAll('mat-tab-header .mat-mdc-tab'),
-      ).find((tab) => {
-        const icon = tab.querySelector('mat-icon');
-        return icon?.textContent?.trim() === 'extension';
+    await uploadTestPlugin(page);
+
+    // The new row is revealed and briefly highlighted, so the upload never looks
+    // like nothing happened (#10477).
+    const row = pluginRow(page);
+    await expect(row).toBeVisible({ timeout: 15000 });
+    await expect(row).toHaveClass(/isHighlighted/);
+    await expect(row).toBeInViewport();
+    await expect(row).not.toHaveClass(/isHighlighted/, { timeout: 5000 });
+
+    // Only the "Community" tab lists uploaded plugins
+    await openTab(page, 'Features');
+    await expect(pluginRow(page)).toHaveCount(0);
+    await openTab(page, 'Integrations');
+    await expect(pluginRow(page)).toHaveCount(0);
+    await openTab(page, 'Community');
+
+    // Uploaded plugins start disabled; toggle them on, off and on again
+    const toggle = row.getByRole('switch');
+    await expect(toggle).toHaveAttribute('aria-checked', 'false');
+    for (const isChecked of ['true', 'false', 'true']) {
+      await toggle.click();
+      await expect(toggle).toHaveAttribute('aria-checked', isChecked, {
+        timeout: 10000,
       });
+    }
 
-      if (pluginsTab) {
-        (pluginsTab as HTMLElement).click();
-      }
-    });
-
-    await page.waitForTimeout(500);
-
-    await page.evaluate(() => {
-      const configPage = document.querySelector('.page-settings');
-      if (!configPage) {
-        console.error('Not on config page');
-        return;
-      }
-
-      const pluginSection = document.querySelector('.plugin-section');
-      if (pluginSection) {
-        pluginSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }
-
-      const collapsible = document.querySelector('.plugin-section collapsible');
-      if (collapsible) {
-        const isExpanded = collapsible.classList.contains('isExpanded');
-        if (!isExpanded) {
-          const header = collapsible.querySelector('.collapsible-header');
-          if (header) {
-            (header as HTMLElement).click();
-          }
-        }
-      }
-    });
-
-    await expect(page.locator('plugin-management')).toBeVisible({ timeout: 10000 });
-
-    // Upload plugin ZIP file
-    const testPluginPath = path.resolve(__dirname, '../../../src/assets/test-plugin.zip');
-
-    await expect(page.locator(UPLOAD_PLUGIN_BTN)).toBeVisible();
-
-    // Make file input visible for testing
-    await page.evaluate(() => {
-      const input = document.querySelector(
-        'input[type="file"][accept=".zip"]',
-      ) as HTMLElement;
-      if (input) {
-        input.style.display = 'block';
-        input.style.position = 'relative';
-        input.style.opacity = '1';
-      }
-    });
-
-    await page.locator(FILE_INPUT).setInputFiles(testPluginPath);
-    await confirmInstall(page);
-
-    // Wait for uploaded plugin to appear in list
-    await page.waitForFunction(
-      (pluginId) => {
-        const cards = Array.from(document.querySelectorAll('plugin-management mat-card'));
-        return cards.some((card) => card.textContent?.includes(pluginId));
-      },
-      TEST_PLUGIN_NAME,
-      { timeout: 15000 },
-    );
-
-    // Verify uploaded plugin appears in list (there are multiple cards, so check first)
-    await expect(page.locator(PLUGIN_CARD).first()).toBeVisible();
-
-    const pluginExists = await page.evaluate((pluginName: string) => {
-      const cards = Array.from(document.querySelectorAll('plugin-management mat-card'));
-      return cards.some((card) => card.textContent?.includes(pluginName));
-    }, TEST_PLUGIN_NAME);
-
-    expect(pluginExists).toBeTruthy();
-
-    // Verify uploaded plugin is disabled by default
-    const initialStatus = await page.evaluate((pluginId: string) => {
-      const cards = Array.from(document.querySelectorAll('plugin-management mat-card'));
-      const targetCard = cards.find((card) => card.textContent?.includes(pluginId));
-      if (targetCard) {
-        const toggleButton = targetCard.querySelector(
-          'mat-slide-toggle button[role="switch"]',
-        ) as HTMLButtonElement;
-        return toggleButton?.getAttribute('aria-checked') === 'true';
-      }
-      return null;
-    }, TEST_PLUGIN_NAME);
-
-    expect(initialStatus).toBe(false);
-
-    // Enable uploaded plugin
-    const enableResult = await page.evaluate((pluginName: string) => {
-      const items = Array.from(document.querySelectorAll('plugin-management mat-card'));
-      const pluginCard = items.find((item) => item.textContent?.includes(pluginName));
-      if (pluginCard) {
-        const toggle = pluginCard.querySelector(
-          'mat-slide-toggle button[role="switch"]',
-        ) as HTMLButtonElement;
-        if (toggle) {
-          toggle.click();
-          return true;
-        }
-      }
-      return false;
-    }, TEST_PLUGIN_NAME);
-
-    expect(enableResult).toBeTruthy();
-
-    // Wait for toggle state to change to enabled
-    await page.waitForFunction(
-      (pluginId) => {
-        const cards = Array.from(document.querySelectorAll('plugin-management mat-card'));
-        const targetCard = cards.find((card) => card.textContent?.includes(pluginId));
-        if (targetCard) {
-          const toggleButton = targetCard.querySelector(
-            'mat-slide-toggle button[role="switch"]',
-          ) as HTMLButtonElement;
-          return toggleButton?.getAttribute('aria-checked') === 'true';
-        }
-        return false;
-      },
-      TEST_PLUGIN_NAME,
-      { timeout: 10000 },
-    );
-
-    // Verify plugin is now enabled
-    const enabledStatus = await page.evaluate((pluginId: string) => {
-      const cards = Array.from(document.querySelectorAll('plugin-management mat-card'));
-      const targetCard = cards.find((card) => card.textContent?.includes(pluginId));
-      if (targetCard) {
-        const toggleButton = targetCard.querySelector(
-          'mat-slide-toggle button[role="switch"]',
-        ) as HTMLButtonElement;
-        return toggleButton?.getAttribute('aria-checked') === 'true';
-      }
-      return null;
-    }, TEST_PLUGIN_NAME);
-
-    expect(enabledStatus).toBe(true);
-
-    // Disable uploaded plugin
-    const disableResult = await page.evaluate((pluginId: string) => {
-      const items = Array.from(document.querySelectorAll('plugin-management mat-card'));
-      const pluginCard = items.find((item) => item.textContent?.includes(pluginId));
-      if (pluginCard) {
-        const toggle = pluginCard.querySelector(
-          'mat-slide-toggle button[role="switch"]',
-        ) as HTMLButtonElement;
-        if (toggle) {
-          toggle.click();
-          return true;
-        }
-      }
-      return false;
-    }, TEST_PLUGIN_NAME);
-
-    expect(disableResult).toBeTruthy();
-
-    // Wait for toggle state to change to disabled
-    await page.waitForFunction(
-      (pluginId) => {
-        const cards = Array.from(document.querySelectorAll('plugin-management mat-card'));
-        const targetCard = cards.find((card) => card.textContent?.includes(pluginId));
-        if (targetCard) {
-          const toggleButton = targetCard.querySelector(
-            'mat-slide-toggle button[role="switch"]',
-          ) as HTMLButtonElement;
-          return toggleButton?.getAttribute('aria-checked') === 'false';
-        }
-        return false;
-      },
-      TEST_PLUGIN_NAME,
-      { timeout: 10000 },
-    );
-
-    // Verify plugin is now disabled
-    const disabledStatus = await page.evaluate((pluginId: string) => {
-      const cards = Array.from(document.querySelectorAll('plugin-management mat-card'));
-      const targetCard = cards.find((card) => card.textContent?.includes(pluginId));
-      if (targetCard) {
-        const toggleButton = targetCard.querySelector(
-          'mat-slide-toggle button[role="switch"]',
-        ) as HTMLButtonElement;
-        return toggleButton?.getAttribute('aria-checked') === 'true';
-      }
-      return null;
-    }, TEST_PLUGIN_NAME);
-
-    expect(disabledStatus).toBe(false);
-
-    // Re-enable uploaded plugin
-    const reEnableResult = await page.evaluate((pluginId: string) => {
-      const items = Array.from(document.querySelectorAll('plugin-management mat-card'));
-      const pluginCard = items.find((item) => item.textContent?.includes(pluginId));
-      if (pluginCard) {
-        const toggle = pluginCard.querySelector(
-          'mat-slide-toggle button[role="switch"]',
-        ) as HTMLButtonElement;
-        if (toggle) {
-          toggle.click();
-          return true;
-        }
-      }
-      return false;
-    }, TEST_PLUGIN_NAME);
-
-    expect(reEnableResult).toBeTruthy();
-
-    // Wait for toggle state to change to enabled again
-    await page.waitForFunction(
-      (pluginId) => {
-        const cards = Array.from(document.querySelectorAll('plugin-management mat-card'));
-        const targetCard = cards.find((card) => card.textContent?.includes(pluginId));
-        if (targetCard) {
-          const toggleButton = targetCard.querySelector(
-            'mat-slide-toggle button[role="switch"]',
-          ) as HTMLButtonElement;
-          return toggleButton?.getAttribute('aria-checked') === 'true';
-        }
-        return false;
-      },
-      TEST_PLUGIN_NAME,
-      { timeout: 10000 },
-    );
-
-    // Verify plugin is enabled again
-    const reEnabledStatus = await page.evaluate((pluginId: string) => {
-      const cards = Array.from(document.querySelectorAll('plugin-management mat-card'));
-      const targetCard = cards.find((card) => card.textContent?.includes(pluginId));
-      if (targetCard) {
-        const toggleButton = targetCard.querySelector(
-          'mat-slide-toggle button[role="switch"]',
-        ) as HTMLButtonElement;
-        return toggleButton?.getAttribute('aria-checked') === 'true';
-      }
-      return null;
-    }, TEST_PLUGIN_NAME);
-
-    expect(reEnabledStatus).toBe(true);
-
-    // Remove uploaded plugin
-    await page.evaluate((pluginId: string) => {
-      const items = Array.from(document.querySelectorAll('plugin-management mat-card'));
-      const pluginCard = items.find((item) => item.textContent?.includes(pluginId));
-      if (pluginCard) {
-        const removeBtn = pluginCard.querySelector('button[color="warn"]') as HTMLElement;
-        if (removeBtn) {
-          removeBtn.click();
-          return true;
-        }
-      }
-      return false;
-    }, TEST_PLUGIN_NAME);
-
-    // Confirm in the app's confirmation dialog
+    // Remove it through the row's "more actions" menu
+    await row.getByRole('button', { name: 'More actions' }).click();
+    await page.getByRole('menuitem', { name: 'Remove' }).click();
     const confirmDialog = page.locator('dialog-confirm');
-    await confirmDialog.waitFor({ state: 'visible', timeout: 5000 });
     await confirmDialog.locator('button[e2e="confirmBtn"]').click();
-    await confirmDialog.waitFor({ state: 'hidden', timeout: 5000 });
+    await expect(confirmDialog).toBeHidden();
 
-    // Wait for plugin to be removed from the list
-    await page.waitForFunction(
-      (pluginId) => {
-        const items = Array.from(document.querySelectorAll('plugin-management mat-card'));
-        return !items.some((item) => item.textContent?.includes(pluginId));
-      },
-      TEST_PLUGIN_NAME,
-      { timeout: 15000 },
-    );
-
-    // Verify plugin is removed
-    const removalResult = await page.evaluate((pluginId: string) => {
-      const items = Array.from(document.querySelectorAll('plugin-management mat-card'));
-      const foundPlugin = items.some((item) => item.textContent?.includes(pluginId));
-      return {
-        removed: !foundPlugin,
-        totalCards: items.length,
-        cardTexts: items.map((item) => item.textContent?.trim().substring(0, 50)),
-      };
-    }, TEST_PLUGIN_NAME);
-
-    // console.log('Removal verification:', removalResult);
-    expect(removalResult.removed).toBeTruthy();
+    await expect(row).toHaveCount(0, { timeout: 15000 });
   });
 
   test('remove all uploaded plugins asks before removing them', async ({ page }) => {
     test.setTimeout(process.env.CI ? 90000 : 60000);
     expect(await waitForPluginManagementInit(page)).toBe(true);
 
-    await page
-      .locator(FILE_INPUT)
-      .setInputFiles(path.resolve(__dirname, '../../../src/assets/test-plugin.zip'));
-    await confirmInstall(page);
-    const uploadedCard = page.locator('plugin-management mat-card', {
-      hasText: TEST_PLUGIN_NAME,
-    });
-    await expect(uploadedCard).toBeVisible({ timeout: 15000 });
+    await uploadTestPlugin(page);
+    const uploadedRow = pluginRow(page);
+    await expect(uploadedRow).toBeVisible({ timeout: 15000 });
 
-    const clearCacheBtn = page.locator('plugin-management button', {
-      hasText: 'Remove all uploaded plugins',
-    });
+    // The button sits in the menu of the Community tab's header row
+    const removeAll = async (): Promise<void> => {
+      await page.locator('plugin-management .community-menu-btn').click();
+      await page.getByRole('menuitem', { name: 'Remove all uploaded plugins' }).click();
+    };
     const confirmDialog = page.locator('dialog-confirm');
 
     // Cancel keeps the uploaded plugin
-    await clearCacheBtn.click();
+    await removeAll();
     await expect(confirmDialog).toContainText('Remove uploaded plugins (1)?');
     await confirmDialog.locator('button', { hasText: 'Cancel' }).click();
     await expect(confirmDialog).toBeHidden();
-    await expect(uploadedCard).toBeVisible();
+    await expect(uploadedRow).toBeVisible();
 
     // Confirm removes it
-    await clearCacheBtn.click();
+    await removeAll();
     await confirmDialog.locator('button[e2e="confirmBtn"]').click();
     await expect(confirmDialog).toBeHidden();
-    await expect(uploadedCard).toHaveCount(0, { timeout: 15000 });
+    await expect(uploadedRow).toHaveCount(0, { timeout: 15000 });
   });
 });

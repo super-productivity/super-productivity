@@ -13,10 +13,14 @@ import { PluginBridgeService } from '../../plugin-bridge.service';
 import { PluginCacheService } from '../../plugin-cache.service';
 import { PluginConfigService } from '../../plugin-config.service';
 import { PluginMetaPersistenceService } from '../../plugin-meta-persistence.service';
-import { PluginInstance, PluginManifest, PluginHooks } from '../../plugin-api.model';
+import { PluginInstance, PluginManifest } from '../../plugin-api.model';
 import { PluginService } from '../../plugin.service';
 import { PluginState } from '../../plugin-state.model';
-import { isPluginListed, PluginManagementComponent } from './plugin-management.component';
+import {
+  isPluginListed,
+  PLUGIN_TAB_INDEX,
+  PluginManagementComponent,
+} from './plugin-management.component';
 import { T } from '../../../t.const';
 import { DialogConfirmComponent } from '../../../ui/dialog-confirm/dialog-confirm.component';
 import { CommunityPlugin } from '../../util/community-plugin.util';
@@ -41,14 +45,17 @@ describe('PluginManagementComponent', () => {
       .and.returnValue(Promise.resolve(true));
     layoutToggleSpy = jasmine.createSpy('toggleAddTaskPanel');
     isShowIssuePanel = signal(false);
+    const pluginStates = signal(new Map<string, PluginState>());
     TestBed.configureTestingModule({
       imports: [PluginManagementComponent, TranslateModule.forRoot()],
       providers: [
         {
           provide: PluginService,
           useValue: {
-            pluginStates: signal(new Map()),
+            pluginStates,
             loadPluginFromZip: loadPluginFromZipSpy,
+            getPluginPath: (id: string) => pluginStates().get(id)?.path,
+            getPluginIconsSignal: () => signal(new Map()),
           },
         },
         {
@@ -86,7 +93,7 @@ describe('PluginManagementComponent', () => {
         },
         {
           provide: PluginBridgeService,
-          useValue: {},
+          useValue: { hasConfigHandler: () => false },
         },
         {
           provide: SnackService,
@@ -162,7 +169,7 @@ describe('PluginManagementComponent', () => {
 
   it('shows a success snack after a plugin ZIP installs', async () => {
     loadPluginFromZipSpy.and.returnValue(
-      Promise.resolve({ manifest: { name: 'My Plugin' } }),
+      Promise.resolve({ manifest: { id: 'my-plugin', name: 'My Plugin' } }),
     );
 
     await component.onFileSelected(zipInputEvent());
@@ -177,7 +184,10 @@ describe('PluginManagementComponent', () => {
 
   it('shows no snack when the plugin loads but fails to run', async () => {
     loadPluginFromZipSpy.and.returnValue(
-      Promise.resolve({ manifest: { name: 'My Plugin' }, error: 'boom' }),
+      Promise.resolve({
+        manifest: { id: 'my-plugin', name: 'My Plugin' },
+        error: 'boom',
+      }),
     );
 
     await component.onFileSelected(zipInputEvent());
@@ -196,7 +206,7 @@ describe('PluginManagementComponent', () => {
 
   it('shows the risk warning before installing and installs only when confirmed', async () => {
     loadPluginFromZipSpy.and.returnValue(
-      Promise.resolve({ manifest: { name: 'My Plugin' } }),
+      Promise.resolve({ manifest: { id: 'my-plugin', name: 'My Plugin' } }),
     );
     const openSpy = stubConfirmDialog(true);
 
@@ -253,29 +263,6 @@ describe('PluginManagementComponent', () => {
     ).toBe(false);
   });
 
-  it('counts every declared permission and hook in the details title', () => {
-    // instant() echoes the key here (no translations loaded).
-    expect(
-      component.getPermissionsHooksTitle({
-        manifest: {
-          ...baseManifest,
-          permissions: ['http', 'getTasks'],
-          allowedHosts: ['api.example.com'],
-          hooks: [PluginHooks.TASK_COMPLETE],
-        },
-        loaded: true,
-        isEnabled: true,
-      }),
-    ).toBe('PLUGINS.PERMISSIONS (2) / PLUGINS.HOOKS (1)');
-    expect(
-      component.getPermissionsHooksTitle({
-        manifest: { ...baseManifest, hooks: [PluginHooks.TASK_COMPLETE] },
-        loaded: true,
-        isEnabled: true,
-      }),
-    ).toBe('PLUGINS.HOOKS (1)');
-  });
-
   it('lists every declared permission exactly once, as checked access or as other', () => {
     const plugin = {
       manifest: {
@@ -304,7 +291,7 @@ describe('PluginManagementComponent', () => {
     ).toEqual(['http']);
   });
 
-  describe('community plugins card', () => {
+  describe('Community tab', () => {
     const normalize = (text: string | null | undefined): string =>
       (text ?? '').replace(/\s+/g, ' ').trim();
     const plugin = {
@@ -328,6 +315,9 @@ describe('PluginManagementComponent', () => {
           COMMUNITY_INSTALL: 'v{{version}} yükle',
           COMMUNITY_PLUGINS: 'Topluluk eklentileri',
           COMMUNITY_WARNING: 'Topluluk eklentileri incelenmez.',
+          GROUP_UPLOADED: 'Yüklenen eklentiler',
+          INSTALL_FROM_FILE: 'Dosyadan yükle',
+          REMOVE_ALL_UPLOADED_PLUGINS: 'Yüklenen tüm eklentileri kaldır',
         },
       });
       translateService.use('tr');
@@ -335,19 +325,21 @@ describe('PluginManagementComponent', () => {
       // may lack the optional authorUrl or release.
       (component as { isInAppInstall: boolean }).isInAppInstall = true;
       component.communityPlugins.set([plugin]);
+      component.selectedTabIndex.set(PLUGIN_TAB_INDEX.COMMUNITY);
       fixture.detectChanges();
     });
 
-    const card = (): HTMLElement =>
-      fixture.nativeElement.querySelector('.community-plugins-card');
+    const card = (): HTMLElement => fixture.nativeElement;
+    const headings = (): string[] =>
+      Array.from(card().querySelectorAll('h3'), (h) => normalize(h.textContent));
 
-    it('translates the title, warning and add-your-plugin link', () => {
-      expect(normalize(card().querySelector('mat-card-title')?.textContent)).toBe(
-        'Topluluk eklentileri',
-      );
-      expect(normalize(card().querySelector('.community-warning')?.textContent)).toBe(
-        'Topluluk eklentileri incelenmez.',
-      );
+    it('translates the warning, the catalog heading and add-your-plugin link', () => {
+      expect(headings()).toContain('Topluluk eklentileri');
+      expect(
+        normalize(
+          card().querySelector('.community-header .community-warning')?.textContent,
+        ),
+      ).toBe('Topluluk eklentileri incelenmez.');
       const addYoursLink = card().querySelector<HTMLAnchorElement>(
         'a[href$="#get-listed-in-the-app"]',
       );
@@ -387,6 +379,52 @@ describe('PluginManagementComponent', () => {
       fixture.detectChanges();
 
       expect(card().querySelector('.community-plugin-item button')).toBeNull();
+    });
+
+    it('opens with one header row: the warning, an install button and a menu, no cards', () => {
+      const header = card().querySelector('.community-header');
+      const installButton = header?.querySelector('.community-header-actions button');
+
+      expect(normalize(installButton?.textContent)).toBe('upload Dosyadan yükle');
+      expect(header?.querySelector('.community-menu-btn')).not.toBeNull();
+      expect(card().querySelector('mat-card')).toBeNull();
+    });
+
+    it('offers "Remove all uploaded plugins" in the header menu', async () => {
+      const clearSpy = spyOn(component, 'clearPluginCache').and.resolveTo();
+      card().querySelector<HTMLButtonElement>('.community-menu-btn')?.click();
+      fixture.detectChanges();
+      await fixture.whenStable();
+      const item = document.querySelector<HTMLButtonElement>(
+        '.cdk-overlay-container .mat-mdc-menu-item',
+      );
+
+      expect(normalize(item?.textContent)).toContain('Yüklenen tüm eklentileri kaldır');
+      item?.click();
+      expect(clearSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('lists uploaded plugins before the catalog', () => {
+      const pluginStates = TestBed.inject(PluginService).pluginStates as WritableSignal<
+        Map<string, PluginState>
+      >;
+      pluginStates.set(
+        new Map([
+          [
+            'mine',
+            {
+              manifest: { ...baseManifest, id: 'mine', name: 'Mine' },
+              status: 'not-loaded',
+              path: 'uploaded://mine',
+              type: 'uploaded',
+              isEnabled: false,
+            },
+          ],
+        ]),
+      );
+      fixture.detectChanges();
+
+      expect(headings()).toEqual(['Yüklenen eklentiler', 'Topluluk eklentileri']);
     });
   });
 
@@ -474,42 +512,247 @@ describe('PluginManagementComponent', () => {
     return openSpy;
   };
 
-  it('groups uploaded plugins, then built-in integrations, then other built-ins', () => {
-    const state = (
-      id: string,
-      type: PluginState['type'],
-      manifestType?: PluginManifest['type'],
-    ): PluginState => ({
-      manifest: { ...baseManifest, id, name: id, type: manifestType },
-      status: 'not-loaded',
-      path: type === 'uploaded' ? `uploaded://${id}` : `assets/bundled-plugins/${id}`,
-      type,
-      isEnabled: false,
-    });
-    const pluginStates = TestBed.inject(PluginService).pluginStates as WritableSignal<
-      Map<string, PluginState>
-    >;
-    pluginStates.set(
-      new Map([
-        ['builtin-a', state('builtin-a', 'built-in')],
-        ['github', state('github', 'built-in', 'issueProvider')],
-        ['uploaded-a', state('uploaded-a', 'uploaded', 'issueProvider')],
-        ['builtin-b', state('builtin-b', 'built-in')],
-      ]),
-    );
+  describe('plugin lists', () => {
+    let pluginStates: WritableSignal<Map<string, PluginState>>;
 
-    expect(
-      component
-        .pluginGroups()
-        .map((g) => [g.titleKey, g.plugins.map((p) => p.manifest.id)]),
-    ).toEqual([
-      [T.PLUGINS.GROUP_UPLOADED, ['uploaded-a']],
-      [T.PLUGINS.GROUP_INTEGRATIONS, ['github']],
-      [T.PLUGINS.GROUP_OTHER, ['builtin-a', 'builtin-b']],
-    ]);
-    // Empty again so the template (rendered on teardown) needs no further stubs.
-    pluginStates.set(new Map());
-    expect(component.pluginGroups()).toEqual([]);
+    const state = (
+      name: string,
+      type: PluginState['type'],
+      opts: { manifestType?: PluginManifest['type']; isEnabled?: boolean } = {},
+    ): PluginState => {
+      const id = name.toLowerCase().replace(/\s+/g, '-');
+      return {
+        manifest: { ...baseManifest, id, name, type: opts.manifestType },
+        status: 'not-loaded',
+        path: type === 'uploaded' ? `uploaded://${id}` : `assets/bundled-plugins/${id}`,
+        type,
+        isEnabled: opts.isEnabled ?? false,
+      };
+    };
+    const setStates = (...states: PluginState[]): void =>
+      pluginStates.set(new Map(states.map((st) => [st.manifest.id, st])));
+    const names = (plugins: PluginInstance[]): string[] =>
+      plugins.map((p) => p.manifest.name);
+    const rowNames = (): string[] =>
+      Array.from(
+        fixture.nativeElement.querySelectorAll('.plugin-row .plugin-row-name'),
+        (el: Element) => el.textContent?.trim() ?? '',
+      );
+
+    beforeEach(() => {
+      pluginStates = TestBed.inject(PluginService).pluginStates as WritableSignal<
+        Map<string, PluginState>
+      >;
+    });
+
+    it('splits built-in plugins into features and integrations, each by name', () => {
+      setStates(
+        state('Zeta', 'built-in'),
+        state('GitHub', 'built-in', { manifestType: 'issueProvider' }),
+        state('alpha', 'built-in', { isEnabled: true }),
+        state('Uploaded', 'uploaded', { manifestType: 'issueProvider' }),
+        state('Azure', 'built-in', { manifestType: 'issueProvider' }),
+      );
+
+      expect(names(component.featurePlugins())).toEqual(['alpha', 'Zeta']);
+      expect(names(component.integrationPlugins())).toEqual(['Azure', 'GitHub']);
+    });
+
+    it('lists the TickTick and Todoist importers and sync.md under integrations', () => {
+      setStates(
+        state('Todoist Import', 'built-in'),
+        state('GitHub', 'built-in', { manifestType: 'issueProvider' }),
+        state('TickTick Import', 'built-in'),
+        state('Sync MD', 'built-in'),
+        state('Brain Dump', 'built-in'),
+      );
+
+      expect(names(component.integrationPlugins())).toEqual([
+        'GitHub',
+        'Sync MD',
+        'TickTick Import',
+        'Todoist Import',
+      ]);
+      expect(names(component.featurePlugins())).toEqual(['Brain Dump']);
+    });
+
+    it('lists uploaded plugins by name, apart from the built-in ones', () => {
+      setStates(
+        state('Plugin 10', 'uploaded'),
+        state('bundled', 'built-in'),
+        state('Plugin 9', 'uploaded'),
+        state('Écrire', 'uploaded'),
+      );
+
+      expect(names(component.uploadedPlugins())).toEqual([
+        'Écrire',
+        'Plugin 9',
+        'Plugin 10',
+      ]);
+    });
+
+    it('keeps the order when a plugin is enabled', () => {
+      setStates(state('B', 'built-in'), state('A', 'built-in'));
+      const before = names(component.featurePlugins());
+
+      setStates(state('B', 'built-in', { isEnabled: true }), state('A', 'built-in'));
+
+      expect(names(component.featurePlugins())).toEqual(before);
+    });
+
+    it('shows feature plugins by default and the others in their own tabs', async () => {
+      setStates(
+        state('Bundled', 'built-in'),
+        state('GitHub', 'built-in', { manifestType: 'issueProvider' }),
+        state('Uploaded', 'uploaded'),
+      );
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      expect(rowNames()).toEqual(['Bundled']);
+
+      component.selectedTabIndex.set(PLUGIN_TAB_INDEX.INTEGRATIONS);
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      expect(rowNames()).toEqual(['GitHub']);
+
+      component.selectedTabIndex.set(PLUGIN_TAB_INDEX.COMMUNITY);
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      expect(rowNames()).toEqual(['Uploaded']);
+      const row = fixture.nativeElement.querySelector('.plugin-row');
+      expect(row.querySelector('.more-actions-btn')).not.toBeNull();
+    });
+
+    it('offers no "more actions" menu on built-in plugins, which cannot be removed', async () => {
+      setStates(state('Bundled', 'built-in'));
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      expect(fixture.nativeElement.querySelector('.more-actions-btn')).toBeNull();
+    });
+
+    it('shows the loading icon in the settings button slot, so the controls keep their place', async () => {
+      const configurable = state('Configurable', 'built-in', { isEnabled: true });
+      configurable.manifest.jsonSchemaCfg = 'config-schema.json';
+      const slot = (): HTMLElement =>
+        fixture.nativeElement.querySelector('.plugin-controls .control-slot');
+      const controlCount = (): number =>
+        fixture.nativeElement.querySelector('.plugin-controls').children.length;
+
+      setStates({ ...configurable, status: 'loading' });
+      fixture.detectChanges();
+      await fixture.whenStable();
+      const loadingControlCount = controlCount();
+
+      expect(slot().querySelector('.loading-icon')).not.toBeNull();
+      expect(slot().querySelector('button')).toBeNull();
+
+      setStates({ ...configurable, status: 'loaded' });
+      fixture.detectChanges();
+
+      expect(slot().querySelector('.loading-icon')).toBeNull();
+      expect(slot().querySelector('button')).not.toBeNull();
+      expect(controlCount()).toBe(loadingControlCount);
+    });
+
+    it('opens and closes the details of one plugin from its summary', async () => {
+      setStates(state('First', 'built-in'), state('Second', 'built-in'));
+      fixture.detectChanges();
+      await fixture.whenStable();
+      const summaries = (): HTMLButtonElement[] =>
+        Array.from(fixture.nativeElement.querySelectorAll('.plugin-summary'));
+
+      expect(fixture.nativeElement.querySelector('.plugin-details')).toBeNull();
+
+      summaries()[1].click();
+      fixture.detectChanges();
+
+      const details = fixture.nativeElement.querySelectorAll('.plugin-details');
+      expect(details.length).toBe(1);
+      expect(details[0].textContent).toContain('second');
+      expect(summaries()[1].getAttribute('aria-expanded')).toBe('true');
+      expect(summaries()[1].getAttribute('aria-controls')).toBe(details[0].id);
+      expect(summaries()[0].getAttribute('aria-expanded')).toBe('false');
+
+      summaries()[1].click();
+      fixture.detectChanges();
+
+      expect(fixture.nativeElement.querySelector('.plugin-details')).toBeNull();
+    });
+
+    describe('after a plugin ZIP installs', () => {
+      const install = async (installed: PluginState): Promise<void> => {
+        loadPluginFromZipSpy.and.callFake(async () => {
+          pluginStates.update((states) =>
+            new Map(states).set(installed.manifest.id, installed),
+          );
+          return { manifest: installed.manifest, loaded: false, isEnabled: false };
+        });
+        await component.onFileSelected(zipInputEvent());
+        fixture.detectChanges();
+        await fixture.whenStable();
+      };
+
+      it('shows the plugin in the "Community" tab, scrolled into view and highlighted', async () => {
+        setStates(state('Bundled', 'built-in'));
+        fixture.detectChanges();
+        const scrollSpy = spyOn(HTMLElement.prototype, 'scrollIntoView');
+
+        await install(state('New Plugin', 'uploaded'));
+
+        expect(component.selectedTabIndex()).toBe(PLUGIN_TAB_INDEX.COMMUNITY);
+        const highlighted = fixture.nativeElement.querySelectorAll('.isHighlighted');
+        expect(highlighted.length).toBe(1);
+        expect(highlighted[0].dataset.pluginId).toBe('new-plugin');
+        expect(scrollSpy).toHaveBeenCalledOnceWith({
+          behavior: 'smooth',
+          block: 'center',
+        });
+        expect(scrollSpy.calls.mostRecent().object).toBe(highlighted[0]);
+      });
+
+      describe('with a mocked clock', () => {
+        beforeEach(() => {
+          jasmine.clock().install();
+        });
+
+        afterEach(() => {
+          jasmine.clock().uninstall();
+        });
+
+        it('removes the highlight after a few seconds', async () => {
+          await install(state('New Plugin', 'uploaded'));
+
+          jasmine.clock().tick(2999);
+          expect(component.highlightedPluginId()).toBe('new-plugin');
+
+          jasmine.clock().tick(1);
+          expect(component.highlightedPluginId()).toBeNull();
+        });
+
+        it('keeps a second upload highlighted for its full time', async () => {
+          await install(state('First Plugin', 'uploaded'));
+          jasmine.clock().tick(2000);
+
+          await install(state('Second Plugin', 'uploaded'));
+          jasmine.clock().tick(2000);
+
+          expect(component.highlightedPluginId()).toBe('second-plugin');
+        });
+      });
+
+      it('highlights nothing when the ZIP fails to install', async () => {
+        loadPluginFromZipSpy.and.rejectWith(new Error('bad zip'));
+
+        await component.onFileSelected(zipInputEvent());
+
+        expect(component.highlightedPluginId()).toBeNull();
+        expect(component.selectedTabIndex()).toBe(PLUGIN_TAB_INDEX.FEATURES);
+      });
+    });
   });
 
   describe('listed community plugins', () => {
@@ -576,6 +819,23 @@ describe('PluginManagementComponent', () => {
       });
     });
 
+    it('offers the update in the installed plugin row', async () => {
+      (component as { isInAppInstall: boolean }).isInAppInstall = true;
+      pluginStates.set(new Map([['listed', uploaded('listed', '1.1.0')]]));
+      component.selectedTabIndex.set(PLUGIN_TAB_INDEX.COMMUNITY);
+      fixture.detectChanges();
+      await fixture.whenStable();
+      const installSpy = spyOn(component, 'installCommunityPlugin').and.resolveTo();
+
+      const updateBtn = fixture.nativeElement.querySelector(
+        '.plugin-row .plugin-row-action button',
+      );
+      expect(updateBtn?.textContent).toContain(T.PLUGINS.COMMUNITY_UPDATE);
+
+      updateBtn.click();
+      expect(installSpy).toHaveBeenCalledOnceWith(listed);
+    });
+
     it('ignores a built-in plugin with the same id', () => {
       pluginStates.set(
         new Map([['listed', { ...uploaded('listed', '1.0.0'), type: 'built-in' }]]),
@@ -610,6 +870,18 @@ describe('PluginManagementComponent', () => {
         translateParams: { name: 'Listed' },
       });
       expect(component.isUploading()).toBe(false);
+    });
+
+    it('shows the installed plugin in the "Community" tab, highlighted, like a ZIP upload', async () => {
+      stubConfirmDialog(true);
+      loadPluginFromZipSpy.and.returnValue(
+        Promise.resolve({ manifest: { id: 'listed', name: 'Listed' } }),
+      );
+
+      await component.installCommunityPlugin(listed);
+
+      expect(component.selectedTabIndex()).toBe(PLUGIN_TAB_INDEX.COMMUNITY);
+      expect(component.highlightedPluginId()).toBe('listed');
     });
 
     it('downloads nothing when the risk warning is cancelled', async () => {
@@ -666,20 +938,6 @@ describe('PluginManagementComponent', () => {
     });
   });
 
-  it('titles the details section with the permission summary when there is one', () => {
-    const withHooks = {
-      manifest: { ...baseManifest, hooks: [PluginHooks.TASK_COMPLETE] },
-      loaded: true,
-      isEnabled: true,
-    };
-    const plain = { manifest: baseManifest, loaded: true, isEnabled: true };
-
-    expect(component.getDetailsTitle(withHooks)).toBe(
-      'PLUGINS.DETAILS · PLUGINS.HOOKS (1)',
-    );
-    expect(component.getDetailsTitle(plain)).toBe('PLUGINS.DETAILS');
-  });
-
   describe('clearPluginCache', () => {
     let clearCacheSpy: jasmine.Spy;
     let clearUploadedSpy: jasmine.Spy;
@@ -714,7 +972,7 @@ describe('PluginManagementComponent', () => {
     });
 
     afterEach(() => {
-      // Plugin cards are not under test and need service methods this mock lacks.
+      // Plugin rows are not under test and need service methods this mock lacks.
       pluginStates.set(new Map());
     });
 
@@ -983,7 +1241,7 @@ describe('PluginManagementComponent', () => {
       { label: 'an Error', thrown: new Error('No config schema found') },
       { label: 'a non-Error value', thrown: 'boom' },
     ].forEach(({ label, thrown }) => {
-      it(`shows a translated error snack, not the Install Plugin card, for ${label}`, async () => {
+      it(`shows a translated error snack, not the install row error, for ${label}`, async () => {
         loadSchemaSpy.and.rejectWith(thrown);
 
         await component.openConfigDialog(plugin);
