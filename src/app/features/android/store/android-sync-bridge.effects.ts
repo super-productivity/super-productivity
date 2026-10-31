@@ -147,16 +147,16 @@ export class AndroidSyncBridgeEffects {
   private _globalConfigService = inject(GlobalConfigService);
   private _dataInitStateService = inject(DataInitStateService);
 
+  // Created here, in the injection context: the operator injects on creation
+  private readonly _skipWhileApplyingRemoteOps =
+    skipWhileApplyingRemoteOps<CurrentProviderPrivateCfg | null>();
+
   /**
    * Turning sync off only makes the provider manager emit a null cfg, which
    * also happens transiently mid-switch, so it is read from the sync config:
    * otherwise the background worker keeps polling with the old login. Gated on
    * the data load so the pre-hydration default (sync off) never clears it.
    */
-  // Created here, in the injection context: the operator injects on creation
-  private readonly _skipWhileApplyingRemoteOps =
-    skipWhileApplyingRemoteOps<CurrentProviderPrivateCfg | null>();
-
   private readonly _bridgeCommand$: Observable<BackgroundSyncBridgeCommand | null> =
     this._dataInitStateService.isAllDataLoadedInitially$.pipe(
       switchMap(() => this._globalConfigService.sync$),
