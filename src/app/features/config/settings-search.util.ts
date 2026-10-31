@@ -16,6 +16,9 @@ export interface SettingsSearchTarget {
   matchedLabelKey?: string;
 }
 
+/** Index of the Time & Tracking tab in the config page's `mat-tab-group`. */
+export const SETTINGS_TIME_TRACKING_TAB_INDEX = 2;
+
 /** Index of the Plugins tab in the config page's `mat-tab-group`. */
 export const SETTINGS_PLUGINS_TAB_INDEX = 4;
 
@@ -58,6 +61,13 @@ const CUSTOM_TARGETS: readonly SettingsSearchTarget[] = [
     tabLabelKey: T.PS.TABS.GENERAL,
     tabIndex: 0,
     scrollSelector: '.wallpaper-select',
+  },
+  // The App Features switch, repeated atop the Time & Tracking tab.
+  {
+    labelKey: T.GCF.APP_FEATURES.TIME_TRACKING,
+    tabLabelKey: T.PS.TABS.TIME_TRACKING,
+    tabIndex: SETTINGS_TIME_TRACKING_TAB_INDEX,
+    scrollSelector: '.time-tracking-switch',
   },
   {
     labelKey: T.GCF.SOUND.TITLE,
