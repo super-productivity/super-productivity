@@ -5,6 +5,7 @@ import {
   generateSyncFolderName,
   waitForSyncComplete,
   WEBDAV_CONFIG_TEMPLATE,
+  WEBDAV_SYNC_FILE,
 } from '../../utils/sync-helpers';
 import {
   closeClient,
@@ -83,23 +84,29 @@ for (const isStored of [false, true]) {
       await a.workView.addTask(titleA);
       await waitForTask(a.page, titleA);
       let isCut = false;
+      let storedStatus = 0;
       await a.page.route('**:2345/**', async (route) => {
-        if (route.request().method() !== 'PUT') return route.continue();
+        const req = route.request();
+        // Cut the main sync file only: the .bak copy is written before it.
+        if (req.method() !== 'PUT' || !req.url().endsWith(`/${WEBDAV_SYNC_FILE}`)) {
+          return route.continue();
+        }
         if (isStored && !isCut) {
-          const response = await route.fetch();
-          expect(response.ok()).toBe(true);
+          storedStatus = (await route.fetch()).status();
         }
         isCut = true;
         await route.abort('failed');
-      });
-      // The pause push is what is under test, so let it run on A.
-      await a.page.evaluate(() => {
-        delete (globalThis as Record<string, unknown>).__SP_E2E_BLOCK_AUTO_SYNC;
       });
       await a.page.evaluate(() =>
         (window as unknown as BridgeWindow).SUPAndroid.onPause$.next(),
       );
       await expect.poll(() => isCut, { timeout: 30000 }).toBe(true);
+      if (isStored) {
+        expect(storedStatus, 'the cut upload did not store the sync file').toBeLessThan(
+          300,
+        );
+        expect(storedStatus).toBeGreaterThanOrEqual(200);
+      }
 
       // B uploads while A is gone.
       await b.workView.addTask(titleB);
