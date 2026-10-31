@@ -23,6 +23,7 @@ import { ProjectState } from '../features/project/project.model';
 import { TagState } from '../features/tag/tag.model';
 import { selectPluginUserDataFeatureState } from './store/plugin-user-data.reducer';
 import { SyncTriggerService } from '../imex/sync/sync-trigger.service';
+import { DataInitStateService } from '../core/data-init/data-init-state.service';
 import { HydrationStateService } from '../op-log/apply/hydration-state.service';
 import { PluginUserData } from './plugin-persistence.model';
 import { updateGlobalConfigSection } from '../features/config/store/global-config.actions';
@@ -40,6 +41,7 @@ describe('PluginHooksEffects', () => {
   let store: MockStore;
   let gateSubject: ReplaySubject<boolean>;
   let todayStr$: ReplaySubject<string>;
+  let dataLoaded$: ReplaySubject<boolean>;
 
   const createMockTask = (overrides: Partial<TaskWithSubTasks> = {}): TaskWithSubTasks =>
     ({
@@ -91,6 +93,7 @@ describe('PluginHooksEffects', () => {
     gateSubject = new ReplaySubject<boolean>(1);
     // ReplaySubject(1) like the real todayDateStr$ (shareReplay(1))
     todayStr$ = new ReplaySubject<string>(1);
+    dataLoaded$ = new ReplaySubject<boolean>(1);
 
     TestBed.configureTestingModule({
       providers: [
@@ -121,6 +124,10 @@ describe('PluginHooksEffects', () => {
           useValue: {
             afterInitialSyncDoneAndDataLoadedInitially$: gateSubject.asObservable(),
           },
+        },
+        {
+          provide: DataInitStateService,
+          useValue: { isAllDataLoadedInitially$: dataLoaded$.asObservable() },
         },
         // Provided with isInSyncWindow=true so a future regression that adds
         // `skipDuringSyncWindow`/`waitForSyncWindow` to the effect would
@@ -747,7 +754,7 @@ describe('PluginHooksEffects', () => {
 
     it('fires with the new logical day only when the day changes', () => {
       const sub = effects.dayChange$.subscribe();
-      gateSubject.next(true);
+      dataLoaded$.next(true);
       todayStr$.next('2026-10-30');
       todayStr$.next('2026-10-30');
       todayStr$.next('2026-10-31');
@@ -765,9 +772,26 @@ describe('PluginHooksEffects', () => {
       const sub = effects.dayChange$.subscribe();
       todayStr$.next('2026-10-31');
       todayStr$.next('2026-10-30');
-      gateSubject.next(true);
+      dataLoaded$.next(true);
       expect(dayChangeCalls()).toEqual([]);
 
+      todayStr$.next('2026-10-31');
+      expect(dayChangeCalls()).toEqual([
+        [PluginHooks.DAY_CHANGE, { todayStr: '2026-10-31' }],
+      ]);
+      sub.unsubscribe();
+    });
+
+    // The sync gate opens after an 8 s timer even when data is still loading,
+    // so it must not be what dayChange$ waits on.
+    it('waits for the data load, not the initial sync timeout', () => {
+      const sub = effects.dayChange$.subscribe();
+      gateSubject.next(true);
+      todayStr$.next('2026-10-31');
+      todayStr$.next('2026-10-30');
+      expect(dayChangeCalls()).toEqual([]);
+
+      dataLoaded$.next(true);
       todayStr$.next('2026-10-31');
       expect(dayChangeCalls()).toEqual([
         [PluginHooks.DAY_CHANGE, { todayStr: '2026-10-31' }],

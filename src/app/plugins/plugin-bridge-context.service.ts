@@ -1,6 +1,5 @@
-import { inject, Injectable, Injector } from '@angular/core';
+import { inject, Injectable } from '@angular/core';
 import { Store } from '@ngrx/store';
-import { DateAdapter } from '@angular/material/core';
 import { TranslateService } from '@ngx-translate/core';
 import { firstValueFrom } from 'rxjs';
 import { timeout } from 'rxjs/operators';
@@ -36,8 +35,6 @@ export class PluginBridgeContextService {
   private _workContextService = inject(WorkContextService);
   private _taskService = inject(TaskService);
   private _dateService = inject(DateService);
-  // Resolved on use: test beds that build the bridge do not all provide one.
-  private _injector = inject(Injector);
   private _translateService = inject(TranslateService);
 
   createBoundMethods(): PluginContextBoundMethods {
@@ -76,7 +73,6 @@ export class PluginBridgeContextService {
     return {
       todayStr: this._dateService.todayStr(),
       startOfNextDayDiffMs: this._dateService.getStartOfNextDayDiffMs(),
-      firstDayOfWeek: this._injector.get(DateAdapter).getFirstDayOfWeek(),
     };
   }
 

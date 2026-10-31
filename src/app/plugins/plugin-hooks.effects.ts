@@ -27,6 +27,7 @@ import { selectLocalizationConfig } from '../features/config/store/global-config
 import { updateGlobalConfigSection } from '../features/config/store/global-config.actions';
 import { Task } from '../features/tasks/task.model';
 import { isWontDoTask } from '../features/tasks/util/is-wont-do-task';
+import { DataInitStateService } from '../core/data-init/data-init-state.service';
 import { PluginService } from './plugin.service';
 import { PluginHooks } from './plugin-api.model';
 import { PluginI18nService } from './plugin-i18n.service';
@@ -73,6 +74,7 @@ export class PluginHooksEffects {
   private readonly pluginI18nService = inject(PluginI18nService);
   private readonly workContextService = inject(WorkContextService);
   private readonly syncTrigger = inject(SyncTriggerService);
+  private readonly _dataInitState = inject(DataInitStateService);
   private readonly _beforeFinishDayService = inject(BeforeFinishDayService);
   private readonly _globalTrackingInterval = inject(GlobalTrackingIntervalService);
 
@@ -463,12 +465,11 @@ export class PluginHooksEffects {
   // The logical day (start-of-next-day offset applied) rolled over while the
   // app ran. todayDateStr$ also re-checks after sleep and focus. Gated on the
   // data load: before it, todayDateStr$ uses offset 0 and corrects itself once
-  // the config arrives, which is not a day change.
+  // the config arrives, which is not a day change. Not the sync gate: its 8 s
+  // timeout can open it before the data (and the offset) are loaded.
   dayChange$ = createEffect(
     () =>
-      this.syncTrigger.afterInitialSyncDoneAndDataLoadedInitially$.pipe(
-        filter((done) => done),
-        take(1),
+      this._dataInitState.isAllDataLoadedInitially$.pipe(
         switchMap(() =>
           this._globalTrackingInterval.todayDateStr$.pipe(
             distinctUntilChanged(),

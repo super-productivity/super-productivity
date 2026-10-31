@@ -346,9 +346,9 @@ is [`types.ts`](../packages/plugin-api/src/types.ts) (`interface PluginAPI`).
 - `updateTask(taskId, updates)` - Update existing task. Setting `dueDay` adds the task to that Planner day (or Today). A scheduled time (`dueWithTime`) and its reminder take precedence over `dueDay`, and `updateTask` cannot clear a reminder yet, so use this for tasks without a time. The task is added at the end of that day. Take day strings from `getDayContext().todayStr` so the user's start of next day is honoured.
 - `startTracking(taskId)` / `stopTracking()` - Start or stop time tracking. Rejects for an unknown or done task (unlike the play button, it does not reopen it) and for a parent whose subtasks are all done. For a parent task, tracking starts on its first unfinished subtask. The tracked task arrives with `currentTaskChange`.
 
-#### Day and Week
+#### Day
 
-- `getDayContext()` - `{ todayStr, startOfNextDayDiffMs, firstDayOfWeek }`. `todayStr` is the user's logical day (YYYY-MM-DD): before the configured start of the next day it is still the previous calendar day. To find a timestamp's logical day, subtract `startOfNextDayDiffMs` before taking its local date. `firstDayOfWeek` is 0 (Sunday) to 6 (Saturday). Re-read it on `DAY_CHANGE`.
+- `getDayContext()` - `{ todayStr, startOfNextDayDiffMs }`. `todayStr` is the user's logical day (YYYY-MM-DD): before the configured start of the next day it is still the previous calendar day. To find a timestamp's logical day, subtract `startOfNextDayDiffMs` before taking its local date. Re-read it on `DAY_CHANGE`.
 
 Feature-detect `getDayContext`, `startTracking` and `stopTracking` on older hosts.
 

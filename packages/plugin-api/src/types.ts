@@ -57,6 +57,11 @@ export enum PluginHooks {
    * in response.
    */
   DATA_CHANGED = 'dataChanged',
+  /**
+   * The user's logical day changed while the app runs (see DayChangePayload).
+   * Not fired at startup; read getDayContext() on load. Fires on every device,
+   * so refresh views only and do not write data in response.
+   */
   DAY_CHANGE = 'dayChange',
 }
 
@@ -313,13 +318,10 @@ export interface DayChangePayload {
  * `todayStr` is the logical day as YYYY-MM-DD: before the configured start of
  * the next day, it is still the previous calendar day. To find a timestamp's
  * logical day, subtract `startOfNextDayDiffMs` before taking its local date.
- * `firstDayOfWeek` is 0 (Sunday) to 6 (Saturday), from the user's settings;
- * Monday (1) when unset.
  */
 export interface PluginDayContext {
   todayStr: string;
   startOfNextDayDiffMs: number;
-  firstDayOfWeek: number;
 }
 
 // Map hook types to their payload types
@@ -635,7 +637,7 @@ export interface PluginAPI {
   getActiveWorkContext(): Promise<ActiveWorkContext | null>;
 
   /**
-   * The user's logical day and week settings. Re-read it on the DAY_CHANGE hook.
+   * The user's logical day and its start-of-next-day offset. Re-read it on the DAY_CHANGE hook.
    * Feature-detect on older hosts.
    */
   getDayContext?(): Promise<PluginDayContext>;

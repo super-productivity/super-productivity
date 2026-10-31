@@ -207,8 +207,8 @@ export class PluginAPI implements PluginAPIInterface {
   }
 
   async startTracking(taskId: string): Promise<void> {
+    await this.#boundMethods.startTracking(taskId);
     PluginLog.log(`Plugin ${this.#pluginId} started tracking`, { taskId });
-    return this.#boundMethods.startTracking(taskId);
   }
 
   async stopTracking(): Promise<void> {

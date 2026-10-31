@@ -1,5 +1,4 @@
 import { TestBed } from '@angular/core/testing';
-import { DateAdapter } from '@angular/material/core';
 import { MockStore, provideMockStore } from '@ngrx/store/testing';
 import { TranslateService } from '@ngx-translate/core';
 import { EMPTY } from 'rxjs';
@@ -33,7 +32,6 @@ describe('PluginBridgeContextService', () => {
             getStartOfNextDayDiffMs: () => 4 * 60 * 60 * 1000,
           },
         },
-        { provide: DateAdapter, useValue: { getFirstDayOfWeek: () => 1 } },
         { provide: TranslateService, useValue: { instant: (key: string) => key } },
       ],
     });
@@ -43,11 +41,10 @@ describe('PluginBridgeContextService', () => {
 
   afterEach(() => store.resetSelectors());
 
-  it('reports the logical day with its offset and the first day of the week', async () => {
+  it('reports the logical day with its offset', async () => {
     expect(await service.getDayContext()).toEqual({
       todayStr: '2026-10-30',
       startOfNextDayDiffMs: 4 * 60 * 60 * 1000,
-      firstDayOfWeek: 1,
     });
   });
 
