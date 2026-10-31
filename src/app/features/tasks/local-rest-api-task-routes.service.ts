@@ -3,7 +3,7 @@ import { Store } from '@ngrx/store';
 import { firstValueFrom } from 'rxjs';
 import typia from 'typia';
 import { TaskService } from './task.service';
-import { Task, TaskWithSubTasks } from './task.model';
+import { Task, TaskPriority, TaskWithSubTasks } from './task.model';
 import { TaskArchiveService } from '../archive/task-archive.service';
 import { ArchiveOperationHandler } from '../../op-log/apply/archive-operation-handler.service';
 import { ProjectService } from '../project/project.service';
@@ -49,6 +49,7 @@ const ALLOWED_TASK_FIELDS = new Set<string>([
   'deadlineDay',
   'deadlineWithTime',
   'deadlineRemindAt',
+  'priority',
 ]);
 
 /**
@@ -101,6 +102,9 @@ interface WritableTaskFields {
   deadlineDay?: string | null;
   deadlineWithTime?: number | null;
   deadlineRemindAt?: number | null;
+  // Numbers only, as the UI writes them; `null` clears the priority. The
+  // legacy 'high' | 'medium' | 'low' strings are read but not accepted here.
+  priority?: TaskPriority | null;
 }
 
 type FieldTypeError = { path: string; expected: string };

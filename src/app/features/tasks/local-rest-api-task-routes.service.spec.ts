@@ -667,6 +667,35 @@ describe('LocalRestApiTaskRoutesService', () => {
         });
       });
 
+      it('should pass a priority to the new task', async () => {
+        Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+          get: () => (_id: string) => of(createMockTask('new-task-id')),
+        });
+
+        await sendRequestAndWait(
+          createRequest('POST', '/tasks', {
+            body: { title: 'New Task', priority: 2 },
+          }),
+        );
+
+        expect(taskServiceMock.add).toHaveBeenCalledWith('New Task', false, {
+          title: 'New Task',
+          priority: 2,
+        });
+      });
+
+      it('should return 400 for an unknown priority on create', async () => {
+        const response = await sendRequestAndWait(
+          createRequest('POST', '/tasks', {
+            body: { title: 'New Task', priority: 'high' },
+          }),
+        );
+
+        expect(response.status).toBe(400);
+        expect((response.body as any).error.code).toBe('INVALID_INPUT');
+        expect(taskServiceMock.add).not.toHaveBeenCalled();
+      });
+
       it('should return 400 when an allowed field has an invalid type', async () => {
         const response = await sendRequestAndWait(
           createRequest('POST', '/tasks', {
@@ -1858,6 +1887,49 @@ describe('LocalRestApiTaskRoutesService', () => {
           tagIds: ['tag-1'],
           timeEstimate: 1000,
           isDone: true,
+        });
+      });
+
+      describe('priority', () => {
+        beforeEach(() => {
+          const mockTask = createMockTask('task-1');
+          Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+            get: () => (_id: string) => of(mockTask),
+          });
+        });
+
+        it('should set a priority level', async () => {
+          const response = await sendRequestAndWait(
+            createRequest('PATCH', '/tasks/task-1', { body: { priority: 3 } }),
+          );
+
+          expect(response.body.ok).toBe(true);
+          expect(taskServiceMock.update).toHaveBeenCalledOnceWith('task-1', {
+            priority: 3,
+          });
+        });
+
+        it('should clear the priority with null', async () => {
+          const response = await sendRequestAndWait(
+            createRequest('PATCH', '/tasks/task-1', { body: { priority: null } }),
+          );
+
+          expect(response.body.ok).toBe(true);
+          expect(taskServiceMock.update).toHaveBeenCalledOnceWith('task-1', {
+            priority: null,
+          });
+        });
+
+        it('should reject values other than 1, 2, 3 or null', async () => {
+          for (const priority of [0, 4, 2.5, 'high', '3']) {
+            const response = await sendRequestAndWait(
+              createRequest('PATCH', '/tasks/task-1', { body: { priority } }),
+            );
+
+            expect(response.status).toBe(400);
+            expect((response.body as any).error.code).toBe('INVALID_INPUT');
+          }
+          expect(taskServiceMock.update).not.toHaveBeenCalled();
         });
       });
 
