@@ -76,9 +76,15 @@
 @for (rule of shownRules(); track rule) {
   <div
     class="rule-row"
+    role="group"
+    [attr.aria-labelledby]="ruleLabelIdPrefix + rule"
     [attr.data-rule]="rule"
   >
-    <span class="rule-label">{{ RULE_LABELS[rule] | translate }}</span>
+    <span
+      class="rule-label"
+      [id]="ruleLabelIdPrefix + rule"
+      >{{ RULE_LABELS[rule] | translate }}</span
+    >
     <div class="rule-control">
       @switch (rule) {
         @case ('project') {

@@ -55,6 +55,7 @@ describe('BoardEditComponent with the view editor', () => {
         {
           provide: ViewCriteriaContextService,
           useValue: {
+            projects: signal([]),
             ctx: signal(
               createTaskCriteriaCtx({
                 todayStr: '2026-10-30',
@@ -215,6 +216,61 @@ describe('BoardEditComponent with the view editor', () => {
     expect(editor().isSectionTitleShown()).toBeTrue();
   });
 
+  it('shows the following hidden title as the view title when a section is added', async () => {
+    await open({
+      id: 'v',
+      title: 'Old',
+      cols: 1,
+      panels: [{ ...DEFAULT_PANEL_CFG, id: 'a', title: 'Old' }],
+    });
+    editor().setTitle('New');
+    editor().duplicatePanel(0);
+    expect(
+      editor()
+        .model()
+        .panels.map((p) => p.title),
+    ).toEqual(['New', 'New (copy)']);
+
+    // A title of its own stays.
+    await open({
+      id: 'w',
+      title: 'Old',
+      cols: 1,
+      panels: [{ ...DEFAULT_PANEL_CFG, id: 'a', title: 'Own' }],
+    });
+    editor().setTitle('New');
+    editor().addPanel();
+    expect(
+      editor()
+        .model()
+        .panels.map((p) => p.title),
+    ).toEqual(['Own', '']);
+  });
+
+  it('refuses a Columns value that is not a whole number of at least 2', async () => {
+    const cmp = await open({
+      id: 'v',
+      title: 'V',
+      cols: 3,
+      panels: [{ ...DEFAULT_PANEL_CFG, id: 'a', title: 'A' }],
+    });
+    const input: HTMLInputElement =
+      fixture.nativeElement.querySelector('input[type=number]');
+    for (const value of ['2.5', '1', '']) {
+      input.value = value;
+      input.dispatchEvent(new Event('input'));
+      await settle();
+      cmp.save();
+      expect(dispatch).not.toHaveBeenCalled();
+      expect(editor().model().cols).toBe(3);
+    }
+    input.value = '4';
+    input.dispatchEvent(new Event('input'));
+    await settle();
+    cmp.save();
+    expect(savedBoard().cols).toBe(4);
+  });
+
   it('moves, duplicates and removes sections', async () => {
     await open({
       id: 'v',
@@ -312,6 +368,10 @@ describe('BoardEditComponent with the view editor', () => {
     });
     // Cards: every match.
     expect(editor().counts()).toEqual([2, 3]);
+    // A cached count follows the tasks.
+    tasks.set([...tasks(), task({ id: 'new' })]);
+    expect(editor().counts()).toEqual([3, 4]);
+    tasks.set(tasks().filter((t) => t.id !== 'new'));
     // List: open top-level rows.
     editor().setLayout('list');
     expect(editor().counts()).toEqual([1, 1]);

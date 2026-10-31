@@ -34,10 +34,11 @@
           required
           min="2"
           step="1"
+          pattern="[0-9]+"
           [ngModel]="model().cols"
           (ngModelChange)="setCols($event)"
         />
-        <mat-error>{{ T.V.E_MIN | translate: { val: 2 } }}</mat-error>
+        <mat-error>{{ T.F.BOARDS.EDITOR.COLUMNS_INVALID | translate }}</mat-error>
       </mat-form-field>
     }
   </div>

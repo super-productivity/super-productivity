@@ -31,6 +31,9 @@ import {
 } from '../../../ui/segmented-button-group/segmented-button-group.component';
 import { selectAllTasksInActiveProjects } from '../../tasks/store/task.selectors';
 import { ViewCriteriaContextService } from '../view-criteria-context.service';
+import { TaskCopy } from '../../tasks/task.model';
+import { TaskCriteriaCtx } from '../../tasks/task-criteria/task-criteria.model';
+import { Project } from '../../project/project.model';
 import { ViewEditorSectionComponent } from './view-editor-section/view-editor-section.component';
 import {
   isSectionTitleShown,
@@ -39,6 +42,14 @@ import {
 } from './view-editor.util';
 
 type ViewLayout = 'list' | 'board';
+
+interface CachedCount {
+  tasks: readonly TaskCopy[];
+  ctx: TaskCriteriaCtx;
+  projects: readonly Project[];
+  isListLayout: boolean;
+  count: number;
+}
 
 const LAYOUT_OPTIONS: readonly SegmentedButtonOption[] = [
   { id: 'list', labelKey: T.F.BOARDS.EDITOR.LAYOUT_LIST, icon: 'filter_list' },
@@ -89,8 +100,11 @@ export class ViewEditorComponent {
   private readonly _colsInput = viewChild('colsModel', { read: MatInput });
   private readonly _sections = viewChildren(ViewEditorSectionComponent);
 
-  private readonly _translate = (key: string): string =>
-    this._translateService.instant(key);
+  // A title that happens to name a group of keys ("F", "G") stays as typed.
+  private readonly _translate = (key: string): string => {
+    const text: unknown = this._translateService.instant(key);
+    return typeof text === 'string' ? text : key;
+  };
 
   /** The editor model, titles as shown. */
   readonly model = linkedSignal<BoardCfg>(() => {
@@ -109,18 +123,38 @@ export class ViewEditorComponent {
   // The live count runs the view's own matching on what would be saved, so it
   // is the number the section header will show for the chosen layout.
   private readonly _allTasks = this._store.selectSignal(selectAllTasksInActiveProjects);
+  // Per editor panel object: typing a title or editing one section doesn't
+  // match the other sections against every task again.
+  private readonly _countCache = new WeakMap<BoardPanelCfg, CachedCount>();
   readonly counts = computed(() => {
     const model = this.model();
-    const ctx = this._viewCtx.ctx();
-    const tasks = this._allTasks();
-    const isListLayout = model.cols <= 1;
-    return normalizeBoardForSave(model).panels.map((panel) =>
-      getPanelHeaderCount(
-        matchPanelTasks(tasks, panelToCriteria(panel), ctx),
-        panel,
-        isListLayout,
-      ),
-    );
+    const key: Omit<CachedCount, 'count'> = {
+      tasks: this._allTasks(),
+      ctx: this._viewCtx.ctx(),
+      // Backlog membership is read while matching: a cached count follows it.
+      projects: this._viewCtx.projects(),
+      isListLayout: model.cols <= 1,
+    };
+    return model.panels.map((panel) => {
+      const hit = this._countCache.get(panel);
+      if (
+        hit &&
+        hit.tasks === key.tasks &&
+        hit.ctx === key.ctx &&
+        hit.projects === key.projects &&
+        hit.isListLayout === key.isListLayout
+      ) {
+        return hit.count;
+      }
+      const saved = normalizeBoardForSave({ ...model, panels: [panel] }).panels[0];
+      const count = getPanelHeaderCount(
+        matchPanelTasks(key.tasks, panelToCriteria(saved), key.ctx),
+        saved,
+        key.isListLayout,
+      );
+      this._countCache.set(panel, { ...key, count });
+      return count;
+    });
   });
 
   setTitle(title: string): void {
@@ -147,13 +181,7 @@ export class ViewEditorComponent {
   }
 
   addPanel(): void {
-    const model = this.model();
-    let panels = model.panels;
-    // The only section of a list hides its title; it shows again now.
-    if (panels.length === 1 && !this.isSectionTitleShown() && !panels[0].title) {
-      panels = [{ ...panels[0], title: model.title }];
-    }
-    this._setPanels([...panels, this._newPanel()]);
+    this._setPanels([...this._withHiddenTitleShown(), this._newPanel()]);
   }
 
   movePanel(index: number, offset: -1 | 1): void {
@@ -167,7 +195,7 @@ export class ViewEditorComponent {
   }
 
   duplicatePanel(index: number): void {
-    const panels = [...this.model().panels];
+    const panels = this._withHiddenTitleShown();
     const source = panels[index];
     panels.splice(index + 1, 0, {
       ...source,
@@ -214,6 +242,23 @@ export class ViewEditorComponent {
       },
       focus: () => matInput?.focus(),
     };
+  }
+
+  /**
+   * The panels, with the hidden title of a list's only section filled in as
+   * save would (the view's title, unless it has its own), since it shows once
+   * there is a second section.
+   */
+  private _withHiddenTitleShown(): BoardPanelCfg[] {
+    const model = this.model();
+    const [only, ...rest] = model.panels;
+    if (!only || rest.length || this.isSectionTitleShown()) {
+      return [...model.panels];
+    }
+    const storedTitle = this.board().title;
+    const isFollowing =
+      !only.title || (!!storedTitle && only.title === this._translate(storedTitle));
+    return [isFollowing ? { ...only, title: model.title } : only];
   }
 
   private _setPanels(panels: BoardPanelCfg[]): void {

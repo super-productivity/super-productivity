@@ -50,6 +50,8 @@ import {
   withSortValue,
 } from '../view-editor.util';
 
+let nextSectionId = 0;
+
 /**
  * One section (List) or column (Board) of the view editor: its title, live
  * count and actions, the rules that are set (one row each) and its order.
@@ -104,6 +106,9 @@ export class ViewEditorSectionComponent {
   protected readonly RULE_OPTIONS = VIEW_RULE_OPTIONS;
   protected readonly SORT_OPTIONS = SORT_OPTIONS;
   protected readonly DEFAULT_PROJECT_ICON = DEFAULT_PROJECT_ICON;
+  // Names each rule row (a group), so its controls (the tag input too) are
+  // announced with the rule they belong to.
+  protected readonly ruleLabelIdPrefix = `view-rule-${nextSectionId++}-`;
 
   private readonly _injector = inject(Injector);
   private readonly _tagService = inject(TagService);
