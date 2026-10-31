@@ -26,6 +26,7 @@
 		B63E17B12C5F3D8A00A1B2C3 /* StoreReviewPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = B63E17B02C5F3D8A00A1B2C3 /* StoreReviewPlugin.swift */; };
 		B63E17B32C5F3D8A00A1B2C3 /* StoreReviewPlugin.m in Sources */ = {isa = PBXBuildFile; fileRef = B63E17B22C5F3D8A00A1B2C3 /* StoreReviewPlugin.m */; };
 		B63E17A52C5F3D8A00A1B2C3 /* CustomViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B63E17A42C5F3D8A00A1B2C3 /* CustomViewController.swift */; };
+		B63E17C12C5F3D8A00A1B2C3 /* DueTaskBadgePlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = B63E17C02C5F3D8A00A1B2C3 /* DueTaskBadgePlugin.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -69,6 +70,7 @@
 		B63E17B02C5F3D8A00A1B2C3 /* StoreReviewPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoreReviewPlugin.swift; sourceTree = "<group>"; };
 		B63E17B22C5F3D8A00A1B2C3 /* StoreReviewPlugin.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = StoreReviewPlugin.m; sourceTree = "<group>"; };
 		B63E17A42C5F3D8A00A1B2C3 /* CustomViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomViewController.swift; sourceTree = "<group>"; };
+		B63E17C02C5F3D8A00A1B2C3 /* DueTaskBadgePlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DueTaskBadgePlugin.swift; sourceTree = "<group>"; };
 		FC68EB0AF532CFC21C3344DD /* Pods-App.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-App.debug.xcconfig"; path = "Pods/Target Support Files/Pods-App/Pods-App.debug.xcconfig"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -128,6 +130,7 @@
 				B63E17A22C5F3D8A00A1B2C3 /* WebDavHttpPlugin.m */,
 				B63E17B02C5F3D8A00A1B2C3 /* StoreReviewPlugin.swift */,
 				B63E17B22C5F3D8A00A1B2C3 /* StoreReviewPlugin.m */,
+				B63E17C02C5F3D8A00A1B2C3 /* DueTaskBadgePlugin.swift */,
 				504EC30B1FED79650016851F /* Main.storyboard */,
 				504EC30E1FED79650016851F /* Assets.xcassets */,
 				504EC3101FED79650016851F /* LaunchScreen.storyboard */,
@@ -286,6 +289,7 @@
 				B63E17A32C5F3D8A00A1B2C3 /* WebDavHttpPlugin.m in Sources */,
 				B63E17B12C5F3D8A00A1B2C3 /* StoreReviewPlugin.swift in Sources */,
 				B63E17B32C5F3D8A00A1B2C3 /* StoreReviewPlugin.m in Sources */,
+				B63E17C12C5F3D8A00A1B2C3 /* DueTaskBadgePlugin.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
