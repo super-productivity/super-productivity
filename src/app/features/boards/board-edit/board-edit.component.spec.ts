@@ -432,6 +432,113 @@ describe('BoardEditComponent with the view editor', () => {
     expect(editor().model().panels[0].projectIds).toEqual(['p1', 'gone']);
   });
 
+  describe('sections collapse to their title and rule summary', () => {
+    const three: BoardCfg = normalizeBoardForSave({
+      id: 'v',
+      title: 'V',
+      cols: 3,
+      panels: [
+        { ...DEFAULT_PANEL_CFG, id: 'a', title: 'A' },
+        {
+          ...DEFAULT_PANEL_CFG,
+          id: 'b',
+          title: 'B',
+          taskDoneState: BoardPanelCfgTaskDoneState.UnDone,
+        },
+        { ...DEFAULT_PANEL_CFG, id: 'c', title: 'C' },
+      ],
+    });
+
+    const cards = (): HTMLElement[] =>
+      Array.from(fixture.nativeElement.querySelectorAll('view-editor-section'));
+    const toggle = (card: HTMLElement): HTMLButtonElement | null =>
+      card.querySelector('.section-toggle');
+    /** Which cards show their rules. */
+    const openCards = (): boolean[] =>
+      cards().map((card) => !!card.querySelector('.section-body'));
+
+    it('opens the first card; the others show only their title and summary', async () => {
+      await open(three);
+      expect(openCards()).toEqual([true, false, false]);
+      const [first, second] = cards();
+      expect(toggle(first)!.getAttribute('aria-expanded')).toBe('true');
+      expect(toggle(second)!.getAttribute('aria-expanded')).toBe('false');
+      expect(toggle(second)!.getAttribute('aria-controls')).toBeTruthy();
+      // No translations loaded: keys stand in for the labels.
+      expect(toggle(second)!.textContent).toContain(
+        'F.BOARDS.EDITOR.RULE_DONE: F.BOARDS.FORM.TASK_DONE_STATE_UNDONE',
+      );
+      expect(toggle(cards()[2])!.textContent).toContain('F.BOARDS.EDITOR.EVERY_TASK');
+      // Every title field stays, so save can validate it.
+      expect(cards().map((card) => !!card.querySelector('input'))).toEqual([
+        true,
+        true,
+        true,
+      ]);
+      expect(second.querySelector('[data-rule]')).toBeNull();
+      expect(second.querySelector('.count')).toBeNull();
+    });
+
+    it('keeps one card open at a time', async () => {
+      await open(three);
+      toggle(cards()[1])!.click();
+      fixture.detectChanges();
+      expect(openCards()).toEqual([false, true, false]);
+      expect(cards()[1].querySelector('[data-rule="done"]')).not.toBeNull();
+      // Clicking the open one closes it.
+      toggle(cards()[1])!.click();
+      fixture.detectChanges();
+      expect(openCards()).toEqual([false, false, false]);
+    });
+
+    it('opens an added or duplicated card, keeps the open one when moving', async () => {
+      await open(three);
+      editor().addPanel();
+      fixture.detectChanges();
+      expect(openCards()).toEqual([false, false, false, true]);
+      editor().duplicatePanel(1);
+      fixture.detectChanges();
+      expect(openCards()).toEqual([false, false, true, false, false]);
+      editor().movePanel(2, -1);
+      fixture.detectChanges();
+      expect(openCards()).toEqual([false, true, false, false, false]);
+      // Removing the open one leaves none open.
+      editor().removePanel(1);
+      fixture.detectChanges();
+      expect(openCards()).toEqual([false, false, false, false]);
+    });
+
+    it('has no toggle with a single section', async () => {
+      await open(DEFAULT_BOARD_CFG);
+      expect(cards().length).toBe(1);
+      expect(toggle(cards()[0])).toBeNull();
+      expect(openCards()).toEqual([true]);
+      expect(cards()[0].querySelector('.count')).not.toBeNull();
+    });
+
+    it('refuses to save an empty title in a collapsed card', async () => {
+      const cmp = await open(three);
+      editor().updatePanel(2, { ...editor().model().panels[2], title: '' });
+      await settle();
+      cmp.save();
+      fixture.detectChanges();
+      expect(dispatch).not.toHaveBeenCalled();
+      expect(openCards()).toEqual([true, false, false]);
+      expect(cards()[2].querySelector('mat-error')).not.toBeNull();
+    });
+
+    it('keeps an empty added rule of a card that is collapsed and opened again', async () => {
+      await open(three);
+      sections()[0].addRule('includedTags');
+      await settle();
+      toggle(cards()[1])!.click();
+      fixture.detectChanges();
+      toggle(cards()[0])!.click();
+      fixture.detectChanges();
+      expect(cards()[0].querySelector('[data-rule="includedTags"]')).not.toBeNull();
+    });
+  });
+
   it('counts what each section header will show, for the chosen layout', async () => {
     tasks.set([
       task({ id: 'parent', subTaskIds: ['child'] }),

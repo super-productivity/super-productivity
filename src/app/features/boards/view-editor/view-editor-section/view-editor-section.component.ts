@@ -21,7 +21,7 @@ import { MatDivider } from '@angular/material/divider';
 import { MatMenu, MatMenuItem, MatMenuTrigger } from '@angular/material/menu';
 import { MatOption, MatSelect, MatSelectChange } from '@angular/material/select';
 import { MatTooltip } from '@angular/material/tooltip';
-import { TranslatePipe } from '@ngx-translate/core';
+import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { BoardMatchMode, BoardPanelCfg } from '../../boards.model';
 import { T } from '../../../../t.const';
 import { TagEditComponent } from '../../../tag/tag-edit/tag-edit.component';
@@ -32,6 +32,7 @@ import { DEFAULT_PROJECT_ICON } from '../../../project/project.const';
 import { SelectOptionRowComponent } from '../../../../ui/select-option-row/select-option-row.component';
 import {
   getAddableRuleGroups,
+  getRuleSummary,
   getRuleValue,
   getSortValue,
   isRuleSet,
@@ -51,6 +52,14 @@ import {
 } from '../view-editor.util';
 
 let nextSectionId = 0;
+
+/** Rules whose row has a text label: no select to carry it. */
+const TEXT_LABEL_RULES: ReadonlySet<ViewRuleId> = new Set([
+  'includedTags',
+  'excludedTags',
+  'untagged',
+  'parentOnly',
+]);
 
 /**
  * One section (List) or column (Board) of the view editor: its title, live
@@ -93,12 +102,16 @@ export class ViewEditorSectionComponent {
   readonly count = input<number>(0);
   readonly isFirst = input<boolean>(false);
   readonly isLast = input<boolean>(false);
+  /** With several sections: a toggle shows or hides the rules. */
+  readonly isCollapsible = input<boolean>(false);
+  readonly isOpen = input<boolean>(true);
 
   readonly panelChange = output<BoardPanelCfg>();
   readonly moveUp = output<void>();
   readonly moveDown = output<void>();
   readonly duplicate = output<void>();
   readonly remove = output<void>();
+  readonly toggleOpen = output<void>();
 
   protected readonly T = T;
   protected readonly OTHER_VALUE = OTHER_VALUE;
@@ -106,14 +119,14 @@ export class ViewEditorSectionComponent {
   protected readonly RULE_OPTIONS = VIEW_RULE_OPTIONS;
   protected readonly SORT_OPTIONS = SORT_OPTIONS;
   protected readonly DEFAULT_PROJECT_ICON = DEFAULT_PROJECT_ICON;
-  // Names each rule row (a group), so its controls (the tag input too) are
-  // announced with the rule they belong to.
-  protected readonly ruleLabelIdPrefix = `view-rule-${nextSectionId++}-`;
+  protected readonly TEXT_LABEL_RULES = TEXT_LABEL_RULES;
+  protected readonly bodyId = `view-section-body-${nextSectionId++}`;
 
   private readonly _injector = inject(Injector);
   private readonly _tagService = inject(TagService);
   private readonly _projectService = inject(ProjectService);
   private readonly _menuTreeService = inject(MenuTreeService);
+  private readonly _translateService = inject(TranslateService);
 
   private readonly _titleModel = viewChild('titleModel', { read: NgModel });
   private readonly _titleInput = viewChild('titleModel', { read: MatInput });
@@ -176,6 +189,15 @@ export class ViewEditorSectionComponent {
     }
     return values;
   });
+
+  /** The collapsed card's one line: only read while the card can collapse. */
+  readonly summary = computed(() =>
+    getRuleSummary(
+      this.panel(),
+      { projects: this.projects(), tags: this._tagService.tags() },
+      (key) => this._translateService.instant(key),
+    ),
+  );
 
   setTitle(title: string): void {
     this._emit({ ...this.panel(), title });

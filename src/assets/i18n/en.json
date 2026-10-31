@@ -167,6 +167,7 @@
         "COUNT_ONE": "1 task",
         "DELETED_PROJECT": "1 archived or deleted project",
         "DELETED_PROJECTS": "{{nr}} archived or deleted projects",
+        "EVERY_TASK": "Every task",
         "LAYOUT": "Layout",
         "LAYOUT_BOARD": "Board",
         "LAYOUT_BOARD_HINT": "Columns side by side, tasks as cards",

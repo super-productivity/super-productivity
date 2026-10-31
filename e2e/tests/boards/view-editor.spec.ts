@@ -228,4 +228,64 @@ test.describe('View editor', () => {
 
     expect(await readBoard(page, 'KANBAN_DEFAULT')).toEqual(before);
   });
+
+  test("clicking a view's title opens its editor and stays on the view", async ({
+    page,
+    workViewPage,
+  }) => {
+    await workViewPage.waitForTaskList();
+    await page.goto('/#/boards/KANBAN_DEFAULT');
+    await expect(page.locator('boards board-panel')).toHaveCount(3);
+
+    const title = page.locator('page-title .page-title');
+    await expect(title).toHaveAttribute('role', 'button');
+    await title.click();
+    const dialog = page.locator('dialog-board-edit');
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByRole('textbox', { name: 'Title', exact: true })).toHaveValue(
+      'Kanban',
+    );
+    await expect(page).toHaveURL(/#\/boards\/KANBAN_DEFAULT$/);
+    await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(dialog).toBeHidden();
+
+    // From the keyboard too.
+    await title.focus();
+    await page.keyboard.press('Enter');
+    await expect(dialog).toBeVisible();
+    await expect(page).toHaveURL(/#\/boards\/KANBAN_DEFAULT$/);
+  });
+
+  test('shows one section of a board at a time, the others as a summary', async ({
+    page,
+    workViewPage,
+  }) => {
+    await workViewPage.waitForTaskList();
+    await page.goto('/#/boards/KANBAN_DEFAULT');
+    await expect(page.locator('boards board-panel')).toHaveCount(3);
+
+    const dialog = await openViewEditor(page);
+    const toggles = dialog.locator('view-editor-section .section-toggle');
+    await expect(toggles).toHaveCount(3);
+    await expect(toggles.nth(0)).toHaveAttribute('aria-expanded', 'true');
+    await expect(toggles.nth(1)).toHaveAttribute('aria-expanded', 'false');
+    await expect(toggles.nth(2)).toHaveAttribute('aria-expanded', 'false');
+    // A collapsed card: its title, then count and rules in one line.
+    const done = viewEditorSection(dialog, 2);
+    await expect(done.getByRole('textbox', { name: 'Column title' })).toHaveValue('Done');
+    await expect(toggles.nth(2)).toContainText(
+      'Backlog: Exclude backlog · Completion: Completed',
+    );
+    await expect(done.locator('.rule-row')).toHaveCount(0);
+    await expect(
+      viewEditorSection(dialog, 0).locator('[data-rule="done"]'),
+    ).toBeVisible();
+
+    // Opening one closes the other.
+    await toggles.nth(2).click();
+    await expect(toggles.nth(2)).toHaveAttribute('aria-expanded', 'true');
+    await expect(toggles.nth(0)).toHaveAttribute('aria-expanded', 'false');
+    await expect(done.locator('[data-rule="done"]')).toBeVisible();
+    await expect(viewEditorSection(dialog, 0).locator('.rule-row')).toHaveCount(0);
+  });
 });

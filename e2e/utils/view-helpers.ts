@@ -61,6 +61,21 @@ export interface ViewSpec {
 export const viewEditorSection = (dialog: Locator, index: number): Locator =>
   dialog.locator('view-editor-section').nth(index);
 
+/**
+ * Opens a section card's rules. With several sections one card is open at a
+ * time; a single section has no toggle and is always open.
+ */
+export const expandViewSection = async (section: Locator): Promise<void> => {
+  const toggle = section.locator('.section-toggle');
+  if (
+    (await toggle.count()) &&
+    (await toggle.getAttribute('aria-expanded')) === 'false'
+  ) {
+    await toggle.click();
+    await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  }
+};
+
 /** Picks an option of a select in the editor, by its accessible name. */
 const pickOption = async (
   page: Page,
@@ -79,6 +94,7 @@ export const addViewRule = async (
   section: Locator,
   spec: ViewRuleSpec,
 ): Promise<void> => {
+  await expandViewSection(section);
   await section.getByRole('button', { name: 'Add rule' }).click();
   await page.getByRole('menuitem', { name: spec.rule, exact: true }).click();
   if (spec.projects) {
@@ -108,14 +124,20 @@ export const setViewRule = async (
   section: Locator,
   rule: string,
   value: string,
-): Promise<void> => pickOption(page, section, rule, value);
+): Promise<void> => {
+  await expandViewSection(section);
+  await pickOption(page, section, rule, value);
+};
 
 /** Picks a section's sort ("Manual", "Title", …). */
 export const setViewSort = async (
   page: Page,
   section: Locator,
   sort: string,
-): Promise<void> => pickOption(page, section, 'Sort by', sort);
+): Promise<void> => {
+  await expandViewSection(section);
+  await pickOption(page, section, 'Sort by', sort);
+};
 
 /**
  * Fills the open view editor: title, sections with their rules and sort, then

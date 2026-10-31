@@ -16,6 +16,7 @@
   letter-spacing: var(--letter-spacing-wide);
 }
 
+// Columns sits next to the toggle down to phone widths; it wraps below them.
 .layout-row {
   display: flex;
   flex-wrap: wrap;
@@ -23,13 +24,16 @@
   gap: var(--s2);
 }
 
+// Basis 0: the group's own width is 100%, which would push Columns to the
+// next line.
 .layout-toggle {
-  flex: 0 1 280px;
+  flex: 1 1 0;
+  min-width: 0;
 }
 
 .cols {
-  // Wide enough for its error on one line.
-  flex: 0 1 200px;
+  // Fits "Columns"; its error may wrap to two lines.
+  flex: 0 0 104px;
 }
 
 .hint {

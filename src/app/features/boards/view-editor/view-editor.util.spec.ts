@@ -10,6 +10,7 @@ import { normalizeBoardForSave, toEditorModel } from '../boards.util';
 import {
   getAddableRuleGroups,
   getPlannedDateChoice,
+  getRuleSummary,
   getRuleValue,
   getSetRules,
   getSortValue,
@@ -339,5 +340,94 @@ describe('getViewUpdates', () => {
     expect(getViewUpdates(board, { ...board, title: 'W' }, current)).toEqual({
       title: 'W',
     });
+  });
+});
+
+describe('getRuleSummary', () => {
+  const ctx = {
+    projects: [
+      { id: 'p1', title: 'Work' },
+      { id: 'p2', title: 'Home' },
+    ],
+    tags: [
+      { id: 't1', title: 'Urgent' },
+      { id: 't2', title: 'Important' },
+    ],
+  };
+  // Labels as their English text, so the joined line reads as shown.
+  const LABELS = new Map<string, string>([
+    ['F.TASK_VIEW.CUSTOMIZER.FILTER_PROJECT', 'Project'],
+    ['F.TASK_VIEW.CUSTOMIZER.FILTER_PRIORITY', 'Priority'],
+    ['F.TASK.CMP.PRIORITY_HIGH', 'High'],
+    ['F.BOARDS.EDITOR.RULE_DONE', 'Completion'],
+    ['F.BOARDS.FORM.TASK_DONE_STATE_UNDONE', 'Not Completed'],
+    ['F.BOARDS.FORM.TAGS_REQUIRED', 'Required Tags'],
+    ['F.BOARDS.FORM.TAGS_EXCLUDED', 'Excluded Tags'],
+    ['F.BOARDS.EDITOR.RULE_UNTAGGED', 'Without tags'],
+    ['F.BOARDS.FORM.ONLY_PARENT_TASKS', 'Only parent tasks'],
+    ['F.TASK_VIEW.CUSTOMIZER.FILTER_DEADLINE', 'Deadline'],
+    ['F.BOARDS.EDITOR.OTHER_KEPT', 'Other (kept)'],
+    ['F.BOARDS.EDITOR.EVERY_TASK', 'Every task'],
+  ]);
+  const t = (key: string): string => LABELS.get(key) ?? key;
+
+  it('reads "Every task" without rules', () => {
+    expect(getRuleSummary(panel(), ctx, t)).toBe('Every task');
+  });
+
+  it('names select rules by their option, in rule order', () => {
+    expect(
+      getRuleSummary(
+        panel({
+          taskDoneState: BoardPanelCfgTaskDoneState.UnDone,
+          priorityRule: '3',
+        }),
+        ctx,
+        t,
+      ),
+    ).toBe('Completion: Not Completed · Priority: High');
+  });
+
+  it('shows a value this client does not know as "Other (kept)"', () => {
+    expect(getRuleSummary(panel({ deadlineState: 'someday' }), ctx, t)).toBe(
+      'Deadline: Other (kept)',
+    );
+  });
+
+  it('names projects and tags by title, the known ones only', () => {
+    expect(
+      getRuleSummary(
+        panel({
+          projectIds: ['p2', 'gone', 'p1'],
+          includedTagIds: ['t1', 'missing'],
+          excludedTagIds: ['t2'],
+        }),
+        ctx,
+        t,
+      ),
+    ).toBe('Project: Home, Work · Required Tags: Urgent · Excluded Tags: Important');
+  });
+
+  it('shows the label alone when no project or tag is known', () => {
+    expect(
+      getRuleSummary(
+        panel({ projectIds: ['gone'], includedTagIds: ['missing'] }),
+        ctx,
+        t,
+      ),
+    ).toBe('Project · Required Tags');
+  });
+
+  it('shows rules without a value by their label', () => {
+    expect(
+      getRuleSummary(panel({ isUntagged: true, isParentTasksOnly: true }), ctx, t),
+    ).toBe('Without tags · Only parent tasks');
+  });
+
+  it('leaves out an added rule that is still empty', () => {
+    // An empty project rule is stored as [''] and an empty tag rule as [].
+    expect(getRuleSummary(panel({ projectIds: [''], includedTagIds: [] }), ctx, t)).toBe(
+      'Every task',
+    );
   });
 });

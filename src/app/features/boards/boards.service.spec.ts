@@ -60,9 +60,19 @@ describe('BoardsService', () => {
     await service.createBoard();
     expect(open).toHaveBeenCalledOnceWith(DialogBoardEditComponent, {
       restoreFocus: true,
+      panelClass: 'fullscreen-xs-dialog',
       data: { board: DEFAULT_BOARD_CFG, isCreate: true, hints: [] },
     });
     expect(navigate).toHaveBeenCalledOnceWith(['/boards', 'new-id']);
+  });
+
+  it('opens the edit dialog full screen on phones', async () => {
+    await service.editBoard(board);
+    expect(open).toHaveBeenCalledOnceWith(DialogBoardEditComponent, {
+      restoreFocus: true,
+      panelClass: 'fullscreen-xs-dialog',
+      data: { board },
+    });
   });
 
   it('stays put when the create dialog is cancelled', async () => {

@@ -1,13 +1,8 @@
 @use '../../../../styles/_globals.scss' as *;
 
+// Below xs the dialog is full screen (panelClass 'fullscreen-xs-dialog').
 :host {
   mat-dialog-content {
-    max-height: 75vh;
-    min-width: calc(100vw - 16px);
-
-    @include mq(xxxs) {
-      min-width: calc(100vw - 32px);
-    }
     @include mq(xs) {
       min-width: 540px;
       max-height: 85vh;

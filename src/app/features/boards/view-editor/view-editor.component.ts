@@ -116,6 +116,17 @@ export class ViewEditorComponent {
       : model;
   });
 
+  /**
+   * The section card that shows its rules when there are several (one at a
+   * time): the first when the editor opens, a new or duplicated one once added;
+   * none after removing the open one. Kept by id when moving.
+   */
+  readonly openPanelId = linkedSignal<BoardCfg, string | null>({
+    source: this.board,
+    computation: (board) => board.panels[0]?.id ?? null,
+  });
+  readonly isCollapsible = computed(() => this.model().panels.length > 1);
+
   readonly layout = computed<ViewLayout>(() =>
     this.model().cols > 1 ? 'board' : 'list',
   );
@@ -184,7 +195,13 @@ export class ViewEditorComponent {
   }
 
   addPanel(): void {
-    this._setPanels([...this._withHiddenTitleShown(), this._newPanel()]);
+    const panel = this._newPanel();
+    this._setPanels([...this._withHiddenTitleShown(), panel]);
+    this.openPanelId.set(panel.id);
+  }
+
+  togglePanel(id: string): void {
+    this.openPanelId.update((openId) => (openId === id ? null : id));
   }
 
   movePanel(index: number, offset: -1 | 1): void {
@@ -200,13 +217,15 @@ export class ViewEditorComponent {
   duplicatePanel(index: number): void {
     const panels = this._withHiddenTitleShown();
     const source = panels[index];
+    const id = nanoid();
     panels.splice(index + 1, 0, {
       ...source,
-      id: nanoid(),
+      id,
       taskIds: [],
       title: `${source.title} (copy)`,
     });
     this._setPanels(panels);
+    this.openPanelId.set(id);
   }
 
   removePanel(index: number): void {

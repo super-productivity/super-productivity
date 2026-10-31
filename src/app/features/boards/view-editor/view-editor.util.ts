@@ -426,6 +426,54 @@ export const withSortValue = (panel: BoardPanelCfg, value: string): BoardPanelCf
 
 type Translate = (key: string) => string;
 
+/** What the rule summary names projects and tags by. */
+export interface RuleSummaryCtx {
+  projects: readonly { id: string; title: string }[];
+  tags: readonly { id: string; title: string }[];
+}
+
+/**
+ * One line for a collapsed section: each set rule as `Label: value` (option
+ * labels; project and tag titles, the label alone when none is known; the
+ * label alone for rules without a value), joined by " · ", or "Every task".
+ */
+export const getRuleSummary = (
+  panel: BoardPanelCfg,
+  ctx: RuleSummaryCtx,
+  translate: Translate,
+): string => {
+  const titled = (
+    label: string,
+    ids: readonly string[] | undefined,
+    all: RuleSummaryCtx['tags'],
+  ): string => {
+    const titles = (ids ?? [])
+      .map((id) => all.find((item) => item.id === id)?.title)
+      .filter((title): title is string => !!title);
+    return titles.length ? `${label}: ${titles.join(', ')}` : label;
+  };
+  const parts = getSetRules(panel).map((rule) => {
+    const label = translate(VIEW_RULE_LABELS[rule]);
+    switch (rule) {
+      case 'project':
+        return titled(label, panel.projectIds, ctx.projects);
+      case 'includedTags':
+        return titled(label, panel.includedTagIds, ctx.tags);
+      case 'excludedTags':
+        return titled(label, panel.excludedTagIds, ctx.tags);
+      case 'untagged':
+      case 'parentOnly':
+        return label;
+      default: {
+        const value = getRuleValue(panel, rule);
+        const option = VIEW_RULE_OPTIONS[rule].find((o) => o.value === value);
+        return `${label}: ${translate(option?.label ?? T.F.BOARDS.EDITOR.OTHER_KEPT)}`;
+      }
+    }
+  });
+  return parts.length ? parts.join(' · ') : translate(T.F.BOARDS.EDITOR.EVERY_TASK);
+};
+
 /**
  * The editor model with titles as shown: default views are titled with
  * translation keys, which the inputs show translated.

@@ -39,6 +39,7 @@ export class BoardsService {
     this._matDialog
       .open(DialogBoardEditComponent, {
         restoreFocus: true,
+        panelClass: 'fullscreen-xs-dialog',
         data: { board, isCreate: true, hints },
       })
       .afterClosed()
@@ -63,6 +64,7 @@ export class BoardsService {
       await import('./dialog-board-edit/dialog-board-edit.component');
     this._matDialog.open(DialogBoardEditComponent, {
       restoreFocus: true,
+      panelClass: 'fullscreen-xs-dialog',
       data: { board },
     });
   }
