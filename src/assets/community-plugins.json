@@ -236,5 +236,18 @@
       "downloadUrl": "https://github.com/AshrafByte/sp-timesheet/releases/download/v2.0.1/sp-timesheet-v2.0.1.zip",
       "sha256": "627d56200730436d0cc70586422ad30512d49da80c041e4e6eb1cf405f4471d0"
     }
+  },
+  {
+    "name": "Deadlines",
+    "shortDescription": "List, Calendar, and Timeline views for deadlines and fixed dates in Super Productivity.",
+    "url": "https://github.com/Jontata/deadlines-plugin",
+    "author": "Jontata",
+    "authorUrl": "https://github.com/Jontata",
+    "id": "deadlines-view",
+    "release": {
+      "version": "0.0.1",
+      "downloadUrl": "https://github.com/Jontata/deadlines-plugin/releases/download/v0.0.1/deadlines-plugin-0.0.1.zip",
+      "sha256": "e7b147b25dbda9b232fff0bdb51b773a11a528d647e93bc34e2bf5e02d2ec6b7"
+    }
   }
 ]
