@@ -24,6 +24,7 @@ import { getRepeatDueWithTime } from '../../task-repeat-cfg/store/get-repeat-due
 import { isValidSplitTime } from '../../../util/is-valid-split-time';
 import { devError } from '../../../util/dev-error';
 import { getTimeLeftForTask } from '../../../util/get-time-left-for-task';
+import { sumSubTaskTimeLeft } from '../../tasks/util/sum-sub-task-time-left';
 import { getDbDateStr } from '../../../util/get-db-date-str';
 import { oneDayInMilliseconds } from '../../../util/month-time-conversion';
 import { ScheduleCalendarMapEntry } from '../../schedule/schedule.model';
@@ -246,6 +247,15 @@ const getPlannerDay = (
     repeatProjectionsForDay,
     noStartTimeRepeatProjections,
     scheduledTaskItems,
+    getIsSubTaskCountedOnItsOwn(
+      dayDate,
+      todayStr,
+      taskMap,
+      normalTasks,
+      plannerState,
+      unplannedTaskIdsToday,
+    ),
+    taskMap,
   );
 
   // Add calendar event durations (CalDAV/ICAL events) to the total time estimate
@@ -292,14 +302,69 @@ const getPlannerDay = (
   };
 };
 
+// A sub task planned on its own is counted by itself: in this day's list, on
+// another upcoming planner day, on Today's list, in its time slot, or in the
+// Overdue section when its day or time has passed. Planning
+// a parent leaves its sub tasks on their other days (#9019) while the parent's
+// `timeEstimate` still includes them, so the parent must leave them out to
+// count each piece of work once. See #10894.
+const getIsSubTaskCountedOnItsOwn = (
+  dayDate: string,
+  todayStr: string,
+  taskMap: Map<string, Task>,
+  normalTasks: TaskCopy[],
+  plannerState: fromPlanner.PlannerState,
+  unplannedTaskIdsToday: string[] | false,
+): ((subTask: Task) => boolean) => {
+  let countedIds: Set<string> | undefined;
+  const getCountedIds = (): Set<string> => {
+    const ids = new Set(normalTasks.map((t) => t.id));
+    for (const [day, dayIds] of Object.entries(plannerState.days)) {
+      if (day > todayStr && day !== dayDate) dayIds.forEach((id) => ids.add(id));
+    }
+    if (dayDate !== todayStr) {
+      // Same ids and dueDay filter as Today's normalTasks in getPlannerDay.
+      const todayIds =
+        unplannedTaskIdsToday || plannerState.days[todayStr] || ([] as string[]);
+      for (const id of todayIds) {
+        const t = taskMap.get(id);
+        if (t && (!t.dueDay || t.dueDay <= todayStr)) ids.add(id);
+      }
+    }
+    return ids;
+  };
+  return (subTask) =>
+    !!subTask.dueWithTime ||
+    (!!subTask.dueDay && subTask.dueDay < todayStr) ||
+    (countedIds ??= getCountedIds()).has(subTask.id);
+};
+
+const getTimeLeftForPlannerTask = (
+  task: TaskCopy,
+  isSubTaskCountedOnItsOwn: (subTask: Task) => boolean,
+  taskMap: Map<string, Task>,
+): number => {
+  if (task.isDone) return 0;
+  const countedSubTasks = task.subTaskIds
+    .map((id) => taskMap.get(id))
+    .filter((st): st is Task => !!st && isSubTaskCountedOnItsOwn(st));
+  if (!countedSubTasks.length) return getTimeLeftForTask(task);
+  return Math.max(0, task.timeEstimate - sumSubTaskTimeLeft(countedSubTasks));
+};
+
 const getAllTimeSpent = (
   normalTasks: TaskCopy[],
   taskRepeatProjections: ScheduleItemRepeatProjection[],
   noStartTimeRepeatProjections: NoStartTimeRepeatProjection[],
   plannedTaskProjections: ScheduleItemTask[],
+  isSubTaskCountedOnItsOwn: (subTask: Task) => boolean,
+  taskMap: Map<string, Task>,
 ): number => {
   return (
-    normalTasks.reduce((acc, t) => acc + (t.isDone ? 0 : getTimeLeftForTask(t)), 0) +
+    normalTasks.reduce(
+      (acc, t) => acc + getTimeLeftForPlannerTask(t, isSubTaskCountedOnItsOwn, taskMap),
+      0,
+    ) +
     taskRepeatProjections.reduce((acc, rp) => acc + rp.end - rp.start, 0) +
     plannedTaskProjections.reduce((acc, si) => acc + si.end - si.start, 0) +
     noStartTimeRepeatProjections.reduce(
