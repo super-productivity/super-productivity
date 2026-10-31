@@ -36,6 +36,7 @@ import { PluginIconComponent } from '../../../plugins/ui/plugin-icon/plugin-icon
 import { selectAllBoards } from '../../../features/boards/store/boards.selectors';
 import { getViewIcon } from '../../../features/boards/boards.util';
 import { ViewMenuComponent } from '../../../features/boards/view-menu/view-menu.component';
+import { BoardsService } from '../../../features/boards/boards.service';
 
 @Component({
   selector: 'page-title',
@@ -57,11 +58,23 @@ import { ViewMenuComponent } from '../../../features/boards/view-menu/view-menu.
   ],
   template: `
     @if (activeWorkContextTypeAndId()) {
+      <!-- On a view page the title opens the view's editor and stays put;
+           elsewhere it links to the task list. One element either way: the
+           static tabindex makes it a tab stop on every page (RouterLink leaves
+           a static tabindex alone), and a null routerLink lets the click
+           through to onTitleClick(). -->
       <div
-        [matTooltip]="T.MH.GO_TO_TASK_LIST | translate"
+        [matTooltip]="
+          (viewBoard() ? T.F.BOARDS.V.EDIT_BOARD : T.MH.GO_TO_TASK_LIST) | translate
+        "
         class="page-title"
         mat-ripple
-        routerLink="/active/tasks"
+        tabindex="0"
+        [routerLink]="viewBoard() ? null : '/active/tasks'"
+        [attr.role]="viewBoard() ? 'button' : null"
+        (click)="onTitleClick()"
+        (keydown.enter)="onTitleClick()"
+        (keydown.space)="onTitleClick($event)"
       >
         @if (sectionIcon(); as icon) {
           <!-- Same icon the side nav shows for this section; it inherits the
@@ -271,6 +284,12 @@ import { ViewMenuComponent } from '../../../features/boards/view-menu/view-menu.
         &:focus {
           outline: none;
         }
+
+        /* Inset: the header row clips anything drawn outside the title box. */
+        &:focus-visible {
+          outline: var(--focus-ring-width) solid var(--focus-ring-color);
+          outline-offset: calc(-1 * var(--focus-ring-width));
+        }
       }
 
       /* The floor is stated as "how much of the NAME survives", so where the
@@ -405,6 +424,7 @@ export class PageTitleComponent {
   private _plainspaceShareService = inject(PlainspaceShareService);
   private _pluginBridge = inject(PluginBridgeService);
   private _pluginService = inject(PluginService);
+  private _boardsService = inject(BoardsService);
 
   readonly T = T;
 
@@ -567,6 +587,20 @@ export class PageTitleComponent {
 
   get kb(): KeyboardConfig {
     return (this._configService.cfg()?.keyboard as KeyboardConfig) || {};
+  }
+
+  /**
+   * Click, Enter or Space on the title: opens the editor on a view page,
+   * where the title is a button; elsewhere the router link (click) is all.
+   */
+  onTitleClick(ev?: Event): void {
+    const board = this.viewBoard();
+    if (!board) {
+      return;
+    }
+    // Space would scroll the page.
+    ev?.preventDefault();
+    void this._boardsService.editBoard(board);
   }
 
   openInPlainspace(): void {

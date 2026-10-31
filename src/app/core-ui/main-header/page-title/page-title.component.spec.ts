@@ -1,5 +1,6 @@
 import {
   Component,
+  EnvironmentProviders,
   NO_ERRORS_SCHEMA,
   Provider,
   WritableSignal,
@@ -9,7 +10,9 @@ import { MatIconButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { TestBed } from '@angular/core/testing';
 import { BehaviorSubject, Subject, of } from 'rxjs';
-import { NavigationEnd, Router } from '@angular/router';
+import { NavigationEnd, provideRouter, Router, RouterLink } from '@angular/router';
+import { MatTooltip } from '@angular/material/tooltip';
+import { By } from '@angular/platform-browser';
 import { BreakpointObserver } from '@angular/cdk/layout';
 import { TranslateModule, TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { MatMenu, MatMenuTrigger } from '@angular/material/menu';
@@ -31,6 +34,7 @@ import { PluginService } from '../../../plugins/plugin.service';
 import { PluginMenuEntryCfg } from '../../../plugins/plugin-api.model';
 import { PluginState } from '../../../plugins/plugin-state.model';
 import { BoardCfg } from '../../../features/boards/boards.model';
+import { BoardsService } from '../../../features/boards/boards.service';
 
 // The title's spacing tokens are declared by main-header and inherited, so this
 // host pulls in that stylesheet and mounts the real `page-title` under it —
@@ -56,6 +60,7 @@ describe('PageTitleComponent', () => {
   let pluginMenuEntries: WritableSignal<PluginMenuEntryCfg[]>;
   let boards: WritableSignal<BoardCfg[]>;
   let pluginStates: Map<string, PluginState>;
+  let editBoardSpy: jasmine.Spy;
 
   // `color` is a Tag-only field not surfaced on WorkContext's type.
   const wc = (o: Partial<WorkContext> & { color?: string | null }): WorkContext =>
@@ -66,8 +71,13 @@ describe('PageTitleComponent', () => {
     return TestBed.createComponent(PageTitleComponent).componentInstance;
   };
 
-  const stubProviders = (opts: { realTranslate?: boolean } = {}): Provider[] => [
-    { provide: Router, useValue: routerStub },
+  const stubProviders = (
+    opts: { realTranslate?: boolean; realRouter?: boolean } = {},
+  ): (Provider | EnvironmentProviders)[] => [
+    ...(opts.realRouter
+      ? [provideRouter([])]
+      : [{ provide: Router, useValue: routerStub }]),
+    { provide: BoardsService, useValue: { editBoard: editBoardSpy } },
     {
       provide: BreakpointObserver,
       useValue: { observe: () => isXxxs$ },
@@ -138,6 +148,7 @@ describe('PageTitleComponent', () => {
     pluginStates = new Map();
     isXxxs$ = new BehaviorSubject<{ matches: boolean }>({ matches: false });
     openMenuRequest$ = new Subject<void>();
+    editBoardSpy = jasmine.createSpy('editBoard').and.returnValue(Promise.resolve());
     openSpy = jasmine
       .createSpy('openProjectOnPlainspace')
       .and.returnValue(Promise.resolve());
@@ -447,9 +458,9 @@ describe('PageTitleComponent', () => {
       );
 
     // The work-context menu holds Delete Project / Delete Tag, and `.page-title`
-    // itself is a roleless `<div>` carrying `routerLink` — not focusable, not a
-    // button. So this button is the only keyboard-reachable route to that menu
-    // from the header, which is why it stays rather than folding into the title.
+    // on a context route is a link to the task list, not a menu button. So this
+    // button is the only keyboard-reachable route to that menu from the
+    // header, which is why it stays rather than folding into the title.
     it('always offers the work-context menu on a context route', async () => {
       expect(buttons(await renderAt('/active/tasks'))).toContain('project-settings-btn');
       expect(buttons(await renderAt('/active/notes'))).toContain('project-settings-btn');
@@ -510,6 +521,103 @@ describe('PageTitleComponent', () => {
         await renderAt('/active/notes');
         openMenuRequest$.next();
         expect(openMenuSpy).not.toHaveBeenCalled();
+      });
+    });
+  });
+
+  // With the real RouterLink and MatTooltip, against a real router whose URL is
+  // pinned, so the link's own click handling is what decides navigation.
+  describe('clicking the title', () => {
+    let navigateSpy: jasmine.Spy;
+    let title: HTMLElement;
+    let tooltip: MatTooltip;
+
+    const renderTitle = async (url: string): Promise<void> => {
+      TestBed.resetTestingModule();
+      await TestBed.configureTestingModule({
+        imports: [TranslateModule.forRoot()],
+        providers: stubProviders({ realTranslate: true, realRouter: true }),
+      })
+        .overrideComponent(PageTitleComponent, {
+          set: {
+            imports: [
+              TranslatePipe,
+              MatMenu,
+              MatMenuTrigger,
+              MatIconButton,
+              MatIcon,
+              RouterLink,
+              MatTooltip,
+            ],
+            schemas: [NO_ERRORS_SCHEMA],
+          },
+        })
+        .compileComponents();
+      const router = TestBed.inject(Router);
+      spyOnProperty(router, 'url', 'get').and.returnValue(url);
+      navigateSpy = spyOn(router, 'navigateByUrl').and.resolveTo(true);
+      const fixture = TestBed.createComponent(PageTitleComponent);
+      fixture.detectChanges();
+      const titleDe = fixture.debugElement.query(By.css('.page-title'));
+      title = titleDe.nativeElement as HTMLElement;
+      tooltip = titleDe.injector.get(MatTooltip);
+    };
+
+    const navigatedTo = (): string[] =>
+      navigateSpy.calls.allArgs().map(([tree]) => String(tree));
+
+    describe('on a view page', () => {
+      const view: BoardCfg = { id: 'v1', title: 'Quick wins', cols: 1, panels: [] };
+
+      beforeEach(async () => {
+        boards.set([view]);
+        await renderTitle('/boards/v1');
+      });
+
+      it('opens the editor on click and stays on the view', () => {
+        title.click();
+        expect(editBoardSpy).toHaveBeenCalledOnceWith(view);
+        expect(navigateSpy).not.toHaveBeenCalled();
+      });
+
+      it('opens the editor on Enter and Space', () => {
+        title.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+        const space = new KeyboardEvent('keydown', { key: ' ', cancelable: true });
+        title.dispatchEvent(space);
+        expect(editBoardSpy).toHaveBeenCalledTimes(2);
+        // Space would otherwise scroll the page.
+        expect(space.defaultPrevented).toBe(true);
+        expect(navigateSpy).not.toHaveBeenCalled();
+      });
+
+      it('is a focusable button described as "Edit view"', () => {
+        expect(title.getAttribute('role')).toBe('button');
+        expect(title.getAttribute('tabindex')).toBe('0');
+        expect(tooltip.message).toBe(T.F.BOARDS.V.EDIT_BOARD);
+        // The view's title stays the accessible name.
+        expect(title.hasAttribute('aria-label')).toBe(false);
+      });
+    });
+
+    [
+      ['the task list', '/active/tasks'],
+      ['/boards without a view', '/boards'],
+    ].forEach(([label, url]) => {
+      it(`still links to the task list on ${label}`, async () => {
+        await renderTitle(url);
+        title.click();
+        expect(navigatedTo()).toEqual(['/active/tasks']);
+        expect(editBoardSpy).not.toHaveBeenCalled();
+        expect(title.hasAttribute('role')).toBe(false);
+        expect(title.getAttribute('tabindex')).toBe('0');
+        expect(tooltip.message).toBe(T.MH.GO_TO_TASK_LIST);
+      });
+
+      it(`does nothing on Enter on ${label}`, async () => {
+        await renderTitle(url);
+        title.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+        expect(editBoardSpy).not.toHaveBeenCalled();
+        expect(navigateSpy).not.toHaveBeenCalled();
       });
     });
   });
