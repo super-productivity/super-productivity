@@ -262,5 +262,18 @@
       "downloadUrl": "https://github.com/super-productivity/ridonculous/releases/download/stadium-mode-v0.4.0/ridonculous-stadium-mode-0.4.0.zip",
       "sha256": "bc0b07947d2be371471fc50ac2359683c54deff4ffc0d8deb737d96f0d7d69a8"
     }
+  },
+  {
+    "name": "Deadlines",
+    "shortDescription": "List, Calendar, and Timeline views for deadlines and fixed dates in Super Productivity.",
+    "url": "https://github.com/Jontata/deadlines-plugin",
+    "author": "Jontata",
+    "authorUrl": "https://github.com/Jontata",
+    "id": "deadlines-view",
+    "release": {
+      "version": "0.0.1",
+      "downloadUrl": "https://github.com/Jontata/deadlines-plugin/releases/download/v0.0.1/deadlines-plugin-0.0.1.zip",
+      "sha256": "e7b147b25dbda9b232fff0bdb51b773a11a528d647e93bc34e2bf5e02d2ec6b7"
+    }
   }
 ]
