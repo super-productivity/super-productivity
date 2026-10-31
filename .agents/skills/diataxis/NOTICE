@@ -1,0 +1,43 @@
+# Notices for the Diátaxis skill
+
+This skill contains original guidance and material from other projects.
+The table records each vendored source and its license.
+
+| Material       | Source project | License      |
+| -------------- | -------------- | ------------ |
+| Tenets         | Diátaxis       | CC BY-SA 4.0 |
+| Voice examples | Kubernetes     | CC BY 4.0    |
+| Voice examples | Cloudflare     | CC BY 4.0    |
+| Voice examples | Gatsby         | MIT          |
+| Voice examples | Astro          | MIT          |
+| Voice examples | Ubuntu         | CC BY-SA 4.0 |
+
+## Tenets
+
+The files under `tenets/` quote, condense, and adapt text from Diátaxis by Daniele Procida.
+Source: [diataxis].
+License: [CC BY-SA 4.0][cc-by-sa-4.0].
+Full license text: [tenets/LICENSE](tenets/LICENSE).
+Upstream license copy: [diataxis-license].
+Changes: excerpts are trimmed, quoted, condensed, reordered, and linked back to the Diátaxis pages.
+The Diátaxis-derived material in `tenets/` is shared under CC BY-SA 4.0.
+
+## Voice corpus
+
+The files under `voice/example-text/` are trimmed excerpts from the projects in the table.
+[voice/NOTICE][voice-notice] records each source, its license, and its attribution.
+Changes: quotations keep their original wording; surrounding text, headings, images, and code samples are omitted.
+
+## Linked sources
+
+`voice/PATTERNS.md` quotes short passages from three Grafana k6 documentation pages and links to each page.
+The full pages are not vendored, and their own copyright terms apply.
+
+## Remaining material
+
+The remaining files contain the toolkit's own guidance, templates, and scripts.
+
+[cc-by-sa-4.0]: https://creativecommons.org/licenses/by-sa/4.0/
+[diataxis]: https://diataxis.fr/
+[diataxis-license]: https://github.com/evildmp/diataxis-documentation-framework/blob/main/LICENSE.rst
+[voice-notice]: voice/NOTICE

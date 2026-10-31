@@ -7,6 +7,7 @@ The diataxis skill runs it as part of `npm run docs:public:check`.
 
 [.vale.ini](.vale.ini) sets `StylesPath = styles`, `MinAlertLevel = suggestion`, and the `Project` and `Toolkit` vocabularies.
 The styles are vendored under [styles/](styles/).
+Third-party notices: [NOTICE](NOTICE).
 Do not run `vale sync`: it replaces the vendored styles with upstream packages and drops local rule changes.
 Update them by copying the matching directories from the [diataxis-toolkit](https://github.com/zenoprax/diataxis-toolkit).
 

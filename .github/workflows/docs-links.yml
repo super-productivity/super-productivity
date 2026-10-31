@@ -45,7 +45,6 @@ jobs:
           node tools/check-doc-links.js --sources-only
 
   # Runs on every PR so docs-only changes still get a QC result.
-  # Mark this job's name ("Public docs QC") required in branch protection.
   public:
     name: Public docs QC
     runs-on: ubuntu-latest

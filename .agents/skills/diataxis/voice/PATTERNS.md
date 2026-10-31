@@ -1,10 +1,10 @@
 # Voice patterns
 
 Pattern library for calibrating documentation voice against real text.
-Every quote is verbatim from the corpus under [example-text/](example-text/); the footnote points at the file it came from.
+Every quote is verbatim; the footnote points at the corpus file or the external page it came from.
 These are **style models, not content sources**: copy the voice and structure, not the examples, commands, or project-specific facts.
-Read the patterns here first; grep the corpus for the cited passage only when a pattern needs more context.
-Corpus inventory and provenance: the [Corpus](#corpus) section below.
+Read the patterns here first; grep the corpus or follow the footnote link only when a pattern needs more context.
+Corpus inventory, provenance, and licenses: the [Corpus](#corpus) section below and [NOTICE](NOTICE).
 
 ## Machine-writing patterns
 
@@ -381,15 +381,16 @@ Each entry names the failure, then shows what the corpus does instead.
    (line and table widths, frontmatter, links) and the repo's style guide.
    Constraints discovered after a rewrite force a second rewrite.
 3. Read the patterns for your quadrant here; when one needs a concrete match,
-   grep the corpus for the cited passage (see [Corpus](#corpus) below). Do not
-   read whole exemplar pages.
+   grep the corpus for the cited passage (see [Corpus](#corpus) below), or follow
+   the external link for a source that is not vendored. Do not read whole
+   exemplar pages.
 4. Extract the structural patterns at sentence and paragraph level (heading hierarchy, opener shape, paragraph flow, list-versus-prose choices, table use, step format), and draft against those, not against the content. Sentence-level fixes alone do not make a page sound like its quadrant.
 5. Check every paragraph against the machine-writing patterns; delete sentences that carry no information.
 6. Run whatever prose and markdown checkers the project keeps.
 
 ## Corpus
 
-Twenty-one pages from projects whose documentation runs on Diátaxis, at least five per quadrant, in [example-text/](example-text/).
+Eighteen pages from projects whose documentation runs on Diátaxis, at least four per quadrant, in [example-text/](example-text/).
 Each file's frontmatter records the URL it was fetched from.
 Use this table to find the source for a grepped passage; the patterns above are the default reading.
 
@@ -405,17 +406,23 @@ Use this table to find the source for a grepped passage; the patterns above are 
 | how-to      | [ubuntu-install-ubuntu-desktop.ubuntu.md][]                | Ubuntu tutorials   |
 | how-to      | [query-data-in-components-with-usestaticquery.gatsby.md][] | Gatsby             |
 | how-to      | [middleware.astro.md][]                                    | Astro              |
-| how-to      | [running-k6.k6.md][]                                       | Grafana k6         |
 | reference   | [kubeconfig-v1.k8s.md][]                                   | Kubernetes         |
 | reference   | [kubectl-reference.k8s.md][]                               | Kubernetes         |
 | reference   | [gatsby-cli.gatsby.md][]                                   | Gatsby             |
-| reference   | [k6-options.k6.md][]                                       | Grafana k6         |
 | reference   | [configuration-reference.astro.md][]                       | Astro              |
 | explanation | [configuration.k8s.md][]                                   | Kubernetes         |
 | explanation | [extending-kubernetes.k8s.md][]                            | Kubernetes         |
 | explanation | [build-time-and-client-runtime-data-fetching.gatsby.md][]  | Gatsby             |
 | explanation | [how-workers-works.cloudflare.md][]                        | Cloudflare Workers |
-| explanation | [load-test-types.k6.md][]                                  | Grafana k6         |
+
+### Linked sources
+
+Three Grafana k6 pages are linked here but not vendored.
+Follow the link when a quoted pattern needs more context; do not add the full page to the corpus.
+
+- Grafana k6, *Running k6* — <https://grafana.com/docs/k6/latest/get-started/running-k6/>
+- Grafana k6, *Options reference* — <https://grafana.com/docs/k6/latest/using-k6/k6-options/reference/>
+- Grafana k6, *Load test types* — <https://grafana.com/docs/k6/latest/testing-guides/test-types/>
 
 ### Provenance
 
@@ -424,7 +431,6 @@ Every corpus project publishes a Diátaxis basis for its documentation:
 - Kubernetes maps its page content types to the Diátaxis framework in the contribution guide.[^k8s-content-types]
 - Gatsby writes, in the docs-contribution guides, that the Gatsby docs are based on the Diátaxis documentation system, and its navigation carries the four quadrant names verbatim.[^gatsby-contributing]
 - Cloudflare Developer Docs named Diátaxis their north star for information architecture when rebuilding the docs; their pages follow get-started tutorials, task how-tos, per-option references, and concept pages.[^cloudflare-diataxis]
-- Grafana k6 writes to the Grafana Writers' Toolkit, which defines concept, task, reference, and tutorial page types per Diátaxis; the k6 sidebar mirrors the quadrants.[^k6-toolkit]
 - Canonical's Ubuntu documentation style guide instructs writers to use Diátaxis to structure product documentation, listing the four document types.[^ubuntu-diataxis]
 - Astro divides its docs site into Tutorial, Guides, and Reference groups, and its Starlight theme ships those quadrants as the default template.[^astro-sidebar]
 
@@ -445,35 +451,32 @@ Every corpus project publishes a Diátaxis basis for its documentation:
 [ubuntu-install-ubuntu-desktop.ubuntu.md]: example-text/how-to/ubuntu-install-ubuntu-desktop.ubuntu.md
 [query-data-in-components-with-usestaticquery.gatsby.md]: example-text/how-to/query-data-in-components-with-usestaticquery.gatsby.md
 [middleware.astro.md]: example-text/how-to/middleware.astro.md
-[running-k6.k6.md]: example-text/how-to/running-k6.k6.md
 [kubeconfig-v1.k8s.md]: example-text/reference/kubeconfig-v1.k8s.md
 [kubectl-reference.k8s.md]: example-text/reference/kubectl-reference.k8s.md
 [gatsby-cli.gatsby.md]: example-text/reference/gatsby-cli.gatsby.md
-[k6-options.k6.md]: example-text/reference/k6-options.k6.md
 [configuration-reference.astro.md]: example-text/reference/configuration-reference.astro.md
 [configuration.k8s.md]: example-text/explanation/configuration.k8s.md
 [extending-kubernetes.k8s.md]: example-text/explanation/extending-kubernetes.k8s.md
 [build-time-and-client-runtime-data-fetching.gatsby.md]: example-text/explanation/build-time-and-client-runtime-data-fetching.gatsby.md
 [how-workers-works.cloudflare.md]: example-text/explanation/how-workers-works.cloudflare.md
-[load-test-types.k6.md]: example-text/explanation/load-test-types.k6.md
 
 [^tutorial-gatsby]: Gatsby, *Create and Deploy Your First Gatsby Site* — [create-and-deploy-your-first-gatsby-site.gatsby.md](example-text/tutorials/create-and-deploy-your-first-gatsby-site.gatsby.md) · <https://www.gatsbyjs.com/docs/tutorial/getting-started/part-1/>
 [^tutorial-cloudflare]: Cloudflare Workers, *Deploy your first Worker with the CLI* — [deploy-your-first-worker.cloudflare.md](example-text/tutorials/deploy-your-first-worker.cloudflare.md) · <https://developers.cloudflare.com/workers/get-started/guide/>
 [^tutorial-k8s-stateful]: Kubernetes, *StatefulSet Basics* — [stateful-set-basics.k8s.md](example-text/tutorials/stateful-set-basics.k8s.md) · <https://kubernetes.io/docs/tutorials/stateful-set/>
 [^tutorial-k8s-sidecar]: Kubernetes, *Adopting Sidecar Containers* — [pod-sidecar-containers.k8s.md](example-text/tutorials/pod-sidecar-containers.k8s.md) · <https://kubernetes.io/docs/tutorials/pod-sidecar-containers/>
 [^tutorial-k8s-wordpress]: Kubernetes, *Example: Deploying WordPress and MySQL with Persistent Volumes* — [mysql-wordpress-persistent-volume-statefulset.k8s.md](example-text/tutorials/mysql-wordpress-persistent-volume-statefulset.k8s.md) · <https://kubernetes.io/docs/tutorials/stateful-set/mysql-wordpress-persistent-volume/>
-[^howto-running-k6]: Grafana k6, *Running k6* — [running-k6.k6.md](example-text/how-to/running-k6.k6.md) · <https://grafana.com/docs/k6/latest/get-started/running-k6/>
+[^howto-running-k6]: Grafana k6, *Running k6* — <https://grafana.com/docs/k6/latest/get-started/running-k6/>
 [^howto-usestaticquery]: Gatsby, *Querying Data in Components with the useStaticQuery Hook* — [query-data-in-components-with-usestaticquery.gatsby.md](example-text/how-to/query-data-in-components-with-usestaticquery.gatsby.md) · <https://www.gatsbyjs.com/docs/how-to/querying-data/use-static-query/>
 [^howto-middleware]: Astro, *Middleware* — [middleware.astro.md](example-text/how-to/middleware.astro.md) · <https://docs.astro.build/en/guides/middleware/>
 [^howto-k8s-secrets]: Kubernetes, *Managing Secrets using kubectl* — [managing-secrets-using-kubectl.k8s.md](example-text/how-to/managing-secrets-using-kubectl.k8s.md) · <https://kubernetes.io/docs/tasks/inject-data-application/managing-secret-using-kubectl/>
 [^howto-ubuntu]: Ubuntu, *Install Ubuntu Desktop* — [ubuntu-install-ubuntu-desktop.ubuntu.md](example-text/how-to/ubuntu-install-ubuntu-desktop.ubuntu.md) · <https://ubuntu.com/tutorials/install-ubuntu-desktop>
 [^howto-k8s-workqueue]: Kubernetes, *Coarse Parallel Processing Using a Work Queue* — [coarse-parallel-processing-using-a-work-queue.k8s.md](example-text/how-to/coarse-parallel-processing-using-a-work-queue.k8s.md) · <https://kubernetes.io/docs/tasks/batch/coarse-parallel-processing-work-queue/>
-[^ref-k6-options]: Grafana k6, *Options reference* — [k6-options.k6.md](example-text/reference/k6-options.k6.md) · <https://grafana.com/docs/k6/latest/using-k6/k6-options/reference/>
+[^ref-k6-options]: Grafana k6, *Options reference* — <https://grafana.com/docs/k6/latest/using-k6/k6-options/reference/>
 [^ref-astro-config]: Astro, *Configuration Reference* — [configuration-reference.astro.md](example-text/reference/configuration-reference.astro.md) · <https://docs.astro.build/en/reference/configuration-reference/>
 [^ref-kubectl]: Kubernetes, *Command line tool (kubectl)* — [kubectl-reference.k8s.md](example-text/reference/kubectl-reference.k8s.md) · <https://kubernetes.io/docs/reference/kubectl/>
 [^ref-gatsby-cli]: Gatsby, *Commands (Gatsby CLI)* — [gatsby-cli.gatsby.md](example-text/reference/gatsby-cli.gatsby.md) · <https://www.gatsbyjs.com/docs/reference/gatsby-cli/>
 [^ref-kubeconfig]: Kubernetes, *kubeconfig (v1)* — [kubeconfig-v1.k8s.md](example-text/reference/kubeconfig-v1.k8s.md) · <https://kubernetes.io/docs/reference/config-api/kubeconfig.v1/>
-[^expl-k6-tests]: Grafana k6, *Load test types* — [load-test-types.k6.md](example-text/explanation/load-test-types.k6.md) · <https://grafana.com/docs/k6/latest/testing-guides/test-types/>
+[^expl-k6-tests]: Grafana k6, *Load test types* — <https://grafana.com/docs/k6/latest/testing-guides/test-types/>
 [^expl-gatsby-data]: Gatsby, *Build Time and Client Runtime Data Fetching* — [build-time-and-client-runtime-data-fetching.gatsby.md](example-text/explanation/build-time-and-client-runtime-data-fetching.gatsby.md) · <https://www.gatsbyjs.com/docs/conceptual/data-fetching/>
 [^expl-cloudflare]: Cloudflare Workers, *How Workers works* — [how-workers-works.cloudflare.md](example-text/explanation/how-workers-works.cloudflare.md) · <https://developers.cloudflare.com/workers/reference/how-workers-works/>
 [^expl-k8s-config]: Kubernetes, *Configuration* — [configuration.k8s.md](example-text/explanation/configuration.k8s.md) · <https://kubernetes.io/docs/concepts/configuration/>
@@ -481,6 +484,5 @@ Every corpus project publishes a Diátaxis basis for its documentation:
 [^k8s-content-types]: Kubernetes, *Page content types* — <https://kubernetes.io/docs/contribute/style/page-content-types/>
 [^gatsby-contributing]: Gatsby, *How to Write a Conceptual Guide* (docs-contribution guides) — <https://www.gatsbyjs.com/contributing/docs-contributions/how-to-write-a-conceptual-guide>
 [^cloudflare-diataxis]: Diátaxis, adopted-testimony homepage — <https://www.diataxis.fr/>
-[^k6-toolkit]: Grafana Labs, *Writers' Toolkit* — <https://grafana.com/developers/writers-toolkit/>
 [^ubuntu-diataxis]: Canonical, *Documentation Style Guide* — <https://documentation.ubuntu.com/style-guide/>
 [^astro-sidebar]: Astro docs sidebar source (`astro.sidebar.ts`) — <https://github.com/withastro/docs/blob/main/astro.sidebar.ts> · Starlight sidebar guide — <https://starlight.astro.build/guides/sidebar/>

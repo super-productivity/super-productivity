@@ -1,0 +1,10 @@
+# Third-party notices
+
+## Harper
+
+The rules in `styles/Harper/` and the dictionary in `styles/config/dictionaries/harper.dict` are derived from [Harper][harper].
+Harper is Copyright (c) Automattic, Inc. and contributors.
+Licensed under the Apache License, Version 2.0.
+Full license texts: `styles/Harper/LICENSE` and `styles/config/dictionaries/LICENSE`.
+
+[harper]: https://github.com/Automattic/harper
