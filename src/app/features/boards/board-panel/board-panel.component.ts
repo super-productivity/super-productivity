@@ -324,8 +324,13 @@ export class BoardPanelComponent implements TaskCardList, ViewTaskListHost {
     return backlogIds;
   });
 
+  // In the list layout, the open rows the header counts: a parent's estimate
+  // already covers its nested subtasks.
   totalEstimate = computed(() =>
-    this.tasks().reduce((acc, task) => acc + (task.timeEstimate || 0), 0),
+    (this.isListLayout() ? this.mainRows() : this.tasks()).reduce(
+      (acc, task) => acc + (task.timeEstimate || 0),
+      0,
+    ),
   );
 
   readonly sortKey = computed(() => getPanelSortKey(this.panelCfg()));

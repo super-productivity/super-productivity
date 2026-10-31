@@ -137,6 +137,9 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
   private readonly _taskMultiSelectService = inject(TaskMultiSelectService);
   // Set inside a view's column: its lists order the view, not the open context.
   private readonly _viewTaskList = inject(VIEW_TASK_LIST, { optional: true });
+  // Group drags place a selection in the open project's lists. A view's rows
+  // move one at a time, whatever context was open before (it's stale there).
+  protected readonly isInView = !!this._viewTaskList;
   protected readonly isTouchSelectionMode =
     this._taskMultiSelectService.isTouchSelectionMode;
   // Lock Y-axis on small screens only — on wider screens the task list may sit
@@ -280,7 +283,7 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
         !(selected.size > 1 && selected.has(drag.data?.id))
       );
     }
-    if (this.multiDrag.isListGroupDrag())
+    if (this._isListGroupDrag())
       return this.multiDrag.canDrop(
         drop.data.listId,
         drop.data.listModelId,
@@ -471,7 +474,7 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
     }
 
     const isGroupLeaderAtSamePosition =
-      this.multiDrag.isListGroupDrag() &&
+      this._isListGroupDrag() &&
       ev.previousContainer === ev.container &&
       ev.previousIndex === ev.currentIndex;
     const targetTask = targetListData.filteredTasks[ev.currentIndex] as TaskCopy;
@@ -482,11 +485,7 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
       throw new Error('Should not happen 2');
     }
 
-    if (
-      !this.multiDrag.isListGroupDrag() &&
-      targetTask &&
-      targetTask.id === draggedTask.id
-    ) {
+    if (!this._isListGroupDrag() && targetTask && targetTask.id === draggedTask.id) {
       return;
     }
 
@@ -577,7 +576,7 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
       newIds: newIds.map((t) => t.id),
     });
 
-    const groupOrderedIds = this.multiDrag.isListGroupDrag()
+    const groupOrderedIds = this._isListGroupDrag()
       ? newIds.map((task) => task.id)
       : null;
     if (
@@ -630,6 +629,10 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
     );
 
     this._taskViewCustomizerService.setSort(DEFAULT_OPTIONS.sort);
+  }
+
+  private _isListGroupDrag(): boolean {
+    return !this.isInView && this.multiDrag.isListGroupDrag();
   }
 
   /**

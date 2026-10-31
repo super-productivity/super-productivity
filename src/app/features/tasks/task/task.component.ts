@@ -11,6 +11,7 @@ import {
   inject,
   input,
   OnDestroy,
+  Signal,
   signal,
   untracked,
   viewChild,
@@ -136,6 +137,9 @@ import {
 } from '../util/get-scheduled-date-color';
 import { isWontDoTask } from '../util/is-wont-do-task';
 import { IssueSyncStateService } from '../../issue/two-way-sync/issue-sync-state.service';
+
+// Outside a view: tag-list hides the open context's tag, as before.
+const NO_VIEW_TAGS_TO_HIDE = signal<string[] | undefined>(undefined).asReadonly();
 
 const isInteractiveTarget = (target: EventTarget | null): boolean =>
   target instanceof Element &&
@@ -275,7 +279,9 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   // the last list opened: rows then act as in any non-Today list.
   private readonly _viewTaskList = inject(VIEW_TASK_LIST, { optional: true });
   readonly isInView = !!this._viewTaskList;
-  readonly viewTagsToHide = computed(() => this._viewTaskList?.tagsToHide());
+  // The host's signal itself: no extra computed per row (hot path).
+  readonly viewTagsToHide: Signal<string[] | undefined> =
+    this._viewTaskList?.tagsToHide ?? NO_VIEW_TAGS_TO_HIDE;
   isTodayListActive = computed(
     () => !this._viewTaskList && this.workContextService.isTodayListSignal(),
   );

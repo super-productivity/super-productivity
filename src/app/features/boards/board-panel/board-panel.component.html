@@ -41,7 +41,9 @@
     listId="PARENT"
     listModelId="VIEW"
     [isSortingDisabled]="!isManualOrder()"
-    [noTasksMsg]="T.F.BOARDS.V.NO_TASKS_IN_VIEW | translate"
+    [noTasksMsg]="
+      doneRows().length ? undefined : (T.F.BOARDS.V.NO_TASKS_IN_VIEW | translate)
+    "
   ></task-list>
   @if (doneRows().length) {
     <collapsible

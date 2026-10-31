@@ -1227,6 +1227,21 @@ describe('BoardPanelComponent - drop()', () => {
       expect(fixture.nativeElement.getAttribute('data-board-selection-scope')).toBeNull();
     });
 
+    it('sums the estimate of the open rows only', async () => {
+      await setup([
+        mkTask({ id: 'parent', subTaskIds: ['child'], timeEstimate: 60_000 }),
+        // Already part of its parent's estimate.
+        mkTask({ id: 'child', parentId: 'parent', timeEstimate: 60_000 }),
+        mkTask({ id: 'other', timeEstimate: 30_000 }),
+        mkTask({ id: 'done', isDone: true, timeEstimate: 120_000 }),
+      ]);
+      fixture.componentRef.setInput('panelCfg', listPanel());
+      fixture.componentRef.setInput('isListLayout', true);
+      fixture.detectChanges();
+
+      expect(component.totalEstimate()).toBe(90_000);
+    });
+
     it('keeps row objects when nothing about them changed', async () => {
       await setup([mkTask({ id: 'a' }), mkTask({ id: 'b' })]);
       fixture.componentRef.setInput('panelCfg', listPanel());

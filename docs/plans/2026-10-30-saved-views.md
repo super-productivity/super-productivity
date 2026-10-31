@@ -607,3 +607,26 @@ Not taken / known gaps:
   is in Today (may refuse a move that would hold).
 - `view-menu` items sit in a child component, so arrow keys don't move between
   them inside the mat-menu; the existing `work-context-menu` has the same gap.
+
+Phase 3 implementation review (fresh-context subagent, 2026-10-31). Fixed:
+
+- Bug: dragging a selected row in a view took the multi-select group-drag
+  path when a project had been open before (that context is stale on a view
+  page). The other selected rows were hidden during the drag, and an
+  unmoved drop still wrote the view's order. View lists now never group-drag.
+- The header estimate in list layout sums the open rows only, so it matches
+  the count: no done tasks, and no parent counted twice with its subtask.
+- "No tasks match this view" is no longer shown when every matching task is
+  done and sits in the Completed section.
+- Hot path: task rows use the host's `tagsToHide` signal directly instead of
+  one extra `computed` per row.
+
+Not fixed (known gaps):
+
+- Reordering writes only the ids that currently match, so filtered-out tasks
+  lose their saved position (as in card layout).
+- An undone matching subtask under a done parent sits inside the collapsed
+  Completed section.
+- "Move to top/bottom" from the task detail panel is outside the view and
+  still follows the last opened list.
+- No E2E yet for drag reordering in a view (the keyboard reorder is covered).

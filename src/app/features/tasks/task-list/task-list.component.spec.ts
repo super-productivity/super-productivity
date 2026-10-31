@@ -203,6 +203,41 @@ describe('TaskListComponent', () => {
       expect(placeRow).toHaveBeenCalledOnceWith('a', 'c');
       expect(store.dispatch).not.toHaveBeenCalled();
     });
+
+    it('moves a selected row alone, even when a project was open before', async () => {
+      const placeRow = jasmine.createSpy('placeRow');
+      const internals = component as unknown as {
+        _viewTaskList: unknown;
+        isInView: boolean;
+      };
+      internals._viewTaskList = { placeRow, isManualOrder: () => true };
+      internals.isInView = true;
+      // A stale project context turns a selection drag into a group drag
+      // elsewhere; a view must not depend on it.
+      spyOn(component.multiDrag, 'isListGroupDrag').and.returnValue(true);
+      const groupDrop = spyOn(component.multiDrag, 'drop').and.resolveTo();
+      const rows = [{ id: 'a' }, { id: 'b' }, { id: 'c' }] as TaskWithSubTasks[];
+      const container = {
+        data: { listId: 'PARENT', listModelId: 'VIEW', filteredTasks: rows },
+      };
+      const dropAt = (currentIndex: number): Promise<void> =>
+        component.drop({
+          previousContainer: container,
+          container,
+          item: { data: rows[1] },
+          previousIndex: 1,
+          currentIndex,
+        } as never);
+
+      // Released where it was picked up: nothing to write.
+      await dropAt(1);
+      expect(placeRow).not.toHaveBeenCalled();
+
+      await dropAt(0);
+      expect(placeRow).toHaveBeenCalledOnceWith('b', null);
+      expect(groupDrop).not.toHaveBeenCalled();
+      expect(store.dispatch).not.toHaveBeenCalled();
+    });
   });
 
   describe('enterPredicate', () => {

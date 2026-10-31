@@ -1115,5 +1115,13 @@ describe('TaskComponent shortcut handling', () => {
       expect(inView.isInView).toBeTrue();
       destroy();
     });
+
+    it("hides the column's required tags, and nothing extra outside a view", () => {
+      const tagsToHide = signal(['required']);
+      const { component: inView, destroy } = createInView({ tagsToHide });
+      expect(inView.viewTagsToHide()).toEqual(['required']);
+      destroy();
+      expect(component.viewTagsToHide()).toBeUndefined();
+    });
   });
 });
