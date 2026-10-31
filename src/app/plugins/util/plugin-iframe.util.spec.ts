@@ -13,6 +13,102 @@ import {
 } from './plugin-iframe.util';
 
 describe('handlePluginMessage()', () => {
+  it('routes binary saving and returns a saved file even when opening failed', async () => {
+    const request = {
+      filename: 'Смета.pdf',
+      data: new Uint8Array([0, 255]).buffer,
+      openAfterSave: true,
+    };
+    const result = { kind: 'saved', path: 'chosen.pdf', openStatus: 'failed' };
+    const saveBinaryFile = jasmine.createSpy('saveBinaryFile').and.resolveTo(result);
+    const source = jasmine.createSpyObj<{ postMessage: jasmine.Spy }>('iframe', [
+      'postMessage',
+    ]);
+    const bridge = {
+      createBoundMethods: () => ({ saveBinaryFile }),
+    } as unknown as PluginBridgeService;
+    await handlePluginMessage(
+      {
+        source,
+        data: {
+          type: PluginIframeMessageType.API_CALL,
+          bridgeToken: 'test-bridge-token',
+          bridgeGeneration: 4,
+          method: 'saveBinaryFile',
+          callId: 46,
+          args: [request],
+        },
+      } as unknown as MessageEvent,
+      createConfig(bridge),
+    );
+    expect(saveBinaryFile).toHaveBeenCalledOnceWith(request);
+    expect(source.postMessage).toHaveBeenCalledWith(
+      { type: PluginIframeMessageType.API_RESPONSE, callId: 46, result },
+      '*',
+    );
+  });
+
+  it('waits past 65 seconds for a save dialog while preserving ordinary API timeouts', async () => {
+    const listeners = new Map<string, (event: MessageEvent) => void>();
+    const parent = { postMessage: jasmine.createSpy('postMessage') };
+    const frame: {
+      parent: typeof parent;
+      addEventListener: (name: string, listener: (event: MessageEvent) => void) => void;
+      PluginAPI?: {
+        saveBinaryFile: (request: unknown) => Promise<unknown>;
+        getTasks: () => Promise<unknown>;
+      };
+    } = { parent, addEventListener: (name, listener) => listeners.set(name, listener) };
+    const wrapped = createPluginApiScript(
+      createConfig({ createBoundMethods: () => ({}) } as unknown as PluginBridgeService),
+    ).trim();
+    expect(wrapped.startsWith('<script>')).toBeTrue();
+    expect(wrapped.endsWith('</script>')).toBeTrue();
+    const code = wrapped.slice('<script>'.length, -'</script>'.length);
+    jasmine.clock().install();
+    try {
+      // Выполняем только скрипт из репозитория с управляемым parent.
+      new Function('window', 'setTimeout', code)(frame, window.setTimeout);
+      const request = {
+        filename: 'Смета.pdf',
+        data: new Uint8Array([0, 255]).buffer,
+        openAfterSave: true,
+      };
+      const pending = frame.PluginAPI!.saveBinaryFile(request);
+      let settled = false;
+      pending.then(
+        () => {
+          settled = true;
+        },
+        () => {
+          settled = true;
+        },
+      );
+      jasmine.clock().tick(66000);
+      await Promise.resolve();
+      expect(settled).toBeFalse();
+      const call = parent.postMessage.calls
+        .allArgs()
+        .map((args) => args[0])
+        .find((data) => data.method === 'saveBinaryFile');
+      expect(new Uint8Array(structuredClone(call.args[0]).data)).toEqual(
+        new Uint8Array([0, 255]),
+      );
+      const result = { kind: 'saved', path: 'chosen.pdf', openStatus: 'failed' };
+      listeners.get('message')!({
+        source: parent,
+        data: { type: PluginIframeMessageType.API_RESPONSE, callId: call.callId, result },
+      } as unknown as MessageEvent);
+      expect(await pending).toEqual(result);
+      const ordinary = expectAsync(frame.PluginAPI!.getTasks()).toBeRejectedWithError(
+        'API call timeout',
+      );
+      jasmine.clock().tick(30000);
+      await ordinary;
+    } finally {
+      jasmine.clock().uninstall();
+    }
+  });
   it('routes iframe key listing to the owning plugin API', async () => {
     const listSyncedDataKeys = jasmine
       .createSpy('listSyncedDataKeys')

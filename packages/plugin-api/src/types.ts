@@ -7,6 +7,25 @@ import {
   PluginHttpOptions,
 } from './issue-provider-types';
 
+export interface PluginBinaryFileRequest {
+  /** Одно имя файла без каталога, до 180 символов. */
+  filename: string;
+  /** Исходные двоичные байты, до 10 МиБ. */
+  data: ArrayBuffer;
+  /** Только desktop: запросить открытие файла в ОС после сохранения. */
+  openAfterSave?: boolean;
+}
+
+export type PluginBinaryFileResult =
+  | { kind: 'canceled' }
+  | { kind: 'download-requested'; openStatus: 'not-requested' | 'unavailable' }
+  | {
+      kind: 'saved';
+      path: string;
+      /** requested означает принятие запроса ОС, а не открытие приложения. */
+      openStatus: 'not-requested' | 'requested' | 'blocked' | 'failed';
+    };
+
 export interface PluginMenuEntryCfg {
   pluginId: string;
   label: string;
@@ -755,6 +774,15 @@ export interface PluginAPI {
   persistDataSynced(dataStr: string, key?: string): Promise<void>;
 
   loadSyncedData(key?: string): Promise<string | null>;
+
+  /**
+   * Desktop: дождаться системного диалога и сохранить двоичные байты.
+   * Можно запросить открытие только сохранённого файла. Отказ сохраняет файл.
+   * Браузер: запросить скачивание; сохранение и ассоциации ОС неизвестны.
+   * Не принимает существующий путь, URL или команду. Диалог без тайм-аута.
+   * Прежний текстовый downloadFile сохраняет свой контракт.
+   */
+  saveBinaryFile(request: PluginBinaryFileRequest): Promise<PluginBinaryFileResult>;
 
   /**
    * Requests normal sync with the configured provider from plugin.js or an iframe.

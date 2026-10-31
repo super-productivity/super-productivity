@@ -69,6 +69,7 @@ const ALLOWED_IFRAME_API_METHODS = new Set([
   'getAppState',
   'persistDataSynced',
   'loadPersistedData',
+  'saveBinaryFile',
   'triggerSync',
   'listSyncedDataKeys',
   'registerHook',
@@ -385,8 +386,9 @@ export const createPluginApiScript = (config: PluginIframeConfig): string => {
               callId: id
             }, '*');
 
-            // Timeout after 30 seconds
-            setTimeout(() => {
+            // Системный диалог остаётся открытым, пока пользователь выбирает путь.
+            // Тайм-аут не означает отмену: операция ещё может сохранить файл.
+            if (method !== 'saveBinaryFile') setTimeout(() => {
               if (pendingCalls.has(id)) {
                 pendingCalls.delete(id);
                 reject(new Error('API call timeout'));
@@ -457,6 +459,7 @@ export const createPluginApiScript = (config: PluginIframeConfig): string => {
           persistDataSynced: (data, key) => callApi('persistDataSynced', [data, key]),
           loadPersistedData: (key) => callApi('loadPersistedData', [key]),
           loadSyncedData: (key) => callApi('loadPersistedData', [key]), // Alias
+          saveBinaryFile: (request) => callApi('saveBinaryFile', [request]),
           triggerSync: () => callApi('triggerSync'),
           listSyncedDataKeys: (prefix) => callApi('listSyncedDataKeys', [prefix]),
 
