@@ -205,7 +205,7 @@
     "@capacitor/keyboard": "^8.0.6",
     "@capacitor/status-bar": "^8.0.4",
     "@material-symbols/font-400": "^0.45.5",
-    "@noble/ciphers": "^2.2.0",
+    "@noble/ciphers": "^2.4.0",
     "capacitor-plugin-safe-area": "^5.0.0",
     "electron-dl": "^3.5.2",
     "electron-localshortcut": "^3.2.1",
