@@ -197,6 +197,57 @@ describe('Planner Selectors - #10894 parent and sub task double-count', () => {
     expect(est.tomorrow).toBe(MIN_20);
   });
 
+  // A parent with a time slot is counted through its slot, not the day list,
+  // so it needs the same correction.
+  describe('parent scheduled with a time', () => {
+    const at10 = (day: string): number =>
+      getDateTimeFromClockString('10:00', dateStrToUtcDate(day).getTime());
+
+    it('does not count a sub task planned for Today again', () => {
+      const tasks = createFamily({ dueDay: today }, {}, { dueWithTime: at10(tomorrow) });
+
+      const est = getDayEstimates(tasks, ['B'], {}, [tasks[0] as TaskWithDueTime]);
+
+      expect(est.today).toBe(MIN_20);
+      expect(est.tomorrow).toBe(MIN_20);
+    });
+
+    it('counts a sub task listed on the same day once', () => {
+      const tasks = createFamily(
+        { dueDay: today },
+        { dueDay: tomorrow },
+        { dueWithTime: at10(tomorrow) },
+      );
+
+      const est = getDayEstimates(tasks, ['B'], { [tomorrow]: ['C'] }, [
+        tasks[0] as TaskWithDueTime,
+      ]);
+
+      expect(est.today).toBe(MIN_20);
+      expect(est.tomorrow).toBe(MIN_20);
+    });
+
+    it('does not count a sub task planned for tomorrow on Today', () => {
+      const tasks = createFamily({}, { dueDay: tomorrow }, { dueWithTime: at10(today) });
+
+      const est = getDayEstimates(tasks, [], { [tomorrow]: ['C'] }, [
+        tasks[0] as TaskWithDueTime,
+      ]);
+
+      expect(est.today).toBe(MIN_20);
+      expect(est.tomorrow).toBe(MIN_20);
+    });
+
+    it('still counts the full estimate when no sub task is planned on its own', () => {
+      const tasks = createFamily({}, {}, { dueWithTime: at10(tomorrow) });
+
+      const est = getDayEstimates(tasks, [], {}, [tasks[0] as TaskWithDueTime]);
+
+      expect(est.today).toBe(0);
+      expect(est.tomorrow).toBe(2 * MIN_20);
+    });
+  });
+
   it('an overdue sub task with a past time is not counted again by its parent', () => {
     const dueWithTime = getDateTimeFromClockString(
       '10:00',
