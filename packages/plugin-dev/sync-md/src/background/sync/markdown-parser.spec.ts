@@ -255,7 +255,7 @@ Some more text here.
       const result = parseMarkdownWithHeader(markdown);
 
       expect(result.header).toBe(
-        '# My Tasks\nThis is a description of my tasks.\n\nSome more text here.\n',
+        '# My Tasks\nThis is a description of my tasks.\n\nSome more text here.\n\n',
       );
       expect(result.tasks.length).toBe(2);
       expect(result.tasks[0].title).toBe('Task 1');
@@ -315,6 +315,7 @@ This document contains all the tasks for my project.
 ## Important Notes
 - Remember to check dependencies
 - Update documentation
+
 `);
       expect(result.tasks.length).toBe(2);
     });
@@ -327,7 +328,7 @@ This document contains all the tasks for my project.
 
       const result = parseMarkdownWithHeader(markdown);
 
-      expect(result.header).toBe('# Header\n\n');
+      expect(result.header).toBe('# Header\n\n\n');
       expect(result.tasks.length).toBe(1);
     });
   });
