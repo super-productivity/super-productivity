@@ -20,7 +20,6 @@ import { BoardCfg, BoardPanelCfg } from '../boards.model';
 import { DEFAULT_PANEL_CFG } from '../boards.const';
 import {
   getPanelHeaderCount,
-  matchPanelTasks,
   normalizeBoardForSave,
   panelToCriteria,
 } from '../boards.util';
@@ -33,6 +32,7 @@ import { selectAllTasksInActiveProjects } from '../../tasks/store/task.selectors
 import { ViewCriteriaContextService } from '../view-criteria-context.service';
 import { TaskCopy } from '../../tasks/task.model';
 import { TaskCriteriaCtx } from '../../tasks/task-criteria/task-criteria.model';
+import { matchesTaskCriteria } from '../../tasks/task-criteria/task-criteria';
 import { Project } from '../../project/project.model';
 import { ViewEditorSectionComponent } from './view-editor-section/view-editor-section.component';
 import {
@@ -49,6 +49,8 @@ interface CachedCount {
   projects: readonly Project[];
   isListLayout: boolean;
   count: number;
+  /** Per task object, for this panel, ctx and project list. */
+  matches: WeakMap<TaskCopy, boolean>;
 }
 
 const LAYOUT_OPTIONS: readonly SegmentedButtonOption[] = [
@@ -128,31 +130,32 @@ export class ViewEditorComponent {
   private readonly _countCache = new WeakMap<BoardPanelCfg, CachedCount>();
   readonly counts = computed(() => {
     const model = this.model();
-    const key: Omit<CachedCount, 'count'> = {
-      tasks: this._allTasks(),
-      ctx: this._viewCtx.ctx(),
-      // Backlog membership is read while matching: a cached count follows it.
-      projects: this._viewCtx.projects(),
-      isListLayout: model.cols <= 1,
-    };
+    const tasks = this._allTasks();
+    const ctx = this._viewCtx.ctx();
+    // Backlog membership is read while matching: a cached match follows it.
+    const projects = this._viewCtx.projects();
+    const isListLayout = model.cols <= 1;
     return model.panels.map((panel) => {
       const hit = this._countCache.get(panel);
-      if (
-        hit &&
-        hit.tasks === key.tasks &&
-        hit.ctx === key.ctx &&
-        hit.projects === key.projects &&
-        hit.isListLayout === key.isListLayout
-      ) {
+      const isSameMatching = !!hit && hit.ctx === ctx && hit.projects === projects;
+      if (isSameMatching && hit.tasks === tasks && hit.isListLayout === isListLayout) {
         return hit.count;
       }
+      // A tracking tick or one edited task replaces only that task object:
+      // the others keep their match instead of being matched again.
+      const matches = isSameMatching ? hit.matches : new WeakMap<TaskCopy, boolean>();
       const saved = normalizeBoardForSave({ ...model, panels: [panel] }).panels[0];
-      const count = getPanelHeaderCount(
-        matchPanelTasks(key.tasks, panelToCriteria(saved), key.ctx),
-        saved,
-        key.isListLayout,
-      );
-      this._countCache.set(panel, { ...key, count });
+      const criteria = panelToCriteria(saved);
+      const matching = tasks.filter((task) => {
+        let isMatch = matches.get(task);
+        if (isMatch === undefined) {
+          isMatch = matchesTaskCriteria(task, criteria, ctx);
+          matches.set(task, isMatch);
+        }
+        return isMatch;
+      });
+      const count = getPanelHeaderCount(matching, saved, isListLayout);
+      this._countCache.set(panel, { tasks, ctx, projects, isListLayout, count, matches });
       return count;
     });
   });
