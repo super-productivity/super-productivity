@@ -524,6 +524,126 @@ time tracking, context menu) instead of board cards.
 - **Known gap:** the multi-select bar's and bulk shortcut's "move to backlog"
   still follow the active context (as on card views today).
 
+## 12. Phase 4 — sections, the filter menu on views, list polish
+
+Decided 2026-10-31 (user: "do 1, 2 and 3"): a one-column view is a list in
+every respect. Its stacked panels are sections of that list, the title bar's
+filter/sort menu edits the view's rules, and the leftover board parts go.
+
+### A. Stacked panels are sections of one list
+
+- **When:** `cols <= 1`, any number of panels (phase 3: one panel only).
+  Boards with two or more columns keep their cards. This changes how existing
+  custom stacked boards look (cards → sectioned list); nothing stored
+  changes and released clients still show cards. It is acceptable only with
+  the keyboard parity below, so the rows lose nothing the cards had.
+- **One panel:** no section header at all (title and edit button repeat the
+  title bar), see C.
+- **Several panels:** each panel is a section: a `collapsible` header with the
+  panel title and its open-row count (like Today's "Overdue" section),
+  expanded by default; the expanded state is local only (never synced). Each
+  section keeps its own done subsection (phase 3 logic, per panel).
+- **Every panel shows what matches it**, as columns do: a task matching two
+  sections is in both. No first-match rule: it would make a move into a later
+  section look like it failed when the task still matches an earlier one.
+- **Drag between sections:** the target section's `task-list` (`VIEW`) accepts
+  a row from another section when the column rules can make it match
+  (`ViewTaskListHost.canEnter(task)`, the panel's existing `canEnter` check);
+  the drop goes through `placeRow` → `moveTasks` (already built for this in
+  phase 3). Refusals show the existing snack.
+- **Keyboard parity with cards:** move up at a section's first row (or down
+  at its last) moves the row into the previous (next) section through its
+  rules, at the bottom (top), via the board's existing `adjacentPanel`
+  (`direction: 'up' | 'down'`, `taskIds`). Works whatever the sort (cards do
+  the same: the edge move is not a reorder). Focus follows the moved row:
+  `focusRow` in list mode focuses the task row element by id.
+- **Add row per section:** sections keep their inline add row ("Add task" in
+  that section, the section's rules applied), since that's how you add to a
+  specific section. A single-panel list has none (see C).
+
+### B. The filter/sort menu edits the view
+
+- **Where:** the title bar on a view page gets the same filter button
+  (`task-filter-btn`, same shortcut) before the view's "More actions" menu.
+  It opens the same `task-view-customizer-panel` in **view mode**
+  (`[view]="board"` input). Shown for every view; the panel's sort and filter
+  items apply to all of the view's panels.
+- **What the items do in view mode:** each click is one `updateBoard` op
+  (`panels` replaced) built by pure functions in `boards/view-menu-rules.ts`:
+  - **Sort:** sets `sortKey`/`sortDir` on every panel (`withPanelSortKey`),
+    "Default" = manual order. Shown as selected when all panels agree.
+  - **Filter, per type:** sets that rule on every panel and leaves the other
+    rules alone (planned date → `dueState`, or `scheduledState` NotScheduled
+    for "Not specified"; deadline → `deadlineState`; estimate →
+    `estimateRule`; time spent → `timeSpentRule`; priority → `priorityRule`;
+    tags → `includedTagIds` + `includedTagsMatch`, "Not specified" →
+    `isUntagged`). Several filter types can be active at once (unlike a list,
+    whose menu holds one filter); each type shows its current preset checked
+    when all panels agree. Clicking the checked preset clears that rule.
+  - **Hidden in view mode:** "No filter" and "Reset all" (they would wipe the
+    view's own scope), "Save as view…", the project text search (one op per
+    keystroke, and the editor picks projects by id), and Group by (sections
+    are edited in the editor; a list's dynamic groups don't map to static
+    panels). "Save sort as default" stays list-only.
+- **Template:** the panel reads selection state through one computed
+  `activeFilters` (`Partial<Record<FILTER_OPTION_TYPE, FilterOption>>`)
+  instead of `selectedFilter().type === X` comparisons; for lists it holds the
+  one selected filter, so list behaviour is unchanged. Clicks go through the
+  panel's `onX` methods, which branch on view mode.
+- **Not in view mode** the menu and service behave exactly as today.
+- **Sync:** `updateBoard` is already a synced, LWW entity update; rule values
+  are the same plain strings/booleans as phase 2. No new persisted field.
+
+### C. List polish
+
+- **Single panel: no panel header.** The count and estimate move to a slim
+  status line above the list (`[count] tasks · ~estimate`), right-aligned as
+  the header did, without the title and edit button. Sections show count in
+  their header and the estimate next to it.
+- **Adding a task:** a single-panel list drops its inline add row. Instead
+  the regular add-task bar (header "+", the add-task shortcut, the mobile
+  button) adds into the open view: while a list-layout view is open, its
+  first panel that accepts new tasks registers as the add target
+  (`ViewAddTargetService`, root, a signal set/cleared by the panel), and
+  `app.component` passes its `additionalFields`, `tagsToRemove`,
+  `isNoDefaults` and forwards `afterTaskAdd` to it (the panel's existing
+  `afterTaskAdd`: order, dates, backlog). Without a target the bar works as
+  today. Today that bar adds to the stale previous context, so a new task
+  often doesn't show in the view.
+- **Gaps from phase 3:**
+  - "Move to top/bottom" in the task detail panel: through
+    `VIEW_TASK_LIST` when the detail panel's task is a row of the open view
+    (the add-target service also exposes the open view's hosts by task id).
+    Otherwise as today.
+  - An undone matching subtask whose parent is done: shown as its own row in
+    the open rows (the parent is not a row for it), not inside Completed.
+  - E2E for drag reordering in a view.
+
+### D. Save as view keeps grouping
+
+- A list grouped by **tag** becomes one section per tag that the list's
+  tasks carry (sidebar order) plus "No tag" (`isUntagged`); grouped by
+  **project**, one section per project. Each section = the list's base rules
+  plus the group's rule (tag: added to `includedTagIds`, match `all`). A tag
+  list's own tag gets no section and no "No tag" (they can't match).
+- Grouping by planned date or deadline keeps the "grouping isn't saved" hint:
+  per-day groups don't make sense as fixed sections.
+
+### Tests
+
+- Unit: `view-menu-rules` (each filter type set/clear on all panels, sort,
+  "all panels agree" display state); customizer panel in view mode (hidden
+  items, a click dispatches one `updateBoard`); board-panel sections (list
+  layout for `cols <= 1` with several panels, edge moves emit `adjacentPanel`,
+  `canEnter` via the token, add target registration); task-list predicate for
+  a row from another section; save-as-view grouping → sections; the subtask
+  under a done parent.
+- E2E: a stacked view shows sections; drag and keyboard move a row into the
+  next section and its rule applies; the title-bar filter sets a rule on the
+  view (survives reload) and clicking it again clears it; the add-task bar
+  adds into the open view; drag reorder in a single-panel view persists.
+  Existing stacked-board tests move from cards to rows.
+
 ## Review
 
 Plan review (fresh-context subagent, 2026-10-30). Fixed in this revision:
