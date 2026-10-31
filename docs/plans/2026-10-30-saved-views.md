@@ -644,6 +644,90 @@ filter/sort menu edits the view's rules, and the leftover board parts go.
   adds into the open view; drag reorder in a single-panel view persists.
   Existing stacked-board tests move from cards to rows.
 
+### Revised after plan review (2026-10-31)
+
+These override the parts above where they differ.
+
+- **Filter menu only on list views, and only for rules the panels share
+  (blocker).** Setting a type "on every panel" overwrites what defines the
+  panels: the Kanban's In-progress tag, the Eisenhower tags, date sections,
+  D's tag sections. So: the title-bar filter button shows on list-layout
+  views (`cols <= 1`) only; multi-column boards keep the editor. In view mode
+  a filter type is editable only when every panel has the same value for it
+  or none has it. Otherwise its submenu is disabled with a "Differs per
+  section, edit the view" hint. Sort stays view-wide (it changes order, not
+  membership). Clicking the selected sort again flips `sortDir`, as in lists.
+- **One mapping.** `view-menu-rules` builds fields through `filterToCriteria`
+  → `criteriaToPanelFields` (the save-as-view path), then
+  `normalizeBoardForSave`, so the "a due rule implies scheduled" coupling and
+  sanitizing match the editor. Clearing planned date deletes `dueState` and
+  sets `scheduledState: All`. That also clears a "Scheduled" the editor had
+  set, which is accepted because the two can't be told apart once stored.
+  The tag chip input is one op per chip.
+- **View mode does not touch the list customizer state.** There is no
+  `isCustomized` dot (a view always has rules). Neither the list's
+  per-context localStorage entry nor the stale context's sort is read or
+  written. The `C` shortcut opens the view menu, so the view trigger keeps
+  the `customizerMenuTrigger` ref and the panel sits in the same `@if` block.
+- **Focus after an edge move (blocker).** `moveRow` returns whether the row
+  left the section. When it did, the task row skips its own `focusSelf`
+  timeouts, because the old host may be a leaving row (§ Footguns, about
+  225 ms). In list mode `rows()` returns the panel's own `task` hosts
+  without destroyed ones (from the component layer). `focusRow(…, taskId)`
+  looks inside this panel only, since a task in two sections has two
+  `#t-<id>` hosts. It runs `afterNextRender`. `reanchorAfterMove` gets those
+  rows too. An edge move into a collapsed section expands it first.
+- **Collapsed sections build nothing.** `collapsible` projects its content,
+  so a projected `task-list` is created even while collapsed. Each section
+  body (add row, task list, done subsection) sits in
+  `@if (isSectionExpanded())` in the panel template, like the done list.
+  Section collapsibles use `[isGroup]="true"`, as Today's Overdue section
+  does, so arrow keys and ArrowLeft/Shift+Arrow reach their headers.
+- **Parity, corrected.** Cards also moved a multi-selection between panels.
+  The edge move therefore takes the selection when the focused row is
+  selected and every selected id is a row of this section (the cards'
+  `_taskIdsToMove` over `mainRows`). Done rows don't cross sections. Known
+  gaps (in the PR): dragging a multi-selection between sections, and dragging
+  a nested subtask into another section, which cards allowed when the
+  subtask was its own card. An empty section must stay a drop target, because
+  the list's padding sits outside `.task-list-inner` (E2E).
+- **Add target lives in `tasks/`.** One root `ViewTaskListRegistry` next to
+  the token holds the open view's hosts in order. `BoardComponent` sets them,
+  so "first section that accepts new tasks" doesn't depend on registration
+  order. The detail panel's Move to top/bottom uses the first host where
+  `isRow(id)`. `app.component` reads the add target when the bar submits and
+  ignores it once the view is gone. It also passes `taskIdsToExclude` and an
+  explicit `projectId`: the panel's project, else the configured default
+  project or Inbox. Without that, `isNoDefaults` still takes the stale
+  context's project (`defaultProject$`).
+- **D: an "Other" section instead of "No tag"; project grouping isn't
+  saved.** In a tag list, tasks carrying only the list's tag sit in the
+  list's "No tag" group, so dropping that section loses them. Fixed sections
+  also lose tasks whose tag is created after saving. So the last section is
+  "Other": the base rules plus `excludedTagIds` = the section tags, with
+  `excludedTagsMatch: 'any'`. That covers untagged tasks and new tags, and
+  released clients understand it (`isUntagged` would show everything there).
+  Grouping by project gets the "grouping isn't saved" hint, because a column
+  can't exclude projects, so new projects would vanish.
+- **Sync, accepted gaps (in the PR).** Each menu click is one `updateBoard`
+  built from the store's current board, with only `panels` in `updates` and
+  rule clears as deleted keys (no `null` or `undefined`). Two concurrent menu
+  edits conflict on the board's id, and LWW keeps one whole board on every
+  client. A menu edit carries every panel's `taskIds`, while
+  `updatePanelCfgTaskIds` is keyed by the panel id. So a concurrent reorder
+  isn't detected as a conflict, and the panel order can differ between
+  clients until the next write. This affects order only and already happens
+  with the editor. No new persisted field and no new action.
+- **Tests added:** the menu on Kanban/Eisenhower (no button) and on a view
+  whose sections differ by tag (tag submenu disabled); clearing planned date;
+  the sort flip; focus lands on the moved row in the target section,
+  including when the task already matches both sections and when the target
+  is collapsed; edge move of a selection; collapsed sections render no
+  `task`; the bar in a view without a project rule doesn't use the
+  previously open project; after leaving the view, the bar adds as before;
+  save-as-view from a tag list grouped by tag keeps tasks that carry only the
+  list's tag; a tag created after saving shows in "Other".
+
 ## Review
 
 Plan review (fresh-context subagent, 2026-10-30). Fixed in this revision:
@@ -750,3 +834,14 @@ Not fixed (known gaps):
 - "Move to top/bottom" from the task detail panel is outside the view and
   still follows the last opened list.
 - No E2E yet for drag reordering in a view (the keyboard reorder is covered).
+
+Phase 4 plan review (fresh-context subagent, 2026-10-31): all recommendations
+adopted, see §12 "Revised after plan review". The main changes:
+
+- The filter menu shows on list views only, and edits only rules every
+  section shares.
+- Focus after a move into another section is handled in list mode.
+- Collapsed sections render nothing.
+- A saved tag grouping gets an "Other" section, and project grouping isn't
+  saved.
+- The add-task bar target lives in `tasks/` and gets an explicit project.
