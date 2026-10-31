@@ -8,6 +8,7 @@ import {
   selectTodayStr,
 } from '../../root-store/app-state/app-state.selectors';
 import { selectUnarchivedProjects } from '../project/store/project.selectors';
+import { selectAllTagIds } from '../tag/store/tag.reducer';
 import { createTaskCriteriaCtx } from '../tasks/task-criteria/task-criteria';
 import { TaskCriteriaCtx } from '../tasks/task-criteria/task-criteria.model';
 import { TaskCopy } from '../tasks/task.model';
@@ -49,6 +50,15 @@ export class ViewCriteriaContextService {
     }
     return ids;
   });
+
+  // The ids of the tags that exist. A view's rules can name a tag that doesn't
+  // (the default views' tags before they are created): no change may write
+  // such an id into a task. Not part of `ctx`, so creating or deleting a tag
+  // doesn't re-match every column.
+  private readonly _tagIds = this._store.selectSignal(selectAllTagIds);
+  readonly tagIdSet = computed<ReadonlySet<string>>(
+    () => new Set(this._tagIds() as string[]),
+  );
 
   readonly ctx = computed<TaskCriteriaCtx>(() =>
     createTaskCriteriaCtx({

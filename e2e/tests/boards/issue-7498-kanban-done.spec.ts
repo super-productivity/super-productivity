@@ -20,8 +20,8 @@ test.describe('Boards #7498 — Kanban', () => {
     await expect(page.locator('boards')).toBeVisible({ timeout: 10000 });
 
     // On a fresh profile the Kanban panels reference KANBAN_IN_PROGRESS which
-    // doesn't exist yet — the board renders a "Create Tag" prompt instead of
-    // the columns.
+    // doesn't exist yet — the board shows a "Create Tag" prompt above the
+    // columns, and the In Progress column takes no new tasks until it exists.
     const createTagBtn = page.getByRole('button', { name: 'Create Tag', exact: true });
     await createTagBtn.waitFor({ state: 'visible', timeout: 10000 });
     await createTagBtn.click();
@@ -32,9 +32,12 @@ test.describe('Boards #7498 — Kanban', () => {
       .first();
     await expect(inProgressPanel).toBeVisible({ timeout: 10000 });
 
-    // Add a task via the IN_PROGRESS panel's inline-add bar — its
+    // Add a task via the IN_PROGRESS panel's header "+" — its
     // `additionalTaskFields` auto-tags the task with IN_PROGRESS_TAG.
-    await inProgressPanel.locator('add-task-inline button').first().click();
+    await inProgressPanel
+      .locator('header')
+      .getByRole('button', { name: /^Add task to / })
+      .click();
 
     const taskName = `${testPrefix}repro7498-kanban`;
     const inlineInput = inProgressPanel.locator('add-task-bar .main-input').first();

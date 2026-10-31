@@ -60,7 +60,6 @@ import {
   selectTaskByIdWithSubTaskData,
 } from '../../tasks/store/task.selectors';
 import { toSignal } from '@angular/core/rxjs-interop';
-import { AddTaskInlineComponent } from '../../planner/add-task-inline/add-task-inline.component';
 import { T } from '../../../t.const';
 import { TaskCopy, TaskWithSubTasks } from '../../tasks/task.model';
 import { TaskService } from '../../tasks/task.service';
@@ -82,10 +81,15 @@ import {
   moveProjectTaskToBacklogListAuto,
   moveProjectTaskToRegularListAuto,
 } from '../../project/store/project.actions';
-import { TaskAddEvent } from '../../tasks/add-task-bar/add-task-bar.component';
+import {
+  AddTaskBarComponent,
+  TaskAddEvent,
+} from '../../tasks/add-task-bar/add-task-bar.component';
+import { MatTooltip } from '@angular/material/tooltip';
 import { firstValueFrom } from 'rxjs';
 import {
   TASK_CARD_LIST,
+  TASK_CARD_LIST_ADD_BTN_SELECTOR,
   TaskCardArrow,
   TaskCardList,
   TaskCardMove,
@@ -95,7 +99,6 @@ import { TaskBulkActionService } from '../../tasks/task-bulk-action.service';
 import { reorderBoardTasks } from '../reorder-board-tasks';
 import { GlobalConfigService } from '../../config/global-config.service';
 import { checkKeyCombo } from '../../../util/check-key-combo';
-import { ADD_TASK_INLINE_BTN_SELECTOR } from '../../planner/add-task-inline/add-task-inline.const';
 import {
   getScheduledDateColor,
   readClockUntilDue,
@@ -120,7 +123,8 @@ export interface BoardPanelNavigation {
     CdkDrag,
     PlannerTaskComponent,
     CdkDropList,
-    AddTaskInlineComponent,
+    AddTaskBarComponent,
+    MatTooltip,
     LocalDateStrPipe,
     MatIcon,
     MatIconButton,
@@ -178,15 +182,42 @@ export class BoardPanelComponent implements TaskCardList, ViewTaskListHost {
   private readonly _viewCtx = inject(ViewCriteriaContextService);
   readonly criteria = computed(() => panelToCriteria(this.panelCfg()));
   readonly criteriaCtx = this._viewCtx.ctx;
-  // Rules no change of a new task can meet (overdue, a minimum estimate …):
-  // the add row would only create tasks that never show up here.
-  readonly isAddTaskHidden = computed(() =>
-    isCriteriaUnreachableForNewTasks(this.criteria()),
+  // Rules no change of a new task can meet (overdue, a minimum estimate …),
+  // or a new task would get a tag that doesn't exist: adding would only create
+  // tasks that never show up here, or a task with a dangling tag id.
+  readonly isAddTaskHidden = computed(
+    () =>
+      isCriteriaUnreachableForNewTasks(this.criteria()) ||
+      this._hasMissingTag(this.tagsToAddForInlineCreate()),
   );
 
   /** Whether a change of the task can make it match (refused moves stay put). */
   canEnter(task: TaskCopy): boolean {
-    return getChangesToMatch(task, this.criteria(), this.criteriaCtx()) !== null;
+    return this._changesToMatch(task) !== null;
+  }
+
+  /**
+   * What the task needs to match this panel (`getChangesToMatch`), or `null`
+   * when no change can make it match, which includes a change that would add a
+   * tag that doesn't exist (a view naming a tag not created yet): the task
+   * would point to a missing tag. Every path that applies the panel's rules to
+   * a task goes through here.
+   */
+  private _changesToMatch(
+    task: TaskCopy,
+    criteria = this.criteria(),
+    ctx = this.criteriaCtx(),
+  ): TaskMatchChanges | null {
+    const changes = getChangesToMatch(task, criteria, ctx);
+    if (!changes?.tagIds) return changes;
+    const added = changes.tagIds.filter((id) => !task.tagIds.includes(id));
+    return this._hasMissingTag(added) ? null : changes;
+  }
+
+  private _hasMissingTag(tagIds: readonly string[]): boolean {
+    if (!tagIds.length) return false;
+    const existing = this._viewCtx.tagIdSet();
+    return tagIds.some((id) => !existing.has(id));
   }
 
   // CDK only passes the dragged item; `moveTasks` checks the whole selection.
@@ -208,8 +239,26 @@ export class BoardPanelComponent implements TaskCardList, ViewTaskListHost {
     return this._cards().map((card) => card.nativeElement as HTMLElement);
   }
 
+  /** The header "+" (absent where the panel takes no new tasks). */
   addButton(): HTMLElement | null {
-    return this._element.nativeElement.querySelector(ADD_TASK_INLINE_BTN_SELECTOR);
+    return this._element.nativeElement.querySelector<HTMLElement>(
+      TASK_CARD_LIST_ADD_BTN_SELECTOR,
+    );
+  }
+
+  // Local only, never synced: the add-task bar at the top of this panel.
+  readonly isAddOpen = signal(false);
+
+  /** The header "+": the add-task bar opens at the top (it focuses itself). */
+  openAddTask(): void {
+    this.isSectionExpanded.set(true);
+    this.isAddOpen.set(true);
+  }
+
+  /** Escape (`isRefocus`) returns focus to the "+"; a click outside doesn't. */
+  closeAddTask(isRefocus: boolean): void {
+    this.isAddOpen.set(false);
+    if (isRefocus) this.addButton()?.focus();
   }
 
   focusRow(index: number, taskId?: string): void {
@@ -358,7 +407,8 @@ export class BoardPanelComponent implements TaskCardList, ViewTaskListHost {
     { sensitivity: 'base', numeric: true },
   );
 
-  // Tags to auto-apply on a new task created via the inline-add row.
+  // Tags to auto-apply on a new task created from the panel (its "+" or the
+  // add-task bar).
   // - AND mode (default): all required tags.
   // - OR mode: just the first required tag (one is enough).
   tagsToAddForInlineCreate = computed<string[]>(() => {
@@ -367,7 +417,7 @@ export class BoardPanelComponent implements TaskCardList, ViewTaskListHost {
     return cfg.includedTagsMatch === 'any' ? [cfg.includedTagIds[0]] : cfg.includedTagIds;
   });
 
-  // Tags to strip from user input on a new task created via the inline-add row.
+  // Tags to strip from user input on a new task created from the panel.
   // - OR mode (default): strip all excluded (any match disqualifies the task).
   // - AND mode: don't strip. add-task-bar applies this list blindly against the
   //   user's typed tags, so stripping "one excluded tag" would wrongly remove a
@@ -480,7 +530,7 @@ export class BoardPanelComponent implements TaskCardList, ViewTaskListHost {
       const criteria = this.criteria();
       const ctx = this.criteriaCtx();
       const changesById = new Map(
-        tasks.map((task) => [task.id, getChangesToMatch(task, criteria, ctx)]),
+        tasks.map((task) => [task.id, this._changesToMatch(task, criteria, ctx)]),
       );
       if ([...changesById.values()].some((changes) => changes === null)) {
         this._injector.get(SnackService).open({
@@ -513,7 +563,7 @@ export class BoardPanelComponent implements TaskCardList, ViewTaskListHost {
           const task = await firstValueFrom(
             this.store.select(selectTaskById, { id: original.id }),
           );
-          const changes = task && getChangesToMatch(task, criteria, ctx);
+          const changes = task && this._changesToMatch(task, criteria, ctx);
           if (task && changes) await this._applyTaskChanges(task, changes);
         }
         // Flush captured task operations before the dependent panel-order write.
@@ -628,7 +678,7 @@ export class BoardPanelComponent implements TaskCardList, ViewTaskListHost {
     const deadlineChanges: [TaskCopy, TaskMatchChanges][] = [];
     for (const id of taskIds) {
       const task = await firstValueFrom(this.store.select(selectTaskById, { id }));
-      const changes = task && getChangesToMatch(task, criteria, ctx);
+      const changes = task && this._changesToMatch(task, criteria, ctx);
       if (!task || !changes) continue;
       if (changes.scheduleDay) {
         const day = getCalendarDateForDueDay(
@@ -680,7 +730,7 @@ export class BoardPanelComponent implements TaskCardList, ViewTaskListHost {
     // creation (`additionalTaskFields`); an existing one found through the add
     // row gets everything here.
     const task = await firstValueFrom(this.store.select(selectTaskById, { id: taskId }));
-    const changes = task && getChangesToMatch(task, this.criteria(), this.criteriaCtx());
+    const changes = task && this._changesToMatch(task);
     if (!task || !changes) {
       return;
     }

@@ -138,6 +138,50 @@ test.describe('View sections', () => {
     await expect(section.locator('task-list')).toHaveCount(0);
   });
 
+  test("a section's + adds a task into that section with its rules", async ({
+    page,
+    workViewPage,
+    testPrefix,
+  }) => {
+    await page.goto('/#/project/INBOX_PROJECT/tasks');
+    await workViewPage.waitForTaskList();
+    await workViewPage.addTask(`${testPrefix}-Existing`);
+    await createView(page, {
+      title: `${testPrefix}-Add here`,
+      sections: [
+        { title: 'Normal', rules: [{ rule: 'Priority', value: 'Not set' }] },
+        { title: 'High', rules: [{ rule: 'Priority', value: 'High' }] },
+      ],
+    });
+    const sections = page.locator('boards board-panel');
+    // No add row in the sections, a "+" in each header instead.
+    await expect(sections.locator('add-task-inline')).toHaveCount(0);
+    const add = sections
+      .nth(1)
+      .getByRole('button', { name: 'Add task to High', exact: true });
+
+    // Also from a collapsed section: it opens with the bar at its top.
+    await sections.nth(1).locator('collapsible .collapsible-header').first().click();
+    await expect(sections.nth(1).locator('task-list')).toHaveCount(0);
+    await add.click();
+    const input = sections.nth(1).locator('add-task-bar .main-input');
+    await expect(input).toBeFocused();
+    const title = `${testPrefix}-Added`;
+    await input.fill(title);
+    await page.keyboard.press('Enter');
+    await expect(sections.nth(1).locator('task').filter({ hasText: title })).toHaveCount(
+      1,
+    );
+    await expect(sections.nth(0).locator('task').filter({ hasText: title })).toHaveCount(
+      0,
+    );
+
+    // Escape closes the bar and focus goes back to the "+".
+    await input.press('Escape');
+    await expect(sections.nth(1).locator('add-task-bar')).toHaveCount(0);
+    await expect(add).toBeFocused();
+  });
+
   test('the add-task bar adds into the open view, not the list open before', async ({
     page,
     workViewPage,

@@ -317,6 +317,41 @@ describe('TaskBulkActionService', () => {
       }
     });
 
+    it("focuses the board column's header + when every selected card is removed", async () => {
+      isConfirmBeforeDelete = false;
+      select([t('only')]);
+      const root = document.createElement('div');
+      // The other column's "+" must not be reached.
+      root.innerHTML = `
+        <board-panel data-board-selection-scope="first">
+          <header><button data-add-task-btn></button></header>
+        </board-panel>
+        <board-panel data-board-selection-scope="second">
+          <header><button data-add-task-btn></button></header>
+          <planner-task data-task-selectable="true" data-task-id="only" tabindex="0"></planner-task>
+        </board-panel>`;
+      document.body.appendChild(root);
+      try {
+        const panel = root.querySelector<HTMLElement>(
+          '[data-board-selection-scope="second"]',
+        )!;
+        const row = panel.querySelector<HTMLElement>('[data-task-id="only"]')!;
+        const add = panel.querySelector<HTMLElement>('[data-add-task-btn]')!;
+        multiSelect.selectionScope = () => panel;
+        spyOnProperty(document, 'activeElement', 'get').and.returnValue(row);
+        let isDestroyed = false;
+        multiSelect.isDestroyedHost = (el: Element) => isDestroyed && el === row;
+        taskService.remove.and.callFake(() => {
+          isDestroyed = true;
+        });
+        spyOn(add, 'focus');
+        await service.deleteSelected();
+        expect(add.focus).toHaveBeenCalled();
+      } finally {
+        root.remove();
+      }
+    });
+
     it('restores focus in the originating board panel when the bulk menu had focus', async () => {
       isConfirmBeforeDelete = false;
       select([t('selected')]);

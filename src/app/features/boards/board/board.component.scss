@@ -28,8 +28,17 @@
   align-content: start;
 }
 
-.empty-board-msg,
-.missing-tags-msg-wrapper {
+// Above the columns, across all of them, as tall as its text (the cards'
+// rows share the height that is left).
+:host(.hasMissingTags) {
+  grid-template-rows: auto;
+}
+
+.missing-tags {
+  grid-column: 1 / -1;
+}
+
+.empty-board-msg {
   display: flex;
   flex-direction: column;
   justify-content: center;

@@ -94,8 +94,13 @@ test.describe('Views in the side menu', () => {
       panels.nth(panelIndex).locator('task').filter({ hasText: taskTitle });
     await expect(card(0)).toHaveCount(1);
     await expect(card(1)).toHaveCount(0);
-    // No date makes a task overdue, so that column has no add row.
-    await expect(panels.nth(2).locator('add-task-inline')).toHaveCount(0);
+    // No date makes a task overdue, so that section has no header "+" (the
+    // others have one).
+    const addButtons = panels.getByRole('button', { name: /^Add task to / });
+    await expect(addButtons).toHaveCount(2);
+    await expect(
+      panels.nth(2).getByRole('button', { name: /^Add task to / }),
+    ).toHaveCount(0);
 
     // Unscheduled → Due today: the task gets scheduled for today.
     await card(0).focus();

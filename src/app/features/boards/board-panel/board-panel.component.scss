@@ -28,10 +28,11 @@
       border-bottom: var(--task-row-edge);
     }
   }
+}
 
-  add-task-inline {
-    display: block;
-  }
+// Opened from the header "+", above the column's cards or the section's rows.
+.panel-add-task-bar {
+  margin: var(--s);
 }
 
 // Part of one task list (the view's only list, or one of its sections): no

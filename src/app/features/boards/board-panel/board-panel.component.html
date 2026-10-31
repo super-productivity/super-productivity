@@ -18,16 +18,17 @@
           >{{ totalEstimate() | msToString: false : true }}</span
         >
       }
+      @if (!isAddTaskHidden()) {
+        <!-- Stops the click: it would toggle the section. -->
+        <ng-container actions>
+          <ng-container
+            [ngTemplateOutlet]="addTaskBtnTpl"
+            [ngTemplateOutletContext]="{ $implicit: true }"
+          ></ng-container>
+        </ng-container>
+      }
       @if (isSectionExpanded()) {
-        @if (!isAddTaskHidden()) {
-          <add-task-inline
-            [additionalFields]="additionalTaskFields()"
-            [tagsToRemove]="tagsToRemoveForInlineCreate()"
-            [taskIdsToExclude]="panelCfg().taskIds"
-            [isNoDefaults]="true"
-            (afterTaskAdd)="afterTaskAdd($event)"
-          ></add-task-inline>
-        }
+        <ng-container [ngTemplateOutlet]="addBarTpl"></ng-container>
         <ng-container [ngTemplateOutlet]="listBody"></ng-container>
       }
     </collapsible>
@@ -111,6 +112,9 @@
         <mat-icon>task_alt</mat-icon>{{ headerCount() }}
       </div>
     }
+    @if (!isAddTaskHidden()) {
+      <ng-container [ngTemplateOutlet]="addTaskBtnTpl"></ng-container>
+    }
     <button
       mat-icon-button
       (click)="editBoard.emit()"
@@ -120,16 +124,7 @@
     </button>
   </header>
 
-  @if (!isAddTaskHidden()) {
-    <add-task-inline
-      style="margin-bottom: 8px"
-      [additionalFields]="additionalTaskFields()"
-      [tagsToRemove]="tagsToRemoveForInlineCreate()"
-      [taskIdsToExclude]="panelCfg().taskIds"
-      [isNoDefaults]="true"
-      (afterTaskAdd)="afterTaskAdd($event)"
-    ></add-task-inline>
-  }
+  <ng-container [ngTemplateOutlet]="addBarTpl"></ng-container>
 
   <div
     class="task-items"
@@ -188,3 +183,39 @@
     <!--  }-->
   </div>
 }
+
+<!-- The header "+" of a section or column: opens the add bar at its top. It is
+     the keyboard's target in an empty column (`addButton()`). -->
+<ng-template
+  #addTaskBtnTpl
+  let-isStopClick
+>
+  @let addLabel =
+    T.F.BOARDS.V.ADD_TASK_TO | translate: { title: panelCfg().title | translate };
+  <button
+    mat-icon-button
+    class="add-task-btn"
+    data-add-task-btn
+    [attr.aria-label]="addLabel"
+    [matTooltip]="addLabel"
+    (click)="openAddTask(); isStopClick && $event.stopPropagation()"
+  >
+    <mat-icon>add</mat-icon>
+  </button>
+</ng-template>
+
+<ng-template #addBarTpl>
+  @if (isAddOpen() && !isAddTaskHidden()) {
+    <add-task-bar
+      class="panel-add-task-bar"
+      [isHideTagTitles]="true"
+      [isNoDefaults]="true"
+      [additionalFields]="additionalTaskFields()"
+      [tagsToRemove]="tagsToRemoveForInlineCreate()"
+      [taskIdsToExclude]="panelCfg().taskIds"
+      (afterTaskAdd)="afterTaskAdd($event)"
+      (closed)="closeAddTask(true)"
+      (done)="closeAddTask(false)"
+    ></add-task-bar>
+  }
+</ng-template>

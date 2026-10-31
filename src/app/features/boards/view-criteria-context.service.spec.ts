@@ -11,12 +11,14 @@ import {
 import { Project } from '../project/project.model';
 import { selectUnarchivedProjects } from '../project/store/project.selectors';
 import { TaskCopy } from '../tasks/task.model';
+import { selectAllTagIds } from '../tag/store/tag.reducer';
 import { ViewCriteriaContextService } from './view-criteria-context.service';
 
 describe('ViewCriteriaContextService', () => {
   const todayStr = signal('2026-10-30');
   const startOfNextDayDiffMs = signal(0);
   let projects$: BehaviorSubject<Project[]>;
+  const tagIds = signal<string[]>(['t1']);
 
   const setup = (): ViewCriteriaContextService => {
     projects$ = new BehaviorSubject<Project[]>([
@@ -33,7 +35,9 @@ describe('ViewCriteriaContextService', () => {
                 ? todayStr
                 : selector === selectStartOfNextDayDiffMs
                   ? startOfNextDayDiffMs
-                  : signal(undefined),
+                  : selector === selectAllTagIds
+                    ? tagIds
+                    : signal(undefined),
             select: (selector: unknown) =>
               selector === selectUnarchivedProjects ? projects$ : of([]),
           },
@@ -75,5 +79,17 @@ describe('ViewCriteriaContextService', () => {
     projects$.next([{ id: 'p1', backlogTaskIds: ['other'] } as Project]);
     expect(ctx.isInBacklog({ id: 'other' } as TaskCopy)).toBeTrue();
     expect(ctx.isInBacklog({ id: 'inBacklog' } as TaskCopy)).toBeFalse();
+  });
+
+  it('knows the existing tags, apart from the matching context', () => {
+    const service = setup();
+    const ctx = service.ctx();
+    expect(service.tagIdSet().has('t1')).toBeTrue();
+    expect(service.tagIdSet().has('t2')).toBeFalse();
+    tagIds.set(['t1', 't2']);
+    expect(service.tagIdSet().has('t2')).toBeTrue();
+    // A new tag doesn't re-match the views.
+    expect(service.ctx()).toBe(ctx);
+    tagIds.set(['t1']);
   });
 });

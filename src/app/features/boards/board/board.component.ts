@@ -17,9 +17,7 @@ import {
 } from '../board-panel/board-panel.component';
 import { MatButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
-import { toSignal } from '@angular/core/rxjs-interop';
 import { Store } from '@ngrx/store';
-import { selectAllTagIds } from '../../tag/store/tag.reducer';
 import { unique } from '../../../util/unique';
 import { addTag } from '../../tag/store/tag.actions';
 import {
@@ -32,6 +30,10 @@ import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { BoardsService } from '../boards.service';
 import { T } from '../../../t.const';
 import { ViewTaskListRegistry } from '../../tasks/view-task-list-registry.service';
+import { ViewCriteriaContextService } from '../view-criteria-context.service';
+
+// The tags the default views use, created with their fixed ids.
+const DEFAULT_VIEW_TAGS = [IMPORTANT_TAG, URGENT_TAG, IN_PROGRESS_TAG];
 
 @Component({
   selector: 'board',
@@ -41,16 +43,18 @@ import { ViewTaskListRegistry } from '../../tasks/view-task-list-registry.servic
   styleUrl: './board.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: {
-    '[style.--cols]': 'missingTagIds().length === 0 ? boardCfg().cols : null',
+    '[style.--cols]': 'boardCfg().cols',
     // One column reads like a task list: list width, centered.
     '[class.isSingleColumn]': 'boardCfg().cols <= 1',
     '[class.isListLayout]': 'isListLayout()',
+    '[class.hasMissingTags]': 'missingTagIds().length > 0',
   },
 })
 export class BoardComponent {
   private _store = inject(Store);
   private _translateService = inject(TranslateService);
   private _boardsService = inject(BoardsService);
+  private _viewCtx = inject(ViewCriteriaContextService);
 
   boardCfg = input.required<BoardCfg>();
   private _panels = viewChildren(BoardPanelComponent);
@@ -108,23 +112,30 @@ export class BoardComponent {
     inject(DestroyRef).onDestroy(() => registry.clear(this));
   }
 
-  allExistingTagIds = toSignal(this._store.select(selectAllTagIds), { initialValue: [] });
-
+  // Tags the rules name that don't exist (the default views' tags on an
+  // install that never created them). The columns still show; moves and adds
+  // that would write such a tag are refused (BoardPanelComponent).
   missingTagIds = computed(() => {
-    const allExistingTagIds: string[] = this.allExistingTagIds() as string[];
-    const allPanelTagIds = this.boardCfg().panels.reduce<string[]>((acc, panel) => {
-      return [...acc, ...(panel.includedTagIds || []), ...(panel.excludedTagIds || [])];
-    }, []);
-    return unique(allPanelTagIds.filter((tagId) => !allExistingTagIds.includes(tagId)));
+    const existing = this._viewCtx.tagIdSet();
+    const allPanelTagIds = this.boardCfg().panels.flatMap((panel) => [
+      ...(panel.includedTagIds || []),
+      ...(panel.excludedTagIds || []),
+    ]);
+    return unique(allPanelTagIds.filter((tagId) => !existing.has(tagId)));
   });
+
+  // Default tags by their title (plain strings), an unknown id as is.
+  missingTagNames = computed(() =>
+    this.missingTagIds()
+      .map((id) => DEFAULT_VIEW_TAGS.find((tag) => tag.id === id)?.title ?? id)
+      .join(', '),
+  );
 
   createTags(): void {
     const missingTagIds = this.missingTagIds();
     if (missingTagIds.length) {
       missingTagIds.forEach((tagId) => {
-        const defaultTags = [IMPORTANT_TAG, URGENT_TAG, IN_PROGRESS_TAG];
-
-        const defaultTag = defaultTags.find((tagInner) => tagInner.id === tagId);
+        const defaultTag = DEFAULT_VIEW_TAGS.find((tagInner) => tagInner.id === tagId);
 
         const tag = defaultTag
           ? {

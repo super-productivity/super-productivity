@@ -1,46 +1,43 @@
+<!-- The view's columns show either way; tasks can't get a missing tag. -->
 @if (missingTagIds().length) {
-  <div class="missing-tags-msg-wrapper">
-    <div class="msg">
-      @if (missingTagIds().length > 1) {
-        {{ T.F.BOARDS.V.CREATE_NEW_TAGS_MSG | translate: { nr: missingTagIds().length } }}
-      } @else {
-        {{ T.F.BOARDS.V.CREATE_NEW_TAG_MSG | translate }}
-      }
-    </div>
-    <button
-      mat-raised-button
-      color="primary"
-      (click)="createTags()"
-    >
-      @if (missingTagIds().length > 1) {
-        {{ T.F.BOARDS.V.CREATE_NEW_TAGS_BTN | translate }}
-      } @else {
-        {{ T.F.BOARDS.V.CREATE_NEW_TAG_BTN | translate }}
-      }
-    </button>
-  </div>
-} @else {
-  @if (boardCfg().panels.length === 0) {
-    <div class="empty-board-msg">
-      <div class="msg">{{ T.F.BOARDS.V.NO_PANELS_MSG | translate }}</div>
+  <div class="callout callout--info missing-tags">
+    <mat-icon aria-hidden="true">label</mat-icon>
+    <div>
+      <p>{{ T.F.BOARDS.V.MISSING_TAGS_MSG | translate: { tags: missingTagNames() } }}</p>
       <button
-        color="primary"
-        mat-raised-button
-        (click)="editBoard()"
+        mat-stroked-button
+        (click)="createTags()"
       >
-        <mat-icon>edit</mat-icon>
-        {{ T.F.BOARDS.V.NO_PANELS_BTN | translate }}
+        @if (missingTagIds().length > 1) {
+          {{ T.F.BOARDS.V.CREATE_NEW_TAGS_BTN | translate }}
+        } @else {
+          {{ T.F.BOARDS.V.CREATE_NEW_TAG_BTN | translate }}
+        }
       </button>
     </div>
-  }
+  </div>
+}
 
-  @for (panel of boardCfg().panels; track panel.id) {
-    <board-panel
-      [panelCfg]="panel"
-      [isListLayout]="isListLayout()"
-      [isSection]="isSectioned()"
-      (editBoard)="editBoard()"
-      (adjacentPanel)="adjacentPanel(panel.id, $event)"
-    ></board-panel>
-  }
+@if (boardCfg().panels.length === 0) {
+  <div class="empty-board-msg">
+    <div class="msg">{{ T.F.BOARDS.V.NO_PANELS_MSG | translate }}</div>
+    <button
+      color="primary"
+      mat-raised-button
+      (click)="editBoard()"
+    >
+      <mat-icon>edit</mat-icon>
+      {{ T.F.BOARDS.V.NO_PANELS_BTN | translate }}
+    </button>
+  </div>
+}
+
+@for (panel of boardCfg().panels; track panel.id) {
+  <board-panel
+    [panelCfg]="panel"
+    [isListLayout]="isListLayout()"
+    [isSection]="isSectioned()"
+    (editBoard)="editBoard()"
+    (adjacentPanel)="adjacentPanel(panel.id, $event)"
+  ></board-panel>
 }

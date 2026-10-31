@@ -430,7 +430,7 @@ const simulateChanges = (
   return sim;
 };
 
-/** Whether no change of a new, empty task can make it match (hide add rows). */
+/** Whether no change of a new, empty task can make it match (hide add buttons). */
 export const isCriteriaUnreachableForNewTasks = (criteria: TaskCriteria): boolean =>
   !!criteria.isNoMatch ||
   criteria.plannedDate === 'overdue' ||

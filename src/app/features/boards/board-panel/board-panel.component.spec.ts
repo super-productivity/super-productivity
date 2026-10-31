@@ -19,7 +19,6 @@ import {
 import { provideMockStore } from '@ngrx/store/testing';
 import { provideMockActions } from '@ngrx/effects/testing';
 import { PlannerTaskComponent } from '../../planner/planner-task/planner-task.component';
-import { AddTaskInlineComponent } from '../../planner/add-task-inline/add-task-inline.component';
 import { selectUnarchivedProjects } from '../../project/store/project.selectors';
 import {
   selectAllTasksInActiveProjects,
@@ -46,10 +45,34 @@ import { TaskBulkActionService } from '../../tasks/task-bulk-action.service';
 import { SnackService } from '../../../core/snack/snack.service';
 import { T } from '../../../t.const';
 import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
+import { selectAllTagIds } from '../../tag/store/tag.reducer';
+import { AddTaskBarComponent } from '../../tasks/add-task-bar/add-task-bar.component';
 
-// The panel reads the logical day from the store for its due-date rule.
-const daySelectSignal = (selector: unknown): Signal<string | number> =>
-  signal(selector === selectTodayStr ? '2026-09-12' : 0);
+// The tags the tests' rules name exist; the guard against missing tags has
+// its own tests.
+const TEST_TAG_IDS = [
+  'a',
+  'b',
+  'c',
+  'in-progress',
+  'important-tag',
+  'need',
+  'required',
+  'keep',
+  'other',
+  'x',
+  'y',
+  TODAY_TAG.id,
+];
+
+// The panel reads the logical day from the store for its due-date rule, and
+// the existing tags.
+const storeSignal = (selector: unknown, tagIds: Signal<string[]>): Signal<unknown> =>
+  selector === selectAllTagIds
+    ? tagIds
+    : signal(selector === selectTodayStr ? '2026-09-12' : 0);
+const daySelectSignal = (selector: unknown): Signal<unknown> =>
+  storeSignal(selector, signal(TEST_TAG_IDS));
 
 const PLANNER_TASK_PROVIDERS = [
   {
@@ -180,11 +203,6 @@ describe('BoardPanelComponent - Backlog Feature', () => {
         set: {
           template: '<ng-content></ng-content><div>Mock Task</div>',
           inputs: ['task'],
-        },
-      })
-      .overrideComponent(AddTaskInlineComponent, {
-        set: {
-          template: '<div>Mock Add Task</div>',
         },
       })
       .compileComponents();
@@ -375,9 +393,6 @@ describe('BoardPanelComponent - Hidden Project Backlog', () => {
       .overrideComponent(PlannerTaskComponent, {
         set: { template: '<div>Mock Task</div>', inputs: ['task'] },
       })
-      .overrideComponent(AddTaskInlineComponent, {
-        set: { template: '<div>Mock Add Task</div>' },
-      })
       .compileComponents();
 
     fixture = TestBed.createComponent(BoardPanelComponent);
@@ -469,9 +484,6 @@ describe('BoardPanelComponent - Tag match mode, sort, inline-create computeds', 
     })
       .overrideComponent(PlannerTaskComponent, {
         set: { template: '<div>Mock Task</div>', inputs: ['task'] },
-      })
-      .overrideComponent(AddTaskInlineComponent, {
-        set: { template: '<div>Mock Add Task</div>' },
       })
       .compileComponents();
 
@@ -832,6 +844,12 @@ describe('BoardPanelComponent - drop()', () => {
   let dispatchSpy: jasmine.Spy;
   let scheduleForSpy: jasmine.Spy;
   let snackOpenSpy: jasmine.Spy;
+  // The ids of the tags that exist; a test may remove one before `setup`.
+  let existingTagIds: WritableSignal<string[]>;
+
+  beforeEach(() => {
+    existingTagIds = signal(TEST_TAG_IDS);
+  });
 
   const mkTask = (overrides: Partial<TaskCopy>): TaskCopy =>
     ({
@@ -894,7 +912,7 @@ describe('BoardPanelComponent - drop()', () => {
       selectSignal: (selector: unknown) =>
         selector === selectTaskFeatureState
           ? signal({ entities: Object.fromEntries(tasks.map((task) => [task.id, task])) })
-          : daySelectSignal(selector),
+          : storeSignal(selector, existingTagIds),
       select: (selectorFn: any, props?: { id: string }) => {
         if (selectorFn === selectUnarchivedProjects)
           return of([{ id: 'p1', backlogTaskIds: [] }]);
@@ -933,16 +951,16 @@ describe('BoardPanelComponent - drop()', () => {
         { provide: SnackService, useValue: { open: snackOpenSpy } },
       ],
     })
-      // The list layout's rows are covered by the task-list and task specs.
+      // The list layout's rows are covered by the task-list and task specs,
+      // the add-task bar by its own.
       .overrideComponent(BoardPanelComponent, {
-        remove: { imports: [TaskListComponent, CollapsibleComponent] },
+        remove: {
+          imports: [TaskListComponent, CollapsibleComponent, AddTaskBarComponent],
+        },
         add: { schemas: [NO_ERRORS_SCHEMA] },
       })
       .overrideComponent(PlannerTaskComponent, {
         set: { template: '<div>Mock Task</div>', inputs: ['task'] },
-      })
-      .overrideComponent(AddTaskInlineComponent, {
-        set: { template: '<div>Mock Add Task</div>' },
       })
       .compileComponents();
 
@@ -1474,7 +1492,7 @@ describe('BoardPanelComponent - drop()', () => {
       expect(el.querySelector('add-task-inline')).toBeNull();
     });
 
-    it('has no header or inline add row as the only list of a view', async () => {
+    it('has no header, add row or "+" as the only list of a view', async () => {
       await setup([mkTask({ id: 'a' })]);
       fixture.componentRef.setInput('panelCfg', listPanel());
       fixture.componentRef.setInput('isListLayout', true);
@@ -1482,6 +1500,7 @@ describe('BoardPanelComponent - drop()', () => {
       const el = fixture.nativeElement as HTMLElement;
       expect(el.querySelector('header')).toBeNull();
       expect(el.querySelector('add-task-inline')).toBeNull();
+      expect(component.addButton()).toBeNull();
       expect(el.querySelector('.list-status')?.textContent).toContain('1');
     });
 
@@ -1494,6 +1513,151 @@ describe('BoardPanelComponent - drop()', () => {
       component.moveRow('a', 'down');
       component.placeRow('b', null);
       expect(dispatchSpy).not.toHaveBeenCalled();
+    });
+  });
+
+  // A view's rules can name a tag that doesn't exist (the default views' tags
+  // before they are created). No move or add may write such an id into a task:
+  // it would fail the related-data check and trigger data repair.
+  describe('a rule naming a tag that does not exist', () => {
+    const drag = (task: TaskCopy): any => ({ data: task });
+    const panel = (overrides: Partial<BoardPanelCfg>): BoardPanelCfg =>
+      ({ ...DEFAULT_PANEL_CFG, id: 'p', taskIds: [], ...overrides }) as BoardPanelCfg;
+
+    beforeEach(() => {
+      existingTagIds.set(TEST_TAG_IDS.filter((id) => id !== 'need'));
+    });
+
+    it('refuses moves and existing tasks, and takes no new ones, when it is required', async () => {
+      const task = mkTask({ id: 'a', tagIds: ['keep'] });
+      await setup([task]);
+      fixture.componentRef.setInput('panelCfg', panel({ includedTagIds: ['need'] }));
+      fixture.componentRef.setInput('isListLayout', true);
+      fixture.detectChanges();
+
+      expect(component.canEnter(task)).toBeFalse();
+      expect(component.canEnterCard(drag(task))).toBeFalse();
+      expect(await component.moveTasks(['a'])).toBeFalse();
+      expect(snackOpenSpy).toHaveBeenCalledOnceWith(
+        jasmine.objectContaining({ msg: T.F.BOARDS.V.S_CANT_MOVE_HERE }),
+      );
+      // An existing task picked in an add bar is left unchanged.
+      await component.afterTaskAdd({
+        taskId: 'a',
+        isAddToBottom: false,
+        isNewTask: false,
+      });
+      expect(dispatchSpy).not.toHaveBeenCalled();
+      expect(component.isAddTaskHidden()).toBeTrue();
+      expect(component.newTaskTarget()).toBeNull();
+    });
+
+    it('takes the task once the tag exists (created here or on another device)', async () => {
+      const task = mkTask({ id: 'a', tagIds: ['keep'] });
+      await setup([task]);
+      fixture.componentRef.setInput('panelCfg', panel({ includedTagIds: ['need'] }));
+      fixture.detectChanges();
+      expect(component.canEnter(task)).toBeFalse();
+
+      existingTagIds.set(TEST_TAG_IDS);
+      expect(component.canEnter(task)).toBeTrue();
+      expect(component.isAddTaskHidden()).toBeFalse();
+      expect(await component.moveTasks(['a'])).toBeTrue();
+      expect(dispatchedTagIds()).toEqual([['keep', 'need']]);
+    });
+
+    it('accepts tasks when the missing tag is only excluded', async () => {
+      const task = mkTask({ id: 'a', tagIds: ['keep'] });
+      await setup([task]);
+      fixture.componentRef.setInput('panelCfg', panel({ excludedTagIds: ['need'] }));
+      fixture.detectChanges();
+
+      expect(component.canEnter(task)).toBeTrue();
+      expect(component.isAddTaskHidden()).toBeFalse();
+      expect(await component.moveTasks(['a'])).toBeTrue();
+      expect(snackOpenSpy).not.toHaveBeenCalled();
+    });
+
+    it('with "any of" required tags admits a task that has an existing one', async () => {
+      const tagged = mkTask({ id: 'a', tagIds: ['keep'] });
+      const untagged = mkTask({ id: 'b', tagIds: [] });
+      await setup([tagged, untagged]);
+      fixture.componentRef.setInput(
+        'panelCfg',
+        panel({ includedTagIds: ['need', 'keep'], includedTagsMatch: 'any' }),
+      );
+      fixture.detectChanges();
+
+      expect(component.canEnter(tagged)).toBeTrue();
+      // It would get the first required tag, the missing one.
+      expect(component.canEnter(untagged)).toBeFalse();
+      expect(await component.moveTasks(['a'])).toBeTrue();
+      expect(dispatchedTagIds()).toEqual([]);
+    });
+  });
+
+  describe('section "+"', () => {
+    const section = (overrides: Partial<BoardPanelCfg> = {}): BoardPanelCfg =>
+      ({
+        ...DEFAULT_PANEL_CFG,
+        id: 'p',
+        title: 'Later',
+        taskIds: [],
+        ...overrides,
+      }) as BoardPanelCfg;
+
+    const render = async (panel: BoardPanelCfg): Promise<HTMLElement> => {
+      await setup([mkTask({ id: 'a' })]);
+      fixture.componentRef.setInput('panelCfg', panel);
+      fixture.componentRef.setInput('isListLayout', true);
+      fixture.componentRef.setInput('isSection', true);
+      fixture.detectChanges();
+      return fixture.nativeElement as HTMLElement;
+    };
+
+    it('replaces the add row with a header "+" that opens the add bar, also when collapsed', async () => {
+      const el = await render(section());
+      expect(el.querySelector('add-task-inline')).toBeNull();
+      const add = component.addButton()!;
+      expect(add.getAttribute('aria-label')).toBe(T.F.BOARDS.V.ADD_TASK_TO);
+      expect(el.querySelector('add-task-bar')).toBeNull();
+
+      component.isSectionExpanded.set(false);
+      fixture.detectChanges();
+      const toggled = jasmine.createSpy('toggled');
+      el.querySelector('collapsible')!.addEventListener('click', toggled);
+      add.click();
+      fixture.detectChanges();
+
+      // The click doesn't reach the section header (it would toggle it).
+      expect(toggled).not.toHaveBeenCalled();
+      expect(component.isSectionExpanded()).toBeTrue();
+      const bar = el.querySelector('add-task-bar')!;
+      expect(bar).not.toBeNull();
+      // At the top of the section body, above its rows.
+      expect(bar.compareDocumentPosition(el.querySelector('task-list')!)).toBe(
+        Node.DOCUMENT_POSITION_FOLLOWING,
+      );
+    });
+
+    it('closes the add bar on Escape and focuses the "+"', async () => {
+      const el = await render(section());
+      document.body.appendChild(el);
+      const add = component.addButton()!;
+      add.click();
+      fixture.detectChanges();
+
+      el.querySelector('add-task-bar')!.dispatchEvent(new CustomEvent('closed'));
+      fixture.detectChanges();
+      expect(el.querySelector('add-task-bar')).toBeNull();
+      expect(document.activeElement).toBe(add);
+      el.remove();
+    });
+
+    it('has no "+" where the section takes no new tasks', async () => {
+      const el = await render(section({ dueState: 'overdue' }));
+      expect(component.addButton()).toBeNull();
+      expect(el.querySelector('[data-add-task-btn]')).toBeNull();
     });
   });
 
@@ -1647,7 +1811,7 @@ describe('BoardPanelComponent - drop()', () => {
       );
     });
 
-    it('hides the add row where a new task can never match', async () => {
+    it('hides the "+" where a new task can never match', async () => {
       await setup([]);
       fixture.componentRef.setInput('panelCfg', {
         ...DEFAULT_PANEL_CFG,
@@ -1658,7 +1822,7 @@ describe('BoardPanelComponent - drop()', () => {
       expect(component.isAddTaskHidden()).toBeTrue();
     });
 
-    it('lets only already overdue tasks enter an overdue panel and hides its add row', async () => {
+    it('lets only already overdue tasks enter an overdue panel and hides its "+"', async () => {
       await setup([]);
       fixture.componentRef.setInput('panelCfg', {
         ...DEFAULT_PANEL_CFG,
@@ -1826,15 +1990,14 @@ describe('BoardPanelComponent - drop()', () => {
 
 /**
  * `addButton()` feeds focus recovery and `onAddButtonKeydown`, which turns
- * ArrowLeft/Right into a jump to the neighbouring panel. Matching any
- * `add-task-inline button` meant that once the inline form was expanded the
- * first match became a button inside `<add-task-bar>` — so arrow keys typed
- * while adding a task jumped panels. Only the collapsed add button is marked.
+ * ArrowLeft/Right into a jump to the neighbouring panel. It is the column's
+ * header "+"; a button of the open add-task bar must never be mistaken for it,
+ * or arrow keys typed while adding a task would jump panels.
  */
 describe('BoardPanelComponent - add button lookup', () => {
-  const setupWithAddTaskTemplate = async (
-    template: string,
-  ): Promise<BoardPanelComponent> => {
+  const setupColumn = async (
+    panel: Partial<BoardPanelCfg> = {},
+  ): Promise<ComponentFixture<BoardPanelComponent>> => {
     await TestBed.configureTestingModule({
       teardown: { destroyAfterEach: true },
       imports: [
@@ -1861,35 +2024,72 @@ describe('BoardPanelComponent - add button lookup', () => {
         { provide: ProjectService, useValue: { getProjectsWithoutId$: () => of([]) } },
       ],
     })
+      .overrideComponent(BoardPanelComponent, {
+        remove: { imports: [AddTaskBarComponent] },
+        add: { schemas: [NO_ERRORS_SCHEMA] },
+      })
       .overrideComponent(PlannerTaskComponent, {
         set: { template: '<div>Mock Task</div>', inputs: ['task'] },
       })
-      .overrideComponent(AddTaskInlineComponent, { set: { template } })
       .compileComponents();
 
     const fixture = TestBed.createComponent(BoardPanelComponent);
     fixture.componentRef.setInput('panelCfg', {
       ...DEFAULT_PANEL_CFG,
       id: 'panel',
+      title: 'Todo',
       taskIds: [],
+      ...panel,
     } as BoardPanelCfg);
     fixture.detectChanges();
-    return fixture.componentInstance;
+    return fixture;
   };
 
-  it('finds the collapsed add button', async () => {
-    const component = await setupWithAddTaskTemplate(
-      '<div><button data-add-task-btn>Add</button></div>',
-    );
-    expect(component.addButton()).not.toBeNull();
+  it('is the header "+", before the edit button, also while the add-task bar is open', async () => {
+    const fixture = await setupColumn();
+    const component = fixture.componentInstance;
+    const el = fixture.nativeElement as HTMLElement;
+    const add = component.addButton()!;
+    expect(add.parentElement?.tagName).toBe('HEADER');
+    expect(add.nextElementSibling?.getAttribute('aria-label')).toBe(T.G.EDIT);
+    expect(add.getAttribute('aria-label')).toBe(T.F.BOARDS.V.ADD_TASK_TO);
+    expect(el.querySelector('add-task-inline')).toBeNull();
+
+    add.click();
+    fixture.detectChanges();
+    const bar = el.querySelector('add-task-bar')!;
+    // Between the header and the cards.
+    expect(bar.previousElementSibling?.tagName).toBe('HEADER');
+    expect(bar.nextElementSibling?.classList).toContain('task-items');
+    bar.appendChild(document.createElement('button'));
+    expect(component.addButton()).toBe(add);
   });
 
-  // The add-task bar that replaces the collapsed button carries its own
-  // buttons; an unmarked one must not be mistaken for the add button.
-  it('finds nothing while the add-task bar is open', async () => {
-    const component = await setupWithAddTaskTemplate(
-      '<div class="add-task-bar-stub"><button>Some bar control</button></div>',
-    );
-    expect(component.addButton()).toBeNull();
+  it('returns focus to the "+" after Escape, not after a click outside', async () => {
+    const fixture = await setupColumn();
+    const component = fixture.componentInstance;
+    const el = fixture.nativeElement as HTMLElement;
+    document.body.appendChild(el);
+    const add = component.addButton()!;
+
+    add.click();
+    fixture.detectChanges();
+    el.querySelector('add-task-bar')!.dispatchEvent(new CustomEvent('done'));
+    fixture.detectChanges();
+    expect(el.querySelector('add-task-bar')).toBeNull();
+    expect(document.activeElement).not.toBe(add);
+
+    add.click();
+    fixture.detectChanges();
+    el.querySelector('add-task-bar')!.dispatchEvent(new CustomEvent('closed'));
+    fixture.detectChanges();
+    expect(el.querySelector('add-task-bar')).toBeNull();
+    expect(document.activeElement).toBe(add);
+    el.remove();
+  });
+
+  it('is absent where the column takes no new tasks', async () => {
+    const fixture = await setupColumn({ dueState: 'overdue' });
+    expect(fixture.componentInstance.addButton()).toBeNull();
   });
 });

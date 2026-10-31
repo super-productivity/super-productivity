@@ -16,8 +16,8 @@ test.describe('Boards — Eisenhower Matrix edit dialog (#7380)', () => {
     await expect(page.locator('boards')).toBeVisible({ timeout: 10000 });
 
     // Default Eisenhower Matrix references Important / Urgent tags that
-    // don't exist in a fresh profile — click "Create Tags" if shown so the
-    // panels actually render.
+    // don't exist in a fresh profile — the panels render with a "Create Tags"
+    // prompt above them; create the tags if it is shown.
     const createTagsBtn = page.locator('button', { hasText: /create tags?/i });
     if (await createTagsBtn.isVisible().catch(() => false)) {
       await createTagsBtn.click();
@@ -25,8 +25,9 @@ test.describe('Boards — Eisenhower Matrix edit dialog (#7380)', () => {
 
     // Open the edit dialog via the per-panel edit (pencil) button.
     const firstPanelEditBtn = page
-      .locator('board-panel header button[mat-icon-button]')
-      .first();
+      .locator('board-panel header')
+      .first()
+      .getByRole('button', { name: 'Edit', exact: true });
     await expect(firstPanelEditBtn).toBeVisible({ timeout: 10000 });
     await firstPanelEditBtn.click();
 
@@ -44,7 +45,7 @@ test.describe('Boards — Eisenhower Matrix edit dialog (#7380)', () => {
     await saveViewEditor(dialog);
 
     // The sort is stored on that quadrant.
-    await page.locator('board-panel header button[mat-icon-button]').first().click();
+    await firstPanelEditBtn.click();
     await expect(
       viewEditorSection(dialog, 0).getByRole('combobox', {
         name: 'Sort by',

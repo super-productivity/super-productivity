@@ -26,7 +26,8 @@ test.describe('Boards #7498', () => {
     await expect(page.locator('boards')).toBeVisible({ timeout: 10000 });
 
     // Default Eisenhower references Important / Urgent tags that don't exist
-    // on a fresh profile — accept the auto-create prompt if shown.
+    // on a fresh profile — the quadrants show anyway, with a "Create Tags"
+    // prompt above them; accept it if shown.
     const createTagsBtn = page.locator('button', { hasText: /create tags?/i });
     if (await createTagsBtn.isVisible().catch(() => false)) {
       await createTagsBtn.click();
