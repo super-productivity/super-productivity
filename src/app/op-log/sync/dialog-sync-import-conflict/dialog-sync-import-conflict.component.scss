@@ -15,6 +15,59 @@ h1 {
   line-height: 1.5;
 }
 
+.local-changes {
+  margin-bottom: var(--s2);
+
+  h2 {
+    font-size: 14px;
+    font-weight: 500;
+    margin-bottom: var(--s-half);
+  }
+
+  ul {
+    // Same ink-on-surface overlay as .import-info below.
+    background: var(--state-hover);
+    border-radius: 8px;
+    list-style: none;
+    margin: 0;
+    padding: var(--s-half) var(--s2);
+  }
+
+  li {
+    display: flex;
+    flex-direction: column;
+    padding: var(--s) 0;
+    overflow-wrap: anywhere;
+
+    & + li {
+      border-top: 1px solid var(--extra-border-color);
+    }
+  }
+
+  .item-title {
+    font-weight: 500;
+  }
+
+  .item-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 var(--s-half);
+    font-size: 13px;
+    color: var(--text-color-muted);
+  }
+
+  .entity::after {
+    content: '·';
+    margin-left: var(--s-half);
+  }
+
+  .automatic-note {
+    font-size: 13px;
+    color: var(--text-color-muted);
+    margin: var(--s-half) 0 0;
+  }
+}
+
 .import-info {
   // Ink-on-surface overlay, not a surface token: the base light theme collapses
   // --surface-2/-3/-4 to #fff, so --bg-lighter on a dialog card renders as
