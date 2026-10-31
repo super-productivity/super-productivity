@@ -17,6 +17,8 @@ It works, and it was cheap. One hard-coded spec (a stack with a metric, a chart,
 | (c) time per project, bar chart           | `lazy-chart` (`type="bar"`)                                                      | Data from all tasks in the store + `selectUnarchivedProjects`; rolling 7 days (not calendar week)                                              |
 | (d) metric tile, remaining estimate today | plain `<p>` + `msToString` pipe over `selectAllTasksDueToday`                    | Verified value `2h 25m` in the e2e                                                                                                             |
 
+The spike code lives on the never-merge branch `spike/native-view-components` (one commit on top of the AI View Builder branch).
+
 Files (all new, under `src/app/features/native-view-spike/`):
 
 - `native-view-spike.component.ts` 192 lines: standalone OnPush, recursive `ng-template` + `@switch` over `component.type`, plain HTML layout.
