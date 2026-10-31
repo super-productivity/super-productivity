@@ -359,15 +359,6 @@ export interface Task {
   created: number;
   updated?: number;
   subTaskIds: string[];
-  /**
-   * 1 = low, 2 = medium, 3 = high. Older data may hold the string forms;
-   * `undefined` and `null` both mean no priority.
-   */
-  priority?: 1 | 2 | 3 | 'low' | 'medium' | 'high' | null;
-  /** Deadline date as YYYY-MM-DD; cleared when `deadlineWithTime` is set. */
-  deadlineDay?: string | null;
-  /** Deadline as a timestamp (ms); cleared when `deadlineDay` is set. */
-  deadlineWithTime?: number | null;
 
   // Additional fields for internal use (plugins can read but shouldn't modify)
   timeSpentOnDay?: { [key: string]: number };

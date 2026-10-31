@@ -1,6 +1,6 @@
 import { fakeAsync, TestBed, tick } from '@angular/core/testing';
 import { provideMockActions } from '@ngrx/effects/testing';
-import { EMPTY, Observable, of, ReplaySubject, Subject } from 'rxjs';
+import { EMPTY, Observable, of, ReplaySubject } from 'rxjs';
 import { PluginHooksEffects } from './plugin-hooks.effects';
 import { WorkContextService } from '../features/work-context/work-context.service';
 import { provideMockStore, MockStore } from '@ngrx/store/testing';
@@ -39,7 +39,7 @@ describe('PluginHooksEffects', () => {
   let pluginI18nServiceMock: jasmine.SpyObj<PluginI18nService>;
   let store: MockStore;
   let gateSubject: ReplaySubject<boolean>;
-  let todayStr$: Subject<string>;
+  let todayStr$: ReplaySubject<string>;
 
   const createMockTask = (overrides: Partial<TaskWithSubTasks> = {}): TaskWithSubTasks =>
     ({
@@ -89,7 +89,8 @@ describe('PluginHooksEffects', () => {
     // at boot `loadAllData` time; a BehaviorSubject(true) would emit on
     // subscribe and make that spec pass for the wrong reason.
     gateSubject = new ReplaySubject<boolean>(1);
-    todayStr$ = new Subject<string>();
+    // ReplaySubject(1) like the real todayDateStr$ (shareReplay(1))
+    todayStr$ = new ReplaySubject<string>(1);
 
     TestBed.configureTestingModule({
       providers: [
@@ -739,8 +740,14 @@ describe('PluginHooksEffects', () => {
   });
 
   describe('dayChange$', () => {
+    const dayChangeCalls = (): unknown[][] =>
+      pluginServiceMock.dispatchHook.calls
+        .allArgs()
+        .filter(([hook]) => hook === PluginHooks.DAY_CHANGE);
+
     it('fires with the new logical day only when the day changes', () => {
       const sub = effects.dayChange$.subscribe();
+      gateSubject.next(true);
       todayStr$.next('2026-10-30');
       todayStr$.next('2026-10-30');
       todayStr$.next('2026-10-31');
@@ -749,6 +756,22 @@ describe('PluginHooksEffects', () => {
         .allArgs()
         .filter(([hook]) => hook === PluginHooks.DAY_CHANGE);
       expect(calls).toEqual([[PluginHooks.DAY_CHANGE, { todayStr: '2026-10-31' }]]);
+      sub.unsubscribe();
+    });
+
+    // Boot: todayDateStr$ starts before the config sets the start-of-next-day
+    // offset, then corrects itself; that correction is not a day change.
+    it('ignores the day correction while data loads', () => {
+      const sub = effects.dayChange$.subscribe();
+      todayStr$.next('2026-10-31');
+      todayStr$.next('2026-10-30');
+      gateSubject.next(true);
+      expect(dayChangeCalls()).toEqual([]);
+
+      todayStr$.next('2026-10-31');
+      expect(dayChangeCalls()).toEqual([
+        [PluginHooks.DAY_CHANGE, { todayStr: '2026-10-31' }],
+      ]);
       sub.unsubscribe();
     });
   });

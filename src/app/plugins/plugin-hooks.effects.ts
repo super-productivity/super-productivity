@@ -461,12 +461,20 @@ export class PluginHooksEffects {
   );
 
   // The logical day (start-of-next-day offset applied) rolled over while the
-  // app ran. todayDateStr$ also re-checks after sleep and focus.
+  // app ran. todayDateStr$ also re-checks after sleep and focus. Gated on the
+  // data load: before it, todayDateStr$ uses offset 0 and corrects itself once
+  // the config arrives, which is not a day change.
   dayChange$ = createEffect(
     () =>
-      this._globalTrackingInterval.todayDateStr$.pipe(
-        distinctUntilChanged(),
-        skip(1),
+      this.syncTrigger.afterInitialSyncDoneAndDataLoadedInitially$.pipe(
+        filter((done) => done),
+        take(1),
+        switchMap(() =>
+          this._globalTrackingInterval.todayDateStr$.pipe(
+            distinctUntilChanged(),
+            skip(1),
+          ),
+        ),
         tap((todayStr) => {
           this.pluginService.dispatchHook(PluginHooks.DAY_CHANGE, { todayStr });
         }),
