@@ -1,7 +1,10 @@
 import {
   criteriaToPanelFields,
   getCalendarDateForDueDay,
+  getPanelHeaderCount,
+  getPanelRowIds,
   getViewIcon,
+  matchPanelTasks,
   normalizeBoardForSave,
   getPanelSortKey,
   panelToCriteria,
@@ -1021,8 +1024,65 @@ describe('criteriaToPanelFields', () => {
 });
 
 describe('getViewIcon', () => {
-  it('shows a list for one column and a board for several', () => {
-    expect(getViewIcon({ panels: [basePanel] })).toBe('filter_list');
-    expect(getViewIcon({ panels: [basePanel, basePanel] })).toBe('view_kanban');
+  it('follows the layout: a list for one column, a board for several', () => {
+    expect(getViewIcon({ cols: 1 })).toBe('filter_list');
+    expect(getViewIcon({ cols: 0 })).toBe('filter_list');
+    expect(getViewIcon({ cols: 2 })).toBe('view_kanban');
+  });
+});
+
+describe('panel rows and header count', () => {
+  const t = (fields: Partial<TaskCopy> & { id: string }): TaskCopy =>
+    ({
+      parentId: undefined,
+      isDone: false,
+      subTaskIds: [],
+      tagIds: [],
+      ...fields,
+    }) as TaskCopy;
+  const tasks = [
+    t({ id: 'parent', subTaskIds: ['child'] }),
+    t({ id: 'child', parentId: 'parent' }),
+    t({ id: 'doneParent', isDone: true, subTaskIds: ['openSub'] }),
+    t({ id: 'openSub', parentId: 'doneParent' }),
+    t({ id: 'lone', parentId: 'elsewhere' }),
+    t({ id: 'done', isDone: true }),
+  ];
+
+  it('nests subtasks under a matching parent, except open ones of a done parent', () => {
+    expect(getPanelRowIds(tasks, true)).toEqual([
+      'parent',
+      'doneParent',
+      'openSub',
+      'lone',
+      'done',
+    ]);
+    expect(getPanelRowIds(tasks, false)).toEqual([
+      'parent',
+      'doneParent',
+      'lone',
+      'done',
+    ]);
+  });
+
+  it('counts open rows in the list layout and every match on cards', () => {
+    const all = { taskDoneState: BoardPanelCfgTaskDoneState.All };
+    const doneOnly = { taskDoneState: BoardPanelCfgTaskDoneState.Done };
+    expect(getPanelHeaderCount(tasks, all, true)).toBe(3);
+    expect(getPanelHeaderCount(tasks, doneOnly, true)).toBe(4);
+    expect(getPanelHeaderCount(tasks, all, false)).toBe(6);
+  });
+
+  it('matches through the panel criteria', () => {
+    const undone = panelToCriteria({
+      ...basePanel,
+      taskDoneState: BoardPanelCfgTaskDoneState.UnDone,
+    });
+    expect(matchPanelTasks(tasks, undone, DUE_CTX).map((task) => task.id)).toEqual([
+      'parent',
+      'child',
+      'openSub',
+      'lone',
+    ]);
   });
 });

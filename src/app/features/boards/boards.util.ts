@@ -10,9 +10,14 @@ import { TaskCopy, TaskPriority } from '../tasks/task.model';
 import {
   TASK_DATE_RULES,
   TaskCriteria,
+  TaskCriteriaCtx,
   TaskDateRule,
 } from '../tasks/task-criteria/task-criteria.model';
-import { addDaysToDbDateStr, TaskSortKey } from '../tasks/task-criteria/task-criteria';
+import {
+  addDaysToDbDateStr,
+  matchesTaskCriteria,
+  TaskSortKey,
+} from '../tasks/task-criteria/task-criteria';
 import { DEFAULT_BOARD_CFG, DEFAULT_PANEL_CFG } from './boards.const';
 
 const VALID_SORT_FIELDS: ReadonlySet<BoardSortField> = new Set([
@@ -264,9 +269,61 @@ export const panelToCriteria = (panel: BoardPanelCfg): TaskCriteria => {
   return criteria;
 };
 
-/** A view's icon: a list for one column, a board for several. */
-export const getViewIcon = (board: Pick<BoardCfg, 'panels'>): string =>
-  board.panels.length > 1 ? 'view_kanban' : 'filter_list';
+/** A view's icon: a list for one column, a board for several (its layout). */
+export const getViewIcon = (board: Pick<BoardCfg, 'cols'>): string =>
+  board.cols > 1 ? 'view_kanban' : 'filter_list';
+
+/** The tasks a panel's rules match, in the order given (no sort). */
+export const matchPanelTasks = (
+  tasks: readonly TaskCopy[],
+  criteria: TaskCriteria,
+  ctx: TaskCriteriaCtx,
+): TaskCopy[] => tasks.filter((task) => matchesTaskCriteria(task, criteria, ctx));
+
+/**
+ * In the list layout, done rows get their own collapsed section, unless the
+ * column only shows done tasks anyway.
+ */
+export const isPanelDoneSplit = (panel: Pick<BoardPanelCfg, 'taskDoneState'>): boolean =>
+  panel.taskDoneState !== BoardPanelCfgTaskDoneState.Done;
+
+/**
+ * The list layout's top-level rows among a panel's matching tasks: a task,
+ * unless its parent matches too (then it shows under the parent). An open
+ * subtask of a done parent stays a row of its own among the open rows instead
+ * of hiding in the collapsed done section.
+ */
+export const getPanelRowIds = (
+  tasks: readonly TaskCopy[],
+  isDoneSplit: boolean,
+): string[] => {
+  const matchingById = new Map(tasks.map((task) => [task.id, task]));
+  return tasks
+    .filter((task) => {
+      const parent = task.parentId && matchingById.get(task.parentId);
+      return !parent || (isDoneSplit && parent.isDone && !task.isDone);
+    })
+    .map((task) => task.id);
+};
+
+/**
+ * The number a panel's header shows for its matching tasks: on cards every
+ * match, in the list layout the open top-level rows (nested subtasks and the
+ * done section not counted).
+ */
+export const getPanelHeaderCount = (
+  tasks: readonly TaskCopy[],
+  panel: Pick<BoardPanelCfg, 'taskDoneState'>,
+  isListLayout: boolean,
+): number => {
+  if (!isListLayout) {
+    return tasks.length;
+  }
+  const isDoneSplit = isPanelDoneSplit(panel);
+  const rowIds = new Set(getPanelRowIds(tasks, isDoneSplit));
+  return tasks.filter((task) => rowIds.has(task.id) && !(isDoneSplit && task.isDone))
+    .length;
+};
 
 /**
  * Column fields for task criteria: the counterpart of `panelToCriteria` for the

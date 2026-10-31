@@ -21,22 +21,21 @@ import { BoardPanelCfg, BoardPanelCfgTaskDoneState } from '../boards.model';
 import {
   firstSpecificProjectId,
   getCalendarDateForDueDay,
+  getPanelHeaderCount,
+  getPanelRowIds,
   getPanelSortKey,
   isAllProjects,
+  isPanelDoneSplit,
+  matchPanelTasks,
   panelToCriteria,
 } from '../boards.util';
 import {
   buildTaskComparator,
-  createTaskCriteriaCtx,
   getChangesToMatch,
   isCriteriaUnreachableForNewTasks,
-  matchesTaskCriteria,
 } from '../../tasks/task-criteria/task-criteria';
-import {
-  TaskCriteriaCtx,
-  TaskMatchChanges,
-} from '../../tasks/task-criteria/task-criteria.model';
-import { DateAdapter } from '@angular/material/core';
+import { TaskMatchChanges } from '../../tasks/task-criteria/task-criteria.model';
+import { ViewCriteriaContextService } from '../view-criteria-context.service';
 import { MenuTreeService } from '../../menu-tree/menu-tree.service';
 import { TODAY_TAG } from '../../tag/tag.const';
 import {
@@ -78,7 +77,6 @@ import { fastArrayCompare } from '../../../util/fast-array-compare';
 import { dragDelayForTouch } from '../../../util/input-intent';
 import { ShortPlannedAtPipe } from '../../../ui/pipes/short-planned-at.pipe';
 import { MsToStringPipe } from '../../../ui/duration/ms-to-string.pipe';
-import { selectUnarchivedProjects } from '../../project/store/project.selectors';
 import {
   moveProjectTaskToBacklogListAuto,
   moveProjectTaskToRegularListAuto,
@@ -104,10 +102,6 @@ import {
 import type { ScheduledDateColor } from '../../tasks/util/get-scheduled-date-color';
 import { GlobalTrackingIntervalService } from '../../../core/global-tracking-interval/global-tracking-interval.service';
 import { DateService } from '../../../core/date/date.service';
-import {
-  selectStartOfNextDayDiffMs,
-  selectTodayStr,
-} from '../../../root-store/app-state/app-state.selectors';
 import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
 import { SnackService } from '../../../core/snack/snack.service';
 
@@ -178,25 +172,10 @@ export class BoardPanelComponent implements TaskCardList, ViewTaskListHost {
   private _cards = viewChildren(PlannerTaskComponent, { read: ElementRef });
   readonly isMoving = signal(false);
 
-  // Store selectors, not DateService: both change at day rollover and when the
-  // start-of-day setting changes, which re-filters the panel.
-  private readonly _todayStr = this.store.selectSignal(selectTodayStr);
-  private readonly _startOfNextDayDiffMs = this.store.selectSignal(
-    selectStartOfNextDayDiffMs,
-  );
-  private readonly _dateAdapter = inject(DateAdapter);
+  // Shared with the other columns and the view editor's live count.
+  private readonly _viewCtx = inject(ViewCriteriaContextService);
   readonly criteria = computed(() => panelToCriteria(this.panelCfg()));
-  readonly criteriaCtx = computed<TaskCriteriaCtx>(() =>
-    createTaskCriteriaCtx({
-      todayStr: this._todayStr() || this._dateService.todayStr(),
-      startOfNextDayDiffMs: this._startOfNextDayDiffMs() ?? 0,
-      // Reads the localization config signal, so a changed week start applies.
-      firstDayOfWeek: this._dateAdapter.getFirstDayOfWeek(),
-      isInBacklog: (task) => this._isTaskInBacklog(task),
-      isBacklogEnabled: (projectId) =>
-        !!this.allProjects().find((project) => project.id === projectId)?.isEnableBacklog,
-    }),
-  );
+  readonly criteriaCtx = this._viewCtx.ctx;
   // Rules no change of a new task can meet (overdue, a minimum estimate …):
   // the add row would only create tasks that never show up here.
   readonly isAddTaskHidden = computed(() =>
@@ -356,24 +335,6 @@ export class BoardPanelComponent implements TaskCardList, ViewTaskListHost {
     initialValue: [],
   });
 
-  // Use selectUnarchivedProjects (not selectUnarchivedVisibleProjects) to include
-  // hidden projects and INBOX, ensuring backlog filtering works for all tasks
-  allProjects$ = this.store.select(selectUnarchivedProjects);
-  allProjects = toSignal(this.allProjects$, {
-    initialValue: [],
-  });
-
-  // Create a Set of all backlog task IDs for fast lookup
-  allBacklogTaskIds = computed(() => {
-    const backlogIds = new Set<string>();
-    for (const project of this.allProjects()) {
-      if (project && project.backlogTaskIds && Array.isArray(project.backlogTaskIds)) {
-        project.backlogTaskIds.forEach((id) => backlogIds.add(id));
-      }
-    }
-    return backlogIds;
-  });
-
   // In the list layout, the open rows the header counts: a parent's estimate
   // already covers its nested subtasks.
   totalEstimate = computed(() =>
@@ -451,10 +412,10 @@ export class BoardPanelComponent implements TaskCardList, ViewTaskListHost {
       }
     });
 
-    const criteria = this.criteria();
-    const ctx = this.criteriaCtx();
-    const allFilteredTasks = this.allTasks().filter((task) =>
-      matchesTaskCriteria(task, criteria, ctx),
+    const allFilteredTasks = matchPanelTasks(
+      this.allTasks(),
+      this.criteria(),
+      this.criteriaCtx(),
     );
 
     allFilteredTasks.forEach((task) => {
@@ -787,19 +748,7 @@ export class BoardPanelComponent implements TaskCardList, ViewTaskListHost {
    * project list; a subtask whose parent doesn't match is a row of its own.
    */
   private readonly _rowIds = computed(
-    () => {
-      const tasks = this.tasks();
-      const matchingById = new Map(tasks.map((task) => [task.id, task]));
-      const isDoneSplit = this._isDoneSplit();
-      return tasks
-        .filter((task) => {
-          const parent = task.parentId && matchingById.get(task.parentId);
-          // An open subtask of a done parent stays visible among the open rows
-          // instead of hiding in the collapsed done section.
-          return !parent || (isDoneSplit && parent.isDone && !task.isDone);
-        })
-        .map((task) => task.id);
-    },
+    () => getPanelRowIds(this.tasks(), this._isDoneSplit()),
     { equal: fastArrayCompare },
   );
   private readonly _rowIdSet = computed(() => new Set(this._rowIds()));
@@ -814,9 +763,7 @@ export class BoardPanelComponent implements TaskCardList, ViewTaskListHost {
   );
   // Done rows get their own collapsed section, unless the column only shows
   // done tasks anyway.
-  private readonly _isDoneSplit = computed(
-    () => this.panelCfg().taskDoneState !== BoardPanelCfgTaskDoneState.Done,
-  );
+  private readonly _isDoneSplit = computed(() => isPanelDoneSplit(this.panelCfg()));
   readonly mainRows = computed(
     () =>
       this._isDoneSplit() ? this._rows().filter((task) => !task.isDone) : this._rows(),
@@ -859,8 +806,9 @@ export class BoardPanelComponent implements TaskCardList, ViewTaskListHost {
   // Local only, never synced, like the done section.
   readonly isSectionExpanded = signal(true);
   readonly tagsToHide = computed(() => this.panelCfg().includedTagIds ?? []);
+  // Same helper as the view editor's live count.
   readonly headerCount = computed(() =>
-    this.isListLayout() ? this.mainRows().length : this.tasks().length,
+    getPanelHeaderCount(this.tasks(), this.panelCfg(), this.isListLayout()),
   );
 
   isRow(taskId: string): boolean {
@@ -958,12 +906,6 @@ export class BoardPanelComponent implements TaskCardList, ViewTaskListHost {
   // else the Inbox.
   private readonly _defaultProjectId = computed(() => {
     const id = this._config.cfg()?.tasks?.defaultProjectId;
-    return id && this.allProjects().some((project) => project.id === id)
-      ? id
-      : INBOX_PROJECT.id;
+    return id && this._viewCtx.projectById().has(id) ? id : INBOX_PROJECT.id;
   });
-
-  _isTaskInBacklog(task: Readonly<TaskCopy>): boolean {
-    return this.allBacklogTaskIds().has(task.parentId || task.id);
-  }
 }

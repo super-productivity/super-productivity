@@ -1,7 +1,11 @@
 import { INBOX_PROJECT } from '../../project/project.const';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { BoardPanelComponent } from './board-panel.component';
-import { BoardPanelCfg, BoardPanelCfgTaskTypeFilter } from '../boards.model';
+import {
+  BoardPanelCfg,
+  BoardPanelCfgTaskDoneState,
+  BoardPanelCfgTaskTypeFilter,
+} from '../boards.model';
 import { TaskCopy } from '../../tasks/task.model';
 import { Store } from '@ngrx/store';
 import { TaskService } from '../../tasks/task.service';
@@ -34,6 +38,7 @@ import { GlobalConfigService } from '../../config/global-config.service';
 import { DateService } from '../../../core/date/date.service';
 import { DateAdapter } from '@angular/material/core';
 import { DEFAULT_PANEL_CFG } from '../boards.const';
+import { getPanelHeaderCount, matchPanelTasks } from '../boards.util';
 import { BoardsActions } from '../store/boards.actions';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { GlobalTrackingIntervalService } from '../../../core/global-tracking-interval/global-tracking-interval.service';
@@ -1376,6 +1381,41 @@ describe('BoardPanelComponent - drop()', () => {
       fixture.detectChanges();
       await fixture.whenStable();
       expect(document.activeElement).toBe(nested);
+    });
+
+    it('counts in the header what it renders, for the view editor (both layouts)', async () => {
+      const tasks = [
+        mkTask({ id: 'parent', subTaskIds: ['child', 'doneChild'] }),
+        mkTask({ id: 'child', parentId: 'parent' }),
+        mkTask({ id: 'doneChild', parentId: 'parent', isDone: true }),
+        mkTask({ id: 'doneParent', isDone: true, subTaskIds: ['openSub'] }),
+        mkTask({ id: 'openSub', parentId: 'doneParent' }),
+        mkTask({ id: 'lone', parentId: 'elsewhere' }),
+        mkTask({ id: 'done', isDone: true }),
+      ];
+      await setup(tasks);
+      const matches = (): TaskCopy[] =>
+        matchPanelTasks(tasks, component.criteria(), component.criteriaCtx());
+      for (const taskDoneState of [
+        BoardPanelCfgTaskDoneState.All,
+        BoardPanelCfgTaskDoneState.Done,
+        BoardPanelCfgTaskDoneState.UnDone,
+      ]) {
+        const panel = listPanel({ taskDoneState });
+        fixture.componentRef.setInput('panelCfg', panel);
+        fixture.componentRef.setInput('isListLayout', true);
+        fixture.detectChanges();
+        expect(component.headerCount()).toBe(component.mainRows().length);
+        expect(getPanelHeaderCount(matches(), panel, true)).toBe(
+          component.mainRows().length,
+        );
+        // Cards aren't rendered here (no planner-task mocks): signals only.
+        fixture.componentRef.setInput('isListLayout', false);
+        expect(component.headerCount()).toBe(component.tasks().length);
+        expect(getPanelHeaderCount(matches(), panel, false)).toBe(
+          component.tasks().length,
+        );
+      }
     });
 
     it('shows an open subtask of a done parent among the open rows', async () => {
