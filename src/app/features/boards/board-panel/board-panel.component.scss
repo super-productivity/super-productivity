@@ -44,6 +44,31 @@
   overflow: visible;
 }
 
+// A one-column view nothing matches: what it is and how to fill it.
+.view-empty {
+  text-align: center;
+  padding: var(--s4) var(--s2);
+}
+
+.view-empty-title {
+  margin: 0 0 var(--s);
+  font-size: var(--font-size-xl);
+  font-weight: 400;
+}
+
+.view-empty-hint {
+  max-width: 420px;
+  margin: 0 auto var(--s2);
+  color: var(--text-color-muted);
+}
+
+.view-empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--s);
+}
+
 .list-status {
   display: flex;
   justify-content: flex-end;

@@ -43,6 +43,31 @@
         <span class="count"><mat-icon>task_alt</mat-icon>{{ headerCount() }}</span>
       </div>
     }
+    @if (!mainRows().length && !doneRows().length) {
+      <div class="view-empty">
+        <h2 class="view-empty-title">{{ T.F.BOARDS.V.NO_TASKS_IN_VIEW | translate }}</h2>
+        <p class="view-empty-hint">{{ T.F.BOARDS.V.EMPTY_VIEW_HINT | translate }}</p>
+        <div class="view-empty-actions">
+          <!-- The add-task bar adds into this view (ViewTaskListRegistry). -->
+          @if (newTaskTarget()) {
+            <button
+              mat-stroked-button
+              (click)="showAddTaskBar()"
+            >
+              <mat-icon>playlist_add</mat-icon>
+              {{ T.F.BOARDS.V.EMPTY_VIEW_ADD | translate }}
+            </button>
+          }
+          <button
+            mat-stroked-button
+            (click)="editBoard.emit()"
+          >
+            <mat-icon>edit</mat-icon>
+            {{ T.F.BOARDS.V.EDIT_BOARD | translate }}
+          </button>
+        </div>
+      </div>
+    }
     <ng-container [ngTemplateOutlet]="listBody"></ng-container>
   }
   <ng-template #listBody>
@@ -53,10 +78,7 @@
       listModelId="VIEW"
       [isSortingDisabled]="!isManualOrder()"
       [noTasksMsg]="
-        doneRows().length
-          ? undefined
-          : ((isSection() ? T.F.PLANNER.NO_TASKS : T.F.BOARDS.V.NO_TASKS_IN_VIEW)
-            | translate)
+        doneRows().length || !isSection() ? undefined : (T.F.PLANNER.NO_TASKS | translate)
       "
     ></task-list>
     @if (doneRows().length) {

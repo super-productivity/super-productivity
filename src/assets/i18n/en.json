@@ -224,6 +224,8 @@
         "CREATE_NEW_TAGS_BTN": "Create Tags",
         "CREATE_NEW_TAGS_MSG": "{{nr}} new tags need to be created for this view to work",
         "EDIT_BOARD": "Edit view",
+        "EMPTY_VIEW_ADD": "Add task",
+        "EMPTY_VIEW_HINT": "Tasks show up here once they match the view's rules. Add one, or change the rules.",
         "FILTER_DIFFERS_PER_SECTION": "Differs per section, edit the view",
         "HINT_FILTER_NOT_ONLY_TODAY": "Shows every open task that matches the filter, not only today's. Add a Planned Date rule to narrow it down.",
         "HINT_FILTER_PART_NOT_SAVED": "Part of the list's filter can't be combined with its project or tag in a view and was left out.",

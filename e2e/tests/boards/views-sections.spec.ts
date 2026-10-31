@@ -171,6 +171,30 @@ test.describe('View sections', () => {
     await expect(page.locator('task').filter({ hasText: listTitle })).toHaveCount(1);
   });
 
+  test('an empty view explains itself and adds a task into the view', async ({
+    page,
+    workViewPage,
+    testPrefix,
+  }) => {
+    await workViewPage.waitForTaskList();
+    await createView(page, {
+      title: `${testPrefix}-Urgent`,
+      sections: [{ rules: [{ rule: 'Priority', value: 'High' }] }],
+    });
+    const empty = page.locator('boards board-panel .view-empty');
+    await expect(empty).toContainText('No tasks match this view');
+    await expect(empty.getByRole('button', { name: 'Edit view' })).toBeVisible();
+
+    await empty.getByRole('button', { name: 'Add task' }).click();
+    const title = `${testPrefix}-First`;
+    await page.locator('add-task-bar.global .main-input').fill(title);
+    await page.keyboard.press('Enter');
+    await expect(
+      page.locator('boards board-panel task').filter({ hasText: title }),
+    ).toHaveCount(1);
+    await expect(empty).toHaveCount(0);
+  });
+
   test('a drag reorders a one-panel view and the order persists', async ({
     page,
     workViewPage,

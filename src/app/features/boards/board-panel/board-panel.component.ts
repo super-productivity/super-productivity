@@ -69,7 +69,8 @@ import { unique } from '../../../util/unique';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { LocalDateStrPipe } from '../../../ui/pipes/local-date-str.pipe';
 import { MatIcon } from '@angular/material/icon';
-import { MatIconButton } from '@angular/material/button';
+import { MatButton, MatIconButton } from '@angular/material/button';
+import { LayoutService } from '../../../core-ui/layout/layout.service';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { DialogScheduleTaskComponent } from '../../planner/dialog-schedule-task/dialog-schedule-task.component';
 import { MatDialog } from '@angular/material/dialog';
@@ -123,6 +124,7 @@ export interface BoardPanelNavigation {
     LocalDateStrPipe,
     MatIcon,
     MatIconButton,
+    MatButton,
     TranslatePipe,
     ShortPlannedAtPipe,
     MsToStringPipe,
@@ -887,6 +889,12 @@ export class BoardPanelComponent implements TaskCardList, ViewTaskListHost {
   // The regular add-task bar adds into the first column that has this
   // (ViewTaskListRegistry). The project is always explicit: without it the bar
   // would use the project that was open before the view.
+  /** The empty view's "Add task": the bar adds into this view. */
+  showAddTaskBar(): void {
+    // Looked up on use: the panel itself never needs the layout state.
+    this._injector.get(LayoutService).showAddTaskBar();
+  }
+
   readonly newTaskTarget = computed<ViewNewTaskTarget | null>(() => {
     if (this.isAddTaskHidden()) {
       return null;
