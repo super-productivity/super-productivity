@@ -5,13 +5,17 @@ import android.util.Log
 import androidx.work.ListenableWorker
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okio.BufferedSource
 import org.json.JSONException
 import org.json.JSONObject
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 
 private const val TAG = "FileSyncReminderCheck"
-private const val DEADLINE_SUFFIX = "_deadline"
+
+// shortcut: whole file in memory, capped — stream it into the reader if real
+// files outgrow the cap. Archives make up most of a large file.
+internal const val MAX_SYNC_FILE_BYTES = 10L * 1024 * 1024
 
 private val httpClient = OkHttpClient.Builder()
     .connectTimeout(15, TimeUnit.SECONDS)
@@ -20,18 +24,17 @@ private val httpClient = OkHttpClient.Builder()
     .build()
 
 /**
- * What one file read changes: alarms to cancel (their reminder ids), alarms to
- * (re)schedule, and the slots to remember for the next diff.
+ * What one file read changes: single alarms to cancel (their reminder ids),
+ * tasks whose alarms all go (gone, done or archived), alarms to (re)schedule,
+ * and the slots to remember for the next diff. Due-day-only tasks get a slot
+ * at time 0, so they are diffed like the others but never scheduled.
  */
 internal data class ReminderSlotPlan(
     val reminderIdsToCancel: Set<String>,
+    val taskIdsToCancel: Set<String>,
     val toSchedule: List<ReminderToSchedule>,
     val slots: Map<String, Long>,
 )
-
-/** Reminder id as the app keys alarms (mobile-notification.effects.ts). */
-internal fun reminderIdOf(reminder: ReminderToSchedule): String =
-    if (reminder.isDeadline) reminder.taskId + DEADLINE_SUFFIX else reminder.taskId
 
 /**
  * Diffs the reminder slots of the file against those of the last processed
@@ -40,18 +43,23 @@ internal fun reminderIdOf(reminder: ReminderToSchedule): String =
  */
 internal fun planReminderSlots(
     previous: Map<String, Long>?,
-    current: List<ReminderToSchedule>,
+    file: SyncFileReadResult.Reminders,
     now: Long,
 ): ReminderSlotPlan {
-    val slots = current.associateBy({ reminderIdOf(it) }, { it.remindAt })
-    if (previous == null) return ReminderSlotPlan(emptySet(), current.filter { it.remindAt > now }, slots)
+    val current = file.reminders
+    val slots = current.associateBy({ reminderIdOf(it) }, { it.remindAt }) +
+        file.dueDayTaskIds.associate { dueDayReminderIdOf(it) to 0L }
+    if (previous == null) return ReminderSlotPlan(emptySet(), emptySet(), current.filter { it.remindAt > now }, slots)
 
     val changed = current.filter { previous[reminderIdOf(it)] != it.remindAt }
     // Past slots are kept for the diff but not scheduled: they already fired.
     // One moved into the past still has its old alarm pending, so cancel that.
     val movedIntoPast = changed.filter { it.remindAt <= now && reminderIdOf(it) in previous }
     val toCancel = (previous.keys - slots.keys) + movedIntoPast.map { reminderIdOf(it) }
-    return ReminderSlotPlan(toCancel, changed.filter { it.remindAt > now }, slots)
+    val currentTaskIds = current.mapTo(HashSet()) { it.taskId } + file.dueDayTaskIds
+    val tasksGone = toCancel.map(::taskIdOfReminderId).filterTo(HashSet()) { it !in currentTaskIds }
+    val singleCancels = toCancel.filterTo(HashSet()) { taskIdOfReminderId(it) !in tasksGone }
+    return ReminderSlotPlan(singleCancels, tasksGone, changed.filter { it.remindAt > now }, slots)
 }
 
 internal fun parseReminderSlots(raw: String?): Map<String, Long>? {
@@ -79,31 +87,24 @@ internal fun runFileSyncReminderCheck(
     // baseline stays as it was, so skipping here loses nothing.
     if (settings.isDisabled) return ListenableWorker.Result.success()
 
-    val previousETag = BackgroundSyncCredentialStore.getFileETag(context)
-    val request = Request.Builder()
-        .url(credentials.fileUrl)
-        .header("Authorization", credentials.authorization)
-        .apply { previousETag?.let { header("If-None-Match", it) } }
-        .get()
-        .build()
-
-    val (body, eTag) = try {
-        httpClient.newCall(request).execute().use { resp ->
-            if (resp.code == 304) {
-                Log.d(TAG, "Sync file unchanged")
-                return ListenableWorker.Result.success()
-            }
-            if (!resp.isSuccessful) {
-                Log.w(TAG, "HTTP ${resp.code} for sync file")
-                // 4xx (no file yet, auth) won't heal by retrying soon; the next period re-checks
-                return if (resp.code >= 500) ListenableWorker.Result.retry() else ListenableWorker.Result.success()
-            }
-            val text = resp.body?.string() ?: return ListenableWorker.Result.retry()
-            text to resp.header("ETag")
+    val fetch = fetchSyncFile(httpClient, credentials, BackgroundSyncCredentialStore.getFileETag(context))
+    val (body, eTag) = when (fetch) {
+        SyncFileFetch.Unchanged -> return ListenableWorker.Result.success()
+        is SyncFileFetch.Skip -> {
+            Log.w(TAG, "HTTP ${fetch.httpCode} for sync file")
+            return ListenableWorker.Result.success()
         }
-    } catch (e: IOException) {
-        Log.w(TAG, "Failed to download sync file", e)
-        return ListenableWorker.Result.retry()
+        is SyncFileFetch.Retry -> {
+            Log.w(TAG, "Sync file download failed: ${fetch.reason}")
+            return ListenableWorker.Result.retry()
+        }
+        is SyncFileFetch.TooLarge -> {
+            Log.w(TAG, "Sync file larger than $MAX_SYNC_FILE_BYTES bytes, skipping")
+            // Keep the baseline; the ETag stops re-downloading it every period
+            BackgroundSyncCredentialStore.setFileETag(context, fetch.eTag)
+            return ListenableWorker.Result.success()
+        }
+        is SyncFileFetch.Body -> fetch.text to fetch.eTag
     }
 
     val decryptor = buildPayloadDecryptor(context, TAG)
@@ -113,19 +114,66 @@ internal fun runFileSyncReminderCheck(
         Log.w(TAG, "Sync file not usable for reminders: ${result.reason}")
         return ListenableWorker.Result.success()
     }
-    val reminders = (result as SyncFileReadResult.Reminders).reminders
-
     val previous = parseReminderSlots(BackgroundSyncCredentialStore.getFileReminderSlotsRaw(context))
-    val plan = planReminderSlots(previous, reminders, System.currentTimeMillis())
+    val plan = planReminderSlots(previous, result as SyncFileReadResult.Reminders, System.currentTimeMillis())
     for (reminderId in plan.reminderIdsToCancel) {
         cancelReminderById(context, reminderId)
+    }
+    for (taskId in plan.taskIdsToCancel) {
+        cancelRemindersForTask(context, taskId)
     }
     for (reminder in plan.toSchedule) {
         scheduleReminderFromSync(context, reminder, settings.useAlarmStyle)
     }
     BackgroundSyncCredentialStore.setFileReadResult(context, eTag, JSONObject(plan.slots).toString())
-    Log.d(TAG, "Cancelled ${plan.reminderIdsToCancel.size}, scheduled ${plan.toSchedule.size} reminder(s)")
+    Log.d(TAG, "Cancelled ${plan.reminderIdsToCancel.size} reminder(s), ${plan.taskIdsToCancel.size} task(s), scheduled ${plan.toSchedule.size} reminder(s)")
     return ListenableWorker.Result.success()
+}
+
+internal sealed interface SyncFileFetch {
+    data object Unchanged : SyncFileFetch
+    data class Retry(val reason: String) : SyncFileFetch
+    /** Won't heal by retrying soon (no file yet, auth); the next period re-checks. */
+    data class Skip(val httpCode: Int) : SyncFileFetch
+    data class TooLarge(val eTag: String?) : SyncFileFetch
+    data class Body(val text: String, val eTag: String?) : SyncFileFetch
+}
+
+/**
+ * Conditional GET of the sync file. Logs nothing (JVM-testable); results
+ * carry no URL or Authorization header.
+ */
+internal fun fetchSyncFile(
+    client: OkHttpClient,
+    credentials: BackgroundSyncCredentialStore.FileSyncCredentials,
+    previousETag: String?,
+): SyncFileFetch {
+    val request = Request.Builder()
+        .url(credentials.fileUrl)
+        .header("Authorization", credentials.authorization)
+        .apply { previousETag?.let { header("If-None-Match", it) } }
+        .get()
+        .build()
+    return try {
+        client.newCall(request).execute().use { resp ->
+            when {
+                resp.code == 304 -> SyncFileFetch.Unchanged
+                resp.code >= 500 -> SyncFileFetch.Retry("HTTP ${resp.code}")
+                !resp.isSuccessful -> SyncFileFetch.Skip(resp.code)
+                else -> readBody(resp.body?.source(), resp.header("ETag"))
+            }
+        }
+    } catch (e: IOException) {
+        // class name only: some messages contain the host
+        SyncFileFetch.Retry(e.javaClass.simpleName)
+    }
+}
+
+private fun readBody(source: BufferedSource?, eTag: String?): SyncFileFetch {
+    source ?: return SyncFileFetch.Retry("no body")
+    // request() buffers at most cap + 1 bytes, also for chunked responses
+    if (source.request(MAX_SYNC_FILE_BYTES + 1)) return SyncFileFetch.TooLarge(eTag)
+    return SyncFileFetch.Body(source.buffer.readUtf8(), eTag)
 }
 
 private fun cancelReminderById(context: Context, reminderId: String) {

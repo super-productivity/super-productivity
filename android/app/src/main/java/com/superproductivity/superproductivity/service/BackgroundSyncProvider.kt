@@ -19,6 +19,15 @@ data class ReminderToSchedule(
     val isDeadline: Boolean
 )
 
+/** Reminder id as the app keys alarms (mobile-notification.effects.ts). */
+internal fun reminderIdOf(reminder: ReminderToSchedule): String =
+    if (reminder.isDeadline) reminder.taskId + DEADLINE_SUFFIX else reminder.taskId
+
+internal fun dueDayReminderIdOf(taskId: String): String = taskId + DUE_DAY_SUFFIX
+
+internal fun taskIdOfReminderId(reminderId: String): String =
+    reminderId.removeSuffix(DEADLINE_SUFFIX).removeSuffix(DUE_DAY_SUFFIX)
+
 /**
  * Cancel all reminder variants (standard, due-day, deadline) for a task.
  * Each cancellation is independent — one failure won't block the other.
@@ -55,7 +64,7 @@ fun cancelRemindersForTask(context: Context, taskId: String) {
  */
 fun scheduleReminderFromSync(context: Context, reminder: ReminderToSchedule, useAlarmStyle: Boolean) {
     try {
-        val reminderId = if (reminder.isDeadline) reminder.taskId + DEADLINE_SUFFIX else reminder.taskId
+        val reminderId = reminderIdOf(reminder)
         val notificationId = SuperSyncBackgroundProvider.generateNotificationId(reminderId)
         val reminderType = if (reminder.isDeadline) "DEADLINE" else "TASK"
         ReminderNotificationHelper.scheduleReminder(

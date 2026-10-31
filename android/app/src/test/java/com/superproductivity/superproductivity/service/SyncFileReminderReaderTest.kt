@@ -88,6 +88,16 @@ class SyncFileReminderReaderTest {
     }
 
     @Test
+    fun `lists open due-day-only tasks for due-day alarm cancellation`() {
+        val body = "pf_2__" + file(
+            """{"d":{"id":"d","dueDay":"2026-11-02"},
+                "timed":{"id":"timed","dueDay":"2026-11-02","remindAt":5},
+                "doneDay":{"id":"doneDay","dueDay":"2026-11-02","isDone":true}}"""
+        )
+        assertEquals(setOf("d"), (read(body) as SyncFileReadResult.Reminders).dueDayTaskIds)
+    }
+
+    @Test
     fun `ignores null and zero reminder values`() {
         val body = "pf_2__" + file("""{"t1":{"id":"t1","remindAt":null,"deadlineRemindAt":0}}""")
         assertEquals(SyncFileReadResult.Reminders(emptyList()), read(body))

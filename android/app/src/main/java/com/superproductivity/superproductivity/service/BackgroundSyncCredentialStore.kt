@@ -211,6 +211,14 @@ object BackgroundSyncCredentialStore {
         editor.commit()
     }
 
+    /** Remembers a file version without reading it, so it is not fetched again until it changes. */
+    @Synchronized
+    fun setFileETag(context: Context, eTag: String?) {
+        val editor = getPrefs(context).edit()
+        if (eTag == null) editor.remove(KEY_FILE_ETAG) else editor.putString(KEY_FILE_ETAG, eTag)
+        editor.commit()
+    }
+
     @Synchronized
     fun getFileReminderSlotsRaw(context: Context): String? =
         getPrefs(context).getString(KEY_FILE_REMINDER_SLOTS, null)

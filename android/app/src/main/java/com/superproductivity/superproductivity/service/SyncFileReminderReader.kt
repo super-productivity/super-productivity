@@ -16,7 +16,15 @@ sealed interface SyncFileReadResult {
      * gone means its alarm or shown notification is stale, a slot that is
      * merely past is not.
      */
-    data class Reminders(val reminders: List<ReminderToSchedule>) : SyncFileReadResult
+    data class Reminders(
+        val reminders: List<ReminderToSchedule>,
+        /**
+         * Open tasks with a due day but no reminder time: the app may hold a
+         * due-day alarm for them (mobile-notification.effects.ts). Its time
+         * depends on app config, so the worker only ever cancels it.
+         */
+        val dueDayTaskIds: Set<String> = emptySet(),
+    ) : SyncFileReadResult
 
     /** The file could not be trusted or understood. [reason] never holds user content. */
     data class Unreadable(val reason: String) : SyncFileReadResult
@@ -45,6 +53,7 @@ object SyncFileReminderReader {
         val deadlineRemindAt: Long?,
         val isDone: Boolean,
         val projectId: String?,
+        val hasDueDay: Boolean,
     )
 
     private class StateFields(
@@ -81,7 +90,11 @@ object SyncFileReminderReader {
         // No task state means a shape this reader does not know — treating it
         // as "no reminders" would cancel every alarm.
         val tasks = state.tasks ?: return SyncFileReadResult.Unreadable("no-task-state")
-        return SyncFileReadResult.Reminders(toReminders(tasks, state.archivedProjectIds))
+        val openTasks = tasks.filter { !it.isDone && it.projectId !in state.archivedProjectIds }
+        return SyncFileReadResult.Reminders(
+            toReminders(openTasks),
+            openTasks.filter { it.hasDueDay && it.remindAt == null }.mapTo(HashSet()) { it.id },
+        )
     }
 
     private fun openReader(data: String, isCompressed: Boolean): Reader {
@@ -97,10 +110,9 @@ object SyncFileReminderReader {
         return GZIPInputStream(ByteArrayInputStream(bytes)).reader(Charsets.UTF_8)
     }
 
-    private fun toReminders(tasks: List<TaskFields>, archivedProjectIds: Set<String>): List<ReminderToSchedule> {
+    private fun toReminders(openTasks: List<TaskFields>): List<ReminderToSchedule> {
         val out = mutableListOf<ReminderToSchedule>()
-        for (task in tasks) {
-            if (task.isDone || task.projectId in archivedProjectIds) continue
+        for (task in openTasks) {
             val title = task.title.ifEmpty { "Task reminder" }
             task.remindAt?.let { out.add(ReminderToSchedule(task.id, title, it, isDeadline = false)) }
             task.deadlineRemindAt?.let { out.add(ReminderToSchedule(task.id, title, it, isDeadline = true)) }
@@ -170,6 +182,7 @@ object SyncFileReminderReader {
         var deadlineRemindAt: Long? = null
         var isDone = false
         var projectId: String? = null
+        var hasDueDay = false
         reader.beginObject()
         while (reader.hasNext()) {
             when (reader.nextName()) {
@@ -179,12 +192,13 @@ object SyncFileReminderReader {
                 "deadlineRemindAt" -> deadlineRemindAt = readTimestampOrNull(reader)
                 "isDone" -> isDone = readBooleanOrFalse(reader)
                 "projectId" -> projectId = readStringOrNull(reader)
+                "dueDay" -> hasDueDay = !readStringOrNull(reader).isNullOrEmpty()
                 else -> reader.skipValue()
             }
         }
         reader.endObject()
         if (id.isEmpty()) return null
-        return TaskFields(id, title, remindAt, deadlineRemindAt, isDone, projectId)
+        return TaskFields(id, title, remindAt, deadlineRemindAt, isDone, projectId, hasDueDay)
     }
 
     private fun parseArchivedProjectId(reader: JsonReader): String? {
