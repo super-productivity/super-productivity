@@ -21,7 +21,7 @@ import { MagicNavConfigService } from '../../magic-side-nav/magic-nav-config.ser
 import { T } from '../../../t.const';
 import { TaskService } from '../../../features/tasks/task.service';
 import { animationFrameScheduler, Subscription } from 'rxjs';
-import { distinctUntilChanged, observeOn } from 'rxjs/operators';
+import { auditTime, distinctUntilChanged } from 'rxjs/operators';
 
 @Component({
   selector: 'play-button',
@@ -267,7 +267,9 @@ export class PlayButtonComponent implements OnInit, OnDestroy {
       this.taskService.currentTaskProgress$
         .pipe(
           // Align ring updates with the frame budget and skip duplicate ratios.
-          observeOn(animationFrameScheduler),
+          // auditTime keeps only the latest value per frame: a hidden window
+          // runs no frames, and observeOn would queue one update per tick.
+          auditTime(0, animationFrameScheduler),
           distinctUntilChanged(),
         )
         .subscribe((progressIN) => {
