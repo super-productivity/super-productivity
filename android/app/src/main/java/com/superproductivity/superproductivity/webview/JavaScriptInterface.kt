@@ -629,6 +629,35 @@ class JavaScriptInterface(
     }
 
     /**
+     * WebDAV/Nextcloud counterpart of [setSuperSyncCredentials]: the worker
+     * GETs [fileUrl] and reads reminders from it. Drops SuperSync credentials.
+     * The E2EE password comes via [setSuperSyncEncryptionPassword].
+     * NEVER log [authorization].
+     */
+    @Suppress("unused")
+    @JavascriptInterface
+    fun setFileSyncCredentials(fileUrl: String, authorization: String, isEncryptionExpected: Boolean) {
+        safeCall("Failed to set file sync credentials") {
+            BackgroundSyncCredentialStore.saveFileSync(
+                activity,
+                BackgroundSyncCredentialStore.FileSyncCredentials(fileUrl, authorization, isEncryptionExpected),
+            )
+            SyncReminderScheduler.ensureScheduled(activity)
+        }
+    }
+
+    @Suppress("unused")
+    @JavascriptInterface
+    fun clearFileSyncCredentials() {
+        safeCall("Failed to clear file sync credentials") {
+            BackgroundSyncCredentialStore.clearFileSync(activity)
+            if (!BackgroundSyncCredentialStore.hasAnyCredentials(activity)) {
+                SyncReminderScheduler.cancel(activity)
+            }
+        }
+    }
+
+    /**
      * Mirrors the reminder settings [com.superproductivity.superproductivity.service.SyncReminderWorker]
      * must honor when it schedules alarms from synced ops while the app is closed.
      */
