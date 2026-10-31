@@ -1,14 +1,18 @@
 # Market scorecard
 
-**Snapshot 2026-10** · SP v19.2.0, plus unreleased changes on `master` up to
-`43269ba` (2026-10-21) · target, competitor set and method: [README.md](README.md)
+**Snapshot 2026-10** · SP v19.3.1, plus unreleased changes on `master` up to
+`f958c66` (2026-10-28) · target, competitor set and method: [README.md](README.md)
 
 How this snapshot was gathered:
 
-- **SP facts** were read from the code at the v19.2.0 tag. Later changes on
-  `master` are listed under [Unreleased on master](#unreleased-on-master).
+- **SP facts** were read from the code at the v19.2.0 tag and updated from the
+  commits and issues up to v19.3.1 (the 2026-10 refresh read commit history and
+  issue state, not every code path). Later changes on `master` are listed under
+  [Unreleased on master](#unreleased-on-master).
 - **Competitor facts** come from search-result excerpts of vendor pages, so they
-  count as **snippet** unless marked otherwise. The research environment blocked
+  count as **snippet** unless marked otherwise. The 2026-10 refresh (2026-10-29)
+  could not read any competitor page and found no verified change, so the
+  competitor sections below are carried over unchanged. The research environment blocked
   play.google.com, apps.apple.com, appbrain.com, alternativeto.net, reddit.com and
   the specialists' vendor sites, and direct fetches of ticktick.com and todoist.com
   failed. GitHub was reachable, so open-source repos and docs were read directly.
@@ -68,16 +72,20 @@ app's section below gives the reasons.
 | 22  | Customization                    | Tracked       | Better         | Better         | Better          |
 | 23  | First run                        | Must not lose | Worse          | Worse          | Worse, by far   |
 
-### SP baseline (v19.2.0, read from code)
+### SP baseline (v19.3.1)
 
 1. **Capture**
    - The add-task bar parses `+project`, `#tag`, `@date`, `30m` estimates and
      recurrence such as `@every friday`. `!deadline` exists but is off by default
      (`src/app/features/tasks/short-syntax.ts`).
-   - Dates are English only (chrono-node `casual`). There is no priority token.
-   - The Android share sheet applies this syntax, and so does the local REST API
-     unless a request sets `isIgnoreShortSyntax`. iOS share, the URL scheme and
-     `.eml` drops store titles literally.
+   - `@` dates follow the UI language and date order (#10970); priority is
+     `p1`–`p3` (#10974). There is no priority control in the add-task bar yet.
+   - The local REST API applies this syntax unless a request sets
+     `isIgnoreShortSyntax`. The Android share sheet (#10917), iOS share, the URL
+     scheme, `.eml` drops, the MCP endpoint and SuperSync assistant capture store
+     titles literally.
+   - An opt-in MCP endpoint on desktop (#10251) and task capture for AI
+     assistants through SuperSync (#10759).
    - No voice capture.
 2. **Organization:** projects, Inbox, tags, sections, project folders, priorities.
    - Subtasks go one level deep (`task.component.ts`: `parentId || id`).
@@ -87,20 +95,21 @@ app's section below gives the reasons.
    - Daily, weekly, monthly or yearly every N days, weeks, months or years.
    - Monthly by nth weekday or last day.
    - Repeat from the completion date, skip overdue, pause, subtask templates.
-   - Missing: an end date or count, hourly, yearly by nth weekday.
+   - Optional end date (#10276). Missing: an end count, hourly, yearly by nth weekday.
 4. **Calendar:**
    - The schedule has day, week and month views.
    - iCal subscriptions, Outlook's included, are read-only.
    - The bundled Google Calendar and CalDAV Events plugins read, create, update
      and delete events, and can auto time-block tasks.
-   - The CalDAV tasks (VTODO) provider syncs done, title and notes, but cannot
-     create VTODOs.
+   - The CalDAV tasks (VTODO) provider syncs done, title and notes, and can
+     create (#10991) and delete (#10989) VTODOs when you opt in.
 5. **Planning:**
    - A planner that opens with 15 days on desktop (5 on phones), loads more on
      scroll, and shows each day's capacity against work hours.
    - The schedule fits tasks around fixed blocks.
    - "Finish day" review. No weekly review.
-6. **Reminders:** one `remindAt` plus one deadline reminder per task (`task.model.ts`).
+6. **Reminders:** one `remindAt` plus one deadline reminder per task (`task.model.ts`),
+   with 1-day, 3-day and 1-week lead times (#10977).
    - Android: exact alarms, an optional alarm style, and Done or Snooze on the
      notification.
    - No location reminders.
@@ -140,55 +149,62 @@ app's section below gives the reasons.
     - Web/PWA, Android (Play, F-Droid) and iOS (App Store).
     - One Android widget: up to 20 of Today's tasks, tap to complete, no adding.
     - iOS Home Screen quick actions: New task, Today, Inbox.
-    - No watch apps, no iOS widget, no Android launcher shortcuts.
-17. **Mobile polish:** bottom navigation below 600px, swipe gestures. Users call
-    it clunky and dated (#9225, #4864).
+    - Android launcher shortcuts (#10971).
+
+- No watch apps, no iOS widget.
+
+17. **Mobile polish:** bottom navigation below 600px (choosable second slot,
+    #10990), swipe gestures, larger touch targets (#10975), long-press menus in
+    the side navigation (#10992). Users still call it clunky and dated (#9225,
+    #4864).
 18. **Sync:** SuperSync (beta, end-to-end encrypted, self-hostable), Dropbox,
     Nextcloud, OneDrive, WebDAV and local file.
     - Some conflicts fall back to a whole-dataset "keep local or remote" dialog.
-    - Open data-loss reports: #7892 (Android data reset overnight, no sync set
-      up) and #9256 (SuperSync data could not be restored).
+    - The two data-loss reports in the 2026-10 baseline are closed: #7892
+      (Android data reset overnight; the last full mobile backup now survives a
+      restart with near-empty data, #10847) and #9256 (SuperSync data could not be
+      restored; decryption failures get diagnostics and SP asks before
+      overwriting remote data it can't decrypt, #10855). v19.3.1 also asks before
+      hydrating a remote that lost the client's own uploads (#11115).
 19. **Privacy:** no account and no telemetry; data stays on the device unless
     you sync it.
     - Encryption (Argon2id + AES-GCM) is required on SuperSync and optional on
       the file-based providers.
     - Automatic local backups on desktop, Android and iOS; full JSON export.
 20. **Price:** free, no paid tier, no ads.
-21. **AI:** nothing built in.
+21. **AI:** no built-in assistant. External assistants connect through the
+    opt-in MCP endpoint and SuperSync capture (see Capture).
 22. **Customization:** 16 built-in themes plus custom CSS themes, 56 configurable
     shortcuts, feature toggles, 28 languages.
 23. **First run:**
-    - New installs start with fewer features switched on, with first-run hints
-      and a guided tour in the Help menu.
+    - New installs start with fewer features switched on, with first-run hints,
+      a quick tour on the first task (#10957), an explanation of Today and the
+      Inbox (#10913) and a guided tour in the Help menu.
     - Reviews (snippet) and #9225 still call it "intimidating" or "overwhelming".
 
 ### Unreleased on master
 
-Merged after v19.2.0, up to `78139c5`. Re-score these when they ship:
+Merged after v19.3.1 (`1014df9`), up to `f958c66` (2026-10-28). Re-score these when
+they ship. Everything listed here in the 2026-10 snapshot shipped in v19.3.0 and
+is now in the baseline.
 
-- **Capture, extensibility, AI:** an opt-in MCP endpoint on desktop (#10251) and
-  task capture for AI assistants through SuperSync (#10759). Both store titles
-  literally, and so does the Android share sheet now (#10917).
-- **Recurrence:** an optional repeat end date (#10276).
-- **First run:** a quick tour on the first task (#10957) and an explanation of
-  Today and the Inbox at the end of the first run (#10913).
-- **Sync trust:** the last full mobile backup survives a restart with near-empty
-  data (#10847, for #7892); decryption failures get diagnostics, and SP asks
-  before overwriting remote data it can't decrypt (#10855, for #9256).
-
-Merged after `78139c5`, up to `43269ba` (2026-10-21), and so far shown only in
-the gap list:
-
-- **Capture:** `@` dates in the UI language and date order (#10970), and
-  priority with `p1`–`p3` (#10974).
-- **Platforms:** Android launcher shortcuts (#10971).
-- **Mobile polish:**
-  - larger touch targets and readable muted text (#10975)
-  - long-press menus in the side navigation (#10992)
-  - a choosable second slot in the bottom bar (#10990)
-- **Calendar:** opt-in CalDAV VTODO creation (#10991) and deletion (#10989).
-- **Reminders:** 1-day, 3-day and 1-week lead times (#10977).
-- **Metrics:** the productivity and sustainability scores were removed (#10968).
+- **Capture:** Android shares are saved without opening the app and uploaded sealed
+  through SuperSync capture (#11119); New task, Today and Inbox in the desktop dock
+  menu and jump list (#11017); existing multi-word tags parse after `#` (#11234).
+- **Calendar and time tracking:** opt-in "Add tracked time to calendar" writes each
+  finished tracking session, with its start and end, as a CalDAV event (#11181,
+  closes #6378). Sessions are not stored with timestamps in the task or shown in
+  the worklog, so #7888 and #7890 stay open.
+- **Reminders:** full-screen intent on alarm-style reminders (#10171).
+- **Mobile polish:** global progress bar above the bottom nav (#11241), grouped
+  task context menu with quieter icons (#11236).
+- **First run:** each list explains itself when empty (#11176); onboarding skips a
+  repeated swipe step and mentions import.
+- **Sync:** download from the start when the op log never synced (#11120), no forced
+  download when the local clock covers rejections (#11229), pending edits kept on a
+  catch-up file snapshot (#11142, re-landed in #11171).
+- **Extensibility:** plugin minimum app version enforced (#11019); monday.com and
+  Timesheet listed as community plugins (#11133, #11224).
 
 ### TickTick
 
@@ -499,32 +515,32 @@ says which dimensions each group is scored on.
 ## Gaps
 
 Gaps where SP misses its group's bar, in the order the 2026-10 comparison ranked
-them; the last three rows were added in review, unranked. A row is a prompt, not a
+them; the last three rows were added in review, unranked. Android app-icon
+shortcuts (#10971) and dates in the user's language (#10970) shipped in v19.3.0
+and their rows were removed. A row is a prompt, not a
 plan: it still has to pass
 [Does it earn its place?](../feature-review-guide.md#does-it-earn-its-place).
 Status values are defined in [README.md](README.md#monthly-refresh) (step 4).
 
-| Gap                                                          | #     | Who has it                                            | Issue                | Status (2026-10)                                                  |
-| ------------------------------------------------------------ | ----- | ----------------------------------------------------- | -------------------- | ----------------------------------------------------------------- |
-| Sync trust: data-loss reports, whole-dataset conflict dialog | 18    | TickTick, Todoist                                     | #7892, #9256, #10393 | Partly on master (#10847, #10855)                                 |
-| Add a task from the Android widget                           | 1, 16 | TickTick, Todoist, To Do List                         | #5139                | Draft PR open (#10612)                                            |
-| Android app-icon shortcuts                                   | 1, 16 | TickTick, Todoist                                     | #7636                | On master (#10971)                                                |
-| Priority in the add-task syntax                              | 1     | Todoist                                               | #10887, #10904       | On master (#10974)                                                |
-| Dates in the user's language                                 | 1     | Todoist                                               | #9340                | On master (#10970)                                                |
-| Multiple reminders per task                                  | 6     | TickTick, Todoist                                     | #4331                | —                                                                 |
-| Two-way Outlook sync; creating CalDAV tasks                  | 4     | Todoist, planners (Outlook); Tasks.org (CalDAV tasks) | #5001, #3938, #2719  | Partly on master (#10991, #10989: CalDAV tasks)                   |
-| Mobile UI refresh                                            | 17    | TickTick, Todoist                                     | #9225, #4864, #7637  | Partly on master (#10975, #10990, #10992)                         |
-| Start and end times per entry, timesheet editing             | 7     | Toggl Track, Clockify                                 | #6378, #7888, #7890  | —                                                                 |
-| Weekly planning and review                                   | 5     | Sunsama, Akiflow                                      | none                 | —                                                                 |
-| Nested subtasks                                              | 2     | TickTick, Todoist, Tasks.org                          | #2657                | —                                                                 |
-| iOS home-screen widget                                       | 16    | TickTick, Todoist                                     | #6373                | —                                                                 |
-| Quick add from a notification                                | 1     | To Do List                                            | none                 | —                                                                 |
-| Voice capture                                                | 1     | TickTick, Todoist, To Do List                         | none                 | —                                                                 |
-| Location reminders                                           | 6     | TickTick, Todoist, Tasks.org                          | #5336                | Proposal ([plan](../long-term-plans/location-based-reminders.md)) |
-| Watch apps                                                   | 16    | TickTick, Todoist, Tasks.org                          | none                 | —                                                                 |
-| First run: time to first task, learning curve                | 23    | TickTick, Todoist, To Do List                         | #8824                | Partly on master (#10913, #10957)                                 |
-| Saved filters                                                | 2     | TickTick, Todoist                                     | #10347               | —                                                                 |
-| Focus: strict mode, focus across devices                     | 8     | TickTick                                              | none                 | —                                                                 |
+| Gap                                                          | #     | Who has it                                            | Issue                        | Status (2026-10)                                                             |
+| ------------------------------------------------------------ | ----- | ----------------------------------------------------- | ---------------------------- | ---------------------------------------------------------------------------- |
+| Sync trust: data-loss reports, whole-dataset conflict dialog | 18    | TickTick, Todoist                                     | #10393 (#7892, #9256 closed) | Partly released v19.3.0 (#10847, #10855); on master (#11120, #11142)         |
+| Add a task from the Android widget                           | 1, 16 | TickTick, Todoist, To Do List                         | #5139                        | Draft PR open (#10612, conflicted)                                           |
+| Priority in the add-task bar                                 | 1     | Todoist                                               | #10887, #10904               | Partly released v19.3.0 (#10974: `p1`–`p3` syntax only)                      |
+| Multiple reminders per task                                  | 6     | TickTick, Todoist                                     | #4331                        | —                                                                            |
+| Two-way Outlook sync; creating CalDAV tasks                  | 4     | Todoist, planners (Outlook); Tasks.org (CalDAV tasks) | #5001, #3938, #2719          | Partly released v19.3.0 (#10991, #10989: CalDAV tasks)                       |
+| Mobile UI refresh                                            | 17    | TickTick, Todoist                                     | #9225, #4864, #7637          | Partly released v19.3.0 (#10975, #10990, #10992); on master (#11241, #11236) |
+| Start and end times per entry, timesheet editing             | 7     | Toggl Track, Clockify                                 | #7888, #7890 (#6378 closed)  | Partly on master (#11181: session start and end go to the calendar only)     |
+| Weekly planning and review                                   | 5     | Sunsama, Akiflow                                      | none                         | —                                                                            |
+| Nested subtasks                                              | 2     | TickTick, Todoist, Tasks.org                          | #2657                        | —                                                                            |
+| iOS home-screen widget                                       | 16    | TickTick, Todoist                                     | #6373                        | —                                                                            |
+| Quick add from a notification                                | 1     | To Do List                                            | none                         | —                                                                            |
+| Voice capture                                                | 1     | TickTick, Todoist, To Do List                         | none                         | —                                                                            |
+| Location reminders                                           | 6     | TickTick, Todoist, Tasks.org                          | #5336                        | Proposal ([plan](../long-term-plans/location-based-reminders.md))            |
+| Watch apps                                                   | 16    | TickTick, Todoist, Tasks.org                          | none                         | —                                                                            |
+| First run: time to first task, learning curve                | 23    | TickTick, Todoist, To Do List                         | #8824                        | Partly released v19.3.0 (#10913, #10957); on master (#11176)                 |
+| Saved filters                                                | 2     | TickTick, Todoist                                     | #10347                       | —                                                                            |
+| Focus: strict mode, focus across devices                     | 8     | TickTick                                              | none                         | —                                                                            |
 
 ## Speed benchmark
 
