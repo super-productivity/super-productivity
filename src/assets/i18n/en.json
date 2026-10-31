@@ -212,6 +212,7 @@
         "CREATE_NEW_TAGS_BTN": "Create Tags",
         "CREATE_NEW_TAGS_MSG": "{{nr}} new tags need to be created for this view to work",
         "EDIT_BOARD": "Edit view",
+        "HINT_FILTER_PART_NOT_SAVED": "Part of the list's filter can't be combined with its project or tag in a view and was left out.",
         "HINT_GROUPING_NOT_SAVED": "Grouping isn't saved: a view lists its tasks without groups.",
         "HINT_TODAY_OR_OVERDUE": "Shows tasks due today or overdue, including the ones the Today list shows in their own section.",
         "NO_PANELS_BTN": "Configure view",

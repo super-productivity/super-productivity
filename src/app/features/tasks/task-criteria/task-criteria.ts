@@ -411,7 +411,9 @@ const simulateChanges = (
   }
   // An undone task whose deadline is today and that is unplanned or overdue
   // is planned for today (setDeadline's auto-plan, TaskDueEffects at day
-  // change), so a rule that excludes today can't hold for it.
+  // change), so a rule that excludes today can't hold for it. Conservative for
+  // subtasks: the real auto-plan skips one whose parent is in Today, so such a
+  // move may be refused although it would hold — never accepted wrongly.
   const deadlineDay = getLogicalDay(sim.deadlineDay, sim.deadlineWithTime, {
     ...ctx,
     isDayBeforeTime: false,

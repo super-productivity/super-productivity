@@ -503,3 +503,35 @@ Not taken:
 - A per-view icon in the page header, keyboard access to the section's
   "Disable feature" (Settings → App Features has the switch) and a tooltip on
   keyboard focus in the compact rail (route rows have none elsewhere either).
+
+Phase 2 implementation review (fresh-context subagent, 2026-10-31). Fixed:
+
+- Bug: moving a task into a "no priority" column sent `priority: undefined`,
+  which the synced op drops (#9776); it now sends `null`.
+- An empty `projectIds` again means all projects (as on released clients);
+  "Save as view" no longer writes `[]` for a project search without hits.
+- "Save as view" from a tag list keeps the list's tag; filter parts one column
+  can't combine with it (any of several tags, untagged, a project search
+  without hits) are left out and named in a dialog hint.
+- An unknown `sortKey` (from a newer client) survives an edit on this client.
+- Test-only `_filterTasks` and the unused `getPanelDueState` removed; Today's
+  title is translated in saved views; title sorting uses the UI language like
+  the lists; the panel reads tags lazily.
+- Added specs: clearing priority/deadline/tags on a move, save-as-view hints.
+
+Behaviour changes to mention in the PR:
+
+- Board columns sorted by due date now put date-only tasks at the end of their
+  day (like the task lists, #9828), and title sorting is natural ("Task 2"
+  before "Task 10").
+- The filter menu's date filters use the logical day.
+- Columns that require the virtual Today tag refuse moves.
+
+Not taken / known gaps:
+
+- On a released client, editing a board resets `sortDir` on a column that is
+  sorted only by a new `sortKey` (its editor hides `sortDir` without `sortBy`).
+- The deadline auto-plan simulation is conservative for subtasks whose parent
+  is in Today (may refuse a move that would hold).
+- `view-menu` items sit in a child component, so arrow keys don't move between
+  them inside the mat-menu; the existing `work-context-menu` has the same gap.

@@ -52,8 +52,9 @@ export class BoardEditComponent implements OnInit {
         boardCfg.panels?.map((panel) => ({
           ...DEFAULT_PANEL_CFG,
           ...panel,
-          // The form has one sort select for `sortBy` and `sortKey`.
-          sortKey: getPanelSortKey(panel) ?? undefined,
+          // The form has one sort select for `sortBy` and `sortKey`. An unknown
+          // `sortKey` (from a newer client) stays in the model, so saving keeps it.
+          sortKey: getPanelSortKey(panel) ?? panel.sortKey,
         })) || [],
     });
   }

@@ -194,11 +194,6 @@ const parsePriorityRule = (
       ? (Number(value) as TaskPriority)
       : undefined;
 
-/** The panel's planned-date rule (`dueState`); unknown values mean "any". */
-export const getPanelDueState = (
-  panelCfg: Pick<BoardPanelCfg, 'dueState'>,
-): TaskDateRule | undefined => parseDateRule(panelCfg.dueState);
-
 /**
  * A board panel's filters as task criteria. Unknown values (written by a newer
  * client) are left out, so they mean "any". A planned-date rule implies
@@ -213,8 +208,13 @@ export const panelToCriteria = (panel: BoardPanelCfg): TaskCriteria => {
     excludedTagsMatch: panel.excludedTagsMatch === 'all' ? 'all' : 'any',
   };
   if (panel.isUntagged === true) criteria.isUntagged = true;
-  if (!isAllProjects(panel.projectIds)) {
-    criteria.projectIds = (panel.projectIds ?? []).filter((id) => id !== '');
+  // An empty list means all projects, as it always has (and on released
+  // clients); only a list of ids restricts.
+  const projectIds = isAllProjects(panel.projectIds)
+    ? []
+    : (panel.projectIds ?? []).filter((id) => id !== '');
+  if (projectIds.length) {
+    criteria.projectIds = projectIds;
   }
   if (panel.taskDoneState === BoardPanelCfgTaskDoneState.Done) criteria.done = 'done';
   if (panel.taskDoneState === BoardPanelCfgTaskDoneState.UnDone) {
@@ -251,7 +251,8 @@ export const getViewIcon = (board: Pick<BoardCfg, 'panels'>): string =>
 
 /**
  * Column fields for task criteria: the counterpart of `panelToCriteria` for the
- * rules a column can hold. `isNoMatch` becomes an empty project list.
+ * rules a column can hold. A column can't say "matches nothing" (`isNoMatch`):
+ * callers check for it first.
  */
 export const criteriaToPanelFields = (criteria: TaskCriteria): Partial<BoardPanelCfg> => {
   const fields: Partial<BoardPanelCfg> = {};
@@ -264,11 +265,7 @@ export const criteriaToPanelFields = (criteria: TaskCriteria): Partial<BoardPane
     fields.excludedTagsMatch = criteria.excludedTagsMatch ?? 'any';
   }
   if (criteria.isUntagged) fields.isUntagged = true;
-  if (criteria.isNoMatch) {
-    fields.projectIds = [];
-  } else if (criteria.projectIds) {
-    fields.projectIds = criteria.projectIds;
-  }
+  if (criteria.projectIds?.length) fields.projectIds = criteria.projectIds;
   if (criteria.plannedDate === 'none') {
     fields.scheduledState = BoardPanelCfgScheduledState.NotScheduled;
   } else if (criteria.plannedDate) {
@@ -314,7 +311,8 @@ export const withPanelSortKey = (
   );
   if (sortBy) {
     out.sortBy = sortBy;
-  } else if (key && NEW_SORT_KEYS.has(key)) {
+  } else if (key) {
+    // A key this client doesn't know (from a newer one) is kept as is.
     out.sortKey = key;
   }
   return out;

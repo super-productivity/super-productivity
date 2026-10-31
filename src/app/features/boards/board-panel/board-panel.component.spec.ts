@@ -1309,6 +1309,36 @@ describe('BoardPanelComponent - drop()', () => {
       );
     });
 
+    it('clears priority with null (so it syncs), removes the deadline and tags', async () => {
+      const task = mkTask({
+        id: 'a',
+        priority: 3,
+        deadlineDay: '2026-09-20',
+        tagIds: ['x'],
+      });
+      await setup([task]);
+      fixture.componentRef.setInput('panelCfg', {
+        ...DEFAULT_PANEL_CFG,
+        id: 'p',
+        priorityRule: 'none',
+        deadlineState: 'none',
+        isUntagged: true,
+      });
+      fixture.detectChanges();
+
+      expect(await component.moveTasks(['a'])).toBeTrue();
+
+      // `undefined` would be dropped from the synced op (#9776).
+      expect(dispatchSpy).toHaveBeenCalledWith(
+        TaskSharedActions.updateTask({
+          task: { id: 'a', changes: { tagIds: [], priority: null } },
+        }),
+      );
+      expect(dispatchSpy).toHaveBeenCalledWith(
+        TaskSharedActions.removeDeadline({ taskId: 'a', isSkipSnack: true }),
+      );
+    });
+
     it('hides the add row where a new task can never match', async () => {
       await setup([]);
       fixture.componentRef.setInput('panelCfg', {

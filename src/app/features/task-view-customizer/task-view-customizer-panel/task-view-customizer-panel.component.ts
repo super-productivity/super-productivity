@@ -22,7 +22,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatDividerModule } from '@angular/material/divider';
 import { TaskViewCustomizerService } from '../task-view-customizer.service';
 import { TagService } from '../../tag/tag.service';
-import { TranslatePipe } from '@ngx-translate/core';
+import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { T } from 'src/app/t.const';
 import {
   DEFAULT_OPTIONS,
@@ -157,18 +157,16 @@ export class TaskViewCustomizerPanelComponent {
   /** Opens the create-view dialog prefilled with this list's filter and sort. */
   async saveAsView(): Promise<void> {
     const list = await firstValueFrom(this._workContextService.activeWorkContext$);
-    const board = this.customizerService.buildViewFromList({
+    const { board, hints } = this.customizerService.buildViewFromList({
       type: list.type,
       id: list.id,
-      title: list.title,
+      // Today's stored title is English; use the translated one.
+      title:
+        list.id === TODAY_TAG.id
+          ? this._injector.get(TranslateService).instant(T.G.TODAY_TAG_TITLE)
+          : list.title,
       taskIds: list.taskIds,
     });
-    const hints = [
-      ...(this.customizerService.selectedGroup().type
-        ? [T.F.BOARDS.V.HINT_GROUPING_NOT_SAVED]
-        : []),
-      ...(list.id === TODAY_TAG.id ? [T.F.BOARDS.V.HINT_TODAY_OR_OVERDUE] : []),
-    ];
     await this._injector.get(BoardsService).createBoard(board, hints);
   }
 }

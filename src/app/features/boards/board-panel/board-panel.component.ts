@@ -57,7 +57,7 @@ import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions'
 import { LocalDateStrPipe } from '../../../ui/pipes/local-date-str.pipe';
 import { MatIcon } from '@angular/material/icon';
 import { MatIconButton } from '@angular/material/button';
-import { TranslatePipe } from '@ngx-translate/core';
+import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { DialogScheduleTaskComponent } from '../../planner/dialog-schedule-task/dialog-schedule-task.component';
 import { MatDialog } from '@angular/material/dialog';
 import { fastArrayCompare } from '../../../util/fast-array-compare';
@@ -316,13 +316,14 @@ export class BoardPanelComponent implements TaskCardList {
   readonly sortKey = computed(() => getPanelSortKey(this.panelCfg()));
   isManualOrder = computed(() => !this.sortKey());
 
-  private readonly _allTags = toSignal(this.store.select(selectAllTags), {
-    initialValue: [],
-  });
-  private readonly _collator = new Intl.Collator(undefined, {
-    sensitivity: 'base',
-    numeric: true,
-  });
+  // Only read for the tag sort; `selectSignal` doesn't subscribe until then.
+  private readonly _allTags = this.store.selectSignal(selectAllTags);
+  // The UI language, like the task lists' sort, so a saved view sorts titles
+  // like the list it came from.
+  private readonly _collator = new Intl.Collator(
+    this._injector.get(TranslateService).currentLang || undefined,
+    { sensitivity: 'base', numeric: true },
+  );
 
   // Tags to auto-apply on a new task created via the inline-add row.
   // - AND mode (default): all required tags.
@@ -566,9 +567,8 @@ export class BoardPanelComponent implements TaskCardList {
     const updates: Partial<TaskCopy> = {
       ...(changes.tagIds ? { tagIds: unique(changes.tagIds) } : {}),
       ...(changes.isDone !== undefined ? { isDone: changes.isDone } : {}),
-      ...(changes.priority !== undefined
-        ? { priority: changes.priority ?? undefined }
-        : {}),
+      // `null` clears it; `undefined` would be dropped from the synced op (#9776).
+      ...(changes.priority !== undefined ? { priority: changes.priority } : {}),
     };
     if (Object.keys(updates).length > 0) {
       this.store.dispatch(

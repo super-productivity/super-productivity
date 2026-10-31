@@ -347,25 +347,15 @@ export class TaskViewCustomizerService {
   }
 
   /** A one-column view showing what `list` shows with the current filter and sort. */
-  buildViewFromList(list: ViewSourceList): BoardCfg {
+  buildViewFromList(list: ViewSourceList): { board: BoardCfg; hints: string[] } {
     return buildViewFromList({
       list,
       filter: this.selectedFilter(),
       sort: this.selectedSort(),
+      isGrouped: !!this.selectedGroup().type,
       tags: this._allTags().filter((tag) => tag.id !== TODAY_TAG.id),
       projects: this._allProjects,
     });
-  }
-
-  private _filterTasks(
-    tasks: TaskWithSubTasks[],
-    filter: FilterOption,
-  ): TaskWithSubTasks[] {
-    const criteria = this._toCriteria(filter);
-    const ctx = this._criteriaCtx();
-    return criteria
-      ? tasks.filter((task) => matchesTaskCriteria(task, criteria, ctx))
-      : tasks;
   }
 
   private applySort(

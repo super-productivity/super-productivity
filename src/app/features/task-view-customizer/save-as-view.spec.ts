@@ -1,6 +1,7 @@
 import { buildViewFromList, ViewSourceList } from './save-as-view';
 import { WorkContextType } from '../work-context/work-context.model';
 import { TODAY_TAG } from '../tag/tag.const';
+import { T } from '../../t.const';
 import {
   DEFAULT_OPTIONS,
   FILTER_COMMON,
@@ -34,17 +35,22 @@ describe('buildViewFromList', () => {
     ...DEFAULT_OPTIONS.filter,
     ...overrides,
   });
-  const build = (
+  const buildWithHints = (
     source: ViewSourceList,
-    opts: { filter?: FilterOption; sort?: SortOption } = {},
+    opts: { filter?: FilterOption; sort?: SortOption; isGrouped?: boolean } = {},
   ): ReturnType<typeof buildViewFromList> =>
     buildViewFromList({
       list: source,
       filter: opts.filter ?? DEFAULT_OPTIONS.filter,
       sort: opts.sort ?? DEFAULT_OPTIONS.sort,
+      isGrouped: !!opts.isGrouped,
       tags,
       projects,
     });
+  const build = (
+    source: ViewSourceList,
+    opts: { filter?: FilterOption; sort?: SortOption } = {},
+  ): ReturnType<typeof buildViewFromList>['board'] => buildWithHints(source, opts).board;
 
   it('makes a one-column view of a project list: undone parents, no backlog', () => {
     const board = build(list());
@@ -113,17 +119,52 @@ describe('buildViewFromList', () => {
     expect(panel.includedTagsMatch).toBe('all');
   });
 
-  it('resolves a legacy title search to ids, and a search without hits to nothing', () => {
+  it('resolves a legacy title search to ids', () => {
     expect(
       build(list({ type: WorkContextType.TAG, id: 'work' }), {
         filter: filter({ type: FILTER_OPTION_TYPE.project, preset: 'web' }),
       }).panels[0].projectIds,
     ).toEqual(['p1']);
+  });
+
+  it('leaves out, with a hint, filter parts a column cannot combine with the list', () => {
+    const noHits = buildWithHints(list(), {
+      filter: filter({ type: FILTER_OPTION_TYPE.project, preset: 'nothing' }),
+    });
+    expect(noHits.board.panels[0].projectIds).toEqual(['p1']);
+    expect(noHits.hints).toContain(T.F.BOARDS.V.HINT_FILTER_PART_NOT_SAVED);
+
+    // A tag list filtered to "home OR other": one column can't say
+    // "work AND (home OR other)", so the list's tag stays and the filter goes.
+    const anyOf = buildWithHints(list({ type: WorkContextType.TAG, id: 'work' }), {
+      filter: filter({
+        type: FILTER_OPTION_TYPE.tag,
+        preset: null,
+        tagIds: ['home', 'work'],
+        tagFilterMode: 'OR',
+      }),
+    });
+    expect(anyOf.board.panels[0].includedTagIds).toEqual(['work']);
+    expect(anyOf.hints).toContain(T.F.BOARDS.V.HINT_FILTER_PART_NOT_SAVED);
+
+    const untagged = buildWithHints(list({ type: WorkContextType.TAG, id: 'work' }), {
+      filter: filter({
+        type: FILTER_OPTION_TYPE.tag,
+        preset: FILTER_COMMON.NOT_SPECIFIED,
+      }),
+    });
+    expect(untagged.board.panels[0].isUntagged).toBeUndefined();
+    expect(untagged.board.panels[0].includedTagIds).toEqual(['work']);
+  });
+
+  it('names what the view does not carry over', () => {
+    expect(buildWithHints(list(), { isGrouped: true }).hints).toEqual([
+      T.F.BOARDS.V.HINT_GROUPING_NOT_SAVED,
+    ]);
     expect(
-      build(list(), {
-        filter: filter({ type: FILTER_OPTION_TYPE.project, preset: 'nothing' }),
-      }).panels[0].projectIds,
-    ).toEqual([]);
+      buildWithHints(list({ type: WorkContextType.TAG, id: TODAY_TAG.id })).hints,
+    ).toEqual([T.F.BOARDS.V.HINT_TODAY_OR_OVERDUE]);
+    expect(buildWithHints(list()).hints).toEqual([]);
   });
 
   it('carries the sort over and then leaves the order to it', () => {

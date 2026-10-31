@@ -8,6 +8,7 @@ import { Project } from '../project/project.model';
 import { Tag } from '../tag/tag.model';
 import { TaskWithSubTasks } from '../tasks/task.model';
 import { MockStore, provideMockStore } from '@ngrx/store/testing';
+import { matchesTaskCriteria } from '../tasks/task-criteria/task-criteria';
 import {
   selectStartOfNextDayDiffMs,
   selectTodayStr,
@@ -48,13 +49,24 @@ import { parseDbDateStr } from '../../util/parse-db-date-str';
 
 // The filter menu filters through the shared task-criteria module; this keeps
 // the per-filter cases below as its parity test.
+const filterTasks = (
+  svc: TaskViewCustomizerService,
+  tasks: TaskWithSubTasks[],
+  filter: FilterOption,
+): TaskWithSubTasks[] => {
+  const criteria = svc['_toCriteria'](filter);
+  const ctx = svc['_criteriaCtx']();
+  return criteria
+    ? tasks.filter((task) => matchesTaskCriteria(task, criteria, ctx))
+    : tasks;
+};
 const applyFilter = (
   svc: TaskViewCustomizerService,
   tasks: TaskWithSubTasks[],
   type: FILTER_OPTION_TYPE | null,
   preset: string,
 ): TaskWithSubTasks[] =>
-  svc['_filterTasks'](tasks, { type, preset, label: '' } as FilterOption);
+  filterTasks(svc, tasks, { type, preset, label: '' } as FilterOption);
 
 describe('TaskViewCustomizerService', () => {
   let service: TaskViewCustomizerService;
@@ -254,7 +266,7 @@ describe('TaskViewCustomizerService', () => {
 
   it('should filter selected tag ids with OR and AND modes', () => {
     const byTagIds = (tagFilterMode?: 'OR' | 'AND'): TaskWithSubTasks[] =>
-      service['_filterTasks'](mockTasks, {
+      filterTasks(service, mockTasks, {
         type: FILTER_OPTION_TYPE.tag,
         preset: null,
         label: '',

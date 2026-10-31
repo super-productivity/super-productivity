@@ -1,7 +1,6 @@
 import {
   criteriaToPanelFields,
   getCalendarDateForDueDay,
-  getPanelDueState,
   getViewIcon,
   normalizeBoardForSave,
   getPanelSortKey,
@@ -696,15 +695,6 @@ describe('doesTaskMatchPanel', () => {
   });
 });
 
-describe('getPanelDueState', () => {
-  it('narrows known values and drops unknown ones', () => {
-    expect(getPanelDueState({ dueState: 'overdue' })).toBe('overdue');
-    expect(getPanelDueState({ dueState: 'next7Days' })).toBe('next7Days');
-    expect(getPanelDueState({ dueState: 'someday' })).toBeUndefined();
-    expect(getPanelDueState({})).toBeUndefined();
-  });
-});
-
 describe('addDaysToDbDateStr', () => {
   it('adds calendar days across month ends and DST changes', () => {
     expect(addDaysToDbDateStr('2026-10-30', 1)).toBe('2026-10-31');
@@ -851,6 +841,11 @@ describe('panelToCriteria: rules added for views', () => {
     expect(panelToCriteria(panel({ dueState: 'today' })).scheduled).toBeUndefined();
   });
 
+  it('reads an empty project list as all projects, like released clients', () => {
+    expect(panelToCriteria(panel({ projectIds: [] })).projectIds).toBeUndefined();
+    expect(panelToCriteria(panel({ projectIds: [''] })).projectIds).toBeUndefined();
+  });
+
   it('ignores values it does not know (written by a newer client)', () => {
     const criteria = panelToCriteria(
       panel({
@@ -887,6 +882,8 @@ describe('panel sort keys', () => {
     expect(getPanelSortKey({ sortBy: 'created', sortKey: 'priority' })).toBe('created');
     expect(getPanelSortKey({ sortKey: 'priority' })).toBe('priority');
     expect(getPanelSortKey({ sortKey: 'nonsense' })).toBeUndefined();
+    // ...but an unknown key survives a save of this client's editor.
+    expect(withPanelSortKey(panel({}), 'futureKey' as any).sortKey).toBe('futureKey');
     expect(getPanelSortKey({})).toBeUndefined();
   });
 });
@@ -980,7 +977,8 @@ describe('criteriaToPanelFields', () => {
     expect(criteriaToPanelFields({ plannedDate: 'none' }).scheduledState).toBe(
       BoardPanelCfgScheduledState.NotScheduled,
     );
-    expect(criteriaToPanelFields({ isNoMatch: true }).projectIds).toEqual([]);
+    // A column can't say "matches nothing"; callers handle isNoMatch first.
+    expect(criteriaToPanelFields({ isNoMatch: true }).projectIds).toBeUndefined();
   });
 });
 
