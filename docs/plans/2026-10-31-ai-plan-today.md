@@ -1,6 +1,6 @@
 # Speak to plan: an optional AI command plugin
 
-Oct 31, 2026 · rev. 4 · status: **proposal**, nothing implemented · branch
+Oct 31, 2026 · rev. 5 · status: **proposal**, nothing implemented · branch
 `claude/ai-plan-today`
 
 **Related:** generative views, parked (`docs/plans/2026-10-30-generative-views.md`
@@ -11,7 +11,9 @@ on `claude/generative-ui-todo-app-h4o6e8`) · agent endpoint / MCP plan
 [contributor sync model](../sync-and-op-log/contributor-sync-model.md).
 
 **Revisions:** rev. 1 was a one-shot "Help me plan today" button. Rev. 2 and
-rev. 4 fixed review findings. Rev. 3 follows the maintainer's direction (2026-10-31): many
+rev. 4 fixed review findings. Rev. 5 adds extensive prior art, the maintainer's decisions on voice and
+local models, and one model call per request instead of an agent loop. Rev. 3
+followed the maintainer's direction (2026-10-31): many
 users don't want AI, so it stays an optional plugin; and instead of one
 button, a shortcut opens a box you speak or type into, to add or change tasks
 or to see a temporary selection ("top 10 for today"). Planning the day is one
@@ -39,13 +41,16 @@ of those commands.
   plugin's panel from its shortcut, and add tasks without parsing `#tag` and
   `@date` out of titles.
 - **Voice in v1:** the system's own dictation into the box (macOS, Windows,
-  phone keyboards). A true push-to-talk microphone needs a host speech service
-  and is Phase 3 (§ 5).
+  phone keyboards): two keys, no microphone code. Push-to-talk needs a host
+  speech service and comes later, on evidence (§ 5).
+- **One model call per request:** the plugin searches tasks on the device
+  first, so small local models can do it too. Local models (Ollama, LM Studio)
+  come after the first release through a scoped local-network permission.
 - **Gate:** an offline eval of realistic requests runs first (no app code).
   Capture and changes ship first; selections and day plans follow when their
   part of the eval passes (§ 11).
-- **Cost to the user:** about US$0.003–0.12 per request depending on model
-  (estimate, § 6.6).
+- **Cost to the user:** about US$0.002–0.08 per request depending on model
+  (estimate, § 6.6); free with a local model.
 
 **Sections:** [1. Demand and fit](#1-demand-and-fit) ·
 [2. Prior art](#2-prior-art) · [3. What the user does](#3-what-the-user-does) ·
@@ -91,40 +96,127 @@ it.
 
 ## 2. Prior art
 
-Checked 2026-10 from vendor docs, release notes and review sites (no hands-on
-use; review-site claims are secondhand).
+Checked 2026-10-31 by a research subagent from vendor docs, changelogs and
+review sites; no hands-on use. **(2nd)** = secondhand or aggregator only. The
+Ollama endpoint and SP issue numbers were re-checked directly.
 
-| App                | What it does with AI                                                                                       | How the user accepts                                                          | Complaints                                              |
-| ------------------ | ---------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- | ------------------------------------------------------- |
-| **Todoist Ramble** | Speech braindump → several tasks with dates, priorities, projects. Raw audio to Gemini, no transcript step | Tasks shown first, then added; free plan limited, each dictation is a session | —                                                       |
-| **TickTick**       | AI voice input splits one input into several tasks (paid); "AI Assistant" organizes lists; MCP support     | Unclear whether existing tasks can be edited by voice                         | —                                                       |
-| **Akiflow (Aki)**  | Moves items when asked, chat or voice (beta)                                                               | Chat                                                                          | Chat is slow for a daily habit; price                   |
-| **Sunsama**        | Guided planning ritual; AI only suggests estimates and channels from history                               | Prefilled, edited inline; "overcommitted" warning                             | Ritual becomes a chore; price                           |
-| **Motion**         | Puts every task on the calendar, continuously                                                              | Applied directly, no preview; reshuffles                                      | "Schedule changed three times by 3 pm"; too-tight days  |
-| **Reclaim**        | Tasks and habits into calendar slots                                                                       | Writes the calendar directly                                                  | Hundreds of events it created; repeated override clicks |
+### 2.1 Voice and natural-language task apps
 
-Sources: [Ramble help](https://www.todoist.com/help/articles/dictate-to-add-tasks-with-ramble-P1Raq7vVF) ·
-[Ramble launch (TechCrunch)](https://techcrunch.com/2026/01/21/todoists-app-now-lets-you-add-tasks-to-your-to-do-list-by-speaking-to-its-ai/) ·
-[Building Ramble (Product Talk)](https://www.producttalk.org/building-todoist-ramble-how-doist-turned-voice-braindumps-into-real-time-task-capture/) ·
-[TickTick release notes](https://releasebot.io/updates/ticktick) ·
-[Akiflow features](https://akiflow.com/features) ·
-[Sunsama AI](https://sunsama.com/features/ai) ·
-[Motion auto-scheduling](https://www.usemotion.com/help/time-management/auto-scheduling/concept-auto-scheduling) ·
-[Motion reviews (saner.ai)](https://blog.saner.ai/motion-reviews) ·
-[Reclaim AI disclosure](https://help.reclaim.ai/en/articles/13178785-reclaim-ai-disclosure) ·
-[Reclaim on Google Workspace Marketplace](https://workspace.google.com/u/0/marketplace/app/reclaimai/950518663892).
+| App                          | Capture · edit · bulk                                                     | How changes are confirmed                                                                              | Speech                                                           |
+| ---------------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------- |
+| **Todoist Ramble** (2026-01) | Capture; edits only the cards of the current session                      | Live preview cards, corrected by voice ("remove that"), then Done                                      | Raw audio to Gemini 2.5 Flash Live; online only                  |
+| **TickTick AI**              | Capture splits items; assistant plans, reorganises, deletes; official MCP | Help center tells users to _ask_ for confirmation in the prompt; "deleted content cannot be recovered" | Cloud                                                            |
+| **Sunsama Sunny**            | Create, edit, move, delete, complete, batch                               | On by default (verified); one-click undo "receipts" per its changelog (2nd, not confirmed)             | Voice experimental (2nd)                                         |
+| **Akiflow Aki**              | Create, edit, reschedule, complete; "Plan" pulls in overdue (2nd)         | Preview before saving; vendor admits replies are slow                                                  | Cloud transcription                                              |
+| **Morgen AI Planner**        | Day plan from tasks and calendar                                          | Pulsing preview blocks: accept, edit or regenerate; "never… without your approval"                     | —                                                                |
+| **Google Tasks + Gemini**    | Add, edit, show; no bulk (2nd)                                            | Applied directly, undo in the notification; reports of false "created" confirmations (2nd)             | Cloud                                                            |
+| **Notion Agent**             | Pages and databases, bulk                                                 | Undo any change; plan-then-confirm for bulk (2nd)                                                      | Cloud                                                            |
+| **Apple Reminders** (iOS 26) | Capture suggestions from the share sheet                                  | Per-item "Add" or "Include All"                                                                        | Apple Intelligence                                               |
+| **MS Planner agent**         | Create, update, draft several tasks                                       | Drafts                                                                                                 | Cloud                                                            |
+| **Tiimo**, **Superlist**     | Brain dump to day plan (Tiimo); record-to-tasks (Superlist)               | Editable proposal (Tiimo); created on tick (Superlist)                                                 | Cloud                                                            |
+| **Motion**                   | AI chat creates and updates; continuous auto-scheduling                   | Applied directly, reshuffles                                                                           | Cloud                                                            |
+| **Raycast AI**               | Acts through extensions (e.g. Todoist)                                    | Preview of what will be performed                                                                      | BYO key and Ollama; calls Ollama tool calling "a bit unreliable" |
+| **Things 3**                 | No in-app AI; iOS 27 Siri can create and amend one to-do                  | —                                                                                                      | Siri                                                             |
 
-In this repo, the bundled **Brain Dump** plugin already turns each pasted line
-into a task, without AI. This plugin is the AI version of that plus edits.
+In this repo: the bundled **Brain Dump** plugin turns each pasted line into a
+task, without AI, and **AI Productivity Prompts** copies prompts to any
+chatbot. #4856 asks for an Android widget for voice task creation (open, 4
+reactions).
 
-**Take:** show the result before anything changes (Ramble, against Motion and
-Reclaim); several tasks from one utterance (Ramble, TickTick); reasons from
-the user's own facts ("overdue 3 days", "deadline Monday"); propose less than
-the day holds; bring your own key.
+**"What to focus on"** is rare: Morgen, Akiflow and Tiimo produce plans, a
+Vikunja MCP has a "daily focus" tool. None found shows a reason per item.
+Todoist dropped its 2016 Smart Schedule; Motion is criticised for moving
+everything; Akiflow users ask for _lighter_ auto-scheduling.
 
-**Deliberately don't:** send audio to a cloud model (Ramble does; audio is
-more sensitive than text and ties us to one provider); continuous re-planning;
-writing calendar events; a chat thread; a daily ritual prompt.
+### 2.2 Open source and local models
+
+- **Obsidian:** an "AI Providers" plugin shares keys and endpoints across
+  plugins (Anthropic, Ollama, LM Studio, OpenAI-compatible). Obsidian 1.11's
+  SecretStorage moved keys out of plugin data. Smart Connections states plainly
+  that switching to a cloud model sends note text.
+- **Logseq, Joplin:** Ollama plugins exist; Joplin's Jarvis once broke custom
+  endpoints in a release, so local endpoints need a test.
+- **Endpoints:** Ollama (`/v1/messages`) and LM Studio (0.4.1+) both speak the
+  Anthropic Messages format, with tools, but no `tool_choice` and no prompt
+  caching. So one client covers Anthropic, Ollama and LM Studio.
+- **Small models:** Qwen3/3.5 8–9B and Gemma 4 E4B are the most cited for
+  tool calling; evidence is mostly self-reported. Multi-turn tool accuracy
+  drops sharply on small models (BFCL).
+- **Speed:** on llama.cpp an 8k-token prompt took about 16 s on an M3 Max and
+  27 s on an M1 Max before generating (2024 benchmark), and ran out of memory on
+  a base 8 GB M1. Expect 25–45 s per request on good laptops.
+
+### 2.3 Failure modes users report
+
+- Over-interpreting: Ramble _executed_ instead of capturing, mixed up dates and
+  project names. Doist's fix: keep it simple and constrained; easy correction
+  beats first-try accuracy (task creation success rose from about 40% to 62%).
+- False success (Gemini says created, nothing saved), hallucinated summaries
+  (Apple paused news summaries, 2025-01), prompt injection that leaked data
+  (Notion agent, 2025-09).
+- AI fatigue: Figma users ask for one switch to turn all AI off; a survey says
+  64% would not use or would disable AI assistants (2nd).
+- Cost and quotas (TickTick, Todoist free tier, Motion and Notion credits);
+  slowness (Aki).
+
+### 2.4 Take and deliberately don't
+
+**Take:**
+
+1. Every edit and delete is previewed and applied only on Apply (Morgen,
+   Raycast, Aki; against TickTick, Gemini, Motion).
+2. Per-row opt-out (Apple's "Add" / "Include All").
+3. Project and tag names and today's date in the prompt; no retrieval service.
+4. Capture literally; to correct, edit the request and run it again (Ramble).
+5. A reason per "focus" item, and the list is temporary. Nobody else shows
+   reasons.
+6. One validated proposal per request; no reliance on `tool_choice`; unknown
+   ids rejected (works with Ollama too).
+7. One client for Anthropic, Ollama and LM Studio; local models labelled
+   slower, context trimmed to what's needed.
+8. The key in secret storage, never in synced data; the notice lists exactly
+   what is sent and says the user's provider terms apply.
+9. OS dictation in v1; a speech model only later.
+10. Keyboard-operable panel, visible labels matching accessible names (WCAG
+    2.5.3), no hold-to-talk requirement.
+11. An eval set of real typed and dictated requests.
+
+**Deliberately don't:** send audio to a cloud model (Ramble); apply directly
+or reshuffle continuously (Motion, Gemini); keep chat history (Ramble: "quick
+capture, not conversation"); give the model any outbound channel such as URLs
+or web tools (Notion's leak needed one); turn it on by default (Sunny).
+
+**Sources:** [Ramble help](https://www.todoist.com/help/articles/use-ramble-to-add-tasks-by-voice-P1Raq7vVF) ·
+[Ramble launch](https://techcrunch.com/2026/01/21/todoists-app-now-lets-you-add-tasks-to-your-to-do-list-by-speaking-to-its-ai/) ·
+[Building Ramble](https://www.producttalk.org/building-todoist-ramble-how-doist-turned-voice-braindumps-into-real-time-task-capture/) ·
+[TickTick AI](https://help.ticktick.com/articles/7444685542580551680) ·
+[Sunny](https://help.sunsama.com/docs/usage-guides/sunny/) ·
+[Sunsama changelog](https://roadmap.sunsama.com/changelog) ·
+[Aki](https://product.akiflow.com/help/articles/9441910-meet-aki) ·
+[Morgen AI Planner](https://www.morgen.so/guides/plan-your-day-using-the-ai-planner) ·
+[Morgen FAQ](https://www.morgen.so/faq) ·
+[Gemini + Tasks](https://support.google.com/gemini/answer/15230285) ·
+[Notion Agent](https://www.notion.com/help/notion-agent) ·
+[Apple Reminders](https://support.apple.com/124025) ·
+[Planner agent](https://techcommunity.microsoft.com/t5/planner-blog/planner-agent-in-microsoft-365-copilot-is-now-generally/ba-p/4527629) ·
+[Tiimo](https://www.tiimoapp.com/resource-hub/ai-planner) ·
+[Superlist Talk](https://help.superlist.com/en/articles/224824-create-tasks-and-notes-with-your-voice-talk) ·
+[Raycast AI extensions](https://manual.raycast.com/v1/ai-extensions) ·
+[Raycast 1.100](https://www.raycast.com/changelog/1-100-0) ·
+[Things 3.24](https://macrumors.com/2026/09/14/things-3-updated-for-ios-27) ·
+[Obsidian AI Providers](https://community.obsidian.md/plugins/ai-providers) ·
+[Obsidian SecretStorage](https://docs.obsidian.md/plugins/guides/secret-storage) ·
+[Ollama Anthropic compatibility](https://docs.ollama.com/api/anthropic-compatibility) ·
+[LM Studio Anthropic compatibility](https://lmstudio.ai/docs/developer/anthropic-compat) ·
+[llama.cpp benchmarks](https://github.com/XiongjieDai/GPU-Benchmarks-on-LLM-Inference) ·
+[Notion lethal trifecta](https://simonwillison.net/2025/Sep/19/notion-lethal-trifecta) ·
+[Apple pauses summaries](https://www.siliconrepublic.com/business/apple-halt-ai-notification-summaries-backlash-features) ·
+[Figma "human mode"](https://forum.figma.com/suggest-a-feature-11/human-mode-single-toggle-to-turn-off-all-ai-features-permanently-per-user-47577) ·
+[Todoist Smart Schedule 2016](https://macrumors.com/2016/11/16/todoist-smart-schedule) ·
+[WCAG 2.5.3](https://www.w3.org/WAI/WCAG22/Understanding/label-in-name.html).
+Motion, Reclaim and earlier complaints: rev. 2 sources
+([Motion](https://www.usemotion.com/help/time-management/auto-scheduling/concept-auto-scheduling),
+[Motion reviews](https://blog.saner.ai/motion-reviews)).
 
 ## 3. What the user does
 
@@ -174,8 +266,9 @@ zip, its `downloadUrl` and sha256, published like the Ridonculous plugins
 install and show in the plugin list; #5952 objects to exactly that.
 
 **Reuse from the prototype** (`packages/plugin-dev/ai-view-builder` on the
-generative-views branch): the agent loop of at most 4 rounds, the API key in
-secret storage, the eval runner. Not its transport: it streams with direct
+generative-views branch): the Anthropic client, tool schemas and validation
+pattern, the API key in secret storage, the eval runner. Not its agent loop
+(§ 6.2). Not its transport: it streams with direct
 `fetch` and `CapacitorWebFetch`, which bypasses the plugin's `allowedHosts`
 and `http` permission. v1 uses `request()` and shows the result whole. Not reused: persisted views and their spec. A
 selection here is the smallest possible generative view: one list, never
@@ -183,7 +276,8 @@ saved.
 
 ### 4.1 Plugin API additions
 
-Both optional, both small, both useful to other plugins:
+Both optional, both small, both useful to other plugins (a third, the scoped
+`localNetwork` permission, comes with local models, § 6.6):
 
 | Addition                                                                  | Why                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | ------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -196,30 +290,35 @@ Apply. A core preview is worth building only when a second source needs it.
 
 ## 5. Voice
 
-The Claude Messages API takes text, not audio, so speech becomes text before it
-leaves the device.
+**Decision (2026-10-31): two keys in v1.** The shortcut opens the box; the
+system's own dictation fills it: macOS (dictation key or Fn twice), Windows
+(Win+H), the microphone key on Android and iOS keyboards (one tap there). The
+empty box shows the platform's dictation key as a hint. Most of these run on
+the device. No microphone permission, no speech model, no plugin API. Most
+Linux desktops have no built-in dictation; Linux users type for now.
 
-**v1: system dictation, no host code.** The input box works with the dictation
-every platform already has: macOS (press the dictation key or Fn twice),
-Windows (Win+H), and the microphone key on Android and iOS keyboards. Most of
-these run on the device. The flow is: shortcut, dictation key, speak, Enter.
-Linux desktops mostly lack built-in dictation; they type.
+The Claude Messages API takes text, not audio, so speech becomes text before
+it leaves the device. We don't follow Ramble in sending raw audio to a cloud
+model: audio is more sensitive and ties the feature to one provider.
 
-**Why not a real push-to-talk microphone in v1:** Electron denies the
-microphone for the whole app (`electron/main-window.ts:332`, only
-`notifications` is allowed). The generative-views plan found Chromium's cloud
-recognizer unavailable in Electron and no working `SpeechRecognition` in the
-Android WebView.
+**Why not push-to-talk in v1:**
 
-**Phase 3, only if v1 shows people speak to it:** a host speech service
-(`PluginAPI.listen()`, partial and final transcripts). Its checklist, from the
-generative-views plan: an Electron permission handler for audio only; the macOS
-audio entitlement and usage string; Snap and Flatpak audio; Android
-`RECORD_AUDIO` and iOS usage strings; F-Droid builds without Google services;
-and on desktop an on-device model (Whisper class, about 40 MB, opt-in
-download), which is a new dependency that needs its own case. That is a large,
-cross-platform host change and a permanent plugin API; it should not ride on
-this plugin's first release.
+- Electron denies the microphone for the whole app
+  (`electron/main-window.ts:332`, only `notifications` is allowed).
+- Chromium's Web Speech API throws a network error in Electron; its on-device
+  mode (`processLocally`) depends on a Chrome-only component with no evidence
+  it works in Electron. Android's "on-device" recognizer may still stream to a
+  server, per its docs.
+
+**Later, on evidence that people speak to it:** a host speech service
+(`PluginAPI.listen()`, partial and final transcripts), with its own plan.
+Checklist: an Electron permission handler for audio only; the macOS audio
+entitlement and usage string; Snap and Flatpak audio; Android `RECORD_AUDIO`
+and iOS usage strings; F-Droid builds without Google services. On-device
+options: whisper.cpp (base 142 MiB, small 466 MiB; desktop, iOS, Android),
+Moonshine (27–61M parameters, English, streaming), Vosk (40 MB small model),
+iOS 26 SpeechAnalyzer. A bundled model is a new dependency and needs its own
+case.
 
 ## 6. Model layer
 
@@ -233,13 +332,14 @@ button that renders the next request's JSON from the user's own data:
 - **Names** of your projects and tags (so "move to Home" can resolve).
 - **Tasks on the radar:** open tasks on Today, overdue, or with a deadline in
   the next 7 days (up to 80), plus the selection on screen, plus up to 30 tasks
-  per search the model runs (at most 4 searches per request). For each: title,
+  whose title, project or tag matches words in your request (searched on the
+  device before the call, § 6.2). For each: title,
   done or not, estimate, time spent, whether it is on Today, overdue or later,
   due date, deadline, priority, whether it repeats, whether it has a fixed
   time or reminder, its parent (if it is a subtask), project and tags.
 - **Not sent:** task ids (replaced by `t1`, `t2`…), notes, attachments,
   calendar events, worklogs, audio. Subtasks are sent only like any other task:
-  when on the radar or found by a search.
+  when on the radar, selected or matched.
 
 Names exclude the virtual Today and in-progress tags: setting them as tags
 would put `TODAY` into `task.tagIds` (sync rule 5), and `getAllTags()` returns
@@ -249,15 +349,23 @@ the plugin `Task` type doesn't declare (`types.ts:352-385`).
 Ids are replaced by aliases and mapped back locally, so the model can only
 refer to tasks it was shown. About 60 tokens per task.
 
-### 6.2 Tools
+### 6.2 One call, output tools only
 
-`tool_choice` is `auto` (forced choice returns a 400 on Opus 5.5 and Sonnet
-5.5); each tool has `strict: true`. The panel shows the result when the request
-completes.
+**Search happens on the device, before the call.** The plugin matches the
+request's words against task titles, project names and tag names (plain text
+match, no AI) and adds up to 30 matching open tasks to the context, next to
+the radar and the on-screen selection. Then **one** model call returns the
+whole proposal. No agent loop: half the requests, faster, and it works with
+small local models, whose multi-turn tool use is weak (§ 2.2). If the task the
+user meant wasn't found, the model says so and the user rephrases.
+
+The model answers with these tools. `tool_choice` is `auto` (forced choice is a
+400 on Opus 5.5 and Sonnet 5.5, and unsupported by Ollama); each tool has
+`strict: true` where the provider supports it, and every input is validated
+locally anyway.
 
 | Tool          | Input                                                                     | Effect                                                     |
 | ------------- | ------------------------------------------------------------------------- | ---------------------------------------------------------- |
-| `find_tasks`  | `{ text?, project?, tag?, where?, includeDone?, limit ≤ 30 }`             | Runs **locally** over the user's tasks, returns rows       |
 | `add_task`    | `{ ref, title, project?, tags?, day?, estimateMin?, parent?, note? }`     | Proposed _Add_ row (`ref` lets a later add be its subtask) |
 | `update_task` | `{ id, title?, day?, estimateMin?, done?, project?, tags?, appendNote? }` | Proposed _Change_ row                                      |
 | `delete_task` | `{ id }`                                                                  | Proposed _Delete_ row                                      |
@@ -267,9 +375,8 @@ completes.
 A day plan is `update_task` calls with `day` plus a `say`; the panel recognises
 an all-`day` change set and shows the plan summary line.
 
-Agent loop: when a turn ends with tool calls, the plugin answers each (`ok`,
-search rows, or the validation error) and continues, at most 4 rounds. No
-conversation history is kept between requests.
+If the proposal fails the schema, one retry with the error. No conversation
+history is kept between requests.
 
 ### 6.3 One validator
 
@@ -323,31 +430,46 @@ other tools.
   typical, 20 s worst, with a spinner and Cancel. Not streamed (§ 4). Measured
   in the eval.
 - **Timeout** 30 s; **offline, no key, 401, 429, refusal:** a plain message,
-  nothing changed. Invalid tool input is returned to the model as an error;
-  after 4 rounds, what is valid is shown.
+  nothing changed. If the proposal fails the schema, one retry with the error;
+  then what is valid is shown.
 - **Stale rows:** on Apply the plugin re-reads each target task and drops rows
   whose task changed or was deleted since the proposal (`dueDay`,
   `dueWithTime`, `remindAt`, deadline, `isDone`, title, estimate, project,
   tags, `parentId`, `repeatCfgId`). A `dayChange` discards day plans.
 
-Cost per request (estimate; ~2 rounds × ~8k input with the prefix cached, ~1k
-output plus thinking at `low` effort, prices from the Claude API reference
+Cost per request (estimate; one call, ~8k input with the fixed prefix cached,
+~1k output plus thinking at `low` effort; prices from the Claude API reference
 cached 2026-10-06):
 
 | Model      | $/MTok in / out | Per request | 10 requests a day, a month |
 | ---------- | --------------- | ----------- | -------------------------- |
-| Haiku 5.5  | 0.10 / 0.50     | ~$0.003     | ~$1                        |
-| Sonnet 5.5 | 2 / 10          | ~$0.06      | ~$18                       |
-| Opus 5.5   | 4 / 20          | ~$0.12      | ~$36                       |
+| Haiku 5.5  | 0.10 / 0.50     | ~$0.002     | ~$0.60                     |
+| Sonnet 5.5 | 2 / 10          | ~$0.04      | ~$12                       |
+| Opus 5.5   | 4 / 20          | ~$0.08      | ~$24                       |
+| Local      | —               | free        | free                       |
 
-Heavy use on the larger models adds up, and voice wants speed. **Default:** the
-cheapest model that meets the eval bar; Opus 5.5 at `low` is the quality
-reference. The only setting is a model picker.
+**Default:** the cheapest cloud model that meets the eval bar; Opus 5.5 at
+`low` is the quality reference. The only setting is the model picker.
 
-**Provider:** Anthropic only in v1. A local model would fit "privacy first"
-best, but `request()` blocks private networks for plugin requests
-(`plugin-bridge.service.ts:568-570`); opening that is a security decision
-(§ 12).
+**Local models (decision 2026-10-31: yes, scoped).** Ollama and LM Studio
+accept the Anthropic Messages format, so the same client works; only the base
+URL and model name change. What blocks it today: `request()` refuses private
+and loopback addresses for every plugin (`plugin-http.service.ts:429`); the
+only way past is `allowPrivateNetwork`, honoured just for bundled issue
+providers (`plugin-bridge.service.ts:499`). Rather than a special case for this
+plugin id, a small general permission:
+
+- the manifest declares `localNetwork`;
+- honoured only for bundled plugins and for directory installs whose sha256
+  matches the listing (not for uploaded zips);
+- off until the user turns it on in the plugin's settings, and then only for
+  the one base URL they enter (for example `http://localhost:11434`), not the
+  whole local network; cloud metadata addresses stay blocked as today.
+
+That is one more optional plugin API surface (§ 4.1 grows to three), built
+after Phase 1a. In practice desktop only: on a phone, `localhost` is the
+phone. Local models are labelled "slower" (25–45 s on good laptops, § 2.2)
+and must pass the same eval; if none does, the option isn't offered.
 
 ## 7. What v1 can and cannot change
 
@@ -395,9 +517,13 @@ the same delete (to Recently deleted).
 - **Conflicts.** A concurrent edit to the same task elsewhere resolves like any
   manual edit. Phase 2 adds one E2E: apply on A while B edits one of the
   tasks; both converge.
-- **No undo in v1.** Restoring "the previous state" would overwrite edits other
-  devices made after Apply. The preview is the safeguard; deletes are
-  unticked by default and kept in Recently deleted on this device.
+- **No undo in v1.** Restoring "the previous state" blindly would overwrite
+  edits other devices made after Apply. The preview is the safeguard; deletes
+  are unticked by default and kept in Recently deleted on this device. Prior
+  art favours a batch undo (Notion; Sunsama reportedly). A safe version only
+  reverts a field if the task still holds the value the plugin wrote
+  (compare-and-set), and needs a restore call for deleted tasks that the
+  plugin API lacks. Candidate for Phase 2 if users ask.
 
 ## 9. Built-in vs external assistants
 
@@ -411,7 +537,7 @@ can speak to SP that way today, for capture.
 - **Built-in:** one shortcut inside SP, no chat, results previewed in place.
 
 They share nothing in v1 and neither blocks the other. If both grow, they
-should share the tool definitions (`find_tasks`, `add_task`, `update_task`…)
+should share the tool definitions (`add_task`, `update_task`…)
 and the validator, so the two paths can't drift in what they allow.
 
 ## 10. Evaluating quality without telemetry
@@ -440,7 +566,9 @@ expected result:
 **Soft:** match with the expected changes or selection; for day plans, compared
 with the rule-based draft. **Ship bar:** hard 100%; soft high enough to trust
 (set after the first run); day plans clearly above the draft; latency targets
-met. Run by hand (about 60 fixtures × $0.12 on Opus), not in CI; CI runs the
+met. The same fixtures run against each local model offered. Soft scoring can
+use an LLM judge against the labels. Run by hand (about 60 fixtures × $0.08
+on Opus), not in CI; CI runs the
 validator and alias map on recorded responses.
 
 **Opt-in feedback:** a GitHub discussion after release. Users can paste the
@@ -449,19 +577,20 @@ become fixtures. Nothing is counted on the device or sent anywhere.
 
 ## 11. Phases
 
-| Phase                                      | Scope                                                                                                                     | Exit                                                                                                        |
-| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| **0. Eval first** (no app change)          | Fixtures, prompt, tools, validator, rule-based draft; Haiku, Sonnet and Opus 5.5                                          | Bar met → Phase 1. Not met → record why, stop                                                               |
-| **1a. Capture and changes**, desktop + web | Shortcut, panel, typed and dictated requests, change list + Apply; § 4.1; directory listing. Covers the voice-capture gap | Eval capture and edit fixtures pass in the shipped plugin; unit tests for validator, alias map, stale check |
-| **1b. Selections and day plans**           | `show_tasks`, row actions, day plans with free time; only once their eval fixtures pass                                   | Selection and day-plan fixtures pass; day plans beat the draft                                              |
-| **2. Mobile + E2E**                        | Android and iOS (check `request()` to the Anthropic API on both); concurrent-edit E2E                                     | E2E green on SuperSync                                                                                      |
-| **3. Push-to-talk** (on evidence)          | Host speech service and its plugin API (§ 5)                                                                              | Separate plan                                                                                               |
-| **Later, on evidence**                     | Times and reminders via a `scheduleTask`-style API; calendar busy minutes; local model                                    | A user request                                                                                              |
+| Phase                                      | Scope                                                                                                                                     | Exit                                                                                                        |
+| ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| **0. Eval first** (no app change)          | Fixtures, prompt, tools, validator, rule-based draft; Haiku, Sonnet and Opus 5.5                                                          | Bar met → Phase 1. Not met → record why, stop                                                               |
+| **1a. Capture and changes**, desktop + web | Shortcut, panel, typed and dictated requests, change list + Apply; § 4.1; directory listing. Covers the voice-capture gap                 | Eval capture and edit fixtures pass in the shipped plugin; unit tests for validator, alias map, stale check |
+| **1b. Selections and day plans**           | `show_tasks`, row actions, day plans with free time; only once their eval fixtures pass                                                   | Selection and day-plan fixtures pass; day plans beat the draft                                              |
+| **2. Mobile + E2E**                        | Android and iOS (check `request()` to the Anthropic API on both); concurrent-edit E2E                                                     | E2E green on SuperSync                                                                                      |
+| **3. Push-to-talk** (on evidence)          | Host speech service and its plugin API (§ 5)                                                                                              | Separate plan                                                                                               |
+| **2b. Local models**, desktop              | `localNetwork` permission (§ 6.6); Ollama or LM Studio through their Anthropic-compatible endpoint; a local model must pass the same eval | A local model passes; labelled "slower" in the picker                                                       |
+| **Later, on evidence**                     | Times and reminders via a `scheduleTask`-style API; calendar busy minutes; batch undo                                                     | A user request                                                                                              |
 
 **Smallest useful version:** Phase 0 + 1a, with system dictation as the voice.
 
 **Not planned:** chat history, automatic or scheduled runs, time-blocking,
-reordering Today, saved views, undo.
+reordering Today, saved views, sending audio to a model.
 
 ## 12. Risks and open questions
 
@@ -472,7 +601,7 @@ reordering Today, saved views, undo.
 - **Short syntax in titles** would turn spoken words into tags, dates and
   times. Fixed by § 4.1 and covered by eval fixtures.
 - **More data leaves the device** than in rev. 2: project and tag names and
-  searched titles. The notice lists every field and shows a real example; the
+  titles that match the request. The notice lists every field and shows a real example; the
   plugin is never installed by default; the key is per device.
 - **Cost surprise** on Sonnet or Opus with heavy use. The panel shows the
   model; the default is the cheapest model that passes.
@@ -485,13 +614,14 @@ reordering Today, saved views, undo.
 
 **Open questions for the maintainer**
 
-1. Name and entry point: one shortcut for both speaking and typing, plus a
-   side-panel button? Any preferred default key?
-2. Is "two keys" (shortcut, then system dictation) good enough for v1, or is
-   push-to-talk the point of the feature? If the latter, Phase 3 becomes the
-   first step and needs its own plan.
-3. Local models: open the private-network guard for this plugin, or leave
-   local models to the external-assistant path?
+1. Name and default key for the shortcut.
+
+**Decided (maintainer, 2026-10-31):**
+
+- Two keys in v1 (shortcut, then system dictation); push-to-talk later, on
+  evidence (§ 5).
+- Local models: yes, through a scoped `localNetwork` permission rather than a
+  special case for this plugin id (§ 6.6), after Phase 1a.
 
 ## Review
 
@@ -515,7 +645,7 @@ the product principles and the sync rules, checking claims against the code.
 | 11  | The gate committed another plan's deliverable                                                                                                                                | Low      | **Fixed**                                                |
 | 12  | Over-scoped: offline fallback, anonymized-example UI, long assistant section, duplicate question                                                                             | Low      | **Fixed**                                                |
 
-### Rev. 3
+### Rev. 4 (fresh-context review of rev. 3)
 
 A fresh-context subagent reviewed rev. 3 against the same guides and the code.
 
@@ -540,3 +670,13 @@ Checked correct by the review: cost arithmetic and prices, the forced
 `tool_choice` 400, `updateTask({ dueDay })` keeping planner days and Today in
 step, `registerShortcut`, secrets, the directory listing, the desktop MCP
 tools.
+
+### Rev. 5
+
+Prior art from a research subagent (§ 2). Re-checked directly: Ollama's
+Anthropic-compatible `/v1/messages` (tools yes, `tool_choice` and caching no),
+#4856, and Sunny being on by default. Not confirmed: Sunsama's undo
+"receipts" (marked secondhand). Design changes from the research: one model
+call with on-device search instead of an agent loop (§ 6.2), local models
+through a scoped permission (§ 6.6), batch undo recorded as a later candidate
+(§ 8). Rev. 5 was not given a separate fresh-context review.
