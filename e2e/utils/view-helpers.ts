@@ -73,6 +73,8 @@ export const viewEditorSection = (dialog: Locator, index: number): Locator =>
  * time; a single section has no toggle and is always open.
  */
 export const expandViewSection = async (section: Locator): Promise<void> => {
+  // The card first: a toggle counted before it renders would read as none.
+  await expect(section.locator('.section-header')).toBeVisible();
   const toggle = section.locator('.section-toggle');
   if (
     (await toggle.count()) &&

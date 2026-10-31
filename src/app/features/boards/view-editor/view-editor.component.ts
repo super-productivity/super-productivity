@@ -1,7 +1,9 @@
 import {
+  afterNextRender,
   ChangeDetectionStrategy,
   Component,
   computed,
+  ElementRef,
   inject,
   input,
   linkedSignal,
@@ -103,6 +105,10 @@ export class ViewEditorComponent {
   private readonly _colsModel = viewChild('colsModel', { read: NgModel });
   private readonly _colsInput = viewChild('colsModel', { read: MatInput });
   private readonly _sections = viewChildren(ViewEditorSectionComponent);
+  private readonly _sectionEls = viewChildren<
+    ViewEditorSectionComponent,
+    ElementRef<HTMLElement>
+  >(ViewEditorSectionComponent, { read: ElementRef });
 
   // A title that happens to name a group of keys ("F", "G") stays as typed.
   private readonly _translate = (key: string): string => {
@@ -135,6 +141,19 @@ export class ViewEditorComponent {
         : board.panels[0]?.id) ?? null,
   });
   readonly isCollapsible = computed(() => this.model().panels.length > 1);
+
+  constructor() {
+    // A column's title asked for its card: on a phone it sits below the fold,
+    // behind the collapsed cards before it. The first focus on its toggle
+    // (`isFocusInitial`) would only bring the toggle itself into view.
+    afterNextRender(() => {
+      const id = this.openPanelId();
+      const index = this.model().panels.findIndex((panel) => panel.id === id);
+      if (this.initialOpenPanelId() && index > 0) {
+        this._sectionEls()[index]?.nativeElement.scrollIntoView({ block: 'start' });
+      }
+    });
+  }
 
   readonly layout = computed<ViewLayout>(() =>
     this.model().cols > 1 ? 'board' : 'list',

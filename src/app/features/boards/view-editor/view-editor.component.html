@@ -66,6 +66,7 @@
       [isLast]="$last"
       [isCollapsible]="isCollapsible()"
       [isOpen]="openPanelId() === panel.id"
+      [isFocusInitial]="panel.id === initialOpenPanelId()"
       (toggleOpen)="togglePanel(panel.id)"
       (panelChange)="updatePanel(i, $event)"
       (moveUp)="movePanel(i, -1)"

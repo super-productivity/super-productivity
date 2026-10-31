@@ -75,19 +75,30 @@
 </header>
 
 <!-- With several sections, one is open at a time: the others show their count
-     and rules in one line. The title field above stays rendered either way,
-     so save still validates it. -->
+     and rules in one line. The open one's toggle is the heading of its rules
+     (no summary right above the rules it repeats). The title field above
+     stays rendered either way, so save still validates it. -->
 @if (isCollapsible()) {
   <button
     class="section-toggle focus-ring"
     type="button"
     [attr.aria-expanded]="isOpen()"
-    [attr.aria-controls]="bodyId"
+    [attr.aria-controls]="isOpen() ? bodyId : null"
+    [attr.cdkFocusInitial]="isFocusInitial() ? '' : null"
     (click)="toggleOpen.emit()"
   >
-    <span class="section-summary">
-      <ng-container *ngTemplateOutlet="countText"></ng-container> · {{ summary() }}
-    </span>
+    @if (isOpen()) {
+      <span class="section-summary rules-heading-label">{{
+        T.F.BOARDS.EDITOR.SHOW_TASKS_THAT_MATCH | translate
+      }}</span>
+      <span class="count">
+        <ng-container *ngTemplateOutlet="countText"></ng-container>
+      </span>
+    } @else {
+      <span class="section-summary">
+        <ng-container *ngTemplateOutlet="countText"></ng-container> · {{ summary() }}
+      </span>
+    }
     <mat-icon
       class="section-toggle-icon"
       aria-hidden="true"
@@ -101,7 +112,7 @@
     class="section-body"
     [id]="bodyId"
   >
-    @if (isShowTitle()) {
+    @if (isShowTitle() && !isCollapsible()) {
       <div class="rules-heading">
         {{ T.F.BOARDS.EDITOR.SHOW_TASKS_THAT_MATCH | translate }}
       </div>

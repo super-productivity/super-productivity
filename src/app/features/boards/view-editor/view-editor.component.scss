@@ -16,10 +16,10 @@
   letter-spacing: var(--letter-spacing-wide);
 }
 
-// Columns sits next to the toggle down to phone widths; it wraps below them.
+// Columns sits next to the toggle on every width: the toggle's basis is 0, so
+// it shrinks instead of wrapping (its two segments still fit at 320px).
 .layout-row {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
   gap: var(--s2);
 }

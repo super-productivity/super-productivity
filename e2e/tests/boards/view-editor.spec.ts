@@ -272,6 +272,9 @@ test.describe('View editor', () => {
     await expect(toggles.nth(0)).toHaveAttribute('aria-expanded', 'true');
     await expect(toggles.nth(1)).toHaveAttribute('aria-expanded', 'false');
     await expect(toggles.nth(2)).toHaveAttribute('aria-expanded', 'false');
+    // The open card's toggle heads its rules; no summary repeats them.
+    await expect(toggles.nth(0)).toContainText('Show tasks that match');
+    await expect(toggles.nth(0)).not.toContainText('Backlog:');
     // A collapsed card: its title, then count and rules in one line.
     const done = viewEditorSection(dialog, 2);
     await expect(done.getByRole('textbox', { name: 'Column title' })).toHaveValue('Done');
@@ -310,6 +313,10 @@ test.describe('View editor', () => {
     const toggles = dialog.locator('view-editor-section .section-toggle');
     await expect(toggles.nth(2)).toHaveAttribute('aria-expanded', 'true');
     await expect(toggles.nth(0)).toHaveAttribute('aria-expanded', 'false');
+    // Focus starts on that column's card (not the view's title field), which
+    // also brings it into view below the collapsed cards.
+    await expect(toggles.nth(2)).toBeFocused();
+    await expect(toggles.nth(2)).toBeInViewport();
     await expect(page).toHaveURL(/#\/boards\/KANBAN_DEFAULT$/);
   });
 

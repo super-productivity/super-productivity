@@ -21,6 +21,7 @@ import { TaskService } from '../../tasks/task.service';
 import { ViewEditorComponent } from '../view-editor/view-editor.component';
 import { ViewEditorSectionComponent } from '../view-editor/view-editor-section/view-editor-section.component';
 import { By } from '@angular/platform-browser';
+import { T } from '../../../t.const';
 
 describe('BoardEditComponent with the view editor', () => {
   let fixture: ComponentFixture<BoardEditComponent>;
@@ -463,11 +464,23 @@ describe('BoardEditComponent with the view editor', () => {
 
     it('opens the first card; the others show only their title and summary', async () => {
       await open(three);
+      expect(fixture.nativeElement.querySelector('[cdkfocusinitial]')).toBeNull();
       expect(openCards()).toEqual([true, false, false]);
       const [first, second] = cards();
       expect(toggle(first)!.getAttribute('aria-expanded')).toBe('true');
       expect(toggle(second)!.getAttribute('aria-expanded')).toBe('false');
-      expect(toggle(second)!.getAttribute('aria-controls')).toBeTruthy();
+      // Only an open card's body exists to be controlled.
+      const body = first.querySelector('.section-body')!;
+      expect(toggle(first)!.getAttribute('aria-controls')).toBe(body.id);
+      expect(toggle(second)!.hasAttribute('aria-controls')).toBeFalse();
+      // Open, the toggle heads the rules with the count; no summary repeats
+      // the rules right above them, and no second heading.
+      expect(toggle(first)!.textContent).toContain(
+        T.F.BOARDS.EDITOR.SHOW_TASKS_THAT_MATCH,
+      );
+      expect(toggle(first)!.querySelector('.count')).not.toBeNull();
+      expect(toggle(first)!.textContent).not.toContain('F.BOARDS.EDITOR.EVERY_TASK');
+      expect(first.querySelector('.rules-heading')).toBeNull();
       // No translations loaded: keys stand in for the labels.
       expect(toggle(second)!.textContent).toContain(
         'F.BOARDS.EDITOR.RULE_DONE: F.BOARDS.FORM.TASK_DONE_STATE_UNDONE',
@@ -486,6 +499,10 @@ describe('BoardEditComponent with the view editor', () => {
     it("opens the card asked for (a column's title), else the first", async () => {
       await open(three, 'c');
       expect(openCards()).toEqual([false, false, true]);
+      // The dialog's first focus goes to that card, not the view's title.
+      expect(
+        cards().map((card) => toggle(card)!.hasAttribute('cdkfocusinitial')),
+      ).toEqual([false, false, true]);
       await open(three, 'gone');
       expect(openCards()).toEqual([true, false, false]);
     });

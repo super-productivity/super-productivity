@@ -105,6 +105,11 @@ export class ViewEditorSectionComponent {
   /** With several sections: a toggle shows or hides the rules. */
   readonly isCollapsible = input<boolean>(false);
   readonly isOpen = input<boolean>(true);
+  /**
+   * The card a column's title asked for: the dialog's first focus goes to its
+   * toggle (`cdkFocusInitial`) instead of the view's title field.
+   */
+  readonly isFocusInitial = input<boolean>(false);
 
   readonly panelChange = output<BoardPanelCfg>();
   readonly moveUp = output<void>();
@@ -190,7 +195,7 @@ export class ViewEditorSectionComponent {
     return values;
   });
 
-  /** The collapsed card's one line: only read while the card can collapse. */
+  /** The collapsed card's one line: only read while the card is collapsed. */
   readonly summary = computed(() =>
     getRuleSummary(
       this.panel(),

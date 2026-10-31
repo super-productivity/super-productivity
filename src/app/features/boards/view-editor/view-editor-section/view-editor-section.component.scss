@@ -23,7 +23,8 @@
 }
 
 .rules-heading,
-.section-label {
+.section-label,
+.rules-heading-label {
   color: var(--text-color-muted);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-semibold);
@@ -85,7 +86,8 @@ span.remove-rule {
   padding-top: var(--s);
 }
 
-// The collapsed card's line: count and rule summary, opens the card.
+// The collapsed card's line: count and rule summary, opens the card. Open,
+// it is the rules' heading with the count, like a single section's header.
 .section-toggle {
   display: flex;
   align-items: center;
