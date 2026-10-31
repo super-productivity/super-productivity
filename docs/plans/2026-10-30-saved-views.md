@@ -364,6 +364,76 @@ would fail typia on clients that don't know a new value, see §6):
   width, centered, like a project list, instead of spanning the page. Still
   board cards; full task rows stay out (needs a work context, hot path).
 
+### Revised after plan review (2026-10-31)
+
+These override the parts above where they differ.
+
+- **Deadline write-back.** `setDeadline` auto-plans a task whose deadline is
+  today into Today (`getDeadlineAutoPlanDecision`, and `TaskDueEffects` again at
+  day change). So: `today`/`todayOrOverdue` write today; range rules
+  (`next7Days`, `thisWeek`, `nextWeek`, `thisMonth`, `nextMonth`) write the
+  **last** day of the range ("due by"); `overdue` refuses; `none` removes it.
+  The auto-plan fields are still sent (the effect would apply them anyway).
+  Deadline `overdue` uses the day threshold (`todayStartMs`), not `Date.now()`.
+- **Self-check.** `getChangesToMatch` applies its changes to a copy of the task,
+  simulates the deadline auto-plan, and runs `matchesTaskCriteria`; if the
+  result doesn't match it returns `null`. This also catches contradictory rules
+  (deadline today + not scheduled), so the form needs no extra validation.
+- **Apply order and op count.** One function applies the changes in this
+  order: project (`moveToOtherProject`, parent with subtasks) → backlog (on
+  `parentId || id`; `null` from `getChangesToMatch` when the target project has
+  no backlog) → **one** `updateTask` merging tags, done and priority →
+  schedule/unschedule → deadline. That is fewer ops per drop than today.
+- **Semantics both engines need**, kept exactly:
+  - project rule is `all` | ids | `none` (a menu project search that matches
+    nothing shows nothing);
+  - tag match default: board include = all, menu = any; a menu tag filter whose
+    tags were all deleted applies no filter;
+  - time spent: "not specified" is `timeSpent === 0`, a minimum sums
+    `timeSpentOnDay`; estimate minimum is `>=`;
+  - the menu reads `dueDay` before `dueWithTime`; boards keep `dueWithTime`
+    first. The module takes the precedence as a ctx flag until the two are
+    reconciled, so neither engine changes behaviour silently (beyond the
+    logical-day fix);
+  - weeks: `getWeekStartDate` plus date-string arithmetic (not `getWeekRange`,
+    which shifts by the timezone offset); first day of week from
+    `GlobalConfigService.localization()`, so columns react to a change;
+  - the filter menu re-filters on `selectTodayStr` and
+    `selectStartOfNextDayDiffMs` too, so the logical-day fix doesn't go stale.
+- **Sorting moves into the module too** (collator, end-of-day for date-only
+  values (#9828), priority high first, tag order from the side menu with DESC
+  flipping the group order), so a saved view sorts like the list it came from.
+  Boards switch to it as well; their existing sorts keep their direction.
+- **`sortKey`.** Written only for keys `sortBy` can't hold (deadline, time spent,
+  priority, tag) and deleted otherwise; read `sortBy ?? sortKey`, so a later
+  choice on a released client wins. Gap: a released client clearing the sort
+  can't clear a new key.
+- **Sanitizing.** `sortKey`, `deadlineState`, `priorityRule`, `estimateRule`,
+  `timeSpentRule` drop `null`/`''` (Formly) and keep unknown strings;
+  `isUntagged` drops non-booleans. Persisted types are `string`/`boolean` only.
+- **Inline add.** Columns whose rules can only refuse (estimate or time-spent
+  minimum, deadline `overdue`, planned `overdue`) hide the add row. `priority`
+  goes into the create op (`additionalTaskFields`). The existing-task branch
+  applies the full `getChangesToMatch`.
+- **Save as view.**
+  - Project and tag lists: `isParentTasksOnly: true` (the lists filter parents);
+    Today: `false`. `TODAY_TAG.id` never goes into `includedTagIds`.
+  - Today maps to `todayOrOverdue`, which is wider than Today's main list
+    (overdue sits in its own panel there, timed tasks later today are split
+    off); the dialog hint says so.
+  - With no sort active, the column's `taskIds` are prefilled with the list's
+    visible order.
+  - The item is hidden while Views are switched off.
+  - Legacy title-substring filters become fixed ids at save time; deleted tag
+    ids are dropped.
+- **Title-bar menu.** A separate `isViewPage` branch (`/boards/<id>` only)
+  renders only `view-menu`; the special-section branch stays as is. The title
+  icon is the view's icon on view pages. This reverses "Not taken: header
+  menu" from the implementation review.
+- **Kept against the review's suggestion to cut:** estimate and time-spent
+  column rules, and the tag sort — the maintainer asked for every filter-menu
+  rule.
+
 ### Tests
 
 - Unit: the criteria module (every rule, logical day, week start, ranges,
@@ -374,6 +444,13 @@ would fail typia on clients that don't know a new value, see §6):
 - E2E: save a filtered project list as a view and see the same tasks; a
   priority column sets priority on move; the title-bar menu duplicates and
   deletes; one-column view width.
+- Added after review: a parity test of the old `applyFilter`/`applySort`
+  against the module on shared fixtures (written before the old code goes); a
+  property test "apply `getChangesToMatch`, then the task matches" including
+  auto-plan cases; filter menu re-evaluates at day change and when the start
+  of day changes; `sortKey` vs a released-client `sortBy` edit; sanitizing per
+  new field; a deadline-column E2E with the Today interplay; a save-as-view E2E
+  checking subtasks and order against the source list.
 
 ## Review
 
