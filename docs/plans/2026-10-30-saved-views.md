@@ -1180,3 +1180,20 @@ Follow-ups to the phase 5 review (2026-10-31), on the open items above:
   actions" for an untitled section).
 - **`--cols`** binds `null` instead of `false` while tags are missing, which
   removes the NG0318 warning.
+
+Feedback after phase 5 (2026-10-31): "Save as view" from Today.
+
+- **From Today, the filter alone.** Saving a filtered Today made a view of
+  "today or overdue" plus the filter, titled "Today". Now a usable filter
+  (not one that matches nothing) is saved alone, with the hint
+  `HINT_FILTER_NOT_ONLY_TODAY`, and the view is named after the filter
+  (`getFilterTitle`: the tags' or projects' titles, else "Planned Date:
+  Today" and the like). Unfiltered, Today still saves "today or overdue",
+  with an empty title for the user to fill (the editor requires one).
+  Decided with the user: "only the filters".
+- **Offered while Views are off.** "Save as view…" showed only with Views
+  enabled (off on a new install). It now always shows, and saving a view
+  while Views are off turns them on (`BoardsService.createBoard`, after the
+  dialog returns an id). That is a second op, on the global config, for the
+  same intent: independent of the board op, so replaying either alone is
+  harmless (a view while Views are off, or Views on without the view).

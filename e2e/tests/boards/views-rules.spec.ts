@@ -121,6 +121,54 @@ test.describe('View rules', () => {
     await expect(page.locator('boards board')).toHaveClass(/isSingleColumn/);
   });
 
+  test('saves a filtered Today as the filter alone, named after it, and turns Views on', async ({
+    page,
+    workViewPage,
+    testPrefix,
+  }) => {
+    // Views off, as on a new install: "Save as view…" is still offered.
+    await workViewPage.waitForTaskList();
+    await page.locator('nav-view-group nav-item').first().click({ button: 'right' });
+    await page.getByRole('menuitem', { name: 'Disable feature' }).click();
+    await expect(page.locator('nav-view-group')).toHaveCount(0);
+
+    await page.goto('/#/project/INBOX_PROJECT/tasks');
+    await workViewPage.waitForTaskList();
+    const later = `${testPrefix}-Later`;
+    await workViewPage.addTask(later);
+    await page.goto('/#/tag/TODAY/tasks');
+    await workViewPage.waitForTaskList();
+    const now = `${testPrefix}-Now`;
+    await workViewPage.addTask(now);
+    await expect(page.locator('task').filter({ hasText: later })).toHaveCount(0);
+
+    // Today filtered to the Inbox project.
+    await page.locator('.task-filter-btn').click();
+    await page.getByRole('menuitem', { name: /Filter By/ }).click();
+    await page.getByRole('menuitem', { name: 'Project', exact: true }).click();
+    await page.getByPlaceholder('Filter Projects').fill('Inbox');
+    // Back to the top menu: the input takes one Escape, each submenu one.
+    const menus = page.locator('.mat-mdc-menu-panel');
+    await expect(async () => {
+      if ((await menus.count()) > 1) await page.keyboard.press('Escape');
+      expect(await menus.count()).toBe(1);
+    }).toPass();
+    await page.getByRole('menuitem', { name: 'Save as view…' }).click();
+    const dialog = page.locator('dialog-board-edit');
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByRole('textbox', { name: 'Title' })).toHaveValue('Inbox');
+    await expect(dialog).toContainText('not only today');
+    await dialog.getByRole('button', { name: 'Save', exact: true }).click();
+    await expect(dialog).toBeHidden();
+
+    // Every matching task, not only today's, and Views are back in the menu.
+    await expect(page).toHaveURL(/#\/boards\/[^/]+$/);
+    const rows = page.locator('boards board-panel task');
+    await expect(rows.filter({ hasText: now })).toHaveCount(1);
+    await expect(rows.filter({ hasText: later })).toHaveCount(1);
+    await expect(sideNavViewRow(page, viewIdFromUrl(page))).toBeVisible();
+  });
+
   test('a one-column view lists task rows and keeps a keyboard reorder', async ({
     page,
     workViewPage,
