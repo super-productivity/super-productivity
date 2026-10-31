@@ -3,6 +3,7 @@ import { PluginBaseCfg, PluginManifest } from '../plugin-api.model';
 import { PluginHooks, PluginIframeMessageType } from '@super-productivity/plugin-api';
 import { PluginLog } from '../../core/log';
 import { PLUGIN_UI_KIT_CSS } from './plugin-ui-kit.css';
+import { PluginBeforeCloseIframe } from './plugin-before-close-iframe';
 
 /**
  * Simplified plugin iframe utilities following KISS principles.
@@ -17,6 +18,7 @@ export interface PluginIframeConfig {
   pluginBridge: PluginBridgeService;
   bridgeToken: string;
   bridgeGeneration: number;
+  beforeClose?: PluginBeforeCloseIframe;
   boundMethods?: ReturnType<typeof PluginBridgeService.prototype.createBoundMethods>;
 }
 
@@ -69,6 +71,7 @@ const ALLOWED_IFRAME_API_METHODS = new Set([
   'getAppState',
   'persistDataSynced',
   'loadPersistedData',
+  'onBeforeAppClose',
   'triggerSync',
   'listSyncedDataKeys',
   'registerHook',
@@ -257,6 +260,16 @@ export const createPluginApiScript = (config: PluginIframeConfig): string => {
         const dialogButtonHandlers = new Map();
         const hookHandlers = new Map(); // Store hook handlers by hook type
         const workContextBtnHandlers = new Map(); // button label -> onClick
+        let beforeCloseHandler = null;
+        const beforeCloseCalls = new Map();
+        function abortBeforeClose(requestId) {
+          const pending = beforeCloseCalls.get(requestId);
+          if (pending) {
+            beforeCloseCalls.delete(requestId);
+            clearTimeout(pending.timer);
+            pending.controller.abort();
+          }
+        }
 
         // Handle responses from parent
         window.addEventListener('message', function(event) {
@@ -267,6 +280,32 @@ export const createPluginApiScript = (config: PluginIframeConfig): string => {
           // so event.source will be window.parent in the legitimate case.
           if (event.source !== window.parent) return;
           const data = event.data;
+          if (data?.type === '${PluginIframeMessageType.BEFORE_CLOSE_ABORT}') {
+            abortBeforeClose(data.requestId);
+            return;
+          }
+          if (data?.type === '${PluginIframeMessageType.BEFORE_CLOSE}') {
+            const handler = beforeCloseHandler;
+            const controller = new AbortController();
+            const timer = setTimeout(() => abortBeforeClose(data.requestId), Math.max(0, data.deadlineAt - Date.now()));
+            beforeCloseCalls.set(data.requestId, { controller, timer });
+            if (data.deadlineAt <= Date.now()) abortBeforeClose(data.requestId);
+            Promise.resolve().then(() => {
+              if (!handler) throw new Error('Before-close callback is not registered');
+              if (!controller.signal.aborted) return handler({ deadlineAt: data.deadlineAt, signal: controller.signal });
+            }).then(() => {
+              if (!controller.signal.aborted) window.parent.postMessage({
+                type: '${PluginIframeMessageType.BEFORE_CLOSE_RESULT}', bridgeToken, bridgeGeneration,
+                requestId: data.requestId
+              }, '*');
+            }, (error) => {
+              if (!controller.signal.aborted) window.parent.postMessage({
+                type: '${PluginIframeMessageType.BEFORE_CLOSE_RESULT}', bridgeToken, bridgeGeneration,
+                requestId: data.requestId, error: error instanceof Error ? error.message : 'Before-close callback failed'
+              }, '*');
+            }).finally(() => abortBeforeClose(data.requestId));
+            return;
+          }
           if (data?.type === '${PluginIframeMessageType.API_RESPONSE}' && data.callId) {
             const resolver = pendingCalls.get(data.callId);
             if (resolver) {
@@ -460,6 +499,15 @@ export const createPluginApiScript = (config: PluginIframeConfig): string => {
           triggerSync: () => callApi('triggerSync'),
           listSyncedDataKeys: (prefix) => callApi('listSyncedDataKeys', [prefix]),
 
+          onBeforeAppClose: (handler) => {
+            if (handler !== null && typeof handler !== 'function') return Promise.reject(new Error('Expected a callback or null'));
+            beforeCloseHandler = handler;
+            return callApi('onBeforeAppClose', [handler === null ? null : 'IFRAME_HANDLER']).then((supported) => {
+              if (!supported && beforeCloseHandler === handler) beforeCloseHandler = null;
+              return supported;
+            });
+          },
+
           // Registration methods
           registerHook: (hook, handler) => callApi('registerHook', [hook, handler]),
           registerHeaderButton: unsupportedIframeRegistration('registerHeaderButton'),
@@ -636,6 +684,16 @@ export const handlePluginMessage = async (
     try {
       if (!ALLOWED_IFRAME_API_METHODS.has(method)) {
         throw new Error(`Unknown API method: ${method}`);
+      }
+
+      if (method === 'onBeforeAppClose') {
+        const result =
+          config.beforeClose?.register(event.source as Window, args[0]) ?? false;
+        (event.source as Window)?.postMessage(
+          { type: PluginIframeMessageType.API_RESPONSE, callId, result },
+          '*',
+        );
+        return;
       }
 
       // For iframe plugins, we need to handle API calls differently

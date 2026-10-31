@@ -10,6 +10,10 @@ import { WorkContextService } from '../work-context/work-context.service';
 import { UiHelperService } from '../ui-helper/ui-helper.service';
 import { DEFAULT_TASK, Task } from '../tasks/task.model';
 import { EMPTY } from 'rxjs';
+import {
+  BeforeCloseCoordinator,
+  PLUGIN_BEFORE_CLOSE_ID,
+} from '../../core/electron/before-close-coordinator';
 
 describe('FinishDayBeforeCloseEffects._handleCloseDecision()', () => {
   let effects: FinishDayBeforeCloseEffects;
@@ -36,6 +40,7 @@ describe('FinishDayBeforeCloseEffects._handleCloseDecision()', () => {
       'schedule',
       'unschedule',
       'setDone',
+      'cancelCloseAttempt',
     ]);
     execBeforeCloseServiceSpy.onBeforeClose$ = EMPTY;
 
@@ -115,6 +120,36 @@ describe('FinishDayBeforeCloseEffects._handleCloseDecision()', () => {
       expect(execBeforeCloseService.setDone).not.toHaveBeenCalled();
       expect(router.navigateByUrl).not.toHaveBeenCalled();
     });
+
+    for (const choice of ['cancel', 'finish-day']) {
+      it(`does not revive a ${choice} attempt when confirmation is subsequently disabled`, async () => {
+        const port = jasmine.createSpyObj('native close', [
+          'schedule',
+          'unschedule',
+          'done',
+        ]);
+        const coordinator = new BeforeCloseCoordinator(port);
+        const callback = jasmine.createSpy('cleanup').and.resolveTo();
+        coordinator.register('plugin/background', callback);
+        coordinator.request(
+          [PLUGIN_BEFORE_CLOSE_ID, 'FINISH_DAY_BEFORE_CLOSE_EFFECT'],
+          () => {},
+        );
+        // Текущее приложение не сообщает coordinator об отмене. После исправления
+        // реальный callback сервиса должен сбросить эту попытку без native DONE.
+        const cancel = execBeforeCloseService.cancelCloseAttempt;
+        cancel.and.callFake(() => {
+          coordinator.cancelCloseAttempt();
+        });
+        showDialogSpy.and.resolveTo(choice);
+        await effects._handleCloseDecision([doneTask]);
+        coordinator.unscheduled('FINISH_DAY_BEFORE_CLOSE_EFFECT');
+        for (let i = 0; i < 8; i++) await Promise.resolve();
+        expect(cancel).toHaveBeenCalledOnceWith();
+        expect(callback).not.toHaveBeenCalled();
+        expect(port.done).not.toHaveBeenCalled();
+      });
+    }
 
     it('navigates to /active/daily-summary and does NOT close when user picks "finish-day"', async () => {
       showDialogSpy.and.returnValue(Promise.resolve('finish-day'));

@@ -27,6 +27,11 @@ test.describe('Boards #7498 — Kanban', () => {
     await kanbanTab.waitFor({ state: 'visible', timeout: 10000 });
     await kanbanTab.click();
 
+    // The sliding tab body can move the button after Playwright picks its coordinates.
+    // Wait for the actual transition to finish before creating the missing tag.
+    const kanbanPanel = page.getByRole('tabpanel', { name: 'Kanban', exact: true });
+    await expect(kanbanPanel).not.toHaveClass(/mat-tab-body-animating/);
+
     // On a fresh profile the Kanban panels reference KANBAN_IN_PROGRESS which
     // doesn't exist yet — the board renders a "Create Tag" prompt instead of
     // the columns. Match the singular Kanban label exactly so we don't also

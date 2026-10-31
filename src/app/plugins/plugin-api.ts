@@ -10,6 +10,7 @@ import {
   OAuthTokenResult,
   PluginAPI as PluginAPIInterface,
   PluginAppState,
+  PluginBeforeCloseHandler,
   PluginBaseCfg,
   PluginCreateTaskData,
   PluginHeaderBtnCfg,
@@ -55,6 +56,7 @@ export class PluginAPI implements PluginAPIInterface {
   #manifest?: PluginManifest;
   #onReadyRegister?: (fn: () => void | Promise<void>) => void;
   #onUnloadRegister?: (fn: () => void | Promise<void>) => void;
+  #onBeforeCloseRegister?: (fn: PluginBeforeCloseHandler | null) => boolean;
   #hookHandlers = new Map<string, Map<Hooks, Array<PluginHookHandler<Hooks>>>>();
   #messageHandler?: (message: unknown) => Promise<unknown>;
   #boundMethods: ReturnType<typeof PluginBridgeService.prototype.createBoundMethods>;
@@ -78,6 +80,7 @@ export class PluginAPI implements PluginAPIInterface {
     lifecycleRegisters?: {
       onReady?: (fn: () => void | Promise<void>) => void;
       onUnload?: (fn: () => void | Promise<void>) => void;
+      onBeforeAppClose?: (fn: PluginBeforeCloseHandler | null) => boolean;
     },
   ) {
     this.#pluginId = pluginId;
@@ -86,6 +89,7 @@ export class PluginAPI implements PluginAPIInterface {
     this.#manifest = manifest;
     this.#onReadyRegister = lifecycleRegisters?.onReady;
     this.#onUnloadRegister = lifecycleRegisters?.onUnload;
+    this.#onBeforeCloseRegister = lifecycleRegisters?.onBeforeAppClose;
 
     // Get bound methods for this plugin
     this.#boundMethods = this.#pluginBridge.createBoundMethods(
@@ -390,6 +394,10 @@ export class PluginAPI implements PluginAPIInterface {
    */
   onUnload(fn: () => void | Promise<void>): void {
     this.#onUnloadRegister?.(fn);
+  }
+
+  async onBeforeAppClose(handler: PluginBeforeCloseHandler | null): Promise<boolean> {
+    return this.#onBeforeCloseRegister?.(handler) ?? false;
   }
 
   /**

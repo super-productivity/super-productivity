@@ -374,5 +374,22 @@ describe('PluginAPI', () => {
       expect(() => pluginAPI.onReady(() => {})).not.toThrow();
       expect(() => pluginAPI.onUnload(() => {})).not.toThrow();
     });
+
+    it('reports unsupported before-close without a lifecycle implementation', async () => {
+      expect(await pluginAPI.onBeforeAppClose(() => {})).toBeFalse();
+    });
+
+    it('registers and removes an async before-close callback without awaiting its work', async () => {
+      const register = jasmine.createSpy('register').and.returnValue(true);
+      const api = buildApiWithLifecycle({ onBeforeAppClose: register });
+      const callback = jasmine
+        .createSpy('cleanup')
+        .and.returnValue(new Promise<void>(() => {}));
+      expect(await api.onBeforeAppClose(callback)).toBeTrue();
+      expect(register).toHaveBeenCalledWith(callback);
+      expect(callback).not.toHaveBeenCalled();
+      expect(await api.onBeforeAppClose(null)).toBeTrue();
+      expect(register).toHaveBeenCalledWith(null);
+    });
   });
 });

@@ -119,7 +119,9 @@ export class FinishDayBeforeCloseEffects {
     }
     if (choice === 'quit') {
       this._execBeforeCloseService.setDone(EXEC_BEFORE_CLOSE_ID);
-    } else if (choice === 'finish-day') {
+    } else {
+      this._execBeforeCloseService.cancelCloseAttempt();
+      if (choice !== 'finish-day') return;
       // There is no top-level `/daily-summary` route — the daily summary only
       // exists under the active work context (tag/project). `/active/...` is
       // resolved by ActiveWorkContextGuard to the current context, same as the

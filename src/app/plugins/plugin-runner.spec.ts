@@ -7,6 +7,7 @@ import { SnackService } from '../core/snack/snack.service';
 import { PluginCleanupService } from './plugin-cleanup.service';
 import { PluginManifest, PluginBaseCfg } from './plugin-api.model';
 import { PluginI18nService } from './plugin-i18n.service';
+import { ExecBeforeCloseService } from '../core/electron/exec-before-close.service';
 
 describe('PluginRunner', () => {
   let service: PluginRunner;
@@ -17,6 +18,7 @@ describe('PluginRunner', () => {
   let mockI18nService: jasmine.SpyObj<PluginI18nService>;
   let registerSidePanelButtonSpy: jasmine.Spy;
   let registerTaskContextMenuEntrySpy: jasmine.Spy;
+  let beforeClose: jasmine.SpyObj<ExecBeforeCloseService>;
 
   const mockManifest: PluginManifest = {
     id: 'test-plugin',
@@ -65,6 +67,11 @@ describe('PluginRunner', () => {
     ]);
     mockI18nService.getCurrentLanguage.and.returnValue('en');
     mockI18nService.translate.and.callFake((_pluginId, key) => key);
+    beforeClose = jasmine.createSpyObj('ExecBeforeCloseService', [
+      'registerPluginFinalizer',
+      'unregisterPluginFinalizers',
+    ]);
+    beforeClose.registerPluginFinalizer.and.returnValue(true);
 
     TestBed.configureTestingModule({
       providers: [
@@ -74,9 +81,79 @@ describe('PluginRunner', () => {
         { provide: SnackService, useValue: mockSnackService },
         { provide: PluginCleanupService, useValue: mockCleanupService },
         { provide: PluginI18nService, useValue: mockI18nService },
+        { provide: ExecBeforeCloseService, useValue: beforeClose },
       ],
     });
     service = TestBed.inject(PluginRunner);
+  });
+
+  it('registers a before-close callback for the current background instance and removes it on unload', async () => {
+    await service.loadPlugin(
+      mockManifest,
+      'plugin.onBeforeAppClose(async () => {});',
+      mockBaseCfg,
+    );
+    expect(beforeClose.registerPluginFinalizer).toHaveBeenCalledWith(
+      mockManifest.id,
+      'background',
+      jasmine.any(Function),
+    );
+    service.triggerUnload(mockManifest.id);
+    expect(beforeClose.unregisterPluginFinalizers).toHaveBeenCalledWith(mockManifest.id);
+  });
+
+  it('rejects before-close registration from a stale background API', async () => {
+    await service.loadPlugin(mockManifest, '', mockBaseCfg);
+    const stale = (
+      service as unknown as { _pluginApis: Map<string, PluginAPI> }
+    )._pluginApis.get(mockManifest.id)!;
+    service.triggerUnload(mockManifest.id);
+    await service.loadPlugin(mockManifest, '', mockBaseCfg);
+    expect(await stale.onBeforeAppClose(() => {})).toBeFalse();
+    expect(beforeClose.registerPluginFinalizer).not.toHaveBeenCalled();
+  });
+
+  it('revokes the API before abort listeners run during finalizer removal', async () => {
+    await service.loadPlugin(mockManifest, '', mockBaseCfg);
+    const stale = (
+      service as unknown as { _pluginApis: Map<string, PluginAPI> }
+    )._pluginApis.get(mockManifest.id)!;
+    let accepted: Promise<boolean> | undefined;
+    beforeClose.unregisterPluginFinalizers.and.callFake(() => {
+      accepted = stale.onBeforeAppClose(() => {});
+    });
+    service.triggerUnload(mockManifest.id);
+    expect(await accepted).toBeFalse();
+    expect(beforeClose.registerPluginFinalizer).not.toHaveBeenCalled();
+  });
+
+  it('removes the API and finalizer when plugin initialization throws after registration', async () => {
+    let registered = false;
+    beforeClose.registerPluginFinalizer.and.callFake(() => {
+      registered = true;
+      return true;
+    });
+    beforeClose.unregisterPluginFinalizers.and.callFake(() => (registered = false));
+    const instance = await service.loadPlugin(
+      mockManifest,
+      `
+      plugin.onReady(() => {});
+      plugin.onBeforeAppClose(async () => {});
+      throw new Error('fixture initialization failed');
+    `,
+      mockBaseCfg,
+    );
+    expect(instance.loaded).toBeFalse();
+    expect(instance.error).toBe('fixture initialization failed');
+    expect(registered).toBeFalse();
+    const state = service as unknown as {
+      _pluginApis: Map<string, PluginAPI>;
+      _readyCallbacks: Map<string, unknown>;
+      _unloadCallbacks: Map<string, unknown>;
+    };
+    expect(state._pluginApis.has(mockManifest.id)).toBeFalse();
+    expect(state._readyCallbacks.has(mockManifest.id)).toBeFalse();
+    expect(state._unloadCallbacks.has(mockManifest.id)).toBeFalse();
   });
 
   describe('Plugin variable injection', () => {
