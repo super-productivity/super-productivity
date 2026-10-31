@@ -1,4 +1,4 @@
-import { inject, Injectable } from '@angular/core';
+import { inject, Injectable, InjectionToken } from '@angular/core';
 import { EMPTY, fromEvent, merge, Observable, of, ReplaySubject, timer } from 'rxjs';
 import {
   auditTime,
@@ -27,8 +27,11 @@ import {
 import { IdleService } from '../../features/idle/idle.service';
 import { IS_ELECTRON } from '../../app.constants';
 import { GlobalConfigState } from '../../features/config/global-config.model';
-import { IS_ANDROID_WEB_VIEW } from '../../util/is-android-web-view';
-import { androidInterface } from '../../features/android/android-interface';
+import { IS_ANDROID_WEB_VIEW_TOKEN } from '../../util/is-android-web-view';
+import {
+  androidInterface,
+  AndroidInterface,
+} from '../../features/android/android-interface';
 import { ipcResume$, ipcSuspend$ } from '../../core/ipc-events';
 import { IS_TOUCH_PRIMARY } from '../../util/is-mouse-primary';
 import { DataInitStateService } from '../../core/data-init/data-init-state.service';
@@ -41,6 +44,11 @@ const MAX_WAIT_FOR_INITIAL_SYNC = 8000;
 /** 15 minutes in milliseconds - throttle time for user activity sync checks */
 const USER_ACTIVITY_SYNC_THROTTLE_TIME = 15 * 60 * 1000;
 
+/** Android lifecycle events the sync triggers listen to; a token so specs can drive them. */
+export const SYNC_TRIGGER_ANDROID_EVENTS = new InjectionToken<
+  Pick<AndroidInterface, 'onResume$' | 'onPause$' | 'isInBackground$'>
+>('SYNC_TRIGGER_ANDROID_EVENTS', { providedIn: 'root', factory: () => androidInterface });
+
 @Injectable({
   providedIn: 'root',
 })
@@ -50,6 +58,8 @@ export class SyncTriggerService {
   private readonly _idleService = inject(IdleService);
   private readonly _syncWrapperService = inject(SyncWrapperService);
   private readonly _hydrationState = inject(HydrationStateService);
+  private readonly _isAndroidWebView = inject(IS_ANDROID_WEB_VIEW_TOKEN);
+  private readonly _androidEvents = inject(SYNC_TRIGGER_ANDROID_EVENTS);
 
   constructor() {
     // When sync is disabled, set initialSyncDone immediately so UI shows
@@ -65,8 +75,10 @@ export class SyncTriggerService {
     // dataInitState + config are ready). This handles the cold-start edge
     // case where a resume arrives before the trigger pipeline is wired.
     // The failsafe in `openSyncWindow()` cleans up if no sync follows.
-    if (IS_ANDROID_WEB_VIEW) {
-      androidInterface.onResume$.subscribe(() => this._hydrationState.openSyncWindow());
+    if (this._isAndroidWebView) {
+      this._androidEvents.onResume$.subscribe(() =>
+        this._hydrationState.openSyncWindow(),
+      );
     }
     if (IS_ELECTRON) {
       ipcResume$.subscribe(() => this._hydrationState.openSyncWindow());
@@ -238,21 +250,27 @@ export class SyncTriggerService {
     syncInterval: number = SYNC_DEFAULT_AUDIT_TIME,
     useIntervalTimer = false,
   ): Observable<unknown> {
-    const _immediateSyncTrigger$: Observable<string> = IS_ANDROID_WEB_VIEW
+    const android = this._androidEvents;
+    const _immediateSyncTrigger$: Observable<string> = this._isAndroidWebView
       ? // ANDROID ONLY
         merge(
-          // to update in background for widget
-          androidInterface.isInBackground$.pipe(
+          // In background: update for the widget. In foreground, file-based
+          // providers only: pick up other devices' changes while the app stays
+          // open (#10685). startWith: no resume has to arrive first.
+          android.isInBackground$.pipe(
+            startWith(false),
             switchMap((isInBackground) =>
               isInBackground
                 ? timer(syncInterval, syncInterval).pipe(
                     mapTo('I_MOBILE_ONLY_BACKGROUND_TIMER'),
                   )
-                : EMPTY,
+                : useIntervalTimer
+                  ? timer(syncInterval, syncInterval).pipe(mapTo('I_INTERVAL_TIMER'))
+                  : EMPTY,
             ),
           ),
-          androidInterface.onResume$.pipe(throttleTime(10000), mapTo('I_RESUME_APP')),
-          androidInterface.onPause$.pipe(throttleTime(10000), mapTo('I_PAUSE_APP')),
+          android.onResume$.pipe(throttleTime(10000), mapTo('I_RESUME_APP')),
+          android.onPause$.pipe(throttleTime(10000), mapTo('I_PAUSE_APP')),
           this._isOnlineTrigger$,
         )
       : // EVERYTHING ELSE
