@@ -97,7 +97,7 @@
   "EXAMPLE_TASKS": {
     "GETTING_STARTED": {
       "TITLE": "Optional: getting started tips",
-      "NOTES": "Nothing here is required. Delete this task whenever you like.\n\n- **Today and Inbox**: Today shows what is planned for today. Tasks without a project of your own stay in Inbox. A task can appear in both lists.\n- **Projects**: group tasks by topic with the **+** next to **Projects** in the sidebar.\n- **Sync**: keep your data on several devices under **Settings → Sync & Backup**.\n- **Coming from Todoist or TickTick?** Import your tasks under **Settings → Sync & Backup → Import/Export**.\n- **Tours**: **Help → Quick tour** in the sidebar menu walks you through the basics on your own task, and **Help → How to** shows short syntax and keyboard navigation step by step. Close a tour whenever you like.\n- **Make it yours**: pick a theme or dark mode, and switch features like boards, schedule, habits, focus mode or integrations on or off under **Settings → General**. Plugins add even more."
+      "NOTES": "Nothing here is required. Delete this task whenever you like.\n\n- **Today and Inbox**: Today shows what is planned for today. Tasks without a project of your own stay in Inbox. A task can appear in both lists.\n- **Projects**: group tasks by topic with the **+** next to **Projects** in the sidebar.\n- **Sync**: keep your data on several devices under **Settings → Sync & Backup**.\n- **Coming from Todoist or TickTick?** Import your tasks under **Settings → Sync & Backup → Import/Export**.\n- **Tours**: **Help → Quick tour** in the sidebar menu walks you through the basics on your own task, and **Help → How to** shows short syntax and keyboard navigation step by step. Close a tour whenever you like.\n- **Make it yours**: pick a theme or dark mode, and switch features like views, schedule, habits, focus mode or integrations on or off under **Settings → General**. Plugins add even more."
     }
   },
   "F": {
@@ -162,6 +162,12 @@
         "BACKLOG_TASK_FILTER_ONLY_BACKLOG": "Backlog only",
         "BACKLOG_TASK_FILTER_TYPE": "Backlog tasks",
         "COLUMNS": "Columns",
+        "DUE_STATE": "Due date",
+        "DUE_STATE_ANY": "Any",
+        "DUE_STATE_NEXT_7_DAYS": "Next 7 days",
+        "DUE_STATE_OVERDUE": "Overdue",
+        "DUE_STATE_TODAY": "Today",
+        "DUE_STATE_TOMORROW": "Tomorrow",
         "ONLY_PARENT_TASKS": "Only parent tasks",
         "PROJECT": "Project",
         "PROJECT_ALL": "All Projects",
@@ -192,15 +198,17 @@
         "TASK_DONE_STATE_UNDONE": "Not Completed"
       },
       "V": {
-        "ADD_NEW_BOARD": "Add new board",
-        "CONFIRM_DELETE": "Are you sure you want to delete this board?",
+        "ADD_NEW_BOARD": "Create view",
+        "CONFIRM_DELETE": "Are you sure you want to delete this view?",
         "CREATE_NEW_TAG_BTN": "Create Tag",
-        "CREATE_NEW_TAG_MSG": "1 new tag needs to be created for this board to work",
+        "CREATE_NEW_TAG_MSG": "1 new tag needs to be created for this view to work",
         "CREATE_NEW_TAGS_BTN": "Create Tags",
-        "CREATE_NEW_TAGS_MSG": "{{nr}} new tags need to be created for this board to work",
-        "EDIT_BOARD": "Edit board",
-        "NO_PANELS_BTN": "Configure Board",
-        "NO_PANELS_MSG": "This board has no panels configured. Add some panels to it."
+        "CREATE_NEW_TAGS_MSG": "{{nr}} new tags need to be created for this view to work",
+        "EDIT_BOARD": "Edit view",
+        "NO_PANELS_BTN": "Configure view",
+        "NO_PANELS_MSG": "This view has no panels configured. Add some panels to it.",
+        "NO_VIEWS_BTN": "Create view",
+        "NO_VIEWS_MSG": "No views yet. A view shows tasks from all your projects that match its rules, in one or more columns."
       }
     },
     "CALDAV": {
@@ -2571,8 +2579,8 @@
   },
   "GCF": {
     "APP_FEATURES": {
-      "BOARDS": "Boards",
-      "BOARDS_HINT": "Kanban-style boards with columns that group your tasks by tag, project or done state.",
+      "BOARDS": "Views",
+      "BOARDS_HINT": "Saved views in the side menu. Each shows tasks from all projects by tag, project, due date or done state, in one or more columns, like a Kanban board.",
       "DONATE_PAGE": "Donate page",
       "DONATE_PAGE_HINT": "Shows a menu entry with ways to support the development of the app.",
       "EXTEND_WITH_PLUGINS": "Find more features in Plugins",
@@ -2912,7 +2920,7 @@
       "WALLPAPER": "Wallpaper",
       "WALLPAPER_BUTTON": "Set wallpaper",
       "WALLPAPER_DIALOG_TITLE": "Global wallpaper",
-      "WALLPAPER_HINT": "Shown on pages without their own background (Planner, Schedule, Boards, Settings…). Tags and projects with their own image override it."
+      "WALLPAPER_HINT": "Shown on pages without their own background (Planner, Schedule, Views, Settings…). Tags and projects with their own image override it."
     },
     "POMODORO": {
       "BREAK_DURATION": "Short break duration",
@@ -3084,7 +3092,7 @@
   "MH": {
     "ADD_NEW_TASK": "Add new Task",
     "ADD_SECTION": "Add Section",
-    "BOARDS": "Boards",
+    "BOARDS": "Views",
     "COPY_TASK_LIST_MARKDOWN": "Copy to clipboard",
     "CREATE_PROJECT": "Create project",
     "CREATE_TAG": "Create tag",
@@ -3203,7 +3211,7 @@
       "TRACK_TIME": "Hover over the task and press {{playIcon}} to track time"
     },
     "WANT_MORE": {
-      "BOARDS": "<b>Boards</b> · Kanban-style columns for your tasks",
+      "BOARDS": "<b>Views</b> · Saved task lists and Kanban boards in the side menu",
       "DONE": "Done",
       "FINISH_DAY": "<b>Finish day</b> · Review and wrap up your day",
       "FOCUS_MODE": "<b>Focus mode</b> · Pomodoro and distraction-free work",

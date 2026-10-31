@@ -33,6 +33,7 @@ import { KeyboardConfig } from '@sp/keyboard-config';
 import { PluginBridgeService } from '../../../plugins/plugin-bridge.service';
 import { PluginService } from '../../../plugins/plugin.service';
 import { PluginIconComponent } from '../../../plugins/ui/plugin-icon/plugin-icon.component';
+import { selectAllBoards } from '../../../features/boards/store/boards.selectors';
 
 @Component({
   selector: 'page-title',
@@ -349,6 +350,7 @@ export class PageTitleComponent {
   private readonly _configService = inject(GlobalConfigService);
   private _translateService = inject(TranslateService);
   private _store = inject(Store);
+  private _boards = this._store.selectSignal(selectAllBoards);
   private _plainspaceShareService = inject(PlainspaceShareService);
   private _pluginBridge = inject(PluginBridgeService);
   private _pluginService = inject(PluginService);
@@ -408,7 +410,8 @@ export class PageTitleComponent {
   > = [
     [/schedule$/, T.MH.SCHEDULE, NAV_SECTION_ICON.SCHEDULE],
     [/planner$/, T.MH.PLANNER, NAV_SECTION_ICON.PLANNER],
-    [/boards$/, T.MH.BOARDS, NAV_SECTION_ICON.BOARDS],
+    // `/boards` or one view, `/boards/<id>` (titled with the view, see below).
+    [/^\/boards(\/[^/]+)?$/, T.MH.BOARDS, NAV_SECTION_ICON.BOARDS],
     [/habits$/, T.MH.HABITS, NAV_SECTION_ICON.HABITS],
     [/search$/, T.MH.SEARCH, NAV_SECTION_ICON.SEARCH],
     [/scheduled-list$/, T.WW.RECURRING_TASKS, NAV_SECTION_ICON.RECURRING_TASKS],
@@ -438,10 +441,22 @@ export class PageTitleComponent {
     return icon && !/\.svg$/i.test(icon) ? icon : 'extension';
   });
 
+  // A view page is titled with the view's own title (default views use keys).
+  private _boardTitle = computed(() => {
+    const id = this._url().match(/^\/boards\/([^/]+)$/)?.[1];
+    return id
+      ? this._boards().find((board) => board.id === decodeURIComponent(id))?.title
+      : undefined;
+  });
+
   isSpecialSection = computed(() => !!this._routeSection() || !!this.pluginId());
   isWorkViewPage = computed(() => /tasks$/.test(this._url()));
 
   displayTitle = computed(() => {
+    const boardTitle = this._boardTitle();
+    if (boardTitle) {
+      return this._translateService.instant(boardTitle);
+    }
     const key = this._routeTitleKey();
     if (key) {
       return this._translateService.instant(key);

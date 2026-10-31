@@ -1,0 +1,99 @@
+<div class="g-multi-btn-wrapper">
+  <nav-item
+    [container]="'group'"
+    [expanded]="isExpanded()"
+    [ariaControls]="'group-' + item().id"
+    [icon]="item().icon"
+    [label]="item().label | translate"
+    [showLabels]="showLabels()"
+    [contextMenu]="sectionMenu"
+    (clicked)="onHeaderClick()"
+  ></nav-item>
+
+  @if (showLabels()) {
+    <div class="additional-btns">
+      <button
+        class="additional-btn"
+        mat-icon-button
+        data-nav-btn="add-view"
+        [matTooltip]="T.F.BOARDS.V.ADD_NEW_BOARD | translate"
+        [attr.aria-label]="T.F.BOARDS.V.ADD_NEW_BOARD | translate"
+        (click)="boardsService.createBoard()"
+      >
+        <mat-icon>add</mat-icon>
+      </button>
+    </div>
+  }
+</div>
+
+<ng-template #sectionMenu>
+  <button
+    mat-menu-item
+    (click)="disableFeature()"
+  >
+    <mat-icon>visibility_off</mat-icon>
+    <span>{{ T.MH.DISABLE_FEATURE | translate }}</span>
+  </button>
+</ng-template>
+
+@if (isExpanded()) {
+  <div
+    class="nav-children"
+    role="list"
+    [id]="'group-' + item().id"
+    [@expandCollapse]
+    cdkDropList
+    cdkDropListLockAxis="y"
+    [cdkDropListData]="item().boards"
+    (cdkDropListDropped)="drop($event)"
+  >
+    @for (row of rows(); track row.board.id) {
+      <div
+        class="nav-child-item draggable view-row"
+        role="listitem"
+        [class.is-indented]="showLabels()"
+        [attr.data-view-id]="row.board.id"
+        cdkDrag
+        [cdkDragData]="row.board"
+        [cdkDragStartDelay]="dragDelayForTouch"
+        [matTooltip]="row.board.title | translate"
+        [matTooltipDisabled]="showLabels()"
+        matTooltipPosition="right"
+      >
+        <nav-item
+          [container]="'route'"
+          [navRoute]="row.route"
+          [icon]="row.icon"
+          [label]="row.board.title"
+          [showLabels]="showLabels()"
+          [contextMenu]="viewMenu"
+          (clicked)="onRowClick(row.board)"
+        ></nav-item>
+
+        <ng-template #viewMenu>
+          <button
+            mat-menu-item
+            (click)="boardsService.editBoard(row.board)"
+          >
+            <mat-icon>edit</mat-icon>
+            <span>{{ T.G.EDIT | translate }}</span>
+          </button>
+          <button
+            mat-menu-item
+            (click)="boardsService.duplicateBoard(row.board)"
+          >
+            <mat-icon>file_copy</mat-icon>
+            <span>{{ T.G.DUPLICATE | translate }}</span>
+          </button>
+          <button
+            mat-menu-item
+            (click)="boardsService.removeBoard(row.board)"
+          >
+            <mat-icon class="color-warn-i">delete_forever</mat-icon>
+            <span>{{ T.G.DELETE | translate }}</span>
+          </button>
+        </ng-template>
+      </div>
+    }
+  </div>
+}

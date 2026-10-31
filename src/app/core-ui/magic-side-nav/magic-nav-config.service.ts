@@ -39,6 +39,7 @@ import { GlobalConfigService } from '../../features/config/global-config.service
 import { AppFeaturesConfig } from '../../features/config/global-config.model';
 import { SnackService } from '../../core/snack/snack.service';
 import { IS_DONATION_UI_RESTRICTED } from '../../app.constants';
+import { selectAllBoards } from '../../features/boards/store/boards.selectors';
 
 @Injectable({
   providedIn: 'root',
@@ -62,6 +63,10 @@ export class MagicNavConfigService {
     lsGetBoolean(LS.IS_PROJECT_LIST_EXPANDED, true),
   );
   private readonly _isTagsExpanded = signal(lsGetBoolean(LS.IS_TAG_LIST_EXPANDED, true));
+  private readonly _isViewsExpanded = signal(
+    lsGetBoolean(LS.IS_VIEW_LIST_EXPANDED, true),
+  );
+  private readonly _boards = this._store.selectSignal(selectAllBoards);
 
   // Data signals
   private readonly _mainWorkContext = toSignal(
@@ -161,6 +166,9 @@ export class MagicNavConfigService {
 
       // Separator
       { type: 'separator', id: 'sep-2' },
+
+      // Views Section (boards)
+      ...this._buildViewGroupItems(),
 
       // Projects Section
       {
@@ -429,17 +437,6 @@ export class MagicNavConfigService {
       });
     }
 
-    if (this.isBoardsEnabled()) {
-      items.push({
-        type: 'route',
-        id: 'boards',
-        label: T.MH.BOARDS,
-        icon: NAV_SECTION_ICON.BOARDS,
-        route: '/boards',
-        featureConfigKey: 'isBoardsEnabled',
-      });
-    }
-
     if (this.isHabitsEnabled()) {
       items.push({
         type: 'route',
@@ -452,6 +449,25 @@ export class MagicNavConfigService {
     }
 
     return items;
+  }
+
+  // Boards are listed one by one as views, in their own section.
+  private _buildViewGroupItems(): NavItem[] {
+    if (!this.isBoardsEnabled()) {
+      return [];
+    }
+    return [
+      {
+        type: 'viewGroup',
+        id: 'views',
+        label: T.MH.BOARDS,
+        icon: 'expand_more',
+        boards: this._boards(),
+        featureConfigKey: 'isBoardsEnabled',
+        action: () => this._toggleViewsExpanded(),
+      },
+      { type: 'separator', id: 'sep-views' },
+    ];
   }
 
   private _buildPluginItems(): NavItem[] {
@@ -487,6 +503,7 @@ export class MagicNavConfigService {
   // Public computed signals for expansion state (for component to check)
   readonly isProjectsExpanded = computed(() => this._isProjectsExpanded());
   readonly isTagsExpanded = computed(() => this._isTagsExpanded());
+  readonly isViewsExpanded = computed(() => this._isViewsExpanded());
 
   // Public access to projects for visibility menu
   readonly allProjectsExceptInbox = computed(() => this._allProjectsExceptInbox());
@@ -508,6 +525,12 @@ export class MagicNavConfigService {
     const newState = !this._isTagsExpanded();
     this._isTagsExpanded.set(newState);
     lsSetItem(LS.IS_TAG_LIST_EXPANDED, newState);
+  }
+
+  private _toggleViewsExpanded(): void {
+    const newState = !this._isViewsExpanded();
+    this._isViewsExpanded.set(newState);
+    lsSetItem(LS.IS_VIEW_LIST_EXPANDED, newState);
   }
 
   // Simple action handlers

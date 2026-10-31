@@ -1,10 +1,17 @@
 import {
+  addDaysToDbDateStr,
+  BoardDueCtx,
   buildComparator,
   doesTaskMatchPanel,
+  getDueDayForPanel,
+  getLogicalDueDay,
+  getPanelDueState,
   rewriteTagIdsForPanel,
   sanitizePanelCfg,
+  withDueStateImpliesScheduled,
 } from './boards.util';
 import {
+  BoardCfg,
   BoardPanelCfg,
   BoardPanelCfgScheduledState,
   BoardPanelCfgTaskDoneState,
@@ -12,6 +19,9 @@ import {
 } from './boards.model';
 import { TaskCopy } from '../tasks/task.model';
 import { TODAY_TAG } from '../tag/tag.const';
+
+// Only consulted by panels with a due rule.
+const DUE_CTX: BoardDueCtx = { todayStr: '2026-10-30', startOfNextDayDiffMs: 0 };
 
 const basePanel: any = {
   id: 'p1',
@@ -120,6 +130,28 @@ describe('sanitizePanelCfg', () => {
     expect(out.sortDir).toBe('desc');
     expect(out.includedTagsMatch).toBe('any');
     expect(out.excludedTagsMatch).toBe('all');
+  });
+
+  it('drops a null or empty dueState (Formly writes null for "Any")', () => {
+    expect('dueState' in sanitizePanelCfg({ ...basePanel, dueState: null } as any)).toBe(
+      false,
+    );
+    expect('dueState' in sanitizePanelCfg({ ...basePanel, dueState: '' } as any)).toBe(
+      false,
+    );
+  });
+
+  it('keeps known and unknown dueState strings', () => {
+    expect(sanitizePanelCfg({ ...basePanel, dueState: 'today' }).dueState).toBe('today');
+    // A newer client's value must survive this client's next updateBoard.
+    expect(sanitizePanelCfg({ ...basePanel, dueState: 'nextMonth' }).dueState).toBe(
+      'nextMonth',
+    );
+  });
+
+  it('keeps panel keys it does not know (written by a newer client)', () => {
+    const out = sanitizePanelCfg({ ...basePanel, someFutureRule: 'x' } as any);
+    expect((out as any).someFutureRule).toBe('x');
   });
 
   it('is idempotent', () => {
@@ -397,6 +429,7 @@ describe('rewriteTagIdsForPanel', () => {
           { id: 't', title: '', projectId: 'INBOX', tagIds: out } as TaskCopy,
           { ...basePanel, ...panel } as BoardPanelCfg,
           () => false,
+          DUE_CTX,
         ),
       ).toBe(true);
     });
@@ -429,7 +462,7 @@ describe('doesTaskMatchPanel', () => {
     task: TaskCopy,
     panel: BoardPanelCfg,
     isInBacklog: (t: Readonly<TaskCopy>) => boolean = noBacklog,
-  ): boolean => doesTaskMatchPanel(task, panel, isInBacklog);
+  ): boolean => doesTaskMatchPanel(task, panel, isInBacklog, DUE_CTX);
 
   it('matches any task when no criteria are set', () => {
     expect(match(mkTask(), mkPanel())).toBe(true);
@@ -559,10 +592,163 @@ describe('doesTaskMatchPanel', () => {
       projectId: 'p1',
       dueDay: '2026-01-01',
     });
-    expect(doesTaskMatchPanel(matching, panel, inBacklog)).toBe(true);
+    expect(doesTaskMatchPanel(matching, panel, inBacklog, DUE_CTX)).toBe(true);
     // identical except it fails ONLY the backlog dimension
-    expect(doesTaskMatchPanel({ ...matching, id: 'not-b' }, panel, inBacklog)).toBe(
-      false,
+    expect(
+      doesTaskMatchPanel({ ...matching, id: 'not-b' }, panel, inBacklog, DUE_CTX),
+    ).toBe(false);
+  });
+
+  describe('dueState', () => {
+    const HOUR = 60 * 60 * 1000;
+    const at = (day: string, hours: number): number => {
+      const d = new Date(`${day}T00:00:00`);
+      d.setHours(hours);
+      return d.getTime();
+    };
+
+    it('matches any due date when absent', () => {
+      expect(match(mkTask(), mkPanel())).toBe(true);
+    });
+
+    it('treats an unknown value as absent', () => {
+      expect(match(mkTask(), mkPanel({ dueState: 'nextFullMoon' }))).toBe(true);
+    });
+
+    it('never matches an undated task when set', () => {
+      expect(match(mkTask(), mkPanel({ dueState: 'today' }))).toBe(false);
+      expect(match(mkTask(), mkPanel({ dueState: 'overdue' }))).toBe(false);
+    });
+
+    it('today / tomorrow / next7Days compare the due day', () => {
+      const today = mkPanel({ dueState: 'today' });
+      const tomorrow = mkPanel({ dueState: 'tomorrow' });
+      const week = mkPanel({ dueState: 'next7Days' });
+      expect(match(mkTask({ dueDay: '2026-10-30' }), today)).toBe(true);
+      expect(match(mkTask({ dueDay: '2026-10-31' }), today)).toBe(false);
+      expect(match(mkTask({ dueDay: '2026-10-31' }), tomorrow)).toBe(true);
+      expect(match(mkTask({ dueDay: '2026-10-30' }), week)).toBe(true);
+      expect(match(mkTask({ dueDay: '2026-11-05' }), week)).toBe(true);
+      expect(match(mkTask({ dueDay: '2026-11-06' }), week)).toBe(false);
+      expect(match(mkTask({ dueDay: '2026-10-29' }), week)).toBe(false);
+    });
+
+    it('overdue uses the logical day boundary', () => {
+      const overdue = mkPanel({ dueState: 'overdue' });
+      expect(match(mkTask({ dueDay: '2026-10-29' }), overdue)).toBe(true);
+      expect(match(mkTask({ dueDay: '2026-10-30' }), overdue)).toBe(false);
+      expect(match(mkTask({ dueWithTime: at('2026-10-29', 23) }), overdue)).toBe(true);
+      expect(match(mkTask({ dueWithTime: at('2026-10-30', 9) }), overdue)).toBe(false);
+    });
+
+    it('dueWithTime wins over dueDay', () => {
+      const task = mkTask({ dueDay: '2026-10-31', dueWithTime: at('2026-10-30', 9) });
+      expect(match(task, mkPanel({ dueState: 'today' }))).toBe(true);
+      expect(match(task, mkPanel({ dueState: 'tomorrow' }))).toBe(false);
+    });
+
+    it('respects a custom start of day', () => {
+      // Day starts at 04:00: 02:00 on Oct 31 still belongs to Oct 30.
+      const ctx: BoardDueCtx = { todayStr: '2026-10-30', startOfNextDayDiffMs: 4 * HOUR };
+      const task = mkTask({ dueWithTime: at('2026-10-31', 2) });
+      expect(
+        doesTaskMatchPanel(task, mkPanel({ dueState: 'today' }), noBacklog, ctx),
+      ).toBe(true);
+      expect(
+        doesTaskMatchPanel(task, mkPanel({ dueState: 'tomorrow' }), noBacklog, ctx),
+      ).toBe(false);
+    });
+  });
+});
+
+describe('getPanelDueState', () => {
+  it('narrows known values and drops unknown ones', () => {
+    expect(getPanelDueState({ dueState: 'overdue' })).toBe('overdue');
+    expect(getPanelDueState({ dueState: 'next7Days' })).toBe('next7Days');
+    expect(getPanelDueState({ dueState: 'someday' })).toBeUndefined();
+    expect(getPanelDueState({})).toBeUndefined();
+  });
+});
+
+describe('getLogicalDueDay', () => {
+  it('shifts timestamps by the start-of-day offset', () => {
+    const ts = new Date('2026-10-31T02:00:00').getTime();
+    expect(getLogicalDueDay({ dueWithTime: ts }, 0)).toBe('2026-10-31');
+    expect(getLogicalDueDay({ dueWithTime: ts }, 4 * 60 * 60 * 1000)).toBe('2026-10-30');
+  });
+
+  it('returns null for undated or malformed tasks', () => {
+    expect(getLogicalDueDay({}, 0)).toBeNull();
+    expect(getLogicalDueDay({ dueDay: 'not-a-day' }, 0)).toBeNull();
+  });
+});
+
+describe('addDaysToDbDateStr', () => {
+  it('adds calendar days across month ends and DST changes', () => {
+    expect(addDaysToDbDateStr('2026-10-30', 1)).toBe('2026-10-31');
+    expect(addDaysToDbDateStr('2026-10-30', 6)).toBe('2026-11-05');
+    // Europe/Berlin and America/Los_Angeles both change clocks in this range.
+    expect(addDaysToDbDateStr('2026-03-27', 6)).toBe('2026-04-02');
+    expect(addDaysToDbDateStr('2026-10-24', 6)).toBe('2026-10-30');
+  });
+});
+
+describe('getDueDayForPanel', () => {
+  const panel = (dueState?: string): Pick<BoardPanelCfg, 'dueState'> => ({ dueState });
+
+  it('needs no change without a rule or when the task already matches', () => {
+    expect(getDueDayForPanel({}, panel(), DUE_CTX)).toBeUndefined();
+    expect(getDueDayForPanel({}, panel('unknown'), DUE_CTX)).toBeUndefined();
+    expect(
+      getDueDayForPanel({ dueDay: '2026-10-30' }, panel('today'), DUE_CTX),
+    ).toBeUndefined();
+    expect(
+      getDueDayForPanel({ dueDay: '2026-11-02' }, panel('next7Days'), DUE_CTX),
+    ).toBeUndefined();
+    expect(
+      getDueDayForPanel({ dueDay: '2026-10-01' }, panel('overdue'), DUE_CTX),
+    ).toBeUndefined();
+  });
+
+  it('returns the day to schedule for', () => {
+    expect(getDueDayForPanel({}, panel('today'), DUE_CTX)).toBe('2026-10-30');
+    expect(getDueDayForPanel({ dueDay: '2026-10-30' }, panel('tomorrow'), DUE_CTX)).toBe(
+      '2026-10-31',
     );
+    expect(getDueDayForPanel({ dueDay: '2026-12-24' }, panel('next7Days'), DUE_CTX)).toBe(
+      '2026-10-30',
+    );
+  });
+
+  it('returns null when no date can satisfy the rule', () => {
+    expect(getDueDayForPanel({}, panel('overdue'), DUE_CTX)).toBeNull();
+    expect(
+      getDueDayForPanel({ dueDay: '2026-10-30' }, panel('overdue'), DUE_CTX),
+    ).toBeNull();
+  });
+});
+
+describe('withDueStateImpliesScheduled', () => {
+  const board = (panels: Partial<BoardPanelCfg>[]): BoardCfg => ({
+    id: 'b',
+    title: 'B',
+    cols: 1,
+    panels: panels.map((p) => ({ ...basePanel, ...p })),
+  });
+
+  it('marks panels with a due rule as scheduled', () => {
+    const out = withDueStateImpliesScheduled(
+      board([
+        { dueState: 'today', scheduledState: BoardPanelCfgScheduledState.NotScheduled },
+        { scheduledState: BoardPanelCfgScheduledState.NotScheduled },
+      ]),
+    );
+    expect(out.panels[0].scheduledState).toBe(BoardPanelCfgScheduledState.Scheduled);
+    expect(out.panels[1].scheduledState).toBe(BoardPanelCfgScheduledState.NotScheduled);
+  });
+
+  it('leaves panels with an unknown due rule alone', () => {
+    const out = withDueStateImpliesScheduled(board([{ dueState: 'future' }]));
+    expect(out.panels[0].scheduledState).toBe(BoardPanelCfgScheduledState.All);
   });
 });

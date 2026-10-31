@@ -22,20 +22,23 @@
   <!--        </button>-->
 </header>
 
-<add-task-inline
-  style="margin-bottom: 8px"
-  [additionalFields]="additionalTaskFields()"
-  [tagsToRemove]="tagsToRemoveForInlineCreate()"
-  [taskIdsToExclude]="panelCfg().taskIds"
-  [isNoDefaults]="true"
-  (afterTaskAdd)="afterTaskAdd($event)"
-></add-task-inline>
+@if (!isAddTaskHidden()) {
+  <add-task-inline
+    style="margin-bottom: 8px"
+    [additionalFields]="additionalTaskFields()"
+    [tagsToRemove]="tagsToRemoveForInlineCreate()"
+    [taskIdsToExclude]="panelCfg().taskIds"
+    [isNoDefaults]="true"
+    (afterTaskAdd)="afterTaskAdd($event)"
+  ></add-task-inline>
+}
 
 <div
   class="task-items"
   cdkDropList
   [cdkDropListData]="tasks()"
   [cdkDropListSortingDisabled]="!isManualOrder()"
+  [cdkDropListEnterPredicate]="canEnter"
   (cdkDropListDropped)="drop($event)"
 >
   @for (task of tasks(); track task.id) {

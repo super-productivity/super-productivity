@@ -444,13 +444,15 @@ export class MagicSideNavComponent implements OnDestroy, AfterViewInit {
       return this._sideNavConfigService.isProjectsExpanded();
     } else if (item.id === 'tags') {
       return this._sideNavConfigService.isTagsExpanded();
+    } else if (item.id === 'views') {
+      return this._sideNavConfigService.isViewsExpanded();
     }
     // For other groups, default to expanded (or extend service to manage all groups)
     return true;
   }
 
   onItemClick(item: NavItem): void {
-    if (item.type === 'tree') {
+    if (item.type === 'tree' || item.type === 'viewGroup') {
       // All groups now handled consistently through service
       if (item.action) {
         item.action();

@@ -23,9 +23,12 @@ import {
   BoardPanelCfgTaskTypeFilter,
 } from '../boards.model';
 import {
+  BoardDueCtx,
   buildComparator,
   doesTaskMatchPanel,
   firstSpecificProjectId,
+  getDueDayForPanel,
+  getPanelDueState,
   isAllProjects,
   rewriteTagIdsForPanel,
 } from '../boards.util';
@@ -80,6 +83,11 @@ import {
 import type { ScheduledDateColor } from '../../tasks/util/get-scheduled-date-color';
 import { GlobalTrackingIntervalService } from '../../../core/global-tracking-interval/global-tracking-interval.service';
 import { DateService } from '../../../core/date/date.service';
+import {
+  selectStartOfNextDayDiffMs,
+  selectTodayStr,
+} from '../../../root-store/app-state/app-state.selectors';
+import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
 
 export interface BoardPanelNavigation {
   direction: -1 | 1 | 'up' | 'down';
@@ -135,6 +143,25 @@ export class BoardPanelComponent implements TaskCardList {
   private _config = inject(GlobalConfigService);
   private _cards = viewChildren(PlannerTaskComponent, { read: ElementRef });
   readonly isMoving = signal(false);
+
+  // Store selectors, not DateService: both change at day rollover and when the
+  // start-of-day setting changes, which re-filters the panel.
+  private readonly _todayStr = this.store.selectSignal(selectTodayStr);
+  private readonly _startOfNextDayDiffMs = this.store.selectSignal(
+    selectStartOfNextDayDiffMs,
+  );
+  readonly dueCtx = computed<BoardDueCtx>(() => ({
+    todayStr: this._todayStr() || this._dateService.todayStr(),
+    startOfNextDayDiffMs: this._startOfNextDayDiffMs() ?? 0,
+  }));
+  readonly dueState = computed(() => getPanelDueState(this.panelCfg()));
+  // No date makes a new task overdue, so the add row would only create tasks
+  // that never show up here.
+  readonly isAddTaskHidden = computed(() => this.dueState() === 'overdue');
+
+  // CDK only passes the dragged item; `moveTasks` checks the whole selection.
+  readonly canEnter = (drag: CdkDrag<TaskCopy>): boolean =>
+    !drag.data || getDueDayForPanel(drag.data, this.panelCfg(), this.dueCtx()) !== null;
 
   rows(): HTMLElement[] {
     return this._cards().map((card) => card.nativeElement as HTMLElement);
@@ -326,8 +353,9 @@ export class BoardPanelComponent implements TaskCardList {
     // Hoist the backlog predicate out of the filter callback so it's allocated
     // once per recompute, not once per task.
     const isInBacklog = (t: Readonly<TaskCopy>): boolean => this._isTaskInBacklog(t);
+    const dueCtx = this.dueCtx();
     const allFilteredTasks = this.allTasks().filter((task) =>
-      doesTaskMatchPanel(task, panelCfg, isInBacklog),
+      doesTaskMatchPanel(task, panelCfg, isInBacklog, dueCtx),
     );
 
     allFilteredTasks.forEach((task) => {
@@ -383,8 +411,15 @@ export class BoardPanelComponent implements TaskCardList {
           ),
         )
       ).filter((task): task is TaskCopy => !!task);
+      // One task no date can move into the panel refuses the whole move.
+      const dueCtx = this.dueCtx();
+      if (tasks.some((task) => getDueDayForPanel(task, panelCfg, dueCtx) === null)) {
+        return false;
+      }
+      // A due rule schedules by itself (below), so it skips the date dialog.
       const unscheduled =
-        panelCfg.scheduledState === BoardPanelCfgScheduledState.Scheduled
+        panelCfg.scheduledState === BoardPanelCfgScheduledState.Scheduled &&
+        !getPanelDueState(panelCfg)
           ? tasks.filter((task) => !task.dueDay && !task.dueWithTime)
           : [];
       let schedule: Parameters<TaskBulkActionService['scheduleFor']>[0] | undefined;
@@ -428,6 +463,7 @@ export class BoardPanelComponent implements TaskCardList {
             .get(TaskBulkActionService)
             .scheduleFor(schedule, tasksToSchedule);
         }
+        await this._scheduleForDueState(panelCfg, movingIds);
         await new Promise<void>((resolve) => setTimeout(resolve, 0));
         this.multiSelect.reanchorAfterMove(movingIds, this.rows());
       } finally {
@@ -502,12 +538,46 @@ export class BoardPanelComponent implements TaskCardList {
       );
     }
 
-    if (panelCfg.scheduledState === BoardPanelCfgScheduledState.NotScheduled) {
+    if (
+      panelCfg.scheduledState === BoardPanelCfgScheduledState.NotScheduled &&
+      !getPanelDueState(panelCfg)
+    ) {
       this.store.dispatch(
         TaskSharedActions.unscheduleTask({ id: task.id, isSkipToast: true }),
       );
     }
     await this._checkBacklogState(panelCfg, task.id);
+  }
+
+  /**
+   * Schedules tasks for the day the panel's due rule asks for. Re-reads each
+   * task first: placing it may have moved it to another project. Tasks no date
+   * can satisfy are skipped; callers refuse those moves up front.
+   */
+  private async _scheduleForDueState(
+    panelCfg: BoardPanelCfg,
+    taskIds: string[],
+  ): Promise<void> {
+    if (!getPanelDueState(panelCfg)) {
+      return;
+    }
+    const dueCtx = this.dueCtx();
+    const tasksByDay = new Map<string, TaskCopy[]>();
+    for (const id of taskIds) {
+      const task = await firstValueFrom(this.store.select(selectTaskById, { id }));
+      const day = task && getDueDayForPanel(task, panelCfg, dueCtx);
+      if (task && day) {
+        tasksByDay.set(day, [...(tasksByDay.get(day) ?? []), task]);
+      }
+    }
+    for (const [day, tasks] of tasksByDay) {
+      await this._injector
+        .get(TaskBulkActionService)
+        .scheduleFor(
+          { date: dateStrToUtcDate(day), time: null, remindOption: null },
+          tasks,
+        );
+    }
   }
 
   async afterTaskAdd({ taskId, isAddToBottom, isNewTask }: TaskAddEvent): Promise<void> {
@@ -527,6 +597,7 @@ export class BoardPanelComponent implements TaskCardList {
       if (!fastArrayCompare(task.tagIds || [], newTagIds)) {
         this.taskService.updateTags(task, newTagIds);
       }
+      await this._scheduleForDueState(panelCfg, [taskId]);
       return;
     }
 
@@ -578,6 +649,11 @@ export class BoardPanelComponent implements TaskCardList {
     panelCfg: BoardPanelCfg,
     taskId: string,
   ): Promise<void> {
+    if (getPanelDueState(panelCfg)) {
+      // A due rule picks the day itself and implies "scheduled".
+      await this._scheduleForDueState(panelCfg, [taskId]);
+      return;
+    }
     if (panelCfg.scheduledState === BoardPanelCfgScheduledState.Scheduled) {
       const task = await this.store
         .select(selectTaskById, { id: taskId })

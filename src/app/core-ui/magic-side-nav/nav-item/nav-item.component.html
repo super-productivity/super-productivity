@@ -175,6 +175,22 @@
           <span>{{ T.MH.DISABLE_FEATURE | translate }}</span>
         </button>
       </ng-template>
+    } @else if (contextMenu(); as routeContextMenu) {
+      <button
+        #routeMenuBtn
+        class="additional-btn"
+        mat-icon-button
+        [attr.aria-label]="T.G.MORE_ACTIONS | translate"
+      >
+        <mat-icon>more_vert</mat-icon>
+      </button>
+
+      <context-menu
+        [contextMenu]="routeContextMenu"
+        [rightClickTriggerEl]="routeLink"
+        [leftClickTriggerEl]="routeMenuBtn"
+        [isTouchLongPress]="true"
+      ></context-menu>
     }
   } @else if (container() === 'href') {
     <a
@@ -268,6 +284,7 @@
       <!-- No matMenuTriggerFor here: even without a menu, its host bindings
            overwrite aria-expanded and aria-controls. -->
       <button
+        #plainBtn
         class="nav-link"
         mat-menu-item
         [class.expanded]="container() === 'group' && expanded()"
@@ -310,6 +327,16 @@
           </span>
         }
       </button>
+
+      <!-- Section headers (e.g. Views): right-click or long-press only, a
+           click toggles the section. -->
+      @if (contextMenu(); as plainContextMenu) {
+        <context-menu
+          [contextMenu]="plainContextMenu"
+          [rightClickTriggerEl]="plainBtn"
+          [isTouchLongPress]="true"
+        ></context-menu>
+      }
     }
   }
 }

@@ -141,8 +141,30 @@ export const BOARDS_FORM: LimitedFormlyFieldConfig<BoardCfg>[] = [
           },
         },
         {
+          key: 'dueState',
+          type: 'select',
+          props: {
+            label: T.F.BOARDS.FORM.DUE_STATE,
+            defaultValue: null,
+            options: [
+              { value: null, label: T.F.BOARDS.FORM.DUE_STATE_ANY },
+              { value: 'overdue', label: T.F.BOARDS.FORM.DUE_STATE_OVERDUE },
+              { value: 'today', label: T.F.BOARDS.FORM.DUE_STATE_TODAY },
+              { value: 'tomorrow', label: T.F.BOARDS.FORM.DUE_STATE_TOMORROW },
+              { value: 'next7Days', label: T.F.BOARDS.FORM.DUE_STATE_NEXT_7_DAYS },
+            ],
+          },
+        },
+        {
           key: 'scheduledState',
           type: 'radio',
+          // A due date implies "scheduled"; BoardEditComponent sets it on save.
+          // Keep the value while hidden: Formly's default `resetFieldOnHide`
+          // would delete this required field from the model.
+          expressions: {
+            hide: '!!model.dueState',
+          },
+          resetOnHide: false,
           props: {
             label: T.F.BOARDS.FORM.SCHEDULED_STATE,
             required: true,

@@ -20,6 +20,7 @@ import { T } from '../../../t.const';
 import { Store } from '@ngrx/store';
 import { BoardsActions } from '../store/boards.actions';
 import { DEFAULT_BOARD_CFG, DEFAULT_PANEL_CFG } from '../boards.const';
+import { withDueStateImpliesScheduled } from '../boards.util';
 
 @Component({
   selector: 'board-edit',
@@ -34,7 +35,7 @@ export class BoardEditComponent implements OnInit {
   boardCfg = model.required<BoardCfg>();
   isEdit = signal(false);
   isHideBtns = input<boolean>(false);
-  afterSave = output<void>();
+  afterSave = output<string>();
 
   form: UntypedFormGroup = new UntypedFormGroup({});
 
@@ -65,15 +66,15 @@ export class BoardEditComponent implements OnInit {
 
   save(): void {
     if (this.form.valid) {
+      const boardCfg = withDueStateImpliesScheduled(this.boardCfg());
       if (this.isEdit()) {
         this.store.dispatch(
-          BoardsActions.updateBoard({ id: this.boardCfg().id, updates: this.boardCfg() }),
+          BoardsActions.updateBoard({ id: boardCfg.id, updates: boardCfg }),
         );
-        this.afterSave.emit();
       } else {
-        this.store.dispatch(BoardsActions.addBoard({ board: this.boardCfg() }));
-        this.afterSave.emit();
+        this.store.dispatch(BoardsActions.addBoard({ board: boardCfg }));
       }
+      this.afterSave.emit(boardCfg.id);
     }
   }
 

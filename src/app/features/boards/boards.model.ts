@@ -19,6 +19,11 @@ export enum BoardPanelCfgTaskTypeFilter {
 export type BoardSortField = 'dueDate' | 'created' | 'title' | 'timeEstimate';
 export type BoardMatchMode = 'all' | 'any';
 
+// Code-only union: the persisted `dueState` is a plain string so a value added
+// by a newer client doesn't fail typia's closed-union check on this one (see
+// validation-fn.ts). Read it through `getPanelDueState`.
+export type BoardPanelDueState = 'overdue' | 'today' | 'tomorrow' | 'next7Days';
+
 export interface BoardSrcCfg {
   includedTagIds: string[];
   excludedTagIds: string[];
@@ -42,6 +47,8 @@ export interface BoardSrcCfg {
   sortByDue?: 'off' | 'asc' | 'desc';
   // optional since newly added
   backlogState?: BoardPanelCfgTaskTypeFilter;
+  // Absent = any due date. A `BoardPanelDueState`; unknown values read as absent.
+  dueState?: string;
 }
 
 export interface BoarFieldsToRemove {

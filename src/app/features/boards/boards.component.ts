@@ -1,169 +1,74 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  computed,
   effect,
-  ElementRef,
   inject,
-  signal,
+  untracked,
 } from '@angular/core';
-import { MatTab, MatTabContent, MatTabGroup, MatTabLabel } from '@angular/material/tabs';
-import { Store } from '@ngrx/store';
-import { T } from '../../t.const';
-import { MatIcon } from '@angular/material/icon';
-import { MatMenuModule } from '@angular/material/menu';
-import { nanoid } from 'nanoid';
-import { BoardComponent } from './board/board.component';
-import { CdkScrollable } from '@angular/cdk/overlay';
-import {
-  CdkDrag,
-  CdkDragDrop,
-  CdkDropList,
-  CdkDropListGroup,
-} from '@angular/cdk/drag-drop';
-import { moveItemInArray } from '../../util/move-item-in-array';
+import { ActivatedRoute, Router } from '@angular/router';
 import { toSignal } from '@angular/core/rxjs-interop';
-import { selectAllBoards } from './store/boards.selectors';
+import { map } from 'rxjs/operators';
+import { Store } from '@ngrx/store';
+import { MatButton } from '@angular/material/button';
+import { MatIcon } from '@angular/material/icon';
+import { CdkDropListGroup } from '@angular/cdk/drag-drop';
+import { TranslatePipe } from '@ngx-translate/core';
+import { T } from '../../t.const';
+import { BoardComponent } from './board/board.component';
 import { LS } from '../../core/persistence/storage-keys.const';
 import { setSelectedTask } from '../tasks/store/task.actions';
-import { TranslatePipe } from '@ngx-translate/core';
-import { BoardEditComponent } from './board-edit/board-edit.component';
-import { DEFAULT_BOARD_CFG } from './boards.const';
-import { BoardsActions } from './store/boards.actions';
-import { BoardCfg } from './boards.model';
-import { MatDialog } from '@angular/material/dialog';
-import { DialogBoardEditComponent } from './dialog-board-edit/dialog-board-edit.component';
-import { DialogConfirmComponent } from '../../ui/dialog-confirm/dialog-confirm.component';
-import { Log } from 'src/app/core/log';
 import { TaskMultiSelectService } from '../tasks/task-multi-select.service';
+import { BoardsService } from './boards.service';
 
+/**
+ * One view (board) per route: `/boards/:boardId`. `BoardRouteGuard` resolves
+ * `/boards` to a view, so this page only shows the "no views" state when there
+ * is no id.
+ */
 @Component({
   selector: 'boards',
   standalone: true,
-  imports: [
-    MatMenuModule,
-    MatTabGroup,
-    MatTab,
-    MatIcon,
-    MatTabContent,
-    MatTabLabel,
-    BoardComponent,
-    CdkScrollable,
-    CdkDropListGroup,
-    CdkDropList,
-    CdkDrag,
-    TranslatePipe,
-    BoardEditComponent,
-  ],
+  imports: [BoardComponent, CdkDropListGroup, MatButton, MatIcon, TranslatePipe],
   templateUrl: './boards.component.html',
   styleUrl: './boards.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class BoardsComponent {
-  private _matDialog = inject(MatDialog);
+  private _route = inject(ActivatedRoute);
+  private _router = inject(Router);
+  private _store = inject(Store);
   private _multiSelect = inject(TaskMultiSelectService);
-  store = inject(Store);
-  elementRef = inject(ElementRef);
-  selectedTabIndex = signal(localStorage.getItem(LS.SELECTED_BOARD) || 0);
-  readonly dragStartDelay = { touch: 300, mouse: 0 };
+  readonly boardsService = inject(BoardsService);
 
-  boards = toSignal(this.store.select(selectAllBoards));
+  readonly boardId = toSignal(
+    this._route.paramMap.pipe(map((params) => params.get('boardId'))),
+    { initialValue: null },
+  );
+  readonly board = computed(() => {
+    const id = this.boardId();
+    return id ? this.boardsService.boards().find((board) => board.id === id) : undefined;
+  });
   protected readonly T = T;
-
-  DEFAULT_BOARD_CFG = DEFAULT_BOARD_CFG;
 
   constructor() {
     effect(() => {
-      localStorage.setItem(LS.SELECTED_BOARD, this.selectedTabIndex().toString());
-    });
-  }
-
-  goToLastIndex(): void {
-    // NOTE: since the index number does not change (the add tab index is at the same index as the newly added tab) we need to do this in two steps
-    const newIndex = (this.boards()?.length || 1) - 1;
-    setTimeout(() => {
-      this.selectedTabIndex.set(newIndex + 1);
-      setTimeout(() => {
-        this.selectedTabIndex.set(newIndex);
-      }, 10);
-    });
-  }
-
-  // Tab change happens before the click event gets to the callback.
-  // We need to delay updating the selected tab index until the click event has completed
-  // propagation.
-  onTabChange(index: number): void {
-    this._multiSelect.clear();
-    setTimeout(() => this.selectedTabIndex.set(index));
-    this.store.dispatch(setSelectedTask({ id: null }));
-  }
-
-  drop(ev: CdkDragDrop<string[]>): void {
-    const boards = this.boards();
-    if (!boards || ev.previousIndex === ev.currentIndex) {
-      return;
-    }
-    const ids = moveItemInArray(boards, ev.previousIndex, ev.currentIndex).map(
-      (b) => b.id,
-    );
-    this.store.dispatch(BoardsActions.sortBoards({ ids }));
-  }
-
-  get componentElement(): HTMLElement {
-    return this.elementRef.nativeElement;
-  }
-
-  duplicateBoard(boardToDuplicate: BoardCfg): void {
-    if (!boardToDuplicate) {
-      Log.warn('No board selected to duplicate');
-      return;
-    }
-    this.store.dispatch(
-      BoardsActions.addBoard({
-        board: {
-          cols: boardToDuplicate.cols,
-          id: nanoid(),
-          panels: boardToDuplicate.panels.map((panel) => ({
-            ...panel,
-            id: nanoid(),
-            taskIds: [],
-          })),
-          title: `${boardToDuplicate.title} (copy)`,
-        },
-      }),
-    );
-  }
-
-  editBoard(board: BoardCfg): void {
-    if (!board) {
-      Log.warn('No board selected to edit');
-      return;
-    }
-    this._matDialog.open(DialogBoardEditComponent, {
-      data: {
-        board: board,
-      },
-    });
-  }
-
-  removeBoard(board: BoardCfg): void {
-    if (!board) {
-      Log.warn('No board selected to remove');
-      return;
-    }
-    this._matDialog
-      .open(DialogConfirmComponent, {
-        restoreFocus: true,
-        data: {
-          cancelTxt: T.G.CANCEL,
-          okTxt: T.G.DELETE,
-          message: T.F.BOARDS.V.CONFIRM_DELETE,
-        },
-      })
-      .afterClosed()
-      .subscribe((isConfirm: boolean) => {
-        if (isConfirm) {
-          this.store.dispatch(BoardsActions.removeBoard({ id: board.id }));
+      const id = this.boardId();
+      untracked(() => {
+        // Selection and the open task belong to the view that was left.
+        this._multiSelect.clear();
+        this._store.dispatch(setSelectedTask({ id: null }));
+        if (id) {
+          localStorage.setItem(LS.SELECTED_BOARD, id);
         }
       });
+    });
+
+    // The open view was deleted (here, in its dialog or on another device).
+    effect(() => {
+      if (this.boardId() && !this.board()) {
+        untracked(() => this._router.navigate(['/boards'], { replaceUrl: true }));
+      }
+    });
   }
 }

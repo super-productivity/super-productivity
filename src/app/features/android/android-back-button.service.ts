@@ -157,7 +157,9 @@ export class AndroidBackButtonService {
     const path = this._pathOf(url);
     return (
       /^\/(?:tag|project)\/[^/]+\/tasks$/.test(path) ||
-      ['/planner', '/schedule', '/boards', '/habits'].includes(path)
+      // `/boards` redirects to `/boards/<id>`, and each view is its own page.
+      /^\/boards(?:\/[^/]+)?$/.test(path) ||
+      ['/planner', '/schedule', '/habits'].includes(path)
     );
   }
 
