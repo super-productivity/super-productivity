@@ -1,18 +1,11 @@
 import { Page } from '@playwright/test';
 import { expect, test } from '../../fixtures/test.fixture';
 import { waitForMenuSettled, waitForStatePersistence } from '../../utils/waits';
+import { openCreateViewDialog } from '../../utils/view-helpers';
 
 const openKanban = async (page: Page): Promise<void> => {
-  await page.goto('/#/boards');
-  await page
-    .getByRole('tab')
-    .filter({ hasText: /kanban/i })
-    .click();
-  const kanbanPanel = page.getByRole('tabpanel', { name: 'Kanban', exact: true });
-  await expect(kanbanPanel).toBeVisible();
-  // The button can pass Playwright's stability check while the tab is still sliding.
-  await expect(kanbanPanel).not.toHaveClass(/mat-tab-body-animating/);
-  await kanbanPanel.getByRole('button', { name: 'Create Tag', exact: true }).click();
+  await page.goto('/#/boards/KANBAN_DEFAULT');
+  await page.getByRole('button', { name: 'Create Tag', exact: true }).click();
   await expect(page.locator('[data-board-selection-scope="TODO"]')).toBeVisible();
 };
 
@@ -26,8 +19,7 @@ test.describe('Board keyboard navigation', () => {
     for (const name of ['Alpha', 'Beta', 'Gamma']) {
       await workViewPage.addTask(`${testPrefix}-${name}`);
     }
-    await page.goto('/#/boards');
-    await page.getByRole('tab').first().click();
+    await page.goto('/#/boards/EISENHOWER_MATRIX');
     await page.getByRole('button', { name: /Create.*Tags/i }).click();
     const panels = page.locator('board-panel');
     const source = panels.nth(3).locator('planner-task');
@@ -104,8 +96,7 @@ test.describe('Board keyboard navigation', () => {
   }) => {
     await workViewPage.waitForTaskList();
     await workViewPage.addTask(`${testPrefix}-Grid task`);
-    await page.goto('/#/boards');
-    await page.getByRole('tab').first().click();
+    await page.goto('/#/boards/EISENHOWER_MATRIX');
     await page.getByRole('button', { name: /Create.*Tags/i }).click();
     const panels = page.locator('board-panel');
     await expect(panels).toHaveCount(4);
@@ -241,9 +232,8 @@ test.describe('Board keyboard navigation', () => {
     await workViewPage.waitForTaskList();
     for (const name of ['Alpha', 'Beta', 'Gamma'])
       await workViewPage.addTask(`${testPrefix}-${name}`);
-    await page.goto('/#/boards');
-    await page.getByRole('tab').last().click();
-    const form = page.locator('board-edit');
+    const createDialog = await openCreateViewDialog(page);
+    const form = createDialog.locator('board-edit');
     await form
       .getByRole('textbox', { name: 'Title', exact: true })
       .fill(`${testPrefix}-Duplicates`);
@@ -255,7 +245,7 @@ test.describe('Board keyboard navigation', () => {
       await expect(titles).toHaveCount(i + 2);
       await titles.last().fill(name);
     }
-    await form.getByRole('button', { name: 'Save', exact: true }).click();
+    await createDialog.getByRole('button', { name: 'Save', exact: true }).click();
     const panels = page.locator('board-panel');
     const first = panels.nth(0).locator('planner-task');
     const second = panels.nth(1).locator('planner-task');

@@ -13,17 +13,10 @@ test.describe('Boards — Eisenhower Matrix edit dialog (#7380)', () => {
   }) => {
     await workViewPage.waitForTaskList();
 
-    await page.goto('/#/boards');
+    // The Eisenhower Matrix board ships with `cols: 2` and four panels.
+    await page.goto('/#/boards/EISENHOWER_MATRIX');
     await page.waitForLoadState('networkidle');
     await expect(page.locator('boards')).toBeVisible({ timeout: 10000 });
-
-    // The Eisenhower Matrix board ships with `cols: 2` and four panels.
-    // Find the Eisenhower tab and select it.
-    const eisenhowerTab = page
-      .locator('mat-tab-group [role="tab"]')
-      .filter({ hasText: /eisenhower/i })
-      .first();
-    await eisenhowerTab.click();
 
     // Default Eisenhower Matrix references Important / Urgent tags that
     // don't exist in a fresh profile — click "Create Tags" if shown so the

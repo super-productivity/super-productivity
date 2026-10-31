@@ -102,8 +102,7 @@ const editContent = async (
 ): Promise<void> => {
   if (family !== 'boards') return dispatch(page, edit);
   // The editor saves the full board config, even for a rename.
-  await page.goto('/#/boards');
-  await page.getByRole('tab', { name: edit.id as string, exact: true }).click();
+  await page.goto(`/#/boards/${edit.id as string}`);
   await page.locator('board:visible button').filter({ hasText: 'edit' }).click();
   const dialog = page.locator('dialog-board-edit');
   await dialog.locator('input[type="text"]').fill('edited concurrently');

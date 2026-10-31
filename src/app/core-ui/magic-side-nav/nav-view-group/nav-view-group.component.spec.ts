@@ -1,4 +1,3 @@
-import { NO_ERRORS_SCHEMA } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { CdkDragDrop } from '@angular/cdk/drag-drop';
@@ -50,7 +49,6 @@ describe('NavViewGroupComponent', () => {
     })
       // The rows' nav-items need the router and theme; the logic under test
       // doesn't render them.
-      .overrideComponent(NavViewGroupComponent, { set: { schemas: [NO_ERRORS_SCHEMA] } })
       .overrideTemplate(NavViewGroupComponent, '')
       .compileComponents();
 

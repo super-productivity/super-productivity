@@ -26,8 +26,9 @@ test.describe('App Features', () => {
       locator: (page: Page) => page.getByRole('menuitem', { name: 'Planner' }),
     },
     {
-      label: 'Boards',
-      locator: (page: Page) => page.getByRole('menuitem', { name: 'Boards' }),
+      // the Views section of the side menu (boards)
+      label: 'Views',
+      locator: (page: Page) => page.getByRole('menuitem', { name: 'Views' }),
     },
     {
       // the day panel button follows the Schedule switch
