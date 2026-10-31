@@ -105,7 +105,14 @@ export class AndroidBackButtonService {
     // 7. A top-level destination → pop to the start destination, or exit if
     //    already there.
     const startUrl = this._getStartPageUrl();
-    if (this._pathOf(currentUrl) === this._pathOf(startUrl)) {
+    const currentPath = this._pathOf(currentUrl);
+    const startPath = this._pathOf(startUrl);
+    if (
+      currentPath === startPath ||
+      // The views start page `/boards` opens the last view, `/boards/<id>`:
+      // popping to `/boards` would land on the same view and never exit.
+      (startPath === '/boards' && /^\/boards\/[^/]+$/.test(currentPath))
+    ) {
       this._minimizeApp();
     } else {
       this._router.navigateByUrl(startUrl, { replaceUrl: true });

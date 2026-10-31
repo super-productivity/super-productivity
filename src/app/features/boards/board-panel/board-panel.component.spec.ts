@@ -23,7 +23,8 @@ import {
 import { WorkContextService } from '../../work-context/work-context.service';
 import { ProjectService } from '../../project/project.service';
 import { signal } from '@angular/core';
-import type { WritableSignal } from '@angular/core';
+import type { Signal, WritableSignal } from '@angular/core';
+import { selectTodayStr } from '../../../root-store/app-state/app-state.selectors';
 import { TODAY_TAG } from '../../tag/tag.const';
 import { GlobalConfigService } from '../../config/global-config.service';
 import { DateService } from '../../../core/date/date.service';
@@ -32,6 +33,12 @@ import { DEFAULT_PANEL_CFG } from '../boards.const';
 import { BoardsActions } from '../store/boards.actions';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { GlobalTrackingIntervalService } from '../../../core/global-tracking-interval/global-tracking-interval.service';
+import { TaskBulkActionService } from '../../tasks/task-bulk-action.service';
+import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
+
+// The panel reads the logical day from the store for its due-date rule.
+const daySelectSignal = (selector: unknown): Signal<string | number> =>
+  signal(selector === selectTodayStr ? '2026-09-12' : 0);
 
 const PLANNER_TASK_PROVIDERS = [
   {
@@ -121,6 +128,7 @@ describe('BoardPanelComponent - Backlog Feature', () => {
     actions$ = new ReplaySubject(1);
 
     const storeMock = {
+      selectSignal: daySelectSignal,
       select: (selectorFn: any) => {
         if (selectorFn === selectUnarchivedProjects) {
           return of(mockProjects);
@@ -322,6 +330,7 @@ describe('BoardPanelComponent - Hidden Project Backlog', () => {
     actions$ = new ReplaySubject(1);
 
     const storeMock = {
+      selectSignal: daySelectSignal,
       select: (selectorFn: any) => {
         if (selectorFn === selectUnarchivedProjects) {
           return of(mockProjects);
@@ -418,6 +427,7 @@ describe('BoardPanelComponent - Tag match mode, sort, inline-create computeds', 
   const setup = async (tasks: TaskCopy[]): Promise<void> => {
     actions$ = new ReplaySubject(1);
     const storeMock = {
+      selectSignal: daySelectSignal,
       select: (selectorFn: any) => {
         if (selectorFn === selectUnarchivedProjects)
           return of([{ id: 'p1', backlogTaskIds: [] }]);
@@ -810,6 +820,7 @@ describe('BoardPanelComponent - drop()', () => {
   let actions$: ReplaySubject<any>;
   let dispatchSpy: jasmine.Spy;
   let updateTagsSpy: jasmine.Spy;
+  let scheduleForSpy: jasmine.Spy;
 
   const mkTask = (overrides: Partial<TaskCopy>): TaskCopy =>
     ({
@@ -854,8 +865,10 @@ describe('BoardPanelComponent - drop()', () => {
     actions$ = new ReplaySubject(1);
     dispatchSpy = jasmine.createSpy('dispatch');
     updateTagsSpy = jasmine.createSpy('updateTags');
+    scheduleForSpy = jasmine.createSpy('scheduleFor').and.resolveTo();
 
     const storeMock = {
+      selectSignal: daySelectSignal,
       select: (selectorFn: any, props?: { id: string }) => {
         if (selectorFn === selectUnarchivedProjects)
           return of([{ id: 'p1', backlogTaskIds: [] }]);
@@ -891,6 +904,7 @@ describe('BoardPanelComponent - drop()', () => {
         { provide: MatDialog, useValue: {} },
         { provide: WorkContextService, useValue: {} },
         { provide: ProjectService, useValue: { getProjectsWithoutId$: () => of([]) } },
+        { provide: TaskBulkActionService, useValue: { scheduleFor: scheduleForSpy } },
       ],
     })
       .overrideComponent(PlannerTaskComponent, {
@@ -1162,6 +1176,75 @@ describe('BoardPanelComponent - drop()', () => {
     expect(component.isMoving()).toBeFalse();
   });
 
+  describe('due date rule', () => {
+    // The mocked logical today is 2026-09-12.
+    it('schedules moved tasks for the panel day without the schedule dialog', async () => {
+      const tasks = ['a', 'b'].map((id) => mkTask({ id }));
+      await setup(tasks);
+      fixture.componentRef.setInput('panelCfg', {
+        ...DEFAULT_PANEL_CFG,
+        id: 'p',
+        dueState: 'tomorrow',
+        scheduledState: 2,
+      });
+      fixture.detectChanges();
+      const open = jasmine.createSpy('open');
+      TestBed.inject(MatDialog).open = open;
+
+      expect(await component.moveTasks(['a', 'b'])).toBeTrue();
+
+      expect(open).not.toHaveBeenCalled();
+      expect(scheduleForSpy).toHaveBeenCalledOnceWith(
+        { date: dateStrToUtcDate('2026-09-13'), time: null, remindOption: null },
+        tasks,
+      );
+    });
+
+    it('leaves tasks that already match where they are', async () => {
+      await setup([mkTask({ id: 'a', dueDay: '2026-09-15' })]);
+      fixture.componentRef.setInput('panelCfg', {
+        ...DEFAULT_PANEL_CFG,
+        id: 'p',
+        dueState: 'next7Days',
+      });
+      fixture.detectChanges();
+
+      expect(await component.moveTasks(['a'])).toBeTrue();
+      expect(scheduleForSpy).not.toHaveBeenCalled();
+    });
+
+    it('refuses the whole move when one task cannot become overdue', async () => {
+      await setup([mkTask({ id: 'a', dueDay: '2026-09-01' }), mkTask({ id: 'b' })]);
+      fixture.componentRef.setInput('panelCfg', {
+        ...DEFAULT_PANEL_CFG,
+        id: 'p',
+        dueState: 'overdue',
+      });
+      fixture.detectChanges();
+
+      expect(await component.moveTasks(['a', 'b'])).toBeFalse();
+      expect(dispatchSpy).not.toHaveBeenCalled();
+      expect(updateTagsSpy).not.toHaveBeenCalled();
+      expect(scheduleForSpy).not.toHaveBeenCalled();
+      expect(component.isMoving()).toBeFalse();
+    });
+
+    it('lets only already overdue tasks enter an overdue panel and hides its add row', async () => {
+      await setup([]);
+      fixture.componentRef.setInput('panelCfg', {
+        ...DEFAULT_PANEL_CFG,
+        id: 'p',
+        dueState: 'overdue',
+      });
+      fixture.detectChanges();
+
+      const drag = (task: TaskCopy): any => ({ data: task });
+      expect(component.canEnter(drag(mkTask({ dueDay: '2026-09-01' })))).toBeTrue();
+      expect(component.canEnter(drag(mkTask({ dueDay: '2026-09-12' })))).toBeFalse();
+      expect(component.isAddTaskHidden()).toBeTrue();
+    });
+  });
+
   it('cross-panel drop with AND-excluded strips only the FIRST excluded and adds first missing included', async () => {
     // Arrange — target panel: includes 'need' (any), excludes ['x','y'] (all)
     const task = mkTask({ id: 't1', tagIds: ['x', 'y', 'keep'] });
@@ -1340,7 +1423,11 @@ describe('BoardPanelComponent - add button lookup', () => {
         provideMockActions(() => new ReplaySubject(1)),
         {
           provide: Store,
-          useValue: { select: () => of([]), dispatch: jasmine.createSpy('dispatch') },
+          useValue: {
+            select: () => of([]),
+            selectSignal: daySelectSignal,
+            dispatch: jasmine.createSpy('dispatch'),
+          },
         },
         { provide: TaskService, useValue: { currentTaskId: signal(null) } },
         { provide: MatDialog, useValue: {} },

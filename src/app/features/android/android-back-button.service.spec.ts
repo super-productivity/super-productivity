@@ -406,6 +406,26 @@ describe('AndroidBackButtonService (#7972)', () => {
       expect(navigateByUrl).not.toHaveBeenCalled();
     });
 
+    it('pops a view to the start destination', () => {
+      routerUrl = '/boards/KANBAN_DEFAULT';
+
+      service.handleBackButton();
+
+      expect(navigateByUrl).toHaveBeenCalledWith(TODAY_URL, { replaceUrl: true });
+      expect(historyBack).not.toHaveBeenCalled();
+    });
+
+    it('exits from any view when the views page is the start destination', () => {
+      // `/boards` redirects to the last view; popping there would loop.
+      misc = { defaultStartPage: DefaultStartPage.Boards };
+      routerUrl = '/boards/KANBAN_DEFAULT';
+
+      service.handleBackButton();
+
+      expect(minimizeApp).toHaveBeenCalled();
+      expect(navigateByUrl).not.toHaveBeenCalled();
+    });
+
     it('treats a deeper path under a task list as non-top-level (navigates up)', () => {
       routerUrl = `${TODAY_URL}/123`;
 
