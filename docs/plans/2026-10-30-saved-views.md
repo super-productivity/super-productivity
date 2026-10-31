@@ -964,6 +964,108 @@ These override the parts above where they differ.
     without changes and check the stored board is unchanged and titles show
     translated.
 
+## 14. Phase 6 — first impression and polish
+
+From a walkthrough of the running app (2026-10-31, screenshots of every
+surface at 1280px and 400px). Four rough spots, worst first. No stored
+shape, action or op changes in this phase.
+
+### A. Default views open on a wall
+
+Today a view whose rules name a tag that doesn't exist (the default
+Eisenhower Matrix and Kanban on any install that never created `urgent`,
+`important`, `in-progress`) shows only "2 new tags need to be created for
+this view to work" and a button: the columns, i.e. what the view _is_, are
+hidden. That is the first screen after turning Views on.
+
+- The board always renders its columns or sections. Above them, a
+  `.callout` (global style, `src/styles/components/_callout.scss`, info
+  tone) names the missing tags and keeps the one-click action: "This view
+  uses tags that don't exist yet: urgent, important." + **Create tags**
+  (`mat-stroked-button`, same `createTags()` as today: default tags keep
+  their fixed ids and translated titles, unknown ids get today's fallback).
+  Tag names come from the default tag consts (translated); an unknown id
+  shows as is.
+- A panel whose **required** tags (`includedTagIds`) include a missing tag
+  can't take tasks until they exist: `canEnter` returns false (drag, card
+  drop, keyboard move into it, multi-select move), the inline add / add-task
+  bar target skips it (`isAddTaskHidden` true, so `newTaskTarget` is null),
+  and its empty state stays plain. Otherwise `getChangesToMatch` would add a
+  tag id with no tag entity (a dangling `tagIds` entry). Excluded missing
+  tags are harmless (excluding a tag nobody has matches every task) and need
+  no guard.
+- The missing-tag set comes from one place both the board and its panels
+  read (e.g. a `computed` over `selectAllTagIds` in
+  `ViewCriteriaContextService`), not a second store subscription per panel.
+- Not done, and why: creating the tags automatically on open or on first
+  drop. Opening a view isn't a user intent to create data, and two devices
+  opening it would both send `addTag` for the same fixed id (a create/create
+  crossing); a drop would become two ops (tag + task). One explicit click
+  stays the creation path. Changing the default views to use Priority
+  instead of tags isn't possible either: the engine can't express the
+  complement quadrants ("not urgent" = no date or later than N days), and it
+  would only reach new installs.
+
+### B. Section "+ Add" rows
+
+Every section of a list view starts with a full-width "+ Add" row above its
+tasks. It pushes the content down, repeats on every section and duplicates
+the add-task bar (which already adds into the view's first section that
+takes new tasks). Project sections in the work view have no add row, only
+header actions.
+
+- The row goes. The section header (`collapsible` `[actions]` slot, as
+  project sections use it) gets a small `mat-icon-button` "+" with
+  `aria-label` "Add task to <section title>" (new key with `{{title}}`),
+  hidden when the section can't take new tasks (`isAddTaskHidden()`).
+  `$event.stopPropagation()` so it doesn't toggle the section.
+- Clicking it expands the section if collapsed and shows the existing
+  `add-task-inline` bar, opened directly (no intermediate "Add" button) and
+  focused, at the top of the section; it closes on done/Escape/blur as
+  today (`closed`/`done`). Add an `isOpen` (or `startOpen`) input to
+  `AddTaskInlineComponent` rather than a second component.
+- Keyboard: the header button is reachable by Tab like the project section
+  ⋮; the existing shortcuts are unchanged.
+
+### C. The editor's first section card
+
+In a one-section list the section title is hidden, which leaves a header row
+holding only "5 tasks" and the ⋮, floating over empty space.
+
+- When the title is hidden, the header row is the "Show tasks that match"
+  label on the left with the count and ⋮ on the right; the separate label
+  line below goes. With a shown title, unchanged.
+
+### D. The Add-rule menu
+
+13 rules in one menu with dividers. Short group headings make it scannable:
+**Where** (project, backlog), **Tags**, **Dates**, **State** (completion,
+parent only), **Effort** (priority, estimate, time spent) — the existing
+`VIEW_RULE_GROUPS`, given names.
+
+- A heading is a non-interactive element in the menu (not a `mat-menu-item`,
+  `role="presentation"` / `aria-hidden`, the items keep their own labels),
+  styled by a new shared class in `src/styles/components/` (e.g.
+  `.menu-subheader`: small, muted, uppercase-free, `--s` padding), not a
+  local override of Material menu styles. Only groups with at least one
+  addable rule show their heading.
+
+### Tests
+
+- Unit: the board shows columns plus the callout with missing tags; a panel
+  with a missing required tag refuses `canEnter` and has no add target; a
+  panel that only excludes a missing tag still accepts tasks. Section header
+  "+" opens the inline add focused and expands a collapsed section. Editor
+  header with a hidden title. Rule menu headings only for groups with
+  addable rules.
+- E2E (`e2e/tests/boards/`): a fresh install opens the Eisenhower Matrix
+  and sees its four columns and the callout; **Create tags** removes the
+  callout and a drag into a quadrant then works; the section "+" adds a task
+  into that section. Update any E2E that relied on the wall or the "+ Add"
+  row (grep `Create Tag`, `add-task-inline`, `.task-section`).
+- Screenshots at 1280px and 400px of: Eisenhower before/after creating tags,
+  a sectioned list, the editor with one section, the Add-rule menu.
+
 ## Review
 
 Plan review (fresh-context subagent, 2026-10-30). Fixed in this revision:
