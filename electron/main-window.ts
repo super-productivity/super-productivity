@@ -27,6 +27,7 @@ import {
   showTaskWidget,
 } from './task-widget/task-widget';
 import { ensureIndicator } from './indicator';
+import { getStartMinimizedMode } from './start-minimized';
 import { getIsMinimizeToTray, getIsQuiting, setIsQuiting } from './shared-state';
 import { createMenuTemplate } from './menu';
 import { loadSimpleStoreAll } from './simple-store';
@@ -145,12 +146,14 @@ export const createWindow = async ({
   quitApp,
   app,
   customUrl,
+  isStartMinimized = false,
 }: {
   IS_DEV: boolean;
   ICONS_FOLDER: string;
   quitApp: () => void;
   app: App;
   customUrl?: string;
+  isStartMinimized?: boolean;
 }): Promise<BrowserWindow> => {
   // make sure the main window isn't already created
   if (mainWin) {
@@ -166,6 +169,10 @@ export const createWindow = async ({
   const mainWindowState = windowStateKeeper({
     defaultWidth: 800,
     defaultHeight: 800,
+    // maximize() and setFullScreen() show a hidden window, so a start-minimized
+    // launch must not restore either. showOrFocus() re-maximizes on first show.
+    maximize: !isStartMinimized,
+    fullScreen: !isStartMinimized,
   });
 
   const simpleStore = await loadSimpleStoreAll();
@@ -385,7 +392,7 @@ export const createWindow = async ({
     mainWin.setBounds(restoreBounds);
   }
 
-  if (wasMaximized && !mainWin.isMaximized()) {
+  if (wasMaximized && !mainWin.isMaximized() && !isStartMinimized) {
     mainWin.maximize();
   }
 
@@ -501,6 +508,18 @@ export const createWindow = async ({
 
   // show gracefully
   mainWin.once('ready-to-show', () => {
+    if (isStartMinimized) {
+      const mode = getStartMinimizedMode({ hasTray: !!ensureIndicator(), isMac: IS_MAC });
+      log('Start minimized: main window', mode === 'hide' ? 'stays hidden' : 'minimized');
+      if (mode === 'minimize') {
+        // Minimizing a window that was never shown leaves it without a taskbar
+        // entry on some platforms, so map it first without taking focus.
+        mainWin.showInactive();
+        mainWin.minimize();
+      }
+      return;
+    }
+
     mainWin.show();
 
     // Workaround for Windows phantom focus bug (electron#20464):
