@@ -452,6 +452,43 @@ These override the parts above where they differ.
   new field; a deadline-column E2E with the Today interplay; a save-as-view E2E
   checking subtasks and order against the source list.
 
+## 11. Phase 3 — one-column views as real task lists
+
+Decided 2026-10-31: with one rule engine for columns and lists, a view with a
+single column renders like a filtered task list (full task rows, subtasks,
+time tracking, context menu) instead of board cards.
+
+- **When:** `cols <= 1` and exactly one panel. Multi-column views keep cards.
+- **Where:** a list mode of `BoardPanelComponent`, so matching, write-back and
+  the add-task row stay in one place. `BoardComponent` sets it.
+- **Rows:** the panel's matching tasks as `TaskWithSubTasks`: a parent carries
+  all its subtasks (like a project list); a matching subtask whose parent also
+  matches is shown under the parent only; one whose parent doesn't match is a
+  row of its own (like Today). Order: the panel's sort, else its `taskIds`.
+- **Done tasks:** when the panel shows done and undone tasks, done ones go to a
+  collapsed "Done" section below; drops into it are refused.
+- **Reordering:** a new reserved list id `VIEW`. `task-list` accepts drops into
+  it only from the same list; a reorder writes the panel's `taskIds`
+  (`updatePanelCfgTaskIds`, already synced) instead of the open project's or
+  tag's order, and doesn't reset the filter menu's sort. Disabled while the
+  panel is sorted. Multi-select group drags are refused (as for other
+  non-project lists today). Subtask lists inside rows work as everywhere.
+- **No work context:** task rows on a view page must not act on the project or
+  tag that was open before (the active context stays in the store). A new
+  injection token `VIEW_TASK_LIST` (tasks feature, like `TASK_CARD_LIST`),
+  provided by the panel, tells rows and the task list they are in a view:
+  - keyboard move up/down/top/bottom of a top-level row reorders the view;
+  - "is Today open" is false (add/remove-to-Today buttons behave as in a
+    project list);
+  - the backlog key and the context menu's backlog items are off.
+- **Hot path:** the task component gets one optional injection and three
+  guarded branches, no template calls or new subscriptions.
+- **Tests:** panel row building (subtask placement, order, done split), the
+  task-list VIEW drop path and predicate, task row moves via the token, E2E:
+  a one-column view shows task rows with subtasks, reorder by drag and by
+  keyboard persists after reload, the Today buttons don't depend on the list
+  opened before.
+
 ## Review
 
 Plan review (fresh-context subagent, 2026-10-30). Fixed in this revision:
