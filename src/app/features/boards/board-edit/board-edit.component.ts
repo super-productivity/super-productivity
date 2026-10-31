@@ -12,8 +12,13 @@ import { nanoid } from 'nanoid';
 import { Store } from '@ngrx/store';
 import { BoardsActions } from '../store/boards.actions';
 import { ViewEditorComponent } from '../view-editor/view-editor.component';
+import { getViewUpdates } from '../view-editor/view-editor.util';
+import { selectAllBoards } from '../store/boards.selectors';
 
-/** Saves what the view editor builds: one `addBoard` or `updateBoard`. */
+/**
+ * Saves what the view editor builds: one `addBoard`, or one `updateBoard` with
+ * the fields the editor changed (none when nothing changed).
+ */
 @Component({
   selector: 'board-edit',
   standalone: true,
@@ -24,6 +29,7 @@ import { ViewEditorComponent } from '../view-editor/view-editor.component';
 export class BoardEditComponent {
   private readonly _store = inject(Store);
   private readonly _editor = viewChild.required(ViewEditorComponent);
+  private readonly _boards = this._store.selectSignal(selectAllBoards);
 
   /** The stored board; a new one has no id yet. */
   readonly board = input.required<BoardCfg>();
@@ -43,7 +49,13 @@ export class BoardEditComponent {
       return;
     }
     if (this.isEdit()) {
-      this._store.dispatch(BoardsActions.updateBoard({ id: board.id, updates: board }));
+      // The dialog edits a copy of the board as it was when it opened.
+      const current = this._boards().find((b) => b.id === board.id);
+      const updates = current && getViewUpdates(this.board(), board, current);
+      // A view deleted meanwhile (e.g. by sync) isn't brought back.
+      if (updates) {
+        this._store.dispatch(BoardsActions.updateBoard({ id: board.id, updates }));
+      }
     } else {
       this._store.dispatch(BoardsActions.addBoard({ board }));
     }

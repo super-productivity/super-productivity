@@ -7,6 +7,7 @@ import { BoardEditComponent } from './board-edit.component';
 import { BoardCfg, BoardPanelCfg, BoardPanelCfgTaskDoneState } from '../boards.model';
 import { DEFAULT_BOARD_CFG, DEFAULT_BOARDS, DEFAULT_PANEL_CFG } from '../boards.const';
 import { BoardsActions } from '../store/boards.actions';
+import { selectAllBoards } from '../store/boards.selectors';
 import { normalizeBoardForSave, toEditorModel } from '../boards.util';
 import { UNTOUCHED_SAVE_FIXTURES } from '../testing/view-editor-fixtures';
 import { ViewCriteriaContextService } from '../view-criteria-context.service';
@@ -25,6 +26,9 @@ describe('BoardEditComponent with the view editor', () => {
   let fixture: ComponentFixture<BoardEditComponent>;
   let dispatch: jasmine.Spy;
   const tasks = signal<TaskCopy[]>([]);
+  // The boards in the store; `open` puts the opened one there.
+  const boards = signal<BoardCfg[]>([]);
+  let opened: BoardCfg;
 
   const task = (fields: Partial<TaskCopy> & { id: string }): TaskCopy =>
     ({
@@ -49,7 +53,11 @@ describe('BoardEditComponent with the view editor', () => {
           useValue: {
             dispatch,
             selectSignal: (selector: unknown) =>
-              selector === selectAllTasksInActiveProjects ? tasks : signal(undefined),
+              selector === selectAllTasksInActiveProjects
+                ? tasks
+                : selector === selectAllBoards
+                  ? boards
+                  : signal(undefined),
           },
         },
         {
@@ -92,6 +100,8 @@ describe('BoardEditComponent with the view editor', () => {
     fixture.detectChanges();
   };
   const open = async (board: BoardCfg): Promise<BoardEditComponent> => {
+    opened = board;
+    boards.set(board.id ? [board] : []);
     fixture = TestBed.createComponent(BoardEditComponent);
     fixture.componentRef.setInput('board', board);
     await settle();
@@ -103,18 +113,24 @@ describe('BoardEditComponent with the view editor', () => {
     fixture.debugElement
       .queryAll(By.directive(ViewEditorSectionComponent))
       .map((el) => el.componentInstance);
+  /** The board as the store holds it after the save. */
   const savedBoard = (): BoardCfg => {
-    const action = dispatch.calls.mostRecent().args[0];
-    return action.type === BoardsActions.updateBoard.type ? action.updates : action.board;
+    const action = dispatch.calls.mostRecent()?.args[0];
+    if (!action) {
+      return opened;
+    }
+    return action.type === BoardsActions.updateBoard.type
+      ? { ...opened, ...action.updates }
+      : action.board;
   };
 
   describe('an untouched save stores the board unchanged', () => {
     for (const f of UNTOUCHED_SAVE_FIXTURES) {
       it(f.name, async () => {
         (await open(f.board)).save();
-        expect(dispatch).toHaveBeenCalledOnceWith(
-          BoardsActions.updateBoard({ id: f.board.id, updates: f.saved }),
-        );
+        // At most one op, and none when the stored board is already as saved.
+        expect(dispatch.calls.count()).toBeLessThanOrEqual(1);
+        expect(savedBoard()).toEqual({ ...f.board, ...f.saved });
         expect(f.saved).toEqual(normalizeBoardForSave(toEditorModel(f.board)));
       });
     }
@@ -158,6 +174,60 @@ describe('BoardEditComponent with the view editor', () => {
     expect(board.cols).toBe(1);
     // The hidden section title takes the view's.
     expect(board.panels.map((p) => p.title)).toEqual(['Focus']);
+  });
+
+  describe('saving an edited view', () => {
+    const stored: BoardCfg = normalizeBoardForSave({
+      id: 'v',
+      title: 'V',
+      cols: 2,
+      panels: [
+        { ...DEFAULT_PANEL_CFG, id: 'a', title: 'A', taskIds: ['t1', 't2'] },
+        { ...DEFAULT_PANEL_CFG, id: 'b', title: 'B', taskIds: [] },
+      ],
+    });
+
+    it('dispatches nothing when nothing changed', async () => {
+      (await open(stored)).save();
+      expect(dispatch).not.toHaveBeenCalled();
+    });
+
+    it('sends only the changed fields', async () => {
+      const cmp = await open(stored);
+      editor().setTitle('Renamed');
+      await settle();
+      cmp.save();
+      expect(dispatch).toHaveBeenCalledOnceWith(
+        BoardsActions.updateBoard({ id: 'v', updates: { title: 'Renamed' } }),
+      );
+    });
+
+    it('keeps a task order and a field that synced in while it was open', async () => {
+      const cmp = await open(stored);
+      boards.set([
+        {
+          ...stored,
+          cols: 3,
+          panels: [{ ...stored.panels[0], taskIds: ['t2', 't1'] }, stored.panels[1]],
+        },
+      ]);
+      editor().updatePanel(1, { ...editor().model().panels[1], title: 'Later' });
+      await settle();
+      cmp.save();
+      const { updates } = dispatch.calls.mostRecent().args[0];
+      expect(updates.cols).toBeUndefined();
+      expect(updates.panels.map((p: BoardPanelCfg) => p.title)).toEqual(['A', 'Later']);
+      expect(updates.panels[0].taskIds).toEqual(['t2', 't1']);
+    });
+
+    it("doesn't bring back a view deleted while it was open", async () => {
+      const cmp = await open(stored);
+      boards.set([]);
+      editor().setTitle('Renamed');
+      await settle();
+      cmp.save();
+      expect(dispatch).not.toHaveBeenCalled();
+    });
   });
 
   it('switches between List and Board', async () => {

@@ -6,6 +6,7 @@ import {
   BoardPanelCfgTaskTypeFilter,
 } from '../boards.model';
 import { isAllProjects, normalizeBoardForSave, toEditorModel } from '../boards.util';
+import { deepEqual } from '@sp/sync-core';
 import { T } from '../../../t.const';
 import { TASK_DATE_RULES } from '../../tasks/task-criteria/task-criteria.model';
 
@@ -485,4 +486,39 @@ export const toSavedBoard = (
     }
   }
   return normalizeBoardForSave({ ...model, title, panels });
+};
+
+/**
+ * What saving `saved` changes: only the fields that differ from the board the
+ * editor opened, so a field synced in meanwhile that the editor didn't touch
+ * stays. Changed panels keep the task order they have now, not the one the
+ * editor opened with (a reorder synced in while it was open). Null when the
+ * save changes nothing.
+ */
+export const getViewUpdates = (
+  opened: BoardCfg,
+  saved: BoardCfg,
+  current: BoardCfg | undefined,
+): Partial<BoardCfg> | null => {
+  const updates: Partial<BoardCfg> = {};
+  let isChanged = false;
+  for (const key of Object.keys(saved) as (keyof BoardCfg)[]) {
+    if (!deepEqual(saved[key], opened[key])) {
+      (updates as Record<string, unknown>)[key] = saved[key];
+      isChanged = true;
+    }
+  }
+  if (!isChanged) {
+    return null;
+  }
+  if (updates.panels && current) {
+    const currentTaskIds = new Map(
+      current.panels.map((panel) => [panel.id, panel.taskIds]),
+    );
+    updates.panels = updates.panels.map((panel) => {
+      const taskIds = currentTaskIds.get(panel.id);
+      return taskIds ? { ...panel, taskIds } : panel;
+    });
+  }
+  return updates;
 };

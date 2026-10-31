@@ -13,6 +13,7 @@ import {
   getRuleValue,
   getSetRules,
   getSortValue,
+  getViewUpdates,
   OTHER_VALUE,
   PLANNED_HAS_DATE,
   PLANNED_NO_DATE,
@@ -301,4 +302,42 @@ describe('toSavedBoard: an untouched save', () => {
       expect(toSavedBoard(model, fixture.board, translate)).toEqual(fixture.saved);
     });
   }
+});
+
+describe('getViewUpdates', () => {
+  const board: BoardCfg = {
+    id: 'v',
+    title: 'V',
+    cols: 2,
+    panels: [panel({ id: 'a', taskIds: ['t1', 't2'] }), panel({ id: 'b' })],
+  };
+
+  it('is null when nothing changed', () => {
+    expect(getViewUpdates(board, { ...board }, board)).toBeNull();
+  });
+
+  it('holds only the changed fields', () => {
+    expect(getViewUpdates(board, { ...board, cols: 3 }, board)).toEqual({ cols: 3 });
+  });
+
+  it('gives changed panels the task order they have now', () => {
+    const current = { ...board, panels: [{ ...board.panels[0], taskIds: ['t2'] }] };
+    const saved = {
+      ...board,
+      panels: [
+        { ...board.panels[0], title: 'Renamed' },
+        panel({ id: 'new', taskIds: [] }),
+      ],
+    };
+    const updates = getViewUpdates(board, saved, current);
+    expect(updates?.panels?.map((p) => p.taskIds)).toEqual([['t2'], []]);
+    expect(updates?.panels?.[0].title).toBe('Renamed');
+  });
+
+  it('leaves out unchanged panels, so a synced reorder stays', () => {
+    const current = { ...board, panels: [{ ...board.panels[0], taskIds: ['t2'] }] };
+    expect(getViewUpdates(board, { ...board, title: 'W' }, current)).toEqual({
+      title: 'W',
+    });
+  });
 });
