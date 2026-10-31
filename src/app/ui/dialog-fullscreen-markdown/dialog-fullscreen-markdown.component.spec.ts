@@ -156,6 +156,24 @@ describe('DialogFullscreenMarkdownComponent', () => {
       } as any);
     });
 
+    for (const eventInit of [
+      { isComposing: true, keyCode: 13 },
+      { isComposing: false, keyCode: 229 },
+    ]) {
+      it(`keeps a list unchanged during IME confirmation (${eventInit.keyCode})`, () => {
+        mockTextarea.value = '- 日本';
+        mockTextarea.setSelectionRange(4, 4);
+        const event = new KeyboardEvent('keydown', {
+          key: 'Enter',
+          cancelable: true,
+          ...eventInit,
+        });
+        component.keydownHandler(event);
+        expect(mockTextarea.value).toBe('- 日本');
+        expect(event.defaultPrevented).toBeFalse();
+      });
+    }
+
     it('should call close() on Ctrl+Enter', () => {
       spyOn(component, 'close');
       component.keydownHandler(
