@@ -28,7 +28,8 @@
 }
 
 .cols {
-  flex: 0 0 120px;
+  // Wide enough for its error on one line.
+  flex: 0 1 200px;
 }
 
 .hint {
