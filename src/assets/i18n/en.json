@@ -3198,8 +3198,8 @@
       "PLANNER": "Plan the next days in {{plannerIcon}} <b>Planner</b>",
       "TASK_MENU_TOUCH": "Swipe a task left for its menu: {{playIcon}} <b>Start tracking time</b>, {{subtaskIcon}} <b>Add subtask</b>",
       "TASK_MENU_TOUCH_NO_TRACKING": "Swipe a task left for its menu, e.g. {{subtaskIcon}} <b>Add subtask</b>",
-      "TIMER_RUNNING": "Timer's running. Press {{playIcon}} again or <kbd>{{key}}</kbd> to pause.",
-      "TIMER_RUNNING_TOUCH": "Timer's running. Tap {{playIcon}} at the top to pause.",
+      "TIMER_RUNNING": "Timer's running. Press {{pauseIcon}} or <kbd>{{key}}</kbd> to pause.",
+      "TIMER_RUNNING_TOUCH": "Timer's running. Tap {{pauseIcon}} at the top to pause.",
       "TRACK_TIME": "Hover over the task and press {{playIcon}} to track time"
     },
     "WANT_MORE": {

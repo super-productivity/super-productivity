@@ -3122,8 +3122,8 @@
       "PLANNER": "Plan de komende dagen in {{plannerIcon}} <b>Planner</b>",
       "TASK_MENU_TOUCH": "Veeg een taak naar links voor het menu: {{playIcon}} <b>Begin met het bijhouden van de tijd</b>, {{subtaskIcon}} <b>Subtaak toevoegen</b>",
       "TASK_MENU_TOUCH_NO_TRACKING": "Veeg een taak naar links voor het menu, bijv. {{subtaskIcon}} <b>Subtaak toevoegen</b>",
-      "TIMER_RUNNING": "De timer loopt. Druk nogmaals op {{playIcon}} of op <kbd>{{key}}</kbd> om te pauzeren.",
-      "TIMER_RUNNING_TOUCH": "De timer loopt. Tik bovenaan op {{playIcon}} om te pauzeren.",
+      "TIMER_RUNNING": "De timer loopt. Druk nogmaals op {{pauseIcon}} of op <kbd>{{key}}</kbd> om te pauzeren.",
+      "TIMER_RUNNING_TOUCH": "De timer loopt. Tik bovenaan op {{pauseIcon}} om te pauzeren.",
       "TRACK_TIME": "Beweeg de muis over de taak en druk op {{playIcon}} om tijd bij te houden"
     },
     "WANT_MORE": {
