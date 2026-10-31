@@ -1,6 +1,6 @@
 # Help me plan today: an optional AI day planner
 
-Oct 31, 2026 · status: **proposal**, nothing implemented · branch `claude/ai-plan-today`
+Oct 31, 2026 · rev. 2 after review · status: **proposal**, nothing implemented · branch `claude/ai-plan-today`
 
 **Related:** generative views, parked (`docs/plans/2026-10-30-generative-views.md`
 on `claude/generative-ui-todo-app-h4o6e8`) · agent endpoint / MCP plan
@@ -12,24 +12,23 @@ on `claude/generative-ui-todo-app-h4o6e8`) · agent endpoint / MCP plan
 
 ## Summary
 
-- **What:** one button, **Help me plan today**. SP sends a short list of
-  today's candidate tasks (ids, titles, estimates, dates) and the day's free
-  time to a model. A proposal comes back: what to keep today, what to pull in
-  (overdue), what to push to tomorrow, one short reason each. The user ticks or
-  unticks items, then presses **Apply**. Nothing changes before that.
+- **What:** one button, **Help me plan today**. SP sends the tasks already on
+  the radar (on Today, overdue, deadline within 7 days: titles, estimates,
+  dates) and today's free minutes to a model. A proposal comes back: what to
+  pull in and what to move to tomorrow, one short reason each. The user
+  unticks what they don't want and presses **Apply**. Nothing changes before
+  that.
 - **Not:** a chat, a companion, nudges, check-ins, "you're behind", streaks,
   praise, background re-planning, or time-blocking.
-- **Where:** a first-party plugin listed in the community plugin directory
-  (one-click install, not bundled), using the user's own Anthropic API key.
-  Two small plugin API methods that wrap existing planner actions. No new NgRx
-  action, op type, persisted model or sync-wire change.
+- **Where:** a first-party plugin listed in the plugin directory (one-click
+  install, not bundled), using the user's own Anthropic API key. **v1 needs no
+  plugin API or core change**: it applies the plan with the existing
+  `updateTask({ dueDay })`.
 - **Demand is weak** (§ 1): two AI-planning issues in eight years, 0 reactions
-  each. The case rests on the market target, not on requests. So the order is:
-  eval first, ship only if it clearly beats rules, and stay removable.
-- **Gate:** before any app code, an offline eval must show the model beats a
-  plain rule-based draft on realistic day fixtures. If it doesn't, we ship the
-  rule-based draft (from the planning-facts work) and stop here.
-- **Cost to the user:** about US$0.002–0.06 per run depending on model
+  each. The case rests on the market target, not on requests.
+- **Gate:** an offline eval runs first (no app code). If the model doesn't
+  clearly beat a plain rule-based draft on realistic days, stop.
+- **Cost to the user:** about US$0.002–0.07 per run depending on model
   (estimate, § 6.5).
 
 **Sections:** [1. Demand and fit](#1-demand-and-fit) ·
@@ -79,8 +78,8 @@ the main items were spot-checked against the API.
 Hence the shape: the eval runs first and needs no app code (Phase 0). App work
 starts only if the model clearly beats a rule-based draft **and** the survey's
 Q8/Q10 counts don't argue against it (open question 1). The deterministic
-planning facts and their rule-based draft are the higher-value step either
-way; this plan must not delay them.
+planning facts are the higher-value step either way; this plan must not delay
+them.
 
 ## 2. Prior art
 
@@ -117,7 +116,7 @@ lists "one-key auto-scheduling" as something the planners do better.
 - Propose less than the day holds, and say what was left out (Sunsama's
   "overcommitted" is its best-liked part).
 - Overrides are checkboxes in the proposal, not a chat round trip.
-- Reasons come from the user's own facts ("overdue 3 days", "pushed 4 times",
+- Reasons come from the user's own facts ("overdue 3 days", "deadline Monday",
   "fits the 40 min left"), not generic tips.
 - Bring your own key; no subscription.
 
@@ -132,109 +131,97 @@ lists "one-key auto-scheduling" as something the planners do better.
 ## 3. Assumptions about planning facts
 
 Step 2 of the agreed order (deterministic planning facts, evaluated on
-`claude/planning-facts-evaluation`) was not on the remote when this was written.
-This plan works with any subset and states what it uses:
+`claude/planning-facts-evaluation`) was not on the remote when this was
+written. This plan needs none of it and uses what survives:
 
-| Fact                                                  | Source if planning facts ship | Fallback if not                                                                                                 |
-| ----------------------------------------------------- | ----------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| Available time today                                  | planning facts                | `PlannerDay.availableHours` minus timed items (already computed by `selectPlannerDays`, `planner.selectors.ts`) |
-| Time already committed (timed tasks, calendar events) | planning facts                | `PlannerDay.scheduledIItems` durations                                                                          |
-| Estimate accuracy (tracked ÷ estimated)               | planning facts                | omitted; the model gets raw estimates                                                                           |
-| Times a task was pushed                               | planning facts                | omitted                                                                                                         |
+| Input                  | v1 source (plugin can read it today)                                                                                                                                                                                | Better if planning facts ship     |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| **Free minutes today** | `getAppState().globalConfig` schedule: work hours from now to work end, minus lunch ahead; 8 h minus time tracked today when work hours are off (the Planner's `DEFAULT_WORK_HOURS`). Minus timed tasks still ahead | includes calendar events          |
+| Estimate accuracy      | —                                                                                                                                                                                                                   | tracked ÷ estimated, last 30 days |
+| Times a task was moved | —                                                                                                                                                                                                                   | per task                          |
 
-Only **available time** is required. Everything else is an optional field in
-the model input (§ 6.1); the eval runs with and without it to show what each
-fact is worth.
+**Known v1 gap:** calendar events are not readable by plugins, so a day full
+of meetings looks free. The eval has meeting-heavy fixtures to measure how much
+that hurts. If it matters, the fix is one read-only number (busy minutes from
+calendar events), ideally from the planning-facts work rather than a second
+API.
 
-The planning-facts work should also produce a **rule-based draft** (keep due and
-overdue, then by priority until the time is used). That draft is the baseline
-the model has to beat (§ 9), and the model starts from it.
+The eval's baseline is a **rule-based draft**: keep what has a time or a
+reminder, keep what has a deadline today or earlier, pull in overdue, then add
+by priority and age until the free time is used, move the rest to tomorrow.
+If planning facts produce such a draft, the eval uses theirs; otherwise
+Phase 0 writes this one inside the eval harness. It is not shipped by this
+plan.
 
 ## 4. Where it lives: core or plugin
 
-|                    | Core feature                                                       | Plugin (**recommended**: first-party, in the plugin directory, not bundled)                                              |
-| ------------------ | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------ |
-| AI decision (open) | Puts an LLM client and API key handling in core; hard to take back | Core stays AI-free; the plugin can be dropped without a migration                                                        |
-| UI                 | Can render inside the Planner                                      | Own side panel, which can stay open next to the Planner; not inline                                                      |
-| Settings surface   | New global config section (persisted model, synced)                | Plugin config and secret storage; nothing in `GlobalConfig`                                                              |
-| API key            | Needs new local-only storage                                       | `setSecret`/`getSecret` exist: local, never synced or exported                                                           |
-| Network            | New HTTP path in core                                              | `request()` bridge with `allowedHosts` exists; the prototype's streaming client exists                                   |
-| Reading data       | Selectors directly                                                 | `getTasks`, `getDayContext` exist; **missing:** day capacity (§ 4.1)                                                     |
-| Applying a plan    | Existing actions directly                                          | **Missing:** a planning method; `updateTask({ dueDay })` skips Today ordering, reminder clearing and planner-day cleanup |
-| Long-term cost     | Core code and a config slice forever                               | Two plugin API methods forever (public contract)                                                                         |
+|                    | Core feature                                                       | Plugin (**recommended**: first-party, in the plugin directory, not bundled)            |
+| ------------------ | ------------------------------------------------------------------ | -------------------------------------------------------------------------------------- |
+| AI decision (open) | Puts an LLM client and API key handling in core; hard to take back | Core stays AI-free; the plugin can be unlisted without a migration                     |
+| UI                 | Can render inside the Planner                                      | Own side panel, which can stay open next to the Planner; not inline                    |
+| Settings           | New global config section (persisted model, synced)                | Plugin config and secret storage; nothing in `GlobalConfig`                            |
+| API key            | Needs new local-only storage                                       | `setSecret`/`getSecret`: local, never synced or exported                               |
+| Network            | New HTTP path in core                                              | `request()` with `"http"` permission and `allowedHosts: ["api.anthropic.com"]`         |
+| Reading data       | Selectors directly                                                 | `getTasks`, `getAppState`, `getDayContext`; no calendar events (§ 3)                   |
+| Applying a plan    | Existing actions directly                                          | `updateTask(id, { dueDay })`, which already keeps planner days and Today in step (§ 7) |
+| Long-term cost     | Core code and a config slice forever                               | None in core for v1                                                                    |
 
 **Recommendation: a first-party plugin, listed in the plugin directory
-(`src/assets/community-plugins.json`, one-click install), not bundled.** The
-model call, prompt, key and proposal UI live in
-`packages/plugin-dev/ai-day-planner`. Core gains two plugin API methods that
-wrap what the Planner already does. This keeps the market doc's open AI
-decision open: if the eval or users say no, we unlist a plugin.
+(`src/assets/community-plugins.json`), not bundled.** Source in
+`packages/plugin-dev/ai-day-planner`; one-click install needs a release zip,
+its `downloadUrl` and sha256, published like the Ridonculous plugins (#11367).
+If the eval or users say no, we unlist it.
 
-Why not bundled and off by default: bundled plugins start disabled, but they
-ship in every install and show in the plugin list. #5952 objects to exactly
-that for the existing AI Prompts plugin. Listing costs users who want it one
-click and costs nobody else anything.
+Why not bundled and off by default: bundled plugins start disabled but ship in
+every install and show in the plugin list. #5952 objects to exactly that for
+the existing AI Prompts plugin.
 
-The planning method also serves the community AutoPlan plugin and any other
-planner plugin: today a plugin can only set `dueDay` through `updateTask`,
-which skips what the Planner does (row "Applying a plan"). That second
-consumer is part of why the API addition is worth its permanent cost. (How
-AutoPlan writes today was not checked.)
+**Challenge to the agreed shape.** "The proposal appears in the normal
+Planner" needs a core preview surface; a plugin cannot draw inside the
+Planner. For v1 the side panel sits beside the Planner, and the Planner
+updates when the user presses Apply. A core "proposed changes" preview is worth
+building only when a second source needs it (the rule-based draft, or an
+external assistant's `propose_day_plan`); then one preview serves all.
 
-**Challenge to the agreed shape.** "The proposal appears in the normal Planner"
-needs a core preview surface. A plugin cannot draw inside the Planner. For v1
-the side panel sits beside the Planner, and the Planner updates the moment the
-user presses Apply. A core "proposed changes" preview in the Planner is worth
-building only if a second source needs it: the rule-based draft from planning
-facts, or an external assistant's `propose_day_plan` (§ 8). Then one preview
-serves all three, and the plugin feeds it through one more method (Phase 3).
-
-### 4.1 Plugin API additions
-
-Both wrap existing code. They go in a new `plugin-bridge-planning.service.ts`,
-because `plugin-bridge.service.ts` is at its pinned `max-lines` cap (2307).
-
-| Method                                                                             | Wraps                                                                                                                   | Notes                                                                            |
-| ---------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| `getDayCapacity?(day: string)` → `{ availableMs, committedMs, plannedEstimateMs }` | `selectPlannerDays` for that day (`availableHours`, `scheduledIItems`, `timeEstimate`)                                  | Numbers only. Calendar event titles never reach the plugin.                      |
-| `planTasksForDay?(taskIds: string[], day: string)`                                 | `day === todayStr` → `TaskSharedActions.planTasksForToday` (one op); otherwise `PlannerActions.planTaskForDay` per task | The same actions the Planner, Add-to-Today and the daily summary dispatch today. |
-
-Both optional (`?`), so older hosts are detected at runtime. Manifest
-permission `planTasks` for the write method. If planning facts ship a plugin
-read method first, `getDayCapacity` folds into it.
-
-Not added: unscheduling, reordering existing Today tasks, `dueWithTime` writes.
+**Plugin API changes:** none in v1. Later, only on evidence: busy minutes from
+calendar events (§ 3), and adding `priority` and `deadlineDay` to the plugin
+`Task` type (sent at runtime already, missing from `types.ts`; also proposed in
+the generative-views plan).
 
 ## 5. User flow
 
 1. **Turn it on.** Settings → Plugins → install _Help me plan today_ from the
-   directory.
-   First open shows a one-time notice, then asks for an API key:
+   directory. First open shows a one-time notice, then asks for an API key:
 
-   > When you press **Help me plan today**, Super Productivity sends to
-   > Anthropic: the titles, estimates, time spent, due dates and deadlines of
-   > the tasks on Today, overdue or due in the next 7 days, plus how many
-   > minutes you have free today. Not sent: notes, subtasks' notes,
-   > attachments, project and tag names, calendar event titles, anything else.
-   > Your key stays on this device. [Show an example of what is sent]
+   > When you press **Help me plan today**, Super Productivity sends this to
+   > Anthropic, and nothing else:
+   >
+   > - for each task on Today, overdue, or with a deadline in the next 7 days
+   >   (up to 80): its title, estimate, time spent, whether it is on Today or
+   >   overdue, due date, deadline, priority, whether it repeats, and whether
+   >   it has a fixed time or reminder;
+   > - for the day: the date, the weekday and your free minutes.
+   >
+   > Not sent: task ids, notes, subtasks, attachments, project and tag names,
+   > calendar events. Your key stays on this device. [Show what would be sent]
 
-   "Show an example" renders the exact JSON of the next request from the
-   user's own data.
+   "Show what would be sent" renders the exact JSON of the next request from
+   the user's own data. If planning facts later add fields, the notice lists
+   them before they are sent.
 
-2. **Ask.** A header button (or the side panel) → **Help me plan today**. One
-   request, a spinner with **Cancel**. Never runs on its own.
+2. **Ask.** The side panel's **Help me plan today** button. One request, a
+   spinner with **Cancel**. Never runs on its own.
 
-3. **Review.** The side panel lists three groups, each row with a checkbox and
-   a one-line reason:
-   - **Today** (n tasks, 5 h 10 min of 5 h 30 min free)
-   - **Pull in** (overdue or due today, not yet on Today)
-   - **Move to tomorrow**
+3. **Review.** A summary line computed locally ("Today: 7 tasks, 4 h 50 min of
+   5 h 30 min free"), then two groups, each row with a checkbox and a reason:
+   - **Pull in:** not on Today yet (overdue, or deadline within 7 days)
+   - **Move to tomorrow:** on Today or overdue
 
-   Unchanged tasks are not listed. Unticking a row drops that change. The
-   totals update locally.
+   Tasks that stay as they are are not listed. Unticking a row drops that
+   change and updates the summary.
 
-4. **Apply.** One button. A snack: "Plan applied · Undo". Undo puts each
-   changed task back on its previous day through the same method.
+4. **Apply.** One button, then a plain snack "Plan applied". No undo in v1
+   (§ 7); every change is an ordinary planner move the user can drag back.
 
 5. **Done.** No follow-up, no score, no "great job".
 
@@ -242,269 +229,261 @@ Not added: unscheduling, reordering existing Today tasks, `dueWithTime` writes.
 
 ### 6.1 Input
 
-Built locally by the plugin from `getTasks()`, `getDayContext()` and
-`getDayCapacity()`. Ids are replaced with short aliases (`t1`, `t2`…) and
+Built by the plugin. Ids are replaced with short aliases (`t1`, `t2`…) and
 mapped back locally, so real ids never leave the device and the model can only
 answer with ids from this list.
 
 ```json
 {
-  "today": "2026-10-31",
+  "date": "2026-10-31",
   "weekday": "Saturday",
   "freeMin": 330,
-  "committedMin": 90,
-  "estimateRatio": 1.4,
-  "candidates": [
+  "tasks": [
     {
       "id": "t1",
       "title": "Review PR 812",
       "estMin": 30,
       "spentMin": 0,
-      "on": "today",
-      "due": null,
+      "where": "today",
+      "due": "2026-10-31",
       "deadline": "2026-11-02",
       "priority": 1,
-      "pushed": 3,
-      "repeat": false,
+      "repeats": false,
       "fixed": false
     }
-  ],
-  "draft": { "today": ["t1", "t4"], "tomorrow": ["t7"] }
+  ]
 }
 ```
 
-- **Candidates:** tasks on Today, overdue, and with a due date or deadline in
-  the next 7 days; open, top-level, not done. Capped at 80 by date. No backlog
-  in v1: the model triages what the user already put on the radar.
-- `fixed: true` for tasks with a time (`dueWithTime`). They count toward
-  committed time and cannot be moved.
-- `estimateRatio`, `pushed`, `draft` are optional (§ 3).
-- About 30 tokens per task; 80 tasks plus instructions ≈ 3–4k input tokens.
+- **Tasks:** open, top-level tasks that are on Today, overdue (`dueDay` before
+  today), or have a deadline within 7 days. Capped at 80, earliest dates first.
+  No backlog in v1: the model triages what the user already put on the radar.
+- `where`: `today`, `overdue` or `later`.
+- `fixed: true` for tasks with a time (`dueWithTime`) or a reminder
+  (`remindAt`). They are never moved, so their reminders are never touched.
+  Fixed tasks today are already subtracted from `freeMin`.
+- Planning facts, when they exist, add optional `estimateRatio` and `moved`
+  (§ 3) and the notice grows with them.
+- About 60 tokens per task: 80 tasks plus instructions ≈ 6k input tokens.
 
 ### 6.2 Output
 
 Structured output (`output_config.format` with a JSON schema). Forced
-`tool_choice` returns a 400 on Opus 5.5 and Sonnet 5.5, so a tool call is not
-the way to force the shape.
+`tool_choice` returns a 400 on Opus 5.5 and Sonnet 5.5, so a forced tool call
+is not the way to get the shape. The model returns only changes:
 
 ```json
 {
-  "today": [{ "id": "t1", "reason": "Deadline Monday, 30 min" }],
-  "pullIn": [{ "id": "t9", "reason": "Overdue 3 days" }],
-  "tomorrow": [{ "id": "t7", "reason": "Pushed 4 times; no deadline; day is full" }]
+  "pullIn": [{ "id": "t9", "reason": "Overdue 3 days, 20 min" }],
+  "tomorrow": [{ "id": "t7", "reason": "No deadline; today is full" }]
 }
 ```
 
-**Local validation**, before anything is shown:
+**One validator**, used by the app and the eval alike. A proposal fails if:
 
-- Every id is a candidate; no id appears twice; `fixed` tasks only in `today`.
-- `pullIn` only holds candidates not already on Today; `tomorrow` only holds
-  candidates on Today or overdue.
-- Reasons are plain text, ≤ 100 characters, rendered with `textContent`.
-- Total estimate of `today` + `pullIn` + committed ≤ free time. If over, show
-  the proposal with a visible "over by 40 min" line, don't fix it silently.
-- Candidates the model didn't mention stay unchanged.
+1. an id is not in the input, or appears twice;
+2. a `fixed` task is in either list;
+3. `pullIn` holds a task already on Today, or `tomorrow` holds a task with
+   `where: later`;
+4. `tomorrow` holds a task with a deadline today or earlier;
+5. a reason is not plain text or is over 100 characters.
 
-Invalid ids are dropped with a note. Invalid JSON or a schema mismatch: one
-retry, then an error and no changes.
+Failed items are dropped with a note; if the JSON doesn't parse or match the
+schema, one retry, then an error and no changes. Reasons are rendered with
+`textContent`.
+
+**Fit to the day** is checked, not enforced: the summary line shows "over by
+40 min" when kept + pulled-in estimates exceed `freeMin`.
 
 The model cannot create tasks, edit titles, change estimates or touch tasks
-outside the candidate list. That is enforced by the alias map, not by the
-prompt.
+outside the input. The alias map enforces that, not the prompt.
 
 ### 6.3 Prompt
 
-A fixed system prompt (cached) describes the job: fit the free time, keep hard
-dates, prefer finishing over starting, leave slack (about 15% unless the user
-sets otherwise), push what was pushed often only with a reason, short reasons
-using the given facts. Task titles go in the user turn as data. Titles can come
-from GitHub or Jira issues, so they are untrusted; the worst a hostile title
-can do is skew which of the user's own candidates get picked, and the user
-sees the result before applying.
+A fixed, cached system prompt: fit the free time with about 15% slack, keep
+hard dates, prefer finishing over starting, short reasons that use only the
+given facts. Task titles go in the user turn as data. Titles can come from
+GitHub or Jira issues, so they are untrusted; the worst a hostile title can do
+is skew which of the user's own tasks are picked, and the user sees the result
+before applying.
 
 ### 6.4 Latency and failures
 
-- **Target:** proposal in under 5 s typical, 15 s worst. Measured in the eval
-  (§ 9), not assumed. Not streamed: the result is shown whole.
+- **Target:** under 5 s typical, 15 s worst; measured in the eval (§ 9). Not
+  streamed: the result is shown whole.
 - **Timeout** 30 s, then "Took too long. Try again." Nothing changed.
-- **Offline / no key / 401 / 429 / refusal:** a plain message; the button
-  stays usable. Offline, the panel offers the rule-based draft if planning
-  facts ship it, labelled as such.
-- **Day changed or tasks changed** between proposal and Apply (`dayChange` or
-  `dataChanged` hook): rows for changed tasks are dropped and the panel says
-  so; a day change discards the proposal.
+- **Offline, no key, 401, 429, refusal:** a plain message. Nothing changed.
+- **Stale proposal:** on Apply the plugin re-reads the tasks and drops rows
+  whose `dueDay`, `dueWithTime`, `remindAt`, `isDone` or estimate changed since
+  the proposal, and says so. A `dayChange` discards the proposal. (`dataChanged`
+  has no payload and fires on every tracking tick, so it is not used per row.)
 
 ### 6.5 Model and cost
 
-Prices from the Claude API reference (cached 2026-10-06). Per run: ~4k input,
-~0.5k output, plus thinking at `low` effort (assumed ~1.5k). Estimates, to be
+Prices from the Claude API reference (cached 2026-10-06). Per run: ~6k input,
+~0.5k output plus thinking at `low` effort (assumed ~1.5k). Estimates, to be
 replaced by eval measurements.
 
 | Model      | $/MTok in / out | Per run (est.) | One run a day for a month |
 | ---------- | --------------- | -------------- | ------------------------- |
-| Haiku 5.5  | 0.10 / 0.50     | ~$0.0015       | ~$0.05                    |
-| Sonnet 5.5 | 2 / 10          | ~$0.03         | ~$0.90                    |
-| Opus 5.5   | 4 / 20          | ~$0.06         | ~$1.80                    |
+| Haiku 5.5  | 0.10 / 0.50     | ~$0.002        | ~$0.05                    |
+| Sonnet 5.5 | 2 / 10          | ~$0.03         | ~$1                       |
+| Opus 5.5   | 4 / 20          | ~$0.07         | ~$2                       |
 
-**Default:** the cheapest model that meets the eval bar (§ 9). Opus 5.5 at
-`low` effort is the quality reference. A model picker is in the plugin's
-settings; no other knobs.
+**Default:** the cheapest model that meets the eval bar. Opus 5.5 at `low`
+effort is the quality reference. The only setting is a model picker.
 
-**Provider:** Anthropic only in v1 (the prototype's client, `CapacitorWebFetch`
-on mobile). A local model (Ollama, LM Studio) would fit "privacy first" best,
-but the plugin `request()` bridge blocks private networks for non-issue-provider
-plugins; opening that is a security decision (§ 11).
+**Provider:** Anthropic only in v1. A local model (Ollama, LM Studio) would
+fit "privacy first" best, but `request()` blocks private networks for plugins
+other than bundled issue providers (`plugin-bridge.service.ts:499`); opening
+that is a security decision (§ 11).
 
 ## 7. Applying the plan and sync
 
-What exists today:
+Apply calls `updateTask(id, { dueDay })` once per ticked row: today's date for
+**Pull in**, tomorrow's for **Move to tomorrow**, both from
+`getDayContext()` (logical day, rule 4).
 
-| Path                                                                                                    | Action dispatched                                                               | Ops                               |
-| ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- | --------------------------------- |
-| Add to Today (context menu, multi-select `task-bulk-action.service.ts`, add-tasks-for-tomorrow service) | `TaskSharedActions.planTasksForToday({ taskIds, today, startOfNextDayDiffMs })` | 1 bulk op (`isBulk`, `entityIds`) |
-| Planner drag to a day, schedule dialog                                                                  | `PlannerActions.planTaskForDay({ task, day })`                                  | 1 per task                        |
-| Daily summary "plan all for tomorrow"                                                                   | loop of `PlannerActions.planTaskForDay`                                         | 1 per task                        |
-| Reorder Today                                                                                           | `moveTaskInTodayList` / `moveTaskInTodayTagList`                                | 1 per move                        |
+What that already does, in the task update meta-reducer
+(`task-shared-crud.reducer.ts:966-1020`): removes the task from its old planner
+day, adds it to the new one (unless it is today), and adds it to or removes it
+from `TODAY_TAG.taskIds`, which only orders (rule 5). Pulled-in tasks land at
+the end of Today. This is the same path a two-way issue sync takes.
 
-Apply maps onto these, adding no new action:
+Why not the Planner's own actions:
 
-1. **Today + pull in** → one `planTasksForToday` with the ids in proposed
-   order. Its meta-reducer sets `dueDay`, clears `remindAt` and stale
-   `dueWithTime`, prepends to `TODAY_TAG.taskIds` (ordering only, rule 5), and
-   removes the ids from planner days. Already on Today = no-op for that task.
-2. **Move to tomorrow** → `planTaskForDay` per task, the same loop the daily
-   summary runs. Tomorrow comes from `DateService` (logical day), not
-   `new Date()`.
-3. **Reordering existing Today tasks** → not in v1. It would be a pairwise move
-   per task on the shared Today order, the most conflict-prone part, for little
-   gain.
+- `TaskSharedActions.planTasksForToday` is one bulk op, but it also picks up
+  timed tasks on Today (setting a time clears `dueDay`,
+  `task-shared-scheduling.reducer.ts:81-85`) and clears their reminders. It
+  also needs a new plugin API method.
+- `PlannerActions.planTaskForDay` clears `remindAt` and `dueWithTime`. Not
+  needed when fixed tasks are never moved.
 
 Why this is safe:
 
-- **One intent, how many ops?** The atomicity rule asks for one op per
-  _replay-atomic_ transition, not per UI workflow. Moving task A to tomorrow and
-  task B to tomorrow are independent: a crash between them leaves a valid
-  state, and each keeps its own per-task conflict boundary (rule 6 allows the
-  loop; no yields needed). The "add to Today" half is already one bulk op.
-- **No new sync surface.** No new action type, op code, entity, persisted field
-  or schema bump. Released clients already replay both actions.
-- **No effects on replay.** The plugin acts only on a button press; hooks fire
-  for local actions, and `dataChanged`/`dayChange` handlers only refresh the
-  panel (their documented contract). Two devices with the plugin never
-  re-plan each other's changes.
-- **Logical day.** `getDayContext().todayStr` for "today"; the host passes
-  `today` and `startOfNextDayDiffMs` into `planTasksForToday` as the actions
-  already require.
-- **Conflicts.** A concurrent edit on another device resolves per task like any
-  manual planner move. `planTasksForToday` declares several task ids; it is an
-  existing action with an existing resolution path, so rule 14 adds nothing
-  new. Confirm in Phase 2 with one E2E (apply on A while B edits one task).
-- **Undo** replays the same two actions with each task's previous day (or
-  `unscheduleTask` if it had none). The pre-image lives in memory only.
+- **Ops.** One `updateTask` op per moved task, each on one entity. Typical
+  apply: 3–15 ops. The atomicity rule asks for one op per replay-atomic
+  transition, not per UI workflow: moving A and moving B are independent, a
+  crash between them leaves a valid state, and each keeps its own per-task
+  conflict boundary. Rule 6 allows the loop without yields.
+- **No new sync surface.** No new action, op code, entity, persisted field,
+  plugin API or schema bump. Released clients already replay `updateTask`.
+- **No effects on replay.** The plugin acts only on a button press. Its
+  `dayChange` handler only discards the panel's proposal. Two devices with the
+  plugin never re-plan each other's changes.
+- **Conflicts.** A concurrent edit to the same task on another device resolves
+  like any other `dueDay` edit (field-level LWW). Phase 2 adds one E2E: apply
+  on A while B edits one of the tasks; both converge.
+- **No undo in v1.** Replaying "the previous day" would lose order and would
+  overwrite edits other devices made after Apply. The preview is the
+  safeguard; a wrong move is one drag in the Planner.
 
 ## 8. Built-in vs external assistants
 
-The agent endpoint plan (on `claude/sp-executable-data-model-gewi7j`) gives
-assistants `get_today_context`, `plan_for_today` and `schedule_task`, and parks
-`propose_day_plan`. The desktop MCP endpoint on master has read and create
-tools only (`electron/mcp/mcp-tools.ts`).
+The agent endpoint plan (on `claude/sp-executable-data-model-gewi7j`) lets
+assistants read the day and `plan_for_today`; the desktop MCP endpoint on
+master has read and create tools only (`electron/mcp/mcp-tools.ts`).
 
-They serve different users:
+- **External** is for people who plan in conversation with their own
+  assistant and subscription. Demand points here (§ 1).
+- **Built-in** is for people who want one button in SP and no chat.
 
-- **External:** people who already live in Claude, ChatGPT or Gemini and plan
-  in conversation. Their assistant, their subscription, their data policy.
-- **Built-in:** people who want one button inside SP and no chat.
-
-What they should share, so neither grows its own planning logic:
-
-| Piece                                      | Owner                                      | Used by                                                    |
-| ------------------------------------------ | ------------------------------------------ | ---------------------------------------------------------- |
-| "Plan these tasks for day X" (§ 7 mapping) | one host function behind `planTasksForDay` | plugin API now; MCP `plan_for_today`/`schedule_task` later |
-| Day capacity numbers                       | planning facts / `getDayCapacity`          | plugin; MCP `get_today_context`                            |
-| Candidate list + validation of a proposal  | the plugin in v1                           | moves to core only if MCP `propose_day_plan` is built      |
-
-The built-in planner does not need the agent endpoint, and the endpoint does
-not need this plugin. Neither blocks the other.
+They share nothing in v1 and neither blocks the other. If both grow, they
+should share one host "plan these tasks for day X" function and the free-time
+numbers, so planning logic lives in one place.
 
 ## 9. Evaluating quality without telemetry
 
 No analytics. Quality comes from an offline eval and from what users choose to
 share.
 
-**Offline eval** (`packages/plugin-dev/ai-day-planner/eval/`, reusing the
-prototype's `scripts/eval.js` pattern):
+**Offline eval** (`packages/plugin-dev/ai-day-planner/eval/`, the prototype's
+`scripts/eval.js` pattern):
 
-- 40 day fixtures written by hand from realistic shapes: overfull day, empty
-  day, all overdue after a holiday, weekend, a day of meetings with 1 h free,
-  many repeat tasks, no estimates at all, 80 candidates, non-English titles,
-  a title that tries prompt injection, a task pushed 10 times.
-- **Hard checks** (code, must be 100%): valid ids only, no duplicates, fixed
-  tasks not moved, nothing due today or with a deadline today pushed, total ≤
-  free time (or flagged), reasons ≤ 100 characters and quoting only given
-  facts.
-- **Soft checks** (per fixture, labelled by the maintainer): an "acceptable"
-  set of today tasks and a "must not push" set; score = overlap. Compared
-  against the rule-based draft on the same fixtures.
-- **Ship bar:** hard checks 100% on every model offered; soft score clearly
-  above the draft (target: +15 points, to be set after the first run); p95
-  latency under 15 s. If the model doesn't beat the draft, don't ship the
-  model.
-- Runs by hand (it costs money: ~40 × $0.06 on Opus), not in CI. CI runs the
-  validator and alias-map unit tests on recorded responses.
+- 40 hand-written day fixtures: overfull day, empty day, all overdue after a
+  holiday, weekend, a day of meetings with 1 h free, many repeat tasks, no
+  estimates, 80 tasks, non-English titles, a prompt-injection title, a task
+  overdue for weeks.
+- **Hard:** the § 6.2 validator passes on every fixture, for every model
+  offered.
+- **Soft** (labelled by the maintainer per fixture): an "acceptable Today" set
+  and a "must not move" set; score = overlap. The fit to free time is reported.
+  Both are compared with the rule-based draft (§ 3).
+- **Ship bar:** hard 100%; soft score clearly above the draft (margin set after
+  the first run); p95 latency under 15 s.
+- Run by hand (about 40 × $0.07 on Opus), not in CI. CI runs the validator and
+  alias map on recorded responses.
 
-**Opt-in feedback:**
-
-- **Share an anonymized example:** a panel link copies the last input and
-  output with titles replaced by "Task 1…", ready to paste into an issue. New
-  fixtures come from these.
-- The survey's Q8 ("I don't want AI in my task app") and a GitHub discussion
-  after release. Nothing is counted on the device or sent anywhere.
+**Opt-in feedback:** a GitHub discussion after release, and the survey's Q8.
+Users can paste the "Show what would be sent" JSON, with titles edited, into
+an issue; good cases become fixtures. Nothing is counted on the device or sent
+anywhere.
 
 ## 10. Phases
 
-| Phase                             | Scope                                                                                               | Exit                                                          |
-| --------------------------------- | --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
-| **0. Eval first** (no app change) | Fixtures, prompt, validator, rule-based baseline, run on Haiku/Sonnet/Opus 5.5                      | Ship bar met → Phase 1. Not met → record why, stop.           |
-| **1. Plugin, desktop + web**      | Directory-listed plugin, notice, key, side panel, Apply, Undo; `getDayCapacity` + `planTasksForDay` | Works end to end; unit tests for validator and bridge methods |
-| **2. Mobile + E2E**               | Android/iOS via `CapacitorWebFetch`; E2E: apply on device A while B edits a task, both converge     | E2E green on SuperSync                                        |
-| **3. On demand only**             | Core Planner preview shared with planning facts and MCP; backlog pull; local model                  | A second consumer or user requests                            |
+| Phase                             | Scope                                                                                            | Exit                                                                    |
+| --------------------------------- | ------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------- |
+| **0. Eval first** (no app change) | Fixtures, prompt, validator, rule-based draft, runs on Haiku, Sonnet and Opus 5.5                | Bar met → Phase 1. Not met → record why, stop                           |
+| **1. Plugin, desktop + web**      | Plugin: notice, key, side panel, Apply; directory listing                                        | Works end to end; unit tests for validator, free-time calc, stale check |
+| **2. Mobile + E2E**               | Android and iOS (`request()` vs the prototype's `CapacitorWebFetch` client); concurrent-edit E2E | E2E green on SuperSync                                                  |
+| **Later, on evidence only**       | Calendar busy minutes; core Planner preview; backlog pull; local model                           | A user request or a second consumer                                     |
 
-**Smallest useful version:** Phase 0 + 1. Triage of Today: keep, pull in
-overdue, push to tomorrow, with reasons.
+**Smallest useful version:** Phase 0 + 1. Triage of what is already on the
+radar: pull in, move to tomorrow, with reasons.
 
-**Not planned:** time-blocking (`dueWithTime`), reordering Today, chat,
-automatic or scheduled runs, multi-day or weekly plans.
+**Not planned:** time-blocking, reordering Today, undo, chat, automatic or
+scheduled runs, weekly plans.
 
 ## 11. Risks and open questions
 
 **Risks**
 
-- **The model doesn't beat the rules.** Likely for small days. Then the AI
-  adds cost and a privacy notice for nothing. Phase 0 exists to find out first.
-- **Trust after one bad plan.** Mitigated by preview, unticking, Undo, and
-  never acting without a press.
-- **Privacy expectations.** Titles leave the device. The notice names exactly
-  what, shows a real example, and the feature is off by default and per
-  device (the key is not synced).
-- **Plugin API is permanent.** Two optional methods. Wrap existing actions
-  only, so their meaning can't drift from the Planner's.
-- **Prompt injection via issue titles.** Bounded: output is a selection over
-  the user's own candidates and is previewed.
+- **The model doesn't beat the rules.** Likely for small days. Then it adds
+  cost and a privacy notice for nothing. Phase 0 finds out before app code.
+- **Meeting-heavy days look free** (§ 3). Measured in the eval.
+- **Trust after one bad plan.** Preview, unticking, and never acting without a
+  press.
+- **Privacy expectations.** Titles leave the device. The notice lists every
+  field and shows a real example; the plugin is not installed by default; the
+  key is per device.
+- **Prompt injection via issue titles.** Bounded: the output is a selection
+  over the user's own tasks and is previewed.
 
 **Open questions for the maintainer**
 
-1. Survey results: how many picked "I don't want AI in my task app" (Q8) and
-   "Connect to AI assistants" (Q10)? A large "don't want" share argues for
-   keeping this a plugin forever, or not shipping it.
-2. Directory-listed first-party plugin (recommended) or bundled and off by
-   default? Bundling is easier to find; #5952 asks for the opposite.
-3. Project names in the input: they help ("Work" on a Saturday) but are more
-   data. v1 leaves them out. Add later behind the same notice?
-4. Local models: open the `request()` private-network guard for this plugin, or
-   leave local models to the external-assistant path?
-5. Should the rule-based draft (planning facts) get the core Planner preview
-   first, with this plugin feeding the same preview later?
+1. Survey: how many picked "I don't want AI in my task app" (Q8) and "Connect
+   to AI assistants" (Q10)? A large "don't want" share argues for not shipping.
+2. Directory-listed (recommended) or bundled and off by default? Bundled is
+   easier to find; #5952 asks for the opposite.
+3. Project names in the input help ("Work" on a Saturday) but are more data.
+   Leave out (v1) or add behind the notice?
+4. Local models: open the private-network guard for this plugin, or leave
+   local models to the external-assistant path?
 
 ## Review
 
-REVIEW_PLACEHOLDER
+A fresh-context subagent reviewed rev. 1 (2026-10-31) against
+`docs/feature-review-guide.md`, the product principles and the sync rules,
+checking claims against the code. Findings, and what rev. 2 did:
+
+| #   | Finding                                                                                                                                                                      | Severity | Outcome                                                                                                                    |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | -------------------------------------------------------------------------------------------------------------------------- |
+| 1   | The reason for a new `planTasksForDay` API was false: `updateTask({ dueDay })` already updates planner days and `TODAY_TAG.taskIds` (`task-shared-crud.reducer.ts:966-1020`) | High     | **Fixed.** Both API methods dropped; v1 applies with `updateTask` (§ 4, § 7)                                               |
+| 2   | One `planTasksForToday` for "keep + pull in" would clear reminders on timed tasks on Today (setting a time clears `dueDay`)                                                  | High     | **Fixed.** Not used; only pull-in and tomorrow rows are written; tasks with a time or reminder are `fixed` and never moved |
+| 3   | Undo was lossy (reminders, Today order, past planner days) and could overwrite later edits from other devices                                                                | High     | **Fixed** by cutting undo from v1; the preview is the safeguard (§ 7)                                                      |
+| 4   | The privacy notice didn't match the fields sent                                                                                                                              | High     | **Fixed.** Notice lists every § 6.1 field; `committedMin`, `draft` and planning-facts fields removed from v1 input         |
+| 5   | "Pull in" defined three ways                                                                                                                                                 | Medium   | **Fixed.** One definition: not on Today, overdue or deadline within 7 days                                                 |
+| 6   | Capacity wrong: `availableHours` is undefined without work hours, covers the whole day, committed time subtracted twice                                                      | Medium   | **Fixed.** `freeMin` defined once (§ 3), checked once (§ 6.2)                                                              |
+| 7   | `dataChanged` has no payload and fires on tracking ticks                                                                                                                     | Medium   | **Fixed.** Stale check compares named fields on Apply (§ 6.4)                                                              |
+| 8   | App validator and eval hard checks differed; "quotes only given facts" isn't checkable                                                                                       | Medium   | **Fixed.** One validator list (§ 6.2), used by both                                                                        |
+| 9   | Manifest needs `http` and `allowedHosts`; one-click install needs zip, `downloadUrl`, sha256                                                                                 | Low      | **Fixed** (§ 4)                                                                                                            |
+| 10  | Token and cost numbers low; "no other knobs" vs a slack setting                                                                                                              | Low      | **Fixed.** ~60 tokens per task, costs recomputed; slack fixed at 15%                                                       |
+| 11  | The gate committed another plan's deliverable                                                                                                                                | Low      | **Fixed.** Gate says only "stop"                                                                                           |
+| 12  | Over-scoped: offline rule-based fallback, anonymized-example UI, long § 8, duplicate open question                                                                           | Low      | **Fixed.** All cut or shortened                                                                                            |
+
+Not verified by the review: model prices and the forced-`tool_choice` 400
+(both taken from the Claude API reference, cached 2026-10-06).
+
+Not fixed, by choice: calendar events stay invisible to v1 (§ 3); it is
+recorded as a gap and measured in the eval instead of adding a plugin API up
+front.
