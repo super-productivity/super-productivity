@@ -7,7 +7,11 @@ import {
 import { Project } from '../project/project.model';
 import { Tag } from '../tag/tag.model';
 import { TaskWithSubTasks } from '../tasks/task.model';
-import { provideMockStore } from '@ngrx/store/testing';
+import { MockStore, provideMockStore } from '@ngrx/store/testing';
+import {
+  selectStartOfNextDayDiffMs,
+  selectTodayStr,
+} from '../../root-store/app-state/app-state.selectors';
 import { selectAllProjects } from '../project/store/project.selectors';
 import { getTomorrow } from '../../util/get-tomorrow';
 import { getDbDateStr } from '../../util/get-db-date-str';
@@ -278,6 +282,38 @@ describe('TaskViewCustomizerService', () => {
     expect(sanitized.preset).toBeNull();
     expect(sanitized.type).toBe(FILTER_OPTION_TYPE.tag);
     expect(sanitized.label).toBe(T.F.TASK_VIEW.CUSTOMIZER.FILTER_TAG);
+  });
+
+  describe('customizeUndoneTasks date filters follow the logical day', () => {
+    it('re-filters when the logical day changes, without a task change', async () => {
+      const store = TestBed.inject(MockStore);
+      store.overrideSelector(selectTodayStr, '2026-10-30');
+      store.overrideSelector(selectStartOfNextDayDiffMs, 0);
+      store.refreshState();
+      const tasks = [
+        { ...mockTasks[0], id: 'thu', dueDay: '2026-10-30' },
+        { ...mockTasks[1], id: 'fri', dueDay: '2026-10-31' },
+      ] as TaskWithSubTasks[];
+      service.setFilter({
+        type: FILTER_OPTION_TYPE.scheduledDate,
+        preset: FILTER_SCHEDULE.today,
+        label: '',
+      });
+      const emissions: CustomizedUndoneTasks[] = [];
+      TestBed.runInInjectionContext(() =>
+        service.customizeUndoneTasks(of(tasks)),
+      ).subscribe((result) => emissions.push(result));
+      const settle = async (): Promise<string[]> => {
+        TestBed.tick();
+        await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+        return emissions[emissions.length - 1].list.map((task) => task.id);
+      };
+      expect(await settle()).toEqual(['thu']);
+
+      store.overrideSelector(selectTodayStr, '2026-10-31');
+      store.refreshState();
+      expect(await settle()).toEqual(['fri']);
+    });
   });
 
   describe('customizeUndoneTasks tag id filter', () => {
