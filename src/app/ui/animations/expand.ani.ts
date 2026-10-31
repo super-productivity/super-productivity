@@ -23,12 +23,27 @@ export const expandInOnlyAnimation = [
   ]),
 ];
 
-/** The leave half of `expand`: for content that shows with its page. */
+/**
+ * The leave half of `expand`: for content that shows with its page. Padding,
+ * border and margins collapse with the height, so a padded box (a callout)
+ * doesn't stop at its padding and then jump away.
+ */
 export const expandOutOnlyAnimation = [
   trigger('expandOutOnly', [
     transition(':leave', [
       style({ overflow: 'hidden' }),
-      animate(ANI_LEAVE_TIMING, style({ height: 0 })),
+      animate(
+        ANI_LEAVE_TIMING,
+        style({
+          height: 0,
+          paddingTop: 0,
+          paddingBottom: 0,
+          borderTopWidth: 0,
+          borderBottomWidth: 0,
+          marginTop: 0,
+          marginBottom: 0,
+        }),
+      ),
     ]),
   ]),
 ];
