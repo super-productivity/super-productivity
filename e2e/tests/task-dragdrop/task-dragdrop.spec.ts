@@ -151,10 +151,9 @@ test.describe('Drag Task to change project and labels', () => {
       await tagDialog.waitFor({ state: 'visible', timeout: 10000 });
       await tagNameInput.waitFor({ state: 'visible', timeout: 5000 });
       // fill() can land before the ngModel binding is live, so re-assert.
-      // The inner timeout must stay below toPass's, or the 20s global expect
-      // timeout eats the whole budget and fill() is never retried.
       await expect(async () => {
         await tagNameInput.fill(name);
+        // Short timeout: the default (20 s) outlasts toPass, so fill never retried.
         await expect(tagNameInput).toHaveValue(name, { timeout: 1000 });
       }).toPass({ timeout: 5000 });
       const saveBtn = tagDialog.getByRole('button', { name: 'Save' });

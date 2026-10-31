@@ -1,5 +1,5 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
-import { SuperSyncUploadOpsRequestSchema } from '@sp/shared-schema';
+import { SuperSyncUploadOpsRequestSchema } from '@sp/shared-schema/supersync-http-contract';
 import { getAuthUser } from '../middleware';
 import { Logger } from '../logger';
 import { getSyncService } from './sync.service';

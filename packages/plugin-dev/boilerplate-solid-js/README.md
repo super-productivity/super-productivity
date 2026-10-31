@@ -16,7 +16,7 @@ A modern, TypeScript-based boilerplate for creating Super Productivity plugins u
 
 - Node.js 16+
 - npm or yarn
-- Super Productivity 8.0.0+
+- Super Productivity 19.3.0+
 
 ### Installation
 

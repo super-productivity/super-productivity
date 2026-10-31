@@ -112,6 +112,18 @@ describe('searchSettings', () => {
     }
   });
 
+  it('should find the time tracking switch atop the Time & Tracking tab', () => {
+    const allTabs: SettingsSearchTab[] = [0, 1, 2, 3, 4, 5].map((i) => ({
+      labelKey: `PS.TABS.Tab ${i}`,
+      sections: [],
+    }));
+    const hits = searchSettings(allTabs, 'time_tracking', translate);
+    expect(hits.map((hit) => [hit.tabIndex, hit.scrollSelector])).toContain([
+      2,
+      '.time-tracking-switch',
+    ]);
+  });
+
   it('should return an empty array when nothing matches', () => {
     expect(searchSettings(TABS, 'zzz', translate)).toEqual([]);
   });
