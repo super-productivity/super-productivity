@@ -228,7 +228,7 @@
           @if (task.isDeadlineReminder && task.deadlineWithTime) {
             {{ task.deadlineWithTime | localeDate: 'short' : undefined : locale() }}
           } @else if (task.isDeadlineReminder && task.deadlineDay) {
-            {{ task.deadlineDay | localDateStr: '' }}
+            {{ task.deadlineDay | localeDate: 'shortDate' : undefined : locale() }}
           } @else {
             {{ task.dueWithTime | localeDate: 'short' : undefined : locale() }}
           }
@@ -241,7 +241,7 @@
               @if (task.dueWithTime) {
                 {{ task.dueWithTime | localeDate: 'short' : undefined : locale() }}
               } @else {
-                {{ task.dueDay | localDateStr: '' }}
+                {{ task.dueDay | localeDate: 'shortDate' : undefined : locale() }}
               }
             </span>
           </div>

@@ -126,6 +126,12 @@ header {
   }
 }
 
+// Badges with a year widen their own button, see the mixin (#10804). With the
+// encapsulation attributes this selector outweighs the fixed 40px rule.
+:host .ico-btn.has-year-badge {
+  @include timeBadgeIconBtn;
+}
+
 .schedule-btn[data-scheduled-date-color='overdue'] {
   mat-icon {
     color: var(--c-warn) !important;

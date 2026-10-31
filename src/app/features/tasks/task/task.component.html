@@ -152,13 +152,20 @@
                   : (T.F.TASK.CMP.EDIT_SCHEDULED | translate)
               "
               class="ico-btn schedule-btn"
+              [class.has-year-badge]="
+                t.dueWithTime
+                  | dateHasOtherYear: globalTrackingIntervalService.todayDateStr()
+              "
               [attr.data-scheduled-date-color]="scheduledDateColor()"
               mat-icon-button
             >
               <mat-icon>alarm</mat-icon>
               <div
                 class="time-badge"
-                [innerHTML]="t.dueWithTime | shortPlannedAt"
+                [innerHTML]="
+                  t.dueWithTime
+                    | shortPlannedAt: false : globalTrackingIntervalService.todayDateStr()
+                "
               ></div>
             </button>
           } @else if (t.dueWithTime) {
@@ -175,6 +182,10 @@
                   : (T.F.TASK.CMP.EDIT_SCHEDULED | translate)
               "
               class="ico-btn schedule-btn"
+              [class.has-year-badge]="
+                t.dueWithTime
+                  | dateHasOtherYear: globalTrackingIntervalService.todayDateStr()
+              "
               [attr.data-scheduled-date-color]="scheduledDateColor()"
               mat-icon-button
             >
@@ -185,7 +196,10 @@
               }
               <div
                 class="time-badge"
-                [innerHTML]="t.dueWithTime | shortPlannedAt"
+                [innerHTML]="
+                  t.dueWithTime
+                    | shortPlannedAt: false : globalTrackingIntervalService.todayDateStr()
+                "
               ></div>
             </button>
           } @else if (isShowDueDayBtn()) {
@@ -202,6 +216,9 @@
                   : (T.F.TASK.CMP.EDIT_SCHEDULED | translate)
               "
               class="ico-btn schedule-btn"
+              [class.has-year-badge]="
+                t.dueDay | dateHasOtherYear: globalTrackingIntervalService.todayDateStr()
+              "
               [attr.data-scheduled-date-color]="scheduledDateColor()"
               mat-icon-button
             >
@@ -233,6 +250,10 @@
               (click)="openDeadlineDialog()"
               [title]="T.F.TASK.ADDITIONAL_INFO.DEADLINE | translate"
               class="ico-btn deadline-btn"
+              [class.has-year-badge]="
+                t.deadlineWithTime || t.deadlineDay
+                  | dateHasOtherYear: globalTrackingIntervalService.todayDateStr()
+              "
               [color]="
                 isDeadlineOverdue() ? 'warn' : isDeadlineApproaching() ? 'accent' : ''
               "
@@ -242,7 +263,12 @@
               @if (t.deadlineWithTime) {
                 <div
                   class="time-badge"
-                  [innerHTML]="t.deadlineWithTime | shortPlannedAt"
+                  [innerHTML]="
+                    t.deadlineWithTime
+                      | shortPlannedAt
+                        : false
+                        : globalTrackingIntervalService.todayDateStr()
+                  "
                 ></div>
               } @else if (t.deadlineDay) {
                 <div class="time-badge">

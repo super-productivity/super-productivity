@@ -106,6 +106,7 @@ import { TaskListComponent } from '../task-list/task-list.component';
 import { MsToStringPipe } from '../../../ui/duration/ms-to-string.pipe';
 import { ShortPlannedAtPipe } from '../../../ui/pipes/short-planned-at.pipe';
 import { LocalDateStrPipe } from '../../../ui/pipes/local-date-str.pipe';
+import { DateHasOtherYearPipe } from '../../../ui/pipes/date-has-other-year.pipe';
 import { LocaleDatePipe } from '../../../ui/pipes/locale-date.pipe';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { SubTaskTotalTimeSpentPipe } from '../pipes/sub-task-total-time-spent.pipe';
@@ -179,6 +180,7 @@ const isInteractiveTarget = (target: EventTarget | null): boolean =>
     MatMenuItem,
     MsToStringPipe,
     LocalDateStrPipe,
+    DateHasOtherYearPipe,
     TranslatePipe,
     MatTooltip,
     SubTaskTotalTimeSpentPipe,

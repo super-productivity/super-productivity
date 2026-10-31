@@ -189,7 +189,7 @@
         </div>
       } @else if (task().deadlineDay) {
         <div class="reminder-value">
-          {{ task().deadlineDay | localDateStr: '' }}
+          {{ task().deadlineDay | localeDate: 'shortDate' : undefined : locale() }}
         </div>
       }
       @if (task().deadlineWithTime || task().deadlineDay) {

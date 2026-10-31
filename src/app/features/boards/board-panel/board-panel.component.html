@@ -54,6 +54,7 @@
           (click)="scheduleTask(task, $event)"
           [title]="T.F.TASK.CMP.EDIT_SCHEDULED | translate"
           class="ico-btn schedule-btn"
+          [class.has-year-badge]="task.dueWithTime | dateHasOtherYear: todayDateStr()"
           [attr.data-scheduled-date-color]="scheduledDateColor(task)"
           color=""
           mat-icon-button
@@ -61,7 +62,7 @@
           <mat-icon>alarm</mat-icon>
           <div
             class="time-badge"
-            [innerHTML]="task.dueWithTime | shortPlannedAt"
+            [innerHTML]="task.dueWithTime | shortPlannedAt: false : todayDateStr()"
           ></div>
         </button>
       }
@@ -71,12 +72,13 @@
           (click)="scheduleTask(task, $event)"
           [title]="T.F.TASK.CMP.SCHEDULE | translate"
           class="ico-btn schedule-btn"
+          [class.has-year-badge]="task.dueDay | dateHasOtherYear: todayDateStr()"
           [attr.data-scheduled-date-color]="scheduledDateColor(task)"
           color=""
           mat-icon-button
         >
           <mat-icon>today</mat-icon>
-          <div class="time-badge">{{ task.dueDay | localDateStr }}</div>
+          <div class="time-badge">{{ task.dueDay | localDateStr: todayDateStr() }}</div>
         </button>
       }
     </planner-task>
