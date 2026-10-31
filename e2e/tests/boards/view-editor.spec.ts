@@ -2,6 +2,7 @@ import { Locator, Page } from '@playwright/test';
 import { expect, test } from '../../fixtures/test.fixture';
 import {
   addViewRule,
+  createView,
   fillViewEditor,
   openCreateViewDialog,
   openViewEditor,
@@ -287,5 +288,19 @@ test.describe('View editor', () => {
     await expect(toggles.nth(0)).toHaveAttribute('aria-expanded', 'false');
     await expect(done.locator('[data-rule="done"]')).toBeVisible();
     await expect(viewEditorSection(dialog, 0).locator('.rule-row')).toHaveCount(0);
+  });
+
+  test('a created view arrives with a snack naming it', async ({
+    page,
+    workViewPage,
+    testPrefix,
+  }) => {
+    await workViewPage.waitForTaskList();
+    const title = `${testPrefix}-Arrived`;
+    await createView(page, { title });
+    await expect(
+      page.locator('snack-custom').filter({ hasText: `View "${title}" created` }),
+    ).toBeVisible();
+    await expect(page.locator('page-title')).toContainText(title);
   });
 });

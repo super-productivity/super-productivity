@@ -20,7 +20,13 @@ import { LS } from '../../core/persistence/storage-keys.const';
 import { setSelectedTask } from '../tasks/store/task.actions';
 import { TaskMultiSelectService } from '../tasks/task-multi-select.service';
 import { BoardsService } from './boards.service';
-import { viewSwitchAnimation } from './boards.ani';
+import {
+  VIEW_ARRIVAL_FROM_XS,
+  VIEW_SWITCH_FROM,
+  viewSwitchAnimation,
+  ViewSwitchParams,
+} from './boards.ani';
+import { BreakpointObserver } from '@angular/cdk/layout';
 
 /**
  * One view (board) per route: `/boards/:boardId`. `BoardRouteGuard` resolves
@@ -53,6 +59,22 @@ export class BoardsComponent {
   });
   protected readonly T = T;
 
+  private readonly _isXs = toSignal(
+    inject(BreakpointObserver)
+      .observe('(max-width: 599px)')
+      .pipe(map((result) => result.matches)),
+    { initialValue: false },
+  );
+  /** A view just created comes in forward; on phones from the right. */
+  readonly switchParams = computed<ViewSwitchParams>(() => {
+    const isArrival =
+      !!this.boardId() && this.boardId() === this.boardsService.arrivalId();
+    return {
+      isArrival,
+      from: isArrival && this._isXs() ? VIEW_ARRIVAL_FROM_XS : VIEW_SWITCH_FROM,
+    };
+  });
+
   constructor() {
     effect(() => {
       const id = this.boardId();
@@ -72,5 +94,12 @@ export class BoardsComponent {
         untracked(() => this._router.navigate(['/boards'], { replaceUrl: true }));
       }
     });
+  }
+
+  /** The new view has arrived: later visits switch to it as usual. */
+  onSwitchDone(toState: string): void {
+    if (toState === this.boardsService.arrivalId()) {
+      this.boardsService.clearArrival();
+    }
   }
 }

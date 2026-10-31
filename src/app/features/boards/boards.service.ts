@@ -1,4 +1,4 @@
-import { inject, Injectable } from '@angular/core';
+import { inject, Injectable, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { Store } from '@ngrx/store';
 import { MatDialog } from '@angular/material/dialog';
@@ -12,6 +12,7 @@ import { DialogConfirmComponent } from '../../ui/dialog-confirm/dialog-confirm.c
 import { T } from '../../t.const';
 import { GlobalConfigService } from '../config/global-config.service';
 import { AppFeaturesConfig } from '../config/global-config.model';
+import { SnackService } from '../../core/snack/snack.service';
 
 /**
  * Create, edit, duplicate and delete views (boards). Shared by the side menu,
@@ -24,8 +25,21 @@ export class BoardsService {
   private _router = inject(Router);
   private _translateService = inject(TranslateService);
   private _globalConfigService = inject(GlobalConfigService);
+  private _snackService = inject(SnackService);
 
   readonly boards = this._store.selectSignal(selectAllBoards);
+
+  /**
+   * A view just created here (Create, Save as view, Duplicate) that the view
+   * page hasn't shown yet: it enters with an arrival motion. Local only.
+   */
+  private readonly _arrivalId = signal<string | null>(null);
+  readonly arrivalId = this._arrivalId.asReadonly();
+
+  /** The view page showed the arrival (or never will). */
+  clearArrival(): void {
+    this._arrivalId.set(null);
+  }
 
   // The edit dialog is loaded on demand: the side menu, which is always
   // loaded, uses this service too.
@@ -54,7 +68,7 @@ export class BoardsService {
               true,
             );
           }
-          this._router.navigate(['/boards', boardId]);
+          this._openCreated(boardId);
         }
       });
   }
@@ -86,7 +100,26 @@ export class BoardsService {
         },
       }),
     );
+    this._openCreated(id);
+  }
+
+  /**
+   * Opens a view that was just created, with a clear arrival: the page lets
+   * it enter (`viewSwitch`), and a snack names it, since on phones the side
+   * menu where its row appears is hidden.
+   */
+  private _openCreated(id: string): void {
+    const title = this.boards().find((board) => board.id === id)?.title;
+    this._arrivalId.set(id);
     this._router.navigate(['/boards', id]);
+    if (title) {
+      this._snackService.open({
+        type: 'SUCCESS',
+        msg: T.F.BOARDS.V.VIEW_CREATED,
+        // Default views are titled with translation keys.
+        translateParams: { title: this._translateService.instant(title) },
+      });
+    }
   }
 
   /** The view page leaves a deleted view by itself (it watches the board list). */

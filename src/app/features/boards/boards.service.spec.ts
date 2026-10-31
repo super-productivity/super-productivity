@@ -11,6 +11,8 @@ import { BoardCfg } from './boards.model';
 import { DEFAULT_BOARD_CFG } from './boards.const';
 import { DialogBoardEditComponent } from './dialog-board-edit/dialog-board-edit.component';
 import { GlobalConfigService } from '../config/global-config.service';
+import { SnackService } from '../../core/snack/snack.service';
+import { T } from '../../t.const';
 
 describe('BoardsService', () => {
   let service: BoardsService;
@@ -19,6 +21,9 @@ describe('BoardsService', () => {
   let open: jasmine.Spy;
   let dialogResult: unknown;
   let updateSection: jasmine.Spy;
+  let snackOpen: jasmine.Spy;
+  // The store's boards: an added one shows up, as with the real reducer.
+  const storeBoards = signal<BoardCfg[]>([]);
   const appFeatures = signal({ isBoardsEnabled: true });
 
   const board: BoardCfg = {
@@ -29,7 +34,13 @@ describe('BoardsService', () => {
   };
 
   beforeEach(() => {
-    dispatch = jasmine.createSpy('dispatch');
+    storeBoards.set([]);
+    snackOpen = jasmine.createSpy('snackOpen');
+    dispatch = jasmine.createSpy('dispatch').and.callFake((action) => {
+      if (action.type === BoardsActions.addBoard.type) {
+        storeBoards.set([...storeBoards(), action.board]);
+      }
+    });
     navigate = jasmine.createSpy('navigate');
     dialogResult = undefined;
     updateSection = jasmine.createSpy('updateSection');
@@ -40,7 +51,8 @@ describe('BoardsService', () => {
 
     TestBed.configureTestingModule({
       providers: [
-        { provide: Store, useValue: { dispatch, selectSignal: () => signal([]) } },
+        { provide: Store, useValue: { dispatch, selectSignal: () => storeBoards } },
+        { provide: SnackService, useValue: { open: snackOpen } },
         { provide: Router, useValue: { navigate } },
         { provide: MatDialog, useValue: { open } },
         { provide: GlobalConfigService, useValue: { appFeatures, updateSection } },
@@ -75,11 +87,27 @@ describe('BoardsService', () => {
     });
   });
 
+  it('lets a created view arrive and names it in a snack', async () => {
+    storeBoards.set([{ ...board, id: 'new-id', title: 'Mine' }]);
+    dialogResult = 'new-id';
+    await service.createBoard();
+    expect(service.arrivalId()).toBe('new-id');
+    expect(snackOpen).toHaveBeenCalledOnceWith({
+      type: 'SUCCESS',
+      msg: T.F.BOARDS.V.VIEW_CREATED,
+      translateParams: { title: 'Mine' },
+    });
+    service.clearArrival();
+    expect(service.arrivalId()).toBeNull();
+  });
+
   it('stays put when the create dialog is cancelled', async () => {
     appFeatures.set({ isBoardsEnabled: false });
     await service.createBoard();
     expect(navigate).not.toHaveBeenCalled();
     expect(updateSection).not.toHaveBeenCalled();
+    expect(snackOpen).not.toHaveBeenCalled();
+    expect(service.arrivalId()).toBeNull();
   });
 
   it('turns Views on when a view is saved while they are off', async () => {
@@ -108,6 +136,10 @@ describe('BoardsService', () => {
     expect(added.board.panels[0].id).not.toBe('p1');
     expect(added.board.panels[0].taskIds).toEqual([]);
     expect(navigate).toHaveBeenCalledOnceWith(['/boards', added.board.id]);
+    expect(service.arrivalId()).toBe(added.board.id);
+    expect(snackOpen).toHaveBeenCalledOnceWith(
+      jasmine.objectContaining({ translateParams: { title: 'Kanban (copy)' } }),
+    );
   });
 
   it('deletes only after confirming', () => {

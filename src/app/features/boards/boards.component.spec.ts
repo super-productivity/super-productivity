@@ -19,6 +19,7 @@ describe('BoardsComponent', () => {
   let navigate: jasmine.Spy;
   let dispatch: jasmine.Spy;
   let clearSelection: jasmine.Spy;
+  let arrivalId: WritableSignal<string | null>;
 
   const board = (id: string): BoardCfg => ({ id, title: id, cols: 1, panels: [] });
 
@@ -28,6 +29,7 @@ describe('BoardsComponent', () => {
     navigate = jasmine.createSpy('navigate');
     dispatch = jasmine.createSpy('dispatch');
     clearSelection = jasmine.createSpy('clear');
+    arrivalId = signal(null);
     localStorage.removeItem(LS.SELECTED_BOARD);
 
     await TestBed.configureTestingModule({
@@ -38,7 +40,15 @@ describe('BoardsComponent', () => {
         { provide: Router, useValue: { navigate } },
         { provide: Store, useValue: { dispatch } },
         { provide: TaskMultiSelectService, useValue: { clear: clearSelection } },
-        { provide: BoardsService, useValue: { boards, createBoard: () => undefined } },
+        {
+          provide: BoardsService,
+          useValue: {
+            boards,
+            createBoard: () => undefined,
+            arrivalId,
+            clearArrival: () => arrivalId.set(null),
+          },
+        },
       ],
     })
       // The board itself is covered by its own specs.
@@ -73,5 +83,20 @@ describe('BoardsComponent', () => {
     fixture.detectChanges();
 
     expect(navigate).toHaveBeenCalledOnceWith(['/boards'], { replaceUrl: true });
+  });
+
+  it('lets a view just created arrive, once', () => {
+    expect(fixture.componentInstance.switchParams().isArrival).toBeFalse();
+    arrivalId.set('b');
+    params$.next(convertToParamMap({ boardId: 'b' }));
+    fixture.detectChanges();
+    expect(fixture.componentInstance.switchParams().isArrival).toBeTrue();
+
+    // Another view's animation ending doesn't use it up.
+    fixture.componentInstance.onSwitchDone('a');
+    expect(arrivalId()).toBe('b');
+    fixture.componentInstance.onSwitchDone('b');
+    expect(arrivalId()).toBeNull();
+    expect(fixture.componentInstance.switchParams().isArrival).toBeFalse();
   });
 });
