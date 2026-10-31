@@ -1197,3 +1197,46 @@ Feedback after phase 5 (2026-10-31): "Save as view" from Today.
   dialog returns an id). That is a second op, on the global config, for the
   same intent: independent of the board op, so replaying either alone is
   harmless (a view while Views are off, or Views on without the view).
+
+Whole-branch review (fresh-context subagent, 2026-10-31), over
+`git diff origin/master...HEAD`. Checked: one op per intent (editor save,
+title-bar menu click, save as view plus the separate Views switch op), no
+`undefined` in payloads (rule clears are deleted keys, priority clears are
+`null`), new panel fields optional strings/booleans, no new actions or
+multi-entity ops, effects untouched, released clients ignore the new keys;
+the rule engine and the filter-menu ⇄ column mapping; drop, move and add
+paths; the task row hot path (one optional injection, no template calls or
+subscriptions); the Material styling rules; translations (only `en.json`,
+every new `F.BOARDS` key used); the E2E specs (no fixed waits). Fixed:
+
+- Sync: the editor measured what changed against the stored board. Where
+  saving normalizes (a panel without `backlogState` from an old client, a
+  date rule with "Not scheduled", a shadowed `sortKey`, "Without tags" with
+  tags), an untouched save or a rename still sent the whole `panels`, so a
+  panel field that synced in while the dialog was open was overwritten. It
+  now compares with what saving the opened board untouched stores
+  (`ViewEditorComponent.buildUntouchedBoard`): an untouched save sends no
+  op, a rename only the title. The spec fails 4 of 30 without the fix.
+- `supersync-reorder-conflict-wedge.spec.ts` still said the editor saves
+  the full board. The UI edit is now `updateBoard({ title, cols })`; the
+  comment and the fixture's (undispatched) edit payload say so. Coverage is
+  kept: it is still a BOARD `UPD` on the board crossing the `Sort Boards`
+  `MOV`, and `reorder-conflict.util` resolves partial `updates` per field
+  (its spec covers each board field). Runs in the scheduled workflow only.
+- Wiki: the side-menu bullets (right-click, drag to reorder, start page)
+  sat under "One-Column Views Are Task Lists"; moved to "Where Boards
+  Live". A stale comment about Today's title in `saveAsView` removed.
+
+Not fixed:
+
+- A view titled exactly like a top-level translation group (`APP`, `G`,
+  `F`, `V`, `WW` …) shows "[object Object]" in the side menu, the title bar
+  and a duplicate's title; only the editor guards against it. Unlikely
+  titles, and the fix is a shared safe-translate for every place that
+  translates board titles.
+- The side-menu view row's ⋮ is named "More actions" without the view's
+  title, like project and tag rows (shared `nav-item`).
+- `S_CANT_MOVE_HERE` says "column's rules" in list sections too (wording).
+- Accepted before and unchanged: once one panel changes, the editor still
+  replaces all `panels` (LWW on the board), and the count recomputes on the
+  tracking tick (now per changed task).
