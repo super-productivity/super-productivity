@@ -25,6 +25,29 @@
     }
   </header>
 
+  @for (block of pluginTaskDetailBlocks(); track block.key) {
+    <task-detail-item
+      type="panel"
+      [expanded]="true"
+      (collapseParent)="collapseParent()"
+      (keyPress)="onItemKeyPress($event)"
+    >
+      <ng-container panel-header>
+        <mat-icon class="panel-header-icon">extension</mat-icon>
+        <span>{{ block.label }}</span>
+      </ng-container>
+      <ng-container panel-content>
+        <plugin-index
+          class="plugin-task-detail-block"
+          [directPluginId]="block.pluginId"
+          [taskDetailContext]="{ taskId: block.taskId, blockId: block.id }"
+          [showFullUI]="false"
+          [skipCleanupOnDestroy]="true"
+        ></plugin-index>
+      </ng-container>
+    </task-detail-item>
+  }
+
   @if (isShowSubTasksPanel()) {
     <task-detail-item
       (collapseParent)="collapseParent()"

@@ -30,6 +30,14 @@ import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 import { T } from '../../t.const';
 import { SnackParams } from '../../core/snack/snack.model';
 import { updateGlobalConfigSection } from '../../features/config/store/global-config.actions';
+import { META_REDUCERS } from '../../root-store/meta/meta-reducer-registry';
+import { RootState } from '../../root-store/root-state';
+import { taskReducer } from '../../features/tasks/store/task.reducer';
+import { createStateWithExistingTasks } from '../../root-store/meta/task-shared-meta-reducers/test-utils';
+import {
+  getOperationCaptureService,
+  setOperationCaptureService,
+} from './operation-capture.meta-reducer';
 
 describe('OperationLogEffects', () => {
   let effects: OperationLogEffects;
@@ -202,6 +210,44 @@ describe('OperationLogEffects', () => {
   });
 
   describe('persistOperation$', () => {
+    it('persists the real reducer history in the same single operation as the task', (done) => {
+      const previousCaptureService = getOperationCaptureService();
+      setOperationCaptureService(new OperationCaptureService());
+      const reduce = META_REDUCERS.reduceRight(
+        (inner, meta) => meta(inner),
+        (state: RootState | undefined, action: Action): RootState => ({
+          ...state!,
+          tasks: taskReducer(state?.tasks, action),
+        }),
+      );
+      const action = TaskSharedActions.setDeadline({
+        taskId: 'task1',
+        deadlineDay: '2026-11-01',
+      });
+      const state = reduce(createStateWithExistingTasks(['task1']), action);
+      actions$ = of(action);
+      effects.persistOperation$.subscribe({
+        complete: () => {
+          setOperationCaptureService(previousCaptureService);
+          expect(mockOpLogStore.appendWithVectorClockOverwrite).toHaveBeenCalledTimes(1);
+          const op =
+            mockOpLogStore.appendWithVectorClockOverwrite.calls.mostRecent().args[0];
+          const payload = op.payload as {
+            actionPayload: { taskHistory: { operationId: string; events: unknown[] } };
+          };
+          expect(payload.actionPayload.taskHistory.operationId).toBe(op.id);
+          expect(payload.actionPayload.taskHistory.events).toEqual(
+            Object.values(state.tasks.taskHistory!.task1.events),
+          );
+          done();
+        },
+        error: (e: unknown) => {
+          setOperationCaptureService(previousCaptureService);
+          done.fail(e instanceof Error ? e : String(e));
+        },
+      });
+    });
+
     it('should persist operation for persistent action', (done) => {
       const action = createPersistentAction(ActionType.TASK_SHARED_UPDATE);
       actions$ = of(action);

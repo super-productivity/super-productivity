@@ -46,6 +46,7 @@ import { ConflictEntityStateService } from './conflict-entity-state.service';
 import { ConflictRecreationOpsService } from './conflict-recreation-ops.service';
 import { ConflictLocalWinOpsService } from './conflict-local-win-ops.service';
 import { ConflictResolutionNotifierService } from './conflict-resolution-notifier.service';
+import { TaskHistoryDeliveryService } from './task-history-delivery.service';
 import { ConflictDetectionService } from './conflict-detection.service';
 import { createLWWUpdateOp, mergeAndIncrementClocks } from './lww-update-op.util';
 import {
@@ -420,6 +421,13 @@ export class ConflictResolutionService {
       compensationOpIdsToApply.add(localWinOpId);
     }
 
+    const historyDeliveries = await this.injector
+      .get(TaskHistoryDeliveryService)
+      .create(conflicts);
+    for (const op of historyDeliveries) {
+      newLocalWinOps.push(op);
+      compensationOpIdsToApply.add(op.id);
+    }
     const newLocalWinOpsById = new Map(newLocalWinOps.map((op) => [op.id, op]));
 
     for (const winners of multiEntityRemoteOpWinners.values()) {

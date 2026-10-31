@@ -3,6 +3,7 @@ import { EntityState } from '@ngrx/entity';
 import { TaskAttachment } from './task-attachment/task-attachment.model';
 // Import the unified Task type from plugin-api
 import { Task as PluginTask } from '@super-productivity/plugin-api';
+import { TaskHistoryState } from './task-history/task-history.model';
 
 export enum HideSubTasksMode {
   // Show is undefined
@@ -244,6 +245,8 @@ export const DEFAULT_TASK: Omit<TaskCopy, 'projectId'> = {
 };
 
 export interface TaskState extends EntityState<Task> {
+  /** Optional on prior snapshots. App-owned and retained when a task is archived. */
+  taskHistory?: TaskHistoryState;
   // overwrite entity model to avoid problems with typing
   ids: string[];
 

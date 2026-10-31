@@ -18,6 +18,11 @@ export class PluginCleanupService {
     this._pluginIframes.set(pluginId, iframe);
   }
 
+  unregisterIframe(pluginId: string, iframe: HTMLIFrameElement): void {
+    if (this._pluginIframes.get(pluginId) === iframe)
+      this._pluginIframes.delete(pluginId);
+  }
+
   /**
    * Clean up resources for a specific plugin
    */

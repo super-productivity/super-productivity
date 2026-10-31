@@ -36,6 +36,8 @@ export const PLUGIN_IFRAME_SANDBOX =
 
 const ALLOWED_IFRAME_API_METHODS = new Set([
   'getTasks',
+  'getTaskHistory',
+  'registerTaskDetailBlock',
   'getArchivedTasks',
   'getCurrentContextTasks',
   'getSelectedTask',
@@ -403,7 +405,7 @@ export const createPluginApiScript = (config: PluginIframeConfig): string => {
 
         // Create the PluginAPI object with all methods
         window.PluginAPI = {
-          cfg: ${JSON.stringify(config.baseCfg)},
+          cfg: ${JSON.stringify(config.baseCfg).replace(/</g, '\\u003c')},
 
           // Add Hooks enum (kept in sync with PluginHooks via JSON.stringify
           // of the real source — no hand-edited mirror to drift).
@@ -411,6 +413,8 @@ export const createPluginApiScript = (config: PluginIframeConfig): string => {
 
           // Task methods
           getTasks: () => callApi('getTasks'),
+          getTaskHistory: (taskId, options) => callApi('getTaskHistory', [taskId, options]),
+          registerTaskDetailBlock: (cfg) => callApi('registerTaskDetailBlock', [cfg]),
           getArchivedTasks: () => callApi('getArchivedTasks'),
           getCurrentContextTasks: () => callApi('getCurrentContextTasks'),
           getSelectedTask: () => callApi('getSelectedTask'),

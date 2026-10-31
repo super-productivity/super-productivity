@@ -19,6 +19,7 @@ import { plannerSharedMetaReducer } from './task-shared-meta-reducers/planner-sh
 import { shortSyntaxSharedMetaReducer } from './task-shared-meta-reducers/short-syntax-shared.reducer';
 import { lwwUpdateMetaReducer } from './task-shared-meta-reducers/lww-update.meta-reducer';
 import { actionLoggerReducer } from './action-logger.reducer';
+import { taskHistoryMetaReducer } from './task-history.meta-reducer';
 
 /**
  * Meta-Reducer Registry
@@ -124,6 +125,10 @@ export const META_REDUCERS: MetaReducer[] = [
   // store with a dead state observable. Must wrap every reducer that handles
   // loadAllData, i.e. run before Phases 3-8. Pure pass-through otherwise.
   loadAllDataFailureGuardMetaReducer,
+
+  // Read original tasks, then record the final result of the entire domain pass.
+  // Inside bulkOperations so remote operation envelopes are handled individually.
+  taskHistoryMetaReducer,
 
   // ═══════════════════════════════════════════════════════════════════════════
   // PHASE 3: UNDO/DELETE CAPTURE

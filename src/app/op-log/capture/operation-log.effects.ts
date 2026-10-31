@@ -16,6 +16,10 @@ import {
   PersistentAction,
 } from '../core/persistent-action.interface';
 import { uuidv7 } from '../../util/uuid-v7';
+import {
+  peekTaskHistoryCapture,
+  releaseTaskHistoryCapture,
+} from './task-history-capture';
 import { devError } from '../../util/dev-error';
 import { incrementVectorClock } from '../../core/util/vector-clock';
 import { MultiEntityPayload, Operation, ActionType } from '../core/operation.types';
@@ -199,6 +203,7 @@ export class OperationLogEffects implements DeferredLocalActionsPort {
       this.operationCaptureService.markUnrecoveredPersistFailure();
       OpLog.err('OperationLogEffects: persist failed (handled; stream preserved)', e);
     } finally {
+      releaseTaskHistoryCapture(action);
       this.operationCaptureService.decrementPending(action);
     }
   }
@@ -218,7 +223,9 @@ export class OperationLogEffects implements DeferredLocalActionsPort {
     isDeferredWrite = false,
     options: WriteOperationOptions = {},
   ): Promise<void> {
-    const operationTimestamp = Date.now();
+    const captured = peekTaskHistoryCapture(action);
+    const historyCapture = captured?.envelope ? captured : undefined;
+    const operationTimestamp = historyCapture?.occurredAt ?? Date.now();
 
     // Validate that at least one entity identifier exists for non-bulk operations
     // Bulk operations with entityType 'ALL' don't need specific entity IDs
@@ -302,7 +309,10 @@ export class OperationLogEffects implements DeferredLocalActionsPort {
 
         const actionPayload = this.addReplayDateFieldsToActionPayload(
           action,
-          rawActionPayload,
+          {
+            ...rawActionPayload,
+            ...(historyCapture?.envelope ? { taskHistory: historyCapture.envelope } : {}),
+          },
           operationTimestamp,
         );
 
@@ -327,7 +337,7 @@ export class OperationLogEffects implements DeferredLocalActionsPort {
         const entityId = action.meta.entityId ?? entityIds?.[0];
 
         const op: Operation = {
-          id: uuidv7(),
+          id: historyCapture?.operationId ?? uuidv7(),
           // NgRx action.type is string, but it matches ActionType enum values
           actionType: action.type as ActionType,
           opType,
@@ -806,6 +816,7 @@ export class OperationLogEffects implements DeferredLocalActionsPort {
       }
 
       if (success) {
+        releaseTaskHistoryCapture(action);
         acknowledgeDeferredAction(action);
         continue;
       }

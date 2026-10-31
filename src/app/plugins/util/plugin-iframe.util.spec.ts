@@ -627,6 +627,19 @@ describe('handlePluginMessage()', () => {
       createBoundMethods: () => ({}),
     } as unknown as PluginBridgeService;
 
+    it('round-trips an untrusted task ID without letting it terminate the bridge script', () => {
+      const config = createConfig(pluginBridge);
+      const taskId = 'task</script><p id="unexpected">пример</p>';
+      config.baseCfg.taskDetail = { taskId, blockId: 'history', instanceId: 'frame-1' };
+      const html = buildPluginIframeHtml({
+        ...config,
+        indexHtml: '<html><head></head><body></body></html>',
+      });
+      expect(html).not.toContain('</script><p id="unexpected">');
+      const configJson = html.match(/cfg: ([^\n]+),/)!;
+      expect(JSON.parse(configJson[1]).taskDetail.taskId).toBe(taskId);
+    });
+
     it('returns an inline HTML document (not a blob: URL) for srcdoc', () => {
       const html = buildPluginIframeHtml({
         ...createConfig(pluginBridge),

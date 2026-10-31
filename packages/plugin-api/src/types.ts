@@ -6,6 +6,12 @@ import {
   IssueProviderPluginDefinition,
   PluginHttpOptions,
 } from './issue-provider-types';
+import type {
+  PluginTaskDetailBlockCfg,
+  PluginTaskDetailContext,
+  TaskHistoryPage,
+  TaskHistoryQuery,
+} from './task-history-types';
 
 export interface PluginMenuEntryCfg {
   pluginId: string;
@@ -55,6 +61,8 @@ export enum PluginHooks {
 export type Hooks = PluginHooks;
 
 export interface PluginBaseCfg {
+  /** Present only inside an embedded native task-detail block. */
+  taskDetail?: PluginTaskDetailContext;
   theme: 'light' | 'dark';
   appVersion: string;
   platform: 'web' | 'desktop' | 'android' | 'ios';
@@ -557,6 +565,12 @@ export interface PluginAPI {
 
   /** Register an action in the task context menu's plugin submenu. */
   registerTaskContextMenuEntry(cfg: PluginTaskContextMenuEntryCfg): void;
+
+  /** Unregistered on plugin unload; closing a task only destroys its iframe. */
+  registerTaskDetailBlock(cfg: PluginTaskDetailBlockCfg): void;
+
+  /** App-owned history, newest first; rejects while storage is inconsistent. */
+  getTaskHistory(taskId: string, options?: TaskHistoryQuery): Promise<TaskHistoryPage>;
 
   registerConfigHandler(handler: () => void): void;
 

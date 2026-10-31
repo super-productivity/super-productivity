@@ -6,6 +6,7 @@ import {
 import { OperationCaptureService } from './operation-capture.service';
 import { OpLog } from '../../core/log';
 import { devError } from '../../util/dev-error';
+import { withTaskHistoryCapture } from './task-history-capture';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // ARCHITECTURAL DEBT: Module-Level State for Meta-Reducer Service Injection
@@ -102,7 +103,9 @@ export const isDeferredAction = (action: PersistentAction): boolean => {
  * Sets the service instance for the meta-reducer.
  * Must be called during app initialization before any persistent actions are dispatched.
  */
-export const setOperationCaptureService = (service: OperationCaptureService): void => {
+export const setOperationCaptureService = (
+  service: OperationCaptureService | null,
+): void => {
   operationCaptureService = service;
   OpLog.normal('operationCaptureMetaReducer: Service initialized');
 };
@@ -262,7 +265,10 @@ export const operationCaptureMetaReducer = <S, A extends Action = Action>(
 ): ActionReducer<S, A> => {
   return (state: S | undefined, action: A): S => {
     // Call inner reducer first
-    const afterState = reducer(state, action);
+    const afterState =
+      isPersistentAction(action) && !action.meta.isRemote
+        ? withTaskHistoryCapture(action, () => reducer(state, action))
+        : reducer(state, action);
 
     // Only process persistent, non-remote actions
     if (isPersistentAction(action) && !(action as PersistentAction).meta.isRemote) {

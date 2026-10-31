@@ -3,6 +3,7 @@ import { toSignal } from '@angular/core/rxjs-interop';
 import { MatDialog } from '@angular/material/dialog';
 import { Store } from '@ngrx/store';
 import { SnackService } from '../core/snack/snack.service';
+import { PluginTaskHistoryService } from './plugin-task-history.service';
 import { NotifyService } from '../core/notify/notify.service';
 import {
   DialogCfg,
@@ -298,9 +299,9 @@ export class PluginBridgeService implements OnDestroy {
     formatDate: (date: Date | string | number, format: PluginDateFormat) => string;
     getCurrentLanguage: () => string;
     log: ReturnType<typeof Log.withContext>;
-  } {
+  } & ReturnType<PluginTaskHistoryService['bind']> {
     return {
-      // Data persistence
+      ...this._injector.get(PluginTaskHistoryService).bind(pluginId),
       persistDataSynced: (dataStr: string, key?: string) =>
         this._persistDataSynced(pluginId, dataStr, key),
       loadPersistedData: (key?: string) =>
@@ -311,7 +312,6 @@ export class PluginBridgeService implements OnDestroy {
       downloadFile: (filename: string, data: string) =>
         this._downloadFile(filename, data),
 
-      // UI registration
       registerHeaderButton: (cfg: PluginHeaderBtnCfg) =>
         this._registerHeaderButton(pluginId, cfg),
       registerMenuEntry: (cfg: Omit<PluginMenuEntryCfg, 'pluginId'>) =>
@@ -329,7 +329,6 @@ export class PluginBridgeService implements OnDestroy {
       registerConfigHandler: (handler: () => void) =>
         this._configHandlers.set(pluginId, handler),
 
-      // Navigation
       showIndexHtmlAsView: () => this._showIndexHtmlAsView(pluginId),
       showInWorkContext: () => this._showInWorkContext(pluginId),
       closeWorkContextView: () => this._closeWorkContextView(pluginId),
@@ -337,18 +336,14 @@ export class PluginBridgeService implements OnDestroy {
       getSelectedTask: () => this.getSelectedTask(),
       getFocusedTask: () => this.getFocusedTask(),
 
-      // Sync
       triggerSync: () => this._triggerSync(pluginId),
 
-      // Actions
       dispatchAction: (action: { type: string; [key: string]: unknown }) =>
         this._dispatchAction(pluginId, action),
 
-      // Node execution
       executeNodeScript: (request: PluginNodeScriptRequest) =>
         this._executeNodeScript(pluginId, manifest || null, request),
 
-      // Basic counter methods (existing)
       getAllCounters: () => this.getAllCounters(),
       getCounter: (id: string) => this.getCounter(id),
       setCounter: (id: string, value: number) => this.setCounter(id, value),
@@ -358,7 +353,6 @@ export class PluginBridgeService implements OnDestroy {
         this.decrementCounter(id, decrementBy),
       deleteCounter: (id: string) => this.deleteSimpleCounter(id),
 
-      // Full SimpleCounter methods (new)
       getAllSimpleCounters: () => this.getAllSimpleCounters(),
       getSimpleCounter: (id: string) => this.getSimpleCounter(id),
       updateSimpleCounter: (id: string, updates: Partial<SimpleCounter>) =>
@@ -372,7 +366,6 @@ export class PluginBridgeService implements OnDestroy {
       setSimpleCounterDate: (id: string, date: string, value: number) =>
         this.setSimpleCounterDate(id, date, value),
 
-      // Issue provider registration
       registerIssueProvider: (definition: IssueProviderPluginDefinition) =>
         this._registerIssueProvider(pluginId, manifest, definition),
       unregisterIssueProvider: () => {
@@ -384,7 +377,6 @@ export class PluginBridgeService implements OnDestroy {
         }
       },
 
-      // OAuth
       startOAuthFlow: (
         config: OAuthFlowConfig,
         tokenKey?: string,
@@ -399,7 +391,6 @@ export class PluginBridgeService implements OnDestroy {
       clearOAuthToken: (tokenKey?: string): Promise<void> =>
         this._pluginOAuthBridge.clearOAuthToken(pluginId, tokenKey),
 
-      // Secret storage (local-only, per-plugin, never synced)
       setSecret: (key: string, value: string): Promise<void> =>
         this._pluginSecretService.setSecret(pluginId, key, value),
       getSecret: (key: string): Promise<string | null> =>
@@ -415,7 +406,6 @@ export class PluginBridgeService implements OnDestroy {
       deleteProject: (projectId: string): Promise<void> =>
         this.deleteProject(projectId, manifest?.permissions),
 
-      // i18n
       translate: (key: string, params?: Record<string, string | number>): string =>
         this._injector.get(PluginI18nService).translate(pluginId, key, params),
       formatDate: (date: Date | string | number, format: PluginDateFormat): string =>
@@ -427,7 +417,6 @@ export class PluginBridgeService implements OnDestroy {
       getCurrentLanguage: (): string =>
         this._injector.get(PluginI18nService).getCurrentLanguage(),
 
-      // Logging
       log: Log.withContext(`${pluginId}`),
     };
   }
@@ -1456,6 +1445,7 @@ export class PluginBridgeService implements OnDestroy {
     this._removePluginSidePanelButtons(pluginId);
     this._removePluginWorkContextHeaderButtons(pluginId);
     this._taskContextMenuRegistry.unregisterPlugin(pluginId);
+    this._injector.get(PluginTaskHistoryService).unregister(pluginId);
     this.unregisterPluginShortcuts(pluginId);
     this._configHandlers.delete(pluginId);
 

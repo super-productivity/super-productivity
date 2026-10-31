@@ -19,7 +19,10 @@ describe('PluginIndexComponent', () => {
   let pluginService: jasmine.SpyObj<PluginService>;
   let pluginBridge: jasmine.SpyObj<PluginBridgeService>;
 
-  const setup = async (): Promise<void> => {
+  const setup = async (taskDetailContext?: {
+    taskId: string;
+    blockId: string;
+  }): Promise<void> => {
     pluginService = jasmine.createSpyObj<PluginService>('PluginService', [
       'isInitialized',
       'initializePlugins',
@@ -51,7 +54,7 @@ describe('PluginIndexComponent', () => {
 
     const cleanupService = jasmine.createSpyObj<PluginCleanupService>(
       'PluginCleanupService',
-      ['registerIframe', 'cleanupPlugin'],
+      ['registerIframe', 'unregisterIframe', 'cleanupPlugin'],
     );
 
     await TestBed.configureTestingModule({
@@ -72,6 +75,8 @@ describe('PluginIndexComponent', () => {
     fixture.componentRef.setInput('directPluginId', PLUGIN_ID);
     fixture.componentRef.setInput('showFullUI', false);
     fixture.componentRef.setInput('useSidePanelConfig', true);
+    if (taskDetailContext)
+      fixture.componentRef.setInput('taskDetailContext', taskDetailContext);
     // contentWindow only exists for a connected iframe.
     document.body.appendChild(fixture.nativeElement);
 
@@ -91,6 +96,27 @@ describe('PluginIndexComponent', () => {
     await setup();
     expect(getIframe()).toBeTruthy();
     expect(component.isLoading()).toBe(false);
+  });
+
+  it('loads a task detail block when randomUUID is unavailable', async () => {
+    const descriptor = Object.getOwnPropertyDescriptor(crypto, 'randomUUID');
+    Object.defineProperty(crypto, 'randomUUID', { configurable: true, value: undefined });
+    try {
+      await setup({ taskId: 'task1', blockId: 'history' });
+      expect(component.error()).toBeNull();
+      expect(getIframe()).toBeTruthy();
+      const config = getIframe()?.srcdoc.match(/"taskDetail":(\{[^}]+\})/);
+      expect(config).not.toBeNull();
+      if (!config) return;
+      expect(JSON.parse(config[1])).toEqual({
+        taskId: 'task1',
+        blockId: 'history',
+        instanceId: jasmine.stringMatching(/^[a-f0-9]{32}$/),
+      });
+    } finally {
+      if (descriptor) Object.defineProperty(crypto, 'randomUUID', descriptor);
+      else Reflect.deleteProperty(crypto, 'randomUUID');
+    }
   });
 
   // Enabling a plugin flips isEnabled before its assets are fetched; opening the
