@@ -1,0 +1,309 @@
+<header class="section-header">
+  @if (isShowTitle()) {
+    <mat-form-field
+      class="section-title"
+      subscriptSizing="dynamic"
+    >
+      <mat-label>{{
+        (isBoard() ? T.F.BOARDS.EDITOR.COLUMN_TITLE : T.F.BOARDS.EDITOR.SECTION_TITLE)
+          | translate
+      }}</mat-label>
+      <input
+        #titleModel="ngModel"
+        matInput
+        required
+        [ngModel]="panel().title"
+        (ngModelChange)="setTitle($event)"
+      />
+      <mat-error>{{ T.V.E_REQUIRED | translate }}</mat-error>
+    </mat-form-field>
+  } @else {
+    <span class="section-title"></span>
+  }
+  <span class="count">
+    @if (count() === 1) {
+      {{ T.F.BOARDS.EDITOR.COUNT_ONE | translate }}
+    } @else {
+      {{ T.F.BOARDS.EDITOR.COUNT | translate: { nr: count() } }}
+    }
+  </span>
+  <button
+    mat-icon-button
+    [matMenuTriggerFor]="sectionMenu"
+    [attr.aria-label]="
+      panel().title
+        ? (T.F.BOARDS.EDITOR.SECTION_ACTIONS | translate: { title: panel().title })
+        : (T.G.MORE_ACTIONS | translate)
+    "
+    [matTooltip]="T.G.MORE_ACTIONS | translate"
+  >
+    <mat-icon>more_vert</mat-icon>
+  </button>
+  <mat-menu #sectionMenu="matMenu">
+    <button
+      mat-menu-item
+      [disabled]="isFirst()"
+      (click)="moveUp.emit()"
+    >
+      <mat-icon>arrow_upward</mat-icon>
+      {{ T.F.BOARDS.EDITOR.MOVE_UP | translate }}
+    </button>
+    <button
+      mat-menu-item
+      [disabled]="isLast()"
+      (click)="moveDown.emit()"
+    >
+      <mat-icon>arrow_downward</mat-icon>
+      {{ T.F.BOARDS.EDITOR.MOVE_DOWN | translate }}
+    </button>
+    <button
+      mat-menu-item
+      (click)="duplicate.emit()"
+    >
+      <mat-icon>content_copy</mat-icon>
+      {{ T.G.DUPLICATE | translate }}
+    </button>
+    <button
+      mat-menu-item
+      (click)="remove.emit()"
+    >
+      <mat-icon>delete</mat-icon>
+      {{ T.G.DELETE | translate }}
+    </button>
+  </mat-menu>
+</header>
+
+<div class="rules-heading">{{ T.F.BOARDS.EDITOR.SHOW_TASKS_THAT_MATCH | translate }}</div>
+@if (!shownRules().length) {
+  <p class="no-rules">{{ T.F.BOARDS.EDITOR.NO_RULES | translate }}</p>
+}
+@for (rule of shownRules(); track rule) {
+  <div
+    class="rule-row"
+    role="group"
+    [attr.aria-labelledby]="ruleLabelIdPrefix + rule"
+    [attr.data-rule]="rule"
+  >
+    <span
+      class="rule-label"
+      [id]="ruleLabelIdPrefix + rule"
+      >{{ RULE_LABELS[rule] | translate }}</span
+    >
+    <div class="rule-control">
+      @switch (rule) {
+        @case ('project') {
+          <mat-form-field subscriptSizing="dynamic">
+            <mat-select
+              #projectSelect
+              multiple
+              [aria-label]="RULE_LABELS[rule] | translate"
+              [value]="knownProjectIds()"
+              (selectionChange)="setProjects($event)"
+            >
+              @for (project of projects(); track project.id) {
+                <mat-option [value]="project.id">
+                  <select-option-row
+                    [title]="project.title"
+                    [icon]="project.icon"
+                    [defaultIcon]="DEFAULT_PROJECT_ICON"
+                    [color]="project.theme?.primary"
+                    [folderPath]="projectFolderMap().get(project.id)"
+                  ></select-option-row>
+                </mat-option>
+              }
+            </mat-select>
+          </mat-form-field>
+          @if (deletedProjectCount() === 1) {
+            <span class="rule-note">{{
+              T.F.BOARDS.EDITOR.DELETED_PROJECT | translate
+            }}</span>
+          } @else if (deletedProjectCount() > 1) {
+            <span class="rule-note">{{
+              T.F.BOARDS.EDITOR.DELETED_PROJECTS
+                | translate: { nr: deletedProjectCount() }
+            }}</span>
+          }
+        }
+        @case ('includedTags') {
+          <ng-container
+            *ngTemplateOutlet="
+              tagRule;
+              context: {
+                rule: rule,
+                tagIds: panel().includedTagIds,
+                otherTagIds: panel().excludedTagIds,
+                match: panel().includedTagsMatch ?? 'all',
+                missing: missingIncludedTagCount(),
+              }
+            "
+          ></ng-container>
+        }
+        @case ('excludedTags') {
+          <ng-container
+            *ngTemplateOutlet="
+              tagRule;
+              context: {
+                rule: rule,
+                tagIds: panel().excludedTagIds,
+                otherTagIds: panel().includedTagIds,
+                match: panel().excludedTagsMatch ?? 'any',
+                missing: missingExcludedTagCount(),
+              }
+            "
+          ></ng-container>
+        }
+        @case ('untagged') {}
+        @case ('parentOnly') {}
+        @default {
+          <mat-form-field subscriptSizing="dynamic">
+            <mat-select
+              [aria-label]="RULE_LABELS[rule] | translate"
+              [value]="ruleValues()[rule]"
+              (selectionChange)="setRuleValue(rule, $event.value)"
+            >
+              @if (ruleValues()[rule] === OTHER_VALUE) {
+                <mat-option [value]="OTHER_VALUE">{{
+                  T.F.BOARDS.EDITOR.OTHER_KEPT | translate
+                }}</mat-option>
+              }
+              @for (option of RULE_OPTIONS[$any(rule)]; track option.value) {
+                <mat-option [value]="option.value">{{
+                  option.label | translate
+                }}</mat-option>
+              }
+            </mat-select>
+          </mat-form-field>
+        }
+      }
+    </div>
+    <button
+      class="remove-rule"
+      mat-icon-button
+      [attr.aria-label]="
+        (T.F.BOARDS.EDITOR.REMOVE_RULE | translate) +
+        ': ' +
+        (RULE_LABELS[rule] | translate)
+      "
+      [matTooltip]="T.F.BOARDS.EDITOR.REMOVE_RULE | translate"
+      (click)="removeRule(rule)"
+    >
+      <mat-icon>close</mat-icon>
+    </button>
+  </div>
+}
+
+@if (addableRuleGroups().length) {
+  <button
+    class="add-rule"
+    mat-button
+    [matMenuTriggerFor]="addRuleMenu"
+  >
+    <mat-icon>add</mat-icon>
+    {{ T.F.BOARDS.EDITOR.ADD_RULE | translate }}
+  </button>
+  <mat-menu #addRuleMenu="matMenu">
+    @for (group of addableRuleGroups(); track $index; let isFirstGroup = $first) {
+      @if (!isFirstGroup) {
+        <mat-divider></mat-divider>
+      }
+      @for (rule of group; track rule) {
+        <button
+          mat-menu-item
+          (click)="addRule(rule)"
+        >
+          {{ RULE_LABELS[rule] | translate }}
+        </button>
+      }
+    }
+  </mat-menu>
+}
+
+<div class="rule-row sort-row">
+  <span class="rule-label">{{ T.F.BOARDS.FORM.SORT_BY | translate }}</span>
+  <div class="rule-control">
+    <mat-form-field subscriptSizing="dynamic">
+      <mat-select
+        [aria-label]="T.F.BOARDS.FORM.SORT_BY | translate"
+        [value]="sortValue()"
+        (selectionChange)="setSort($event.value)"
+      >
+        @if (sortValue() === OTHER_VALUE) {
+          <mat-option [value]="OTHER_VALUE">{{
+            T.F.BOARDS.EDITOR.OTHER_KEPT | translate
+          }}</mat-option>
+        }
+        @for (option of SORT_OPTIONS; track option.value) {
+          <mat-option [value]="option.value">{{ option.label | translate }}</mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+  </div>
+  @if (isSorted()) {
+    <button
+      mat-icon-button
+      [attr.aria-label]="T.F.BOARDS.EDITOR.SORT_DIR_TOGGLE | translate"
+      [matTooltip]="
+        (isSortDesc() ? T.F.BOARDS.FORM.SORT_DIR_DESC : T.F.BOARDS.FORM.SORT_DIR_ASC)
+          | translate
+      "
+      (click)="toggleSortDir()"
+    >
+      <mat-icon>{{ isSortDesc() ? 'arrow_downward' : 'arrow_upward' }}</mat-icon>
+    </button>
+  } @else {
+    <span class="remove-rule"></span>
+  }
+</div>
+
+<ng-template
+  #tagRule
+  let-rule="rule"
+  let-tagIds="tagIds"
+  let-otherTagIds="otherTagIds"
+  let-match="match"
+  let-missing="missing"
+>
+  <tag-edit
+    [isShowMyDayTag]="true"
+    [tagIds]="tagIds"
+    [excludedTagIds]="otherTagIds"
+    (tagUpdate)="setTags(rule, $event)"
+  ></tag-edit>
+  @if (missing === 1) {
+    <span class="rule-note">{{ T.F.BOARDS.EDITOR.MISSING_TAG | translate }}</span>
+  } @else if (missing > 1) {
+    <span class="rule-note">{{
+      T.F.BOARDS.EDITOR.MISSING_TAGS | translate: { nr: missing }
+    }}</span>
+  }
+  @if (tagIds.length > 1) {
+    <mat-form-field subscriptSizing="dynamic">
+      <mat-select
+        [aria-label]="
+          (rule === 'includedTags'
+            ? T.F.BOARDS.FORM.TAGS_MATCH_MODE
+            : T.F.BOARDS.FORM.TAGS_EXCLUDED_MATCH_MODE
+          ) | translate
+        "
+        [value]="match"
+        (selectionChange)="setTagsMatch(rule, $event.value)"
+      >
+        @if (rule === 'includedTags') {
+          <mat-option value="all">{{
+            T.F.BOARDS.FORM.TAGS_MATCH_ALL | translate
+          }}</mat-option>
+          <mat-option value="any">{{
+            T.F.BOARDS.FORM.TAGS_MATCH_ANY | translate
+          }}</mat-option>
+        } @else {
+          <mat-option value="any">{{
+            T.F.BOARDS.FORM.TAGS_EXCLUDED_MATCH_ANY | translate
+          }}</mat-option>
+          <mat-option value="all">{{
+            T.F.BOARDS.FORM.TAGS_EXCLUDED_MATCH_ALL | translate
+          }}</mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+  }
+</ng-template>

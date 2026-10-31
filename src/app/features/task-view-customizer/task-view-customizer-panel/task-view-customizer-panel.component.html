@@ -10,26 +10,28 @@
   >
     <mat-icon>sort</mat-icon>
     <span>{{ T.F.TASK_VIEW.CUSTOMIZER.SORT | translate }}</span>
-    @if (customizerService.selectedSort().type) {
+    @if (selectedSort()?.type) {
       <span class="current-value">
-        {{ customizerService.selectedSort().label | translate }}
+        {{ selectedSort()!.label | translate }}
       </span>
     }
   </button>
 
-  <!-- Group By -->
-  <button
-    mat-menu-item
-    [matMenuTriggerFor]="groupMenu"
-  >
-    <mat-icon>group_work</mat-icon>
-    <span>{{ T.F.TASK_VIEW.CUSTOMIZER.GROUP_BY | translate }}</span>
-    @if (customizerService.selectedGroup().type) {
-      <span class="current-value">
-        {{ customizerService.selectedGroup().label | translate }}
-      </span>
-    }
-  </button>
+  <!-- Group By: lists only (a view's sections are edited in the editor) -->
+  @if (!view()) {
+    <button
+      mat-menu-item
+      [matMenuTriggerFor]="groupMenu"
+    >
+      <mat-icon>group_work</mat-icon>
+      <span>{{ T.F.TASK_VIEW.CUSTOMIZER.GROUP_BY | translate }}</span>
+      @if (customizerService.selectedGroup().type) {
+        <span class="current-value">
+          {{ customizerService.selectedGroup().label | translate }}
+        </span>
+      }
+    </button>
+  }
 
   <!-- Filter By -->
   <button
@@ -38,23 +40,35 @@
   >
     <mat-icon>filter_alt</mat-icon>
     <span>{{ T.F.TASK_VIEW.CUSTOMIZER.FILTER_BY | translate }}</span>
-    @if (customizerService.selectedFilter().type) {
+    @if (!view() && customizerService.selectedFilter().type) {
       <span class="current-value">
         {{ customizerService.selectedFilter().label | translate }}
       </span>
     }
   </button>
 
-  <mat-divider></mat-divider>
+  <!-- Lists only: "Reset all" would wipe a view's own scope -->
+  @if (!view()) {
+    <mat-divider></mat-divider>
 
-  <!-- Reset All -->
-  <button
-    mat-menu-item
-    (click)="onResetAll()"
-  >
-    <mat-icon>refresh</mat-icon>
-    <span>{{ T.F.TASK_VIEW.CUSTOMIZER.RESET_ALL | translate }}</span>
-  </button>
+    <!-- Also while Views are off: saving one turns them on -->
+    <button
+      mat-menu-item
+      (click)="saveAsView()"
+    >
+      <mat-icon>bookmark_add</mat-icon>
+      <span>{{ T.F.BOARDS.V.SAVE_AS_VIEW | translate }}</span>
+    </button>
+
+    <!-- Reset All -->
+    <button
+      mat-menu-item
+      (click)="onResetAll()"
+    >
+      <mat-icon>refresh</mat-icon>
+      <span>{{ T.F.TASK_VIEW.CUSTOMIZER.RESET_ALL | translate }}</span>
+    </button>
+  }
 </mat-menu>
 
 <!-- Sort submenu -->
@@ -62,16 +76,16 @@
   @for (opt of OPTIONS.sort.list; track opt.type) {
     <button
       mat-menu-item
-      (click)="customizerService.setSort(opt)"
-      [class.active]="customizerService.selectedSort().type === opt.type"
+      (click)="onSortSelect(opt)"
+      [class.active]="selectedSort()?.type === opt.type"
     >
       <span class="menu-item-content">
         <span>{{ opt.label | translate }}</span>
-        @if (customizerService.selectedSort().type === opt.type) {
+        @if (selectedSort()?.type === opt.type) {
           @if (opt.type) {
             <mat-icon class="check-icon">
               {{
-                customizerService.selectedSort().order === OPTIONS.sort.order.ASC
+                selectedSort()!.order === OPTIONS.sort.order.ASC
                   ? 'arrow_downward'
                   : 'arrow_upward'
               }}
@@ -84,19 +98,21 @@
     </button>
   }
 
-  <mat-divider></mat-divider>
+  @if (!view()) {
+    <mat-divider></mat-divider>
 
-  <button
-    mat-menu-item
-    (click)="customizerService.saveSort()"
-    [disabled]="customizerService.selectedSort().type === DEFAULT.sort.type"
-  >
-    <span class="menu-item-content">
-      <mat-icon class="check-icon">save</mat-icon>
+    <button
+      mat-menu-item
+      (click)="customizerService.saveSort()"
+      [disabled]="customizerService.selectedSort().type === DEFAULT.sort.type"
+    >
+      <span class="menu-item-content">
+        <mat-icon class="check-icon">save</mat-icon>
 
-      <span>{{ T.F.TASK_VIEW.CUSTOMIZER.SAVE_SORT | translate }}</span>
-    </span>
-  </button>
+        <span>{{ T.F.TASK_VIEW.CUSTOMIZER.SAVE_SORT | translate }}</span>
+      </span>
+    </button>
+  }
 </mat-menu>
 
 <!-- Group submenu -->
@@ -119,59 +135,68 @@
 
 <!-- Filter submenu -->
 <mat-menu #filterMenu="matMenu">
-  <button
-    mat-menu-item
-    (click)="onFilterSelect(DEFAULT.filter)"
-    [class.active]="!customizerService.selectedFilter().type"
-  >
-    <span class="menu-item-content">
-      <span>{{ T.F.TASK_VIEW.CUSTOMIZER.FILTER_DEFAULT | translate }}</span>
-      @if (!customizerService.selectedFilter().type) {
-        <mat-icon class="check-icon">check</mat-icon>
-      }
-    </span>
-  </button>
+  @if (!view()) {
+    <button
+      mat-menu-item
+      (click)="onFilterSelect(DEFAULT.filter)"
+      [class.active]="!customizerService.selectedFilter().type"
+    >
+      <span class="menu-item-content">
+        <span>{{ T.F.TASK_VIEW.CUSTOMIZER.FILTER_DEFAULT | translate }}</span>
+        @if (!customizerService.selectedFilter().type) {
+          <mat-icon class="check-icon">check</mat-icon>
+        }
+      </span>
+    </button>
+  }
 
   <button
     mat-menu-item
     [matMenuTriggerFor]="filterTagMenu"
-    [class.active]="customizerService.selectedFilter().type === OPTIONS.filter.types.tag"
+    [class.active]="!!activeFilters().tag"
+    [disabled]="!!differingFilterTypes().tag"
   >
     <span class="menu-item-content">
       <span>{{ T.F.TASK_VIEW.CUSTOMIZER.FILTER_TAG | translate }}</span>
-      @if (customizerService.selectedFilter().type === OPTIONS.filter.types.tag) {
+      @if (differingFilterTypes().tag) {
+        <span class="current-value">
+          {{ T.F.BOARDS.V.FILTER_DIFFERS_PER_SECTION | translate }}
+        </span>
+      } @else if (activeFilters().tag) {
         <mat-icon class="check-icon">check</mat-icon>
       }
     </span>
   </button>
 
-  <button
-    mat-menu-item
-    [matMenuTriggerFor]="filterProjectMenu"
-    [class.active]="
-      customizerService.selectedFilter().type === OPTIONS.filter.types.project
-    "
-  >
-    <span class="menu-item-content">
-      <span>{{ T.F.TASK_VIEW.CUSTOMIZER.FILTER_PROJECT | translate }}</span>
-      @if (customizerService.selectedFilter().type === OPTIONS.filter.types.project) {
-        <mat-icon class="check-icon">check</mat-icon>
-      }
-    </span>
-  </button>
+  <!-- Lists only: one op per keystroke on a view, whose editor picks projects -->
+  @if (!view()) {
+    <button
+      mat-menu-item
+      [matMenuTriggerFor]="filterProjectMenu"
+      [class.active]="!!activeFilters().project"
+    >
+      <span class="menu-item-content">
+        <span>{{ T.F.TASK_VIEW.CUSTOMIZER.FILTER_PROJECT | translate }}</span>
+        @if (activeFilters().project) {
+          <mat-icon class="check-icon">check</mat-icon>
+        }
+      </span>
+    </button>
+  }
 
   <button
     mat-menu-item
     [matMenuTriggerFor]="filterScheduledDateMenu"
-    [class.active]="
-      customizerService.selectedFilter().type === OPTIONS.filter.types.scheduledDate
-    "
+    [class.active]="!!activeFilters().scheduledDate"
+    [disabled]="!!differingFilterTypes().scheduledDate"
   >
     <span class="menu-item-content">
       <span>{{ T.F.TASK_VIEW.CUSTOMIZER.FILTER_SCHEDULED_DATE | translate }}</span>
-      @if (
-        customizerService.selectedFilter().type === OPTIONS.filter.types.scheduledDate
-      ) {
+      @if (differingFilterTypes().scheduledDate) {
+        <span class="current-value">
+          {{ T.F.BOARDS.V.FILTER_DIFFERS_PER_SECTION | translate }}
+        </span>
+      } @else if (activeFilters().scheduledDate) {
         <mat-icon class="check-icon">check</mat-icon>
       }
     </span>
@@ -180,13 +205,16 @@
   <button
     mat-menu-item
     [matMenuTriggerFor]="filterDeadlineMenu"
-    [class.active]="
-      customizerService.selectedFilter().type === OPTIONS.filter.types.deadline
-    "
+    [class.active]="!!activeFilters().deadline"
+    [disabled]="!!differingFilterTypes().deadline"
   >
     <span class="menu-item-content">
       <span>{{ T.F.TASK_VIEW.CUSTOMIZER.FILTER_DEADLINE | translate }}</span>
-      @if (customizerService.selectedFilter().type === OPTIONS.filter.types.deadline) {
+      @if (differingFilterTypes().deadline) {
+        <span class="current-value">
+          {{ T.F.BOARDS.V.FILTER_DIFFERS_PER_SECTION | translate }}
+        </span>
+      } @else if (activeFilters().deadline) {
         <mat-icon class="check-icon">check</mat-icon>
       }
     </span>
@@ -195,15 +223,16 @@
   <button
     mat-menu-item
     [matMenuTriggerFor]="filterEstimatedTimeMenu"
-    [class.active]="
-      customizerService.selectedFilter().type === OPTIONS.filter.types.estimatedTime
-    "
+    [class.active]="!!activeFilters().estimatedTime"
+    [disabled]="!!differingFilterTypes().estimatedTime"
   >
     <span class="menu-item-content">
       <span>{{ T.F.TASK_VIEW.CUSTOMIZER.FILTER_ESTIMATED_TIME | translate }}</span>
-      @if (
-        customizerService.selectedFilter().type === OPTIONS.filter.types.estimatedTime
-      ) {
+      @if (differingFilterTypes().estimatedTime) {
+        <span class="current-value">
+          {{ T.F.BOARDS.V.FILTER_DIFFERS_PER_SECTION | translate }}
+        </span>
+      } @else if (activeFilters().estimatedTime) {
         <mat-icon class="check-icon">check</mat-icon>
       }
     </span>
@@ -212,13 +241,16 @@
   <button
     mat-menu-item
     [matMenuTriggerFor]="filterTimeSpentMenu"
-    [class.active]="
-      customizerService.selectedFilter().type === OPTIONS.filter.types.timeSpent
-    "
+    [class.active]="!!activeFilters().timeSpent"
+    [disabled]="!!differingFilterTypes().timeSpent"
   >
     <span class="menu-item-content">
       <span>{{ T.F.TASK_VIEW.CUSTOMIZER.FILTER_TIME_SPENT | translate }}</span>
-      @if (customizerService.selectedFilter().type === OPTIONS.filter.types.timeSpent) {
+      @if (differingFilterTypes().timeSpent) {
+        <span class="current-value">
+          {{ T.F.BOARDS.V.FILTER_DIFFERS_PER_SECTION | translate }}
+        </span>
+      } @else if (activeFilters().timeSpent) {
         <mat-icon class="check-icon">check</mat-icon>
       }
     </span>
@@ -227,13 +259,16 @@
   <button
     mat-menu-item
     [matMenuTriggerFor]="filterPriorityMenu"
-    [class.active]="
-      customizerService.selectedFilter().type === OPTIONS.filter.types.priority
-    "
+    [class.active]="!!activeFilters().priority"
+    [disabled]="!!differingFilterTypes().priority"
   >
     <span class="menu-item-content">
       <span>{{ T.F.TASK_VIEW.CUSTOMIZER.FILTER_PRIORITY | translate }}</span>
-      @if (customizerService.selectedFilter().type === OPTIONS.filter.types.priority) {
+      @if (differingFilterTypes().priority) {
+        <span class="current-value">
+          {{ T.F.BOARDS.V.FILTER_DIFFERS_PER_SECTION | translate }}
+        </span>
+      } @else if (activeFilters().priority) {
         <mat-icon class="check-icon">check</mat-icon>
       }
     </span>
@@ -248,10 +283,7 @@
   >
     <span class="menu-item-content">
       <span>{{ T.F.TASK_VIEW.CUSTOMIZER.FILTER_NOT_SPECIFIED | translate }}</span>
-      @if (
-        customizerService.selectedFilter().type === OPTIONS.filter.types.tag &&
-        customizerService.selectedFilter().preset === FILTER_COMMON.NOT_SPECIFIED
-      ) {
+      @if (activeFilters().tag?.preset === FILTER_COMMON.NOT_SPECIFIED) {
         <mat-icon class="check-icon">check</mat-icon>
       }
     </span>
@@ -303,11 +335,7 @@
     >
       <input
         matInput
-        [ngModel]="
-          customizerService.selectedFilter().type === OPTIONS.filter.types.project
-            ? customizerService.selectedFilter().preset
-            : ''
-        "
+        [ngModel]="activeFilters().project?.preset ?? ''"
         (ngModelChange)="onFilterInputChange(OPTIONS.filter.types.project, $event)"
         [placeholder]="T.F.TASK_VIEW.CUSTOMIZER.ENTER_PROJECT | translate"
         (keydown.enter)="$event.stopPropagation()"
@@ -321,7 +349,7 @@
   <task-view-customizer-menu-item
     [type]="OPTIONS.filter.types.scheduledDate"
     [options]="PRESETS.schedule"
-    [selectedFilter]="customizerService.selectedFilter()"
+    [selectedFilter]="activeFilters().scheduledDate ?? DEFAULT.filter"
     (byClick)="onFilterWithValue($event)"
   />
 </mat-menu>
@@ -331,7 +359,7 @@
   <task-view-customizer-menu-item
     [type]="OPTIONS.filter.types.deadline"
     [options]="PRESETS.deadline"
-    [selectedFilter]="customizerService.selectedFilter()"
+    [selectedFilter]="activeFilters().deadline ?? DEFAULT.filter"
     (byClick)="onFilterWithValue($event)"
   />
 </mat-menu>
@@ -341,7 +369,7 @@
   <task-view-customizer-menu-item
     [type]="OPTIONS.filter.types.estimatedTime"
     [options]="PRESETS.time"
-    [selectedFilter]="customizerService.selectedFilter()"
+    [selectedFilter]="activeFilters().estimatedTime ?? DEFAULT.filter"
     (byClick)="onFilterWithValue($event)"
   />
 </mat-menu>
@@ -351,7 +379,7 @@
   <task-view-customizer-menu-item
     [type]="OPTIONS.filter.types.timeSpent"
     [options]="PRESETS.time"
-    [selectedFilter]="customizerService.selectedFilter()"
+    [selectedFilter]="activeFilters().timeSpent ?? DEFAULT.filter"
     (byClick)="onFilterWithValue($event)"
   />
 </mat-menu>
@@ -361,7 +389,7 @@
   <task-view-customizer-menu-item
     [type]="OPTIONS.filter.types.priority"
     [options]="PRESETS.priority"
-    [selectedFilter]="customizerService.selectedFilter()"
+    [selectedFilter]="activeFilters().priority ?? DEFAULT.filter"
     (byClick)="onFilterWithValue($event)"
   />
 </mat-menu>

@@ -1,86 +1,17 @@
-@use '../../../styles/_globals.scss' as *;
-
 :host {
-  ::ng-deep {
-    //.mat-mdc-tab-header {
-    //  @include mq(xs, max) {
-    //    margin-right: 50px;
-    //  }
-    //}
-
-    .mat-mdc-tab-body-wrapper {
-      min-height: 0;
-      height: 100%;
-    }
-
-    .mat-mdc-tab {
-      min-width: 40px !important;
-
-      /* The context menu is attached to the div in the tab-label, which is essentially only the title text;
-         To be able to open the context menu via right-click on the hole tab-label, we modify the default material
-         design to have zero padding and let the inner div define the tab shape. The inner spans which normally 
-         define the text-alignment are "deactivated" by defining display: contents. */
-      padding: 0px;
-
-      span.mdc-tab__content {
-        display: contents;
-
-        span.mdc-tab__text-label {
-          display: contents;
-
-          div {
-            padding: 0px var(--s3);
-            display: flex;
-            align-items: center;
-          }
-        }
-      }
-    }
-
-    .mat-tab-label:last-child {
-      opacity: 1;
-      min-width: 20px;
-      padding: 0;
-    }
-
-    .mat-mdc-tab-group {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      height: 100%;
-    }
-
-    .mat-mdc-tab-body {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      height: 100%;
-    }
-
-    .mat-mdc-tab-body-content {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      height: 100%;
-    }
-  }
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
 }
 
-.board-add-wrapper {
+board {
+  flex: 1;
+}
+
+.no-views {
   max-width: var(--component-max-width);
-  margin: 0 auto;
+  margin: auto;
   padding: var(--s2);
-  max-height: 100%;
-  overflow: auto;
-}
-
-::ng-deep .boards-drag-preview {
-  min-width: 0 !important;
-  background: transparent;
-  overflow: hidden;
-  border-radius: 8px;
-}
-
-::ng-deep .boards-drag-preview.cdk-drag-animating {
-  transition: transform 250ms cubic-bezier(0, 0, 0.2, 1);
+  text-align: center;
 }

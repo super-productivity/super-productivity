@@ -1,83 +1,70 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  computed,
   inject,
   input,
-  model,
-  OnInit,
   output,
-  signal,
+  viewChild,
 } from '@angular/core';
-import { FormlyModule } from '@ngx-formly/core';
 import { BoardCfg } from '../boards.model';
-import { BOARDS_FORM } from '../boards-form.const';
-import { UntypedFormGroup } from '@angular/forms';
 import { nanoid } from 'nanoid';
-import { MatButton } from '@angular/material/button';
-import { MatIcon } from '@angular/material/icon';
-import { TranslatePipe } from '@ngx-translate/core';
-import { T } from '../../../t.const';
 import { Store } from '@ngrx/store';
 import { BoardsActions } from '../store/boards.actions';
-import { DEFAULT_BOARD_CFG, DEFAULT_PANEL_CFG } from '../boards.const';
+import { ViewEditorComponent } from '../view-editor/view-editor.component';
+import { getViewUpdates } from '../view-editor/view-editor.util';
+import { selectAllBoards } from '../store/boards.selectors';
 
+/**
+ * Saves what the view editor builds: one `addBoard`, or one `updateBoard` with
+ * the fields the editor changed (none when nothing changed).
+ */
 @Component({
   selector: 'board-edit',
   standalone: true,
-  imports: [FormlyModule, MatButton, MatIcon, TranslatePipe],
+  imports: [ViewEditorComponent],
   templateUrl: './board-edit.component.html',
-  styleUrl: './board-edit.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class BoardEditComponent implements OnInit {
-  store = inject(Store);
-  boardCfg = model.required<BoardCfg>();
-  isEdit = signal(false);
-  isHideBtns = input<boolean>(false);
-  afterSave = output<void>();
+export class BoardEditComponent {
+  private readonly _store = inject(Store);
+  private readonly _editor = viewChild.required(ViewEditorComponent);
+  private readonly _boards = this._store.selectSignal(selectAllBoards);
 
-  form: UntypedFormGroup = new UntypedFormGroup({});
+  /** The stored board; a new one has no id yet. */
+  readonly board = input.required<BoardCfg>();
+  readonly afterSave = output<string>();
 
-  protected readonly BOARDS_FORM = BOARDS_FORM;
+  readonly isEdit = computed(() => !!this.board().id);
+  readonly boardCfg = computed<BoardCfg>(() =>
+    this.isEdit() ? this.board() : { ...this.board(), id: nanoid() },
+  );
 
-  ngOnInit(): void {
-    if (this.boardCfg().id) {
-      this.isEdit.set(true);
-    } else {
-      this.boardCfg.set({ ...this.boardCfg(), id: nanoid() });
-    }
-
-    // be safe with legacy data (only required for my current SP config)
-    const boardCfg = this.boardCfg();
-    this.boardCfg.set({
-      ...DEFAULT_BOARD_CFG,
-      ...boardCfg,
-      // Ensure each panel has all default properties
-      panels:
-        boardCfg.panels?.map((panel) => ({
-          ...DEFAULT_PANEL_CFG,
-          ...panel,
-        })) || [],
-    });
-  }
-
-  protected readonly T = T;
-
+  /** Does nothing while a field is invalid (the editor shows why). */
   save(): void {
-    if (this.form.valid) {
-      if (this.isEdit()) {
-        this.store.dispatch(
-          BoardsActions.updateBoard({ id: this.boardCfg().id, updates: this.boardCfg() }),
-        );
-        this.afterSave.emit();
-      } else {
-        this.store.dispatch(BoardsActions.addBoard({ board: this.boardCfg() }));
-        this.afterSave.emit();
-      }
+    // Normalized before dispatching, not only in the reducer: the op carries
+    // the payload, and released clients store it as is.
+    const board = this._editor().buildBoard();
+    if (!board) {
+      return;
     }
+    if (this.isEdit()) {
+      // The dialog edits a copy of the board as it was when it opened, so
+      // what changed is measured against saving that copy untouched.
+      const current = this._boards().find((b) => b.id === board.id);
+      const updates =
+        current && getViewUpdates(this._editor().buildUntouchedBoard(), board, current);
+      // A view deleted meanwhile (e.g. by sync) isn't brought back.
+      if (updates) {
+        this._store.dispatch(BoardsActions.updateBoard({ id: board.id, updates }));
+      }
+    } else {
+      this._store.dispatch(BoardsActions.addBoard({ board }));
+    }
+    this.afterSave.emit(board.id);
   }
 
   removeBoard(): void {
-    this.store.dispatch(BoardsActions.removeBoard({ id: this.boardCfg().id }));
+    this._store.dispatch(BoardsActions.removeBoard({ id: this.board().id }));
   }
 }

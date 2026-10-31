@@ -11,6 +11,7 @@ import {
 } from '../../utils/supersync-helpers';
 import { waitForAppReady } from '../../utils/waits';
 import { NotePage } from '../../pages/note.page';
+import { fillViewEditor, saveViewEditor } from '../../utils/view-helpers';
 import {
   RELEASED_APP_URL,
   serveReleasedClientAssets,
@@ -101,15 +102,14 @@ const editContent = async (
   edit: PersistentAction,
 ): Promise<void> => {
   if (family !== 'boards') return dispatch(page, edit);
-  // The editor saves the full board config, even for a rename.
-  await page.goto('/#/boards');
-  await page.getByRole('tab', { name: edit.id as string, exact: true }).click();
+  // A real editor save: one `updateBoard` carrying only the changed fields
+  // (`title`, `cols`), a content UPD on this board crossing the reorder.
+  await page.goto(`/#/boards/${edit.id as string}`);
   await page.locator('board:visible button').filter({ hasText: 'edit' }).click();
   const dialog = page.locator('dialog-board-edit');
-  await dialog.locator('input[type="text"]').fill('edited concurrently');
-  await dialog.locator('input[type="number"]').fill('3');
-  await dialog.getByRole('button', { name: /Save/ }).click();
-  await expect(dialog).toBeHidden();
+  // A board with cols: 2 opens in the Board layout, which has the Columns field.
+  await fillViewEditor(page, dialog, { title: 'edited concurrently', columns: 3 });
+  await saveViewEditor(dialog);
 };
 
 const snapshot = (
@@ -335,9 +335,10 @@ const fixture = (
         }),
       ),
       reorder: action('[Boards] Sort Boards', 'BOARD', ids, 'MOV', { ids }),
+      // What the editor dispatches in `editContent` (only the changed fields).
       edit: action('[Boards] Update Board', 'BOARD', a, 'UPD', {
         id: a,
-        updates: { id: a, title: 'edited concurrently', cols: 3, panels: [] },
+        updates: { title: 'edited concurrently', cols: 3 },
       }),
     };
   }

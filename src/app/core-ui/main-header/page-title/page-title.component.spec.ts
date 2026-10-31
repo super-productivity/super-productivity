@@ -30,6 +30,7 @@ import { PluginBridgeService } from '../../../plugins/plugin-bridge.service';
 import { PluginService } from '../../../plugins/plugin.service';
 import { PluginMenuEntryCfg } from '../../../plugins/plugin-api.model';
 import { PluginState } from '../../../plugins/plugin-state.model';
+import { BoardCfg } from '../../../features/boards/boards.model';
 
 // The title's spacing tokens are declared by main-header and inherited, so this
 // host pulls in that stylesheet and mounts the real `page-title` under it —
@@ -53,6 +54,7 @@ describe('PageTitleComponent', () => {
   let openMenuRequest$: Subject<void>;
   let openSpy: jasmine.Spy;
   let pluginMenuEntries: WritableSignal<PluginMenuEntryCfg[]>;
+  let boards: WritableSignal<BoardCfg[]>;
   let pluginStates: Map<string, PluginState>;
 
   // `color` is a Tag-only field not surfaced on WorkContext's type.
@@ -80,7 +82,8 @@ describe('PageTitleComponent', () => {
     },
     // Ignores the selector arg — the switchMap only calls select() for a
     // project context, so `isShared$` stands in for the shared-state result.
-    { provide: Store, useValue: { select: () => isShared$ } },
+    // selectSignal() is only used for the boards (views) list.
+    { provide: Store, useValue: { select: () => isShared$, selectSignal: () => boards } },
     {
       provide: PlainspaceShareService,
       useValue: { openProjectOnPlainspace: openSpy },
@@ -131,6 +134,7 @@ describe('PageTitleComponent', () => {
     );
     isShared$ = new BehaviorSubject(false);
     pluginMenuEntries = signal<PluginMenuEntryCfg[]>([]);
+    boards = signal<BoardCfg[]>([]);
     pluginStates = new Map();
     isXxxs$ = new BehaviorSubject<{ matches: boolean }>({ matches: false });
     openMenuRequest$ = new Subject<void>();
@@ -162,6 +166,20 @@ describe('PageTitleComponent', () => {
         const c = setupComponent(url);
         expect(c.displayTitle()).toBe(expectedKey);
       });
+    });
+
+    it('titles a view page with the view title', () => {
+      boards.set([{ id: 'v1', title: 'Quick wins', cols: 1, panels: [] }]);
+      const c = setupComponent('/boards/v1');
+      expect(c.displayTitle()).toBe('Quick wins');
+      // The view's own icon: a list for a one-column view.
+      expect(c.sectionIcon()).toBe('filter_list');
+      expect(c.viewBoard()?.id).toBe('v1');
+    });
+
+    it('falls back to the section title for an unknown view', () => {
+      const c = setupComponent('/boards/missing');
+      expect(c.displayTitle()).toBe(T.MH.BOARDS);
     });
 
     it('falls through to activeWorkContextTitle for non-special routes', () => {
@@ -442,6 +460,15 @@ describe('PageTitleComponent', () => {
       expect(buttons(await renderAt('/active/notes'))).not.toContain('task-filter-btn');
     });
 
+    it('adds the filter to list-layout views only', async () => {
+      boards.set([
+        { id: 'list', title: 'List', cols: 1, panels: [] },
+        { id: 'kanban', title: 'Kanban', cols: 3, panels: [] },
+      ]);
+      expect(buttons(await renderAt('/boards/list'))).toContain('task-filter-btn');
+      expect(buttons(await renderAt('/boards/kanban'))).not.toContain('task-filter-btn');
+    });
+
     it('adds the Plainspace button for a shared project', async () => {
       typeAndId$.next({ activeId: 'p1', activeType: WorkContextType.PROJECT });
       isShared$.next(true);
@@ -468,6 +495,13 @@ describe('PageTitleComponent', () => {
 
       it('opens the filter menu on the work view', async () => {
         await renderAt('/active/tasks');
+        openMenuRequest$.next();
+        expect(openMenuSpy).toHaveBeenCalledTimes(1);
+      });
+
+      it('opens the view filter menu on a list-layout view', async () => {
+        boards.set([{ id: 'list', title: 'List', cols: 1, panels: [] }]);
+        await renderAt('/boards/list');
         openMenuRequest$.next();
         expect(openMenuSpy).toHaveBeenCalledTimes(1);
       });

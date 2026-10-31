@@ -3,6 +3,8 @@ import {
   ChangeDetectionStrategy,
   Component,
   computed,
+  DestroyRef,
+  effect,
   ElementRef,
   inject,
   input,
@@ -27,9 +29,9 @@ import {
   URGENT_TAG,
 } from '../../tag/tag.const';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
-import { MatDialog } from '@angular/material/dialog';
-import { DialogBoardEditComponent } from '../dialog-board-edit/dialog-board-edit.component';
+import { BoardsService } from '../boards.service';
 import { T } from '../../../t.const';
+import { ViewTaskListRegistry } from '../../tasks/view-task-list-registry.service';
 
 @Component({
   selector: 'board',
@@ -39,13 +41,16 @@ import { T } from '../../../t.const';
   styleUrl: './board.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: {
-    '[style.--cols]': 'missingTagIds().length === 0 && boardCfg().cols',
+    '[style.--cols]': 'missingTagIds().length === 0 ? boardCfg().cols : null',
+    // One column reads like a task list: list width, centered.
+    '[class.isSingleColumn]': 'boardCfg().cols <= 1',
+    '[class.isListLayout]': 'isListLayout()',
   },
 })
 export class BoardComponent {
   private _store = inject(Store);
   private _translateService = inject(TranslateService);
-  private _matDialog = inject(MatDialog);
+  private _boardsService = inject(BoardsService);
 
   boardCfg = input.required<BoardCfg>();
   private _panels = viewChildren(BoardPanelComponent);
@@ -85,6 +90,24 @@ export class BoardComponent {
     target.focusRow(event.rowIndex, event.focusTaskId ?? event.taskIds?.[0]);
   }
 
+  // A one-column view reads like a task list: task rows instead of cards,
+  // its stacked panels being sections of that list (rows move between them
+  // by drag and keyboard as cards did). Boards with columns keep their cards.
+  readonly isListLayout = computed(() => this.boardCfg().cols <= 1);
+  readonly isSectioned = computed(
+    () => this.isListLayout() && this.boardCfg().panels.length > 1,
+  );
+
+  constructor() {
+    // The open view list's columns, in display order: the add-task bar adds
+    // into the first one that accepts new tasks.
+    const registry = inject(ViewTaskListRegistry);
+    effect(() => {
+      registry.set(this, this.isListLayout() ? this._panels() : []);
+    });
+    inject(DestroyRef).onDestroy(() => registry.clear(this));
+  }
+
   allExistingTagIds = toSignal(this._store.select(selectAllTagIds), { initialValue: [] });
 
   missingTagIds = computed(() => {
@@ -120,11 +143,7 @@ export class BoardComponent {
   }
 
   editBoard(): void {
-    this._matDialog.open(DialogBoardEditComponent, {
-      data: {
-        board: this.boardCfg(),
-      },
-    });
+    this._boardsService.editBoard(this.boardCfg());
   }
 
   protected readonly T = T;

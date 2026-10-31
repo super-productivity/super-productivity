@@ -21,15 +21,9 @@ test.describe('Boards #7498', () => {
     const taskName = `${testPrefix}repro7498-eisenhower`;
     await workViewPage.addTask(taskName);
 
-    await page.goto('/#/boards');
+    await page.goto('/#/boards/EISENHOWER_MATRIX');
     await page.waitForLoadState('networkidle');
     await expect(page.locator('boards')).toBeVisible({ timeout: 10000 });
-
-    const eisenhowerTab = page
-      .locator('mat-tab-group [role="tab"]')
-      .filter({ hasText: /eisenhower/i })
-      .first();
-    await eisenhowerTab.click();
 
     // Default Eisenhower references Important / Urgent tags that don't exist
     // on a fresh profile — accept the auto-create prompt if shown.

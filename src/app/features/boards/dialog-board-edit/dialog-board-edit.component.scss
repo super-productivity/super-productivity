@@ -9,11 +9,13 @@
       min-width: calc(100vw - 32px);
     }
     @include mq(xs) {
-      min-width: 500px;
+      min-width: 540px;
       max-height: 85vh;
     }
+    // One column of section cards: a wider dialog would only stretch the rows.
     @include mq(sm) {
-      min-width: 800px;
+      min-width: 640px;
+      max-width: 800px;
     }
   }
 }

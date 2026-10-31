@@ -15,23 +15,13 @@ test.describe('Boards #7498 — Kanban', () => {
   }) => {
     await workViewPage.waitForTaskList();
 
-    await page.goto('/#/boards');
+    await page.goto('/#/boards/KANBAN_DEFAULT');
     await page.waitForLoadState('networkidle');
     await expect(page.locator('boards')).toBeVisible({ timeout: 10000 });
 
-    // Switch to the Kanban Default board.
-    const kanbanTab = page
-      .locator('mat-tab-group [role="tab"]')
-      .filter({ hasText: /kanban/i })
-      .first();
-    await kanbanTab.waitFor({ state: 'visible', timeout: 10000 });
-    await kanbanTab.click();
-
     // On a fresh profile the Kanban panels reference KANBAN_IN_PROGRESS which
     // doesn't exist yet — the board renders a "Create Tag" prompt instead of
-    // the columns. Match the singular Kanban label exactly so we don't also
-    // pick up the Eisenhower tab's "Create Tags" button when both tab bodies
-    // are momentarily in the DOM during the mat-tab transition.
+    // the columns.
     const createTagBtn = page.getByRole('button', { name: 'Create Tag', exact: true });
     await createTagBtn.waitFor({ state: 'visible', timeout: 10000 });
     await createTagBtn.click();

@@ -1,0 +1,87 @@
+<div class="g-multi-btn-wrapper">
+  <nav-item
+    [container]="'group'"
+    [expanded]="isExpanded()"
+    [ariaControls]="'group-' + item().id"
+    [icon]="item().icon"
+    [label]="item().label | translate"
+    [showLabels]="showLabels()"
+    [contextMenu]="sectionMenu"
+    (clicked)="onHeaderClick()"
+  ></nav-item>
+
+  @if (showLabels()) {
+    <div class="additional-btns">
+      <button
+        class="additional-btn"
+        mat-icon-button
+        data-nav-btn="add-view"
+        [matTooltip]="T.F.BOARDS.V.ADD_NEW_BOARD | translate"
+        [attr.aria-label]="T.F.BOARDS.V.ADD_NEW_BOARD | translate"
+        (click)="boardsService.createBoard()"
+      >
+        <mat-icon>add</mat-icon>
+      </button>
+    </div>
+  }
+</div>
+
+<ng-template #sectionMenu>
+  <!-- Also the way to create a view in the compact rail, which hides the +. -->
+  <button
+    mat-menu-item
+    (click)="boardsService.createBoard()"
+  >
+    <mat-icon>add</mat-icon>
+    <span>{{ T.F.BOARDS.V.ADD_NEW_BOARD | translate }}</span>
+  </button>
+  <button
+    mat-menu-item
+    (click)="disableFeature()"
+  >
+    <mat-icon>visibility_off</mat-icon>
+    <span>{{ T.MH.DISABLE_FEATURE | translate }}</span>
+  </button>
+</ng-template>
+
+@if (isExpanded()) {
+  <div
+    class="nav-children"
+    role="list"
+    [id]="'group-' + item().id"
+    [@expandCollapse]
+    cdkDropList
+    cdkDropListLockAxis="y"
+    [cdkDropListData]="boardsService.boards()"
+    (cdkDropListDropped)="drop($event)"
+  >
+    @for (row of rows(); track row.board.id) {
+      <div
+        class="nav-child-item draggable view-row"
+        role="listitem"
+        [class.is-indented]="showLabels()"
+        [attr.data-view-id]="row.board.id"
+        cdkDrag
+        [cdkDragData]="row.board"
+        [cdkDragStartDelay]="dragDelayForTouch()"
+        [matTooltip]="row.board.title | translate"
+        [matTooltipDisabled]="showLabels()"
+        matTooltipPosition="right"
+      >
+        <nav-item
+          [container]="'route'"
+          [navRoute]="row.route"
+          [icon]="row.icon"
+          [label]="row.board.title"
+          [showLabels]="showLabels()"
+          [contextMenu]="viewMenu"
+          (clicked)="onRowClick(row.board)"
+        ></nav-item>
+
+        <ng-template #viewMenu>
+          <view-menu [board]="row.board"></view-menu>
+        </ng-template>
+      </div>
+    }
+  </div>
+}

@@ -15,21 +15,45 @@ import {
   viewChildren,
 } from '@angular/core';
 import { CdkDrag, CdkDragDrop, CdkDropList } from '@angular/cdk/drag-drop';
+import { NgTemplateOutlet } from '@angular/common';
 import { PlannerTaskComponent } from '../../planner/planner-task/planner-task.component';
+import { BoardPanelCfg, BoardPanelCfgTaskDoneState } from '../boards.model';
 import {
-  BoardPanelCfg,
-  BoardPanelCfgScheduledState,
-  BoardPanelCfgTaskDoneState,
-  BoardPanelCfgTaskTypeFilter,
-} from '../boards.model';
-import {
-  buildComparator,
-  doesTaskMatchPanel,
   firstSpecificProjectId,
+  getCalendarDateForDueDay,
+  getPanelHeaderCount,
+  getPanelRowIds,
+  getPanelSortKey,
   isAllProjects,
-  rewriteTagIdsForPanel,
+  isPanelDoneSplit,
+  matchPanelTasks,
+  panelToCriteria,
 } from '../boards.util';
-import { select, Store } from '@ngrx/store';
+import {
+  buildTaskComparator,
+  getChangesToMatch,
+  isCriteriaUnreachableForNewTasks,
+} from '../../tasks/task-criteria/task-criteria';
+import { TaskMatchChanges } from '../../tasks/task-criteria/task-criteria.model';
+import { ViewCriteriaContextService } from '../view-criteria-context.service';
+import { MenuTreeService } from '../../menu-tree/menu-tree.service';
+import { TODAY_TAG } from '../../tag/tag.const';
+import {
+  mapIdsToTasksWithSubTasks,
+  selectTaskFeatureState,
+  TaskWithSubTasksCache,
+} from '../../tasks/store/task.selectors';
+import { TaskListComponent } from '../../tasks/task-list/task-list.component';
+import { CollapsibleComponent } from '../../../ui/collapsible/collapsible.component';
+import {
+  VIEW_TASK_LIST,
+  ViewNewTaskTarget,
+  ViewTaskListHost,
+} from '../../tasks/view-task-list.token';
+import { INBOX_PROJECT } from '../../project/project.const';
+import { selectAllTags } from '../../tag/store/tag.reducer';
+import { getDeadlineAutoPlanFields } from '../../tasks/util/get-deadline-auto-plan-fields';
+import { Store } from '@ngrx/store';
 import {
   selectAllTasksInActiveProjects,
   selectTaskById,
@@ -38,23 +62,22 @@ import {
 import { toSignal } from '@angular/core/rxjs-interop';
 import { AddTaskInlineComponent } from '../../planner/add-task-inline/add-task-inline.component';
 import { T } from '../../../t.const';
-import { TaskCopy } from '../../tasks/task.model';
+import { TaskCopy, TaskWithSubTasks } from '../../tasks/task.model';
 import { TaskService } from '../../tasks/task.service';
 import { BoardsActions } from '../store/boards.actions';
 import { unique } from '../../../util/unique';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { LocalDateStrPipe } from '../../../ui/pipes/local-date-str.pipe';
 import { MatIcon } from '@angular/material/icon';
-import { MatIconButton } from '@angular/material/button';
-import { TranslatePipe } from '@ngx-translate/core';
+import { MatButton, MatIconButton } from '@angular/material/button';
+import { LayoutService } from '../../../core-ui/layout/layout.service';
+import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { DialogScheduleTaskComponent } from '../../planner/dialog-schedule-task/dialog-schedule-task.component';
 import { MatDialog } from '@angular/material/dialog';
 import { fastArrayCompare } from '../../../util/fast-array-compare';
-import { first, take } from 'rxjs/operators';
 import { dragDelayForTouch } from '../../../util/input-intent';
 import { ShortPlannedAtPipe } from '../../../ui/pipes/short-planned-at.pipe';
 import { MsToStringPipe } from '../../../ui/duration/ms-to-string.pipe';
-import { selectUnarchivedProjects } from '../../project/store/project.selectors';
 import {
   moveProjectTaskToBacklogListAuto,
   moveProjectTaskToRegularListAuto,
@@ -80,6 +103,8 @@ import {
 import type { ScheduledDateColor } from '../../tasks/util/get-scheduled-date-color';
 import { GlobalTrackingIntervalService } from '../../../core/global-tracking-interval/global-tracking-interval.service';
 import { DateService } from '../../../core/date/date.service';
+import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
+import { SnackService } from '../../../core/snack/snack.service';
 
 export interface BoardPanelNavigation {
   direction: -1 | 1 | 'up' | 'down';
@@ -99,27 +124,40 @@ export interface BoardPanelNavigation {
     LocalDateStrPipe,
     MatIcon,
     MatIconButton,
+    MatButton,
     TranslatePipe,
     ShortPlannedAtPipe,
     MsToStringPipe,
+    TaskListComponent,
+    CollapsibleComponent,
+    NgTemplateOutlet,
   ],
   templateUrl: './board-panel.component.html',
   styleUrl: './board-panel.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
   providers: [
     { provide: TASK_CARD_LIST, useExisting: forwardRef(() => BoardPanelComponent) },
+    // Read by the task rows and task lists of the list layout only.
+    { provide: VIEW_TASK_LIST, useExisting: forwardRef(() => BoardPanelComponent) },
   ],
   host: {
-    // Angular host bindings use template attribute syntax.
+    // Angular host bindings use template attribute syntax. The list layout
+    // drops the board scope, so multi-select scopes to its task list.
     // eslint-disable-next-line @typescript-eslint/naming-convention
-    '[attr.data-board-selection-scope]': 'panelCfg().id',
+    '[attr.data-board-selection-scope]': 'isListLayout() ? null : panelCfg().id',
+    // eslint-disable-next-line @typescript-eslint/naming-convention
+    '[class.isListLayout]': 'isListLayout()',
   },
 })
-export class BoardPanelComponent implements TaskCardList {
+export class BoardPanelComponent implements TaskCardList, ViewTaskListHost {
   T = T;
   dragDelayForTouch = dragDelayForTouch;
 
   panelCfg = input.required<BoardPanelCfg>();
+  // One-column views show task rows (`task-list`) instead of cards.
+  isListLayout = input<boolean>(false);
+  // List layout with several panels: this panel is one section of the list.
+  isSection = input<boolean>(false);
   editBoard = output<void>();
   adjacentPanel = output<BoardPanelNavigation>();
 
@@ -136,7 +174,37 @@ export class BoardPanelComponent implements TaskCardList {
   private _cards = viewChildren(PlannerTaskComponent, { read: ElementRef });
   readonly isMoving = signal(false);
 
+  // Shared with the other columns and the view editor's live count.
+  private readonly _viewCtx = inject(ViewCriteriaContextService);
+  readonly criteria = computed(() => panelToCriteria(this.panelCfg()));
+  readonly criteriaCtx = this._viewCtx.ctx;
+  // Rules no change of a new task can meet (overdue, a minimum estimate …):
+  // the add row would only create tasks that never show up here.
+  readonly isAddTaskHidden = computed(() =>
+    isCriteriaUnreachableForNewTasks(this.criteria()),
+  );
+
+  /** Whether a change of the task can make it match (refused moves stay put). */
+  canEnter(task: TaskCopy): boolean {
+    return getChangesToMatch(task, this.criteria(), this.criteriaCtx()) !== null;
+  }
+
+  // CDK only passes the dragged item; `moveTasks` checks the whole selection.
+  readonly canEnterCard = (drag: CdkDrag<TaskCopy>): boolean =>
+    !drag.data || this.canEnter(drag.data);
+
   rows(): HTMLElement[] {
+    if (this.isListLayout()) {
+      // Top-level task rows of this panel (not nested subtasks). Rows of a
+      // task shown in two sections are told apart by their panel. A row that
+      // left stays in the DOM while it animates out: skip destroyed hosts.
+      return Array.from(
+        this._element.nativeElement.querySelectorAll<HTMLElement>('task[data-task-id]'),
+      ).filter(
+        (row) =>
+          !row.parentElement?.closest('task') && !this.multiSelect.isDestroyedHost(row),
+      );
+    }
     return this._cards().map((card) => card.nativeElement as HTMLElement);
   }
 
@@ -145,13 +213,37 @@ export class BoardPanelComponent implements TaskCardList {
   }
 
   focusRow(index: number, taskId?: string): void {
+    if (this.isListLayout()) {
+      // A section a row was moved into may be collapsed; rows render later.
+      this.isSectionExpanded.set(true);
+      afterNextRender(() => this._focusRowNow(index, taskId), {
+        injector: this._injector,
+      });
+      return;
+    }
+    this._focusRowNow(index, taskId);
+  }
+
+  private _focusRowNow(index: number, taskId?: string): void {
     const rows = this.rows();
     const target =
-      (taskId && rows.find((row) => row.dataset.taskId === taskId)) ||
+      (taskId &&
+        (rows.find((row) => row.dataset.taskId === taskId) ||
+          this._nestedListRow(taskId))) ||
       rows[Math.min(index, rows.length - 1)] ||
       this.addButton();
     target?.focus();
     target?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }
+
+  // A subtask moved into a section that shows its parent is nested there.
+  private _nestedListRow(taskId: string): HTMLElement | undefined {
+    if (!this.isListLayout()) return undefined;
+    return Array.from(
+      this._element.nativeElement.querySelectorAll<HTMLElement>('task[data-task-id]'),
+    ).find(
+      (row) => row.dataset.taskId === taskId && !this.multiSelect.isDestroyedHost(row),
+    );
   }
 
   navigate(taskId: string, key: TaskCardArrow): void {
@@ -245,29 +337,26 @@ export class BoardPanelComponent implements TaskCardList {
     initialValue: [],
   });
 
-  // Use selectUnarchivedProjects (not selectUnarchivedVisibleProjects) to include
-  // hidden projects and INBOX, ensuring backlog filtering works for all tasks
-  allProjects$ = this.store.select(selectUnarchivedProjects);
-  allProjects = toSignal(this.allProjects$, {
-    initialValue: [],
-  });
-
-  // Create a Set of all backlog task IDs for fast lookup
-  allBacklogTaskIds = computed(() => {
-    const backlogIds = new Set<string>();
-    for (const project of this.allProjects()) {
-      if (project && project.backlogTaskIds && Array.isArray(project.backlogTaskIds)) {
-        project.backlogTaskIds.forEach((id) => backlogIds.add(id));
-      }
-    }
-    return backlogIds;
-  });
-
+  // In the list layout, the open rows the header counts: a parent's estimate
+  // already covers its nested subtasks.
   totalEstimate = computed(() =>
-    this.tasks().reduce((acc, task) => acc + (task.timeEstimate || 0), 0),
+    (this.isListLayout() ? this.mainRows() : this.tasks()).reduce(
+      (acc, task) => acc + (task.timeEstimate || 0),
+      0,
+    ),
   );
 
-  isManualOrder = computed(() => !this.panelCfg().sortBy);
+  readonly sortKey = computed(() => getPanelSortKey(this.panelCfg()));
+  isManualOrder = computed(() => !this.sortKey());
+
+  // Only read for the tag sort; `selectSignal` doesn't subscribe until then.
+  private readonly _allTags = this.store.selectSignal(selectAllTags);
+  // The UI language, like the task lists' sort, so a saved view sorts titles
+  // like the list it came from.
+  private readonly _collator = new Intl.Collator(
+    this._injector.get(TranslateService).currentLang || undefined,
+    { sensitivity: 'base', numeric: true },
+  );
 
   // Tags to auto-apply on a new task created via the inline-add row.
   // - AND mode (default): all required tags.
@@ -294,6 +383,7 @@ export class BoardPanelComponent implements TaskCardList {
   additionalTaskFields = computed(() => {
     const panelCfg = this.panelCfg();
     const tagsToAdd = this.tagsToAddForInlineCreate();
+    const priority = this.criteria().priority;
     const firstProjectId = isAllProjects(panelCfg.projectIds)
       ? undefined
       : firstSpecificProjectId(panelCfg.projectIds);
@@ -307,7 +397,8 @@ export class BoardPanelComponent implements TaskCardList {
         ? { isDone: false }
         : {}),
       ...(firstProjectId ? { projectId: firstProjectId } : {}),
-      // TODO scheduledState
+      ...(typeof priority === 'number' ? { priority } : {}),
+      // Dates, deadline and backlog are applied after creation (afterTaskAdd).
     };
   });
 
@@ -323,11 +414,10 @@ export class BoardPanelComponent implements TaskCardList {
       }
     });
 
-    // Hoist the backlog predicate out of the filter callback so it's allocated
-    // once per recompute, not once per task.
-    const isInBacklog = (t: Readonly<TaskCopy>): boolean => this._isTaskInBacklog(t);
-    const allFilteredTasks = this.allTasks().filter((task) =>
-      doesTaskMatchPanel(task, panelCfg, isInBacklog),
+    const allFilteredTasks = matchPanelTasks(
+      this.allTasks(),
+      this.criteria(),
+      this.criteriaCtx(),
     );
 
     allFilteredTasks.forEach((task) => {
@@ -340,9 +430,13 @@ export class BoardPanelComponent implements TaskCardList {
     });
     const merged = [...orderedTasks, ...nonOrderedTasks].filter((t) => !!t);
 
-    if (panelCfg.sortBy) {
+    const sortKey = this.sortKey();
+    if (sortKey) {
       const dir = panelCfg.sortDir === 'desc' ? -1 : 1;
-      const cmp = buildComparator(panelCfg.sortBy);
+      const cmp = buildTaskComparator(sortKey, {
+        collator: this._collator,
+        tagRankById: sortKey === 'tag' ? this._tagRankById() : undefined,
+      });
       merged.sort((a, b) => dir * cmp(a, b));
     }
 
@@ -374,7 +468,6 @@ export class BoardPanelComponent implements TaskCardList {
   async moveTasks(ids: string[], index = this.tasks().length): Promise<boolean> {
     if (this.isMoving()) return false;
     this.isMoving.set(true);
-    const panelCfg = this.panelCfg();
     try {
       const tasks = (
         await Promise.all(
@@ -383,10 +476,24 @@ export class BoardPanelComponent implements TaskCardList {
           ),
         )
       ).filter((task): task is TaskCopy => !!task);
-      const unscheduled =
-        panelCfg.scheduledState === BoardPanelCfgScheduledState.Scheduled
-          ? tasks.filter((task) => !task.dueDay && !task.dueWithTime)
-          : [];
+      // One task no change can make match refuses the whole move.
+      const criteria = this.criteria();
+      const ctx = this.criteriaCtx();
+      const changesById = new Map(
+        tasks.map((task) => [task.id, getChangesToMatch(task, criteria, ctx)]),
+      );
+      if ([...changesById.values()].some((changes) => changes === null)) {
+        this._injector.get(SnackService).open({
+          type: 'CUSTOM',
+          ico: 'block',
+          msg: T.F.BOARDS.V.S_CANT_MOVE_HERE,
+        });
+        return false;
+      }
+      // "Scheduled" without a day: ask once for the whole move.
+      const unscheduled = tasks.filter(
+        (task) => changesById.get(task.id)?.isAskForSchedule,
+      );
       let schedule: Parameters<TaskBulkActionService['scheduleFor']>[0] | undefined;
       if (unscheduled.length) {
         schedule = await firstValueFrom(
@@ -406,7 +513,8 @@ export class BoardPanelComponent implements TaskCardList {
           const task = await firstValueFrom(
             this.store.select(selectTaskById, { id: original.id }),
           );
-          if (task) await this._applyPanel(task, panelCfg);
+          const changes = task && getChangesToMatch(task, criteria, ctx);
+          if (task && changes) await this._applyTaskChanges(task, changes);
         }
         // Flush captured task operations before the dependent panel-order write.
         await new Promise<void>((resolve) => setTimeout(resolve, 0));
@@ -428,6 +536,7 @@ export class BoardPanelComponent implements TaskCardList {
             .get(TaskBulkActionService)
             .scheduleFor(schedule, tasksToSchedule);
         }
+        await this._applyDateChanges(movingIds);
         await new Promise<void>((resolve) => setTimeout(resolve, 0));
         this.multiSelect.reanchorAfterMove(movingIds, this.rows());
       } finally {
@@ -453,94 +562,133 @@ export class BoardPanelComponent implements TaskCardList {
     );
   }
 
-  private async _applyPanel(task: TaskCopy, panelCfg: BoardPanelCfg): Promise<void> {
-    const newTagIds = rewriteTagIdsForPanel(task.tagIds || [], panelCfg);
-
-    const updates: Partial<TaskCopy> = {};
-
-    // conditional updates
-    if (!fastArrayCompare(task.tagIds || [], newTagIds)) {
-      this.taskService.updateTags(task, unique(newTagIds));
-    }
-    if (panelCfg.taskDoneState === BoardPanelCfgTaskDoneState.Done && !task.isDone) {
-      updates.isDone = true;
-    } else if (
-      panelCfg.taskDoneState === BoardPanelCfgTaskDoneState.UnDone &&
-      task.isDone
-    ) {
-      updates.isDone = false;
-    }
-
-    const firstProjectId = firstSpecificProjectId(panelCfg.projectIds);
-    if (
-      firstProjectId &&
-      panelCfg.projectIds &&
-      panelCfg.projectIds.length > 0 &&
-      !isAllProjects(panelCfg.projectIds) &&
-      !panelCfg.projectIds.includes(task.projectId)
-    ) {
-      const taskWithSubTasks = await this.store
-        .pipe(
-          select(selectTaskByIdWithSubTaskData, { id: task.parentId || task.id }),
-          take(1),
-        )
-        .toPromise();
-
+  /**
+   * Applies the per-task part of what a task needs to match the panel, in the
+   * order the changes depend on: project (moves the parent with its subtasks)
+   * → backlog (on the parent) → one `updateTask` for tags, done and priority
+   * → unschedule. Dates follow in `_applyDateChanges`.
+   */
+  private async _applyTaskChanges(
+    task: TaskCopy,
+    changes: TaskMatchChanges,
+  ): Promise<void> {
+    if (changes.projectId) {
+      const taskWithSubTasks = await firstValueFrom(
+        this.store.select(selectTaskByIdWithSubTaskData, {
+          id: task.parentId || task.id,
+        }),
+      );
       if (taskWithSubTasks) {
         this.store.dispatch(
           TaskSharedActions.moveToOtherProject({
             task: taskWithSubTasks,
-            targetProjectId: firstProjectId,
+            targetProjectId: changes.projectId,
           }),
         );
       }
     }
-
+    const projectId = changes.projectId ?? task.projectId;
+    if (changes.backlog && projectId) {
+      const taskId = task.parentId || task.id;
+      this.store.dispatch(
+        changes.backlog === 'moveIn'
+          ? moveProjectTaskToBacklogListAuto({ taskId, projectId })
+          : moveProjectTaskToRegularListAuto({ taskId, projectId, isMoveToTop: false }),
+      );
+    }
+    const updates: Partial<TaskCopy> = {
+      ...(changes.tagIds ? { tagIds: unique(changes.tagIds) } : {}),
+      ...(changes.isDone !== undefined ? { isDone: changes.isDone } : {}),
+      // `null` clears it; `undefined` would be dropped from the synced op (#9776).
+      ...(changes.priority !== undefined ? { priority: changes.priority } : {}),
+    };
     if (Object.keys(updates).length > 0) {
       this.store.dispatch(
         TaskSharedActions.updateTask({ task: { id: task.id, changes: updates } }),
       );
     }
-
-    if (panelCfg.scheduledState === BoardPanelCfgScheduledState.NotScheduled) {
+    if (changes.isUnschedule) {
       this.store.dispatch(
         TaskSharedActions.unscheduleTask({ id: task.id, isSkipToast: true }),
       );
     }
-    await this._checkBacklogState(panelCfg, task.id);
+  }
+
+  /**
+   * Plans tasks for the day and sets the deadline the panel's rules ask for.
+   * Re-reads each task first: earlier changes may have moved it. A planned day
+   * is the logical day; a timed task keeps its time on the matching calendar
+   * date. The deadline goes last: its auto-plan into Today then sees the
+   * planned date.
+   */
+  private async _applyDateChanges(taskIds: string[]): Promise<void> {
+    const criteria = this.criteria();
+    const ctx = this.criteriaCtx();
+    const tasksByDay = new Map<string, TaskCopy[]>();
+    const deadlineChanges: [TaskCopy, TaskMatchChanges][] = [];
+    for (const id of taskIds) {
+      const task = await firstValueFrom(this.store.select(selectTaskById, { id }));
+      const changes = task && getChangesToMatch(task, criteria, ctx);
+      if (!task || !changes) continue;
+      if (changes.scheduleDay) {
+        const day = getCalendarDateForDueDay(
+          task,
+          changes.scheduleDay,
+          ctx.startOfNextDayDiffMs,
+        );
+        tasksByDay.set(day, [...(tasksByDay.get(day) ?? []), task]);
+      }
+      if (changes.deadlineDay || changes.isRemoveDeadline) {
+        deadlineChanges.push([task, changes]);
+      }
+    }
+    for (const [day, tasks] of tasksByDay) {
+      await this._injector
+        .get(TaskBulkActionService)
+        .scheduleFor(
+          { date: dateStrToUtcDate(day), time: null, remindOption: null },
+          tasks,
+        );
+    }
+    for (const [task, changes] of deadlineChanges) {
+      this.store.dispatch(
+        changes.deadlineDay
+          ? TaskSharedActions.setDeadline({
+              taskId: task.id,
+              deadlineDay: changes.deadlineDay,
+              isSkipSnack: true,
+              ...getDeadlineAutoPlanFields(this._dateService, changes.deadlineDay),
+            })
+          : TaskSharedActions.removeDeadline({ taskId: task.id, isSkipSnack: true }),
+      );
+    }
   }
 
   async afterTaskAdd({ taskId, isAddToBottom, isNewTask }: TaskAddEvent): Promise<void> {
     const panelCfg = this.panelCfg();
-
-    if (!isNewTask) {
-      const task = await this.store
-        .select(selectTaskById, { id: taskId })
-        .pipe(first())
-        .toPromise();
-      if (!task) {
-        return;
-      }
-
-      const newTagIds = unique(rewriteTagIdsForPanel(task.tagIds || [], panelCfg));
-
-      if (!fastArrayCompare(task.tagIds || [], newTagIds)) {
-        this.taskService.updateTags(task, newTagIds);
-      }
+    if (isNewTask) {
+      this.store.dispatch(
+        BoardsActions.updatePanelCfgTaskIds({
+          panelId: panelCfg.id,
+          taskIds: isAddToBottom
+            ? [...panelCfg.taskIds, taskId]
+            : [taskId, ...panelCfg.taskIds],
+        }),
+      );
+    }
+    // A new task already got tags, done state, project and priority on
+    // creation (`additionalTaskFields`); an existing one found through the add
+    // row gets everything here.
+    const task = await firstValueFrom(this.store.select(selectTaskById, { id: taskId }));
+    const changes = task && getChangesToMatch(task, this.criteria(), this.criteriaCtx());
+    if (!task || !changes) {
       return;
     }
-
-    this.store.dispatch(
-      BoardsActions.updatePanelCfgTaskIds({
-        panelId: panelCfg.id,
-        taskIds: isAddToBottom
-          ? [...panelCfg.taskIds, taskId]
-          : [taskId, ...panelCfg.taskIds],
-      }),
-    );
-
-    this._checkToScheduledTask(panelCfg, taskId);
-    this._checkBacklogState(panelCfg, taskId);
+    await this._applyTaskChanges(task, changes);
+    if (changes.isAskForSchedule) {
+      this.scheduleTask(task);
+    }
+    await this._applyDateChanges([taskId]);
   }
 
   scheduledDateColor(task: TaskCopy): ScheduledDateColor {
@@ -574,75 +722,198 @@ export class BoardPanelComponent implements TaskCardList {
     });
   }
 
-  private async _checkToScheduledTask(
-    panelCfg: BoardPanelCfg,
-    taskId: string,
-  ): Promise<void> {
-    if (panelCfg.scheduledState === BoardPanelCfgScheduledState.Scheduled) {
-      const task = await this.store
-        .select(selectTaskById, { id: taskId })
-        .pipe(first())
-        .toPromise();
-      if (!task.dueDay && !task.dueWithTime) {
-        this.scheduleTask(task);
-      }
-    }
-    if (panelCfg.scheduledState === BoardPanelCfgScheduledState.NotScheduled) {
-      this.store.dispatch(
-        TaskSharedActions.unscheduleTask({
-          id: taskId,
-          isSkipToast: false,
-        }),
-      );
-    }
+  // Side-menu tag order, for sorting by tag like task lists do. Only read when
+  // the panel sorts by tag.
+  private readonly _tagRankById = computed(
+    () =>
+      new Map(
+        this._injector
+          .get(MenuTreeService)
+          .buildTagListInTreeOrder(
+            this._allTags().filter((tag) => tag.id !== TODAY_TAG.id),
+          )
+          .map((tag, index) => [tag.id, index]),
+      ),
+  );
+
+  // === LIST LAYOUT (ViewTaskListHost) ===
+
+  // Built through a long-lived cache: the task list re-emits every second
+  // while time is tracked, and untouched rows must keep their object so they
+  // don't re-render (the task row is the hot path).
+  private readonly _taskState = this.store.selectSignal(selectTaskFeatureState);
+  private readonly _rowCache: TaskWithSubTasksCache = new Map();
+
+  /**
+   * Top-level rows: a matching task, unless its parent matches too (then it
+   * shows under the parent). A row's parent carries all its subtasks, like a
+   * project list; a subtask whose parent doesn't match is a row of its own.
+   */
+  private readonly _rowIds = computed(
+    () => getPanelRowIds(this.tasks(), this._isDoneSplit()),
+    { equal: fastArrayCompare },
+  );
+  private readonly _rowIdSet = computed(() => new Set(this._rowIds()));
+  private readonly _rows = computed(
+    () =>
+      mapIdsToTasksWithSubTasks(
+        this._rowIds(),
+        this._taskState()?.entities ?? {},
+        this._rowCache,
+      ),
+    { equal: fastArrayCompare },
+  );
+  // Done rows get their own collapsed section, unless the column only shows
+  // done tasks anyway.
+  private readonly _isDoneSplit = computed(() => isPanelDoneSplit(this.panelCfg()));
+  readonly mainRows = computed(
+    () =>
+      this._isDoneSplit() ? this._rows().filter((task) => !task.isDone) : this._rows(),
+    { equal: fastArrayCompare },
+  );
+  readonly doneRows = computed(
+    () => {
+      if (!this._isDoneSplit()) return [];
+      const rowIds = this._rowIdSet();
+      return this._rows()
+        .filter((task) => task.isDone)
+        .map((task) => this._withoutOwnRowSubTasks(task, rowIds));
+    },
+    { equal: fastArrayCompare },
+  );
+  // Done rows whose open subtasks are rows of their own, without them (keyed by
+  // the cached row, so an unchanged row keeps its object).
+  private readonly _doneRowCache = new WeakMap<
+    TaskWithSubTasks,
+    { key: string; row: TaskWithSubTasks }
+  >();
+
+  /** An open subtask shown as its own row isn't repeated inside its done parent. */
+  private _withoutOwnRowSubTasks(
+    task: TaskWithSubTasks,
+    rowIds: ReadonlySet<string>,
+  ): TaskWithSubTasks {
+    if (!task.subTasks.some((sub) => rowIds.has(sub.id))) return task;
+    const subTasks = task.subTasks.filter((sub) => !rowIds.has(sub.id));
+    const key = subTasks.map((sub) => sub.id).join();
+    const cached = this._doneRowCache.get(task);
+    if (cached?.key === key) return cached.row;
+    const row = { ...task, subTasks };
+    this._doneRowCache.set(task, { key, row });
+    return row;
+  }
+  // Local only, never synced: built on first expand (a view across all
+  // projects can hold many done tasks).
+  readonly isDoneListExpanded = signal(false);
+  // Local only, never synced, like the done section.
+  readonly isSectionExpanded = signal(true);
+  readonly tagsToHide = computed(() => this.panelCfg().includedTagIds ?? []);
+  // Same helper as the view editor's live count.
+  readonly headerCount = computed(() =>
+    getPanelHeaderCount(this.tasks(), this.panelCfg(), this.isListLayout()),
+  );
+
+  isRow(taskId: string): boolean {
+    return this._rowIdSet().has(taskId);
   }
 
-  private async _checkBacklogState(
-    panelCfg: BoardPanelCfg,
-    taskId: string,
-  ): Promise<void> {
-    if (
-      !panelCfg.backlogState ||
-      panelCfg.backlogState === BoardPanelCfgTaskTypeFilter.All
-    ) {
+  placeRow(taskId: string, afterTaskId: string | null): void {
+    const isOwnRow = this.isRow(taskId);
+    if (isOwnRow && !this.isManualOrder()) {
       return;
     }
-
-    const task = await this.store
-      .select(selectTaskById, { id: taskId })
-      .pipe(first())
-      .toPromise();
-
-    if (!task || !task.projectId) {
-      return;
-    }
-
-    const project = this.allProjects().find((p) => p.id === task.projectId);
-    const isInBacklog = this._isTaskInBacklog(task);
-
-    if (panelCfg.backlogState === BoardPanelCfgTaskTypeFilter.NoBacklog && isInBacklog) {
-      this.store.dispatch(
-        moveProjectTaskToRegularListAuto({
-          taskId: task.id,
-          projectId: task.projectId,
-          isMoveToTop: false,
-        }),
-      );
-    } else if (
-      panelCfg.backlogState === BoardPanelCfgTaskTypeFilter.OnlyBacklog &&
-      !isInBacklog &&
-      project?.isEnableBacklog
-    ) {
-      this.store.dispatch(
-        moveProjectTaskToBacklogListAuto({
-          taskId: task.id,
-          projectId: task.projectId,
-        }),
-      );
+    // The panel's order covers all its tasks (subtasks and done ones too):
+    // place after the anchor in that order.
+    const remaining = this.tasks()
+      .map((task) => task.id)
+      .filter((id) => id !== taskId);
+    const index = afterTaskId ? remaining.indexOf(afterTaskId) + 1 : 0;
+    if (isOwnRow) {
+      this._placeInOrder([taskId], index);
+    } else {
+      // From another column of the view: through this column's rules.
+      void this.moveTasks([taskId], index);
     }
   }
 
-  _isTaskInBacklog(task: Readonly<TaskCopy>): boolean {
-    return this.allBacklogTaskIds().has(task.parentId || task.id);
+  moveRow(taskId: string, to: 'up' | 'down' | 'top' | 'bottom'): boolean {
+    const task = this._rows().find((row) => row.id === taskId);
+    const isDoneRow = !!task?.isDone && this._isDoneSplit();
+    // Rows move within their part of the section (open or done).
+    const rows = (isDoneRow ? this.doneRows() : this.mainRows()).map((row) => row.id);
+    const i = rows.indexOf(taskId);
+    if (i === -1) {
+      return false;
+    }
+    const isEdge = (to === 'up' && i === 0) || (to === 'down' && i === rows.length - 1);
+    if (isEdge) {
+      return this._moveToAdjacentSection(taskId, to, isDoneRow);
+    }
+    if (!this.isManualOrder()) {
+      return false;
+    }
+    const others = rows.filter((id) => id !== taskId);
+    const targetIndex =
+      to === 'top'
+        ? 0
+        : to === 'bottom'
+          ? others.length
+          : Math.max(0, Math.min(others.length, i + (to === 'up' ? -1 : 1)));
+    if (targetIndex !== i) {
+      this.placeRow(taskId, targetIndex > 0 ? others[targetIndex - 1] : null);
+    }
+    return false;
   }
+
+  /**
+   * Past a section's first or last open row, a row (or the selection it is
+   * part of) moves into the previous or next section through that section's
+   * rules, like a card moves between stacked panels. Done rows stay.
+   */
+  private _moveToAdjacentSection(
+    taskId: string,
+    direction: 'up' | 'down',
+    isDoneRow: boolean,
+  ): boolean {
+    if (!this.isSection() || isDoneRow) {
+      return false;
+    }
+    const taskIds = this._taskIdsToMove(taskId, this.mainRows());
+    if (!taskIds.length) {
+      return false;
+    }
+    this.adjacentPanel.emit({ direction, rowIndex: 0, taskIds, focusTaskId: taskId });
+    return true;
+  }
+
+  // The regular add-task bar adds into the first column that has this
+  // (ViewTaskListRegistry). The project is always explicit: without it the bar
+  // would use the project that was open before the view.
+  /** The empty view's "Add task": the bar adds into this view. */
+  showAddTaskBar(): void {
+    // Looked up on use: the panel itself never needs the layout state.
+    this._injector.get(LayoutService).showAddTaskBar();
+  }
+
+  readonly newTaskTarget = computed<ViewNewTaskTarget | null>(() => {
+    if (this.isAddTaskHidden()) {
+      return null;
+    }
+    const fields = this.additionalTaskFields();
+    return {
+      additionalFields: {
+        ...fields,
+        projectId: fields.projectId ?? this._defaultProjectId(),
+      },
+      tagsToRemove: this.tagsToRemoveForInlineCreate(),
+      taskIdsToExclude: this.panelCfg().taskIds,
+    };
+  });
+
+  // Like the add-task bar outside a project: the configured default project,
+  // else the Inbox.
+  private readonly _defaultProjectId = computed(() => {
+    const id = this._config.cfg()?.tasks?.defaultProjectId;
+    return id && this._viewCtx.projectById().has(id) ? id : INBOX_PROJECT.id;
+  });
 }

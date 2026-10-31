@@ -23,7 +23,10 @@ export type DropListModelSource =
   | 'BACKLOG'
   | 'ADD_TASK_PANEL'
   | 'OVERDUE'
-  | 'LATER_TODAY';
+  | 'LATER_TODAY'
+  // A view column's rows, and its collapsed done rows (accepts no drops).
+  | 'VIEW'
+  | 'VIEW_DONE';
 
 // NOTE: do not change these, as they are used inside task repeat model directly
 // (new can be added though)

@@ -1,6 +1,11 @@
+import { INBOX_PROJECT } from '../../project/project.const';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { BoardPanelComponent } from './board-panel.component';
-import { BoardPanelCfg, BoardPanelCfgTaskTypeFilter } from '../boards.model';
+import {
+  BoardPanelCfg,
+  BoardPanelCfgTaskDoneState,
+  BoardPanelCfgTaskTypeFilter,
+} from '../boards.model';
 import { TaskCopy } from '../../tasks/task.model';
 import { Store } from '@ngrx/store';
 import { TaskService } from '../../tasks/task.service';
@@ -19,19 +24,32 @@ import { selectUnarchivedProjects } from '../../project/store/project.selectors'
 import {
   selectAllTasksInActiveProjects,
   selectTaskById,
+  selectTaskFeatureState,
 } from '../../tasks/store/task.selectors';
 import { WorkContextService } from '../../work-context/work-context.service';
 import { ProjectService } from '../../project/project.service';
-import { signal } from '@angular/core';
-import type { WritableSignal } from '@angular/core';
+import { NO_ERRORS_SCHEMA, signal } from '@angular/core';
+import { TaskListComponent } from '../../tasks/task-list/task-list.component';
+import { CollapsibleComponent } from '../../../ui/collapsible/collapsible.component';
+import type { Signal, WritableSignal } from '@angular/core';
+import { selectTodayStr } from '../../../root-store/app-state/app-state.selectors';
 import { TODAY_TAG } from '../../tag/tag.const';
 import { GlobalConfigService } from '../../config/global-config.service';
 import { DateService } from '../../../core/date/date.service';
 import { DateAdapter } from '@angular/material/core';
 import { DEFAULT_PANEL_CFG } from '../boards.const';
+import { getPanelHeaderCount, matchPanelTasks } from '../boards.util';
 import { BoardsActions } from '../store/boards.actions';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { GlobalTrackingIntervalService } from '../../../core/global-tracking-interval/global-tracking-interval.service';
+import { TaskBulkActionService } from '../../tasks/task-bulk-action.service';
+import { SnackService } from '../../../core/snack/snack.service';
+import { T } from '../../../t.const';
+import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
+
+// The panel reads the logical day from the store for its due-date rule.
+const daySelectSignal = (selector: unknown): Signal<string | number> =>
+  signal(selector === selectTodayStr ? '2026-09-12' : 0);
 
 const PLANNER_TASK_PROVIDERS = [
   {
@@ -121,6 +139,7 @@ describe('BoardPanelComponent - Backlog Feature', () => {
     actions$ = new ReplaySubject(1);
 
     const storeMock = {
+      selectSignal: daySelectSignal,
       select: (selectorFn: any) => {
         if (selectorFn === selectUnarchivedProjects) {
           return of(mockProjects);
@@ -322,6 +341,7 @@ describe('BoardPanelComponent - Hidden Project Backlog', () => {
     actions$ = new ReplaySubject(1);
 
     const storeMock = {
+      selectSignal: daySelectSignal,
       select: (selectorFn: any) => {
         if (selectorFn === selectUnarchivedProjects) {
           return of(mockProjects);
@@ -418,6 +438,7 @@ describe('BoardPanelComponent - Tag match mode, sort, inline-create computeds', 
   const setup = async (tasks: TaskCopy[]): Promise<void> => {
     actions$ = new ReplaySubject(1);
     const storeMock = {
+      selectSignal: daySelectSignal,
       select: (selectorFn: any) => {
         if (selectorFn === selectUnarchivedProjects)
           return of([{ id: 'p1', backlogTaskIds: [] }]);
@@ -809,7 +830,8 @@ describe('BoardPanelComponent - drop()', () => {
   let fixture: ComponentFixture<BoardPanelComponent>;
   let actions$: ReplaySubject<any>;
   let dispatchSpy: jasmine.Spy;
-  let updateTagsSpy: jasmine.Spy;
+  let scheduleForSpy: jasmine.Spy;
+  let snackOpenSpy: jasmine.Spy;
 
   const mkTask = (overrides: Partial<TaskCopy>): TaskCopy =>
     ({
@@ -826,6 +848,17 @@ describe('BoardPanelComponent - drop()', () => {
       subTaskIds: [],
       ...overrides,
     }) as TaskCopy;
+
+  // Tag writes go out in the one `updateTask` a move sends per task.
+  const dispatchedTagIds = (): string[][] =>
+    dispatchSpy.calls
+      .allArgs()
+      .map(([action]) => action)
+      .filter(
+        (action) =>
+          action.type === TaskSharedActions.updateTask.type && action.task.changes.tagIds,
+      )
+      .map((action) => action.task.changes.tagIds);
 
   // Minimal CdkDragDrop-shaped event — drop() only reads these fields.
   const mkDropEvent = (opts: {
@@ -853,9 +886,15 @@ describe('BoardPanelComponent - drop()', () => {
   const setup = async (tasks: TaskCopy[]): Promise<void> => {
     actions$ = new ReplaySubject(1);
     dispatchSpy = jasmine.createSpy('dispatch');
-    updateTagsSpy = jasmine.createSpy('updateTags');
+    scheduleForSpy = jasmine.createSpy('scheduleFor').and.resolveTo();
+    snackOpenSpy = jasmine.createSpy('open');
 
     const storeMock = {
+      // The list layout builds rows from the task entities.
+      selectSignal: (selector: unknown) =>
+        selector === selectTaskFeatureState
+          ? signal({ entities: Object.fromEntries(tasks.map((task) => [task.id, task])) })
+          : daySelectSignal(selector),
       select: (selectorFn: any, props?: { id: string }) => {
         if (selectorFn === selectUnarchivedProjects)
           return of([{ id: 'p1', backlogTaskIds: [] }]);
@@ -885,14 +924,20 @@ describe('BoardPanelComponent - drop()', () => {
           provide: TaskService,
           useValue: {
             currentTaskId: signal(null),
-            updateTags: updateTagsSpy,
           },
         },
         { provide: MatDialog, useValue: {} },
         { provide: WorkContextService, useValue: {} },
         { provide: ProjectService, useValue: { getProjectsWithoutId$: () => of([]) } },
+        { provide: TaskBulkActionService, useValue: { scheduleFor: scheduleForSpy } },
+        { provide: SnackService, useValue: { open: snackOpenSpy } },
       ],
     })
+      // The list layout's rows are covered by the task-list and task specs.
+      .overrideComponent(BoardPanelComponent, {
+        remove: { imports: [TaskListComponent, CollapsibleComponent] },
+        add: { schemas: [NO_ERRORS_SCHEMA] },
+      })
       .overrideComponent(PlannerTaskComponent, {
         set: { template: '<div>Mock Task</div>', inputs: ['task'] },
       })
@@ -935,7 +980,7 @@ describe('BoardPanelComponent - drop()', () => {
 
     // Assert
     expect(dispatchSpy).not.toHaveBeenCalled();
-    expect(updateTagsSpy).not.toHaveBeenCalled();
+    expect(dispatchedTagIds()).toEqual([]);
   });
 
   it('reorders selected rows in this panel using one order action', async () => {
@@ -951,7 +996,7 @@ describe('BoardPanelComponent - drop()', () => {
         taskIds: ['a', 'd', 'b', 'c'],
       }),
     );
-    expect(updateTagsSpy).not.toHaveBeenCalled();
+    expect(dispatchedTagIds()).toEqual([]);
   });
 
   for (const scenario of [
@@ -1045,7 +1090,7 @@ describe('BoardPanelComponent - drop()', () => {
 
     expect(adjacentSpy).not.toHaveBeenCalled();
     expect(dispatchSpy).not.toHaveBeenCalled();
-    expect(updateTagsSpy).not.toHaveBeenCalled();
+    expect(dispatchedTagIds()).toEqual([]);
   });
 
   it('moves a single-panel selection in source order, including duplicate cards', async () => {
@@ -1129,11 +1174,11 @@ describe('BoardPanelComponent - drop()', () => {
     });
     fixture.detectChanges();
     await component.moveTasks(['a', 'b']);
+    // One updateTask per task carries both the tags and the done state.
     for (const task of tasks) {
-      expect(updateTagsSpy).toHaveBeenCalledWith(task, ['in-progress']);
       expect(dispatchSpy).toHaveBeenCalledWith(
         TaskSharedActions.updateTask({
-          task: { id: task.id, changes: { isDone: true } },
+          task: { id: task.id, changes: { tagIds: ['in-progress'], isDone: true } },
         }),
       );
     }
@@ -1158,8 +1203,475 @@ describe('BoardPanelComponent - drop()', () => {
     expect(await component.moveTasks(['a', 'b'])).toBeFalse();
     expect(open).toHaveBeenCalledTimes(1);
     expect(dispatchSpy).not.toHaveBeenCalled();
-    expect(updateTagsSpy).not.toHaveBeenCalled();
+    expect(dispatchedTagIds()).toEqual([]);
     expect(component.isMoving()).toBeFalse();
+  });
+
+  describe('list layout', () => {
+    const listPanel = (overrides: Partial<BoardPanelCfg> = {}): BoardPanelCfg =>
+      ({ ...DEFAULT_PANEL_CFG, id: 'p', taskIds: [], ...overrides }) as BoardPanelCfg;
+
+    it('shows parents with their subtasks, lone subtasks as rows, done tasks apart', async () => {
+      const tasks = [
+        mkTask({ id: 'parent', subTaskIds: ['child'] }),
+        mkTask({ id: 'child', parentId: 'parent' }),
+        mkTask({ id: 'lone', parentId: 'otherParent' }),
+        mkTask({ id: 'done', isDone: true }),
+      ];
+      await setup(tasks);
+      fixture.componentRef.setInput('panelCfg', listPanel());
+      fixture.componentRef.setInput('isListLayout', true);
+      fixture.detectChanges();
+
+      expect(component.mainRows().map((row) => row.id)).toEqual(['parent', 'lone']);
+      expect(component.mainRows()[0].subTasks.map((st) => st.id)).toEqual(['child']);
+      expect(component.doneRows().map((row) => row.id)).toEqual(['done']);
+      expect(component.isRow('lone')).toBeTrue();
+      expect(component.isRow('child')).toBeFalse();
+      expect(component.headerCount()).toBe(2);
+      // Multi-select scopes to the task list, not the board.
+      expect(fixture.nativeElement.getAttribute('data-board-selection-scope')).toBeNull();
+    });
+
+    it('sums the estimate of the open rows only', async () => {
+      await setup([
+        mkTask({ id: 'parent', subTaskIds: ['child'], timeEstimate: 60_000 }),
+        // Already part of its parent's estimate.
+        mkTask({ id: 'child', parentId: 'parent', timeEstimate: 60_000 }),
+        mkTask({ id: 'other', timeEstimate: 30_000 }),
+        mkTask({ id: 'done', isDone: true, timeEstimate: 120_000 }),
+      ]);
+      fixture.componentRef.setInput('panelCfg', listPanel());
+      fixture.componentRef.setInput('isListLayout', true);
+      fixture.detectChanges();
+
+      expect(component.totalEstimate()).toBe(90_000);
+    });
+
+    it('keeps row objects when nothing about them changed', async () => {
+      await setup([mkTask({ id: 'a' }), mkTask({ id: 'b' })]);
+      fixture.componentRef.setInput('panelCfg', listPanel());
+      fixture.componentRef.setInput('isListLayout', true);
+      fixture.detectChanges();
+      const before = component.mainRows();
+
+      // A new panel config object (e.g. a re-emit) rebuilds the computeds.
+      fixture.componentRef.setInput('panelCfg', listPanel());
+      fixture.detectChanges();
+
+      expect(component.mainRows()).toBe(before);
+    });
+
+    it('reorders rows in the view order, by anchor and by keyboard move', async () => {
+      await setup(['a', 'b', 'c'].map((id) => mkTask({ id })));
+      fixture.componentRef.setInput('panelCfg', listPanel({ taskIds: ['a', 'b', 'c'] }));
+      fixture.componentRef.setInput('isListLayout', true);
+      fixture.detectChanges();
+
+      component.placeRow('c', null);
+      expect(dispatchSpy).toHaveBeenCalledWith(
+        BoardsActions.updatePanelCfgTaskIds({ panelId: 'p', taskIds: ['c', 'a', 'b'] }),
+      );
+      component.moveRow('a', 'down');
+      expect(dispatchSpy).toHaveBeenCalledWith(
+        BoardsActions.updatePanelCfgTaskIds({ panelId: 'p', taskIds: ['b', 'a', 'c'] }),
+      );
+      component.moveRow('a', 'bottom');
+      expect(dispatchSpy).toHaveBeenCalledWith(
+        BoardsActions.updatePanelCfgTaskIds({ panelId: 'p', taskIds: ['b', 'c', 'a'] }),
+      );
+    });
+
+    it('moves a row past the section edge into the next section, also when sorted', async () => {
+      await setup(['a', 'b', 'done'].map((id) => mkTask({ id, isDone: id === 'done' })));
+      fixture.componentRef.setInput('panelCfg', listPanel({ sortBy: 'title' }));
+      fixture.componentRef.setInput('isListLayout', true);
+      fixture.componentRef.setInput('isSection', true);
+      fixture.detectChanges();
+      const emitted: unknown[] = [];
+      component.adjacentPanel.subscribe((ev) => emitted.push(ev));
+
+      expect(component.moveRow('b', 'down')).toBeTrue();
+      expect(component.moveRow('a', 'up')).toBeTrue();
+      expect(emitted).toEqual([
+        { direction: 'down', rowIndex: 0, taskIds: ['b'], focusTaskId: 'b' },
+        { direction: 'up', rowIndex: 0, taskIds: ['a'], focusTaskId: 'a' },
+      ]);
+      // Sorted: no reorder inside the section. Done rows stay in their section.
+      expect(component.moveRow('a', 'down')).toBeFalse();
+      expect(component.moveRow('done', 'down')).toBeFalse();
+      expect(emitted.length).toBe(2);
+      expect(dispatchSpy).not.toHaveBeenCalled();
+    });
+
+    it('keeps a row in a single-panel list at its edge', async () => {
+      await setup(['a', 'b'].map((id) => mkTask({ id })));
+      fixture.componentRef.setInput('panelCfg', listPanel({ taskIds: ['a', 'b'] }));
+      fixture.componentRef.setInput('isListLayout', true);
+      fixture.detectChanges();
+      const emit = spyOn(component.adjacentPanel, 'emit');
+
+      expect(component.moveRow('a', 'up')).toBeFalse();
+      expect(emit).not.toHaveBeenCalled();
+      expect(dispatchSpy).not.toHaveBeenCalled();
+    });
+
+    it('takes the selection along past the edge, only when all of it is in the section', async () => {
+      await setup(['a', 'b', 'c'].map((id) => mkTask({ id })));
+      fixture.componentRef.setInput('panelCfg', listPanel({ taskIds: ['a', 'b', 'c'] }));
+      fixture.componentRef.setInput('isListLayout', true);
+      fixture.componentRef.setInput('isSection', true);
+      fixture.detectChanges();
+      const emit = spyOn(component.adjacentPanel, 'emit');
+
+      component.multiSelect.toggle('c');
+      component.multiSelect.toggle('a');
+      expect(component.moveRow('c', 'down')).toBeTrue();
+      expect(emit).toHaveBeenCalledOnceWith({
+        direction: 'down',
+        rowIndex: 0,
+        taskIds: ['a', 'c'],
+        focusTaskId: 'c',
+      });
+
+      // A selected task from another section: nothing moves, the row stays.
+      emit.calls.reset();
+      component.multiSelect.toggle('elsewhere');
+      expect(component.moveRow('c', 'down')).toBeFalse();
+      expect(emit).not.toHaveBeenCalled();
+      expect(dispatchSpy).not.toHaveBeenCalled();
+    });
+
+    it('focuses the moved row of this section, skipping rows that are animating out', async () => {
+      await setup([mkTask({ id: 'a' })]);
+      fixture.componentRef.setInput('panelCfg', listPanel());
+      fixture.componentRef.setInput('isListLayout', true);
+      fixture.componentRef.setInput('isSection', true);
+      fixture.detectChanges();
+      const host = fixture.nativeElement as HTMLElement;
+      const mkRow = (id: string, parent: HTMLElement = host): HTMLElement => {
+        const row = document.createElement('task');
+        row.dataset.taskId = id;
+        row.tabIndex = 0;
+        parent.appendChild(row);
+        return row;
+      };
+      const leaving = mkRow('a');
+      component.multiSelect.removeWhenUnrendered('a', leaving);
+      const other = mkRow('other');
+      const live = mkRow('a');
+      const nested = mkRow('sub', mkRow('parent'));
+
+      expect(component.rows()).toEqual([
+        other,
+        live,
+        host.lastElementChild as HTMLElement,
+      ]);
+
+      // Collapsed: expanded first, focused after the next render.
+      component.isSectionExpanded.set(false);
+      component.focusRow(0, 'a');
+      expect(component.isSectionExpanded()).toBeTrue();
+      fixture.detectChanges();
+      await fixture.whenStable();
+      expect(document.activeElement).toBe(live);
+
+      // Moved under its parent: the nested row, not the first one.
+      component.focusRow(0, 'sub');
+      fixture.detectChanges();
+      await fixture.whenStable();
+      expect(document.activeElement).toBe(nested);
+    });
+
+    it('counts in the header what it renders, for the view editor (both layouts)', async () => {
+      const tasks = [
+        mkTask({ id: 'parent', subTaskIds: ['child', 'doneChild'] }),
+        mkTask({ id: 'child', parentId: 'parent' }),
+        mkTask({ id: 'doneChild', parentId: 'parent', isDone: true }),
+        mkTask({ id: 'doneParent', isDone: true, subTaskIds: ['openSub'] }),
+        mkTask({ id: 'openSub', parentId: 'doneParent' }),
+        mkTask({ id: 'lone', parentId: 'elsewhere' }),
+        mkTask({ id: 'done', isDone: true }),
+      ];
+      await setup(tasks);
+      const matches = (): TaskCopy[] =>
+        matchPanelTasks(tasks, component.criteria(), component.criteriaCtx());
+      for (const taskDoneState of [
+        BoardPanelCfgTaskDoneState.All,
+        BoardPanelCfgTaskDoneState.Done,
+        BoardPanelCfgTaskDoneState.UnDone,
+      ]) {
+        const panel = listPanel({ taskDoneState });
+        fixture.componentRef.setInput('panelCfg', panel);
+        fixture.componentRef.setInput('isListLayout', true);
+        fixture.detectChanges();
+        expect(component.headerCount()).toBe(component.mainRows().length);
+        expect(getPanelHeaderCount(matches(), panel, true)).toBe(
+          component.mainRows().length,
+        );
+        // Cards aren't rendered here (no planner-task mocks): signals only.
+        fixture.componentRef.setInput('isListLayout', false);
+        expect(component.headerCount()).toBe(component.tasks().length);
+        expect(getPanelHeaderCount(matches(), panel, false)).toBe(
+          component.tasks().length,
+        );
+      }
+    });
+
+    it('shows an open subtask of a done parent among the open rows', async () => {
+      await setup([
+        mkTask({ id: 'parent', isDone: true, subTaskIds: ['open', 'closed'] }),
+        mkTask({ id: 'open', parentId: 'parent' }),
+        mkTask({ id: 'closed', parentId: 'parent', isDone: true }),
+      ]);
+      fixture.componentRef.setInput('panelCfg', listPanel());
+      fixture.componentRef.setInput('isListLayout', true);
+      fixture.detectChanges();
+
+      expect(component.mainRows().map((row) => row.id)).toEqual(['open']);
+      expect(component.doneRows().map((row) => row.id)).toEqual(['parent']);
+      // Not repeated inside its done parent; the row object stays stable.
+      expect(component.doneRows()[0].subTasks.map((st) => st.id)).toEqual(['closed']);
+      const doneRow = component.doneRows()[0];
+      fixture.componentRef.setInput('panelCfg', listPanel());
+      fixture.detectChanges();
+      expect(component.doneRows()[0]).toBe(doneRow);
+      expect(component.isRow('open')).toBeTrue();
+      expect(component.isRow('closed')).toBeFalse();
+    });
+
+    it('gives the add-task bar an explicit project, and nothing for unreachable rules', async () => {
+      await setup([]);
+      fixture.componentRef.setInput('panelCfg', listPanel({ priorityRule: '3' }));
+      fixture.componentRef.setInput('isListLayout', true);
+      fixture.detectChanges();
+
+      expect(component.newTaskTarget()).toEqual({
+        additionalFields: { priority: 3, projectId: INBOX_PROJECT.id },
+        tagsToRemove: [],
+        taskIdsToExclude: [],
+      });
+
+      fixture.componentRef.setInput('panelCfg', listPanel({ dueState: 'overdue' }));
+      fixture.detectChanges();
+      expect(component.newTaskTarget()).toBeNull();
+    });
+
+    it('builds a collapsed section without its rows', async () => {
+      await setup([mkTask({ id: 'a' })]);
+      fixture.componentRef.setInput('panelCfg', listPanel({ title: 'Later' }));
+      fixture.componentRef.setInput('isListLayout', true);
+      fixture.componentRef.setInput('isSection', true);
+      fixture.detectChanges();
+      const el = fixture.nativeElement as HTMLElement;
+      expect(el.querySelector('collapsible')).not.toBeNull();
+      expect(el.querySelector('task-list')).not.toBeNull();
+      expect(el.querySelector('header')).toBeNull();
+
+      component.isSectionExpanded.set(false);
+      fixture.detectChanges();
+      expect(el.querySelector('task-list')).toBeNull();
+      expect(el.querySelector('add-task-inline')).toBeNull();
+    });
+
+    it('has no header or inline add row as the only list of a view', async () => {
+      await setup([mkTask({ id: 'a' })]);
+      fixture.componentRef.setInput('panelCfg', listPanel());
+      fixture.componentRef.setInput('isListLayout', true);
+      fixture.detectChanges();
+      const el = fixture.nativeElement as HTMLElement;
+      expect(el.querySelector('header')).toBeNull();
+      expect(el.querySelector('add-task-inline')).toBeNull();
+      expect(el.querySelector('.list-status')?.textContent).toContain('1');
+    });
+
+    it("leaves a sorted column's order alone", async () => {
+      await setup(['a', 'b'].map((id) => mkTask({ id })));
+      fixture.componentRef.setInput('panelCfg', listPanel({ sortBy: 'title' }));
+      fixture.componentRef.setInput('isListLayout', true);
+      fixture.detectChanges();
+
+      component.moveRow('a', 'down');
+      component.placeRow('b', null);
+      expect(dispatchSpy).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('due date rule', () => {
+    // The mocked logical today is 2026-09-12.
+    it('schedules moved tasks for the panel day without the schedule dialog', async () => {
+      const tasks = ['a', 'b'].map((id) => mkTask({ id }));
+      await setup(tasks);
+      fixture.componentRef.setInput('panelCfg', {
+        ...DEFAULT_PANEL_CFG,
+        id: 'p',
+        dueState: 'tomorrow',
+        scheduledState: 2,
+      });
+      fixture.detectChanges();
+      const open = jasmine.createSpy('open');
+      TestBed.inject(MatDialog).open = open;
+
+      expect(await component.moveTasks(['a', 'b'])).toBeTrue();
+
+      expect(open).not.toHaveBeenCalled();
+      expect(scheduleForSpy).toHaveBeenCalledOnceWith(
+        { date: dateStrToUtcDate('2026-09-13'), time: null, remindOption: null },
+        tasks,
+      );
+    });
+
+    it('leaves tasks that already match where they are', async () => {
+      await setup([mkTask({ id: 'a', dueDay: '2026-09-15' })]);
+      fixture.componentRef.setInput('panelCfg', {
+        ...DEFAULT_PANEL_CFG,
+        id: 'p',
+        dueState: 'next7Days',
+      });
+      fixture.detectChanges();
+
+      expect(await component.moveTasks(['a'])).toBeTrue();
+      expect(scheduleForSpy).not.toHaveBeenCalled();
+    });
+
+    it('refuses the whole move when one task cannot become overdue', async () => {
+      await setup([mkTask({ id: 'a', dueDay: '2026-09-01' }), mkTask({ id: 'b' })]);
+      fixture.componentRef.setInput('panelCfg', {
+        ...DEFAULT_PANEL_CFG,
+        id: 'p',
+        dueState: 'overdue',
+      });
+      fixture.detectChanges();
+
+      expect(await component.moveTasks(['a', 'b'])).toBeFalse();
+      expect(snackOpenSpy).toHaveBeenCalledOnceWith(
+        jasmine.objectContaining({ msg: T.F.BOARDS.V.S_CANT_MOVE_HERE }),
+      );
+      expect(dispatchSpy).not.toHaveBeenCalled();
+      expect(dispatchedTagIds()).toEqual([]);
+      expect(scheduleForSpy).not.toHaveBeenCalled();
+      expect(component.isMoving()).toBeFalse();
+    });
+
+    it('schedules a task added inline, new or existing, for the panel day', async () => {
+      const tasks = [mkTask({ id: 'new' }), mkTask({ id: 'old' })];
+      await setup(tasks);
+      fixture.componentRef.setInput('panelCfg', {
+        ...DEFAULT_PANEL_CFG,
+        id: 'p',
+        dueState: 'today',
+      });
+      fixture.detectChanges();
+      const flush = (): Promise<void> => new Promise((resolve) => setTimeout(resolve));
+
+      await component.afterTaskAdd({
+        taskId: 'new',
+        isAddToBottom: true,
+        isNewTask: true,
+      });
+      await flush();
+      await component.afterTaskAdd({
+        taskId: 'old',
+        isAddToBottom: true,
+        isNewTask: false,
+      });
+
+      const today = {
+        date: dateStrToUtcDate('2026-09-12'),
+        time: null,
+        remindOption: null,
+      };
+      expect(scheduleForSpy.calls.allArgs()).toEqual([
+        [today, [tasks[0]]],
+        [today, [tasks[1]]],
+      ]);
+    });
+
+    it('sets priority (in the task update) and the deadline a column asks for', async () => {
+      const task = mkTask({ id: 'a' });
+      await setup([task]);
+      fixture.componentRef.setInput('panelCfg', {
+        ...DEFAULT_PANEL_CFG,
+        id: 'p',
+        priorityRule: '3',
+        // Week of 2026-09-07 (weeks start on Monday here): "due by" its last day.
+        deadlineState: 'thisWeek',
+      });
+      fixture.detectChanges();
+
+      expect(await component.moveTasks(['a'])).toBeTrue();
+
+      expect(dispatchSpy).toHaveBeenCalledWith(
+        TaskSharedActions.updateTask({ task: { id: 'a', changes: { priority: 3 } } }),
+      );
+      expect(dispatchSpy).toHaveBeenCalledWith(
+        TaskSharedActions.setDeadline({
+          taskId: 'a',
+          deadlineDay: '2026-09-13',
+          isSkipSnack: true,
+        }),
+      );
+      // New tasks get the priority on creation.
+      expect(component.additionalTaskFields()).toEqual(
+        jasmine.objectContaining({ priority: 3 }),
+      );
+    });
+
+    it('clears priority with null (so it syncs), removes the deadline and tags', async () => {
+      const task = mkTask({
+        id: 'a',
+        priority: 3,
+        deadlineDay: '2026-09-20',
+        tagIds: ['x'],
+      });
+      await setup([task]);
+      fixture.componentRef.setInput('panelCfg', {
+        ...DEFAULT_PANEL_CFG,
+        id: 'p',
+        priorityRule: 'none',
+        deadlineState: 'none',
+        isUntagged: true,
+      });
+      fixture.detectChanges();
+
+      expect(await component.moveTasks(['a'])).toBeTrue();
+
+      // `undefined` would be dropped from the synced op (#9776).
+      expect(dispatchSpy).toHaveBeenCalledWith(
+        TaskSharedActions.updateTask({
+          task: { id: 'a', changes: { tagIds: [], priority: null } },
+        }),
+      );
+      expect(dispatchSpy).toHaveBeenCalledWith(
+        TaskSharedActions.removeDeadline({ taskId: 'a', isSkipSnack: true }),
+      );
+    });
+
+    it('hides the add row where a new task can never match', async () => {
+      await setup([]);
+      fixture.componentRef.setInput('panelCfg', {
+        ...DEFAULT_PANEL_CFG,
+        id: 'p',
+        estimateRule: '3600000',
+      });
+      fixture.detectChanges();
+      expect(component.isAddTaskHidden()).toBeTrue();
+    });
+
+    it('lets only already overdue tasks enter an overdue panel and hides its add row', async () => {
+      await setup([]);
+      fixture.componentRef.setInput('panelCfg', {
+        ...DEFAULT_PANEL_CFG,
+        id: 'p',
+        dueState: 'overdue',
+      });
+      fixture.detectChanges();
+
+      const drag = (task: TaskCopy): any => ({ data: task });
+      expect(component.canEnterCard(drag(mkTask({ dueDay: '2026-09-01' })))).toBeTrue();
+      expect(component.canEnterCard(drag(mkTask({ dueDay: '2026-09-12' })))).toBeFalse();
+      expect(component.isAddTaskHidden()).toBeTrue();
+    });
   });
 
   it('cross-panel drop with AND-excluded strips only the FIRST excluded and adds first missing included', async () => {
@@ -1186,10 +1698,7 @@ describe('BoardPanelComponent - drop()', () => {
     await component.drop(mkDropEvent({ panelCfg, task }));
 
     // Assert — only 'x' stripped (first excluded), 'need' appended
-    expect(updateTagsSpy).toHaveBeenCalledTimes(1);
-    const [taskArg, tagsArg] = updateTagsSpy.calls.mostRecent().args;
-    expect(taskArg).toBe(task);
-    expect(tagsArg).toEqual(['y', 'keep', 'need']);
+    expect(dispatchedTagIds()).toEqual([['y', 'keep', 'need']]);
   });
 
   it('cross-panel drop with OR-included and no exclusion adds the first required tag', async () => {
@@ -1215,10 +1724,7 @@ describe('BoardPanelComponent - drop()', () => {
     await component.drop(mkDropEvent({ panelCfg, task }));
 
     // Assert — 'need' appended, 'other' preserved
-    expect(updateTagsSpy).toHaveBeenCalledTimes(1);
-    const [taskArg, tagsArg] = updateTagsSpy.calls.mostRecent().args;
-    expect(taskArg).toBe(task);
-    expect(tagsArg).toEqual(['other', 'need']);
+    expect(dispatchedTagIds()).toEqual([['other', 'need']]);
   });
 
   // TODAY_TAG is selectable in the board tag picker (isShowMyDayTag), but it is
@@ -1245,10 +1751,10 @@ describe('BoardPanelComponent - drop()', () => {
     // Act
     await component.drop(mkDropEvent({ panelCfg, task }));
 
-    // Assert — only the real required tag is applied
-    expect(updateTagsSpy).toHaveBeenCalledTimes(1);
-    const [, tagsArg] = updateTagsSpy.calls.mostRecent().args;
-    expect(tagsArg).toEqual(['other', 'need']);
+    // Assert — no task can carry the virtual Today tag, so no change makes it
+    // match this column: the move is refused instead of writing 'need' alone.
+    expect(dispatchedTagIds()).toEqual([]);
+    expect(snackOpenSpy).toHaveBeenCalled();
   });
 
   // The AND-exclude list contains My Day, which `doesTaskMatchPanel` can never
@@ -1283,8 +1789,10 @@ describe('BoardPanelComponent - drop()', () => {
       isNewTask: false,
     });
 
-    expect(updateTagsSpy).toHaveBeenCalledOnceWith(task, ['x', 'y', 'keep', 'need']);
-    expect(dispatchSpy).not.toHaveBeenCalled();
+    expect(dispatchedTagIds()).toEqual([['x', 'y', 'keep', 'need']]);
+    expect(dispatchSpy).not.toHaveBeenCalledWith(
+      jasmine.objectContaining({ type: BoardsActions.updatePanelCfgTaskIds.type }),
+    );
   });
 
   it('never writes the virtual TODAY_TAG into a task when the column requires My Day', async () => {
@@ -1311,7 +1819,8 @@ describe('BoardPanelComponent - drop()', () => {
       isNewTask: false,
     });
 
-    expect(updateTagsSpy).toHaveBeenCalledOnceWith(task, ['keep', 'need']);
+    // No task can carry the virtual Today tag, so nothing makes it match.
+    expect(dispatchedTagIds()).toEqual([]);
   });
 });
 
@@ -1340,7 +1849,11 @@ describe('BoardPanelComponent - add button lookup', () => {
         provideMockActions(() => new ReplaySubject(1)),
         {
           provide: Store,
-          useValue: { select: () => of([]), dispatch: jasmine.createSpy('dispatch') },
+          useValue: {
+            select: () => of([]),
+            selectSignal: daySelectSignal,
+            dispatch: jasmine.createSpy('dispatch'),
+          },
         },
         { provide: TaskService, useValue: { currentTaskId: signal(null) } },
         { provide: MatDialog, useValue: {} },

@@ -16,6 +16,18 @@
   }
 }
 
+:host(.isSingleColumn) {
+  width: 100%;
+  max-width: var(--component-max-width);
+  margin: 0 auto;
+}
+
+// Sections of one list: as tall as their rows, not equal grid rows.
+:host(.isListLayout) {
+  grid-auto-rows: auto;
+  align-content: start;
+}
+
 .empty-board-msg,
 .missing-tags-msg-wrapper {
   display: flex;

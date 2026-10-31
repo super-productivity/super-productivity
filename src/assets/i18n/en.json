@@ -97,7 +97,7 @@
   "EXAMPLE_TASKS": {
     "GETTING_STARTED": {
       "TITLE": "Optional: getting started tips",
-      "NOTES": "Nothing here is required. Delete this task whenever you like.\n\n- **Today and Inbox**: Today shows what is planned for today. Tasks without a project of your own stay in Inbox. A task can appear in both lists.\n- **Projects**: group tasks by topic with the **+** next to **Projects** in the sidebar.\n- **Sync**: keep your data on several devices under **Settings → Sync & Backup**.\n- **Coming from Todoist or TickTick?** Import your tasks under **Settings → Sync & Backup → Import/Export**.\n- **Tours**: **Help → Quick tour** in the sidebar menu walks you through the basics on your own task, and **Help → How to** shows short syntax and keyboard navigation step by step. Close a tour whenever you like.\n- **Make it yours**: pick a theme or dark mode, and switch features like boards, schedule, habits, focus mode or integrations on or off under **Settings → General**. Plugins add even more."
+      "NOTES": "Nothing here is required. Delete this task whenever you like.\n\n- **Today and Inbox**: Today shows what is planned for today. Tasks without a project of your own stay in Inbox. A task can appear in both lists.\n- **Projects**: group tasks by topic with the **+** next to **Projects** in the sidebar.\n- **Sync**: keep your data on several devices under **Settings → Sync & Backup**.\n- **Coming from Todoist or TickTick?** Import your tasks under **Settings → Sync & Backup → Import/Export**.\n- **Tours**: **Help → Quick tour** in the sidebar menu walks you through the basics on your own task, and **Help → How to** shows short syntax and keyboard navigation step by step. Close a tour whenever you like.\n- **Make it yours**: pick a theme or dark mode, and switch features like views, schedule, habits, focus mode or integrations on or off under **Settings → General**. Plugins add even more."
     }
   },
   "F": {
@@ -155,27 +155,54 @@
         "URGENT_IMPORTANT": "Urgent & Important",
         "URGENT_NOT_IMPORTANT": "Urgent & Not Important"
       },
-      "FORM": {
-        "ADD_NEW_PANEL": "Add new Panel",
-        "BACKLOG_TASK_FILTER_ALL": "All",
-        "BACKLOG_TASK_FILTER_NO_BACKLOG": "Exclude",
-        "BACKLOG_TASK_FILTER_ONLY_BACKLOG": "Backlog only",
-        "BACKLOG_TASK_FILTER_TYPE": "Backlog tasks",
+      "EDITOR": {
+        "ADD_COLUMN": "Add column",
+        "ADD_RULE": "Add rule",
+        "ADD_SECTION": "Add section",
+        "BACKLOG_EXCLUDE": "Exclude backlog",
+        "COLUMN_TITLE": "Column title",
         "COLUMNS": "Columns",
+        "COLUMNS_INVALID": "Whole number, 2 or more",
+        "COUNT": "{{nr}} tasks",
+        "COUNT_ONE": "1 task",
+        "DELETED_PROJECT": "1 archived or deleted project",
+        "DELETED_PROJECTS": "{{nr}} archived or deleted projects",
+        "LAYOUT": "Layout",
+        "LAYOUT_BOARD": "Board",
+        "LAYOUT_BOARD_HINT": "Columns side by side, tasks as cards",
+        "LAYOUT_LIST": "List",
+        "LAYOUT_LIST_HINT": "Sections stack in one task list",
+        "MISSING_TAG": "1 missing tag",
+        "MISSING_TAGS": "{{nr}} missing tags",
+        "MOVE_DOWN": "Move down",
+        "MOVE_UP": "Move up",
+        "NO_RULES": "Every task matches. Add a rule to narrow it down.",
+        "OTHER_KEPT": "Other (kept)",
+        "PLANNED_HAS_DATE": "Has a date",
+        "PLANNED_NO_DATE": "No date",
+        "REMOVE_RULE": "Remove rule",
+        "RULE_BACKLOG": "Backlog",
+        "RULE_DONE": "Completion",
+        "RULE_UNTAGGED": "Without tags",
+        "SECTION_ACTIONS": "More actions for {{title}}",
+        "SECTION_TITLE": "Section title",
+        "SECTIONS": "Sections",
+        "SHOW_TASKS_THAT_MATCH": "Show tasks that match",
+        "SORT_DIR_TOGGLE": "Change sort direction"
+      },
+      "FORM": {
+        "BACKLOG_TASK_FILTER_ONLY_BACKLOG": "Backlog only",
+        "COLUMNS": "Columns",
+        "DUE_STATE_NEXT_7_DAYS": "Next 7 days",
+        "DUE_STATE_OVERDUE": "Overdue",
+        "DUE_STATE_TODAY_OR_OVERDUE": "Today or overdue",
         "ONLY_PARENT_TASKS": "Only parent tasks",
-        "PROJECT": "Project",
-        "PROJECT_ALL": "All Projects",
-        "SCHEDULED_STATE": "Scheduled State",
-        "SCHEDULED_STATE_ALL": "All",
-        "SCHEDULED_STATE_NOT_SCHEDULED": "Not Scheduled",
-        "SCHEDULED_STATE_SCHEDULED": "Scheduled",
+        "RULE_NOT_SET": "Not set",
         "SORT_BY": "Sort by",
         "SORT_BY_CREATED": "Created",
-        "SORT_BY_DUE": "Due date",
         "SORT_BY_MANUAL": "Manual",
         "SORT_BY_TIME_ESTIMATE": "Time estimate",
         "SORT_BY_TITLE": "Title",
-        "SORT_DIR": "Direction",
         "SORT_DIR_ASC": "Ascending",
         "SORT_DIR_DESC": "Descending",
         "TAGS_EXCLUDED": "Excluded Tags",
@@ -186,21 +213,32 @@
         "TAGS_MATCH_ANY": "Match any (OR)",
         "TAGS_MATCH_MODE": "Required tag match",
         "TAGS_REQUIRED": "Required Tags",
-        "TASK_DONE_STATE": "Task Completion State",
-        "TASK_DONE_STATE_ALL": "All",
         "TASK_DONE_STATE_DONE": "Completed",
         "TASK_DONE_STATE_UNDONE": "Not Completed"
       },
       "V": {
-        "ADD_NEW_BOARD": "Add new board",
-        "CONFIRM_DELETE": "Are you sure you want to delete this board?",
+        "ADD_NEW_BOARD": "Create view",
+        "CONFIRM_DELETE": "Are you sure you want to delete this view?",
         "CREATE_NEW_TAG_BTN": "Create Tag",
-        "CREATE_NEW_TAG_MSG": "1 new tag needs to be created for this board to work",
+        "CREATE_NEW_TAG_MSG": "1 new tag needs to be created for this view to work",
         "CREATE_NEW_TAGS_BTN": "Create Tags",
-        "CREATE_NEW_TAGS_MSG": "{{nr}} new tags need to be created for this board to work",
-        "EDIT_BOARD": "Edit board",
-        "NO_PANELS_BTN": "Configure Board",
-        "NO_PANELS_MSG": "This board has no panels configured. Add some panels to it."
+        "CREATE_NEW_TAGS_MSG": "{{nr}} new tags need to be created for this view to work",
+        "EDIT_BOARD": "Edit view",
+        "EMPTY_VIEW_ADD": "Add task",
+        "EMPTY_VIEW_HINT": "Tasks show up here once they match the view's rules. Add one, or change the rules.",
+        "FILTER_DIFFERS_PER_SECTION": "Differs per section, edit the view",
+        "HINT_FILTER_NOT_ONLY_TODAY": "Shows every open task that matches the filter, not only today's. Add a Planned Date rule to narrow it down.",
+        "HINT_FILTER_PART_NOT_SAVED": "Part of the list's filter can't be combined with its project or tag in a view and was left out.",
+        "HINT_GROUPING_NOT_SAVED": "This grouping isn't saved: only grouping by tag becomes sections of a view.",
+        "HINT_TODAY_OR_OVERDUE": "Shows tasks due today or overdue, including the ones the Today list shows in their own section.",
+        "NO_PANELS_BTN": "Configure view",
+        "NO_PANELS_MSG": "This view has no sections yet. Add one to show tasks.",
+        "NO_TASKS_IN_VIEW": "No tasks match this view",
+        "NO_VIEWS_BTN": "Create view",
+        "NO_VIEWS_MSG": "No views yet. A view shows tasks from all your projects that match its rules, in one or more columns.",
+        "SAVE_AS_VIEW": "Save as view…",
+        "SECTION_OTHER": "Other",
+        "S_CANT_MOVE_HERE": "No change makes this task fit the column's rules, so it can't be moved here"
       }
     },
     "CALDAV": {
@@ -2571,8 +2609,8 @@
   },
   "GCF": {
     "APP_FEATURES": {
-      "BOARDS": "Boards",
-      "BOARDS_HINT": "Kanban-style boards with columns that group your tasks by tag, project or done state.",
+      "BOARDS": "Views",
+      "BOARDS_HINT": "Saved views in the side menu. Each shows tasks from all projects by tag, project, due date or done state, in one or more columns, like a Kanban board.",
       "DONATE_PAGE": "Donate page",
       "DONATE_PAGE_HINT": "Shows a menu entry with ways to support the development of the app.",
       "EXTEND_WITH_PLUGINS": "Find more features in Plugins",
@@ -2912,7 +2950,7 @@
       "WALLPAPER": "Wallpaper",
       "WALLPAPER_BUTTON": "Set wallpaper",
       "WALLPAPER_DIALOG_TITLE": "Global wallpaper",
-      "WALLPAPER_HINT": "Shown on pages without their own background (Planner, Schedule, Boards, Settings…). Tags and projects with their own image override it."
+      "WALLPAPER_HINT": "Shown on pages without their own background (Planner, Schedule, Views, Settings…). Tags and projects with their own image override it."
     },
     "POMODORO": {
       "BREAK_DURATION": "Short break duration",
@@ -3084,7 +3122,7 @@
   "MH": {
     "ADD_NEW_TASK": "Add new Task",
     "ADD_SECTION": "Add Section",
-    "BOARDS": "Boards",
+    "BOARDS": "Views",
     "COPY_TASK_LIST_MARKDOWN": "Copy to clipboard",
     "CREATE_PROJECT": "Create project",
     "CREATE_TAG": "Create tag",
@@ -3203,7 +3241,7 @@
       "TRACK_TIME": "Hover over the task and press {{playIcon}} to track time"
     },
     "WANT_MORE": {
-      "BOARDS": "<b>Boards</b> · Kanban-style columns for your tasks",
+      "BOARDS": "<b>Views</b> · Saved task lists and Kanban boards in the side menu",
       "DONE": "Done",
       "FINISH_DAY": "<b>Finish day</b> · Review and wrap up your day",
       "FOCUS_MODE": "<b>Focus mode</b> · Pomodoro and distraction-free work",

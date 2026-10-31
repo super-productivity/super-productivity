@@ -1,29 +1,19 @@
 import { expect, test } from '../../fixtures/test.fixture';
+import { saveViewEditor, setViewSort, viewEditorSection } from '../../utils/view-helpers';
 
 /**
- * Regression for #7380: opening the edit dialog for the default Eisenhower
- * Matrix board left the Save button disabled, because Formly's required
- * `includedTagsMatch` / `excludedTagsMatch` radios never received their
- * `defaultValue` (it was placed inside `props`, which Formly ignores).
+ * Regression for #7380: editing the default Eisenhower Matrix view and saving
+ * it must work. The Formly editor once left Save disabled there (a required
+ * match-mode radio never got its default); the view editor keeps Save enabled
+ * and saves a tag rule without a match mode as "all".
  */
 test.describe('Boards — Eisenhower Matrix edit dialog (#7380)', () => {
-  test('Save is enabled on open and after picking a sortBy', async ({
-    page,
-    workViewPage,
-  }) => {
+  test('saves the default view after changing a sort', async ({ page, workViewPage }) => {
     await workViewPage.waitForTaskList();
 
-    await page.goto('/#/boards');
-    await page.waitForLoadState('networkidle');
-    await expect(page.locator('boards')).toBeVisible({ timeout: 10000 });
-
     // The Eisenhower Matrix board ships with `cols: 2` and four panels.
-    // Find the Eisenhower tab and select it.
-    const eisenhowerTab = page
-      .locator('mat-tab-group [role="tab"]')
-      .filter({ hasText: /eisenhower/i })
-      .first();
-    await eisenhowerTab.click();
+    await page.goto('/#/boards/EISENHOWER_MATRIX');
+    await expect(page.locator('boards')).toBeVisible({ timeout: 10000 });
 
     // Default Eisenhower Matrix references Important / Urgent tags that
     // don't exist in a fresh profile — click "Create Tags" if shown so the
@@ -33,8 +23,7 @@ test.describe('Boards — Eisenhower Matrix edit dialog (#7380)', () => {
       await createTagsBtn.click();
     }
 
-    // Open the edit dialog via the per-panel edit (pencil) button — the only
-    // way to edit a board on a desktop viewport without right-click.
+    // Open the edit dialog via the per-panel edit (pencil) button.
     const firstPanelEditBtn = page
       .locator('board-panel header button[mat-icon-button]')
       .first();
@@ -43,29 +32,24 @@ test.describe('Boards — Eisenhower Matrix edit dialog (#7380)', () => {
 
     const dialog = page.locator('dialog-board-edit');
     await expect(dialog).toBeVisible({ timeout: 5000 });
+    await expect(dialog.getByRole('button', { name: 'Save', exact: true })).toBeEnabled();
 
-    const saveBtn = dialog.locator('button:has(mat-icon:has-text("save"))');
-    await expect(saveBtn).toBeVisible();
+    // The first quadrant requires two tags: its rule shows both, matching all.
+    const first = viewEditorSection(dialog, 0);
+    await expect(
+      first.getByRole('combobox', { name: 'Required tag match', exact: true }),
+    ).toContainText('Match all (AND)');
 
-    // Pre-fix: this expectation fails — the form is invalid on open because
-    // `includedTagsMatch` for URGENT_AND_IMPORTANT is required-but-undefined.
-    await expect(saveBtn).toBeEnabled();
+    await setViewSort(page, first, 'Title');
+    await saveViewEditor(dialog);
 
-    // Now exercise the second part of the bug: pick a sort column on the
-    // first panel; sortDir radio is revealed with `defaultValue: 'asc'`.
-    // Drilling into Formly internals via DOM is fragile, so we just confirm
-    // the form stays enabled after toggling the first sort-by select to its
-    // first non-manual option.
-    const sortBySelect = dialog.locator('mat-select').first();
-    await sortBySelect.click();
-    // Pick the first option that isn't the currently-selected "manual" entry.
-    const sortOption = page.locator('mat-option').nth(1);
-    await sortOption.click();
-
-    await expect(saveBtn).toBeEnabled();
-
-    // Click Save and the dialog should close cleanly.
-    await saveBtn.click();
-    await expect(dialog).toBeHidden({ timeout: 5000 });
+    // The sort is stored on that quadrant.
+    await page.locator('board-panel header button[mat-icon-button]').first().click();
+    await expect(
+      viewEditorSection(dialog, 0).getByRole('combobox', {
+        name: 'Sort by',
+        exact: true,
+      }),
+    ).toContainText('Title');
   });
 });

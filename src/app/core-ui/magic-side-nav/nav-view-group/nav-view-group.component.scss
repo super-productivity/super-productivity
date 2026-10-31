@@ -1,0 +1,5 @@
+// Rows sit under the section header like the Projects and Tags rows (one
+// indent step, none in the compact rail).
+.view-row.is-indented {
+  padding-left: var(--s2);
+}

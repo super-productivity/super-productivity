@@ -42,6 +42,23 @@ export interface BoardSrcCfg {
   sortByDue?: 'off' | 'asc' | 'desc';
   // optional since newly added
   backlogState?: BoardPanelCfgTaskTypeFilter;
+  // The rule fields below are optional and stored as plain strings/booleans:
+  // a closed union would make typia reject a value a newer client adds (see
+  // validation-fn.ts). Read them through `panelToCriteria`; unknown values
+  // mean "any". Absent = no rule.
+  // Planned date: a `TaskDateRule` ('today', 'thisWeek', …).
+  dueState?: string;
+  // Deadline: a `TaskDateRule`.
+  deadlineState?: string;
+  // 'none' or a minimum in ms, e.g. '1800000'.
+  estimateRule?: string;
+  timeSpentRule?: string;
+  // 'none', '1' (low), '2', '3' (high).
+  priorityRule?: string;
+  isUntagged?: boolean;
+  // Sort keys `sortBy` can't hold ('deadline', 'timeSpent', 'priority',
+  // 'tag'); `sortBy` wins when both are set. See `getPanelSortKey`.
+  sortKey?: string;
 }
 
 export interface BoarFieldsToRemove {

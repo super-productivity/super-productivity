@@ -33,6 +33,9 @@ import { KeyboardConfig } from '@sp/keyboard-config';
 import { PluginBridgeService } from '../../../plugins/plugin-bridge.service';
 import { PluginService } from '../../../plugins/plugin.service';
 import { PluginIconComponent } from '../../../plugins/ui/plugin-icon/plugin-icon.component';
+import { selectAllBoards } from '../../../features/boards/store/boards.selectors';
+import { getViewIcon } from '../../../features/boards/boards.util';
+import { ViewMenuComponent } from '../../../features/boards/view-menu/view-menu.component';
 
 @Component({
   selector: 'page-title',
@@ -50,6 +53,7 @@ import { PluginIconComponent } from '../../../plugins/ui/plugin-icon/plugin-icon
     TaskViewCustomizerPanelComponent,
     TranslatePipe,
     PluginIconComponent,
+    ViewMenuComponent,
   ],
   template: `
     @if (activeWorkContextTypeAndId()) {
@@ -133,6 +137,54 @@ import { PluginIconComponent } from '../../../plugins/ui/plugin-icon/plugin-icon
           }
         </div>
       }
+      @if (!isXxxs() && viewBoard(); as board) {
+        <div class="page-title-actions">
+          <!-- The filter/sort menu edits a list-layout view's rules. Boards
+               with several columns keep the editor: their panels differ by
+               design. Same trigger ref as the work view's, so the shortcut
+               opens it; the panel shares this block for the reason given
+               there. -->
+          @if (board.cols <= 1) {
+            <button
+              #customizerMenuTrigger
+              class="task-filter-btn"
+              [matMenuTriggerFor]="viewCustomizerPanel.menu"
+              [attr.aria-label]="
+                T.GCF.KEYBOARD.TOGGLE_TASK_VIEW_CUSTOMIZER_PANEL | translate
+              "
+              mat-icon-button
+              matTooltip="{{
+                T.GCF.KEYBOARD.TOGGLE_TASK_VIEW_CUSTOMIZER_PANEL | translate
+              }} {{
+                kb.toggleTaskViewCustomizerPanel
+                  ? '[' + kb.toggleTaskViewCustomizerPanel + ']'
+                  : ''
+              }}"
+            >
+              <mat-icon>filter_list</mat-icon>
+            </button>
+            <task-view-customizer-panel
+              #viewCustomizerPanel
+              [view]="board"
+            ></task-view-customizer-panel>
+          }
+          <button
+            [matMenuTriggerFor]="viewMenu"
+            [matTooltip]="T.G.MORE_ACTIONS | translate"
+            [attr.aria-label]="T.G.MORE_ACTIONS | translate"
+            mat-icon-button
+          >
+            <mat-icon>more_vert</mat-icon>
+          </button>
+        </div>
+      }
+      <mat-menu #viewMenu="matMenu">
+        <ng-template matMenuContent>
+          @if (viewBoard(); as board) {
+            <view-menu [board]="board"></view-menu>
+          }
+        </ng-template>
+      </mat-menu>
       <mat-menu #activeWorkContextMenu="matMenu">
         <ng-template matMenuContent>
           <work-context-menu
@@ -349,14 +401,16 @@ export class PageTitleComponent {
   private readonly _configService = inject(GlobalConfigService);
   private _translateService = inject(TranslateService);
   private _store = inject(Store);
+  private _boards = this._store.selectSignal(selectAllBoards);
   private _plainspaceShareService = inject(PlainspaceShareService);
   private _pluginBridge = inject(PluginBridgeService);
   private _pluginService = inject(PluginService);
 
   readonly T = T;
 
-  // Absent off the work view (and on xxxs screens), where the shortcut then
-  // does nothing — matching the button not being there to click.
+  // On the work view and on list-layout view pages; absent elsewhere (and on
+  // xxxs screens), where the shortcut then does nothing — matching the button
+  // not being there to click.
   private _customizerMenuTrigger = viewChild('customizerMenuTrigger', {
     read: MatMenuTrigger,
   });
@@ -408,7 +462,8 @@ export class PageTitleComponent {
   > = [
     [/schedule$/, T.MH.SCHEDULE, NAV_SECTION_ICON.SCHEDULE],
     [/planner$/, T.MH.PLANNER, NAV_SECTION_ICON.PLANNER],
-    [/boards$/, T.MH.BOARDS, NAV_SECTION_ICON.BOARDS],
+    // `/boards` or one view, `/boards/<id>` (titled with the view, see below).
+    [/^\/boards(\/[^/]+)?$/, T.MH.BOARDS, NAV_SECTION_ICON.BOARDS],
     [/habits$/, T.MH.HABITS, NAV_SECTION_ICON.HABITS],
     [/search$/, T.MH.SEARCH, NAV_SECTION_ICON.SEARCH],
     [/scheduled-list$/, T.WW.RECURRING_TASKS, NAV_SECTION_ICON.RECURRING_TASKS],
@@ -421,7 +476,10 @@ export class PageTitleComponent {
     PageTitleComponent._ROUTE_SECTIONS.find(([re]) => re.test(this._url())),
   );
   private _routeTitleKey = computed(() => this._routeSection()?.[1]);
-  sectionIcon = computed(() => this._routeSection()?.[2]);
+  sectionIcon = computed(() => {
+    const viewBoard = this.viewBoard();
+    return viewBoard ? getViewIcon(viewBoard) : this._routeSection()?.[2];
+  });
 
   // Plugin pages are titled like the built-in sections, with the label and
   // icon of the plugin's nav entry.
@@ -438,10 +496,24 @@ export class PageTitleComponent {
     return icon && !/\.svg$/i.test(icon) ? icon : 'extension';
   });
 
+  // The view (board) a `/boards/<id>` page shows: titled with its own title
+  // (default views use keys) and icon, with its menu in the title bar.
+  viewBoard = computed(() => {
+    const id = this._url().match(/^\/boards\/([^/]+)$/)?.[1];
+    return id
+      ? this._boards().find((board) => board.id === decodeURIComponent(id))
+      : undefined;
+  });
+  private _boardTitle = computed(() => this.viewBoard()?.title);
+
   isSpecialSection = computed(() => !!this._routeSection() || !!this.pluginId());
   isWorkViewPage = computed(() => /tasks$/.test(this._url()));
 
   displayTitle = computed(() => {
+    const boardTitle = this._boardTitle();
+    if (boardTitle) {
+      return this._translateService.instant(boardTitle);
+    }
     const key = this._routeTitleKey();
     if (key) {
       return this._translateService.instant(key);
