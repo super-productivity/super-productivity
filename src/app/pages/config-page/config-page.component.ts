@@ -48,6 +48,9 @@ import { getAppVersionStr } from '../../util/get-app-version-str';
 import { UpdateCheckService } from '../../core/update-check/update-check.service';
 import { isUpdateCheckPossible } from '../../core/update-check/is-update-check-possible.util';
 import { ConfigSectionComponent } from '../../features/config/config-section/config-section.component';
+import { ConfigFormComponent } from '../../features/config/config-form/config-form.component';
+import { TIME_TRACKING_SWITCH_FORM_ITEM } from '../../features/config/form-cfgs/app-features-form.const';
+import { FormlyFieldConfig } from '@ngx-formly/core';
 import { ConfigSoundFormComponent } from '../../features/config/config-sound-form/config-sound-form.component';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { SyncProviderManager } from '../../op-log/sync-providers/provider-manager.service';
@@ -103,6 +106,7 @@ const TAB_ANIMATION_DURATION_MS = 200;
   imports: [
     ThemeSelectorComponent,
     ConfigSectionComponent,
+    ConfigFormComponent,
     ConfigSoundFormComponent,
     TranslatePipe,
     PluginManagementComponent,
@@ -161,6 +165,10 @@ export class ConfigPageComponent implements OnInit {
   generalFormCfg: ConfigFormConfig;
   globalTasksFormCfg: ConfigFormConfig;
   timeTrackingFormCfg: ConfigFormConfig;
+  /** The App Features time tracking switch, repeated atop the Time Tracking tab. */
+  readonly timeTrackingSwitchFormCfg: FormlyFieldConfig[] = [
+    TIME_TRACKING_SWITCH_FORM_ITEM,
+  ];
   pluginsShortcutsFormCfg: ConfigFormConfig;
   globalImexFormCfg: ConfigFormConfig;
   globalProductivityConfigFormCfg: ConfigFormConfig;
@@ -449,6 +457,13 @@ export class ConfigPageComponent implements OnInit {
     }
 
     this.configService.updateSection(sectionKey, config);
+  }
+
+  saveTimeTrackingSwitch($event: { config: unknown }): void {
+    this.saveGlobalCfg({
+      sectionKey: 'appFeatures',
+      config: $event.config as Record<string, unknown>,
+    });
   }
 
   /**

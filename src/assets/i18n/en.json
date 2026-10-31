@@ -2595,7 +2595,7 @@
       "SEARCH_HINT": "Find any task, including archived ones, and your notes. Opens from the side menu or a keyboard shortcut.",
       "SYNC_BUTTON": "Sync button",
       "SYNC_BUTTON_HINT": "Shows a button in the header to start syncing manually and see the sync status.",
-      "TIME_TRACKING": "Stopwatch time tracking",
+      "TIME_TRACKING": "Time tracking",
       "TIME_TRACKING_HINT": "The play button for starting and stopping a timer on the current task to track how long you work on it.",
       "TITLE": "App Features"
     },
