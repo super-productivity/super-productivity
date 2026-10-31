@@ -1341,6 +1341,49 @@ the ~320px of content).
   with several sections collapse to their title and a rule summary, one
   open at a time.
 
+### Added after the plan review (user feedback)
+
+User feedback (2026-10-31), during implementation: "We still lack a proper
+transition animation when we click save view. Especially on mobile it's
+disorienting. It's not clear we are on a new list." And: the per-column edit
+button is replaced by the column's title.
+
+- **Arrival of a created view.** `BoardsService` remembers the id of a view
+  it just created (Create from the side menu or the empty page, Save as
+  view…, Duplicate; local signal, not stored) and opens it through one
+  `_openCreated()`. `viewSwitch` takes params: its one transition also
+  accepts `void => id` when `isArrival` is set, so the new view enters from
+  the empty `/boards` page and, from another page, after `warpRoute` brought
+  the page in (its `animateChild()` runs the board's enter). Motion: the
+  project-change zoom (`scale(1.2)` + fade) on wider screens; below `xs` it
+  comes in from the right (`translateX(25%)` + fade), both `ANI_ENTER_TIMING`.
+  The board's `(@viewSwitch.done)` for that id clears the arrival, so later
+  switches to it are ordinary. The in-app **Disable animations** setting
+  covers it like every trigger inside `app-root`.
+- **A snack names the new view** ("View "{{title}}" created",
+  `F.BOARDS.V.VIEW_CREATED`, `SUCCESS`, no action): on phones the side menu,
+  where its row appears, is hidden.
+- **Column titles edit their column.** The board column header loses its
+  pencil; its title is a `role="button"` with `tabindex="0"`, Enter/Space,
+  the `.focus-ring` utility and the tooltip "Edit column"
+  (`F.BOARDS.V.EDIT_COLUMN`), the title staying its accessible name. It
+  opens the editor with that column's section open:
+  `BoardsService.editBoard(board, panelId)` → dialog data `openPanelId` →
+  `board-edit` → `view-editor`'s `initialOpenPanelId`, which seeds
+  `openPanelId` (an unknown id falls back to the first). List-layout
+  sections keep their header as the collapse toggle. The keyboard: an empty
+  column without a "+" focuses its title, and ArrowLeft/Right leave the title
+  sideways like the "+"; `addButton()` stays the "+" (focus recovery after
+  the add bar and the bulk-action fallback depend on it). The header keeps
+  its height without buttons.
+- Tests: `boards.service.spec` (arrival, snack, `openPanelId`),
+  `boards.component.spec` (arrival params, cleared once),
+  `board-panel.component.spec` (title button, focus, arrows),
+  `board-edit.component.spec` (the asked-for card opens); E2E: a column's
+  title opens the editor with that column open and no Edit button in the
+  header; a created view shows the snack. `board-keyboard-navigation` and
+  `issue-7380` click the column title (`columnTitleButton`).
+
 ## Review
 
 Plan review (fresh-context subagent, 2026-10-30). Fixed in this revision:
