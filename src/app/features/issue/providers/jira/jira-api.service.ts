@@ -345,6 +345,23 @@ export class JiraApiService {
     });
   }
 
+  updateIssueFields$(
+    issueId: string,
+    fields: Record<string, unknown>,
+    cfg: JiraCfg,
+  ): Observable<unknown> {
+    return this._sendRequest$({
+      jiraReqCfg: {
+        pathname: `issue/${issueId}`,
+        method: 'PUT',
+        body: {
+          fields,
+        },
+      },
+      cfg,
+    });
+  }
+
   addWorklog$({
     issueId,
     started,
