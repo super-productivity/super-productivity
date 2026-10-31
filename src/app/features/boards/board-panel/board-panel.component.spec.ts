@@ -2062,13 +2062,15 @@ describe('BoardPanelComponent - add button lookup', () => {
     return fixture;
   };
 
-  it('is the header "+", before the edit button, also while the add-task bar is open', async () => {
+  it('is the header "+", at its end, also while the add-task bar is open', async () => {
     const fixture = await setupColumn();
     const component = fixture.componentInstance;
     const el = fixture.nativeElement as HTMLElement;
     const add = component.addButton()!;
     expect(add.parentElement?.tagName).toBe('HEADER');
-    expect(add.nextElementSibling?.getAttribute('aria-label')).toBe(T.G.EDIT);
+    // The column's title edits it; there is no separate edit button.
+    expect(add.parentElement?.lastElementChild).toBe(add);
+    expect(el.querySelector(`header [aria-label="${T.G.EDIT}"]`)).toBeNull();
     expect(add.getAttribute('aria-label')).toBe(T.F.BOARDS.V.ADD_TASK_TO);
     expect(el.querySelector('add-task-inline')).toBeNull();
 
@@ -2108,5 +2110,46 @@ describe('BoardPanelComponent - add button lookup', () => {
   it('is absent where the column takes no new tasks', async () => {
     const fixture = await setupColumn({ dueState: 'overdue' });
     expect(fixture.componentInstance.addButton()).toBeNull();
+  });
+
+  describe("the column's title", () => {
+    it('is a button named by the title that edits the column', async () => {
+      const fixture = await setupColumn();
+      const el = fixture.nativeElement as HTMLElement;
+      const edits: unknown[] = [];
+      fixture.componentInstance.editColumn.subscribe((v) => edits.push(v));
+      const title = el.querySelector<HTMLElement>('header > .title')!;
+      expect(title.getAttribute('role')).toBe('button');
+      expect(title.getAttribute('tabindex')).toBe('0');
+      expect(title.hasAttribute('aria-label')).toBeFalse();
+      expect(title.textContent?.trim()).toBe('Todo');
+
+      title.click();
+      title.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+      const space = new KeyboardEvent('keydown', { key: ' ', cancelable: true });
+      title.dispatchEvent(space);
+      expect(edits.length).toBe(3);
+      expect(space.defaultPrevented).toBeTrue();
+    });
+
+    it('takes the focus in an empty column without a "+"', async () => {
+      const fixture = await setupColumn({ dueState: 'overdue' });
+      const el = fixture.nativeElement as HTMLElement;
+      document.body.appendChild(el);
+      fixture.componentInstance.focusRow(0);
+      expect(document.activeElement).toBe(el.querySelector('header > .title'));
+      el.remove();
+    });
+
+    it('leaves sideways with the arrow keys', async () => {
+      const fixture = await setupColumn();
+      const el = fixture.nativeElement as HTMLElement;
+      const jumps: unknown[] = [];
+      fixture.componentInstance.adjacentPanel.subscribe((v) => jumps.push(v));
+      el.querySelector('header > .title')!.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }),
+      );
+      expect(jumps).toEqual([{ direction: 1, rowIndex: 0 }]);
+    });
   });
 });

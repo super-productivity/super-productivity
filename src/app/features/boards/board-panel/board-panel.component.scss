@@ -104,6 +104,8 @@ header {
   padding-right: var(--s-half);
   display: flex;
   align-items: center;
+  // As tall with or without the "+": the title alone is a button too.
+  min-height: calc(var(--s5) + 2 * var(--s-half));
 
   //@include mousePrimaryDevice() {
   //  button {
@@ -130,8 +132,23 @@ header {
     letter-spacing: var(--letter-spacing-wide);
     color: var(--text-color-muted);
     // `auto` (not a fixed gap): the meta next to it is omitted when the panel is
-    // empty, so the title has to be what pushes the edit button to the far edge.
+    // empty, so the title has to be what pushes the "+" to the far edge.
     margin-right: auto;
+
+    // A button (it opens the editor): the header's height to tap, inset a
+    // little so the focus ring doesn't touch the text.
+    align-self: stretch;
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    padding-inline: var(--s-half);
+    margin-left: calc(-1 * var(--s-half));
+    border-radius: var(--card-border-radius);
+    cursor: pointer;
+
+    &:hover {
+      color: var(--text-color);
+    }
   }
 
   .tasks-total-estimate {

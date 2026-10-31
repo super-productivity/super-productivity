@@ -73,13 +73,14 @@ export class BoardsService {
       });
   }
 
-  async editBoard(board: BoardCfg): Promise<void> {
+  /** `panelId`: the section or column to show open (a column's title). */
+  async editBoard(board: BoardCfg, panelId?: string): Promise<void> {
     const { DialogBoardEditComponent } =
       await import('./dialog-board-edit/dialog-board-edit.component');
     this._matDialog.open(DialogBoardEditComponent, {
       restoreFocus: true,
       panelClass: 'fullscreen-xs-dialog',
-      data: { board },
+      data: panelId ? { board, openPanelId: panelId } : { board },
     });
   }
 

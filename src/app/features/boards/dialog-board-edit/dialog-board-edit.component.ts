@@ -41,6 +41,8 @@ export class DialogBoardEditComponent {
     isCreate?: boolean;
     // Translation keys shown above the form, e.g. what "Save as view" drops.
     hints?: string[];
+    // The section or column shown open (default: the first).
+    openPanelId?: string;
   }>(MAT_DIALOG_DATA);
   boarEditCmp = viewChild('boarEditCmp', { read: BoardEditComponent });
 

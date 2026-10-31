@@ -102,7 +102,19 @@
   </ng-template>
 } @else {
   <header>
-    <div class="title">{{ panelCfg().title | translate }}</div>
+    <!-- The column's title opens the view editor with this column open, like
+         the view's title in the title bar: a button named by the title. -->
+    <div
+      class="title focus-ring"
+      role="button"
+      tabindex="0"
+      [matTooltip]="T.F.BOARDS.V.EDIT_COLUMN | translate"
+      (click)="editColumn.emit()"
+      (keydown.enter)="editColumn.emit()"
+      (keydown.space)="$event.preventDefault(); editColumn.emit()"
+    >
+      {{ panelCfg().title | translate }}
+    </div>
     @if (headerCount()) {
       <div class="tasks-total-estimate">
         @if (totalEstimate()) {
@@ -115,13 +127,6 @@
     @if (!isAddTaskHidden()) {
       <ng-container [ngTemplateOutlet]="addTaskBtnTpl"></ng-container>
     }
-    <button
-      mat-icon-button
-      (click)="editBoard.emit()"
-      [attr.aria-label]="T.G.EDIT | translate"
-    >
-      <mat-icon>edit</mat-icon>
-    </button>
   </header>
 
   <ng-container [ngTemplateOutlet]="addBarTpl"></ng-container>
@@ -185,7 +190,8 @@
 }
 
 <!-- The header "+" of a section or column: opens the add bar at its top. It is
-     the keyboard's target in an empty column (`addButton()`). -->
+     the keyboard's target in an empty column (`addButton()`; without it, the
+     column's title). -->
 <ng-template
   #addTaskBtnTpl
   let-isInSectionHeader

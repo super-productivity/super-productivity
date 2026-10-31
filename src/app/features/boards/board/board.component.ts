@@ -154,8 +154,9 @@ export class BoardComponent {
     }
   }
 
-  editBoard(): void {
-    this._boardsService.editBoard(this.boardCfg());
+  /** `panelId`: the column whose title was clicked, shown open. */
+  editBoard(panelId?: string): void {
+    void this._boardsService.editBoard(this.boardCfg(), panelId);
   }
 
   protected readonly T = T;

@@ -163,6 +163,8 @@ export class BoardPanelComponent implements TaskCardList, ViewTaskListHost {
   // List layout with several panels: this panel is one section of the list.
   isSection = input<boolean>(false);
   editBoard = output<void>();
+  /** A column's title: edit the view with this column open. */
+  editColumn = output<void>();
   adjacentPanel = output<BoardPanelNavigation>();
 
   store = inject(Store);
@@ -246,6 +248,17 @@ export class BoardPanelComponent implements TaskCardList, ViewTaskListHost {
     );
   }
 
+  /**
+   * A column's title (a button that opens the editor). With the "+" it is a
+   * header stop the arrow keys leave sideways; it takes the focus in an empty
+   * column that has no "+".
+   */
+  private _columnTitle(): HTMLElement | null {
+    return this._element.nativeElement.querySelector<HTMLElement>(
+      ':scope > header > .title',
+    );
+  }
+
   // Local only, never synced: the add-task bar at the top of this panel.
   readonly isAddOpen = signal(false);
 
@@ -286,7 +299,8 @@ export class BoardPanelComponent implements TaskCardList, ViewTaskListHost {
         (rows.find((row) => row.dataset.taskId === taskId) ||
           this._nestedListRow(taskId))) ||
       rows[Math.min(index, rows.length - 1)] ||
-      this.addButton();
+      this.addButton() ||
+      this._columnTitle();
     target?.focus();
     target?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   }
@@ -317,7 +331,7 @@ export class BoardPanelComponent implements TaskCardList, ViewTaskListHost {
   @HostListener('keydown', ['$event'])
   onAddButtonKeydown(event: KeyboardEvent): void {
     if (
-      event.target !== this.addButton() ||
+      (event.target !== this.addButton() && event.target !== this._columnTitle()) ||
       event.ctrlKey ||
       event.altKey ||
       event.metaKey ||

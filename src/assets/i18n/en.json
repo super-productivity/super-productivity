@@ -224,6 +224,7 @@
         "CREATE_NEW_TAG_BTN": "Create Tag",
         "CREATE_NEW_TAGS_BTN": "Create Tags",
         "EDIT_BOARD": "Edit view",
+        "EDIT_COLUMN": "Edit column",
         "EMPTY_VIEW_ADD": "Add task",
         "EMPTY_VIEW_HINT": "Tasks show up here once they match the view's rules. Add one, or change the rules.",
         "FILTER_DIFFERS_PER_SECTION": "Differs per section, edit the view",

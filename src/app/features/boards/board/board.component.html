@@ -43,6 +43,7 @@
     [isListLayout]="isListLayout()"
     [isSection]="isSectioned()"
     (editBoard)="editBoard()"
+    (editColumn)="editBoard(panel.id)"
     (adjacentPanel)="adjacentPanel(panel.id, $event)"
   ></board-panel>
 }

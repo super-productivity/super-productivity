@@ -58,7 +58,7 @@ test.describe('Boards #7498 — Kanban', () => {
     // retries until the state settles after the toggle animation.
     const donePanel = page
       .locator('board-panel')
-      .filter({ has: page.locator('header .title', { hasText: /^done$/i }) })
+      .filter({ has: page.locator('header .title', { hasText: /^\s*done\s*$/i }) })
       .first();
     await expect(
       donePanel.locator('planner-task').filter({ hasText: taskName }).first(),

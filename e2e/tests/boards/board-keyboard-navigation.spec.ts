@@ -3,6 +3,7 @@ import { expect, test } from '../../fixtures/test.fixture';
 import { waitForMenuSettled, waitForStatePersistence } from '../../utils/waits';
 import {
   addViewRule,
+  columnTitleButton,
   createView,
   saveViewEditor,
   setViewSort,
@@ -18,10 +19,6 @@ const openKanban = async (page: Page): Promise<void> => {
 /** A column's header "+", the arrow keys' target in an empty column. */
 const addButton = (panel: Locator): Locator =>
   panel.locator('header').getByRole('button', { name: /^Add task to / });
-
-/** A column's edit button. */
-const editButton = (panel: Locator): Locator =>
-  panel.locator('header').getByRole('button', { name: 'Edit', exact: true });
 
 test.describe('Board keyboard navigation', () => {
   test('keeps task focus while moving up and down within and between vertical panels', async ({
@@ -194,7 +191,7 @@ test.describe('Board keyboard navigation', () => {
       await page.keyboard.press('Enter');
     }
     await page.keyboard.press('Escape');
-    await editButton(todo).click();
+    await columnTitleButton(todo, 'To Do').click();
     const editor = page.locator('dialog-board-edit');
     // In progress only shows planned tasks.
     await addViewRule(page, viewEditorSection(editor, 1), {
@@ -269,8 +266,13 @@ test.describe('Board keyboard navigation', () => {
     await expect(second.nth(1)).toContainText('Alpha');
     await expect(first.nth(0)).toContainText('Alpha');
 
-    await editButton(panels.nth(1)).click();
+    await columnTitleButton(panels.nth(1), 'Second panel').click();
     const dialog = page.locator('dialog-board-edit');
+    // The clicked column's section is the open one.
+    await expect(viewEditorSection(dialog, 1).locator('.section-toggle')).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
     await setViewSort(page, viewEditorSection(dialog, 1), 'Title');
     await saveViewEditor(dialog);
     await expect(second.first()).toContainText('Alpha');

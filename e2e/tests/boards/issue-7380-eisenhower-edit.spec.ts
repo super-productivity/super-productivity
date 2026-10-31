@@ -1,5 +1,10 @@
 import { expect, test } from '../../fixtures/test.fixture';
-import { saveViewEditor, setViewSort, viewEditorSection } from '../../utils/view-helpers';
+import {
+  columnTitleButton,
+  saveViewEditor,
+  setViewSort,
+  viewEditorSection,
+} from '../../utils/view-helpers';
 
 /**
  * Regression for #7380: editing the default Eisenhower Matrix view and saving
@@ -23,13 +28,13 @@ test.describe('Boards — Eisenhower Matrix edit dialog (#7380)', () => {
       await createTagsBtn.click();
     }
 
-    // Open the edit dialog via the per-panel edit (pencil) button.
-    const firstPanelEditBtn = page
-      .locator('board-panel header')
-      .first()
-      .getByRole('button', { name: 'Edit', exact: true });
-    await expect(firstPanelEditBtn).toBeVisible({ timeout: 10000 });
-    await firstPanelEditBtn.click();
+    // Open the edit dialog via the first column's title.
+    const firstColumnTitle = columnTitleButton(
+      page.locator('board-panel').first(),
+      'Urgent & Important',
+    );
+    await expect(firstColumnTitle).toBeVisible({ timeout: 10000 });
+    await firstColumnTitle.click();
 
     const dialog = page.locator('dialog-board-edit');
     await expect(dialog).toBeVisible({ timeout: 5000 });
@@ -45,7 +50,7 @@ test.describe('Boards — Eisenhower Matrix edit dialog (#7380)', () => {
     await saveViewEditor(dialog);
 
     // The sort is stored on that quadrant.
-    await firstPanelEditBtn.click();
+    await firstColumnTitle.click();
     await expect(
       viewEditorSection(dialog, 0).getByRole('combobox', {
         name: 'Sort by',

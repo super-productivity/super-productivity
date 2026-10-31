@@ -24,6 +24,13 @@ export const openViewEditor = async (page: Page): Promise<Locator> => {
   return dialog;
 };
 
+/**
+ * A board column's title, a button that opens the view editor with that
+ * column's section open.
+ */
+export const columnTitleButton = (panel: Locator, title: string): Locator =>
+  panel.locator('header').getByRole('button', { name: title, exact: true });
+
 /** A view row of the side menu's Views section, by view id. */
 export const sideNavViewRow = (page: Page, viewId: string): Locator =>
   page.locator(`nav-view-group [data-view-id="${viewId}"]`);

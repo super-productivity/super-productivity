@@ -33,6 +33,8 @@ export class BoardEditComponent {
 
   /** The stored board; a new one has no id yet. */
   readonly board = input.required<BoardCfg>();
+  /** The section or column shown open (default: the first). */
+  readonly openPanelId = input<string | undefined>(undefined);
   readonly afterSave = output<string>();
 
   readonly isEdit = computed(() => !!this.board().id);

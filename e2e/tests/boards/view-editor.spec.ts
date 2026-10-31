@@ -2,6 +2,7 @@ import { Locator, Page } from '@playwright/test';
 import { expect, test } from '../../fixtures/test.fixture';
 import {
   addViewRule,
+  columnTitleButton,
   createView,
   fillViewEditor,
   openCreateViewDialog,
@@ -288,6 +289,28 @@ test.describe('View editor', () => {
     await expect(toggles.nth(0)).toHaveAttribute('aria-expanded', 'false');
     await expect(done.locator('[data-rule="done"]')).toBeVisible();
     await expect(viewEditorSection(dialog, 0).locator('.rule-row')).toHaveCount(0);
+  });
+
+  test("a column's title opens the editor with that column open", async ({
+    page,
+    workViewPage,
+  }) => {
+    await workViewPage.waitForTaskList();
+    await page.goto('/#/boards/KANBAN_DEFAULT');
+    const done = page.locator('boards board-panel').nth(2);
+    await expect(done).toBeVisible();
+    // No edit button of its own: the title is it.
+    await expect(
+      done.locator('header').getByRole('button', { name: 'Edit', exact: true }),
+    ).toHaveCount(0);
+
+    await columnTitleButton(done, 'Done').click();
+    const dialog = page.locator('dialog-board-edit');
+    await expect(dialog).toBeVisible();
+    const toggles = dialog.locator('view-editor-section .section-toggle');
+    await expect(toggles.nth(2)).toHaveAttribute('aria-expanded', 'true');
+    await expect(toggles.nth(0)).toHaveAttribute('aria-expanded', 'false');
+    await expect(page).toHaveURL(/#\/boards\/KANBAN_DEFAULT$/);
   });
 
   test('a created view arrives with a snack naming it', async ({

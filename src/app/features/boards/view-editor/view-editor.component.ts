@@ -88,6 +88,8 @@ export class ViewEditorComponent {
   readonly board = input.required<BoardCfg>();
   /** A new view starts with one section. */
   readonly isNew = input<boolean>(false);
+  /** The section shown open when the editor opens (default: the first). */
+  readonly initialOpenPanelId = input<string | undefined>(undefined);
 
   protected readonly T = T;
   protected readonly LAYOUT_OPTIONS = LAYOUT_OPTIONS;
@@ -118,12 +120,19 @@ export class ViewEditorComponent {
 
   /**
    * The section card that shows its rules when there are several (one at a
-   * time): the first when the editor opens, a new or duplicated one once added;
-   * none after removing the open one. Kept by id when moving.
+   * time): the one asked for (a column's title) or the first when the editor
+   * opens, a new or duplicated one once added; none after removing the open
+   * one. Kept by id when moving.
    */
-  readonly openPanelId = linkedSignal<BoardCfg, string | null>({
-    source: this.board,
-    computation: (board) => board.panels[0]?.id ?? null,
+  readonly openPanelId = linkedSignal<
+    { board: BoardCfg; initialId: string | undefined },
+    string | null
+  >({
+    source: () => ({ board: this.board(), initialId: this.initialOpenPanelId() }),
+    computation: ({ board, initialId }) =>
+      (initialId && board.panels.some((panel) => panel.id === initialId)
+        ? initialId
+        : board.panels[0]?.id) ?? null,
   });
   readonly isCollapsible = computed(() => this.model().panels.length > 1);
 

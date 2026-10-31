@@ -99,11 +99,15 @@ describe('BoardEditComponent with the view editor', () => {
     await fixture.whenStable();
     fixture.detectChanges();
   };
-  const open = async (board: BoardCfg): Promise<BoardEditComponent> => {
+  const open = async (
+    board: BoardCfg,
+    openPanelId?: string,
+  ): Promise<BoardEditComponent> => {
     opened = board;
     boards.set(board.id ? [board] : []);
     fixture = TestBed.createComponent(BoardEditComponent);
     fixture.componentRef.setInput('board', board);
+    fixture.componentRef.setInput('openPanelId', openPanelId);
     await settle();
     return fixture.componentInstance;
   };
@@ -477,6 +481,13 @@ describe('BoardEditComponent with the view editor', () => {
       ]);
       expect(second.querySelector('[data-rule]')).toBeNull();
       expect(second.querySelector('.count')).toBeNull();
+    });
+
+    it("opens the card asked for (a column's title), else the first", async () => {
+      await open(three, 'c');
+      expect(openCards()).toEqual([false, false, true]);
+      await open(three, 'gone');
+      expect(openCards()).toEqual([true, false, false]);
     });
 
     it('keeps one card open at a time', async () => {

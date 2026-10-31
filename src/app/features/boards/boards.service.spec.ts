@@ -101,6 +101,15 @@ describe('BoardsService', () => {
     expect(service.arrivalId()).toBeNull();
   });
 
+  it('opens the edit dialog with a column open', async () => {
+    await service.editBoard(board, 'p1');
+    expect(open).toHaveBeenCalledOnceWith(DialogBoardEditComponent, {
+      restoreFocus: true,
+      panelClass: 'fullscreen-xs-dialog',
+      data: { board, openPanelId: 'p1' },
+    });
+  });
+
   it('stays put when the create dialog is cancelled', async () => {
     appFeatures.set({ isBoardsEnabled: false });
     await service.createBoard();
