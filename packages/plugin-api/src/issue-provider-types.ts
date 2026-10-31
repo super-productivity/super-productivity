@@ -19,6 +19,10 @@ export interface PluginSearchResult {
   duration?: number;
   /** True if this is an all-day event */
   isAllDay?: boolean;
+  /** Deadline date as YYYY-MM-DD string. For date-only deadlines (Frist). */
+  deadlineDay?: string;
+  /** Deadline timestamp (ms). For deadlines with a specific time (Frist). */
+  deadlineWithTime?: number;
   /** Event description / body text */
   description?: string;
   /** Color of the event's calendar, used to tell calendars apart in agenda views:
@@ -88,6 +92,8 @@ export interface PluginFieldMapping {
     | 'notes'
     | 'dueDay'
     | 'dueWithTime'
+    | 'deadlineDay'
+    | 'deadlineWithTime'
     | 'timeEstimate'
     | 'tagIds';
   issueField: string;
