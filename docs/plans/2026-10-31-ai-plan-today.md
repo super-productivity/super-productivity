@@ -614,7 +614,16 @@ reordering Today, saved views, sending audio to a model.
 
 **Open questions for the maintainer**
 
-1. Name and default key for the shortcut.
+1. Name and key. **Recommended:** list it as **AI Command** (plugin id
+   `ai-command`, permanent once published). "AI" up front, so people who don't
+   want AI can skip it at a glance; "Command", because it acts and is not a
+   chat. Panel placeholder: "Add, change or find tasks…" plus the platform's
+   dictation hint. **No default key:** plugin shortcuts can't carry one
+   (`PluginShortcutCfg` has no key field); setup offers to bind one and
+   suggests Ctrl+Shift+K (free in SP's defaults; Ctrl+K is a common
+   command-palette key). The shortcut works only while SP is focused; a
+   system-wide key (like `globalShowHide`) would be a host change, later and
+   only on demand.
 
 **Decided (maintainer, 2026-10-31):**
 
