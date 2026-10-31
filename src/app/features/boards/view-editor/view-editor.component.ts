@@ -234,6 +234,19 @@ export class ViewEditorComponent {
     return toSavedBoard(this.model(), this.board(), this._translate);
   }
 
+  /**
+   * What saving without any change would store: the baseline for what the
+   * user changed. It differs from the stored board where saving normalizes
+   * (defaults filled in, a date rule's "scheduled"), which the user didn't do.
+   */
+  buildUntouchedBoard(): BoardCfg {
+    return toSavedBoard(
+      toEditorDisplayModel(this.board(), this._translate),
+      this.board(),
+      this._translate,
+    );
+  }
+
   private _field(
     ngModel: NgModel | undefined,
     matInput: MatInput | undefined,

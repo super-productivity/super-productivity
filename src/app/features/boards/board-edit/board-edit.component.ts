@@ -49,9 +49,11 @@ export class BoardEditComponent {
       return;
     }
     if (this.isEdit()) {
-      // The dialog edits a copy of the board as it was when it opened.
+      // The dialog edits a copy of the board as it was when it opened, so
+      // what changed is measured against saving that copy untouched.
       const current = this._boards().find((b) => b.id === board.id);
-      const updates = current && getViewUpdates(this.board(), board, current);
+      const updates =
+        current && getViewUpdates(this._editor().buildUntouchedBoard(), board, current);
       // A view deleted meanwhile (e.g. by sync) isn't brought back.
       if (updates) {
         this._store.dispatch(BoardsActions.updateBoard({ id: board.id, updates }));

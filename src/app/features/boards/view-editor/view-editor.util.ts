@@ -489,9 +489,9 @@ export const toSavedBoard = (
 };
 
 /**
- * What saving `saved` changes: only the fields that differ from the board the
- * editor opened, so a field synced in meanwhile that the editor didn't touch
- * stays. Changed panels keep the task order they have now, not the one the
+ * What saving `saved` changes: only the fields that differ from `opened`, what
+ * an untouched save of the board the editor opened stores, so a field synced
+ * in meanwhile that the editor didn't touch stays. Changed panels keep the task order they have now, not the one the
  * editor opened with (a reorder synced in while it was open). Null when the
  * save changes nothing.
  */

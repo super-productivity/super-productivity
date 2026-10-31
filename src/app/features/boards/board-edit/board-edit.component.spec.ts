@@ -127,13 +127,26 @@ describe('BoardEditComponent with the view editor', () => {
   describe('an untouched save stores the board unchanged', () => {
     for (const f of UNTOUCHED_SAVE_FIXTURES) {
       it(f.name, async () => {
-        (await open(f.board)).save();
-        // At most one op, and none when the stored board is already as saved.
-        expect(dispatch.calls.count()).toBeLessThanOrEqual(1);
-        expect(savedBoard()).toEqual({ ...f.board, ...f.saved });
+        const cmp = await open(f.board);
+        // What saving stores: the board as `normalizeBoardForSave` keeps it.
+        expect(editor().buildBoard()).toEqual(f.saved);
         expect(f.saved).toEqual(normalizeBoardForSave(toEditorModel(f.board)));
+        // Nothing changed, so no op, even where saving would normalize.
+        cmp.save();
+        expect(dispatch).not.toHaveBeenCalled();
       });
     }
+
+    it('sends only a rename for a board saving would normalize', async () => {
+      const f = UNTOUCHED_SAVE_FIXTURES.find((x) => x.saved !== x.board)!;
+      const cmp = await open(f.board);
+      editor().setTitle('Renamed');
+      await settle();
+      cmp.save();
+      expect(dispatch).toHaveBeenCalledOnceWith(
+        BoardsActions.updateBoard({ id: f.board.id, updates: { title: 'Renamed' } }),
+      );
+    });
 
     it('keeps the title keys of a default view in another language', async () => {
       const translate = TestBed.inject(TranslateService);
@@ -148,8 +161,9 @@ describe('BoardEditComponent with the view editor', () => {
       ).map((input) => (input as HTMLInputElement).value);
       expect(titles).toContain('Kanban-Tafel');
       expect(titles).toContain('Zu erledigen');
+      expect(editor().buildBoard()).toEqual(kanban);
       fixture.componentInstance.save();
-      expect(savedBoard()).toEqual(kanban);
+      expect(dispatch).not.toHaveBeenCalled();
     });
   });
 
