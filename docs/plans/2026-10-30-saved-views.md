@@ -728,6 +728,120 @@ These override the parts above where they differ.
   save-as-view from a tag list grouped by tag keeps tasks that carry only the
   list's tag; a tag created after saving shows in "Other".
 
+## 13. Phase 5 — a friendlier view editor
+
+Asked 2026-10-31: "make the boards config UI more user friendly". This is a UI
+change only: the stored `BoardCfg`, the save path (`normalizeBoardForSave`,
+one `addBoard`/`updateBoard` op) and the dialog's API stay as they are.
+
+### What is wrong today (screenshots of the create dialog)
+
+1. A new view opens with **no section**. You have to find "Add new Panel" at
+   the bottom before anything shows.
+2. The title shows **"This field is required" in red** before you type.
+3. **"Columns"** is a bare number. Whether it gives a list (1) or a board
+   (2+) isn't said anywhere.
+4. A section is a **narrow card of 15 stacked fields**, all shown even when
+   set to "Any": about 1300px of scrolling for one section. The fields you
+   need most (project, tags) sit next to rare ones (backlog, time spent),
+   with project near the bottom.
+5. **"Planned date" and "Scheduled State"** are two controls for one
+   question.
+6. **"Panel"** is jargon. Sections can't be told apart without reading every
+   field, and reordering hides in a ⋮ menu as "Move backward/forward".
+7. **No feedback** on what the rules match until you save.
+
+### Design
+
+- **A dedicated editor component** (`view-editor`, in `boards/`) replaces
+  the Formly form inside `board-edit`, so `dialog-board-edit` still reads a
+  validity flag and calls `save()`. It edits a copy of the board; values it
+  doesn't show (unknown rule values from newer clients, `taskIds`) are
+  carried through untouched.
+- **Top:**
+  - The view's title. Its required error shows only after the field was
+    touched.
+  - **Layout:** a two-option toggle, **List** (`cols: 1`) or **Board**. Board
+    shows a "Columns" number (2–6; it defaults to the number of sections,
+    capped at 6). A one-line hint says what the layout does: "Sections stack
+    in one task list" or "Columns side by side, tasks as cards".
+- **Sections** (List) or **Columns** (Board). The heading and the button
+  ("Add section" or "Add column") follow the layout; "panel" is no longer
+  used.
+  - A new view starts with one section, expanded.
+  - In a List with one section, that section's title is hidden, because
+    nothing shows it. On save it takes the view's title.
+- **A section card:**
+  - **Header:** the title (inline input), a one-line summary of its rules when
+    collapsed ("Not completed · Due today · #work · High priority"), the
+    live count ("12 tasks"), an expand toggle and a ⋮ menu (Move up, Move
+    down, Duplicate, Delete).
+  - **Body:** "Show tasks that match", listing only the rules that are set,
+    one row each (label, control, remove ✕). Then **"Add rule"**, a menu of
+    the rules not yet set, grouped:
+    - Where: Project, Backlog
+    - Tags: Required tags, Excluded tags, Without tags
+    - When: Planned date, Deadline
+    - Status: Completion, Only parent tasks
+    - Effort: Priority, Estimate, Time spent
+
+    Rule labels reuse the filter menu's wording.
+
+  - **Order:** below the rules, always visible (it isn't a rule): Sort
+    (Manual or a key), plus a direction toggle when sorted.
+
+- **Rule controls (same model fields as today):**
+  - **Project:** a multi-select. Empty means all projects (`['']`).
+  - **Required / Excluded tags:** `tag-edit` (what the Formly tag type
+    wraps), with the all/any toggle from two tags on.
+  - **Without tags:** no control (`isUntagged`). It hides the two tag rules
+    from the menu, and they hide it.
+  - **Completion:** Completed or Not completed. Removing the rule means All.
+  - **Planned date:** one select instead of two controls. "Has a date" maps
+    to Scheduled, "No date" to Not scheduled, and the date rules (Today,
+    Tomorrow, This week…) to `dueState`. That merges `dueState` with
+    `scheduledState`.
+  - **Deadline, Estimate, Time spent, Priority:** the existing option
+    lists.
+  - **Backlog:** Exclude backlog or Backlog only.
+  - **Only parent tasks:** no control.
+  - **Defaults when a rule is added:** the first useful option (Completion →
+    Not completed, Planned date → Today, Priority → High).
+  - An unknown stored value (from a newer client) shows as "Other (kept)"
+    and is saved unchanged unless changed.
+- **Live count:** per section, the number of tasks the rules match, through
+  the same engine as the view (`panelToCriteria` + `matchesTaskCriteria`).
+  The criteria context the panel builds (logical day, week start, backlog
+  ids, backlog-enabled projects) moves into one root service
+  (`ViewCriteriaContextService`) used by `BoardPanelComponent` and the
+  editor, so both count the same.
+- **Validation:** the view title is required. Section titles are required
+  when the view shows them (Board, or a List with several sections). Save is
+  disabled until valid; the first invalid field shows its error on Save.
+- **Mobile:** the dialog uses the full width on small screens. Section cards
+  are one column, and the rule rows wrap their control below the label.
+- **Out of scope:** templates or presets, icons and colors, editing several
+  views at once.
+
+### Tests
+
+- **Unit:**
+  - the editor's model mapping (planned-date select ↔ `dueState` +
+    `scheduledState`, rule add and remove ↔ fields, Without tags ↔ tags,
+    List ↔ `cols`, the single-section title);
+  - unknown values carried through;
+  - the summary text;
+  - the live count, against the panel's own filtering, for the same tasks;
+  - validation.
+- **E2E:**
+  - One helper in `e2e/utils/view-helpers.ts`
+    (`createView(page, { title, layout, sections: [{ title, rules, sort }] })`)
+    replaces the per-spec Formly steps in all board specs.
+  - New: create a List view with one section and a rule, check its live
+    count and the result; switch to Board and back; reorder and duplicate
+    a section; edit an existing view and keep a value the editor doesn't
+    show.
+
 ## Review
 
 Plan review (fresh-context subagent, 2026-10-30). Fixed in this revision:
