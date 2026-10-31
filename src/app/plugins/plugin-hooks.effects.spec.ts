@@ -716,6 +716,22 @@ describe('PluginHooksEffects', () => {
       expect(hookCalls()).toBe(2);
       sub.unsubscribe();
     }));
+
+    // The docs promise this so plugins can re-read getSelectedTask() on it;
+    // there is no separate selection hook.
+    it('fires when only the selected task changes', fakeAsync(() => {
+      const sub = effects.dataChanged$.subscribe();
+      gateSubject.next(true);
+      store.overrideSelector(selectTaskFeatureState, {
+        ids: ['a'],
+        entities: {},
+        selectedTaskId: 'a',
+      } as unknown as TaskState);
+      store.refreshState();
+      tick(1000);
+      expect(hookCalls()).toBe(1);
+      sub.unsubscribe();
+    }));
   });
 
   describe('dayChange$', () => {

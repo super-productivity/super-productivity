@@ -57,13 +57,13 @@ import { SyncTriggerService } from '../imex/sync/sync-trigger.service';
 import { selectPluginUserDataFeatureState } from './store/plugin-user-data.reducer';
 import { diffChangedPluginIds } from './util/plugin-data-diff.util';
 import { GlobalTrackingIntervalService } from '../core/global-tracking-interval/global-tracking-interval.service';
+import { BeforeFinishDayService } from '../features/before-finish-day/before-finish-day.service';
+import { PluginLog } from '../core/log';
 
 // Coalesces a sync batch or bulk action into one DATA_CHANGED call while
 // keeping views responsive. Time tracking updates the tracked task once a
 // second, so while it runs the hook fires about once a second.
 const DATA_CHANGED_AUDIT_MS = 250;
-import { BeforeFinishDayService } from '../features/before-finish-day/before-finish-day.service';
-import { PluginLog } from '../core/log';
 
 @Injectable()
 export class PluginHooksEffects {

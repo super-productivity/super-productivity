@@ -50,6 +50,12 @@ export enum PluginHooks {
   ANY_TASK_UPDATE = 'anyTaskUpdate',
   PROJECT_LIST_UPDATE = 'projectListUpdate',
   WORK_CONTEXT_CHANGE = 'workContextChange',
+  /**
+   * Tasks, projects or tags changed from any source (remote sync included), or
+   * the selected or tracked task changed. Coalesced; no payload. Refresh views
+   * only: it fires on every device for a synced change, so do not write data
+   * in response.
+   */
   DATA_CHANGED = 'dataChanged',
   DAY_CHANGE = 'dayChange',
 }
