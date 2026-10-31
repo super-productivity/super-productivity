@@ -1446,3 +1446,57 @@ After the phase 6 plan review (2026-10-31): the user found the "+ Add"
 button odd, so B now also replaces the board columns' add row with the
 header "+" (keyboard focus in an empty column moves to it). D stays cut as
 the review recommends.
+
+Phase 6 implementation review (fresh-context subagent, 2026-10-31). Checked
+`7bfd1c5..d0a048b` against §14 and the plan review; unit, type, lint and
+boards E2E runs green. Fixed:
+
+- B, one add bar at a time: the section "+" stopped its click so the section
+  wouldn't toggle, which also hid it from every other open add-task bar
+  (another section's, the global one), so two bars stayed open. Now it marks
+  the click handled (`preventDefault`) and `collapsible` skips handled header
+  clicks, as its keydown already skips projected actions. Unit tests for both,
+  and the sections E2E opens one section's bar, then another's.
+- B, a collapsed section kept `isAddOpen`: the bar came back and took focus on
+  the next expand. Collapsing now drops it.
+- B, the column header "+" and edit button were dimmed (opacity 0.7, a local
+  override of `mat-icon-button`), the section "+" was not. The override goes:
+  both headers use Material's own icon button, like the work view's section
+  actions. Screenshots `review-*` (1280 and 400px).
+
+Checked, not changed:
+
+- A's guard is complete: CDK enter predicates (`canEnter`), card drops,
+  keyboard and multi-select moves (`moveTasks`, also from the board's
+  `adjacentPanel`), list drops and the context menu's moves (`placeRow`,
+  `moveRow`), date changes (`_applyDateChanges`), existing tasks picked in an
+  add bar (`afterTaskAdd`), new tasks (`isAddTaskHidden`, `newTaskTarget` for
+  `ViewTaskListRegistry`) all go through `_changesToMatch`. Only ids the
+  change adds are checked, so a task already carrying a dangling id still
+  moves. `tagIdSet` is not in `ctx`; `task.component` is untouched.
+- The Done column keeps its "+": it had an add row before (done state never
+  made new tasks unreachable), and adding there logs a done task. Removing it
+  would be a behaviour change outside this phase.
+- `TASK_CARD_LIST_ADD_BTN_SELECTOR` matches only the header "+" (no button of
+  the add bar carries the marker); bulk focus recovery stays inside the board
+  column and planner scopes keep `add-task-inline`.
+- Translations: only `en.json` changed; `npm run int` regenerates the same
+  `t.const.ts`; the removed `CREATE_NEW_TAG(S)_MSG` keys have no users left
+  (other locales drop them through the i18n script).
+
+Not fixed:
+
+- "Any of" required tags: a new task gets the first one, so a panel whose
+  first required tag is missing hides its "+" even when a later one exists,
+  and an untagged task can't enter it. Safe (no dangling id), only over-blocks;
+  the default views don't use "any of".
+- A column without a "+" (missing tags, overdue) still gives the arrow keys
+  no focus target when empty. Known gap from §14, now visible on a fresh
+  Eisenhower Matrix (three empty quadrants); Tab still reaches the edit button.
+- An open bar whose panel stops taking new tasks (its tag deleted on another
+  device) hides but keeps `isAddOpen`; it would reopen if the tag came back.
+  Rare, harmless.
+- The section header is `role="button"` with the "+" inside it (nested
+  interactive control), the same pattern as the work view's section ⋮.
+- In a 280px column the add bar's action row scrolls sideways (the bar's own
+  layout).
