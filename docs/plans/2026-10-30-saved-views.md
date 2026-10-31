@@ -842,6 +842,127 @@ one `addBoard`/`updateBoard` op) and the dialog's API stay as they are.
     a section; edit an existing view and keep a value the editor doesn't
     show.
 
+### Revised after plan review (2026-10-31)
+
+These override the parts above where they differ.
+
+- **Untouched means unchanged (blocker).** `normalizeBoardForSave` expects
+  the editor model's `sortKey` to hold the sort key (it calls
+  `withPanelSortKey` with it): handing it a stored panel with
+  `sortBy: 'dueDate'` and no `sortKey` deletes the sort. So today's load mapping in
+  `BoardEditComponent.ngOnInit` (defaults spread, `sortKey` from
+  `getPanelSortKey`, unknown `sortKey` kept) becomes a pure
+  `toEditorModel(board)` in `boards.util.ts`, and save stays
+  `normalizeBoardForSave(model)`. Each panel is the stored panel spread, with
+  only the rules the user changed overwritten; unknown keys on panels and the
+  board survive the spread. Removing a rule deletes its key (required fields
+  go to their default: `taskDoneState: All`, `scheduledState: All`,
+  `isParentTasksOnly: false`, `projectIds: ['']`), never `null`/`undefined`.
+  Rule presence comes from stored values, not from what a control can show:
+  - **Project:** `select-project` is a Formly `FieldType` and can't be used
+    alone. The editor uses a plain `mat-select multiple` with
+    `select-option-row`, without an "All projects" option (no rule = all).
+    The rule is set when `projectIds` has any id but `''`, including ids of
+    deleted projects, which are kept and shown as "1 deleted project". Picking
+    every project stores those ids (today it collapses to `['']`, which also
+    takes future projects); clearing the selection removes the rule.
+  - **Tags:** `tag-edit` works without Formly (the task detail panel uses it
+    bare) and keeps ids it can't show on `remove()`. But it hides ids with no
+    tag, so the default Eisenhower view on a fresh install (missing Important
+    and Urgent tags) would show empty rules. The row shows "N missing tags"
+    then; the ids stay. Required and excluded lists exclude each other through
+    `excludedTagIds`, as the Formly type does. Without tags and the tag rules
+    only hide each other in the Add-rule menu; a stored panel with both shows
+    both (normalize clears the tags on save, as today).
+  - **Planned date:** one select over `dueState` + `scheduledState`. A known
+    `dueState` shows as that rule, else `Scheduled` →
+    "Has a date", `NotScheduled` → "No date", `All` → no rule; an unknown
+    `dueState` shows "Other (kept)". Both fields are written only when the
+    user changes this select: Has a date = delete `dueState` + `Scheduled`;
+    No date = delete `dueState` + `NotScheduled`; a date rule = `dueState`
+    (+ `Scheduled` from `withDueStateImpliesScheduled`); removed = delete
+    `dueState` + `All`. A stored `dueState: 'none'` shows as "No date" and
+    stays as stored until changed.
+- **Titles of default views (bug today).** `DEFAULT_BOARDS` titles are
+  translation keys; today's form shows `F.BOARDS.DEFAULT.KANBAN` raw. Inputs
+  show the translated text; on save a title whose text still equals the
+  translation of its stored key keeps the key, so it stays translated on every
+  client and language. The single-section title, the count label and Duplicate
+  use the translated text.
+- **Single-section List title.** Hidden; on save it takes the view's title
+  only when it is empty or equals the view's previous title (released clients
+  show it as the card header, so a rename follows). A different stored title
+  (save-as-view, released clients) is kept, and shows again, prefilled, when
+  a second section is added.
+- **Layout.** `segmented-button-group` (`src/app/ui/`), not a restyled
+  Material toggle. List = `cols: 1`; Board shows Columns as an integer ≥ 2
+  with no upper cap: `board.component` has none and stored boards may hold
+  more than 6. Switching List → Board sets `cols` to the section count
+  (2 if fewer); an untouched `cols` is saved as stored. `getViewIcon` reads
+  `cols` instead of the panel count, so the sidebar icon matches the chosen
+  layout (display only).
+- **Save and validity.** Drop "Save is disabled until valid": with errors
+  hidden until touched, a disabled Save gives no reason. Save stays enabled;
+  on click with errors it marks all fields touched and focuses the first
+  invalid one. `board-edit` exposes `save()` only; the dialog's
+  `boarEditCmp()?.form.valid` binding goes. The Eisenhower view saves without
+  `includedTagsMatch` (absent = `all`), which today's Formly default writes;
+  both mean the same on every client.
+- **Sections: no collapse, no summary line.** Showing only the set rules
+  already removes the 1300px card; a section with 2–4 rules is a few rows.
+  Collapse state and a summary builder (translated text for every rule value,
+  tag and project titles) add code and tests for little speed. Section header:
+  title, live count, ⋮ (Move up, Move down, Duplicate, Delete). Duplicate: new
+  `nanoid` id, `taskIds: []`, title + " (copy)".
+- **Add-rule menu:** one flat `mat-menu`, groups separated by dividers, no
+  nested menus or group headings. A rule added with an empty control (Project,
+  tags) opens or focuses that control; left empty, it saves as no rule.
+- **Live count = what the section header will show.** The panel counts open
+  rows in list layout (`mainRows`, subtasks under a matching parent not
+  counted, done split off) and all matches on cards (`tasks()`). The matching
+  (`tasks()` without sort) and the open-row filter (`_rowIds` + done split)
+  become pure helpers in `boards.util.ts` used by both, so the editor shows
+  the header's number for the chosen layout. `ViewCriteriaContextService`
+  (root, store selectors for day and day start, `DateAdapter` week start,
+  one backlog-id set and a project map) replaces each panel's own backlog set
+  and `allProjects` scan. Boards keep `isDayBeforeTime` unset; the customizer
+  keeps its own ctx. The count recomputes on the tracking tick (the task list
+  re-emits every second); that is the same work one more panel does.
+- **Strings:** "panel" also leaves `NO_PANELS_MSG`. New keys in `en.json`
+  only; old `FORM` keys still used by `view-menu-rules` or the panel stay.
+  Planned date and the date options reuse the customizer's wording ("Planned
+  Date" instead of today's "Due date").
+- **Mobile:** the dialog is already full width below `xs`; only the rule rows
+  wrap. At `sm` the 800px min width (sized for side-by-side Formly cards)
+  becomes a max width for one column.
+- **Prior art:** §2 (TickTick's form, Todoist's query) covers how rules are
+  defined. Taken (from memory, not re-checked): Notion's and Linear's
+  "+ Add filter", listing only the rules that are set. Not taken: TickTick's always-visible field list, the 1300px card this
+  phase replaces.
+- **Known gap, not changed (no evidence of harm, rule 15):** the editor saves
+  each panel's `taskIds` from the copy taken when the dialog opened, so an
+  `updatePanelCfgTaskIds` that syncs in while it is open is overwritten. That
+  is today's behaviour.
+- **Tests added:**
+  - Unit, the main guard: an untouched save equals
+    `normalizeBoardForSave(toEditorModel(board))` (minus the Formly-only
+    `includedTagsMatch` fill) for `DEFAULT_BOARDS`, a `sortBy: 'dueDate'`
+    panel, a `sortBy` + shadowed `sortKey` panel, unknown `dueState`/`sortKey`
+    and an unknown panel key, `cols: 8`, `projectIds` with a deleted id,
+    `dueState: 'none'`, `dueState` + `NotScheduled`, `isUntagged` with tags,
+    a single section titled differently from the view, missing tags.
+  - Unit: the planned-date mapping in both directions; translated-title
+    keep-key; single-section title follow; the pure match and row-count
+    helpers against `BoardPanelComponent`'s `headerCount` for both layouts.
+  - E2E: the helper also replaces the editor steps in
+    `e2e/tests/sync/supersync-reorder-conflict-wedge.spec.ts`
+    (`input[type="number"]` exists on Board only); run it through the
+    scheduled workflow (`grep`), since provider specs skip locally.
+    `issue-7380-eisenhower-edit.spec.ts` keeps its intent: editing the default
+    Eisenhower view, changing a sort, and saving works. New: edit Kanban
+    without changes and check the stored board is unchanged and titles show
+    translated.
+
 ## Review
 
 Plan review (fresh-context subagent, 2026-10-30). Fixed in this revision:
@@ -959,3 +1080,19 @@ adopted, see §12 "Revised after plan review". The main changes:
 - A saved tag grouping gets an "Other" section, and project grouping isn't
   saved.
 - The add-task bar target lives in `tasks/` and gets an explicit project.
+
+Phase 5 plan review (fresh-context subagent, 2026-10-31): all
+recommendations adopted, see §13 "Revised after plan review". Main changes:
+
+- Saving an untouched view writes `normalizeBoardForSave(toEditorModel(board))`.
+  This fixes a sort-loss blocker, and fixtures cover it.
+- The project rule gets its own `mat-select`. Deleted projects and missing
+  tags are kept and labelled.
+- The planned-date mapping is specified both ways.
+- Default view titles show translated.
+- A hidden single-section title is only filled in, never overwritten.
+- Save stays enabled and points to the first error.
+- The live count shares the panel's helpers.
+- Columns has no upper cap.
+- Section collapse and the summary line are cut.
+- The Add-rule menu is flat with dividers.
