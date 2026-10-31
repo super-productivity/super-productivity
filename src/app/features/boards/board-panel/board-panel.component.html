@@ -79,6 +79,29 @@
           <div class="time-badge">{{ task.dueDay | localDateStr }}</div>
         </button>
       }
+      @if (task.deadlineWithTime || task.deadlineDay) {
+        <button
+          task-card-trailing
+          (click)="editDeadline(task, $event)"
+          [title]="T.F.TASK.ADDITIONAL_INFO.DEADLINE | translate"
+          class="ico-btn schedule-btn"
+          [attr.data-scheduled-date-color]="deadlineColor(task)"
+          color=""
+          mat-icon-button
+        >
+          <mat-icon>flag</mat-icon>
+          @if (task.deadlineWithTime) {
+            <div
+              class="time-badge"
+              [innerHTML]="task.deadlineWithTime | shortPlannedAt"
+            ></div>
+          } @else {
+            <div class="time-badge">
+              {{ task.deadlineDay | localDateStr: todayDateStr() }}
+            </div>
+          }
+        </button>
+      }
     </planner-task>
   }
 
