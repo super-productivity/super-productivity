@@ -348,7 +348,8 @@ const isTimeOnlyChronoMatch = (result: ParsedResult): boolean =>
 
 // French-style clock time right after the trigger: "@09h", "@14h30". Only this
 // position: a spaced "@demain 18h" stays a time estimate (see the docs).
-const SHORT_SYNTAX_H_TIME_REG_EX = /^(\d{1,2})h(\d{2})?(?=\s|$)/i;
+// Trailing punctuation ends it too ("@9h, then"), but "@1h30m" does not.
+const SHORT_SYNTAX_H_TIME_REG_EX = /^(\d{1,2})h(\d{2})?(?=[\s,.;:!?)]|$)/i;
 
 // The next occurrence of a wall-clock time from `now`, or null when it is no
 // clock time ("25h")
