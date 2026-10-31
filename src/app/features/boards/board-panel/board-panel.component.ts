@@ -16,25 +16,31 @@ import {
 } from '@angular/core';
 import { CdkDrag, CdkDragDrop, CdkDropList } from '@angular/cdk/drag-drop';
 import { PlannerTaskComponent } from '../../planner/planner-task/planner-task.component';
+import { BoardPanelCfg, BoardPanelCfgTaskDoneState } from '../boards.model';
 import {
-  BoardPanelCfg,
-  BoardPanelCfgScheduledState,
-  BoardPanelCfgTaskDoneState,
-  BoardPanelCfgTaskTypeFilter,
-} from '../boards.model';
-import {
-  BoardDueCtx,
-  buildComparator,
-  createBoardDueCtx,
-  doesTaskMatchPanel,
   firstSpecificProjectId,
   getCalendarDateForDueDay,
-  getDueDayForPanel,
-  getPanelDueState,
+  getPanelSortKey,
   isAllProjects,
-  rewriteTagIdsForPanel,
+  panelToCriteria,
 } from '../boards.util';
-import { select, Store } from '@ngrx/store';
+import {
+  buildTaskComparator,
+  createTaskCriteriaCtx,
+  getChangesToMatch,
+  isCriteriaUnreachableForNewTasks,
+  matchesTaskCriteria,
+} from '../../tasks/task-criteria/task-criteria';
+import {
+  TaskCriteriaCtx,
+  TaskMatchChanges,
+} from '../../tasks/task-criteria/task-criteria.model';
+import { DateAdapter } from '@angular/material/core';
+import { MenuTreeService } from '../../menu-tree/menu-tree.service';
+import { TODAY_TAG } from '../../tag/tag.const';
+import { selectAllTags } from '../../tag/store/tag.reducer';
+import { getDeadlineAutoPlanFields } from '../../tasks/util/get-deadline-auto-plan-fields';
+import { Store } from '@ngrx/store';
 import {
   selectAllTasksInActiveProjects,
   selectTaskById,
@@ -55,7 +61,6 @@ import { TranslatePipe } from '@ngx-translate/core';
 import { DialogScheduleTaskComponent } from '../../planner/dialog-schedule-task/dialog-schedule-task.component';
 import { MatDialog } from '@angular/material/dialog';
 import { fastArrayCompare } from '../../../util/fast-array-compare';
-import { first, take } from 'rxjs/operators';
 import { dragDelayForTouch } from '../../../util/input-intent';
 import { ShortPlannedAtPipe } from '../../../ui/pipes/short-planned-at.pipe';
 import { MsToStringPipe } from '../../../ui/duration/ms-to-string.pipe';
@@ -153,20 +158,29 @@ export class BoardPanelComponent implements TaskCardList {
   private readonly _startOfNextDayDiffMs = this.store.selectSignal(
     selectStartOfNextDayDiffMs,
   );
-  readonly dueCtx = computed<BoardDueCtx>(() =>
-    createBoardDueCtx(
-      this._todayStr() || this._dateService.todayStr(),
-      this._startOfNextDayDiffMs() ?? 0,
-    ),
+  private readonly _dateAdapter = inject(DateAdapter);
+  readonly criteria = computed(() => panelToCriteria(this.panelCfg()));
+  readonly criteriaCtx = computed<TaskCriteriaCtx>(() =>
+    createTaskCriteriaCtx({
+      todayStr: this._todayStr() || this._dateService.todayStr(),
+      startOfNextDayDiffMs: this._startOfNextDayDiffMs() ?? 0,
+      // Reads the localization config signal, so a changed week start applies.
+      firstDayOfWeek: this._dateAdapter.getFirstDayOfWeek(),
+      isInBacklog: (task) => this._isTaskInBacklog(task),
+      isBacklogEnabled: (projectId) =>
+        !!this.allProjects().find((project) => project.id === projectId)?.isEnableBacklog,
+    }),
   );
-  readonly dueState = computed(() => getPanelDueState(this.panelCfg()));
-  // No date makes a new task overdue, so the add row would only create tasks
-  // that never show up here.
-  readonly isAddTaskHidden = computed(() => this.dueState() === 'overdue');
+  // Rules no change of a new task can meet (overdue, a minimum estimate …):
+  // the add row would only create tasks that never show up here.
+  readonly isAddTaskHidden = computed(() =>
+    isCriteriaUnreachableForNewTasks(this.criteria()),
+  );
 
   // CDK only passes the dragged item; `moveTasks` checks the whole selection.
   readonly canEnter = (drag: CdkDrag<TaskCopy>): boolean =>
-    !drag.data || getDueDayForPanel(drag.data, this.panelCfg(), this.dueCtx()) !== null;
+    !drag.data ||
+    getChangesToMatch(drag.data, this.criteria(), this.criteriaCtx()) !== null;
 
   rows(): HTMLElement[] {
     return this._cards().map((card) => card.nativeElement as HTMLElement);
@@ -299,7 +313,16 @@ export class BoardPanelComponent implements TaskCardList {
     this.tasks().reduce((acc, task) => acc + (task.timeEstimate || 0), 0),
   );
 
-  isManualOrder = computed(() => !this.panelCfg().sortBy);
+  readonly sortKey = computed(() => getPanelSortKey(this.panelCfg()));
+  isManualOrder = computed(() => !this.sortKey());
+
+  private readonly _allTags = toSignal(this.store.select(selectAllTags), {
+    initialValue: [],
+  });
+  private readonly _collator = new Intl.Collator(undefined, {
+    sensitivity: 'base',
+    numeric: true,
+  });
 
   // Tags to auto-apply on a new task created via the inline-add row.
   // - AND mode (default): all required tags.
@@ -339,7 +362,10 @@ export class BoardPanelComponent implements TaskCardList {
         ? { isDone: false }
         : {}),
       ...(firstProjectId ? { projectId: firstProjectId } : {}),
-      // TODO scheduledState
+      ...(typeof this.criteria().priority === 'number'
+        ? { priority: this.criteria().priority }
+        : {}),
+      // Dates, deadline and backlog are applied after creation (afterTaskAdd).
     };
   });
 
@@ -355,12 +381,10 @@ export class BoardPanelComponent implements TaskCardList {
       }
     });
 
-    // Hoist the backlog predicate out of the filter callback so it's allocated
-    // once per recompute, not once per task.
-    const isInBacklog = (t: Readonly<TaskCopy>): boolean => this._isTaskInBacklog(t);
-    const dueCtx = this.dueCtx();
+    const criteria = this.criteria();
+    const ctx = this.criteriaCtx();
     const allFilteredTasks = this.allTasks().filter((task) =>
-      doesTaskMatchPanel(task, panelCfg, isInBacklog, dueCtx),
+      matchesTaskCriteria(task, criteria, ctx),
     );
 
     allFilteredTasks.forEach((task) => {
@@ -373,9 +397,13 @@ export class BoardPanelComponent implements TaskCardList {
     });
     const merged = [...orderedTasks, ...nonOrderedTasks].filter((t) => !!t);
 
-    if (panelCfg.sortBy) {
+    const sortKey = this.sortKey();
+    if (sortKey) {
       const dir = panelCfg.sortDir === 'desc' ? -1 : 1;
-      const cmp = buildComparator(panelCfg.sortBy);
+      const cmp = buildTaskComparator(sortKey, {
+        collator: this._collator,
+        tagRankById: sortKey === 'tag' ? this._tagRankById() : undefined,
+      });
       merged.sort((a, b) => dir * cmp(a, b));
     }
 
@@ -407,7 +435,6 @@ export class BoardPanelComponent implements TaskCardList {
   async moveTasks(ids: string[], index = this.tasks().length): Promise<boolean> {
     if (this.isMoving()) return false;
     this.isMoving.set(true);
-    const panelCfg = this.panelCfg();
     try {
       const tasks = (
         await Promise.all(
@@ -416,22 +443,24 @@ export class BoardPanelComponent implements TaskCardList {
           ),
         )
       ).filter((task): task is TaskCopy => !!task);
-      // One task no date can move into the panel refuses the whole move.
-      const dueCtx = this.dueCtx();
-      if (tasks.some((task) => getDueDayForPanel(task, panelCfg, dueCtx) === null)) {
+      // One task no change can make match refuses the whole move.
+      const criteria = this.criteria();
+      const ctx = this.criteriaCtx();
+      const changesById = new Map(
+        tasks.map((task) => [task.id, getChangesToMatch(task, criteria, ctx)]),
+      );
+      if ([...changesById.values()].some((changes) => changes === null)) {
         this._injector.get(SnackService).open({
           type: 'CUSTOM',
           ico: 'block',
-          msg: T.F.BOARDS.V.S_ONLY_OVERDUE,
+          msg: T.F.BOARDS.V.S_CANT_MOVE_HERE,
         });
         return false;
       }
-      // A due rule schedules by itself (below), so it skips the date dialog.
-      const unscheduled =
-        panelCfg.scheduledState === BoardPanelCfgScheduledState.Scheduled &&
-        !getPanelDueState(panelCfg)
-          ? tasks.filter((task) => !task.dueDay && !task.dueWithTime)
-          : [];
+      // "Scheduled" without a day: ask once for the whole move.
+      const unscheduled = tasks.filter(
+        (task) => changesById.get(task.id)?.isAskForSchedule,
+      );
       let schedule: Parameters<TaskBulkActionService['scheduleFor']>[0] | undefined;
       if (unscheduled.length) {
         schedule = await firstValueFrom(
@@ -451,7 +480,8 @@ export class BoardPanelComponent implements TaskCardList {
           const task = await firstValueFrom(
             this.store.select(selectTaskById, { id: original.id }),
           );
-          if (task) await this._applyPanel(task, panelCfg);
+          const changes = task && getChangesToMatch(task, criteria, ctx);
+          if (task && changes) await this._applyTaskChanges(task, changes);
         }
         // Flush captured task operations before the dependent panel-order write.
         await new Promise<void>((resolve) => setTimeout(resolve, 0));
@@ -473,7 +503,7 @@ export class BoardPanelComponent implements TaskCardList {
             .get(TaskBulkActionService)
             .scheduleFor(schedule, tasksToSchedule);
         }
-        await this._scheduleForDueState(panelCfg, movingIds);
+        await this._applyDateChanges(movingIds);
         await new Promise<void>((resolve) => setTimeout(resolve, 0));
         this.multiSelect.reanchorAfterMove(movingIds, this.rows());
       } finally {
@@ -499,90 +529,85 @@ export class BoardPanelComponent implements TaskCardList {
     );
   }
 
-  private async _applyPanel(task: TaskCopy, panelCfg: BoardPanelCfg): Promise<void> {
-    const newTagIds = rewriteTagIdsForPanel(task.tagIds || [], panelCfg);
-
-    const updates: Partial<TaskCopy> = {};
-
-    // conditional updates
-    if (!fastArrayCompare(task.tagIds || [], newTagIds)) {
-      this.taskService.updateTags(task, unique(newTagIds));
-    }
-    if (panelCfg.taskDoneState === BoardPanelCfgTaskDoneState.Done && !task.isDone) {
-      updates.isDone = true;
-    } else if (
-      panelCfg.taskDoneState === BoardPanelCfgTaskDoneState.UnDone &&
-      task.isDone
-    ) {
-      updates.isDone = false;
-    }
-
-    const firstProjectId = firstSpecificProjectId(panelCfg.projectIds);
-    if (
-      firstProjectId &&
-      panelCfg.projectIds &&
-      panelCfg.projectIds.length > 0 &&
-      !isAllProjects(panelCfg.projectIds) &&
-      !panelCfg.projectIds.includes(task.projectId)
-    ) {
-      const taskWithSubTasks = await this.store
-        .pipe(
-          select(selectTaskByIdWithSubTaskData, { id: task.parentId || task.id }),
-          take(1),
-        )
-        .toPromise();
-
+  /**
+   * Applies the per-task part of what a task needs to match the panel, in the
+   * order the changes depend on: project (moves the parent with its subtasks)
+   * → backlog (on the parent) → one `updateTask` for tags, done and priority
+   * → unschedule. Dates follow in `_applyDateChanges`.
+   */
+  private async _applyTaskChanges(
+    task: TaskCopy,
+    changes: TaskMatchChanges,
+  ): Promise<void> {
+    if (changes.projectId) {
+      const taskWithSubTasks = await firstValueFrom(
+        this.store.select(selectTaskByIdWithSubTaskData, {
+          id: task.parentId || task.id,
+        }),
+      );
       if (taskWithSubTasks) {
         this.store.dispatch(
           TaskSharedActions.moveToOtherProject({
             task: taskWithSubTasks,
-            targetProjectId: firstProjectId,
+            targetProjectId: changes.projectId,
           }),
         );
       }
     }
-
+    const projectId = changes.projectId ?? task.projectId;
+    if (changes.backlog && projectId) {
+      const taskId = task.parentId || task.id;
+      this.store.dispatch(
+        changes.backlog === 'moveIn'
+          ? moveProjectTaskToBacklogListAuto({ taskId, projectId })
+          : moveProjectTaskToRegularListAuto({ taskId, projectId, isMoveToTop: false }),
+      );
+    }
+    const updates: Partial<TaskCopy> = {
+      ...(changes.tagIds ? { tagIds: unique(changes.tagIds) } : {}),
+      ...(changes.isDone !== undefined ? { isDone: changes.isDone } : {}),
+      ...(changes.priority !== undefined
+        ? { priority: changes.priority ?? undefined }
+        : {}),
+    };
     if (Object.keys(updates).length > 0) {
       this.store.dispatch(
         TaskSharedActions.updateTask({ task: { id: task.id, changes: updates } }),
       );
     }
-
-    if (
-      panelCfg.scheduledState === BoardPanelCfgScheduledState.NotScheduled &&
-      !getPanelDueState(panelCfg)
-    ) {
+    if (changes.isUnschedule) {
       this.store.dispatch(
         TaskSharedActions.unscheduleTask({ id: task.id, isSkipToast: true }),
       );
     }
-    await this._checkBacklogState(panelCfg, task.id);
   }
 
   /**
-   * Schedules tasks for the day the panel's due rule asks for. Re-reads each
-   * task first: placing it may have moved it to another project. Tasks no date
-   * can satisfy are skipped; callers refuse those moves up front.
+   * Plans tasks for the day and sets the deadline the panel's rules ask for.
+   * Re-reads each task first: earlier changes may have moved it. A planned day
+   * is the logical day; a timed task keeps its time on the matching calendar
+   * date. The deadline goes last: its auto-plan into Today then sees the
+   * planned date.
    */
-  private async _scheduleForDueState(
-    panelCfg: BoardPanelCfg,
-    taskIds: string[],
-  ): Promise<void> {
-    if (!getPanelDueState(panelCfg)) {
-      return;
-    }
-    const dueCtx = this.dueCtx();
+  private async _applyDateChanges(taskIds: string[]): Promise<void> {
+    const criteria = this.criteria();
+    const ctx = this.criteriaCtx();
     const tasksByDay = new Map<string, TaskCopy[]>();
+    const deadlineChanges: [TaskCopy, TaskMatchChanges][] = [];
     for (const id of taskIds) {
       const task = await firstValueFrom(this.store.select(selectTaskById, { id }));
-      const logicalDay = task && getDueDayForPanel(task, panelCfg, dueCtx);
-      if (task && logicalDay) {
+      const changes = task && getChangesToMatch(task, criteria, ctx);
+      if (!task || !changes) continue;
+      if (changes.scheduleDay) {
         const day = getCalendarDateForDueDay(
           task,
-          logicalDay,
-          dueCtx.startOfNextDayDiffMs,
+          changes.scheduleDay,
+          ctx.startOfNextDayDiffMs,
         );
         tasksByDay.set(day, [...(tasksByDay.get(day) ?? []), task]);
+      }
+      if (changes.deadlineDay || changes.isRemoveDeadline) {
+        deadlineChanges.push([task, changes]);
       }
     }
     for (const [day, tasks] of tasksByDay) {
@@ -593,40 +618,45 @@ export class BoardPanelComponent implements TaskCardList {
           tasks,
         );
     }
+    for (const [task, changes] of deadlineChanges) {
+      this.store.dispatch(
+        changes.deadlineDay
+          ? TaskSharedActions.setDeadline({
+              taskId: task.id,
+              deadlineDay: changes.deadlineDay,
+              isSkipSnack: true,
+              ...getDeadlineAutoPlanFields(this._dateService, changes.deadlineDay),
+            })
+          : TaskSharedActions.removeDeadline({ taskId: task.id, isSkipSnack: true }),
+      );
+    }
   }
 
   async afterTaskAdd({ taskId, isAddToBottom, isNewTask }: TaskAddEvent): Promise<void> {
     const panelCfg = this.panelCfg();
-
-    if (!isNewTask) {
-      const task = await this.store
-        .select(selectTaskById, { id: taskId })
-        .pipe(first())
-        .toPromise();
-      if (!task) {
-        return;
-      }
-
-      const newTagIds = unique(rewriteTagIdsForPanel(task.tagIds || [], panelCfg));
-
-      if (!fastArrayCompare(task.tagIds || [], newTagIds)) {
-        this.taskService.updateTags(task, newTagIds);
-      }
-      await this._scheduleForDueState(panelCfg, [taskId]);
+    if (isNewTask) {
+      this.store.dispatch(
+        BoardsActions.updatePanelCfgTaskIds({
+          panelId: panelCfg.id,
+          taskIds: isAddToBottom
+            ? [...panelCfg.taskIds, taskId]
+            : [taskId, ...panelCfg.taskIds],
+        }),
+      );
+    }
+    // A new task already got tags, done state, project and priority on
+    // creation (`additionalTaskFields`); an existing one found through the add
+    // row gets everything here.
+    const task = await firstValueFrom(this.store.select(selectTaskById, { id: taskId }));
+    const changes = task && getChangesToMatch(task, this.criteria(), this.criteriaCtx());
+    if (!task || !changes) {
       return;
     }
-
-    this.store.dispatch(
-      BoardsActions.updatePanelCfgTaskIds({
-        panelId: panelCfg.id,
-        taskIds: isAddToBottom
-          ? [...panelCfg.taskIds, taskId]
-          : [taskId, ...panelCfg.taskIds],
-      }),
-    );
-
-    this._checkToScheduledTask(panelCfg, taskId);
-    this._checkBacklogState(panelCfg, taskId);
+    await this._applyTaskChanges(task, changes);
+    if (changes.isAskForSchedule) {
+      this.scheduleTask(task);
+    }
+    await this._applyDateChanges([taskId]);
   }
 
   scheduledDateColor(task: TaskCopy): ScheduledDateColor {
@@ -660,78 +690,19 @@ export class BoardPanelComponent implements TaskCardList {
     });
   }
 
-  private async _checkToScheduledTask(
-    panelCfg: BoardPanelCfg,
-    taskId: string,
-  ): Promise<void> {
-    if (getPanelDueState(panelCfg)) {
-      // A due rule picks the day itself and implies "scheduled".
-      await this._scheduleForDueState(panelCfg, [taskId]);
-      return;
-    }
-    if (panelCfg.scheduledState === BoardPanelCfgScheduledState.Scheduled) {
-      const task = await this.store
-        .select(selectTaskById, { id: taskId })
-        .pipe(first())
-        .toPromise();
-      if (!task.dueDay && !task.dueWithTime) {
-        this.scheduleTask(task);
-      }
-    }
-    if (panelCfg.scheduledState === BoardPanelCfgScheduledState.NotScheduled) {
-      this.store.dispatch(
-        TaskSharedActions.unscheduleTask({
-          id: taskId,
-          isSkipToast: false,
-        }),
-      );
-    }
-  }
-
-  private async _checkBacklogState(
-    panelCfg: BoardPanelCfg,
-    taskId: string,
-  ): Promise<void> {
-    if (
-      !panelCfg.backlogState ||
-      panelCfg.backlogState === BoardPanelCfgTaskTypeFilter.All
-    ) {
-      return;
-    }
-
-    const task = await this.store
-      .select(selectTaskById, { id: taskId })
-      .pipe(first())
-      .toPromise();
-
-    if (!task || !task.projectId) {
-      return;
-    }
-
-    const project = this.allProjects().find((p) => p.id === task.projectId);
-    const isInBacklog = this._isTaskInBacklog(task);
-
-    if (panelCfg.backlogState === BoardPanelCfgTaskTypeFilter.NoBacklog && isInBacklog) {
-      this.store.dispatch(
-        moveProjectTaskToRegularListAuto({
-          taskId: task.id,
-          projectId: task.projectId,
-          isMoveToTop: false,
-        }),
-      );
-    } else if (
-      panelCfg.backlogState === BoardPanelCfgTaskTypeFilter.OnlyBacklog &&
-      !isInBacklog &&
-      project?.isEnableBacklog
-    ) {
-      this.store.dispatch(
-        moveProjectTaskToBacklogListAuto({
-          taskId: task.id,
-          projectId: task.projectId,
-        }),
-      );
-    }
-  }
+  // Side-menu tag order, for sorting by tag like task lists do. Only read when
+  // the panel sorts by tag.
+  private readonly _tagRankById = computed(
+    () =>
+      new Map(
+        this._injector
+          .get(MenuTreeService)
+          .buildTagListInTreeOrder(
+            this._allTags().filter((tag) => tag.id !== TODAY_TAG.id),
+          )
+          .map((tag, index) => [tag.id, index]),
+      ),
+  );
 
   _isTaskInBacklog(task: Readonly<TaskCopy>): boolean {
     return this.allBacklogTaskIds().has(task.parentId || task.id);

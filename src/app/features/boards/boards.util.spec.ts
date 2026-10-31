@@ -1,16 +1,11 @@
 import {
-  addDaysToDbDateStr,
-  BoardDueCtx,
-  buildComparator,
-  createBoardDueCtx,
   getCalendarDateForDueDay,
-  doesTaskMatchPanel,
-  getDueDayForPanel,
-  getLogicalDueDay,
   getPanelDueState,
-  rewriteTagIdsForPanel,
+  getPanelSortKey,
+  panelToCriteria,
   sanitizePanelCfg,
   withDueStateImpliesScheduled,
+  withPanelSortKey,
 } from './boards.util';
 import {
   BoardCfg,
@@ -18,12 +13,47 @@ import {
   BoardPanelCfgScheduledState,
   BoardPanelCfgTaskDoneState,
   BoardPanelCfgTaskTypeFilter,
+  BoardSortField,
 } from './boards.model';
 import { TaskCopy } from '../tasks/task.model';
 import { TODAY_TAG } from '../tag/tag.const';
+import {
+  addDaysToDbDateStr,
+  buildTaskComparator,
+  createTaskCriteriaCtx,
+  getChangesToMatch,
+  getTagIdsToMatch,
+  matchesTaskCriteria,
+} from '../tasks/task-criteria/task-criteria';
+import { TaskCriteriaCtx } from '../tasks/task-criteria/task-criteria.model';
+
+// The board panel filters run through the shared task-criteria module; these
+// helpers keep this panel-shaped matrix as a parity test of `panelToCriteria`.
+const doesTaskMatchPanel = (
+  task: TaskCopy,
+  panel: BoardPanelCfg,
+  isInBacklog: (task: Readonly<TaskCopy>) => boolean,
+  ctx: TaskCriteriaCtx,
+): boolean => matchesTaskCriteria(task, panelToCriteria(panel), { ...ctx, isInBacklog });
+const rewriteTagIdsForPanel = getTagIdsToMatch;
+const SORT_BY_KEY = {
+  dueDate: 'plannedDate',
+  created: 'created',
+  title: 'title',
+  timeEstimate: 'estimate',
+} as const;
+const buildComparator = (field: BoardSortField): ((a: TaskCopy, b: TaskCopy) => number) =>
+  buildTaskComparator(SORT_BY_KEY[field], {
+    collator: new Intl.Collator(undefined, { sensitivity: 'base', numeric: true }),
+  });
+const createBoardDueCtx = (
+  todayStr: string,
+  startOfNextDayDiffMs: number,
+): TaskCriteriaCtx =>
+  createTaskCriteriaCtx({ todayStr, startOfNextDayDiffMs, firstDayOfWeek: 1 });
 
 // Only consulted by panels with a due rule.
-const DUE_CTX: BoardDueCtx = createBoardDueCtx('2026-10-30', 0);
+const DUE_CTX = createBoardDueCtx('2026-10-30', 0);
 
 const basePanel: any = {
   id: 'p1',
@@ -672,19 +702,6 @@ describe('getPanelDueState', () => {
   });
 });
 
-describe('getLogicalDueDay', () => {
-  it('shifts timestamps by the start-of-day offset', () => {
-    const ts = new Date('2026-10-31T02:00:00').getTime();
-    expect(getLogicalDueDay({ dueWithTime: ts }, 0)).toBe('2026-10-31');
-    expect(getLogicalDueDay({ dueWithTime: ts }, 4 * 60 * 60 * 1000)).toBe('2026-10-30');
-  });
-
-  it('returns null for undated or malformed tasks', () => {
-    expect(getLogicalDueDay({}, 0)).toBeNull();
-    expect(getLogicalDueDay({ dueDay: 'not-a-day' }, 0)).toBeNull();
-  });
-});
-
 describe('addDaysToDbDateStr', () => {
   it('adds calendar days across month ends and DST changes', () => {
     expect(addDaysToDbDateStr('2026-10-30', 1)).toBe('2026-10-31');
@@ -695,8 +712,21 @@ describe('addDaysToDbDateStr', () => {
   });
 });
 
-describe('getDueDayForPanel', () => {
+describe('due date write-back (getChangesToMatch on a panel)', () => {
   const panel = (dueState?: string): Pick<BoardPanelCfg, 'dueState'> => ({ dueState });
+  // undefined: no date change; a day: schedule for it; null: refused.
+  const getDueDayForPanel = (
+    task: Partial<TaskCopy>,
+    panelCfg: Pick<BoardPanelCfg, 'dueState'>,
+    ctx: TaskCriteriaCtx,
+  ): string | null | undefined => {
+    const changes = getChangesToMatch(
+      { tagIds: [], projectId: 'p', ...task } as TaskCopy,
+      panelToCriteria({ ...basePanel, ...panelCfg }),
+      ctx,
+    );
+    return changes === null ? null : changes.scheduleDay;
+  };
 
   it('needs no change without a rule or when the task already matches', () => {
     expect(getDueDayForPanel({}, panel(), DUE_CTX)).toBeUndefined();
@@ -783,5 +813,97 @@ describe('getCalendarDateForDueDay', () => {
         4 * HOUR,
       ),
     ).toBe('2026-10-30');
+  });
+});
+
+describe('panelToCriteria: rules added for views', () => {
+  const panel = (overrides: Partial<BoardPanelCfg>): BoardPanelCfg =>
+    ({ ...basePanel, ...overrides }) as BoardPanelCfg;
+
+  it('maps every rule field, a planned-date rule replacing the scheduled state', () => {
+    expect(
+      panelToCriteria(
+        panel({
+          dueState: 'thisWeek',
+          scheduledState: BoardPanelCfgScheduledState.NotScheduled,
+          deadlineState: 'nextMonth',
+          estimateRule: '1800000',
+          timeSpentRule: 'none',
+          priorityRule: '3',
+          isUntagged: true,
+          projectIds: ['p1'],
+        }),
+      ),
+    ).toEqual(
+      jasmine.objectContaining({
+        plannedDate: 'thisWeek',
+        deadline: 'nextMonth',
+        estimate: 1800000,
+        timeSpent: 'none',
+        priority: 3,
+        isUntagged: true,
+        projectIds: ['p1'],
+      }),
+    );
+    expect(panelToCriteria(panel({ dueState: 'today' })).scheduled).toBeUndefined();
+  });
+
+  it('ignores values it does not know (written by a newer client)', () => {
+    const criteria = panelToCriteria(
+      panel({
+        dueState: 'nextYear',
+        deadlineState: 'x',
+        estimateRule: 'lots',
+        priorityRule: '9',
+      }),
+    );
+    expect(criteria.plannedDate).toBeUndefined();
+    expect(criteria.deadline).toBeUndefined();
+    expect(criteria.estimate).toBeUndefined();
+    expect(criteria.priority).toBeUndefined();
+  });
+});
+
+describe('panel sort keys', () => {
+  const panel = (overrides: Partial<BoardPanelCfg>): BoardPanelCfg =>
+    ({ ...basePanel, ...overrides }) as BoardPanelCfg;
+
+  it('stores keys sortBy can hold in sortBy, others in sortKey', () => {
+    expect(withPanelSortKey(panel({ sortKey: 'tag' }), 'title')).toEqual(
+      jasmine.objectContaining({ sortBy: 'title' }),
+    );
+    expect('sortKey' in withPanelSortKey(panel({ sortKey: 'tag' }), 'title')).toBeFalse();
+    const priority = withPanelSortKey(panel({ sortBy: 'title' }), 'priority');
+    expect(priority.sortKey).toBe('priority');
+    expect('sortBy' in priority).toBeFalse();
+    const manual = withPanelSortKey(panel({ sortBy: 'title' }), null);
+    expect('sortBy' in manual || 'sortKey' in manual).toBeFalse();
+  });
+
+  it('reads sortBy first, so a sort picked on a released client wins', () => {
+    expect(getPanelSortKey({ sortBy: 'created', sortKey: 'priority' })).toBe('created');
+    expect(getPanelSortKey({ sortKey: 'priority' })).toBe('priority');
+    expect(getPanelSortKey({ sortKey: 'nonsense' })).toBeUndefined();
+    expect(getPanelSortKey({})).toBeUndefined();
+  });
+});
+
+describe('sanitizePanelCfg: rule fields', () => {
+  it('drops null and empty values and keeps unknown strings', () => {
+    const out = sanitizePanelCfg({
+      ...basePanel,
+      deadlineState: null,
+      estimateRule: '',
+      timeSpentRule: 'futureRule',
+      priorityRule: null,
+      sortKey: '',
+      isUntagged: null,
+    } as any);
+    expect('deadlineState' in out).toBeFalse();
+    expect('estimateRule' in out).toBeFalse();
+    expect(out.timeSpentRule).toBe('futureRule');
+    expect('priorityRule' in out).toBeFalse();
+    expect('sortKey' in out).toBeFalse();
+    expect('isUntagged' in out).toBeFalse();
   });
 });

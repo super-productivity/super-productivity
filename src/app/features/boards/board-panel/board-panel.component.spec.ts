@@ -821,7 +821,6 @@ describe('BoardPanelComponent - drop()', () => {
   let fixture: ComponentFixture<BoardPanelComponent>;
   let actions$: ReplaySubject<any>;
   let dispatchSpy: jasmine.Spy;
-  let updateTagsSpy: jasmine.Spy;
   let scheduleForSpy: jasmine.Spy;
   let snackOpenSpy: jasmine.Spy;
 
@@ -840,6 +839,17 @@ describe('BoardPanelComponent - drop()', () => {
       subTaskIds: [],
       ...overrides,
     }) as TaskCopy;
+
+  // Tag writes go out in the one `updateTask` a move sends per task.
+  const dispatchedTagIds = (): string[][] =>
+    dispatchSpy.calls
+      .allArgs()
+      .map(([action]) => action)
+      .filter(
+        (action) =>
+          action.type === TaskSharedActions.updateTask.type && action.task.changes.tagIds,
+      )
+      .map((action) => action.task.changes.tagIds);
 
   // Minimal CdkDragDrop-shaped event — drop() only reads these fields.
   const mkDropEvent = (opts: {
@@ -867,7 +877,6 @@ describe('BoardPanelComponent - drop()', () => {
   const setup = async (tasks: TaskCopy[]): Promise<void> => {
     actions$ = new ReplaySubject(1);
     dispatchSpy = jasmine.createSpy('dispatch');
-    updateTagsSpy = jasmine.createSpy('updateTags');
     scheduleForSpy = jasmine.createSpy('scheduleFor').and.resolveTo();
     snackOpenSpy = jasmine.createSpy('open');
 
@@ -902,7 +911,6 @@ describe('BoardPanelComponent - drop()', () => {
           provide: TaskService,
           useValue: {
             currentTaskId: signal(null),
-            updateTags: updateTagsSpy,
           },
         },
         { provide: MatDialog, useValue: {} },
@@ -954,7 +962,7 @@ describe('BoardPanelComponent - drop()', () => {
 
     // Assert
     expect(dispatchSpy).not.toHaveBeenCalled();
-    expect(updateTagsSpy).not.toHaveBeenCalled();
+    expect(dispatchedTagIds()).toEqual([]);
   });
 
   it('reorders selected rows in this panel using one order action', async () => {
@@ -970,7 +978,7 @@ describe('BoardPanelComponent - drop()', () => {
         taskIds: ['a', 'd', 'b', 'c'],
       }),
     );
-    expect(updateTagsSpy).not.toHaveBeenCalled();
+    expect(dispatchedTagIds()).toEqual([]);
   });
 
   for (const scenario of [
@@ -1064,7 +1072,7 @@ describe('BoardPanelComponent - drop()', () => {
 
     expect(adjacentSpy).not.toHaveBeenCalled();
     expect(dispatchSpy).not.toHaveBeenCalled();
-    expect(updateTagsSpy).not.toHaveBeenCalled();
+    expect(dispatchedTagIds()).toEqual([]);
   });
 
   it('moves a single-panel selection in source order, including duplicate cards', async () => {
@@ -1148,11 +1156,11 @@ describe('BoardPanelComponent - drop()', () => {
     });
     fixture.detectChanges();
     await component.moveTasks(['a', 'b']);
+    // One updateTask per task carries both the tags and the done state.
     for (const task of tasks) {
-      expect(updateTagsSpy).toHaveBeenCalledWith(task, ['in-progress']);
       expect(dispatchSpy).toHaveBeenCalledWith(
         TaskSharedActions.updateTask({
-          task: { id: task.id, changes: { isDone: true } },
+          task: { id: task.id, changes: { tagIds: ['in-progress'], isDone: true } },
         }),
       );
     }
@@ -1177,7 +1185,7 @@ describe('BoardPanelComponent - drop()', () => {
     expect(await component.moveTasks(['a', 'b'])).toBeFalse();
     expect(open).toHaveBeenCalledTimes(1);
     expect(dispatchSpy).not.toHaveBeenCalled();
-    expect(updateTagsSpy).not.toHaveBeenCalled();
+    expect(dispatchedTagIds()).toEqual([]);
     expect(component.isMoving()).toBeFalse();
   });
 
@@ -1229,10 +1237,10 @@ describe('BoardPanelComponent - drop()', () => {
 
       expect(await component.moveTasks(['a', 'b'])).toBeFalse();
       expect(snackOpenSpy).toHaveBeenCalledOnceWith(
-        jasmine.objectContaining({ msg: T.F.BOARDS.V.S_ONLY_OVERDUE }),
+        jasmine.objectContaining({ msg: T.F.BOARDS.V.S_CANT_MOVE_HERE }),
       );
       expect(dispatchSpy).not.toHaveBeenCalled();
-      expect(updateTagsSpy).not.toHaveBeenCalled();
+      expect(dispatchedTagIds()).toEqual([]);
       expect(scheduleForSpy).not.toHaveBeenCalled();
       expect(component.isMoving()).toBeFalse();
     });
@@ -1311,10 +1319,7 @@ describe('BoardPanelComponent - drop()', () => {
     await component.drop(mkDropEvent({ panelCfg, task }));
 
     // Assert — only 'x' stripped (first excluded), 'need' appended
-    expect(updateTagsSpy).toHaveBeenCalledTimes(1);
-    const [taskArg, tagsArg] = updateTagsSpy.calls.mostRecent().args;
-    expect(taskArg).toBe(task);
-    expect(tagsArg).toEqual(['y', 'keep', 'need']);
+    expect(dispatchedTagIds()).toEqual([['y', 'keep', 'need']]);
   });
 
   it('cross-panel drop with OR-included and no exclusion adds the first required tag', async () => {
@@ -1340,10 +1345,7 @@ describe('BoardPanelComponent - drop()', () => {
     await component.drop(mkDropEvent({ panelCfg, task }));
 
     // Assert — 'need' appended, 'other' preserved
-    expect(updateTagsSpy).toHaveBeenCalledTimes(1);
-    const [taskArg, tagsArg] = updateTagsSpy.calls.mostRecent().args;
-    expect(taskArg).toBe(task);
-    expect(tagsArg).toEqual(['other', 'need']);
+    expect(dispatchedTagIds()).toEqual([['other', 'need']]);
   });
 
   // TODAY_TAG is selectable in the board tag picker (isShowMyDayTag), but it is
@@ -1370,10 +1372,10 @@ describe('BoardPanelComponent - drop()', () => {
     // Act
     await component.drop(mkDropEvent({ panelCfg, task }));
 
-    // Assert — only the real required tag is applied
-    expect(updateTagsSpy).toHaveBeenCalledTimes(1);
-    const [, tagsArg] = updateTagsSpy.calls.mostRecent().args;
-    expect(tagsArg).toEqual(['other', 'need']);
+    // Assert — no task can carry the virtual Today tag, so no change makes it
+    // match this column: the move is refused instead of writing 'need' alone.
+    expect(dispatchedTagIds()).toEqual([]);
+    expect(snackOpenSpy).toHaveBeenCalled();
   });
 
   // The AND-exclude list contains My Day, which `doesTaskMatchPanel` can never
@@ -1408,8 +1410,10 @@ describe('BoardPanelComponent - drop()', () => {
       isNewTask: false,
     });
 
-    expect(updateTagsSpy).toHaveBeenCalledOnceWith(task, ['x', 'y', 'keep', 'need']);
-    expect(dispatchSpy).not.toHaveBeenCalled();
+    expect(dispatchedTagIds()).toEqual([['x', 'y', 'keep', 'need']]);
+    expect(dispatchSpy).not.toHaveBeenCalledWith(
+      jasmine.objectContaining({ type: BoardsActions.updatePanelCfgTaskIds.type }),
+    );
   });
 
   it('never writes the virtual TODAY_TAG into a task when the column requires My Day', async () => {
@@ -1436,7 +1440,8 @@ describe('BoardPanelComponent - drop()', () => {
       isNewTask: false,
     });
 
-    expect(updateTagsSpy).toHaveBeenCalledOnceWith(task, ['keep', 'need']);
+    // No task can carry the virtual Today tag, so nothing makes it match.
+    expect(dispatchedTagIds()).toEqual([]);
   });
 });
 

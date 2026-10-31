@@ -4,17 +4,15 @@ import {
   BoardPanelCfgScheduledState,
   BoardPanelCfgTaskDoneState,
   BoardPanelCfgTaskTypeFilter,
-  BoardPanelDueState,
   BoardSortField,
 } from './boards.model';
-import { TaskCopy } from '../tasks/task.model';
-import { dateStrToUtcDate } from '../../util/date-str-to-utc-date';
-import { getDbDateStr, isDBDateStr } from '../../util/get-db-date-str';
-import { TODAY_TAG } from '../tag/tag.const';
+import { TaskCopy, TaskPriority } from '../tasks/task.model';
 import {
-  getLogicalTodayStartMs,
-  isTaskOverdueByThreshold,
-} from '../tasks/util/is-task-overdue';
+  TASK_DATE_RULES,
+  TaskCriteria,
+  TaskDateRule,
+} from '../tasks/task-criteria/task-criteria.model';
+import { addDaysToDbDateStr, TaskSortKey } from '../tasks/task-criteria/task-criteria';
 
 const VALID_SORT_FIELDS: ReadonlySet<BoardSortField> = new Set([
   'dueDate',
@@ -23,27 +21,32 @@ const VALID_SORT_FIELDS: ReadonlySet<BoardSortField> = new Set([
   'timeEstimate',
 ]);
 
-const VALID_DUE_STATES: ReadonlySet<string> = new Set<BoardPanelDueState>([
-  'overdue',
-  'today',
-  'tomorrow',
-  'next7Days',
+const SORT_BY_TO_KEY: Record<BoardSortField, TaskSortKey> = {
+  dueDate: 'plannedDate',
+  created: 'created',
+  title: 'title',
+  timeEstimate: 'estimate',
+};
+// Sort keys the persisted `sortBy` (a closed union on released clients) can't
+// hold; they go into `sortKey` instead.
+const NEW_SORT_KEYS: ReadonlySet<string> = new Set<TaskSortKey>([
+  'deadline',
+  'timeSpent',
+  'priority',
+  'tag',
 ]);
 
-/**
- * The logical "today" a panel's due rule is evaluated against. Callers read
- * `todayStr` and `startOfNextDayDiffMs` from the store (`selectTodayStr`,
- * `selectStartOfNextDayDiffMs`) so day rollover and a changed day-start
- * setting refresh the panel. Build it with `createBoardDueCtx`: the other
- * fields are derived once per panel update instead of once per task.
- */
-export interface BoardDueCtx {
-  todayStr: string;
-  startOfNextDayDiffMs: number;
-  tomorrowStr: string;
-  next7DaysEndStr: string;
-  todayStartMs: number;
-}
+// Optional string fields Formly writes `null` into; unknown strings are kept,
+// so a newer client's value survives this client's next `updateBoard`, which
+// replaces `panels`.
+const OPTIONAL_STRING_FIELDS = [
+  'dueState',
+  'deadlineState',
+  'estimateRule',
+  'timeSpentRule',
+  'priorityRule',
+  'sortKey',
+] as const;
 
 // Absent `projectIds` (legacy data that hasn't been sanitized yet) means
 // "All Projects", same as an array containing the "" sentinel.
@@ -59,8 +62,9 @@ export const firstSpecificProjectId = (
  * - Migrates legacy `sortByDue` → `sortBy`/`sortDir`.
  * - Coerces `null` values (from Formly) on optional string-union fields to absent.
  * - Drops unknown `sortBy` values (e.g. from a newer client synced down).
- * - Drops an empty `dueState`, but keeps unknown strings: a newer client's value
- *   must survive this client's next `updateBoard`, which replaces `panels`.
+ * - Drops empty rule strings (`dueState`, `sortKey`, …), but keeps unknown
+ *   ones: a newer client's value must survive this client's next
+ *   `updateBoard`, which replaces `panels`.
  * Idempotent.
  */
 export const sanitizePanelCfg = (panel: BoardPanelCfg): BoardPanelCfg => {
@@ -117,8 +121,13 @@ export const sanitizePanelCfg = (panel: BoardPanelCfg): BoardPanelCfg => {
   if (out.excludedTagsMatch == null) {
     delete (out as Partial<BoardPanelCfg>).excludedTagsMatch;
   }
-  if (typeof out.dueState !== 'string' || out.dueState === '') {
-    delete (out as Partial<BoardPanelCfg>).dueState;
+  for (const field of OPTIONAL_STRING_FIELDS) {
+    if (typeof out[field] !== 'string' || out[field] === '') {
+      delete (out as Partial<BoardPanelCfg>)[field];
+    }
+  }
+  if (typeof out.isUntagged !== 'boolean') {
+    delete (out as Partial<BoardPanelCfg>).isUntagged;
   }
 
   return out;
@@ -132,56 +141,126 @@ export const sanitizePanelCfg = (panel: BoardPanelCfg): BoardPanelCfg => {
 export const withDueStateImpliesScheduled = (board: BoardCfg): BoardCfg => ({
   ...board,
   panels: board.panels.map((panel) =>
-    getPanelDueState(panel) &&
+    isScheduledDateRule(parseDateRule(panel.dueState)) &&
     panel.scheduledState !== BoardPanelCfgScheduledState.Scheduled
       ? { ...panel, scheduledState: BoardPanelCfgScheduledState.Scheduled }
       : panel,
   ),
 });
 
-/** Narrows the persisted `dueState` string; unknown values mean "any". */
-export const getPanelDueState = (
-  panelCfg: Pick<BoardPanelCfg, 'dueState'>,
-): BoardPanelDueState | undefined =>
-  typeof panelCfg.dueState === 'string' && VALID_DUE_STATES.has(panelCfg.dueState)
-    ? (panelCfg.dueState as BoardPanelDueState)
+const parseDateRule = (value: string | undefined): TaskDateRule | undefined =>
+  value && (TASK_DATE_RULES as readonly string[]).includes(value)
+    ? (value as TaskDateRule)
     : undefined;
 
+const isScheduledDateRule = (rule: TaskDateRule | undefined): boolean =>
+  !!rule && rule !== 'none';
+
+/** `none` or a minimum in ms, stored as a string. Unknown values mean "any". */
+const parseAmountRule = (value: string | undefined): 'none' | number | undefined => {
+  if (value === 'none') return 'none';
+  const ms = value ? Number(value) : NaN;
+  return Number.isFinite(ms) && ms > 0 ? ms : undefined;
+};
+
+const parsePriorityRule = (
+  value: string | undefined,
+): 'none' | TaskPriority | undefined =>
+  value === 'none'
+    ? 'none'
+    : value === '1' || value === '2' || value === '3'
+      ? (Number(value) as TaskPriority)
+      : undefined;
+
+/** The panel's planned-date rule (`dueState`); unknown values mean "any". */
+export const getPanelDueState = (
+  panelCfg: Pick<BoardPanelCfg, 'dueState'>,
+): TaskDateRule | undefined => parseDateRule(panelCfg.dueState);
+
 /**
- * The logical day a task is due, or null if undated. `dueWithTime` wins over
- * `dueDay`, as in task.selectors.ts; a timestamp is shifted by the
- * start-of-next-day offset so 01:00 with a 4 h day start counts as yesterday.
+ * A board panel's filters as task criteria. Unknown values (written by a newer
+ * client) are left out, so they mean "any". A planned-date rule implies
+ * "scheduled", so the scheduled state is only used without one.
  */
-export const getLogicalDueDay = (
-  task: Pick<TaskCopy, 'dueDay' | 'dueWithTime'>,
-  startOfNextDayDiffMs: number,
-): string | null => {
-  if (task.dueWithTime) {
-    return getDbDateStr(task.dueWithTime - startOfNextDayDiffMs);
+export const panelToCriteria = (panel: BoardPanelCfg): TaskCriteria => {
+  const plannedDate = parseDateRule(panel.dueState);
+  const criteria: TaskCriteria = {
+    includedTagIds: panel.includedTagIds,
+    includedTagsMatch: panel.includedTagsMatch === 'any' ? 'any' : 'all',
+    excludedTagIds: panel.excludedTagIds,
+    excludedTagsMatch: panel.excludedTagsMatch === 'all' ? 'all' : 'any',
+  };
+  if (panel.isUntagged === true) criteria.isUntagged = true;
+  if (!isAllProjects(panel.projectIds)) {
+    criteria.projectIds = (panel.projectIds ?? []).filter((id) => id !== '');
   }
-  if (task.dueDay && isDBDateStr(task.dueDay)) {
-    return task.dueDay;
+  if (panel.taskDoneState === BoardPanelCfgTaskDoneState.Done) criteria.done = 'done';
+  if (panel.taskDoneState === BoardPanelCfgTaskDoneState.UnDone) {
+    criteria.done = 'undone';
   }
-  return null;
+  if (panel.isParentTasksOnly) criteria.isParentOnly = true;
+  if (plannedDate) {
+    criteria.plannedDate = plannedDate;
+  } else if (panel.scheduledState === BoardPanelCfgScheduledState.Scheduled) {
+    criteria.scheduled = 'scheduled';
+  } else if (panel.scheduledState === BoardPanelCfgScheduledState.NotScheduled) {
+    criteria.scheduled = 'unscheduled';
+  }
+  if (panel.backlogState === BoardPanelCfgTaskTypeFilter.OnlyBacklog) {
+    criteria.backlog = 'only';
+  }
+  if (panel.backlogState === BoardPanelCfgTaskTypeFilter.NoBacklog) {
+    criteria.backlog = 'exclude';
+  }
+  const deadline = parseDateRule(panel.deadlineState);
+  if (deadline) criteria.deadline = deadline;
+  const estimate = parseAmountRule(panel.estimateRule);
+  if (estimate !== undefined) criteria.estimate = estimate;
+  const timeSpent = parseAmountRule(panel.timeSpentRule);
+  if (timeSpent !== undefined) criteria.timeSpent = timeSpent;
+  const priority = parsePriorityRule(panel.priorityRule);
+  if (priority !== undefined) criteria.priority = priority;
+  return criteria;
 };
 
-/** Adds days on the local calendar, so DST changes don't shift the result. */
-export const addDaysToDbDateStr = (dayStr: string, days: number): string => {
-  const date = dateStrToUtcDate(dayStr);
-  date.setDate(date.getDate() + days);
-  return getDbDateStr(date);
+/**
+ * The panel's sort key, or undefined for manual order. `sortBy` wins, so a
+ * sort a released client picks later (it only knows `sortBy`) takes effect;
+ * `sortKey` holds the keys `sortBy` can't.
+ */
+export const getPanelSortKey = (
+  panel: Pick<BoardPanelCfg, 'sortBy' | 'sortKey'>,
+): TaskSortKey | undefined => {
+  if (panel.sortBy && panel.sortBy in SORT_BY_TO_KEY) {
+    return SORT_BY_TO_KEY[panel.sortBy];
+  }
+  return panel.sortKey && NEW_SORT_KEYS.has(panel.sortKey)
+    ? (panel.sortKey as TaskSortKey)
+    : undefined;
 };
 
-export const createBoardDueCtx = (
-  todayStr: string,
-  startOfNextDayDiffMs: number,
-): BoardDueCtx => ({
-  todayStr,
-  startOfNextDayDiffMs,
-  tomorrowStr: addDaysToDbDateStr(todayStr, 1),
-  next7DaysEndStr: addDaysToDbDateStr(todayStr, 6),
-  todayStartMs: getLogicalTodayStartMs(todayStr, startOfNextDayDiffMs),
-});
+/**
+ * Stores a sort key: in `sortBy` when it can hold it (released clients keep
+ * sorting), else in `sortKey`, deleting the other field. Gap: a released
+ * client clearing the sort can't clear a `sortKey`.
+ */
+export const withPanelSortKey = (
+  panel: BoardPanelCfg,
+  key: TaskSortKey | null | undefined,
+): BoardPanelCfg => {
+  const out: BoardPanelCfg = { ...panel };
+  delete out.sortBy;
+  delete out.sortKey;
+  const sortBy = (Object.keys(SORT_BY_TO_KEY) as BoardSortField[]).find(
+    (field) => SORT_BY_TO_KEY[field] === key,
+  );
+  if (sortBy) {
+    out.sortBy = sortBy;
+  } else if (key && NEW_SORT_KEYS.has(key)) {
+    out.sortKey = key;
+  }
+  return out;
+};
 
 /**
  * The calendar date to schedule a task for so that it lands on the logical
@@ -199,264 +278,4 @@ export const getCalendarDateForDueDay = (
   }
   const msIntoDay = task.dueWithTime - new Date(task.dueWithTime).setHours(0, 0, 0, 0);
   return msIntoDay < startOfNextDayDiffMs ? addDaysToDbDateStr(day, 1) : day;
-};
-
-const doesTaskMatchDueState = (
-  task: Pick<TaskCopy, 'dueDay' | 'dueWithTime'>,
-  dueState: BoardPanelDueState,
-  ctx: BoardDueCtx,
-): boolean => {
-  if (dueState === 'overdue') {
-    // Same predicate as the overdue section and the red date colour.
-    return isTaskOverdueByThreshold(task, ctx.todayStr, ctx.todayStartMs);
-  }
-  const day = getLogicalDueDay(task, ctx.startOfNextDayDiffMs);
-  if (!day) {
-    return false;
-  }
-  switch (dueState) {
-    case 'today':
-      return day === ctx.todayStr;
-    case 'tomorrow':
-      return day === ctx.tomorrowStr;
-    case 'next7Days':
-      return day >= ctx.todayStr && day <= ctx.next7DaysEndStr;
-  }
-};
-
-/**
- * The day a task has to be scheduled for to satisfy the panel's due rule:
- * - `undefined`: no change needed (no rule, or the task already matches);
- * - a `YYYY-MM-DD` string: schedule the task for that day;
- * - `null`: no date can satisfy the rule (moving a task into "overdue").
- */
-export const getDueDayForPanel = (
-  task: Pick<TaskCopy, 'dueDay' | 'dueWithTime'>,
-  panelCfg: Pick<BoardPanelCfg, 'dueState'>,
-  ctx: BoardDueCtx,
-): string | null | undefined => {
-  const dueState = getPanelDueState(panelCfg);
-  if (!dueState || doesTaskMatchDueState(task, dueState, ctx)) {
-    return undefined;
-  }
-  switch (dueState) {
-    case 'overdue':
-      return null;
-    case 'tomorrow':
-      return ctx.tomorrowStr;
-    case 'today':
-    case 'next7Days':
-      return ctx.todayStr;
-  }
-};
-
-/**
- * Normalize a task's due moment to a comparable millisecond timestamp, or null
- * if undated. Timezone-safe: uses `dateStrToUtcDate` for YYYY-MM-DD strings,
- * matching task.selectors.ts.
- */
-const getDueTs = (task: TaskCopy): number | null => {
-  if (task.dueWithTime) return task.dueWithTime;
-  if (task.dueDay) {
-    return dateStrToUtcDate(task.dueDay).getTime();
-  }
-  return null;
-};
-
-const NO_OP_COMPARATOR = (): number => 0;
-
-/**
- * Rewrite a task's tagIds so it will match the given panel's include/exclude
- * filter after a cross-panel drop. Pure function — never mutates inputs.
- *
- * Semantics (matches the panel-filter rules):
- * - Included tags:
- *   - Default ('all'): append every required tag (caller de-dupes if needed).
- *   - 'any': append the FIRST required tag only when the task has none of them.
- * - Excluded tags:
- *   - Default ('any'): strip ALL excluded tags the task carries.
- *   - 'all': strip only the FIRST excluded tag when the task has ALL excluded
- *     tags (breaks the AND-exclude condition without over-removing).
- *
- * TODAY_TAG is virtual: membership derives from dueDay/dueWithTime and it must
- * never be written to `task.tagIds` (ARCHITECTURE-DECISIONS #2), so the result
- * never contains it. Only the INCLUDE side ignores it — dropping it from the
- * EXCLUDE side would let an AND-exclude fire here that `doesTaskMatchPanel` can
- * never hit (it only ever sees real tags), stripping a real user tag to satisfy
- * a filter that was already inert.
- *
- * Duplicates are not de-duplicated here; callers that care should pass the
- * result through `unique()`.
- */
-export const rewriteTagIdsForPanel = (
-  currentTagIds: readonly string[],
-  panelCfg: Pick<
-    BoardPanelCfg,
-    'includedTagIds' | 'includedTagsMatch' | 'excludedTagIds' | 'excludedTagsMatch'
-  >,
-): string[] => {
-  const includedTagIds = panelCfg.includedTagIds?.filter((id) => id !== TODAY_TAG.id);
-  // Also heals a legacy TODAY_TAG that an older build wrote into the task.
-  let next: string[] = currentTagIds.filter((id) => id !== TODAY_TAG.id);
-
-  if (includedTagIds?.length) {
-    if (panelCfg.includedTagsMatch === 'any') {
-      const hasAny = includedTagIds.some((id) => next.includes(id));
-      if (!hasAny) {
-        next = next.concat(includedTagIds[0]);
-      }
-    } else {
-      next = next.concat(includedTagIds);
-    }
-  }
-
-  if (panelCfg.excludedTagIds?.length) {
-    if (panelCfg.excludedTagsMatch === 'all') {
-      const hasAll = panelCfg.excludedTagIds.every((id) => next.includes(id));
-      if (hasAll) {
-        const firstExcluded = panelCfg.excludedTagIds[0];
-        next = next.filter((id) => id !== firstExcluded);
-      }
-    } else {
-      const excluded = panelCfg.excludedTagIds;
-      next = next.filter((id) => !excluded.includes(id));
-    }
-  }
-
-  return next;
-};
-
-/**
- * Pure membership predicate: does `task` belong in a panel/column with the
- * given criteria? Companion to `rewriteTagIdsForPanel` (which rewrites a task's
- * tags TO match) — the two encode the same tag rules and must stay in sync.
- *
- * `isInBacklog` is supplied by the caller because backlog membership derives
- * from project state, not from the task itself. It is only consulted when
- * `panelCfg.backlogState` requests backlog filtering. `dueCtx` is the logical
- * today, consulted only when the panel has a due rule.
- */
-export const doesTaskMatchPanel = (
-  task: Readonly<TaskCopy>,
-  panelCfg: Pick<
-    BoardPanelCfg,
-    | 'includedTagIds'
-    | 'includedTagsMatch'
-    | 'excludedTagIds'
-    | 'excludedTagsMatch'
-    | 'isParentTasksOnly'
-    | 'taskDoneState'
-    | 'projectIds'
-    | 'scheduledState'
-    | 'backlogState'
-    | 'dueState'
-  >,
-  isInBacklog: (task: Readonly<TaskCopy>) => boolean,
-  dueCtx: BoardDueCtx,
-): boolean => {
-  const taskTagIds = task.tagIds ?? [];
-
-  if (panelCfg.includedTagIds?.length) {
-    const matches =
-      panelCfg.includedTagsMatch === 'any'
-        ? panelCfg.includedTagIds.some((tagId) => taskTagIds.includes(tagId))
-        : panelCfg.includedTagIds.every((tagId) => taskTagIds.includes(tagId));
-    if (!matches) return false;
-  }
-
-  if (panelCfg.excludedTagIds?.length) {
-    const hit =
-      panelCfg.excludedTagsMatch === 'all'
-        ? panelCfg.excludedTagIds.every((tagId) => taskTagIds.includes(tagId))
-        : panelCfg.excludedTagIds.some((tagId) => taskTagIds.includes(tagId));
-    if (hit) return false;
-  }
-
-  if (panelCfg.isParentTasksOnly && task.parentId) {
-    return false;
-  }
-
-  if (panelCfg.taskDoneState === BoardPanelCfgTaskDoneState.Done && !task.isDone) {
-    return false;
-  }
-  if (panelCfg.taskDoneState === BoardPanelCfgTaskDoneState.UnDone && task.isDone) {
-    return false;
-  }
-
-  if (
-    panelCfg.projectIds &&
-    panelCfg.projectIds.length > 0 &&
-    !isAllProjects(panelCfg.projectIds) &&
-    !panelCfg.projectIds.includes(task.projectId)
-  ) {
-    return false;
-  }
-
-  if (
-    panelCfg.scheduledState === BoardPanelCfgScheduledState.Scheduled &&
-    !(task.dueWithTime || task.dueDay)
-  ) {
-    return false;
-  }
-  if (
-    panelCfg.scheduledState === BoardPanelCfgScheduledState.NotScheduled &&
-    (task.dueWithTime || task.dueDay)
-  ) {
-    return false;
-  }
-
-  if (
-    panelCfg.backlogState === BoardPanelCfgTaskTypeFilter.OnlyBacklog &&
-    !isInBacklog(task)
-  ) {
-    return false;
-  }
-  if (
-    panelCfg.backlogState === BoardPanelCfgTaskTypeFilter.NoBacklog &&
-    isInBacklog(task)
-  ) {
-    return false;
-  }
-
-  const dueState = getPanelDueState(panelCfg);
-  if (dueState && !doesTaskMatchDueState(task, dueState, dueCtx)) {
-    return false;
-  }
-
-  return true;
-};
-
-/**
- * Returns an ascending comparator for the given field. Callers multiply by -1
- * for descending. Returns a no-op comparator for unknown fields, so an invalid
- * persisted `sortBy` degrades to manual order instead of crashing the panel.
- */
-export const buildComparator = (
-  field: BoardSortField,
-): ((a: TaskCopy, b: TaskCopy) => number) => {
-  switch (field) {
-    case 'title':
-      return (a, b) => (a.title || '').localeCompare(b.title || '');
-    case 'created':
-      return (a, b) => (a.created || 0) - (b.created || 0);
-    case 'timeEstimate':
-      return (a, b) => (a.timeEstimate || 0) - (b.timeEstimate || 0);
-    case 'dueDate':
-      return (a, b) => {
-        // Fast path: both have only dueDay (string) → lex compare (YYYY-MM-DD
-        // is fixed-width, so < / > work and are faster than localeCompare).
-        if (!a.dueWithTime && !b.dueWithTime && a.dueDay && b.dueDay) {
-          return a.dueDay < b.dueDay ? -1 : a.dueDay > b.dueDay ? 1 : 0;
-        }
-        const aTs = getDueTs(a);
-        const bTs = getDueTs(b);
-        if (aTs === null && bTs === null) return 0;
-        // Nulls last in ascending order — caller reverses for descending.
-        if (aTs === null) return 1;
-        if (bTs === null) return -1;
-        return aTs - bTs;
-      };
-    default:
-      return NO_OP_COMPARATOR;
-  }
 };

@@ -42,6 +42,16 @@ import { T } from '../../t.const';
 import { getDateTimeFromClockString } from '../../util/get-date-time-from-clock-string';
 import { parseDbDateStr } from '../../util/parse-db-date-str';
 
+// The filter menu filters through the shared task-criteria module; this keeps
+// the per-filter cases below as its parity test.
+const applyFilter = (
+  svc: TaskViewCustomizerService,
+  tasks: TaskWithSubTasks[],
+  type: FILTER_OPTION_TYPE | null,
+  preset: string,
+): TaskWithSubTasks[] =>
+  svc['_filterTasks'](tasks, { type, preset, label: '' } as FilterOption);
+
 describe('TaskViewCustomizerService', () => {
   let service: TaskViewCustomizerService;
   let mockWorkContextService: {
@@ -195,7 +205,7 @@ describe('TaskViewCustomizerService', () => {
   });
 
   it('should filter by tag name', () => {
-    const filtered = service['applyFilter'](mockTasks, FILTER_OPTION_TYPE.tag, 'Tag A');
+    const filtered = applyFilter(service, mockTasks, FILTER_OPTION_TYPE.tag, 'Tag A');
     expect(filtered.length).toBe(2);
     expect(filtered[0].id).toBe('Alpha(Tag A)');
     expect(filtered[1].id).toBe('Third Task(Tag A, Tag B)');
@@ -213,27 +223,24 @@ describe('TaskViewCustomizerService', () => {
       { ...mockTasks[1], id: 'work-task', tagIds: ['work'] },
     ];
 
-    const filtered = service['applyFilter'](tasks, FILTER_OPTION_TYPE.tag, 'work');
+    const filtered = applyFilter(service, tasks, FILTER_OPTION_TYPE.tag, 'work');
 
     expect(filtered.map((task) => task.id)).toEqual(['homework-task', 'work-task']);
   });
 
   it('should return an empty task list when filtering by a tag that doesnt exist', () => {
-    const filtered = service['applyFilter'](
-      mockTasks,
-      FILTER_OPTION_TYPE.tag,
-      'Tag Three',
-    );
+    const filtered = applyFilter(service, mockTasks, FILTER_OPTION_TYPE.tag, 'Tag Three');
     expect(filtered.length).toBe(0);
   });
 
   it('should not filter when filtering with an empty tag input', () => {
-    const filtered = service['applyFilter'](mockTasks, FILTER_OPTION_TYPE.tag, '');
+    const filtered = applyFilter(service, mockTasks, FILTER_OPTION_TYPE.tag, '');
     expect(filtered.length).toBe(4);
   });
 
   it('should filter by NOT_SPECIFIED tag (no tags)', () => {
-    const filtered = service['applyFilter'](
+    const filtered = applyFilter(
+      service,
       mockTasks,
       FILTER_OPTION_TYPE.tag,
       FILTER_COMMON.NOT_SPECIFIED,
@@ -242,8 +249,16 @@ describe('TaskViewCustomizerService', () => {
   });
 
   it('should filter selected tag ids with OR and AND modes', () => {
-    const orFiltered = service['_filterByTagIds'](mockTasks, ['Tag A', 'Tag B']);
-    const andFiltered = service['_filterByTagIds'](mockTasks, ['Tag A', 'Tag B'], 'AND');
+    const byTagIds = (tagFilterMode?: 'OR' | 'AND'): TaskWithSubTasks[] =>
+      service['_filterTasks'](mockTasks, {
+        type: FILTER_OPTION_TYPE.tag,
+        preset: null,
+        label: '',
+        tagIds: ['Tag A', 'Tag B'],
+        tagFilterMode,
+      });
+    const orFiltered = byTagIds();
+    const andFiltered = byTagIds('AND');
 
     expect(orFiltered).toHaveSize(3);
     expect(andFiltered.map((task) => task.id)).toEqual(['Third Task(Tag A, Tag B)']);
@@ -313,16 +328,13 @@ describe('TaskViewCustomizerService', () => {
       ...mockTasks,
       { ...mockTasks[1], id: 'Beta Extra', projectId: 'Project B Extra' },
     ];
-    const filtered = service['applyFilter'](
-      tasks,
-      FILTER_OPTION_TYPE.project,
-      'Project B',
-    );
+    const filtered = applyFilter(service, tasks, FILTER_OPTION_TYPE.project, 'Project B');
     expect(filtered.map((task) => task.id)).toEqual(['Beta(Tag B)', 'Beta Extra']);
   });
 
   it('should filter by schedule date', () => {
-    const filtered = service['applyFilter'](
+    const filtered = applyFilter(
+      service,
       mockTasks,
       FILTER_OPTION_TYPE.scheduledDate,
       FILTER_SCHEDULE.tomorrow,
@@ -332,7 +344,8 @@ describe('TaskViewCustomizerService', () => {
   });
 
   it('should filter by NOT_SPECIFIED schedule date (no schedule date)', () => {
-    const filtered = service['applyFilter'](
+    const filtered = applyFilter(
+      service,
       mockTasks,
       FILTER_OPTION_TYPE.scheduledDate,
       FILTER_COMMON.NOT_SPECIFIED,
@@ -341,7 +354,8 @@ describe('TaskViewCustomizerService', () => {
   });
 
   it('should filter by NOT_SPECIFIED timeSpent (no timeSpent)', () => {
-    const filtered = service['applyFilter'](
+    const filtered = applyFilter(
+      service,
       mockTasks,
       FILTER_OPTION_TYPE.timeSpent,
       FILTER_COMMON.NOT_SPECIFIED,
@@ -350,7 +364,8 @@ describe('TaskViewCustomizerService', () => {
   });
 
   it('should filter by NOT_SPECIFIED estimatedTime (no estimatedTime)', () => {
-    const filtered = service['applyFilter'](
+    const filtered = applyFilter(
+      service,
       mockTasks,
       FILTER_OPTION_TYPE.estimatedTime,
       FILTER_COMMON.NOT_SPECIFIED,
@@ -366,7 +381,8 @@ describe('TaskViewCustomizerService', () => {
       { ...mockTasks[3], id: 'none' },
     ];
 
-    const filtered = service['applyFilter'](
+    const filtered = applyFilter(
+      service,
       tasks,
       FILTER_OPTION_TYPE.priority,
       FILTER_PRIORITY.high,
@@ -382,7 +398,8 @@ describe('TaskViewCustomizerService', () => {
       { ...mockTasks[2], id: 'low', priority: 'low' },
     ];
 
-    const filtered = service['applyFilter'](
+    const filtered = applyFilter(
+      service,
       tasks,
       FILTER_OPTION_TYPE.priority,
       FILTER_COMMON.NOT_SPECIFIED,
@@ -1136,7 +1153,8 @@ describe('TaskViewCustomizerService', () => {
       },
     ];
 
-    const filtered = service['applyFilter'](
+    const filtered = applyFilter(
+      service,
       deadlineTasks,
       FILTER_OPTION_TYPE.deadline,
       FILTER_SCHEDULE.today,
@@ -1165,7 +1183,8 @@ describe('TaskViewCustomizerService', () => {
       },
     ];
 
-    const filtered = service['applyFilter'](
+    const filtered = applyFilter(
+      service,
       deadlineTasks,
       FILTER_OPTION_TYPE.deadline,
       FILTER_SCHEDULE.today,
@@ -1207,7 +1226,8 @@ describe('TaskViewCustomizerService', () => {
       },
     ];
 
-    const filtered = service['applyFilter'](
+    const filtered = applyFilter(
+      service,
       deadlineTasks,
       FILTER_OPTION_TYPE.deadline,
       FILTER_COMMON.NOT_SPECIFIED,
@@ -1250,7 +1270,8 @@ describe('TaskViewCustomizerService', () => {
       },
     ];
 
-    const filtered = service['applyFilter'](
+    const filtered = applyFilter(
+      service,
       deadlineTasks,
       FILTER_OPTION_TYPE.deadline,
       FILTER_SCHEDULE.tomorrow,
@@ -1738,7 +1759,7 @@ describe('TaskViewCustomizerService', () => {
           { ...mockTasks[2], id: 'none', priority: null },
         ];
         expect(
-          newService['applyFilter'](candidates, filter.type, filter.preset!).map(
+          applyFilter(newService, candidates, filter.type, filter.preset!).map(
             (t) => t.id,
           ),
         ).toEqual(['legacy', 'numeric']);

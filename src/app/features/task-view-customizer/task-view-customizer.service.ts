@@ -10,7 +10,17 @@ import { Tag } from '../tag/tag.model';
 import { TODAY_TAG } from '../tag/tag.const';
 import { takeUntilDestroyed, toObservable, toSignal } from '@angular/core/rxjs-interop';
 import { getDbDateStr } from '../../util/get-db-date-str';
-import { getWeekRange } from '../../util/get-week-range';
+import {
+  selectStartOfNextDayDiffMs,
+  selectTodayStr,
+} from '../../root-store/app-state/app-state.selectors';
+import {
+  buildTaskComparator,
+  createTaskCriteriaCtx,
+  matchesTaskCriteria,
+} from '../tasks/task-criteria/task-criteria';
+import { filterToCriteria, SORT_OPTION_TO_KEY } from './filter-to-criteria';
+import { TaskCriteria } from '../tasks/task-criteria/task-criteria.model';
 import { WorkContextService } from '../work-context/work-context.service';
 import { WorkContextType } from '../work-context/work-context.model';
 import { ProjectService } from '../project/project.service';
@@ -25,9 +35,7 @@ import {
   SORT_OPTION_TYPE,
   GROUP_OPTION_TYPE,
   FILTER_OPTION_TYPE,
-  FILTER_SCHEDULE,
   SORT_ORDER,
-  FILTER_COMMON,
   OPTIONS,
   NO_TAG_GROUP_ID,
 } from './types';
@@ -37,7 +45,6 @@ import { LS } from '../../core/persistence/storage-keys.const';
 import { LanguageService } from 'src/app/core/language/language.service';
 import { TranslateService } from '@ngx-translate/core';
 import { T } from '../../t.const';
-import { parseDbDateStr } from '../../util/parse-db-date-str';
 
 const GROUP_OPTIONS_NO_PROJECT = OPTIONS.group.list.filter(
   (opt) => opt.type !== GROUP_OPTION_TYPE.project,
@@ -83,6 +90,20 @@ export class TaskViewCustomizerService {
   private store = inject(Store);
   private _workContextService = inject(WorkContextService);
   private _dateAdapter = inject(DateAdapter);
+  private readonly _todayStr = this.store.selectSignal(selectTodayStr);
+  private readonly _startOfNextDayDiffMs = this.store.selectSignal(
+    selectStartOfNextDayDiffMs,
+  );
+  private readonly _criteriaCtx = computed(() =>
+    createTaskCriteriaCtx({
+      todayStr: this._todayStr() || getDbDateStr(new Date()),
+      startOfNextDayDiffMs: this._startOfNextDayDiffMs() ?? 0,
+      // Reads the localization config signal, so a changed week start applies.
+      firstDayOfWeek: this._dateAdapter.getFirstDayOfWeek(),
+      // Task lists read a plain day before a time; boards the other way round.
+      isDayBeforeTime: true,
+    }),
+  );
   private _projectService = inject(ProjectService);
   private _tagService = inject(TagService);
   private _menuTreeService = inject(MenuTreeService);
@@ -257,19 +278,13 @@ export class TaskViewCustomizerService {
       // Tag filtering, tag grouping and group order all read the tags; re-run
       // when their sidebar order or titles change, not only when tasks do.
       toObservable(this._tagOrderKey),
+      // Date filters use the logical day: re-run at day rollover and when the
+      // start of day or the first day of the week changes.
+      toObservable(this._criteriaCtx),
     ]).pipe(
-      map(([tasks, sort, group, filter]) => {
-        const normalizedFilterVal = filter.preset?.trim();
-        const filterValueToUse = normalizedFilterVal ?? '';
-        // A deleted tag stays in stored tagIds, but the chip list hides it.
-        // Keep only ids that still exist so the list matches the chips.
-        const tagIds =
-          filter.type === FILTER_OPTION_TYPE.tag
-            ? this._existingTagIds(filter.tagIds ?? [])
-            : [];
-        const hasTagIds = tagIds.length > 0;
-
-        const isDefaultFilter = !filter.type || (!filterValueToUse && !hasTagIds);
+      map(([tasks, sort, group, filter, , ctx]) => {
+        const criteria = this._toCriteria(filter);
+        const isDefaultFilter = !criteria;
         const isDefaultSort = !sort.type;
         const isDefaultGroup = !group.type;
 
@@ -277,11 +292,9 @@ export class TaskViewCustomizerService {
           return { result: { list: tasks }, isDefault: true };
         }
 
-        const filtered = isDefaultFilter
-          ? tasks
-          : filter.type === FILTER_OPTION_TYPE.tag && hasTagIds
-            ? this._filterByTagIds(tasks, tagIds, filter.tagFilterMode)
-            : this.applyFilter(tasks, filter.type, filterValueToUse);
+        const filtered = criteria
+          ? tasks.filter((task) => matchesTaskCriteria(task, criteria, ctx))
+          : tasks;
         const sorted = isDefaultSort
           ? filtered
           : this.applySort(filtered, sort.type, sort.order);
@@ -320,65 +333,26 @@ export class TaskViewCustomizerService {
     );
   }
 
-  private applyFilter(
+  /**
+   * The filter as task criteria (`null`: no filter). A deleted tag stays in
+   * stored tagIds, but the chip list hides it; only existing ids count.
+   */
+  private _toCriteria(filter: FilterOption): TaskCriteria | null {
+    return filterToCriteria(filter, {
+      tags: this._allTags().filter((tag) => tag.id !== TODAY_TAG.id),
+      projects: this._allProjects,
+    });
+  }
+
+  private _filterTasks(
     tasks: TaskWithSubTasks[],
-    type: FILTER_OPTION_TYPE | FILTER_COMMON | null,
-    value: string,
+    filter: FilterOption,
   ): TaskWithSubTasks[] {
-    if (!type || !value) return tasks;
-
-    switch (type) {
-      case FILTER_OPTION_TYPE.tag:
-        if (value === FILTER_COMMON.NOT_SPECIFIED) {
-          return tasks.filter((t) => !t.tagIds.length);
-        }
-
-        return tasks.filter((task) =>
-          task.tagIds?.some((id) =>
-            this._allTags().some(
-              (tag) =>
-                tag.id === id && tag.title.toLowerCase().includes(value.toLowerCase()),
-            ),
-          ),
-        );
-      case FILTER_OPTION_TYPE.project:
-        const projectIds = this._allProjects
-          .filter((p) => p.title.toLowerCase().includes(value.toLowerCase().trim()))
-          .map((p) => p.id);
-        return tasks.filter((task) => projectIds.includes(task.projectId));
-      case FILTER_OPTION_TYPE.scheduledDate:
-        return this._filterByDateFields(tasks, value, (t) => [t.dueDay, t.dueWithTime]);
-      case FILTER_OPTION_TYPE.deadline:
-        return this._filterByDateFields(tasks, value, (t) => [
-          t.deadlineDay,
-          t.deadlineWithTime,
-        ]);
-      case FILTER_OPTION_TYPE.estimatedTime:
-        if (value === FILTER_COMMON.NOT_SPECIFIED) {
-          return tasks.filter((task) => task.timeEstimate === 0);
-        }
-
-        return tasks.filter((task) => task.timeEstimate >= +value);
-      case FILTER_OPTION_TYPE.timeSpent:
-        if (value === FILTER_COMMON.NOT_SPECIFIED) {
-          return tasks.filter((task) => task.timeSpent === 0);
-        }
-
-        return tasks.filter((task) => {
-          const spent = task.timeSpentOnDay
-            ? Object.values(task.timeSpentOnDay).reduce((a, b) => a + b, 0)
-            : 0;
-          return spent >= +value;
-        });
-      case FILTER_OPTION_TYPE.priority:
-        if (value === FILTER_COMMON.NOT_SPECIFIED) {
-          return tasks.filter((t) => !getTaskPriority(t.priority));
-        }
-
-        return tasks.filter((t) => getTaskPriority(t.priority) === +value);
-      default:
-        return tasks;
-    }
+    const criteria = this._toCriteria(filter);
+    const ctx = this._criteriaCtx();
+    return criteria
+      ? tasks.filter((task) => matchesTaskCriteria(task, criteria, ctx))
+      : tasks;
   }
 
   private applySort(
@@ -386,11 +360,9 @@ export class TaskViewCustomizerService {
     sortType: SORT_OPTION_TYPE | null,
     order?: SORT_ORDER,
   ): TaskWithSubTasks[] {
-    const tasksCopy = [...tasks];
-
-    // Factor for bidirectional for sorting
-    const factor = order === SORT_ORDER.DESC ? -1 : 1;
-
+    if (!sortType) {
+      return [...tasks];
+    }
     const locale = this._languageService.detect();
     if (!this._collator || this._collatorLocale !== locale) {
       this._collator = new Intl.Collator(locale, {
@@ -399,90 +371,17 @@ export class TaskViewCustomizerService {
       });
       this._collatorLocale = locale;
     }
-    const collator = this._collator;
-    const sortByTitle = (a: string, b: string, multiplier = 1): number => {
-      return collator.compare(a, b) * multiplier;
-    };
-
-    const tagsInSidebarOrder = this._tagsInSidebarOrder();
-    const tagOrderById = new Map(tagsInSidebarOrder.map((tag, index) => [tag.id, index]));
-    const unknownTagRank = tagsInSidebarOrder.length;
-    const noTagRank = unknownTagRank + 1;
-
-    // A task is placed by its highest-priority tag = the one with the lowest
-    // sidebar (menu-tree) index. Unknown tag ids rank after all known tags,
-    // untagged tasks last. (#8400)
-    const getPrimaryTagRank = (task: TaskWithSubTasks): number => {
-      if (!task.tagIds?.length) {
-        return noTagRank;
-      }
-
-      let min = unknownTagRank;
-      for (const tagId of task.tagIds) {
-        const rank = tagOrderById.get(tagId) ?? unknownTagRank;
-        if (rank < min) min = rank;
-      }
-      return min;
-    };
-
-    // Order by the primary tag's sidebar position. Equal ranks (same tag group)
-    // return 0, so the stable sort keeps the user's manual ordering within a tag
-    // instead of re-sorting it by task title (#8486). Note this makes DESC flip
-    // only the group order, not the order within a group - that asymmetry is
-    // intentional; re-sorting within a group would bring the bug back.
-    const sortByTagRank = (a: TaskWithSubTasks, b: TaskWithSubTasks): number =>
-      (getPrimaryTagRank(a) - getPrimaryTagRank(b)) * factor;
-
-    switch (sortType) {
-      case SORT_OPTION_TYPE.name:
-        return tasksCopy.sort((a, b) => sortByTitle(a.title, b.title, factor));
-
-      case SORT_OPTION_TYPE.tag: {
-        return tasksCopy.sort(sortByTagRank);
-      }
-
-      case SORT_OPTION_TYPE.priority: {
-        return tasksCopy.sort(
-          (a, b) =>
-            ((getTaskPriority(b.priority) ?? 0) - (getTaskPriority(a.priority) ?? 0)) *
-            factor,
-        );
-      }
-
-      case SORT_OPTION_TYPE.creationDate:
-        return tasksCopy.sort((a, b) => (a.created - b.created) * factor);
-
-      case SORT_OPTION_TYPE.scheduledDate:
-        return this._sortByDateFields(tasksCopy, factor, (t) => [
-          t.dueDay,
-          t.dueWithTime,
-        ]);
-
-      case SORT_OPTION_TYPE.deadline:
-        return this._sortByDateFields(tasksCopy, factor, (t) => [
-          t.deadlineDay,
-          t.deadlineWithTime,
-        ]);
-
-      case SORT_OPTION_TYPE.estimatedTime:
-        return tasksCopy.sort(
-          (a, b) => ((a.timeEstimate || 0) - (b.timeEstimate || 0)) * factor,
-        );
-
-      case SORT_OPTION_TYPE.timeSpent:
-        return tasksCopy.sort((a, b) => {
-          const aSpent = a.timeSpentOnDay
-            ? Object.values(a.timeSpentOnDay).reduce((x, y) => x + y, 0)
-            : 0;
-          const bSpent = b.timeSpentOnDay
-            ? Object.values(b.timeSpentOnDay).reduce((x, y) => x + y, 0)
-            : 0;
-          return (aSpent - bSpent) * factor;
-        });
-
-      default:
-        return tasksCopy;
-    }
+    const key = SORT_OPTION_TO_KEY[sortType];
+    const compare = buildTaskComparator(key, {
+      collator: this._collator,
+      tagRankById:
+        key === 'tag'
+          ? new Map(this._tagsInSidebarOrder().map((tag, index) => [tag.id, index]))
+          : undefined,
+    });
+    // Same comparators as board columns, so a saved view sorts like its list.
+    const factor = order === SORT_ORDER.DESC ? -1 : 1;
+    return [...tasks].sort((a, b) => compare(a, b) * factor);
   }
 
   private applyGrouping(
@@ -670,123 +569,6 @@ export class TaskViewCustomizerService {
     }
 
     return grouped;
-  }
-
-  private _filterByDateFields(
-    tasks: TaskWithSubTasks[],
-    value: string,
-    getFields: (
-      t: TaskWithSubTasks,
-    ) => [string | undefined | null, number | undefined | null],
-  ): TaskWithSubTasks[] {
-    if (value === FILTER_COMMON.NOT_SPECIFIED) {
-      return tasks.filter((t) => {
-        const [day, withTime] = getFields(t);
-        return !day && !withTime;
-      });
-    }
-
-    const today = new Date();
-    const firstDayOfWeek = this._dateAdapter.getFirstDayOfWeek();
-    const todayStr = getDbDateStr(today);
-    const tomorrowStr = getDbDateStr(new Date(new Date().setDate(today.getDate() + 1)));
-
-    return tasks.filter((task) => {
-      const [day, withTime] = getFields(task);
-      const dateStr = day ? day : withTime ? getDbDateStr(withTime) : null;
-      if (!dateStr) return false;
-
-      switch (value) {
-        case FILTER_SCHEDULE.today:
-          return dateStr.startsWith(todayStr);
-        case FILTER_SCHEDULE.tomorrow:
-          return dateStr.startsWith(tomorrowStr);
-        case FILTER_SCHEDULE.thisWeek: {
-          const weekRange = getWeekRange(today, firstDayOfWeek);
-          return (
-            dateStr >= getDbDateStr(weekRange.start) &&
-            dateStr <= getDbDateStr(weekRange.end)
-          );
-        }
-        case FILTER_SCHEDULE.nextWeek: {
-          const nextWeekStart = new Date(new Date().setDate(today.getDate() + 7));
-          const weekRange = getWeekRange(nextWeekStart, firstDayOfWeek);
-          return (
-            dateStr >= getDbDateStr(weekRange.start) &&
-            dateStr <= getDbDateStr(weekRange.end)
-          );
-        }
-        case FILTER_SCHEDULE.thisMonth: {
-          const yearMonth = getDbDateStr(today).substring(0, 7);
-          return dateStr.startsWith(yearMonth);
-        }
-        case FILTER_SCHEDULE.nextMonth: {
-          const nextMonth = new Date(new Date().setDate(1));
-          nextMonth.setMonth(nextMonth.getMonth() + 1);
-          const yearMonth = getDbDateStr(nextMonth).substring(0, 7);
-          return dateStr.startsWith(yearMonth);
-        }
-        default:
-          return true;
-      }
-    });
-  }
-
-  /** Ids the chip list can still show: real tags, not Today and not deleted ones. */
-  private _existingTagIds(tagIds: string[]): string[] {
-    const known = new Set(
-      this._allTags()
-        .filter((tag) => tag.id !== TODAY_TAG.id)
-        .map((tag) => tag.id),
-    );
-    return tagIds.filter((id) => known.has(id));
-  }
-
-  private _filterByTagIds(
-    tasks: TaskWithSubTasks[],
-    tagIds: string[],
-    mode: 'OR' | 'AND' = 'OR',
-  ): TaskWithSubTasks[] {
-    return tasks.filter((task) => {
-      const taskTagIds = task.tagIds ?? [];
-      return mode === 'AND'
-        ? tagIds.every((tagId) => taskTagIds.includes(tagId))
-        : tagIds.some((tagId) => taskTagIds.includes(tagId));
-    });
-  }
-
-  private _sortByDateFields(
-    tasks: TaskWithSubTasks[],
-    factor: number,
-    getFields: (
-      t: TaskWithSubTasks,
-    ) => [string | undefined | null, number | undefined | null],
-  ): TaskWithSubTasks[] {
-    const toDate = (
-      day: string | undefined | null,
-      withTime: number | undefined | null,
-    ): Date | null => {
-      if (day) {
-        // A date-only value means "by the end of that day" for sorting (#9828).
-        const date = parseDbDateStr(day);
-        date.setHours(23, 59, 59, 999);
-        return date;
-      }
-      return withTime ? new Date(withTime) : null;
-    };
-
-    return tasks.sort((a, b) => {
-      const [dayA, withTimeA] = getFields(a);
-      const [dayB, withTimeB] = getFields(b);
-      const dateA = toDate(dayA, withTimeA);
-      const dateB = toDate(dayB, withTimeB);
-
-      if (dateA === null && dateB === null) return 0;
-      if (dateA === null) return 1 * factor;
-      if (dateB === null) return -1 * factor;
-
-      return (dateA.getTime() - dateB.getTime()) * factor;
-    });
   }
 
   setSort(val: SortOption): void {

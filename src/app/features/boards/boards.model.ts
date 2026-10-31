@@ -19,11 +19,6 @@ export enum BoardPanelCfgTaskTypeFilter {
 export type BoardSortField = 'dueDate' | 'created' | 'title' | 'timeEstimate';
 export type BoardMatchMode = 'all' | 'any';
 
-// Code-only union: the persisted `dueState` is a plain string so a value added
-// by a newer client doesn't fail typia's closed-union check on this one (see
-// validation-fn.ts). Read it through `getPanelDueState`.
-export type BoardPanelDueState = 'overdue' | 'today' | 'tomorrow' | 'next7Days';
-
 export interface BoardSrcCfg {
   includedTagIds: string[];
   excludedTagIds: string[];
@@ -47,8 +42,23 @@ export interface BoardSrcCfg {
   sortByDue?: 'off' | 'asc' | 'desc';
   // optional since newly added
   backlogState?: BoardPanelCfgTaskTypeFilter;
-  // Absent = any due date. A `BoardPanelDueState`; unknown values read as absent.
+  // The rule fields below are optional and stored as plain strings/booleans:
+  // a closed union would make typia reject a value a newer client adds (see
+  // validation-fn.ts). Read them through `panelToCriteria`; unknown values
+  // mean "any". Absent = no rule.
+  // Planned date: a `TaskDateRule` ('today', 'thisWeek', …).
   dueState?: string;
+  // Deadline: a `TaskDateRule`.
+  deadlineState?: string;
+  // 'none' or a minimum in ms, e.g. '1800000'.
+  estimateRule?: string;
+  timeSpentRule?: string;
+  // 'none', '1' (low), '2', '3' (high).
+  priorityRule?: string;
+  isUntagged?: boolean;
+  // Sort keys `sortBy` can't hold ('deadline', 'timeSpent', 'priority',
+  // 'tag'); `sortBy` wins when both are set. See `getPanelSortKey`.
+  sortKey?: string;
 }
 
 export interface BoarFieldsToRemove {
