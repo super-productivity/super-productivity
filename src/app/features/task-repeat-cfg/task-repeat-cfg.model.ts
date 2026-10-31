@@ -50,6 +50,8 @@ export interface TaskRepeatCfgCopy {
   priority?: Task['priority'];
   startTime?: string;
   remindAt?: TaskReminderOptionId;
+  // Days from an occurrence's day to its deadline day; unset = no deadline.
+  deadlineOffsetDays?: number;
 
   // actual repeat cfg fields
   isPaused: boolean;
