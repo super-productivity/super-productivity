@@ -239,8 +239,7 @@ export class TaskViewCustomizerPanelComponent {
       {
         type: list.type,
         id: list.id,
-        // Today's stored title is English; use the translated one.
-        // Today's view is named after its filter instead.
+        // Not used for Today: its view is named after the filter.
         title: list.title,
         taskIds: list.taskIds,
       },
