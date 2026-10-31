@@ -228,13 +228,14 @@ object BackgroundSyncCredentialStore {
      * payloads (SuperSync encrypts payloads end-to-end since #8670); an empty
      * password clears it. Cached derived keys are password-dependent, so any
      * change also drops the key cache — this method is the single owner of
-     * that invariant.
+     * that invariant. It also drops the file ETag, so a sync file that was
+     * unreadable with the old password is downloaded again.
      */
     @Synchronized
     fun setEncryptionPassword(context: Context, password: String) {
         val prefs = getPrefs(context)
         if ((prefs.getString(KEY_ENCRYPTION_PASSWORD, null) ?: "") == password) return
-        val editor = prefs.edit().remove(KEY_DERIVED_KEY_CACHE)
+        val editor = prefs.edit().remove(KEY_DERIVED_KEY_CACHE).remove(KEY_FILE_ETAG)
         if (password.isEmpty()) {
             editor.remove(KEY_ENCRYPTION_PASSWORD)
         } else {

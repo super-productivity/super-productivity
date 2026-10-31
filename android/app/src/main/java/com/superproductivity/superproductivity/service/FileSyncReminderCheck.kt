@@ -110,8 +110,10 @@ internal fun runFileSyncReminderCheck(
     val decryptor = buildPayloadDecryptor(context, TAG)
     val result = SyncFileReminderReader.read(body, decryptor, credentials.isEncryptionExpected)
     if (result is SyncFileReadResult.Unreadable) {
-        // Keep ETag and baseline: a password fix or format change re-reads it
+        // Store the ETag so an unchanged file is not re-downloaded every
+        // period; a password change clears it. Keep the baseline.
         Log.w(TAG, "Sync file not usable for reminders: ${result.reason}")
+        BackgroundSyncCredentialStore.setFileETag(context, eTag)
         return ListenableWorker.Result.success()
     }
     val previous = parseReminderSlots(BackgroundSyncCredentialStore.getFileReminderSlotsRaw(context))
