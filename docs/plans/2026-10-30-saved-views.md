@@ -278,6 +278,103 @@ dateStrToUtcDate(day) }, tasks)`, which keeps a task's time of day and uses
   in English) until translators catch up.
 - **E2E churn** across board specs; mechanical.
 
+## 10. Phase 2 — full rules, save as view, title menu, list layout
+
+Decided 2026-10-31 by the maintainer: don't wait for usage, build the best
+form now. Four parts, in this order; A is a prerequisite and lands as its own
+commits so it can be reviewed (or split out) on its own.
+
+### A. One rule module for columns and the filter menu (prerequisite)
+
+Today two engines decide whether a task belongs: `doesTaskMatchPanel` (board
+columns) and `TaskViewCustomizerService.applyFilter` (the sort/group/filter
+menu). They support different rules, and the menu's date filter uses the
+calendar day instead of the logical day.
+
+New pure module `src/app/features/tasks/task-criteria/`:
+
+- `TaskCriteria` (in memory only, never persisted): tags (include all/any,
+  exclude all/any, untagged), project ids, done state, parent only, scheduled
+  state, backlog, planned-date rule, deadline rule, minimum estimate (or none),
+  minimum time spent (or none), priority (or none).
+- Date rules: `overdue`, `todayOrOverdue`, `today`, `tomorrow`, `next7Days`,
+  `thisWeek`, `nextWeek`, `thisMonth`, `nextMonth`, `none`. Logical day via
+  `startOfNextDayDiffMs`; weeks start on the user's first day of the week.
+- `TaskCriteriaCtx`: today, offset, first day of week, backlog lookup, plus
+  bounds derived once (`createTaskCriteriaCtx`), as `createBoardDueCtx` does now.
+- `matchesTaskCriteria(task, criteria, ctx): boolean`.
+- `getChangesToMatch(task, criteria, ctx): TaskMatchChanges | null` — what has
+  to change so the task matches: tags, done, project, schedule day or
+  unschedule, deadline day or no deadline, priority, backlog move; `null` when
+  no change can satisfy a rule (overdue, minimum estimate or time spent the
+  task doesn't meet). Only a description: callers dispatch existing actions.
+- Adapters: `panelToCriteria(BoardPanelCfg)` and `filterToCriteria(filter,
+lookups)` (the menu's legacy title-substring tag/project presets resolve to
+  ids at evaluation time, so their behaviour is unchanged).
+- Board columns and the filter menu both match through it. Board write-back
+  uses `getChangesToMatch` instead of its own per-field code. The filter menu's
+  date filter moves to the logical day (behaviour fix, noted in the PR).
+- The grouped-by-tag drop in task lists (`_retagAcrossGroups`) stays as is.
+
+### B. Every filter-menu rule on columns
+
+New optional persisted panel fields, all plain strings/booleans (closed unions
+would fail typia on clients that don't know a new value, see §6):
+
+| Field               | Values                                                                  | Write-back on move/add                                                                                          |
+| ------------------- | ----------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `dueState` (exists) | adds `todayOrOverdue`, `thisWeek`, `nextWeek`, `thisMonth`, `nextMonth` | schedule for today (or the first day of the range if today is outside it); `todayOrOverdue` keeps overdue tasks |
+| `deadlineState`     | the date rules incl. `none`                                             | set deadline day like the planned date; `none` removes it; `overdue` refuses                                    |
+| `estimateRule`      | `none` or a minimum in ms (`600000` …)                                  | refuse unless it already matches                                                                                |
+| `timeSpentRule`     | `none` or a minimum in ms                                               | refuse unless it already matches                                                                                |
+| `priorityRule`      | `none`, `1`, `2`, `3`                                                   | set the priority                                                                                                |
+| `isUntagged`        | boolean                                                                 | remove all tags                                                                                                 |
+
+- Sorting: `sortBy` is a closed union persisted today, so new sort keys can't
+  go there. New `sortKey?: string` adds `deadline`, `timeSpent`, `priority`,
+  `tag`; when it is one of the old four, `sortBy` is written too, so released
+  clients keep sorting. Read `sortKey ?? sortBy`.
+- The board form gets the new fields (estimate/time spent/priority as selects,
+  untagged as a checkbox that hides the tag fields).
+- Released clients ignore the new fields: such a column shows more tasks there,
+  and drops there apply only the old rules. Same degradation as `dueState`.
+
+### C. "Save as view…" from the filter menu
+
+- New item in the sort/group/filter menu, on project, tag and Today task lists.
+- Opens the create dialog prefilled: title = the list's title, one column,
+  `cols: 1`; context rule = the project (`projectIds`, not backlog), the tag
+  (`includedTagIds`), or for Today `dueState: todayOrOverdue`; plus the
+  current filter mapped to its rule and the current sort mapped to `sortKey`.
+  Undone tasks only, like the list.
+- Grouping is not saved: columns don't group. The dialog says so in a hint
+  when a grouping is active.
+
+### D. View menu in the title bar
+
+- The Edit/Duplicate/Delete menu becomes a small `view-menu` component shared by
+  the side-menu row and the title bar.
+- On `/boards/<id>` the title bar shows its more-button with that menu under the
+  same condition as the project menu (not on the narrowest screens).
+- The title icon is the view's own icon (list or board).
+
+### E. List layout for one-column views
+
+- A view with `cols: 1` (one or more stacked columns) is laid out at list
+  width, centered, like a project list, instead of spanning the page. Still
+  board cards; full task rows stay out (needs a work context, hot path).
+
+### Tests
+
+- Unit: the criteria module (every rule, logical day, week start, ranges,
+  changes-to-match incl. refusals); adapters; the filter menu spec keeps
+  passing (plus the logical-day fix); board panel write-back per rule;
+  `sortKey`; save-as-view mapping per context and filter; `view-menu`;
+  page-title menu condition.
+- E2E: save a filtered project list as a view and see the same tasks; a
+  priority column sets priority on move; the title-bar menu duplicates and
+  deletes; one-column view width.
+
 ## Review
 
 Plan review (fresh-context subagent, 2026-10-30). Fixed in this revision:
