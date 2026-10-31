@@ -278,8 +278,9 @@ test.describe('View rules', () => {
 
   test('a view with several columns has no title-bar filter', async ({ page }) => {
     for (const id of ['KANBAN_DEFAULT', 'EISENHOWER_MATRIX']) {
+      // A fresh profile lacks some of their tags, so the page may show a
+      // "create tag" prompt instead of panels; the title bar is the same.
       await page.goto(`/#/boards/${id}`);
-      await expect(page.locator('boards board-panel').first()).toBeVisible();
       await expect(
         page
           .locator('page-title .page-title-actions')
@@ -338,7 +339,8 @@ test.describe('View rules', () => {
     // The sections differ by tag, so the title-bar menu can't edit tags.
     await page.locator('page-title .task-filter-btn').click();
     await page.getByRole('menuitem', { name: /Filter By/ }).click();
-    await expect(page.getByRole('menuitem', { name: /^Tag/ })).toBeDisabled();
-    await expect(page.getByRole('menuitem', { name: /Priority/ })).toBeEnabled();
+    const menus = page.locator('.mat-mdc-menu-panel');
+    await expect(menus.getByRole('menuitem', { name: /^Tag/ })).toBeDisabled();
+    await expect(menus.getByRole('menuitem', { name: /Priority/ })).toBeEnabled();
   });
 });
