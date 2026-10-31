@@ -5,7 +5,7 @@ import { expect, Locator, Page } from '@playwright/test';
  * The + only shows on hover (desktop), like the other section buttons.
  */
 export const openCreateViewDialog = async (page: Page): Promise<Locator> => {
-  await page.locator('nav-view-group .g-multi-btn-wrapper').hover();
+  await page.locator('nav-view-group > div.g-multi-btn-wrapper').hover();
   await page.locator('[data-nav-btn="add-view"]').click();
   const dialog = page.locator('dialog-board-edit');
   await expect(dialog).toBeVisible();

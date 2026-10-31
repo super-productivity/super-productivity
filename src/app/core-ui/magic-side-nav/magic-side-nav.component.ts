@@ -22,6 +22,7 @@ import {
 import { NavigationStart, Router, RouterModule } from '@angular/router';
 import { NavItemComponent } from './nav-item/nav-item.component';
 import { NavListTreeComponent } from './nav-list/nav-list-tree.component';
+import { NavViewGroupComponent } from './nav-view-group/nav-view-group.component';
 import { NavItem } from './magic-side-nav.model';
 import { LS } from '../../core/persistence/storage-keys.const';
 import { MagicNavConfigService } from './magic-nav-config.service';
@@ -67,6 +68,7 @@ const SIDENAV_WIDTH_ANIMATION_DURATION_MS = 425;
     RouterModule,
     NavItemComponent,
     NavListTreeComponent,
+    NavViewGroupComponent,
     MatMenuModule,
     NavMatMenuComponent,
     SwipeDirective,
