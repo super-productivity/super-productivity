@@ -822,13 +822,20 @@ describe('TaskService', () => {
     // With a start-of-next-day offset, 01:00 still belongs to yesterday: the
     // calendar date would hide the new task from Today until the next day
     it('should set the logical today, not the calendar day, for TODAY', () => {
-      const task = service.createNewTaskWithDefaults({
-        title: 'Test',
-        workContextType: WorkContextType.TAG,
-        workContextId: TODAY_TAG.id,
-      });
+      jasmine.clock().install();
+      // calendar day 2026-01-06; the DateService mock's logical today is 2026-01-05
+      jasmine.clock().mockDate(new Date(2026, 0, 6, 1));
+      try {
+        const task = service.createNewTaskWithDefaults({
+          title: 'Test',
+          workContextType: WorkContextType.TAG,
+          workContextId: TODAY_TAG.id,
+        });
 
-      expect(task.dueDay).toBe('2026-01-05');
+        expect(task.dueDay).toBe('2026-01-05');
+      } finally {
+        jasmine.clock().uninstall();
+      }
     });
 
     // The TODAY default is keyed on `'dueDay' in additional`, not on its value,
