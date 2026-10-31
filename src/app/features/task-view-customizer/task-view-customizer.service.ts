@@ -234,14 +234,25 @@ export class TaskViewCustomizerService {
       preset = String(getTaskPriority(preset));
     }
     if (!currentFilter) return DEFAULT_OPTIONS.filter;
+    // A tag title typed into the old text input: the tag chips cannot show or
+    // remove it, so it would filter the list invisibly
+    if (
+      stored.type === FILTER_OPTION_TYPE.tag &&
+      preset &&
+      preset !== FILTER_COMMON.NOT_SPECIFIED
+    ) {
+      return DEFAULT_OPTIONS.filter;
+    }
 
     const sanitized: FilterOption = {
       ...currentFilter,
       preset,
     };
     if (stored.type === FILTER_OPTION_TYPE.tag) {
-      if (stored.tagIds) sanitized.tagIds = stored.tagIds;
-      if (stored.tagFilterMode) sanitized.tagFilterMode = stored.tagFilterMode;
+      if (Array.isArray(stored.tagIds)) sanitized.tagIds = stored.tagIds;
+      if (stored.tagFilterMode === 'AND' || stored.tagFilterMode === 'OR') {
+        sanitized.tagFilterMode = stored.tagFilterMode;
+      }
     }
     return sanitized;
   }
