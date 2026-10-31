@@ -1,0 +1,20 @@
+---
+# Generated from Harper's AsIsWithAnything rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Flags the incorrect idiom blend `as is with anything` and suggests standard alternatives like `as with anything` or `as is the case with anything`.
+extends: existence
+message: "The phrase `as is with anything` is ungrammatical. Use `as with anything` or `as is the case with anything`."
+level: suggestion
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "as with anything"
+    - "as is the case with anything"
+tokens:
+  - "as(?!\\s*\\n\\s*\\n)\\s+is(?!\\s*\\n\\s*\\n)\\s+with(?!\\s*\\n\\s*\\n)\\s+anything(?!['\\x{2019}]s\\b)"

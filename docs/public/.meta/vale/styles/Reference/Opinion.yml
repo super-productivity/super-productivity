@@ -1,0 +1,31 @@
+# Reference is neutral. It states what is, without judging it easy, simple,
+# unfortunate, or obvious.
+# https://diataxis.fr/reference/#the-language-of-reference
+extends: existence
+message: "'%s' is an opinion. Reference states what is."
+link: https://diataxis.fr/reference/#the-language-of-reference
+level: warning
+ignorecase: true
+tokens:
+  - unfortunately
+  - simply
+  - easily
+  - "it(?:'s| is) easy to"
+  - obviously
+  - of course
+  - powerful
+  - convenient(?:ly)?
+
+tests:
+  - name: fires
+    input: |
+      Simply pass the flag. Unfortunately, it is ignored on Windows.
+
+    want: |
+      1:1:Reference.Opinion:'Simply' is an opinion. Reference states what is.
+      1:23:Reference.Opinion:'Unfortunately' is an opinion. Reference states what is.
+  - name: clean
+    input: |
+      Pass the flag. On Windows it is ignored.
+
+    want: ""

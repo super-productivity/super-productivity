@@ -1,0 +1,19 @@
+---
+# Generated from Harper's ExpandWithout rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Expands the abbreviation `w/o` to the full word `without` for clarity.
+extends: existence
+message: "Use `without` instead of `w/o`"
+level: suggestion
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "without"
+tokens:
+  - "w/o(?!['\\x{2019}]s\\b)"

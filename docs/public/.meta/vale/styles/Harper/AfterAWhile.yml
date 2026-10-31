@@ -1,0 +1,19 @@
+---
+# Generated from Harper's AfterAWhile rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects the missing article in `after while`, forming `after a while`.
+extends: existence
+message: "When describing a timeframe, use `a while`."
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "after a while"
+tokens:
+  - "after(?!\\s*\\n\\s*\\n)\\s+while(?!['\\x{2019}]s\\b)"

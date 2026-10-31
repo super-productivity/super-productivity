@@ -1,0 +1,30 @@
+---
+# Hand-written from Harper's AWhile: `awhile` is the adverb, `a while` the noun
+# phrase.
+#
+# Harper only asks for `a while` when what precedes `awhile` is not a verb --
+# after one, the adverb is correct, and "after thinking awhile" is right as it
+# stands. The generated rule was a bare swap with no context at all, so it
+# fired on every `awhile` in the corpus.
+#
+# Harper's other direction, a verb followed by `a while`, is not ported here;
+# the generated rule never had it either. That is a recall gap, not a precision
+# one.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: sequence
+message: "Did you mean `a while`?"
+level: warning
+ignorecase: true
+model: harper
+action:
+  name: replace
+  params:
+    - "a while"
+tokens:
+  - tag: 'VB[DGNPZ]?'
+    negate: true
+  - pattern: 'awhile'
+    target: true

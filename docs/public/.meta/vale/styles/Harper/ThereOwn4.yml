@@ -1,0 +1,22 @@
+---
+# Hand-written companion to ThereOwn2, which matches `they're own` as a single
+# token and so only ever caught the apostrophe-less `theyre`.
+#
+# Vale splits the contraction: `they` and `'re` are two tokens, and no pattern
+# on one of them can see the whole word. Written out as three slots it matches
+# the spelling people actually use.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: sequence
+message: "Did you mean the possessive `their`?"
+level: warning
+ignorecase: true
+model: harper
+tokens:
+  - pattern: 'they'
+    target: true
+  - pattern: "'re"
+    target: true
+  - pattern: 'own'

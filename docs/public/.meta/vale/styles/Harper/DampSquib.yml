@@ -1,0 +1,19 @@
+---
+# Generated from Harper's DampSquib rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects the eggcorn `damp squid` to `damp squib`, ensuring the intended meaning of a failed or underwhelming outcome.
+extends: existence
+message: "Use the correct phrase for a disappointing outcome."
+level: error
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "damp squib"
+tokens:
+  - "damp(?!\\s*\\n\\s*\\n)\\s+squid(?!['\\x{2019}]s\\b)"

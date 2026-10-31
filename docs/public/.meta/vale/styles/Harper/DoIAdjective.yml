@@ -1,0 +1,54 @@
+---
+# Generated from Harper's DoIAdjective rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Swaps the helping verb `do` for `am` in `Do I <adjective>` questions so they use the correct linking verb.
+extends: substitution
+message: "When describing how you feel, `I` pairs with `am`, not `do`."
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+swap:
+  "Do(?!\\s*\\n\\s*\\n)\\s+I(?!\\s*\\n\\s*\\n)\\s+annoyed(?!['\\x{2019}]s\\b)": "am I annoyed"
+  "Do(?!\\s*\\n\\s*\\n)\\s+I(?!\\s*\\n\\s*\\n)\\s+anxious(?!['\\x{2019}]s\\b)": "am I anxious"
+  "Do(?!\\s*\\n\\s*\\n)\\s+I(?!\\s*\\n\\s*\\n)\\s+available(?!['\\x{2019}]s\\b)": "am I available"
+  "Do(?!\\s*\\n\\s*\\n)\\s+I(?!\\s*\\n\\s*\\n)\\s+calm(?!['\\x{2019}]s\\b)": "am I calm"
+  "Do(?!\\s*\\n\\s*\\n)\\s+I(?!\\s*\\n\\s*\\n)\\s+comfortable(?!['\\x{2019}]s\\b)": "am I comfortable"
+  "Do(?!\\s*\\n\\s*\\n)\\s+I(?!\\s*\\n\\s*\\n)\\s+concerned(?!['\\x{2019}]s\\b)": "am I concerned"
+  "Do(?!\\s*\\n\\s*\\n)\\s+I(?!\\s*\\n\\s*\\n)\\s+confident(?!['\\x{2019}]s\\b)": "am I confident"
+  "Do(?!\\s*\\n\\s*\\n)\\s+I(?!\\s*\\n\\s*\\n)\\s+curious(?!['\\x{2019}]s\\b)": "am I curious"
+  "Do(?!\\s*\\n\\s*\\n)\\s+I(?!\\s*\\n\\s*\\n)\\s+excited(?!['\\x{2019}]s\\b)": "am I excited"
+  "Do(?!\\s*\\n\\s*\\n)\\s+I(?!\\s*\\n\\s*\\n)\\s+frustrated(?!['\\x{2019}]s\\b)": "am I frustrated"
+  "Do(?!\\s*\\n\\s*\\n)\\s+I(?!\\s*\\n\\s*\\n)\\s+interested(?!['\\x{2019}]s\\b)": "am I interested"
+  "Do(?!\\s*\\n\\s*\\n)\\s+I(?!\\s*\\n\\s*\\n)\\s+not(?!\\s*\\n\\s*\\n)\\s+annoyed(?!['\\x{2019}]s\\b)": "am I not annoyed"
+  "Do(?!\\s*\\n\\s*\\n)\\s+I(?!\\s*\\n\\s*\\n)\\s+not(?!\\s*\\n\\s*\\n)\\s+anxious(?!['\\x{2019}]s\\b)": "am I not anxious"
+  "Do(?!\\s*\\n\\s*\\n)\\s+I(?!\\s*\\n\\s*\\n)\\s+not(?!\\s*\\n\\s*\\n)\\s+available(?!['\\x{2019}]s\\b)": "am I not available"
+  "Do(?!\\s*\\n\\s*\\n)\\s+I(?!\\s*\\n\\s*\\n)\\s+not(?!\\s*\\n\\s*\\n)\\s+calm(?!['\\x{2019}]s\\b)": "am I not calm"
+  "Do(?!\\s*\\n\\s*\\n)\\s+I(?!\\s*\\n\\s*\\n)\\s+not(?!\\s*\\n\\s*\\n)\\s+comfortable(?!['\\x{2019}]s\\b)": "am I not comfortable"
+  "Do(?!\\s*\\n\\s*\\n)\\s+I(?!\\s*\\n\\s*\\n)\\s+not(?!\\s*\\n\\s*\\n)\\s+concerned(?!['\\x{2019}]s\\b)": "am I not concerned"
+  "Do(?!\\s*\\n\\s*\\n)\\s+I(?!\\s*\\n\\s*\\n)\\s+not(?!\\s*\\n\\s*\\n)\\s+confident(?!['\\x{2019}]s\\b)": "am I not confident"
+  "Do(?!\\s*\\n\\s*\\n)\\s+I(?!\\s*\\n\\s*\\n)\\s+not(?!\\s*\\n\\s*\\n)\\s+curious(?!['\\x{2019}]s\\b)": "am I not curious"
+  "Do(?!\\s*\\n\\s*\\n)\\s+I(?!\\s*\\n\\s*\\n)\\s+not(?!\\s*\\n\\s*\\n)\\s+excited(?!['\\x{2019}]s\\b)": "am I not excited"
+  "Do(?!\\s*\\n\\s*\\n)\\s+I(?!\\s*\\n\\s*\\n)\\s+not(?!\\s*\\n\\s*\\n)\\s+frustrated(?!['\\x{2019}]s\\b)": "am I not frustrated"
+  "Do(?!\\s*\\n\\s*\\n)\\s+I(?!\\s*\\n\\s*\\n)\\s+not(?!\\s*\\n\\s*\\n)\\s+interested(?!['\\x{2019}]s\\b)": "am I not interested"
+  "Do(?!\\s*\\n\\s*\\n)\\s+I(?!\\s*\\n\\s*\\n)\\s+not(?!\\s*\\n\\s*\\n)\\s+overwhelmed(?!['\\x{2019}]s\\b)": "am I not overwhelmed"
+  "Do(?!\\s*\\n\\s*\\n)\\s+I(?!\\s*\\n\\s*\\n)\\s+not(?!\\s*\\n\\s*\\n)\\s+prepared(?!['\\x{2019}]s\\b)": "am I not prepared"
+  "Do(?!\\s*\\n\\s*\\n)\\s+I(?!\\s*\\n\\s*\\n)\\s+not(?!\\s*\\n\\s*\\n)\\s+ready(?!['\\x{2019}]s\\b)": "am I not ready"
+  "Do(?!\\s*\\n\\s*\\n)\\s+I(?!\\s*\\n\\s*\\n)\\s+not(?!\\s*\\n\\s*\\n)\\s+relieved(?!['\\x{2019}]s\\b)": "am I not relieved"
+  "Do(?!\\s*\\n\\s*\\n)\\s+I(?!\\s*\\n\\s*\\n)\\s+not(?!\\s*\\n\\s*\\n)\\s+satisfied(?!['\\x{2019}]s\\b)": "am I not satisfied"
+  "Do(?!\\s*\\n\\s*\\n)\\s+I(?!\\s*\\n\\s*\\n)\\s+not(?!\\s*\\n\\s*\\n)\\s+surprised(?!['\\x{2019}]s\\b)": "am I not surprised"
+  "Do(?!\\s*\\n\\s*\\n)\\s+I(?!\\s*\\n\\s*\\n)\\s+not(?!\\s*\\n\\s*\\n)\\s+tired(?!['\\x{2019}]s\\b)": "am I not tired"
+  "Do(?!\\s*\\n\\s*\\n)\\s+I(?!\\s*\\n\\s*\\n)\\s+not(?!\\s*\\n\\s*\\n)\\s+worried(?!['\\x{2019}]s\\b)": "am I not worried"
+  "Do(?!\\s*\\n\\s*\\n)\\s+I(?!\\s*\\n\\s*\\n)\\s+overwhelmed(?!['\\x{2019}]s\\b)": "am I overwhelmed"
+  "Do(?!\\s*\\n\\s*\\n)\\s+I(?!\\s*\\n\\s*\\n)\\s+prepared(?!['\\x{2019}]s\\b)": "am I prepared"
+  "Do(?!\\s*\\n\\s*\\n)\\s+I(?!\\s*\\n\\s*\\n)\\s+ready(?!['\\x{2019}]s\\b)": "am I ready"
+  "Do(?!\\s*\\n\\s*\\n)\\s+I(?!\\s*\\n\\s*\\n)\\s+relieved(?!['\\x{2019}]s\\b)": "am I relieved"
+  "Do(?!\\s*\\n\\s*\\n)\\s+I(?!\\s*\\n\\s*\\n)\\s+satisfied(?!['\\x{2019}]s\\b)": "am I satisfied"
+  "Do(?!\\s*\\n\\s*\\n)\\s+I(?!\\s*\\n\\s*\\n)\\s+surprised(?!['\\x{2019}]s\\b)": "am I surprised"
+  "Do(?!\\s*\\n\\s*\\n)\\s+I(?!\\s*\\n\\s*\\n)\\s+tired(?!['\\x{2019}]s\\b)": "am I tired"
+  "Do(?!\\s*\\n\\s*\\n)\\s+I(?!\\s*\\n\\s*\\n)\\s+worried(?!['\\x{2019}]s\\b)": "am I worried"

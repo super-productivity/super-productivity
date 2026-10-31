@@ -1,0 +1,20 @@
+---
+# Generated from Harper's LinesOfCode rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects pluralizing the wrong noun in `lines of code`.
+extends: existence
+message: "The correct plural is `lines of code`."
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "lines of code"
+tokens:
+  - "lines(?!\\s*\\n\\s*\\n)\\s+of(?!\\s*\\n\\s*\\n)\\s+codes(?!['\\x{2019}]s\\b)"
+  - "line(?!\\s*\\n\\s*\\n)\\s+of(?!\\s*\\n\\s*\\n)\\s+codes(?!['\\x{2019}]s\\b)"

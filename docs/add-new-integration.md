@@ -245,7 +245,8 @@ For a bundled provider:
    plugin dir or in `packages/plugin-dev`) and commit the updated shared `packages/plugin-dev/package-lock.json`, or
    every build's `npm ci` fails.
 4. Add only English source strings; follow existing plugin i18n packaging.
-5. Update the issue-provider comparison in `docs/wiki/` in the same change.
+5. Update the issue-provider comparison in `docs/wiki/` in the same change (or its
+   `docs/public/` replacement once migrated); see the [documentation guide](documentation-guide.md).
 
 Uploaded community plugins do not need core registration and keep their
 `plugin:<plugin-id>` provider key.

@@ -1,0 +1,27 @@
+# A how-to guide is named for the goal: "How to deploy to production" or
+# "Deploying to production", not "Deployment".
+# https://diataxis.fr/how-to-guides/#the-language-of-how-to-guides
+extends: occurrence
+message: "Name the guide for its goal: 'How to ...' or a verb phrase such as 'Deploying to ...'."
+link: https://diataxis.fr/how-to-guides/#the-language-of-how-to-guides
+level: warning
+scope: heading.h1
+token: '(?i)^(?:how to \w|\w+ing\b)'
+min: 1
+
+tests:
+  - name: fires
+    input: |
+      # Deployment
+
+      Body.
+
+    want: |
+      1:3:HowTo.Title:Name the guide for its goal: 'How to ...' or a verb phrase such as 'Deploying to ...'.
+  - name: clean
+    input: |
+      # How to deploy to production
+
+      Body.
+
+    want: ""

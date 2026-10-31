@@ -1,0 +1,28 @@
+# A tutorial is a sequence of concrete steps the learner follows, so it has
+# at least one numbered list.
+# https://diataxis.fr/tutorials/
+extends: occurrence
+message: "A tutorial walks the learner through numbered steps; there is no numbered list here."
+link: https://diataxis.fr/tutorials/
+level: warning
+scope: doc(ol)
+token: '(?s).'
+min: 1
+
+tests:
+  - name: fires
+    input: |
+      # Title
+
+      Do things, then more things.
+
+    want: |
+      1:1:Tutorial.Steps:A tutorial walks the learner through numbered steps; there is no numbered list here.
+  - name: clean
+    input: |
+      # Title
+
+      1. Do this.
+      2. Then this.
+
+    want: ""

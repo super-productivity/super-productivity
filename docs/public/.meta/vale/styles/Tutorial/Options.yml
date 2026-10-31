@@ -1,0 +1,31 @@
+# A tutorial takes one path. Choices, alternatives, and options hand the
+# learner decisions they can't yet make; the how-to guide is where those
+# belong.
+# https://diataxis.fr/tutorials/#the-language-of-tutorials
+extends: existence
+message: "'%s' offers a choice. A tutorial takes one path; alternatives belong in a how-to guide."
+link: https://diataxis.fr/tutorials/#the-language-of-tutorials
+level: warning
+ignorecase: true
+tokens:
+  - alternatively
+  - you can also
+  - you could also
+  - if you prefer
+  - optionally
+  - another (?:way|option) is
+  - or, if you
+  - you might (?:want|prefer)
+
+tests:
+  - name: fires
+    input: |
+      Run the server. Alternatively, use Docker.
+
+    want: |
+      1:17:Tutorial.Options:'Alternatively' offers a choice. A tutorial takes one path; alternatives belong in a how-to guide.
+  - name: clean
+    input: |
+      Run the server.
+
+    want: ""

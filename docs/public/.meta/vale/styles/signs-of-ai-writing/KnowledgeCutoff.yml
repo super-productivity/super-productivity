@@ -1,0 +1,14 @@
+extends: existence
+message: "AI knowledge cutoff reference detected: '%s'"
+level: warning
+link: https://en.wikipedia.org/wiki/Wikipedia:Signs_of_AI_writing
+tokens:
+  - 'as of my last update'
+  - 'as of my knowledge cutoff'
+  - 'my training data only goes up to'
+  - "I don't have information beyond"
+  - 'my knowledge was last updated'
+  - 'as of \[month/year\]'
+  - "I cannot provide information past"
+  - 'my training only includes data until'
+  - 'as of the time of my training'

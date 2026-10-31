@@ -1,0 +1,28 @@
+---
+# Hand-written from Harper's SoughtAfter, the branch its sibling rule cannot
+# reach: any adverb before `sort after`, except four.
+#
+# A `sequence` token carrying both a tag and a pattern has to satisfy both, so
+# the exceptions go in the pattern as a negative look-ahead: adverb, and not
+# one of these words. `not sort after` and `always sort after` are ordinary
+# instructions about sorting, which is why Harper spells them out.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: sequence
+message: "Did you mean `sought after`?"
+level: warning
+ignorecase: true
+model: harper
+matchcase: true
+action:
+  name: replace
+  params:
+    - "sought"
+tokens:
+  - pattern: '(?!(?:always|maybe|not|perhaps)$)\S+'
+    tag: 'RB[RS]?'
+  - pattern: 'sort'
+    target: true
+  - pattern: 'after'

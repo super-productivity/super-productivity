@@ -1,0 +1,30 @@
+---
+# Generated from Harper's BewareOf rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# The verb `beware` naturally pairs with `of` before the noun being warned about, so swap other prepositions for clarity.
+extends: existence
+message: "Use `beware of` when naming the object you want readers to avoid."
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "beware of"
+tokens:
+  - "beware(?!\\s*\\n\\s*\\n)\\s+with(?!\\s*\\n\\s*\\n)\\s+regard(?!\\s*\\n\\s*\\n)\\s+to(?!['\\x{2019}]s\\b)"
+  - "beware(?!\\s*\\n\\s*\\n)\\s+concerning(?!['\\x{2019}]s\\b)"
+  - "beware(?!\\s*\\n\\s*\\n)\\s+regarding(?!['\\x{2019}]s\\b)"
+  - "beware(?!\\s*\\n\\s*\\n)\\s+against(?!['\\x{2019}]s\\b)"
+  - "beware(?!\\s*\\n\\s*\\n)\\s+between(?!['\\x{2019}]s\\b)"
+  - "beware(?!\\s*\\n\\s*\\n)\\s+about(?!['\\x{2019}]s\\b)"
+  - "beware(?!\\s*\\n\\s*\\n)\\s+among(?!['\\x{2019}]s\\b)"
+  - "beware(?!\\s*\\n\\s*\\n)\\s+with(?!['\\x{2019}]s\\b)"
+  - "beware(?!\\s*\\n\\s*\\n)\\s+for(?!['\\x{2019}]s\\b)"
+  - "beware(?!\\s*\\n\\s*\\n)\\s+at(?!['\\x{2019}]s\\b)"
+  - "beware(?!\\s*\\n\\s*\\n)\\s+in(?!['\\x{2019}]s\\b)"
+  - "beware(?!\\s*\\n\\s*\\n)\\s+on(?!['\\x{2019}]s\\b)"

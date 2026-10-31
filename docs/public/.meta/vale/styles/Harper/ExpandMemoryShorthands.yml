@@ -1,0 +1,63 @@
+---
+# Hand-written from Harper's ExpandMemoryShorthands: prose spells the unit out.
+#
+# The generated rule keyed on punctuation. Harper's table is a map from the
+# abbreviation to the word, singular after `1` and plural after anything else,
+# which is why every unit appears twice here.
+#
+# Matched case-sensitively: `MB` and `mb` are the megabyte, but `Mb` is the
+# megabit, and the units differ from each other only by case.
+#
+# The abbreviations are ordered longest first, so `GiB` is read as the gibibyte
+# rather than as a stray `B`.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: substitution
+message: "Prose usually spells out the unit."
+level: suggestion
+nonword: true
+action:
+  name: replace
+swap:
+  '(?<=\b1\s{0,2})KiB\b': "kibibyte"
+  '(?<=\b(?:[02-9]|\d\d+)\s{0,2})KiB\b': "kibibytes"
+  '(?<=\b1\s{0,2})MiB\b': "mebibyte"
+  '(?<=\b(?:[02-9]|\d\d+)\s{0,2})MiB\b': "mebibytes"
+  '(?<=\b1\s{0,2})GiB\b': "gibibyte"
+  '(?<=\b(?:[02-9]|\d\d+)\s{0,2})GiB\b': "gibibytes"
+  '(?<=\b1\s{0,2})TiB\b': "tebibyte"
+  '(?<=\b(?:[02-9]|\d\d+)\s{0,2})TiB\b': "tebibytes"
+  '(?<=\b1\s{0,2})PiB\b': "pebibyte"
+  '(?<=\b(?:[02-9]|\d\d+)\s{0,2})PiB\b': "pebibytes"
+  '(?<=\b1\s{0,2})EiB\b': "exbibyte"
+  '(?<=\b(?:[02-9]|\d\d+)\s{0,2})EiB\b': "exbibytes"
+  '(?<=\b1\s{0,2})ZiB\b': "zebibyte"
+  '(?<=\b(?:[02-9]|\d\d+)\s{0,2})ZiB\b': "zebibytes"
+  '(?<=\b1\s{0,2})YiB\b': "yobibyte"
+  '(?<=\b(?:[02-9]|\d\d+)\s{0,2})YiB\b': "yobibytes"
+  '(?<=\b1\s{0,2})RiB\b': "robibyte"
+  '(?<=\b(?:[02-9]|\d\d+)\s{0,2})RiB\b': "robibytes"
+  '(?<=\b1\s{0,2})QiB\b': "quebibyte"
+  '(?<=\b(?:[02-9]|\d\d+)\s{0,2})QiB\b': "quebibytes"
+  '(?<=\b1\s{0,2})kB\b': "kilobyte"
+  '(?<=\b(?:[02-9]|\d\d+)\s{0,2})kB\b': "kilobytes"
+  '(?<=\b1\s{0,2})MB\b': "megabyte"
+  '(?<=\b(?:[02-9]|\d\d+)\s{0,2})MB\b': "megabytes"
+  '(?<=\b1\s{0,2})GB\b': "gigabyte"
+  '(?<=\b(?:[02-9]|\d\d+)\s{0,2})GB\b': "gigabytes"
+  '(?<=\b1\s{0,2})TB\b': "terabyte"
+  '(?<=\b(?:[02-9]|\d\d+)\s{0,2})TB\b': "terabytes"
+  '(?<=\b1\s{0,2})PB\b': "petabyte"
+  '(?<=\b(?:[02-9]|\d\d+)\s{0,2})PB\b': "petabytes"
+  '(?<=\b1\s{0,2})EB\b': "exabyte"
+  '(?<=\b(?:[02-9]|\d\d+)\s{0,2})EB\b': "exabytes"
+  '(?<=\b1\s{0,2})ZB\b': "zettabyte"
+  '(?<=\b(?:[02-9]|\d\d+)\s{0,2})ZB\b': "zettabytes"
+  '(?<=\b1\s{0,2})YB\b': "yottabyte"
+  '(?<=\b(?:[02-9]|\d\d+)\s{0,2})YB\b': "yottabytes"
+  '(?<=\b1\s{0,2})RB\b': "ronnabyte"
+  '(?<=\b(?:[02-9]|\d\d+)\s{0,2})RB\b': "ronnabytes"
+  '(?<=\b1\s{0,2})B\b': "byte"
+  '(?<=\b(?:[02-9]|\d\d+)\s{0,2})B\b': "bytes"

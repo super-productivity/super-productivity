@@ -1,0 +1,28 @@
+---
+# Generated from Harper's NobelPeacePrize rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects the frequent typos that swap the Nobel/Peace/Prize spelling when people mention the prize.
+extends: existence
+message: "Spell the name of the international peace award as Nobel Peace Prize."
+level: error
+ignorecase: true
+action:
+  name: replace
+  params:
+    - "Nobel Peace Prize"
+tokens:
+  - "nobel(?!\\s*\\n\\s*\\n)\\s+peace(?!\\s*\\n\\s*\\n)\\s+price(?!['\\x{2019}]s\\b)"
+  - "nobel(?!\\s*\\n\\s*\\n)\\s+peace(?!\\s*\\n\\s*\\n)\\s+prise(?!['\\x{2019}]s\\b)"
+  - "nobel(?!\\s*\\n\\s*\\n)\\s+piece(?!\\s*\\n\\s*\\n)\\s+price(?!['\\x{2019}]s\\b)"
+  - "nobel(?!\\s*\\n\\s*\\n)\\s+piece(?!\\s*\\n\\s*\\n)\\s+prise(?!['\\x{2019}]s\\b)"
+  - "nobel(?!\\s*\\n\\s*\\n)\\s+piece(?!\\s*\\n\\s*\\n)\\s+prize(?!['\\x{2019}]s\\b)"
+  - "noble(?!\\s*\\n\\s*\\n)\\s+peace(?!\\s*\\n\\s*\\n)\\s+price(?!['\\x{2019}]s\\b)"
+  - "noble(?!\\s*\\n\\s*\\n)\\s+peace(?!\\s*\\n\\s*\\n)\\s+prise(?!['\\x{2019}]s\\b)"
+  - "noble(?!\\s*\\n\\s*\\n)\\s+peace(?!\\s*\\n\\s*\\n)\\s+prize(?!['\\x{2019}]s\\b)"
+  - "noble(?!\\s*\\n\\s*\\n)\\s+piece(?!\\s*\\n\\s*\\n)\\s+price(?!['\\x{2019}]s\\b)"
+  - "noble(?!\\s*\\n\\s*\\n)\\s+piece(?!\\s*\\n\\s*\\n)\\s+prise(?!['\\x{2019}]s\\b)"
+  - "noble(?!\\s*\\n\\s*\\n)\\s+piece(?!\\s*\\n\\s*\\n)\\s+prize(?!['\\x{2019}]s\\b)"

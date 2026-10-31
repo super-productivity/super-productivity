@@ -1,0 +1,20 @@
+---
+# Generated from Harper's TheDifferenceBetween rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects `the different(s) between to `the difference between`.
+extends: existence
+message: "The correct word is `difference`, not `different` or `differents`."
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "the difference between"
+tokens:
+  - "the(?!\\s*\\n\\s*\\n)\\s+differents(?!\\s*\\n\\s*\\n)\\s+between(?!['\\x{2019}]s\\b)"
+  - "the(?!\\s*\\n\\s*\\n)\\s+different(?!\\s*\\n\\s*\\n)\\s+between(?!['\\x{2019}]s\\b)"

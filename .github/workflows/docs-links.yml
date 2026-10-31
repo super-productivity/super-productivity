@@ -31,7 +31,10 @@ jobs:
       - name: Check documentation links
         run: |
           node --test tools/check-doc-links.test.js
-          git ls-files -z -- '*.md' '*.markdown' |
+          # The voice corpus is verbatim exemplar text with site-relative
+          # links; it is reference material, not repository documentation.
+          git ls-files -z -- '*.md' '*.markdown' \
+            ':(exclude).agents/skills/diataxis/voice/**' |
             xargs -0 -r node tools/check-doc-links.js --docs-only
           git ls-files -z -- \
             ':(glob)docs/**/*.html' \
@@ -40,3 +43,51 @@ jobs:
           # Separate pass: xargs above may invoke the script per batch, so the
           # source-comment scan runs once here instead of once per batch.
           node tools/check-doc-links.js --sources-only
+
+  # Runs on every PR so docs-only changes still get a QC result.
+  # Mark this job's name ("Public docs QC") required in branch protection.
+  public:
+    name: Public docs QC
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.13'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v6
+        with:
+          node-version: 22
+
+      - name: Install documentation tools
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.local/bin"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+          vale_version=3.25.1
+          curl -sSL -o /tmp/vale.tar.gz \
+            "https://github.com/vale-cli/vale/releases/download/v${vale_version}/vale_${vale_version}_Linux_64-bit.tar.gz"
+          echo "4bf5c5176b682b1da0830f471584d3494f1c2e27ee3029e1ad6f6661d4962182  /tmp/vale.tar.gz" |
+            sha256sum -c -
+          tar -xzf /tmp/vale.tar.gz -C "$HOME/.local/bin" vale
+
+          lychee_version=0.24.2
+          curl -sSL -o /tmp/lychee.tar.gz \
+            "https://github.com/lycheeverse/lychee/releases/download/lychee-v${lychee_version}/lychee-x86_64-unknown-linux-gnu.tar.gz"
+          echo "1f4e0ef7f6554a6ed33dd7ac144fb2e1bbed98598e7af973042fc5cd43951c9a  /tmp/lychee.tar.gz" |
+            sha256sum -c -
+          tar -xzf /tmp/lychee.tar.gz -C /tmp
+          mv /tmp/lychee-x86_64-unknown-linux-gnu/lychee "$HOME/.local/bin/lychee"
+
+          npm install --global --prefix "$HOME/.local" markdownlint-cli2@0.24.0
+
+      - name: Run public docs checks
+        env:
+          DOCS_LYCHEE_OFFLINE: '1'
+        run: bash .agents/skills/diataxis/scripts/checks.sh

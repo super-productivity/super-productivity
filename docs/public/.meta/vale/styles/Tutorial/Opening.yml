@@ -1,0 +1,28 @@
+# A tutorial opens by saying what the learner will have made by the end,
+# so they can decide whether it's for them before they start. Read from
+# the paragraph after the title.
+# https://diataxis.fr/tutorials/
+extends: occurrence
+message: "Open by saying what the learner will build or be able to do by the end."
+link: https://diataxis.fr/tutorials/
+level: warning
+scope: 'text & doc(h1 + p)'
+token: "(?i)\\b(?:in this tutorial|you(?:'ll| will) (?:build|create|make|write|set up|have|be able)|by the end|we(?:'ll| will) (?:build|create|make|write))\\b"
+min: 1
+
+tests:
+  - name: fires
+    input: |
+      # Getting started
+
+      The tool has many features.
+
+    want: |
+      3:1:Tutorial.Opening:Open by saying what the learner will build or be able to do by the end.
+  - name: clean
+    input: |
+      # Getting started
+
+      In this tutorial you'll build a small site and deploy it.
+
+    want: ""

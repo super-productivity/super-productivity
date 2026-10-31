@@ -1,0 +1,19 @@
+---
+# Generated from Harper's BestRegards rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# In valedictions, `best` expresses your highest regard—avoid the typo `beat regards`.
+extends: existence
+message: "Use `best regards` to convey sincere well wishes in a closing."
+level: error
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "best regards"
+tokens:
+  - "beat(?!\\s*\\n\\s*\\n)\\s+regards(?!['\\x{2019}]s\\b)"

@@ -1,0 +1,20 @@
+---
+# Generated from Harper's RulesOfThumb rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects pluralizing the wrong noun in `rule of thumb`.
+extends: existence
+message: "The correct plural is `rules of thumb`."
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "rules of thumb"
+tokens:
+  - "rule(?!\\s*\\n\\s*\\n)\\s+of(?!\\s*\\n\\s*\\n)\\s+thumbs(?!['\\x{2019}]s\\b)"
+  - "rule-of-thumbs(?!['\\x{2019}]s\\b)"

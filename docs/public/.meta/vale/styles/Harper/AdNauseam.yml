@@ -1,0 +1,19 @@
+---
+# Generated from Harper's AdNauseam rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects `as nauseam` to `ad nauseam`.
+extends: existence
+message: "This phrase comes from Latin, where `ad` means `to`."
+level: error
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "ad nauseam"
+tokens:
+  - "as(?!\\s*\\n\\s*\\n)\\s+nauseam(?!['\\x{2019}]s\\b)"

@@ -1,0 +1,18 @@
+---
+# Hand-written companion to ProgressiveNeedsBe: the contracted form, where
+# `I've` is one token.
+#
+# Reported without a fix: the correction is `I've been`, and the pronoun is
+# part of the token being replaced, so one replacement cannot serve all four.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: sequence
+message: "A progressive verb after `have` needs `been`."
+level: warning
+ignorecase: true
+model: harper
+tokens:
+  - pattern: "i've|we've|you've|they've|ive|weve|youve|theyve"
+  - tag: 'VBG'
