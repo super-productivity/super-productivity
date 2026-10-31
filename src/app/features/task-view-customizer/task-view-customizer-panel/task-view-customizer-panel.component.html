@@ -51,15 +51,14 @@
   @if (!view()) {
     <mat-divider></mat-divider>
 
-    @if (isViewsEnabled()) {
-      <button
-        mat-menu-item
-        (click)="saveAsView()"
-      >
-        <mat-icon>bookmark_add</mat-icon>
-        <span>{{ T.F.BOARDS.V.SAVE_AS_VIEW | translate }}</span>
-      </button>
-    }
+    <!-- Also while Views are off: saving one turns them on -->
+    <button
+      mat-menu-item
+      (click)="saveAsView()"
+    >
+      <mat-icon>bookmark_add</mat-icon>
+      <span>{{ T.F.BOARDS.V.SAVE_AS_VIEW | translate }}</span>
+    </button>
 
     <!-- Reset All -->
     <button

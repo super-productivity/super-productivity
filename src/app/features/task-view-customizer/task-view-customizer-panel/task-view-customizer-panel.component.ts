@@ -9,10 +9,8 @@ import {
 } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { Store } from '@ngrx/store';
-import { GlobalConfigService } from '../../config/global-config.service';
 import { WorkContextService } from '../../work-context/work-context.service';
 import { BoardsService } from '../../boards/boards.service';
-import { TODAY_TAG } from '../../tag/tag.const';
 import { FormsModule } from '@angular/forms';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatSelectModule } from '@angular/material/select';
@@ -24,7 +22,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatDividerModule } from '@angular/material/divider';
 import { TaskViewCustomizerService } from '../task-view-customizer.service';
 import { TagService } from '../../tag/tag.service';
-import { TranslatePipe, TranslateService } from '@ngx-translate/core';
+import { TranslatePipe } from '@ngx-translate/core';
 import { T } from 'src/app/t.const';
 import {
   DEFAULT_OPTIONS,
@@ -75,7 +73,6 @@ export class TaskViewCustomizerPanelComponent {
   customizerService = inject(TaskViewCustomizerService);
   private _tagService = inject(TagService);
   private _injector = inject(Injector);
-  private _globalConfigService = inject(GlobalConfigService);
   private _workContextService = inject(WorkContextService);
   private _store = inject(Store);
 
@@ -86,11 +83,6 @@ export class TaskViewCustomizerPanelComponent {
    * current board.
    */
   readonly view = input<BoardCfg | undefined>(undefined);
-
-  // "Save as view" only where views are switched on (off on a new install).
-  readonly isViewsEnabled = computed(
-    () => !!this._globalConfigService.appFeatures()?.isBoardsEnabled,
-  );
 
   @ViewChild('customizerMenu', { static: false })
   menu!: MatMenu;
@@ -248,10 +240,8 @@ export class TaskViewCustomizerPanelComponent {
         type: list.type,
         id: list.id,
         // Today's stored title is English; use the translated one.
-        title:
-          list.id === TODAY_TAG.id
-            ? this._injector.get(TranslateService).instant(T.G.TODAY_TAG_TITLE)
-            : list.title,
+        // Today's view is named after its filter instead.
+        title: list.title,
         taskIds: list.taskIds,
       },
       undoneTasks,

@@ -10,7 +10,15 @@ import { criteriaToPanelFields, withPanelSortKey } from '../boards/boards.util';
 import { TODAY_TAG } from '../tag/tag.const';
 import { WorkContextType } from '../work-context/work-context.model';
 import { filterToCriteria, SORT_OPTION_TO_KEY } from './filter-to-criteria';
-import { FilterOption, GROUP_OPTION_TYPE, SORT_ORDER, SortOption } from './types';
+import {
+  FILTER_OPTION_TYPE,
+  FilterOption,
+  GROUP_OPTION_TYPE,
+  OPTIONS,
+  PRESETS,
+  SORT_ORDER,
+  SortOption,
+} from './types';
 import { T } from '../../t.const';
 import { TaskCopy } from '../tasks/task.model';
 
@@ -29,14 +37,16 @@ export interface ViewSourceList {
 
 /**
  * A one-column view (board) showing what a task list shows with its current
- * filter and sort: the project's or tag's undone tasks, or for Today the
- * tasks due today or overdue. Grouped by tag, it gets one section (panel) per
- * tag, see `toTagSections`. `hints` are translation keys for what the view
- * can't carry over: other groupings (fixed sections can't follow new projects
- * or days), Today's own overdue section, and filter parts one column can't
- * express next to the list's own project or tag. Those parts are left out,
- * so the view stays within the list's project or tag but may show more of it
- * than the filtered list.
+ * filter and sort: the project's or tag's undone tasks. From Today it is the
+ * filter alone (the view then shows every matching task, not only today's),
+ * titled after the filter; without a filter, the tasks due today or overdue,
+ * untitled for the user to name. Grouped by tag, it gets one section (panel)
+ * per tag, see `toTagSections`. `hints` are translation keys for what the
+ * view can't carry over: other groupings (fixed sections can't follow new
+ * projects or days), Today's own overdue section or Today's scope, and filter
+ * parts one column can't express next to the list's own project or tag. Those
+ * parts are left out, so the view stays within the list's project or tag but
+ * may show more of it than the filtered list.
  */
 export const buildViewFromList = (opts: {
   list: ViewSourceList;
@@ -48,21 +58,32 @@ export const buildViewFromList = (opts: {
   projects: readonly { id: string; title: string }[];
   /** The translated title of the last section of a tag-grouped view. */
   otherSectionTitle: string;
+  /** The filter's name for a view saved from Today, see `getFilterTitle`. */
+  filterTitle?: string;
 }): { board: BoardCfg; hints: string[] } => {
   const { list } = opts;
   const hints: string[] = [];
   const isToday = list.type === WorkContextType.TAG && list.id === TODAY_TAG.id;
   const isTagList = list.type === WorkContextType.TAG && !isToday;
+  const criteria = filterToCriteria(opts.filter, {
+    tags: opts.tags,
+    projects: opts.projects,
+  });
+  const isFiltered = !!criteria && !criteria.isNoMatch;
+  // "Today" names a day's list, not what a saved view shows.
+  const title = isToday ? (isFiltered ? (opts.filterTitle ?? '') : '') : list.title;
   let panel: BoardPanelCfg = {
     ...DEFAULT_PANEL_CFG,
     id: nanoid(),
-    title: list.title,
+    title,
     taskDoneState: BoardPanelCfgTaskDoneState.UnDone,
     // Project and tag lists show parent tasks with their subtasks; Today also
     // lists subtasks whose parent isn't due today.
     isParentTasksOnly: !isToday,
   };
-  if (isToday) {
+  if (isToday && isFiltered) {
+    hints.push(T.F.BOARDS.V.HINT_FILTER_NOT_ONLY_TODAY);
+  } else if (isToday) {
     panel.dueState = 'todayOrOverdue';
     hints.push(T.F.BOARDS.V.HINT_TODAY_OR_OVERDUE);
   } else if (list.type === WorkContextType.PROJECT) {
@@ -72,10 +93,6 @@ export const buildViewFromList = (opts: {
     panel.includedTagIds = [list.id];
   }
 
-  const criteria = filterToCriteria(opts.filter, {
-    tags: opts.tags,
-    projects: opts.projects,
-  });
   let isFilterPartDropped = !!criteria?.isNoMatch;
   if (criteria && !criteria.isNoMatch) {
     const fields = criteriaToPanelFields(criteria);
@@ -131,7 +148,7 @@ export const buildViewFromList = (opts: {
     hints.push(T.F.BOARDS.V.HINT_GROUPING_NOT_SAVED);
   }
 
-  return { board: { id: '', title: list.title, cols: 1, panels }, hints };
+  return { board: { id: '', title, cols: 1, panels }, hints };
 };
 
 /**
@@ -182,4 +199,59 @@ const toTagSections = (
     taskIds: [...base.taskIds],
   };
   return [...sections, other];
+};
+
+const FILTER_PRESETS: Partial<
+  Record<FILTER_OPTION_TYPE, readonly { type: string | null; label: string }[]>
+> = {
+  [FILTER_OPTION_TYPE.tag]: PRESETS.tag,
+  [FILTER_OPTION_TYPE.scheduledDate]: PRESETS.schedule,
+  [FILTER_OPTION_TYPE.deadline]: PRESETS.deadline,
+  [FILTER_OPTION_TYPE.estimatedTime]: PRESETS.time,
+  [FILTER_OPTION_TYPE.timeSpent]: PRESETS.time,
+  [FILTER_OPTION_TYPE.priority]: PRESETS.priority,
+};
+
+/**
+ * A name for a view saved from a filter, as the filter menu words it: the
+ * tags' or projects' titles, else "Priority: High" and the like. Empty when
+ * there is no filter a view can carry.
+ */
+export const getFilterTitle = (
+  filter: FilterOption,
+  lookups: {
+    tags: readonly { id: string; title: string }[];
+    projects: readonly { id: string; title: string }[];
+  },
+  translate: (key: string) => string,
+): string => {
+  const criteria = filterToCriteria(filter, lookups);
+  if (!filter.type || !criteria || criteria.isNoMatch) {
+    return '';
+  }
+  const titles = (
+    ids: readonly string[] | undefined,
+    items: readonly { id: string; title: string }[],
+  ): string =>
+    (ids ?? [])
+      .map((id) => items.find((item) => item.id === id)?.title)
+      .filter((itemTitle): itemTitle is string => !!itemTitle)
+      .join(', ');
+  if (filter.type === FILTER_OPTION_TYPE.tag && criteria.includedTagIds?.length) {
+    return titles(criteria.includedTagIds, lookups.tags);
+  }
+  if (filter.type === FILTER_OPTION_TYPE.project) {
+    return titles(criteria.projectIds, lookups.projects);
+  }
+  const typeLabel = OPTIONS.filter.list.find((o) => o.type === filter.type)?.label;
+  const presetLabel = FILTER_PRESETS[filter.type]?.find(
+    (o) => o.type === filter.preset,
+  )?.label;
+  if (!typeLabel || !presetLabel) {
+    return typeLabel ? translate(typeLabel) : '';
+  }
+  // Deadline presets already say "Deadline …".
+  return filter.type === FILTER_OPTION_TYPE.deadline
+    ? translate(presetLabel)
+    : `${translate(typeLabel)}: ${translate(presetLabel)}`;
 };

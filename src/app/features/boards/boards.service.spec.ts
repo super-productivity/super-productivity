@@ -10,6 +10,7 @@ import { BoardsActions } from './store/boards.actions';
 import { BoardCfg } from './boards.model';
 import { DEFAULT_BOARD_CFG } from './boards.const';
 import { DialogBoardEditComponent } from './dialog-board-edit/dialog-board-edit.component';
+import { GlobalConfigService } from '../config/global-config.service';
 
 describe('BoardsService', () => {
   let service: BoardsService;
@@ -17,6 +18,8 @@ describe('BoardsService', () => {
   let navigate: jasmine.Spy;
   let open: jasmine.Spy;
   let dialogResult: unknown;
+  let updateSection: jasmine.Spy;
+  const appFeatures = signal({ isBoardsEnabled: true });
 
   const board: BoardCfg = {
     id: 'b1',
@@ -29,6 +32,8 @@ describe('BoardsService', () => {
     dispatch = jasmine.createSpy('dispatch');
     navigate = jasmine.createSpy('navigate');
     dialogResult = undefined;
+    updateSection = jasmine.createSpy('updateSection');
+    appFeatures.set({ isBoardsEnabled: true });
     open = jasmine
       .createSpy('open')
       .and.callFake(() => ({ afterClosed: () => of(dialogResult) }));
@@ -38,6 +43,7 @@ describe('BoardsService', () => {
         { provide: Store, useValue: { dispatch, selectSignal: () => signal([]) } },
         { provide: Router, useValue: { navigate } },
         { provide: MatDialog, useValue: { open } },
+        { provide: GlobalConfigService, useValue: { appFeatures, updateSection } },
         {
           provide: TranslateService,
           useValue: {
@@ -60,8 +66,25 @@ describe('BoardsService', () => {
   });
 
   it('stays put when the create dialog is cancelled', async () => {
+    appFeatures.set({ isBoardsEnabled: false });
     await service.createBoard();
     expect(navigate).not.toHaveBeenCalled();
+    expect(updateSection).not.toHaveBeenCalled();
+  });
+
+  it('turns Views on when a view is saved while they are off', async () => {
+    dialogResult = 'new-id';
+    await service.createBoard();
+    expect(updateSection).not.toHaveBeenCalled();
+
+    appFeatures.set({ isBoardsEnabled: false });
+    await service.createBoard();
+    expect(updateSection).toHaveBeenCalledOnceWith(
+      'appFeatures',
+      { isBoardsEnabled: true },
+      true,
+    );
+    expect(navigate).toHaveBeenCalledWith(['/boards', 'new-id']);
   });
 
   it('duplicates with a translated title, fresh ids and no manual order', () => {

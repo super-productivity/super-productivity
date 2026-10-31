@@ -1,4 +1,4 @@
-import { buildViewFromList, ViewSourceList } from './save-as-view';
+import { buildViewFromList, getFilterTitle, ViewSourceList } from './save-as-view';
 import { WorkContextType } from '../work-context/work-context.model';
 import { TODAY_TAG } from '../tag/tag.const';
 import { T } from '../../t.const';
@@ -43,6 +43,7 @@ describe('buildViewFromList', () => {
       filter?: FilterOption;
       sort?: SortOption;
       groupType?: GROUP_OPTION_TYPE;
+      filterTitle?: string;
     } = {},
   ): ReturnType<typeof buildViewFromList> =>
     buildViewFromList({
@@ -53,6 +54,7 @@ describe('buildViewFromList', () => {
       tags,
       projects,
       otherSectionTitle: 'Other',
+      filterTitle: opts.filterTitle,
     });
   const build = (
     source: ViewSourceList,
@@ -82,11 +84,36 @@ describe('buildViewFromList', () => {
     expect(panel.projectIds).toEqual(['']);
   });
 
-  it('maps Today to "today or overdue" with subtasks and without the virtual tag', () => {
-    const panel = build(list({ type: WorkContextType.TAG, id: TODAY_TAG.id })).panels[0];
+  it('maps an unfiltered Today to "today or overdue", untitled, with subtasks', () => {
+    const board = build(list({ type: WorkContextType.TAG, id: TODAY_TAG.id }));
+    const panel = board.panels[0];
     expect(panel.dueState).toBe('todayOrOverdue');
     expect(panel.includedTagIds).toEqual([]);
     expect(panel.isParentTasksOnly).toBeFalse();
+    // "Today" doesn't name the view: the user does.
+    expect(board.title).toBe('');
+  });
+
+  it('saves a filtered Today as the filter alone, named after it', () => {
+    const { board, hints } = buildWithHints(
+      list({ type: WorkContextType.TAG, id: TODAY_TAG.id, title: 'Today' }),
+      {
+        filter: filter({ type: FILTER_OPTION_TYPE.tag, tagIds: ['work'] }),
+        filterTitle: 'Work',
+      },
+    );
+    expect(board.title).toBe('Work');
+    expect(board.panels[0].dueState).toBeUndefined();
+    expect(board.panels[0].includedTagIds).toEqual(['work']);
+    expect(hints).toEqual([T.F.BOARDS.V.HINT_FILTER_NOT_ONLY_TODAY]);
+
+    // A filter that matches nothing can't be saved: Today's scope stays.
+    const noMatch = build(list({ type: WorkContextType.TAG, id: TODAY_TAG.id }), {
+      filter: filter({ type: FILTER_OPTION_TYPE.project, preset: 'nothing like it' }),
+      filterTitle: 'x',
+    });
+    expect(noMatch.panels[0].dueState).toBe('todayOrOverdue');
+    expect(noMatch.title).toBe('');
   });
 
   it('carries the filter over as column rules', () => {
@@ -261,5 +288,50 @@ describe('buildViewFromList', () => {
       });
       expect(board.panels.map((p) => p.title)).toEqual(['Home', 'Other']);
     });
+  });
+});
+
+describe('getFilterTitle', () => {
+  const lookups = {
+    tags: [
+      { id: 'work', title: 'Work' },
+      { id: 'home', title: 'Home' },
+    ],
+    projects: [{ id: 'p1', title: 'Website' }],
+  };
+  const title = (overrides: Partial<FilterOption>): string =>
+    getFilterTitle(
+      { ...DEFAULT_OPTIONS.filter, ...overrides },
+      lookups,
+      (key) => key.split('.').pop()!,
+    );
+
+  it('names tags and projects by their titles', () => {
+    expect(title({ type: FILTER_OPTION_TYPE.tag, tagIds: ['work', 'home'] })).toBe(
+      'Work, Home',
+    );
+    expect(title({ type: FILTER_OPTION_TYPE.project, preset: 'web' })).toBe('Website');
+  });
+
+  it('names other filters as the filter menu does', () => {
+    expect(title({ type: FILTER_OPTION_TYPE.priority, preset: '3' })).toBe(
+      'FILTER_PRIORITY: PRIORITY_HIGH',
+    );
+    expect(
+      title({ type: FILTER_OPTION_TYPE.scheduledDate, preset: FILTER_SCHEDULE.today }),
+    ).toBe('FILTER_SCHEDULED_DATE: SCHEDULED_TODAY');
+    expect(
+      title({ type: FILTER_OPTION_TYPE.deadline, preset: FILTER_SCHEDULE.thisWeek }),
+    ).toBe('DEADLINE_THIS_WEEK');
+    expect(
+      title({ type: FILTER_OPTION_TYPE.tag, preset: FILTER_COMMON.NOT_SPECIFIED }),
+    ).toBe('FILTER_TAG: FILTER_NOT_SPECIFIED');
+  });
+
+  it('is empty without a filter a view can carry', () => {
+    expect(title({})).toBe('');
+    expect(title({ type: FILTER_OPTION_TYPE.project, preset: 'nothing like it' })).toBe(
+      '',
+    );
   });
 });

@@ -10,6 +10,8 @@ import { BoardCfg } from './boards.model';
 import { DEFAULT_BOARD_CFG } from './boards.const';
 import { DialogConfirmComponent } from '../../ui/dialog-confirm/dialog-confirm.component';
 import { T } from '../../t.const';
+import { GlobalConfigService } from '../config/global-config.service';
+import { AppFeaturesConfig } from '../config/global-config.model';
 
 /**
  * Create, edit, duplicate and delete views (boards). Shared by the side menu,
@@ -21,6 +23,7 @@ export class BoardsService {
   private _matDialog = inject(MatDialog);
   private _router = inject(Router);
   private _translateService = inject(TranslateService);
+  private _globalConfigService = inject(GlobalConfigService);
 
   readonly boards = this._store.selectSignal(selectAllBoards);
 
@@ -41,6 +44,15 @@ export class BoardsService {
       .afterClosed()
       .subscribe((boardId?: string) => {
         if (boardId) {
+          // "Save as view" is offered while Views are off: saving one turns
+          // them on, so the new view has its place in the menu.
+          if (!this._globalConfigService.appFeatures()?.isBoardsEnabled) {
+            this._globalConfigService.updateSection(
+              'appFeatures',
+              { isBoardsEnabled: true } as Partial<AppFeaturesConfig>,
+              true,
+            );
+          }
           this._router.navigate(['/boards', boardId]);
         }
       });

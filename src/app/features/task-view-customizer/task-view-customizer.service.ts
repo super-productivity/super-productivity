@@ -21,7 +21,7 @@ import {
 } from '../tasks/task-criteria/task-criteria';
 import { filterToCriteria, SORT_OPTION_TO_KEY } from './filter-to-criteria';
 import { TaskCriteria } from '../tasks/task-criteria/task-criteria.model';
-import { buildViewFromList, ViewSourceList } from './save-as-view';
+import { buildViewFromList, getFilterTitle, ViewSourceList } from './save-as-view';
 import { BoardCfg } from '../boards/boards.model';
 import { WorkContextService } from '../work-context/work-context.service';
 import { WorkContextType } from '../work-context/work-context.model';
@@ -371,6 +371,11 @@ export class TaskViewCustomizerService {
       tags: this._tagsInSidebarOrder(),
       projects: this._allProjects,
       otherSectionTitle: this._translateService.instant(T.F.BOARDS.V.SECTION_OTHER),
+      filterTitle: getFilterTitle(
+        filter,
+        { tags: this._tagsInSidebarOrder(), projects: this._allProjects },
+        (key) => this._translateService.instant(key),
+      ),
     });
   }
 
