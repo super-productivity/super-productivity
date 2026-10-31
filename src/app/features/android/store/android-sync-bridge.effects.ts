@@ -200,10 +200,10 @@ export class AndroidSyncBridgeEffects {
       return null;
     }
     if (isBackgroundFileSyncProvider(cfg.providerId) && cfg.privateCfg) {
-      const provider = (await this._providerManager.getProviderById(cfg.providerId)) as
-        | Partial<FileReadRequestProvider>
-        | undefined;
       try {
+        const provider = (await this._providerManager.getProviderById(cfg.providerId)) as
+          | Partial<FileReadRequestProvider>
+          | undefined;
         const readRequest = await provider?.getFileReadRequest?.(
           FILE_BASED_SYNC_CONSTANTS.SYNC_FILE,
         );

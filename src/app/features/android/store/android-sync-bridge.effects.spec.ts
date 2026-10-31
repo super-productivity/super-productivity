@@ -1,3 +1,4 @@
+import { TestBed } from '@angular/core/testing';
 import { BehaviorSubject } from 'rxjs';
 import { distinctUntilChanged, filter, map } from 'rxjs/operators';
 import { SyncProviderId } from '../../../op-log/sync-providers/provider.const';
@@ -6,7 +7,10 @@ import type { SuperSyncPrivateCfg } from '@sp/sync-providers/super-sync';
 import type { DropboxPrivateCfg } from '@sp/sync-providers/dropbox';
 import type { WebdavPrivateCfg } from '@sp/sync-providers/webdav';
 import { ReminderConfig } from '../../config/global-config.model';
+import { SyncProviderManager } from '../../../op-log/sync-providers/provider-manager.service';
+import { GlobalConfigService } from '../../config/global-config.service';
 import {
+  AndroidSyncBridgeEffects,
   bridgeCommandEqual,
   getBackgroundReminderSettings,
   getCapturePublicKeyForNative,
@@ -238,6 +242,57 @@ describe('AndroidSyncBridgeEffects - credential mirroring logic', () => {
         ),
       ).toBe(false);
       expect(bridgeCommandEqual(a, cmd(webdavCfg()))).toBe(false);
+    });
+  });
+
+  describe('command from the active provider (_toBridgeCommand)', () => {
+    const readRequest = {
+      url: 'https://dav.example.com/sp/sync-data.json',
+      authorization: 'Basic abc',
+    };
+
+    const toCommand = (
+      provider: unknown,
+      cfg: CurrentProviderPrivateCfg | null,
+    ): ReturnType<AndroidSyncBridgeEffects['_toBridgeCommand']> => {
+      TestBed.configureTestingModule({
+        providers: [
+          AndroidSyncBridgeEffects,
+          {
+            provide: SyncProviderManager,
+            useValue: { getProviderById: () => Promise.resolve(provider) },
+          },
+          { provide: GlobalConfigService, useValue: {} },
+        ],
+      });
+      return TestBed.inject(AndroidSyncBridgeEffects)['_toBridgeCommand'](cfg);
+    };
+
+    it('asks the WebDAV provider for the sync-data.json read request', async () => {
+      const getFileReadRequest = jasmine
+        .createSpy('getFileReadRequest')
+        .and.resolveTo(readRequest);
+      const command = await toCommand({ getFileReadRequest }, webdavCfg());
+      expect(getFileReadRequest).toHaveBeenCalledWith('sync-data.json');
+      expect(command).toEqual(getFileSyncCredentialBridgeCommand({}, readRequest));
+    });
+
+    it('clears when the provider cannot build a read request yet', async () => {
+      const getFileReadRequest = (): Promise<never> =>
+        Promise.reject(new Error('WebDAV base URL is not configured'));
+      expect(await toCommand({ getFileReadRequest }, webdavCfg())).toEqual(
+        cmd(webdavCfg()),
+      );
+    });
+
+    it('clears for a provider without a read request', async () => {
+      expect(await toCommand(undefined, webdavCfg())).toEqual(cmd(webdavCfg()));
+    });
+
+    it('keeps the SuperSync path for SuperSync', async () => {
+      expect(await toCommand(undefined, superSyncCfg('tok', 'https://s'))).toEqual(
+        cmd(superSyncCfg('tok', 'https://s')),
+      );
     });
   });
 
