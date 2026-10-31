@@ -1038,7 +1038,7 @@ screen after turning Views on.
 - Known gap, unchanged: a column that refuses new tasks has no add row, so
   an empty one gives arrow keys no focus target (as the Overdue column today).
 
-### B. Section "+ Add" rows
+### B. "+ Add" rows (sections and board columns)
 
 Every section of a list view starts with a full-width "+ Add" row
 (`add-task-inline` in the `collapsible` body of `board-panel.component.html`)
@@ -1047,10 +1047,18 @@ duplicates the add-task bar (which already adds into the first section that
 takes new tasks). Project sections in the work view have no add row, only a
 ⋮ in the header's `[actions]` slot.
 
-- The row goes, in sections only. Board columns (cards) keep theirs: it is
-  their only add path (the registry covers list layout only) and the arrow
-  keys' focus target in an empty column (`addButton()`,
-  `onAddButtonKeydown`, `board-keyboard-navigation.spec.ts`).
+- The row goes in sections **and in board columns** (user feedback,
+  2026-10-31: "the add button looks a bit odd"; the centered "+ Add" text
+  button in a bordered full-width row reads like an empty task row). One
+  pattern for both layouts: a "+" icon in the header. Board columns put it
+  in their own `<header>` before the edit button, same label, tooltip and
+  open behaviour (the bar opens at the top of the column, above the cards).
+  The arrow keys' focus target in an empty column (`addButton()`,
+  `onAddButtonKeydown`, `board-keyboard-navigation.spec.ts`) becomes that
+  header "+": Enter/Space open the bar, arrows keep moving between columns
+  and cards as they do from the add row today. Update the keyboard spec
+  instead of keeping the row for it. The planner keeps
+  `AddTaskInlineComponent` unchanged.
 - The section header's `[actions]` slot (after the estimate) gets a
   `mat-icon-button` (`add`), `aria-label` and tooltip "Add task to
   {{title}}" (new key, with the translated section title), absent while
@@ -1433,3 +1441,8 @@ Not changed:
   `some-tag-<id>` (today's fallback).
 - `createTags()` dispatches one `addTag` per tag: independent creates, each
   valid on replay alone; unchanged.
+
+After the phase 6 plan review (2026-10-31): the user found the "+ Add"
+button odd, so B now also replaces the board columns' add row with the
+header "+" (keyboard focus in an empty column moves to it). D stays cut as
+the review recommends.
