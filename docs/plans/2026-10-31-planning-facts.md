@@ -195,6 +195,12 @@ in the issue (A: parent planned for tomorrow, subtask planned elsewhere; B:
 parent and subtask both on the day). Specs for both variants go next to
 `planner.bug-8220.spec.ts` and `planner.bug-8232.spec.ts`.
 
+**Already done in open PR #10923** (community, 2026-10-18), which this plan
+first missed. Checked 2026-10-31: it applies cleanly to master (`5a6d557`), its
+`planner.bug-10894.spec.ts` fails without the fix (7 of 9) and passes with it,
+`test:affected` and `checkFile` pass. Step 1 is reviewing and merging it, not a
+new fix.
+
 **Step 2 (optional, open an issue first): make today's numbers true.**
 
 1. **Pure helper** `getDayCapacity({ dayDate, scheduleConfig, timedItems, nowMs? })`
