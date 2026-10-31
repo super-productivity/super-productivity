@@ -214,6 +214,11 @@ export interface AndroidInterface {
   // Mirrors the reminder settings the background worker must honor when it
   // schedules alarms from synced ops. Optional: older APKs don't have it.
   setBackgroundReminderSettings?(isDisabled: boolean, useAlarmStyle: boolean): void;
+
+  // #11147 — launcher icon badge for due/today tasks (parity with iOS
+  // DueTaskBadgePlugin + misc.isShowDueTaskBadge). Optional until native lands;
+  // DueTaskBadgeService already optional-calls it.
+  setDueTaskBadge?(count: number): void;
 }
 
 export type ForegroundServiceStartFailure = {

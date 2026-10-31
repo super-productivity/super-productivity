@@ -48,7 +48,7 @@
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
 	<key>NSUserNotificationsUsageDescription</key>
-	<string>Super Productivity uses notifications to remind you about tasks and scheduled events.</string>
+	<string>Super Productivity uses notifications to remind you about tasks and scheduled events, and optionally to show a badge for due tasks on the app icon.</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Super Productivity uses your local network to sync with sync servers you host yourself, such as a WebDAV or Super Sync server on your network.</string>
 	<key>UIBackgroundModes</key>

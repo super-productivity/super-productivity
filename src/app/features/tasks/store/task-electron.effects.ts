@@ -1,24 +1,20 @@
 import { inject, Injectable } from '@angular/core';
 import { createEffect, ofType } from '@ngrx/effects';
-import { combineLatest } from 'rxjs';
 import { selectTaskSchedulingSnapshot } from './task.selectors';
 import {
   selectTodayStr,
   selectStartOfNextDayDiffMs,
 } from '../../../root-store/app-state/app-state.selectors';
-import { countDueTasks } from '../util/count-due-tasks';
 import { createDueTaskBadgeIcon } from '../util/create-due-task-badge-icon';
+import { createDueTaskBadgeCount$ } from '../util/due-task-badge-count$';
 import { IS_ELECTRON_TOKEN } from '../../../app.constants';
-import { skipDuringSyncWindow } from '../../../util/skip-during-sync-window.operator';
 import { HydrationStateService } from '../../../op-log/apply/hydration-state.service';
 import { SyncTriggerService } from '../../../imex/sync/sync-trigger.service';
 import { setCurrentTask, unsetCurrentTask } from './task.actions';
 import { select, Store } from '@ngrx/store';
 import {
-  distinctUntilChanged,
   filter,
   map,
-  skipWhile,
   startWith,
   take,
   tap,
@@ -129,7 +125,7 @@ export class TaskElectronEffects {
 
   syncDueTaskBadge$ = createEffect(
     () =>
-      combineLatest([
+      createDueTaskBadgeCount$(
         this._store$.select(selectTaskSchedulingSnapshot),
         this._store$.select(selectTodayStr),
         this._store$.select(selectStartOfNextDayDiffMs),
@@ -138,17 +134,7 @@ export class TaskElectronEffects {
         // last task emission was suppressed during hydration/remote apply.
         this._hydrationState.isInSyncWindow$,
         this._syncTrigger.initialSyncGateOpen$,
-      ]).pipe(
-        skipDuringSyncWindow(),
-        map(([tasks, today, dayOffset, misc]) =>
-          misc.isShowDueTaskBadge && today
-            ? countDueTasks(tasks, today, dayOffset ?? 0)
-            : 0,
-        ),
-        distinctUntilChanged(),
-        // Opt-in: until a badge was ever shown there is nothing to clear, so
-        // users who never enabled it don't touch the taskbar/dock at all.
-        skipWhile((count) => count === 0),
+      ).pipe(
         tap((count) => {
           if (this._isElectron) {
             const iconDataUrl =

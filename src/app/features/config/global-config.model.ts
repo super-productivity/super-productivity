@@ -28,7 +28,7 @@ export type MiscConfig = Readonly<{
   isConfirmBeforeExit: boolean;
   isConfirmBeforeExitWithoutFinishDay: boolean;
   isMinimizeToTray: boolean;
-  /** Desktop only; absent in older persisted settings, defaults to off. */
+  /** Desktop + iOS (Android via #11147); absent in older settings, defaults off. */
   isShowDueTaskBadge?: boolean;
   // Legacy: the local REST API switch is device-local now (Electron main's
   // simple store), because a synced switch started the listener on every
