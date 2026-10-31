@@ -89,7 +89,8 @@ export const IGNORED_PROBES = new Set(['then', 'toJSON']);
  * real methods lets the author (or their assistant) fix the call.
  *
  * Must stay self-contained (no references outside its body): the iframe
- * bridge embeds it via `toString()`.
+ * bridge embeds it via `toString()`. That is why its helpers are inlined and
+ * it runs longer than usual.
  */
 export const unknownPluginApiMemberMessage = (
   name: string,

@@ -251,7 +251,8 @@ export interface LanguageChangePayload {
 }
 
 export interface ActionPayload {
-  action: string;
+  /** The dispatched app action; read `action.type` to tell actions apart. */
+  action: { type: string; [key: string]: unknown };
   payload?: unknown;
 }
 
