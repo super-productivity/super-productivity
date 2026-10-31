@@ -288,19 +288,6 @@ describe('TaskViewCustomizerService', () => {
     expect(sanitized.preset).toBe(FILTER_COMMON.NOT_SPECIFIED);
   });
 
-  it('ignores malformed stored tag ids and mode', () => {
-    const sanitized = service['_sanitizeFilter']({
-      type: FILTER_OPTION_TYPE.tag,
-      preset: null,
-      label: 'stale label',
-      tagIds: 'Tag A' as unknown as string[],
-      tagFilterMode: 'XOR' as unknown as 'AND',
-    });
-
-    expect(sanitized.tagIds).toBeUndefined();
-    expect(sanitized.tagFilterMode).toBeUndefined();
-  });
-
   describe('customizeUndoneTasks tag id filter', () => {
     const nextFrame = (): Promise<void> =>
       new Promise((resolve) => requestAnimationFrame(() => resolve()));

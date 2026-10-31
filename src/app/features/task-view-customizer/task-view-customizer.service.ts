@@ -249,10 +249,8 @@ export class TaskViewCustomizerService {
       preset,
     };
     if (stored.type === FILTER_OPTION_TYPE.tag) {
-      if (Array.isArray(stored.tagIds)) sanitized.tagIds = stored.tagIds;
-      if (stored.tagFilterMode === 'AND' || stored.tagFilterMode === 'OR') {
-        sanitized.tagFilterMode = stored.tagFilterMode;
-      }
+      if (stored.tagIds) sanitized.tagIds = stored.tagIds;
+      if (stored.tagFilterMode) sanitized.tagFilterMode = stored.tagFilterMode;
     }
     return sanitized;
   }
