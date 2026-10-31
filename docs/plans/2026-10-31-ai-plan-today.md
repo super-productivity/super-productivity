@@ -19,9 +19,13 @@ on `claude/generative-ui-todo-app-h4o6e8`) · agent endpoint / MCP plan
   unticks items, then presses **Apply**. Nothing changes before that.
 - **Not:** a chat, a companion, nudges, check-ins, "you're behind", streaks,
   praise, background re-planning, or time-blocking.
-- **Where:** a bundled plugin, **off by default**, using the user's own
-  Anthropic API key. Two small plugin API methods that wrap existing planner
-  actions. No new NgRx action, op type, persisted model or sync-wire change.
+- **Where:** a first-party plugin listed in the community plugin directory
+  (one-click install, not bundled), using the user's own Anthropic API key.
+  Two small plugin API methods that wrap existing planner actions. No new NgRx
+  action, op type, persisted model or sync-wire change.
+- **Demand is weak** (§ 1): two AI-planning issues in eight years, 0 reactions
+  each. The case rests on the market target, not on requests. So the order is:
+  eval first, ship only if it clearly beats rules, and stay removable.
 - **Gate:** before any app code, an offline eval must show the model beats a
   plain rule-based draft on realistic day fixtures. If it doesn't, we ship the
   rule-based draft (from the planning-facts work) and stop here.
@@ -30,7 +34,7 @@ on `claude/generative-ui-todo-app-h4o6e8`) · agent endpoint / MCP plan
 
 **Sections:** [1. Demand and fit](#1-demand-and-fit) ·
 [2. Prior art](#2-prior-art) · [3. Assumptions](#3-assumptions-about-planning-facts) ·
-[4. Where it lives](#4-where-it-lives-core-or-bundled-plugin) ·
+[4. Where it lives](#4-where-it-lives-core-or-plugin) ·
 [5. User flow](#5-user-flow) · [6. Model layer](#6-model-layer) ·
 [7. Applying the plan and sync](#7-applying-the-plan-and-sync) ·
 [8. Built-in vs external assistants](#8-built-in-vs-external-assistants) ·
@@ -40,7 +44,43 @@ on `claude/generative-ui-todo-app-h4o6e8`) · agent endpoint / MCP plan
 
 ## 1. Demand and fit
 
-DEMAND_PLACEHOLDER
+Searched 2026-10-31: about 40 terms over all issues (titles and bodies) and all
+1,423 discussions (titles and bodies, not comments). Counts are reactions;
+the main items were spot-checked against the API.
+
+| Bucket                                  | Items                                                                                                                                                                                                                     | Reactions                    |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------- |
+| **AI plans my day**                     | #4718 "How to integrate AI?" (closed; maintainer: a plugin with your own key or a local model) · #4885 LLM turns a goal into a plan (closed; maintainer: paste a chatbot's list) · two lines in wishlist discussion #3812 | 0 · 0 · 2                    |
+| **Rule-based auto-scheduling**          | Discussion #6051, community **AutoPlan** plugin ("as if it was an AI, but it isn't"), already one-click in the plugin directory · #10824 reuse today's plan for tomorrow (open) · discussion #5278                        | 6 · 0 · 1                    |
+| **External assistants (MCP, API, CLI)** | #7056 API/CLI so AI agents can control SP (closed, local REST API shipped) · #11246 official CLI and MCP (open) · discussions #4770, #7256, #7895, #8385, #9704, #11350                                                   | 14 · 0 · ≤ 3 each, ~19 total |
+| **Against AI**                          | #5952 remove default plugins, "I strongly prefer to not have any AI related tools" (open) · discussion #9120 how to disable auto-scheduling                                                                               | 0 · 0                        |
+
+**What this says:**
+
+- Nobody is asking for a built-in AI day planner. The two asks were answered
+  "use a plugin with your own key", which is this plan.
+- Interest in AI concentrates on **external** assistants controlling SP (#7056,
+  14 reactions). That is the agent endpoint and the desktop MCP endpoint
+  (§ 8), not this plan.
+- Rule-based auto-planning already exists as a community plugin with modest
+  interest (6 reactions).
+- One explicit objection to AI shipped by default (#5952), which argues
+  against bundling.
+
+**Does it earn its place?** Not on demand. What it has going for it:
+
+- Daily planning is a _must be best_ dimension, and "one-key auto-scheduling"
+  is listed as something Sunsama, Akiflow and Motion do better
+  ([scorecard](../market/scorecard.md#daily-planners-sunsama-akiflow-motion)).
+  A scorecard gap alone does not justify a feature, per the review guide.
+- The AI decision is open, and a removable plugin is the cheapest way to learn
+  without committing core.
+
+Hence the shape: the eval runs first and needs no app code (Phase 0). App work
+starts only if the model clearly beats a rule-based draft **and** the survey's
+Q8/Q10 counts don't argue against it (open question 1). The deterministic
+planning facts and their rule-based draft are the higher-value step either
+way; this plan must not delay them.
 
 ## 2. Prior art
 
@@ -110,9 +150,9 @@ The planning-facts work should also produce a **rule-based draft** (keep due and
 overdue, then by priority until the time is used). That draft is the baseline
 the model has to beat (§ 9), and the model starts from it.
 
-## 4. Where it lives: core or bundled plugin
+## 4. Where it lives: core or plugin
 
-|                    | Core feature                                                       | Bundled plugin, off by default (**recommended**)                                                                         |
+|                    | Core feature                                                       | Plugin (**recommended**: first-party, in the plugin directory, not bundled)                                              |
 | ------------------ | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------ |
 | AI decision (open) | Puts an LLM client and API key handling in core; hard to take back | Core stays AI-free; the plugin can be dropped without a migration                                                        |
 | UI                 | Can render inside the Planner                                      | Own side panel, which can stay open next to the Planner; not inline                                                      |
@@ -123,10 +163,23 @@ the model has to beat (§ 9), and the model starts from it.
 | Applying a plan    | Existing actions directly                                          | **Missing:** a planning method; `updateTask({ dueDay })` skips Today ordering, reminder clearing and planner-day cleanup |
 | Long-term cost     | Core code and a config slice forever                               | Two plugin API methods forever (public contract)                                                                         |
 
-**Recommendation: bundled plugin.** The model call, prompt, key and proposal UI
-live in `packages/plugin-dev/ai-day-planner`. Core gains two plugin API methods
-that wrap what the Planner already does. This keeps the market doc's open AI
-decision open: if the eval or users say no, we delete a plugin.
+**Recommendation: a first-party plugin, listed in the plugin directory
+(`src/assets/community-plugins.json`, one-click install), not bundled.** The
+model call, prompt, key and proposal UI live in
+`packages/plugin-dev/ai-day-planner`. Core gains two plugin API methods that
+wrap what the Planner already does. This keeps the market doc's open AI
+decision open: if the eval or users say no, we unlist a plugin.
+
+Why not bundled and off by default: bundled plugins start disabled, but they
+ship in every install and show in the plugin list. #5952 objects to exactly
+that for the existing AI Prompts plugin. Listing costs users who want it one
+click and costs nobody else anything.
+
+The planning method also serves the community AutoPlan plugin and any other
+planner plugin: today a plugin can only set `dueDay` through `updateTask`,
+which skips what the Planner does (row "Applying a plan"). That second
+consumer is part of why the API addition is worth its permanent cost. (How
+AutoPlan writes today was not checked.)
 
 **Challenge to the agreed shape.** "The proposal appears in the normal Planner"
 needs a core preview surface. A plugin cannot draw inside the Planner. For v1
@@ -154,7 +207,8 @@ Not added: unscheduling, reordering existing Today tasks, `dueWithTime` writes.
 
 ## 5. User flow
 
-1. **Turn it on.** Settings → Plugins → _Help me plan today_ (off by default).
+1. **Turn it on.** Settings → Plugins → install _Help me plan today_ from the
+   directory.
    First open shows a one-time notice, then asks for an API key:
 
    > When you press **Help me plan today**, Super Productivity sends to
@@ -408,12 +462,12 @@ prototype's `scripts/eval.js` pattern):
 
 ## 10. Phases
 
-| Phase                             | Scope                                                                                            | Exit                                                          |
-| --------------------------------- | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------- |
-| **0. Eval first** (no app change) | Fixtures, prompt, validator, rule-based baseline, run on Haiku/Sonnet/Opus 5.5                   | Ship bar met → Phase 1. Not met → record why, stop.           |
-| **1. Plugin, desktop + web**      | Bundled plugin (off), notice, key, side panel, Apply, Undo; `getDayCapacity` + `planTasksForDay` | Works end to end; unit tests for validator and bridge methods |
-| **2. Mobile + E2E**               | Android/iOS via `CapacitorWebFetch`; E2E: apply on device A while B edits a task, both converge  | E2E green on SuperSync                                        |
-| **3. On demand only**             | Core Planner preview shared with planning facts and MCP; backlog pull; local model               | A second consumer or user requests                            |
+| Phase                             | Scope                                                                                               | Exit                                                          |
+| --------------------------------- | --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| **0. Eval first** (no app change) | Fixtures, prompt, validator, rule-based baseline, run on Haiku/Sonnet/Opus 5.5                      | Ship bar met → Phase 1. Not met → record why, stop.           |
+| **1. Plugin, desktop + web**      | Directory-listed plugin, notice, key, side panel, Apply, Undo; `getDayCapacity` + `planTasksForDay` | Works end to end; unit tests for validator and bridge methods |
+| **2. Mobile + E2E**               | Android/iOS via `CapacitorWebFetch`; E2E: apply on device A while B edits a task, both converge     | E2E green on SuperSync                                        |
+| **3. On demand only**             | Core Planner preview shared with planning facts and MCP; backlog pull; local model                  | A second consumer or user requests                            |
 
 **Smallest useful version:** Phase 0 + 1. Triage of Today: keep, pull in
 overdue, push to tomorrow, with reasons.
@@ -442,8 +496,8 @@ automatic or scheduled runs, multi-day or weekly plans.
 1. Survey results: how many picked "I don't want AI in my task app" (Q8) and
    "Connect to AI assistants" (Q10)? A large "don't want" share argues for
    keeping this a plugin forever, or not shipping it.
-2. Is a bundled plugin acceptable as the place for SP's first built-in AI, or
-   should it be a downloadable plugin listed in the plugin directory only?
+2. Directory-listed first-party plugin (recommended) or bundled and off by
+   default? Bundling is easier to find; #5952 asks for the opposite.
 3. Project names in the input: they help ("Work" on a Saturday) but are more
    data. v1 leaves them out. Add later behind the same notice?
 4. Local models: open the `request()` private-network guard for this plugin, or
