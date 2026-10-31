@@ -1,7 +1,10 @@
 import { LimitedFormlyFieldConfig } from '../config/global-config.model';
 import {
   BoardCfg,
+  BoardDateTimeframeCfg,
+  BoardDateTimeframeType,
   BoardPanelCfg,
+  BoardPanelCfgDeadlineState,
   BoardPanelCfgScheduledState,
   BoardPanelCfgTaskDoneState,
   BoardPanelCfgTaskTypeFilter,
@@ -9,11 +12,106 @@ import {
 import { nanoid } from 'nanoid';
 import { T } from '../../t.const';
 import { DEFAULT_PANEL_CFG } from './boards.const';
+import { BOARD_TIMEFRAME_MAX_DAYS } from './board-date-filter.util';
+import { getDbDateStr } from '../../util/get-db-date-str';
+
+// The date picker emits Date objects; the synced config stores YYYY-MM-DD.
+const toDbDateStr = (value: unknown): unknown =>
+  value instanceof Date ? getDbDateStr(value) : (value ?? undefined);
 
 const getNewPanel = (): BoardPanelCfg => ({
   ...DEFAULT_PANEL_CFG,
   id: nanoid(),
 });
+
+const TIMEFRAME_OPTIONS: {
+  value: BoardDateTimeframeType;
+  label: string;
+}[] = [
+  { value: 'all', label: T.F.BOARDS.FORM.TIMEFRAME_ALL },
+  { value: 'today', label: T.F.BOARDS.FORM.TIMEFRAME_TODAY },
+  { value: 'tomorrow', label: T.F.BOARDS.FORM.TIMEFRAME_TOMORROW },
+  { value: 'next7Days', label: T.F.BOARDS.FORM.TIMEFRAME_NEXT_7_DAYS },
+  { value: 'nextNDays', label: T.F.BOARDS.FORM.TIMEFRAME_NEXT_N_DAYS },
+  {
+    value: 'atLeastNDaysFuture',
+    label: T.F.BOARDS.FORM.TIMEFRAME_AT_LEAST_N_DAYS_FUTURE,
+  },
+  { value: 'nextWeek', label: T.F.BOARDS.FORM.TIMEFRAME_NEXT_WEEK },
+  { value: 'nextMonth', label: T.F.BOARDS.FORM.TIMEFRAME_NEXT_MONTH },
+  { value: 'customDate', label: T.F.BOARDS.FORM.TIMEFRAME_CUSTOM_DATE },
+  { value: 'customRange', label: T.F.BOARDS.FORM.TIMEFRAME_CUSTOM_RANGE },
+];
+
+const buildTimeframeFieldGroup = (
+  label: string,
+): LimitedFormlyFieldConfig<BoardDateTimeframeCfg>[] => [
+  {
+    key: 'type',
+    type: 'select',
+    props: {
+      label,
+      required: true,
+      options: TIMEFRAME_OPTIONS,
+    },
+  },
+  {
+    key: 'days',
+    type: 'input',
+    expressions: {
+      hide: 'model?.type !== "nextNDays" && model?.type !== "atLeastNDaysFuture"',
+    },
+    defaultValue: 7,
+    props: {
+      label: T.F.BOARDS.FORM.TIMEFRAME_DAYS_VALUE,
+      type: 'number',
+      min: 1,
+      max: BOARD_TIMEFRAME_MAX_DAYS,
+      required: true,
+    },
+  },
+  {
+    key: 'customDate',
+    type: 'date',
+    parsers: [toDbDateStr],
+    expressions: {
+      hide: 'model?.type !== "customDate"',
+    },
+    props: {
+      label: T.F.BOARDS.FORM.TIMEFRAME_CUSTOM_DATE_VALUE,
+      required: true,
+    },
+  },
+  // A range may be open on one side, but not on both.
+  /* eslint-disable @typescript-eslint/naming-convention -- formly expression keys are property paths */
+  {
+    key: 'customStart',
+    type: 'date',
+    parsers: [toDbDateStr],
+    expressions: {
+      hide: 'model?.type !== "customRange"',
+      'props.required': '!model?.customEnd',
+      'props.max': 'model?.customEnd',
+    },
+    props: {
+      label: T.F.BOARDS.FORM.TIMEFRAME_CUSTOM_RANGE_START,
+    },
+  },
+  {
+    key: 'customEnd',
+    type: 'date',
+    parsers: [toDbDateStr],
+    expressions: {
+      hide: 'model?.type !== "customRange"',
+      'props.required': '!model?.customStart',
+      'props.min': 'model?.customStart',
+    },
+    props: {
+      label: T.F.BOARDS.FORM.TIMEFRAME_CUSTOM_RANGE_END,
+    },
+  },
+];
+/* eslint-enable @typescript-eslint/naming-convention */
 
 export const BOARDS_FORM: LimitedFormlyFieldConfig<BoardCfg>[] = [
   {
@@ -162,6 +260,48 @@ export const BOARDS_FORM: LimitedFormlyFieldConfig<BoardCfg>[] = [
               },
             ],
           },
+        },
+        {
+          key: 'scheduledTimeframe',
+          // `model` here is the nested timeframe object; the panel is the parent.
+          expressions: {
+            hide: `field.parent?.model?.scheduledState !== ${BoardPanelCfgScheduledState.Scheduled}`,
+          },
+          resetOnHide: true,
+          defaultValue: { type: 'all' },
+          fieldGroup: buildTimeframeFieldGroup(T.F.BOARDS.FORM.SCHEDULED_TIMEFRAME),
+        },
+        {
+          key: 'deadlineState',
+          type: 'radio',
+          props: {
+            label: T.F.BOARDS.FORM.DEADLINE_STATE,
+            required: true,
+            defaultValue: BoardPanelCfgDeadlineState.All,
+            options: [
+              {
+                value: BoardPanelCfgDeadlineState.All,
+                label: T.F.BOARDS.FORM.DEADLINE_STATE_ALL,
+              },
+              {
+                value: BoardPanelCfgDeadlineState.HasDeadline,
+                label: T.F.BOARDS.FORM.DEADLINE_STATE_HAS_DEADLINE,
+              },
+              {
+                value: BoardPanelCfgDeadlineState.NoDeadline,
+                label: T.F.BOARDS.FORM.DEADLINE_STATE_NO_DEADLINE,
+              },
+            ],
+          },
+        },
+        {
+          key: 'deadlineTimeframe',
+          expressions: {
+            hide: `field.parent?.model?.deadlineState !== ${BoardPanelCfgDeadlineState.HasDeadline}`,
+          },
+          resetOnHide: true,
+          defaultValue: { type: 'all' },
+          fieldGroup: buildTimeframeFieldGroup(T.F.BOARDS.FORM.DEADLINE_TIMEFRAME),
         },
         {
           key: 'sortBy',

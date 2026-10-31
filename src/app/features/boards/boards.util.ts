@@ -1,5 +1,7 @@
 import {
+  BoardDateTimeframeCfg,
   BoardPanelCfg,
+  BoardPanelCfgDeadlineState,
   BoardPanelCfgScheduledState,
   BoardPanelCfgTaskDoneState,
   BoardPanelCfgTaskTypeFilter,
@@ -7,6 +9,13 @@ import {
 } from './boards.model';
 import { TaskCopy } from '../tasks/task.model';
 import { dateStrToUtcDate } from '../../util/date-str-to-utc-date';
+import {
+  BoardDateTimeframeRange,
+  getBoardTaskDateStr,
+  isDateInBoardRange,
+  resolveBoardDateTimeframeRange,
+  sanitizeBoardDateTimeframeCfg,
+} from './board-date-filter.util';
 import { TODAY_TAG } from '../tag/tag.const';
 
 const VALID_SORT_FIELDS: ReadonlySet<BoardSortField> = new Set([
@@ -14,6 +23,12 @@ const VALID_SORT_FIELDS: ReadonlySet<BoardSortField> = new Set([
   'created',
   'title',
   'timeEstimate',
+]);
+
+const VALID_DEADLINE_STATES: ReadonlySet<BoardPanelCfgDeadlineState> = new Set([
+  BoardPanelCfgDeadlineState.All,
+  BoardPanelCfgDeadlineState.HasDeadline,
+  BoardPanelCfgDeadlineState.NoDeadline,
 ]);
 
 // Absent `projectIds` (legacy data that hasn't been sanitized yet) means
@@ -85,6 +100,27 @@ export const sanitizePanelCfg = (panel: BoardPanelCfg): BoardPanelCfg => {
   }
   if (out.excludedTagsMatch == null) {
     delete (out as Partial<BoardPanelCfg>).excludedTagsMatch;
+  }
+
+  if (out.scheduledState === BoardPanelCfgScheduledState.Scheduled) {
+    out.scheduledTimeframe = sanitizeBoardDateTimeframeCfg(out.scheduledTimeframe);
+    if (!out.scheduledTimeframe) {
+      delete (out as Partial<BoardPanelCfg>).scheduledTimeframe;
+    }
+  } else {
+    delete (out as Partial<BoardPanelCfg>).scheduledTimeframe;
+  }
+
+  if (out.deadlineState == null || !VALID_DEADLINE_STATES.has(out.deadlineState)) {
+    delete (out as Partial<BoardPanelCfg>).deadlineState;
+    delete (out as Partial<BoardPanelCfg>).deadlineTimeframe;
+  } else if (out.deadlineState === BoardPanelCfgDeadlineState.HasDeadline) {
+    out.deadlineTimeframe = sanitizeBoardDateTimeframeCfg(out.deadlineTimeframe);
+    if (!out.deadlineTimeframe) {
+      delete (out as Partial<BoardPanelCfg>).deadlineTimeframe;
+    }
+  } else {
+    delete (out as Partial<BoardPanelCfg>).deadlineTimeframe;
   }
 
   return out;
@@ -187,6 +223,7 @@ export const doesTaskMatchPanel = (
     | 'taskDoneState'
     | 'projectIds'
     | 'scheduledState'
+    | 'deadlineState'
     | 'backlogState'
   >,
   isInBacklog: (task: Readonly<TaskCopy>) => boolean,
@@ -243,6 +280,19 @@ export const doesTaskMatchPanel = (
   }
 
   if (
+    panelCfg.deadlineState === BoardPanelCfgDeadlineState.HasDeadline &&
+    !(task.deadlineWithTime || task.deadlineDay)
+  ) {
+    return false;
+  }
+  if (
+    panelCfg.deadlineState === BoardPanelCfgDeadlineState.NoDeadline &&
+    (task.deadlineWithTime || task.deadlineDay)
+  ) {
+    return false;
+  }
+
+  if (
     panelCfg.backlogState === BoardPanelCfgTaskTypeFilter.OnlyBacklog &&
     !isInBacklog(task)
   ) {
@@ -257,6 +307,58 @@ export const doesTaskMatchPanel = (
 
   return true;
 };
+
+export interface BoardPanelTimeframeRanges {
+  /** Absent = no timeframe restriction; null = invalid config, matches nothing. */
+  scheduled?: BoardDateTimeframeRange | null;
+  deadline?: BoardDateTimeframeRange | null;
+}
+
+/**
+ * Resolves a panel's timeframe filters once per filter pass, so the per-task
+ * check in `doesTaskMatchPanelTimeframes` is only string comparisons.
+ */
+export const resolvePanelTimeframeRanges = (
+  panelCfg: Pick<
+    BoardPanelCfg,
+    'scheduledState' | 'scheduledTimeframe' | 'deadlineState' | 'deadlineTimeframe'
+  >,
+  todayStr: string,
+  firstDayOfWeek: number,
+): BoardPanelTimeframeRanges => {
+  const resolve = (
+    timeframe: BoardDateTimeframeCfg | undefined,
+  ): BoardDateTimeframeRange | null | undefined =>
+    timeframe && timeframe.type !== 'all'
+      ? resolveBoardDateTimeframeRange({ timeframe, todayStr, firstDayOfWeek })
+      : undefined;
+
+  return {
+    ...(panelCfg.scheduledState === BoardPanelCfgScheduledState.Scheduled
+      ? { scheduled: resolve(panelCfg.scheduledTimeframe) }
+      : {}),
+    ...(panelCfg.deadlineState === BoardPanelCfgDeadlineState.HasDeadline
+      ? { deadline: resolve(panelCfg.deadlineTimeframe) }
+      : {}),
+  };
+};
+
+/** Companion to `doesTaskMatchPanel` for the date-dependent filters. */
+export const doesTaskMatchPanelTimeframes = (
+  task: Readonly<TaskCopy>,
+  ranges: BoardPanelTimeframeRanges,
+  startOfNextDayDiffMs: number,
+): boolean =>
+  (ranges.scheduled === undefined ||
+    isDateInBoardRange(
+      getBoardTaskDateStr(task.dueDay, task.dueWithTime, startOfNextDayDiffMs),
+      ranges.scheduled,
+    )) &&
+  (ranges.deadline === undefined ||
+    isDateInBoardRange(
+      getBoardTaskDateStr(task.deadlineDay, task.deadlineWithTime, startOfNextDayDiffMs),
+      ranges.deadline,
+    ));
 
 /**
  * Returns an ascending comparator for the given field. Callers multiply by -1

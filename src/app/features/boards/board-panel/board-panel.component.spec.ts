@@ -1,6 +1,11 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { BoardPanelComponent } from './board-panel.component';
-import { BoardPanelCfg, BoardPanelCfgTaskTypeFilter } from '../boards.model';
+import {
+  BoardPanelCfg,
+  BoardPanelCfgDeadlineState,
+  BoardPanelCfgScheduledState,
+  BoardPanelCfgTaskTypeFilter,
+} from '../boards.model';
 import { TaskCopy } from '../../tasks/task.model';
 import { Store } from '@ngrx/store';
 import { TaskService } from '../../tasks/task.service';
@@ -32,6 +37,13 @@ import { DEFAULT_PANEL_CFG } from '../boards.const';
 import { BoardsActions } from '../store/boards.actions';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { GlobalTrackingIntervalService } from '../../../core/global-tracking-interval/global-tracking-interval.service';
+import { selectStartOfNextDayDiffMs } from '../../../root-store/app-state/app-state.selectors';
+import { PlannerActions } from '../../planner/store/planner.actions';
+import { DialogScheduleTaskComponent } from '../../planner/dialog-schedule-task/dialog-schedule-task.component';
+import { DialogDeadlineComponent } from '../../tasks/dialog-deadline/dialog-deadline.component';
+import { SnackService } from '../../../core/snack/snack.service';
+import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
+import { TaskBulkActionService } from '../../tasks/task-bulk-action.service';
 
 const PLANNER_TASK_PROVIDERS = [
   {
@@ -1378,5 +1390,356 @@ describe('BoardPanelComponent - add button lookup', () => {
       '<div class="add-task-bar-stub"><button>Some bar control</button></div>',
     );
     expect(component.addButton()).toBeNull();
+  });
+});
+
+describe('BoardPanelComponent - date and deadline filters', () => {
+  const TODAY = '2026-03-18'; // a Wednesday
+  let component: BoardPanelComponent;
+  let fixture: ComponentFixture<BoardPanelComponent>;
+  let dispatchSpy: jasmine.Spy;
+  let dialogOpenSpy: jasmine.Spy;
+  let snackOpenSpy: jasmine.Spy;
+  let bulk: { scheduleFor: jasmine.Spy; setDeadlineFor: jasmine.Spy };
+  let firstDayOfWeek: number;
+
+  const mkTask = (overrides: Partial<TaskCopy>): TaskCopy =>
+    ({
+      id: overrides.id || 't',
+      title: 'Task',
+      projectId: 'p1',
+      timeSpentOnDay: {},
+      attachments: [],
+      timeEstimate: 0,
+      timeSpent: 0,
+      isDone: false,
+      tagIds: [],
+      created: new Date(2026, 2, 1).getTime(),
+      subTaskIds: [],
+      ...overrides,
+    }) as TaskCopy;
+
+  const panel = (cfg: Partial<BoardPanelCfg>): BoardPanelCfg => ({
+    ...DEFAULT_PANEL_CFG,
+    id: 'p',
+    ...cfg,
+  });
+
+  const setup = async (tasks: TaskCopy[], cfg: Partial<BoardPanelCfg>): Promise<void> => {
+    dispatchSpy = jasmine.createSpy('dispatch');
+    dialogOpenSpy = jasmine.createSpy('open');
+    snackOpenSpy = jasmine.createSpy('open');
+    bulk = {
+      scheduleFor: jasmine.createSpy('scheduleFor').and.resolveTo(),
+      setDeadlineFor: jasmine.createSpy('setDeadlineFor').and.resolveTo(),
+    };
+    const storeMock = {
+      select: (selectorFn: unknown, props?: { id: string }) => {
+        if (selectorFn === selectUnarchivedProjects)
+          return of([{ id: 'p1', backlogTaskIds: [] }]);
+        if (selectorFn === selectAllTasksInActiveProjects) return of(tasks);
+        if (selectorFn === selectTaskById)
+          return of(tasks.find((task) => task.id === props?.id));
+        if (selectorFn === selectStartOfNextDayDiffMs) return of(0);
+        return of([]);
+      },
+      pipe: () => ({ toPromise: () => Promise.resolve(undefined) }),
+      dispatch: dispatchSpy,
+    };
+
+    await TestBed.configureTestingModule({
+      teardown: { destroyAfterEach: true },
+      imports: [
+        BoardPanelComponent,
+        TranslateModule.forRoot({
+          loader: { provide: TranslateLoader, useClass: TranslateNoOpLoader },
+        }),
+      ],
+      providers: [
+        ...PLANNER_TASK_PROVIDERS,
+        {
+          provide: GlobalConfigService,
+          useValue: {
+            cfg: () => null,
+            localization: () => ({ firstDayOfWeek }),
+            appFeatures: () => ({ isTimeTrackingEnabled: false }),
+          },
+        },
+        {
+          provide: DateService,
+          useValue: { todayStr: () => TODAY, getStartOfNextDayDiffMs: () => 0 },
+        },
+        {
+          provide: GlobalTrackingIntervalService,
+          useFactory: () => ({
+            todayDateStr: signal(TODAY),
+            clockTimestamp: signal(new Date(2026, 2, 18, 12).getTime()),
+          }),
+        },
+        provideMockStore({}),
+        provideMockActions(() => new ReplaySubject(1)),
+        { provide: Store, useValue: storeMock },
+        {
+          provide: TaskService,
+          useValue: {
+            currentTaskId: signal(null),
+            updateTags: jasmine.createSpy('updateTags'),
+          },
+        },
+        { provide: MatDialog, useValue: { open: dialogOpenSpy } },
+        { provide: SnackService, useValue: { open: snackOpenSpy } },
+        { provide: DateTimeFormatService, useValue: { currentLocale: () => 'en-US' } },
+        { provide: TaskBulkActionService, useValue: bulk },
+        { provide: WorkContextService, useValue: {} },
+        { provide: ProjectService, useValue: { getProjectsWithoutId$: () => of([]) } },
+      ],
+    })
+      .overrideComponent(PlannerTaskComponent, {
+        set: { template: '<div>Mock Task</div>', inputs: ['task'] },
+      })
+      .overrideComponent(AddTaskInlineComponent, {
+        set: { template: '<div>Mock Add Task</div>' },
+      })
+      .compileComponents();
+
+    fixture = TestBed.createComponent(BoardPanelComponent);
+    component = fixture.componentInstance;
+    fixture.componentRef.setInput('panelCfg', panel(cfg));
+    fixture.detectChanges();
+  };
+
+  const shownIds = (): string[] => component.tasks().map((task) => task.id);
+
+  const dispatched = (type: string): unknown[] =>
+    dispatchSpy.calls
+      .allArgs()
+      .map(([action]) => action)
+      .filter((action) => action.type === type);
+
+  beforeEach(() => {
+    firstDayOfWeek = 1;
+  });
+
+  describe('filtering', () => {
+    it('shows only tasks planned for today when scheduled timeframe is Today', async () => {
+      await setup(
+        [
+          mkTask({ id: 'today', dueDay: TODAY }),
+          mkTask({ id: 'timed', dueWithTime: new Date(2026, 2, 18, 15).getTime() }),
+          mkTask({ id: 'tomorrow', dueDay: '2026-03-19' }),
+          mkTask({ id: 'none' }),
+        ],
+        {
+          scheduledState: BoardPanelCfgScheduledState.Scheduled,
+          scheduledTimeframe: { type: 'today' },
+        },
+      );
+      expect(shownIds()).toEqual(['today', 'timed']);
+    });
+
+    it('shows only deadline tasks in the next 7 days', async () => {
+      await setup(
+        [
+          mkTask({ id: 'in', deadlineDay: '2026-03-24' }),
+          mkTask({ id: 'out', deadlineDay: '2026-03-25' }),
+          mkTask({ id: 'none' }),
+        ],
+        {
+          deadlineState: BoardPanelCfgDeadlineState.HasDeadline,
+          deadlineTimeframe: { type: 'next7Days' },
+        },
+      );
+      expect(shownIds()).toEqual(['in']);
+    });
+
+    it('shows only tasks without a deadline for NoDeadline', async () => {
+      await setup(
+        [
+          mkTask({ id: 'day', deadlineDay: TODAY }),
+          mkTask({ id: 'timed', deadlineWithTime: new Date(2026, 2, 18, 9).getTime() }),
+          mkTask({ id: 'none' }),
+        ],
+        { deadlineState: BoardPanelCfgDeadlineState.NoDeadline },
+      );
+      expect(shownIds()).toEqual(['none']);
+    });
+
+    // Today is Wednesday 2026-03-18. Monday-start: next week is Mar 23–29;
+    // Sunday-start: Mar 22–28.
+    it('derives next week from the first day of week setting', async () => {
+      const tasks = [
+        mkTask({ id: 'sun22', dueDay: '2026-03-22' }),
+        mkTask({ id: 'mon23', dueDay: '2026-03-23' }),
+        mkTask({ id: 'sun29', dueDay: '2026-03-29' }),
+      ];
+      const cfg = {
+        scheduledState: BoardPanelCfgScheduledState.Scheduled,
+        scheduledTimeframe: { type: 'nextWeek' as const },
+      };
+
+      firstDayOfWeek = 1;
+      await setup(tasks, cfg);
+      expect(shownIds()).withContext('Monday start').toEqual(['mon23', 'sun29']);
+
+      TestBed.resetTestingModule();
+      firstDayOfWeek = 0;
+      await setup(tasks, cfg);
+      expect(shownIds()).withContext('Sunday start').toEqual(['sun22', 'mon23']);
+    });
+  });
+
+  describe('moving tasks in', () => {
+    it('replans a task to the nearest day of a scheduled timeframe', async () => {
+      const task = mkTask({ id: 'a', dueDay: '2026-04-30' });
+      await setup([task], {
+        scheduledState: BoardPanelCfgScheduledState.Scheduled,
+        scheduledTimeframe: { type: 'next7Days' },
+      });
+
+      expect(await component.moveTasks(['a'])).toBeTrue();
+
+      expect(dialogOpenSpy).not.toHaveBeenCalled();
+      expect(dispatchSpy).toHaveBeenCalledWith(
+        PlannerActions.planTaskForDay({ task, day: '2026-03-24' }),
+      );
+      expect(snackOpenSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('plans an unscheduled task into a timeframe panel without asking', async () => {
+      const task = mkTask({ id: 'a' });
+      await setup([task], {
+        scheduledState: BoardPanelCfgScheduledState.Scheduled,
+        scheduledTimeframe: { type: 'tomorrow' },
+      });
+
+      await component.moveTasks(['a']);
+
+      expect(dialogOpenSpy).not.toHaveBeenCalled();
+      expect(dispatchSpy).toHaveBeenCalledWith(
+        PlannerActions.planTaskForDay({ task, day: '2026-03-19' }),
+      );
+    });
+
+    it('leaves a task alone that already fits the timeframe', async () => {
+      await setup([mkTask({ id: 'a', dueDay: '2026-03-20' })], {
+        scheduledState: BoardPanelCfgScheduledState.Scheduled,
+        scheduledTimeframe: { type: 'next7Days' },
+      });
+
+      await component.moveTasks(['a']);
+
+      expect(dispatched(PlannerActions.planTaskForDay.type)).toEqual([]);
+      expect(snackOpenSpy).not.toHaveBeenCalled();
+    });
+
+    it('does not dispatch for an over-limit day count from a synced config', async () => {
+      await setup([mkTask({ id: 'a', dueDay: TODAY })], {
+        scheduledState: BoardPanelCfgScheduledState.Scheduled,
+        scheduledTimeframe: { type: 'atLeastNDaysFuture', days: 1e9 },
+      });
+
+      expect(shownIds()).toEqual([]);
+      await component.moveTasks(['a']);
+
+      expect(dispatched(PlannerActions.planTaskForDay.type)).toEqual([]);
+    });
+
+    it('opens one schedule dialog for a scheduled panel without timeframe', async () => {
+      await setup([mkTask({ id: 'a' })], {
+        scheduledState: BoardPanelCfgScheduledState.Scheduled,
+      });
+      dialogOpenSpy.and.returnValue({ afterClosed: () => of(undefined) });
+
+      expect(await component.moveTasks(['a'])).toBeFalse();
+
+      expect(dialogOpenSpy).toHaveBeenCalledOnceWith(DialogScheduleTaskComponent, {
+        data: { isSelectDueOnly: true },
+      });
+    });
+
+    it('moves a deadline to the nearest day of a deadline timeframe', async () => {
+      await setup([mkTask({ id: 'a', deadlineDay: '2026-05-01' })], {
+        deadlineState: BoardPanelCfgDeadlineState.HasDeadline,
+        deadlineTimeframe: { type: 'customRange', customEnd: '2026-03-31' },
+      });
+
+      await component.moveTasks(['a']);
+
+      expect(dispatched(TaskSharedActions.setDeadline.type)).toEqual([
+        TaskSharedActions.setDeadline({
+          taskId: 'a',
+          deadlineDay: '2026-03-31',
+          isSkipSnack: true,
+        }),
+      ]);
+    });
+
+    it('also plans the task for today when its deadline becomes today', async () => {
+      await setup([mkTask({ id: 'a', deadlineDay: '2026-04-01' })], {
+        deadlineState: BoardPanelCfgDeadlineState.HasDeadline,
+        deadlineTimeframe: { type: 'today' },
+      });
+
+      await component.moveTasks(['a']);
+
+      const [action] = dispatched(TaskSharedActions.setDeadline.type) as {
+        deadlineDay: string;
+        autoPlanToday?: string;
+      }[];
+      expect(action.deadlineDay).toBe(TODAY);
+      expect(action.autoPlanToday).toBe(TODAY);
+    });
+
+    it('asks once for a deadline and sets it for every task without one', async () => {
+      const pick = { date: new Date(2026, 3, 1) };
+      await setup([mkTask({ id: 'a' }), mkTask({ id: 'b', deadlineDay: '2026-03-20' })], {
+        deadlineState: BoardPanelCfgDeadlineState.HasDeadline,
+      });
+      dialogOpenSpy.and.returnValue({ afterClosed: () => of(pick) });
+
+      expect(await component.moveTasks(['a', 'b'])).toBeTrue();
+
+      expect(dialogOpenSpy).toHaveBeenCalledOnceWith(DialogDeadlineComponent, {
+        autoFocus: false,
+        data: { isSelectDeadlineOnly: true },
+      });
+      expect(bulk.setDeadlineFor).toHaveBeenCalledOnceWith(pick, [
+        jasmine.objectContaining({ id: 'a' }),
+      ]);
+    });
+
+    it('cancels the whole placement when the deadline dialog is dismissed', async () => {
+      await setup([mkTask({ id: 'a' })], {
+        deadlineState: BoardPanelCfgDeadlineState.HasDeadline,
+      });
+      dialogOpenSpy.and.returnValue({ afterClosed: () => of(undefined) });
+
+      expect(await component.moveTasks(['a'])).toBeFalse();
+      expect(dispatchSpy).not.toHaveBeenCalled();
+    });
+
+    it('removes the deadline silently when moving into a NoDeadline panel', async () => {
+      await setup([mkTask({ id: 'a', deadlineDay: TODAY }), mkTask({ id: 'b' })], {
+        deadlineState: BoardPanelCfgDeadlineState.NoDeadline,
+      });
+
+      await component.moveTasks(['a', 'b']);
+
+      expect(dispatched(TaskSharedActions.removeDeadline.type)).toEqual([
+        TaskSharedActions.removeDeadline({ taskId: 'a', isSkipSnack: true }),
+      ]);
+    });
+
+    it('shows no per-task snack when several tasks are adjusted at once', async () => {
+      await setup([mkTask({ id: 'a', dueDay: '2026-05-01' }), mkTask({ id: 'b' })], {
+        scheduledState: BoardPanelCfgScheduledState.Scheduled,
+        scheduledTimeframe: { type: 'today' },
+      });
+
+      await component.moveTasks(['a', 'b']);
+
+      expect(dispatched(PlannerActions.planTaskForDay.type).length).toBe(2);
+      expect(snackOpenSpy).not.toHaveBeenCalled();
+    });
   });
 });
