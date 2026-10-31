@@ -1171,9 +1171,10 @@ with `outline: none`, no role and no Enter handling (it only listens to
   instead of a bare `outline: none`; this also fixes the invisible focus on
   the other pages.
 - `/boards` without views and all other pages are unchanged (they link to
-  the task list like the Planner or Schedule title). Under 398px (`isXxxs`)
-  the title bar hides the view's ⋮ menu, so the title is then the only way
-  to edit from the header.
+  the task list like the Planner or Schedule title). At 350px and below
+  (`isXxxs` in `page-title`, not the 398px `xxxs` breakpoint) the title bar
+  hides the view's ⋮ menu, so the title is then the only way to edit from
+  the header.
 
 ### C. Motion
 
