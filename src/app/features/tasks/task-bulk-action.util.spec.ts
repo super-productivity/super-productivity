@@ -1,8 +1,13 @@
 import { DEFAULT_TASK, Task } from './task.model';
+import { Section } from '../section/section.model';
+import { WorkContextType } from '../work-context/work-context.model';
 import {
   dedupeByRepeatCfg,
   dedupeSubtasksOfSelectedParents,
   getCommonProjectId,
+  getMultiTaskAnchor,
+  getProjectSections,
+  getTaskSectionMap,
   orderForMarkDone,
   resolveDoneIntent,
   resolveTagIntent,
@@ -96,5 +101,66 @@ describe('task-bulk-action.util', () => {
       ).toBeNull();
       expect(getCommonProjectId([])).toBeNull();
     });
+  });
+});
+
+describe('multi-task section placement', () => {
+  const section = (id: string, overrides: Partial<Section> = {}): Section => ({
+    id,
+    title: id,
+    contextType: WorkContextType.PROJECT,
+    contextId: 'p',
+    taskIds: [],
+    ...overrides,
+  });
+
+  it('resolves sources only from the target project, not foreign or tag sections', () => {
+    const sections = [
+      section('left', { taskIds: ['a', 'b'] }),
+      section('right', { taskIds: ['c'] }),
+      section('foreign', { contextId: 'other', taskIds: ['a'] }),
+      section('tag', { contextType: WorkContextType.TAG, taskIds: ['b'] }),
+    ];
+    const projectSections = getProjectSections(sections, 'p');
+    expect(projectSections.map((item) => item.id)).toEqual(['left', 'right']);
+    const sources = getTaskSectionMap(projectSections);
+    expect([...sources]).toEqual([
+      ['a', 'left'],
+      ['b', 'left'],
+      ['c', 'right'],
+    ]);
+    expect(sources.get('root')).toBeUndefined();
+    expect(getProjectSections(sections, 'missing')).toEqual([]);
+  });
+
+  it('snapshots source membership without mutating the sections', () => {
+    const source = section('source', { taskIds: ['a'] });
+    const sources = getTaskSectionMap([source]);
+    expect(source.taskIds).toEqual(['a']);
+    source.taskIds.push('b');
+    expect([...sources]).toEqual([['a', 'source']]);
+    expect([...getTaskSectionMap([])]).toEqual([]);
+  });
+
+  it('appends after the last destination task that is not moving', () => {
+    const ids = Object.freeze(['existing', 'a', 'b']);
+    expect(getMultiTaskAnchor(ids, new Set(['a', 'b']))).toBe('existing');
+    expect(getMultiTaskAnchor(ids, new Set(['a']))).toBe('b');
+    expect(ids).toEqual(['existing', 'a', 'b']);
+  });
+
+  it('skips selected rows before the drag leader without using later rows', () => {
+    const ids = ['existing', 'a', 'b', 'later'];
+    const selected = new Set(['a', 'b']);
+    expect(getMultiTaskAnchor(ids, selected, ids.indexOf('a'))).toBe('existing');
+    expect(getMultiTaskAnchor(ids, selected, ids.indexOf('b'))).toBe('existing');
+  });
+
+  it('uses a null anchor for an empty destination or only selected preceding rows', () => {
+    expect(getMultiTaskAnchor([], new Set())).toBeNull();
+    expect(getMultiTaskAnchor(['a', 'b'], new Set(['a', 'b']))).toBeNull();
+    expect(getMultiTaskAnchor(['a', 'b'], new Set(['a', 'b']), 1)).toBeNull();
+    expect(getMultiTaskAnchor(['a', 'b'], new Set(['a', 'b']), 0)).toBeNull();
+    expect(getMultiTaskAnchor(['a', 'b'], new Set(['a', 'b']), -1)).toBeNull();
   });
 });
