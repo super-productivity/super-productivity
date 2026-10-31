@@ -48,6 +48,8 @@ export class BoardComponent {
   private _matDialog = inject(MatDialog);
 
   boardCfg = input.required<BoardCfg>();
+  // SPIKE: throwaway, do not merge. Passed through to every board-panel.
+  isEphemeral = input(false);
   private _panels = viewChildren(BoardPanelComponent);
   private _panelElements = viewChildren(BoardPanelComponent, { read: ElementRef });
 

@@ -120,6 +120,9 @@ export class BoardPanelComponent implements TaskCardList {
   dragDelayForTouch = dragDelayForTouch;
 
   panelCfg = input.required<BoardPanelCfg>();
+  // SPIKE: throwaway, do not merge. An in-memory panelCfg has no stored panel, so
+  // writing its manual order only records an orphan BOARD op that syncs.
+  isEphemeral = input(false);
   editBoard = output<void>();
   adjacentPanel = output<BoardPanelNavigation>();
 
@@ -224,9 +227,8 @@ export class BoardPanelComponent implements TaskCardList {
     if (!this.isManualOrder()) return;
     const taskIds = reorderBoardTasks(ids, selected, direction);
     if (!fastArrayCompare(ids, taskIds)) {
-      this.store.dispatch(
-        BoardsActions.updatePanelCfgTaskIds({ panelId: this.panelCfg().id, taskIds }),
-      );
+      // SPIKE: throwaway, do not merge
+      this._saveOrder(taskIds);
       afterNextRender(() => this.focusRow(0, taskId), { injector: this._injector });
     }
   }
@@ -445,11 +447,15 @@ export class BoardPanelComponent implements TaskCardList {
       .map((task) => task.id)
       .filter((id) => !moving.has(id));
     remainingIds.splice(index, 0, ...ids);
+    // SPIKE: throwaway, do not merge
+    this._saveOrder(remainingIds);
+  }
+
+  // SPIKE: throwaway, do not merge
+  private _saveOrder(taskIds: string[]): void {
+    if (this.isEphemeral()) return;
     this.store.dispatch(
-      BoardsActions.updatePanelCfgTaskIds({
-        panelId: this.panelCfg().id,
-        taskIds: remainingIds,
-      }),
+      BoardsActions.updatePanelCfgTaskIds({ panelId: this.panelCfg().id, taskIds }),
     );
   }
 
@@ -530,13 +536,9 @@ export class BoardPanelComponent implements TaskCardList {
       return;
     }
 
-    this.store.dispatch(
-      BoardsActions.updatePanelCfgTaskIds({
-        panelId: panelCfg.id,
-        taskIds: isAddToBottom
-          ? [...panelCfg.taskIds, taskId]
-          : [taskId, ...panelCfg.taskIds],
-      }),
+    // SPIKE: throwaway, do not merge
+    this._saveOrder(
+      isAddToBottom ? [...panelCfg.taskIds, taskId] : [taskId, ...panelCfg.taskIds],
     );
 
     this._checkToScheduledTask(panelCfg, taskId);

@@ -35,8 +35,10 @@
   }
 
   @for (panel of boardCfg().panels; track panel.id) {
+    <!-- SPIKE: throwaway, do not merge ([isEphemeral] below) -->
     <board-panel
       [panelCfg]="panel"
+      [isEphemeral]="isEphemeral()"
       (editBoard)="editBoard()"
       (adjacentPanel)="adjacentPanel(panel.id, $event)"
     ></board-panel>

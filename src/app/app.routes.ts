@@ -147,6 +147,16 @@ export const APP_ROUTES: Routes = [
     loadComponent: () =>
       import('./routes/pages.routes').then((m) => m.ConfigPageComponent),
   },
+  // SPIKE: throwaway, do not merge
+  {
+    path: 'native-view-spike',
+    loadComponent: () =>
+      import('./features/native-view-spike/native-view-spike.component').then(
+        (m) => m.NativeViewSpikeComponent,
+      ),
+    data: { page: 'native-view-spike' },
+    canActivate: [FocusOverlayOpenGuard],
+  },
   // Wildcard — redirects to default start page
   {
     path: '**',
