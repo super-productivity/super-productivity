@@ -53,6 +53,10 @@ export const ALLOWED_EXTERNAL_URL_SCHEMES = [
   // handler accepts only `new-task?spTaskId=<opaque id>` and merely pre-fills a
   // form; remove it if that handler ever takes a path, URL or command.
   'parallelcode:',
+  // Claude Desktop app. Restricted below in `isExternalUrlSchemeAllowed` to
+  // only permit deep-links to explicit chat or project timelines, blocking arbitrary
+  // prompt pre-fills or local folder initialization routes.
+  'claude:',
 ];
 
 const LOCAL_FILE_URL_PREFIX = 'file:///';
@@ -112,6 +116,16 @@ export const isExternalUrlSchemeAllowed = (url: unknown): boolean => {
   // `protocol` is always lower-cased by the WHATWG URL parser.
   if (!ALLOWED_EXTERNAL_URL_SCHEMES.includes(parsed.protocol)) {
     return false;
+  }
+  // Only allow claude:// links pointing strictly to chats or projects,
+  // rejecting pre-filled prompts or path initializers
+  if (parsed.protocol === 'claude:') {
+    // Disallow URLs with non-`claude.ai` hostnames or with query params
+    if (parsed.host !== 'claude.ai' || parsed.searchParams.size > 0) {
+      return false;
+    }
+    const path = parsed.pathname;
+    return path.startsWith('/chat/') || path.startsWith('/project/');
   }
   if (parsed.protocol === 'file:') {
     // Allow ONLY the canonical local form `file:///<path>`. Anything with an
