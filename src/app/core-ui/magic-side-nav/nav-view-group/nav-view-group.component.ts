@@ -69,8 +69,10 @@ export class NavViewGroupComponent {
   // Off for the first render, so an open section doesn't animate in on start.
   readonly isAnimationEnabled = signal(false);
 
+  // Read here, not passed in through the nav config: boards change on every
+  // drop into a column, which must not rebuild the whole side menu.
   readonly rows = computed(() =>
-    this.item().boards.map((board) => ({
+    this.boardsService.boards().map((board) => ({
       board,
       route: `/boards/${board.id}`,
       icon: board.panels.length > 1 ? 'view_kanban' : 'filter_list',
@@ -101,7 +103,7 @@ export class NavViewGroupComponent {
       return;
     }
     const ids = moveItemInArray(
-      this.item().boards,
+      this.boardsService.boards(),
       ev.previousIndex,
       ev.currentIndex,
     ).map((board) => board.id);

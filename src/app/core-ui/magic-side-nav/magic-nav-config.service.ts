@@ -39,7 +39,6 @@ import { GlobalConfigService } from '../../features/config/global-config.service
 import { AppFeaturesConfig } from '../../features/config/global-config.model';
 import { SnackService } from '../../core/snack/snack.service';
 import { IS_DONATION_UI_RESTRICTED } from '../../app.constants';
-import { selectAllBoards } from '../../features/boards/store/boards.selectors';
 
 @Injectable({
   providedIn: 'root',
@@ -66,7 +65,6 @@ export class MagicNavConfigService {
   private readonly _isViewsExpanded = signal(
     lsGetBoolean(LS.IS_VIEW_LIST_EXPANDED, true),
   );
-  private readonly _boards = this._store.selectSignal(selectAllBoards);
 
   // Data signals
   private readonly _mainWorkContext = toSignal(
@@ -462,7 +460,6 @@ export class MagicNavConfigService {
         id: 'views',
         label: T.MH.BOARDS,
         icon: 'expand_more',
-        boards: this._boards(),
         featureConfigKey: 'isBoardsEnabled',
         action: () => this._toggleViewsExpanded(),
       },

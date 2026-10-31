@@ -34,6 +34,8 @@ import { BoardsActions } from '../store/boards.actions';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { GlobalTrackingIntervalService } from '../../../core/global-tracking-interval/global-tracking-interval.service';
 import { TaskBulkActionService } from '../../tasks/task-bulk-action.service';
+import { SnackService } from '../../../core/snack/snack.service';
+import { T } from '../../../t.const';
 import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
 
 // The panel reads the logical day from the store for its due-date rule.
@@ -821,6 +823,7 @@ describe('BoardPanelComponent - drop()', () => {
   let dispatchSpy: jasmine.Spy;
   let updateTagsSpy: jasmine.Spy;
   let scheduleForSpy: jasmine.Spy;
+  let snackOpenSpy: jasmine.Spy;
 
   const mkTask = (overrides: Partial<TaskCopy>): TaskCopy =>
     ({
@@ -866,6 +869,7 @@ describe('BoardPanelComponent - drop()', () => {
     dispatchSpy = jasmine.createSpy('dispatch');
     updateTagsSpy = jasmine.createSpy('updateTags');
     scheduleForSpy = jasmine.createSpy('scheduleFor').and.resolveTo();
+    snackOpenSpy = jasmine.createSpy('open');
 
     const storeMock = {
       selectSignal: daySelectSignal,
@@ -905,6 +909,7 @@ describe('BoardPanelComponent - drop()', () => {
         { provide: WorkContextService, useValue: {} },
         { provide: ProjectService, useValue: { getProjectsWithoutId$: () => of([]) } },
         { provide: TaskBulkActionService, useValue: { scheduleFor: scheduleForSpy } },
+        { provide: SnackService, useValue: { open: snackOpenSpy } },
       ],
     })
       .overrideComponent(PlannerTaskComponent, {
@@ -1223,10 +1228,47 @@ describe('BoardPanelComponent - drop()', () => {
       fixture.detectChanges();
 
       expect(await component.moveTasks(['a', 'b'])).toBeFalse();
+      expect(snackOpenSpy).toHaveBeenCalledOnceWith(
+        jasmine.objectContaining({ msg: T.F.BOARDS.V.S_ONLY_OVERDUE }),
+      );
       expect(dispatchSpy).not.toHaveBeenCalled();
       expect(updateTagsSpy).not.toHaveBeenCalled();
       expect(scheduleForSpy).not.toHaveBeenCalled();
       expect(component.isMoving()).toBeFalse();
+    });
+
+    it('schedules a task added inline, new or existing, for the panel day', async () => {
+      const tasks = [mkTask({ id: 'new' }), mkTask({ id: 'old' })];
+      await setup(tasks);
+      fixture.componentRef.setInput('panelCfg', {
+        ...DEFAULT_PANEL_CFG,
+        id: 'p',
+        dueState: 'today',
+      });
+      fixture.detectChanges();
+      const flush = (): Promise<void> => new Promise((resolve) => setTimeout(resolve));
+
+      await component.afterTaskAdd({
+        taskId: 'new',
+        isAddToBottom: true,
+        isNewTask: true,
+      });
+      await flush();
+      await component.afterTaskAdd({
+        taskId: 'old',
+        isAddToBottom: true,
+        isNewTask: false,
+      });
+
+      const today = {
+        date: dateStrToUtcDate('2026-09-12'),
+        time: null,
+        remindOption: null,
+      };
+      expect(scheduleForSpy.calls.allArgs()).toEqual([
+        [today, [tasks[0]]],
+        [today, [tasks[1]]],
+      ]);
     });
 
     it('lets only already overdue tasks enter an overdue panel and hides its add row', async () => {

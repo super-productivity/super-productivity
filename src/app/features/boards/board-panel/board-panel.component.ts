@@ -25,8 +25,10 @@ import {
 import {
   BoardDueCtx,
   buildComparator,
+  createBoardDueCtx,
   doesTaskMatchPanel,
   firstSpecificProjectId,
+  getCalendarDateForDueDay,
   getDueDayForPanel,
   getPanelDueState,
   isAllProjects,
@@ -88,6 +90,7 @@ import {
   selectTodayStr,
 } from '../../../root-store/app-state/app-state.selectors';
 import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
+import { SnackService } from '../../../core/snack/snack.service';
 
 export interface BoardPanelNavigation {
   direction: -1 | 1 | 'up' | 'down';
@@ -150,10 +153,12 @@ export class BoardPanelComponent implements TaskCardList {
   private readonly _startOfNextDayDiffMs = this.store.selectSignal(
     selectStartOfNextDayDiffMs,
   );
-  readonly dueCtx = computed<BoardDueCtx>(() => ({
-    todayStr: this._todayStr() || this._dateService.todayStr(),
-    startOfNextDayDiffMs: this._startOfNextDayDiffMs() ?? 0,
-  }));
+  readonly dueCtx = computed<BoardDueCtx>(() =>
+    createBoardDueCtx(
+      this._todayStr() || this._dateService.todayStr(),
+      this._startOfNextDayDiffMs() ?? 0,
+    ),
+  );
   readonly dueState = computed(() => getPanelDueState(this.panelCfg()));
   // No date makes a new task overdue, so the add row would only create tasks
   // that never show up here.
@@ -414,6 +419,11 @@ export class BoardPanelComponent implements TaskCardList {
       // One task no date can move into the panel refuses the whole move.
       const dueCtx = this.dueCtx();
       if (tasks.some((task) => getDueDayForPanel(task, panelCfg, dueCtx) === null)) {
+        this._injector.get(SnackService).open({
+          type: 'CUSTOM',
+          ico: 'block',
+          msg: T.F.BOARDS.V.S_ONLY_OVERDUE,
+        });
         return false;
       }
       // A due rule schedules by itself (below), so it skips the date dialog.
@@ -565,8 +575,13 @@ export class BoardPanelComponent implements TaskCardList {
     const tasksByDay = new Map<string, TaskCopy[]>();
     for (const id of taskIds) {
       const task = await firstValueFrom(this.store.select(selectTaskById, { id }));
-      const day = task && getDueDayForPanel(task, panelCfg, dueCtx);
-      if (task && day) {
+      const logicalDay = task && getDueDayForPanel(task, panelCfg, dueCtx);
+      if (task && logicalDay) {
+        const day = getCalendarDateForDueDay(
+          task,
+          logicalDay,
+          dueCtx.startOfNextDayDiffMs,
+        );
         tasksByDay.set(day, [...(tasksByDay.get(day) ?? []), task]);
       }
     }

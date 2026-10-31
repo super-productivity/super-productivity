@@ -1,3 +1,4 @@
+import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { CdkDragDrop } from '@angular/cdk/drag-drop';
@@ -23,14 +24,13 @@ describe('NavViewGroupComponent', () => {
     panels: Array.from({ length: panelCount }, (_, i) => ({ id: `${id}-${i}` }) as any),
   });
 
-  const item = (boards: BoardCfg[]): NavViewGroupItem => ({
+  const item: NavViewGroupItem = {
     type: 'viewGroup',
     id: 'views',
     label: 'Views',
     icon: 'expand_more',
-    boards,
     action: () => undefined,
-  });
+  };
 
   beforeEach(async () => {
     dispatch = jasmine.createSpy('dispatch');
@@ -42,7 +42,7 @@ describe('NavViewGroupComponent', () => {
         { provide: Store, useValue: { dispatch } },
         {
           provide: BoardsService,
-          useValue: jasmine.createSpyObj('BoardsService', ['createBoard']),
+          useValue: { boards: signal([board('a', 1), board('b', 3)]) },
         },
         { provide: MagicNavConfigService, useValue: { disableFeature } },
       ],
@@ -54,7 +54,7 @@ describe('NavViewGroupComponent', () => {
 
     fixture = TestBed.createComponent(NavViewGroupComponent);
     component = fixture.componentInstance;
-    fixture.componentRef.setInput('item', item([board('a', 1), board('b', 3)]));
+    fixture.componentRef.setInput('item', item);
     fixture.detectChanges();
   });
 

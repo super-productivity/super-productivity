@@ -208,7 +208,8 @@
         "NO_PANELS_BTN": "Configure view",
         "NO_PANELS_MSG": "This view has no panels configured. Add some panels to it.",
         "NO_VIEWS_BTN": "Create view",
-        "NO_VIEWS_MSG": "No views yet. A view shows tasks from all your projects that match its rules, in one or more columns."
+        "NO_VIEWS_MSG": "No views yet. A view shows tasks from all your projects that match its rules, in one or more columns.",
+        "S_ONLY_OVERDUE": "Only overdue tasks can be moved here"
       }
     },
     "CALDAV": {

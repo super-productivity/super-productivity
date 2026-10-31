@@ -2,7 +2,6 @@ import {
   ChangeDetectionStrategy,
   Component,
   inject,
-  input,
   model,
   OnInit,
   output,
@@ -13,19 +12,15 @@ import { BoardCfg } from '../boards.model';
 import { BOARDS_FORM } from '../boards-form.const';
 import { UntypedFormGroup } from '@angular/forms';
 import { nanoid } from 'nanoid';
-import { MatButton } from '@angular/material/button';
-import { MatIcon } from '@angular/material/icon';
-import { TranslatePipe } from '@ngx-translate/core';
-import { T } from '../../../t.const';
 import { Store } from '@ngrx/store';
 import { BoardsActions } from '../store/boards.actions';
 import { DEFAULT_BOARD_CFG, DEFAULT_PANEL_CFG } from '../boards.const';
-import { withDueStateImpliesScheduled } from '../boards.util';
+import { sanitizePanelCfg, withDueStateImpliesScheduled } from '../boards.util';
 
 @Component({
   selector: 'board-edit',
   standalone: true,
-  imports: [FormlyModule, MatButton, MatIcon, TranslatePipe],
+  imports: [FormlyModule],
   templateUrl: './board-edit.component.html',
   styleUrl: './board-edit.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -34,7 +29,6 @@ export class BoardEditComponent implements OnInit {
   store = inject(Store);
   boardCfg = model.required<BoardCfg>();
   isEdit = signal(false);
-  isHideBtns = input<boolean>(false);
   afterSave = output<string>();
 
   form: UntypedFormGroup = new UntypedFormGroup({});
@@ -62,11 +56,15 @@ export class BoardEditComponent implements OnInit {
     });
   }
 
-  protected readonly T = T;
-
   save(): void {
     if (this.form.valid) {
-      const boardCfg = withDueStateImpliesScheduled(this.boardCfg());
+      // Sanitize before dispatching, not only in the reducer: the op carries
+      // the payload, and released clients store it as is (e.g. Formly's null).
+      const formCfg = this.boardCfg();
+      const boardCfg = withDueStateImpliesScheduled({
+        ...formCfg,
+        panels: formCfg.panels.map(sanitizePanelCfg),
+      });
       if (this.isEdit()) {
         this.store.dispatch(
           BoardsActions.updateBoard({ id: boardCfg.id, updates: boardCfg }),

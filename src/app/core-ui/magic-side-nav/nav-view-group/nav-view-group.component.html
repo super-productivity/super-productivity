@@ -27,6 +27,14 @@
 </div>
 
 <ng-template #sectionMenu>
+  <!-- Also the way to create a view in the compact rail, which hides the +. -->
+  <button
+    mat-menu-item
+    (click)="boardsService.createBoard()"
+  >
+    <mat-icon>add</mat-icon>
+    <span>{{ T.F.BOARDS.V.ADD_NEW_BOARD | translate }}</span>
+  </button>
   <button
     mat-menu-item
     (click)="disableFeature()"
@@ -44,7 +52,7 @@
     [@expandCollapse]
     cdkDropList
     cdkDropListLockAxis="y"
-    [cdkDropListData]="item().boards"
+    [cdkDropListData]="boardsService.boards()"
     (cdkDropListDropped)="drop($event)"
   >
     @for (row of rows(); track row.board.id) {
@@ -55,7 +63,7 @@
         [attr.data-view-id]="row.board.id"
         cdkDrag
         [cdkDragData]="row.board"
-        [cdkDragStartDelay]="dragDelayForTouch"
+        [cdkDragStartDelay]="dragDelayForTouch()"
         [matTooltip]="row.board.title | translate"
         [matTooltipDisabled]="showLabels()"
         matTooltipPosition="right"

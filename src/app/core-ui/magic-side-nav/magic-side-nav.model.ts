@@ -7,7 +7,6 @@ import {
   MenuTreeViewNode,
 } from '../../features/menu-tree/store/menu-tree.model';
 import { AppFeaturesConfig } from '../../features/config/global-config.model';
-import { BoardCfg } from '../../features/boards/boards.model';
 
 export type NavItem =
   | NavSeparatorItem
@@ -91,12 +90,11 @@ export interface NavMenuItem extends NavBaseItem {
   children: NavItem[];
 }
 
-/** The Views section: every board, in stored order. */
+/** The Views section: every board, in stored order (read by the section). */
 export interface NavViewGroupItem extends NavBaseItem {
   type: 'viewGroup';
   label: string;
   icon: string;
-  boards: BoardCfg[];
   action: () => void; // toggles the section
 }
 

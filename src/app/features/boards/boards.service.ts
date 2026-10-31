@@ -12,8 +12,8 @@ import { DialogConfirmComponent } from '../../ui/dialog-confirm/dialog-confirm.c
 import { T } from '../../t.const';
 
 /**
- * Create, edit, duplicate and delete views (boards). Shared by the side menu
- * and the view page, so both behave the same.
+ * Create, edit, duplicate and delete views (boards). Shared by the side menu,
+ * the view page's empty state and the boards' own edit buttons.
  */
 @Injectable({ providedIn: 'root' })
 export class BoardsService {

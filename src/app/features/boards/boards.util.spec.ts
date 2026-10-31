@@ -2,6 +2,8 @@ import {
   addDaysToDbDateStr,
   BoardDueCtx,
   buildComparator,
+  createBoardDueCtx,
+  getCalendarDateForDueDay,
   doesTaskMatchPanel,
   getDueDayForPanel,
   getLogicalDueDay,
@@ -21,7 +23,7 @@ import { TaskCopy } from '../tasks/task.model';
 import { TODAY_TAG } from '../tag/tag.const';
 
 // Only consulted by panels with a due rule.
-const DUE_CTX: BoardDueCtx = { todayStr: '2026-10-30', startOfNextDayDiffMs: 0 };
+const DUE_CTX: BoardDueCtx = createBoardDueCtx('2026-10-30', 0);
 
 const basePanel: any = {
   id: 'p1',
@@ -649,7 +651,7 @@ describe('doesTaskMatchPanel', () => {
 
     it('respects a custom start of day', () => {
       // Day starts at 04:00: 02:00 on Oct 31 still belongs to Oct 30.
-      const ctx: BoardDueCtx = { todayStr: '2026-10-30', startOfNextDayDiffMs: 4 * HOUR };
+      const ctx = createBoardDueCtx('2026-10-30', 4 * HOUR);
       const task = mkTask({ dueWithTime: at('2026-10-31', 2) });
       expect(
         doesTaskMatchPanel(task, mkPanel({ dueState: 'today' }), noBacklog, ctx),
@@ -750,5 +752,36 @@ describe('withDueStateImpliesScheduled', () => {
   it('leaves panels with an unknown due rule alone', () => {
     const out = withDueStateImpliesScheduled(board([{ dueState: 'future' }]));
     expect(out.panels[0].scheduledState).toBe(BoardPanelCfgScheduledState.All);
+  });
+});
+
+describe('getCalendarDateForDueDay', () => {
+  const HOUR = 60 * 60 * 1000;
+  const at = (day: string, hours: number): number =>
+    new Date(`${day}T${String(hours).padStart(2, '0')}:00:00`).getTime();
+
+  it('keeps the day for untimed tasks and without a day-start offset', () => {
+    expect(getCalendarDateForDueDay({}, '2026-10-30', 4 * HOUR)).toBe('2026-10-30');
+    expect(
+      getCalendarDateForDueDay({ dueWithTime: at('2026-10-01', 1) }, '2026-10-30', 0),
+    ).toBe('2026-10-30');
+  });
+
+  it('moves a time before the start of day to the next calendar date', () => {
+    // 01:00 with a 04:00 day start belongs to the previous logical day.
+    expect(
+      getCalendarDateForDueDay(
+        { dueWithTime: at('2026-10-01', 1) },
+        '2026-10-30',
+        4 * HOUR,
+      ),
+    ).toBe('2026-10-31');
+    expect(
+      getCalendarDateForDueDay(
+        { dueWithTime: at('2026-10-01', 9) },
+        '2026-10-30',
+        4 * HOUR,
+      ),
+    ).toBe('2026-10-30');
   });
 });

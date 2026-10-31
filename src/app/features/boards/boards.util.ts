@@ -11,7 +11,10 @@ import { TaskCopy } from '../tasks/task.model';
 import { dateStrToUtcDate } from '../../util/date-str-to-utc-date';
 import { getDbDateStr, isDBDateStr } from '../../util/get-db-date-str';
 import { TODAY_TAG } from '../tag/tag.const';
-import { isTaskOverdue } from '../tasks/util/is-task-overdue';
+import {
+  getLogicalTodayStartMs,
+  isTaskOverdueByThreshold,
+} from '../tasks/util/is-task-overdue';
 
 const VALID_SORT_FIELDS: ReadonlySet<BoardSortField> = new Set([
   'dueDate',
@@ -29,12 +32,17 @@ const VALID_DUE_STATES: ReadonlySet<string> = new Set<BoardPanelDueState>([
 
 /**
  * The logical "today" a panel's due rule is evaluated against. Callers read
- * both values from the store (`selectTodayStr`, `selectStartOfNextDayDiffMs`)
- * so day rollover and a changed day-start setting refresh the panel.
+ * `todayStr` and `startOfNextDayDiffMs` from the store (`selectTodayStr`,
+ * `selectStartOfNextDayDiffMs`) so day rollover and a changed day-start
+ * setting refresh the panel. Build it with `createBoardDueCtx`: the other
+ * fields are derived once per panel update instead of once per task.
  */
 export interface BoardDueCtx {
   todayStr: string;
   startOfNextDayDiffMs: number;
+  tomorrowStr: string;
+  next7DaysEndStr: string;
+  todayStartMs: number;
 }
 
 // Absent `projectIds` (legacy data that hasn't been sanitized yet) means
@@ -164,6 +172,35 @@ export const addDaysToDbDateStr = (dayStr: string, days: number): string => {
   return getDbDateStr(date);
 };
 
+export const createBoardDueCtx = (
+  todayStr: string,
+  startOfNextDayDiffMs: number,
+): BoardDueCtx => ({
+  todayStr,
+  startOfNextDayDiffMs,
+  tomorrowStr: addDaysToDbDateStr(todayStr, 1),
+  next7DaysEndStr: addDaysToDbDateStr(todayStr, 6),
+  todayStartMs: getLogicalTodayStartMs(todayStr, startOfNextDayDiffMs),
+});
+
+/**
+ * The calendar date to schedule a task for so that it lands on the logical
+ * `day`. Scheduling keeps a timed task's time of day; if that time is before
+ * the start of day (01:00 with a 04:00 start), it belongs to the previous
+ * logical day, so the calendar date is the day after.
+ */
+export const getCalendarDateForDueDay = (
+  task: Pick<TaskCopy, 'dueWithTime'>,
+  day: string,
+  startOfNextDayDiffMs: number,
+): string => {
+  if (!task.dueWithTime || startOfNextDayDiffMs <= 0) {
+    return day;
+  }
+  const msIntoDay = task.dueWithTime - new Date(task.dueWithTime).setHours(0, 0, 0, 0);
+  return msIntoDay < startOfNextDayDiffMs ? addDaysToDbDateStr(day, 1) : day;
+};
+
 const doesTaskMatchDueState = (
   task: Pick<TaskCopy, 'dueDay' | 'dueWithTime'>,
   dueState: BoardPanelDueState,
@@ -171,7 +208,7 @@ const doesTaskMatchDueState = (
 ): boolean => {
   if (dueState === 'overdue') {
     // Same predicate as the overdue section and the red date colour.
-    return isTaskOverdue(task, ctx.todayStr, ctx.startOfNextDayDiffMs);
+    return isTaskOverdueByThreshold(task, ctx.todayStr, ctx.todayStartMs);
   }
   const day = getLogicalDueDay(task, ctx.startOfNextDayDiffMs);
   if (!day) {
@@ -181,9 +218,9 @@ const doesTaskMatchDueState = (
     case 'today':
       return day === ctx.todayStr;
     case 'tomorrow':
-      return day === addDaysToDbDateStr(ctx.todayStr, 1);
+      return day === ctx.tomorrowStr;
     case 'next7Days':
-      return day >= ctx.todayStr && day <= addDaysToDbDateStr(ctx.todayStr, 6);
+      return day >= ctx.todayStr && day <= ctx.next7DaysEndStr;
   }
 };
 
@@ -206,7 +243,7 @@ export const getDueDayForPanel = (
     case 'overdue':
       return null;
     case 'tomorrow':
-      return addDaysToDbDateStr(ctx.todayStr, 1);
+      return ctx.tomorrowStr;
     case 'today':
     case 'next7Days':
       return ctx.todayStr;

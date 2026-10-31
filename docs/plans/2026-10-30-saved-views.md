@@ -1,6 +1,7 @@
 # Saved views — boards become views in the sidebar
 
-Status: plan, 2026-10-30, revised after review. Mocks: [Smart Lists Mocks
+Status: implemented 2026-10-31 (branch `ccr-03c6fb33-93d4kb`), plan revised
+after review. Mocks: [Smart Lists Mocks
 canvas](https://claude.ai/artifact/9GtPQWm3oEVEzrC6Vh55jf) (private to the
 author).
 
@@ -126,10 +127,11 @@ Matches the mocks, minus §3.5.
     via the header context menu (like other sections, extra buttons only show
     with labels).
 - **View page** (`BoardsComponent`, now single-view): the existing `<board>` for
-  the routed id. The page title in the main header shows the view title and
-  icon (`page-title.component.ts` gets a `/boards/<id>` case instead of an extra
-  in-page header); a header more-menu offers Edit, Duplicate, Delete. Tab group
-  and inline add-board tab are removed.
+  the routed id. The page title in the main header shows the view title with
+  the Views section icon (`page-title.component.ts` gets a `/boards/<id>` case
+  instead of an extra in-page header). Edit, Duplicate and Delete live in the
+  view's side-menu row menu; each panel keeps its edit button. Tab group and
+  inline add-board tab are removed.
 - **Create:** "+" opens `DialogBoardEditComponent` in create mode: title "Create
   view", no Delete button, closes with the saved board id, and the caller
   navigates to `/boards/<newId>`.
@@ -300,3 +302,30 @@ Not taken:
   to replace the Boards entry with sidebar views; recorded in §1.
 - Keyboard reordering of sidebar views: deferred (§3.5), same as the tab bar
   today.
+
+Implementation review (fresh-context subagent, 2026-10-31). Fixed:
+
+- Bug: side-menu view rows passed the `dragDelayForTouch` signal instead of its
+  value, so touch scrolling over them started a reorder drag.
+- The board editor now sanitizes panels before dispatching, so no op carries
+  Formly's `dueState: null` to released clients.
+- The section menu also offers "Create view" (the compact rail hides the +).
+- The boards' own edit buttons go through `BoardsService` (one dialog path).
+- A timed task moved into Today/Tomorrow with a late start of day kept a time
+  before the day start and landed on the previous logical day →
+  `getCalendarDateForDueDay`.
+- A refused move into an Overdue column shows a snack.
+- Performance: the due context (`createBoardDueCtx`) derives tomorrow, the
+  7-day end and the overdue threshold once per panel update, not per task; the
+  Views section reads boards itself, so a drop into a column no longer rebuilds
+  the whole side menu.
+- Dead code from the tab page (`isHideBtns`, the editor's own buttons) removed.
+- Added specs: `BoardsService`, `BoardsComponent`, inline add with a due rule.
+
+Not taken:
+
+- An Edit/Duplicate/Delete menu in the view page header: the side-menu row menu
+  and the panels' edit buttons cover it without new header UI.
+- A per-view icon in the page header, keyboard access to the section's
+  "Disable feature" (Settings → App Features has the switch) and a tooltip on
+  keyboard focus in the compact rail (route rows have none elsewhere either).

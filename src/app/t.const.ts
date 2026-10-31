@@ -213,6 +213,7 @@ const T = {
         NO_PANELS_MSG: 'F.BOARDS.V.NO_PANELS_MSG',
         NO_VIEWS_BTN: 'F.BOARDS.V.NO_VIEWS_BTN',
         NO_VIEWS_MSG: 'F.BOARDS.V.NO_VIEWS_MSG',
+        S_ONLY_OVERDUE: 'F.BOARDS.V.S_ONLY_OVERDUE',
       },
     },
     CALDAV: {

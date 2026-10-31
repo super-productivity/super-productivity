@@ -27,8 +27,7 @@ import {
   URGENT_TAG,
 } from '../../tag/tag.const';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
-import { MatDialog } from '@angular/material/dialog';
-import { DialogBoardEditComponent } from '../dialog-board-edit/dialog-board-edit.component';
+import { BoardsService } from '../boards.service';
 import { T } from '../../../t.const';
 
 @Component({
@@ -45,7 +44,7 @@ import { T } from '../../../t.const';
 export class BoardComponent {
   private _store = inject(Store);
   private _translateService = inject(TranslateService);
-  private _matDialog = inject(MatDialog);
+  private _boardsService = inject(BoardsService);
 
   boardCfg = input.required<BoardCfg>();
   private _panels = viewChildren(BoardPanelComponent);
@@ -120,11 +119,7 @@ export class BoardComponent {
   }
 
   editBoard(): void {
-    this._matDialog.open(DialogBoardEditComponent, {
-      data: {
-        board: this.boardCfg(),
-      },
-    });
+    this._boardsService.editBoard(this.boardCfg());
   }
 
   protected readonly T = T;

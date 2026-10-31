@@ -5,7 +5,6 @@
   @if (data.board) {
     <board-edit
       #boarEditCmp
-      [isHideBtns]="true"
       [boardCfg]="data.board"
       (afterSave)="close($event)"
     ></board-edit>
