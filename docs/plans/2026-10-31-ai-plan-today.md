@@ -1,6 +1,6 @@
 # Speak to plan: an optional AI command plugin
 
-Oct 31, 2026 · rev. 3 · status: **proposal**, nothing implemented · branch
+Oct 31, 2026 · rev. 4 · status: **proposal**, nothing implemented · branch
 `claude/ai-plan-today`
 
 **Related:** generative views, parked (`docs/plans/2026-10-30-generative-views.md`
@@ -10,8 +10,8 @@ on `claude/generative-ui-todo-app-h4o6e8`) · agent endpoint / MCP plan
 (daily planning is _must be best_, AI is an _open decision_) ·
 [contributor sync model](../sync-and-op-log/contributor-sync-model.md).
 
-**Revisions:** rev. 1 was a one-shot "Help me plan today" button. Rev. 2 fixed
-review findings. Rev. 3 follows the maintainer's direction (2026-10-31): many
+**Revisions:** rev. 1 was a one-shot "Help me plan today" button. Rev. 2 and
+rev. 4 fixed review findings. Rev. 3 follows the maintainer's direction (2026-10-31): many
 users don't want AI, so it stays an optional plugin; and instead of one
 button, a shortcut opens a box you speak or type into, to add or change tasks
 or to see a temporary selection ("top 10 for today"). Planning the day is one
@@ -20,7 +20,8 @@ of those commands.
 ## Summary
 
 - **What:** press a shortcut (or a button), speak or type one request, see the
-  result, press **Apply**. Three kinds of result:
+  result, press **Apply**. Three kinds of result, plus a one-line answer when
+  there is nothing to do:
   - **Changes:** "add call mom tomorrow, 15 minutes, to Home", "mark the
     invoice tasks done", "move everything from Work on Today to Monday".
     Shown as a change list; nothing changes before **Apply**.
@@ -33,12 +34,16 @@ of those commands.
   praise, background runs, or time-blocking. Each request stands alone; the
   only memory is the selection on screen ("move these to tomorrow").
 - **Where:** a first-party plugin listed in the plugin directory (one-click
-  install, not bundled), with the user's own Anthropic API key. **v1 needs no
-  plugin API, core or sync change.**
+  install, not bundled), with the user's own Anthropic API key. No core or sync
+  change; **two small, optional plugin API additions** (§ 4.1): open the
+  plugin's panel from its shortcut, and add tasks without parsing `#tag` and
+  `@date` out of titles.
 - **Voice in v1:** the system's own dictation into the box (macOS, Windows,
   phone keyboards). A true push-to-talk microphone needs a host speech service
   and is Phase 3 (§ 5).
 - **Gate:** an offline eval of realistic requests runs first (no app code).
+  Capture and changes ship first; selections and day plans follow when their
+  part of the eval passes (§ 11).
 - **Cost to the user:** about US$0.003–0.12 per request depending on model
   (estimate, § 6.6).
 
@@ -109,6 +114,9 @@ Sources: [Ramble help](https://www.todoist.com/help/articles/dictate-to-add-task
 [Reclaim AI disclosure](https://help.reclaim.ai/en/articles/13178785-reclaim-ai-disclosure) ·
 [Reclaim on Google Workspace Marketplace](https://workspace.google.com/u/0/marketplace/app/reclaimai/950518663892).
 
+In this repo, the bundled **Brain Dump** plugin already turns each pasted line
+into a task, without AI. This plugin is the AI version of that plus edits.
+
 **Take:** show the result before anything changes (Ramble, against Motion and
 Reclaim); several tasks from one utterance (Ramble, TickTick); reasons from
 the user's own facts ("overdue 3 days", "deadline Monday"); propose less than
@@ -122,14 +130,16 @@ writing calendar events; a chat thread; a daily ritual prompt.
 
 1. **Turn it on.** Settings → Plugins → install from the directory. A one-time
    notice (§ 6.1), then the API key. The plugin registers a shortcut (the user
-   binds the key in the keyboard settings) and a side-panel button.
+   binds the key in the keyboard settings) and a side-panel button. The
+   shortcut opening the panel needs § 4.1.
 2. **Ask.** The shortcut opens the side panel with the input focused. Speak
    (system dictation, § 5) or type, then Enter. The panel can stay open next to
    the Planner or Today.
-3. **See the result**, as it streams in:
+3. **See the result** (a spinner with Cancel until it arrives):
    - **Changes:** grouped _Add_, _Change_, _Delete_, one row each with a
      checkbox and what changes ("Tomorrow → Mon", "+ tag Errands"). Deletes
-     are listed last and say "goes to Recently deleted".
+     are listed last, **unticked by default**, and say "kept in Recently
+     deleted on this device for 30 days" (that store is local, never synced).
    - **Selection:** a titled list ("Focus today, top 10") with a reason per
      row. Each row has done, start tracking and open. These are the user's own
      clicks, through existing API calls, not AI actions.
@@ -138,22 +148,23 @@ writing calendar events; a chat thread; a daily ritual prompt.
    - **A sentence** when there is nothing to do or the request is unclear ("Two
      tasks match 'report'"), together with a selection to pick from.
 4. **Apply** (button or Ctrl+Enter) applies the ticked rows. Esc discards.
-5. **Follow up.** A new request sees the selection on screen as "these" ("move
-   these to tomorrow", "only the Work ones"). Nothing else carries over.
+5. **Follow up.** A new request sees the ids of the selection on screen as
+   "these" ("move these to tomorrow"). No earlier request, answer or sentence
+   is sent: no conversation history, by design.
 
 ## 4. Where it lives: core or plugin
 
-|                    | Core feature                                                       | Plugin (**recommended**: first-party, in the plugin directory, not bundled)      |
-| ------------------ | ------------------------------------------------------------------ | -------------------------------------------------------------------------------- |
-| AI decision (open) | Puts an LLM client and API key handling in core; hard to take back | Core stays AI-free; the plugin can be unlisted without a migration               |
-| UI                 | Could render inside the Planner and task lists                     | Side panel next to the Planner or Today; not inline                              |
-| Settings           | New global config section (persisted model, synced)                | Plugin config and secret storage; nothing in `GlobalConfig`                      |
-| API key            | Needs new local-only storage                                       | `setSecret`/`getSecret`: local, never synced or exported                         |
-| Network            | New HTTP path in core                                              | `request()` with `"http"` permission and `allowedHosts: ["api.anthropic.com"]`   |
-| Shortcut           | Core keyboard config                                               | `registerShortcut` (user-bindable) exists                                        |
-| Reading data       | Selectors directly                                                 | `getTasks`, `getAppState`, `getAllProjects`, `getAllTags`, `getDayContext`       |
-| Writing            | Existing actions directly                                          | `addTask`, `updateTask`, `deleteTask`, `startTracking`, `selectTask` exist (§ 7) |
-| Long-term cost     | Core code and a config slice forever                               | None in core for v1                                                              |
+|                    | Core feature                                                       | Plugin (**recommended**: first-party, in the plugin directory, not bundled)                                  |
+| ------------------ | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------ |
+| AI decision (open) | Puts an LLM client and API key handling in core; hard to take back | Core stays AI-free; the plugin can be unlisted without a migration                                           |
+| UI                 | Could render inside the Planner and task lists                     | Side panel next to the Planner or Today; not inline                                                          |
+| Settings           | New global config section (persisted model, synced)                | Plugin config and secret storage; nothing in `GlobalConfig`                                                  |
+| API key            | Needs new local-only storage                                       | `setSecret`/`getSecret`: local, never synced or exported                                                     |
+| Network            | New HTTP path in core                                              | `request()` with `"http"` permission and `allowedHosts: ["api.anthropic.com"]`; whole response, no streaming |
+| Shortcut           | Core keyboard config                                               | `registerShortcut` (user-bindable) exists; opening the panel from it does not (§ 4.1)                        |
+| Reading data       | Selectors directly                                                 | `getTasks`, `getAppState`, `getAllProjects`, `getAllTags`, `getDayContext`                                   |
+| Writing            | Existing actions directly                                          | `addTask`, `updateTask`, `deleteTask`, `startTracking`, `selectTask` exist (§ 7)                             |
+| Long-term cost     | Core code and a config slice forever                               | Two optional plugin API additions (§ 4.1)                                                                    |
 
 **Recommendation: a first-party plugin, listed in the plugin directory
 (`src/assets/community-plugins.json`), not bundled.** Source in
@@ -163,11 +174,21 @@ zip, its `downloadUrl` and sha256, published like the Ridonculous plugins
 install and show in the plugin list; #5952 objects to exactly that.
 
 **Reuse from the prototype** (`packages/plugin-dev/ai-view-builder` on the
-generative-views branch): the Anthropic streaming client, per-tool-call
-application with an agent loop of at most 4 rounds, the API key in secret
-storage, the eval runner. Not reused: persisted views and their spec. A
+generative-views branch): the agent loop of at most 4 rounds, the API key in
+secret storage, the eval runner. Not its transport: it streams with direct
+`fetch` and `CapacitorWebFetch`, which bypasses the plugin's `allowedHosts`
+and `http` permission. v1 uses `request()` and shows the result whole. Not reused: persisted views and their spec. A
 selection here is the smallest possible generative view: one list, never
 saved.
+
+### 4.1 Plugin API additions
+
+Both optional, both small, both useful to other plugins:
+
+| Addition                                                                  | Why                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| ------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `showPluginPanel` in `ALLOWED_PLUGIN_ACTIONS` (or a `showPanel()` method) | Only the host's side-panel button opens a plugin panel (`plugin-side-panel-btns.component.ts:129`); plugins may only hide it. A shortcut that opens the box is the core of the feature                                                                                                                                                                                                                                       |
+| `isIgnoreShortSyntax?: boolean` on `addTask` data and `updateTask`        | Plugin `addTask` parses short syntax (`plugin-bridge.service.ts:991-996`; `short-syntax.effects.ts:60-75`), so "Call mom #errands 15m @3pm" would set tags, an estimate and a time, and may open the "create tags?" dialog. A title-only `updateTask` is parsed too. `TaskService.add` already has the flag for untrusted titles; the bridge only needs to pass it. Default unchanged, so Brain Dump and others keep parsing |
 
 **Challenge to "the proposal appears in the Planner".** A plugin cannot draw
 inside the Planner. The panel sits next to it, and the Planner updates on
@@ -185,7 +206,7 @@ these run on the device. The flow is: shortcut, dictation key, speak, Enter.
 Linux desktops mostly lack built-in dictation; they type.
 
 **Why not a real push-to-talk microphone in v1:** Electron denies the
-microphone for the whole app (`electron/main-window.ts:331`, only
+microphone for the whole app (`electron/main-window.ts:332`, only
 `notifications` is allowed). The generative-views plan found Chromium's cloud
 recognizer unavailable in Electron and no working `SpeechRecognition` in the
 Android WebView.
@@ -213,11 +234,17 @@ button that renders the next request's JSON from the user's own data:
 - **Tasks on the radar:** open tasks on Today, overdue, or with a deadline in
   the next 7 days (up to 80), plus the selection on screen, plus up to 30 tasks
   per search the model runs (at most 4 searches per request). For each: title,
-  estimate, time spent, whether it is on Today, overdue or later, due date,
-  deadline, priority, whether it repeats, whether it has a fixed time or
-  reminder, project and tags.
-- **Not sent:** task ids (replaced by `t1`, `t2`…), notes, subtasks' contents
-  unless found by search, attachments, calendar events, worklogs, audio.
+  done or not, estimate, time spent, whether it is on Today, overdue or later,
+  due date, deadline, priority, whether it repeats, whether it has a fixed
+  time or reminder, its parent (if it is a subtask), project and tags.
+- **Not sent:** task ids (replaced by `t1`, `t2`…), notes, attachments,
+  calendar events, worklogs, audio. Subtasks are sent only like any other task:
+  when on the radar or found by a search.
+
+Names exclude the virtual Today and in-progress tags: setting them as tags
+would put `TODAY` into `task.tagIds` (sync rule 5), and `getAllTags()` returns
+them. Deadline and priority are read from fields the app passes at runtime but
+the plugin `Task` type doesn't declare (`types.ts:352-385`).
 
 Ids are replaced by aliases and mapped back locally, so the model can only
 refer to tasks it was shown. About 60 tokens per task.
@@ -225,8 +252,8 @@ refer to tasks it was shown. About 60 tokens per task.
 ### 6.2 Tools
 
 `tool_choice` is `auto` (forced choice returns a 400 on Opus 5.5 and Sonnet
-5.5); each tool has `strict: true`. A tool call is applied to the panel when
-its block completes, so rows appear as they stream.
+5.5); each tool has `strict: true`. The panel shows the result when the request
+completes.
 
 | Tool          | Input                                                                     | Effect                                                     |
 | ------------- | ------------------------------------------------------------------------- | ---------------------------------------------------------- |
@@ -250,12 +277,17 @@ Used by the app and the eval alike. A proposed row is dropped, with a note, if:
 
 1. it names an id the model was not shown, or the same task twice;
 2. it sets `day` on a task with a fixed time or reminder (§ 7);
-3. it names a project or tag that doesn't exist (v1 doesn't create them);
+3. it names a project or tag that doesn't exist (v1 doesn't create them), or
+   a virtual tag (Today, in progress);
 4. `day` is before today;
 5. a moved-to-tomorrow task has a deadline today or earlier;
 6. a title is empty or over 500 characters, or a reason is over 100
-   characters (all text rendered with `textContent`);
-7. the request proposes more than 50 changes. Then nothing is shown except
+   characters (all text rendered with `textContent`; titles are written with
+   short syntax off, § 4.1);
+7. it changes the project of a repeating task (that moves the whole series,
+   archived instances included, without asking; `task-move-to-project.service.ts:83-116`)
+   or of a subtask (the bridge throws);
+8. the request proposes more than 50 changes. Then nothing is shown except
    "That would change 50+ tasks; narrow it down."
 
 ### 6.4 Planning the day
@@ -287,14 +319,16 @@ other tools.
 
 ### 6.6 Latency, failures, cost
 
-- **Latency target:** first row or sentence within 3 s for a simple add,
-  complete within 10 s typical, 20 s worst. Measured in the eval.
+- **Latency target:** the whole result within 5 s for a simple add, 10 s
+  typical, 20 s worst, with a spinner and Cancel. Not streamed (§ 4). Measured
+  in the eval.
 - **Timeout** 30 s; **offline, no key, 401, 429, refusal:** a plain message,
   nothing changed. Invalid tool input is returned to the model as an error;
   after 4 rounds, what is valid is shown.
 - **Stale rows:** on Apply the plugin re-reads each target task and drops rows
-  whose task changed since the proposal (`dueDay`, `dueWithTime`, `remindAt`,
-  `isDone`, title, estimate, project, tags). A `dayChange` discards day plans.
+  whose task changed or was deleted since the proposal (`dueDay`,
+  `dueWithTime`, `remindAt`, deadline, `isDone`, title, estimate, project,
+  tags, `parentId`, `repeatCfgId`). A `dayChange` discards day plans.
 
 Cost per request (estimate; ~2 rounds × ~8k input with the prefix cached, ~1k
 output plus thinking at `low` effort, prices from the Claude API reference
@@ -311,28 +345,28 @@ cheapest model that meets the eval bar; Opus 5.5 at `low` is the quality
 reference. The only setting is a model picker.
 
 **Provider:** Anthropic only in v1. A local model would fit "privacy first"
-best, but `request()` blocks private networks for plugins other than bundled
-issue providers (`plugin-bridge.service.ts:499`); opening that is a security
-decision (§ 12).
+best, but `request()` blocks private networks for plugin requests
+(`plugin-bridge.service.ts:568-570`); opening that is a security decision
+(§ 12).
 
 ## 7. What v1 can and cannot change
 
-Everything goes through existing plugin API calls; the plugin adds no new
-write path.
+Everything goes through existing plugin API calls (titles written with short
+syntax off, § 4.1); the plugin adds no new write path.
 
-| Request                                   | v1  | How / why not                                                                                                                                                                                                                  |
-| ----------------------------------------- | --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Add tasks, several at once, with subtasks | Yes | `addTask` (project, tags, estimate, `dueDay`, `parentId`)                                                                                                                                                                      |
-| Rename, estimate, add a note              | Yes | `updateTask`; notes are appended, never read                                                                                                                                                                                   |
-| Plan for a day, move to tomorrow, unplan  | Yes | `updateTask({ dueDay })`, which already keeps planner days and Today in step (`task-shared-crud.reducer.ts:966-1020`)                                                                                                          |
-| Mark done / undone                        | Yes | `updateTask({ isDone })`; Phase 1 checks it matches the UI's done path                                                                                                                                                         |
-| Move to a project, change tags            | Yes | `updateTask`: project moves go through the UI's move service; tags are validated                                                                                                                                               |
-| Delete                                    | Yes | `deleteTask`; recoverable from Recently deleted (#10912)                                                                                                                                                                       |
-| Start tracking, open a task               | Yes | `startTracking`, `selectTask`, only from the user's click on a selection row                                                                                                                                                   |
-| Set a time or reminder; deadlines         | No  | `updateTask` would bypass the scheduling reducer's time/day exclusivity; needs a `scheduleTask`-style API wrapping the existing action. Tasks that already have a time or reminder are not moved (their reminders stay intact) |
-| Repeat rules, time entries                | No  | No plugin write API; low value by voice                                                                                                                                                                                        |
-| Create projects or tags                   | No  | `addProject`/`addTag` exist, but a typo would create clutter; v1 asks the user to pick an existing one                                                                                                                         |
-| Reorder Today                             | No  | Pairwise moves on the shared Today order are the most conflict-prone write, for little gain                                                                                                                                    |
+| Request                                   | v1  | How / why not                                                                                                                                                                                                                                                                                                                |
+| ----------------------------------------- | --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Add tasks, several at once, with subtasks | Yes | `addTask` (project, tags, estimate, `dueDay`, `parentId`)                                                                                                                                                                                                                                                                    |
+| Rename, estimate, add a note              | Yes | `updateTask`; notes are appended, never read                                                                                                                                                                                                                                                                                 |
+| Plan for a day, move to tomorrow, unplan  | Yes | `updateTask({ dueDay })`, which already keeps planner days and Today in step (`task-shared-crud.reducer.ts:966-1020`). Unplan sends `dueDay: null`: `undefined` is ignored by the reducer and dropped on the wire                                                                                                            |
+| Mark done / undone                        | Yes | `updateTask({ isDone })`, which is what the UI's `setDone` does (`task.service.ts:1221-1231`)                                                                                                                                                                                                                                |
+| Move to a project, change tags            | Yes | Project: the UI's move service, its own call (so a row with a project and other fields is 2 actions); not for repeating tasks or subtasks (§ 6.3). Tags: validated, virtual tags excluded                                                                                                                                    |
+| Delete                                    | Yes | `deleteTask`; unticked by default; Recently deleted keeps it on this device for 30 days (#10912)                                                                                                                                                                                                                             |
+| Start tracking, open a task               | Yes | `startTracking`, `selectTask`, only from the user's click on a selection row                                                                                                                                                                                                                                                 |
+| Set a time or reminder; deadlines         | No  | Times: `updateTask` would bypass the scheduling reducer's time/day exclusivity. Deadlines have their own `setDeadline` action, and the plugin `Task` type has no deadline fields. Both need a small API wrapping the existing action. Tasks that already have a time or reminder are not moved (their reminders stay intact) |
+| Repeat rules, time entries                | No  | No plugin write API; low value by voice                                                                                                                                                                                                                                                                                      |
+| Create projects or tags                   | No  | `addProject`/`addTag` exist, but a typo would create clutter; v1 asks the user to pick an existing one                                                                                                                                                                                                                       |
+| Reorder Today                             | No  | Pairwise moves on the shared Today order are the most conflict-prone write, for little gain                                                                                                                                                                                                                                  |
 
 ## 8. Applying changes and sync
 
@@ -341,14 +375,16 @@ deletes. Each row is one existing plugin call, so one existing action:
 `addTask` and `updateTask` dispatch the same actions as the UI, `deleteTask`
 the same delete (to Recently deleted).
 
-- **Ops.** One op per changed task (a project move may touch its subtasks, as
-  in the UI). "Move these 8 to tomorrow" is 8 independent `updateTask` ops: the
+- **Ops.** One op per changed field group: a row is one `updateTask`, plus
+  one project move when the project changes (it carries the task's subtasks,
+  as in the UI). "Move these 8 to tomorrow" is 8 independent `updateTask` ops: the
   atomicity rule asks for one op per replay-atomic transition, not per UI
   workflow; a crash midway leaves a valid state; each keeps its own per-task
   conflict boundary. Rule 6 allows the loop without yields. The 50-change cap
   bounds it.
-- **No new sync surface.** No new action, op code, entity, persisted field,
-  plugin API or schema bump.
+- **No new sync surface.** No new action, op code, entity, persisted field
+  or schema bump. The two plugin API additions (§ 4.1) only open a panel and
+  pass an existing flag.
 - **Selections are not data.** They live in the panel's memory, are never
   persisted or synced, and vanish on close.
 - **No effects on replay.** The plugin acts only on the user's Apply or click.
@@ -361,7 +397,7 @@ the same delete (to Recently deleted).
   tasks; both converge.
 - **No undo in v1.** Restoring "the previous state" would overwrite edits other
   devices made after Apply. The preview is the safeguard; deletes are
-  recoverable from Recently deleted.
+  unticked by default and kept in Recently deleted on this device.
 
 ## 9. Built-in vs external assistants
 
@@ -397,7 +433,8 @@ expected result:
 - **Day plans:** overfull day, empty day, after a holiday, weekend, meeting day
   (the calendar gap), no estimates, 80 tasks.
 - **Hostile:** a title that tries prompt injection; a request to change 200
-  tasks.
+  tasks; spoken text with `#`, `@` or `+` in it; "move this repeating task to
+  Work".
 
 **Hard:** the § 6.3 validator passes on every fixture, for every model offered.
 **Soft:** match with the expected changes or selection; for day plans, compared
@@ -412,15 +449,16 @@ become fixtures. Nothing is counted on the device or sent anywhere.
 
 ## 11. Phases
 
-| Phase                             | Scope                                                                                                   | Exit                                                                          |
-| --------------------------------- | ------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| **0. Eval first** (no app change) | Fixtures, prompt, tools, validator, rule-based draft; Haiku, Sonnet and Opus 5.5                        | Bar met → Phase 1. Not met → record why, stop                                 |
-| **1. Plugin, desktop + web**      | Shortcut, panel, typed and dictated requests, changes + Apply, selections, day plans; directory listing | Works end to end; unit tests for validator, alias map, free time, stale check |
-| **2. Mobile + E2E**               | Android and iOS (`request()` vs the prototype's `CapacitorWebFetch` client); concurrent-edit E2E        | E2E green on SuperSync                                                        |
-| **3. Push-to-talk** (on evidence) | Host speech service and its plugin API (§ 5)                                                            | Separate plan                                                                 |
-| **Later, on evidence**            | Times and reminders via a `scheduleTask`-style API; calendar busy minutes; local model                  | A user request                                                                |
+| Phase                                      | Scope                                                                                                                     | Exit                                                                                                        |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| **0. Eval first** (no app change)          | Fixtures, prompt, tools, validator, rule-based draft; Haiku, Sonnet and Opus 5.5                                          | Bar met → Phase 1. Not met → record why, stop                                                               |
+| **1a. Capture and changes**, desktop + web | Shortcut, panel, typed and dictated requests, change list + Apply; § 4.1; directory listing. Covers the voice-capture gap | Eval capture and edit fixtures pass in the shipped plugin; unit tests for validator, alias map, stale check |
+| **1b. Selections and day plans**           | `show_tasks`, row actions, day plans with free time; only once their eval fixtures pass                                   | Selection and day-plan fixtures pass; day plans beat the draft                                              |
+| **2. Mobile + E2E**                        | Android and iOS (check `request()` to the Anthropic API on both); concurrent-edit E2E                                     | E2E green on SuperSync                                                                                      |
+| **3. Push-to-talk** (on evidence)          | Host speech service and its plugin API (§ 5)                                                                              | Separate plan                                                                                               |
+| **Later, on evidence**                     | Times and reminders via a `scheduleTask`-style API; calendar busy minutes; local model                                    | A user request                                                                                              |
 
-**Smallest useful version:** Phase 0 + 1, with system dictation as the voice.
+**Smallest useful version:** Phase 0 + 1a, with system dictation as the voice.
 
 **Not planned:** chat history, automatic or scheduled runs, time-blocking,
 reordering Today, saved views, undo.
@@ -431,6 +469,8 @@ reordering Today, saved views, undo.
 
 - **Wrong change applied.** Preview of every change, ticked rows only,
   ambiguity shown instead of guessed, deletes recoverable, a 50-change cap.
+- **Short syntax in titles** would turn spoken words into tags, dates and
+  times. Fixed by § 4.1 and covered by eval fixtures.
 - **More data leaves the device** than in rev. 2: project and tag names and
   searched titles. The notice lists every field and shows a real example; the
   plugin is never installed by default; the key is per device.
@@ -450,9 +490,7 @@ reordering Today, saved views, undo.
 2. Is "two keys" (shortcut, then system dictation) good enough for v1, or is
    push-to-talk the point of the feature? If the latter, Phase 3 becomes the
    first step and needs its own plan.
-3. Should deletes be ticked by default in the preview (recoverable) or
-   unticked?
-4. Local models: open the private-network guard for this plugin, or leave
+3. Local models: open the private-network guard for this plugin, or leave
    local models to the external-assistant path?
 
 ## Review
@@ -479,4 +517,26 @@ the product principles and the sync rules, checking claims against the code.
 
 ### Rev. 3
 
-REVIEW3_PLACEHOLDER
+A fresh-context subagent reviewed rev. 3 against the same guides and the code.
+
+| #   | Finding                                                                                                                                                  | Severity | Outcome                                                                                 |
+| --- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | --------------------------------------------------------------------------------------- |
+| 1   | A plugin shortcut can't open the plugin's panel; only the host button can (`plugin-side-panel-btns.component.ts:129`). "No plugin API change" was false  | High     | **Fixed.** § 4.1 adds `showPluginPanel` to the allowed actions                          |
+| 2   | Plugin `addTask` and title-only `updateTask` parse short syntax: spoken "#errands 15m @3pm" would set tags, estimate and a time, bypassing the validator | High     | **Fixed.** § 4.1 passes `isIgnoreShortSyntax`; eval fixtures added                      |
+| 3   | Project moves: a repeating task moves its whole series without asking; subtasks throw; a project change is a separate action                             | High     | **Fixed.** Validator rule 7; § 7 and § 8 corrected                                      |
+| 4   | `request()` doesn't stream; the prototype's streaming transport bypasses `allowedHosts`                                                                  | Medium   | **Fixed.** `request()`, no streaming, latency target adjusted                           |
+| 5   | `getAllTags()` returns the virtual Today tag; setting it breaks sync rule 5                                                                              | Medium   | **Fixed.** Excluded from names and validator                                            |
+| 6   | "Unplan" needs `dueDay: null`; `undefined` is ignored and dropped on the wire                                                                            | Medium   | **Fixed** (§ 7)                                                                         |
+| 7   | Recently deleted is device-local, 30 days                                                                                                                | Medium   | **Fixed.** Wording; deletes unticked by default; the open question removed              |
+| 8   | Phase 1 too big; Brain Dump not mentioned                                                                                                                | Medium   | **Fixed.** Phase 1a capture and changes, 1b selections and day plans; Brain Dump in § 2 |
+| 9   | Stale check missed deletion, parent, repeat, deadline                                                                                                    | Low      | **Fixed**                                                                               |
+| 10  | § 6.1 missed done state and parent; subtask wording unclear                                                                                              | Low      | **Fixed**                                                                               |
+| 11  | "Phase 1 checks done path" unnecessary: `setDone` is `update({ isDone: true })`                                                                          | Low      | **Fixed**                                                                               |
+| 12  | Deadline reason wrong; deadline and priority read from untyped fields                                                                                    | Low      | **Fixed** (§ 6.1, § 7)                                                                  |
+| 13  | Wrong line citations                                                                                                                                     | Low      | **Fixed**                                                                               |
+| 14  | "Three kinds" vs four; untestable Phase 1 exit; `say` and "these" lean toward chat                                                                       | Low      | **Fixed.** No-history rule stated in § 3                                                |
+
+Checked correct by the review: cost arithmetic and prices, the forced
+`tool_choice` 400, `updateTask({ dueDay })` keeping planner days and Today in
+step, `registerShortcut`, secrets, the directory listing, the desktop MCP
+tools.
