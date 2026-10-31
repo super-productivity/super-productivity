@@ -313,8 +313,8 @@ export interface DayChangePayload {
  * `todayStr` is the logical day as YYYY-MM-DD: before the configured start of
  * the next day, it is still the previous calendar day. To find a timestamp's
  * logical day, subtract `startOfNextDayDiffMs` before taking its local date.
- * `firstDayOfWeek` is 0 (Sunday) to 6 (Saturday), from the user's settings or
- * locale.
+ * `firstDayOfWeek` is 0 (Sunday) to 6 (Saturday), from the user's settings;
+ * Monday (1) when unset.
  */
 export interface PluginDayContext {
   todayStr: string;
