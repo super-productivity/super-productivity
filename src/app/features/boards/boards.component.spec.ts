@@ -4,6 +4,7 @@ import { ActivatedRoute, convertToParamMap, ParamMap, Router } from '@angular/ro
 import { Store } from '@ngrx/store';
 import { BehaviorSubject } from 'rxjs';
 import { TranslateModule } from '@ngx-translate/core';
+import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { BoardsComponent } from './boards.component';
 import { BoardsService } from './boards.service';
 import { BoardCfg } from './boards.model';
@@ -32,6 +33,7 @@ describe('BoardsComponent', () => {
     await TestBed.configureTestingModule({
       imports: [BoardsComponent, TranslateModule.forRoot()],
       providers: [
+        provideNoopAnimations(),
         { provide: ActivatedRoute, useValue: { paramMap: params$ } },
         { provide: Router, useValue: { navigate } },
         { provide: Store, useValue: { dispatch } },

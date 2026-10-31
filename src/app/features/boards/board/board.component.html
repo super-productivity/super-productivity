@@ -1,6 +1,11 @@
-<!-- The view's columns show either way; tasks can't get a missing tag. -->
+<!-- The view's columns show either way; tasks can't get a missing tag.
+     Leave-only: it shows with its view, and collapses when Create Tags (or
+     sync) makes it obsolete. -->
 @if (missingTagIds().length) {
-  <div class="callout callout--info missing-tags">
+  <div
+    class="callout callout--info missing-tags"
+    @expandOutOnly
+  >
     <mat-icon aria-hidden="true">label</mat-icon>
     <div>
       <p>{{ T.F.BOARDS.V.MISSING_TAGS_MSG | translate: { tags: missingTagNames() } }}</p>

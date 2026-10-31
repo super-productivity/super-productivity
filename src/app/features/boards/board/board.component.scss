@@ -29,8 +29,10 @@
 }
 
 // Above the columns, across all of them, as tall as its text (the cards'
-// rows share the height that is left).
-:host(.hasMissingTags) {
+// rows share the height that is left). :has() rather than a host class: the
+// callout stays in the DOM while it collapses, and a class flipped at removal
+// would stretch it to a `1fr` row for that time.
+:host:has(> .missing-tags) {
   grid-template-rows: auto;
 }
 

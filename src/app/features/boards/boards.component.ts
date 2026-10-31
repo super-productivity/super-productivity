@@ -20,6 +20,7 @@ import { LS } from '../../core/persistence/storage-keys.const';
 import { setSelectedTask } from '../tasks/store/task.actions';
 import { TaskMultiSelectService } from '../tasks/task-multi-select.service';
 import { BoardsService } from './boards.service';
+import { viewSwitchAnimation } from './boards.ani';
 
 /**
  * One view (board) per route: `/boards/:boardId`. `BoardRouteGuard` resolves
@@ -32,6 +33,7 @@ import { BoardsService } from './boards.service';
   imports: [BoardComponent, CdkDropListGroup, MatButton, MatIcon, TranslatePipe],
   templateUrl: './boards.component.html',
   styleUrl: './boards.component.scss',
+  animations: [viewSwitchAnimation],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class BoardsComponent {

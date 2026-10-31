@@ -31,6 +31,7 @@ import { BoardsService } from '../boards.service';
 import { T } from '../../../t.const';
 import { ViewTaskListRegistry } from '../../tasks/view-task-list-registry.service';
 import { ViewCriteriaContextService } from '../view-criteria-context.service';
+import { expandOutOnlyAnimation } from '../../../ui/animations/expand.ani';
 
 // The tags the default views use, created with their fixed ids.
 const DEFAULT_VIEW_TAGS = [IMPORTANT_TAG, URGENT_TAG, IN_PROGRESS_TAG];
@@ -41,13 +42,13 @@ const DEFAULT_VIEW_TAGS = [IMPORTANT_TAG, URGENT_TAG, IN_PROGRESS_TAG];
   imports: [BoardPanelComponent, MatIcon, MatButton, TranslatePipe],
   templateUrl: './board.component.html',
   styleUrl: './board.component.scss',
+  animations: [expandOutOnlyAnimation],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: {
     '[style.--cols]': 'boardCfg().cols',
     // One column reads like a task list: list width, centered.
     '[class.isSingleColumn]': 'boardCfg().cols <= 1',
     '[class.isListLayout]': 'isListLayout()',
-    '[class.hasMissingTags]': 'missingTagIds().length > 0',
   },
 })
 export class BoardComponent {

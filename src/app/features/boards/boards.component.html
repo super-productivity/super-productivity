@@ -1,5 +1,6 @@
 @if (board(); as board) {
   <board
+    [@viewSwitch]="board.id"
     [boardCfg]="board"
     cdkDropListGroup
   ></board>

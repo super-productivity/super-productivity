@@ -55,10 +55,13 @@
     [cdkDropListData]="boardsService.boards()"
     (cdkDropListDropped)="drop($event)"
   >
+    <!-- A view added or removed (here or by sync) opens or closes in place;
+         the host's @.disabled keeps the first render still. -->
     @for (row of rows(); track row.board.id) {
       <div
         class="nav-child-item draggable view-row"
         role="listitem"
+        @expandCollapse
         [class.is-indented]="showLabels()"
         [attr.data-view-id]="row.board.id"
         cdkDrag

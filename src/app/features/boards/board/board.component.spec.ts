@@ -2,6 +2,7 @@ import { NO_ERRORS_SCHEMA, signal, WritableSignal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Store } from '@ngrx/store';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { BoardComponent } from './board.component';
 import { BoardPanelComponent } from '../board-panel/board-panel.component';
 import { BoardCfg } from '../boards.model';
@@ -32,6 +33,7 @@ describe('BoardComponent', () => {
     await TestBed.configureTestingModule({
       imports: [BoardComponent, TranslateModule.forRoot()],
       providers: [
+        provideNoopAnimations(),
         { provide: Store, useValue: { dispatch } },
         { provide: BoardsService, useValue: { editBoard: jasmine.createSpy() } },
         { provide: ViewCriteriaContextService, useValue: { tagIdSet: tagIds } },
@@ -60,7 +62,6 @@ describe('BoardComponent', () => {
 
     expect(el.querySelectorAll('board-panel').length).toBe(4);
     expect(el.style.getPropertyValue('--cols')).toBe('2');
-    expect(el.classList).toContain('hasMissingTags');
     const callout = el.querySelector('.callout')!;
     expect(callout.textContent).toContain('Missing tags: important, urgent');
     // Above the columns.
@@ -79,8 +80,9 @@ describe('BoardComponent', () => {
     // The store reports them (here, or synced from another device).
     tagIds.set(new Set([IMPORTANT_TAG.id, URGENT_TAG.id]));
     fixture.detectChanges();
+    // It collapses on its way out (a no-op animation here).
+    await fixture.whenStable();
     expect(el.querySelector('.callout')).toBeNull();
-    expect(el.classList).not.toContain('hasMissingTags');
     expect(el.querySelectorAll('board-panel').length).toBe(4);
   });
 

@@ -23,6 +23,16 @@ export const expandInOnlyAnimation = [
   ]),
 ];
 
+/** The leave half of `expand`: for content that shows with its page. */
+export const expandOutOnlyAnimation = [
+  trigger('expandOutOnly', [
+    transition(':leave', [
+      style({ overflow: 'hidden' }),
+      animate(ANI_LEAVE_TIMING, style({ height: 0 })),
+    ]),
+  ]),
+];
+
 export const expandFadeAnimation = [
   trigger('expandFade', [
     transition(':enter', [
