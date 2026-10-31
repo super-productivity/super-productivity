@@ -3,6 +3,12 @@ import { PluginBaseCfg, PluginManifest } from '../plugin-api.model';
 import { PluginHooks, PluginIframeMessageType } from '@super-productivity/plugin-api';
 import { PluginLog } from '../../core/log';
 import { PLUGIN_UI_KIT_CSS } from './plugin-ui-kit.css';
+import {
+  IGNORED_PROBES,
+  PLUGIN_API_MEMBER_NAMES,
+  PLUGIN_API_TYPES_URL,
+  unknownPluginApiMemberMessage,
+} from './unknown-plugin-api-member.util';
 
 /**
  * Simplified plugin iframe utilities following KISS principles.
@@ -405,7 +411,7 @@ export const createPluginApiScript = (config: PluginIframeConfig): string => {
         }
 
         // Create the PluginAPI object with all methods
-        window.PluginAPI = {
+        const pluginApi = {
           cfg: ${JSON.stringify(config.baseCfg)},
 
           // Add Hooks enum (kept in sync with PluginHooks via JSON.stringify
@@ -563,6 +569,30 @@ export const createPluginApiScript = (config: PluginIframeConfig): string => {
             });
           }
         };
+
+        // Name the real alternatives when plugin code reads a member the
+        // iframe lacks (see unknown-plugin-api-member.util.ts); reads still
+        // return undefined so feature detection keeps working.
+        const unknownMemberMessage = (${unknownPluginApiMemberMessage.toString()});
+        const knownMembers = ${JSON.stringify(PLUGIN_API_MEMBER_NAMES)};
+        const ignoredProbes = ${JSON.stringify([...IGNORED_PROBES])};
+        const warnedMembers = new Set();
+        window.PluginAPI = new Proxy(pluginApi, {
+          get: (target, prop) => {
+            if (
+              typeof prop === 'string' &&
+              !(prop in target) &&
+              !ignoredProbes.includes(prop) &&
+              !warnedMembers.has(prop)
+            ) {
+              warnedMembers.add(prop);
+              console.warn('[Plugin] ' + (knownMembers.includes(prop)
+                ? 'PluginAPI.' + prop + ' is only available in plugin.js, not in iframe index.html.'
+                : unknownMemberMessage(prop, knownMembers, '${PLUGIN_API_TYPES_URL}')));
+            }
+            return target[prop];
+          },
+        });
 
         // Notify parent that plugin is ready
         window.parent.postMessage({

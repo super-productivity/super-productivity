@@ -141,6 +141,29 @@ describe('handlePluginMessage()', () => {
     });
   }
 
+  it('names real alternatives when iframe code reads a missing PluginAPI member', () => {
+    const warn = spyOn(console, 'warn');
+    const { frame } = loadGeneratedIframeApi(
+      createConfig({ createBoundMethods: () => ({}) } as unknown as PluginBridgeService),
+    );
+    const api = frame.PluginAPI as unknown as Record<string, unknown>;
+
+    expect(api['showIframe']).toBeUndefined();
+    expect(warn.calls.mostRecent().args[0]).toContain(
+      'PluginAPI.showIframe does not exist. Did you mean: show',
+    );
+
+    expect(api['getSecret']).toBeUndefined();
+    expect(warn.calls.mostRecent().args[0]).toContain(
+      'PluginAPI.getSecret is only available in plugin.js',
+    );
+
+    warn.calls.reset();
+    expect(typeof api['getTasks']).toBe('function');
+    expect(api['showIframe']).toBeUndefined();
+    expect(warn).not.toHaveBeenCalled();
+  });
+
   it('does not cancel the bound sync when the generated iframe request times out', async () => {
     let finish!: () => void;
     let completed = false;
@@ -658,7 +681,7 @@ describe('handlePluginMessage()', () => {
           '<html><head><script>window.PluginAPI.getTasks();</script></head>' +
           '<body><script>window.PluginAPI.showSnack({});</script></body></html>',
       });
-      const apiDefinition = html.indexOf('window.PluginAPI = {');
+      const apiDefinition = html.indexOf('window.PluginAPI = new Proxy(');
       expect(apiDefinition).toBeGreaterThan(-1);
       expect(apiDefinition).toBeLessThan(html.indexOf('window.PluginAPI.getTasks()'));
       expect(apiDefinition).toBeLessThan(html.indexOf('window.PluginAPI.showSnack({})'));
