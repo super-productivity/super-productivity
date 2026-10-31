@@ -1,0 +1,83 @@
+<mat-form-field class="view-title">
+  <mat-label>{{ T.G.TITLE | translate }}</mat-label>
+  <input
+    #titleModel="ngModel"
+    matInput
+    required
+    [ngModel]="model().title"
+    (ngModelChange)="setTitle($event)"
+  />
+  <mat-error>{{ T.V.E_REQUIRED | translate }}</mat-error>
+</mat-form-field>
+
+<div class="layout">
+  <span class="field-label">{{ T.F.BOARDS.EDITOR.LAYOUT | translate }}</span>
+  <div class="layout-row">
+    <segmented-button-group
+      class="layout-toggle"
+      size="md"
+      [options]="LAYOUT_OPTIONS"
+      [selectedId]="layout()"
+      [ariaLabel]="T.F.BOARDS.EDITOR.LAYOUT | translate"
+      (selectionChange)="setLayout($event)"
+    ></segmented-button-group>
+    @if (isBoard()) {
+      <mat-form-field
+        class="cols"
+        subscriptSizing="dynamic"
+      >
+        <mat-label>{{ T.F.BOARDS.FORM.COLUMNS | translate }}</mat-label>
+        <input
+          #colsModel="ngModel"
+          matInput
+          type="number"
+          required
+          min="2"
+          step="1"
+          [ngModel]="model().cols"
+          (ngModelChange)="setCols($event)"
+        />
+        <mat-error>{{ T.V.E_MIN | translate: { val: 2 } }}</mat-error>
+      </mat-form-field>
+    }
+  </div>
+  <p class="hint">
+    {{
+      (isBoard()
+        ? T.F.BOARDS.EDITOR.LAYOUT_BOARD_HINT
+        : T.F.BOARDS.EDITOR.LAYOUT_LIST_HINT
+      ) | translate
+    }}
+  </p>
+</div>
+
+<h3 class="sections-heading">
+  {{ (isBoard() ? T.F.BOARDS.EDITOR.COLUMNS : T.F.BOARDS.EDITOR.SECTIONS) | translate }}
+</h3>
+<div class="sections">
+  @for (panel of model().panels; track panel.id; let i = $index) {
+    <view-editor-section
+      [panel]="panel"
+      [isShowTitle]="isSectionTitleShown()"
+      [isBoard]="isBoard()"
+      [count]="counts()[i]"
+      [isFirst]="$first"
+      [isLast]="$last"
+      (panelChange)="updatePanel(i, $event)"
+      (moveUp)="movePanel(i, -1)"
+      (moveDown)="movePanel(i, 1)"
+      (duplicate)="duplicatePanel(i)"
+      (remove)="removePanel(i)"
+    ></view-editor-section>
+  }
+</div>
+<button
+  class="add-section"
+  mat-stroked-button
+  (click)="addPanel()"
+>
+  <mat-icon>add</mat-icon>
+  {{
+    (isBoard() ? T.F.BOARDS.EDITOR.ADD_COLUMN : T.F.BOARDS.EDITOR.ADD_SECTION) | translate
+  }}
+</button>

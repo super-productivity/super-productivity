@@ -1,0 +1,47 @@
+:host {
+  display: block;
+}
+
+.view-title {
+  width: 100%;
+}
+
+.field-label,
+.sections-heading {
+  display: block;
+  margin: 0 0 var(--s);
+  color: var(--text-color-muted);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: var(--letter-spacing-wide);
+}
+
+.layout-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2);
+}
+
+.layout-toggle {
+  flex: 0 1 280px;
+}
+
+.cols {
+  flex: 0 0 120px;
+}
+
+.hint {
+  margin: var(--s) 0 var(--s3);
+  color: var(--text-color-muted);
+}
+
+.sections {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+}
+
+.add-section {
+  margin-top: var(--s2);
+}

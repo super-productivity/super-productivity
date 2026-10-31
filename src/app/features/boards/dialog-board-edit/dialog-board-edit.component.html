@@ -8,11 +8,10 @@
   @if (data.board) {
     <board-edit
       #boarEditCmp
-      [boardCfg]="data.board"
+      [board]="data.board"
       (afterSave)="close($event)"
     ></board-edit>
   }
-  <!--  <pre>{{ data.board | json }}</pre>-->
 </mat-dialog-content>
 
 <mat-dialog-actions align="end">
@@ -35,7 +34,6 @@
   }
 
   <button
-    [disabled]="!boarEditCmp()?.form.valid"
     (click)="save()"
     color="primary"
     mat-flat-button

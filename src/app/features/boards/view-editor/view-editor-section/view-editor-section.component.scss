@@ -1,0 +1,94 @@
+@use '../../../../../styles/_globals.scss' as *;
+
+:host {
+  display: block;
+  padding: var(--s) var(--s2) var(--s2);
+  border: 1px solid var(--divider-color);
+  border-radius: var(--card-border-radius);
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  gap: var(--s);
+}
+
+.section-title {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.count {
+  color: var(--text-color-muted);
+  font-size: var(--font-size-sm);
+  white-space: nowrap;
+}
+
+.rules-heading {
+  margin: var(--s2) 0 var(--s);
+  color: var(--text-color-muted);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: var(--letter-spacing-wide);
+}
+
+.no-rules {
+  margin: 0 0 var(--s);
+  color: var(--text-color-muted);
+}
+
+.rule-row {
+  display: flex;
+  align-items: center;
+  gap: var(--s);
+  padding: var(--s-half) 0;
+
+  // Phones: the control moves below its label.
+  @include mq(xs, max) {
+    flex-wrap: wrap;
+  }
+}
+
+.rule-label {
+  flex: 0 0 140px;
+
+  @include mq(xs, max) {
+    flex: 1 1 auto;
+  }
+}
+
+.rule-control {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-half);
+  flex: 1 1 auto;
+  min-width: 0;
+
+  @include mq(xs, max) {
+    order: 3;
+    flex-basis: 100%;
+  }
+}
+
+.rule-note {
+  color: var(--text-color-muted);
+  font-size: var(--font-size-sm);
+}
+
+// Keeps the sort row's control aligned with the rule rows above it.
+.remove-rule {
+  flex: 0 0 auto;
+}
+
+span.remove-rule {
+  width: var(--s5);
+}
+
+.add-rule {
+  margin: var(--s-half) 0 var(--s);
+}
+
+.sort-row {
+  border-top: 1px solid var(--divider-color);
+  padding-top: var(--s);
+}

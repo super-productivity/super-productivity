@@ -70,7 +70,7 @@ export class DialogBoardEditComponent {
   }
 
   save(): void {
-    // Closes through `afterSave`, which only fires for a valid form.
+    // Closes through `afterSave`; with an invalid field the editor shows why.
     this.boarEditCmp()?.save();
   }
 }

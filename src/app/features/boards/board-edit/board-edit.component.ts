@@ -1,67 +1,56 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  computed,
   inject,
-  model,
-  OnInit,
+  input,
   output,
-  signal,
+  viewChild,
 } from '@angular/core';
-import { FormlyModule } from '@ngx-formly/core';
 import { BoardCfg } from '../boards.model';
-import { BOARDS_FORM } from '../boards-form.const';
-import { UntypedFormGroup } from '@angular/forms';
 import { nanoid } from 'nanoid';
 import { Store } from '@ngrx/store';
 import { BoardsActions } from '../store/boards.actions';
-import { normalizeBoardForSave, toEditorModel } from '../boards.util';
+import { ViewEditorComponent } from '../view-editor/view-editor.component';
 
+/** Saves what the view editor builds: one `addBoard` or `updateBoard`. */
 @Component({
   selector: 'board-edit',
   standalone: true,
-  imports: [FormlyModule],
+  imports: [ViewEditorComponent],
   templateUrl: './board-edit.component.html',
-  styleUrl: './board-edit.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class BoardEditComponent implements OnInit {
-  store = inject(Store);
-  boardCfg = model.required<BoardCfg>();
-  isEdit = signal(false);
-  afterSave = output<string>();
+export class BoardEditComponent {
+  private readonly _store = inject(Store);
+  private readonly _editor = viewChild.required(ViewEditorComponent);
 
-  form: UntypedFormGroup = new UntypedFormGroup({});
+  /** The stored board; a new one has no id yet. */
+  readonly board = input.required<BoardCfg>();
+  readonly afterSave = output<string>();
 
-  protected readonly BOARDS_FORM = BOARDS_FORM;
+  readonly isEdit = computed(() => !!this.board().id);
+  readonly boardCfg = computed<BoardCfg>(() =>
+    this.isEdit() ? this.board() : { ...this.board(), id: nanoid() },
+  );
 
-  ngOnInit(): void {
-    if (this.boardCfg().id) {
-      this.isEdit.set(true);
-    } else {
-      this.boardCfg.set({ ...this.boardCfg(), id: nanoid() });
-    }
-
-    // Defaults for legacy data, and the panel sort as one select value.
-    this.boardCfg.set(toEditorModel(this.boardCfg()));
-  }
-
+  /** Does nothing while a field is invalid (the editor shows why). */
   save(): void {
-    if (this.form.valid) {
-      // Normalize before dispatching, not only in the reducer: the op carries
-      // the payload, and released clients store it as is (e.g. Formly's null).
-      const boardCfg = normalizeBoardForSave(this.boardCfg());
-      if (this.isEdit()) {
-        this.store.dispatch(
-          BoardsActions.updateBoard({ id: boardCfg.id, updates: boardCfg }),
-        );
-      } else {
-        this.store.dispatch(BoardsActions.addBoard({ board: boardCfg }));
-      }
-      this.afterSave.emit(boardCfg.id);
+    // Normalized before dispatching, not only in the reducer: the op carries
+    // the payload, and released clients store it as is.
+    const board = this._editor().buildBoard();
+    if (!board) {
+      return;
     }
+    if (this.isEdit()) {
+      this._store.dispatch(BoardsActions.updateBoard({ id: board.id, updates: board }));
+    } else {
+      this._store.dispatch(BoardsActions.addBoard({ board }));
+    }
+    this.afterSave.emit(board.id);
   }
 
   removeBoard(): void {
-    this.store.dispatch(BoardsActions.removeBoard({ id: this.boardCfg().id }));
+    this._store.dispatch(BoardsActions.removeBoard({ id: this.board().id }));
   }
 }
