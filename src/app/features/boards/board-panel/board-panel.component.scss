@@ -116,14 +116,10 @@ header {
   //  }
   //}
 
+  // Material's own icon-button look, like the "+" in a section header.
   button {
     //margin-left: auto;
     margin-left: 10px;
-    opacity: 0.7;
-
-    &:hover {
-      opacity: 1;
-    }
   }
 
   // Same label treatment as the task-list section headings (collapsible
