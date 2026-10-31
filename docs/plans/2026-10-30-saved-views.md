@@ -1119,6 +1119,101 @@ In a one-section list (`isShowTitle` false) the header row holds an empty
   create their tags, and tasks can't be moved into a column that requires a
   missing tag.
 
+## 15. Phase 7 — icon, title, motion, the editor on phones
+
+User feedback after phase 6 (2026-10-31): "We definitely need a transition
+animation when a view is created and possibly more. We never should use the
+filter icon since it has another meaning already. Tapping on title should
+not route to today. The config UI is a bit hard to use and understand on
+mobile." No stored shape, action or op changes.
+
+### A. No filter icon for views
+
+`filter_list` means "filter/sort this list" (the title-bar customizer
+button). Views use it as their own icon: `getViewIcon` for one-column views
+(side menu rows, title bar), and the editor's **List** layout option.
+
+- One-column views get `view_agenda` (stacked sections; same family as
+  boards' `view_kanban`). Change `getViewIcon` and `LAYOUT_OPTIONS` in
+  `view-editor.component.ts`; grep for other view-icon uses (the views
+  section header, the start-page setting, the mobile bottom-nav slot,
+  default views) and keep them consistent. The title-bar customizer button
+  keeps `filter_list`: it _is_ the filter.
+
+### B. The title on a view page
+
+`page-title` links the title to `/active/tasks` everywhere, with the
+tooltip "Go to task list". On a view page that jumps to the last work
+context (often Today): unexpected, and it leaves the view.
+
+- On a view page the title is not a link. Clicking/tapping it opens the
+  view editor (`BoardsService.editBoard`), tooltip and `aria-label` "Edit
+  view" (existing `T.F.BOARDS.V.EDIT_BOARD`), keyboard-activatable like
+  today's title. Other pages are unchanged.
+
+### C. Motion
+
+Views switch and appear without any transition. All views are one route
+page (`page: 'boards'`), so `warpRoute` in `app.component` (which animates
+between different pages) never runs between views, and a created view
+just replaces the content.
+
+- **Switching or creating a view:** the view content enters with the same
+  motion as switching projects (`workViewProjectChangeAnimation`, or the
+  shared fade/expand primitives in `src/app/ui/animations/`), keyed by the
+  view id so it runs on every view change, including the one right after
+  Create. No leave animation (no layout jump while two views overlap).
+- **The new view's side-menu row:** enters with the side menu's existing
+  list motion (expand/fade, as other nav rows), so the user sees where the
+  created view went.
+- **The header "+" add bar** and **the missing-tags callout** (enter and,
+  after Create tags, leave) use the existing `expand` animation instead of
+  popping in/out.
+- Durations and easing come from `animation.const.ts`. Respect reduced
+  motion the way the app already does (check how `warpRoute` /
+  `@expand` behave under `prefers-reduced-motion` and match it). Nothing
+  loops or draws attention by itself.
+
+### D. The editor on phones
+
+At 400px the dialog floats with margins over the bottom nav; each rule
+takes two rows (a label line, then a full-width select); every section is
+fully expanded, so a three-column board is a long scroll and its structure
+is hard to see; the Columns field sits on its own line.
+
+- **Full screen at the xs breakpoint** (the dialog's own `maxWidth`/
+  `width`/`height` options, or the existing pattern of a full-screen
+  dialog in the app if there is one), with the title bar and the
+  Cancel/Delete/Save row fixed and the content scrolling between them.
+- **One row per rule, on every width:** the rule's name becomes the
+  form field's label (`mat-label` inside the select / tag input), the ×
+  stays at the end of the row. Drops the separate label column/line;
+  desktop gets shorter too.
+- **Sections as an accordion:** each section card collapsed shows its
+  title, its task count and a one-line summary of its rules (e.g.
+  "Priority: High · Not completed"; "Every task" when none); tapping it
+  expands it for editing. One section is open at a time; the only section
+  of a list is always open (no header to tap); a new or duplicated section
+  opens; a section with an invalid field opens on Save.
+- **Columns** sits next to the List/Board toggle on the same row.
+- Keep everything else (rules, live count, Add rule, Add section, the
+  untouched-save guard); the editor's unit and E2E helpers adapt (the
+  `e2e/utils/view-helpers.ts` helpers expand a section before editing it).
+
+### Tests
+
+- Unit: `getViewIcon`; title click on a view opens the editor and does not
+  navigate; rule summary text per rule type; accordion (one open, new
+  section opens, invalid section opens on save); the untouched-save
+  fixtures still pass.
+- E2E: tapping a view's title opens the editor and stays on the view;
+  creating a view still lands on it (animation not asserted, no fixed
+  waits); the existing editor-driven specs pass through the updated
+  helpers.
+- Screenshots at 1280px and 400px: side menu with list and board views,
+  the editor (one section; a three-column board with one section open),
+  the add bar open, the missing-tags callout.
+
 ## Review
 
 Plan review (fresh-context subagent, 2026-10-30). Fixed in this revision:
