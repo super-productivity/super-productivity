@@ -17,11 +17,14 @@ const LINEAR_API_URL = 'https://api.linear.app/graphql';
 
 // Linear workflow state types that mean "done" (matches the built-in provider).
 const DONE_STATE_TYPES = ['completed', 'canceled'];
+// Open workflow state types that search and auto-import list.
+const OPEN_STATE_TYPES = ['backlog', 'unstarted', 'started'];
 
 interface LinearConfig {
   apiKey?: string;
   teamId?: string;
   projectId?: string;
+  skipBacklogOnAutoImport?: boolean;
 }
 
 interface LinearGraphQLResponse<T = unknown> {
@@ -37,6 +40,7 @@ interface LinearRawIssueReduced {
   updatedAt: string;
   url: string;
   state: { name: string; type: string };
+  parent?: { id: string } | null;
 }
 
 interface LinearRawIssue extends LinearRawIssueReduced {
@@ -60,12 +64,17 @@ interface LinearRawIssue extends LinearRawIssueReduced {
 }
 
 const SEARCH_ISSUES_QUERY = `
-  query SearchIssues($first: Int!, $team: TeamFilter, $project: NullableProjectFilter) {
+  query SearchIssues(
+    $first: Int!
+    $stateTypes: [String!]!
+    $team: TeamFilter
+    $project: NullableProjectFilter
+  ) {
     viewer {
       assignedIssues(
         first: $first,
         filter: {
-          state: { type: { in: ["backlog", "unstarted", "started"] } },
+          state: { type: { in: $stateTypes } },
           team: $team,
           project: $project
         }
@@ -73,6 +82,7 @@ const SEARCH_ISSUES_QUERY = `
         nodes {
           id identifier number title updatedAt url
           state { id name type }
+          parent { id }
         }
       }
     }
@@ -98,6 +108,11 @@ const GET_ISSUE_QUERY = `
 
 const GET_VIEWER_QUERY = `query GetViewer { viewer { id name } }`;
 
+// Archived teams and projects are excluded by default. First 250 only, no paging;
+// projects are listed workspace-wide, not per team.
+const LIST_TEAMS_QUERY = `query ListTeams { teams(first: 250) { nodes { id name key } } }`;
+const LIST_PROJECTS_QUERY = `query ListProjects { projects(first: 250) { nodes { id name } } }`;
+
 const graphql = async <T>(
   http: PluginHttp,
   query: string,
@@ -121,17 +136,20 @@ const mapReduced = (issue: LinearRawIssueReduced): PluginSearchResult => ({
   title: `${issue.identifier} ${issue.title}`,
   url: issue.url,
   status: issue.state?.name,
+  parentId: issue.parent?.id,
   // Provider-specific fields used for display + isDone mapping.
   identifier: issue.identifier,
   stateType: issue.state?.type,
+  stateTags: issue.state?.name ? [issue.state.name] : [],
 });
 
 const searchAssignedIssues = async (
   searchTerm: string,
   cfg: LinearConfig,
   http: PluginHttp,
+  stateTypes: string[] = OPEN_STATE_TYPES,
 ): Promise<PluginSearchResult[]> => {
-  const variables: Record<string, unknown> = { first: 50 };
+  const variables: Record<string, unknown> = { first: 50, stateTypes };
   // Deliberate behavior change from the built-in provider: the old
   // LinearApiService accepted teamId/projectId but its callers never passed
   // them, so the "filter to specific team/project" config fields were inert.
@@ -160,6 +178,40 @@ const searchAssignedIssues = async (
   return issues.map(mapReduced);
 };
 
+interface SelectOption {
+  label: string;
+  value: string;
+}
+
+// The empty value means "no filter"; a single select cannot be cleared otherwise.
+const loadOptions =
+  <N extends { id: string; name: string }>(
+    query: string,
+    listKey: 'teams' | 'projects',
+    allLabel: string,
+    toLabel: (node: N) => string,
+  ) =>
+  async (_config: Record<string, unknown>, http: PluginHttp): Promise<SelectOption[]> => {
+    const data = await graphql<Record<string, { nodes: N[] }>>(http, query, {});
+    const options = (data[listKey]?.nodes || [])
+      .map((node) => ({ label: toLabel(node), value: node.id }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+    return [{ label: t(allLabel), value: '' }, ...options];
+  };
+
+const loadTeamOptions = loadOptions<{ id: string; name: string; key: string }>(
+  LIST_TEAMS_QUERY,
+  'teams',
+  'CFG.ALL_TEAMS',
+  (team) => `${team.name} (${team.key})`,
+);
+const loadProjectOptions = loadOptions(
+  LIST_PROJECTS_QUERY,
+  'projects',
+  'CFG.ALL_PROJECTS',
+  (project) => project.name,
+);
+
 registerIssueProvider({
   configFields: [
     {
@@ -176,14 +228,24 @@ registerIssueProvider({
     },
     {
       key: 'teamId',
-      type: 'input',
+      type: 'select',
       label: t('CFG.TEAM_ID'),
+      options: [],
+      loadOptions: loadTeamOptions,
       advanced: true,
     },
     {
       key: 'projectId',
-      type: 'input',
+      type: 'select',
       label: t('CFG.PROJECT_ID'),
+      options: [],
+      loadOptions: loadProjectOptions,
+      advanced: true,
+    },
+    {
+      key: 'skipBacklogOnAutoImport',
+      type: 'checkbox' as const,
+      label: t('CFG.SKIP_BACKLOG_ON_AUTO_IMPORT'),
       advanced: true,
     },
   ],
@@ -238,6 +300,7 @@ registerIssueProvider({
       number: issue.number,
       summary: `${issue.identifier} ${issue.title}`,
       stateType: issue.state?.type,
+      stateTags: issue.state?.name ? [issue.state.name] : [],
       priority: issue.priority,
       creator: issue.creator?.name,
       createdAt: new Date(issue.createdAt).getTime(),
@@ -259,7 +322,12 @@ registerIssueProvider({
     config: Record<string, unknown>,
     http: PluginHttp,
   ): Promise<PluginSearchResult[]> {
-    return searchAssignedIssues('', asConfig<LinearConfig>(config), http);
+    const cfg = asConfig<LinearConfig>(config);
+    // Manual search still lists backlog issues, so one can be added on purpose.
+    const stateTypes = cfg.skipBacklogOnAutoImport
+      ? OPEN_STATE_TYPES.filter((type) => type !== 'backlog')
+      : OPEN_STATE_TYPES;
+    return searchAssignedIssues('', cfg, http, stateTypes);
   },
 
   issueDisplay: [
@@ -281,7 +349,15 @@ registerIssueProvider({
       open: 'unstarted',
       isDone: (issueValue) => DONE_STATE_TYPES.includes(issueValue as string),
     }),
+    // Off by default; "Pull only" tags each task with its Linear status.
+    {
+      taskField: 'tagIds',
+      issueField: 'stateTags',
+      defaultDirection: 'off',
+      toIssueValue: () => undefined,
+      toTaskValue: (issueValue) => (Array.isArray(issueValue) ? issueValue : []),
+    },
   ],
 
-  extractSyncValues: pickSyncValues('stateType', 'title', 'body'),
+  extractSyncValues: pickSyncValues('stateType', 'stateTags', 'title', 'body'),
 });
