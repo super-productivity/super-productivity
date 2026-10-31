@@ -1,6 +1,9 @@
 import {
+  criteriaToPanelFields,
   getCalendarDateForDueDay,
   getPanelDueState,
+  getViewIcon,
+  normalizeBoardForSave,
   getPanelSortKey,
   panelToCriteria,
   sanitizePanelCfg,
@@ -905,5 +908,85 @@ describe('sanitizePanelCfg: rule fields', () => {
     expect('priorityRule' in out).toBeFalse();
     expect('sortKey' in out).toBeFalse();
     expect('isUntagged' in out).toBeFalse();
+  });
+});
+
+describe('normalizeBoardForSave', () => {
+  const board = (panels: Partial<BoardPanelCfg>[]): BoardCfg => ({
+    id: 'b',
+    title: 'B',
+    cols: 1,
+    panels: panels.map((p) => ({ ...basePanel, ...p })),
+  });
+
+  it('turns the form sort select into sortBy or sortKey', () => {
+    const out = normalizeBoardForSave(
+      board([
+        { sortKey: 'plannedDate' },
+        { sortKey: 'priority' },
+        { sortKey: null as any },
+      ]),
+    );
+    expect(out.panels[0].sortBy).toBe('dueDate');
+    expect('sortKey' in out.panels[0]).toBeFalse();
+    expect(out.panels[1].sortKey).toBe('priority');
+    expect('sortBy' in out.panels[2] || 'sortKey' in out.panels[2]).toBeFalse();
+  });
+
+  it('clears the hidden tag lists of an untagged column and drops a false flag', () => {
+    const out = normalizeBoardForSave(
+      board([
+        { isUntagged: true, includedTagIds: ['a'], excludedTagIds: ['b'] },
+        { isUntagged: false, includedTagIds: ['a'] },
+      ]),
+    );
+    expect(out.panels[0].includedTagIds).toEqual([]);
+    expect(out.panels[0].excludedTagIds).toEqual([]);
+    expect('isUntagged' in out.panels[1]).toBeFalse();
+    expect(out.panels[1].includedTagIds).toEqual(['a']);
+  });
+
+  it('drops Formly nulls before they reach an op', () => {
+    const out = normalizeBoardForSave(board([{ deadlineState: null as any }]));
+    expect('deadlineState' in out.panels[0]).toBeFalse();
+  });
+});
+
+describe('criteriaToPanelFields', () => {
+  it('round-trips through panelToCriteria', () => {
+    const fields = criteriaToPanelFields({
+      includedTagIds: ['a'],
+      includedTagsMatch: 'any',
+      plannedDate: 'nextWeek',
+      deadline: 'none',
+      estimate: 'none',
+      timeSpent: 600000,
+      priority: 2,
+    });
+    expect(panelToCriteria({ ...basePanel, ...fields })).toEqual(
+      jasmine.objectContaining({
+        includedTagIds: ['a'],
+        includedTagsMatch: 'any',
+        plannedDate: 'nextWeek',
+        deadline: 'none',
+        estimate: 'none',
+        timeSpent: 600000,
+        priority: 2,
+      }),
+    );
+  });
+
+  it('maps "no planned date" to the not-scheduled state and no match to no project', () => {
+    expect(criteriaToPanelFields({ plannedDate: 'none' }).scheduledState).toBe(
+      BoardPanelCfgScheduledState.NotScheduled,
+    );
+    expect(criteriaToPanelFields({ isNoMatch: true }).projectIds).toEqual([]);
+  });
+});
+
+describe('getViewIcon', () => {
+  it('shows a list for one column and a board for several', () => {
+    expect(getViewIcon({ panels: [basePanel] })).toBe('filter_list');
+    expect(getViewIcon({ panels: [basePanel, basePanel] })).toBe('view_kanban');
   });
 });

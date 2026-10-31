@@ -15,6 +15,29 @@ const getNewPanel = (): BoardPanelCfg => ({
   id: nanoid(),
 });
 
+// Date rules for the planned date and the deadline (TaskDateRule values).
+const DATE_RULE_OPTIONS = [
+  { value: 'overdue', label: T.F.BOARDS.FORM.DUE_STATE_OVERDUE },
+  { value: 'todayOrOverdue', label: T.F.BOARDS.FORM.DUE_STATE_TODAY_OR_OVERDUE },
+  { value: 'today', label: T.F.BOARDS.FORM.DUE_STATE_TODAY },
+  { value: 'tomorrow', label: T.F.BOARDS.FORM.DUE_STATE_TOMORROW },
+  { value: 'next7Days', label: T.F.BOARDS.FORM.DUE_STATE_NEXT_7_DAYS },
+  { value: 'thisWeek', label: T.F.TASK_VIEW.CUSTOMIZER.SCHEDULED_THIS_WEEK },
+  { value: 'nextWeek', label: T.F.TASK_VIEW.CUSTOMIZER.SCHEDULED_NEXT_WEEK },
+  { value: 'thisMonth', label: T.F.TASK_VIEW.CUSTOMIZER.SCHEDULED_THIS_MONTH },
+  { value: 'nextMonth', label: T.F.TASK_VIEW.CUSTOMIZER.SCHEDULED_NEXT_MONTH },
+];
+
+// Estimate / time spent: not set, or at least a duration (ms as a string).
+const AMOUNT_RULE_OPTIONS = [
+  { value: null, label: T.F.BOARDS.FORM.DUE_STATE_ANY },
+  { value: 'none', label: T.F.BOARDS.FORM.RULE_NOT_SET },
+  { value: '600000', label: T.F.TASK_VIEW.CUSTOMIZER.TIME_10MIN },
+  { value: '1800000', label: T.F.TASK_VIEW.CUSTOMIZER.TIME_30MIN },
+  { value: '3600000', label: T.F.TASK_VIEW.CUSTOMIZER.TIME_1HOUR },
+  { value: '7200000', label: T.F.TASK_VIEW.CUSTOMIZER.TIME_2HOUR },
+];
+
 export const BOARDS_FORM: LimitedFormlyFieldConfig<BoardCfg>[] = [
   {
     key: 'title',
@@ -55,9 +78,20 @@ export const BOARDS_FORM: LimitedFormlyFieldConfig<BoardCfg>[] = [
           },
         },
         {
+          key: 'isUntagged',
+          type: 'checkbox',
+          props: {
+            label: T.F.BOARDS.FORM.IS_UNTAGGED,
+          },
+        },
+        {
           type: 'tag-select',
           key: 'includedTagIds',
+          // Untagged columns clear their tag lists on save (normalizeBoardForSave);
+          // keep the required arrays in the model while hidden.
+          resetOnHide: false,
           expressions: {
+            hide: '!!model.isUntagged',
             // eslint-disable-next-line @typescript-eslint/naming-convention
             'props.excludedTagIds': 'model.excludedTagIds',
           },
@@ -70,7 +104,7 @@ export const BOARDS_FORM: LimitedFormlyFieldConfig<BoardCfg>[] = [
           type: 'radio',
           // Only meaningful with >=2 required tags.
           expressions: {
-            hide: 'model.includedTagIds?.length < 2',
+            hide: '!!model.isUntagged || model.includedTagIds?.length < 2',
           },
           // `defaultValue` lives at the field level — Formly's core extension
           // reads `field.defaultValue`, not `field.props.defaultValue`, when
@@ -92,7 +126,9 @@ export const BOARDS_FORM: LimitedFormlyFieldConfig<BoardCfg>[] = [
         {
           type: 'tag-select',
           key: 'excludedTagIds',
+          resetOnHide: false,
           expressions: {
+            hide: '!!model.isUntagged',
             // eslint-disable-next-line @typescript-eslint/naming-convention
             'props.excludedTagIds': 'model.includedTagIds',
           },
@@ -104,7 +140,7 @@ export const BOARDS_FORM: LimitedFormlyFieldConfig<BoardCfg>[] = [
           key: 'excludedTagsMatch',
           type: 'radio',
           expressions: {
-            hide: 'model.excludedTagIds?.length < 2',
+            hide: '!!model.isUntagged || model.excludedTagIds?.length < 2',
           },
           defaultValue: 'any',
           resetOnHide: true,
@@ -148,10 +184,7 @@ export const BOARDS_FORM: LimitedFormlyFieldConfig<BoardCfg>[] = [
             defaultValue: null,
             options: [
               { value: null, label: T.F.BOARDS.FORM.DUE_STATE_ANY },
-              { value: 'overdue', label: T.F.BOARDS.FORM.DUE_STATE_OVERDUE },
-              { value: 'today', label: T.F.BOARDS.FORM.DUE_STATE_TODAY },
-              { value: 'tomorrow', label: T.F.BOARDS.FORM.DUE_STATE_TOMORROW },
-              { value: 'next7Days', label: T.F.BOARDS.FORM.DUE_STATE_NEXT_7_DAYS },
+              ...DATE_RULE_OPTIONS,
             ],
           },
         },
@@ -186,17 +219,69 @@ export const BOARDS_FORM: LimitedFormlyFieldConfig<BoardCfg>[] = [
           },
         },
         {
-          key: 'sortBy',
+          key: 'deadlineState',
+          type: 'select',
+          props: {
+            label: T.F.BOARDS.FORM.DEADLINE,
+            defaultValue: null,
+            options: [
+              { value: null, label: T.F.BOARDS.FORM.DUE_STATE_ANY },
+              { value: 'none', label: T.F.TASK_VIEW.CUSTOMIZER.GROUP_DEADLINE_NONE },
+              ...DATE_RULE_OPTIONS,
+            ],
+          },
+        },
+        {
+          key: 'estimateRule',
+          type: 'select',
+          props: {
+            label: T.F.BOARDS.FORM.ESTIMATE,
+            defaultValue: null,
+            options: AMOUNT_RULE_OPTIONS,
+          },
+        },
+        {
+          key: 'timeSpentRule',
+          type: 'select',
+          props: {
+            label: T.F.BOARDS.FORM.TIME_SPENT,
+            defaultValue: null,
+            options: AMOUNT_RULE_OPTIONS,
+          },
+        },
+        {
+          key: 'priorityRule',
+          type: 'select',
+          props: {
+            label: T.F.BOARDS.FORM.PRIORITY,
+            defaultValue: null,
+            options: [
+              { value: null, label: T.F.BOARDS.FORM.DUE_STATE_ANY },
+              { value: 'none', label: T.F.BOARDS.FORM.RULE_NOT_SET },
+              { value: '1', label: T.F.TASK.CMP.PRIORITY_LOW },
+              { value: '2', label: T.F.TASK.CMP.PRIORITY_MEDIUM },
+              { value: '3', label: T.F.TASK.CMP.PRIORITY_HIGH },
+            ],
+          },
+        },
+        {
+          // Not persisted as is: BoardEditComponent maps it to `sortBy` or
+          // `sortKey` on save (withPanelSortKey) and back on load.
+          key: 'sortKey',
           type: 'select',
           props: {
             label: T.F.BOARDS.FORM.SORT_BY,
             defaultValue: null,
             options: [
               { value: null, label: T.F.BOARDS.FORM.SORT_BY_MANUAL },
-              { value: 'dueDate', label: T.F.BOARDS.FORM.SORT_BY_DUE },
+              { value: 'plannedDate', label: T.F.BOARDS.FORM.SORT_BY_DUE },
+              { value: 'deadline', label: T.F.TASK_VIEW.CUSTOMIZER.SORT_DEADLINE },
               { value: 'created', label: T.F.BOARDS.FORM.SORT_BY_CREATED },
               { value: 'title', label: T.F.BOARDS.FORM.SORT_BY_TITLE },
-              { value: 'timeEstimate', label: T.F.BOARDS.FORM.SORT_BY_TIME_ESTIMATE },
+              { value: 'estimate', label: T.F.BOARDS.FORM.SORT_BY_TIME_ESTIMATE },
+              { value: 'timeSpent', label: T.F.BOARDS.FORM.TIME_SPENT },
+              { value: 'priority', label: T.F.TASK_VIEW.CUSTOMIZER.SORT_PRIORITY },
+              { value: 'tag', label: T.F.TASK_VIEW.CUSTOMIZER.GROUP_TAG },
             ],
           },
         },
@@ -204,7 +289,7 @@ export const BOARDS_FORM: LimitedFormlyFieldConfig<BoardCfg>[] = [
           key: 'sortDir',
           type: 'radio',
           expressions: {
-            hide: '!model.sortBy',
+            hide: '!model.sortKey',
           },
           defaultValue: 'asc',
           resetOnHide: true,

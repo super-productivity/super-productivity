@@ -79,27 +79,7 @@
         ></nav-item>
 
         <ng-template #viewMenu>
-          <button
-            mat-menu-item
-            (click)="boardsService.editBoard(row.board)"
-          >
-            <mat-icon>edit</mat-icon>
-            <span>{{ T.G.EDIT | translate }}</span>
-          </button>
-          <button
-            mat-menu-item
-            (click)="boardsService.duplicateBoard(row.board)"
-          >
-            <mat-icon>file_copy</mat-icon>
-            <span>{{ T.G.DUPLICATE | translate }}</span>
-          </button>
-          <button
-            mat-menu-item
-            (click)="boardsService.removeBoard(row.board)"
-          >
-            <mat-icon class="color-warn-i">delete_forever</mat-icon>
-            <span>{{ T.G.DELETE | translate }}</span>
-          </button>
+          <view-menu [board]="row.board"></view-menu>
         </ng-template>
       </div>
     }

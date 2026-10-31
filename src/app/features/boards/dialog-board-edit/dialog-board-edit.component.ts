@@ -39,6 +39,8 @@ export class DialogBoardEditComponent {
     board: BoardCfg;
     // Creates a new view: no Delete button, create title.
     isCreate?: boolean;
+    // Translation keys shown above the form, e.g. what "Save as view" drops.
+    hints?: string[];
   }>(MAT_DIALOG_DATA);
   boarEditCmp = viewChild('boarEditCmp', { read: BoardEditComponent });
 

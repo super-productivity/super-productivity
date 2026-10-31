@@ -3,8 +3,14 @@ import {
   Component,
   computed,
   inject,
+  Injector,
   ViewChild,
 } from '@angular/core';
+import { firstValueFrom } from 'rxjs';
+import { GlobalConfigService } from '../../config/global-config.service';
+import { WorkContextService } from '../../work-context/work-context.service';
+import { BoardsService } from '../../boards/boards.service';
+import { TODAY_TAG } from '../../tag/tag.const';
 import { FormsModule } from '@angular/forms';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatSelectModule } from '@angular/material/select';
@@ -57,6 +63,14 @@ import { ChipListInputComponent } from '../../../ui/chip-list-input/chip-list-in
 export class TaskViewCustomizerPanelComponent {
   customizerService = inject(TaskViewCustomizerService);
   private _tagService = inject(TagService);
+  private _injector = inject(Injector);
+  private _globalConfigService = inject(GlobalConfigService);
+  private _workContextService = inject(WorkContextService);
+
+  // "Save as view" only where views are switched on (off on a new install).
+  readonly isViewsEnabled = computed(
+    () => !!this._globalConfigService.appFeatures()?.isBoardsEnabled,
+  );
 
   @ViewChild('customizerMenu', { static: false })
   menu!: MatMenu;
@@ -138,5 +152,23 @@ export class TaskViewCustomizerPanelComponent {
 
   onResetAll(): void {
     this.customizerService.resetAll();
+  }
+
+  /** Opens the create-view dialog prefilled with this list's filter and sort. */
+  async saveAsView(): Promise<void> {
+    const list = await firstValueFrom(this._workContextService.activeWorkContext$);
+    const board = this.customizerService.buildViewFromList({
+      type: list.type,
+      id: list.id,
+      title: list.title,
+      taskIds: list.taskIds,
+    });
+    const hints = [
+      ...(this.customizerService.selectedGroup().type
+        ? [T.F.BOARDS.V.HINT_GROUPING_NOT_SAVED]
+        : []),
+      ...(list.id === TODAY_TAG.id ? [T.F.BOARDS.V.HINT_TODAY_OR_OVERDUE] : []),
+    ];
+    await this._injector.get(BoardsService).createBoard(board, hints);
   }
 }

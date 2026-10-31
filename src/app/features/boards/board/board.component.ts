@@ -39,6 +39,8 @@ import { T } from '../../../t.const';
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: {
     '[style.--cols]': 'missingTagIds().length === 0 && boardCfg().cols',
+    // One column reads like a task list: list width, centered.
+    '[class.isSingleColumn]': 'boardCfg().cols <= 1',
   },
 })
 export class BoardComponent {

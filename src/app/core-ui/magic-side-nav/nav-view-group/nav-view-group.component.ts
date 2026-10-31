@@ -25,6 +25,8 @@ import { BoardsActions } from '../../../features/boards/store/boards.actions';
 import { moveItemInArray } from '../../../util/move-item-in-array';
 import { dragDelayForTouch } from '../../../util/input-intent';
 import { T } from '../../../t.const';
+import { ViewMenuComponent } from '../../../features/boards/view-menu/view-menu.component';
+import { getViewIcon } from '../../../features/boards/boards.util';
 
 /** The Views section of the side menu: one route row per board (view). */
 @Component({
@@ -39,6 +41,7 @@ import { T } from '../../../t.const';
     MatTooltip,
     NavItemComponent,
     TranslatePipe,
+    ViewMenuComponent,
   ],
   templateUrl: './nav-view-group.component.html',
   // The section header and rows look like the Projects and Tags sections.
@@ -75,7 +78,7 @@ export class NavViewGroupComponent {
     this.boardsService.boards().map((board) => ({
       board,
       route: `/boards/${board.id}`,
-      icon: board.panels.length > 1 ? 'view_kanban' : 'filter_list',
+      icon: getViewIcon(board),
     })),
   );
 

@@ -172,7 +172,9 @@ describe('PageTitleComponent', () => {
       boards.set([{ id: 'v1', title: 'Quick wins', cols: 1, panels: [] }]);
       const c = setupComponent('/boards/v1');
       expect(c.displayTitle()).toBe('Quick wins');
-      expect(c.sectionIcon()).toBe(NAV_SECTION_ICON.BOARDS);
+      // The view's own icon: a list for a one-column view.
+      expect(c.sectionIcon()).toBe('filter_list');
+      expect(c.viewBoard()?.id).toBe('v1');
     });
 
     it('falls back to the section title for an unknown view', () => {

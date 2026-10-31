@@ -21,6 +21,8 @@ import {
 } from '../tasks/task-criteria/task-criteria';
 import { filterToCriteria, SORT_OPTION_TO_KEY } from './filter-to-criteria';
 import { TaskCriteria } from '../tasks/task-criteria/task-criteria.model';
+import { buildViewFromList, ViewSourceList } from './save-as-view';
+import { BoardCfg } from '../boards/boards.model';
 import { WorkContextService } from '../work-context/work-context.service';
 import { WorkContextType } from '../work-context/work-context.model';
 import { ProjectService } from '../project/project.service';
@@ -339,6 +341,17 @@ export class TaskViewCustomizerService {
    */
   private _toCriteria(filter: FilterOption): TaskCriteria | null {
     return filterToCriteria(filter, {
+      tags: this._allTags().filter((tag) => tag.id !== TODAY_TAG.id),
+      projects: this._allProjects,
+    });
+  }
+
+  /** A one-column view showing what `list` shows with the current filter and sort. */
+  buildViewFromList(list: ViewSourceList): BoardCfg {
+    return buildViewFromList({
+      list,
+      filter: this.selectedFilter(),
+      sort: this.selectedSort(),
       tags: this._allTags().filter((tag) => tag.id !== TODAY_TAG.id),
       projects: this._allProjects,
     });

@@ -54,7 +54,7 @@ describe('BoardsService', () => {
     await service.createBoard();
     expect(open).toHaveBeenCalledOnceWith(DialogBoardEditComponent, {
       restoreFocus: true,
-      data: { board: DEFAULT_BOARD_CFG, isCreate: true },
+      data: { board: DEFAULT_BOARD_CFG, isCreate: true, hints: [] },
     });
     expect(navigate).toHaveBeenCalledOnceWith(['/boards', 'new-id']);
   });

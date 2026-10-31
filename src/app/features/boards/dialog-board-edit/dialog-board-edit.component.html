@@ -2,6 +2,9 @@
   {{ (data.isCreate ? T.F.BOARDS.V.ADD_NEW_BOARD : T.F.BOARDS.V.EDIT_BOARD) | translate }}
 </h2>
 <mat-dialog-content>
+  @for (hint of data.hints ?? []; track hint) {
+    <p>{{ hint | translate }}</p>
+  }
   @if (data.board) {
     <board-edit
       #boarEditCmp

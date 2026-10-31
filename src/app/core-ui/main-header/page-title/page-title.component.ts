@@ -34,6 +34,8 @@ import { PluginBridgeService } from '../../../plugins/plugin-bridge.service';
 import { PluginService } from '../../../plugins/plugin.service';
 import { PluginIconComponent } from '../../../plugins/ui/plugin-icon/plugin-icon.component';
 import { selectAllBoards } from '../../../features/boards/store/boards.selectors';
+import { getViewIcon } from '../../../features/boards/boards.util';
+import { ViewMenuComponent } from '../../../features/boards/view-menu/view-menu.component';
 
 @Component({
   selector: 'page-title',
@@ -51,6 +53,7 @@ import { selectAllBoards } from '../../../features/boards/store/boards.selectors
     TaskViewCustomizerPanelComponent,
     TranslatePipe,
     PluginIconComponent,
+    ViewMenuComponent,
   ],
   template: `
     @if (activeWorkContextTypeAndId()) {
@@ -134,6 +137,25 @@ import { selectAllBoards } from '../../../features/boards/store/boards.selectors
           }
         </div>
       }
+      @if (!isXxxs() && viewBoard()) {
+        <div class="page-title-actions">
+          <button
+            [matMenuTriggerFor]="viewMenu"
+            [matTooltip]="T.G.MORE_ACTIONS | translate"
+            [attr.aria-label]="T.G.MORE_ACTIONS | translate"
+            mat-icon-button
+          >
+            <mat-icon>more_vert</mat-icon>
+          </button>
+        </div>
+      }
+      <mat-menu #viewMenu="matMenu">
+        <ng-template matMenuContent>
+          @if (viewBoard(); as board) {
+            <view-menu [board]="board"></view-menu>
+          }
+        </ng-template>
+      </mat-menu>
       <mat-menu #activeWorkContextMenu="matMenu">
         <ng-template matMenuContent>
           <work-context-menu
@@ -424,7 +446,10 @@ export class PageTitleComponent {
     PageTitleComponent._ROUTE_SECTIONS.find(([re]) => re.test(this._url())),
   );
   private _routeTitleKey = computed(() => this._routeSection()?.[1]);
-  sectionIcon = computed(() => this._routeSection()?.[2]);
+  sectionIcon = computed(() => {
+    const viewBoard = this.viewBoard();
+    return viewBoard ? getViewIcon(viewBoard) : this._routeSection()?.[2];
+  });
 
   // Plugin pages are titled like the built-in sections, with the label and
   // icon of the plugin's nav entry.
@@ -441,13 +466,15 @@ export class PageTitleComponent {
     return icon && !/\.svg$/i.test(icon) ? icon : 'extension';
   });
 
-  // A view page is titled with the view's own title (default views use keys).
-  private _boardTitle = computed(() => {
+  // The view (board) a `/boards/<id>` page shows: titled with its own title
+  // (default views use keys) and icon, with its menu in the title bar.
+  viewBoard = computed(() => {
     const id = this._url().match(/^\/boards\/([^/]+)$/)?.[1];
     return id
-      ? this._boards().find((board) => board.id === decodeURIComponent(id))?.title
+      ? this._boards().find((board) => board.id === decodeURIComponent(id))
       : undefined;
   });
+  private _boardTitle = computed(() => this.viewBoard()?.title);
 
   isSpecialSection = computed(() => !!this._routeSection() || !!this.pluginId());
   isWorkViewPage = computed(() => /tasks$/.test(this._url()));

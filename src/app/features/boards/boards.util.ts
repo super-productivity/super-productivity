@@ -134,6 +134,28 @@ export const sanitizePanelCfg = (panel: BoardPanelCfg): BoardPanelCfg => {
 };
 
 /**
+ * Turns the board editor's model into what is stored: the form's sort select
+ * becomes `sortBy`/`sortKey`, an untagged column drops its (hidden) tag lists,
+ * a date rule implies "scheduled", and Formly's nulls are dropped, so no op
+ * carries them to released clients.
+ */
+export const normalizeBoardForSave = (board: BoardCfg): BoardCfg =>
+  withDueStateImpliesScheduled({
+    ...board,
+    panels: board.panels.map((panel) => {
+      let out = withPanelSortKey(panel, panel.sortKey as TaskSortKey | null | undefined);
+      if (out.isUntagged) {
+        out = { ...out, includedTagIds: [], excludedTagIds: [] };
+        delete out.includedTagsMatch;
+        delete out.excludedTagsMatch;
+      } else {
+        delete out.isUntagged;
+      }
+      return sanitizePanelCfg(out);
+    }),
+  });
+
+/**
  * A due rule implies "scheduled". The form hides the scheduled-state field
  * while a due rule is set, so this stores the matching value: released clients
  * that don't know `dueState` then still show only scheduled tasks there.
@@ -221,6 +243,42 @@ export const panelToCriteria = (panel: BoardPanelCfg): TaskCriteria => {
   const priority = parsePriorityRule(panel.priorityRule);
   if (priority !== undefined) criteria.priority = priority;
   return criteria;
+};
+
+/** A view's icon: a list for one column, a board for several. */
+export const getViewIcon = (board: Pick<BoardCfg, 'panels'>): string =>
+  board.panels.length > 1 ? 'view_kanban' : 'filter_list';
+
+/**
+ * Column fields for task criteria: the counterpart of `panelToCriteria` for the
+ * rules a column can hold. `isNoMatch` becomes an empty project list.
+ */
+export const criteriaToPanelFields = (criteria: TaskCriteria): Partial<BoardPanelCfg> => {
+  const fields: Partial<BoardPanelCfg> = {};
+  if (criteria.includedTagIds?.length) {
+    fields.includedTagIds = criteria.includedTagIds;
+    fields.includedTagsMatch = criteria.includedTagsMatch ?? 'all';
+  }
+  if (criteria.excludedTagIds?.length) {
+    fields.excludedTagIds = criteria.excludedTagIds;
+    fields.excludedTagsMatch = criteria.excludedTagsMatch ?? 'any';
+  }
+  if (criteria.isUntagged) fields.isUntagged = true;
+  if (criteria.isNoMatch) {
+    fields.projectIds = [];
+  } else if (criteria.projectIds) {
+    fields.projectIds = criteria.projectIds;
+  }
+  if (criteria.plannedDate === 'none') {
+    fields.scheduledState = BoardPanelCfgScheduledState.NotScheduled;
+  } else if (criteria.plannedDate) {
+    fields.dueState = criteria.plannedDate;
+  }
+  if (criteria.deadline) fields.deadlineState = criteria.deadline;
+  if (criteria.estimate !== undefined) fields.estimateRule = String(criteria.estimate);
+  if (criteria.timeSpent !== undefined) fields.timeSpentRule = String(criteria.timeSpent);
+  if (criteria.priority !== undefined) fields.priorityRule = String(criteria.priority);
+  return fields;
 };
 
 /**

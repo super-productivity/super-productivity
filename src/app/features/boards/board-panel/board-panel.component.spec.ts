@@ -1279,6 +1279,47 @@ describe('BoardPanelComponent - drop()', () => {
       ]);
     });
 
+    it('sets priority (in the task update) and the deadline a column asks for', async () => {
+      const task = mkTask({ id: 'a' });
+      await setup([task]);
+      fixture.componentRef.setInput('panelCfg', {
+        ...DEFAULT_PANEL_CFG,
+        id: 'p',
+        priorityRule: '3',
+        // Week of 2026-09-07 (weeks start on Monday here): "due by" its last day.
+        deadlineState: 'thisWeek',
+      });
+      fixture.detectChanges();
+
+      expect(await component.moveTasks(['a'])).toBeTrue();
+
+      expect(dispatchSpy).toHaveBeenCalledWith(
+        TaskSharedActions.updateTask({ task: { id: 'a', changes: { priority: 3 } } }),
+      );
+      expect(dispatchSpy).toHaveBeenCalledWith(
+        TaskSharedActions.setDeadline({
+          taskId: 'a',
+          deadlineDay: '2026-09-13',
+          isSkipSnack: true,
+        }),
+      );
+      // New tasks get the priority on creation.
+      expect(component.additionalTaskFields()).toEqual(
+        jasmine.objectContaining({ priority: 3 }),
+      );
+    });
+
+    it('hides the add row where a new task can never match', async () => {
+      await setup([]);
+      fixture.componentRef.setInput('panelCfg', {
+        ...DEFAULT_PANEL_CFG,
+        id: 'p',
+        estimateRule: '3600000',
+      });
+      fixture.detectChanges();
+      expect(component.isAddTaskHidden()).toBeTrue();
+    });
+
     it('lets only already overdue tasks enter an overdue panel and hides its add row', async () => {
       await setup([]);
       fixture.componentRef.setInput('panelCfg', {

@@ -26,13 +26,17 @@ export class BoardsService {
 
   // The edit dialog is loaded on demand: the side menu, which is always
   // loaded, uses this service too.
-  async createBoard(): Promise<void> {
+  /** Opens the create dialog, empty or prefilled (e.g. "Save as view"). */
+  async createBoard(
+    board: BoardCfg = DEFAULT_BOARD_CFG,
+    hints: string[] = [],
+  ): Promise<void> {
     const { DialogBoardEditComponent } =
       await import('./dialog-board-edit/dialog-board-edit.component');
     this._matDialog
       .open(DialogBoardEditComponent, {
         restoreFocus: true,
-        data: { board: DEFAULT_BOARD_CFG, isCreate: true },
+        data: { board, isCreate: true, hints },
       })
       .afterClosed()
       .subscribe((boardId?: string) => {

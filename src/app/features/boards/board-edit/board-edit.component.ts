@@ -15,7 +15,7 @@ import { nanoid } from 'nanoid';
 import { Store } from '@ngrx/store';
 import { BoardsActions } from '../store/boards.actions';
 import { DEFAULT_BOARD_CFG, DEFAULT_PANEL_CFG } from '../boards.const';
-import { sanitizePanelCfg, withDueStateImpliesScheduled } from '../boards.util';
+import { getPanelSortKey, normalizeBoardForSave } from '../boards.util';
 
 @Component({
   selector: 'board-edit',
@@ -52,19 +52,17 @@ export class BoardEditComponent implements OnInit {
         boardCfg.panels?.map((panel) => ({
           ...DEFAULT_PANEL_CFG,
           ...panel,
+          // The form has one sort select for `sortBy` and `sortKey`.
+          sortKey: getPanelSortKey(panel) ?? undefined,
         })) || [],
     });
   }
 
   save(): void {
     if (this.form.valid) {
-      // Sanitize before dispatching, not only in the reducer: the op carries
+      // Normalize before dispatching, not only in the reducer: the op carries
       // the payload, and released clients store it as is (e.g. Formly's null).
-      const formCfg = this.boardCfg();
-      const boardCfg = withDueStateImpliesScheduled({
-        ...formCfg,
-        panels: formCfg.panels.map(sanitizePanelCfg),
-      });
+      const boardCfg = normalizeBoardForSave(this.boardCfg());
       if (this.isEdit()) {
         this.store.dispatch(
           BoardsActions.updateBoard({ id: boardCfg.id, updates: boardCfg }),

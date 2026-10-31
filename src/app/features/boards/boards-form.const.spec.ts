@@ -105,35 +105,35 @@ describe('BOARDS_FORM panel behavior (#7380)', () => {
     expect(model.includedTagsMatch).toBe('all');
   });
 
-  it('keeps the form valid after picking a sortBy (sortDir gets its default)', () => {
+  it('keeps the form valid after picking a sort (sortDir gets its default)', () => {
     const { form, fields, model } = buildPanelForm(eisenhowerPanel(0));
     expect(form.valid).toBe(true);
 
-    const sortBy = fieldByKey(fields, 'sortBy');
-    sortBy.formControl!.setValue('dueDate');
-    model.sortBy = 'dueDate';
+    const sortKey = fieldByKey(fields, 'sortKey');
+    sortKey.formControl!.setValue('plannedDate');
+    model.sortKey = 'plannedDate';
 
     // Re-evaluate hide expressions — what `(modelChange)` triggers in the
     // running dialog. `checkExpressions` walks the tree and flips hide.
-    const opts = sortBy.options as any;
+    const opts = sortKey.options as any;
     opts.checkExpressions({ fieldGroup: fields, options: opts });
 
     expect(model.sortDir).toBe('asc');
     expect(form.valid).toBe(true);
   });
 
-  it('clears sortDir and stays valid when sortBy reverts to manual', () => {
+  it('clears sortDir and stays valid when the sort reverts to manual', () => {
     const { form, fields, model } = buildPanelForm(eisenhowerPanel(0));
-    const sortBy = fieldByKey(fields, 'sortBy');
-    const opts = sortBy.options as any;
+    const sortKey = fieldByKey(fields, 'sortKey');
+    const opts = sortKey.options as any;
 
-    sortBy.formControl!.setValue('dueDate');
-    model.sortBy = 'dueDate';
+    sortKey.formControl!.setValue('plannedDate');
+    model.sortKey = 'plannedDate';
     opts.checkExpressions({ fieldGroup: fields, options: opts });
     expect(model.sortDir).toBe('asc');
 
-    sortBy.formControl!.setValue(null);
-    model.sortBy = undefined;
+    sortKey.formControl!.setValue(null);
+    model.sortKey = undefined;
     opts.checkExpressions({ fieldGroup: fields, options: opts });
 
     expect(model.sortDir).toBeUndefined();
