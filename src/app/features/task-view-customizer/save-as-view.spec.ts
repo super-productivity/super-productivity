@@ -8,6 +8,7 @@ import {
   FILTER_OPTION_TYPE,
   FILTER_SCHEDULE,
   FilterOption,
+  GROUP_OPTION_TYPE,
   SORT_OPTION_TYPE,
   SORT_ORDER,
   SortOption,
@@ -29,6 +30,7 @@ describe('buildViewFromList', () => {
     id: 'p1',
     title: 'Website',
     taskIds: ['a', 'b'],
+    visibleTasks: [],
     ...overrides,
   });
   const filter = (overrides: Partial<FilterOption>): FilterOption => ({
@@ -37,19 +39,24 @@ describe('buildViewFromList', () => {
   });
   const buildWithHints = (
     source: ViewSourceList,
-    opts: { filter?: FilterOption; sort?: SortOption; isGrouped?: boolean } = {},
+    opts: {
+      filter?: FilterOption;
+      sort?: SortOption;
+      groupType?: GROUP_OPTION_TYPE;
+    } = {},
   ): ReturnType<typeof buildViewFromList> =>
     buildViewFromList({
       list: source,
       filter: opts.filter ?? DEFAULT_OPTIONS.filter,
       sort: opts.sort ?? DEFAULT_OPTIONS.sort,
-      isGrouped: !!opts.isGrouped,
+      groupType: opts.groupType ?? null,
       tags,
       projects,
+      otherSectionTitle: 'Other',
     });
   const build = (
     source: ViewSourceList,
-    opts: { filter?: FilterOption; sort?: SortOption } = {},
+    opts: Parameters<typeof buildWithHints>[1] = {},
   ): ReturnType<typeof buildViewFromList>['board'] => buildWithHints(source, opts).board;
 
   it('makes a one-column view of a project list: undone parents, no backlog', () => {
@@ -158,9 +165,15 @@ describe('buildViewFromList', () => {
   });
 
   it('names what the view does not carry over', () => {
-    expect(buildWithHints(list(), { isGrouped: true }).hints).toEqual([
-      T.F.BOARDS.V.HINT_GROUPING_NOT_SAVED,
-    ]);
+    for (const groupType of [
+      GROUP_OPTION_TYPE.project,
+      GROUP_OPTION_TYPE.scheduledDate,
+      GROUP_OPTION_TYPE.deadline,
+    ]) {
+      const grouped = buildWithHints(list(), { groupType });
+      expect(grouped.hints).toEqual([T.F.BOARDS.V.HINT_GROUPING_NOT_SAVED]);
+      expect(grouped.board.panels.length).toBe(1);
+    }
     expect(
       buildWithHints(list({ type: WorkContextType.TAG, id: TODAY_TAG.id })).hints,
     ).toEqual([T.F.BOARDS.V.HINT_TODAY_OR_OVERDUE]);
@@ -178,5 +191,75 @@ describe('buildViewFromList', () => {
       sort: { type: SORT_OPTION_TYPE.name, order: SORT_ORDER.ASC, label: '' },
     }).panels[0];
     expect(byTitle.sortBy).toBe('title');
+  });
+
+  describe('grouped by tag', () => {
+    const tagged = (...tagIds: string[]): { tagIds: string[] } => ({ tagIds });
+
+    it('makes a section per carried tag in sidebar order, then "Other"', () => {
+      const { board, hints } = buildWithHints(
+        list({ visibleTasks: [tagged('home'), tagged('work', 'home'), tagged()] }),
+        { groupType: GROUP_OPTION_TYPE.tag },
+      );
+      expect(hints).toEqual([]);
+      expect(board.cols).toBe(1);
+      expect(board.panels.map((p) => p.title)).toEqual(['Work', 'Home', 'Other']);
+      const [work, home, other] = board.panels;
+      expect(work.includedTagIds).toEqual(['work']);
+      expect(work.includedTagsMatch).toBe('all');
+      expect(home.includedTagIds).toEqual(['home']);
+      // Base rules on every section.
+      for (const p of board.panels) {
+        expect(p.projectIds).toEqual(['p1']);
+        expect(p.taskDoneState).toBe(BoardPanelCfgTaskDoneState.UnDone);
+        expect(p.taskIds).toEqual(['a', 'b']);
+      }
+      expect(other.includedTagIds).toEqual([]);
+      expect(other.excludedTagIds).toEqual(['work', 'home']);
+      expect(other.excludedTagsMatch).toBe('any');
+      expect(new Set(board.panels.map((p) => p.id)).size).toBe(3);
+    });
+
+    it("gives a tag list's own tag no section and keeps it on every section", () => {
+      const grouped = buildWithHints(
+        list({
+          type: WorkContextType.TAG,
+          id: 'work',
+          visibleTasks: [tagged('work'), tagged('work', 'home')],
+        }),
+        { groupType: GROUP_OPTION_TYPE.tag },
+      ).board;
+      expect(grouped.panels.map((p) => p.title)).toEqual(['Home', 'Other']);
+      expect(grouped.panels[0].includedTagIds).toEqual(['work', 'home']);
+      // Tasks carrying only the list's tag land in "Other".
+      expect(grouped.panels[1].includedTagIds).toEqual(['work']);
+      expect(grouped.panels[1].excludedTagIds).toEqual(['home']);
+    });
+
+    it('adds the section tag to a filter tag', () => {
+      const board = build(list({ visibleTasks: [tagged('work', 'home')] }), {
+        filter: filter({ type: FILTER_OPTION_TYPE.tag, preset: null, tagIds: ['work'] }),
+        groupType: GROUP_OPTION_TYPE.tag,
+      });
+      expect(board.panels.map((p) => p.includedTagIds)).toEqual([
+        ['work', 'home'],
+        ['work'],
+      ]);
+    });
+
+    it('keeps one list, with the hint, when no task carries a tag to group by', () => {
+      const { board, hints } = buildWithHints(list({ visibleTasks: [tagged()] }), {
+        groupType: GROUP_OPTION_TYPE.tag,
+      });
+      expect(board.panels.length).toBe(1);
+      expect(hints).toEqual([T.F.BOARDS.V.HINT_GROUPING_NOT_SAVED]);
+    });
+
+    it('skips tags that no longer exist', () => {
+      const board = build(list({ visibleTasks: [tagged('gone', 'home')] }), {
+        groupType: GROUP_OPTION_TYPE.tag,
+      });
+      expect(board.panels.map((p) => p.title)).toEqual(['Home', 'Other']);
+    });
   });
 });

@@ -346,15 +346,31 @@ export class TaskViewCustomizerService {
     });
   }
 
-  /** A one-column view showing what `list` shows with the current filter and sort. */
-  buildViewFromList(list: ViewSourceList): { board: BoardCfg; hints: string[] } {
+  /**
+   * A one-column view showing what `list` shows with the current filter and
+   * sort. `undoneTasks` are the list's undone tasks: when grouped by tag, the
+   * tags the filtered ones carry become the view's sections.
+   */
+  buildViewFromList(
+    list: Omit<ViewSourceList, 'visibleTasks'>,
+    undoneTasks: readonly TaskWithSubTasks[],
+  ): { board: BoardCfg; hints: string[] } {
+    const filter = this.selectedFilter();
+    const criteria = this._toCriteria(filter);
+    const ctx = this._criteriaCtx();
     return buildViewFromList({
-      list,
-      filter: this.selectedFilter(),
+      list: {
+        ...list,
+        visibleTasks: criteria
+          ? undoneTasks.filter((task) => matchesTaskCriteria(task, criteria, ctx))
+          : undoneTasks,
+      },
+      filter,
       sort: this.selectedSort(),
-      isGrouped: !!this.selectedGroup().type,
-      tags: this._allTags().filter((tag) => tag.id !== TODAY_TAG.id),
+      groupType: this.selectedGroup().type,
+      tags: this._tagsInSidebarOrder(),
       projects: this._allProjects,
+      otherSectionTitle: this._translateService.instant(T.F.BOARDS.V.SECTION_OTHER),
     });
   }
 

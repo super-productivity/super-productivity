@@ -460,6 +460,15 @@ describe('PageTitleComponent', () => {
       expect(buttons(await renderAt('/active/notes'))).not.toContain('task-filter-btn');
     });
 
+    it('adds the filter to list-layout views only', async () => {
+      boards.set([
+        { id: 'list', title: 'List', cols: 1, panels: [] },
+        { id: 'kanban', title: 'Kanban', cols: 3, panels: [] },
+      ]);
+      expect(buttons(await renderAt('/boards/list'))).toContain('task-filter-btn');
+      expect(buttons(await renderAt('/boards/kanban'))).not.toContain('task-filter-btn');
+    });
+
     it('adds the Plainspace button for a shared project', async () => {
       typeAndId$.next({ activeId: 'p1', activeType: WorkContextType.PROJECT });
       isShared$.next(true);
@@ -486,6 +495,13 @@ describe('PageTitleComponent', () => {
 
       it('opens the filter menu on the work view', async () => {
         await renderAt('/active/tasks');
+        openMenuRequest$.next();
+        expect(openMenuSpy).toHaveBeenCalledTimes(1);
+      });
+
+      it('opens the view filter menu on a list-layout view', async () => {
+        boards.set([{ id: 'list', title: 'List', cols: 1, panels: [] }]);
+        await renderAt('/boards/list');
         openMenuRequest$.next();
         expect(openMenuSpy).toHaveBeenCalledTimes(1);
       });
