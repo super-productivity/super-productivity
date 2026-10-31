@@ -1117,3 +1117,46 @@ Not fixed (known gaps):
   the menu.
 - Accepted sync gaps from §12: concurrent menu edits are last-write-wins on
   the whole board, and a concurrent reorder isn't detected as a conflict.
+
+Phase 5 implementation review (fresh-context subagent, 2026-10-31). The
+editor ⇄ stored board mapping holds in both directions: planned date ⇄
+`dueState`/`scheduledState`, the `'manual'` sort never written (a stored
+`sortKey: 'manual'`, which no client writes, is kept as an unknown key),
+deleted project and missing tag ids kept, unknown keys and values, legacy
+fields and `taskIds` carried through, no `null`/`undefined` written, one
+`addBoard`/`updateBoard` per save. The live count uses the panel's own
+helpers on the same task selector, so it equals the header count. No
+Angular Material restyling. Fixed:
+
+- Bug: a Columns value like 2.5 passed the `min` validator, was ignored by
+  the model, and Save closed the dialog with the old value. Columns now
+  requires a whole number of at least 2 ("Whole number, 2 or more").
+- Performance: the live count re-matched every section against all tasks on
+  each keystroke in any title. Counts are cached per section object, keyed on
+  the tasks, the criteria context and the projects (backlog membership).
+- Adding or duplicating a section in a one-section list showed the hidden
+  title as the view's old title; it now shows what save would store.
+- A view titled like a group of translation keys ("F", "G") showed
+  "[object Object]".
+- Accessibility: rule rows are labelled groups, so the tag inputs are
+  announced with their rule (Required or Excluded Tags).
+- "1 deleted project" also counted archived projects (the select lists
+  unarchived ones only); the note now says "archived or deleted".
+- The 23 `F.BOARDS.FORM` keys nothing uses any more were removed from
+  `en.json` (other locales keep extra keys as informational; `int:test`
+  passes). Wiki: sort by "planned date", archived projects.
+
+Not fixed:
+
+- The missing-tag banner over the Backlog row in the builder's Kanban
+  screenshot is not real: it is the view page behind the dialog, captured
+  during the dialog's open animation. Settled screenshots show no overlap.
+- Deadline defaults to Today when added, like Planned date; "No deadline"
+  first would be the opposite of what adding a deadline rule usually means.
+- Every section's ⋮ button is named "More actions" without the section's
+  title (the title field sits right next to it).
+- The count still recomputes once per section on the tracking tick (the
+  task list re-emits every second while tracking), the same work one more
+  column does.
+- Pre-existing, outside this phase: `board.component` binds `--cols` to
+  `false` while tags are missing (NG0318 warning in the console).
