@@ -2855,6 +2855,7 @@
       "DEFAULT_START_PAGE": "Default start page",
       "FIRST_DAY_OF_WEEK": "First day of the week",
       "HELP": "<p><strong>Not seeing desktop notifications?</strong> For Windows you may want to check 'System' > 'Notifications & actions' and verify the required notifications are enabled.</p>",
+      "IS_AUTO_START_ON_SYSTEM_STARTUP": "Start on system startup",
       "IS_CHECK_FOR_UPDATES": "Automatically check for new versions (desktop only)",
       "IS_CHECK_FOR_UPDATES_HINT": "Checks the latest release on GitHub once a day and shows a notice when a newer version is available. Only a standard web request is made — no personal data is sent.",
       "IS_CONFIRM_BEFORE_EXIT": "Confirm before exiting the app",
