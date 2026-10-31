@@ -6,6 +6,7 @@ import {
   getPanelSortKey,
   panelToCriteria,
   sanitizePanelCfg,
+  toEditorModel,
   withDueStateImpliesScheduled,
   withPanelSortKey,
 } from './boards.util';
@@ -28,6 +29,7 @@ import {
   matchesTaskCriteria,
 } from '../tasks/task-criteria/task-criteria';
 import { TaskCriteriaCtx } from '../tasks/task-criteria/task-criteria.model';
+import { UNTOUCHED_SAVE_FIXTURES } from './testing/view-editor-fixtures';
 
 // The board panel filters run through the shared task-criteria module; these
 // helpers keep this panel-shaped matrix as a parity test of `panelToCriteria`.
@@ -946,6 +948,42 @@ describe('normalizeBoardForSave', () => {
   it('drops Formly nulls before they reach an op', () => {
     const out = normalizeBoardForSave(board([{ deadlineState: null as any }]));
     expect('deadlineState' in out.panels[0]).toBeFalse();
+  });
+});
+
+describe('toEditorModel: an untouched save keeps the stored board', () => {
+  for (const fixture of UNTOUCHED_SAVE_FIXTURES) {
+    it(fixture.name, () => {
+      expect(normalizeBoardForSave(toEditorModel(fixture.board))).toEqual(fixture.saved);
+    });
+  }
+
+  it('holds the sort of sortBy in sortKey, which normalize needs', () => {
+    const model = toEditorModel({
+      id: 'b',
+      title: 'B',
+      cols: 1,
+      panels: [{ ...basePanel, sortBy: 'dueDate' }],
+    });
+    expect(model.panels[0].sortKey).toBe('plannedDate');
+    // Without it, normalize would delete the sort.
+    const withoutKey = { ...model.panels[0], sortKey: undefined };
+    expect(
+      normalizeBoardForSave({ ...model, panels: [withoutKey] }).panels[0].sortBy,
+    ).toBeUndefined();
+  });
+
+  it('fills defaults that legacy data lacks', () => {
+    const legacy = {
+      id: 'b',
+      title: 'B',
+      panels: [{ id: 'p', title: 'P', taskIds: [] }],
+    } as unknown as BoardCfg;
+    const model = toEditorModel(legacy);
+    expect(model.cols).toBe(1);
+    expect(model.panels[0].projectIds).toEqual(['']);
+    expect(model.panels[0].taskDoneState).toBe(BoardPanelCfgTaskDoneState.All);
+    expect(model.panels[0].backlogState).toBe(BoardPanelCfgTaskTypeFilter.All);
   });
 });
 

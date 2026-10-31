@@ -13,6 +13,7 @@ import {
   TaskDateRule,
 } from '../tasks/task-criteria/task-criteria.model';
 import { addDaysToDbDateStr, TaskSortKey } from '../tasks/task-criteria/task-criteria';
+import { DEFAULT_BOARD_CFG, DEFAULT_PANEL_CFG } from './boards.const';
 
 const VALID_SORT_FIELDS: ReadonlySet<BoardSortField> = new Set([
   'dueDate',
@@ -132,6 +133,24 @@ export const sanitizePanelCfg = (panel: BoardPanelCfg): BoardPanelCfg => {
 
   return out;
 };
+
+/**
+ * The board editor's model of a stored board: defaults filled in (legacy data
+ * may lack fields) and the panel's sort as one `sortKey`. Everything else is
+ * the stored board spread, so unknown keys and values (from a newer client)
+ * survive an untouched save: `normalizeBoardForSave(toEditorModel(board))`.
+ */
+export const toEditorModel = (board: BoardCfg): BoardCfg => ({
+  ...DEFAULT_BOARD_CFG,
+  ...board,
+  panels: (board.panels ?? []).map((panel) => ({
+    ...DEFAULT_PANEL_CFG,
+    ...panel,
+    // `normalizeBoardForSave` stores this key as `sortBy` or `sortKey`, so it
+    // must hold the sort of `sortBy` too. An unknown `sortKey` is kept.
+    sortKey: getPanelSortKey(panel) ?? panel.sortKey,
+  })),
+});
 
 /**
  * Turns the board editor's model into what is stored: the form's sort select

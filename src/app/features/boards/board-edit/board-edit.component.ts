@@ -14,8 +14,7 @@ import { UntypedFormGroup } from '@angular/forms';
 import { nanoid } from 'nanoid';
 import { Store } from '@ngrx/store';
 import { BoardsActions } from '../store/boards.actions';
-import { DEFAULT_BOARD_CFG, DEFAULT_PANEL_CFG } from '../boards.const';
-import { getPanelSortKey, normalizeBoardForSave } from '../boards.util';
+import { normalizeBoardForSave, toEditorModel } from '../boards.util';
 
 @Component({
   selector: 'board-edit',
@@ -42,21 +41,8 @@ export class BoardEditComponent implements OnInit {
       this.boardCfg.set({ ...this.boardCfg(), id: nanoid() });
     }
 
-    // be safe with legacy data (only required for my current SP config)
-    const boardCfg = this.boardCfg();
-    this.boardCfg.set({
-      ...DEFAULT_BOARD_CFG,
-      ...boardCfg,
-      // Ensure each panel has all default properties
-      panels:
-        boardCfg.panels?.map((panel) => ({
-          ...DEFAULT_PANEL_CFG,
-          ...panel,
-          // The form has one sort select for `sortBy` and `sortKey`. An unknown
-          // `sortKey` (from a newer client) stays in the model, so saving keeps it.
-          sortKey: getPanelSortKey(panel) ?? panel.sortKey,
-        })) || [],
-    });
+    // Defaults for legacy data, and the panel sort as one select value.
+    this.boardCfg.set(toEditorModel(this.boardCfg()));
   }
 
   save(): void {
