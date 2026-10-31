@@ -252,6 +252,19 @@ describe('createPluginSyncAdapter', () => {
     expect(result).toEqual({ state: 'open', title: 'test' });
   });
 
+  it('should return no sync values without calling the plugin when nothing is mapped', () => {
+    const definition = createMockDefinition({ fieldMappings: [] });
+    const adapter = createPluginSyncAdapter(
+      definition,
+      () => mockHttpHelper,
+      mockTagService,
+      'test-plugin',
+    );
+
+    expect(adapter.extractSyncValues({ state: 'open' })).toEqual({});
+    expect(definition.extractSyncValues).not.toHaveBeenCalled();
+  });
+
   it('should create issue via definition.createIssue', async () => {
     const definition = createMockDefinition();
     const adapter = createPluginSyncAdapter(
