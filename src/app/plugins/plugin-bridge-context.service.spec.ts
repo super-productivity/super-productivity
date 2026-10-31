@@ -8,8 +8,8 @@ import { WorkContextService } from '../features/work-context/work-context.servic
 import { TaskService } from '../features/tasks/task.service';
 import { DateService } from '../core/date/date.service';
 import {
-  selectCurrentTaskId,
   selectTaskById,
+  selectTaskEntities,
 } from '../features/tasks/store/task.selectors';
 import { Task } from '../features/tasks/task.model';
 
@@ -51,17 +51,12 @@ describe('PluginBridgeContextService', () => {
     });
   });
 
-  it('reports the tracked task id, or null', async () => {
-    store.overrideSelector(selectCurrentTaskId, 'task-1');
-    expect(await service.getCurrentTaskId()).toBe('task-1');
-
-    store.overrideSelector(selectCurrentTaskId, null);
-    store.refreshState();
-    expect(await service.getCurrentTaskId()).toBeNull();
-  });
-
   it('starts tracking an open task the way the play button does', async () => {
-    store.overrideSelector(selectTaskById, { id: 'task-1', isDone: false } as Task);
+    store.overrideSelector(selectTaskById, {
+      id: 'task-1',
+      isDone: false,
+      subTaskIds: [],
+    } as unknown as Task);
     await service.startTracking('task-1');
     expect(taskService.setCurrentId).toHaveBeenCalledWith('task-1');
   });
@@ -70,9 +65,36 @@ describe('PluginBridgeContextService', () => {
     store.overrideSelector(selectTaskById, undefined as unknown as Task);
     await expectAsync(service.startTracking('missing')).toBeRejected();
 
-    store.overrideSelector(selectTaskById, { id: 'task-2', isDone: true } as Task);
+    store.overrideSelector(selectTaskById, {
+      id: 'task-2',
+      isDone: true,
+      subTaskIds: [],
+    } as unknown as Task);
     store.refreshState();
     await expectAsync(service.startTracking('task-2')).toBeRejected();
+    expect(taskService.setCurrentId).not.toHaveBeenCalled();
+  });
+
+  it('tracks a parent with an open subtask, refuses one whose subtasks are all done', async () => {
+    store.overrideSelector(selectTaskById, {
+      id: 'parent',
+      isDone: false,
+      subTaskIds: ['s1', 's2'],
+    } as unknown as Task);
+    store.overrideSelector(selectTaskEntities, {
+      s1: { id: 's1', isDone: true } as Task,
+      s2: { id: 's2', isDone: false } as Task,
+    });
+    await service.startTracking('parent');
+    expect(taskService.setCurrentId).toHaveBeenCalledWith('parent');
+
+    taskService.setCurrentId.calls.reset();
+    store.overrideSelector(selectTaskEntities, {
+      s1: { id: 's1', isDone: true } as Task,
+      s2: { id: 's2', isDone: true } as Task,
+    });
+    store.refreshState();
+    await expectAsync(service.startTracking('parent')).toBeRejected();
     expect(taskService.setCurrentId).not.toHaveBeenCalled();
   });
 

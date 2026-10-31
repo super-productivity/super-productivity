@@ -28,6 +28,8 @@ import { PluginUserData } from './plugin-persistence.model';
 import { updateGlobalConfigSection } from '../features/config/store/global-config.actions';
 import { selectLocalizationConfig } from '../features/config/store/global-config.reducer';
 import { LanguageCode } from '../core/locale.constants';
+import { initialTaskState, taskReducer } from '../features/tasks/store/task.reducer';
+import { setSelectedTask } from '../features/tasks/store/task.actions';
 import { BeforeFinishDayService } from '../features/before-finish-day/before-finish-day.service';
 
 describe('PluginHooksEffects', () => {
@@ -720,13 +722,15 @@ describe('PluginHooksEffects', () => {
     // The docs promise this so plugins can re-read getSelectedTask() on it;
     // there is no separate selection hook.
     it('fires when only the selected task changes', fakeAsync(() => {
+      const before: TaskState = { ...initialTaskState, ids: ['a'] };
+      store.overrideSelector(selectTaskFeatureState, before);
+      store.refreshState();
       const sub = effects.dataChanged$.subscribe();
       gateSubject.next(true);
-      store.overrideSelector(selectTaskFeatureState, {
-        ids: ['a'],
-        entities: {},
-        selectedTaskId: 'a',
-      } as unknown as TaskState);
+      store.overrideSelector(
+        selectTaskFeatureState,
+        taskReducer(before, setSelectedTask({ id: 'a' })),
+      );
       store.refreshState();
       tick(1000);
       expect(hookCalls()).toBe(1);

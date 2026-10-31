@@ -34,6 +34,8 @@ const openPlanner = async (page: Page): Promise<void> => {
   const plannerPage = new PlannerPage(page);
   await plannerPage.navigateToPlanner();
   await plannerPage.waitForPlannerView();
+  // A revisit briefly renders the leaving and the entering planner.
+  await expect(page.locator('planner')).toHaveCount(1);
 };
 
 const openPluginFrame = async (page: Page): Promise<Locator> => {

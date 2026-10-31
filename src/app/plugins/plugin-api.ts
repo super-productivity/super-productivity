@@ -206,10 +206,6 @@ export class PluginAPI implements PluginAPIInterface {
     return this.#boundMethods.getDayContext();
   }
 
-  async getCurrentTaskId(): Promise<string | null> {
-    return this.#boundMethods.getCurrentTaskId();
-  }
-
   async startTracking(taskId: string): Promise<void> {
     PluginLog.log(`Plugin ${this.#pluginId} started tracking`, { taskId });
     return this.#boundMethods.startTracking(taskId);

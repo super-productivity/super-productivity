@@ -8,8 +8,8 @@ import { ActiveWorkContext, PluginDayContext } from './plugin-api.model';
 import { WorkContextService } from '../features/work-context/work-context.service';
 import { TaskService } from '../features/tasks/task.service';
 import {
-  selectCurrentTaskId,
   selectTaskById,
+  selectTaskEntities,
 } from '../features/tasks/store/task.selectors';
 import { DateService } from '../core/date/date.service';
 import { T } from '../t.const';
@@ -21,14 +21,13 @@ import { pluginAssert } from './plugin-bridge-asserts';
 export type PluginContextBoundMethods = {
   getActiveWorkContext: () => Promise<ActiveWorkContext | null>;
   getDayContext: () => Promise<PluginDayContext>;
-  getCurrentTaskId: () => Promise<string | null>;
   startTracking: (taskId: string) => Promise<void>;
   stopTracking: () => Promise<void>;
 };
 
 /**
  * Plugin API methods about "where and when the user is": the open work
- * context, the logical day and the tracked task. Split from PluginBridgeService,
+ * context, the logical day and time tracking. Split from PluginBridgeService,
  * which is at its size cap.
  */
 @Injectable({ providedIn: 'root' })
@@ -45,7 +44,6 @@ export class PluginBridgeContextService {
     return {
       getActiveWorkContext: () => this.getActiveWorkContext(),
       getDayContext: () => this.getDayContext(),
-      getCurrentTaskId: () => this.getCurrentTaskId(),
       startTracking: (taskId: string) => this.startTracking(taskId),
       stopTracking: () => this.stopTracking(),
     };
@@ -82,10 +80,6 @@ export class PluginBridgeContextService {
     };
   }
 
-  async getCurrentTaskId(): Promise<string | null> {
-    return (await firstValueFrom(this._store.select(selectCurrentTaskId))) ?? null;
-  }
-
   async startTracking(taskId: string): Promise<void> {
     pluginAssert.string(taskId);
     const task = await firstValueFrom(this._store.select(selectTaskById, { id: taskId }));
@@ -96,6 +90,13 @@ export class PluginBridgeContextService {
     }
     if (task.isDone) {
       throw new Error('A done task cannot be tracked. Mark it as not done first.');
+    }
+    // setCurrentTask falls back to the first subtask, done or not, when none is open
+    if (task.subTaskIds.length) {
+      const entities = await firstValueFrom(this._store.select(selectTaskEntities));
+      if (!task.subTaskIds.some((id) => entities[id] && !entities[id].isDone)) {
+        throw new Error('All subtasks are done. Mark one as not done first.');
+      }
     }
     this._taskService.setCurrentId(taskId);
   }

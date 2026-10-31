@@ -301,7 +301,8 @@ export type WorkContextChangePayload = ActiveWorkContext;
 
 /**
  * Payload for DAY_CHANGE: the new logical day, which honours the user's
- * "start of next day" setting. Fires when the day rolls over while the app runs.
+ * "start of next day" setting. Fires when the day changes while the app runs: at
+ * the rollover, or when that setting moves it.
  */
 export interface DayChangePayload {
   todayStr: string;
@@ -648,12 +649,10 @@ export interface PluginAPI {
    */
   getDayContext?(): Promise<PluginDayContext>;
 
-  /** Id of the task whose time is being tracked, or null. Feature-detect on older hosts. */
-  getCurrentTaskId?(): Promise<string | null>;
-
   /**
-   * Start tracking time on a task, as the task's play button does. Rejects for an
-   * unknown or done task. Feature-detect on older hosts.
+   * Start tracking time on a task. Rejects for an unknown or done task (the play
+   * button would reopen it) and for a parent whose subtasks are all done. For a
+   * parent, tracks its first unfinished subtask. Feature-detect on older hosts.
    */
   startTracking?(taskId: string): Promise<void>;
 
