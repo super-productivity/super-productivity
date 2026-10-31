@@ -939,10 +939,11 @@ These override the parts above where they differ.
   defined. Taken (from memory, not re-checked): Notion's and Linear's
   "+ Add filter", listing only the rules that are set. Not taken: TickTick's always-visible field list, the 1300px card this
   phase replaces.
-- **Known gap, not changed (no evidence of harm, rule 15):** the editor saves
-  each panel's `taskIds` from the copy taken when the dialog opened, so an
-  `updatePanelCfgTaskIds` that syncs in while it is open is overwritten. That
-  is today's behaviour.
+- **Was a known gap, fixed after the phase 5 review:** the editor saved each
+  panel's `taskIds` from the copy taken when the dialog opened, so an
+  `updatePanelCfgTaskIds` that synced in while it was open was overwritten.
+  Save now sends only the fields the editor changed, with changed panels
+  taking their current `taskIds` (see the follow-up below).
 - **Tests added:**
   - Unit, the main guard: an untouched save equals
     `normalizeBoardForSave(toEditorModel(board))` (minus the Formly-only
@@ -1160,3 +1161,22 @@ Not fixed:
   column does.
 - Pre-existing, outside this phase: `board.component` binds `--cols` to
   `false` while tags are missing (NG0318 warning in the console).
+
+Follow-ups to the phase 5 review (2026-10-31), on the open items above:
+
+- **Save sends only what changed.** `getViewUpdates(opened, saved, current)`
+  compares the saved board with the one the dialog opened: `updateBoard`
+  carries only the fields that differ, and changed `panels` take each existing
+  panel's `taskIds` from the store, so a reorder or a field (e.g. the title-bar
+  menu's sort) that synced in while the dialog was open stays. An untouched
+  save dispatches nothing (no op), and a view deleted while the dialog was
+  open isn't revived by an update. Still one `updateBoard` per save; the
+  payload is a `Partial<BoardCfg>` as the title-bar menu already sends.
+  Concurrent edits of the same field remain last-writer-wins on the board.
+- **Tracking tick:** the live count caches each task's match per section
+  (keyed on the task object, ctx and project list), so a tick that replaces
+  one task re-matches that task only, not every task per section.
+- **Section ⋮ button** is named "More actions for <title>" (plain "More
+  actions" for an untitled section).
+- **`--cols`** binds `null` instead of `false` while tags are missing, which
+  removes the NG0318 warning.

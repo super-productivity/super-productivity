@@ -41,7 +41,7 @@ import { ViewTaskListRegistry } from '../../tasks/view-task-list-registry.servic
   styleUrl: './board.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: {
-    '[style.--cols]': 'missingTagIds().length === 0 && boardCfg().cols',
+    '[style.--cols]': 'missingTagIds().length === 0 ? boardCfg().cols : null',
     // One column reads like a task list: list width, centered.
     '[class.isSingleColumn]': 'boardCfg().cols <= 1',
     '[class.isListLayout]': 'isListLayout()',

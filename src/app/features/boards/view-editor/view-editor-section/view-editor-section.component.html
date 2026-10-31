@@ -30,7 +30,11 @@
   <button
     mat-icon-button
     [matMenuTriggerFor]="sectionMenu"
-    [attr.aria-label]="T.G.MORE_ACTIONS | translate"
+    [attr.aria-label]="
+      panel().title
+        ? (T.F.BOARDS.EDITOR.SECTION_ACTIONS | translate: { title: panel().title })
+        : (T.G.MORE_ACTIONS | translate)
+    "
     [matTooltip]="T.G.MORE_ACTIONS | translate"
   >
     <mat-icon>more_vert</mat-icon>

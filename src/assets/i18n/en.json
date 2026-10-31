@@ -184,6 +184,7 @@
         "RULE_BACKLOG": "Backlog",
         "RULE_DONE": "Completion",
         "RULE_UNTAGGED": "Without tags",
+        "SECTION_ACTIONS": "More actions for {{title}}",
         "SECTION_TITLE": "Section title",
         "SECTIONS": "Sections",
         "SHOW_TASKS_THAT_MATCH": "Show tasks that match",
