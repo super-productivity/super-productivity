@@ -432,13 +432,14 @@ describe('TaskComponent shortcut handling', () => {
   it('does NOT delete on Escape for existing subtask with cleared title', () => {
     fixture.componentRef.setInput('task', createSubTask('Existing subtask'));
 
+    // The title editor reports a cleared title as the unchanged previous one.
     component.updateTaskTitleIfChanged({
-      newVal: '',
-      wasChanged: true,
+      newVal: 'Existing subtask',
+      wasChanged: false,
       submitTrigger: 'escape',
     });
 
-    expect(taskServiceSpy.update).toHaveBeenCalledWith('sub-1', { title: '' });
+    expect(taskServiceSpy.update).not.toHaveBeenCalled();
     expect(taskServiceSpy.remove).not.toHaveBeenCalled();
   });
 
