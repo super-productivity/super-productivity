@@ -57,7 +57,10 @@ test.describe('Views whose tags do not exist yet', () => {
     // Up into "Not urgent & important", which requires `important`: refused.
     await card(3).focus();
     await page.keyboard.press('Control+Shift+ArrowUp');
-    await expect(page.locator('snack-custom')).toContainText("can't be moved here");
+    // Filtered: other snacks (e.g. the storage warning) can be up at the same time.
+    await expect(
+      page.locator('snack-custom').filter({ hasText: "can't be moved here" }),
+    ).toHaveCount(1);
     await expect(card(3)).toHaveCount(1);
     await expect(card(1)).toHaveCount(0);
     // The task kept its tags (none): no dangling tag id.
