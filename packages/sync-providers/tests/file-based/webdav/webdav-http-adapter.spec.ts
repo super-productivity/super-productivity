@@ -94,7 +94,7 @@ describe('WebDavHttpAdapter', () => {
         ).headers;
         expect(sentHeaders['Cache-Control']).toBe('no-cache, no-store');
         expect(sentHeaders['Pragma']).toBe('no-cache');
-        expect(sentHeaders['X-SuperProductivity-WebDAV-Upload']).toBeUndefined();
+        expect(sentHeaders['X-SuperProductivity-WebDAV']).toBeUndefined();
         // Caller headers are preserved.
         expect(sentHeaders['Authorization']).toBe('Basic abc');
       },
@@ -102,10 +102,14 @@ describe('WebDavHttpAdapter', () => {
 
     it.each([
       [true, 'PUT', '1'],
-      [true, 'GET', null],
+      [true, 'GET', '1'],
+      [true, 'PROPFIND', '1'],
       [false, 'PUT', null],
+      [false, 'GET', null],
     ])(
-      'marks only Electron WebDAV PUTs (electron=%s, method=%s)',
+      // The main process keys Connection: close on PUT (#9985) and the session
+      // cookie jar (#10839) on this marker.
+      'marks every Electron WebDAV request (electron=%s, method=%s)',
       async (isElectron, method, marker) => {
         const fetchImpl = vi.fn().mockResolvedValue(okFetchResponse());
         const adapter = new WebDavHttpAdapter(
@@ -120,7 +124,7 @@ describe('WebDavHttpAdapter', () => {
         };
         await adapter.request({ url: 'https://dav.example.com/file', method, headers });
         const sent = new Headers((fetchImpl.mock.calls[0][1] as RequestInit).headers);
-        expect(sent.get('X-SuperProductivity-WebDAV-Upload')).toBe(marker);
+        expect(sent.get('X-SuperProductivity-WebDAV')).toBe(marker);
         expect(sent.get('Authorization')).toBe('Basic abc');
         expect(sent.get('If-Match')).toBe('"rev"');
         expect(headers).toEqual({
