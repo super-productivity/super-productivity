@@ -10,6 +10,7 @@ import { PluginService } from '../../plugin.service';
 import { PluginBridgeService } from '../../plugin-bridge.service';
 import { PluginCleanupService } from '../../plugin-cleanup.service';
 import { LayoutService } from '../../../core-ui/layout/layout.service';
+import { ShortcutService } from '../../../core-ui/shortcut/shortcut.service';
 
 const PLUGIN_ID = 'test-plugin';
 
@@ -18,6 +19,7 @@ describe('PluginIndexComponent', () => {
   let component: PluginIndexComponent;
   let pluginService: jasmine.SpyObj<PluginService>;
   let pluginBridge: jasmine.SpyObj<PluginBridgeService>;
+  let shortcutService: jasmine.SpyObj<ShortcutService>;
 
   const setup = async (): Promise<void> => {
     pluginService = jasmine.createSpyObj<PluginService>('PluginService', [
@@ -49,6 +51,11 @@ describe('PluginIndexComponent', () => {
     pluginBridge.createBoundMethods.and.returnValue({} as never);
     pluginBridge.sendMessageToPlugin.and.resolveTo('translated');
 
+    shortcutService = jasmine.createSpyObj<ShortcutService>('ShortcutService', [
+      'handleKeyDown',
+    ]);
+    shortcutService.handleKeyDown.and.resolveTo();
+
     const cleanupService = jasmine.createSpyObj<PluginCleanupService>(
       'PluginCleanupService',
       ['registerIframe', 'cleanupPlugin'],
@@ -61,6 +68,7 @@ describe('PluginIndexComponent', () => {
         { provide: PluginBridgeService, useValue: pluginBridge },
         { provide: PluginCleanupService, useValue: cleanupService },
         { provide: LayoutService, useValue: { isPanelResizing: signal(false) } },
+        { provide: ShortcutService, useValue: shortcutService },
         { provide: ActivatedRoute, useValue: { paramMap: EMPTY } },
         { provide: Router, useValue: jasmine.createSpyObj('Router', ['navigate']) },
       ],
@@ -86,6 +94,55 @@ describe('PluginIndexComponent', () => {
 
   const getIframe = (): HTMLIFrameElement =>
     fixture.nativeElement.querySelector('iframe[data-plugin-iframe]');
+
+  describe('app shortcuts inside the plugin iframe', () => {
+    const pressInIframe = (
+      init: KeyboardEventInit,
+      onTarget?: HTMLElement,
+    ): KeyboardEvent => {
+      const win = getIframe().contentWindow!;
+      const ev = new (win as unknown as typeof globalThis).KeyboardEvent('keydown', {
+        bubbles: true,
+        cancelable: true,
+        ...init,
+      });
+      (onTarget ?? win.document.body).dispatchEvent(ev);
+      return ev;
+    };
+
+    it('forwards key presses to the app shortcut handler once the iframe loads', async () => {
+      await setup();
+      component.onIframeLoad();
+
+      const ev = pressInIframe({ key: ',', metaKey: true });
+
+      expect(shortcutService.handleKeyDown).toHaveBeenCalledOnceWith(ev);
+    });
+
+    it('keeps the original target, so typing in plugin inputs stays local', async () => {
+      await setup();
+      component.onIframeLoad();
+      const doc = getIframe().contentWindow!.document;
+      const input = doc.createElement('input');
+      doc.body.appendChild(input);
+
+      pressInIframe({ key: 'T', shiftKey: true }, input);
+
+      // handleKeyDown skips plain keys whose target is an input element.
+      expect(shortcutService.handleKeyDown.calls.mostRecent().args[0].target).toBe(input);
+    });
+
+    it('leaves keys the plugin handled itself', async () => {
+      await setup();
+      component.onIframeLoad();
+      const doc = getIframe().contentWindow!.document;
+      doc.addEventListener('keydown', (e) => e.preventDefault());
+
+      pressInIframe({ key: 'T', shiftKey: true });
+
+      expect(shortcutService.handleKeyDown).not.toHaveBeenCalled();
+    });
+  });
 
   it('renders the plugin iframe after loading', async () => {
     await setup();
