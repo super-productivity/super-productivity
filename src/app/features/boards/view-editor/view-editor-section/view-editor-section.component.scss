@@ -24,12 +24,16 @@
   white-space: nowrap;
 }
 
-.rules-heading {
-  margin: var(--s2) 0 var(--s);
+.rules-heading,
+.section-label {
   color: var(--text-color-muted);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-semibold);
   letter-spacing: var(--letter-spacing-wide);
+}
+
+.rules-heading {
+  margin: var(--s2) 0 var(--s);
 }
 
 .no-rules {

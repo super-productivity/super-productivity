@@ -18,7 +18,10 @@
       <mat-error>{{ T.V.E_REQUIRED | translate }}</mat-error>
     </mat-form-field>
   } @else {
-    <span class="section-title"></span>
+    <!-- The only section of a list: its label takes the title's place. -->
+    <span class="section-title section-label">{{
+      T.F.BOARDS.EDITOR.SHOW_TASKS_THAT_MATCH | translate
+    }}</span>
   }
   <span class="count">
     @if (count() === 1) {
@@ -73,7 +76,11 @@
   </mat-menu>
 </header>
 
-<div class="rules-heading">{{ T.F.BOARDS.EDITOR.SHOW_TASKS_THAT_MATCH | translate }}</div>
+@if (isShowTitle()) {
+  <div class="rules-heading">
+    {{ T.F.BOARDS.EDITOR.SHOW_TASKS_THAT_MATCH | translate }}
+  </div>
+}
 @if (!shownRules().length) {
   <p class="no-rules">{{ T.F.BOARDS.EDITOR.NO_RULES | translate }}</p>
 }
