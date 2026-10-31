@@ -30,7 +30,9 @@ test.describe('App Features', () => {
       locator: (page: Page) => page.getByRole('menuitem', { name: 'Boards' }),
     },
     {
-      label: 'Schedule day panel',
+      // the day panel button follows the Schedule switch
+      label: 'Schedule',
+      title: 'Schedule (day panel button)',
       locator: (page: Page) => page.locator('.e2e-toggle-schedule-day-panel'),
     },
     {
@@ -46,7 +48,7 @@ test.describe('App Features', () => {
       locator: (page: Page) => page.locator('.sync-btn'),
     },
   ].forEach((feature) => {
-    test(`Element assigned with App feature ${feature.label} is only visible if feature is enabled`, async ({
+    test(`Element assigned with App feature ${feature.title ?? feature.label} is only visible if feature is enabled`, async ({
       page,
     }) => {
       const featureElement = feature.locator(page);

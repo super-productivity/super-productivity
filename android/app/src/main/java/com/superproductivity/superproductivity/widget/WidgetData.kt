@@ -1,5 +1,6 @@
 package com.superproductivity.superproductivity.widget
 
+import org.json.JSONArray
 import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -8,7 +9,15 @@ data class WidgetTask(
     val id: String,
     val title: String,
     val isDone: Boolean,
-    val projectColor: String?
+    val projectColor: String?,
+    /** A quick add the app has not imported yet; it has no task to toggle. */
+    val isPending: Boolean = false
+)
+
+/** The task currently being tracked — on this device or, via SuperSync presence, a remote one. */
+data class WidgetCurrentTask(
+    val title: String,
+    val deviceLabel: String
 )
 
 /**
@@ -91,6 +100,58 @@ object WidgetData {
             )
         }
         return result
+    }
+
+    /**
+     * Puts the title captures from [CaptureInbox.pendingJson] (widget quick adds)
+     * above the snapshot, newest first like the add bar's add-to-top. Not a Today
+     * rule mirrored natively: the app imports every title capture into Today by
+     * contract (AndroidCaptureImportService). The capture id becomes the task id,
+     * so one already in the snapshot (imported, not yet acknowledged) shows once.
+     */
+    fun withPendingCaptures(tasks: List<WidgetTask>, capturesJson: String): List<WidgetTask> {
+        val known = tasks.mapTo(HashSet()) { it.id }
+        val captures = JSONArray(capturesJson)
+        val pending = (0 until captures.length())
+            .map { captures.getJSONObject(it) }
+            .filter { it.getString("id") !in known }
+            .map {
+                WidgetTask(
+                    id = it.getString("id"),
+                    title = it.getString("title"),
+                    isDone = false,
+                    projectColor = null,
+                    isPending = true
+                )
+            }
+        return pending.asReversed() + tasks
+    }
+
+    /**
+     * The `currentTask` field, or null when nothing is tracked (locally or, via
+     * SuperSync tracking-presence, remotely) — same degrade-to-null contract as
+     * every other field here, never a title-less stub. Also null once the session's
+     * `expiresAt` has passed at [nowMs].
+     */
+    fun parseCurrentTask(json: String, nowMs: Long): WidgetCurrentTask? {
+        return try {
+            val root = JSONObject(json)
+            if (root.optInt("v", -1) != SUPPORTED_VERSION) {
+                return null
+            }
+            val task = root.optJSONObject("currentTask") ?: return null
+            // A remote session carries its own deadline: JS cannot expire it once the
+            // process is gone, and a saved blob would otherwise read "tracking" forever.
+            if (task.has("expiresAt") && nowMs >= task.getLong("expiresAt")) {
+                return null
+            }
+            WidgetCurrentTask(
+                title = task.getString("title"),
+                deviceLabel = task.optString("deviceLabel", "")
+            )
+        } catch (e: Exception) {
+            null
+        }
     }
 
     /**

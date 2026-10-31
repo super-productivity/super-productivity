@@ -27,6 +27,7 @@ import {
   getSyncService,
 } from './sync';
 import { wsRoutes } from './sync/websocket.routes';
+import { RETENTION_DAYS } from './sync/sync.types';
 import {
   getWsConnectionService,
   resetWsConnectionService,
@@ -203,7 +204,10 @@ const assertFullyRendered = (html: string, source: string): void => {
  * or worse, inherited boilerplate about someone else's hosting provider — is a false
  * legal statement published in the operator's name. A 404 is the honest failure.
  */
-const generatePrivacyHtml = (privacy?: PrivacyConfig): boolean => {
+const generatePrivacyHtml = (
+  privacy: PrivacyConfig | undefined,
+  options: { isCaptureEnabled: boolean },
+): boolean => {
   const publicDir = resolvePublicDir();
   const templatePath = path.join(resolveTemplateDir(), 'privacy.template.html');
   const outputPath = path.join(publicDir, 'privacy.html');
@@ -239,6 +243,8 @@ const generatePrivacyHtml = (privacy?: PrivacyConfig): boolean => {
   const keep = new Set<string>([
     privacy.hostingProvider ? 'HOSTING' : 'NO_HOSTING',
     ...(privacy.supervisoryAuthority ? ['AUTHORITY'] : []),
+    // Describes the AI assistant connector only where it can be used.
+    ...(options.isCaptureEnabled ? ['CAPTURE'] : []),
   ]);
 
   // Only tokens whose block survived are supplied; an unused one would be an unresolved
@@ -257,6 +263,10 @@ const generatePrivacyHtml = (privacy?: PrivacyConfig): boolean => {
         : {}),
       ...(privacy.supervisoryAuthority
         ? { PRIVACY_SUPERVISORY_AUTHORITY: privacy.supervisoryAuthority }
+        : {}),
+      // Unclaimed captures are removed by the same retention as stored ops.
+      ...(options.isCaptureEnabled
+        ? { CAPTURE_RETENTION_DAYS: String(RETENTION_DAYS) }
         : {}),
     },
   );
@@ -363,7 +373,9 @@ export const createServer = (
 
   // Generate the legal pages, then tell the API whether consent can be required at all.
   // Order matters: index.html must reflect the pages that were actually written.
-  const hasPrivacyPolicy = generatePrivacyHtml(fullConfig.privacy);
+  const hasPrivacyPolicy = generatePrivacyHtml(fullConfig.privacy, {
+    isCaptureEnabled: fullConfig.captureConnectorEnabled,
+  });
   const hasOperatorTerms = installOperatorLegalPages(fullConfig.dataDir);
   generateIndexHtml({
     hasPrivacyPolicy,
@@ -512,7 +524,14 @@ export const createServer = (
           publicUrl: fullConfig.publicUrl,
           signingKey: getJwtSecret(),
           clients: fullConfig.captureOAuthClients,
+          review: fullConfig.captureReview,
         });
+        if (fullConfig.captureReview) {
+          Logger.warn(
+            'CAPTURE_REVIEW_* is set: a reusable reviewer code can connect assistants ' +
+              'to one demo account. Unset it once directory review is done.',
+          );
+        }
         await fastifyServer.register(captureRoutes, { prefix: '/api/capture' });
       }
 

@@ -162,6 +162,15 @@
         <!-- Wait for the archive so the tables render once instead of growing
         when archived tasks are appended. -->
         @if (tasks && isArchiveLoaded()) {
+          <!-- on the last work day the look back at the week comes first -->
+          @if (isForToday && isFinishWeek) {
+            <section style="margin-bottom: 32px">
+              <h3 style="font-weight: bold; margin-bottom: 4px">
+                {{ T.PDS.THIS_WEEK | translate }}
+              </h3>
+              <worklog-week></worklog-week>
+            </section>
+          }
           @if (tasks.length) {
             <task-summary-tables
               [dayStr]="dayStr"
@@ -178,14 +187,16 @@
           } @else {
             <p>{{ T.PDS.NO_TASKS | translate }}</p>
           }
-          <section style="margin-top: 48px">
-            <h3 style="font-weight: bold; margin-bottom: 4px">
-              {{ T.PDS.WEEK | translate }}
-            </h3>
-            @if (isForToday) {
-              <worklog-week></worklog-week>
-            }
-          </section>
+          @if (!(isForToday && isFinishWeek)) {
+            <section style="margin-top: 48px">
+              <h3 style="font-weight: bold; margin-bottom: 4px">
+                {{ T.PDS.WEEK | translate }}
+              </h3>
+              @if (isForToday) {
+                <worklog-week></worklog-week>
+              }
+            </section>
+          }
         } @else {
           <mat-spinner style="margin: auto"></mat-spinner>
         }
@@ -200,7 +211,7 @@
         >
           <evaluation-sheet
             [dayStr$]="dayStr$"
-            [timeWorkedToday]="timeWorked$ | async"
+            [isWeek]="isForToday && isFinishWeek"
           ></evaluation-sheet>
         </section>
       </mat-tab>
@@ -213,7 +224,11 @@
         "
       >
         <section class="tab-inner">
-          <plan-tasks-tomorrow></plan-tasks-tomorrow>
+          @if (isFinishWeek) {
+            <plan-tasks-next-week></plan-tasks-next-week>
+          } @else {
+            <plan-tasks-tomorrow></plan-tasks-tomorrow>
+          }
         </section>
       </mat-tab>
     }
@@ -229,7 +244,7 @@
           mat-flat-button
         >
           <mat-icon>wb_sunny</mat-icon>
-          {{ T.PDS.SAVE_AND_GO_HOME | translate }}
+          {{ (isFinishWeek ? T.PDS.FINISH_WEEK : T.PDS.SAVE_AND_GO_HOME) | translate }}
         </button>
       }
       @if (!isForToday) {

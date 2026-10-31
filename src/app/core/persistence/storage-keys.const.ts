@@ -51,6 +51,13 @@ export enum LS {
   // don't all hit SuperSync at the same second. Device-local on purpose: the
   // point is that it differs between devices.
   DUE_DATE_NOTIFICATION_OFFSET_MS = 'SUP_DUE_DATE_NOTIFICATION_OFFSET_MS',
+  // Notification ids each mobile reminder effect has armed natively. Native
+  // alarms outlive the app, so the next run needs these to cancel alarms for
+  // tasks completed or deleted (e.g. via sync) while it was closed.
+  MOBILE_ARMED_REMINDER_IDS = 'SUP_MOBILE_ARMED_REMINDER_IDS',
+  MOBILE_ARMED_REPEAT_REMINDER_IDS = 'SUP_MOBILE_ARMED_REPEAT_REMINDER_IDS',
+  MOBILE_ARMED_DUE_DATE_IDS = 'SUP_MOBILE_ARMED_DUE_DATE_IDS',
+  MOBILE_ARMED_DEADLINE_IDS = 'SUP_MOBILE_ARMED_DEADLINE_IDS',
 
   // Epoch ms until which the "encrypt your SuperSync account" migration banner
   // stays hidden. Set when the user picks "Later" (or opens the flow), so — unlike
@@ -76,6 +83,9 @@ export enum LS {
   // added, so a reload after that does not start onboarding over.
   ONBOARDING_PRESET_DONE = 'SUP_ONBOARDING_PRESET_DONE',
   ONBOARDING_HINTS_DONE = 'SUP_ONBOARDING_HINTS_DONE',
+  // Quick tour (device-local, never synced): the running step and its task, so
+  // a reload resumes it. Removed once the tour ends.
+  QUICK_TOUR_STATE = 'SUP_QUICK_TOUR_STATE',
 
   LAST_FULLSCREEN_EDIT_VIEW_MODE = 'SUP_LAST_FULLSCREEN_EDIT_VIEW_MODE',
 
@@ -110,8 +120,16 @@ export enum LS {
   NAV_SIDEBAR_WIDTH = 'SUP_NAV_SIDEBAR_WIDTH',
   RIGHT_PANEL_WIDTH = 'SUP_RIGHT_PANEL_WIDTH',
 
+  // Destination of the phone bottom nav's second slot. Device-local, never
+  // synced: the bar only exists on narrow screens.
+  BOTTOM_NAV_SLOT = 'SUP_BOTTOM_NAV_SLOT',
+
   // Task view customizer
   TASK_VIEW_CUSTOMIZER_BY_CONTEXT = 'SUP_TASK_VIEW_CUSTOMIZER_BY_CONTEXT',
+
+  // Tracked work sessions not yet added to the calendar. Device-local, never
+  // synced: only the device that tracked the time adds the event.
+  WORK_SESSION_LOG = 'SUP_WORK_SESSION_LOG',
 }
 
 // Prefix for device-local, never-synced note drafts (see LocalDraftService).

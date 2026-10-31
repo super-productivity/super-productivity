@@ -14,6 +14,8 @@ import { InitialPwaUpdateCheckService } from '../../core/initial-pwa-update-chec
 import { SyncProviderId } from '../../op-log/sync-providers/provider.const';
 import { SYNC_INITIAL_SYNC_TRIGGER } from './sync.const';
 import { OperationLogDownloadService } from '../../op-log/sync/operation-log-download.service';
+import { UiHelperService } from '../../features/ui-helper/ui-helper.service';
+import { SYNC_BEFORE_CLOSE_ID } from './sync.const';
 
 /**
  * Task 3 routing. The split is the whole behaviour change: background triggers
@@ -96,6 +98,10 @@ describe('SyncEffects routing (Task 3)', () => {
             'flushAccumulatedTime',
             'turnOffAll',
           ]),
+        },
+        {
+          provide: UiHelperService,
+          useValue: jasmine.createSpyObj('UiHelperService', ['focusApp']),
         },
         {
           provide: ExecBeforeCloseService,
@@ -222,6 +228,77 @@ describe('SyncEffects routing (Task 3)', () => {
   describe('the SYNC_INITIAL_SYNC_TRIGGER constant', () => {
     it('is still the value the awaited path keys its gate flip on', () => {
       expect(SYNC_INITIAL_SYNC_TRIGGER).toBeDefined();
+    });
+  });
+
+  // syncBeforeQuit$ itself only runs in Electron; this drives its request pipe.
+  describe('sync before quit', () => {
+    let requests$: Subject<string[]>;
+    let setDone: jasmine.Spy;
+    let focusApp: jasmine.Spy;
+
+    const settle = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
+
+    beforeEach(() => {
+      requests$ = new Subject<string[]>();
+      setDone = TestBed.inject(ExecBeforeCloseService).setDone as jasmine.Spy;
+      focusApp = TestBed.inject(UiHelperService).focusApp as jasmine.Spy;
+      subs.push(effects._syncBeforeQuitOnRequest$(requests$).subscribe());
+    });
+
+    it('a repeated quit while syncing neither starts a second sync nor ends early', async () => {
+      let finishSync: (status: string) => void = () => undefined;
+      sync.and.returnValue(new Promise((resolve) => (finishSync = resolve)));
+
+      requests$.next([SYNC_BEFORE_CLOSE_ID]);
+      await settle();
+      requests$.next([SYNC_BEFORE_CLOSE_ID]);
+      await settle();
+
+      expect(sync).toHaveBeenCalledTimes(1);
+      expect(setDone).not.toHaveBeenCalled();
+      // The running sync may wait on a dialog in a hidden window.
+      expect(focusApp).toHaveBeenCalledTimes(1);
+
+      finishSync('InSync');
+      await settle();
+      expect(setDone).toHaveBeenCalledOnceWith(SYNC_BEFORE_CLOSE_ID);
+    });
+
+    it('still lets the app close when the sync throws', async () => {
+      sync.and.rejectWith(new Error('offline'));
+      // window.alert is already a spy in the global test setup.
+      const alertSpy = window.alert as jasmine.Spy;
+      alertSpy.calls.reset();
+
+      requests$.next([SYNC_BEFORE_CLOSE_ID]);
+      await settle();
+      await settle();
+
+      expect(alertSpy).toHaveBeenCalled();
+      expect(focusApp).toHaveBeenCalled();
+      expect(setDone).toHaveBeenCalledOnceWith(SYNC_BEFORE_CLOSE_ID);
+    });
+
+    it('runs a new sync for a quit request after the previous one finished', async () => {
+      requests$.next([SYNC_BEFORE_CLOSE_ID]);
+      await settle();
+      await settle();
+      requests$.next([SYNC_BEFORE_CLOSE_ID]);
+      await settle();
+      await settle();
+
+      expect(sync).toHaveBeenCalledTimes(2);
+      expect(setDone).toHaveBeenCalledTimes(2);
+      expect(focusApp).not.toHaveBeenCalled();
+    });
+
+    it('ignores requests without its id', async () => {
+      requests$.next(['FINISH_DAY_BEFORE_CLOSE_EFFECT']);
+      await settle();
+
+      expect(sync).not.toHaveBeenCalled();
+      expect(setDone).not.toHaveBeenCalled();
     });
   });
 });

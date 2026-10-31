@@ -86,6 +86,10 @@
     "INTRO_2": "Si valoras este enfoque y quieres mantener el proyecto saludable y en evolución, se agradece enormemente una donación voluntaria."
   },
   "EXAMPLE_TASKS": {
+    "GETTING_STARTED": {
+      "TITLE": "Opcional: consejos para empezar",
+      "NOTES": "Nada de esto es obligatorio. Borra esta tarea cuando quieras.\n\n- **Hoy y Bandeja de entrada**: Hoy muestra lo planificado para hoy. Las tareas sin un proyecto propio se quedan en Bandeja de entrada. Una tarea puede aparecer en ambas listas.\n- **Proyectos**: agrupa las tareas por tema con el **+** junto a **Proyectos** en la barra lateral.\n- **Sincronización**: mantén tus datos en varios dispositivos en **Ajustes → Sincronización y respaldo**.\n- **¿Vienes de Todoist o TickTick?** Importa tus tareas en **Ajustes → Sincronización y respaldo → Importar/Exportar**.\n- **Tours**: **Ayuda → Tour rápido** en el menú de la barra lateral te guía por lo básico con tu propia tarea, y **Ayuda → Tutorial** muestra paso a paso la sintaxis corta y la navegación con teclado. Cierra un tour cuando quieras.\n- **Hazlo tuyo**: elige un tema o el modo oscuro y activa o desactiva funciones como tableros, cronograma, hábitos, modo concentración o integraciones en **Ajustes → General**. Los plugins añaden aún más."
+    },
     "LEARN_KEYBOARD_SHORTCUTS": {
       "TITLE": "Aprende los atajos de teclado",
       "NOTES": "Super Productivity está diseñado para usarse con el teclado. Aprende los atajos para trabajar más rápido.\n\n**Cómo empezar:**\n1. Abre el **menú de la barra lateral**\n2. Ve a **Ayuda**\n3. Haz clic en **Tour de navegación con teclado**"
@@ -3011,6 +3015,7 @@
       "CREATE_TASK": "Cómo crear una tarea",
       "GET_HELP_ONLINE": "Obtener ayuda online",
       "KEYBOARD": "Tutorial: Teclado Avanzado",
+      "QUICK_TOUR": "Tour rápido",
       "REDDIT_COMMUNITY": "Comunidad de Reddit",
       "REPORT_A_PROBLEM": "Reportar un problema",
       "SEND_FEEDBACK": "Enviar comentarios",
@@ -3096,13 +3101,50 @@
     "HINTS": {
       "CREATE_TASK": "Haz clic en + para añadir tu primera tarea",
       "CREATE_TASK_TOUCH": "Toca + para añadir tu primera tarea",
+      "DECLINED": "Sin problema. Lo encontrarás en Ayuda → Tour rápido cuando quieras.",
+      "MORE_FALLBACK": "Ya hay más activado: proyectos, seguimiento de tiempo, Planificador…",
+      "NO_THANKS": "No, gracias",
+      "SHOW_ME_MORE": "Muéstrame más ›",
       "EXPLORE": "¡Explora libremente haciendo clic por aquí! Puedes encontrar ayuda en la barra lateral.",
       "EXPLORE_TOUCH": "¡Explora libremente tocando por aquí! Puedes encontrar ayuda en el menú.",
       "TASK_TAP_TOUCH": "Toca una tarea para abrir sus detalles.",
       "TASK_SWIPE_LEFT_TOUCH": "Desliza la tarea a la izquierda para ver más acciones",
+      "TODAY_AND_INBOX": "Esta tarea está planificada para hoy, por eso aparece en {{todayIcon}} <b>Hoy</b>. Las tareas sin un proyecto propio se quedan en {{inboxIcon}} <b>Bandeja de entrada</b>.",
+      "TODAY_AND_INBOX_PHONE": "Esta tarea está planificada para hoy, por eso aparece en {{todayIcon}} <b>Hoy</b>. Las tareas sin un proyecto propio se quedan en {{inboxIcon}} <b>Bandeja de entrada</b>, en ☰.",
       "TASK_SWIPE_RIGHT_TOUCH": "Desliza la tarea a la derecha para marcarla como hecha",
       "OR_PRESS": "o pulsa",
       "SKIP_ARIA": "Cerrar indicación"
+    },
+    "TOUR": {
+      "ADD_SUBTASK": "Divídela: haz clic derecho en la tarea y elige {{subtaskIcon}} <b>Añadir subtarea</b>",
+      "COUNTER": "{{nr}} de {{total}}",
+      "NEXT": "Siguiente ›",
+      "ORGANIZE": "Crea un <b>proyecto</b> propio para agrupar tareas, o una <b>etiqueta</b> para marcarlas. Crea uno con +",
+      "ORGANIZE_COLLAPSED": "Crea un <b>proyecto</b> propio para agrupar tareas, o una <b>etiqueta</b> para marcarlas. Expande la barra lateral con {{expandIcon}} para crear uno",
+      "ORGANIZE_PHONE": "Los proyectos y las etiquetas están en ☰. Crea un <b>proyecto</b> propio para agrupar tareas, o una <b>etiqueta</b> para marcarlas",
+      "PLANNER": "Planifica los próximos días en {{plannerIcon}} <b>Planificador</b>",
+      "TASK_MENU_TOUCH": "Desliza una tarea a la izquierda para ver su menú: {{playIcon}} <b>Iniciar seguimiento de tiempo</b>, {{subtaskIcon}} <b>Añadir subtarea</b>",
+      "TASK_MENU_TOUCH_NO_TRACKING": "Desliza una tarea a la izquierda para ver su menú, p. ej. {{subtaskIcon}} <b>Añadir subtarea</b>",
+      "TIMER_RUNNING": "El temporizador está en marcha. Pulsa {{playIcon}} de nuevo o <kbd>{{key}}</kbd> para pausar.",
+      "TIMER_RUNNING_TOUCH": "El temporizador está en marcha. Toca {{playIcon}} arriba para pausar.",
+      "TRACK_TIME": "Pasa el ratón sobre la tarea y pulsa {{playIcon}} para registrar el tiempo"
+    },
+    "WANT_MORE": {
+      "BOARDS": "<b>Tableros</b> · columnas estilo kanban para tus tareas",
+      "DONE": "Hecho",
+      "FINISH_DAY": "<b>Finalizar día</b> · repasa y cierra tu día",
+      "FOCUS_MODE": "<b>Modo concentración</b> · pomodoro y trabajo sin distracciones",
+      "FOOTER": "Lo encontrarás de nuevo en Ayuda → Tour rápido.",
+      "HABITS": "<b>Hábitos</b> · sigue tus rutinas día a día",
+      "INTRO": "Super Productivity empieza tranquilo. Hay más cuando lo necesites:",
+      "OPEN_SETTINGS": "Abrir ajustes ›",
+      "PLUGINS": "<b>Plugins e integraciones</b> · Jira, GitHub, CalDAV y más",
+      "SCHEDULE": "<b>Cronograma</b> · tu día en una línea de tiempo",
+      "SEARCH": "Busca en todo con <kbd>{{key}}</kbd>.",
+      "SEARCH_PHONE": "Busca en todo desde ☰.",
+      "SHORT_SYNTAX": "Escribe <code>#tag</code>, <code>+project</code> o <code>@tomorrow</code> al añadir una tarea. Ayuda → Tutorial muestra más.",
+      "SYNC": "Tus datos se quedan en este dispositivo. La sincronización y las copias de seguridad están en Ajustes.",
+      "TITLE": "¿Quieres más?"
     }
   },
   "PDS": {

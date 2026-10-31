@@ -1,4 +1,6 @@
-import { TestBed, fakeAsync, tick } from '@angular/core/testing';
+import { TestBed, discardPeriodicTasks, fakeAsync, tick } from '@angular/core/testing';
+import { HttpErrorResponse } from '@angular/common/http';
+import { IssueLog } from '../../../core/log';
 import { provideMockActions } from '@ngrx/effects/testing';
 import { MockStore, provideMockStore } from '@ngrx/store/testing';
 import { BehaviorSubject, Observable, of, Subject } from 'rxjs';
@@ -14,6 +16,7 @@ import { JIRA_TYPE } from '../issue.const';
 import { IssueProvider } from '../issue.model';
 import { PluginIssueProviderRegistryService } from '../../../plugins/issue-provider/plugin-issue-provider-registry.service';
 import { HydrationStateService } from '../../../op-log/apply/hydration-state.service';
+import { IS_ONLINE$ } from '../../../util/is-online.token';
 
 describe('PollToBacklogEffects', () => {
   let effects: PollToBacklogEffects;
@@ -25,6 +28,7 @@ describe('PollToBacklogEffects', () => {
   let isInSyncWindow: boolean;
   let isInitialSyncDone: boolean;
   let isActiveProject$: BehaviorSubject<boolean>;
+  let isOnline$: BehaviorSubject<boolean>;
 
   const createMockIssueProvider = (
     overrides: Partial<IssueProvider> = {},
@@ -62,6 +66,7 @@ describe('PollToBacklogEffects', () => {
 
     isInSyncWindow = false;
     isInitialSyncDone = true;
+    isOnline$ = new BehaviorSubject<boolean>(true);
 
     TestBed.configureTestingModule({
       providers: [
@@ -87,6 +92,7 @@ describe('PollToBacklogEffects', () => {
           provide: SnackService,
           useValue: snackServiceSpy,
         },
+        { provide: IS_ONLINE$, useValue: isOnline$ },
       ],
     });
 
@@ -383,6 +389,36 @@ describe('PollToBacklogEffects', () => {
       ).toHaveBeenCalledWith(JIRA_TYPE, 'jira-1', true);
     }));
 
+    it('should skip polls while offline and poll once the connection is back', fakeAsync(() => {
+      store.overrideSelector(selectEnabledIssueProviders, [
+        createMockIssueProvider({ id: 'jira-1', pollingMode: 'always' }),
+      ]);
+      store.refreshState();
+      actions$ = new Subject<any>().asObservable();
+      isOnline$.next(false);
+
+      const sub = effects.pollNewIssuesToBacklogAlways$.subscribe();
+      tick(10001);
+      tick(300000);
+      expect(
+        issueServiceSpy.checkAndImportNewIssuesToBacklogForProject,
+      ).not.toHaveBeenCalled();
+      expect(snackServiceSpy.open).not.toHaveBeenCalled();
+
+      isOnline$.next(true);
+      tick(7999);
+      expect(
+        issueServiceSpy.checkAndImportNewIssuesToBacklogForProject,
+      ).not.toHaveBeenCalled();
+      tick(1);
+      expect(
+        issueServiceSpy.checkAndImportNewIssuesToBacklogForProject,
+      ).toHaveBeenCalledTimes(1);
+
+      sub.unsubscribe();
+      discardPeriodicTasks();
+    }));
+
     it('should NOT poll always-mode providers without isAutoAddToBacklog', fakeAsync(() => {
       const provider = createMockIssueProvider({
         id: 'jira-1',
@@ -489,6 +525,30 @@ describe('PollToBacklogEffects', () => {
       expect(
         issueServiceSpy.checkAndImportNewIssuesToBacklogForProject,
       ).toHaveBeenCalledTimes(2);
+    }));
+
+    // Log history is exportable: an HTTP error carries the provider's URL.
+    it('logs only the status of a failed request', fakeAsync(() => {
+      store.overrideSelector(selectEnabledIssueProviders, [
+        createMockIssueProvider({
+          id: 'jira-1',
+          defaultProjectId: 'project-2',
+          isAutoAddToBacklog: true,
+          pollingMode: 'always',
+        }),
+      ]);
+      store.refreshState();
+      issueServiceSpy.checkAndImportNewIssuesToBacklogForProject.and.rejectWith(
+        new HttpErrorResponse({ status: 500, url: 'https://private.example/api' }),
+      );
+      const logSpy = spyOn(IssueLog, 'err');
+      actions$ = new Subject<any>().asObservable();
+      effects.pollNewIssuesToBacklogAlways$.subscribe();
+
+      tick(10001);
+
+      expect(logSpy).toHaveBeenCalledOnceWith(jasmine.any(String), { status: 500 });
+      discardPeriodicTasks();
     }));
 
     it('should NOT poll on a tick that falls inside the sync window, but poll on the next tick', fakeAsync(() => {

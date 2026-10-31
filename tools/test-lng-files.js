@@ -86,10 +86,14 @@ const comparePlaceholders = (reference, translation, sharedKeys, baseline) => {
   const newDroppedPlaceholderKeys = [];
   const unexpectedPlaceholderKeys = [];
   const malformedKeys = [];
+  const emptyKeys = [];
   const droppedByKey = new Map();
 
   for (const key of sharedKeys) {
     const translationValue = getValueAtPath(translation, key);
+    // ngx-translate treats "" as a defined value and renders it blank; only a
+    // missing key falls back to English (#11189).
+    if (translationValue === '') emptyKeys.push(key);
     const defect = findBraceDefect(translationValue);
     if (defect) malformedKeys.push(`${key} (${defect})`);
 
@@ -142,6 +146,7 @@ const comparePlaceholders = (reference, translation, sharedKeys, baseline) => {
     staleBaselineKeys,
     unexpectedPlaceholderKeys,
     malformedKeys,
+    emptyKeys,
   };
 };
 
@@ -212,6 +217,7 @@ const inspectTranslationDirectory = (directory, baseline = {}) => {
       0,
     ),
     totalMalformed: files.reduce((total, file) => total + file.malformedKeys.length, 0),
+    totalEmpty: files.reduce((total, file) => total + file.emptyKeys.length, 0),
     totalNewDroppedPlaceholders: files.reduce(
       (total, file) => total + file.newDroppedPlaceholderKeys.length,
       0,
@@ -228,6 +234,7 @@ const inspectTranslationDirectory = (directory, baseline = {}) => {
 const hasBlockingDefects = (report) =>
   report.totalUnexpectedPlaceholders > 0 ||
   report.totalMalformed > 0 ||
+  report.totalEmpty > 0 ||
   report.totalNewDroppedPlaceholders > 0 ||
   report.totalStaleBaseline > 0 ||
   report.staleBaselineFiles.length > 0;
@@ -262,6 +269,7 @@ const printReport = (report) => {
     const stale = file.staleBaselineKeys.length;
     const unexpected = file.unexpectedPlaceholderKeys.length;
     const malformed = file.malformedKeys.length;
+    const empty = file.emptyKeys.length;
 
     if (
       missing === 0 &&
@@ -270,7 +278,8 @@ const printReport = (report) => {
       dropped === 0 &&
       stale === 0 &&
       unexpected === 0 &&
-      malformed === 0
+      malformed === 0 &&
+      empty === 0
     ) {
       console.log(`${formatLogValue(file.file)}: OK`);
       continue;
@@ -283,7 +292,8 @@ const printReport = (report) => {
         `${dropped} dropped placeholders not in baseline${formatExamples(file.newDroppedPlaceholderKeys)}; ` +
         `${stale} stale baseline entries${formatExamples(file.staleBaselineKeys)}; ` +
         `${unexpected} unexpected placeholders${formatExamples(file.unexpectedPlaceholderKeys)}; ` +
-        `${malformed} broken braces${formatExamples(file.malformedKeys)}`,
+        `${malformed} broken braces${formatExamples(file.malformedKeys)}; ` +
+        `${empty} empty values${formatExamples(file.emptyKeys)}`,
     );
   }
 
@@ -295,7 +305,8 @@ const printReport = (report) => {
       `${report.totalNewDroppedPlaceholders} dropped placeholders not in baseline, ` +
       `${report.totalStaleBaseline} stale baseline entries, ` +
       `${report.totalUnexpectedPlaceholders} unexpected placeholders, ` +
-      `${report.totalMalformed} broken braces.`,
+      `${report.totalMalformed} broken braces, ` +
+      `${report.totalEmpty} empty values.`,
   );
   console.log(
     'Key differences and baselined placeholder mismatches are informational; ' +
@@ -310,6 +321,12 @@ const printReport = (report) => {
     console.error(
       'Unexpected placeholder names in an English placeholder contract and ' +
         'broken braces render literally; fix them.',
+    );
+  }
+  if (report.totalEmpty > 0) {
+    console.error(
+      'An empty value renders blank instead of falling back to English; delete ' +
+        'the key instead (see docs/TRANSLATING.md, "Fallback Language").',
     );
   }
   if (report.totalNewDroppedPlaceholders > 0) {

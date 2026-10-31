@@ -12,6 +12,7 @@ export const APP_FEATURES_FORM_CFG: ConfigFormSection<AppFeaturesConfig> = {
       type: 'slide-toggle',
       templateOptions: {
         label: T.GCF.APP_FEATURES.PLANNER,
+        description: T.GCF.APP_FEATURES.PLANNER_HINT,
         icon: 'edit_calendar',
       },
     },
@@ -20,6 +21,7 @@ export const APP_FEATURES_FORM_CFG: ConfigFormSection<AppFeaturesConfig> = {
       type: 'slide-toggle',
       templateOptions: {
         label: T.GCF.APP_FEATURES.SCHEDULE,
+        description: T.GCF.APP_FEATURES.SCHEDULE_HINT,
         icon: 'schedule',
       },
     },
@@ -28,6 +30,7 @@ export const APP_FEATURES_FORM_CFG: ConfigFormSection<AppFeaturesConfig> = {
       type: 'slide-toggle',
       templateOptions: {
         label: T.GCF.APP_FEATURES.BOARDS,
+        description: T.GCF.APP_FEATURES.BOARDS_HINT,
         icon: 'grid_view',
       },
     },
@@ -36,6 +39,7 @@ export const APP_FEATURES_FORM_CFG: ConfigFormSection<AppFeaturesConfig> = {
       type: 'slide-toggle',
       templateOptions: {
         label: T.GCF.APP_FEATURES.HABITS,
+        description: T.GCF.APP_FEATURES.HABITS_HINT,
         icon: 'heart_check',
       },
     },
@@ -44,6 +48,7 @@ export const APP_FEATURES_FORM_CFG: ConfigFormSection<AppFeaturesConfig> = {
       type: 'slide-toggle',
       props: {
         label: T.GCF.APP_FEATURES.TIME_TRACKING,
+        description: T.GCF.APP_FEATURES.TIME_TRACKING_HINT,
         icon: 'play_arrow',
       },
     },
@@ -52,6 +57,7 @@ export const APP_FEATURES_FORM_CFG: ConfigFormSection<AppFeaturesConfig> = {
       type: 'slide-toggle',
       templateOptions: {
         label: T.GCF.APP_FEATURES.FOCUS_MODE,
+        description: T.GCF.APP_FEATURES.FOCUS_MODE_HINT,
         icon: 'center_focus_strong',
       },
     },
@@ -60,15 +66,8 @@ export const APP_FEATURES_FORM_CFG: ConfigFormSection<AppFeaturesConfig> = {
       type: 'slide-toggle',
       templateOptions: {
         label: T.GCF.APP_FEATURES.FINISH_DAY,
+        description: T.GCF.APP_FEATURES.FINISH_DAY_HINT,
         icon: 'done_all',
-      },
-    },
-    {
-      key: 'isScheduleDayPanelEnabled',
-      type: 'slide-toggle',
-      templateOptions: {
-        label: T.GCF.APP_FEATURES.SCHEDULE_DAY_PANEL,
-        icon: 'schedule',
       },
     },
     {
@@ -76,6 +75,7 @@ export const APP_FEATURES_FORM_CFG: ConfigFormSection<AppFeaturesConfig> = {
       type: 'slide-toggle',
       templateOptions: {
         label: T.GCF.APP_FEATURES.ISSUES_PANEL,
+        description: T.GCF.APP_FEATURES.ISSUES_PANEL_HINT,
         icon: 'webhook',
       },
     },
@@ -84,6 +84,7 @@ export const APP_FEATURES_FORM_CFG: ConfigFormSection<AppFeaturesConfig> = {
       type: 'slide-toggle',
       templateOptions: {
         label: T.GCF.APP_FEATURES.PROJECT_NOTES,
+        description: T.GCF.APP_FEATURES.PROJECT_NOTES_HINT,
         icon: 'comment',
       },
     },
@@ -92,6 +93,7 @@ export const APP_FEATURES_FORM_CFG: ConfigFormSection<AppFeaturesConfig> = {
       type: 'slide-toggle',
       templateOptions: {
         label: T.GCF.APP_FEATURES.SYNC_BUTTON,
+        description: T.GCF.APP_FEATURES.SYNC_BUTTON_HINT,
         icon: 'sync',
       },
     },
@@ -100,6 +102,7 @@ export const APP_FEATURES_FORM_CFG: ConfigFormSection<AppFeaturesConfig> = {
       type: 'slide-toggle',
       templateOptions: {
         label: T.GCF.APP_FEATURES.SEARCH,
+        description: T.GCF.APP_FEATURES.SEARCH_HINT,
         icon: 'search',
       },
     },
@@ -111,6 +114,7 @@ export const APP_FEATURES_FORM_CFG: ConfigFormSection<AppFeaturesConfig> = {
       hideExpression: () => IS_DONATION_UI_RESTRICTED,
       templateOptions: {
         label: T.GCF.APP_FEATURES.DONATE_PAGE,
+        description: T.GCF.APP_FEATURES.DONATE_PAGE_HINT,
         icon: 'favorite',
       },
     },

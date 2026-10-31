@@ -35,6 +35,46 @@ describe('PluginLoaderService', () => {
     httpMock.verify();
   });
 
+  it('rejects an incompatible HTTP plugin before fetching its code', async () => {
+    const resultPromise = service.loadPluginAssets('/plugins/future');
+    httpMock.expectOne('/plugins/future/manifest.json').flush(
+      JSON.stringify({
+        id: 'future',
+        name: 'Future',
+        manifestVersion: 1,
+        version: '1.0.0',
+        minSupVersion: '9999.0.0',
+        hooks: [],
+        permissions: [],
+      }),
+    );
+    await Promise.resolve();
+
+    httpMock.expectNone('/plugins/future/plugin.js');
+    await expectAsync(resultPromise).toBeRejectedWithError(/9999\.0\.0/);
+  });
+
+  it('rejects an incompatible uploaded plugin when reloading its cached assets', async () => {
+    cacheService.getPlugin.and.resolveTo({
+      id: 'future',
+      manifest: JSON.stringify({
+        id: 'future',
+        name: 'Future',
+        manifestVersion: 1,
+        version: '1.0.0',
+        minSupVersion: '9999.0.0',
+        hooks: [],
+        permissions: [],
+      }),
+      code: 'cached code',
+      uploadDate: 123,
+    });
+
+    await expectAsync(
+      service.loadPluginAssets('uploaded://future'),
+    ).toBeRejectedWithError(/9999\.0\.0/);
+  });
+
   it('loads standard plugin assets from HTTP', async () => {
     const resultPromise = service.loadPluginAssets('/plugins/example');
 

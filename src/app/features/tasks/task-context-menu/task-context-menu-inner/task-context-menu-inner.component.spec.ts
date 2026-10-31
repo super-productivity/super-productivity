@@ -28,8 +28,12 @@ import { By } from '@angular/platform-browser';
 import { MatMenu } from '@angular/material/menu';
 import { TaskDuplicateService } from '../../task-duplicate.service';
 import { TaskMultiSelectService } from '../../task-multi-select.service';
+import { FocusModeService } from '../../../focus-mode/focus-mode.service';
+import { showFocusOverlay } from '../../../focus-mode/store/focus-mode.actions';
 import { T } from '../../../../t.const';
 import { PluginTaskContextMenuRegistryService } from '../../../../plugins/plugin-task-context-menu-registry.service';
+import { IssueSyncStateService } from '../../../issue/two-way-sync/issue-sync-state.service';
+import { PlainspaceHandoffService } from '../../../issue/providers/plainspace/plainspace-handoff.service';
 
 const projectInTreeOrder = (id: string, title: string): Project =>
   ({
@@ -55,6 +59,7 @@ describe('TaskContextMenuInnerComponent', () => {
   let taskDuplicateService: jasmine.SpyObj<TaskDuplicateService>;
   let addSubtaskInputService: jasmine.SpyObj<AddSubtaskInputService>;
   let store: MockStore;
+  let focusModeService: jasmine.SpyObj<FocusModeService>;
   let isTaskContextMenuOpen: ReturnType<typeof signal<boolean>>;
   let closeActiveTaskContextMenu: ReturnType<typeof signal<(() => void) | null>>;
 
@@ -68,8 +73,14 @@ describe('TaskContextMenuInnerComponent', () => {
       'getTasksWithSubTasksByRepeatCfgId$',
       'getArchiveTasksForRepeatCfgId',
       'update',
+      'setCurrentId',
+      'moveToTop',
+      'moveToBottom',
     ]);
     taskService.currentTaskId.and.returnValue('some-id');
+    focusModeService = jasmine.createSpyObj<FocusModeService>('FocusModeService', [
+      'tryStartSessionForTask',
+    ]);
     taskDuplicateService = jasmine.createSpyObj<TaskDuplicateService>(
       'TaskDuplicateService',
       ['duplicate'],
@@ -92,6 +103,7 @@ describe('TaskContextMenuInnerComponent', () => {
         { provide: TaskService, useValue: taskService },
         { provide: TaskDuplicateService, useValue: taskDuplicateService },
         { provide: AddSubtaskInputService, useValue: addSubtaskInputService },
+        { provide: FocusModeService, useValue: focusModeService },
         {
           provide: TaskRepeatCfgService,
           useValue: {
@@ -144,7 +156,14 @@ describe('TaskContextMenuInnerComponent', () => {
           },
         },
         { provide: LocaleDatePipe, useValue: {} },
-        { provide: DateAdapter, useValue: { getFirstDayOfWeek: () => 0 } },
+        {
+          provide: DateAdapter,
+          useValue: {
+            getFirstDayOfWeek: () => 1,
+            getDayOfWeek: (d: Date) => d.getDay(),
+            getDayOfWeekNames: () => ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
+          },
+        },
       ],
     }).compileComponents();
 
@@ -181,6 +200,27 @@ describe('TaskContextMenuInnerComponent', () => {
         flush();
       }));
     }
+  });
+
+  describe('goToFocusMode()', () => {
+    it('leaves starting to the focus mode service when it can start right away', () => {
+      focusModeService.tryStartSessionForTask.and.returnValue(true);
+      const dispatchSpy = spyOn(store, 'dispatch');
+      component.goToFocusMode();
+      expect(focusModeService.tryStartSessionForTask).toHaveBeenCalledWith(
+        component.task,
+      );
+      expect(taskService.setCurrentId).not.toHaveBeenCalled();
+      expect(dispatchSpy).not.toHaveBeenCalled();
+    });
+
+    it('tracks the task and opens the overlay when it cannot start right away', () => {
+      focusModeService.tryStartSessionForTask.and.returnValue(false);
+      const dispatchSpy = spyOn(store, 'dispatch');
+      component.goToFocusMode();
+      expect(taskService.setCurrentId).toHaveBeenCalledWith('task-default');
+      expect(dispatchSpy).toHaveBeenCalledWith(showFocusOverlay());
+    });
   });
 
   describe('enterSelectionMode()', () => {
@@ -330,6 +370,172 @@ describe('TaskContextMenuInnerComponent', () => {
     });
   });
 
+  // One order on touch and desktop, frequent actions first and the destructive
+  // ones last, so Delete stays above the fold of a phone-sized menu.
+  describe('menu layout', () => {
+    const ITEM_KEYS = [
+      T.F.TASK.CMP.FOCUS_SESSION,
+      T.F.TASK.CMP.ADD_SUB_TASK,
+      T.F.TASK.CMP.ESTIMATE,
+      T.F.TASK.CMP.TOGGLE_TAGS,
+      T.F.TASK.CMP.MOVE_TO_OTHER_PROJECT,
+      T.F.TASK.CMP.PRIORITY,
+      T.F.TASK.CMP.REORDER,
+      T.F.TASK.CMP.DUPLICATE,
+      T.F.TASK.CMP.MARK_WONT_DO,
+      T.F.TASK.CMP.DELETE,
+      T.F.TASK.CMP.MOVE_TO_TOP,
+      T.F.TASK.CMP.MOVE_TO_BOTTOM,
+    ];
+    const overlayItems = (): HTMLElement[] =>
+      Array.from(
+        document.querySelectorAll<HTMLElement>('.cdk-overlay-container [mat-menu-item]'),
+      );
+    const itemKeys = (items: HTMLElement[]): string[] =>
+      items
+        .map((el) => ITEM_KEYS.find((key) => el.textContent?.includes(key)))
+        .filter((key): key is string => !!key);
+    const openMenu = (taskOverrides: Partial<Task> = {}): void => {
+      Object.assign(TestBed.inject(GlobalConfigService), {
+        appFeatures: () => ({ isFocusModeEnabled: true, isTimeTrackingEnabled: true }),
+      });
+      fixture.componentRef.setInput('isAdvancedControls', true);
+      component.taskSet = {
+        ...DEFAULT_TASK,
+        id: 'task-1',
+        projectId: 'project-current',
+        ...taskOverrides,
+      } as Task;
+      fixture.detectChanges();
+      component.contextMenuTrigger()?.openMenu();
+      fixture.detectChanges();
+      tick();
+    };
+    const closeMenus = (): void => {
+      component.contextMenuTrigger()?.closeMenu();
+      flush();
+    };
+
+    it('lists the actions in the agreed order', fakeAsync(() => {
+      openMenu();
+
+      expect(itemKeys(overlayItems())).toEqual([
+        T.F.TASK.CMP.FOCUS_SESSION,
+        T.F.TASK.CMP.ADD_SUB_TASK,
+        T.F.TASK.CMP.ESTIMATE,
+        T.F.TASK.CMP.TOGGLE_TAGS,
+        T.F.TASK.CMP.MOVE_TO_OTHER_PROJECT,
+        T.F.TASK.CMP.PRIORITY,
+        T.F.TASK.CMP.REORDER,
+        T.F.TASK.CMP.DUPLICATE,
+        T.F.TASK.CMP.MARK_WONT_DO,
+        T.F.TASK.CMP.DELETE,
+      ]);
+      closeMenus();
+    }));
+
+    // Groups are conditional, so an empty group leaves dividers next to each
+    // other; the .mat-menu-grouped styles must hide all but one of them.
+    const isShown = (el: Element): boolean => getComputedStyle(el).display !== 'none';
+    const shownSibling = (
+      el: Element,
+      dir: 'previousElementSibling' | 'nextElementSibling',
+    ): Element | null => {
+      let sib = el[dir];
+      while (sib && !isShown(sib)) {
+        sib = sib[dir];
+      }
+      return sib;
+    };
+    // direct children only: submenus have their own dividers
+    const shownDividers = (): Element[] =>
+      Array.from(
+        document.querySelectorAll(
+          '.cdk-overlay-container .mat-menu-grouped .mat-mdc-menu-content > .mat-divider',
+        ),
+      ).filter(isShown);
+    const expectDividersBetweenItems = (): void => {
+      const dividers = shownDividers();
+      expect(dividers.length).toBeGreaterThan(0);
+      dividers.forEach((divider) => {
+        expect(
+          shownSibling(divider, 'previousElementSibling')?.hasAttribute('mat-menu-item'),
+        ).toBeTrue();
+        expect(
+          shownSibling(divider, 'nextElementSibling')?.hasAttribute('mat-menu-item'),
+        ).toBeTrue();
+      });
+    };
+    const shownItemBefore = (key: string): Element | null => {
+      const item = overlayItems().find((el) => el.textContent?.includes(key));
+      return item ? shownSibling(item, 'previousElementSibling') : null;
+    };
+
+    it('shows one divider between groups when a group is empty', fakeAsync(() => {
+      openMenu();
+
+      expect(shownDividers().length).toBe(3);
+      expectDividersBetweenItems();
+      expect(shownItemBefore(T.F.TASK.CMP.MARK_WONT_DO)?.classList).toContain(
+        'mat-divider',
+      );
+      closeMenus();
+    }));
+
+    it('shows a divider around the issue group when it is present', fakeAsync(() => {
+      openMenu({ issueId: 'issue-1', issueType: 'GITHUB' } as Partial<Task>);
+
+      expect(shownDividers().length).toBe(4);
+      expectDividersBetweenItems();
+      closeMenus();
+    }));
+
+    it('labels every date shortcut visibly', fakeAsync(() => {
+      openMenu();
+
+      const labels = Array.from(
+        document.querySelectorAll<HTMLElement>(
+          '.cdk-overlay-container .quick-access button',
+        ),
+      ).map((btn) => btn.querySelector('.quick-access-label')?.textContent?.trim());
+      expect(labels).toEqual([
+        T.G.TODAY,
+        // weekday names keep every label on one line in the narrow row
+        ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][(new Date().getDay() + 1) % 7],
+        'Mon',
+        T.F.TASK.D_SCHEDULE_TASK.QA_LABEL_PICK_DATE,
+      ]);
+      closeMenus();
+    }));
+
+    it('moves to top and bottom from the Reorder submenu', fakeAsync(() => {
+      const openReorder = (): HTMLElement[] => {
+        openMenu();
+        const trigger = overlayItems().find((el) =>
+          el.textContent?.includes(T.F.TASK.CMP.REORDER),
+        );
+        expect(trigger).toBeDefined();
+        trigger!.click();
+        fixture.detectChanges();
+        tick();
+        return overlayItems();
+      };
+
+      openReorder()
+        .find((el) => el.textContent?.includes(T.F.TASK.CMP.MOVE_TO_TOP))!
+        .click();
+      flush();
+      expect(taskService.moveToTop).toHaveBeenCalledWith('task-1', undefined, false);
+
+      openReorder()
+        .find((el) => el.textContent?.includes(T.F.TASK.CMP.MOVE_TO_BOTTOM))!
+        .click();
+      flush();
+      expect(taskService.moveToBottom).toHaveBeenCalledWith('task-1', undefined, false);
+      closeMenus();
+    }));
+  });
+
   describe('priority submenu', () => {
     const menuItems = (selector: string): HTMLElement[] =>
       Array.from(
@@ -398,6 +604,48 @@ describe('TaskContextMenuInnerComponent', () => {
 
   // A `wontDoOn` equal to `doneOn` marks won't do; both travel in the op, so
   // every client, released ones included, stores the same pair.
+  describe('Plainspace handoff (#8648)', () => {
+    const linked = {
+      ...DEFAULT_TASK,
+      id: 'ps-1',
+      projectId: 'P1',
+      issueType: 'PLAINSPACE',
+      issueId: 'item-1',
+      issueProviderId: 'prov-1',
+    } as Task;
+
+    it('is offered on a linked Plainspace task still assigned to me', () => {
+      fixture.componentRef.setInput('task', linked);
+      expect(component.isPlainspaceHandoff).toBeTrue();
+    });
+
+    it('is not offered once the task is no longer in my Plainspace list', () => {
+      TestBed.inject(IssueSyncStateService).setMissing(['ps-1'], ['ps-1']);
+      fixture.componentRef.setInput('task', linked);
+      expect(component.isPlainspaceHandoff).toBeFalse();
+    });
+
+    it('is not offered on other issue types', () => {
+      fixture.componentRef.setInput('task', { ...linked, issueType: 'GITHUB' });
+      expect(component.isPlainspaceHandoff).toBeFalse();
+    });
+
+    it('closes the menu when the members cannot be loaded', async () => {
+      const handoff = TestBed.inject(PlainspaceHandoffService);
+      spyOn(handoff, 'getMembers').and.resolveTo(null);
+      const closeSpy = spyOn(
+        component as unknown as { _closeContextMenu: () => void },
+        '_closeContextMenu',
+      );
+      component.task = linked;
+
+      await component.loadPlainspaceMembers();
+
+      expect(component.plainspaceMembers()).toBeNull();
+      expect(closeSpy).toHaveBeenCalled();
+    });
+  });
+
   describe('setWontDo()', () => {
     it('finishes the task with a matching doneOn and wontDoOn', () => {
       jasmine.clock().install();

@@ -92,6 +92,10 @@
     "INTRO_2": "如果您认同这种方式，并希望项目持续健康地发展，您的自愿性捐赠我们将非常感激。"
   },
   "EXAMPLE_TASKS": {
+    "GETTING_STARTED": {
+      "TITLE": "可选：入门小提示",
+      "NOTES": "这里的内容都不是必需的。你可以随时删除这个任务。\n\n- **今天和收件箱**：今天会显示今天计划的任务。没有自己项目的任务会留在收件箱。一个任务可以同时出现在两个列表中。\n- **项目**：使用侧边栏中**项目**旁的 **+**，按主题对任务分组。\n- **同步**：在**设置 → 同步与备份**中，让你的数据保存在多台设备上。\n- **从 Todoist 或 TickTick 转过来？** 在**设置 → 同步与备份 → 导入/导出**中导入你的任务。\n- **导览**：侧边栏菜单中的**帮助 → 快速导览**会用你自己的任务带你了解基本操作，而**帮助 → 操作指南**则会逐步介绍简短语法和键盘操作。你可以随时关闭导览。\n- **打造专属设置**：选择主题或深色模式，并在**设置 → 常规**中开启或关闭看板、计划、习惯、专注模式或集成等功能。插件还能带来更多。"
+    },
     "LEARN_KEYBOARD_SHORTCUTS": {
       "TITLE": "学习键盘快捷键",
       "NOTES": "Super Productivity 专为键盘操作而设计。学习快捷键可以让您工作更高效。\n\n**如何开始：**\n1. 打开**侧边栏菜单**\n2. 进入**帮助**\n3. 点击**键盘导航教程**"
@@ -2948,6 +2952,7 @@
       "CREATE_TASK": "操作指南：创建任务",
       "GET_HELP_ONLINE": "在线获取帮助",
       "KEYBOARD": "如何：高级键盘",
+      "QUICK_TOUR": "快速导览",
       "REDDIT_COMMUNITY": "Reddit 社区",
       "REPORT_A_PROBLEM": "报告问题",
       "SEND_FEEDBACK": "发送反馈",
@@ -3034,13 +3039,50 @@
     "HINTS": {
       "CREATE_TASK": "点击 + 添加你的第一个任务",
       "CREATE_TASK_TOUCH": "点按 + 添加你的第一个任务",
+      "DECLINED": "没问题。你随时可以在帮助 → 快速导览找到它。",
+      "MORE_FALLBACK": "还有更多功能已经启用：项目、时间跟踪、规划表…",
+      "NO_THANKS": "不用了",
+      "SHOW_ME_MORE": "显示更多 ›",
       "EXPLORE": "随意点击探索吧！你可以在侧边栏找到帮助。",
       "EXPLORE_TOUCH": "随意点按探索吧！你可以在菜单中找到帮助。",
       "TASK_TAP_TOUCH": "点按任务以打开详情。",
       "TASK_SWIPE_LEFT_TOUCH": "向左滑动任务以查看更多操作",
+      "TODAY_AND_INBOX": "这个任务已计划在今天，所以会显示在{{todayIcon}} <b>今天</b>。没有自己项目的任务会留在{{inboxIcon}} <b>收件箱</b>。",
+      "TODAY_AND_INBOX_PHONE": "这个任务已计划在今天，所以会显示在{{todayIcon}} <b>今天</b>。没有自己项目的任务会留在{{inboxIcon}} <b>收件箱</b>，位于 ☰ 之下。",
       "TASK_SWIPE_RIGHT_TOUCH": "向右滑动任务以将其标记为完成",
       "OR_PRESS": "或按",
       "SKIP_ARIA": "关闭提示"
+    },
+    "TOUR": {
+      "ADD_SUBTASK": "把它拆开：在任务上单击鼠标右键，选择{{subtaskIcon}} <b>添加子任务</b>",
+      "COUNTER": "{{nr}} / {{total}}",
+      "NEXT": "下一步 ›",
+      "ORGANIZE": "创建你自己的<b>项目</b>来分组任务，或创建<b>标签</b>来标记任务。点击 + 即可创建",
+      "ORGANIZE_COLLAPSED": "创建你自己的<b>项目</b>来分组任务，或创建<b>标签</b>来标记任务。点击 {{expandIcon}} 展开侧边栏即可创建",
+      "ORGANIZE_PHONE": "项目和标签都在 ☰ 之下。创建你自己的<b>项目</b>来分组任务，或创建<b>标签</b>来标记任务",
+      "PLANNER": "在{{plannerIcon}} <b>规划表</b>中规划接下来几天",
+      "TASK_MENU_TOUCH": "向左滑动任务以打开菜单：{{playIcon}} <b>开始计时</b>、{{subtaskIcon}} <b>添加子任务</b>",
+      "TASK_MENU_TOUCH_NO_TRACKING": "向左滑动任务以打开菜单，例如{{subtaskIcon}} <b>添加子任务</b>",
+      "TIMER_RUNNING": "计时器正在运行。再按一次{{playIcon}}或 <kbd>{{key}}</kbd> 即可暂停。",
+      "TIMER_RUNNING_TOUCH": "计时器正在运行。点击顶部的{{playIcon}}即可暂停。",
+      "TRACK_TIME": "将鼠标悬停在任务上，按下{{playIcon}}即可开始计时"
+    },
+    "WANT_MORE": {
+      "BOARDS": "<b>看板</b> · 为你的任务提供看板式列",
+      "DONE": "完成",
+      "FINISH_DAY": "<b>结束一天</b> · 回顾并收尾你的一天",
+      "FOCUS_MODE": "<b>专注模式</b> · 番茄钟与无干扰工作",
+      "FOOTER": "之后可在帮助 → 快速导览再次找到。",
+      "HABITS": "<b>习惯</b> · 逐日跟踪你的日常习惯",
+      "INTRO": "Super Productivity 一开始很简洁。需要时，还有更多功能：",
+      "OPEN_SETTINGS": "打开设置 ›",
+      "PLUGINS": "<b>插件与集成</b> · Jira、GitHub、CalDAV 等",
+      "SCHEDULE": "<b>计划</b> · 以时间线呈现你的一天",
+      "SEARCH": "按 <kbd>{{key}}</kbd> 即可搜索所有内容。",
+      "SEARCH_PHONE": "从 ☰ 即可搜索所有内容。",
+      "SHORT_SYNTAX": "添加任务时输入 <code>#tag</code>、<code>+project</code> 或 <code>@tomorrow</code>。帮助 → 操作指南中有更多说明。",
+      "SYNC": "你的数据会留在这台设备上。同步与备份在设置中。",
+      "TITLE": "想要更多吗？"
     }
   },
   "PDS": {

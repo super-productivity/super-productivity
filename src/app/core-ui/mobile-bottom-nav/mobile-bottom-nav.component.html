@@ -12,15 +12,43 @@
   >
     <mat-icon>wb_sunny</mat-icon>
   </button>
-  @if (isPlannerEnabled()) {
+  @if (slot(); as slot) {
+    <!-- Tap navigates; long-press or contextmenu (right click, menu key) picks
+         the destination. The anchor only positions the menu; its
+         matButtonIcon/iconPositionEnd attributes project it into the button
+         itself rather than the zero-width label. -->
     <button
+      #slotButton
       mat-button
-      class="nav-button"
-      routerLink="/planner"
-      routerLinkActive="active"
-      [attr.aria-label]="T.MH.PLANNER | translate"
+      class="nav-button e2e-bottom-nav-slot"
+      [class.tour-planner]="slot.id === 'planner'"
+      [class.active]="isSlotActive()"
+      [attr.aria-label]="slot.kind === 'route' ? (slot.labelKey | translate) : slot.label"
+      [attr.aria-description]="T.BN.SLOT_CHANGE_HINT | translate"
+      (pointerdown)="onSlotPointerDown()"
+      (longPress)="onSlotLongPress()"
+      (touchend)="onSlotTouchEnd($event)"
+      (contextmenu)="$event.preventDefault(); openSlotMenu()"
+      (click)="onSlotClick(slot)"
     >
-      <mat-icon>edit_calendar</mat-icon>
+      @if (slot.kind === 'route') {
+        <mat-icon>{{ slot.icon }}</mat-icon>
+      } @else {
+        <plugin-icon
+          [pluginId]="slot.pluginId"
+          [fallbackIcon]="slot.icon"
+        ></plugin-icon>
+      }
+      <span
+        class="slot-menu-anchor"
+        matButtonIcon
+        iconPositionEnd
+        aria-hidden="true"
+        #slotMenuTrigger="matMenuTrigger"
+        [matMenuTriggerFor]="slotMenu"
+        [matMenuTriggerRestoreFocus]="false"
+        (menuClosed)="onSlotMenuClosed()"
+      ></span>
     </button>
   }
   <button
@@ -97,7 +125,7 @@
 
   <button
     mat-button
-    class="nav-button"
+    class="nav-button tour-navMenuBtn"
     (click)="toggleMobileNav()"
     [attr.aria-label]="T.MH.PROJECT_MENU | translate"
   >
@@ -116,6 +144,7 @@
       [class.active]="activePluginId() === button.pluginId && isShowPluginPanel()"
     >
       <plugin-icon
+        matMenuItemIcon
         [pluginId]="button.pluginId"
         [fallbackIcon]="button.icon || 'extension'"
       ></plugin-icon>
@@ -156,6 +185,37 @@
     >
       <mat-icon>comment</mat-icon>
       <span>{{ T.BN.SHOW_NOTES | translate }}</span>
+    </button>
+  }
+</mat-menu>
+
+<mat-menu
+  #slotMenu="matMenu"
+  yPosition="above"
+  class="mobile-bottom-nav-slot-menu"
+  [ariaLabel]="T.BN.SLOT_MENU_LABEL | translate"
+>
+  @for (option of slotOptions(); track option.id) {
+    <button
+      mat-menu-item
+      role="menuitemradio"
+      [attr.aria-checked]="option.id === slot()?.id"
+      (click)="selectSlot(option.id)"
+    >
+      @if (option.kind === 'route') {
+        <mat-icon>{{ option.icon }}</mat-icon>
+        <span>{{ option.labelKey | translate }}</span>
+      } @else {
+        <plugin-icon
+          matMenuItemIcon
+          [pluginId]="option.pluginId"
+          [fallbackIcon]="option.icon"
+        ></plugin-icon>
+        <span>{{ option.label }}</span>
+      }
+      @if (option.id === slot()?.id) {
+        <div><mat-icon>check</mat-icon></div>
+      }
     </button>
   }
 </mat-menu>

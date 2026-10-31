@@ -9,7 +9,7 @@ import {
   getSuperSyncConfig,
   type SimulatedE2EClient,
 } from '../../utils/supersync-helpers';
-import { waitForAppReady } from '../../utils/waits';
+import { waitForAppReady, waitForMenuSettled } from '../../utils/waits';
 import { serveReleasedClientAssets } from '../../utils/released-client-assets';
 
 /**
@@ -108,6 +108,7 @@ const noteMenuAction = async (
   const note = client.page.locator(`#n-${id}`);
   await note.hover();
   await note.locator('button:has(mat-icon:text-is("more_vert"))').click();
+  await waitForMenuSettled(client.page);
   await client.page
     .locator('.mat-mdc-menu-panel button')
     .filter({ has: client.page.locator(`mat-icon:text-is("${icon}")`) })

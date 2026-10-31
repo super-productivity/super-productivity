@@ -15,11 +15,14 @@ import {
 } from './capture-rate-limit';
 import { parseRefreshToken } from './capture-oauth-token';
 import { parseCaptureToken } from './capture-token';
+import { CaptureReviewAccess } from './capture-review';
 
 interface OAuthOptions {
   publicUrl: string;
   signingKey: string;
   clients: CaptureOAuthClient[];
+  /** Operator-set reviewer code (CAPTURE_REVIEW_*); absent unless configured. */
+  review?: CaptureReviewAccess;
 }
 
 const AuthorizeSchema = z.object({
@@ -94,7 +97,7 @@ ${local ? '<p class="consent-note">This assistant runs on your computer. Continu
 </form>
 <details class="consent-privacy">
 <summary>Privacy and access</summary>
-<p>Waiting tasks are stored encrypted. Enable sync encryption to keep the capture key private.</p>
+<p>Waiting tasks are stored encrypted to a key only your devices hold.</p>
 <p>You can remove this connection at any time in Super Productivity’s AI assistants settings.</p>
 </details>
 </section>
@@ -106,7 +109,7 @@ export const captureOAuthRoutes = async (
   app: FastifyInstance,
   options: OAuthOptions,
 ): Promise<void> => {
-  const { publicUrl, signingKey, clients } = options;
+  const { publicUrl, signingKey, clients, review } = options;
   const resource = `${publicUrl}/mcp`;
   const config = { rateLimit: false as const };
   app.addHook('onRequest', async (_req, reply) => {
@@ -202,6 +205,7 @@ export const captureOAuthRoutes = async (
         parsed.data.authId,
         parsed.data.code,
         publicUrl,
+        review,
       );
       return redirect
         ? reply.send({ redirect })

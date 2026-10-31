@@ -89,6 +89,7 @@ import { TaskMultiSelectBarComponent } from './features/tasks/task-multi-select-
 import { TaskMultiSelectService } from './features/tasks/task-multi-select.service';
 import { OnboardingHintComponent } from './features/onboarding/onboarding-hint.component';
 import { OnboardingHintService } from './features/onboarding/onboarding-hint.service';
+import { QuickTourService } from './features/onboarding/quick-tour.service';
 import { MaterialIconsLoaderService } from './ui/material-icons-loader.service';
 import { BrowserTitleService } from './core/browser-title/browser-title.service';
 
@@ -172,6 +173,7 @@ export class AppComponent implements OnDestroy, AfterViewInit {
   private _iosShareService = inject(IosShareService);
   private _agentCaptureService = inject(AgentCaptureService);
   readonly onboardingHintService = inject(OnboardingHintService);
+  readonly quickTourService = inject(QuickTourService);
 
   private _syncTriggerService = inject(SyncTriggerService);
   readonly workContextService = inject(WorkContextService);

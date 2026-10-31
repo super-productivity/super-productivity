@@ -163,6 +163,7 @@ describe('Hydration-replay vs compaction race (integration, real store, #9084)',
           provide: ValidateStateService,
           useValue: {
             validateState: () => Promise.resolve({ isValid: true, typiaErrors: [] }),
+            validateStateWhenIdle: () => undefined,
           },
         },
       ],

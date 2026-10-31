@@ -1,5 +1,8 @@
 import { DEFAULT_GLOBAL_CONFIG } from '../../features/config/default-global-config.const';
-import { NEW_INSTALL_APP_FEATURES } from '../../features/config/new-install-app-features.const';
+import {
+  NEW_INSTALL_APP_FEATURES,
+  NEW_INSTALL_CONFIG_SECTIONS,
+} from '../../features/config/new-install-config.const';
 import { SyncProviderId } from '../sync-providers/provider.const';
 import { buildRemoteRebuildBaselineState } from './remote-rebuild-baseline.util';
 
@@ -12,14 +15,21 @@ describe('buildRemoteRebuildBaselineState', () => {
     isManualSyncOnly: true,
   };
 
-  it("starts a history without a snapshot from the device's own app features (#10399)", () => {
+  it("starts a history without a snapshot from the device's own new-install sections (#10399)", () => {
     const baseline = buildRemoteRebuildBaselineState(
       { task: { ids: [], entities: {} } },
       localOnlySyncSettings,
-      NEW_INSTALL_APP_FEATURES,
+      NEW_INSTALL_CONFIG_SECTIONS,
     );
 
     expect(baseline.globalConfig.appFeatures).toEqual(NEW_INSTALL_APP_FEATURES);
+    expect(baseline.globalConfig.idle).toEqual(NEW_INSTALL_CONFIG_SECTIONS.idle);
+    expect(baseline.globalConfig.takeABreak).toEqual(
+      NEW_INSTALL_CONFIG_SECTIONS.takeABreak,
+    );
+    expect(baseline.globalConfig.focusMode).toEqual(
+      NEW_INSTALL_CONFIG_SECTIONS.focusMode,
+    );
     expect(baseline.globalConfig.misc).toEqual(DEFAULT_GLOBAL_CONFIG.misc);
     expect(baseline['task']).toEqual({ ids: [], entities: {} });
   });
@@ -34,7 +44,7 @@ describe('buildRemoteRebuildBaselineState', () => {
     const baseline = buildRemoteRebuildBaselineState(
       { globalConfig: { appFeatures: snapshotAppFeatures } },
       localOnlySyncSettings,
-      NEW_INSTALL_APP_FEATURES,
+      NEW_INSTALL_CONFIG_SECTIONS,
     );
 
     expect(baseline.globalConfig.appFeatures).toEqual(snapshotAppFeatures);
@@ -44,7 +54,7 @@ describe('buildRemoteRebuildBaselineState', () => {
     const baseline = buildRemoteRebuildBaselineState(
       { globalConfig: { sync: { isCompressionEnabled: true } } },
       localOnlySyncSettings,
-      DEFAULT_GLOBAL_CONFIG.appFeatures,
+      NEW_INSTALL_CONFIG_SECTIONS,
     );
 
     expect(baseline.globalConfig.sync).toEqual({

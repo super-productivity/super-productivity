@@ -23,7 +23,9 @@ export class TranslateMatDatepickerIntl extends MatDatepickerIntl {
 
   private _updateLabels(): void {
     this.calendarLabel = this._translateService.instant(T.DATETIME_SCHEDULE.MONTH);
-    this.openCalendarLabel = this._translateService.instant(T.F.TASK.CMP.SCHEDULE);
+    this.openCalendarLabel = this._translateService.instant(
+      T.DATETIME_SCHEDULE.OPEN_CALENDAR,
+    );
     this.prevMonthLabel = this._translateService.instant(
       T.DATETIME_SCHEDULE.PREVIOUS_MONTH,
     );

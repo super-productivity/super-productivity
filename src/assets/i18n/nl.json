@@ -86,6 +86,10 @@
     "INTRO_2": "Als je deze aanpak waardeert en het project gezond en in ontwikkeling wilt houden, wordt een vrijwillige donatie zeer op prijs gesteld."
   },
   "EXAMPLE_TASKS": {
+    "GETTING_STARTED": {
+      "TITLE": "Optioneel: tips om te beginnen",
+      "NOTES": "Niets hier is verplicht. Verwijder deze taak wanneer je wilt.\n\n- **Vandaag en Postvak IN**: Vandaag toont wat voor vandaag gepland staat. Taken zonder eigen project blijven in Postvak IN. Een taak kan in beide lijsten staan.\n- **Projecten**: groepeer taken per onderwerp met de **+** naast **Projecten** in de zijbalk.\n- **Synchronisatie**: houd je gegevens op meerdere apparaten bij via **Instellingen → Synchronisatie en backup**.\n- **Kom je van Todoist of TickTick?** Importeer je taken via **Instellingen → Synchronisatie en backup → Importeren / exporteren**.\n- **Rondleidingen**: **Help → Snelle rondleiding** in het zijbalkmenu loopt met je eigen taak de basis door, en **Help → Uitleg** toont stap voor stap de korte syntaxis en toetsenbordnavigatie. Sluit een rondleiding wanneer je wilt.\n- **Maak het van jou**: kies een thema of donkere modus en zet functies zoals borden, agenda, gewoonten, focusmodus of integraties aan of uit via **Instellingen → Algemeen**. Plugins voegen nog meer toe."
+    },
     "LEARN_KEYBOARD_SHORTCUTS": {
       "TITLE": "Leer de sneltoetsen",
       "NOTES": "Super Productivity is ontworpen om met het toetsenbord te gebruiken. Leer de sneltoetsen om sneller te werken.\n\n**Hoe te beginnen:**\n1. Open het **zijbalkmenu**\n2. Ga naar **Help**\n3. Klik op **Toetsenbordnavigatie-tour**"
@@ -3004,6 +3008,7 @@
       "CONTRIBUTE": "Draag bij",
       "GET_HELP_ONLINE": "Online hulp krijgen",
       "KEYBOARD": "Howto: Geavanceerd toetsenbord",
+      "QUICK_TOUR": "Snelle rondleiding",
       "REDDIT_COMMUNITY": "Reddit-gemeenschap",
       "REPORT_A_PROBLEM": "Een probleem melden",
       "SEND_FEEDBACK": "Feedback versturen",
@@ -3093,13 +3098,50 @@
     "HINTS": {
       "CREATE_TASK": "Klik op + om je eerste taak toe te voegen",
       "CREATE_TASK_TOUCH": "Tik op + om je eerste taak toe te voegen",
+      "DECLINED": "Geen probleem. Je vindt het altijd onder Help → Snelle rondleiding.",
+      "MORE_FALLBACK": "Er staat al meer aan: projecten, tijdregistratie, Planner…",
+      "NO_THANKS": "Nee, bedankt",
+      "SHOW_ME_MORE": "Laat me meer zien ›",
       "EXPLORE": "Klik gerust rond en ontdek alles! Je vindt hulp in de zijbalk.",
       "EXPLORE_TOUCH": "Tik gerust rond en ontdek alles! Je vindt hulp in het menu.",
       "TASK_TAP_TOUCH": "Tik op een taak om de details te openen.",
       "TASK_SWIPE_LEFT_TOUCH": "Veeg de taak naar links voor meer acties",
+      "TODAY_AND_INBOX": "Deze taak staat gepland voor vandaag, daarom staat hij in {{todayIcon}} <b>Vandaag</b>. Taken zonder eigen project blijven in {{inboxIcon}} <b>Postvak IN</b>.",
+      "TODAY_AND_INBOX_PHONE": "Deze taak staat gepland voor vandaag, daarom staat hij in {{todayIcon}} <b>Vandaag</b>. Taken zonder eigen project blijven in {{inboxIcon}} <b>Postvak IN</b>, onder ☰.",
       "TASK_SWIPE_RIGHT_TOUCH": "Veeg de taak naar rechts om deze als voltooid te markeren",
       "OR_PRESS": "of druk op",
       "SKIP_ARIA": "Hint sluiten"
+    },
+    "TOUR": {
+      "ADD_SUBTASK": "Splits hem op: klik met de rechtermuisknop op de taak en kies {{subtaskIcon}} <b>Subtaak toevoegen</b>",
+      "COUNTER": "{{nr}} van {{total}}",
+      "NEXT": "Volgende ›",
+      "ORGANIZE": "Maak een eigen <b>project</b> om taken te groeperen, of een <b>tag</b> om ze te labelen. Maak er een met +",
+      "ORGANIZE_COLLAPSED": "Maak een eigen <b>project</b> om taken te groeperen, of een <b>tag</b> om ze te labelen. Klap de zijbalk uit met {{expandIcon}} om er een te maken",
+      "ORGANIZE_PHONE": "Projecten en tags vind je onder ☰. Maak een eigen <b>project</b> om taken te groeperen, of een <b>tag</b> om ze te labelen",
+      "PLANNER": "Plan de komende dagen in {{plannerIcon}} <b>Planner</b>",
+      "TASK_MENU_TOUCH": "Veeg een taak naar links voor het menu: {{playIcon}} <b>Begin met het bijhouden van de tijd</b>, {{subtaskIcon}} <b>Subtaak toevoegen</b>",
+      "TASK_MENU_TOUCH_NO_TRACKING": "Veeg een taak naar links voor het menu, bijv. {{subtaskIcon}} <b>Subtaak toevoegen</b>",
+      "TIMER_RUNNING": "De timer loopt. Druk nogmaals op {{playIcon}} of op <kbd>{{key}}</kbd> om te pauzeren.",
+      "TIMER_RUNNING_TOUCH": "De timer loopt. Tik bovenaan op {{playIcon}} om te pauzeren.",
+      "TRACK_TIME": "Beweeg de muis over de taak en druk op {{playIcon}} om tijd bij te houden"
+    },
+    "WANT_MORE": {
+      "BOARDS": "<b>Borden</b> · kanbankolommen voor je taken",
+      "DONE": "Klaar",
+      "FINISH_DAY": "<b>Dag afsluiten</b> · blik terug op je dag en rond hem af",
+      "FOCUS_MODE": "<b>Focusmodus</b> · pomodoro en afleidingsvrij werken",
+      "FOOTER": "Je vindt dit terug onder Help → Snelle rondleiding.",
+      "HABITS": "<b>Gewoonten</b> · volg je routines dag na dag",
+      "INTRO": "Super Productivity begint rustig. Meer is er als je het nodig hebt:",
+      "OPEN_SETTINGS": "Instellingen openen ›",
+      "PLUGINS": "<b>Plugins en integraties</b> · Jira, GitHub, CalDAV en meer",
+      "SCHEDULE": "<b>Agenda</b> · je dag op een tijdlijn",
+      "SEARCH": "Zoek overal in met <kbd>{{key}}</kbd>.",
+      "SEARCH_PHONE": "Zoek overal in via ☰.",
+      "SHORT_SYNTAX": "Typ <code>#tag</code>, <code>+project</code> of <code>@tomorrow</code> terwijl je een taak toevoegt. Help → Uitleg toont meer.",
+      "SYNC": "Je gegevens blijven op dit apparaat. Synchronisatie en back-ups vind je onder Instellingen.",
+      "TITLE": "Meer nodig?"
     },
     "SYNC_CTA": "Gebruik je Super Productivity al op een ander apparaat?",
     "SYNC_CTA_LINK": "Synchronisatie instellen"

@@ -94,7 +94,7 @@
   "EXAMPLE_TASKS": {
     "GETTING_STARTED": {
       "TITLE": "İsteğe bağlı: Başlangıç ipuçları",
-      "NOTES": "Buradaki hiçbir şey zorunlu değildir. Bu görevi dilediğiniz zaman silebilirsiniz.\n\n- **Projeler**: Kenar çubuğundaki **Projeler** seçeneğinin yanında bulunan **+** simgesini kullanarak görevleri konuya göre gruplandırın.\n- **Eşitleme**: Verilerinizi **Ayarlar → Eşitleme ve Yedekleme** bölümünden birden fazla cihazda tutun.\n- **Klavye**: Kenar çubuğu menüsünden **Yardım → Nasıl yapılır: Klavye Navigasyonu** seçeneğini açın.\n- **Kendinize göre kişiselleştirin**: Bir tema veya karanlık mod seçin ve panolar, zamanlama, alışkanlıklar, odak modu veya entegrasyonlar gibi özellikleri **Ayarlar → Genel** bölümünden açıp kapatın. Eklentiler çok daha fazlasını ekler."
+      "NOTES": "Buradaki hiçbir şey zorunlu değildir. Bu görevi dilediğiniz zaman silebilirsiniz.\n\n- **Bugün ve Gelen kutusu**: Bugün, bugün için planlananları gösterir. Kendi projesi olmayan görevler Gelen kutusu içinde kalır. Bir görev her iki listede de görünebilir.\n- **Projeler**: Kenar çubuğundaki **Projeler** seçeneğinin yanında bulunan **+** simgesini kullanarak görevleri konuya göre gruplandırın.\n- **Eşitleme**: Verilerinizi **Ayarlar → Senkronizasyon ve Yedek** bölümünden birden fazla cihazda tutun.\n- **Todoist veya TickTick'ten mi geliyorsunuz?** Görevlerinizi **Ayarlar → Senkronizasyon ve Yedek → İçe Aktar/Dışa Aktar** bölümünden içe aktarın.\n- **Turlar**: Kenar çubuğu menüsündeki **Yardım → Hızlı tur** temel bilgileri kendi göreviniz üzerinde adım adım gösterir, **Yardım → Nasıl yapılır** ise kısa sözdizimini ve klavye gezinmesini gösterir. Bir turu dilediğiniz zaman kapatabilirsiniz.\n- **Kendinize göre kişiselleştirin**: Bir tema veya karanlık mod seçin ve panolar, zamanlama, alışkanlıklar, odak modu veya entegrasyonlar gibi özellikleri **Ayarlar → Genel** bölümünden açıp kapatın. Eklentiler çok daha fazlasını ekler."
     }
   },
   "F": {
@@ -2950,6 +2950,7 @@
       "CREATE_TASK": "Nasıl yapılır: Görev oluşturma",
       "GET_HELP_ONLINE": "Online yardım al",
       "KEYBOARD": "Nasıl Yapılır: Gelişmiş Klavye",
+      "QUICK_TOUR": "Hızlı tur",
       "REDDIT_COMMUNITY": "Reddit Topluluğu",
       "REPORT_A_PROBLEM": "Sorun bildir",
       "SEND_FEEDBACK": "Geri bildirim gönder",
@@ -3016,13 +3017,50 @@
     "HINTS": {
       "CREATE_TASK": "İlk görevinizi eklemek için + işaretine tıklayın",
       "CREATE_TASK_TOUCH": "İlk görevinizi eklemek için + işaretine dokunun",
+      "DECLINED": "Sorun değil. İstediğiniz zaman Yardım → Hızlı tur altında bulabilirsiniz.",
+      "MORE_FALLBACK": "Daha fazlası zaten açık: projeler, zaman takibi, Planlayıcı…",
+      "NO_THANKS": "Hayır, teşekkürler",
+      "SHOW_ME_MORE": "Daha fazlasını göster ›",
       "DONE_TITLE": "Her şey hazır",
       "EXPLORE_INBOX": "Gelen Kutunuzda bazı isteğe bağlı ipuçları sizi bekliyor. İstediğiniz zaman deneyin veya silin.",
       "GOT_IT": "Anladım",
       "TASK_SWIPE_LEFT_TOUCH": "Daha fazla işlem için görevi sola kaydırın",
+      "TODAY_AND_INBOX": "Bu görev bugün için planlandığından {{todayIcon}} <b>Bugün</b> içinde görünür. Kendi projesi olmayan görevler {{inboxIcon}} <b>Gelen kutusu</b> içinde kalır.",
+      "TODAY_AND_INBOX_PHONE": "Bu görev bugün için planlandığından {{todayIcon}} <b>Bugün</b> içinde görünür. Kendi projesi olmayan görevler {{inboxIcon}} <b>Gelen kutusu</b> içinde kalır, ☰ altında.",
       "TASK_SWIPE_RIGHT_TOUCH": "Tamamlandı olarak işaretlemek için görevi sağa kaydırın",
       "OR_PRESS": "veya basın",
       "SKIP_ARIA": "İpucunu kapat"
+    },
+    "TOUR": {
+      "ADD_SUBTASK": "Parçalara ayırın: göreve sağ tıklayın ve {{subtaskIcon}} <b>Alt Görev ekle</b> seçeneğini seçin",
+      "COUNTER": "{{nr}} / {{total}}",
+      "NEXT": "Sonraki ›",
+      "ORGANIZE": "Görevleri gruplamak için kendi <b>projenizi</b> veya etiketlemek için bir <b>etiket</b> oluşturun. + ile oluşturabilirsiniz",
+      "ORGANIZE_COLLAPSED": "Görevleri gruplamak için kendi <b>projenizi</b> veya etiketlemek için bir <b>etiket</b> oluşturun. Oluşturmak için kenar çubuğunu {{expandIcon}} ile genişletin",
+      "ORGANIZE_PHONE": "Projeler ve etiketler ☰ altında bulunur. Görevleri gruplamak için kendi <b>projenizi</b> veya etiketlemek için bir <b>etiket</b> oluşturun",
+      "PLANNER": "Önümüzdeki günleri {{plannerIcon}} <b>Planlayıcı</b> içinde planlayın",
+      "TASK_MENU_TOUCH": "Menüsü için görevi sola kaydırın: {{playIcon}} <b>İzlemeye başla</b>, {{subtaskIcon}} <b>Alt Görev ekle</b>",
+      "TASK_MENU_TOUCH_NO_TRACKING": "Menüsü için görevi sola kaydırın, örneğin {{subtaskIcon}} <b>Alt Görev ekle</b>",
+      "TIMER_RUNNING": "Zamanlayıcı çalışıyor. Duraklatmak için {{playIcon}} düğmesine tekrar veya <kbd>{{key}}</kbd> tuşuna basın.",
+      "TIMER_RUNNING_TOUCH": "Zamanlayıcı çalışıyor. Duraklatmak için üstteki {{playIcon}} düğmesine dokunun.",
+      "TRACK_TIME": "Görevin üzerine gelin ve zamanı izlemek için {{playIcon}} düğmesine basın"
+    },
+    "WANT_MORE": {
+      "BOARDS": "<b>Panolar</b> · Görevleriniz için Kanban tarzı sütunlar",
+      "DONE": "Tamam",
+      "FINISH_DAY": "<b>Günü bitir</b> · Gününüzü gözden geçirin ve tamamlayın",
+      "FOCUS_MODE": "<b>Odak Modu</b> · Pomodoro ve dikkat dağıtmayan çalışma",
+      "FOOTER": "Bunu Yardım → Hızlı tur altında yeniden bulabilirsiniz.",
+      "HABITS": "<b>Alışkanlıklar</b> · Rutinlerinizi gün gün takip edin",
+      "INTRO": "Super Productivity sakin başlar. İhtiyaç duyduğunuzda daha fazlası hazır:",
+      "OPEN_SETTINGS": "Ayarlar aç ›",
+      "PLUGINS": "<b>Eklentiler ve entegrasyonlar</b> · Jira, GitHub, CalDAV ve daha fazlası",
+      "SCHEDULE": "<b>Takvim</b> · Gününüz bir zaman çizelgesinde",
+      "SEARCH": "<kbd>{{key}}</kbd> ile her şeyi arayın.",
+      "SEARCH_PHONE": "☰ üzerinden her şeyi arayın.",
+      "SHORT_SYNTAX": "Görev eklerken <code>#tag</code>, <code>+project</code> veya <code>@tomorrow</code> yazın. Daha fazlasını Yardım → Nasıl yapılır bölümünde görebilirsiniz.",
+      "SYNC": "Verileriniz bu cihazda kalır. Senkronizasyon ve yedekler Ayarlar içindedir.",
+      "TITLE": "Daha fazlası ister misiniz?"
     }
   },
   "PDS": {

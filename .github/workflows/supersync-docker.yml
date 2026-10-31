@@ -46,7 +46,7 @@ jobs:
 
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
+        uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
         with:
           egress-policy: audit
           allowed-endpoints: >
@@ -68,7 +68,7 @@ jobs:
           ssh://git@github.com/
 
       - name: Log in to GitHub Container Registry
-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v2
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v2
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -164,7 +164,7 @@ jobs:
 
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
+        uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
         with:
           egress-policy: audit
           allowed-endpoints: >
@@ -199,7 +199,7 @@ jobs:
           ssh://git@github.com/
 
       - name: Log in to GitHub Container Registry
-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v2
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v2
         with:
           registry: ghcr.io
           username: ${{ github.actor }}

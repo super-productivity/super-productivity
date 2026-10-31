@@ -1,6 +1,6 @@
 # Multi-select & bulk actions for tasks — concept
 
-**Status:** Revision 2 after an adversarial and a normal review (2026-09-04). Phase 1 implemented on this branch on 2026-09-05; deviations from the plan are listed at the end of §9.
+**Status:** Revision 2 after an adversarial and a normal review (2026-09-04). Phase 1 shipped in #9929; deviations from the plan are listed at the end of §9.
 
 **Closes / consolidates:** #4645 (27 👍, "Select and change multiple tasks"), #7058 (19 👍, "multi-select / batch operations + recurring tasks"), #6352 ("Deleting multiple tasks at once"). Duplicates already closed in favour of #4645: #5685 (11 👍), #9022. Related: #6486 (delete all instances of a recurring task), #8273 (move tasks to backlog from tag view), #6551 (focused vs. selected task, plugin API). Existing attempt: PR #7146 (far behind master, see §10).
 

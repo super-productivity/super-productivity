@@ -24,6 +24,7 @@ import { PluginBridgeService } from '../../plugins/plugin-bridge.service';
 import { TaskShortcutService } from '../../features/tasks/task-shortcut.service';
 import { TODAY_TAG } from '../../features/tag/tag.const';
 import { DialogConfirmComponent } from '../../ui/dialog-confirm/dialog-confirm.component';
+import { TaskViewCustomizerService } from '../../features/task-view-customizer/task-view-customizer.service';
 
 // NOTE: Relying on Angular CDK overlay CSS class names keeps shortcut suppression simple.
 // If CDK changes these class names we only need to adjust the helpers below.
@@ -71,6 +72,7 @@ export class ShortcutService {
   private _taskShortcutService = inject(TaskShortcutService);
   private _overlayContainer = inject(OverlayContainer);
   private _isNoteTaskHandoffPending = false;
+  private _taskViewCustomizerService = inject(TaskViewCustomizerService);
 
   isCtrlPressed$: Observable<boolean> = fromEvent(document, 'keydown').pipe(
     switchMap((ev: Event) => {
@@ -255,6 +257,11 @@ export class ShortcutService {
       this._configService.appFeatures().isSchedulerEnabled
     ) {
       this._router.navigate(['/schedule']);
+    } else if (
+      checkKeyCombo(ev, keys.goToPlanner) &&
+      this._configService.appFeatures().isPlannerEnabled
+    ) {
+      this._router.navigate(['/planner']);
 
       // } else if (checkKeyCombo(ev, keys.goToDailyAgenda)) {
       //   this._router.navigate(['/daily-agenda']);
@@ -317,7 +324,7 @@ export class ShortcutService {
       this._layoutService.toggleNotes();
     } else if (checkKeyCombo(ev, keys.toggleTaskViewCustomizerPanel)) {
       ev.preventDefault();
-      this._layoutService.toggleTaskViewCustomizerPanel();
+      this._taskViewCustomizerService.requestOpenMenu();
     } else if (checkKeyCombo(ev, keys.toggleIssuePanel)) {
       ev.preventDefault();
       this._layoutService.toggleAddTaskPanel();

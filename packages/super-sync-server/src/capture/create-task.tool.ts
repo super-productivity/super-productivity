@@ -28,6 +28,7 @@ const DUE_TIME_PATTERN = '^([01]\\d|2[0-3]):[0-5]\\d$';
  */
 export const CREATE_TASK_TOOL: McpToolDefinition = {
   name: 'create_task',
+  title: 'Add task to Inbox',
   description:
     'Add a task to the Inbox in Super Productivity. Text is kept literally: ' +
     '#tags, +projects and dates in the title or notes are not parsed; pass ' +
@@ -91,7 +92,15 @@ export const CREATE_TASK_TOOL: McpToolDefinition = {
     required: ['title'],
     additionalProperties: false,
   },
-  annotations: { readOnlyHint: false, destructiveHint: false },
+  // Adds and never overwrites. Not idempotent: the retry window merges an
+  // identical call for 10 minutes only. Touches only the user's own Inbox.
+  annotations: {
+    title: 'Add task to Inbox',
+    readOnlyHint: false,
+    destructiveHint: false,
+    idempotentHint: false,
+    openWorldHint: false,
+  },
 };
 
 const text = (message: string, isError = false): McpToolResult => ({

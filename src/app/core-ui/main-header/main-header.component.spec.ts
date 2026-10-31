@@ -9,11 +9,13 @@ import {
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ApplicationRef } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
-import { EMPTY, of } from 'rxjs';
+import { EMPTY, firstValueFrom, of } from 'rxjs';
+import { filter } from 'rxjs/operators';
 import { TranslateModule, TranslatePipe } from '@ngx-translate/core';
 import { PluginBridgeService } from '../../plugins/plugin-bridge.service';
 
 import { MainHeaderComponent } from './main-header.component';
+import { isOnline$ } from '../../util/is-online';
 import { ProjectService } from '../../features/project/project.service';
 import { LayoutService } from '../layout/layout.service';
 import { TaskService } from '../../features/tasks/task.service';
@@ -924,6 +926,16 @@ describe('MainHeaderComponent action placement', () => {
   });
 
   describe('sync button state', () => {
+    // isOnline$ starts from navigator.onLine, which is false in a sandbox
+    // without a network interface. Real time, not fakeAsync: the debounce timer
+    // runs in the zone of whichever spec subscribed to the shared stream first.
+    beforeEach(async () => {
+      // Subscribe first: the first subscriber adds the event listeners.
+      const isBackOnline = firstValueFrom(isOnline$.pipe(filter(Boolean)));
+      window.dispatchEvent(new Event('online'));
+      await isBackOnline;
+    });
+
     const readySync = (patch: Partial<typeof syncWrapperState> = {}): void => {
       syncWrapperState = {
         ...syncWrapperState,

@@ -494,7 +494,7 @@ export class PluginManagementComponent {
       !(await this._confirmInDialog(
         T.PLUGINS.CONFIRM_CLEAR_CACHE,
         { count: uploadedCount },
-        T.PLUGINS.CLEAR_PLUGIN_CACHE,
+        T.PLUGINS.REMOVE_ALL_UPLOADED_PLUGINS,
       ))
     ) {
       return;
@@ -509,13 +509,13 @@ export class PluginManagementComponent {
       // plugin before the method returns (issue #8512 Phase 2 — see the service method).
       await this._pluginService.clearUploadedPluginsFromMemory();
 
-      PluginLog.log('Plugin cache cleared successfully');
+      PluginLog.log('Uploaded plugins removed');
     } catch (error) {
-      PluginLog.err('Failed to clear plugin cache:', error);
+      PluginLog.err('Failed to remove uploaded plugins:', error);
       this.uploadError.set(
         error instanceof Error
           ? error.message
-          : this._translateService.instant(T.PLUGINS.FAILED_TO_CLEAR_CACHE),
+          : this._translateService.instant(T.PLUGINS.FAILED_TO_REMOVE_UPLOADED_PLUGINS),
       );
     } finally {
       this.isUploading.set(false);

@@ -41,6 +41,8 @@ import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
 import { DateAdapter } from '@angular/material/core';
 import { MatButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
+import { MatFormField, MatLabel, MatPrefix } from '@angular/material/form-field';
+import { MatInput } from '@angular/material/input';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { Log } from '../../../core/log';
 import { GlobalConfigService } from '../../config/global-config.service';
@@ -63,6 +65,10 @@ import { ExactAlarmHintComponent } from '../../reminder/exact-alarm-hint/exact-a
   imports: [
     FormsModule,
     MatIcon,
+    MatFormField,
+    MatLabel,
+    MatPrefix,
+    MatInput,
     TranslatePipe,
     MatButton,
     MatDialogActions,
@@ -83,6 +89,8 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
     showQuickAccess?: boolean;
     minDate?: Date | null;
     isSubmitOnQuickAccess?: boolean;
+    /** Defaults to every task option; repeat configs pass a narrower list. */
+    reminderOptions?: TaskReminderOption[];
   }>(MAT_DIALOG_DATA);
   private _matDialogRef = inject<MatDialogRef<DialogScheduleTaskComponent>>(MatDialogRef);
   private _matDialog = inject(MatDialog);
@@ -112,19 +120,20 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
   readonly DO_NOT_REMIND = TaskReminderOptionId.DoNotRemind;
   minDate = this.data.minDate === undefined ? new Date() : this.data.minDate;
 
-  remindAvailableOptions: TaskReminderOption[] = TASK_REMINDER_OPTIONS;
+  remindAvailableOptions: TaskReminderOption[] =
+    this.data.reminderOptions ?? TASK_REMINDER_OPTIONS;
   task: TaskCopy | undefined = this.data.task;
 
   // Recurrence only applies to top-level, non-issue tasks (mirrors the panel's
   // Repeat row gating). Hidden in select-due-only mode, since that mode IS the
-  // repeat dialog's own start-date picker and a repeat button there is circular.
+  // repeat dialog's own start-date picker and a repeat field there is circular.
   readonly canRepeat =
     !this.data.isSelectDueOnly &&
     !!this.data.task &&
     !this.data.task.parentId &&
     !this.data.task.issueId;
 
-  // Reactive label for the repeat button. Tracks the live task in the store so it
+  // Reactive label for the repeat field. Tracks the live task in the store so it
   // flips from "does not repeat" to e.g. "Daily" the moment the repeat sub-dialog
   // saves, without closing this dialog.
   private _task$: Observable<Task | null> = this.data.task
@@ -169,6 +178,7 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
   // private _prevQuickAccessAction: number | null = null;
   private _previewTaskId = '__schedule-preview__';
   private _repeatCfgCreatedInDialogId: string | null = null;
+  private _isRepeatDialogOpen = false;
 
   private _defaultTaskRemindCfgId = computed(
     () =>
@@ -311,6 +321,12 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
   }
 
   async openRepeatDialog(): Promise<void> {
+    // One click on the repeat field's label fires twice (on the label, then
+    // forwarded to the input), and both would pass the await below before either
+    // opens; set synchronously so only the first opens the dialog.
+    if (this._isRepeatDialogOpen) {
+      return;
+    }
     // Use the live task, not the frozen dialog snapshot: if a repeat cfg was just
     // created here, re-opening must route to edit (via its repeatCfgId) instead of
     // creating a second, orphaning cfg.
@@ -318,10 +334,18 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
     if (!task) {
       return;
     }
+    this._isRepeatDialogOpen = true;
     // Lazy import to avoid a static schedule-dialog <-> repeat-dialog module cycle,
     // matching how task.component / add-task-bar open this dialog.
-    const { DialogEditTaskRepeatCfgComponent } =
-      await import('../../task-repeat-cfg/dialog-edit-task-repeat-cfg/dialog-edit-task-repeat-cfg.component');
+    let DialogEditTaskRepeatCfgComponent;
+    try {
+      ({ DialogEditTaskRepeatCfgComponent } =
+        await import('../../task-repeat-cfg/dialog-edit-task-repeat-cfg/dialog-edit-task-repeat-cfg.component'));
+    } catch (e) {
+      // A failed chunk load (e.g. offline) must not leave the field dead.
+      this._isRepeatDialogOpen = false;
+      throw e;
+    }
     const selectedDate = this.selectedDate;
     const targetDate = selectedDate
       ? typeof selectedDate === 'string'
@@ -343,6 +367,7 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
       })
       .afterClosed()
       .subscribe((createdRepeatCfgId: unknown) => {
+        this._isRepeatDialogOpen = false;
         if (typeof createdRepeatCfgId === 'string') {
           this._repeatCfgCreatedInDialogId = createdRepeatCfgId;
         }

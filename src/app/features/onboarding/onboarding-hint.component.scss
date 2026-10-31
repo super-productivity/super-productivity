@@ -7,6 +7,13 @@
   z-index: var(--z-onboarding-hint);
   pointer-events: auto;
   animation: hint-appear var(--transition-duration-l) var(--ani-enter-timing);
+
+  // Between tour steps the same chip moves to the next target.
+  &.is-sliding {
+    transition:
+      top var(--transition-duration-l) var(--ani-standard-timing),
+      left var(--transition-duration-l) var(--ani-standard-timing);
+  }
 }
 
 .hint-chip {
@@ -16,8 +23,30 @@
   padding: var(--s) var(--s2);
   box-shadow: var(--whiteframe-shadow-8dp);
   max-width: 260px;
-  font-size: 14px;
+  font-size: var(--font-size-md);
   color: var(--text-color);
+
+  // Tip text comes from translations via innerHTML, outside view encapsulation.
+  ::ng-deep {
+    .inline-icon {
+      font-size: 1.15em;
+      vertical-align: -0.2em;
+      color: var(--palette-primary-500);
+    }
+
+    kbd,
+    code {
+      padding: 0 var(--s-half);
+      font-size: var(--font-size-xs);
+      font-family: inherit;
+      background: rgba(var(--ink-on-channel), 0.08);
+      border: 1px solid rgba(var(--ink-on-channel), var(--border-alpha));
+      border-radius: 3px;
+    }
+  }
+}
+
+.hint-top {
   display: flex;
   align-items: flex-start;
   gap: var(--s);
@@ -33,12 +62,67 @@
   gap: var(--s-half);
   line-height: 1.35;
 
-  mat-icon {
+  > mat-icon {
     flex-shrink: 0;
     width: 18px;
     height: 18px;
     font-size: 18px;
     color: var(--palette-primary-500);
+  }
+}
+
+.ack {
+  color: var(--color-success);
+  font-weight: var(--font-weight-bold);
+}
+
+.timer-note {
+  margin-top: var(--s-half);
+  font-size: var(--font-size-sm);
+  color: var(--text-color-muted);
+}
+
+.hint-footer {
+  display: flex;
+  align-items: center;
+  gap: var(--s-half);
+  margin-top: var(--s-half);
+}
+
+.hint-meta {
+  flex: 1;
+  font-size: var(--font-size-sm);
+  color: var(--text-color-muted);
+  white-space: nowrap;
+}
+
+.hint-action {
+  flex-shrink: 0;
+  padding: var(--s-half) var(--s);
+  margin-inline-end: calc(-1 * var(--s));
+  font: inherit;
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+  color: var(--palette-primary-500);
+  background: none;
+  border: none;
+  border-radius: var(--s-half);
+  cursor: pointer;
+  transition: background-color var(--transition-duration-s) ease;
+
+  &.is-quiet {
+    margin-inline-end: 0;
+    font-weight: normal;
+    color: var(--text-color-muted);
+  }
+
+  &:hover {
+    background: rgba(var(--ink-on-channel), var(--overlay-alpha));
+  }
+
+  &:focus-visible {
+    outline: var(--focus-ring-width) solid var(--focus-ring-color);
+    outline-offset: var(--focus-ring-offset);
   }
 }
 
@@ -112,6 +196,17 @@
     bottom: -5px;
     transform: translateX(-4px) rotate(225deg);
   }
+
+  &.arrow-left {
+    left: -5px;
+    transform: translateY(-4px) rotate(-45deg);
+  }
+}
+
+.is-sliding .hint-arrow {
+  transition:
+    left var(--transition-duration-l) var(--ani-standard-timing),
+    top var(--transition-duration-l) var(--ani-standard-timing);
 }
 
 @keyframes hint-appear {
@@ -127,7 +222,10 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .hint-container {
+  .hint-container,
+  .hint-container.is-sliding,
+  .is-sliding .hint-arrow {
     animation: none;
+    transition: none;
   }
 }

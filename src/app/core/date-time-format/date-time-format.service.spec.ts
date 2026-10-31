@@ -1,9 +1,10 @@
 import { TestBed } from '@angular/core/testing';
-import { DateTimeFormatService } from './date-time-format.service';
+import { DateTimeFormatService, SYSTEM_USES_24H_CLOCK } from './date-time-format.service';
 import { MockStore, provideMockStore } from '@ngrx/store/testing';
 import { DEFAULT_GLOBAL_CONFIG } from '../../features/config/default-global-config.const';
 import { DateAdapter, MatNativeDateModule } from '@angular/material/core';
 import {
+  DateTimeLocale,
   DateTimeLocales,
   DEFAULT_FIRST_DAY_OF_WEEK,
   LanguageCode,
@@ -456,6 +457,188 @@ describe('DateTimeFormatService', () => {
     });
   });
 
+  describe('UI language vs browser locale (#8565)', () => {
+    const TIME_FORMAT: Intl.DateTimeFormatOptions = {
+      hour: 'numeric',
+      minute: 'numeric',
+    };
+    const testDate = new Date(2000, 11, 31, 14, 0, 0);
+
+    const setup = (opts: {
+      dateTimeLocale: string | null;
+      uiLang: string;
+      browserCulture: string;
+    }): DateTimeFormatService => {
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        imports: [MatNativeDateModule],
+        providers: [
+          DateTimeFormatService,
+          { provide: DateAdapter, useClass: CustomDateAdapter },
+          {
+            provide: TranslateService,
+            useValue: {
+              currentLang: opts.uiLang,
+              defaultLang: 'en',
+              getBrowserCultureLang: () => opts.browserCulture,
+            },
+          },
+          provideMockStore({
+            initialState: {
+              globalConfig: {
+                ...DEFAULT_GLOBAL_CONFIG,
+                localization: {
+                  ...DEFAULT_GLOBAL_CONFIG.localization,
+                  dateTimeLocale: opts.dateTimeLocale,
+                },
+              },
+            },
+          }),
+        ],
+      });
+      dateAdapter = TestBed.inject(DateAdapter);
+      const s = TestBed.inject(DateTimeFormatService);
+      s.setUiLanguage(opts.uiLang);
+      TestBed.flushEffects();
+      return s;
+    };
+
+    it('follows a German UI over an en-US browser when no locale is set', () => {
+      const s = setup({ dateTimeLocale: null, uiLang: 'de', browserCulture: 'en-US' });
+
+      expect(s.currentLocale()).toBe('de');
+      expect(s.is24HourFormat()).toBe(true);
+      // short syntax reads @3/1 in the displayed order
+      expect(s.dateInputLocale().isDayFirst).toBe(true);
+      expect(dateAdapter.format(testDate, TIME_FORMAT)).toBe('14:00');
+    });
+
+    // English is also the UI LanguageService falls back to for untranslated
+    // (da) and auto-switched (ru, ja) browser languages
+    [
+      { browserCulture: 'da-DK', locale: 'da-dk' },
+      { browserCulture: 'ru-RU', locale: 'ru-ru' },
+      { browserCulture: 'ja', locale: 'ja' },
+    ].forEach(({ browserCulture, locale }) => {
+      it(`keeps a ${browserCulture} browser locale for an English UI`, () => {
+        const s = setup({ dateTimeLocale: null, uiLang: 'en', browserCulture });
+
+        expect(s.currentLocale()).toBe(locale as DateTimeLocale);
+        expect(s.is24HourFormat()).toBe(true);
+        expect(dateAdapter.format(testDate, TIME_FORMAT)).not.toContain('PM');
+      });
+    });
+
+    // fa: Persian calendar and digits; ar: RTL marks in the date pattern
+    ['fa', 'ar'].forEach((uiLang) => {
+      it(`keeps the browser locale for a "${uiLang}" UI it cannot read dates in`, () => {
+        const s = setup({ dateTimeLocale: null, uiLang, browserCulture: 'de-DE' });
+
+        expect(s.currentLocale()).toBe('de-de' as DateTimeLocale);
+        expect(s.dateFormat().raw).toBe('dd.MM.yyyy');
+      });
+    });
+
+    it('keeps a regional UI language as is', () => {
+      const s = setup({ dateTimeLocale: null, uiLang: 'pt-br', browserCulture: 'en-US' });
+
+      expect(s.currentLocale()).toBe('pt-br');
+    });
+
+    it('keeps the browser region when it matches the UI language', () => {
+      const s = setup({ dateTimeLocale: null, uiLang: 'en', browserCulture: 'en-GB' });
+
+      expect(s.currentLocale()).toBe('en-gb');
+      expect(s.is24HourFormat()).toBe(true);
+    });
+
+    it('keeps an en-US browser 12h for an English UI when no locale is set', () => {
+      const s = setup({ dateTimeLocale: null, uiLang: 'en', browserCulture: 'en-US' });
+
+      expect(s.currentLocale()).toBe('en-us');
+      expect(s.is24HourFormat()).toBe(false);
+    });
+
+    it('renders 24h for ISO 8601 with an English UI', () => {
+      const s = setup({
+        dateTimeLocale: DateTimeLocales.sv,
+        uiLang: 'en',
+        browserCulture: 'en-US',
+      });
+
+      expect(s.is24HourFormat()).toBe(true);
+      expect(dateAdapter.format(testDate, TIME_FORMAT)).toBe('14:00');
+    });
+
+    it('renders 24h for ISO 8601 with a German UI', () => {
+      const s = setup({
+        dateTimeLocale: DateTimeLocales.sv,
+        uiLang: 'de',
+        browserCulture: 'en-US',
+      });
+
+      expect(s.is24HourFormat()).toBe(true);
+      expect(dateAdapter.format(testDate, TIME_FORMAT)).toBe('14:00');
+    });
+
+    it('keeps an explicit 12h locale over a German UI', () => {
+      const s = setup({
+        dateTimeLocale: DateTimeLocales.en_us,
+        uiLang: 'de',
+        browserCulture: 'de-DE',
+      });
+
+      expect(s.currentLocale()).toBe(DateTimeLocales.en_us);
+      expect(s.is24HourFormat()).toBe(false);
+      expect(dateAdapter.format(testDate, TIME_FORMAT)).toBe('2:00 PM');
+    });
+  });
+
+  describe('useNativeTimeInput (#8565)', () => {
+    const setup = (
+      dateTimeLocale: string,
+      isSystem24h: boolean,
+    ): DateTimeFormatService => {
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        imports: [MatNativeDateModule],
+        providers: [
+          DateTimeFormatService,
+          { provide: DateAdapter, useClass: CustomDateAdapter },
+          { provide: SYSTEM_USES_24H_CLOCK, useValue: isSystem24h },
+          {
+            provide: TranslateService,
+            useValue: { currentLang: 'en', defaultLang: 'en' },
+          },
+          provideMockStore({
+            initialState: {
+              globalConfig: {
+                ...DEFAULT_GLOBAL_CONFIG,
+                localization: { ...DEFAULT_GLOBAL_CONFIG.localization, dateTimeLocale },
+              },
+            },
+          }),
+        ],
+      });
+      const s = TestBed.inject(DateTimeFormatService);
+      TestBed.flushEffects();
+      return s;
+    };
+
+    it('keeps the native input when it already shows the configured clock', () => {
+      expect(setup(DateTimeLocales.en_us, false).useNativeTimeInput()).toBe(true);
+      expect(setup(DateTimeLocales.sv, true).useNativeTimeInput()).toBe(true);
+    });
+
+    it('drops the native input when ISO 24h is set on a 12h system', () => {
+      expect(setup(DateTimeLocales.sv, false).useNativeTimeInput()).toBe(false);
+    });
+
+    it('drops the native input when 12h is set on a 24h system', () => {
+      expect(setup(DateTimeLocales.en_us, true).useNativeTimeInput()).toBe(false);
+    });
+  });
+
   describe('LanguageService wiring keeps the dateTimeLocale override (#8565)', () => {
     const TIME_FORMAT: Intl.DateTimeFormatOptions = {
       hour: 'numeric',
@@ -512,6 +695,56 @@ describe('DateTimeFormatService', () => {
 
       TestBed.flushEffects();
       expect(adapter.format(testDate, TIME_FORMAT)).toBe('14:00');
+    });
+  });
+  describe('dateInputLocale for short syntax (#9340)', () => {
+    const setup = (dateTimeLocale: string): DateTimeFormatService => {
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        imports: [MatNativeDateModule],
+        providers: [
+          DateTimeFormatService,
+          { provide: DateAdapter, useClass: CustomDateAdapter },
+          {
+            provide: TranslateService,
+            useValue: { currentLang: 'en', defaultLang: 'en' },
+          },
+          provideMockStore({
+            initialState: {
+              globalConfig: {
+                ...DEFAULT_GLOBAL_CONFIG,
+                localization: { ...DEFAULT_GLOBAL_CONFIG.localization, dateTimeLocale },
+              },
+            },
+          }),
+        ],
+      });
+      return TestBed.inject(DateTimeFormatService);
+    };
+
+    it('reads dates day-first for a day-first date format', () => {
+      const s = setup(DateTimeLocales.en_gb);
+      TestBed.flushEffects();
+      expect(s.dateInputLocale()).toEqual({ language: 'en', isDayFirst: true });
+    });
+
+    it('reads dates month-first for a US date format', () => {
+      const s = setup(DateTimeLocales.en_us);
+      TestBed.flushEffects();
+      expect(s.dateInputLocale()).toEqual({ language: 'en', isDayFirst: false });
+    });
+
+    it('reads dates month-first for the year-first ISO format', () => {
+      const s = setup(DateTimeLocales.sv);
+      TestBed.flushEffects();
+      expect(s.dateInputLocale().isDayFirst).toBe(false);
+    });
+
+    it('follows the UI language for date words, independent of the date format', () => {
+      const s = setup(DateTimeLocales.en_us);
+      s.setUiLanguage('de');
+      TestBed.flushEffects();
+      expect(s.dateInputLocale()).toEqual({ language: 'de', isDayFirst: false });
     });
   });
 });

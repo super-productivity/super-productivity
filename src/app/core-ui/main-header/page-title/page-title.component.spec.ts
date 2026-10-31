@@ -1,4 +1,10 @@
-import { Component, NO_ERRORS_SCHEMA, Provider } from '@angular/core';
+import {
+  Component,
+  NO_ERRORS_SCHEMA,
+  Provider,
+  WritableSignal,
+  signal,
+} from '@angular/core';
 import { MatIconButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { TestBed } from '@angular/core/testing';
@@ -6,7 +12,7 @@ import { BehaviorSubject, Subject, of } from 'rxjs';
 import { NavigationEnd, Router } from '@angular/router';
 import { BreakpointObserver } from '@angular/cdk/layout';
 import { TranslateModule, TranslatePipe, TranslateService } from '@ngx-translate/core';
-import { MatMenu } from '@angular/material/menu';
+import { MatMenu, MatMenuTrigger } from '@angular/material/menu';
 import { Store } from '@ngrx/store';
 
 import { PageTitleComponent } from './page-title.component';
@@ -20,6 +26,10 @@ import { TaskViewCustomizerService } from '../../../features/task-view-customize
 import { GlobalConfigService } from '../../../features/config/global-config.service';
 import { PlainspaceShareService } from '../../../features/issue/providers/plainspace/plainspace-share.service';
 import { T } from '../../../t.const';
+import { PluginBridgeService } from '../../../plugins/plugin-bridge.service';
+import { PluginService } from '../../../plugins/plugin.service';
+import { PluginMenuEntryCfg } from '../../../plugins/plugin-api.model';
+import { PluginState } from '../../../plugins/plugin-state.model';
 
 // The title's spacing tokens are declared by main-header and inherited, so this
 // host pulls in that stylesheet and mounts the real `page-title` under it —
@@ -40,7 +50,10 @@ describe('PageTitleComponent', () => {
   let activeWorkContext$: BehaviorSubject<WorkContext>;
   let isShared$: BehaviorSubject<boolean>;
   let isXxxs$: BehaviorSubject<{ matches: boolean }>;
+  let openMenuRequest$: Subject<void>;
   let openSpy: jasmine.Spy;
+  let pluginMenuEntries: WritableSignal<PluginMenuEntryCfg[]>;
+  let pluginStates: Map<string, PluginState>;
 
   // `color` is a Tag-only field not surfaced on WorkContext's type.
   const wc = (o: Partial<WorkContext> & { color?: string | null }): WorkContext =>
@@ -74,7 +87,15 @@ describe('PageTitleComponent', () => {
     },
     {
       provide: TaskViewCustomizerService,
-      useValue: { isCustomized: () => false },
+      useValue: { isCustomized: () => false, openMenuRequest$ },
+    },
+    {
+      provide: PluginBridgeService,
+      useValue: { menuEntries: () => pluginMenuEntries() },
+    },
+    {
+      provide: PluginService,
+      useValue: { getAllPluginStates: () => pluginStates },
     },
     {
       provide: GlobalConfigService,
@@ -109,7 +130,10 @@ describe('PageTitleComponent', () => {
       }),
     );
     isShared$ = new BehaviorSubject(false);
+    pluginMenuEntries = signal<PluginMenuEntryCfg[]>([]);
+    pluginStates = new Map();
     isXxxs$ = new BehaviorSubject<{ matches: boolean }>({ matches: false });
+    openMenuRequest$ = new Subject<void>();
     openSpy = jasmine
       .createSpy('openProjectOnPlainspace')
       .and.returnValue(Promise.resolve());
@@ -128,7 +152,7 @@ describe('PageTitleComponent', () => {
       ['/boards', T.MH.BOARDS],
       ['/habits', T.MH.HABITS],
       ['/search', T.MH.SEARCH],
-      ['/scheduled-list', T.MH.ALL_PLANNED_LIST],
+      ['/scheduled-list', T.WW.RECURRING_TASKS],
       ['/donate', T.MH.DONATE],
       ['/config', T.PS.GLOBAL_SETTINGS],
     ];
@@ -167,6 +191,44 @@ describe('PageTitleComponent', () => {
     });
   });
 
+  describe('plugin page', () => {
+    const url = '/plugins/my-plugin/index';
+    const entry = (o: Partial<PluginMenuEntryCfg>): PluginMenuEntryCfg => ({
+      pluginId: 'my-plugin',
+      label: 'My Plugin',
+      onClick: () => undefined,
+      ...o,
+    });
+
+    it('uses the label of the plugin menu entry', () => {
+      pluginMenuEntries.set([entry({ pluginId: 'other', label: 'Other' }), entry({})]);
+      expect(setupComponent(url).displayTitle()).toBe('My Plugin');
+    });
+
+    it('falls back to the manifest name without a menu entry', () => {
+      pluginStates.set('my-plugin', {
+        manifest: { name: 'Manifest Name' },
+      } as PluginState);
+      expect(setupComponent(url).displayTitle()).toBe('Manifest Name');
+    });
+
+    it('is a special section, so the work-context actions are hidden', () => {
+      expect(setupComponent(url).isSpecialSection()).toBe(true);
+    });
+
+    it('exposes the plugin id for the icon', () => {
+      expect(setupComponent(url).pluginId()).toBe('my-plugin');
+      expect(setupComponent('/active/tasks').pluginId()).toBeUndefined();
+    });
+
+    it('passes a Material fallback icon but never an SVG path', () => {
+      pluginMenuEntries.set([entry({ icon: 'alarm' })]);
+      expect(setupComponent(url).pluginFallbackIcon()).toBe('alarm');
+      pluginMenuEntries.set([entry({ icon: 'icon.svg' })]);
+      expect(setupComponent(url).pluginFallbackIcon()).toBe('extension');
+    });
+  });
+
   describe('isSpecialSection()', () => {
     it('is true for /config', () => {
       const c = setupComponent('/config');
@@ -181,7 +243,7 @@ describe('PageTitleComponent', () => {
     it('does not collide /scheduled-list with /schedule', () => {
       const c = setupComponent('/scheduled-list');
       expect(c.isSpecialSection()).toBe(true);
-      expect(c.displayTitle()).toBe(T.MH.ALL_PLANNED_LIST);
+      expect(c.displayTitle()).toBe(T.WW.RECURRING_TASKS);
     });
   });
 
@@ -300,7 +362,7 @@ describe('PageTitleComponent', () => {
       ['/boards', NAV_SECTION_ICON.BOARDS],
       ['/habits', NAV_SECTION_ICON.HABITS],
       ['/search', NAV_SECTION_ICON.SEARCH],
-      ['/scheduled-list', NAV_SECTION_ICON.SCHEDULED_LIST],
+      ['/scheduled-list', NAV_SECTION_ICON.RECURRING_TASKS],
       ['/donate', NAV_SECTION_ICON.DONATE],
       ['/config', NAV_SECTION_ICON.SETTINGS],
       ['/archived-projects', NAV_SECTION_ICON.ARCHIVED_PROJECTS],
@@ -331,11 +393,12 @@ describe('PageTitleComponent', () => {
   });
 
   // Keeps the real template — that is the whole point — but drops the
-  // directives that only decorate it. Three have to stay: `MatMenu`, because
+  // directives that only decorate it. Four have to stay: `MatMenu`, because
   // the template resolves `#activeWorkContextMenu="matMenu"` and an
   // unresolvable `exportAs` is a compile error NO_ERRORS_SCHEMA does not cover,
-  // and `MatIconButton`/`MatIcon`, because the specs below measure the boxes
-  // they draw. `RouterLink` stays out, so no `ActivatedRoute` is needed.
+  // `MatMenuTrigger`, which the filter-shortcut specs drive, and
+  // `MatIconButton`/`MatIcon`, because the specs below measure the boxes they
+  // draw. `RouterLink` stays out, so no `ActivatedRoute` is needed.
   const configureRender = async (): Promise<void> => {
     TestBed.resetTestingModule();
     await TestBed.configureTestingModule({
@@ -344,7 +407,7 @@ describe('PageTitleComponent', () => {
     })
       .overrideComponent(PageTitleComponent, {
         set: {
-          imports: [TranslatePipe, MatMenu, MatIconButton, MatIcon],
+          imports: [TranslatePipe, MatMenu, MatMenuTrigger, MatIconButton, MatIcon],
           schemas: [NO_ERRORS_SCHEMA],
         },
       })
@@ -392,6 +455,28 @@ describe('PageTitleComponent', () => {
     it('renders no actions at the smallest breakpoint', async () => {
       isXxxs$.next({ matches: true });
       expect(buttons(await renderAt('/active/tasks')).length).toBe(0);
+    });
+
+    // The filter shortcut used to toggle a layout-state side panel that no
+    // longer had anything to show; it must drive this button's menu instead.
+    describe('the filter shortcut', () => {
+      let openMenuSpy: jasmine.Spy;
+
+      beforeEach(() => {
+        openMenuSpy = spyOn(MatMenuTrigger.prototype, 'openMenu');
+      });
+
+      it('opens the filter menu on the work view', async () => {
+        await renderAt('/active/tasks');
+        openMenuRequest$.next();
+        expect(openMenuSpy).toHaveBeenCalledTimes(1);
+      });
+
+      it('does nothing where the filter button is not rendered', async () => {
+        await renderAt('/active/notes');
+        openMenuRequest$.next();
+        expect(openMenuSpy).not.toHaveBeenCalled();
+      });
     });
   });
 

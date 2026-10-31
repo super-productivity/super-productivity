@@ -31,14 +31,22 @@ export class ConfigFormComponent {
   fields = computed(() => adjustToLiveFormlyForm(this.formCfg()));
   // formly (`immutable: true`) re-creates every field, dropping focus, unless
   // [model] is the object it last emitted. The store hands a saved section back
-  // as a fresh but equal object, so keep the current model then (#8447).
+  // as a fresh but equal object, so keep the current model then (#8447). The
+  // same goes for a save that comes back after a newer, invalid and so unsaved
+  // edit ("183" typed on the way to "1830"): it is no change from elsewhere.
   model = linkedSignal<Record<string, unknown>, Record<string, unknown>>({
     source: this.cfg,
-    computation: (cfg, previous) =>
-      cfg && previous?.value && isShallowEqual(cfg, previous.value)
-        ? previous.value
-        : cfg,
+    computation: (cfg, previous) => {
+      const isEcho = !!this._lastSaved && !!cfg && isShallowEqual(cfg, this._lastSaved);
+      if (cfg && previous?.value && (isShallowEqual(cfg, previous.value) || isEcho)) {
+        return previous.value;
+      }
+      // a change from elsewhere: a later return to the old save is one too
+      this._lastSaved = undefined;
+      return cfg;
+    },
   });
+  private _lastSaved?: Record<string, unknown>;
 
   save = output<{
     sectionKey: GlobalConfigFormSectionKey | ProjectCfgFormKey;
@@ -58,6 +66,7 @@ export class ConfigFormComponent {
     this.form.updateValueAndValidity();
 
     if (this.form.valid) {
+      this._lastSaved = cfg;
       this.save.emit({
         sectionKey: exists(this.sectionKey()),
         config: cfg,

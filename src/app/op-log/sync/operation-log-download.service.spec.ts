@@ -50,6 +50,7 @@ describe('OperationLogDownloadService', () => {
       'getAppliedOpIds',
       'hasSyncedOps',
       'getVectorClock',
+      'loadStateCache',
     ]);
     mockLockService = jasmine.createSpyObj('LockService', ['request']);
     mockSnackService = jasmine.createSpyObj('SnackService', ['open']);
@@ -80,6 +81,8 @@ describe('OperationLogDownloadService', () => {
     mockOpLogStore.getAppliedOpIds.and.returnValue(Promise.resolve(new Set<string>()));
     mockOpLogStore.hasSyncedOps.and.returnValue(Promise.resolve(false));
     mockOpLogStore.getVectorClock.and.returnValue(Promise.resolve(null));
+    // A synced baseline by default, so the stored cursor is trusted (#11099).
+    mockOpLogStore.loadStateCache.and.resolveTo({} as never);
 
     TestBed.configureTestingModule({
       providers: [
@@ -136,6 +139,38 @@ describe('OperationLogDownloadService', () => {
         await service.downloadRemoteOps(mockApiProvider);
 
         expect(mockApiProvider.downloadOps).toHaveBeenCalled();
+      });
+
+      describe('cursor that outlived the op log (#11099)', () => {
+        beforeEach(() => {
+          mockApiProvider.getLastServerSeq.and.resolveTo(7);
+        });
+
+        it('downloads from seq 0 when the op log has never synced', async () => {
+          mockOpLogStore.hasSyncedOps.and.resolveTo(false);
+          mockOpLogStore.loadStateCache.and.resolveTo(null);
+
+          await service.downloadRemoteOps(mockApiProvider);
+
+          expect(mockApiProvider.downloadOps.calls.first().args[0]).toBe(0);
+        });
+
+        it('keeps the cursor when the op log holds synced ops', async () => {
+          mockOpLogStore.hasSyncedOps.and.resolveTo(true);
+          mockOpLogStore.loadStateCache.and.resolveTo(null);
+
+          await service.downloadRemoteOps(mockApiProvider);
+
+          expect(mockApiProvider.downloadOps.calls.first().args[0]).toBe(7);
+        });
+
+        it('keeps the cursor when compaction or a snapshot left a state cache', async () => {
+          mockOpLogStore.hasSyncedOps.and.resolveTo(false);
+
+          await service.downloadRemoteOps(mockApiProvider);
+
+          expect(mockApiProvider.downloadOps.calls.first().args[0]).toBe(7);
+        });
       });
 
       it('should hand an op with an unknown opType to the receiver instead of failing the page (#8764)', async () => {

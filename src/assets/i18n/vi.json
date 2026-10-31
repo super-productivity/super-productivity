@@ -93,6 +93,10 @@
     "INTRO_2": "Nếu bạn đánh giá cao cách tiếp cận này và muốn dự án phát triển bền vững, một khoản đóng góp tự nguyện rất được trân trọng."
   },
   "EXAMPLE_TASKS": {
+    "GETTING_STARTED": {
+      "TITLE": "Tùy chọn: mẹo bắt đầu",
+      "NOTES": "Không có gì ở đây là bắt buộc. Hãy xóa công việc này bất cứ lúc nào bạn muốn.\n\n- **Hôm nay và Hộp thư đến**: Hôm nay hiển thị những gì được lên kế hoạch cho hôm nay. Các công việc không thuộc dự án riêng của bạn sẽ nằm trong Hộp thư đến. Một công việc có thể xuất hiện ở cả hai danh sách.\n- **Dự án**: nhóm công việc theo chủ đề bằng dấu **+** bên cạnh **Dự án** trong thanh bên.\n- **Đồng bộ**: giữ dữ liệu của bạn trên nhiều thiết bị tại **Cài đặt → Đồng bộ & Sao lưu**.\n- **Chuyển từ Todoist hoặc TickTick sang?** Nhập công việc của bạn tại **Cài đặt → Đồng bộ & Sao lưu → Nhập/Xuất**.\n- **Tham quan**: **Trợ giúp → Tham quan nhanh** trong menu thanh bên hướng dẫn bạn những điều cơ bản ngay trên công việc của chính bạn, còn **Trợ giúp → Cách** cho thấy từng bước cú pháp ngắn và cách điều hướng bằng bàn phím. Bạn có thể đóng phần tham quan bất cứ lúc nào.\n- **Biến nó thành của bạn**: chọn giao diện hoặc chế độ tối, rồi bật hoặc tắt các tính năng như bảng, lên lịch, thói quen, chế độ tập trung hay tích hợp tại **Cài đặt → Chung**. Plugin còn bổ sung nhiều hơn nữa."
+    },
     "LEARN_KEYBOARD_SHORTCUTS": {
       "TITLE": "Tìm hiểu phím tắt bàn phím",
       "NOTES": "Super Productivity được thiết kế để sử dụng bằng bàn phím. Học các phím tắt để làm việc nhanh hơn.\n\n**Cách bắt đầu:**\n1. Mở **menu thanh bên**\n2. Vào **Trợ giúp**\n3. Nhấp **Hướng dẫn điều hướng bàn phím**"
@@ -2996,6 +3000,7 @@
       "CREATE_TASK": "Cách: Tạo công việc",
       "GET_HELP_ONLINE": "Trợ giúp trực tuyến",
       "KEYBOARD": "Cách: Bàn phím nâng cao",
+      "QUICK_TOUR": "Tham quan nhanh",
       "REDDIT_COMMUNITY": "Cộng đồng Reddit",
       "REPORT_A_PROBLEM": "Báo cáo vấn đề",
       "SEND_FEEDBACK": "Gửi phản hồi",
@@ -3083,13 +3088,50 @@
     "HINTS": {
       "CREATE_TASK": "Nhấp + để thêm công việc đầu tiên của bạn",
       "CREATE_TASK_TOUCH": "Chạm + để thêm công việc đầu tiên của bạn",
+      "DECLINED": "Không sao cả. Bạn có thể tìm thấy nó tại Trợ giúp → Tham quan nhanh bất cứ lúc nào.",
+      "MORE_FALLBACK": "Còn nhiều thứ đã được bật sẵn: dự án, theo dõi thời gian, Lập kế hoạch…",
+      "NO_THANKS": "Không, cảm ơn",
+      "SHOW_ME_MORE": "Cho tôi xem thêm ›",
       "EXPLORE": "Hãy thoải mái nhấp xung quanh và khám phá! Bạn có thể tìm trợ giúp trong thanh bên.",
       "EXPLORE_TOUCH": "Hãy thoải mái khám phá. Bạn có thể tìm trợ giúp trong thanh bên.",
       "TASK_TAP_TOUCH": "Chạm vào công việc để mở chi tiết.",
       "TASK_SWIPE_LEFT_TOUCH": "Vuốt công việc sang trái để xem thêm hành động",
+      "TODAY_AND_INBOX": "Công việc này được lên kế hoạch cho hôm nay nên nó hiển thị trong {{todayIcon}} <b>Hôm nay</b>. Các công việc không thuộc dự án riêng của bạn sẽ nằm trong {{inboxIcon}} <b>Hộp thư đến</b>.",
+      "TODAY_AND_INBOX_PHONE": "Công việc này được lên kế hoạch cho hôm nay nên nó hiển thị trong {{todayIcon}} <b>Hôm nay</b>. Các công việc không thuộc dự án riêng của bạn sẽ nằm trong {{inboxIcon}} <b>Hộp thư đến</b>, dưới ☰.",
       "TASK_SWIPE_RIGHT_TOUCH": "Vuốt công việc sang phải để đánh dấu hoàn thành",
       "OR_PRESS": "hoặc nhấn",
       "SKIP_ARIA": "Bỏ qua gợi ý"
+    },
+    "TOUR": {
+      "ADD_SUBTASK": "Chia nhỏ nó: nhấp chuột phải vào công việc và chọn {{subtaskIcon}} <b>Thêm việc con</b>",
+      "COUNTER": "{{nr}} / {{total}}",
+      "NEXT": "Tiếp theo ›",
+      "ORGANIZE": "Tạo <b>dự án</b> riêng để nhóm các công việc, hoặc <b>nhãn</b> để gắn nhãn cho chúng. Tạo bằng dấu +",
+      "ORGANIZE_COLLAPSED": "Tạo <b>dự án</b> riêng để nhóm các công việc, hoặc <b>nhãn</b> để gắn nhãn cho chúng. Mở rộng thanh bên bằng {{expandIcon}} để tạo",
+      "ORGANIZE_PHONE": "Dự án và nhãn nằm dưới ☰. Tạo <b>dự án</b> riêng để nhóm các công việc, hoặc <b>nhãn</b> để gắn nhãn cho chúng",
+      "PLANNER": "Lên kế hoạch cho những ngày tới trong {{plannerIcon}} <b>Lập kế hoạch</b>",
+      "TASK_MENU_TOUCH": "Vuốt công việc sang trái để mở menu: {{playIcon}} <b>Bắt đầu theo dõi</b>, {{subtaskIcon}} <b>Thêm việc con</b>",
+      "TASK_MENU_TOUCH_NO_TRACKING": "Vuốt công việc sang trái để mở menu, ví dụ {{subtaskIcon}} <b>Thêm việc con</b>",
+      "TIMER_RUNNING": "Bộ đếm giờ đang chạy. Nhấn {{playIcon}} lần nữa hoặc <kbd>{{key}}</kbd> để tạm dừng.",
+      "TIMER_RUNNING_TOUCH": "Bộ đếm giờ đang chạy. Chạm vào {{playIcon}} ở phía trên để tạm dừng.",
+      "TRACK_TIME": "Di chuột lên công việc và nhấn {{playIcon}} để theo dõi thời gian"
+    },
+    "WANT_MORE": {
+      "BOARDS": "<b>Bảng</b> · các cột kiểu Kanban cho công việc của bạn",
+      "DONE": "Xong",
+      "FINISH_DAY": "<b>Kết thúc ngày</b> · xem lại và khép lại một ngày của bạn",
+      "FOCUS_MODE": "<b>Chế độ tập trung</b> · Pomodoro và làm việc không bị xao nhãng",
+      "FOOTER": "Bạn có thể tìm lại mục này tại Trợ giúp → Tham quan nhanh.",
+      "HABITS": "<b>Thói quen</b> · theo dõi thói quen từng ngày",
+      "INTRO": "Super Productivity khởi đầu nhẹ nhàng. Còn nhiều hơn thế khi bạn cần:",
+      "OPEN_SETTINGS": "Mở cài đặt ›",
+      "PLUGINS": "<b>Plugin & tích hợp</b> · Jira, GitHub, CalDAV và nhiều hơn nữa",
+      "SCHEDULE": "<b>Lên lịch</b> · một ngày của bạn trên dòng thời gian",
+      "SEARCH": "Tìm kiếm mọi thứ bằng <kbd>{{key}}</kbd>.",
+      "SEARCH_PHONE": "Tìm kiếm mọi thứ từ ☰.",
+      "SHORT_SYNTAX": "Gõ <code>#tag</code>, <code>+project</code> hoặc <code>@tomorrow</code> khi thêm công việc. Trợ giúp → Cách cho xem thêm.",
+      "SYNC": "Dữ liệu của bạn nằm trên thiết bị này. Đồng bộ và sao lưu nằm trong cài đặt.",
+      "TITLE": "Muốn nhiều hơn?"
     }
   },
   "PDS": {

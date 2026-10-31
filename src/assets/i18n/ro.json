@@ -92,6 +92,10 @@
     "INTRO_2": "Dacă apreciezi această abordare și vrei să păstrezi proiectul sănătos și în evoluție, o donație voluntară este apreciată."
   },
   "EXAMPLE_TASKS": {
+    "GETTING_STARTED": {
+      "TITLE": "Opțional: sfaturi pentru început",
+      "NOTES": "Nimic de aici nu este obligatoriu. Șterge această sarcină oricând vrei.\n\n- **Azi și Intrări**: Azi arată ce este planificat pentru azi. Sarcinile fără un proiect propriu rămân în Intrări. O sarcină poate apărea în ambele liste.\n- **Proiecte**: grupează sarcinile pe teme cu **+** de lângă **Proiecte** din bara laterală.\n- **Sincronizare**: păstrează-ți datele pe mai multe dispozitive la **Setări → Sincronizare și backup**.\n- **Vii din Todoist sau TickTick?** Importă-ți sarcinile la **Setări → Sincronizare și backup → Importare/Exportare**.\n- **Tururi**: **Ajutor → Tur rapid** din meniul barei laterale îți arată elementele de bază pe propria ta sarcină, iar **Ajutor → Cum să** îți arată pas cu pas sintaxa scurtă și navigarea cu tastatura. Închide un tur oricând vrei.\n- **Fă-l al tău**: alege o temă sau modul întunecat și activează sau dezactivează funcții precum table, orar, obiceiuri, mod concentrare sau integrări la **Setări → General**. Plugin-urile adaugă și mai multe."
+    },
     "LEARN_KEYBOARD_SHORTCUTS": {
       "TITLE": "Învață scurtăturile de tastatură",
       "NOTES": "Super Productivity este conceput pentru a fi folosit cu tastatura. Învață scurtăturile pentru a lucra mai rapid.\n\n**Cum să începi:**\n1. Deschide **meniul lateral**\n2. Mergi la **Ajutor**\n3. Apasă pe **Tur de navigare cu tastatura**"
@@ -2960,6 +2964,7 @@
       "CREATE_TASK": "Cum să: Creează o sarcină",
       "GET_HELP_ONLINE": "Obține ajutor online",
       "KEYBOARD": "Cum să: Tastatură avansată",
+      "QUICK_TOUR": "Tur rapid",
       "REDDIT_COMMUNITY": "Comunitatea Reddit",
       "REPORT_A_PROBLEM": "Raportează o problemă",
       "SEND_FEEDBACK": "Trimite feedback",
@@ -3027,13 +3032,50 @@
     "HINTS": {
       "CREATE_TASK": "Apasă pe + pentru a adăuga prima ta sarcină",
       "CREATE_TASK_TOUCH": "Atinge + pentru a adăuga prima ta sarcină",
+      "DECLINED": "Nicio problemă. Îl găsești la Ajutor → Tur rapid oricând vrei.",
+      "MORE_FALLBACK": "Mai sunt deja activate: proiecte, contorizarea timpului, Planificator…",
+      "NO_THANKS": "Nu, mulțumesc",
+      "SHOW_ME_MORE": "Arată-mi mai multe ›",
       "DONE_TITLE": "Ești gata",
       "EXPLORE_INBOX": "Unele sfaturi opționale te așteaptă în Inbox-ul tău. Încearcă-le sau șterge-le, oricând dorești.",
       "GOT_IT": "Am înțeles",
       "TASK_SWIPE_LEFT_TOUCH": "Glisează sarcina spre stânga pentru mai multe acțiuni",
+      "TODAY_AND_INBOX": "Această sarcină este planificată pentru azi, așa că apare în {{todayIcon}} <b>Azi</b>. Sarcinile fără un proiect propriu rămân în {{inboxIcon}} <b>Intrări</b>.",
+      "TODAY_AND_INBOX_PHONE": "Această sarcină este planificată pentru azi, așa că apare în {{todayIcon}} <b>Azi</b>. Sarcinile fără un proiect propriu rămân în {{inboxIcon}} <b>Intrări</b>, sub ☰.",
       "TASK_SWIPE_RIGHT_TOUCH": "Glisează sarcina spre dreapta pentru a o marca drept finalizată",
       "OR_PRESS": "sau apasă",
       "SKIP_ARIA": "Închide indicația"
+    },
+    "TOUR": {
+      "ADD_SUBTASK": "Împarte-o în pași: dă clic dreapta pe sarcină și alege {{subtaskIcon}} <b>Adaugă subsarcină</b>",
+      "COUNTER": "{{nr}} din {{total}}",
+      "NEXT": "Următorul ›",
+      "ORGANIZE": "Creează un <b>proiect</b> propriu pentru a grupa sarcinile sau o <b>etichetă</b> pentru a le marca. Creează unul cu +",
+      "ORGANIZE_COLLAPSED": "Creează un <b>proiect</b> propriu pentru a grupa sarcinile sau o <b>etichetă</b> pentru a le marca. Extinde bara laterală cu {{expandIcon}} ca să creezi unul",
+      "ORGANIZE_PHONE": "Proiectele și etichetele se află sub ☰. Creează un <b>proiect</b> propriu pentru a grupa sarcinile sau o <b>etichetă</b> pentru a le marca",
+      "PLANNER": "Planifică zilele următoare în {{plannerIcon}} <b>Planificator</b>",
+      "TASK_MENU_TOUCH": "Glisează o sarcină spre stânga pentru meniul ei: {{playIcon}} <b>Începe contorizarea timpului</b>, {{subtaskIcon}} <b>Adaugă subsarcină</b>",
+      "TASK_MENU_TOUCH_NO_TRACKING": "Glisează o sarcină spre stânga pentru meniul ei, de ex. {{subtaskIcon}} <b>Adaugă subsarcină</b>",
+      "TIMER_RUNNING": "Cronometrul rulează. Apasă din nou {{playIcon}} sau <kbd>{{key}}</kbd> pentru pauză.",
+      "TIMER_RUNNING_TOUCH": "Cronometrul rulează. Atinge {{playIcon}} din partea de sus pentru pauză.",
+      "TRACK_TIME": "Treci cu mouse-ul peste sarcină și apasă {{playIcon}} pentru a contoriza timpul"
+    },
+    "WANT_MORE": {
+      "BOARDS": "<b>Table</b> · coloane în stil Kanban pentru sarcinile tale",
+      "DONE": "Gata",
+      "FINISH_DAY": "<b>Încheie ziua</b> · privește în urmă și încheie-ți ziua",
+      "FOCUS_MODE": "<b>Mod concentrare</b> · Pomodoro și lucru fără distrageri",
+      "FOOTER": "Regăsești asta la Ajutor → Tur rapid.",
+      "HABITS": "<b>Obiceiuri</b> · urmărește-ți rutinele zi de zi",
+      "INTRO": "Super Productivity începe calm. Mai mult e la îndemână când ai nevoie:",
+      "OPEN_SETTINGS": "Deschide setări ›",
+      "PLUGINS": "<b>Plugin-uri și integrări</b> · Jira, GitHub, CalDAV și altele",
+      "SCHEDULE": "<b>Orar</b> · ziua ta pe o axă a timpului",
+      "SEARCH": "Caută oriunde cu <kbd>{{key}}</kbd>.",
+      "SEARCH_PHONE": "Caută oriunde din ☰.",
+      "SHORT_SYNTAX": "Scrie <code>#tag</code>, <code>+project</code> sau <code>@tomorrow</code> când adaugi o sarcină. Ajutor → Cum să arată mai multe.",
+      "SYNC": "Datele tale rămân pe acest dispozitiv. Sincronizarea și backup-urile sunt în setări.",
+      "TITLE": "Vrei mai mult?"
     }
   },
   "PDS": {

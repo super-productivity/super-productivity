@@ -66,6 +66,16 @@
   </button>
 }
 
+@if (isForProject && (inviteUrl$ | async); as inviteUrl) {
+  <button
+    (click)="copyPlainspaceInviteUrl(inviteUrl)"
+    mat-menu-item
+  >
+    <mat-icon>link</mat-icon>
+    <span class="text">{{ T.PLAINSPACE.COPY_INVITE_LINK | translate }}</span>
+  </button>
+}
+
 @if (isForProject || contextId === TODAY_TAG_ID) {
   <button
     (click)="addSection()"

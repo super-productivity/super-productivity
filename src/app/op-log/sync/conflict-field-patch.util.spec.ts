@@ -4,6 +4,7 @@ import {
   isFieldPatchEligible,
   keptLocalTimeDeltas,
   localWinningFieldGroups,
+  mergedSnapshotState,
   supersededPatchFields,
   survivingLocalFields,
   timeDeltasSurvivingLww,
@@ -70,6 +71,127 @@ const sides = (
 });
 
 describe('conflict-field-patch.util', () => {
+  // #10958: a repeat-config crossing goes out as ONE full replace snapshot.
+  describe('mergedSnapshotState (#10958)', () => {
+    const base = {
+      id: 'cfg-1',
+      title: 'Daily',
+      skipOverdue: false,
+      lastTaskCreationDay: '2026-06-15',
+      tagIds: ['t0'],
+      startTime: '09:00',
+    };
+    const cfgEdit = (
+      changes: Record<string, unknown>,
+      clientId: string,
+      timestamp: number,
+      clearedFields?: string[],
+    ): Operation =>
+      op({
+        id: `${clientId}${timestamp}`,
+        clientId,
+        timestamp,
+        actionType: '[TaskRepeatCfg] Update TaskRepeatCfg' as ActionType,
+        entityType: 'TASK_REPEAT_CFG' as EntityType,
+        entityId: 'cfg-1',
+        payload: {
+          actionPayload: {
+            taskRepeatCfg: { id: 'cfg-1', changes },
+            ...(clearedFields ? { clearedFields } : {}),
+          },
+          entityChanges: [],
+        },
+      });
+    const cfgSides = (
+      localOps: Operation[],
+      remoteOps: Operation[],
+    ): ReturnType<typeof sides> => ({
+      localOps,
+      remoteOps,
+      payloadKey: 'taskRepeatCfg',
+      entityId: 'cfg-1',
+    });
+    const resolve = (
+      current: Record<string, unknown>,
+      localOps: Operation[],
+      remoteOps: Operation[],
+    ): Record<string, unknown> | undefined => {
+      const s = cfgSides(localOps, remoteOps);
+      return mergedSnapshotState(current, s, localWinningFieldGroups(s));
+    };
+
+    const skip = cfgEdit({ skipOverdue: true }, 'A', 1000);
+    const generation = cfgEdit({ lastTaskCreationDay: '2026-06-16' }, 'B', 2000);
+
+    it('builds the same merged config on whichever device resolves', () => {
+      const onA = resolve({ ...base, skipOverdue: true }, [skip], [generation]);
+      const onB = resolve(
+        { ...base, lastTaskCreationDay: '2026-06-16' },
+        [generation],
+        [skip],
+      );
+      const expected = { ...base, skipOverdue: true, lastTaskCreationDay: '2026-06-16' };
+      expect(onA).toEqual(expected);
+      expect(onB).toEqual(expected);
+    });
+
+    it('gives a field both sides wrote, arrays included, to its newer write', () => {
+      const local = cfgEdit({ skipOverdue: true, tagIds: ['local'] }, 'A', 1000);
+      const remote = cfgEdit({ tagIds: ['remote'] }, 'B', 2000);
+      expect(
+        resolve({ ...base, skipOverdue: true, tagIds: ['local'] }, [local], [remote]),
+      ).toEqual({ ...base, skipOverdue: true, tagIds: ['remote'] });
+      // Reverse timestamps: the local array wins whole.
+      const newerLocal = cfgEdit({ tagIds: ['local'] }, 'A', 3000);
+      expect(
+        resolve({ ...base, tagIds: ['local'] }, [newerLocal], [remote])?.['tagIds'],
+      ).toEqual(['local']);
+    });
+
+    it('leaves a field out that either side cleared, on the wire or not', () => {
+      const remoteClear = cfgEdit({}, 'B', 2000, ['startTime']);
+      const merged = resolve({ ...base, skipOverdue: true }, [skip], [remoteClear]);
+      expect(merged).toEqual({
+        id: 'cfg-1',
+        title: 'Daily',
+        skipOverdue: true,
+        lastTaskCreationDay: '2026-06-15',
+        tagIds: ['t0'],
+      });
+      expect('startTime' in merged!).toBe(false);
+      const localClear = cfgEdit({ startTime: undefined }, 'A', 3000);
+      const rest: Record<string, unknown> = { ...base };
+      delete rest['startTime'];
+      expect(resolve(rest, [localClear], [generation])).toEqual({
+        ...rest,
+        lastTaskCreationDay: '2026-06-16',
+      });
+    });
+
+    it('refuses a remote LWW row, whose values it may not read (decision 5)', () => {
+      const row = op({
+        id: 'row',
+        clientId: 'B',
+        timestamp: 500,
+        actionType: '[TASK_REPEAT_CFG] LWW Update' as ActionType,
+        entityType: 'TASK_REPEAT_CFG' as EntityType,
+        entityId: 'cfg-1',
+        payload: {
+          actionPayload: { ...base, title: 'Renamed' },
+          entityChanges: [],
+          lwwUpdateMode: 'replace',
+        },
+      });
+      expect(resolve({ ...base, skipOverdue: true }, [skip], [row])).toBeUndefined();
+    });
+
+    it('refuses when no local field won', () => {
+      const s = cfgSides([skip], [cfgEdit({ skipOverdue: false }, 'B', 2000)]);
+      expect(localWinningFieldGroups(s)).toEqual([]);
+      expect(mergedSnapshotState(base, s, [])).toBeUndefined();
+    });
+  });
+
   describe('isFieldPatchEligible', () => {
     it('admits disjoint and overlapping readable edits', () => {
       expect(

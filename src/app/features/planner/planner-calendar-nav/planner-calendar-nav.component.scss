@@ -1,3 +1,5 @@
+@use '../../../../styles/_globals.scss' as *;
+
 :host {
   display: block;
   padding: var(--s-half) var(--s) 0;
@@ -65,8 +67,19 @@
     color: var(--c-contrast);
   }
 
-  &.is-past {
-    opacity: 0.35;
+  // Muted rather than faded: opacity took past days below 3:1 in both themes.
+  &.is-past:not(.is-active) {
+    color: var(--text-color-muted);
+  }
+
+  // Grow the hit area past the 36px circle without moving the grid: wider
+  // into the column gap, and no taller than the row so rows never overlap.
+  @include touchOnlyDevice {
+    &::before {
+      content: '';
+      position: absolute;
+      inset: calc(var(--s-quarter) * -1) calc(var(--s-half) * -1);
+    }
   }
 
   &:disabled {

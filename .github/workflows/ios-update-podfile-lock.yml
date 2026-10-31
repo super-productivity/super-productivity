@@ -1,0 +1,46 @@
+# Regenerates ios/App/Podfile.lock on a macOS runner, for maintainers without a Mac.
+# Needed after Capacitor plugin bumps change a trunk pod's version constraint.
+# Download the result: gh run download <run-id> -n podfile-lock -D ios/App
+name: iOS Update Podfile.lock
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  update-podfile-lock:
+    runs-on: macos-26
+    timeout-minutes: 20
+    steps:
+      - name: Check out Git repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v6
+        with:
+          node-version-file: .nvmrc
+
+      # work around for npm installs from git+https://github.com/johannesjo/J2M.git
+      - name: Reconfigure git to use HTTP authentication
+        run: >
+          git config --global url."https://github.com/".insteadOf
+          ssh://git@github.com/
+
+      - name: Install npm Packages
+        run: npm ci
+
+      # Updates every pod; the lockfile is otherwise never refreshed and drifts from node_modules
+      - name: Update pods
+        run: |
+          cd ios/App
+          pod update --repo-update
+
+      - name: Show Podfile.lock diff
+        run: git diff -- ios/App/Podfile.lock
+
+      - name: Upload Podfile.lock
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: podfile-lock
+          path: ios/App/Podfile.lock

@@ -3,6 +3,7 @@ import * as fromPlanner from './planner.reducer';
 import {
   selectMapOfAllTasksInActiveProjects,
   selectAllTasksInActiveProjects,
+  selectAllUndoneTasksWithDeadlineSorted,
 } from '../../tasks/store/task.selectors';
 import {
   NoStartTimeRepeatProjection,
@@ -142,6 +143,7 @@ export const selectPlannerDays = (
           plannedTasksByDay.get(dayDate) || [],
           calendarEventsByDay.get(dayDate) || [],
           unplannedTaskIdsToday,
+          allPlannedIdSet,
           deadlineMap,
           scheduleConfig,
           startOfNextDayDiffMs,
@@ -159,7 +161,11 @@ export const selectPlannerDayMap = createSelector(
 
     Object.keys(plannerState.days).forEach((dayDate) => {
       const tids = plannerState.days[dayDate] || [];
-      map[dayDate] = tids.map((id) => taskMap.get(id) as TaskCopy).filter((t) => !!t);
+      // A timed task belongs to its dueWithTime slot only; data written before
+      // the #11212 fix can still list it in planner.days.
+      map[dayDate] = tids
+        .map((id) => taskMap.get(id) as TaskCopy)
+        .filter((t) => !!t && typeof t.dueWithTime !== 'number');
     });
 
     return map;
@@ -175,6 +181,7 @@ const getPlannerDay = (
   plannedTasksForDay: TaskWithDueTime[],
   calendarEventsForDay: ScheduleFromCalendarEvent[],
   unplannedTaskIdsToday: string[] | false,
+  allPlannedIdSet: Set<string>,
   deadlineTasksByDay: Record<string, TaskCopy[]>,
   scheduleConfig?: ScheduleConfig,
   startOfNextDayDiffMs: number = 0,
@@ -182,10 +189,15 @@ const getPlannerDay = (
   const isTodayI = dayDate === todayStr;
   const currentDayDate = dateStrToUtcDate(dayDate);
   const currentDayTimestamp = currentDayDate.getTime();
+  // Planned (dueWithTime) tasks render as scheduledTaskItems; data written
+  // before the #11212 fix can also list them in planner.days, which would
+  // render them twice and count their estimate twice.
   const tIds =
     isTodayI && unplannedTaskIdsToday
       ? unplannedTaskIdsToday
-      : plannerState.days[dayDate] || [];
+      : ((plannerState.days[dayDate] || []) as string[]).filter(
+          (id) => !allPlannedIdSet.has(id),
+        );
   const normalTasks = tIds
     .map((id) => taskMap.get(id) as TaskCopy)
     .filter((t) => !!t)
@@ -486,7 +498,7 @@ const getIcalEventsForDay = (
  * Groups all undone deadline tasks by their effective day string.
  * O(N) single pass — callers can then do O(1) map lookups per day.
  */
-const groupDeadlineTasksByDay = (
+export const groupDeadlineTasksByDay = (
   activeTasks: Iterable<Task>,
   startOfNextDayDiffMs: number = 0,
 ): Record<string, TaskCopy[]> => {
@@ -506,3 +518,12 @@ const groupDeadlineTasksByDay = (
   }
   return result;
 };
+
+// Built from the scheduling snapshot (SPAP-20), so a time-tracking tick does not
+// regroup every deadline the way a grouping of all active tasks does.
+export const selectUndoneDeadlineTasksByDay = createSelector(
+  selectAllUndoneTasksWithDeadlineSorted,
+  selectStartOfNextDayDiffMs,
+  (tasks, startOfNextDayDiffMs): Record<string, TaskCopy[]> =>
+    groupDeadlineTasksByDay(tasks, startOfNextDayDiffMs),
+);

@@ -1,4 +1,5 @@
-import { inject, Injectable } from '@angular/core';
+import { inject, Injectable, Injector } from '@angular/core';
+import { toObservable } from '@angular/core/rxjs-interop';
 import { createEffect } from '@ngrx/effects';
 import { Store } from '@ngrx/store';
 import { merge } from 'rxjs';
@@ -8,12 +9,14 @@ import {
   filter,
   first,
   pairwise,
+  startWith,
   switchMap,
   tap,
 } from 'rxjs/operators';
 import { IS_ANDROID_WEB_VIEW } from '../../../util/is-android-web-view';
 import { androidInterface } from '../android-interface';
 import { WidgetDataService } from '../widget-data.service';
+import { TrackingPresenceService } from '../../tracking-presence/tracking-presence.service';
 import { TaskService } from '../../tasks/task.service';
 import { SnackService } from '../../../core/snack/snack.service';
 import { DroidLog } from '../../../core/log';
@@ -57,7 +60,9 @@ export const getTaskDoneChangesToApply = (
 @Injectable()
 export class AndroidWidgetEffects {
   private _store = inject(Store);
+  private _injector = inject(Injector);
   private _widgetDataService = inject(WidgetDataService);
+  private _trackingPresence = inject(TrackingPresenceService);
   private _taskService = inject(TaskService);
   private _snackService = inject(SnackService);
   private _hydrationState = inject(HydrationStateService);
@@ -70,6 +75,23 @@ export class AndroidWidgetEffects {
     createEffect(
       () =>
         this._store.select(selectAndroidWidgetData).pipe(
+          filter(() => !this._hydrationState.isApplyingRemoteOps()),
+          debounceTime(500),
+          tap(() => this._widgetDataService.pushCurrent()),
+        ),
+      { dispatch: false },
+    );
+
+  // Remote tracking-presence (SuperSync only) lives in a service signal, not the
+  // store, so store-selector emissions never fire for it — this is its own
+  // trigger for the widget's currentTask fallback.
+  pushOnRemoteSessionChange$ =
+    IS_ANDROID_WEB_VIEW &&
+    createEffect(
+      () =>
+        toObservable(this._trackingPresence.remoteSessionView, {
+          injector: this._injector,
+        }).pipe(
           filter(() => !this._hydrationState.isApplyingRemoteOps()),
           debounceTime(500),
           tap(() => this._widgetDataService.pushCurrent()),
@@ -102,10 +124,11 @@ export class AndroidWidgetEffects {
       { dispatch: false },
     );
 
-  // Single delivery path for widget done-taps: cold start and background→
-  // foreground are covered by onResume$ (ReplaySubject(1)), taps while the app
-  // is alive by the contentless native drain signal. The queue read is
-  // get-and-clear, so overlapping triggers drain at most once.
+  // Single delivery path for widget done-taps: cold start by startWith (the
+  // native onResume call runs before this bundle defines onResume$ and is
+  // dropped), background→foreground by onResume$, taps while the app is alive
+  // by the contentless native drain signal. The queue read is get-and-clear, so
+  // overlapping triggers drain at most once.
   drainWidgetDoneQueue$ =
     IS_ANDROID_WEB_VIEW &&
     createEffect(
@@ -114,6 +137,7 @@ export class AndroidWidgetEffects {
           androidInterface.onResume$,
           androidInterface.onWidgetDoneDrainRequest$,
         ).pipe(
+          startWith(undefined),
           concatMap(() =>
             this._dataInitState.isAllDataLoadedInitially$.pipe(
               first(),

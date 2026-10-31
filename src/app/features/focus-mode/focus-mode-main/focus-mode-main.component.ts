@@ -146,7 +146,7 @@ export class FocusModeMainComponent {
   private readonly _LAUNCH_DURATION_MS = 800;
   // True while the brief inline rocket launch plays (default, prep screen off).
   readonly isLaunching = signal(false);
-  private _launchSubscription: Subscription | null = null;
+  private _launch: { taskId: string; subscription: Subscription } | null = null;
 
   readonly simpleCounterService = inject(SimpleCounterService);
   readonly taskService = inject(TaskService);
@@ -372,6 +372,11 @@ export class FocusModeMainComponent {
     this._pomodoroDurationToPersist$
       .pipe(debounceTime(400), takeUntilDestroyed())
       .subscribe((duration) => this._persistPomodoroDuration(duration));
+
+    // Closing the overlay (Escape, close button, Android back) destroys this
+    // component. If that happens mid-launch, the user has already pressed
+    // Start, so start the session now instead of silently dropping it.
+    this._destroyRef.onDestroy(() => this._finishInlineLaunch());
   }
 
   @HostListener('window:focus') onWindowFocus(): void {
@@ -541,17 +546,27 @@ export class FocusModeMainComponent {
     }
 
     this.isLaunching.set(true);
-    this._launchSubscription = timer(this._LAUNCH_DURATION_MS)
-      .pipe(takeUntilDestroyed(this._destroyRef))
-      .subscribe(() => {
-        this._launchSubscription = null;
-        this.isLaunching.set(false);
-        if (!this._isPreparation()) {
-          this._pendingTaskId.set(null);
-          return;
-        }
-        this._dispatchStartSession(taskId);
-      });
+    this._launch = {
+      taskId,
+      subscription: timer(this._LAUNCH_DURATION_MS).subscribe(() =>
+        this._finishInlineLaunch(),
+      ),
+    };
+  }
+
+  private _finishInlineLaunch(): void {
+    const launch = this._launch;
+    if (!launch) {
+      return;
+    }
+    launch.subscription.unsubscribe();
+    this._launch = null;
+    this.isLaunching.set(false);
+    if (!this._isPreparation()) {
+      this._pendingTaskId.set(null);
+      return;
+    }
+    this._dispatchStartSession(launch.taskId);
   }
 
   private _prefersReducedMotion(): boolean {
@@ -586,9 +601,9 @@ export class FocusModeMainComponent {
     this._store.dispatch(resetCycles());
   }
 
-  exitToPlanning(): void {
-    // Cancelling the session clears tracking and hides the overlay, returning
-    // the user to wherever they were before focus mode (no forced navigation).
+  cancelSession(): void {
+    // Ends the session without logging it: unlike completing, it advances no
+    // Pomodoro cycle and starts no break. Clears tracking and hides the overlay.
     this._store.dispatch(cancelFocusSession());
   }
 
@@ -639,8 +654,8 @@ export class FocusModeMainComponent {
   }
 
   private _cancelInlineLaunch(): void {
-    this._launchSubscription?.unsubscribe();
-    this._launchSubscription = null;
+    this._launch?.subscription.unsubscribe();
+    this._launch = null;
     this.isLaunching.set(false);
   }
 

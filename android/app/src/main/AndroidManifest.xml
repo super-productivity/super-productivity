@@ -76,7 +76,59 @@
         <action android:name="com.superproductivity.superproductivity.DONE" />
         <action android:name="com.superproductivity.superproductivity.PAUSE" />
       </intent-filter>
+
+      <!-- Launcher shortcuts (long-press the app icon). Must sit on the
+           MAIN/LAUNCHER activity; they target AppShortcutActivity below. -->
+      <meta-data
+        android:name="android.app.shortcuts"
+        android:resource="@xml/shortcuts" />
     </activity>
+
+    <!-- Trampoline for the launcher shortcuts in res/xml/shortcuts.xml: forwards
+         the shortcut's URL to CapacitorMainActivity without the CLEAR_TASK flag
+         Android forces on static shortcuts (see AppShortcutActivity.kt). Empty
+         taskAffinity + excludeFromRecents keep it out of the app's task and
+         recents. Not exported: the launcher starts shortcuts as this app, so
+         nothing else needs to reach it. -->
+    <activity
+      android:name=".AppShortcutActivity"
+      android:excludeFromRecents="true"
+      android:exported="false"
+      android:noHistory="true"
+      android:taskAffinity=""
+      android:theme="@android:style/Theme.NoDisplay" />
+
+    <!-- Text share target: saves the share to the capture inbox and finishes, so
+         the user stays in the app they shared from. Own empty taskAffinity and
+         noHistory, like AppShortcutActivity, so it never joins the app's task. -->
+    <activity
+      android:name=".share.ShareReceiverActivity"
+      android:excludeFromRecents="true"
+      android:exported="true"
+      android:label="@string/title_activity_fullscreen"
+      android:noHistory="true"
+      android:taskAffinity=""
+      android:theme="@android:style/Theme.NoDisplay">
+      <intent-filter>
+        <action android:name="android.intent.action.SEND" />
+        <category android:name="android.intent.category.DEFAULT" />
+        <data android:mimeType="text/*" />
+      </intent-filter>
+    </activity>
+
+    <!-- Widget quick add: a dialog over the home screen that saves the title to
+         the capture inbox, without loading the app. Own empty taskAffinity and
+         noHistory, like ShareReceiverActivity. Not exported: only the widget's
+         explicit PendingIntent starts it. -->
+    <activity
+      android:name=".widget.QuickAddActivity"
+      android:excludeFromRecents="true"
+      android:exported="false"
+      android:label="@string/quick_add_title"
+      android:noHistory="true"
+      android:taskAffinity=""
+      android:theme="@style/AppTheme.QuickAdd"
+      android:windowSoftInputMode="stateAlwaysVisible|adjustResize" />
 
     <!-- All new Super-Productivity main activity, based on Capacitor to support offline use -->
     <activity
@@ -89,12 +141,6 @@
       android:launchMode="singleTask"
       android:theme="@style/AppTheme.NoActionBarLaunch"
       android:windowSoftInputMode="adjustResize">
-      <intent-filter>
-        <action android:name="android.intent.action.SEND" />
-        <category android:name="android.intent.category.DEFAULT" />
-        <data android:mimeType="text/*" />
-      </intent-filter>
-
       <!-- OAuth callback handler for Dropbox authentication -->
       <intent-filter>
         <action android:name="android.intent.action.VIEW" />
@@ -187,6 +233,11 @@
 
     <receiver
       android:name=".receiver.ReminderActionReceiver"
+      android:enabled="true"
+      android:exported="false" />
+
+    <receiver
+      android:name=".receiver.NotificationActionReceiver"
       android:enabled="true"
       android:exported="false" />
 

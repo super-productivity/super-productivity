@@ -1,6 +1,6 @@
 import { TestBed, fakeAsync, flush, tick } from '@angular/core/testing';
 import { MockStore, provideMockStore } from '@ngrx/store/testing';
-import { BehaviorSubject, of, Subscription } from 'rxjs';
+import { BehaviorSubject, of, Subscription, throwError } from 'rxjs';
 import { CalendarIntegrationEffects } from './calendar-integration.effects';
 import { GlobalTrackingIntervalService } from '../../../core/global-tracking-interval/global-tracking-interval.service';
 import { BannerService } from '../../../core/banner/banner.service';
@@ -19,6 +19,7 @@ import { CalendarIntegrationEvent } from '../calendar-integration.model';
 import { selectTaskFeatureState } from '../../tasks/store/task.selectors';
 import { initialTaskState } from '../../tasks/store/task.reducer';
 import { TaskState } from '../../tasks/task.model';
+import { IS_ONLINE$ } from '../../../util/is-online.token';
 
 describe('CalendarIntegrationEffects pollChanges$ startup guard', () => {
   let effects: CalendarIntegrationEffects;
@@ -28,6 +29,8 @@ describe('CalendarIntegrationEffects pollChanges$ startup guard', () => {
   let checkForTaskWithIssueEverywhereSpy: jasmine.Spy;
   let todayDateStr$: BehaviorSubject<string>;
   let requestEvents$Spy: jasmine.Spy;
+  let getCachedEventsSpy: jasmine.Spy;
+  let isOnline$: BehaviorSubject<boolean>;
   let isInitialSyncDoneSyncSpy: jasmine.Spy;
   let isInSyncWindowSpy: jasmine.Spy;
   let taskStateForSelector: TaskState & {
@@ -84,6 +87,8 @@ describe('CalendarIntegrationEffects pollChanges$ startup guard', () => {
       .createSpy('isInitialSyncDoneSync')
       .and.returnValue(true);
     isInSyncWindowSpy = jasmine.createSpy('isInSyncWindow').and.returnValue(false);
+    getCachedEventsSpy = jasmine.createSpy('getCachedEvents').and.returnValue([]);
+    isOnline$ = new BehaviorSubject<boolean>(true);
 
     todayDateStr$ = new BehaviorSubject<string>('2026-05-20');
     taskStateForSelector = { ...initialTaskState };
@@ -120,6 +125,7 @@ describe('CalendarIntegrationEffects pollChanges$ startup guard', () => {
           provide: CalendarIntegrationService,
           useValue: {
             requestEvents$: requestEvents$Spy,
+            getCachedEvents: getCachedEventsSpy,
             skippedEventIds$: new BehaviorSubject<string[]>([]),
           },
         },
@@ -148,6 +154,7 @@ describe('CalendarIntegrationEffects pollChanges$ startup guard', () => {
           provide: HydrationStateService,
           useValue: { isInSyncWindow: isInSyncWindowSpy },
         },
+        { provide: IS_ONLINE$, useValue: isOnline$ },
       ],
     });
 
@@ -399,4 +406,60 @@ describe('CalendarIntegrationEffects pollChanges$ startup guard', () => {
     )._currentlyShownBanners$.getValue();
     expect(banners.length).toBe(0);
   }));
+
+  describe('offline', () => {
+    const getBannerIds = (): string[] =>
+      (
+        effects as unknown as {
+          _currentlyShownBanners$: BehaviorSubject<{ id: string }[]>;
+        }
+      )._currentlyShownBanners$
+        .getValue()
+        .map((b) => b.id);
+
+    it('shows banners from cached events when offline at start, without importing or requesting', fakeAsync(() => {
+      isOnline$.next(false);
+      getCachedEventsSpy.and.returnValue([
+        buildEvent('cached-due', { start: Date.now() + THIRTY_MINUTES_MS }),
+      ]);
+
+      sub = effects.pollChanges$.subscribe();
+      tick(0);
+      flush();
+
+      expect(requestEvents$Spy).not.toHaveBeenCalled();
+      expect(getCachedEventsSpy).toHaveBeenCalledWith(PROVIDER_ID);
+      expect(addTaskFromIssueSpy).not.toHaveBeenCalled();
+      expect(getBannerIds()).toEqual(['cached-due']);
+    }));
+
+    it('fetches and imports once the connection is back', fakeAsync(() => {
+      isOnline$.next(false);
+      sub = effects.pollChanges$.subscribe();
+      tick(0);
+      flush();
+      expect(requestEvents$Spy).not.toHaveBeenCalled();
+
+      isOnline$.next(true);
+      tick(0);
+      flush();
+
+      expect(requestEvents$Spy).toHaveBeenCalledTimes(1);
+      expect(addTaskFromIssueSpy).toHaveBeenCalledTimes(1);
+    }));
+
+    it('falls back to cached events for banners only when the request fails', fakeAsync(() => {
+      requestEvents$Spy.and.returnValue(throwError(() => new Error('offline')));
+      getCachedEventsSpy.and.returnValue([
+        buildEvent('cached-due', { start: Date.now() + THIRTY_MINUTES_MS }),
+      ]);
+
+      sub = effects.pollChanges$.subscribe();
+      tick(0);
+      flush();
+
+      expect(addTaskFromIssueSpy).not.toHaveBeenCalled();
+      expect(getBannerIds()).toEqual(['cached-due']);
+    }));
+  });
 });

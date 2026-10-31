@@ -82,7 +82,11 @@ describe('WorkContextMenuComponent', () => {
 
     mockPlainspaceShareService = jasmine.createSpyObj('PlainspaceShareService', [
       'shareProjectOnPlainspace',
+      'inviteUrl$',
+      'copyInviteUrl',
     ]);
+    mockPlainspaceShareService.inviteUrl$.and.returnValue(of(null));
+    mockPlainspaceShareService.copyInviteUrl.and.resolveTo();
     mockPlainspaceShareService.shareProjectOnPlainspace.and.returnValue(
       Promise.resolve('space-1'),
     );
@@ -527,6 +531,35 @@ describe('WorkContextMenuComponent', () => {
       fixture.detectChanges();
 
       expect(menuButtonByIcon('group_add')).toBeNull();
+    });
+  });
+
+  describe('rendered Copy-invite-link action', () => {
+    beforeEach(() => {
+      mockProjectService.getByIdLive$.and.returnValue(
+        of({ id: 'project-123', isArchived: false } as any),
+      );
+    });
+
+    // The URL is resolved when the menu opens, so the click copies straight
+    // away, inside its user activation (WebKit refuses a later write).
+    it('copies the URL resolved when the menu opened', () => {
+      mockPlainspaceShareService.inviteUrl$.and.returnValue(
+        of('https://plainspace.org/demo'),
+      );
+      fixture.detectChanges();
+
+      const copyBtn = menuButtonByIcon('link');
+      expect(copyBtn).toBeTruthy();
+      copyBtn!.click();
+      expect(mockPlainspaceShareService.copyInviteUrl).toHaveBeenCalledWith(
+        'https://plainspace.org/demo',
+      );
+    });
+
+    it('hides the action while no invite URL resolves (not shared, offline)', () => {
+      fixture.detectChanges();
+      expect(menuButtonByIcon('link')).toBeNull();
     });
   });
 });

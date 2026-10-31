@@ -1,6 +1,6 @@
 # Recently deleted tasks (trash bin) — design note
 
-Status: draft, implemented on `feat/recently-deleted-tasks`.
+Status: shipped in #10912.
 Demand: #2778 (21 👍, 15 comments); #10350 also asks for projects/tags/filters
 (out of scope); related general-undo requests #7244 and #8821.
 

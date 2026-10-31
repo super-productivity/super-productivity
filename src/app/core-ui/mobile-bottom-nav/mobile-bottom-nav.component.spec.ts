@@ -1,7 +1,7 @@
 import { NO_ERRORS_SCHEMA, WritableSignal, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslateModule } from '@ngx-translate/core';
-import { provideRouter } from '@angular/router';
+import { provideRouter, Router } from '@angular/router';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { Store } from '@ngrx/store';
 import { BehaviorSubject, of } from 'rxjs';
@@ -19,6 +19,10 @@ import {
 } from '../layout/store/layout.reducer';
 import { DEFAULT_GLOBAL_CONFIG } from '../../features/config/default-global-config.const';
 import { AppFeaturesConfig } from '../../features/config/global-config.model';
+import { LS } from '../../core/persistence/storage-keys.const';
+import { INBOX_PROJECT } from '../../features/project/project.const';
+import { T } from '../../t.const';
+import { PluginMenuEntryCfg } from '../../plugins/plugin-api.model';
 
 /**
  * Below 600px this nav's panels menu is the ONLY route to every right-panel
@@ -48,7 +52,7 @@ describe('MobileBottomNavComponent', () => {
     [keyof AppFeaturesConfig, string, LayoutToggle, LayoutShowSignal]
   > = [
     [
-      'isScheduleDayPanelEnabled',
+      'isSchedulerEnabled',
       '.e2e-toggle-schedule-day-panel',
       'toggleScheduleDayPanel',
       'isShowScheduleDayPanel',
@@ -63,7 +67,7 @@ describe('MobileBottomNavComponent', () => {
   ];
 
   const ALL_OFF: Partial<AppFeaturesConfig> = {
-    isScheduleDayPanelEnabled: false,
+    isSchedulerEnabled: false,
     isIssuesPanelEnabled: false,
     isProjectNotesEnabled: false,
   };
@@ -85,6 +89,7 @@ describe('MobileBottomNavComponent', () => {
   const render = async (
     over: Partial<AppFeaturesConfig>,
     sidePanelButtons: SidePanelBtn[] = [],
+    menuEntries: PluginMenuEntryCfg[] = [],
   ): Promise<MobileBottomNavComponent> => {
     const appFeatures = signal<AppFeaturesConfig>({
       ...DEFAULT_GLOBAL_CONFIG.appFeatures,
@@ -122,7 +127,10 @@ describe('MobileBottomNavComponent', () => {
         { provide: LayoutService, useValue: layout },
         {
           provide: PluginBridgeService,
-          useValue: { sidePanelButtons: signal(sidePanelButtons) },
+          useValue: {
+            sidePanelButtons: signal(sidePanelButtons),
+            menuEntries: signal(menuEntries),
+          },
         },
         { provide: Store, useValue: { select, dispatch } },
         {
@@ -182,7 +190,7 @@ describe('MobileBottomNavComponent', () => {
   const cases: Array<[string, Partial<AppFeaturesConfig>]> = [
     ['all three enabled', {}],
     ['schedule and notes', { isIssuesPanelEnabled: false }],
-    ['issues and notes', { isScheduleDayPanelEnabled: false }],
+    ['issues and notes', { isSchedulerEnabled: false }],
   ];
 
   cases.forEach(([name, over]) => {
@@ -261,15 +269,115 @@ describe('MobileBottomNavComponent', () => {
     PANEL_ITEMS.forEach(([, sel]) => expect(nav().querySelector(sel)).toBeFalsy());
   });
 
-  it('shows the Planner button when the feature is enabled', async () => {
-    await render({ isPlannerEnabled: true });
+  describe('configurable second slot', () => {
+    const slotBtn = (): HTMLElement | null =>
+      nav().querySelector<HTMLElement>('.e2e-bottom-nav-slot');
+    let navigateByUrl: jasmine.Spy;
 
-    expect(nav().querySelector('button[routerLink="/planner"]')).toBeTruthy();
-  });
+    const renderSlot = async (
+      over: Partial<AppFeaturesConfig> = {},
+      menuEntries: PluginMenuEntryCfg[] = [],
+    ): Promise<MobileBottomNavComponent> => {
+      const cmp = await render(over, [], menuEntries);
+      navigateByUrl = spyOn(TestBed.inject(Router), 'navigateByUrl').and.resolveTo(true);
+      return cmp;
+    };
 
-  it('hides the Planner button when the feature is disabled', async () => {
-    await render({ isPlannerEnabled: false });
+    afterEach(() => localStorage.removeItem(LS.BOTTOM_NAV_SLOT));
 
-    expect(nav().querySelector('button[routerLink="/planner"]')).toBeFalsy();
+    it('shows Planner by default and navigates there on tap', async () => {
+      await renderSlot();
+
+      expect(slotBtn()?.getAttribute('aria-label')).toBe(T.MH.PLANNER);
+      expect(slotBtn()?.classList).toContain('tour-planner');
+      slotBtn()?.click();
+      expect(navigateByUrl).toHaveBeenCalledOnceWith('/planner');
+    });
+
+    it('runs a stored plugin entry on tap', async () => {
+      const onClick = jasmine.createSpy('onClick');
+      localStorage.setItem(LS.BOTTOM_NAV_SLOT, 'plugin:p1:Doc Mode');
+      await renderSlot({}, [
+        { pluginId: 'p1', label: 'Doc Mode', icon: 'description', onClick },
+      ]);
+
+      expect(slotBtn()?.getAttribute('aria-label')).toBe('Doc Mode');
+      expect(slotBtn()?.querySelector('plugin-icon')).toBeTruthy();
+      slotBtn()?.click();
+      expect(onClick).toHaveBeenCalledTimes(1);
+      expect(navigateByUrl).not.toHaveBeenCalled();
+    });
+
+    it('uses the stored choice', async () => {
+      localStorage.setItem(LS.BOTTOM_NAV_SLOT, 'boards');
+      await renderSlot();
+
+      expect(slotBtn()?.getAttribute('aria-label')).toBe(T.MH.BOARDS);
+      expect(slotBtn()?.classList).not.toContain('tour-planner');
+      slotBtn()?.click();
+      expect(navigateByUrl).toHaveBeenCalledOnceWith('/boards');
+    });
+
+    it('hides the slot when Planner is disabled and nothing else was chosen', async () => {
+      await renderSlot({ isPlannerEnabled: false });
+
+      expect(slotBtn()).toBeFalsy();
+    });
+
+    it('opens the menu on contextmenu without navigating', async () => {
+      await renderSlot();
+
+      slotBtn()?.dispatchEvent(new MouseEvent('contextmenu', { cancelable: true }));
+      fixture.detectChanges();
+      // The click that ends a long-press must not navigate.
+      slotBtn()?.click();
+
+      expect(document.querySelector('.mobile-bottom-nav-slot-menu')).toBeTruthy();
+      expect(navigateByUrl).not.toHaveBeenCalled();
+    });
+
+    it('returns focus to the slot button when the menu closes', async () => {
+      const cmp = await renderSlot();
+
+      cmp.openSlotMenu();
+      fixture.detectChanges();
+      document
+        .querySelector<HTMLElement>('.mobile-bottom-nav-slot-menu [role="menuitemradio"]')
+        ?.click();
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      expect(document.activeElement).toBe(slotBtn());
+    });
+
+    it('stores a picked destination and navigates to it afterwards', async () => {
+      const cmp = await renderSlot();
+
+      cmp.openSlotMenu();
+      fixture.detectChanges();
+      const items = [
+        ...document.querySelectorAll<HTMLElement>(
+          '.mobile-bottom-nav-slot-menu [role="menuitemradio"]',
+        ),
+      ];
+      expect(items.map((el) => el.getAttribute('aria-checked'))).toEqual([
+        'true',
+        'false',
+        'false',
+        'false',
+        'false',
+      ]);
+
+      items[1].click();
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      expect(localStorage.getItem(LS.BOTTOM_NAV_SLOT)).toBe('inbox');
+      expect(cmp.slot()?.id).toBe('inbox');
+      slotBtn()?.click();
+      expect(navigateByUrl).toHaveBeenCalledOnceWith(
+        `/project/${INBOX_PROJECT.id}/tasks`,
+      );
+    });
   });
 });

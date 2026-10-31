@@ -4,9 +4,13 @@ import { SyncConfigService } from '../../imex/sync/sync-config.service';
 import { SnackService } from '../../core/snack/snack.service';
 import { SyncProviderManager } from '../../op-log/sync-providers/provider-manager.service';
 import { GlobalConfigService } from '../../features/config/global-config.service';
-import { NEW_INSTALL_APP_FEATURES } from '../../features/config/new-install-app-features.const';
+import {
+  NEW_INSTALL_APP_FEATURES,
+  NEW_INSTALL_IDLE_CONFIG,
+} from '../../features/config/new-install-config.const';
 import {
   AppFeaturesConfig,
+  IdleConfig,
   ConfigFormSection,
 } from '../../features/config/global-config.model';
 import { ActivatedRoute } from '@angular/router';
@@ -25,6 +29,7 @@ import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { ConfigSectionComponent } from '../../features/config/config-section/config-section.component';
 import { CollapsibleComponent } from '../../ui/collapsible/collapsible.component';
 import { WorkContextService } from '../../features/work-context/work-context.service';
+import { FocusModeLocalSettingsService } from '../../features/config/focus-mode-local-settings.service';
 
 describe('ConfigPageComponent', () => {
   let component: ConfigPageComponent;
@@ -85,6 +90,10 @@ describe('ConfigPageComponent', () => {
           useValue: jasmine.createSpyObj('GlobalConfigService', ['updateSection'], {
             cfg$: of({}),
             sync$: of({}),
+            cfg: signal({
+              appFeatures: NEW_INSTALL_APP_FEATURES,
+              idle: NEW_INSTALL_IDLE_CONFIG,
+            }),
             appFeatures: signal(NEW_INSTALL_APP_FEATURES),
           }),
         },
@@ -149,6 +158,79 @@ describe('ConfigPageComponent', () => {
         config: { ...NEW_INSTALL_APP_FEATURES },
       });
       expect(configService.updateSection).not.toHaveBeenCalled();
+    });
+
+    it('writes only the changed idle fields, not the new-install values', () => {
+      const configService = TestBed.inject(
+        GlobalConfigService,
+      ) as jasmine.SpyObj<GlobalConfigService>;
+      component.saveGlobalCfg({
+        sectionKey: 'idle',
+        config: { ...NEW_INSTALL_IDLE_CONFIG, minIdleTime: 600000 },
+      });
+      expect(configService.updateSection).toHaveBeenCalledOnceWith('idle', {
+        minIdleTime: 600000,
+      } as Partial<IdleConfig>);
+    });
+  });
+
+  describe('focus session end notifications (#7550)', () => {
+    let localSettings: FocusModeLocalSettingsService;
+    let snackService: jasmine.SpyObj<SnackService>;
+    let requestPermissionSpy: jasmine.Spy;
+
+    // a macrotask turn runs every queued microtask of the permission flow
+    const flushPromises = (): Promise<void> =>
+      new Promise((resolve) => setTimeout(resolve));
+
+    const enableNotifications = (): void =>
+      component.saveGlobalCfg({
+        sectionKey: 'focusModeLocal',
+        config: { isLoopBreakEndAlarm: false, isNotifyOnSessionEnd: true },
+      });
+
+    beforeEach(() => {
+      localStorage.removeItem('sp_focus_mode_local_settings');
+      localSettings = TestBed.inject(FocusModeLocalSettingsService);
+      localSettings.update({ isNotifyOnSessionEnd: false });
+      snackService = TestBed.inject(SnackService) as jasmine.SpyObj<SnackService>;
+      spyOnProperty(Notification, 'permission', 'get').and.returnValue('default');
+      requestPermissionSpy = spyOn(Notification, 'requestPermission');
+    });
+
+    afterEach(() => {
+      localStorage.removeItem('sp_focus_mode_local_settings');
+    });
+
+    it('asks for permission when turned on and keeps it on when granted', async () => {
+      requestPermissionSpy.and.resolveTo('granted');
+      enableNotifications();
+      await flushPromises();
+
+      expect(requestPermissionSpy).toHaveBeenCalledTimes(1);
+      expect(localSettings.settings().isNotifyOnSessionEnd).toBe(true);
+      expect(snackService.open).not.toHaveBeenCalled();
+    });
+
+    it('turns the setting back off and informs the user when denied', async () => {
+      requestPermissionSpy.and.resolveTo('denied');
+      enableNotifications();
+      await flushPromises();
+
+      expect(localSettings.settings().isNotifyOnSessionEnd).toBe(false);
+      expect(snackService.open).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          type: 'ERROR',
+          msg: T.GCF.FOCUS_MODE_LOCAL.S_NOTIFICATION_PERMISSION_DENIED,
+        }),
+      );
+    });
+
+    it('does not ask again when saving with the setting already on', () => {
+      localSettings.update({ isNotifyOnSessionEnd: true });
+      enableNotifications();
+
+      expect(requestPermissionSpy).not.toHaveBeenCalled();
     });
   });
 
@@ -277,6 +359,25 @@ describe('ConfigPageComponent', () => {
         expect(hit?.sectionKey).toBe(sectionHit!.sectionKey);
         expect(hit?.scrollSelector).toBe(sectionHit!.scrollSelector);
       }
+    });
+  });
+
+  describe('tab query parameter', () => {
+    const openWithTab = (tab: string): void => {
+      TestBed.inject(ActivatedRoute).queryParams = of({ tab });
+      component.ngOnInit();
+    };
+
+    it('opens the last tab, Sync & Backup', () => {
+      openWithTab('5');
+
+      expect(component.selectedTabIndex).toBe(5);
+    });
+
+    it('ignores an index past the last tab', () => {
+      openWithTab('6');
+
+      expect(component.selectedTabIndex).toBe(0);
     });
   });
 

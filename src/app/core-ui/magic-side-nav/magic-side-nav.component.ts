@@ -1,15 +1,19 @@
 import { TaskMultiDragService } from '../../features/tasks/task-multi-drag.service';
 /* eslint-disable @typescript-eslint/naming-convention */
 import {
+  afterNextRender,
   AfterViewInit,
   ChangeDetectionStrategy,
   Component,
   computed,
   DestroyRef,
   effect,
+  ElementRef,
   HostListener,
   inject,
+  Injector,
   input,
+  linkedSignal,
   OnDestroy,
   output,
   signal,
@@ -85,6 +89,8 @@ const SIDENAV_WIDTH_ANIMATION_DURATION_MS = 425;
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class MagicSideNavComponent implements OnDestroy, AfterViewInit {
+  private readonly _elementRef = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly _injector = inject(Injector);
   private readonly _destroyRef = inject(DestroyRef);
   private readonly _sideNavConfigService = inject(MagicNavConfigService);
   private readonly _taskService = inject(TaskService);
@@ -138,9 +144,21 @@ export class MagicSideNavComponent implements OnDestroy, AfterViewInit {
 
   isFullMode = signal(this._initialState.isFullMode);
   showMobileMenuOverlay = signal(false);
-  // Temporarily disable swipe during menu open animation to prevent
-  // the touch event from the toggle button being captured as a swipe
-  swipeEnabled = signal(true);
+  readonly isMobileNavOpen = computed(
+    () => this.isMobile() && this.showMobileMenuOverlay(),
+  );
+  // Sticky: once opened, the mobile drawer is hidden rather than destroyed, so
+  // later opens skip rebuilding every nav row (#10820). Boot still skips it.
+  readonly isMobileNavRendered = linkedSignal<boolean, boolean>({
+    source: this.isMobileNavOpen,
+    computation: (isOpen, previous) => isOpen || !!previous?.value,
+  });
+  // True during the drawer's enter animation. Swipe is off so the touch from the
+  // toggle button is not captured as a swipe, and taps are ignored so repeated
+  // taps on a slow device do not hit the drawer row that slid under the
+  // finger (#10820: "Create New Tag" opened instead).
+  isOpeningMobileNav = signal(false);
+  private _focusBeforeMobileNavOpen: HTMLElement | null = null;
 
   // Animate only for compactMode/fullMode toggle
   animateWidth = signal(false);
@@ -200,6 +218,28 @@ export class MagicSideNavComponent implements OnDestroy, AfterViewInit {
       this._layoutService.isMobileSideNavOpen.set(
         this.isMobile() && this.showMobileMenuOverlay(),
       );
+    });
+
+    // The drawer is no longer destroyed on close, so the focus trap does not
+    // restore focus by itself; hand it back to where it was before opening.
+    effect(() => {
+      const isOpen = this.isMobileNavOpen();
+      untracked(() => {
+        if (isOpen) {
+          this._focusBeforeMobileNavOpen = document.activeElement as HTMLElement | null;
+          return;
+        }
+        const previous = this._focusBeforeMobileNavOpen;
+        this._focusBeforeMobileNavOpen = null;
+        // Resized to desktop: the drawer became the regular nav, keep focus there.
+        if (!this.isMobile()) return;
+        const active = document.activeElement as HTMLElement | null;
+        if (active && this._elementRef.nativeElement.contains(active)) {
+          // Blur first: with no focusable opener, focus would stay on a hidden row.
+          active.blur();
+          previous?.focus();
+        }
+      });
     });
 
     // Sync history state with mobile menu visibility status
@@ -356,17 +396,27 @@ export class MagicSideNavComponent implements OnDestroy, AfterViewInit {
   }
 
   toggleMobileNav(): void {
+    // A second toggle while the drawer slides in is a repeated tap, not a
+    // request to close. Closed by any other path (back, route, item), the
+    // next tap opens it again.
+    // shortcut: an earlier open's timer may end a quick reopen's guard early —
+    // track and clear the timer if that ever shows up as a misfire.
+    if (this.isOpeningMobileNav() && this.showMobileMenuOverlay()) return;
     const isOpening = !this.showMobileMenuOverlay();
     this.showMobileMenuOverlay.update((show) => !show);
 
-    // On mobile, briefly disable swipe gesture to prevent
-    // the touch event from the toggle button from being captured by
-    // the drawer's swipe handler during its enter animation.
     if (isOpening && this.isMobile()) {
-      this.swipeEnabled.set(false);
-      window.setTimeout(() => {
-        this.swipeEnabled.set(true);
-      }, 300); // Match animation duration (225ms) + buffer
+      this.isOpeningMobileNav.set(true);
+      // Count from the render that starts the slide-in: a slow first render
+      // would otherwise use up the window before the drawer moves.
+      afterNextRender(
+        () => {
+          window.setTimeout(() => {
+            this.isOpeningMobileNav.set(false);
+          }, 300); // Match animation duration (225ms) + buffer
+        },
+        { injector: this._injector },
+      );
     }
   }
 
@@ -378,7 +428,10 @@ export class MagicSideNavComponent implements OnDestroy, AfterViewInit {
 
   /** Handle "back" button to hide mobile menu overlay */
   @HostListener('window:popstate') onBack(): void {
-    if (this.isMobile() && this.showMobileMenuOverlay()) this.toggleMobileNav();
+    // Bypasses the opening guard: a swallowed back would lose the history entry.
+    if (this.isMobile() && this.showMobileMenuOverlay()) {
+      this.showMobileMenuOverlay.set(false);
+    }
   }
 
   /** Synchronize window history state with the visibility of the mobile menu overlay */
@@ -631,7 +684,7 @@ export class MagicSideNavComponent implements OnDestroy, AfterViewInit {
       event.stopPropagation();
 
       if (this.isMobile() && this.showMobileMenuOverlay()) {
-        this.toggleMobileNav();
+        this.showMobileMenuOverlay.set(false);
         return;
       }
 

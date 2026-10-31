@@ -86,6 +86,10 @@
     "INTRO_2": "Ak si vážite tento prístup a chcete, aby projekt zostal zdravý a vyvíjal sa, dobrovoľný príspevok je veľmi ocenený."
   },
   "EXAMPLE_TASKS": {
+    "GETTING_STARTED": {
+      "TITLE": "Voliteľné: tipy na začiatok",
+      "NOTES": "Nič z toho tu nie je povinné. Túto úlohu môžete kedykoľvek odstrániť.\n\n- **Dnes a Doručená pošta**: Dnes zobrazuje, čo je naplánované na dnes. Úlohy bez vlastného projektu zostávajú v časti Doručená pošta. Úloha sa môže zobraziť v oboch zoznamoch.\n- **Projekty**: zoskupujte úlohy podľa témy pomocou **+** vedľa položky **Projekty** v bočnom paneli.\n- **Synchronizácia**: majte svoje dáta na viacerých zariadeniach v **Nastavenia → Synchronizácia a záloha**.\n- **Prichádzate z Todoistu alebo TickTicku?** Importujte svoje úlohy v **Nastavenia → Synchronizácia a záloha → Import/Export**.\n- **Prehliadky**: **Pomoc → Rýchla prehliadka** v ponuke bočného panela vás prevedie základmi na vašej vlastnej úlohe a **Pomoc → Ako na to** krok za krokom ukáže krátku syntax a ovládanie klávesnicou. Prehliadku môžete kedykoľvek zavrieť.\n- **Prispôsobte si to**: vyberte motív alebo tmavý režim a funkcie ako tabule, plán, návyky, režim zamerania či integrácie zapínajte a vypínajte v **Nastavenia → Všeobecné**. Pluginy pridávajú ešte viac."
+    },
     "LEARN_KEYBOARD_SHORTCUTS": {
       "TITLE": "Naučte sa klávesové skratky",
       "NOTES": "Super Productivity je navrhnuté na ovládanie klávesnicou. Naučte sa skratky, aby ste pracovali rýchlejšie.\n\n**Ako začať:**\n1. Otvorte **bočné menu**\n2. Prejdite na **Pomoc**\n3. Kliknite na **Prehliadka klávesovej navigácie**"
@@ -3004,6 +3008,7 @@
       "CONTRIBUTE": "Prispieť na",
       "GET_HELP_ONLINE": "Získajte pomoc online",
       "KEYBOARD": "Ako na to: Pokročilá klávesnica",
+      "QUICK_TOUR": "Rýchla prehliadka",
       "REDDIT_COMMUNITY": "Komunita Reddit",
       "REPORT_A_PROBLEM": "Nahlásiť problém",
       "SEND_FEEDBACK": "Poslať spätnú väzbu",
@@ -3094,13 +3099,50 @@
     "HINTS": {
       "CREATE_TASK": "Kliknite na + pre pridanie prvej úlohy",
       "CREATE_TASK_TOUCH": "Ťuknite na + pre pridanie prvej úlohy",
+      "DECLINED": "V poriadku. Nájdete to kedykoľvek v Pomoc → Rýchla prehliadka.",
+      "MORE_FALLBACK": "Viac je už zapnuté: projekty, sledovanie času, Plánovač…",
+      "NO_THANKS": "Nie, ďakujem",
+      "SHOW_ME_MORE": "Ukáž mi viac ›",
       "EXPLORE": "Kľudne klikajte a objavujte! Pomoc nájdete v bočnom paneli.",
       "EXPLORE_TOUCH": "Kľudne objavujte! Pomoc nájdete v menu.",
       "TASK_TAP_TOUCH": "Ťuknite na úlohu a otvorte jej podrobnosti.",
       "TASK_SWIPE_LEFT_TOUCH": "Potiahnite úlohu doľava pre ďalšie akcie",
+      "TODAY_AND_INBOX": "Táto úloha je naplánovaná na dnes, a preto sa zobrazuje v {{todayIcon}} <b>Dnes</b>. Úlohy bez vlastného projektu zostávajú v {{inboxIcon}} <b>Doručená pošta</b>.",
+      "TODAY_AND_INBOX_PHONE": "Táto úloha je naplánovaná na dnes, a preto sa zobrazuje v {{todayIcon}} <b>Dnes</b>. Úlohy bez vlastného projektu zostávajú v {{inboxIcon}} <b>Doručená pošta</b>, pod ☰.",
       "TASK_SWIPE_RIGHT_TOUCH": "Potiahnite úlohu doprava a označte ju ako hotovú",
       "OR_PRESS": "alebo stlačte",
       "SKIP_ARIA": "Zavrieť nápovedu"
+    },
+    "TOUR": {
+      "ADD_SUBTASK": "Rozdeľte ju: kliknite na úlohu pravým tlačidlom a vyberte {{subtaskIcon}} <b>Pridať podúlohu</b>",
+      "COUNTER": "{{nr}} z {{total}}",
+      "NEXT": "Ďalej ›",
+      "ORGANIZE": "Vytvorte si vlastný <b>projekt</b> na zoskupenie úloh alebo <b>štítok</b> na ich označenie. Vytvoríte ho pomocou +",
+      "ORGANIZE_COLLAPSED": "Vytvorte si vlastný <b>projekt</b> na zoskupenie úloh alebo <b>štítok</b> na ich označenie. Rozbaľte bočný panel pomocou {{expandIcon}} a vytvorte ho",
+      "ORGANIZE_PHONE": "Projekty a štítky nájdete pod ☰. Vytvorte si vlastný <b>projekt</b> na zoskupenie úloh alebo <b>štítok</b> na ich označenie",
+      "PLANNER": "Naplánujte ďalšie dni v {{plannerIcon}} <b>Plánovač</b>",
+      "TASK_MENU_TOUCH": "Potiahnutím úlohy doľava otvoríte jej ponuku: {{playIcon}} <b>Začať sledovanie času</b>, {{subtaskIcon}} <b>Pridať podúlohu</b>",
+      "TASK_MENU_TOUCH_NO_TRACKING": "Potiahnutím úlohy doľava otvoríte jej ponuku, napr. {{subtaskIcon}} <b>Pridať podúlohu</b>",
+      "TIMER_RUNNING": "Časovač beží. Na pozastavenie znova stlačte {{playIcon}} alebo <kbd>{{key}}</kbd>.",
+      "TIMER_RUNNING_TOUCH": "Časovač beží. Na pozastavenie ťuknite hore na {{playIcon}}.",
+      "TRACK_TIME": "Prejdite myšou nad úlohu a stlačením {{playIcon}} spustite sledovanie času"
+    },
+    "WANT_MORE": {
+      "BOARDS": "<b>Tabule</b> · stĺpce v štýle Kanban pre vaše úlohy",
+      "DONE": "Hotovo",
+      "FINISH_DAY": "<b>Ukončiť deň</b> · prejdite si a uzavrite svoj deň",
+      "FOCUS_MODE": "<b>Režim zamerania</b> · pomodoro a práca bez vyrušovania",
+      "FOOTER": "Nájdete to znova v Pomoc → Rýchla prehliadka.",
+      "HABITS": "<b>Návyky</b> · sledujte rutiny deň po dni",
+      "INTRO": "Super Productivity začína pokojne. Viac je poruke, keď to budete potrebovať:",
+      "OPEN_SETTINGS": "Otvoriť nastavenia ›",
+      "PLUGINS": "<b>Pluginy a integrácie</b> · Jira, GitHub, CalDAV a ďalšie",
+      "SCHEDULE": "<b>Plán</b> · váš deň na časovej osi",
+      "SEARCH": "Vyhľadávajte všetko pomocou <kbd>{{key}}</kbd>.",
+      "SEARCH_PHONE": "Vyhľadávajte všetko cez ☰.",
+      "SHORT_SYNTAX": "Pri pridávaní úlohy napíšte <code>#tag</code>, <code>+project</code> alebo <code>@tomorrow</code>. Viac ukáže Pomoc → Ako na to.",
+      "SYNC": "Vaše dáta zostávajú v tomto zariadení. Synchronizácia a zálohy sú v nastaveniach.",
+      "TITLE": "Chcete viac?"
     },
     "SYNC_CTA": "Používate už Super Productivity v inom zariadení?",
     "SYNC_CTA_LINK": "Nastaviť synchronizáciu"

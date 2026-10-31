@@ -728,7 +728,7 @@ describe('PluginManagementComponent', () => {
         data: {
           message: T.PLUGINS.CONFIRM_CLEAR_CACHE,
           translateParams: { count: 2 },
-          okTxt: T.PLUGINS.CLEAR_PLUGIN_CACHE,
+          okTxt: T.PLUGINS.REMOVE_ALL_UPLOADED_PLUGINS,
         },
       });
       expect(clearCacheSpy).toHaveBeenCalledTimes(1);

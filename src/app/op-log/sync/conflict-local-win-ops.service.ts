@@ -24,6 +24,8 @@ import {
   aggregateEntityConflict,
   fieldPatchGroups,
   buildSurvivingFieldPatches,
+  MERGED_SNAPSHOT_TYPES,
+  mergedSnapshotState,
 } from './conflict-field-patch.util';
 import { RECREATE_FALLBACK } from '../core/recreate-fallback.const';
 import { asPatchSnapshotIfTypeShadowed } from './lww-snapshot-patch-mode.util';
@@ -81,7 +83,8 @@ export class ConflictLocalWinOpsService {
    * sides and the one before it. Rows never re-merge (#10393 decision 5).
    * Types without a RECREATE_FALLBACK (NOTE, decision 4) are refused: a
    * receiver that applied a concurrent delete recreates the entity from the
-   * partial patch (accepted residual, decision 2).
+   * partial patch (accepted residual, decision 2). `MERGED_SNAPSHOT_TYPES`
+   * re-send one full replace snapshot of the merged entity instead (#10958).
    */
   async _tryCreateFieldPatch(
     entityPlans: LwwConflictResolutionPlan<EntityConflict>[],
@@ -106,8 +109,9 @@ export class ConflictLocalWinOpsService {
     // load-bearing: a patched conflict bypasses `resolutions` and would starve
     // `_preservePartiallyRejectedLocalBulkPlanOps` while rejecting the bulk row.
     const groups = fieldPatchGroups(sides);
+    const asSnapshot = MERGED_SNAPSHOT_TYPES.has(entityType);
     if (
-      !RECREATE_FALLBACK[entityType] ||
+      (!RECREATE_FALLBACK[entityType] && !asSnapshot) ||
       [...entityPlans, plan].some((p) => this._isWholeEntityWinPlan(p)) ||
       !groups ||
       // A no-pending crossing (#9073) the remote side won: the local fields
@@ -118,10 +122,8 @@ export class ConflictLocalWinOpsService {
       return undefined;
     }
     const clientId = await this.clientIdProvider.loadClientId();
-    if (
-      !clientId ||
-      !(await this.entityState.getCurrentEntityState(entityType, entityId))
-    ) {
+    const current = await this.entityState.getCurrentEntityState(entityType, entityId);
+    if (!clientId || !current) {
       OpLog.warn(`ConflictResolutionService: Cannot patch ${entityType}:${entityId}.`);
       return undefined;
     }
@@ -137,6 +139,26 @@ export class ConflictLocalWinOpsService {
       clientId,
     );
     const moves = latestProjectMoveEntityIds(entityId, allOps);
+    if (asSnapshot) {
+      const merged = mergedSnapshotState(
+        current as Record<string, unknown>,
+        sides,
+        groups,
+      );
+      if (!merged) return undefined;
+      // Stamped at the newest local write that won, like the patch rows.
+      const snapshot = createLWWUpdateOp(
+        entityType,
+        entityId,
+        merged,
+        clientId,
+        clock,
+        Math.max(...groups.map(({ timestamp }) => timestamp)),
+        'replace',
+        moves,
+      );
+      return { conflict, mergedOps: [snapshot], winner: plan.winner };
+    }
     // Each re-send dominates the one before; it re-declares its clears (#9776).
     const mergedOps = groups.map(({ timestamp, changes }, index) => {
       if (index > 0) clock = mergeAndIncrementClocks([clock], clientId);

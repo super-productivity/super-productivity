@@ -5,6 +5,7 @@ import { MIN_CHECKPOINT_SAFE_APP_VERSION } from './checkpoint-gate';
 import {
   deleteDeadCaptureGrants,
   deleteExpiredCaptures,
+  pruneCaptureRateLimits,
   pruneRetryWindow,
 } from '../capture';
 
@@ -122,12 +123,14 @@ const runDailyCleanup = async (): Promise<void> => {
   }
 
   // 7. Agent task capture: items no device claimed within retention, grants
-  // that can never authenticate again, and stale retry-window entries. The
+  // that can never authenticate again, stale retry-window entries and expired
+  // rate-limit counters (which hold IP addresses). The
   // tables are empty unless CAPTURE_CONNECTOR_ENABLED, so this is a no-op then.
   try {
     const items = await deleteExpiredCaptures(cutoffTime);
     const grants = await deleteDeadCaptureGrants(Date.now());
     pruneRetryWindow();
+    pruneCaptureRateLimits();
     if (items > 0 || grants > 0) {
       Logger.info(`Cleanup [capture]: removed ${items} items, ${grants} grants`);
     }

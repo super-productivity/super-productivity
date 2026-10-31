@@ -47,6 +47,7 @@
     [contextMenu]="contextMenu"
     [rightClickTriggerEl]="routeBtn"
     [leftClickTriggerEl]="settingsBtn"
+    [isTouchLongPress]="true"
   ></context-menu>
 
   <ng-template #contextMenu>
@@ -91,6 +92,7 @@
     [contextMenu]="folderContextMenu"
     [rightClickTriggerEl]="folderBtn"
     [leftClickTriggerEl]="folderSettingsBtn"
+    [isTouchLongPress]="true"
   ></context-menu>
 
   <ng-template #folderContextMenu>
@@ -115,7 +117,9 @@
       @if (customPluginId(); as pluginId) {
         <plugin-icon
           class="nav-icon"
+          matMenuItemIcon
           [pluginId]="pluginId"
+          [size]="18"
           [fallbackIcon]="icon() || 'extension'"
         ></plugin-icon>
       } @else if (svgIcon()) {
@@ -159,6 +163,7 @@
         [contextMenu]="featureContextMenu"
         [rightClickTriggerEl]="routeLink"
         [leftClickTriggerEl]="featureSettingsBtn"
+        [isTouchLongPress]="true"
       ></context-menu>
 
       <ng-template #featureContextMenu>
@@ -184,7 +189,9 @@
       @if (customPluginId(); as pluginId) {
         <plugin-icon
           class="nav-icon"
+          matMenuItemIcon
           [pluginId]="pluginId"
+          [size]="18"
           [fallbackIcon]="icon() || 'extension'"
         ></plugin-icon>
       } @else if (svgIcon()) {
@@ -226,7 +233,9 @@
         @if (customPluginId(); as pluginId) {
           <plugin-icon
             class="nav-icon"
+            matMenuItemIcon
             [pluginId]="pluginId"
+            [size]="18"
             [fallbackIcon]="icon() || 'extension'"
           ></plugin-icon>
         } @else if (svgIcon()) {
@@ -270,7 +279,9 @@
         @if (customPluginId(); as pluginId) {
           <plugin-icon
             class="nav-icon"
+            matMenuItemIcon
             [pluginId]="pluginId"
+            [size]="18"
             [fallbackIcon]="icon() || 'extension'"
           ></plugin-icon>
         } @else if (svgIcon()) {

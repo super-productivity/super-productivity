@@ -93,6 +93,10 @@
     "INTRO_2": "Ako ti se sviđa ovaj pristup i želiš da projekt ostane živ i razvija se, dobrovoljna donacija je itekako dobrodošla."
   },
   "EXAMPLE_TASKS": {
+    "GETTING_STARTED": {
+      "TITLE": "Neobavezno: savjeti za početak",
+      "NOTES": "Ništa ovdje nije obavezno. Izbriši ovaj zadatak kad god želiš.\n\n- **Danas i Ulazni pretinac**: Danas prikazuje što je planirano za danas. Zadaci bez vlastitog projekta ostaju u pretincu Ulazni pretinac. Zadatak se može pojaviti na oba popisa.\n- **Projekti**: grupiraj zadatke po temi pomoću **+** pored **Projekti** u bočnoj traci.\n- **Sinkronizacija**: čuvaj svoje podatke na više uređaja u **Postavke → Sinkronizacija i sigurnosne kopije**.\n- **Dolaziš iz Todoista ili TickTicka?** Uvezi svoje zadatke u **Postavke → Sinkronizacija i sigurnosne kopije → Uvoz/izvoz**.\n- **Ture**: **Pomoć → Brza tura** u izborniku bočne trake provest će te kroz osnove na tvom vlastitom zadatku, a **Pomoć → Kako** korak po korak prikazuje kratku sintaksu i navigaciju tipkovnicom. Zatvori turu kad god želiš.\n- **Prilagodi po svom**: odaberi temu ili tamni način i uključi ili isključi značajke poput ploča, termina, navika, modusa fokusa ili integracija u **Postavke → Općenito**. Dodaci donose još više."
+    },
     "LEARN_KEYBOARD_SHORTCUTS": {
       "TITLE": "Nauči tipkovničke prečace",
       "NOTES": "Super Productivity je napravljen da se koristi tipkovnicom. Nauči prečace za brži rad.\n\n**Kako krenuti:**\n1. Otvori **izbornik u bočnoj traci**\n2. Idi na **Pomoć**\n3. Klikni **Vodič za navigaciju putem tipkovnice**"
@@ -2989,6 +2993,7 @@
       "CONTRIBUTE": "Doprinos",
       "GET_HELP_ONLINE": "Pomoć online",
       "KEYBOARD": "Kako: Napredna tipkovnica",
+      "QUICK_TOUR": "Brza tura",
       "REDDIT_COMMUNITY": "Reddit zajednica",
       "REPORT_A_PROBLEM": "Prijavi problem",
       "SEND_FEEDBACK": "Pošalji povratnu informaciju",
@@ -3080,13 +3085,50 @@
     "HINTS": {
       "CREATE_TASK": "Klikni + za dodavanje prvog zadatka",
       "CREATE_TASK_TOUCH": "Dodirni + za dodavanje prvog zadatka",
+      "DECLINED": "Nema problema. Nalazi se u Pomoć → Brza tura kad god želiš.",
+      "MORE_FALLBACK": "Više je već uključeno: projekti, praćenje vremena, Planer…",
+      "NO_THANKS": "Ne, hvala",
+      "SHOW_ME_MORE": "Pokaži mi više ›",
       "EXPLORE": "Slobodno klikaj i istražuj! Pomoć možeš pronaći u bočnoj traci.",
       "EXPLORE_TOUCH": "Slobodno istražuj. Pomoć možeš pronaći u bočnoj traci.",
       "TASK_TAP_TOUCH": "Dodirni zadatak za otvaranje njegovih detalja.",
       "TASK_SWIPE_LEFT_TOUCH": "Povuci zadatak lijevo za više akcija",
+      "TODAY_AND_INBOX": "Ovaj zadatak je planiran za danas, pa se prikazuje u {{todayIcon}} <b>Danas</b>. Zadaci bez vlastitog projekta ostaju u {{inboxIcon}} <b>Ulazni pretinac</b>.",
+      "TODAY_AND_INBOX_PHONE": "Ovaj zadatak je planiran za danas, pa se prikazuje u {{todayIcon}} <b>Danas</b>. Zadaci bez vlastitog projekta ostaju u {{inboxIcon}} <b>Ulazni pretinac</b>, pod ☰.",
       "TASK_SWIPE_RIGHT_TOUCH": "Povuci zadatak desno da ga označiš kao završen",
       "OR_PRESS": "ili pritisni",
       "SKIP_ARIA": "Zanemari upute"
+    },
+    "TOUR": {
+      "ADD_SUBTASK": "Razdvoji ga: desni klik na zadatak i odaberi {{subtaskIcon}} <b>Dodaj podzadatak</b>",
+      "COUNTER": "{{nr}} od {{total}}",
+      "NEXT": "Sljedeće ›",
+      "ORGANIZE": "Napravi vlastiti <b>projekt</b> za grupiranje zadataka ili <b>oznaku</b> za njihovo označavanje. Napravi ga pomoću +",
+      "ORGANIZE_COLLAPSED": "Napravi vlastiti <b>projekt</b> za grupiranje zadataka ili <b>oznaku</b> za njihovo označavanje. Proširi bočnu traku pomoću {{expandIcon}} da ga napraviš",
+      "ORGANIZE_PHONE": "Projekti i oznake nalaze se pod ☰. Napravi vlastiti <b>projekt</b> za grupiranje zadataka ili <b>oznaku</b> za njihovo označavanje",
+      "PLANNER": "Planiraj sljedeće dane u {{plannerIcon}} <b>Planer</b>",
+      "TASK_MENU_TOUCH": "Povuci zadatak ulijevo za njegov izbornik: {{playIcon}} <b>Pokreni praćenje vremena</b>, {{subtaskIcon}} <b>Dodaj podzadatak</b>",
+      "TASK_MENU_TOUCH_NO_TRACKING": "Povuci zadatak ulijevo za njegov izbornik, npr. {{subtaskIcon}} <b>Dodaj podzadatak</b>",
+      "TIMER_RUNNING": "Mjerač vremena radi. Ponovno pritisni {{playIcon}} ili <kbd>{{key}}</kbd> za pauzu.",
+      "TIMER_RUNNING_TOUCH": "Mjerač vremena radi. Dodirni {{playIcon}} na vrhu za pauzu.",
+      "TRACK_TIME": "Pređi mišem preko zadatka i pritisni {{playIcon}} za praćenje vremena"
+    },
+    "WANT_MORE": {
+      "BOARDS": "<b>Ploče</b> · kanban stupci za tvoje zadatke",
+      "DONE": "Gotovo",
+      "FINISH_DAY": "<b>Završi dan</b> · pregledaj i zaokruži svoj dan",
+      "FOCUS_MODE": "<b>Modus fokusa</b> · pomodoro i rad bez ometanja",
+      "FOOTER": "Ovo ponovno možeš naći u Pomoć → Brza tura.",
+      "HABITS": "<b>Navike</b> · prati rutine iz dana u dan",
+      "INTRO": "Super Productivity počinje mirno. Više ti je na raspolaganju kad zatreba:",
+      "OPEN_SETTINGS": "Otvori postavke ›",
+      "PLUGINS": "<b>Dodaci i integracije</b> · Jira, GitHub, CalDAV i više",
+      "SCHEDULE": "<b>Raspored</b> · tvoj dan na vremenskoj crti",
+      "SEARCH": "Pretraži sve pomoću <kbd>{{key}}</kbd>.",
+      "SEARCH_PHONE": "Pretraži sve iz ☰.",
+      "SHORT_SYNTAX": "Upiši <code>#tag</code>, <code>+project</code> ili <code>@tomorrow</code> dok dodaješ zadatak. Pomoć → Kako prikazuje više.",
+      "SYNC": "Tvoji podaci ostaju na ovom uređaju. Sinkronizacija i sigurnosne kopije nalaze se u postavke.",
+      "TITLE": "Želiš više?"
     },
     "SYNC_CTA": "Već koristiš Super Productivity na drugom uređaju?",
     "SYNC_CTA_LINK": "Postavi sinkronizaciju"

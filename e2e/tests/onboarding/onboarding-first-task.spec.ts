@@ -11,10 +11,13 @@ const pixel5TestOptions = { ...devices['Pixel 5'] };
 // Browser type is worker-scoped and cannot be overridden inside a describe block.
 Reflect.deleteProperty(pixel5TestOptions, 'defaultBrowserType');
 
-const MODEL_TIP = 'This task is planned for today, so it shows in Today.';
-const INBOX_TIP = 'Tasks without a project of your own stay in Inbox';
+// Up to the inline icons, whose ligature names are part of the text content.
+const MODEL_TIP = 'This task is planned for today, so it shows in';
+const INBOX_TIP = 'Tasks without a project of your own stay in';
 const INBOX_NAV_ITEM =
   'magic-side-nav nav-item[data-project-id="INBOX_PROJECT"] .nav-link';
+const TODAY_NAV_ITEM = 'magic-side-nav nav-item[data-tag-id="TODAY"] .nav-link';
+const MORE_FALLBACK = "There's more already switched on";
 
 /** First run; `withExamples: false` skips seeding the Inbox example tasks. */
 const openFreshApp = async (
@@ -110,7 +113,7 @@ test.describe('First-run onboarding', () => {
     await expectHintOnInboxChip(page, title);
 
     await page.locator(INBOX_NAV_ITEM).click();
-    await expect(hint).toHaveCount(0);
+    await expect(hint).toContainText(MORE_FALLBACK);
     await expect(
       page.locator('task').filter({ hasText: 'Optional: getting started tips' }),
     ).toBeVisible();
@@ -161,6 +164,8 @@ test.describe('First-run onboarding', () => {
     await task.click({ button: 'right' });
     await expect(page.locator('.mat-mdc-menu-content')).toBeVisible();
     await expect(hint).toHaveCount(0);
+    // A click during the open animation does not close the menu.
+    await waitForMenuSettled(page);
     await page.mouse.click(900, 650);
     await expect(page.locator('.mat-mdc-menu-content')).toHaveCount(0);
     await expect(hint).toContainText(MODEL_TIP);
@@ -282,8 +287,10 @@ test.describe('First-run onboarding', () => {
     await expect(hint).toContainText(MODEL_TIP);
     await expect(hint).toContainText(INBOX_TIP);
 
-    // Moving on anywhere ends the last tip.
+    // Moving on offers the quick tour once more; moving on again ends guidance.
     await page.locator(INBOX_NAV_ITEM).click();
+    await expect(hint).toContainText(MORE_FALLBACK);
+    await page.locator(TODAY_NAV_ITEM).click();
     await expect(hint).toHaveCount(0);
     await expect
       .poll(() => page.evaluate(() => localStorage.getItem('SUP_ONBOARDING_HINTS_DONE')))
@@ -368,7 +375,7 @@ test.describe('First-run onboarding', () => {
       // on the task's "Inbox" chip, saying where the Inbox is on phones.
       await task.locator('done-toggle').tap();
       await expect(hint).toContainText(MODEL_TIP);
-      await expect(hint).toContainText(`${INBOX_TIP}, under ☰`);
+      await expect(hint).toContainText('Inbox, under ☰');
       await expectHintOnInboxChip(page, 'My first mobile task');
       // The tip would sit above the opened menu: it steps aside until it closes.
       await page.locator('mobile-bottom-nav nav > button:last-of-type').tap();
@@ -376,7 +383,8 @@ test.describe('First-run onboarding', () => {
       await expect(hint).toHaveCount(0);
       await page.locator('.mobile-menu-close').tap();
       await expect(page.locator(INBOX_NAV_ITEM)).toBeHidden();
-      await expect(hint).toContainText(`${INBOX_TIP}, under ☰`);
+      await expect(hint).toContainText(INBOX_TIP);
+      await expect(hint).toContainText('Inbox, under ☰');
       await hint.getByRole('button', { name: 'Close tip' }).tap();
       await expect(hint).toHaveCount(0);
       assertNoRuntimeBrowserErrors(runtimeErrors, 'mobile onboarding');

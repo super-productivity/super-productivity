@@ -18,6 +18,9 @@
 <!---->
 
 @if (ip.isEnabled) {
+  @if (ip.issueProviderKey === 'PLAINSPACE') {
+    <plainspace-reconnect-notice [issueProvider]="ip"></plainspace-reconnect-notice>
+  }
   <!---->
   @if (
     ip.issueProviderKey === 'JIRA' &&

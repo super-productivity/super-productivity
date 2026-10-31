@@ -111,7 +111,7 @@ export class DesktopPanelButtonsComponent {
     () => this._configService.appFeatures().isIssuesPanelEnabled,
   );
   readonly isScheduleDayPanelEnabled = computed(
-    () => this._configService.appFeatures().isScheduleDayPanelEnabled,
+    () => this._configService.appFeatures().isSchedulerEnabled,
   );
   readonly isProjectNotesEnabled = computed(
     () => this._configService.appFeatures().isProjectNotesEnabled,

@@ -11,7 +11,8 @@ import {
 } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { GlobalConfigService } from '../../features/config/global-config.service';
-import { getChangedAppFeatures } from '../../features/config/get-changed-app-features.util';
+import { getChangedConfigFields } from '../../features/config/get-changed-config-fields.util';
+import { NEW_INSTALL_CONFIG_SECTION_KEYS } from '../../features/config/new-install-config.const';
 import { TaskWidgetSettingsService } from '../../features/config/task-widget-settings.service';
 import { FocusModeLocalSettingsService } from '../../features/config/focus-mode-local-settings.service';
 import {
@@ -27,7 +28,6 @@ import {
   GLOBAL_TASKS_FORM_CONFIG,
 } from '../../features/config/global-config-form-config.const';
 import {
-  AppFeaturesConfig,
   ConfigFormConfig,
   GenericConfigFormSection,
   GlobalConfigFormSectionKey,
@@ -60,11 +60,13 @@ import { ThemeSelectorComponent } from '../../core/theme/theme-selector/theme-se
 import { Log } from '../../core/log';
 import { DialogLogsComponent } from '../../ui/dialog-logs/dialog-logs.component';
 import { SnackService } from '../../core/snack/snack.service';
+import { requestBrowserNotificationPermission } from '../../core/notify/browser-notification-permission';
 import { ShareService } from '../../core/share/share.service';
 import { SyncWrapperService } from '../../imex/sync/sync-wrapper.service';
 import { MatDialog } from '@angular/material/dialog';
 import { SyncProviderId } from '../../op-log/sync-providers/provider.const';
 import { MatTab, MatTabGroup, MatTabLabel } from '@angular/material/tabs';
+import { TabHeaderWheelScrollDirective } from '../../ui/tab-header-wheel-scroll/tab-header-wheel-scroll.directive';
 import { MatIcon } from '@angular/material/icon';
 import { MatTooltip } from '@angular/material/tooltip';
 import { MatButton, MatIconButton } from '@angular/material/button';
@@ -79,6 +81,7 @@ import { MatOption } from '@angular/material/core';
 import {
   searchSettings,
   SETTINGS_PLUGINS_TAB_INDEX,
+  SETTINGS_SYNC_BACKUP_TAB_INDEX,
   SettingsSearchTarget,
 } from '../../features/config/settings-search.util';
 
@@ -104,6 +107,7 @@ const TAB_ANIMATION_DURATION_MS = 200;
     TranslatePipe,
     PluginManagementComponent,
     MatTabGroup,
+    TabHeaderWheelScrollDirective,
     MatTab,
     MatTabLabel,
     MatIcon,
@@ -315,7 +319,11 @@ export class ConfigPageComponent implements OnInit {
       .subscribe((params) => {
         if (params['tab'] !== undefined) {
           const tabIndex = parseInt(params['tab'], 10);
-          if (!isNaN(tabIndex) && tabIndex >= 0 && tabIndex < 5) {
+          if (
+            !isNaN(tabIndex) &&
+            tabIndex >= 0 &&
+            tabIndex <= SETTINGS_SYNC_BACKUP_TAB_INDEX
+          ) {
             this.selectedTabIndex = tabIndex;
             this._cd.detectChanges();
           }
@@ -414,18 +422,25 @@ export class ConfigPageComponent implements OnInit {
 
     // focusModeLocal is per-instance (not synced) — handled by a dedicated service
     if (formSectionKey === 'focusModeLocal') {
-      this.focusModeLocalSettingsService.update(config as Partial<FocusModeLocalConfig>);
+      const localCfg = config as Partial<FocusModeLocalConfig>;
+      const wasNotifyOn =
+        this.focusModeLocalSettingsService.settings().isNotifyOnSessionEnd;
+      this.focusModeLocalSettingsService.update(localCfg);
+      // Prompt only on the opt-in click: browsers ignore prompts without a gesture
+      if (localCfg.isNotifyOnSessionEnd && !wasNotifyOn) {
+        void this._ensureFocusNotificationPermission();
+      }
       return;
     }
 
     // From here on we know it's a real GlobalConfigState section.
     const sectionKey = formSectionKey as GlobalConfigSectionKey;
 
-    if (sectionKey === 'appFeatures') {
-      // Sync only the switches that changed, never this device's untouched defaults.
-      const changed = getChangedAppFeatures(
-        this.configService.appFeatures(),
-        config as Partial<AppFeaturesConfig>,
+    if ((NEW_INSTALL_CONFIG_SECTION_KEYS as readonly string[]).includes(sectionKey)) {
+      // Sync only the fields that changed, never this device's untouched defaults.
+      const changed = getChangedConfigFields<Record<string, unknown>>(
+        (this.configService.cfg()?.[sectionKey] as Record<string, unknown>) ?? {},
+        config,
       );
       if (Object.keys(changed).length > 0) {
         this.configService.updateSection(sectionKey, changed);
@@ -534,6 +549,18 @@ export class ConfigPageComponent implements OnInit {
       width: '600px',
       maxWidth: '95vw',
       data: { logs: Log.exportLogHistory() },
+    });
+  }
+
+  private async _ensureFocusNotificationPermission(): Promise<void> {
+    if (await requestBrowserNotificationPermission()) {
+      return;
+    }
+    // Revert so the checkbox reflects that nothing will be shown
+    this.focusModeLocalSettingsService.update({ isNotifyOnSessionEnd: false });
+    this._snackService.open({
+      type: 'ERROR',
+      msg: T.GCF.FOCUS_MODE_LOCAL.S_NOTIFICATION_PERMISSION_DENIED,
     });
   }
 

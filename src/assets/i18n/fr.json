@@ -86,6 +86,10 @@
     "INTRO_2": "Si vous appréciez cette approche et souhaitez maintenir le projet en bonne santé et en évolution, un don volontaire est grandement apprécié."
   },
   "EXAMPLE_TASKS": {
+    "GETTING_STARTED": {
+      "TITLE": "Facultatif : conseils pour bien démarrer",
+      "NOTES": "Rien ici n’est obligatoire. Supprimez cette tâche quand vous voulez.\n\n- **Aujourd'hui et Boîte de réception** : Aujourd'hui affiche ce qui est prévu pour aujourd’hui. Les tâches sans projet à vous restent dans Boîte de réception. Une tâche peut apparaître dans les deux listes.\n- **Projets** : regroupez les tâches par thème avec le **+** à côté de **Projets** dans la barre latérale.\n- **Synchronisation** : gardez vos données sur plusieurs appareils dans **Réglages → Synchronisation & sauvegarde**.\n- **Vous venez de Todoist ou TickTick ?** Importez vos tâches dans **Réglages → Synchronisation & sauvegarde → Import / Export**.\n- **Visites** : **Aide → Visite rapide** dans le menu de la barre latérale vous guide à travers les bases sur votre propre tâche, et **Aide → Tutoriel** montre pas à pas la syntaxe courte et la navigation au clavier. Fermez une visite quand vous voulez.\n- **Personnalisez** : choisissez un thème ou le mode sombre, et activez ou désactivez des fonctions comme les tableaux, le planning, les habitudes, le mode concentration ou les intégrations dans **Réglages → Général**. Les plugins en ajoutent encore plus."
+    },
     "LEARN_KEYBOARD_SHORTCUTS": {
       "TITLE": "Apprendre les raccourcis clavier",
       "NOTES": "Super Productivity est conçu pour être utilisé au clavier. Apprenez les raccourcis pour travailler plus vite.\n\n**Comment commencer :**\n1. Ouvrez le **menu de la barre latérale**\n2. Allez dans **Aide**\n3. Cliquez sur **Visite guidée de la navigation au clavier**"
@@ -3011,6 +3015,7 @@
       "CREATE_TASK": "Tutoriel : créer une tâche",
       "GET_HELP_ONLINE": "Obtenir de l'aide en ligne",
       "KEYBOARD": "Tutoriel : Raccourcis clavier avancés",
+      "QUICK_TOUR": "Visite rapide",
       "REDDIT_COMMUNITY": "Communauté Reddit",
       "REPORT_A_PROBLEM": "Signaler un problème",
       "SEND_FEEDBACK": "Envoyer un retour",
@@ -3096,13 +3101,50 @@
     "HINTS": {
       "CREATE_TASK": "Cliquez sur + pour ajouter votre première tâche",
       "CREATE_TASK_TOUCH": "Appuyez sur + pour ajouter votre première tâche",
+      "DECLINED": "Pas de souci. Vous le retrouverez dans Aide → Visite rapide quand vous voulez.",
+      "MORE_FALLBACK": "Il y a déjà plus d’options activées : projets, suivi du temps, Planificateur…",
+      "NO_THANKS": "Non merci",
+      "SHOW_ME_MORE": "Montrez-moi plus ›",
       "EXPLORE": "N'hésitez pas à cliquer partout et à explorer ! Vous trouverez de l'aide dans la barre latérale.",
       "EXPLORE_TOUCH": "N'hésitez pas à explorer ! Vous trouverez de l'aide dans le menu.",
       "TASK_TAP_TOUCH": "Appuyez sur une tâche pour ouvrir ses détails.",
       "TASK_SWIPE_LEFT_TOUCH": "Faites glisser la tâche vers la gauche pour plus d'actions",
+      "TODAY_AND_INBOX": "Cette tâche est prévue pour aujourd’hui, elle apparaît donc dans {{todayIcon}} <b>Aujourd'hui</b>. Les tâches sans projet à vous restent dans {{inboxIcon}} <b>Boîte de réception</b>.",
+      "TODAY_AND_INBOX_PHONE": "Cette tâche est prévue pour aujourd’hui, elle apparaît donc dans {{todayIcon}} <b>Aujourd'hui</b>. Les tâches sans projet à vous restent dans {{inboxIcon}} <b>Boîte de réception</b>, sous ☰.",
       "TASK_SWIPE_RIGHT_TOUCH": "Faites glisser la tâche vers la droite pour la marquer comme terminée",
       "OR_PRESS": "ou appuyez sur",
       "SKIP_ARIA": "Fermer l'indication"
+    },
+    "TOUR": {
+      "ADD_SUBTASK": "Décomposez-la : faites un clic droit sur la tâche et choisissez {{subtaskIcon}} <b>Ajouter une sous-tâche</b>",
+      "COUNTER": "{{nr}} sur {{total}}",
+      "NEXT": "Suivant ›",
+      "ORGANIZE": "Créez votre propre <b>projet</b> pour regrouper des tâches, ou une <b>balise</b> pour les étiqueter. Créez-en un avec +",
+      "ORGANIZE_COLLAPSED": "Créez votre propre <b>projet</b> pour regrouper des tâches, ou une <b>balise</b> pour les étiqueter. Développez la barre latérale avec {{expandIcon}} pour en créer un",
+      "ORGANIZE_PHONE": "Les projets et les balises se trouvent sous ☰. Créez votre propre <b>projet</b> pour regrouper des tâches, ou une <b>balise</b> pour les étiqueter",
+      "PLANNER": "Planifiez les jours à venir dans {{plannerIcon}} <b>Planificateur</b>",
+      "TASK_MENU_TOUCH": "Faites glisser une tâche vers la gauche pour son menu : {{playIcon}} <b>Commencer le suivi du temps</b>, {{subtaskIcon}} <b>Ajouter une sous-tâche</b>",
+      "TASK_MENU_TOUCH_NO_TRACKING": "Faites glisser une tâche vers la gauche pour son menu, p. ex. {{subtaskIcon}} <b>Ajouter une sous-tâche</b>",
+      "TIMER_RUNNING": "Le minuteur tourne. Appuyez à nouveau sur {{playIcon}} ou sur <kbd>{{key}}</kbd> pour mettre en pause.",
+      "TIMER_RUNNING_TOUCH": "Le minuteur tourne. Appuyez sur {{playIcon}} en haut pour mettre en pause.",
+      "TRACK_TIME": "Survolez la tâche et appuyez sur {{playIcon}} pour suivre le temps"
+    },
+    "WANT_MORE": {
+      "BOARDS": "<b>Tableaux</b> · des colonnes de type Kanban pour vos tâches",
+      "DONE": "Terminé",
+      "FINISH_DAY": "<b>Terminer la journée</b> · faites le point et bouclez votre journée",
+      "FOCUS_MODE": "<b>Mode Concentration</b> · Pomodoro et travail sans distraction",
+      "FOOTER": "Retrouvez ceci dans Aide → Visite rapide.",
+      "HABITS": "<b>Habitudes</b> · suivez vos routines jour après jour",
+      "INTRO": "Super Productivity démarre en douceur. Il y a plus quand vous en avez besoin :",
+      "OPEN_SETTINGS": "Ouvrir les réglages ›",
+      "PLUGINS": "<b>Plugins et intégrations</b> · Jira, GitHub, CalDAV et plus",
+      "SCHEDULE": "<b>Planning</b> · votre journée sur une frise chronologique",
+      "SEARCH": "Recherchez partout avec <kbd>{{key}}</kbd>.",
+      "SEARCH_PHONE": "Recherchez partout depuis ☰.",
+      "SHORT_SYNTAX": "Saisissez <code>#tag</code>, <code>+project</code> ou <code>@tomorrow</code> en ajoutant une tâche. Aide → Tutoriel en montre plus.",
+      "SYNC": "Vos données restent sur cet appareil. La synchronisation et les sauvegardes se trouvent dans les réglages.",
+      "TITLE": "Envie de plus ?"
     }
   },
   "PDS": {

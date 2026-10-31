@@ -15,6 +15,11 @@
   padding-bottom: 96px;
   margin-bottom: var(--s4);
 
+  // the leftmost column has nothing to separate it from
+  &:first-child {
+    border-inline-start: none;
+  }
+
   @include mq(xs, max) {
     width: 100%;
     max-width: 100%;

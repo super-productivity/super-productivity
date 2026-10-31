@@ -92,6 +92,10 @@
     "INTRO_2": "Jeśli cenisz takie podejście i chcesz, aby projekt był utrzymywany w dobrej kondycji i się rozwijał, dobrowolna darowizna jest bardzo mile widziana."
   },
   "EXAMPLE_TASKS": {
+    "GETTING_STARTED": {
+      "TITLE": "Opcjonalnie: wskazówki na start",
+      "NOTES": "Nic tutaj nie jest obowiązkowe. Usuń to zadanie, kiedy chcesz.\n\n- **Dzisiaj i Skrzynka odbiorcza**: widok „Dzisiaj” pokazuje to, co zaplanowano na dziś. Zadania bez własnego projektu zostają w widoku „Skrzynka odbiorcza”. Zadanie może pojawić się na obu listach.\n- **Projekty**: grupuj zadania tematycznie za pomocą **+** obok **Projekty** na pasku bocznym.\n- **Synchronizacja**: trzymaj dane na kilku urządzeniach w **Ustawienia → Synchronizacja i kopia zapasowa**.\n- **Przychodzisz z Todoista lub TickTicka?** Zaimportuj swoje zadania w **Ustawienia → Synchronizacja i kopia zapasowa → Import/eksport**.\n- **Przewodniki**: **Pomoc → Krótki przewodnik** w menu paska bocznego przeprowadzi Cię przez podstawy na Twoim własnym zadaniu, a **Pomoc → Poradnik** pokazuje krok po kroku krótką składnię i nawigację klawiaturą. Zamknij przewodnik, kiedy chcesz.\n- **Dopasuj do siebie**: wybierz motyw lub tryb ciemny i włączaj lub wyłączaj funkcje, takie jak tablice, harmonogram, nawyki, tryb skupienia czy integracje, w **Ustawienia → Ogólne**. Wtyczki dodają jeszcze więcej."
+    },
     "LEARN_KEYBOARD_SHORTCUTS": {
       "TITLE": "Poznaj skróty klawiaturowe",
       "NOTES": "Super Productivity jest zaprojektowane do obsługi za pomocą klawiatury. Poznaj skróty, aby pracować szybciej.\n\n**Jak zacząć:**\n1. Otwórz **menu boczne**\n2. Przejdź do **Pomoc**\n3. Kliknij **Przewodnik po nawigacji klawiaturowej**"
@@ -2933,6 +2937,7 @@
       "CREATE_TASK": "Poradnik: Utwórz zadanie",
       "GET_HELP_ONLINE": "Uzyskaj pomoc online",
       "KEYBOARD": "Poradnik: Zaawansowana klawiatura",
+      "QUICK_TOUR": "Krótki przewodnik",
       "REDDIT_COMMUNITY": "Społeczność Reddit",
       "REPORT_A_PROBLEM": "Zgłoś problem",
       "SEND_FEEDBACK": "Wyślij opinię",
@@ -3000,13 +3005,50 @@
     "HINTS": {
       "CREATE_TASK": "Kliknij +, aby dodać pierwsze zadanie",
       "CREATE_TASK_TOUCH": "Dotknij +, aby dodać pierwsze zadanie",
+      "DECLINED": "Nie ma problemu. Znajdziesz go w Pomoc → Krótki przewodnik, kiedy zechcesz.",
+      "MORE_FALLBACK": "Więcej jest już włączone: projekty, śledzenie czasu, Planer…",
+      "NO_THANKS": "Nie, dziękuję",
+      "SHOW_ME_MORE": "Pokaż więcej ›",
       "DONE_TITLE": "Wszystko gotowe",
       "EXPLORE_INBOX": "W Twojej skrzynce odbiorczej czekają dodatkowe, opcjonalne wskazówki. Możesz je wypróbować lub usunąć, kiedy tylko zechcesz.",
       "GOT_IT": "Rozumiem",
       "TASK_SWIPE_LEFT_TOUCH": "Przesuń zadanie w lewo, aby zobaczyć więcej akcji",
+      "TODAY_AND_INBOX": "To zadanie jest zaplanowane na dziś, więc widać je w {{todayIcon}} <b>Dzisiaj</b>. Zadania bez własnego projektu zostają w {{inboxIcon}} <b>Skrzynka odbiorcza</b>.",
+      "TODAY_AND_INBOX_PHONE": "To zadanie jest zaplanowane na dziś, więc widać je w {{todayIcon}} <b>Dzisiaj</b>. Zadania bez własnego projektu zostają w {{inboxIcon}} <b>Skrzynka odbiorcza</b>, pod ☰.",
       "TASK_SWIPE_RIGHT_TOUCH": "Przesuń zadanie w prawo, aby oznaczyć je jako ukończone",
       "OR_PRESS": "lub naciśnij",
       "SKIP_ARIA": "Zamknij wskazówkę"
+    },
+    "TOUR": {
+      "ADD_SUBTASK": "Rozbij je na części: kliknij zadanie prawym przyciskiem myszy i wybierz {{subtaskIcon}} <b>Dodaj podzadanie</b>",
+      "COUNTER": "{{nr}} z {{total}}",
+      "NEXT": "Dalej ›",
+      "ORGANIZE": "Utwórz własny <b>projekt</b>, aby grupować zadania, albo <b>tag</b>, aby je oznaczać. Utworzysz go przyciskiem +",
+      "ORGANIZE_COLLAPSED": "Utwórz własny <b>projekt</b>, aby grupować zadania, albo <b>tag</b>, aby je oznaczać. Rozwiń pasek boczny przyciskiem {{expandIcon}}, aby go utworzyć",
+      "ORGANIZE_PHONE": "Projekty i tagi znajdziesz pod ☰. Utwórz własny <b>projekt</b>, aby grupować zadania, albo <b>tag</b>, aby je oznaczać",
+      "PLANNER": "Zaplanuj kolejne dni w {{plannerIcon}} <b>Planer</b>",
+      "TASK_MENU_TOUCH": "Przesuń zadanie w lewo, aby zobaczyć jego menu: {{playIcon}} <b>Rozpocznij śledzenie czasu</b>, {{subtaskIcon}} <b>Dodaj podzadanie</b>",
+      "TASK_MENU_TOUCH_NO_TRACKING": "Przesuń zadanie w lewo, aby zobaczyć jego menu, np. {{subtaskIcon}} <b>Dodaj podzadanie</b>",
+      "TIMER_RUNNING": "Stoper działa. Naciśnij ponownie {{playIcon}} lub <kbd>{{key}}</kbd>, aby wstrzymać.",
+      "TIMER_RUNNING_TOUCH": "Stoper działa. Stuknij {{playIcon}} u góry, aby wstrzymać.",
+      "TRACK_TIME": "Najedź na zadanie i naciśnij {{playIcon}}, aby śledzić czas"
+    },
+    "WANT_MORE": {
+      "BOARDS": "<b>Tablice</b> · kolumny w stylu kanban dla Twoich zadań",
+      "DONE": "Gotowe",
+      "FINISH_DAY": "<b>Zakończ dzień</b> · przejrzyj i podsumuj swój dzień",
+      "FOCUS_MODE": "<b>Tryb skupienia</b> · pomodoro i praca bez rozpraszaczy",
+      "FOOTER": "Znajdziesz to ponownie w Pomoc → Krótki przewodnik.",
+      "HABITS": "<b>Nawyki</b> · śledź rutyny dzień po dniu",
+      "INTRO": "Super Productivity zaczyna spokojnie. Więcej jest pod ręką, gdy tego potrzebujesz:",
+      "OPEN_SETTINGS": "Otwórz ustawienia ›",
+      "PLUGINS": "<b>Wtyczki i integracje</b> · Jira, GitHub, CalDAV i więcej",
+      "SCHEDULE": "<b>Harmonogram</b> · Twój dzień na osi czasu",
+      "SEARCH": "Przeszukuj wszystko za pomocą <kbd>{{key}}</kbd>.",
+      "SEARCH_PHONE": "Przeszukuj wszystko z poziomu ☰.",
+      "SHORT_SYNTAX": "Wpisz <code>#tag</code>, <code>+project</code> lub <code>@tomorrow</code> podczas dodawania zadania. Pomoc → Poradnik pokazuje więcej.",
+      "SYNC": "Twoje dane zostają na tym urządzeniu. Synchronizacja i kopie zapasowe są w ustawieniach.",
+      "TITLE": "Chcesz więcej?"
     }
   },
   "PDS": {

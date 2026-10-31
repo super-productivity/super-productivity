@@ -18,7 +18,8 @@
         let-page
         let-isCurrent="isCurrent"
       >
-        @if (page.hasNoEvents) {
+        <!-- The bottom sheet covers the task list, so there is nothing to drop -->
+        @if (page.hasNoEvents && !isInBottomSheet) {
           <div class="empty-state-anchor">
             <div class="empty-state">
               <div class="empty-state-text">
@@ -36,6 +37,7 @@
           [workStartEnd]="workStartEnd() || null"
           [currentTimeRow]="page.day === todayDateStr() ? currentTimeRow() : null"
           [isTaskDragActive]="isCurrent && isDragging()"
+          [deadlineTasksByDay]="deadlineTasksByDay()"
         >
           <button
             weekHeaderStart

@@ -1,0 +1,49 @@
+name: Open Flathub Update PR on Release
+
+# Flathub's global external-data-checker opened its PR 4–41h after our
+# releases (measured 2026-09/10, v19.0.1–v19.2.0). Running the same checker on
+# release gets the PR up right away. Flathub asks custom workflows to opt out
+# of the global checker, so the manifest repo's flathub.json sets
+# disable-external-data-checker; if this run fails, re-run it via
+# workflow_dispatch.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs: {}
+
+permissions:
+  contents: read
+
+jobs:
+  open-flathub-pr:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    if: ${{ github.event_name == 'workflow_dispatch' || !github.event.release.prerelease }}
+    # FLATHUB_TOKEN lives in this environment (restricted to v* tags) so a
+    # workflow on an arbitrary branch can't read the cross-repo token.
+    environment: flathub
+
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+        with:
+          egress-policy: audit
+
+      - name: Checkout Flathub manifest repo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: flathub/com.super_productivity.SuperProductivity
+          token: ${{ secrets.FLATHUB_TOKEN }}
+
+      - name: Run external-data-checker
+        uses: docker://ghcr.io/flathub/flatpak-external-data-checker@sha256:58cbad601261c2ebaae2e18b6f639c09aa5809ef941dcff7284f68928ebb790d
+        env:
+          GIT_AUTHOR_NAME: Flatpak External Data Checker
+          GIT_COMMITTER_NAME: Flatpak External Data Checker
+          GIT_AUTHOR_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
+          GIT_COMMITTER_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
+          EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
+          GITHUB_TOKEN: ${{ secrets.FLATHUB_TOKEN }}
+        with:
+          args: --update --never-fork com.super_productivity.SuperProductivity.yml

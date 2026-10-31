@@ -72,9 +72,7 @@ test('edits an existing series priority and can clear it for future tasks only',
   ): Promise<void> => {
     await taskPage.openTaskDetail(task);
     const dialog = await openRecurDialog(page);
-    await dialog
-      .locator('.collapsible-header', { hasText: 'Advanced configuration' })
-      .click();
+    await dialog.locator('.collapsible-header', { hasText: 'Options' }).click();
     await dialog.getByRole('combobox', { name: 'Priority', exact: true }).click();
     await page.getByRole('option', { name: priority, exact: true }).click();
     await dialog.getByRole('button', { name: 'Save', exact: true }).click();

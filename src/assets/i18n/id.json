@@ -86,6 +86,10 @@
     "INTRO_2": "Jika Anda menghargai pendekatan ini dan ingin menjaga proyek tetap sehat dan berkembang, donasi sukarela sangat dihargai."
   },
   "EXAMPLE_TASKS": {
+    "GETTING_STARTED": {
+      "TITLE": "Opsional: tips memulai",
+      "NOTES": "Tidak ada yang wajib di sini. Hapus tugas ini kapan saja.\n\n- **Hari ini dan Kotak masuk**: Hari ini menampilkan apa yang direncanakan untuk hari ini. Tugas tanpa proyek sendiri tetap berada di Kotak masuk. Satu tugas bisa muncul di kedua daftar.\n- **Proyek**: kelompokkan tugas berdasarkan topik dengan **+** di samping **Proyek** pada bilah samping.\n- **Sinkronisasi**: simpan data Anda di beberapa perangkat melalui **Pengaturan → Sinkronisasi & Cadangan**.\n- **Pindahan dari Todoist atau TickTick?** Impor tugas Anda melalui **Pengaturan → Sinkronisasi & Cadangan → Impor/Ekspor**.\n- **Tur**: **Bantuan → Tur singkat** di menu bilah samping memandu Anda memahami dasar-dasarnya dengan tugas Anda sendiri, dan **Bantuan → Cara** menunjukkan sintaks singkat dan navigasi keyboard langkah demi langkah. Tutup tur kapan saja.\n- **Sesuaikan sendiri**: pilih tema atau mode gelap, lalu aktifkan atau nonaktifkan fitur seperti papan, jadwal, kebiasaan, mode fokus, atau integrasi di **Pengaturan → Umum**. Plugin menambahkan lebih banyak lagi."
+    },
     "LEARN_KEYBOARD_SHORTCUTS": {
       "TITLE": "Pelajari pintasan keyboard",
       "NOTES": "Super Productivity dirancang untuk digunakan dengan keyboard. Pelajari pintasan agar bekerja lebih cepat.\n\n**Cara memulai:**\n1. Buka **menu sidebar**\n2. Buka **Bantuan**\n3. Klik **Tur Navigasi Keyboard**"
@@ -3003,6 +3007,7 @@
       "CONTRIBUTE": "Berkontribusi",
       "GET_HELP_ONLINE": "Dapatkan bantuan secara online",
       "KEYBOARD": "Howto: Papan Ketik Tingkat Lanjut",
+      "QUICK_TOUR": "Tur singkat",
       "REDDIT_COMMUNITY": "Komunitas Reddit",
       "REPORT_A_PROBLEM": "Laporkan masalah",
       "SEND_FEEDBACK": "Kirim masukan",
@@ -3093,13 +3098,50 @@
     "HINTS": {
       "CREATE_TASK": "Klik + untuk menambahkan tugas pertama Anda",
       "CREATE_TASK_TOUCH": "Ketuk + untuk menambahkan tugas pertama Anda",
+      "DECLINED": "Tidak masalah. Anda bisa menemukannya di Bantuan → Tur singkat kapan saja.",
+      "MORE_FALLBACK": "Masih ada lagi yang sudah aktif: proyek, pelacakan waktu, Perencana…",
+      "NO_THANKS": "Tidak, terima kasih",
+      "SHOW_ME_MORE": "Tampilkan lebih banyak ›",
       "EXPLORE": "Silakan klik-klik dan jelajahi! Bantuan bisa ditemukan di bilah samping.",
       "EXPLORE_TOUCH": "Silakan jelajahi! Bantuan bisa ditemukan di menu.",
       "TASK_TAP_TOUCH": "Ketuk tugas untuk membuka detailnya.",
       "TASK_SWIPE_LEFT_TOUCH": "Geser tugas ke kiri untuk tindakan lainnya",
+      "TODAY_AND_INBOX": "Tugas ini dijadwalkan untuk hari ini, jadi muncul di {{todayIcon}} <b>Hari ini</b>. Tugas tanpa proyek sendiri tetap berada di {{inboxIcon}} <b>Kotak masuk</b>.",
+      "TODAY_AND_INBOX_PHONE": "Tugas ini dijadwalkan untuk hari ini, jadi muncul di {{todayIcon}} <b>Hari ini</b>. Tugas tanpa proyek sendiri tetap berada di {{inboxIcon}} <b>Kotak masuk</b>, di bawah ☰.",
       "TASK_SWIPE_RIGHT_TOUCH": "Geser tugas ke kanan untuk menandainya selesai",
       "OR_PRESS": "atau tekan",
       "SKIP_ARIA": "Tutup petunjuk"
+    },
+    "TOUR": {
+      "ADD_SUBTASK": "Pecah menjadi bagian kecil: klik kanan tugas dan pilih {{subtaskIcon}} <b>Tambah Subtugas</b>",
+      "COUNTER": "{{nr}} dari {{total}}",
+      "NEXT": "Berikutnya ›",
+      "ORGANIZE": "Buat <b>proyek</b> sendiri untuk mengelompokkan tugas, atau <b>tag</b> untuk melabelinya. Buat dengan +",
+      "ORGANIZE_COLLAPSED": "Buat <b>proyek</b> sendiri untuk mengelompokkan tugas, atau <b>tag</b> untuk melabelinya. Buka bilah samping dengan {{expandIcon}} untuk membuatnya",
+      "ORGANIZE_PHONE": "Proyek dan tag ada di bawah ☰. Buat <b>proyek</b> sendiri untuk mengelompokkan tugas, atau <b>tag</b> untuk melabelinya",
+      "PLANNER": "Rencanakan beberapa hari ke depan di {{plannerIcon}} <b>Perencana</b>",
+      "TASK_MENU_TOUCH": "Geser tugas ke kiri untuk menu: {{playIcon}} <b>Mulai waktu pelacakan</b>, {{subtaskIcon}} <b>Tambah Subtugas</b>",
+      "TASK_MENU_TOUCH_NO_TRACKING": "Geser tugas ke kiri untuk menu, mis. {{subtaskIcon}} <b>Tambah Subtugas</b>",
+      "TIMER_RUNNING": "Timer sedang berjalan. Tekan {{playIcon}} lagi atau <kbd>{{key}}</kbd> untuk menjeda.",
+      "TIMER_RUNNING_TOUCH": "Timer sedang berjalan. Ketuk {{playIcon}} di bagian atas untuk menjeda.",
+      "TRACK_TIME": "Arahkan kursor ke tugas dan tekan {{playIcon}} untuk melacak waktu"
+    },
+    "WANT_MORE": {
+      "BOARDS": "<b>Papan</b> · kolom bergaya Kanban untuk tugas Anda",
+      "DONE": "Selesai",
+      "FINISH_DAY": "<b>Akhiri hari</b> · tinjau dan tutup hari Anda",
+      "FOCUS_MODE": "<b>Mode Fokus</b> · Pomodoro dan kerja tanpa gangguan",
+      "FOOTER": "Temukan ini lagi di Bantuan → Tur singkat.",
+      "HABITS": "<b>Kebiasaan</b> · pantau rutinitas hari demi hari",
+      "INTRO": "Super Productivity dimulai dengan tenang. Masih ada lagi saat Anda membutuhkannya:",
+      "OPEN_SETTINGS": "Buka pengaturan ›",
+      "PLUGINS": "<b>Plugin & integrasi</b> · Jira, GitHub, CalDAV, dan lainnya",
+      "SCHEDULE": "<b>Jadwal</b> · hari Anda dalam lini masa",
+      "SEARCH": "Cari apa saja dengan <kbd>{{key}}</kbd>.",
+      "SEARCH_PHONE": "Cari apa saja dari ☰.",
+      "SHORT_SYNTAX": "Ketik <code>#tag</code>, <code>+project</code> atau <code>@tomorrow</code> saat menambahkan tugas. Bantuan → Cara menampilkan lebih banyak.",
+      "SYNC": "Data Anda tetap berada di perangkat ini. Sinkronisasi dan pencadangan ada di pengaturan.",
+      "TITLE": "Ingin lebih?"
     },
     "SYNC_CTA": "Sudah menggunakan Super Productivity di perangkat lain?",
     "SYNC_CTA_LINK": "Siapkan sinkronisasi"

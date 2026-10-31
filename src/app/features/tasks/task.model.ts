@@ -35,7 +35,8 @@ export enum TaskReminderOptionId {
   m15 = 'm15',
   m30 = 'm30',
   h1 = 'h1',
-  // deadline-only: long lead times for preparing ahead of a deadline
+  // long lead times; not offered where the option id itself is persisted
+  // (global default, repeat cfgs), see TASK_REMINDER_OPTIONS_WITHOUT_LONG_LEAD
   d1 = 'd1',
   d3 = 'd3',
   w1 = 'w1',

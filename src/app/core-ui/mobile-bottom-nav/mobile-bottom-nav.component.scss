@@ -79,6 +79,17 @@
     }
   }
 
+  // Zero-size anchor at the slot's top centre, so the destination menu opens
+  // above the bar instead of under the finger.
+  .slot-menu-anchor {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    width: 0;
+    height: 0;
+    pointer-events: none;
+  }
+
   .add-task-button {
     flex: 0 0 var(--s7);
     width: var(--s7);

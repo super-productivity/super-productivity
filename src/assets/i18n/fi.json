@@ -86,6 +86,10 @@
     "INTRO_2": "Jos arvostat tätä lähestymistapaa ja haluat pitää projektin terveenä ja kehittyvänä, vapaaehtoinen lahjoitus on erittäin arvostettu."
   },
   "EXAMPLE_TASKS": {
+    "GETTING_STARTED": {
+      "TITLE": "Valinnainen: vinkkejä alkuun",
+      "NOTES": "Mikään täällä ei ole pakollista. Poista tämä tehtävä milloin haluat.\n\n- **Tänään ja Saapuneet**: Tänään-näkymä näyttää tälle päivälle suunnitellut tehtävät. Tehtävät, joilla ei ole omaa projektia, pysyvät kohdassa Saapuneet. Tehtävä voi näkyä molemmissa listoissa.\n- **Projektit**: ryhmittele tehtävät aiheen mukaan sivupalkin **Projektit**-kohdan vieressä olevalla **+**-painikkeella.\n- **Synkronointi**: pidä tietosi usealla laitteella kohdassa **Asetukset → Synkronointi ja varmuuskopiot**.\n- **Tuletko Todoististä tai TickTickistä?** Tuo tehtäväsi kohdassa **Asetukset → Synkronointi ja varmuuskopiot → Tuonti/Vienti**.\n- **Esittelyt**: sivupalkin valikon **Ohje → Pikaesittely** käy perusteet läpi omalla tehtävälläsi, ja **Ohje → Ohje** näyttää lyhyen syntaksin ja näppäimistöohjauksen vaihe vaiheelta. Sulje esittely milloin haluat.\n- **Tee siitä omasi**: valitse teema tai tumma tila ja ota ominaisuudet, kuten taulut, aikataulu, tavat, keskittymismoodi tai integraatiot, käyttöön tai pois käytöstä kohdassa **Asetukset → Yleinen**. Lisäosat tuovat vielä lisää."
+    },
     "LEARN_KEYBOARD_SHORTCUTS": {
       "TITLE": "Opi pikanäppäimet",
       "NOTES": "Super Productivity on suunniteltu käytettäväksi näppäimistöllä. Opi pikanäppäimet työskennelläksesi nopeammin.\n\n**Näin pääset alkuun:**\n1. Avaa **sivuvalikko**\n2. Siirry kohtaan **Ohje**\n3. Napsauta **Näppäimistönavigointikierros**"
@@ -3003,6 +3007,7 @@
       "CONTRIBUTE": "Osallistu",
       "GET_HELP_ONLINE": "Hae apua verkosta",
       "KEYBOARD": "Ohje: Kehittynyt näppäimistö",
+      "QUICK_TOUR": "Pikaesittely",
       "REDDIT_COMMUNITY": "Reddit-yhteisö",
       "REPORT_A_PROBLEM": "Ilmoita ongelmasta",
       "SEND_FEEDBACK": "Lähetä palautetta",
@@ -3093,13 +3098,50 @@
     "HINTS": {
       "CREATE_TASK": "Napsauta + lisätäksesi ensimmäisen tehtävän",
       "CREATE_TASK_TOUCH": "Napauta + lisätäksesi ensimmäisen tehtävän",
+      "DECLINED": "Ei hätää. Löydät sen milloin tahansa kohdasta Ohje → Pikaesittely.",
+      "MORE_FALLBACK": "Lisää on jo käytössä: projektit, ajanseuranta, Suunnittelija…",
+      "NO_THANKS": "Ei kiitos",
+      "SHOW_ME_MORE": "Näytä lisää ›",
       "EXPLORE": "Napsauttele vapaasti ja tutustu! Ohje löytyy sivupalkista.",
       "EXPLORE_TOUCH": "Napauttele vapaasti ja tutustu! Ohje löytyy valikosta.",
       "TASK_TAP_TOUCH": "Napauta tehtävää avataksesi sen tiedot.",
       "TASK_SWIPE_LEFT_TOUCH": "Pyyhkäise tehtävää vasemmalle nähdäksesi lisää toimintoja",
+      "TODAY_AND_INBOX": "Tämä tehtävä on suunniteltu tälle päivälle, joten se näkyy kohdassa {{todayIcon}} <b>Tänään</b>. Tehtävät, joilla ei ole omaa projektia, pysyvät kohdassa {{inboxIcon}} <b>Saapuneet</b>.",
+      "TODAY_AND_INBOX_PHONE": "Tämä tehtävä on suunniteltu tälle päivälle, joten se näkyy kohdassa {{todayIcon}} <b>Tänään</b>. Tehtävät, joilla ei ole omaa projektia, pysyvät kohdassa {{inboxIcon}} <b>Saapuneet</b>, ☰-valikon alla.",
       "TASK_SWIPE_RIGHT_TOUCH": "Pyyhkäise tehtävää oikealle merkitäksesi sen tehdyksi",
       "OR_PRESS": "tai paina",
       "SKIP_ARIA": "Sulje vihje"
+    },
+    "TOUR": {
+      "ADD_SUBTASK": "Pilko se osiin: napsauta tehtävää hiiren kakkospainikkeella ja valitse {{subtaskIcon}} <b>Lisää alitehtävä</b>",
+      "COUNTER": "{{nr}} / {{total}}",
+      "NEXT": "Seuraava ›",
+      "ORGANIZE": "Luo oma <b>projekti</b> tehtävien ryhmittelyyn tai <b>tunniste</b> niiden merkitsemiseen. Luo se +-painikkeella",
+      "ORGANIZE_COLLAPSED": "Luo oma <b>projekti</b> tehtävien ryhmittelyyn tai <b>tunniste</b> niiden merkitsemiseen. Laajenna sivupalkki {{expandIcon}}-painikkeella luodaksesi sellaisen",
+      "ORGANIZE_PHONE": "Projektit ja tunnisteet löytyvät ☰-valikosta. Luo oma <b>projekti</b> tehtävien ryhmittelyyn tai <b>tunniste</b> niiden merkitsemiseen",
+      "PLANNER": "Suunnittele tulevat päivät kohdassa {{plannerIcon}} <b>Suunnittelija</b>",
+      "TASK_MENU_TOUCH": "Pyyhkäise tehtävää vasemmalle nähdäksesi sen valikon: {{playIcon}} <b>Aloita ajan seuraaminen</b>, {{subtaskIcon}} <b>Lisää alitehtävä</b>",
+      "TASK_MENU_TOUCH_NO_TRACKING": "Pyyhkäise tehtävää vasemmalle nähdäksesi sen valikon, esim. {{subtaskIcon}} <b>Lisää alitehtävä</b>",
+      "TIMER_RUNNING": "Ajastin käy. Keskeytä painamalla {{playIcon}} uudelleen tai <kbd>{{key}}</kbd>.",
+      "TIMER_RUNNING_TOUCH": "Ajastin käy. Keskeytä napauttamalla ylhäällä {{playIcon}}.",
+      "TRACK_TIME": "Vie hiiri tehtävän päälle ja seuraa aikaa painamalla {{playIcon}}"
+    },
+    "WANT_MORE": {
+      "BOARDS": "<b>Taulut</b> · Kanban-tyyliset sarakkeet tehtävillesi",
+      "DONE": "Valmis",
+      "FINISH_DAY": "<b>Päätä päivä</b> · käy päiväsi läpi ja päätä se",
+      "FOCUS_MODE": "<b>Keskittymismoodi</b> · pomodoro ja häiriötön työskentely",
+      "FOOTER": "Löydät tämän uudelleen kohdasta Ohje → Pikaesittely.",
+      "HABITS": "<b>Tavat</b> · seuraa rutiineja päivä päivältä",
+      "INTRO": "Super Productivity alkaa rauhallisena. Lisää on tarjolla, kun tarvitset sitä:",
+      "OPEN_SETTINGS": "Avaa asetukset ›",
+      "PLUGINS": "<b>Lisäosat ja integraatiot</b> · Jira, GitHub, CalDAV ja muita",
+      "SCHEDULE": "<b>Aikataulu</b> · päiväsi aikajanalla",
+      "SEARCH": "Hae kaikesta painamalla <kbd>{{key}}</kbd>.",
+      "SEARCH_PHONE": "Hae kaikesta ☰-valikosta.",
+      "SHORT_SYNTAX": "Kirjoita tehtävää lisätessäsi <code>#tag</code>, <code>+project</code> tai <code>@tomorrow</code>. Ohje → Ohje näyttää lisää.",
+      "SYNC": "Tietosi pysyvät tällä laitteella. Synkronointi ja varmuuskopiot löytyvät kohdasta Asetukset.",
+      "TITLE": "Haluatko lisää?"
     },
     "SYNC_CTA": "Käytätkö jo Super Productivitya toisella laitteella?",
     "SYNC_CTA_LINK": "Määritä synkronointi"
