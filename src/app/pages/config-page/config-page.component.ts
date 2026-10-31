@@ -9,7 +9,7 @@ import {
   OnInit,
   viewChild,
 } from '@angular/core';
-import { ActivatedRoute, RouterLink } from '@angular/router';
+import { ActivatedRoute } from '@angular/router';
 import { GlobalConfigService } from '../../features/config/global-config.service';
 import { getChangedConfigFields } from '../../features/config/get-changed-config-fields.util';
 import { NEW_INSTALL_CONFIG_SECTION_KEYS } from '../../features/config/new-install-config.const';
@@ -114,7 +114,6 @@ const TAB_ANIMATION_DURATION_MS = 200;
     MatTooltip,
     MatButton,
     MatIconButton,
-    RouterLink,
     NgTemplateOutlet,
     FormsModule,
     MatFormField,
