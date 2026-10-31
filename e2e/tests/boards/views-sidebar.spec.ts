@@ -1,7 +1,12 @@
 import { Locator, Page } from '@playwright/test';
 import { expect, test } from '../../fixtures/test.fixture';
 import { waitForStatePersistence } from '../../utils/waits';
-import { openCreateViewDialog, sideNavViewRow } from '../../utils/view-helpers';
+import {
+  createView,
+  fillViewEditor,
+  openCreateViewDialog,
+  sideNavViewRow,
+} from '../../utils/view-helpers';
 
 /**
  * Boards are views: each one is a row in the side menu's Views section with
@@ -15,14 +20,6 @@ const viewIdFromUrl = (page: Page): string => {
     throw new Error(`not on a view page: ${page.url()}`);
   }
   return id;
-};
-
-const fillViewTitle = async (dialog: Locator, title: string): Promise<void> => {
-  await dialog
-    .locator('board-edit')
-    .getByRole('textbox', { name: 'Title', exact: true })
-    .first()
-    .fill(title);
 };
 
 test.describe('Views in the side menu', () => {
@@ -40,7 +37,7 @@ test.describe('Views in the side menu', () => {
     const title = `${testPrefix}-Quick wins`;
     const dialog = await openCreateViewDialog(page);
     await expect(dialog.getByRole('button', { name: /Delete/ })).toHaveCount(0);
-    await fillViewTitle(dialog, title);
+    await fillViewEditor(page, dialog, { title });
     await dialog.getByRole('button', { name: 'Save', exact: true }).click();
     await expect(dialog).toBeHidden();
 
@@ -81,24 +78,14 @@ test.describe('Views in the side menu', () => {
     const taskTitle = `${testPrefix}-Due task`;
     await workViewPage.addTask(taskTitle);
 
-    const dialog = await openCreateViewDialog(page);
-    const form = dialog.locator('board-edit');
-    await fillViewTitle(dialog, `${testPrefix}-Due columns`);
-    const titles = form.getByRole('textbox', { name: 'Title', exact: true });
-    for (const [i, name] of ['Unscheduled', 'Due today', 'Overdue'].entries()) {
-      await form.getByRole('button', { name: 'Add new Panel' }).click();
-      // The new panel row renders asynchronously.
-      await expect(titles).toHaveCount(i + 2);
-      await titles.last().fill(name);
-    }
-    await form.getByText('Not Scheduled', { exact: true }).first().click();
-    const dueDate = form.getByRole('combobox', { name: 'Due date', exact: true });
-    await dueDate.nth(1).click();
-    await page.getByRole('option', { name: 'Today', exact: true }).click();
-    await dueDate.nth(2).click();
-    await page.getByRole('option', { name: 'Overdue', exact: true }).click();
-    await dialog.getByRole('button', { name: 'Save', exact: true }).click();
-    await expect(dialog).toBeHidden();
+    await createView(page, {
+      title: `${testPrefix}-Due columns`,
+      sections: [
+        { title: 'Unscheduled', rules: [{ rule: 'Planned Date', value: 'No date' }] },
+        { title: 'Due today', rules: [{ rule: 'Planned Date', value: 'Today' }] },
+        { title: 'Overdue', rules: [{ rule: 'Planned Date', value: 'Overdue' }] },
+      ],
+    });
 
     const panels = page.locator('boards board-panel');
     await expect(panels).toHaveCount(3);

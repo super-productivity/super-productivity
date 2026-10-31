@@ -1,6 +1,13 @@
 import { Locator, Page } from '@playwright/test';
 import { expect, test } from '../../fixtures/test.fixture';
-import { openCreateViewDialog, sideNavViewRow } from '../../utils/view-helpers';
+import {
+  createView,
+  openViewEditor,
+  saveViewEditor,
+  setViewSort,
+  sideNavViewRow,
+  viewEditorSection,
+} from '../../utils/view-helpers';
 
 /**
  * Views (boards) with the filter menu's rules: priority and deadline columns,
@@ -16,39 +23,6 @@ const viewIdFromUrl = (page: Page): string => {
   return id;
 };
 
-/** Creates a view with the given panels stacked in one column. */
-const createView = async (
-  page: Page,
-  title: string,
-  panelTitles: string[],
-  configure: (form: Locator) => Promise<void>,
-): Promise<void> => {
-  const dialog = await openCreateViewDialog(page);
-  const form = dialog.locator('board-edit');
-  const titles = form.getByRole('textbox', { name: 'Title', exact: true });
-  await titles.first().fill(title);
-  for (const [i, name] of panelTitles.entries()) {
-    await form.getByRole('button', { name: 'Add new Panel' }).click();
-    await expect(titles).toHaveCount(i + 2);
-    await titles.last().fill(name);
-  }
-  await configure(form);
-  await dialog.getByRole('button', { name: 'Save', exact: true }).click();
-  await expect(dialog).toBeHidden();
-  await expect(page.locator('boards board-panel')).toHaveCount(panelTitles.length);
-};
-
-const pickOption = async (
-  page: Page,
-  form: Locator,
-  label: string,
-  index: number,
-  option: string,
-): Promise<void> => {
-  await form.getByRole('combobox', { name: label, exact: true }).nth(index).click();
-  await page.getByRole('option', { name: option, exact: true }).click();
-};
-
 test.describe('View rules', () => {
   test('a priority column sets the priority of a task moved into it', async ({
     page,
@@ -60,15 +34,13 @@ test.describe('View rules', () => {
     const taskTitle = `${testPrefix}-Prioritize me`;
     await workViewPage.addTask(taskTitle);
 
-    await createView(
-      page,
-      `${testPrefix}-Priorities`,
-      ['No priority', 'High'],
-      async (form) => {
-        await pickOption(page, form, 'Priority', 0, 'Not set');
-        await pickOption(page, form, 'Priority', 1, 'High');
-      },
-    );
+    await createView(page, {
+      title: `${testPrefix}-Priorities`,
+      sections: [
+        { title: 'No priority', rules: [{ rule: 'Priority', value: 'Not set' }] },
+        { title: 'High', rules: [{ rule: 'Priority', value: 'High' }] },
+      ],
+    });
 
     const panels = page.locator('boards board-panel');
     const card = (i: number): Locator =>
@@ -91,14 +63,13 @@ test.describe('View rules', () => {
     const taskTitle = `${testPrefix}-Due by tonight`;
     await workViewPage.addTask(taskTitle);
 
-    await createView(
-      page,
-      `${testPrefix}-Deadlines`,
-      ['Any', 'Due today'],
-      async (form) => {
-        await pickOption(page, form, 'Deadline', 1, 'Today');
-      },
-    );
+    await createView(page, {
+      title: `${testPrefix}-Deadlines`,
+      sections: [
+        { title: 'Any' },
+        { title: 'Due today', rules: [{ rule: 'Deadline', value: 'Today' }] },
+      ],
+    });
 
     const panels = page.locator('boards board-panel');
     const card = (i: number): Locator =>
@@ -162,9 +133,10 @@ test.describe('View rules', () => {
     await workViewPage.addTask(first);
     await workViewPage.addTask(second);
 
-    await createView(page, `${testPrefix}-List`, ['Mine'], async (form) => {
-      // Only this test's tasks, in the order they were added.
-      await pickOption(page, form, 'Sort by', 0, 'Created');
+    // Only this test's tasks, in the order they were added.
+    await createView(page, {
+      title: `${testPrefix}-List`,
+      sections: [{ sort: 'Created' }],
     });
     const rows = page.locator('boards board-panel task');
     const titles = async (): Promise<string[]> =>
@@ -174,15 +146,9 @@ test.describe('View rules', () => {
     await expect.poll(titles).toEqual([first, second]);
 
     // Back to manual order, then move the second row up with the keyboard.
-    await page
-      .locator('page-title .page-title-actions')
-      .getByRole('button', { name: 'More actions' })
-      .click();
-    await page.getByRole('menuitem', { name: 'Edit' }).click();
-    const dialog = page.locator('dialog-board-edit');
-    await pickOption(page, dialog.locator('board-edit'), 'Sort by', 0, 'Manual');
-    await dialog.getByRole('button', { name: 'Save', exact: true }).click();
-    await expect(dialog).toBeHidden();
+    const dialog = await openViewEditor(page);
+    await setViewSort(page, viewEditorSection(dialog, 0), 'Manual');
+    await saveViewEditor(dialog);
 
     await rows.filter({ hasText: second }).first().focus();
     await page.keyboard.press('Control+Shift+ArrowUp');
@@ -199,7 +165,7 @@ test.describe('View rules', () => {
   }) => {
     await workViewPage.waitForTaskList();
     const title = `${testPrefix}-Menu view`;
-    await createView(page, title, ['Everything'], async () => undefined);
+    await createView(page, { title });
     const originalId = viewIdFromUrl(page);
 
     const titleMenu = page
@@ -234,12 +200,7 @@ test.describe('View rules', () => {
     await workViewPage.addTask(`${planned} @tomorrow`);
     await expect(page.locator('task').filter({ hasText: planned })).toHaveCount(1);
 
-    await createView(
-      page,
-      `${testPrefix}-Filtered`,
-      ['Everything'],
-      async () => undefined,
-    );
+    await createView(page, { title: `${testPrefix}-Filtered` });
     const rows = page.locator('boards board-panel task');
     await expect(rows.filter({ hasText: unplanned })).toHaveCount(1);
     await expect(rows.filter({ hasText: planned })).toHaveCount(1);

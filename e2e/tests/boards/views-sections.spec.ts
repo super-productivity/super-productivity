@@ -1,6 +1,6 @@
 import { Locator, Page } from '@playwright/test';
 import { expect, test } from '../../fixtures/test.fixture';
-import { openCreateViewDialog } from '../../utils/view-helpers';
+import { createView } from '../../utils/view-helpers';
 import { waitForStatePersistence } from '../../utils/waits';
 
 /**
@@ -8,38 +8,6 @@ import { waitForStatePersistence } from '../../utils/waits';
  * Rows move between sections by keyboard and by drag (through the target
  * section's rules), and the regular add-task bar adds into the open view.
  */
-
-const createView = async (
-  page: Page,
-  title: string,
-  sectionTitles: string[],
-  configure: (form: Locator) => Promise<void> = async () => undefined,
-): Promise<void> => {
-  const dialog = await openCreateViewDialog(page);
-  const form = dialog.locator('board-edit');
-  const titles = form.getByRole('textbox', { name: 'Title', exact: true });
-  await titles.first().fill(title);
-  for (const [i, name] of sectionTitles.entries()) {
-    await form.getByRole('button', { name: 'Add new Panel' }).click();
-    await expect(titles).toHaveCount(i + 2);
-    await titles.last().fill(name);
-  }
-  await configure(form);
-  await dialog.getByRole('button', { name: 'Save', exact: true }).click();
-  await expect(dialog).toBeHidden();
-  await expect(page.locator('boards board-panel')).toHaveCount(sectionTitles.length);
-};
-
-const pickOption = async (
-  page: Page,
-  form: Locator,
-  label: string,
-  index: number,
-  option: string,
-): Promise<void> => {
-  await form.getByRole('combobox', { name: label, exact: true }).nth(index).click();
-  await page.getByRole('option', { name: option, exact: true }).click();
-};
 
 /** A CDK drag with real pointer moves (dragTo is too fast for CDK). */
 const dragRow = async (page: Page, row: Locator, target: Locator): Promise<void> => {
@@ -71,15 +39,13 @@ test.describe('View sections', () => {
     await workViewPage.addTask(first);
     await workViewPage.addTask(second);
 
-    await createView(
-      page,
-      `${testPrefix}-Priorities`,
-      ['Normal', 'High'],
-      async (form) => {
-        await pickOption(page, form, 'Priority', 0, 'Not set');
-        await pickOption(page, form, 'Priority', 1, 'High');
-      },
-    );
+    await createView(page, {
+      title: `${testPrefix}-Priorities`,
+      sections: [
+        { title: 'Normal', rules: [{ rule: 'Priority', value: 'Not set' }] },
+        { title: 'High', rules: [{ rule: 'Priority', value: 'High' }] },
+      ],
+    });
 
     const sections = page.locator('boards board-panel');
     // Not CDK's placeholder, which sits in the target list until the drop ends.
@@ -124,8 +90,12 @@ test.describe('View sections', () => {
     await workViewPage.addTask(`${testPrefix}-Task`);
 
     // "All" has no rules, so a row moved into "High" stays in "All" too.
-    await createView(page, `${testPrefix}-Overlap`, ['All', 'High'], async (form) => {
-      await pickOption(page, form, 'Priority', 1, 'High');
+    await createView(page, {
+      title: `${testPrefix}-Overlap`,
+      sections: [
+        { title: 'All' },
+        { title: 'High', rules: [{ rule: 'Priority', value: 'High' }] },
+      ],
     });
     const sections = page.locator('boards board-panel');
     const allRows = sections.nth(0).locator('task');
@@ -156,7 +126,10 @@ test.describe('View sections', () => {
   }) => {
     await workViewPage.waitForTaskList();
     await workViewPage.addTask(`${testPrefix}-Something`);
-    await createView(page, `${testPrefix}-Two`, ['One', 'Two']);
+    await createView(page, {
+      title: `${testPrefix}-Two`,
+      sections: [{ title: 'One' }, { title: 'Two' }],
+    });
     const section = page.locator('boards board-panel').first();
     await expect(section.locator('task').first()).toBeVisible();
 
@@ -178,8 +151,9 @@ test.describe('View sections', () => {
     await workViewPage.waitForTaskList();
 
     // A view of high-priority tasks across all projects.
-    await createView(page, `${testPrefix}-Important`, ['Important'], async (form) => {
-      await pickOption(page, form, 'Priority', 0, 'High');
+    await createView(page, {
+      title: `${testPrefix}-Important`,
+      sections: [{ rules: [{ rule: 'Priority', value: 'High' }] }],
     });
     const viewTitle = `${testPrefix}-From the view`;
     await workViewPage.addTask(`${viewTitle}`, false, null);
@@ -208,7 +182,7 @@ test.describe('View sections', () => {
     const second = `${testPrefix}-Second`;
     await workViewPage.addTask(first);
     await workViewPage.addTask(second);
-    await createView(page, `${testPrefix}-Mine`, ['Mine']);
+    await createView(page, { title: `${testPrefix}-Mine` });
 
     const rows = page.locator('boards board-panel task:not(.cdk-drag-placeholder)');
     const titles = async (): Promise<string[]> =>

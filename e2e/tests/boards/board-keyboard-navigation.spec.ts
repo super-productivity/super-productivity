@@ -1,7 +1,13 @@
 import { Page } from '@playwright/test';
 import { expect, test } from '../../fixtures/test.fixture';
 import { waitForMenuSettled, waitForStatePersistence } from '../../utils/waits';
-import { openCreateViewDialog } from '../../utils/view-helpers';
+import {
+  addViewRule,
+  createView,
+  saveViewEditor,
+  setViewSort,
+  viewEditorSection,
+} from '../../utils/view-helpers';
 
 const openKanban = async (page: Page): Promise<void> => {
   await page.goto('/#/boards/KANBAN_DEFAULT');
@@ -182,9 +188,12 @@ test.describe('Board keyboard navigation', () => {
     await page.keyboard.press('Escape');
     await todo.locator('header button').click();
     const editor = page.locator('dialog-board-edit');
-    await editor.getByRole('radio', { name: 'Scheduled', exact: true }).nth(1).check();
-    await editor.getByRole('button', { name: 'Save', exact: true }).click();
-    await expect(editor).toHaveCount(0);
+    // In progress only shows planned tasks.
+    await addViewRule(page, viewEditorSection(editor, 1), {
+      rule: 'Planned Date',
+      value: 'Has a date',
+    });
+    await saveViewEditor(editor);
     const cards = todo.locator('planner-task');
     await expect(cards).toHaveCount(2);
     await cards.first().focus();
@@ -232,22 +241,12 @@ test.describe('Board keyboard navigation', () => {
     await workViewPage.waitForTaskList();
     for (const name of ['Alpha', 'Beta', 'Gamma'])
       await workViewPage.addTask(`${testPrefix}-${name}`);
-    const createDialog = await openCreateViewDialog(page);
-    const form = createDialog.locator('board-edit');
-    await form
-      .getByRole('textbox', { name: 'Title', exact: true })
-      .fill(`${testPrefix}-Duplicates`);
-    const titles = form.getByRole('textbox', { name: 'Title', exact: true });
-    for (const [i, name] of ['First panel', 'Second panel'].entries()) {
-      await form.getByRole('button', { name: 'Add new Panel' }).click();
-      // The new panel row renders asynchronously; without this wait `.last()`
-      // can still resolve to the previous row and overwrite its title.
-      await expect(titles).toHaveCount(i + 2);
-      await titles.last().fill(name);
-    }
     // Two columns keep cards (a one-column view lists task rows).
-    await form.getByRole('spinbutton', { name: 'Columns' }).fill('2');
-    await createDialog.getByRole('button', { name: 'Save', exact: true }).click();
+    await createView(page, {
+      title: `${testPrefix}-Duplicates`,
+      layout: 'board',
+      sections: [{ title: 'First panel' }, { title: 'Second panel' }],
+    });
     const panels = page.locator('board-panel');
     const first = panels.nth(0).locator('planner-task');
     const second = panels.nth(1).locator('planner-task');
@@ -264,9 +263,8 @@ test.describe('Board keyboard navigation', () => {
 
     await panels.nth(1).locator('header button').click();
     const dialog = page.locator('dialog-board-edit');
-    await dialog.getByRole('combobox', { name: 'Sort by', exact: true }).last().click();
-    await page.getByRole('option', { name: 'Title', exact: true }).click();
-    await dialog.getByRole('button', { name: 'Save', exact: true }).click();
+    await setViewSort(page, viewEditorSection(dialog, 1), 'Title');
+    await saveViewEditor(dialog);
     await expect(second.first()).toContainText('Alpha');
     await second.first().focus();
     await page.keyboard.press('Control+Shift+ArrowDown');

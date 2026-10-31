@@ -11,6 +11,7 @@ import {
 } from '../../utils/supersync-helpers';
 import { waitForAppReady } from '../../utils/waits';
 import { NotePage } from '../../pages/note.page';
+import { fillViewEditor, saveViewEditor } from '../../utils/view-helpers';
 import {
   RELEASED_APP_URL,
   serveReleasedClientAssets,
@@ -105,10 +106,9 @@ const editContent = async (
   await page.goto(`/#/boards/${edit.id as string}`);
   await page.locator('board:visible button').filter({ hasText: 'edit' }).click();
   const dialog = page.locator('dialog-board-edit');
-  await dialog.locator('input[type="text"]').fill('edited concurrently');
-  await dialog.locator('input[type="number"]').fill('3');
-  await dialog.getByRole('button', { name: /Save/ }).click();
-  await expect(dialog).toBeHidden();
+  // A board with cols: 2 opens in the Board layout, which has the Columns field.
+  await fillViewEditor(page, dialog, { title: 'edited concurrently', columns: 3 });
+  await saveViewEditor(dialog);
 };
 
 const snapshot = (
