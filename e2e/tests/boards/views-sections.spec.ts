@@ -180,6 +180,16 @@ test.describe('View sections', () => {
     await input.press('Escape');
     await expect(sections.nth(1).locator('add-task-bar')).toHaveCount(0);
     await expect(add).toBeFocused();
+
+    // One add bar at a time: another section's "+" closes the open one.
+    await sections
+      .nth(0)
+      .getByRole('button', { name: 'Add task to Normal', exact: true })
+      .click();
+    await expect(sections.nth(0).locator('add-task-bar .main-input')).toBeFocused();
+    await add.click();
+    await expect(sections.nth(1).locator('add-task-bar .main-input')).toBeFocused();
+    await expect(sections.nth(0).locator('add-task-bar')).toHaveCount(0);
   });
 
   test('the add-task bar adds into the open view, not the list open before', async ({

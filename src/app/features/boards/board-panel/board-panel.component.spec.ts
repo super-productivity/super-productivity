@@ -1624,13 +1624,16 @@ describe('BoardPanelComponent - drop()', () => {
 
       component.isSectionExpanded.set(false);
       fixture.detectChanges();
-      const toggled = jasmine.createSpy('toggled');
-      el.querySelector('collapsible')!.addEventListener('click', toggled);
+      let headerClick: Event | undefined;
+      el.querySelector('collapsible')!.addEventListener('click', (ev) => {
+        headerClick = ev;
+      });
       add.click();
       fixture.detectChanges();
 
-      // The click doesn't reach the section header (it would toggle it).
-      expect(toggled).not.toHaveBeenCalled();
+      // The click goes on (an open add bar elsewhere closes on it), marked as
+      // handled so the section header doesn't toggle.
+      expect(headerClick?.defaultPrevented).toBeTrue();
       expect(component.isSectionExpanded()).toBeTrue();
       const bar = el.querySelector('add-task-bar')!;
       expect(bar).not.toBeNull();
@@ -1652,6 +1655,20 @@ describe('BoardPanelComponent - drop()', () => {
       expect(el.querySelector('add-task-bar')).toBeNull();
       expect(document.activeElement).toBe(add);
       el.remove();
+    });
+
+    it('drops the open add bar when the section collapses', async () => {
+      const el = await render(section());
+      component.addButton()!.click();
+      fixture.detectChanges();
+      expect(el.querySelector('add-task-bar')).not.toBeNull();
+
+      component.onSectionExpandedChange(false);
+      fixture.detectChanges();
+      component.onSectionExpandedChange(true);
+      fixture.detectChanges();
+      expect(component.isAddOpen()).toBeFalse();
+      expect(el.querySelector('add-task-bar')).toBeNull();
     });
 
     it('has no "+" where the section takes no new tasks', async () => {

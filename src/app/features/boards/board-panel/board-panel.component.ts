@@ -255,6 +255,12 @@ export class BoardPanelComponent implements TaskCardList, ViewTaskListHost {
     this.isAddOpen.set(true);
   }
 
+  /** A collapsed section drops its add bar, so it doesn't come back on expand. */
+  onSectionExpandedChange(isExpanded: boolean): void {
+    this.isSectionExpanded.set(isExpanded);
+    if (!isExpanded) this.isAddOpen.set(false);
+  }
+
   /** Escape (`isRefocus`) returns focus to the "+"; a click outside doesn't. */
   closeAddTask(isRefocus: boolean): void {
     this.isAddOpen.set(false);

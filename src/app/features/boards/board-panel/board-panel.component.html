@@ -9,7 +9,7 @@
       [isIconBefore]="true"
       [isGroup]="true"
       [isExpanded]="isSectionExpanded()"
-      (isExpandedChange)="isSectionExpanded.set($event)"
+      (isExpandedChange)="onSectionExpandedChange($event)"
     >
       @if (totalEstimate()) {
         <span
@@ -19,7 +19,7 @@
         >
       }
       @if (!isAddTaskHidden()) {
-        <!-- Stops the click: it would toggle the section. -->
+        <!-- Marks its click handled: the section header would toggle on it. -->
         <ng-container actions>
           <ng-container
             [ngTemplateOutlet]="addTaskBtnTpl"
@@ -188,7 +188,7 @@
      the keyboard's target in an empty column (`addButton()`). -->
 <ng-template
   #addTaskBtnTpl
-  let-isStopClick
+  let-isInSectionHeader
 >
   @let addLabel =
     T.F.BOARDS.V.ADD_TASK_TO | translate: { title: panelCfg().title | translate };
@@ -198,7 +198,7 @@
     data-add-task-btn
     [attr.aria-label]="addLabel"
     [matTooltip]="addLabel"
-    (click)="openAddTask(); isStopClick && $event.stopPropagation()"
+    (click)="openAddTask(); isInSectionHeader && $event.preventDefault()"
   >
     <mat-icon>add</mat-icon>
   </button>
