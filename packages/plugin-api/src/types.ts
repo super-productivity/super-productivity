@@ -50,6 +50,19 @@ export enum PluginHooks {
   ANY_TASK_UPDATE = 'anyTaskUpdate',
   PROJECT_LIST_UPDATE = 'projectListUpdate',
   WORK_CONTEXT_CHANGE = 'workContextChange',
+  /**
+   * Tasks, projects or tags changed from any source (remote sync included), or
+   * the selected or tracked task changed. Coalesced; no payload. Refresh views
+   * only: it fires on every device for a synced change, so do not write data
+   * in response.
+   */
+  DATA_CHANGED = 'dataChanged',
+  /**
+   * The user's logical day changed while the app runs (see DayChangePayload).
+   * Not fired at startup; read getDayContext() on load. Fires on every device,
+   * so refresh views only and do not write data in response.
+   */
+  DAY_CHANGE = 'dayChange',
 }
 
 export type Hooks = PluginHooks;
@@ -291,6 +304,26 @@ export interface ActiveWorkContext {
  */
 export type WorkContextChangePayload = ActiveWorkContext;
 
+/**
+ * Payload for DAY_CHANGE: the new logical day, which honours the user's
+ * "start of next day" setting. Fires when the day changes while the app runs: at
+ * the rollover, or when that setting moves it.
+ */
+export interface DayChangePayload {
+  todayStr: string;
+}
+
+/**
+ * The user's logical day, for plugins that bucket tasks by date.
+ * `todayStr` is the logical day as YYYY-MM-DD: before the configured start of
+ * the next day, it is still the previous calendar day. To find a timestamp's
+ * logical day, subtract `startOfNextDayDiffMs` before taking its local date.
+ */
+export interface PluginDayContext {
+  todayStr: string;
+  startOfNextDayDiffMs: number;
+}
+
 // Map hook types to their payload types
 export interface HookPayloadMap {
   [PluginHooks.TASK_CREATED]: TaskCreatedPayload;
@@ -305,6 +338,8 @@ export interface HookPayloadMap {
   [PluginHooks.ANY_TASK_UPDATE]: AnyTaskUpdatePayload;
   [PluginHooks.PROJECT_LIST_UPDATE]: ProjectListUpdatePayload;
   [PluginHooks.WORK_CONTEXT_CHANGE]: WorkContextChangePayload;
+  [PluginHooks.DATA_CHANGED]: void;
+  [PluginHooks.DAY_CHANGE]: DayChangePayload;
 }
 
 // Generic hook handler with typed payload
@@ -600,6 +635,22 @@ export interface PluginAPI {
    * only if the app has not finished its initial data load.
    */
   getActiveWorkContext(): Promise<ActiveWorkContext | null>;
+
+  /**
+   * The user's logical day and its start-of-next-day offset. Re-read it on the DAY_CHANGE hook.
+   * Feature-detect on older hosts.
+   */
+  getDayContext?(): Promise<PluginDayContext>;
+
+  /**
+   * Start tracking time on a task. Rejects for an unknown or done task (the play
+   * button would reopen it) and for a parent whose subtasks are all done. For a
+   * parent, tracks its first unfinished subtask. Feature-detect on older hosts.
+   */
+  startTracking?(taskId: string): Promise<void>;
+
+  /** Stop time tracking. Feature-detect on older hosts. */
+  stopTracking?(): Promise<void>;
 
   /**
    * Mount this plugin's index.html inside the work-view body, in place of

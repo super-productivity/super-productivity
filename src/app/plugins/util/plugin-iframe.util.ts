@@ -66,6 +66,9 @@ const ALLOWED_IFRAME_API_METHODS = new Set([
   'showInWorkContext',
   'closeWorkContextView',
   'getActiveWorkContext',
+  'getDayContext',
+  'startTracking',
+  'stopTracking',
   'getAppState',
   'persistDataSynced',
   'loadPersistedData',
@@ -451,6 +454,9 @@ export const createPluginApiScript = (config: PluginIframeConfig): string => {
           showInWorkContext: () => callApi('showInWorkContext'),
           closeWorkContextView: () => callApi('closeWorkContextView'),
           getActiveWorkContext: () => callApi('getActiveWorkContext'),
+          getDayContext: () => callApi('getDayContext'),
+          startTracking: (taskId) => callApi('startTracking', [taskId]),
+          stopTracking: () => callApi('stopTracking'),
           getAppState: () => callApi('getAppState'),
 
           // Persistence methods (optional second arg = key, forwarded by callApi)

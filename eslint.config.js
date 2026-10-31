@@ -437,7 +437,7 @@ module.exports = tseslint.config(
     'src/app/op-log/sync-providers/file-based/file-based-sync-adapter.service.ts': 3175,
     'src/app/op-log/persistence/operation-log-store.service.ts': 3068,
     'src/app/op-log/sync/operation-log-sync.service.ts': 2552,
-    'src/app/plugins/plugin-bridge.service.ts': 2345,
+    'src/app/plugins/plugin-bridge.service.ts': 2307,
     'src/app/imex/sync/sync-wrapper.service.ts': 2079,
     'src/app/plugins/plugin.service.ts': 1851,
     'src/app/features/tasks/task.service.ts': 1527,

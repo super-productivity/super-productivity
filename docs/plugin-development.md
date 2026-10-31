@@ -343,7 +343,14 @@ is [`types.ts`](../packages/plugin-api/src/types.ts) (`interface PluginAPI`).
 - `getSelectedTask()` - Get the task selected in the task detail panel, or `null`
 - `getFocusedTask()` - Get the currently focused task row, or `null`. Task-row focus is cleared when focus moves elsewhere, including into iframe side panels; use `getSelectedTask()` for persistent side-panel task context.
 - `addTask(task)` - Create a new task
-- `updateTask(taskId, updates)` - Update existing task
+- `updateTask(taskId, updates)` - Update existing task. Setting `dueDay` adds the task to that Planner day (or Today). A scheduled time (`dueWithTime`) and its reminder take precedence over `dueDay`, and `updateTask` cannot clear a reminder yet, so use this for tasks without a time. The task is added at the end of that day. Take day strings from `getDayContext().todayStr` so the user's start of next day is honoured.
+- `startTracking(taskId)` / `stopTracking()` - Start or stop time tracking. Rejects for an unknown or done task (unlike the play button, it does not reopen it) and for a parent whose subtasks are all done. For a parent task, tracking starts on its first unfinished subtask. The tracked task arrives with `currentTaskChange`.
+
+#### Day
+
+- `getDayContext()` - `{ todayStr, startOfNextDayDiffMs }`. `todayStr` is the user's logical day (YYYY-MM-DD): before the configured start of the next day it is still the previous calendar day. To find a timestamp's logical day, subtract `startOfNextDayDiffMs` before taking its local date. Re-read it on `DAY_CHANGE`.
+
+Feature-detect `getDayContext`, `startTracking` and `stopTracking` on older hosts.
 
 #### Application State
 
@@ -570,8 +577,25 @@ const hooks = {
   LANGUAGE_CHANGE: 'languageChange',
   PERSISTED_DATA_CHANGED: 'persistedDataChanged',
   ACTION: 'action',
+  DATA_CHANGED: 'dataChanged',
+  DAY_CHANGE: 'dayChange',
 };
 ```
+
+`DATA_CHANGED` fires after tasks, projects or tags change from any source:
+the user, another plugin, planning, archiving, imports and remote sync, and
+when the selected or tracked task changes. It carries no payload; re-read
+what you display (`getSelectedTask()` for the selection). Use it to refresh a
+view only: it fires on every device for a synced change, so writing data in
+response would repeat the write on each one. Bursts (a sync batch, a bulk
+action) are coalesced into one call; while a task is tracked it fires about
+once a second, so compare what you render before redrawing. Prefer it over
+`ANY_TASK_UPDATE` for keeping a view current: that hook sees only local
+actions from a short list.
+
+`DAY_CHANGE` fires with `{ todayStr }` when the user's logical day changes
+while the app runs: at the rollover, or when the start-of-next-day setting
+moves it.
 
 `PERSISTED_DATA_CHANGED` fires whenever this plugin's persisted data
 changes — local writes, remote sync deliveries, and bulk imports —
