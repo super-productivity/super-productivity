@@ -1,5 +1,4 @@
 /* eslint-disable @typescript-eslint/naming-convention */
-import { signal, WritableSignal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
 import { TagListComponent } from './tag-list.component';
@@ -19,7 +18,6 @@ import { DEFAULT_PROJECT } from '../../project/project.const';
 import { TranslateService } from '@ngx-translate/core';
 import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
 import { PluginIssueProviderRegistryService } from '../../../plugins/issue-provider/plugin-issue-provider-registry.service';
-import { TaskMultiSelectService } from '../../tasks/task-multi-select.service';
 
 describe('TagListComponent', () => {
   let component: TagListComponent;
@@ -31,7 +29,6 @@ describe('TagListComponent', () => {
     activeType: WorkContextType;
   } | null>;
   let routerMock: jasmine.SpyObj<Router>;
-  let isTouchSelectionMode: WritableSignal<boolean>;
 
   const createMockTag = (id: string, title: string): Tag =>
     ({
@@ -109,7 +106,6 @@ describe('TagListComponent', () => {
 
     routerMock = jasmine.createSpyObj<Router>('Router', ['navigate']);
     routerMock.navigate.and.resolveTo(true);
-    isTouchSelectionMode = signal(false);
 
     await TestBed.configureTestingModule({
       imports: [TagListComponent, NoopAnimationsModule],
@@ -123,7 +119,6 @@ describe('TagListComponent', () => {
           useValue: pluginRegistryMock,
         },
         { provide: Router, useValue: routerMock },
-        { provide: TaskMultiSelectService, useValue: { isTouchSelectionMode } },
       ],
     }).compileComponents();
 
@@ -448,7 +443,7 @@ describe('TagListComponent', () => {
     it('should leave modifier clicks and touch-selection taps to the row', () => {
       const projectChip = getChips()[0];
       projectChip.dispatchEvent(click({ ctrlKey: true }));
-      isTouchSelectionMode.set(true);
+      fixture.componentRef.setInput('isTouchSelectionMode', true);
       projectChip.dispatchEvent(click());
 
       expect(routerMock.navigate).not.toHaveBeenCalled();

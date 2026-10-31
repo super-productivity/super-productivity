@@ -26,8 +26,6 @@ import { getTaskRepeatInfoText } from '../../tasks/task-detail-panel/get-task-re
 import { TranslateService } from '@ngx-translate/core';
 import { TagListStateService } from './tag-list-state.service';
 import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
-import { TaskMultiSelectService } from '../../tasks/task-multi-select.service';
-import { isMultiSelectModifierEvent } from '../../../util/is-multi-select-modifier-event';
 
 /**
  * Structural contract of what tag-list actually reads from its input. Both
@@ -54,7 +52,6 @@ export class TagListComponent {
   private readonly _translateService = inject(TranslateService);
   private readonly _dateTimeFormatService = inject(DateTimeFormatService);
   private readonly _router = inject(Router);
-  private readonly _multiSelect = inject(TaskMultiSelectService);
 
   task = input.required<TagListTask>();
 
@@ -65,6 +62,9 @@ export class TagListComponent {
   isShowProjectTagNever = input(false);
   // Off in modal dialogs, where navigating would change the page behind them.
   isProjectTagClickable = input(true);
+  // From the host: importing TaskMultiSelectService or isMultiSelectModifierEvent
+  // here splits each into its own lazy chunk (Lighthouse script budget).
+  isTouchSelectionMode = input(false);
 
   workContext = toSignal(this._workContextService.activeWorkContextTypeAndId$);
 
@@ -168,7 +168,7 @@ export class TagListComponent {
 
   openProject(ev: MouseEvent, projectId: string): void {
     // Modifier clicks and touch-selection taps stay with the row's multi-select.
-    if (isMultiSelectModifierEvent(ev) || this._multiSelect.isTouchSelectionMode()) {
+    if (ev.shiftKey || ev.ctrlKey || ev.metaKey || this.isTouchSelectionMode()) {
       return;
     }
     // Keep the row's click handlers (select, detail panel) out of it (#9060).
