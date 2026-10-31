@@ -1,10 +1,15 @@
-import { TASK_REPEAT_WEEKDAY_MAP, TaskRepeatCfg } from '../task-repeat-cfg.model';
+import { TaskRepeatCfg } from '../task-repeat-cfg.model';
 import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
 import {
   findMonthlyNthWeekdayOccurrence,
   hasNthWeekdayAnchor,
 } from './get-nth-weekday-of-month.util';
 import { isAfterRepeatUntilDay } from './repeat-until-day.util';
+import {
+  getClampedDayOfMonth,
+  getMonthlyRepeatDay,
+  isRepeatWeekday,
+} from './recurrence-date.util';
 
 /**
  * Returns the first valid repeat occurrence on or after `cfg.startDate`.
@@ -68,13 +73,9 @@ const getFirstRepeatOccurrenceIgnoringEnd = (
           accept: (candidate) => candidate >= checkDate,
         });
       }
-      if (taskRepeatCfg.monthlyLastDay) {
-        // Last calendar day of startDate's month — day 0 of the next month
-        // (#7726).
-        const lastDay = new Date(checkDate.getFullYear(), checkDate.getMonth() + 1, 0);
-        lastDay.setHours(12, 0, 0, 0);
-        return lastDay;
-      }
+      checkDate.setDate(
+        getClampedDayOfMonth(checkDate, getMonthlyRepeatDay(taskRepeatCfg, checkDate)),
+      );
       return checkDate;
     }
 
@@ -84,8 +85,7 @@ const getFirstRepeatOccurrenceIgnoringEnd = (
 
     case 'WEEKLY': {
       for (let i = 0; i < 7; i++) {
-        const dayKey = TASK_REPEAT_WEEKDAY_MAP[checkDate.getDay()];
-        if (dayKey && taskRepeatCfg[dayKey] === true) {
+        if (isRepeatWeekday(taskRepeatCfg, checkDate)) {
           return checkDate;
         }
         checkDate.setDate(checkDate.getDate() + 1);
