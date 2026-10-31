@@ -114,6 +114,41 @@ test.describe('View sections', () => {
     await expect(row(1, second)).toHaveCount(1);
   });
 
+  test('focus follows a row into a section that already shows it, also when collapsed', async ({
+    page,
+    workViewPage,
+    testPrefix,
+  }) => {
+    await page.goto('/#/project/INBOX_PROJECT/tasks');
+    await workViewPage.waitForTaskList();
+    await workViewPage.addTask(`${testPrefix}-Task`);
+
+    // "All" has no rules, so a row moved into "High" stays in "All" too.
+    await createView(page, `${testPrefix}-Overlap`, ['All', 'High'], async (form) => {
+      await pickOption(page, form, 'Priority', 1, 'High');
+    });
+    const sections = page.locator('boards board-panel');
+    const allRows = sections.nth(0).locator('task');
+    const row = (i: number, title: string): Locator =>
+      sections.nth(i).locator('task').filter({ hasText: title });
+    await expect(allRows.first()).toBeVisible();
+    const title = (await allRows.last().locator('task-title').innerText()).trim();
+
+    await allRows.last().focus();
+    await page.keyboard.press('Control+Shift+ArrowDown');
+    await expect(row(1, title)).toHaveCount(1);
+    await expect(row(0, title)).toHaveCount(1);
+    await expect(row(1, title)).toBeFocused();
+
+    // Into the collapsed section again: it opens and its row gets focus.
+    await sections.nth(1).locator('collapsible .collapsible-header').first().click();
+    await expect(sections.nth(1).locator('task')).toHaveCount(0);
+    await row(0, title).focus();
+    await page.keyboard.press('Control+Shift+ArrowDown');
+    await expect(row(1, title)).toBeFocused();
+    await expect(row(0, title)).toHaveCount(1);
+  });
+
   test('a collapsed section renders no rows', async ({
     page,
     workViewPage,

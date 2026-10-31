@@ -213,5 +213,16 @@ describe('TaskViewCustomizerPanelComponent', () => {
       cmp().addTagFilter('work');
       expect(dispatch).not.toHaveBeenCalled();
     });
+
+    it('does not dispatch for a view without panels', () => {
+      fixture.componentInstance.view.set(view());
+      fixture.detectChanges();
+      cmp().onSortSelect(OPTIONS.sort.list[1]);
+      cmp().onFilterWithValue({
+        filterType: FILTER_OPTION_TYPE.deadline,
+        preset: FILTER_SCHEDULE.today,
+      });
+      expect(dispatch).not.toHaveBeenCalled();
+    });
   });
 });

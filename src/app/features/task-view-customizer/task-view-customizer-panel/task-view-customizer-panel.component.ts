@@ -281,9 +281,12 @@ export class TaskViewCustomizerPanelComponent {
     );
   }
 
-  /** One op per click; `null` when the click can't change the view. */
+  /**
+   * One op per click; `null` when the click can't change the view. A view
+   * without panels has nothing to change.
+   */
   private _updateViewPanels(view: BoardCfg, panels: BoardPanelCfg[] | null): void {
-    if (panels) {
+    if (panels?.length) {
       this._store.dispatch(
         BoardsActions.updateBoard({ id: view.id, updates: { panels } }),
       );

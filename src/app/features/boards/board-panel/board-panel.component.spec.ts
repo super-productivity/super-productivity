@@ -1311,6 +1311,73 @@ describe('BoardPanelComponent - drop()', () => {
       expect(dispatchSpy).not.toHaveBeenCalled();
     });
 
+    it('takes the selection along past the edge, only when all of it is in the section', async () => {
+      await setup(['a', 'b', 'c'].map((id) => mkTask({ id })));
+      fixture.componentRef.setInput('panelCfg', listPanel({ taskIds: ['a', 'b', 'c'] }));
+      fixture.componentRef.setInput('isListLayout', true);
+      fixture.componentRef.setInput('isSection', true);
+      fixture.detectChanges();
+      const emit = spyOn(component.adjacentPanel, 'emit');
+
+      component.multiSelect.toggle('c');
+      component.multiSelect.toggle('a');
+      expect(component.moveRow('c', 'down')).toBeTrue();
+      expect(emit).toHaveBeenCalledOnceWith({
+        direction: 'down',
+        rowIndex: 0,
+        taskIds: ['a', 'c'],
+        focusTaskId: 'c',
+      });
+
+      // A selected task from another section: nothing moves, the row stays.
+      emit.calls.reset();
+      component.multiSelect.toggle('elsewhere');
+      expect(component.moveRow('c', 'down')).toBeFalse();
+      expect(emit).not.toHaveBeenCalled();
+      expect(dispatchSpy).not.toHaveBeenCalled();
+    });
+
+    it('focuses the moved row of this section, skipping rows that are animating out', async () => {
+      await setup([mkTask({ id: 'a' })]);
+      fixture.componentRef.setInput('panelCfg', listPanel());
+      fixture.componentRef.setInput('isListLayout', true);
+      fixture.componentRef.setInput('isSection', true);
+      fixture.detectChanges();
+      const host = fixture.nativeElement as HTMLElement;
+      const mkRow = (id: string, parent: HTMLElement = host): HTMLElement => {
+        const row = document.createElement('task');
+        row.dataset.taskId = id;
+        row.tabIndex = 0;
+        parent.appendChild(row);
+        return row;
+      };
+      const leaving = mkRow('a');
+      component.multiSelect.removeWhenUnrendered('a', leaving);
+      const other = mkRow('other');
+      const live = mkRow('a');
+      const nested = mkRow('sub', mkRow('parent'));
+
+      expect(component.rows()).toEqual([
+        other,
+        live,
+        host.lastElementChild as HTMLElement,
+      ]);
+
+      // Collapsed: expanded first, focused after the next render.
+      component.isSectionExpanded.set(false);
+      component.focusRow(0, 'a');
+      expect(component.isSectionExpanded()).toBeTrue();
+      fixture.detectChanges();
+      await fixture.whenStable();
+      expect(document.activeElement).toBe(live);
+
+      // Moved under its parent: the nested row, not the first one.
+      component.focusRow(0, 'sub');
+      fixture.detectChanges();
+      await fixture.whenStable();
+      expect(document.activeElement).toBe(nested);
+    });
+
     it('shows an open subtask of a done parent among the open rows', async () => {
       await setup([
         mkTask({ id: 'parent', isDone: true, subTaskIds: ['open', 'closed'] }),
@@ -1323,6 +1390,12 @@ describe('BoardPanelComponent - drop()', () => {
 
       expect(component.mainRows().map((row) => row.id)).toEqual(['open']);
       expect(component.doneRows().map((row) => row.id)).toEqual(['parent']);
+      // Not repeated inside its done parent; the row object stays stable.
+      expect(component.doneRows()[0].subTasks.map((st) => st.id)).toEqual(['closed']);
+      const doneRow = component.doneRows()[0];
+      fixture.componentRef.setInput('panelCfg', listPanel());
+      fixture.detectChanges();
+      expect(component.doneRows()[0]).toBe(doneRow);
       expect(component.isRow('open')).toBeTrue();
       expect(component.isRow('closed')).toBeFalse();
     });

@@ -63,7 +63,7 @@ import {
 import { toSignal } from '@angular/core/rxjs-interop';
 import { AddTaskInlineComponent } from '../../planner/add-task-inline/add-task-inline.component';
 import { T } from '../../../t.const';
-import { TaskCopy } from '../../tasks/task.model';
+import { TaskCopy, TaskWithSubTasks } from '../../tasks/task.model';
 import { TaskService } from '../../tasks/task.service';
 import { BoardsActions } from '../store/boards.actions';
 import { unique } from '../../../util/unique';
@@ -215,10 +215,14 @@ export class BoardPanelComponent implements TaskCardList, ViewTaskListHost {
   rows(): HTMLElement[] {
     if (this.isListLayout()) {
       // Top-level task rows of this panel (not nested subtasks). Rows of a
-      // task shown in two sections are told apart by their panel.
+      // task shown in two sections are told apart by their panel. A row that
+      // left stays in the DOM while it animates out: skip destroyed hosts.
       return Array.from(
         this._element.nativeElement.querySelectorAll<HTMLElement>('task[data-task-id]'),
-      ).filter((row) => !row.parentElement?.closest('task'));
+      ).filter(
+        (row) =>
+          !row.parentElement?.closest('task') && !this.multiSelect.isDestroyedHost(row),
+      );
     }
     return this._cards().map((card) => card.nativeElement as HTMLElement);
   }
@@ -242,11 +246,23 @@ export class BoardPanelComponent implements TaskCardList, ViewTaskListHost {
   private _focusRowNow(index: number, taskId?: string): void {
     const rows = this.rows();
     const target =
-      (taskId && rows.find((row) => row.dataset.taskId === taskId)) ||
+      (taskId &&
+        (rows.find((row) => row.dataset.taskId === taskId) ||
+          this._nestedListRow(taskId))) ||
       rows[Math.min(index, rows.length - 1)] ||
       this.addButton();
     target?.focus();
     target?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }
+
+  // A subtask moved into a section that shows its parent is nested there.
+  private _nestedListRow(taskId: string): HTMLElement | undefined {
+    if (!this.isListLayout()) return undefined;
+    return Array.from(
+      this._element.nativeElement.querySelectorAll<HTMLElement>('task[data-task-id]'),
+    ).find(
+      (row) => row.dataset.taskId === taskId && !this.multiSelect.isDestroyedHost(row),
+    );
   }
 
   navigate(taskId: string, key: TaskCardArrow): void {
@@ -807,9 +823,36 @@ export class BoardPanelComponent implements TaskCardList, ViewTaskListHost {
     { equal: fastArrayCompare },
   );
   readonly doneRows = computed(
-    () => (this._isDoneSplit() ? this._rows().filter((task) => task.isDone) : []),
+    () => {
+      if (!this._isDoneSplit()) return [];
+      const rowIds = this._rowIdSet();
+      return this._rows()
+        .filter((task) => task.isDone)
+        .map((task) => this._withoutOwnRowSubTasks(task, rowIds));
+    },
     { equal: fastArrayCompare },
   );
+  // Done rows whose open subtasks are rows of their own, without them (keyed by
+  // the cached row, so an unchanged row keeps its object).
+  private readonly _doneRowCache = new WeakMap<
+    TaskWithSubTasks,
+    { key: string; row: TaskWithSubTasks }
+  >();
+
+  /** An open subtask shown as its own row isn't repeated inside its done parent. */
+  private _withoutOwnRowSubTasks(
+    task: TaskWithSubTasks,
+    rowIds: ReadonlySet<string>,
+  ): TaskWithSubTasks {
+    if (!task.subTasks.some((sub) => rowIds.has(sub.id))) return task;
+    const subTasks = task.subTasks.filter((sub) => !rowIds.has(sub.id));
+    const key = subTasks.map((sub) => sub.id).join();
+    const cached = this._doneRowCache.get(task);
+    if (cached?.key === key) return cached.row;
+    const row = { ...task, subTasks };
+    this._doneRowCache.set(task, { key, row });
+    return row;
+  }
   // Local only, never synced: built on first expand (a view across all
   // projects can hold many done tasks).
   readonly isDoneListExpanded = signal(false);

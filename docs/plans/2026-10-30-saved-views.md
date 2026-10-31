@@ -1096,3 +1096,24 @@ recommendations adopted, see §13 "Revised after plan review". Main changes:
 - Columns has no upper cap.
 - Section collapse and the summary line are cut.
 - The Add-rule menu is flat with dividers.
+
+Phase 4 implementation review (fresh-context subagent, 2026-10-31). No
+blockers. Fixed:
+
+- Focus after a move skips rows that are still animating out, and finds the
+  moved row when it is nested under a matching parent in the target section.
+- An open subtask that is its own row is no longer repeated inside its done
+  parent in Completed. The row objects stay stable.
+- The view menu doesn't dispatch for a view without panels.
+
+Added tests for a selection's edge move and for focus into a collapsed
+section that already shows the row, plus an E2E for both.
+
+Not fixed (known gaps):
+
+- Removing a typed `+project` in the add-task bar falls back to the stale
+  context's project, as the inline add rows already do.
+- A legacy `TODAY` id in a panel's required tags doesn't show as a chip in
+  the menu.
+- Accepted sync gaps from §12: concurrent menu edits are last-write-wins on
+  the whole board, and a concurrent reorder isn't detected as a conflict.
