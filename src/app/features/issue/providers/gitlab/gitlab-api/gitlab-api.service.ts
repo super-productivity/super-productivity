@@ -26,6 +26,10 @@ import {
 } from 'rxjs/operators';
 import { GitlabIssue } from '../gitlab-issue.model';
 import {
+  getGitlabIssueSource,
+  isGitlabSourceConfigured,
+} from '../gitlab-issue-source.util';
+import {
   getPartsFromGitlabIssueId,
   mapGitlabIssue,
   mapGitlabIssueToSearchResult,
@@ -57,11 +61,14 @@ export class GitlabApiService {
   }
 
   private getScopeParam(cfg: GitlabCfg): string {
-    if (cfg.scope) {
-      return `&scope=${cfg.scope}`;
-    } else {
+    if (!cfg.scope) {
       return '';
     }
+    // The group and global /issues endpoints document only the underscore values
+    // (created_by_me, assigned_to_me); the project endpoint keeps the stored value.
+    const scope =
+      getGitlabIssueSource(cfg) === 'project' ? cfg.scope : cfg.scope.replace(/-/g, '_');
+    return `&scope=${scope}`;
   }
 
   private getCustomFilterParam(cfg: GitlabCfg): string {
@@ -126,7 +133,7 @@ export class GitlabApiService {
     // burst of thousands of requests that GitLab rate-limited with a 429 — see #9034.
     return this._sendIssueRequestFirstPage$(
       {
-        url: `${this._apiLink(cfg)}/issues?search=${encodeURIComponent(searchText)}${this.getScopeParam(
+        url: `${this._issuesListLink(cfg)}?search=${encodeURIComponent(searchText)}${this.getScopeParam(
           cfg,
         )}&order_by=updated_at${this.getCustomFilterParam(cfg)}`,
       },
@@ -137,9 +144,7 @@ export class GitlabApiService {
   getProjectIssues$(cfg: GitlabCfg): Observable<GitlabIssue[]> {
     return this._sendIssuePaginatedRequest$(
       {
-        url: `${this._apiLink(
-          cfg,
-        )}/issues?state=opened&order_by=updated_at&${this.getScopeParam(
+        url: `${this._issuesListLink(cfg)}?state=opened&order_by=updated_at&${this.getScopeParam(
           cfg,
         )}${this.getCustomFilterParam(cfg)}`,
       },
@@ -210,7 +215,7 @@ export class GitlabApiService {
   }
 
   private _isValidSettings(cfg: GitlabCfg): boolean {
-    if (cfg && cfg.project && cfg.project.length > 0) {
+    if (cfg && isGitlabSourceConfigured(cfg)) {
       return true;
     }
     this._snackService.open({
@@ -335,24 +340,33 @@ export class GitlabApiService {
     return `${this._projectApiLink(cfg, project)}/issues/${projectIssueId}`;
   }
 
-  private _projectApiLink(cfg: GitlabCfg, project: string): string {
-    let apiURL: string = '';
-
+  private _baseApiLink(cfg: GitlabCfg): string {
     if (cfg.gitlabBaseUrl) {
       const fixedUrl = cfg.gitlabBaseUrl.match(/.*\/$/)
         ? cfg.gitlabBaseUrl
         : `${cfg.gitlabBaseUrl}/`;
-      apiURL = fixedUrl + 'api/v4/';
-    } else {
-      apiURL = GITLAB_API_BASE_URL + '/';
+      return fixedUrl + 'api/v4/';
     }
-
-    const projectURL = assertTruthy(project).toString().replace(/\//gi, '%2F');
-    apiURL += 'projects/' + projectURL;
-    return apiURL;
+    return GITLAB_API_BASE_URL + '/';
   }
 
-  private _apiLink(cfg: GitlabCfg): string {
-    return this._projectApiLink(cfg, assertTruthy(cfg.project));
+  private _projectApiLink(cfg: GitlabCfg, project: string): string {
+    const projectURL = assertTruthy(project).toString().replace(/\//gi, '%2F');
+    return this._baseApiLink(cfg) + 'projects/' + projectURL;
+  }
+
+  // Issue list endpoint for the configured source: one project, one group, or
+  // every issue the token can access.
+  private _issuesListLink(cfg: GitlabCfg): string {
+    switch (getGitlabIssueSource(cfg)) {
+      case 'all':
+        return this._baseApiLink(cfg) + 'issues';
+      case 'group': {
+        const groupURL = assertTruthy(cfg.group).toString().replace(/\//gi, '%2F');
+        return `${this._baseApiLink(cfg)}groups/${groupURL}/issues`;
+      }
+      default:
+        return `${this._projectApiLink(cfg, assertTruthy(cfg.project))}/issues`;
+    }
   }
 }

@@ -18,9 +18,11 @@
     </div>
   }
 
-  <h3>
-    For gitlab project: <strong>{{ (issueProviderCfg$ | async)?.project }}</strong>
-  </h3>
+  @if (sourceHeading$ | async; as heading) {
+    <h3>
+      {{ heading.labelKey | translate }} <strong>{{ heading.name }}</strong>
+    </h3>
+  }
 
   <div class="table-wrapper">
     <table
