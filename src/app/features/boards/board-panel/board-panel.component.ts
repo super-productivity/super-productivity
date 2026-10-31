@@ -38,6 +38,14 @@ import {
 import { DateAdapter } from '@angular/material/core';
 import { MenuTreeService } from '../../menu-tree/menu-tree.service';
 import { TODAY_TAG } from '../../tag/tag.const';
+import {
+  mapIdsToTasksWithSubTasks,
+  selectTaskFeatureState,
+  TaskWithSubTasksCache,
+} from '../../tasks/store/task.selectors';
+import { TaskListComponent } from '../../tasks/task-list/task-list.component';
+import { CollapsibleComponent } from '../../../ui/collapsible/collapsible.component';
+import { VIEW_TASK_LIST, ViewTaskListHost } from '../../tasks/view-task-list.token';
 import { selectAllTags } from '../../tag/store/tag.reducer';
 import { getDeadlineAutoPlanFields } from '../../tasks/util/get-deadline-auto-plan-fields';
 import { Store } from '@ngrx/store';
@@ -118,24 +126,31 @@ export interface BoardPanelNavigation {
     TranslatePipe,
     ShortPlannedAtPipe,
     MsToStringPipe,
+    TaskListComponent,
+    CollapsibleComponent,
   ],
   templateUrl: './board-panel.component.html',
   styleUrl: './board-panel.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
   providers: [
     { provide: TASK_CARD_LIST, useExisting: forwardRef(() => BoardPanelComponent) },
+    // Read by the task rows and task lists of the list layout only.
+    { provide: VIEW_TASK_LIST, useExisting: forwardRef(() => BoardPanelComponent) },
   ],
   host: {
-    // Angular host bindings use template attribute syntax.
+    // Angular host bindings use template attribute syntax. The list layout
+    // drops the board scope, so multi-select scopes to its task list.
     // eslint-disable-next-line @typescript-eslint/naming-convention
-    '[attr.data-board-selection-scope]': 'panelCfg().id',
+    '[attr.data-board-selection-scope]': 'isListLayout() ? null : panelCfg().id',
   },
 })
-export class BoardPanelComponent implements TaskCardList {
+export class BoardPanelComponent implements TaskCardList, ViewTaskListHost {
   T = T;
   dragDelayForTouch = dragDelayForTouch;
 
   panelCfg = input.required<BoardPanelCfg>();
+  // One-column views show task rows (`task-list`) instead of cards.
+  isListLayout = input<boolean>(false);
   editBoard = output<void>();
   adjacentPanel = output<BoardPanelNavigation>();
 
@@ -703,6 +718,110 @@ export class BoardPanelComponent implements TaskCardList {
           .map((tag, index) => [tag.id, index]),
       ),
   );
+
+  // === LIST LAYOUT (ViewTaskListHost) ===
+
+  // Built through a long-lived cache: the task list re-emits every second
+  // while time is tracked, and untouched rows must keep their object so they
+  // don't re-render (the task row is the hot path).
+  private readonly _taskState = this.store.selectSignal(selectTaskFeatureState);
+  private readonly _rowCache: TaskWithSubTasksCache = new Map();
+
+  /**
+   * Top-level rows: a matching task, unless its parent matches too (then it
+   * shows under the parent). A row's parent carries all its subtasks, like a
+   * project list; a subtask whose parent doesn't match is a row of its own.
+   */
+  private readonly _rowIds = computed(
+    () => {
+      const tasks = this.tasks();
+      const matching = new Set(tasks.map((task) => task.id));
+      return tasks
+        .filter((task) => !task.parentId || !matching.has(task.parentId))
+        .map((task) => task.id);
+    },
+    { equal: fastArrayCompare },
+  );
+  private readonly _rowIdSet = computed(() => new Set(this._rowIds()));
+  private readonly _rows = computed(
+    () =>
+      mapIdsToTasksWithSubTasks(
+        this._rowIds(),
+        this._taskState()?.entities ?? {},
+        this._rowCache,
+      ),
+    { equal: fastArrayCompare },
+  );
+  // Done rows get their own collapsed section, unless the column only shows
+  // done tasks anyway.
+  private readonly _isDoneSplit = computed(
+    () => this.panelCfg().taskDoneState !== BoardPanelCfgTaskDoneState.Done,
+  );
+  readonly mainRows = computed(
+    () =>
+      this._isDoneSplit() ? this._rows().filter((task) => !task.isDone) : this._rows(),
+    { equal: fastArrayCompare },
+  );
+  readonly doneRows = computed(
+    () => (this._isDoneSplit() ? this._rows().filter((task) => task.isDone) : []),
+    { equal: fastArrayCompare },
+  );
+  // Local only, never synced: built on first expand (a view across all
+  // projects can hold many done tasks).
+  readonly isDoneListExpanded = signal(false);
+  readonly tagsToHide = computed(() => this.panelCfg().includedTagIds ?? []);
+  readonly headerCount = computed(() =>
+    this.isListLayout() ? this.mainRows().length : this.tasks().length,
+  );
+
+  isRow(taskId: string): boolean {
+    return this._rowIdSet().has(taskId);
+  }
+
+  placeRow(taskId: string, afterTaskId: string | null): void {
+    const isOwnRow = this.isRow(taskId);
+    if (isOwnRow && !this.isManualOrder()) {
+      return;
+    }
+    // The panel's order covers all its tasks (subtasks and done ones too):
+    // place after the anchor in that order.
+    const remaining = this.tasks()
+      .map((task) => task.id)
+      .filter((id) => id !== taskId);
+    const index = afterTaskId ? remaining.indexOf(afterTaskId) + 1 : 0;
+    if (isOwnRow) {
+      this._placeInOrder([taskId], index);
+    } else {
+      // From another column of the view: through this column's rules.
+      void this.moveTasks([taskId], index);
+    }
+  }
+
+  moveRow(taskId: string, to: 'up' | 'down' | 'top' | 'bottom'): void {
+    if (!this.isManualOrder()) {
+      return;
+    }
+    const task = this._rows().find((row) => row.id === taskId);
+    // Rows move within their section (open or done).
+    const rows = (
+      task?.isDone && this._isDoneSplit() ? this.doneRows() : this.mainRows()
+    ).map((row) => row.id);
+    const i = rows.indexOf(taskId);
+    if (i === -1) {
+      return;
+    }
+    const others = rows.filter((id) => id !== taskId);
+    const targetIndex =
+      to === 'top'
+        ? 0
+        : to === 'bottom'
+          ? others.length
+          : Math.max(0, Math.min(others.length, i + (to === 'up' ? -1 : 1)));
+    if (targetIndex === i) {
+      return;
+    }
+    this.placeRow(taskId, targetIndex > 0 ? others[targetIndex - 1] : null);
+  }
 
   _isTaskInBacklog(task: Readonly<TaskCopy>): boolean {
     return this.allBacklogTaskIds().has(task.parentId || task.id);

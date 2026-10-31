@@ -489,6 +489,41 @@ time tracking, context menu) instead of board cards.
   keyboard persists after reload, the Today buttons don't depend on the list
   opened before.
 
+### Revised after plan review (2026-10-31)
+
+- **Re-renders (blocker).** The panel's task list emits every second while a
+  task tracks time. Rows are built through a panel-owned
+  `TaskWithSubTasksCache` (the logic of `selectTasksWithSubTasksByIdsFactory`,
+  extracted as a pure helper) and the row computeds are array-equal, so
+  untouched rows keep their object. The done section's list renders only once
+  it is expanded (local state, never a synced field).
+- **Only a single-panel, one-column view is a list.** Tried first: every
+  panel of any `cols <= 1` board as a list. Dropped, because custom boards
+  default to `cols: 1`, so every existing stacked board would silently turn
+  from cards into lists and lose its keyboard moves between panels. Adding a
+  second panel shows cards again (the editor makes that visible). The host's
+  `placeRow` still handles a task from another panel via the column rules.
+- **What counts as a view row** is what is rendered top-level
+  (`host.isRow(id)`), not `!parentId`: a subtask shown on its own reorders the
+  view. Keyboard move up/down/top/bottom and the context menu's "Move to
+  top/bottom" both go through the token, before the done-task early return.
+- **Placement** goes by anchor (`afterTaskId`), converted to the panel's own
+  index space; the token carries callbacks (`placeRow`, `moveRow`, `isRow`,
+  `tagsToHide`, `isManualOrder`), so `tasks/` imports nothing from `boards/`.
+- **Drop predicate:** the `VIEW` check comes first and keys on
+  `drop.data.listModelId`; it accepts only drags from a `VIEW` list, and never
+  a multi-selection (one behaviour whatever list was open before). `VIEW` and
+  `VIEW_DONE` are reserved list ids; `VIEW_DONE` accepts nothing. A drop into
+  a sorted panel's own list does nothing.
+- **Multi-select:** in list mode the panel drops its
+  `data-board-selection-scope` host attribute, so Shift-range and Ctrl+A use
+  the task list as scope.
+- **Chips:** rows in a view show the project chip and hide the tags the column
+  requires (like the cards), not the previously open context's.
+- **Empty state** ("No tasks match this view") and a header count of rows.
+- **Known gap:** the multi-select bar's and bulk shortcut's "move to backlog"
+  still follow the active context (as on card views today).
+
 ## Review
 
 Plan review (fresh-context subagent, 2026-10-30). Fixed in this revision:

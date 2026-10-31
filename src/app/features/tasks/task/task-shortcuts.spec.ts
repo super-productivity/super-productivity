@@ -1,4 +1,11 @@
-import { signal, WritableSignal } from '@angular/core';
+import {
+  createComponent,
+  EnvironmentInjector,
+  Injector,
+  signal,
+  WritableSignal,
+} from '@angular/core';
+import { VIEW_TASK_LIST, ViewTaskListHost } from '../view-task-list.token';
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { Location } from '@angular/common';
 import { MatDialog, MatDialogState } from '@angular/material/dialog';
@@ -1067,6 +1074,46 @@ describe('TaskComponent shortcut handling', () => {
       component.onToggleDetailPanelBtnClick();
 
       expect(taskServiceSpy.setSelectedId).toHaveBeenCalledWith(null);
+    });
+  });
+
+  describe('inside a view (VIEW_TASK_LIST)', () => {
+    const createInView = (
+      host: Partial<ViewTaskListHost>,
+    ): { component: TaskComponent; destroy: () => void } => {
+      const ref = createComponent(TaskComponent, {
+        environmentInjector: TestBed.inject(EnvironmentInjector),
+        elementInjector: Injector.create({
+          providers: [{ provide: VIEW_TASK_LIST, useValue: host }],
+        }),
+      });
+      ref.setInput('task', createTopLevelTask('In a view'));
+      return { component: ref.instance, destroy: () => ref.destroy() };
+    };
+
+    it('reorders the view, not the list that was open before', () => {
+      const moveRow = jasmine.createSpy('moveRow');
+      const { component: inView, destroy } = createInView({
+        isRow: () => true,
+        moveRow,
+      });
+
+      inView.moveTaskUp();
+      inView.moveTaskToBottom();
+
+      expect(moveRow.calls.allArgs()).toEqual([
+        ['top-1', 'up'],
+        ['top-1', 'bottom'],
+      ]);
+      expect(taskServiceSpy.moveUp).not.toHaveBeenCalled();
+      destroy();
+    });
+
+    it('never treats the view as the Today list and has no backlog key', () => {
+      const { component: inView, destroy } = createInView({ isRow: () => true });
+      expect(inView.isTodayListActive()).toBeFalse();
+      expect(inView.isInView).toBeTrue();
+      destroy();
     });
   });
 });

@@ -31,6 +31,7 @@ import {
 import { MatDivider } from '@angular/material/divider';
 import { ESTIMATE_OPTIONS } from '../../add-task-bar/add-task-bar.const';
 import { Task, TaskPriority, TaskWithSubTasks } from '../../task.model';
+import { VIEW_TASK_LIST } from '../../view-task-list.token';
 import { from, Observable, of, ReplaySubject, Subject } from 'rxjs';
 import {
   delay,
@@ -225,11 +226,14 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
   projectFolderMap = computed(() => this._menuTreeService.projectFolderMap());
   tagFolderMap = computed(() => this._menuTreeService.tagFolderMap());
 
-  isShowMoveFromAndToBacklogBtns$: Observable<boolean> =
-    this._workContextService.activeWorkContext$.pipe(
-      take(1),
-      map((ctx) => !!ctx.isEnableBacklog),
-    );
+  // In a view the active context is stale and there's no backlog of its own.
+  private readonly _viewTaskList = inject(VIEW_TASK_LIST, { optional: true });
+  isShowMoveFromAndToBacklogBtns$: Observable<boolean> = this._viewTaskList
+    ? of(false)
+    : this._workContextService.activeWorkContext$.pipe(
+        take(1),
+        map((ctx) => !!ctx.isEnableBacklog),
+      );
 
   private _destroy$: Subject<boolean> = new Subject<boolean>();
   private _isTaskDeleteTriggered: boolean = false;
@@ -622,10 +626,18 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
   }
 
   moveToTop(): void {
+    if (this._viewTaskList?.isRow(this.task.id)) {
+      this._viewTaskList.moveRow(this.task.id, 'top');
+      return;
+    }
     this._taskService.moveToTop(this.task.id, this.task.parentId, this.isBacklog);
   }
 
   moveToBottom(): void {
+    if (this._viewTaskList?.isRow(this.task.id)) {
+      this._viewTaskList.moveRow(this.task.id, 'bottom');
+      return;
+    }
     this._taskService.moveToBottom(this.task.id, this.task.parentId, this.isBacklog);
   }
 

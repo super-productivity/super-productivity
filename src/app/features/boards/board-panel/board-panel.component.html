@@ -1,12 +1,12 @@
 <header>
   <div class="title">{{ panelCfg().title | translate }}</div>
-  @if (tasks().length) {
+  @if (headerCount()) {
     <div class="tasks-total-estimate">
       @if (totalEstimate()) {
         <!-- placeholder hidden: the pipe renders '-' for any sub-minute total -->
         <span>{{ totalEstimate() | msToString: false : true }}</span>
       }
-      <mat-icon>task_alt</mat-icon>{{ tasks().length }}
+      <mat-icon>task_alt</mat-icon>{{ headerCount() }}
     </div>
   }
   <button
@@ -33,59 +33,88 @@
   ></add-task-inline>
 }
 
-<div
-  class="task-items"
-  cdkDropList
-  [cdkDropListData]="tasks()"
-  [cdkDropListSortingDisabled]="!isManualOrder()"
-  [cdkDropListEnterPredicate]="canEnter"
-  (cdkDropListDropped)="drop($event)"
->
-  @for (task of tasks(); track task.id) {
-    <planner-task
-      cdkDrag
-      [cdkDragData]="task"
-      [cdkDragStartDelay]="dragDelayForTouch()"
-      [task]="task"
-      [focusable]="true"
-      [cdkDragDisabled]="isMoving() || multiSelect.isTouchSelectionMode()"
-      [tagsToHide]="panelCfg().includedTagIds || []"
+@if (isListLayout()) {
+  <!-- Rows reorder the view through VIEW_TASK_LIST (see BoardPanelComponent). -->
+  <task-list
+    class="view-task-list"
+    [tasks]="mainRows()"
+    listId="PARENT"
+    listModelId="VIEW"
+    [isSortingDisabled]="!isManualOrder()"
+    [noTasksMsg]="T.F.BOARDS.V.NO_TASKS_IN_VIEW | translate"
+  ></task-list>
+  @if (doneRows().length) {
+    <collapsible
+      [title]="(T.WW.DONE_TASKS | translate) + ' (' + doneRows().length + ')'"
+      [isIconBefore]="true"
+      [isExpanded]="isDoneListExpanded()"
+      (isExpandedChange)="isDoneListExpanded.set($event)"
     >
-      @if (task.remindAt) {
-        <button
-          task-card-trailing
-          (click)="scheduleTask(task, $event)"
-          [title]="T.F.TASK.CMP.EDIT_SCHEDULED | translate"
-          class="ico-btn schedule-btn"
-          [attr.data-scheduled-date-color]="scheduledDateColor(task)"
-          color=""
-          mat-icon-button
-        >
-          <mat-icon>alarm</mat-icon>
-          <div
-            class="time-badge"
-            [innerHTML]="task.dueWithTime | shortPlannedAt"
-          ></div>
-        </button>
+      @if (isDoneListExpanded()) {
+        <task-list
+          [tasks]="doneRows()"
+          listId="PARENT"
+          listModelId="VIEW_DONE"
+          [isSortingDisabled]="true"
+        ></task-list>
       }
-      @if (task.dueDay) {
-        <button
-          task-card-trailing
-          (click)="scheduleTask(task, $event)"
-          [title]="T.F.TASK.CMP.SCHEDULE | translate"
-          class="ico-btn schedule-btn"
-          [attr.data-scheduled-date-color]="scheduledDateColor(task)"
-          color=""
-          mat-icon-button
-        >
-          <mat-icon>today</mat-icon>
-          <div class="time-badge">{{ task.dueDay | localDateStr }}</div>
-        </button>
-      }
-    </planner-task>
+    </collapsible>
   }
+} @else {
+  <div
+    class="task-items"
+    cdkDropList
+    [cdkDropListData]="tasks()"
+    [cdkDropListSortingDisabled]="!isManualOrder()"
+    [cdkDropListEnterPredicate]="canEnter"
+    (cdkDropListDropped)="drop($event)"
+  >
+    @for (task of tasks(); track task.id) {
+      <planner-task
+        cdkDrag
+        [cdkDragData]="task"
+        [cdkDragStartDelay]="dragDelayForTouch()"
+        [task]="task"
+        [focusable]="true"
+        [cdkDragDisabled]="isMoving() || multiSelect.isTouchSelectionMode()"
+        [tagsToHide]="panelCfg().includedTagIds || []"
+      >
+        @if (task.remindAt) {
+          <button
+            task-card-trailing
+            (click)="scheduleTask(task, $event)"
+            [title]="T.F.TASK.CMP.EDIT_SCHEDULED | translate"
+            class="ico-btn schedule-btn"
+            [attr.data-scheduled-date-color]="scheduledDateColor(task)"
+            color=""
+            mat-icon-button
+          >
+            <mat-icon>alarm</mat-icon>
+            <div
+              class="time-badge"
+              [innerHTML]="task.dueWithTime | shortPlannedAt"
+            ></div>
+          </button>
+        }
+        @if (task.dueDay) {
+          <button
+            task-card-trailing
+            (click)="scheduleTask(task, $event)"
+            [title]="T.F.TASK.CMP.SCHEDULE | translate"
+            class="ico-btn schedule-btn"
+            [attr.data-scheduled-date-color]="scheduledDateColor(task)"
+            color=""
+            mat-icon-button
+          >
+            <mat-icon>today</mat-icon>
+            <div class="time-badge">{{ task.dueDay | localDateStr }}</div>
+          </button>
+        }
+      </planner-task>
+    }
 
-  <!--  @if (tasks().length === 0) {-->
-  <!--    <div class="empty">{{ T.F.PLANNER.NO_TASKS | translate }}</div>-->
-  <!--  }-->
-</div>
+    <!--  @if (tasks().length === 0) {-->
+    <!--    <div class="empty">{{ T.F.PLANNER.NO_TASKS | translate }}</div>-->
+    <!--  }-->
+  </div>
+}

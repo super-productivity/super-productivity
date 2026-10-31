@@ -19,10 +19,13 @@ import { selectUnarchivedProjects } from '../../project/store/project.selectors'
 import {
   selectAllTasksInActiveProjects,
   selectTaskById,
+  selectTaskFeatureState,
 } from '../../tasks/store/task.selectors';
 import { WorkContextService } from '../../work-context/work-context.service';
 import { ProjectService } from '../../project/project.service';
-import { signal } from '@angular/core';
+import { NO_ERRORS_SCHEMA, signal } from '@angular/core';
+import { TaskListComponent } from '../../tasks/task-list/task-list.component';
+import { CollapsibleComponent } from '../../../ui/collapsible/collapsible.component';
 import type { Signal, WritableSignal } from '@angular/core';
 import { selectTodayStr } from '../../../root-store/app-state/app-state.selectors';
 import { TODAY_TAG } from '../../tag/tag.const';
@@ -881,7 +884,11 @@ describe('BoardPanelComponent - drop()', () => {
     snackOpenSpy = jasmine.createSpy('open');
 
     const storeMock = {
-      selectSignal: daySelectSignal,
+      // The list layout builds rows from the task entities.
+      selectSignal: (selector: unknown) =>
+        selector === selectTaskFeatureState
+          ? signal({ entities: Object.fromEntries(tasks.map((task) => [task.id, task])) })
+          : daySelectSignal(selector),
       select: (selectorFn: any, props?: { id: string }) => {
         if (selectorFn === selectUnarchivedProjects)
           return of([{ id: 'p1', backlogTaskIds: [] }]);
@@ -920,6 +927,11 @@ describe('BoardPanelComponent - drop()', () => {
         { provide: SnackService, useValue: { open: snackOpenSpy } },
       ],
     })
+      // The list layout's rows are covered by the task-list and task specs.
+      .overrideComponent(BoardPanelComponent, {
+        remove: { imports: [TaskListComponent, CollapsibleComponent] },
+        add: { schemas: [NO_ERRORS_SCHEMA] },
+      })
       .overrideComponent(PlannerTaskComponent, {
         set: { template: '<div>Mock Task</div>', inputs: ['task'] },
       })
@@ -1187,6 +1199,78 @@ describe('BoardPanelComponent - drop()', () => {
     expect(dispatchSpy).not.toHaveBeenCalled();
     expect(dispatchedTagIds()).toEqual([]);
     expect(component.isMoving()).toBeFalse();
+  });
+
+  describe('list layout', () => {
+    const listPanel = (overrides: Partial<BoardPanelCfg> = {}): BoardPanelCfg =>
+      ({ ...DEFAULT_PANEL_CFG, id: 'p', taskIds: [], ...overrides }) as BoardPanelCfg;
+
+    it('shows parents with their subtasks, lone subtasks as rows, done tasks apart', async () => {
+      const tasks = [
+        mkTask({ id: 'parent', subTaskIds: ['child'] }),
+        mkTask({ id: 'child', parentId: 'parent' }),
+        mkTask({ id: 'lone', parentId: 'otherParent' }),
+        mkTask({ id: 'done', isDone: true }),
+      ];
+      await setup(tasks);
+      fixture.componentRef.setInput('panelCfg', listPanel());
+      fixture.componentRef.setInput('isListLayout', true);
+      fixture.detectChanges();
+
+      expect(component.mainRows().map((row) => row.id)).toEqual(['parent', 'lone']);
+      expect(component.mainRows()[0].subTasks.map((st) => st.id)).toEqual(['child']);
+      expect(component.doneRows().map((row) => row.id)).toEqual(['done']);
+      expect(component.isRow('lone')).toBeTrue();
+      expect(component.isRow('child')).toBeFalse();
+      expect(component.headerCount()).toBe(2);
+      // Multi-select scopes to the task list, not the board.
+      expect(fixture.nativeElement.getAttribute('data-board-selection-scope')).toBeNull();
+    });
+
+    it('keeps row objects when nothing about them changed', async () => {
+      await setup([mkTask({ id: 'a' }), mkTask({ id: 'b' })]);
+      fixture.componentRef.setInput('panelCfg', listPanel());
+      fixture.componentRef.setInput('isListLayout', true);
+      fixture.detectChanges();
+      const before = component.mainRows();
+
+      // A new panel config object (e.g. a re-emit) rebuilds the computeds.
+      fixture.componentRef.setInput('panelCfg', listPanel());
+      fixture.detectChanges();
+
+      expect(component.mainRows()).toBe(before);
+    });
+
+    it('reorders rows in the view order, by anchor and by keyboard move', async () => {
+      await setup(['a', 'b', 'c'].map((id) => mkTask({ id })));
+      fixture.componentRef.setInput('panelCfg', listPanel({ taskIds: ['a', 'b', 'c'] }));
+      fixture.componentRef.setInput('isListLayout', true);
+      fixture.detectChanges();
+
+      component.placeRow('c', null);
+      expect(dispatchSpy).toHaveBeenCalledWith(
+        BoardsActions.updatePanelCfgTaskIds({ panelId: 'p', taskIds: ['c', 'a', 'b'] }),
+      );
+      component.moveRow('a', 'down');
+      expect(dispatchSpy).toHaveBeenCalledWith(
+        BoardsActions.updatePanelCfgTaskIds({ panelId: 'p', taskIds: ['b', 'a', 'c'] }),
+      );
+      component.moveRow('a', 'bottom');
+      expect(dispatchSpy).toHaveBeenCalledWith(
+        BoardsActions.updatePanelCfgTaskIds({ panelId: 'p', taskIds: ['b', 'c', 'a'] }),
+      );
+    });
+
+    it("leaves a sorted column's order alone", async () => {
+      await setup(['a', 'b'].map((id) => mkTask({ id })));
+      fixture.componentRef.setInput('panelCfg', listPanel({ sortBy: 'title' }));
+      fixture.componentRef.setInput('isListLayout', true);
+      fixture.detectChanges();
+
+      component.moveRow('a', 'down');
+      component.placeRow('b', null);
+      expect(dispatchSpy).not.toHaveBeenCalled();
+    });
   });
 
   describe('due date rule', () => {

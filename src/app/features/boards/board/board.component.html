@@ -37,6 +37,7 @@
   @for (panel of boardCfg().panels; track panel.id) {
     <board-panel
       [panelCfg]="panel"
+      [isListLayout]="isListLayout()"
       (editBoard)="editBoard()"
       (adjacentPanel)="adjacentPanel(panel.id, $event)"
     ></board-panel>

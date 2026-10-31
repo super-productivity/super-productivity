@@ -86,6 +86,13 @@ export class BoardComponent {
     target.focusRow(event.rowIndex, event.focusTaskId ?? event.taskIds?.[0]);
   }
 
+  // A view with one column and one panel reads like a task list: task rows
+  // instead of cards. Boards with several panels keep their cards (and their
+  // keyboard moves between panels), however many columns they have.
+  readonly isListLayout = computed(
+    () => this.boardCfg().cols <= 1 && this.boardCfg().panels.length === 1,
+  );
+
   allExistingTagIds = toSignal(this._store.select(selectAllTagIds), { initialValue: [] });
 
   missingTagIds = computed(() => {

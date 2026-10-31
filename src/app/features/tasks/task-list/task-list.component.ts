@@ -62,6 +62,7 @@ import { DateService } from '../../../core/date/date.service';
 import { canDropTaskIntoSubTaskList } from '../util/can-convert-task-to-sub-task';
 import { TODAY_TAG } from '../../tag/tag.const';
 import { TaskMultiSelectService } from '../task-multi-select.service';
+import { VIEW_TASK_LIST } from '../view-task-list.token';
 
 export type TaskListId = 'PARENT' | 'SUB';
 export type ListModelId = DropListModelSource | string;
@@ -86,6 +87,8 @@ const RESERVED_LIST_IDS = new Set<string>([
   'BACKLOG',
   'LATER_TODAY',
   'ADD_TASK_PANEL',
+  'VIEW',
+  'VIEW_DONE',
 ] satisfies DropListModelSource[]);
 const PARENT_ALLOWED_LISTS = ['DONE', 'UNDONE', 'OVERDUE', 'BACKLOG', 'ADD_TASK_PANEL'];
 
@@ -132,6 +135,8 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
   private _layoutService = inject(LayoutService);
   protected readonly dragDelayForTouch = dragDelayForTouch;
   private readonly _taskMultiSelectService = inject(TaskMultiSelectService);
+  // Set inside a view's column: its lists order the view, not the open context.
+  private readonly _viewTaskList = inject(VIEW_TASK_LIST, { optional: true });
   protected readonly isTouchSelectionMode =
     this._taskMultiSelectService.isTouchSelectionMode;
   // Lock Y-axis on small screens only — on wider screens the task list may sit
@@ -264,6 +269,17 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
     // A section dragged by its header (see the work view's acceptSectionDragOnly)
     // is not a task: no task list takes it, so it snaps back (#10866).
     if (drag.data && 'contextType' in drag.data) return false;
+    // A view's lists come first: whatever list was open before must not
+    // matter. Rows move only between a view's lists, one task at a time (a
+    // multi-selection is moved by keyboard); the done rows take no drops.
+    if (drop.data.listModelId === 'VIEW_DONE') return false;
+    if (drop.data.listModelId === 'VIEW') {
+      const selected = this._taskMultiSelectService.selectedIds();
+      return (
+        drag.dropContainer?.data?.listModelId === 'VIEW' &&
+        !(selected.size > 1 && selected.has(drag.data?.id))
+      );
+    }
     if (this.multiDrag.isListGroupDrag())
       return this.multiDrag.canDrop(
         drop.data.listId,
@@ -474,6 +490,16 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
       return;
     }
 
+    if (targetListData.listModelId === 'VIEW') {
+      this._dropIntoView(
+        draggedTask.id,
+        ev.currentIndex,
+        targetListData,
+        ev.previousContainer === ev.container,
+      );
+      return;
+    }
+
     // Grouped-by-tag view: dropping a task into a *different* tag group
     // reassigns its tags instead of reordering. `groupTagId` is defined only for
     // lists inside that view; a string is a retag target (a real tagId → move:
@@ -604,6 +630,27 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
     );
 
     this._taskViewCustomizerService.setSort(DEFAULT_OPTIONS.sort);
+  }
+
+  /**
+   * A drop into a view's list: placed by the row before it, in the view's own
+   * order (or moved in through the column's rules from another column).
+   */
+  private _dropIntoView(
+    taskId: string,
+    currentIndex: number,
+    targetListData: DropModelDataForList,
+    isSameList: boolean,
+  ): void {
+    const host = this._viewTaskList;
+    // A sorted column's own rows keep the sort.
+    if (!host || (isSameList && !host.isManualOrder())) {
+      return;
+    }
+    const others = targetListData.filteredTasks.filter((task) => task.id !== taskId);
+    const afterTaskId = currentIndex > 0 ? (others[currentIndex - 1]?.id ?? null) : null;
+    this.dropListService.blockAniTrigger$.next();
+    host.placeRow(taskId, afterTaskId);
   }
 
   async _addFromIssuePanel(

@@ -16,7 +16,7 @@ const viewIdFromUrl = (page: Page): string => {
   return id;
 };
 
-/** Creates a one-column-per-panel view with the given panel titles. */
+/** Creates a view with the given panels stacked in one column. */
 const createView = async (
   page: Page,
   title: string,
@@ -143,14 +143,53 @@ test.describe('View rules', () => {
     await expect(page).toHaveURL(/#\/boards\/[^/]+$/);
     const column = page.locator('boards board-panel');
     await expect(column).toHaveCount(1);
-    await expect(
-      column.locator('planner-task').filter({ hasText: unplanned }),
-    ).toHaveCount(1);
-    await expect(column.locator('planner-task').filter({ hasText: planned })).toHaveCount(
-      0,
-    );
-    // One column reads like a list.
+    // One column: task rows, like the list it came from.
+    await expect(column.locator('task').filter({ hasText: unplanned })).toHaveCount(1);
+    await expect(column.locator('task').filter({ hasText: planned })).toHaveCount(0);
+    await expect(column.locator('planner-task')).toHaveCount(0);
     await expect(page.locator('boards board')).toHaveClass(/isSingleColumn/);
+  });
+
+  test('a one-column view lists task rows and keeps a keyboard reorder', async ({
+    page,
+    workViewPage,
+    testPrefix,
+  }) => {
+    await page.goto('/#/project/INBOX_PROJECT/tasks');
+    await workViewPage.waitForTaskList();
+    const first = `${testPrefix}-First`;
+    const second = `${testPrefix}-Second`;
+    await workViewPage.addTask(first);
+    await workViewPage.addTask(second);
+
+    await createView(page, `${testPrefix}-List`, ['Mine'], async (form) => {
+      // Only this test's tasks, in the order they were added.
+      await pickOption(page, form, 'Sort by', 0, 'Created');
+    });
+    const rows = page.locator('boards board-panel task');
+    const titles = async (): Promise<string[]> =>
+      (await rows.locator('task-title').allInnerTexts())
+        .map((title) => title.trim())
+        .filter((title) => title.startsWith(testPrefix));
+    await expect.poll(titles).toEqual([first, second]);
+
+    // Back to manual order, then move the second row up with the keyboard.
+    await page
+      .locator('page-title .page-title-actions')
+      .getByRole('button', { name: 'More actions' })
+      .click();
+    await page.getByRole('menuitem', { name: 'Edit' }).click();
+    const dialog = page.locator('dialog-board-edit');
+    await pickOption(page, dialog.locator('board-edit'), 'Sort by', 0, 'Manual');
+    await dialog.getByRole('button', { name: 'Save', exact: true }).click();
+    await expect(dialog).toBeHidden();
+
+    await rows.filter({ hasText: second }).first().focus();
+    await page.keyboard.press('Control+Shift+ArrowUp');
+    await expect.poll(titles).toEqual([second, first]);
+
+    await page.reload();
+    await expect.poll(titles).toEqual([second, first]);
   });
 
   test('the title bar menu duplicates and deletes the open view', async ({

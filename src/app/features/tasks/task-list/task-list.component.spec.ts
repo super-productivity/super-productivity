@@ -12,13 +12,12 @@ import { ScheduleExternalDragService } from '../../schedule/schedule-week/schedu
 import { DropListService } from '../../../core-ui/drop-list/drop-list.service';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { of } from 'rxjs';
-import { TaskWithSubTasks } from '../task.model';
 import { SectionService } from '../../section/section.service';
 import { moveSubTask } from '../store/task.actions';
 import { moveTaskInTodayList } from '../../work-context/store/work-context-meta.actions';
 import { WorkContextType } from '../../work-context/work-context.model';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
-import { Task } from '../task.model';
+import { Task, TaskWithSubTasks } from '../task.model';
 import { Section } from '../../section/section.model';
 
 describe('TaskListComponent', () => {
@@ -144,6 +143,66 @@ describe('TaskListComponent', () => {
     fixture.componentRef.setInput('listId', 'PARENT');
     fixture.componentRef.setInput('listModelId', 'UNDONE');
     fixture.detectChanges();
+  });
+
+  describe("a view's lists (VIEW / VIEW_DONE)", () => {
+    const dragFrom = (task: MockDragTask, sourceModelId: unknown): CdkDrag =>
+      ({
+        data: task,
+        dropContainer: { data: { listId: 'PARENT', listModelId: sourceModelId } },
+      }) as unknown as CdkDrag;
+
+    it('accepts rows of a view, subtasks shown on their own included', () => {
+      expect(
+        component.enterPredicate(dragFrom({ id: 'a' }, 'VIEW'), createMockDrop('VIEW')),
+      ).toBe(true);
+      expect(
+        component.enterPredicate(
+          dragFrom({ id: 'sub', parentId: 'p' }, 'VIEW'),
+          createMockDrop('VIEW'),
+        ),
+      ).toBe(true);
+    });
+
+    it('rejects drags from other lists, issue items and anything into done rows', () => {
+      expect(
+        component.enterPredicate(dragFrom({ id: 'a' }, 'UNDONE'), createMockDrop('VIEW')),
+      ).toBe(false);
+      expect(
+        component.enterPredicate(
+          dragFrom({ id: 'issue' }, 'issue-provider-id'),
+          createMockDrop('VIEW'),
+        ),
+      ).toBe(false);
+      expect(
+        component.enterPredicate(
+          dragFrom({ id: 'a' }, 'VIEW'),
+          createMockDrop('VIEW_DONE'),
+        ),
+      ).toBe(false);
+    });
+
+    it('places a dropped row after the row before it, through the view', async () => {
+      const placeRow = jasmine.createSpy('placeRow');
+      (component as unknown as { _viewTaskList: unknown })._viewTaskList = {
+        placeRow,
+        isManualOrder: () => true,
+      };
+      const rows = [{ id: 'a' }, { id: 'b' }, { id: 'c' }] as TaskWithSubTasks[];
+      const container = {
+        data: { listId: 'PARENT', listModelId: 'VIEW', filteredTasks: rows },
+      };
+      await component.drop({
+        previousContainer: container,
+        container,
+        item: { data: rows[0] },
+        previousIndex: 0,
+        currentIndex: 2,
+      } as never);
+
+      expect(placeRow).toHaveBeenCalledOnceWith('a', 'c');
+      expect(store.dispatch).not.toHaveBeenCalled();
+    });
   });
 
   describe('enterPredicate', () => {
