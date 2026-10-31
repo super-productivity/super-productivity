@@ -29,6 +29,7 @@ export const shortSyntaxToTags = async ({
   defaultColor,
   shortSyntaxConfig,
   dateLocale,
+  todayStr = getDbDateStr(),
 }: {
   val: string;
   tags: Tag[];
@@ -36,6 +37,7 @@ export const shortSyntaxToTags = async ({
   defaultColor: string;
   shortSyntaxConfig: ShortSyntaxConfig;
   dateLocale?: DateInputLocale;
+  todayStr?: string;
 }): Promise<ShortSyntaxTag[]> => {
   const r = await shortSyntax(
     {
@@ -50,6 +52,7 @@ export const shortSyntaxToTags = async ({
     'combine',
     true,
     dateLocale,
+    todayStr,
   );
   const shortSyntaxTags: ShortSyntaxTag[] = [];
 
@@ -74,8 +77,8 @@ export const shortSyntaxToTags = async ({
   if (r.taskChanges.timeEstimate) {
     let time = msToString(r.taskChanges.timeEstimate);
 
-    if (r.taskChanges.timeSpentOnDay && r.taskChanges.timeSpentOnDay[getDbDateStr()]) {
-      time = msToString(r.taskChanges.timeSpentOnDay[getDbDateStr()]) + '/' + time;
+    if (r.taskChanges.timeSpentOnDay && r.taskChanges.timeSpentOnDay[todayStr]) {
+      time = msToString(r.taskChanges.timeSpentOnDay[todayStr]) + '/' + time;
     }
     TaskLog.log(time);
 

@@ -12,6 +12,7 @@ import {
 } from '../short-syntax';
 import { ShortSyntaxConfig } from '../../config/global-config.model';
 import { getDbDateStr } from '../../../util/get-db-date-str';
+import { DateService } from '../../../core/date/date.service';
 import { TimeSpentOnDay, TaskPriority, TaskReminderOptionId } from '../task.model';
 import { TaskAttachment } from '../task-attachment/task-attachment.model';
 import { millisecondsDiffToRemindOption } from '../util/remind-option-to-milliseconds';
@@ -63,6 +64,7 @@ const isSameRepeat = (
 @Injectable()
 export class AddTaskBarParserService {
   private readonly _stateService = inject(AddTaskBarStateService);
+  private readonly _dateService = inject(DateService);
   private _previousParseResult: PreviousParseResult | null = null;
   private _parseRunId = 0;
   // Exactly which characters of which input the parser last consumed, so a
@@ -125,6 +127,7 @@ export class AddTaskBarParserService {
       'replace',
       true,
       dateLocale,
+      this._dateService.todayStr(),
     );
 
     if (parseRunId !== this._parseRunId) {

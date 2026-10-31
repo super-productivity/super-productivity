@@ -294,6 +294,7 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
           defaultColor: activeWorkContext?.theme?.primary || DEFAULT_PROJECT_COLOR,
           shortSyntaxConfig,
           dateLocale: this._dateTimeFormatService.dateInputLocale(),
+          todayStr: this._dateService.todayStr(),
         }),
       ),
     ),
