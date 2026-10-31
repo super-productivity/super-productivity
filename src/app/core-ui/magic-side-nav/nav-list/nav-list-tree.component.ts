@@ -15,6 +15,7 @@ import { MatIcon } from '@angular/material/icon';
 import { MatIconButton } from '@angular/material/button';
 import { MatTooltip } from '@angular/material/tooltip';
 import { MatMenuModule, MatMenuTrigger } from '@angular/material/menu';
+import { MatDivider } from '@angular/material/divider';
 import { TranslatePipe } from '@ngx-translate/core';
 import { TreeDndComponent } from '../../../ui/tree-dnd/tree.component';
 import { TreeNode } from '../../../ui/tree-dnd/tree.types';
@@ -63,6 +64,7 @@ const ARCHIVED_PROJECTS_NAV_ITEM: NavRouteItem = {
     MatIconButton,
     MatTooltip,
     MatMenuModule,
+    MatDivider,
     TranslatePipe,
     TreeDndComponent,
     NavItemComponent,
@@ -98,8 +100,8 @@ export class NavListTreeComponent {
   // Access to service methods and data for visibility menu (includes Inbox for unhiding)
   readonly allUnarchivedProjects = this._navConfigService.allUnarchivedProjects;
 
-  // ViewChild for visibility menu trigger to close menu after toggling
-  visibilityMenuTrigger = viewChild('visibilityBtn', { read: MatMenuTrigger });
+  // ViewChild for the section menu trigger to close menu after toggling
+  moreMenuTrigger = viewChild('moreBtn', { read: MatMenuTrigger });
 
   readonly treeNodes = signal<TreeNode<MenuTreeViewNode>[]>([]);
   readonly treeKind = computed<MenuTreeKind>(() => this.item().treeKind);
@@ -155,7 +157,7 @@ export class NavListTreeComponent {
   toggleProjectVisibility(projectId: string): void {
     this._navConfigService.toggleProjectVisibility(projectId);
     // Close menu to prevent stale positioning after DOM update (#5955)
-    this.visibilityMenuTrigger()?.closeMenu();
+    this.moreMenuTrigger()?.closeMenu();
   }
 
   onFolderMoreButton(event: MouseEvent, node: TreeNode<MenuTreeViewNode>): void {
