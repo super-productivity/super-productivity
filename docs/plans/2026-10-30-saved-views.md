@@ -1125,94 +1125,221 @@ User feedback after phase 6 (2026-10-31): "We definitely need a transition
 animation when a view is created and possibly more. We never should use the
 filter icon since it has another meaning already. Tapping on title should
 not route to today. The config UI is a bit hard to use and understand on
-mobile." No stored shape, action or op changes.
+mobile." No stored shape, action or op changes; one new string. Revised
+after plan review (see "Phase 7 plan review").
 
 ### A. No filter icon for views
 
-`filter_list` means "filter/sort this list" (the title-bar customizer
-button). Views use it as their own icon: `getViewIcon` for one-column views
-(side menu rows, title bar), and the editor's **List** layout option.
+`filter_list` means "filter/sort this list": the title bar's customizer
+button (`page-title.component.ts`, work view and list-layout views). Views
+also use it as their own icon in exactly two places: `getViewIcon`
+(`boards.util.ts`; side-menu rows via `nav-view-group`, the title bar via
+`page-title`'s `sectionIcon`) and the editor's **List** option
+(`LAYOUT_OPTIONS`, `view-editor.component.ts`). Nothing else picks a view
+icon: the Views section header, the `/boards` title, the bottom-nav slot
+and the onboarding card use `NAV_SECTION_ICON.BOARDS` (`grid_view`); the
+start-page select has one text-only **Views** entry.
 
-- One-column views get `view_agenda` (stacked sections; same family as
-  boards' `view_kanban`). Change `getViewIcon` and `LAYOUT_OPTIONS` in
-  `view-editor.component.ts`; grep for other view-icon uses (the views
-  section header, the start-page setting, the mobile bottom-nav slot,
-  default views) and keep them consistent. The title-bar customizer button
-  keeps `filter_list`: it _is_ the filter.
+- One-column views and the **List** option get `view_list` (a list; the
+  `view_*` family of the board's `view_kanban`; unused elsewhere in the
+  app, in the bundled Material Symbols font). The customizer buttons keep
+  `filter_list`: they _are_ the filter. Update the three specs that pin
+  the icon (`boards.util.spec.ts`, `nav-view-group.component.spec.ts`,
+  `page-title.component.spec.ts`).
 
 ### B. The title on a view page
 
-`page-title` links the title to `/active/tasks` everywhere, with the
-tooltip "Go to task list". On a view page that jumps to the last work
-context (often Today): unexpected, and it leaves the view.
+`page-title` puts `routerLink="/active/tasks"` on the title `<div>`, tooltip
+"Go to task list", on every page. On a view page that jumps to the last work
+context (often Today) and leaves the view. Angular's `RouterLink` on a
+non-anchor also sets `tabindex="0"`, so the title is a tab stop today, but
+with `outline: none`, no role and no Enter handling (it only listens to
+`click`; the spec comment calling it "not focusable" is wrong).
 
-- On a view page the title is not a link. Clicking/tapping it opens the
-  view editor (`BoardsService.editBoard`), tooltip and `aria-label` "Edit
-  view" (existing `T.F.BOARDS.V.EDIT_BOARD`), keyboard-activatable like
-  today's title. Other pages are unchanged.
+- On a view page (`viewBoard()` set, i.e. `/boards/<id>` of an existing
+  view) clicking or tapping the title opens the editor
+  (`BoardsService.editBoard`); it doesn't navigate. One element, no second
+  template branch: a static `tabindex="0"` (RouterLink leaves a static
+  tabindex alone), `[routerLink]` bound to `null` on view pages (no
+  navigation; `onClick` lets the click through) and `'/active/tasks'`
+  elsewhere, `[attr.role]` `button` on view pages only, `(click)`,
+  `(keydown.enter)` and `(keydown.space)` (prevent scroll) calling one
+  `onTitleClick()` that does nothing off view pages. Tooltip "Edit view"
+  (`T.F.BOARDS.V.EDIT_BOARD`) on view pages; the accessible name stays the
+  view's title (the tooltip becomes its description), so no `aria-label`.
+- `.page-title` gets a `:focus-visible` ring (`--focus-ring-*` tokens)
+  instead of a bare `outline: none`; this also fixes the invisible focus on
+  the other pages.
+- `/boards` without views and all other pages are unchanged (they link to
+  the task list like the Planner or Schedule title). Under 398px (`isXxxs`)
+  the title bar hides the view's ⋮ menu, so the title is then the only way
+  to edit from the header.
 
 ### C. Motion
 
-Views switch and appear without any transition. All views are one route
-page (`page: 'boards'`), so `warpRoute` in `app.component` (which animates
-between different pages) never runs between views, and a created view
-just replaces the content.
+Views switch without any transition. Both view routes have `page: 'boards'`,
+so `warpRoute` (`app.component.html`, keyed on the route's `page`) only runs
+when entering or leaving the views page, and the router reuses
+`BoardsComponent` between `/boards/a` and `/boards/b`. Its
+`@if (board(); as board)` keeps the same `<board>` element and only swaps
+the input (`ɵɵconditional` updates the context in place). So creating a view
+_from another page_ already animates; creating, duplicating or switching
+_from a view page_ just replaces the content.
 
-- **Switching or creating a view:** the view content enters with the same
-  motion as switching projects (`workViewProjectChangeAnimation`, or the
-  shared fade/expand primitives in `src/app/ui/animations/`), keyed by the
-  view id so it runs on every view change, including the one right after
-  Create. No leave animation (no layout jump while two views overlap).
-- **The new view's side-menu row:** enters with the side menu's existing
-  list motion (expand/fade, as other nav rows), so the user sees where the
-  created view went.
-- **The header "+" add bar** and **the missing-tags callout** (enter and,
-  after Create tags, leave) use the existing `expand` animation instead of
-  popping in/out.
-- Durations and easing come from `animation.const.ts`. Respect reduced
-  motion the way the app already does (check how `warpRoute` /
-  `@expand` behave under `prefers-reduced-motion` and match it). Nothing
-  loops or draws attention by itself.
+App-wide, Angular animations honour only the in-app **Disable animations**
+setting (`@.disabled` on `AppComponent`'s host, plus `MATERIAL_ANIMATIONS`);
+`prefers-reduced-motion` reaches only a few CSS rules and components, not
+`warpRoute`, `projectChange` or `expand`. Triggers inside `app-root` get the
+setting for free; dialogs live in the CDK overlay, outside it, so the editor
+gets no Angular animation (D).
+
+- **Switching views** (also after Create or Duplicate from a view page):
+  `<board [@viewSwitch]="board.id">` in `boards.component.html`, a
+  state-change trigger (precedent: `[@pluginSwitch]` in
+  `plugin-index.component.html`, `[@taskDetailPanelTaskChange]`). Its only
+  transition runs when both states are view ids (a matcher function that
+  rejects `'void'` on either side): on entering the page `warpRoute` already
+  animates (and its `animateChild()` would replay an `:enter` afterwards),
+  and a leaving board must not animate at all. Motion = the work view's
+  project change enter: `opacity 0, scale(1.2)` → `1, scale(1)`,
+  `ANI_ENTER_TIMING`. No `animateChild()`, so child triggers (the callout
+  below) don't replay after it. Transform and opacity only, on the `board`
+  host: no layout change, and `.route-wrapper`'s `overflow: clip` keeps
+  the scaled paint from nudging a scroll (#9873). The trigger goes in
+  `src/app/features/boards/boards.ani.ts` next to its one user.
+  - Not covered, accepted: the first view created from the `/boards` empty
+    state (`/boards` → `/boards/<id>` is a new `BoardsComponent` on the
+    same `page`, so neither trigger runs), and the view shown after
+    deleting the open one (`board()` is briefly undefined, so the next
+    board enters from `void`).
+- **The new view's side-menu row:** `[@expandCollapse]` (already registered
+  in `nav-view-group`, the section's own expand) on each `.view-row`, so a
+  row added by Create, Duplicate or sync opens in place and a deleted one
+  closes. The host's existing `[@.disabled]` gate (`isAnimationEnabled`,
+  on after first render) keeps start-up still; rows inside a section that
+  is expanding don't animate twice (parent animation, no `animateChild`).
+  Rows are tracked by board id, so board updates (a drop into a column)
+  don't re-enter them. Project and tag rows don't animate on add today;
+  this stays view rows only.
+- **The missing-tags callout** (`board.component.html`) collapses when
+  **Create Tags** removes it: a leave-only height collapse
+  (`expandOutOnlyAnimation`, mirroring `expandInOnly` in `expand.ani.ts`).
+  No enter: the callout shows with its view, and an `@expand` enter would
+  run again after `warpRoute` on page entry, pushing the columns down once
+  the page is already in place. The host's `.hasMissingTags` class flips
+  the moment the callout starts leaving, and without it the grid's
+  `grid-auto-rows: 1fr` would stretch the leaving callout to a column's
+  height for 195ms: replace the class with `:host:has(> .missing-tags)`
+  (the leaving element is still in the DOM; check the selector survives
+  emulated encapsulation in the built CSS) and update
+  `board.component.spec.ts`'s class assertions.
+- Cut: the section "+" add bar. `add-task-bar` already animates itself
+  (`@blendInOut`, enter and leave), as in the planner's inline add; an
+  `@expand` around it would animate it twice.
+- `boards.component.spec.ts` and `board.component.spec.ts` need
+  `provideNoopAnimations()` once their templates carry triggers.
 
 ### D. The editor on phones
 
-At 400px the dialog floats with margins over the bottom nav; each rule
-takes two rows (a label line, then a full-width select); every section is
-fully expanded, so a three-column board is a long scroll and its structure
-is hard to see; the Columns field sits on its own line.
+At 400px the dialog floats over the bottom nav with 16px margins
+(`dialog-board-edit.component.scss`: `min-width: calc(100vw - 32px)`,
+content `max-height: 75vh`); each rule takes two rows (label line, then a
+full-width select: `.rule-row` wraps below `xs`); every section is fully
+expanded, so a three-column board is a long scroll; and Columns wraps to
+its own line (toggle `flex: 0 1 280px` + gap + Columns `0 1 200px` >
+the ~320px of content).
 
-- **Full screen at the xs breakpoint** (the dialog's own `maxWidth`/
-  `width`/`height` options, or the existing pattern of a full-screen
-  dialog in the app if there is one), with the title bar and the
-  Cancel/Delete/Save row fixed and the content scrolling between them.
-- **One row per rule, on every width:** the rule's name becomes the
-  form field's label (`mat-label` inside the select / tag input), the ×
-  stays at the end of the row. Drops the separate label column/line;
-  desktop gets shorter too.
-- **Sections as an accordion:** each section card collapsed shows its
-  title, its task count and a one-line summary of its rules (e.g.
-  "Priority: High · Not completed"; "Every task" when none); tapping it
-  expands it for editing. One section is open at a time; the only section
-  of a list is always open (no header to tap); a new or duplicated section
-  opens; a section with an invalid field opens on Save.
-- **Columns** sits next to the List/Board toggle on the same row.
-- Keep everything else (rules, live count, Add rule, Add section, the
-  untouched-save guard); the editor's unit and E2E helpers adapt (the
-  `e2e/utils/view-helpers.ts` helpers expand a section before editing it).
+- **Full screen below `xs` (600px).** The app has no reusable pattern:
+  `.project-complete-fullscreen-dialog` is transparent and specific, the
+  markdown editor sets `minWidth/height` on every width. Add one shared
+  panel class `fullscreen-xs-dialog` in `_overwrite-material.scss`, next to
+  `.big`: below `xs`, the pane is `100vw` × `100dvh` with no margin and
+  overrides the global `max-width: 96vw !important`; the surface fills it
+  with no radius and pads by `--safe-area-*` (edge-to-edge Android/iOS).
+  Keep its specificity below the iOS keyboard rule
+  (`body.isIOS.isKeyboardVisible .cdk-overlay-pane.mat-mdc-dialog-panel`)
+  so that rule still caps the height. `BoardsService.createBoard` and
+  `editBoard` pass `panelClass: 'fullscreen-xs-dialog'`;
+  `dialog-board-edit.component.scss` drops its sub-`xs`
+  `min-width`/`max-height`. Title and actions already stay put while
+  `.mat-mdc-dialog-content` scrolls (global flex layout).
+- **One row per rule, on every width.** Select rules (and Project and
+  **Sort by**) put the rule's name in the field's `<mat-label>`; the
+  separate label column and its `xs` wrapping go, the × stays at the end.
+  Keep `aria-label` on the selects: with it, `MatSelect` names the trigger
+  by it exactly, which the E2E helpers' `getByRole('combobox', { name })`
+  relies on. Rows keep `data-rule` and `role="group"`, named by
+  `aria-label` (the rule's name) instead of the dropped label span.
+  Exceptions: **Without tags**
+  and **Only parent tasks** have no control (the label is the row); the
+  tag rules keep their text label, since `tag-edit` is a bare
+  `mat-chip-grid` with no form-field label slot (changing the shared
+  component isn't worth it) and `addViewRule` finds tag rows by
+  `.rule-label`.
+- **Sections collapse, one open at a time**, when the editor has two or
+  more panels (on every width). A card keeps its title field and ⋮ on top
+  (title inputs stay rendered, so `buildBoard()`'s
+  `isTitleInvalid()`/`focusTitle()` and the specs that read all title
+  fields keep working; the only invalid field a card has is its title).
+  Below it, a full-width `<button>` with `aria-expanded`/`aria-controls`
+  and an `expand_more` chevron shows the count and a one-line rule summary,
+  e.g. "4 tasks · Priority: High · Completion: Not Completed" ("Every
+  task" without rules); it toggles the card's body (rules, Add rule, Sort
+  by), rendered with `@if`, no animation. No nested interactive controls.
+  - State: `openPanelId` in `ViewEditorComponent`, first panel open when
+    the dialog opens; `addPanel`/`duplicatePanel` open the new panel;
+    moving keeps it (by id); removing the open one leaves none open. A
+    single panel (a list's only section, a new board) has no toggle, is
+    always open and keeps today's header. `_touchedRules` lives on the
+    section component, so an added-but-empty rule survives collapsing.
+  - Summary: pure `getRuleSummary(panel, { projects, tags }, translate)`
+    in `view-editor.util.ts`, over `getSetRules(panel)` (so empty touched
+    rules don't show): select rules `Label: option label` from
+    `VIEW_RULE_LABELS` / `VIEW_RULE_OPTIONS` (`OTHER_VALUE` → "Other
+    (kept)"); Project and the tag rules `Label: title, title` (known ones;
+    the label alone when none is known); **Without tags** and **Only parent
+    tasks** the label. Joined with " · " like `getFilterTitle`'s
+    `Label: preset`. New string: `F.BOARDS.EDITOR.EVERY_TASK` ("Every
+    task", `en.json` only).
+- **Columns next to the toggle:** `.layout-toggle` `flex: 1 1 auto`,
+  `.cols` a fixed narrow basis that fits "Columns" (its error may wrap to
+  two lines); keep `flex-wrap` for widths under 398px.
+- Unchanged: rules, live count, Add rule, Add section, save and the
+  untouched-save path (`buildBoard`, `buildUntouchedBoard`, fixtures).
 
 ### Tests
 
-- Unit: `getViewIcon`; title click on a view opens the editor and does not
-  navigate; rule summary text per rule type; accordion (one open, new
-  section opens, invalid section opens on save); the untouched-save
-  fixtures still pass.
-- E2E: tapping a view's title opens the editor and stays on the view;
-  creating a view still lands on it (animation not asserted, no fixed
-  waits); the existing editor-driven specs pass through the updated
-  helpers.
-- Screenshots at 1280px and 400px: side menu with list and board views,
-  the editor (one section; a three-column board with one section open),
-  the add bar open, the missing-tags callout.
+- Unit: `getViewIcon` (`view_list`) and the two icon specs; `page-title`:
+  on `/boards/<id>` a click and Enter call `BoardsService.editBoard` with
+  the view and don't navigate, `role="button"`, tooltip "Edit view"; on
+  `/active/tasks` and `/boards` (no view) the title still links to
+  `/active/tasks`; `getRuleSummary` per rule type, incl. `OTHER_VALUE`,
+  unknown tag/project ids, no rules; `board-edit.component.spec.ts`: first
+  panel open, the others show only title and summary, `addPanel` /
+  `duplicatePanel` open the new panel, one open at a time, a single panel
+  has no toggle; an empty section title in a collapsed card still blocks
+  save; the untouched-save fixtures pass unchanged. `board.component.spec`
+  drops its `hasMissingTags` class assertions (the callout's presence is
+  already asserted).
+- E2E (`e2e/tests/boards/view-editor.spec.ts`): clicking a view's title
+  opens the editor and the URL stays on the view; a default three-panel
+  view opens with the first section expanded and the others collapsed with
+  their summary; expanding one collapses the other. Creating a view still
+  lands on it (animation not asserted, no fixed waits: Playwright's
+  stability check waits out the transform).
+- E2E helpers: `addViewRule`, `setViewRule` and `setViewSort` first expand
+  their section (`expandViewSection(section)`: click the toggle when
+  `aria-expanded="false"`, no-op when there is none). Callers on later
+  sections that would otherwise fail: `board-keyboard-navigation.spec.ts`
+  (section 1, twice). Section 0 is open by default, so
+  `issue-7380-eisenhower-edit.spec.ts` and `view-editor.spec.ts`'s direct
+  combobox queries keep working; title queries see every card.
+- Screenshots at 1280px and 400px: side menu with list and board views;
+  the editor (400px full screen; one section, and a three-column board with
+  one section open); the callout before and after Create Tags.
+- Wiki `4.05-Board-View.md`: clicking a view's title opens Edit; cards
+  with several sections collapse to their title and a rule summary, one
+  open at a time.
 
 ## Review
 
@@ -1595,3 +1722,72 @@ Not fixed:
   interactive control), the same pattern as the work view's section ⋮.
 - In a 280px column the add bar's action row scrolls sideways (the bar's own
   layout).
+
+Phase 7 plan review (fresh-context subagent, 2026-10-31). Checked §15
+against the code (`page-title`, `boards.component`, `board`, `nav-view-group`,
+`tree.animations`, `src/app/ui/animations/`, `app.component`, the editor and
+dialog, `_overwrite-material.scss`, the E2E helpers and their callers, the
+Angular router/control-flow sources). Changed:
+
+- A: the plan guessed at icon uses in the section header, start-page
+  setting, bottom-nav slot and default views. None pick a view icon: those
+  use `NAV_SECTION_ICON.BOARDS` (`grid_view`) or none. The only two places
+  are `getViewIcon` and `LAYOUT_OPTIONS`; three specs pin the icon. Icon
+  changed from `view_agenda` to `view_list`: both are in the bundled font
+  and unused, but most one-column views are one list, and it matches the
+  **List** label.
+- B, wrong claim: "keyboard-activatable like today's title". `RouterLink`
+  on a `<div>` sets `tabindex="0"` but handles only `click`, and the title
+  has `outline: none`, so today it is an invisible tab stop that Enter
+  does nothing on (the page-title spec comment "not focusable" is also
+  wrong). Now specified: one element, static `tabindex`, `[routerLink]`
+  `null` on views, `role="button"`, Enter/Space, a `:focus-visible` ring.
+  `aria-label` "Edit view" dropped: it would hide the view's title from
+  screen readers; the tooltip describes it instead. `/boards` without views
+  keeps the link like the other section pages. If the feedback meant every
+  page's title, that is a separate, app-wide decision.
+- C, wrong claims: the side menu has no row-level list motion to reuse
+  (projects and tags only animate a section's expand); the section "+" add
+  bar doesn't pop, `add-task-bar` animates itself (`@blendInOut`), so that
+  item is cut; reduced motion is not handled app-wide (only the in-app
+  setting disables Angular animations, and dialogs sit outside it), so
+  "match how warpRoute behaves" means adding nothing, and the editor gets
+  no Angular animation. Specified instead: a `[@viewSwitch]` state-change
+  trigger on the reused `<board>` element, between view ids only (an
+  `:enter` would run a second time after `warpRoute`'s `animateChild()`),
+  no `animateChild()`; `@expandCollapse` on view rows behind the existing
+  first-render gate; a leave-only collapse for the callout, with
+  `.hasMissingTags` replaced by `:has()` (otherwise the leaving callout
+  stretches to a `1fr` row for 195ms); `provideNoopAnimations()` for the two
+  specs that don't have it. Noted gaps: the first view created from the
+  empty state, and the view shown after deleting the open one, enter from
+  `void` and don't animate.
+- D, full screen: no reusable full-screen-on-mobile pattern exists; a
+  shared `fullscreen-xs-dialog` panel class, safe areas, the global
+  `max-width: 96vw !important` it must beat and the iOS keyboard rule it
+  must not.
+- D, one row per rule: `tag-edit` has no form-field label slot, so tag rules
+  keep a text label; `aria-label` stays on the selects (MatSelect then names
+  the combobox by it exactly, which the E2E helpers query).
+- D, accordion: the plan's collapsed card showed the title as text, which
+  unrenders the title inputs `buildBoard()` validates through NgModel, so a
+  collapsed empty title would have saved, and it breaks the board-edit and
+  E2E checks that read every title field. The title field and ⋮ now stay;
+  a separate full-width toggle button carries count and summary (no nested
+  interactive controls), so "opens on Save" isn't needed. State location,
+  the initial open panel, the one-panel case and the summary's sources
+  (`getSetRules`, `VIEW_RULE_LABELS`/`OPTIONS`) specified; one new string.
+- D, E2E helpers: `addViewRule`/`setViewRule`/`setViewSort` expand first;
+  `board-keyboard-navigation.spec.ts` (section 1) is the caller that would
+  break silently otherwise; section-0 and title queries keep working.
+- Docs: the wiki update (`4.05-Board-View.md`) was missing.
+
+Checked, not changed:
+
+- No stored shape, action or op changes; the untouched-save fixtures and
+  `getViewUpdates` path are untouched (titles stay rendered).
+- Switching views keeps the `board` host's scroll offset (same element);
+  pre-existing, not part of this feedback. A keyed rebuild would reset it
+  but needs its own enter handling; left for a report.
+- Focus is lost to `body` when Create Tags removes the callout (phase 6,
+  with or without the animation). Left as is.
