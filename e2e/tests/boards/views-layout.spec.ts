@@ -148,19 +148,13 @@ test.describe('View layout (List/Board in the title bar)', () => {
 
     // Each section is as tall as its rows: its last row ends above the next
     // section (a capped section stays in its box but its rows spill over).
-    const lastRowBottomAndNextTop = (): Promise<number[]> =>
+    // Polled as the overlap in px, so a failure reports how far rows spill.
+    const overlap = (): Promise<number> =>
       sections.evaluateAll((els) => {
         const rows = els[0].querySelectorAll('task');
-        return [
-          rows[rows.length - 1].getBoundingClientRect().bottom,
-          els[1].getBoundingClientRect().top,
-        ].map(Math.round);
+        const lastRowBottom = rows[rows.length - 1].getBoundingClientRect().bottom;
+        return Math.round(lastRowBottom - els[1].getBoundingClientRect().top);
       });
-    await expect
-      .poll(async () => {
-        const [lastRowBottom, nextTop] = await lastRowBottomAndNextTop();
-        return lastRowBottom <= nextTop;
-      })
-      .toBe(true);
+    await expect.poll(overlap).toBeLessThanOrEqual(0);
   });
 });

@@ -269,7 +269,8 @@ export const createView = async (page: Page, spec: ViewSpec): Promise<void> => {
 
 /**
  * Creates tasks with these titles in the Inbox in one go, through the store
- * (the UI would take minutes for long lists).
+ * (the UI would take minutes for long lists). Ids are `seeded-<index>`, so
+ * call it once per test.
  */
 export const seedInboxTasks = async (page: Page, titles: string[]): Promise<void> => {
   await page.evaluate((taskTitles) => {
