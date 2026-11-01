@@ -20,7 +20,6 @@
       @for (template of viewTemplates; track template.id) {
         <button
           mat-stroked-button
-          [attr.data-view-template]="template.id"
           (click)="boardsService.createFromTemplate(template.id)"
         >
           <mat-icon>{{ template.icon }}</mat-icon>
