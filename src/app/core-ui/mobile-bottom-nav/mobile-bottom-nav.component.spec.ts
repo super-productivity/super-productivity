@@ -380,4 +380,17 @@ describe('MobileBottomNavComponent', () => {
       );
     });
   });
+
+  describe('RTL layout', () => {
+    it('applies row-reverse to mobile-bottom-nav when dir="rtl" is present on ancestor', async () => {
+      await render(ALL_OFF);
+      const hostEl = fixture.nativeElement as HTMLElement;
+      hostEl.setAttribute('dir', 'rtl');
+      fixture.detectChanges();
+
+      const navEl = hostEl.querySelector<HTMLElement>('.mobile-bottom-nav');
+      expect(navEl).toBeTruthy();
+      expect(window.getComputedStyle(navEl!).flexDirection).toBe('row-reverse');
+    });
+  });
 });
