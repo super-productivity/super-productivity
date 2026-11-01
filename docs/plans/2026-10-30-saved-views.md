@@ -2082,3 +2082,62 @@ Checked, not changed:
   (also reaching the side menu's context menu) would add no header button.
   Kept the title-bar button: the user asked for it there, and the header
   holds three buttons on project pages already.
+
+Phase 8 implementation review (fresh-context subagent, 2026-11-01). Checked
+`1856ecb..4783927` against §16 and the plan review: `boards.util`
+(`getViewLayout`, `getLayoutChanges`), `boards.service` (`setViewLayout`,
+`duplicateBoard`), `boards.component`/`boards.ani.ts`, `page-title`, the view
+editor's `setLayout`, `getViewUpdates`, the untouched-save fixtures, the
+`BOARDS_UPDATE` reorder-conflict adapter, `frozen-state.spec`, the E2E and
+the wiki. Screenshots at 1280, 400 and 360px. Fixed:
+
+- The title on phones (the known issue): with three buttons next to it, a
+  view's title was one word at 400px ("Open …"), and on phones the title is
+  the view's name and its way into the editor. Below 600px (the bottom-nav
+  layout, the breakpoint `boards.component` already uses) the List/Board
+  switch is now the first item of the view's ⋮ menu (`view-menu`'s
+  `withLayoutSwitch` input, set only by the title bar, so the side menu's
+  menu stays Edit/Duplicate/Delete) with the button's icon and label; wider
+  screens keep the button. One helper, `getViewLayoutSwitch`, gives both the
+  other mode, its icon and its label. On phones the header is again what it
+  was before phase 8 (filter + ⋮ on a list, ⋮ on a board). Measured: at 400px
+  "Open work" is whole (93 of 93px) and "Eisenhower Matrix" as a board shows
+  "Eisenhower Mat…" (156 of 159px), as a list "Eisenhower…" (114px). Tests: a
+  `view-menu` spec, `page-title` (phone: no button, filter and ⋮ only),
+  `getViewLayoutSwitch`, and an E2E at 400px switching through the menu both
+  ways (fails without the fix: the header button is there). Wiki updated.
+
+Checked, not changed:
+
+- At 360px a list view's title is still "Open …" (74 of 93px) and "Eisen…":
+  the same as before phase 8, since the filter button and ⋮ take that room.
+  More room means main-header's spacing tokens (16px gutter before the
+  global actions) or dropping the title's icon on phones, both app-wide
+  header decisions outside this phase.
+- `boardCols`: never `undefined` in an op (the helper omits it; unit-tested),
+  only an integer ≥ 2 is written or read; an untouched save of a list with
+  `boardCols` sends nothing (fixture); the editor keeps it on a list's save
+  and overwrites it when a board becomes a list; `getViewUpdates` sends it
+  only when it changed; duplicate keeps it (spec); released clients merge
+  `updates` and send the spread board, so they keep it; optional, so
+  `frozen-state.spec` and typia pass. Edge left alone: a board with a
+  non-integer `cols` (only a released client's Columns field can write one)
+  becomes a list without overwriting an older `boardCols`, so it comes back
+  with that older count; harmless and unreachable in this client.
+- Reorder conflicts: `BOARDS_UPDATE` replays `pick(entity, updates)`, so a
+  replay against a board without `boardCols` (a released client's whole-board
+  edit won) writes `boardCols: undefined`. Generic for every optional field of
+  every patch there, dropped by JSON, accepted by typia; not a phase 8 change.
+- One `updateBoard` per click, none when already in that mode (specs); no
+  effect, remote ops trigger nothing. A synced mode change changes the
+  `viewSwitch` state once, so it animates once. The selection is cleared only
+  when the mode changes (a rename or a column count change keeps it), and the
+  open task stays.
+- a11y: the button's `aria-label` and tooltip follow the mode, and it keeps
+  the focus across the switch (spec and E2E); the menu item has the same
+  label. Seen in Material 22's source, not run: `MatMenu` collects its items
+  with a content query, so items rendered inside `view-menu`'s own view (Edit,
+  Duplicate, Delete, and now the switch) are not in its arrow-key order, in
+  the title bar and the side menu alike. Pre-existing; worth an issue.
+- E2E: no fixed waits (`expect.poll` for the layout); `readBoard` moved to
+  the shared helpers.
