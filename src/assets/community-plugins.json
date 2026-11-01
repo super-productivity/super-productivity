@@ -199,6 +199,14 @@
     "id": "auto-tag-manager"
   },
   {
+    "name": "Vikunja Integration",
+    "shortDescription": "Two-way sync of title, description, completion and due date; pulls Vikunja projects, subtasks and labels. Requires Vikunja 2.4.0+.",
+    "url": "https://github.com/abhilesh/sp-vikunja",
+    "author": "abhilesh",
+    "authorUrl": "https://github.com/abhilesh",
+    "id": "vikunja-integration"
+  },
+  {
     "name": "YouGile Integration (SuperGile)",
     "shortDescription": "Two-way sync of YouGile tasks assigned to you: done state, title, deadline, time estimate and time spent.",
     "url": "https://github.com/SileboxUnderfined/SuperGile",
