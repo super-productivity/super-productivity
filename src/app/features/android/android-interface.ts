@@ -131,6 +131,8 @@ export interface AndroidInterface {
     isOngoing: boolean,
   ): void;
   cancelNativeReminder?(notificationId: number): void;
+  canDrawReminderOverlays?(): boolean;
+  openReminderOverlaySettings?(): void;
 
   // Reminder tap queue - get task ID from notification tap (cold start)
   getReminderTapQueue?(): string | null;

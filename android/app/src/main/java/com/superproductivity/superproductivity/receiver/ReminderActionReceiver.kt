@@ -7,6 +7,7 @@ import android.util.Log
 import androidx.core.app.NotificationManagerCompat
 import com.superproductivity.superproductivity.service.ReminderAlarmStore
 import com.superproductivity.superproductivity.service.ReminderNotificationHelper
+import com.superproductivity.superproductivity.service.ReminderOverlayService
 import com.superproductivity.superproductivity.widget.ReminderDoneQueue
 import com.superproductivity.superproductivity.widget.ReminderSnoozeQueue
 
@@ -45,6 +46,7 @@ class ReminderActionReceiver : BroadcastReceiver() {
         when (intent.action) {
             ACTION_SNOOZE -> {
                 Log.d(TAG, "Snooze 10m: notificationId=$notificationId")
+                ReminderOverlayService.dismiss(notificationId)
 
                 // Dismiss the notification
                 if (notificationId != -1) {
@@ -58,6 +60,7 @@ class ReminderActionReceiver : BroadcastReceiver() {
 
             ACTION_SNOOZE_1H -> {
                 Log.d(TAG, "Snooze 1h: notificationId=$notificationId")
+                ReminderOverlayService.dismiss(notificationId)
 
                 // Dismiss the notification
                 if (notificationId != -1) {
@@ -71,6 +74,7 @@ class ReminderActionReceiver : BroadcastReceiver() {
 
             ACTION_DONE -> {
                 Log.d(TAG, "Done: notificationId=$notificationId, relatedId=$relatedId")
+                ReminderOverlayService.dismiss(notificationId)
 
                 // Dismiss the notification
                 if (notificationId != -1) {

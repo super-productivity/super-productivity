@@ -31,6 +31,7 @@ import { MatButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { Log } from '../../../core/log';
 import { ExactAlarmHintComponent } from '../../reminder/exact-alarm-hint/exact-alarm-hint.component';
+import { ReminderOverlayHintComponent } from '../../reminder/reminder-overlay-hint/reminder-overlay-hint.component';
 
 interface CustomFormInstance {
   cfg?: Record<string, unknown>;
@@ -52,6 +53,7 @@ interface CustomFormInstance {
     MatButton,
     MatIcon,
     ExactAlarmHintComponent,
+    ReminderOverlayHintComponent,
   ],
 })
 export class ConfigSectionComponent implements OnInit, OnDestroy {

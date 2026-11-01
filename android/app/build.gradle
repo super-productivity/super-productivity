@@ -116,6 +116,14 @@ android {
             ])
             matchingFallbacks = ["release"]
         }
+        create("plus") {
+            initWith release
+            applicationIdSuffix ".plus"
+            signingConfig signingConfigs.debug
+            minifyEnabled false
+            manifestPlaceholders = [launcherName: "Super Productivity Plus"]
+            matchingFallbacks = ["release"]
+        }
     }
 
     flavorDimensions "version"

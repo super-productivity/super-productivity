@@ -10,6 +10,7 @@ import { ConfigFormSection, ConfigSectionAction } from '../global-config.model';
 import { WorkContextService } from '../../work-context/work-context.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { ExactAlarmStatusService } from '../../reminder/exact-alarm-status.service';
+import { ReminderOverlayPermissionStatusService } from '../../reminder/reminder-overlay-permission-status.service';
 import { Log } from '../../../core/log';
 import { Component } from '@angular/core';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
@@ -196,6 +197,10 @@ describe('ConfigSectionComponent exact-alarm hint', () => {
       providers: [
         { provide: WorkContextService, useValue: { onWorkContextChange$: EMPTY } },
         { provide: ExactAlarmStatusService, useValue: { isDenied$: of(true) } },
+        {
+          provide: ReminderOverlayPermissionStatusService,
+          useValue: { isDenied$: of(true) },
+        },
       ],
     }).compileComponents();
   });
@@ -206,10 +211,16 @@ describe('ConfigSectionComponent exact-alarm hint', () => {
     expect(render('reminder').querySelector('exact-alarm-hint .callout')).not.toBeNull();
   });
 
-  it('hides the hint while all reminders are disabled', () => {
+  it('shows the overlay permission hint in the reminder section', () => {
     expect(
-      render('reminder', { disableReminders: true }).querySelector('exact-alarm-hint'),
-    ).toBeNull();
+      render('reminder').querySelector('reminder-overlay-hint .callout'),
+    ).not.toBeNull();
+  });
+
+  it('hides the hint while all reminders are disabled', () => {
+    const element = render('reminder', { disableReminders: true });
+    expect(element.querySelector('exact-alarm-hint')).toBeNull();
+    expect(element.querySelector('reminder-overlay-hint')).toBeNull();
   });
 
   it('does not show the hint in other sections', () => {

@@ -1,0 +1,5 @@
+<resources>
+  <string name="app_name">Super Productivity Plus</string>
+  <string name="title_activity_fullscreen">Super Productivity Plus</string>
+  <string name="webview_init_failure_message">Super Productivity Plus could not start Android System WebView.</string>
+</resources>

@@ -22,6 +22,7 @@ import com.superproductivity.superproductivity.service.BackgroundSyncCredentialS
 import com.superproductivity.superproductivity.service.FocusModeForegroundService
 import com.superproductivity.superproductivity.service.ForegroundServiceFailure
 import com.superproductivity.superproductivity.service.ReminderNotificationHelper
+import com.superproductivity.superproductivity.service.ReminderOverlayService
 import com.superproductivity.superproductivity.service.RemoteTrackingNotificationHelper
 import com.superproductivity.superproductivity.service.SyncReminderScheduler
 import com.superproductivity.superproductivity.service.TrackingForegroundService
@@ -666,6 +667,29 @@ class JavaScriptInterface(
     fun setBackgroundReminderSettings(isDisabled: Boolean, useAlarmStyle: Boolean) {
         safeCall("Failed to set background reminder settings") {
             BackgroundReminderSettingsStore.save(activity, isDisabled, useAlarmStyle)
+        }
+    }
+
+    @Suppress("unused")
+    @JavascriptInterface
+    fun canDrawReminderOverlays(): Boolean =
+        BuildConfig.BUILD_TYPE != "plus" || ReminderOverlayService.canDrawOverlays(activity)
+
+    @Suppress("unused")
+    @JavascriptInterface
+    fun openReminderOverlaySettings() {
+        if (BuildConfig.BUILD_TYPE != "plus" ||
+            ReminderOverlayService.canDrawOverlays(activity)
+        ) {
+            return
+        }
+
+        safeCall("Failed to open reminder overlay settings") {
+            val intent = Intent(
+                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                Uri.parse("package:${activity.packageName}"),
+            )
+            activity.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         }
     }
 

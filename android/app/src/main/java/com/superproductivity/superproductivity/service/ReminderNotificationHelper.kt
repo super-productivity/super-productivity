@@ -180,6 +180,7 @@ object ReminderNotificationHelper {
         )
         alarmManager.cancel(pendingIntent)
         NotificationManagerCompat.from(context).cancel(notificationId)
+        ReminderOverlayService.dismiss(notificationId)
         ReminderAlarmStore.remove(context, notificationId)
     }
 
@@ -336,7 +337,7 @@ object ReminderNotificationHelper {
             // Show summary notification for grouping
             val summaryNotification = NotificationCompat.Builder(context, channelId)
                 .setSmallIcon(R.drawable.ic_stat_sp)
-                .setContentTitle("Super Productivity")
+                .setContentTitle(context.getString(R.string.app_name))
                 .setContentText("Task reminders")
                 .setGroup(GROUP_KEY)
                 .setGroupSummary(true)
@@ -346,5 +347,16 @@ object ReminderNotificationHelper {
         } catch (e: SecurityException) {
             Log.e(TAG, "No permission to show notification", e)
         }
+
+        ReminderOverlayService.showIfAllowed(
+            context,
+            notificationId,
+            reminderId,
+            relatedId,
+            title,
+            reminderType,
+            useAlarmStyle,
+            isOngoing,
+        )
     }
 }

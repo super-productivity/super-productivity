@@ -59,6 +59,7 @@ import { selectTaskRepeatCfgByIdAllowUndefined } from '../../task-repeat-cfg/sto
 import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
 import { getTaskRepeatInfoText } from '../../tasks/task-detail-panel/get-task-repeat-info-text.util';
 import { ExactAlarmHintComponent } from '../../reminder/exact-alarm-hint/exact-alarm-hint.component';
+import { ReminderOverlayHintComponent } from '../../reminder/reminder-overlay-hint/reminder-overlay-hint.component';
 
 @Component({
   selector: 'dialog-schedule-task',
@@ -75,6 +76,7 @@ import { ExactAlarmHintComponent } from '../../reminder/exact-alarm-hint/exact-a
     MatDialogContent,
     DateTimePickerComponent,
     ExactAlarmHintComponent,
+    ReminderOverlayHintComponent,
   ],
   templateUrl: './dialog-schedule-task.component.html',
   styleUrl: './dialog-schedule-task.component.scss',

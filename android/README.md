@@ -51,3 +51,18 @@ LAUNCH_MODE=2
 
 - **[Connectivity-Free Mode Documentation (Recommended)](./README_OFFLINE.md)**: Step-by-step guide to setting up and building the app in Connectivity-Free Mode.
 - **[Online-Only Mode (Compatibility) Documentation](./README_ONLINE.md)**: Step-by-step guide to setting up and building the app in Online-Only Mode.
+
+## Super Productivity Plus
+
+The Plus variant is a debug-signed APK of the full app with a distinct package
+ID and the task reminder overlay. It can be installed alongside the official
+app, but keeps separate local data. Build it from the repository root with:
+
+```bash
+npm run dist:android:plus
+```
+
+The APK is written to
+`android/app/build/outputs/apk/fdroid/plus/app-fdroid-plus.apk`. Because it uses
+the local debug signing key, it can be installed alongside the official app but
+is not an update to an already installed Plus APK signed with another key.

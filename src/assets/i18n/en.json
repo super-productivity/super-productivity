@@ -1088,6 +1088,8 @@
       },
       "EXACT_ALARM_HINT": "Reminders may be delayed because \"Alarms & reminders\" is turned off for this app in Android settings.",
       "EXACT_ALARM_OPEN_SETTINGS": "Open settings",
+      "OVERLAY_PERMISSION_HINT": "To show task reminders over other apps, allow Super Productivity Plus to display over other apps. Without this permission, reminders remain regular notifications.",
+      "OVERLAY_PERMISSION_OPEN_SETTINGS": "Allow overlay",
       "S_ACTIVE_TASK_DUE": "The task you are currently working on is now due!<br/> ({{title}})",
       "S_REMINDER_ERR": "Error for reminder interface"
     },
