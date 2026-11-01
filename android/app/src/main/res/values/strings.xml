@@ -31,20 +31,21 @@
   <string name="share_failed">Could not save the share</string>
 
   <!-- Home screen widget -->
-  <string name="widget_title">Today\'s Tasks</string>
+  <string name="widget_title">Tasks</string>
   <string name="widget_header_title">Today</string>
   <!-- Header when the snapshot predates the current day; %1$s is that day's date -->
   <string name="widget_header_outdated">%1$s (outdated)</string>
   <!-- Same, but the snapshot's own date could not be read — must still not say "Today" -->
   <string name="widget_header_outdated_unknown">Outdated</string>
-  <string name="widget_description">Shows today\'s tasks with quick done action</string>
-  <string name="widget_empty">No tasks for today</string>
+  <string name="widget_description">Shows Today\'s or a selected project\'s tasks with quick done action</string>
+  <string name="widget_empty">No tasks</string>
   <string name="widget_task_done">Toggle task done</string>
   <!-- Currently tracked task row; %1$s is the task title -->
   <string name="widget_tracking_title">Tracking: %1$s</string>
   <!-- Device currently tracking it, e.g. "on Desktop"; %1$s is the device label -->
   <string name="widget_tracking_device">on %1$s</string>
   <string name="widget_add_task">Add task</string>
+  <string name="widget_configure_title">Choose task list</string>
 
   <!-- Widget quick add (QuickAddActivity): a dialog over the home screen -->
   <string name="quick_add_title">New task</string>
