@@ -516,6 +516,15 @@ export const createWindow = async ({
         // entry on some platforms, so map it first without taking focus.
         mainWin.showInactive();
         mainWin.minimize();
+        // createWindow() skipped the #7276 re-maximize, and a taskbar click is
+        // an OS restore that never goes through showOrFocus(), so re-apply it on
+        // the first restore. Not before minimizing: maximize() on a hidden
+        // window activates it on Windows (SC_MAXIMIZE), stealing focus at login.
+        mainWin.once('restore', () => {
+          if (getWasMaximizedBeforeHide() && !mainWin.isMaximized()) {
+            mainWin.maximize();
+          }
+        });
       }
       return;
     }
