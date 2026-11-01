@@ -29,7 +29,8 @@ import {
   initializeProtocolHandling,
   processPendingProtocolUrls,
 } from './protocol-handler';
-import { getIsQuiting, setIsLocked } from './shared-state';
+import { getIsQuiting } from './shared-state';
+import { initPowerMonitorHandlers } from './power-monitor-handlers';
 import { evaluateGpuStartupGuard } from './gpu-startup-guard';
 import * as fs from 'fs';
 
@@ -334,7 +335,6 @@ export const startApp = (): void => {
     // Initialize idle time handler
     idleTimeHandler = new IdleTimeHandler();
 
-    let suspendStart: number;
     // Prevent overlapping async idle checks.
     // lazySetInterval schedules the next tick regardless of whether the previous
     // check finished. Our idle detection on Wayland may spawn external commands
@@ -408,51 +408,7 @@ export const startApp = (): void => {
     }, CONFIG.IDLE_PING_INTERVAL);
     // --------END IDLE HANDLING---------
 
-    // Track whether window was visible before suspend/lock so we only
-    // restore keyboard focus for windows that were actually in use.
-    // Using showOrFocus() unconditionally would surface hidden/minimized
-    // windows on every wake/unlock — a UX regression.
-    let wasVisibleBeforeSuspend = false;
-
-    powerMonitor.on('suspend', () => {
-      log('powerMonitor: System suspend detected');
-      wasVisibleBeforeSuspend = mainWin.isVisible() && !mainWin.isMinimized();
-      setIsLocked(true);
-      suspendStart = Date.now();
-      mainWin.webContents.send(IPC.SUSPEND);
-    });
-
-    powerMonitor.on('lock-screen', () => {
-      log('powerMonitor: Screen lock detected');
-      wasVisibleBeforeSuspend = mainWin.isVisible() && !mainWin.isMinimized();
-      setIsLocked(true);
-      suspendStart = Date.now();
-      mainWin.webContents.send(IPC.SUSPEND);
-    });
-
-    powerMonitor.on('resume', () => {
-      const idleTime = Date.now() - suspendStart;
-      log(`powerMonitor: System resume detected. Idle time: ${idleTime}ms`);
-      setIsLocked(false);
-      sendIdleMsgIfOverMin(idleTime);
-      mainWin.webContents.send(IPC.RESUME);
-      // Restore keyboard focus only if window was visible before suspend (electron#20464)
-      if (wasVisibleBeforeSuspend) {
-        showOrFocus(mainWin);
-      }
-    });
-
-    powerMonitor.on('unlock-screen', () => {
-      const idleTime = Date.now() - suspendStart;
-      log(`powerMonitor: Screen unlock detected. Idle time: ${idleTime}ms`);
-      setIsLocked(false);
-      sendIdleMsgIfOverMin(idleTime);
-      mainWin.webContents.send(IPC.RESUME);
-      // Restore keyboard focus only if window was visible before lock (electron#20464)
-      if (wasVisibleBeforeSuspend) {
-        showOrFocus(mainWin);
-      }
-    });
+    initPowerMonitorHandlers(powerMonitor, mainWin, sendIdleMsgIfOverMin);
   });
 
   appIN.on('will-quit', () => {

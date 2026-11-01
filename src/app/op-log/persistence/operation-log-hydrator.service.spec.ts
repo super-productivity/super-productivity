@@ -142,6 +142,7 @@ describe('OperationLogHydratorService', () => {
     mockValidateStateService = jasmine.createSpyObj('ValidateStateService', [
       'validateAndRepair',
       'validateState',
+      'validateStateWhenIdle',
     ]);
     mockRepairOperationService = jasmine.createSpyObj('RepairOperationService', [
       'createRepairOperation',
@@ -717,6 +718,42 @@ describe('OperationLogHydratorService', () => {
         await service.hydrateStore();
 
         expect(mockSnapshotService.saveCurrentStateAsSnapshot).not.toHaveBeenCalled();
+      });
+
+      it('should defer tail validation off the boot path when there is no save to gate', async () => {
+        const snapshot = createMockSnapshot({ lastAppliedOpSeq: 5 });
+        const tailOps = Array.from({ length: 10 }, (_, i) =>
+          createMockEntry(6 + i, createMockOperation(`op-${6 + i}`)),
+        );
+        mockOpLogStore.loadStateCache.and.returnValue(Promise.resolve(snapshot));
+        mockOpLogStore.getOpsAfterSeq.and.returnValue(Promise.resolve(tailOps));
+
+        await service.hydrateStore();
+
+        expect(mockValidateStateService.validateState).not.toHaveBeenCalled();
+        expect(mockValidateStateService.validateStateWhenIdle).toHaveBeenCalledOnceWith(
+          mockState,
+          'tail-replay',
+        );
+        expect(mockSnapshotService.saveCurrentStateAsSnapshot).not.toHaveBeenCalled();
+      });
+
+      it('should await tail validation when it gates a snapshot save', async () => {
+        const snapshot = createMockSnapshot({ lastAppliedOpSeq: 5 });
+        const tailOps = Array.from({ length: 11 }, (_, i) =>
+          createMockEntry(6 + i, createMockOperation(`op-${6 + i}`)),
+        );
+        mockOpLogStore.loadStateCache.and.returnValue(Promise.resolve(snapshot));
+        mockOpLogStore.getOpsAfterSeq.and.returnValue(Promise.resolve(tailOps));
+        mockOpLogStore.getLastSeq.and.returnValue(Promise.resolve(16));
+
+        await service.hydrateStore();
+
+        expect(mockValidateStateService.validateState).toHaveBeenCalledOnceWith(
+          mockState,
+        );
+        expect(mockValidateStateService.validateStateWhenIdle).not.toHaveBeenCalled();
+        expect(mockSnapshotService.saveCurrentStateAsSnapshot).toHaveBeenCalled();
       });
 
       it('should merge tail ops clocks into local clock after replay', async () => {

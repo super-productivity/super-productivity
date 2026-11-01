@@ -19,6 +19,15 @@ data class ReminderToSchedule(
     val isDeadline: Boolean
 )
 
+/** Reminder id as the app keys alarms (mobile-notification.effects.ts). */
+internal fun reminderIdOf(reminder: ReminderToSchedule): String =
+    if (reminder.isDeadline) reminder.taskId + DEADLINE_SUFFIX else reminder.taskId
+
+internal fun dueDayReminderIdOf(taskId: String): String = taskId + DUE_DAY_SUFFIX
+
+internal fun taskIdOfReminderId(reminderId: String): String =
+    reminderId.removeSuffix(DEADLINE_SUFFIX).removeSuffix(DUE_DAY_SUFFIX)
+
 /**
  * Cancel all reminder variants (standard, due-day, deadline) for a task.
  * Each cancellation is independent — one failure won't block the other.
@@ -55,7 +64,7 @@ fun cancelRemindersForTask(context: Context, taskId: String) {
  */
 fun scheduleReminderFromSync(context: Context, reminder: ReminderToSchedule, useAlarmStyle: Boolean) {
     try {
-        val reminderId = if (reminder.isDeadline) reminder.taskId + DEADLINE_SUFFIX else reminder.taskId
+        val reminderId = reminderIdOf(reminder)
         val notificationId = SuperSyncBackgroundProvider.generateNotificationId(reminderId)
         val reminderType = if (reminder.isDeadline) "DEADLINE" else "TASK"
         ReminderNotificationHelper.scheduleReminder(
@@ -74,12 +83,16 @@ fun scheduleReminderFromSync(context: Context, reminder: ReminderToSchedule, use
  * @param remindersToSchedule List of reminders to schedule as AlarmManager alarms
  * @param latestSeq The latest server sequence number processed
  * @param hasMore Whether more operations are available (pagination)
+ * @param unreadableTaskIds Task IDs touched by encrypted ops whose payload could
+ *   not be decrypted (e.g. no cached key for a new desktop session), so their
+ *   reminder changes are unknown
  */
 data class ReminderChangeResult(
     val taskIdsToCancel: Set<String>,
     val remindersToSchedule: List<ReminderToSchedule>,
     val latestSeq: Long,
-    val hasMore: Boolean
+    val hasMore: Boolean,
+    val unreadableTaskIds: Set<String> = emptySet(),
 ) {
     /**
      * Fire-time stale check for one alarm: was it cancelled (deleted/done/
@@ -111,8 +124,8 @@ data class ReminderChangeResult(
  * Interface for background sync providers that can detect reminder-relevant changes.
  *
  * Currently implemented for SuperSync (lightweight operation-based API).
- * Could be extended to Dropbox/WebDAV in the future, though those would require
- * downloading the full sync file which is heavier.
+ * WebDAV/Nextcloud have no op API and read the whole sync file instead, so they
+ * diff reminder state rather than ops ([runFileSyncReminderCheck]).
  */
 interface BackgroundSyncProvider {
     /**

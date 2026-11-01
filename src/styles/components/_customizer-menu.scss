@@ -21,6 +21,16 @@
 }
 
 .customizer-menu {
+  .tag-filter-mode-toggle {
+    display: flex;
+    gap: var(--s-half);
+    padding: var(--s-half) 0;
+
+    .is-active {
+      font-weight: 500;
+    }
+  }
+
   .current-value {
     padding-left: 16px;
     font-size: 0.875em;

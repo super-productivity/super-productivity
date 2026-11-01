@@ -54,6 +54,7 @@
           cdkAutosizeMaxRows="4"
           rows="1"
           spellcheck="false"
+          enterkeyhint="send"
           (keydown)="onInputKeydown($event)"
           (input)="onInputChange($event)"
           (scroll)="syncHighlightScroll()"
@@ -189,6 +190,7 @@
     <add-task-bar-actions
       [isHideTagBtn]="!!planForDay()"
       [isHideDueBtn]="!!planForDay()"
+      [isHideDeadlineBtn]="!!planForDay()"
       (refocus)="focusInput()"
       (scheduleDialogOpenChange)="onScheduleDialogOpenChange($event)"
     >
@@ -229,7 +231,7 @@
   [autoActiveFirstOption]="true"
 >
   @for (
-    item of suggestions$ | async;
+    item of suggestions();
     track item.taskId || (item.issueData && item.issueData.id)
   ) {
     <mat-option [value]="item">
@@ -249,6 +251,11 @@
           [isHideTitle]="isHideTagTitles()"
         ></tag>
       }
+    </mat-option>
+  }
+  @if (isShowNoSearchMatches()) {
+    <mat-option disabled>
+      {{ T.F.TASK.ADD_TASK_BAR.NO_SEARCH_MATCHES | translate }}
     </mat-option>
   }
 </mat-autocomplete>

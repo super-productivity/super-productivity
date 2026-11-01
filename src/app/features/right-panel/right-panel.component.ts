@@ -412,7 +412,6 @@ export class RightPanelComponent implements AfterViewInit, OnDestroy {
     this._taskService.setSelectedId(null);
     this._layoutService.hideNotes();
     this._layoutService.hideAddTaskPanel();
-    this._layoutService.hideTaskViewCustomizerPanel();
     this._layoutService.hideScheduleDayPanel();
     this._store.dispatch(hidePluginPanel());
 

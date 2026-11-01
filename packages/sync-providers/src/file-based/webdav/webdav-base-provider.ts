@@ -187,6 +187,18 @@ export abstract class WebdavBaseProvider<
     await this._api.remove(filePath);
   }
 
+  /**
+   * URL and Authorization header value that download `targetPath`, so the
+   * Android background reminder worker reads the same file this provider
+   * syncs. The header carries credentials: never log it.
+   */
+  async getFileReadRequest(
+    targetPath: string,
+  ): Promise<{ url: string; authorization: string }> {
+    const { filePath } = await this._getConfigAndPath(targetPath);
+    return this._api.getReadRequest(filePath);
+  }
+
   protected _getFilePath(targetPath: string, cfg: WebdavPrivateCfg): string {
     const parts = cfg.syncFolderPath ? [cfg.syncFolderPath] : [];
     if (this._extraPath) {

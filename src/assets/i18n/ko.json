@@ -3061,8 +3061,8 @@
       "PLANNER": "{{plannerIcon}} <b>플래너</b>에서 앞으로 며칠을 계획하세요",
       "TASK_MENU_TOUCH": "작업을 왼쪽으로 스와이프하면 메뉴가 나와요: {{playIcon}} <b>시간 추적 시작</b>, {{subtaskIcon}} <b>하위 작업 추가</b>",
       "TASK_MENU_TOUCH_NO_TRACKING": "작업을 왼쪽으로 스와이프하면 메뉴가 나와요. 예: {{subtaskIcon}} <b>하위 작업 추가</b>",
-      "TIMER_RUNNING": "타이머가 실행 중입니다. 일시중지하려면 {{playIcon}}를 다시 누르거나 <kbd>{{key}}</kbd>를 누르세요.",
-      "TIMER_RUNNING_TOUCH": "타이머가 실행 중입니다. 일시중지하려면 상단의 {{playIcon}}를 탭하세요.",
+      "TIMER_RUNNING": "타이머가 실행 중입니다. 일시중지하려면 {{pauseIcon}}를 다시 누르거나 <kbd>{{key}}</kbd>를 누르세요.",
+      "TIMER_RUNNING_TOUCH": "타이머가 실행 중입니다. 일시중지하려면 상단의 {{pauseIcon}}를 탭하세요.",
       "TRACK_TIME": "작업 위에 마우스를 올리고 {{playIcon}}를 눌러 시간을 추적하세요"
     },
     "WANT_MORE": {

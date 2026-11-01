@@ -3117,8 +3117,8 @@
       "PLANNER": "خطط للأيام القادمة في {{plannerIcon}} <b>مخطط</b>",
       "TASK_MENU_TOUCH": "اسحب المهمة إلى اليسار لقائمتها: {{playIcon}} <b>بدء تتبع الوقت</b>، {{subtaskIcon}} <b>إضافة المهمة الفرعية</b>",
       "TASK_MENU_TOUCH_NO_TRACKING": "اسحب المهمة إلى اليسار لقائمتها، مثل {{subtaskIcon}} <b>إضافة المهمة الفرعية</b>",
-      "TIMER_RUNNING": "المؤقت يعمل. اضغط {{playIcon}} مرة أخرى أو <kbd>{{key}}</kbd> للإيقاف المؤقت.",
-      "TIMER_RUNNING_TOUCH": "المؤقت يعمل. اضغط على {{playIcon}} في الأعلى للإيقاف المؤقت.",
+      "TIMER_RUNNING": "المؤقت يعمل. اضغط {{pauseIcon}} مرة أخرى أو <kbd>{{key}}</kbd> للإيقاف المؤقت.",
+      "TIMER_RUNNING_TOUCH": "المؤقت يعمل. اضغط على {{pauseIcon}} في الأعلى للإيقاف المؤقت.",
       "TRACK_TIME": "مرّر المؤشر فوق المهمة واضغط {{playIcon}} لتتبع الوقت"
     },
     "WANT_MORE": {

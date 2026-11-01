@@ -1,0 +1,20 @@
+@if (openTasks().length) {
+  <div class="add-open-tasks">
+    <button
+      mat-stroked-button
+      color="primary"
+      (click)="planOpenTasksOnMonday()"
+    >
+      <mat-icon>wb_sunny</mat-icon>
+      {{ T.PDS.ADD_OPEN_TASKS_FROM_WEEK | translate }} ({{ openTaskCount() }})
+    </button>
+  </div>
+}
+<div
+  class="week"
+  cdkDropListGroup
+>
+  @for (day of days(); track day.dayDate) {
+    <planner-day [day]="day"></planner-day>
+  }
+</div>

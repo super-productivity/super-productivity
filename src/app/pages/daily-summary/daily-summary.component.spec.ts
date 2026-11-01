@@ -211,6 +211,30 @@ describe('DailySummaryComponent', () => {
     });
   });
 
+  describe('_moveDoneToArchive()', () => {
+    it('archives every done task, not only the ones listed on Today', async () => {
+      const listed = createTask({ id: 'done-today', isDone: true });
+      const earlier = createTask({ id: 'done-earlier', isDone: true });
+      const moveToArchive = jasmine.createSpy('moveToArchive').and.resolveTo();
+      const receiver = Object.assign(Object.create(DailySummaryComponent.prototype), {
+        workContextService: {
+          doneTasks$: of([listed]),
+          doneTasksToArchive$: of([listed, earlier]),
+        },
+        _taskService: { moveToArchive },
+        _snackService: { open: jasmine.createSpy('open') },
+        _translateService: { currentLang: 'en' },
+        _translateStore: { getTranslations: () => ({}) },
+      }) as DailySummaryComponent;
+
+      await (
+        receiver as unknown as { _moveDoneToArchive: () => Promise<void> }
+      )._moveDoneToArchive();
+
+      expect(moveToArchive).toHaveBeenCalledOnceWith([listed, earlier]);
+    });
+  });
+
   describe('_finishDayForGood()', () => {
     it('should still execute the callback when the final sync fails', async () => {
       const cb = jasmine.createSpy('cb');

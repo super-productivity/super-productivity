@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { of } from 'rxjs';
+import { BehaviorSubject, firstValueFrom, of } from 'rxjs';
 import { resolveContextTheme, WorkContextService } from './work-context.service';
 import { SYSTEM_ENTITY_THEMES } from './work-context-default-theme.util';
 import {
@@ -10,6 +10,7 @@ import {
 import { DEFAULT_PROJECT, INBOX_PROJECT } from '../project/project.const';
 import { DEFAULT_TASK, Task, TaskWithSubTasks } from '../tasks/task.model';
 import { TASK_FEATURE_NAME } from '../tasks/store/task.reducer';
+import { selectAllTasksWithSubTasks } from '../tasks/store/task.selectors';
 import { MockStore, provideMockStore } from '@ngrx/store/testing';
 import { provideMockActions } from '@ngrx/effects/testing';
 import { Router } from '@angular/router';
@@ -153,6 +154,102 @@ describe('WorkContextService - undoneTasks$ filtering', () => {
 
   afterEach(() => {
     jasmine.clock().uninstall();
+  });
+
+  describe('done tasks on Today', () => {
+    const at = (month: number, day: number, hours: number): number =>
+      new Date(2023, month, day, hours, 0, 0, 0).getTime();
+    const DUE_TODAY = createMockTask({
+      id: 'DUE_TODAY',
+      isDone: true,
+      dueDay: '2023-06-13',
+      doneOn: at(5, 13, 9),
+    });
+    const DONE_TODAY = createMockTask({
+      id: 'DONE_TODAY',
+      isDone: true,
+      dueDay: '2023-01-02',
+      doneOn: at(5, 13, 8),
+    });
+    const DONE_EARLIER = createMockTask({
+      id: 'DONE_EARLIER',
+      isDone: true,
+      dueDay: '2023-01-01',
+      doneOn: at(0, 1, 9),
+    });
+    const DUE_TIME_TODAY = createMockTask({
+      id: 'DUE_TIME_TODAY',
+      isDone: true,
+      dueWithTime: at(5, 13, 7),
+      doneOn: at(5, 12, 9),
+    });
+    const UNDONE = createMockTask({ id: 'UNDONE', dueDay: '2023-06-13' });
+
+    beforeEach(() => {
+      const store = TestBed.inject(MockStore);
+      store.overrideSelector(selectActiveContextId, TODAY_TAG.id);
+      store.overrideSelector(selectAllTasksWithSubTasks, [
+        DONE_EARLIER,
+        DUE_TODAY,
+        DONE_TODAY,
+        DUE_TIME_TODAY,
+        UNDONE,
+      ]);
+      store.refreshState();
+    });
+
+    it('lists only tasks due or completed today, newest first', async () => {
+      const done = await firstValueFrom(service.doneTasks$);
+      expect(done.map((t) => t.id)).toEqual([
+        'DUE_TODAY',
+        'DONE_TODAY',
+        'DUE_TIME_TODAY',
+      ]);
+    });
+
+    it('drops tasks of the previous day once the day changes', () => {
+      const day$ = new BehaviorSubject('2023-06-13');
+      (
+        Object.getOwnPropertyDescriptor(
+          globalTrackingIntervalServiceMock,
+          'todayDateStr$',
+        )!.get as jasmine.Spy
+      ).and.returnValue(day$);
+      let ids: string[] = [];
+      const sub = service.doneTasks$.subscribe((tasks) => (ids = tasks.map((t) => t.id)));
+      expect(ids).toEqual(['DUE_TODAY', 'DONE_TODAY', 'DUE_TIME_TODAY']);
+
+      day$.next('2023-06-14');
+
+      expect(ids).toEqual([]);
+      sub.unsubscribe();
+    });
+
+    it('archives every unarchived done task, including earlier ones', async () => {
+      const toArchive = await firstValueFrom(service.doneTasksToArchive$);
+      expect(toArchive.map((t) => t.id)).toEqual([
+        'DUE_TODAY',
+        'DONE_TODAY',
+        'DUE_TIME_TODAY',
+        'DONE_EARLIER',
+      ]);
+    });
+
+    it('lists every done task of the context outside Today', async () => {
+      const store = TestBed.inject(MockStore);
+      store.overrideSelector(selectActiveContextId, 'project-1');
+      store.refreshState();
+      // read lazily inside switchMap, so replacing it after construction works
+      (service as unknown as { mainListTasks$: unknown }).mainListTasks$ = of([
+        DONE_EARLIER,
+        DUE_TODAY,
+        UNDONE,
+      ]);
+
+      const done = await firstValueFrom(service.doneTasks$);
+
+      expect(done.map((t) => t.id)).toEqual(['DUE_TODAY', 'DONE_EARLIER']);
+    });
   });
 
   describe('breakTimeToday$', () => {
@@ -556,6 +653,14 @@ describe('WorkContextService - getDoneTodayInArchive', () => {
 
     expect(result).toBe(1);
     jasmine.clock().uninstall();
+  });
+
+  it('doneTodayArchived$ falls back to 0 when the archive read fails', async () => {
+    taskArchiveServiceMock.loadYoung.and.returnValue(Promise.reject(new Error('idb')));
+
+    const result = await firstValueFrom(service.doneTodayArchived$);
+
+    expect(result).toBe(0);
   });
 
   it('does not count a task done yesterday (different logical day)', async () => {

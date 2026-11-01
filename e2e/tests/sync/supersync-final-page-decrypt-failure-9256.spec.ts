@@ -1,10 +1,10 @@
+import { CURRENT_SCHEMA_VERSION } from '@sp/shared-schema';
 import {
-  CURRENT_SCHEMA_VERSION,
   SuperSyncDownloadOpsResponseSchema,
   SuperSyncUploadOpsRequestSchema,
   SuperSyncUploadOpsResponseSchema,
   type SuperSyncOperation,
-} from '@sp/shared-schema';
+} from '@sp/shared-schema/supersync-http-contract';
 import { encrypt } from '@sp/sync-core';
 import type { Dialog, Page } from '@playwright/test';
 import { test, expect } from '../../fixtures/supersync.fixture';

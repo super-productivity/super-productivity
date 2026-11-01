@@ -9,6 +9,7 @@ import {
   afterNextRender,
   inject,
   input,
+  linkedSignal,
   OnDestroy,
   OnInit,
   signal,
@@ -26,6 +27,7 @@ import { TakeABreakService } from '../take-a-break/take-a-break.service';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import {
   animationFrameScheduler,
+  firstValueFrom,
   from,
   fromEvent,
   Observable,
@@ -315,6 +317,13 @@ export class WorkViewComponent implements OnInit, OnDestroy {
   selectedTaskId = this.taskService.selectedTaskId;
   isOnTodayList = toSignal(this.workContextService.isTodayList$, { initialValue: false });
   isDoneHidden = signal(!!localStorage.getItem(LS.DONE_TASKS_HIDDEN));
+  // Projected content is built even while its collapsible is closed, so the Done
+  // list is created on first expand only; it is kept afterwards so collapsing
+  // animates the rows out and re-expanding is free.
+  isDoneListBuilt = linkedSignal<boolean, boolean>({
+    source: this.isDoneHidden,
+    computation: (isHidden, previous) => !!previous?.value || !isHidden,
+  });
   isLaterTodayHidden = signal(!!localStorage.getItem(LS.LATER_TODAY_TASKS_HIDDEN));
   isOverdueHidden = signal(!!localStorage.getItem(LS.OVERDUE_TASKS_HIDDEN));
   isRepeatCfgsHidden = signal(!!localStorage.getItem(LS.REPEAT_CFGS_HIDDEN));
@@ -584,7 +593,9 @@ export class WorkViewComponent implements OnInit, OnDestroy {
   }
 
   async moveDoneToArchive(): Promise<void> {
-    const doneTasks = this.doneTasks();
+    // not this.doneTasks(): on Today that hides done tasks from earlier days,
+    // which should still be swept
+    const doneTasks = await firstValueFrom(this.workContextService.doneTasksToArchive$);
 
     if (!doneTasks || doneTasks.length === 0) {
       return;

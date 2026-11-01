@@ -1,6 +1,6 @@
 import { getTaskPriority } from '../tasks/task-priority.const';
 import { computed, effect, Injectable, inject, signal } from '@angular/core';
-import { Observable, animationFrameScheduler, combineLatest, of } from 'rxjs';
+import { Observable, Subject, animationFrameScheduler, combineLatest, of } from 'rxjs';
 import { map, observeOn, switchMap, take } from 'rxjs/operators';
 import { TaskWithSubTasks } from '../tasks/task.model';
 import { selectAllProjects } from '../project/store/project.selectors';
@@ -95,6 +95,15 @@ export class TaskViewCustomizerService {
   public selectedGroup = signal<GroupOption>(DEFAULT_OPTIONS.group);
   public selectedFilter = signal<FilterOption>(DEFAULT_OPTIONS.filter);
   public collapsedGroupIds = signal<string[]>([]);
+
+  // The customizer is a menu anchored to the header's filter button, so the
+  // keyboard shortcut can only ask that button to open it.
+  private readonly _openMenuRequest$ = new Subject<void>();
+  readonly openMenuRequest$ = this._openMenuRequest$.asObservable();
+
+  requestOpenMenu(): void {
+    this._openMenuRequest$.next();
+  }
 
   isCustomized = computed(() => {
     return [
@@ -224,7 +233,17 @@ export class TaskViewCustomizerService {
     ) {
       preset = String(getTaskPriority(preset));
     }
-    return currentFilter ? { ...currentFilter, preset } : DEFAULT_OPTIONS.filter;
+    if (!currentFilter) return DEFAULT_OPTIONS.filter;
+
+    const sanitized: FilterOption = {
+      ...currentFilter,
+      preset,
+    };
+    if (stored.type === FILTER_OPTION_TYPE.tag) {
+      if (stored.tagIds) sanitized.tagIds = stored.tagIds;
+      if (stored.tagFilterMode) sanitized.tagFilterMode = stored.tagFilterMode;
+    }
+    return sanitized;
   }
 
   customizeUndoneTasks(
@@ -242,8 +261,15 @@ export class TaskViewCustomizerService {
       map(([tasks, sort, group, filter]) => {
         const normalizedFilterVal = filter.preset?.trim();
         const filterValueToUse = normalizedFilterVal ?? '';
+        // A deleted tag stays in stored tagIds, but the chip list hides it.
+        // Keep only ids that still exist so the list matches the chips.
+        const tagIds =
+          filter.type === FILTER_OPTION_TYPE.tag
+            ? this._existingTagIds(filter.tagIds ?? [])
+            : [];
+        const hasTagIds = tagIds.length > 0;
 
-        const isDefaultFilter = !filter.type || !filterValueToUse;
+        const isDefaultFilter = !filter.type || (!filterValueToUse && !hasTagIds);
         const isDefaultSort = !sort.type;
         const isDefaultGroup = !group.type;
 
@@ -253,7 +279,9 @@ export class TaskViewCustomizerService {
 
         const filtered = isDefaultFilter
           ? tasks
-          : this.applyFilter(tasks, filter.type, filterValueToUse);
+          : filter.type === FILTER_OPTION_TYPE.tag && hasTagIds
+            ? this._filterByTagIds(tasks, tagIds, filter.tagFilterMode)
+            : this.applyFilter(tasks, filter.type, filterValueToUse);
         const sorted = isDefaultSort
           ? filtered
           : this.applySort(filtered, sort.type, sort.order);
@@ -305,17 +333,19 @@ export class TaskViewCustomizerService {
           return tasks.filter((t) => !t.tagIds.length);
         }
 
-        const tag = this._allTags().find((t) =>
-          t.title.toLowerCase().includes(value.toLowerCase().trim()),
+        return tasks.filter((task) =>
+          task.tagIds?.some((id) =>
+            this._allTags().some(
+              (tag) =>
+                tag.id === id && tag.title.toLowerCase().includes(value.toLowerCase()),
+            ),
+          ),
         );
-        if (!tag) return [];
-        return tasks.filter((task) => task.tagIds?.includes(tag.id));
       case FILTER_OPTION_TYPE.project:
-        const project = this._allProjects.find((p) =>
-          p.title.toLowerCase().includes(value.toLowerCase().trim()),
-        );
-        if (!project) return [];
-        return tasks.filter((task) => task.projectId === project.id);
+        const projectIds = this._allProjects
+          .filter((p) => p.title.toLowerCase().includes(value.toLowerCase().trim()))
+          .map((p) => p.id);
+        return tasks.filter((task) => projectIds.includes(task.projectId));
       case FILTER_OPTION_TYPE.scheduledDate:
         return this._filterByDateFields(tasks, value, (t) => [t.dueDay, t.dueWithTime]);
       case FILTER_OPTION_TYPE.deadline:
@@ -596,14 +626,22 @@ export class TaskViewCustomizerService {
     const groupedByTagId = new Map<string, TaskWithSubTasks[]>();
     const unknownTagTasks: TaskWithSubTasks[] = [];
     const noTagTasks: TaskWithSubTasks[] = [];
+    // Inside a tag's own view every task carries that tag, so its group would
+    // just repeat the whole list (#9630). TODAY is virtual and never in tagIds,
+    // so this is a no-op there.
+    const contextTagId =
+      this._workContextService.activeWorkContextType === WorkContextType.TAG
+        ? this._workContextService.activeWorkContextId
+        : undefined;
 
     tasks.forEach((task) => {
-      if (!task.tagIds?.length) {
+      const tagIds = (task.tagIds ?? []).filter((tagId) => tagId !== contextTagId);
+      if (!tagIds.length) {
         noTagTasks.push(task);
         return;
       }
 
-      task.tagIds.forEach((tagId) => {
+      tagIds.forEach((tagId) => {
         if (tagById.has(tagId)) {
           const tagTasks = groupedByTagId.get(tagId) ?? [];
           tagTasks.push(task);
@@ -691,6 +729,29 @@ export class TaskViewCustomizerService {
         default:
           return true;
       }
+    });
+  }
+
+  /** Ids the chip list can still show: real tags, not Today and not deleted ones. */
+  private _existingTagIds(tagIds: string[]): string[] {
+    const known = new Set(
+      this._allTags()
+        .filter((tag) => tag.id !== TODAY_TAG.id)
+        .map((tag) => tag.id),
+    );
+    return tagIds.filter((id) => known.has(id));
+  }
+
+  private _filterByTagIds(
+    tasks: TaskWithSubTasks[],
+    tagIds: string[],
+    mode: 'OR' | 'AND' = 'OR',
+  ): TaskWithSubTasks[] {
+    return tasks.filter((task) => {
+      const taskTagIds = task.tagIds ?? [];
+      return mode === 'AND'
+        ? tagIds.every((tagId) => taskTagIds.includes(tagId))
+        : tagIds.some((tagId) => taskTagIds.includes(tagId));
     });
   }
 

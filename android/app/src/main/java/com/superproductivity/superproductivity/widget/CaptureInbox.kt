@@ -10,8 +10,9 @@ import java.util.UUID
 
 /**
  * Durable on-device inbox for tasks captured natively: Android shares
- * ([addShare]) and title-only captures left by the removed startup quick-add
- * overlay of an older app version ([add]).
+ * ([addShare]) and title-only captures ([add]) from the widget's quick add
+ * ([QuickAddActivity]) or left by the removed startup quick-add overlay of an
+ * older app version.
  *
  * One JSON file per capture: writes return only after the file is fsynced and
  * renamed into place, reads never delete, and the app acknowledges an entry
@@ -212,6 +213,7 @@ class CaptureInbox(private val dir: File) {
     companion object {
         const val VERSION = 1
         const val SOURCE_SHARE = "share"
+        const val SOURCE_WIDGET = "widget"
         private const val KEY_UPLOAD = "upload"
         private const val UPLOAD_PENDING = "pending"
         private const val KEY_SENDING_AT = "sendingAt"

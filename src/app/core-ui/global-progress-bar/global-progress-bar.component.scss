@@ -1,3 +1,5 @@
+@use '../../../styles/_globals.scss' as *;
+
 :host {
   position: absolute;
   bottom: 0;
@@ -11,6 +13,16 @@
     height: 3px;
     box-shadow: var(--whiteframe-shadow-2dp);
     opacity: 0.3;
+  }
+}
+
+// Sit on top of the mobile bottom nav instead of over its buttons.
+:host-context(.has-mobile-bottom-nav) {
+  @include mq(xs, max) {
+    bottom: calc(
+      var(--bottom-nav-height) + var(--bottom-nav-safe-area) +
+        var(--bottom-nav-extra-offset)
+    );
   }
 }
 

@@ -3112,8 +3112,8 @@
       "PLANNER": "Lên kế hoạch cho những ngày tới trong {{plannerIcon}} <b>Lập kế hoạch</b>",
       "TASK_MENU_TOUCH": "Vuốt công việc sang trái để mở menu: {{playIcon}} <b>Bắt đầu theo dõi</b>, {{subtaskIcon}} <b>Thêm việc con</b>",
       "TASK_MENU_TOUCH_NO_TRACKING": "Vuốt công việc sang trái để mở menu, ví dụ {{subtaskIcon}} <b>Thêm việc con</b>",
-      "TIMER_RUNNING": "Bộ đếm giờ đang chạy. Nhấn {{playIcon}} lần nữa hoặc <kbd>{{key}}</kbd> để tạm dừng.",
-      "TIMER_RUNNING_TOUCH": "Bộ đếm giờ đang chạy. Chạm vào {{playIcon}} ở phía trên để tạm dừng.",
+      "TIMER_RUNNING": "Bộ đếm giờ đang chạy. Nhấn {{pauseIcon}} lần nữa hoặc <kbd>{{key}}</kbd> để tạm dừng.",
+      "TIMER_RUNNING_TOUCH": "Bộ đếm giờ đang chạy. Chạm vào {{pauseIcon}} ở phía trên để tạm dừng.",
       "TRACK_TIME": "Di chuột lên công việc và nhấn {{playIcon}} để theo dõi thời gian"
     },
     "WANT_MORE": {

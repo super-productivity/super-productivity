@@ -255,6 +255,46 @@ describe('NextcloudProvider', () => {
     );
   });
 
+  it('getFileReadRequest matches the request downloadFile sends', async () => {
+    const nativeHttp = vi.fn().mockResolvedValue({
+      status: 200,
+      headers: {},
+      data: 'real-payload',
+    });
+    const provider = new NextcloudProvider(
+      {
+        logger: NOOP_SYNC_LOGGER,
+        platformInfo: {
+          isNativePlatform: true,
+          isAndroidWebView: false,
+          isIosNative: false,
+        },
+        webFetch: () => globalThis.fetch as typeof fetch,
+        nativeHttp,
+        credentialStore: fakeStore<typeof PROVIDER_ID_NEXTCLOUD, NextcloudPrivateCfg>({
+          ...validNextcloudCfg,
+          loginName: 'alice@example.com',
+          syncFolderPath: 'my folder',
+        }),
+      },
+      '/DEV',
+    );
+
+    await provider.downloadFile('sync-data.json');
+    const sent = nativeHttp.mock.calls[0]?.[0] as {
+      url: string;
+      headers: Record<string, string>;
+    };
+
+    expect(await provider.getFileReadRequest('sync-data.json')).toEqual({
+      url: sent.url,
+      authorization: sent.headers.Authorization,
+    });
+    expect(sent.url).toBe(
+      'https://cloud.example.com/remote.php/dav/files/alice/my%20folder/DEV/sync-data.json',
+    );
+  });
+
   it('uses Nextcloud canonical OC-ETag revisions', async () => {
     const nativeHttp = vi.fn().mockResolvedValue({
       status: 200,

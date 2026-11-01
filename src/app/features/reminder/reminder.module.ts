@@ -43,7 +43,9 @@ import { Log } from '../../core/log';
 import { IS_ANDROID_WEB_VIEW } from '../../util/is-android-web-view';
 import { androidInterface } from '../android/android-interface';
 import { DateService } from '../../core/date/date.service';
+import { startLoopingAlarm, stopLoopingAlarm } from '../../util/looping-alarm';
 
+const REMINDER_ALARM_SOUND = 'copper-bell-ding.mp3';
 const SNOOZE_10M_MS = 10 * 60 * 1000;
 const SNOOZE_1H_MS = 60 * 60 * 1000;
 // Pre-scheduled reminders for repeatable tasks can fire for a predicted
@@ -148,10 +150,10 @@ export class ReminderModule {
           willShowDialog: !IS_ANDROID_NATIVE || overdueReminders.length > 0,
         });
 
-        if (
-          this._isElectron &&
-          this._globalConfigService.cfg()?.reminder?.isFocusWindow
-        ) {
+        const cfg = this._globalConfigService.cfg();
+        const isAlarm = this._isElectron && !!cfg?.reminder?.useAlarmStyleReminders;
+
+        if (this._isElectron && (cfg?.reminder?.isFocusWindow || isAlarm)) {
           this._uiHelperService.focusAppAfterNotification({ isReminder: true });
         }
 
@@ -209,7 +211,7 @@ export class ReminderModule {
             );
           }
         } else {
-          this._matDialog.open(DialogViewTaskRemindersComponent, {
+          const dialogRef = this._matDialog.open(DialogViewTaskRemindersComponent, {
             restoreFocus: true,
             // Backdrop click / Escape closes the dialog. Deadline reminders are
             // cleared on destroy; scheduled reminders stay active and the worker
@@ -218,6 +220,14 @@ export class ReminderModule {
               reminders,
             },
           });
+          if (isAlarm) {
+            // Rings until the dialog closes, however the reminders were handled.
+            const alarm = startLoopingAlarm(
+              REMINDER_ALARM_SOUND,
+              cfg?.sound?.volume || 0,
+            );
+            dialogRef.afterClosed().subscribe(() => alarm.then(stopLoopingAlarm));
+          }
         }
       });
   }

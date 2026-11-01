@@ -219,9 +219,13 @@ export class TaskRepeatCfgEffects {
           // Also align dueDay with the first occurrence: for future occurrences
           // this removes the task from today's view (#6856); for past occurrences
           // this is a no-op when dueDay already matches (#7344 preservation).
+          // Timed tasks are skipped: addRepeatCfgToTaskUpdateTask$ schedules
+          // them via scheduleTaskWithTime, which clears dueDay. Setting it here
+          // afterwards leaves dueDay + dueWithTime and a planner.days entry, so
+          // the task renders twice in planner and schedule (#11212).
           this._taskService.update(task.id, {
             created: firstOccurrence.getTime(),
-            dueDay: firstOccurrenceStr,
+            ...(isTimedTask ? {} : { dueDay: firstOccurrenceStr }),
           });
           // planTaskForDay (below) also sets dueDay redundantly, plus handles
           // planner days and TODAY_TAG removal
@@ -372,9 +376,16 @@ export class TaskRepeatCfgEffects {
                       this._addTasksForTomorrowService.addAllDueToday();
                     }
                   } else if (
-                    // Resumed (#3589): today's occurrence would otherwise wait
-                    // for the next day change, same as #7768 Bug 2 above.
-                    changes.isPaused === false &&
+                    // Resumed (#3589) or replanned onto today, e.g. startDate
+                    // moved forward to today after the last copy was done
+                    // (#11213): today's occurrence would otherwise wait for
+                    // the next day change, same as #7768 Bug 2 above. Paused
+                    // configs returned early, so this is never a pause. Skip
+                    // when today was already processed: the sweep would create
+                    // nothing for this series (e.g. repeat-from-completion
+                    // re-anchoring to today on every completion).
+                    (!lastCreationDay ||
+                      lastCreationDay < this._dateService.todayStr()) &&
                     firstOccurrence &&
                     this._dateService.isToday(firstOccurrence)
                   ) {

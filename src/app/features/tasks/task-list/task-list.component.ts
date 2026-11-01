@@ -59,7 +59,7 @@ import { DEFAULT_OPTIONS, NO_TAG_GROUP_ID } from '../../task-view-customizer/typ
 import { dragDelayForTouch, isTouchActive } from '../../../util/input-intent';
 import { performHapticFeedback } from '../../../util/haptic-feedback';
 import { DateService } from '../../../core/date/date.service';
-import { canConvertTaskToSubTask } from '../util/can-convert-task-to-sub-task';
+import { canDropTaskIntoSubTaskList } from '../util/can-convert-task-to-sub-task';
 import { TODAY_TAG } from '../../tag/tag.const';
 import { TaskMultiSelectService } from '../task-multi-select.service';
 
@@ -332,7 +332,7 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
     const isSrcSection = srcListIdRaw === 'PARENT' && !RESERVED_LIST_IDS.has(srcModelId);
 
     if (targetListId === 'SUB') {
-      return targetModelId !== task.id && canConvertTaskToSubTask(task);
+      return targetModelId !== task.id && canDropTaskIntoSubTaskList(task);
     }
 
     if (PARENT_ALLOWED_LISTS.includes(targetModelId)) {
@@ -677,6 +677,18 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
 
     if (srcListId === 'PARENT' && targetListId === 'SUB') {
       const afterTaskId = getAnchorFromDragDrop(taskId, newOrderedIds);
+      // #11027: a subtask doesn't keep the schedule it had as a main task (the
+      // convert already drops dueDay), so clear the time and reminder first —
+      // as its own op, so released clients' convertToSubTask guard accepts the
+      // follow-up (see canDropTaskIntoSubTaskList).
+      if (draggedTask?.dueWithTime || draggedTask?.remindAt) {
+        this._store.dispatch(
+          TaskSharedActions.unscheduleTask({
+            id: taskId,
+            isSkipToast: !draggedTask.remindAt,
+          }),
+        );
+      }
       this._store.dispatch(
         TaskSharedActions.convertToSubTask({
           taskId,
@@ -821,7 +833,8 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
   /**
    * Reassign tags when a task is dragged across tag-group boundaries in the
    * grouped-by-tag work view:
-   * - target is the {@link NO_TAG_GROUP_ID} bucket → clear all tags;
+   * - target is the {@link NO_TAG_GROUP_ID} bucket → clear all tags (except
+   *   the active context tag in a tag view);
    * - otherwise move semantics: drop the source group's tag (when the drag
    *   started from a real tag group) and add the target group's tag.
    * `updateTags` de-dupes, so a task that already carries the target tag is fine.
@@ -838,7 +851,14 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
     task: TaskWithSubTasks,
   ): void {
     if (targetTagId === NO_TAG_GROUP_ID) {
-      this._taskService.updateTags(task, []);
+      // In a tag view, "No tag" means "no tag besides this one" (#9630);
+      // clearing it too would drop the task out of the current view.
+      const { activeWorkContextId, activeWorkContextType } = this._workContextService;
+      const keptTagIds = (task.tagIds ?? []).filter(
+        (id) =>
+          activeWorkContextType === WorkContextType.TAG && id === activeWorkContextId,
+      );
+      this._taskService.updateTags(task, keptTagIds);
       return;
     }
     const nextTagIds = [

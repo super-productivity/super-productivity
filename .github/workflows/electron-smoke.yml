@@ -62,7 +62,7 @@ jobs:
         uses: ./.github/actions/setup-electron-build
 
       - name: Install npm packages
-        uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08 # v3
+        uses: nick-fields/retry@ad984534de44a9489a53aefd81eb77f87c70dc60 # v4.0.0
         with:
           timeout_minutes: 10
           max_attempts: 3
@@ -87,7 +87,7 @@ jobs:
         # --linux dir produces linux-unpacked/ with the real app.asar but
         # skips AppImage/deb/snap/rpm — cheap and enough to exercise the
         # same packaging pipeline release uses.
-        uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08 # v3
+        uses: nick-fields/retry@ad984534de44a9489a53aefd81eb77f87c70dc60 # v4.0.0
         with:
           timeout_minutes: 15
           max_attempts: 3

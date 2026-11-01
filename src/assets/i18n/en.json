@@ -804,12 +804,14 @@
         "PLACEHOLDER_3": "Where did focus slip - and how can you protect it?",
         "PLACEHOLDER_4": "Which task gave you energy? Which drained it?",
         "PLACEHOLDER_5": "One thing to repeat. One thing to change.",
+        "PLACEHOLDER_WEEK": "Wins? What pulled you off track? What changes next week?",
         "REMIND_LABEL": "Remind me tomorrow about this",
         "REMINDER_CREATED": "Reflection reminder scheduled for tomorrow",
         "REMINDER_ERROR": "Could not schedule the reminder",
         "REMINDER_NEEDS_TEXT": "Write a reflection before asking for a reminder",
         "REMINDER_TASK_TITLE": "Revisit reflection note",
-        "TITLE": "Reflection Note"
+        "TITLE": "Reflection Note",
+        "TITLE_WEEK": "Reflect on your week"
       }
     },
     "NOTE": {
@@ -1762,13 +1764,15 @@
       "ADD_TASK_BAR": {
         "ADD_EXISTING_TASK": "Add existing task \"{{taskTitle}}\"",
         "CREATE_NEW_TAGS": "Create new tags",
+        "DEADLINE_BUTTON": "Deadline",
         "DUE_BUTTON": "Schedule",
         "ESTIMATE_BUTTON": "Estimate",
+        "NO_SEARCH_MATCHES": "No matching tasks or issues",
         "NOTE_PLACEHOLDER": "Add a note… (Ctrl+Enter to add task)",
-        "PLACEHOLDER_CREATE": "A task title #tag @16:00 t25m ",
+        "PLACEHOLDER_CREATE": "A task title #tag @16:00 t25m",
         "PLACEHOLDER_SEARCH": "Add existing task or issues...",
         "REPEAT_BUTTON": "Repeat",
-        "SEARCH_INFO_TEXT": "Search and add issues and tasks from archive and other projects",
+        "SEARCH_INFO_TEXT": "Search issues and existing tasks to add here",
         "TAGS_BUTTON": "Tags",
         "TODAY": "Today",
         "TOGGLE_ADD_TOP_OR_BOTTOM": "Toggle adding task to top & bottom of list",
@@ -2292,7 +2296,6 @@
         "DEADLINE_TODAY": "Deadline Today",
         "DEADLINE_TOMORROW": "Deadline Tomorrow",
         "ENTER_PROJECT": "Filter Projects",
-        "ENTER_TAG": "Filter Tag",
         "ESTIMATED_TIME": "Estimated Time",
         "FILTER_BY": "Filter By",
         "FILTER_DEADLINE": "Deadline",
@@ -2304,6 +2307,8 @@
         "FILTER_SCHEDULED_DATE": "Planned Date",
         "FILTER_TAG": "Tag",
         "FILTER_TIME_SPENT": "Time Spent",
+        "TAG_FILTER_OR": "Any tag (OR)",
+        "TAG_FILTER_AND": "All tags (AND)",
         "GROUP_BY": "Group By",
         "GROUP_DEADLINE": "Deadline",
         "GROUP_DEADLINE_NONE": "No deadline",
@@ -2590,7 +2595,7 @@
       "SEARCH_HINT": "Find any task, including archived ones, and your notes. Opens from the side menu or a keyboard shortcut.",
       "SYNC_BUTTON": "Sync button",
       "SYNC_BUTTON_HINT": "Shows a button in the header to start syncing manually and see the sync status.",
-      "TIME_TRACKING": "Stopwatch time tracking",
+      "TIME_TRACKING": "Time tracking",
       "TIME_TRACKING_HINT": "The play button for starting and stopping a timer on the current task to track how long you work on it.",
       "TITLE": "App Features"
     },
@@ -2694,6 +2699,8 @@
     "FOCUS_MODE_LOCAL": {
       "HELP": "These settings apply only to this device and are not synced.",
       "L_IS_LOOP_BREAK_END_ALARM": "Loop the break-end sound until I dismiss the break (this device only)",
+      "L_IS_NOTIFY_ON_SESSION_END": "Show a browser notification when a Pomodoro session or break ends",
+      "S_NOTIFICATION_PERMISSION_DENIED": "Notifications are not allowed for this site. Allow them in your browser to use this option.",
       "TITLE": "Focus Mode (this device)"
     },
     "TASK_WIDGET": {
@@ -2778,7 +2785,7 @@
       "TOGGLE_PLAY": "Start/stop time tracking for task",
       "TOGGLE_SIDE_NAV": "Focus sidenav",
       "TOGGLE_SIDE_NAV_MODE": "Toggle sidebar compact/full mode",
-      "TOGGLE_TASK_VIEW_CUSTOMIZER_PANEL": "Toggle filter/group/sort panel",
+      "TOGGLE_TASK_VIEW_CUSTOMIZER_PANEL": "Open filter/group/sort menu",
       "TRIGGER_SYNC": "Trigger sync (if configured)",
       "ZOOM_DEFAULT": "Zoom default (desktop only)",
       "ZOOM_IN": "Zoom in (desktop only)",
@@ -2813,7 +2820,7 @@
       "TIME_LOCALE_AUTO": "System default",
       "TIME_LOCALE_CS_CZ": "Czech: 24-hour, DD. MM. YYYY",
       "TIME_LOCALE_DE_DE": "German: 24-hour, DD.MM.YYYY",
-      "TIME_LOCALE_DESCRIPTION": "Sets how dates and times are displayed across the app. \"System default\" follows your browser's language/region — to force 12- or 24-hour display, pick a specific locale. Time entry fields (e.g. when scheduling a task) are drawn by your browser or OS and always follow its clock format. With ISO 8601, weekday labels in Schedule, Habits, and Planner follow the app language.",
+      "TIME_LOCALE_DESCRIPTION": "Sets the date format and the 12/24-hour time format used across the app, including time entry fields. \"System default\" follows your browser's region, or a non-English app language that differs from it (except Arabic and Persian) — to force 12- or 24-hour time, pick a specific locale. With ISO 8601, weekday labels in Schedule, Habits, and Planner follow the app language.",
       "TIME_LOCALE_EN_GB": "English (UK): 24-hour, DD/MM/YYYY",
       "TIME_LOCALE_EN_US": "English (US): 12-hour AM/PM, MM/DD/YYYY",
       "TIME_LOCALE_ES_ES": "Spanish: 24-hour, DD/MM/YYYY",
@@ -2923,8 +2930,8 @@
       "IS_FOCUS_WINDOW": "Focus application window when reminder is triggered",
       "NOTIFY_ON_DUE_DATE": "Show notifications for tasks planned for today",
       "TITLE": "Reminders",
-      "USE_ALARM_STYLE_REMINDERS": "Use alarm-style notifications (Android only)",
-      "USE_ALARM_STYLE_REMINDERS_DESCRIPTION": "When enabled, reminders use louder alarm sounds and more intrusive notifications. Recommended for critical reminders."
+      "USE_ALARM_STYLE_REMINDERS": "Use alarm-style reminders",
+      "USE_ALARM_STYLE_REMINDERS_DESCRIPTION": "When enabled, reminders use louder alarm sounds and more intrusive notifications. On desktop, a bell rings until you act on the reminder (at most 10 minutes) and the window comes to the front. Recommended for critical reminders."
     },
     "SCHEDULE": {
       "HELP": "The schedule feature provides you with a quick overview over how your planned tasks play out over time. You can find it in the left hand menu under <a href='#/schedule'>'Schedule'</a>. ",
@@ -3191,8 +3198,8 @@
       "PLANNER": "Plan the next days in {{plannerIcon}} <b>Planner</b>",
       "TASK_MENU_TOUCH": "Swipe a task left for its menu: {{playIcon}} <b>Start tracking time</b>, {{subtaskIcon}} <b>Add subtask</b>",
       "TASK_MENU_TOUCH_NO_TRACKING": "Swipe a task left for its menu, e.g. {{subtaskIcon}} <b>Add subtask</b>",
-      "TIMER_RUNNING": "Timer's running. Press {{playIcon}} again or <kbd>{{key}}</kbd> to pause.",
-      "TIMER_RUNNING_TOUCH": "Timer's running. Tap {{playIcon}} at the top to pause.",
+      "TIMER_RUNNING": "Timer's running. Press {{pauseIcon}} or <kbd>{{key}}</kbd> to pause.",
+      "TIMER_RUNNING_TOUCH": "Timer's running. Tap {{pauseIcon}} at the top to pause.",
       "TRACK_TIME": "Hover over the task and press {{playIcon}} to track time"
     },
     "WANT_MORE": {
@@ -3214,6 +3221,7 @@
     }
   },
   "PDS": {
+    "ADD_OPEN_TASKS_FROM_WEEK": "Add open tasks from this week",
     "ADD_TASKS_FROM_TODAY": "Add tasks from today",
     "ARCHIVED_TASKS": {
       "ONE": "{{count}} completed parent task has been archived",
@@ -3231,6 +3239,7 @@
     "ESTIMATE_TOTAL": "Total estimate:",
     "EVALUATE_DAY": "Evaluate Day",
     "EXPORT_TASK_LIST": "Export Task List",
+    "FINISH_WEEK": "Finish the week",
     "FOCUS_SUMMARY": "Focus Sessions",
     "NO_TASKS": "There are no tasks for this day",
     "PLAN_TOMORROW": "Plan",
@@ -3249,6 +3258,7 @@
     "START_END": "Start – End",
     "SUMMARY_FOR": "Daily Summary for {{dayStr}}",
     "TASKS_COMPLETED": "Tasks Completed",
+    "THIS_WEEK": "This week",
     "TIME_SPENT_AND_ESTIMATE_LABEL": "Time Spent / Estimated",
     "TIME_SPENT_ESTIMATE_TITLE": "Time Spent: Total time spent today. Archived tasks not included. – Time Estimated: Time estimated for tasks worked on today minus the time already spent on them on other days.",
     "TIME_SPENT_TODAY_BY_TAG": "Time Spent today by Tag",
@@ -3459,6 +3469,8 @@
     "UNABLE_TO_PERSIST_DATA": "Unable to persist data to plugin storage",
     "UNKNOWN_ERROR": "An unknown error occurred",
     "UPLOAD_PLUGIN_INSTRUCTION": "Upload a plugin ZIP file to install it:",
+    "BUILD_YOUR_OWN": "Want to build your own?",
+    "BUILD_YOUR_OWN_LINK": "Read the plugin guide",
     "VALIDATION_FAILED": "Validation failed: {{errors}}",
     "NODE_EXECUTION_BRIDGE_UNAVAILABLE": "Could not connect to the Node.js execution bridge. Please try disabling and re-enabling the plugin.",
     "PLUGIN_LOAD_FAILED": "Plugin \"{{pluginName}}\" failed to load: {{error}}",

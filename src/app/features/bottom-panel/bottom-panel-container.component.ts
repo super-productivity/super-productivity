@@ -20,7 +20,6 @@ import { MAT_BOTTOM_SHEET_DATA, MatBottomSheetRef } from '@angular/material/bott
 import { TaskDetailPanelComponent } from '../tasks/task-detail-panel/task-detail-panel.component';
 import { NotesComponent } from '../note/notes/notes.component';
 import { IssuePanelComponent } from '../issue-panel/issue-panel.component';
-import { TaskViewCustomizerPanelComponent } from '../task-view-customizer/task-view-customizer-panel/task-view-customizer-panel.component';
 import { PluginPanelContainerComponent } from '../../plugins/ui/plugin-panel-container/plugin-panel-container.component';
 import { ScheduleDayPanelComponent } from '../schedule/schedule-day-panel/schedule-day-panel.component';
 import { fadeAnimation } from '../../ui/animations/fade.ani';
@@ -114,7 +113,6 @@ const KEYBOARD_RESIZE_DEBOUNCE_MS = 100;
     TaskDetailPanelComponent,
     NotesComponent,
     IssuePanelComponent,
-    TaskViewCustomizerPanelComponent,
     PluginPanelContainerComponent,
     ScheduleDayPanelComponent,
   ],

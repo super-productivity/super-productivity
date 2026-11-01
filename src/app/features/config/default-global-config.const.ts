@@ -228,7 +228,7 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
     defaultTaskRemindOption: TaskReminderOptionId.AtStart, // The hard-coded default prior to this changeable setting
     isFocusWindow: false,
     useAlarmStyleReminders: false,
-    notifyOnDueDate: true,
+    notifyOnDueDate: false,
     dueDateNotificationHour: 9,
   },
   schedule: {

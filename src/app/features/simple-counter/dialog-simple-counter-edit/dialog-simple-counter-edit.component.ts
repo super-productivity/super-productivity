@@ -112,7 +112,10 @@ export class DialogSimpleCounterEditComponent {
   });
 
   readonly currentStreak = computed(() =>
-    getSimpleCounterStreakDuration(this.localCounter()),
+    getSimpleCounterStreakDuration(
+      this.localCounter(),
+      this._dateService.getStartOfNextDayDiffMs(),
+    ),
   );
 
   readonly chartData = computed((): LineChartData => {

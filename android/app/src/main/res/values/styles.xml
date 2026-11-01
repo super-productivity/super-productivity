@@ -19,6 +19,14 @@
   </style>
 
 
+  <!-- Widget quick add: a floating dialog over the home screen that follows
+       the system day/night setting, in the widget's brand color. -->
+  <style name="AppTheme.QuickAdd" parent="Theme.AppCompat.DayNight.Dialog.Alert">
+    <item name="colorAccent">@color/widget_brand</item>
+    <item name="windowNoTitle">true</item>
+  </style>
+
+
   <style name="AppTheme.NoActionBarLaunch" >
     <item name="android:windowActionBarOverlay">true</item>
     <!--

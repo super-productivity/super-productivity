@@ -1,7 +1,10 @@
-import { TestBed } from '@angular/core/testing';
+import { fakeAsync, TestBed, tick } from '@angular/core/testing';
 import { MockStore, provideMockStore } from '@ngrx/store/testing';
 import { TranslateService } from '@ngx-translate/core';
-import { ValidateStateService } from './validate-state.service';
+import {
+  DEFERRED_VALIDATION_FALLBACK_DELAY_MS,
+  ValidateStateService,
+} from './validate-state.service';
 import { RepairOperationService } from './repair-operation.service';
 import { StateSnapshotService } from '../backup/state-snapshot.service';
 import { CLIENT_ID_PROVIDER } from '../util/client-id.provider';
@@ -17,6 +20,7 @@ import {
 } from '../../features/menu-tree/store/menu-tree.model';
 import { environment } from '../../../environments/environment';
 import { LS } from '../../core/persistence/storage-keys.const';
+import { OpLog } from '../../core/log';
 
 describe('ValidateStateService', () => {
   let service: ValidateStateService;
@@ -252,6 +256,74 @@ describe('ValidateStateService', () => {
         jasmine.any(String),
       );
     });
+  });
+
+  describe('validateStateWhenIdle', () => {
+    const flushIdle = (): void => {
+      const idleSpy = window.requestIdleCallback as jasmine.Spy;
+      idleSpy.calls.mostRecent().args[0]({} as IdleDeadline);
+    };
+
+    beforeEach(() => {
+      spyOn(window, 'requestIdleCallback').and.returnValue(1);
+    });
+
+    it('validates only once the app is idle', async () => {
+      const validateSpy = spyOn(service, 'validateState').and.resolveTo({
+        isValid: true,
+        typiaErrors: [],
+      });
+      const state = createEmptyState();
+
+      service.validateStateWhenIdle(state, 'test');
+
+      expect(validateSpy).not.toHaveBeenCalled();
+      flushIdle();
+      expect(validateSpy).toHaveBeenCalledOnceWith(state);
+    });
+
+    it('logs instead of rejecting when validation throws', async () => {
+      const errSpy = spyOn(OpLog, 'err');
+      spyOn(service, 'validateState').and.rejectWith(new Error('chunk load failed'));
+
+      service.validateStateWhenIdle(createEmptyState(), 'test');
+      flushIdle();
+      await new Promise((resolve) => setTimeout(resolve));
+
+      expect(errSpy).toHaveBeenCalledWith(
+        '[ValidateStateService:test] Deferred validation threw',
+        jasmine.any(Error),
+      );
+    });
+  });
+
+  describe('validateStateWhenIdle without requestIdleCallback', () => {
+    const win = window as unknown as { requestIdleCallback?: unknown };
+    let originalRequestIdleCallback: unknown;
+
+    beforeEach(() => {
+      originalRequestIdleCallback = win.requestIdleCallback;
+      win.requestIdleCallback = undefined;
+    });
+
+    afterEach(() => {
+      win.requestIdleCallback = originalRequestIdleCallback;
+    });
+
+    it('validates after the fallback delay, not on the next macrotask', fakeAsync(() => {
+      const validateSpy = spyOn(service, 'validateState').and.resolveTo({
+        isValid: true,
+        typiaErrors: [],
+      });
+      const state = createEmptyState();
+
+      service.validateStateWhenIdle(state, 'test');
+      tick(DEFERRED_VALIDATION_FALLBACK_DELAY_MS - 1);
+      expect(validateSpy).not.toHaveBeenCalled();
+
+      tick(1);
+      expect(validateSpy).toHaveBeenCalledOnceWith(state);
+    }));
   });
 
   describe('validateAndRepairCurrentState', () => {

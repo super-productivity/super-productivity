@@ -1,4 +1,11 @@
-import { computed, effect, inject, Injectable, signal } from '@angular/core';
+import {
+  computed,
+  effect,
+  inject,
+  Injectable,
+  InjectionToken,
+  signal,
+} from '@angular/core';
 // eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import { GlobalConfigService } from '../../features/config/global-config.service';
 import { DateAdapter } from '@angular/material/core';
@@ -11,6 +18,54 @@ import {
 import { TranslateService } from '@ngx-translate/core';
 import { DateInputLocale, isDayFirstDateFormat } from './date-input-locale';
 
+/** Whether `locale` (`undefined` = the browser default) renders 13:00 as "13". */
+const uses24HourClock = (locale: string | undefined): boolean =>
+  new Date(2000, 11, 31, 13, 0, 0)
+    .toLocaleTimeString(locale, { hour: 'numeric', minute: '2-digit' })
+    .includes('13');
+
+/**
+ * Clock of the browser default locale, which native `<input type="time">`
+ * follows regardless of our dateTimeLocale setting (#8565).
+ * shortcut: approximates the native control via Intl — Chromium on Windows/macOS
+ * and the Android WebView picker may also follow OS clock settings that Intl
+ * does not expose; a per-platform check if users report a mismatch.
+ */
+export const SYSTEM_USES_24H_CLOCK = new InjectionToken<boolean>(
+  'SYSTEM_USES_24H_CLOCK',
+  {
+    providedIn: 'root',
+    factory: () => uses24HourClock(undefined),
+  },
+);
+
+/**
+ * Whether the locale writes numeric dates in Latin digits with plain
+ * separators — the only shape `dateFormat` and `parseStringToDate` can read
+ * (fa uses Persian digits and calendar, ar inserts RTL marks).
+ */
+const hasPlainNumericDate = (locale: string): boolean =>
+  /^[0-9./\- ]+$/.test(new Date(2000, 11, 31).toLocaleDateString(locale));
+
+/**
+ * Locale used when no explicit dateTimeLocale is set. A non-English UI language
+ * that differs from the browser's wins, otherwise a German UI on an en-US
+ * browser shows 12h AM/PM (#8565). An English UI keeps the browser locale: it
+ * is also what LanguageService falls back to for untranslated and auto-switched
+ * languages (da-DK, ru-RU), so it says nothing about the preferred formats.
+ * A UI language whose dates the app cannot read keeps the browser locale too.
+ */
+const resolveFallbackLocale = (
+  browserLocale: string | undefined,
+  uiLang: string | null | undefined,
+): string => {
+  if (!browserLocale) return uiLang || DEFAULT_LOCALE;
+  if (!uiLang || uiLang === DEFAULT_LANGUAGE) return browserLocale;
+  const isSameLanguage =
+    new Intl.Locale(browserLocale).language === new Intl.Locale(uiLang).language;
+  return isSameLanguage || !hasPlainNumericDate(uiLang) ? browserLocale : uiLang;
+};
+
 @Injectable({
   providedIn: 'root',
 })
@@ -18,6 +73,7 @@ export class DateTimeFormatService {
   private readonly _globalConfigService = inject(GlobalConfigService);
   private _dateAdapter = inject(DateAdapter, { optional: true });
   private readonly _translateService = inject(TranslateService);
+  private readonly _isSystem24Hour = inject(SYSTEM_USES_24H_CLOCK);
   private readonly _localeSig = signal<DateTimeLocale>(DEFAULT_LOCALE);
   // UI translation language, pushed in by LanguageService. Used for ISO text
   // labels and as a fallback when no explicit dateTimeLocale override is set.
@@ -60,14 +116,12 @@ export class DateTimeFormatService {
     () => this.isoTextLocale() ?? this.currentLocale(),
   );
 
-  /** Test formats to detect locale-specific time and date formats (e.g., 24h vs 12h, DD/MM vs MM/DD) */
+  /** Test formats to detect locale-specific date formats (e.g., DD/MM vs MM/DD) */
   private readonly _testFormats = computed(() => {
     const locale = this.currentLocale();
     const testDate = new Date(2000, 11, 31, 13, 0, 0);
 
     return {
-      // "1:00 PM" (en-US) | "13:00" (en-GB)
-      time: testDate.toLocaleTimeString(locale, { hour: 'numeric', minute: '2-digit' }),
       date: {
         // "12/31/2000" (en-US) | "31/12/2000" (en-GB)
         raw: testDate.toLocaleDateString(locale),
@@ -81,10 +135,18 @@ export class DateTimeFormatService {
     };
   });
 
-  // For detecting if current locale uses 24-hour format (used in schedule component)
-  readonly is24HourFormat = computed(() => {
-    return this._testFormats().time.includes('13');
-  });
+  // Whether the current locale uses a 24-hour clock (schedule views, time input choice)
+  readonly is24HourFormat = computed(() => uses24HourClock(this.currentLocale()));
+
+  /**
+   * Time entry fields keep the native `<input type="time">` (mobile clock
+   * wheel, OS picker) only when it already shows the configured 12h/24h clock;
+   * otherwise they switch to MatTimepicker, which formats via the adapter
+   * locale this service owns (#8565).
+   */
+  readonly useNativeTimeInput = computed(
+    () => this.is24HourFormat() === this._isSystem24Hour,
+  );
 
   /** Detects the actual date format based on locale ('dd/MM/yyyy', 'MM/dd/yyyy', 'dd.MM.yyyy', etc) */
   readonly dateFormat = computed(() => {
@@ -121,17 +183,12 @@ export class DateTimeFormatService {
       if (cfgValue) {
         this._setDateAdapterLocale(cfgValue);
       } else {
-        // No explicit date/time override: follow the browser's regional locale
-        // (e.g. 'en-GB' → DD/MM/YYYY) rather than the UI translation language.
-        // The UI language is region-agnostic — 'en' resolves to US MM/DD/YYYY,
-        // which would mis-format dates for en-GB/en-AU/etc. users who never
-        // picked a date locale. Fall back to UI language, then the default.
-        const fallbackLocale =
-          this._translateService.getBrowserCultureLang?.()?.toLowerCase() ||
+        const fallbackLocale = resolveFallbackLocale(
+          this._translateService.getBrowserCultureLang?.()?.toLowerCase(),
           uiLang ||
-          this._translateService.currentLang ||
-          this._translateService.defaultLang ||
-          DEFAULT_LOCALE;
+            this._translateService.currentLang ||
+            this._translateService.defaultLang,
+        );
         this._setDateAdapterLocale(fallbackLocale as DateTimeLocale);
       }
     });

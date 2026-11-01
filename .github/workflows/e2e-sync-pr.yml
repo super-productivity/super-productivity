@@ -214,7 +214,7 @@ jobs:
         # Retry to survive transient Docker Hub pull / Alpine mirror failures.
         # set -eu fails an attempt as soon as the build fails; without it the
         # health wait spun until timeout_minutes, burning the job's time budget.
-        uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08 # v3
+        uses: nick-fields/retry@ad984534de44a9489a53aefd81eb77f87c70dc60 # v4.0.0
         with:
           timeout_minutes: 6
           max_attempts: 3
@@ -262,7 +262,7 @@ jobs:
     needs: [detect, build]
     if: needs.detect.outputs.webdav == 'true'
     runs-on: ${{ vars.USE_BLACKSMITH == 'true' && github.event.pull_request.user.login == 'johannesjo' && 'blacksmith-4vcpu-ubuntu-2404' || 'ubuntu-latest' }}
-    timeout-minutes: 30
+    timeout-minutes: 40
     env:
       UNSPLASH_KEY: ${{ secrets.UNSPLASH_KEY }}
       UNSPLASH_CLIENT_ID: ${{ secrets.UNSPLASH_CLIENT_ID }}
@@ -300,7 +300,7 @@ jobs:
 
       - name: Start WebDAV Docker Service
         # Retry to survive transient Docker Hub pull timeouts / rate limits.
-        uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08 # v3
+        uses: nick-fields/retry@ad984534de44a9489a53aefd81eb77f87c70dc60 # v4.0.0
         with:
           timeout_minutes: 6
           max_attempts: 3

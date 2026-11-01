@@ -82,6 +82,39 @@ test.describe('Drag Task to change project and labels', () => {
     await expect(tagList).toContainText('Inbox');
   });
 
+  // #11210: tasks dragged from the planner were ignored by the side nav
+  test('should move task to project when dragged from the planner to a project link', async ({
+    page,
+    testPrefix,
+    projectPage,
+    plannerPage,
+  }) => {
+    await projectPage.createProject('PlannerTarget');
+    const projectNavItem = page
+      .getByRole('menuitem')
+      .filter({ hasText: `${testPrefix}-PlannerTarget` });
+
+    const todayNavItem = page.getByRole('menuitem').filter({ hasText: 'Today' });
+    await todayNavItem.click();
+    await page.waitForURL(/tag\/TODAY/);
+    await workViewPage.addTask('PlannerDragTask');
+    await page.waitForSelector('task', { state: 'visible' });
+
+    await plannerPage.navigateToPlanner();
+    const plannerTask = page.locator('planner-task').filter({
+      hasText: 'PlannerDragTask',
+    });
+    await plannerTask.waitFor({ state: 'visible', timeout: 10000 });
+    await projectNavItem.waitFor({ state: 'visible', timeout: 10000 });
+
+    await plannerTask.dragTo(projectNavItem);
+
+    await projectPage.navigateToProjectByName('PlannerTarget');
+    await expect(page.locator('task').filter({ hasText: 'PlannerDragTask' })).toBeVisible(
+      { timeout: 10000 },
+    );
+  });
+
   test('should be able to add and remove tags by dragging task to the tag link in magic-side-nav', async ({
     page,
     testPrefix,
@@ -120,7 +153,8 @@ test.describe('Drag Task to change project and labels', () => {
       // fill() can land before the ngModel binding is live, so re-assert.
       await expect(async () => {
         await tagNameInput.fill(name);
-        await expect(tagNameInput).toHaveValue(name);
+        // Short timeout: the default (20 s) outlasts toPass, so fill never retried.
+        await expect(tagNameInput).toHaveValue(name, { timeout: 1000 });
       }).toPass({ timeout: 5000 });
       const saveBtn = tagDialog.getByRole('button', { name: 'Save' });
       await saveBtn.waitFor({ state: 'visible', timeout: 5000 });

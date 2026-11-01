@@ -1,4 +1,10 @@
-import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  inject,
+  viewChild,
+} from '@angular/core';
 import { NavigationEnd, Router, RouterLink } from '@angular/router';
 import { MatRipple } from '@angular/material/core';
 import { MatTooltip } from '@angular/material/tooltip';
@@ -9,7 +15,7 @@ import { WorkContextMenuComponent } from '../../work-context-menu/work-context-m
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { T } from '../../../t.const';
 import { BreakpointObserver } from '@angular/cdk/layout';
-import { toSignal } from '@angular/core/rxjs-interop';
+import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { of } from 'rxjs';
 import { filter, map, switchMap } from 'rxjs/operators';
 import { Store } from '@ngrx/store';
@@ -97,6 +103,7 @@ import { PluginIconComponent } from '../../../plugins/ui/plugin-icon/plugin-icon
           </button>
           @if (isWorkViewPage()) {
             <button
+              #customizerMenuTrigger
               class="task-filter-btn"
               [class.isCustomized]="taskViewCustomizerService.isCustomized()"
               [matMenuTriggerFor]="customizerPanel.menu"
@@ -347,6 +354,18 @@ export class PageTitleComponent {
   private _pluginService = inject(PluginService);
 
   readonly T = T;
+
+  // Absent off the work view (and on xxxs screens), where the shortcut then
+  // does nothing — matching the button not being there to click.
+  private _customizerMenuTrigger = viewChild('customizerMenuTrigger', {
+    read: MatMenuTrigger,
+  });
+
+  constructor() {
+    this.taskViewCustomizerService.openMenuRequest$
+      .pipe(takeUntilDestroyed())
+      .subscribe(() => this._customizerMenuTrigger()?.openMenu());
+  }
 
   // Get data directly from services instead of inputs
   activeWorkContextTitle = toSignal(this._workContextService.activeWorkContextTitle$);

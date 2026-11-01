@@ -3041,8 +3041,8 @@
       "PLANNER": "Önümüzdeki günleri {{plannerIcon}} <b>Planlayıcı</b> içinde planlayın",
       "TASK_MENU_TOUCH": "Menüsü için görevi sola kaydırın: {{playIcon}} <b>İzlemeye başla</b>, {{subtaskIcon}} <b>Alt Görev ekle</b>",
       "TASK_MENU_TOUCH_NO_TRACKING": "Menüsü için görevi sola kaydırın, örneğin {{subtaskIcon}} <b>Alt Görev ekle</b>",
-      "TIMER_RUNNING": "Zamanlayıcı çalışıyor. Duraklatmak için {{playIcon}} düğmesine tekrar veya <kbd>{{key}}</kbd> tuşuna basın.",
-      "TIMER_RUNNING_TOUCH": "Zamanlayıcı çalışıyor. Duraklatmak için üstteki {{playIcon}} düğmesine dokunun.",
+      "TIMER_RUNNING": "Zamanlayıcı çalışıyor. Duraklatmak için {{pauseIcon}} düğmesine tekrar veya <kbd>{{key}}</kbd> tuşuna basın.",
+      "TIMER_RUNNING_TOUCH": "Zamanlayıcı çalışıyor. Duraklatmak için üstteki {{pauseIcon}} düğmesine dokunun.",
       "TRACK_TIME": "Görevin üzerine gelin ve zamanı izlemek için {{playIcon}} düğmesine basın"
     },
     "WANT_MORE": {
