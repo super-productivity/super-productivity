@@ -71,10 +71,12 @@ export const readPrefixedFile = async <T>(
 /**
  * Generates a unique sync folder name for test isolation.
  * @param prefix - Folder name prefix (default: 'e2e-test')
- * @returns Unique folder name with timestamp
+ * @returns Unique folder name with timestamp and random suffix
  */
 export const generateSyncFolderName = (prefix: string = 'e2e-test'): string => {
-  return `${prefix}-${Date.now()}`;
+  // Random suffix: parallel workers can start in the same millisecond (two
+  // parametrized tests shared one WebDAV folder in scheduled run 41564833512).
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 };
 
 /**
