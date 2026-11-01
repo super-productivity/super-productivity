@@ -268,6 +268,27 @@ test.describe('View rules', () => {
     await expect(sideNavViewRow(page, originalId)).toHaveCount(1);
   });
 
+  test("the view's ⋮ menu in the title bar moves with the arrow keys", async ({
+    page,
+    workViewPage,
+  }) => {
+    await workViewPage.waitForTaskList();
+    await page.goto('/#/boards/KANBAN_DEFAULT');
+    await expect(page.locator('board-panel')).toHaveCount(3);
+    await page
+      .locator('page-title .page-title-actions')
+      .getByRole('button', { name: 'More actions' })
+      .focus();
+    await page.keyboard.press('Enter');
+    // Scoped to the open menu: the side menu's rows are menu items too.
+    const menu = page.locator('.mat-mdc-menu-panel');
+    await expect(menu.getByRole('menuitem', { name: 'Edit', exact: true })).toBeFocused();
+    await page.keyboard.press('ArrowDown');
+    await expect(
+      menu.getByRole('menuitem', { name: 'Duplicate', exact: true }),
+    ).toBeFocused();
+  });
+
   test('the title-bar filter on a one-column view opens the view editor', async ({
     page,
     testPrefix,

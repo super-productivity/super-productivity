@@ -7,8 +7,6 @@ import { expect, Locator, Page } from '@playwright/test';
 export const openCreateViewDialog = async (page: Page): Promise<Locator> => {
   await page.locator('nav-view-group > div.g-multi-btn-wrapper').hover();
   await page.locator('[data-nav-btn="add-view"]').click();
-  // "+" offers a blank view or a template.
-  await page.getByRole('menuitem', { name: 'Blank view' }).click();
   const dialog = page.locator('dialog-board-edit');
   await expect(dialog).toBeVisible();
   return dialog;
