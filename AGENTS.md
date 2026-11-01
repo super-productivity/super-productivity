@@ -11,7 +11,7 @@ Read by section, not whole: the long sync docs open with a **Sections** index an
 ## Product principles
 
 - **Avoid feature creep:** extend existing building blocks; new UI, settings and sync surface must make users faster. A personal deep-work tool, not team management or reporting. Surface the leaner alternative when scope outgrows the problem.
-- **Less noise, more depth:** no constant alerts, vanity dashboards, streaks or dopamine loops. Attention-grabbing behavior ships off by default; reminders stay opt-in.
+- **Less noise, more depth:** no constant alerts, vanity dashboards, streaks or dopamine loops. Attention-grabbing behavior ships off by default; reminders stay opt-in. No always-visible explanatory UI (status lines, "what syncs" labels, badges): explain at the moment it matters (an error, a tooltip, the settings that own it).
 - **Adapt, don't impose:** one calm default; add a setting only when real workflows diverge. Prefer not building a feature over adding a toggle to dodge a decision.
 - **Privacy & offline first:** no analytics, tracking or telemetry; user data stays local unless explicitly synced. Core tasks and time tracking work offline; sync and integrations are optional and degrade gracefully.
 
