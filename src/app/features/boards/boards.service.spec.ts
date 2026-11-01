@@ -89,6 +89,13 @@ describe('BoardsService', () => {
     });
   });
 
+  it('opens one editor for a second request while the first loads', async () => {
+    await Promise.all([service.editBoard(board), service.editBoard(board)]);
+    expect(open).toHaveBeenCalledTimes(1);
+    await service.editBoard(board);
+    expect(open).toHaveBeenCalledTimes(2);
+  });
+
   it('lets a created view arrive and names it in a snack', async () => {
     storeBoards.set([{ ...board, id: 'new-id', title: 'Mine' }]);
     dialogResult = 'new-id';

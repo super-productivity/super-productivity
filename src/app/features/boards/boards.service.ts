@@ -74,10 +74,12 @@ export class BoardsService {
       });
   }
 
+  // A second click or shortcut press while the dialog's code loads would
+  // open a second editor.
+  private _isOpeningEditor = false;
+
   /** `panelId`: the section or column to show open (a column's title). */
   async editBoard(board: BoardCfg, panelId?: string): Promise<void> {
-    // A second click or shortcut press while the dialog's code loads would
-    // open a second editor.
     if (this._isOpeningEditor) {
       return;
     }
@@ -94,7 +96,6 @@ export class BoardsService {
       this._isOpeningEditor = false;
     }
   }
-  private _isOpeningEditor = false;
 
   duplicateBoard(board: BoardCfg): void {
     const id = nanoid();

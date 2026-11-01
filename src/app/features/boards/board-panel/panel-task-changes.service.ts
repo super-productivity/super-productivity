@@ -109,7 +109,7 @@ export class PanelTaskChangesService {
       }
     }
     for (const [day, tasks] of tasksByDay) {
-      // Looked up on use, like the panel did.
+      // Looked up on use, not injected eagerly.
       await this._injector
         .get(TaskBulkActionService)
         .scheduleFor(

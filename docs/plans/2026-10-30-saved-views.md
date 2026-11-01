@@ -76,6 +76,9 @@ OmniFocus 4, Vikunja), not hands-on.
 - **Opening the editor:** the view title, a column's title, the side-menu row
   menu, and on list views the title bar's filter button (see Decisions).
   **Save as view…** on a task list prefills it from the list's filter and sort.
+  Project and tag lists get "parent tasks only"; Today maps to the
+  `todayOrOverdue` planned-date rule (wider than Today's main list; the dialog
+  hint says so) and `TODAY_TAG.id` never goes into `includedTagIds`.
 
 ## Decisions
 
@@ -83,11 +86,16 @@ OmniFocus 4, Vikunja), not hands-on.
   to fit next to each other; a stacked list has the width for full rows and
   gets the list's keyboard moves, subtasks and time tracking. Rows carry the
   `VIEW_TASK_LIST` token so they never act on the previously open project or
-  tag.
+  tag. `VIEW` and `VIEW_DONE` are reserved list ids: a view list accepts drags
+  only from a `VIEW` list and never a multi-selection; `VIEW_DONE` accepts
+  nothing. Rows are built through a panel-owned `TaskWithSubTasksCache` so
+  untouched rows keep their object while time tracks (the task row is the hot
+  path).
 - **Released-client compatibility, no schema bump.** All new fields are
   optional (`dueState`, `deadlineState`, `estimateRule`, `timeSpentRule`,
   `priorityRule`, `sortKey`, `isUntagged`, `boardCols`) and not in
-  `DEFAULT_PANEL_CFG`/`DEFAULT_BOARD_CFG`. Persisted types are plain
+  `DEFAULT_PANEL_CFG`/`DEFAULT_BOARD_CFG` (the board editor and
+  `migrate-legacy-backup.ts` merge those into every panel). Persisted types are plain
   `string`/`boolean`/`number`, never closed unions: typia ignores unknown
   properties but rejects an unknown union member (the repair-dialog wedge in
   `validation-fn.ts`). `sanitizePanelCfg` drops `null`/`''` (Formly) and keeps
@@ -95,7 +103,8 @@ OmniFocus 4, Vikunja), not hands-on.
   survives. Released clients keep boards as cards on their Boards page, show
   more tasks in a column with a rule they don't know, and keep the new fields
   when they edit a board (their editor spreads the board). Degradation, no data
-  loss.
+  loss. Duplicating spreads the board, so `boardCols` and a newer client's
+  top-level fields survive.
 - **Stored vocabulary (locked, added 2026-11-01):** this release validates and
   reads the view fields, so their persisted types and words may only be
   extended, never changed or given another meaning; an unknown new word reads
@@ -117,12 +126,14 @@ OmniFocus 4, Vikunja), not hands-on.
   a save stores "scheduled" again.
 - **Missing-tag guard.** A move or add that would write a tag id with no tag
   entity is refused: a dangling `tagIds` entry fails `isRelatedModelDataValid`
-  and sends the state to data repair. All write-back paths in
-  `BoardPanelComponent` go through one `_changesToMatch` wrapper; new tasks are
+  and sends the state to data repair. All write-back paths go through one
+  wrapper, `getPanelChangesToMatch` (`board-panel/panel-rules.ts`); new tasks are
   covered by hiding the add row (`isAddTaskHidden`). The check is per task, so
   excluding a missing tag blocks nothing. The view still renders its columns;
   a callout names the missing tags with one-click **Create Tags**. Tags are
   never created automatically: opening a view is not an intent to create data.
+  The existing-tag set is `ViewCriteriaContextService.tagIdSet`, not part of
+  `ctx`: a tag change must not re-match every panel.
 - **Date rules.** Logical day via `startOfNextDayDiffMs` (sync rule 4),
   reactive to day rollover and the day-start setting. `dueWithTime`
   wins over `dueDay` on boards. Date-string arithmetic only (DST safe); weeks
