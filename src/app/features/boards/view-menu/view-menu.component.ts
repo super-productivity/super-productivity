@@ -6,38 +6,69 @@ import { T } from '../../../t.const';
 import { BoardCfg } from '../boards.model';
 import { BoardsService } from '../boards.service';
 
-/** Menu items for a view: shared by its side-menu row and the title bar. */
+export type ViewMenuAction = 'edit' | 'duplicate' | 'delete';
+
+export interface ViewMenuItem {
+  action: ViewMenuAction;
+  icon: string;
+  /** A translation key. */
+  label: string;
+  isWarn?: boolean;
+}
+
+/**
+ * A view's menu items. A host that owns a `mat-menu` renders them inside it
+ * itself (the title bar): MatMenu's arrow keys only reach items written in the
+ * menu's own template, not ones inside another component like `view-menu`.
+ */
+export const VIEW_MENU_ITEMS: readonly ViewMenuItem[] = [
+  { action: 'edit', icon: 'edit', label: T.G.EDIT },
+  { action: 'duplicate', icon: 'file_copy', label: T.G.DUPLICATE },
+  { action: 'delete', icon: 'delete_forever', label: T.G.DELETE, isWarn: true },
+];
+
+export const runViewMenuAction = (
+  boardsService: BoardsService,
+  board: BoardCfg,
+  action: ViewMenuAction,
+): void => {
+  switch (action) {
+    case 'edit':
+      void boardsService.editBoard(board);
+      return;
+    case 'duplicate':
+      boardsService.duplicateBoard(board);
+      return;
+    case 'delete':
+      boardsService.removeBoard(board);
+      return;
+  }
+};
+
+/** Menu items for a view, for menus that take a template (the side menu's rows). */
 @Component({
   selector: 'view-menu',
   standalone: true,
   imports: [MatIcon, MatMenuItem, TranslatePipe],
   template: `
-    <button
-      mat-menu-item
-      (click)="boardsService.editBoard(board())"
-    >
-      <mat-icon>edit</mat-icon>
-      <span>{{ T.G.EDIT | translate }}</span>
-    </button>
-    <button
-      mat-menu-item
-      (click)="boardsService.duplicateBoard(board())"
-    >
-      <mat-icon>file_copy</mat-icon>
-      <span>{{ T.G.DUPLICATE | translate }}</span>
-    </button>
-    <button
-      mat-menu-item
-      (click)="boardsService.removeBoard(board())"
-    >
-      <mat-icon class="color-warn-i">delete_forever</mat-icon>
-      <span>{{ T.G.DELETE | translate }}</span>
-    </button>
+    @for (item of items; track item.action) {
+      <button
+        mat-menu-item
+        (click)="run(item.action)"
+      >
+        <mat-icon [class.color-warn-i]="item.isWarn">{{ item.icon }}</mat-icon>
+        <span>{{ item.label | translate }}</span>
+      </button>
+    }
   `,
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class ViewMenuComponent {
-  readonly boardsService = inject(BoardsService);
+  private readonly _boardsService = inject(BoardsService);
   board = input.required<BoardCfg>();
-  protected readonly T = T;
+  readonly items = VIEW_MENU_ITEMS;
+
+  run(action: ViewMenuAction): void {
+    runViewMenuAction(this._boardsService, this.board(), action);
+  }
 }

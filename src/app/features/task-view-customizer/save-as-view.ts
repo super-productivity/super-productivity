@@ -37,14 +37,15 @@ export interface ViewSourceList {
 
 /**
  * A one-column view (board) showing what a task list shows with its current
- * filter and sort: the project's or tag's undone tasks. From Today it is the
- * filter alone (the view then shows every matching task, not only today's),
- * titled after the filter; without a filter, the tasks due today or overdue,
- * untitled for the user to name. Grouped by tag, it gets one section (panel)
- * per tag, see `toTagSections`. `hints` are translation keys for what the
- * view can't carry over: other groupings (fixed sections can't follow new
- * projects or days), Today's own overdue section or Today's scope, and filter
- * parts one column can't express next to the list's own project or tag. Those
+ * filter and sort: the project's or tag's tasks, the done ones in its Done
+ * group. From Today it is the filter alone (the view then shows every
+ * matching open task, not only today's), titled after the filter; without a
+ * filter, the open tasks due today or overdue, untitled for the user to name.
+ * Grouped by tag, it gets one section (panel) per tag, see `toTagSections`.
+ * `hints` are translation keys for what the view can't carry over: other
+ * groupings (fixed sections can't follow new projects or days), Today's own
+ * overdue section or Today's scope, and filter parts one column can't express
+ * next to the list's own project or tag. Those
  * parts are left out, so the view stays within the list's project or tag but
  * may show more of it than the filtered list.
  */
@@ -76,7 +77,13 @@ export const buildViewFromList = (opts: {
     ...DEFAULT_PANEL_CFG,
     id: nanoid(),
     title,
-    taskDoneState: BoardPanelCfgTaskDoneState.UnDone,
+    // Project and tag lists show every task (All, the default): a ticked-off
+    // task moves to the Done group, as in the list. Today's rules keep a
+    // completed task (it keeps its due day, and the filter alone matches
+    // beyond today), so they stay "Not completed".
+    taskDoneState: isToday
+      ? BoardPanelCfgTaskDoneState.UnDone
+      : DEFAULT_PANEL_CFG.taskDoneState,
     // Project and tag lists show parent tasks with their subtasks; Today also
     // lists subtasks whose parent isn't due today.
     isParentTasksOnly: !isToday,
