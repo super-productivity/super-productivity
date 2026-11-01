@@ -128,7 +128,6 @@ class SuperSyncBackgroundProvider(
             .url(url)
             .header("Authorization", "Bearer $accessToken")
             .header("Accept", "application/json")
-            .header("Accept-Encoding", "gzip")
             .get()
             .build()
 
