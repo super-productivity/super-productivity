@@ -1,4 +1,4 @@
-<h2 mat-dialog-title>Share</h2>
+<h2 mat-dialog-title>{{ T.G.SHARE | translate }}</h2>
 
 <div mat-dialog-content>
   <div class="share-options">
@@ -11,7 +11,7 @@
         (click)="shareNative()"
       >
         <mat-icon>share</mat-icon>
-        <span>System Share</span>
+        <span>{{ T.F.SHARE.SYSTEM_SHARE | translate }}</span>
       </button>
     }
 
@@ -23,7 +23,7 @@
         (click)="shareToTarget(shareTarget.target)"
       >
         <mat-icon>{{ shareTarget.icon }}</mat-icon>
-        <span>{{ shareTarget.label }}</span>
+        <span>{{ shareTarget.label | translate }}</span>
       </button>
     }
   </div>
@@ -31,7 +31,7 @@
   <!-- Mastodon Instance Input -->
   <div class="mastodon-instance">
     <mat-form-field appearance="outline">
-      <mat-label>Mastodon Instance</mat-label>
+      <mat-label>{{ T.F.SHARE.MASTODON_INSTANCE | translate }}</mat-label>
       <input
         matInput
         [(ngModel)]="mastodonInstance"
@@ -48,7 +48,7 @@
       (click)="copyText()"
     >
       <mat-icon>content_copy</mat-icon>
-      <span>Copy Text</span>
+      <span>{{ T.F.SHARE.COPY_TEXT | translate }}</span>
     </button>
   </div>
 </div>

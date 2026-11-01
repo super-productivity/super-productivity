@@ -801,6 +801,10 @@
         "CHART_FOCUS_MINUTES": "Focus minutes",
         "CHART_FOCUS_SESSIONS": "Focus sessions",
         "CHART_IMPACT": "Impact (1-4)",
+        "CHART_LOADING": "Loading chart...",
+        "CHART_SHARE_TAGLINE": "With the Super Productivity App",
+        "CHART_SHARED_TO_DEVICE": "Chart image saved to device storage",
+        "CHART_SHARED_TO_PATH": "Chart image saved to {{path}}",
         "CHART_X_DAY": "Day",
         "CHART_Y_COUNT": "Count",
         "CHART_Y_MINUTES": "Minutes",
@@ -1189,6 +1193,24 @@
       "INFO": "Start typing to search for tasks, notes, projects or tags",
       "NO_RESULTS": "No tasks, notes, projects or tags found matching your search",
       "PLACEHOLDER": "Search for tasks, notes, projects or tags"
+    },
+    "SHARE": {
+      "COPIED": {
+        "CODE": "Code copied to clipboard!",
+        "COMMAND": "Command copied to clipboard!",
+        "LOGS": "Logs copied to clipboard!",
+        "TEXT": "Text copied to clipboard!",
+        "TOKEN": "Token copied to clipboard!",
+        "URL": "URL copied to clipboard!",
+        "VERSION": "Version copied to clipboard!"
+      },
+      "COPY_TEXT": "Copy Text",
+      "EMAIL": "Email",
+      "MASTODON_INSTANCE": "Mastodon Instance",
+      "OPENING_SHARE_WINDOW": "Opening share window...",
+      "SHARE_VIA": "Share via",
+      "SHARED_SUCCESSFULLY": "Shared successfully!",
+      "SYSTEM_SHARE": "System Share"
     },
     "SIMPLE_COUNTER": {
       "D_CONFIRM_REMOVE": {

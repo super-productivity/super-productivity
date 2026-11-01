@@ -91,6 +91,7 @@
                   [options]="evaluationChartOptions()"
                   height="400px"
                   [shareFileName]="'impact-energy-over-time.png'"
+                  [shareTitle]="T.F.METRIC.CMP.EVALUATION_OVER_TIME | translate"
                   [enableTimeframeSelector]="true"
                 ></lazy-chart>
               </section>
@@ -108,6 +109,7 @@
                   [options]="focusSessionChartOptions()"
                   height="400px"
                   [shareFileName]="'focus-session-trends.png'"
+                  [shareTitle]="T.F.METRIC.CMP.FOCUS_SESSION_TRENDS | translate"
                   [enableTimeframeSelector]="true"
                 ></lazy-chart>
               </section>
@@ -129,6 +131,7 @@
                 [legend]="true"
                 height="400px"
                 [shareFileName]="'simple-click-counters-over-time.png'"
+                [shareTitle]="T.F.METRIC.CMP.SIMPLE_CLICK_COUNTERS_OVER_TIME | translate"
                 [enableTimeframeSelector]="true"
               >
               </lazy-chart>
@@ -147,6 +150,9 @@
                 [legend]="true"
                 height="400px"
                 [shareFileName]="'simple-stopwatch-counters-over-time.png'"
+                [shareTitle]="
+                  T.F.METRIC.CMP.SIMPLE_STOPWATCH_COUNTERS_OVER_TIME | translate
+                "
                 [enableTimeframeSelector]="true"
               >
               </lazy-chart>
