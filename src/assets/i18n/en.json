@@ -220,6 +220,7 @@
       "V": {
         "ADD_NEW_BOARD": "Create view",
         "ADD_TASK_TO": "Add task to {{title}}",
+        "BLANK_VIEW": "Blank view",
         "CONFIRM_DELETE": "Are you sure you want to delete this view?",
         "CREATE_NEW_TAG_BTN": "Create Tag",
         "CREATE_NEW_TAGS_BTN": "Create Tags",

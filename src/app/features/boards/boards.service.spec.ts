@@ -13,6 +13,9 @@ import { DialogBoardEditComponent } from './dialog-board-edit/dialog-board-edit.
 import { GlobalConfigService } from '../config/global-config.service';
 import { SnackService } from '../../core/snack/snack.service';
 import { T } from '../../t.const';
+import { ViewCriteriaContextService } from './view-criteria-context.service';
+import { addTag } from '../tag/store/tag.actions';
+import { IMPORTANT_TAG, URGENT_TAG } from '../tag/tag.const';
 
 describe('BoardsService', () => {
   let service: BoardsService;
@@ -25,6 +28,7 @@ describe('BoardsService', () => {
   // The store's boards: an added one shows up, as with the real reducer.
   const storeBoards = signal<BoardCfg[]>([]);
   const appFeatures = signal({ isBoardsEnabled: true });
+  const tagIdSet = signal<ReadonlySet<string>>(new Set());
 
   const board: BoardCfg = {
     id: 'b1',
@@ -35,6 +39,7 @@ describe('BoardsService', () => {
 
   beforeEach(() => {
     storeBoards.set([]);
+    tagIdSet.set(new Set());
     snackOpen = jasmine.createSpy('snackOpen');
     dispatch = jasmine.createSpy('dispatch').and.callFake((action) => {
       if (action.type === BoardsActions.addBoard.type) {
@@ -56,6 +61,7 @@ describe('BoardsService', () => {
         { provide: Router, useValue: { navigate } },
         { provide: MatDialog, useValue: { open } },
         { provide: GlobalConfigService, useValue: { appFeatures, updateSection } },
+        { provide: ViewCriteriaContextService, useValue: { tagIdSet } },
         {
           provide: TranslateService,
           useValue: {
@@ -141,6 +147,47 @@ describe('BoardsService', () => {
       true,
     );
     expect(navigate).toHaveBeenCalledWith(['/boards', 'new-id']);
+  });
+
+  describe('createFromTemplate', () => {
+    const dispatched = (): { type: string }[] =>
+      dispatch.calls.allArgs().map(([action]) => action);
+
+    it('creates the missing tags first, then the view, and opens it', () => {
+      tagIdSet.set(new Set([URGENT_TAG.id]));
+      service.createFromTemplate('EISENHOWER_MATRIX');
+      const actions = dispatched();
+      expect(actions.map((a) => a.type)).toEqual([
+        addTag.type,
+        BoardsActions.addBoard.type,
+      ]);
+      expect((actions[0] as ReturnType<typeof addTag>).tag.id).toBe(IMPORTANT_TAG.id);
+      const created = (actions[1] as ReturnType<typeof BoardsActions.addBoard>).board;
+      expect(created.id).not.toBe('EISENHOWER_MATRIX');
+      expect(created.title).toBe(T.F.BOARDS.DEFAULT.EISENHAUER_MATRIX);
+      expect(navigate).toHaveBeenCalledOnceWith(['/boards', created.id]);
+      expect(service.arrivalId()).toBe(created.id);
+      expect(snackOpen).toHaveBeenCalledWith(
+        jasmine.objectContaining({ msg: T.F.BOARDS.V.VIEW_CREATED }),
+      );
+      expect(updateSection).not.toHaveBeenCalled();
+    });
+
+    it('adds no tag when they all exist', () => {
+      tagIdSet.set(new Set([URGENT_TAG.id, IMPORTANT_TAG.id]));
+      service.createFromTemplate('EISENHOWER_MATRIX');
+      expect(dispatched().map((a) => a.type)).toEqual([BoardsActions.addBoard.type]);
+    });
+
+    it('turns Views on when they are off', () => {
+      appFeatures.set({ isBoardsEnabled: false });
+      service.createFromTemplate('KANBAN');
+      expect(updateSection).toHaveBeenCalledOnceWith(
+        'appFeatures',
+        { isBoardsEnabled: true },
+        true,
+      );
+    });
   });
 
   it('duplicates with a translated title, fresh ids and no manual order', () => {

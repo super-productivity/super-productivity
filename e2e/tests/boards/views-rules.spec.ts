@@ -121,6 +121,38 @@ test.describe('View rules', () => {
     await expect(page.locator('boards board')).toHaveClass(/isSingleColumn/);
   });
 
+  test('a task completed in a view saved from a project moves to its Done group', async ({
+    page,
+    workViewPage,
+    testPrefix,
+  }) => {
+    await page.goto('/#/project/INBOX_PROJECT/tasks');
+    await workViewPage.waitForTaskList();
+    const title = `${testPrefix}-Finish me`;
+    await workViewPage.addTask(title);
+
+    await page.locator('.task-filter-btn').click();
+    await page.getByRole('menuitem', { name: 'Save as view…' }).click();
+    const dialog = page.locator('dialog-board-edit');
+    await dialog.getByRole('button', { name: 'Save', exact: true }).click();
+    await expect(dialog).toBeHidden();
+    await expect(page).toHaveURL(/#\/boards\/[^/]+$/);
+
+    const column = page.locator('boards board-panel');
+    const row = column.locator('task').filter({ hasText: title });
+    await row.hover();
+    await row.locator('done-toggle').first().click();
+    // The row leaves the open rows (markTaskAsDone would wait for it there).
+    await expect(column.locator('task').filter({ hasText: title })).toHaveCount(0);
+    // Like the list it came from: out of the open rows, into "Completed Tasks".
+    const doneGroup = column
+      .locator('collapsible')
+      .filter({ hasText: 'Completed Tasks' });
+    await expect(doneGroup).toBeVisible();
+    await doneGroup.locator('.collapsible-header').click();
+    await expect(doneGroup.locator('task').filter({ hasText: title })).toHaveCount(1);
+  });
+
   test('saves a filtered Today as the filter alone, named after it, and turns Views on', async ({
     page,
     workViewPage,

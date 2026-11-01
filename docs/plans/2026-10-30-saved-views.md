@@ -158,13 +158,46 @@ OmniFocus 4, Vikunja), not hands-on.
   like tapping the view title. The editor covers every rule; the menu covered
   only part of them.
 
+- **Templates (2026-11-01, #11384).** "+", the Views section menu and the
+  empty Views page offer a blank view or a template (Eisenhower Matrix,
+  Kanban: `view-templates.ts`, built from `DEFAULT_BOARDS`). A template is one
+  explicit action that dispatches `addTag` for each tag it names that doesn't
+  exist (fixed ids; `addOne` keeps an existing one, as "Create Tags" does) and
+  then `addBoard` with fresh board and column ids. Titles stay translation
+  keys, which every client translates. Opening a view still never creates tags.
+- **The default boards stay for new installs.** `DEFAULT_BOARDS` were never
+  written as ops: they are the implicit start of every op history. SuperSync
+  replays a history onto the client's initial state (a fresh client uploads
+  without a full-state op, `server-migration.service.ts`), so a client starting
+  from `[]` would permanently miss an account's default boards and every later
+  edit to them, and a released client joining a `[]` client's account would
+  show boards that client doesn't have. Dropping them for new installs needs a
+  synced fact first (see Known gaps).
+- **Save as view keeps done tasks for project and tag lists.** Their column is
+  "All", so a ticked-off task moves to the Done group like in the list. Today
+  stays "Not completed": a completed task keeps its due day, and
+  `todayOrOverdue` (or a filter alone) would collect every completed task.
+- **Menu items live in the menu's own template.** MatMenu's arrow keys only
+  reach `mat-menu-item`s written inside the `mat-menu` (a content query), not
+  ones inside another component. The title bar renders the view's items itself
+  (`getViewMenuItems`); `view-menu` keeps them for the side menu's rows.
+
 ## Known gaps and follow-ups
 
 - **#11384:** boards as rows on narrow screens; card/row parity (counts, Done
-  handling, subtask hint, keyboard moves); long columns; templates instead of
-  the default boards for new installs; Save as view without the "Not completed"
-  rule; small gaps (e.g. dragging a multi-selection between sections, empty
-  columns without a "+" give arrow keys no focus target).
+  handling, subtask hint, keyboard moves); long columns (#11395). Small gaps:
+  dragging a multi-selection between sections, empty columns without a "+"
+  give arrow keys no focus target.
+- **New installs without the default boards** (#11384) is not done: it needs
+  the default boards stored as a fact before clients can start without them
+  (see Decisions). Until then new installs keep them (Views are off there).
+- **Keyboard in side-menu context menus:** every menu opened through
+  `ContextMenuComponent` (views, projects, tags, the section menus) stamps in a
+  template declared elsewhere, so MatMenu's arrow keys don't reach its items
+  (checked in a browser 2026-11-01). App-wide, not views-specific.
+- **View titles on phones:** at 360–375px the title ellipsizes ("Eisenhower …")
+  next to the header's global buttons (play, focus, sync). Left to a
+  header-wide decision; the title still opens the editor.
 - **#11386:** editor redesign.
 - **#11388:** sync order bug. Accepted: concurrent edits of one board are
   last-writer-wins on the board.

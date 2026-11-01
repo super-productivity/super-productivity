@@ -3,7 +3,11 @@ import { TranslateModule } from '@ngx-translate/core';
 import { T } from '../../../t.const';
 import { BoardCfg } from '../boards.model';
 import { BoardsService } from '../boards.service';
-import { ViewMenuComponent } from './view-menu.component';
+import {
+  getViewMenuItems,
+  runViewMenuAction,
+  ViewMenuComponent,
+} from './view-menu.component';
 
 describe('ViewMenuComponent', () => {
   const list: BoardCfg = { id: 'list', title: 'List', cols: 1, panels: [] };
@@ -51,5 +55,40 @@ describe('ViewMenuComponent', () => {
     setViewLayout.calls.reset();
     layoutItem(render(kanban, true))?.click();
     expect(setViewLayout).toHaveBeenCalledOnceWith(kanban, 'list');
+  });
+});
+
+describe('getViewMenuItems / runViewMenuAction', () => {
+  const kanban: BoardCfg = { id: 'kanban', title: 'Kanban', cols: 3, panels: [] };
+
+  it('lists Edit, Duplicate, Delete, with the List/Board switch first when asked', () => {
+    expect(getViewMenuItems(kanban, false).map((item) => item.action)).toEqual([
+      'edit',
+      'duplicate',
+      'delete',
+    ]);
+    expect(getViewMenuItems(kanban, true).map((item) => item.action)).toEqual([
+      'layout',
+      'edit',
+      'duplicate',
+      'delete',
+    ]);
+  });
+
+  it('runs each action through the service', () => {
+    const service = jasmine.createSpyObj<BoardsService>('BoardsService', [
+      'setViewLayout',
+      'editBoard',
+      'duplicateBoard',
+      'removeBoard',
+    ]);
+    runViewMenuAction(service, kanban, 'layout');
+    runViewMenuAction(service, kanban, 'edit');
+    runViewMenuAction(service, kanban, 'duplicate');
+    runViewMenuAction(service, kanban, 'delete');
+    expect(service.setViewLayout).toHaveBeenCalledOnceWith(kanban, 'list');
+    expect(service.editBoard).toHaveBeenCalledOnceWith(kanban);
+    expect(service.duplicateBoard).toHaveBeenCalledOnceWith(kanban);
+    expect(service.removeBoard).toHaveBeenCalledOnceWith(kanban);
   });
 });

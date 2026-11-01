@@ -18,13 +18,35 @@
         data-nav-btn="add-view"
         [matTooltip]="T.F.BOARDS.V.ADD_NEW_BOARD | translate"
         [attr.aria-label]="T.F.BOARDS.V.ADD_NEW_BOARD | translate"
-        (click)="boardsService.createBoard()"
+        [matMenuTriggerFor]="addMenu"
       >
         <mat-icon>add</mat-icon>
       </button>
     </div>
   }
 </div>
+
+<!-- A blank view or a template; the items sit in the menu's own template so
+     the arrow keys reach them. -->
+<mat-menu #addMenu="matMenu">
+  <button
+    mat-menu-item
+    (click)="boardsService.createBoard()"
+  >
+    <mat-icon>add</mat-icon>
+    <span>{{ T.F.BOARDS.V.BLANK_VIEW | translate }}</span>
+  </button>
+  <mat-divider></mat-divider>
+  @for (template of viewTemplates; track template.id) {
+    <button
+      mat-menu-item
+      (click)="boardsService.createFromTemplate(template.id)"
+    >
+      <mat-icon>{{ template.icon }}</mat-icon>
+      <span>{{ template.title | translate }}</span>
+    </button>
+  }
+</mat-menu>
 
 <ng-template #sectionMenu>
   <!-- Also the way to create a view in the compact rail, which hides the +. -->
@@ -33,8 +55,18 @@
     (click)="boardsService.createBoard()"
   >
     <mat-icon>add</mat-icon>
-    <span>{{ T.F.BOARDS.V.ADD_NEW_BOARD | translate }}</span>
+    <span>{{ T.F.BOARDS.V.BLANK_VIEW | translate }}</span>
   </button>
+  @for (template of viewTemplates; track template.id) {
+    <button
+      mat-menu-item
+      (click)="boardsService.createFromTemplate(template.id)"
+    >
+      <mat-icon>{{ template.icon }}</mat-icon>
+      <span>{{ template.title | translate }}</span>
+    </button>
+  }
+  <mat-divider></mat-divider>
   <button
     mat-menu-item
     (click)="disableFeature()"

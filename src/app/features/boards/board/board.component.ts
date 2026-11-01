@@ -20,21 +20,14 @@ import { MatIcon } from '@angular/material/icon';
 import { Store } from '@ngrx/store';
 import { unique } from '../../../util/unique';
 import { addTag } from '../../tag/store/tag.actions';
-import {
-  DEFAULT_TAG,
-  IMPORTANT_TAG,
-  IN_PROGRESS_TAG,
-  URGENT_TAG,
-} from '../../tag/tag.const';
+import { DEFAULT_TAG } from '../../tag/tag.const';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { BoardsService } from '../boards.service';
 import { T } from '../../../t.const';
 import { ViewTaskListRegistry } from '../../tasks/view-task-list-registry.service';
 import { ViewCriteriaContextService } from '../view-criteria-context.service';
 import { expandOutOnlyAnimation } from '../../../ui/animations/expand.ani';
-
-// The tags the default views use, created with their fixed ids.
-const DEFAULT_VIEW_TAGS = [IMPORTANT_TAG, URGENT_TAG, IN_PROGRESS_TAG];
+import { DEFAULT_VIEW_TAGS } from '../view-templates';
 
 @Component({
   selector: 'board',

@@ -15,3 +15,11 @@ board {
   padding: var(--s2);
   text-align: center;
 }
+
+.templates {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--s);
+  margin-top: var(--s2);
+}

@@ -10,7 +10,12 @@ import { MatRipple } from '@angular/material/core';
 import { MatTooltip } from '@angular/material/tooltip';
 import { MatIconButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
-import { MatMenu, MatMenuContent, MatMenuTrigger } from '@angular/material/menu';
+import {
+  MatMenu,
+  MatMenuContent,
+  MatMenuItem,
+  MatMenuTrigger,
+} from '@angular/material/menu';
 import { WorkContextMenuComponent } from '../../work-context-menu/work-context-menu.component';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { T } from '../../../t.const';
@@ -40,7 +45,11 @@ import {
   translateViewTitle,
 } from '../../../features/boards/boards.util';
 import { BoardCfg } from '../../../features/boards/boards.model';
-import { ViewMenuComponent } from '../../../features/boards/view-menu/view-menu.component';
+import {
+  getViewMenuItems,
+  runViewMenuAction,
+  ViewMenuAction,
+} from '../../../features/boards/view-menu/view-menu.component';
 import { BoardsService } from '../../../features/boards/boards.service';
 
 @Component({
@@ -59,7 +68,7 @@ import { BoardsService } from '../../../features/boards/boards.service';
     TaskViewCustomizerPanelComponent,
     TranslatePipe,
     PluginIconComponent,
-    ViewMenuComponent,
+    MatMenuItem,
   ],
   template: `
     @if (activeWorkContextTypeAndId()) {
@@ -205,11 +214,19 @@ import { BoardsService } from '../../../features/boards/boards.service';
       }
       <mat-menu #viewMenu="matMenu">
         <ng-template matMenuContent>
+          <!-- Written here, not through view-menu: MatMenu's arrow keys only
+               reach items in its own template. -->
           @if (viewBoard(); as board) {
-            <view-menu
-              [board]="board"
-              [withLayoutSwitch]="isXs()"
-            ></view-menu>
+            @for (item of viewMenuItems(); track item.action) {
+              <button
+                mat-menu-item
+                [class.view-layout-item]="item.action === 'layout'"
+                (click)="runViewMenuAction(board, item.action)"
+              >
+                <mat-icon [class.color-warn-i]="item.isWarn">{{ item.icon }}</mat-icon>
+                <span>{{ item.label | translate }}</span>
+              </button>
+            }
           }
         </ng-template>
       </mat-menu>
@@ -615,6 +632,12 @@ export class PageTitleComponent {
     { initialValue: false },
   );
 
+  /** The open view's ⋮ menu, with the List/Board switch on phones. */
+  viewMenuItems = computed(() => {
+    const board = this.viewBoard();
+    return board ? getViewMenuItems(board, this.isXs()) : [];
+  });
+
   /** The List/Board switch of the open view: the other mode. */
   viewLayoutSwitch = computed(() => {
     const board = this.viewBoard();
@@ -642,6 +665,10 @@ export class PageTitleComponent {
   /** A list-layout view's filter button (and its shortcut): the editor. */
   editView(board: BoardCfg): void {
     void this._boardsService.editBoard(board);
+  }
+
+  runViewMenuAction(board: BoardCfg, action: ViewMenuAction): void {
+    runViewMenuAction(this._boardsService, board, action);
   }
 
   /** The title bar's List/Board button: the open view in the other mode. */

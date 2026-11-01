@@ -29,6 +29,7 @@ import {
 } from './boards.ani';
 import { BreakpointObserver } from '@angular/cdk/layout';
 import { getViewLayout } from './boards.util';
+import { VIEW_TEMPLATES } from './view-templates';
 
 /**
  * One view (board) per route: `/boards/:boardId`. `BoardRouteGuard` resolves
@@ -50,6 +51,7 @@ export class BoardsComponent {
   private _store = inject(Store);
   private _multiSelect = inject(TaskMultiSelectService);
   readonly boardsService = inject(BoardsService);
+  readonly viewTemplates = VIEW_TEMPLATES;
 
   readonly boardId = toSignal(
     this._route.paramMap.pipe(map((params) => params.get('boardId'))),

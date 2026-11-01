@@ -14,6 +14,9 @@ import { T } from '../../t.const';
 import { GlobalConfigService } from '../config/global-config.service';
 import { AppFeaturesConfig } from '../config/global-config.model';
 import { SnackService } from '../../core/snack/snack.service';
+import { addTag } from '../tag/store/tag.actions';
+import { ViewCriteriaContextService } from './view-criteria-context.service';
+import { buildViewFromTemplate, ViewTemplateId } from './view-templates';
 
 /**
  * Create, edit, duplicate and delete views (boards). Shared by the side menu,
@@ -27,6 +30,7 @@ export class BoardsService {
   private _translateService = inject(TranslateService);
   private _globalConfigService = inject(GlobalConfigService);
   private _snackService = inject(SnackService);
+  private _viewCtx = inject(ViewCriteriaContextService);
 
   readonly boards = this._store.selectSignal(selectAllBoards);
 
@@ -60,18 +64,41 @@ export class BoardsService {
       .afterClosed()
       .subscribe((boardId?: string) => {
         if (boardId) {
-          // "Save as view" is offered while Views are off: saving one turns
-          // them on, so the new view has its place in the menu.
-          if (!this._globalConfigService.appFeatures()?.isBoardsEnabled) {
-            this._globalConfigService.updateSection(
-              'appFeatures',
-              { isBoardsEnabled: true } as Partial<AppFeaturesConfig>,
-              true,
-            );
-          }
+          this._enableViews();
           this._openCreated(boardId);
         }
       });
+  }
+
+  /**
+   * Creates a view from a template together with the tags its rules name, so
+   * it works right away (no missing-tags step). The tags have fixed ids: one
+   * that exists already is kept as it is. Independent ops for one explicit
+   * user action.
+   */
+  createFromTemplate(templateId: ViewTemplateId): void {
+    const { board, tags } = buildViewFromTemplate(templateId, (key) =>
+      this._translateService.instant(key),
+    );
+    const existingTagIds = this._viewCtx.tagIdSet();
+    tags
+      .filter((tag) => !existingTagIds.has(tag.id))
+      .forEach((tag) => this._store.dispatch(addTag({ tag })));
+    this._store.dispatch(BoardsActions.addBoard({ board }));
+    this._enableViews();
+    this._openCreated(board.id);
+  }
+
+  // "Save as view" is offered while Views are off: saving one turns them on,
+  // so the new view has its place in the menu.
+  private _enableViews(): void {
+    if (!this._globalConfigService.appFeatures()?.isBoardsEnabled) {
+      this._globalConfigService.updateSection(
+        'appFeatures',
+        { isBoardsEnabled: true } as Partial<AppFeaturesConfig>,
+        true,
+      );
+    }
   }
 
   // A second click or shortcut press while the dialog's code loads would

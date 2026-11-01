@@ -16,5 +16,17 @@
       <mat-icon>add</mat-icon>
       {{ T.F.BOARDS.V.NO_VIEWS_BTN | translate }}
     </button>
+    <div class="templates">
+      @for (template of viewTemplates; track template.id) {
+        <button
+          mat-stroked-button
+          [attr.data-view-template]="template.id"
+          (click)="boardsService.createFromTemplate(template.id)"
+        >
+          <mat-icon>{{ template.icon }}</mat-icon>
+          {{ template.title | translate }}
+        </button>
+      }
+    </div>
   </div>
 }

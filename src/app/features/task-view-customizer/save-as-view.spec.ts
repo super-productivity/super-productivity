@@ -61,7 +61,7 @@ describe('buildViewFromList', () => {
     opts: Parameters<typeof buildWithHints>[1] = {},
   ): ReturnType<typeof buildViewFromList>['board'] => buildWithHints(source, opts).board;
 
-  it('makes a one-column view of a project list: undone parents, no backlog', () => {
+  it('makes a one-column view of a project list: parents, done ones too, no backlog', () => {
     const board = build(list());
     expect(board.cols).toBe(1);
     expect(board.title).toBe('Website');
@@ -70,7 +70,8 @@ describe('buildViewFromList', () => {
       jasmine.objectContaining({
         projectIds: ['p1'],
         backlogState: BoardPanelCfgTaskTypeFilter.NoBacklog,
-        taskDoneState: BoardPanelCfgTaskDoneState.UnDone,
+        // A ticked-off task moves to the Done group, as in the list.
+        taskDoneState: BoardPanelCfgTaskDoneState.All,
         isParentTasksOnly: true,
         // No sort: the column keeps the list's order.
         taskIds: ['a', 'b'],
@@ -82,6 +83,7 @@ describe('buildViewFromList', () => {
     const panel = build(list({ type: WorkContextType.TAG, id: 'work' })).panels[0];
     expect(panel.includedTagIds).toEqual(['work']);
     expect(panel.projectIds).toEqual(['']);
+    expect(panel.taskDoneState).toBe(BoardPanelCfgTaskDoneState.All);
   });
 
   it('maps an unfiltered Today to "today or overdue", untitled, with subtasks', () => {
@@ -90,6 +92,8 @@ describe('buildViewFromList', () => {
     expect(panel.dueState).toBe('todayOrOverdue');
     expect(panel.includedTagIds).toEqual([]);
     expect(panel.isParentTasksOnly).toBeFalse();
+    // A completed task keeps its due day: "today or overdue" would collect them.
+    expect(panel.taskDoneState).toBe(BoardPanelCfgTaskDoneState.UnDone);
     // "Today" doesn't name the view: the user does.
     expect(board.title).toBe('');
   });
@@ -238,7 +242,7 @@ describe('buildViewFromList', () => {
       // Base rules on every section.
       for (const p of board.panels) {
         expect(p.projectIds).toEqual(['p1']);
-        expect(p.taskDoneState).toBe(BoardPanelCfgTaskDoneState.UnDone);
+        expect(p.taskDoneState).toBe(BoardPanelCfgTaskDoneState.All);
         expect(p.taskIds).toEqual(['a', 'b']);
       }
       expect(other.includedTagIds).toEqual([]);

@@ -13,51 +13,91 @@ import { BoardCfg } from '../boards.model';
 import { BoardsService } from '../boards.service';
 import { getViewLayoutSwitch } from '../boards.util';
 
-/** Menu items for a view: shared by its side-menu row and the title bar. */
+export type ViewMenuAction = 'layout' | 'edit' | 'duplicate' | 'delete';
+
+export interface ViewMenuItem {
+  action: ViewMenuAction;
+  icon: string;
+  /** A translation key. */
+  label: string;
+  isWarn?: boolean;
+}
+
+/**
+ * A view's menu items. A host that owns a `mat-menu` renders them inside it
+ * itself (the title bar): MatMenu's arrow keys only reach items written in the
+ * menu's own template, not ones inside another component like `view-menu`.
+ * `withLayoutSwitch`: the title bar's List/Board switch, on phones where it
+ * has no button.
+ */
+export const getViewMenuItems = (
+  board: Pick<BoardCfg, 'cols'>,
+  withLayoutSwitch: boolean,
+): ViewMenuItem[] => {
+  const items: ViewMenuItem[] = [
+    { action: 'edit', icon: 'edit', label: T.G.EDIT },
+    { action: 'duplicate', icon: 'file_copy', label: T.G.DUPLICATE },
+    { action: 'delete', icon: 'delete_forever', label: T.G.DELETE, isWarn: true },
+  ];
+  if (!withLayoutSwitch) {
+    return items;
+  }
+  const layoutSwitch = getViewLayoutSwitch(board);
+  return [
+    { action: 'layout', icon: layoutSwitch.icon, label: layoutSwitch.label },
+    ...items,
+  ];
+};
+
+export const runViewMenuAction = (
+  boardsService: BoardsService,
+  board: BoardCfg,
+  action: ViewMenuAction,
+): void => {
+  switch (action) {
+    case 'layout':
+      boardsService.setViewLayout(board, getViewLayoutSwitch(board).layout);
+      return;
+    case 'edit':
+      void boardsService.editBoard(board);
+      return;
+    case 'duplicate':
+      boardsService.duplicateBoard(board);
+      return;
+    case 'delete':
+      boardsService.removeBoard(board);
+      return;
+  }
+};
+
+/** Menu items for a view, for menus that take a template (the side menu's rows). */
 @Component({
   selector: 'view-menu',
   standalone: true,
   imports: [MatIcon, MatMenuItem, TranslatePipe],
   template: `
-    @if (withLayoutSwitch()) {
+    @for (item of items(); track item.action) {
       <button
-        class="view-layout-item"
         mat-menu-item
-        (click)="boardsService.setViewLayout(board(), layoutSwitch().layout)"
+        [class.view-layout-item]="item.action === 'layout'"
+        (click)="run(item.action)"
       >
-        <mat-icon>{{ layoutSwitch().icon }}</mat-icon>
-        <span>{{ layoutSwitch().label | translate }}</span>
+        <mat-icon [class.color-warn-i]="item.isWarn">{{ item.icon }}</mat-icon>
+        <span>{{ item.label | translate }}</span>
       </button>
     }
-    <button
-      mat-menu-item
-      (click)="boardsService.editBoard(board())"
-    >
-      <mat-icon>edit</mat-icon>
-      <span>{{ T.G.EDIT | translate }}</span>
-    </button>
-    <button
-      mat-menu-item
-      (click)="boardsService.duplicateBoard(board())"
-    >
-      <mat-icon>file_copy</mat-icon>
-      <span>{{ T.G.DUPLICATE | translate }}</span>
-    </button>
-    <button
-      mat-menu-item
-      (click)="boardsService.removeBoard(board())"
-    >
-      <mat-icon class="color-warn-i">delete_forever</mat-icon>
-      <span>{{ T.G.DELETE | translate }}</span>
-    </button>
   `,
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class ViewMenuComponent {
-  readonly boardsService = inject(BoardsService);
+  private readonly _boardsService = inject(BoardsService);
   board = input.required<BoardCfg>();
-  /** The title bar's List/Board switch, on phones where it has no button. */
   withLayoutSwitch = input(false);
-  readonly layoutSwitch = computed(() => getViewLayoutSwitch(this.board()));
-  protected readonly T = T;
+  readonly items = computed(() =>
+    getViewMenuItems(this.board(), this.withLayoutSwitch()),
+  );
+
+  run(action: ViewMenuAction): void {
+    runViewMenuAction(this._boardsService, this.board(), action);
+  }
 }

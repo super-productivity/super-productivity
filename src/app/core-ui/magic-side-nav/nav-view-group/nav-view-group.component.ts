@@ -11,7 +11,8 @@ import {
 import { CdkDrag, CdkDragDrop, CdkDropList } from '@angular/cdk/drag-drop';
 import { MatIconButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
-import { MatMenuItem } from '@angular/material/menu';
+import { MatMenu, MatMenuItem, MatMenuTrigger } from '@angular/material/menu';
+import { MatDivider } from '@angular/material/divider';
 import { MatTooltip } from '@angular/material/tooltip';
 import { Store } from '@ngrx/store';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
@@ -27,6 +28,7 @@ import { dragDelayForTouch } from '../../../util/input-intent';
 import { T } from '../../../t.const';
 import { ViewMenuComponent } from '../../../features/boards/view-menu/view-menu.component';
 import { getViewIcon } from '../../../features/boards/boards.util';
+import { VIEW_TEMPLATES } from '../../../features/boards/view-templates';
 
 /** The Views section of the side menu: one route row per board (view). */
 @Component({
@@ -37,7 +39,10 @@ import { getViewIcon } from '../../../features/boards/boards.util';
     CdkDropList,
     MatIcon,
     MatIconButton,
+    MatDivider,
+    MatMenu,
     MatMenuItem,
+    MatMenuTrigger,
     MatTooltip,
     NavItemComponent,
     TranslatePipe,
@@ -68,6 +73,7 @@ export class NavViewGroupComponent {
   itemClick = output<NavItem>();
 
   readonly T = T;
+  readonly viewTemplates = VIEW_TEMPLATES;
   readonly dragDelayForTouch = dragDelayForTouch;
   // Off for the first render, so an open section doesn't animate in on start.
   readonly isAnimationEnabled = signal(false);
