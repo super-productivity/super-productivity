@@ -130,6 +130,14 @@ export const UNTOUCHED_SAVE_FIXTURES: UntouchedSaveFixture[] = [
     ),
   ),
   same(
+    'a list that remembers its board columns (boardCols)',
+    board(
+      'boardCols',
+      [panel({ id: 'a' }), panel({ id: 'b' }), panel({ id: 'c' }), panel({ id: 'd' })],
+      { cols: 1, boardCols: 2 },
+    ),
+  ),
+  same(
     'missing tags',
     board('missingTags', [
       panel({

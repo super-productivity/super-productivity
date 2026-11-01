@@ -151,6 +151,42 @@ describe('BoardsService', () => {
     );
   });
 
+  it('duplicates every field of the board, including boardCols', () => {
+    const list = { ...board, cols: 1, boardCols: 3, newerField: 'kept' } as BoardCfg;
+    service.duplicateBoard(list);
+    const added = dispatch.calls.mostRecent().args[0] as ReturnType<
+      typeof BoardsActions.addBoard
+    >;
+    expect(added.board).toEqual(
+      jasmine.objectContaining({
+        cols: 1,
+        boardCols: 3,
+        newerField: 'kept',
+      } as Partial<BoardCfg>),
+    );
+  });
+
+  describe('setViewLayout', () => {
+    it('switches a board to a list in one updateBoard, keeping its columns', () => {
+      service.setViewLayout(board, 'list');
+      expect(dispatch).toHaveBeenCalledOnceWith(
+        BoardsActions.updateBoard({ id: 'b1', updates: { cols: 1, boardCols: 3 } }),
+      );
+    });
+
+    it('switches a list back to the board it was', () => {
+      service.setViewLayout({ ...board, cols: 1, boardCols: 3 }, 'board');
+      expect(dispatch).toHaveBeenCalledOnceWith(
+        BoardsActions.updateBoard({ id: 'b1', updates: { cols: 3 } }),
+      );
+    });
+
+    it('dispatches nothing when the view already has that mode', () => {
+      service.setViewLayout(board, 'board');
+      expect(dispatch).not.toHaveBeenCalled();
+    });
+  });
+
   it('deletes only after confirming', () => {
     dialogResult = false;
     service.removeBoard(board);

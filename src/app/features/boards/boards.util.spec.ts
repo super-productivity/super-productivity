@@ -1,6 +1,7 @@
 import {
   criteriaToPanelFields,
   getCalendarDateForDueDay,
+  getLayoutChanges,
   getPanelHeaderCount,
   getPanelRowIds,
   getViewIcon,
@@ -1028,6 +1029,58 @@ describe('getViewIcon', () => {
     expect(getViewIcon({ cols: 1 })).toBe('view_list');
     expect(getViewIcon({ cols: 0 })).toBe('view_list');
     expect(getViewIcon({ cols: 2 })).toBe('view_kanban');
+  });
+});
+
+describe('getLayoutChanges', () => {
+  const panels = (n: number): BoardPanelCfg[] =>
+    Array.from({ length: n }, (_, i) => ({ id: `p${i}` }) as BoardPanelCfg);
+
+  it('turns a board into a list, remembering its column count', () => {
+    expect(getLayoutChanges({ cols: 2, panels: panels(4) }, 'list')).toEqual({
+      cols: 1,
+      boardCols: 2,
+    });
+    expect(getLayoutChanges({ cols: 4, panels: panels(4) }, 'list')).toEqual({
+      cols: 1,
+      boardCols: 4,
+    });
+  });
+
+  it('remembers no column count that is not a whole number (no undefined key)', () => {
+    const changes = getLayoutChanges({ cols: 2.5, panels: panels(3) }, 'list');
+    expect(changes).toEqual({ cols: 1 });
+    expect('boardCols' in changes).toBeFalse();
+  });
+
+  it('turns a list into the board it was', () => {
+    expect(
+      getLayoutChanges({ cols: 1, boardCols: 2, panels: panels(4) }, 'board'),
+    ).toEqual({ cols: 2 });
+    expect(
+      getLayoutChanges({ cols: 0, boardCols: 3, panels: panels(1) }, 'board'),
+    ).toEqual({ cols: 3 });
+  });
+
+  it('gives a list without a valid column count one column per section (at least 2)', () => {
+    expect(getLayoutChanges({ cols: 1, panels: panels(4) }, 'board')).toEqual({
+      cols: 4,
+    });
+    expect(getLayoutChanges({ cols: 0, panels: panels(1) }, 'board')).toEqual({
+      cols: 2,
+    });
+    for (const boardCols of [1, 0, 2.5, -3, NaN]) {
+      expect(
+        getLayoutChanges({ cols: 1, boardCols, panels: panels(3) }, 'board'),
+      ).toEqual({ cols: 3 });
+    }
+  });
+
+  it('changes nothing when the view already has that mode', () => {
+    expect(getLayoutChanges({ cols: 3, panels: panels(3) }, 'board')).toEqual({});
+    expect(
+      getLayoutChanges({ cols: 1, boardCols: 2, panels: panels(3) }, 'list'),
+    ).toEqual({});
   });
 });
 

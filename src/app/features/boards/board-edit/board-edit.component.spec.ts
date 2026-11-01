@@ -279,6 +279,37 @@ describe('BoardEditComponent with the view editor', () => {
     expect(single).toBeTruthy();
   });
 
+  it("keeps a board's column count through List and back, and saves both fields", async () => {
+    const fourSections = [
+      { ...DEFAULT_PANEL_CFG, id: 'a', title: 'A' },
+      { ...DEFAULT_PANEL_CFG, id: 'b', title: 'B' },
+      { ...DEFAULT_PANEL_CFG, id: 'c', title: 'C' },
+      { ...DEFAULT_PANEL_CFG, id: 'd', title: 'D' },
+    ];
+    const cmp = await open({ id: 'v', title: 'V', cols: 2, panels: fourSections });
+    editor().setLayout('list');
+    expect(editor().model().cols).toBe(1);
+    editor().setLayout('board');
+    // Not one column per section: the 2×2 it had.
+    expect(editor().model().cols).toBe(2);
+
+    editor().setLayout('list');
+    await settle();
+    cmp.save();
+    expect(dispatch).toHaveBeenCalledOnceWith(
+      BoardsActions.updateBoard({ id: 'v', updates: { cols: 1, boardCols: 2 } }),
+    );
+
+    dispatch.calls.reset();
+    const list = await open({ ...opened, cols: 1, boardCols: 2 });
+    editor().setLayout('board');
+    await settle();
+    list.save();
+    expect(dispatch).toHaveBeenCalledOnceWith(
+      BoardsActions.updateBoard({ id: 'v', updates: { cols: 2 } }),
+    );
+  });
+
   it('requires shown section titles', async () => {
     const cmp = await open({
       id: 'v',

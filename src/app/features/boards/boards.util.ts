@@ -269,6 +269,40 @@ export const panelToCriteria = (panel: BoardPanelCfg): TaskCriteria => {
   return criteria;
 };
 
+export type ViewLayout = 'list' | 'board';
+
+/** A view's mode: a list for one column (or less), a board for several. */
+export const getViewLayout = (board: Pick<BoardCfg, 'cols'>): ViewLayout =>
+  board.cols > 1 ? 'board' : 'list';
+
+const isBoardColCount = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isInteger(value) && value >= 2;
+
+/**
+ * What switching a view to `layout` changes, for one `updateBoard`: a list is
+ * `cols: 1` and remembers the board's column count in `boardCols`, so the
+ * board comes back with it (the Eisenhower Matrix stays 2×2). `boardCols` is
+ * left out unless it is a valid count (never `undefined` in an op), and is
+ * never removed: while a board it is stale and unread. Nothing when the view
+ * already has that mode.
+ */
+export const getLayoutChanges = (
+  board: Pick<BoardCfg, 'cols' | 'panels' | 'boardCols'>,
+  layout: ViewLayout,
+): Partial<BoardCfg> => {
+  if (getViewLayout(board) === layout) {
+    return {};
+  }
+  if (layout === 'list') {
+    return isBoardColCount(board.cols) ? { cols: 1, boardCols: board.cols } : { cols: 1 };
+  }
+  return {
+    cols: isBoardColCount(board.boardCols)
+      ? board.boardCols
+      : Math.max(2, board.panels.length),
+  };
+};
+
 /** A view's icon: a list for one column, a board for several (its layout). */
 export const getViewIcon = (board: Pick<BoardCfg, 'cols'>): string =>
   board.cols > 1 ? 'view_kanban' : 'view_list';

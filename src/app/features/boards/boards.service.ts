@@ -8,6 +8,7 @@ import { selectAllBoards } from './store/boards.selectors';
 import { BoardsActions } from './store/boards.actions';
 import { BoardCfg } from './boards.model';
 import { DEFAULT_BOARD_CFG } from './boards.const';
+import { getLayoutChanges, ViewLayout } from './boards.util';
 import { DialogConfirmComponent } from '../../ui/dialog-confirm/dialog-confirm.component';
 import { T } from '../../t.const';
 import { GlobalConfigService } from '../config/global-config.service';
@@ -88,8 +89,9 @@ export class BoardsService {
     const id = nanoid();
     this._store.dispatch(
       BoardsActions.addBoard({
+        // Spread, so every other field (`boardCols`, a newer client's) stays.
         board: {
-          cols: board.cols,
+          ...board,
           id,
           panels: board.panels.map((panel) => ({
             ...panel,
@@ -120,6 +122,17 @@ export class BoardsService {
         // Default views are titled with translation keys.
         translateParams: { title: this._translateService.instant(title) },
       });
+    }
+  }
+
+  /**
+   * Shows a view as a list or as a board (the title bar's button): one
+   * `updateBoard`, which keeps a board's column count for its way back.
+   */
+  setViewLayout(board: BoardCfg, layout: ViewLayout): void {
+    const updates = getLayoutChanges(board, layout);
+    if (Object.keys(updates).length) {
+      this._store.dispatch(BoardsActions.updateBoard({ id: board.id, updates }));
     }
   }
 

@@ -74,6 +74,12 @@ export interface BoardPanelCfg extends BoardSrcCfg {
 export interface BoardCfg {
   id: string;
   title: string;
+  // 1 (or less) = a list: sections stacked; more = a board with that many
+  // columns.
   cols: number;
   panels: BoardPanelCfg[];
+  // Optional since newly added: the column count a list (`cols <= 1`) gets
+  // back when it becomes a board again. Read only while a list and only as an
+  // integer >= 2 (see `getLayoutChanges`); stale and unread while a board.
+  boardCols?: number;
 }

@@ -21,9 +21,11 @@ import { nanoid } from 'nanoid';
 import { BoardCfg, BoardPanelCfg } from '../boards.model';
 import { DEFAULT_PANEL_CFG } from '../boards.const';
 import {
+  getLayoutChanges,
   getPanelHeaderCount,
   normalizeBoardForSave,
   panelToCriteria,
+  ViewLayout,
 } from '../boards.util';
 import { T } from '../../../t.const';
 import {
@@ -42,8 +44,6 @@ import {
   toEditorDisplayModel,
   toSavedBoard,
 } from './view-editor.util';
-
-type ViewLayout = 'list' | 'board';
 
 interface CachedCount {
   tasks: readonly TaskCopy[];
@@ -203,12 +203,12 @@ export class ViewEditorComponent {
     this.model.update((model) => ({ ...model, title }));
   }
 
+  /** Same change as the title bar's List/Board button (`setViewLayout`). */
   setLayout(layout: string | number): void {
-    this.model.update((model) =>
-      layout === 'board'
-        ? { ...model, cols: Math.max(2, model.panels.length) }
-        : { ...model, cols: 1 },
-    );
+    if (layout !== 'list' && layout !== 'board') {
+      return;
+    }
+    this.model.update((model) => ({ ...model, ...getLayoutChanges(model, layout) }));
   }
 
   setCols(value: number | null): void {
