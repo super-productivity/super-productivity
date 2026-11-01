@@ -108,6 +108,53 @@ COMPAT_OLD_ASSETS=$PWD/.tmp/released-clients/v18.14.0 \
   npx playwright test --config e2e/playwright.compatibility.config.ts
 ```
 
+### Performance Benchmark
+
+[`e2e/performance/`](performance/) measures how interactions slow down as an
+account grows. It runs against the production web build (`dist/browser`) and is
+never collected by `npm run e2e`. It reports numbers and never asserts on them:
+the run fails only when setup, validation or an endpoint fails.
+
+```bash
+npm run perf        # production build + full run (about 2 minutes locally, measured 2026-10)
+npm run perf:run    # reuse the existing dist/browser build
+PERF_PROFILES=baseline,long-list PERF_SCENARIOS=add-task PERF_SAMPLES=3 npm run perf:run
+```
+
+Results go to `.tmp/perf/results.json` (raw samples and environment) and
+`.tmp/perf/summary.md`. The [Performance Benchmark workflow](../.github/workflows/performance-benchmark.yml)
+runs on manual dispatch (with the same filters) and once a week on master. It
+uploads both files and adds the table to the job summary.
+
+- **Profiles** ([dataset.ts](performance/dataset.ts)): `baseline` (1,000 tasks, 50 in the
+  focus project, 10 projects), `large-account` (10,000 tasks) and `long-list` (900 in
+  the focus project). Each changes one dimension. All tasks are open standalone tasks;
+  settings are the build's defaults.
+- **Setup:** each profile is imported once through the backup UI. It is validated by
+  the per-project task counts in the side nav, before and after a reload, and fails on
+  a data repair or page error. It is then saved with
+  `storageState({ indexedDB: true })`. Every sample starts a fresh browser context
+  from that state. Service workers are blocked.
+- **Scenarios:** `reload` (navigation start of a reload with a warm HTTP cache, until
+  the focus project's first rows are rendered), `switch-project` (click on the
+  focus project in the side nav, until its rows are rendered and the previous rows
+  are gone) and `add-task` (Enter in the filled add-task bar, until the new row is
+  rendered).
+- **Metric:** a DOM response latency proxy, measured in the page from the input
+  event's `timeStamp` to the first task after the next animation frame once the
+  endpoint holds. It is not INP or paint time. `switch-project` includes the
+  `warpRoute` animation, so a small slowdown there partly hides behind it.
+- **Reading results:** one discarded warm-up and `PERF_SAMPLES` (default 5) samples
+  per cell, with profile order rotated per repetition. Compare the `× baseline`
+  ratios within one run. Milliseconds from different machines, browser versions or
+  `harnessVersion`/`datasetVersion` are not comparable.
+- **Checking the harness:** `PERF_INJECT_DELAY_MS=100` busy-waits in the input
+  handler, so every interaction should rise by about 100 ms.
+
+Out of scope: native Electron/mobile, sync, archives, long operation logs,
+memory, and scrolling. A pull-request comparison or regression gate needs
+calibration of runner noise first.
+
 ---
 
 ## Test Structure
