@@ -12,6 +12,7 @@ import { TaskService } from './task.service';
 import { addSubTask } from './store/task.actions';
 import { parseTimeSpentChanges } from './short-syntax';
 import { GlobalConfigService } from '../config/global-config.service';
+import { DateService } from '../../core/date/date.service';
 import { DEFAULT_GLOBAL_CONFIG } from '../config/default-global-config.const';
 import { Task } from './task.model';
 
@@ -28,6 +29,7 @@ export class MarkdownPasteService {
   private _taskService = inject(TaskService);
   private _store = inject(Store);
   private _globalConfigService = inject(GlobalConfigService);
+  private _dateService = inject(DateService);
 
   async handleMarkdownPaste(
     pastedText: string,
@@ -211,9 +213,10 @@ export class MarkdownPasteService {
     if (!shortSyntaxConfig.isEnableDue) {
       return { title: originalTitle, timeProps: {} };
     }
-    const { title: cleanedTitle, ...timeProps } = parseTimeSpentChanges({
-      title: originalTitle,
-    });
+    const { title: cleanedTitle, ...timeProps } = parseTimeSpentChanges(
+      { title: originalTitle },
+      this._dateService.todayStr(),
+    );
     return { title: cleanedTitle ?? originalTitle, timeProps };
   }
 }
