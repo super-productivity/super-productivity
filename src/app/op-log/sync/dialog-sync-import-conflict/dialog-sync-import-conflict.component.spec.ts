@@ -3,6 +3,7 @@ import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
+import { T } from '../../../t.const';
 import {
   DialogSyncImportConflictComponent,
   SyncImportConflictData,
@@ -56,6 +57,46 @@ describe('DialogSyncImportConflictComponent', () => {
     confirmSpy = window.confirm as jasmine.Spy;
     confirmSpy.calls.reset();
     confirmSpy.and.returnValue(true);
+  });
+
+  describe('localChangeRows', () => {
+    it('is empty when the dialog was given no change list', () => {
+      const cmp = setup({}).componentInstance;
+
+      expect(cmp.localChangeRows).toEqual([]);
+    });
+
+    it('maps each change to translation keys, falling back to the raw entity type', () => {
+      const cmp = setup({
+        localChanges: [
+          {
+            entityType: 'TASK',
+            entityId: 't1',
+            kind: 'UPDATED',
+            label: 'Buy milk',
+            fields: ['title', 'isDone'],
+          },
+          { entityType: 'SOMETHING_NEW', kind: 'DELETED' },
+        ],
+      }).componentInstance;
+
+      expect(cmp.localChangeRows).toEqual([
+        {
+          entityKey: T.F.SYNC.D_SYNC_IMPORT_CONFLICT.ENTITY.TASK,
+          entityType: 'TASK',
+          label: 'Buy milk',
+          kindKey: T.F.SYNC.D_SYNC_IMPORT_CONFLICT.CHANGE_UPDATED,
+          fieldsText: 'title, isDone',
+        },
+        {
+          entityKey: undefined,
+          entityType: 'SOMETHING_NEW',
+          label: undefined,
+          kindKey: T.F.SYNC.D_SYNC_IMPORT_CONFLICT.CHANGE_DELETED,
+          fieldsText: undefined,
+        },
+      ]);
+    });
   });
 
   describe('first-sync USE_LOCAL guard', () => {

@@ -1,4 +1,6 @@
 import { TestBed } from '@angular/core/testing';
+import { MockStore, provideMockStore } from '@ngrx/store/testing';
+import { selectTaskEntities } from '../../features/tasks/store/task.selectors';
 import { OperationLogStoreService } from '../persistence/operation-log-store.service';
 import { OperationWriteFlushService } from './operation-write-flush.service';
 import {
@@ -53,6 +55,9 @@ describe('SyncImportConflictGateService', () => {
 
     TestBed.configureTestingModule({
       providers: [
+        provideMockStore({
+          selectors: [{ selector: selectTaskEntities, value: {} }],
+        }),
         SyncImportConflictGateService,
         { provide: OperationLogStoreService, useValue: opLogStoreSpy },
         { provide: OperationWriteFlushService, useValue: writeFlushServiceSpy },
@@ -91,6 +96,109 @@ describe('SyncImportConflictGateService', () => {
       syncImportReason: 'SERVER_MIGRATION',
       scenario: 'INCOMING_IMPORT',
       isNeverSynced: true,
+      localChanges: [{ entityType: 'TASK', entityId: 'task-1', kind: 'UPDATED' }],
+    });
+  });
+
+  describe('localChanges', () => {
+    const pendingUpdate = (
+      entityId: string,
+      changes: Record<string, unknown>,
+    ): OperationLogEntry =>
+      createEntry(
+        createOperation({
+          id: `local-${entityId}`,
+          actionType: ActionType.TASK_SHARED_UPDATE,
+          opType: OpType.Update,
+          entityType: 'TASK',
+          entityId,
+          payload: {
+            entityChanges: [],
+            actionPayload: { task: { id: entityId, changes } },
+          },
+          clientId: 'client-A',
+          vectorClock: { clientA: 1 },
+        }),
+      );
+
+    it('should name a task from the live state when its op only carries other fields', async () => {
+      TestBed.inject(MockStore).overrideSelector(selectTaskEntities, {
+        ['task-1']: { id: 'task-1', title: 'Water the plants' },
+      } as never);
+      opLogStoreSpy.getUnsynced.and.resolveTo([
+        pendingUpdate('task-1', { isDone: true }),
+      ]);
+
+      const result = await service.checkIncomingFullStateConflict([createOperation()]);
+
+      expect(result.dialogData?.localChanges).toEqual([
+        {
+          entityType: 'TASK',
+          entityId: 'task-1',
+          kind: 'UPDATED',
+          label: 'Water the plants',
+          fields: ['isDone'],
+        },
+      ]);
+    });
+
+    it('should prefer the title carried by the op over the live state', async () => {
+      TestBed.inject(MockStore).overrideSelector(selectTaskEntities, {
+        ['task-1']: { id: 'task-1', title: 'Live title' },
+      } as never);
+      opLogStoreSpy.getUnsynced.and.resolveTo([
+        pendingUpdate('task-1', { title: 'Op title' }),
+      ]);
+
+      const result = await service.checkIncomingFullStateConflict([createOperation()]);
+
+      expect(result.dialogData?.localChanges?.[0].label).toBe('Op title');
+    });
+
+    it('should report automatic repeat-config updates as a count, not rows', async () => {
+      const repeatCfgBookkeeping = createEntry(
+        createOperation({
+          id: 'local-repeat-cfg',
+          actionType: ActionType.TASK_SHARED_UPDATE,
+          opType: OpType.Update,
+          entityType: 'TASK_REPEAT_CFG',
+          entityId: 'cfg-1',
+          payload: {
+            entityChanges: [],
+            actionPayload: {
+              taskRepeatCfg: {
+                id: 'cfg-1',
+                changes: { lastTaskCreationDay: '2026-10-26' },
+              },
+            },
+          },
+          clientId: 'client-A',
+          vectorClock: { clientA: 1 },
+        }),
+      );
+      opLogStoreSpy.getUnsynced.and.resolveTo([
+        repeatCfgBookkeeping,
+        pendingUpdate('task-1', { title: 'Real edit' }),
+      ]);
+
+      const result = await service.checkIncomingFullStateConflict([createOperation()]);
+
+      expect(result.dialogData?.filteredOpCount).toBe(2);
+      expect(result.dialogData?.localChanges?.map((c) => c.entityId)).toEqual(['task-1']);
+      expect(result.dialogData?.automaticChangeCount).toBe(1);
+    });
+
+    it('should omit the list when there are too many changes to read', async () => {
+      opLogStoreSpy.getUnsynced.and.resolveTo(
+        Array.from({ length: 21 }, (_, i) =>
+          pendingUpdate(`task-${i}`, { isDone: true }),
+        ),
+      );
+
+      const result = await service.checkIncomingFullStateConflict([createOperation()]);
+
+      expect(result.dialogData?.filteredOpCount).toBe(21);
+      expect(result.dialogData?.localChanges).toBeUndefined();
     });
   });
 
@@ -404,6 +512,7 @@ describe('SyncImportConflictGateService', () => {
       syncImportReason: undefined,
       scenario: 'INCOMING_IMPORT',
       isNeverSynced: true,
+      localChanges: [{ entityType: 'ALL', kind: 'IMPORTED' }],
     });
   });
 

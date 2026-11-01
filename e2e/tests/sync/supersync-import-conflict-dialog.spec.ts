@@ -673,6 +673,8 @@ test.describe('@supersync @import-conflict Sync Import Conflict Dialog', () => {
       await clientB.sync.syncBtn.click();
       const dialog = clientB.page.locator('dialog-sync-import-conflict');
       await expect(dialog).toBeVisible({ timeout: 20000 });
+      // The dialog names the local change the user is about to lose.
+      await expect(dialog.locator('.local-changes')).toContainText(bPendingTask);
       await dialog.getByRole('button', { name: /cancel/i }).click();
       await expect(dialog).not.toBeVisible({ timeout: 5000 });
       console.log('[#8304] Client B cancelled the dialog');
