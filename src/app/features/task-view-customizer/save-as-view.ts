@@ -41,10 +41,11 @@ export interface ViewSourceList {
  * group. From Today it is the filter alone (the view then shows every
  * matching open task, not only today's), titled after the filter; without a
  * filter, the open tasks due today or overdue, untitled for the user to name.
- * Grouped by tag, it gets one section (panel) per tag, see `toTagSections`. `hints` are translation keys for what the
- * view can't carry over: other groupings (fixed sections can't follow new
- * projects or days), Today's own overdue section or Today's scope, and filter
- * parts one column can't express next to the list's own project or tag. Those
+ * Grouped by tag, it gets one section (panel) per tag, see `toTagSections`.
+ * `hints` are translation keys for what the view can't carry over: other
+ * groupings (fixed sections can't follow new projects or days), Today's own
+ * overdue section or Today's scope, and filter parts one column can't express
+ * next to the list's own project or tag. Those
  * parts are left out, so the view stays within the list's project or tag but
  * may show more of it than the filtered list.
  */
