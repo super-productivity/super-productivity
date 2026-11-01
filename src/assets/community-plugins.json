@@ -212,6 +212,19 @@
     }
   },
   {
+    "name": "Days Until",
+    "shortDescription": "Countdown board for upcoming dates with repeating countdowns, groups, and an archive.",
+    "url": "https://github.com/Ruurdoos/days-until-plugin",
+    "author": "Ruurdoos",
+    "authorUrl": "https://github.com/Ruurdoos",
+    "id": "days-until",
+    "release": {
+      "version": "1.1.1",
+      "downloadUrl": "https://github.com/Ruurdoos/days-until-plugin/releases/download/v1.1.1/output.zip",
+      "sha256": "3cc509029c8d721bc5b9a8d7a0c37dde3d2a70e90784ef528f5998deaab85746"
+      }
+    },
+  {
     "name": "monday.com Issue Provider",
     "shortDescription": "Search, import, and sync monday.com board items as Super Productivity tasks, including status/done detection and item updates as comments.",
     "url": "https://github.com/Zoriot/sp-monday",
