@@ -68,9 +68,10 @@ const markPendingMigrationRejected = (page: Page): Promise<number> =>
  * read-only share or a misconfigured folder; a revoked app password or an
  * unrecognised mobile network error behaves the same), the snapshot was marked
  * permanently rejected. From then on every sync stopped with "A previous
- * server-migration snapshot was rejected" (or, once the folder had data,
+ * server-migration snapshot was rejected", even after the server problem was
+ * gone. (Once another device fills the folder, the same rejection shows as
  * "Upload blocked because pending operations depend on a rejected full-state
- * baseline"), even after the server problem was gone.
+ * baseline"; that later state is not covered here.)
  */
 test.describe('@webdav a failed snapshot upload does not stop file sync for good', () => {
   test.beforeEach(async ({ webdavServerUp }) => {
