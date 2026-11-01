@@ -129,6 +129,22 @@ describe('view-menu-rules', () => {
       expect(state.filters.tag?.preset).toBe(FILTER_COMMON.NOT_SPECIFIED);
     });
 
+    it('reads rules a released client contradicted as panelToCriteria does', () => {
+      const state = getViewMenuState(
+        board(
+          panel({
+            dueState: 'today',
+            scheduledState: BoardPanelCfgScheduledState.NotScheduled,
+            isUntagged: true,
+            includedTagIds: ['work'],
+          }),
+        ),
+      );
+      expect(state.filters.scheduledDate?.preset).toBe(FILTER_COMMON.NOT_SPECIFIED);
+      expect(state.filters.tag?.preset).toBeNull();
+      expect(state.filters.tag?.tagIds).toEqual(['work']);
+    });
+
     it('shows required tags with their match mode', () => {
       const tag = getViewMenuState(
         board(panel({ includedTagIds: ['work', 'home'], includedTagsMatch: 'any' })),

@@ -5,7 +5,13 @@ import {
   BoardPanelCfgTaskDoneState,
   BoardPanelCfgTaskTypeFilter,
 } from '../boards.model';
-import { isAllProjects, normalizeBoardForSave, toEditorModel } from '../boards.util';
+import {
+  hasStaleDueState,
+  isAllProjects,
+  isPanelUntagged,
+  normalizeBoardForSave,
+  toEditorModel,
+} from '../boards.util';
 import { deepEqual } from '@sp/sync-core';
 import { T } from '../../../t.const';
 import { TASK_DATE_RULES } from '../../tasks/task-criteria/task-criteria.model';
@@ -171,7 +177,7 @@ export const isRuleSet = (panel: BoardPanelCfg, rule: ViewRuleId): boolean => {
     case 'excludedTags':
       return (panel.excludedTagIds ?? []).length > 0;
     case 'untagged':
-      return panel.isUntagged === true;
+      return isPanelUntagged(panel);
     case 'plannedDate':
       return (
         isSetString(panel.dueState) ||
@@ -308,7 +314,7 @@ const isKnownDateRule = (value: string): boolean =>
  * `OTHER_VALUE` for a value this client doesn't know, `null` for no rule.
  */
 export const getPlannedDateChoice = (panel: BoardPanelCfg): string | null => {
-  if (isSetString(panel.dueState)) {
+  if (isSetString(panel.dueState) && !hasStaleDueState(panel)) {
     const dueState = panel.dueState as string;
     if (dueState === 'none') return PLANNED_NO_DATE;
     return isKnownDateRule(dueState) ? dueState : OTHER_VALUE;

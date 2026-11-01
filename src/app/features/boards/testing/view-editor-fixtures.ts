@@ -83,15 +83,15 @@ export const UNTOUCHED_SAVE_FIXTURES: UntouchedSaveFixture[] = [
   ),
   {
     // A date rule implies "scheduled" (released clients only know that).
-    name: 'dueState with NotScheduled',
-    board: board('dueNotScheduled', [
+    name: 'dueState with scheduledState All',
+    board: board('dueAll', [
       panel({
         id: 'a',
         dueState: 'today',
-        scheduledState: BoardPanelCfgScheduledState.NotScheduled,
+        scheduledState: BoardPanelCfgScheduledState.All,
       }),
     ]),
-    saved: board('dueNotScheduled', [
+    saved: board('dueAll', [
       panel({
         id: 'a',
         dueState: 'today',
@@ -100,14 +100,52 @@ export const UNTOUCHED_SAVE_FIXTURES: UntouchedSaveFixture[] = [
     ]),
   },
   {
-    name: 'isUntagged with tags',
-    board: board('untagged', [
+    // Only a released client's form stores "not scheduled" next to a date
+    // rule; that later edit wins (`hasStaleDueState`).
+    name: 'dueState with NotScheduled (a released edit)',
+    board: board('dueNotScheduled', [
+      panel({
+        id: 'a',
+        dueState: 'today',
+        scheduledState: BoardPanelCfgScheduledState.NotScheduled,
+      }),
+    ]),
+    saved: board('dueNotScheduled', [
+      panel({ id: 'a', scheduledState: BoardPanelCfgScheduledState.NotScheduled }),
+    ]),
+  },
+  {
+    // Only a released client's form adds required tags to an untagged
+    // section; the tags win (`isPanelUntagged`), all tag lists are kept.
+    name: 'isUntagged with required tags (a released edit)',
+    board: board('untaggedTags', [
       panel({
         id: 'a',
         isUntagged: true,
         includedTagIds: ['t1', 't2'],
         includedTagsMatch: 'any',
         excludedTagIds: ['t3'],
+      }),
+    ]),
+    saved: board('untaggedTags', [
+      panel({
+        id: 'a',
+        includedTagIds: ['t1', 't2'],
+        includedTagsMatch: 'any',
+        excludedTagIds: ['t3'],
+      }),
+    ]),
+  },
+  {
+    // Excluded tags don't contradict "untagged" (an untagged task has none),
+    // so it stays and the redundant list is dropped.
+    name: 'isUntagged with excluded tags',
+    board: board('untagged', [
+      panel({
+        id: 'a',
+        isUntagged: true,
+        excludedTagIds: ['t3'],
+        excludedTagsMatch: 'all',
       }),
     ]),
     saved: board('untagged', [

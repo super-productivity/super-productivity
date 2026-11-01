@@ -773,7 +773,7 @@ describe('withDueStateImpliesScheduled', () => {
   it('marks panels with a due rule as scheduled', () => {
     const out = withDueStateImpliesScheduled(
       board([
-        { dueState: 'today', scheduledState: BoardPanelCfgScheduledState.NotScheduled },
+        { dueState: 'today', scheduledState: BoardPanelCfgScheduledState.All },
         { scheduledState: BoardPanelCfgScheduledState.NotScheduled },
       ]),
     );
@@ -827,7 +827,7 @@ describe('panelToCriteria: rules added for views', () => {
       panelToCriteria(
         panel({
           dueState: 'thisWeek',
-          scheduledState: BoardPanelCfgScheduledState.NotScheduled,
+          scheduledState: BoardPanelCfgScheduledState.Scheduled,
           deadlineState: 'nextMonth',
           estimateRule: '1800000',
           timeSpentRule: 'none',
@@ -848,6 +848,51 @@ describe('panelToCriteria: rules added for views', () => {
       }),
     );
     expect(panelToCriteria(panel({ dueState: 'today' })).scheduled).toBeUndefined();
+  });
+
+  // A released client's form edits the fields it knows next to rules it
+  // doesn't; its later edit wins, as it shows the view.
+  it('lets required tags a released client added win over "untagged"', () => {
+    const criteria = panelToCriteria(panel({ isUntagged: true, includedTagIds: ['a'] }));
+    expect(criteria.isUntagged).toBeUndefined();
+    expect(criteria.includedTagIds).toEqual(['a']);
+    expect(
+      panelToCriteria(panel({ isUntagged: true, excludedTagIds: ['b'] })).isUntagged,
+    ).toBeTrue();
+  });
+
+  it('lets "not scheduled" a released client set win over a planned-date rule', () => {
+    const criteria = panelToCriteria(
+      panel({
+        dueState: 'today',
+        scheduledState: BoardPanelCfgScheduledState.NotScheduled,
+      }),
+    );
+    expect(criteria.plannedDate).toBeUndefined();
+    expect(criteria.scheduled).toBe('unscheduled');
+    // "No date" is not a planned date: no contradiction.
+    expect(
+      panelToCriteria(
+        panel({
+          dueState: 'none',
+          scheduledState: BoardPanelCfgScheduledState.NotScheduled,
+        }),
+      ).plannedDate,
+    ).toBe('none');
+    // An unknown rule from a newer client is left to it.
+    expect(
+      toEditorModel({
+        id: 'b',
+        title: 'B',
+        cols: 1,
+        panels: [
+          panel({
+            dueState: 'nextYear',
+            scheduledState: BoardPanelCfgScheduledState.NotScheduled,
+          }),
+        ],
+      }).panels[0].dueState,
+    ).toBe('nextYear');
   });
 
   it('reads an empty project list as all projects, like released clients', () => {
@@ -942,14 +987,46 @@ describe('normalizeBoardForSave', () => {
   it('clears the hidden tag lists of an untagged column and drops a false flag', () => {
     const out = normalizeBoardForSave(
       board([
-        { isUntagged: true, includedTagIds: ['a'], excludedTagIds: ['b'] },
+        { isUntagged: true, excludedTagIds: ['b'], excludedTagsMatch: 'all' },
         { isUntagged: false, includedTagIds: ['a'] },
       ]),
     );
-    expect(out.panels[0].includedTagIds).toEqual([]);
+    expect(out.panels[0].isUntagged).toBeTrue();
     expect(out.panels[0].excludedTagIds).toEqual([]);
+    expect('excludedTagsMatch' in out.panels[0]).toBeFalse();
     expect('isUntagged' in out.panels[1]).toBeFalse();
     expect(out.panels[1].includedTagIds).toEqual(['a']);
+  });
+
+  it('keeps tags a released client added to an untagged column, dropping the flag', () => {
+    const out = normalizeBoardForSave(
+      board([
+        {
+          isUntagged: true,
+          includedTagIds: ['a'],
+          includedTagsMatch: 'any',
+          excludedTagIds: ['b'],
+        },
+      ]),
+    );
+    expect('isUntagged' in out.panels[0]).toBeFalse();
+    expect(out.panels[0].includedTagIds).toEqual(['a']);
+    expect(out.panels[0].includedTagsMatch).toBe('any');
+    expect(out.panels[0].excludedTagIds).toEqual(['b']);
+  });
+
+  it('keeps "not scheduled" a released client set, dropping the date rule', () => {
+    const out = normalizeBoardForSave(
+      board([
+        { dueState: 'today', scheduledState: BoardPanelCfgScheduledState.NotScheduled },
+        { dueState: 'today', scheduledState: BoardPanelCfgScheduledState.All },
+      ]),
+    );
+    expect('dueState' in out.panels[0]).toBeFalse();
+    expect(out.panels[0].scheduledState).toBe(BoardPanelCfgScheduledState.NotScheduled);
+    // "All" doesn't contradict the rule: it stays, with the "scheduled" it implies.
+    expect(out.panels[1].dueState).toBe('today');
+    expect(out.panels[1].scheduledState).toBe(BoardPanelCfgScheduledState.Scheduled);
   });
 
   it('drops Formly nulls before they reach an op', () => {

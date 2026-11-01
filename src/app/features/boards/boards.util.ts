@@ -149,14 +149,55 @@ export const sanitizePanelCfg = (panel: BoardPanelCfg): BoardPanelCfg => {
 export const toEditorModel = (board: BoardCfg): BoardCfg => ({
   ...DEFAULT_BOARD_CFG,
   ...board,
-  panels: (board.panels ?? []).map((panel) => ({
-    ...DEFAULT_PANEL_CFG,
-    ...panel,
-    // `normalizeBoardForSave` stores this key as `sortBy` or `sortKey`, so it
-    // must hold the sort of `sortBy` too. An unknown `sortKey` is kept.
-    sortKey: getPanelSortKey(panel) ?? panel.sortKey,
-  })),
+  panels: (board.panels ?? []).map((panel) =>
+    withoutStaleRules({
+      ...DEFAULT_PANEL_CFG,
+      ...panel,
+      // `normalizeBoardForSave` stores this key as `sortBy` or `sortKey`, so it
+      // must hold the sort of `sortBy` too. An unknown `sortKey` is kept.
+      sortKey: getPanelSortKey(panel) ?? panel.sortKey,
+    }),
+  ),
 });
+
+/**
+ * Whether the panel's "without tags" rule applies. Released clients don't know
+ * `isUntagged` and their board form can add required tags to such a panel
+ * (this client never stores both). The tags win: the released client shows
+ * the tagged tasks, and "untagged" plus required tags would match nothing.
+ */
+export const isPanelUntagged = (
+  panel: Pick<BoardPanelCfg, 'isUntagged' | 'includedTagIds'>,
+): boolean => panel.isUntagged === true && !panel.includedTagIds?.length;
+
+/**
+ * Whether the panel's planned-date rule is stale: released clients don't know
+ * `dueState` and their board form can set "not scheduled" next to it (this
+ * client stores "scheduled" with a date rule). Their later edit wins, as they
+ * show it. ("All" next to a date rule is left alone: it doesn't contradict
+ * the rule, the date rule keeps applying here and a save stores "scheduled".)
+ */
+export const hasStaleDueState = (
+  panel: Pick<BoardPanelCfg, 'dueState' | 'scheduledState'>,
+): boolean =>
+  panel.scheduledState === BoardPanelCfgScheduledState.NotScheduled &&
+  isScheduledDateRule(parseDateRule(panel.dueState));
+
+/**
+ * The panel without the rules a released client's edit made stale (see
+ * `isPanelUntagged`, `hasStaleDueState`), keeping that edit.
+ */
+const withoutStaleRules = (panel: BoardPanelCfg): BoardPanelCfg => {
+  const isStaleUntagged = panel.isUntagged === true && !isPanelUntagged(panel);
+  const isStaleDue = hasStaleDueState(panel);
+  if (!isStaleUntagged && !isStaleDue) {
+    return panel;
+  }
+  const out = { ...panel };
+  if (isStaleUntagged) delete out.isUntagged;
+  if (isStaleDue) delete out.dueState;
+  return out;
+};
 
 /**
  * Turns the board editor's model into what is stored: the form's sort select
@@ -168,7 +209,9 @@ export const normalizeBoardForSave = (board: BoardCfg): BoardCfg =>
   withDueStateImpliesScheduled({
     ...board,
     panels: board.panels.map((panel) => {
-      let out = withPanelSortKey(panel, panel.sortKey as TaskSortKey | null | undefined);
+      let out = withoutStaleRules(
+        withPanelSortKey(panel, panel.sortKey as TaskSortKey | null | undefined),
+      );
       if (out.isUntagged) {
         out = { ...out, includedTagIds: [], excludedTagIds: [] };
         delete out.includedTagsMatch;
@@ -225,14 +268,14 @@ const parsePriorityRule = (
  * "scheduled", so the scheduled state is only used without one.
  */
 export const panelToCriteria = (panel: BoardPanelCfg): TaskCriteria => {
-  const plannedDate = parseDateRule(panel.dueState);
+  const plannedDate = hasStaleDueState(panel) ? undefined : parseDateRule(panel.dueState);
   const criteria: TaskCriteria = {
     includedTagIds: panel.includedTagIds,
     includedTagsMatch: panel.includedTagsMatch === 'any' ? 'any' : 'all',
     excludedTagIds: panel.excludedTagIds,
     excludedTagsMatch: panel.excludedTagsMatch === 'all' ? 'all' : 'any',
   };
-  if (panel.isUntagged === true) criteria.isUntagged = true;
+  if (isPanelUntagged(panel)) criteria.isUntagged = true;
   // An empty list means all projects, as it always has (and on released
   // clients); only a list of ids restricts.
   const projectIds = isAllProjects(panel.projectIds)

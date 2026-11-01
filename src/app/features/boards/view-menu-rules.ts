@@ -2,6 +2,8 @@ import { BoardCfg, BoardPanelCfg, BoardPanelCfgScheduledState } from './boards.m
 import {
   criteriaToPanelFields,
   getPanelSortKey,
+  hasStaleDueState,
+  isPanelUntagged,
   normalizeBoardForSave,
   withPanelSortKey,
 } from './boards.util';
@@ -64,11 +66,12 @@ const getRuleKey = (panel: BoardPanelCfg, type: FILTER_OPTION_TYPE): string => {
     case FILTER_OPTION_TYPE.tag: {
       const included = sortedCopy(panel.includedTagIds);
       const excluded = sortedCopy(panel.excludedTagIds);
-      if (panel.isUntagged !== true && !included.length && !excluded.length) {
+      const isUntagged = isPanelUntagged(panel);
+      if (!isUntagged && !included.length && !excluded.length) {
         return '';
       }
       return JSON.stringify([
-        panel.isUntagged === true,
+        isUntagged,
         included,
         // Match modes only matter for several tags.
         included.length > 1 ? (panel.includedTagsMatch ?? 'all') : '',
@@ -77,7 +80,7 @@ const getRuleKey = (panel: BoardPanelCfg, type: FILTER_OPTION_TYPE): string => {
       ]);
     }
     case FILTER_OPTION_TYPE.scheduledDate:
-      if (panel.dueState) return `due:${panel.dueState}`;
+      if (panel.dueState && !hasStaleDueState(panel)) return `due:${panel.dueState}`;
       if (panel.scheduledState === BoardPanelCfgScheduledState.NotScheduled) {
         return 'unscheduled';
       }
@@ -113,7 +116,7 @@ const getPanelFilter = (
   if (!option) return undefined;
   switch (type) {
     case FILTER_OPTION_TYPE.tag:
-      if (panel.isUntagged === true) {
+      if (isPanelUntagged(panel)) {
         return { ...option, preset: FILTER_COMMON.NOT_SPECIFIED };
       }
       return panel.includedTagIds?.length

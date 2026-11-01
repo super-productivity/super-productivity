@@ -56,7 +56,7 @@ describe('view editor rules', () => {
         panel({
           projectIds: ['deleted-project'],
           backlogState: BoardPanelCfgTaskTypeFilter.OnlyBacklog,
-          includedTagIds: ['a'],
+          excludedTagIds: ['a'],
           isUntagged: true,
           scheduledState: BoardPanelCfgScheduledState.Scheduled,
           deadlineState: 'unknownRule',
@@ -70,7 +70,7 @@ describe('view editor rules', () => {
     ).toEqual([
       'project',
       'backlog',
-      'includedTags',
+      'excludedTags',
       'untagged',
       'plannedDate',
       'deadline',
@@ -133,6 +133,17 @@ describe('view editor rules', () => {
     ).toEqual(['excludedTags', 'untagged']);
   });
 
+  it('shows required tags a released client added, not "Without tags"', () => {
+    const stored = panel({ isUntagged: true, includedTagIds: ['a'] });
+    expect(getSetRules(stored)).toEqual(['includedTags']);
+    // The editor model drops the stale flag, so removing the tags can't
+    // bring "Without tags" back.
+    const model = toEditorModel({ id: 'b', title: 'B', cols: 1, panels: [stored] })
+      .panels[0];
+    expect('isUntagged' in model).toBeFalse();
+    expect(getSetRules(withoutRule(model, 'includedTags'))).toEqual([]);
+  });
+
   it('drops empty groups from the Add-rule menu', () => {
     expect(getAddableRuleGroups(['project', 'backlog'])[0]).toEqual([
       'includedTags',
@@ -168,6 +179,18 @@ describe('planned date select', () => {
     expect(
       getPlannedDateChoice(panel({ scheduledState: 7 as BoardPanelCfgScheduledState })),
     ).toBe(OTHER_VALUE);
+  });
+
+  it('shows "No date" a released client set next to a date rule', () => {
+    const stored = panel({
+      dueState: 'today',
+      scheduledState: BoardPanelCfgScheduledState.NotScheduled,
+    });
+    expect(getPlannedDateChoice(stored)).toBe(PLANNED_NO_DATE);
+    const model = toEditorModel({ id: 'b', title: 'B', cols: 1, panels: [stored] })
+      .panels[0];
+    expect('dueState' in model).toBeFalse();
+    expect(getPlannedDateChoice(model)).toBe(PLANNED_NO_DATE);
   });
 
   it('writes both fields only from a choice', () => {
