@@ -174,6 +174,104 @@ describe('CaldavClientService.updateFields$ – completion push', () => {
   });
 });
 
+// Some servers (e.g. Vikunja) ignore the UID filter of the calendar-query and
+// return every VTODO of the calendar, so the first result can be another task.
+describe('CaldavClientService – exact UID match on lookup', () => {
+  let svc: CaldavClientService;
+  let snack: jasmine.SpyObj<SnackService>;
+
+  const davTodo = (
+    uid: string,
+  ): { data: string; url: string; etag: string; update: jasmine.Spy } => ({
+    data: [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'BEGIN:VTODO',
+      `UID:${uid}`,
+      `SUMMARY:Task ${uid}`,
+      'STATUS:NEEDS-ACTION',
+      'END:VTODO',
+      'END:VCALENDAR',
+    ].join('\r\n'),
+    url: `https://cal.example.com/${uid}.ics`,
+    etag: `"etag-${uid}"`,
+    update: jasmine.createSpy('update').and.resolveTo(undefined),
+  });
+
+  beforeEach(() => {
+    snack = jasmine.createSpyObj('SnackService', ['open']);
+    TestBed.configureTestingModule({
+      providers: [CaldavClientService, { provide: SnackService, useValue: snack }],
+    });
+    svc = TestBed.inject(CaldavClientService);
+    spyOn(svc as any, '_getCalendar').and.resolveTo({
+      readOnly: false,
+      createObject: jasmine.createSpy().and.resolveTo({}),
+    });
+  });
+
+  afterEach(() => TestBed.resetTestingModule());
+
+  it('getById$ returns the VTODO with the requested UID, not the first one', async () => {
+    spyOn(CaldavClientService as any, '_findTaskByUid').and.resolveTo([
+      davTodo('other-1'),
+      davTodo('wanted'),
+      davTodo('other-2'),
+    ]);
+
+    const issue = await firstValueFrom(svc.getById$('wanted', MOCK_CFG));
+
+    expect(issue.id).toBe('wanted');
+    expect(issue.summary).toBe('Task wanted');
+  });
+
+  it('getById$ treats a result without the requested UID as not found', async () => {
+    spyOn(CaldavClientService as any, '_findTaskByUid').and.resolveTo([
+      davTodo('other-1'),
+      davTodo('other-2'),
+    ]);
+
+    await expectAsync(firstValueFrom(svc.getById$('missing', MOCK_CFG))).toBeRejected();
+    expect(snack.open).toHaveBeenCalled();
+  });
+
+  it('updateFields$ writes to the VTODO with the requested UID only', async () => {
+    const other = davTodo('other-1');
+    const wanted = davTodo('wanted');
+    spyOn(CaldavClientService as any, '_findTaskByUid').and.resolveTo([other, wanted]);
+
+    await firstValueFrom(svc.updateFields$(MOCK_CFG, 'wanted', { completed: true }));
+
+    expect(other.update).not.toHaveBeenCalled();
+    expect(other.data).not.toContain('STATUS:COMPLETED');
+    expect(wanted.update).toHaveBeenCalled();
+    expect(wanted.data).toContain('STATUS:COMPLETED');
+  });
+
+  it('updateFields$ does not touch another VTODO when the UID is missing', async () => {
+    const other = davTodo('other-1');
+    spyOn(CaldavClientService as any, '_findTaskByUid').and.resolveTo([other]);
+
+    await expectAsync(
+      firstValueFrom(svc.updateFields$(MOCK_CFG, 'missing', { completed: true })),
+    ).toBeRejected();
+    expect(other.update).not.toHaveBeenCalled();
+  });
+
+  it('createTask$ resolves to the created VTODO, not another one returned first', async () => {
+    spyOn(CaldavClientService as any, '_findTaskByUid').and.resolveTo([
+      davTodo('other-1'),
+      davTodo('new-task'),
+    ]);
+
+    const issue = await firstValueFrom(
+      svc.createTask$(MOCK_CFG, { uid: 'new-task', summary: 'Task new-task' }),
+    );
+
+    expect(issue.id).toBe('new-task');
+  });
+});
+
 describe('CaldavClientService.createTask$', () => {
   let svc: CaldavClientService;
   let snack: jasmine.SpyObj<SnackService>;
