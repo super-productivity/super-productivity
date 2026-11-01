@@ -233,6 +233,15 @@ describe('Azure DevOps Plugin - push done state (#8556)', () => {
     }
   });
 
+  it('does not reopen a Removed item', async () => {
+    const { http, patch } = mockHttp(
+      { type: 'Task', state: 'Removed' },
+      AGILE_TASK_STATES,
+    );
+    await push(http, false);
+    expect(patch).not.toHaveBeenCalled();
+  });
+
   it('does not write when reopening an item that is already open', async () => {
     const { http, patch } = mockHttp({ type: 'Task', state: 'New' }, AGILE_TASK_STATES);
     await push(http, false);

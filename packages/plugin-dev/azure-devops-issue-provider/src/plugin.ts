@@ -59,7 +59,11 @@ interface AzureWiqlResponse {
 // Azure's state categories: each process template names its states freely
 // (Closed, Done, Finished…) but files each under one of these.
 type AzureStateCategory =
-  'Proposed' | 'InProgress' | 'Resolved' | 'Completed' | 'Removed';
+  | 'Proposed'
+  | 'InProgress'
+  | 'Resolved'
+  | 'Completed'
+  | 'Removed';
 
 interface AzureWorkItemState {
   name: string;
@@ -196,7 +200,8 @@ const runWiqlAndFetch = async (
 };
 
 // Moves a work item to its type's done (or open) state. Skips the write when
-// the item is already there, so a re-push or a Removed item stays untouched.
+// the item is already there, and never touches a Removed item: reopening the
+// task must not bring back a work item someone deleted in Azure DevOps.
 const setWorkItemDone = async (
   cfg: AzureDevOpsConfig,
   http: PluginHttp,
@@ -216,7 +221,7 @@ const setWorkItemDone = async (
   const isCurrentlyDone = currentCategory
     ? isDoneCategory(currentCategory)
     : DONE_STATES.includes(current.toLowerCase());
-  if (isCurrentlyDone === isDone) {
+  if (currentCategory === 'Removed' || isCurrentlyDone === isDone) {
     return;
   }
   const target = pickTargetState(states, isDone);
