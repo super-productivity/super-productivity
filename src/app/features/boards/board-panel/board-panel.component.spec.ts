@@ -42,6 +42,7 @@ import { DateAdapter } from '@angular/material/core';
 import { DEFAULT_PANEL_CFG } from '../boards.const';
 import { getPanelHeaderCount, matchPanelTasks } from '../boards.util';
 import { BoardsActions } from '../store/boards.actions';
+import { PANEL_SHOWN_LIMIT } from './panel-rules';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { GlobalTrackingIntervalService } from '../../../core/global-tracking-interval/global-tracking-interval.service';
 import { TaskBulkActionService } from '../../tasks/task-bulk-action.service';
@@ -1612,6 +1613,104 @@ describe('BoardPanelComponent - drop()', () => {
           taskIds: [...ids(100).slice(1), 't0', 'hidden', 'done'],
         }),
       );
+    });
+
+    const lastPlacement = (): string[] =>
+      (
+        dispatchSpy.calls
+          .allArgs()
+          .map(([action]) => action)
+          .filter((action) => action.type === BoardsActions.updatePanelCfgTaskIds.type)
+          .pop() as { taskIds: string[] }
+      ).taskIds;
+
+    it('drops a card from another panel below the last card shown as the last one shown', async () => {
+      const tasks = ids(101).map((id) => mkTask({ id }));
+      const incoming = mkTask({ id: 'x' });
+      await setup([...tasks, incoming]);
+      fixture.componentRef.setInput('panelCfg', { ...DEFAULT_PANEL_CFG, id: 'p' });
+      fixture.detectChanges();
+      // `x` matches here too (a duplicate): it moves, it isn't counted.
+      await component.drop(
+        mkDropEvent({
+          panelCfg: component.panelCfg(),
+          task: incoming,
+          currentIndex: 100,
+        }),
+      );
+      const order = lastPlacement();
+      expect(order.indexOf('x')).toBe(99);
+      expect(order.slice(0, 100)).toContain('x');
+    });
+
+    describe('a move without an index into a long column', () => {
+      const setupLong = async (count: number): Promise<void> => {
+        // The column's tasks carry its tag; the incoming ones get it.
+        const tasks = [
+          ...ids(count).map((id) => mkTask({ id, tagIds: ['in-progress'] })),
+          mkTask({ id: 'x' }),
+          mkTask({ id: 'y' }),
+        ];
+        await setup(tasks);
+        fixture.componentRef.setInput('panelCfg', {
+          ...DEFAULT_PANEL_CFG,
+          id: 'p',
+          includedTagIds: ['in-progress'],
+        });
+        fixture.detectChanges();
+      };
+
+      it('goes to the end of a short column', async () => {
+        await setupLong(3);
+        expect(await component.moveTasks(['x'])).toBeTrue();
+        expect(lastPlacement()).toEqual(['t0', 't1', 't2', 'x']);
+      });
+
+      it('lands as the last item shown, keeping the column capped', async () => {
+        await setupLong(150);
+        expect(await component.moveTasks(['x'])).toBeTrue();
+        expect(lastPlacement().indexOf('x')).toBe(PANEL_SHOWN_LIMIT - 1);
+      });
+
+      // A column of exactly 100 is cut off by the move.
+      it('stays shown when the column only reaches the limit with it', async () => {
+        await setupLong(PANEL_SHOWN_LIMIT);
+        expect(await component.moveTasks(['x'])).toBeTrue();
+        expect(lastPlacement().indexOf('x')).toBe(PANEL_SHOWN_LIMIT - 1);
+      });
+
+      it('keeps a whole selection among the items shown', async () => {
+        await setupLong(150);
+        expect(await component.moveTasks(['x', 'y'])).toBeTrue();
+        const order = lastPlacement();
+        expect(order.indexOf('x')).toBe(PANEL_SHOWN_LIMIT - 2);
+        expect(order.indexOf('y')).toBe(PANEL_SHOWN_LIMIT - 1);
+      });
+    });
+
+    it('"Show all" focuses the first card it revealed', async () => {
+      await setup(ids(150).map((id) => mkTask({ id })));
+      fixture.componentRef.setInput('panelCfg', { ...DEFAULT_PANEL_CFG, id: 'p' });
+      fixture.detectChanges();
+      const cards = ids(150).map((id) => {
+        const el = document.createElement('div');
+        el.dataset.taskId = id;
+        el.tabIndex = 0;
+        return el;
+      });
+      const host = document.createElement('div');
+      host.append(...cards);
+      document.body.appendChild(host);
+      spyOn(component, 'rows').and.returnValue(cards);
+      try {
+        component.showAll(component.mainItems());
+        expect(component.isShowAll()).toBeTrue();
+        fixture.detectChanges();
+        await fixture.whenStable();
+        expect(document.activeElement).toBe(cards[100]);
+      } finally {
+        host.remove();
+      }
     });
 
     it('moves a selection that reaches past the rendered cards whole', async () => {

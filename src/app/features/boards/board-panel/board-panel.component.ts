@@ -472,7 +472,10 @@ export class BoardPanelComponent implements TaskCardList, ViewTaskListHost {
    * effects. Without an index, tasks go after the last open item shown, so a
    * move into a long column neither hides the task nor renders the whole column.
    */
-  async moveTasks(ids: string[], index = this._endOfShownIndex()): Promise<boolean> {
+  async moveTasks(
+    ids: string[],
+    index = this._endOfShownIndex(new Set(ids)),
+  ): Promise<boolean> {
     if (this.isMoving()) return false;
     this.isMoving.set(true);
     try {
@@ -665,22 +668,33 @@ export class BoardPanelComponent implements TaskCardList, ViewTaskListHost {
 
   /**
    * Where moved tasks go at the end of what is shown, counted without them
-   * (like `placeInOrder`): the end of the panel, or, while it is cut off at
-   * the limit, the place of the last open item shown, so they stay in view.
+   * (like `placeInOrder`): the end of the panel, or, when they would push its
+   * open items past the limit, right after the open item that leaves them
+   * room to be the last ones shown, so they stay in view and the panel stays
+   * capped.
    */
   private _endOfShownIndex(moving: ReadonlySet<string> = new Set()): number {
     const order = this.tasks()
       .map((task) => task.id)
       .filter((id) => !moving.has(id));
-    const shown = this.shownMain();
-    if (shown.length === this.mainItems().length) return order.length;
-    const kept = shown.filter((task) => !moving.has(task.id));
-    const last = kept[kept.length - 1];
-    if (!last) return 0;
-    // Moved from among the shown ones, they free their places: after the
-    // last kept one they still show.
-    const isRoomAfterLast = shown.length - kept.length >= moving.size;
-    return order.indexOf(last.id) + (isRoomAfterLast ? 1 : 0);
+    if (this.isShowAll()) return order.length;
+    const kept = this.mainItems().filter((task) => !moving.has(task.id));
+    const room = PANEL_SHOWN_LIMIT - moving.size;
+    if (kept.length <= room) return order.length;
+    const anchor = kept[room - 1];
+    return anchor ? order.indexOf(anchor.id) + 1 : 0;
+  }
+
+  /**
+   * "Show all" below a part (`items`): the button goes, so the focus moves to
+   * the first item it revealed.
+   */
+  showAll(items: readonly TaskCopy[]): void {
+    const taskId = items[PANEL_SHOWN_LIMIT]?.id;
+    this.isShowAll.set(true);
+    afterNextRender(() => this._focusRowNow(PANEL_SHOWN_LIMIT, taskId), {
+      injector: this._injector,
+    });
   }
 
   private _capped(items: TaskCopy[], isShowAll: boolean): TaskCopy[] {

@@ -3,9 +3,10 @@ import { expect, test } from '../../fixtures/test.fixture';
 
 /**
  * A long column renders its first 100 cards and a "Show all (n)" button;
- * the header counts every task. A card moved past the first 100, by keyboard
- * or drag, makes the column show all of it, so the card stays in view and
- * keeps the focus. Never stored: a reload shows the first 100 again.
+ * the header counts every task. A card moved into it, by keyboard or by a
+ * drag below the last card shown, becomes the last card shown, so it stays in
+ * view and keeps the focus while the column stays capped. Never stored: a
+ * reload shows the first 100 again.
  */
 
 const TASK_COUNT = 150;

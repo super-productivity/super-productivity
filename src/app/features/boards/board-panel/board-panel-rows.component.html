@@ -110,7 +110,7 @@
   @if (panel.mainItems().length > panel.shownMain().length) {
     <ng-container
       [ngTemplateOutlet]="showAll"
-      [ngTemplateOutletContext]="{ $implicit: panel.mainItems().length }"
+      [ngTemplateOutletContext]="{ $implicit: panel.mainItems() }"
     ></ng-container>
   }
   @if (panel.doneItems().length) {
@@ -130,7 +130,7 @@
         @if (panel.doneItems().length > panel.shownDone().length) {
           <ng-container
             [ngTemplateOutlet]="showAll"
-            [ngTemplateOutletContext]="{ $implicit: panel.doneItems().length }"
+            [ngTemplateOutletContext]="{ $implicit: panel.doneItems() }"
           ></ng-container>
         }
       }
@@ -140,13 +140,13 @@
 
 <ng-template
   #showAll
-  let-count
+  let-items
 >
   <button
     mat-button
     class="show-all-btn"
-    (click)="panel.isShowAll.set(true)"
+    (click)="panel.showAll(items)"
   >
-    {{ T.F.BOARDS.V.SHOW_ALL | translate: { count } }}
+    {{ T.F.BOARDS.V.SHOW_ALL | translate: { count: items.length } }}
   </button>
 </ng-template>
