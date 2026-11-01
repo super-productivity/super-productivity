@@ -47,7 +47,7 @@
     "@sp/shared-schema": "*",
     "@sp/sync-core": "*",
     "bcryptjs": "^3.0.3",
-    "dotenv": "^17.2.3",
+    "dotenv": "^18.0.9",
     "fastify": "^5.12.7",
     "jsonwebtoken": "^9.0.2",
     "nodemailer": "^10.1.0",
