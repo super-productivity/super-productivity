@@ -196,10 +196,6 @@
     "plugins:build:silent": "npm run vite-plugin:build && cd packages/plugin-dev && npm run build:all:silent",
     "plugin-starter:check": "node tools/check-plugin-starter.js"
   },
-  "resolutions": {
-    "sass": "1.32.6",
-    "@ctrl/tinycolor": "4.1.0"
-  },
   "dependencies": {
     "@capacitor/browser": "^8.0.5",
     "@capacitor/ios": "^8.5.3",
