@@ -3,8 +3,12 @@ import { IPC } from '../shared-with-frontend/ipc-events.const';
 import { isExternalUrlSchemeAllowed } from '../shared-with-frontend/is-external-url-allowed';
 import { isLocalFileUrl, openLocalPath } from '../open-url';
 import { getWin } from '../main-window';
+import { savePluginBinaryFile } from '../save-plugin-binary-file';
 
 export const initSystemIpc = (): void => {
+  ipcMain.handle(IPC.SAVE_BINARY_FILE_DIALOG, (_ev, request: unknown) =>
+    savePluginBinaryFile(getWin(), request),
+  );
   ipcMain.on(IPC.OPEN_PATH, (ev, path: string) => {
     // openLocalPath enforces the guards this sink needs: reject UNC / remote
     // file:// paths (NTLM-hash leak) and never launch an executable/script.

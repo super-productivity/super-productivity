@@ -10,6 +10,8 @@ import {
   OAuthTokenResult,
   PluginAPI as PluginAPIInterface,
   PluginAppState,
+  PluginBinaryFileRequest,
+  PluginBinaryFileResult,
   PluginBaseCfg,
   PluginCreateTaskData,
   PluginHeaderBtnCfg,
@@ -374,6 +376,10 @@ export class PluginAPI implements PluginAPIInterface {
   async downloadFile(filename: string, data: string): Promise<void> {
     PluginLog.log(`Plugin ${this.#pluginId} requested to download file "${filename}"`);
     return this.#boundMethods.downloadFile(filename, data);
+  }
+
+  saveBinaryFile(request: PluginBinaryFileRequest): Promise<PluginBinaryFileResult> {
+    return this.#boundMethods.saveBinaryFile(request);
   }
 
   async openDialog(dialogCfg: DialogCfg): Promise<DialogResult> {

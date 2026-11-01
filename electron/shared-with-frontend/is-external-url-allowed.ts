@@ -265,8 +265,8 @@ export const hasExecutableFileExtension = (path: unknown): boolean => {
   const lastSep = Math.max(candidate.lastIndexOf('/'), candidate.lastIndexOf('\\'));
   const base = candidate.slice(lastSep + 1);
   const dot = base.lastIndexOf('.');
-  if (dot <= 0) {
-    return false; // no extension, or a dotfile with none
+  if (dot < 0) {
+    return false; // Нет расширения; имена вроде .cmd всё равно исполняются в Windows
   }
   // `.slice` after the dot, then strip an NTFS ADS suffix (`bat:$DATA`).
   const ext = base

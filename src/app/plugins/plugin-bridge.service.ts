@@ -97,6 +97,7 @@ import {
 } from './plugin-bridge-context.service';
 import { PluginTaskContextMenuRegistryService } from './plugin-task-context-menu-registry.service';
 import { formatDateForPlugin } from './plugin-i18n-date.util';
+import { downloadPluginTextFile, savePluginBinaryFile } from './plugin-file-download';
 
 // Relational fields corrupt parent<->child links when applied as plain values (mirrors
 // `REJECTED_TASK_FIELDS` in the local REST API); `wontDoOn` isn't in the plugin API yet.
@@ -249,6 +250,7 @@ export class PluginBridgeService implements OnDestroy {
     listSyncedDataKeys: (prefix?: string) => Promise<string[]>;
     getConfig: () => Promise<unknown>;
     downloadFile: (filename: string, data: string) => Promise<void>;
+    saveBinaryFile: typeof savePluginBinaryFile;
     registerHeaderButton: (cfg: PluginHeaderBtnCfg) => void;
     registerMenuEntry: (cfg: Omit<PluginMenuEntryCfg, 'pluginId'>) => void;
     registerTaskContextMenuEntry: (cfg: PluginTaskContextMenuEntryCfg) => void;
@@ -310,8 +312,8 @@ export class PluginBridgeService implements OnDestroy {
       listSyncedDataKeys: (prefix?: string) =>
         listPluginDataKeys(this._store, pluginId, prefix),
       getConfig: () => this._getConfig(pluginId),
-      downloadFile: (filename: string, data: string) =>
-        this._downloadFile(filename, data),
+      downloadFile: downloadPluginTextFile,
+      saveBinaryFile: savePluginBinaryFile,
 
       // UI registration
       registerHeaderButton: (cfg: PluginHeaderBtnCfg) =>
@@ -638,14 +640,6 @@ export class PluginBridgeService implements OnDestroy {
     return this._pluginIssueProviderRegistry
       .getConfigFields(registeredKey)
       .find((f) => f.type === 'oauthButton' && f.oauthConfig)?.oauthConfig;
-  }
-
-  private async _downloadFile(filename: string, data: string): Promise<void> {
-    pluginAssert.string(filename);
-    pluginAssert.string(data);
-
-    const { download } = await import('../util/download');
-    await download(filename, data);
   }
 
   /**
