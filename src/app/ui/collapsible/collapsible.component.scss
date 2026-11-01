@@ -8,6 +8,7 @@
 
 // Task-list section headings share one treatment, including user-made sections.
 :host(.task-section) .collapsible-header {
+  position: relative;
   min-height: var(--bar-height);
   padding: 0 var(--s);
   gap: var(--s-half);

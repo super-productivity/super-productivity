@@ -26,6 +26,8 @@
     <div class="collapsible-title">{{ title() }}</div>
   }
 
+  <ng-content select="[header-drop-target]"></ng-content>
+
   <ng-content select="[actions]"></ng-content>
 
   @if (!isIconBefore()) {

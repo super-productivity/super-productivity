@@ -812,6 +812,18 @@ describe('TaskListComponent', () => {
       expect(args[2]).toBeNull();
     });
 
+    it('anchors a section drop after appendAfterTaskId when the rendered list has no predecessor', () => {
+      fixture.componentRef.setInput('appendAfterTaskId', 'already-there');
+      callMove('task1', 'UNDONE', 'section-x', 'PARENT', 'PARENT', ['task1']);
+
+      const args = sectionServiceMock.addTaskToSection.calls.mostRecent().args;
+      expect(args[0]).toBe('section-x');
+      expect(args[1]).toBe('task1');
+      expect(args[2]).toBe('already-there');
+      expect(args[3]).toBeNull();
+      fixture.componentRef.setInput('appendAfterTaskId', undefined);
+    });
+
     it('routes a section -> no-section drag to removeTaskFromSection with workContext anchor', () => {
       callMove('task1', 'section-from', 'UNDONE', 'PARENT', 'PARENT', [
         'before-anchor',
@@ -886,6 +898,7 @@ describe('TaskListComponent', () => {
       }) as unknown as Parameters<TaskListComponent['drop']>[0];
 
     beforeEach(() => {
+      fixture.componentRef.setInput('appendAfterTaskId', undefined);
       spyOn(component.multiDrag, 'ids').and.returnValue(['t1', 't2', 't3']);
       spyOn(component.multiDrag, 'isListGroupDrag').and.returnValue(true);
       spyOn(component.multiDrag, 'canDrop').and.returnValue(true);
@@ -897,6 +910,15 @@ describe('TaskListComponent', () => {
       await component.drop(groupEvent({ x: 300, y: 325 }));
       expect(moveGroup).toHaveBeenCalledOnceWith('section', 't1', ['t1']);
       expect(store.dispatch).not.toHaveBeenCalled();
+    });
+
+    it('appends a group drop after appendAfterTaskId when the rendered list is empty', async () => {
+      fixture.componentRef.setInput('appendAfterTaskId', 'already-there');
+      await component.drop(groupEvent({ x: 300, y: 325 }));
+      expect(moveGroup).toHaveBeenCalledOnceWith('section', 't1', [
+        'already-there',
+        't1',
+      ]);
     });
 
     it('keeps the actual destination order when the group leader stays at the same index', async () => {

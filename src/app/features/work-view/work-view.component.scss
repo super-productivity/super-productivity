@@ -170,6 +170,32 @@ finish-day-btn,
   task-list ::ng-deep > .task-list-inner {
     min-height: 50px;
   }
+
+  // Inert until a task drag. CDK marks a connected list `.cdk-drop-list-receiving`
+  // at drag start (before `elementFromPoint`), then `.cdk-drop-list-dragging`
+  // once the item enters it. Pointer events stay off otherwise, so the section
+  // menu and the title drag handle keep working. `pointer-events` is not
+  // inherited, so the inner list needs its own `none`.
+  .collapsed-section-drop-target {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    margin: 0 !important;
+    padding: 0;
+    pointer-events: none;
+
+    ::ng-deep > .task-list-inner {
+      height: 100%;
+      min-height: 0;
+      padding: 0;
+      pointer-events: none;
+
+      &.cdk-drop-list-receiving,
+      &.cdk-drop-list-dragging {
+        pointer-events: auto;
+      }
+    }
+  }
 }
 
 .today {
