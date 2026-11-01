@@ -491,6 +491,16 @@ describe('PageTitleComponent', () => {
       expect(buttons(await renderAt('/boards/kanban'))).not.toContain('task-filter-btn');
     });
 
+    it("opens the editor from a list-layout view's filter button", async () => {
+      const list: BoardCfg = { id: 'list', title: 'List', cols: 1, panels: [] };
+      boards.set([list]);
+      const host = await renderAt('/boards/list');
+      const button = host.querySelector<HTMLButtonElement>('.task-filter-btn')!;
+      expect(button.getAttribute('aria-label')).toBe(T.F.BOARDS.V.EDIT_BOARD);
+      button.click();
+      expect(editBoardSpy).toHaveBeenCalledOnceWith(list);
+    });
+
     describe('the List/Board button', () => {
       const list: BoardCfg = { id: 'list', title: 'List', cols: 1, panels: [] };
       const kanban: BoardCfg = { id: 'kanban', title: 'Kanban', cols: 3, panels: [] };
@@ -550,10 +560,7 @@ describe('PageTitleComponent', () => {
         const labels = Array.from(
           host.querySelectorAll('.page-title-actions button'),
         ).map((b) => b.getAttribute('aria-label'));
-        expect(labels).toEqual([
-          T.GCF.KEYBOARD.TOGGLE_TASK_VIEW_CUSTOMIZER_PANEL,
-          T.G.MORE_ACTIONS,
-        ]);
+        expect(labels).toEqual([T.F.BOARDS.V.EDIT_BOARD, T.G.MORE_ACTIONS]);
         expect(fixture.componentInstance.isXs()).toBeTrue();
         expect(fixture.componentInstance.viewLayoutSwitch()?.layout).toBe('board');
       });
@@ -589,11 +596,13 @@ describe('PageTitleComponent', () => {
         expect(openMenuSpy).toHaveBeenCalledTimes(1);
       });
 
-      it('opens the view filter menu on a list-layout view', async () => {
-        boards.set([{ id: 'list', title: 'List', cols: 1, panels: [] }]);
+      it('opens the editor on a list-layout view', async () => {
+        const list: BoardCfg = { id: 'list', title: 'List', cols: 1, panels: [] };
+        boards.set([list]);
         await renderAt('/boards/list');
         openMenuRequest$.next();
-        expect(openMenuSpy).toHaveBeenCalledTimes(1);
+        expect(editBoardSpy).toHaveBeenCalledOnceWith(list);
+        expect(openMenuSpy).not.toHaveBeenCalled();
       });
 
       it('does nothing where the filter button is not rendered', async () => {

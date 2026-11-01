@@ -76,14 +76,25 @@ export class BoardsService {
 
   /** `panelId`: the section or column to show open (a column's title). */
   async editBoard(board: BoardCfg, panelId?: string): Promise<void> {
-    const { DialogBoardEditComponent } =
-      await import('./dialog-board-edit/dialog-board-edit.component');
-    this._matDialog.open(DialogBoardEditComponent, {
-      restoreFocus: true,
-      panelClass: 'fullscreen-xs-dialog',
-      data: panelId ? { board, openPanelId: panelId } : { board },
-    });
+    // A second click or shortcut press while the dialog's code loads would
+    // open a second editor.
+    if (this._isOpeningEditor) {
+      return;
+    }
+    this._isOpeningEditor = true;
+    try {
+      const { DialogBoardEditComponent } =
+        await import('./dialog-board-edit/dialog-board-edit.component');
+      this._matDialog.open(DialogBoardEditComponent, {
+        restoreFocus: true,
+        panelClass: 'fullscreen-xs-dialog',
+        data: panelId ? { board, openPanelId: panelId } : { board },
+      });
+    } finally {
+      this._isOpeningEditor = false;
+    }
   }
+  private _isOpeningEditor = false;
 
   duplicateBoard(board: BoardCfg): void {
     const id = nanoid();

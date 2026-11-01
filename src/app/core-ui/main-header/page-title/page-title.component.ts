@@ -174,23 +174,17 @@ import { BoardsService } from '../../../features/boards/boards.service';
               <mat-icon>{{ layoutSwitch.icon }}</mat-icon>
             </button>
           }
-          <!-- The filter/sort menu edits a list-layout view's rules. Boards
-               with several columns keep the editor: their panels differ by
-               design. Same trigger ref as the work view's, so the shortcut
-               opens it; the panel shares this block for the reason given
-               there. -->
+          <!-- Where a list has its filter/sort button, a list-layout view
+               has one that opens the view editor, like its title: the
+               editor covers every rule. Boards with several columns use
+               their title and column titles. -->
           @if (board.cols <= 1) {
             <button
-              #customizerMenuTrigger
               class="task-filter-btn"
-              [matMenuTriggerFor]="viewCustomizerPanel.menu"
-              [attr.aria-label]="
-                T.GCF.KEYBOARD.TOGGLE_TASK_VIEW_CUSTOMIZER_PANEL | translate
-              "
+              (click)="editView(board)"
+              [attr.aria-label]="T.F.BOARDS.V.EDIT_BOARD | translate"
               mat-icon-button
-              matTooltip="{{
-                T.GCF.KEYBOARD.TOGGLE_TASK_VIEW_CUSTOMIZER_PANEL | translate
-              }} {{
+              matTooltip="{{ T.F.BOARDS.V.EDIT_BOARD | translate }} {{
                 kb.toggleTaskViewCustomizerPanel
                   ? '[' + kb.toggleTaskViewCustomizerPanel + ']'
                   : ''
@@ -198,10 +192,6 @@ import { BoardsService } from '../../../features/boards/boards.service';
             >
               <mat-icon>filter_list</mat-icon>
             </button>
-            <task-view-customizer-panel
-              #viewCustomizerPanel
-              [view]="board"
-            ></task-view-customizer-panel>
           }
           <button
             [matMenuTriggerFor]="viewMenu"
@@ -453,17 +443,24 @@ export class PageTitleComponent {
 
   readonly T = T;
 
-  // On the work view and on list-layout view pages; absent elsewhere (and on
-  // xxxs screens), where the shortcut then does nothing — matching the button
-  // not being there to click.
+  // On the work view; absent elsewhere (and on xxxs screens), where the
+  // shortcut then does nothing — matching the button not being there to click.
   private _customizerMenuTrigger = viewChild('customizerMenuTrigger', {
     read: MatMenuTrigger,
   });
 
   constructor() {
+    // On a list-layout view the shortcut does what its filter button does.
     this.taskViewCustomizerService.openMenuRequest$
       .pipe(takeUntilDestroyed())
-      .subscribe(() => this._customizerMenuTrigger()?.openMenu());
+      .subscribe(() => {
+        const board = this.viewBoard();
+        if (board && board.cols <= 1 && !this.isXxxs()) {
+          this.editView(board);
+        } else {
+          this._customizerMenuTrigger()?.openMenu();
+        }
+      });
   }
 
   // Get data directly from services instead of inputs
@@ -639,6 +636,11 @@ export class PageTitleComponent {
     }
     // Space would scroll the page.
     ev?.preventDefault();
+    void this._boardsService.editBoard(board);
+  }
+
+  /** A list-layout view's filter button (and its shortcut): the editor. */
+  editView(board: BoardCfg): void {
     void this._boardsService.editBoard(board);
   }
 

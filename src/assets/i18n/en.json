@@ -227,7 +227,6 @@
         "EDIT_COLUMN": "Edit column",
         "EMPTY_VIEW_ADD": "Add task",
         "EMPTY_VIEW_HINT": "Tasks show up here once they match the view's rules. Add one, or change the rules.",
-        "FILTER_DIFFERS_PER_SECTION": "Differs per section, edit the view",
         "HINT_FILTER_NOT_ONLY_TODAY": "Shows every open task that matches the filter, not only today's. Add a Planned Date rule to narrow it down.",
         "HINT_FILTER_PART_NOT_SAVED": "Part of the list's filter can't be combined with its project or tag in a view and was left out.",
         "HINT_GROUPING_NOT_SAVED": "This grouping isn't saved: only grouping by tag becomes sections of a view.",

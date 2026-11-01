@@ -12,8 +12,7 @@ import {
 
 /**
  * Views (boards) with the filter menu's rules: priority and deadline columns,
- * "Save as view…" from a task list's filter menu, and the view's title-bar
- * menu.
+ * "Save as view…" from a task list's filter menu, and the view's title bar.
  */
 
 const viewIdFromUrl = (page: Page): string => {
@@ -237,55 +236,25 @@ test.describe('View rules', () => {
     await expect(sideNavViewRow(page, originalId)).toHaveCount(1);
   });
 
-  test('the title-bar filter sets a rule on a one-column view and clears it again', async ({
+  test('the title-bar filter on a one-column view opens the view editor', async ({
     page,
-    workViewPage,
     testPrefix,
   }) => {
-    await page.goto('/#/project/INBOX_PROJECT/tasks');
-    await workViewPage.waitForTaskList();
-    const unplanned = `${testPrefix}-Unplanned`;
-    const planned = `${testPrefix}-Planned`;
-    await workViewPage.addTask(unplanned);
-    await workViewPage.addTask(`${planned} @tomorrow`);
-    await expect(page.locator('task').filter({ hasText: planned })).toHaveCount(1);
-
     await createView(page, { title: `${testPrefix}-Filtered` });
-    const rows = page.locator('boards board-panel task');
-    await expect(rows.filter({ hasText: unplanned })).toHaveCount(1);
-    await expect(rows.filter({ hasText: planned })).toHaveCount(1);
+    const dialog = page.locator('dialog-board-edit');
 
-    const filterBtn = page.locator('page-title .task-filter-btn');
-    const pickNotPlanned = async (): Promise<void> => {
-      await filterBtn.click();
-      await page.getByRole('menuitem', { name: /Filter By/ }).click();
-      await page.getByRole('menuitem', { name: /Planned Date/ }).click();
-      await page.getByRole('menuitem', { name: 'Not specified', exact: true }).click();
-      await expect(page.locator('.mat-mdc-menu-panel')).toHaveCount(0);
-    };
-
-    // List-only items are not offered on a view.
-    await filterBtn.click();
-    await expect(page.getByRole('menuitem', { name: /Sort/ }).first()).toBeVisible();
-    await expect(page.getByRole('menuitem', { name: /Group By/ })).toHaveCount(0);
-    await expect(page.getByRole('menuitem', { name: 'Save as view…' })).toHaveCount(0);
-    await expect(page.getByRole('menuitem', { name: /Reset All/i })).toHaveCount(0);
+    // Where a list has its filter menu, a view has its editor: it covers
+    // every rule, the menu only some.
+    await page.locator('page-title .task-filter-btn').click();
+    await expect(dialog).toBeVisible();
+    await expect(page.locator('.mat-mdc-menu-panel')).toHaveCount(0);
     await page.keyboard.press('Escape');
+    await expect(dialog).toBeHidden();
 
-    await pickNotPlanned();
-    await expect(rows.filter({ hasText: planned })).toHaveCount(0);
-    await expect(rows.filter({ hasText: unplanned })).toHaveCount(1);
-
-    // The rule is the view's own, so it survives a reload.
-    await waitForStatePersistence(page);
-    await page.reload();
-    await expect(rows.filter({ hasText: unplanned })).toHaveCount(1);
-    await expect(rows.filter({ hasText: planned })).toHaveCount(0);
-
-    // Clicking the checked preset again clears the rule.
-    await pickNotPlanned();
-    await expect(rows.filter({ hasText: planned })).toHaveCount(1);
-    await expect(rows.filter({ hasText: unplanned })).toHaveCount(1);
+    // The filter shortcut does the same.
+    await page.keyboard.press('c');
+    await expect(dialog).toBeVisible();
+    await expect(dialog.locator('view-editor-section')).toHaveCount(1);
   });
 
   test('a view with several columns has no title-bar filter', async ({ page }) => {
@@ -347,12 +316,5 @@ test.describe('View rules', () => {
     await expect(sections.nth(2)).toContainText('Other');
     await expect(rowsIn(2, untagged)).toHaveCount(1);
     await expect(rowsIn(2, inAlpha)).toHaveCount(0);
-
-    // The sections differ by tag, so the title-bar menu can't edit tags.
-    await page.locator('page-title .task-filter-btn').click();
-    await page.getByRole('menuitem', { name: /Filter By/ }).click();
-    const menus = page.locator('.mat-mdc-menu-panel');
-    await expect(menus.getByRole('menuitem', { name: /^Tag/ })).toBeDisabled();
-    await expect(menus.getByRole('menuitem', { name: /Priority/ })).toBeEnabled();
   });
 });
