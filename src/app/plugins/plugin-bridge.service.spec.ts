@@ -925,6 +925,10 @@ describe('PluginBridgeService - openDialog', () => {
         closeOnNavigation: false,
       }),
     );
+    // Plugin dialogs follow the touch-aware default (no keyboard on touch).
+    expect(matDialog.open.calls.mostRecent().args[1]).not.toEqual(
+      jasmine.objectContaining({ autoFocus: jasmine.anything() }),
+    );
   });
 
   it('resolves with undefined when the dialog is dismissed', async () => {

@@ -1,4 +1,3 @@
-import { type Page } from '@playwright/test';
 import { expect, test } from '../../fixtures/test.fixture';
 
 /**
@@ -10,13 +9,6 @@ import { expect, test } from '../../fixtures/test.fixture';
  */
 
 const PHONE = { width: 400, height: 800 };
-const isTextEntryFocused = (page: Page): Promise<boolean> =>
-  page.evaluate(
-    () =>
-      !!document.activeElement?.matches(
-        'input:not([type=checkbox]):not([type=radio]), textarea, [contenteditable]',
-      ),
-  );
 
 test.describe('Dialog auto focus on a phone', () => {
   // isMobile makes Chromium report `pointer: coarse`, so the app starts in
@@ -42,9 +34,10 @@ test.describe('Dialog auto focus on a phone', () => {
 
     const container = page.locator('mat-dialog-container');
     await expect(container.locator('board-edit')).toBeVisible();
+    // The container itself holds focus, so no text field does and the
+    // on-screen keyboard stays down.
     await expect(container).toBeFocused();
     await expect(container).toHaveAttribute('role', 'dialog');
-    expect(await isTextEntryFocused(page)).toBe(false);
 
     // Closing hands focus back to the button that opened the dialog.
     await container.getByRole('button', { name: 'Cancel', exact: true }).tap();
