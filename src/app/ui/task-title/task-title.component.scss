@@ -184,3 +184,11 @@
   visibility: hidden;
   pointer-events: none;
 }
+
+// Match paragraph direction and alignment in all three title layers.
+.display-value,
+.height-measure,
+.wrapper > textarea {
+  unicode-bidi: isolate;
+  text-align: start;
+}

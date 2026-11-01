@@ -18,6 +18,9 @@
           <div
             (click)="editFullscreen($event)"
             class="markdown-preview"
+            [spTextDirection]="
+              isLongNote ? resolvedShortenedContent() : resolvedContent()
+            "
             [innerHTML]="
               (isLongNote ? resolvedShortenedContent() : resolvedContent()) | renderLinks
             "

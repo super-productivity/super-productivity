@@ -9,6 +9,7 @@
 // so we have to list every single property explicitly.
 const properties = [
   'direction', // RTL support
+  'unicodeBidi', // Mirror dir=auto textareas with independently directed paragraphs.
   'boxSizing',
   'width', // on Chrome and IE, exclude the scrollbar, so the mirror div wraps exactly as the textarea does
   'height',

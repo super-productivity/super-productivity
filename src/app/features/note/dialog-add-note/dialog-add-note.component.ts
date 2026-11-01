@@ -1,3 +1,4 @@
+import { TextDirectionDirective } from '../../../ui/text-direction/text-direction.directive';
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { SS } from '../../../core/persistence/storage-keys.const';
 import { T } from '../../../t.const';
@@ -24,6 +25,7 @@ import { LiveMarkdownEditorComponent } from '../../../ui/inline-markdown/live-ma
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
+    TextDirectionDirective,
     FormsModule,
     MarkdownComponent,
     MatButtonToggleGroup,

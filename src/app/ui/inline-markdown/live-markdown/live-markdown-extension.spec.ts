@@ -15,6 +15,32 @@ describe('liveMarkdown interactions', () => {
     });
   };
 
+  it('detects each prose line independently and excludes checkbox glyphs', () => {
+    mount('English\nReview متن فارسی\n- [ ] Review کار فارسی');
+    const lines = view.contentDOM.querySelectorAll('.cm-line');
+    expect(getComputedStyle(lines[0]).direction).toBe('ltr');
+    expect(getComputedStyle(lines[1]).direction).toBe('rtl');
+    expect(getComputedStyle(lines[2]).direction).toBe('rtl');
+    expect(view.state.facet(EditorView.perLineTextDirection)).toBeTrue();
+  });
+
+  it('updates line direction after replacing the document without changing its text', () => {
+    mount('English');
+    view.dispatch({ changes: { from: 0, to: 7, insert: 'متن فارسی' } });
+    expect(getComputedStyle(view.contentDOM.querySelector('.cm-line')!).direction).toBe(
+      'rtl',
+    );
+    expect(view.state.doc.toString()).toBe('متن فارسی');
+  });
+
+  it('keeps fenced and indented code LTR even with Persian text', () => {
+    mount('```\nمتن فارسی\n```\n\n    متن فارسی');
+    for (const line of view.contentDOM.querySelectorAll('.cm-md-code-block')) {
+      expect(getComputedStyle(line).direction).toBe('ltr');
+    }
+    expect(view.contentDOM.querySelectorAll('.cm-md-code-block').length).toBe(4);
+  });
+
   const clickLink = (): void => {
     const link = view.contentDOM.querySelector('.cm-md-link')!;
     expect(link).not.toBeNull();

@@ -44,8 +44,16 @@
 
         <div class="title-and-tags-wrapper">
           @if (!isInSubTaskList() && t.parentId) {
-            <div class="parent-title">
-              <div class="title">{{ parentTitle() }}</div>
+            <div
+              class="parent-title"
+              [spTextDirection]="parentTitle()"
+            >
+              <div
+                class="title"
+                [spTextDirection]="parentTitle()"
+              >
+                {{ parentTitle() }}
+              </div>
             </div>
           }
 

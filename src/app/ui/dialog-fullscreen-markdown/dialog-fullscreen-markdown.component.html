@@ -231,6 +231,7 @@
         }
       } @else {
         <textarea
+          [spTextDirection]="data.content"
           #textareaEl
           [(ngModel)]="data.content"
           (keydown)="keydownHandler($event)"

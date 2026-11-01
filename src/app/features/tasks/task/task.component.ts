@@ -1,3 +1,4 @@
+import { TextDirectionDirective } from '../../../ui/text-direction/text-direction.directive';
 import {
   AfterViewInit,
   ChangeDetectionStrategy,
@@ -169,6 +170,7 @@ const isInteractiveTarget = (target: EventTarget | null): boolean =>
     '(click)': 'onHostClick($event)',
   },
   imports: [
+    TextDirectionDirective,
     MatIcon,
     MatMenuTrigger,
     MatIconButton,

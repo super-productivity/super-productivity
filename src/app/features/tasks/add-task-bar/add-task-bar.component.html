@@ -19,6 +19,7 @@
         <div
           #highlightEl
           class="main-input-highlight"
+          [spTextDirection]="stateService.inputTxt()"
           aria-hidden="true"
         >
           @for (seg of highlightSegments(); track $index) {
@@ -40,6 +41,7 @@
         <textarea
           #inputEl
           class="main-input"
+          [spTextDirection]="stateService.inputTxt()"
           [(ngModel)]="stateService.inputTxt"
           [tabindex]="tabindex()"
           [mention]="tagMentions$ | async"
@@ -208,6 +210,7 @@
         <textarea
           #noteEl
           class="note-input"
+          [spTextDirection]="stateService.noteTxt()"
           cdkTextareaAutosize
           cdkAutosizeMinRows="3"
           cdkAutosizeMaxRows="8"
@@ -244,7 +247,10 @@
       } @else if (!item.ctx) {
         <mat-icon>library_books</mat-icon>
       }
-      <span [innerHTML]="item?.titleHighlighted || item?.title"></span>
+      <span
+        [spTextDirection]="item?.title"
+        [innerHTML]="item?.titleHighlighted || item?.title"
+      ></span>
       @if (item.ctx) {
         <tag
           [tag]="item.ctx"

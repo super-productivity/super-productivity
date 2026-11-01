@@ -9,11 +9,13 @@
     @if (hasContent && hasUrlsOrMarkdown()) {
       <span
         class="display-value"
+        [spTextDirection]="displayText"
         [innerHTML]="tmpValue() | renderLinks"
       ></span>
     } @else {
       <span
         class="display-value"
+        [spTextDirection]="displayText"
         [class.is-placeholder]="!hasContent"
         >{{ displayText }}</span
       >
@@ -22,12 +24,14 @@
   @if (isEditing() && !readonly()) {
     <span
       class="height-measure"
+      [spTextDirection]="displayText"
       aria-hidden="true"
       >{{ displayText }}</span
     >
     <textarea
       #textAreaElement
       class="edit-panel"
+      [spTextDirection]="currentValue"
       spellcheck="false"
       rows="1"
       tabindex="-1"

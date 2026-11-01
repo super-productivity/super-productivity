@@ -32,16 +32,27 @@
     <div class="no-drag">
       <div class="wrap">
         @if (parentTitle) {
-          <div class="parent-title">{{ parentTitle }}</div>
+          <div
+            class="parent-title"
+            [spTextDirection]="parentTitle"
+          >
+            {{ parentTitle }}
+          </div>
         }
 
         @if (titleHasLinks()) {
           <div
             class="title"
+            [spTextDirection]="task().title"
             [innerHTML]="task().title | renderLinks"
           ></div>
         } @else {
-          <div class="title">{{ task().title }}</div>
+          <div
+            class="title"
+            [spTextDirection]="task().title"
+          >
+            {{ task().title }}
+          </div>
         }
 
         <tag-list
