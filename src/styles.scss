@@ -125,3 +125,25 @@ body.isIPad {
     }
   }
 }
+
+/* ==================================================== */
+/* RTL Support & Layout Tweaks */
+/* ==================================================== */
+
+html[dir='rtl'], [dir='rtl'] {
+    direction: rtl;
+    text-align: right;
+
+    .cdk-overlay-container,
+    .mat-mdc-menu-panel,
+    .mat-mdc-dialog-container {
+        direction: rtl;
+        text-align: right;
+    }
+
+    /* Expanding the box and spacing */
+    .task-list-wrapper, .task-summary {
+        padding: 15px;
+        margin-right: 10px;
+    }
+}
