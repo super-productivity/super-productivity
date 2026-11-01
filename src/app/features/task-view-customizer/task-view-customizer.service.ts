@@ -38,6 +38,7 @@ import { LanguageService } from 'src/app/core/language/language.service';
 import { TranslateService } from '@ngx-translate/core';
 import { T } from '../../t.const';
 import { parseDbDateStr } from '../../util/parse-db-date-str';
+import { DateService } from '../../core/date/date.service';
 
 const GROUP_OPTIONS_NO_PROJECT = OPTIONS.group.list.filter(
   (opt) => opt.type !== GROUP_OPTION_TYPE.project,
@@ -83,6 +84,7 @@ export class TaskViewCustomizerService {
   private store = inject(Store);
   private _workContextService = inject(WorkContextService);
   private _dateAdapter = inject(DateAdapter);
+  private _dateService = inject(DateService);
   private _projectService = inject(ProjectService);
   private _tagService = inject(TagService);
   private _menuTreeService = inject(MenuTreeService);
@@ -686,10 +688,14 @@ export class TaskViewCustomizerService {
       });
     }
 
-    const today = new Date();
+    // Logical today: between midnight and the configured day start the
+    // logical day is still the previous calendar day.
+    const today = this._dateService.getLogicalTodayDate();
     const firstDayOfWeek = this._dateAdapter.getFirstDayOfWeek();
     const todayStr = getDbDateStr(today);
-    const tomorrowStr = getDbDateStr(new Date(new Date().setDate(today.getDate() + 1)));
+    const tomorrow = new Date(today);
+    tomorrow.setDate(today.getDate() + 1);
+    const tomorrowStr = getDbDateStr(tomorrow);
 
     return tasks.filter((task) => {
       const [day, withTime] = getFields(task);
@@ -709,7 +715,8 @@ export class TaskViewCustomizerService {
           );
         }
         case FILTER_SCHEDULE.nextWeek: {
-          const nextWeekStart = new Date(new Date().setDate(today.getDate() + 7));
+          const nextWeekStart = new Date(today);
+          nextWeekStart.setDate(nextWeekStart.getDate() + 7);
           const weekRange = getWeekRange(nextWeekStart, firstDayOfWeek);
           return (
             dateStr >= getDbDateStr(weekRange.start) &&
@@ -721,7 +728,8 @@ export class TaskViewCustomizerService {
           return dateStr.startsWith(yearMonth);
         }
         case FILTER_SCHEDULE.nextMonth: {
-          const nextMonth = new Date(new Date().setDate(1));
+          const nextMonth = new Date(today);
+          nextMonth.setDate(1);
           nextMonth.setMonth(nextMonth.getMonth() + 1);
           const yearMonth = getDbDateStr(nextMonth).substring(0, 7);
           return dateStr.startsWith(yearMonth);

@@ -19,6 +19,7 @@ import { selectAllTasksWithSubTasks } from '../tasks/store/task.selectors';
 import { ProjectService } from '../project/project.service';
 import { TagService } from '../tag/tag.service';
 import { MenuTreeService } from '../menu-tree/menu-tree.service';
+import { DateService } from '../../core/date/date.service';
 import {
   DEFAULT_OPTIONS,
   FILTER_COMMON,
@@ -329,6 +330,35 @@ describe('TaskViewCustomizerService', () => {
     );
     expect(filtered.length).toBe(1);
     expect(filtered[0].id).toBe('Alpha(Tag A)');
+  });
+
+  it('should filter "today" by the logical today, not the calendar day', () => {
+    // Simulates 02:00 with a start-of-day offset: the logical today is still
+    // the calendar yesterday, so a task due on the logical today must match.
+    const dateService = TestBed.inject(DateService);
+    const logicalToday = new Date();
+    logicalToday.setDate(logicalToday.getDate() - 1);
+    spyOn(dateService, 'getLogicalTodayDate').and.returnValue(logicalToday);
+
+    const tasks: TaskWithSubTasks[] = [
+      {
+        ...mockTasks[1],
+        id: 'logical-today',
+        dueDay: getDbDateStr(logicalToday),
+      },
+      {
+        ...mockTasks[0],
+        id: 'calendar-today',
+        dueDay: todayStr, // calendar today = logical tomorrow
+      },
+    ];
+
+    const filtered = service['applyFilter'](
+      tasks,
+      FILTER_OPTION_TYPE.scheduledDate,
+      FILTER_SCHEDULE.today,
+    );
+    expect(filtered.map((task) => task.id)).toEqual(['logical-today']);
   });
 
   it('should filter by NOT_SPECIFIED schedule date (no schedule date)', () => {
