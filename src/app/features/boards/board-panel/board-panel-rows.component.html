@@ -1,0 +1,127 @@
+@if (panel.isSection()) {
+  <!-- One section of a sectioned view list: header like Today's sections.
+       The body is built only while expanded (projected content would be
+       created even when collapsed). -->
+  <collapsible
+    class="task-section"
+    [title]="(panel.panelCfg().title | translate) + ' (' + panel.headerCount() + ')'"
+    [isIconBefore]="true"
+    [isGroup]="true"
+    [isExpanded]="panel.isSectionExpanded()"
+    (isExpandedChange)="panel.onSectionExpandedChange($event)"
+  >
+    @if (panel.totalEstimate()) {
+      <span
+        actions
+        class="tasks-total-estimate"
+        >{{ panel.totalEstimate() | msToString: false : true }}</span
+      >
+    }
+    @if (!panel.isAddTaskHidden()) {
+      <!-- The header "+": opens the add bar at the section's top. One root
+           element, so the block is projected; it marks its click handled:
+           the section header would toggle on it. -->
+      <ng-container actions>
+        @let addLabel =
+          T.F.BOARDS.V.ADD_TASK_TO
+            | translate: { title: panel.panelCfg().title | translate };
+        <button
+          mat-icon-button
+          class="add-task-btn"
+          data-add-task-btn
+          [attr.aria-label]="addLabel"
+          [matTooltip]="addLabel"
+          (click)="panel.openAddTask(); $event.preventDefault()"
+        >
+          <mat-icon>add</mat-icon>
+        </button>
+      </ng-container>
+    }
+    @if (panel.isSectionExpanded()) {
+      @if (panel.isAddOpen() && !panel.isAddTaskHidden()) {
+        <add-task-bar
+          class="panel-add-task-bar"
+          [isHideTagTitles]="true"
+          [isNoDefaults]="true"
+          [additionalFields]="panel.additionalTaskFields()"
+          [tagsToRemove]="panel.tagsToRemoveForInlineCreate()"
+          [taskIdsToExclude]="panel.panelCfg().taskIds"
+          (afterTaskAdd)="panel.afterTaskAdd($event)"
+          (closed)="panel.closeAddTask(true)"
+          (done)="panel.closeAddTask(false)"
+        ></add-task-bar>
+      }
+      <ng-container [ngTemplateOutlet]="listBody"></ng-container>
+    }
+  </collapsible>
+} @else {
+  <!-- The view's title and menu are in the title bar; tasks are added with
+       the regular add-task bar (ViewTaskListRegistry). -->
+  @if (panel.headerCount()) {
+    <div class="list-status">
+      @if (panel.totalEstimate()) {
+        <!-- placeholder hidden: the pipe renders '-' for any sub-minute total -->
+        <span>~{{ panel.totalEstimate() | msToString: false : true }}</span>
+      }
+      <span class="count"><mat-icon>task_alt</mat-icon>{{ panel.headerCount() }}</span>
+    </div>
+  }
+  @if (!panel.mainRows().length && !panel.doneRows().length) {
+    <div class="view-empty">
+      <h2 class="view-empty-title">{{ T.F.BOARDS.V.NO_TASKS_IN_VIEW | translate }}</h2>
+      <p class="view-empty-hint">{{ T.F.BOARDS.V.EMPTY_VIEW_HINT | translate }}</p>
+      <div class="view-empty-actions">
+        <!-- The add-task bar adds into this view (ViewTaskListRegistry). -->
+        @if (panel.newTaskTarget()) {
+          <button
+            mat-stroked-button
+            (click)="panel.showAddTaskBar()"
+          >
+            <mat-icon>playlist_add</mat-icon>
+            {{ T.F.BOARDS.V.EMPTY_VIEW_ADD | translate }}
+          </button>
+        }
+        <button
+          mat-stroked-button
+          (click)="panel.editBoard.emit()"
+        >
+          <mat-icon>edit</mat-icon>
+          {{ T.F.BOARDS.V.EDIT_BOARD | translate }}
+        </button>
+      </div>
+    </div>
+  }
+  <ng-container [ngTemplateOutlet]="listBody"></ng-container>
+}
+
+<ng-template #listBody>
+  <!-- Rows reorder the view through VIEW_TASK_LIST (see BoardPanelComponent). -->
+  <task-list
+    [tasks]="panel.mainRows()"
+    listId="PARENT"
+    listModelId="VIEW"
+    [isSortingDisabled]="!panel.isManualOrder()"
+    [noTasksMsg]="
+      panel.doneRows().length || !panel.isSection()
+        ? undefined
+        : (T.F.PLANNER.NO_TASKS | translate)
+    "
+  ></task-list>
+  @if (panel.doneRows().length) {
+    <collapsible
+      [title]="(T.WW.DONE_TASKS | translate) + ' (' + panel.doneRows().length + ')'"
+      [isIconBefore]="true"
+      [isExpanded]="panel.isDoneListExpanded()"
+      (isExpandedChange)="panel.isDoneListExpanded.set($event)"
+    >
+      @if (panel.isDoneListExpanded()) {
+        <task-list
+          [tasks]="panel.doneRows()"
+          listId="PARENT"
+          listModelId="VIEW_DONE"
+          [isSortingDisabled]="true"
+        ></task-list>
+      }
+    </collapsible>
+  }
+</ng-template>

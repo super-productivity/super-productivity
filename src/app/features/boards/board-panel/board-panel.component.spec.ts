@@ -1,6 +1,9 @@
 import { INBOX_PROJECT } from '../../project/project.const';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { BoardPanelComponent } from './board-panel.component';
+import { BoardPanelCardsComponent } from './board-panel-cards.component';
+import { BoardPanelRowsComponent } from './board-panel-rows.component';
+import { By } from '@angular/platform-browser';
 import {
   BoardPanelCfg,
   BoardPanelCfgTaskDoneState,
@@ -214,9 +217,12 @@ describe('BoardPanelComponent - Backlog Feature', () => {
     fixture.detectChanges();
   });
 
+  const cards = (): BoardPanelCardsComponent =>
+    fixture.debugElement.query(By.directive(BoardPanelCardsComponent)).componentInstance;
+
   it('keeps Board Today controls at the default color', () => {
     const task = component.tasks()[0];
-    expect(component.scheduledDateColor(task)).toBe('');
+    expect(cards().scheduledDateColor(task)).toBe('');
 
     const button = fixture.nativeElement.querySelector(
       '.schedule-btn',
@@ -237,15 +243,15 @@ describe('BoardPanelComponent - Backlog Feature', () => {
     >;
     const dueWithTime = new Date(2026, 8, 12, 12, 1).getTime();
     const task = { ...component.tasks()[0], dueDay: undefined, dueWithTime };
-    expect(component.scheduledDateColor(task)).toBe('');
+    expect(cards().scheduledDateColor(task)).toBe('');
     interval.clockTimestamp.set(dueWithTime);
-    expect(component.scheduledDateColor(task)).toBe('overdue');
+    expect(cards().scheduledDateColor(task)).toBe('overdue');
     currentTaskId.set(task.id);
-    expect(component.scheduledDateColor(task)).toBe('');
+    expect(cards().scheduledDateColor(task)).toBe('');
     currentTaskId.set(null);
-    expect(component.scheduledDateColor(task)).toBe('overdue');
-    expect(component.scheduledDateColor({ ...task, isDone: true })).toBe('');
-    expect(component.scheduledDateColor({ ...task, dueWithTime: undefined })).toBe('');
+    expect(cards().scheduledDateColor(task)).toBe('overdue');
+    expect(cards().scheduledDateColor({ ...task, isDone: true })).toBe('');
+    expect(cards().scheduledDateColor({ ...task, dueWithTime: undefined })).toBe('');
   });
 
   it('should only include backlog tasks when backlogState is OnlyBacklog', () => {
@@ -953,10 +959,14 @@ describe('BoardPanelComponent - drop()', () => {
     })
       // The list layout's rows are covered by the task-list and task specs,
       // the add-task bar by its own.
-      .overrideComponent(BoardPanelComponent, {
+      .overrideComponent(BoardPanelRowsComponent, {
         remove: {
           imports: [TaskListComponent, CollapsibleComponent, AddTaskBarComponent],
         },
+        add: { schemas: [NO_ERRORS_SCHEMA] },
+      })
+      .overrideComponent(BoardPanelCardsComponent, {
+        remove: { imports: [AddTaskBarComponent] },
         add: { schemas: [NO_ERRORS_SCHEMA] },
       })
       .overrideComponent(PlannerTaskComponent, {
@@ -2041,7 +2051,11 @@ describe('BoardPanelComponent - add button lookup', () => {
         { provide: ProjectService, useValue: { getProjectsWithoutId$: () => of([]) } },
       ],
     })
-      .overrideComponent(BoardPanelComponent, {
+      .overrideComponent(BoardPanelCardsComponent, {
+        remove: { imports: [AddTaskBarComponent] },
+        add: { schemas: [NO_ERRORS_SCHEMA] },
+      })
+      .overrideComponent(BoardPanelRowsComponent, {
         remove: { imports: [AddTaskBarComponent] },
         add: { schemas: [NO_ERRORS_SCHEMA] },
       })

@@ -1,0 +1,107 @@
+<header>
+  <!-- The column's title opens the view editor with this column open, like
+       the view's title in the title bar: a button named by the title. -->
+  <div
+    class="title focus-ring"
+    role="button"
+    tabindex="0"
+    [matTooltip]="T.F.BOARDS.V.EDIT_COLUMN | translate"
+    (click)="panel.editColumn.emit()"
+    (keydown.enter)="panel.editColumn.emit()"
+    (keydown.space)="$event.preventDefault(); panel.editColumn.emit()"
+  >
+    {{ panel.panelCfg().title | translate }}
+  </div>
+  @if (panel.headerCount()) {
+    <div class="tasks-total-estimate">
+      @if (panel.totalEstimate()) {
+        <!-- placeholder hidden: the pipe renders '-' for any sub-minute total -->
+        <span>{{ panel.totalEstimate() | msToString: false : true }}</span>
+      }
+      <mat-icon>task_alt</mat-icon>{{ panel.headerCount() }}
+    </div>
+  }
+  @if (!panel.isAddTaskHidden()) {
+    <!-- The header "+": opens the add bar at the top. It is the keyboard's
+         target in an empty column (`addButton()`; without it, the title). -->
+    @let addLabel =
+      T.F.BOARDS.V.ADD_TASK_TO | translate: { title: panel.panelCfg().title | translate };
+    <button
+      mat-icon-button
+      class="add-task-btn"
+      data-add-task-btn
+      [attr.aria-label]="addLabel"
+      [matTooltip]="addLabel"
+      (click)="panel.openAddTask()"
+    >
+      <mat-icon>add</mat-icon>
+    </button>
+  }
+</header>
+
+@if (panel.isAddOpen() && !panel.isAddTaskHidden()) {
+  <add-task-bar
+    class="panel-add-task-bar"
+    [isHideTagTitles]="true"
+    [isNoDefaults]="true"
+    [additionalFields]="panel.additionalTaskFields()"
+    [tagsToRemove]="panel.tagsToRemoveForInlineCreate()"
+    [taskIdsToExclude]="panel.panelCfg().taskIds"
+    (afterTaskAdd)="panel.afterTaskAdd($event)"
+    (closed)="panel.closeAddTask(true)"
+    (done)="panel.closeAddTask(false)"
+  ></add-task-bar>
+}
+
+<div
+  class="task-items"
+  cdkDropList
+  [cdkDropListData]="panel.tasks()"
+  [cdkDropListSortingDisabled]="!panel.isManualOrder()"
+  [cdkDropListEnterPredicate]="panel.canEnterCard"
+  (cdkDropListDropped)="panel.drop($event)"
+>
+  @for (task of panel.tasks(); track task.id) {
+    <planner-task
+      cdkDrag
+      [cdkDragData]="task"
+      [cdkDragStartDelay]="dragDelayForTouch()"
+      [task]="task"
+      [focusable]="true"
+      [cdkDragDisabled]="panel.isMoving() || panel.multiSelect.isTouchSelectionMode()"
+      [tagsToHide]="panel.tagsToHide()"
+    >
+      @if (task.remindAt) {
+        <button
+          task-card-trailing
+          (click)="panel.scheduleTask(task, $event)"
+          [title]="T.F.TASK.CMP.EDIT_SCHEDULED | translate"
+          class="ico-btn schedule-btn"
+          [attr.data-scheduled-date-color]="scheduledDateColor(task)"
+          color=""
+          mat-icon-button
+        >
+          <mat-icon>alarm</mat-icon>
+          <div
+            class="time-badge"
+            [innerHTML]="task.dueWithTime | shortPlannedAt"
+          ></div>
+        </button>
+      }
+      @if (task.dueDay) {
+        <button
+          task-card-trailing
+          (click)="panel.scheduleTask(task, $event)"
+          [title]="T.F.TASK.CMP.SCHEDULE | translate"
+          class="ico-btn schedule-btn"
+          [attr.data-scheduled-date-color]="scheduledDateColor(task)"
+          color=""
+          mat-icon-button
+        >
+          <mat-icon>today</mat-icon>
+          <div class="time-badge">{{ task.dueDay | localDateStr }}</div>
+        </button>
+      }
+    </planner-task>
+  }
+</div>
