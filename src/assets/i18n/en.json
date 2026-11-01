@@ -1179,6 +1179,9 @@
         "PREV_WEEK": "Previous week",
         "TODAY": "Today"
       },
+      "N": {
+        "COUNTDOWN_COMPLETE": "Countdown is finished!"
+      },
       "S": {
         "GOAL_REACHED_1": "You reached your goal for today!",
         "GOAL_REACHED_2": "Current streak duration: "
