@@ -48,6 +48,7 @@ import { markGpuStartupSuccess } from './gpu-startup-guard';
 import { isAppOriginUrl } from './navigation-guard';
 import { assertSecureWebPreferences } from './web-preferences-guard';
 import { applyJiraImageAuth } from './jira-image-auth';
+import { createWebDavCookieJar } from './webdav-cookie-jar';
 
 // Long enough to outlast a resize or move gesture, so a drag records one
 // sample rather than one per frame.
@@ -255,6 +256,7 @@ export const createWindow = async ({
   });
 
   const apiUserAgent = getApiUserAgent(app.getVersion());
+  const webDavCookieJar = createWebDavCookieJar();
   // see: https://pratikpc.medium.com/bypassing-cors-with-electron-ab7eaf331605
   mainWin.webContents.session.webRequest.onBeforeSendHeaders((details, callback) => {
     const { requestHeaders } = details;
@@ -285,16 +287,29 @@ export const createWindow = async ({
       removeKeyInAnyCase(requestHeaders, 'User-Agent');
       requestHeaders['User-Agent'] = apiUserAgent;
     }
-    // WebDavHttpAdapter marks desktop uploads because renderer fetch refuses to
-    // set Connection itself. Consume the marker here; it must not reach the
-    // server. The literal below mirrors that adapter's ELECTRON_UPLOAD_HEADER
-    // and is pinned to it by electron/webdav-connection.test.cjs — the two
-    // build targets cannot import each other.
-    const webdavUploadHeader = Object.keys(requestHeaders).find(
-      (key) => key.toLowerCase() === 'x-superproductivity-webdav-upload',
+    // WebDavHttpAdapter marks desktop WebDAV requests because renderer fetch
+    // refuses to set Connection and Cookie itself. Consume the marker here; it
+    // must not reach the server. The literal below mirrors that adapter's
+    // ELECTRON_WEBDAV_HEADER and is pinned to it by
+    // electron/webdav-connection.test.cjs — the two build targets cannot import
+    // each other.
+    const webdavHeader = Object.keys(requestHeaders).find(
+      (key) => key.toLowerCase() === 'x-superproductivity-webdav',
     );
-    if (webdavUploadHeader) {
-      delete requestHeaders[webdavUploadHeader];
+    if (webdavHeader) {
+      delete requestHeaders[webdavHeader];
+      // #10839: resend the server's session cookie so pCloud does not treat
+      // every sync as a new login and email a security alert.
+      const authorizationHeader = Object.keys(requestHeaders).find(
+        (key) => key.toLowerCase() === 'authorization',
+      );
+      const cookie = webDavCookieJar.beginRequest(
+        details.url,
+        authorizationHeader ? requestHeaders[authorizationHeader] : undefined,
+      );
+      if (cookie) {
+        requestHeaders.Cookie = cookie;
+      }
       // #9985: avoid verifying on a PUT connection retaining the old file.
       // HTTP/1.1 only — Connection is a connection-specific header that RFC 9113
       // forbids over HTTP/2, so any conformant client drops it there. The
@@ -311,6 +326,9 @@ export const createWindow = async ({
 
   mainWin.webContents.session.webRequest.onHeadersReceived((details, callback) => {
     const { responseHeaders } = details;
+    if (responseHeaders) {
+      webDavCookieJar.storeFromResponse(details.url, responseHeaders);
+    }
     upsertKeyValue(responseHeaders, 'Access-Control-Allow-Origin', ['*']);
     upsertKeyValue(responseHeaders, 'Access-Control-Allow-Headers', ['*']);
     upsertKeyValue(responseHeaders, 'Access-Control-Allow-Methods', ['*']);

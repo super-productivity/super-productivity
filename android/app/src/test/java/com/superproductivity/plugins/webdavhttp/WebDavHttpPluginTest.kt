@@ -2,6 +2,8 @@ package com.superproductivity.plugins.webdavhttp
 
 import okhttp3.OkHttpClient
 import okhttp3.Call
+import okhttp3.Cookie
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.ConnectionPool
 import okhttp3.Dispatcher
 import okhttp3.Dns
@@ -10,6 +12,7 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertThrows
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.net.ConnectException
 import java.net.InetAddress
@@ -89,6 +92,67 @@ class WebDavHttpPluginTest {
         } finally {
             closeTestClient(client)
         }
+    }
+
+    @Test
+    fun `resends the session cookie a WebDAV server set on later requests (#10839)`() {
+        // pCloud treats every cookie-less request as a new login and emails the user.
+        // Another account on the same host must not inherit the session: Nextcloud
+        // authenticates a DAV session cookie without checking Basic credentials.
+        val cookieHeaders = mutableListOf<String?>()
+        val server = ServerSocket(0, 10, InetAddress.getByName("127.0.0.1"))
+        val executor = Executors.newSingleThreadExecutor()
+        executor.submit {
+            repeat(3) { index ->
+                server.accept().use { socket ->
+                    val reader = socket.getInputStream().bufferedReader()
+                    reader.readLine()
+                    var cookie: String? = null
+                    while (true) {
+                        val line = reader.readLine() ?: break
+                        if (line.isEmpty()) break
+                        if (line.startsWith("Cookie:", ignoreCase = true)) {
+                            cookie = line.substringAfter(':').trim()
+                        }
+                    }
+                    synchronized(cookieHeaders) { cookieHeaders.add(cookie) }
+                    val setCookie = if (index == 0) "Set-Cookie: session=s1; Path=/; HttpOnly\r\n" else ""
+                    socket.getOutputStream().write(
+                        "HTTP/1.1 200 OK\r\n${setCookie}Content-Length: 0\r\nConnection: close\r\n\r\n".toByteArray()
+                    )
+                }
+            }
+        }
+        val client = newTestClientBuilder().build()
+        try {
+            val url = "http://127.0.0.1:${server.localPort}/dav/sync-data.json"
+            // Unique credentials also reset any cookie other tests left for this host.
+            for (auth in listOf("Basic cookie-a", "Basic cookie-a", "Basic cookie-b")) {
+                val request = Request.Builder().url(url).header("Authorization", auth).build()
+                client.newCall(request).execute().close()
+            }
+            assertEquals(
+                listOf(null, "session=s1", null),
+                synchronized(cookieHeaders) { cookieHeaders.toList() },
+            )
+        } finally {
+            server.close()
+            executor.shutdownNow()
+            closeTestClient(client)
+        }
+    }
+
+    @Test
+    fun `credential change drops cookies on every path of the host (#10839)`() {
+        val jar = WebDavSessionCookieJar()
+        val davUrl = "https://dav.example.com/dav/sync-data.json".toHttpUrl()
+        fun requestTo(path: String, auth: String) =
+            Request.Builder().url("https://dav.example.com$path").header("Authorization", auth).build()
+
+        jar.beginRequest(requestTo("/dav/sync-data.json", "Basic a"))
+        jar.saveFromResponse(davUrl, listOfNotNull(Cookie.parse(davUrl, "session=s1; Path=/dav")))
+        jar.beginRequest(requestTo("/other", "Basic b"))
+        assertTrue(jar.loadForRequest(davUrl).isEmpty())
     }
 
     private fun newTestClientBuilder(): OkHttpClient.Builder {

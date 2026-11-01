@@ -44,17 +44,18 @@ export interface WebDavHttpAdapterDeps {
 export class WebDavHttpAdapter {
   private static readonly L = 'WebDavHttpAdapter';
   /**
-   * Marks a desktop WebDAV upload so `electron/main-window.ts` can put
-   * `Connection: close` on it — renderer `fetch` refuses to set that header
-   * itself (#9985). The main process matches this exact name as a literal (the
-   * two build targets cannot import each other), and the Electron test
-   * `webdav-connection.test.cjs` reads this constant so the two cannot drift.
+   * Marks a desktop WebDAV request so `electron/main-window.ts` can set the
+   * headers renderer `fetch` refuses to set itself: `Connection: close` on
+   * uploads (#9985) and the server's session `Cookie` (#10839). The main process
+   * matches this exact name as a literal (the two build targets cannot import
+   * each other), and the Electron test `webdav-connection.test.cjs` reads this
+   * constant so the two cannot drift.
    *
-   * HTTP/1.1 only: RFC 9113 forbids connection-specific headers over HTTP/2, so
-   * the marker is inert there and `WebdavApi`'s verification retry budget is
-   * what covers h2 servers.
+   * `Connection: close` is HTTP/1.1 only: RFC 9113 forbids connection-specific
+   * headers over HTTP/2, so it is inert there and `WebdavApi`'s verification
+   * retry budget is what covers h2 servers.
    */
-  private static readonly ELECTRON_UPLOAD_HEADER = 'X-SuperProductivity-WebDAV-Upload';
+  private static readonly ELECTRON_WEBDAV_HEADER = 'X-SuperProductivity-WebDAV';
 
   /**
    * Sync correctness (#7144): force revalidation on the NATIVE HTTP path. iOS
@@ -136,12 +137,11 @@ export class WebDavHttpAdapter {
         try {
           const fetchImpl = this._deps.webFetch();
           // Electron's main-window request hook consumes this marker and sets
-          // Connection: close, which renderer fetch cannot set itself (#9985).
+          // the Connection/Cookie headers renderer fetch cannot (#9985, #10839).
           // Keep it off the web/native paths and preserve conditional headers.
-          const headers =
-            this._deps.platformInfo.isElectron && options.method === 'PUT'
-              ? { ...options.headers, [WebDavHttpAdapter.ELECTRON_UPLOAD_HEADER]: '1' }
-              : options.headers;
+          const headers = this._deps.platformInfo.isElectron
+            ? { ...options.headers, [WebDavHttpAdapter.ELECTRON_WEBDAV_HEADER]: '1' }
+            : options.headers;
           const fetchResponse = await fetchImpl(options.url, {
             method: options.method,
             headers,

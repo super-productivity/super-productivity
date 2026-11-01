@@ -21,6 +21,8 @@ import javax.net.ssl.SSLHandshakeException
 class WebDavHttpPlugin : Plugin() {
 
     companion object {
+        private val cookieJar = WebDavSessionCookieJar()
+
         // Shared OkHttpClient instance for better resource management
         private val client = OkHttpClient.Builder()
             .connectTimeout(30, TimeUnit.SECONDS)
@@ -29,6 +31,12 @@ class WebDavHttpPlugin : Plugin() {
             // Follow redirects as the TypeScript code expects
             .followRedirects(true)
             .followSslRedirects(true)
+            // Keep the server's session cookie between syncs (#10839).
+            .cookieJar(cookieJar)
+            .addInterceptor { chain ->
+                cookieJar.beginRequest(chain.request())
+                chain.proceed(chain.request())
+            }
             // Add retry interceptor for reliability
             .addInterceptor { chain ->
                 val request = chain.request()
