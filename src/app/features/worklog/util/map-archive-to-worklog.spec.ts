@@ -23,6 +23,37 @@ const fakeTaskStateFromArray = (tasks: TaskCopy[]): EntityState<Task> => {
 };
 
 describe('mapArchiveToWorklog', () => {
+  it('places an untracked independently tagged subtask on its own date when its parent is outside the context', () => {
+    const state = fakeTaskStateFromArray([
+      {
+        ...DEFAULT_TASK,
+        id: 'subtask',
+        projectId: 'INBOX_PROJECT',
+        parentId: 'outside-context',
+        tagIds: ['own-tag'],
+        created: new Date(2026, 9, 20, 12).getTime(),
+        doneOn: new Date(2026, 9, 21, 12).getTime(),
+      },
+      {
+        ...DEFAULT_TASK,
+        id: 'logged',
+        projectId: 'INBOX_PROJECT',
+        timeSpentOnDay: { '2026-10-21': 600000 },
+      },
+    ]);
+    const { worklog } = mapArchiveToWorklog(
+      state,
+      [],
+      { workStart: {}, workEnd: {} },
+      1,
+      'en-US',
+    );
+    expect(
+      worklog[2026].ent[10].ent[21].logEntries.map((entry) => entry.task.id),
+    ).toEqual(['logged', 'subtask']);
+    expect(state.entities.subtask?.timeSpentOnDay).toEqual({});
+  });
+
   it('should preserve restore flags for every day of active and archived tasks', () => {
     const taskState = fakeTaskStateFromArray(
       ['active', 'archived'].map((id) => ({
