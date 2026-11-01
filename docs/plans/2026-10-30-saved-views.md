@@ -160,11 +160,19 @@ OmniFocus 4, Vikunja), not hands-on.
 
 ## Known gaps and follow-ups
 
-- **#11384:** boards as rows on narrow screens; card/row parity (counts, Done
-  handling, subtask hint, keyboard moves); long columns; templates instead of
-  the default boards for new installs; Save as view without the "Not completed"
-  rule; small gaps (e.g. dragging a multi-selection between sections, empty
-  columns without a "+" give arrow keys no focus target).
+- **#11384 (done, 2026-11-01):** rows below 600 px (`BoardComponent.isListLayout`
+  reads `LayoutService.isXs`; the stored `cols` stays, phones get no List/Board
+  switch or filter button); one header count rule, open items, for cards, rows
+  and the editor (`getPanelItems`); a collapsed Done group on cards; each part
+  renders its first 100 items (`PANEL_SHOWN_LIMIT`, local, never stored), drops
+  placed by the rendered item before the marker (`getDropIndex`), a task moved,
+  added or focused past the limit shows the whole part; arrow keys leave a
+  stacked column at its edges. Accepted: select-all and Shift ranges cover the
+  rendered items; moving into a long column can show all of it.
+- **#11384, still open:** templates instead of the default boards for new
+  installs; Save as view without the "Not completed" rule; small gaps
+  (dragging a multi-selection between sections, empty columns without a "+"
+  give arrow keys no focus target, the subtask hint on cards).
 - **#11386:** editor redesign.
 - **#11388:** sync order bug. Accepted: concurrent edits of one board are
   last-writer-wins on the board.
