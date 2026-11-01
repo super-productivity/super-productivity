@@ -88,7 +88,8 @@ test.describe('Long view columns', () => {
     );
     await expect(showAll).toHaveText(`Show all (${TASK_COUNT})`);
 
-    // Out to In Progress and back: appended past the first 100, it shows.
+    // Out to In Progress and back: it comes back as the last card shown, and
+    // the column still renders 100.
     const card = todoCards.first();
     const id = await card.getAttribute('data-task-id');
     await card.focus();
@@ -100,15 +101,15 @@ test.describe('Long view columns', () => {
     const back = todo.locator(`planner-task[data-task-id="${id}"]`);
     await expect(back).toBeFocused();
     await expect(back).toBeInViewport();
-    await expect(todoCards).toHaveCount(TASK_COUNT);
-    await expect(showAll).toHaveCount(0);
+    await expect(todoCards).toHaveCount(100);
+    await expect(todoCards.last()).toHaveAttribute('data-task-id', id!);
 
     // A fresh visit shows the first 100 again (nothing is stored).
     await page.goto('/#/tag/TODAY/tasks');
     await page.goto('/#/boards/KANBAN_DEFAULT');
     await expect(todoCards).toHaveCount(100);
 
-    // Dragged in after the last card shown: it shows.
+    // Dragged in after the last card shown: it is the last card shown.
     await todoCards.first().focus();
     const dragId = await todoCards.first().getAttribute('data-task-id');
     await page.keyboard.press('Control+Shift+ArrowRight');
@@ -119,6 +120,12 @@ test.describe('Long view columns', () => {
     await expect(progress.locator('planner-task')).toHaveCount(0);
     const dropped = todo.locator(`planner-task[data-task-id="${dragId}"]`);
     await expect(dropped).toBeVisible();
+    await expect(todoCards).toHaveCount(100);
+    await expect(todoCards.last()).toHaveAttribute('data-task-id', dragId!);
+
+    // "Show all" renders the rest.
+    await showAll.click();
     await expect(todoCards).toHaveCount(TASK_COUNT);
+    await expect(showAll).toHaveCount(0);
   });
 });

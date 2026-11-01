@@ -448,12 +448,17 @@ export class BoardPanelComponent implements TaskCardList, ViewTaskListHost {
     const isSamePanel = ev.previousContainer.id === ev.container.id;
     // CDK removes only the dragged card when calculating its insertion index;
     // placement removes every moving one, including destination duplicates.
-    const index = getDropIndex(
-      this.tasks().map((task) => task.id),
-      this.shownMain().map((task) => task.id),
-      new Set(ids),
-      ev.currentIndex,
-      isSamePanel ? ev.item.data.id : undefined,
+    const moving = new Set(ids);
+    // Past the cards shown, a card stays the last one shown.
+    const index = Math.min(
+      getDropIndex(
+        this.tasks().map((task) => task.id),
+        this.shownMain().map((task) => task.id),
+        moving,
+        ev.currentIndex,
+        isSamePanel ? ev.item.data.id : undefined,
+      ),
+      this._endOfShownIndex(moving),
     );
     if (isSamePanel) {
       this._placeInOrder(ids, index);
@@ -462,8 +467,12 @@ export class BoardPanelComponent implements TaskCardList, ViewTaskListHost {
     await this.moveTasks(ids, index);
   }
 
-  /** Shared by dragging and keyboard placement; normal task actions retain their effects. */
-  async moveTasks(ids: string[], index = this.tasks().length): Promise<boolean> {
+  /**
+   * Shared by dragging and keyboard placement; normal task actions retain their
+   * effects. Without an index, tasks go after the last open item shown, so a
+   * move into a long column neither hides the task nor renders the whole column.
+   */
+  async moveTasks(ids: string[], index = this._endOfShownIndex()): Promise<boolean> {
     if (this.isMoving()) return false;
     this.isMoving.set(true);
     try {
@@ -653,6 +662,26 @@ export class BoardPanelComponent implements TaskCardList, ViewTaskListHost {
       this.isDoneListExpanded() ? this._capped(this.doneItems(), this.isShowAll()) : [],
     { equal: fastArrayCompare },
   );
+
+  /**
+   * Where moved tasks go at the end of what is shown, counted without them
+   * (like `placeInOrder`): the end of the panel, or, while it is cut off at
+   * the limit, the place of the last open item shown, so they stay in view.
+   */
+  private _endOfShownIndex(moving: ReadonlySet<string> = new Set()): number {
+    const order = this.tasks()
+      .map((task) => task.id)
+      .filter((id) => !moving.has(id));
+    const shown = this.shownMain();
+    if (shown.length === this.mainItems().length) return order.length;
+    const kept = shown.filter((task) => !moving.has(task.id));
+    const last = kept[kept.length - 1];
+    if (!last) return 0;
+    // Moved from among the shown ones, they free their places: after the
+    // last kept one they still show.
+    const isRoomAfterLast = shown.length - kept.length >= moving.size;
+    return order.indexOf(last.id) + (isRoomAfterLast ? 1 : 0);
+  }
 
   private _capped(items: TaskCopy[], isShowAll: boolean): TaskCopy[] {
     return isShowAll || items.length <= PANEL_SHOWN_LIMIT
