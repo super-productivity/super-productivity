@@ -13,13 +13,14 @@ import { MatFormField, MatLabel, MatSuffix } from '@angular/material/form-field'
 import { MatInput } from '@angular/material/input';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
-import { DatePipe } from '@angular/common';
 import { TranslatePipe } from '@ngx-translate/core';
 import { selectArchivedProjectsSortedByTitle } from '../../features/project/store/project.selectors';
 import { ProjectService } from '../../features/project/project.service';
 import { Project } from '../../features/project/project.model';
 import { DEFAULT_PROJECT_ICON } from '../../features/project/project.const';
 import { T } from '../../t.const';
+import { LocaleDatePipe } from '../../ui/pipes/locale-date.pipe';
+import { DateTimeFormatService } from '../../core/date-time-format/date-time-format.service';
 
 @Component({
   selector: 'archived-projects-page',
@@ -37,16 +38,18 @@ import { T } from '../../t.const';
     MatSuffix,
     FormsModule,
     RouterLink,
-    DatePipe,
+    LocaleDatePipe,
     TranslatePipe,
   ],
 })
 export class ArchivedProjectsPageComponent {
   private readonly _store = inject(Store);
   private readonly _projectService = inject(ProjectService);
+  private readonly _dateTimeFormatService = inject(DateTimeFormatService);
 
   readonly T = T;
   readonly DEFAULT_PROJECT_ICON = DEFAULT_PROJECT_ICON;
+  readonly locale = this._dateTimeFormatService.currentLocale;
 
   readonly searchTerm = signal('');
 
