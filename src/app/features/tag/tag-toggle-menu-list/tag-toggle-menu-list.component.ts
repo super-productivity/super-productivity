@@ -23,6 +23,7 @@ import { TranslatePipe } from '@ngx-translate/core';
 import { TaskService } from '../../tasks/task.service';
 import { MenuTreeService } from '../../menu-tree/menu-tree.service';
 import { SelectOptionRowComponent } from '../../../ui/select-option-row/select-option-row.component';
+import { DIALOG_AUTO_FOCUS_TYPING } from '../../../util/dialog-auto-focus';
 
 @Component({
   selector: 'tag-toggle-menu-list',
@@ -80,6 +81,7 @@ export class TagToggleMenuListComponent {
   openAddNewTag(): void {
     this._matDialog
       .open(DialogPromptComponent, {
+        autoFocus: DIALOG_AUTO_FOCUS_TYPING,
         data: {
           placeholder: T.F.TAG.TTL.ADD_NEW_TAG,
         },

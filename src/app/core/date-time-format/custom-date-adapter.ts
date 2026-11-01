@@ -5,6 +5,9 @@ import { DEFAULT_FIRST_DAY_OF_WEEK } from 'src/app/core/locale.constants';
 // eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import { GlobalConfigService } from '../../features/config/global-config.service';
 
+// "9", "22", "930", "1430", "2pm", "230 pm" — digits typed without a separator
+const COMPACT_TIME_RE = /^(\d{1,2})(\d{2})?\s*(am|pm)?$/i;
+
 /** Custom DateAdapter that handles locale-aware date parsing and formatting */
 @Injectable({ providedIn: 'root' })
 export class CustomDateAdapter extends NativeDateAdapter {
@@ -39,6 +42,51 @@ export class CustomDateAdapter extends NativeDateAdapter {
     );
 
     return parsed !== null ? parsed : super.parse(value, format);
+  }
+
+  /**
+   * Also accepts times typed without a separator ("1430", "22", "2pm"), as a
+   * native time input does; the base adapter requires "14:30" (#8565).
+   */
+  override parseTime(value: unknown, parseFormat: unknown): Date | null {
+    if (typeof value === 'string') value = this._toLatinDayPeriod(value);
+    const parsed = super.parseTime(value, parseFormat);
+    if (typeof value !== 'string' || (parsed && this.isValid(parsed))) return parsed;
+
+    const match = COMPACT_TIME_RE.exec(value.trim());
+    if (!match) return parsed;
+    let hours = +match[1];
+    const minutes = match[2] ? +match[2] : 0;
+    const amPm = match[3]?.toLowerCase();
+    if (amPm) {
+      if (hours < 1 || hours > 12) return this.invalid();
+      hours = (hours % 12) + (amPm === 'pm' ? 12 : 0);
+    }
+    if (hours > 23 || minutes > 59) return this.invalid();
+    return this.setTime(this.today(), hours, minutes, 0);
+  }
+
+  /**
+   * Rewrites the locale's own AM/PM marker ("오후 2:30", "下午2:30") as a trailing
+   * AM/PM: the base parser drops non-Latin text, which would read every
+   * formatted afternoon time back as morning.
+   */
+  private _toLatinDayPeriod(value: string): string {
+    const dayPeriodOf = (hours: number): string | undefined =>
+      new Intl.DateTimeFormat(this.locale, { hour: 'numeric', hour12: true })
+        .formatToParts(new Date(2000, 0, 1, hours))
+        .find((part) => part.type === 'dayPeriod')?.value;
+
+    for (const [hours, latin] of [
+      [1, 'AM'],
+      [13, 'PM'],
+    ] as const) {
+      const marker = dayPeriodOf(hours);
+      if (marker && !/^[ap]\.?m\.?$/i.test(marker) && value.includes(marker)) {
+        return `${value.replace(marker, '').trim()} ${latin}`;
+      }
+    }
+    return value;
   }
 
   override format(

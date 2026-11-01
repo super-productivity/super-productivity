@@ -201,6 +201,23 @@ describe('TaskViewCustomizerService', () => {
     expect(filtered[1].id).toBe('Third Task(Tag A, Tag B)');
   });
 
+  it('should include every tag whose title contains the term', () => {
+    // 'work' is a substring of both titles. Homework is first, so the old
+    // find() returned only that tag and dropped the Work task.
+    tagsInTreeOrder.set([
+      { id: 'homework', title: 'Homework' } as Tag,
+      { id: 'work', title: 'Work' } as Tag,
+    ]);
+    const tasks: TaskWithSubTasks[] = [
+      { ...mockTasks[0], id: 'homework-task', tagIds: ['homework'] },
+      { ...mockTasks[1], id: 'work-task', tagIds: ['work'] },
+    ];
+
+    const filtered = service['applyFilter'](tasks, FILTER_OPTION_TYPE.tag, 'work');
+
+    expect(filtered.map((task) => task.id)).toEqual(['homework-task', 'work-task']);
+  });
+
   it('should return an empty task list when filtering by a tag that doesnt exist', () => {
     const filtered = service['applyFilter'](
       mockTasks,
@@ -224,14 +241,84 @@ describe('TaskViewCustomizerService', () => {
     expect(filtered.length).toBe(1);
   });
 
+  it('should filter selected tag ids with OR and AND modes', () => {
+    const orFiltered = service['_filterByTagIds'](mockTasks, ['Tag A', 'Tag B']);
+    const andFiltered = service['_filterByTagIds'](mockTasks, ['Tag A', 'Tag B'], 'AND');
+
+    expect(orFiltered).toHaveSize(3);
+    expect(andFiltered.map((task) => task.id)).toEqual(['Third Task(Tag A, Tag B)']);
+  });
+
+  it('keeps tagIds and tagFilterMode when sanitizing a stored tag filter', () => {
+    const sanitized = service['_sanitizeFilter']({
+      type: FILTER_OPTION_TYPE.tag,
+      preset: null,
+      label: 'stale label',
+      tagIds: ['Tag A', 'Tag B'],
+      tagFilterMode: 'AND',
+    });
+
+    expect(sanitized.tagIds).toEqual(['Tag A', 'Tag B']);
+    expect(sanitized.tagFilterMode).toBe('AND');
+    expect(sanitized.preset).toBeNull();
+    expect(sanitized.type).toBe(FILTER_OPTION_TYPE.tag);
+    expect(sanitized.label).toBe(T.F.TASK_VIEW.CUSTOMIZER.FILTER_TAG);
+  });
+
+  describe('customizeUndoneTasks tag id filter', () => {
+    const nextFrame = (): Promise<void> =>
+      new Promise((resolve) => requestAnimationFrame(() => resolve()));
+
+    const latestList = async (): Promise<string[]> => {
+      const emissions: CustomizedUndoneTasks[] = [];
+      TestBed.runInInjectionContext(() =>
+        service.customizeUndoneTasks(of(mockTasks)),
+      ).subscribe((result) => emissions.push(result));
+      TestBed.tick();
+      await nextFrame();
+      return emissions[emissions.length - 1].list.map((task) => task.id);
+    };
+
+    it('treats a null preset with tag ids as an active AND filter', async () => {
+      service.setFilter({
+        type: FILTER_OPTION_TYPE.tag,
+        preset: null,
+        label: T.F.TASK_VIEW.CUSTOMIZER.FILTER_TAG,
+        tagIds: ['Tag A', 'Tag B'],
+        tagFilterMode: 'AND',
+      });
+
+      expect(await latestList()).toEqual(['Third Task(Tag A, Tag B)']);
+    });
+
+    it('ignores tag ids that no longer exist', async () => {
+      service.setFilter({
+        type: FILTER_OPTION_TYPE.tag,
+        preset: null,
+        label: T.F.TASK_VIEW.CUSTOMIZER.FILTER_TAG,
+        tagIds: ['Tag A', 'deleted-tag'],
+        tagFilterMode: 'AND',
+      });
+
+      expect(await latestList()).toEqual(['Alpha(Tag A)', 'Third Task(Tag A, Tag B)']);
+    });
+  });
+
   it('should filter by project name', () => {
+    (service as any)._allProjects = [
+      ...mockProjects,
+      { id: 'Project B Extra', title: 'Project B Extra' } as Project,
+    ];
+    const tasks = [
+      ...mockTasks,
+      { ...mockTasks[1], id: 'Beta Extra', projectId: 'Project B Extra' },
+    ];
     const filtered = service['applyFilter'](
-      mockTasks,
+      tasks,
       FILTER_OPTION_TYPE.project,
       'Project B',
     );
-    expect(filtered.length).toBe(1);
-    expect(filtered[0].id).toBe('Beta(Tag B)');
+    expect(filtered.map((task) => task.id)).toEqual(['Beta(Tag B)', 'Beta Extra']);
   });
 
   it('should filter by schedule date', () => {

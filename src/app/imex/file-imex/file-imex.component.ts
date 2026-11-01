@@ -48,6 +48,7 @@ import {
 } from '../../op-log/core/errors/sync-errors';
 import { alertDialog } from '../../util/native-dialogs';
 import { PluginService } from '../../plugins/plugin.service';
+import { DIALOG_AUTO_FOCUS_TYPING } from '../../util/dialog-auto-focus';
 
 const TODOIST_IMPORT_PLUGIN_ID = 'todoist-import';
 const TICKTICK_IMPORT_PLUGIN_ID = 'ticktick-import';
@@ -169,6 +170,7 @@ export class FileImexComponent implements OnInit {
   openUrlImportDialog(): void {
     this._matDialog
       .open(DialogImportFromUrlComponent, {
+        autoFocus: DIALOG_AUTO_FOCUS_TYPING,
         width: '500px', // Or any other appropriate width
       })
       .afterClosed()

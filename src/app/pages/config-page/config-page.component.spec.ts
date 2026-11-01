@@ -4,9 +4,13 @@ import { SyncConfigService } from '../../imex/sync/sync-config.service';
 import { SnackService } from '../../core/snack/snack.service';
 import { SyncProviderManager } from '../../op-log/sync-providers/provider-manager.service';
 import { GlobalConfigService } from '../../features/config/global-config.service';
-import { NEW_INSTALL_APP_FEATURES } from '../../features/config/new-install-app-features.const';
+import {
+  NEW_INSTALL_APP_FEATURES,
+  NEW_INSTALL_IDLE_CONFIG,
+} from '../../features/config/new-install-config.const';
 import {
   AppFeaturesConfig,
+  IdleConfig,
   ConfigFormSection,
 } from '../../features/config/global-config.model';
 import { ActivatedRoute } from '@angular/router';
@@ -86,6 +90,10 @@ describe('ConfigPageComponent', () => {
           useValue: jasmine.createSpyObj('GlobalConfigService', ['updateSection'], {
             cfg$: of({}),
             sync$: of({}),
+            cfg: signal({
+              appFeatures: NEW_INSTALL_APP_FEATURES,
+              idle: NEW_INSTALL_IDLE_CONFIG,
+            }),
             appFeatures: signal(NEW_INSTALL_APP_FEATURES),
           }),
         },
@@ -150,6 +158,31 @@ describe('ConfigPageComponent', () => {
         config: { ...NEW_INSTALL_APP_FEATURES },
       });
       expect(configService.updateSection).not.toHaveBeenCalled();
+    });
+
+    it('writes only time tracking from the Time Tracking tab switch', () => {
+      const configService = TestBed.inject(
+        GlobalConfigService,
+      ) as jasmine.SpyObj<GlobalConfigService>;
+      component.saveTimeTrackingSwitch({
+        config: { ...NEW_INSTALL_APP_FEATURES, isTimeTrackingEnabled: false },
+      });
+      expect(configService.updateSection).toHaveBeenCalledOnceWith('appFeatures', {
+        isTimeTrackingEnabled: false,
+      } as Partial<AppFeaturesConfig>);
+    });
+
+    it('writes only the changed idle fields, not the new-install values', () => {
+      const configService = TestBed.inject(
+        GlobalConfigService,
+      ) as jasmine.SpyObj<GlobalConfigService>;
+      component.saveGlobalCfg({
+        sectionKey: 'idle',
+        config: { ...NEW_INSTALL_IDLE_CONFIG, minIdleTime: 600000 },
+      });
+      expect(configService.updateSection).toHaveBeenCalledOnceWith('idle', {
+        minIdleTime: 600000,
+      } as Partial<IdleConfig>);
     });
   });
 

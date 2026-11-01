@@ -6,6 +6,7 @@ import { SyncWrapperService } from './sync-wrapper.service';
 import { SyncProviderManager } from '../../op-log/sync-providers/provider-manager.service';
 import { SyncProviderId } from '../../op-log/sync-providers/provider.const';
 import { T } from '../../t.const';
+import { DIALOG_AUTO_FOCUS_TYPING } from '../../util/dialog-auto-focus';
 
 describe('SuperSyncEncryptionSetupService', () => {
   let service: SuperSyncEncryptionSetupService;
@@ -55,6 +56,7 @@ describe('SuperSyncEncryptionSetupService', () => {
     expect(outcome).toBe('opened');
     expect(matDialog.open).toHaveBeenCalledWith(jasmine.any(Function), {
       data: { providerType: 'supersync', initialSetup: false },
+      autoFocus: DIALOG_AUTO_FOCUS_TYPING,
     });
     expect(snackService.open).not.toHaveBeenCalled();
   });

@@ -49,6 +49,7 @@ import { openWorkContextSettingsDialog } from '../../features/work-context/dialo
 import { Log } from '../../core/log';
 import { PlainspaceShareService } from '../../features/issue/providers/plainspace/plainspace-share.service';
 import { selectIsProjectSharedOnPlainspace } from '../../features/issue/store/issue-provider.selectors';
+import { DIALOG_AUTO_FOCUS_TYPING } from '../../util/dialog-auto-focus';
 
 @Component({
   selector: 'work-context-menu',
@@ -171,6 +172,7 @@ export class WorkContextMenuComponent implements OnInit {
       const result = await firstValueFrom(
         this._matDialog
           .open(DialogPromptComponent, {
+            autoFocus: DIALOG_AUTO_FOCUS_TYPING,
             restoreFocus: true,
             data: {
               txtValue: project.title,
@@ -195,6 +197,7 @@ export class WorkContextMenuComponent implements OnInit {
     const result = await firstValueFrom(
       this._matDialog
         .open(DialogPromptComponent, {
+          autoFocus: DIALOG_AUTO_FOCUS_TYPING,
           restoreFocus: true,
           data: {
             txtValue: tag.title,
@@ -390,6 +393,7 @@ export class WorkContextMenuComponent implements OnInit {
   addSection(): void {
     this._matDialog
       .open(DialogPromptComponent, {
+        autoFocus: DIALOG_AUTO_FOCUS_TYPING,
         // Omit `message` to match the Add Tag pattern — the dialog
         // collapses its outer padding when there's no message text
         // (`dialog-prompt.scss: mat-dialog-content.isNoMsg`).

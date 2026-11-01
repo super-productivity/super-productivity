@@ -7,6 +7,7 @@ import { SnackService } from '../core/snack/snack.service';
 import { PluginCleanupService } from './plugin-cleanup.service';
 import { PluginManifest, PluginBaseCfg } from './plugin-api.model';
 import { PluginI18nService } from './plugin-i18n.service';
+import { PluginLog } from '../core/log';
 
 describe('PluginRunner', () => {
   let service: PluginRunner;
@@ -129,6 +130,24 @@ describe('PluginRunner', () => {
 
       expect(instance.loaded).toBe(true);
       expect(instance.error).toBeUndefined();
+    });
+
+    it('warns about invented PluginAPI members while real ones keep working', async () => {
+      const warn = spyOn(PluginLog, 'warn');
+      const pluginCode = `
+        if (PluginAPI.showIframe !== undefined) {
+          throw new Error('unknown members must stay undefined');
+        }
+        PluginAPI.registerSidePanelButton({ label: 'Panel', onClick: () => {} });
+      `;
+
+      const instance = await service.loadPlugin(mockManifest, pluginCode, mockBaseCfg);
+
+      expect(instance.error).toBeUndefined();
+      expect(registerSidePanelButtonSpy).toHaveBeenCalled();
+      expect(warn).toHaveBeenCalledOnceWith(
+        jasmine.stringContaining('[test-plugin] PluginAPI.showIframe does not exist.'),
+      );
     });
 
     it('should capture plugin execution errors', async () => {

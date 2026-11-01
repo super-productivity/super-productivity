@@ -2,17 +2,19 @@ import { inject, Injectable } from '@angular/core';
 import { createEffect, ofType } from '@ngrx/effects';
 import { select, Store } from '@ngrx/store';
 import {
+  auditTime,
   distinctUntilChanged,
   filter,
   map,
   pairwise,
+  skip,
   startWith,
   switchMap,
   take,
   tap,
   withLatestFrom,
 } from 'rxjs/operators';
-import { EMPTY } from 'rxjs';
+import { combineLatest, EMPTY } from 'rxjs';
 
 import {
   selectCurrentTask,
@@ -20,10 +22,12 @@ import {
   selectTaskFeatureState,
 } from '../features/tasks/store/task.selectors';
 import { selectProjectFeatureState } from '../features/project/store/project.selectors';
+import { selectTagFeatureState } from '../features/tag/store/tag.reducer';
 import { selectLocalizationConfig } from '../features/config/store/global-config.reducer';
 import { updateGlobalConfigSection } from '../features/config/store/global-config.actions';
 import { Task } from '../features/tasks/task.model';
 import { isWontDoTask } from '../features/tasks/util/is-wont-do-task';
+import { DataInitStateService } from '../core/data-init/data-init-state.service';
 import { PluginService } from './plugin.service';
 import { PluginHooks } from './plugin-api.model';
 import { PluginI18nService } from './plugin-i18n.service';
@@ -53,8 +57,14 @@ import { toActiveWorkContext } from './util/active-work-context.util';
 import { SyncTriggerService } from '../imex/sync/sync-trigger.service';
 import { selectPluginUserDataFeatureState } from './store/plugin-user-data.reducer';
 import { diffChangedPluginIds } from './util/plugin-data-diff.util';
+import { GlobalTrackingIntervalService } from '../core/global-tracking-interval/global-tracking-interval.service';
 import { BeforeFinishDayService } from '../features/before-finish-day/before-finish-day.service';
 import { PluginLog } from '../core/log';
+
+// Coalesces a sync batch or bulk action into one DATA_CHANGED call while
+// keeping views responsive. Time tracking updates the tracked task once a
+// second, so while it runs the hook fires about once a second.
+const DATA_CHANGED_AUDIT_MS = 250;
 
 @Injectable()
 export class PluginHooksEffects {
@@ -64,7 +74,9 @@ export class PluginHooksEffects {
   private readonly pluginI18nService = inject(PluginI18nService);
   private readonly workContextService = inject(WorkContextService);
   private readonly syncTrigger = inject(SyncTriggerService);
+  private readonly _dataInitState = inject(DataInitStateService);
   private readonly _beforeFinishDayService = inject(BeforeFinishDayService);
+  private readonly _globalTrackingInterval = inject(GlobalTrackingIntervalService);
 
   taskComplete$ = createEffect(
     () =>
@@ -423,6 +435,50 @@ export class PluginHooksEffects {
             }),
           ),
         ),
+      ),
+    { dispatch: false },
+  );
+
+  // Selector-based for the same reasons as firePersistedDataChanged$: remote
+  // ops, planning, archiving and bulk actions change task, project and tag
+  // state without passing anyTaskUpdate$'s local action list. Same gate and
+  // the same reason for having no skipDuringSyncWindow: no ops are created,
+  // and the remote changes are the point.
+  dataChanged$ = createEffect(
+    () =>
+      this.syncTrigger.afterInitialSyncDoneAndDataLoadedInitially$.pipe(
+        filter((done) => done),
+        switchMap(() =>
+          combineLatest([
+            this.store.select(selectTaskFeatureState),
+            this.store.select(selectProjectFeatureState),
+            this.store.select(selectTagFeatureState),
+          ]).pipe(skip(1), auditTime(DATA_CHANGED_AUDIT_MS)),
+        ),
+        tap(() => {
+          this.pluginService.dispatchHook(PluginHooks.DATA_CHANGED);
+        }),
+      ),
+    { dispatch: false },
+  );
+
+  // The logical day (start-of-next-day offset applied) rolled over while the
+  // app ran. todayDateStr$ also re-checks after sleep and focus. Gated on the
+  // data load: before it, todayDateStr$ uses offset 0 and corrects itself once
+  // the config arrives, which is not a day change. Not the sync gate: its 8 s
+  // timeout can open it before the data (and the offset) are loaded.
+  dayChange$ = createEffect(
+    () =>
+      this._dataInitState.isAllDataLoadedInitially$.pipe(
+        switchMap(() =>
+          this._globalTrackingInterval.todayDateStr$.pipe(
+            distinctUntilChanged(),
+            skip(1),
+          ),
+        ),
+        tap((todayStr) => {
+          this.pluginService.dispatchHook(PluginHooks.DAY_CHANGE, { todayStr });
+        }),
       ),
     { dispatch: false },
   );

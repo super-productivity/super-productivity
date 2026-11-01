@@ -51,6 +51,13 @@ export enum LS {
   // don't all hit SuperSync at the same second. Device-local on purpose: the
   // point is that it differs between devices.
   DUE_DATE_NOTIFICATION_OFFSET_MS = 'SUP_DUE_DATE_NOTIFICATION_OFFSET_MS',
+  // Notification ids each mobile reminder effect has armed natively. Native
+  // alarms outlive the app, so the next run needs these to cancel alarms for
+  // tasks completed or deleted (e.g. via sync) while it was closed.
+  MOBILE_ARMED_REMINDER_IDS = 'SUP_MOBILE_ARMED_REMINDER_IDS',
+  MOBILE_ARMED_REPEAT_REMINDER_IDS = 'SUP_MOBILE_ARMED_REPEAT_REMINDER_IDS',
+  MOBILE_ARMED_DUE_DATE_IDS = 'SUP_MOBILE_ARMED_DUE_DATE_IDS',
+  MOBILE_ARMED_DEADLINE_IDS = 'SUP_MOBILE_ARMED_DEADLINE_IDS',
 
   // Epoch ms until which the "encrypt your SuperSync account" migration banner
   // stays hidden. Set when the user picks "Later" (or opens the flow), so — unlike

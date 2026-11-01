@@ -101,6 +101,7 @@ import { getWontDoChanges } from '../../util/is-wont-do-task';
 import { IssueSyncStateService } from '../../../issue/two-way-sync/issue-sync-state.service';
 import { PlainspaceHandoffService } from '../../../issue/providers/plainspace/plainspace-handoff.service';
 import { PlainspaceMember } from '../../../issue/providers/plainspace/plainspace-api.service';
+import { DIALOG_AUTO_FOCUS_TYPING } from '../../../../util/dialog-auto-focus';
 
 @Component({
   selector: 'task-context-menu-inner',
@@ -687,6 +688,7 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
   openAddNewTag(): void {
     this._matDialog
       .open(DialogPromptComponent, {
+        autoFocus: DIALOG_AUTO_FOCUS_TYPING,
         data: {
           placeholder: T.F.TAG.TTL.ADD_NEW_TAG,
         },

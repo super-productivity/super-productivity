@@ -63,6 +63,7 @@ import { TestClient } from '../../op-log/testing/integration/helpers/test-client
 import type { SyncProviderBase } from '../../op-log/sync-providers/provider.interface';
 import type { MatDialogRef } from '@angular/material/dialog';
 import { DialogGetAndEnterAuthCodeComponent } from './dialog-get-and-enter-auth-code/dialog-get-and-enter-auth-code.component';
+import { DIALOG_AUTO_FOCUS_TYPING } from '../../util/dialog-auto-focus';
 
 describe('SyncWrapperService', () => {
   let service: SyncWrapperService;
@@ -445,6 +446,7 @@ describe('SyncWrapperService', () => {
       expect(mockSnackService.open).toHaveBeenCalledTimes(1);
       expect(mockMatDialog.open).toHaveBeenCalledWith(jasmine.any(Function), {
         data: { providerType: 'supersync', initialSetup: false },
+        autoFocus: DIALOG_AUTO_FOCUS_TYPING,
       });
     });
 
@@ -466,6 +468,7 @@ describe('SyncWrapperService', () => {
       // enter-password flow owns recovery for a peer-encrypted remote.
       expect(mockMatDialog.open).not.toHaveBeenCalledWith(jasmine.any(Function), {
         data: { providerType: 'supersync', initialSetup: false },
+        autoFocus: DIALOG_AUTO_FOCUS_TYPING,
       });
       expect(mockMatDialog.open).toHaveBeenCalledWith(
         DialogEnterEncryptionPasswordComponent,

@@ -3122,8 +3122,8 @@
       "PLANNER": "Rencanakan beberapa hari ke depan di {{plannerIcon}} <b>Perencana</b>",
       "TASK_MENU_TOUCH": "Geser tugas ke kiri untuk menu: {{playIcon}} <b>Mulai waktu pelacakan</b>, {{subtaskIcon}} <b>Tambah Subtugas</b>",
       "TASK_MENU_TOUCH_NO_TRACKING": "Geser tugas ke kiri untuk menu, mis. {{subtaskIcon}} <b>Tambah Subtugas</b>",
-      "TIMER_RUNNING": "Timer sedang berjalan. Tekan {{playIcon}} lagi atau <kbd>{{key}}</kbd> untuk menjeda.",
-      "TIMER_RUNNING_TOUCH": "Timer sedang berjalan. Ketuk {{playIcon}} di bagian atas untuk menjeda.",
+      "TIMER_RUNNING": "Timer sedang berjalan. Tekan {{pauseIcon}} lagi atau <kbd>{{key}}</kbd> untuk menjeda.",
+      "TIMER_RUNNING_TOUCH": "Timer sedang berjalan. Ketuk {{pauseIcon}} di bagian atas untuk menjeda.",
       "TRACK_TIME": "Arahkan kursor ke tugas dan tekan {{playIcon}} untuk melacak waktu"
     },
     "WANT_MORE": {

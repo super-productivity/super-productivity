@@ -9,9 +9,10 @@ import {
   OnInit,
   viewChild,
 } from '@angular/core';
-import { ActivatedRoute, RouterLink } from '@angular/router';
+import { ActivatedRoute } from '@angular/router';
 import { GlobalConfigService } from '../../features/config/global-config.service';
-import { getChangedAppFeatures } from '../../features/config/get-changed-app-features.util';
+import { getChangedConfigFields } from '../../features/config/get-changed-config-fields.util';
+import { NEW_INSTALL_CONFIG_SECTION_KEYS } from '../../features/config/new-install-config.const';
 import { TaskWidgetSettingsService } from '../../features/config/task-widget-settings.service';
 import { FocusModeLocalSettingsService } from '../../features/config/focus-mode-local-settings.service';
 import {
@@ -27,7 +28,6 @@ import {
   GLOBAL_TASKS_FORM_CONFIG,
 } from '../../features/config/global-config-form-config.const';
 import {
-  AppFeaturesConfig,
   ConfigFormConfig,
   GenericConfigFormSection,
   GlobalConfigFormSectionKey,
@@ -48,6 +48,9 @@ import { getAppVersionStr } from '../../util/get-app-version-str';
 import { UpdateCheckService } from '../../core/update-check/update-check.service';
 import { isUpdateCheckPossible } from '../../core/update-check/is-update-check-possible.util';
 import { ConfigSectionComponent } from '../../features/config/config-section/config-section.component';
+import { ConfigFormComponent } from '../../features/config/config-form/config-form.component';
+import { TIME_TRACKING_SWITCH_FORM_ITEM } from '../../features/config/form-cfgs/app-features-form.const';
+import { FormlyFieldConfig } from '@ngx-formly/core';
 import { ConfigSoundFormComponent } from '../../features/config/config-sound-form/config-sound-form.component';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { SyncProviderManager } from '../../op-log/sync-providers/provider-manager.service';
@@ -103,6 +106,7 @@ const TAB_ANIMATION_DURATION_MS = 200;
   imports: [
     ThemeSelectorComponent,
     ConfigSectionComponent,
+    ConfigFormComponent,
     ConfigSoundFormComponent,
     TranslatePipe,
     PluginManagementComponent,
@@ -114,7 +118,6 @@ const TAB_ANIMATION_DURATION_MS = 200;
     MatTooltip,
     MatButton,
     MatIconButton,
-    RouterLink,
     NgTemplateOutlet,
     FormsModule,
     MatFormField,
@@ -161,6 +164,10 @@ export class ConfigPageComponent implements OnInit {
   generalFormCfg: ConfigFormConfig;
   globalTasksFormCfg: ConfigFormConfig;
   timeTrackingFormCfg: ConfigFormConfig;
+  /** The App Features time tracking switch, repeated atop the Time Tracking tab. */
+  readonly timeTrackingSwitchFormCfg: FormlyFieldConfig[] = [
+    TIME_TRACKING_SWITCH_FORM_ITEM,
+  ];
   pluginsShortcutsFormCfg: ConfigFormConfig;
   globalImexFormCfg: ConfigFormConfig;
   globalProductivityConfigFormCfg: ConfigFormConfig;
@@ -436,11 +443,11 @@ export class ConfigPageComponent implements OnInit {
     // From here on we know it's a real GlobalConfigState section.
     const sectionKey = formSectionKey as GlobalConfigSectionKey;
 
-    if (sectionKey === 'appFeatures') {
-      // Sync only the switches that changed, never this device's untouched defaults.
-      const changed = getChangedAppFeatures(
-        this.configService.appFeatures(),
-        config as Partial<AppFeaturesConfig>,
+    if ((NEW_INSTALL_CONFIG_SECTION_KEYS as readonly string[]).includes(sectionKey)) {
+      // Sync only the fields that changed, never this device's untouched defaults.
+      const changed = getChangedConfigFields<Record<string, unknown>>(
+        (this.configService.cfg()?.[sectionKey] as Record<string, unknown>) ?? {},
+        config,
       );
       if (Object.keys(changed).length > 0) {
         this.configService.updateSection(sectionKey, changed);
@@ -449,6 +456,13 @@ export class ConfigPageComponent implements OnInit {
     }
 
     this.configService.updateSection(sectionKey, config);
+  }
+
+  saveTimeTrackingSwitch($event: { config: unknown }): void {
+    this.saveGlobalCfg({
+      sectionKey: 'appFeatures',
+      config: $event.config as Record<string, unknown>,
+    });
   }
 
   /**

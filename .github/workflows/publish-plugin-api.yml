@@ -1,0 +1,102 @@
+name: Publish Plugin API Types
+
+# Publishes @super-productivity/plugin-api to npm on every stable release,
+# versioned like the app: plugin-api@X.Y.Z describes the plugin API of
+# Super Productivity X.Y.Z, so a plugin built against it sets
+# minSupVersion: "X.Y.Z". The repo copy of the package keeps a placeholder
+# version; the published one is set here from the release tag.
+#
+# Uses npm trusted publishing (OIDC), so no token lives in the repo. One-time
+# setup on npmjs.com: package → Settings → Trusted publisher → GitHub Actions,
+# repository super-productivity/super-productivity, workflow
+# publish-plugin-api.yml. Without it the publish step fails; nothing else does.
+#
+# To re-run a failed publish, run this workflow by hand and pick the release
+# tag (not a branch) under "Use workflow from": it then builds that tag, and
+# provenance names the tag's commit. Versions already on npm are skipped. Only
+# tags that contain this workflow can be published this way, and npm refuses
+# to publish a version below its current latest without an explicit --tag.
+'on':
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-plugin-api-${{ github.event.release.tag_name || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: (github.event_name == 'release' && !github.event.release.prerelease) || (github.event_name == 'workflow_dispatch' && startsWith(github.ref, 'refs/tags/v'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      # npm trusted publishing and provenance.
+      id-token: write
+
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+        with:
+          egress-policy: audit
+
+      - name: Resolve release tag
+        id: tag
+        shell: bash
+        env:
+          RAW_TAG: ${{ github.event.release.tag_name || github.ref_name }}
+        run: |
+          if [[ ! "$RAW_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Release tag must look like vX.Y.Z, got: $RAW_TAG" >&2
+            exit 1
+          fi
+          echo "tag=$RAW_TAG" >> "$GITHUB_OUTPUT"
+          echo "version=${RAW_TAG#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Check out the release tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
+        with:
+          ref: refs/tags/${{ steps.tag.outputs.tag }}
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v6
+        with:
+          node-version-file: .nvmrc
+          registry-url: 'https://registry.npmjs.org'
+
+      # Trusted publishing needs npm >= 11.5.1; Node 22 bundles npm 10.
+      # Same version as the root packageManager field.
+      - name: Install npm 11
+        run: npm install -g npm@11.18.0
+
+      - name: Skip if already published
+        id: exists
+        shell: bash
+        env:
+          VERSION: ${{ steps.tag.outputs.version }}
+        run: |
+          if npm view "@super-productivity/plugin-api@$VERSION" version 2>/dev/null | grep -qx "$VERSION"; then
+            echo "@super-productivity/plugin-api@$VERSION is already on npm; nothing to do."
+            echo "published=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "published=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install, version and publish
+        if: steps.exists.outputs.published != 'true'
+        working-directory: packages/plugin-api
+        env:
+          VERSION: ${{ steps.tag.outputs.version }}
+        # plugin-api is a root workspace: npm ci here installs only its own
+        # dependencies from the root lockfile. --ignore-scripts skips the root's
+        # install scripts (patch-package is not installed in this mode).
+        # `npm pkg set`, unlike `npm version`, does not trigger a reinstall.
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm pkg set version="$VERSION"
+          # prepack cleans and builds dist/.
+          npm publish --provenance --access public

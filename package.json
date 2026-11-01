@@ -193,7 +193,8 @@
     "plugin-api:build:watch": "cd packages/plugin-api && npm run build:watch",
     "vite-plugin:build": "cd packages/vite-plugin && npm run build",
     "plugins:build": "npm run plugin-api:build && npm run vite-plugin:build && cd packages/plugin-dev && npm run build:all",
-    "plugins:build:silent": "npm run vite-plugin:build && cd packages/plugin-dev && npm run build:all:silent"
+    "plugins:build:silent": "npm run vite-plugin:build && cd packages/plugin-dev && npm run build:all:silent",
+    "plugin-starter:check": "node tools/check-plugin-starter.js"
   },
   "resolutions": {
     "sass": "1.32.6",
@@ -242,7 +243,7 @@
     "@capacitor/app": "^8.1.2",
     "@capacitor/cli": "^8.6.0",
     "@capacitor/core": "^8.5.3",
-    "@capacitor/filesystem": "^8.1.4",
+    "@capacitor/filesystem": "^8.1.5",
     "@capacitor/local-notifications": "^8.3.1",
     "@capacitor/share": "^8.0.3",
     "@capawesome/capacitor-android-dark-mode-support": "^8.0.1",
@@ -277,8 +278,8 @@
     "@types/node": "^22.19.17",
     "@types/node-fetch": "^2.6.13",
     "@types/object-path": "^0.11.4",
-    "@typescript-eslint/types": "^8.71.2",
-    "@typescript-eslint/utils": "^8.71.2",
+    "@typescript-eslint/types": "^8.72.1",
+    "@typescript-eslint/utils": "^8.72.1",
     "angular-eslint": "^22.6.0",
     "angular-material-css-vars": "^11.0.0",
     "baseline-browser-mapping": "^2.10.24",
@@ -300,7 +301,7 @@
     "eslint-plugin-local-rules": "^3.0.2",
     "eslint-plugin-prefer-arrow": "1.2.3",
     "eslint-plugin-prettier": "^5.5.7",
-    "fake-indexeddb": "^6.2.5",
+    "fake-indexeddb": "^6.2.7",
     "fflate": "^0.8.2",
     "file-saver": "^2.0.5",
     "fs-extra": "^11.3.4",
@@ -339,7 +340,7 @@
     "ts-patch": "^3.3.0",
     "tslib": "^2.8.1",
     "typescript": "~6.0.3",
-    "typescript-eslint": "^8.71.2",
+    "typescript-eslint": "^8.72.1",
     "typia": "^12.0.2",
     "zone.js": "^0.16.3"
   },
@@ -372,7 +373,8 @@
   },
   "workspaces": [
     "packages/*",
-    "!packages/plugin-dev"
+    "!packages/plugin-dev",
+    "!packages/plugin-starter"
   ],
   "publish": [
     {

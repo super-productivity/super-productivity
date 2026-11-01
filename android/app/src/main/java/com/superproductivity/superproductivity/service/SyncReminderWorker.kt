@@ -13,6 +13,9 @@ import androidx.work.WorkerParameters
  * Runs every 15 minutes when network is available. Does NOT apply full state changes —
  * only manages reminders for tasks that changed on another device (done, deleted,
  * archived, dismissed, or newly created/updated).
+ *
+ * WebDAV/Nextcloud have no op API, so for them it reads the sync file instead
+ * ([runFileSyncReminderCheck]).
  */
 class SyncReminderWorker(
     appContext: Context,
@@ -26,6 +29,10 @@ class SyncReminderWorker(
     override suspend fun doWork(): Result {
         val credentials = BackgroundSyncCredentialStore.get(applicationContext)
         if (credentials == null) {
+            val fileCredentials = BackgroundSyncCredentialStore.getFileSync(applicationContext)
+            if (fileCredentials != null) {
+                return runFileSyncReminderCheck(applicationContext, fileCredentials)
+            }
             Log.d(TAG, "No sync credentials configured, skipping")
             return Result.success()
         }

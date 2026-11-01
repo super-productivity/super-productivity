@@ -3125,8 +3125,8 @@
       "PLANNER": "Planifiez les jours à venir dans {{plannerIcon}} <b>Planificateur</b>",
       "TASK_MENU_TOUCH": "Faites glisser une tâche vers la gauche pour son menu : {{playIcon}} <b>Commencer le suivi du temps</b>, {{subtaskIcon}} <b>Ajouter une sous-tâche</b>",
       "TASK_MENU_TOUCH_NO_TRACKING": "Faites glisser une tâche vers la gauche pour son menu, p. ex. {{subtaskIcon}} <b>Ajouter une sous-tâche</b>",
-      "TIMER_RUNNING": "Le minuteur tourne. Appuyez à nouveau sur {{playIcon}} ou sur <kbd>{{key}}</kbd> pour mettre en pause.",
-      "TIMER_RUNNING_TOUCH": "Le minuteur tourne. Appuyez sur {{playIcon}} en haut pour mettre en pause.",
+      "TIMER_RUNNING": "Le minuteur tourne. Appuyez à nouveau sur {{pauseIcon}} ou sur <kbd>{{key}}</kbd> pour mettre en pause.",
+      "TIMER_RUNNING_TOUCH": "Le minuteur tourne. Appuyez sur {{pauseIcon}} en haut pour mettre en pause.",
       "TRACK_TIME": "Survolez la tâche et appuyez sur {{playIcon}} pour suivre le temps"
     },
     "WANT_MORE": {

@@ -3122,8 +3122,8 @@
       "PLANNER": "Planlegg de neste dagene i {{plannerIcon}} <b>Planlegger</b>",
       "TASK_MENU_TOUCH": "Sveip en oppgave mot venstre for menyen: {{playIcon}} <b>Begynn å spore tid</b>, {{subtaskIcon}} <b>Legg til underoppgave</b>",
       "TASK_MENU_TOUCH_NO_TRACKING": "Sveip en oppgave mot venstre for menyen, f.eks. {{subtaskIcon}} <b>Legg til underoppgave</b>",
-      "TIMER_RUNNING": "Tidtakeren går. Trykk {{playIcon}} igjen eller <kbd>{{key}}</kbd> for å pause.",
-      "TIMER_RUNNING_TOUCH": "Tidtakeren går. Trykk på {{playIcon}} øverst for å pause.",
+      "TIMER_RUNNING": "Tidtakeren går. Trykk {{pauseIcon}} igjen eller <kbd>{{key}}</kbd> for å pause.",
+      "TIMER_RUNNING_TOUCH": "Tidtakeren går. Trykk på {{pauseIcon}} øverst for å pause.",
       "TRACK_TIME": "Hold musepekeren over oppgaven og trykk {{playIcon}} for å spore tid"
     },
     "WANT_MORE": {

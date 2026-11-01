@@ -290,7 +290,7 @@ class CapacitorMainActivity : BridgeActivity() {
         val appContext = applicationContext
         Thread({
             try {
-                if (BackgroundSyncCredentialStore.get(appContext) != null) {
+                if (BackgroundSyncCredentialStore.hasAnyCredentials(appContext)) {
                     SyncReminderScheduler.ensureScheduled(appContext)
                 }
             } catch (e: Exception) {
