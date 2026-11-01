@@ -75,6 +75,7 @@ import { ChipListInputComponent } from '../../../ui/chip-list-input/chip-list-in
 import { unique } from '../../../util/unique';
 import { getErrorTxt } from '../../../util/get-error-text';
 import { mergeIssueProviderModelUpdates } from './issue-provider-model-merge.util';
+import { withPluginOptionLabels } from '../mapping-helper/plugin-option-labels';
 import {
   PLUGIN_OAUTH_TOKEN_KEY_CFG_KEY,
   shouldScopePluginOAuth,
@@ -239,6 +240,7 @@ export class DialogEditIssueProviderComponent {
 
   submit(isSkipClose = false): void {
     if (this.form.valid) {
+      this.model = this._withSelectedOptionLabels(this.model);
       if (this.isEdit) {
         this._store.dispatch(
           IssueProviderActions.updateIssueProvider({
@@ -572,6 +574,33 @@ export class DialogEditIssueProviderComponent {
 
       templateOptions.disabled = isDisabled;
     }
+  }
+
+  private _withSelectedOptionLabels(
+    model: Partial<IssueProvider>,
+  ): Partial<IssueProvider> {
+    const pluginConfig = (model as { pluginConfig?: Record<string, unknown> })
+      .pluginConfig;
+    if (!pluginConfig) {
+      return model;
+    }
+    const loadedSelects = this._pluginRegistry
+      .getConfigFields(this.issueProviderKey)
+      .filter((f) => f.type === 'select' && typeof f.loadOptions === 'function')
+      .map((f) => ({
+        key: f.key,
+        options: this._findFormlyField(
+          this.fields as FormlyFieldConfig[],
+          'pluginConfig.' + f.key,
+        )?.templateOptions?.options,
+      }));
+    if (!loadedSelects.length) {
+      return model;
+    }
+    return {
+      ...model,
+      pluginConfig: withPluginOptionLabels(pluginConfig, loadedSelects),
+    } as Partial<IssueProvider>;
   }
 
   private _findFormlyField(

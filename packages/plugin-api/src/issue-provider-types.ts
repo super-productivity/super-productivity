@@ -25,6 +25,9 @@ export interface PluginSearchResult {
    *  hex, rgb(a), hsl(a) or a color name (e.g. '#fbe983'); other values are
    *  ignored. A color the user set on the provider takes precedence. */
   color?: string;
+  /** Id of the parent issue. When a task for it already exists, the imported
+   *  task becomes its sub-task; otherwise it is added at top level. */
+  parentId?: string;
   /** Provider-specific fields used by issue display and field mappings */
   [key: string]: unknown;
 }
