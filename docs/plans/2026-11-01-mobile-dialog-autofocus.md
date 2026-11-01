@@ -119,3 +119,10 @@ finish-day). They raise no keyboard and stay as they are.
 
 Real on-screen keyboard behaviour (Android IME, iOS WKWebView) needs a device.
 See `tools/android-verify/`.
+
+Known gap, with no instance today: the `autoFocus` getter reads the
+`isTouchActive` signal on every `MatDialog.open`. A dialog opened synchronously
+inside an `effect()` or `computed()` would therefore track input-intent
+changes and could reopen when a hybrid device switches between mouse and touch.
+No effect in `src/` opens a dialog (measured 2026-11). If one ever does, read
+the signal with `untracked` in the getter.
