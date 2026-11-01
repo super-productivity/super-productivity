@@ -23,6 +23,28 @@ describe('TaskTitleComponent', () => {
     expect(component).toBeTruthy();
   });
 
+  describe('automatic text direction', () => {
+    for (const title of ['بررسی گزارش', 'Review گزارش', 'بررسی https://example.com']) {
+      it(`detects direction while displaying and editing ${title}`, () => {
+        fixture.componentRef.setInput('value', title);
+        fixture.detectChanges();
+        const display = fixture.nativeElement.querySelector('.display-value');
+        expect(display.matches(':dir(rtl)')).toBeTrue();
+
+        const displayDirection = getComputedStyle(display).direction;
+        component.focusInput();
+        fixture.detectChanges();
+        const textarea = fixture.nativeElement.querySelector('textarea');
+        const measure = fixture.nativeElement.querySelector('.height-measure');
+        expect(getComputedStyle(textarea).direction).toBe(displayDirection);
+        expect(getComputedStyle(measure).direction).toBe(
+          getComputedStyle(textarea).direction,
+        );
+        expect(textarea.value).toBe(title);
+      });
+    }
+  });
+
   describe('readonly mode', () => {
     it('should not enter editing mode when clicked in readonly mode', () => {
       fixture.componentRef.setInput('readonly', true);

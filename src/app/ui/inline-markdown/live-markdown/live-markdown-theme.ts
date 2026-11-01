@@ -30,7 +30,7 @@ export const liveMarkdownTheme = EditorView.theme({
     fontFamily: 'inherit',
     caretColor: 'currentColor',
   },
-  '.cm-line': { padding: '0' },
+  '.cm-line': { padding: '0', textAlign: 'start' },
   '.cm-gutters': { display: 'none' },
 
   '.cm-md-h1': { fontSize: '22px', lineHeight: '24px', fontWeight: 'bold' },
@@ -65,7 +65,7 @@ export const liveMarkdownTheme = EditorView.theme({
     fontSize: '20px',
     lineHeight: '1',
     verticalAlign: '-5px',
-    marginRight: 'var(--s-half, 4px)',
+    marginInlineEnd: 'var(--s-half, 4px)',
     color: 'var(--text-color-muted, inherit)',
     cursor: 'pointer',
     // The glyph's textContent is the ligature name (`check_box_outline_blank`);
@@ -98,8 +98,8 @@ export const liveMarkdownTheme = EditorView.theme({
     verticalAlign: 'top',
   },
   '.cm-md-quote': {
-    borderLeft: '3px solid var(--extra-border-color, currentColor)',
-    paddingLeft: 'var(--s, 8px)',
+    borderInlineStart: '3px solid var(--extra-border-color, currentColor)',
+    paddingInlineStart: 'var(--s, 8px)',
     color: 'var(--text-color-muted, inherit)',
   },
   '.cm-md-hr': {
