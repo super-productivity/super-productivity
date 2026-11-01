@@ -52,7 +52,7 @@
     [class.has-mobile-bottom-nav]="isShowMobileButtonNav()"
     [class.is-multi-selecting]="isMultiSelecting()"
     [class.has-vertical-action-bar]="isVerticalActionBar()"
-    [class.app-entrance]="isAppEntrance()"
+    [class.app-entrance]="isAppEntrance() && isDataLoaded()"
     [dir]="isRTL ? 'rtl' : 'ltr'"
   >
     <magic-side-nav
@@ -61,7 +61,10 @@
     >
     </magic-side-nav>
 
-    <main class="main-content">
+    <main
+      #mainContent
+      class="main-content"
+    >
       <right-panel>
         <header
           [class.isNotScrolled]="!layoutService.isWorkViewScrolled()"
@@ -72,9 +75,11 @@
           <banner></banner>
         </header>
 
+        <!-- The first route arrives with the data, whose entrance animates it in. -->
         <div
           #routeWrapper
           [@warpRoute]="getPage(o)"
+          [@.disabled]="isAppEntrance()"
           class="route-wrapper"
         >
           <router-outlet #o="outlet"></router-outlet>
@@ -95,8 +100,12 @@
 }
 <!-- -->
 
-<!-- One host for part 1 and the tour, so the chip can slide from one into the other. -->
-@if (onboardingHintService.currentStep() || quickTourService.currentStep()) {
+<!-- One host for part 1 and the tour, so the chip can slide from one into the other.
+     Waits for the shell entrance so the chip arrives after, and anchors to, settled content. -->
+@if (
+  !isAppEntrance() &&
+  (onboardingHintService.currentStep() || quickTourService.currentStep())
+) {
   <onboarding-hint></onboarding-hint>
 }
 

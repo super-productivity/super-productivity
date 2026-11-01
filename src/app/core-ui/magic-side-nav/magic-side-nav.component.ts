@@ -90,7 +90,6 @@ const elementUnderTooltips = (point: { x: number; y: number }): Element | null =
   host: {
     '[style.width.px]': 'hostWidthSignal()',
     '[class.animate]': 'animateWidth()',
-    '[class.initial-shell-enter]': 'playInitialShellEnter()',
     '[class.initial-enter]': 'playInitialEnter()',
     '[class.initializing]': '!areTransitionsReady()',
     '[class.resizing]': 'isResizing()',
@@ -152,12 +151,9 @@ export class MagicSideNavComponent implements OnDestroy, AfterViewInit {
   // Animate only for compactMode/fullMode toggle
   animateWidth = signal(false);
   areTransitionsReady = signal(false);
-  playInitialShellEnter = signal(false);
   playInitialEnter = signal(false);
-  private _hasPlayedInitialShellEnter = false;
   private _hasPlayedInitialEnter = false;
   private _animateTimeoutId: number | null = null;
-  private _initialShellEnterTimeoutId: number | null = null;
   private _initialEnterTimeoutId: number | null = null;
 
   // Resize functionality
@@ -278,24 +274,6 @@ export class MagicSideNavComponent implements OnDestroy, AfterViewInit {
 
     effect(() => {
       if (
-        this._hasPlayedInitialShellEnter ||
-        !this.areTransitionsReady() ||
-        this.playInitialShellEnter() ||
-        this._initialShellEnterTimeoutId != null
-      ) {
-        return;
-      }
-
-      this._hasPlayedInitialShellEnter = true;
-      this.playInitialShellEnter.set(true);
-      this._initialShellEnterTimeoutId = window.setTimeout(() => {
-        this.playInitialShellEnter.set(false);
-        this._initialShellEnterTimeoutId = null;
-      }, INITIAL_ENTER_ANIMATION_DURATION_MS);
-    });
-
-    effect(() => {
-      if (
         this._hasPlayedInitialEnter ||
         !this.areTransitionsReady() ||
         !this.isDataLoaded() ||
@@ -329,11 +307,6 @@ export class MagicSideNavComponent implements OnDestroy, AfterViewInit {
     if (this._animateTimeoutId != null) {
       window.clearTimeout(this._animateTimeoutId);
       this._animateTimeoutId = null;
-    }
-
-    if (this._initialShellEnterTimeoutId != null) {
-      window.clearTimeout(this._initialShellEnterTimeoutId);
-      this._initialShellEnterTimeoutId = null;
     }
 
     if (this._initialEnterTimeoutId != null) {

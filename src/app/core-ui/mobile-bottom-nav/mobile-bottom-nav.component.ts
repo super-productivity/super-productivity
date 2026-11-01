@@ -67,6 +67,7 @@ export class MobileBottomNavComponent {
   private readonly _globalConfigService = inject(GlobalConfigService);
   private readonly _router = inject(Router);
 
+  /** Slides the bar up as the app first shows it (the launch screen leaves its place empty). */
   isEntrance = input(false);
 
   readonly T = T;
