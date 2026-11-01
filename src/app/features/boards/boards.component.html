@@ -1,82 +1,20 @@
-<mat-tab-group
-  mat-stretch-tabs="false"
-  dynamicHeight="true"
-  cdkScrollable
-  cdkDropList
-  cdkDropListOrientation="horizontal"
-  cdkDropListElementContainer=".mat-mdc-tab-labels"
-  (cdkDropListDropped)="drop($event)"
-  (selectedIndexChange)="onTabChange($event)"
-  [selectedIndex]="selectedTabIndex()"
->
-  @for (board of boards(); track board.id; let i = $index) {
-    <mat-tab>
-      <ng-template mat-tab-label>
-        <div
-          cdkDrag
-          cdkDragLockAxis="x"
-          cdkDragRootElement=".mat-mdc-tab"
-          cdkDragPreviewClass="boards-drag-preview"
-          [cdkDragStartDelay]="dragStartDelay"
-          [matContextMenuTriggerFor]="boardContextMenu"
-          [matContextMenuTriggerData]="{ boardCfg: board }"
-        >
-          {{ board.title | translate }}
-        </div>
-      </ng-template>
-      <ng-template matTabContent>
-        <board
-          [boardCfg]="board"
-          cdkDropListGroup
-        ></board>
-      </ng-template>
-    </mat-tab>
-  }
-
-  <mat-tab>
-    <ng-template mat-tab-label>
-      <div class="tab-header-item">
-        <mat-icon>add_circle</mat-icon>
-      </div>
-    </ng-template>
-
-    <ng-template matTabContent>
-      <div class="board-add-wrapper">
-        <h2>{{ T.F.BOARDS.V.ADD_NEW_BOARD | translate }}</h2>
-        <board-edit
-          [boardCfg]="DEFAULT_BOARD_CFG"
-          (afterSave)="goToLastIndex()"
-        ></board-edit>
-      </div>
-    </ng-template>
-  </mat-tab>
-</mat-tab-group>
-
-<mat-menu #boardContextMenu>
-  <ng-template
-    matMenuContent
-    let-board="boardCfg"
-  >
+@if (board(); as board) {
+  <board
+    [@viewSwitch]="{ value: switchState(), params: switchParams() }"
+    (@viewSwitch.done)="onSwitchDone($event.toState)"
+    [boardCfg]="board"
+    cdkDropListGroup
+  ></board>
+} @else if (!boardId()) {
+  <div class="no-views">
+    <p>{{ T.F.BOARDS.V.NO_VIEWS_MSG | translate }}</p>
     <button
-      mat-menu-item
-      (click)="editBoard(board)"
+      mat-flat-button
+      color="primary"
+      (click)="boardsService.createBoard()"
     >
-      <mat-icon>edit</mat-icon>
-      {{ T.G.EDIT | translate }}
+      <mat-icon>add</mat-icon>
+      {{ T.F.BOARDS.V.NO_VIEWS_BTN | translate }}
     </button>
-    <button
-      mat-menu-item
-      (click)="duplicateBoard(board)"
-    >
-      <mat-icon>file_copy</mat-icon>
-      {{ T.G.DUPLICATE | translate }}
-    </button>
-    <button
-      mat-menu-item
-      (click)="removeBoard(board)"
-    >
-      <mat-icon class="color-warn-i">delete_forever</mat-icon>
-      {{ T.G.DELETE | translate }}
-    </button>
-  </ng-template>
-</mat-menu>
+  </div>
+}

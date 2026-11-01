@@ -1,0 +1,52 @@
+:host {
+  display: block;
+}
+
+.view-title {
+  width: 100%;
+}
+
+.field-label,
+.sections-heading {
+  display: block;
+  margin: 0 0 var(--s);
+  color: var(--text-color-muted);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: var(--letter-spacing-wide);
+}
+
+// Columns sits next to the toggle on every width: the toggle's basis is 0, so
+// it shrinks instead of wrapping (its two segments still fit at 320px).
+.layout-row {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+}
+
+// Basis 0: the group's own width is 100%, which would push Columns to the
+// next line.
+.layout-toggle {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.cols {
+  // Fits "Columns"; its error may wrap to two lines.
+  flex: 0 0 104px;
+}
+
+.hint {
+  margin: var(--s) 0 var(--s3);
+  color: var(--text-color-muted);
+}
+
+.sections {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+}
+
+.add-section {
+  margin-top: var(--s2);
+}

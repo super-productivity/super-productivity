@@ -92,6 +92,9 @@ import { OnboardingHintService } from './features/onboarding/onboarding-hint.ser
 import { QuickTourService } from './features/onboarding/quick-tour.service';
 import { MaterialIconsLoaderService } from './ui/material-icons-loader.service';
 import { BrowserTitleService } from './core/browser-title/browser-title.service';
+import { ViewTaskListRegistry } from './features/tasks/view-task-list-registry.service';
+import { BoardsService } from './features/boards/boards.service';
+import { DIALOG_AUTO_FOCUS_TYPING } from './util/dialog-auto-focus';
 
 const ENTRANCE_ANIMATION_DURATION = 1500;
 
@@ -145,6 +148,7 @@ export class AppComponent implements OnDestroy, AfterViewInit {
   private _matDialog = inject(MatDialog);
   private _markdownPasteService = inject(MarkdownPasteService);
   private _taskService = inject(TaskService);
+  private _boardsService = inject(BoardsService);
   private _taskAttachmentService = inject(TaskAttachmentService);
   private _translateService = inject(TranslateService);
   private _projectService = inject(ProjectService);
@@ -178,6 +182,12 @@ export class AppComponent implements OnDestroy, AfterViewInit {
   private _syncTriggerService = inject(SyncTriggerService);
   readonly workContextService = inject(WorkContextService);
   readonly layoutService = inject(LayoutService);
+  private readonly _viewTaskListRegistry = inject(ViewTaskListRegistry);
+  // On a view shown as a task list, the add-task bar adds into the view (its
+  // rules applied) instead of the project or tag that was open before.
+  readonly viewAddTarget = computed(
+    () => this._viewTaskListRegistry.addTarget()?.newTaskTarget() ?? null,
+  );
   readonly globalThemeService = inject(GlobalThemeService);
   readonly _store = inject(Store);
   private _sectionService = inject(SectionService);
@@ -405,7 +415,16 @@ export class AppComponent implements OnDestroy, AfterViewInit {
   }
 
   getPage(outlet: RouterOutlet): string {
-    return outlet.activatedRouteData.page || 'one';
+    const page = outlet.activatedRouteData.page || 'one';
+    // A view just created gets its own forward motion (see warpRoute).
+    if (
+      page === 'boards' &&
+      outlet.isActivated &&
+      outlet.activatedRoute.snapshot.params['boardId'] === this._boardsService.arrivalId()
+    ) {
+      return 'view-arrival';
+    }
+    return page;
   }
 
   /**
@@ -425,7 +444,10 @@ export class AppComponent implements OnDestroy, AfterViewInit {
     return this._activeWorkContextId() ?? null;
   }
 
-  onTaskAdded({ taskId }: TaskAddEvent): void {
+  onTaskAdded(ev: TaskAddEvent): void {
+    // Read when the task is added: the view may have closed meanwhile.
+    void this._viewTaskListRegistry.addTarget()?.afterTaskAdd(ev);
+    const { taskId } = ev;
     this.layoutService.setPendingFocusTaskId(taskId);
     this.layoutService.scrollToNewTask(taskId);
     if (this.onboardingHintService.shouldAutoCloseFirstTaskComposer(taskId)) {
@@ -472,7 +494,10 @@ export class AppComponent implements OnDestroy, AfterViewInit {
     if (!ctxId || !ctxType) return;
     const title = await firstValueFrom(
       this._matDialog
-        .open(DialogPromptComponent, { data: { placeholder: T.WW.ADD_SECTION_TITLE } })
+        .open(DialogPromptComponent, {
+          data: { placeholder: T.WW.ADD_SECTION_TITLE },
+          autoFocus: DIALOG_AUTO_FOCUS_TYPING,
+        })
         .afterClosed(),
     );
     if (typeof title === 'string' && title.trim()) {

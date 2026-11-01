@@ -25,6 +25,7 @@ import { TaskShortcutService } from '../../features/tasks/task-shortcut.service'
 import { TODAY_TAG } from '../../features/tag/tag.const';
 import { DialogConfirmComponent } from '../../ui/dialog-confirm/dialog-confirm.component';
 import { TaskViewCustomizerService } from '../../features/task-view-customizer/task-view-customizer.service';
+import { DIALOG_AUTO_FOCUS_TYPING } from '../../util/dialog-auto-focus';
 
 // NOTE: Relying on Angular CDK overlay CSS class names keeps shortcut suppression simple.
 // If CDK changes these class names we only need to adjust the helpers below.
@@ -290,7 +291,10 @@ export class ShortcutService {
           await import('../../features/project/dialogs/create-project/dialog-create-project.component');
         if (this._matDialog.openDialogs.length === 0) {
           this._matDialog
-            .open(DialogCreateProjectComponent, { restoreFocus: true })
+            .open(DialogCreateProjectComponent, {
+              restoreFocus: true,
+              autoFocus: DIALOG_AUTO_FOCUS_TYPING,
+            })
             .afterClosed()
             .subscribe((newProjectId: string | undefined) => {
               if (newProjectId) {

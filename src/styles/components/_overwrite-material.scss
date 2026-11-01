@@ -187,6 +187,46 @@ body .mat-mdc-dialog-surface {
   }
 }
 
+// Full screen on phones, a normal dialog from xs up: panelClass
+// 'fullscreen-xs-dialog'. Title and actions stay put while the content
+// scrolls (the flex layout above). Three classes: enough to beat the global
+// 96vw cap, and still below the iOS keyboard rule, which keeps capping the
+// height to what the keyboard leaves.
+.cdk-overlay-pane.mat-mdc-dialog-panel.fullscreen-xs-dialog {
+  @include media-queries.mq(xs, max) {
+    --mat-dialog-container-shape: 0;
+    width: 100vw !important;
+    max-width: none !important;
+    height: 100dvh !important;
+    max-height: none !important;
+    margin: 0;
+
+    .mat-mdc-dialog-surface {
+      // Edge-to-edge web views (iOS PWA): keep the content off the notch and
+      // the home indicator.
+      padding: var(--safe-area-top) var(--safe-area-right) var(--safe-area-bottom)
+        var(--safe-area-left);
+    }
+
+    .mat-mdc-dialog-content {
+      max-height: none;
+    }
+  }
+}
+
+// Native mobile pads the overlay wrapper by the safe areas already (above):
+// the pane fills what is left, and the surface needs no padding of its own.
+body.isNativeMobile .mat-mdc-dialog-panel.fullscreen-xs-dialog {
+  @include media-queries.mq(xs, max) {
+    width: calc(100vw - var(--safe-area-left) - var(--safe-area-right)) !important;
+    height: calc(100dvh - var(--safe-area-top) - var(--safe-area-bottom)) !important;
+
+    .mat-mdc-dialog-surface {
+      padding: 0;
+    }
+  }
+}
+
 .project-complete-fullscreen-dialog {
   width: 100vw !important;
   height: 100vh !important;

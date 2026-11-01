@@ -1,0 +1,167 @@
+@use '../../../../styles/_globals.scss' as *;
+
+// The column's parts are the panel's flex items.
+:host {
+  display: contents;
+}
+
+planner-task {
+  // Same row rhythm and hairlines as the planner and the main task list.
+  margin-bottom: var(--task-list-row-gap);
+  // planner-task draws its own box border, so use the row edge token.
+  border-top: var(--task-row-edge);
+
+  &:last-child {
+    border-bottom: var(--task-row-edge);
+  }
+}
+
+// Opened from the header "+", above the column's cards.
+.panel-add-task-bar {
+  margin: var(--s);
+}
+
+header {
+  padding: var(--s-half) var(--s2);
+  padding-right: var(--s-half);
+  display: flex;
+  align-items: center;
+  // As tall with or without the "+": the title alone is a button too.
+  min-height: calc(var(--s5) + 2 * var(--s-half));
+
+  //@include mousePrimaryDevice() {
+  //  button {
+  //    opacity: 0;
+  //  }
+  //  &:hover {
+  //    button {
+  //      opacity: 1;
+  //    }
+  //  }
+  //}
+
+  // Material's own icon-button look, like the "+" in a section header.
+  button {
+    //margin-left: auto;
+    margin-left: 10px;
+  }
+
+  // Same label treatment as the task-list section headings (collapsible
+  // .task-section): a column header must not read like the cards below it.
+  .title {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    letter-spacing: var(--letter-spacing-wide);
+    color: var(--text-color-muted);
+    // `auto` (not a fixed gap): the meta next to it is omitted when the panel is
+    // empty, so the title has to be what pushes the "+" to the far edge.
+    margin-right: auto;
+
+    // A button (it opens the editor): the header's height to tap, inset a
+    // little so the focus ring doesn't touch the text.
+    align-self: stretch;
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    padding-inline: var(--s-half);
+    margin-left: calc(-1 * var(--s-half));
+    border-radius: var(--card-border-radius);
+    cursor: pointer;
+
+    &:hover {
+      color: var(--text-color);
+    }
+  }
+
+  .tasks-total-estimate {
+    white-space: nowrap;
+    margin-left: var(--s);
+    margin-right: var(--s-half);
+    display: flex;
+    align-items: center;
+    gap: var(--s-quarter);
+    font-size: var(--font-size-sm);
+    color: var(--text-color-muted);
+
+    mat-icon {
+      font-size: 14px;
+      line-height: 14px;
+      height: 14px;
+      width: 14px;
+    }
+  }
+}
+
+.task-items {
+  overflow: auto;
+  padding: 0 var(--s);
+  border-radius: 8px;
+  min-height: 100px;
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+// The open cards take the column's free height: an empty or short column is
+// a drop target to its bottom.
+.drop-list {
+  flex: 1 0 auto;
+  min-height: var(--s5);
+}
+
+.show-all-btn {
+  align-self: center;
+  margin-bottom: var(--s);
+}
+
+.schedule-btn {
+  opacity: 0.7;
+  position: relative;
+  margin-top: auto;
+  margin-bottom: auto;
+  height: 100% !important;
+  border-radius: var(--card-border-radius);
+
+  ::ng-deep {
+    .mat-mdc-button-persistent-ripple {
+      border-radius: var(--card-border-radius);
+    }
+  }
+
+  &:hover {
+    opacity: 1;
+  }
+}
+
+.schedule-btn[data-scheduled-date-color='overdue'] {
+  mat-icon {
+    color: var(--c-warn) !important;
+  }
+
+  .time-badge {
+    color: var(--c-warn);
+  }
+}
+
+.time-badge {
+  @include center;
+  margin-top: 10px;
+  font-size: 12px;
+  z-index: 10;
+  line-height: 1;
+  text-align: center;
+  padding: 1px var(--s-quarter) 0;
+  @include extraBorder();
+  border-radius: var(--card-border-radius);
+  white-space: nowrap;
+
+  // avoid affecting drag handle
+  pointer-events: none;
+
+  border-color: var(--extra-border-color);
+  background: var(--bg-lighter);
+
+  ::ng-deep span {
+    font-size: 10px;
+  }
+}

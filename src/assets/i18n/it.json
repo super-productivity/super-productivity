@@ -3122,8 +3122,8 @@
       "PLANNER": "Pianifica i prossimi giorni in {{plannerIcon}} <b>Pianificatore</b>",
       "TASK_MENU_TOUCH": "Scorri un'attività verso sinistra per il suo menu: {{playIcon}} <b>Inizia a tracciare il tempo</b>, {{subtaskIcon}} <b>Aggiungi sotto-attività</b>",
       "TASK_MENU_TOUCH_NO_TRACKING": "Scorri un'attività verso sinistra per il suo menu, ad es. {{subtaskIcon}} <b>Aggiungi sotto-attività</b>",
-      "TIMER_RUNNING": "Il timer è in corso. Premi di nuovo {{playIcon}} o <kbd>{{key}}</kbd> per metterlo in pausa.",
-      "TIMER_RUNNING_TOUCH": "Il timer è in corso. Tocca {{playIcon}} in alto per metterlo in pausa.",
+      "TIMER_RUNNING": "Il timer è in corso. Premi di nuovo {{pauseIcon}} o <kbd>{{key}}</kbd> per metterlo in pausa.",
+      "TIMER_RUNNING_TOUCH": "Il timer è in corso. Tocca {{pauseIcon}} in alto per metterlo in pausa.",
       "TRACK_TIME": "Passa il mouse sull'attività e premi {{playIcon}} per tracciare il tempo"
     },
     "WANT_MORE": {

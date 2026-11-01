@@ -40,7 +40,7 @@ import {
 import { MarkdownModule, MARKED_OPTIONS, SANITIZE } from 'ngx-markdown';
 import { MAT_FORM_FIELD_DEFAULT_OPTIONS } from '@angular/material/form-field';
 import { MAT_DIALOG_DEFAULT_OPTIONS } from '@angular/material/dialog';
-import { IS_TOUCH_PRIMARY } from './app/util/is-mouse-primary';
+import { createDialogDefaultOptions } from './app/util/dialog-auto-focus';
 import { FeatureStoresModule } from './app/root-store/feature-stores.module';
 import { REMOTE_APPLY_LISTENER } from './app/op-log/apply/remote-apply-listener.token';
 import { RecentlyDeletedService } from './app/features/tasks/recently-deleted/recently-deleted.service';
@@ -89,6 +89,8 @@ import { initializeMatMenuTouchFix } from './app/features/tasks/task-context-men
 import { Log, SyncLog } from './app/core/log';
 import { setLegacyKdfWarningHandler } from '@sp/sync-core';
 import { OperationWriteFlushService } from './app/op-log/sync/operation-write-flush.service';
+import { BackgroundExitSyncService } from './app/imex/sync/background-exit-sync.service';
+import { handleIosBackground } from './app/features/ios/handle-ios-background';
 import { TaskService } from './app/features/tasks/task.service';
 import { LOCAL_REST_API_FEATURE_ROUTES } from './app/core/electron/local-rest-api-feature-routes';
 import { LocalRestApiTaskRoutesService } from './app/features/tasks/local-rest-api-task-routes.service';
@@ -305,10 +307,9 @@ bootstrapApplication(AppComponent, {
       provide: MAT_FORM_FIELD_DEFAULT_OPTIONS,
       useValue: { appearance: 'fill', subscriptSizing: 'dynamic' },
     },
-    // Disable autofocus for touch-primary devices to prevent virtual keyboard popup
-    ...(IS_TOUCH_PRIMARY
-      ? [{ provide: MAT_DIALOG_DEFAULT_OPTIONS, useValue: { autoFocus: false } }]
-      : []),
+    // On touch, dialogs focus their container instead of their first field so
+    // the on-screen keyboard does not cover them (see dialog-auto-focus.ts).
+    { provide: MAT_DIALOG_DEFAULT_OPTIONS, useValue: createDialogDefaultOptions() },
     provideAnimationsAsync(),
     // Keep component <style> elements once added. Removing them when the last
     // instance is destroyed means every snack and dialog adds its stylesheets on
@@ -649,8 +650,13 @@ if (IS_ANDROID_WEB_VIEW) {
   });
 }
 
-// iOS: Flush pending operations to IndexedDB when app goes to background.
+// iOS: persist and push pending ops when the app leaves the foreground.
+// A suspended app leaves its ops invisible to other devices until reopened.
 if (IS_IOS_NATIVE) {
+  // appStateChange, not `pause` (didEnterBackground): it fires first, on
+  // willResignActive, so the budget is requested before iOS can suspend the
+  // WebView. It also fires for Control Center and the notification shade; the
+  // push skips when no op is unsynced, so those usually cost no sync.
   CapacitorApp.addListener('appStateChange', async ({ isActive }) => {
     if (isActive) {
       return;
@@ -658,18 +664,18 @@ if (IS_IOS_NATIVE) {
     // Release the audio output stream so a silent-but-running AudioContext does
     // not keep the audio hardware (and the process) awake in the background (#8243).
     suspendAudioContext();
-    const taskId = await BackgroundTask.beforeExit(async () => {
-      try {
+    const taskId = await BackgroundTask.beforeExit(() =>
+      handleIosBackground({
         // Dispatch any accumulated tracked time so it is enqueued before the
-        // op-log drain below. iOS suspends the WebView seconds after this, so
-        // both the dispatch and the persist must happen inside this budget.
-        appInjector?.get(TaskService).flushAccumulatedTimeSpent();
-        await flushPendingOperations('iOS');
-      } catch (e) {
-        Log.err('iOS background: operation flush failed', e);
-      }
-      BackgroundTask.finish({ taskId });
-    });
+        // op-log drain inside the push. iOS suspends the WebView seconds after
+        // this, so the dispatch, persist and push must happen inside this budget.
+        flushAccumulatedTimeSpent: () =>
+          appInjector?.get(TaskService).flushAccumulatedTimeSpent(),
+        pushPendingOps: async () =>
+          appInjector?.get(BackgroundExitSyncService).flushAndPush(),
+        finish: () => BackgroundTask.finish({ taskId }),
+      }),
+    );
   });
 }
 

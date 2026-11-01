@@ -946,6 +946,18 @@ export class OperationLogUploadService {
       const message = err instanceof Error ? err.message : 'Unknown error';
       OpLog.error(`OperationLogUploadService: Snapshot upload failed: ${message}`);
       handleStorageQuotaError(err);
+      // #11344/#11352: a file-based remote is plain storage. It cannot judge a
+      // snapshot: the adapter returns its only verdict (REPAIR_STALE) as a
+      // result. A thrown error (auth, permission, a network message the
+      // retryable patterns miss, a target switch) says nothing about the op.
+      // Classifying it as rejected made the snapshot a permanent upload barrier,
+      // so re-throw: the op stays pending and the error reaches the user.
+      if (
+        syncProvider.providerMode === 'fileSnapshotOps' &&
+        !isRetryableUploadError(err instanceof Error ? err : message)
+      ) {
+        throw err;
+      }
 
       const errorCode = getSyncErrorCode(err) ?? this._getLegacyErrorCode(message);
 

@@ -31,6 +31,8 @@ import {
 import { MatDivider } from '@angular/material/divider';
 import { ESTIMATE_OPTIONS } from '../../add-task-bar/add-task-bar.const';
 import { Task, TaskPriority, TaskWithSubTasks } from '../../task.model';
+import { VIEW_TASK_LIST, ViewTaskListHost } from '../../view-task-list.token';
+import { ViewTaskListRegistry } from '../../view-task-list-registry.service';
 import { from, Observable, of, ReplaySubject, Subject } from 'rxjs';
 import {
   delay,
@@ -101,6 +103,7 @@ import { getWontDoChanges } from '../../util/is-wont-do-task';
 import { IssueSyncStateService } from '../../../issue/two-way-sync/issue-sync-state.service';
 import { PlainspaceHandoffService } from '../../../issue/providers/plainspace/plainspace-handoff.service';
 import { PlainspaceMember } from '../../../issue/providers/plainspace/plainspace-api.service';
+import { DIALOG_AUTO_FOCUS_TYPING } from '../../../../util/dialog-auto-focus';
 
 @Component({
   selector: 'task-context-menu-inner',
@@ -225,11 +228,15 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
   projectFolderMap = computed(() => this._menuTreeService.projectFolderMap());
   tagFolderMap = computed(() => this._menuTreeService.tagFolderMap());
 
-  isShowMoveFromAndToBacklogBtns$: Observable<boolean> =
-    this._workContextService.activeWorkContext$.pipe(
-      take(1),
-      map((ctx) => !!ctx.isEnableBacklog),
-    );
+  // In a view the active context is stale and there's no backlog of its own.
+  private readonly _viewTaskList = inject(VIEW_TASK_LIST, { optional: true });
+  private readonly _viewTaskListRegistry = inject(ViewTaskListRegistry);
+  isShowMoveFromAndToBacklogBtns$: Observable<boolean> = this._viewTaskList
+    ? of(false)
+    : this._workContextService.activeWorkContext$.pipe(
+        take(1),
+        map((ctx) => !!ctx.isEnableBacklog),
+      );
 
   private _destroy$: Subject<boolean> = new Subject<boolean>();
   private _isTaskDeleteTriggered: boolean = false;
@@ -622,11 +629,30 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
   }
 
   moveToTop(): void {
+    const view = this._viewHostForRow();
+    if (view) {
+      view.moveRow(this.task.id, 'top');
+      return;
+    }
     this._taskService.moveToTop(this.task.id, this.task.parentId, this.isBacklog);
   }
 
   moveToBottom(): void {
+    const view = this._viewHostForRow();
+    if (view) {
+      view.moveRow(this.task.id, 'bottom');
+      return;
+    }
     this._taskService.moveToBottom(this.task.id, this.task.parentId, this.isBacklog);
+  }
+
+  // The row's own view column, or, from outside the rows (the task detail
+  // panel), the open view's column showing it.
+  private _viewHostForRow(): ViewTaskListHost | null {
+    if (this._viewTaskList) {
+      return this._viewTaskList.isRow(this.task.id) ? this._viewTaskList : null;
+    }
+    return this._viewTaskListRegistry.hostForRow(this.task.id);
   }
 
   @throttle(200, { leading: true, trailing: false })
@@ -687,6 +713,7 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
   openAddNewTag(): void {
     this._matDialog
       .open(DialogPromptComponent, {
+        autoFocus: DIALOG_AUTO_FOCUS_TYPING,
         data: {
           placeholder: T.F.TAG.TTL.ADD_NEW_TAG,
         },

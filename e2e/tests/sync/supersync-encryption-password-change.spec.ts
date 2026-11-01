@@ -16,7 +16,7 @@ import {
   SuperSyncDownloadOpsResponseSchema,
   SuperSyncUploadOpsResponseSchema,
   type SuperSyncServerOperation,
-} from '../../../packages/shared-schema/src';
+} from '../../../packages/shared-schema/src/supersync-http-contract';
 
 interface SyncStatusResponse {
   storageUsedBytes: number;

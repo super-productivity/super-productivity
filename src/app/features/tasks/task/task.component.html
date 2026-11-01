@@ -61,10 +61,14 @@
           ></task-title>
 
           @if (t.tagIds?.length || t.projectId || t.repeatCfgId || t.issueId) {
+            <!-- In a view, chips follow the view (like its cards), not the
+                 stale active context: project shown, required tags hidden. -->
             <tag-list
               [task]="t"
               [isShowProjectTagNever]="isInSubTaskList()"
               [isTouchSelectionMode]="isTouchSelectionMode()"
+              [isShowProjectTagAlways]="isInView && !isInSubTaskList()"
+              [tagsToHide]="viewTagsToHide()"
             ></tag-list>
           }
         </div>

@@ -42,7 +42,7 @@ const captureDarkScenes = async (
   await resetView(page);
 
   // 03 — Eisenhower board
-  await gotoAndSettle(page, '/#/boards');
+  await gotoAndSettle(page, '/#/boards/EISENHOWER_MATRIX');
   await page.locator('boards').first().waitFor({ state: 'visible' });
   await page
     .locator('board-panel, .panel, mat-card')

@@ -113,24 +113,13 @@ WorkManager poll (15-min, guaranteed)
 
 ## Possible improvement: other sync providers
 
-### Dropbox / WebDAV
+### WebDAV / Nextcloud (implemented)
 
-The `BackgroundSyncProvider` interface already supports this. A Dropbox implementation would:
+`runFileSyncReminderCheck` (FileSyncReminderCheck.kt) downloads `sync-data.json` with `If-None-Match`, reads the reminders from the state snapshot (`SyncFileReminderReader`), and diffs them against the reminder slots of the previous read. It does not implement `BackgroundSyncProvider`: a file has no op stream, so it diffs state rather than ops. Not covered: the split-file format, a fire-time stale check like SuperSync's, and repeat-config occurrence reminders.
 
-1. Download `sync-data.json` (~100KB+) via the Dropbox API
-2. Diff against a locally cached copy to detect task completions/deletions
-3. Return the set of taskIds to cancel
+### Dropbox / OneDrive
 
-This is heavier than SuperSync's operation-based API but workable for the ~15-minute poll interval. WebDAV would be similar.
-
-**Key difference**: Dropbox/WebDAV providers would need to cache the previous state locally to compute diffs, adding storage overhead. SuperSync's seq-based pagination avoids this entirely.
-
-### Implementation would add:
-
-- `DropboxBackgroundProvider` implementing `BackgroundSyncProvider`
-- `WebDavBackgroundProvider` implementing `BackgroundSyncProvider`
-- Credential bridging for Dropbox OAuth tokens and WebDAV credentials
-- Provider selection logic in `SyncReminderWorker` based on stored provider ID
+The same reader and diff would work; each needs its own download request and OAuth token refresh in native code.
 
 ---
 

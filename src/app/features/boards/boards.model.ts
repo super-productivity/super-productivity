@@ -42,6 +42,30 @@ export interface BoardSrcCfg {
   sortByDue?: 'off' | 'asc' | 'desc';
   // optional since newly added
   backlogState?: BoardPanelCfgTaskTypeFilter;
+  // The rule fields below are optional and stored as plain strings/booleans:
+  // a closed union would make typia reject a value a newer client adds (see
+  // validation-fn.ts). Read them through `panelToCriteria`; unknown values
+  // mean "any". Absent = no rule.
+  // STORED VOCABULARY, locked: released clients validate and read these types
+  // and words, so they may only be extended (a new word reads as "any"),
+  // never changed or reused with another meaning. Types: the rule strings,
+  // `sortKey` string, `isUntagged` boolean, `BoardCfg.boardCols` number.
+  // Words: `TaskDateRule` strings; 'none'; estimate/time minimums as decimal
+  // ms strings; priority '1'..'3'; `sortBy` wins over `sortKey`. Details:
+  // docs/plans/2026-10-30-saved-views.md § Stored vocabulary.
+  // Planned date: a `TaskDateRule` ('today', 'thisWeek', …).
+  dueState?: string;
+  // Deadline: a `TaskDateRule`.
+  deadlineState?: string;
+  // 'none' or a minimum in ms, e.g. '1800000'.
+  estimateRule?: string;
+  timeSpentRule?: string;
+  // 'none', '1' (low), '2', '3' (high).
+  priorityRule?: string;
+  isUntagged?: boolean;
+  // Sort keys `sortBy` can't hold ('deadline', 'timeSpent', 'priority',
+  // 'tag'); `sortBy` wins when both are set. See `getPanelSortKey`.
+  sortKey?: string;
 }
 
 export interface BoarFieldsToRemove {
@@ -57,6 +81,13 @@ export interface BoardPanelCfg extends BoardSrcCfg {
 export interface BoardCfg {
   id: string;
   title: string;
+  // 1 (or less) = a list: sections stacked; more = a board with that many
+  // columns.
   cols: number;
   panels: BoardPanelCfg[];
+  // Optional since newly added: the column count a list (`cols <= 1`) gets
+  // back when it becomes a board again. Read only while a list and only as an
+  // integer >= 2 (see `getLayoutChanges`); stale and unread while a board,
+  // and never removed. Locked like the panel rules' stored vocabulary.
+  boardCols?: number;
 }

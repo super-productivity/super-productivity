@@ -1,5 +1,10 @@
 # Plugin Development Quick Start
 
+**Building a plugin of your own, outside this repository?** Start from the
+[plugin starter](../plugin-starter): plain JavaScript, no dependencies, works in
+any folder. The options below copy a bundled plugin and only build inside
+`packages/plugin-dev/`.
+
 Pick the existing plugin closest to what you want to build and copy its folder
 within `packages/plugin-dev/`.
 

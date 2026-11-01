@@ -159,6 +159,15 @@
             <h2 class="mat-h2 section-title">
               {{ 'PS.TABS.TIME_TRACKING' | translate }}
             </h2>
+            <!-- Same switch as in General › App Features: people look for it here. -->
+            <section class="config-section time-tracking-switch">
+              <config-form
+                (save)="saveTimeTrackingSwitch($event)"
+                [cfg]="globalCfg.appFeatures"
+                [formCfg]="timeTrackingSwitchFormCfg"
+                sectionKey="appFeatures"
+              ></config-form>
+            </section>
             @for (section of timeTrackingFormCfg; track section.key) {
               <section class="config-section section-{{ section.key }}">
                 <config-section

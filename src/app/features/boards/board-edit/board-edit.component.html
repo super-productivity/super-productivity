@@ -1,31 +1,5 @@
-<formly-form
-  [form]="form"
-  (modelChange)="boardCfg.set($event)"
-  [fields]="BOARDS_FORM"
-  [model]="boardCfg()"
-></formly-form>
-
-@if (!isHideBtns()) {
-  <div class="btn-wrapper">
-    @if (isEdit()) {
-      <button
-        (click)="removeBoard()"
-        mat-button
-      >
-        <mat-icon class="color-warn-i">delete_forever</mat-icon>
-        <span class="text">{{ T.G.DELETE | translate }}</span>
-      </button>
-    }
-
-    <button
-      [disabled]="!form.valid"
-      (click)="save()"
-      color="primary"
-      mat-flat-button
-      type="submit"
-    >
-      <mat-icon>save</mat-icon>
-      {{ T.G.SAVE | translate }}
-    </button>
-  </div>
-}
+<view-editor
+  [board]="boardCfg()"
+  [isNew]="!isEdit()"
+  [initialOpenPanelId]="openPanelId()"
+></view-editor>

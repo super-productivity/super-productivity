@@ -37,11 +37,17 @@ export class DialogBoardEditComponent {
 
   data = inject<{
     board: BoardCfg;
+    // Creates a new view: no Delete button, create title.
+    isCreate?: boolean;
+    // Translation keys shown above the form, e.g. what "Save as view" drops.
+    hints?: string[];
+    // The section or column shown open (default: the first).
+    openPanelId?: string;
   }>(MAT_DIALOG_DATA);
   boarEditCmp = viewChild('boarEditCmp', { read: BoardEditComponent });
 
-  close(): void {
-    this._matDialogRef.close();
+  close(savedBoardId?: string): void {
+    this._matDialogRef.close(savedBoardId);
   }
 
   protected readonly T = T;
@@ -66,7 +72,7 @@ export class DialogBoardEditComponent {
   }
 
   save(): void {
+    // Closes through `afterSave`; with an invalid field the editor shows why.
     this.boarEditCmp()?.save();
-    this.close();
   }
 }

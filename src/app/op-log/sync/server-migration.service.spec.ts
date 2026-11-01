@@ -242,6 +242,113 @@ describe('ServerMigrationService', () => {
       expect(opLogStoreSpy.append).not.toHaveBeenCalled();
     });
 
+    describe('file-based provider with a rejected server-migration snapshot (#11344)', () => {
+      const createFileProvider = (latestSeq: number): OperationSyncProvider => {
+        const provider = createMockSyncProvider();
+        (provider as { providerMode: string }).providerMode = 'fileSnapshotOps';
+        (provider.downloadOps as jasmine.Spy).and.resolveTo({
+          ops: [],
+          latestSeq,
+          hasMore: false,
+        });
+        return provider;
+      };
+
+      it('seeds an empty remote again from current state', async () => {
+        const provider = createFileProvider(0);
+        const rejected = createMigrationEntry(Date.now());
+        opLogStoreSpy.getOpsAfterSeq.and.resolveTo([rejected]);
+
+        await service.checkAndHandleMigration(provider);
+
+        expect(provider.downloadOps).toHaveBeenCalled();
+        expect(opLogStoreSpy.append).toHaveBeenCalledTimes(1);
+        const [op, source] = opLogStoreSpy.append.calls.mostRecent().args;
+        expect(source).toBe('local');
+        expect(op.opType).toBe(OpType.SyncImport);
+        expect(op.syncImportReason).toBe('SERVER_MIGRATION');
+        expect(op.id).not.toBe(rejected.op.id);
+        // Dominates the rejected snapshot, so it supersedes it on every client.
+        expect(op.vectorClock['test-client']).toBeGreaterThan(
+          rejected.op.vectorClock['test-client'],
+        );
+      });
+
+      it('asks before seeding a remote another device has filled meanwhile', async () => {
+        const provider = createFileProvider(3);
+        opLogStoreSpy.getOpsAfterSeq.and.resolveTo([createMigrationEntry(Date.now())]);
+        matDialogSpy.open.and.returnValue({
+          afterClosed: () => of(false),
+        } as MatDialogRef<unknown>);
+
+        await service.checkAndHandleMigration(provider);
+
+        expect(matDialogSpy.open).toHaveBeenCalled();
+        expect(opLogStoreSpy.append).not.toHaveBeenCalled();
+      });
+
+      it('reuses the newer pending snapshot instead of seeding a third one', async () => {
+        const provider = createFileProvider(0);
+        const pending = {
+          ...createMigrationEntry(),
+          seq: 2,
+          op: {
+            ...createMigrationEntry().op,
+            id: '01900000-0000-7000-8000-000000000002',
+          },
+        };
+        opLogStoreSpy.getOpsAfterSeq.and.resolveTo([
+          createMigrationEntry(Date.now()),
+          pending,
+        ]);
+
+        await service.checkAndHandleMigration(provider);
+
+        expect(provider.downloadOps).not.toHaveBeenCalled();
+        expect(opLogStoreSpy.append).not.toHaveBeenCalled();
+      });
+
+      it('creates a new snapshot from the download-side seeding path too', async () => {
+        const provider = createFileProvider(0);
+        opLogStoreSpy.getOpsAfterSeq.and.resolveTo([createMigrationEntry(Date.now())]);
+
+        const outcome = await service.handleServerMigration(provider);
+
+        expect(outcome).toEqual({
+          kind: 'created',
+          opId: opLogStoreSpy.append.calls.mostRecent().args[0].id,
+        });
+      });
+
+      it('reuses a snapshot another tab appended while this one probed the remote', async () => {
+        const provider = createFileProvider(0);
+        const rejected = createMigrationEntry(Date.now());
+        const fromOtherTab = {
+          ...createMigrationEntry(),
+          seq: 2,
+          op: {
+            ...createMigrationEntry().op,
+            id: '01900000-0000-7000-8000-000000000002',
+          },
+        };
+        // Outside the operation-log barrier only the rejected snapshot exists;
+        // inside it, the other tab's fresh one is already appended.
+        opLogStoreSpy.getOpsAfterSeq.and.resolveTo([rejected]);
+        writeFlushServiceSpy.flushThenRunExclusive.and.callFake(
+          async <T>(fn: () => Promise<T>) => {
+            opLogStoreSpy.getOpsAfterSeq.and.resolveTo([rejected, fromOtherTab]);
+            return fn();
+          },
+        );
+
+        const outcome = await service.handleServerMigration(provider);
+
+        expect(provider.downloadOps).toHaveBeenCalled();
+        expect(outcome).toEqual({ kind: 'reused_pending' });
+        expect(opLogStoreSpy.append).not.toHaveBeenCalled();
+      });
+    });
+
     it('should skip if server has data and client has no synced ops', async () => {
       const provider = createMockSyncProvider();
       (provider.getLastServerSeq as jasmine.Spy).and.returnValue(Promise.resolve(0));

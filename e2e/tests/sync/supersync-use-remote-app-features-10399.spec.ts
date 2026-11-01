@@ -45,7 +45,7 @@ const RESUME_DETECTED_LOG =
   'OperationLogSyncService: Interrupted USE_REMOTE rebuild detected';
 
 /** The features NEW_INSTALL_APP_FEATURES turns off, by their side-nav label. */
-const HIDDEN_NAV_ITEMS = ['Schedule', 'Boards', 'Habits'];
+const HIDDEN_NAV_ITEMS = ['Schedule', 'Views', 'Habits'];
 
 const NEW_INSTALL_APP_FEATURES_OFF = {
   isSchedulerEnabled: false,

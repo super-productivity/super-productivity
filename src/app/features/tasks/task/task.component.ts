@@ -11,12 +11,14 @@ import {
   inject,
   input,
   OnDestroy,
+  Signal,
   signal,
   untracked,
   viewChild,
 } from '@angular/core';
 import { TaskService } from '../task.service';
 import { TaskDuplicateService } from '../task-duplicate.service';
+import { VIEW_TASK_LIST } from '../view-task-list.token';
 import { TaskMultiSelectService } from '../task-multi-select.service';
 import { TaskMoveToProjectService } from '../task-move-to-project.service';
 import { isMultiSelectModifierEvent } from '../../../util/is-multi-select-modifier-event';
@@ -135,6 +137,9 @@ import {
 } from '../util/get-scheduled-date-color';
 import { isWontDoTask } from '../util/is-wont-do-task';
 import { IssueSyncStateService } from '../../issue/two-way-sync/issue-sync-state.service';
+
+// Outside a view: tag-list hides the open context's tag, as before.
+const NO_VIEW_TAGS_TO_HIDE = signal<string[] | undefined>(undefined).asReadonly();
 
 const isInteractiveTarget = (target: EventTarget | null): boolean =>
   target instanceof Element &&
@@ -270,7 +275,16 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
     return 'chat';
   });
 
-  isTodayListActive = computed(() => this.workContextService.isTodayListSignal());
+  // In a view (`VIEW_TASK_LIST`), the active context is a stale leftover from
+  // the last list opened: rows then act as in any non-Today list.
+  private readonly _viewTaskList = inject(VIEW_TASK_LIST, { optional: true });
+  readonly isInView = !!this._viewTaskList;
+  // The host's signal itself: no extra computed per row (hot path).
+  readonly viewTagsToHide: Signal<string[] | undefined> =
+    this._viewTaskList?.tagsToHide ?? NO_VIEW_TAGS_TO_HIDE;
+  isTodayListActive = computed(
+    () => !this._viewTaskList && this.workContextService.isTodayListSignal(),
+  );
   taskIdWithPrefix = computed(() => 't-' + this.task().id);
   isRepeatTaskCreatedToday = computed(
     () => !!(this.task().repeatCfgId && this._dateService.isToday(this.task().created)),
@@ -871,27 +885,50 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   }
 
   moveTaskUp(): void {
+    if (this._moveViewRow('up')) return;
     this._moveAndRefocus((id, parentId, isBacklog) =>
       this._taskService.moveUp(id, parentId, isBacklog),
     );
   }
 
   moveTaskDown(): void {
+    if (this._moveViewRow('down')) return;
     this._moveAndRefocus((id, parentId, isBacklog) =>
       this._taskService.moveDown(id, parentId, isBacklog),
     );
   }
 
   moveTaskToTop(): void {
+    if (this._moveViewRow('top')) return;
     this._moveAndRefocus((id, parentId, isBacklog) =>
       this._taskService.moveToTop(id, parentId, isBacklog),
     );
   }
 
   moveTaskToBottom(): void {
+    if (this._moveViewRow('bottom')) return;
     this._moveAndRefocus((id, parentId, isBacklog) =>
       this._taskService.moveToBottom(id, parentId, isBacklog),
     );
+  }
+
+  /**
+   * A view's own rows (subtasks shown on their own included) are ordered by
+   * the view, never by the stale active context. Nested subtasks keep their
+   * normal order within the parent.
+   */
+  private _moveViewRow(to: 'up' | 'down' | 'top' | 'bottom'): boolean {
+    const id = this.task().id;
+    if (!this._viewTaskList?.isRow(id)) {
+      return false;
+    }
+    // A row that moved into another section is leaving: the target section
+    // focuses its new row instead.
+    if (!this._viewTaskList.moveRow(id, to)) {
+      setTimeout(() => this.focusSelf());
+      setTimeout(() => this.focusSelf(), 10);
+    }
+    return true;
   }
 
   handleArrowUp(): void {
@@ -959,7 +996,8 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
 
   moveToBacklogWithFocus(): void {
     const t = this.task();
-    if (!t.projectId || t.parentId) {
+    // A view has no backlog of its own (and the active context is stale there).
+    if (!t.projectId || t.parentId || this._viewTaskList) {
       return;
     }
     // Gated on the ACTIVE context, like the context menu's move-to-backlog item
