@@ -95,7 +95,7 @@ import { ArchiveService } from '../archive/archive.service';
 import { TaskArchiveService } from '../archive/task-archive.service';
 import { TODAY_TAG } from '../tag/tag.const';
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
-import { getDbDateStr, isDBDateStr } from '../../util/get-db-date-str';
+import { isDBDateStr } from '../../util/get-db-date-str';
 import { INBOX_PROJECT } from '../project/project.const';
 import { GlobalConfigService } from '../config/global-config.service';
 import { TaskLog } from '../../core/log';
@@ -1487,7 +1487,7 @@ export class TaskService {
       !additional.parentId &&
       !additional.dueWithTime &&
       !('dueDay' in additional)
-        ? { dueDay: getDbDateStr() }
+        ? { dueDay: this._dateService.todayStr() }
         : {}),
 
       ...additional,

@@ -39,6 +39,7 @@ import { TASK_FEATURE_NAME } from '../tasks/store/task.reducer';
 import { selectAllTasksWithReminder } from '../tasks/store/task.selectors';
 import { createCombinedTaskSharedMetaReducer } from '../../root-store/meta/task-shared-meta-reducers/test-helpers';
 import { PendingRemoteIssueDeleteService } from './two-way-sync/pending-remote-issue-delete.service';
+import { DateService } from '../../core/date/date.service';
 import {
   createBaseState,
   createMockTask as createReducerTask,
@@ -722,8 +723,10 @@ describe('IssueService', () => {
       expect(taskData.dueDay).toBeUndefined();
     });
 
-    it('should set dueDay to today when isAddToBacklog is not set', async () => {
+    it('should set dueDay to the logical today when isAddToBacklog is not set', async () => {
       setupForNewTask();
+      const dateService = TestBed.inject(DateService);
+      spyOn(dateService, 'todayStr').and.returnValue('2026-01-05');
 
       await service.addTaskFromIssue({
         issueDataReduced: jiraIssue as any,
@@ -733,7 +736,7 @@ describe('IssueService', () => {
 
       const addCall = taskServiceSpy.add.calls.mostRecent();
       const taskData = addCall.args[2] as Partial<Task>;
-      expect(taskData.dueDay).toBeDefined();
+      expect(taskData.dueDay).toBe('2026-01-05');
     });
   });
 
