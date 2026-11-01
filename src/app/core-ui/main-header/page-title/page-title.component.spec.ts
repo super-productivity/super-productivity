@@ -14,6 +14,7 @@ import { NavigationEnd, provideRouter, Router, RouterLink } from '@angular/route
 import { MatTooltip } from '@angular/material/tooltip';
 import { By } from '@angular/platform-browser';
 import { BreakpointObserver } from '@angular/cdk/layout';
+import { LayoutService } from '../../layout/layout.service';
 import { TranslateModule, TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { MatMenu, MatMenuTrigger } from '@angular/material/menu';
 import { Store } from '@ngrx/store';
@@ -55,7 +56,7 @@ describe('PageTitleComponent', () => {
   let activeWorkContext$: BehaviorSubject<WorkContext>;
   let isShared$: BehaviorSubject<boolean>;
   let isXxxs$: BehaviorSubject<{ matches: boolean }>;
-  let isXs$: BehaviorSubject<{ matches: boolean }>;
+  let isXs: WritableSignal<boolean>;
   let openMenuRequest$: Subject<void>;
   let openSpy: jasmine.Spy;
   let pluginMenuEntries: WritableSignal<PluginMenuEntryCfg[]>;
@@ -83,14 +84,10 @@ describe('PageTitleComponent', () => {
       provide: BoardsService,
       useValue: { editBoard: editBoardSpy, setViewLayout: setViewLayoutSpy },
     },
-    {
-      provide: BreakpointObserver,
-      // The phone breakpoint (599px) has its own subject; the smallest one
-      // (350px) drives the rest.
-      useValue: {
-        observe: (query: string) => (query.includes('599px') ? isXs$ : isXxxs$),
-      },
-    },
+    // The phone breakpoint (LayoutService); the smallest one (350px) is the
+    // page title's own.
+    { provide: LayoutService, useValue: { isXs: () => isXs() } },
+    { provide: BreakpointObserver, useValue: { observe: () => isXxxs$ } },
     {
       provide: WorkContextService,
       useValue: {
@@ -156,7 +153,7 @@ describe('PageTitleComponent', () => {
     boards = signal<BoardCfg[]>([]);
     pluginStates = new Map();
     isXxxs$ = new BehaviorSubject<{ matches: boolean }>({ matches: false });
-    isXs$ = new BehaviorSubject<{ matches: boolean }>({ matches: false });
+    isXs = signal(false);
     openMenuRequest$ = new Subject<void>();
     editBoardSpy = jasmine.createSpy('editBoard').and.returnValue(Promise.resolve());
     setViewLayoutSpy = jasmine.createSpy('setViewLayout');
@@ -549,21 +546,22 @@ describe('PageTitleComponent', () => {
         expect(firstButton(await renderAt('/boards/list'))).toBeNull();
       });
 
-      // Three buttons left the view's title a word at 400px.
-      it("moves into the view's menu on phones, keeping the title's room", async () => {
-        isXs$.next({ matches: true });
-        await configureRender();
-        routerStub.url = '/boards/list';
-        const fixture = TestBed.createComponent(PageTitleComponent);
-        fixture.detectChanges();
-        const host = fixture.nativeElement as HTMLElement;
-        const labels = Array.from(
-          host.querySelectorAll('.page-title-actions button'),
-        ).map((b) => b.getAttribute('aria-label'));
-        expect(labels).toEqual([T.F.BOARDS.V.EDIT_BOARD, T.G.MORE_ACTIONS]);
-        expect(fixture.componentInstance.isXs()).toBeTrue();
-        expect(fixture.componentInstance.viewLayoutSwitch()?.layout).toBe('board');
-      });
+      // More buttons left the view's title a word ("Open …") at 360px.
+      // Phones show every view as a list; the title opens the editor.
+      for (const url of ['/boards/list', '/boards/kanban']) {
+        it(`leaves only the view's menu on phones (${url})`, async () => {
+          isXs.set(true);
+          await configureRender();
+          routerStub.url = url;
+          const fixture = TestBed.createComponent(PageTitleComponent);
+          fixture.detectChanges();
+          const host = fixture.nativeElement as HTMLElement;
+          const labels = Array.from(
+            host.querySelectorAll('.page-title-actions button'),
+          ).map((b) => b.getAttribute('aria-label'));
+          expect(labels).toEqual([T.G.MORE_ACTIONS]);
+        });
+      }
     });
 
     it('adds the Plainspace button for a shared project', async () => {

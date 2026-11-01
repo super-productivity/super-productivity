@@ -53,55 +53,121 @@
   ></add-task-bar>
 }
 
+<!-- The scroll area: the open cards (the drop list), then the done group. -->
 <div
   class="task-items"
-  cdkDropList
-  [cdkDropListData]="panel.tasks()"
-  [cdkDropListSortingDisabled]="!panel.isManualOrder()"
-  [cdkDropListEnterPredicate]="panel.canEnterCard"
-  (cdkDropListDropped)="panel.drop($event)"
+  cdkScrollable
 >
-  @for (task of panel.tasks(); track task.id) {
-    <planner-task
-      cdkDrag
-      [cdkDragData]="task"
-      [cdkDragStartDelay]="dragDelayForTouch()"
-      [task]="task"
-      [focusable]="true"
-      [cdkDragDisabled]="panel.isMoving() || panel.multiSelect.isTouchSelectionMode()"
-      [tagsToHide]="panel.tagsToHide()"
+  <div
+    class="drop-list"
+    cdkDropList
+    [cdkDropListData]="panel.mainItems()"
+    [cdkDropListSortingDisabled]="!panel.isManualOrder()"
+    [cdkDropListEnterPredicate]="panel.canEnterCard"
+    (cdkDropListDropped)="panel.drop($event)"
+  >
+    @for (task of panel.shownMain(); track task.id) {
+      <planner-task
+        cdkDrag
+        [cdkDragData]="task"
+        [cdkDragStartDelay]="dragDelayForTouch()"
+        [task]="task"
+        [focusable]="true"
+        [cdkDragDisabled]="panel.isMoving() || panel.multiSelect.isTouchSelectionMode()"
+        [tagsToHide]="panel.tagsToHide()"
+      >
+        <ng-container
+          ngProjectAs="[task-card-trailing]"
+          [ngTemplateOutlet]="scheduleButtons"
+          [ngTemplateOutletContext]="{ $implicit: task }"
+        ></ng-container>
+      </planner-task>
+    }
+  </div>
+  @if (panel.mainItems().length > panel.shownMain().length) {
+    <ng-container
+      [ngTemplateOutlet]="showAll"
+      [ngTemplateOutletContext]="{ $implicit: panel.mainItems() }"
+    ></ng-container>
+  }
+  @if (panel.doneItems().length) {
+    <!-- Done cards stay put, like the done rows: no drag, no moves. -->
+    <collapsible
+      class="done-group"
+      [title]="(T.WW.DONE_TASKS | translate) + ' (' + panel.doneItems().length + ')'"
+      [isIconBefore]="true"
+      [isExpanded]="panel.isDoneListExpanded()"
+      (isExpandedChange)="panel.isDoneListExpanded.set($event)"
     >
-      @if (task.remindAt) {
-        <button
-          task-card-trailing
-          (click)="panel.scheduleTask(task, $event)"
-          [title]="T.F.TASK.CMP.EDIT_SCHEDULED | translate"
-          class="ico-btn schedule-btn"
-          [attr.data-scheduled-date-color]="scheduledDateColor(task)"
-          color=""
-          mat-icon-button
-        >
-          <mat-icon>alarm</mat-icon>
-          <div
-            class="time-badge"
-            [innerHTML]="task.dueWithTime | shortPlannedAt"
-          ></div>
-        </button>
+      @if (panel.isDoneListExpanded()) {
+        @for (task of panel.shownDone(); track task.id) {
+          <planner-task
+            [task]="task"
+            [focusable]="true"
+            [tagsToHide]="panel.tagsToHide()"
+          >
+            <ng-container
+              ngProjectAs="[task-card-trailing]"
+              [ngTemplateOutlet]="scheduleButtons"
+              [ngTemplateOutletContext]="{ $implicit: task }"
+            ></ng-container>
+          </planner-task>
+        }
+        @if (panel.doneItems().length > panel.shownDone().length) {
+          <ng-container
+            [ngTemplateOutlet]="showAll"
+            [ngTemplateOutletContext]="{ $implicit: panel.doneItems() }"
+          ></ng-container>
+        }
       }
-      @if (task.dueDay) {
-        <button
-          task-card-trailing
-          (click)="panel.scheduleTask(task, $event)"
-          [title]="T.F.TASK.CMP.SCHEDULE | translate"
-          class="ico-btn schedule-btn"
-          [attr.data-scheduled-date-color]="scheduledDateColor(task)"
-          color=""
-          mat-icon-button
-        >
-          <mat-icon>today</mat-icon>
-          <div class="time-badge">{{ task.dueDay | localDateStr }}</div>
-        </button>
-      }
-    </planner-task>
+    </collapsible>
   }
 </div>
+
+<ng-template
+  #showAll
+  let-items
+>
+  <button
+    mat-button
+    class="show-all-btn"
+    (click)="panel.showAll(items)"
+  >
+    {{ T.F.BOARDS.V.SHOW_ALL | translate: { count: items.length } }}
+  </button>
+</ng-template>
+
+<ng-template
+  #scheduleButtons
+  let-task
+>
+  @if (task.remindAt) {
+    <button
+      (click)="panel.scheduleTask(task, $event)"
+      [title]="T.F.TASK.CMP.EDIT_SCHEDULED | translate"
+      class="ico-btn schedule-btn"
+      [attr.data-scheduled-date-color]="scheduledDateColor(task)"
+      color=""
+      mat-icon-button
+    >
+      <mat-icon>alarm</mat-icon>
+      <div
+        class="time-badge"
+        [innerHTML]="task.dueWithTime | shortPlannedAt"
+      ></div>
+    </button>
+  }
+  @if (task.dueDay) {
+    <button
+      (click)="panel.scheduleTask(task, $event)"
+      [title]="T.F.TASK.CMP.SCHEDULE | translate"
+      class="ico-btn schedule-btn"
+      [attr.data-scheduled-date-color]="scheduledDateColor(task)"
+      color=""
+      mat-icon-button
+    >
+      <mat-icon>today</mat-icon>
+      <div class="time-badge">{{ task.dueDay | localDateStr }}</div>
+    </button>
+  }
+</ng-template>

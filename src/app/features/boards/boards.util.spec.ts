@@ -3,6 +3,7 @@ import {
   getCalendarDateForDueDay,
   getLayoutChanges,
   getPanelHeaderCount,
+  getPanelItems,
   getPanelRowIds,
   getViewIcon,
   getViewLayoutSwitch,
@@ -1232,12 +1233,33 @@ describe('panel rows and header count', () => {
     ]);
   });
 
-  it('counts open rows in the list layout and every match on cards', () => {
-    const all = { taskDoneState: BoardPanelCfgTaskDoneState.All };
-    const doneOnly = { taskDoneState: BoardPanelCfgTaskDoneState.Done };
+  const all = { taskDoneState: BoardPanelCfgTaskDoneState.All };
+  const doneOnly = { taskDoneState: BoardPanelCfgTaskDoneState.Done };
+  const ids = (items: { main: TaskCopy[]; done: TaskCopy[] }): string[][] => [
+    items.main.map((task) => task.id),
+    items.done.map((task) => task.id),
+  ];
+
+  it('shows cards or top-level rows, done ones apart unless the column is done-only', () => {
+    expect(ids(getPanelItems(tasks, all, false))).toEqual([
+      ['parent', 'child', 'openSub', 'lone'],
+      ['doneParent', 'done'],
+    ]);
+    expect(ids(getPanelItems(tasks, all, true))).toEqual([
+      ['parent', 'openSub', 'lone'],
+      ['doneParent', 'done'],
+    ]);
+    expect(ids(getPanelItems(tasks, doneOnly, false))).toEqual([
+      ['parent', 'child', 'doneParent', 'openSub', 'lone', 'done'],
+      [],
+    ]);
+  });
+
+  it('counts the main items: open rows or open cards', () => {
     expect(getPanelHeaderCount(tasks, all, true)).toBe(3);
     expect(getPanelHeaderCount(tasks, doneOnly, true)).toBe(4);
-    expect(getPanelHeaderCount(tasks, all, false)).toBe(6);
+    expect(getPanelHeaderCount(tasks, all, false)).toBe(4);
+    expect(getPanelHeaderCount(tasks, doneOnly, false)).toBe(6);
   });
 
   it('matches through the panel criteria', () => {

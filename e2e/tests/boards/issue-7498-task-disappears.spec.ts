@@ -49,8 +49,13 @@ test.describe('Boards #7498', () => {
 
     await taskPage.markTaskAsDone(task);
 
-    // Fixed behavior: the task is still in its original quadrant — Playwright
-    // auto-retries the assertion until the toggle's 200ms animation settles.
-    await expect(task).toBeVisible();
+    // Fixed behavior: the task is still in its original quadrant, in its
+    // collapsed Done group (as in task lists).
+    const doneGroup = notUrgentNotImportantPanel.locator('.done-group');
+    await expect(doneGroup).toContainText('(1)');
+    await doneGroup.locator('.collapsible-header').click();
+    await expect(
+      doneGroup.locator('planner-task').filter({ hasText: taskName }),
+    ).toBeVisible();
   });
 });

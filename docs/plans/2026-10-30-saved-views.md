@@ -180,14 +180,23 @@ OmniFocus 4, Vikunja), not hands-on.
 - **Menu items live in the menu's own template.** MatMenu's arrow keys only
   reach `mat-menu-item`s written inside the `mat-menu` (a content query), not
   ones inside another component. The title bar renders the view's items itself
-  (`getViewMenuItems`); `view-menu` keeps them for the side menu's rows.
+  (`VIEW_MENU_ITEMS`); `view-menu` keeps them for the side menu's rows.
 
 ## Known gaps and follow-ups
 
-- **#11384:** boards as rows on narrow screens; card/row parity (counts, Done
-  handling, subtask hint, keyboard moves); long columns (#11395). Small gaps:
-  dragging a multi-selection between sections, empty columns without a "+"
-  give arrow keys no focus target.
+- **#11384 (done, 2026-11-01):** rows below 600 px (`BoardComponent.isListLayout`
+  reads `LayoutService.isXs`; the stored `cols` stays, phones get no List/Board
+  switch or filter button); one header count rule, open items, for cards, rows
+  and the editor (`getPanelItems`); a collapsed Done group on cards (cards
+  already had their subtask hint); each part
+  renders its first 100 items (`PANEL_SHOWN_LIMIT`, local, never stored), drops
+  placed by the rendered item before the marker (`getDropIndex`), a task moved,
+  added or focused past the limit shows the whole part; arrow keys leave a
+  stacked column at its edges. Accepted: select-all and Shift ranges cover the
+  rendered items; moving into a long column can show all of it.
+- **#11384, part 2 (2026-11-01):** templates and Save as view (see
+  Decisions). Still open: small gaps (dragging a multi-selection between
+  sections, empty columns without a "+" give arrow keys no focus target).
 - **New installs without the default boards** (#11384) is not done: it needs
   the default boards stored as a fact before clients can start without them
   (see Decisions). Until then new installs keep them (Views are off there).

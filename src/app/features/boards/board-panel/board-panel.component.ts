@@ -17,10 +17,8 @@ import {
 import { CdkDrag, CdkDragDrop } from '@angular/cdk/drag-drop';
 import { BoardPanelCfg } from '../boards.model';
 import {
-  getPanelHeaderCount,
-  getPanelRowIds,
+  getPanelItems,
   getPanelSortKey,
-  isPanelDoneSplit,
   matchPanelTasks,
   panelToCriteria,
 } from '../boards.util';
@@ -77,13 +75,16 @@ import { BOARD_PANEL } from './board-panel.token';
 import { BoardPanelCardsComponent } from './board-panel-cards.component';
 import { BoardPanelRowsComponent } from './board-panel-rows.component';
 import {
+  getDropIndex,
   getNewTaskFields,
   getNewTaskTagsToAdd,
   getNewTaskTagsToRemove,
   getPanelChangesToMatch,
   hasMissingTag,
   orderPanelTasks,
+  PANEL_SHOWN_LIMIT,
   placeInOrder,
+  withPartOrder,
 } from './panel-rules';
 import { PanelTaskChangesService } from './panel-task-changes.service';
 
@@ -237,9 +238,10 @@ export class BoardPanelComponent implements TaskCardList, ViewTaskListHost {
   }
 
   focusRow(index: number, taskId?: string): void {
-    if (this.isListLayout()) {
+    const isRevealed = !!taskId && this._reveal([taskId]);
+    if (this.isListLayout() || isRevealed) {
       // A section a row was moved into may be collapsed; rows render later.
-      this.isSectionExpanded.set(true);
+      if (this.isListLayout()) this.isSectionExpanded.set(true);
       afterNextRender(() => this._focusRowNow(index, taskId), {
         injector: this._injector,
       });
@@ -271,16 +273,27 @@ export class BoardPanelComponent implements TaskCardList, ViewTaskListHost {
     );
   }
 
+  /** The arrow keys on a card: the rendered cards, then the panel beside, above or below. */
   navigate(taskId: string, key: TaskCardArrow): void {
-    const index = this.tasks().findIndex((task) => task.id === taskId);
+    const rows = this.rows();
+    const index = rows.findIndex((row) => row.dataset.taskId === taskId);
     if (key === 'ArrowLeft' || key === 'ArrowRight') {
       this.adjacentPanel.emit({
         direction: key === 'ArrowLeft' ? -1 : 1,
         rowIndex: index,
       });
+      return;
+    }
+    const isUp = key === 'ArrowUp';
+    const next = index + (isUp ? -1 : 1);
+    if (next >= 0 && next < rows.length) {
+      this.focusRow(next);
     } else {
-      const next = index + (key === 'ArrowUp' ? -1 : 1);
-      if (next >= 0 && next < this.tasks().length) this.focusRow(next);
+      // Past the first or last card: the stacked panel's last or first one.
+      this.adjacentPanel.emit({
+        direction: isUp ? 'up' : 'down',
+        rowIndex: isUp ? Number.MAX_SAFE_INTEGER : 0,
+      });
     }
   }
 
@@ -312,7 +325,7 @@ export class BoardPanelComponent implements TaskCardList, ViewTaskListHost {
   }
 
   moveToAdjacent(taskId: string, direction: -1 | 1): void {
-    const taskIds = this._taskIdsToMove(taskId);
+    const taskIds = this._taskIdsToMove(taskId, this.mainItems());
     if (!taskIds.length) return;
     this.adjacentPanel.emit({
       direction,
@@ -322,9 +335,11 @@ export class BoardPanelComponent implements TaskCardList, ViewTaskListHost {
     });
   }
 
+  // Done cards don't move, like the done rows: their order and column follow
+  // from being done.
   reorder(taskId: string, direction: TaskCardMove): void {
-    const ids = this.tasks().map((task) => task.id);
-    const selected = new Set(this._taskIdsToMove(taskId));
+    const ids = this.mainItems().map((task) => task.id);
+    const selected = new Set(this._taskIdsToMove(taskId, this.mainItems()));
     if (!selected.size) return;
     if (
       (direction === 'up' && ids[0] === taskId) ||
@@ -339,16 +354,29 @@ export class BoardPanelComponent implements TaskCardList, ViewTaskListHost {
       return;
     }
     if (!this.isManualOrder()) return;
-    const taskIds = reorderBoardTasks(ids, selected, direction);
-    if (!fastArrayCompare(ids, taskIds)) {
+    const partOrder = reorderBoardTasks(ids, selected, direction);
+    if (!fastArrayCompare(ids, partOrder)) {
       this.store.dispatch(
-        BoardsActions.updatePanelCfgTaskIds({ panelId: this.panelCfg().id, taskIds }),
+        BoardsActions.updatePanelCfgTaskIds({
+          panelId: this.panelCfg().id,
+          taskIds: withPartOrder(
+            this.tasks().map((task) => task.id),
+            partOrder,
+          ),
+        }),
       );
       afterNextRender(() => this.focusRow(0, taskId), { injector: this._injector });
     }
   }
 
-  private _taskIdsToMove(taskId: string, sourceTasks = this.tasks()): string[] {
+  /**
+   * The task, or the selection it is part of when all of it is among
+   * `sourceTasks` (the panel's open items, all of them: a selection reaching
+   * past the rendered ones moves whole); none when the selection reaches
+   * further, or the task isn't among them (a done card).
+   */
+  private _taskIdsToMove(taskId: string, sourceTasks: readonly TaskCopy[]): string[] {
+    if (!sourceTasks.some((task) => task.id === taskId)) return [];
     if (!this.multiSelect.has(taskId)) return [taskId];
     const selected = this.multiSelect.selectedIds();
     const ids = sourceTasks
@@ -362,13 +390,10 @@ export class BoardPanelComponent implements TaskCardList, ViewTaskListHost {
     initialValue: [],
   });
 
-  // In the list layout, the open rows the header counts: a parent's estimate
+  // The items the header counts: in the list layout a parent's estimate
   // already covers its nested subtasks.
   totalEstimate = computed(() =>
-    (this.isListLayout() ? this.mainRows() : this.tasks()).reduce(
-      (acc, task) => acc + (task.timeEstimate || 0),
-      0,
-    ),
+    this.mainItems().reduce((acc, task) => acc + (task.timeEstimate || 0), 0),
   );
 
   readonly sortKey = computed(() => getPanelSortKey(this.panelCfg()));
@@ -409,6 +434,11 @@ export class BoardPanelComponent implements TaskCardList, ViewTaskListHost {
     );
   });
 
+  /**
+   * A card dropped here. The lists' data are the panels' open cards, all of
+   * them (`mainItems`), so a selection reaching past the rendered ones moves
+   * whole; the marker is placed among the rendered cards.
+   */
   async drop(ev: CdkDragDrop<TaskCopy[], TaskCopy[], TaskCopy>): Promise<void> {
     if (ev.previousContainer.id === ev.container.id && !this.isManualOrder()) {
       return;
@@ -416,13 +446,20 @@ export class BoardPanelComponent implements TaskCardList, ViewTaskListHost {
     const ids = this._taskIdsToMove(ev.item.data.id, ev.previousContainer.data);
     if (!ids.length) return;
     const isSamePanel = ev.previousContainer.id === ev.container.id;
+    // CDK removes only the dragged card when calculating its insertion index;
+    // placement removes every moving one, including destination duplicates.
     const moving = new Set(ids);
-    // CDK removes only the dragged row when calculating its insertion index.
-    // Group placement removes every moving row, including destination duplicates.
-    const index = this.tasks()
-      .filter((task) => !isSamePanel || task.id !== ev.item.data.id)
-      .slice(0, ev.currentIndex)
-      .filter((task) => !moving.has(task.id)).length;
+    // Past the cards shown, a card stays the last one shown.
+    const index = Math.min(
+      getDropIndex(
+        this.tasks().map((task) => task.id),
+        this.shownMain().map((task) => task.id),
+        moving,
+        ev.currentIndex,
+        isSamePanel ? ev.item.data.id : undefined,
+      ),
+      this._endOfShownIndex(moving),
+    );
     if (isSamePanel) {
       this._placeInOrder(ids, index);
       return;
@@ -430,8 +467,15 @@ export class BoardPanelComponent implements TaskCardList, ViewTaskListHost {
     await this.moveTasks(ids, index);
   }
 
-  /** Shared by dragging and keyboard placement; normal task actions retain their effects. */
-  async moveTasks(ids: string[], index = this.tasks().length): Promise<boolean> {
+  /**
+   * Shared by dragging and keyboard placement; normal task actions retain their
+   * effects. Without an index, tasks go after the last open item shown, so a
+   * move into a long column neither hides the task nor renders the whole column.
+   */
+  async moveTasks(
+    ids: string[],
+    index = this._endOfShownIndex(new Set(ids)),
+  ): Promise<boolean> {
     if (this.isMoving()) return false;
     this.isMoving.set(true);
     try {
@@ -525,6 +569,7 @@ export class BoardPanelComponent implements TaskCardList, ViewTaskListHost {
         ),
       }),
     );
+    this._revealAfterRender(ids);
   }
 
   async afterTaskAdd({ taskId, isAddToBottom, isNewTask }: TaskAddEvent): Promise<void> {
@@ -552,6 +597,8 @@ export class BoardPanelComponent implements TaskCardList, ViewTaskListHost {
       this.scheduleTask(task);
     }
     await this._applyDateChanges([taskId]);
+    // Added to the bottom of a long column: it shows.
+    this._revealAfterRender([taskId]);
   }
 
   /** Planned day and deadline, by the panel's rules as they are now. */
@@ -588,54 +635,137 @@ export class BoardPanelComponent implements TaskCardList, ViewTaskListHost {
       ),
   );
 
-  // === LIST LAYOUT (ViewTaskListHost) ===
+  // === WHAT THE PANEL SHOWS (both renderers) ===
 
-  // Built through a long-lived cache: the task list re-emits every second
-  // while time is tracked, and untouched rows must keep their object so they
-  // don't re-render (the task row is the hot path).
-  private readonly _taskState = this.store.selectSignal(selectTaskFeatureState);
-  private readonly _rowCache: TaskWithSubTasksCache = new Map();
+  /** Cards, or the list layout's top-level rows; done ones in their own group. */
+  private readonly _items = computed(() =>
+    getPanelItems(this.tasks(), this.panelCfg(), this.isListLayout()),
+  );
+  readonly mainItems = computed(() => this._items().main, { equal: fastArrayCompare });
+  readonly doneItems = computed(() => this._items().done, { equal: fastArrayCompare });
+  // Same helper as the view editor's live count (`getPanelHeaderCount`).
+  readonly headerCount = computed(() => this.mainItems().length);
+
+  // Local only, never synced: the parts past PANEL_SHOWN_LIMIT, shown on
+  // "Show all" or when a task there is moved, added or focused.
+  readonly isShowAll = signal(false);
+  // Local only, never synced: built on first expand (a view across all
+  // projects can hold many done tasks).
+  readonly isDoneListExpanded = signal(false);
+  // Local only, never synced, like the done section.
+  readonly isSectionExpanded = signal(true);
+
+  /** The main items rendered (capped before anything is built for them). */
+  readonly shownMain = computed(() => this._capped(this.mainItems(), this.isShowAll()), {
+    equal: fastArrayCompare,
+  });
+  /** The done items rendered: none while their group is collapsed. */
+  readonly shownDone = computed(
+    () =>
+      this.isDoneListExpanded() ? this._capped(this.doneItems(), this.isShowAll()) : [],
+    { equal: fastArrayCompare },
+  );
 
   /**
-   * Top-level rows: a matching task, unless its parent matches too (then it
-   * shows under the parent). A row's parent carries all its subtasks, like a
-   * project list; a subtask whose parent doesn't match is a row of its own.
+   * Where moved tasks go at the end of what is shown, counted without them
+   * (like `placeInOrder`): the end of the panel, or, when they would push its
+   * open items past the limit, right after the open item that leaves them
+   * room to be the last ones shown, so they stay in view and the panel stays
+   * capped.
    */
+  private _endOfShownIndex(moving: ReadonlySet<string> = new Set()): number {
+    const order = this.tasks()
+      .map((task) => task.id)
+      .filter((id) => !moving.has(id));
+    if (this.isShowAll()) return order.length;
+    const kept = this.mainItems().filter((task) => !moving.has(task.id));
+    const room = PANEL_SHOWN_LIMIT - moving.size;
+    if (kept.length <= room) return order.length;
+    const anchor = kept[room - 1];
+    return anchor ? order.indexOf(anchor.id) + 1 : 0;
+  }
+
+  /**
+   * "Show all" below a part (`items`): the button goes, so the focus moves to
+   * the first item it revealed.
+   */
+  showAll(items: readonly TaskCopy[]): void {
+    const taskId = items[PANEL_SHOWN_LIMIT]?.id;
+    this.isShowAll.set(true);
+    afterNextRender(() => this._focusRowNow(PANEL_SHOWN_LIMIT, taskId), {
+      injector: this._injector,
+    });
+  }
+
+  private _capped(items: TaskCopy[], isShowAll: boolean): TaskCopy[] {
+    return isShowAll || items.length <= PANEL_SHOWN_LIMIT
+      ? items
+      : items.slice(0, PANEL_SHOWN_LIMIT);
+  }
+
+  /**
+   * `_reveal` once the new order has reached this panel (the board passes
+   * the stored panel down on its next render).
+   */
+  private _revealAfterRender(taskIds: readonly string[]): void {
+    afterNextRender(() => this._reveal(taskIds), { injector: this._injector });
+  }
+
+  /** Shows the whole panel when one of the tasks is past the limit. */
+  private _reveal(taskIds: readonly string[]): boolean {
+    if (this.isShowAll()) return false;
+    const isHidden = (items: TaskCopy[]): boolean =>
+      items.slice(PANEL_SHOWN_LIMIT).some((task) => taskIds.includes(task.id));
+    if (
+      isHidden(this.mainItems()) ||
+      (this.isDoneListExpanded() && isHidden(this.doneItems()))
+    ) {
+      this.isShowAll.set(true);
+      return true;
+    }
+    return false;
+  }
+
+  // === LIST LAYOUT (ViewTaskListHost) ===
+
+  // Built through long-lived caches (one per part: a cache keeps only the ids
+  // of its last call): the task list re-emits every second while time is
+  // tracked, and untouched rows must keep their object so they don't
+  // re-render (the task row is the hot path). A row's parent carries all its
+  // subtasks, like a project list.
+  private readonly _taskState = this.store.selectSignal(selectTaskFeatureState);
+  private readonly _rowCache: TaskWithSubTasksCache = new Map();
+  private readonly _doneRowCache: TaskWithSubTasksCache = new Map();
+
+  // By id: a tracking tick replaces a task object, not the rows.
   private readonly _rowIds = computed(
-    () => getPanelRowIds(this.tasks(), this._isDoneSplit()),
+    () => [...this.mainItems(), ...this.doneItems()].map((task) => task.id),
     { equal: fastArrayCompare },
   );
   private readonly _rowIdSet = computed(() => new Set(this._rowIds()));
-  private readonly _rows = computed(
+  readonly mainRows = computed(
     () =>
       mapIdsToTasksWithSubTasks(
-        this._rowIds(),
+        this.shownMain().map((task) => task.id),
         this._taskState()?.entities ?? {},
         this._rowCache,
       ),
     { equal: fastArrayCompare },
   );
-  // Done rows get their own collapsed section, unless the column only shows
-  // done tasks anyway.
-  private readonly _isDoneSplit = computed(() => isPanelDoneSplit(this.panelCfg()));
-  readonly mainRows = computed(
-    () =>
-      this._isDoneSplit() ? this._rows().filter((task) => !task.isDone) : this._rows(),
-    { equal: fastArrayCompare },
-  );
   readonly doneRows = computed(
     () => {
-      if (!this._isDoneSplit()) return [];
       const rowIds = this._rowIdSet();
-      return this._rows()
-        .filter((task) => task.isDone)
-        .map((task) => this._withoutOwnRowSubTasks(task, rowIds));
+      return mapIdsToTasksWithSubTasks(
+        this.shownDone().map((task) => task.id),
+        this._taskState()?.entities ?? {},
+        this._doneRowCache,
+      ).map((task) => this._withoutOwnRowSubTasks(task, rowIds));
     },
     { equal: fastArrayCompare },
   );
   // Done rows whose open subtasks are rows of their own, without them (keyed by
   // the cached row, so an unchanged row keeps its object).
-  private readonly _doneRowCache = new WeakMap<
+  private readonly _doneRowSubTaskCache = new WeakMap<
     TaskWithSubTasks,
     { key: string; row: TaskWithSubTasks }
   >();
@@ -648,22 +778,13 @@ export class BoardPanelComponent implements TaskCardList, ViewTaskListHost {
     if (!task.subTasks.some((sub) => rowIds.has(sub.id))) return task;
     const subTasks = task.subTasks.filter((sub) => !rowIds.has(sub.id));
     const key = subTasks.map((sub) => sub.id).join();
-    const cached = this._doneRowCache.get(task);
+    const cached = this._doneRowSubTaskCache.get(task);
     if (cached?.key === key) return cached.row;
     const row = { ...task, subTasks };
-    this._doneRowCache.set(task, { key, row });
+    this._doneRowSubTaskCache.set(task, { key, row });
     return row;
   }
-  // Local only, never synced: built on first expand (a view across all
-  // projects can hold many done tasks).
-  readonly isDoneListExpanded = signal(false);
-  // Local only, never synced, like the done section.
-  readonly isSectionExpanded = signal(true);
   readonly tagsToHide = computed(() => this.panelCfg().includedTagIds ?? []);
-  // Same helper as the view editor's live count.
-  readonly headerCount = computed(() =>
-    getPanelHeaderCount(this.tasks(), this.panelCfg(), this.isListLayout()),
-  );
 
   isRow(taskId: string): boolean {
     return this._rowIdSet().has(taskId);
@@ -689,10 +810,9 @@ export class BoardPanelComponent implements TaskCardList, ViewTaskListHost {
   }
 
   moveRow(taskId: string, to: 'up' | 'down' | 'top' | 'bottom'): boolean {
-    const task = this._rows().find((row) => row.id === taskId);
-    const isDoneRow = !!task?.isDone && this._isDoneSplit();
-    // Rows move within their part of the section (open or done).
-    const rows = (isDoneRow ? this.doneRows() : this.mainRows()).map((row) => row.id);
+    const isDoneRow = this.doneItems().some((row) => row.id === taskId);
+    // Rows move within their part of the section (open or done), all of it.
+    const rows = (isDoneRow ? this.doneItems() : this.mainItems()).map((row) => row.id);
     const i = rows.indexOf(taskId);
     if (i === -1) {
       return false;
@@ -730,7 +850,7 @@ export class BoardPanelComponent implements TaskCardList, ViewTaskListHost {
     if (!this.isSection() || isDoneRow) {
       return false;
     }
-    const taskIds = this._taskIdsToMove(taskId, this.mainRows());
+    const taskIds = this._taskIdsToMove(taskId, this.mainItems());
     if (!taskIds.length) {
       return false;
     }

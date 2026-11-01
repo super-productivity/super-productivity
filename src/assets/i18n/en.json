@@ -240,6 +240,7 @@
         "NO_VIEWS_MSG": "No views yet. A view shows tasks from all your projects that match its rules, in one or more columns.",
         "SAVE_AS_VIEW": "Save as view…",
         "SECTION_OTHER": "Other",
+        "SHOW_ALL": "Show all ({{count}})",
         "SHOW_AS_BOARD": "Show as board",
         "SHOW_AS_LIST": "Show as list",
         "S_CANT_MOVE_HERE": "No change makes this task fit the column's rules, so it can't be moved here",
