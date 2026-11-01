@@ -1,5 +1,6 @@
 import { Locator, Page } from '@playwright/test';
 import { expect, test } from '../../fixtures/test.fixture';
+import { waitForStatePersistence } from '../../utils/waits';
 import {
   createView,
   openViewEditor,
@@ -202,6 +203,7 @@ test.describe('View rules', () => {
     await page.keyboard.press('Control+Shift+ArrowUp');
     await expect.poll(titles).toEqual([second, first]);
 
+    await waitForStatePersistence(page);
     await page.reload();
     await expect.poll(titles).toEqual([second, first]);
   });
@@ -275,6 +277,7 @@ test.describe('View rules', () => {
     await expect(rows.filter({ hasText: unplanned })).toHaveCount(1);
 
     // The rule is the view's own, so it survives a reload.
+    await waitForStatePersistence(page);
     await page.reload();
     await expect(rows.filter({ hasText: unplanned })).toHaveCount(1);
     await expect(rows.filter({ hasText: planned })).toHaveCount(0);

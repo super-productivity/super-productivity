@@ -1,5 +1,6 @@
 import { Locator, Page } from '@playwright/test';
 import { expect, test } from '../../fixtures/test.fixture';
+import { waitForStatePersistence } from '../../utils/waits';
 import { createView, readBoard, toggleViewLayout } from '../../utils/view-helpers';
 
 /**
@@ -47,6 +48,7 @@ test.describe('View layout (List/Board in the title bar)', () => {
     await expect(layoutButton(page)).toBeFocused();
 
     // The mode is stored: it survives a reload.
+    await waitForStatePersistence(page);
     await page.reload();
     await expect(page.locator('boards board')).toHaveClass(/isListLayout/);
 
