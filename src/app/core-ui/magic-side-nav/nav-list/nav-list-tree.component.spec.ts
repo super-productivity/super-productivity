@@ -13,11 +13,13 @@ import { Project } from '../../../features/project/project.model';
 import { MenuTreeKind } from '../../../features/menu-tree/store/menu-tree.model';
 import { MenuTreeService } from '../../../features/menu-tree/menu-tree.service';
 import { selectAllDoneIds } from '../../../features/tasks/store/task.selectors';
+import { DEFAULT_TAG } from '../../../features/tag/tag.const';
 import { TreeDndComponent } from '../../../ui/tree-dnd/tree.component';
 import { MagicNavConfigService } from '../magic-nav-config.service';
 import { NavItem, NavTreeItem } from '../magic-side-nav.model';
 import { NavItemComponent } from '../nav-item/nav-item.component';
 import {
+  getFolderTaskIds,
   getProjectVisibilityIconColor,
   NavListTreeComponent,
 } from './nav-list-tree.component';
@@ -76,6 +78,109 @@ describe('getProjectVisibilityIconColor', () => {
     delete (project as unknown as Record<string, unknown>).theme;
 
     expect(getProjectVisibilityIconColor(project)).toBeNull();
+  });
+});
+
+describe('getFolderTaskIds (#5931)', () => {
+  it('collects the task ids of all projects in a folder, nested folders included', () => {
+    const result = getFolderTaskIds([
+      {
+        id: 'folder-outer',
+        isFolder: true,
+        data: {
+          k: MenuTreeKind.FOLDER,
+          id: 'outer',
+          name: 'Outer',
+          isExpanded: false,
+          children: [],
+        },
+        children: [
+          {
+            id: 'project-a',
+            data: {
+              k: MenuTreeKind.PROJECT,
+              project: createProject({ id: 'a', taskIds: ['t1', 't2'] }),
+            },
+          },
+          {
+            id: 'folder-inner',
+            isFolder: true,
+            data: {
+              k: MenuTreeKind.FOLDER,
+              id: 'inner',
+              name: 'Inner',
+              isExpanded: true,
+              children: [],
+            },
+            children: [
+              {
+                id: 'project-b',
+                data: {
+                  k: MenuTreeKind.PROJECT,
+                  project: createProject({ id: 'b', taskIds: ['t3'] }),
+                },
+              },
+              {
+                id: 'project-hidden',
+                data: {
+                  k: MenuTreeKind.PROJECT,
+                  project: createProject({
+                    id: 'hidden',
+                    taskIds: ['t4'],
+                    isHiddenFromMenu: true,
+                  }),
+                },
+              },
+            ],
+          },
+        ],
+      },
+      {
+        id: 'project-top',
+        data: {
+          k: MenuTreeKind.PROJECT,
+          project: createProject({ id: 'top', taskIds: ['t5'] }),
+        },
+      },
+    ]);
+
+    expect(result.get('folder-outer')).toEqual(['t1', 't2', 't3']);
+    expect(result.get('folder-inner')).toEqual(['t3']);
+    expect(result.has('project-top')).toBeFalse();
+  });
+
+  it('lists a task that is in several tags of a folder only once', () => {
+    const result = getFolderTaskIds([
+      {
+        id: 'folder-tags',
+        isFolder: true,
+        data: {
+          k: MenuTreeKind.FOLDER,
+          id: 'tags',
+          name: 'Tags',
+          isExpanded: true,
+          children: [],
+        },
+        children: [
+          {
+            id: 'tag-a',
+            data: {
+              k: MenuTreeKind.TAG,
+              tag: { ...DEFAULT_TAG, id: 'a', title: 'A', taskIds: ['t1', 't2'] },
+            },
+          },
+          {
+            id: 'tag-b',
+            data: {
+              k: MenuTreeKind.TAG,
+              tag: { ...DEFAULT_TAG, id: 'b', title: 'B', taskIds: ['t2', 't3'] },
+            },
+          },
+        ],
+      },
+    ]);
+
+    expect(result.get('folder-tags')).toEqual(['t1', 't2', 't3']);
   });
 });
 

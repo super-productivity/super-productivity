@@ -60,6 +60,7 @@
   <button
     #folderBtn
     class="nav-link"
+    [class.has-tasks]="nrOfOpenTasks() > 0"
     mat-menu-item
     [attr.aria-expanded]="expanded()"
     [attr.aria-controls]="ariaControls()"
@@ -78,6 +79,10 @@
       </span>
     }
   </button>
+
+  @if (nrOfOpenTasks() > 0) {
+    <div class="task-count">{{ nrOfOpenTasks() }}</div>
+  }
 
   <button
     #folderSettingsBtn

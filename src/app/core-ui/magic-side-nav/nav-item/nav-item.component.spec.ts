@@ -87,6 +87,55 @@ describe('NavItemComponent group header', () => {
 @Component({
   template: `
     <nav-item
+      [mode]="'folder'"
+      [folderId]="'folder-id'"
+      [label]="'Folder'"
+      [folderTaskIds]="folderTaskIds()"
+    ></nav-item>
+  `,
+  imports: [NavItemComponent],
+})
+class FolderHostComponent {
+  readonly folderTaskIds = signal<string[]>([]);
+}
+
+describe('NavItemComponent folder task count (#5931)', () => {
+  let fixture: ComponentFixture<FolderHostComponent>;
+
+  const getTaskCount = (): string | undefined =>
+    fixture.nativeElement.querySelector('.task-count')?.textContent?.trim();
+
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
+      imports: [FolderHostComponent, NoopAnimationsModule, TranslateModule.forRoot()],
+      providers: [
+        provideMockStore({ selectors: [{ selector: selectAllDoneIds, value: ['done'] }] }),
+        { provide: GlobalThemeService, useValue: { registerSvgIcon: () => undefined } },
+        { provide: MagicNavConfigService, useValue: {} },
+      ],
+    }).compileComponents();
+
+    fixture = TestBed.createComponent(FolderHostComponent);
+  });
+
+  it('shows the number of open tasks inside the folder', () => {
+    fixture.componentInstance.folderTaskIds.set(['a', 'b', 'done']);
+    fixture.detectChanges();
+
+    expect(getTaskCount()).toBe('2');
+  });
+
+  it('shows no count when all tasks inside the folder are done', () => {
+    fixture.componentInstance.folderTaskIds.set(['done']);
+    fixture.detectChanges();
+
+    expect(getTaskCount()).toBeUndefined();
+  });
+});
+
+@Component({
+  template: `
+    <nav-item
       [container]="'route'"
       [navRoute]="'/planner'"
       [label]="'Planner'"
