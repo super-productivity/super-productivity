@@ -1,0 +1,30 @@
+---
+# Hand-written from Harper's HaveAHardTime: the idiom needs its article.
+#
+# Harper inserts the `a`, which a `sequence` cannot do, so each form of the
+# verb and each of Harper's two intensifiers gets a swap.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: substitution
+message: "The idiom is `have a hard time`."
+level: warning
+ignorecase: true
+matchcase: true
+nonword: true
+action:
+  name: replace
+swap:
+  '\bhave\s+hard\s+time\b': "have a hard time"
+  '\bhave\s+extremely\s+hard\s+time\b': "have a extremely hard time"
+  '\bhave\s+real\s+hard\s+time\b': "have a real hard time"
+  '\bhad\s+hard\s+time\b': "had a hard time"
+  '\bhad\s+extremely\s+hard\s+time\b': "had a extremely hard time"
+  '\bhad\s+real\s+hard\s+time\b': "had a real hard time"
+  '\bhas\s+hard\s+time\b': "has a hard time"
+  '\bhas\s+extremely\s+hard\s+time\b': "has a extremely hard time"
+  '\bhas\s+real\s+hard\s+time\b': "has a real hard time"
+  '\bhaving\s+hard\s+time\b': "having a hard time"
+  '\bhaving\s+extremely\s+hard\s+time\b': "having a extremely hard time"
+  '\bhaving\s+real\s+hard\s+time\b': "having a real hard time"

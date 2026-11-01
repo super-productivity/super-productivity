@@ -1,0 +1,20 @@
+---
+# Hand-written companion to LittleKnown: the half that drops the article.
+#
+# Before `that`, `little known` is a predicate and takes no article: "it's a
+# little-known that Mustafa Kemal visited" is the error, and Harper's fix
+# removes the `a`.
+#
+# Reported without a fix, since an `existence` rule replaces its match rather
+# than deleting it.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: existence
+message: "This reads better without the article."
+level: warning
+ignorecase: true
+nonword: true
+tokens:
+  - '(?<=\b(?:it''s|its)\s)a\b(?=\s+little[\s-]known\s+that\b)'

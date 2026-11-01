@@ -1,0 +1,22 @@
+# The hard cap: a sentence this long is a confirmed readability problem.
+# The soft limit in Sentence.yml is the same check at 25 words, as a
+# suggestion.
+# https://www.w3.org/WAI/WCAG22/Understanding/reading-level
+extends: occurrence
+message: "This sentence is %d words. The hard cap is 35; split it."
+link: https://www.w3.org/WAI/WCAG22/Understanding/reading-level
+level: warning
+scope: sentence
+max: 35
+token: '\b\w+\b'
+
+tests:
+  - name: fires
+    input: |
+      When you have finished the installation and confirmed that the service starts, open the settings page, choose the account you want to connect, and then paste the token you copied earlier into the field at the bottom.
+    want: |
+      1:1:Plain.SentenceHard:This sentence is 37 words. The hard cap is 35; split it.
+  - name: clean
+    input: |
+      When the service starts, open the settings page. Paste the token into the field.
+    want: ""

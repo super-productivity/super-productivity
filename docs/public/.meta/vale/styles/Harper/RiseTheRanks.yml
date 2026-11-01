@@ -1,0 +1,23 @@
+---
+# Hand-written from Harper's RiseTheRanks: you rise *through* the ranks.
+#
+# Harper offers `through` or `from` and inserts rather than replaces, which a
+# `sequence` cannot do, so each form of the verb gets its own swap.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: substitution
+message: "Did you mean `through the ranks`?"
+level: warning
+ignorecase: true
+matchcase: true
+nonword: true
+action:
+  name: replace
+swap:
+  '\brise\s+the\s+ranks\b': "rise through the ranks"
+  '\brisen\s+the\s+ranks\b': "risen through the ranks"
+  '\brising\s+the\s+ranks\b': "rising through the ranks"
+  '\brose\s+the\s+ranks\b': "rose through the ranks"
+  '\brised\s+the\s+ranks\b': "rose through the ranks"

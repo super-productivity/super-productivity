@@ -1,0 +1,19 @@
+---
+# Generated from Harper's AwareOf rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects `aware about` to the standard `aware of`.
+extends: existence
+message: "Use `aware of` instead of `aware about`."
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "aware of"
+tokens:
+  - "aware(?!\\s*\\n\\s*\\n)\\s+about(?!['\\x{2019}]s\\b)"

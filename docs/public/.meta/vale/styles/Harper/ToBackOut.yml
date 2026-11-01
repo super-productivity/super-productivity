@@ -1,0 +1,19 @@
+---
+# Generated from Harper's ToBackOut rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Treats `to backout` as a mistyped infinitive and prefers the two-word verb.
+extends: existence
+message: "Separate `backout` into the verb `back out` after `to`."
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "to back out"
+tokens:
+  - "to(?!\\s*\\n\\s*\\n)\\s+backout(?!['\\x{2019}]s\\b)"

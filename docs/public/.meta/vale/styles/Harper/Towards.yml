@@ -1,0 +1,19 @@
+---
+# Generated from Harper's Towards rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Removes redundant `to` before `towards`.
+extends: existence
+message: "Use `towards` without the preceding `to`."
+level: suggestion
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "towards"
+tokens:
+  - "to(?!\\s*\\n\\s*\\n)\\s+towards(?!['\\x{2019}]s\\b)"

@@ -1,0 +1,28 @@
+# A tutorial speaks as "we": the first-person plural puts the tutor beside
+# the learner. A tutorial that never says it reads as instructions handed
+# down.
+# https://diataxis.fr/tutorials/#the-language-of-tutorials
+extends: occurrence
+message: "A tutorial says 'we': the tutor is beside the learner. Nothing here does."
+link: https://diataxis.fr/tutorials/#the-language-of-tutorials
+level: suggestion
+scope: summary
+token: "(?i)\\b(?:we|we'll|we're|let's|our)\\b"
+min: 1
+
+tests:
+  - name: fires
+    input: |
+      # Title
+
+      Run the server. Open the page.
+
+    want: |
+      3:1:Tutorial.We:A tutorial says 'we': the tutor is beside the learner. Nothing here does.
+  - name: clean
+    input: |
+      # Title
+
+      In this tutorial we'll run the server. Let's open the page.
+
+    want: ""

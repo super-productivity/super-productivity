@@ -1,0 +1,22 @@
+---
+# Hand-written from Harper's ThingThink: `thing` where `think` is meant,
+# recognised by what comes before it -- a pronoun, a modal, an adverb of
+# frequency, or a verb followed by `to`.
+#
+# The look-behind keeps that context out of the match, so the fix replaces only
+# the wrong word and the alert points at it.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: existence
+message: "Did you mean `think`?"
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "think"
+tokens:
+  - "(?<=\\b(?:I|you|we|they|anybody|anyone|everybody|everyone|every body|(?:have|had|has|having|need|needed|needs|needing|want|wanted|wants|wanting|try|tried|tries|trying)\\s+to|can|cannot|can't|could|couldn't|may|might|mightn't|must|mustn't|shall|shan't|should|shouldn't|will|won't|always|sometimes|often|usually|never)\\s+)thing\\b"

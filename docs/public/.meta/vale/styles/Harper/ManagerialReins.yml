@@ -1,0 +1,19 @@
+---
+# Generated from Harper's ManagerialReins rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects the eggcorn `managerial reigns` to the idiomatic `managerial reins`.
+extends: existence
+message: "Swap in `reins` when talking about control of a team or project."
+level: error
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "managerial reins"
+tokens:
+  - "managerial(?!\\s*\\n\\s*\\n)\\s+reigns(?!['\\x{2019}]s\\b)"

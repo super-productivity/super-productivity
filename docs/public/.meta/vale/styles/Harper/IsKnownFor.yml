@@ -1,0 +1,19 @@
+---
+# Generated from Harper's IsKnownFor rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Typo: `known` is the correct past participle.
+extends: existence
+message: "Did you mean `is known for`?"
+level: error
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "is known for"
+tokens:
+  - "is(?!\\s*\\n\\s*\\n)\\s+know(?!\\s*\\n\\s*\\n)\\s+for(?!['\\x{2019}]s\\b)"

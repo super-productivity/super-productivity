@@ -1,0 +1,24 @@
+---
+# Generated from Harper's ExitedExcitedContext rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Changes `exited` to `excited` when the sentence indicates enthusiasm or anticipation.
+extends: sequence
+message: "This word choice looks off for this meaning."
+level: error
+ignorecase: true
+model: harper
+matchcase: true
+action:
+  name: replace
+  params:
+    - "excited"
+tokens:
+  - pattern: 'be'
+  - upos: ADV
+  - pattern: 'exited'
+    target: true
+  - pattern: 'about|that|for|to'

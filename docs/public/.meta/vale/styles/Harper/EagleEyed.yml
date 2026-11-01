@@ -1,0 +1,19 @@
+---
+# Generated from Harper's EagleEyed rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Treats the phrase as a compound modifier and replaces the space with a hyphen so it reads like one idea.
+extends: existence
+message: "Hyphenate `eagle eyed` when it acts as a single adjective before a noun."
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "eagle-eyed"
+tokens:
+  - "eagle(?!\\s*\\n\\s*\\n)\\s+eyed(?!['\\x{2019}]s\\b)"

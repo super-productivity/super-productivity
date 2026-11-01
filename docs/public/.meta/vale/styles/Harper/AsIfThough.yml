@@ -1,0 +1,20 @@
+---
+# Generated from Harper's AsIfThough rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects redundant `as if though`.
+extends: existence
+message: "This should be `as if` or `as though`."
+level: suggestion
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "as if"
+    - "as though"
+tokens:
+  - "as(?!\\s*\\n\\s*\\n)\\s+if(?!\\s*\\n\\s*\\n)\\s+though(?!['\\x{2019}]s\\b)"

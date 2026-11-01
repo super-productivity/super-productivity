@@ -1,0 +1,26 @@
+---
+# Hand-written from Harper's OverPlus: `over 20 plus` says "more than" twice.
+#
+# The generated rule keyed on the punctuation in its examples.
+#
+# `plus` is matched in lower case and title case but not as `PLUS`, which
+# Harper excludes outright -- an all-caps PLUS is a product name far more often
+# than it is this mistake.
+#
+# Reported without a fix: Harper drops one word or the other, and choosing is
+# the writer's.
+#
+# Three things after `plus` rule it out, all of them Harper leaves alone: a
+# hyphen ("over one million Plus-linked ATMs"), the word `size` ("Over 50
+# plus size outfits", where the count and the compound are separate), and a
+# digit ("over one plus 9", a phone).
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: existence
+message: "It's redundant to use both `over` and `plus`."
+level: warning
+nonword: true
+tokens:
+  - '\b[Oo]ver\s+(?:[0-9][0-9,.]*|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)(?:\s+(?:thousand|million|billion))?\s+[Pp]lus\b(?!-)(?!\s+(?:size|sized|[0-9]))'

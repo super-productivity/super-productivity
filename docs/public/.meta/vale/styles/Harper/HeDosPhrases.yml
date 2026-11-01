@@ -1,0 +1,22 @@
+---
+# Generated from Harper's HeDosPhrases rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects the misspelling `dos` after `he`, `she`, or `it`.
+extends: existence
+message: "Did you mean `does`?"
+level: error
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "does"
+nonword: true
+tokens:
+  - "(?<=\\b(?:she)(?!\\s*\\n\\s*\\n)\\s+)(?:dos)\\b"
+  - "(?<=\\b(?:he)(?!\\s*\\n\\s*\\n)\\s+)(?:dos)\\b"
+  - "(?<=\\b(?:it)(?!\\s*\\n\\s*\\n)\\s+)(?:dos)\\b"

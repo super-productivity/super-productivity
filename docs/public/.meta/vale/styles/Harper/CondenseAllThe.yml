@@ -1,0 +1,19 @@
+---
+# Generated from Harper's CondenseAllThe rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Suggests removing `of` in `all of the` for a more concise phrase.
+extends: existence
+message: "Consider simplifying to `all the`."
+level: suggestion
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "all the"
+tokens:
+  - "all(?!\\s*\\n\\s*\\n)\\s+of(?!\\s*\\n\\s*\\n)\\s+the(?!['\\x{2019}]s\\b)"

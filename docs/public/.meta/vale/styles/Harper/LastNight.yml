@@ -1,0 +1,19 @@
+---
+# Generated from Harper's LastNight rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Flags `yesterday night` and suggests the standard phrasing `last night`.
+extends: existence
+message: "The idiomatic phrase is `last night`."
+level: suggestion
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "last night"
+tokens:
+  - "yesterday(?!\\s*\\n\\s*\\n)\\s+night(?!['\\x{2019}]s\\b)"

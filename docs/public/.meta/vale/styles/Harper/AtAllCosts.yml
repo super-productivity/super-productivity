@@ -1,0 +1,19 @@
+---
+# Generated from Harper's AtAllCosts rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects `at all cost` to `at all costs`.
+extends: existence
+message: "Did you mean `at all costs`?"
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "at all costs"
+tokens:
+  - "at(?!\\s*\\n\\s*\\n)\\s+all(?!\\s*\\n\\s*\\n)\\s+cost(?!['\\x{2019}]s\\b)"

@@ -1,0 +1,18 @@
+---
+# Generated from Harper's ClicheAccent rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Adds the accent to the standard plural spelling of `clichés`.
+extends: substitution
+message: "Did you mean %[1]s?"
+level: error
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+swap:
+  "cliche(?!['\\x{2019}]s\\b)": "cliché"
+  "cliches(?!['\\x{2019}]s\\b)": "clichés"

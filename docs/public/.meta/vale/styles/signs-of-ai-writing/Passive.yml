@@ -1,0 +1,16 @@
+extends: existence
+message: "'%s' looks like passive voice."
+ignorecase: true
+level: suggestion
+link: https://en.wikipedia.org/wiki/Wikipedia:Signs_of_AI_writing
+raw:
+  - \b(am|are|were|being|is|been|was|be)\b\s*
+tokens:
+  - founded
+  - known
+  - considered
+  - established
+  - recognized
+  - created
+  - regarded
+  - developed

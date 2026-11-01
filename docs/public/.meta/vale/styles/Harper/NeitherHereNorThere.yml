@@ -1,0 +1,18 @@
+---
+# Generated from Harper's NeitherHereNorThere rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects `it's here nor there` to the standard idiom `it's neither here nor there`.
+extends: substitution
+message: "Did you mean %[1]s?"
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+swap:
+  "it's(?!\\s*\\n\\s*\\n)\\s+here(?!\\s*\\n\\s*\\n)\\s+nor(?!\\s*\\n\\s*\\n)\\s+there(?!['\\x{2019}]s\\b)": "it's neither here nor there"
+  "that's(?!\\s*\\n\\s*\\n)\\s+here(?!\\s*\\n\\s*\\n)\\s+nor(?!\\s*\\n\\s*\\n)\\s+there(?!['\\x{2019}]s\\b)": "that's neither here nor there"

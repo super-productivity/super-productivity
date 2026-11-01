@@ -1,0 +1,19 @@
+---
+# Generated from Harper's BesideThePoint rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects `besides the point` to `beside the point`.
+extends: existence
+message: "Use `beside` in the idiom `beside the point`."
+level: error
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "beside the point"
+tokens:
+  - "besides(?!\\s*\\n\\s*\\n)\\s+the(?!\\s*\\n\\s*\\n)\\s+point(?!['\\x{2019}]s\\b)"

@@ -1,0 +1,30 @@
+---
+# Hand-written from Harper's TheMy: an article and a possessive together.
+#
+# Harper drops two cases after matching, and the generated rule kept both:
+#
+#   `her the` -- `her` is also the object pronoun, so "give her the book" is
+#   ordinary English rather than a doubled determiner.
+#
+#   a second word starting uppercase -- "My The Frame TV" names a product, and
+#   Harper will not guess otherwise.
+#
+# Neither is a pattern Harper rejects; they are checks it runs on what it
+# matched. Spelling the case out in the tokens comes to the same thing, at the
+# cost of `ignorecase`: the article has to be lowercase to be an article, so
+# the possessives carry their own capitals instead.
+#
+# Harper has a second branch for `the` before a possessive that the generated
+# rule never had, and this does not add it. That is a recall gap, not a
+# precision one.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: sequence
+message: "Use either the definite article 'the' or the possessive. Using both together is ungrammatical in English."
+level: warning
+model: harper
+tokens:
+  - pattern: '[Tt]heir|[Yy]our|[Hh]is|[Ii]ts|[Oo]ur|[Mm]y'
+  - pattern: 'the'

@@ -1,0 +1,19 @@
+---
+# Generated from Harper's OkToOkay rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects `ok` to `okay`.
+extends: existence
+message: "Use `okay` instead of `ok`."
+level: error
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "okay"
+tokens:
+  - "ok(?!['\\x{2019}]s\\b)"

@@ -1,0 +1,44 @@
+# Third-party notices: voice corpus
+
+The files under `example-text/` are excerpts from published documentation.
+The excerpts are trimmed: quotations keep their original wording, but surrounding text, headings, images, and code samples are omitted.
+They calibrate voice and structure; they are not content sources.
+Each file's `source:` frontmatter records the exact page, title, and URL.
+
+| Source project | File suffix      | Files | License      |
+| -------------- | ---------------- | ----- | ------------ |
+| Kubernetes     | `.k8s.md`        | 9     | CC BY 4.0    |
+| Cloudflare     | `.cloudflare.md` | 2     | CC BY 4.0    |
+| Gatsby         | `.gatsby.md`     | 4     | MIT          |
+| Astro          | `.astro.md`      | 2     | MIT          |
+| Ubuntu         | `.ubuntu.md`     | 1     | CC BY-SA 4.0 |
+
+## Attribution and licenses
+
+- Kubernetes: Copyright The Kubernetes Authors; CC BY 4.0, [upstream license][kubernetes-license].
+- Cloudflare: Copyright Cloudflare, Inc.; CC BY 4.0, [upstream license][cloudflare-license].
+- Gatsby: Copyright (c) 2015 Gatsbyjs; MIT, [upstream license][gatsby-license].
+- Astro: Copyright (c) 2022 withastro; MIT, [upstream license][astro-license].
+- Ubuntu: Copyright Canonical Ltd.; CC BY-SA 4.0, [maintained source][ubuntu-docs] and [upstream license][ubuntu-license].
+
+The Ubuntu excerpt comes from an older tutorial page that states no license on its face; the maintained version of that tutorial is published under CC BY-SA 4.0 in [ubuntu-docs].
+
+## Linked sources
+
+`PATTERNS.md` quotes short passages from three Grafana k6 documentation pages and links to each page.
+The full pages are not vendored, and Grafana's own copyright terms apply to them.
+
+## License texts
+
+The full license texts are in `licenses/`:
+
+- `licenses/CC-BY-4.0.txt`
+- `licenses/CC-BY-SA-4.0.txt`
+- `licenses/MIT.txt`
+
+[kubernetes-license]: https://github.com/kubernetes/website/blob/main/LICENSE
+[cloudflare-license]: https://github.com/cloudflare/cloudflare-docs/blob/production/LICENSE
+[gatsby-license]: https://github.com/gatsbyjs/gatsby/blob/master/LICENSE
+[astro-license]: https://github.com/withastro/docs/blob/main/LICENSE
+[ubuntu-docs]: https://github.com/ubuntu/ubuntu-desktop-documentation
+[ubuntu-license]: https://github.com/ubuntu/ubuntu-desktop-documentation/blob/main/LICENSE

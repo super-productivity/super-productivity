@@ -1,0 +1,23 @@
+---
+# Hand-written companion to ThereIsAgreement: the contracted form.
+#
+# `there's` is two tokens -- `there` and `'s` -- so it needs its own rule
+# rather than another spelling in the first position of the other one.
+#
+# Harper also catches the inverted question form ("are there object"). That
+# is left out on purpose: the tagger reads `Are` as a proper noun and
+# `object` as an adjective in a sentence that is already ungrammatical, so no
+# tag-based rule can match it.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: sequence
+message: "There is disagreement in number between the verb and the noun."
+level: warning
+ignorecase: true
+tokens:
+  - pattern: 'there'
+  - pattern: "'s"
+    target: true
+  - tag: 'NNS'

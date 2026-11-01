@@ -1,0 +1,31 @@
+# One top-level heading per page: it's the title, and the first thing a
+# screen reader user asks for. A metric measures prose, so a page of
+# headings and nothing else is not measured.
+# https://www.w3.org/WAI/tutorials/page-structure/headings/
+extends: metric
+message: "%s top-level headings. A page has one; the rest are sections."
+link: https://www.w3.org/WAI/tutorials/page-structure/headings/
+level: suggestion
+formula: heading.h1
+condition: "> 1"
+
+tests:
+  - name: fires
+    input: |
+      # Title
+
+      Body.
+
+      # Another title
+
+      More body.
+    want: |
+      1:1:A11y.HeadingMultiple:2.00 top-level headings. A page has one; the rest are sections.
+  - name: clean
+    input: |
+      # Title
+
+      Body.
+
+      ## Section
+    want: ""

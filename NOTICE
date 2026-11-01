@@ -1,0 +1,8 @@
+# Notices
+
+This repository contains third-party material under the licenses below.
+
+- **Diátaxis skill tenets**: CC BY-SA 4.0; see `.agents/skills/diataxis/NOTICE`.
+- **Voice corpus**: CC BY 4.0, MIT, and CC BY-SA 4.0; see `.agents/skills/diataxis/voice/NOTICE`.
+- **Linked sources**: short Grafana k6 quotations appear in `.agents/skills/diataxis/voice/PATTERNS.md`; the full pages are linked, not vendored.
+- **Harper rules and dictionary**: Apache-2.0; see `docs/public/.meta/vale/NOTICE` and the `LICENSE` files in `docs/public/.meta/vale/styles/Harper/` and `docs/public/.meta/vale/styles/config/dictionaries/`.

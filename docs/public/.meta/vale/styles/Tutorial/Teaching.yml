@@ -1,0 +1,26 @@
+# A tutorial shows the learner what they will build. A promise that they
+# will learn is presumptuous and replaces the concrete outcome.
+# https://diataxis.fr/tutorials/#the-language-of-tutorials
+extends: existence
+message: "'%s' is a learning promise. Say what the learner will build instead."
+link: https://diataxis.fr/tutorials/#the-language-of-tutorials
+level: warning
+ignorecase: true
+tokens:
+  - "(?:you|we)(?:'ll| will) learn"
+  - "let's learn"
+
+tests:
+  - name: fires
+    input: |
+      # Getting started
+
+      In this tutorial, you'll learn to build a site.
+    want: |
+      3:19:Tutorial.Teaching:'you'll learn' is a learning promise. Say what the learner will build instead.
+  - name: clean
+    input: |
+      # Getting started
+
+      In this tutorial, we'll build a small site.
+    want: ""

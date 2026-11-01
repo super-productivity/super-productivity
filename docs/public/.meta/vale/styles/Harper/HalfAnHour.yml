@@ -1,0 +1,19 @@
+---
+# Generated from Harper's HalfAnHour rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Fixes the eggcorn `half an our` to the accepted `half an hour`.
+extends: existence
+message: "Remember the silent 'h' when writing `hour`: `half an hour`."
+level: error
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "half an hour"
+tokens:
+  - "half(?!\\s*\\n\\s*\\n)\\s+an(?!\\s*\\n\\s*\\n)\\s+our(?!['\\x{2019}]s\\b)"

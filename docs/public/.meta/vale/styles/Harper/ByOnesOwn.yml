@@ -1,0 +1,29 @@
+---
+# Hand-written from Harper's ByOnesOwn:
+#   "by" + possessive determiner + "own", with nothing after it
+#
+# The trailing lookahead is the whole rule. `by his own` standing alone is
+# unidiomatic, but the same three words followed by a noun are ordinary
+# English -- "broken only by her own ragged breathing" -- and Harper drops the
+# match when any word follows. Without that test this fires on every one of
+# them.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: substitution
+message: "`By one's own` is not idiomatic. Consider either `on one's own` or `by oneself`."
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+swap:
+  'by my own(?!\s+\w)': "on my own"
+  'by our own(?!\s+\w)': "on our own"
+  'by your own(?!\s+\w)': "on your own"
+  'by his own(?!\s+\w)': "on his own"
+  'by her own(?!\s+\w)': "on her own"
+  'by its own(?!\s+\w)': "on its own"
+  'by their own(?!\s+\w)': "on their own"
+  "by one's own(?!\\s+\\w)": "on one's own"

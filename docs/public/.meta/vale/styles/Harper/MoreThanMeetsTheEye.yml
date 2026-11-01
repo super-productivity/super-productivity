@@ -1,0 +1,21 @@
+---
+# Generated from Harper's MoreThanMeetsTheEye rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects nonstandard and less idiomatic variants of `more than meets the eye`.
+extends: existence
+message: "For something that has hidden complexity or depth, `more than meets the eye` is the most idiomatic and most standard."
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "more than meets the eye"
+tokens:
+  - "more(?!\\s*\\n\\s*\\n)\\s+than(?!\\s*\\n\\s*\\n)\\s+what(?!\\s*\\n\\s*\\n)\\s+meets(?!\\s*\\n\\s*\\n)\\s+the(?!\\s*\\n\\s*\\n)\\s+eye(?!['\\x{2019}]s\\b)"
+  - "more(?!\\s*\\n\\s*\\n)\\s+that(?!\\s*\\n\\s*\\n)\\s+what(?!\\s*\\n\\s*\\n)\\s+meets(?!\\s*\\n\\s*\\n)\\s+the(?!\\s*\\n\\s*\\n)\\s+eye(?!['\\x{2019}]s\\b)"
+  - "more(?!\\s*\\n\\s*\\n)\\s+that(?!\\s*\\n\\s*\\n)\\s+meets(?!\\s*\\n\\s*\\n)\\s+the(?!\\s*\\n\\s*\\n)\\s+eye(?!['\\x{2019}]s\\b)"
