@@ -6,7 +6,7 @@ import {
   HttpParams,
   HttpRequest,
 } from '@angular/common/http';
-import { parseUrl, stringifyUrl } from 'query-string';
+import queryString from 'query-string';
 import { EMPTY, Observable } from 'rxjs';
 import { SnackService } from 'src/app/core/snack/snack.service';
 
@@ -273,8 +273,8 @@ export class GitlabApiService {
     cfg: GitlabCfg,
     page: number,
   ): Observable<any> {
-    const parsedUrl = parseUrl(params.url);
-    params.url = stringifyUrl({
+    const parsedUrl = queryString.parseUrl(params.url);
+    params.url = queryString.stringifyUrl({
       url: parsedUrl.url,
       query: {
         ...parsedUrl.query,
