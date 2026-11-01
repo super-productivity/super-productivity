@@ -9,6 +9,7 @@ import { Store } from '@ngrx/store';
 import { selectAllTags } from '../../tag/store/tag.reducer';
 import { Tag } from '../../tag/tag.model';
 import { getDbDateStr } from '../../../util/get-db-date-str';
+import { parseDbDateStr } from '../../../util/parse-db-date-str';
 import { AsyncPipe } from '@angular/common';
 import { MsToStringPipe } from '../../../ui/duration/ms-to-string.pipe';
 import { TranslatePipe } from '@ngx-translate/core';
@@ -64,7 +65,10 @@ export class TasksByTagComponent {
 
   private _mapToTagWithTasks(tag: Tag): TagWithTimeSpent {
     // if (this.isShowYesterday && this.isForToday) {
-    const yesterdayDate = new Date();
+    // Derive from dayStr (logical today): between midnight and the configured
+    // day start, the calendar yesterday IS the logical today and would
+    // double-count its time.
+    const yesterdayDate = parseDbDateStr(this.dayStr());
     yesterdayDate.setDate(yesterdayDate.getDate() - 1);
     const yesterdayDayStr = getDbDateStr(yesterdayDate);
 
