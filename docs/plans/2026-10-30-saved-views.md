@@ -1919,3 +1919,17 @@ Left open (for the user):
   first-tabbable default, unchanged since phase 5). Opening the editor by
   tapping the view's title on a phone may raise the keyboard over the
   full-screen editor; not verifiable without a device.
+
+Coordinator follow-up to the phase 7 implementation review (2026-11-01):
+the arrival from another page (the user's original complaint, Save as view…
+on a task list) is fixed at the page level. `AppComponent.getPage` reports
+`view-arrival` while the active route shows the view in
+`BoardsService.arrivalId`, and `warpRoute` has a `* => view-arrival`
+transition: the new page slides in from the right (translateX 25% → 0, fade)
+while the old one slides left and fades, `ANI_ENTER_TIMING`. `boards <=>
+view-arrival` don't animate, so creating on the view page keeps the board's
+own `viewSwitch` arrival, and the state settling back to `boards` after
+`arrivalId` clears doesn't replay anything. Measured at 400px after Save as
+view: the board goes from x=+100px/opacity 0 to 0/1 over the full transition
+while the task page leaves, then stays put (no second motion). Same motion on
+wide screens.

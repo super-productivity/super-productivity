@@ -23,9 +23,10 @@ export interface ViewSwitchParams {
  * page `warpRoute` already animates it (and its `animateChild()` would replay
  * an `:enter` afterwards), and a leaving board must not animate. A created
  * view does enter from the empty `/boards` page (same page, no `warpRoute`),
- * so it reads as somewhere new. From another page `warpRoute` is the motion:
- * its `animateChild()` reaches only the route's host, so this enter is
- * blocked there (measured), and its `.done` still clears the arrival. No
+ * so it reads as somewhere new. From another page the page itself arrives:
+ * `AppComponent.getPage` reports `view-arrival` and `warpRoute` slides the page
+ * in from the right; this enter is blocked there (its `.done` still clears the
+ * arrival, which `warpRoute` lets settle without animating again). No
  * `animateChild()` here, so the board's own triggers don't replay after it.
  */
 export const viewSwitchAnimation = [

@@ -93,6 +93,7 @@ import { QuickTourService } from './features/onboarding/quick-tour.service';
 import { MaterialIconsLoaderService } from './ui/material-icons-loader.service';
 import { BrowserTitleService } from './core/browser-title/browser-title.service';
 import { ViewTaskListRegistry } from './features/tasks/view-task-list-registry.service';
+import { BoardsService } from './features/boards/boards.service';
 
 const ENTRANCE_ANIMATION_DURATION = 1500;
 
@@ -146,6 +147,7 @@ export class AppComponent implements OnDestroy, AfterViewInit {
   private _matDialog = inject(MatDialog);
   private _markdownPasteService = inject(MarkdownPasteService);
   private _taskService = inject(TaskService);
+  private _boardsService = inject(BoardsService);
   private _taskAttachmentService = inject(TaskAttachmentService);
   private _translateService = inject(TranslateService);
   private _projectService = inject(ProjectService);
@@ -412,7 +414,16 @@ export class AppComponent implements OnDestroy, AfterViewInit {
   }
 
   getPage(outlet: RouterOutlet): string {
-    return outlet.activatedRouteData.page || 'one';
+    const page = outlet.activatedRouteData.page || 'one';
+    // A view just created gets its own forward motion (see warpRoute).
+    if (
+      page === 'boards' &&
+      outlet.isActivated &&
+      outlet.activatedRoute.snapshot.params['boardId'] === this._boardsService.arrivalId()
+    ) {
+      return 'view-arrival';
+    }
+    return page;
   }
 
   /**
