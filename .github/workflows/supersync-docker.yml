@@ -74,11 +74,17 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Lowercase repository owner
+        id: vars
+        shell: bash
+        run: |
+          echo "owner=${GITHUB_REPOSITORY_OWNER@L}" >> $GITHUB_OUTPUT
+
       - name: Extract metadata (tags)
         id: meta
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302
         with:
-          images: ghcr.io/super-productivity/supersync
+          images: ghcr.io/${{ steps.vars.outputs.owner }}/supersync
           tags: |
             type=raw,value=latest
             type=sha,prefix={{branch}}-
@@ -174,6 +180,12 @@ jobs:
             registry.npmjs.org:443
             objects.githubusercontent.com:443
 
+      - name: Lowercase repository owner
+        id: vars
+        shell: bash
+        run: |
+          echo "owner=${GITHUB_REPOSITORY_OWNER@L}" >> $GITHUB_OUTPUT
+
       - name: Resolve release tag
         id: tag
         shell: bash
@@ -234,7 +246,7 @@ jobs:
           context: .
           file: ./packages/super-sync-server/Dockerfile
           push: true
-          tags: ghcr.io/super-productivity/supersync:${{ steps.tag.outputs.tag }}
+          tags: ghcr.io/${{ steps.vars.outputs.owner }}/supersync:${{ steps.tag.outputs.tag }}
           build-args: |
             VCS_REF=${{ steps.source-ref.outputs.revision }}
           no-cache: true
