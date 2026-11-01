@@ -20,6 +20,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { IssueLog } from '../../../core/log';
 import { SyncTriggerService } from '../../../imex/sync/sync-trigger.service';
 import { IS_ONLINE$ } from '../../../util/is-online.token';
+import { PluginIssueProviderRegistryService } from '../../../plugins/issue-provider/plugin-issue-provider-registry.service';
 
 describe('PollIssueUpdatesEffects', () => {
   let effects: PollIssueUpdatesEffects;
@@ -29,6 +30,7 @@ describe('PollIssueUpdatesEffects', () => {
   let workContextServiceSpy: jasmine.SpyObj<WorkContextService>;
   let initialSyncDone$: Subject<boolean>;
   let isOnline$: BehaviorSubject<boolean>;
+  let registrationChanges$: BehaviorSubject<number>;
 
   const createMockTask = (overrides: Partial<Task> = {}): Task =>
     ({
@@ -64,6 +66,7 @@ describe('PollIssueUpdatesEffects', () => {
   beforeEach(() => {
     initialSyncDone$ = new Subject<boolean>();
     isOnline$ = new BehaviorSubject<boolean>(true);
+    registrationChanges$ = new BehaviorSubject(0);
     issueServiceSpy = jasmine.createSpyObj('IssueService', [
       'getPollInterval',
       'refreshIssueTasks',
@@ -98,6 +101,10 @@ describe('PollIssueUpdatesEffects', () => {
           useValue: { afterInitialSyncDoneStrict$: initialSyncDone$ },
         },
         { provide: IS_ONLINE$, useValue: isOnline$ },
+        {
+          provide: PluginIssueProviderRegistryService,
+          useValue: { registrationChanges$ },
+        },
       ],
     });
 
@@ -110,6 +117,47 @@ describe('PollIssueUpdatesEffects', () => {
   });
 
   describe('pollIssueChangesForCurrentContext$', () => {
+    it('should start polling when a plugin provider registers after the context switch', fakeAsync(() => {
+      let linearInterval = 0;
+      issueServiceSpy.getPollInterval.and.callFake(() => linearInterval);
+      const provider = createMockIssueProvider({
+        id: 'linear-1',
+        issueProviderKey: 'LINEAR',
+        pollingMode: 'whenProjectOpen',
+      });
+      const task = createMockTask({
+        issueId: 'LIN-1',
+        issueType: 'LINEAR',
+        issueProviderId: 'linear-1',
+      });
+      Object.defineProperty(workContextServiceSpy, 'allTasksForCurrentContext$', {
+        value: of([task]),
+      });
+      store.overrideSelector(selectEnabledIssueProviders, [provider]);
+      store.refreshState();
+
+      const actionsSubject = new Subject<any>();
+      actions$ = actionsSubject.asObservable();
+      const subscription = effects.pollIssueChangesForCurrentContext$.subscribe();
+      actionsSubject.next(
+        setActiveWorkContext({
+          activeType: WorkContextType.PROJECT,
+          activeId: 'project-1',
+        }),
+      );
+
+      tick(300000);
+      expect(issueServiceSpy.refreshIssueTasks).not.toHaveBeenCalled();
+
+      // The plugin registers: its poll interval becomes known.
+      linearInterval = 300000;
+      registrationChanges$.next(1);
+      tick(10001);
+      expect(issueServiceSpy.refreshIssueTasks).toHaveBeenCalledWith([task], provider);
+
+      subscription.unsubscribe();
+    }));
+
     it('should trigger polling when setActiveWorkContext action is dispatched', fakeAsync(() => {
       const calendarProvider = createMockIssueProvider({
         id: 'cal-provider-1',
@@ -792,6 +840,38 @@ describe('PollIssueUpdatesEffects', () => {
   });
 
   describe('pollIssueChangesAlways$', () => {
+    it('should start polling when a plugin provider registers after the initial sync', fakeAsync(() => {
+      let linearInterval = 0;
+      issueServiceSpy.getPollInterval.and.callFake(() => linearInterval);
+      const provider = createMockIssueProvider({
+        id: 'linear-1',
+        issueProviderKey: 'LINEAR',
+        pollingMode: 'always',
+      });
+      const task = createMockTask({
+        issueId: 'LIN-1',
+        issueType: 'LINEAR',
+        issueProviderId: 'linear-1',
+      });
+      store.overrideSelector(selectEnabledIssueProviders, [provider]);
+      store.overrideSelector(selectAllTasks, [task]);
+      store.refreshState();
+
+      const subscription = effects.pollIssueChangesAlways$.subscribe();
+      initialSyncDone$.next(true);
+
+      tick(300000);
+      expect(issueServiceSpy.refreshIssueTasks).not.toHaveBeenCalled();
+
+      // The plugin registers: its poll interval becomes known.
+      linearInterval = 300000;
+      registrationChanges$.next(1);
+      tick(10001);
+      expect(issueServiceSpy.refreshIssueTasks).toHaveBeenCalledWith([task], provider);
+
+      subscription.unsubscribe();
+    }));
+
     it('should poll ALL tasks for providers with pollingMode always', fakeAsync(() => {
       const jiraProvider = createMockIssueProvider({
         id: 'jira-provider-1',
