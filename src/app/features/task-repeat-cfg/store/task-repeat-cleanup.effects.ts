@@ -21,6 +21,7 @@ import { TODAY_TAG } from '../../tag/tag.const';
 import { isValidSplitTime } from '../../../util/is-valid-split-time';
 import { getRepeatDueWithTime } from './get-repeat-due-with-time.util';
 import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
+import { getRepeatDeadlineDay } from './get-repeat-deadline-day.util';
 import { TaskTimeSyncService } from '../../tasks/task-time-sync.service';
 import { getTaskPriority } from '../../tasks/task-priority.const';
 import { selectConfigFeatureState } from '../../config/store/global-config.reducer';
@@ -41,6 +42,16 @@ const _hasNoDeadlineFields = (
   task: Pick<TaskWithSubTasks, 'deadlineDay' | 'deadlineWithTime' | 'deadlineRemindAt'>,
 ): boolean =>
   _isNil(task.deadlineDay) &&
+  _isNil(task.deadlineWithTime) &&
+  _isNil(task.deadlineRemindAt);
+
+// A cfg-derived deadline is template data; any other deadline is a user edit.
+const _hasTemplateDeadline = (
+  task: TaskWithSubTasks,
+  cfg: TaskRepeatCfg,
+  dueStr: string,
+): boolean =>
+  (task.deadlineDay ?? undefined) === getRepeatDeadlineDay(cfg, dueStr) &&
   _isNil(task.deadlineWithTime) &&
   _isNil(task.deadlineRemindAt);
 
@@ -149,7 +160,7 @@ const _isUnmodifiedSkipOverdueInstance = (
     ? task.projectId === cfg.projectId
     : task.projectId === newestInstanceProjectId) &&
   _hasTemplateSchedule(task, cfg, dueStr, startOfNextDayDiffMs) &&
-  _hasNoDeadlineFields(task) &&
+  _hasTemplateDeadline(task, cfg, dueStr) &&
   _hasTemplateSubTasks(task, cfg, timeTrackingCfg);
 
 @Injectable()

@@ -44,6 +44,7 @@ import {
   getRepeatableTaskId,
 } from './get-repeatable-task-id.util';
 import { getDeadlineAutoPlanFields } from '../tasks/util/get-deadline-auto-plan-fields';
+import { getRepeatDeadlineDay } from './store/get-repeat-deadline-day.util';
 import { getTaskPriority } from '../tasks/task-priority.const';
 import { addTaskToSection } from '../section/store/section.actions';
 import { selectSectionFeatureState } from '../section/store/section.selectors';
@@ -470,6 +471,7 @@ export class TaskRepeatCfgService {
           projectId: taskRepeatCfg.projectId || undefined,
           notes: taskRepeatCfg.notes || '',
           dueDay,
+          deadlineDay: getRepeatDeadlineDay(taskRepeatCfg, dueDay),
           tagIds: taskRepeatCfg.tagIds.filter((tagId) => tagId !== TODAY_TAG.id),
         },
       }),

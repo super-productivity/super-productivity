@@ -2214,6 +2214,8 @@
         "C_YEAR": "Year",
         "C_YEARS": "Years",
         "DEFAULT_ESTIMATE": "Default Estimate",
+        "DEADLINE_OFFSET_DAYS": "Deadline (days after each occurrence)",
+        "DEADLINE_OFFSET_DAYS_DESCRIPTION": "Empty for no deadline. 0 = due on the same day.",
         "DISABLE_AUTO_UPDATE_SUBTASKS": "Disable auto-updating subtasks",
         "DISABLE_AUTO_UPDATE_SUBTASKS_DESCRIPTION": "Do not update inherited subtasks automatically when the newest copy changes",
         "FALL_BEHIND": "If you fall behind",

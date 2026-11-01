@@ -46,6 +46,7 @@ import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { getDbDateStr, isDBDateStr } from '../../../util/get-db-date-str';
 import { formatMonthDay } from '../../../util/format-month-day.util';
 import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
+import { getDeadlineOffsetDays } from '../store/get-repeat-deadline-day.util';
 import { first } from 'rxjs/operators';
 import { getQuickSettingUpdates } from './get-quick-setting-updates';
 import { getDefaultSkipOverdue } from './get-default-skip-overdue';
@@ -675,21 +676,26 @@ export class DialogEditTaskRepeatCfgComponent {
       const startTime = this._data.task.dueWithTime
         ? clockStringFromDate(this._data.task.dueWithTime)
         : undefined;
+      const startOfNextDayDiffMs = this._dateService.getStartOfNextDayDiffMs();
+      const startDate =
+        this._data.initialStartDate ??
+        this._data.task.dueDay ??
+        // the logical day, so a late-night time keeps its night (#3378)
+        (this._data.task.dueWithTime
+          ? getDbDateStr(this._data.task.dueWithTime - startOfNextDayDiffMs)
+          : this._dateService.todayStr());
+      const deadlineDay =
+        this._data.task.deadlineDay ??
+        (this._data.task.deadlineWithTime
+          ? getDbDateStr(this._data.task.deadlineWithTime - startOfNextDayDiffMs)
+          : undefined);
       return withFallBehind({
         ...DEFAULT_TASK_REPEAT_CFG,
         // New configs open on the "Daily" quick setting, where collapsing empty
         // overdue instances is both useful and safe; see getDefaultSkipOverdue.
         // Re-derived from the final schedule on save in case the user switches.
         skipOverdue: getDefaultSkipOverdue(DEFAULT_TASK_REPEAT_CFG),
-        startDate:
-          this._data.initialStartDate ??
-          this._data.task.dueDay ??
-          // the logical day, so a late-night time keeps its night (#3378)
-          (this._data.task.dueWithTime
-            ? getDbDateStr(
-                this._data.task.dueWithTime - this._dateService.getStartOfNextDayDiffMs(),
-              )
-            : this._dateService.todayStr()),
+        startDate,
         startTime,
         remindAt: startTime
           ? (this._data.defaultRemindOption ??
@@ -702,6 +708,8 @@ export class DialogEditTaskRepeatCfgComponent {
         tagIds: unique(this._data.task.tagIds),
         defaultEstimate: this._data.task.timeEstimate,
         priority: getTaskPriority(this._data.task.priority),
+        // Keep the task's due→deadline gap for every occurrence (#10983).
+        deadlineOffsetDays: getDeadlineOffsetDays(startDate, deadlineDay),
       });
     } else {
       throw new Error('Invalid params given for repeat dialog!');
@@ -971,6 +979,7 @@ export class DialogEditTaskRepeatCfgComponent {
       monthlyLastDay?: boolean;
       quickSetting?: string;
       repeatUntilDay?: string | null;
+      deadlineOffsetDays?: number | null;
     },
   >(cfg: T): T {
     let result = cfg;
@@ -992,6 +1001,10 @@ export class DialogEditTaskRepeatCfgComponent {
     // clear is sent via `clearedFields` (#10091).
     if (result.repeatUntilDay === null) {
       result = { ...result, repeatUntilDay: undefined };
+    }
+    // A cleared number input leaves `null`; the model only allows `undefined`.
+    if (result.deadlineOffsetDays === null) {
+      result = { ...result, deadlineOffsetDays: undefined };
     }
     return result;
   }
