@@ -70,6 +70,7 @@ class CapacitorMainActivity : BridgeActivity() {
     private var isForegroundServiceFailureReceiverRegistered = false
     private var isWidgetDoneDrainReceiverRegistered = false
     private var isNotificationActionDrainReceiverRegistered = false
+    private var isWidgetProjectOpenDrainReceiverRegistered = false
 
     private val storageHelper =
         SimpleStorageHelper(this) // for scoped storage permission management on Android 10+
@@ -100,6 +101,16 @@ class CapacitorMainActivity : BridgeActivity() {
             if (intent?.action == NotificationActionReceiver.ACTION_DRAIN) {
                 // Contentless: Angular pulls the queued actions itself.
                 callJSInterfaceFunctionIfExists("next", "onNotificationActionDrainRequest$")
+            }
+        }
+    }
+
+    private val widgetProjectOpenDrainReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == TaskListWidgetProvider.ACTION_WIDGET_PROJECT_OPEN_DRAIN) {
+                // The project ID remains in the native queue so cold and warm starts
+                // use the same pull-based Angular delivery path.
+                callJSInterfaceFunctionIfExists("next", "onWidgetProjectOpenDrainRequest$")
             }
         }
     }
@@ -152,6 +163,7 @@ class CapacitorMainActivity : BridgeActivity() {
         // recents guard in onNewIntent doesn't catch it. A stale VIEW data URI
         // would re-fire appUrlOpen and duplicate the URL scheme task action;
         // clear it (mirrors the savedInstanceState guard for handleIntent below).
+        var isReplayedLaunch = false
         if (savedInstanceState != null) {
             intent?.data = null
         } else if (intent != null &&
@@ -159,6 +171,7 @@ class CapacitorMainActivity : BridgeActivity() {
         ) {
             // The system relaunched the task after a package update (#11153).
             intent.data = null
+            isReplayedLaunch = true
         }
         try {
             super.onCreate(savedInstanceState)
@@ -278,6 +291,19 @@ class CapacitorMainActivity : BridgeActivity() {
             IntentFilter(NotificationActionReceiver.ACTION_DRAIN)
         )
         isNotificationActionDrainReceiverRegistered = true
+        LocalBroadcastManager.getInstance(this).registerReceiver(
+            widgetProjectOpenDrainReceiver,
+            IntentFilter(TaskListWidgetProvider.ACTION_WIDGET_PROJECT_OPEN_DRAIN)
+        )
+        isWidgetProjectOpenDrainReceiverRegistered = true
+
+        // Direct widget activity PendingIntents arrive here on both cold and warm
+        // starts. Keep the project ID in the native queue for the existing pull path;
+        // the drain broadcast additionally wakes an already-running frontend.
+        // A base intent the system replays after a package update is not a new tap.
+        if (savedInstanceState == null && !isReplayedLaunch) {
+            handleWidgetProjectOpenIntent(intent)
+        }
 
         // Schedule background sync worker if credentials are configured.
         // Off the main thread: the first credential read opens the
@@ -367,7 +393,23 @@ class CapacitorMainActivity : BridgeActivity() {
             intent.data = null
         }
         super.onNewIntent(intent)
+        handleWidgetProjectOpenIntent(intent)
         handleIntent(intent)
+    }
+
+    private fun handleWidgetProjectOpenIntent(intent: Intent) {
+        val projectId = intent.getStringExtra(TaskListWidgetProvider.EXTRA_OPEN_PROJECT_ID)
+            ?: return
+        intent.removeExtra(TaskListWidgetProvider.EXTRA_OPEN_PROJECT_ID)
+        // Reopening from recents re-delivers the task's base intent (after a reboot
+        // even into a fresh activity) with the widget tap's extra still on it, since
+        // removeExtra only changes this process's copy. That is not a new tap.
+        if (intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY != 0) {
+            return
+        }
+        TaskListWidgetProvider.queueProjectToOpen(this, projectId)
+        LocalBroadcastManager.getInstance(this)
+            .sendBroadcast(Intent(TaskListWidgetProvider.ACTION_WIDGET_PROJECT_OPEN_DRAIN))
     }
 
     /** Called by the web app once its bundle has initialised, including after a reload. */
@@ -663,6 +705,12 @@ class CapacitorMainActivity : BridgeActivity() {
                 notificationActionDrainReceiver
             )
             isNotificationActionDrainReceiverRegistered = false
+        }
+        if (isWidgetProjectOpenDrainReceiverRegistered) {
+            LocalBroadcastManager.getInstance(this).unregisterReceiver(
+                widgetProjectOpenDrainReceiver
+            )
+            isWidgetProjectOpenDrainReceiverRegistered = false
         }
         super.onDestroy()
     }

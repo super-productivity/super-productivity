@@ -158,6 +158,9 @@ export interface AndroidInterface {
   // widget as a JSON object string `{taskId: targetIsDone}` and clear the queue
   getWidgetDoneQueue?(): string | null;
 
+  // Project ID selected by the most recent project-widget tap (header or row)
+  getWidgetProjectToOpen?(): string | null;
+
   // Re-render the home screen widget from the current widget_data snapshot
   updateWidget?(): void;
 
@@ -201,6 +204,11 @@ export interface AndroidInterface {
   // Contentless "drain now" signal after a tracking/focus/remote-stop notification
   // tap while the activity is alive; the actions are pulled via the queue getters
   onNotificationActionDrainRequest$: Subject<void>;
+
+  // Contentless native signal after a project-widget tap. Angular pulls the
+  // project ID from the native queue so cold and warm starts share one path.
+  onWidgetProjectOpenDrainRequest$: Subject<void>;
+  onWidgetProjectOpen$: ReplaySubject<string>;
 
   // Background sync credential bridge (for WorkManager-based reminder cancellation)
   setSuperSyncCredentials?(baseUrl: string, accessToken: string): void;
@@ -257,6 +265,8 @@ if (IS_ANDROID_WEB_VIEW) {
   androidInterface.onReminderSnooze$ = new ReplaySubject(20);
   androidInterface.onWidgetDoneDrainRequest$ = new Subject();
   androidInterface.onNotificationActionDrainRequest$ = new Subject();
+  androidInterface.onWidgetProjectOpenDrainRequest$ = new Subject();
+  androidInterface.onWidgetProjectOpen$ = new ReplaySubject(1);
   androidInterface.isKeyboardShown$ = new BehaviorSubject(false);
 
   androidInterface.isInBackground$ = merge(
@@ -330,6 +340,17 @@ if (IS_ANDROID_WEB_VIEW) {
     }
   } catch (e) {
     DroidLog.err('Failed to parse reminder tap queue', e);
+  }
+
+  // Pull-based: retrieve the project a project-widget tap asked to open (cold start).
+  try {
+    const projectId = androidInterface.getWidgetProjectToOpen?.();
+    if (projectId) {
+      DroidLog.log('Pulled project-widget open queue from SharedPreferences');
+      androidInterface.onWidgetProjectOpen$.next(projectId);
+    }
+  } catch (e) {
+    DroidLog.err('Failed to process project-widget open queue', e);
   }
 
   // Pull-based: retrieve queued "Done" task IDs from notification actions

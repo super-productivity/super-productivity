@@ -17,10 +17,11 @@ import com.superproductivity.superproductivity.CapacitorMainActivity
 import com.superproductivity.superproductivity.R
 
 /**
- * Home screen widget listing today's tasks from the `widget_data` KeyValStore
- * snapshot pushed by Angular. Checkbox taps enqueue the task ID in
- * [WidgetDoneQueue]; Angular drains the queue (instantly via the local drain
- * broadcast when alive, otherwise on next resume/cold start).
+ * Home screen widget listing Today's tasks, or the open tasks of one project picked
+ * per widget instance (#9518), from the `widget_data` KeyValStore snapshot pushed
+ * by Angular. Checkbox taps enqueue the task ID in [WidgetDoneQueue]; Angular
+ * drains the queue (instantly via the local drain broadcast when alive, otherwise
+ * on next resume/cold start).
  */
 class TaskListWidgetProvider : AppWidgetProvider() {
 
@@ -30,6 +31,15 @@ class TaskListWidgetProvider : AppWidgetProvider() {
         appWidgetIds: IntArray
     ) {
         updateAll(context, appWidgetManager, appWidgetIds)
+    }
+
+    override fun onDeleted(context: Context, appWidgetIds: IntArray) {
+        super.onDeleted(context, appWidgetIds)
+        prefs(context).edit().apply {
+            appWidgetIds.forEach { remove(selectionKey(it)) }
+            apply()
+        }
+        clearPendingProjectToOpen(context)
     }
 
     override fun onReceive(context: Context, intent: Intent) {
@@ -60,6 +70,13 @@ class TaskListWidgetProvider : AppWidgetProvider() {
             }
 
             intent.getBooleanExtra(EXTRA_OPEN_APP, false) -> {
+                // Queued before the launch: a blocked background launch is silent
+                // (startActivity returns normally), so the entry carries its own
+                // timestamp and goes stale instead of hijacking a later app start.
+                val projectId = intent.getStringExtra(EXTRA_OPEN_PROJECT_ID)
+                if (projectId != null) {
+                    queueProjectToOpen(context, projectId)
+                }
                 try {
                     context.startActivity(
                         Intent(context, CapacitorMainActivity::class.java).apply {
@@ -67,10 +84,17 @@ class TaskListWidgetProvider : AppWidgetProvider() {
                                 Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
                         }
                     )
+                    if (projectId != null) {
+                        LocalBroadcastManager.getInstance(context)
+                            .sendBroadcast(Intent(ACTION_WIDGET_PROJECT_OPEN_DRAIN))
+                    }
                 } catch (e: Exception) {
                     // Background-activity-launch restrictions may block this on some
                     // API levels/OEMs; the header tap (direct activity PendingIntent)
                     // remains as the reliable way in.
+                    if (projectId != null) {
+                        clearPendingProjectToOpen(context)
+                    }
                     Log.w(TAG, "Failed to open app from widget row tap", e)
                 }
             }
@@ -82,14 +106,39 @@ class TaskListWidgetProvider : AppWidgetProvider() {
         const val ACTION_CLICK = "com.superproductivity.superproductivity.WIDGET_CLICK"
         const val ACTION_WIDGET_DONE_DRAIN =
             "com.superproductivity.superproductivity.WIDGET_DONE_DRAIN"
+        const val ACTION_WIDGET_PROJECT_OPEN_DRAIN =
+            "com.superproductivity.superproductivity.WIDGET_PROJECT_OPEN_DRAIN"
         const val EXTRA_TASK_ID = "WIDGET_TASK_ID"
         const val EXTRA_SET_DONE = "WIDGET_SET_DONE"
         const val EXTRA_OPEN_APP = "WIDGET_OPEN_APP"
+        const val EXTRA_OPEN_PROJECT_ID = "WIDGET_OPEN_PROJECT_ID"
+
+        // Excluded from backup and device transfer (backup_rules.xml,
+        // data_extraction_rules.xml): widget ids are not preserved across a restore.
+        private const val PREFERENCES_NAME = "task_list_widget"
+        private const val PENDING_OPEN_PROJECT_KEY = "pending_open_project"
+        private const val PENDING_OPEN_PROJECT_AT_KEY = "pending_open_project_at"
 
         private fun widgetIds(context: Context, appWidgetManager: AppWidgetManager): IntArray =
             appWidgetManager.getAppWidgetIds(
                 ComponentName(context, TaskListWidgetProvider::class.java)
             )
+
+        private fun prefs(context: Context) =
+            context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
+
+        private fun selectionKey(appWidgetId: Int): String = "project_$appWidgetId"
+
+        /**
+         * One read of the blob per refresh, shared by every widget id: the Today
+         * header (or its #9098 outdated form), the current-task row, and the raw
+         * JSON so a project widget can look up its own title without reading again.
+         */
+        private data class Snapshot(
+            val json: String?,
+            val todayHeader: CharSequence,
+            val currentTask: WidgetCurrentTask?
+        )
 
         /**
          * "Today" while the snapshot still describes the current logical day,
@@ -101,17 +150,15 @@ class TaskListWidgetProvider : AppWidgetProvider() {
          *
          * Reads the blob itself: the header lives in the provider's RemoteViews while
          * the rows are built in a separate RemoteViewsFactory, with no shared lifetime
-         * to hand it down. Call once per refresh — the result is the same for every
-         * widget id. Also returns the current-task row so both read the same blob
-         * string instead of hitting the KeyValStore twice per refresh.
+         * to hand it down.
          */
-        private fun headerAndCurrentTask(context: Context): Pair<CharSequence, WidgetCurrentTask?> {
+        private fun readSnapshot(context: Context): Snapshot {
             val json = try {
                 (context.applicationContext as App).keyValStore.get(WidgetData.KEYVAL_KEY, "{}")
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to read widget data for header", e)
                 // Unknown stamp: keep the pre-#9098 behaviour rather than cry stale.
-                return context.getString(R.string.widget_header_title) to null
+                return Snapshot(null, context.getString(R.string.widget_header_title), null)
             }
             val meta = WidgetData.parseMeta(json)
             val nowMs = System.currentTimeMillis()
@@ -130,7 +177,7 @@ class TaskListWidgetProvider : AppWidgetProvider() {
                     )
                 } ?: context.getString(R.string.widget_header_outdated_unknown)
             }
-            return header to WidgetData.parseCurrentTask(json, nowMs)
+            return Snapshot(json, header, WidgetData.parseCurrentTask(json, nowMs))
         }
 
         /**
@@ -159,15 +206,41 @@ class TaskListWidgetProvider : AppWidgetProvider() {
             updateAll(context, appWidgetManager, ids)
         }
 
-        /** Rebuilds each passed widget, reading the header once for all of them. */
+        /** Re-renders one widget, e.g. after its project was picked. */
+        fun refresh(context: Context, appWidgetId: Int) {
+            updateAll(context, AppWidgetManager.getInstance(context), intArrayOf(appWidgetId))
+        }
+
+        /** Rebuilds each passed widget from one read of the blob. */
         private fun updateAll(
             context: Context,
             appWidgetManager: AppWidgetManager,
             appWidgetIds: IntArray
         ) {
-            val (header, currentTask) = headerAndCurrentTask(context)
+            val snapshot = readSnapshot(context)
             for (appWidgetId in appWidgetIds) {
-                updateWidget(context, appWidgetManager, appWidgetId, header, currentTask)
+                // A selection can outlive its project (deleted, archived or hidden,
+                // possibly on another device): header and list then both fall back
+                // to Today, and the selection is kept so un-hiding restores it.
+                val projectId = selectedProjectId(context, appWidgetId)
+                val projectTitle = projectId?.let { id ->
+                    snapshot.json?.let { json ->
+                        try {
+                            WidgetData.projectTitle(json, id)
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Failed to read selected project for widget header", e)
+                            null
+                        }
+                    }
+                }
+                updateWidget(
+                    context,
+                    appWidgetManager,
+                    appWidgetId,
+                    header = projectTitle ?: snapshot.todayHeader,
+                    projectIdToOpen = projectId.takeIf { projectTitle != null },
+                    currentTask = snapshot.currentTask
+                )
             }
             // setRemoteAdapter alone does not re-invoke the factory's onDataSetChanged()
             // when the adapter intent is unchanged (it always is — same widget id, same
@@ -180,6 +253,7 @@ class TaskListWidgetProvider : AppWidgetProvider() {
             appWidgetManager: AppWidgetManager,
             appWidgetId: Int,
             header: CharSequence,
+            projectIdToOpen: String?,
             currentTask: WidgetCurrentTask?
         ) {
             val views = RemoteViews(context.packageName, R.layout.widget_task_list)
@@ -226,11 +300,28 @@ class TaskListWidgetProvider : AppWidgetProvider() {
                 context, 0, openAppIntent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
-            views.setOnClickPendingIntent(R.id.widget_header, openAppPendingIntent)
-            views.setOnClickPendingIntent(R.id.widget_empty, openAppPendingIntent)
+            // Header/empty tap on a project widget → open that project. Still a direct
+            // activity PendingIntent (background-activity-launch restrictions do not
+            // apply); the per-widget data Uri and request code keep one widget's
+            // project extra from overwriting another's under FLAG_UPDATE_CURRENT.
+            val openSourcePendingIntent = projectIdToOpen?.let { projectId ->
+                PendingIntent.getActivity(
+                    context,
+                    appWidgetId,
+                    Intent(context, CapacitorMainActivity::class.java).apply {
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                        putExtra(EXTRA_OPEN_PROJECT_ID, projectId)
+                        data = Uri.parse("widget-open:$appWidgetId")
+                    },
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                )
+            } ?: openAppPendingIntent
+            views.setOnClickPendingIntent(R.id.widget_header, openSourcePendingIntent)
+            views.setOnClickPendingIntent(R.id.widget_empty, openSourcePendingIntent)
             views.setOnClickPendingIntent(R.id.widget_tracking_row, openAppPendingIntent)
 
-            // "+" → quick add dialog; the app itself stays closed.
+            // "+" → quick add dialog; the app itself stays closed. The capture goes
+            // to Today on every widget, project widgets included.
             val quickAddIntent = Intent(context, QuickAddActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK
             }
@@ -241,6 +332,49 @@ class TaskListWidgetProvider : AppWidgetProvider() {
             views.setOnClickPendingIntent(R.id.widget_add, quickAddPendingIntent)
 
             appWidgetManager.updateAppWidget(appWidgetId, views)
+        }
+
+        fun selectedProjectId(context: Context, appWidgetId: Int): String? =
+            prefs(context).getString(selectionKey(appWidgetId), null)
+
+        fun setSelectedProjectId(context: Context, appWidgetId: Int, projectId: String?) {
+            prefs(context).edit().apply {
+                if (projectId == null) {
+                    remove(selectionKey(appWidgetId))
+                } else {
+                    putString(selectionKey(appWidgetId), projectId)
+                }
+                apply()
+            }
+        }
+
+        @Synchronized
+        fun queueProjectToOpen(context: Context, projectId: String) {
+            // commit (not apply): a row tap queues from a short-lived broadcast.
+            prefs(context).edit()
+                .putString(PENDING_OPEN_PROJECT_KEY, projectId)
+                .putLong(PENDING_OPEN_PROJECT_AT_KEY, System.currentTimeMillis())
+                .commit()
+        }
+
+        /** The queued project, unless it is older than a tap the app could still be serving. */
+        @Synchronized
+        fun getAndClearProjectToOpen(context: Context): String? {
+            val prefs = prefs(context)
+            val projectId = prefs.getString(PENDING_OPEN_PROJECT_KEY, null) ?: return null
+            val queuedAtMs = prefs.getLong(PENDING_OPEN_PROJECT_AT_KEY, 0L)
+            clearPendingProjectToOpen(context)
+            return projectId.takeIf {
+                WidgetData.isProjectOpenRequestFresh(queuedAtMs, System.currentTimeMillis())
+            }
+        }
+
+        @Synchronized
+        fun clearPendingProjectToOpen(context: Context) {
+            prefs(context).edit()
+                .remove(PENDING_OPEN_PROJECT_KEY)
+                .remove(PENDING_OPEN_PROJECT_AT_KEY)
+                .commit()
         }
     }
 }
