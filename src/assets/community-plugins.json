@@ -262,5 +262,18 @@
       "downloadUrl": "https://github.com/super-productivity/ridonculous/releases/download/stadium-mode-v0.4.0/ridonculous-stadium-mode-0.4.0.zip",
       "sha256": "bc0b07947d2be371471fc50ac2359683c54deff4ffc0d8deb737d96f0d7d69a8"
     }
+  },
+  {
+    "name": "Timesheets",
+    "shortDescription": "Timesheet table of tracked time: tasks grouped by project × days, tag filter, rounding to 15/30/60 min, CSV export.",
+    "url": "https://github.com/No-No-Space/SP-Timesheets",
+    "author": "Aksel Alvarez Jurgueson",
+    "authorUrl": "https://github.com/No-No-Space",
+    "id": "sp-timesheets",
+    "release": {
+      "version": "0.2.2",
+      "downloadUrl": "https://github.com/No-No-Space/SP-Timesheets/releases/download/v0.2.2/sp-timesheets-0.2.2.zip",
+      "sha256": "5fe6c69fc7bc99a8f68f2a46444be392018a050523c6dc9bea484527a399802e"
+    }
   }
 ]
