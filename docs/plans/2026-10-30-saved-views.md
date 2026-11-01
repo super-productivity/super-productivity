@@ -1390,58 +1390,90 @@ button is replaced by the column's title.
 User request (2026-11-01): sections and columns are the same panels, so make
 List and Board two modes of one view, switchable without opening the editor.
 Follow-ups (rows on narrow screens, card/row parity, templates instead of the
-default boards) go to a separate issue, not this PR.
+default boards) go to a separate issue, not this PR. Revised after plan
+review (see "Phase 8 plan review").
 
 ### Behaviour
 
-- A view's title-bar actions (`page-title`, next to the filter button and ⋮)
-  get one icon button that switches the open view to the other mode: shows
-  `view_kanban` with tooltip/aria "Show as board" in list mode, `view_list`
-  with "Show as list" in board mode (new keys). Same visibility rules as the
-  view's other title-bar actions (hidden below `isXxxs`, where the title opens
-  the editor).
-- One click = one `updateBoard` op with only the changed layout fields; the
-  board content enters with the `viewSwitch` motion (state keyed on the
-  layout as well as the view id, so a mode switch animates like a view
-  switch). Synced: the mode is part of the view, every device shows the same.
-- The editor's List/Board segmented control uses the same rules, so both
-  places stay consistent.
+- A view's title-bar actions (`page-title`, the `viewBoard()` block) get one
+  icon button that switches the open view to the other mode: `view_kanban`
+  with tooltip and `aria-label` "Show as board" in list mode, `view_list`
+  with "Show as list" in board mode (new keys `F.BOARDS.V.SHOW_AS_BOARD` /
+  `SHOW_AS_LIST`, `en.json` only). It is the block's **first** button, so it
+  stays under the pointer when the filter button (list mode only) appears or
+  goes after a switch; ⋮ moves instead. Same visibility as the block (hidden
+  at `isXxxs`, where the title opens the editor). The block's `@if` stays
+  rendered across the switch (its `board` alias updates in place), so the
+  button keeps the focus.
+- One click = one `updateBoard` op (below), through
+  `BoardsService.setViewLayout(board, layout)`. Remote ops trigger nothing.
+- The board content enters with the `viewSwitch` motion: its state becomes
+  `` `${board.id}:${mode}` `` (nanoid and the default ids have no `:`), so a
+  mode switch animates like a view switch and only once (no `animateChild()`,
+  so the panels' own enter triggers stay blocked while the host animates).
+  `onSwitchDone` compares the state with the arrival's key instead of the bare
+  id. A mode change that arrives by sync animates the same way.
+- A multi-selection is cleared on a mode switch, as on a view switch
+  (`boards.component`'s effect): its remembered scope element (a list's
+  `.task-list-inner` or a column's `data-board-selection-scope`) is replaced.
+  The open task stays selected.
+- The editor's List/Board control (`setLayout`) applies the same helper, so
+  both places agree.
 
 ### The stored mode
 
-Today the layout is derived from `cols` (`cols <= 1` = list). A pure
-`cols = 1` toggle would lose a board's column count (the Eisenhower Matrix's
-2×2 becomes 4 side by side when switched back).
+The mode stays `cols <= 1` = list, as today: every place that decides it
+(`board.component` `isListLayout`/`isSingleColumn`/`--cols`, which feed
+`board-panel`'s `isListLayout` and `ViewTaskListRegistry`; `page-title`'s
+filter button; `getViewIcon`; the editor's `layout` and `counts`;
+`isSectionTitleShown`) stays as is. A pure `cols = 1` switch would lose a
+board's column count (the Eisenhower Matrix's 2×2 comes back as 4 side by
+side), so the count a board had is remembered:
 
-- New optional field `BoardCfg.layout?: 'list' | 'board'` (persisted
-  `string`, unknown values read as absent; no schema bump; runtime default:
-  derive from `cols`). One helper `isListView(board)` =
-  `board.layout === 'list' || (board.layout !== 'board' && board.cols <= 1)`
-  replaces every `cols <= 1` / `cols > 1` decision (`board.component`,
-  `page-title`, `getViewIcon`, the editor's `layout` computed and its
-  `view-editor.util` check, anything else grep finds).
-- To list: `{ layout: 'list' }`; `cols` untouched. To board: `{ layout:
-'board' }`, plus `cols: max(2, panels.length)` when `cols <= 1` (a view that
-  was created as a list).
-- New lists keep writing `cols: 1` (Save as view, the editor), so released
-  clients keep showing them as one column. Released clients ignore `layout`:
-  a board switched to list still shows as a board there; a list switched to
-  board shows its columns (cols ≥ 2) — no data loss, no wedge.
-- Never write `undefined`; `layout` is set to a value or left out. Check
-  `sanitize`/`normalizeBoardForSave`, the untouched-save fixtures (a board
-  without `layout` saves without it) and the frozen-state spec (rule 11: if it
-  fails, fix the model, never the fixture).
+- New optional field `BoardCfg.boardCols?: number` (no schema bump, not in
+  `DEFAULT_BOARD_CFG`): the column count to restore when a list becomes a
+  board again; read only while `cols <= 1`, and only when it is an integer
+  ≥ 2.
+- One pure helper in `boards.util.ts`, `getLayoutChanges(board, layout):
+Partial<BoardCfg>`, used by `setViewLayout` and the editor's `setLayout`:
+  - to list: `{ cols: 1, boardCols: cols }`; `boardCols` only when `cols` is
+    an integer ≥ 2 (released clients accept any number), never `undefined`.
+  - to board: `{ cols: boardCols ?? max(2, panels.length) }`; `boardCols` is
+    left as is (stale while a board, read only as a list).
+- Duplicate copies it: `duplicateBoard` today rebuilds the board from `cols`,
+  `id`, `panels` and `title` only; it spreads the board instead, so this and
+  any newer client's top-level field survive.
+- Released clients (v19.3.1) ignore `boardCols` and agree on the mode
+  (`cols: 1` is one column there), keep it on their own edits (the reducer
+  merges `updates` into the board, and their `BoardEditComponent` sends the
+  whole spread board), and validate it (typia ignores unknown keys). Setting
+  `cols` there turns a list into a board on every client, with a stale
+  `boardCols` that nothing reads. No data loss, no wedge.
+- Sanitizing: nothing to add (`sanitizePanelCfg` is per panel; the editor's
+  `toEditorModel`/`toSavedBoard` spread the board, `getViewUpdates` diffs
+  every key the saved board has, and the helper never deletes a key).
 
 ### Tests
 
-- Unit: `isListView` for all combinations; the toggle dispatches exactly one
-  `updateBoard` with the expected partial (list→board from cols 1, from cols
-  3; board→list keeps cols); editor setLayout follows the same rules; the
-  untouched-save fixtures still pass; page-title shows the right icon and
-  label per mode.
-- E2E: toggle a sectioned list to board and back: columns ⇄ sections, the
-  Eisenhower Matrix keeps its 2×2 after list → board; the mode survives a
-  reload.
+- Unit: `getLayoutChanges` (to list from cols 2, 4 and a non-integer; to
+  board with and without a valid `boardCols`, from cols 1 and 0);
+  `setViewLayout` dispatches exactly one `updateBoard`; the editor's
+  `setLayout` round trip keeps 2 columns for 4 sections and saves `cols` and
+  `boardCols` through `getViewUpdates`; `duplicateBoard` keeps `boardCols`;
+  `page-title` shows the button first with the right icon and label per mode,
+  hidden at `isXxxs`; `boards.component`: the `viewSwitch` state carries the
+  mode, the arrival still clears, a mode switch clears the multi-selection;
+  the untouched-save fixtures and `frozen-state.spec` pass unchanged; a
+  fixture with `boardCols` saves untouched without a change.
+  `reorder-conflict.util.spec.ts` `BOARD_FIELDS` is `Required<BoardCfg>`
+  (it compiles only with the new field), so it gains `boardCols`.
+- E2E (`view-editor.spec.ts` or a new `views-layout.spec.ts`): the
+  Eisenhower Matrix to list (sections, the filter button appears) and back
+  keeps 2 columns (`readBoard`: `cols: 2`); a list created as a list becomes
+  a board with one column per section; the mode survives a reload. Helper
+  `toggleViewLayout(page)` in `e2e/utils/view-helpers.ts` (by the button's
+  accessible name).
+- Wiki `4.05-Board-View.md`: the title bar's List/Board switch.
 
 ### Not in this phase (follow-up issue)
 
@@ -1998,3 +2030,55 @@ own `viewSwitch` arrival, and the state settling back to `boards` after
 view: the board goes from x=+100px/opacity 0 to 0/1 over the full transition
 while the task page leaves, then stays put (no second motion). Same motion on
 wide screens.
+
+Phase 8 plan review (fresh-context subagent, 2026-11-01). Checked §16
+against the code (`boards.model`, `boards.const`, the boards reducer,
+`boards.util`, `boards.service`, `board`, `board-panel`, `boards.component`,
+`boards.ani.ts`, `page-title`, the view editor and `view-editor.util`,
+`board-edit`, `validation-fn`, `reorder-conflict.util` and its spec,
+`migrate-legacy-backup`, the E2E helpers) and released v19.3.1's
+`board-edit` and `boards-form`. Changed:
+
+- Stored shape, the main change: `layout?: 'list' | 'board'` replaced by
+  `boardCols?: number`, with the mode staying `cols <= 1`. Reasons found in
+  the code: (1) `board.component` binds `--cols` to `cols`, so a
+  `layout: 'list'` view with `cols: 3` would lay its sections out in three
+  grid columns unless that binding changed too, one of several decision
+  points (the editor's `counts`, `isSectionTitleShown`, `isSingleColumn`) the
+  plan's list missed; with `boardCols` none of them changes. (2) Released
+  clients would disagree on the mode (a board switched to list stays a board
+  there); with `boardCols` they show one column, as for any list. (3)
+  v19.3.1's editor has no minimum on Columns, so `layout: 'board'` plus
+  `cols: 1` was reachable, a one-column "board" the new editor refuses to
+  save (Columns ≥ 2). The field still earns its place over none: without it
+  the default Eisenhower Matrix comes back as 4 columns after a round trip;
+  a local (localStorage) memory would lose it on the next device.
+- Gap: `duplicateBoard` rebuilds the board from four keys, so a duplicate
+  would lose the new field (with `layout`, a board switched to list would
+  have duplicated as a board). Now it spreads the board.
+- Gap: `reorder-conflict.util.spec.ts` types `BOARD_FIELDS` as
+  `Required<BoardCfg>`, so adding a field fails compilation until it is
+  listed there; added to Tests.
+- Motion: keying `viewSwitch` on id and mode breaks `onSwitchDone`, which
+  compares the state with the arrival id; specified. One motion only (no
+  `animateChild()`).
+- Gaps: the button goes first in the view's actions so it doesn't jump when
+  the list-only filter button appears or goes; a mode switch clears the
+  multi-selection, whose remembered scope element the switch replaces; the
+  button keeps focus (the `@if … as board` block stays). Labels as
+  `aria-label` too; key names given.
+- E2E: a `toggleViewLayout` helper; the wiki update was missing.
+
+Checked, not changed:
+
+- Sync: one `updateBoard` with both fields, one declared entity, no effect,
+  no new action; concurrent edits stay entity-level LWW as for every board
+  edit, and `cols`/`boardCols` can't diverge (one op). No `undefined` (the
+  helper omits `boardCols` instead), no schema bump, typia accepts the
+  optional number, `frozen-state.spec` unaffected (optional field), no
+  sanitize, migration or repair change (`migrate-legacy-backup` spreads
+  `DEFAULT_BOARD_CFG`, which doesn't get the field).
+- Leaner alternative: a "Show as board/list" entry in the view's ⋮ menu
+  (also reaching the side menu's context menu) would add no header button.
+  Kept the title-bar button: the user asked for it there, and the header
+  holds three buttons on project pages already.
