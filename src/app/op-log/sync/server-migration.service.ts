@@ -131,7 +131,7 @@ export class ServerMigrationService {
       return;
     }
 
-    if (await this._skipOrThrowForOutstandingServerMigration()) {
+    if (await this._skipOrThrowForOutstandingServerMigration(syncProvider)) {
       return;
     }
 
@@ -209,7 +209,10 @@ export class ServerMigrationService {
   ): Promise<ServerMigrationOutcome> {
     const isServerMigration =
       (options?.syncImportReason ?? 'SERVER_MIGRATION') === 'SERVER_MIGRATION';
-    if (isServerMigration && (await this._skipOrThrowForOutstandingServerMigration())) {
+    if (
+      isServerMigration &&
+      (await this._skipOrThrowForOutstandingServerMigration(syncProvider))
+    ) {
       return { kind: 'reused_pending' };
     }
 
@@ -242,7 +245,10 @@ export class ServerMigrationService {
       // Another tab may have appended the same multi-megabyte migration op
       // while this tab was probing the server or waiting for confirmation.
       // Re-check inside the cross-tab operation-log barrier before snapshotting.
-      if (isServerMigration && (await this._skipOrThrowForOutstandingServerMigration())) {
+      if (
+        isServerMigration &&
+        (await this._skipOrThrowForOutstandingServerMigration(syncProvider))
+      ) {
         return { kind: 'reused_pending' };
       }
 
@@ -365,7 +371,9 @@ export class ServerMigrationService {
     });
   }
 
-  private async _skipOrThrowForOutstandingServerMigration(): Promise<boolean> {
+  private async _skipOrThrowForOutstandingServerMigration(
+    syncProvider: OperationSyncCapable,
+  ): Promise<boolean> {
     const entries = await this.opLogStore.getOpsAfterSeq(0);
     const existing = [...entries]
       .reverse()
@@ -381,6 +389,19 @@ export class ServerMigrationService {
       return false;
     }
     if (existing.rejectedAt) {
+      // #11344: a file-based remote never rejects a snapshot on its merits, so
+      // this rejection is a misclassified upload error from an older version.
+      // Seed again from the current state, which includes every later local
+      // change. The callers still check the remote first: an empty one gets
+      // the new snapshot, a seeded one goes through the usual confirmation.
+      // The new full-state op also releases the upload barrier.
+      if (syncProvider.providerMode === 'fileSnapshotOps') {
+        OpLog.warn(
+          `ServerMigrationService: Previous server-migration snapshot ${existing.op.id} ` +
+            'was rejected by a file-based provider; seeding again from current state.',
+        );
+        return false;
+      }
       throw new Error(
         'A previous server-migration snapshot was rejected; refusing to create another snapshot.',
       );
