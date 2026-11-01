@@ -192,4 +192,46 @@ describe('GitlabCommonInterfacesService', () => {
       expect('isDone' in result!.taskChanges).toBe(false);
     });
   });
+
+  describe('issueSource', () => {
+    const ALL_CFG: IssueProviderGitlab = {
+      ...BASE_CFG,
+      project: null,
+      issueSource: 'all',
+    };
+
+    it('counts as enabled without a project for all projects', () => {
+      expect(service.isEnabled(ALL_CFG)).toBe(true);
+      expect(service.isEnabled({ ...ALL_CFG, issueSource: 'project' })).toBe(false);
+    });
+
+    it('needs a group for the group source', () => {
+      const groupCfg: IssueProviderGitlab = { ...ALL_CFG, issueSource: 'group' };
+      expect(service.isEnabled({ ...groupCfg, group: null })).toBe(false);
+      expect(service.isEnabled({ ...groupCfg, group: 'my-org' })).toBe(true);
+    });
+
+    it('treats data without issueSource as project mode', () => {
+      const legacyCfg: IssueProviderGitlab = { ...BASE_CFG };
+      delete (legacyCfg as Partial<IssueProviderGitlab>).issueSource;
+      expect(service.isEnabled(legacyCfg)).toBe(true);
+      expect(service.isEnabled({ ...legacyCfg, project: null })).toBe(false);
+    });
+
+    it('links an issue to its own project', async () => {
+      issueProviderService.getCfgOnce$.and.returnValue(of(ALL_CFG));
+      expect(await service.issueLink('other/group/repo#7', ISSUE_PROVIDER_ID)).toBe(
+        'https://gitlab.com/other/group/repo/-/issues/7',
+      );
+    });
+
+    it('uses the custom base URL for the issue link', async () => {
+      issueProviderService.getCfgOnce$.and.returnValue(
+        of({ ...ALL_CFG, gitlabBaseUrl: 'https://git.example.test' }),
+      );
+      expect(await service.issueLink('team/repo#3', ISSUE_PROVIDER_ID)).toBe(
+        'https://git.example.test/team/repo/-/issues/3',
+      );
+    });
+  });
 });

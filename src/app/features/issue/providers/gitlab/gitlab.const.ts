@@ -9,6 +9,8 @@ export {
 export const DEFAULT_GITLAB_CFG: GitlabCfg = {
   isEnabled: false,
   project: null,
+  issueSource: 'project',
+  group: null,
   gitlabBaseUrl: null,
   token: null,
   filterUsername: null,

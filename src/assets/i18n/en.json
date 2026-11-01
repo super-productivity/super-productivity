@@ -440,6 +440,9 @@
     },
     "GITLAB": {
       "DIALOG_SUBMIT_WORKLOG": {
+        "FOR_ALL": "For all GitLab projects on:",
+        "FOR_GROUP": "For GitLab group:",
+        "FOR_PROJECT": "For GitLab project:",
         "PAST_DAY_INFO": "The prefilled duration contains untracked data from past days.",
         "T_ALREADY_TRACKED": "Already Tracked",
         "T_TITLE": "Title",
@@ -452,6 +455,8 @@
         "FILTER_DESCRIPTION": "See https://docs.gitlab.com/ee/api/issues.html#list-issues. Multiple can be combined with &",
         "FILTER_USER": "Filter username",
         "GITLAB_BASE_URL": "Custom GitLab base URL (optional)",
+        "GROUP": "Group",
+        "GROUP_HINT": "Group path or numeric group ID, not the display name (e.g. my-org or my-org/sub-group)",
         "PROJECT": "user name/project",
         "PROJECT_HINT": "Project path (namespace/project-slug) or numeric project ID, not the display name (e.g. super-productivity/super-productivity or 12345)",
         "SCOPE": "Scope",
@@ -461,6 +466,7 @@
         "SOURCE": "Source",
         "SOURCE_GLOBAL": "All",
         "SOURCE_GROUP": "Group",
+        "SOURCE_HINT": "Where issues come from. \"All\" uses every issue the access token can see; GitLab.com may reject the scope \"All\" there, so use \"Created by me\" or \"Assigned to me\" instead.",
         "SOURCE_PROJECT": "Project",
         "SUBMIT_TIMELOGS": "Submit timelogs to GitLab",
         "SUBMIT_TIMELOGS_DESCRIPTION": "Show time tracking dialog after clicking on \"Finish Day\"",

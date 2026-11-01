@@ -30,8 +30,36 @@ export const GITLAB_PROJECT_REGEX = /^(?:[1-9][0-9]*|(?=.*(?:\/|%2[Ff]))[\w.%\/\
 export const GITLAB_CONFIG_FORM: LimitedFormlyFieldConfig<IssueProviderGitlab>[] = [
   ...CROSS_ORIGIN_WARNING,
   {
+    // Not `source`: that key belonged to a 2021–2024 setting and may still be in old data.
+    key: 'issueSource',
+    type: 'select',
+    defaultValue: 'project',
+    templateOptions: {
+      label: T.F.GITLAB.FORM.SOURCE,
+      description: T.F.GITLAB.FORM.SOURCE_HINT,
+      options: [
+        { value: 'project', label: T.F.GITLAB.FORM.SOURCE_PROJECT },
+        { value: 'group', label: T.F.GITLAB.FORM.SOURCE_GROUP },
+        { value: 'all', label: T.F.GITLAB.FORM.SOURCE_GLOBAL },
+      ],
+    },
+  },
+  {
+    key: 'group',
+    type: 'input',
+    hideExpression: (model: IssueProviderGitlab) => model.issueSource !== 'group',
+    templateOptions: {
+      required: true,
+      label: T.F.GITLAB.FORM.GROUP,
+      type: 'text',
+      description: T.F.GITLAB.FORM.GROUP_HINT,
+    },
+  },
+  {
     key: 'project',
     type: 'input',
+    hideExpression: (model: IssueProviderGitlab) =>
+      !!model.issueSource && model.issueSource !== 'project',
     templateOptions: {
       required: true,
       label: T.F.GITLAB.FORM.PROJECT,
@@ -58,7 +86,8 @@ export const GITLAB_CONFIG_FORM: LimitedFormlyFieldConfig<IssueProviderGitlab>[]
       // It's not a fancy trick using model.project alone gets the required case right but won't remove it
       // if the project field is empty so this is needed for the wanted behavior
       // eslint-disable-next-line @typescript-eslint/naming-convention
-      'templateOptions.required': '!!model.project',
+      'templateOptions.required':
+        '!!model.project || model.issueSource === "group" || model.issueSource === "all"',
     },
   },
   {

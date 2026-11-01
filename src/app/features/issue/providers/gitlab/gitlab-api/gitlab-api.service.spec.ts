@@ -190,4 +190,110 @@ describe('GitlabApiService', () => {
       expect(completed).toBe(true);
     });
   });
+
+  describe('issueSource: group', () => {
+    const groupCfg: GitlabCfg = {
+      ...cfg,
+      project: 'old/proj',
+      issueSource: 'group',
+      group: 'my-org/sub',
+      scope: 'created-by-me',
+    };
+
+    it('searches the group endpoint with an encoded path and the documented scope', () => {
+      service.searchIssueInProject$('bug', groupCfg).subscribe();
+
+      const req = httpMock.expectOne(() => true);
+      const url = new URL(req.request.url);
+      expect(url.pathname).toBe('/api/v4/groups/my-org%2Fsub/issues');
+      expect(url.searchParams.get('scope')).toBe('created_by_me');
+      expect(url.searchParams.get('search')).toBe('bug');
+      req.flush([]);
+    });
+
+    it('imports open issues from the group endpoint', () => {
+      let result: GitlabIssue[] | undefined;
+      service.getProjectIssues$(groupCfg).subscribe((r) => (result = r));
+
+      const req = httpMock.expectOne(() => true);
+      const url = new URL(req.request.url);
+      expect(url.pathname).toBe('/api/v4/groups/my-org%2Fsub/issues');
+      expect(url.searchParams.get('state')).toBe('opened');
+      req.flush([makeOriginalIssue(4)]);
+
+      expect(result?.[0].id).toBe('group/sub/proj#4');
+    });
+
+    it('sends no request when the group is missing', () => {
+      service.searchIssueInProject$('bug', { ...groupCfg, group: null }).subscribe();
+      httpMock.expectNone(() => true);
+    });
+  });
+
+  describe('issueSource: all', () => {
+    const allCfg: GitlabCfg = {
+      ...cfg,
+      project: null,
+      issueSource: 'all',
+      scope: 'assigned-to-me',
+    };
+
+    it('searches the global /issues endpoint with the documented scope value', () => {
+      service.searchIssueInProject$('bug', allCfg).subscribe();
+
+      const req = httpMock.expectOne(() => true);
+      const url = new URL(req.request.url);
+      expect(url.pathname).toBe('/api/v4/issues');
+      expect(url.searchParams.get('scope')).toBe('assigned_to_me');
+      expect(url.searchParams.get('search')).toBe('bug');
+      req.flush([]);
+    });
+
+    it('imports open issues from the global endpoint on a custom host', () => {
+      let result: GitlabIssue[] | undefined;
+      service
+        .getProjectIssues$({ ...allCfg, gitlabBaseUrl: 'https://git.example.test' })
+        .subscribe((r) => (result = r));
+
+      const req = httpMock.expectOne(() => true);
+      const url = new URL(req.request.url);
+      expect(url.origin + url.pathname).toBe('https://git.example.test/api/v4/issues');
+      expect(url.searchParams.get('state')).toBe('opened');
+      req.flush([makeOriginalIssue(3)]);
+
+      expect(result?.length).toBe(1);
+      expect(result?.[0].id).toBe('group/sub/proj#3');
+    });
+
+    it('ignores a stale project value when enabled', () => {
+      service
+        .searchIssueInProject$('bug', { ...allCfg, project: 'old/proj' })
+        .subscribe();
+
+      const req = httpMock.expectOne(() => true);
+      expect(new URL(req.request.url).pathname).toBe('/api/v4/issues');
+      req.flush([]);
+    });
+
+    it('fetches a single issue through its own project', () => {
+      service.getById$('other/repo#9', allCfg).subscribe();
+
+      const issueReq = httpMock.expectOne((req) => !req.url.includes('/notes'));
+      expect(issueReq.request.url).toContain('/api/v4/projects/other%2Frepo/issues/9');
+      issueReq.flush([makeOriginalIssue(9)]);
+      httpMock.expectOne((req) => req.url.includes('/notes')).flush([]);
+    });
+
+    it('keeps the stored scope value for the project endpoint', () => {
+      service
+        .searchIssueInProject$('bug', { ...cfg, scope: 'assigned-to-me' })
+        .subscribe();
+
+      const req = httpMock.expectOne(() => true);
+      const url = new URL(req.request.url);
+      expect(url.pathname).toBe('/api/v4/projects/group%2Fsub%2Fproj/issues');
+      expect(url.searchParams.get('scope')).toBe('assigned-to-me');
+      req.flush([]);
+    });
+  });
 });
