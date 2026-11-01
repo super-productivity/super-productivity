@@ -2642,6 +2642,24 @@ describe('LocalRestApiTaskRoutesService', () => {
         expect(response.body.ok).toBe(false);
         expect(response.status).toBe(404);
       });
+
+      // moveToArchive only archives top-level tasks, so a subtask on its own was left in
+      // place while the response said it was archived.
+      it('should reject a subtask with 400 and not archive anything', async () => {
+        const subTask = createMockTask('sub-1', { parentId: 'parent-1' });
+        Object.defineProperty(taskServiceMock, 'getByIdWithSubTaskData$', {
+          get: () => (_id: string) => of(createMockTaskWithSubTasks(subTask)),
+        });
+
+        const response = await sendRequestAndWait(
+          createRequest('POST', '/tasks/sub-1/archive'),
+        );
+
+        expect(response.status).toBe(400);
+        expect(response.body.ok).toBe(false);
+        expect((response.body as any).error.code).toBe('INVALID_INPUT');
+        expect(taskServiceMock.moveToArchive).not.toHaveBeenCalled();
+      });
     });
 
     describe('POST /tasks/:id/restore', () => {

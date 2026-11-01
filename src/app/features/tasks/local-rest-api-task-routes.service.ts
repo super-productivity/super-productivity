@@ -963,6 +963,15 @@ export class LocalRestApiTaskRoutesService implements LocalRestApiFeatureRoutes 
     if (!task) {
       return createErrorResponse(requestId, 404, 'TASK_NOT_FOUND', 'Task not found');
     }
+    // moveToArchive only archives top-level tasks: a subtask on its own stays where it is.
+    if (task.parentId) {
+      return createErrorResponse(
+        requestId,
+        400,
+        'INVALID_INPUT',
+        'Cannot archive a subtask on its own; archive its parent task, which takes its subtasks with it',
+      );
+    }
 
     await this._taskService.moveToArchive(task);
     return createSuccessResponse(requestId, 200, { id: taskId, archived: true });
