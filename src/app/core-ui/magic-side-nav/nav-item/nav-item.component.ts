@@ -102,6 +102,8 @@ export class NavItemComponent {
   // Folder inputs
 
   folderId = input<string | null>(null);
+  // Task ids of all projects/tags inside the folder, for its open task count
+  folderTaskIds = input<string[]>([]);
   treeKind = input<MenuTreeKind>(MenuTreeKind.PROJECT);
   // Variant styling to integrate into magic-side-nav without deep selectors
   showMoreButton = input<boolean>(true);
@@ -132,11 +134,12 @@ export class NavItemComponent {
 
   // Memoized computation for better performance
   nrOfOpenTasks = computed<number>(() => {
-    const wc = this.workContext();
-    if (!wc || wc.taskIds.length === 0) return 0;
+    const taskIds =
+      this.mode() === 'folder' ? this.folderTaskIds() : this.workContext()?.taskIds;
+    if (!taskIds || taskIds.length === 0) return 0;
 
     const allDoneTaskIds = this._allDoneTaskIds();
-    const undoneTaskCount = wc.taskIds.filter(
+    const undoneTaskCount = taskIds.filter(
       (tid) => !allDoneTaskIds.includes(tid),
     ).length;
     return undoneTaskCount;
