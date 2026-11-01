@@ -134,3 +134,122 @@ describe('Azure DevOps Plugin - done states (#9774)', () => {
     expect(isDoneMapping().toTaskValue('Removed', ctx)).toBe(true);
   });
 });
+
+describe('Azure DevOps Plugin - push done state (#8556)', () => {
+  const AGILE_TASK_STATES = [
+    { name: 'New', category: 'Proposed' },
+    { name: 'Active', category: 'InProgress' },
+    { name: 'Closed', category: 'Completed' },
+    { name: 'Removed', category: 'Removed' },
+  ];
+  const SCRUM_PBI_STATES = [
+    { name: 'New', category: 'Proposed' },
+    { name: 'Approved', category: 'Proposed' },
+    { name: 'Committed', category: 'InProgress' },
+    { name: 'Done', category: 'Completed' },
+    { name: 'Removed', category: 'Removed' },
+  ];
+  const CFG = { host: 'https://dev.azure.com/org', project: 'P', token: 'pat' };
+
+  const mockHttp = (
+    item: { type: string; state: string },
+    states: { name: string; category: string }[],
+  ): {
+    http: PluginHttp;
+    patch: ReturnType<typeof vi.fn>;
+    get: ReturnType<typeof vi.fn>;
+  } => {
+    const get = vi.fn(async (url: string) =>
+      url.includes('/workitemtypes/')
+        ? { value: states }
+        : {
+            id: 7,
+            fields: { 'System.WorkItemType': item.type, 'System.State': item.state },
+          },
+    );
+    const patch = vi.fn(async () => ({}));
+    return { http: { get, patch } as unknown as PluginHttp, patch, get };
+  };
+
+  const push = (http: PluginHttp, isDone: boolean): Promise<void> => {
+    const mapping = definition.fieldMappings!.find((m) => m.taskField === 'isDone')!;
+    const state = mapping.toIssueValue(isDone, { issueId: '7' });
+    return definition.updateIssue!('7', { state }, CFG, http);
+  };
+
+  it('keeps the done state pull-only by default', () => {
+    const mapping = definition.fieldMappings!.find((m) => m.taskField === 'isDone')!;
+    expect(mapping.defaultDirection).toBe('pullOnly');
+  });
+
+  it('sends no Content-Type with the auth headers (it would override json-patch)', () => {
+    const headers = definition.getHeaders(CFG) as Record<string, string>;
+    expect(Object.keys(headers)).toEqual(['Authorization']);
+  });
+
+  it("closes an Agile task with its type's completed state as a json-patch", async () => {
+    const { http, patch } = mockHttp(
+      { type: 'Task', state: 'Active' },
+      AGILE_TASK_STATES,
+    );
+    await push(http, true);
+    expect(patch).toHaveBeenCalledWith(
+      'https://dev.azure.com/org/P/_apis/wit/workitems/7?api-version=6.0',
+      [{ op: 'add', path: '/fields/System.State', value: 'Closed' }],
+      { headers: { 'Content-Type': 'application/json-patch+json' } },
+    );
+  });
+
+  it('uses Done for a Scrum backlog item and escapes the type in the URL', async () => {
+    const { http, patch, get } = mockHttp(
+      { type: 'Product Backlog Item', state: 'Committed' },
+      SCRUM_PBI_STATES,
+    );
+    await push(http, true);
+    expect(get.mock.calls[1][0]).toContain(
+      '/workitemtypes/Product%20Backlog%20Item/states',
+    );
+    expect(patch.mock.calls[0][1]).toEqual([
+      { op: 'add', path: '/fields/System.State', value: 'Done' },
+    ]);
+  });
+
+  it('reopens to the in-progress state', async () => {
+    const { http, patch } = mockHttp(
+      { type: 'Product Backlog Item', state: 'Done' },
+      SCRUM_PBI_STATES,
+    );
+    await push(http, false);
+    expect(patch.mock.calls[0][1]).toEqual([
+      { op: 'add', path: '/fields/System.State', value: 'Committed' },
+    ]);
+  });
+
+  it('does not write when the item is already done (including Removed)', async () => {
+    for (const state of ['Closed', 'Removed']) {
+      const { http, patch } = mockHttp({ type: 'Task', state }, AGILE_TASK_STATES);
+      await push(http, true);
+      expect(patch).not.toHaveBeenCalled();
+    }
+  });
+
+  it('does not write when reopening an item that is already open', async () => {
+    const { http, patch } = mockHttp({ type: 'Task', state: 'New' }, AGILE_TASK_STATES);
+    await push(http, false);
+    expect(patch).not.toHaveBeenCalled();
+  });
+
+  it('throws when the type has no completed state', async () => {
+    const { http, patch } = mockHttp({ type: 'Odd', state: 'Active' }, [
+      { name: 'Active', category: 'InProgress' },
+    ]);
+    await expect(push(http, true)).rejects.toThrow('ERRORS.NO_TARGET_STATE');
+    expect(patch).not.toHaveBeenCalled();
+  });
+
+  it('ignores changes without a state', async () => {
+    const { http, get } = mockHttp({ type: 'Task', state: 'Active' }, AGILE_TASK_STATES);
+    await definition.updateIssue!('7', { title: 'x' }, CFG, http);
+    expect(get).not.toHaveBeenCalled();
+  });
+});

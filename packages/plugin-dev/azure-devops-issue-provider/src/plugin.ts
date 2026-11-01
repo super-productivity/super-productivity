@@ -15,6 +15,8 @@ import {
 } from '../../issue-provider-kit';
 
 const API_VERSION = '6.0';
+// The work item type states endpoint is still preview in 6.0 (Server 2020).
+const STATES_API_VERSION = '6.0-preview.1';
 const DEFAULT_WORK_ITEM_LIMIT = 50;
 const MAX_WORK_ITEM_LIMIT = 200;
 
@@ -54,6 +56,22 @@ interface AzureWiqlResponse {
   workItems?: { id: number }[];
 }
 
+// Azure's state categories: each process template names its states freely
+// (Closed, Done, Finished…) but files each under one of these.
+type AzureStateCategory =
+  'Proposed' | 'InProgress' | 'Resolved' | 'Completed' | 'Removed';
+
+interface AzureWorkItemState {
+  name: string;
+  category: AzureStateCategory;
+}
+
+// What the isDone mapping sends to updateIssue. These are intents, not state
+// names: the state to write depends on the work item's type and process
+// (Agile Task → Closed, Scrum PBI → Done), so updateIssue resolves them.
+const DONE_INTENT = 'Closed';
+const OPEN_INTENT = 'Active';
+
 // Azure DevOps Server (on-prem) uses a custom host; cloud falls back to the
 // dev.azure.com/<org> URL the built-in provider built from `organization`.
 const getBaseUrl = (cfg: AzureDevOpsConfig): string => {
@@ -70,6 +88,21 @@ const clampLimit = (cfg: AzureDevOpsConfig): number => {
   const raw = Number(cfg.autoImportLimit);
   const limit = Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_WORK_ITEM_LIMIT;
   return Math.min(Math.max(Math.floor(limit), 1), MAX_WORK_ITEM_LIMIT);
+};
+
+const isDoneCategory = (category: AzureStateCategory | undefined): boolean =>
+  category === 'Completed' || category === 'Removed';
+
+/** The state to move a work item to, by category; undefined if its type has none. */
+const pickTargetState = (
+  states: AzureWorkItemState[],
+  isDone: boolean,
+): string | undefined => {
+  const byCategory = (category: AzureStateCategory): string | undefined =>
+    states.find((s) => s.category === category)?.name;
+  return isDone
+    ? byCategory('Completed')
+    : (byCategory('InProgress') ?? byCategory('Proposed'));
 };
 
 const summaryOf = (item: AzureWorkItem): string =>
@@ -162,6 +195,42 @@ const runWiqlAndFetch = async (
   return res?.value || [];
 };
 
+// Moves a work item to its type's done (or open) state. Skips the write when
+// the item is already there, so a re-push or a Removed item stays untouched.
+const setWorkItemDone = async (
+  cfg: AzureDevOpsConfig,
+  http: PluginHttp,
+  id: string,
+  isDone: boolean,
+): Promise<void> => {
+  const witUrl = `${getBaseUrl(cfg)}/${cfg.project}/_apis/wit`;
+  const itemUrl = `${witUrl}/workitems/${id}?api-version=${API_VERSION}`;
+  const item = await http.get<AzureWorkItem>(itemUrl);
+  const type = String(item.fields['System.WorkItemType'] || '');
+  const res = await http.get<{ value?: AzureWorkItemState[] }>(
+    `${witUrl}/workitemtypes/${encodeURIComponent(type)}/states?api-version=${STATES_API_VERSION}`,
+  );
+  const states = res?.value || [];
+  const current = String(item.fields['System.State'] || '');
+  const currentCategory = states.find((s) => s.name === current)?.category;
+  const isCurrentlyDone = currentCategory
+    ? isDoneCategory(currentCategory)
+    : DONE_STATES.includes(current.toLowerCase());
+  if (isCurrentlyDone === isDone) {
+    return;
+  }
+  const target = pickTargetState(states, isDone);
+  if (!target) {
+    throw new Error(t('ERRORS.NO_TARGET_STATE', { type }));
+  }
+  await http.patch(
+    itemUrl,
+    [{ op: 'add', path: '/fields/System.State', value: target }],
+    // eslint-disable-next-line @typescript-eslint/naming-convention
+    { headers: { 'Content-Type': 'application/json-patch+json' } },
+  );
+};
+
 // Build the WIQL query used for auto backlog import. When the user provides a
 // custom WIQL it fully replaces the generated query — they own scope, the state
 // filter and ordering (e.g. to filter by iteration/area path or work item type,
@@ -236,10 +305,10 @@ registerIssueProvider({
   ],
 
   // Azure DevOps PAT auth: HTTP Basic with an empty username and the PAT as
-  // the password. Content-Type is set globally for the WIQL POST body.
+  // the password. No Content-Type here: these headers override per-request
+  // ones, which would break the json-patch PATCH; JSON bodies get
+  // application/json from the HTTP client.
   getHeaders: (config) => ({
-    // eslint-disable-next-line @typescript-eslint/naming-convention
-    'Content-Type': 'application/json',
     Authorization: basicAuth('', asConfig<AzureDevOpsConfig>(config).token || ''),
   }),
 
@@ -314,14 +383,27 @@ registerIssueProvider({
 
   doneStates: DONE_STATES,
 
-  // Read-only provider: pull-only mapping drives remote-update detection only.
+  // Pull-only by default; pushing the done state is opt-in (it needs a token
+  // with work item write access).
   fieldMappings: [
     isDoneMapping({
-      done: 'Closed',
-      open: 'Active',
+      done: DONE_INTENT,
+      open: OPEN_INTENT,
       isDone: (issueValue) => DONE_STATES.includes(String(issueValue).toLowerCase()),
     }),
   ],
+
+  async updateIssue(
+    id: string,
+    changes: Record<string, unknown>,
+    config: Record<string, unknown>,
+    http: PluginHttp,
+  ): Promise<void> {
+    if ('state' in changes) {
+      const cfg = asConfig<AzureDevOpsConfig>(config);
+      await setWorkItemDone(cfg, http, id, changes['state'] === DONE_INTENT);
+    }
+  },
 
   extractSyncValues: pickSyncValues('state', 'title', 'body'),
 });
