@@ -21,13 +21,6 @@
 }
 
 .customizer-menu {
-  .mat-mdc-menu-item {
-    &.active {
-      background-color: rgba(0, 0, 0, 0.08);
-      font-weight: 500;
-    }
-  }
-
   .tag-filter-mode-toggle {
     display: flex;
     gap: var(--s-half);
