@@ -6,6 +6,7 @@ import {
 } from './boards.util';
 import {
   BoardPanelCfg,
+  BoardPanelCfgDeadlineState,
   BoardPanelCfgScheduledState,
   BoardPanelCfgTaskDoneState,
   BoardPanelCfgTaskTypeFilter,
@@ -95,6 +96,79 @@ describe('sanitizePanelCfg', () => {
     expect('sortDir' in out).toBe(false);
     expect('includedTagsMatch' in out).toBe(false);
     expect('excludedTagsMatch' in out).toBe(false);
+  });
+
+  it('drops invalid timeframe fields', () => {
+    const out = sanitizePanelCfg({
+      ...basePanel,
+      scheduledState: BoardPanelCfgScheduledState.Scheduled,
+      scheduledTimeframe: { type: 'nextNDays', days: 0 },
+      deadlineState: BoardPanelCfgDeadlineState.HasDeadline,
+      deadlineTimeframe: { type: 'customRange' },
+    } as any);
+
+    expect('scheduledTimeframe' in out).toBe(false);
+    expect('deadlineTimeframe' in out).toBe(false);
+  });
+
+  it('drops scheduled timeframe unless scheduledState is Scheduled', () => {
+    const out = sanitizePanelCfg({
+      ...basePanel,
+      scheduledState: BoardPanelCfgScheduledState.All,
+      scheduledTimeframe: { type: 'today' },
+    } as any);
+
+    expect('scheduledTimeframe' in out).toBe(false);
+  });
+
+  it('drops deadline timeframe unless deadlineState is HasDeadline', () => {
+    const out = sanitizePanelCfg({
+      ...basePanel,
+      deadlineState: BoardPanelCfgDeadlineState.NoDeadline,
+      deadlineTimeframe: { type: 'today' },
+    } as any);
+
+    expect('deadlineTimeframe' in out).toBe(false);
+  });
+
+  it('preserves valid scheduled and deadline timeframe fields', () => {
+    const out = sanitizePanelCfg({
+      ...basePanel,
+      scheduledState: BoardPanelCfgScheduledState.Scheduled,
+      scheduledTimeframe: { type: 'today' },
+      deadlineState: BoardPanelCfgDeadlineState.HasDeadline,
+      deadlineTimeframe: {
+        type: 'customRange',
+        customStart: '2026-04-01',
+        customEnd: '2026-04-30',
+      },
+    } as any);
+
+    expect(out.scheduledTimeframe).toEqual({ type: 'today' });
+    expect(out.deadlineTimeframe).toEqual({
+      type: 'customRange',
+      customStart: '2026-04-01',
+      customEnd: '2026-04-30',
+    });
+  });
+
+  it('preserves valid dynamic and half-bounded timeframe fields', () => {
+    const out = sanitizePanelCfg({
+      ...basePanel,
+      scheduledState: BoardPanelCfgScheduledState.Scheduled,
+      scheduledTimeframe: { type: 'nextNDays', days: 14 },
+      deadlineState: BoardPanelCfgDeadlineState.HasDeadline,
+      deadlineTimeframe: {
+        type: 'customRange',
+        customEnd: '2026-04-30',
+      },
+    } as any);
+
+    expect(out.scheduledTimeframe).toEqual({ type: 'nextNDays', days: 14 });
+    expect(out.deadlineTimeframe).toEqual({
+      type: 'customRange',
+      customEnd: '2026-04-30',
+    });
   });
 
   it('drops unknown sortBy values (e.g. from a newer client)', () => {

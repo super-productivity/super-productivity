@@ -1,6 +1,7 @@
 import {
   BoardCfg,
   BoardPanelCfg,
+  BoardPanelCfgDeadlineState,
   BoardPanelCfgScheduledState,
   BoardPanelCfgTaskDoneState,
   BoardPanelCfgTaskTypeFilter,
@@ -128,6 +129,7 @@ export const DEFAULT_PANEL_CFG: BoardPanelCfg = {
   excludedTagIds: [],
   includedTagIds: [],
   scheduledState: BoardPanelCfgScheduledState.All,
+  deadlineState: BoardPanelCfgDeadlineState.All,
   backlogState: BoardPanelCfgTaskTypeFilter.All,
   isParentTasksOnly: false,
   projectIds: [''],
