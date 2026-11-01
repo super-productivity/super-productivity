@@ -115,11 +115,15 @@ test.describe('Plugin API updateTask with dueDay', () => {
     expect(startIndex).toBeGreaterThanOrEqual(0);
     const targetDay = dates[startIndex + 2];
     await plannerCard.focus();
+    await expect(plannerCard).toBeFocused();
     await page.keyboard.press('Control+Shift+ArrowRight');
     await expect(dayOfCard(plannerCard)).toHaveAttribute(
       'data-day',
       dates[startIndex + 1],
     );
+    // The moved card re-renders in its new day; focus returns asynchronously,
+    // and a key pressed before that is lost.
+    await expect(plannerCard).toBeFocused();
     await page.keyboard.press('Control+Shift+ArrowRight');
     await expect(dayOfCard(plannerCard)).toHaveAttribute('data-day', targetDay);
 
