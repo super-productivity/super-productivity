@@ -2749,8 +2749,8 @@ describe('TaskRepeatCfgEffects - Repeatable Subtasks', () => {
       });
     });
 
-    // Issue #7423 guard: for repeatFromCompletionDate=true, startDate is
-    // decoupled from scheduling (getEffectiveRepeatStartDate returns
+    // Issue #7423 guard: for repeatFromCompletionDate=true, an earlier startDate
+    // does not move scheduling (getEffectiveRepeatStartDate keeps
     // lastTaskCreationDay). Editing startDate must NOT take the re-anchor
     // branch — doing so would wipe completion history and re-schedule from
     // an arbitrary past anchor.
@@ -2802,6 +2802,53 @@ describe('TaskRepeatCfgEffects - Repeatable Subtasks', () => {
         expect(emittedDay).not.toBe(newStartDateStr);
         done();
       }, 0);
+    });
+
+    // #11266: a startDate later than lastTaskCreationDay does count, so the
+    // open copy moves to it instead of a year after its own day.
+    it('should move the open copy to a startDate moved past lastTaskCreationDay when repeatFromCompletionDate is true (#11266)', (done) => {
+      const today = new Date();
+      const lastCreationStr = getDbDateStr(addDays(today, -10));
+      const newStartDateStr = getDbDateStr(addDays(today, 5));
+
+      const liveTask: Task = {
+        ...mockTask,
+        isDone: false,
+        dueDay: lastCreationStr,
+        created: addDays(today, -10).getTime(),
+      };
+
+      const updatedCfg: TaskRepeatCfgCopy = {
+        ...mockRepeatCfg,
+        repeatCycle: 'YEARLY',
+        repeatEvery: 1,
+        repeatFromCompletionDate: true,
+        waitForCompletion: true,
+        startDate: newStartDateStr,
+        lastTaskCreationDay: lastCreationStr,
+      };
+
+      actions$ = of(
+        updateTaskRepeatCfg({
+          taskRepeatCfg: { id: 'repeat-cfg-id', changes: { startDate: newStartDateStr } },
+        }),
+      );
+      taskRepeatCfgService.getTaskRepeatCfgById$.and.returnValue(of(updatedCfg));
+      taskService.getTasksByRepeatCfgId$.and.returnValue(of([liveTask]));
+
+      effects.rescheduleTaskOnRepeatCfgUpdate$.subscribe((result) => {
+        expect(result).toEqual(
+          PlannerActions.planTaskForDay({
+            task: liveTask as any,
+            day: newStartDateStr,
+          }),
+        );
+        expect(taskRepeatCfgService.updateTaskRepeatCfg).toHaveBeenCalledWith(
+          'repeat-cfg-id',
+          jasmine.objectContaining({ lastTaskCreationDay: newStartDateStr }),
+        );
+        done();
+      });
     });
 
     // Issue #7423: edge case where the new startDate lies in the past relative
@@ -3034,6 +3081,39 @@ describe('TaskRepeatCfgEffects - Repeatable Subtasks', () => {
       setTimeout(() => {
         expect(emitted).toEqual([]);
         // The anchor is already before today; it must not be moved.
+        expect(taskRepeatCfgService.updateTaskRepeatCfg).not.toHaveBeenCalled();
+        expect(addTasksForTomorrowService.addAllDueToday).toHaveBeenCalled();
+        done();
+      }, 0);
+    });
+
+    // #11266: the same replan on a repeat-from-completion series. A startDate
+    // later than the last completion must count, not only lastTaskCreationDay.
+    it('should trigger addAllDueToday when startDate is moved past the last completion to today (#11266)', (done) => {
+      const today = new Date();
+      const todayStr = getDbDateStr(today);
+      const lastCompletionStr = getDbDateStr(addDays(today, -10));
+
+      const updatedCfg: TaskRepeatCfgCopy = {
+        ...mockRepeatCfg,
+        repeatCycle: 'YEARLY',
+        repeatEvery: 1,
+        repeatFromCompletionDate: true,
+        waitForCompletion: true,
+        startDate: todayStr,
+        lastTaskCreationDay: lastCompletionStr,
+      };
+      actions$ = of(
+        updateTaskRepeatCfg({
+          taskRepeatCfg: { id: 'repeat-cfg-id', changes: { startDate: todayStr } },
+        }),
+      );
+      taskRepeatCfgService.getTaskRepeatCfgById$.and.returnValue(of(updatedCfg));
+      taskService.getTasksByRepeatCfgId$.and.returnValue(of([]));
+
+      effects.rescheduleTaskOnRepeatCfgUpdate$.subscribe();
+
+      setTimeout(() => {
         expect(taskRepeatCfgService.updateTaskRepeatCfg).not.toHaveBeenCalled();
         expect(addTasksForTomorrowService.addAllDueToday).toHaveBeenCalled();
         done();

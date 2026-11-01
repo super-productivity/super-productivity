@@ -313,9 +313,9 @@ export class TaskRepeatCfgEffects {
                 // If the user moved startDate earlier than the existing
                 // lastTaskCreationDay, the anchor is stale — re-anchor on
                 // the new startDate (#7423). Skip for repeatFromCompletionDate
-                // configs: there startDate is decoupled from scheduling
-                // (getEffectiveRepeatStartDate uses lastTaskCreationDay), so
-                // editing startDate must not clear completion history.
+                // configs: there scheduling counts from lastTaskCreationDay and
+                // only a later startDate moves it (#11266), so moving startDate
+                // earlier must not clear completion history.
                 const changes = taskRepeatCfg.changes as Partial<TaskRepeatCfgCopy>;
                 // A pause or resume alone moves no occurrence: the open copy
                 // stays where it is, as for an end date (#10091). Relocating
@@ -727,9 +727,9 @@ export class TaskRepeatCfgEffects {
         const today = this._dateService.todayStr();
         const isLatestInstance = this._isLatestInstance(task, cfg);
 
-        // For repeatFromCompletionDate, update both startDate AND lastTaskCreationDay
-        // because getEffectiveRepeatStartDate() prioritizes lastTaskCreationDay when set.
-        // Without updating lastTaskCreationDay, the recurrence stays anchored to the old date.
+        // For repeatFromCompletionDate, update both startDate AND lastTaskCreationDay.
+        // getEffectiveRepeatStartDate() counts from lastTaskCreationDay, and a later
+        // startDate alone would make today due again and create another copy (#11266).
         if (cfg.repeatFromCompletionDate && isLatestInstance) {
           return rxOf([
             updateTaskRepeatCfg({
