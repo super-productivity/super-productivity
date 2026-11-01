@@ -16,6 +16,7 @@ import {
   PlainspaceConnectDialogComponent,
   PlainspaceConnectDialogData,
 } from '../connect-dialog/plainspace-connect-dialog.component';
+import { DIALOG_AUTO_FOCUS_TYPING } from '../../../util/dialog-auto-focus';
 
 /**
  * Shown in a Plainspace provider's issue panel tab while Plainspace rejects its
@@ -46,6 +47,9 @@ export class PlainspaceReconnectNoticeComponent {
   reconnect(): void {
     const ip = this.issueProvider();
     const data: PlainspaceConnectDialogData = { host: ip.host, replacedToken: ip.token };
-    this._matDialog.open(PlainspaceConnectDialogComponent, { data });
+    this._matDialog.open(PlainspaceConnectDialogComponent, {
+      data,
+      autoFocus: DIALOG_AUTO_FOCUS_TYPING,
+    });
   }
 }

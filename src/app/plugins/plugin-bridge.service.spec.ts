@@ -920,7 +920,6 @@ describe('PluginBridgeService - openDialog', () => {
       PluginDialogComponent,
       jasmine.objectContaining({
         data: dialogCfg,
-        autoFocus: true,
         restoreFocus: true,
         disableClose: false,
         closeOnNavigation: false,

@@ -20,6 +20,7 @@ import { SnackService } from '../../core/snack/snack.service';
 import { T } from '../../t.const';
 import { IS_ELECTRON } from '../../app.constants';
 import { Log } from '../../core/log';
+import { DIALOG_AUTO_FOCUS_TYPING } from '../../util/dialog-auto-focus';
 
 const MAX_BACKGROUND_IMAGE_FILE_SIZE_BYTES = 256 * 1024;
 
@@ -126,6 +127,7 @@ export class FormlyImageInputComponent extends FieldType<FormlyFieldConfig> {
     }
 
     const dialogRef = this._dialog.open(DialogUnsplashPickerComponent, {
+      autoFocus: DIALOG_AUTO_FOCUS_TYPING,
       width: '900px',
       maxWidth: '95vw',
     });

@@ -11,6 +11,7 @@ import {
   EnableEncryptionResult,
 } from './dialog-enable-encryption/dialog-enable-encryption.component';
 import { firstValueFrom } from 'rxjs';
+import { DIALOG_AUTO_FOCUS_TYPING } from '../../util/dialog-auto-focus';
 
 // Module-level reference, set by the service constructor
 let dialogOpenerInstance: EncryptionPasswordDialogOpenerService | null = null;
@@ -56,6 +57,7 @@ export class EncryptionPasswordDialogOpenerService {
     providerType: 'supersync' | 'file-based' = 'supersync',
   ): Promise<ChangeEncryptionPasswordResult | undefined> {
     const dialogRef = this._matDialog.open(DialogChangeEncryptionPasswordComponent, {
+      autoFocus: DIALOG_AUTO_FOCUS_TYPING,
       width: mode === 'disable-only' ? '450px' : '400px',
       disableClose: true,
       data: { mode, providerType } as ChangeEncryptionPasswordDialogData,
@@ -68,6 +70,7 @@ export class EncryptionPasswordDialogOpenerService {
     providerType: 'supersync' | 'file-based' = 'supersync',
   ): Promise<EnableEncryptionResult | undefined> {
     const dialogRef = this._matDialog.open(DialogEnableEncryptionComponent, {
+      autoFocus: DIALOG_AUTO_FOCUS_TYPING,
       width: '450px',
       disableClose: true,
       data: { providerType } as EnableEncryptionDialogData,

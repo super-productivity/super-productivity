@@ -92,6 +92,7 @@ import { OnboardingHintService } from './features/onboarding/onboarding-hint.ser
 import { QuickTourService } from './features/onboarding/quick-tour.service';
 import { MaterialIconsLoaderService } from './ui/material-icons-loader.service';
 import { BrowserTitleService } from './core/browser-title/browser-title.service';
+import { DIALOG_AUTO_FOCUS_TYPING } from './util/dialog-auto-focus';
 
 const ENTRANCE_ANIMATION_DURATION = 1500;
 
@@ -472,7 +473,10 @@ export class AppComponent implements OnDestroy, AfterViewInit {
     if (!ctxId || !ctxType) return;
     const title = await firstValueFrom(
       this._matDialog
-        .open(DialogPromptComponent, { data: { placeholder: T.WW.ADD_SECTION_TITLE } })
+        .open(DialogPromptComponent, {
+          data: { placeholder: T.WW.ADD_SECTION_TITLE },
+          autoFocus: DIALOG_AUTO_FOCUS_TYPING,
+        })
         .afterClosed(),
     );
     if (typeof title === 'string' && title.trim()) {

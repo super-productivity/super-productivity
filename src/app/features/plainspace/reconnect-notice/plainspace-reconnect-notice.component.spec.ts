@@ -6,6 +6,7 @@ import { PlainspaceReconnectNoticeComponent } from './plainspace-reconnect-notic
 import { PlainspaceConnectionStateService } from '../../issue/providers/plainspace/plainspace-connection-state.service';
 import { PlainspaceConnectDialogComponent } from '../connect-dialog/plainspace-connect-dialog.component';
 import { IssueProviderPlainspace } from '../../issue/issue.model';
+import { DIALOG_AUTO_FOCUS_TYPING } from '../../../util/dialog-auto-focus';
 
 describe('PlainspaceReconnectNoticeComponent', () => {
   let fixture: ComponentFixture<PlainspaceReconnectNoticeComponent>;
@@ -43,6 +44,7 @@ describe('PlainspaceReconnectNoticeComponent', () => {
     button()!.click();
     expect(matDialog.open).toHaveBeenCalledWith(PlainspaceConnectDialogComponent, {
       data: { host: 'https://plainspace.example', replacedToken: 'pat_old' },
+      autoFocus: DIALOG_AUTO_FOCUS_TYPING,
     });
   });
 
