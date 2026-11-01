@@ -1,4 +1,5 @@
 import { expect, test } from '../../fixtures/test.fixture';
+import { columnTitleButton } from '../../utils/view-helpers';
 
 /**
  * Dialogs on a phone open without focusing a text field, so the on-screen
@@ -15,25 +16,17 @@ test.describe('Dialog auto focus on a phone', () => {
   // touch input mode, as on an Android/iOS device.
   test.use({ viewport: PHONE, hasTouch: true, isMobile: true });
 
-  test('the edit-board dialog focuses itself, not its title field', async ({
-    page,
-    workViewPage,
-  }) => {
+  test('the view editor focuses itself, not a field', async ({ page, workViewPage }) => {
     await workViewPage.waitForTaskList();
-    await page.goto('/#/boards');
-    await expect(page.locator('boards')).toBeVisible({ timeout: 10000 });
-    await page.getByRole('tab', { name: 'Kanban', exact: true }).tap();
-    // A fresh profile lacks the board's tag; once created, the panels show.
-    await page.getByRole('button', { name: 'Create Tag' }).tap();
-
-    const editBtn = page
-      .locator('board-panel header')
-      .getByRole('button', { name: 'Edit' })
-      .first();
-    await editBtn.tap();
+    await page.goto('/#/boards/KANBAN_DEFAULT');
+    // Default views show their columns even before their tags exist.
+    // A column's title opens the view editor with that column's card asked to
+    // take first focus (`cdkFocusInitial`); on touch the container wins.
+    const columnTitle = columnTitleButton(page.locator('board-panel').first(), 'To Do');
+    await columnTitle.tap();
 
     const container = page.locator('mat-dialog-container');
-    await expect(container.locator('board-edit')).toBeVisible();
+    await expect(container.locator('dialog-board-edit')).toBeVisible();
     // The container itself holds focus, so no text field does and the
     // on-screen keyboard stays down.
     await expect(container).toBeFocused();
@@ -42,7 +35,7 @@ test.describe('Dialog auto focus on a phone', () => {
     // Closing hands focus back to the button that opened the dialog.
     await container.getByRole('button', { name: 'Cancel', exact: true }).tap();
     await expect(container).toHaveCount(0);
-    await expect(editBtn).toBeFocused();
+    await expect(columnTitle).toBeFocused();
   });
 
   test('the create-project dialog still focuses its name field', async ({

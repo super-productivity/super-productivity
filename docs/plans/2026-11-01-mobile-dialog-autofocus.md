@@ -111,8 +111,8 @@ finish-day). They raise no keyboard and stay as they are.
   - The options keep all other Material defaults.
 - **E2E:** `e2e/tests/mobile/dialog-auto-focus-touch.spec.ts`, at 400×800 with
   `hasTouch` and `isMobile`:
-  - "Edit board" focuses its container, not its title, and gives focus back to
-    the button on close.
+  - The view editor, opened from a board column's title, focuses its
+    container, not a field, and gives focus back to the title on close.
   - "Create project" (an opt-in) focuses its title field.
 
 ## Not covered here
