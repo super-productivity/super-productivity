@@ -1,7 +1,12 @@
 import { Locator, Page } from '@playwright/test';
 import { expect, test } from '../../fixtures/test.fixture';
 import { waitForStatePersistence } from '../../utils/waits';
-import { createView, readBoard, toggleViewLayout } from '../../utils/view-helpers';
+import {
+  createView,
+  readBoard,
+  seedInboxTasks,
+  toggleViewLayout,
+} from '../../utils/view-helpers';
 
 /**
  * List and Board are two modes of one view, switched from the title bar
@@ -114,5 +119,42 @@ test.describe('View layout (List/Board in the title bar)', () => {
     await page.setViewportSize({ width: 1280, height: 800 });
     await expect(board).not.toHaveClass(/isListLayout/);
     await expect(layoutButton(page)).toBeVisible();
+  });
+
+  test('on phones long sections with multiline rows stack without overlapping', async ({
+    page,
+    workViewPage,
+    testPrefix,
+  }) => {
+    await workViewPage.waitForTaskList();
+    // Taller than the screen, with rows that wrap (an unbreakable URL too).
+    await seedInboxTasks(
+      page,
+      Array.from({ length: 16 }, (_, index) =>
+        index % 4
+          ? `${testPrefix}-${index}`
+          : `${testPrefix}-${index} a long title https://example.com/share/6a8de183-d750-83eb-81e0-97bcffed0946?q=plain that wraps`,
+      ),
+    );
+    // No rules: both sections hold every task.
+    await createView(page, {
+      title: `${testPrefix}-Long`,
+      sections: [{ title: 'One' }, { title: 'Two' }],
+    });
+    await page.setViewportSize({ width: 375, height: 800 });
+    const sections = page.locator('boards board-panel');
+    await expect(sections.nth(0).locator('task')).toHaveCount(16);
+    await expect(sections.nth(1).locator('task')).toHaveCount(16);
+
+    // Each section is as tall as its rows: its last row ends above the next
+    // section (a capped section stays in its box but its rows spill over).
+    // Polled as the overlap in px, so a failure reports how far rows spill.
+    const overlap = (): Promise<number> =>
+      sections.evaluateAll((els) => {
+        const rows = els[0].querySelectorAll('task');
+        const lastRowBottom = rows[rows.length - 1].getBoundingClientRect().bottom;
+        return Math.round(lastRowBottom - els[1].getBoundingClientRect().top);
+      });
+    await expect.poll(overlap).toBeLessThanOrEqual(0);
   });
 });
