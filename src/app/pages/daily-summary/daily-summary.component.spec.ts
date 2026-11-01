@@ -1,10 +1,26 @@
-import { fakeAsync, flushMicrotasks, tick } from '@angular/core/testing';
+import { fakeAsync, flushMicrotasks, TestBed, tick } from '@angular/core/testing';
+import { MatDialog } from '@angular/material/dialog';
+import { ActivatedRoute, convertToParamMap, Router } from '@angular/router';
 import { EntityState } from '@ngrx/entity';
-import { firstValueFrom, Observable, of, Subject } from 'rxjs';
+import { TranslateService, TranslateStore } from '@ngx-translate/core';
+import { BehaviorSubject, firstValueFrom, Observable, of, Subject } from 'rxjs';
+import { ConfettiService } from '../../core/confetti/confetti.service';
+import { DateService } from '../../core/date/date.service';
+import { SnackService } from '../../core/snack/snack.service';
+import { TaskArchiveService } from '../../features/archive/task-archive.service';
+import { BeforeFinishDayService } from '../../features/before-finish-day/before-finish-day.service';
+import { GlobalConfigService } from '../../features/config/global-config.service';
+import { MetricService } from '../../features/metric/metric.service';
+import { SimpleCounterService } from '../../features/simple-counter/simple-counter.service';
 import { TODAY_TAG } from '../../features/tag/tag.const';
 import { Task } from '../../features/tasks/task.model';
+import { TaskService } from '../../features/tasks/task.service';
 import { createTask } from '../../features/tasks/task.test-helper';
 import { WorkContextType } from '../../features/work-context/work-context.model';
+import { WorkContextService } from '../../features/work-context/work-context.service';
+import { WorklogService } from '../../features/worklog/worklog.service';
+import { SyncWrapperService } from '../../imex/sync/sync-wrapper.service';
+import { OperationWriteFlushService } from '../../op-log/sync/operation-write-flush.service';
 import { T } from '../../t.const';
 import {
   DailySummaryComponent,
@@ -131,6 +147,84 @@ describe('DailySummaryComponent', () => {
 
       expect(tasks.map((task) => task.id)).toEqual(['today-repeat']);
     });
+  });
+
+  describe('tasksWorkedOnOrDoneOrRepeatableFlat$', () => {
+    let taskState$: BehaviorSubject<EntityState<Task>>;
+    let archiveUpdateTrigger$: BehaviorSubject<boolean>;
+    let loadArchive: jasmine.Spy;
+
+    beforeEach(() => {
+      taskState$ = new BehaviorSubject(buildTaskState([]));
+      archiveUpdateTrigger$ = new BehaviorSubject(true);
+      loadArchive = jasmine.createSpy('loadArchive').and.resolveTo(buildTaskState([]));
+
+      TestBed.configureTestingModule({
+        providers: [
+          {
+            provide: TaskService,
+            useValue: { setSelectedId: () => undefined, taskFeatureState$: taskState$ },
+          },
+          { provide: TaskArchiveService, useValue: { load: loadArchive } },
+          {
+            provide: WorklogService,
+            useValue: { archiveUpdateManualTrigger$: archiveUpdateTrigger$ },
+          },
+          {
+            provide: WorkContextService,
+            useValue: {
+              activeWorkContextTypeAndId$: of({
+                activeId: TODAY_TAG.id,
+                activeType: WorkContextType.TAG,
+              }),
+            },
+          },
+          {
+            provide: GlobalConfigService,
+            useValue: { cfg: () => undefined, cfg$: of(undefined), idle$: of(undefined) },
+          },
+          {
+            provide: DateService,
+            useValue: { todayStr: () => '2026-01-15', getStartOfNextDayDiffMs: () => 0 },
+          },
+          { provide: ActivatedRoute, useValue: { paramMap: of(convertToParamMap({})) } },
+          { provide: SimpleCounterService, useValue: { enabledSimpleCounters$: of([]) } },
+          ...[
+            ConfettiService,
+            Router,
+            MatDialog,
+            SnackService,
+            SyncWrapperService,
+            OperationWriteFlushService,
+            BeforeFinishDayService,
+            MetricService,
+            TranslateService,
+            TranslateStore,
+          ].map((provide) => ({ provide, useValue: {} })),
+        ],
+      });
+    });
+
+    const visitPage = (): void => {
+      const component = TestBed.runInInjectionContext(() => new DailySummaryComponent());
+      component.tasksWorkedOnOrDoneOrRepeatableFlat$.subscribe().unsubscribe();
+      component.ngOnDestroy();
+    };
+
+    it('should stop observing task and archive updates once the page closes', fakeAsync(() => {
+      for (let i = 0; i < 5; i++) {
+        visitPage();
+      }
+      tick();
+      loadArchive.calls.reset();
+
+      archiveUpdateTrigger$.next(true);
+      tick();
+
+      expect(taskState$.observed).toBeFalse();
+      expect(archiveUpdateTrigger$.observed).toBeFalse();
+      expect(loadArchive).toHaveBeenCalledTimes(0);
+    }));
   });
 
   describe('finishDay()', () => {
