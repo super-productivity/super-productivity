@@ -689,7 +689,6 @@ export class PluginBridgeService implements OnDestroy {
           // width: '500px',
           // maxWidth: '90vw',
           // maxHeight: '80vh',
-          autoFocus: true,
           restoreFocus: true,
           disableClose: false,
           closeOnNavigation: false,

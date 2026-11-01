@@ -39,6 +39,7 @@ import { GlobalConfigService } from '../../features/config/global-config.service
 import { AppFeaturesConfig } from '../../features/config/global-config.model';
 import { SnackService } from '../../core/snack/snack.service';
 import { IS_DONATION_UI_RESTRICTED } from '../../app.constants';
+import { DIALOG_AUTO_FOCUS_TYPING } from '../../util/dialog-auto-focus';
 
 @Injectable({
   providedIn: 'root',
@@ -535,7 +536,10 @@ export class MagicNavConfigService {
     const { DialogCreateProjectComponent } =
       await import('../../features/project/dialogs/create-project/dialog-create-project.component');
     this._matDialog
-      .open(DialogCreateProjectComponent, { restoreFocus: true })
+      .open(DialogCreateProjectComponent, {
+        restoreFocus: true,
+        autoFocus: DIALOG_AUTO_FOCUS_TYPING,
+      })
       .afterClosed()
       .subscribe((newProjectId: string | undefined) => {
         if (newProjectId) {
@@ -547,6 +551,7 @@ export class MagicNavConfigService {
   private _openCreateProjectFolder(): void {
     this._matDialog
       .open(DialogPromptComponent, {
+        autoFocus: DIALOG_AUTO_FOCUS_TYPING,
         restoreFocus: true,
         data: {
           placeholder: T.F.PROJECT_FOLDER.DIALOG.NAME_PLACEHOLDER,
@@ -568,6 +573,7 @@ export class MagicNavConfigService {
   private _openCreateTagFolder(): void {
     this._matDialog
       .open(DialogPromptComponent, {
+        autoFocus: DIALOG_AUTO_FOCUS_TYPING,
         restoreFocus: true,
         data: {
           placeholder: T.F.TAG_FOLDER.DIALOG.NAME_PLACEHOLDER,
@@ -589,6 +595,7 @@ export class MagicNavConfigService {
   private _createNewTag(): void {
     this._matDialog
       .open(DialogCreateTagComponent, {
+        autoFocus: DIALOG_AUTO_FOCUS_TYPING,
         restoreFocus: true,
       })
       .afterClosed()
