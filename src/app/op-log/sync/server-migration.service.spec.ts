@@ -307,6 +307,46 @@ describe('ServerMigrationService', () => {
         expect(provider.downloadOps).not.toHaveBeenCalled();
         expect(opLogStoreSpy.append).not.toHaveBeenCalled();
       });
+
+      it('creates a new snapshot from the download-side seeding path too', async () => {
+        const provider = createFileProvider(0);
+        opLogStoreSpy.getOpsAfterSeq.and.resolveTo([createMigrationEntry(Date.now())]);
+
+        const outcome = await service.handleServerMigration(provider);
+
+        expect(outcome).toEqual({
+          kind: 'created',
+          opId: opLogStoreSpy.append.calls.mostRecent().args[0].id,
+        });
+      });
+
+      it('reuses a snapshot another tab appended while this one probed the remote', async () => {
+        const provider = createFileProvider(0);
+        const rejected = createMigrationEntry(Date.now());
+        const fromOtherTab = {
+          ...createMigrationEntry(),
+          seq: 2,
+          op: {
+            ...createMigrationEntry().op,
+            id: '01900000-0000-7000-8000-000000000002',
+          },
+        };
+        // Outside the operation-log barrier only the rejected snapshot exists;
+        // inside it, the other tab's fresh one is already appended.
+        opLogStoreSpy.getOpsAfterSeq.and.resolveTo([rejected]);
+        writeFlushServiceSpy.flushThenRunExclusive.and.callFake(
+          async <T>(fn: () => Promise<T>) => {
+            opLogStoreSpy.getOpsAfterSeq.and.resolveTo([rejected, fromOtherTab]);
+            return fn();
+          },
+        );
+
+        const outcome = await service.handleServerMigration(provider);
+
+        expect(provider.downloadOps).toHaveBeenCalled();
+        expect(outcome).toEqual({ kind: 'reused_pending' });
+        expect(opLogStoreSpy.append).not.toHaveBeenCalled();
+      });
     });
 
     it('should skip if server has data and client has no synced ops', async () => {
