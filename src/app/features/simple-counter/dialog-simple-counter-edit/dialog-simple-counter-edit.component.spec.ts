@@ -68,6 +68,20 @@ describe('DialogSimpleCounterEditComponent', () => {
     expect(datasets[0].data).toEqual([3, 0, 0]);
   });
 
+  // After midnight but before the configured start of the next day, the
+  // logical day is still yesterday; the chart must not show tomorrow early.
+  it('should end the chart on the logical today', () => {
+    jasmine.clock().mockDate(new Date(2026, 0, 8, 2));
+    const component = createComponent({
+      ...EMPTY_SIMPLE_COUNTER,
+      type: SimpleCounterType.ClickCounter,
+      countOnDay: { '2026-01-06': 2 },
+      isTrackStreaks: false,
+    });
+
+    expect(component.chartData().labels).toEqual([label(2026, 1, 6), label(2026, 1, 7)]);
+  });
+
   it('should format the selected date as its local day', () => {
     const component = createComponent(
       { ...EMPTY_SIMPLE_COUNTER, countOnDay: {} },

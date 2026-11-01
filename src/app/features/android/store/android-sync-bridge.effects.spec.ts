@@ -9,8 +9,10 @@ import type { WebdavPrivateCfg } from '@sp/sync-providers/webdav';
 import { ReminderConfig } from '../../config/global-config.model';
 import { SyncProviderManager } from '../../../op-log/sync-providers/provider-manager.service';
 import { GlobalConfigService } from '../../config/global-config.service';
+import { DataInitStateService } from '../../../core/data-init/data-init-state.service';
 import {
   AndroidSyncBridgeEffects,
+  BackgroundSyncBridgeCommand,
   bridgeCommandEqual,
   getBackgroundReminderSettings,
   getCapturePublicKeyForNative,
@@ -293,6 +295,81 @@ describe('AndroidSyncBridgeEffects - credential mirroring logic', () => {
       expect(await toCommand(undefined, superSyncCfg('tok', 'https://s'))).toEqual(
         cmd(superSyncCfg('tok', 'https://s')),
       );
+    });
+  });
+
+  describe('command stream (sync on/off)', () => {
+    const setup = (): {
+      cfg$: BehaviorSubject<CurrentProviderPrivateCfg | null>;
+      sync$: BehaviorSubject<{ isEnabled: boolean }>;
+      emissions: (BackgroundSyncBridgeCommand | null)[];
+      markDataLoaded: () => void;
+    } => {
+      const cfg$ = new BehaviorSubject<CurrentProviderPrivateCfg | null>(null);
+      const sync$ = new BehaviorSubject({ isEnabled: false });
+      TestBed.configureTestingModule({
+        providers: [
+          AndroidSyncBridgeEffects,
+          {
+            provide: SyncProviderManager,
+            useValue: {
+              currentProviderPrivateCfg$: cfg$,
+              getProviderById: () => Promise.resolve(undefined),
+            },
+          },
+          { provide: GlobalConfigService, useValue: { sync$ } },
+        ],
+      });
+      const effects = TestBed.inject(AndroidSyncBridgeEffects);
+      const emissions: (BackgroundSyncBridgeCommand | null)[] = [];
+      effects['_bridgeCommand$'].subscribe((c) => emissions.push(c));
+      const dataInit = TestBed.inject(DataInitStateService);
+      return {
+        cfg$,
+        sync$,
+        emissions,
+        markDataLoaded: () => dataInit._neverUpdateOutsideDataInitService$.next(true),
+      };
+    };
+    const flush = (): Promise<void> => new Promise((r) => setTimeout(r));
+
+    it('clears the stored credentials when sync is turned off', async () => {
+      const { cfg$, sync$, emissions, markDataLoaded } = setup();
+      sync$.next({ isEnabled: true });
+      markDataLoaded();
+      cfg$.next(superSyncCfg('tok'));
+      await flush();
+      expect(emissions.at(-1)?.type).toBe('set');
+
+      // disabling sync: the provider manager only emits a null cfg
+      sync$.next({ isEnabled: false });
+      cfg$.next(null);
+      await flush();
+      expect(emissions.at(-1)).toEqual({ type: 'clear', reason: 'sync-disabled' });
+    });
+
+    it('clears leftover credentials on startup with sync off', async () => {
+      const { emissions, markDataLoaded } = setup();
+      markDataLoaded();
+      await flush();
+      expect(emissions).toEqual([{ type: 'clear', reason: 'sync-disabled' }]);
+    });
+
+    it('does not clear from the pre-hydration default config', async () => {
+      const { emissions } = setup();
+      await flush();
+      expect(emissions).toEqual([]);
+    });
+
+    it('does not clear for the transient null while switching providers', async () => {
+      const { cfg$, sync$, emissions, markDataLoaded } = setup();
+      sync$.next({ isEnabled: true });
+      markDataLoaded();
+      cfg$.next(superSyncCfg('tok'));
+      await flush();
+      cfg$.next(null);
+      await flush();
+      expect(emissions.filter((c) => c?.type === 'clear')).toEqual([]);
     });
   });
 

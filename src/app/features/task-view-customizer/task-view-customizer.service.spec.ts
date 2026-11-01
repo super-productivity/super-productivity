@@ -265,6 +265,29 @@ describe('TaskViewCustomizerService', () => {
     expect(sanitized.label).toBe(T.F.TASK_VIEW.CUSTOMIZER.FILTER_TAG);
   });
 
+  // The tag title text input is gone, so a stored title would filter the list
+  // with no chip to show or remove it
+  it('drops a stored tag title filter from before tag ids', () => {
+    const sanitized = service['_sanitizeFilter']({
+      type: FILTER_OPTION_TYPE.tag,
+      preset: 'work',
+      label: 'stale label',
+    });
+
+    expect(sanitized).toEqual(DEFAULT_OPTIONS.filter);
+  });
+
+  it('keeps the "no tag" preset of a stored tag filter', () => {
+    const sanitized = service['_sanitizeFilter']({
+      type: FILTER_OPTION_TYPE.tag,
+      preset: FILTER_COMMON.NOT_SPECIFIED,
+      label: 'stale label',
+    });
+
+    expect(sanitized.type).toBe(FILTER_OPTION_TYPE.tag);
+    expect(sanitized.preset).toBe(FILTER_COMMON.NOT_SPECIFIED);
+  });
+
   describe('customizeUndoneTasks tag id filter', () => {
     const nextFrame = (): Promise<void> =>
       new Promise((resolve) => requestAnimationFrame(() => resolve()));
@@ -1608,7 +1631,8 @@ describe('TaskViewCustomizerService', () => {
     const savedGroup: GroupOption = { type: GROUP_OPTION_TYPE.tag, label: 'Tag' };
     const savedFilter: FilterOption = {
       type: FILTER_OPTION_TYPE.tag,
-      preset: 'Tag A',
+      preset: null,
+      tagIds: ['Tag A'],
       label: 'Tag',
     };
     const restoredSavedFilter: FilterOption = {

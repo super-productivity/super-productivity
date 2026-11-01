@@ -234,6 +234,15 @@ export class TaskViewCustomizerService {
       preset = String(getTaskPriority(preset));
     }
     if (!currentFilter) return DEFAULT_OPTIONS.filter;
+    // A tag title typed into the old text input: the tag chips cannot show or
+    // remove it, so it would filter the list invisibly
+    if (
+      stored.type === FILTER_OPTION_TYPE.tag &&
+      preset &&
+      preset !== FILTER_COMMON.NOT_SPECIFIED
+    ) {
+      return DEFAULT_OPTIONS.filter;
+    }
 
     const sanitized: FilterOption = {
       ...currentFilter,

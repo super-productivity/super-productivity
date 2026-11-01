@@ -95,4 +95,18 @@ describe('AddTaskBarIssueSearchService', () => {
     expect(emissions[emissions.length - 1].map((s) => s.taskId)).toEqual(['b1', 'o1']);
     sub.unsubscribe();
   }));
+
+  it('should match search text literally, not as a regex', fakeAsync(() => {
+    backlogTasks$.next([{ id: 'b1', title: 'Fix C++ (build)', projectId: 'p1' } as Task]);
+    const emissions: AddTaskSuggestion[][] = [];
+    const sub = service
+      .getFilteredIssueSuggestions$(new BehaviorSubject('c++ ('), of(true), signal(false))
+      .subscribe((s) => emissions.push(s));
+    tick(300);
+    issueSearch$.next([]);
+    tick();
+
+    expect(emissions[emissions.length - 1].map((s) => s.taskId)).toEqual(['b1']);
+    sub.unsubscribe();
+  }));
 });
