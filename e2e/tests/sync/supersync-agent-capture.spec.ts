@@ -3,6 +3,7 @@ import type { Browser, Page } from '@playwright/test';
 import { test, expect } from '../../fixtures/supersync.fixture';
 import {
   closeClient,
+  createProjectReliably,
   createSimulatedClient,
   createTestUser,
   deleteTask,
@@ -263,6 +264,28 @@ const holdNextClaim = async (
   return { seen: seenPromise, release };
 };
 
+/** Title of the project holding the task with this title, read from the store. */
+const getCapturedProjectTitle = (page: Page, title: string): Promise<string | null> =>
+  page.evaluate((taskTitle) => {
+    type StoreLike = {
+      subscribe: (next: (s: unknown) => void) => { unsubscribe: () => void };
+    };
+    const store = (window as unknown as { __e2eTestHelpers?: { store?: StoreLike } })
+      .__e2eTestHelpers?.store;
+    if (!store) throw new Error('__e2eTestHelpers.store missing');
+    let state:
+      | {
+          tasks: { entities: Record<string, { title: string; projectId: string }> };
+          projects: { entities: Record<string, { title: string } | undefined> };
+        }
+      | undefined;
+    store.subscribe((s) => (state = s as typeof state)).unsubscribe();
+    const task = Object.values(state?.tasks.entities ?? {}).find(
+      (t) => t?.title === taskTitle,
+    );
+    return task ? (state?.projects.entities[task.projectId]?.title ?? null) : null;
+  }, title);
+
 const expectInboxTasks = async (
   client: SimulatedE2EClient,
   title: string,
@@ -492,6 +515,39 @@ test.describe('@supersync Agent task capture', () => {
     clientB = await joinClient(browser, baseURL!, testRunId, user);
     await expectInboxTasks(clientB, weeklyTitle, 1);
     await expectSchedules(clientB);
+  });
+
+  test('a task for a named project lands there on every device, else in the Inbox', async ({
+    browser,
+    baseURL,
+    testRunId,
+  }) => {
+    const { user, client: a, token } = await setUpCapture(browser, baseURL!, testRunId);
+    clientA = a;
+    const projectName = `Work-${testRunId}`;
+    await createProjectReliably(a.page, projectName);
+    await a.sync.syncAndWait();
+    const filedTitle = `Filed-${testRunId}`;
+    const strayTitle = `Stray-${testRunId}`;
+    // Matched ignoring case; an unknown name falls back to the Inbox.
+    await captureTask(token, filedTitle, { project: projectName.toUpperCase() });
+    await captureTask(token, strayTitle, { project: `Missing-${testRunId}` });
+
+    await a.sync.startSync();
+    await expectInboxTasks(a, strayTitle, 1);
+    await waitForNoPending(user);
+    const expectProjects = async (client: SimulatedE2EClient): Promise<void> => {
+      await expect
+        .poll(() => getCapturedProjectTitle(client.page, filedTitle))
+        .toBe(projectName);
+      expect(await getCapturedProjectTitle(client.page, strayTitle)).toBe('Inbox');
+    };
+    await expectProjects(a);
+    await a.sync.syncAndWait();
+
+    clientB = await joinClient(browser, baseURL!, testRunId, user);
+    await expectInboxTasks(clientB, strayTitle, 1);
+    await expectProjects(clientB);
   });
 
   test('a restart between creating the task and its ack leaves one task', async ({

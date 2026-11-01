@@ -7,6 +7,7 @@ import { Log } from '../../../core/log';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { CaptureKeyConfig } from '../../config/global-config.model';
 import { INBOX_PROJECT } from '../../project/project.const';
+import { Project } from '../../project/project.model';
 import { WorkContextType } from '../../work-context/work-context.model';
 import { DEFAULT_TASK, TaskReminderOptionId } from '../task.model';
 import { addTaskRepeatCfgToTask } from '../../task-repeat-cfg/store/task-repeat-cfg.actions';
@@ -26,6 +27,7 @@ export const AGENT_CAPTURE_RECEIPTS_KEY = 'sp-agent-capture-receipts';
 const TITLE_MAX_CHARS = 500;
 const NOTES_MAX_CHARS = 8 * 1024;
 const LINK_MAX_CHARS = 2048;
+const PROJECT_MAX_CHARS = 200;
 
 /** The server has no capture routes (feature off, rollback, other server). */
 export class CaptureUnsupportedError extends Error {
@@ -47,6 +49,8 @@ export interface AgentCapture {
     repeat?: CaptureRepeat;
     /** An http(s) URL, added as the task's one LINK attachment. */
     link?: string;
+    /** Wanted project title; resolved against this device's projects on create. */
+    project?: string;
   } | null;
 }
 
@@ -61,6 +65,11 @@ export interface AgentCaptureRun {
   defaultRemindOption: TaskReminderOptionId;
   /** This device's logical today, `YYYY-MM-DD`: where an undated series starts. */
   todayStr: string;
+  /**
+   * Projects a capture may name, read at create time so a project deleted
+   * mid-run is never the target.
+   */
+  getTargetProjects: () => Pick<Project, 'id' | 'title'>[];
   /** Throws SyncEpochChangedError once the account, provider or password changed. */
   assertUnchanged: (context: string) => void;
 }
@@ -106,10 +115,19 @@ export const createSuperSyncCaptureSource = (
     isValid: (capture) => capture.task !== null,
     createTask: (capture) => {
       const active = currentRun('createTask');
-      deps.dispatch(
-        addInboxTaskAction(capture, active.defaultEstimate, active.defaultRemindOption),
+      const projectId = findCaptureProjectId(
+        capture.task?.project,
+        active.getTargetProjects(),
       );
-      const repeatAction = addRepeatCfgAction(capture, active);
+      deps.dispatch(
+        addCaptureTaskAction(
+          capture,
+          active.defaultEstimate,
+          active.defaultRemindOption,
+          projectId,
+        ),
+      );
+      const repeatAction = addRepeatCfgAction(capture, active, projectId);
       if (repeatAction) deps.dispatch(repeatAction);
     },
     acknowledge: async (id) => {
@@ -201,6 +219,32 @@ const parseLink = (value: unknown): string | undefined => {
   }
 };
 
+/** Optional v1 field: a project title, trimmed; anything else is dropped. */
+const parseProject = (value: unknown): string | undefined => {
+  if (typeof value !== 'string') return undefined;
+  const project = value.trim();
+  const chars = [...project].length;
+  return chars > 0 && chars <= PROJECT_MAX_CHARS ? project : undefined;
+};
+
+/** Case- and locale-independent, so every device resolves a title alike. */
+const projectKey = (title: string): string => title.trim().normalize('NFC').toLowerCase();
+
+/**
+ * The one project of `projects` titled `wanted` (ignoring case and surrounding
+ * space), else the Inbox. A missing or ambiguous match keeps the capture, as
+ * on apps that predate the field; a project is never created.
+ */
+export const findCaptureProjectId = (
+  wanted: string | undefined,
+  projects: Pick<Project, 'id' | 'title'>[],
+): string => {
+  if (wanted === undefined) return INBOX_PROJECT.id;
+  const key = projectKey(wanted);
+  const matches = projects.filter((p) => projectKey(p.title) === key);
+  return matches.length === 1 ? matches[0].id : INBOX_PROJECT.id;
+};
+
 /**
  * Validates an opened payload; null when it cannot become a task.
  * `notesMaxChars`: the server's limit by default; a share from this device's
@@ -224,6 +268,7 @@ export const toCaptureTask = (
   const link = parseLink(p.link);
   const createdAt = typeof p.createdAt === 'number' ? p.createdAt : Date.now();
   const repeat = parseCaptureRepeat(p.repeat);
+  const project = parseProject(p.project);
   return {
     title,
     // The link alone as notes is only there for apps that predate `link`.
@@ -232,14 +277,19 @@ export const toCaptureTask = (
     ...toDue(p),
     ...(repeat ? { repeat } : {}),
     ...(link ? { link } : {}),
+    ...(project ? { project } : {}),
   };
 };
 
-/** One Inbox addTask for a validated capture; its link, if any, rides along. */
-export const addInboxTaskAction = (
+/**
+ * One addTask for a validated capture in the resolved project; its link, if
+ * any, rides along.
+ */
+export const addCaptureTaskAction = (
   capture: AgentCapture,
   defaultEstimate: number,
   defaultRemindOption: TaskReminderOptionId,
+  projectId: string,
 ): ReturnType<typeof TaskSharedActions.addTask> => {
   const task = capture.task as NonNullable<AgentCapture['task']>;
   return TaskSharedActions.addTask({
@@ -248,7 +298,7 @@ export const addInboxTaskAction = (
       id: capture.id,
       title: task.title,
       notes: task.notes ?? '',
-      projectId: INBOX_PROJECT.id,
+      projectId,
       created: task.createdAt,
       timeEstimate: defaultEstimate,
       ...toSchedule(task, defaultRemindOption),
@@ -266,7 +316,7 @@ export const addInboxTaskAction = (
           ]
         : [],
     },
-    workContextId: INBOX_PROJECT.id,
+    workContextId: projectId,
     workContextType: WorkContextType.PROJECT,
     isAddToBacklog: false,
     isAddToBottom: true,
@@ -281,6 +331,7 @@ export const addInboxTaskAction = (
 const addRepeatCfgAction = (
   capture: AgentCapture,
   run: AgentCaptureRun,
+  projectId: string,
 ): ReturnType<typeof addTaskRepeatCfgToTask> | null => {
   const task = capture.task as NonNullable<AgentCapture['task']>;
   if (!task.repeat) return null;
@@ -288,7 +339,7 @@ const addRepeatCfgAction = (
   const cfg = toCaptureRepeatCfg(task.repeat, {
     title: task.title,
     notes: task.notes,
-    projectId: INBOX_PROJECT.id,
+    projectId,
     startDay: task.dueDay ?? run.todayStr,
     startTime,
     defaultEstimate: run.defaultEstimate,
