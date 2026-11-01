@@ -8,7 +8,7 @@ import { selectAllBoards } from './store/boards.selectors';
 import { BoardsActions } from './store/boards.actions';
 import { BoardCfg } from './boards.model';
 import { DEFAULT_BOARD_CFG } from './boards.const';
-import { getLayoutChanges, ViewLayout } from './boards.util';
+import { getLayoutChanges, translateViewTitle, ViewLayout } from './boards.util';
 import { DialogConfirmComponent } from '../../ui/dialog-confirm/dialog-confirm.component';
 import { T } from '../../t.const';
 import { GlobalConfigService } from '../config/global-config.service';
@@ -99,7 +99,7 @@ export class BoardsService {
             taskIds: [],
           })),
           // Default views are titled with translation keys.
-          title: `${this._translateService.instant(board.title)} (copy)`,
+          title: `${this._viewTitle(board.title)} (copy)`,
         },
       }),
     );
@@ -120,9 +120,13 @@ export class BoardsService {
         type: 'SUCCESS',
         msg: T.F.BOARDS.V.VIEW_CREATED,
         // Default views are titled with translation keys.
-        translateParams: { title: this._translateService.instant(title) },
+        translateParams: { title: this._viewTitle(title) },
       });
     }
+  }
+
+  private _viewTitle(title: string): string {
+    return translateViewTitle(title, (key) => this._translateService.instant(key));
   }
 
   /**

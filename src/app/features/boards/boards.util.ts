@@ -304,6 +304,20 @@ export const getLayoutChanges = (
   };
 };
 
+/**
+ * A view's or section's title as shown. Default views store translation keys;
+ * a title that happens to name a group of keys ("PM", "G") resolves to an
+ * object there and stays as typed, as does an empty one (`instant` throws).
+ */
+export const translateViewTitle = (
+  title: string,
+  instant: (key: string) => unknown,
+): string => {
+  if (!title) return title;
+  const text = instant(title);
+  return typeof text === 'string' ? text : title;
+};
+
 /** A view's icon: a list for one column, a board for several (its layout). */
 export const getViewIcon = (board: Pick<BoardCfg, 'cols'>): string =>
   board.cols > 1 ? 'view_kanban' : 'view_list';

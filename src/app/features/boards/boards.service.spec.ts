@@ -59,7 +59,9 @@ describe('BoardsService', () => {
         {
           provide: TranslateService,
           useValue: {
-            instant: (key: string) => (key === board.title ? 'Kanban' : key),
+            // 'PM' names a group of keys, as `instant` returns it.
+            instant: (key: string): unknown =>
+              key === board.title ? 'Kanban' : key === 'PM' ? { X: 'x' } : key,
           },
         },
       ],
@@ -149,6 +151,14 @@ describe('BoardsService', () => {
     expect(snackOpen).toHaveBeenCalledOnceWith(
       jasmine.objectContaining({ translateParams: { title: 'Kanban (copy)' } }),
     );
+  });
+
+  it('keeps a title that names a group of translation keys as typed', () => {
+    service.duplicateBoard({ ...board, title: 'PM' });
+    const added = dispatch.calls.mostRecent().args[0] as ReturnType<
+      typeof BoardsActions.addBoard
+    >;
+    expect(added.board.title).toBe('PM (copy)');
   });
 
   it('duplicates every field of the board, including boardCols', () => {

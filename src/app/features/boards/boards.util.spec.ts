@@ -12,6 +12,7 @@ import {
   panelToCriteria,
   sanitizePanelCfg,
   toEditorModel,
+  translateViewTitle,
   withDueStateImpliesScheduled,
   withPanelSortKey,
 } from './boards.util';
@@ -1023,6 +1024,23 @@ describe('criteriaToPanelFields', () => {
     );
     // A column can't say "matches nothing"; callers handle isNoMatch first.
     expect(criteriaToPanelFields({ isNoMatch: true }).projectIds).toBeUndefined();
+  });
+});
+
+describe('translateViewTitle', () => {
+  const instant = (key: string): unknown =>
+    key === 'F.BOARDS.DEFAULT.KANBAN' ? 'Kanban' : key === 'PM' ? { X: 'x' } : key;
+
+  it('translates a default view key and keeps a plain title', () => {
+    expect(translateViewTitle('F.BOARDS.DEFAULT.KANBAN', instant)).toBe('Kanban');
+    expect(translateViewTitle('Work', instant)).toBe('Work');
+  });
+
+  it('keeps a title naming a group of keys, and an empty one, as is', () => {
+    const spy = jasmine.createSpy('instant').and.callFake(instant);
+    expect(translateViewTitle('PM', spy)).toBe('PM');
+    expect(translateViewTitle('', spy)).toBe('');
+    expect(spy).toHaveBeenCalledTimes(1);
   });
 });
 

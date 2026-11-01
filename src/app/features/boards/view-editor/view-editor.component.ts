@@ -25,6 +25,7 @@ import {
   getPanelHeaderCount,
   normalizeBoardForSave,
   panelToCriteria,
+  translateViewTitle,
   ViewLayout,
 } from '../boards.util';
 import { T } from '../../../t.const';
@@ -111,10 +112,8 @@ export class ViewEditorComponent {
   >(ViewEditorSectionComponent, { read: ElementRef });
 
   // A title that happens to name a group of keys ("F", "G") stays as typed.
-  private readonly _translate = (key: string): string => {
-    const text: unknown = this._translateService.instant(key);
-    return typeof text === 'string' ? text : key;
-  };
+  private readonly _translate = (key: string): string =>
+    translateViewTitle(key, (k) => this._translateService.instant(k));
 
   /** The editor model, titles as shown. */
   readonly model = linkedSignal<BoardCfg>(() => {

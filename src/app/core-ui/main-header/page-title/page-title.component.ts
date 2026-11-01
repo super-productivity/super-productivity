@@ -34,7 +34,11 @@ import { PluginBridgeService } from '../../../plugins/plugin-bridge.service';
 import { PluginService } from '../../../plugins/plugin.service';
 import { PluginIconComponent } from '../../../plugins/ui/plugin-icon/plugin-icon.component';
 import { selectAllBoards } from '../../../features/boards/store/boards.selectors';
-import { getViewIcon, getViewLayoutSwitch } from '../../../features/boards/boards.util';
+import {
+  getViewIcon,
+  getViewLayoutSwitch,
+  translateViewTitle,
+} from '../../../features/boards/boards.util';
 import { BoardCfg } from '../../../features/boards/boards.model';
 import { ViewMenuComponent } from '../../../features/boards/view-menu/view-menu.component';
 import { BoardsService } from '../../../features/boards/boards.service';
@@ -553,7 +557,7 @@ export class PageTitleComponent {
   displayTitle = computed(() => {
     const boardTitle = this._boardTitle();
     if (boardTitle) {
-      return this._translateService.instant(boardTitle);
+      return translateViewTitle(boardTitle, (k) => this._translateService.instant(k));
     }
     const key = this._routeTitleKey();
     if (key) {
