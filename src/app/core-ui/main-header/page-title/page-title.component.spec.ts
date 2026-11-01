@@ -61,6 +61,7 @@ describe('PageTitleComponent', () => {
   let boards: WritableSignal<BoardCfg[]>;
   let pluginStates: Map<string, PluginState>;
   let editBoardSpy: jasmine.Spy;
+  let setViewLayoutSpy: jasmine.Spy;
 
   // `color` is a Tag-only field not surfaced on WorkContext's type.
   const wc = (o: Partial<WorkContext> & { color?: string | null }): WorkContext =>
@@ -77,7 +78,10 @@ describe('PageTitleComponent', () => {
     ...(opts.realRouter
       ? [provideRouter([])]
       : [{ provide: Router, useValue: routerStub }]),
-    { provide: BoardsService, useValue: { editBoard: editBoardSpy } },
+    {
+      provide: BoardsService,
+      useValue: { editBoard: editBoardSpy, setViewLayout: setViewLayoutSpy },
+    },
     {
       provide: BreakpointObserver,
       useValue: { observe: () => isXxxs$ },
@@ -149,6 +153,7 @@ describe('PageTitleComponent', () => {
     isXxxs$ = new BehaviorSubject<{ matches: boolean }>({ matches: false });
     openMenuRequest$ = new Subject<void>();
     editBoardSpy = jasmine.createSpy('editBoard').and.returnValue(Promise.resolve());
+    setViewLayoutSpy = jasmine.createSpy('setViewLayout');
     openSpy = jasmine
       .createSpy('openProjectOnPlainspace')
       .and.returnValue(Promise.resolve());
@@ -478,6 +483,55 @@ describe('PageTitleComponent', () => {
       ]);
       expect(buttons(await renderAt('/boards/list'))).toContain('task-filter-btn');
       expect(buttons(await renderAt('/boards/kanban'))).not.toContain('task-filter-btn');
+    });
+
+    describe('the List/Board button', () => {
+      const list: BoardCfg = { id: 'list', title: 'List', cols: 1, panels: [] };
+      const kanban: BoardCfg = { id: 'kanban', title: 'Kanban', cols: 3, panels: [] };
+      const firstButton = (host: HTMLElement): HTMLButtonElement =>
+        host.querySelector('.page-title-actions button') as HTMLButtonElement;
+
+      beforeEach(() => boards.set([list, kanban]));
+
+      it('comes first and offers the board on a list', async () => {
+        const btn = firstButton(await renderAt('/boards/list'));
+        expect(btn.classList).toContain('view-layout-btn');
+        expect(btn.getAttribute('aria-label')).toBe(T.F.BOARDS.V.SHOW_AS_BOARD);
+        expect(btn.textContent?.trim()).toBe('view_kanban');
+      });
+
+      it('comes first and offers the list on a board', async () => {
+        const btn = firstButton(await renderAt('/boards/kanban'));
+        expect(btn.classList).toContain('view-layout-btn');
+        expect(btn.getAttribute('aria-label')).toBe(T.F.BOARDS.V.SHOW_AS_LIST);
+        expect(btn.textContent?.trim()).toBe('view_list');
+      });
+
+      it('switches the open view to the other mode', async () => {
+        firstButton(await renderAt('/boards/list')).click();
+        expect(setViewLayoutSpy).toHaveBeenCalledOnceWith(list, 'board');
+        setViewLayoutSpy.calls.reset();
+        firstButton(await renderAt('/boards/kanban')).click();
+        expect(setViewLayoutSpy).toHaveBeenCalledOnceWith(kanban, 'list');
+      });
+
+      it('keeps its element (and the focus) when the mode changes', async () => {
+        await configureRender();
+        routerStub.url = '/boards/list';
+        const fixture = TestBed.createComponent(PageTitleComponent);
+        fixture.detectChanges();
+        const host = fixture.nativeElement as HTMLElement;
+        const before = firstButton(host);
+        boards.set([{ ...list, cols: 2, boardCols: 2 }, kanban]);
+        fixture.detectChanges();
+        expect(firstButton(host)).toBe(before);
+        expect(before.getAttribute('aria-label')).toBe(T.F.BOARDS.V.SHOW_AS_LIST);
+      });
+
+      it('is hidden at the smallest breakpoint', async () => {
+        isXxxs$.next({ matches: true });
+        expect(firstButton(await renderAt('/boards/list'))).toBeNull();
+      });
     });
 
     it('adds the Plainspace button for a shared project', async () => {

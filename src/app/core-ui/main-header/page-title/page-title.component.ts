@@ -34,7 +34,8 @@ import { PluginBridgeService } from '../../../plugins/plugin-bridge.service';
 import { PluginService } from '../../../plugins/plugin.service';
 import { PluginIconComponent } from '../../../plugins/ui/plugin-icon/plugin-icon.component';
 import { selectAllBoards } from '../../../features/boards/store/boards.selectors';
-import { getViewIcon } from '../../../features/boards/boards.util';
+import { getViewIcon, getViewLayout } from '../../../features/boards/boards.util';
+import { BoardCfg } from '../../../features/boards/boards.model';
 import { ViewMenuComponent } from '../../../features/boards/view-menu/view-menu.component';
 import { BoardsService } from '../../../features/boards/boards.service';
 
@@ -152,6 +153,25 @@ import { BoardsService } from '../../../features/boards/boards.service';
       }
       @if (!isXxxs() && viewBoard(); as board) {
         <div class="page-title-actions">
+          <!-- List/Board: first, so it stays under the pointer when the
+               list-only filter button comes or goes. This block stays
+               rendered across the switch (its alias updates), so the button
+               keeps the focus. -->
+          <button
+            class="view-layout-btn"
+            (click)="toggleViewLayout(board)"
+            [matTooltip]="
+              (board.cols <= 1 ? T.F.BOARDS.V.SHOW_AS_BOARD : T.F.BOARDS.V.SHOW_AS_LIST)
+                | translate
+            "
+            [attr.aria-label]="
+              (board.cols <= 1 ? T.F.BOARDS.V.SHOW_AS_BOARD : T.F.BOARDS.V.SHOW_AS_LIST)
+                | translate
+            "
+            mat-icon-button
+          >
+            <mat-icon>{{ board.cols <= 1 ? 'view_kanban' : 'view_list' }}</mat-icon>
+          </button>
           <!-- The filter/sort menu edits a list-layout view's rules. Boards
                with several columns keep the editor: their panels differ by
                design. Same trigger ref as the work view's, so the shortcut
@@ -601,6 +621,14 @@ export class PageTitleComponent {
     // Space would scroll the page.
     ev?.preventDefault();
     void this._boardsService.editBoard(board);
+  }
+
+  /** The title bar's List/Board button: the open view in the other mode. */
+  toggleViewLayout(board: BoardCfg): void {
+    this._boardsService.setViewLayout(
+      board,
+      getViewLayout(board) === 'list' ? 'board' : 'list',
+    );
   }
 
   openInPlainspace(): void {

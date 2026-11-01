@@ -93,10 +93,43 @@ describe('BoardsComponent', () => {
     expect(fixture.componentInstance.switchParams().isArrival).toBeTrue();
 
     // Another view's animation ending doesn't use it up.
-    fixture.componentInstance.onSwitchDone('a');
+    fixture.componentInstance.onSwitchDone('a:list');
     expect(arrivalId()).toBe('b');
-    fixture.componentInstance.onSwitchDone('b');
+    fixture.componentInstance.onSwitchDone('b:list');
     expect(arrivalId()).toBeNull();
     expect(fixture.componentInstance.switchParams().isArrival).toBeFalse();
+  });
+
+  it('switches with the mode too: the viewSwitch state is the id and the mode', () => {
+    expect(fixture.componentInstance.switchState()).toBe('a:list');
+    boards.set([{ ...board('a'), cols: 2 }, board('b')]);
+    fixture.detectChanges();
+    expect(fixture.componentInstance.switchState()).toBe('a:board');
+  });
+
+  it('lets a view that arrives as a board clear its arrival', () => {
+    boards.set([board('a'), { ...board('b'), cols: 3 }]);
+    arrivalId.set('b');
+    params$.next(convertToParamMap({ boardId: 'b' }));
+    fixture.detectChanges();
+    fixture.componentInstance.onSwitchDone('b');
+    expect(arrivalId()).toBe('b');
+    fixture.componentInstance.onSwitchDone('b:board');
+    expect(arrivalId()).toBeNull();
+  });
+
+  it('drops the selection, but not the open task, on a mode switch', () => {
+    clearSelection.calls.reset();
+    dispatch.calls.reset();
+
+    boards.set([{ ...board('a'), cols: 2 }, board('b')]);
+    fixture.detectChanges();
+    expect(clearSelection).toHaveBeenCalledTimes(1);
+
+    // Another edit of the view keeps the selection.
+    boards.set([{ ...board('a'), cols: 3, title: 'Renamed' }, board('b')]);
+    fixture.detectChanges();
+    expect(clearSelection).toHaveBeenCalledTimes(1);
+    expect(dispatch).not.toHaveBeenCalled();
   });
 });

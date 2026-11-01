@@ -21,12 +21,14 @@ import { setSelectedTask } from '../tasks/store/task.actions';
 import { TaskMultiSelectService } from '../tasks/task-multi-select.service';
 import { BoardsService } from './boards.service';
 import {
+  getViewSwitchState,
   VIEW_ARRIVAL_FROM_XS,
   VIEW_SWITCH_FROM,
   viewSwitchAnimation,
   ViewSwitchParams,
 } from './boards.ani';
 import { BreakpointObserver } from '@angular/cdk/layout';
+import { getViewLayout } from './boards.util';
 
 /**
  * One view (board) per route: `/boards/:boardId`. `BoardRouteGuard` resolves
@@ -56,6 +58,15 @@ export class BoardsComponent {
   readonly board = computed(() => {
     const id = this.boardId();
     return id ? this.boardsService.boards().find((board) => board.id === id) : undefined;
+  });
+  /** The `viewSwitch` state: a switch of view or of mode animates. */
+  readonly switchState = computed(() => {
+    const board = this.board();
+    return board ? getViewSwitchState(board) : null;
+  });
+  private readonly _layout = computed(() => {
+    const board = this.board();
+    return board ? getViewLayout(board) : null;
   });
   protected readonly T = T;
 
@@ -88,6 +99,13 @@ export class BoardsComponent {
       });
     });
 
+    // A mode switch replaces the list or columns a multi-selection is scoped
+    // to. The open task stays.
+    effect(() => {
+      this._layout();
+      untracked(() => this._multiSelect.clear());
+    });
+
     // The open view was deleted (here, in its dialog or on another device).
     effect(() => {
       if (this.boardId() && !this.board()) {
@@ -98,7 +116,12 @@ export class BoardsComponent {
 
   /** The new view has arrived: later visits switch to it as usual. */
   onSwitchDone(toState: string): void {
-    if (toState === this.boardsService.arrivalId()) {
+    const board = this.board();
+    if (
+      board &&
+      board.id === this.boardsService.arrivalId() &&
+      toState === getViewSwitchState(board)
+    ) {
       this.boardsService.clearArrival();
     }
   }

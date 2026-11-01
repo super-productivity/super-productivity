@@ -1,6 +1,6 @@
 @if (board(); as board) {
   <board
-    [@viewSwitch]="{ value: board.id, params: switchParams() }"
+    [@viewSwitch]="{ value: switchState(), params: switchParams() }"
     (@viewSwitch.done)="onSwitchDone($event.toState)"
     [boardCfg]="board"
     cdkDropListGroup

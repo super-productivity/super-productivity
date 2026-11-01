@@ -1,5 +1,7 @@
 import { animate, style, transition, trigger } from '@angular/animations';
 import { ANI_ENTER_TIMING } from '../../ui/animations/animation.const';
+import { BoardCfg } from './boards.model';
+import { getViewLayout } from './boards.util';
 
 /** Where the board starts its enter: the work view's project-change zoom. */
 export const VIEW_SWITCH_FROM = 'scale(1.2)';
@@ -14,10 +16,19 @@ export interface ViewSwitchParams {
 }
 
 /**
+ * The `viewSwitch` state of a view: its id and mode (nanoid and the default
+ * ids have no `:`), so switching it between list and board animates too.
+ */
+export const getViewSwitchState = (board: Pick<BoardCfg, 'id' | 'cols'>): string =>
+  `${board.id}:${getViewLayout(board)}`;
+
+/**
  * Switching from one view to another (also after Create or Duplicate on a
  * view page): the router reuses the page and the `<board>` element, so only
  * this state change on the view id can animate it. Same motion as the work
- * view's project change.
+ * view's project change. Switching a view between list and board (the title
+ * bar's button, the editor or a synced edit) changes the state too, so it
+ * enters the same way.
  *
  * Between two view ids only, unless a view was just created: on entering the
  * page `warpRoute` already animates it (and its `animateChild()` would replay
