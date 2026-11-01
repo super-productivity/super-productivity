@@ -14,7 +14,6 @@ import {
 } from '@angular/material/dialog';
 import { MatButton } from '@angular/material/button';
 import { TranslateModule } from '@ngx-translate/core';
-import { DatePipe } from '@angular/common';
 import { MatIcon } from '@angular/material/icon';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { firstValueFrom } from 'rxjs';
@@ -22,6 +21,8 @@ import { T } from '../../../t.const';
 import { DialogConfirmComponent } from '../../../ui/dialog-confirm/dialog-confirm.component';
 import { SnackService } from '../../../core/snack/snack.service';
 import { BackupListEntry, BackupSourcesService } from '../backup-sources.service';
+import { LocaleDatePipe } from '../../../ui/pipes/locale-date.pipe';
+import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
 
 const KIND_ICON: Record<BackupListEntry['kind'], string> = {
   RECOVERY_POINT: 'history',
@@ -45,7 +46,7 @@ const KIND_ICON: Record<BackupListEntry['kind'], string> = {
     MatDialogActions,
     MatButton,
     TranslateModule,
-    DatePipe,
+    LocaleDatePipe,
     MatIcon,
     MatProgressSpinner,
   ],
@@ -55,8 +56,10 @@ export class DialogBackupsListComponent implements OnInit {
   private _matDialog = inject(MatDialog);
   private _snackService = inject(SnackService);
   private _sources = inject(BackupSourcesService);
+  private _dateTimeFormatService = inject(DateTimeFormatService);
 
   T = T;
+  readonly locale = this._dateTimeFormatService.currentLocale;
   KIND_ICON = KIND_ICON;
 
   entries = signal<BackupListEntry[]>([]);
@@ -118,7 +121,10 @@ export class DialogBackupsListComponent implements OnInit {
             message: T.GCF.AUTO_BACKUPS.D_LIST.CONFIRM_MSG,
             translateParams: {
               timestamp: entry.createdAt
-                ? new Date(entry.createdAt).toLocaleString()
+                ? new Date(entry.createdAt).toLocaleString(this.locale(), {
+                    dateStyle: 'medium',
+                    timeStyle: 'medium',
+                  })
                 : '—',
               tasks: entry.taskCount ?? '?',
             },
