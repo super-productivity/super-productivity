@@ -50,6 +50,7 @@ import { Log } from '../../core/log';
 import { PlainspaceShareService } from '../../features/issue/providers/plainspace/plainspace-share.service';
 import { selectIsProjectSharedOnPlainspace } from '../../features/issue/store/issue-provider.selectors';
 import { DIALOG_AUTO_FOCUS_TYPING } from '../../util/dialog-auto-focus';
+import { MenuTreeService } from '../../features/menu-tree/menu-tree.service';
 
 @Component({
   selector: 'work-context-menu',
@@ -72,6 +73,7 @@ export class WorkContextMenuComponent implements OnInit {
   private _store = inject(Store);
   private _dateService = inject(DateService);
   private _plainspaceShareService = inject(PlainspaceShareService);
+  private _menuTreeService = inject(MenuTreeService);
 
   // TODO: Skipped for migration because:
   //  This input is used in a control flow expression (e.g. `@if` or `*ngIf`)
@@ -379,7 +381,8 @@ export class WorkContextMenuComponent implements OnInit {
 
   async duplicateProject(): Promise<void> {
     try {
-      await this._projectService.duplicateProject(this.contextId);
+      const newProjectId = await this._projectService.duplicateProject(this.contextId);
+      this._menuTreeService.addProjectAfter(newProjectId, this.contextId);
       this._snackService.open(T.GLOBAL_SNACK.DUPLICATE_PROJECT_SUCCESS);
     } catch (err) {
       this._snackService.open({

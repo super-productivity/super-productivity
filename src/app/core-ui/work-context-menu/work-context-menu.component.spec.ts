@@ -18,6 +18,7 @@ import { DialogPromptComponent } from '../../ui/dialog-prompt/dialog-prompt.comp
 import { DateService } from '../../core/date/date.service';
 import { DialogProjectCompleteComponent } from '../../features/project/dialog-project-complete/dialog-project-complete.component';
 import { PlainspaceShareService } from '../../features/issue/providers/plainspace/plainspace-share.service';
+import { MenuTreeService } from '../../features/menu-tree/menu-tree.service';
 
 describe('WorkContextMenuComponent', () => {
   let component: WorkContextMenuComponent;
@@ -27,6 +28,7 @@ describe('WorkContextMenuComponent', () => {
   let mockWorkContextService: { activeWorkContextId: string | undefined };
   let mockMatDialog: jasmine.SpyObj<MatDialog>;
   let mockPlainspaceShareService: jasmine.SpyObj<PlainspaceShareService>;
+  let mockMenuTreeService: jasmine.SpyObj<MenuTreeService>;
   let resolveResult$: any;
   let confirmResult$: any;
   let promptResult$: any;
@@ -53,6 +55,7 @@ describe('WorkContextMenuComponent', () => {
       'getByIdOnce$',
       'getByIdLive$',
       'update',
+      'duplicateProject',
     ]);
     mockProjectService.getByIdOnce$.and.returnValue(
       of({ id: 'project-123', title: 'Demo project' } as any),
@@ -90,6 +93,8 @@ describe('WorkContextMenuComponent', () => {
     mockPlainspaceShareService.shareProjectOnPlainspace.and.returnValue(
       Promise.resolve('space-1'),
     );
+
+    mockMenuTreeService = jasmine.createSpyObj('MenuTreeService', ['addProjectAfter']);
 
     // Default: project not yet shared → the Collaborate action is visible.
     isSharedOnPlainspace$ = of(false);
@@ -129,6 +134,7 @@ describe('WorkContextMenuComponent', () => {
           provide: PlainspaceShareService,
           useValue: mockPlainspaceShareService,
         },
+        { provide: MenuTreeService, useValue: mockMenuTreeService },
         {
           provide: DateService,
           useValue: {
@@ -418,6 +424,23 @@ describe('WorkContextMenuComponent', () => {
       mockProjectService.unarchive.and.returnValue(Promise.resolve());
       await component.restoreProject();
       expect(mockProjectService.unarchive).toHaveBeenCalledWith('project-123');
+    });
+  });
+
+  describe('duplicateProject()', () => {
+    it('places the copy right after the original in the menu tree', async () => {
+      mockProjectService.duplicateProject.and.resolveTo('project-copy');
+      await component.duplicateProject();
+      expect(mockMenuTreeService.addProjectAfter).toHaveBeenCalledWith(
+        'project-copy',
+        'project-123',
+      );
+    });
+
+    it('does not touch the menu tree when duplication fails', async () => {
+      mockProjectService.duplicateProject.and.rejectWith('cancelled');
+      await component.duplicateProject();
+      expect(mockMenuTreeService.addProjectAfter).not.toHaveBeenCalled();
     });
   });
 
