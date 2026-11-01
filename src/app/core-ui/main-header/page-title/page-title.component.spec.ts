@@ -55,6 +55,7 @@ describe('PageTitleComponent', () => {
   let activeWorkContext$: BehaviorSubject<WorkContext>;
   let isShared$: BehaviorSubject<boolean>;
   let isXxxs$: BehaviorSubject<{ matches: boolean }>;
+  let isXs$: BehaviorSubject<{ matches: boolean }>;
   let openMenuRequest$: Subject<void>;
   let openSpy: jasmine.Spy;
   let pluginMenuEntries: WritableSignal<PluginMenuEntryCfg[]>;
@@ -84,7 +85,11 @@ describe('PageTitleComponent', () => {
     },
     {
       provide: BreakpointObserver,
-      useValue: { observe: () => isXxxs$ },
+      // The phone breakpoint (599px) has its own subject; the smallest one
+      // (350px) drives the rest.
+      useValue: {
+        observe: (query: string) => (query.includes('599px') ? isXs$ : isXxxs$),
+      },
     },
     {
       provide: WorkContextService,
@@ -151,6 +156,7 @@ describe('PageTitleComponent', () => {
     boards = signal<BoardCfg[]>([]);
     pluginStates = new Map();
     isXxxs$ = new BehaviorSubject<{ matches: boolean }>({ matches: false });
+    isXs$ = new BehaviorSubject<{ matches: boolean }>({ matches: false });
     openMenuRequest$ = new Subject<void>();
     editBoardSpy = jasmine.createSpy('editBoard').and.returnValue(Promise.resolve());
     setViewLayoutSpy = jasmine.createSpy('setViewLayout');
@@ -531,6 +537,25 @@ describe('PageTitleComponent', () => {
       it('is hidden at the smallest breakpoint', async () => {
         isXxxs$.next({ matches: true });
         expect(firstButton(await renderAt('/boards/list'))).toBeNull();
+      });
+
+      // Three buttons left the view's title a word at 400px.
+      it("moves into the view's menu on phones, keeping the title's room", async () => {
+        isXs$.next({ matches: true });
+        await configureRender();
+        routerStub.url = '/boards/list';
+        const fixture = TestBed.createComponent(PageTitleComponent);
+        fixture.detectChanges();
+        const host = fixture.nativeElement as HTMLElement;
+        const labels = Array.from(
+          host.querySelectorAll('.page-title-actions button'),
+        ).map((b) => b.getAttribute('aria-label'));
+        expect(labels).toEqual([
+          T.GCF.KEYBOARD.TOGGLE_TASK_VIEW_CUSTOMIZER_PANEL,
+          T.G.MORE_ACTIONS,
+        ]);
+        expect(fixture.componentInstance.isXs()).toBeTrue();
+        expect(fixture.componentInstance.viewLayoutSwitch()?.layout).toBe('board');
       });
     });
 

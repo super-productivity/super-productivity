@@ -34,7 +34,7 @@ import { PluginBridgeService } from '../../../plugins/plugin-bridge.service';
 import { PluginService } from '../../../plugins/plugin.service';
 import { PluginIconComponent } from '../../../plugins/ui/plugin-icon/plugin-icon.component';
 import { selectAllBoards } from '../../../features/boards/store/boards.selectors';
-import { getViewIcon, getViewLayout } from '../../../features/boards/boards.util';
+import { getViewIcon, getViewLayoutSwitch } from '../../../features/boards/boards.util';
 import { BoardCfg } from '../../../features/boards/boards.model';
 import { ViewMenuComponent } from '../../../features/boards/view-menu/view-menu.component';
 import { BoardsService } from '../../../features/boards/boards.service';
@@ -154,24 +154,22 @@ import { BoardsService } from '../../../features/boards/boards.service';
       @if (!isXxxs() && viewBoard(); as board) {
         <div class="page-title-actions">
           <!-- List/Board: first, so it stays under the pointer when the
-               list-only filter button comes or goes. This block stays
-               rendered across the switch (its alias updates), so the button
-               keeps the focus. -->
-          <button
-            class="view-layout-btn"
-            (click)="toggleViewLayout(board)"
-            [matTooltip]="
-              (board.cols <= 1 ? T.F.BOARDS.V.SHOW_AS_BOARD : T.F.BOARDS.V.SHOW_AS_LIST)
-                | translate
-            "
-            [attr.aria-label]="
-              (board.cols <= 1 ? T.F.BOARDS.V.SHOW_AS_BOARD : T.F.BOARDS.V.SHOW_AS_LIST)
-                | translate
-            "
-            mat-icon-button
-          >
-            <mat-icon>{{ board.cols <= 1 ? 'view_kanban' : 'view_list' }}</mat-icon>
-          </button>
+               list-only filter button comes or goes. These blocks stay
+               rendered across the switch (their aliases update), so the
+               button keeps the focus. On phones it is an item of the ⋮ menu
+               instead: three buttons left the view's title a word ("Open …")
+               at 400px, and the title is the view's name there. -->
+          @if (!isXs() && viewLayoutSwitch(); as layoutSwitch) {
+            <button
+              class="view-layout-btn"
+              (click)="toggleViewLayout(board)"
+              [matTooltip]="layoutSwitch.label | translate"
+              [attr.aria-label]="layoutSwitch.label | translate"
+              mat-icon-button
+            >
+              <mat-icon>{{ layoutSwitch.icon }}</mat-icon>
+            </button>
+          }
           <!-- The filter/sort menu edits a list-layout view's rules. Boards
                with several columns keep the editor: their panels differ by
                design. Same trigger ref as the work view's, so the shortcut
@@ -214,7 +212,10 @@ import { BoardsService } from '../../../features/boards/boards.service';
       <mat-menu #viewMenu="matMenu">
         <ng-template matMenuContent>
           @if (viewBoard(); as board) {
-            <view-menu [board]="board"></view-menu>
+            <view-menu
+              [board]="board"
+              [withLayoutSwitch]="isXs()"
+            ></view-menu>
           }
         </ng-template>
       </mat-menu>
@@ -604,6 +605,20 @@ export class PageTitleComponent {
   isXxxs = toSignal(this._isXxxs$.pipe(map((result) => result.matches)), {
     initialValue: false,
   });
+  // Phones (the bottom-nav layout): the view's List/Board switch moves into
+  // its ⋮ menu, so the title keeps room for the view's name.
+  isXs = toSignal(
+    this._breakpointObserver
+      .observe('(max-width: 599px)')
+      .pipe(map((result) => result.matches)),
+    { initialValue: false },
+  );
+
+  /** The List/Board switch of the open view: the other mode. */
+  viewLayoutSwitch = computed(() => {
+    const board = this.viewBoard();
+    return board ? getViewLayoutSwitch(board) : undefined;
+  });
 
   get kb(): KeyboardConfig {
     return (this._configService.cfg()?.keyboard as KeyboardConfig) || {};
@@ -625,10 +640,7 @@ export class PageTitleComponent {
 
   /** The title bar's List/Board button: the open view in the other mode. */
   toggleViewLayout(board: BoardCfg): void {
-    this._boardsService.setViewLayout(
-      board,
-      getViewLayout(board) === 'list' ? 'board' : 'list',
-    );
+    this._boardsService.setViewLayout(board, getViewLayoutSwitch(board).layout);
   }
 
   openInPlainspace(): void {

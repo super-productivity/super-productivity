@@ -5,6 +5,7 @@ import {
   getPanelHeaderCount,
   getPanelRowIds,
   getViewIcon,
+  getViewLayoutSwitch,
   matchPanelTasks,
   normalizeBoardForSave,
   getPanelSortKey,
@@ -24,6 +25,7 @@ import {
 } from './boards.model';
 import { TaskCopy } from '../tasks/task.model';
 import { TODAY_TAG } from '../tag/tag.const';
+import { T } from '../../t.const';
 import {
   addDaysToDbDateStr,
   buildTaskComparator,
@@ -1029,6 +1031,23 @@ describe('getViewIcon', () => {
     expect(getViewIcon({ cols: 1 })).toBe('view_list');
     expect(getViewIcon({ cols: 0 })).toBe('view_list');
     expect(getViewIcon({ cols: 2 })).toBe('view_kanban');
+  });
+});
+
+describe('getViewLayoutSwitch', () => {
+  it("offers the other mode, with that mode's icon", () => {
+    for (const cols of [1, 0]) {
+      expect(getViewLayoutSwitch({ cols })).toEqual({
+        layout: 'board',
+        icon: getViewIcon({ cols: 2 }),
+        label: T.F.BOARDS.V.SHOW_AS_BOARD,
+      });
+    }
+    expect(getViewLayoutSwitch({ cols: 2 })).toEqual({
+      layout: 'list',
+      icon: getViewIcon({ cols: 1 }),
+      label: T.F.BOARDS.V.SHOW_AS_LIST,
+    });
   });
 });
 

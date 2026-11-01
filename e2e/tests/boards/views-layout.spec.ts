@@ -81,4 +81,31 @@ test.describe('View layout (List/Board in the title bar)', () => {
     expect(saved?.boardCols).toBeUndefined();
     await expect.poll(async () => new Set(await panelLefts(page)).size).toBe(3);
   });
+
+  test("on phones the switch is in the view's menu, leaving the title its room", async ({
+    page,
+    workViewPage,
+  }) => {
+    await workViewPage.waitForTaskList();
+    await page.setViewportSize({ width: 400, height: 800 });
+    await page.goto('/#/boards/EISENHOWER_MATRIX');
+    await expect(page.locator('boards board-panel')).toHaveCount(4);
+    await expect(layoutButton(page)).toHaveCount(0);
+
+    await actions(page).getByRole('button', { name: 'More actions' }).click();
+    // First in the menu, before Edit.
+    await expect(page.getByRole('menuitem').first()).toHaveAccessibleName(/Show as list/);
+    await page.getByRole('menuitem', { name: 'Show as list' }).click();
+    await expect(page.locator('boards board')).toHaveClass(/isListLayout/);
+    expect(await readBoard(page, 'EISENHOWER_MATRIX')).toEqual(
+      expect.objectContaining({ cols: 1, boardCols: 2 }),
+    );
+    await expect(layoutButton(page)).toHaveCount(0);
+    await expect(filterButton(page)).toBeVisible();
+
+    await actions(page).getByRole('button', { name: 'More actions' }).click();
+    await page.getByRole('menuitem', { name: 'Show as board' }).click();
+    await expect(page.locator('boards board')).not.toHaveClass(/isListLayout/);
+    expect((await readBoard(page, 'EISENHOWER_MATRIX'))?.cols).toBe(2);
+  });
 });

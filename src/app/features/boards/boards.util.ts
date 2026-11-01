@@ -19,6 +19,7 @@ import {
   TaskSortKey,
 } from '../tasks/task-criteria/task-criteria';
 import { DEFAULT_BOARD_CFG, DEFAULT_PANEL_CFG } from './boards.const';
+import { T } from '../../t.const';
 
 const VALID_SORT_FIELDS: ReadonlySet<BoardSortField> = new Set([
   'dueDate',
@@ -306,6 +307,22 @@ export const getLayoutChanges = (
 /** A view's icon: a list for one column, a board for several (its layout). */
 export const getViewIcon = (board: Pick<BoardCfg, 'cols'>): string =>
   board.cols > 1 ? 'view_kanban' : 'view_list';
+
+/** The List/Board switch of a view: the mode it goes to, with its icon and label. */
+export interface ViewLayoutSwitch {
+  layout: ViewLayout;
+  icon: string;
+  label: string;
+}
+
+/**
+ * What the List/Board switch offers on a view (the title bar's button, or the
+ * item in the view's menu on phones): the other mode.
+ */
+export const getViewLayoutSwitch = (board: Pick<BoardCfg, 'cols'>): ViewLayoutSwitch =>
+  getViewLayout(board) === 'list'
+    ? { layout: 'board', icon: 'view_kanban', label: T.F.BOARDS.V.SHOW_AS_BOARD }
+    : { layout: 'list', icon: 'view_list', label: T.F.BOARDS.V.SHOW_AS_LIST };
 
 /** The tasks a panel's rules match, in the order given (no sort). */
 export const matchPanelTasks = (
