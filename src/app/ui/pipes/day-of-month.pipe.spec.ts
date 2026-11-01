@@ -22,7 +22,13 @@ describe('DayOfMonthPipe', () => {
 
   it('should only add a trailing dot where the locale uses one', () => {
     expect(pipe.transform('2026-09-30', 'pl')).toBe('30');
+    expect(pipe.transform('2026-09-30', 'en-US')).toBe('30');
     expect(pipe.transform('2026-09-30', 'de-DE')).toBe('30.');
+    expect(pipe.transform('2026-09-30', 'hu')).toBe('30.');
+  });
+
+  it('should not append words that follow the day', () => {
+    expect(pipe.transform('2026-09-30', 'es')).toBe('30');
   });
 
   it('should order and inflect the day with its month per locale', () => {
