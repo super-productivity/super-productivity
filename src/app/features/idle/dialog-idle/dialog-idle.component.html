@@ -217,7 +217,7 @@
         </div>
       }
 
-      @if ((configService.takeABreak$ | async)?.isTakeABreakEnabled) {
+      @if (mode !== 'BREAK' && (configService.takeABreak$ | async)?.isTakeABreakEnabled) {
         <div class="reset-break-timer">
           <mat-checkbox
             [ngModel]="isResetBreakTimer"
