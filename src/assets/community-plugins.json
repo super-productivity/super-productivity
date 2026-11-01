@@ -236,5 +236,31 @@
       "downloadUrl": "https://github.com/AshrafByte/sp-timesheet/releases/download/v2.0.1/sp-timesheet-v2.0.1.zip",
       "sha256": "627d56200730436d0cc70586422ad30512d49da80c041e4e6eb1cf405f4471d0"
     }
+  },
+  {
+    "name": "Daily Quest",
+    "shortDescription": "Experimental: an adventure map from a buff to your boss task to a recovery break, with the boss's subtasks as steps along the trail.",
+    "url": "https://github.com/super-productivity/ridonculous/tree/main/plugins/daily-quest",
+    "author": "super-productivity",
+    "authorUrl": "https://github.com/super-productivity",
+    "id": "ridonculous-daily-quest",
+    "release": {
+      "version": "0.3.0",
+      "downloadUrl": "https://github.com/super-productivity/ridonculous/releases/download/daily-quest-v0.3.0/ridonculous-daily-quest-0.3.0.zip",
+      "sha256": "22c91f677dd93faed17a7fb78af682da3d13f3c0d8cea293d9cbd9c7c991c9c4"
+    }
+  },
+  {
+    "name": "Stadium Mode",
+    "shortDescription": "Experimental: a roaring crowd and a stadium announcer for every task you start, finish, postpone or delete. An optional neural voice downloads about 110 MB after you confirm.",
+    "url": "https://github.com/super-productivity/ridonculous/tree/main/plugins/stadium-mode",
+    "author": "super-productivity",
+    "authorUrl": "https://github.com/super-productivity",
+    "id": "ridonculous-stadium-mode",
+    "release": {
+      "version": "0.4.0",
+      "downloadUrl": "https://github.com/super-productivity/ridonculous/releases/download/stadium-mode-v0.4.0/ridonculous-stadium-mode-0.4.0.zip",
+      "sha256": "bc0b07947d2be371471fc50ac2359683c54deff4ffc0d8deb737d96f0d7d69a8"
+    }
   }
 ]

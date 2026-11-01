@@ -10,7 +10,8 @@
 > move the enduring parts into
 > [android-background-sync-improvements.md](../long-term-plans/android-background-sync-improvements.md).
 
-Sibling notes: [cross-device time tracking](2026-10-28-survey-cross-device-time-tracking.md),
+Sibling notes: [narrow outbound background sync design](2026-10-30-narrow-mobile-background-sync.md),
+[cross-device time tracking](2026-10-28-survey-cross-device-time-tracking.md),
 [Planner and Schedule](2026-10-28-survey-planner-schedule.md).
 
 **Survey references.** `#N` is the 0-based row of the response in the

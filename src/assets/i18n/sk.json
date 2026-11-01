@@ -3123,8 +3123,8 @@
       "PLANNER": "Naplánujte ďalšie dni v {{plannerIcon}} <b>Plánovač</b>",
       "TASK_MENU_TOUCH": "Potiahnutím úlohy doľava otvoríte jej ponuku: {{playIcon}} <b>Začať sledovanie času</b>, {{subtaskIcon}} <b>Pridať podúlohu</b>",
       "TASK_MENU_TOUCH_NO_TRACKING": "Potiahnutím úlohy doľava otvoríte jej ponuku, napr. {{subtaskIcon}} <b>Pridať podúlohu</b>",
-      "TIMER_RUNNING": "Časovač beží. Na pozastavenie znova stlačte {{playIcon}} alebo <kbd>{{key}}</kbd>.",
-      "TIMER_RUNNING_TOUCH": "Časovač beží. Na pozastavenie ťuknite hore na {{playIcon}}.",
+      "TIMER_RUNNING": "Časovač beží. Na pozastavenie znova stlačte {{pauseIcon}} alebo <kbd>{{key}}</kbd>.",
+      "TIMER_RUNNING_TOUCH": "Časovač beží. Na pozastavenie ťuknite hore na {{pauseIcon}}.",
       "TRACK_TIME": "Prejdite myšou nad úlohu a stlačením {{playIcon}} spustite sledovanie času"
     },
     "WANT_MORE": {

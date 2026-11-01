@@ -2638,7 +2638,7 @@
       "SEARCH_HINT": "Find any task, including archived ones, and your notes. Opens from the side menu or a keyboard shortcut.",
       "SYNC_BUTTON": "Sync button",
       "SYNC_BUTTON_HINT": "Shows a button in the header to start syncing manually and see the sync status.",
-      "TIME_TRACKING": "Stopwatch time tracking",
+      "TIME_TRACKING": "Time tracking",
       "TIME_TRACKING_HINT": "The play button for starting and stopping a timer on the current task to track how long you work on it.",
       "TITLE": "App Features"
     },
@@ -3241,8 +3241,8 @@
       "PLANNER": "Plan the next days in {{plannerIcon}} <b>Planner</b>",
       "TASK_MENU_TOUCH": "Swipe a task left for its menu: {{playIcon}} <b>Start tracking time</b>, {{subtaskIcon}} <b>Add subtask</b>",
       "TASK_MENU_TOUCH_NO_TRACKING": "Swipe a task left for its menu, e.g. {{subtaskIcon}} <b>Add subtask</b>",
-      "TIMER_RUNNING": "Timer's running. Press {{playIcon}} again or <kbd>{{key}}</kbd> to pause.",
-      "TIMER_RUNNING_TOUCH": "Timer's running. Tap {{playIcon}} at the top to pause.",
+      "TIMER_RUNNING": "Timer's running. Press {{pauseIcon}} or <kbd>{{key}}</kbd> to pause.",
+      "TIMER_RUNNING_TOUCH": "Timer's running. Tap {{pauseIcon}} at the top to pause.",
       "TRACK_TIME": "Hover over the task and press {{playIcon}} to track time"
     },
     "WANT_MORE": {
@@ -3512,6 +3512,8 @@
     "UNABLE_TO_PERSIST_DATA": "Unable to persist data to plugin storage",
     "UNKNOWN_ERROR": "An unknown error occurred",
     "UPLOAD_PLUGIN_INSTRUCTION": "Upload a plugin ZIP file to install it:",
+    "BUILD_YOUR_OWN": "Want to build your own?",
+    "BUILD_YOUR_OWN_LINK": "Read the plugin guide",
     "VALIDATION_FAILED": "Validation failed: {{errors}}",
     "NODE_EXECUTION_BRIDGE_UNAVAILABLE": "Could not connect to the Node.js execution bridge. Please try disabling and re-enabling the plugin.",
     "PLUGIN_LOAD_FAILED": "Plugin \"{{pluginName}}\" failed to load: {{error}}",

@@ -1,18 +1,18 @@
 # Super Productivity Plugin Development Guide
 
-This is a comprehensive documentation of the Super Productivity Plugin System. This guide covers everything you need to know about creating plugins for Super Productivity.
+Plugins add buttons, panels, shortcuts and integrations to Super Productivity.
+A plugin is a ZIP with a `manifest.json` and JavaScript (`plugin.js`) and/or an
+HTML page (`index.html`); no build step is required.
 
-These docs might not always be perfectly up to date. You find the latest typescript interfaces here:
-[types.ts](../packages/plugin-api/src/types.ts)
-
-Personally I think the best way to figure out how to write a plugin is to check out the example plugins:
-
-- [yesterday-tasks-plugin](../packages/plugin-dev/yesterday-tasks-plugin)
-- [procrastination-buster](../packages/plugin-dev/procrastination-buster)
-- [api-test-plugin](../packages/plugin-dev/api-test-plugin)
-
-If you want to build a sophisticated UI there is a boilerplate available for solidjs:
-[boilerplate-solid-js](../packages/plugin-dev/boilerplate-solid-js)
+**Source of truth.** This guide explains concepts and the most used methods.
+The complete API — every `PluginAPI` method with its signature and comments — is
+[`packages/plugin-api/src/types.ts`](../packages/plugin-api/src/types.ts),
+published on npm as
+[`@super-productivity/plugin-api`](https://www.npmjs.com/package/@super-productivity/plugin-api).
+The npm package is versioned like the app: version X.Y.Z describes the API of
+Super Productivity X.Y.Z. Set a plugin's `minSupVersion` to the oldest app
+version that has every method it uses — not simply the newest, since people on
+slower release channels run older versions.
 
 ---
 
@@ -28,14 +28,82 @@ If you want to build a sophisticated UI there is a boilerplate available for sol
 
 ## Quick Start
 
-### 1. Basic Plugin Structure
+Your first plugin in about five minutes. You need a text editor and
+[Node.js](https://nodejs.org) 20.15 or newer (only to pack the ZIP).
+
+### 1. Copy the starter
+
+Copy the [plugin starter](../packages/plugin-starter) folder to a folder or
+repository of your own. It is plain JavaScript with no dependencies: a header
+button and a hook. With git:
+
+```bash
+git clone --depth 1 --filter=blob:none --sparse https://github.com/super-productivity/super-productivity.git sp-source
+git -C sp-source sparse-checkout set packages/plugin-starter
+cp -r sp-source/packages/plugin-starter my-plugin
+rm -rf sp-source
+```
+
+### 2. Make it yours
+
+In `manifest.json`, set a unique `id` (letters, numbers and dashes), `name`,
+`description` and `author`. Then edit `plugin.js`:
+
+```javascript
+PluginAPI.registerHeaderButton({
+  label: 'Say hello',
+  icon: 'waving_hand', // any Material icon name
+  onClick: async () => {
+    const tasks = await PluginAPI.getCurrentContextTasks();
+    PluginAPI.showSnack({ msg: `${tasks.length} tasks here`, type: 'SUCCESS' });
+  },
+});
+```
+
+### 3. Pack and install
+
+```bash
+node scripts/pack.mjs   # writes plugin.zip and prints its SHA-256
+```
+
+In the app: **Settings → Plugins → Choose Plugin File** → `plugin.zip`. Use a
+test instance, not your real data — for example
+[test-app.super-productivity.com](https://test-app.super-productivity.com).
+
+### 4. Iterate
+
+Edit, pack, and upload again: the same `id` replaces the installed plugin. Open
+the developer tools (F12 or Ctrl+Shift+I) for errors and `console.log` output.
+
+### Editor autocomplete
+
+Run `npm install --save-dev @super-productivity/plugin-api` in your plugin
+folder. The starter's `jsconfig.json` points editors such as VS Code at the
+installed types, so they autocomplete every `PluginAPI` method; add
+`// @ts-check` as the first line of `plugin.js` to have mistakes flagged too.
+
+Outside the starter, reference the global types at the top of a file:
+
+```javascript
+/// <reference types="@super-productivity/plugin-api/global" />
+```
+
+In TypeScript you can instead declare the global yourself:
+
+```typescript
+import type { PluginAPI as PluginAPIType } from '@super-productivity/plugin-api';
+declare const PluginAPI: PluginAPIType;
+```
+
+### Plugin structure
 
 ```
 my-plugin/
 ├── manifest.json      # Plugin metadata (required)
 ├── plugin.js          # Host-side plugin code (optional for iframe-only plugins)
 ├── index.html         # UI interface (required when omitting plugin.js; requires iFrame:true in manifest)
-└── icon.svg           # Plugin icon (optional)
+├── icon.svg           # Plugin icon (optional)
+└── i18n/              # Translations (optional), see PLUGIN_I18N.md
 ```
 
 `plugin.js` is required for plugins that need host-side setup at plugin load time,
@@ -43,48 +111,15 @@ shortcuts, header buttons, background behavior, or host-side API handlers. A UI-
 iframe plugin can ship only `manifest.json` and `index.html` when the manifest sets
 `iFrame: true`.
 
-### 2. Minimal Example
+### More examples
 
-**manifest.json:**
-
-```json
-{
-  "id": "hello-world",
-  "name": "Hello World Plugin",
-  "version": "1.0.0",
-  "description": "My first Super Productivity plugin",
-  "manifestVersion": 1,
-  "minSupVersion": "14.0.0",
-  "hooks": [],
-  "permissions": []
-}
-```
-
-**plugin.js:**
-
-```javascript
-console.log('Hello World plugin loaded!');
-
-// Show a notification
-PluginAPI.showSnack({
-  msg: 'Hello from my plugin!',
-  type: 'SUCCESS',
-});
-
-// Demo a simple counter
-await PluginAPI.setCounter('hello-count', 0);
-PluginAPI.registerHeaderButton({
-  label: 'Hello (Count: 0)',
-  icon: 'waving_hand',
-  onClick: async () => {
-    const newCount = await PluginAPI.incrementCounter('hello-count');
-    PluginAPI.showSnack({
-      msg: `Button clicked! Count: ${newCount}`,
-      type: 'INFO',
-    });
-  },
-});
-```
+- [yesterday-tasks-plugin](../packages/plugin-dev/yesterday-tasks-plugin) — plain
+  JavaScript with an iframe side panel
+- [api-test-plugin](../packages/plugin-dev/api-test-plugin) — exercises most API calls
+- [procrastination-buster](../packages/plugin-dev/procrastination-buster) — TypeScript
+- [boilerplate-solid-js](../packages/plugin-dev/boilerplate-solid-js) — SolidJS UI
+  with Vite. It builds inside this repository only; see its README.
+- All bundled plugins: [packages/plugin-dev](../packages/plugin-dev)
 
 ## Plugin Manifest
 
@@ -154,7 +189,8 @@ PluginAPI.registerHeaderButton({
   },
 });
 
-PluginAPI.registerHook(PluginAPI.Hooks.TASK_COMPLETE, (taskId) => {
+// Hook handlers receive one payload object (see HookPayloadMap in types.ts)
+PluginAPI.registerHook(PluginAPI.Hooks.TASK_COMPLETE, ({ taskId }) => {
   console.log(`Task ${taskId} completed!`);
 });
 ```
@@ -295,6 +331,9 @@ Iframe plugins automatically receive:
 
 ## Available API Methods
 
+This section covers the most used methods. The complete list, with signatures,
+is [`types.ts`](../packages/plugin-api/src/types.ts) (`interface PluginAPI`).
+
 ### Data Operations
 
 #### Tasks
@@ -305,7 +344,14 @@ Iframe plugins automatically receive:
 - `getSelectedTask()` - Get the task selected in the task detail panel, or `null`
 - `getFocusedTask()` - Get the currently focused task row, or `null`. Task-row focus is cleared when focus moves elsewhere, including into iframe side panels; use `getSelectedTask()` for persistent side-panel task context.
 - `addTask(task)` - Create a new task
-- `updateTask(taskId, updates)` - Update existing task
+- `updateTask(taskId, updates)` - Update existing task. Setting `dueDay` adds the task to that Planner day (or Today). A scheduled time (`dueWithTime`) and its reminder take precedence over `dueDay`, and `updateTask` cannot clear a reminder yet, so use this for tasks without a time. The task is added at the end of that day. Take day strings from `getDayContext().todayStr` so the user's start of next day is honoured.
+- `startTracking(taskId)` / `stopTracking()` - Start or stop time tracking. Rejects for an unknown or done task (unlike the play button, it does not reopen it) and for a parent whose subtasks are all done. For a parent task, tracking starts on its first unfinished subtask. The tracked task arrives with `currentTaskChange`.
+
+#### Day
+
+- `getDayContext()` - `{ todayStr, startOfNextDayDiffMs }`. `todayStr` is the user's logical day (YYYY-MM-DD): before the configured start of the next day it is still the previous calendar day. To find a timestamp's logical day, subtract `startOfNextDayDiffMs` before taking its local date. Re-read it on `DAY_CHANGE`.
+
+Feature-detect `getDayContext`, `startTracking` and `stopTracking` on older hosts.
 
 #### Application State
 
@@ -532,8 +578,25 @@ const hooks = {
   LANGUAGE_CHANGE: 'languageChange',
   PERSISTED_DATA_CHANGED: 'persistedDataChanged',
   ACTION: 'action',
+  DATA_CHANGED: 'dataChanged',
+  DAY_CHANGE: 'dayChange',
 };
 ```
+
+`DATA_CHANGED` fires after tasks, projects or tags change from any source:
+the user, another plugin, planning, archiving, imports and remote sync, and
+when the selected or tracked task changes. It carries no payload; re-read
+what you display (`getSelectedTask()` for the selection). Use it to refresh a
+view only: it fires on every device for a synced change, so writing data in
+response would repeat the write on each one. Bursts (a sync batch, a bulk
+action) are coalesced into one call; while a task is tracked it fires about
+once a second, so compare what you render before redrawing. Prefer it over
+`ANY_TASK_UPDATE` for keeping a view current: that hook sees only local
+actions from a short list.
+
+`DAY_CHANGE` fires with `{ todayStr }` when the user's logical day changes
+while the app runs: at the rollover, or when the start-of-next-day setting
+moves it.
 
 `PERSISTED_DATA_CHANGED` fires whenever this plugin's persisted data
 changes — local writes, remote sync deliveries, and bulk imports —
@@ -546,14 +609,15 @@ plugin init, then subscribe to this hook for subsequent updates.
 
 ```javascript
 // Register hook listener
-PluginAPI.registerHook(PluginAPI.Hooks.TASK_COMPLETE, (taskId) => {
+// Hook handlers receive one payload object (see HookPayloadMap in types.ts)
+PluginAPI.registerHook(PluginAPI.Hooks.TASK_COMPLETE, ({ taskId }) => {
   console.log(`Task ${taskId} completed!`);
 });
 
 // Listen to Redux actions
-PluginAPI.registerHook(PluginAPI.Hooks.ACTION, (action) => {
-  if (action.type === 'ADD_TASK_SUCCESS') {
-    console.log('New task added:', action.payload);
+PluginAPI.registerHook(PluginAPI.Hooks.ACTION, ({ action }) => {
+  if (action.type === '[Task Shared] addTask') {
+    console.log('New task added:', action.task.id);
     // Bonus: Increment a counter on task add
     PluginAPI.incrementCounter('tasks-added-today');
   }
@@ -938,7 +1002,8 @@ async function testAPI() {
 
 ## Resources
 
-- **Plugin API Types**: [@super-productivity/plugin-api](https://www.npmjs.com/package/@super-productivity/plugin-api)
+- **Plugin API Types**: [@super-productivity/plugin-api](https://www.npmjs.com/package/@super-productivity/plugin-api) ([source](../packages/plugin-api/src/types.ts))
+- **Plugin Starter**: [plugin-starter](../packages/plugin-starter)
 - **Plugin Boilerplate**: [boilerplate-solid-js](../packages/plugin-dev/boilerplate-solid-js)
 - **Example Plugins**: [plugin-dev](../packages/plugin-dev)
 - **Community Plugins**: [community-plugins.json](../src/assets/community-plugins.json), also listed in Settings → Plugins
@@ -1001,17 +1066,32 @@ Happy plugin development! 🚀
 - Don't test on your real world data! Use a test instance! (you can use https://test-app.super-productivity.com/ if you don't know how get one)
 - Be as specific as possible
 - Outline what APIs your plugin should use
-- Test for errors (`Ctrl+Shift+i` opens the console) and iterate until it works. Don't expect that everything works on your first try.
+- Give the assistant [`types.ts`](../packages/plugin-api/src/types.ts): it is the complete, current API, while this guide only covers the most used parts. If the assistant can't open links, paste the file into the chat
+- Test for errors (`Ctrl+Shift+i` opens the console) and iterate until it works. Don't expect that everything works on your first try. When the plugin uses a `PluginAPI` method that does not exist, the console names the closest real ones: paste that line back to the assistant
 - Read the code! Don't trust it blindly.
 
 ### Example
 
+The rules in the prompt are the mistakes assistants make most often. Keep them
+even for a small plugin.
+
 ```md
-Can you you write me a plugin for Super Productivity that plays a beep sound every time i click on a header button (You need to add a header button via PluginAPI.registerHeaderButton).
+Write me a plugin for Super Productivity that plays a beep sound every time I click on a header button.
 
-Here are the docs: https://github.com/super-productivity/super-productivity/blob/master/docs/plugin-development.md
+The complete API (the global PluginAPI object): https://raw.githubusercontent.com/super-productivity/super-productivity/master/packages/plugin-api/src/types.ts
+A working starter: https://github.com/super-productivity/super-productivity/tree/master/packages/plugin-starter
 
-Don't use any PluginAPI methods that are not listed in the guide.
+Rules:
 
-Please give me the output as flat zip file to download.
+- Only use PluginAPI methods and hooks listed in types.ts. If something is not possible with them, say so instead of inventing a method.
+- manifest.json needs id (letters, numbers and dashes), name, version, "manifestVersion": 1, minSupVersion, "hooks": [] and "permissions": [].
+- plugin.js is not a module: no import/export, no top-level await. Put async startup code in PluginAPI.onReady(async () => { ... }).
+- Header buttons, menu entries, shortcuts and side panel buttons can only be registered from plugin.js, not from index.html.
+- A UI goes in index.html with "iFrame": true in the manifest. Inline all CSS and JavaScript; other files are not served to it.
+- Hook handlers get one payload object, e.g. registerHook(PluginAPI.Hooks.TASK_COMPLETE, ({ taskId, task }) => { ... }).
+- Most methods return Promises: await them.
+- Store data with PluginAPI.persistDataSynced(string) and loadSyncedData(), not localStorage.
+- PluginAPI.request needs "http" in permissions and the host in "allowedHosts".
+
+Give me the files and a flat ZIP (manifest.json at the top level, not inside a folder).
 ```

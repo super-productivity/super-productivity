@@ -3114,8 +3114,8 @@
       "PLANNER": "{{plannerIcon}} <b>プランナー</b>で数日先の予定を立てましょう",
       "TASK_MENU_TOUCH": "タスクを左にスワイプするとメニューが開きます: {{playIcon}} <b>タイムトラッキングの開始</b>、{{subtaskIcon}} <b>サブタスクを追加</b>",
       "TASK_MENU_TOUCH_NO_TRACKING": "タスクを左にスワイプするとメニューが開きます。例: {{subtaskIcon}} <b>サブタスクを追加</b>",
-      "TIMER_RUNNING": "タイマー作動中です。一時停止するには、もう一度{{playIcon}}または<kbd>{{key}}</kbd>を押します。",
-      "TIMER_RUNNING_TOUCH": "タイマー作動中です。一時停止するには、上部の{{playIcon}}をタップします。",
+      "TIMER_RUNNING": "タイマー作動中です。一時停止するには、もう一度{{pauseIcon}}または<kbd>{{key}}</kbd>を押します。",
+      "TIMER_RUNNING_TOUCH": "タイマー作動中です。一時停止するには、上部の{{pauseIcon}}をタップします。",
       "TRACK_TIME": "タスクにカーソルを合わせて{{playIcon}}を押すと、時間を記録できます"
     },
     "WANT_MORE": {

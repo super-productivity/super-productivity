@@ -7,6 +7,8 @@ import { DateService } from '../../../core/date/date.service';
 import { Task } from '../../tasks/task.model';
 import * as focusModeActions from '../../focus-mode/store/focus-mode.actions';
 import {
+  AndroidPauseDeps,
+  handleAndroidPause,
   handleAndroidResume,
   isTimeSpentJumpForNotification,
   NativeElapsedSyncDeps,
@@ -2228,5 +2230,31 @@ describe('syncNativeElapsedTimeForTask - recovery after process death', () => {
     expect(didSync).toBeFalse();
     expect(addTimeSpentAndSync).not.toHaveBeenCalled();
     expect(showWarning).toHaveBeenCalled();
+  });
+});
+
+describe('handleAndroidPause - push after time flush', () => {
+  const makeDeps = (order: string[]): AndroidPauseDeps => ({
+    syncElapsedTimeForTask: async (taskId) => {
+      order.push('reconcile:' + taskId);
+      return true;
+    },
+    flushAccumulatedTimeSpent: () => order.push('timeSpent'),
+    flushPendingOperations: async () => void order.push('flush'),
+    pushPendingOps: async () => void order.push('push'),
+  });
+
+  it('pushes only after the tracked time is dispatched and flushed', async () => {
+    const order: string[] = [];
+    await handleAndroidPause(makeDeps(order), { id: 'task-1' } as Task);
+    expect(order).toEqual(['reconcile:task-1', 'timeSpent', 'flush', 'push']);
+  });
+
+  it('still pushes ops persisted earlier when the time flush fails', async () => {
+    const order: string[] = [];
+    const deps = makeDeps(order);
+    deps.flushPendingOperations = () => Promise.reject(new Error('idb'));
+    await expectAsync(handleAndroidPause(deps, null)).toBeRejected();
+    expect(order).toEqual(['timeSpent', 'push']);
   });
 });

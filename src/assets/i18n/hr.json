@@ -3109,8 +3109,8 @@
       "PLANNER": "Planiraj sljedeće dane u {{plannerIcon}} <b>Planer</b>",
       "TASK_MENU_TOUCH": "Povuci zadatak ulijevo za njegov izbornik: {{playIcon}} <b>Pokreni praćenje vremena</b>, {{subtaskIcon}} <b>Dodaj podzadatak</b>",
       "TASK_MENU_TOUCH_NO_TRACKING": "Povuci zadatak ulijevo za njegov izbornik, npr. {{subtaskIcon}} <b>Dodaj podzadatak</b>",
-      "TIMER_RUNNING": "Mjerač vremena radi. Ponovno pritisni {{playIcon}} ili <kbd>{{key}}</kbd> za pauzu.",
-      "TIMER_RUNNING_TOUCH": "Mjerač vremena radi. Dodirni {{playIcon}} na vrhu za pauzu.",
+      "TIMER_RUNNING": "Mjerač vremena radi. Ponovno pritisni {{pauseIcon}} ili <kbd>{{key}}</kbd> za pauzu.",
+      "TIMER_RUNNING_TOUCH": "Mjerač vremena radi. Dodirni {{pauseIcon}} na vrhu za pauzu.",
       "TRACK_TIME": "Pređi mišem preko zadatka i pritisni {{playIcon}} za praćenje vremena"
     },
     "WANT_MORE": {

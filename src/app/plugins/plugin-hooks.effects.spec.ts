@@ -1,4 +1,4 @@
-import { TestBed } from '@angular/core/testing';
+import { fakeAsync, TestBed, tick } from '@angular/core/testing';
 import { provideMockActions } from '@ngrx/effects/testing';
 import { EMPTY, Observable, of, ReplaySubject } from 'rxjs';
 import { PluginHooksEffects } from './plugin-hooks.effects';
@@ -13,14 +13,24 @@ import { PluginI18nService } from './plugin-i18n.service';
 import {
   selectCurrentTask,
   selectTaskById,
+  selectTaskFeatureState,
 } from '../features/tasks/store/task.selectors';
+import { selectProjectFeatureState } from '../features/project/store/project.selectors';
+import { selectTagFeatureState } from '../features/tag/store/tag.reducer';
+import { GlobalTrackingIntervalService } from '../core/global-tracking-interval/global-tracking-interval.service';
+import { TaskState } from '../features/tasks/task.model';
+import { ProjectState } from '../features/project/project.model';
+import { TagState } from '../features/tag/tag.model';
 import { selectPluginUserDataFeatureState } from './store/plugin-user-data.reducer';
 import { SyncTriggerService } from '../imex/sync/sync-trigger.service';
+import { DataInitStateService } from '../core/data-init/data-init-state.service';
 import { HydrationStateService } from '../op-log/apply/hydration-state.service';
 import { PluginUserData } from './plugin-persistence.model';
 import { updateGlobalConfigSection } from '../features/config/store/global-config.actions';
 import { selectLocalizationConfig } from '../features/config/store/global-config.reducer';
 import { LanguageCode } from '../core/locale.constants';
+import { initialTaskState, taskReducer } from '../features/tasks/store/task.reducer';
+import { setSelectedTask } from '../features/tasks/store/task.actions';
 import { BeforeFinishDayService } from '../features/before-finish-day/before-finish-day.service';
 
 describe('PluginHooksEffects', () => {
@@ -30,6 +40,8 @@ describe('PluginHooksEffects', () => {
   let pluginI18nServiceMock: jasmine.SpyObj<PluginI18nService>;
   let store: MockStore;
   let gateSubject: ReplaySubject<boolean>;
+  let todayStr$: ReplaySubject<string>;
+  let dataLoaded$: ReplaySubject<boolean>;
 
   const createMockTask = (overrides: Partial<TaskWithSubTasks> = {}): TaskWithSubTasks =>
     ({
@@ -79,6 +91,9 @@ describe('PluginHooksEffects', () => {
     // at boot `loadAllData` time; a BehaviorSubject(true) would emit on
     // subscribe and make that spec pass for the wrong reason.
     gateSubject = new ReplaySubject<boolean>(1);
+    // ReplaySubject(1) like the real todayDateStr$ (shareReplay(1))
+    todayStr$ = new ReplaySubject<string>(1);
+    dataLoaded$ = new ReplaySubject<boolean>(1);
 
     TestBed.configureTestingModule({
       providers: [
@@ -101,10 +116,18 @@ describe('PluginHooksEffects', () => {
         // empty stream keeps that effect inert for the other effects' tests.
         { provide: WorkContextService, useValue: { activeWorkContext$: EMPTY } },
         {
+          provide: GlobalTrackingIntervalService,
+          useValue: { todayDateStr$: todayStr$.asObservable() },
+        },
+        {
           provide: SyncTriggerService,
           useValue: {
             afterInitialSyncDoneAndDataLoadedInitially$: gateSubject.asObservable(),
           },
+        },
+        {
+          provide: DataInitStateService,
+          useValue: { isAllDataLoadedInitially$: dataLoaded$.asObservable() },
         },
         // Provided with isInSyncWindow=true so a future regression that adds
         // `skipDuringSyncWindow`/`waitForSyncWindow` to the effect would
@@ -647,6 +670,133 @@ describe('PluginHooksEffects', () => {
         await TestBed.inject(BeforeFinishDayService).executeActions('2026-09-03');
 
       expect(result).toBe('ERROR');
+    });
+  });
+  describe('dataChanged$', () => {
+    const hookCalls = (): number =>
+      pluginServiceMock.dispatchHook.calls
+        .allArgs()
+        .filter(([hook]) => hook === PluginHooks.DATA_CHANGED).length;
+
+    const setTaskIds = (ids: string[]): void => {
+      store.overrideSelector(selectTaskFeatureState, {
+        ids,
+        entities: {},
+      } as unknown as TaskState);
+      store.refreshState();
+    };
+
+    beforeEach(() => {
+      store.overrideSelector(selectProjectFeatureState, {
+        ids: [],
+        entities: {},
+      } as unknown as ProjectState);
+      store.overrideSelector(selectTagFeatureState, {
+        ids: [],
+        entities: {},
+      } as unknown as TagState);
+      setTaskIds(['a']);
+    });
+
+    it('stays silent before the gate opens and for the baseline state', fakeAsync(() => {
+      const sub = effects.dataChanged$.subscribe();
+      setTaskIds(['a', 'b']);
+      tick(2000);
+      expect(hookCalls()).toBe(0);
+
+      gateSubject.next(true);
+      tick(2000);
+      expect(hookCalls()).toBe(0);
+      sub.unsubscribe();
+    }));
+
+    it('fires for any task state change, local or remote, coalescing bursts', fakeAsync(() => {
+      const sub = effects.dataChanged$.subscribe();
+      gateSubject.next(true);
+
+      // A sync batch or bulk action: several state emissions in a row.
+      setTaskIds(['a', 'b']);
+      setTaskIds(['a', 'b', 'c']);
+      setTaskIds(['a', 'c']);
+      tick(1000);
+      expect(hookCalls()).toBe(1);
+
+      setTaskIds(['c']);
+      tick(1000);
+      expect(hookCalls()).toBe(2);
+      sub.unsubscribe();
+    }));
+
+    // The docs promise this so plugins can re-read getSelectedTask() on it;
+    // there is no separate selection hook.
+    it('fires when only the selected task changes', fakeAsync(() => {
+      const before: TaskState = { ...initialTaskState, ids: ['a'] };
+      store.overrideSelector(selectTaskFeatureState, before);
+      store.refreshState();
+      const sub = effects.dataChanged$.subscribe();
+      gateSubject.next(true);
+      store.overrideSelector(
+        selectTaskFeatureState,
+        taskReducer(before, setSelectedTask({ id: 'a' })),
+      );
+      store.refreshState();
+      tick(1000);
+      expect(hookCalls()).toBe(1);
+      sub.unsubscribe();
+    }));
+  });
+
+  describe('dayChange$', () => {
+    const dayChangeCalls = (): unknown[][] =>
+      pluginServiceMock.dispatchHook.calls
+        .allArgs()
+        .filter(([hook]) => hook === PluginHooks.DAY_CHANGE);
+
+    it('fires with the new logical day only when the day changes', () => {
+      const sub = effects.dayChange$.subscribe();
+      dataLoaded$.next(true);
+      todayStr$.next('2026-10-30');
+      todayStr$.next('2026-10-30');
+      todayStr$.next('2026-10-31');
+
+      const calls = pluginServiceMock.dispatchHook.calls
+        .allArgs()
+        .filter(([hook]) => hook === PluginHooks.DAY_CHANGE);
+      expect(calls).toEqual([[PluginHooks.DAY_CHANGE, { todayStr: '2026-10-31' }]]);
+      sub.unsubscribe();
+    });
+
+    // Boot: todayDateStr$ starts before the config sets the start-of-next-day
+    // offset, then corrects itself; that correction is not a day change.
+    it('ignores the day correction while data loads', () => {
+      const sub = effects.dayChange$.subscribe();
+      todayStr$.next('2026-10-31');
+      todayStr$.next('2026-10-30');
+      dataLoaded$.next(true);
+      expect(dayChangeCalls()).toEqual([]);
+
+      todayStr$.next('2026-10-31');
+      expect(dayChangeCalls()).toEqual([
+        [PluginHooks.DAY_CHANGE, { todayStr: '2026-10-31' }],
+      ]);
+      sub.unsubscribe();
+    });
+
+    // The sync gate opens after an 8 s timer even when data is still loading,
+    // so it must not be what dayChange$ waits on.
+    it('waits for the data load, not the initial sync timeout', () => {
+      const sub = effects.dayChange$.subscribe();
+      gateSubject.next(true);
+      todayStr$.next('2026-10-31');
+      todayStr$.next('2026-10-30');
+      expect(dayChangeCalls()).toEqual([]);
+
+      dataLoaded$.next(true);
+      todayStr$.next('2026-10-31');
+      expect(dayChangeCalls()).toEqual([
+        [PluginHooks.DAY_CHANGE, { todayStr: '2026-10-31' }],
+      ]);
+      sub.unsubscribe();
     });
   });
 });

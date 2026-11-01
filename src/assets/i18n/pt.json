@@ -3122,8 +3122,8 @@
       "PLANNER": "Planeie os próximos dias no {{plannerIcon}} <b>Planeador</b>",
       "TASK_MENU_TOUCH": "Deslize uma tarefa para a esquerda para ver o menu: {{playIcon}} <b>Comece a rastrear o tempo</b>, {{subtaskIcon}} <b>Adicionar subtarefa</b>",
       "TASK_MENU_TOUCH_NO_TRACKING": "Deslize uma tarefa para a esquerda para ver o menu, p. ex. {{subtaskIcon}} <b>Adicionar subtarefa</b>",
-      "TIMER_RUNNING": "O temporizador está a correr. Prima {{playIcon}} novamente ou <kbd>{{key}}</kbd> para pausar.",
-      "TIMER_RUNNING_TOUCH": "O temporizador está a correr. Toque em {{playIcon}} no topo para pausar.",
+      "TIMER_RUNNING": "O temporizador está a correr. Prima {{pauseIcon}} novamente ou <kbd>{{key}}</kbd> para pausar.",
+      "TIMER_RUNNING_TOUCH": "O temporizador está a correr. Toque em {{pauseIcon}} no topo para pausar.",
       "TRACK_TIME": "Passe o rato sobre a tarefa e prima {{playIcon}} para registar o tempo"
     },
     "WANT_MORE": {
