@@ -469,6 +469,12 @@ done-toggle {
   }
 }
 
+// Badges with a year widen their own button, see the mixin (#10804). With the
+// encapsulation attributes this selector outweighs the fixed 40px rule.
+.first-line .ico-btn.has-year-badge {
+  @include timeBadgeIconBtn;
+}
+
 .repeat-date-badge,
 .time-badge {
   @include center;

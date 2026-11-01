@@ -74,7 +74,6 @@ import { TaskAttachmentListComponent } from '../task-attachment/task-attachment-
 import { TagEditComponent } from '../../tag/tag-edit/tag-edit.component';
 import { DialogSelectDateTimeComponent } from '../dialog-select-date-time/dialog-select-date-time.component';
 import { LocaleDatePipe } from 'src/app/ui/pipes/locale-date.pipe';
-import { LocalDateStrPipe } from 'src/app/ui/pipes/local-date-str.pipe';
 import { MsToStringPipe } from '../../../ui/duration/ms-to-string.pipe';
 import { IssueIconPipe } from '../../issue/issue-icon/issue-icon.pipe';
 import { takeUntilDestroyed, toObservable, toSignal } from '@angular/core/rxjs-interop';
@@ -125,7 +124,6 @@ import { isWontDoTask } from '../util/is-wont-do-task';
     TaskAttachmentListComponent,
     TagEditComponent,
     LocaleDatePipe,
-    LocalDateStrPipe,
     MsToStringPipe,
     TranslatePipe,
     IssueIconPipe,

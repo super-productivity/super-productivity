@@ -33,7 +33,6 @@ import { MatDivider } from '@angular/material/divider';
 import { SplitButtonComponent } from '../../../ui/split-button/split-button.component';
 import { AsyncPipe, NgTemplateOutlet } from '@angular/common';
 import { LocaleDatePipe } from 'src/app/ui/pipes/locale-date.pipe';
-import { LocalDateStrPipe } from 'src/app/ui/pipes/local-date-str.pipe';
 import { TranslatePipe } from '@ngx-translate/core';
 import { TagListComponent } from '../../tag/tag-list/tag-list.component';
 import { Store } from '@ngrx/store';
@@ -91,7 +90,6 @@ export const shouldShowDeadlineScheduleHint = (
     TranslatePipe,
     TagListComponent,
     LocaleDatePipe,
-    LocalDateStrPipe,
     MatTooltip,
   ],
 })
