@@ -1835,3 +1835,87 @@ Checked, not changed:
   but needs its own enter handling; left for a report.
 - Focus is lost to `body` when Create Tags removes the callout (phase 6,
   with or without the animation). Left as is.
+
+Phase 7 implementation review (fresh-context subagent, 2026-10-31). Checked
+`e48a194..HEAD` against §15 and its user-feedback addendum, with the
+screenshots and new measurements (per-frame `getComputedStyle` sampling in a
+temporary E2E spec, deleted; screenshots `review-*` at 1280, 400 and 320px).
+Fixed:
+
+- The open card repeated its rule summary in the toggle right above the
+  same rules, followed by a "Show tasks that match" heading. Now the summary
+  shows only on collapsed cards; an open card's toggle reads "Show tasks
+  that match" with the count and chevron, like a single section's header,
+  and the separate heading goes for collapsible cards (still shown for a
+  shown title without a toggle). The heading wasn't needed twice; one row
+  explains the rules below.
+- A column's title opened the editor with that card open but out of view at
+  phone width (below two collapsed cards) and the focus on the view's title
+  field. The asked-for card's toggle now carries `cdkFocusInitial` and the
+  card scrolls to the top of the content (focus alone only revealed the
+  toggle). E2E asserts focus and viewport; the assertion fails without the
+  change.
+- `aria-controls` pointed at a body that isn't rendered while collapsed;
+  now only set while open.
+- The callout's leave animated only `height`: it stopped at its padding and
+  border (34px), then the row and its gap snapped away, a 50px jump
+  (measured). `expandOutOnly` now collapses padding, border and margins too;
+  the grid's 16px row gap still closes at removal (a negative margin can't
+  shrink a grid track below 0).
+- Wrong claim in the addendum, the trigger comment and the wiki: from
+  another page (Save as view… on a task list, Create while on Today) the
+  board's arrival enter does not run after `warpRoute`; its
+  `animateChild()` reaches only the route host, so the board's enter is
+  blocked (measured: the board stays at opacity 1 while the page zooms in).
+  The page transition plus the snack is the arrival there; the phone slide
+  runs only from a view page or the empty `/boards` page. The done event
+  still clears `arrivalId` (measured: a later switch back to that view is
+  the ordinary zoom). Comment and wiki corrected.
+- `isXxxs` is `max-width: 350px` in `page-title`, not 398px; §15 B
+  corrected. The layout row's `flex-wrap` was dead (the toggle's basis is
+  0, so Columns never wraps; the two segments still fit at 320px): removed
+  with its comment.
+- E2E `expandViewSection` counted the toggle before the card rendered; it
+  now waits for the card's header first.
+
+Checked, not changed:
+
+- Motion is calm: one 225ms enter (`scale(1.2)` + fade, or `translateX(25%)`
+  - fade below `xs`); no double animation on page entry, no layout jump
+    (transform/opacity only); the in-app Disable animations setting covers it
+    and the done callback still clears the arrival. `:host:has(> .missing-tags)`
+    survives emulated encapsulation (the grid gets an `auto` first row while
+    the callout leaves).
+- `arrivalId` after a cancelled navigation stays set until that view is
+  next shown, which then plays the arrival once and clears it; harmless, no
+  guard added (no observed instance).
+- Full-screen dialog: three-class selector beats the global `96vw` cap and
+  stays below the iOS keyboard rule (`(0,4,1)`), which still caps the
+  height; native pads the overlay wrapper by the safe areas and the pane
+  subtracts them, web pads the surface; shared class in
+  `_overwrite-material.scss`, Material styled only through its shape token.
+- Title and column-title buttons: role, Enter/Space (Space prevents
+  scroll), visible focus ring, the title as accessible name, tooltip as
+  description; dialog `restoreFocus` returns focus to them after Save or
+  Cancel.
+- `getRuleSummary` covers every rule type, unknown values ("Other (kept)"),
+  unknown ids and empty rules; only `en.json` edited, `t.const.ts` has the
+  three keys. The untouched-save fixtures don't touch the summary or the
+  open state.
+- Wiki matches the UI after the corrections above.
+
+Tests after the fixes: boards specs (323), `test:affected` (19613 + 6848),
+app and spec `tsc`, and E2E `boards`, `navigation` and `task-dragdrop`
+(73 passed).
+
+Left open (for the user):
+
+- On phones, the original complaint's path (Save as view… from a task list)
+  gets the generic page transition plus the snack, not the slide. Making the
+  board's arrival run there means changing the app-wide `warpRoute` (an
+  `animateChild()` for `@viewSwitch` would play it after the page's zoom:
+  two motions in sequence), so it wasn't done here.
+- The editor's first focus is the view's title field (Material's
+  first-tabbable default, unchanged since phase 5). Opening the editor by
+  tapping the view's title on a phone may raise the keyboard over the
+  full-screen editor; not verifiable without a device.
