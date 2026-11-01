@@ -1,5 +1,6 @@
 import { Locator, Page } from '@playwright/test';
 import { expect, test } from '../../fixtures/test.fixture';
+import { seedInboxTasks } from '../../utils/view-helpers';
 
 /**
  * A long column renders its first 100 cards and a "Show all (n)" button;
@@ -10,43 +11,6 @@ import { expect, test } from '../../fixtures/test.fixture';
  */
 
 const TASK_COUNT = 150;
-
-/** Creates the tasks in the Inbox in one go (the UI would take minutes). */
-const seedTasks = async (page: Page, prefix: string): Promise<void> => {
-  await page.evaluate(
-    ({ count, titlePrefix }) => {
-      const store = (
-        window as unknown as {
-          __e2eTestHelpers?: { store?: { dispatch: (action: unknown) => void } };
-        }
-      ).__e2eTestHelpers?.store;
-      if (!store) throw new Error('__e2eTestHelpers.store missing');
-      const operations = Array.from({ length: count }, (_, index) => ({
-        type: 'create',
-        tempId: `temp-${index}`,
-        data: { title: `${titlePrefix}-${String(index).padStart(3, '0')}` },
-      }));
-      for (let offset = 0; offset < count; offset += 50) {
-        store.dispatch({
-          type: '[Task Shared] batchUpdateForProject',
-          projectId: 'INBOX_PROJECT',
-          operations: operations.slice(offset, offset + 50),
-          createdTaskIds: Object.fromEntries(
-            operations.map(({ tempId }, index) => [tempId, `long-${index}`]),
-          ),
-          createdTaskTimestamp: Date.now(),
-          meta: {
-            isPersistent: true,
-            entityType: 'PROJECT',
-            entityId: 'INBOX_PROJECT',
-            opType: 'BATCH',
-          },
-        });
-      }
-    },
-    { count: TASK_COUNT, titlePrefix: prefix },
-  );
-};
 
 /** A CDK drag with real pointer moves, ending in the target's lower half. */
 const dragCard = async (page: Page, card: Locator, target: Locator): Promise<void> => {
@@ -75,7 +39,13 @@ test.describe('Long view columns', () => {
     testPrefix,
   }) => {
     await workViewPage.waitForTaskList();
-    await seedTasks(page, testPrefix);
+    await seedInboxTasks(
+      page,
+      Array.from(
+        { length: TASK_COUNT },
+        (_, index) => `${testPrefix}-${String(index).padStart(3, '0')}`,
+      ),
+    );
     await page.goto('/#/boards/KANBAN_DEFAULT');
     await page.getByRole('button', { name: 'Create Tag', exact: true }).click();
     const todo = page.locator('[data-board-selection-scope="TODO"]');
