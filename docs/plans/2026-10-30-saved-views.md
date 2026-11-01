@@ -1385,6 +1385,71 @@ button is replaced by the column's title.
   header; a created view shows the snack. `board-keyboard-navigation` and
   `issue-7380` click the column title (`columnTitleButton`).
 
+## 16. Phase 8 — List/Board as a view mode in the title bar
+
+User request (2026-11-01): sections and columns are the same panels, so make
+List and Board two modes of one view, switchable without opening the editor.
+Follow-ups (rows on narrow screens, card/row parity, templates instead of the
+default boards) go to a separate issue, not this PR.
+
+### Behaviour
+
+- A view's title-bar actions (`page-title`, next to the filter button and ⋮)
+  get one icon button that switches the open view to the other mode: shows
+  `view_kanban` with tooltip/aria "Show as board" in list mode, `view_list`
+  with "Show as list" in board mode (new keys). Same visibility rules as the
+  view's other title-bar actions (hidden below `isXxxs`, where the title opens
+  the editor).
+- One click = one `updateBoard` op with only the changed layout fields; the
+  board content enters with the `viewSwitch` motion (state keyed on the
+  layout as well as the view id, so a mode switch animates like a view
+  switch). Synced: the mode is part of the view, every device shows the same.
+- The editor's List/Board segmented control uses the same rules, so both
+  places stay consistent.
+
+### The stored mode
+
+Today the layout is derived from `cols` (`cols <= 1` = list). A pure
+`cols = 1` toggle would lose a board's column count (the Eisenhower Matrix's
+2×2 becomes 4 side by side when switched back).
+
+- New optional field `BoardCfg.layout?: 'list' | 'board'` (persisted
+  `string`, unknown values read as absent; no schema bump; runtime default:
+  derive from `cols`). One helper `isListView(board)` =
+  `board.layout === 'list' || (board.layout !== 'board' && board.cols <= 1)`
+  replaces every `cols <= 1` / `cols > 1` decision (`board.component`,
+  `page-title`, `getViewIcon`, the editor's `layout` computed and its
+  `view-editor.util` check, anything else grep finds).
+- To list: `{ layout: 'list' }`; `cols` untouched. To board: `{ layout:
+'board' }`, plus `cols: max(2, panels.length)` when `cols <= 1` (a view that
+  was created as a list).
+- New lists keep writing `cols: 1` (Save as view, the editor), so released
+  clients keep showing them as one column. Released clients ignore `layout`:
+  a board switched to list still shows as a board there; a list switched to
+  board shows its columns (cols ≥ 2) — no data loss, no wedge.
+- Never write `undefined`; `layout` is set to a value or left out. Check
+  `sanitize`/`normalizeBoardForSave`, the untouched-save fixtures (a board
+  without `layout` saves without it) and the frozen-state spec (rule 11: if it
+  fails, fix the model, never the fixture).
+
+### Tests
+
+- Unit: `isListView` for all combinations; the toggle dispatches exactly one
+  `updateBoard` with the expected partial (list→board from cols 1, from cols
+  3; board→list keeps cols); editor setLayout follows the same rules; the
+  untouched-save fixtures still pass; page-title shows the right icon and
+  label per mode.
+- E2E: toggle a sectioned list to board and back: columns ⇄ sections, the
+  Eisenhower Matrix keeps its 2×2 after list → board; the mode survives a
+  reload.
+
+### Not in this phase (follow-up issue)
+
+- Boards on narrow screens rendering as sections with task rows; card/row
+  parity (counts, Done handling, subtask hint, keyboard moves).
+- Templates instead of the default boards for new installs; Save as view
+  without the "Not completed" rule.
+
 ## Review
 
 Plan review (fresh-context subagent, 2026-10-30). Fixed in this revision:
