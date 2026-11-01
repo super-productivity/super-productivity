@@ -7,6 +7,7 @@ import {
   fillViewEditor,
   openCreateViewDialog,
   openViewEditor,
+  readBoard,
   saveViewEditor,
   viewEditorSection,
 } from '../../utils/view-helpers';
@@ -15,29 +16,6 @@ import {
  * The view editor: layout, sections with only the rules that are set, a live
  * count per section, and saving without losing what it doesn't show.
  */
-
-type BoardState = { id: string; title: string; cols: number; panels: unknown[] };
-
-const readBoard = (page: Page, id: string): Promise<BoardState | undefined> =>
-  page.evaluate((boardId) => {
-    let boards: BoardState[] = [];
-    (
-      window as unknown as {
-        __e2eTestHelpers: {
-          store: {
-            subscribe: (
-              next: (state: { boards: { boardCfgs: BoardState[] } }) => void,
-            ) => {
-              unsubscribe: () => void;
-            };
-          };
-        };
-      }
-    ).__e2eTestHelpers.store
-      .subscribe((state) => (boards = state.boards.boardCfgs))
-      .unsubscribe();
-    return boards.find((board) => board.id === boardId);
-  }, id);
 
 const values = (inputs: Locator): Promise<string[]> =>
   inputs.evaluateAll((els) => els.map((el) => (el as HTMLInputElement).value));

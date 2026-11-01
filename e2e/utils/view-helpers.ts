@@ -25,6 +25,55 @@ export const openViewEditor = async (page: Page): Promise<Locator> => {
 };
 
 /**
+ * The title bar's List/Board button ("Show as board" / "Show as list"):
+ * switches the open view to the other mode and waits for it.
+ */
+export const toggleViewLayout = async (page: Page): Promise<void> => {
+  const board = page.locator('boards board');
+  const wasList = await board.evaluate((el) => el.classList.contains('isListLayout'));
+  await page
+    .locator('page-title .page-title-actions')
+    .getByRole('button', { name: wasList ? 'Show as board' : 'Show as list' })
+    .click();
+  if (wasList) {
+    await expect(board).not.toHaveClass(/isListLayout/);
+  } else {
+    await expect(board).toHaveClass(/isListLayout/);
+  }
+};
+
+/** A stored view (board), as the store holds it. */
+export type BoardState = {
+  id: string;
+  title: string;
+  cols: number;
+  boardCols?: number;
+  panels: unknown[];
+};
+
+/** Reads a view (board) from the store. */
+export const readBoard = (page: Page, id: string): Promise<BoardState | undefined> =>
+  page.evaluate((boardId) => {
+    let boards: BoardState[] = [];
+    (
+      window as unknown as {
+        __e2eTestHelpers: {
+          store: {
+            subscribe: (
+              next: (state: { boards: { boardCfgs: BoardState[] } }) => void,
+            ) => {
+              unsubscribe: () => void;
+            };
+          };
+        };
+      }
+    ).__e2eTestHelpers.store
+      .subscribe((state) => (boards = state.boards.boardCfgs))
+      .unsubscribe();
+    return boards.find((board) => board.id === boardId);
+  }, id);
+
+/**
  * A board column's title, a button that opens the view editor with that
  * column's section open.
  */
