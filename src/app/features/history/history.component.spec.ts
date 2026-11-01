@@ -1,4 +1,4 @@
-import { ChangeDetectorRef } from '@angular/core';
+import { ChangeDetectorRef, signal } from '@angular/core';
 import {
   ComponentFixture,
   fakeAsync,
@@ -27,6 +27,7 @@ import { Task } from '../tasks/task.model';
 import { selectAllProjectColorsAndTitles } from '../project/store/project.selectors';
 import { mapArchiveToWorklog } from '../worklog/util/map-archive-to-worklog';
 import { DateService } from '../../core/date/date.service';
+import { DateTimeFormatService } from '../../core/date-time-format/date-time-format.service';
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 import { DialogWorklogExportComponent } from '../worklog/dialog-worklog-export/dialog-worklog-export.component';
 
@@ -112,6 +113,7 @@ describe('HistoryComponent', () => {
         { provide: TaskArchiveService, useValue: taskArchiveServiceSpy },
         { provide: TaskService, useValue: {} },
         { provide: DateService, useValue: dateServiceSpy },
+        { provide: DateTimeFormatService, useValue: { textLocale: signal('en-GB') } },
         { provide: WorkContextService, useValue: {} },
         { provide: SimpleCounterService, useValue: { enabledSimpleCounters$: of([]) } },
         { provide: WorklogService, useValue: worklogServiceSpy },
@@ -198,7 +200,7 @@ describe('HistoryComponent', () => {
       .queryAll(By.css('.week-row td:first-child'))
       .map((de) => de.nativeElement.textContent.trim());
 
-    expect(dayLabels).toEqual(['Wed 1.', 'Thu 2.', 'Fri 3.']);
+    expect(dayLabels).toEqual(['Wed 1', 'Thu 2', 'Fri 3']);
   });
 
   it('exports the complete worklog date range', () => {
@@ -377,20 +379,20 @@ describe('HistoryComponent', () => {
       setCrossMonthWorklog();
       fixture.componentInstance.toggleMonth('2026', '9');
 
-      expect(renderedDayLabels()).toEqual(['Mon 31. August', 'Tue 1.']);
+      expect(renderedDayLabels()).toEqual(['Mon 31 August', 'Tue 1']);
       expect(
         fixture.debugElement
           .queryAll(By.css('.week-row.isOtherMonth td:first-child'))
           .map((de) => de.nativeElement.textContent.replace(/\s+/g, ' ').trim()),
-      ).toEqual(['Mon 31. August']);
+      ).toEqual(['Mon 31 August']);
 
       fixture.componentInstance.toggleMonth('2026', '8');
 
       expect(renderedDayLabels()).toEqual([
-        'Mon 31. August',
-        'Tue 1.',
-        'Mon 31.',
-        'Tue 1. September',
+        'Mon 31 August',
+        'Tue 1',
+        'Mon 31',
+        'Tue 1 September',
       ]);
     });
 
@@ -413,7 +415,7 @@ describe('HistoryComponent', () => {
       fixture = TestBed.createComponent(HistoryComponent);
       setCrossMonthWorklog();
 
-      expect(renderedDayLabels()).toEqual(['Mon 31. August', 'Tue 1.']);
+      expect(renderedDayLabels()).toEqual(['Mon 31 August', 'Tue 1']);
     });
   });
 });
