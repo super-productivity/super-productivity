@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { signal } from '@angular/core';
 import { MockStore, provideMockStore } from '@ngrx/store/testing';
 import { of } from 'rxjs';
 import { LocalRestApiTaskRoutesService } from './local-rest-api-task-routes.service';
@@ -17,6 +18,8 @@ import {
   LocalRestApiResponsePayload,
 } from '../../../../electron/shared-with-frontend/local-rest-api.model';
 import { ArchiveOperationHandler } from '../../op-log/apply/archive-operation-handler.service';
+import { TrackingPresenceService } from '../tracking-presence/tracking-presence.service';
+import { RemoteSessionView } from '../tracking-presence/tracking-presence.model';
 
 describe('LocalRestApiTaskRoutesService', () => {
   let service: LocalRestApiTaskRoutesService;
@@ -28,6 +31,7 @@ describe('LocalRestApiTaskRoutesService', () => {
   let featureBridgeMock: jasmine.SpyObj<LocalRestApiFeatureBridgeService>;
   let store: MockStore;
   let dispatchSpy: jasmine.Spy;
+  const remoteSessionView = signal<RemoteSessionView | null>(null);
   let activeProjects: Project[];
 
   const createMockTask = (id: string, overrides: Partial<Task> = {}): Task =>
@@ -93,6 +97,7 @@ describe('LocalRestApiTaskRoutesService', () => {
 
   beforeEach(() => {
     activeProjects = [];
+    remoteSessionView.set(null);
 
     taskServiceMock = jasmine.createSpyObj(
       'TaskService',
@@ -175,6 +180,7 @@ describe('LocalRestApiTaskRoutesService', () => {
         { provide: ProjectService, useValue: projectServiceMock },
         { provide: DateService, useValue: dateServiceMock },
         { provide: LocalRestApiFeatureBridgeService, useValue: featureBridgeMock },
+        { provide: TrackingPresenceService, useValue: { remoteSessionView } },
         provideMockStore(),
       ],
     });
@@ -194,6 +200,64 @@ describe('LocalRestApiTaskRoutesService', () => {
 
       expect(response.body.ok).toBe(true);
       expect(response.status).toBe(200);
+    });
+
+    describe('trackingOnOtherDevice', () => {
+      const setRemote = (
+        state: 'tracking' | 'stopped',
+        opts: { isStale?: boolean } = {},
+      ): void => {
+        remoteSessionView.set({
+          session: {
+            payload: {
+              v: 1,
+              sessionId: 's1',
+              seq: 1,
+              state,
+              taskId: 'remote-task',
+              sinceTs: 1000,
+              deviceLabel: 'Android',
+            },
+            producerConnected: true,
+            receivedAt: 2000,
+          },
+          isStale: opts.isStale ?? false,
+          stateKey: '',
+          timeKey: '',
+          timeTs: 0,
+          showStop: state === 'tracking',
+        });
+      };
+
+      const getStatusBody = async (): Promise<Record<string, unknown>> => {
+        Object.defineProperty(taskServiceMock, 'currentTask$', { get: () => of(null) });
+        Object.defineProperty(taskServiceMock, 'allTasks$', { get: () => of([]) });
+        const response = await sendRequestAndWait(createRequest('GET', '/status'));
+        return (response.body as { data: Record<string, unknown> }).data;
+      };
+
+      it('reports the session another device is live-tracking', async () => {
+        setRemote('tracking');
+        expect((await getStatusBody()).trackingOnOtherDevice).toEqual({
+          taskId: 'remote-task',
+          deviceLabel: 'Android',
+          sinceTs: 1000,
+        });
+      });
+
+      it('is null when no other device is tracking', async () => {
+        expect((await getStatusBody()).trackingOnOtherDevice).toBeNull();
+      });
+
+      it('is null when the other device stopped or paused', async () => {
+        setRemote('stopped');
+        expect((await getStatusBody()).trackingOnOtherDevice).toBeNull();
+      });
+
+      it('is null when the other session is stale', async () => {
+        setRemote('tracking', { isStale: true });
+        expect((await getStatusBody()).trackingOnOtherDevice).toBeNull();
+      });
     });
   });
 

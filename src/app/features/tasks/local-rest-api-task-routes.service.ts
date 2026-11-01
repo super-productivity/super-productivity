@@ -13,6 +13,7 @@ import { isTodayWithOffset } from '../../util/is-today.util';
 import { isValidDBDateStr } from '../../util/get-db-date-str';
 import { IssueLog } from '../../core/log';
 import { LocalRestApiFeatureBridgeService } from './local-rest-api-feature-bridge.service';
+import { TrackingPresenceService } from '../tracking-presence/tracking-presence.service';
 import { LocalRestApiFeatureRoutes } from '../../core/electron/local-rest-api-feature-routes';
 import {
   createErrorResponse,
@@ -362,6 +363,7 @@ export class LocalRestApiTaskRoutesService implements LocalRestApiFeatureRoutes 
   private readonly _dateService = inject(DateService);
   private readonly _featureBridge = inject(LocalRestApiFeatureBridgeService);
   private readonly _store = inject(Store);
+  private readonly _trackingPresence = inject(TrackingPresenceService);
 
   private _dispatchDeadlineChange(taskId: string, change: DeadlineChange): void {
     if (change.type === 'clearReminder') {
@@ -439,7 +441,28 @@ export class LocalRestApiTaskRoutesService implements LocalRestApiFeatureRoutes 
       currentTask,
       currentTaskId: currentTask?.id ?? null,
       taskCount: allTasks.length,
+      trackingOnOtherDevice: this._getTrackingOnOtherDevice(),
     });
+  }
+
+  /**
+   * The session another device is live-tracking (SuperSync presence), so
+   * clients that start tracking on their own (e.g. Parallel Code) can leave
+   * it alone instead of taking it over. Null while this device tracks, when
+   * the other device stopped or paused, or once its session went stale — a
+   * stale session must not block tracking here forever.
+   */
+  private _getTrackingOnOtherDevice(): {
+    taskId: string | null;
+    deviceLabel: string;
+    sinceTs: number;
+  } | null {
+    const view = this._trackingPresence.remoteSessionView();
+    const p = view?.session.payload;
+    if (!view || view.isStale || p?.state !== 'tracking') {
+      return null;
+    }
+    return { taskId: p.taskId, deviceLabel: p.deviceLabel, sinceTs: p.sinceTs };
   }
 
   private async _handleGetCurrentTask(
