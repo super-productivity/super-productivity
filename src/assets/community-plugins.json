@@ -212,6 +212,19 @@
     }
   },
   {
+    "name": "Dynamic Time Board",
+    "shortDescription": "A bilingual rolling task board with schedule-first grouping, deadline fallback, and configurable deadline alerts.",
+    "url": "https://github.com/DT-2017/super-productivity-dynamic-time-board",
+    "author": "DT-2017",
+    "authorUrl": "https://github.com/DT-2017",
+    "id": "dynamic-time-board-cn",
+    "release": {
+      "version": "1.1.0",
+      "downloadUrl": "https://github.com/DT-2017/super-productivity-dynamic-time-board/releases/download/v1.1.0/SuperProductivity_DynamicTimeBoard_v1.1.0.zip",
+      "sha256": "321b730d3516bbe538ceb285c930f1b41b2a5f305c6956262aae5051c76ccf6b"
+    }
+  },
+  {
     "name": "monday.com Issue Provider",
     "shortDescription": "Search, import, and sync monday.com board items as Super Productivity tasks, including status/done detection and item updates as comments.",
     "url": "https://github.com/Zoriot/sp-monday",
