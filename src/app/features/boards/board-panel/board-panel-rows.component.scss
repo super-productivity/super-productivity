@@ -63,3 +63,9 @@
   font-size: var(--font-size-sm);
   color: var(--text-color-muted);
 }
+
+// Below the rows a long section doesn't render yet.
+.show-all-btn {
+  display: block;
+  margin: var(--s) auto;
+}

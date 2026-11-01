@@ -22,6 +22,7 @@ import { ViewEditorComponent } from '../view-editor/view-editor.component';
 import { ViewEditorSectionComponent } from '../view-editor/view-editor-section/view-editor-section.component';
 import { By } from '@angular/platform-browser';
 import { T } from '../../../t.const';
+import { LayoutService } from '../../../core-ui/layout/layout.service';
 
 describe('BoardEditComponent with the view editor', () => {
   let fixture: ComponentFixture<BoardEditComponent>;
@@ -29,6 +30,8 @@ describe('BoardEditComponent with the view editor', () => {
   const tasks = signal<TaskCopy[]>([]);
   // The boards in the store; `open` puts the opened one there.
   const boards = signal<BoardCfg[]>([]);
+  // Phones show every view as a list.
+  const isXs = signal(false);
   let opened: BoardCfg;
 
   const task = (fields: Partial<TaskCopy> & { id: string }): TaskCopy =>
@@ -45,6 +48,7 @@ describe('BoardEditComponent with the view editor', () => {
   beforeEach(async () => {
     dispatch = jasmine.createSpy('dispatch');
     tasks.set([]);
+    isXs.set(false);
     await TestBed.configureTestingModule({
       imports: [BoardEditComponent, TranslateModule.forRoot()],
       providers: [
@@ -90,6 +94,7 @@ describe('BoardEditComponent with the view editor', () => {
           },
         },
         { provide: TaskService, useValue: {} },
+        { provide: LayoutService, useValue: { isXs } },
       ],
     }).compileComponents();
   });
@@ -616,12 +621,16 @@ describe('BoardEditComponent with the view editor', () => {
       cols: 2,
       panels: [undone, { ...DEFAULT_PANEL_CFG, id: 'all', title: 'All' }],
     });
-    // Cards: every match.
-    expect(editor().counts()).toEqual([2, 3]);
+    // Cards: every open match (done ones are in a collapsed group).
+    expect(editor().counts()).toEqual([2, 2]);
     // A cached count follows the tasks.
     tasks.set([...tasks(), task({ id: 'new' })]);
-    expect(editor().counts()).toEqual([3, 4]);
+    expect(editor().counts()).toEqual([3, 3]);
     tasks.set(tasks().filter((t) => t.id !== 'new'));
+    // On a phone the board shows rows.
+    isXs.set(true);
+    expect(editor().counts()).toEqual([1, 1]);
+    isXs.set(false);
     // List: open top-level rows.
     editor().setLayout('list');
     expect(editor().counts()).toEqual([1, 1]);

@@ -84,30 +84,35 @@ test.describe('View layout (List/Board in the title bar)', () => {
     await expect.poll(async () => new Set(await panelLefts(page)).size).toBe(3);
   });
 
-  test("on phones the switch is in the view's menu, leaving the title its room", async ({
+  test('on phones every view is a list, and the title bar keeps to its name', async ({
     page,
     workViewPage,
   }) => {
     await workViewPage.waitForTaskList();
-    await page.setViewportSize({ width: 400, height: 800 });
+    await page.setViewportSize({ width: 360, height: 800 });
     await page.goto('/#/boards/EISENHOWER_MATRIX');
-    await expect(page.locator('boards board-panel')).toHaveCount(4);
-    await expect(layoutButton(page)).toHaveCount(0);
-
-    await actions(page).getByRole('button', { name: 'More actions' }).click();
-    // First in the menu, before Edit.
-    await expect(page.getByRole('menuitem').first()).toHaveAccessibleName(/Show as list/);
-    await page.getByRole('menuitem', { name: 'Show as list' }).click();
-    await expect(page.locator('boards board')).toHaveClass(/isListLayout/);
-    expect(await readBoard(page, 'EISENHOWER_MATRIX')).toEqual(
-      expect.objectContaining({ cols: 1, boardCols: 2 }),
+    const board = page.locator('boards board');
+    // Sections of one list, with task rows; the stored layout stays 2×2.
+    await expect(page.locator('boards board-panel collapsible.task-section')).toHaveCount(
+      4,
     );
-    await expect(layoutButton(page)).toHaveCount(0);
-    await expect(filterButton(page)).toBeVisible();
-
-    await actions(page).getByRole('button', { name: 'More actions' }).click();
-    await page.getByRole('menuitem', { name: 'Show as board' }).click();
-    await expect(page.locator('boards board')).not.toHaveClass(/isListLayout/);
+    await expect(board).toHaveClass(/isListLayout/);
+    await expect(page.locator('boards planner-task')).toHaveCount(0);
     expect((await readBoard(page, 'EISENHOWER_MATRIX'))?.cols).toBe(2);
+
+    // The view's name and its menu, without List/Board or filter.
+    await expect(actions(page).getByRole('button')).toHaveCount(1);
+    await expect(page.locator('page-title .page-title-text')).toHaveText(
+      'Eisenhower Matrix',
+    );
+    await actions(page).getByRole('button', { name: 'More actions' }).click();
+    await expect(page.getByRole('menuitem', { name: 'Edit' })).toBeVisible();
+    await expect(page.getByRole('menuitem', { name: /Show as/ })).toHaveCount(0);
+    await page.keyboard.press('Escape');
+
+    // Wider again: the columns come back as cards.
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await expect(board).not.toHaveClass(/isListLayout/);
+    await expect(layoutButton(page)).toBeVisible();
   });
 });

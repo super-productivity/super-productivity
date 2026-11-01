@@ -50,6 +50,7 @@ import { T } from '../../../t.const';
 import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
 import { selectAllTagIds } from '../../tag/store/tag.reducer';
 import { AddTaskBarComponent } from '../../tasks/add-task-bar/add-task-bar.component';
+import { provideNoopAnimations } from '@angular/platform-browser/animations';
 
 // The tags the tests' rules name exist; the guard against missing tags has
 // its own tests.
@@ -941,6 +942,8 @@ describe('BoardPanelComponent - drop()', () => {
       ],
       providers: [
         ...PLANNER_TASK_PROVIDERS,
+        // The done group's collapsible animates.
+        provideNoopAnimations(),
         provideMockStore({}),
         provideMockActions(() => actions$),
         { provide: Store, useValue: storeMock },
@@ -1253,6 +1256,10 @@ describe('BoardPanelComponent - drop()', () => {
 
       expect(component.mainRows().map((row) => row.id)).toEqual(['parent', 'lone']);
       expect(component.mainRows()[0].subTasks.map((st) => st.id)).toEqual(['child']);
+      // Done rows are built on first expand; counted before.
+      expect(component.doneItems().map((row) => row.id)).toEqual(['done']);
+      expect(component.doneRows()).toEqual([]);
+      component.isDoneListExpanded.set(true);
       expect(component.doneRows().map((row) => row.id)).toEqual(['done']);
       expect(component.isRow('lone')).toBeTrue();
       expect(component.isRow('child')).toBeFalse();
@@ -1437,12 +1444,17 @@ describe('BoardPanelComponent - drop()', () => {
         expect(getPanelHeaderCount(matches(), panel, true)).toBe(
           component.mainRows().length,
         );
-        // Cards aren't rendered here (no planner-task mocks): signals only.
+        // Cards: the open cards (done ones are in their collapsed group).
+        // Not rendered here (subtasks need more of the task service).
         fixture.componentRef.setInput('isListLayout', false);
-        expect(component.headerCount()).toBe(component.tasks().length);
-        expect(getPanelHeaderCount(matches(), panel, false)).toBe(
-          component.tasks().length,
+        const cards = component.shownMain().length;
+        expect(cards).toBe(
+          matches().filter(
+            (task) => taskDoneState === BoardPanelCfgTaskDoneState.Done || !task.isDone,
+          ).length,
         );
+        expect(component.headerCount()).toBe(cards);
+        expect(getPanelHeaderCount(matches(), panel, false)).toBe(cards);
       }
     });
 
@@ -1454,6 +1466,7 @@ describe('BoardPanelComponent - drop()', () => {
       ]);
       fixture.componentRef.setInput('panelCfg', listPanel());
       fixture.componentRef.setInput('isListLayout', true);
+      component.isDoneListExpanded.set(true);
       fixture.detectChanges();
 
       expect(component.mainRows().map((row) => row.id)).toEqual(['open']);
@@ -1523,6 +1536,174 @@ describe('BoardPanelComponent - drop()', () => {
       component.moveRow('a', 'down');
       component.placeRow('b', null);
       expect(dispatchSpy).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('cards', () => {
+    const ids = (n: number, prefix = 't'): string[] =>
+      Array.from({ length: n }, (_, i) => `${prefix}${i}`);
+    const cardEls = (): NodeListOf<HTMLElement> =>
+      (fixture.nativeElement as HTMLElement).querySelectorAll('planner-task');
+    const showAllButtons = (): HTMLButtonElement[] =>
+      Array.from(
+        (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLButtonElement>(
+          '.show-all-btn',
+        ),
+      );
+
+    it('renders the first 100 cards of a long column until "Show all"', async () => {
+      await setup(ids(150).map((id) => mkTask({ id })));
+      fixture.componentRef.setInput('panelCfg', { ...DEFAULT_PANEL_CFG, id: 'p' });
+      fixture.detectChanges();
+
+      expect(cardEls().length).toBe(100);
+      // The header counts the whole column.
+      expect(component.headerCount()).toBe(150);
+      expect(showAllButtons().length).toBe(1);
+      showAllButtons()[0].click();
+      fixture.detectChanges();
+      expect(cardEls().length).toBe(150);
+      expect(showAllButtons().length).toBe(0);
+    });
+
+    it('shows the whole column for a task past the limit that is focused or added', async () => {
+      await setup(ids(150).map((id) => mkTask({ id })));
+      fixture.componentRef.setInput('panelCfg', { ...DEFAULT_PANEL_CFG, id: 'p' });
+      fixture.detectChanges();
+
+      component.focusRow(0, 't50');
+      expect(component.isShowAll()).toBeFalse();
+      component.focusRow(0, 't120');
+      expect(component.isShowAll()).toBeTrue();
+
+      component.isShowAll.set(false);
+      await component.afterTaskAdd({
+        taskId: 't149',
+        isAddToBottom: true,
+        isNewTask: true,
+      });
+      // Once the new order has reached the panel.
+      fixture.detectChanges();
+      await fixture.whenStable();
+      expect(component.isShowAll()).toBeTrue();
+    });
+
+    it('drops by the rendered card before the marker, in the whole order', async () => {
+      const tasks = [...ids(100), 'hidden', 'done'].map((id) =>
+        mkTask({ id, isDone: id === 'done' }),
+      );
+      await setup(tasks);
+      fixture.componentRef.setInput('panelCfg', { ...DEFAULT_PANEL_CFG, id: 'p' });
+      fixture.detectChanges();
+      // t0 dragged below the last rendered card: the hidden one stays after it.
+      await component.drop(
+        mkDropEvent({
+          panelCfg: component.panelCfg(),
+          task: tasks[0],
+          sourceTasks: component.mainItems(),
+          previousContainerId: 'same',
+          containerId: 'same',
+          currentIndex: 99,
+        }),
+      );
+      expect(dispatchSpy).toHaveBeenCalledOnceWith(
+        BoardsActions.updatePanelCfgTaskIds({
+          panelId: 'p',
+          taskIds: [...ids(100).slice(1), 't0', 'hidden', 'done'],
+        }),
+      );
+    });
+
+    it('moves a selection that reaches past the rendered cards whole', async () => {
+      const tasks = ids(101).map((id) => mkTask({ id }));
+      await setup(tasks);
+      fixture.componentRef.setInput('panelCfg', { ...DEFAULT_PANEL_CFG, id: 'p' });
+      fixture.detectChanges();
+      component.multiSelect.toggle('t0');
+      component.multiSelect.toggle('t100');
+      const emit = spyOn(component.adjacentPanel, 'emit');
+
+      component.moveToAdjacent('t0', 1);
+      expect(emit).toHaveBeenCalledOnceWith({
+        direction: 1,
+        rowIndex: 0,
+        taskIds: ['t0', 't100'],
+        focusTaskId: 't0',
+      });
+    });
+
+    it('groups done cards in a collapsed "Done" group that stays put', async () => {
+      const tasks = [
+        mkTask({ id: 'a' }),
+        mkTask({ id: 'd1', isDone: true }),
+        mkTask({ id: 'b' }),
+        mkTask({ id: 'd2', isDone: true }),
+      ];
+      await setup(tasks);
+      fixture.componentRef.setInput('panelCfg', { ...DEFAULT_PANEL_CFG, id: 'p' });
+      fixture.detectChanges();
+      const el = fixture.nativeElement as HTMLElement;
+
+      expect(el.querySelectorAll('.drop-list planner-task').length).toBe(2);
+      expect(el.querySelector('.done-group')?.textContent).toContain('(2)');
+      expect(component.headerCount()).toBe(2);
+      // Built on first expand.
+      expect(el.querySelectorAll('.done-group planner-task').length).toBe(0);
+      component.isDoneListExpanded.set(true);
+      fixture.detectChanges();
+      expect(el.querySelectorAll('.done-group planner-task').length).toBe(2);
+
+      // Done cards don't move; open ones reorder among themselves, the done
+      // ones keeping their places in the order.
+      const emit = spyOn(component.adjacentPanel, 'emit');
+      component.reorder('d1', 'up');
+      component.moveToAdjacent('d2', 1);
+      expect(emit).not.toHaveBeenCalled();
+      expect(dispatchSpy).not.toHaveBeenCalled();
+      component.reorder('b', 'up');
+      expect(dispatchSpy).toHaveBeenCalledOnceWith(
+        BoardsActions.updatePanelCfgTaskIds({
+          panelId: 'p',
+          taskIds: ['b', 'd1', 'a', 'd2'],
+        }),
+      );
+    });
+
+    it('shows done cards inline in a column of done tasks', async () => {
+      await setup([mkTask({ id: 'd1', isDone: true })]);
+      fixture.componentRef.setInput('panelCfg', {
+        ...DEFAULT_PANEL_CFG,
+        id: 'p',
+        taskDoneState: BoardPanelCfgTaskDoneState.Done,
+      });
+      fixture.detectChanges();
+      const el = fixture.nativeElement as HTMLElement;
+      expect(el.querySelectorAll('.drop-list planner-task').length).toBe(1);
+      expect(el.querySelector('.done-group')).toBeNull();
+      expect(component.headerCount()).toBe(1);
+    });
+
+    it('leaves a column past its first or last card for the panel above or below', async () => {
+      await setup(['a', 'b'].map((id) => mkTask({ id })));
+      fixture.componentRef.setInput('panelCfg', { ...DEFAULT_PANEL_CFG, id: 'p' });
+      fixture.detectChanges();
+      const card = (id: string): HTMLElement => {
+        const el = document.createElement('planner-task');
+        el.dataset.taskId = id;
+        return el;
+      };
+      spyOn(component, 'rows').and.returnValue([card('a'), card('b')]);
+      const emitted: unknown[] = [];
+      component.adjacentPanel.subscribe((ev) => emitted.push(ev));
+
+      component.navigate('b', 'ArrowDown');
+      component.navigate('a', 'ArrowUp');
+      component.navigate('b', 'ArrowLeft');
+      expect(emitted).toEqual([
+        { direction: 'down', rowIndex: 0 },
+        { direction: 'up', rowIndex: Number.MAX_SAFE_INTEGER },
+        { direction: -1, rowIndex: 1 },
+      ]);
     });
   });
 

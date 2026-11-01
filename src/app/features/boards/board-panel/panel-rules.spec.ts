@@ -9,6 +9,7 @@ import { TaskCriteriaCtx } from '../../tasks/task-criteria/task-criteria.model';
 import { TaskCopy } from '../../tasks/task.model';
 import { createTaskCriteriaCtx } from '../../tasks/task-criteria/task-criteria';
 import {
+  getDropIndex,
   getNewTaskFields,
   getNewTaskTagsToAdd,
   getNewTaskTagsToRemove,
@@ -16,6 +17,7 @@ import {
   hasMissingTag,
   orderPanelTasks,
   placeInOrder,
+  withPartOrder,
 } from './panel-rules';
 
 const panel = (fields: Partial<BoardPanelCfg> = {}): BoardPanelCfg => ({
@@ -163,5 +165,43 @@ describe('panel rules', () => {
       'c',
     ]);
     expect(placeInOrder(['a', 'b'], ['x'], 2)).toEqual(['a', 'b', 'x']);
+  });
+
+  describe('getDropIndex', () => {
+    // The panel's order; `d` and `e` are not rendered (done, or past the limit).
+    const order = ['a', 'd', 'b', 'c', 'e'];
+    const none = new Set<string>();
+
+    it('places after the rendered item before the marker, in the whole order', () => {
+      expect(getDropIndex(order, ['a', 'b', 'c'], none, 0)).toBe(0);
+      expect(getDropIndex(order, ['a', 'b', 'c'], none, 1)).toBe(1);
+      expect(getDropIndex(order, ['a', 'b', 'c'], none, 2)).toBe(3);
+      // Past the last rendered item: hidden items after it stay after it.
+      expect(getDropIndex(order, ['a', 'b', 'c'], none, 3)).toBe(4);
+    });
+
+    it('skips the dragged item of the same list and every moving one', () => {
+      // `a` dragged down past `b`: CDK's index counts without it.
+      expect(getDropIndex(order, ['a', 'b', 'c'], new Set(['a']), 1, 'a')).toBe(2);
+      // A selection of `a` and the hidden `e`, dropped from another panel
+      // after `b` (the duplicate `a` here is moving too).
+      expect(getDropIndex(order, ['a', 'b', 'c'], new Set(['a', 'e']), 2)).toBe(2);
+      // Only moving items before the marker: first.
+      expect(getDropIndex(order, ['a', 'b'], new Set(['a']), 1)).toBe(0);
+    });
+
+    it('places first in an empty or unrendered panel', () => {
+      expect(getDropIndex([], [], none, 0)).toBe(0);
+      expect(getDropIndex(['d'], [], new Set(['x']), 0)).toBe(0);
+    });
+  });
+
+  it('withPartOrder reorders one part in its own places, the others staying', () => {
+    expect(withPartOrder(['a', 'd', 'b', 'c'], ['b', 'a', 'c'])).toEqual([
+      'b',
+      'd',
+      'a',
+      'c',
+    ]);
   });
 });
