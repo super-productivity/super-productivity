@@ -216,6 +216,25 @@ dateStrToUtcDate(day) }, tasks)`, which keeps a task's time of day and uses
   order), the existing pattern, with no new multi-entity action. Remote ops
   trigger nothing new.
 - **Growth:** none; boards are user-created and few. **Plugin API:** untouched.
+- **Stored vocabulary (locked, added 2026-11-01):** this release validates
+  and reads the view fields, so their persisted types and words may only be
+  extended, never changed or given another meaning; an unknown new word reads
+  as "any" here. Types: `dueState`, `deadlineState`, `estimateRule`,
+  `timeSpentRule`, `priorityRule` and `sortKey` are strings, `isUntagged` a
+  boolean, `boardCols` a number. Words: the `TaskDateRule` strings for the
+  date rules; `'none'`; estimate and time-spent minimums as decimal ms
+  strings (`'1800000'`); priority `'1'`..`'3'`; `sortBy` wins over `sortKey`;
+  `cols <= 1` means a list; `boardCols` is an integer ≥ 2 and is never
+  removed. Follow-ups (#11384, #11385, #11386) must respect this: a new rule
+  is a new word or a new optional field, not a new meaning for an old one.
+- **Released edits that contradict a new rule:** the released board form
+  edits only the fields it knows, so it can add required tags to an untagged
+  column or set "not scheduled" next to a `dueState`. This client never
+  stores either pair, so the released edit is the later intent and wins
+  (`isPanelUntagged`, `hasStaleDueState`): the tags apply, or the column has
+  no date; the stale flag or date rule is dropped on the next save, which
+  keeps the edit. "All" next to a `dueState` doesn't contradict it: the date
+  rule keeps applying and a save stores "scheduled" again.
 
 ## 7. Implementation steps
 
@@ -950,7 +969,8 @@ These override the parts above where they differ.
     `includedTagsMatch` fill) for `DEFAULT_BOARDS`, a `sortBy: 'dueDate'`
     panel, a `sortBy` + shadowed `sortKey` panel, unknown `dueState`/`sortKey`
     and an unknown panel key, `cols: 8`, `projectIds` with a deleted id,
-    `dueState: 'none'`, `dueState` + `NotScheduled`, `isUntagged` with tags,
+    `dueState: 'none'`, `dueState` + `All`/`NotScheduled`, `isUntagged` with
+    required or excluded tags,
     a single section titled differently from the view, missing tags.
   - Unit: the planned-date mapping in both directions; translated-title
     keep-key; single-section title follow; the pure match and row-count
