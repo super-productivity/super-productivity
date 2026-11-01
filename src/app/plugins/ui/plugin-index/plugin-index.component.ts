@@ -4,6 +4,7 @@ import {
   ElementRef,
   inject,
   Input,
+  NgZone,
   OnDestroy,
   OnInit,
   signal,
@@ -31,6 +32,7 @@ import { TranslateService, TranslatePipe } from '@ngx-translate/core';
 import { T } from '../../../t.const';
 import { PluginLog } from '../../../core/log';
 import { LayoutService } from '../../../core-ui/layout/layout.service';
+import { ShortcutService } from '../../../core-ui/shortcut/shortcut.service';
 import { MatButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
@@ -87,6 +89,8 @@ export class PluginIndexComponent implements OnInit, OnDestroy {
   private readonly _cleanupService = inject(PluginCleanupService);
   private readonly _translateService = inject(TranslateService);
   private readonly _layoutService = inject(LayoutService);
+  private readonly _shortcutService = inject(ShortcutService);
+  private readonly _ngZone = inject(NgZone);
 
   T = T;
 
@@ -367,5 +371,30 @@ export class PluginIndexComponent implements OnInit, OnDestroy {
     if (this.iframeRef?.nativeElement && this.pluginId()) {
       this._cleanupService.registerIframe(this.pluginId(), this.iframeRef.nativeElement);
     }
+    this._forwardShortcutKeys();
+  }
+
+  /**
+   * App shortcuts listen on the host document (app.component), which never
+   * sees key presses made inside the plugin iframe, so forward them. The iframe
+   * is same-origin (PLUGIN_IFRAME_SANDBOX), and each srcdoc load creates a new
+   * window, so the listener is dropped with the old one. The event's target
+   * stays the element inside the iframe, so handleKeyDown still ignores plain
+   * keys typed into plugin inputs. A plugin keeps a key by calling
+   * preventDefault(); its own listeners run before this window-level one.
+   */
+  private _forwardShortcutKeys(): void {
+    const win = this.iframeRef?.nativeElement.contentWindow;
+    if (!win) {
+      return;
+    }
+    win.addEventListener('keydown', (ev: KeyboardEvent) => {
+      if (ev.defaultPrevented) {
+        return;
+      }
+      this._ngZone.run(() => {
+        void this._shortcutService.handleKeyDown(ev);
+      });
+    });
   }
 }
