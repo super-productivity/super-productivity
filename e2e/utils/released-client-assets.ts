@@ -2,6 +2,7 @@ import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { extname, resolve, sep } from 'node:path';
 import type { AddressInfo } from 'node:net';
+import type { Page } from '@playwright/test';
 
 export const RELEASED_APP_URL = 'http://127.0.0.1:4249';
 export type ClientRelease = 'old' | 'new';
@@ -60,3 +61,17 @@ export const serveReleasedClientAssets = async (
       }),
   };
 };
+
+/** The entry script a released bundle's index.html loads, e.g. `main-ABC123.js`. */
+export const releasedEntryScript = async (directory: string): Promise<string> => {
+  const html = await readFile(`${resolve(directory)}/index.html`, 'utf8');
+  const entry = /src="(main-[^"]+\.js)"/.exec(html)?.[1];
+  if (!entry) throw new Error(`No main-*.js entry script in ${directory}/index.html`);
+  return entry;
+};
+
+/** The entry script the page booted: proves which release a client runs. */
+export const loadedEntryScript = (page: Page): Promise<string | null> =>
+  page.evaluate(
+    () => document.querySelector('script[src^="main-"]')?.getAttribute('src') ?? null,
+  );
