@@ -13,11 +13,12 @@ import { TaskCopy } from '../../tasks/task.model';
 import { Store } from '@ngrx/store';
 import { TaskService } from '../../tasks/task.service';
 import { MatDialog } from '@angular/material/dialog';
-import { of, ReplaySubject } from 'rxjs';
+import { BehaviorSubject, of, ReplaySubject } from 'rxjs';
 import {
   TranslateLoader,
   TranslateModule,
   TranslateNoOpLoader,
+  TranslateService,
 } from '@ngx-translate/core';
 import { provideMockStore } from '@ngrx/store/testing';
 import { provideMockActions } from '@ngrx/effects/testing';
@@ -44,6 +45,7 @@ import { getPanelHeaderCount, matchPanelTasks } from '../boards.util';
 import { BoardsActions } from '../store/boards.actions';
 import { PANEL_SHOWN_LIMIT } from './panel-rules';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
+import { ShortTimeHtmlPipe } from '../../../ui/pipes/short-time-html.pipe';
 import { GlobalTrackingIntervalService } from '../../../core/global-tracking-interval/global-tracking-interval.service';
 import { TaskBulkActionService } from '../../tasks/task-bulk-action.service';
 import { SnackService } from '../../../core/snack/snack.service';
@@ -93,6 +95,7 @@ const PLANNER_TASK_PROVIDERS = [
     useValue: {
       todayStr: () => '2026-09-12',
       getStartOfNextDayDiffMs: () => 0,
+      isToday: () => false,
     },
   },
   {
@@ -113,6 +116,7 @@ describe('BoardPanelComponent - Backlog Feature', () => {
   let component: BoardPanelComponent;
   let fixture: ComponentFixture<BoardPanelComponent>;
   let actions$: ReplaySubject<any>;
+  let tasks$: BehaviorSubject<TaskCopy[]>;
 
   const mockBacklogTaskId = 'backlog-task-1';
   const mockNonBacklogTaskId = 'regular-task-1';
@@ -142,6 +146,7 @@ describe('BoardPanelComponent - Backlog Feature', () => {
       created: Date.now(),
       subTaskIds: [],
       dueDay: '2026-09-12',
+      deadlineDay: '2026-09-20',
     } as TaskCopy,
     {
       id: mockNonBacklogTaskId,
@@ -165,6 +170,7 @@ describe('BoardPanelComponent - Backlog Feature', () => {
 
   beforeEach(async () => {
     actions$ = new ReplaySubject(1);
+    tasks$ = new BehaviorSubject(mockTasks);
 
     const storeMock = {
       selectSignal: daySelectSignal,
@@ -172,7 +178,7 @@ describe('BoardPanelComponent - Backlog Feature', () => {
         if (selectorFn === selectUnarchivedProjects) {
           return of(mockProjects);
         } else if (selectorFn === selectAllTasksInActiveProjects) {
-          return of(mockTasks);
+          return tasks$;
         }
         return of([]);
       },
@@ -202,6 +208,7 @@ describe('BoardPanelComponent - Backlog Feature', () => {
         { provide: MatDialog, useValue: {} },
         { provide: WorkContextService, useValue: workContextServiceMock },
         { provide: ProjectService, useValue: projectServiceMock },
+        { provide: ShortTimeHtmlPipe, useValue: { transform: () => '' } },
       ],
     })
       .overrideComponent(PlannerTaskComponent, {
@@ -254,6 +261,52 @@ describe('BoardPanelComponent - Backlog Feature', () => {
     expect(cards().scheduledDateColor(task)).toBe('overdue');
     expect(cards().scheduledDateColor({ ...task, isDone: true })).toBe('');
     expect(cards().scheduledDateColor({ ...task, dueWithTime: undefined })).toBe('');
+  });
+
+  const deadlineBtn = (): HTMLElement => {
+    const buttons = fixture.nativeElement.querySelectorAll('.schedule-btn');
+    expect(buttons.length).toBe(2);
+    expect(buttons[1].querySelector('mat-icon').textContent).toBe('flag');
+    return buttons[1];
+  };
+
+  it('shows the deadline day against the logical today', () => {
+    const interval = TestBed.inject(GlobalTrackingIntervalService) as unknown as {
+      todayDateStr: WritableSignal<string>;
+    };
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('en', { G: { TODAY_TAG_TITLE: 'Today' } });
+    translate.use('en');
+
+    interval.todayDateStr.set('2026-09-20');
+    fixture.detectChanges();
+    expect(deadlineBtn().getAttribute('data-scheduled-date-color')).toBe('');
+    expect(deadlineBtn().querySelector('.time-badge')!.textContent!.trim()).toBe('Today');
+
+    interval.todayDateStr.set('2026-09-21');
+    fixture.detectChanges();
+    expect(deadlineBtn().getAttribute('data-scheduled-date-color')).toBe('overdue');
+    expect(deadlineBtn().querySelector('.time-badge')!.textContent!.trim()).not.toBe(
+      'Today',
+    );
+    expect(cards().deadlineColor({ ...mockTasks[0], isDone: true })).toBe('');
+  });
+
+  it('recolors a timed deadline at expiry without other changes', () => {
+    const interval = TestBed.inject(GlobalTrackingIntervalService) as unknown as {
+      clockTimestamp: WritableSignal<number>;
+    };
+    const deadlineWithTime = new Date(2026, 8, 12, 12, 1).getTime();
+    tasks$.next([
+      { ...mockTasks[0], deadlineDay: undefined, deadlineWithTime },
+      mockTasks[1],
+    ]);
+    fixture.detectChanges();
+    expect(deadlineBtn().getAttribute('data-scheduled-date-color')).toBe('');
+
+    interval.clockTimestamp.set(deadlineWithTime + 1);
+    fixture.detectChanges();
+    expect(deadlineBtn().getAttribute('data-scheduled-date-color')).toBe('overdue');
   });
 
   it('should only include backlog tasks when backlogState is OnlyBacklog', () => {

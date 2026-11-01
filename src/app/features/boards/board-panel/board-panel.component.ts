@@ -70,6 +70,7 @@ import { TaskBulkActionService } from '../../tasks/task-bulk-action.service';
 import { reorderBoardTasks } from '../reorder-board-tasks';
 import { GlobalConfigService } from '../../config/global-config.service';
 import { checkKeyCombo } from '../../../util/check-key-combo';
+import { DialogDeadlineComponent } from '../../tasks/dialog-deadline/dialog-deadline.component';
 import { SnackService } from '../../../core/snack/snack.service';
 import { BOARD_PANEL } from './board-panel.token';
 import { BoardPanelCardsComponent } from './board-panel-cards.component';
@@ -610,6 +611,16 @@ export class BoardPanelComponent implements TaskCardList, ViewTaskListHost {
       (task) => this._changesToMatch(task, criteria, ctx),
       ctx.startOfNextDayDiffMs,
     );
+  }
+
+  editDeadline(task: TaskCopy, ev: MouseEvent): void {
+    ev.preventDefault();
+    ev.stopPropagation();
+    this._matDialog.open(DialogDeadlineComponent, {
+      autoFocus: false,
+      restoreFocus: true,
+      data: { task },
+    });
   }
 
   scheduleTask(task: TaskCopy, ev?: MouseEvent): void {

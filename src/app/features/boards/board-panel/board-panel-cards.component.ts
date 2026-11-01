@@ -25,6 +25,7 @@ import {
   readClockUntilDue,
 } from '../../tasks/util/get-scheduled-date-color';
 import type { ScheduledDateColor } from '../../tasks/util/get-scheduled-date-color';
+import { isDeadlineOverdue } from '../../tasks/util/is-deadline-overdue';
 import { GlobalTrackingIntervalService } from '../../../core/global-tracking-interval/global-tracking-interval.service';
 import { DateService } from '../../../core/date/date.service';
 import { T } from '../../../t.const';
@@ -65,6 +66,7 @@ export class BoardPanelCardsComponent {
   protected readonly T = T;
   protected readonly dragDelayForTouch = dragDelayForTouch;
   private readonly _trackingInterval = inject(GlobalTrackingIntervalService);
+  readonly todayDateStr = this._trackingInterval.todayDateStr;
   private readonly _dateService = inject(DateService);
   private readonly _cards = viewChildren(PlannerTaskComponent, { read: ElementRef });
 
@@ -93,5 +95,14 @@ export class BoardPanelCardsComponent {
           )
         : 0,
     );
+  }
+
+  deadlineColor(task: TaskCopy): ScheduledDateColor {
+    if (task.isDone) return '';
+    // Timed deadlines read the shared clock so an idle OnPush board recolors at expiry.
+    const isOverdue = task.deadlineWithTime
+      ? task.deadlineWithTime < this._trackingInterval.clockTimestamp()
+      : isDeadlineOverdue(task, this._trackingInterval.todayDateStr());
+    return isOverdue ? 'overdue' : '';
   }
 }
