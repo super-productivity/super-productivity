@@ -9,6 +9,7 @@ import {
 } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { Store } from '@ngrx/store';
+import { deepEqual } from '@sp/sync-core';
 import { WorkContextService } from '../../work-context/work-context.service';
 import { BoardsService } from '../../boards/boards.service';
 import { FormsModule } from '@angular/forms';
@@ -272,10 +273,12 @@ export class TaskViewCustomizerPanelComponent {
 
   /**
    * One op per click; `null` when the click can't change the view. A view
-   * without panels has nothing to change.
+   * without panels has nothing to change. A click that leaves the panels as
+   * stored (e.g. manual sort on an unsorted view) dispatches nothing: the op
+   * replaces all `panels` and would win LWW over a real concurrent edit.
    */
   private _updateViewPanels(view: BoardCfg, panels: BoardPanelCfg[] | null): void {
-    if (panels?.length) {
+    if (panels?.length && !deepEqual(panels, view.panels)) {
       this._store.dispatch(
         BoardsActions.updateBoard({ id: view.id, updates: { panels } }),
       );

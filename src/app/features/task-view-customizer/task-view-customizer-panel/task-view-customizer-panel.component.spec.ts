@@ -20,6 +20,7 @@ import { BoardsActions } from '../../boards/store/boards.actions';
 import {
   DEFAULT_OPTIONS,
   FILTER_OPTION_TYPE,
+  FILTER_PRIORITY,
   FILTER_SCHEDULE,
   FilterOption,
   GroupOption,
@@ -206,6 +207,22 @@ describe('TaskViewCustomizerPanelComponent', () => {
       expect(dispatch).toHaveBeenCalledTimes(2);
       expect(customizer.setFilter).not.toHaveBeenCalled();
       expect(customizer.setSort).not.toHaveBeenCalled();
+    });
+
+    it('does not dispatch when the click leaves the panels as stored', () => {
+      // Manual sort on an unsorted view.
+      cmp().onSortSelect(DEFAULT_OPTIONS.sort);
+      expect(dispatch).not.toHaveBeenCalled();
+
+      cmp().onFilterWithValue({
+        filterType: FILTER_OPTION_TYPE.priority,
+        preset: FILTER_PRIORITY.low,
+      });
+      expect(dispatch).toHaveBeenCalledTimes(1);
+      const action = dispatch.calls.mostRecent().args[0] as ReturnType<
+        typeof BoardsActions.updateBoard
+      >;
+      expect(action.updates.panels!.map((p) => p.priorityRule)).toEqual(['1', '1']);
     });
 
     it('does not dispatch for a type that differs per section', () => {
