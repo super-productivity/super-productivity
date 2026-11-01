@@ -11,7 +11,7 @@ import { WorkContextType } from '../work-context/work-context.model';
 import { LazyChartComponent } from './lazy-chart/lazy-chart.component';
 import { DecimalPipe } from '@angular/common';
 import { MsToStringPipe } from '../../ui/duration/ms-to-string.pipe';
-import { TranslatePipe } from '@ngx-translate/core';
+import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { ActivityHeatmapComponent } from './activity-heatmap/activity-heatmap.component';
 import { ShareButtonComponent } from '../../core/share/share-button/share-button.component';
 import { ShareFormatter } from '../../core/share/share-formatter';
@@ -19,6 +19,15 @@ import { SharePayload } from '../../core/share/share.model';
 import { TODAY_TAG } from '../tag/tag.const';
 import { LocaleDatePipe } from '../../ui/pipes/locale-date.pipe';
 import { DateTimeFormatService } from '../../core/date-time-format/date-time-format.service';
+import { LineChartData } from './metric.model';
+import { dateStrToUtcDate } from '../../util/date-str-to-utc-date';
+
+type LineChartOptions = ChartConfiguration<
+  'line',
+  (number | undefined)[],
+  string
+>['options'];
+type LineScaleOptions = NonNullable<NonNullable<LineChartOptions>['scales']>['y'];
 
 @Component({
   selector: 'metric',
@@ -41,8 +50,13 @@ export class MetricComponent {
   metricService = inject(MetricService);
   projectMetricsService = inject(ProjectMetricsService);
   allTasksMetricsService = inject(AllTasksMetricsService);
+  private readonly _translateService = inject(TranslateService);
+  private readonly _dateTimeFormatService = inject(DateTimeFormatService);
   // Passed to the pure `localeDate` pipe so dates re-render on a locale change.
-  readonly locale = inject(DateTimeFormatService).currentLocale;
+  readonly locale = this._dateTimeFormatService.currentLocale;
+  private readonly _langChange = toSignal(this._translateService.onLangChange, {
+    initialValue: null,
+  });
 
   T: typeof T = T;
 
@@ -65,47 +79,44 @@ export class MetricComponent {
     return this.isShowingAllTasks() ? this.T.PM.ALL_TASKS_TITLE : this.T.PM.TITLE;
   });
 
-  simpleClickCounterData = toSignal(this.metricService.getSimpleClickCounterMetrics$());
-
-  simpleCounterStopWatchData = toSignal(
+  private readonly _simpleClickCounterData = toSignal(
+    this.metricService.getSimpleClickCounterMetrics$(),
+  );
+  private readonly _simpleCounterStopWatchData = toSignal(
     this.metricService.getSimpleCounterStopwatchMetrics$(),
   );
+  private readonly _focusSessionData = toSignal(
+    this.metricService.getFocusSessionMetrics$(),
+  );
+  private readonly _evaluationData = toSignal(this.metricService.getEvaluationMetrics$());
 
-  focusSessionData = toSignal(this.metricService.getFocusSessionMetrics$());
+  // Counter series are named by the user, so only their day labels are localized.
+  simpleClickCounterData = computed(() =>
+    this._localizeChartData(this._simpleClickCounterData(), false),
+  );
+  simpleCounterStopWatchData = computed(() =>
+    this._localizeChartData(this._simpleCounterStopWatchData(), false),
+  );
+  focusSessionData = computed(() =>
+    this._localizeChartData(this._focusSessionData(), true),
+  );
+  evaluationData = computed(() => this._localizeChartData(this._evaluationData(), true));
 
-  evaluationData = toSignal(this.metricService.getEvaluationMetrics$());
-
-  lineChartOptions: ChartConfiguration<
-    'line',
-    (number | undefined)[],
-    string
-  >['options'] = {
-    responsive: true,
-    scales: {
-      y: {
-        ticks: {
-          precision: 0,
-        },
-      },
-    },
-  };
+  clickCounterChartOptions = computed(() =>
+    this._buildLineChartOptions(T.F.METRIC.CMP.CHART_Y_COUNT),
+  );
+  stopWatchChartOptions = computed(() =>
+    this._buildLineChartOptions(T.F.METRIC.CMP.CHART_Y_MINUTES),
+  );
+  focusSessionChartOptions = computed(() => this._buildLineChartOptions());
   // Fixed 0-4 axis so the 1-4 impact and 1-3 energy ratings read on the same scale.
-  evaluationChartOptions: ChartConfiguration<
-    'line',
-    (number | undefined)[],
-    string
-  >['options'] = {
-    responsive: true,
-    scales: {
-      y: {
-        min: 0,
-        max: 4,
-        ticks: {
-          stepSize: 1,
-        },
-      },
-    },
-  };
+  evaluationChartOptions = computed(() =>
+    this._buildLineChartOptions(T.F.METRIC.CMP.CHART_Y_RATING, {
+      min: 0,
+      max: 4,
+      ticks: { stepSize: 1 },
+    }),
+  );
   lineChartType: ChartType = 'line';
 
   /**
@@ -153,4 +164,49 @@ export class MetricComponent {
       },
     );
   });
+
+  private _localizeChartData(
+    chart: LineChartData | undefined,
+    isTranslateDatasetLabels: boolean,
+  ): LineChartData | undefined {
+    if (!chart) return chart;
+    this._langChange();
+    const locale = this.locale();
+    return {
+      ...chart,
+      labels: chart.labels?.map((day) =>
+        this._dateTimeFormatService.formatDate(dateStrToUtcDate(day), locale),
+      ),
+      datasets: isTranslateDatasetLabels
+        ? chart.datasets.map((dataset) => ({
+            ...dataset,
+            label: dataset.label && this._translateService.instant(dataset.label),
+          }))
+        : chart.datasets,
+    };
+  }
+
+  private _buildLineChartOptions(
+    yTitleKey?: string,
+    yScale: LineScaleOptions = { ticks: { precision: 0 } },
+  ): LineChartOptions {
+    this._langChange();
+    return {
+      responsive: true,
+      scales: {
+        x: {
+          title: {
+            display: true,
+            text: this._translateService.instant(T.F.METRIC.CMP.CHART_X_DAY),
+          },
+        },
+        y: {
+          ...yScale,
+          ...(yTitleKey && {
+            title: { display: true, text: this._translateService.instant(yTitleKey) },
+          }),
+        },
+      },
+    };
+  }
 }
