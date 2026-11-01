@@ -2141,3 +2141,90 @@ Checked, not changed:
   the title bar and the side menu alike. Pre-existing; worth an issue.
 - E2E: no fixed waits (`expect.poll` for the layout); `readBoard` moved to
   the shared helpers.
+
+## Performance check (2026-11-01)
+
+**Setup.** CI's E2E build (`ng build`: optimized, Angular prod mode,
+`NG_BUILD_MANGLE=0` for readable profiles) served statically; Playwright
+Chromium, headless (software rendering), 1280×800, a 4-core 2.8 GHz VM. Seeded
+through Settings → Import with a generated backup: 5,000 tasks (4,000 parents,
+1,000 subtasks under 300 parents), 11 projects (3 with a backlog), 13 tags
+(10 + the Eisenhower and Kanban tags), 20 % done, 8 % due today, 8 % overdue,
+19 % later, 5 % timed, 10 % with a deadline, 30 % with a priority, 50 % with an
+estimate. 8 views: the default Eisenhower Matrix and Kanban, five lists (2–4
+sections: overdue/today/this week, priorities, deadlines, quick wins, one
+manual order) and a 4-column tag board. Timed in the page from the click to
+the view rendered and no long task for 400 ms ("settled"); medians of 3 runs
+(editor keystrokes 9, drags 3); CDP metrics for the breakdowns, CDP profiles
+for causes. The harness was a temporary spec, not committed. Runs vary by
+10–20 %; read ratios, not absolute times.
+
+Rendered items: Matrix 45/434/356/3,165 cards, Kanban 3,728/93/975 cards,
+list views 361–1,398 rows, tag board 905 cards; baselines Today 1,042 rows,
+a project 396 rows.
+
+| Interaction (settled, ms)        |          Before |           After |
+| -------------------------------- | --------------: | --------------: |
+| Open Matrix from the side menu   |           7,849 |           6,911 |
+| Open Kanban                      |           8,219 |           7,790 |
+| Open a list view (3 sections)    |           4,504 |           4,093 |
+| Open the manual-order list       |           1,716 |           1,783 |
+| Open the tag board               |           1,928 |           1,841 |
+| Baseline: open Today             |           3,721 |           3,076 |
+| Baseline: open a project         |           3,547 |           3,232 |
+| Switch view → Matrix / → Kanban  |   6,359 / 8,132 |   7,720 / 8,359 |
+| Switch view → list views         |     2,156–4,796 |     2,261–5,200 |
+| List ⇄ Board, Matrix             | 10,695 / 11,985 | 10,674 / 11,444 |
+| List ⇄ Board, Kanban             | 14,008 / 15,982 | 14,002 / 14,342 |
+| List ⇄ Board, 3-section list     |   3,898 / 4,274 |   3,950 / 4,333 |
+| Editor open (list / over Kanban) |     367 / 1,134 |       379 / 896 |
+| Editor keystroke, live counts    |         20 / 59 |         21 / 52 |
+| Drag a card To Do → In Progress  |           2,593 |           1,162 |
+| Drag it back                     |           2,637 |           1,735 |
+
+List ⇄ Board rows: to list / to board. The drag rows are an A/B of the same
+session against both builds; the other "After" numbers changed only by noise.
+
+Time tracking (per second while a task is tracked, script ms / main-thread
+busy ms / long tasks per 10 s, max): Today 55–59 / 89–107 / 6, ~100 ms;
+Matrix 53 / 135–143 / 7, ~200–240 ms; Kanban 71–77 / 84–90 / 10, ~100 ms;
+3-section list 32–33 / 72–81 / 6, ~100 ms; tag board 24–26 / 51–85 / 4–5,
+~70 ms. No style or layout work per tick.
+
+**Findings.**
+
+- Opening, switching and the List/Board switch cost what the rendered rows
+  and cards cost: about 1.5 ms per card and 3 ms per task row here, the same
+  per row as the Today list. The profile is Angular view creation, DOM and GC;
+  matching the rules is under 1 %. The default Matrix and Kanban are slow with
+  this data only because they show most tasks: "Not urgent & not important"
+  holds every parent task without the two tags, done ones included (3,165
+  cards), and "To Do" every open task with its subtasks (3,728). Not changed:
+  bounding long columns (a "show more", or done tasks out of the Matrix) is a
+  product decision, and virtual scrolling fights the drag-and-drop lists.
+  Worth an issue.
+- Moving a card spent 1.2–1.6 s in style recalculation. Cause: the app-wide
+  `.route-wrapper > router-outlet + *` rule. A sibling combinator on a
+  universal subject is checked against every element, so Chromium marks every
+  parent as sibling-dependent and restyles all following siblings on each
+  insert or removal. Removing the top card of the 3,728-card column took
+  658 ms, inserting one 796 ms, removing the top row of Today (343 rows)
+  106 ms. Fixed: the rule is now `.route-wrapper > :not(router-outlet)` (the
+  same element; during a route animation the leaving page matches too and
+  keeps its scroll container, which both pages already get positioned for).
+  After: 30 ms, 31 ms and 14 ms; style recalc per drop 60–120 ms. This helps
+  every long list in the app, not only views.
+- Tracking tick: comparable to the Today list. On the Matrix about 7 ms of a
+  tick re-matched every task in the four columns. A per-task match cache (the
+  editor's pattern) removed it from the profile, but an A/B showed no
+  measurable change in script time per second (53 vs 53 ms on the Matrix,
+  71–77 vs 71–74 ms on Kanban), so it was not kept. The rest is change
+  detection over every card (host bindings, the `@for`) and, on the Matrix,
+  GC and hover hit-testing of a 4,000-card DOM.
+- Only the open view matches tasks; the side menu reads views, not tasks, so
+  there is no work per view on unrelated changes. The editor's live count was
+  already cached per section; keystrokes stay at 20–60 ms.
+
+**Not measured:** GPU rasterization (headless software rendering), phones and
+Electron, a row dragged between sections of a list view (same CDK path and
+the same style fix), memory, and real user data instead of a generated set.
