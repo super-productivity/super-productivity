@@ -50,7 +50,12 @@
                   @if (project.doneOn) {
                     {{
                       T.F.PROJECT.COMPLETE.COMPLETED_ON
-                        | translate: { date: (project.doneOn | date) }
+                        | translate
+                          : {
+                              date:
+                                (project.doneOn
+                                | localeDate: 'mediumDate' : undefined : locale()),
+                            }
                     }}
                   }
                 </span>

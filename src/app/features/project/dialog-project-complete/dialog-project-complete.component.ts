@@ -11,7 +11,6 @@ import {
   signal,
 } from '@angular/core';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
-import { DatePipe } from '@angular/common';
 import { MatButton, MatIconButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { TranslatePipe } from '@ngx-translate/core';
@@ -26,6 +25,8 @@ import { MatTooltip } from '@angular/material/tooltip';
 import { GlobalThemeService } from '../../../core/theme/global-theme.service';
 import { resolveBgImageToDataUrl } from '../../../core/theme/resolve-bg-image-to-data-url.util';
 import { normalizeBackgroundImageBlur } from '../../work-context/work-context.const';
+import { LocaleDatePipe } from '../../../ui/pipes/locale-date.pipe';
+import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
 
 export interface DialogProjectCompleteData {
   project: Project;
@@ -42,7 +43,7 @@ export interface DialogProjectCompleteData {
     MatIconButton,
     MatIcon,
     MatTooltip,
-    DatePipe,
+    LocaleDatePipe,
     TranslatePipe,
     MsToStringPipe,
   ],
@@ -53,9 +54,11 @@ export class DialogProjectCompleteComponent implements AfterViewInit, OnDestroy 
   private readonly _confettiService = inject(ConfettiService);
   private readonly _configService = inject(GlobalConfigService);
   private readonly _globalThemeService = inject(GlobalThemeService);
+  private readonly _dateTimeFormatService = inject(DateTimeFormatService);
 
   readonly data = inject<DialogProjectCompleteData>(MAT_DIALOG_DATA);
   readonly T: typeof T = T;
+  readonly locale = this._dateTimeFormatService.currentLocale;
   readonly resolvedBgImage = signal<string | null>(null);
   readonly isDisableBackgroundTint = computed(
     () => !!this.data.project.theme?.isDisableBackgroundTint,

@@ -85,9 +85,9 @@
       @if (data.stats.startedOn) {
         <p class="date-range">
           {{ T.F.PROJECT.COMPLETE.CELEBRATION.STARTED | translate }}:
-          {{ data.stats.startedOn | date }} ·
+          {{ data.stats.startedOn | localeDate: 'mediumDate' : undefined : locale() }} ·
           {{ T.F.PROJECT.COMPLETE.CELEBRATION.FINISHED | translate }}:
-          {{ data.stats.doneOn | date }}
+          {{ data.stats.doneOn | localeDate: 'mediumDate' : undefined : locale() }}
         </p>
       }
     </div>

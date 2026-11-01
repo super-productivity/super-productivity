@@ -44,7 +44,7 @@
           <span class="backup-info">
             <span class="backup-date">
               @if (entry.createdAt) {
-                {{ entry.createdAt | date: 'medium' }}
+                {{ entry.createdAt | localeDate: 'medium' : undefined : locale() }}
               } @else {
                 {{ T.GCF.AUTO_BACKUPS.D_LIST.DATE_UNKNOWN | translate }}
               }

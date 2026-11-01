@@ -13,6 +13,7 @@ import { ConfettiInstance } from '../../../core/confetti/confetti.model';
 import { GlobalConfigService } from '../../config/global-config.service';
 import { createProject } from '../project.test-helper';
 import { GlobalThemeService } from '../../../core/theme/global-theme.service';
+import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
 
 describe('DialogProjectCompleteComponent', () => {
   let fixture: ComponentFixture<DialogProjectCompleteComponent>;
@@ -64,6 +65,7 @@ describe('DialogProjectCompleteComponent', () => {
         { provide: ConfettiService, useValue: confettiService },
         { provide: GlobalConfigService, useValue: { misc: () => misc } },
         { provide: GlobalThemeService, useValue: { isDarkTheme } },
+        { provide: DateTimeFormatService, useValue: { currentLocale: () => 'en-US' } },
       ],
     });
 

@@ -583,7 +583,10 @@ export class ConfigPageComponent implements OnInit {
   }
 
   async copyVersionToClipboard(text: string): Promise<void> {
-    const result = await this._shareService.copyToClipboard(text, 'Version');
+    const result = await this._shareService.copyToClipboard(
+      text,
+      T.F.SHARE.COPIED.VERSION,
+    );
     if (!result.success) {
       this._snackService.open({
         type: 'ERROR',

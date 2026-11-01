@@ -47,7 +47,10 @@ export class DialogLogsComponent {
     // ShareService handles the execCommand fallback for older Android WebViews
     // where navigator.clipboard.writeText is unavailable — same class of
     // silent-failure platform that motivated this dialog in the first place.
-    const result = await this._shareService.copyToClipboard(this.data.logs, 'Logs');
+    const result = await this._shareService.copyToClipboard(
+      this.data.logs,
+      T.F.SHARE.COPIED.LOGS,
+    );
     if (!result.success) {
       this._snackService.open(T.DIALOG_LOGS.S_COPY_FAILED);
     }

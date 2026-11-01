@@ -88,9 +88,10 @@
                   [datasets]="evaluation.datasets"
                   [labels]="evaluation.labels"
                   [legend]="true"
-                  [options]="evaluationChartOptions"
+                  [options]="evaluationChartOptions()"
                   height="400px"
                   [shareFileName]="'impact-energy-over-time.png'"
+                  [shareTitle]="T.F.METRIC.CMP.EVALUATION_OVER_TIME | translate"
                   [enableTimeframeSelector]="true"
                 ></lazy-chart>
               </section>
@@ -105,9 +106,10 @@
                   [datasets]="focusSessions.datasets"
                   [labels]="focusSessions.labels"
                   [legend]="true"
-                  [options]="lineChartOptions"
+                  [options]="focusSessionChartOptions()"
                   height="400px"
                   [shareFileName]="'focus-session-trends.png'"
+                  [shareTitle]="T.F.METRIC.CMP.FOCUS_SESSION_TRENDS | translate"
                   [enableTimeframeSelector]="true"
                 ></lazy-chart>
               </section>
@@ -125,10 +127,11 @@
                 [type]="lineChartType"
                 [datasets]="simpleCounterClickData.datasets"
                 [labels]="simpleCounterClickData.labels"
-                [options]="lineChartOptions"
+                [options]="clickCounterChartOptions()"
                 [legend]="true"
                 height="400px"
                 [shareFileName]="'simple-click-counters-over-time.png'"
+                [shareTitle]="T.F.METRIC.CMP.SIMPLE_CLICK_COUNTERS_OVER_TIME | translate"
                 [enableTimeframeSelector]="true"
               >
               </lazy-chart>
@@ -143,10 +146,13 @@
                 [type]="lineChartType"
                 [datasets]="simpleCounterStopWatchData.datasets"
                 [labels]="simpleCounterStopWatchData.labels"
-                [options]="lineChartOptions"
+                [options]="stopWatchChartOptions()"
                 [legend]="true"
                 height="400px"
                 [shareFileName]="'simple-stopwatch-counters-over-time.png'"
+                [shareTitle]="
+                  T.F.METRIC.CMP.SIMPLE_STOPWATCH_COUNTERS_OVER_TIME | translate
+                "
                 [enableTimeframeSelector]="true"
               >
               </lazy-chart>
