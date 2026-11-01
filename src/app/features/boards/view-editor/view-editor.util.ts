@@ -47,22 +47,6 @@ export const VIEW_RULE_GROUPS: readonly (readonly ViewRuleId[])[] = [
 ];
 export const VIEW_RULE_ORDER: readonly ViewRuleId[] = VIEW_RULE_GROUPS.flat();
 
-/** Rule labels, in the filter menu's wording where it has one. */
-export const VIEW_RULE_LABELS: Record<ViewRuleId, string> = {
-  project: T.F.TASK_VIEW.CUSTOMIZER.FILTER_PROJECT,
-  backlog: T.F.BOARDS.EDITOR.RULE_BACKLOG,
-  includedTags: T.F.BOARDS.FORM.TAGS_REQUIRED,
-  excludedTags: T.F.BOARDS.FORM.TAGS_EXCLUDED,
-  untagged: T.F.BOARDS.EDITOR.RULE_UNTAGGED,
-  plannedDate: T.F.TASK_VIEW.CUSTOMIZER.FILTER_SCHEDULED_DATE,
-  deadline: T.F.TASK_VIEW.CUSTOMIZER.FILTER_DEADLINE,
-  done: T.F.BOARDS.EDITOR.RULE_DONE,
-  parentOnly: T.F.BOARDS.FORM.ONLY_PARENT_TASKS,
-  priority: T.F.TASK_VIEW.CUSTOMIZER.FILTER_PRIORITY,
-  estimate: T.F.TASK_VIEW.CUSTOMIZER.FILTER_ESTIMATED_TIME,
-  timeSpent: T.F.TASK_VIEW.CUSTOMIZER.FILTER_TIME_SPENT,
-};
-
 /** Shown for a stored value this client doesn't know; saved unchanged. */
 export const OTHER_VALUE = '__other__';
 
@@ -102,46 +86,6 @@ const AMOUNT_RULE_OPTIONS: RuleOption[] = [
 export const PLANNED_HAS_DATE = 'scheduled';
 export const PLANNED_NO_DATE = 'unscheduled';
 
-export const VIEW_RULE_OPTIONS: Record<SelectRuleId, readonly RuleOption[]> = {
-  backlog: [
-    {
-      value: BoardPanelCfgTaskTypeFilter.NoBacklog,
-      label: T.F.BOARDS.EDITOR.BACKLOG_EXCLUDE,
-    },
-    {
-      value: BoardPanelCfgTaskTypeFilter.OnlyBacklog,
-      label: T.F.BOARDS.FORM.BACKLOG_TASK_FILTER_ONLY_BACKLOG,
-    },
-  ],
-  plannedDate: [
-    { value: PLANNED_HAS_DATE, label: T.F.BOARDS.EDITOR.PLANNED_HAS_DATE },
-    { value: PLANNED_NO_DATE, label: T.F.BOARDS.EDITOR.PLANNED_NO_DATE },
-    ...DATE_RULE_OPTIONS,
-  ],
-  deadline: [
-    { value: 'none', label: T.F.TASK_VIEW.CUSTOMIZER.GROUP_DEADLINE_NONE },
-    ...DATE_RULE_OPTIONS,
-  ],
-  done: [
-    {
-      value: BoardPanelCfgTaskDoneState.UnDone,
-      label: T.F.BOARDS.FORM.TASK_DONE_STATE_UNDONE,
-    },
-    {
-      value: BoardPanelCfgTaskDoneState.Done,
-      label: T.F.BOARDS.FORM.TASK_DONE_STATE_DONE,
-    },
-  ],
-  priority: [
-    { value: '3', label: T.F.TASK.CMP.PRIORITY_HIGH },
-    { value: '2', label: T.F.TASK.CMP.PRIORITY_MEDIUM },
-    { value: '1', label: T.F.TASK.CMP.PRIORITY_LOW },
-    { value: 'none', label: T.F.BOARDS.FORM.RULE_NOT_SET },
-  ],
-  estimate: AMOUNT_RULE_OPTIONS,
-  timeSpent: AMOUNT_RULE_OPTIONS,
-};
-
 /** The sort select's manual order (a select can't show a `null` option). */
 export const SORT_MANUAL = 'manual';
 
@@ -160,47 +104,227 @@ export const SORT_OPTIONS: readonly { value: string; label: string }[] = [
 const isSetString = (value: unknown): boolean =>
   typeof value === 'string' && value !== '';
 
-/** Whether the stored panel has the rule, from its values. */
-export const isRuleSet = (panel: BoardPanelCfg, rule: ViewRuleId): boolean => {
-  switch (rule) {
-    case 'project':
-      return (
-        !isAllProjects(panel.projectIds) && (panel.projectIds ?? []).some((id) => !!id)
-      );
-    case 'backlog':
-      return (
-        panel.backlogState !== undefined &&
-        panel.backlogState !== BoardPanelCfgTaskTypeFilter.All
-      );
-    case 'includedTags':
-      return (panel.includedTagIds ?? []).length > 0;
-    case 'excludedTags':
-      return (panel.excludedTagIds ?? []).length > 0;
-    case 'untagged':
-      return isPanelUntagged(panel);
-    case 'plannedDate':
-      return (
-        isSetString(panel.dueState) ||
-        (panel.scheduledState !== undefined &&
-          panel.scheduledState !== BoardPanelCfgScheduledState.All)
-      );
-    case 'deadline':
-      return isSetString(panel.deadlineState);
-    case 'done':
-      return (
-        panel.taskDoneState !== undefined &&
-        panel.taskDoneState !== BoardPanelCfgTaskDoneState.All
-      );
-    case 'parentOnly':
-      return panel.isParentTasksOnly === true;
-    case 'priority':
-      return isSetString(panel.priorityRule);
-    case 'estimate':
-      return isSetString(panel.estimateRule);
-    case 'timeSpent':
-      return isSetString(panel.timeSpentRule);
+const without = <K extends keyof BoardPanelCfg>(
+  panel: BoardPanelCfg,
+  ...keys: K[]
+): BoardPanelCfg => {
+  const out = { ...panel };
+  for (const key of keys) {
+    delete out[key];
   }
+  return out;
 };
+
+const isKnownDateRule = (value: string): boolean =>
+  (TASK_DATE_RULES as readonly string[]).includes(value);
+
+/** What every rule has. */
+interface RuleDefBase {
+  /** In the filter menu's wording where it has one. */
+  label: string;
+  /** Whether the stored panel has the rule, from its values. */
+  isSet: (panel: BoardPanelCfg) => boolean;
+  /**
+   * Removes the rule: optional fields are deleted, required ones go to their
+   * default. Never `null` or `undefined`, which an op would carry to released
+   * clients.
+   */
+  remove: (panel: BoardPanelCfg) => BoardPanelCfg;
+}
+
+/** A rule with a select: its options, the value it is added with, read and write. */
+interface SelectRuleDef extends RuleDefBase {
+  options: readonly RuleOption[];
+  /** The value the rule gets when it is added (the first useful option). */
+  added: RuleValue;
+  /** The stored value; shown as `OTHER_VALUE` when it isn't an option. */
+  read: (panel: BoardPanelCfg) => unknown;
+  /** Writes an option (only ever called with one). */
+  write: (panel: BoardPanelCfg, value: RuleValue) => BoardPanelCfg;
+}
+
+/** A rule without a select: a flag, or a list of projects or tags. */
+interface PlainRuleDef extends RuleDefBase {
+  /** Writes the rule when it is added; absent: it starts empty (its control opens). */
+  add?: (panel: BoardPanelCfg) => BoardPanelCfg;
+  /** The projects or tags the summary names it by. */
+  titles?: {
+    of: keyof RuleSummaryCtx;
+    ids: (panel: BoardPanelCfg) => readonly string[] | undefined;
+  };
+}
+
+/**
+ * Every rule in one place: adding a rule means adding its row here (and to
+ * `VIEW_RULE_GROUPS`).
+ */
+const VIEW_RULES: {
+  [R in ViewRuleId]: R extends SelectRuleId ? SelectRuleDef : PlainRuleDef;
+} = {
+  project: {
+    label: T.F.TASK_VIEW.CUSTOMIZER.FILTER_PROJECT,
+    isSet: (panel) =>
+      !isAllProjects(panel.projectIds) && (panel.projectIds ?? []).some((id) => !!id),
+    remove: (panel) => ({ ...panel, projectIds: [''] }),
+    titles: { of: 'projects', ids: (panel) => panel.projectIds },
+  },
+  backlog: {
+    label: T.F.BOARDS.EDITOR.RULE_BACKLOG,
+    isSet: (panel) =>
+      panel.backlogState !== undefined &&
+      panel.backlogState !== BoardPanelCfgTaskTypeFilter.All,
+    remove: (panel) => ({ ...panel, backlogState: BoardPanelCfgTaskTypeFilter.All }),
+    options: [
+      {
+        value: BoardPanelCfgTaskTypeFilter.NoBacklog,
+        label: T.F.BOARDS.EDITOR.BACKLOG_EXCLUDE,
+      },
+      {
+        value: BoardPanelCfgTaskTypeFilter.OnlyBacklog,
+        label: T.F.BOARDS.FORM.BACKLOG_TASK_FILTER_ONLY_BACKLOG,
+      },
+    ],
+    added: BoardPanelCfgTaskTypeFilter.NoBacklog,
+    read: (panel) => panel.backlogState,
+    write: (panel, value) => ({
+      ...panel,
+      backlogState: value as BoardPanelCfgTaskTypeFilter,
+    }),
+  },
+  includedTags: {
+    label: T.F.BOARDS.FORM.TAGS_REQUIRED,
+    isSet: (panel) => (panel.includedTagIds ?? []).length > 0,
+    remove: (panel) => ({ ...without(panel, 'includedTagsMatch'), includedTagIds: [] }),
+    titles: { of: 'tags', ids: (panel) => panel.includedTagIds },
+  },
+  excludedTags: {
+    label: T.F.BOARDS.FORM.TAGS_EXCLUDED,
+    isSet: (panel) => (panel.excludedTagIds ?? []).length > 0,
+    remove: (panel) => ({ ...without(panel, 'excludedTagsMatch'), excludedTagIds: [] }),
+    titles: { of: 'tags', ids: (panel) => panel.excludedTagIds },
+  },
+  untagged: {
+    label: T.F.BOARDS.EDITOR.RULE_UNTAGGED,
+    isSet: isPanelUntagged,
+    remove: (panel) => without(panel, 'isUntagged'),
+    add: (panel) => ({ ...panel, isUntagged: true }),
+  },
+  plannedDate: {
+    label: T.F.TASK_VIEW.CUSTOMIZER.FILTER_SCHEDULED_DATE,
+    isSet: (panel) =>
+      isSetString(panel.dueState) ||
+      (panel.scheduledState !== undefined &&
+        panel.scheduledState !== BoardPanelCfgScheduledState.All),
+    remove: (panel) => ({
+      ...without(panel, 'dueState'),
+      scheduledState: BoardPanelCfgScheduledState.All,
+    }),
+    options: [
+      { value: PLANNED_HAS_DATE, label: T.F.BOARDS.EDITOR.PLANNED_HAS_DATE },
+      { value: PLANNED_NO_DATE, label: T.F.BOARDS.EDITOR.PLANNED_NO_DATE },
+      ...DATE_RULE_OPTIONS,
+    ],
+    added: 'today',
+    // Two stored fields behind one select (see `getPlannedDateChoice`).
+    read: (panel) => getPlannedDateChoice(panel),
+    write: (panel, value) => withPlannedDateChoice(panel, value as string),
+  },
+  deadline: {
+    label: T.F.TASK_VIEW.CUSTOMIZER.FILTER_DEADLINE,
+    isSet: (panel) => isSetString(panel.deadlineState),
+    remove: (panel) => without(panel, 'deadlineState'),
+    options: [
+      { value: 'none', label: T.F.TASK_VIEW.CUSTOMIZER.GROUP_DEADLINE_NONE },
+      ...DATE_RULE_OPTIONS,
+    ],
+    added: 'today',
+    read: (panel) => panel.deadlineState,
+    write: (panel, value) => ({ ...panel, deadlineState: value as string }),
+  },
+  done: {
+    label: T.F.BOARDS.EDITOR.RULE_DONE,
+    isSet: (panel) =>
+      panel.taskDoneState !== undefined &&
+      panel.taskDoneState !== BoardPanelCfgTaskDoneState.All,
+    remove: (panel) => ({ ...panel, taskDoneState: BoardPanelCfgTaskDoneState.All }),
+    options: [
+      {
+        value: BoardPanelCfgTaskDoneState.UnDone,
+        label: T.F.BOARDS.FORM.TASK_DONE_STATE_UNDONE,
+      },
+      {
+        value: BoardPanelCfgTaskDoneState.Done,
+        label: T.F.BOARDS.FORM.TASK_DONE_STATE_DONE,
+      },
+    ],
+    added: BoardPanelCfgTaskDoneState.UnDone,
+    read: (panel) => panel.taskDoneState,
+    write: (panel, value) => ({
+      ...panel,
+      taskDoneState: value as BoardPanelCfgTaskDoneState,
+    }),
+  },
+  parentOnly: {
+    label: T.F.BOARDS.FORM.ONLY_PARENT_TASKS,
+    isSet: (panel) => panel.isParentTasksOnly === true,
+    remove: (panel) => ({ ...panel, isParentTasksOnly: false }),
+    add: (panel) => ({ ...panel, isParentTasksOnly: true }),
+  },
+  priority: {
+    label: T.F.TASK_VIEW.CUSTOMIZER.FILTER_PRIORITY,
+    isSet: (panel) => isSetString(panel.priorityRule),
+    remove: (panel) => without(panel, 'priorityRule'),
+    options: [
+      { value: '3', label: T.F.TASK.CMP.PRIORITY_HIGH },
+      { value: '2', label: T.F.TASK.CMP.PRIORITY_MEDIUM },
+      { value: '1', label: T.F.TASK.CMP.PRIORITY_LOW },
+      { value: 'none', label: T.F.BOARDS.FORM.RULE_NOT_SET },
+    ],
+    added: '3',
+    read: (panel) => panel.priorityRule,
+    write: (panel, value) => ({ ...panel, priorityRule: value as string }),
+  },
+  estimate: {
+    label: T.F.TASK_VIEW.CUSTOMIZER.FILTER_ESTIMATED_TIME,
+    isSet: (panel) => isSetString(panel.estimateRule),
+    remove: (panel) => without(panel, 'estimateRule'),
+    options: AMOUNT_RULE_OPTIONS,
+    added: 'none',
+    read: (panel) => panel.estimateRule,
+    write: (panel, value) => ({ ...panel, estimateRule: value as string }),
+  },
+  timeSpent: {
+    label: T.F.TASK_VIEW.CUSTOMIZER.FILTER_TIME_SPENT,
+    isSet: (panel) => isSetString(panel.timeSpentRule),
+    remove: (panel) => without(panel, 'timeSpentRule'),
+    options: AMOUNT_RULE_OPTIONS,
+    added: 'none',
+    read: (panel) => panel.timeSpentRule,
+    write: (panel, value) => ({ ...panel, timeSpentRule: value as string }),
+  },
+};
+
+const selectRule = (rule: ViewRuleId): SelectRuleDef | undefined => {
+  const def: SelectRuleDef | PlainRuleDef = VIEW_RULES[rule];
+  return 'options' in def ? def : undefined;
+};
+
+/** Rule labels, in the filter menu's wording where it has one. */
+export const VIEW_RULE_LABELS = Object.fromEntries(
+  VIEW_RULE_ORDER.map((rule) => [rule, VIEW_RULES[rule].label]),
+) as Record<ViewRuleId, string>;
+
+/** The options of each rule with a select (only those rules are keys). */
+export const VIEW_RULE_OPTIONS = Object.fromEntries(
+  VIEW_RULE_ORDER.flatMap((rule) => {
+    const def = selectRule(rule);
+    return def ? [[rule, def.options]] : [];
+  }),
+) as Record<SelectRuleId, readonly RuleOption[]>;
+
+/** Whether the stored panel has the rule, from its values. */
+export const isRuleSet = (panel: BoardPanelCfg, rule: ViewRuleId): boolean =>
+  VIEW_RULES[rule].isSet(panel);
 
 /** The rules the stored panel has set, in menu order. */
 export const getSetRules = (panel: BoardPanelCfg): ViewRuleId[] =>
@@ -226,46 +350,17 @@ export const getAddableRuleGroups = (shown: readonly ViewRuleId[]): ViewRuleId[]
   ).filter((group) => group.length > 0);
 };
 
-/** The value a rule gets when it is added (the first useful option). */
-const RULE_DEFAULTS: Partial<Record<ViewRuleId, RuleValue | true>> = {
-  backlog: BoardPanelCfgTaskTypeFilter.NoBacklog,
-  untagged: true,
-  plannedDate: 'today',
-  deadline: 'today',
-  done: BoardPanelCfgTaskDoneState.UnDone,
-  parentOnly: true,
-  priority: '3',
-  estimate: 'none',
-  timeSpent: 'none',
-};
-
 /**
- * Adds a rule with its default. Project and tags start empty (the editor opens
- * their control); left empty, they save as no rule.
+ * Adds a rule: a select rule with its first useful option, a flag set. Project
+ * and tags start empty (the editor opens their control); left empty, they save
+ * as no rule.
  */
 export const withRuleAdded = (panel: BoardPanelCfg, rule: ViewRuleId): BoardPanelCfg => {
-  const value = RULE_DEFAULTS[rule];
-  if (value === undefined) {
-    return panel;
+  const def = selectRule(rule);
+  if (def) {
+    return withRuleValue(panel, rule as SelectRuleId, def.added);
   }
-  if (rule === 'untagged') {
-    return { ...panel, isUntagged: true };
-  }
-  if (rule === 'parentOnly') {
-    return { ...panel, isParentTasksOnly: true };
-  }
-  return withRuleValue(panel, rule as SelectRuleId, value as RuleValue);
-};
-
-const without = <K extends keyof BoardPanelCfg>(
-  panel: BoardPanelCfg,
-  ...keys: K[]
-): BoardPanelCfg => {
-  const out = { ...panel };
-  for (const key of keys) {
-    delete out[key];
-  }
-  return out;
+  return (VIEW_RULES[rule] as PlainRuleDef).add?.(panel) ?? panel;
 };
 
 /**
@@ -273,40 +368,8 @@ const without = <K extends keyof BoardPanelCfg>(
  * default. Never `null` or `undefined`, which an op would carry to released
  * clients.
  */
-export const withoutRule = (panel: BoardPanelCfg, rule: ViewRuleId): BoardPanelCfg => {
-  switch (rule) {
-    case 'project':
-      return { ...panel, projectIds: [''] };
-    case 'backlog':
-      return { ...panel, backlogState: BoardPanelCfgTaskTypeFilter.All };
-    case 'includedTags':
-      return { ...without(panel, 'includedTagsMatch'), includedTagIds: [] };
-    case 'excludedTags':
-      return { ...without(panel, 'excludedTagsMatch'), excludedTagIds: [] };
-    case 'untagged':
-      return without(panel, 'isUntagged');
-    case 'plannedDate':
-      return {
-        ...without(panel, 'dueState'),
-        scheduledState: BoardPanelCfgScheduledState.All,
-      };
-    case 'deadline':
-      return without(panel, 'deadlineState');
-    case 'done':
-      return { ...panel, taskDoneState: BoardPanelCfgTaskDoneState.All };
-    case 'parentOnly':
-      return { ...panel, isParentTasksOnly: false };
-    case 'priority':
-      return without(panel, 'priorityRule');
-    case 'estimate':
-      return without(panel, 'estimateRule');
-    case 'timeSpent':
-      return without(panel, 'timeSpentRule');
-  }
-};
-
-const isKnownDateRule = (value: string): boolean =>
-  (TASK_DATE_RULES as readonly string[]).includes(value);
+export const withoutRule = (panel: BoardPanelCfg, rule: ViewRuleId): BoardPanelCfg =>
+  VIEW_RULES[rule].remove(panel);
 
 /**
  * What the planned-date select shows for `dueState` + `scheduledState`: a
@@ -363,28 +426,11 @@ export const withPlannedDateChoice = (
 };
 
 const isOption = (rule: SelectRuleId, value: unknown): boolean =>
-  VIEW_RULE_OPTIONS[rule].some((option) => option.value === value);
+  VIEW_RULES[rule].options.some((option) => option.value === value);
 
 /** The select value for a rule; `OTHER_VALUE` for a value it can't show. */
 export const getRuleValue = (panel: BoardPanelCfg, rule: SelectRuleId): RuleValue => {
-  const value = ((): unknown => {
-    switch (rule) {
-      case 'backlog':
-        return panel.backlogState;
-      case 'plannedDate':
-        return getPlannedDateChoice(panel);
-      case 'deadline':
-        return panel.deadlineState;
-      case 'done':
-        return panel.taskDoneState;
-      case 'priority':
-        return panel.priorityRule;
-      case 'estimate':
-        return panel.estimateRule;
-      case 'timeSpent':
-        return panel.timeSpentRule;
-    }
-  })();
+  const value = VIEW_RULES[rule].read(panel);
   return isOption(rule, value) ? (value as RuleValue) : OTHER_VALUE;
 };
 
@@ -393,27 +439,10 @@ export const withRuleValue = (
   panel: BoardPanelCfg,
   rule: SelectRuleId,
   value: RuleValue,
-): BoardPanelCfg => {
-  if (value === OTHER_VALUE || !isOption(rule, value)) {
-    return panel;
-  }
-  switch (rule) {
-    case 'backlog':
-      return { ...panel, backlogState: value as BoardPanelCfgTaskTypeFilter };
-    case 'plannedDate':
-      return withPlannedDateChoice(panel, value as string);
-    case 'deadline':
-      return { ...panel, deadlineState: value as string };
-    case 'done':
-      return { ...panel, taskDoneState: value as BoardPanelCfgTaskDoneState };
-    case 'priority':
-      return { ...panel, priorityRule: value as string };
-    case 'estimate':
-      return { ...panel, estimateRule: value as string };
-    case 'timeSpent':
-      return { ...panel, timeSpentRule: value as string };
-  }
-};
+): BoardPanelCfg =>
+  value === OTHER_VALUE || !isOption(rule, value)
+    ? panel
+    : VIEW_RULES[rule].write(panel, value);
 
 /** The sort select's value: `SORT_MANUAL`, a key, or `OTHER_VALUE` for an unknown key. */
 export const getSortValue = (panel: BoardPanelCfg): string => {
@@ -448,34 +477,23 @@ export const getRuleSummary = (
   ctx: RuleSummaryCtx,
   translate: Translate,
 ): string => {
-  const titled = (
-    label: string,
-    ids: readonly string[] | undefined,
-    all: RuleSummaryCtx['tags'],
-  ): string => {
-    const titles = (ids ?? [])
-      .map((id) => all.find((item) => item.id === id)?.title)
-      .filter((title): title is string => !!title);
-    return titles.length ? `${label}: ${titles.join(', ')}` : label;
-  };
   const parts = getSetRules(panel).map((rule) => {
     const label = translate(VIEW_RULE_LABELS[rule]);
-    switch (rule) {
-      case 'project':
-        return titled(label, panel.projectIds, ctx.projects);
-      case 'includedTags':
-        return titled(label, panel.includedTagIds, ctx.tags);
-      case 'excludedTags':
-        return titled(label, panel.excludedTagIds, ctx.tags);
-      case 'untagged':
-      case 'parentOnly':
-        return label;
-      default: {
-        const value = getRuleValue(panel, rule);
-        const option = VIEW_RULE_OPTIONS[rule].find((o) => o.value === value);
-        return `${label}: ${translate(option?.label ?? T.F.BOARDS.EDITOR.OTHER_KEPT)}`;
-      }
+    const select = selectRule(rule);
+    if (select) {
+      const value = getRuleValue(panel, rule as SelectRuleId);
+      const option = select.options.find((o) => o.value === value);
+      return `${label}: ${translate(option?.label ?? T.F.BOARDS.EDITOR.OTHER_KEPT)}`;
     }
+    const titles = (VIEW_RULES[rule] as PlainRuleDef).titles;
+    if (!titles) {
+      return label;
+    }
+    const all = ctx[titles.of];
+    const names = (titles.ids(panel) ?? [])
+      .map((id) => all.find((item) => item.id === id)?.title)
+      .filter((title): title is string => !!title);
+    return names.length ? `${label}: ${names.join(', ')}` : label;
   });
   return parts.length ? parts.join(' · ') : translate(T.F.BOARDS.EDITOR.EVERY_TASK);
 };
