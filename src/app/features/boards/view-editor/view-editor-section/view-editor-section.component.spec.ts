@@ -10,6 +10,7 @@ import { ProjectService } from '../../../project/project.service';
 import { MenuTreeService } from '../../../menu-tree/menu-tree.service';
 import { TagService } from '../../../tag/tag.service';
 import { T } from '../../../../t.const';
+import { TODAY_TAG } from '../../../tag/tag.const';
 
 describe('ViewEditorSectionComponent', () => {
   let fixture: ComponentFixture<ViewEditorSectionComponent>;
@@ -189,6 +190,21 @@ describe('ViewEditorSectionComponent', () => {
     expect(overlay.querySelector('.mat-mdc-menu-panel')).not.toBeNull();
   });
 
+  it('does not offer the virtual Today tag in a tag menu', async () => {
+    const el = await render({ includedTagIds: ['urgent'] });
+    tags.set([...TAGS, { id: TODAY_TAG.id, title: 'Today' }]);
+    (
+      el.querySelector(
+        'view-rule-chip[data-rule="includedTags"] .chip-main',
+      ) as HTMLElement
+    ).click();
+    fixture.detectChanges();
+
+    const titles = menuItems().map((item) => text(item));
+    expect(titles.some((t) => t.includes('Home'))).toBeTrue();
+    expect(titles.some((t) => t.includes('Today'))).toBeFalse();
+  });
+
   it('disables set and contradicting rules in the Add-rule menu', async () => {
     const el = await render({ includedTagIds: ['urgent'] });
     (el.querySelector('view-add-rule-chip .chip-main') as HTMLElement).click();
@@ -334,7 +350,7 @@ describe('ViewEditorSectionComponent', () => {
       BoardPanelCfgTaskDoneState.Done,
       BoardPanelCfgTaskDoneState.UnDone,
     ]) {
-      for (const tags of [
+      for (const tagRules of [
         { includedTagIds: [], excludedTagIds: [] },
         { includedTagIds: ['urgent'], excludedTagIds: [] },
         { includedTagIds: [], excludedTagIds: ['home'] },
@@ -344,13 +360,13 @@ describe('ViewEditorSectionComponent', () => {
           id: 'p',
           title: 'Next',
           taskDoneState,
-          ...tags,
+          ...tagRules,
         });
         fixture.detectChanges();
 
         expect(text(el).includes('Completion tag help')).toBe(
           taskDoneState === BoardPanelCfgTaskDoneState.Done &&
-            !!(tags.includedTagIds.length || tags.excludedTagIds.length),
+            !!(tagRules.includedTagIds.length || tagRules.excludedTagIds.length),
         );
       }
     }

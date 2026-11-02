@@ -26,6 +26,7 @@ import { TranslatePipe } from '@ngx-translate/core';
 import { BoardMatchMode, BoardPanelCfg } from '../../boards.model';
 import { T } from '../../../../t.const';
 import { TagService } from '../../../tag/tag.service';
+import { TODAY_TAG } from '../../../tag/tag.const';
 import { ProjectService } from '../../../project/project.service';
 import { MenuTreeService } from '../../../menu-tree/menu-tree.service';
 import { DEFAULT_PROJECT_ICON } from '../../../project/project.const';
@@ -50,7 +51,7 @@ import {
 
 type ChipKind = 'select' | 'tags' | 'project' | 'flag';
 
-/** Above this many projects their menu gets a filter field. */
+/** From this many projects on, their menu gets a filter field. */
 const PROJECT_FILTER_MIN = 9;
 
 /** As tag-edit creates tags: without the short-syntax `#`. */
@@ -145,8 +146,9 @@ export class ViewRuleChipComponent {
         ? this.panel().excludedTagIds
         : this.panel().includedTagIds,
     );
+    // Today is virtual (never in `task.tagIds`): as in tag-edit, not offered.
     const tags = byTitle(
-      this._tagService.tagsInTreeOrder(),
+      this._tagService.tagsInTreeOrder().filter((tag) => tag.id !== TODAY_TAG.id),
       this.filter(),
       (t) => t.title,
     );
