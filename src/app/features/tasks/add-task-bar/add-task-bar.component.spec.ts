@@ -551,6 +551,44 @@ describe('AddTaskBarComponent', () => {
     });
   });
 
+  describe('view prefill', () => {
+    // Hidden unless the task keeps the tag "need" and is planned for the day.
+    const prefill = {
+      fields: { tagIds: ['need'], dueDay: '2026-09-12' },
+      isHidden: (f: Partial<TaskCopy>) =>
+        !f.tagIds?.includes('need') || f.dueDay !== '2026-09-12',
+    };
+
+    beforeEach(() => {
+      fixture.componentRef.setInput('isNoDefaults', true);
+      fixture.componentRef.setInput('viewPrefill', prefill);
+      fixture.detectChanges();
+    });
+
+    it("shows the view's values as chips", () => {
+      expect(component.stateService.state().tagIds).toEqual(['need']);
+      expect(component.stateService.state().date).toBe('2026-09-12');
+      expect(component.isHiddenInView()).toBeFalse();
+    });
+
+    it('tells when a removed chip hides the task, and adds it back', () => {
+      component.stateService.updateTagIds([]);
+      expect(component.isHiddenInView()).toBeTrue();
+
+      component.applyViewPrefill();
+      expect(component.isHiddenInView()).toBeFalse();
+    });
+
+    it('keeps the view tags for the next task', async () => {
+      mockTaskService.add.and.returnValue('task-1');
+      component.stateService.updateInputTxt('First task');
+      component.stateService.updateCleanText('First task');
+      await component.addTask();
+
+      expect(component.stateService.state().tagIds).toEqual(['need']);
+    });
+  });
+
   describe('addTask', () => {
     it('should not add a task when the visible input is empty', async () => {
       component.stateService.updateCleanText('Stale task');

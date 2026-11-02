@@ -4,7 +4,8 @@
        created even when collapsed). -->
   <collapsible
     class="task-section task-section-flat"
-    [title]="(panel.panelCfg().title | translate) + ' (' + panel.headerCount() + ')'"
+    [title]="panel.panelCfg().title | translate"
+    [count]="panel.headerCount()"
     [isIconBefore]="true"
     [isGroup]="true"
     [isExpanded]="panel.isSectionExpanded()"
@@ -43,7 +44,8 @@
           class="panel-add-task-bar"
           [isHideTagTitles]="true"
           [isNoDefaults]="true"
-          [additionalFields]="panel.additionalTaskFields()"
+          [additionalFields]="panel.newTaskBarFields()"
+          [viewPrefill]="panel.newTaskPrefill()"
           [tagsToRemove]="panel.tagsToRemoveForInlineCreate()"
           [taskIdsToExclude]="panel.panelCfg().taskIds"
           (afterTaskAdd)="panel.afterTaskAdd($event)"

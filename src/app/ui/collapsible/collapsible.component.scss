@@ -41,7 +41,21 @@
 // Flat sections (a view's sections): no line under the header; the rows'
 // edges draw none either (`.task-list-no-top-line`), space separates them.
 :host(.task-section.task-section-flat) .collapsible-header {
+  min-height: var(--bar-height-small);
   border-bottom-color: transparent;
+}
+
+// With no line under it, the heading itself carries the section.
+:host(.task-section.task-section-flat) .collapsible-title {
+  font-size: var(--font-size-md);
+  letter-spacing: normal;
+  color: var(--text-color);
+}
+
+.collapsible-count {
+  margin-left: var(--s);
+  font-weight: 400;
+  color: var(--text-color-muted);
 }
 
 .collapsible-header {

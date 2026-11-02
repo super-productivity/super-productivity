@@ -88,6 +88,33 @@ export const getNewTaskFields = (
 };
 
 /**
+ * What the add-task bar shows as chips (project, tags, planned day). For a task created there the user's choice wins: the panel's rules
+ * don't change these afterwards.
+ */
+const BAR_CHOICE_KEYS: readonly (keyof TaskMatchChanges)[] = [
+  'projectId',
+  'tagIds',
+  'scheduleDay',
+  'isUnschedule',
+];
+
+/** The changes without the ones the add-task bar left to the user. */
+export const withoutBarChoices = (changes: TaskMatchChanges): TaskMatchChanges =>
+  Object.fromEntries(
+    Object.entries(changes).filter(
+      ([key]) => !BAR_CHOICE_KEYS.includes(key as keyof TaskMatchChanges),
+    ),
+  );
+
+/**
+ * Whether a task created with the add-task bar's choices stays outside the
+ * panel: it needs a change the bar left to the user, or no change can make it
+ * match.
+ */
+export const isHiddenByBarChoices = (changes: TaskMatchChanges | null): boolean =>
+  !changes || BAR_CHOICE_KEYS.some((key) => changes[key] !== undefined);
+
+/**
  * The panel's tasks in its order: the stored manual order first (the first
  * occurrence of a repeated id counts), then matches it doesn't list yet; a
  * sort, when set, orders the result.

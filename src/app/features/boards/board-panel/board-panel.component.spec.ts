@@ -1484,11 +1484,13 @@ describe('BoardPanelComponent - drop()', () => {
       fixture.componentRef.setInput('isListLayout', true);
       fixture.detectChanges();
 
-      expect(component.newTaskTarget()).toEqual({
-        additionalFields: { priority: 3, projectId: INBOX_PROJECT.id },
-        tagsToRemove: [],
-        taskIdsToExclude: [],
-      });
+      expect(component.newTaskTarget()).toEqual(
+        jasmine.objectContaining({
+          additionalFields: { priority: 3, projectId: INBOX_PROJECT.id },
+          tagsToRemove: [],
+          taskIdsToExclude: [],
+        }),
+      );
 
       fixture.componentRef.setInput('panelCfg', listPanel({ dueState: 'overdue' }));
       fixture.detectChanges();
@@ -2034,7 +2036,7 @@ describe('BoardPanelComponent - drop()', () => {
       expect(component.isMoving()).toBeFalse();
     });
 
-    it('schedules a task added inline, new or existing, for the panel day', async () => {
+    it('schedules an existing task added inline for the panel day; a new one keeps the bar day', async () => {
       const tasks = [mkTask({ id: 'new' }), mkTask({ id: 'old' })];
       await setup(tasks);
       fixture.componentRef.setInput('panelCfg', {
@@ -2062,10 +2064,45 @@ describe('BoardPanelComponent - drop()', () => {
         time: null,
         remindOption: null,
       };
-      expect(scheduleForSpy.calls.allArgs()).toEqual([
-        [today, [tasks[0]]],
-        [today, [tasks[1]]],
-      ]);
+      expect(scheduleForSpy.calls.allArgs()).toEqual([[today, [tasks[1]]]]);
+    });
+
+    it('prefills the panel day and tags as chips, and tells when a change hides the task', async () => {
+      await setup([]);
+      fixture.componentRef.setInput('panelCfg', {
+        ...DEFAULT_PANEL_CFG,
+        id: 'p',
+        dueState: 'today',
+        priorityRule: '3',
+      });
+      fixture.detectChanges();
+
+      const prefill = component.newTaskPrefill();
+      expect(prefill.fields).toEqual({ dueDay: '2026-09-12' });
+      expect(component.newTaskBarFields()).toEqual(
+        jasmine.objectContaining({ priority: 3 }),
+      );
+      expect(prefill.isHidden(prefill.fields)).toBeFalse();
+      // No project picked in the bar: the default one, not none.
+      expect(prefill.isHidden({ ...prefill.fields, projectId: undefined })).toBeFalse();
+      expect(prefill.isHidden({})).toBeTrue();
+      expect(prefill.isHidden({ dueDay: '2026-09-20' })).toBeTrue();
+    });
+
+    it('prefills the tags all of which a section needs; removing one hides the task', async () => {
+      await setup([]);
+      fixture.componentRef.setInput('panelCfg', {
+        ...DEFAULT_PANEL_CFG,
+        id: 'p',
+        includedTagIds: ['need', 'keep'],
+      });
+      fixture.detectChanges();
+
+      const prefill = component.newTaskPrefill();
+      expect(prefill.fields).toEqual({ tagIds: ['need', 'keep'] });
+      expect(prefill.isHidden(prefill.fields)).toBeFalse();
+      expect(prefill.isHidden({ tagIds: ['keep', 'need', 'x'] })).toBeFalse();
+      expect(prefill.isHidden({ tagIds: ['keep'] })).toBeTrue();
     });
 
     it('sets priority (in the task update) and the deadline a column asks for', async () => {

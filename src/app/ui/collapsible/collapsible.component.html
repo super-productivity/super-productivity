@@ -20,11 +20,19 @@
       class="collapsible-title is-drag-handle"
       cdkDragHandle
     >
-      {{ title() }}
+      {{ title() }}<ng-container [ngTemplateOutlet]="countTpl"></ng-container>
     </div>
   } @else {
-    <div class="collapsible-title">{{ title() }}</div>
+    <div class="collapsible-title">
+      {{ title() }}<ng-container [ngTemplateOutlet]="countTpl"></ng-container>
+    </div>
   }
+
+  <ng-template #countTpl>
+    @if (count() !== undefined) {
+      <span class="collapsible-count">{{ count() }}</span>
+    }
+  </ng-template>
 
   <ng-content select="[actions]"></ng-content>
 
