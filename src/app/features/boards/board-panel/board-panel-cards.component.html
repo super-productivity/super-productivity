@@ -53,7 +53,7 @@
   ></add-task-bar>
 }
 
-<!-- The scroll area: the open cards (the drop list), then the done group. -->
+<!-- The scroll area: the open cards (the drop list), then the done ones. -->
 <div
   class="task-items"
   cdkScrollable
@@ -84,58 +84,31 @@
       </planner-task>
     }
   </div>
-  @if (panel.mainItems().length > panel.shownMain().length) {
-    <ng-container
-      [ngTemplateOutlet]="showAll"
-      [ngTemplateOutletContext]="{ $implicit: panel.mainItems() }"
-    ></ng-container>
-  }
-  @if (panel.doneItems().length) {
-    <!-- Done cards stay put, like the done rows: no drag, no moves. -->
-    <collapsible
-      class="done-group"
-      [title]="(T.WW.DONE_TASKS | translate) + ' (' + panel.doneItems().length + ')'"
-      [isIconBefore]="true"
-      [isExpanded]="panel.isDoneListExpanded()"
-      (isExpandedChange)="panel.isDoneListExpanded.set($event)"
+  <!-- Done cards follow the open ones and stay put, like the done rows: no
+       drag, no moves. -->
+  @for (task of panel.shownDone(); track task.id) {
+    <planner-task
+      [task]="task"
+      [focusable]="true"
+      [tagsToHide]="panel.tagsToHide()"
     >
-      @if (panel.isDoneListExpanded()) {
-        @for (task of panel.shownDone(); track task.id) {
-          <planner-task
-            [task]="task"
-            [focusable]="true"
-            [tagsToHide]="panel.tagsToHide()"
-          >
-            <ng-container
-              ngProjectAs="[task-card-trailing]"
-              [ngTemplateOutlet]="scheduleButtons"
-              [ngTemplateOutletContext]="{ $implicit: task }"
-            ></ng-container>
-          </planner-task>
-        }
-        @if (panel.doneItems().length > panel.shownDone().length) {
-          <ng-container
-            [ngTemplateOutlet]="showAll"
-            [ngTemplateOutletContext]="{ $implicit: panel.doneItems() }"
-          ></ng-container>
-        }
-      }
-    </collapsible>
+      <ng-container
+        ngProjectAs="[task-card-trailing]"
+        [ngTemplateOutlet]="scheduleButtons"
+        [ngTemplateOutletContext]="{ $implicit: task }"
+      ></ng-container>
+    </planner-task>
+  }
+  @if (panel.hasHiddenItems()) {
+    <button
+      mat-button
+      class="show-all-btn"
+      (click)="panel.showAll()"
+    >
+      {{ T.F.BOARDS.V.SHOW_ALL | translate: { count: panel.allItems().length } }}
+    </button>
   }
 </div>
-
-<ng-template
-  #showAll
-  let-items
->
-  <button
-    mat-button
-    class="show-all-btn"
-    (click)="panel.showAll(items)"
-  >
-    {{ T.F.BOARDS.V.SHOW_ALL | translate: { count: items.length } }}
-  </button>
-</ng-template>
 
 <ng-template
   #scheduleButtons

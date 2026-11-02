@@ -38,6 +38,12 @@
   border-bottom-color: var(--divider-color);
 }
 
+// Flat sections (a view's sections): no line under the header; the rows'
+// edges draw none either (`.task-list-no-top-line`), space separates them.
+:host(.task-section.task-section-flat) .collapsible-header {
+  border-bottom-color: transparent;
+}
+
 .collapsible-header {
   &:focus-visible {
     outline: var(--focus-ring-width) solid var(--focus-ring-color);

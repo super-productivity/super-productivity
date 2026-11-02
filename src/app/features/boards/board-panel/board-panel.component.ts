@@ -637,33 +637,46 @@ export class BoardPanelComponent implements TaskCardList, ViewTaskListHost {
 
   // === WHAT THE PANEL SHOWS (both renderers) ===
 
-  /** Cards, or the list layout's top-level rows; done ones in their own group. */
+  /** Cards, or the list layout's top-level rows; done ones after the open ones. */
   private readonly _items = computed(() =>
     getPanelItems(this.tasks(), this.panelCfg(), this.isListLayout()),
   );
   readonly mainItems = computed(() => this._items().main, { equal: fastArrayCompare });
   readonly doneItems = computed(() => this._items().done, { equal: fastArrayCompare });
+  /** Everything the panel shows, open then done (as rendered). */
+  readonly allItems = computed(() => [...this.mainItems(), ...this.doneItems()], {
+    equal: fastArrayCompare,
+  });
   // Same helper as the view editor's live count (`getPanelHeaderCount`).
   readonly headerCount = computed(() => this.mainItems().length);
 
-  // Local only, never synced: the parts past PANEL_SHOWN_LIMIT, shown on
+  // Local only, never synced: the items past PANEL_SHOWN_LIMIT, shown on
   // "Show all" or when a task there is moved, added or focused.
   readonly isShowAll = signal(false);
-  // Local only, never synced: built on first expand (a view across all
-  // projects can hold many done tasks).
-  readonly isDoneListExpanded = signal(false);
-  // Local only, never synced, like the done section.
+  // Local only, never synced.
   readonly isSectionExpanded = signal(true);
 
   /** The main items rendered (capped before anything is built for them). */
   readonly shownMain = computed(() => this._capped(this.mainItems(), this.isShowAll()), {
     equal: fastArrayCompare,
   });
-  /** The done items rendered: none while their group is collapsed. */
+  /**
+   * The done items rendered, after the open ones and within the same cap: a
+   * view across all projects can hold many done tasks.
+   */
   readonly shownDone = computed(
     () =>
-      this.isDoneListExpanded() ? this._capped(this.doneItems(), this.isShowAll()) : [],
+      this.isShowAll()
+        ? this.doneItems()
+        : this.doneItems().slice(
+            0,
+            Math.max(0, PANEL_SHOWN_LIMIT - this.shownMain().length),
+          ),
     { equal: fastArrayCompare },
+  );
+  /** Whether items past the cap aren't rendered ("Show all"). */
+  readonly hasHiddenItems = computed(
+    () => this.allItems().length > this.shownMain().length + this.shownDone().length,
   );
 
   /**
@@ -686,11 +699,11 @@ export class BoardPanelComponent implements TaskCardList, ViewTaskListHost {
   }
 
   /**
-   * "Show all" below a part (`items`): the button goes, so the focus moves to
-   * the first item it revealed.
+   * "Show all" below the items: the button goes, so the focus moves to the
+   * first item it revealed (rendered: open then done).
    */
-  showAll(items: readonly TaskCopy[]): void {
-    const taskId = items[PANEL_SHOWN_LIMIT]?.id;
+  showAll(): void {
+    const taskId = this.allItems()[PANEL_SHOWN_LIMIT]?.id;
     this.isShowAll.set(true);
     afterNextRender(() => this._focusRowNow(PANEL_SHOWN_LIMIT, taskId), {
       injector: this._injector,
@@ -714,11 +727,11 @@ export class BoardPanelComponent implements TaskCardList, ViewTaskListHost {
   /** Shows the whole panel when one of the tasks is past the limit. */
   private _reveal(taskIds: readonly string[]): boolean {
     if (this.isShowAll()) return false;
-    const isHidden = (items: TaskCopy[]): boolean =>
-      items.slice(PANEL_SHOWN_LIMIT).some((task) => taskIds.includes(task.id));
+    const isHidden = (items: TaskCopy[], shown: number): boolean =>
+      items.slice(shown).some((task) => taskIds.includes(task.id));
     if (
-      isHidden(this.mainItems()) ||
-      (this.isDoneListExpanded() && isHidden(this.doneItems()))
+      isHidden(this.mainItems(), this.shownMain().length) ||
+      isHidden(this.doneItems(), this.shownDone().length)
     ) {
       this.isShowAll.set(true);
       return true;

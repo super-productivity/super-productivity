@@ -3,7 +3,7 @@
        The body is built only while expanded (projected content would be
        created even when collapsed). -->
   <collapsible
-    class="task-section"
+    class="task-section task-section-flat"
     [title]="(panel.panelCfg().title | translate) + ' (' + panel.headerCount() + ')'"
     [isIconBefore]="true"
     [isGroup]="true"
@@ -95,8 +95,14 @@
 }
 
 <ng-template #listBody>
-  <!-- Rows reorder the view through VIEW_TASK_LIST (see BoardPanelComponent). -->
+  <!-- Rows reorder the view through VIEW_TASK_LIST (see BoardPanelComponent).
+       Done rows follow the open ones in a list of their own: they don't move.
+       Edge classes: a flat section draws no line at its edges, and the done
+       list none above its first row (the open list's last line is there). -->
+  @let hasDone = panel.shownDone().length > 0;
   <task-list
+    [class.task-list-no-top-line]="panel.isSection()"
+    [class.task-list-no-bottom-line]="panel.isSection() && !hasDone"
     [tasks]="panel.mainRows()"
     listId="PARENT"
     listModelId="VIEW"
@@ -107,46 +113,23 @@
         : (T.F.PLANNER.NO_TASKS | translate)
     "
   ></task-list>
-  @if (panel.mainItems().length > panel.shownMain().length) {
-    <ng-container
-      [ngTemplateOutlet]="showAll"
-      [ngTemplateOutletContext]="{ $implicit: panel.mainItems() }"
-    ></ng-container>
+  @if (hasDone) {
+    <task-list
+      class="done-rows task-list-no-top-line"
+      [class.task-list-no-bottom-line]="panel.isSection()"
+      [tasks]="panel.doneRows()"
+      listId="PARENT"
+      listModelId="VIEW_DONE"
+      [isSortingDisabled]="true"
+    ></task-list>
   }
-  @if (panel.doneItems().length) {
-    <collapsible
-      [title]="(T.WW.DONE_TASKS | translate) + ' (' + panel.doneItems().length + ')'"
-      [isIconBefore]="true"
-      [isExpanded]="panel.isDoneListExpanded()"
-      (isExpandedChange)="panel.isDoneListExpanded.set($event)"
+  @if (panel.hasHiddenItems()) {
+    <button
+      mat-button
+      class="show-all-btn"
+      (click)="panel.showAll()"
     >
-      @if (panel.isDoneListExpanded()) {
-        <task-list
-          [tasks]="panel.doneRows()"
-          listId="PARENT"
-          listModelId="VIEW_DONE"
-          [isSortingDisabled]="true"
-        ></task-list>
-        @if (panel.doneItems().length > panel.shownDone().length) {
-          <ng-container
-            [ngTemplateOutlet]="showAll"
-            [ngTemplateOutletContext]="{ $implicit: panel.doneItems() }"
-          ></ng-container>
-        }
-      }
-    </collapsible>
+      {{ T.F.BOARDS.V.SHOW_ALL | translate: { count: panel.allItems().length } }}
+    </button>
   }
-</ng-template>
-
-<ng-template
-  #showAll
-  let-items
->
-  <button
-    mat-button
-    class="show-all-btn"
-    (click)="panel.showAll(items)"
-  >
-    {{ T.F.BOARDS.V.SHOW_ALL | translate: { count: items.length } }}
-  </button>
 </ng-template>
