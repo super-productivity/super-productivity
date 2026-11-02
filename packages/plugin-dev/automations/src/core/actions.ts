@@ -1,4 +1,5 @@
 import { AutomationContext, IAutomationAction } from './definitions';
+import { getRulePriority, toTaskPriority } from './priority';
 
 const resolveTagId = async (ctx: AutomationContext, value: string): Promise<string | null> => {
   const tag = (await ctx.dataCache.getTags()).find((t) => t.id === value || t.title === value);
@@ -101,6 +102,29 @@ export const ActionMoveToProject: IAutomationAction = {
 
     await ctx.plugin.updateTask(event.task.id, { projectId: project.id });
     ctx.plugin.log.info(`[Automation] Action: Moved task to project "${project.title}"`);
+  },
+};
+
+export const ActionSetPriority: IAutomationAction = {
+  id: 'setPriority',
+  name: 'Set Priority',
+  execute: async (ctx, event, value) => {
+    if (!event.task || !value) {
+      ctx.plugin.log.warn(`[Automation] Cannot set priority "${value}" without task context.`);
+      return;
+    }
+    const priority = toTaskPriority(value);
+    if (priority === undefined) {
+      ctx.plugin.log.warn(
+        `[Automation] Invalid priority "${value}". Use high, medium, low or none.`,
+      );
+      return;
+    }
+    // Also stops a taskUpdated rule from re-firing on its own change.
+    if (getRulePriority(event.task.priority) === getRulePriority(priority)) return;
+
+    await ctx.plugin.updateTask(event.task.id, { priority });
+    ctx.plugin.log.info(`[Automation] Action: Set priority "${value}"`);
   },
 };
 

@@ -57,7 +57,7 @@ export function RuleEditor(props: RuleEditorProps) {
 
   const allowedConditionTypes = (): import('../../types').ConditionType[] => {
     if (isTimeBased()) return [];
-    return ['titleContains', 'titleStartsWith', 'projectIs', 'hasTag', 'weekdayIs'];
+    return ['titleContains', 'titleStartsWith', 'projectIs', 'hasTag', 'weekdayIs', 'priorityIs'];
   };
 
   const allowedActionTypes = (): import('../../types').ActionType[] => {
@@ -70,6 +70,7 @@ export function RuleEditor(props: RuleEditorProps) {
       'addTag',
       'removeTag',
       'moveToProject',
+      'setPriority',
       'displaySnack',
       'displayDialog',
       'webhook',

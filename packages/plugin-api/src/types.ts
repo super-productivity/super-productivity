@@ -356,6 +356,11 @@ export interface Task {
   timeEstimate: number;
   timeSpent: number;
   isDone: boolean;
+  /**
+   * 1/'low' = Low, 2/'medium' = Medium, 3/'high' = High; undefined and null
+   * both mean no priority. Older data may use the strings; write numbers.
+   */
+  priority?: 1 | 2 | 3 | 'high' | 'medium' | 'low' | null;
   projectId: string | null;
   tagIds: string[];
   parentId?: string | null;
