@@ -13,15 +13,21 @@
     <span class="row-label">{{ T.F.BOARDS.EDITOR.ADD_RULE | translate }}</span>
   </button>
 } @else {
-  <button
-    class="add-rule"
-    mat-button
-    type="button"
-    [matMenuTriggerFor]="menu"
-  >
-    <mat-icon>add</mat-icon>
-    {{ T.F.BOARDS.EDITOR.ADD_RULE | translate }}
-  </button>
+  <!-- A dashed chip: the next rule of the row, not a section. -->
+  <span class="chip chip--add">
+    <button
+      class="chip-main add-rule focus-ring"
+      type="button"
+      [matMenuTriggerFor]="menu"
+    >
+      <mat-icon
+        class="chip-icon"
+        aria-hidden="true"
+        >add</mat-icon
+      >
+      {{ T.F.BOARDS.EDITOR.ADD_RULE | translate }}
+    </button>
+  </span>
 }
 
 <mat-menu

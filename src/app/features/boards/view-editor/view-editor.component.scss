@@ -95,10 +95,9 @@
   display: none;
 }
 
-// A flat list: "Add section" below a rule, quiet.
+// A flat list: "Add section" below a rule, apart from the section's rules.
 .add-section {
-  margin-top: calc(-1 * var(--s));
-  padding-top: var(--s);
+  padding-top: var(--s2);
   border-top: 1px solid var(--divider-color);
 }
 

@@ -5,7 +5,6 @@ import {
   input,
   output,
 } from '@angular/core';
-import { MatButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import {
   MatMenu,
@@ -18,22 +17,14 @@ import { T } from '../../../../t.const';
 import { getAddRuleMenu, VIEW_RULE_LABELS, ViewRuleId } from '../view-editor.util';
 
 /**
- * "Add rule" as a text button (a full-width row on a phone): its menu lists
+ * "Add rule" as a dashed chip (a full-width row on a phone): its menu lists
  * every rule by group; rules the section shows are checked, rules that
  * contradict one it shows say which.
  */
 @Component({
   selector: 'view-add-rule-chip',
   standalone: true,
-  imports: [
-    MatButton,
-    MatIcon,
-    MatMenu,
-    MatMenuContent,
-    MatMenuItem,
-    MatMenuTrigger,
-    TranslatePipe,
-  ],
+  imports: [MatIcon, MatMenu, MatMenuContent, MatMenuItem, MatMenuTrigger, TranslatePipe],
   templateUrl: './view-add-rule-chip.component.html',
   styleUrl: '../view-editor-chip.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

@@ -24,6 +24,20 @@
   line-height: var(--line-height-snug);
 }
 
+// "Add rule": an action at the end of the rules, not a rule.
+.chip--add {
+  border-style: dashed;
+
+  .chip-main {
+    padding-inline-end: var(--s);
+    color: var(--c-primary);
+  }
+
+  .chip-icon {
+    color: inherit;
+  }
+}
+
 .chip--warn {
   border-color: var(--color-warning);
 }

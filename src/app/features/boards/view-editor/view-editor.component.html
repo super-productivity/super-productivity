@@ -99,11 +99,11 @@
           }}
         </h3>
         <button
-          mat-button
+          mat-stroked-button
           type="button"
           (click)="addPanel()"
         >
-          <mat-icon>add</mat-icon>
+          <mat-icon>{{ isBoard() ? 'view_week' : 'playlist_add' }}</mat-icon>
           {{
             (isBoard() ? T.F.BOARDS.EDITOR.ADD_COLUMN : T.F.BOARDS.EDITOR.ADD_SECTION)
               | translate
@@ -150,13 +150,14 @@
   </div>
 
   @if (!isSectionTitleShown()) {
+    <!-- A structural action, apart from the rules: outlined, its own icon. -->
     <div class="add-section">
       <button
-        mat-button
+        mat-stroked-button
         type="button"
         (click)="addPanel()"
       >
-        <mat-icon>add</mat-icon>
+        <mat-icon>playlist_add</mat-icon>
         {{ T.F.BOARDS.EDITOR.ADD_SECTION | translate }}
       </button>
     </div>
