@@ -1,5 +1,18 @@
 [
   {
+    "name": "Markdown Notes",
+    "shortDescription": "Read-only viewer for Markdown and Obsidian notes from a local folder, grouped by directory and rendered in a side panel.",
+    "url": "https://github.com/Zoriot/sp-markdown-notes",
+    "author": "Zoriot",
+    "authorUrl": "https://github.com/Zoriot",
+    "id": "markdown-notes",
+    "release": {
+      "version": "0.1.1",
+      "downloadUrl": "https://github.com/Zoriot/sp-markdown-notes/releases/download/v0.1.1/markdown-notes-0.1.1.zip",
+      "sha256": "ee3d66a1c9db02c3a7440f5e992a94fe46478b536e3f25d9e3c49dec537fa53a"
+    }
+  },
+  {
     "name": "Date Range Reporter Plugin",
     "shortDescription": "Generates reports of completed tasks and tasks with work logs within a specified date range.",
     "url": "https://github.com/dougcooper/sp-reporter",
@@ -209,6 +222,45 @@
       "version": "1.0.0",
       "downloadUrl": "https://github.com/Zoriot/sp-monday/releases/download/v1.0.0/sp-monday-1.0.0.zip",
       "sha256": "e4ecd2e726e9f7716e6cd526cf755bc9957f6f0ed342fd62b7df4406d331ba5d"
+    }
+  },
+  {
+    "name": "Timesheet",
+    "shortDescription": "Weekly timesheet and charts of your tracked time: days by project, a 12-week trend, daily targets, manual entries, CSV export, and hours kept after a task is deleted.",
+    "url": "https://github.com/AshrafByte/sp-timesheet",
+    "author": "AshrafByte",
+    "authorUrl": "https://github.com/AshrafByte",
+    "id": "sp-timesheet",
+    "release": {
+      "version": "2.0.1",
+      "downloadUrl": "https://github.com/AshrafByte/sp-timesheet/releases/download/v2.0.1/sp-timesheet-v2.0.1.zip",
+      "sha256": "627d56200730436d0cc70586422ad30512d49da80c041e4e6eb1cf405f4471d0"
+    }
+  },
+  {
+    "name": "Daily Quest",
+    "shortDescription": "Experimental: an adventure map from a buff to your boss task to a recovery break, with the boss's subtasks as steps along the trail.",
+    "url": "https://github.com/super-productivity/ridonculous/tree/main/plugins/daily-quest",
+    "author": "super-productivity",
+    "authorUrl": "https://github.com/super-productivity",
+    "id": "ridonculous-daily-quest",
+    "release": {
+      "version": "0.3.0",
+      "downloadUrl": "https://github.com/super-productivity/ridonculous/releases/download/daily-quest-v0.3.0/ridonculous-daily-quest-0.3.0.zip",
+      "sha256": "22c91f677dd93faed17a7fb78af682da3d13f3c0d8cea293d9cbd9c7c991c9c4"
+    }
+  },
+  {
+    "name": "Stadium Mode",
+    "shortDescription": "Experimental: a roaring crowd and a stadium announcer for every task you start, finish, postpone or delete. An optional neural voice downloads about 110 MB after you confirm.",
+    "url": "https://github.com/super-productivity/ridonculous/tree/main/plugins/stadium-mode",
+    "author": "super-productivity",
+    "authorUrl": "https://github.com/super-productivity",
+    "id": "ridonculous-stadium-mode",
+    "release": {
+      "version": "0.4.0",
+      "downloadUrl": "https://github.com/super-productivity/ridonculous/releases/download/stadium-mode-v0.4.0/ridonculous-stadium-mode-0.4.0.zip",
+      "sha256": "bc0b07947d2be371471fc50ac2359683c54deff4ffc0d8deb737d96f0d7d69a8"
     }
   }
 ]

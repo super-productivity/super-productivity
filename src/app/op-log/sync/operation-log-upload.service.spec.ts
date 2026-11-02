@@ -2137,6 +2137,52 @@ describe('OperationLogUploadService', () => {
           expect(mockOpLogStore.markRejected).not.toHaveBeenCalled();
         });
 
+        describe('thrown snapshot errors (#11344/#11352)', () => {
+          const pendingImport = (): OperationLogEntry[] => [
+            createFullStateEntry(1, 'my-import', 'client-1', OpType.SyncImport),
+            createMockEntry(2, 'after-import', 'client-1'),
+          ];
+
+          it('re-throws a non-retryable error from a file-based provider, keeping the snapshot pending', async () => {
+            mockApiProvider.providerMode = 'fileSnapshotOps';
+            mockOpLogStore.getUnsynced.and.resolveTo(pendingImport());
+            const error = new Error('HTTP 403 Forbidden');
+            mockApiProvider.uploadSnapshot.and.rejectWith(error);
+
+            await expectAsync(service.uploadPendingOps(mockApiProvider)).toBeRejectedWith(
+              error,
+            );
+
+            expect(mockOpLogStore.markRejected).not.toHaveBeenCalled();
+            expect(mockOpLogStore.markSynced).not.toHaveBeenCalled();
+            expect(mockOpLogStore.deleteOpsWhere).not.toHaveBeenCalled();
+            expect(mockApiProvider.uploadOps).not.toHaveBeenCalled();
+          });
+
+          it('defers a retryable error from a file-based provider without rejecting it', async () => {
+            mockApiProvider.providerMode = 'fileSnapshotOps';
+            mockOpLogStore.getUnsynced.and.resolveTo(pendingImport());
+            mockApiProvider.uploadSnapshot.and.rejectWith(new Error('Network error'));
+
+            const result = await service.uploadPendingOps(mockApiProvider);
+
+            expect(result.rejectedOps).toEqual([]);
+            expect(result.fullStateUploadDeferred).toBe(true);
+            expect(mockApiProvider.uploadOps).not.toHaveBeenCalled();
+          });
+
+          it('still reports a thrown SuperSync refusal as a rejection', async () => {
+            mockOpLogStore.getUnsynced.and.resolveTo(pendingImport());
+            mockApiProvider.uploadSnapshot.and.rejectWith(
+              new Error('HTTP 400 Bad Request'),
+            );
+
+            const result = await service.uploadPendingOps(mockApiProvider);
+
+            expect(result.rejectedOps.map(({ opId }) => opId)).toEqual(['my-import']);
+          });
+        });
+
         it('keeps legacy SYNC_IMPORT_EXISTS message fallback for older providers', async () => {
           const entry = createFullStateEntry(
             1,

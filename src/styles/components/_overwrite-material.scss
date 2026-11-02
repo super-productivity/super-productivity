@@ -187,6 +187,46 @@ body .mat-mdc-dialog-surface {
   }
 }
 
+// Full screen on phones, a normal dialog from xs up: panelClass
+// 'fullscreen-xs-dialog'. Title and actions stay put while the content
+// scrolls (the flex layout above). Three classes: enough to beat the global
+// 96vw cap, and still below the iOS keyboard rule, which keeps capping the
+// height to what the keyboard leaves.
+.cdk-overlay-pane.mat-mdc-dialog-panel.fullscreen-xs-dialog {
+  @include media-queries.mq(xs, max) {
+    --mat-dialog-container-shape: 0;
+    width: 100vw !important;
+    max-width: none !important;
+    height: 100dvh !important;
+    max-height: none !important;
+    margin: 0;
+
+    .mat-mdc-dialog-surface {
+      // Edge-to-edge web views (iOS PWA): keep the content off the notch and
+      // the home indicator.
+      padding: var(--safe-area-top) var(--safe-area-right) var(--safe-area-bottom)
+        var(--safe-area-left);
+    }
+
+    .mat-mdc-dialog-content {
+      max-height: none;
+    }
+  }
+}
+
+// Native mobile pads the overlay wrapper by the safe areas already (above):
+// the pane fills what is left, and the surface needs no padding of its own.
+body.isNativeMobile .mat-mdc-dialog-panel.fullscreen-xs-dialog {
+  @include media-queries.mq(xs, max) {
+    width: calc(100vw - var(--safe-area-left) - var(--safe-area-right)) !important;
+    height: calc(100dvh - var(--safe-area-top) - var(--safe-area-bottom)) !important;
+
+    .mat-mdc-dialog-surface {
+      padding: 0;
+    }
+  }
+}
+
 .project-complete-fullscreen-dialog {
   width: 100vw !important;
   height: 100vh !important;
@@ -518,6 +558,29 @@ body .mat-mdc-button-base .mat-icon {
 .mat-mdc-menu-panel.mat-menu-wide {
   width: min(320px, calc(100vw - var(--s2)));
   max-width: none;
+}
+
+// Opt-in via `<mat-menu class="mat-menu-grouped">` for long action menus whose
+// items are split into groups by unconditional `<mat-divider>`s and wrap icon +
+// label in `.menuItemLeft`. Quiet 20px icons (same as the quick-access row) let
+// the labels lead; Material's default tracking is wider than the app's text.
+.mat-mdc-menu-panel.mat-menu-grouped {
+  --mat-menu-item-label-text-tracking: normal;
+  --mat-menu-item-icon-color: var(--text-color-muted);
+
+  .menuItemLeft > .mat-icon {
+    // Matched set — the glyph must equal its box or it decenters.
+    font-size: 20px;
+    width: 20px;
+    height: 20px;
+  }
+
+  // Groups render conditionally, so a group can be empty: drop the divider
+  // that would double up or sit right under the quick-access row's border.
+  .quick-access + .mat-divider,
+  .mat-divider + .mat-divider {
+    display: none;
+  }
 }
 
 .mat-mdc-menu-content {

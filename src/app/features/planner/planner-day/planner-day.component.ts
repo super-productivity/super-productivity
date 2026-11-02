@@ -9,7 +9,7 @@ import {
 import { T } from '../../../t.const';
 import { TaskMultiSelectService } from '../../tasks/task-multi-select.service';
 import { PlannerDay, ScheduleItem, ScheduleItemType } from '../planner.model';
-import { CdkDrag, CdkDragDrop, CdkDropList } from '@angular/cdk/drag-drop';
+import { CdkDrag, CdkDragDrop, CdkDragStart, CdkDropList } from '@angular/cdk/drag-drop';
 import { TaskCopy } from '../../tasks/task.model';
 import { PlannerActions } from '../store/planner.actions';
 import { millisecondsDiffToRemindOption } from '../../tasks/util/remind-option-to-milliseconds';
@@ -37,6 +37,7 @@ import { dragDelayForTouch } from '../../../util/input-intent';
 import { LayoutService } from '../../../core-ui/layout/layout.service';
 import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
 import { parseDbDateStr } from '../../../util/parse-db-date-str';
+import { ScheduleExternalDragService } from '../../schedule/schedule-week/schedule-external-drag.service';
 import { safeFormatDate } from '../../../util/safe-format-date';
 
 @Component({
@@ -70,6 +71,7 @@ export class PlannerDayComponent {
   private _dateService = inject(DateService);
   private _layoutService = inject(LayoutService);
   private _dateTimeFormatService = inject(DateTimeFormatService);
+  private _externalDragService = inject(ScheduleExternalDragService);
 
   // TODO: Skipped for migration because:
   //  This input is used in a control flow expression (e.g. `@if` or `*ngIf`)
@@ -121,12 +123,35 @@ export class PlannerDayComponent {
     }
   }
 
+  // Register the drag so the side nav (projects, tags) and the schedule panel
+  // can handle drops on them (#11210)
+  onDragStarted(task: TaskCopy, ev: CdkDragStart): void {
+    this._taskService
+      .getByIdWithSubTaskData$(task.id)
+      .subscribe((taskWithSubTasks) =>
+        this._externalDragService.setActiveTask(
+          taskWithSubTasks ?? null,
+          ev.source._dragRef,
+        ),
+      );
+  }
+
+  onDragEnded(): void {
+    this._externalDragService.setActiveTask(null);
+  }
+
   // TODO correct type
   drop(
     targetList: 'TODO' | 'SCHEDULED',
     allItems: TaskCopy[] | ScheduleItem[],
     ev: CdkDragDrop<string, string, TaskCopy>,
   ): void {
+    // the side nav or schedule panel already handled the drop; skip the reorder
+    if (this._externalDragService.isCancelNextDrop()) {
+      this._externalDragService.setCancelNextDrop(false);
+      return;
+    }
+
     const newDay = ev.container.data;
     const task = ev.item.data;
 

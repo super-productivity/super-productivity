@@ -144,6 +144,21 @@ export class LockAcquisitionTimeoutError extends Error {
   }
 }
 
+/**
+ * flushThenRunExclusive could not find a moment with no capture in flight:
+ * actions kept arriving between the flush and the lock. Transient — retrying
+ * once dispatch activity settles succeeds.
+ */
+export class OperationWriteCutoffError extends Error {
+  override name = 'OperationWriteCutoffError';
+
+  constructor(attempts: number) {
+    super(
+      `Operation write cutoff not reached after ${attempts} attempts — continuous dispatch activity. Try again.`,
+    );
+  }
+}
+
 export class UnknownSyncStateError extends Error {
   override name = 'UnknownSyncStateError';
 }

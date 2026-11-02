@@ -3127,8 +3127,8 @@
       "PLANNER": "在{{plannerIcon}} <b>規劃工具</b>中規劃接下來幾天",
       "TASK_MENU_TOUCH": "向左滑動任務以開啟選單：{{playIcon}} <b>開始追蹤時間</b>、{{subtaskIcon}} <b>新增子工作</b>",
       "TASK_MENU_TOUCH_NO_TRACKING": "向左滑動任務以開啟選單，例如{{subtaskIcon}} <b>新增子工作</b>",
-      "TIMER_RUNNING": "計時器正在執行。再按一次{{playIcon}}或 <kbd>{{key}}</kbd> 即可暫停。",
-      "TIMER_RUNNING_TOUCH": "計時器正在執行。點選上方的{{playIcon}}即可暫停。",
+      "TIMER_RUNNING": "計時器正在執行。再按一次{{pauseIcon}}或 <kbd>{{key}}</kbd> 即可暫停。",
+      "TIMER_RUNNING_TOUCH": "計時器正在執行。點選上方的{{pauseIcon}}即可暫停。",
       "TRACK_TIME": "將游標移到任務上，按下{{playIcon}}即可追蹤時間"
     },
     "WANT_MORE": {

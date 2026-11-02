@@ -95,7 +95,7 @@ jobs:
         uses: ./.github/actions/setup-electron-build
 
       - name: Install npm Packages
-        uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08 # v3
+        uses: nick-fields/retry@ad984534de44a9489a53aefd81eb77f87c70dc60 # v4.0.0
         with:
           timeout_minutes: 10
           max_attempts: 3
@@ -214,6 +214,17 @@ jobs:
             exit 1
           fi
           bash tools/assert-deb-desktop-exec.sh "$DEB_FILE"
+
+      # #11136: same for the .rpm, plus the %posttrans that keeps the link on upgrade.
+      - name: Verify .rpm desktop entry Exec
+        run: |
+          set -euo pipefail
+          RPM_FILE=$(find ./.tmp/app-builds -type f -name '*.rpm' -print -quit)
+          if [ -z "$RPM_FILE" ]; then
+            echo "::error::no .rpm produced in .tmp/app-builds"
+            exit 1
+          fi
+          bash tools/assert-rpm-desktop-exec.sh "$RPM_FILE"
 
       - name: Normalize snap file name
         if: false == startsWith(github.ref, 'refs/tags/v')
@@ -519,7 +530,7 @@ jobs:
       # no longer downloads the Electron binary; electron-builder fetches its
       # own copy when packaging.)
       - name: Install npm Packages
-        uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08 # v3
+        uses: nick-fields/retry@ad984534de44a9489a53aefd81eb77f87c70dc60 # v4.0.0
         with:
           timeout_minutes: 10
           max_attempts: 3
@@ -613,7 +624,7 @@ jobs:
       # the Electron binary; electron-builder fetches its own copy when
       # packaging.)
       - name: Install npm Packages
-        uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08 # v3
+        uses: nick-fields/retry@ad984534de44a9489a53aefd81eb77f87c70dc60 # v4.0.0
         with:
           timeout_minutes: 10
           max_attempts: 3

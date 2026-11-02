@@ -103,6 +103,20 @@ class CaptureInboxTest {
         assertEquals(1, JSONArray(inbox.pendingJson()).length())
     }
 
+    @Test
+    fun widgetQuickAddIsATrimmedTitleCaptureNotAShare() {
+        val inbox = inbox()
+        val id = inbox.add("  Call Anna @tomorrow ", CaptureInbox.SOURCE_WIDGET)
+
+        val captures = JSONArray(inbox.pendingJson())
+        assertEquals(1, captures.length())
+        val entry = captures.getJSONObject(0)
+        assertEquals(id, entry.getString("id"))
+        assertEquals("Call Anna @tomorrow", entry.getString("title"))
+        assertEquals("widget", entry.getString("source"))
+        assertEquals(0, JSONArray(inbox.pendingSharesJson()).length())
+    }
+
     private fun share(text: String = "https://example.com/a") =
         SharePayload.build(text, null, null, createdAt = 1)!!
 

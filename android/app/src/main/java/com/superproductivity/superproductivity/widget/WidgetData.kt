@@ -1,5 +1,6 @@
 package com.superproductivity.superproductivity.widget
 
+import org.json.JSONArray
 import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -8,7 +9,9 @@ data class WidgetTask(
     val id: String,
     val title: String,
     val isDone: Boolean,
-    val projectColor: String?
+    val projectColor: String?,
+    /** A quick add the app has not imported yet; it has no task to toggle. */
+    val isPending: Boolean = false
 )
 
 /** The task currently being tracked — on this device or, via SuperSync presence, a remote one. */
@@ -97,6 +100,31 @@ object WidgetData {
             )
         }
         return result
+    }
+
+    /**
+     * Puts the title captures from [CaptureInbox.pendingJson] (widget quick adds)
+     * above the snapshot, newest first like the add bar's add-to-top. Not a Today
+     * rule mirrored natively: the app imports every title capture into Today by
+     * contract (AndroidCaptureImportService). The capture id becomes the task id,
+     * so one already in the snapshot (imported, not yet acknowledged) shows once.
+     */
+    fun withPendingCaptures(tasks: List<WidgetTask>, capturesJson: String): List<WidgetTask> {
+        val known = tasks.mapTo(HashSet()) { it.id }
+        val captures = JSONArray(capturesJson)
+        val pending = (0 until captures.length())
+            .map { captures.getJSONObject(it) }
+            .filter { it.getString("id") !in known }
+            .map {
+                WidgetTask(
+                    id = it.getString("id"),
+                    title = it.getString("title"),
+                    isDone = false,
+                    projectColor = null,
+                    isPending = true
+                )
+            }
+        return pending.asReversed() + tasks
     }
 
     /**

@@ -69,10 +69,6 @@ const COMMUNITY_DOWNLOAD_ERROR_KEYS: Record<CommunityPluginDownloadFailure, stri
   manifestMismatch: T.PLUGINS.COMMUNITY_MANIFEST_MISMATCH,
 };
 
-interface PluginManifestAuthor {
-  author?: unknown;
-}
-
 /**
  * The app's Chinese codes stand for scripts, not regions: `zh` is Simplified
  * and `zh-tw` is Traditional. Read literally, `zh-tw` would be "Chinese (Taiwan)".
@@ -369,7 +365,8 @@ export class PluginManagementComponent {
   }
 
   getPluginAuthor(plugin: PluginInstance): string | null {
-    const author = (plugin.manifest as PluginManifestAuthor).author;
+    // Manifests are third-party JSON: the declared type is not a guarantee.
+    const author: unknown = plugin.manifest.author;
     return typeof author === 'string' && author.trim().length > 0 ? author.trim() : null;
   }
 

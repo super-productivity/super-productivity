@@ -16,7 +16,10 @@ import {
 } from '../global-config.model';
 import type { KeyboardConfig } from '@sp/keyboard-config';
 import { DEFAULT_GLOBAL_CONFIG } from '../default-global-config.const';
-import { getInitialAppFeatures } from '../new-install-app-features.const';
+import {
+  getInitialNewInstallSections,
+  NewInstallConfigSections,
+} from '../new-install-config.const';
 import { loadAllData } from '../../../root-store/meta/load-all-data.action';
 import { getHoursFromClockString } from '../../../util/get-hours-from-clock-string';
 import { isValidSplitTime } from '../../../util/is-valid-split-time';
@@ -105,6 +108,18 @@ export const selectPomodoroConfig = createConfigSectionSelector('pomodoro');
 export const selectFlowtimeConfig = createConfigSectionSelector('flowtime');
 export const selectReminderConfig = createConfigSectionSelector('reminder');
 export const selectAppFeaturesConfig = createConfigSectionSelector('appFeatures');
+export const selectNewInstallSections = createSelector(
+  selectAppFeaturesConfig,
+  selectIdleConfig,
+  selectTakeABreakConfig,
+  selectFocusModeConfig,
+  (appFeatures, idle, takeABreak, focusMode): NewInstallConfigSections => ({
+    appFeatures,
+    idle,
+    takeABreak,
+    focusMode,
+  }),
+);
 export const selectIsFocusModeEnabled = createSelector(
   selectConfigFeatureState,
   (cfg): boolean =>
@@ -115,7 +130,7 @@ export const selectIsFocusModeEnabled = createSelector(
 export const initialGlobalConfigState: GlobalConfigState = {
   ...DEFAULT_GLOBAL_CONFIG,
   // New installs start calm; existing data keeps its own values (see loadAllData).
-  appFeatures: getInitialAppFeatures(),
+  ...getInitialNewInstallSections(),
 };
 
 const migrateKeyboardConfig = (cfg: KeyboardConfig | undefined): KeyboardConfig => {

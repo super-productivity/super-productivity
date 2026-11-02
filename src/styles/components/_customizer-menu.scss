@@ -20,6 +20,16 @@
   }
 }
 
+// The current value next to a menu item's label, or why it is disabled (a
+// view's filter that differs per section). Also used in the submenus, which
+// don't carry the `customizer-menu` class.
+.current-value {
+  padding-left: 16px;
+  font-size: 0.875em;
+  opacity: 0.7;
+  font-style: italic;
+}
+
 .customizer-menu {
   .mat-mdc-menu-item {
     &.active {
@@ -28,11 +38,14 @@
     }
   }
 
-  .current-value {
-    padding-left: 16px;
-    font-size: 0.875em;
-    opacity: 0.7;
-    font-style: italic;
+  .tag-filter-mode-toggle {
+    display: flex;
+    gap: var(--s-half);
+    padding: var(--s-half) 0;
+
+    .is-active {
+      font-weight: 500;
+    }
   }
 
   mat-icon:first-child:not(.check-icon) {

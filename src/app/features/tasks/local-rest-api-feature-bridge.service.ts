@@ -1,7 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import { Store } from '@ngrx/store';
 import { firstValueFrom } from 'rxjs';
-import { LocalRestApiFeatureBridge } from '../../core/electron/local-rest-api-feature-bridge';
 import { TaskLog } from '../../core/log';
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 import { DEFAULT_GLOBAL_CONFIG } from '../config/default-global-config.const';
@@ -14,9 +13,14 @@ import { TaskMoveToProjectService } from './task-move-to-project.service';
 import { TaskService } from './task.service';
 import { withRemindAtForDueChange } from './util/with-remind-at-for-due-change';
 
-/** Features-side implementation of `LOCAL_REST_API_FEATURE_BRIDGE`. */
-@Injectable()
-export class LocalRestApiFeatureBridgeService implements LocalRestApiFeatureBridge {
+/**
+ * Task operations the Local REST API task routes need that `TaskService`
+ * doesn't offer as such: the issue link lookup, literal subtask titles,
+ * back-filled time, project moves without the confirm dialog and due-time
+ * changes that move the reminder.
+ */
+@Injectable({ providedIn: 'root' })
+export class LocalRestApiFeatureBridgeService {
   private readonly _issueService = inject(IssueService);
   private readonly _taskService = inject(TaskService);
   private readonly _taskMoveToProjectService = inject(TaskMoveToProjectService);

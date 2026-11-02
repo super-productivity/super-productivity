@@ -2,13 +2,19 @@ import { TestBed, ComponentFixture, fakeAsync, tick } from '@angular/core/testin
 import { DateTimePickerComponent } from './datetime-picker.component';
 import { DateService } from '../../core/date/date.service';
 import { GlobalConfigService } from '../../features/config/global-config.service';
-import { MatNativeDateModule } from '@angular/material/core';
+import { DateAdapter, MatNativeDateModule } from '@angular/material/core';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { TranslateModule, TranslateService, TranslateStore } from '@ngx-translate/core';
 import { signal } from '@angular/core';
 import { TaskReminderOptionId } from '../../features/tasks/task.model';
 import { IS_ELECTRON_TOKEN } from '../../app.constants';
 import { IS_ANDROID_WEB_VIEW_TOKEN } from '../../util/is-android-web-view';
+import { CustomDateAdapter } from '../../core/date-time-format/custom-date-adapter';
+import {
+  DateTimeFormatService,
+  SYSTEM_USES_24H_CLOCK,
+} from '../../core/date-time-format/date-time-format.service';
+import { DateTimeLocales } from '../../core/locale.constants';
 
 describe('DateTimePickerComponent', () => {
   let component: DateTimePickerComponent;
@@ -427,5 +433,138 @@ describe('DateTimePickerComponent', () => {
 
       expect(emitted).toEqual(['today', 'tomorrow', 'nextWeek', 'nextMonth']);
     });
+  });
+});
+
+describe('DateTimePickerComponent time field clock format (#8565)', () => {
+  let fixture: ComponentFixture<DateTimePickerComponent>;
+
+  const setup = async (uiLang: string, dateTimeLocale: string): Promise<void> => {
+    TestBed.resetTestingModule();
+    await TestBed.configureTestingModule({
+      imports: [
+        DateTimePickerComponent,
+        NoopAnimationsModule,
+        TranslateModule.forRoot(),
+        MatNativeDateModule,
+      ],
+      providers: [
+        {
+          provide: DateService,
+          useValue: jasmine.createSpyObj('DateService', ['isToday', 'todayStr']),
+        },
+        {
+          provide: GlobalConfigService,
+          useValue: { localization: signal({ dateTimeLocale }), cfg: signal({}) },
+        },
+        { provide: DateAdapter, useClass: CustomDateAdapter },
+        // the native time input would render 12h AM/PM here
+        { provide: SYSTEM_USES_24H_CLOCK, useValue: false },
+        { provide: IS_ELECTRON_TOKEN, useValue: false },
+        { provide: IS_ANDROID_WEB_VIEW_TOKEN, useValue: false },
+        TranslateService,
+        TranslateStore,
+      ],
+    }).compileComponents();
+
+    TestBed.inject(DateTimeFormatService).setUiLanguage(uiLang);
+    fixture = TestBed.createComponent(DateTimePickerComponent);
+    fixture.componentRef.setInput('selectedTime', '14:30');
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+  };
+
+  const getTimeInput = (): HTMLInputElement =>
+    fixture.nativeElement.querySelector('.time-form-field input');
+
+  ['en', 'de'].forEach((uiLang) => {
+    describe(`with ISO 8601 (24h) and a "${uiLang}" UI`, () => {
+      beforeEach(() => setup(uiLang, DateTimeLocales.sv));
+
+      it('shows the time in 24h', () => {
+        expect(getTimeInput().type).not.toBe('time');
+        expect(getTimeInput().value).toBe('14:30');
+      });
+
+      it('emits a typed 24h time as HH:mm, including hours 20-23', () => {
+        const emitted: (string | null)[] = [];
+        fixture.componentInstance.timeChanged.subscribe((v) => emitted.push(v));
+
+        const input = getTimeInput();
+        input.value = '2215';
+        input.dispatchEvent(new Event('input'));
+
+        expect(emitted).toEqual(['22:15']);
+      });
+    });
+  });
+
+  it('shows the time defaulted on focus while the field keeps focus', async () => {
+    await setup('en', DateTimeLocales.sv);
+    // the parent dialogs feed timeChanged back into selectedTime
+    fixture.componentInstance.timeChanged.subscribe((v) => {
+      fixture.componentRef.setInput('selectedTime', v);
+    });
+    fixture.componentRef.setInput('selectedTime', null);
+    fixture.detectChanges();
+    const input = getTimeInput();
+
+    input.focus();
+    input.dispatchEvent(new Event('focus'));
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    expect(document.activeElement).toBe(input);
+    expect(input.value).toMatch(/^\d{2}:00$/);
+  });
+
+  it('clears unreadable text on blur, matching the cleared time', async () => {
+    await setup('en', DateTimeLocales.sv);
+    const emitted: (string | null)[] = [];
+    fixture.componentInstance.timeChanged.subscribe((v) => emitted.push(v));
+    const input = getTimeInput();
+
+    input.focus();
+    input.value = '25';
+    input.dispatchEvent(new Event('input'));
+    // the app flushes effects while the field still has focus
+    fixture.detectChanges();
+    input.blur();
+    input.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
+
+    expect(emitted).toEqual([null]);
+    expect(input.value).toBe('');
+  });
+
+  it('does not submit on Enter while the time list is open', async () => {
+    await setup('en', DateTimeLocales.sv);
+    let submits = 0;
+    fixture.componentInstance.enterSubmit.subscribe(() => submits++);
+    const input = getTimeInput();
+    // MatTimepicker reads the legacy keyCode
+    const press = (key: string, keyCode: number): void => {
+      input.dispatchEvent(
+        new KeyboardEvent('keydown', {
+          key,
+          keyCode,
+          bubbles: true,
+        } as KeyboardEventInit),
+      );
+      fixture.detectChanges();
+    };
+
+    press('Enter', 13);
+    press('ArrowDown', 40); // opens the list
+    expect(document.querySelector('mat-option')).toBeTruthy();
+    press('Enter', 13); // picks the active option, must not submit the old time
+
+    expect(submits).toBe(0);
+  });
+
+  it('keeps the native input when the configured clock matches the system', async () => {
+    await setup('en', DateTimeLocales.en_us);
+    expect(getTimeInput().type).toBe('time');
   });
 });

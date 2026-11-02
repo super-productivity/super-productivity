@@ -99,9 +99,7 @@ describe('AddTaskBarComponent Mentions Integration', () => {
     const projectServiceSpy = jasmine.createSpyObj('ProjectService', [], {
       list$: of(validProjects),
       listSorted$: of(validProjects),
-      listSortedForUI$: of(validProjects),
       listInTreeOrderForUI$: of(validProjects),
-      listSortedForUI: signal(validProjects),
       listInTreeOrderForUI: signal(validProjects),
       listInTreeOrder: signal(validProjects),
     });

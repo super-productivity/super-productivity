@@ -30,7 +30,7 @@ export const initLauncherShortcuts = (
   // A jump list task starts the exe with the URL as its argument: the single-instance
   // lock hands it to the running app (`second-instance`), a cold start reads it from
   // argv. Installer builds only: the Store and portable builds run from versioned or
-  // temporary paths that a saved task would outlive (cf. the tray GUID in indicator.ts).
+  // temporary paths that a saved task would outlive (cf. the retired tray GUIDs in indicator.ts).
   if (app.isPackaged && getDistChannel() === 'win-nsis') {
     app.setUserTasks(
       SHORTCUTS.map(({ title, url }) => ({
