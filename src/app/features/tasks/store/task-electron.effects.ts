@@ -20,7 +20,6 @@ import {
   map,
   skipWhile,
   startWith,
-  take,
   tap,
   throttleTime,
   withLatestFrom,
@@ -48,7 +47,6 @@ import {
   tick,
   unPauseFocusSession,
 } from '../../focus-mode/store/focus-mode.actions';
-import { IPC } from '../../../../../electron/shared-with-frontend/ipc-events.const';
 import { TaskService } from '../task.service';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { LOCAL_ACTIONS } from '../../../util/local-actions.token';
@@ -71,36 +69,6 @@ export class TaskElectronEffects {
   // -----------------------------------------------------------------------------------
 
   constructor() {
-    /**
-     * SYNC-SAFE: This IPC listener is safe during sync/hydration because:
-     * - Read-only operation - only reads current state and sends to Electron
-     * - No store mutations or action dispatches
-     * - Responds to explicit IPC request, not store-change driven
-     * - take(1) ensures single response per request
-     */
-    window.ea.on(IPC.REQUEST_CURRENT_TASK_FOR_TASK_WIDGET, () => {
-      this._store$
-        .pipe(
-          select(selectCurrentTask),
-          withLatestFrom(
-            this._store$.pipe(select(selectIsOverlayShown)),
-            this._focusModeService.currentSessionTime$,
-          ),
-          // Only take the first value and complete
-          take(1),
-        )
-        .subscribe(([current, isFocusModeEnabled, currentFocusSessionTime]) => {
-          window.ea.updateCurrentTask(
-            current,
-            false, // isPomodoroEnabled - legacy, always false
-            0, // currentPomodoroSessionTime - legacy, always 0
-            isFocusModeEnabled,
-            currentFocusSessionTime,
-            this._focusModeService.mode(),
-          );
-        });
-    });
-
     window.ea.onSwitchTask((taskId) => {
       this._taskService.setCurrentId(taskId);
     });

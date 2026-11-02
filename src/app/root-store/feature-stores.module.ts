@@ -62,6 +62,7 @@ import { RecentlyDeletedEffects } from '../features/tasks/recently-deleted/recen
 import { ShortSyntaxEffects } from '../features/tasks/store/short-syntax.effects';
 import { IS_ELECTRON } from '../app.constants';
 import { TaskElectronEffects } from '../features/tasks/store/task-electron.effects';
+import { TaskWidgetEffects } from '../features/tasks/store/task-widget.effects';
 import { WORK_CONTEXT_FEATURE_NAME } from '../features/work-context/store/work-context.selectors';
 import { workContextReducer } from '../features/work-context/store/work-context.reducer';
 import { WorkContextEffects } from '../features/work-context/store/work-context.effects';
@@ -163,7 +164,7 @@ import { ReducerFailureSnackEffects } from './meta/reducer-failure-snack.effects
       RecentlyDeletedEffects,
       ShortSyntaxEffects,
       TaskDueEffects,
-      ...(IS_ELECTRON ? [TaskElectronEffects] : []),
+      ...(IS_ELECTRON ? [TaskElectronEffects, TaskWidgetEffects] : []),
     ]),
 
     StoreModule.forFeature(WORK_CONTEXT_FEATURE_NAME, workContextReducer),

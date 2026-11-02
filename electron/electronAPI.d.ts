@@ -12,6 +12,7 @@ import {
   TaskWidgetConfig,
 } from '../src/app/features/config/global-config.model';
 import { KeyboardConfig } from './shared-with-frontend/keyboard-config.model';
+import { TaskWidgetView } from './shared-with-frontend/task-widget-view.model';
 import { AppDataCompleteLegacy } from '../src/app/imex/sync/sync.model';
 import { Task } from '../src/app/features/tasks/task.model';
 import { LocalBackupMeta } from '../src/app/imex/local-backup/local-backup.model';
@@ -248,6 +249,8 @@ export interface ElectronAPI {
   sendSettingsUpdate(globalCfg: GlobalConfigState): void;
 
   updateTaskWidgetSettings(cfg: TaskWidgetConfig): void;
+
+  updateTaskWidgetView(view: TaskWidgetView): void;
 
   updateTitleBarDarkMode(isDarkMode: boolean): void;
 
