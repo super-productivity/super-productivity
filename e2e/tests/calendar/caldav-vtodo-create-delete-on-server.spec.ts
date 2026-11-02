@@ -250,13 +250,19 @@ const addProvider = async (
 
 const deleteTaskViaUi = async (page: Page, title: string): Promise<void> => {
   const task = page.locator('task').filter({ hasText: title }).first();
-  // Focus + Backspace avoids entering title edit mode.
-  await task.focus();
-  await page.keyboard.press('Backspace');
   const confirm = page.locator('mat-dialog-actions button:has-text("Delete")');
-  if (await confirm.isVisible().catch(() => false)) {
-    await confirm.click();
-  }
+  // Delete confirmation is on at the defaults, so Backspace always opens the
+  // dialog. A key press that lands while the row has lost focus opens nothing,
+  // so press again only while neither the dialog nor the deletion happened.
+  await expect(async () => {
+    if (!(await confirm.isVisible())) {
+      // Focus + Backspace avoids entering title edit mode.
+      await task.focus();
+      await page.keyboard.press('Backspace');
+    }
+    await expect(confirm).toBeVisible({ timeout: 5000 });
+  }).toPass({ timeout: 15000 });
+  await confirm.click();
   await expect(task).not.toBeVisible({ timeout: 5000 });
 };
 

@@ -16,11 +16,13 @@ import {
   PlainspaceConnectDialogComponent,
   PlainspaceConnectDialogData,
 } from '../connect-dialog/plainspace-connect-dialog.component';
+import { DIALOG_AUTO_FOCUS_TYPING } from '../../../util/dialog-auto-focus';
 
 /**
  * Shown in a Plainspace provider's issue panel tab while Plainspace rejects its
  * token (401). Reconnecting hands the new token to every provider that held
- * the rejected one. Offline and server errors never show it.
+ * the rejected one. Offline and server errors never show it. Also says once
+ * when the provider's server is too old to take titles.
  */
 @Component({
   selector: 'plainspace-reconnect-notice',
@@ -38,10 +40,16 @@ export class PlainspaceReconnectNoticeComponent {
   readonly isRejected = computed(() =>
     this._connectionState.rejectedProviderIds().has(this.issueProvider().id),
   );
+  readonly isServerTooOld = computed(() =>
+    this._connectionState.serverTooOldProviderIds().has(this.issueProvider().id),
+  );
 
   reconnect(): void {
     const ip = this.issueProvider();
     const data: PlainspaceConnectDialogData = { host: ip.host, replacedToken: ip.token };
-    this._matDialog.open(PlainspaceConnectDialogComponent, { data });
+    this._matDialog.open(PlainspaceConnectDialogComponent, {
+      data,
+      autoFocus: DIALOG_AUTO_FOCUS_TYPING,
+    });
   }
 }

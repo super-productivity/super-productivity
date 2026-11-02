@@ -7,13 +7,9 @@ import { DroidLog } from '../../../core/log';
 import {
   androidInterface,
   AndroidReminderSnoozeEvent,
-  AndroidShareData,
   parseReminderTapQueue,
 } from '../android-interface';
-import { TaskService } from '../../tasks/task.service';
-import { TaskAttachmentService } from '../../tasks/task-attachment/task-attachment.service';
 import { T } from '../../../t.const';
-import { readableUrl } from '../../../util/readable-url';
 import { AndroidCaptureImportService } from '../android-capture-import.service';
 import { getCaptureImportErrorReason } from '../../tasks/native-capture/native-capture-importer.service';
 
@@ -22,46 +18,7 @@ import { getCaptureImportErrorReason } from '../../tasks/native-capture/native-c
 @Injectable()
 export class AndroidEffects {
   private _snackService = inject(SnackService);
-  private _taskService = inject(TaskService);
-  private _taskAttachmentService = inject(TaskAttachmentService);
   private _captureImport = inject(AndroidCaptureImportService);
-
-  handleShare$ =
-    IS_ANDROID_WEB_VIEW &&
-    createEffect(
-      () =>
-        androidInterface.onShareWithAttachment$.pipe(
-          tap((shareData) => this.createTaskFromShare(shareData)),
-        ),
-      { dispatch: false },
-    );
-
-  /** Public for tests: `handleShare$` only exists inside the Android WebView. */
-  createTaskFromShare(shareData: AndroidShareData): void {
-    // Guard against empty payloads (e.g. stale share data persisted by an
-    // older app version) so we never create a blank, attachment-less task.
-    if (!shareData?.path?.trim()) {
-      DroidLog.warn('Ignoring share intent with empty content');
-      return;
-    }
-    const taskTitle = buildTaskTitle(shareData);
-    // isIgnoreShortSyntax: a share is untrusted external content (often a web
-    // page title), so `#tag`/`@date`/`+project` tokens are stored literally, as
-    // for the iOS share extension and the URL scheme actions.
-    const taskId = this._taskService.add(taskTitle, false, {}, false, true);
-    const icon = shareData.type === 'LINK' ? 'link' : 'file_present';
-    this._taskAttachmentService.addAttachment(taskId, {
-      title: shareData.subject?.trim() || shareData.title?.trim() || shareData.path,
-      type: shareData.type,
-      path: shareData.path,
-      icon,
-      id: null,
-    });
-    this._snackService.open({
-      type: 'SUCCESS',
-      msg: 'Task created from share',
-    });
-  }
 
   showForegroundServiceFailure$ =
     IS_ANDROID_WEB_VIEW &&
@@ -86,10 +43,9 @@ export class AndroidEffects {
       { dispatch: false },
     );
 
-  // Import tasks left in the native capture inbox by the removed startup
-  // quick-add overlay of an older app version, on cold start and every resume
-  // (a retry if the first import failed). concatMap keeps imports serial;
-  // startWith covers cold start.
+  // Import the native capture inbox (Android shares and widget quick adds) on
+  // cold start and every resume (a retry if the first import failed). concatMap
+  // keeps imports serial; startWith covers cold start.
   importNativeCaptures$ =
     IS_ANDROID_WEB_VIEW &&
     createEffect(
@@ -167,53 +123,4 @@ export class AndroidEffects {
         ),
       { dispatch: false },
     );
-
-  // Check for pending share data on resume (catches app killed after receiving share)
-  checkPendingShareOnResume$ =
-    IS_ANDROID_WEB_VIEW &&
-    createEffect(
-      () =>
-        androidInterface.onResume$.pipe(
-          tap(() => {
-            try {
-              const pendingShare = androidInterface.getPendingShareData?.();
-              if (pendingShare) {
-                const parsed = JSON.parse(pendingShare);
-                DroidLog.log('Resume: found pending share data');
-                androidInterface.onShareWithAttachment$.next(parsed);
-              }
-            } catch (e) {
-              DroidLog.err('Failed to process pending share on resume', e);
-            }
-          }),
-        ),
-      { dispatch: false },
-    );
 }
-
-/**
- * Build a meaningful task title from Android share intent data.
- * Prefers the page subject (EXTRA_SUBJECT, sent by browsers), then an explicit
- * title (EXTRA_TITLE), then a type-specific fallback derived from the shared
- * content itself. Never returns the unhelpful literal "Shared Content".
- */
-export const buildTaskTitle = (shareData: Partial<AndroidShareData>): string => {
-  const subject = shareData.subject?.trim() || '';
-  const title = shareData.title?.trim() || '';
-  const path = shareData.path?.trim() || '';
-
-  let taskTitle: string;
-
-  if (subject) {
-    taskTitle = subject;
-  } else if (title) {
-    taskTitle = title;
-  } else if (shareData.type === 'LINK') {
-    taskTitle = readableUrl(path);
-  } else {
-    const firstLine = path.split('\n')[0].trim();
-    taskTitle = firstLine || 'Shared note';
-  }
-
-  return taskTitle.length > 150 ? taskTitle.substring(0, 147) + '...' : taskTitle;
-};

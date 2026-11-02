@@ -120,9 +120,7 @@ export class SelectTaskComponent {
       const projectParseResult = this._globalConfigService.shortSyntax()?.isEnableProject
         ? parseProjectChanges(
             { title: taskOrTitle },
-            this._projects().filter(
-              (project) => !project.isArchived && !project.isHiddenFromMenu,
-            ),
+            this._projects().filter((project) => !project.isArchived),
           )
         : {};
       const searchTerm = (projectParseResult.title ?? taskOrTitle).trim().toLowerCase();

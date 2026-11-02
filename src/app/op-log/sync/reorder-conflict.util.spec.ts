@@ -14,6 +14,8 @@ import { plannerReducer } from '../../features/planner/store/planner.reducer';
 import { Section, SectionState } from '../../features/section/section.model';
 import {
   addSection,
+  addTaskToSection,
+  removeTaskFromSection,
   updateSection,
   updateSectionOrder,
 } from '../../features/section/store/section.actions';
@@ -173,7 +175,7 @@ const buildBase = (): State => {
             title: id,
             contextId: id === 'foreign' ? 'TODAY' : P,
             contextType: id === 'foreign' ? WorkContextType.TAG : WorkContextType.PROJECT,
-            taskIds: [],
+            taskIds: id === 'alpha' ? ['s-a', 's-b'] : id === 'beta' ? ['s-c'] : [],
           },
         }),
       ),
@@ -247,6 +249,7 @@ const BOARD_FIELDS: Required<BoardCfg> = {
   title: 'changed',
   cols: 4,
   panels: [{ ...DEFAULT_PANEL_CFG, id: 'panel-new', title: 'new' }],
+  boardCols: 3,
 };
 // The shared and plugin fields, plus every key of each built-in provider.
 const PROVIDER_BASE_FIELDS: Required<IssueProviderPluginType> = {
@@ -341,6 +344,52 @@ const reorders: Reorder[] = [
         ),
       ),
   },
+  // Section placements write the `taskIds` of the sections they declare (#10969).
+  ...[
+    {
+      name: 'cross-section task move',
+      action: addTaskToSection({
+        sectionId: 'beta',
+        taskId: 's-a',
+        afterTaskId: 's-c',
+        sourceSectionId: 'alpha',
+      }),
+    },
+    {
+      name: 'task placement within a section',
+      action: addTaskToSection({
+        sectionId: 'alpha',
+        taskId: 's-b',
+        afterTaskId: null,
+        sourceSectionId: 'alpha',
+      }),
+    },
+    {
+      name: 'task removal from a section',
+      action: removeTaskFromSection({
+        sectionId: 'alpha',
+        taskId: 's-a',
+        workContextId: P,
+        workContextType: WorkContextType.PROJECT,
+        workContextAfterTaskId: null,
+      }),
+    },
+  ].map(
+    ({ name, action }): Reorder => ({
+      name,
+      action,
+      list: (s) => [
+        ...s.section.entities['alpha']!.taskIds,
+        '|',
+        ...s.section.entities['beta']!.taskIds,
+      ],
+      members: (s) =>
+        sorted([
+          ...s.section.entities['alpha']!.taskIds,
+          ...s.section.entities['beta']!.taskIds,
+        ]),
+    }),
+  ),
   {
     name: 'issue providers',
     action: IssueProviderActions.sortIssueProvidersFirst({ ids: ['b', 'a', 'u'] }),
@@ -424,7 +473,8 @@ const patchesFor = (reorder: Reorder): Patch[] => {
  */
 const expectedStop = (reorder: Reorder, patch: Patch): string | undefined => {
   const fields = Object.keys(patch.changes);
-  const listed = (reorder.action as unknown as { ids: string[] }).ids;
+  const { entityIds, entityId } = reorder.action.meta;
+  const listed = entityIds ?? [entityId];
   if (!listed.includes(patch.target)) return 'the order does not list it';
   if (fields.includes('id') && patch.changes['id'] !== patch.target) return 'identity';
   if (reorder.action.meta.entityType === 'NOTE') {

@@ -17,7 +17,13 @@ import {
   isGenesisEntityType,
   Operation,
   OperationLogEntry,
+  VectorClock,
 } from '../core/operation.types';
+import { FileSnapshotDownloadResult } from '../core/types/sync-results.types';
+import {
+  LocalDataConflictError,
+  OwnUploadsMissingConflictError,
+} from '../core/errors/sync-errors';
 
 /**
  * Legacy-migration and crash-recovery genesis ops carry this client's entire
@@ -257,6 +263,71 @@ export class SyncLocalStateService {
       { opCount: undecryptable.opCount, isConfirmed },
     );
     return isConfirmed;
+  }
+
+  /**
+   * Snapshot-hydration gate for a file-based client with no pending ops.
+   * Throws a conflict error when hydrating would silently replace local data;
+   * returns false when the user declines the fresh-client confirmation.
+   */
+  async confirmSnapshotWithoutPendingOps(
+    result: Pick<
+      FileSnapshotDownloadResult,
+      'snapshotState' | 'snapshotVectorClock' | 'remoteLastModified' | 'ownUploadsMissing'
+    >,
+    lastSyncedVectorClock: VectorClock | null,
+  ): Promise<boolean> {
+    const isFreshClient = await this.isWhollyFreshClient();
+
+    // CRITICAL FIX: Even if op-log is empty, check if NgRx store has meaningful data.
+    // This catches data that existed before the operation-log feature was added.
+    if (isFreshClient && (await this.hasMeaningfulStoreData())) {
+      OpLog.warn(
+        'OperationLogSyncService: Fresh client detected with meaningful local data in store. ' +
+          'Throwing LocalDataConflictError for conflict resolution dialog.',
+      );
+
+      // Fresh client (no unsynced ops, no prior sync) — there is no
+      // last-synced clock, so pass null explicitly (SPAP-7).
+      throw new LocalDataConflictError(
+        0, // No unsynced ops, but we have meaningful store data
+        result.snapshotState as Record<string, unknown>,
+        result.snapshotVectorClock,
+        null,
+        result.remoteLastModified,
+      );
+    }
+
+    // #10916: nothing is pending because this device already uploaded its
+    // changes, yet the remote lost them. Hydrating would delete them here too.
+    if (!isFreshClient && result.ownUploadsMissing) {
+      OpLog.warn(
+        'OperationLogSyncService: Remote snapshot lost changes this client already ' +
+          'synced. Throwing OwnUploadsMissingConflictError for conflict resolution dialog.',
+      );
+      throw new OwnUploadsMissingConflictError(
+        0,
+        result.snapshotState as Record<string, unknown>,
+        result.snapshotVectorClock,
+        lastSyncedVectorClock,
+        result.remoteLastModified,
+      );
+    }
+
+    // Original flow for truly fresh clients (no store data)
+    if (!isFreshClient) {
+      return true;
+    }
+    OpLog.warn(
+      'OperationLogSyncService: Fresh client detected. Requesting confirmation before accepting snapshot.',
+    );
+    const confirmed = this.confirmFreshClientSync(1); // Show as "1 snapshot"
+    OpLog.normal(
+      confirmed
+        ? 'OperationLogSyncService: User confirmed fresh client sync. Proceeding with snapshot.'
+        : 'OperationLogSyncService: User cancelled fresh client sync. Snapshot not applied.',
+    );
+    return confirmed;
   }
 
   confirmFreshClientSync(opCount: number): boolean {

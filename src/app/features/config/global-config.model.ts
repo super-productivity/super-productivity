@@ -28,6 +28,8 @@ export type MiscConfig = Readonly<{
   isConfirmBeforeExit: boolean;
   isConfirmBeforeExitWithoutFinishDay: boolean;
   isMinimizeToTray: boolean;
+  /** Desktop only; absent in older persisted settings, defaults to off. */
+  isShowDueTaskBadge?: boolean;
   // Legacy: the local REST API switch is device-local now (Electron main's
   // simple store), because a synced switch started the listener on every
   // desktop. Nothing reads or writes this anymore; kept optional so synced data
@@ -292,7 +294,8 @@ export type ReminderConfig = Readonly<{
   defaultTaskRemindOption?: TaskReminderOptionId;
   disableReminders?: boolean;
   isFocusWindow?: boolean;
-  // Android only: use alarm-style notifications (louder, more intrusive)
+  // Android: alarm-style notifications (louder, more intrusive). Desktop: a bell
+  // loops while the reminder dialog is open, and the window is focused.
   useAlarmStyleReminders?: boolean;
   notifyOnDueDate?: boolean;
   dueDateNotificationHour?: number;
@@ -364,6 +367,7 @@ export type TaskWidgetConfig = Readonly<{
 
 export type FocusModeLocalConfig = Readonly<{
   isLoopBreakEndAlarm?: boolean;
+  isNotifyOnSessionEnd?: boolean;
 }>;
 
 export type ClipboardImagesConfig = Readonly<{

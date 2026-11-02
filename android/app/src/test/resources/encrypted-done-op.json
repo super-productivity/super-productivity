@@ -1,0 +1,12 @@
+{
+  "password": "test-encryption-password-123",
+  "taskId": "task-done",
+  "op": {
+    "actionType": "[Task Shared] updateTask",
+    "opType": "UPD",
+    "entityType": "TASK",
+    "entityId": "task-done",
+    "payload": "6QrH6kuQ7/DRFcZ486/WoBxMSqRLTV+1dB0Xlq3aVsW93qH96TWMwHhrb6cliQ65S7IiCQZY9fqt3rZaRghBzWaBibA8zKPNG69hxX+GqqdOlGxg+TlmPeoXrazl+dcfMnjB0hpMbzV34C+YNLg5ZNAJIZWx9555PbJnW35t7RTq9HfS8Gc=",
+    "isPayloadEncrypted": true
+  }
+}

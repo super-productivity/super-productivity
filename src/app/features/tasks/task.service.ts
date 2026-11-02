@@ -197,7 +197,7 @@ export class TaskService {
     ),
   );
 
-  private _lastFocusedTaskEl: HTMLElement | null = null;
+  private _lastFocusedTaskEl: WeakRef<HTMLElement> | null = null;
   private _allTasks$: Observable<Task[]> = this._store.pipe(select(selectAllTasks));
   private _taskEntities = this._store.selectSignal(selectTaskEntities);
 
@@ -215,7 +215,7 @@ export class TaskService {
           ev.target instanceof HTMLElement &&
           ev.target.tagName.toLowerCase() === 'task'
         ) {
-          this._lastFocusedTaskEl = ev.target;
+          this._lastFocusedTaskEl = new WeakRef(ev.target);
         }
       },
       true,
@@ -434,8 +434,9 @@ export class TaskService {
     additional: Partial<Task> = {},
     due: number,
     remindCfg?: TaskReminderOptionId,
+    isIgnoreShortSyntax = false,
   ): Promise<string> {
-    const id = this.add(title, undefined, additional, undefined);
+    const id = this.add(title, undefined, additional, undefined, isIgnoreShortSyntax);
     const task = await this.getByIdOnce$(id).toPromise();
     this.scheduleTask(
       task,
@@ -702,7 +703,6 @@ export class TaskService {
       const workContextType = this._workContextService
         .activeWorkContextType as WorkContextType;
 
-      // this.
       if (isBacklog) {
         const undoneBacklogTaskIds = await this._workContextService.undoneBacklogTaskIds$
           .pipe(take(1))
@@ -923,9 +923,7 @@ export class TaskService {
   }
 
   focusLastFocusedTask(): void {
-    if (this._lastFocusedTaskEl) {
-      this._lastFocusedTaskEl.focus();
-    }
+    this._lastFocusedTaskEl?.deref()?.focus();
   }
 
   focusTaskIfPossible(id: string): void {

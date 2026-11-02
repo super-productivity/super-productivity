@@ -126,7 +126,7 @@ for (const [legacy, numeric] of [
         b.page.locator('task-title', { hasText: 'Other priority' }),
       ).not.toBeAttached();
       await b.page
-        .getByRole('button', { name: 'Toggle filter/group/sort panel', exact: true })
+        .getByRole('button', { name: 'Open filter/group/sort menu', exact: true })
         .click();
       await b.page.getByRole('menuitem', { name: /Filter By/ }).click();
       await b.page.getByRole('menuitem', { name: 'Priority', exact: true }).click();

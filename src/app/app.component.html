@@ -17,6 +17,10 @@
     (done)="layoutService.hideAddTaskBar()"
     (afterTaskAdd)="onTaskAdded($event)"
     [isGlobalBarVariant]="true"
+    [additionalFields]="viewAddTarget()?.additionalFields"
+    [tagsToRemove]="viewAddTarget()?.tagsToRemove ?? []"
+    [taskIdsToExclude]="viewAddTarget()?.taskIdsToExclude"
+    [isNoDefaults]="!!viewAddTarget()"
     class="global"
   ></add-task-bar>
 }

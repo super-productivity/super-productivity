@@ -41,6 +41,7 @@ import {
 import { getDbDateStr } from '../../util/get-db-date-str';
 import { selectCalendarProviders } from '../issue/store/issue-provider.selectors';
 import {
+  IssueProvider,
   IssueProviderCalendar,
   IssueProviderPluginType,
   isPluginIssueProvider,
@@ -66,6 +67,8 @@ import { NotIcalResponseError } from '../schedule/ical/is-likely-ical';
 import { sanitizeIcalUrlForDisplay } from '../issue/mapping-helper/get-issue-provider-tooltip';
 import { isCalendarProviderDisabledOnCurrentPlatform } from '../issue/providers/calendar/is-calendar-provider-disabled-on-current-platform.util';
 import { withPluginOAuthTokenKey } from '../../plugins/oauth/plugin-oauth-token-key.util';
+import { IS_ONLINE$ } from '../../util/is-online.token';
+import { pollWhileOnline } from '../../util/poll-while-online';
 
 const ONE_MONTHS = 60 * 60 * 1000 * 24 * 31;
 const ONE_WEEK = 60 * 60 * 1000 * 24 * 7;
@@ -82,6 +85,7 @@ export class CalendarIntegrationService {
   private _pluginHttp = inject(PluginHttpService);
   private _hiddenEventsService = inject(HiddenCalendarEventsService);
   private _taskArchiveService = inject(TaskArchiveService);
+  private _isOnline$ = inject(IS_ONLINE$);
   private _refreshTrigger$ = new Subject<void>();
 
   /**
@@ -156,7 +160,11 @@ export class CalendarIntegrationService {
         this._getFilteredCalProviderFromCache$(icalProviders, pluginCalProviders).pipe(
           first(),
         ),
-        merge(timer(0, minInterval), this._refreshTrigger$).pipe(
+        // Offline, the cached emission above stays in place until the connection is back.
+        pollWhileOnline(this._isOnline$, [
+          timer(0, minInterval),
+          this._refreshTrigger$,
+        ]).pipe(
           switchMap(() => this._fetchAllCombined(icalProviders, pluginCalProviders)),
         ),
       );
@@ -266,10 +274,9 @@ export class CalendarIntegrationService {
     pluginCalProviders: IssueProviderPluginType[],
   ): Observable<ScheduleCalendarMapEntry[]> {
     const icalProviderMap = new Map(icalProviders.map((p) => [p.id, p]));
-    const activeProviderIds = new Set([
-      ...icalProviders.map((p) => p.id),
-      ...pluginCalProviders.map((p) => p.id),
-    ]);
+    const activeProviderMap = new Map<string, IssueProvider>(
+      [...icalProviders, ...pluginCalProviders].map((p) => [p.id, p]),
+    );
 
     return combineLatest([
       this._allLinkedCalendarEventIds$,
@@ -281,7 +288,7 @@ export class CalendarIntegrationService {
       map(([allCalendarTaskEventIds, skippedEventIds, hiddenEventIds]) =>
         this._filterCalendarEntriesForView(
           entries,
-          activeProviderIds,
+          activeProviderMap,
           icalProviderMap,
           allCalendarTaskEventIds,
           skippedEventIds,
@@ -293,7 +300,7 @@ export class CalendarIntegrationService {
 
   private _filterCalendarEntriesForView(
     entries: ScheduleCalendarMapEntry[],
-    activeProviderIds: Set<string>,
+    activeProviderMap: Map<string, IssueProvider>,
     icalProviderMap: Map<string, IssueProviderCalendar>,
     allCalendarTaskEventIds: string[],
     skippedEventIds: string[],
@@ -301,22 +308,32 @@ export class CalendarIntegrationService {
   ): ScheduleCalendarMapEntry[] {
     return entries.map((entry) => ({
       ...entry,
-      items: entry.items.filter((calEv) => {
-        if (!activeProviderIds.has(calEv.calProviderId)) {
-          return false;
-        }
-        const cfg = icalProviderMap.get(calEv.calProviderId);
-        return (
-          passesCalendarEventRegexFilter(
-            calEv,
-            cfg?.filterIncludeRegex,
-            cfg?.filterExcludeRegex,
-          ) &&
-          !matchesAnyCalendarEventId(calEv, allCalendarTaskEventIds) &&
-          !matchesAnyCalendarEventId(calEv, skippedEventIds) &&
-          !matchesAnyCalendarEventId(calEv, hiddenEventIds)
-        );
-      }),
+      items: entry.items
+        .filter((calEv) => {
+          if (!activeProviderMap.has(calEv.calProviderId)) {
+            return false;
+          }
+          const cfg = icalProviderMap.get(calEv.calProviderId);
+          return (
+            passesCalendarEventRegexFilter(
+              calEv,
+              cfg?.filterIncludeRegex,
+              cfg?.filterExcludeRegex,
+            ) &&
+            !matchesAnyCalendarEventId(calEv, allCalendarTaskEventIds) &&
+            !matchesAnyCalendarEventId(calEv, skippedEventIds) &&
+            !matchesAnyCalendarEventId(calEv, hiddenEventIds)
+          );
+        })
+        // Events keep the color they were fetched with, also in the cache, so
+        // re-derive it to reflect color changes and events cached before colors.
+        .map((calEv) => {
+          const provider = activeProviderMap.get(calEv.calProviderId);
+          const color = provider
+            ? getCalendarProviderColor(provider, calEv.calendarColor)
+            : calEv.color;
+          return calEv.color === color ? calEv : { ...calEv, color };
+        }),
     }));
   }
 
@@ -340,7 +357,6 @@ export class CalendarIntegrationService {
     const results: PluginSearchResult[] =
       await provider.definition.getNewIssuesForBacklog(pluginConfig, http);
 
-    const color = getCalendarProviderColor(pluginProvider);
     return results
       .filter((r) => r.start != null)
       .map((r) => ({
@@ -353,7 +369,8 @@ export class CalendarIntegrationService {
         isAllDay: r.isAllDay,
         issueProviderKey: pluginProvider.issueProviderKey,
         dueWithTime: r.dueWithTime,
-        color,
+        color: getCalendarProviderColor(pluginProvider, r.color),
+        ...(typeof r.color === 'string' ? { calendarColor: r.color } : {}),
       }));
   }
 
@@ -510,6 +527,25 @@ export class CalendarIntegrationService {
       Date.now() - ONE_WEEK,
       Date.now() + ONE_MONTHS,
       isForwardError,
+    );
+  }
+
+  /**
+   * Last fetched events of one provider overlapping `start`–`end`, from the cache
+   * the schedule poll writes. For showing something while the feed can't be reached.
+   */
+  getCachedEvents(
+    calProviderId: string,
+    start = getStartOfDayTimestamp(),
+    end = getEndOfDayTimestamp(),
+  ): CalendarIntegrationEvent[] {
+    return this._getCalProviderFromCache().flatMap((entry) =>
+      entry.items.filter(
+        (item) =>
+          item.calProviderId === calProviderId &&
+          item.start <= end &&
+          item.start + item.duration >= start,
+      ),
     );
   }
 

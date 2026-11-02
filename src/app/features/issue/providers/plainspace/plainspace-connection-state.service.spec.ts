@@ -39,4 +39,32 @@ describe('PlainspaceConnectionStateService', () => {
     state.clear(['p1']);
     expect([...state.rejectedProviderIds()]).toEqual(['p2']);
   });
+
+  // Review finding: a request made with the old token could answer 401 after
+  // a successful reconnect and ask to reconnect again.
+  it('ignores a rejection of a token a reconnect replaced', () => {
+    state.reportError('p1', httpError(401), 'pat_old');
+    state.replaceTokens(['p1'], ['pat_old']);
+    expect(state.rejectedProviderIds().has('p1')).toBe(false);
+
+    state.reportError('p1', httpError(401), 'pat_old');
+    expect(state.rejectedProviderIds().has('p1')).toBe(false);
+    state.reportError('p1', httpError(401), 'pat_new');
+    expect(state.rejectedProviderIds().has('p1')).toBe(true);
+  });
+
+  // A reconnect leaves a provider of a space the account left on the old
+  // token: its rejection must still show.
+  it('still shows a rejection of a provider the reconnect skipped', () => {
+    state.replaceTokens(['p1'], ['pat_old']);
+    state.reportError('p2', httpError(401), 'pat_old');
+    expect(state.rejectedProviderIds().has('p2')).toBe(true);
+  });
+
+  it('remembers a server too old for titles per provider, and a success keeps it', () => {
+    state.reportServerTooOld('p1');
+    state.reportSuccess('p1');
+    expect(state.isServerTooOld('p1')).toBe(true);
+    expect(state.isServerTooOld('p2')).toBe(false);
+  });
 });

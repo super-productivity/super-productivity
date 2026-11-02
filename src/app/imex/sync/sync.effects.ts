@@ -40,6 +40,7 @@ import { DataInitStateService } from '../../core/data-init/data-init-state.servi
 import { SyncLog } from '../../core/log';
 import { alertDialog } from '../../util/native-dialogs';
 import { vectorClockPruned$ } from '../../core/util/vector-clock';
+import { UiHelperService } from '../../features/ui-helper/ui-helper.service';
 
 @Injectable()
 export class SyncEffects {
@@ -53,6 +54,8 @@ export class SyncEffects {
   private _simpleCounterService = inject(SimpleCounterService);
   private _dataInitStateService = inject(DataInitStateService);
   private _execBeforeCloseService = inject(ExecBeforeCloseService);
+  private _uiHelperService = inject(UiHelperService);
+  private _isSyncBeforeQuitRunning = false;
   private readonly _initialPwaUpdateCheckService = inject(InitialPwaUpdateCheckService);
 
   syncBeforeQuit$ = createEffect(
@@ -75,40 +78,67 @@ export class SyncEffects {
                 : this._execBeforeCloseService.unschedule(SYNC_BEFORE_CLOSE_ID),
             ),
             switchMap((isEnabled) =>
-              isEnabled ? this._execBeforeCloseService.onBeforeClose$ : EMPTY,
-            ),
-            filter((ids) => ids.includes(SYNC_BEFORE_CLOSE_ID)),
-            switchMap(() => {
-              this._taskService.setCurrentId(null);
-              this._simpleCounterService.flushAccumulatedTime();
-              this._simpleCounterService.turnOffAll();
-              // Yield to the event loop so NgRx effects triggered by the above
-              // dispatches (e.g. persistence writes to IndexedDB) get a chance to
-              // run before we start the sync.  A single macrotask tick is enough
-              // because the op-log persistence effects schedule their writes in
-              // the same tick; we just need to let them execute.
-              return new Promise<void>((resolve) => setTimeout(resolve, 0));
-            }),
-            switchMap(() =>
-              this._syncWrapperService
-                .sync()
-                .then(() => {
-                  this._execBeforeCloseService.setDone(SYNC_BEFORE_CLOSE_ID);
-                })
-                .catch((e: unknown) => {
-                  SyncLog.err(e);
-                  this._snackService.open({
-                    msg: T.F.DROPBOX.S.SYNC_ERROR,
-                    type: 'ERROR',
-                  });
-                  // Inform user but always allow close - sync already failed
-                  alertDialog('Sync failed. The app will close.');
-                  this._execBeforeCloseService.setDone(SYNC_BEFORE_CLOSE_ID);
-                }),
+              isEnabled
+                ? this._syncBeforeQuitOnRequest$(
+                    this._execBeforeCloseService.onBeforeClose$,
+                  )
+                : EMPTY,
             ),
           ),
     { dispatch: false },
   );
+
+  /**
+   * Runs the sync before close for each quit request carrying its id. Kept out
+   * of the Electron-only effect above so specs can drive it.
+   */
+  _syncBeforeQuitOnRequest$(requests$: Observable<string[]>): Observable<void> {
+    return requests$.pipe(
+      filter((ids) => ids.includes(SYNC_BEFORE_CLOSE_ID)),
+      tap(() => {
+        // The running sync may wait on a dialog (conflict, confirm) that
+        // a window hidden in the tray hides; a repeated Quit shows it.
+        if (this._isSyncBeforeQuitRunning) {
+          this._uiHelperService.focusApp();
+        }
+      }),
+      // A repeated Quit while this runs must not start a second sync: it
+      // returns at once (one is in progress) and would mark the work done
+      // before the first sync finished.
+      exhaustMap(async () => {
+        this._isSyncBeforeQuitRunning = true;
+        try {
+          this._taskService.setCurrentId(null);
+          this._simpleCounterService.flushAccumulatedTime();
+          this._simpleCounterService.turnOffAll();
+          // Yield to the event loop so NgRx effects triggered by the above
+          // dispatches (e.g. persistence writes to IndexedDB) get a chance to
+          // run before we start the sync.  A single macrotask tick is enough
+          // because the op-log persistence effects schedule their writes in
+          // the same tick; we just need to let them execute.
+          await new Promise<void>((resolve) => setTimeout(resolve, 0));
+          try {
+            await this._syncWrapperService.sync();
+          } catch (e: unknown) {
+            SyncLog.err(e);
+            this._snackService.open({
+              msg: T.F.DROPBOX.S.SYNC_ERROR,
+              type: 'ERROR',
+            });
+            // Quit from the tray can leave the window hidden; the alert
+            // blocks until dismissed, so it must be visible.
+            this._uiHelperService.focusApp();
+            // Inform user but always allow close - sync already failed
+            alertDialog('Sync failed. The app will close.');
+          }
+        } finally {
+          this._isSyncBeforeQuitRunning = false;
+          // Whatever happened, never leave the quit waiting on this id.
+          this._execBeforeCloseService.setDone(SYNC_BEFORE_CLOSE_ID);
+        }
+      }),
+    );
+  }
   vectorClockPruningNotification$ = createEffect(
     () =>
       vectorClockPruned$.pipe(

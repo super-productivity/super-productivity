@@ -12,6 +12,9 @@ const LONG_PRESS_MS = 800;
 const PHONE = { width: 360, height: 800 };
 
 const longPress = async (page: Page, target: Locator): Promise<void> => {
+  // Raw touch events skip actionability: wait until the target has stopped
+  // moving (e.g. a drawer sliding in) and is the element at its center.
+  await target.tap({ trial: true });
   const box = await target.boundingBox();
   if (!box) throw new Error('Long-press target has no bounding box');
   const halfWidth = box.width / 2;
@@ -145,9 +148,10 @@ test.describe('Phone menus (touch)', () => {
     // The date shortcuts carry visible labels: tooltips never show on touch.
     await expect(menu.locator('.quick-access-label')).toHaveText([
       'Today',
-      'Tomorrow',
-      'Next week',
-      'Pick date',
+      // Short weekday names for tomorrow and the first day of next week.
+      /^\w{2,4}$/,
+      /^\w{2,4}$/,
+      'Date',
       // Added to Today, so it is scheduled and can be cleared.
       'Clear',
     ]);

@@ -1,0 +1,35 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.super-productivity/supersync",
+  "title": "Super Productivity",
+  "description": "Add tasks to your Super Productivity Inbox. Write-only: it cannot read your tasks.",
+  "version": "1.0.0",
+  "websiteUrl": "https://github.com/super-productivity/super-productivity/wiki/3.01-API#agent-task-capture-mcp",
+  "repository": {
+    "url": "https://github.com/super-productivity/super-productivity",
+    "source": "github",
+    "subfolder": "packages/super-sync-server"
+  },
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://sync.super-productivity.com/mcp",
+      "headers": [
+        {
+          "name": "Authorization",
+          "description": "A capture token from Super Productivity: Settings → Sync → SuperSync → AI assistants → Manual tokens. Claude, Claude Code and ChatGPT can sign in with OAuth instead.",
+          "isRequired": true,
+          "isSecret": true,
+          "value": "Bearer {token}",
+          "variables": {
+            "token": {
+              "description": "The sp_cap_… token, shown once when created",
+              "isRequired": true,
+              "isSecret": true
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

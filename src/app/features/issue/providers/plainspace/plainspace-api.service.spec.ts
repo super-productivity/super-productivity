@@ -9,6 +9,7 @@ import {
   PLAINSPACE_NATIVE_HTTP,
   PlainspaceApiService,
   PlainspaceNativeHttp,
+  PlainspaceTokenCheck,
 } from './plainspace-api.service';
 import { Log } from '../../../../core/log';
 import { PlainspaceCfg } from './plainspace.model';
@@ -78,6 +79,14 @@ describe('PlainspaceApiService', () => {
     expect((await p).map((t) => t.id)).toEqual(['u1']);
   });
 
+  for (const body of [null, {}, { tasks: null }]) {
+    it(`getMyTasks$ rejects a 200 without a task list (${JSON.stringify(body)}) as no answer`, async () => {
+      const p = firstValueFrom(service.getMyTasks$(cfg));
+      httpMock.expectOne(`${BASE}/tasks`).flush(body);
+      await expectAsync(p).toBeRejectedWith(jasmine.objectContaining({ status: 0 }));
+    });
+  }
+
   it('getMyTasks$ matches the bound space by slug, not just the id', async () => {
     const slugCfg: PlainspaceCfg = { ...cfg, spaceId: 'my-slug' };
     const p = firstValueFrom(service.getMyTasks$(slugCfg));
@@ -117,12 +126,27 @@ describe('PlainspaceApiService', () => {
     expect(issue?.isDone).toBe(true);
   });
 
-  it('patchTask$ reports a failed completion update as null', async () => {
-    const p = firstValueFrom(service.patchTask$('a', { done: true }, cfg));
+  it('patchTask$ sends the title and maps the echoed title', async () => {
+    const p = firstValueFrom(
+      service.patchTask$('a', { done: true, title: '  Exact title ' }, cfg),
+    );
+    const req = httpMock.expectOne(`${BASE}/tasks/a`);
+    expect(req.request.body).toEqual({ done: true, title: '  Exact title ' });
+    req.flush({ task: { ...spTask('a', 'space-1', true), title: '  Exact title ' } });
+    const confirmation = await p;
+    expect(confirmation?.title).toBe('  Exact title ');
+    expect(confirmation?.updatedAt).toBe(spTask('a', 'space-1', true).updatedAt);
+  });
+
+  it('patchTask$ lets HTTP errors through so the adapter can read the status', async () => {
+    const p = firstValueFrom(service.patchTask$('a', { title: 'x' }, cfg));
     httpMock
       .expectOne(`${BASE}/tasks/a`)
-      .flush('boom', { status: 500, statusText: 'Server Error' });
-    expect(await p).toBeNull();
+      .flush(
+        { error: 'Validation failed' },
+        { status: 422, statusText: 'Unprocessable' },
+      );
+    await expectAsync(p).toBeRejectedWith(jasmine.objectContaining({ status: 422 }));
   });
 
   it('patchTask$ accepts a minimal completion confirmation', async () => {
@@ -410,6 +434,25 @@ describe('PlainspaceApiService native token check', () => {
 
   afterEach(() => httpMock.verify());
 
+  // A native rejection is retried after a real 500ms delay; a mock clock skips
+  // it. Native promise hops can't be ticked, so yield to them between steps.
+  const verifyWithMockClock = async (
+    service: PlainspaceApiService,
+  ): Promise<PlainspaceTokenCheck | undefined> => {
+    let res: PlainspaceTokenCheck | undefined;
+    jasmine.clock().install();
+    try {
+      service.verifyToken$(cfg).subscribe((r) => (res = r));
+      for (let i = 0; i < 100 && !res; i++) {
+        await Promise.resolve();
+        jasmine.clock().tick(10);
+      }
+    } finally {
+      jasmine.clock().uninstall();
+    }
+    return res;
+  };
+
   it('sends GET /me with the PAT through native HTTP, not HttpClient', async () => {
     nativeHttp.and.resolveTo({
       status: 200,
@@ -460,7 +503,7 @@ describe('PlainspaceApiService native token check', () => {
         { code: 'SSLHandshakeException' },
       ),
     );
-    const res = await firstValueFrom(setup(nativeHttp).verifyToken$(cfg));
+    const res = await verifyWithMockClock(setup(nativeHttp));
     expect(res).toEqual({ status: 'unreachable' });
     expect(errSpy).toHaveBeenCalledWith('Plainspace: token check failed natively', {
       errorName: 'SSLHandshakeException',
@@ -482,7 +525,7 @@ describe('PlainspaceApiService native token check', () => {
         { code: 'IllegalArgumentException' },
       ),
     );
-    await firstValueFrom(setup(nativeHttp).verifyToken$(cfg));
+    await verifyWithMockClock(setup(nativeHttp));
     expect(errSpy).toHaveBeenCalledWith('Plainspace: token check failed natively', {
       errorName: 'IllegalArgumentException',
       errorMessage: 'Unexpected char 0x200b at 15 in header value: Bearer <token>',
@@ -500,7 +543,7 @@ describe('PlainspaceApiService native token check', () => {
         { code: 'SocketTimeoutException' },
       ),
     );
-    await firstValueFrom(setup(nativeHttp).verifyToken$(cfg));
+    await verifyWithMockClock(setup(nativeHttp));
     expect(errSpy).toHaveBeenCalledWith('Plainspace: token check failed natively', {
       errorName: 'SocketTimeoutException',
       errorMessage:
@@ -520,7 +563,7 @@ describe('PlainspaceApiService native token check', () => {
         url: '',
       }),
     );
-    const res = await firstValueFrom(setup(nativeHttp).verifyToken$(cfg));
+    const res = await verifyWithMockClock(setup(nativeHttp));
     expect(res).toEqual({ status: 'ok', me: { email: 'a@b.c', projects: [] } });
     expect(nativeHttp).toHaveBeenCalledTimes(2);
   });
@@ -530,7 +573,7 @@ describe('PlainspaceApiService native token check', () => {
     nativeHttp.and.callFake(() =>
       Promise.reject('Unable to resolve host "plainspace.org"'),
     );
-    const res = await firstValueFrom(setup(nativeHttp).verifyToken$(cfg));
+    const res = await verifyWithMockClock(setup(nativeHttp));
     expect(res).toEqual({ status: 'unreachable' });
     expect(nativeHttp).toHaveBeenCalledTimes(2);
     expect(errSpy).toHaveBeenCalledWith('Plainspace: token check failed natively', {

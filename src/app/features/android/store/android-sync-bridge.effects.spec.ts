@@ -1,3 +1,4 @@
+import { TestBed } from '@angular/core/testing';
 import { BehaviorSubject } from 'rxjs';
 import { distinctUntilChanged, filter, map } from 'rxjs/operators';
 import { SyncProviderId } from '../../../op-log/sync-providers/provider.const';
@@ -6,10 +7,16 @@ import type { SuperSyncPrivateCfg } from '@sp/sync-providers/super-sync';
 import type { DropboxPrivateCfg } from '@sp/sync-providers/dropbox';
 import type { WebdavPrivateCfg } from '@sp/sync-providers/webdav';
 import { ReminderConfig } from '../../config/global-config.model';
+import { SyncProviderManager } from '../../../op-log/sync-providers/provider-manager.service';
+import { GlobalConfigService } from '../../config/global-config.service';
 import {
+  AndroidSyncBridgeEffects,
   bridgeCommandEqual,
   getBackgroundReminderSettings,
+  getCapturePublicKeyForNative,
+  getFileSyncCredentialBridgeCommand,
   getSuperSyncCredentialBridgeCommand,
+  isBackgroundFileSyncProvider,
   SuperSyncCredentialBridgeCommand,
 } from './android-sync-bridge.effects';
 
@@ -174,6 +181,121 @@ describe('AndroidSyncBridgeEffects - credential mirroring logic', () => {
     });
   });
 
+  describe('file sync command (WebDAV/Nextcloud)', () => {
+    const readRequest = {
+      url: 'https://dav.example.com/sp/sync-data.json',
+      authorization: 'Basic abc',
+    };
+
+    it('only treats WebDAV and Nextcloud as background-readable file providers', () => {
+      expect(isBackgroundFileSyncProvider(SyncProviderId.WebDAV)).toBe(true);
+      expect(isBackgroundFileSyncProvider(SyncProviderId.Nextcloud)).toBe(true);
+      expect(isBackgroundFileSyncProvider(SyncProviderId.Dropbox)).toBe(false);
+      expect(isBackgroundFileSyncProvider(SyncProviderId.OneDrive)).toBe(false);
+      expect(isBackgroundFileSyncProvider(SyncProviderId.LocalFile)).toBe(false);
+      expect(isBackgroundFileSyncProvider(SyncProviderId.SuperSync)).toBe(false);
+    });
+
+    it('carries the read request and the encryption password', () => {
+      expect(
+        getFileSyncCredentialBridgeCommand(
+          { encryptKey: 'pw', isEncryptionEnabled: true },
+          readRequest,
+        ),
+      ).toEqual({
+        type: 'set-file',
+        fileUrl: readRequest.url,
+        authorization: readRequest.authorization,
+        isEncryptionExpected: true,
+        encryptionPassword: 'pw',
+      });
+    });
+
+    it('expects encryption from the key alone on configs without the flag', () => {
+      expect(
+        getFileSyncCredentialBridgeCommand({ encryptKey: 'pw' }, readRequest)
+          .isEncryptionExpected,
+      ).toBe(true);
+      expect(
+        getFileSyncCredentialBridgeCommand({}, readRequest).isEncryptionExpected,
+      ).toBe(false);
+    });
+
+    it('keeps expecting encryption when the flag is set but the key was dropped', () => {
+      const command = getFileSyncCredentialBridgeCommand(
+        { isEncryptionEnabled: true },
+        readRequest,
+      );
+      expect(command.isEncryptionExpected).toBe(true);
+      expect(command.encryptionPassword).toBe('');
+    });
+
+    it('re-emits only when the file target or credentials change', () => {
+      const a = getFileSyncCredentialBridgeCommand({}, readRequest);
+      expect(
+        bridgeCommandEqual(a, getFileSyncCredentialBridgeCommand({}, readRequest)),
+      ).toBe(true);
+      expect(
+        bridgeCommandEqual(
+          a,
+          getFileSyncCredentialBridgeCommand({}, { ...readRequest, authorization: 'x' }),
+        ),
+      ).toBe(false);
+      expect(bridgeCommandEqual(a, cmd(webdavCfg()))).toBe(false);
+    });
+  });
+
+  describe('command from the active provider (_toBridgeCommand)', () => {
+    const readRequest = {
+      url: 'https://dav.example.com/sp/sync-data.json',
+      authorization: 'Basic abc',
+    };
+
+    const toCommand = (
+      provider: unknown,
+      cfg: CurrentProviderPrivateCfg | null,
+    ): ReturnType<AndroidSyncBridgeEffects['_toBridgeCommand']> => {
+      TestBed.configureTestingModule({
+        providers: [
+          AndroidSyncBridgeEffects,
+          {
+            provide: SyncProviderManager,
+            useValue: { getProviderById: () => Promise.resolve(provider) },
+          },
+          { provide: GlobalConfigService, useValue: {} },
+        ],
+      });
+      return TestBed.inject(AndroidSyncBridgeEffects)['_toBridgeCommand'](cfg);
+    };
+
+    it('asks the WebDAV provider for the sync-data.json read request', async () => {
+      const getFileReadRequest = jasmine
+        .createSpy('getFileReadRequest')
+        .and.resolveTo(readRequest);
+      const command = await toCommand({ getFileReadRequest }, webdavCfg());
+      expect(getFileReadRequest).toHaveBeenCalledWith('sync-data.json');
+      expect(command).toEqual(getFileSyncCredentialBridgeCommand({}, readRequest));
+    });
+
+    it('clears when the provider cannot build a read request yet', async () => {
+      const getFileReadRequest = (): Promise<never> =>
+        Promise.reject(new Error('WebDAV base URL is not configured'));
+      expect(await toCommand({ getFileReadRequest }, webdavCfg())).toEqual(
+        cmd(webdavCfg()),
+      );
+    });
+
+    it('clears for a provider without a read request', async () => {
+      expect(await toCommand(undefined, webdavCfg())).toEqual(cmd(webdavCfg()));
+    });
+
+    it('keeps the SuperSync path for SuperSync', async () => {
+      expect(await toCommand(undefined, superSyncCfg('tok', 'https://s'))).toEqual(
+        cmd(superSyncCfg('tok', 'https://s')),
+      );
+    });
+  });
+
   describe('integration: observable filtering', () => {
     it('should only emit on meaningful changes through map + distinctUntilChanged + filter', () => {
       const source$ = new BehaviorSubject<CurrentProviderPrivateCfg | null>(null);
@@ -253,5 +375,26 @@ describe('AndroidSyncBridgeEffects - reminder settings mirroring logic', () => {
       getBackgroundReminderSettings(reminderCfg({ useAlarmStyleReminders: true }))
         .useAlarmStyle,
     ).toBe(true);
+  });
+});
+
+describe('getCapturePublicKeyForNative', () => {
+  const key = { v: 1, privateKeyPkcs8: 'priv', publicKeySpki: 'pub' };
+
+  it('mirrors the public key while capture is on and SuperSync is logged in', () => {
+    expect(getCapturePublicKeyForNative(key, true)).toBe('pub');
+  });
+
+  it('clears it when capture is off', () => {
+    expect(getCapturePublicKeyForNative(null, true)).toBe('');
+    expect(getCapturePublicKeyForNative(undefined, true)).toBe('');
+  });
+
+  it('clears it without SuperSync credentials, so shares stay local', () => {
+    expect(getCapturePublicKeyForNative(key, false)).toBe('');
+  });
+
+  it('never mirrors a key from a newer client: its format may differ', () => {
+    expect(getCapturePublicKeyForNative({ ...key, v: 2 }, true)).toBe('');
   });
 });

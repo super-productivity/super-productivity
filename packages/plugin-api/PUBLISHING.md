@@ -1,91 +1,53 @@
 # Publishing @super-productivity/plugin-api
 
-## Overview
+## How it is published
 
-This package provides TypeScript definitions for Super Productivity plugin development. It's published to npm as `@super-productivity/plugin-api`.
+[`publish-plugin-api.yml`](../../.github/workflows/publish-plugin-api.yml)
+publishes this package to npm on every stable app release, with the app's
+version: `plugin-api@19.4.0` describes the plugin API of Super Productivity
+19.4.0, so plugin authors can tell which app version added what they use and
+set `minSupVersion` (the oldest app version a plugin installs on) accordingly.
 
-## Publishing Process
+- The `version` in this folder's `package.json` is a placeholder; CI sets the
+  real one from the release tag (`npm pkg set version=…`). Do not publish by
+  hand.
+- Prereleases are not published.
+- To re-run a failed publish, run the workflow by hand with the release tag
+  (e.g. `v19.4.0`) selected under "Use workflow from". It builds that tag, so
+  provenance names the tag's commit, and skips versions already on npm. Tags
+  cut before this workflow existed lack the global types and are not
+  republished.
+- Authentication is npm trusted publishing (OIDC): on npmjs.com, the package's
+  Settings → Trusted publisher lists this repository and `publish-plugin-api.yml`.
+  No npm token is stored in the repository.
 
-### 1. Update Version
+Like `@types/vscode`, a minor version may tighten types. Exported symbols are
+not withdrawn: third-party plugins depend on them (see
+[feature-review-guide.md](../../docs/feature-review-guide.md#long-term-cost-of-a-change)).
 
-Update the version in `package.json`:
+## Changing the API
+
+1. Edit `src/types.ts` (or `src/issue-provider-types.ts`). The app imports these
+   sources directly through `tsconfig` paths, so no build is needed for the app.
+2. Check: `npm --prefix packages/plugin-api run typecheck` and
+   `npm run plugin-starter:check` from the repository root. The latter packs
+   this package as npm would publish it and typechecks the starter against it.
+3. Document user-facing additions in
+   [docs/plugin-development.md](../../docs/plugin-development.md) and
+   [docs/wiki/3.01-API.md](../../docs/wiki/3.01-API.md).
+
+## Testing the package locally
 
 ```bash
 cd packages/plugin-api
-npm version patch   # or minor/major
+npm pack                       # prepack builds dist/, then writes a .tgz
+cd /path/to/your-plugin
+npm install --save-dev /path/to/super-productivity-plugin-api-*.tgz
 ```
 
-### 2. Build the Package
+## Package contents
 
-```bash
-npm run build
-```
-
-### 3. Test the Build
-
-```bash
-npm pack --dry-run
-```
-
-### 4. Publish to npm
-
-For stable releases:
-
-```bash
-npm publish --access public
-```
-
-For beta releases:
-
-```bash
-npm publish --tag beta --access public
-```
-
-## Project Integration
-
-### Updating the Main Project
-
-When updating the plugin API types, you need to:
-
-1. **Update this package** with new types/interfaces
-2. **Rebuild the package**: `npm run build`
-3. **Update the main project** to use the new types from this package instead of local definitions
-4. **Test the integration** to ensure everything works
-
-### Using in the Main Project
-
-The main project should import types from this package:
-
-```typescript
-// Instead of local imports:
-// import { PluginManifest } from './plugin-api.model';
-
-// Use the npm package:
-import type { PluginManifest } from '@super-productivity/plugin-api';
-```
-
-## Package Structure
-
-```
-packages/plugin-api/
-├── src/
-│   ├── index.ts      # Main export file
-│   └── types.ts      # All type definitions
-├── dist/             # Built output (generated)
-├── package.json      # Package configuration
-├── tsconfig.json     # TypeScript configuration
-├── README.md         # User documentation
-├── PUBLISHING.md     # This file
-└── .npmignore        # Files to exclude from npm
-```
-
-## Maintenance
-
-- Keep types in sync with the main project's plugin system
-- Update documentation when adding new features
-- Follow semantic versioning for releases
-- Test changes with actual plugin development
-
-## Version History
-
-- `1.0.0` - Initial release with core plugin API types
+- `dist/` — compiled `index`, `types`, `issue-provider-types` and `global`
+- `global.d.ts` — entry point for
+  `/// <reference types="@super-productivity/plugin-api/global" />`, which
+  declares the global `PluginAPI` for plain-JavaScript plugins

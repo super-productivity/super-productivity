@@ -31,6 +31,15 @@
   }
 }
 
+// The narrow layout pins the bar near the window top, where macOS draws the
+// `hiddenInset` traffic lights over it (#11118). The wide layout's offset
+// already clears them.
+:host-context(.isMac.isElectron).global {
+  @include mq(xs, max) {
+    top: calc(var(--s) + var(--mac-title-bar-padding));
+  }
+}
+
 // Pin the floating bar to the bottom whenever touch is the primary input.
 // Keys on `.isTouchPrimary`, not `.isTouchOnly`: Android Chrome advertises a
 // fine pointer, so detect-it classifies phones as `hybrid` rather than

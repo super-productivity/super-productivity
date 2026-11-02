@@ -829,7 +829,9 @@ const appCloseHandler = (app: App): void => {
 
       event.preventDefault();
 
-      if (ids.length > 0) {
+      // A gone renderer (killed, oom, ...) never answers, so waiting for it
+      // would leave no way to quit.
+      if (ids.length > 0 && !mainWin.webContents.isCrashed()) {
         log('Actions to wait for ', ids);
         mainWin.webContents.send(IPC.NOTIFY_ON_CLOSE, ids);
       } else {

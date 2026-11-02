@@ -25,6 +25,7 @@ import {
   PluginSidePanelBtnCfg,
   PluginWorkContextHeaderBtnCfg,
   ActiveWorkContext,
+  PluginDayContext,
   Project,
   SnackCfg,
   Tag,
@@ -201,6 +202,20 @@ export class PluginAPI implements PluginAPIInterface {
     return this.#boundMethods.getActiveWorkContext();
   }
 
+  async getDayContext(): Promise<PluginDayContext> {
+    return this.#boundMethods.getDayContext();
+  }
+
+  async startTracking(taskId: string): Promise<void> {
+    await this.#boundMethods.startTracking(taskId);
+    PluginLog.log(`Plugin ${this.#pluginId} started tracking`, { taskId });
+  }
+
+  async stopTracking(): Promise<void> {
+    PluginLog.log(`Plugin ${this.#pluginId} stopped tracking`);
+    return this.#boundMethods.stopTracking();
+  }
+
   async getTasks(): Promise<Task[]> {
     PluginLog.log(`Plugin ${this.#pluginId} requested all tasks`);
     const tasks = await this.#pluginBridge.getTasks();
@@ -350,6 +365,10 @@ export class PluginAPI implements PluginAPIInterface {
   async getConfig(): Promise<any> {
     PluginLog.log(`Plugin ${this.#pluginId} requested configuration`);
     return this.#boundMethods.getConfig();
+  }
+
+  listSyncedDataKeys(prefix?: string): Promise<string[]> {
+    return this.#boundMethods.listSyncedDataKeys(prefix);
   }
 
   async downloadFile(filename: string, data: string): Promise<void> {

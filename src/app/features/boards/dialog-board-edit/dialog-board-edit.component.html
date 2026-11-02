@@ -1,13 +1,18 @@
-<h2 mat-dialog-title>{{ T.F.BOARDS.V.EDIT_BOARD | translate }}</h2>
+<h2 mat-dialog-title>
+  {{ (data.isCreate ? T.F.BOARDS.V.ADD_NEW_BOARD : T.F.BOARDS.V.EDIT_BOARD) | translate }}
+</h2>
 <mat-dialog-content>
+  @for (hint of data.hints ?? []; track hint) {
+    <p>{{ hint | translate }}</p>
+  }
   @if (data.board) {
     <board-edit
       #boarEditCmp
-      [isHideBtns]="true"
-      [boardCfg]="data.board"
+      [board]="data.board"
+      [openPanelId]="data.openPanelId"
+      (afterSave)="close($event)"
     ></board-edit>
   }
-  <!--  <pre>{{ data.board | json }}</pre>-->
 </mat-dialog-content>
 
 <mat-dialog-actions align="end">
@@ -18,17 +23,18 @@
     {{ T.G.CANCEL | translate }}
   </button>
 
-  <button
-    (click)="removeBoard()"
-    mat-button
-    color="warn"
-  >
-    <mat-icon>delete_forever</mat-icon>
-    {{ T.G.DELETE | translate }}
-  </button>
+  @if (!data.isCreate) {
+    <button
+      (click)="removeBoard()"
+      mat-button
+      color="warn"
+    >
+      <mat-icon>delete_forever</mat-icon>
+      {{ T.G.DELETE | translate }}
+    </button>
+  }
 
   <button
-    [disabled]="!boarEditCmp()?.form.valid"
     (click)="save()"
     color="primary"
     mat-flat-button

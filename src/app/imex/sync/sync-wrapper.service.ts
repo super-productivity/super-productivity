@@ -1673,9 +1673,7 @@ export class SyncWrapperService {
       const localLastUpdate = vcEntry?.lastUpdate || Date.now();
 
       const conflictData: ConflictData = {
-        reason: snapshotConflict
-          ? ConflictReason.NoLastSync
-          : ConflictReason.BothNewerLastSync,
+        reason: snapshotConflict?.conflictReason ?? ConflictReason.BothNewerLastSync,
         remote: {
           lastUpdate: snapshotConflict?.remoteLastModified ?? null,
           // A user whose first encounter is a manual sync never sees the snack,

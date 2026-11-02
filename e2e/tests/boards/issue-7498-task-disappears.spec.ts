@@ -21,18 +21,13 @@ test.describe('Boards #7498', () => {
     const taskName = `${testPrefix}repro7498-eisenhower`;
     await workViewPage.addTask(taskName);
 
-    await page.goto('/#/boards');
+    await page.goto('/#/boards/EISENHOWER_MATRIX');
     await page.waitForLoadState('networkidle');
     await expect(page.locator('boards')).toBeVisible({ timeout: 10000 });
 
-    const eisenhowerTab = page
-      .locator('mat-tab-group [role="tab"]')
-      .filter({ hasText: /eisenhower/i })
-      .first();
-    await eisenhowerTab.click();
-
     // Default Eisenhower references Important / Urgent tags that don't exist
-    // on a fresh profile — accept the auto-create prompt if shown.
+    // on a fresh profile — the quadrants show anyway, with a "Create Tags"
+    // prompt above them; accept it if shown.
     const createTagsBtn = page.locator('button', { hasText: /create tags?/i });
     if (await createTagsBtn.isVisible().catch(() => false)) {
       await createTagsBtn.click();
@@ -54,8 +49,13 @@ test.describe('Boards #7498', () => {
 
     await taskPage.markTaskAsDone(task);
 
-    // Fixed behavior: the task is still in its original quadrant — Playwright
-    // auto-retries the assertion until the toggle's 200ms animation settles.
-    await expect(task).toBeVisible();
+    // Fixed behavior: the task is still in its original quadrant, in its
+    // collapsed Done group (as in task lists).
+    const doneGroup = notUrgentNotImportantPanel.locator('.done-group');
+    await expect(doneGroup).toContainText('(1)');
+    await doneGroup.locator('.collapsible-header').click();
+    await expect(
+      doneGroup.locator('planner-task').filter({ hasText: taskName }),
+    ).toBeVisible();
   });
 });

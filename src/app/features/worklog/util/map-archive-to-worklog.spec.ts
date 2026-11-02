@@ -399,3 +399,105 @@ describe('mapArchiveToWorklog', () => {
     expect(w[2021].ent[6].ent[8].logEntries[3].task.id).toBe('SUB_C');
   });
 });
+
+describe('mapArchiveToWorklog weeks crossing a month boundary (#9950)', () => {
+  const taskWithDays = (timeSpentOnDay: { [dateStr: string]: number }): TaskCopy => ({
+    ...DEFAULT_TASK,
+    projectId: 'P1',
+    title: 'A',
+    id: 'A',
+    timeSpentOnDay,
+  });
+  const map = (
+    timeSpentOnDay: { [dateStr: string]: number },
+    firstDayOfWeek: number = 1,
+  ): Worklog =>
+    mapArchiveToWorklog(
+      fakeTaskStateFromArray([taskWithDays(timeSpentOnDay)]),
+      [],
+      { workStart: {}, workEnd: {} },
+      firstDayOfWeek,
+      'en-US',
+    ).worklog;
+
+  it('should show the whole week in every month it has worked days in', () => {
+    // Mon 2026-08-31 – Sun 2026-09-06 is ISO week 36
+    const w = map({ '2026-08-31': 1000, '2026-09-01': 2000, '2026-09-06': 4000 });
+
+    expect(w[2026].ent[8].weeks.length).toBe(1);
+    expect(w[2026].ent[9].weeks.length).toBe(1);
+    const week = w[2026].ent[9].weeks[0];
+    expect(w[2026].ent[8].weeks[0]).toEqual(week);
+    expect(week.weekNr).toBe(36);
+    expect(week.timeSpent).toBe(7000);
+    expect(week.daysWorked).toBe(3);
+    expect(week.start).toBe(31);
+    expect(week.end).toBe(6);
+    expect(week.startDateStr).toBe('2026-08-31');
+    expect(week.endDateStr).toBe('2026-09-06');
+    expect(Object.values(week.ent).map((d) => d.dateStr)).toEqual(
+      jasmine.arrayWithExactContents(['2026-08-31', '2026-09-01', '2026-09-06']),
+    );
+    // month totals stay calendar-month based
+    expect(w[2026].ent[8].timeSpent).toBe(1000);
+    expect(w[2026].ent[9].timeSpent).toBe(6000);
+  });
+
+  it('should not list the week in a month it has no worked days in', () => {
+    const w = map({ '2026-08-31': 500, '2026-09-14': 2000 });
+
+    expect(w[2026].ent[8].weeks.map((wk) => wk.weekNr)).toEqual([36]);
+    expect(w[2026].ent[8].weeks[0].endDateStr).toBe('2026-09-06');
+    expect(w[2026].ent[9].weeks.map((wk) => wk.weekNr)).toEqual([38]);
+  });
+
+  it('should keep weeks in date order within a month', () => {
+    const w = map({ '2026-09-01': 1000, '2026-09-10': 1000, '2026-09-28': 1000 });
+
+    expect(w[2026].ent[9].weeks.map((wk) => wk.weekNr)).toEqual([36, 37, 40]);
+  });
+
+  it('should respect a Sunday first day of week', () => {
+    // Sun 2026-08-30 – Sat 2026-09-05; Sun 2026-09-06 starts the next week
+    const w = map({ '2026-08-30': 1000, '2026-09-05': 2000, '2026-09-06': 4000 }, 0);
+
+    expect(w[2026].ent[8].weeks.map((wk) => wk.timeSpent)).toEqual([3000]);
+    expect(w[2026].ent[9].weeks.map((wk) => wk.timeSpent)).toEqual([3000, 4000]);
+    expect(w[2026].ent[9].weeks[0].startDateStr).toBe('2026-08-30');
+    expect(w[2026].ent[9].weeks[0].endDateStr).toBe('2026-09-05');
+    expect(w[2026].ent[9].weeks[1].startDateStr).toBe('2026-09-06');
+  });
+
+  it('should keep a week crossing the year boundary whole', () => {
+    // Mon 2026-12-28 – Sun 2027-01-03
+    const w = map({ '2026-12-31': 1000, '2027-01-01': 2000 });
+
+    expect(w[2026].ent[12].weeks.map((wk) => wk.timeSpent)).toEqual([3000]);
+    expect(w[2027].ent[1].weeks.map((wk) => wk.timeSpent)).toEqual([3000]);
+    expect(w[2027].ent[1].weeks[0].startDateStr).toBe('2026-12-28');
+  });
+});
+
+describe('mapArchiveToWorklog weeks with malformed day keys', () => {
+  // production devError only logs invalid date strings, so mapping must carry on;
+  // the global confirm spy (src/test.ts) decides whether devError throws
+  beforeEach(() => (window.confirm as jasmine.Spy).and.returnValue(false));
+  afterEach(() => (window.confirm as jasmine.Spy).and.returnValue(true));
+
+  it('should skip days without a valid date when building weeks', () => {
+    const ts = fakeTaskStateFromArray([
+      {
+        ...DEFAULT_TASK,
+        projectId: 'P1',
+        title: 'A',
+        id: 'A',
+        timeSpentOnDay: { undefined: 1000, '2026-09': 1000, '2026-09-01': 2000 },
+      },
+    ]);
+
+    const w = mapArchiveToWorklog(ts, [], START_END_ALL, 1, 'en-US').worklog;
+
+    expect(w[2026].ent[9].weeks.map((wk) => wk.weekNr)).toEqual([36]);
+    expect(w[2026].ent[9].weeks[0].timeSpent).toBe(2000);
+  });
+});

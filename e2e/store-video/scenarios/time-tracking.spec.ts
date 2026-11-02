@@ -121,7 +121,7 @@ test.describe('@video time-tracking reel', () => {
     // The Work table holds the tracked time; it sits below the fold.
     const workTable = page
       .locator('task-summary-tables .project-section')
-      .filter({ has: page.locator('h3', { hasText: /^Work$/ }) });
+      .filter({ has: page.locator('.collapsible-title', { hasText: /^Work$/ }) });
     await expect(workTable).toContainText('0:30');
     await workTable.evaluate((el) =>
       el.scrollIntoView({ behavior: 'smooth', block: 'center' }),

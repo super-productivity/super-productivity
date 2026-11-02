@@ -9,7 +9,7 @@ import {
 } from '@angular/material/dialog';
 import { T } from 'src/app/t.const';
 import { DialogConflictResolutionResult } from '../sync.model';
-import { ConflictData, VectorClock } from '../../../op-log/sync-exports';
+import { ConflictData, ConflictReason, VectorClock } from '../../../op-log/sync-exports';
 import { MatButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
@@ -60,6 +60,7 @@ export class DialogSyncConflictComponent {
 
   remote = this.data.remote;
   local = this.data.local;
+  isOwnUploadsMissing = this.data.reason === ConflictReason.OwnUploadsMissing;
 
   isHighlightRemote =
     this.remote.lastUpdate !== null && this.remote.lastUpdate > this.local.lastUpdate;

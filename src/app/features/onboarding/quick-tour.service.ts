@@ -50,6 +50,8 @@ interface QuickTourStepsCtx {
   isTimeTrackingEnabled: boolean;
   isPlannerEnabled: boolean;
   hasTask: boolean;
+  /** The user opened the task menu during part 1, so touch skips its menu step. */
+  isTaskMenuLearned: boolean;
 }
 
 /**
@@ -60,7 +62,9 @@ export const getQuickTourSteps = (ctx: QuickTourStepsCtx): QuickTourStep[] => {
   const taskSteps: QuickTourStep[] = !ctx.hasTask
     ? []
     : ctx.isTouch
-      ? ['task-menu']
+      ? ctx.isTaskMenuLearned
+        ? []
+        : ['task-menu']
       : ctx.isTimeTrackingEnabled
         ? ['track-time', 'add-subtask']
         : ['add-subtask'];
@@ -76,6 +80,7 @@ interface QuickTourState {
   steps: QuickTourStep[];
   index: number;
   taskId: string | null;
+  isTaskMenuLearned: boolean;
   /** The step that adds "Timer's running…", because the step before started it. */
   timerNoteStep: QuickTourStep | null;
 }
@@ -83,6 +88,8 @@ interface QuickTourState {
 interface PersistedQuickTourState {
   step: QuickTourStep;
   taskId: string | null;
+  /** Missing in state saved before this field existed. */
+  isTaskMenuLearned?: boolean;
 }
 
 /**
@@ -178,13 +185,14 @@ export class QuickTourService {
    * Starts (or restarts) the tour on Today. Without a task the task steps are
    * skipped; by default the tour uses the first undone task in Today.
    */
-  start(taskId?: string | null): void {
+  start(taskId?: string | null, isTaskMenuLearned = false): void {
     const id = this._isUndoneTask(taskId) ? taskId : this._findFirstTodayTaskId();
     this._clearAck();
     this._setState({
-      steps: this._getSteps(id !== null),
+      steps: this._getSteps(id !== null, isTaskMenuLearned),
       index: 0,
       taskId: id,
+      isTaskMenuLearned,
       timerNoteStep: null,
     });
     if (!this._router.url.startsWith(TODAY_ROUTE)) {
@@ -252,29 +260,34 @@ export class QuickTourService {
     this._setState({ ...state, index: state.index + 1 });
   }
 
-  private _resume({ step, taskId }: PersistedQuickTourState): void {
+  private _resume({
+    step,
+    taskId,
+    isTaskMenuLearned = false,
+  }: PersistedQuickTourState): void {
     // Help → Quick tour may have started a fresh tour meanwhile.
     if (this._state()) {
       return;
     }
     const id = this._isUndoneTask(taskId) ? taskId : null;
-    const steps = this._getSteps(id !== null);
+    const steps = this._getSteps(id !== null, isTaskMenuLearned);
     const index = steps.indexOf(step);
     if (index === -1) {
       // The step no longer applies, e.g. its feature was switched off.
       this.end();
       return;
     }
-    this._setState({ steps, index, taskId: id, timerNoteStep: null });
+    this._setState({ steps, index, taskId: id, isTaskMenuLearned, timerNoteStep: null });
   }
 
-  private _getSteps(hasTask: boolean): QuickTourStep[] {
+  private _getSteps(hasTask: boolean, isTaskMenuLearned: boolean): QuickTourStep[] {
     const appFeatures = this._globalConfigService.appFeatures();
     return getQuickTourSteps({
       isTouch: isTouchActive(),
       isTimeTrackingEnabled: appFeatures.isTimeTrackingEnabled,
       isPlannerEnabled: appFeatures.isPlannerEnabled,
       hasTask,
+      isTaskMenuLearned,
     });
   }
 
@@ -294,6 +307,7 @@ export class QuickTourService {
     const persisted: PersistedQuickTourState = {
       step: state.steps[state.index],
       taskId: state.taskId,
+      isTaskMenuLearned: state.isTaskMenuLearned,
     };
     localStorage.setItem(LS.QUICK_TOUR_STATE, JSON.stringify(persisted));
   }
@@ -328,9 +342,10 @@ const isPersistedState = (value: unknown): value is PersistedQuickTourState => {
   if (typeof value !== 'object' || value === null) {
     return false;
   }
-  const { step, taskId } = value as Record<string, unknown>;
+  const { step, taskId, isTaskMenuLearned } = value as Record<string, unknown>;
   return (
     QUICK_TOUR_STEPS.includes(step as QuickTourStep) &&
-    (taskId === null || typeof taskId === 'string')
+    (taskId === null || typeof taskId === 'string') &&
+    (isTaskMenuLearned === undefined || typeof isTaskMenuLearned === 'boolean')
   );
 };

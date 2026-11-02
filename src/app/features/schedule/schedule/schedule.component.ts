@@ -157,13 +157,14 @@ export class ScheduleComponent {
   };
   // Materialized once per provider-list change; method calls inside the menu
   // @for would re-run the hash and URL parsing on every change detection.
-  readonly calProviderRows = computed(() =>
-    this.enabledCalendarProviders().map((p) => ({
+  readonly calProviderRows = computed(() => {
+    const calendarColors = this.scheduleService.calendarColorByProviderId();
+    return this.enabledCalendarProviders().map((p) => ({
       id: p.id,
-      color: getCalendarProviderColor(p),
+      color: getCalendarProviderColor(p, calendarColors.get(p.id)),
       label: this.calProviderLabel(p),
-    })),
-  );
+    }));
+  });
 
   toggleCalProvider(providerId: string): void {
     this._hiddenCalendarProviders.toggle(providerId);

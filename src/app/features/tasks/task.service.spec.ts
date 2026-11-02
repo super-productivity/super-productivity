@@ -1167,6 +1167,25 @@ describe('TaskService', () => {
   // Note: convertToMainTask requires complex selector mocking that doesn't work well
   // with the current test setup. It's better tested via integration tests.
 
+  describe('focusLastFocusedTask', () => {
+    it('restores the same connected row even when another copy has the same id', () => {
+      const original = document.createElement('task');
+      const duplicate = document.createElement('task');
+      original.id = duplicate.id = 't-focus-lifetime';
+      original.tabIndex = duplicate.tabIndex = 0;
+      document.body.append(original, duplicate);
+      try {
+        original.focus();
+        original.blur();
+        service.focusLastFocusedTask();
+        expect(document.activeElement).toBe(original);
+      } finally {
+        original.remove();
+        duplicate.remove();
+      }
+    });
+  });
+
   describe('focusTaskById', () => {
     let created: HTMLElement[];
 

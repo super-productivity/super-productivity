@@ -26,6 +26,21 @@ describe('PlainspaceAccountService', () => {
     // Shared later, after a token was minted on another device: holds the
     // account token this device currently has saved.
     { id: 'ps-current', issueProviderKey: 'PLAINSPACE', token: 'pat_current' },
+    // Bound to a space (the providers above leave it open).
+    {
+      id: 'ps-space-b',
+      issueProviderKey: 'PLAINSPACE',
+      token: 'pat_b',
+      spaceId: 'space-b',
+    },
+    // One account sharing two Spaces on one token; it later left one of them.
+    { id: 'ps-in', issueProviderKey: 'PLAINSPACE', token: 'pat_t', spaceId: 'space-in' },
+    {
+      id: 'ps-left',
+      issueProviderKey: 'PLAINSPACE',
+      token: 'pat_t',
+      spaceId: 'space-left',
+    },
     { id: 'gh', issueProviderKey: 'GITHUB', token: 'pat_old' },
   ] as unknown as IssueProvider[];
 
@@ -277,10 +292,147 @@ describe('PlainspaceAccountService', () => {
       );
     });
 
+    // Review finding: another account's token, pasted on a provider's
+    // reconnect, was written to it, and every task of that space then read as
+    // no longer assigned to me.
+    describe('membership of the provider space', () => {
+      const reconnectSpaceB = async (projects: unknown[]): Promise<string> => {
+        const p = service.connect('pat_fresh', undefined, 'pat_b');
+        httpMock.expectOne(ME_URL).flush({ email: 'other@example.com', projects });
+        return p;
+      };
+
+      it("refuses a token whose account isn't a member of the space", async () => {
+        await connect('pat_current');
+        expect(await reconnectSpaceB([{ id: 'space-c', slug: 'c' }])).toBe(
+          'other-account',
+        );
+        expect(store.dispatch).not.toHaveBeenCalled();
+        expect(service.token()).toBe('pat_current');
+      });
+
+      it('accepts a member; the space may be bound by its slug', async () => {
+        expect(await reconnectSpaceB([{ id: 'uuid-b', slug: 'space-b' }])).toBe('ok');
+        expect(store.dispatch).toHaveBeenCalledOnceWith(
+          tokenUpdate('ps-space-b', 'pat_fresh') as never,
+        );
+      });
+
+      // Re-review finding: reconnecting the Space I'm still in was refused
+      // because another Space on the same token had been left.
+      it('reconnects the member Space of a token whose other Space was left', async () => {
+        const p = service.connect('pat_fresh', undefined, 'pat_t');
+        httpMock
+          .expectOne(ME_URL)
+          .flush({ email: 'me@example.com', projects: [{ id: 'space-in', slug: 'in' }] });
+        expect(await p).toBe('ok');
+        expect(store.dispatch).toHaveBeenCalledOnceWith(
+          tokenUpdate('ps-in', 'pat_fresh') as never,
+        );
+      });
+
+      it('leaves a provider of a space the account left on its token', async () => {
+        await connect('pat_b');
+        await connect('pat_new');
+        expect(store.dispatch).not.toHaveBeenCalled();
+      });
+    });
+
     it('writes nothing when reconnecting with the same token', async () => {
       await connect('pat_old');
       await connect('pat_old');
       expect(store.dispatch).not.toHaveBeenCalled();
+    });
+  });
+
+  // A key replaced from the connect dialog: the old key is unknown to SP, so
+  // it is found among the tokens this device holds before it is revoked.
+  describe('findAccountTokens', () => {
+    const HOST = 'https://plainspace.org';
+    const hosted = [
+      { id: 'mine', issueProviderKey: 'PLAINSPACE', host: HOST, token: 'pat_mine' },
+      { id: 'mine-2', issueProviderKey: 'PLAINSPACE', host: HOST, token: 'pat_mine' },
+      { id: 'theirs', issueProviderKey: 'PLAINSPACE', host: HOST, token: 'pat_theirs' },
+      { id: 'dead', issueProviderKey: 'PLAINSPACE', host: HOST, token: 'pat_dead' },
+      {
+        id: 'elsewhere',
+        issueProviderKey: 'PLAINSPACE',
+        host: 'https://self.example',
+        token: 'pat_elsewhere',
+      },
+      { id: 'gh', issueProviderKey: 'GITHUB', host: HOST, token: 'pat_gh' },
+    ] as unknown as IssueProvider[];
+
+    beforeEach(() => {
+      store.overrideSelector(selectAllIssueProviders, hosted);
+      store.refreshState();
+    });
+
+    it('returns the tokens on this host that belong to the email', async () => {
+      const p = service.findAccountTokens(HOST, ' Me@Example.com ');
+      // The providers are read before the checks go out.
+      await new Promise((resolve) => setTimeout(resolve));
+      // Each distinct token on the host is checked once.
+      const reqs = httpMock.match(ME_URL);
+      expect(reqs.map((r) => r.request.headers.get('Authorization')).sort()).toEqual([
+        'Bearer pat_dead',
+        'Bearer pat_mine',
+        'Bearer pat_theirs',
+      ]);
+      for (const req of reqs) {
+        const auth = req.request.headers.get('Authorization');
+        if (auth === 'Bearer pat_dead') {
+          req.flush({ error: 'Invalid' }, { status: 401, statusText: 'Unauthorized' });
+        } else {
+          req.flush({
+            email: auth === 'Bearer pat_mine' ? 'me@example.com' : 'them@example.com',
+            projects: [],
+          });
+        }
+      }
+      expect(await p).toEqual(['pat_mine']);
+    });
+
+    it('replaces the found token on every provider holding it', async () => {
+      const p = service.connect('pat_new', HOST, null, ['pat_mine']);
+      httpMock.expectOne(ME_URL).flush({ email: 'me@example.com', projects: [] });
+      expect(await p).toBe('ok');
+      expect(store.dispatch).toHaveBeenCalledTimes(2);
+      for (const id of ['mine', 'mine-2']) {
+        expect(store.dispatch).toHaveBeenCalledWith(
+          IssueProviderActions.updateIssueProvider({
+            issueProvider: { id, changes: { token: 'pat_new' } },
+          }) as never,
+        );
+      }
+    });
+
+    // Review finding: a replace refused for another account's provider
+    // reconnect had already revoked the found key, so its providers broke.
+    it("still hands the new key to the found token's providers when the reconnect is refused", async () => {
+      store.overrideSelector(selectAllIssueProviders, [
+        ...hosted,
+        {
+          id: 'not-member',
+          issueProviderKey: 'PLAINSPACE',
+          host: HOST,
+          token: 'pat_rejected',
+          spaceId: 'space-x',
+        },
+      ] as unknown as IssueProvider[]);
+      store.refreshState();
+      const p = service.connect('pat_new', HOST, 'pat_rejected', ['pat_mine']);
+      httpMock.expectOne(ME_URL).flush({ email: 'me@example.com', projects: [] });
+      expect(await p).toBe('other-account');
+      expect(store.dispatch).toHaveBeenCalledTimes(2);
+      for (const id of ['mine', 'mine-2']) {
+        expect(store.dispatch).toHaveBeenCalledWith(
+          IssueProviderActions.updateIssueProvider({
+            issueProvider: { id, changes: { token: 'pat_new' } },
+          }) as never,
+        );
+      }
+      expect(service.account()).toBeNull();
     });
   });
 });

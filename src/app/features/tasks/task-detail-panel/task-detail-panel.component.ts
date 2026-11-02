@@ -67,6 +67,8 @@ import { ProgressBarComponent } from '../../../ui/progress-bar/progress-bar.comp
 import { IssueHeaderComponent } from '../../issue/issue-header/issue-header.component';
 import { MatProgressBar } from '@angular/material/progress-bar';
 import { IssueContentComponent } from '../../issue/issue-content/issue-content.component';
+import { IssueSyncStateComponent } from '../../issue/issue-sync-state/issue-sync-state.component';
+import { IssueSyncStateService } from '../../issue/two-way-sync/issue-sync-state.service';
 import { InlineMarkdownComponent } from '../../../ui/inline-markdown/inline-markdown.component';
 import { TaskAttachmentListComponent } from '../task-attachment/task-attachment-list/task-attachment-list.component';
 import { TagEditComponent } from '../../tag/tag-edit/tag-edit.component';
@@ -118,6 +120,7 @@ import { isWontDoTask } from '../util/is-wont-do-task';
     IssueHeaderComponent,
     MatProgressBar,
     IssueContentComponent,
+    IssueSyncStateComponent,
     InlineMarkdownComponent,
     TaskAttachmentListComponent,
     TagEditComponent,
@@ -144,6 +147,7 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
   private _taskRepeatCfgService = inject(TaskRepeatCfgService);
   private _matDialog = inject(MatDialog);
   private _store = inject(Store);
+  private readonly _issueSyncState = inject(IssueSyncStateService);
   private _translateService = inject(TranslateService);
   private _destroyRef = inject(DestroyRef);
   private _dateTimeFormatService = inject(DateTimeFormatService);
@@ -332,8 +336,14 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
   });
 
   // Panel expansion computed signals
+  // Open on a sync notice too: a task Plainspace no longer lists has no issue
+  // data to load, and the notice is the reason to look.
   isExpandedIssuePanel = computed(() => {
-    return !this.layoutService.isXs() && !!this.issueData();
+    const taskId = this.task().id;
+    const hasSyncNotice =
+      this._issueSyncState.missingTaskIds().has(taskId) ||
+      this._issueSyncState.failures().has(taskId);
+    return !this.layoutService.isXs() && (!!this.issueData() || hasSyncNotice);
   });
 
   isExpandedNotesPanel = computed(() => {

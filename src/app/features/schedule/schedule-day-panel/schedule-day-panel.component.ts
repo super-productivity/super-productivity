@@ -389,6 +389,8 @@ export class ScheduleDayPanelComponent implements AfterViewInit, OnDestroy {
     // Disable snap-back animation when successfully dropped on panel
     if (wasDroppedSuccessfully) {
       this._disableSnapBackAnimation();
+      // the source list's CDK drop fires next; it must not move the task again
+      this._externalDragService.setCancelNextDrop(true);
     }
   }
 

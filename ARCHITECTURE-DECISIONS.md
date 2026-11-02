@@ -469,10 +469,13 @@ The boundary today:
 
 **Implementation**:
 
-- Contract: `timeBlock: { upsertEvent, deleteEvent }` in
+- Contract: `timeBlock: { upsertEvent, deleteEvent, logWorkSession? }` in
   [`packages/plugin-api/src/issue-provider-types.ts`](packages/plugin-api/src/issue-provider-types.ts)
 - Driver: [`time-block-sync.effects.ts`](src/app/features/calendar-integration/time-block/time-block-sync.effects.ts),
   registered in [`feature-stores.module.ts`](src/app/root-store/feature-stores.module.ts)
+- Tracked work sessions (#6378, append-only, written only by the tracking device;
+  unwritten sessions wait in device-local `LS.WORK_SESSION_LOG`, never synced):
+  [`work-session-log.effects.ts`](src/app/features/calendar-integration/time-block/work-session-log.effects.ts)
 - Manual per-event actions (reschedule, delete): [`calendar-event-actions.service.ts`](src/app/features/calendar-integration/calendar-event-actions.service.ts)
 - Events themselves are **not** op-log entities — a converted task is an ordinary
   task with a derived stable id

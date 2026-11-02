@@ -3,15 +3,39 @@ import { HttpErrorResponse } from '@angular/common/http';
 
 /**
  * Which Plainspace providers had their token rejected (401) on the last
- * request, so the issue panel can ask the user to reconnect. In memory only —
- * never persisted or synced: the next successful poll clears it, and a restart
- * starts clean.
+ * request, so the issue panel can ask the user to reconnect, and which run on a
+ * server too old to take a title or a scheduled time. In memory only — never persisted or synced:
+ * the next successful poll clears a rejection, and a restart starts clean.
  */
 @Injectable({ providedIn: 'root' })
 export class PlainspaceConnectionStateService {
   private readonly _rejectedProviderIds = signal<ReadonlySet<string>>(new Set());
+  private readonly _serverTooOldProviderIds = signal<ReadonlySet<string>>(new Set());
+  /**
+   * Provider + token pairs a reconnect replaced: requests made with them may
+   * still answer. Per provider, as a provider a reconnect skipped keeps the
+   * old token and must still show its rejection.
+   */
+  private readonly _replacedTokens = new Set<string>();
 
   readonly rejectedProviderIds = this._rejectedProviderIds.asReadonly();
+  readonly serverTooOldProviderIds = this._serverTooOldProviderIds.asReadonly();
+
+  /**
+   * The provider's server refused or ignored a title or a scheduled time (a
+   * server from before the integration PATCH took them; both arrived
+   * together). Neither is pushed to it for this session; done keeps syncing.
+   * An upgraded server is picked up after a restart.
+   */
+  reportServerTooOld(providerId: string): void {
+    if (!this._serverTooOldProviderIds().has(providerId)) {
+      this._serverTooOldProviderIds.update((ids) => new Set(ids).add(providerId));
+    }
+  }
+
+  isServerTooOld(providerId: string): boolean {
+    return this._serverTooOldProviderIds().has(providerId);
+  }
 
   /** A request for this provider succeeded: its token works. */
   reportSuccess(providerId: string): void {
@@ -20,12 +44,24 @@ export class PlainspaceConnectionStateService {
 
   /**
    * A request for this provider failed. Only a rejected token changes the
-   * state; offline and server errors say nothing about the token.
+   * state; offline and server errors say nothing about the token, and neither
+   * does a late answer to a request made with a token a reconnect replaced.
    */
-  reportError(providerId: string, err: unknown): void {
+  reportError(providerId: string, err: unknown, usedToken?: string | null): void {
+    if (usedToken && this._replacedTokens.has(`${providerId}\n${usedToken}`)) {
+      return;
+    }
     if (isPlainspaceAuthError(err) && !this._rejectedProviderIds().has(providerId)) {
       this._rejectedProviderIds.update((ids) => new Set(ids).add(providerId));
     }
+  }
+
+  /** A reconnect gave these providers a new token in place of `oldTokens`. */
+  replaceTokens(providerIds: string[], oldTokens: string[]): void {
+    providerIds.forEach((id) =>
+      oldTokens.forEach((t) => this._replacedTokens.add(`${id}\n${t}`)),
+    );
+    this.clear(providerIds);
   }
 
   clear(providerIds: string[]): void {

@@ -464,6 +464,7 @@ describe('bulk archive conflict resolution integration (#9537)', () => {
           provide: ValidateStateService,
           useValue: {
             validateState: () => Promise.resolve({ isValid: true, typiaErrors: [] }),
+            validateStateWhenIdle: () => undefined,
           },
         },
         { provide: SyncHydrationService, useValue: {} },

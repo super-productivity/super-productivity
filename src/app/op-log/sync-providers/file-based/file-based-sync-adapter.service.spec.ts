@@ -1738,6 +1738,67 @@ describe('FileBasedSyncAdapterService', () => {
         expect(result.gapDetected).toBe(true);
       });
 
+      describe('own uploads missing from the remote (#10916)', () => {
+        const BASE = { clientA: 1, clientB: 1 };
+
+        // clientA last saw its own upload (counter 3) in a file based on BASE.
+        const establish = async (): Promise<void> => {
+          const established = createMockSyncData({
+            syncVersion: 3,
+            vectorClock: { clientA: 3, clientB: 1 },
+            snapshotBaseClock: BASE,
+            clientId: 'clientA',
+            recentOps: [],
+            state: { tasks: [{ id: 'task-a' }] },
+          });
+          mockProvider.downloadFile.and.returnValue(
+            Promise.resolve({ dataStr: addPrefix(established), rev: 'rev-1' }),
+          );
+          await adapter.downloadOps(0, 'clientA');
+          await adapter.setLastServerSeq(3);
+        };
+
+        const downloadFromZero = async (
+          remote: FileBasedSyncData,
+        ): Promise<{ gapDetected?: boolean; ownUploadsMissing?: boolean }> => {
+          mockProvider.downloadFile.and.returnValue(
+            Promise.resolve({ dataStr: addPrefix(remote), rev: 'rev-2' }),
+          );
+          expect((await adapter.downloadOps(3, 'clientA')).gapDetected).toBe(true);
+          return adapter.downloadOps(0, 'clientA');
+        };
+
+        it('flags a stale-base write that dropped them', async () => {
+          await establish();
+          const result = await downloadFromZero(
+            createMockSyncData({
+              syncVersion: 3,
+              vectorClock: { clientA: 1, clientB: 2 },
+              snapshotBaseClock: BASE,
+              clientId: 'clientB',
+              recentOps: [],
+              state: { tasks: [{ id: 'task-b' }] },
+            }),
+          );
+          expect(result.ownUploadsMissing).toBe(true);
+        });
+
+        it('does not flag a full-state replacement with a new base', async () => {
+          await establish();
+          const result = await downloadFromZero(
+            createMockSyncData({
+              syncVersion: 1,
+              vectorClock: { clientB: 9 },
+              snapshotBaseClock: { clientB: 9 },
+              clientId: 'clientB',
+              recentOps: [],
+              state: { tasks: [{ id: 'task-b' }] },
+            }),
+          );
+          expect(result.ownUploadsMissing).toBe(false);
+        });
+      });
+
       it('records a clock on the first commit after upgrading from state without lastSeenClocks (#9170)', async () => {
         // State persisted by a pre-#9170 client: cursor and expected version, but
         // no last-seen clock (it was kept in memory only).
