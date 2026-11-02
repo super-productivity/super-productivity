@@ -160,6 +160,18 @@ describe('ConfigPageComponent', () => {
       expect(configService.updateSection).not.toHaveBeenCalled();
     });
 
+    it('writes only time tracking from the Time Tracking tab switch', () => {
+      const configService = TestBed.inject(
+        GlobalConfigService,
+      ) as jasmine.SpyObj<GlobalConfigService>;
+      component.saveTimeTrackingSwitch({
+        config: { ...NEW_INSTALL_APP_FEATURES, isTimeTrackingEnabled: false },
+      });
+      expect(configService.updateSection).toHaveBeenCalledOnceWith('appFeatures', {
+        isTimeTrackingEnabled: false,
+      } as Partial<AppFeaturesConfig>);
+    });
+
     it('writes only the changed idle fields, not the new-install values', () => {
       const configService = TestBed.inject(
         GlobalConfigService,

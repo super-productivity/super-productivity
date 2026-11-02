@@ -7,6 +7,7 @@ import { SyncProviderId } from '../../op-log/sync-providers/provider.const';
 import { isOperationSyncCapable } from '../../op-log/sync/operation-sync.util';
 import { T } from '../../t.const';
 import { SyncWrapperService } from './sync-wrapper.service';
+import { DIALOG_AUTO_FOCUS_TYPING } from '../../util/dialog-auto-focus';
 
 export type EncryptionSetupOutcome = 'opened' | 'deferred' | 'not_needed';
 
@@ -104,6 +105,7 @@ export class SuperSyncEncryptionSetupService {
     // whole point of these calm nudges. enableEncryption() re-uploads the
     // freshly-synced state encrypted, with its revert-on-failure safety net.
     this._matDialog.open(DialogEnableEncryptionComponent, {
+      autoFocus: DIALOG_AUTO_FOCUS_TYPING,
       data: { providerType: 'supersync', initialSetup: false },
     });
   }

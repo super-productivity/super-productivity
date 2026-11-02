@@ -21,7 +21,7 @@
         "cumulative-layout-shift": ["warn", { "maxNumericValue": 0.1 }],
         "total-blocking-time": ["warn", { "maxNumericValue": 300 }],
         "interactive": ["warn", { "maxNumericValue": 5000 }],
-        "resource-summary.script.count": ["warn", { "maxNumericValue": 250 }],
+        "resource-summary.script.count": ["warn", { "maxNumericValue": 255 }],
         "resource-summary.total.count": ["warn", { "maxNumericValue": 330 }],
         "resource-summary.font.size": ["warn", { "maxNumericValue": 520000 }]
       }

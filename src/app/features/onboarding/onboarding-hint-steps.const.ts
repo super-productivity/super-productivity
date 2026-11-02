@@ -69,6 +69,7 @@ export const HINT_ICON_PARAMS: Record<string, string> = {
   todayIcon: icon('wb_sunny'),
   inboxIcon: icon('inbox'),
   playIcon: icon('play_arrow'),
+  pauseIcon: icon('pause'),
   subtaskIcon: icon('playlist_add'),
   plannerIcon: icon(NAV_SECTION_ICON.PLANNER),
   expandIcon: icon('chevron_right'),

@@ -32,7 +32,7 @@ class BootReceiver : BroadcastReceiver() {
         Log.d(TAG, "Re-registered $count alarms")
 
         // Re-schedule the background sync worker if credentials are configured
-        if (BackgroundSyncCredentialStore.get(context) != null) {
+        if (BackgroundSyncCredentialStore.hasAnyCredentials(context)) {
             SyncReminderScheduler.ensureScheduled(context)
         }
     }

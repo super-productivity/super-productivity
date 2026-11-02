@@ -26,6 +26,7 @@ import {
   PlainspaceSpaceChoice,
   PlainspaceSpacePickerDialogComponent,
 } from '../../../plainspace/space-picker-dialog/plainspace-space-picker-dialog.component';
+import { DIALOG_AUTO_FOCUS_TYPING } from '../../../../util/dialog-auto-focus';
 
 /**
  * Provisions Plainspace sharing for a project: ensures the user is signed in,
@@ -227,7 +228,12 @@ export class PlainspaceShareService {
       spaceName: title,
     };
     const connected = await firstValueFrom(
-      this._matDialog.open(PlainspaceConnectDialogComponent, { data }).afterClosed(),
+      this._matDialog
+        .open(PlainspaceConnectDialogComponent, {
+          data,
+          autoFocus: DIALOG_AUTO_FOCUS_TYPING,
+        })
+        .afterClosed(),
     );
     return connected || null;
   }

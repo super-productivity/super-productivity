@@ -193,7 +193,8 @@
     "plugin-api:build:watch": "cd packages/plugin-api && npm run build:watch",
     "vite-plugin:build": "cd packages/vite-plugin && npm run build",
     "plugins:build": "npm run plugin-api:build && npm run vite-plugin:build && cd packages/plugin-dev && npm run build:all",
-    "plugins:build:silent": "npm run vite-plugin:build && cd packages/plugin-dev && npm run build:all:silent"
+    "plugins:build:silent": "npm run vite-plugin:build && cd packages/plugin-dev && npm run build:all:silent",
+    "plugin-starter:check": "node tools/check-plugin-starter.js"
   },
   "resolutions": {
     "sass": "1.32.6",
@@ -372,7 +373,8 @@
   },
   "workspaces": [
     "packages/*",
-    "!packages/plugin-dev"
+    "!packages/plugin-dev",
+    "!packages/plugin-starter"
   ],
   "publish": [
     {

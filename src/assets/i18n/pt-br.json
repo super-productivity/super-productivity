@@ -3168,8 +3168,8 @@
       "PLANNER": "Planeje os próximos dias em {{plannerIcon}} <b>Planejador</b>",
       "TASK_MENU_TOUCH": "Deslize uma tarefa para a esquerda para ver o menu: {{playIcon}} <b>Iniciar registro de trabalho</b>, {{subtaskIcon}} <b>Adicionar subtarefa</b>",
       "TASK_MENU_TOUCH_NO_TRACKING": "Deslize uma tarefa para a esquerda para ver o menu, p. ex. {{subtaskIcon}} <b>Adicionar subtarefa</b>",
-      "TIMER_RUNNING": "O cronômetro está rodando. Pressione {{playIcon}} novamente ou <kbd>{{key}}</kbd> para pausar.",
-      "TIMER_RUNNING_TOUCH": "O cronômetro está rodando. Toque em {{playIcon}} no topo para pausar.",
+      "TIMER_RUNNING": "O cronômetro está rodando. Pressione {{pauseIcon}} novamente ou <kbd>{{key}}</kbd> para pausar.",
+      "TIMER_RUNNING_TOUCH": "O cronômetro está rodando. Toque em {{pauseIcon}} no topo para pausar.",
       "TRACK_TIME": "Passe o mouse sobre a tarefa e pressione {{playIcon}} para registrar o tempo"
     },
     "WANT_MORE": {
