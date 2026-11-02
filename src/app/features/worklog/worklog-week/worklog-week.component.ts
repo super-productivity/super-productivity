@@ -11,7 +11,7 @@ import { DialogWorklogExportComponent } from '../dialog-worklog-export/dialog-wo
 import { MatDialog } from '@angular/material/dialog';
 import { expandAnimation, expandFadeAnimation } from '../../../ui/animations/expand.ani';
 import { fadeAnimation } from '../../../ui/animations/fade.ani';
-import { rangeEndWithTime } from '../../../util/get-date-range-for-week';
+import { getWeekStartDate } from '../../../util/get-week-start-date';
 import { DateService } from '../../../core/date/date.service';
 import { Task } from '../../tasks/task.model';
 import { TaskService } from '../../tasks/task.service';
@@ -83,13 +83,12 @@ export class WorklogWeekComponent {
   }
 
   async exportData(): Promise<void> {
-    const today = this._dateService.getLogicalTodayDate();
-    const daysSinceStart =
-      (today.getDay() - this._dateAdapter.getFirstDayOfWeek() + 7) % 7;
-    const rangeStart = new Date(today);
-    rangeStart.setDate(rangeStart.getDate() - daysSinceStart);
-    rangeStart.setHours(0, 0, 0, 0);
-    const rangeEnd = rangeEndWithTime(rangeStart);
+    // the displayed week (see getWorklogWeekForDate), through its last day
+    const rangeStart = getWeekStartDate(
+      this._dateService.getLogicalTodayDate(),
+      this._dateAdapter.getFirstDayOfWeek(),
+    );
+    const rangeEnd = new Date(rangeStart);
     rangeEnd.setDate(rangeEnd.getDate() + 6);
 
     this._matDialog.open(DialogWorklogExportComponent, {
