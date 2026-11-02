@@ -1,18 +1,118 @@
-<mat-form-field class="view-title">
-  <mat-label>{{ T.G.TITLE | translate }}</mat-label>
-  <input
-    #titleModel="ngModel"
-    matInput
-    required
-    [ngModel]="model().title"
-    (ngModelChange)="setTitle($event)"
-  />
-  <mat-error>{{ T.V.E_REQUIRED | translate }}</mat-error>
-</mat-form-field>
+<h2 mat-dialog-title>
+  <view-editor-title
+    [title]="model().title"
+    [label]="T.G.TITLE | translate"
+    [isPencilShown]="true"
+    (titleChange)="setTitle($event)"
+  ></view-editor-title>
+</h2>
 
-<div class="layout">
-  <span class="field-label">{{ T.F.BOARDS.EDITOR.LAYOUT | translate }}</span>
+<mat-dialog-content class="content">
+  @for (hint of hints(); track hint) {
+    <p>{{ hint | translate }}</p>
+  }
+
+  <!-- Phones always show a list: the layout is set at the end, on demand. -->
+  @if (!isXs()) {
+    <ng-container *ngTemplateOutlet="layoutTpl"></ng-container>
+  }
+
+  @if (isSectionTitleShown()) {
+    <div class="sections-head">
+      <h3 class="sections-heading">
+        {{
+          (isBoard() ? T.F.BOARDS.EDITOR.COLUMNS : T.F.BOARDS.EDITOR.SECTIONS) | translate
+        }}
+        · {{ model().panels.length }}
+      </h3>
+      <button
+        class="add-head"
+        mat-button
+        type="button"
+        (click)="addPanel()"
+      >
+        <mat-icon>add</mat-icon>
+        {{
+          (isBoard() ? T.F.BOARDS.EDITOR.ADD_COLUMN : T.F.BOARDS.EDITOR.ADD_SECTION)
+            | translate
+        }}
+      </button>
+    </div>
+  }
+
+  <div
+    class="sections"
+    cdkDropList
+    cdkDropListLockAxis="y"
+    [cdkDropListDisabled]="!isSectionTitleShown()"
+    (cdkDropListDropped)="dropPanel($event)"
+  >
+    @for (panel of model().panels; track panel.id; let i = $index) {
+      <view-editor-section
+        cdkDrag
+        [cdkDragDisabled]="!isSectionTitleShown()"
+        [panel]="panel"
+        [index]="i"
+        [isShowTitle]="isSectionTitleShown()"
+        [isBoard]="isBoard()"
+        [count]="panelStats()[i].count"
+        [previewTitles]="panelStats()[i].previewTitles"
+        [isFirst]="$first"
+        [isLast]="$last"
+        [isCollapsible]="isCollapsible()"
+        [isOpen]="openPanelId() === panel.id"
+        [isFocusInitial]="panel.id === initialOpenPanelId()"
+        (toggleOpen)="togglePanel(panel.id)"
+        (panelChange)="updatePanel(i, $event)"
+        (moveUp)="movePanel(i, -1)"
+        (moveDown)="movePanel(i, 1)"
+        (duplicate)="duplicatePanel(i)"
+        (remove)="removePanel(i)"
+      ></view-editor-section>
+    }
+  </div>
+
+  @if (!isSectionTitleShown()) {
+    <button
+      class="add-section"
+      mat-stroked-button
+      type="button"
+      (click)="addPanel()"
+    >
+      <mat-icon>add</mat-icon>
+      {{ T.F.BOARDS.EDITOR.ADD_SECTION | translate }}
+    </button>
+  }
+
+  @if (isXs()) {
+    <button
+      class="layout-summary focus-ring"
+      type="button"
+      [attr.aria-expanded]="isLayoutShown()"
+      (click)="toggleLayoutShown()"
+    >
+      <mat-icon aria-hidden="true">{{
+        isBoard() ? 'view_kanban' : 'view_list'
+      }}</mat-icon>
+      <span>{{ T.F.BOARDS.EDITOR.LAYOUT_WIDER_SCREENS | translate }}:</span>
+      <span class="layout-summary-value">{{
+        isBoard()
+          ? (T.F.BOARDS.EDITOR.LAYOUT_BOARD_COLS | translate: { nr: model().cols })
+          : (T.F.BOARDS.EDITOR.LAYOUT_LIST | translate)
+      }}</span>
+      <mat-icon aria-hidden="true">{{
+        isLayoutShown() ? 'expand_less' : 'chevron_right'
+      }}</mat-icon>
+    </button>
+    @if (isLayoutShown()) {
+      <ng-container *ngTemplateOutlet="layoutTpl"></ng-container>
+    }
+  }
+</mat-dialog-content>
+
+<ng-template #layoutTpl>
   <div class="layout-row">
+    <span class="field-label">{{ T.F.BOARDS.EDITOR.LAYOUT | translate }}</span>
     <segmented-button-group
       class="layout-toggle"
       size="md"
@@ -22,67 +122,37 @@
       (selectionChange)="setLayout($event)"
     ></segmented-button-group>
     @if (isBoard()) {
-      <mat-form-field
+      <span
         class="cols"
-        subscriptSizing="dynamic"
+        role="group"
+        [attr.aria-label]="T.F.BOARDS.FORM.COLUMNS | translate"
       >
-        <mat-label>{{ T.F.BOARDS.FORM.COLUMNS | translate }}</mat-label>
-        <input
-          #colsModel="ngModel"
-          matInput
-          type="number"
-          required
-          min="2"
-          step="1"
-          pattern="[0-9]+"
-          [ngModel]="model().cols"
-          (ngModelChange)="setCols($event)"
-        />
-        <mat-error>{{ T.F.BOARDS.EDITOR.COLUMNS_INVALID | translate }}</mat-error>
-      </mat-form-field>
+        <span class="stepper">
+          <button
+            mat-icon-button
+            type="button"
+            [disabled]="model().cols <= 2"
+            [attr.aria-label]="T.F.BOARDS.EDITOR.COLUMNS_DECREASE | translate"
+            (click)="setCols(model().cols - 1)"
+          >
+            <mat-icon>remove</mat-icon>
+          </button>
+          <span
+            class="cols-value"
+            aria-live="polite"
+            >{{ model().cols }}</span
+          >
+          <button
+            mat-icon-button
+            type="button"
+            [attr.aria-label]="T.F.BOARDS.EDITOR.COLUMNS_INCREASE | translate"
+            (click)="setCols(model().cols + 1)"
+          >
+            <mat-icon>add</mat-icon>
+          </button>
+        </span>
+        <span class="field-label">{{ T.F.BOARDS.FORM.COLUMNS | translate }}</span>
+      </span>
     }
   </div>
-  <p class="hint">
-    {{
-      (isBoard()
-        ? T.F.BOARDS.EDITOR.LAYOUT_BOARD_HINT
-        : T.F.BOARDS.EDITOR.LAYOUT_LIST_HINT
-      ) | translate
-    }}
-  </p>
-</div>
-
-<h3 class="sections-heading">
-  {{ (isBoard() ? T.F.BOARDS.EDITOR.COLUMNS : T.F.BOARDS.EDITOR.SECTIONS) | translate }}
-</h3>
-<div class="sections">
-  @for (panel of model().panels; track panel.id; let i = $index) {
-    <view-editor-section
-      [panel]="panel"
-      [isShowTitle]="isSectionTitleShown()"
-      [isBoard]="isBoard()"
-      [count]="counts()[i]"
-      [isFirst]="$first"
-      [isLast]="$last"
-      [isCollapsible]="isCollapsible()"
-      [isOpen]="openPanelId() === panel.id"
-      [isFocusInitial]="panel.id === initialOpenPanelId()"
-      (toggleOpen)="togglePanel(panel.id)"
-      (panelChange)="updatePanel(i, $event)"
-      (moveUp)="movePanel(i, -1)"
-      (moveDown)="movePanel(i, 1)"
-      (duplicate)="duplicatePanel(i)"
-      (remove)="removePanel(i)"
-    ></view-editor-section>
-  }
-</div>
-<button
-  class="add-section"
-  mat-stroked-button
-  (click)="addPanel()"
->
-  <mat-icon>add</mat-icon>
-  {{
-    (isBoard() ? T.F.BOARDS.EDITOR.ADD_COLUMN : T.F.BOARDS.EDITOR.ADD_SECTION) | translate
-  }}
-</button>
+</ng-template>

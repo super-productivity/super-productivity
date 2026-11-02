@@ -1,0 +1,94 @@
+// The chips of an open section: rules, sort and "Add rule".
+:host {
+  display: inline-flex;
+  max-width: 100%;
+}
+
+// One outline around the value button and ×; a long value wraps between its
+// items like text instead of growing the chip past the card.
+.chip {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  min-height: var(--s4);
+  border: 1px solid var(--extra-border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-lighter);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-snug);
+}
+
+.chip--plain {
+  background: transparent;
+}
+
+// "Add rule": an action, not a rule.
+.chip--add {
+  border-style: dashed;
+  background: transparent;
+
+  .chip-main {
+    padding-inline-end: var(--s);
+  }
+
+  .chip-icon {
+    color: var(--c-primary);
+  }
+}
+
+.chip--warn {
+  border-color: var(--color-warning);
+}
+
+.chip-main {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-half);
+  min-width: 0;
+  padding: var(--s-half) var(--s-half) var(--s-half) var(--s);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+}
+
+button.chip-main {
+  cursor: pointer;
+
+  &:hover {
+    background: var(--state-hover);
+  }
+}
+
+.chip-icon {
+  flex: 0 0 auto;
+  font-size: 16px;
+  width: 16px;
+  height: 16px;
+  color: var(--text-color-muted);
+}
+
+.chip-remove {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-self: stretch;
+  align-items: center;
+  padding: 0 var(--s-half);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-color-muted);
+  cursor: pointer;
+
+  &:hover {
+    background: var(--state-hover);
+  }
+
+  mat-icon {
+    font-size: 16px;
+    width: 16px;
+    height: 16px;
+  }
+}

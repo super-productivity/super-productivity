@@ -1,0 +1,40 @@
+:host {
+  display: flex;
+  align-items: center;
+  gap: var(--s-half);
+  min-width: 0;
+}
+
+.title-field {
+  flex: 1 1 auto;
+  min-width: 0;
+  // Clear of the dialog's top edge when it is the dialog's title.
+  margin-top: var(--s);
+}
+
+// Long titles wrap to two lines, then end in an ellipsis.
+.title-text {
+  min-width: 0;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow-wrap: anywhere;
+  cursor: text;
+}
+
+.title-btn {
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+}
+
+.rename-btn {
+  flex: 0 0 auto;
+  color: var(--text-color-muted);
+}

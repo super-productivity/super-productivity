@@ -1,0 +1,53 @@
+<!-- Menu styles: src/styles/components/_view-editor-menus.scss (overlay). -->
+<span class="chip chip--add">
+  <button
+    class="chip-main focus-ring"
+    type="button"
+    [matMenuTriggerFor]="menu"
+  >
+    <mat-icon
+      class="chip-icon"
+      aria-hidden="true"
+      >add</mat-icon
+    >
+    {{ T.F.BOARDS.EDITOR.ADD_RULE | translate }}
+  </button>
+</span>
+
+<mat-menu
+  #menu="matMenu"
+  class="view-editor-menu"
+>
+  <ng-template matMenuContent>
+    @for (group of groups(); track group.label) {
+      <div
+        class="menu-caption"
+        role="presentation"
+      >
+        {{ group.label | translate }}
+      </div>
+      @for (item of group.items; track item.rule) {
+        <button
+          mat-menu-item
+          [disabled]="item.isShown || !!item.conflictsWith"
+          (click)="addRule.emit(item.rule)"
+        >
+          <mat-icon [class.menu-hidden-icon]="!item.isShown">check</mat-icon>
+          <span>
+            {{ RULE_LABELS[item.rule] | translate }}
+            @if (item.isShown) {
+              <span class="menu-item-sub">{{
+                T.F.BOARDS.EDITOR.ALREADY_SET | translate
+              }}</span>
+            } @else if (item.conflictsWith) {
+              <span class="menu-item-sub">{{
+                T.F.BOARDS.EDITOR.CONFLICTS_WITH
+                  | translate: { rule: (RULE_LABELS[item.conflictsWith] | translate) }
+              }}</span>
+            }
+          </span>
+        </button>
+      }
+    }
+  </ng-template>
+</mat-menu>

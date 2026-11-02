@@ -1,19 +1,78 @@
 :host {
   display: block;
-  padding: var(--s) var(--s2) var(--s2);
-  border: 1px solid var(--divider-color);
+}
+
+.card {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s);
+  padding: var(--s) var(--s) var(--s) var(--s);
+  border: 1px solid var(--extra-border-color);
   border-radius: var(--card-border-radius);
+  background: var(--card-bg);
+}
+
+// The open card: tinted from the theme, so it reads in dark themes too.
+.card.is-open {
+  border-color: color-mix(in srgb, var(--c-primary) 45%, transparent);
+  background: color-mix(in srgb, var(--c-primary) 7%, var(--card-bg));
+}
+
+.gutter {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s-half);
+  padding-top: var(--s);
+}
+
+.nr {
+  min-width: 18px;
+  height: 18px;
+  border-radius: var(--s);
+  background: color-mix(in srgb, var(--text-color) 8%, transparent);
+  color: var(--text-color-muted);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+  line-height: 18px;
+  text-align: center;
+}
+
+.drag-handle {
+  font-size: 18px;
+  width: 18px;
+  height: 18px;
+  color: var(--text-color-muted);
+  cursor: grab;
+}
+
+.card-body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--s);
+  min-width: 0;
 }
 
 .section-header {
   display: flex;
   align-items: center;
   gap: var(--s);
+  min-height: var(--s5);
 }
 
 .section-title {
   flex: 1 1 auto;
   min-width: 0;
+  color: var(--text-color);
+  font-weight: var(--font-weight-semibold);
+}
+
+.section-header .section-label {
+  color: var(--text-color-muted);
+  font-size: var(--font-size-sm);
+  letter-spacing: var(--letter-spacing-wide);
 }
 
 .count {
@@ -22,109 +81,55 @@
   white-space: nowrap;
 }
 
-.rules-heading,
-.section-label,
-.rules-heading-label {
-  color: var(--text-color-muted);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
-  letter-spacing: var(--letter-spacing-wide);
-}
-
-.rules-heading {
-  margin: var(--s2) 0 var(--s);
-}
-
-.no-rules {
-  margin: 0 0 var(--s);
-  color: var(--text-color-muted);
-}
-
-// One row per rule on every width: the control (a select labelled with the
-// rule's name) fills it, the remove button ends it.
-.rule-row {
-  display: flex;
-  align-items: center;
-  gap: var(--s);
-  padding: var(--s-half) 0;
-}
-
-.rule-control {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s-half);
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-// A tag rule's name above its chips, where a select has its floating label.
-.rule-label--field {
-  color: var(--text-color-muted);
-  font-size: var(--font-size-sm);
-}
-
-.rule-note {
-  color: var(--text-color-muted);
-  font-size: var(--font-size-sm);
-}
-
-// Keeps the sort row's control aligned with the rule rows above it.
-.remove-rule {
-  flex: 0 0 auto;
-}
-
-span.remove-rule {
-  width: var(--s5);
-}
-
-.add-rule {
-  margin: var(--s-half) 0 var(--s);
-}
-
-.sort-row {
-  border-top: 1px solid var(--divider-color);
-  padding-top: var(--s);
-}
-
-// The collapsed card's line: count and rule summary, opens the card. Open,
-// it is the rules' heading with the count, like a single section's header.
-.section-toggle {
-  display: flex;
-  align-items: center;
-  gap: var(--s);
-  width: 100%;
-  margin-top: var(--s);
-  padding: var(--s);
-  border: 0;
-  border-radius: var(--card-border-radius);
-  background: transparent;
-  color: var(--text-color-muted);
-  font: inherit;
-  text-align: start;
-  cursor: pointer;
-
-  &:hover {
-    background: var(--state-hover);
-  }
-}
-
 // Two lines: on a phone one line ends before the rules that tell the cards
 // apart.
-.section-summary {
-  flex: 1 1 auto;
-  min-width: 0;
+.summary {
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   line-clamp: 2;
   overflow: hidden;
+  padding-bottom: var(--s-half);
+  color: var(--text-color-muted);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-normal);
+  cursor: pointer;
 }
 
-.section-toggle-icon {
-  flex: 0 0 auto;
-  transition: transform var(--transition-duration-m) var(--ani-standard-timing);
+.section-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s);
+  padding-bottom: var(--s-half);
+}
 
-  [aria-expanded='true'] > & {
-    transform: rotate(180deg);
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s);
+}
+
+// Titles only, not task rows: what the rules match, at a glance.
+.preview {
+  margin: 0;
+  padding: var(--s) 0 0 var(--s2);
+  border-top: 1px solid var(--divider-color);
+  color: var(--text-color-muted);
+  font-size: var(--font-size-sm);
+  list-style: circle;
+
+  li {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
+}
+
+.preview-more {
+  list-style: none;
+}
+
+.preview--empty {
+  padding-left: 0;
+  font-style: italic;
 }

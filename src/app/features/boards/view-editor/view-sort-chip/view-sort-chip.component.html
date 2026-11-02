@@ -1,0 +1,83 @@
+<!-- Menu styles: src/styles/components/_view-editor-menus.scss (overlay). -->
+<span class="chip chip--plain">
+  <button
+    class="chip-main focus-ring"
+    type="button"
+    [attr.aria-label]="
+      (T.F.BOARDS.FORM.SORT_BY | translate) +
+      ': ' +
+      (label() | translate) +
+      (isSorted() ? ', ' + (dirLabel() | translate) : '')
+    "
+    [matMenuTriggerFor]="menu"
+  >
+    <mat-icon
+      class="chip-icon"
+      aria-hidden="true"
+      >swap_vert</mat-icon
+    >
+    @if (value() === OTHER_VALUE) {
+      <mat-icon
+        class="chip-icon"
+        aria-hidden="true"
+        >info_outline</mat-icon
+      >
+    }
+    {{ label() | translate }}
+    @if (isSorted()) {
+      {{ dir() === 'desc' ? '↓' : '↑' }}
+    }
+    <mat-icon
+      class="chip-icon"
+      aria-hidden="true"
+      >expand_more</mat-icon
+    >
+  </button>
+</span>
+
+<mat-menu
+  #menu="matMenu"
+  class="view-editor-menu"
+>
+  <ng-template matMenuContent>
+    @if (value() === OTHER_VALUE) {
+      <button
+        mat-menu-item
+        role="menuitemradio"
+        aria-checked="true"
+      >
+        <mat-icon>radio_button_checked</mat-icon>
+        {{ T.F.BOARDS.EDITOR.OTHER_KEPT | translate }}
+      </button>
+    }
+    @for (option of SORT_OPTIONS; track option.value) {
+      <button
+        mat-menu-item
+        role="menuitemradio"
+        [attr.aria-checked]="option.value === value()"
+        (click)="setSort(option.value)"
+      >
+        <mat-icon>{{
+          option.value === value() ? 'radio_button_checked' : 'radio_button_unchecked'
+        }}</mat-icon>
+        {{ option.label | translate }}
+      </button>
+    }
+    @if (isSorted()) {
+      <mat-divider></mat-divider>
+      @for (sortDir of SORT_DIRS; track sortDir.value) {
+        <button
+          mat-menu-item
+          role="menuitemradio"
+          [attr.aria-checked]="sortDir.value === dir()"
+          (click)="setDir(sortDir.value)"
+        >
+          <mat-icon>{{
+            sortDir.value === dir() ? 'radio_button_checked' : 'radio_button_unchecked'
+          }}</mat-icon>
+          {{ sortDir.arrow }} {{ sortDir.label | translate }}
+        </button>
+      }
+    }
+  </ng-template>
+</mat-menu>

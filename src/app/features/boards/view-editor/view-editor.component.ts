@@ -5,16 +5,18 @@ import {
   computed,
   ElementRef,
   inject,
+  Injector,
   input,
   linkedSignal,
+  signal,
   viewChild,
   viewChildren,
 } from '@angular/core';
-import { FormsModule, NgModel } from '@angular/forms';
-import { MatButton } from '@angular/material/button';
-import { MatError, MatFormField, MatLabel } from '@angular/material/form-field';
+import { NgTemplateOutlet } from '@angular/common';
+import { CdkDrag, CdkDragDrop, CdkDropList } from '@angular/cdk/drag-drop';
+import { MatButton, MatIconButton } from '@angular/material/button';
+import { MatDialogContent, MatDialogTitle } from '@angular/material/dialog';
 import { MatIcon } from '@angular/material/icon';
-import { MatInput } from '@angular/material/input';
 import { Store } from '@ngrx/store';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { nanoid } from 'nanoid';
@@ -22,7 +24,7 @@ import { BoardCfg, BoardPanelCfg } from '../boards.model';
 import { DEFAULT_PANEL_CFG } from '../boards.const';
 import {
   getLayoutChanges,
-  getPanelHeaderCount,
+  getPanelItems,
   normalizeBoardForSave,
   panelToCriteria,
   translateViewTitle,
@@ -41,21 +43,31 @@ import { TaskCriteriaCtx } from '../../tasks/task-criteria/task-criteria.model';
 import { matchesTaskCriteria } from '../../tasks/task-criteria/task-criteria';
 import { Project } from '../../project/project.model';
 import { ViewEditorSectionComponent } from './view-editor-section/view-editor-section.component';
+import { ViewEditorTitleComponent } from './view-editor-title/view-editor-title.component';
 import {
   isSectionTitleShown,
   toEditorDisplayModel,
   toSavedBoard,
 } from './view-editor.util';
 
-interface CachedCount {
+/** What a section shows of its matching tasks: their number and first titles. */
+export interface PanelStats {
+  count: number;
+  previewTitles: readonly string[];
+}
+
+interface CachedStats {
   tasks: readonly TaskCopy[];
   ctx: TaskCriteriaCtx;
   projects: readonly Project[];
   isListLayout: boolean;
-  count: number;
+  stats: PanelStats;
   /** Per task object, for this panel, ctx and project list. */
   matches: WeakMap<TaskCopy, boolean>;
 }
+
+/** How many matching task titles an open section previews. */
+const PREVIEW_SIZE = 3;
 
 const LAYOUT_OPTIONS: readonly SegmentedButtonOption[] = [
   { id: 'list', labelKey: T.F.BOARDS.EDITOR.LAYOUT_LIST, icon: 'view_list' },
@@ -67,21 +79,27 @@ const LAYOUT_OPTIONS: readonly SegmentedButtonOption[] = [
  * rules. Works on a copy of the stored board; fields it doesn't show
  * (unknown values from newer clients, `taskIds`) are carried through, and an
  * untouched save stores `normalizeBoardForSave(toEditorModel(board))`.
+ *
+ * Renders the dialog's title (the view's name) and content; the dialog adds
+ * the actions. Its host is `display: contents`, so both are the dialog's own
+ * rows: the title stays put while the content scrolls.
  */
 @Component({
   selector: 'view-editor',
   standalone: true,
   imports: [
-    FormsModule,
-    MatFormField,
-    MatLabel,
-    MatError,
-    MatInput,
+    NgTemplateOutlet,
+    CdkDropList,
+    CdkDrag,
+    MatDialogTitle,
+    MatDialogContent,
     MatButton,
+    MatIconButton,
     MatIcon,
     TranslatePipe,
     SegmentedButtonGroupComponent,
     ViewEditorSectionComponent,
+    ViewEditorTitleComponent,
   ],
   templateUrl: './view-editor.component.html',
   styleUrl: './view-editor.component.scss',
@@ -94,6 +112,8 @@ export class ViewEditorComponent {
   readonly isNew = input<boolean>(false);
   /** The section shown open when the editor opens (default: the first). */
   readonly initialOpenPanelId = input<string | undefined>(undefined);
+  /** Translation keys shown above the editor, e.g. what "Save as view" drops. */
+  readonly hints = input<readonly string[]>([]);
 
   protected readonly T = T;
   protected readonly LAYOUT_OPTIONS = LAYOUT_OPTIONS;
@@ -101,12 +121,10 @@ export class ViewEditorComponent {
   private readonly _translateService = inject(TranslateService);
   private readonly _store = inject(Store);
   private readonly _viewCtx = inject(ViewCriteriaContextService);
-  private readonly _isXs = inject(LayoutService).isXs;
+  private readonly _injector = inject(Injector);
+  readonly isXs = inject(LayoutService).isXs;
 
-  private readonly _titleModel = viewChild('titleModel', { read: NgModel });
-  private readonly _titleInput = viewChild('titleModel', { read: MatInput });
-  private readonly _colsModel = viewChild('colsModel', { read: NgModel });
-  private readonly _colsInput = viewChild('colsModel', { read: MatInput });
+  private readonly _nameField = viewChild.required(ViewEditorTitleComponent);
   private readonly _sections = viewChildren(ViewEditorSectionComponent);
   private readonly _sectionEls = viewChildren<
     ViewEditorSectionComponent,
@@ -142,6 +160,8 @@ export class ViewEditorComponent {
         : board.panels[0]?.id) ?? null,
   });
   readonly isCollapsible = computed(() => this.model().panels.length > 1);
+  /** Phones: the layout's controls show on demand below the sections. */
+  readonly isLayoutShown = signal(false);
 
   constructor() {
     // A column's title asked for its card: on a phone it sits below the fold,
@@ -167,20 +187,20 @@ export class ViewEditorComponent {
   private readonly _allTasks = this._store.selectSignal(selectAllTasksInActiveProjects);
   // Per editor panel object: typing a title or editing one section doesn't
   // match the other sections against every task again.
-  private readonly _countCache = new WeakMap<BoardPanelCfg, CachedCount>();
-  readonly counts = computed(() => {
+  private readonly _statsCache = new WeakMap<BoardPanelCfg, CachedStats>();
+  readonly panelStats = computed<PanelStats[]>(() => {
     const model = this.model();
     const tasks = this._allTasks();
     const ctx = this._viewCtx.ctx();
     // Backlog membership is read while matching: a cached match follows it.
     const projects = this._viewCtx.projects();
     // Phones show every view as a list (`BoardComponent.isListLayout`).
-    const isListLayout = model.cols <= 1 || this._isXs();
+    const isListLayout = model.cols <= 1 || this.isXs();
     return model.panels.map((panel) => {
-      const hit = this._countCache.get(panel);
+      const hit = this._statsCache.get(panel);
       const isSameMatching = !!hit && hit.ctx === ctx && hit.projects === projects;
       if (isSameMatching && hit.tasks === tasks && hit.isListLayout === isListLayout) {
-        return hit.count;
+        return hit.stats;
       }
       // A tracking tick or one edited task replaces only that task object:
       // the others keep their match instead of being matched again.
@@ -195,11 +215,18 @@ export class ViewEditorComponent {
         }
         return isMatch;
       });
-      const count = getPanelHeaderCount(matching, saved, isListLayout);
-      this._countCache.set(panel, { tasks, ctx, projects, isListLayout, count, matches });
-      return count;
+      // What the section header counts (`getPanelHeaderCount`), in store
+      // order: the preview names the first of them.
+      const main = getPanelItems(matching, saved, isListLayout).main;
+      const stats: PanelStats = {
+        count: main.length,
+        previewTitles: main.slice(0, PREVIEW_SIZE).map((task) => task.title),
+      };
+      this._statsCache.set(panel, { tasks, ctx, projects, isListLayout, stats, matches });
+      return stats;
     });
   });
+  readonly counts = computed(() => this.panelStats().map((stats) => stats.count));
 
   setTitle(title: string): void {
     this.model.update((model) => ({ ...model, title }));
@@ -213,21 +240,29 @@ export class ViewEditorComponent {
     this.model.update((model) => ({ ...model, ...getLayoutChanges(model, layout) }));
   }
 
-  setCols(value: number | null): void {
-    // Kept while invalid, so the error shows; save refuses it.
-    if (typeof value === 'number' && Number.isInteger(value) && value >= 2) {
+  /** The column stepper: a whole number, 2 or more. */
+  setCols(value: number): void {
+    if (Number.isInteger(value) && value >= 2) {
       this.model.update((model) => ({ ...model, cols: value }));
     }
+  }
+
+  toggleLayoutShown(): void {
+    this.isLayoutShown.update((isShown) => !isShown);
   }
 
   updatePanel(index: number, panel: BoardPanelCfg): void {
     this._setPanels(this.model().panels.map((p, i) => (i === index ? panel : p)));
   }
 
+  /** Appends a section, open, its title field focused. */
   addPanel(): void {
     const panel = this._newPanel();
     this._setPanels([...this._withHiddenTitleShown(), panel]);
     this.openPanelId.set(panel.id);
+    afterNextRender(() => this._sections().at(-1)?.focusTitle(), {
+      injector: this._injector,
+    });
   }
 
   togglePanel(id: string): void {
@@ -235,12 +270,20 @@ export class ViewEditorComponent {
   }
 
   movePanel(index: number, offset: -1 | 1): void {
+    this.movePanelTo(index, index + offset);
+  }
+
+  dropPanel(ev: CdkDragDrop<unknown>): void {
+    this.movePanelTo(ev.previousIndex, ev.currentIndex);
+  }
+
+  movePanelTo(from: number, to: number): void {
     const panels = [...this.model().panels];
-    const target = index + offset;
-    if (target < 0 || target >= panels.length) {
+    if (from === to || to < 0 || to >= panels.length || !panels[from]) {
       return;
     }
-    [panels[index], panels[target]] = [panels[target], panels[index]];
+    const [panel] = panels.splice(from, 1);
+    panels.splice(to, 0, panel);
     this._setPanels(panels);
   }
 
@@ -267,9 +310,9 @@ export class ViewEditorComponent {
    * shows and the first invalid field gets the focus.
    */
   buildBoard(): BoardCfg | null {
+    const name = this._nameField();
     const fields: { isInvalid: () => boolean; focus: () => void }[] = [
-      this._field(this._titleModel(), this._titleInput()),
-      this._field(this._colsModel(), this._colsInput()),
+      { isInvalid: () => name.isInvalid(), focus: () => name.focus() },
       ...this._sections().map((section) => ({
         isInvalid: () => section.isTitleInvalid(),
         focus: () => section.focusTitle(),
@@ -294,19 +337,6 @@ export class ViewEditorComponent {
       this.board(),
       this._translate,
     );
-  }
-
-  private _field(
-    ngModel: NgModel | undefined,
-    matInput: MatInput | undefined,
-  ): { isInvalid: () => boolean; focus: () => void } {
-    return {
-      isInvalid: () => {
-        ngModel?.control.markAsTouched();
-        return !!ngModel?.invalid;
-      },
-      focus: () => matInput?.focus(),
-    };
   }
 
   /**

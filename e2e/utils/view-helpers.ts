@@ -117,60 +117,73 @@ export interface ViewSpec {
 export const viewEditorSection = (dialog: Locator, index: number): Locator =>
   dialog.locator('view-editor-section').nth(index);
 
+/** The open view editor's name (the dialog title) as text. */
+export const viewEditorName = (dialog: Locator): Locator =>
+  dialog.locator('[mat-dialog-title] view-editor-title .title-text');
+
+const escapeRegExp = (text: string): string =>
+  text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 /**
  * Opens a section card's rules. With several sections one card is open at a
- * time; a single section has no toggle and is always open.
+ * time (it has no toggle); a single section is always open.
  */
 export const expandViewSection = async (section: Locator): Promise<void> => {
   // The card first: a toggle counted before it renders would read as none.
   await expect(section.locator('.section-header')).toBeVisible();
   const toggle = section.locator('.section-toggle');
-  if (
-    (await toggle.count()) &&
-    (await toggle.getAttribute('aria-expanded')) === 'false'
-  ) {
+  if (await toggle.count()) {
     await toggle.click();
-    await expect(toggle).toHaveAttribute('aria-expanded', 'true');
   }
+  await expect(section.locator('.section-body')).toBeVisible();
 };
 
-/** Picks an option of a select in the editor, by its accessible name. */
-const pickOption = async (
-  page: Page,
-  scope: Locator,
-  selectName: string,
-  option: string,
-): Promise<void> => {
-  await scope.getByRole('combobox', { name: selectName, exact: true }).click();
-  await page.getByRole('option', { name: option, exact: true }).click();
-  await expect(page.locator('.mat-mdc-select-panel')).toHaveCount(0);
+/**
+ * A rule's chip button ("Priority: High", "Required Tags: …"), by the rule's
+ * label.
+ */
+export const viewRuleChip = (section: Locator, rule: string): Locator =>
+  section.getByRole('button', { name: new RegExp(`^${escapeRegExp(rule)}(:|$)`) });
+
+/** Picks a radio item of the open menu and waits for the menu to close. */
+const pickMenuRadio = async (page: Page, option: string): Promise<void> => {
+  await page.getByRole('menuitemradio', { name: option, exact: true }).click();
+  await expect(page.locator('.mat-mdc-menu-panel')).toHaveCount(0);
 };
 
-/** Adds a rule to a section and sets its value. */
+/**
+ * Ticks checkbox items of the open menu (it stays open), then closes it.
+ * Where the menu has a filter (always for tags, from 9 projects), each name
+ * is typed into it first, so long lists need no scrolling.
+ */
+const tickMenuItems = async (page: Page, names: string[]): Promise<void> => {
+  const filter = page.locator('.mat-mdc-menu-panel .menu-filter input');
+  for (const name of names) {
+    if (await filter.isVisible()) {
+      await filter.fill(name);
+    }
+    await page.getByRole('menuitemcheckbox', { name, exact: true }).click();
+  }
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.mat-mdc-menu-panel')).toHaveCount(0);
+};
+
+/**
+ * Adds a rule to a section and sets its value. Tags and projects must exist
+ * (the rule's menu lists them).
+ */
 export const addViewRule = async (
   page: Page,
   section: Locator,
   spec: ViewRuleSpec,
 ): Promise<void> => {
   await expandViewSection(section);
-  await section.getByRole('button', { name: 'Add rule' }).click();
+  await section.getByRole('button', { name: 'Add rule', exact: true }).click();
   await page.getByRole('menuitem', { name: spec.rule, exact: true }).click();
-  if (spec.projects) {
-    // Adding the rule opens its select.
-    for (const project of spec.projects) {
-      await page.getByRole('option', { name: project, exact: true }).click();
-    }
-    await page.keyboard.press('Escape');
-    await expect(page.locator('.mat-mdc-select-panel')).toHaveCount(0);
-  } else if (spec.tags) {
-    const input = section
-      .locator('.rule-row')
-      .filter({ has: page.locator('.rule-label', { hasText: spec.rule }) })
-      .locator('tag-edit input');
-    for (const tag of spec.tags) {
-      await input.fill(tag);
-      await page.keyboard.press('Enter');
-    }
+  if (spec.projects || spec.tags) {
+    // Adding a project or tag rule opens its menu.
+    await expect(page.locator('.mat-mdc-menu-panel')).toHaveCount(1);
+    await tickMenuItems(page, spec.projects ?? spec.tags ?? []);
   } else if (spec.value) {
     await setViewRule(page, section, spec.rule, spec.value);
   }
@@ -184,7 +197,8 @@ export const setViewRule = async (
   value: string,
 ): Promise<void> => {
   await expandViewSection(section);
-  await pickOption(page, section, rule, value);
+  await viewRuleChip(section, rule).click();
+  await pickMenuRadio(page, value);
 };
 
 /** Picks a section's sort ("Manual", "Title", …). */
@@ -194,7 +208,59 @@ export const setViewSort = async (
   sort: string,
 ): Promise<void> => {
   await expandViewSection(section);
-  await pickOption(page, section, 'Sort by', sort);
+  await section.getByRole('button', { name: /^Sort by: / }).click();
+  await pickMenuRadio(page, sort);
+};
+
+/**
+ * Renames through a title shown as text: opens its field (unless open), fills
+ * it and confirms with Enter.
+ */
+const renameTitle = async (
+  field: Locator,
+  openBtn: Locator,
+  title: string,
+): Promise<void> => {
+  if (!(await field.isVisible())) {
+    await openBtn.click();
+  }
+  await field.fill(title);
+  if (title) {
+    await field.press('Enter');
+    await expect(field).toBeHidden();
+  }
+};
+
+/** Sets the view's layout and columns; on a phone they show on demand. */
+const setViewLayout = async (
+  dialog: Locator,
+  layout: ViewSpec['layout'],
+  columns: number | undefined,
+): Promise<void> => {
+  const toggle = dialog.locator('view-editor segmented-button-group');
+  const summary = dialog.locator('.layout-summary');
+  if (!(await toggle.isVisible()) && (await summary.isVisible())) {
+    await summary.click();
+  }
+  if (layout) {
+    await toggle
+      .getByRole('radio', { name: layout === 'board' ? 'Board' : 'List', exact: true })
+      .click();
+  }
+  if (columns !== undefined) {
+    const value = dialog.locator('.cols-value');
+    for (let i = 0; i < 20; i++) {
+      const current = Number(await value.innerText());
+      if (current === columns) break;
+      await dialog
+        .getByRole('button', {
+          name: current < columns ? 'More columns' : 'Fewer columns',
+          exact: true,
+        })
+        .click();
+    }
+    await expect(value).toHaveText(String(columns));
+  }
 };
 
 /**
@@ -208,7 +274,11 @@ export const fillViewEditor = async (
   spec: ViewSpec,
 ): Promise<void> => {
   if (spec.title !== undefined) {
-    await dialog.getByRole('textbox', { name: 'Title', exact: true }).fill(spec.title);
+    await renameTitle(
+      dialog.getByRole('textbox', { name: 'Title', exact: true }),
+      dialog.getByRole('button', { name: 'Rename', exact: true }),
+      spec.title,
+    );
   }
   const sections = spec.sections ?? [];
   const cards = dialog.locator('view-editor-section');
@@ -217,26 +287,17 @@ export const fillViewEditor = async (
     await dialog.getByRole('button', { name: /^Add (section|column)$/ }).click();
     await expect(cards).toHaveCount(count + 1);
   }
-  if (spec.layout) {
-    await dialog
-      .locator('view-editor segmented-button-group')
-      .getByRole('radio', {
-        name: spec.layout === 'board' ? 'Board' : 'List',
-        exact: true,
-      })
-      .click();
-  }
-  if (spec.columns !== undefined) {
-    await dialog
-      .getByRole('spinbutton', { name: 'Columns', exact: true })
-      .fill(String(spec.columns));
+  if (spec.layout || spec.columns !== undefined) {
+    await setViewLayout(dialog, spec.layout, spec.columns);
   }
   for (const [i, section] of sections.entries()) {
     const card = viewEditorSection(dialog, i);
     if (section.title !== undefined) {
-      await card
-        .getByRole('textbox', { name: /^(Section|Column) title$/ })
-        .fill(section.title);
+      await renameTitle(
+        card.getByRole('textbox', { name: /^(Section|Column) title$/ }),
+        card.locator('view-editor-title .title-btn'),
+        section.title,
+      );
     }
     for (const rule of section.rules ?? []) {
       await addViewRule(page, card, rule);

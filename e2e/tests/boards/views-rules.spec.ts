@@ -7,6 +7,7 @@ import {
   saveViewEditor,
   setViewSort,
   sideNavViewRow,
+  viewEditorName,
   viewEditorSection,
 } from '../../utils/view-helpers';
 
@@ -188,7 +189,7 @@ test.describe('View rules', () => {
     await page.getByRole('menuitem', { name: 'Save as view…' }).click();
     const dialog = page.locator('dialog-board-edit');
     await expect(dialog).toBeVisible();
-    await expect(dialog.getByRole('textbox', { name: 'Title' })).toHaveValue('Inbox');
+    await expect(viewEditorName(dialog)).toHaveText('Inbox');
     await expect(dialog).toContainText('not only today');
     await dialog.getByRole('button', { name: 'Save', exact: true }).click();
     await expect(dialog).toBeHidden();

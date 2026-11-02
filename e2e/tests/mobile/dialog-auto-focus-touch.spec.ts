@@ -31,6 +31,29 @@ test.describe('Dialog auto focus on a phone', () => {
     await expect(container).toBeFocused();
     await expect(container).toHaveAttribute('role', 'dialog');
 
+    // Layout is tucked below the sections on phones, without horizontal scroll.
+    const layout = container.locator('segmented-button-group');
+    await expect(layout).toHaveCount(0);
+    await container.getByRole('button', { name: /Layout on wider screens/ }).tap();
+    await expect(layout).toBeVisible();
+    await expect(
+      layout.getByRole('radio', { name: 'Board', exact: true }),
+    ).toHaveAttribute('aria-checked', 'true');
+    const content = container.locator('mat-dialog-content');
+    expect(await content.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+
+    // Opening a tag picker by touch also leaves the keyboard down.
+    await container
+      .locator('view-editor-section')
+      .first()
+      .getByRole('button', { name: /^Excluded Tags:/ })
+      .tap();
+    const filter = page.getByRole('searchbox', { name: 'Filter tags', exact: true });
+    await expect(filter).toBeVisible();
+    await expect(filter).not.toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(filter).toBeHidden();
+
     // Closing hands focus back to the button that opened the dialog.
     await container.getByRole('button', { name: 'Cancel', exact: true }).tap();
     await expect(container).toHaveCount(0);

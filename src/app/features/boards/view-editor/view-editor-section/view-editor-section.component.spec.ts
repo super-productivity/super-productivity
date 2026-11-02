@@ -1,6 +1,7 @@
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
+import { OverlayContainer } from '@angular/cdk/overlay';
 import { TranslateModule } from '@ngx-translate/core';
 import { ViewEditorSectionComponent } from './view-editor-section.component';
 import { DEFAULT_PANEL_CFG } from '../../boards.const';
@@ -12,53 +13,311 @@ import { T } from '../../../../t.const';
 
 describe('ViewEditorSectionComponent', () => {
   let fixture: ComponentFixture<ViewEditorSectionComponent>;
+  let emitted: BoardPanelCfg[];
+  let overlay: HTMLElement;
+  let addTag: jasmine.Spy;
+  let tags: ReturnType<typeof signal<{ id: string; title: string }[]>>;
+  const projects = signal<{ id: string; title: string }[]>([]);
 
-  const render = async (isShowTitle: boolean): Promise<HTMLElement> => {
+  const TAGS = [
+    { id: 'urgent', title: 'Urgent', icon: 'priority_high', color: '#f00' },
+    { id: 'home', title: 'Home', icon: null, theme: { primary: '#0f0' } },
+  ];
+
+  const render = async (
+    fields: Partial<BoardPanelCfg> = {},
+    isShowTitle: boolean = true,
+  ): Promise<HTMLElement> => {
+    tags = signal<{ id: string; title: string }[]>(TAGS);
+    addTag = jasmine.createSpy('addTag').and.callFake(({ title }: { title: string }) => {
+      tags.set([...tags(), { id: 'new-tag', title }]);
+      return 'new-tag';
+    });
     await TestBed.configureTestingModule({
       imports: [ViewEditorSectionComponent, TranslateModule.forRoot()],
       providers: [
         provideNoopAnimations(),
-        { provide: ProjectService, useValue: { listInTreeOrder: signal([]) } },
+        { provide: ProjectService, useValue: { listInTreeOrder: projects } },
         { provide: MenuTreeService, useValue: { projectFolderMap: signal(new Map()) } },
         {
           provide: TagService,
-          useValue: {
-            tags: signal([]),
-            tagsInTreeOrder: signal([]),
-            tagsNoMyDayAndNoListInTreeOrder: signal([]),
-          },
+          useValue: { tags, tagsInTreeOrder: tags, addTag },
         },
       ],
     }).compileComponents();
+    overlay = TestBed.inject(OverlayContainer).getContainerElement();
     fixture = TestBed.createComponent(ViewEditorSectionComponent);
+    emitted = [];
+    fixture.componentInstance.panelChange.subscribe((panel) => {
+      emitted.push(panel);
+      fixture.componentRef.setInput('panel', panel);
+    });
     fixture.componentRef.setInput('panel', {
       ...DEFAULT_PANEL_CFG,
       id: 'p',
       title: 'Next',
+      ...fields,
     } as BoardPanelCfg);
     fixture.componentRef.setInput('isShowTitle', isShowTitle);
     fixture.detectChanges();
     return fixture.nativeElement as HTMLElement;
   };
 
-  it('puts the rules label in the header when the title is hidden', async () => {
-    const el = await render(false);
+  const text = (el: Element | null): string =>
+    (el?.textContent ?? '').replace(/\s+/g, ' ').trim();
+  const menuItems = (): HTMLButtonElement[] =>
+    Array.from(overlay.querySelectorAll('[mat-menu-item]'));
 
-    const header = el.querySelector('.section-header')!;
-    expect(header.querySelector('.section-label')?.textContent).toContain(
-      T.F.BOARDS.EDITOR.SHOW_TASKS_THAT_MATCH,
+  beforeEach(() => projects.set([]));
+
+  it('does not create a tag or change rules on Enter in the project filter', async () => {
+    projects.set(
+      Array.from({ length: 9 }, (_, i) => ({ id: `p${i}`, title: `Project ${i}` })),
     );
-    expect(header.querySelector('input')).toBeNull();
-    expect(el.querySelector('.rules-heading')).toBeNull();
+    const el = await render({ projectIds: ['p0'] });
+    (el.querySelector('view-rule-chip .chip-main') as HTMLElement).click();
+    fixture.detectChanges();
+    const filter = overlay.querySelector('input') as HTMLInputElement;
+    filter.value = 'Project 1';
+    filter.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    filter.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    fixture.detectChanges();
+
+    expect(addTag).not.toHaveBeenCalled();
+    expect(emitted).toEqual([]);
+    expect(filter.value).toBe('Project 1');
   });
 
-  it('keeps the label below a shown title', async () => {
-    const el = await render(true);
+  it('shows the only section of a list without a card or title', async () => {
+    const el = await render({}, false);
 
-    expect(el.querySelector('.section-header input')).not.toBeNull();
-    expect(el.querySelector('.section-label')).toBeNull();
-    expect(el.querySelector('.rules-heading')?.textContent).toContain(
+    expect(el.querySelector('.section-label')?.textContent).toContain(
       T.F.BOARDS.EDITOR.SHOW_TASKS_THAT_MATCH,
     );
+    expect(el.querySelector('.card')).toBeNull();
+    expect(el.querySelector('view-editor-title')).toBeNull();
+    expect(el.querySelector('view-add-rule-chip')).not.toBeNull();
+  });
+
+  it('shows a card with number and title as text', async () => {
+    const el = await render();
+
+    expect(el.querySelector('.nr')?.textContent).toBe('1');
+    expect(text(el.querySelector('view-editor-title .title-text'))).toBe('Next');
+    expect(el.querySelector('input')).toBeNull();
+    expect(el.querySelector('.section-label')).toBeNull();
+  });
+
+  it('moves focus to the section actions when opening replaces the chevron', async () => {
+    const el = await render();
+    fixture.componentRef.setInput('isCollapsible', true);
+    fixture.componentRef.setInput('isOpen', false);
+    fixture.componentInstance.toggleOpen.subscribe(() =>
+      fixture.componentRef.setInput('isOpen', true),
+    );
+    fixture.detectChanges();
+    const toggle = el.querySelector('.section-toggle') as HTMLButtonElement;
+    toggle.focus();
+    toggle.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    expect(el.querySelector('.section-toggle')).toBeNull();
+    expect(document.activeElement).toBe(el.querySelector('.section-menu-btn'));
+  });
+
+  it('renames on a click on the title, back to text on Enter', async () => {
+    const el = await render();
+    (el.querySelector('view-editor-title .title-text') as HTMLElement).click();
+    fixture.detectChanges();
+    const input = el.querySelector('view-editor-title input') as HTMLInputElement;
+    expect(input).not.toBeNull();
+    input.value = 'Later';
+    input.dispatchEvent(new Event('input'));
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+    fixture.detectChanges();
+    expect(emitted.at(-1)?.title).toBe('Later');
+    expect(el.querySelector('view-editor-title input')).toBeNull();
+    expect(text(el.querySelector('view-editor-title .title-text'))).toBe('Later');
+  });
+
+  it('keeps the title field open while Enter confirms IME composition', async () => {
+    const el = await render();
+    (el.querySelector('view-editor-title .title-text') as HTMLElement).click();
+    fixture.detectChanges();
+    const input = el.querySelector('view-editor-title input') as HTMLInputElement;
+    input.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Enter', isComposing: true }),
+    );
+    fixture.detectChanges();
+    expect(el.querySelector('view-editor-title input')).toBe(input);
+  });
+
+  it('shows a chip per rule with its tags, missing ones and a non-default match', async () => {
+    const el = await render({
+      includedTagIds: ['urgent', 'gone', 'home'],
+      includedTagsMatch: 'any',
+      isParentTasksOnly: true,
+    });
+
+    const tagChip = el.querySelector('view-rule-chip[data-rule="includedTags"]')!;
+    expect(tagChip.querySelectorAll('tag').length).toBe(2);
+    expect(text(tagChip)).toContain(T.F.BOARDS.EDITOR.MISSING_TAG);
+    expect(text(tagChip)).toContain(T.F.BOARDS.FORM.TAGS_MATCH_ANY);
+    expect(tagChip.querySelector('.chip--warn')).not.toBeNull();
+    // A flag has no menu, only its remove button.
+    const flag = el.querySelector('view-rule-chip[data-rule="parentOnly"]')!;
+    expect(flag.querySelector('button.chip-main')).toBeNull();
+    expect(flag.querySelector('.chip-remove')!.getAttribute('aria-label')).toContain(
+      T.F.BOARDS.EDITOR.REMOVE_RULE,
+    );
+  });
+
+  it('toggles a tag in its menu without closing it, keeping missing ids', async () => {
+    const el = await render({ includedTagIds: ['urgent', 'gone'] });
+    (
+      el.querySelector(
+        'view-rule-chip[data-rule="includedTags"] .chip-main',
+      ) as HTMLElement
+    ).click();
+    fixture.detectChanges();
+    const home = menuItems().find((item) => text(item).includes('Home'))!;
+    home.click();
+    fixture.detectChanges();
+    expect(emitted.at(-1)?.includedTagIds).toEqual(['urgent', 'gone', 'home']);
+    expect(overlay.querySelector('.mat-mdc-menu-panel')).not.toBeNull();
+  });
+
+  it('disables set and contradicting rules in the Add-rule menu', async () => {
+    const el = await render({ includedTagIds: ['urgent'] });
+    (el.querySelector('view-add-rule-chip .chip-main') as HTMLElement).click();
+    fixture.detectChanges();
+    const item = (label: string): HTMLButtonElement =>
+      menuItems().find((i) => text(i).includes(label))!;
+
+    expect(text(overlay)).toContain(T.F.BOARDS.EDITOR.GROUP_WHERE);
+    expect(item(T.F.BOARDS.FORM.TAGS_REQUIRED).disabled).toBeTrue();
+    expect(text(item(T.F.BOARDS.FORM.TAGS_REQUIRED))).toContain(
+      T.F.BOARDS.EDITOR.ALREADY_SET,
+    );
+    const untagged = item(T.F.BOARDS.EDITOR.RULE_UNTAGGED);
+    expect(untagged.disabled).toBeTrue();
+    expect(text(untagged)).toContain(T.F.BOARDS.EDITOR.CONFLICTS_WITH);
+    expect(item(T.F.BOARDS.EDITOR.RULE_DONE).disabled).toBeFalse();
+  });
+
+  it('picks the sort and its direction; manual order has none', async () => {
+    const el = await render();
+    const openSort = (): void => {
+      (el.querySelector('view-sort-chip .chip-main') as HTMLElement).click();
+      fixture.detectChanges();
+    };
+    openSort();
+    expect(text(overlay)).not.toContain(T.F.BOARDS.FORM.SORT_DIR_DESC);
+    menuItems()
+      .find((i) => text(i).includes(T.F.BOARDS.FORM.SORT_BY_TITLE))!
+      .click();
+    fixture.detectChanges();
+    expect(emitted.at(-1)?.sortKey).toBe('title');
+    await fixture.whenStable();
+
+    openSort();
+    menuItems()
+      .find((i) => text(i).includes(T.F.BOARDS.FORM.SORT_DIR_DESC))!
+      .click();
+    fixture.detectChanges();
+    expect(emitted.at(-1)?.sortDir).toBe('desc');
+    expect(text(el.querySelector('view-sort-chip'))).toContain('↓');
+  });
+
+  describe('the tag menu filter', () => {
+    const openTagMenu = async (fields: Partial<BoardPanelCfg>): Promise<HTMLElement> => {
+      const el = await render(fields);
+      (el.querySelector('view-rule-chip[data-rule] .chip-main') as HTMLElement).click();
+      fixture.detectChanges();
+      return el;
+    };
+    const filterInput = (): HTMLInputElement =>
+      overlay.querySelector('.menu-filter input') as HTMLInputElement;
+    const type = (value: string): void => {
+      filterInput().value = value;
+      filterInput().dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+    };
+    const tagItems = (): string[] =>
+      Array.from(overlay.querySelectorAll('[role="menuitemcheckbox"]')).map((i) =>
+        text(i),
+      );
+    const createItem = (): HTMLButtonElement | undefined =>
+      menuItems().find((i) => text(i).includes(T.F.BOARDS.EDITOR.CREATE_TAG));
+
+    it('filters the tags by title, ignoring case', async () => {
+      await openTagMenu({ includedTagIds: ['urgent'] });
+      expect(tagItems().length).toBe(2);
+      type('hO');
+      expect(tagItems()).toEqual(['Home']);
+      type('');
+      expect(tagItems().length).toBe(2);
+    });
+
+    it('creates a tag from the filter and adds it to the rule, menu open', async () => {
+      await openTagMenu({ excludedTagIds: ['urgent'] });
+      type('#Errands');
+      createItem()!.click();
+      fixture.detectChanges();
+      expect(addTag).toHaveBeenCalledOnceWith({ title: 'Errands' });
+      expect(emitted.at(-1)?.excludedTagIds).toEqual(['urgent', 'new-tag']);
+      expect(emitted.at(-1)?.includedTagIds).toEqual([]);
+      expect(filterInput().value).toBe('');
+      expect(overlay.querySelector('.mat-mdc-menu-panel')).not.toBeNull();
+      expect(tagItems()).toContain('Errands');
+    });
+
+    it('creates the tag on Enter in the filter', async () => {
+      await openTagMenu({ includedTagIds: ['urgent'] });
+      type('Garden');
+      const enter = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true });
+      filterInput().dispatchEvent(enter);
+      fixture.detectChanges();
+      expect(addTag).toHaveBeenCalledOnceWith({ title: 'Garden' });
+      expect(emitted.at(-1)?.includedTagIds).toEqual(['urgent', 'new-tag']);
+    });
+
+    it('does not create a tag while Enter is confirming IME composition', async () => {
+      await openTagMenu({ includedTagIds: ['urgent'] });
+      type('庭');
+      filterInput().dispatchEvent(
+        new KeyboardEvent('keydown', {
+          key: 'Enter',
+          bubbles: true,
+          isComposing: true,
+        }),
+      );
+      expect(addTag).not.toHaveBeenCalled();
+      expect(emitted).toEqual([]);
+    });
+
+    it('offers no create for an existing title or an empty filter', async () => {
+      await openTagMenu({ includedTagIds: ['urgent'] });
+      expect(createItem()).toBeUndefined();
+      type('  home ');
+      expect(createItem()).toBeUndefined();
+      type('hom');
+      expect(createItem()).toBeDefined();
+      expect(addTag).not.toHaveBeenCalled();
+    });
+
+    it('keeps typed keys from the menu (typeahead, navigation)', async () => {
+      await openTagMenu({ includedTagIds: ['urgent'] });
+      const key = new KeyboardEvent('keydown', { key: 'h', bubbles: true });
+      const stop = spyOn(key, 'stopPropagation').and.callThrough();
+      filterInput().dispatchEvent(key);
+      expect(stop).toHaveBeenCalled();
+      const escape = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true });
+      const keepEscape = spyOn(escape, 'stopPropagation').and.callThrough();
+      filterInput().dispatchEvent(escape);
+      expect(keepEscape).not.toHaveBeenCalled();
+    });
   });
 });
