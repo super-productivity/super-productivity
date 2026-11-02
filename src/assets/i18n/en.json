@@ -168,6 +168,7 @@
         "DELETED_PROJECT": "1 archived or deleted project",
         "DELETED_PROJECTS": "{{nr}} archived or deleted projects",
         "EVERY_TASK": "Every task",
+        "DONE_TAG_FILTER_HINT": "Checked-off tasks appear here only if they also match these tag filters. Checking off does not apply these tag rules; moving a task here does.",
         "LAYOUT": "Layout",
         "LAYOUT_BOARD": "Board",
         "LAYOUT_BOARD_HINT": "Columns side by side, tasks as cards",

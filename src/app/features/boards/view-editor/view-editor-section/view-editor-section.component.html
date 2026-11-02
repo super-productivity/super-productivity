@@ -270,6 +270,9 @@
       </mat-menu>
     }
 
+    @if (isShowDoneTagHint()) {
+      <p class="rule-note">{{ T.F.BOARDS.EDITOR.DONE_TAG_FILTER_HINT | translate }}</p>
+    }
     <div class="rule-row sort-row">
       <div class="rule-control">
         <mat-form-field subscriptSizing="dynamic">

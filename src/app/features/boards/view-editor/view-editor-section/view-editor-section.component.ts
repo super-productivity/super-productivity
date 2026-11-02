@@ -22,7 +22,11 @@ import { MatMenu, MatMenuItem, MatMenuTrigger } from '@angular/material/menu';
 import { MatOption, MatSelect, MatSelectChange } from '@angular/material/select';
 import { MatTooltip } from '@angular/material/tooltip';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
-import { BoardMatchMode, BoardPanelCfg } from '../../boards.model';
+import {
+  BoardMatchMode,
+  BoardPanelCfg,
+  BoardPanelCfgTaskDoneState,
+} from '../../boards.model';
 import { T } from '../../../../t.const';
 import { TagEditComponent } from '../../../tag/tag-edit/tag-edit.component';
 import { TagService } from '../../../tag/tag.service';
@@ -149,6 +153,13 @@ export class ViewEditorSectionComponent {
     return VIEW_RULE_ORDER.filter((rule) => touched.has(rule) || isRuleSet(panel, rule));
   });
   readonly addableRuleGroups = computed(() => getAddableRuleGroups(this.shownRules()));
+  readonly isShowDoneTagHint = computed(() => {
+    const panel = this.panel();
+    return (
+      panel.taskDoneState === BoardPanelCfgTaskDoneState.Done &&
+      !!(panel.includedTagIds.length || panel.excludedTagIds.length)
+    );
+  });
 
   readonly projects = this._projectService.listInTreeOrder;
   readonly projectFolderMap = computed(() => this._menuTreeService.projectFolderMap());
