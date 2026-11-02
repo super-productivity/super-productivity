@@ -11,7 +11,7 @@ Each file's `source:` frontmatter records the exact page, title, and URL.
 | Cloudflare     | `.cloudflare.md` | 2     | CC BY 4.0    |
 | Gatsby         | `.gatsby.md`     | 4     | MIT          |
 | Astro          | `.astro.md`      | 2     | MIT          |
-| Ubuntu         | `.ubuntu.md`     | 1     | CC BY-SA 4.0 |
+| Ubuntu         | `.ubuntu.md`     | 23    | CC BY-SA 4.0 |
 
 ## Attribution and licenses
 
@@ -19,9 +19,10 @@ Each file's `source:` frontmatter records the exact page, title, and URL.
 - Cloudflare: Copyright Cloudflare, Inc.; CC BY 4.0, [upstream license][cloudflare-license].
 - Gatsby: Copyright (c) 2015 Gatsbyjs; MIT, [upstream license][gatsby-license].
 - Astro: Copyright (c) 2022 withastro; MIT, [upstream license][astro-license].
-- Ubuntu: Copyright Canonical Ltd.; CC BY-SA 4.0, [maintained source][ubuntu-docs] and [upstream license][ubuntu-license].
+- Ubuntu: Copyright Canonical Ltd.; CC BY-SA 4.0, [Ubuntu Desktop documentation][ubuntu-desktop-docs] and [license][ubuntu-license], plus [Ubuntu Core documentation][ubuntu-core-docs] and [license][ubuntu-core-license].
 
-The Ubuntu excerpt comes from an older tutorial page that states no license on its face; the maintained version of that tutorial is published under CC BY-SA 4.0 in [ubuntu-docs].
+The Ubuntu excerpts come from the Ubuntu Desktop and Ubuntu Core documentation, both published under CC BY-SA 4.0.
+The Ubuntu Core excerpts cover tutorials, how-to guides, reference, and explanation, and the Ubuntu Desktop excerpts cover the same four quadrants.
 
 ## Linked sources
 
@@ -40,5 +41,7 @@ The full license texts are in `licenses/`:
 [cloudflare-license]: https://github.com/cloudflare/cloudflare-docs/blob/production/LICENSE
 [gatsby-license]: https://github.com/gatsbyjs/gatsby/blob/master/LICENSE
 [astro-license]: https://github.com/withastro/docs/blob/main/LICENSE
-[ubuntu-docs]: https://github.com/ubuntu/ubuntu-desktop-documentation
+[ubuntu-desktop-docs]: https://github.com/ubuntu/ubuntu-desktop-documentation
+[ubuntu-core-docs]: https://github.com/canonical/ubuntu-core-docs
 [ubuntu-license]: https://github.com/ubuntu/ubuntu-desktop-documentation/blob/main/LICENSE
+[ubuntu-core-license]: https://github.com/canonical/ubuntu-core-docs/blob/main/LICENSE.txt

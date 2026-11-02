@@ -10,12 +10,12 @@ The frontmatter block is the exception: every page carries it.
 
 ````markdown
 ---
-title: How to [Solve Specific Problem/Achieve Specific Goal]
+title: [Create/Configure/Deploy] [Specific Goal]
 type: how-to
 domain: [project-or-package]
 ---
 
-# How to [Solve Specific Problem/Achieve Specific Goal]
+# [Create/Configure/Deploy] [Specific Goal]
 
 > **How-to guide**: Shows how to [specific goal]. Use when you need to [scenario].
 

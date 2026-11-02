@@ -38,6 +38,7 @@ Template: [tutorial-template.md](../templates/tutorial-template.md).
 - Give the learner one action per step, a visible result after each. Quote prompts when the reader must not walk past one.
 - Minimize explanation: it is linked, not embedded.
 - Offer no choices or alternatives: one safe path, bound to one deployment route.
+  If an alternative is essential, cover it in a separate how-to guide rather than branching the tutorial.
 - Show the way out: cleanup closes the lesson; troubleshooting sits at the step where failure happens.
 - A tutorial must work for its intended reader without a teacher present.
 - Title: the destination the learner reaches.
@@ -52,7 +53,7 @@ Template: [how-to-template.md](../templates/how-to-template.md).
 - Steps carry one action each and say which environment each command runs against; document the migration from commands-to-config when it exists.
 - Put the minimum theory immediately ahead of the example that exercises it.
 - Verification shows the literal output, not reassurance. State the boundary between lookalike things. Troubleshooting sits at the point of failure.
-- Title: `How to [accomplish this specific goal]`.
+- Title: an imperative phrase such as `Create a bootable USB stick`; do not use `How to ...` or a gerund such as `Creating ...`.
 
 ### Reference: facts, complete and exact
 

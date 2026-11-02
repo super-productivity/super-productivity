@@ -1,13 +1,16 @@
-# A tutorial opens by saying what the learner will have made by the end,
-# so they can decide whether it's for them before they start. Read from
-# the paragraph after the title.
+# A tutorial opens by saying where the learner is going, so they can decide
+# whether it's for them before they start. Ubuntu states the goal directly
+# ("Let's walk through...", "This tutorial will guide you...") as well as
+# with "In this tutorial...". Vale cannot reliably identify an entry page,
+# so the rule reads the page summary and reports at the first paragraph.
+# This is advisory: an index page is excluded in .vale.ini.
 # https://diataxis.fr/tutorials/
 extends: occurrence
 message: "Open by saying what the learner will build or be able to do by the end."
 link: https://diataxis.fr/tutorials/
-level: warning
-scope: 'text & doc(h1 + p)'
-token: "(?i)\\b(?:in this tutorial|you(?:'ll| will) (?:build|create|make|write|set up|have|be able)|by the end|we(?:'ll| will) (?:build|create|make|write))\\b"
+level: suggestion
+scope: summary
+token: "(?i)\\b(?:in this tutorial|this tutorial (?:will|walks|guides|shows|introduces|takes)|you(?:'ll| will) (?:build|create|make|write|set up|have|be able|learn|install|configure|deploy|use|run|try)|we(?:'ll| will) (?:build|create|make|write|walk|explore|use|install|configure|deploy|run|try)|let'?s (?:walk|explore|get started|begin|start|build|create)|by the end)\\b"
 min: 1
 
 tests:
@@ -19,10 +22,24 @@ tests:
 
     want: |
       3:1:Tutorial.Opening:Open by saying what the learner will build or be able to do by the end.
-  - name: clean
+  - name: clean in this tutorial
     input: |
       # Getting started
 
       In this tutorial you'll build a small site and deploy it.
+
+    want: ""
+  - name: clean let's walk
+    input: |
+      # Getting started
+
+      Let's walk through the first build.
+
+    want: ""
+  - name: clean this tutorial will guide
+    input: |
+      # Getting started
+
+      This tutorial will guide you through the installation.
 
     want: ""

@@ -4,7 +4,7 @@
 extends: existence
 message: "'%s' is a learning promise. Say what the learner will build instead."
 link: https://diataxis.fr/tutorials/#the-language-of-tutorials
-level: warning
+level: suggestion
 ignorecase: true
 tokens:
   - "(?:you|we)(?:'ll| will) learn"

@@ -1,13 +1,14 @@
 # Explanation gives the shape of things, not their every value. A table of
-# every option or a list of every flag is reference; link to it.
+# every option or a list of every flag is reference; link to it. Eight rows
+# leaves room for a comparison table that carries the shape of the system.
 # https://diataxis.fr/explanation/#the-language-of-explanation
 extends: occurrence
-message: "%d tables. Explanation gives the shape; the full listing is reference, so link to it."
+message: "%d table rows. Explanation gives the shape; the full listing is reference, so link to it."
 link: https://diataxis.fr/explanation/#the-language-of-explanation
 level: suggestion
 scope: raw
 token: '(?m)^\|[^\n]*\|\s*$'
-max: 6
+max: 8
 
 tests:
   - name: fires
@@ -19,9 +20,11 @@ tests:
       | 5 | 6 |
       | 7 | 8 |
       | 9 | 0 |
+      | 1 | 2 |
+      | 3 | 4 |
 
     want: |
-      1:1:Explanation.Reference:7 tables. Explanation gives the shape; the full listing is reference, so link to it.
+      1:1:Explanation.Reference:9 table rows. Explanation gives the shape; the full listing is reference, so link to it.
   - name: clean
     input: |
       The cache has two layers.
