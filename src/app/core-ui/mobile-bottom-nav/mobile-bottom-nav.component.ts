@@ -41,6 +41,7 @@ import {
   resolveBottomNavSlot,
   writeStoredBottomNavSlot,
 } from './mobile-bottom-nav-slot';
+import { selectAllBoards } from '../../features/boards/store/boards.selectors';
 
 @Component({
   selector: 'mobile-bottom-nav',
@@ -104,17 +105,22 @@ export class MobileBottomNavComponent {
 
   // Second slot: configurable destination, Planner by default (#7637).
   private readonly _storedSlotId = signal(readStoredBottomNavSlot());
+  private readonly _views = toSignal(this._store.select(selectAllBoards));
+  private readonly _slotSources = computed(() => ({
+    pluginEntries: this._pluginBridge.menuEntries(),
+    views: this._views() ?? [],
+  }));
   readonly slotOptions = computed(() =>
     getAvailableBottomNavSlotOptions(
       this._globalConfigService.appFeatures(),
-      this._pluginBridge.menuEntries(),
+      this._slotSources(),
     ),
   );
   readonly slot = computed(() =>
     resolveBottomNavSlot(
       this._storedSlotId(),
       this._globalConfigService.appFeatures(),
-      this._pluginBridge.menuEntries(),
+      this._slotSources(),
     ),
   );
   private readonly _url = toSignal(
