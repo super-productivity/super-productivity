@@ -98,7 +98,20 @@ header {
   border-radius: 8px;
   min-height: 100px;
   flex-grow: 1;
-  //border-color: var(--extra-border-color);
+  display: flex;
+  flex-direction: column;
+}
+
+// The open cards take the column's free height: an empty or short column is
+// a drop target to its bottom.
+.drop-list {
+  flex: 1 0 auto;
+  min-height: var(--s5);
+}
+
+.show-all-btn {
+  align-self: center;
+  margin-bottom: var(--s);
 }
 
 .schedule-btn {

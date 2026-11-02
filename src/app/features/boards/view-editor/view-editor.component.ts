@@ -35,6 +35,7 @@ import {
 } from '../../../ui/segmented-button-group/segmented-button-group.component';
 import { selectAllTasksInActiveProjects } from '../../tasks/store/task.selectors';
 import { ViewCriteriaContextService } from '../view-criteria-context.service';
+import { LayoutService } from '../../../core-ui/layout/layout.service';
 import { TaskCopy } from '../../tasks/task.model';
 import { TaskCriteriaCtx } from '../../tasks/task-criteria/task-criteria.model';
 import { matchesTaskCriteria } from '../../tasks/task-criteria/task-criteria';
@@ -100,6 +101,7 @@ export class ViewEditorComponent {
   private readonly _translateService = inject(TranslateService);
   private readonly _store = inject(Store);
   private readonly _viewCtx = inject(ViewCriteriaContextService);
+  private readonly _isXs = inject(LayoutService).isXs;
 
   private readonly _titleModel = viewChild('titleModel', { read: NgModel });
   private readonly _titleInput = viewChild('titleModel', { read: MatInput });
@@ -172,7 +174,8 @@ export class ViewEditorComponent {
     const ctx = this._viewCtx.ctx();
     // Backlog membership is read while matching: a cached match follows it.
     const projects = this._viewCtx.projects();
-    const isListLayout = model.cols <= 1;
+    // Phones show every view as a list (`BoardComponent.isListLayout`).
+    const isListLayout = model.cols <= 1 || this._isXs();
     return model.panels.map((panel) => {
       const hit = this._countCache.get(panel);
       const isSameMatching = !!hit && hit.ctx === ctx && hit.projects === projects;

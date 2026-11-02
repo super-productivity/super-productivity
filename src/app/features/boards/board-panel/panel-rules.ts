@@ -131,3 +131,47 @@ export const placeInOrder = (
   remaining.splice(index, 0, ...ids);
   return remaining;
 };
+
+/**
+ * How many items of a part (main or done) a panel renders before "Show all":
+ * thousands of cards or rows take seconds to render, and a column that long
+ * isn't read to its end. Local to the panel, never stored or synced.
+ */
+export const PANEL_SHOWN_LIMIT = 100;
+
+/**
+ * Where a drop lands in the panel's order (counted without the moving ids):
+ * after the rendered item before the drop marker, as task lists place rows.
+ * `currentIndex` is CDK's index among the rendered items, which don't
+ * include the dragged one when it comes from the same list (`draggedId`).
+ * Items not rendered (past the limit, the done group) keep their place.
+ */
+export const getDropIndex = (
+  orderIds: readonly string[],
+  renderedIds: readonly string[],
+  movingIds: ReadonlySet<string>,
+  currentIndex: number,
+  draggedId?: string,
+): number => {
+  const before = renderedIds
+    .filter((id) => id !== draggedId)
+    .slice(0, currentIndex)
+    .filter((id) => !movingIds.has(id));
+  const anchor = before[before.length - 1];
+  if (anchor === undefined) return 0;
+  return orderIds.filter((id) => !movingIds.has(id)).indexOf(anchor) + 1;
+};
+
+/**
+ * The panel's order with the ids of one part (its open cards) in
+ * `partOrder`: they take the places the part had, so the other ids (the done
+ * group) stay where they are.
+ */
+export const withPartOrder = (
+  orderIds: readonly string[],
+  partOrder: readonly string[],
+): string[] => {
+  const part = new Set(partOrder);
+  let next = 0;
+  return orderIds.map((id) => (part.has(id) ? partOrder[next++] : id));
+};

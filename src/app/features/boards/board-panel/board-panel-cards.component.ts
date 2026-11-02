@@ -6,11 +6,14 @@ import {
   viewChildren,
 } from '@angular/core';
 import { CdkDrag, CdkDropList } from '@angular/cdk/drag-drop';
+import { CdkScrollable } from '@angular/cdk/scrolling';
+import { NgTemplateOutlet } from '@angular/common';
 import { MatIcon } from '@angular/material/icon';
-import { MatIconButton } from '@angular/material/button';
+import { MatButton, MatIconButton } from '@angular/material/button';
 import { MatTooltip } from '@angular/material/tooltip';
 import { TranslatePipe } from '@ngx-translate/core';
 import { PlannerTaskComponent } from '../../planner/planner-task/planner-task.component';
+import { CollapsibleComponent } from '../../../ui/collapsible/collapsible.component';
 import { AddTaskBarComponent } from '../../tasks/add-task-bar/add-task-bar.component';
 import { TaskCopy } from '../../tasks/task.model';
 import { LocalDateStrPipe } from '../../../ui/pipes/local-date-str.pipe';
@@ -29,7 +32,9 @@ import { BOARD_PANEL } from './board-panel.token';
 
 /**
  * A board panel as a column of cards (`planner-task`), for columns side by
- * side: header, add bar and the drop list. State and moves are the panel's.
+ * side: header, add bar, the open cards (the drop list) and the collapsed
+ * done group, each part capped (`PANEL_SHOWN_LIMIT`). State and moves are the
+ * panel's.
  */
 @Component({
   selector: 'board-panel-cards',
@@ -37,9 +42,13 @@ import { BOARD_PANEL } from './board-panel.token';
   imports: [
     CdkDrag,
     CdkDropList,
+    CdkScrollable,
+    NgTemplateOutlet,
     PlannerTaskComponent,
+    CollapsibleComponent,
     AddTaskBarComponent,
     MatIcon,
+    MatButton,
     MatIconButton,
     MatTooltip,
     TranslatePipe,
@@ -59,7 +68,7 @@ export class BoardPanelCardsComponent {
   private readonly _dateService = inject(DateService);
   private readonly _cards = viewChildren(PlannerTaskComponent, { read: ElementRef });
 
-  /** The cards, in order (the panel's keyboard rows). */
+  /** The rendered cards, open then done (the panel's keyboard rows). */
   cards(): HTMLElement[] {
     return this._cards().map((card) => card.nativeElement as HTMLElement);
   }

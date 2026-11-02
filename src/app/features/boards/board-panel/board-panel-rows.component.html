@@ -66,7 +66,7 @@
       <span class="count"><mat-icon>task_alt</mat-icon>{{ panel.headerCount() }}</span>
     </div>
   }
-  @if (!panel.mainRows().length && !panel.doneRows().length) {
+  @if (!panel.mainItems().length && !panel.doneItems().length) {
     <div class="view-empty">
       <h2 class="view-empty-title">{{ T.F.BOARDS.V.NO_TASKS_IN_VIEW | translate }}</h2>
       <p class="view-empty-hint">{{ T.F.BOARDS.V.EMPTY_VIEW_HINT | translate }}</p>
@@ -102,14 +102,20 @@
     listModelId="VIEW"
     [isSortingDisabled]="!panel.isManualOrder()"
     [noTasksMsg]="
-      panel.doneRows().length || !panel.isSection()
+      panel.doneItems().length || !panel.isSection()
         ? undefined
         : (T.F.PLANNER.NO_TASKS | translate)
     "
   ></task-list>
-  @if (panel.doneRows().length) {
+  @if (panel.mainItems().length > panel.shownMain().length) {
+    <ng-container
+      [ngTemplateOutlet]="showAll"
+      [ngTemplateOutletContext]="{ $implicit: panel.mainItems() }"
+    ></ng-container>
+  }
+  @if (panel.doneItems().length) {
     <collapsible
-      [title]="(T.WW.DONE_TASKS | translate) + ' (' + panel.doneRows().length + ')'"
+      [title]="(T.WW.DONE_TASKS | translate) + ' (' + panel.doneItems().length + ')'"
       [isIconBefore]="true"
       [isExpanded]="panel.isDoneListExpanded()"
       (isExpandedChange)="panel.isDoneListExpanded.set($event)"
@@ -121,7 +127,26 @@
           listModelId="VIEW_DONE"
           [isSortingDisabled]="true"
         ></task-list>
+        @if (panel.doneItems().length > panel.shownDone().length) {
+          <ng-container
+            [ngTemplateOutlet]="showAll"
+            [ngTemplateOutletContext]="{ $implicit: panel.doneItems() }"
+          ></ng-container>
+        }
       }
     </collapsible>
   }
+</ng-template>
+
+<ng-template
+  #showAll
+  let-items
+>
+  <button
+    mat-button
+    class="show-all-btn"
+    (click)="panel.showAll(items)"
+  >
+    {{ T.F.BOARDS.V.SHOW_ALL | translate: { count: items.length } }}
+  </button>
 </ng-template>

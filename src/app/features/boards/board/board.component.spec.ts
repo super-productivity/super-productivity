@@ -12,11 +12,13 @@ import { ViewCriteriaContextService } from '../view-criteria-context.service';
 import { addTag } from '../../tag/store/tag.actions';
 import { IMPORTANT_TAG, URGENT_TAG } from '../../tag/tag.const';
 import { Tag } from '../../tag/tag.model';
+import { LayoutService } from '../../../core-ui/layout/layout.service';
 
 describe('BoardComponent', () => {
   let fixture: ComponentFixture<BoardComponent>;
   let dispatch: jasmine.Spy;
   let tagIds: WritableSignal<ReadonlySet<string>>;
+  let isXs: WritableSignal<boolean>;
 
   // One `addTag` per tag; nothing else is dispatched.
   const addedTags = (): Tag[] =>
@@ -30,6 +32,7 @@ describe('BoardComponent', () => {
   const render = async (board: BoardCfg, existing: string[]): Promise<HTMLElement> => {
     dispatch = jasmine.createSpy('dispatch');
     tagIds = signal(new Set(existing));
+    isXs = signal(false);
     await TestBed.configureTestingModule({
       imports: [BoardComponent, TranslateModule.forRoot()],
       providers: [
@@ -37,6 +40,7 @@ describe('BoardComponent', () => {
         { provide: Store, useValue: { dispatch } },
         { provide: BoardsService, useValue: { editBoard: jasmine.createSpy() } },
         { provide: ViewCriteriaContextService, useValue: { tagIdSet: tagIds } },
+        { provide: LayoutService, useValue: { isXs: () => isXs() } },
       ],
     })
       // The columns are covered by the board panel's specs.
@@ -109,5 +113,20 @@ describe('BoardComponent', () => {
 
     expect(el.querySelector('.callout')).toBeNull();
     expect(el.querySelectorAll('board-panel').length).toBe(4);
+  });
+
+  // Cards side by side, rows when stacked.
+  it('shows rows on phones, keeping the stored columns', async () => {
+    const el = await render(eisenhower, [IMPORTANT_TAG.id, URGENT_TAG.id]);
+    expect(fixture.componentInstance.isListLayout()).toBeFalse();
+    expect(el.classList).not.toContain('isListLayout');
+
+    isXs.set(true);
+    fixture.detectChanges();
+    expect(fixture.componentInstance.isListLayout()).toBeTrue();
+    expect(fixture.componentInstance.isSectioned()).toBeTrue();
+    expect(el.classList).toContain('isListLayout');
+    // Still the board's columns: not the list width of a one-column view.
+    expect(el.classList).not.toContain('isSingleColumn');
   });
 });

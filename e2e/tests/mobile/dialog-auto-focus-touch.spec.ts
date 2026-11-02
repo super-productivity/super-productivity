@@ -1,5 +1,4 @@
 import { expect, test } from '../../fixtures/test.fixture';
-import { columnTitleButton } from '../../utils/view-helpers';
 
 /**
  * Dialogs on a phone open without focusing a text field, so the on-screen
@@ -19,11 +18,11 @@ test.describe('Dialog auto focus on a phone', () => {
   test('the view editor focuses itself, not a field', async ({ page, workViewPage }) => {
     await workViewPage.waitForTaskList();
     await page.goto('/#/boards/KANBAN_DEFAULT');
-    // Default views show their columns even before their tags exist.
-    // A column's title opens the view editor with that column's card asked to
-    // take first focus (`cdkFocusInitial`); on touch the container wins.
-    const columnTitle = columnTitleButton(page.locator('board-panel').first(), 'To Do');
-    await columnTitle.tap();
+    // On a phone a view is a list, and its title in the title bar opens the
+    // view editor.
+    await expect(page.locator('board-panel')).toHaveCount(3);
+    const viewTitle = page.locator('page-title .page-title');
+    await viewTitle.tap();
 
     const container = page.locator('mat-dialog-container');
     await expect(container.locator('dialog-board-edit')).toBeVisible();
@@ -35,7 +34,7 @@ test.describe('Dialog auto focus on a phone', () => {
     // Closing hands focus back to the button that opened the dialog.
     await container.getByRole('button', { name: 'Cancel', exact: true }).tap();
     await expect(container).toHaveCount(0);
-    await expect(columnTitle).toBeFocused();
+    await expect(viewTitle).toBeFocused();
   });
 
   test('the create-project dialog still focuses its name field', async ({

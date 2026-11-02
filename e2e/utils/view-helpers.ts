@@ -266,3 +266,42 @@ export const createView = async (page: Page, spec: ViewSpec): Promise<void> => {
     Math.max(1, spec.sections?.length ?? 1),
   );
 };
+
+/**
+ * Creates tasks with these titles in the Inbox in one go, through the store
+ * (the UI would take minutes for long lists). Ids are `seeded-<index>`, so
+ * call it once per test.
+ */
+export const seedInboxTasks = async (page: Page, titles: string[]): Promise<void> => {
+  await page.evaluate((taskTitles) => {
+    const store = (
+      window as unknown as {
+        __e2eTestHelpers?: { store?: { dispatch: (action: unknown) => void } };
+      }
+    ).__e2eTestHelpers?.store;
+    if (!store) throw new Error('__e2eTestHelpers.store missing');
+    const operations = taskTitles.map((title, index) => ({
+      type: 'create',
+      tempId: `temp-${index}`,
+      data: { title },
+    }));
+    const createdTaskIds = Object.fromEntries(
+      operations.map(({ tempId }, index) => [tempId, `seeded-${index}`]),
+    );
+    for (let offset = 0; offset < operations.length; offset += 50) {
+      store.dispatch({
+        type: '[Task Shared] batchUpdateForProject',
+        projectId: 'INBOX_PROJECT',
+        operations: operations.slice(offset, offset + 50),
+        createdTaskIds,
+        createdTaskTimestamp: Date.now(),
+        meta: {
+          isPersistent: true,
+          entityType: 'PROJECT',
+          entityId: 'INBOX_PROJECT',
+          opType: 'BATCH',
+        },
+      });
+    }
+  }, titles);
+};

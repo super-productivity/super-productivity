@@ -24,7 +24,9 @@
 :host(.isListLayout) {
   border: 0;
   border-radius: 0;
-  min-height: 0;
+  // As tall as its rows: a grid row of the board may not shrink it (`0`
+  // let a long section overlap the next one).
+  min-height: auto;
   max-height: none;
   overflow: visible;
 }

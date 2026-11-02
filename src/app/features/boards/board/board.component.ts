@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/naming-convention */
 import {
+  afterNextRender,
   ChangeDetectionStrategy,
   Component,
   computed,
@@ -7,7 +8,9 @@ import {
   effect,
   ElementRef,
   inject,
+  Injector,
   input,
+  untracked,
   viewChildren,
 } from '@angular/core';
 import { BoardCfg } from '../boards.model';
@@ -32,6 +35,7 @@ import { T } from '../../../t.const';
 import { ViewTaskListRegistry } from '../../tasks/view-task-list-registry.service';
 import { ViewCriteriaContextService } from '../view-criteria-context.service';
 import { expandOutOnlyAnimation } from '../../../ui/animations/expand.ani';
+import { LayoutService } from '../../../core-ui/layout/layout.service';
 
 // The tags the default views use, created with their fixed ids.
 const DEFAULT_VIEW_TAGS = [IMPORTANT_TAG, URGENT_TAG, IN_PROGRESS_TAG];
@@ -55,7 +59,10 @@ export class BoardComponent {
   private _store = inject(Store);
   private _translateService = inject(TranslateService);
   private _boardsService = inject(BoardsService);
+  private _layoutService = inject(LayoutService);
   private _viewCtx = inject(ViewCriteriaContextService);
+  private _element = inject<ElementRef<HTMLElement>>(ElementRef);
+  private _injector = inject(Injector);
 
   boardCfg = input.required<BoardCfg>();
   private _panels = viewChildren(BoardPanelComponent);
@@ -95,10 +102,14 @@ export class BoardComponent {
     target.focusRow(event.rowIndex, event.focusTaskId ?? event.taskIds?.[0]);
   }
 
-  // A one-column view reads like a task list: task rows instead of cards,
-  // its stacked panels being sections of that list (rows move between them
-  // by drag and keyboard as cards did). Boards with columns keep their cards.
-  readonly isListLayout = computed(() => this.boardCfg().cols <= 1);
+  // Cards side by side, rows when stacked: a one-column view, and any view on
+  // a phone (where the grid stacks its columns), reads like a task list: task
+  // rows instead of cards, its stacked panels being sections of that list
+  // (rows move between them by drag and keyboard as cards did). The stored
+  // layout stays as it is.
+  readonly isListLayout = computed(
+    () => this.boardCfg().cols <= 1 || this._layoutService.isXs(),
+  );
   readonly isSectioned = computed(
     () => this.isListLayout() && this.boardCfg().panels.length > 1,
   );
@@ -111,6 +122,29 @@ export class BoardComponent {
       registry.set(this, this.isListLayout() ? this._panels() : []);
     });
     inject(DestroyRef).onDestroy(() => registry.clear(this));
+
+    // Crossing the phone breakpoint (rotating, resizing) swaps cards and rows:
+    // the focused task keeps the focus. Runs before the swap renders.
+    let wasListLayout: boolean | undefined;
+    effect(() => {
+      const isListLayout = this.isListLayout();
+      if (wasListLayout !== undefined && wasListLayout !== isListLayout) {
+        untracked(() => this._refocusAfterSwap());
+      }
+      wasListLayout = isListLayout;
+    });
+  }
+
+  private _refocusAfterSwap(): void {
+    const focused = document.activeElement?.closest<HTMLElement>('[data-task-id]');
+    const taskId = focused?.dataset.taskId;
+    if (!taskId || !this._element.nativeElement.contains(focused)) return;
+    const panelEl = focused.closest('board-panel');
+    const panel =
+      this._panels()[
+        this._panelElements().findIndex((el) => el.nativeElement === panelEl)
+      ];
+    afterNextRender(() => panel?.focusRow(0, taskId), { injector: this._injector });
   }
 
   // Tags the rules name that don't exist (the default views' tags on an

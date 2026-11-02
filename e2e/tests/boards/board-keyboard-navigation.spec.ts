@@ -134,13 +134,50 @@ test.describe('Board keyboard navigation', () => {
     await page.keyboard.press('ArrowRight');
     await expect(addButton(panels.nth(1))).toBeFocused();
 
-    await page.setViewportSize({ width: 375, height: 900 });
+    // On a phone the panels are sections of one list: the focused card is a
+    // row there and keeps the focus through the swap, and back.
     await moved.focus();
-    await page.keyboard.press('ArrowRight');
+    const movedId = await moved.getAttribute('data-task-id');
+    await page.setViewportSize({ width: 375, height: 900 });
+    const row = panels.nth(2).locator(`task[data-task-id="${movedId}"]`);
+    await expect(row).toBeFocused();
+    await expect(panels.nth(2).locator('planner-task')).toHaveCount(0);
+    await page.setViewportSize({ width: 1280, height: 900 });
     await expect(moved).toBeFocused();
-    await page.keyboard.press('Control+Shift+ArrowRight');
-    await expect(moved).toHaveCount(1);
-    await expect(panels.nth(3).locator('planner-task')).toHaveCount(0);
+  });
+
+  test('arrows leave a stacked panel past its first or last card', async ({
+    page,
+    workViewPage,
+    testPrefix,
+  }) => {
+    await workViewPage.waitForTaskList();
+    for (const name of ['Upper', 'Lower']) {
+      await workViewPage.addTask(`${testPrefix}-${name}`);
+    }
+    await page.goto('/#/boards/EISENHOWER_MATRIX');
+    await page.getByRole('button', { name: /Create.*Tags/i }).click();
+    const panels = page.locator('board-panel');
+    const lower = panels.nth(3).locator('planner-task');
+    const upper = panels.nth(1).locator('planner-task');
+    await expect(lower).toHaveCount(2);
+    // One card into the quadrant above.
+    await lower.first().focus();
+    await page.keyboard.press('Control+Shift+ArrowUp');
+    await page.keyboard.press('Control+Shift+ArrowUp');
+    await expect(upper).toHaveCount(1);
+    await expect(upper).toBeFocused();
+    // Down past its last card: the first card below; up again: back.
+    await page.keyboard.press('ArrowDown');
+    await expect(lower).toBeFocused();
+    await page.keyboard.press('ArrowUp');
+    await expect(upper).toBeFocused();
+    // Nothing above the top row of panels, nothing below the bottom one.
+    await page.keyboard.press('ArrowUp');
+    await expect(upper).toBeFocused();
+    await lower.focus();
+    await page.keyboard.press('ArrowDown');
+    await expect(lower).toBeFocused();
   });
 
   test('does not move or reorder a selection spanning panels', async ({
@@ -222,7 +259,8 @@ test.describe('Board keyboard navigation', () => {
 
     const scheduledCard = progress.locator('planner-task').first();
     await expect(scheduledCard.locator('.time-badge')).toBeVisible();
-    for (const width of [1280, 375]) {
+    // Cards down to the phone breakpoint, where views show rows.
+    for (const width of [1280, 600]) {
       await page.setViewportSize({ width, height: 900 });
       await expect
         .poll(() =>

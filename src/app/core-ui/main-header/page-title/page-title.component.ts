@@ -10,7 +10,12 @@ import { MatRipple } from '@angular/material/core';
 import { MatTooltip } from '@angular/material/tooltip';
 import { MatIconButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
-import { MatMenu, MatMenuContent, MatMenuTrigger } from '@angular/material/menu';
+import {
+  MatMenu,
+  MatMenuContent,
+  MatMenuItem,
+  MatMenuTrigger,
+} from '@angular/material/menu';
 import { WorkContextMenuComponent } from '../../work-context-menu/work-context-menu.component';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { T } from '../../../t.const';
@@ -40,8 +45,13 @@ import {
   translateViewTitle,
 } from '../../../features/boards/boards.util';
 import { BoardCfg } from '../../../features/boards/boards.model';
-import { ViewMenuComponent } from '../../../features/boards/view-menu/view-menu.component';
+import {
+  runViewMenuAction,
+  VIEW_MENU_ITEMS,
+  ViewMenuAction,
+} from '../../../features/boards/view-menu/view-menu.component';
 import { BoardsService } from '../../../features/boards/boards.service';
+import { LayoutService } from '../../layout/layout.service';
 
 @Component({
   selector: 'page-title',
@@ -59,7 +69,7 @@ import { BoardsService } from '../../../features/boards/boards.service';
     TaskViewCustomizerPanelComponent,
     TranslatePipe,
     PluginIconComponent,
-    ViewMenuComponent,
+    MatMenuItem,
   ],
   template: `
     @if (activeWorkContextTypeAndId()) {
@@ -160,9 +170,10 @@ import { BoardsService } from '../../../features/boards/boards.service';
           <!-- List/Board: first, so it stays under the pointer when the
                list-only filter button comes or goes. These blocks stay
                rendered across the switch (their aliases update), so the
-               button keeps the focus. On phones it is an item of the ⋮ menu
-               instead: three buttons left the view's title a word ("Open …")
-               at 400px, and the title is the view's name there. -->
+               button keeps the focus. Phones show every view as a list and
+               keep the title bar to the view's name and its ⋮ menu: more
+               buttons left the title a word ("Open …") at 360px. The title
+               opens the editor, which also sets the layout. -->
           @if (!isXs() && viewLayoutSwitch(); as layoutSwitch) {
             <button
               class="view-layout-btn"
@@ -177,8 +188,8 @@ import { BoardsService } from '../../../features/boards/boards.service';
           <!-- Where a list has its filter/sort button, a list-layout view
                has one that opens the view editor, like its title: the
                editor covers every rule. Boards with several columns use
-               their title and column titles. -->
-          @if (board.cols <= 1) {
+               their title and column titles; phones the title. -->
+          @if (board.cols <= 1 && !isXs()) {
             <button
               class="task-filter-btn"
               (click)="editView(board)"
@@ -205,11 +216,18 @@ import { BoardsService } from '../../../features/boards/boards.service';
       }
       <mat-menu #viewMenu="matMenu">
         <ng-template matMenuContent>
+          <!-- Written here, not through view-menu: MatMenu's arrow keys only
+               reach items in its own template. -->
           @if (viewBoard(); as board) {
-            <view-menu
-              [board]="board"
-              [withLayoutSwitch]="isXs()"
-            ></view-menu>
+            @for (item of viewMenuItems; track item.action) {
+              <button
+                mat-menu-item
+                (click)="runViewMenuAction(board, item.action)"
+              >
+                <mat-icon [class.color-warn-i]="item.isWarn">{{ item.icon }}</mat-icon>
+                <span>{{ item.label | translate }}</span>
+              </button>
+            }
           }
         </ng-template>
       </mat-menu>
@@ -606,14 +624,12 @@ export class PageTitleComponent {
   isXxxs = toSignal(this._isXxxs$.pipe(map((result) => result.matches)), {
     initialValue: false,
   });
-  // Phones (the bottom-nav layout): the view's List/Board switch moves into
-  // its ⋮ menu, so the title keeps room for the view's name.
-  isXs = toSignal(
-    this._breakpointObserver
-      .observe('(max-width: 599px)')
-      .pipe(map((result) => result.matches)),
-    { initialValue: false },
-  );
+  // Phones (the bottom-nav layout), from the real viewport on the first
+  // render: a view's title bar is its name and its ⋮ menu only.
+  readonly isXs = inject(LayoutService).isXs;
+
+  /** The open view's ⋮ menu. */
+  readonly viewMenuItems = VIEW_MENU_ITEMS;
 
   /** The List/Board switch of the open view: the other mode. */
   viewLayoutSwitch = computed(() => {
@@ -642,6 +658,10 @@ export class PageTitleComponent {
   /** A list-layout view's filter button (and its shortcut): the editor. */
   editView(board: BoardCfg): void {
     void this._boardsService.editBoard(board);
+  }
+
+  runViewMenuAction(board: BoardCfg, action: ViewMenuAction): void {
+    runViewMenuAction(this._boardsService, board, action);
   }
 
   /** The title bar's List/Board button: the open view in the other mode. */
