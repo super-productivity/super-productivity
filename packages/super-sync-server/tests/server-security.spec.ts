@@ -6,10 +6,12 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   escapeHtml,
+  getServerHelmetConfig,
   sanitizeRequestUrlForLog,
   SERVER_HELMET_CONFIG,
   SERVER_TRUST_PROXY,
 } from '../src/server';
+import { parseTrustProxy } from '../src/config';
 
 const currentDir = dirname(fileURLToPath(import.meta.url));
 
@@ -116,6 +118,29 @@ describe('Server Security Configuration', () => {
       expect(cspHeader).toContain("script-src 'self'");
       expect(cspHeader).toContain("object-src 'none'");
       expect(cspHeader).toContain("frame-ancestors 'none'");
+    });
+
+    const getCspFor = async (publicUrl: string): Promise<string> => {
+      await app.register(helmet, getServerHelmetConfig(publicUrl));
+      app.get('/test', async () => ({ status: 'ok' }));
+      await app.ready();
+      const response = await app.inject({ method: 'GET', url: '/test' });
+      return String(response.headers['content-security-policy']);
+    };
+
+    it('should keep upgrade-insecure-requests for an https public URL', async () => {
+      const csp = await getCspFor('https://sync.example.com');
+      expect(csp).toContain('upgrade-insecure-requests');
+      expect(csp).toContain("default-src 'self'");
+    });
+
+    // #10023: upgrading same-origin assets to https breaks plain-HTTP LAN deployments
+    it('should drop upgrade-insecure-requests for an http public URL', async () => {
+      const csp = await getCspFor('http://192.168.1.210:1999');
+      expect(csp).not.toContain('upgrade-insecure-requests');
+      expect(csp).toContain("default-src 'self'");
+      expect(csp).toContain("script-src 'self'");
+      expect(csp).toContain("frame-ancestors 'none'");
     });
 
     it('should include X-Frame-Options header', async () => {
@@ -262,10 +287,27 @@ describe('Server Security Configuration', () => {
     it('should not use the hop-count form disabled by GHSA-3m5p-2c4r-xxw2', () => {
       expect(typeof SERVER_TRUST_PROXY).not.toBe('number');
     });
+
+    // The default deliberately leaves CGNAT (100.64.0.0/10) out, so a Tailscale
+    // sidecar's headers are ignored unless the operator opts in via TRUST_PROXY.
+    it('should ignore X-Forwarded-For from a CGNAT peer by default', async () => {
+      expect(await getIpForPeer('100.64.0.1')).toBe('100.64.0.1');
+    });
+
+    it('should resolve the forwarded client IP for a CGNAT peer once TRUST_PROXY names its range', async () => {
+      await app.close();
+      app = Fastify({
+        trustProxy: parseTrustProxy('loopback,uniquelocal,100.64.0.0/10'),
+      });
+      app.get('/test', async (req) => ({ ip: req.ip }));
+      await app.ready();
+
+      expect(await getIpForPeer('100.64.0.1')).toBe('203.0.113.9');
+    });
   });
 });
 
-describe('Password Reset Page', () => {
+describe('Token Page Escaping', () => {
   let app: FastifyInstance;
 
   beforeEach(async () => {
@@ -276,46 +318,6 @@ describe('Password Reset Page', () => {
     if (app) {
       await app.close();
     }
-  });
-
-  it('should render password reset form with token', async () => {
-    const { pageRoutes } = await import('../src/pages');
-
-    app = Fastify();
-    await app.register(pageRoutes, { prefix: '/' });
-    await app.ready();
-
-    const response = await app.inject({
-      method: 'GET',
-      url: '/reset-password?token=test-token-123',
-    });
-
-    expect(response.statusCode).toBe(200);
-    expect(response.headers['content-type']).toContain('text/html');
-
-    const html = response.body;
-    expect(html).toContain('<title>Reset Password</title>');
-    expect(html).toContain('<form id="resetForm">');
-    expect(html).toContain('type="password"');
-    expect(html).toContain('Minimum 12 characters');
-    // Token should be escaped in the JavaScript
-    expect(html).toContain('test-token-123');
-  });
-
-  it('should return 400 when token is missing', async () => {
-    const { pageRoutes } = await import('../src/pages');
-
-    app = Fastify();
-    await app.register(pageRoutes, { prefix: '/' });
-    await app.ready();
-
-    const response = await app.inject({
-      method: 'GET',
-      url: '/reset-password',
-    });
-
-    expect(response.statusCode).toBe(400);
-    expect(response.body).toBe('Token is required');
   });
 
   it('should escape malicious token in data attribute', async () => {
@@ -329,7 +331,7 @@ describe('Password Reset Page', () => {
     const maliciousToken = '"><script>alert(1)</script>';
     const response = await app.inject({
       method: 'GET',
-      url: `/reset-password?token=${encodeURIComponent(maliciousToken)}`,
+      url: `/recover-passkey?token=${encodeURIComponent(maliciousToken)}`,
     });
 
     expect(response.statusCode).toBe(200);
@@ -353,7 +355,7 @@ describe('Password Reset Page', () => {
     const maliciousToken = '</script><script>alert("xss")</script>';
     const response = await app.inject({
       method: 'GET',
-      url: `/reset-password?token=${encodeURIComponent(maliciousToken)}`,
+      url: `/recover-passkey?token=${encodeURIComponent(maliciousToken)}`,
     });
 
     expect(response.statusCode).toBe(200);

@@ -46,6 +46,7 @@
 
 <mat-menu
   #bulkMenu="matMenu"
+  class="mat-menu-grouped"
   (closed)="onMenuClosed()"
 >
   <div class="menu-title">
@@ -162,6 +163,18 @@
   }
 
   <button
+    #priorityTrigger="matMenuTrigger"
+    [menuTouchFix]="priorityTrigger"
+    [matMenuTriggerFor]="priorityMenu"
+    mat-menu-item
+  >
+    <span class="menuItemLeft">
+      <mat-icon>priority_high</mat-icon>
+      {{ T.F.TASK.CMP.PRIORITY | translate }}
+    </span>
+  </button>
+
+  <button
     #tagTrigger="matMenuTrigger"
     [menuTouchFix]="tagTrigger"
     [matMenuTriggerFor]="tagMenu"
@@ -227,6 +240,34 @@
   </ng-template>
 </mat-menu>
 
+<mat-menu #priorityMenu="matMenu">
+  <ng-template matMenuContent>
+    <button
+      (click)="bulk.setPriority(null)"
+      menuTouchFix
+      mat-menu-item
+    >
+      <mat-icon>clear</mat-icon>
+      {{ T.F.TASK.CMP.PRIORITY_NONE | translate }}
+    </button>
+    <mat-divider></mat-divider>
+    @for (level of PRIORITY_LEVELS; track level) {
+      <button
+        (click)="bulk.setPriority(level)"
+        menuTouchFix
+        mat-menu-item
+      >
+        <task-priority-indicator
+          matMenuItemIcon
+          [priority]="level"
+          aria-hidden="true"
+        ></task-priority-indicator>
+        {{ PRIORITY_LABEL_KEY[level] | translate }}
+      </button>
+    }
+  </ng-template>
+</mat-menu>
+
 <mat-menu #tagMenu="matMenu">
   <ng-template matMenuContent>
     <div (click)="$event.stopPropagation()">
@@ -264,7 +305,7 @@
             [title]="project.title"
             [icon]="project.icon"
             [defaultIcon]="DEFAULT_PROJECT_ICON"
-            [color]="project.theme?.primary"
+            [color]="$safeNavigationMigration(project.theme?.primary)"
             [folderPath]="projectFolderMap().get(project.id)"
           ></select-option-row>
         </button>

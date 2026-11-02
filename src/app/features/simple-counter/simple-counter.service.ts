@@ -18,7 +18,6 @@ import {
   tickSimpleCounterLocal,
   toggleSimpleCounterCounter,
   turnOffAllSimpleCounterCounters,
-  updateAllSimpleCounters,
   updateSimpleCounter,
   updateSimpleCounterOrder,
   upsertSimpleCounter,
@@ -230,10 +229,6 @@ export class SimpleCounterService implements OnDestroy {
 
   updateOrder(ids: string[]): void {
     this._store$.dispatch(updateSimpleCounterOrder({ ids }));
-  }
-
-  updateAll(items: SimpleCounter[]): void {
-    this._store$.dispatch(updateAllSimpleCounters({ items }));
   }
 
   setCounterToday(id: string, newVal: number): void {

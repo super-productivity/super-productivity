@@ -66,7 +66,9 @@
 .title-and-tags-wrapper {
   flex-grow: 1;
   flex-shrink: 1;
-  min-width: 180px;
+  // Let this flex item shrink below the old 180px floor so long titles and tags
+  // can wrap within narrow task cards (#9829).
+  min-width: 0;
   // we cannot do this since this cuts of the box shadow of the task edit
   //overflow: hidden;
 
@@ -87,6 +89,29 @@
     // to match task title padding
     margin-left: var(--s);
     margin-bottom: var(--s-half);
+  }
+
+  // A single long tag is a flex item, so cap it at the title area and allow its
+  // text to break instead of painting beyond the task card (#9829).
+  ::ng-deep tag {
+    max-width: 100%;
+
+    .tag-title {
+      min-width: 0;
+      overflow-wrap: anywhere;
+    }
+  }
+}
+
+// Priority reads as a coloured icon only (like the overdue schedule icon and
+// the time-conflict "!"); the colour lives inside task-priority-indicator's
+// own encapsulation, so no colour rule here can leak into nested sub-task rows.
+task-priority-indicator {
+  align-self: center;
+  margin: 0 var(--s-quarter);
+
+  @include isDoneForFirstLine {
+    opacity: var(--task-is-done-dim-opacity);
   }
 }
 
@@ -127,8 +152,7 @@
   &.isEditable {
     cursor: pointer;
 
-    &:hover,
-    &:focus-visible {
+    @include hoverWithPointer {
       .time {
         color: var(--text-color);
       }
@@ -138,6 +162,10 @@
       outline: var(--focus-ring-width) solid var(--focus-ring-color);
       outline-offset: var(--focus-ring-offset);
       border-radius: var(--radius-xs);
+
+      .time {
+        color: var(--text-color);
+      }
     }
   }
 
@@ -355,8 +383,10 @@ done-toggle {
   box-shadow: none;
   background: var(--bg-lighter) !important;
 
-  :host:hover & {
-    opacity: 1;
+  @media (hover: hover) {
+    :host:hover & {
+      opacity: 1;
+    }
   }
 
   mat-icon {
@@ -402,13 +432,16 @@ done-toggle {
   position: relative;
 }
 
-// Overdue indicator = the schedule icon itself, in the danger color. Driven by
-// the semantic :host.isOverdue host state rather than Material's `color="warn"`
-// modifier class, so the cue is decoupled from Material's theming internals and
-// reads the same across light/dark/custom themes. !important wins over the
-// Material icon-color token.
-:host.isOverdue .schedule-btn mat-icon {
-  color: var(--c-warn) !important;
+// Only overdue schedules are colored; all other dates keep the default color.
+.schedule-btn[data-scheduled-date-color='overdue'] {
+  mat-icon {
+    // The overdue state takes precedence over Material's icon-color token.
+    color: var(--c-warn) !important;
+  }
+
+  .time-badge {
+    color: var(--c-warn);
+  }
 }
 
 // Time conflict indicator: a danger "!" shown next to the schedule control,
@@ -471,7 +504,8 @@ done-toggle {
   }
 }
 
-.checklist-progress-badge {
+// done/total count overlaid on an icon button (checklist + collapsed sub tasks)
+.progress-badge {
   @include center;
   margin-top: 10px;
   font-size: 10px;

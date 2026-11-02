@@ -2,13 +2,21 @@ import {
   buildLocalCurrentTask,
   getWidgetValidUntil,
   resolveRemoteCurrentTask,
+  withLocalTrackingInfo,
   selectAndroidWidgetData,
 } from './android-widget.selectors';
 import { getDbDateStr } from '../../../util/get-db-date-str';
 import { Task } from '../../tasks/task.model';
 import { Project } from '../../project/project.model';
-import { RemoteSessionView } from '../../tracking-presence/tracking-presence.model';
+import {
+  PRESENCE_STALE_AFTER_MS,
+  RemoteSessionView,
+} from '../../tracking-presence/tracking-presence.model';
 import { getDeviceLabel } from '../../tracking-presence/get-device-label.util';
+import { selectLaterTodayStructure } from '../../tasks/store/task.selectors';
+import { Section } from '../../section/section.model';
+import { TODAY_TAG } from '../../tag/tag.const';
+import { WorkContextType } from '../../work-context/work-context.model';
 
 describe('getWidgetValidUntil', () => {
   const HOUR = 60 * 60 * 1000;
@@ -95,6 +103,8 @@ describe('selectAndroidWidgetData', () => {
       DAY,
       0,
       null,
+      [],
+      new Map(),
     );
     expect(result).toEqual({
       v: 1,
@@ -117,6 +127,8 @@ describe('selectAndroidWidgetData', () => {
       DAY,
       0,
       null,
+      [],
+      new Map(),
     );
     expect(result.tasks.length).toBe(1);
     expect(result.tasks[0].id).toBe('t1');
@@ -130,6 +142,8 @@ describe('selectAndroidWidgetData', () => {
       DAY,
       0,
       null,
+      [],
+      new Map(),
     );
     expect('projectId' in result.tasks[0]).toBe(false);
   });
@@ -142,6 +156,8 @@ describe('selectAndroidWidgetData', () => {
       DAY,
       0,
       null,
+      [],
+      new Map(),
     );
     expect(result.projectColors).toEqual({});
     expect(result.tasks[0].projectId).toBe('p1');
@@ -158,16 +174,14 @@ describe('selectAndroidWidgetData', () => {
       '2026-07-16',
       fourAmOffset,
       null,
+      [],
+      new Map(),
     );
     expect(result.dayStr).toBe('2026-07-16');
     expect(result.validUntil).toBe(new Date(2026, 6, 17).getTime() + fourAmOffset);
   });
 
-  // currentTask needs TrackingPresenceService signals (since-timestamp, focus
-  // cycle, remote session), which live outside the store — WidgetDataService
-  // always builds it (via buildLocalCurrentTask / resolveRemoteCurrentTask,
-  // tested below), never this selector.
-  it('should always return currentTask: null — WidgetDataService overwrites it', () => {
+  it('should include the local device currentTask when a task is being tracked', () => {
     const result = selectAndroidWidgetData.projector(
       ['t1'],
       { t1: task('t1', { title: 'Task one', projectId: 'p1' }) },
@@ -175,8 +189,16 @@ describe('selectAndroidWidgetData', () => {
       DAY,
       0,
       't1',
+      [],
+      new Map(),
     );
-    expect(result.currentTask).toBeNull();
+    expect(result.currentTask).toEqual({
+      id: 't1',
+      title: 'Task one',
+      projectId: 'p1',
+      deviceLabel: getDeviceLabel(),
+      isLocal: true,
+    });
   });
 
   it('should serialize to the exact v:1 blob shape consumed by WidgetData.kt (see WidgetDataTest.kt)', () => {
@@ -190,6 +212,8 @@ describe('selectAndroidWidgetData', () => {
       DAY,
       0,
       null,
+      [],
+      new Map(),
     );
     expect(JSON.stringify(result)).toBe(
       `{"v":1,"dayStr":"${DAY}","validUntil":${VALID_UNTIL},"tasks":[` +
@@ -197,6 +221,178 @@ describe('selectAndroidWidgetData', () => {
         '{"id":"t2","title":"Task two","isDone":true}],' +
         '"projectColors":{"p1":"#ff0000"},"currentTask":null}',
     );
+  });
+
+  // #11109: the widget must list today's tasks in the order the Today screen shows
+  // them — main list, then the "Later Today" panel (by start time), then done —
+  // not in the raw stored order.
+  describe('order (#11109)', () => {
+    const at = (hours: number): number => new Date(2026, 6, 17, hours).getTime();
+
+    beforeEach(() => {
+      jasmine.clock().install();
+      jasmine.clock().mockDate(new Date(2026, 6, 17, 9));
+    });
+    afterEach(() => jasmine.clock().uninstall());
+
+    // The Later Today panel's real source, so the widget is checked against the
+    // order the screen actually renders, not against a hand-written stub.
+    const laterTodayStructureFor = (
+      tasks: Task[],
+      currentTaskId: string | null,
+    ): ReturnType<typeof selectLaterTodayStructure.projector> =>
+      selectLaterTodayStructure.projector(
+        tasks.map((t) => ({
+          id: t.id,
+          isDone: t.isDone,
+          dueDay: t.dueDay ?? null,
+          dueWithTime: t.dueWithTime ?? null,
+          deadlineDay: null,
+          deadlineWithTime: null,
+          parentId: t.parentId ?? null,
+          subTaskIds: t.subTaskIds,
+        })),
+        DAY,
+        0,
+        currentTaskId,
+      );
+
+    const widgetOrder = (
+      storedOrder: string[],
+      tasks: Task[],
+      currentTaskId: string | null = null,
+      todaySections: Section[] = [],
+    ): string[] =>
+      selectAndroidWidgetData
+        .projector(
+          storedOrder,
+          Object.fromEntries(tasks.map((t) => [t.id, t])),
+          projectState([]),
+          DAY,
+          0,
+          currentTaskId,
+          laterTodayStructureFor(tasks, currentTaskId),
+          new Map([[TODAY_TAG.id, todaySections]]),
+        )
+        .tasks.map((t) => t.id);
+
+    const sched = (id: string, partial: Partial<Task>): Task =>
+      task(id, { subTaskIds: [], dueDay: DAY, ...partial });
+
+    it('should list the main list first, then upcoming tasks by start time, then done', () => {
+      const tasks = [
+        sched('B', { dueDay: undefined, dueWithTime: at(15) }),
+        sched('A', { dueDay: undefined, dueWithTime: at(11) }),
+        sched('C', {}),
+        sched('D', { isDone: true, doneOn: at(8) }),
+      ];
+      expect(widgetOrder(['B', 'A', 'C', 'D'], tasks)).toEqual(['C', 'A', 'B', 'D']);
+    });
+
+    it('should keep an appointment that already started in its stored main-list place', () => {
+      const tasks = [
+        sched('B', { dueDay: undefined, dueWithTime: at(15) }),
+        sched('P', { dueDay: undefined, dueWithTime: at(8) }),
+        sched('C', {}),
+      ];
+      expect(widgetOrder(['B', 'P', 'C'], tasks)).toEqual(['P', 'C', 'B']);
+    });
+
+    it('should keep the tracked task in the main list even if it starts later', () => {
+      const tasks = [
+        sched('B', { dueDay: undefined, dueWithTime: at(15) }),
+        sched('C', {}),
+      ];
+      expect(widgetOrder(['B', 'C'], tasks, 'B')).toEqual(['B', 'C']);
+    });
+
+    // The screen lists such a parent in both its main-list place and the panel;
+    // the widget has one row per task and keeps the manual main-list place.
+    it('should keep a parent that is upcoming only through a subtask in its main-list place', () => {
+      const tasks = [
+        sched('P', { subTaskIds: ['S'] }),
+        sched('S', { dueDay: undefined, dueWithTime: at(14), parentId: 'P' }),
+        sched('C', {}),
+      ];
+      expect(widgetOrder(['P', 'C'], tasks)).toEqual(['P', 'C']);
+    });
+
+    it('should keep a parent whose own start passed in its main-list place despite an upcoming subtask', () => {
+      const tasks = [
+        sched('P', { dueDay: undefined, dueWithTime: at(8), subTaskIds: ['S'] }),
+        sched('S', { dueDay: undefined, dueWithTime: at(14), parentId: 'P' }),
+        sched('C', {}),
+      ];
+      expect(widgetOrder(['P', 'C'], tasks)).toEqual(['P', 'C']);
+    });
+
+    it('should list unsectioned tasks first, then each Today section in its own order', () => {
+      const tasks = [
+        sched('X1', {}),
+        sched('N', {}),
+        sched('X2', {}),
+        sched('L', { dueDay: undefined, dueWithTime: at(11) }),
+      ];
+      const section = {
+        id: 'sec',
+        contextId: TODAY_TAG.id,
+        contextType: WorkContextType.TAG,
+        title: 'Section',
+        // the section holds an upcoming task too; it stays in the later block
+        taskIds: ['X2', 'L', 'X1'],
+      };
+      expect(widgetOrder(['X1', 'N', 'X2', 'L'], tasks, null, [section])).toEqual([
+        'N',
+        'X2',
+        'X1',
+        'L',
+      ]);
+    });
+
+    it('should move an upcoming subtask whose parent is not in Today to the later block', () => {
+      const tasks = [
+        sched('X', { dueDay: '2026-07-20', subTaskIds: ['S'] }),
+        sched('S', { dueDay: undefined, dueWithTime: at(11), parentId: 'X' }),
+        sched('C', {}),
+      ];
+      expect(widgetOrder(['S', 'C'], tasks)).toEqual(['C', 'S']);
+    });
+
+    // The panel structure is memoized with the clock of its last recompute, so it
+    // can still list an appointment that has started since; the widget must
+    // re-check the start against its own clock, as the work view does.
+    it('should return a task the stale panel still lists to the main list once it started', () => {
+      const tasks = [
+        sched('B', {
+          dueDay: undefined,
+          dueWithTime: new Date(2026, 6, 17, 9, 30).getTime(),
+        }),
+        sched('C', {}),
+      ];
+      const staleStructure = laterTodayStructureFor(tasks, null);
+      jasmine.clock().mockDate(new Date(2026, 6, 17, 10));
+      const result = selectAndroidWidgetData.projector(
+        ['B', 'C'],
+        Object.fromEntries(tasks.map((t) => [t.id, t])),
+        projectState([]),
+        DAY,
+        0,
+        null,
+        staleStructure,
+        new Map(),
+      );
+      expect(staleStructure.map((e) => e.id)).toEqual(['B']);
+      expect(result.tasks.map((t) => t.id)).toEqual(['B', 'C']);
+    });
+
+    it('should list done tasks newest-first like the Done list', () => {
+      const tasks = [
+        sched('D1', { isDone: true, doneOn: at(7) }),
+        sched('C', {}),
+        sched('D2', { isDone: true, doneOn: at(8) }),
+      ];
+      expect(widgetOrder(['D1', 'C', 'D2'], tasks)).toEqual(['C', 'D2', 'D1']);
+    });
   });
 });
 
@@ -211,19 +407,15 @@ describe('buildLocalCurrentTask', () => {
     }) as Task;
 
   it('should return null when nothing is tracked locally', () => {
-    expect(buildLocalCurrentTask(null, {}, null)).toBeNull();
+    expect(buildLocalCurrentTask(null, {})).toBeNull();
   });
 
   it('should return null when the tracked id has no matching task entity', () => {
-    expect(buildLocalCurrentTask('missing', {}, null)).toBeNull();
+    expect(buildLocalCurrentTask('missing', {})).toBeNull();
   });
 
   it('should build the current task with the device label and isLocal true', () => {
-    const result = buildLocalCurrentTask(
-      't1',
-      { t1: task('t1', { title: 'Write' }) },
-      null,
-    );
+    const result = buildLocalCurrentTask('t1', { t1: task('t1', { title: 'Write' }) });
     expect(result).toEqual({
       id: 't1',
       title: 'Write',
@@ -233,33 +425,10 @@ describe('buildLocalCurrentTask', () => {
   });
 
   it('should include projectId only when set', () => {
-    const result = buildLocalCurrentTask(
-      't1',
-      { t1: task('t1', { projectId: 'p1' }) },
-      null,
-    );
+    const result = buildLocalCurrentTask('t1', {
+      t1: task('t1', { projectId: 'p1' }),
+    });
     expect(result?.projectId).toBe('p1');
-  });
-
-  it('should omit sinceTs/focusCycle when localInfo is null (transient race)', () => {
-    const result = buildLocalCurrentTask('t1', { t1: task('t1') }, null);
-    expect('sinceTs' in result!).toBe(false);
-    expect('focusCycle' in result!).toBe(false);
-  });
-
-  it('should include sinceTs from localInfo', () => {
-    const result = buildLocalCurrentTask('t1', { t1: task('t1') }, { sinceTs: 1000 });
-    expect(result?.sinceTs).toBe(1000);
-    expect('focusCycle' in result!).toBe(false);
-  });
-
-  it('should include focusCycle from localInfo only when present', () => {
-    const result = buildLocalCurrentTask(
-      't1',
-      { t1: task('t1') },
-      { sinceTs: 1000, focusCycle: 3 },
-    );
-    expect(result?.focusCycle).toBe(3);
   });
 });
 
@@ -278,17 +447,17 @@ describe('resolveRemoteCurrentTask', () => {
     state?: 'tracking' | 'stopped';
     taskId?: string | null;
     deviceLabel?: string;
-    sinceTs?: number;
     focusCycle?: number;
   }): RemoteSessionView =>
     ({
       isStale: partial.isStale ?? false,
       session: {
+        receivedAt: 1_000,
         payload: {
           state: partial.state ?? 'tracking',
           taskId: partial.taskId ?? 't1',
           deviceLabel: partial.deviceLabel ?? 'Desktop',
-          sinceTs: partial.sinceTs ?? 1000,
+          sinceTs: 500,
           ...(partial.focusCycle !== undefined ? { focusCycle: partial.focusCycle } : {}),
         },
       },
@@ -314,31 +483,48 @@ describe('resolveRemoteCurrentTask', () => {
     expect(resolveRemoteCurrentTask(view({}), {})).toBeNull();
   });
 
-  it('should resolve the remote task with its device label, sinceTs, and isLocal false', () => {
-    const result = resolveRemoteCurrentTask(
-      view({ deviceLabel: 'Desktop', sinceTs: 5000 }),
-      {
-        t1: task('t1', { title: 'Write report' }),
-      },
-    );
+  it('should resolve the remote task with its device label and isLocal false', () => {
+    const result = resolveRemoteCurrentTask(view({ deviceLabel: 'Desktop' }), {
+      t1: task('t1', { title: 'Write report' }),
+    });
     expect(result).toEqual({
       id: 't1',
       title: 'Write report',
       deviceLabel: 'Desktop',
       isLocal: false,
-      sinceTs: 5000,
+      expiresAt: 1_000 + PRESENCE_STALE_AFTER_MS,
+      sinceTs: 500,
     });
   });
 
-  it('should include focusCycle only when the remote payload carries one', () => {
-    const result = resolveRemoteCurrentTask(view({ focusCycle: 2 }), {
-      t1: task('t1'),
-    });
-    expect(result?.focusCycle).toBe(2);
+  it('should carry the remote focus cycle while a focus session runs', () => {
+    const result = resolveRemoteCurrentTask(view({ focusCycle: 3 }), { t1: task('t1') });
+    expect(result?.focusCycle).toBe(3);
+  });
+});
+
+describe('withLocalTrackingInfo', () => {
+  const local = {
+    id: 't1',
+    title: 'Write',
+    deviceLabel: 'Android',
+    isLocal: true,
+  };
+
+  it('should leave the task unchanged without presence info', () => {
+    expect(withLocalTrackingInfo(local, null)).toBe(local);
   });
 
-  it('should omit focusCycle when the remote payload has none', () => {
-    const result = resolveRemoteCurrentTask(view({}), { t1: task('t1') });
-    expect('focusCycle' in result!).toBe(false);
+  it('should add since and focus cycle', () => {
+    expect(withLocalTrackingInfo(local, { sinceTs: 42, focusCycle: 2 })).toEqual({
+      ...local,
+      sinceTs: 42,
+      focusCycle: 2,
+    });
+  });
+
+  it('should omit the focus cycle key outside a focus session', () => {
+    const result = withLocalTrackingInfo(local, { sinceTs: 42 });
+    expect('focusCycle' in result).toBe(false);
   });
 });

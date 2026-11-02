@@ -146,7 +146,7 @@ test.describe('@supersync Post-Import Operation Flow', () => {
       console.log('[Post Import] Client B synced (new tasks uploaded)');
 
       // Check for sync errors (would appear if tasks were rejected)
-      const errorSnack = clientB.page.locator('simple-snack-bar.error');
+      const errorSnack = clientB.page.locator('snack-custom .wrapper.error');
       await expect(errorSnack).not.toBeVisible({ timeout: 5000 });
       console.log('[Post Import] No sync errors on Client B');
 
@@ -303,8 +303,8 @@ test.describe('@supersync Post-Import Operation Flow', () => {
       );
 
       // Check for errors
-      const errorSnackA = clientA.page.locator('simple-snack-bar.error');
-      const errorSnackB = clientB.page.locator('simple-snack-bar.error');
+      const errorSnackA = clientA.page.locator('snack-custom .wrapper.error');
+      const errorSnackB = clientB.page.locator('snack-custom .wrapper.error');
       await expect(errorSnackA).not.toBeVisible({ timeout: 5000 });
       await expect(errorSnackB).not.toBeVisible({ timeout: 5000 });
 

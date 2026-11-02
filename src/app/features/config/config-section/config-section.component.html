@@ -1,14 +1,15 @@
 <collapsible
+  (isExpandedChange)="isExpandedChange.emit($event)"
   [isExpanded]="isExpanded"
   [isIconBefore]="true"
-  [title]="section?.title | translate"
+  [title]="$safeNavigationMigration(section?.title) | translate"
 >
   <!--[icon]="section?.icon"-->
 
   @if (section?.help || section?.helpArr) {
     <help-section>
       @if (section?.help) {
-        <div [innerHtml]="section?.help | translate"></div>
+        <div [innerHtml]="$safeNavigationMigration(section?.help) | translate"></div>
       }
       @if (section?.helpArr) {
         @for (helpSection of section?.helpArr; track trackByIndex($index, helpSection)) {
@@ -32,12 +33,16 @@
     </help-section>
   }
   <div class="form-wrapper {{ section?.key }}">
+    @if (section?.key === 'reminder' && !cfg?.['disableReminders']) {
+      <!-- Users look here when reminders arrive late (#10424); no hint once they opted out -->
+      <exact-alarm-hint />
+    }
     @if (section?.items && !section?.customSection) {
       <config-form
         (save)="onSave($event)"
         [cfg]="cfg"
-        [formCfg]="section?.items"
-        [sectionKey]="section?.key"
+        [formCfg]="$safeNavigationMigration(section?.items)"
+        [sectionKey]="$safeNavigationMigration(section?.key)"
       ></config-form>
     }
 
@@ -46,9 +51,28 @@
       class="custom-form"
     ></ng-template>
 
-    @if (section?.actions?.length) {
+    @for (action of rowActions(); track action.label) {
+      <button
+        class="action-row"
+        type="button"
+        (click)="onAction(action)"
+        [disabled]="isActionPending(action)"
+      >
+        @if (action.icon) {
+          <mat-icon
+            class="action-row__icon"
+            aria-hidden="true"
+            >{{ action.icon }}</mat-icon
+          >
+        }
+        <span class="action-row__label">{{ action.label | translate }}</span>
+        <mat-icon aria-hidden="true">chevron_right</mat-icon>
+      </button>
+    }
+
+    @if (buttonActions().length) {
       <div class="section-actions">
-        @for (action of section?.actions || []; track action.label) {
+        @for (action of buttonActions(); track action.label) {
           <button
             (click)="onAction(action)"
             [disabled]="isActionPending(action)"

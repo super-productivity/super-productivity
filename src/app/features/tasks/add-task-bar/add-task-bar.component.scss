@@ -31,6 +31,15 @@
   }
 }
 
+// The narrow layout pins the bar near the window top, where macOS draws the
+// `hiddenInset` traffic lights over it (#11118). The wide layout's offset
+// already clears them.
+:host-context(.isMac.isElectron).global {
+  @include mq(xs, max) {
+    top: calc(var(--s) + var(--mac-title-bar-padding));
+  }
+}
+
 // Pin the floating bar to the bottom whenever touch is the primary input.
 // Keys on `.isTouchPrimary`, not `.isTouchOnly`: Android Chrome advertises a
 // fine pointer, so detect-it classifies phones as `hybrid` rather than
@@ -252,14 +261,14 @@
     flex-shrink: 0;
   }
 
-  // The add (+) button and its separators span the full height of the row
-  // (which grows with the wrapping input); the icon stays vertically centred.
+  // Holds the add button. Always in the layout so the input width never jumps;
+  // the button itself is a raised, rounded primary block inset from the bar's
+  // edges. Pinned to the top so it stays put while the input wraps.
   .separator-box {
-    align-self: stretch;
+    align-self: flex-start;
     display: flex;
-    align-items: stretch;
-    border-right: 1px solid var(--divider-color);
-    border-left: 1px solid var(--divider-color);
+    padding: var(--s-half);
+    transition: opacity var(--transition-fast);
 
     // Reserve the button's space while the field is empty without letting it
     // show or take clicks. `visibility:hidden` is not enough here: mat-icon's
@@ -269,19 +278,45 @@
     &.is-invisible {
       opacity: 0;
       pointer-events: none;
+
+      .add-task-submit-btn {
+        transform: scale(0.8);
+      }
     }
 
     .add-task-submit-btn {
-      align-self: stretch;
-      height: auto;
-      border-radius: 0;
-      // The submit + is the primary action while composing — full strength and
-      // tinted, not the dimmed treatment the other icons share. Colour the icon
-      // via the MDC token (the icon inherits it) rather than a .mat-*/.mdc-*
-      // selector override.
+      width: 36px;
+      height: 36px;
+      padding: 0;
+      // The primary action while composing — colours and shape go through the
+      // button tokens rather than a .mat-*/.mdc-* override.
+      --mat-icon-button-container-shape: var(--radius-md);
+      --mat-icon-button-icon-color: var(--c-contrast);
+      --mat-icon-button-state-layer-color: var(--c-contrast);
+      --mat-icon-button-ripple-color: color-mix(
+        in srgb,
+        var(--c-contrast) 20%,
+        transparent
+      );
+      border-radius: var(--radius-md);
+      background-color: var(--c-primary);
+      color: var(--c-contrast);
       opacity: 1;
-      --mdc-icon-button-icon-color: var(--c-primary);
-      color: var(--c-primary);
+      box-shadow: var(--whiteframe-shadow-2dp);
+      transition:
+        box-shadow var(--transition-fast),
+        transform var(--transition-fast);
+
+      &:hover,
+      &:focus-visible {
+        box-shadow: var(--whiteframe-shadow-4dp);
+        transform: translateY(-1px);
+      }
+
+      &:active {
+        box-shadow: var(--whiteframe-shadow-1dp);
+        transform: translateY(0);
+      }
     }
   }
 

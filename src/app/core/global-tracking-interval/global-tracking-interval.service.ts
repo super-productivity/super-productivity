@@ -27,9 +27,11 @@ import { Tick } from './tick.model';
 import { DateService } from 'src/app/core/date/date.service';
 import { Log } from '../log';
 import { IS_ANDROID_WEB_VIEW } from '../../util/is-android-web-view';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import { androidInterface } from '../../features/android/android-interface';
 
 const MINUTE_MS = 60 * 1000;
+const toMinute = (timestamp: number): number => Math.floor(timestamp / MINUTE_MS);
 
 /**
  * Builds the shared 1s tick source. When a background-state stream is given
@@ -90,6 +92,26 @@ export class GlobalTrackingIntervalService {
    */
   minuteTick$: Observable<unknown> = this._createMinuteTickObservable();
 
+  // Reuse the shared second tick; refresh immediately after focus/resume as well.
+  private _clock$ = merge(
+    this.globalInterval$,
+    this._createAppActiveObservable(),
+    this._wakeUpTick$,
+  ).pipe(
+    map(() => Date.now()),
+    share(),
+  );
+
+  clockTimestamp = toSignal(this._clock$, { initialValue: Date.now() });
+
+  /**
+   * The same clock in whole minutes since the epoch. It changes once a minute,
+   * so a consumer that only needs minutes doesn't re-run every second.
+   */
+  clockMinute = toSignal(this._clock$.pipe(map(toMinute)), {
+    initialValue: toMinute(Date.now()),
+  });
+
   // Shared signal to avoid creating 200+ subscriptions in task components
   todayDateStr = toSignal(this.todayDateStr$, {
     initialValue: this._dateService.todayStr(),
@@ -134,6 +156,18 @@ export class GlobalTrackingIntervalService {
     };
     this._wakeUpTick$.next(tick);
     return tick;
+  }
+
+  /**
+   * Like triggerWakeUpTick, but only credits the gap up to `untilTimestamp`
+   * (e.g. when a notification action was tapped while the app was
+   * backgrounded); the rest of the gap stays for the next tick.
+   */
+  triggerWakeUpTickUntil(untilTimestamp: number, maxDurationMs?: number): Tick {
+    const upTo = untilTimestamp - this._currentTrackingStart;
+    return this.triggerWakeUpTick(
+      typeof maxDurationMs === 'number' ? Math.min(upTo, maxDurationMs) : upTo,
+    );
   }
 
   /**

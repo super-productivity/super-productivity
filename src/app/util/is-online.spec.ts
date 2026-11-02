@@ -4,6 +4,17 @@ import { withLatestFrom } from 'rxjs/operators';
 import { Subject } from 'rxjs';
 
 describe('isOnline utilities', () => {
+  // isOnline$ is a module-level shareReplay(1) that stays subscribed, so a test
+  // ending on 'offline' left it offline for every later spec in the run (random
+  // order made e.g. the main-header sync-button specs fail intermittently).
+  afterEach(fakeAsync(() => {
+    const sub = isOnline$.subscribe();
+    window.dispatchEvent(new Event('online'));
+    tick(1000);
+    sub.unsubscribe();
+    discardPeriodicTasks();
+  }));
+
   describe('isOnline()', () => {
     it('should return true when navigator.onLine is true', () => {
       spyOnProperty(navigator, 'onLine').and.returnValue(true);

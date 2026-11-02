@@ -222,6 +222,20 @@ export class NetworkUnavailableSPError extends Error {
   }
 }
 
+/**
+ * The SuperSync server refused this app version (`CLIENT_UPDATE_REQUIRED`).
+ * The whole request was refused, so nothing was accepted or rejected: pending
+ * ops must stay pending until the app is updated. Never an auth failure.
+ * The message is fixed on purpose — no status, host or server text — so no
+ * string classifier (retryable, network, quota) can misread it.
+ */
+export class ClientUpdateRequiredSPError extends Error {
+  override name = 'ClientUpdateRequiredSPError';
+  constructor() {
+    super('SuperSync server requires a newer app version');
+  }
+}
+
 export class WebDavNativeRequestError extends Error {
   override name = 'WebDavNativeRequestError';
   readonly code?: string | number;

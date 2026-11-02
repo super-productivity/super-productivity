@@ -104,7 +104,7 @@ class ReminderActionReceiver : BroadcastReceiver() {
             title, reminderType, newTriggerTime, useAlarmStyle, isOngoing,
         )
         // Queue for frontend to update NgRx state on next app open
-        ReminderSnoozeQueue.addSnoozeEvent(context, relatedId, newTriggerTime)
+        ReminderSnoozeQueue.addSnoozeEvent(context, relatedId, newTriggerTime, reminderType)
         Log.d(TAG, "Snoozed reminder to ${newTriggerTime}")
     }
 }

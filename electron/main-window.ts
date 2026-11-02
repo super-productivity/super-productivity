@@ -15,9 +15,10 @@ import { pathToFileURL } from 'node:url';
 import { IPC } from './shared-with-frontend/ipc-events.const';
 import { isExternalUrlSchemeAllowed } from './shared-with-frontend/is-external-url-allowed';
 import { isLocalFileUrl, openLocalPath } from './open-url';
-import { readFileSync, stat } from 'fs';
+import { getApiUserAgent, isGitLabApiUrl } from './api-user-agent';
+import { readFileSync, watch } from 'fs';
 import { error, log } from 'electron-log/main';
-import { IS_MAC, IS_GNOME_WAYLAND } from './common.const';
+import { IS_MAC, IS_LINUX, IS_GNOME_WAYLAND } from './common.const';
 import {
   destroyTaskWidget,
   getIsTaskWidgetAlwaysShow,
@@ -61,11 +62,17 @@ let mainWin: BrowserWindow;
 let appLoadedUrl: string | undefined;
 
 // Compact WCO band on Win/Linux. Native button width is OS-controlled
-// (~138px total); only height is configurable. Lower values may be
-// clamped to the OS minimum (~24–28px on Win11) — Electron silently
-// floors instead of rejecting. Stays well clear of the vertical action
-// strip which positions itself --bar-height (48px) down.
-const WCO_HEIGHT = 24;
+// (~138px total on Windows); only height is configurable. Lower values may
+// be clamped to the OS minimum (~24–28px on Win11) — Electron silently
+// floors instead of rejecting.
+// Since Electron 44, Linux draws theme-styled round buttons (24px circles
+// for Adwaita, 18px for Breeze) centered in the band and capped at its
+// height, so a 24px band makes the Adwaita circles touch the window's top
+// edge. 32px is Electron's own default band for them: 4px above and below
+// a 24px circle. Not taller: the strip behind the buttons is a native drag
+// region for the full band height, and with the right panel open it covers
+// the panel's top-right corner, swallowing clicks on the controls there.
+const WCO_HEIGHT = IS_LINUX ? 32 : 24;
 
 /**
  * Returns theme-aware background color for titlebar overlay.
@@ -247,6 +254,7 @@ export const createWindow = async ({
     // frame: true,
   });
 
+  const apiUserAgent = getApiUserAgent(app.getVersion());
   // see: https://pratikpc.medium.com/bypassing-cors-with-electron-ab7eaf331605
   mainWin.webContents.session.webRequest.onBeforeSendHeaders((details, callback) => {
     const { requestHeaders } = details;
@@ -272,6 +280,10 @@ export const createWindow = async ({
       )
     ) {
       removeKeyInAnyCase(requestHeaders, 'User-Agent');
+    } else if (isGitLabApiUrl(details.url)) {
+      // Anubis-protected instances challenge browser UAs (#10650)
+      removeKeyInAnyCase(requestHeaders, 'User-Agent');
+      requestHeaders['User-Agent'] = apiUserAgent;
     }
     // WebDavHttpAdapter marks desktop uploads because renderer fetch refuses to
     // set Connection itself. Consume the marker here; it must not reach the
@@ -394,24 +406,98 @@ export const createWindow = async ({
     if (IS_DEV) {
       mainWin.setTitle('Super Productivity D');
     }
+  });
 
-    // load custom stylesheet if any
-    const CSS_FILE_PATH = app.getPath('userData') + '/styles.css';
-    stat(app.getPath('userData') + '/styles.css', (err) => {
-      if (err) {
-        log('No custom styles detected at ' + CSS_FILE_PATH);
-      } else {
-        log('Loading custom styles from ' + CSS_FILE_PATH);
-        const styles = readFileSync(CSS_FILE_PATH, { encoding: 'utf8' });
+  // load custom stylesheet if any, and re-apply it whenever the file changes
+  const CSS_FILE_PATH = path.join(app.getPath('userData'), 'styles.css');
+  // An inserted-stylesheet key is a counter scoped to the renderer process, so
+  // it only means anything for the document it was inserted into: after a
+  // reload the old key is inert, and after a renderer crash the counter starts
+  // over at 1 and a stale key can collide with — and silently remove — a live
+  // sheet (measured against Electron 43). So tag every key with the document it
+  // belongs to, and never touch a key from an earlier one.
+  let documentGeneration = 0;
+  let insertedCssKey: string | undefined;
+  let insertedCssGeneration = -1;
+  // Count committed navigations (`did-navigate`), not started ones: Electron
+  // emits `did-start-navigation` before `will-navigate`, and the
+  // `preventDefault()` in the navigation guard does not retract it, so a
+  // blocked navigation would bump the counter while the document stays the
+  // same — untracking the live sheet and leaking it on the next apply.
+  // `did-navigate` also doesn't fire for in-page navigations (hash routes).
+  mainWin.webContents.on('did-navigate', () => {
+    documentGeneration++;
+  });
+  // Applies are serialized through a promise chain: the key is read before and
+  // written after the `insertCSS` round-trip, which can take seconds while the
+  // renderer is still booting, so two overlapping runs would otherwise capture
+  // the same previous key and leave the sheet inserted in between untracked.
+  let cssApplyQueue: Promise<void> = Promise.resolve();
+  const applyCustomCss = (): Promise<void> => {
+    cssApplyQueue = cssApplyQueue.then(async () => {
+      if (mainWin.isDestroyed() || mainWin.webContents.isDestroyed()) {
+        return;
+      }
+      try {
+        let styles: string | undefined;
         try {
-          mainWin.webContents.insertCSS(styles);
-          log('Custom styles loaded successfully');
-        } catch (cssError) {
-          error('Failed to load custom styles:', cssError);
+          styles = readFileSync(CSS_FILE_PATH, { encoding: 'utf8' });
+        } catch (readError) {
+          if ((readError as NodeJS.ErrnoException).code !== 'ENOENT') {
+            throw readError;
+          }
         }
+        const isKeyFromCurrentDoc = insertedCssGeneration === documentGeneration;
+        const prevKey = isKeyFromCurrentDoc ? insertedCssKey : undefined;
+        if (styles === undefined) {
+          // Deleting the file un-applies it, just like emptying it does, and
+          // like removing a theme via the in-app installer.
+          insertedCssKey = undefined;
+          insertedCssGeneration = -1;
+          if (prevKey) {
+            await mainWin.webContents.removeInsertedCSS(prevKey);
+          }
+          log('No custom styles detected at ' + CSS_FILE_PATH);
+          return;
+        }
+        insertedCssKey = await mainWin.webContents.insertCSS(styles);
+        // re-read after the await: if a navigation completed while we were
+        // inserting, the sheet belongs to the document that is current now
+        insertedCssGeneration = documentGeneration;
+        if (prevKey) {
+          await mainWin.webContents.removeInsertedCSS(prevKey);
+        }
+        log('Custom styles loaded from ' + CSS_FILE_PATH);
+      } catch (cssError) {
+        error('Failed to load custom styles:', cssError);
       }
     });
-  });
+    return cssApplyQueue;
+  };
+  // covers the initial load as well as every renderer reload (e.g.
+  // `window.ea.reloadMainWin()`), which would otherwise drop the custom CSS
+  mainWin.webContents.on('did-finish-load', () => void applyCustomCss());
+
+  // Watch the folder rather than the file itself: the file may not exist
+  // yet, and editors often save atomically (write temp + rename), which
+  // detaches a watch bound to the original file. Debounced because a
+  // single save usually emits several events.
+  let cssReloadTimer: NodeJS.Timeout | undefined;
+  try {
+    const cssWatcher = watch(app.getPath('userData'), (_ev, fileName) => {
+      if (fileName && path.basename(fileName.toString()) !== 'styles.css') {
+        return;
+      }
+      clearTimeout(cssReloadTimer);
+      cssReloadTimer = setTimeout(() => void applyCustomCss(), 150);
+    });
+    mainWin.webContents.once('destroyed', () => {
+      clearTimeout(cssReloadTimer);
+      cssWatcher.close();
+    });
+  } catch (watchError) {
+    error('Could not watch for custom style changes:', watchError);
+  }
 
   // show gracefully
   mainWin.once('ready-to-show', () => {
@@ -721,6 +807,8 @@ const appCloseHandler = (app: App): void => {
     if (ids.length === 0) {
       // Destroy task widget before closing main window
       destroyTaskWidget();
+      // The quit request can time out while the user answers the finish-day prompt
+      setIsQuitRequested(true);
       mainWin.close();
     }
   });
@@ -741,7 +829,9 @@ const appCloseHandler = (app: App): void => {
 
       event.preventDefault();
 
-      if (ids.length > 0) {
+      // A gone renderer (killed, oom, ...) never answers, so waiting for it
+      // would leave no way to quit.
+      if (ids.length > 0 && !mainWin.webContents.isCrashed()) {
         log('Actions to wait for ', ids);
         mainWin.webContents.send(IPC.NOTIFY_ON_CLOSE, ids);
       } else {

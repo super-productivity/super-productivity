@@ -178,8 +178,7 @@ platform :ios do
   #
   # TESTFLIGHT_GROUP and CHANGELOG are optional. Note this lane shares the
   # ASC_* credentials with `release`; the App Manager role is required (see
-  # header). See docs/plans/2026-07-14-ios-testflight-master-builds.md for the
-  # separate internal-master beta path.
+  # header). See docs/apple-release-automation.md#public-testflight-builds-label-triggered.
   lane :testflight do
     # ENV.fetch's default only applies when the key is absent; the workflow
     # always sets TESTFLIGHT_GROUP (from an optional repo variable), so an

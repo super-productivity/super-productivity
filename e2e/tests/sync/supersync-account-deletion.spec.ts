@@ -1,4 +1,5 @@
 import { test, expect } from '../../fixtures/supersync.fixture';
+import { cssSelectors } from '../../constants/selectors';
 import {
   createTestUser,
   getSuperSyncConfig,
@@ -68,7 +69,7 @@ test.describe('@supersync SuperSync Account Deletion', () => {
       await client.sync.syncBtn.click();
 
       // 4. Wait for error indicator to appear
-      // The sync button should show error state (sync_problem icon),
+      // The sync button should show error state (sync error icon),
       // or a snackbar with error message should appear
       // Note: App uses snack-custom component, not simple-snack-bar
       const errorIndicator = client.page.locator(
@@ -78,7 +79,7 @@ test.describe('@supersync SuperSync Account Deletion', () => {
           '.mat-mdc-snack-bar-container:has-text("Configure"), ' +
           '.mat-mdc-snack-bar-container:has-text("Authentication"), ' +
           // Or sync button showing error icon
-          '.sync-btn mat-icon:has-text("sync_problem")',
+          cssSelectors.SYNC_ERROR,
       );
 
       await expect(errorIndicator.first()).toBeVisible({ timeout: 20000 });

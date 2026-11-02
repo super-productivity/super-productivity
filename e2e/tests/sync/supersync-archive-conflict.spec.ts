@@ -1,4 +1,4 @@
-import { test } from '../../fixtures/supersync.fixture';
+import { test, expect } from '../../fixtures/supersync.fixture';
 import {
   createTestUser,
   getSuperSyncConfig,
@@ -11,9 +11,11 @@ import {
   expectTaskInWorklog,
   hasTaskInWorklog,
   navigateToWorkView,
+  getArchiveYoungTaskIds,
   type SimulatedE2EClient,
 } from '../../utils/supersync-helpers';
 import { expectTaskNotVisible } from '../../utils/supersync-assertions';
+import { waitForAppReady } from '../../utils/waits';
 
 /**
  * SuperSync Archive Conflict E2E Tests
@@ -449,4 +451,149 @@ test.describe('@supersync Archive Conflict Resolution', () => {
       if (clientB) await closeClient(clientB);
     }
   });
+
+  /**
+   * #10220: a restore made while the Finish Day bulk archive is still pending
+   * must survive the conflict with a concurrent remote edit — whether the edit
+   * hits the restored task itself or only a sibling of the same archive.
+   *
+   * Scenario:
+   * 1. Client A creates T1–T3, syncs; Client B syncs
+   * 2. Client B renames the edited task, syncs
+   * 3. Client A (unaware) marks T1–T3 done, runs Finish Day (ONE pending bulk
+   *    moveToArchive) and restores T2 from the worklog
+   * 4. Client A syncs: every conflict row is won locally by the archive
+   *
+   * Expected on both clients, live and after reload: T2 is active and not
+   * done, T1 and T3 are archived. Pre-fix the archive was re-emitted for all
+   * three tasks, re-archiving T2 on Client B.
+   */
+  for (const editedTask of ['T2', 'T1'] as const) {
+    test(`restore survives a pending bulk archive when the remote edit hits ${editedTask} (#10220) @supersync`, async ({
+      browser,
+      baseURL,
+      testRunId,
+    }) => {
+      test.setTimeout(240000);
+      const uniqueId = Date.now();
+      const names = {
+        T1: `RestoreArch-T1-${uniqueId}`,
+        T2: `RestoreArch-T2-${uniqueId}`,
+        T3: `RestoreArch-T3-${uniqueId}`,
+      };
+      let clientA: SimulatedE2EClient | null = null;
+      let clientB: SimulatedE2EClient | null = null;
+
+      try {
+        const syncConfig = getSuperSyncConfig(await createTestUser(testRunId));
+        clientA = await createSimulatedClient(browser, baseURL!, 'A', testRunId);
+        await clientA.sync.setupSuperSync(syncConfig);
+        for (const name of Object.values(names)) {
+          await clientA.workView.addTask(name);
+        }
+        await clientA.sync.syncAndWait();
+        const ids = {
+          T1: await getTaskIdByTitle(clientA, names.T1),
+          T2: await getTaskIdByTitle(clientA, names.T2),
+          T3: await getTaskIdByTitle(clientA, names.T3),
+        };
+
+        clientB = await createSimulatedClient(browser, baseURL!, 'B', testRunId);
+        await clientB.sync.setupSuperSync(syncConfig);
+        await clientB.sync.syncAndWait();
+        await waitForTask(clientB.page, names.T3);
+
+        // Client A must not see the edit before its own archive and restore.
+        await clientA.page.evaluate(
+          () =>
+            ((
+              globalThis as typeof globalThis & { __SP_E2E_BLOCK_WS_DOWNLOAD?: boolean }
+            ).__SP_E2E_BLOCK_WS_DOWNLOAD = true),
+        );
+        await renameTask(clientB, names[editedTask], `${names[editedTask]}-edited`);
+        await clientB.sync.syncAndWait();
+
+        for (const name of Object.values(names)) {
+          await markTaskDoneByKey(clientA, name);
+        }
+        await archiveDoneTasks(clientA);
+        await clientA.page.goto('/#/tag/TODAY/history');
+        await clientA.page.locator('history .week-row .day-toggle').first().click();
+        await clientA.page
+          .locator('.task-summary-table tr', { hasText: names.T2 })
+          .getByRole('button', { name: 'Restore task from archive' })
+          .click();
+        await clientA.page.getByRole('button', { name: 'Do it!' }).click();
+        await waitForTask(clientA.page, names.T2);
+
+        await clientA.page.evaluate(
+          () =>
+            ((
+              globalThis as typeof globalThis & { __SP_E2E_BLOCK_WS_DOWNLOAD?: boolean }
+            ).__SP_E2E_BLOCK_WS_DOWNLOAD = false),
+        );
+        await clientA.sync.syncAndWait();
+        await clientA.sync.syncAndWait();
+        await clientB.sync.syncAndWait();
+        await clientA.sync.syncAndWait();
+        await clientB.sync.syncAndWait();
+
+        const clients = [clientA, clientB];
+        const expectRestoreKept = async (): Promise<void> => {
+          for (const client of clients) {
+            await expect
+              .poll(() => getTaskDoneState(client, ids.T2), { timeout: 30000 })
+              .toBe(false);
+            await expect
+              .poll(() => getArchiveYoungTaskIds(client.page), { timeout: 30000 })
+              .toEqual(expect.arrayContaining([ids.T1, ids.T3]));
+            expect(await getArchiveYoungTaskIds(client.page)).not.toContain(ids.T2);
+          }
+        };
+        await expectRestoreKept();
+
+        // Replay from the persisted op log must reach the same state.
+        for (const client of clients) {
+          await client.page.reload({ waitUntil: 'domcontentloaded', timeout: 30000 });
+          await waitForAppReady(client.page);
+        }
+        await expectRestoreKept();
+      } finally {
+        if (clientA) await closeClient(clientA);
+        if (clientB) await closeClient(clientB);
+      }
+    });
+  }
 });
+
+type TaskSummary = { id: string; title: string; isDone: boolean };
+
+const getActiveTasks = (client: SimulatedE2EClient): Promise<TaskSummary[]> =>
+  client.page.evaluate(() => {
+    type StoreLike = {
+      subscribe: (next: (state: unknown) => void) => { unsubscribe: () => void };
+    };
+    const store = (window as unknown as { __e2eTestHelpers?: { store?: StoreLike } })
+      .__e2eTestHelpers?.store;
+    let state: { tasks?: { entities?: Record<string, TaskSummary | undefined> } } = {};
+    store?.subscribe((s) => (state = s as typeof state)).unsubscribe();
+    return Object.values(state.tasks?.entities ?? {})
+      .filter((task): task is TaskSummary => !!task)
+      .map(({ id, title, isDone }) => ({ id, title, isDone }));
+  });
+
+const getTaskIdByTitle = async (
+  client: SimulatedE2EClient,
+  title: string,
+): Promise<string> => {
+  const task = (await getActiveTasks(client)).find((t) => t.title.includes(title));
+  if (!task) throw new Error(`Task not found in state: ${title}`);
+  return task.id;
+};
+
+/** `null` when the task is not in the active store. */
+const getTaskDoneState = async (
+  client: SimulatedE2EClient,
+  id: string,
+): Promise<boolean | null> =>
+  (await getActiveTasks(client)).find((t) => t.id === id)?.isDone ?? null;

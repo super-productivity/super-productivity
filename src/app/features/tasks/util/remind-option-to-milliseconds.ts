@@ -1,5 +1,9 @@
 import { TaskReminderOptionId } from '../task.model';
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+const THREE_DAYS_MS = 3 * DAY_MS;
+const WEEK_MS = 7 * DAY_MS;
+
 export const remindOptionToMilliseconds = (
   due: number,
   remindOptId: TaskReminderOptionId,
@@ -28,6 +32,16 @@ export const remindOptionToMilliseconds = (
       // prettier-ignore
       return due - (60 * 60 * 1000);
     }
+    // shortcut: fixed 24h days — a DST switch in between shifts the reminder by 1h
+    case TaskReminderOptionId.d1: {
+      return due - DAY_MS;
+    }
+    case TaskReminderOptionId.d3: {
+      return due - THREE_DAYS_MS;
+    }
+    case TaskReminderOptionId.w1: {
+      return due - WEEK_MS;
+    }
   }
   return undefined;
 };
@@ -41,8 +55,15 @@ export const millisecondsDiffToRemindOption = (
   }
   const diff: number = due - remindAt;
   const diffInMinutes = diff / (60 * 1000);
+  const diffInDays = diff / DAY_MS;
 
-  if (diffInMinutes >= 45) {
+  if (diffInDays >= 5) {
+    return TaskReminderOptionId.w1;
+  } else if (diffInDays >= 2) {
+    return TaskReminderOptionId.d3;
+  } else if (diffInDays >= 0.5) {
+    return TaskReminderOptionId.d1;
+  } else if (diffInMinutes >= 45) {
     return TaskReminderOptionId.h1;
   } else if (diffInMinutes >= 22.5) {
     return TaskReminderOptionId.m30;

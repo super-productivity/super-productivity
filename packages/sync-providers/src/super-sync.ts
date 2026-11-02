@@ -2,12 +2,24 @@ export {
   PROVIDER_ID_SUPER_SYNC,
   SUPER_SYNC_DEFAULT_BASE_URL,
   isSuperSyncWebSocketAccess,
+  type SuperSyncCaptureClaimResult,
+  type SuperSyncCaptureGrantInfo,
+  type SuperSyncCaptureGrantList,
+  type SuperSyncCaptureItemInfo,
+  type SuperSyncCaptureKeyResult,
+  type SuperSyncCaptureTokenResult,
+  type SuperSyncCaptureConnectCodeResult,
   type SuperSyncDeviceInfo,
   type SuperSyncDeviceListResponse,
   type SuperSyncPrivateCfg,
   type SuperSyncReplaceTokenResult,
   type SuperSyncWebSocketAccess,
 } from './super-sync/super-sync.model';
-export { SuperSyncProvider, type SuperSyncDeps } from './super-sync/super-sync';
+export {
+  SUPER_SYNC_CLIENT_UPDATE_REQUIRED_CODE,
+  SuperSyncCaptureUnsupportedError,
+  SuperSyncProvider,
+  type SuperSyncDeps,
+} from './super-sync/super-sync';
 export type { SuperSyncResponseValidators } from './super-sync/response-validators';
 export type { SuperSyncStorage } from './super-sync/storage';

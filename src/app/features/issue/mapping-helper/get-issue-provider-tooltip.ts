@@ -61,14 +61,8 @@ export const getIssueProviderTooltip = (issueProvider: IssueProvider): string =>
         return issueProvider.resourceName || issueProvider.caldavUrl;
       case 'ICAL':
         return sanitizeIcalUrlForDisplay(issueProvider.icalUrl);
-      case 'REDMINE':
-        return issueProvider.projectId;
       case 'OPEN_PROJECT':
         return issueProvider.projectId;
-      case 'NEXTCLOUD_DECK':
-        return issueProvider.selectedBoardTitle
-          ? `Deck: ${issueProvider.selectedBoardTitle}`
-          : undefined;
       case 'PLAINSPACE':
         return issueProvider.spaceId || undefined;
       default:
@@ -130,15 +124,11 @@ export const getIssueProviderInitials = (
       return sanitizeIcalUrlForDisplay(issueProvider.icalUrl)
         .substring(0, 2)
         .toUpperCase();
-    case 'REDMINE':
-      return issueProvider.projectId?.substring(0, 2).toUpperCase();
     case 'OPEN_PROJECT':
       return issueProvider.projectId?.substring(0, 2).toUpperCase();
 
     case 'GITLAB':
       return getRepoInitials(issueProvider.project);
-    case 'NEXTCLOUD_DECK':
-      return issueProvider.selectedBoardTitle?.substring(0, 2)?.toUpperCase();
     case 'PLAINSPACE':
       return issueProvider.spaceId?.substring(0, 2)?.toUpperCase() || 'PS';
   }

@@ -1,19 +1,21 @@
 /**
- * Client-checkpoint gate (#9962).
+ * Client-checkpoint compatibility diagnostics (#9962).
  *
  * Under mandatory E2EE only a client can create the causal full-state
  * boundary that authorizes the old-ops sweep to prune a user's history, and
  * routine incremental sync never creates one. An automatic checkpoint cadence
- * would fix that, but releases before v18.21.2 treat a REPAIR op as a full
- * reset and drop offline edits concurrent with it (the narrower REPAIR
- * semantics landed in 78a459294104, first shipped in v18.21.2). So a cadence
- * may only ever be enabled for an account whose every active device runs a
- * release at or above that cut.
+ * needs a separate compatibility design. Concurrent-preserving REPAIR filtering
+ * landed in 329da9b9f313 (v18.15.0), but later fixes cover the incoming-REPAIR
+ * conflict gate (577bdbbf138, v18.21.0) and failed-heal progress (633a27b68e3,
+ * v18.21.2). Keep v18.21.2 as a conservative diagnostic cutoff, not proof of
+ * end-to-end checkpoint safety.
  *
  * Clients report their bare semver as the `appVersion` query parameter on the
  * download path (sync.routes.ts → DeviceService.touchDevice). A device with
- * no reported version counts as old: every release that reports one is newer
- * than the cut, so silence can only mean a pre-reporting client.
+ * no reported version counts as old. These reports cannot authorize cadence:
+ * devices can return after retention, and recording versions is asynchronous.
+ * Compatibility must also hold for checkpoints stored before an old device
+ * returns and for devices arriving during checkpoint acceptance.
  *
  * Pure functions only; the per-account and fleet-wide queries live in
  * DeviceService.
@@ -70,7 +72,7 @@ const compareTuples = (a: readonly number[], b: readonly number[]): number => {
 const MIN_SAFE = toParsedVersion(MIN_CHECKPOINT_SAFE_APP_VERSION)!;
 
 /**
- * Whether one reported version keeps concurrent edits across a REPAIR.
+ * Whether one reported version meets the conservative REPAIR diagnostic cutoff.
  * A prerelease of the cut itself (`18.21.2-beta.1`) may predate the fix and
  * counts as old; a prerelease of any later version is fine.
  */
@@ -90,9 +92,9 @@ export interface CheckpointGateDevice {
 }
 
 /**
- * Whether every device of an account is checkpoint-safe. An account with no
- * device inside the window is NOT safe: there is nobody to create a
- * checkpoint for, and "no devices" must never read as "all devices agree".
+ * Whether all supplied device versions meet the diagnostic cutoff. An empty
+ * window does not qualify. Devices outside this window may still return, so
+ * even a positive result is not authorization to create a checkpoint.
  */
 export const isAccountCheckpointSafe = (
   devices: readonly CheckpointGateDevice[],
@@ -100,18 +102,17 @@ export const isAccountCheckpointSafe = (
   devices.length > 0 && devices.every((d) => isCheckpointSafeAppVersion(d.appVersion));
 
 export interface CheckpointGateFleetSummary {
-  /** Accounts with at least one device in the window whose devices are all safe. */
+  /** Accounts whose observed devices meet the cutoff, not checkpoint authorization. */
   safeAccounts: number;
   /** Accounts with at least one device in the window. */
   totalAccounts: number;
-  /** Devices in the window that never reported a version. */
+  /** Devices in the window without a currently recorded version. */
   unversionedDevices: number;
 }
 
 /**
- * Fleet-wide roll-up of the gate over one row per device in the window. This
- * is the number that decides when a cadence can be switched on, so it is
- * logged by the daily cleanup unconditionally.
+ * Fleet-wide diagnostic roll-up over one row per device in the window.
+ * Logged by daily cleanup; it cannot decide when cadence is safe to enable.
  */
 export const summarizeCheckpointGate = (
   devices: readonly (CheckpointGateDevice & { userId: number })[],

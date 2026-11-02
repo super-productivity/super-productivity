@@ -459,6 +459,18 @@ describe('performance migrations', () => {
     expect(dockerWorkflow).toContain('revision=$revision');
     expect(dockerWorkflow).toContain('VCS_REF=${{ steps.source-ref.outputs.revision }}');
     expect(dockerWorkflow).not.toContain('labels: ${{ steps.meta.outputs.labels }}');
+    // Release images: a vX.Y.Z tag built from the tag's tree, never `latest`, never pruned.
+    expect(dockerWorkflow).toContain('types: [published]');
+    expect(dockerWorkflow).toContain('!github.event.release.prerelease');
+    expect(dockerWorkflow).toContain('ref: refs/tags/${{ steps.tag.outputs.tag }}');
+    expect(dockerWorkflow).toContain('^v[0-9]+\\.[0-9]+\\.[0-9]+$');
+    expect(dockerWorkflow).toContain(
+      'tags: ghcr.io/super-productivity/supersync:${{ steps.tag.outputs.tag }}',
+    );
+    expect(
+      dockerWorkflow.match(/VCS_REF=\$\{\{ steps\.source-ref\.outputs\.revision \}\}/g),
+    ).toHaveLength(2);
+    expect(dockerWorkflow).toContain('exclude-tags: v*');
     expect(helmDeployment).toContain('sh scripts/migrate-deploy.sh');
     expect(
       helmDeployment.match(/include "supersync\.postgresqlConnectionLimit" \./g),

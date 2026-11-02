@@ -8,7 +8,6 @@ import {
 } from './dialog-change-encryption-password.component';
 import { EncryptionPasswordChangeService } from '../encryption-password-change.service';
 import { SnackService } from '../../../core/snack/snack.service';
-import { SuperSyncEncryptionToggleService } from '../supersync-encryption-toggle.service';
 import { FileBasedEncryptionService } from '../file-based-encryption.service';
 import { SyncWrapperService } from '../sync-wrapper.service';
 import { SyncLocalStateService } from '../../../op-log/sync/sync-local-state.service';
@@ -23,7 +22,6 @@ describe('DialogChangeEncryptionPasswordComponent', () => {
   let mockEncryptionPasswordChangeService: jasmine.SpyObj<EncryptionPasswordChangeService>;
   let mockFileBasedEncryptionService: jasmine.SpyObj<FileBasedEncryptionService>;
   let mockSnackService: jasmine.SpyObj<SnackService>;
-  let mockEncryptionToggleService: jasmine.SpyObj<SuperSyncEncryptionToggleService>;
   let mockSyncWrapperService: jasmine.SpyObj<SyncWrapperService>;
   let mockSyncLocalStateService: jasmine.SpyObj<SyncLocalStateService>;
 
@@ -32,8 +30,12 @@ describe('DialogChangeEncryptionPasswordComponent', () => {
     mockSyncLocalStateService = jasmine.createSpyObj('SyncLocalStateService', [
       'hasNothingWorthUploading',
       'warnNothingWorthUploading',
+      'confirmOverwriteOfUndecryptableRemoteOps',
     ]);
     mockSyncLocalStateService.hasNothingWorthUploading.and.resolveTo(false);
+    mockSyncLocalStateService.confirmOverwriteOfUndecryptableRemoteOps.and.returnValue(
+      true,
+    );
     mockEncryptionPasswordChangeService = jasmine.createSpyObj(
       'EncryptionPasswordChangeService',
       ['changePassword'],
@@ -43,10 +45,6 @@ describe('DialogChangeEncryptionPasswordComponent', () => {
       'disableEncryption',
     ]);
     mockSnackService = jasmine.createSpyObj('SnackService', ['open']);
-    mockEncryptionToggleService = jasmine.createSpyObj(
-      'SuperSyncEncryptionToggleService',
-      ['disableEncryption'],
-    );
     mockSyncWrapperService = jasmine.createSpyObj('SyncWrapperService', [
       'runWithSyncBlocked',
     ]);
@@ -72,10 +70,6 @@ describe('DialogChangeEncryptionPasswordComponent', () => {
           useValue: mockFileBasedEncryptionService,
         },
         { provide: SnackService, useValue: mockSnackService },
-        {
-          provide: SuperSyncEncryptionToggleService,
-          useValue: mockEncryptionToggleService,
-        },
         {
           provide: SyncWrapperService,
           useValue: mockSyncWrapperService,
@@ -228,6 +222,39 @@ describe('DialogChangeEncryptionPasswordComponent', () => {
     });
   });
 
+  describe('removeEncryption', () => {
+    it('disables file-based encryption while sync is blocked and closes', async () => {
+      mockFileBasedEncryptionService.disableEncryption.and.resolveTo();
+
+      await component.removeEncryption();
+
+      expect(mockSyncWrapperService.runWithSyncBlocked).toHaveBeenCalled();
+      expect(mockFileBasedEncryptionService.disableEncryption).toHaveBeenCalled();
+      expect(mockDialogRef.close).toHaveBeenCalledWith({
+        success: true,
+        encryptionRemoved: true,
+      });
+    });
+
+    it('keeps the dialog open and reports the error when disabling fails', async () => {
+      // e.g. the service refusing a non-file-based provider (SuperSync)
+      mockFileBasedEncryptionService.disableEncryption.and.rejectWith(
+        new Error('only supported for file-based providers'),
+      );
+
+      await component.removeEncryption();
+
+      expect(mockDialogRef.close).not.toHaveBeenCalled();
+      expect(component.isRemovingEncryption()).toBe(false);
+      expect(mockSnackService.open).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          type: 'ERROR',
+          translateParams: { message: 'only supported for file-based providers' },
+        }),
+      );
+    });
+  });
+
   describe('empty-device guard (#9256)', () => {
     it('refuses the op-log clean slate when this device has nothing to upload', async () => {
       mockSyncLocalStateService.hasNothingWorthUploading.and.resolveTo(true);
@@ -241,6 +268,20 @@ describe('DialogChangeEncryptionPasswordComponent', () => {
       expect(mockSyncLocalStateService.warnNothingWorthUploading).toHaveBeenCalledWith(
         T.F.SYNC.D_NOTHING_TO_UPLOAD.MESSAGE_CHANGE_PW,
       );
+      expect(mockEncryptionPasswordChangeService.changePassword).not.toHaveBeenCalled();
+      expect(mockDialogRef.close).not.toHaveBeenCalled();
+      expect(component.isLoading()).toBe(false);
+    });
+
+    it('stops when the user declines deleting undecryptable remote ops', async () => {
+      mockSyncLocalStateService.confirmOverwriteOfUndecryptableRemoteOps.and.returnValue(
+        false,
+      );
+      component.newPassword = 'password123';
+      component.confirmPassword = 'password123';
+
+      await component.confirm();
+
       expect(mockEncryptionPasswordChangeService.changePassword).not.toHaveBeenCalled();
       expect(mockDialogRef.close).not.toHaveBeenCalled();
       expect(component.isLoading()).toBe(false);

@@ -17,7 +17,7 @@ export type ElectronDistChannel =
  * Detects which distribution channel the running Electron app belongs to.
  * Returns `null` on unknown platforms.
  *
- * Shared between the Electron main process (tray GUID selection) and the
+ * Shared between the Electron main process (Windows jump-list gating) and the
  * preload bridge (channel suffix appended to the diagnostic version string).
  * Safe to call from preload: only reads `process` / `process.env`.
  *

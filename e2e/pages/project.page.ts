@@ -15,6 +15,7 @@ export class ProjectPage extends BasePage {
   readonly workCtxTitle: Locator;
   readonly projectSettingsBtn: Locator;
   readonly moveToArchiveBtn: Locator;
+  readonly archivedProjectsLink: Locator;
   readonly globalErrorAlert: Locator;
 
   constructor(page: Page, testPrefix: string = '') {
@@ -29,7 +30,7 @@ export class ProjectPage extends BasePage {
       .locator('dialog-create-project input[type="text"]')
       .first();
     this.submitBtn = page.locator('dialog-create-project button[type=submit]');
-    this.workCtxMenu = page.locator('work-context-menu');
+    this.workCtxMenu = page.locator('.work-context-menu-panel');
     // Use more specific selector to avoid matching titles in other areas
     this.workCtxTitle = page
       .locator('main .page-title, .route-wrapper .page-title')
@@ -38,6 +39,8 @@ export class ProjectPage extends BasePage {
       .locator('button[aria-label="Project Settings"]')
       .or(this.workCtxMenu.locator('button').nth(3));
     this.moveToArchiveBtn = page.locator('.e2e-move-done-to-archive');
+    // Last row of the sidebar Projects list, shown while a project is archived.
+    this.archivedProjectsLink = page.locator('magic-side-nav .archived-projects-link a');
     this.globalErrorAlert = page.locator('.global-error-alert');
   }
 
@@ -181,19 +184,15 @@ export class ProjectPage extends BasePage {
       .locator('.g-multi-btn-wrapper nav-item button')
       .first();
 
-    // Ensure Projects group is expanded with retry logic
+    // MatMenuTrigger also owns aria-expanded on this button. The component's
+    // expanded class reflects the group state, including while children animate.
     await projectsGroup.waitFor({ state: 'visible', timeout: 5000 });
-    for (let i = 0; i < 3; i++) {
-      const isExpanded = await projectsGroup.getAttribute('aria-expanded');
-      if (isExpanded === 'true') break;
-
+    if (
+      !(await projectsGroup.evaluate((button) => button.classList.contains('expanded')))
+    ) {
       await projectsGroup.click();
-      // Wait for expansion animation to complete - scoped to Projects tree
-      await projectsTree
-        .locator('.nav-children')
-        .waitFor({ state: 'visible', timeout: 3000 })
-        .catch(() => {});
     }
+    await expect(projectsGroup).toHaveClass(/\bexpanded\b/);
 
     // Wait for the project to appear in the tree (may take time after sync/reload)
     // Scope to the Projects tree to avoid matching tags or other trees
@@ -236,17 +235,8 @@ export class ProjectPage extends BasePage {
       }
     }
 
-    // Final verification - wait for the project to appear in main
-    // Use a locator-based wait for better reliability
-    try {
-      await this.page
-        .locator('main')
-        .getByText(fullProjectName, { exact: false })
-        .first()
-        .waitFor({ state: 'visible', timeout: 15000 });
-    } catch {
-      // If verification fails, continue anyway - the test will catch real issues
-    }
+    await this.page.waitForURL((url) => isProjectTasksRoute(url.href));
+    await expect(this.workCtxTitle).toContainText(fullProjectName);
   }
 
   async navigateToProject(projectLocator: Locator): Promise<void> {
@@ -363,7 +353,7 @@ export class ProjectPage extends BasePage {
     // Wait for the project to appear in the navigation - use improved approach from project.spec.ts
     await this.page.waitForTimeout(1000); // Allow time for project to appear
 
-    let newProject;
+    let newProject: Locator | undefined;
     let projectFound = false;
 
     // Check if the Projects tree's .nav-children container exists after expansion.
@@ -420,7 +410,7 @@ export class ProjectPage extends BasePage {
     }
 
     // Verify the project is found and click it
-    if (!projectFound) {
+    if (!projectFound || !newProject) {
       throw new Error(`Project "${projectName}" not found in navigation after creation`);
     }
 
@@ -581,9 +571,11 @@ export class ProjectPage extends BasePage {
 
     const dialog = this.page.locator('dialog-fullscreen-markdown');
     const noteEditor = markdownEditor(dialog);
-    if (!(await noteEditor.isVisible({ timeout: 2000 }).catch(() => false))) {
-      throw new Error('Note dialog markdown editor not found');
-    }
+    // The editor is a deferred chunk that can render after the dialog. isVisible()
+    // ignores its timeout and returns at once, so wait for it instead.
+    await noteEditor.waitFor({ state: 'visible', timeout: 10000 }).catch((e: unknown) => {
+      throw new Error(`Note dialog markdown editor not found: ${String(e)}`);
+    });
 
     await fillMarkdownEditor(dialog, noteContent);
 

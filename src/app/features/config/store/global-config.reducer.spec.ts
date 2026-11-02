@@ -141,10 +141,32 @@ describe('GlobalConfigReducer', () => {
       // Existing values preserved
       expect(result.idle.isEnableIdleTimeTracking).toBe(true);
       expect(result.idle.minIdleTime).toBe(5 * 60 * 1000);
-      // Missing value filled from default (must be false = opt-in)
+      // Missing value filled from default
       expect(result.idle.isSuppressIdleDuringFocusMode).toBe(
         DEFAULT_GLOBAL_CONFIG.idle.isSuppressIdleDuringFocusMode,
       );
+    });
+
+    it('should turn priority short syntax on for a config that predates it', () => {
+      const { isEnablePriority, ...legacyShortSyntax } =
+        DEFAULT_GLOBAL_CONFIG.shortSyntax;
+      expect(isEnablePriority).toBe(true);
+
+      const load = (shortSyntax: object): GlobalConfigState =>
+        globalConfigReducer(
+          initialGlobalConfigState,
+          loadAllData({
+            appDataComplete: {
+              globalConfig: { ...initialGlobalConfigState, shortSyntax },
+            } as AppDataComplete,
+          }),
+        );
+
+      expect(load(legacyShortSyntax).shortSyntax.isEnablePriority).toBe(true);
+      expect(
+        load({ ...legacyShortSyntax, isEnablePriority: false }).shortSyntax
+          .isEnablePriority,
+      ).toBe(false);
     });
 
     it('should coerce a legacy null defaultProjectId to the Inbox default (#7891)', () => {

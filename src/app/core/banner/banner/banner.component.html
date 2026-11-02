@@ -51,7 +51,6 @@
             (click)="dismiss(banner.id)"
             color="primary"
             mat-button
-            tabindex="1"
           >
             {{ T.G.DISMISS | translate }}
           </button>
@@ -63,7 +62,6 @@
               [attr.aria-label]="banner.action.label | translate: banner.translateParams"
               [title]="banner.action.label | translate: banner.translateParams"
               mat-icon-button
-              tabindex="1"
             >
               <mat-icon>{{ banner.action.icon }}</mat-icon>
             </button>
@@ -72,7 +70,6 @@
               (click)="action(banner, banner.action)"
               color="primary"
               mat-button
-              tabindex="1"
             >
               {{ banner.action.label | translate: banner.translateParams }}
             </button>
@@ -85,7 +82,6 @@
               [attr.aria-label]="banner.action2.label | translate: banner.translateParams"
               [title]="banner.action2.label | translate: banner.translateParams"
               mat-icon-button
-              tabindex="1"
             >
               <mat-icon>{{ banner.action2.icon }}</mat-icon>
             </button>
@@ -94,7 +90,6 @@
               (click)="action(banner, banner.action2)"
               color="primary"
               mat-button
-              tabindex="1"
             >
               {{ banner.action2.label | translate: banner.translateParams }}
             </button>
@@ -107,7 +102,6 @@
               [attr.aria-label]="banner.action3.label | translate: banner.translateParams"
               [title]="banner.action3.label | translate: banner.translateParams"
               mat-icon-button
-              tabindex="1"
             >
               <mat-icon>{{ banner.action3.icon }}</mat-icon>
             </button>
@@ -116,7 +110,6 @@
               (click)="action(banner, banner.action3)"
               color="primary"
               mat-button
-              tabindex="1"
             >
               {{ banner.action3.label | translate: banner.translateParams }}
             </button>

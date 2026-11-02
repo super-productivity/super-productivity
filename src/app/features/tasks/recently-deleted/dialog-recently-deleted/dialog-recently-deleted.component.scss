@@ -1,0 +1,33 @@
+.intro,
+.none {
+  color: var(--text-color-muted);
+}
+
+.entries {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.entry {
+  display: flex;
+  align-items: center;
+  gap: var(--s);
+  padding: var(--s-half) 0;
+}
+
+.entry-text {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.entry-title {
+  overflow-wrap: anywhere;
+}
+
+.entry-meta {
+  color: var(--text-color-muted);
+  font-size: var(--font-size-sm);
+}

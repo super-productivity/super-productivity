@@ -1,3 +1,4 @@
+import { createSafeIpcError } from './safe-ipc-error';
 import { app, ipcMain } from 'electron';
 import type { IpcMainInvokeEvent } from 'electron';
 import {
@@ -22,25 +23,32 @@ import {
   selectBackupFilesToDelete,
 } from './shared-with-frontend/backup-file-cleanup.util';
 
-export const BACKUP_DIR = path.join(app.getPath('userData'), `backups`);
+/**
+ * Resolved at use time, not import time: this module is imported before
+ * userData moves (snap common dir in main.ts, `--user-data-dir` in
+ * start-app.ts), and an import-time value sent snap backups to the
+ * per-revision dir that snapd deletes with old revisions (#11049).
+ */
+const getBackupDir = (): string => path.join(app.getPath('userData'), `backups`);
 
 /**
- * Where a virtualized MSIX package's writes to BACKUP_DIR physically land, so
+ * Where a virtualized MSIX package's writes to getBackupDir() physically land, so
  * Explorer (which runs outside the package and sees no redirection) can be
  * pointed at them. Display-oriented but not inert: `BACKUP_LOAD_DATA` below
  * also accepts it as an allow-listed read root.
  *
  * shortcut: the package family name is hardcoded and nothing in CI would notice
  * it drifting (the appx config lives in the WIN_STORE_ELECTRON_BUILDER_YML
- * secret); drift just fails the probe and we show BACKUP_DIR. Verified against
+ * secret); drift just fails the probe and we show getBackupDir(). Verified against
  * the shipped v18.15.1 appx on 2026-07-21 — it is `<Identity Name>_<PublisherId>`,
  * PublisherId being base32(SHA-256(UTF-16LE Publisher)[0..8]), so any release
  * artifact re-checks it without a Windows machine.
  */
-const BACKUP_DIR_WINSTORE = BACKUP_DIR.replace(
-  'Roaming',
-  `Local\\Packages\\53707johannesjo.SuperProductivity_ch45amy23cdv6\\LocalCache\\Roaming`,
-);
+const getBackupDirWinStore = (): string =>
+  getBackupDir().replace(
+    'Roaming',
+    `Local\\Packages\\53707johannesjo.SuperProductivity_ch45amy23cdv6\\LocalCache\\Roaming`,
+  );
 
 /**
  * The backup location to *show* the user, which is not always the one we write
@@ -50,19 +58,19 @@ const BACKUP_DIR_WINSTORE = BACKUP_DIR.replace(
  *
  * shortcut: an install that flipped from virtualized to full-trust keeps a
  * stale LocalCache dir that still wins the probe, showing real but outdated
- * backups. Accepted — restore reads BACKUP_DIR either way, so only manual
+ * backups. Accepted — restore reads getBackupDir() either way, so only manual
  * recovery is affected. Upgrade path: probe for the newest filename in
- * BACKUP_DIR (timestamps sort lexically) instead of for the directory.
+ * getBackupDir() (timestamps sort lexically) instead of for the directory.
  */
 export const getBackupDirForDisplay = (): string =>
-  process.windowsStore && existsSync(BACKUP_DIR_WINSTORE)
-    ? BACKUP_DIR_WINSTORE
-    : BACKUP_DIR;
+  process.windowsStore && existsSync(getBackupDirWinStore())
+    ? getBackupDirWinStore()
+    : getBackupDir();
 
 // eslint-disable-next-line prefer-arrow/prefer-arrow-functions
 export function initBackupAdapter(): void {
-  console.log('Saving backups to', BACKUP_DIR);
-  log('Saving backups to', BACKUP_DIR);
+  console.log('Saving backups to', getBackupDir());
+  log('Saving backups to', getBackupDir());
 
   // BACKUP
   ipcMain.handle(IPC.BACKUP, backupData);
@@ -87,10 +95,10 @@ export function initBackupAdapter(): void {
     // (or XSS payload) could read arbitrary files via window.ea.loadBackupData.
     // See GHSA-x937-wf3j-88q3. Both the regular and the Windows-Store backup
     // dirs are accepted; the legitimate caller only ever passes paths built
-    // from BACKUP_DIR (see IPC.BACKUP_IS_AVAILABLE above).
+    // from getBackupDir() (see IPC.BACKUP_IS_AVAILABLE above).
     if (
-      !isPathInsideDir(BACKUP_DIR, backupPath) &&
-      !isPathInsideDir(BACKUP_DIR_WINSTORE, backupPath)
+      !isPathInsideDir(getBackupDir(), backupPath) &&
+      !isPathInsideDir(getBackupDirWinStore(), backupPath)
     ) {
       throw new Error('BACKUP_LOAD_DATA: refused path outside backup directory');
     }
@@ -100,22 +108,23 @@ export function initBackupAdapter(): void {
   });
 }
 
-/** All backup files in BACKUP_DIR, newest first; empty when the dir is missing. */
+/** All backup files in getBackupDir(), newest first; empty when the dir is missing. */
 const listBackupFiles = (): LocalBackupMeta[] => {
-  if (!existsSync(BACKUP_DIR)) {
+  const backupDir = getBackupDir();
+  if (!existsSync(backupDir)) {
     return [];
   }
   const files: LocalBackupMeta[] = [];
-  for (const name of readdirSync(BACKUP_DIR)) {
+  for (const name of readdirSync(backupDir)) {
     if (!name.endsWith('.json')) {
       continue;
     }
-    const filePath = path.join(BACKUP_DIR, name);
+    const filePath = path.join(backupDir, name);
     try {
       files.push({
         name,
         path: filePath,
-        folder: BACKUP_DIR,
+        folder: backupDir,
         created: statSync(filePath).mtime.getTime(),
       });
     } catch (e) {
@@ -142,10 +151,11 @@ function backupData(
   ev: IpcMainInvokeEvent,
   dataOrArgs: AppDataCompleteLegacy | BackupDataArgs,
 ): void {
-  if (!existsSync(BACKUP_DIR)) {
-    mkdirSync(BACKUP_DIR);
+  const backupDir = getBackupDir();
+  if (!existsSync(backupDir)) {
+    mkdirSync(backupDir);
   }
-  const filePath = `${BACKUP_DIR}/${getBackupTimestamp()}.json`;
+  const filePath = `${backupDir}/${getBackupTimestamp()}.json`;
   const data = isBackupDataArgs(dataOrArgs) ? dataOrArgs.data : dataOrArgs;
   const maxBackupFiles = isBackupDataArgs(dataOrArgs)
     ? dataOrArgs.maxBackupFiles
@@ -158,12 +168,15 @@ function backupData(
   } catch (e) {
     log('Error while backing up');
     error(e);
+    // Rejects the renderer's invoke so it doesn't record a backup that never
+    // landed (#10022); the safe error keeps the file path out of renderer logs.
+    throw createSafeIpcError(IPC.BACKUP, e);
   }
 }
 
 // eslint-disable-next-line prefer-arrow/prefer-arrow-functions
 function cleanupOldBackups(maxBackupFiles?: number | null): void {
-  if (!existsSync(BACKUP_DIR)) {
+  if (!existsSync(getBackupDir())) {
     return;
   }
 

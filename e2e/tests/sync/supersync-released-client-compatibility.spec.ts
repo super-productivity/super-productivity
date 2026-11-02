@@ -179,7 +179,8 @@ test.describe('Published-client upgrade requirement (#9962)', () => {
             contentType: 'application/json',
             body: JSON.stringify({
               error: 'Upgrade required before syncing this account',
-              errorCode: 'CLIENT_UPGRADE_REQUIRED',
+              // The code a future version floor sends; released apps don't know it.
+              errorCode: 'CLIENT_UPDATE_REQUIRED',
             }),
           });
         });

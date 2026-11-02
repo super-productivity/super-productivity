@@ -1,0 +1,1 @@
+New: task priorities, project and tag search, multi-task dragging, undo for unscheduling, and TickTick CSV import. Android deadline reminders can alert you up to one week ahead. Fixed double-counted and lost tracking time, background Pomodoro tracking, and mobile sync hangs. Improved reminder scheduling, mobile planner selection, note editing, and translations.

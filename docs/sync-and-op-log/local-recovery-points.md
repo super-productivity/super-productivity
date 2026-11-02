@@ -104,5 +104,5 @@ list. Fires only on that rare event; no setting.
 
 - Server-side retention of the previous op generation on clean slate (follow-up,
   bounded to one previous generation to stay under 2× storage).
-- Re-enabling the conflict journal (partial field loss, untested blast radius).
+- Field-level recovery for discarded overlapping edits (the conflict journal is retired).
 - Compressing ring entries — upgrade path if mobile peak memory becomes an issue.

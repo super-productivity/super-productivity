@@ -1,9 +1,8 @@
-<!--<pre><code>{{(worklogService.currentWeek$|async|json)}}</code></pre>-->
-
-@if (worklogService.currentWeek$ | async; as currentWeek) {
-  <div>
+@let week = currentWeek();
+@if (week) {
+  <div [@.disabled]="!isAnimationEnabled()">
     <div class="days">
-      @for (day of currentWeek!.ent | keyvalue: sortDays; track day.key; let i = $index) {
+      @for (day of week.ent | keyvalue: sortDays; track day.key; let i = $index) {
         <div class="day">
           <div class="material-table">
             <div
@@ -133,6 +132,6 @@
       </button>
     </div>
   </div>
-} @else {
+} @else if (week === null) {
   <div class="no-data">{{ T.F.WORKLOG.WEEK.NO_DATA | translate }}</div>
 }

@@ -118,8 +118,9 @@ class TaskListWidgetProvider : AppWidgetProvider() {
                 return context.getString(R.string.widget_header_title) to null
             }
             val meta = WidgetData.parseMeta(json)
+            val nowMs = System.currentTimeMillis()
             // The verdict lives in WidgetData.headerFor (pure, tested); this only renders it.
-            val header = when (val h = WidgetData.headerFor(meta, System.currentTimeMillis())) {
+            val header = when (val h = WidgetData.headerFor(meta, nowMs)) {
                 is WidgetHeader.Today -> context.getString(R.string.widget_header_title)
                 is WidgetHeader.Outdated -> h.dayMs?.let { dayMs ->
                     context.getString(
@@ -133,8 +134,8 @@ class TaskListWidgetProvider : AppWidgetProvider() {
                     )
                 } ?: context.getString(R.string.widget_header_outdated_unknown)
             }
-            return header to WidgetTrackingStopQueue.withoutPendingStop(
-                context, WidgetData.parseCurrentTask(json)
+            return header to NotificationActionQueue.withoutPendingStop(
+                context, WidgetData.parseCurrentTask(json, nowMs)
             )
         }
 
@@ -191,6 +192,7 @@ class TaskListWidgetProvider : AppWidgetProvider() {
             val style = WidgetBackground.styleFor(context, appWidgetId)
             style.applyBackground(views, R.id.widget_task_list_root)
             style.icon(views, R.id.widget_header_icon, WidgetInk.BRAND)
+            style.icon(views, R.id.widget_add, WidgetInk.INK)
             style.text(views, R.id.widget_header_title, WidgetInk.INK)
             style.text(views, R.id.widget_tracking_title, WidgetInk.INK)
             style.text(views, R.id.widget_tracking_device, WidgetInk.MUTED)
@@ -242,6 +244,16 @@ class TaskListWidgetProvider : AppWidgetProvider() {
             views.setOnClickPendingIntent(R.id.widget_header, openAppPendingIntent)
             views.setOnClickPendingIntent(R.id.widget_empty, openAppPendingIntent)
             views.setOnClickPendingIntent(R.id.widget_tracking_row, openAppPendingIntent)
+
+            // "+" → quick add dialog; the app itself stays closed.
+            val quickAddIntent = Intent(context, QuickAddActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+            val quickAddPendingIntent = PendingIntent.getActivity(
+                context, 0, quickAddIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            views.setOnClickPendingIntent(R.id.widget_add, quickAddPendingIntent)
 
             appWidgetManager.updateAppWidget(appWidgetId, views)
         }

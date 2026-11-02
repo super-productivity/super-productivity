@@ -283,6 +283,35 @@ describe('TaskDetailPanelComponent', () => {
     });
   });
 
+  // A won't-do task is one whose `wontDoOn` matches its `doneOn`.
+  describe('editCompleted()', () => {
+    const editCompletedTo = (task: TaskWithSubTasks, doneOn: number): void => {
+      componentRef.setInput('task', task);
+      const matDialog = TestBed.inject(MatDialog) as jasmine.SpyObj<MatDialog>;
+      matDialog.open.and.returnValue({
+        afterClosed: () => of(doneOn),
+      } as ReturnType<MatDialog['open']>);
+      component.editCompleted();
+    };
+
+    it("moves wontDoOn with doneOn so a won't-do task stays won't do", () => {
+      editCompletedTo({ ...MOCK_TASK, isDone: true, doneOn: 5, wontDoOn: 5 }, 9);
+
+      expect(mockTaskService.update).toHaveBeenCalledOnceWith(MOCK_TASK.id, {
+        doneOn: 9,
+        wontDoOn: 9,
+      });
+    });
+
+    it('moves only doneOn on a completed task', () => {
+      editCompletedTo({ ...MOCK_TASK, isDone: true, doneOn: 5, wontDoOn: 3 }, 9);
+
+      expect(mockTaskService.update).toHaveBeenCalledOnceWith(MOCK_TASK.id, {
+        doneOn: 9,
+      });
+    });
+  });
+
   describe('showScheduleIcon (merged schedule + recurrence item)', () => {
     it("returns 'today' when a due day is set", () => {
       componentRef.setInput('task', {

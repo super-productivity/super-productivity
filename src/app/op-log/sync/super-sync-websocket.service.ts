@@ -2,6 +2,7 @@ import { Injectable, inject, signal, OnDestroy } from '@angular/core';
 import { Observable, Subject } from 'rxjs';
 import { SyncLog } from '../../core/log';
 import { CLIENT_ID_PROVIDER } from '../util/client-id.provider';
+import { getAppSemver } from '../../util/get-app-version-str';
 
 export interface NewOpsNotification {
   latestSeq: number;
@@ -169,7 +170,12 @@ export class SuperSyncWebSocketService implements OnDestroy {
 
     // Convert http(s) to ws(s)
     const wsUrl = baseUrl.replace(/^https:\/\//, 'wss://').replace(/^http:\/\//, 'ws://');
-    const url = `${wsUrl}/api/sync/ws?token=${encodeURIComponent(accessToken)}&clientId=${encodeURIComponent(clientId)}`;
+    // The app version goes on the handshake too, like on every HTTP request
+    // (client-version-floor.md): a server may gate this route as well.
+    const appVersion = getAppSemver();
+    const url =
+      `${wsUrl}/api/sync/ws?token=${encodeURIComponent(accessToken)}&clientId=${encodeURIComponent(clientId)}` +
+      (appVersion ? `&appVersion=${encodeURIComponent(appVersion)}` : '');
 
     let ws: WebSocket;
     try {

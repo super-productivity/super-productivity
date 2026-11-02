@@ -2,6 +2,9 @@
 
 This guide provides comprehensive information for writing and maintaining end-to-end tests for Super Productivity using Playwright.
 
+For current command selection, provider prerequisites, and agent instructions,
+start with [AGENTS.md](AGENTS.md).
+
 ## Table of Contents
 
 - [Overview](#overview)
@@ -35,7 +38,7 @@ Our E2E tests are built with Playwright and follow the Page Object Model (POM) p
 ### Basic Commands
 
 ```bash
-# Run all tests
+# Run regular browser tests (excludes SuperSync and WebDAV)
 npm run e2e
 
 # Run tests in UI mode (interactive)
@@ -54,11 +57,55 @@ npm run e2e:debug
 npm run e2e:show-report
 ```
 
+### Faster local reruns
+
+Keep the Angular dev server running to avoid restarting it for each test run:
+
+```bash
+# Terminal 1 (leave running)
+npm run startFrontend:e2e
+
+# Terminal 2
+E2E_BASE_URL=http://localhost:4242 npm run e2e:file -- e2e/tests/task-basic/task-crud.spec.ts
+```
+
+`E2E_BASE_URL` uses that server instead of starting one. The dev server rebuilds
+when source files change. Add `--grep "test name"` to run only the scenario you
+are working on. Provider tests still need their provider-specific commands.
+
 ### WebDAV Sync Tests
 
 ```bash
 # Run WebDAV tests (starts Docker container)
 npm run e2e:webdav
+```
+
+### Released-Client Compatibility Tests
+
+Some SuperSync specs run unmodified published app bundles next to the current
+build. They skip unless `COMPAT_OLD_ASSETS` (and `COMPAT_NEW_ASSETS` for the
+upgrade spec) point at extracted bundles. The scheduled workflow's
+`E2E Tests (Released Clients)` job runs them on every nightly and sync-path push
+(and on manual dispatch unless `run_released_clients` is unchecked) and fails on
+any skipped test. It selects specs by the `@supersync released` title tag, so keep
+that tag on new released-client suites; the upgrade spec runs through its own
+config. Locally, use the same digest-pinned bundles from
+[the fetch script](../scripts/fetch-released-client-assets.sh):
+
+```bash
+./scripts/fetch-released-client-assets.sh .tmp/released-clients v19.1.0 v19.0.1 v18.14.0
+
+# v19.1.0 clients against the current build
+COMPAT_OLD_ASSETS=$PWD/.tmp/released-clients/v19.1.0 npm run e2e:supersync:file \
+  e2e/tests/sync/supersync-reorder-conflict-wedge.spec.ts \
+  e2e/tests/sync/supersync-issue-provider-reorder-conflict.spec.ts -- --grep "@supersync released"
+
+# v18.14.0 -> v19.0.1 upgrade (#9962); needs SuperSync already running on 1901, e.g.
+#   docker compose -f docker-compose.yaml -f docker-compose.supersync.yaml up -d --build supersync && ./scripts/wait-for-supersync.sh
+COMPAT_OLD_ASSETS=$PWD/.tmp/released-clients/v18.14.0 \
+  COMPAT_NEW_ASSETS=$PWD/.tmp/released-clients/v19.0.1 \
+  SUPERSYNC_E2E_URL=http://127.0.0.1:1901 \
+  npx playwright test --config e2e/playwright.compatibility.config.ts
 ```
 
 ---
@@ -203,22 +250,22 @@ Settings and configuration:
 class SettingsPage extends BasePage {
   async navigateToSettings(): Promise<void>;
   async expandSection(sectionSelector: string): Promise<void>;
-  async expandPluginSection(): Promise<void>;
-  async navigateToPluginSettings(): Promise<void>;
-  async enablePlugin(pluginName: string): Promise<boolean>;
-  async disablePlugin(pluginName: string): Promise<boolean>;
-  async isPluginEnabled(pluginName: string): Promise<boolean>;
-  async uploadPlugin(pluginPath: string): Promise<void>;
+  async scrollToSection(sectionSelector: string): Promise<void>;
+  async isOnSettingsPage(): Promise<boolean>;
+  async navigateBackToWorkView(): Promise<void>;
 }
 ```
 
 **Example:**
 
 ```typescript
-await settingsPage.navigateToPluginSettings();
-await settingsPage.enablePlugin('Test Plugin');
-expect(await settingsPage.isPluginEnabled('Test Plugin')).toBeTruthy();
+await settingsPage.navigateToSettings();
+expect(await settingsPage.isOnSettingsPage()).toBeTruthy();
 ```
+
+Plugin management lives in `helpers/plugin-test.helpers.ts`
+(`waitForPluginManagementInit`, `enablePluginWithVerification`,
+`disablePluginWithVerification`, `waitForPluginInMenu`).
 
 #### 6. **DialogPage** (`dialog.page.ts`)
 
@@ -285,11 +332,10 @@ test('should create project and add tasks', async ({ projectPage, workViewPage }
 ### Pattern 3: Settings Configuration
 
 ```typescript
-test('should enable plugin', async ({ settingsPage, waitForNav }) => {
-  await settingsPage.navigateToPluginSettings();
-  await settingsPage.enablePlugin('My Plugin');
-  await waitForNav();
-  expect(await settingsPage.isPluginEnabled('My Plugin')).toBeTruthy();
+test('should enable plugin', async ({ page }) => {
+  expect(await waitForPluginManagementInit(page)).toBe(true);
+  expect(await enablePluginWithVerification(page, 'My Plugin')).toBe(true);
+  expect(await waitForPluginInMenu(page, 'My Plugin')).toBe(true);
 });
 ```
 
@@ -484,6 +530,19 @@ await expect(page.locator('task')).toHaveCount(3);
 // Avoid fixed timeouts
 await page.waitForTimeout(1000); // BAD
 await waitForAngularStability(page); // GOOD
+
+// Read a list in ONE snapshot. `count()` + `nth(i).innerText()` re-resolves and
+// auto-waits per row, so a re-render in between (a sync applying ops, the route
+// animation that keeps the leaving view mounted for ~225ms) waits out the whole
+// timeout on a row that no longer exists
+const count = await titles.count(); // BAD: then titles.nth(i).innerText() per row
+const all = await titles.allInnerTexts(); // GOOD
+
+// Wait for the FINAL state of a multi-step update, not for "it exists". Short syntax
+// can create the task with the raw title and a default due day first and rewrite both
+// in a second action, so "the task exists" or "it has some due day" are both true
+// before it is applied
+await expect.poll(() => readTaskTitle(page)).toBe('Cleaned title');
 ```
 
 ---
@@ -601,13 +660,8 @@ test('should create project with tasks', async ({
 
 ```typescript
 test('should configure plugin', async ({ settingsPage, page }) => {
-  await settingsPage.navigateToPluginSettings();
-
-  const pluginExists = await settingsPage.pluginExists('Test Plugin');
-  expect(pluginExists).toBeTruthy();
-
-  await settingsPage.enablePlugin('Test Plugin');
-  expect(await settingsPage.isPluginEnabled('Test Plugin')).toBeTruthy();
+  expect(await waitForPluginManagementInit(page)).toBe(true);
+  expect(await enablePluginWithVerification(page, 'Test Plugin')).toBe(true);
 
   await settingsPage.navigateBackToWorkView();
   await expect(page).toHaveURL(/tag\/TODAY/);

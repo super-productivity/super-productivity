@@ -61,6 +61,14 @@ export interface DownloadResultBase {
    * - Any operation has isPayloadEncrypted: true (server still has encrypted data)
    */
   serverHasOnlyUnencryptedData?: boolean;
+  /**
+   * #9256: set when the run kept the ops decrypted before a page that failed to
+   * decrypt (`keepDecryptedPrefix`). `newOps` and `latestServerSeq` then cover
+   * only that prefix; the caller applies them, persists the cursor, and then
+   * throws this error so the same sync cycle reports the failure — unless the
+   * cycle's outcome supersedes it (`isKeptPrefixDecryptErrorSuperseded`).
+   */
+  decryptErrorAfterKeptPrefix?: Error;
 }
 
 export interface DownloadUnavailableResult extends Omit<
@@ -98,12 +106,18 @@ export interface FileSnapshotDownloadResult extends DownloadResultBase {
    * with file providers that expose a fully current snapshot.
    */
   snapshotAppliedOpIds?: string[];
+  /** See `FileSnapshotOpDownloadResponse.ownUploadsMissing` (#10916). */
+  ownUploadsMissing?: boolean;
+  /** See `FileSnapshotOpDownloadResponse.snapshotExtendsLastSeen` (#10972). */
+  snapshotExtendsLastSeen?: boolean;
 }
 
 export type DownloadResult =
   | DownloadUnavailableResult
   | SuperSyncDownloadResult
   | FileSnapshotDownloadResult;
+
+export type SuccessfulDownloadResult = Exclude<DownloadResult, DownloadUnavailableResult>;
 
 /**
  * Result of an upload operation. May contain piggybacked operations
@@ -121,6 +135,8 @@ export interface UploadResult {
    * deferred until the caller has resolved and applied piggybacked operations.
    */
   pendingAcknowledgementSeqs?: number[];
+  /** Verified server originals to restore atomically with deferred acknowledgement. */
+  pendingAcknowledgementOriginals?: ReadonlyMap<string, Operation>;
   /**
    * Number of local-win update ops created during LWW conflict resolution.
    * These ops need to be uploaded to propagate local state to other clients.

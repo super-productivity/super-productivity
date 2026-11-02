@@ -133,6 +133,9 @@ export class OperationLogSnapshotService {
           return false;
         }
 
+        // Another tab may have raised this client's counter in place, which
+        // this tab's cached clock misses: read the durable clock below.
+        this.opLogStore.clearVectorClockCache();
         // Read state synchronously at the quiesce cutoff (no await before it)
         // and lastSeq after — see JSDoc above.
         const currentState = this.stateSnapshotService.getStateSnapshotForOperationLog();

@@ -40,6 +40,7 @@ import { SyncProviderManager } from '../sync-providers/provider-manager.service'
 import { BackupService } from '../backup/backup.service';
 import { RecoveryPointBannerService } from '../../imex/local-backup/recovery-point-banner.service';
 import { countAllTasks } from '../../imex/local-backup/backup-ring.util';
+import { SupersededOperationResolverService } from './superseded-operation-resolver.service';
 
 /** The state that ends up applied when a batch carries several full-state ops. */
 const lastFullStateOp = (ops: Operation[]): Operation | undefined =>
@@ -67,6 +68,7 @@ export class RemoteOpsProcessingService {
   private opLogStore = inject(OperationLogStoreService);
   private operationApplier = inject(OperationApplierService);
   private conflictResolutionService = inject(ConflictResolutionService);
+  private supersededOperationResolver = inject(SupersededOperationResolverService);
   private validateStateService = inject(ValidateStateService);
   private sessionValidation = inject(SyncSessionValidationService);
   private vectorClockService = inject(VectorClockService);
@@ -136,6 +138,8 @@ export class RemoteOpsProcessingService {
        * apply old-epoch ops onto the fresh state.
        */
       fenceEpoch?: number;
+      /** SuperSync can recover receipts if a kept delta was already uploaded. */
+      rebaseKeptTimeDeltas?: boolean;
     },
   ): Promise<{
     localWinOpsCreated: number;
@@ -492,15 +496,6 @@ export class RemoteOpsProcessingService {
         // Auto-resolve conflicts using Last-Write-Wins strategy.
         // Piggyback non-conflicting ops so they're applied with resolved conflicts.
         // Validation failure is surfaced via the session-validation latch.
-        //
-        // PRODUCER FREEZE (journal half) for the conflict-review rollback, set
-        // here at the only production entry point so the producer stops at the
-        // fleet boundary while the service keeps the capability intact:
-        //  - disableConflictJournal: stop persisting the discarded side of a
-        //    conflict verbatim, so that device-local data obligation does not
-        //    expand beyond the edge/internal builds that already carry it.
-        // Reverting the freeze = drop that line.
-        //
         // The disjoint-merge half of the original #9061 freeze was UNFROZEN for
         // #9095: with the merge disabled, concurrent edits to DIFFERENT fields
         // of one entity resolve by whole-entity LWW and the earlier side's edit
@@ -513,20 +508,32 @@ export class RemoteOpsProcessingService {
           nonConflicting,
           {
             callerHoldsOperationLogLock: true,
-            disableConflictJournal: true,
+            ...(options?.rebaseKeptTimeDeltas
+              ? {
+                  rebaseKeptTimeDeltas: true,
+                  assertFence: (context: string) =>
+                    this.providerManager.assertSyncEpochUnchanged(
+                      options.fenceEpoch,
+                      context,
+                    ),
+                }
+              : {}),
           },
         );
         localWinOpsCreated = lwwResult.localWinOpsCreated;
-        return;
-      }
-
-      // ─────────────────────────────────────────────────────────────────────────
-      // STEP 6: No Conflicts - Apply directly and validate
-      // ─────────────────────────────────────────────────────────────────────────
-      if (nonConflicting.length > 0) {
+      } else if (nonConflicting.length > 0) {
+        // ───────────────────────────────────────────────────────────────────────
+        // STEP 6: No Conflicts - Apply directly and validate
+        // ───────────────────────────────────────────────────────────────────────
         await this.applyNonConflictingOps(nonConflicting, true);
         await this.validateAfterSync(true); // Inside sp_op_log lock
       }
+
+      // #10377: a pending reorder that crossed a competing order or a delete
+      // applied above is reissued now, before it can upload stale.
+      localWinOpsCreated += (
+        await this.supersededOperationResolver.reissueCrossedPendingReorders()
+      ).created;
     });
     return {
       localWinOpsCreated,
@@ -812,6 +819,7 @@ export class RemoteOpsProcessingService {
           syncImportReason: op.syncImportReason ?? null,
           vectorClock: op.vectorClock,
         })),
+        // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
         priorClock: priorClock ?? null,
         priorClockSize: priorClock ? Object.keys(priorClock).length : 0,
         priorUnsyncedCount: priorUnsynced.length,

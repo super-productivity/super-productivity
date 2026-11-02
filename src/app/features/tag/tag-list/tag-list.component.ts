@@ -6,16 +6,12 @@ import {
   input,
 } from '@angular/core';
 import { standardListAnimation } from '../../../ui/animations/standard-list.ani';
-import { Tag, TagState } from '../tag.model';
-import { ProjectState } from '../../project/project.model';
+import { Tag } from '../tag.model';
 import { Task } from '../../tasks/task.model';
 import { WorkContextService } from '../../work-context/work-context.service';
 import { WorkContextType } from '../../work-context/work-context.model';
 import { expandFadeAnimation } from '../../../ui/animations/expand.ani';
 import { toSignal } from '@angular/core/rxjs-interop';
-import { Store } from '@ngrx/store';
-import { selectTagFeatureState } from '../store/tag.reducer';
-import { selectProjectFeatureState } from '../../project/store/project.selectors';
 import { TagComponent, TagComponentTag } from '../tag/tag.component';
 import { DEFAULT_PROJECT_COLOR } from '../../work-context/work-context.const';
 import { DEFAULT_PROJECT_ICON } from '../../project/project.const';
@@ -25,10 +21,9 @@ import {
 } from '../../issue/issue.const';
 import { BuiltInIssueProviderKey } from '../../issue/issue.model';
 import { PluginIssueProviderRegistryService } from '../../../plugins/issue-provider/plugin-issue-provider-registry.service';
-import { selectTaskRepeatCfgFeatureState } from '../../task-repeat-cfg/store/task-repeat-cfg.selectors';
-import { TaskRepeatCfgState } from '../../task-repeat-cfg/task-repeat-cfg.model';
 import { getTaskRepeatInfoText } from '../../tasks/task-detail-panel/get-task-repeat-info-text.util';
 import { TranslateService } from '@ngx-translate/core';
+import { TagListStateService } from './tag-list-state.service';
 import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
 
 /**
@@ -50,7 +45,7 @@ export type TagListTask = Pick<
   imports: [TagComponent],
 })
 export class TagListComponent {
-  private readonly _store = inject(Store);
+  private readonly _tagListState = inject(TagListStateService);
   private readonly _workContextService = inject(WorkContextService);
   private readonly _pluginRegistry = inject(PluginIssueProviderRegistryService);
   private readonly _translateService = inject(TranslateService);
@@ -66,15 +61,9 @@ export class TagListComponent {
 
   workContext = toSignal(this._workContextService.activeWorkContextTypeAndId$);
 
-  tagState = toSignal(this._store.select(selectTagFeatureState), {
-    initialValue: { ids: [], entities: {} } as TagState,
-  });
-  projectState = toSignal(this._store.select(selectProjectFeatureState), {
-    initialValue: { ids: [], entities: {} } as ProjectState,
-  });
-  repeatCfgState = toSignal(this._store.select(selectTaskRepeatCfgFeatureState), {
-    initialValue: { ids: [], entities: {} } as TaskRepeatCfgState,
-  });
+  tagState = this._tagListState.tagState;
+  projectState = this._tagListState.projectState;
+  repeatCfgState = this._tagListState.repeatCfgState;
 
   tagIds = computed<string[]>(() => this.task().tagIds || []);
 
@@ -139,8 +128,7 @@ export class TagListComponent {
         icon = builtInIcon;
         label = builtInLabel;
       } else if (this._pluginRegistry.hasProvider(t.issueType)) {
-        const pluginIcon = this._pluginRegistry.getIcon(t.issueType);
-        icon = pluginIcon !== 'extension' ? pluginIcon : undefined;
+        icon = this._pluginRegistry.getSvgIcon(t.issueType);
         label = this._pluginRegistry.getHumanReadableName(t.issueType);
       }
 

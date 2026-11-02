@@ -14,6 +14,9 @@ export {
   PluginCreateTaskData,
   PluginShortcutCfg,
   PluginMenuEntryCfg,
+  PluginTaskContextMenuContext,
+  PluginTaskContextMenuEntryCfg,
+  PluginTaskContextMenuTarget,
   PluginHeaderBtnCfg,
   PluginNodeScriptRequest,
   PluginNodeScriptResult,
@@ -22,6 +25,8 @@ export {
   PluginWorkContextHeaderBtnCfg,
   ActiveWorkContext,
   WorkContextChangePayload,
+  PluginDayContext,
+  DayChangePayload,
   // Export the new unified types
   Task,
   Project,

@@ -102,26 +102,29 @@ export class DeviceService {
    * transaction's upsert would otherwise never create.
    *
    * `appVersion` (already validated by `parseAppVersion`) is recorded for the
-   * checkpoint gate (#9962). A changed version bypasses the throttle so an
-   * update is visible on the next poll, and an absent one (WebSocket heartbeat,
-   * pre-reporting clients) never overwrites a known version with NULL.
+   * checkpoint diagnostics (#9962). Downloads pass null for an absent/invalid
+   * version, clearing a previously reported version after a downgrade. Only
+   * heartbeats omit the argument to preserve it. Version changes, including
+   * clearing to null, bypass the throttle.
    */
   async touchDevice(
     userId: number,
     clientId: string,
-    appVersion?: string,
+    appVersion?: string | null,
   ): Promise<void> {
     const nowBig = BigInt(Date.now());
     const staleBefore = nowBig - BigInt(DEVICE_TOUCH_THROTTLE_MS);
     const version = appVersion ?? null;
+    const updateAppVersion = appVersion !== undefined;
     await prisma.$executeRaw`
       INSERT INTO sync_devices (client_id, user_id, last_seen_at, last_acked_seq, created_at, app_version)
       VALUES (${clientId}, ${userId}, ${nowBig}::bigint, 0, ${nowBig}::bigint, ${version})
       ON CONFLICT (user_id, client_id) DO UPDATE
       SET last_seen_at = EXCLUDED.last_seen_at,
-          app_version = COALESCE(EXCLUDED.app_version, sync_devices.app_version)
+          app_version = CASE WHEN ${updateAppVersion} THEN EXCLUDED.app_version
+                             ELSE sync_devices.app_version END
       WHERE sync_devices.last_seen_at < ${staleBefore}::bigint
-         OR (EXCLUDED.app_version IS NOT NULL
+         OR (${updateAppVersion}
              AND sync_devices.app_version IS DISTINCT FROM EXCLUDED.app_version)
     `;
   }

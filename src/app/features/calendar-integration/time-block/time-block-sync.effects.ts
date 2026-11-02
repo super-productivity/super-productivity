@@ -1,4 +1,7 @@
 import { Injectable, inject } from '@angular/core';
+import { MatDialog } from '@angular/material/dialog';
+import { PluginBridgeService } from '../../../plugins/plugin-bridge.service';
+import { DialogEditIssueProviderComponent } from '../../issue/dialog-edit-issue-provider/dialog-edit-issue-provider.component';
 import { Store } from '@ngrx/store';
 import { createEffect, ofType } from '@ngrx/effects';
 import { EMPTY, Observable, from } from 'rxjs';
@@ -16,29 +19,23 @@ import {
 import { LOCAL_ACTIONS } from '../../../util/local-actions.token';
 import { TaskService } from '../../tasks/task.service';
 import { Task } from '../../tasks/task.model';
+import { isCompletedTask } from '../../tasks/util/is-wont-do-task';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { PlannerActions } from '../../planner/store/planner.actions';
 import { PluginHttpService } from '../../../plugins/issue-provider/plugin-http.service';
 import { PluginIssueProviderRegistryService } from '../../../plugins/issue-provider/plugin-issue-provider-registry.service';
-import { PluginHttp } from '../../../plugins/issue-provider/plugin-issue-provider.model';
 import { selectEnabledIssueProviders } from '../../issue/store/issue-provider.selectors';
 import { IssueProviderPluginType, isPluginIssueProvider } from '../../issue/issue.model';
 import { IssueProviderActions } from '../../issue/store/issue-provider.actions';
+import { SnackParams } from '../../../core/snack/snack.model';
 import { SnackService } from '../../../core/snack/snack.service';
 import { getErrorTxt } from '../../../util/get-error-text';
 import { TimeBlockDeleteSidecarService } from './time-block-delete-sidecar.service';
-import { IssueProviderPluginDefinition } from '../../../plugins/issue-provider/plugin-issue-provider.model';
+import { createTimeBlockContext, TimeBlockContext } from './time-block-context';
 import { selectAllTasksWithDueTimeSorted } from '../../tasks/store/task.selectors';
 import { T } from '../../../t.const';
 import { Log } from '../../../core/log';
-import { withPluginOAuthTokenKey } from '../../../plugins/oauth/plugin-oauth-token-key.util';
-
-interface TimeBlockContext {
-  providerId: string;
-  definition: IssueProviderPluginDefinition;
-  config: Record<string, unknown>;
-  http: PluginHttp;
-}
+import { shouldScopePluginOAuth } from '../../../plugins/oauth/plugin-oauth-token-key.util';
 
 type TimeBlockOperation = 'upsert' | 'upsertIfScheduled' | 'delete';
 
@@ -80,6 +77,8 @@ export class TimeBlockSyncEffects {
   private readonly _store = inject(Store);
   private readonly _taskService = inject(TaskService);
   private readonly _pluginRegistry = inject(PluginIssueProviderRegistryService);
+  private readonly _matDialog = inject(MatDialog);
+  private readonly _pluginBridge = inject(PluginBridgeService);
   private readonly _pluginHttpService = inject(PluginHttpService);
   private readonly _snackService = inject(SnackService);
   private readonly _deletesSidecar = inject(TimeBlockDeleteSidecarService);
@@ -353,7 +352,7 @@ export class TimeBlockSyncEffects {
           concatMap((task) =>
             task?.dueWithTime
               ? from(this._upsertEvent(ctx, task, task.dueWithTime)).pipe(
-                  catchError((err) => this._handleError(err)),
+                  catchError((err) => this._handleError(err, ctx)),
                 )
               : EMPTY,
           ),
@@ -368,7 +367,7 @@ export class TimeBlockSyncEffects {
   ): Observable<unknown> {
     const runWithCtx = (ctx: TimeBlockContext): Observable<unknown> =>
       from(ctx.definition.timeBlock!.deleteEvent(taskId, ctx.config, ctx.http)).pipe(
-        catchError((err) => this._handleError(err)),
+        catchError((err) => this._handleError(err, ctx)),
       );
 
     return queuedCtx ? runWithCtx(queuedCtx) : this._withTimeBlockContext$(runWithCtx);
@@ -406,32 +405,14 @@ export class TimeBlockSyncEffects {
     return this._store.select(selectEnabledIssueProviders).pipe(
       first(),
       concatMap((providers) => {
-        const provider = providers.find(
-          (p): p is IssueProviderPluginType =>
-            (!filterProviderId || p.id === filterProviderId) &&
-            isPluginIssueProvider(p.issueProviderKey) &&
-            !!(p as IssueProviderPluginType).pluginConfig?.['isAutoTimeBlock'],
-        );
-        if (!provider) return EMPTY;
-
-        const registered = this._pluginRegistry.getProvider(provider.issueProviderKey);
-        if (!registered?.definition.timeBlock) return EMPTY;
-
-        const pluginConfig = withPluginOAuthTokenKey(
-          registered.pluginId,
-          provider.pluginConfig,
-          provider.id,
-        );
-        const http = this._pluginHttpService.createHttpHelper(
-          () => registered.definition.getHeaders(pluginConfig),
-          { allowPrivateNetwork: registered.allowPrivateNetwork },
-        );
-        return fn({
-          providerId: provider.id,
-          definition: registered.definition,
-          config: pluginConfig,
-          http,
+        const ctx = createTimeBlockContext({
+          providers,
+          configKey: 'isAutoTimeBlock',
+          registry: this._pluginRegistry,
+          httpService: this._pluginHttpService,
+          filterProviderId,
         });
+        return ctx ? fn(ctx) : EMPTY;
       }),
     );
   }
@@ -454,7 +435,8 @@ export class TimeBlockSyncEffects {
         title: task.title,
         dueWithTime,
         durationMs,
-        isDone: task.isDone,
+        // A won't-do task wasn't completed, so its block gets no done marker.
+        isDone: isCompletedTask(task),
       },
       ctx.config,
       ctx.http,
@@ -481,13 +463,30 @@ export class TimeBlockSyncEffects {
     return Math.max(task.timeEstimate - task.timeSpent, 0) || DEFAULT_DURATION_MS;
   }
 
-  private _handleError(err: unknown): Observable<never> {
+  private async _handleError(err: unknown, ctx?: TimeBlockContext): Promise<void> {
     Log.err('[TimeBlock] Failed to sync time block', err);
-    this._snackService.open({
+    const snack: SnackParams = {
       type: 'ERROR',
       msg: T.F.CALENDARS.S.TIME_BLOCK_ERROR,
       translateParams: { errTxt: getErrorTxt(err) },
-    });
-    return EMPTY;
+    };
+    if (
+      ctx &&
+      this._pluginRegistry
+        .getConfigFields(ctx.issueProvider.issueProviderKey)
+        .some((field) => field.type === 'oauthButton') &&
+      !(await this._pluginBridge.restoreAndCheckOAuthTokens(
+        ctx.pluginId,
+        shouldScopePluginOAuth(ctx.pluginId) ? ctx.providerId : undefined,
+      ))
+    ) {
+      snack.actionStr = T.F.CALENDARS.S.CONNECT;
+      snack.actionFn = () =>
+        this._matDialog.open(DialogEditIssueProviderComponent, {
+          restoreFocus: true,
+          data: { issueProvider: ctx.issueProvider },
+        });
+    }
+    this._snackService.open(snack);
   }
 }

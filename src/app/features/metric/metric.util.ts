@@ -4,6 +4,7 @@ import { getDbDateStr } from '../../util/get-db-date-str';
 import { SimpleMetrics } from './metric.model';
 import { BreakNr, BreakTime } from '../work-context/work-context.model';
 import { exists } from '../../util/exists';
+import { isCompletedTask } from '../tasks/util/is-wont-do-task';
 
 // really TaskWithSubTasks?
 export const mapSimpleMetrics = ([
@@ -48,7 +49,8 @@ export const mapSimpleMetrics = ([
       // s.timeSpent = s.timeSpent + Object.keys(task.timeSpentOnDay).reduce((acc, v) => acc + task.timeSpentOnDay [v], 0);
     }
 
-    if (task.isDone) {
+    // A task dismissed as won't do is finished, but it was never completed.
+    if (isCompletedTask(task)) {
       s.nrOfCompletedTasks++;
     }
   });

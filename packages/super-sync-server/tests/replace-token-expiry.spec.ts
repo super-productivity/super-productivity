@@ -14,7 +14,9 @@ vi.mock('../src/auth', async (importOriginal) => {
   return {
     ...actual,
     // Keep verifyToken mocked (from setup.ts pattern)
-    verifyToken: vi.fn().mockResolvedValue({ valid: true, userId: 1, email: 'test@test.com' }),
+    verifyToken: vi
+      .fn()
+      .mockResolvedValue({ valid: true, userId: 1, email: 'test@test.com' }),
   };
 });
 
@@ -63,6 +65,8 @@ import { replaceToken, JWT_EXPIRY } from '../src/auth';
 import { prisma } from '../src/db';
 
 describe('replaceToken', () => {
+  const txExecuteRaw = vi.fn().mockResolvedValue(0);
+
   beforeEach(() => {
     vi.clearAllMocks();
 
@@ -70,6 +74,7 @@ describe('replaceToken', () => {
     vi.mocked(prisma.$transaction).mockImplementation(
       async (cb: (tx: unknown) => unknown) => {
         const tx = {
+          $executeRaw: txExecuteRaw,
           user: {
             update: vi.fn().mockResolvedValue({ tokenVersion: 5 }),
           },
@@ -92,6 +97,7 @@ describe('replaceToken', () => {
     vi.mocked(prisma.$transaction).mockImplementation(
       async (cb: (tx: unknown) => unknown) => {
         const tx = {
+          $executeRaw: txExecuteRaw,
           user: {
             update: vi.fn().mockResolvedValue({ tokenVersion: 42 }),
           },
@@ -113,6 +119,14 @@ describe('replaceToken', () => {
     );
   });
 
+  it('revokes capture grants in the same transaction', async () => {
+    await replaceToken(1, 'user@example.com');
+
+    expect(String(txExecuteRaw.mock.calls[0][0].join('?'))).toContain(
+      'UPDATE capture_grants SET revoked_at',
+    );
+  });
+
   it('should return the correct user info and token', async () => {
     const result = await replaceToken(7, 'test@test.com');
 
@@ -127,6 +141,7 @@ describe('replaceToken', () => {
     vi.mocked(prisma.$transaction).mockImplementation(
       async (cb: (tx: unknown) => unknown) => {
         const tx = {
+          $executeRaw: txExecuteRaw,
           user: {
             update: vi.fn().mockImplementation(async (args: unknown) => {
               capturedUpdateArgs = args;

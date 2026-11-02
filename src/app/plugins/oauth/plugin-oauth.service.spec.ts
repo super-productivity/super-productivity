@@ -3,7 +3,7 @@ import {
   HttpTestingController,
   provideHttpClientTesting,
 } from '@angular/common/http/testing';
-import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClient, withXhr } from '@angular/common/http';
 import { PluginOAuthService } from './plugin-oauth.service';
 import { OAuthFlowConfig } from '@super-productivity/plugin-api';
 
@@ -13,7 +13,11 @@ describe('PluginOAuthService', () => {
 
   beforeEach(() => {
     TestBed.configureTestingModule({
-      providers: [PluginOAuthService, provideHttpClient(), provideHttpClientTesting()],
+      providers: [
+        PluginOAuthService,
+        provideHttpClient(withXhr()),
+        provideHttpClientTesting(),
+      ],
     });
     service = TestBed.inject(PluginOAuthService);
     httpMock = TestBed.inject(HttpTestingController);

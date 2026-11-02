@@ -409,7 +409,6 @@ test.describe('#9779 root custom-property write cost', () => {
     // Streamed, not buffered to the end: the run is minutes long, and a timeout
     // or a mid-run throw used to discard every number already measured.
     const record = (line: string): void => {
-      // eslint-disable-next-line no-console
       console.log(`[measure] ${line}`);
     };
     // browserName + browser.version(), never a user-agent sniff: the shared

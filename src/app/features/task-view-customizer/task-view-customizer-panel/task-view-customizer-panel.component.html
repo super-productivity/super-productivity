@@ -47,6 +47,15 @@
 
   <mat-divider></mat-divider>
 
+  <!-- Also while Views are off: saving one turns them on -->
+  <button
+    mat-menu-item
+    (click)="saveAsView()"
+  >
+    <mat-icon>bookmark_add</mat-icon>
+    <span>{{ T.F.BOARDS.V.SAVE_AS_VIEW | translate }}</span>
+  </button>
+
   <!-- Reset All -->
   <button
     mat-menu-item
@@ -71,7 +80,9 @@
           @if (opt.type) {
             <mat-icon class="check-icon">
               {{
-                opt.order === OPTIONS.sort.order.ASC ? 'arrow_downward' : 'arrow_upward'
+                customizerService.selectedSort().order === OPTIONS.sort.order.ASC
+                  ? 'arrow_downward'
+                  : 'arrow_upward'
               }}
             </mat-icon>
           } @else {
@@ -221,6 +232,21 @@
       }
     </span>
   </button>
+
+  <button
+    mat-menu-item
+    [matMenuTriggerFor]="filterPriorityMenu"
+    [class.active]="
+      customizerService.selectedFilter().type === OPTIONS.filter.types.priority
+    "
+  >
+    <span class="menu-item-content">
+      <span>{{ T.F.TASK_VIEW.CUSTOMIZER.FILTER_PRIORITY | translate }}</span>
+      @if (customizerService.selectedFilter().type === OPTIONS.filter.types.priority) {
+        <mat-icon class="check-icon">check</mat-icon>
+      }
+    </span>
+  </button>
 </mat-menu>
 
 <!-- Filter: Tag submenu -->
@@ -243,23 +269,34 @@
   <div
     class="menu-input-wrapper"
     (click)="$event.stopPropagation()"
+    (keydown)="$event.stopPropagation()"
   >
-    <mat-form-field
-      class="menu-input"
-      subscriptSizing="dynamic"
-    >
-      <input
-        matInput
-        [ngModel]="
-          customizerService.selectedFilter().preset === OPTIONS.filter.types.tag
-            ? customizerService.selectedFilter().preset
-            : ''
-        "
-        (ngModelChange)="onFilterInputChange(OPTIONS.filter.types.tag, $event)"
-        [placeholder]="T.F.TASK_VIEW.CUSTOMIZER.ENTER_TAG | translate"
-        (keydown.enter)="$event.stopPropagation()"
-      />
-    </mat-form-field>
+    <chip-list-input
+      [label]="T.F.TASK_VIEW.CUSTOMIZER.FILTER_TAG | translate"
+      [suggestions]="allTags()"
+      [model]="tagFilterIds()"
+      (addItem)="addTagFilter($event)"
+      (removeItem)="removeTagFilter($event)"
+    ></chip-list-input>
+
+    @if (tagFilterIds().length >= 2) {
+      <div class="tag-filter-mode-toggle">
+        <button
+          mat-button
+          [class.is-active]="tagFilterMode() === 'OR'"
+          (click)="setTagFilterMode('OR')"
+        >
+          {{ T.F.TASK_VIEW.CUSTOMIZER.TAG_FILTER_OR | translate }}
+        </button>
+        <button
+          mat-button
+          [class.is-active]="tagFilterMode() === 'AND'"
+          (click)="setTagFilterMode('AND')"
+        >
+          {{ T.F.TASK_VIEW.CUSTOMIZER.TAG_FILTER_AND | translate }}
+        </button>
+      </div>
+    }
   </div>
 </mat-menu>
 
@@ -276,7 +313,7 @@
       <input
         matInput
         [ngModel]="
-          customizerService.selectedFilter().preset === OPTIONS.filter.types.project
+          customizerService.selectedFilter().type === OPTIONS.filter.types.project
             ? customizerService.selectedFilter().preset
             : ''
         "
@@ -323,6 +360,16 @@
   <task-view-customizer-menu-item
     [type]="OPTIONS.filter.types.timeSpent"
     [options]="PRESETS.time"
+    [selectedFilter]="customizerService.selectedFilter()"
+    (byClick)="onFilterWithValue($event)"
+  />
+</mat-menu>
+
+<!-- Filter: Priority submenu -->
+<mat-menu #filterPriorityMenu>
+  <task-view-customizer-menu-item
+    [type]="OPTIONS.filter.types.priority"
+    [options]="PRESETS.priority"
     [selectedFilter]="customizerService.selectedFilter()"
     (byClick)="onFilterWithValue($event)"
   />

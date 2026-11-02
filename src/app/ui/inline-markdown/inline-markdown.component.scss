@@ -57,7 +57,13 @@
 }
 
 :host:has(.controls) {
-  .markdown-unparsed {
+  // Reserve space below the note so the hover controls (checklist, fullscreen)
+  // sit under the text instead of over its last line — otherwise they hide the
+  // text and, being buttons, swallow the clicks meant to select it (#10544).
+  // The live editor (#10068) needs the same reservation the textarea has; it
+  // only ever covered `.markdown-unparsed`, so the live path had none.
+  .markdown-unparsed,
+  live-markdown-editor {
     padding-bottom: var(--s5);
   }
 }

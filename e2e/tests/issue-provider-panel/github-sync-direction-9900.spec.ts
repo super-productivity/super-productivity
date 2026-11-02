@@ -32,7 +32,7 @@ test('GitHub refresh respects disabled title sync while still pulling status', a
   });
 
   await page.locator('.e2e-toggle-issue-provider-panel').click();
-  await page.locator('mat-tab-group .mat-mdc-tab:last-child').click();
+  await page.locator('issue-panel .mat-mdc-tab').last().click();
   await page.getByRole('button', { name: 'GitHub Issues', exact: true }).click();
   const dialog = page.locator('dialog-edit-issue-provider');
   await dialog.locator('input[id*="repo"]').fill('e2e/repro');
@@ -42,7 +42,7 @@ test('GitHub refresh respects disabled title sync while still pulling status', a
   await dialog.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(dialog).toBeHidden();
 
-  await page.locator('mat-tab-group .mat-mdc-tab').first().click();
+  await page.locator('issue-panel .mat-mdc-tab').first().click();
   await page.locator('issue-provider-tab input[name="search"]').fill('Original issue');
   await page
     .locator('issue-preview-item', { hasText: 'Original issue' })

@@ -8,23 +8,24 @@
  *   Lead-in       Black fades to SP work-view (mobile layout).
  *   1  "On the go." tagline overlay.
  *   2  Tap "+"   → quick add task, type, confirm.
- *   3  Tap task  → focus mode on tapped task.
+ *   3  Tap focus → select the captured task and start a focus session.
  *   4  End card  "Mobile · iOS · Android" with stat counter.
  *
  * Activated only by `REEL_VARIANT=mobile`. Output lands as
  * `dist/video/reel-mobile.{mp4,webm,gif}` at 1080×2340.
  */
-import type { Locator, Page } from '@playwright/test';
+import { expect, type Locator, type Page } from '@playwright/test';
 import { test } from '../fixture';
-import { loopBoundary, showEndCard, showOverlay } from '../overlays';
+import { loopBoundary, markScene, showEndCard, showOverlay } from '../../video-kit';
 
 const VARIANT = process.env.REEL_VARIANT ?? '';
 const NEW_TASK_TITLE = 'Plan trip 30m';
 const NEW_TASK_DISPLAY = 'Plan trip';
 
 const tapCenter = async (page: Page, locator: Locator): Promise<void> => {
+  await expect(locator).toBeVisible();
   const box = await locator.boundingBox();
-  if (!box) return;
+  if (!box) throw new Error('Touch target has no bounding box');
   const halfW = box.width / 2;
   const halfH = box.height / 2;
   const cx = box.x + halfW;
@@ -49,96 +50,62 @@ test.describe('@video mobile reel', () => {
     await loopBoundary(page, 'in', 460);
 
     // ── Beat 1 — "On the go." ────────────────────────────────────────────
+    markScene(page, 'On the go.');
     const b1 = await showOverlay(page, 'On the go.');
     await page.waitForTimeout(900);
     void b1.hide();
     await page.waitForTimeout(220);
 
     // ── Beat 2 — Tap + → quick capture ───────────────────────────────────
+    markScene(page, 'Tap to capture.');
     const b2 = await showOverlay(page, 'Tap to capture.');
-    // Open the global add-task bar via store dispatch — the mobile FAB
-    // selector varies across breakpoints, but the bar itself is the same
-    // surface and the tap-ripple before dispatch makes the cause visible.
-    const fab = page
-      .locator(
-        'button.e2e-add-task-fab, .add-task-fab button, button[aria-label*="Add Task" i]',
-      )
-      .first();
-    if (await fab.isVisible().catch(() => false)) {
-      await tapCenter(page, fab);
-    } else {
-      await page.evaluate(() => {
-        const helper = (
-          window as unknown as {
-            __e2eTestHelpers?: { store?: { dispatch: (a: unknown) => void } };
-          }
-        ).__e2eTestHelpers;
-        helper?.store?.dispatch({ type: '[Layout] Show AddTaskBar' });
-      });
-    }
+    await page.waitForTimeout(600);
+    await b2.hide();
+    const fab = page.locator('mobile-bottom-nav button.add-task-button');
+    await tapCenter(page, fab);
     const globalInput = page.locator('add-task-bar.global .main-input').first();
-    await globalInput.waitFor({ state: 'visible', timeout: 5_000 });
+    await expect(globalInput).toBeVisible({ timeout: 5_000 });
     await page.waitForTimeout(220);
     await globalInput.pressSequentially(NEW_TASK_TITLE, { delay: 55 });
     await page.waitForTimeout(360);
     await page.keyboard.press('Enter');
     await page.waitForTimeout(500);
+    const newTask = page.locator('task').filter({ hasText: NEW_TASK_DISPLAY }).first();
+    await expect(newTask).toBeVisible({ timeout: 5_000 });
     const backdrop = page.locator('.backdrop').first();
     if (await backdrop.isVisible().catch(() => false)) {
       await backdrop.click({ force: true });
-      await backdrop.waitFor({ state: 'hidden', timeout: 2_000 }).catch(() => undefined);
+      await expect(backdrop).toBeHidden({ timeout: 2_000 });
     }
-    await page
-      .locator('add-task-bar.global')
-      .first()
-      .waitFor({ state: 'hidden', timeout: 3_000 })
-      .catch(() => undefined);
-    void b2.hide();
+    await expect(page.locator('add-task-bar.global').first()).toBeHidden({
+      timeout: 3_000,
+    });
     await page.waitForTimeout(220);
 
-    // ── Beat 3 — Tap captured task → focus mode ──────────────────────────
+    // ── Beat 3 — Open focus mode and select the captured task ────────────
+    markScene(page, 'Tap to focus.');
     const b3 = await showOverlay(page, 'Tap to focus.');
-    const newTask = page.locator('task').filter({ hasText: NEW_TASK_DISPLAY }).first();
-    await newTask.waitFor({ state: 'visible', timeout: 5_000 });
-    const newTaskId = await newTask.getAttribute('data-task-id').catch(() => null);
-    await tapCenter(page, newTask);
-    await page.waitForTimeout(160);
-    // The tap visibly lands on the task; the focus-mode entry happens via
-    // dispatch so it doesn't depend on whichever overflow menu the tap
-    // routes through on this breakpoint.
-    if (newTaskId) {
-      await page.evaluate((id) => {
-        const helper = (
-          window as unknown as {
-            __e2eTestHelpers?: { store?: { dispatch: (a: unknown) => void } };
-          }
-        ).__e2eTestHelpers;
-        if (!helper?.store) return;
-        helper.store.dispatch({ type: '[Task] SetCurrentTask', id });
-        helper.store.dispatch({ type: '[FocusMode] Show Overlay' });
-        helper.store.dispatch({
-          type: '[FocusMode] Start Session',
-          duration: 1500000,
-        });
-      }, newTaskId);
-      await page
-        .locator('focus-mode-main')
-        .first()
-        .waitFor({ state: 'visible', timeout: 8_000 })
-        .catch(() => undefined);
-      await page.clock.runFor(5500).catch(() => undefined);
-      await page
-        .locator('focus-mode-main .bottom-controls')
-        .first()
-        .waitFor({ state: 'visible', timeout: 5_000 })
-        .catch(() => undefined);
-      await page.clock.resume().catch(() => undefined);
-    }
+    await page.waitForTimeout(600);
+    await b3.hide();
+    await tapCenter(page, page.locator('main-header focus-button button'));
+    await expect(page.locator('focus-mode-main')).toBeVisible({ timeout: 5_000 });
+    await tapCenter(page, page.locator('focus-mode-main .task-title-placeholder'));
+    const selector = page.locator('focus-mode-task-selector .task-selector-overlay');
+    await expect(selector).toBeVisible();
+    await selector.locator('input').fill(NEW_TASK_DISPLAY);
+    await tapCenter(page, page.getByRole('option', { name: NEW_TASK_DISPLAY }));
+    await expect(page.locator('focus-mode-main task-title')).toContainText(
+      NEW_TASK_DISPLAY,
+    );
+    await tapCenter(page, page.locator('focus-mode-main button.play-button'));
+    await page.clock.runFor(5500);
+    await expect(page.locator('focus-mode-main .bottom-controls')).toBeVisible();
+    await page.clock.resume();
     await page.waitForTimeout(1600);
-    void b3.hide();
     await page.waitForTimeout(220);
 
     // ── Beat 4 — End card "Mobile · iOS · Android" ──────────────────────
+    markScene(page, 'Take it anywhere.');
     await showEndCard(
       page,
       {

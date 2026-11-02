@@ -54,6 +54,14 @@ progress-bar {
   }
 }
 
+// In the side panel, a window-controls band (see right-panel.component.scss)
+// already separates the title from the window's top edge, so drop the title's
+// own top margin under it rather than stacking both. The env() is unset
+// without a band, which keeps the margin.
+:host-context(.right-panel) .task-title-wrapper {
+  margin-top: max(0px, var(--s) - env(titlebar-area-height, 0px));
+}
+
 .task-title.task-title {
   font-weight: bold;
   transform-origin: top center;
@@ -87,7 +95,6 @@ progress-bar {
 .created,
 .date-info {
   padding: var(--s);
-  opacity: 0.5;
   text-align: center;
   color: var(--text-color-muted);
 }
@@ -163,4 +170,8 @@ progress-bar {
 
 .local-attachments-heading {
   margin-bottom: 0;
+}
+
+.sub-tasks {
+  --task-hover-underlay: var(--task-detail-bg);
 }

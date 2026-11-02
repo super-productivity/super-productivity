@@ -1,17 +1,10 @@
 import 'fake-indexeddb/auto';
-import { fakeAsync, tick } from '@angular/core/testing';
 import { IDBPDatabase, openDB } from 'idb';
 import { IndexedDbOpLogAdapter } from './indexed-db-op-log-adapter';
 import { DbKey } from './op-log-db-adapter';
 import { OP_LOG_DB_SCHEMA } from './op-log-db-schema';
 import { STORE_NAMES, OPS_INDEXES, SINGLETON_KEY } from './db-keys.const';
 import { runDbUpgrade } from './db-upgrade';
-import {
-  IDB_OPEN_RETRIES,
-  IDB_OPEN_RETRIES_NON_LOCK,
-  IDB_OPEN_RETRY_BASE_DELAY_MS,
-} from '../core/operation-log.const';
-import { IndexedDBOpenError } from '../core/errors/indexed-db-open.error';
 
 /**
  * Verifies IndexedDbOpLogAdapter against a real (faked) IndexedDB: CRUD,
@@ -36,8 +29,12 @@ describe('IndexedDbOpLogAdapter', () => {
   });
 
   beforeEach(async () => {
+    // Mirror the stores: they own the IDBPDatabase and lend it to the adapter.
+    const owner = await openDB(OP_LOG_DB_SCHEMA.name, OP_LOG_DB_SCHEMA.version, {
+      upgrade: (d, oldVersion, _newVersion, tx) => runDbUpgrade(d, oldVersion, tx),
+    });
     adapter = new IndexedDbOpLogAdapter();
-    await adapter.init();
+    adapter.adoptConnection(owner as unknown as IDBPDatabase);
   });
 
   afterEach(async () => {
@@ -461,30 +458,18 @@ describe('IndexedDbOpLogAdapter', () => {
     });
   });
 
-  it('init() is idempotent under concurrent callers', async () => {
-    const fresh = new IndexedDbOpLogAdapter();
-    await Promise.all([fresh.init(), fresh.init(), fresh.init()]);
-    // A working DB after concurrent init proves no double-open/upgrade crash.
-    const seq = await fresh.add(STORE_NAMES.OPS, makeOpEntry('concurrent', 'local'));
-    expect(seq).toBeGreaterThan(0);
-    fresh.close();
-  });
-
-  it('throws ADAPTER_NOT_INITIALIZED after close(), then init() re-opens', async () => {
+  it('throws ADAPTER_NOT_INITIALIZED after close()', async () => {
     adapter.close();
     // No auto-reopen on a bare op — the documented behavioral cliff. (Production
     // auto-recovery is the store's job via its own _ensureInit, covered in the
-    // store spec; here we only assert the adapter's cliff + explicit re-open.)
+    // store spec; here we only assert the adapter's cliff.)
     await expectAsync(adapter.get(STORE_NAMES.OPS, 1)).toBeRejectedWithError(
       /not initialized/i,
     );
-    await adapter.init();
-    const seq = await adapter.add(STORE_NAMES.OPS, makeOpEntry('reopened', 'local'));
-    expect(seq).toBeGreaterThan(0);
   });
 
   describe('adoptConnection (shared-connection seam)', () => {
-    it('routes ops onto an externally-owned connection without calling init()', async () => {
+    it('routes ops onto an externally-owned connection', async () => {
       // Mirror the store: it owns the IDBPDatabase and hands it to the adapter.
       const owner = await openDB(OP_LOG_DB_SCHEMA.name, OP_LOG_DB_SCHEMA.version, {
         upgrade: (d, oldVersion, _newVersion, tx) => runDbUpgrade(d, oldVersion, tx),
@@ -507,82 +492,5 @@ describe('IndexedDbOpLogAdapter', () => {
       );
       owner.close();
     });
-  });
-
-  describe('open retry (via _openDbOnce seam)', () => {
-    // Access the private seam without `any`, mirroring the existing store spec.
-    // fakeAsync + tick drive the exponential-backoff sleeps virtually (no real
-    // 1+2+4s waits), so we can also assert the exact attempt budget.
-    type Seam = { _openDbOnce: () => Promise<unknown> };
-    const seamOf = (a: IndexedDbOpLogAdapter): Seam => a as unknown as Seam;
-    const fakeDb = (): IDBPDatabase =>
-      ({ addEventListener: () => {} }) as unknown as IDBPDatabase;
-
-    it('retries a lock-related open failure, then succeeds', fakeAsync(() => {
-      const a = new IndexedDbOpLogAdapter();
-      const db = fakeDb();
-      const openSpy = spyOn(seamOf(a), '_openDbOnce').and.returnValues(
-        // InvalidStateError is classified lock-related -> full retry budget.
-        Promise.reject(new DOMException('backing store locked', 'InvalidStateError')),
-        Promise.resolve(db),
-      );
-
-      let resolved = false;
-      a.init().then(() => {
-        resolved = true;
-      });
-
-      // Backoff before attempt 2 is BASE * 2^0 = 1s.
-      tick(IDB_OPEN_RETRY_BASE_DELAY_MS);
-      tick();
-
-      expect(openSpy).toHaveBeenCalledTimes(2);
-      expect(resolved).toBe(true);
-      expect((a as unknown as { _db?: IDBPDatabase })._db).toBe(db);
-    }));
-
-    it('makes 1 + IDB_OPEN_RETRIES_NON_LOCK attempts on a non-lock error, then wraps in IndexedDBOpenError', fakeAsync(() => {
-      const a = new IndexedDbOpLogAdapter();
-      const openSpy = spyOn(seamOf(a), '_openDbOnce').and.returnValue(
-        // A non-lock error fails fast: it shrinks the budget after attempt 1.
-        Promise.reject(new DOMException('boom', 'UnknownError')),
-      );
-
-      let caught: unknown;
-      a.init().catch((e) => {
-        caught = e;
-      });
-
-      // Drain each backoff window (1s, 2s, 4s) for the non-lock budget.
-      for (let i = 1; i <= IDB_OPEN_RETRIES_NON_LOCK; i++) {
-        tick(IDB_OPEN_RETRY_BASE_DELAY_MS * Math.pow(2, i - 1));
-      }
-      tick();
-
-      expect(openSpy).toHaveBeenCalledTimes(1 + IDB_OPEN_RETRIES_NON_LOCK);
-      expect(caught).toBeInstanceOf(IndexedDBOpenError);
-    }));
-
-    it('uses the full lock budget (1 + IDB_OPEN_RETRIES) before giving up', fakeAsync(() => {
-      const a = new IndexedDbOpLogAdapter();
-      const lockErr = new DOMException('Internal error.', 'InvalidStateError');
-      const openSpy = spyOn(seamOf(a), '_openDbOnce').and.returnValue(
-        Promise.reject(lockErr),
-      );
-
-      let caught: unknown;
-      a.init().catch((e) => {
-        caught = e;
-      });
-
-      for (let i = 1; i <= IDB_OPEN_RETRIES; i++) {
-        tick(IDB_OPEN_RETRY_BASE_DELAY_MS * Math.pow(2, i - 1));
-      }
-      tick();
-
-      expect(openSpy).toHaveBeenCalledTimes(1 + IDB_OPEN_RETRIES);
-      expect(openSpy.calls.count()).toBeGreaterThan(1 + IDB_OPEN_RETRIES_NON_LOCK);
-      expect(caught).toBeInstanceOf(IndexedDBOpenError);
-    }));
   });
 });

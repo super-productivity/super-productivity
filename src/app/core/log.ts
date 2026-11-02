@@ -72,6 +72,26 @@ const serializeErrorArg = (error: Error): Record<string, unknown> => {
   return result;
 };
 
+// Angular's HttpErrorResponse is not an Error, and its url, message and body can
+// carry user content. Matched by name and url rather than instanceof so the
+// reminder worker, which bundles this file, does not pull in @angular/common/http.
+const isHttpErrorResponse = (
+  value: unknown,
+): value is { status: unknown; statusText: unknown } =>
+  typeof value === 'object' &&
+  value !== null &&
+  (value as { name?: unknown }).name === 'HttpErrorResponse' &&
+  'url' in value;
+
+const serializeHttpErrorArg = (error: {
+  status: unknown;
+  statusText: unknown;
+}): Record<string, unknown> => ({
+  name: 'HttpErrorResponse',
+  status: error.status,
+  statusText: error.statusText,
+});
+
 // IMPORTANT: All Log class methods and context loggers (SyncLog, etc.) record logs to history
 // for later export. The trade-off is that line numbers will show log.ts instead of the
 // actual calling location. This is a fundamental limitation of JavaScript - any wrapper
@@ -133,6 +153,8 @@ export class Log {
           msg = firstArg;
         } else if (firstArg instanceof Error) {
           msg = serializeErrorMessage(firstArg);
+        } else if (isHttpErrorResponse(firstArg)) {
+          msg = JSON.stringify(serializeHttpErrorArg(firstArg));
         } else if (typeof firstArg === 'object' && firstArg !== null) {
           // Handle DOM objects (HTMLCollection, NodeList, etc.)
           if (isDomRelatedObject(firstArg)) {
@@ -253,6 +275,9 @@ export class Log {
           }
           if (arg instanceof Error) {
             return serializeErrorArg(arg);
+          }
+          if (isHttpErrorResponse(arg)) {
+            return serializeHttpErrorArg(arg);
           }
           // Try to serialize each arg safely
           const r = JSON.stringify(arg);

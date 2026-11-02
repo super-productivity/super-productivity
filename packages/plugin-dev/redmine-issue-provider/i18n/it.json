@@ -1,0 +1,33 @@
+{
+  "CFG": {
+    "HOST": "Host (es.: https://redmine.org)",
+    "API_KEY": "Chiave di accesso API",
+    "PROJECT_ID": "Identificatore progetto",
+    "PROJECT_ID_DESC": "Può essere trovato come parte dell'URL, quando si visualizza il progetto nel Browser.",
+    "SCOPE": "Scopo",
+    "SCOPE_ALL": "Tutti",
+    "SCOPE_CREATED": "Create da me",
+    "SCOPE_ASSIGNED": "Assegnate a me",
+    "IS_SHOW_TIME_TRACKING_DIALOG": "Mostra finestra di tracciamento tempo per inviare a Redmine",
+    "IS_SHOW_TIME_TRACKING_DIALOG_DESC": "Richiede che il modulo di tracciamento tempo sia abilitato per il progetto Redmine",
+    "IS_SHOW_TIME_TRACKING_DIALOG_FOR_EACH_SUB_TASK": "Mostra finestra di tracciamento tempo quando le sotto-attività vengono completate",
+    "DEFAULT_TIME": "Valore di tempo predefinito per la finestra di dialogo",
+    "DEFAULT_TIME_ALL_TIME": "Compila tutto il tempo speso per l'attività",
+    "DEFAULT_TIME_ALL_TIME_MINUS_LOGGED": "Inserisci tutto il tempo trascorso meno il tempo registrato",
+    "DEFAULT_TIME_TODAY": "Riempi solo il tempo trascorso oggi",
+    "DEFAULT_TIME_YESTERDAY": "Riempi solo il tempo trascorso ieri"
+  },
+  "DISPLAY": {
+    "SUMMARY": "Riepilogo",
+    "STATUS": "Stato",
+    "PRIORITY": "Priorità",
+    "AUTHOR": "Autore",
+    "ASSIGNEE": "Assegnatario",
+    "CATEGORY": "Categoria",
+    "VERSION": "Versione",
+    "DUE_DATE": "Data di scadenza",
+    "TIME_SPENT": "Tempo impiegato",
+    "DESCRIPTION": "Descrizione"
+  },
+  "FORM_HELP": "<p>Qui è possibile configurare SuperProductivity per elencare le issue aperte di Redmine (sia la versione online che un'istanza self-hosted) per un progetto specifico nel pannello di creazione delle attività nella vista di pianificazione giornaliera. Saranno elencate come suggerimenti e forniranno un link all'issue e ulteriori informazioni su di esso.</p><p>Inoltre è possibile importare automaticamente tutte le issue aperte.</p>"
+}

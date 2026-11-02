@@ -18,6 +18,7 @@ import { loadAllData } from '../../root-store/meta/load-all-data.action';
 import { isDataRepairPossible } from '../validation/is-data-repair-possible.util';
 import { recordCriticalErrorTime } from '../../util/critical-error-signal';
 import { OpLog } from '../../core/log';
+import { BackupRepairFailedError } from '../core/errors/sync-errors';
 import {
   AppDataComplete,
   CROSS_MODEL_VERSION,
@@ -29,7 +30,6 @@ import { normalizeGlobalConfigStartOfNextDay } from '../../features/config/norma
 import { extractEntityKeysFromState } from '../persistence/extract-entity-keys';
 import { OperationWriteFlushService } from '../sync/operation-write-flush.service';
 import { LockService } from '../sync/lock.service';
-import { ConflictJournalService } from '../sync/conflict-journal.service';
 import { LOCK_NAMES } from '../core/operation-log.const';
 import { TaskTimeSyncService } from '../../features/tasks/task-time-sync.service';
 
@@ -60,7 +60,6 @@ export class BackupService {
   private _protectedBackupId: string | null = null;
   private _operationWriteFlushService = inject(OperationWriteFlushService);
   private _lockService = inject(LockService);
-  private _conflictJournalService = inject(ConflictJournalService);
   private _taskTimeSyncService = inject(TaskTimeSyncService);
 
   /**
@@ -97,6 +96,8 @@ export class BackupService {
    *   single slot while restoring that exact backup.
    * @param requiredImportBackupId - Abort the destructive commit unless this
    *   backup still occupies the single recovery slot.
+   * @param isOwnStateRestore - Restoring this device's own recovery point or
+   *   auto-backup: do not refuse state still invalid after repair (#8279).
    */
   async importCompleteBackup(
     data: AppDataComplete | CompleteBackup<AllModelConfig>,
@@ -105,6 +106,7 @@ export class BackupService {
     isForceConflict: boolean = false,
     isSkipPreImportBackup: boolean = false,
     requiredImportBackupId?: string,
+    isOwnStateRestore: boolean = false,
   ): Promise<void> {
     if (isSkipPreImportBackup !== (requiredImportBackupId !== undefined)) {
       throw new Error(
@@ -137,7 +139,7 @@ export class BackupService {
           // modern-path refusal. Fixed string: log history is exportable.
           OpLog.err('BackupService: legacy backup refused, core slice missing');
           recordCriticalErrorTime();
-          throw new Error('Data validation failed and repair not possible');
+          throw new BackupRepairFailedError();
         }
         OpLog.normal(
           'BackupService: Detected legacy backup format, running migration...',
@@ -154,7 +156,7 @@ export class BackupService {
       // all-defaults empty store — on every import path (JSON import,
       // local-backup restore, SuperSync restore).
       if (!isDataRepairPossible(backupData)) {
-        throw new Error('Data validation failed and repair not possible');
+        throw new BackupRepairFailedError();
       }
 
       // A pre-migration `pf` backup carries only the model keys that database
@@ -198,8 +200,19 @@ export class BackupService {
               : [];
           const { dataRepair } = await import('../validation/data-repair');
           validatedData = dataRepair(backupData, errors).data;
+          // The import is persisted and broadcast as BACKUP_IMPORT, so state that
+          // repair could not fix would fail validation on every client (#8279).
+          // A device's own recovery point or auto-backup was already live here,
+          // so it is restored anyway: refusing would strand the user.
+          if (!validateFull(validatedData).isValid) {
+            if (!isOwnStateRestore) {
+              OpLog.err('BackupService: backup refused, still invalid after repair');
+              throw new BackupRepairFailedError();
+            }
+            OpLog.err('BackupService: restoring own state still invalid after repair');
+          }
         } else {
-          throw new Error('Data validation failed and repair not possible');
+          throw new BackupRepairFailedError();
         }
       }
 
@@ -211,17 +224,6 @@ export class BackupService {
           isSkipPreImportBackup,
           requiredImportBackupId,
         );
-
-        // 4b. The conflict journal is a device-local side store describing
-        // conflicts in the op history that was JUST replaced — every import
-        // path (JSON import, local-backup restore, SuperSync
-        // restore) funnels through here, and without this the badge keeps its
-        // pre-restore count and the review page lists entries from the
-        // replaced dataset. Cleared INSIDE the op-log lock: a concurrent
-        // (cross-tab) conflict resolution serializes on this lock, so its
-        // fresh post-import journal entries cannot land before the clear and
-        // be wiped. clearAll swallows its own errors (must not fail the import).
-        await this._conflictJournalService.clearAll();
 
         // The imported full state replaces the live task totals. Any batch from
         // the pre-import state must not flush later onto that new baseline.
@@ -345,6 +347,9 @@ export class BackupService {
         true, // isSkipLegacyWarnings
         true, // isSkipReload - loadAllData updates state live
         true, // isForceConflict
+        false, // isSkipPreImportBackup
+        undefined, // requiredImportBackupId
+        true, // isOwnStateRestore
       );
     } finally {
       this._protectedBackupId = null;
@@ -384,6 +389,7 @@ export class BackupService {
       true, // isForceConflict
       true, // keep this exact recovery backup until the full restore succeeds
       backup.backupId,
+      true, // isOwnStateRestore
     );
     // Retire the restored slot only if it still has the same opaque identity.
     // The import path or another tab may have created a newer safety backup

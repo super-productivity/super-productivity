@@ -8,6 +8,7 @@ import {
   getDeferredActions,
   clearDeferredActions,
   DEFERRED_ACTIONS_RELOAD_WARNING_THRESHOLD,
+  consumeDeferredBufferStuckNotice,
 } from './operation-capture.meta-reducer';
 import { OperationCaptureService } from './operation-capture.service';
 import { Action } from '@ngrx/store';
@@ -330,6 +331,33 @@ describe('operationCaptureMetaReducer', () => {
         expect(reloadWarningCalls().length).toBe(1);
 
         expect(getDeferredActions()).toEqual(actions);
+      });
+
+      // devError only logs in production builds, so the user needs its own
+      // signal that changes are piling up unsaved (#8297).
+      it('should raise the user notice once per stuck window at the reload-warning threshold', () => {
+        spyNativeDialogs();
+        const actions = createManyActions(DEFERRED_ACTIONS_RELOAD_WARNING_THRESHOLD + 50);
+        consumeDeferredBufferStuckNotice();
+
+        actions
+          .slice(0, DEFERRED_ACTIONS_RELOAD_WARNING_THRESHOLD - 1)
+          .forEach((a) => bufferDeferredAction(a));
+        expect(consumeDeferredBufferStuckNotice()).toBeFalse();
+
+        bufferDeferredAction(actions[DEFERRED_ACTIONS_RELOAD_WARNING_THRESHOLD - 1]);
+        expect(consumeDeferredBufferStuckNotice()).toBeTrue();
+        // Consumed: a second read (and further buffering) does not repeat it.
+        actions
+          .slice(DEFERRED_ACTIONS_RELOAD_WARNING_THRESHOLD)
+          .forEach((a) => bufferDeferredAction(a));
+        expect(consumeDeferredBufferStuckNotice()).toBeFalse();
+
+        clearDeferredActions();
+        createManyActions(DEFERRED_ACTIONS_RELOAD_WARNING_THRESHOLD).forEach((a) =>
+          bufferDeferredAction(a),
+        );
+        expect(consumeDeferredBufferStuckNotice()).toBeTrue();
       });
 
       it('should fire the reload warning only once per stuck window (no per-action spam)', () => {

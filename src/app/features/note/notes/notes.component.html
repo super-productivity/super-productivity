@@ -23,7 +23,7 @@
 <!---->
 @let notes = workContextService.notes$ | async;
 <div
-  [@standardList]="notes?.length"
+  [@standardList]="$safeNavigationMigration(notes?.length)"
   cdkDropList
   [cdkDropListData]="notes"
   (cdkDropListDropped)="drop($event)"

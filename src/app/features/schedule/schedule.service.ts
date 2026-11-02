@@ -19,6 +19,7 @@ import { selectTimelineTasks } from '../work-context/store/work-context.selector
 import { selectPlannerDayMap } from '../planner/store/planner.selectors';
 import { selectTaskRepeatCfgsWithAndWithoutStartTime } from '../task-repeat-cfg/store/task-repeat-cfg.selectors';
 import { selectTimelineConfig } from '../config/store/global-config.reducer';
+import { selectStartOfNextDayDiffMs } from '../../root-store/app-state/app-state.selectors';
 import { CalendarIntegrationService } from '../calendar-integration/calendar-integration.service';
 import { HiddenCalendarProvidersService } from '../calendar-integration/hidden-calendar-providers.service';
 import { toSignal } from '@angular/core/rxjs-interop';
@@ -43,8 +44,26 @@ export class ScheduleService {
   );
   private _timelineConfig = toSignal(this._store.select(selectTimelineConfig));
   private _plannerDayMap = toSignal(this._store.select(selectPlannerDayMap));
+  // a signal, so changing the day start re-projects late-night repeats (#3378)
+  private _startOfNextDayDiffMs = toSignal(
+    this._store.select(selectStartOfNextDayDiffMs),
+  );
   private _calendarEvents = toSignal(this._calendarIntegrationService.calendarEvents$, {
     initialValue: [],
+  });
+  // The color a calendar source reported per provider (e.g. a Google calendar's
+  // color), for per-provider legends. A provider with several calendars shows
+  // the first one found.
+  readonly calendarColorByProviderId = computed(() => {
+    const colors = new Map<string, string>();
+    for (const entry of this._calendarEvents()) {
+      for (const ev of entry.items) {
+        if (ev.calendarColor && !colors.has(ev.calProviderId)) {
+          colors.set(ev.calProviderId, ev.calendarColor);
+        }
+      }
+    }
+    return colors;
   });
   scheduleRefreshTick = toSignal(interval(2 * 60 * 1000).pipe(startWith(0)), {
     initialValue: 0,
@@ -60,8 +79,8 @@ export class ScheduleService {
       const calendarEvents = this._calendarEvents();
       const currentTaskId = this._taskService.currentTaskId() ?? null;
 
-      // `daysToShow` here is logical today, which respects the start-of-next-day
-      // offset. Leaving `now` to its Date.now() default let the raw wall clock
+      // `daysToShow` here is logical today (respecting the start-of-next-day
+      // offset) or a later day the user navigated to. Leaving `now` to its Date.now() default let the raw wall clock
       // sit past that day's end between midnight and the offset, so every entry
       // landed beyond the only rendered day and the panel came up empty.
       const days = daysToShow();
@@ -112,6 +131,7 @@ export class ScheduleService {
       timelineCfg?.isWorkStartEndEnabled ? createWorkStartEndCfg(timelineCfg) : undefined,
       timelineCfg?.isLunchBreakEnabled ? createLunchBreakCfg(timelineCfg) : undefined,
       realNow,
+      this._startOfNextDayDiffMs() ?? 0,
     );
   }
 

@@ -6,6 +6,10 @@ import type {
   SuperSyncOpDownloadResponse,
 } from '../provider-types';
 import type {
+  SuperSyncCaptureClaimResult,
+  SuperSyncCaptureGrantList,
+  SuperSyncCaptureTokenResult,
+  SuperSyncCaptureConnectCodeResult,
   SuperSyncDeviceListResponse,
   SuperSyncReplaceTokenResult,
 } from './super-sync.model';
@@ -30,4 +34,8 @@ export interface SuperSyncResponseValidators {
   validateDeleteAllData(data: unknown): { success: boolean };
   validateDevices(data: unknown): SuperSyncDeviceListResponse;
   validateReplaceToken(data: unknown): SuperSyncReplaceTokenResult;
+  validateCaptureClaim(data: unknown): SuperSyncCaptureClaimResult;
+  validateCaptureGrants(data: unknown): SuperSyncCaptureGrantList;
+  validateCaptureConnectCode(data: unknown): SuperSyncCaptureConnectCodeResult;
+  validateCaptureToken(data: unknown): SuperSyncCaptureTokenResult;
 }

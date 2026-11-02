@@ -10,11 +10,10 @@ import android.text.format.DateUtils
 import android.util.Log
 import android.view.View
 import android.widget.RemoteViews
-import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import com.superproductivity.superproductivity.App
 import com.superproductivity.superproductivity.CapacitorMainActivity
 import com.superproductivity.superproductivity.R
-import com.superproductivity.superproductivity.service.TrackingForegroundService
+import com.superproductivity.superproductivity.receiver.NotificationActionReceiver
 
 /**
  * Home screen widget showing the task currently being tracked — on this device,
@@ -49,28 +48,12 @@ class TrackingWidgetProvider : AppWidgetProvider() {
         }
         val taskId = intent.getStringExtra(EXTRA_TASK_ID) ?: return
         Log.d(TAG, "Stop tracking tap from widget: taskId=$taskId")
-        // Stop the native counter here, not in Angular: with the activity
-        // dismissed from recents nothing would drain the queue, and the
-        // foreground service would keep accruing time until the app is reopened.
-        // The frozen total is handed to Angular to book exactly up to the tap.
-        val elapsedMs = if (
-            TrackingForegroundService.isTracking &&
-            TrackingForegroundService.currentTaskId == taskId
-        ) {
-            TrackingForegroundService.getElapsedMs()
-        } else {
-            null
-        }
-        WidgetTrackingStopQueue.request(context, taskId, elapsedMs)
-        if (elapsedMs != null) {
-            TrackingForegroundService.requestStop(context)
-        }
+        // Same path as the tracking notification's Pause: stops the native
+        // counter right here (the activity may be gone) and queues the total
+        // for the app to book up to the tap (#10683).
+        NotificationActionReceiver.handleWidgetStop(context, taskId)
         refreshAll(context)
         TaskListWidgetProvider.refreshAll(context)
-        // Contentless "drain now" signal for a live app — shared with the
-        // task-list widget's done-tap queue, both mean "check native queues now".
-        LocalBroadcastManager.getInstance(context)
-            .sendBroadcast(Intent(TaskListWidgetProvider.ACTION_WIDGET_DONE_DRAIN))
     }
 
     companion object {
@@ -86,11 +69,12 @@ class TrackingWidgetProvider : AppWidgetProvider() {
         /** Reads the `currentTask` field from the same blob the task-list widget uses. */
         private fun currentTask(context: Context): WidgetCurrentTask? {
             return try {
-                WidgetTrackingStopQueue.withoutPendingStop(
+                NotificationActionQueue.withoutPendingStop(
                     context,
                     WidgetData.parseCurrentTask(
                         (context.applicationContext as App).keyValStore
-                            .get(WidgetData.KEYVAL_KEY, "{}")
+                            .get(WidgetData.KEYVAL_KEY, "{}"),
+                        System.currentTimeMillis()
                     )
                 )
             } catch (e: Exception) {

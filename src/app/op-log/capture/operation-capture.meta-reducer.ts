@@ -156,6 +156,20 @@ export const DEFERRED_ACTIONS_RELOAD_WARNING_THRESHOLD = 100;
 let highestWarnedThreshold = 0;
 
 /**
+ * Raised with the reload warning. devError only logs in production, so
+ * OperationLogEffects consumes this after the reducer pass and tells the user
+ * that their changes are piling up unsaved (#8297).
+ */
+let isDeferredBufferStuckNoticePending = false;
+
+/** Returns whether a stuck-buffer notice is pending, and clears it. */
+export const consumeDeferredBufferStuckNotice = (): boolean => {
+  const isPending = isDeferredBufferStuckNoticePending;
+  isDeferredBufferStuckNoticePending = false;
+  return isPending;
+};
+
+/**
  * Buffers an action for processing after sync completes.
  * Called by the meta-reducer when a persistent action arrives during sync.
  *
@@ -173,6 +187,7 @@ export const bufferDeferredAction = (action: PersistentAction): void => {
     highestWarnedThreshold < DEFERRED_ACTIONS_RELOAD_WARNING_THRESHOLD
   ) {
     highestWarnedThreshold = DEFERRED_ACTIONS_RELOAD_WARNING_THRESHOLD;
+    isDeferredBufferStuckNoticePending = true;
     devError(
       `[operationCaptureMetaReducer] Deferred actions buffer has ${nextLength} items. ` +
         `Sync may be stuck - consider reloading the app. Nothing is dropped; actions remain buffered.`,
@@ -208,6 +223,7 @@ export const acknowledgeDeferredAction = (action: PersistentAction): void => {
   deferredActionSet.delete(action);
   if (deferredActions.length === 0) {
     highestWarnedThreshold = 0;
+    isDeferredBufferStuckNoticePending = false;
   }
 };
 
@@ -223,6 +239,7 @@ export const clearDeferredActions = (): void => {
   }
   deferredActions = [];
   highestWarnedThreshold = 0;
+  isDeferredBufferStuckNoticePending = false;
 };
 
 /**

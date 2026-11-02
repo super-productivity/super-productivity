@@ -3,12 +3,14 @@ import { TranslateService } from '@ngx-translate/core';
 import { SyncLocalStateService } from './sync-local-state.service';
 import { OperationLogStoreService } from '../persistence/operation-log-store.service';
 import { StateSnapshotService } from '../backup/state-snapshot.service';
+import { OperationLogDownloadService } from './operation-log-download.service';
 import {
   ActionType,
   EntityType,
   OperationLogEntry,
   OpType,
 } from '../core/operation.types';
+import { OwnUploadsMissingConflictError } from '../core/errors/sync-errors';
 
 type StateCache = NonNullable<
   Awaited<ReturnType<OperationLogStoreService['loadStateCache']>>
@@ -18,6 +20,8 @@ describe('SyncLocalStateService', () => {
   let service: SyncLocalStateService;
   let opLogStoreSpy: jasmine.SpyObj<OperationLogStoreService>;
   let stateSnapshotSpy: jasmine.SpyObj<StateSnapshotService>;
+  let downloadServiceSpy: jasmine.SpyObj<OperationLogDownloadService>;
+  let translateSpy: jasmine.SpyObj<TranslateService>;
 
   const entry = (
     entityType: EntityType,
@@ -77,15 +81,18 @@ describe('SyncLocalStateService', () => {
     opLogStoreSpy.getFirstOpEntry.and.resolveTo(migrationGenesis);
     opLogStoreSpy.getUnsynced.and.resolveTo([]);
 
+    downloadServiceSpy = jasmine.createSpyObj('OperationLogDownloadService', [
+      'getUndecryptableRemoteOps',
+    ]);
+    downloadServiceSpy.getUndecryptableRemoteOps.and.returnValue(null);
+    translateSpy = jasmine.createSpyObj('TranslateService', ['instant']);
     TestBed.configureTestingModule({
       providers: [
         SyncLocalStateService,
         { provide: OperationLogStoreService, useValue: opLogStoreSpy },
         { provide: StateSnapshotService, useValue: stateSnapshotSpy },
-        {
-          provide: TranslateService,
-          useValue: jasmine.createSpyObj('TranslateService', ['instant']),
-        },
+        { provide: TranslateService, useValue: translateSpy },
+        { provide: OperationLogDownloadService, useValue: downloadServiceSpy },
       ],
     });
     service = TestBed.inject(SyncLocalStateService);
@@ -360,6 +367,76 @@ describe('SyncLocalStateService', () => {
 
       expect(await service.hasMeaningfulStoreData(new Set(['example-1']))).toBe(false);
       expect(stateSnapshotSpy.getStateSnapshotAsync).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('confirmOverwriteOfUndecryptableRemoteOps (#9256)', () => {
+    // The global spy outlives this spec; leave it as src/test.ts set it.
+    afterEach(() => {
+      (window.confirm as jasmine.Spy).and.returnValue(true);
+    });
+
+    it('passes without a prompt when no undecryptable remote ops are pending', () => {
+      // src/test.ts installs window.confirm as a global spy.
+      const confirmSpy = window.confirm as jasmine.Spy;
+      confirmSpy.calls.reset();
+
+      expect(service.confirmOverwriteOfUndecryptableRemoteOps()).toBe(true);
+      expect(confirmSpy).not.toHaveBeenCalled();
+    });
+
+    it('asks, naming the op count, and returns the answer', () => {
+      downloadServiceSpy.getUndecryptableRemoteOps.and.returnValue({ opCount: 458 });
+      translateSpy.instant.and.callFake(
+        (key: string | string[], params?: { count?: number }) =>
+          params?.count !== undefined ? `${key}:${params.count}` : `${key}`,
+      );
+      const confirmSpy = (window.confirm as jasmine.Spy).and.returnValue(false);
+
+      expect(service.confirmOverwriteOfUndecryptableRemoteOps()).toBe(false);
+      expect(confirmSpy).toHaveBeenCalledWith(
+        jasmine.stringContaining('F.SYNC.D_UNDECRYPTABLE_REMOTE.MESSAGE:458'),
+      );
+
+      confirmSpy.and.returnValue(true);
+      expect(service.confirmOverwriteOfUndecryptableRemoteOps()).toBe(true);
+    });
+  });
+
+  describe('confirmSnapshotWithoutPendingOps', () => {
+    const download = {
+      snapshotState: { task: {} },
+      snapshotVectorClock: { remote: 2 },
+      remoteLastModified: 1,
+    };
+
+    it('throws OwnUploadsMissingConflictError for a synced client whose uploads the remote lost (#10916)', async () => {
+      await expectAsync(
+        service.confirmSnapshotWithoutPendingOps(
+          { ...download, ownUploadsMissing: true },
+          { clientA: 3 },
+        ),
+      ).toBeRejectedWith(jasmine.any(OwnUploadsMissingConflictError));
+    });
+
+    it('lets a synced client hydrate when its uploads are not missing', async () => {
+      expect(
+        await service.confirmSnapshotWithoutPendingOps(download, { clientA: 3 }),
+      ).toBe(true);
+    });
+
+    it('returns false when a fresh client without data declines the snapshot', async () => {
+      opLogStoreSpy.loadStateCache.and.resolveTo(null);
+      opLogStoreSpy.getLastSeq.and.resolveTo(0);
+      spyOn(service, 'hasMeaningfulStoreData').and.resolveTo(false);
+      spyOn(service, 'confirmFreshClientSync').and.returnValue(false);
+
+      expect(
+        await service.confirmSnapshotWithoutPendingOps(
+          { ...download, ownUploadsMissing: true },
+          null,
+        ),
+      ).toBe(false);
     });
   });
 });

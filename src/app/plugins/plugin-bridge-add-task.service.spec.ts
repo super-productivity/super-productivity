@@ -272,6 +272,17 @@ describe('PluginBridgeService.addTask() — subtask creation', () => {
       });
     });
 
+    // `wontDoOn` is kept out of the plugin API for now; exposing it later is additive.
+    it('rejects wontDoOn instead of applying it', async () => {
+      const { service, store } = setup(true);
+
+      await expectAsync(
+        service.updateTask('parent-1', { wontDoOn: 5 }),
+      ).toBeRejectedWithError(/FIELD_NOT_IN_PLUGIN_API/);
+
+      expect(store.dispatch).not.toHaveBeenCalled();
+    });
+
     it('still applies non-relational updates', async () => {
       const { service, taskService } = setup(true);
 

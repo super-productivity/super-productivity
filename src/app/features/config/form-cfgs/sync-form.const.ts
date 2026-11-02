@@ -482,6 +482,9 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
       fieldGroup: [
         {
           type: 'tpl',
+          // Custom app registration steps: noise with the built-in sign-in.
+          hideExpression: (m: any) =>
+            HAS_OFFICIAL_ONEDRIVE_CLIENT_ID && !m?.oneDrive?.useCustomApp,
           templateOptions: {
             tag: 'p',
             text: T.F.SYNC.FORM.ONEDRIVE.INFO_TEXT,
@@ -654,28 +657,34 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
           hideExpression: (m, v, field) =>
             isNotSyncProvider(field, 2, SyncProviderId.SuperSync),
           type: 'btn',
+          className: 'e2e-get-token-btn',
           templateOptions: {
             text: T.F.SYNC.FORM.SUPER_SYNC.BTN_GET_TOKEN,
-            tooltip: T.F.SYNC.FORM.SUPER_SYNC.LOGIN_INSTRUCTIONS,
             btnType: 'primary',
             btnStyle: 'stroked',
-            centerBtn: true,
             onClick: (field: any) => {
               const baseUrl = field.model.baseUrl || SUPER_SYNC_DEFAULT_BASE_URL;
               window.open(baseUrl, '_blank');
             },
+          },
+          // First step of setup: filled. Later only for a replacement token,
+          // so outlined to leave Save as the main action. Fixed per dialog
+          // session, so the button is never swapped while typing.
+          expressions: {
+            'props.btnStyle': (field: FormlyFieldConfig) =>
+              field.parent?.parent?.model?._isInitialSetup === true ? 'flat' : 'stroked',
           },
         },
         {
           hideExpression: (m, v, field) =>
             isNotSyncProvider(field, 2, SyncProviderId.SuperSync),
           key: 'accessToken',
-          type: 'textarea',
+          type: 'input',
           className: 'e2e-accessToken',
           templateOptions: {
             label: T.F.SYNC.FORM.SUPER_SYNC.L_ACCESS_TOKEN,
             description: T.F.SYNC.FORM.SUPER_SYNC.ACCESS_TOKEN_DESCRIPTION,
-            rows: 3,
+            attributes: { autocomplete: 'off', spellcheck: 'false' },
           },
           expressions: {
             'props.required': (field: FormlyFieldConfig) =>
@@ -738,6 +747,15 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
               return result?.success ? true : false;
             },
           },
+        },
+        // Agent task capture: shown during setup too, so the option is
+        // discoverable. It acts only on the active, persisted provider and
+        // asks to save SuperSync first until then (isSuperSyncActive).
+        {
+          hideExpression: (m: any, v: any, field?: FormlyFieldConfig) =>
+            isNotSyncProvider(field, 2, SyncProviderId.SuperSync),
+          type: 'agent-capture-settings',
+          className: 'e2e-agent-capture',
         },
         // Advanced settings for SuperSync
         {

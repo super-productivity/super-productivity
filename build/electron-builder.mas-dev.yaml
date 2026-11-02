@@ -4,6 +4,7 @@ artifactName: ${name}-${arch}.${ext}
 files:
   - electron/**/*
   - '!electron/**/*.ts'
+  - '!electron/**/*.test.cjs'
   - '!electron/**/*.js.map'
   - .tmp/angular-dist/**/*
   - 'embedded.provisionprofile'

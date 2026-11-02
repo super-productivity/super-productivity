@@ -21,7 +21,9 @@
     @if (configFormSection?.help || configFormSection?.helpArr) {
       <help-section>
         @if (configFormSection?.help) {
-          <div [innerHtml]="configFormSection?.help | translate"></div>
+          <div
+            [innerHtml]="$safeNavigationMigration(configFormSection?.help) | translate"
+          ></div>
         }
         @if (configFormSection?.helpArr) {
           @for (helpSection of configFormSection?.helpArr; track helpSection) {
@@ -246,14 +248,6 @@
             [cfg]="model"
             (modelChange)="customCfgCmpSave($event)"
           ></open-project-additional-cfg>
-          <!-- -->
-        }
-        @case ('NEXTCLOUD_DECK') {
-          <nextcloud-deck-additional-cfg
-            [section]="configFormSection"
-            [cfg]="model"
-            (modelChange)="customCfgCmpSave($event)"
-          ></nextcloud-deck-additional-cfg>
           <!-- -->
         }
       }

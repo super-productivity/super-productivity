@@ -1,22 +1,39 @@
 /**
- * Post-process the latest Playwright video capture into shippable formats:
- *   - reel.mp4   1024×1024, 25fps, H.264 yuv420p   landing-page fallback
- *   - reel.webm  1024×1024, 25fps, VP9             landing-page primary
- *   - reel.gif   1024 wide, 25fps, two-pass palette README embed
+ * Post-process the latest video capture into shippable formats:
+ *   - reel.mp4   2048×2048, 30fps, H.264 yuv420p   landing-page fallback
+ *   - reel.webm  2048×2048, 30fps, VP9             landing-page primary
+ *   - reel.gif   1024 wide, 30fps, two-pass palette README embed
  *   - reel-ms-store.mp4 / reel-ms-store-thumbnail.png when
  *     REEL_VARIANT=ms-store. These are 1920×1080 Partner Center trailer assets.
  *
- * Inputs: the most recent `.webm` under `.tmp/video/recordings/` (where the
- * fixture's `recordVideo` setting writes). Outputs: `dist/video/`.
+ * Inputs: the most recent successful recording with a matching `.trim.json`
+ * under `.tmp/video/recordings/`. Outputs: `dist/video/`, plus a
+ * review contact sheet (two frames per scene) under `.tmp/video/review/`.
+ * `VIDEO_QUICK=1` builds only the mp4 and the contact sheet.
  *
  * ffmpeg is required; gifsicle is optional (used to shrink the gif if present).
  *
  * Run: npm run video:build
  */
 
-import { spawnSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import {
+  encodeGif,
+  encodeMp4,
+  encodeWebm,
+  findLatestRecording,
+  hasCommand,
+  logOutputs,
+  OUTPUT_FPS,
+  probeMedia,
+  readRecordingTrim,
+  run,
+  streamOfType,
+  trimFilter as toTrimFilter,
+  type RecordingTrim,
+  writeContactSheet,
+} from '../video-kit/render';
 
 const REPO_ROOT = path.resolve(__dirname, '..', '..');
 const RECORDINGS_ROOT_DIR = path.join(REPO_ROOT, '.tmp', 'video', 'recordings');
@@ -30,13 +47,15 @@ const RECORDINGS_ROOT_DIR = path.join(REPO_ROOT, '.tmp', 'video', 'recordings');
 const VARIANT = process.env.REEL_VARIANT ?? '';
 const SUFFIX = VARIANT ? `-${VARIANT}` : '';
 const IS_MS_STORE = VARIANT === 'ms-store';
+/** `VIDEO_QUICK=1`: mp4 and contact sheet only, for iterating on a reel. */
+const IS_QUICK = process.env.VIDEO_QUICK === '1';
 const variantDirName = (VARIANT || 'default').replace(/[^a-z0-9_-]+/gi, '-');
 const RECORDINGS_DIR = path.join(RECORDINGS_ROOT_DIR, variantDirName);
-const TRIM_SIDECAR_PATH = path.join(RECORDINGS_DIR, '_latest-trim.json');
 const OUT_DIR = path.join(REPO_ROOT, 'dist', 'video');
-// Playwright's recorder currently emits 25fps VP8 webm. Keeping all derived
-// formats on that cadence avoids duplicate/drop-frame judder in fades.
-const OUTPUT_FPS = 25;
+const REVIEW_DIR = path.join(REPO_ROOT, '.tmp', 'video', 'review');
+/** Seconds after a scene's reveal starts, once its fade-in has settled. */
+const CONTACT_FRAME_DELAY_S = 0.8;
+const CONTACT_FALLBACK_FRAMES = 8;
 const MS_STORE_WIDTH = 1920;
 const MS_STORE_HEIGHT = 1080;
 const MS_STORE_GOP = Math.round(OUTPUT_FPS / 2);
@@ -45,46 +64,6 @@ const MS_STORE_MAX_BYTES = 2 * 1024 * 1024 * 1024;
 const MS_STORE_AUDIO_BITRATE_TARGET = 384_000;
 const MS_STORE_AUDIO_BITRATE_HARD_MIN = 128_000;
 const MS_STORE_AUDIO_BITRATE_WARNING_THRESHOLD = MS_STORE_AUDIO_BITRATE_TARGET * 0.9;
-
-type TrimSidecar = {
-  offsetMs?: unknown;
-  recordedAtMs?: unknown;
-  variant?: unknown;
-  recordingSize?: unknown;
-};
-
-type MediaStream = {
-  codec_type?: string;
-  codec_name?: string;
-  codec_tag_string?: string;
-  profile?: string;
-  width?: number;
-  height?: number;
-  pix_fmt?: string;
-  field_order?: string;
-  r_frame_rate?: string;
-  avg_frame_rate?: string;
-  bit_rate?: string;
-  sample_rate?: string;
-  channels?: number;
-  channel_layout?: string;
-  color_space?: string;
-  color_transfer?: string;
-  color_primaries?: string;
-  has_b_frames?: number;
-};
-
-type MediaFormat = {
-  duration?: string;
-  size?: string;
-  bit_rate?: string;
-  format_name?: string;
-};
-
-type MediaProbe = {
-  streams?: MediaStream[];
-  format?: MediaFormat;
-};
 
 const readNonNegativeNumberEnv = (name: string, fallback: number): number => {
   const raw = process.env[name];
@@ -99,80 +78,69 @@ const MS_STORE_THUMBNAIL_AT_SECONDS = readNonNegativeNumberEnv(
   1.2,
 );
 
-const readTrimSidecar = (): TrimSidecar | null => {
-  if (!fs.existsSync(TRIM_SIDECAR_PATH)) return null;
-  try {
-    return JSON.parse(fs.readFileSync(TRIM_SIDECAR_PATH, 'utf8')) as TrimSidecar;
-  } catch {
-    return null;
-  }
-};
-
 /**
  * Read the trim offset (seconds) from the sidecar the fixture writes when
- * `markBeatsStart()` is called. Falls back to 0 (no trim) if missing or
- * malformed. `VIDEO_TRIM_OVERRIDE` env var wins for manual overrides.
+ * `markBeatsStart()` is called. `VIDEO_TRIM_OVERRIDE` wins for manual trims.
  */
-const readTrimSeconds = (sidecar: TrimSidecar | null): number => {
+const readTrimSeconds = (sidecar: RecordingTrim): number => {
   const override = process.env.VIDEO_TRIM_OVERRIDE;
   if (override !== undefined) {
     const n = Number(override);
     if (Number.isFinite(n) && n >= 0) return n;
+    throw new Error(
+      `VIDEO_TRIM_OVERRIDE must be a non-negative number, got ${JSON.stringify(override)}`,
+    );
   }
-
-  const offsetMs = sidecar?.offsetMs;
-  if (typeof offsetMs === 'number' && Number.isFinite(offsetMs) && offsetMs >= 0) {
-    return offsetMs / 1000;
-  }
-  return 0;
+  return sidecar.offsetMs / 1000;
 };
 
-const findMostRecentWebm = (root: string): string => {
-  if (!fs.existsSync(root)) {
-    throw new Error(`${root} does not exist. Run \`npm run video:capture\` first.`);
-  }
-  const candidates: { file: string; mtime: number }[] = [];
-  for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
-    const p = path.join(root, entry.name);
-    if (entry.isFile() && entry.name.endsWith('.webm')) {
-      candidates.push({ file: p, mtime: fs.statSync(p).mtimeMs });
-    }
-  }
-  if (candidates.length === 0) {
-    throw new Error(`No .webm files under ${root}. Did the capture run produce a video?`);
-  }
-  candidates.sort((a, b) => b.mtime - a.mtime);
-  return candidates[0].file;
+/** Source time (s) where the beats end, or undefined to keep everything. */
+const readEndSeconds = (sidecar: RecordingTrim): number => sidecar.endOffsetMs / 1000;
+
+type Scene = { label: string; atSeconds: number };
+
+/** Labeled scene reveals, in output time (after the lead-in trim). */
+const readScenes = (sidecar: RecordingTrim, trimSeconds: number): Scene[] => {
+  if (!Array.isArray(sidecar.scenes)) return [];
+  return sidecar.scenes.flatMap((scene: unknown) => {
+    const { label, offsetMs } = (scene ?? {}) as { label?: unknown; offsetMs?: unknown };
+    if (typeof label !== 'string' || typeof offsetMs !== 'number') return [];
+    const sourceSeconds = offsetMs / 1000;
+    return [{ label, atSeconds: sourceSeconds - trimSeconds }];
+  });
 };
 
-const run = (cmd: string, args: string[]): void => {
-  const r = spawnSync(cmd, args, { stdio: 'inherit' });
-  if (r.error) throw r.error;
-  if (r.status !== 0) throw new Error(`${cmd} exited with status ${r.status}`);
+const logScenes = (scenes: Scene[], durationSeconds: number | undefined): void => {
+  if (scenes.length === 0) return;
+  console.log('[video] scenes (output time):');
+  scenes.forEach((scene, i) => {
+    const next = scenes[i + 1]?.atSeconds ?? durationSeconds;
+    const length = next === undefined ? '' : ` (${(next - scene.atSeconds).toFixed(1)}s)`;
+    console.log(`  ${scene.atSeconds.toFixed(2).padStart(6)}s  ${scene.label}${length}`);
+  });
 };
 
-const has = (cmd: string): boolean => {
-  const probe = process.platform === 'win32' ? 'where' : 'which';
-  const r = spawnSync(probe, [cmd], { stdio: 'ignore' });
-  return r.status === 0;
-};
-
-const probeMedia = (file: string): MediaProbe => {
-  const r = spawnSync(
-    'ffprobe',
-    ['-v', 'error', '-show_streams', '-show_format', '-of', 'json', file],
-    { encoding: 'utf8' },
-  );
-  if (r.error) throw r.error;
-  if (r.status !== 0) {
-    const detail = r.stderr ? `: ${r.stderr.trim()}` : '';
-    throw new Error(`ffprobe exited with status ${r.status}${detail}`);
+/**
+ * Two frames per scene, its opening and its middle (where zooms and other
+ * mid-scene beats land), so each sheet row is one scene. Evenly spaced frames
+ * when no scenes were labeled.
+ */
+const contactSheetTimes = (scenes: Scene[], durationSeconds: number): number[] => {
+  if (scenes.length > 0) {
+    const starts = [0, ...scenes.map((scene) => scene.atSeconds)];
+    return starts.flatMap((start, i) => {
+      const end = starts[i + 1] ?? durationSeconds;
+      // Short theme scenes need an earlier opening sample; otherwise it can
+      // round to the midpoint's frame, be deduplicated, and shift every row.
+      const opening = start + Math.min(CONTACT_FRAME_DELAY_S, (end - start) / 3);
+      const frameDuration = 1 / OUTPUT_FPS;
+      const middle = Math.max((start + end) / 2, opening + frameDuration);
+      return [opening, middle].map((t) => Math.min(durationSeconds - 0.1, t));
+    });
   }
-  return JSON.parse(r.stdout) as MediaProbe;
+  const step = durationSeconds / CONTACT_FALLBACK_FRAMES;
+  return Array.from({ length: CONTACT_FALLBACK_FRAMES }, (_, i) => step * (i + 0.5));
 };
-
-const streamOfType = (probe: MediaProbe, type: string): MediaStream | undefined =>
-  probe.streams?.find((stream) => stream.codec_type === type);
 
 const asNumber = (value: string | number | undefined): number | null => {
   if (typeof value === 'number') return Number.isFinite(value) ? value : null;
@@ -183,42 +151,7 @@ const asNumber = (value: string | number | undefined): number | null => {
 
 const relative = (file: string): string => path.relative(REPO_ROOT, file);
 
-const logOutputs = (): void => {
-  console.log('[video] outputs:');
-  for (const f of fs.readdirSync(OUT_DIR)) {
-    const full = path.join(OUT_DIR, f);
-    if (!fs.statSync(full).isFile()) continue;
-    const kb = (fs.statSync(full).size / 1024).toFixed(0);
-    console.log(`  ${relative(full)}  ${kb} KB`);
-  }
-};
-
-const validateMsStoreSource = (
-  src: string,
-  sidecar: TrimSidecar | null,
-  trimSeconds: number,
-): void => {
-  if (process.env.VIDEO_TRIM_OVERRIDE === undefined && trimSeconds === 0) {
-    throw new Error(
-      `Missing valid trim sidecar for ms-store recording at ${relative(
-        TRIM_SIDECAR_PATH,
-      )}. Run \`npm run video:ms-store\` or set VIDEO_TRIM_OVERRIDE.`,
-    );
-  }
-
-  const sidecarVariant = sidecar?.variant;
-  if (
-    sidecarVariant !== undefined &&
-    sidecarVariant !== 'ms-store' &&
-    sidecarVariant !== VARIANT
-  ) {
-    throw new Error(
-      `Trim sidecar variant ${JSON.stringify(
-        sidecarVariant,
-      )} does not match REEL_VARIANT=${JSON.stringify(VARIANT)}.`,
-    );
-  }
-
+const validateMsStoreSource = (src: string): void => {
   const probe = probeMedia(src);
   const video = streamOfType(probe, 'video');
   if (!video) throw new Error(`No video stream found in ${relative(src)}.`);
@@ -461,130 +394,122 @@ const validateMsStoreOutputs = (mp4: string, thumbnail: string): void => {
   console.log('[video] ms-store validation passed.');
 };
 
-const main = (): void => {
-  if (!has('ffmpeg')) {
+const main = async (): Promise<void> => {
+  if (!hasCommand('ffmpeg')) {
     throw new Error('ffmpeg not found in PATH — install ffmpeg first.');
   }
-  if (IS_MS_STORE && !has('ffprobe')) {
+  if (!hasCommand('ffprobe')) {
     throw new Error('ffprobe not found in PATH — install ffprobe first.');
   }
   fs.mkdirSync(OUT_DIR, { recursive: true });
 
-  const src = findMostRecentWebm(RECORDINGS_DIR);
+  const src = findLatestRecording(RECORDINGS_DIR);
   console.log(`[video] source: ${relative(src)}`);
 
-  const sidecar = readTrimSidecar();
+  const sidecar = readRecordingTrim(src, VARIANT || 'default');
   const trimSeconds = readTrimSeconds(sidecar);
   if (IS_MS_STORE) {
-    validateMsStoreSource(src, sidecar, trimSeconds);
+    validateMsStoreSource(src);
   }
-  // Trim in the filter graph so ffmpeg decodes to the exact trim point for
-  // every output. Seeking before `-i` is faster, but VP8 keyframes can be
-  // sparse enough to drop the opening beat from the generated reel.
-  const trimFilter =
-    trimSeconds > 0 ? `trim=start=${trimSeconds.toFixed(3)},setpts=PTS-STARTPTS,` : '';
+  const endSeconds = process.env.VIDEO_TRIM_OVERRIDE
+    ? undefined
+    : readEndSeconds(sidecar);
+  const trimFilter = toTrimFilter(trimSeconds, endSeconds);
   if (trimSeconds > 0) {
     console.log(
       `[video] trimming first ${trimSeconds.toFixed(3)}s (seed-import lead-in)`,
     );
   }
+  const sourceSeconds = asNumber(probeMedia(src).format?.duration) ?? undefined;
+  const lastSecond = endSeconds ?? sourceSeconds;
+  const durationSeconds = lastSecond === undefined ? undefined : lastSecond - trimSeconds;
+  if (endSeconds !== undefined && sourceSeconds !== undefined) {
+    const dropped = sourceSeconds - endSeconds;
+    console.log(`[video] trimming last ${dropped.toFixed(3)}s (teardown)`);
+  }
+  const scenes = readScenes(sidecar, trimSeconds);
+  logScenes(scenes, durationSeconds);
 
   const mp4 = path.join(OUT_DIR, `reel${SUFFIX}.mp4`);
   const thumbnail = path.join(OUT_DIR, `reel${SUFFIX}-thumbnail.png`);
   const webm = path.join(OUT_DIR, `reel${SUFFIX}.webm`);
-  const palette = path.join(OUT_DIR, `.palette${SUFFIX}.png`);
   const gif = path.join(OUT_DIR, `reel${SUFFIX}.gif`);
+
+  const contactSheet = path.join(REVIEW_DIR, `reel${SUFFIX}-contact.png`);
+  const writeReviewSheet = async (): Promise<void> => {
+    if (durationSeconds === undefined) return;
+    fs.mkdirSync(REVIEW_DIR, { recursive: true });
+    await writeContactSheet({
+      src,
+      out: contactSheet,
+      trim: trimFilter,
+      atSeconds: contactSheetTimes(scenes, durationSeconds),
+      columns: scenes.length > 0 ? 2 : undefined,
+    });
+  };
 
   if (IS_MS_STORE) {
     buildMsStoreAssets(src, trimFilter, mp4, thumbnail);
     validateMsStoreOutputs(mp4, thumbnail);
-    logOutputs();
+    await writeReviewSheet();
+    logOutputs(
+      [mp4, thumbnail, ...(durationSeconds === undefined ? [] : [contactSheet])],
+      REPO_ROOT,
+    );
     return;
   }
 
-  // 1. mp4 — Playwright records VFR; force CFR for predictable playback.
-  console.log('[video] -> mp4');
-  run('ffmpeg', [
-    '-y',
-    '-i',
-    src,
-    '-c:v',
-    'libx264',
-    '-preset',
-    'slow',
-    '-crf',
-    '20',
-    '-pix_fmt',
-    'yuv420p',
-    '-vf',
-    `${trimFilter}fps=${OUTPUT_FPS}`,
-    '-movflags',
-    '+faststart',
-    '-an',
-    mp4,
-  ]);
-
-  // 2. webm — VP9 at the same quality is materially smaller than H.264.
-  console.log('[video] -> webm');
-  run('ffmpeg', [
-    '-y',
-    '-i',
-    src,
-    '-c:v',
-    'libvpx-vp9',
-    '-crf',
-    '32',
-    '-b:v',
-    '0',
-    '-pix_fmt',
-    'yuv420p',
-    '-vf',
-    `${trimFilter}fps=${OUTPUT_FPS}`,
-    '-an',
-    webm,
-  ]);
-
-  // 3. gif — two-pass palette is non-negotiable for tolerable color quality.
-  // `stats_mode=full` (vs `diff`) builds the palette from every pixel of
-  // every frame, which gives more even coverage of the intermediate
-  // brightness levels we hit during fade-to-black scene cuts. With `diff`
-  // the palette skews toward "changing pixels" and the in-fade frames
-  // banded visibly. `dither=sierra2_4a` is an error-diffusion dither
-  // that's smoother for gradients than the previous `bayer` (Bayer's
-  // fixed pattern reads as a static crosshatch at low contrast).
-  console.log('[video] -> gif (palette pass)');
-  run('ffmpeg', [
-    '-y',
-    '-i',
-    src,
-    '-vf',
-    `${trimFilter}fps=${OUTPUT_FPS},scale=1024:-1:flags=lanczos,palettegen=stats_mode=full`,
-    palette,
-  ]);
-  console.log('[video] -> gif (paletteuse)');
-  run('ffmpeg', [
-    '-y',
-    '-i',
-    src,
-    '-i',
-    palette,
-    '-lavfi',
-    `${trimFilter}fps=${OUTPUT_FPS},scale=1024:-1:flags=lanczos [x]; [x][1:v] paletteuse=dither=sierra2_4a`,
-    gif,
-  ]);
-  fs.unlinkSync(palette);
-
-  if (has('gifsicle')) {
-    console.log(`[video] -> reel${SUFFIX}-optimized.gif (gifsicle -O3 --lossy=80)`);
-    const optimized = path.join(OUT_DIR, `reel${SUFFIX}-optimized.gif`);
-    run('gifsicle', ['-O3', '--lossy=80', gif, '-o', optimized]);
+  const startedAt = Date.now();
+  if (IS_QUICK) {
+    // Review loop: the gif (and its gifsicle pass) dominates the build.
+    console.log('[video] -> mp4, contact sheet (VIDEO_QUICK)');
+    await Promise.all([
+      encodeMp4({ src, out: mp4, trim: trimFilter }),
+      writeReviewSheet(),
+    ]);
   } else {
-    console.log(
-      '[video] gifsicle not installed; skipping optimization (install for ~30% smaller gif).',
+    // Independent encodes overlap; the webm and gif dominated a serial build.
+    console.log('[video] -> mp4, webm, gif, contact sheet (in parallel)');
+    await Promise.all([
+      encodeMp4({ src, out: mp4, trim: trimFilter }),
+      encodeWebm({ src, out: webm, trim: trimFilter }),
+      encodeGif({ src, out: gif, trim: trimFilter }),
+      writeReviewSheet(),
+    ]);
+  }
+  console.log(`[video] encoded in ${((Date.now() - startedAt) / 1000).toFixed(1)}s`);
+
+  if (IS_QUICK) {
+    logOutputs(
+      [mp4, ...(durationSeconds === undefined ? [] : [contactSheet])],
+      REPO_ROOT,
+    );
+    const staleSiblings = [webm, gif, gif.replace(/\.gif$/, '-optimized.gif')].filter(
+      (file) => fs.existsSync(file),
+    );
+    if (staleSiblings.length > 0) {
+      console.log(
+        `[video] existing stale siblings from earlier builds (not updated): ${staleSiblings
+          .map(relative)
+          .join(', ')}`,
+      );
+    }
+  } else {
+    const optimizedGif = gif.replace(/\.gif$/, '-optimized.gif');
+    logOutputs(
+      [
+        mp4,
+        webm,
+        gif,
+        ...(hasCommand('gifsicle') ? [optimizedGif] : []),
+        ...(durationSeconds === undefined ? [] : [contactSheet]),
+      ],
+      REPO_ROOT,
     );
   }
-
-  logOutputs();
 };
 
-main();
+main().catch((err: unknown) => {
+  console.error(err);
+  process.exitCode = 1;
+});

@@ -29,11 +29,16 @@ export interface AndroidWidgetCurrentTask {
   /** True when tracked on this device; false when tracked remotely (SuperSync presence). */
   isLocal: boolean;
   /**
+   * Epoch ms after which native must stop showing this as live. Set only for remote
+   * sessions (`receivedAt + PRESENCE_STALE_AFTER_MS`): the JS staleness ticker cannot
+   * run once Android reclaims the process, so the native widget enforces it itself.
+   */
+  expiresAt?: number;
+  /**
    * DISPLAY ONLY — wall-clock ms this continuous tracking session began, never
-   * accounting. Omitted (not null) when unavailable — e.g. a transient race
-   * between the local task-tracking signal and TrackingPresenceService's own
-   * session bookkeeping — so native shows the row without a "since" line
-   * rather than a fabricated one.
+   * accounting. Omitted when unknown (only tracking presence knows it, so it
+   * needs SuperSync with live tracking presence enabled) — native then shows
+   * no "since" line rather than a fabricated one.
    */
   sinceTs?: number;
   /** Focus-session cycle number, present while a focus session is running. */

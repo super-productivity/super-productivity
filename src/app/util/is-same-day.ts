@@ -14,6 +14,7 @@ export const isSameDay = (
   );
   const isValid = isValidDate(d1) && isValidDate(d2);
   if (!isValid) {
+    // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
     Log.log(date1, date2);
     throw new Error('Invalid dates passed');
   }

@@ -168,6 +168,16 @@ body.isDarkTheme .mat-mdc-dialog-surface:has(plugin-config-dialog) {
   --bg-lighter: color-mix(in srgb, var(--bg), #fff 5%);
 }
 
+/* The focus mode notes panel slides up over the timer and its controls, so a
+   transparent note lets them show through the text. Give it an opaque surface. */
+body:not(.isDarkTheme) .notes-and-attachments {
+  --standard-note-bg: #fff;
+}
+
+body.isDarkTheme .notes-and-attachments {
+  --standard-note-bg: color-mix(in srgb, var(--bg), #fff 5%);
+}
+
 body .mat-mdc-card {
   background: var(--bg) !important;
   box-shadow: none !important;

@@ -1,0 +1,84 @@
+import { Injectable, inject } from '@angular/core';
+import { Store } from '@ngrx/store';
+import { firstValueFrom } from 'rxjs';
+import { TaskLog } from '../../core/log';
+import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
+import { DEFAULT_GLOBAL_CONFIG } from '../config/default-global-config.const';
+import { GlobalConfigService } from '../config/global-config.service';
+import { IssueService } from '../issue/issue.service';
+import { IssueProviderKey } from '../issue/issue.model';
+import { addSubTask } from './store/task.actions';
+import { Task } from './task.model';
+import { TaskMoveToProjectService } from './task-move-to-project.service';
+import { TaskService } from './task.service';
+import { withRemindAtForDueChange } from './util/with-remind-at-for-due-change';
+
+/**
+ * Task operations the Local REST API task routes need that `TaskService`
+ * doesn't offer as such: the issue link lookup, literal subtask titles,
+ * back-filled time, project moves without the confirm dialog and due-time
+ * changes that move the reminder.
+ */
+@Injectable({ providedIn: 'root' })
+export class LocalRestApiFeatureBridgeService {
+  private readonly _issueService = inject(IssueService);
+  private readonly _taskService = inject(TaskService);
+  private readonly _taskMoveToProjectService = inject(TaskMoveToProjectService);
+  private readonly _globalConfigService = inject(GlobalConfigService);
+  private readonly _store = inject(Store);
+
+  issueLink(
+    issueType: IssueProviderKey,
+    issueId: string | number,
+    issueProviderId: string,
+  ): Promise<string> {
+    return this._issueService.issueLink(issueType, issueId, issueProviderId);
+  }
+
+  /**
+   * `TaskService.addSubTaskTo` with short syntax switched off. Kept here
+   * rather than as a flag on the service, which is already over the size cap.
+   */
+  addLiteralSubTask(parentId: string, additional: Partial<Task>): string {
+    const task = this._taskService.createNewTaskWithDefaults({
+      title: additional.title || '',
+      additional: { dueDay: additional.dueDay || undefined, ...additional },
+    });
+    TaskLog.log('addSubTaskTo', { taskId: task.id, parentId });
+    this._store.dispatch(addSubTask({ task, parentId, isIgnoreShortSyntax: true }));
+    return task.id;
+  }
+
+  addTimeSpentOnDay(task: Task, durationMs: number, date: string): void {
+    this._taskService.addTimeSpentAndSync(task, durationMs, date);
+  }
+
+  async moveTaskToProject(taskId: string, projectId: string): Promise<void> {
+    const task = await firstValueFrom(this._taskService.getByIdWithSubTaskData$(taskId));
+    if (task) {
+      await this._taskMoveToProjectService.moveToProject(task, projectId, {
+        isSkipConfirm: true,
+      });
+    }
+  }
+
+  /**
+   * Same reminder handling as an issue-provider reschedule: the reminder keeps
+   * its offset when the time moves, and a cleared time dismisses it through
+   * its own action (see `withRemindAtForDueChange`).
+   */
+  updateTaskWithDueTime(task: Task, changesIn: Partial<Task>): void {
+    const { changes, isClearRemindAt } = withRemindAtForDueChange(
+      task,
+      changesIn,
+      this._globalConfigService.cfg()?.reminder.defaultTaskRemindOption ??
+        DEFAULT_GLOBAL_CONFIG.reminder.defaultTaskRemindOption!,
+    );
+    this._taskService.update(task.id, changes);
+    if (isClearRemindAt) {
+      this._store.dispatch(
+        TaskSharedActions.dismissReminderOnly({ id: task.id, isSkipSnack: true }),
+      );
+    }
+  }
+}

@@ -6,11 +6,15 @@ import { ScheduleService } from '../schedule.service';
 import { MatDialog } from '@angular/material/dialog';
 import { GlobalTrackingIntervalService } from '../../../core/global-tracking-interval/global-tracking-interval.service';
 import { DateAdapter } from '@angular/material/core';
-import { signal } from '@angular/core';
+import { signal, WritableSignal } from '@angular/core';
 import { of } from 'rxjs';
 import { MockStore, provideMockStore } from '@ngrx/store/testing';
-import { selectCalendarProviders } from '../../issue/store/issue-provider.selectors';
+import {
+  selectCalendarProviders,
+  selectEnabledIssueProviders,
+} from '../../issue/store/issue-provider.selectors';
 import { HiddenCalendarProvidersService } from '../../calendar-integration/hidden-calendar-providers.service';
+import { PluginIssueProviderRegistryService } from '../../../plugins/issue-provider/plugin-issue-provider-registry.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { SCHEDULE_CONSTANTS } from '../schedule.constants';
 import { GlobalConfigService } from '../../config/global-config.service';
@@ -18,6 +22,10 @@ import { ScheduleDay } from '../schedule.model';
 import { CalendarEventActionsService } from '../../calendar-integration/calendar-event-actions.service';
 import { registerLocaleData } from '@angular/common';
 import localeSv from '@angular/common/locales/sv';
+import { selectUndoneDeadlineTasksByDay } from '../../planner/store/planner.selectors';
+import { DEFAULT_TASK } from '../../tasks/task.model';
+import { DateService } from '../../../core/date/date.service';
+import { LS } from '../../../core/persistence/storage-keys.const';
 
 describe('ScheduleComponent', () => {
   const mockLocalization = signal({ firstDayOfWeek: 1, dateTimeLocale: 'en-US' });
@@ -25,7 +33,9 @@ describe('ScheduleComponent', () => {
   let fixture: ComponentFixture<ScheduleComponent>;
   let mockTaskService: jasmine.SpyObj<TaskService>;
   let mockLayoutService: jasmine.SpyObj<LayoutService>;
+  let mockIsXs: WritableSignal<boolean>;
   let mockScheduleService: jasmine.SpyObj<ScheduleService>;
+  let calendarColorByProviderId: WritableSignal<Map<string, string>>;
   let mockMatDialog: jasmine.SpyObj<MatDialog>;
   let mockGlobalTrackingIntervalService: jasmine.SpyObj<GlobalTrackingIntervalService>;
   let mockGlobalConfigService: jasmine.SpyObj<GlobalConfigService>;
@@ -39,22 +49,29 @@ describe('ScheduleComponent', () => {
     mockTaskService = jasmine.createSpyObj('TaskService', ['currentTaskId']);
     (mockTaskService as any).currentTaskId = signal(null);
 
+    mockIsXs = signal(false);
     mockLayoutService = jasmine.createSpyObj('LayoutService', [], {
       selectedTimeView: signal('week'),
+      isXs: mockIsXs,
     });
 
-    mockScheduleService = jasmine.createSpyObj('ScheduleService', [
-      'getDaysToShow',
-      'getMonthDaysToShow',
-      'getMonthWeeksToShow',
-      'buildScheduleDays',
-      'scheduleRefreshTick',
-      'getTodayStr',
-      'createScheduleDaysWithContext',
-      'getDayClass',
-      'hasEventsForDay',
-      'getEventsForDay',
-    ]);
+    calendarColorByProviderId = signal(new Map<string, string>());
+    mockScheduleService = jasmine.createSpyObj(
+      'ScheduleService',
+      [
+        'getDaysToShow',
+        'getMonthDaysToShow',
+        'getMonthWeeksToShow',
+        'buildScheduleDays',
+        'scheduleRefreshTick',
+        'getTodayStr',
+        'createScheduleDaysWithContext',
+        'getDayClass',
+        'hasEventsForDay',
+        'getEventsForDay',
+      ],
+      { calendarColorByProviderId: calendarColorByProviderId },
+    );
     mockScheduleService.getDaysToShow.and.returnValue([
       '2026-01-20',
       '2026-01-21',
@@ -130,9 +147,17 @@ describe('ScheduleComponent', () => {
       ],
     }).compileComponents();
 
+    const store = TestBed.inject(MockStore);
+    store.overrideSelector(selectUndoneDeadlineTasksByDay, {});
+
     fixture = TestBed.createComponent(ScheduleComponent);
     component = fixture.componentInstance;
     fixture.detectChanges();
+  });
+
+  afterEach(() => {
+    fixture.destroy();
+    TestBed.inject(MockStore).resetSelectors();
   });
 
   describe('headerTitle computed', () => {
@@ -350,6 +375,34 @@ describe('ScheduleComponent', () => {
       component['_selectedDate'].set(new Date('2026-01-13'));
       expect(component.isViewingToday()).toBe(false);
     });
+
+    // #10451: today (Jan 20) is a leading padding day of the next month's grid
+    describe('month view with today in the padding days of the next month', () => {
+      beforeEach(() => {
+        mockLayoutService.selectedTimeView.set('month');
+        mockScheduleService.getMonthDaysToShow.and.returnValue([
+          '2026-01-19',
+          '2026-01-20',
+          '2026-01-21',
+          '2026-02-01',
+        ]);
+        component['_selectedDate'].set(new Date(2026, 1, 1)); // Feb 1, 2026
+        fixture.detectChanges();
+      });
+
+      it('should return false', () => {
+        expect(component.isViewingToday()).toBe(false);
+      });
+
+      it('should allow navigating back to the current month', () => {
+        component.goToPreviousPeriod();
+
+        const newDate = component['_selectedDate']();
+        expect(newDate?.getFullYear()).toBe(2026);
+        expect(newDate?.getMonth()).toBe(0); // January
+        expect(component.isViewingToday()).toBe(true);
+      });
+    });
   });
 
   describe('goToPreviousPeriod', () => {
@@ -424,7 +477,7 @@ describe('ScheduleComponent', () => {
     it('should go to previous year when navigating from January in month view', () => {
       // Arrange
       mockLayoutService.selectedTimeView.set('month');
-      const startDate = new Date(2026, 0, 15); // Jan 15, 2026
+      const startDate = new Date(2027, 0, 15); // Jan 15, 2027 (future → nav enabled)
       component['_selectedDate'].set(startDate);
 
       // Act
@@ -432,12 +485,103 @@ describe('ScheduleComponent', () => {
 
       // Assert
       const newDate = component['_selectedDate']();
-      expect(newDate?.getFullYear()).toBe(2025);
+      expect(newDate?.getFullYear()).toBe(2026);
       expect(newDate?.getMonth()).toBe(11); // December
     });
   });
 
   describe('goToNextPeriod', () => {
+    describe('with a shifted day start', () => {
+      beforeEach(() => {
+        jasmine.clock().install();
+        const dateService = TestBed.inject(DateService);
+        dateService.setStartOfNextDayDiff('04:00');
+        const calendarService = {
+          _dateService: dateService,
+        } as unknown as ScheduleService;
+        mockScheduleService.getMonthDaysToShow.and.callFake((...args) =>
+          ScheduleService.prototype.getMonthDaysToShow.apply(calendarService, args),
+        );
+        mockScheduleService.getMonthWeeksToShow.and.callFake((...args) =>
+          ScheduleService.prototype.getMonthWeeksToShow.apply(calendarService, args),
+        );
+        mockScheduleService.getDaysToShow.and.callFake((...args) =>
+          ScheduleService.prototype.getDaysToShow.apply(calendarService, args),
+        );
+        mockLayoutService.selectedTimeView.set('month');
+      });
+
+      afterEach(() => jasmine.clock().uninstall());
+
+      it('advances from the displayed September 30 to October 1 before the day starts in day view', () => {
+        mockLayoutService.selectedTimeView.set('day');
+        jasmine.clock().mockDate(new Date(2026, 9, 1, 1));
+        expect(component.daysToShow()).toEqual(['2026-09-30']);
+
+        component.goToNextPeriod();
+
+        expect(component['_selectedDate']()).toEqual(new Date(2026, 9, 1));
+        expect(component.daysToShow()).toEqual(['2026-10-01']);
+      });
+
+      it('goes back from October 2 to October 1 before the day starts in day view', () => {
+        mockLayoutService.selectedTimeView.set('day');
+        jasmine.clock().mockDate(new Date(2026, 9, 1, 1));
+
+        component.goToNextPeriod();
+        component.goToNextPeriod();
+        expect(component.daysToShow()).toEqual(['2026-10-02']);
+
+        component.goToPreviousPeriod();
+        expect(component['_selectedDate']()).toEqual(new Date(2026, 9, 1));
+        expect(component.daysToShow()).toEqual(['2026-10-01']);
+
+        component.goToPreviousPeriod();
+        expect(component['_selectedDate']()).toBeNull();
+        expect(component.daysToShow()).toEqual(['2026-09-30']);
+      });
+
+      it('advances from the displayed September to October before the day starts', () => {
+        jasmine.clock().mockDate(new Date(2026, 9, 1, 1));
+        expect(component.headerTitle()).toBe('September 2026');
+
+        component.goToNextPeriod();
+
+        expect(component['_selectedDate']()).toEqual(new Date(2026, 9, 1));
+        expect(component.headerTitle()).toBe('October 2026');
+      });
+
+      it('advances from December to January before the first logical day of the year', () => {
+        jasmine.clock().mockDate(new Date(2027, 0, 1, 1));
+        expect(component.headerTitle()).toBe('December 2026');
+
+        component.goToNextPeriod();
+
+        expect(component['_selectedDate']()).toEqual(new Date(2027, 0, 1));
+        expect(component.headerTitle()).toBe('January 2027');
+      });
+
+      it('advances from October to November after the day starts', () => {
+        jasmine.clock().mockDate(new Date(2026, 9, 1, 5));
+        expect(component.headerTitle()).toBe('October 2026');
+
+        component.goToNextPeriod();
+
+        expect(component['_selectedDate']()).toEqual(new Date(2026, 10, 1));
+      });
+
+      it('uses an explicitly selected month without shifting it again', () => {
+        jasmine.clock().mockDate(new Date(2026, 9, 1, 1));
+        component['_selectedDate'].set(new Date(2026, 11, 1));
+
+        component.goToNextPeriod();
+
+        expect(component['_selectedDate']()).toEqual(new Date(2027, 0, 1));
+        component.goToPreviousPeriod();
+        expect(component['_selectedDate']()).toEqual(new Date(2026, 11, 1));
+      });
+    });
+
     it('should advance exactly one day in day view', () => {
       mockLayoutService.selectedTimeView.set('day');
       mockScheduleService.getDaysToShow.and.returnValue(['2027-06-15']);
@@ -1158,12 +1302,6 @@ describe('ScheduleComponent', () => {
       hidden.setHidden([]);
     });
 
-    // overrideSelector mutates the selector itself, so always reset to avoid
-    // leaking provider lists into unrelated tests later in the file.
-    afterEach(() => {
-      TestBed.inject(MockStore).resetSelectors();
-    });
-
     it('should be false when no providers are enabled', () => {
       const store = TestBed.inject(MockStore);
       store.overrideSelector(selectCalendarProviders, []);
@@ -1199,6 +1337,156 @@ describe('ScheduleComponent', () => {
       store.refreshState();
       fixture.detectChanges();
       expect(component.showCalFilterBtn()).toBe(true);
+    });
+  });
+
+  describe('plugin calendar providers', () => {
+    const icalProvider = (id: string): any => ({
+      id,
+      isEnabled: true,
+      issueProviderKey: 'ICAL',
+      icalUrl: `https://example.com/${id}.ics`,
+    });
+    const pluginProvider = (id: string, key = 'plugin:cal'): any => ({
+      id,
+      isEnabled: true,
+      issueProviderKey: key,
+      pluginId: 'cal',
+      pluginConfig: {},
+    });
+
+    beforeEach(() => {
+      localStorage.removeItem('SUP_HIDDEN_CALENDAR_PROVIDER_IDS');
+      TestBed.inject(HiddenCalendarProvidersService).setHidden([]);
+    });
+
+    afterEach(() => {
+      TestBed.inject(MockStore).resetSelectors();
+    });
+
+    it('includes plugin issue providers that opt into the agenda view', () => {
+      const store = TestBed.inject(MockStore);
+      spyOn(
+        TestBed.inject(PluginIssueProviderRegistryService),
+        'getUseAgendaView',
+      ).and.returnValue(true);
+      store.overrideSelector(selectCalendarProviders, []);
+      store.overrideSelector(selectEnabledIssueProviders, [pluginProvider('p1')]);
+      store.refreshState();
+      fixture.detectChanges();
+      expect(component.enabledCalendarProviders().map((p) => p.id)).toEqual(['p1']);
+    });
+
+    it('excludes plugin providers that do not use the agenda view', () => {
+      const store = TestBed.inject(MockStore);
+      spyOn(
+        TestBed.inject(PluginIssueProviderRegistryService),
+        'getUseAgendaView',
+      ).and.returnValue(false);
+      store.overrideSelector(selectCalendarProviders, []);
+      store.overrideSelector(selectEnabledIssueProviders, [pluginProvider('p1')]);
+      store.refreshState();
+      fixture.detectChanges();
+      expect(component.enabledCalendarProviders()).toEqual([]);
+    });
+
+    it('materializes color and label per provider row', () => {
+      const store = TestBed.inject(MockStore);
+      spyOn(
+        TestBed.inject(PluginIssueProviderRegistryService),
+        'getUseAgendaView',
+      ).and.returnValue(true);
+      store.overrideSelector(selectCalendarProviders, [
+        { ...icalProvider('ical'), color: '#123456' },
+      ]);
+      store.overrideSelector(selectEnabledIssueProviders, [pluginProvider('plug')]);
+      store.refreshState();
+      fixture.detectChanges();
+      expect(component.calProviderRows()).toEqual([
+        { id: 'ical', color: '#123456', label: 'example.com' },
+        { id: 'plug', color: jasmine.stringMatching(/^hsl\(/), label: 'plugin:cal' },
+      ]);
+    });
+
+    it('uses the color the calendar source reported for a provider without one', () => {
+      const store = TestBed.inject(MockStore);
+      spyOn(
+        TestBed.inject(PluginIssueProviderRegistryService),
+        'getUseAgendaView',
+      ).and.returnValue(true);
+      store.overrideSelector(selectCalendarProviders, []);
+      store.overrideSelector(selectEnabledIssueProviders, [pluginProvider('plug')]);
+      store.refreshState();
+      calendarColorByProviderId.set(new Map([['plug', '#fbe983']]));
+      fixture.detectChanges();
+      expect(component.calProviderRows()).toEqual([
+        { id: 'plug', color: '#fbe983', label: 'plugin:cal' },
+      ]);
+    });
+
+    it('shows the filter button for one iCal plus one plugin calendar provider', () => {
+      const store = TestBed.inject(MockStore);
+      spyOn(
+        TestBed.inject(PluginIssueProviderRegistryService),
+        'getUseAgendaView',
+      ).and.returnValue(true);
+      store.overrideSelector(selectCalendarProviders, [icalProvider('ical')]);
+      store.overrideSelector(selectEnabledIssueProviders, [
+        icalProvider('ical'),
+        pluginProvider('plug'),
+      ]);
+      store.refreshState();
+      fixture.detectChanges();
+      expect(component.showCalFilterBtn()).toBe(true);
+    });
+  });
+
+  describe('calProviderLabel', () => {
+    it('normalizes a URL-shaped label to host-only', () => {
+      expect(
+        component.calProviderLabel({
+          id: 'p',
+          isEnabled: true,
+          issueProviderKey: 'plugin:cal',
+          pluginId: 'cal',
+          pluginConfig: { serverUrl: 'https://calendar.example.com/dav/' },
+        } as any),
+      ).toBe('calendar.example.com');
+    });
+
+    it('collapses an opaque-scheme plugin label to the provider key', () => {
+      expect(
+        component.calProviderLabel({
+          id: 'p',
+          isEnabled: true,
+          issueProviderKey: 'plugin:cal',
+          pluginId: 'cal',
+          pluginConfig: { serverUrl: 'javascript:alert(1)' },
+        } as any),
+      ).toBe('plugin:cal');
+    });
+
+    it('leaves a plain plugin label untouched', () => {
+      expect(
+        component.calProviderLabel({
+          id: 'p',
+          isEnabled: true,
+          issueProviderKey: 'plugin:cal',
+          pluginId: 'cal',
+          pluginConfig: { name: 'Work: shared' },
+        } as any),
+      ).toBe('Work: shared');
+    });
+
+    it('leaves an already host-only iCal label untouched', () => {
+      expect(
+        component.calProviderLabel({
+          id: 'p',
+          isEnabled: true,
+          issueProviderKey: 'ICAL',
+          icalUrl: 'https://feeds.example.com/cal.ics',
+        } as any),
+      ).toBe('feeds.example.com');
     });
   });
 
@@ -1387,6 +1675,33 @@ describe('ScheduleComponent', () => {
       expect(el.querySelector('schedule-month')).toBeFalsy();
     });
 
+    it('passes deadline tasks to the paged day view badge', fakeAsync(() => {
+      const store = TestBed.inject(MockStore);
+      store.overrideSelector(selectUndoneDeadlineTasksByDay, {
+        // eslint-disable-next-line @typescript-eslint/naming-convention
+        '2026-01-20': [
+          {
+            ...DEFAULT_TASK,
+            id: 'task-1',
+            projectId: 'project-1',
+            title: 'Day-view deadline',
+            deadlineDay: '2026-01-20',
+          },
+        ],
+      });
+      store.refreshState();
+      mockScheduleService.getDaysToShow.and.returnValue(['2026-01-20']);
+      mockLayoutService.selectedTimeView.set('day');
+
+      fixture.detectChanges();
+      tick();
+      fixture.detectChanges();
+
+      const el: HTMLElement = fixture.nativeElement;
+      expect(el.querySelector('schedule-week .deadline-badge')).toBeTruthy();
+      expect(el.querySelector('schedule-week planner-deadline-task')).toBeFalsy();
+    }));
+
     it('has a day-view toggle button that selects day mode', () => {
       const el: HTMLElement = fixture.nativeElement;
       const dayBtn = el.querySelector<HTMLButtonElement>(
@@ -1453,6 +1768,54 @@ describe('ScheduleComponent', () => {
       // Rect-based math landed 20% of the distance from midnight too far —
       // hundreds of pixels. What is left here is sub-pixel rounding.
       expect(Math.abs(scaledWrapper.scrollTop - plainTop)).toBeLessThan(2);
+    });
+  });
+
+  describe('initial time view', () => {
+    let savedView: string | null;
+
+    beforeEach(() => {
+      savedView = localStorage.getItem(LS.SELECTED_TIME_VIEW);
+    });
+
+    afterEach(() => {
+      if (savedView === null) {
+        localStorage.removeItem(LS.SELECTED_TIME_VIEW);
+      } else {
+        localStorage.setItem(LS.SELECTED_TIME_VIEW, savedView);
+      }
+    });
+
+    const createWith = (isXs: boolean, saved: string | null): void => {
+      if (saved === null) {
+        localStorage.removeItem(LS.SELECTED_TIME_VIEW);
+      } else {
+        localStorage.setItem(LS.SELECTED_TIME_VIEW, saved);
+      }
+      mockIsXs.set(isXs);
+      TestBed.createComponent(ScheduleComponent);
+    };
+
+    it('starts on the day view on a phone without a saved choice', () => {
+      createWith(true, null);
+      expect(mockLayoutService.selectedTimeView()).toBe('day');
+      // Not persisted, so a wider window later still starts on the week view.
+      expect(localStorage.getItem(LS.SELECTED_TIME_VIEW)).toBeNull();
+    });
+
+    it('starts on the week view on wider screens without a saved choice', () => {
+      createWith(false, null);
+      expect(mockLayoutService.selectedTimeView()).toBe('week');
+    });
+
+    it('keeps a saved week view on a phone', () => {
+      createWith(true, 'week');
+      expect(mockLayoutService.selectedTimeView()).toBe('week');
+    });
+
+    it('keeps a saved month view on a phone', () => {
+      createWith(true, 'month');
+      expect(mockLayoutService.selectedTimeView()).toBe('month');
     });
   });
 });

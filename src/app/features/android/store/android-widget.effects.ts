@@ -9,6 +9,7 @@ import {
   filter,
   first,
   pairwise,
+  startWith,
   switchMap,
   tap,
 } from 'rxjs/operators';
@@ -113,11 +114,9 @@ export class AndroidWidgetEffects {
       { dispatch: false },
     );
 
-  // currentTask is no longer part of selectAndroidWidgetData (it needs
-  // TrackingPresenceService signals) — this is the trigger for the LOCAL side:
-  // task switch, tracking start/stop, and focus-cycle changes all flow through
-  // TrackingPresenceService's own local-change subscription, so its signal is a
-  // superset of what selectCurrentTaskId alone would catch.
+  // The local current task's since/focus fields come from a service signal
+  // (TrackingPresenceService.localTrackingInfo), not the store, so store
+  // emissions miss a focus-cycle change — this is their trigger.
   pushOnLocalTrackingChange$ =
     IS_ANDROID_WEB_VIEW &&
     createEffect(
@@ -142,10 +141,11 @@ export class AndroidWidgetEffects {
       { dispatch: false },
     );
 
-  // Single delivery path for widget done-taps: cold start and background→
-  // foreground are covered by onResume$ (ReplaySubject(1)), taps while the app
-  // is alive by the contentless native drain signal. The queue read is
-  // get-and-clear, so overlapping triggers drain at most once.
+  // Single delivery path for widget done-taps: cold start by startWith (the
+  // native onResume call runs before this bundle defines onResume$ and is
+  // dropped), background→foreground by onResume$, taps while the app is alive
+  // by the contentless native drain signal. The queue read is get-and-clear, so
+  // overlapping triggers drain at most once.
   drainWidgetDoneQueue$ =
     IS_ANDROID_WEB_VIEW &&
     createEffect(
@@ -154,6 +154,7 @@ export class AndroidWidgetEffects {
           androidInterface.onResume$,
           androidInterface.onWidgetDoneDrainRequest$,
         ).pipe(
+          startWith(undefined),
           concatMap(() =>
             this._dataInitState.isAllDataLoadedInitially$.pipe(
               first(),

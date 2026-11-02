@@ -80,7 +80,31 @@ export class CollapsibleComponent implements OnInit, OnDestroy {
     }
   }
 
+  onHeaderClick(ev: MouseEvent): void {
+    // A projected header action that handled its click marks it handled
+    // (`preventDefault`) instead of stopping it, so document listeners, such
+    // as an open add-task bar closing on a click outside, still see it.
+    if (ev.defaultPrevented) {
+      return;
+    }
+    this.toggleExpand();
+  }
+
   onHeaderKeydown(ev: KeyboardEvent): void {
+    // Keys on a projected header action (e.g. a link button) belong to that
+    // action; handling them here would toggle the group and cancel its click.
+    if (ev.target !== ev.currentTarget) {
+      return;
+    }
+
+    // Every header is a button; arrow navigation is only for work-view groups.
+    if (ev.key === 'Enter' || ev.key === ' ') {
+      this.toggleExpand();
+      ev.preventDefault();
+      ev.stopPropagation();
+      return;
+    }
+
     if (!this.isGroup) {
       return;
     }
@@ -112,13 +136,6 @@ export class CollapsibleComponent implements OnInit, OnDestroy {
         ev.preventDefault();
         ev.stopPropagation();
       }
-      return;
-    }
-
-    if (ev.key === 'Enter' || ev.key === ' ') {
-      this.toggleExpand();
-      ev.preventDefault();
-      ev.stopPropagation();
       return;
     }
   }

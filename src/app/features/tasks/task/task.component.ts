@@ -11,12 +11,14 @@ import {
   inject,
   input,
   OnDestroy,
+  Signal,
   signal,
   untracked,
   viewChild,
 } from '@angular/core';
 import { TaskService } from '../task.service';
 import { TaskDuplicateService } from '../task-duplicate.service';
+import { VIEW_TASK_LIST } from '../view-task-list.token';
 import { TaskMultiSelectService } from '../task-multi-select.service';
 import { TaskMoveToProjectService } from '../task-move-to-project.service';
 import { isMultiSelectModifierEvent } from '../../../util/is-multi-select-modifier-event';
@@ -39,6 +41,7 @@ import {
   ChecklistProgress,
   getChecklistProgress,
 } from '../../markdown-checklist/get-checklist-progress';
+import { getSubTaskProgress } from '../util/get-sub-task-progress';
 import { GlobalConfigService } from '../../config/global-config.service';
 import { DoneToggleComponent } from '../../../ui/done-toggle/done-toggle.component';
 import { SwipeBlockComponent } from '../../../ui/swipe-block/swipe-block.component';
@@ -91,10 +94,15 @@ import { isDeadlineApproaching as isDeadlineApproachingFn } from '../util/is-dea
 import { TaskContextMenuComponent } from '../task-context-menu/task-context-menu.component';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ICAL_TYPE, PLAINSPACE_TYPE } from '../../issue/issue.const';
+import {
+  getTaskDeleteConfirmData,
+  isTaskDeleteConfirmRequired,
+} from '../util/get-task-delete-confirm';
 import { TaskTitleComponent } from '../../../ui/task-title/task-title.component';
 import { MatIcon } from '@angular/material/icon';
 import { MatIconButton, MatMiniFabButton } from '@angular/material/button';
 import { TaskHoverControlsComponent } from './task-hover-controls/task-hover-controls.component';
+import { TaskPriorityIndicatorComponent } from '../task-priority-indicator/task-priority-indicator.component';
 import { ProgressBarComponent } from '../../../ui/progress-bar/progress-bar.component';
 import { TaskListComponent } from '../task-list/task-list.component';
 import { MsToStringPipe } from '../../../ui/duration/ms-to-string.pipe';
@@ -123,6 +131,15 @@ import {
 } from '../add-subtask-input/add-subtask-input.component';
 import { AddSubtaskInputService } from '../add-subtask-input/add-subtask-input.service';
 import { getSubTaskTimeLeftForDisplay } from '../util/get-sub-task-time-left-for-display';
+import {
+  getScheduledDateColor,
+  readClockUntilDue,
+} from '../util/get-scheduled-date-color';
+import { isWontDoTask } from '../util/is-wont-do-task';
+import { IssueSyncStateService } from '../../issue/two-way-sync/issue-sync-state.service';
+
+// Outside a view: tag-list hides the open context's tag, as before.
+const NO_VIEW_TAGS_TO_HIDE = signal<string[] | undefined>(undefined).asReadonly();
 
 const isInteractiveTarget = (target: EventTarget | null): boolean =>
   target instanceof Element &&
@@ -157,6 +174,7 @@ const isInteractiveTarget = (target: EventTarget | null): boolean =>
     MatIconButton,
     TaskTitleComponent,
     TaskHoverControlsComponent,
+    TaskPriorityIndicatorComponent,
     ProgressBarComponent,
     MatMiniFabButton,
     forwardRef(() => TaskListComponent),
@@ -200,6 +218,7 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   private readonly _addSubtaskInputService = inject(AddSubtaskInputService);
   private readonly _multiSelect = inject(TaskMultiSelectService);
   private readonly _taskMoveToProjectService = inject(TaskMoveToProjectService);
+  private readonly _issueSyncState = inject(IssueSyncStateService);
 
   readonly workContextService = inject(WorkContextService);
   readonly layoutService = inject(LayoutService);
@@ -213,6 +232,7 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
 
   // Use shared signals from services to avoid creating 600+ subscriptions on initial render
   isCurrent = computed(() => this._taskService.currentTaskId() === this.task().id);
+  isWontDo = computed(() => isWontDoTask(this.task()));
   isSelected = computed(() => this._taskService.selectedTaskId() === this.task().id);
   // Part of the transient multi-selection (modifier click, Shift+Arrow, X,
   // Ctrl/Cmd+A, touch tap in selection mode).
@@ -255,7 +275,16 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
     return 'chat';
   });
 
-  isTodayListActive = computed(() => this.workContextService.isTodayListSignal());
+  // In a view (`VIEW_TASK_LIST`), the active context is a stale leftover from
+  // the last list opened: rows then act as in any non-Today list.
+  private readonly _viewTaskList = inject(VIEW_TASK_LIST, { optional: true });
+  readonly isInView = !!this._viewTaskList;
+  // The host's signal itself: no extra computed per row (hot path).
+  readonly viewTagsToHide: Signal<string[] | undefined> =
+    this._viewTaskList?.tagsToHide ?? NO_VIEW_TAGS_TO_HIDE;
+  isTodayListActive = computed(
+    () => !this._viewTaskList && this.workContextService.isTodayListSignal(),
+  );
   taskIdWithPrefix = computed(() => 't-' + this.task().id);
   isRepeatTaskCreatedToday = computed(
     () => !!(this.task().repeatCfgId && this._dateService.isToday(this.task().created)),
@@ -285,6 +314,25 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
     return (
       (t.dueWithTime && this._dateService.isToday(t.dueWithTime)) ||
       (t.dueDay && t.dueDay === todayStr)
+    );
+  });
+  scheduledDateColor = computed(() => {
+    const task = this.task();
+    if (task.isDone || this.isCurrent() || (!task.dueDay && !task.dueWithTime)) {
+      return '';
+    }
+    return getScheduledDateColor(
+      task,
+      this.globalTrackingIntervalService.todayDateStr(),
+      this._dateService.getStartOfNextDayDiffMs(),
+      // Only timed tasks not yet due depend on the clock, with no per-row subscription.
+      task.dueWithTime
+        ? readClockUntilDue(
+            this.globalTrackingIntervalService.clockTimestamp,
+            this.globalTrackingIntervalService.clockMinute,
+            task.dueWithTime,
+          )
+        : 0,
     );
   });
   hasTimeConflict = computed(() => {
@@ -320,6 +368,14 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   checklistProgress = computed<ChecklistProgress | null>(() =>
     getChecklistProgress(this.task().notes),
   );
+
+  // Done/total badge on the toggle while sub tasks are collapsed (null = not shown). #7057
+  subTaskProgress = computed<ChecklistProgress | null>(() => {
+    const t = this.task();
+    return t._hideSubTasksMode === HideSubTasksMode.HideAll
+      ? getSubTaskProgress(t.subTasks)
+      : null;
+  });
 
   isShowRemoveFromToday = computed(() => {
     return (
@@ -499,7 +555,12 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
     if (
       !isMultiSelectModifierEvent(ev) &&
       this._multiSelect.isActive() &&
-      !this._multiSelect.isTouchSelectionMode()
+      !this._multiSelect.isTouchSelectionMode() &&
+      !(
+        this._multiSelect.has(this.task().id) &&
+        !this.task().parentId &&
+        this._multiSelect.count() > 1
+      )
     ) {
       this._multiSelect.clear();
     }
@@ -517,6 +578,9 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
       return;
     }
     const isModifierClick = isMultiSelectModifierEvent(ev);
+    // Defer clearing a selected parent until click so CDK can start a group drag.
+    if (!isModifierClick && !this._multiSelect.isTouchSelectionMode())
+      this._multiSelect.clear();
     const isTouchTap = !isModifierClick && this._multiSelect.isTouchSelectionMode();
     if (
       (!isModifierClick && !isTouchTap) ||
@@ -631,6 +695,9 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   }
 
   ngOnDestroy(): void {
+    if (this._taskFocusService.lastFocusedTaskComponent() === this) {
+      this._taskFocusService.lastFocusedTaskComponent.set(null);
+    }
     // Possibly no longer rendered (checked after the DOM settles, since rows
     // re-mount when they change lists and the detail panel renders copies).
     this._multiSelect.removeWhenUnrendered(
@@ -748,14 +815,17 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
     const isConfirmBeforeTaskDelete =
       this._configService.cfg()?.tasks?.isConfirmBeforeDelete ?? true;
 
-    if (isConfirmBeforeTaskDelete) {
+    const isNoLongerListed = this._issueSyncState.isMissing(this.task().id);
+    if (
+      isTaskDeleteConfirmRequired(
+        this.task(),
+        isConfirmBeforeTaskDelete,
+        isNoLongerListed,
+      )
+    ) {
       this._matDialog
         .open(DialogConfirmComponent, {
-          data: {
-            okTxt: T.F.TASK.D_CONFIRM_DELETE.OK,
-            message: T.F.TASK.D_CONFIRM_DELETE.MSG,
-            translateParams: { title: this.task().title },
-          },
+          data: getTaskDeleteConfirmData(this.task(), undefined, isNoLongerListed),
         })
         .afterClosed()
         .pipe(takeUntilDestroyed(this._destroyRef))
@@ -815,27 +885,50 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   }
 
   moveTaskUp(): void {
+    if (this._moveViewRow('up')) return;
     this._moveAndRefocus((id, parentId, isBacklog) =>
       this._taskService.moveUp(id, parentId, isBacklog),
     );
   }
 
   moveTaskDown(): void {
+    if (this._moveViewRow('down')) return;
     this._moveAndRefocus((id, parentId, isBacklog) =>
       this._taskService.moveDown(id, parentId, isBacklog),
     );
   }
 
   moveTaskToTop(): void {
+    if (this._moveViewRow('top')) return;
     this._moveAndRefocus((id, parentId, isBacklog) =>
       this._taskService.moveToTop(id, parentId, isBacklog),
     );
   }
 
   moveTaskToBottom(): void {
+    if (this._moveViewRow('bottom')) return;
     this._moveAndRefocus((id, parentId, isBacklog) =>
       this._taskService.moveToBottom(id, parentId, isBacklog),
     );
+  }
+
+  /**
+   * A view's own rows (subtasks shown on their own included) are ordered by
+   * the view, never by the stale active context. Nested subtasks keep their
+   * normal order within the parent.
+   */
+  private _moveViewRow(to: 'up' | 'down' | 'top' | 'bottom'): boolean {
+    const id = this.task().id;
+    if (!this._viewTaskList?.isRow(id)) {
+      return false;
+    }
+    // A row that moved into another section is leaving: the target section
+    // focuses its new row instead.
+    if (!this._viewTaskList.moveRow(id, to)) {
+      setTimeout(() => this.focusSelf());
+      setTimeout(() => this.focusSelf(), 10);
+    }
+    return true;
   }
 
   handleArrowUp(): void {
@@ -903,7 +996,8 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
 
   moveToBacklogWithFocus(): void {
     const t = this.task();
-    if (!t.projectId || t.parentId) {
+    // A view has no backlog of its own (and the active context is stale there).
+    if (!t.projectId || t.parentId || this._viewTaskList) {
       return;
     }
     // Gated on the ACTIVE context, like the context menu's move-to-backlog item
@@ -1127,6 +1221,7 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   }
 
   toggleTaskDone(): void {
+    if (!this._multiSelect.isTouchSelectionMode()) this._multiSelect.clear();
     window.clearTimeout(this._doneAnimationTimeout);
     this.focusNext(true, true);
     this._doneAnimationTimeout = this._taskService.toggleDoneWithAnimation(
@@ -1248,6 +1343,15 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
         id: this.task().id,
       }),
     );
+  }
+
+  clearSelectionOnTitleClick(event: MouseEvent): void {
+    if (
+      !isInteractiveTarget(event.target) &&
+      !isMultiSelectModifierEvent(event) &&
+      !this._multiSelect.isTouchSelectionMode()
+    )
+      this._multiSelect.clear();
   }
 
   titleBarClick(event: MouseEvent): void {

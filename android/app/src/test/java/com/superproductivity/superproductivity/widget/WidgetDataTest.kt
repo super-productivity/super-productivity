@@ -85,65 +85,83 @@ class WidgetDataTest {
 
     // --- parseCurrentTask: the "which task, which device" contract ---
 
+    private val NOW = 1_700_000_000_000L
+
     @Test
     fun parsesCurrentTask() {
         val json =
-            """{"v":1,"tasks":[],"currentTask":{"id":"t1","title":"Write report","deviceLabel":"Desktop","isLocal":false,"sinceTs":1700000000000,"focusCycle":2}}"""
+            """{"v":1,"tasks":[],"currentTask":{"id":"t1","title":"Write report","deviceLabel":"Desktop","isLocal":false}}"""
         assertEquals(
-            WidgetCurrentTask("t1", "Write report", "Desktop", false, 1700000000000L, 2),
-            WidgetData.parseCurrentTask(json)
+            WidgetCurrentTask("t1", "Write report", "Desktop", false),
+            WidgetData.parseCurrentTask(json, NOW)
         )
     }
 
     @Test
-    fun currentTaskSinceTsAndFocusCycleAreOptional() {
-        // AndroidWidgetCurrentTask omits both keys entirely when unavailable — never a
-        // fabricated value (see WidgetDataService / android-widget.selectors.ts).
-        val json =
-            """{"v":1,"tasks":[],"currentTask":{"id":"t1","title":"X","deviceLabel":"Desktop","isLocal":true}}"""
-        val task = WidgetData.parseCurrentTask(json)
-        assertNull(task?.sinceTs)
-        assertNull(task?.focusCycle)
-    }
-
-    @Test
-    fun currentTaskNonPositiveSinceTsIsRejected() {
-        // 0L is both optLong's default and a real instant; treat it as absent — same
-        // reasoning as AndroidWidgetData.validUntil.
-        val json =
-            """{"v":1,"tasks":[],"currentTask":{"id":"t1","title":"X","deviceLabel":"Desktop","isLocal":true,"sinceTs":0}}"""
-        assertNull(WidgetData.parseCurrentTask(json)?.sinceTs)
-    }
-
-    @Test
-    fun currentTaskJsonNullFocusCycleParsesToNull() {
-        // isNull guard: optString/optInt-style defaults would otherwise be indistinguishable
-        // from a real value.
-        val json =
-            """{"v":1,"tasks":[],"currentTask":{"id":"t1","title":"X","deviceLabel":"Desktop","isLocal":true,"focusCycle":null}}"""
-        assertNull(WidgetData.parseCurrentTask(json)?.focusCycle)
-    }
-
-    @Test
     fun nullCurrentTaskParsesToNull() {
-        assertNull(WidgetData.parseCurrentTask("""{"v":1,"tasks":[],"currentTask":null}"""))
+        assertNull(WidgetData.parseCurrentTask("""{"v":1,"tasks":[],"currentTask":null}""", NOW))
     }
 
     @Test
     fun missingCurrentTaskParsesToNull() {
-        assertNull(WidgetData.parseCurrentTask("""{"v":1,"tasks":[]}"""))
+        assertNull(WidgetData.parseCurrentTask("""{"v":1,"tasks":[]}""", NOW))
     }
 
     @Test
     fun currentTaskUnknownVersionParsesToNull() {
         val json =
             """{"v":2,"tasks":[],"currentTask":{"id":"t1","title":"X","deviceLabel":"Desktop","isLocal":false}}"""
-        assertNull(WidgetData.parseCurrentTask(json))
+        assertNull(WidgetData.parseCurrentTask(json, NOW))
+    }
+
+    @Test
+    fun remoteCurrentTaskIsShownBeforeItsExpiry() {
+        val json =
+            """{"v":1,"tasks":[],"currentTask":{"id":"t1","title":"X","deviceLabel":"Desktop","isLocal":false,"expiresAt":${NOW + 1}}}"""
+        assertEquals(WidgetCurrentTask("t1", "X", "Desktop", false), WidgetData.parseCurrentTask(json, NOW))
+    }
+
+    @Test
+    fun expiredRemoteCurrentTaskParsesToNull() {
+        val json =
+            """{"v":1,"tasks":[],"currentTask":{"id":"t1","title":"X","deviceLabel":"Desktop","isLocal":false,"expiresAt":$NOW}}"""
+        assertNull(WidgetData.parseCurrentTask(json, NOW))
+    }
+
+    @Test
+    fun parsesLocalCurrentTaskWithSinceAndFocusCycle() {
+        val json =
+            """{"v":1,"tasks":[],"currentTask":{"id":"t1","title":"X","deviceLabel":"Android","isLocal":true,"sinceTs":1700000000000,"focusCycle":2}}"""
+        assertEquals(
+            WidgetCurrentTask("t1", "X", "Android", true, 1700000000000L, 2),
+            WidgetData.parseCurrentTask(json, NOW)
+        )
+    }
+
+    @Test
+    fun currentTaskSinceTsAndFocusCycleAreOptional() {
+        // Omitted entirely when unavailable — never a fabricated value.
+        val task = WidgetData.parseCurrentTask(
+            """{"v":1,"tasks":[],"currentTask":{"id":"t1","title":"X","deviceLabel":"Android","isLocal":true}}""",
+            NOW
+        )
+        assertNull(task?.sinceTs)
+        assertNull(task?.focusCycle)
+    }
+
+    @Test
+    fun currentTaskNonPositiveSinceTsAndNullFocusCycleAreAbsent() {
+        val task = WidgetData.parseCurrentTask(
+            """{"v":1,"tasks":[],"currentTask":{"id":"t1","title":"X","deviceLabel":"Android","isLocal":true,"sinceTs":0,"focusCycle":null}}""",
+            NOW
+        )
+        assertNull(task?.sinceTs)
+        assertNull(task?.focusCycle)
     }
 
     @Test
     fun currentTaskUnparseableBlobDegradesInsteadOfThrowing() {
-        assertNull(WidgetData.parseCurrentTask("not json"))
+        assertNull(WidgetData.parseCurrentTask("not json", NOW))
     }
 
     @Test
@@ -323,5 +341,41 @@ class WidgetDataTest {
         // the last case — either way labelling a confidently wrong day.
         assertNull(WidgetData.dayStrToMs("2026-02-30"))
         assertNull(WidgetData.dayStrToMs("2026-07-17garbage"))
+    }
+
+    // CaptureInbox.pendingJson shape: oldest first.
+    private val captures =
+        """
+        [
+          {"v": 1, "id": "c1", "title": "Older @tomorrow", "source": "widget", "createdAt": 1},
+          {"v": 1, "id": "c2", "title": "Newer", "source": "widget", "createdAt": 2}
+        ]
+        """.trimIndent()
+
+    @Test
+    fun showsQuickAddsNotYetImportedAboveTheSnapshotNewestFirst() {
+        val tasks = WidgetData.withPendingCaptures(WidgetData.parse(blob), captures)
+        assertEquals(listOf("c2", "c1", "t1", "t2", "t3"), tasks.map { it.id })
+        // Raw title: short syntax is only applied when the app imports it.
+        assertEquals(
+            WidgetTask("c1", "Older @tomorrow", isDone = false, projectColor = null, isPending = true),
+            tasks[1]
+        )
+        assertTrue(tasks.drop(2).none { it.isPending })
+    }
+
+    @Test
+    fun aQuickAddAlreadyInTheSnapshotIsShownOnce() {
+        // Imported (capture id = task id) but not yet acknowledged.
+        val imported = WidgetData.parse(blob.replace("\"t1\"", "\"c1\""))
+        val tasks = WidgetData.withPendingCaptures(imported, captures)
+        assertEquals(listOf("c2", "c1", "t2", "t3"), tasks.map { it.id })
+        assertEquals(false, tasks[1].isPending)
+    }
+
+    @Test
+    fun noQuickAddsLeavesTheSnapshotAsIs() {
+        val tasks = WidgetData.parse(blob)
+        assertEquals(tasks, WidgetData.withPendingCaptures(tasks, "[]"))
     }
 }

@@ -12,6 +12,7 @@ import { SyncSessionValidationService } from './sync-session-validation.service'
 import { SyncCycleGuardService } from './sync-cycle-guard.service';
 import { SyncWrapperService } from '../../imex/sync/sync-wrapper.service';
 import { AuthFailSPError, MissingCredentialsSPError } from '../sync-exports';
+import { ClientUpdateRequiredSPError } from '../core/errors/sync-errors';
 import {
   ForceUploadFailedError,
   ForceUploadPendingOpsError,
@@ -339,6 +340,25 @@ describe('WsTriggeredDownloadService', () => {
     flushMicrotasks();
 
     expect(mockSyncService.downloadRemoteOps).toHaveBeenCalledTimes(1);
+  }));
+
+  it('should stop without retrying when the server requires an app update', fakeAsync(() => {
+    mockSyncService.downloadRemoteOps.and.rejectWith(new ClientUpdateRequiredSPError());
+
+    service.start();
+    notification$.next({ latestSeq: 4 });
+    tick(500);
+    flushMicrotasks();
+
+    // Past every retry window (1s, 2s, 4s): a transient failure would retry.
+    tick(10_000);
+    flushMicrotasks();
+    notification$.next({ latestSeq: 5 });
+    tick(500);
+    flushMicrotasks();
+
+    expect(mockSyncService.downloadRemoteOps).toHaveBeenCalledTimes(1);
+    expect(mockProviderManager.setSyncStatus).not.toHaveBeenCalledWith('ERROR');
   }));
 
   it('should stop listening after a MissingCredentialsSPError', fakeAsync(() => {

@@ -42,6 +42,13 @@ export interface FileBasedSyncData<
   vectorClock: VectorClock;
 
   /**
+   * Clock of the last explicit snapshot replacement, whose history is not in
+   * recentOps. Preserve it through ordinary uploads and compaction. Optional:
+   * older readers ignore it and older writers may omit it (#9170).
+   */
+  snapshotBaseClock?: VectorClock;
+
+  /**
    * Timestamp of last successful sync (epoch ms).
    */
   lastModified: number;
@@ -75,6 +82,16 @@ export interface FileBasedSyncData<
    * The syncVersion of the oldest operation in recentOps.
    */
   oldestOpSyncVersion?: number;
+
+  /**
+   * #10973: true when recentOps provably holds every operation of the batch
+   * `oldestOpSyncVersion` (writers since #10973 trim only at batch boundaries).
+   * Optional: older writers omit it and may have cut inside that batch, so
+   * readers treat absence as unproven. Older readers ignore it. A writer that
+   * changes recentOps must recompute it (appendRecentOpsAtBatchBoundary), never
+   * copy it forward: a stale `true` would suppress the #10973 gap.
+   */
+  oldestBatchComplete?: boolean;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -121,10 +138,14 @@ export interface FileBasedOpsFile<
   syncVersion: number;
   schemaVersion: number;
   vectorClock: VectorClock;
+  /** Last explicit replacement clock; same meaning as FileBasedSyncData. */
+  snapshotBaseClock?: VectorClock;
   lastModified: number;
   clientId: string;
   recentOps: SyncFileCompactOp<TCompactOperation>[];
   oldestOpSyncVersion?: number;
+  /** Same meaning as FileBasedSyncData.oldestBatchComplete (#10973). */
+  oldestBatchComplete?: boolean;
   snapshotRef: FileBasedSnapshotRef;
   /**
    * Present only while converting a legacy v2 file. Readers must finish or
@@ -207,19 +228,4 @@ export const FILE_BASED_SYNC_CONSTANTS = {
   SPLIT_TOMBSTONE_FORMAT: 'split' as const,
   SYNC_VERSION_STORAGE_KEY_PREFIX: 'FILE_SYNC_VERSION_',
   LEGACY_META_FILE: '__meta_',
-  // SPAP-9: when a seq-0 snapshot download has CONCURRENT vector clocks with the
-  // local client, attempt an entity-level last-write-wins merge of the remote
-  // recent ops instead of forcing the binary USE_LOCAL/USE_REMOTE conflict
-  // dialog.
-  //
-  // Default OFF (review follow-up): the merge only replays the capped `recentOps`
-  // buffer and never re-hydrates the compacted `snapshotState`, so a snapshot whose
-  // compacted base holds an entity this client never downloaded would silently drop
-  // that entity — turning a user-recoverable conflict dialog into permanent, global,
-  // undetectable data loss. `_tryConcurrentSnapshotMerge` now additionally refuses to
-  // merge unless the retained recentOps provably bridge the entire gap, but until that
-  // guard is validated by a real multi-client E2E harness (SPAP-34) we keep the
-  // feature opt-in and fall back to the conflict dialog. Flip to true only alongside
-  // that validation.
-  AUTO_MERGE_CONCURRENT_SNAPSHOT: false,
 } as const;

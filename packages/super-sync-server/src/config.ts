@@ -1,3 +1,10 @@
+import {
+  CaptureOAuthClient,
+  CaptureOAuthClientsSchema,
+  DEFAULT_CAPTURE_OAUTH_CLIENTS,
+} from './capture/capture-oauth-clients';
+import { CaptureReviewAccess, parseCaptureReviewAccess } from './capture/capture-review';
+import { isIP } from 'net';
 import * as path from 'path';
 import { Logger } from './logger';
 
@@ -81,6 +88,57 @@ export interface PrivacyConfig {
  */
 export const isConsentRequired = (config: ServerConfig): boolean => !!config.privacy;
 
+/**
+ * Which peers may set X-Forwarded-* so req.ip resolves to the real client IP
+ * instead of the proxy's. Two proxy-addr ranges, one per place the reverse
+ * proxy can sit: 'loopback' (127.0.0.1/8, ::1/128) for host networking or a
+ * same-pod sidecar, and 'uniquelocal' (10/8, 172.16/12, 192.168/16, fc00::/7)
+ * for the docker bridge or an ingress controller's pod network. Headers from
+ * any other peer are ignored, so a client that reaches the origin directly
+ * cannot spoof its IP.
+ *
+ * Must stay a value that validates the connecting address: fastify 5.12.1
+ * disabled the hop-count form (`trustProxy: 1`) because it ignores the peer
+ * address entirely, leaving the headers spoofable (GHSA-3m5p-2c4r-xxw2).
+ *
+ * req.ip is the @fastify/rate-limit key, so too narrow a value silently
+ * collapses every client into one bucket instead of failing loudly. Neither
+ * range covers 100.64.0.0/10 (CGNAT/Tailscale) or 169.254.0.0/16 — a
+ * deployment needing those sets TRUST_PROXY instead of this being widened for
+ * everyone.
+ */
+export const SERVER_TRUST_PROXY = ['loopback', 'uniquelocal'];
+
+const TRUST_PROXY_KEYWORDS = ['loopback', 'linklocal', 'uniquelocal'];
+
+/**
+ * Parse a TRUST_PROXY value into the list fastify's trustProxy option takes.
+ * Throws unless each entry is a keyword or an IP address with an optional
+ * range, so the spoofable hop-count and `true` forms never reach fastify; the
+ * range itself is left to proxy-addr, which rejects an invalid one when the
+ * server starts.
+ */
+export const parseTrustProxy = (value: string): string[] => {
+  const entries = value
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
+
+  for (const entry of entries) {
+    const rangeStart = entry.lastIndexOf('/');
+    const address = rangeStart === -1 ? entry : entry.slice(0, rangeStart);
+    const isValid = TRUST_PROXY_KEYWORDS.includes(entry) || isIP(address) !== 0;
+    if (!isValid) {
+      throw new Error(
+        `Invalid TRUST_PROXY entry "${entry}". Use proxy-addr keywords (loopback, linklocal, uniquelocal), ` +
+          'IP addresses or CIDR ranges; hop counts and "true" leave X-Forwarded-For spoofable.',
+      );
+    }
+  }
+
+  return entries;
+};
+
 export interface ServerConfig {
   port: number;
   host: string;
@@ -94,6 +152,8 @@ export interface ServerConfig {
     enabled: boolean;
     allowedOrigins?: CorsOrigin[];
   };
+  /** Peers whose X-Forwarded-* headers are trusted; see SERVER_TRUST_PROXY. */
+  trustProxy: string[];
   smtp?: {
     host: string;
     port: number;
@@ -117,6 +177,19 @@ export interface ServerConfig {
    * statement this whole change exists to remove.
    */
   dataRegion?: string;
+  /**
+   * Agent task capture: `/mcp` and `/api/capture/*`. Off by default, so a
+   * self-hosted server exposes no new public endpoint unless its operator opts
+   * in. Set CAPTURE_CONNECTOR_ENABLED=true.
+   */
+  captureConnectorEnabled: boolean;
+  captureOAuthClients: CaptureOAuthClient[];
+  /**
+   * A reusable consent-page code for connector directory reviewers, bound to
+   * one demo account. Off unless CAPTURE_REVIEW_EMAIL and CAPTURE_REVIEW_CODE
+   * are both set.
+   */
+  captureReview?: CaptureReviewAccess;
   /**
    * Test mode configuration. When enabled, provides endpoints for E2E testing.
    * NEVER enable in production!
@@ -150,6 +223,9 @@ const DEFAULT_CONFIG: ServerConfig = {
     enabled: true,
     allowedOrigins: DEFAULT_CORS_ORIGINS,
   },
+  trustProxy: SERVER_TRUST_PROXY,
+  captureConnectorEnabled: false,
+  captureOAuthClients: DEFAULT_CAPTURE_OAUTH_CLIENTS,
 };
 
 /**
@@ -221,6 +297,27 @@ export const loadConfigFromEnv = (
     throw new Error('PUBLIC_URL must use HTTPS in production');
   }
 
+  if (process.env.CAPTURE_OAUTH_CLIENTS) {
+    config.captureOAuthClients = CaptureOAuthClientsSchema.parse(
+      JSON.parse(process.env.CAPTURE_OAUTH_CLIENTS),
+    );
+  }
+  if (process.env.CAPTURE_CONNECTOR_ENABLED !== undefined) {
+    config.captureConnectorEnabled = process.env.CAPTURE_CONNECTOR_ENABLED === 'true';
+  }
+  const captureReview = parseCaptureReviewAccess(
+    process.env.CAPTURE_REVIEW_EMAIL,
+    process.env.CAPTURE_REVIEW_CODE,
+  );
+  if (captureReview) {
+    config.captureReview = captureReview;
+    if (!config.captureConnectorEnabled) {
+      Logger.warn(
+        'CAPTURE_REVIEW_EMAIL/CODE are set but CAPTURE_CONNECTOR_ENABLED is not true; the reviewer code has no effect.',
+      );
+    }
+  }
+
   // CORS configuration
   // CORS_ORIGINS overrides defaults (comma-separated list of origins)
   // Use CORS_ORIGINS=* for wildcard (NOT recommended for production)
@@ -264,6 +361,14 @@ export const loadConfigFromEnv = (
     // If origins are provided, implicitly enable CORS if not explicitly disabled
     if (process.env.CORS_ENABLED === undefined) {
       config.cors.enabled = true;
+    }
+  }
+
+  // Trusted reverse-proxy peers (comma-separated keywords, IPs or CIDR ranges)
+  if (process.env.TRUST_PROXY) {
+    const trustProxy = parseTrustProxy(process.env.TRUST_PROXY);
+    if (trustProxy.length > 0) {
+      config.trustProxy = trustProxy;
     }
   }
 

@@ -28,13 +28,19 @@ const config: CapacitorConfig = {
     },
     SystemBars: {
       // Let Capacitor's built-in SystemBars own edge-to-edge inset handling on
-      // Android (replaces the @capawesome edge-to-edge plugin). 'css' enables
-      // SystemBars' Android inset handling: it *injects* --safe-area-inset-* CSS
-      // vars on API >= 35, and passes native env(safe-area-inset-*) through on
-      // WebView >= 140. The WebView <140 / API <35 tail gets neither and falls
-      // back to env() (plus the native keyboard shim in CapacitorMainActivity).
-      // See docs/android-edge-to-edge-keyboard.md.
+      // Android (replaces the @capawesome edge-to-edge plugin). With 'css', from
+      // Capacitor 8.5.2 on, it either passes the native insets through to the
+      // WebView (WebView >= 140 with viewport-fit=cover) and mirrors them into
+      // --safe-area-inset-*, or else pads the window's DecorView for the system
+      // bars and keyboard itself (any API level) and writes 0px into the vars.
+      // See docs/android-edge-to-edge-keyboard.md ("Capacitor 8.5.2+").
       insetsHandling: 'css',
+      // src/index.html always declares viewport-fit=cover. Telling SystemBars up
+      // front keeps WebView >= 140 in the passthrough branch from the first
+      // inset pass, instead of padding the DecorView until the page commits and
+      // then jumping (it reads the meta tag back only at onPageCommitVisible).
+      // Must change together with that meta tag.
+      initialViewportFitValueHint: 'cover',
       // Initial bar icon style before the theme service boots; runtime updates
       // go through StatusBar.setStyle / NavigationBar (global-theme.service.ts).
       style: 'DARK',

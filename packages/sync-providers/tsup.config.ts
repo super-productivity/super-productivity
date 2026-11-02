@@ -1,5 +1,8 @@
 import { defineConfig } from 'tsup';
 
+// tsup's DTS build injects the deprecated `baseUrl`; TypeScript 6 errors on it.
+const DTS_COMPILER_OPTIONS = { ignoreDeprecations: '6.0' };
+
 export default defineConfig({
   entry: [
     'src/dropbox.ts',
@@ -18,7 +21,7 @@ export default defineConfig({
   ],
   format: ['esm', 'cjs'],
   tsconfig: 'tsconfig.build.json',
-  dts: { tsconfig: 'tsconfig.build.json' },
+  dts: { tsconfig: 'tsconfig.build.json', compilerOptions: DTS_COMPILER_OPTIONS },
   sourcemap: true,
   clean: true,
 });

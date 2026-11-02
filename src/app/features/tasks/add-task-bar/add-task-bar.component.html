@@ -54,6 +54,7 @@
           cdkAutosizeMaxRows="4"
           rows="1"
           spellcheck="false"
+          enterkeyhint="send"
           (keydown)="onInputKeydown($event)"
           (input)="onInputChange($event)"
           (scroll)="syncHighlightScroll()"
@@ -79,7 +80,7 @@
           [matTooltip]="T.F.TASK.ADD_TASK_BAR.TOOLTIP_ADD_TASK | translate"
           matTooltipPosition="above"
         >
-          <mat-icon>add</mat-icon>
+          <mat-icon>send</mat-icon>
         </button>
       </div>
 
@@ -189,6 +190,7 @@
     <add-task-bar-actions
       [isHideTagBtn]="!!planForDay()"
       [isHideDueBtn]="!!planForDay()"
+      [isHideDeadlineBtn]="!!planForDay()"
       (refocus)="focusInput()"
       (scheduleDialogOpenChange)="onScheduleDialogOpenChange($event)"
     >
@@ -222,12 +224,14 @@
 <mat-autocomplete
   #taskAutoCompleteEl="matAutocomplete"
   class="add-task-bar-panel"
-  (optionActivated)="onTaskSuggestionActivated($event?.option?.value)"
+  (optionActivated)="
+    onTaskSuggestionActivated($safeNavigationMigration($event?.option?.value))
+  "
   (optionSelected)="onTaskSuggestionSelected($event.option.value)"
   [autoActiveFirstOption]="true"
 >
   @for (
-    item of suggestions$ | async;
+    item of suggestions();
     track item.taskId || (item.issueData && item.issueData.id)
   ) {
     <mat-option [value]="item">
@@ -247,6 +251,11 @@
           [isHideTitle]="isHideTagTitles()"
         ></tag>
       }
+    </mat-option>
+  }
+  @if (isShowNoSearchMatches()) {
+    <mat-option disabled>
+      {{ T.F.TASK.ADD_TASK_BAR.NO_SEARCH_MATCHES | translate }}
     </mat-option>
   }
 </mat-autocomplete>

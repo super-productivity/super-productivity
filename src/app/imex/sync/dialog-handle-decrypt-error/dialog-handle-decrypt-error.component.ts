@@ -1,11 +1,10 @@
-import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import {
   MatDialogActions,
   MatDialogContent,
   MatDialogRef,
   MatDialogTitle,
 } from '@angular/material/dialog';
-import { TranslateService } from '@ngx-translate/core';
 import { T } from '../../../t.const';
 import { MatFormField, MatLabel } from '@angular/material/form-field';
 import { MatInput } from '@angular/material/input';
@@ -16,9 +15,14 @@ import { TranslatePipe } from '@ngx-translate/core';
 import { SyncConfigService } from '../sync-config.service';
 import { SnackService } from '../../../core/snack/snack.service';
 import { SyncLog } from '../../../core/log';
-import { confirmDialog } from '../../../util/native-dialogs';
-import { SyncLocalStateService } from '../../../op-log/sync/sync-local-state.service';
 
+/**
+ * Shown when remote data cannot be decrypted. It deliberately offers no way to
+ * overwrite the server (#9256): a failed decrypt cannot tell a wrong password
+ * from a corrupt op or one under another key, and after a kept decrypted prefix
+ * this device may hold only part of the data. Replacing the server stays a
+ * deliberate action in Settings (Force Overwrite / Change Password).
+ */
 @Component({
   selector: 'dialog-handle-decrypt-error',
   templateUrl: './dialog-handle-decrypt-error.component.html',
@@ -40,67 +44,12 @@ import { SyncLocalStateService } from '../../../op-log/sync/sync-local-state.ser
 export class DialogHandleDecryptErrorComponent {
   private _syncConfigService = inject(SyncConfigService);
   private _snackService = inject(SnackService);
-  private _translateService = inject(TranslateService);
-  private _syncLocalStateService = inject(SyncLocalStateService);
 
   private _matDialogRef =
     inject<MatDialogRef<DialogHandleDecryptErrorComponent>>(MatDialogRef);
 
   T: typeof T = T;
   passwordVal: string = '';
-  isForceUploadPending = signal(false);
-
-  async updatePWAndForceUpload(): Promise<void> {
-    // The guard below awaits, so a second click could otherwise start a second
-    // pass and open two confirms — i.e. two clean slates. A signal, not a plain
-    // field, because the button's [disabled] binding reads it under OnPush.
-    if (this.isForceUploadPending()) {
-      return;
-    }
-    this.isForceUploadPending.set(true);
-    try {
-      await this._forceUploadFlow();
-    } catch (error) {
-      // Reading local state can fail (e.g. the archive DB read behind the
-      // guard). Without this the rejection would be swallowed by the click
-      // handler and the user would see nothing happen at all.
-      SyncLog.err('Failed to evaluate the force-upload guard', error);
-      this._snackService.open({
-        type: 'ERROR',
-        msg: T.F.SYNC.S.OVERWRITE_SERVER_FAILED,
-        translateParams: {
-          message: error instanceof Error ? error.message : 'Unknown error',
-        },
-      });
-    } finally {
-      this.isForceUploadPending.set(false);
-    }
-  }
-
-  private async _forceUploadFlow(): Promise<void> {
-    // #9256: this dialog is shown to a client that failed to DOWNLOAD, so the
-    // one offered alternative to retrying the password destroys the server copy
-    // via a clean-slate SYNC_IMPORT. Refuse when there is nothing here to put
-    // in its place — the user is trying to recover data, not discard it.
-    if (await this._syncLocalStateService.hasNothingWorthUploading()) {
-      this._syncLocalStateService.warnNothingWorthUploading();
-      return;
-    }
-    if (!confirmDialog(this._translateService.instant(T.F.SYNC.C.DECRYPT_OVERWRITE))) {
-      return;
-    }
-    try {
-      await this._syncConfigService.updateEncryptionPassword(this.passwordVal);
-      this.passwordVal = '';
-      this._matDialogRef.close({ isForceUpload: true });
-    } catch (error) {
-      SyncLog.err('Failed to save encryption password for force upload', error);
-      this._snackService.open({
-        type: 'ERROR',
-        msg: T.F.SYNC.S.PERSIST_FAILED,
-      });
-    }
-  }
 
   async updatePwAndResync(): Promise<void> {
     // The template's formEl.valid gate is vacuous (the input has no validators),

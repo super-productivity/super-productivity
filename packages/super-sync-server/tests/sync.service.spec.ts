@@ -1279,6 +1279,60 @@ describe('SyncService', () => {
       );
     });
 
+    it('classifies an exact intra-batch retry of an oversized-clock op as DUPLICATE_OPERATION', async () => {
+      // Storage pruning protects the full-state author; the in-batch duplicate
+      // check must compare against the op as submitted, not the pruned first
+      // occurrence, or the client permanently rejects an already-stored op.
+      const service = new SyncService();
+      const fullStateAuthor = 'import-author';
+      const uploadClient = 'post-import-client';
+      const fullStateOp = makeOp({
+        clientId: fullStateAuthor,
+        actionType: '[SP_ALL] Load(import) all data',
+        opType: 'SYNC_IMPORT',
+        entityType: 'ALL',
+        entityId: undefined,
+        payload: { TASK: {} },
+        vectorClock: { [fullStateAuthor]: 1 },
+      });
+      const oversizedDelta = makeOp({
+        clientId: uploadClient,
+        entityId: 'post-import-task',
+        vectorClock: {
+          [fullStateAuthor]: 1,
+          [uploadClient]: 2,
+          ...Object.fromEntries(
+            Array.from({ length: 25 }, (_, index) => [
+              `old-client-${index}`,
+              100 + index,
+            ]),
+          ),
+        },
+        timestamp: fullStateOp.timestamp + 1,
+      });
+      const retryDelta = makeOp({
+        ...oversizedDelta,
+        vectorClock: { ...oversizedDelta.vectorClock },
+      });
+
+      expect(
+        (await service.uploadOps(userId, fullStateAuthor, [fullStateOp]))[0].accepted,
+      ).toBe(true);
+
+      const results = await service.uploadOps(userId, uploadClient, [
+        oversizedDelta,
+        retryDelta,
+      ]);
+
+      expect(results[0]).toEqual(expect.objectContaining({ accepted: true }));
+      expect(results[1]).toEqual(
+        expect.objectContaining({
+          accepted: false,
+          errorCode: SYNC_ERROR_CODES.DUPLICATE_OPERATION,
+        }),
+      );
+    });
+
     it('looks the full-state author up at most once per upload', async () => {
       // The answer cannot change mid-transaction unless this upload itself
       // accepts a full-state op, so one oversized op must not become one query.

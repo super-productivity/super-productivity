@@ -13,10 +13,11 @@ import kotlin.math.abs
  * Fetches operations from the SuperSync server and parses them
  * for reminder-relevant changes (scheduled, unscheduled, done, deleted, archived).
  *
- * IMPORTANT: The op-log system returns empty entityChanges for most actions —
- * only TIME_TRACKING and CRT (addTask) ops populate it. For schedule/unschedule/
- * deadline actions, the actual data is in actionPayload. This provider uses
- * action-type matching to handle both paths.
+ * IMPORTANT: The op-log system returns empty entityChanges for task actions
+ * (only time-tracking ops populate it — see operation-capture.service.ts), so
+ * reminder data comes from actionPayload. This provider matches on actionType
+ * to know each payload's shape; an action type missing here means reminders it
+ * sets on another device only reach this phone once the app is opened.
  *
  * SuperSync encrypts op payloads end-to-end (mandatory since #8670), so the
  * payload arrives as a base64 string, not JSON. [payloadDecryptor] makes those
@@ -51,6 +52,15 @@ class SuperSyncBackgroundProvider(
         private const val ACTION_SCHEDULE_WITH_TIME = "[Task Shared] scheduleTaskWithTime"
         private const val ACTION_RESCHEDULE_WITH_TIME = "[Task Shared] reScheduleTaskWithTime"
         private const val ACTION_SET_DEADLINE = "[Task Shared] setDeadline"
+
+        // Actions whose payload carries task fields (remindAt, isDone, ...) as a
+        // patch or snapshot. See [extractTaskPatches] for each payload shape.
+        private const val ACTION_ADD_TASK = "[Task Shared] addTask"
+        private const val ACTION_UPDATE_TASK = "[Task Shared] updateTask"
+        private const val ACTION_UPDATE_TASKS = "[Task Shared] updateTasks"
+        private const val ACTION_APPLY_SHORT_SYNTAX = "[Task Shared] applyShortSyntax"
+        // Synthetic conflict-resolution op: toLwwUpdateActionType('TASK') in packages/sync-core
+        private const val ACTION_TASK_LWW_UPDATE = "[TASK] LWW Update"
 
         private val httpClient = OkHttpClient.Builder()
             .connectTimeout(15, TimeUnit.SECONDS)
@@ -152,12 +162,13 @@ class SuperSyncBackgroundProvider(
         }
         val now = System.currentTimeMillis()
 
-        // Keyed by (taskId, isDueDate) so later ops naturally overwrite earlier ones
+        // Keyed by (taskId, isDeadline) so later ops naturally overwrite earlier ones
         val reminderMap = mutableMapOf<Pair<String, Boolean>, ReminderToSchedule>()
-        // Per-task: tracks whether the LAST op affecting this task was a cancel or a schedule.
-        // Ops are in server sequence order, so processing forward ensures the latest op wins.
-        // This handles dismiss-then-reschedule: the reschedule (later op) takes precedence.
-        val taskLastAction = mutableMapOf<String, String>()
+        // Tasks whose alarms are all cancelled before their collected reminders
+        // are scheduled. Ops are in server sequence order, so processing forward
+        // ensures the latest op wins: dismiss-then-reschedule keeps only the reschedule.
+        val taskIdsToCancel = mutableSetOf<String>()
+        val unreadableTaskIds = mutableSetOf<String>()
 
         for (i in 0 until ops.length()) {
             val serverOp = ops.getJSONObject(i)
@@ -165,32 +176,39 @@ class SuperSyncBackgroundProvider(
             // Lazy so envelope-only ops (e.g. DEL) never pay for decryption
             val payload = lazy(LazyThreadSafetyMode.NONE) { resolvePayload(op) }
 
-            // Process schedules first so that within the same op, cancels take precedence
             val tempMap = mutableMapOf<Pair<String, Boolean>, ReminderToSchedule>()
             extractRemindersToSchedule(op, payload, tempMap, now)
-            for ((key, reminder) in tempMap) {
-                reminderMap[key] = reminder
-                taskLastAction[reminder.taskId] = "schedule"
-            }
-
             val cancelIds = mutableSetOf<String>()
             extractReminderRelevantTaskIds(op, payload, cancelIds)
+            // Needed but undecryptable (no key for its salt yet): the alarm
+            // receiver can't trust a "not stale" answer for these tasks.
+            if (payload.isInitialized() && payload.value == null && op.opt("payload") is String) {
+                collectEntityIds(op, unreadableTaskIds)
+            }
+
             for (id in cancelIds) {
-                taskLastAction[id] = "cancel"
+                taskIdsToCancel.add(id)
+                // A cancel clears every alarm slot of the task, so reminders
+                // collected from earlier ops are stale: drop them, or a later
+                // schedule of the other slot (e.g. setDeadline) would revive them.
+                reminderMap.keys.removeAll { it.first == id }
+            }
+            for ((key, reminder) in tempMap) {
+                reminderMap[key] = reminder
+                // A schedule supersedes an EARLIER op's cancel. The same op's
+                // cancel stays: it clears the slot this op does not set, e.g. an
+                // LWW snapshot that sets remindAt and lists the absent
+                // deadlineRemindAt in clearedFields. Done ops schedule nothing.
+                if (reminder.taskId !in cancelIds) taskIdsToCancel.remove(reminder.taskId)
             }
         }
 
-        val taskIdsToCancel = taskLastAction
-            .filter { it.value == "cancel" }
-            .keys
-            .toSet()
-        val reminders = reminderMap.values.filter { taskLastAction[it.taskId] == "schedule" }
-
         return ReminderChangeResult(
             taskIdsToCancel = taskIdsToCancel,
-            remindersToSchedule = reminders,
+            remindersToSchedule = reminderMap.values.toList(),
             latestSeq = latestSeq,
-            hasMore = hasMore
+            hasMore = hasMore,
+            unreadableTaskIds = unreadableTaskIds,
         )
     }
 
@@ -268,9 +286,10 @@ class SuperSyncBackgroundProvider(
             // Each entry has: { entityType, entityId, opType, changes: { isDone, remindAt, ... } }
             if (checkEntityChanges(payload, out)) return
 
-            // Secondary: check actionPayload.task.changes for single-entity updates
-            if (checkActionPayload(payload)) {
-                collectEntityIds(op, out)
+            // Secondary: task fields carried in actionPayload (updateTask, updateTasks,
+            // applyShortSyntax, LWW Update)
+            for (patch in extractTaskPatches(actionType, payload)) {
+                if (isCancellingPatch(patch)) out.add(patch.taskId)
             }
         }
     }
@@ -302,15 +321,110 @@ class SuperSyncBackgroundProvider(
     }
 
     /**
-     * Check p.actionPayload for reminder-relevant changes.
-     * Structure: actionPayload.task.changes.{isDone, remindAt, deadlineRemindAt}
+     * Task fields carried by one op for one task.
+     *
+     * @param fields the changed fields (a patch) or the whole task (a snapshot)
+     * @param isSnapshot true when absent fields mean "cleared", i.e. a full
+     *   replacement of the task (LWW Update in replace mode)
+     * @param clearedFields fields cleared out-of-band (LWW patch `clearedFields`,
+     *   because JSON drops undefined-valued keys — #9776)
      */
-    private fun checkActionPayload(payload: JSONObject): Boolean {
-        val actionPayload = payload.optJSONObject("actionPayload") ?: return false
-        val task = actionPayload.optJSONObject("task") ?: return false
-        val changes = task.optJSONObject("changes") ?: return false
-        return isReminderRelevantChanges(changes)
+    private data class TaskPatch(
+        val taskId: String,
+        val fields: JSONObject,
+        val title: String,
+        val isSnapshot: Boolean = false,
+        val clearedFields: Set<String> = emptySet(),
+    )
+
+    /**
+     * Maps the reminder-carrying payload shapes of task actions to [TaskPatch]es.
+     * Shapes (src/app/root-store/meta/task-shared.actions.ts):
+     *   addTask:          { task: Task }
+     *   updateTask:       { task: { id, changes } }
+     *   updateTasks:      { tasks: [{ id, changes }] }
+     *   applyShortSyntax: { task: Task, taskChanges, schedulingInfo?: { remindAt? } }
+     *   [TASK] LWW Update: payload { actionPayload: Task | Partial<Task>, lwwUpdateMode, clearedFields? }
+     */
+    private fun extractTaskPatches(actionType: String, payload: JSONObject): List<TaskPatch> {
+        val actionPayload = payload.optJSONObject("actionPayload") ?: return emptyList()
+        return when (actionType) {
+            ACTION_ADD_TASK -> {
+                val task = actionPayload.optJSONObject("task") ?: return emptyList()
+                val id = task.optString("id", "")
+                if (id.isEmpty()) emptyList()
+                else listOf(TaskPatch(id, task, task.optString("title", "")))
+            }
+            ACTION_UPDATE_TASK -> {
+                val task = actionPayload.optJSONObject("task") ?: return emptyList()
+                listOfNotNull(updateToPatch(task))
+            }
+            ACTION_UPDATE_TASKS -> {
+                val tasks = actionPayload.optJSONArray("tasks") ?: return emptyList()
+                (0 until tasks.length()).mapNotNull { i -> tasks.optJSONObject(i)?.let(::updateToPatch) }
+            }
+            ACTION_APPLY_SHORT_SYNTAX -> {
+                val task = actionPayload.optJSONObject("task") ?: return emptyList()
+                val id = task.optString("id", "")
+                if (id.isEmpty()) return emptyList()
+                // Copy so merging schedulingInfo never mutates the parsed payload
+                val changes = JSONObject(actionPayload.optJSONObject("taskChanges")?.toString() ?: "{}")
+                // Mirrors short-syntax-shared.reducer.ts: schedulingInfo.remindAt is
+                // applied only together with dueWithTime and only as a value
+                // (`remindAt ?? undefined`) — null or day-only planning never clears
+                // the task's reminder, so neither may cancel the alarm here.
+                val schedulingInfo = actionPayload.optJSONObject("schedulingInfo")
+                if (schedulingInfo != null &&
+                    hasTimestamp(schedulingInfo, "dueWithTime") &&
+                    hasTimestamp(schedulingInfo, "remindAt")
+                ) {
+                    changes.put("remindAt", schedulingInfo.optLong("remindAt"))
+                }
+                val title = changes.optString("title", "").ifEmpty { task.optString("title", "") }
+                listOf(TaskPatch(id, changes, title))
+            }
+            ACTION_TASK_LWW_UPDATE -> {
+                val id = actionPayload.optString("id", "")
+                if (id.isEmpty()) return emptyList()
+                val cleared = payload.optJSONArray("clearedFields")
+                    ?.let { arr -> (0 until arr.length()).map { arr.optString(it, "") }.toSet() }
+                    ?: emptySet()
+                listOf(
+                    TaskPatch(
+                        id,
+                        actionPayload,
+                        actionPayload.optString("title", ""),
+                        isSnapshot = payload.optString("lwwUpdateMode", "") == "replace",
+                        clearedFields = cleared,
+                    )
+                )
+            }
+            else -> emptyList()
+        }
     }
+
+    private fun updateToPatch(update: JSONObject): TaskPatch? {
+        val id = update.optString("id", "")
+        val changes = update.optJSONObject("changes") ?: return null
+        if (id.isEmpty()) return null
+        return TaskPatch(id, changes, changes.optString("title", ""))
+    }
+
+    /**
+     * True when the patch means the task's reminders must go: it is marked done,
+     * or its reminder is cleared — explicitly (null), out-of-band (clearedFields),
+     * or by a snapshot that no longer carries any reminder.
+     */
+    private fun isCancellingPatch(patch: TaskPatch): Boolean {
+        if (isReminderRelevantChanges(patch.fields)) return true
+        if ("remindAt" in patch.clearedFields || "deadlineRemindAt" in patch.clearedFields) return true
+        return patch.isSnapshot &&
+            !hasTimestamp(patch.fields, "remindAt") &&
+            !hasTimestamp(patch.fields, "deadlineRemindAt")
+    }
+
+    private fun hasTimestamp(obj: JSONObject, key: String): Boolean =
+        obj.has(key) && !obj.isNull(key) && obj.optLong(key, 0L) > 0L
 
     /**
      * Check if a changes object contains reminder-relevant field changes.
@@ -343,10 +457,13 @@ class SuperSyncBackgroundProvider(
     /**
      * Extracts reminders to schedule from an operation.
      *
-     * Two detection paths:
-     * 1. entityChanges — populated for CRT ops (addTask) where the full entity is in changes.
-     * 2. actionPayload — for schedule/reschedule/setDeadline actions where the op-log
-     *    returns empty entityChanges and the reminder data is only in the action payload.
+     * Three detection paths:
+     * 1. entityChanges — kept for payloads that populate it (the op-log currently
+     *    returns empty entityChanges for task actions).
+     * 2. task fields in actionPayload — addTask, updateTask(s), applyShortSyntax
+     *    (e.g. "Call mom @15:00" typed on desktop) and LWW Update (see [extractTaskPatches]).
+     * 3. actionPayload — for schedule/reschedule/setDeadline actions where the
+     *    reminder data sits at the payload top level.
      */
     private fun extractRemindersToSchedule(
         op: JSONObject,
@@ -364,7 +481,7 @@ class SuperSyncBackgroundProvider(
         val payload = payloadLazy.value ?: return
         val actionType = op.optString("actionType", "")
 
-        // Path 1: Check entityChanges (populated for CRT/addTask ops)
+        // Path 1: Check entityChanges (for payloads that populate it)
         val entityChanges = payload.optJSONArray("entityChanges")
         if (entityChanges != null) {
             for (i in 0 until entityChanges.length()) {
@@ -375,6 +492,8 @@ class SuperSyncBackgroundProvider(
                 if (entityId.isEmpty()) continue
 
                 val changes = entry.optJSONObject("changes") ?: continue
+                // A done task gets no alarm; its cancel comes from the same op
+                if (changes.optBoolean("isDone", false)) continue
 
                 val title = changes.optString("title", "").ifEmpty {
                     payload.optJSONObject("actionPayload")
@@ -386,20 +505,39 @@ class SuperSyncBackgroundProvider(
                 if (changes.has("remindAt") && !changes.isNull("remindAt")) {
                     val remindAt = changes.optLong("remindAt", 0L)
                     if (remindAt > now) {
-                        out[Pair(entityId, false)] = ReminderToSchedule(entityId, title, remindAt, isDueDate = false)
+                        out[Pair(entityId, false)] = ReminderToSchedule(entityId, title, remindAt, isDeadline = false)
                     }
                 }
 
                 if (changes.has("deadlineRemindAt") && !changes.isNull("deadlineRemindAt")) {
                     val deadlineRemindAt = changes.optLong("deadlineRemindAt", 0L)
                     if (deadlineRemindAt > now) {
-                        out[Pair(entityId, true)] = ReminderToSchedule(entityId, title, deadlineRemindAt, isDueDate = true)
+                        out[Pair(entityId, true)] = ReminderToSchedule(entityId, title, deadlineRemindAt, isDeadline = true)
                     }
                 }
             }
         }
 
-        // Path 2: Check actionPayload for schedule/setDeadline actions.
+        // Path 2: task fields in actionPayload (addTask, updateTask(s), applyShortSyntax,
+        // LWW Update). A done task gets no alarm — its cancel wins in parseResponse anyway.
+        for (patch in extractTaskPatches(actionType, payload)) {
+            if (patch.fields.optBoolean("isDone", false)) continue
+            val title = patch.title.ifEmpty { "Task reminder" }
+            if (hasTimestamp(patch.fields, "remindAt")) {
+                val remindAt = patch.fields.optLong("remindAt", 0L)
+                if (remindAt > now) {
+                    out[Pair(patch.taskId, false)] = ReminderToSchedule(patch.taskId, title, remindAt, isDeadline = false)
+                }
+            }
+            if (hasTimestamp(patch.fields, "deadlineRemindAt")) {
+                val deadlineRemindAt = patch.fields.optLong("deadlineRemindAt", 0L)
+                if (deadlineRemindAt > now) {
+                    out[Pair(patch.taskId, true)] = ReminderToSchedule(patch.taskId, title, deadlineRemindAt, isDeadline = true)
+                }
+            }
+        }
+
+        // Path 3: Check actionPayload for schedule/setDeadline actions.
         // These actions have empty entityChanges — the reminder fields are in actionPayload.
         // scheduleTaskWithTime / reScheduleTaskWithTime payload:
         //   { task: { id, title, ... }, dueWithTime: number, remindAt?: number, ... }
@@ -418,7 +556,7 @@ class SuperSyncBackgroundProvider(
                     val remindAt = actionPayload.optLong("remindAt", 0L)
                     if (remindAt > now) {
                         val title = taskObj.optString("title", "").ifEmpty { "Task reminder" }
-                        out[Pair(taskId, false)] = ReminderToSchedule(taskId, title, remindAt, isDueDate = false)
+                        out[Pair(taskId, false)] = ReminderToSchedule(taskId, title, remindAt, isDeadline = false)
                     }
                 }
             }
@@ -429,7 +567,7 @@ class SuperSyncBackgroundProvider(
                 if (actionPayload.has("deadlineRemindAt") && !actionPayload.isNull("deadlineRemindAt")) {
                     val deadlineRemindAt = actionPayload.optLong("deadlineRemindAt", 0L)
                     if (deadlineRemindAt > now) {
-                        out[Pair(taskId, true)] = ReminderToSchedule(taskId, "Task reminder", deadlineRemindAt, isDueDate = true)
+                        out[Pair(taskId, true)] = ReminderToSchedule(taskId, "Task reminder", deadlineRemindAt, isDeadline = true)
                     }
                 }
             }

@@ -3,7 +3,7 @@ export default {
   extends: 'stylelint-config-recommended-scss',
   rules: {
     'no-empty-source': null,
-    'block-no-empty': [true, { severity: 'warning' }],
+    'block-no-empty': true,
     'no-descending-specificity': null,
     'font-family-no-missing-generic-family-keyword': [
       true,

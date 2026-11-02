@@ -56,9 +56,10 @@ tests, or a focused contract.
 | Contract | [contributor-sync-model.md](./contributor-sync-model.md)                       | Contributor invariant: one replay-atomic transition = one op; replayed/remote ops must not re-trigger effects                                     |
 | Contract | [section-conflict-replay.md](./section-conflict-replay.md)                     | SECTION conflict commutativity, state-projected semantic replay, atomic replacement, and released-client compensation                             |
 | Contract | [package-boundaries.md](./package-boundaries.md)                               | Dependency/ownership boundaries for `@sp/sync-core`, `@sp/sync-providers`, app wiring                                                             |
-| Contract | [conflict-journal-and-review.md](./conflict-journal-and-review.md)             | Disjoint-field auto-merge plus the dormant device-local journal/review capability and its security boundary                                       |
+| Contract | [conflict-journal-and-review.md](./conflict-journal-and-review.md)             | Disjoint-field auto-merge, conflict composition limits and device-local journal retirement                                                        |
 | Contract | [persisted-model-fields.md](./persisted-model-fields.md)                       | Adding fields to persisted models: optional-plus-default invariant, heal paths, and the latent hydration-validation failure (#8965)               |
 | Contract | [local-recovery-points.md](./local-recovery-points.md)                         | Device-local snapshot ring before any full-state replacement, the backups list, and the shrink banner                                             |
+| Contract | [client-version-floor.md](./client-version-floor.md)                           | SuperSync minimum-app-version refusal: the shipped client contract and what enforcing it on a server requires                                     |
 | Contract | [vector-clocks.md](./vector-clocks.md)                                         | Vector-clock implementation, storage/pruning ownership, and history                                                                               |
 | Contract | [supersync-encryption-architecture.md](./supersync-encryption-architecture.md) | End-to-end encryption wire format, key lifecycle, integrity boundary, and known limitations                                                       |
 | Mixed    | [operation-log-architecture.md](./operation-log-architecture.md)               | Deep rationale and implementation history plus the normative A.7.11 cross-version/schema-bump contract; use executable owners for volatile detail |
@@ -73,9 +74,12 @@ tests, or a focused contract.
 
 ## Active plans
 
-| Document                                     | Scope                                                                                  |
-| -------------------------------------------- | -------------------------------------------------------------------------------------- |
-| [sqlite-migration.md](./sqlite-migration.md) | Current native SQLite durability rationale, landed foundation, remaining rollout gates |
+| Document                                                             | Scope                                                                                       |
+| -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| [sqlite-migration.md](./sqlite-migration.md)                         | Parked native SQLite migration: durability rationale and why it was stopped                 |
+| [lww-field-level-resolution.md](./lww-field-level-resolution.md)     | Proposal: LWW resolutions that carry only the fields that must win (#10379, #10260, #10385) |
+| [protocol-change-options.md](./protocol-change-options.md)           | Decisions D1–D11 after the stopping point; option (6) spike rejected (D11, #10393)          |
+| [order-and-membership-options.md](./order-and-membership-options.md) | D5: list order and membership, measured divergence and options; design only (#10393)        |
 
 ## Related
 

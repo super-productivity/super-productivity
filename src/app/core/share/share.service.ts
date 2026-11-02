@@ -526,8 +526,11 @@ export class ShareService {
           : `file:///${resolvedUri}`;
 
       Log.debug('[ShareService] shareCanvasViaNative', {
+        // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
         resolvedUri,
+        // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
         fileUrl,
+        // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
         relativePath,
       });
 
@@ -536,6 +539,7 @@ export class ShareService {
           path: relativePath,
           directory: Directory.Cache,
         });
+        // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
         Log.debug('[ShareService] shareCanvasViaNative stat', stat);
       } catch (statError) {
         Log.warn('[ShareService] stat failed for shared image', statError);
@@ -572,8 +576,11 @@ export class ShareService {
         };
       }
       Log.warn('Native image share failed:', error, {
+        // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
         fileUrl: fileUrl ?? 'n/a',
+        // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
         resolvedUri: resolvedUri ?? 'n/a',
+        // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
         relativePath,
       });
       ShareFileUtil.scheduleCacheCleanup(relativePath);

@@ -2,6 +2,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 // Spec imports only from the barrel so the public-API contract is the
 // single tested surface.
 import {
+  DecryptFailedError,
   WebCryptoNotAvailableError,
   clearSessionKeyCache,
   decrypt,
@@ -101,6 +102,53 @@ describe('encryption', () => {
   it('fails to decrypt with the wrong password', async () => {
     const encrypted = await encrypt(DATA, PASSWORD);
     await expect(decrypt(encrypted, 'wrong_password')).rejects.toBeDefined();
+  });
+
+  describe('Argon2 failure diagnostics when the legacy fallback also fails (#4514)', () => {
+    afterEach(() => {
+      setArgon2ParamsForTesting({ parallelism: 1, memorySize: 8, iterations: 1 });
+    });
+
+    it('reports the AES step and both error names for a wrong password', async () => {
+      const encrypted = await encrypt(DATA, PASSWORD);
+      const err = await decrypt(encrypted, 'wrong_password').catch((e: unknown) => e);
+
+      expect(err).toBeInstanceOf(DecryptFailedError);
+      const failure = err as DecryptFailedError;
+      expect(failure.primaryStage).toBe('aes');
+      expect(failure.primaryError.name).toBe('OperationError');
+      expect(failure.fallbackError.name).toBe('OperationError');
+      expect(failure.message).not.toContain('wrong_password');
+      expect(failure.message).not.toContain(PASSWORD);
+    });
+
+    it('reports a key-derivation failure instead of hiding it behind the legacy error', async () => {
+      const encrypted = await encrypt(DATA, PASSWORD);
+      clearSessionKeyCache();
+      // hash-wasm rejects memorySize < 8 * parallelism before deriving.
+      setArgon2ParamsForTesting({ parallelism: 2, memorySize: 8, iterations: 1 });
+
+      const err = await decrypt(encrypted, PASSWORD).catch((e: unknown) => e);
+
+      expect(err).toBeInstanceOf(DecryptFailedError);
+      const failure = err as DecryptFailedError;
+      expect(failure.primaryStage).toBe('kdf');
+      expect(failure.primaryError.name).toBe('Error');
+      expect(failure.fallbackError.name).toBe('OperationError');
+      expect(failure.message).toContain('argon2id kdf step');
+      expect(failure.message).toMatch(/memory/i);
+      expect(failure.message).not.toContain(PASSWORD);
+    });
+
+    it('reports the AES step from decryptBatch for a wrong password', async () => {
+      const encrypted = await encryptBatch([DATA], PASSWORD);
+      const err = await decryptBatch(encrypted, 'wrong_password').catch(
+        (e: unknown) => e,
+      );
+
+      expect(err).toBeInstanceOf(DecryptFailedError);
+      expect((err as DecryptFailedError).primaryStage).toBe('aes');
+    });
   });
 
   describe('Legacy PBKDF2 compatibility', () => {
@@ -483,6 +531,20 @@ describe('encryption', () => {
       for (let i = 0; i < len; i++) binary += String.fromCharCode(bytes[i]);
       const invalid = btoa(binary);
       await expect(decrypt(invalid, PASSWORD)).rejects.toBeDefined();
+    });
+
+    it('keeps rethrowing WebCryptoNotAvailableError when the Argon2 path fails first', async () => {
+      const encrypted = await encrypt(DATA, PASSWORD);
+      await expect(decrypt(encrypted, 'wrong_password')).rejects.toBeInstanceOf(
+        WebCryptoNotAvailableError,
+      );
+    });
+
+    it('keeps rethrowing WebCryptoNotAvailableError from decryptBatch when the Argon2 path fails first', async () => {
+      const encrypted = await encryptBatch([DATA], PASSWORD);
+      await expect(decryptBatch(encrypted, 'wrong_password')).rejects.toBeInstanceOf(
+        WebCryptoNotAvailableError,
+      );
     });
 
     it('throws WebCryptoNotAvailableError on legacy decrypt in fallback mode', async () => {

@@ -14,10 +14,7 @@ export class IssueIconPipe implements PipeTransform {
       return undefined;
     }
     if (this._pluginRegistry.hasProvider(value)) {
-      const icon = this._pluginRegistry.getIcon(value);
-      // 'extension' fallback means provider is not registered (e.g. plugin disabled)
-      // Return undefined since 'extension' is not a registered SVG icon
-      return icon === 'extension' ? undefined : icon;
+      return this._pluginRegistry.getSvgIcon(value);
     }
     return ISSUE_PROVIDER_ICON_MAP[value as BuiltInIssueProviderKey];
   }

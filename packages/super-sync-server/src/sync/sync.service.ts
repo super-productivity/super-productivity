@@ -378,16 +378,19 @@ export class SyncService {
 
           for (const op of ops) {
             const firstRequestOperation = firstOperationById.get(op.id);
-            if (!firstRequestOperation) {
-              firstOperationById.set(op.id, {
-                op,
-                originalTimestamp: op.timestamp,
-              });
-            }
             const validation =
               prevalidatedResults.get(op) ??
               this.validationService.validateOp(op, clientId);
             prevalidatedResults.set(op, validation);
+            if (!firstRequestOperation) {
+              // Copy: processOperation clamps the timestamp and prunes the
+              // vector clock of the stored op in place, so a live reference
+              // would make an exact in-batch retry look like an ID collision.
+              firstOperationById.set(op.id, {
+                op: { ...op },
+                originalTimestamp: op.timestamp,
+              });
+            }
 
             const { result, storageBytes, fallback } =
               await this.operationUploadService.processOperation(
@@ -649,14 +652,15 @@ export class SyncService {
 
   /**
    * Keeps the device row alive for the device list. Called from the download
-   * ROUTE only — not from `getOpsSinceWithSeq`, whose other callers (the
+   * route and WebSocket heartbeat, not from `getOpsSinceWithSeq`, whose callers (the
    * upload handler's piggyback and dedup-retry reads) run right after the
    * upload already upserted `lastSeenAt`, so a touch there is a
    * guaranteed-suppressed extra statement per upload. Fire-and-forget and
    * deliberately outside any transaction: this is advisory metadata for a UI
    * list and must never fail, slow, or lengthen the lock window of a sync.
+   * Downloads pass a version or null; heartbeats omit it to preserve the version.
    */
-  touchDevice(userId: number, clientId: string, appVersion?: string): void {
+  touchDevice(userId: number, clientId: string, appVersion?: string | null): void {
     void this.deviceService
       .touchDevice(userId, clientId, appVersion)
       .catch((err) =>

@@ -2,7 +2,8 @@ import { TestBed } from '@angular/core/testing';
 import { provideMockActions } from '@ngrx/effects/testing';
 import { Observable, of } from 'rxjs';
 import { Action, Store } from '@ngrx/store';
-import { TaskReminderEffects } from './task-reminder.effects';
+import { nativeReminderIdToCancel, TaskReminderEffects } from './task-reminder.effects';
+import { generateNotificationId } from '../../android/android-notification-id.util';
 import { SnackService } from '../../../core/snack/snack.service';
 import { TaskService } from '../task.service';
 import { LocaleDatePipe } from '../../../ui/pipes/locale-date.pipe';
@@ -571,6 +572,30 @@ describe('TaskReminderEffects - cancelNativeReminderOnUnschedule$ filter', () =>
         },
       });
     });
+  });
+});
+
+describe('nativeReminderIdToCancel', () => {
+  it('cancels only the deadline slot for deadline actions', () => {
+    const deadlineId = generateNotificationId('task-1_deadline');
+    expect(
+      nativeReminderIdToCancel(TaskSharedActions.removeDeadline({ taskId: 'task-1' })),
+    ).toBe(deadlineId);
+    expect(
+      nativeReminderIdToCancel(
+        TaskSharedActions.clearDeadlineReminder({ taskId: 'task-1' }),
+      ),
+    ).toBe(deadlineId);
+  });
+
+  it('cancels the task slot for unschedule and dismiss', () => {
+    const taskSlotId = generateNotificationId('task-1');
+    expect(
+      nativeReminderIdToCancel(TaskSharedActions.unscheduleTask({ id: 'task-1' })),
+    ).toBe(taskSlotId);
+    expect(
+      nativeReminderIdToCancel(TaskSharedActions.dismissReminderOnly({ id: 'task-1' })),
+    ).toBe(taskSlotId);
   });
 });
 

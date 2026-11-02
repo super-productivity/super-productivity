@@ -11,9 +11,9 @@
 // (overlay panes live outside the teleported nav and need a body-level
 // anchor).
 @media screen and (min-width: 600px) {
-  // The strip sits BELOW the horizontal header on Win/Linux Electron with
-  // custom title bar (the header still owns the drag region + native
-  // window controls); elsewhere it starts at viewport top.
+  // The strip sits BELOW the window-controls overlay band on Win/Linux
+  // Electron with custom title bar (the band holds the native window
+  // controls); elsewhere it starts at viewport top.
   body > nav.action-nav-right.action-nav-right--teleported {
     // Header spacing tokens are declared on <main-header>'s :host, but the
     // strip is teleported to <body> and out of that scope, so re-declare them.
@@ -31,7 +31,7 @@
     // Default: strip starts at viewport top (web, Mac, native-frame
     // Electron — none of these have a window-control overlay clashing
     // with the right edge). Only Win/Linux Electron with custom title
-    // bar pushes the strip down by the header height to clear the WCO
+    // bar pushes the strip down by the band height to clear the WCO
     // overlay band (rule below).
     inset: 0 0 0 auto;
     width: var(--vertical-action-bar-width);
@@ -113,12 +113,12 @@
   }
 
   // Win/Linux Electron with custom title bar: WCO renders a compact band
-  // (--wco-height, matches electron WCO_HEIGHT) at top-right. Push the
+  // (electron WCO_HEIGHT, which differs per platform) at top-right. Push the
   // strip down by exactly that height so its first button sits flush
   // below the WCO buttons and the strip reclaims the newly-freed space.
   body.isElectron.isNoMac.isObsidianStyleHeader
     > nav.action-nav-right.action-nav-right--teleported {
-    top: calc(var(--wco-height) + var(--s));
+    top: calc(env(titlebar-area-height, var(--wco-height)) + var(--s));
   }
 
   // Descendant, not child: the teleported nav's parent is `<body>`, and `dir`

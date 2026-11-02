@@ -6,7 +6,7 @@
   user-select: none;
 }
 .impact-stars:focus-visible {
-  outline: 2px solid var(--c-accent, #6aa9ff);
+  outline: 2px solid var(--c-accent);
   outline-offset: 2px;
   border-radius: var(--card-border-radius);
 }

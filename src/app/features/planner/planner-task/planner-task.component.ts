@@ -22,6 +22,7 @@ import { IS_HYBRID_DEVICE } from '../../../util/is-mouse-primary';
 import { DRAG_DELAY_FOR_TOUCH } from '../../../app.constants';
 import { T } from '../../../t.const';
 import { TaskContextMenuComponent } from '../../tasks/task-context-menu/task-context-menu.component';
+import { TaskPriorityIndicatorComponent } from '../../tasks/task-priority-indicator/task-priority-indicator.component';
 import { MatIcon } from '@angular/material/icon';
 import { TagListComponent } from '../../tag/tag-list/tag-list.component';
 import { InlineInputComponent } from '../../../ui/inline-input/inline-input.component';
@@ -46,8 +47,13 @@ import { getNextWeekDayOffset } from '../../../util/get-next-week-day-offset';
 import { getDbDateStr } from '../../../util/get-db-date-str';
 import { combineDateAndTime } from '../../../util/combine-date-and-time';
 import { millisecondsDiffToRemindOption } from '../../tasks/util/remind-option-to-milliseconds';
+import { isWontDoTask } from '../../tasks/util/is-wont-do-task';
 import { PlannerActions } from '../store/planner.actions';
 import { DialogConfirmComponent } from '../../../ui/dialog-confirm/dialog-confirm.component';
+import {
+  getTaskDeleteConfirmData,
+  isTaskDeleteConfirmRequired,
+} from '../../tasks/util/get-task-delete-confirm';
 import { first } from 'rxjs/operators';
 import { isInputElement, isLinkTarget } from '../../../util/dom-element';
 import { isMultiSelectModifierEvent } from '../../../util/is-multi-select-modifier-event';
@@ -62,6 +68,7 @@ import { WorkContextType } from '../../work-context/work-context.model';
 import { TODAY_TAG } from '../../tag/tag.const';
 import { ADD_TASK_INLINE_BTN_SELECTOR } from '../add-task-inline/add-task-inline.const';
 import { getNextPlannerAddButton } from '../get-next-planner-add-button';
+import { IssueSyncStateService } from '../../issue/two-way-sync/issue-sync-state.service';
 
 @Component({
   selector: 'planner-task',
@@ -74,6 +81,7 @@ import { getNextPlannerAddButton } from '../get-next-planner-add-button';
     TagListComponent,
     InlineInputComponent,
     TaskContextMenuComponent,
+    TaskPriorityIndicatorComponent,
     MsToStringPipe,
     RenderLinksPipe,
     DoneToggleComponent,
@@ -82,7 +90,7 @@ import { getNextPlannerAddButton } from '../get-next-planner-add-button';
   ],
   /* eslint-disable @typescript-eslint/naming-convention */
   host: {
-    // Planner and Boards opt in; scheduled-list cards keep their existing behavior.
+    // Planner and Boards opt in; other hosts keep their existing behavior.
     '[attr.data-task-id]': 'focusable() ? task().id : null',
     '[attr.data-task-selectable]': 'focusable() ? "true" : null',
     '[attr.tabindex]': 'focusable() ? "0" : null',
@@ -101,6 +109,7 @@ export class PlannerTaskComponent implements OnInit, OnDestroy, AfterViewInit {
   private _multiSelect = inject(TaskMultiSelectService);
   private _cardList = inject(TASK_CARD_LIST, { optional: true });
   private _configService = inject(GlobalConfigService);
+  private readonly _issueSyncState = inject(IssueSyncStateService);
   private _matDialog = inject(MatDialog);
   private _store = inject(Store);
   private _dateService = inject(DateService);
@@ -124,11 +133,13 @@ export class PlannerTaskComponent implements OnInit, OnDestroy, AfterViewInit {
   readonly tagsToHide = input<string[]>();
   // Containers opt in explicitly; TASK_CARD_LIST supplies board-specific movement.
   readonly focusable = input<boolean>(false);
+  readonly isWontDo = computed<boolean>(() => isWontDoTask(this.task()));
+
   readonly isMultiSelected = computed(() =>
     this.focusable() ? this._multiSelect.selectedIds().has(this.task().id) : false,
   );
   readonly isTouchSelecting = computed(
-    () => !!this._cardList && this._multiSelect.isTouchSelectionMode(),
+    () => this.focusable() && this._multiSelect.isTouchSelectionMode(),
   );
 
   readonly T = T;
@@ -176,7 +187,7 @@ export class PlannerTaskComponent implements OnInit, OnDestroy, AfterViewInit {
   @HostListener('click', ['$event'])
   async clickHandler(event: MouseEvent): Promise<void> {
     const target = event.target as HTMLElement | null;
-    if (isLinkTarget(target)) {
+    if (this.isTouchSelecting() || isLinkTarget(target)) {
       return;
     }
     // Mirrors the modifier/touch half of task.component's clear (which lives in
@@ -215,6 +226,7 @@ export class PlannerTaskComponent implements OnInit, OnDestroy, AfterViewInit {
   onDoubleClick(event: MouseEvent): void {
     if (
       !this.focusable() ||
+      this.isTouchSelecting() ||
       event.ctrlKey ||
       event.metaKey ||
       event.shiftKey ||
@@ -259,6 +271,9 @@ export class PlannerTaskComponent implements OnInit, OnDestroy, AfterViewInit {
     if (isTouchActive() || IS_HYBRID_DEVICE) {
       const el = this._elementRef.nativeElement;
       const onStart = (): void => {
+        if (this.isTouchSelecting()) {
+          return;
+        }
         this._dragReadyTimeout = window.setTimeout(() => {
           this.isDragReady.set(true);
         }, DRAG_DELAY_FOR_TOUCH);
@@ -282,7 +297,7 @@ export class PlannerTaskComponent implements OnInit, OnDestroy, AfterViewInit {
         // and title editing. Tapping the link needs the mode left first.
         if (this.isTouchSelecting()) {
           event.preventDefault();
-          event.stopPropagation();
+          event.stopImmediatePropagation();
           host.focus();
           this._multiSelect.toggle(this.task().id);
           return;
@@ -299,10 +314,17 @@ export class PlannerTaskComponent implements OnInit, OnDestroy, AfterViewInit {
         }
         event.preventDefault();
         event.stopPropagation();
-        host.focus();
         if (event.shiftKey) {
-          this._multiSelect.selectRange(this.task().id, event.ctrlKey || event.metaKey);
+          // Range first: until the clicked row takes focus, the focused row is
+          // the one a Shift+click with nothing selected starts from (#10143).
+          this._multiSelect.selectRange(
+            this.task().id,
+            event.ctrlKey || event.metaKey,
+            host,
+          );
+          host.focus();
         } else {
+          host.focus();
           this._multiSelect.toggle(this.task().id);
         }
       };
@@ -561,14 +583,17 @@ export class PlannerTaskComponent implements OnInit, OnDestroy, AfterViewInit {
     if (this._isTaskDeleteTriggered) {
       return;
     }
-    if (this._configService.cfg()?.tasks?.isConfirmBeforeDelete ?? true) {
+    const isNoLongerListed = this._issueSyncState.isMissing(this.task().id);
+    if (
+      isTaskDeleteConfirmRequired(
+        this.task(),
+        this._configService.cfg()?.tasks?.isConfirmBeforeDelete ?? true,
+        isNoLongerListed,
+      )
+    ) {
       this._matDialog
         .open(DialogConfirmComponent, {
-          data: {
-            okTxt: T.F.TASK.D_CONFIRM_DELETE.OK,
-            message: T.F.TASK.D_CONFIRM_DELETE.MSG,
-            translateParams: { title: this.task().title },
-          },
+          data: getTaskDeleteConfirmData(this.task(), undefined, isNoLongerListed),
         })
         .afterClosed()
         .pipe(takeUntilDestroyed(this._destroyRef))

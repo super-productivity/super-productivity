@@ -16,6 +16,9 @@ plugin.log.info('Automation plugin initialized');
 
 const automationManager = new AutomationManager(plugin);
 
+// Stop the time-based rule check when the plugin is disabled or reloaded
+plugin.onUnload?.(() => automationManager.destroy());
+
 // Hook into task creation
 plugin.registerHook('taskCreated' as any, (payload: TaskCreatedPayload) => {
   if (!payload.task) {

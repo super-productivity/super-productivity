@@ -5,6 +5,9 @@ import { WorkViewPage } from '../../pages/work-view.page';
 import { waitForAppReady, waitForStatePersistence } from '../../utils/waits';
 import {
   WEBDAV_CONFIG_TEMPLATE,
+  WEBDAV_SYNC_FORMAT,
+  WEBDAV_SYNC_FILE,
+  readPrefixedFile,
   setupSyncClient,
   createSyncFolder,
   waitForSyncComplete,
@@ -83,6 +86,42 @@ test.describe('@webdav WebDAV Sync Full Flow', () => {
     await syncPageA.triggerSync();
     await waitForSyncComplete(pageA, syncPageA);
     console.log('[Test] Sync completed on Client A');
+
+    // Prove the selected suite format reached the remote, independently of the
+    // checkbox. Reading v3 must fail if setup silently falls back to v2.
+    const folderUrl = `${WEBDAV_CONFIG.baseUrl}${SYNC_FOLDER_NAME}/DEV/`;
+    const authorization = `Basic ${Buffer.from(
+      `${WEBDAV_CONFIG.username}:${WEBDAV_CONFIG.password}`,
+    ).toString('base64')}`;
+    const remote = await readPrefixedFile<{
+      version: number;
+      state?: unknown;
+      snapshotRef?: {
+        file?: string;
+        syncVersion: number;
+        vectorClock: Record<string, number>;
+      };
+    }>(request, `${folderUrl}${WEBDAV_SYNC_FILE}`, authorization);
+    expect(remote.version).toBe(WEBDAV_SYNC_FORMAT === 'v3' ? 3 : 2);
+    if (WEBDAV_SYNC_FORMAT === 'v3') {
+      expect(remote.snapshotRef).toBeDefined();
+      const snapshotFile = remote.snapshotRef!.file ?? 'sync-state.json';
+      const snapshot = await readPrefixedFile<{ state: unknown }>(
+        request,
+        `${folderUrl}${snapshotFile}`,
+        authorization,
+      );
+      expect(snapshot).toMatchObject({
+        version: 3,
+        syncVersion: remote.snapshotRef!.syncVersion,
+        vectorClock: remote.snapshotRef!.vectorClock,
+      });
+      expect(snapshot.state).toBeDefined();
+      console.log(`[Test] Verified v3 ${WEBDAV_SYNC_FILE} and ${snapshotFile}`);
+    } else {
+      expect(remote.state).toBeDefined();
+      console.log(`[Test] Verified v2 ${WEBDAV_SYNC_FILE}`);
+    }
 
     // --- Client B ---
     const { context: contextB, page: pageB } = await setupSyncClient(browser, url);

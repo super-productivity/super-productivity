@@ -1,4 +1,5 @@
 import { FastifyInstance, FastifyRequest } from 'fastify';
+import WebSocket from 'ws';
 import { verifyToken } from '../auth';
 import { getWsConnectionService } from './services/websocket-connection.service';
 import { Logger } from '../logger';
@@ -7,6 +8,56 @@ import { isValidClientId } from './sync.const';
 export const WS_CONNECTION_RATE_LIMIT_MAX = 120;
 export const WS_CONNECTION_RATE_LIMIT_WINDOW = '1 minute';
 export const WS_IP_CONNECTION_RATE_LIMIT_MAX = 10_000;
+
+/**
+ * Grace period given to a peer to complete the WebSocket closing handshake
+ * after we send a rejection close frame. `ws` itself will wait up to 30s
+ * (CLOSE_TIMEOUT) for an uncooperative peer before destroying the underlying
+ * TCP socket — see ws/lib/websocket.js. A peer that never echoes the close
+ * frame costs it nothing but pins one fd + one ws.WebSocket (+ Receiver/
+ * Sender) on the server for the full 30s. Since this route accepts the
+ * upgrade BEFORE authenticating (required so the client can distinguish the
+ * 4001/4003 close-code auth-failure contract from a generic 1006 drop — see
+ * AUTH_FAILURE_CLOSE_CODE in super-sync-websocket.service.ts), an
+ * unauthenticated caller can hold sockets open essentially for free. 1s is
+ * long enough for any cooperative client to process the close code and echo
+ * it back, but short enough that an uncooperative one can't meaningfully
+ * exhaust fds. See #9885.
+ */
+export const WS_REJECTED_SOCKET_GRACE_MS = 1_000;
+
+/**
+ * Rejects a socket while bounding how long an uncooperative peer can keep it
+ * alive. `socket.close(code, reason)` starts the polite closing handshake —
+ * required to preserve the 4001/4003 wire contract the client relies on —
+ * but does not itself guarantee timely teardown. This arms a short grace
+ * timer and falls back to `socket.terminate()` (an immediate, handshake-free
+ * TCP kill) if the peer hasn't completed the handshake by then. `terminate()`
+ * is intentionally NOT used in place of `close()`: skipping the close frame
+ * entirely would prevent the client from ever seeing the 4001/4003 code.
+ *
+ * Centralized here (rather than duplicating close+timer+terminate at each of
+ * the four rejection sites below) so every rejection path gets the same
+ * lifecycle guarantee.
+ */
+export const closeRejectedSocket = (
+  socket: WebSocket,
+  code: number,
+  reason: string,
+): void => {
+  socket.close(code, reason);
+
+  const timer = setTimeout(() => {
+    if (socket.readyState !== WebSocket.CLOSED) {
+      socket.terminate();
+    }
+  }, WS_REJECTED_SOCKET_GRACE_MS);
+
+  // Don't let this timer keep the process alive on its own, and clear it
+  // promptly once the handshake actually completes (cooperative peer).
+  timer.unref?.();
+  socket.once('close', () => clearTimeout(timer));
+};
 
 /**
  * Rate-limit key for the WS upgrade endpoint. Keyed by (ip, clientId) instead
@@ -75,14 +126,14 @@ export const wsRoutes = async (fastify: FastifyInstance): Promise<void> => {
         // Validate token
         if (!token) {
           Logger.warn('[ws] Connection rejected: missing token');
-          socket.close(4001, 'Missing token');
+          closeRejectedSocket(socket, 4001, 'Missing token');
           return;
         }
 
         // Validate clientId
         if (!isValidClientId(clientId)) {
           Logger.warn('[ws] Connection rejected: invalid clientId');
-          socket.close(4001, 'Invalid clientId');
+          closeRejectedSocket(socket, 4001, 'Invalid clientId');
           return;
         }
 
@@ -92,7 +143,7 @@ export const wsRoutes = async (fastify: FastifyInstance): Promise<void> => {
           // 4003 = auth-failure wire contract; see TOKEN_REVOKED_CLOSE_CODE
           // (websocket-connection.service.ts) and the client's
           // AUTH_FAILURE_CLOSE_CODE (super-sync-websocket.service.ts).
-          socket.close(4003, 'Invalid token');
+          closeRejectedSocket(socket, 4003, 'Invalid token');
           return;
         }
 
@@ -101,7 +152,7 @@ export const wsRoutes = async (fastify: FastifyInstance): Promise<void> => {
       } catch (err) {
         Logger.error('[ws] Unexpected error in WebSocket handler:', err);
         try {
-          socket.close(1011, 'Internal error');
+          closeRejectedSocket(socket, 1011, 'Internal error');
         } catch (closeErr) {
           Logger.debug('[ws] Failed to close socket after error', closeErr);
         }

@@ -1,4 +1,11 @@
-import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import {
+  afterRenderEffect,
+  ChangeDetectionStrategy,
+  Component,
+  inject,
+  signal,
+} from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
 import { WorklogService } from '../worklog.service';
 import { DialogWorklogExportComponent } from '../dialog-worklog-export/dialog-worklog-export.component';
 import { MatDialog } from '@angular/material/dialog';
@@ -55,11 +62,24 @@ export class WorklogWeekComponent {
   private _dateAdapter = inject(DateAdapter);
   private readonly _metricService = inject(MetricService);
 
+  // undefined while the worklog loads, null when the week has no entries
+  readonly currentWeek = toSignal(this.worklogService.currentWeek$);
+  // Rows rendered with the first data appear in place; only later toggles animate.
+  readonly isAnimationEnabled = signal(false);
+
   visibility: boolean[] = [];
   T: typeof T = T;
   keys: (o: Record<string, unknown>) => string[] = Object.keys;
 
   sortDays = sortWorklogDays;
+
+  constructor() {
+    afterRenderEffect(() => {
+      if (this.currentWeek() !== undefined) {
+        this.isAnimationEnabled.set(true);
+      }
+    });
+  }
 
   async exportData(): Promise<void> {
     const now = new Date();

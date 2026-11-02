@@ -22,8 +22,10 @@ import { Log } from '../../core/log';
 import { MentionConfig, MentionModule } from '../mentions';
 import { AsyncPipe } from '@angular/common';
 import { Observable } from 'rxjs';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import { MentionConfigService } from '../../features/tasks/mention-config.service';
 import { hasLinkHints, RenderLinksPipe } from '../pipes/render-links.pipe';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import { SubmitTrigger } from 'src/app/features/tasks/task.model';
 
 /**

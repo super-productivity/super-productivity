@@ -250,6 +250,69 @@ describe('getTaskRepeatInfoText()', () => {
           friday: true,
         },
       ],
+      // weekly every N names its days instead of "Custom recur config"
+      [
+        T.F.TASK_REPEAT.ADD_INFO_PANEL.EVERY_X_WEEKLY,
+        { daysStr: 'Mo, We', timeStr: '', x: 2 },
+        {
+          repeatEvery: 2,
+          repeatCycle: 'WEEKLY',
+          quickSetting: 'CUSTOM',
+          monday: true,
+          wednesday: true,
+        },
+      ],
+      // after completion (#5388): whole weeks stored as days read as weeks
+      [
+        T.F.TASK_REPEAT.ADD_INFO_PANEL.AFTER_COMPLETION_X_WEEKS,
+        { x: 2 },
+        {
+          repeatEvery: 14,
+          repeatCycle: 'DAILY',
+          quickSetting: 'CUSTOM',
+          repeatFromCompletionDate: true,
+        },
+      ],
+      [
+        T.F.TASK_REPEAT.ADD_INFO_PANEL.AFTER_COMPLETION_WEEK,
+        { x: 1 },
+        {
+          repeatEvery: 7,
+          repeatCycle: 'DAILY',
+          quickSetting: 'CUSTOM',
+          repeatFromCompletionDate: true,
+        },
+      ],
+      [
+        T.F.TASK_REPEAT.ADD_INFO_PANEL.AFTER_COMPLETION_X_DAYS,
+        { x: 3 },
+        {
+          repeatEvery: 3,
+          repeatCycle: 'DAILY',
+          quickSetting: 'CUSTOM',
+          repeatFromCompletionDate: true,
+        },
+      ],
+      [
+        T.F.TASK_REPEAT.ADD_INFO_PANEL.AFTER_COMPLETION_DAY,
+        { x: 1 },
+        {
+          repeatEvery: 1,
+          repeatCycle: 'DAILY',
+          quickSetting: 'CUSTOM',
+          repeatFromCompletionDate: true,
+        },
+      ],
+      [
+        T.F.TASK_REPEAT.ADD_INFO_PANEL.AFTER_COMPLETION_MONTH,
+        { x: 1 },
+        {
+          repeatEvery: 1,
+          repeatCycle: 'MONTHLY',
+          quickSetting: 'CUSTOM',
+          repeatFromCompletionDate: true,
+        },
+      ],
     ] as [
       string,
       { [key: string]: string | number } | undefined,
@@ -277,6 +340,28 @@ describe('getTaskRepeatInfoText()', () => {
         ),
       ).toEqual([translationKey, translateParams]);
     });
+  });
+
+  it('adds the time to an after-completion label (#5388)', () => {
+    const [key, params] = getTaskRepeatInfoText(
+      {
+        ...DEFAULT_TASK_REPEAT_CFG,
+        id: 'IDDD',
+        quickSetting: 'CUSTOM',
+        repeatCycle: 'DAILY',
+        repeatEvery: 14,
+        repeatFromCompletionDate: true,
+        startTime: '09:00',
+      },
+      'en-US',
+      undefined,
+      mockTranslateService,
+    );
+    expect(key).toBe(T.F.TASK_REPEAT.ADD_INFO_PANEL.WITH_TIME);
+    expect(params['repeatStr']).toBe(
+      T.F.TASK_REPEAT.ADD_INFO_PANEL.AFTER_COMPLETION_X_WEEKS,
+    );
+    expect(params['timeStr']).toBeTruthy();
   });
 
   // #8987 follow-up: under the ISO 8601 option the numeric locale is the `sv`
@@ -364,5 +449,44 @@ describe('getTaskRepeatInfoText()', () => {
       expect(key).toBe(T.F.TASK_REPEAT.ADD_INFO_PANEL.DAILY);
       expect(params).toEqual({ timeStr: '' });
     });
+  });
+});
+
+describe('getTaskRepeatInfoText() with repeatUntilDay (#10091)', () => {
+  const dailyCfg = (repeatUntilDay?: string): TaskRepeatCfg => ({
+    ...DEFAULT_TASK_REPEAT_CFG,
+    id: 'IDDD',
+    repeatEvery: 1,
+    repeatCycle: 'DAILY',
+    quickSetting: 'DAILY',
+    repeatUntilDay,
+  });
+
+  it('keeps the open-ended label when no end day is set', () => {
+    expect(
+      getTaskRepeatInfoText(dailyCfg(), 'en-US', undefined, mockTranslateService),
+    ).toEqual([T.F.TASK_REPEAT.ADD_INFO_PANEL.DAILY, { timeStr: '' }]);
+  });
+
+  it('wraps the label with the formatted end day', () => {
+    const formatDate = jasmine
+      .createSpy('formatDate')
+      .and.callFake((d: Date) => `${d.getMonth() + 1}/${d.getDate()}/${d.getFullYear()}`);
+    const dateTimeFormatService = {
+      textLocale: () => 'en',
+      formatDate,
+    } as unknown as DateTimeFormatService;
+
+    expect(
+      getTaskRepeatInfoText(
+        dailyCfg('2026-03-05'),
+        'en-US',
+        dateTimeFormatService,
+        mockTranslateService,
+      ),
+    ).toEqual([
+      T.F.TASK_REPEAT.ADD_INFO_PANEL.UNTIL,
+      { repeatStr: T.F.TASK_REPEAT.ADD_INFO_PANEL.DAILY, untilStr: '3/5/2026' },
+    ]);
   });
 });

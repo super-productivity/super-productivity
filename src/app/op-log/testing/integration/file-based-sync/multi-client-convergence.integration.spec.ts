@@ -29,7 +29,8 @@ describe('File-Based Sync Integration - Multi-Client Convergence', () => {
       await clientA.uploadOps([opA]);
 
       // Client B downloads and creates its own op
-      await clientB.downloadOps(0);
+      const downloaded = await clientB.downloadOps(0);
+      await clientB.adapter.setLastServerSeq(downloaded.latestSeq);
       const opB = clientB.createOp('Task', 'task-b', 'CRT', 'TaskActionTypes.ADD_TASK', {
         title: 'From B',
       });
@@ -60,8 +61,10 @@ describe('File-Based Sync Integration - Multi-Client Convergence', () => {
       await clientA.uploadOps([initialOp]);
 
       // All clients sync
-      await clientB.downloadOps(0);
-      await clientC.downloadOps(0);
+      const downloadB = await clientB.downloadOps(0);
+      await clientB.adapter.setLastServerSeq(downloadB.latestSeq);
+      const downloadC = await clientC.downloadOps(0);
+      await clientC.adapter.setLastServerSeq(downloadC.latestSeq);
 
       // C creates and uploads
       const opC = clientC.createOp('Task', 'task-c', 'CRT', 'TaskActionTypes.ADD_TASK', {
@@ -70,7 +73,8 @@ describe('File-Based Sync Integration - Multi-Client Convergence', () => {
       await clientC.uploadOps([opC]);
 
       // B downloads and adds
-      await clientB.downloadOps(0);
+      const nextDownloadB = await clientB.downloadOps(0);
+      await clientB.adapter.setLastServerSeq(nextDownloadB.latestSeq);
       const opB = clientB.createOp('Task', 'task-b', 'CRT', 'TaskActionTypes.ADD_TASK', {
         title: 'From B',
       });
@@ -100,9 +104,13 @@ describe('File-Based Sync Integration - Multi-Client Convergence', () => {
         title: 'C',
       });
 
-      // All upload (with potential conflicts/merges)
+      // Each upload follows a download, as in the real sync cycle.
       await clientA.uploadOps([opA]);
+      const downloadB = await clientB.downloadOps(0);
+      await clientB.adapter.setLastServerSeq(downloadB.latestSeq);
       await clientB.uploadOps([opB]);
+      const downloadC = await clientC.downloadOps(0);
+      await clientC.adapter.setLastServerSeq(downloadC.latestSeq);
       await clientC.uploadOps([opC]);
 
       // All download to get final state
@@ -171,6 +179,7 @@ describe('File-Based Sync Integration - Multi-Client Convergence', () => {
       for (const serverOp of downloadB.ops) {
         clientB.mergeRemoteClock(serverOp.op.vectorClock);
       }
+      await clientB.adapter.setLastServerSeq(downloadB.latestSeq);
 
       // Client B should be able to upload
       const opB = clientB.createOp('Task', 'task-b', 'CRT', 'TaskActionTypes.ADD_TASK', {
@@ -199,6 +208,7 @@ describe('File-Based Sync Integration - Multi-Client Convergence', () => {
       for (const serverOp of downloadB.ops) {
         clientB.mergeRemoteClock(serverOp.op.vectorClock);
       }
+      await clientB.adapter.setLastServerSeq(downloadB.latestSeq);
       const opB = clientB.createOp('Task', 'task-b', 'CRT', 'TaskActionTypes.ADD_TASK', {
         title: 'B',
       });
@@ -243,6 +253,7 @@ describe('File-Based Sync Integration - Multi-Client Convergence', () => {
       // B downloads, knows about A1
       const downloadB = await clientB.downloadOps(0);
       clientB.mergeRemoteClock(downloadB.ops[0].op.vectorClock);
+      await clientB.adapter.setLastServerSeq(downloadB.latestSeq);
 
       // B creates op
       const opB = clientB.createOp('Task', 'task-b', 'CRT', 'TaskActionTypes.ADD_TASK', {
@@ -439,18 +450,24 @@ describe('File-Based Sync Integration - Multi-Client Convergence', () => {
       const clientC = harness.createClient('client-c');
       const observer = harness.createClient('observer');
 
-      // Rapid sequential uploads
+      // Rapid sequential download/upload cycles
       for (let i = 0; i < 3; i++) {
+        const downloadA = await clientA.downloadOps();
+        await clientA.adapter.setLastServerSeq(downloadA.latestSeq);
         await clientA.uploadOps([
           clientA.createOp('Task', `task-a-${i}`, 'CRT', 'TaskActionTypes.ADD_TASK', {
             title: `A${i}`,
           }),
         ]);
+        const downloadB = await clientB.downloadOps();
+        await clientB.adapter.setLastServerSeq(downloadB.latestSeq);
         await clientB.uploadOps([
           clientB.createOp('Task', `task-b-${i}`, 'CRT', 'TaskActionTypes.ADD_TASK', {
             title: `B${i}`,
           }),
         ]);
+        const downloadC = await clientC.downloadOps();
+        await clientC.adapter.setLastServerSeq(downloadC.latestSeq);
         await clientC.uploadOps([
           clientC.createOp('Task', `task-c-${i}`, 'CRT', 'TaskActionTypes.ADD_TASK', {
             title: `C${i}`,

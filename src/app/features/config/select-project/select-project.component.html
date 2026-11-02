@@ -19,7 +19,7 @@
   [multiple]="to.multiple"
   (selectionChange)="onSelectionChange($event)"
 >
-  @if (to.multiple && triggerLabel()) {
+  @if (triggerLabel()) {
     <mat-select-trigger>
       {{ triggerLabel() }}
     </mat-select-trigger>
@@ -35,7 +35,7 @@
         [title]="opt.title"
         [icon]="opt.icon"
         [defaultIcon]="DEFAULT_PROJECT_ICON"
-        [color]="opt.theme?.primary"
+        [color]="$safeNavigationMigration(opt.theme?.primary)"
         [folderPath]="projectFolderMap().get(opt.id)"
       ></select-option-row>
     </mat-option>

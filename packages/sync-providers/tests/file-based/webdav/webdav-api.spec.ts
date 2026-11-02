@@ -89,6 +89,20 @@ const okResponse = (
   data,
 });
 
+const propfindXml = (etag: string): string => `<?xml version="1.0" encoding="utf-8"?>
+<D:multistatus xmlns:D="DAV:">
+  <D:response>
+    <D:href>/dav/sp/op-1.json</D:href>
+    <D:propstat>
+      <D:prop>
+        <D:getetag>${etag}</D:getetag>
+        <D:resourcetype/>
+      </D:prop>
+      <D:status>HTTP/1.1 200 OK</D:status>
+    </D:propstat>
+  </D:response>
+</D:multistatus>`;
+
 interface DavRequest {
   method: string;
   headers?: Record<string, string>;
@@ -114,13 +128,20 @@ interface FakeDavFile {
  * and satisfied if ANY member matches. That mirrors both evaluators that matter
  * — Apache's `ap_find_list_item` (verified live against 2.4 + mod_dav) and
  * sabre/dav's `explode(',', $ifMatch)`, which is what Nextcloud runs.
+ *
+ * PROPFIND reports the bare tag as `getetag`: content-coding suffixes are added
+ * to the HTTP header only, never to the DAV property.
+ *
+ * `ignoreIfMatch` reproduces servers that serve strong ETags but PUT
+ * unconditionally — e.g. hacdias/webdav v5, our self-hosting compose (#9030).
  */
 const makeFakeDavServer = (
   file: FakeDavFile,
   {
     etagSuffix = '',
     exposeOcEtag = false,
-  }: { etagSuffix?: string; exposeOcEtag?: boolean } = {},
+    ignoreIfMatch = false,
+  }: { etagSuffix?: string; exposeOcEtag?: boolean; ignoreIfMatch?: boolean } = {},
 ): MockAdapter => {
   const adapter = makeAdapter();
   let writes = 0;
@@ -136,8 +157,11 @@ const makeFakeDavServer = (
         ...(exposeOcEtag ? { ['OC-ETag']: comparedTag() } : {}),
       });
     }
+    if (method === 'PROPFIND') {
+      return okResponse(propfindXml(comparedTag()), 207);
+    }
     if (method === 'PUT') {
-      const ifMatch = headers?.[WebDavHttpHeader.IF_MATCH];
+      const ifMatch = ignoreIfMatch ? undefined : headers?.[WebDavHttpHeader.IF_MATCH];
       const candidates = ifMatch?.split(',').map((t) => t.trim());
       if (candidates !== undefined && !candidates.includes(comparedTag())) {
         throw new HttpNotOkAPIError(new Response('', { status: 412 }));
@@ -168,32 +192,6 @@ const headerValue = (req: DavRequest, name: string): string | undefined =>
   )?.[1];
 
 describe('WebdavApi', () => {
-  describe('listFiles', () => {
-    it('returns file paths from PROPFIND multistatus, filtering folder itself', async () => {
-      const adapter = makeAdapter();
-      adapter.request.mockResolvedValue(okResponse(sampleListing, 207));
-
-      const result = await makeApi(adapter).listFiles('sp/');
-      expect(result).toEqual(['/dav/sp/op-1.json']);
-    });
-
-    it('returns empty array on 404', async () => {
-      const adapter = makeAdapter();
-      adapter.request.mockResolvedValue(okResponse('', 404));
-      const result = await makeApi(adapter).listFiles('missing/');
-      expect(result).toEqual([]);
-    });
-
-    it('also returns empty array on HttpNotOkAPIError with 404 in catch', async () => {
-      const adapter = makeAdapter();
-      adapter.request.mockRejectedValue(
-        new HttpNotOkAPIError(new Response('', { status: 404 })),
-      );
-      const result = await makeApi(adapter).listFiles('missing/');
-      expect(result).toEqual([]);
-    });
-  });
-
   describe('download', () => {
     it('returns dataStr and md5 rev', async () => {
       const adapter = makeAdapter();
@@ -239,8 +237,22 @@ describe('WebdavApi', () => {
 
       const result = await makeApi(adapter).download({ path: 'op-1.json' });
 
-      expect(result.rev).toBe('"strong-rev-gzip"');
+      // Not `"strong-rev"`: the vendor header is ignored, and the content-coded
+      // ETag cannot drive `If-Match`, so the rev is the content hash (#10808).
+      expect(result.rev).toBe(await md5HashWasm('hello world'));
     });
+
+    it.each(['"strong-rev-gzip"', '"strong-rev-br"', '"strong-rev-deflate"'])(
+      'uses the content hash for a content-coded generic ETag %s (#10808)',
+      async (etag) => {
+        const adapter = makeAdapter();
+        adapter.request.mockResolvedValue(okResponse('hello world', 200, { etag }));
+
+        const result = await makeApi(adapter).download({ path: 'op-1.json' });
+
+        expect(result.rev).toBe(await md5HashWasm('hello world'));
+      },
+    );
 
     it('uses a canonical OC-ETag when the HTTP ETag is not exposed', async () => {
       const adapter = makeAdapter();
@@ -328,6 +340,8 @@ describe('WebdavApi', () => {
     it('uses If-Match atomically when the expected revision is a strong ETag', async () => {
       const adapter = makeAdapter();
       const data = 'updated body';
+      // #9030 pre-check: an unchanged getetag needs no body download.
+      adapter.request.mockResolvedValueOnce(okResponse(propfindXml('"old-rev"'), 207));
       adapter.request.mockResolvedValueOnce(okResponse('', 204));
       adapter.request.mockResolvedValueOnce(okResponse(data, 200, { etag: '"new-rev"' }));
 
@@ -338,8 +352,9 @@ describe('WebdavApi', () => {
       });
 
       expect(result.rev).toBe('"new-rev"');
-      expect(adapter.request).toHaveBeenCalledTimes(2);
-      expect(adapter.request.mock.calls[0]?.[0]).toMatchObject({
+      expect(adapter.request).toHaveBeenCalledTimes(3);
+      expect(adapter.request.mock.calls[0]?.[0]).toMatchObject({ method: 'PROPFIND' });
+      expect(adapter.request.mock.calls[1]?.[0]).toMatchObject({
         method: 'PUT',
         headers: expect.objectContaining({
           [WebDavHttpHeader.IF_MATCH]: '"old-rev"',
@@ -369,6 +384,8 @@ describe('WebdavApi', () => {
 
     it('maps a failed HTTP precondition to RemoteFileChangedUnexpectedly', async () => {
       const adapter = makeAdapter();
+      // The pre-check passes; the write then races and loses on `If-Match`.
+      adapter.request.mockResolvedValueOnce(okResponse(propfindXml('"stale-rev"'), 207));
       adapter.request.mockRejectedValueOnce(
         new HttpNotOkAPIError(new Response('', { status: 412 })),
       );
@@ -478,19 +495,20 @@ describe('WebdavApi', () => {
         expect(putsOf(adapter)).toHaveLength(2);
       });
 
-      it('does not expand a tag that is only the suffix', async () => {
-        // `"-gzip"` is a tag in its own right; expanding it would offer the
-        // degenerate `""` alongside it.
+      it('never derives a bare tag, even from a tag that is only the suffix', async () => {
+        // `"-gzip"` must not turn into the degenerate `""` either.
         const file: FakeDavFile = { body: 'remote body', tag: '' };
         const adapter = makeFakeDavServer(file, { etagSuffix: '-gzip' });
         const api = makeApi(adapter);
         const { rev } = await api.download({ path: 'op-1.json' });
-        expect(rev).toBe('"-gzip"');
+        expect(rev).toBe(await md5HashWasm('remote body'));
 
-        await expect(
-          api.upload({ path: 'op-1.json', data: 'mine', expectedRev: rev }),
-        ).rejects.toBeInstanceOf(RemoteFileChangedUnexpectedly);
-        expect(putsOf(adapter)[0]?.headers?.[WebDavHttpHeader.IF_MATCH]).toBe('"-gzip"');
+        await api.upload({ path: 'op-1.json', data: 'mine', expectedRev: rev });
+
+        expect(file.body).toBe('mine');
+        expect(headerValue(putsOf(adapter)[0]!, WebDavHttpHeader.IF_MATCH)).toBe(
+          undefined,
+        );
       });
 
       it('treats a 412 on an atomic create as a conflict, never a retry', async () => {
@@ -505,6 +523,223 @@ describe('WebdavApi', () => {
           makeApi(adapter).upload({ path: 'op-1.json', data: 'mine', expectedRev: null }),
         ).rejects.toBeInstanceOf(RemoteFileChangedUnexpectedly);
         expect(putsOf(adapter)).toHaveLength(1);
+      });
+    });
+
+    describe('generic WebDAV behind mod_deflate without OC-ETag (#10808)', () => {
+      it('keeps uploading instead of failing every conditional PUT with 412', async () => {
+        const file: FakeDavFile = { body: 'remote body', tag: 'abc' };
+        const adapter = makeFakeDavServer(file, { etagSuffix: '-gzip' });
+        const api = makeApi(adapter);
+
+        const first = await api.download({ path: 'op-1.json' });
+        const second = await api.upload({
+          path: 'op-1.json',
+          data: 'body two',
+          expectedRev: first.rev,
+        });
+        // The rev returned after an upload is content-coded too; the next
+        // upload must not regress to echoing it.
+        await api.upload({
+          path: 'op-1.json',
+          data: 'body three',
+          expectedRev: second.rev,
+        });
+
+        expect(file.body).toBe('body three');
+        expect(second.rev).toBe(await md5HashWasm('body two'));
+        const puts = putsOf(adapter);
+        expect(puts).toHaveLength(2);
+        for (const put of puts) {
+          expect(headerValue(put, WebDavHttpHeader.IF_MATCH)).toBe(undefined);
+        }
+      });
+
+      it('still refuses to overwrite a concurrent write, via the content hash', async () => {
+        const file: FakeDavFile = { body: 'remote body', tag: 'abc' };
+        const adapter = makeFakeDavServer(file, { etagSuffix: '-gzip' });
+        const api = makeApi(adapter);
+        const { rev } = await api.download({ path: 'op-1.json' });
+
+        file.body = 'their body';
+        file.tag = 'xyz';
+
+        await expect(
+          api.upload({ path: 'op-1.json', data: 'my new body', expectedRev: rev }),
+        ).rejects.toBeInstanceOf(RemoteFileChangedUnexpectedly);
+        expect(file.body).toBe('their body');
+        expect(putsOf(adapter)).toHaveLength(0);
+      });
+
+      it('makes the PUT conditional on the OC-ETag ownCloud/Nextcloud send alongside', async () => {
+        const file: FakeDavFile = { body: 'remote body', tag: 'abc' };
+        const adapter = makeFakeDavServer(file, {
+          etagSuffix: '-gzip',
+          exposeOcEtag: true,
+        });
+        const api = makeApi(adapter);
+
+        const { rev } = await api.download({ path: 'op-1.json' });
+        // Same-second writes keep the tag on these servers, so the rev stays
+        // the content hash; the tag only guards the GET→PUT window.
+        expect(rev).toBe(await md5HashWasm('remote body'));
+        const next = await api.upload({
+          path: 'op-1.json',
+          data: 'body two',
+          expectedRev: rev,
+        });
+        await api.upload({
+          path: 'op-1.json',
+          data: 'body three',
+          expectedRev: next.rev,
+        });
+
+        expect(file.body).toBe('body three');
+        expect(
+          putsOf(adapter).map((put) => headerValue(put, WebDavHttpHeader.IF_MATCH)),
+        ).toEqual(['"abc"', '"tag-1"']);
+      });
+
+      it('refuses a concurrent write landing between the content check and the PUT', async () => {
+        const file: FakeDavFile = { body: 'remote body', tag: 'abc' };
+        const adapter = makeFakeDavServer(file, {
+          etagSuffix: '-gzip',
+          exposeOcEtag: true,
+        });
+        const serve = adapter.request.getMockImplementation() as (
+          raw: unknown,
+        ) => Promise<WebDavHttpResponse>;
+        adapter.request.mockImplementation(async (raw: unknown) => {
+          if ((raw as DavRequest).method === 'PUT' && file.body === 'remote body') {
+            file.body = 'their body';
+            file.tag = 'xyz';
+          }
+          return serve(raw);
+        });
+        const api = makeApi(adapter);
+        const { rev } = await api.download({ path: 'op-1.json' });
+
+        await expect(
+          api.upload({ path: 'op-1.json', data: 'my new body', expectedRev: rev }),
+        ).rejects.toBeInstanceOf(RemoteFileChangedUnexpectedly);
+        expect(file.body).toBe('their body');
+      });
+
+      it('ignores OC-ETag while the generic ETag is usable', async () => {
+        const file: FakeDavFile = { body: 'remote body', tag: 'abc' };
+        const adapter = makeFakeDavServer(file, { exposeOcEtag: true });
+        const api = makeApi(adapter);
+        const { rev } = await api.download({ path: 'op-1.json' });
+        expect(rev).toBe('"abc"');
+
+        await api.upload({ path: 'op-1.json', data: 'mine', expectedRev: rev });
+        expect(headerValue(putsOf(adapter)[0]!, WebDavHttpHeader.IF_MATCH)).toBe('"abc"');
+      });
+
+      it('never sends a content-coded rev stored by an earlier version in If-Match', async () => {
+        // The mismatch is reported as a conflict without a PUT; the adapter's
+        // normal retry re-downloads and gets a content-hash rev.
+        const file: FakeDavFile = { body: 'remote body', tag: 'abc' };
+        const adapter = makeFakeDavServer(file, { etagSuffix: '-gzip' });
+        const api = makeApi(adapter);
+
+        await expect(
+          api.upload({ path: 'op-1.json', data: 'mine', expectedRev: '"abc-gzip"' }),
+        ).rejects.toBeInstanceOf(RemoteFileChangedUnexpectedly);
+        expect(putsOf(adapter)).toHaveLength(0);
+
+        const { rev } = await api.download({ path: 'op-1.json' });
+        await api.upload({ path: 'op-1.json', data: 'mine', expectedRev: rev });
+        expect(file.body).toBe('mine');
+      });
+    });
+
+    describe('servers that ignore If-Match on PUT (#9030)', () => {
+      it('refuses to overwrite a concurrent write', async () => {
+        const file: FakeDavFile = { body: 'remote body', tag: 'abc' };
+        const adapter = makeFakeDavServer(file, { ignoreIfMatch: true });
+        const api = makeApi(adapter);
+        const { rev } = await api.download({ path: 'op-1.json' });
+
+        file.body = 'their body';
+        file.tag = 'xyz';
+
+        await expect(
+          api.upload({ path: 'op-1.json', data: 'my new body', expectedRev: rev }),
+        ).rejects.toBeInstanceOf(RemoteFileChangedUnexpectedly);
+        expect(file.body).toBe('their body');
+        expect(putsOf(adapter)).toHaveLength(0);
+      });
+
+      it('checks an unchanged file without downloading its body', async () => {
+        const file: FakeDavFile = { body: 'remote body', tag: 'abc' };
+        const adapter = makeFakeDavServer(file, { ignoreIfMatch: true });
+        const api = makeApi(adapter);
+        const { rev } = await api.download({ path: 'op-1.json' });
+
+        await api.upload({ path: 'op-1.json', data: 'my new body', expectedRev: rev });
+
+        expect(file.body).toBe('my new body');
+        // The initial download plus the post-upload verification only.
+        expect(getsOf(adapter)).toHaveLength(2);
+      });
+
+      it('confirms via GET instead of failing when getetag differs from the served ETag', async () => {
+        // A false conflict here would repeat on every sync and wedge uploads.
+        // A served spelling that is not a content coding stays a strong rev.
+        const file: FakeDavFile = { body: 'remote body', tag: 'abc' };
+        const adapter = makeFakeDavServer(file, {
+          etagSuffix: '-served',
+          ignoreIfMatch: true,
+        });
+        const api = makeApi(adapter);
+        const { rev } = await api.download({ path: 'op-1.json' });
+        expect(rev).toBe('"abc-served"');
+
+        await api.upload({ path: 'op-1.json', data: 'my new body', expectedRev: rev });
+
+        expect(file.body).toBe('my new body');
+        expect(getsOf(adapter)).toHaveLength(3);
+      });
+
+      it('does not log a swallowed PROPFIND failure as critical', async () => {
+        // The pre-check runs on every upload; a server rejecting PROPFIND
+        // must not flood the exportable log while GET still confirms the rev.
+        const critical = vi.fn();
+        const adapter = makeAdapter();
+        adapter.request.mockRejectedValueOnce(
+          new HttpNotOkAPIError(new Response('', { status: 405 })),
+        );
+        adapter.request.mockResolvedValueOnce(okResponse('old', 200, { etag: '"old"' }));
+        adapter.request.mockResolvedValueOnce(okResponse('', 204));
+        adapter.request.mockResolvedValueOnce(okResponse('mine', 200, { etag: '"new"' }));
+
+        const result = await makeApi(adapter, {
+          ...NOOP_SYNC_LOGGER,
+          critical,
+        }).upload({ path: 'op-1.json', data: 'mine', expectedRev: '"old"' });
+
+        expect(result.rev).toBe('"new"');
+        expect(critical).not.toHaveBeenCalled();
+      });
+
+      it('treats a file deleted since the download as a conflict', async () => {
+        const adapter = makeAdapter();
+        adapter.request.mockRejectedValueOnce(
+          new RemoteFileNotFoundAPIError('op-1.json'),
+        );
+        adapter.request.mockRejectedValueOnce(
+          new RemoteFileNotFoundAPIError('op-1.json'),
+        );
+
+        await expect(
+          makeApi(adapter).upload({
+            path: 'op-1.json',
+            data: 'mine',
+            expectedRev: '"old-rev"',
+          }),
+        ).rejects.toBeInstanceOf(RemoteFileChangedUnexpectedly);
+        expect(putsOf(adapter)).toHaveLength(0);
       });
     });
 
@@ -871,46 +1106,28 @@ describe('WebdavApi', () => {
     });
   });
 
-  describe('_buildFullPath (via list)', () => {
+  describe('_buildFullPath (via download)', () => {
     it('throws MissingCredentialsSPError when baseUrl is missing', async () => {
       const adapter = makeAdapter();
       const api = makeApi(adapter, NOOP_SYNC_LOGGER, {
         ...cfg,
         baseUrl: '',
       } as WebdavPrivateCfg);
-      await expect(api.listFiles('/')).rejects.toBeInstanceOf(MissingCredentialsSPError);
+      await expect(api.download({ path: '/' })).rejects.toBeInstanceOf(
+        MissingCredentialsSPError,
+      );
     });
 
     it('throws InvalidDataSPError for paths with .. (no path echo in message)', async () => {
       const adapter = makeAdapter();
       const api = makeApi(adapter);
       try {
-        await api.listFiles('../escape');
+        await api.download({ path: '../escape' });
         expect.fail('expected throw');
       } catch (e) {
         expect(e).toBeInstanceOf(InvalidDataSPError);
         expect((e as Error).message).not.toContain('../escape');
       }
-    });
-  });
-
-  describe('privacy: A3 sweep — never log raw errors', () => {
-    it('listFiles error meta does not embed raw Error', async () => {
-      const calls: Array<{ msg: string; meta?: unknown }> = [];
-      const logger: SyncLogger = {
-        ...NOOP_SYNC_LOGGER,
-        critical: (msg, meta) => calls.push({ msg, meta }),
-      };
-      const adapter = makeAdapter();
-      adapter.request.mockRejectedValue(new Error('inner-leak-token-xyz'));
-      const api = makeApi(adapter, logger);
-      await expect(api.listFiles('sp/')).rejects.toThrow();
-
-      // critical was called; meta must be structured, not raw error
-      expect(calls.length).toBeGreaterThan(0);
-      const meta = calls[0].meta as { errorName?: string };
-      expect(meta?.errorName).toBe('Error');
-      expect(JSON.stringify(calls)).not.toContain('inner-leak-token-xyz');
     });
   });
 });

@@ -1,6 +1,7 @@
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { extname, resolve, sep } from 'node:path';
+import type { AddressInfo } from 'node:net';
 
 export const RELEASED_APP_URL = 'http://127.0.0.1:4249';
 export type ClientRelease = 'old' | 'new';
@@ -8,7 +9,8 @@ export type ClientRelease = 'old' | 'new';
 /** Serve unmodified published bundles, switching releases without changing origin. */
 export const serveReleasedClientAssets = async (
   directories: Record<ClientRelease, string>,
-): Promise<{ close: () => Promise<void> }> => {
+  port = 4249,
+): Promise<{ url: string; close: () => Promise<void> }> => {
   const roots = { old: resolve(directories.old), new: resolve(directories.new) };
   await Promise.all(Object.values(roots).map((root) => readFile(`${root}/index.html`)));
   const mime: Record<string, string> = {
@@ -47,9 +49,10 @@ export const serveReleasedClientAssets = async (
   });
   await new Promise<void>((ready, reject) => {
     server.once('error', reject);
-    server.listen(4249, '127.0.0.1', ready);
+    server.listen(port, '127.0.0.1', ready);
   });
   return {
+    url: `http://127.0.0.1:${(server.address() as AddressInfo).port}`,
     close: () =>
       new Promise<void>((done, reject) => {
         server.close((error) => (error ? reject(error) : done()));

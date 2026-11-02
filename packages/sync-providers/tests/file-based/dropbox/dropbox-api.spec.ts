@@ -7,6 +7,7 @@ import {
   UploadRevToMatchMismatchAPIError,
 } from '../../../src/errors';
 import {
+  Dropbox,
   type DropboxCfg,
   type DropboxDeps,
   type DropboxPrivateCfg,
@@ -892,5 +893,49 @@ describe('DropboxApi Native Platform Routing', () => {
         dropboxApi.download({ path: '/test/nonexistent.json' }),
       ).rejects.toThrow(RemoteFileNotFoundAPIError);
     });
+  });
+});
+
+// Exercise the public provider AND its API encoder: auto-v3 folder creation
+// relies on null meaning create-only. Dropbox has no browser E2E harness.
+describe('Dropbox provider conditional creation', () => {
+  it('does not turn a new-file write into an update of concurrent remote data', async () => {
+    const { deps, fetchSpy, credentialStore } = makeDeps();
+    vi.mocked(credentialStore.load).mockResolvedValue({
+      accessToken: 'token',
+      refreshToken: 'refresh',
+    });
+    let remote = 'pf_2__{"version":2,"state":{"task":{"ids":["remote-task"]}}}';
+    const original = remote;
+    fetchSpy.mockImplementation(async (url: string, init: RequestInit) => {
+      if (url.endsWith('/get_metadata')) {
+        return new Response(JSON.stringify({ rev: 'concurrent-v2-rev' }), {
+          status: 200,
+        });
+      }
+      const args = JSON.parse(new Headers(init.headers).get('Dropbox-API-Arg')!) as {
+        mode: Record<string, string>;
+      };
+      if (args.mode['.tag'] === 'add') {
+        return new Response(JSON.stringify({ error_summary: 'path/conflict/file/...' }), {
+          status: 409,
+        });
+      }
+      remote = String(init.body);
+      return new Response(JSON.stringify({ rev: 'overwritten', size: remote.length }), {
+        status: 200,
+      });
+    });
+    const provider = new Dropbox({ appKey: 'test-key', basePath: '/' }, deps);
+    await expect(
+      provider.uploadFile(
+        'sync-data.json',
+        'pf_3__{"version":3,"format":"split"}',
+        null,
+        false,
+      ),
+    ).rejects.toThrow(UploadRevToMatchMismatchAPIError);
+    expect(remote).toBe(original);
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
   });
 });

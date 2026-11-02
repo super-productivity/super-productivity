@@ -1,4 +1,4 @@
-import { fakeAsync, TestBed, tick } from '@angular/core/testing';
+import { fakeAsync, flushMicrotasks, TestBed, tick } from '@angular/core/testing';
 import { MatDialog } from '@angular/material/dialog';
 import { Store } from '@ngrx/store';
 import { NEVER, Observable, of, ReplaySubject, Subject } from 'rxjs';
@@ -21,11 +21,19 @@ import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 import { T } from 'src/app/t.const';
 import { Task, TaskWithReminderData } from '../tasks/task.model';
 import { DialogViewTaskRemindersComponent } from '../tasks/dialog-view-task-reminders/dialog-view-task-reminders.component';
+import { DateService } from '../../core/date/date.service';
+import { IS_ELECTRON_TOKEN } from '../../app.constants';
+import { getRepeatableTaskId } from '../task-repeat-cfg/get-repeatable-task-id.util';
+import { closeAudioContext } from '../../util/audio-context';
+import { startLoopingAlarm, stopLoopingAlarm } from '../../util/looping-alarm';
 
 describe('ReminderModule dialog opening', () => {
   let matDialogSpy: jasmine.SpyObj<MatDialog>;
+  let uiHelperSpy: jasmine.SpyObj<UiHelperService>;
   let remindersActive$: Subject<TaskWithReminderData[]>;
   let syncDone$: Subject<void>;
+  let isFocusWindow: boolean;
+  let useAlarmStyleReminders: boolean;
 
   const reminder = {
     id: 'task-1',
@@ -37,6 +45,12 @@ describe('ReminderModule dialog opening', () => {
     remindersActive$ = new Subject<TaskWithReminderData[]>();
     syncDone$ = new Subject<void>();
     matDialogSpy = jasmine.createSpyObj('MatDialog', ['open'], { openDialogs: [] });
+    uiHelperSpy = jasmine.createSpyObj('UiHelperService', [
+      'focusApp',
+      'focusAppAfterNotification',
+    ]);
+    isFocusWindow = false;
+    useAlarmStyleReminders = false;
 
     const taskServiceSpy = jasmine.createSpyObj('TaskService', ['currentTaskId']);
     taskServiceSpy.currentTaskId.and.returnValue(null);
@@ -60,10 +74,8 @@ describe('ReminderModule dialog opening', () => {
           provide: SnackService,
           useValue: jasmine.createSpyObj('SnackService', ['open']),
         },
-        {
-          provide: UiHelperService,
-          useValue: jasmine.createSpyObj('UiHelperService', ['focusApp']),
-        },
+        { provide: UiHelperService, useValue: uiHelperSpy },
+        { provide: IS_ELECTRON_TOKEN, useValue: true },
         { provide: NotifyService, useValue: notifyServiceSpy },
         {
           provide: LayoutService,
@@ -79,7 +91,12 @@ describe('ReminderModule dialog opening', () => {
           useValue: jasmine.createSpyObj('SyncWrapperService', ['sync']),
         },
         { provide: Store, useValue: jasmine.createSpyObj('Store', ['dispatch']) },
-        { provide: GlobalConfigService, useValue: { cfg: () => ({}) } },
+        {
+          provide: GlobalConfigService,
+          useValue: {
+            cfg: () => ({ reminder: { isFocusWindow, useAlarmStyleReminders } }),
+          },
+        },
         {
           provide: CapacitorReminderService,
           useValue: jasmine.createSpyObj('CapacitorReminderService', ['initialize'], {
@@ -89,6 +106,61 @@ describe('ReminderModule dialog opening', () => {
       ],
     });
   });
+
+  const triggerReminder = (): void => {
+    TestBed.inject(ReminderModule);
+    syncDone$.next();
+    tick(1000);
+    remindersActive$.next([reminder]);
+  };
+
+  const mockAudioSources = (): jasmine.SpyObj<AudioBufferSourceNode>[] => {
+    const sources: jasmine.SpyObj<AudioBufferSourceNode>[] = [];
+    closeAudioContext();
+    spyOn(window as any, 'AudioContext').and.returnValue({
+      state: 'running',
+      destination: {},
+      close: jasmine.createSpy('close'),
+      createBufferSource: () => {
+        const source = jasmine.createSpyObj<AudioBufferSourceNode>('source', [
+          'connect',
+          'disconnect',
+          'start',
+          'stop',
+        ]);
+        sources.push(source);
+        return source;
+      },
+      createGain: () => ({
+        gain: {},
+        connect: () => undefined,
+        disconnect: () => undefined,
+      }),
+      decodeAudioData: () => Promise.resolve({}),
+    });
+    spyOn(window, 'fetch').and.resolveTo({
+      ok: true,
+      arrayBuffer: () => Promise.resolve(new ArrayBuffer(8)),
+    } as Response);
+    return sources;
+  };
+
+  it('focuses the app via the delayed notification path when the setting is on (#10410)', fakeAsync(() => {
+    isFocusWindow = true;
+    triggerReminder();
+
+    expect(uiHelperSpy.focusAppAfterNotification).toHaveBeenCalledOnceWith({
+      isReminder: true,
+    });
+    expect(uiHelperSpy.focusApp).not.toHaveBeenCalled();
+  }));
+
+  it('does not focus the app when the setting is off', fakeAsync(() => {
+    triggerReminder();
+
+    expect(uiHelperSpy.focusAppAfterNotification).not.toHaveBeenCalled();
+    expect(uiHelperSpy.focusApp).not.toHaveBeenCalled();
+  }));
 
   it('opens task reminder dialog as dismissable (no disableClose)', fakeAsync(() => {
     TestBed.inject(ReminderModule);
@@ -104,6 +176,49 @@ describe('ReminderModule dialog opening', () => {
       },
     });
   }));
+
+  it('loops the alarm and focuses the app until the dialog closes when alarm-style is on', fakeAsync(() => {
+    useAlarmStyleReminders = true;
+    const afterClosed$ = new Subject<void>();
+    matDialogSpy.open.and.returnValue({ afterClosed: () => afterClosed$ } as never);
+    const sources = mockAudioSources();
+
+    triggerReminder();
+    flushMicrotasks();
+
+    expect(uiHelperSpy.focusAppAfterNotification).toHaveBeenCalledOnceWith({
+      isReminder: true,
+    });
+    expect(sources[0].loop).toBe(true);
+    expect(sources[0].start).toHaveBeenCalled();
+
+    afterClosed$.next();
+    flushMicrotasks();
+
+    expect(sources[0].stop).toHaveBeenCalled();
+    closeAudioContext();
+  }));
+
+  it('keeps a newer alarm loop running when the dialog closes', fakeAsync(() => {
+    useAlarmStyleReminders = true;
+    const afterClosed$ = new Subject<void>();
+    matDialogSpy.open.and.returnValue({ afterClosed: () => afterClosed$ } as never);
+    const sources = mockAudioSources();
+
+    triggerReminder();
+    flushMicrotasks();
+    // e.g. the focus-mode break-end alarm replaces the bell
+    startLoopingAlarm('positive.mp3', 50);
+    flushMicrotasks();
+
+    afterClosed$.next();
+    flushMicrotasks();
+
+    expect(sources.length).toBe(2);
+    expect(sources[1].stop).not.toHaveBeenCalled();
+    stopLoopingAlarm();
+    closeAudioContext();
+  }));
 });
 
 describe('ReminderModule iOS notification actions', () => {
@@ -112,6 +227,10 @@ describe('ReminderModule iOS notification actions', () => {
   let taskServiceSpy: jasmine.SpyObj<TaskService>;
   let syncWrapperSpy: jasmine.SpyObj<SyncWrapperService>;
   let snackServiceSpy: jasmine.SpyObj<SnackService>;
+
+  // Fixed logical today so predicted repeatable ids in the #10077 tests are
+  // deterministic.
+  const TODAY_STR = '2026-09-20';
 
   // setDeadline enforces mutual exclusivity, so a real task only carries one
   // of deadlineDay / deadlineWithTime. The fixture mirrors the deadlineWithTime
@@ -146,6 +265,7 @@ describe('ReminderModule iOS notification actions', () => {
       'currentTaskId',
       'focusTask',
       'getByIdOnce$',
+      'getByIdLive$',
       'setDone',
     ]);
     taskServiceSpy.currentTaskId.and.returnValue(null);
@@ -195,6 +315,7 @@ describe('ReminderModule iOS notification actions', () => {
         { provide: SyncWrapperService, useValue: syncWrapperSpy },
         { provide: Store, useValue: storeSpy },
         { provide: GlobalConfigService, useValue: { cfg: () => ({}) } },
+        { provide: DateService, useValue: { todayStr: () => TODAY_STR } },
         {
           provide: CapacitorReminderService,
           useValue: jasmine.createSpyObj('CapacitorReminderService', ['initialize'], {
@@ -291,6 +412,71 @@ describe('ReminderModule iOS notification actions', () => {
     expect(taskServiceSpy.focusTask).toHaveBeenCalledOnceWith('task-1');
   });
 
+  type AndroidHandlers = {
+    _handleSnoozeAction: (
+      taskId: string,
+      newRemindAt: number,
+      reminderType?: string,
+    ) => Promise<void>;
+    _handleTapAction: (taskId: string, reminderType?: string) => Promise<void>;
+  };
+
+  it('moves only the deadline reminder for an Android deadline snooze', async () => {
+    await (module as unknown as AndroidHandlers)._handleSnoozeAction(
+      'task-1',
+      9_000,
+      'DEADLINE',
+    );
+
+    expect(storeSpy.dispatch).toHaveBeenCalledOnceWith(
+      jasmine.objectContaining({
+        type: TaskSharedActions.setDeadline.type,
+        taskId: 'task-1',
+        deadlineWithTime: 456,
+        deadlineRemindAt: 9_000,
+        // A snooze leaves the deadline as is, so no "Deadline set" snack.
+        isSkipSnack: true,
+      }),
+    );
+  });
+
+  it('ignores a deadline snooze when the deadline was removed meanwhile', async () => {
+    // Without a deadline, setDeadline would store an orphan deadlineRemindAt.
+    taskServiceSpy.getByIdOnce$.and.returnValue(
+      of({ id: 'task-1', title: 'Task 1', isDone: false } as Task),
+    );
+
+    await (module as unknown as AndroidHandlers)._handleSnoozeAction(
+      'task-1',
+      9_000,
+      'DEADLINE',
+    );
+
+    expect(storeSpy.dispatch).not.toHaveBeenCalled();
+  });
+
+  it('keeps rescheduling the task reminder for an untyped Android snooze', async () => {
+    await (module as unknown as AndroidHandlers)._handleSnoozeAction('task-1', 9_000);
+
+    expect(storeSpy.dispatch).toHaveBeenCalledOnceWith(
+      jasmine.objectContaining({
+        type: TaskSharedActions.reScheduleTaskWithTime.type,
+        remindAt: 9_000,
+      }),
+    );
+  });
+
+  it('clears the deadline reminder when tapping an Android deadline notification', async () => {
+    await (module as unknown as AndroidHandlers)._handleTapAction('task-1', 'DEADLINE');
+
+    expect(storeSpy.dispatch).toHaveBeenCalledOnceWith(
+      jasmine.objectContaining({
+        type: TaskSharedActions.clearDeadlineReminder.type,
+        taskId: 'task-1',
+      }),
+    );
+  });
+
   it('does not dismiss regular reminders when tapping an iOS due-date notification', async () => {
     await handleIOSNotificationAction({
       actionId: 'tap',
@@ -304,9 +490,9 @@ describe('ReminderModule iOS notification actions', () => {
 
   // The Done action routes through the shared _handleDoneAction, which is the
   // handler the #8551 hydration gate protects: once the store is loaded the task
-  // resolves and gets marked done; on an empty/unhydrated store getByIdOnce$
-  // returns undefined and the action must be reported as already-done (never a
-  // silent no-op that loses a setDone).
+  // resolves and gets marked done. A missing task is only "already completed"
+  // when it cannot still be created — regular ids never materialize, while
+  // today's predicted repeatable instance id is waited for (see #10077 tests).
   it('marks the task done for a Done notification action', async () => {
     await handleIOSNotificationAction({
       actionId: NOTIFICATION_ACTION.DONE,
@@ -320,7 +506,7 @@ describe('ReminderModule iOS notification actions', () => {
     );
   });
 
-  it('does not setDone for a missing task and reports already-completed (#8551 guard)', async () => {
+  it('does not setDone for a missing regular task and reports already-completed (#8551 guard)', async () => {
     taskServiceSpy.getByIdOnce$.and.returnValue(of(undefined as unknown as Task));
 
     await handleIOSNotificationAction({
@@ -330,10 +516,88 @@ describe('ReminderModule iOS notification actions', () => {
     });
 
     expect(taskServiceSpy.setDone).not.toHaveBeenCalled();
+    expect(taskServiceSpy.getByIdLive$).not.toHaveBeenCalled();
     expect(snackServiceSpy.open).toHaveBeenCalledWith(
       jasmine.objectContaining({ msg: T.NOTIFICATION.TASK_ALREADY_COMPLETED }),
     );
   });
+
+  // #10077: reminders for repeatable tasks are pre-scheduled natively for a
+  // predicted instance id before the task entity exists — the instance is only
+  // created lazily after the strict initial-sync gate plus a 1s debounce. A
+  // Done tap that beats creation must wait for the instance instead of being
+  // dropped as "already completed".
+  it('marks the pending repeatable instance done once it appears (#10077)', async () => {
+    const predictedId = getRepeatableTaskId('cfg-1', TODAY_STR);
+    taskServiceSpy.getByIdOnce$.and.returnValue(of(undefined as unknown as Task));
+    const live$ = new Subject<Task>();
+    taskServiceSpy.getByIdLive$.and.returnValue(live$);
+
+    const donePromise = handleIOSNotificationAction({
+      actionId: NOTIFICATION_ACTION.DONE,
+      notificationId: 1,
+      extra: { relatedId: predictedId, reminderType: 'TASK' },
+    });
+    await new Promise((resolve) => setTimeout(resolve));
+
+    expect(taskServiceSpy.getByIdLive$).toHaveBeenCalledOnceWith(predictedId);
+    expect(taskServiceSpy.setDone).not.toHaveBeenCalled();
+
+    // The lazy instance creation lands in the store (TaskDueEffects) moments later.
+    live$.next({ id: predictedId, isDone: false } as Task);
+    await donePromise;
+
+    expect(taskServiceSpy.setDone).toHaveBeenCalledOnceWith(predictedId);
+    expect(snackServiceSpy.open).toHaveBeenCalledWith(
+      jasmine.objectContaining({ msg: T.NOTIFICATION.TASK_MARKED_DONE }),
+    );
+  });
+
+  it('does not wait for a predicted instance id from a previous day (#10077)', async () => {
+    const staleId = getRepeatableTaskId('cfg-1', '2026-09-19');
+    taskServiceSpy.getByIdOnce$.and.returnValue(of(undefined as unknown as Task));
+
+    await handleIOSNotificationAction({
+      actionId: NOTIFICATION_ACTION.DONE,
+      notificationId: 1,
+      extra: { relatedId: staleId, reminderType: 'TASK' },
+    });
+
+    // Lazy creation only materializes the newest occurrence, so a past-day
+    // instance will never appear — no bounded wait for it.
+    expect(taskServiceSpy.getByIdLive$).not.toHaveBeenCalled();
+    expect(taskServiceSpy.setDone).not.toHaveBeenCalled();
+    expect(snackServiceSpy.open).toHaveBeenCalledWith(
+      jasmine.objectContaining({ msg: T.NOTIFICATION.TASK_ALREADY_COMPLETED }),
+    );
+  });
+
+  it('gives up after the bounded wait when the repeatable instance is never created (#10077)', fakeAsync(() => {
+    // 15s ceiling mirrors REPEATABLE_DONE_MAX_WAIT_MS in reminder.module.ts.
+    const REPEATABLE_DONE_MAX_WAIT_MS = 15_000;
+    const predictedId = getRepeatableTaskId('cfg-1', TODAY_STR);
+    taskServiceSpy.getByIdOnce$.and.returnValue(of(undefined as unknown as Task));
+    taskServiceSpy.getByIdLive$.and.returnValue(NEVER);
+
+    let settled = false;
+    void handleIOSNotificationAction({
+      actionId: NOTIFICATION_ACTION.DONE,
+      notificationId: 1,
+      extra: { relatedId: predictedId, reminderType: 'TASK' },
+    }).then(() => (settled = true));
+
+    // Setup microtasks (sync + one-shot read) drain, the wait is armed.
+    tick(0);
+    expect(taskServiceSpy.setDone).not.toHaveBeenCalled();
+
+    tick(REPEATABLE_DONE_MAX_WAIT_MS + 1);
+
+    expect(settled).toBe(true);
+    expect(taskServiceSpy.setDone).not.toHaveBeenCalled();
+    expect(snackServiceSpy.open).toHaveBeenCalledWith(
+      jasmine.objectContaining({ msg: T.NOTIFICATION.TASK_ALREADY_COMPLETED }),
+    );
+  }));
 });
 
 describe('ReminderModule _handleAfterDataLoaded gate (#8551)', () => {

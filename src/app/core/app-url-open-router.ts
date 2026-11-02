@@ -1,7 +1,9 @@
 import { Subject } from 'rxjs';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import { pendingCapacitorAppUriAction$ } from '../features/tasks/app-uri-actions/pending-capacitor-app-uri-action';
 import { pendingCapacitorQuickAction$ } from './app-uri-actions/pending-capacitor-quick-action';
 import { pendingCapacitorOAuthUrl$ } from '../imex/sync/pending-capacitor-oauth-url';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import {
   AppUriTaskAction,
   parseAppUriTaskAction,

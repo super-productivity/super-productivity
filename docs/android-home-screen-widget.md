@@ -21,6 +21,14 @@ state, not an independent task or calendar engine.
   applies those intents. Native code must never rewrite the snapshot.
 - Keep the explicit-component PendingIntent and exported-receiver restrictions;
   external apps must not be able to complete tasks.
+- The header's "+" opens `QuickAddActivity`, a dialog over the home screen
+  that writes the typed title to `CaptureInbox` (like a share) and finishes.
+  Angular imports it on its next start or resume as one Today `addTask` with
+  short syntax applied. Like checkbox taps, it never touches the snapshot: the
+  renderer lists not-yet-imported title captures above the snapshot rows
+  (`WidgetData.withPendingCaptures`, raw title, checkbox opens the app). This
+  is a fact of the capture contract (title captures always go to Today), not
+  Today membership computed natively.
 
 The serializer and Kotlin parser are locked to the same golden shape by
 `android-widget.selectors.spec.ts` and `WidgetDataTest.kt`. Update both ends and
@@ -30,12 +38,11 @@ both tests when the contract changes.
 
 `TrackingWidgetProvider` renders the snapshot's `currentTask` field. Its Stop
 button must work with no activity alive (dismissed from recents while the
-tracking foreground service runs), so the receiver itself freezes the native
-counter, stops `TrackingForegroundService`, and queues `{taskId, elapsedMs}` in
-`WidgetTrackingStopQueue`. Angular applies it on the next drain
-(`AndroidForegroundTrackingEffects`): it books `elapsedMs` like recovery does
-and pauses only if that task is still current. On resume the stop is applied
-before the background gap credit, so time after the tap is never booked.
+tracking foreground service runs), so it takes the tracking notification's
+Pause path (`NotificationActionReceiver.handleWidgetStop`): native samples the
+total and stops the service at the tap, and Angular books it from
+`NotificationActionQueue` when it next runs (#10683). Both widgets hide a
+local task whose stop is still queued.
 
 ## Appearance
 
@@ -59,7 +66,8 @@ until the app writes a current snapshot.
 
 ## Deliberate limitations
 
-- No task creation, undo, or per-task deep link.
+- No undo or per-task deep link. Quick add takes a title only (short syntax
+  covers project, tags and dates); no list picker or configurable list.
 - Native widget chrome is English-only.
 - At most 20 tasks are rendered.
 - Cross-client freshness while the app is dead requires a separate background

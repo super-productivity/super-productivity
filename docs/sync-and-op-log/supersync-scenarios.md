@@ -27,7 +27,7 @@ For the complete inventory, search
 | Encryption, password lifecycle, downgrade/decrypt failures           | [`supersync-encryption.spec.ts`](../../e2e/tests/sync/supersync-encryption.spec.ts), [`supersync-encryption-password-change.spec.ts`](../../e2e/tests/sync/supersync-encryption-password-change.spec.ts), [`supersync-wrong-password-error.spec.ts`](../../e2e/tests/sync/supersync-wrong-password-error.spec.ts), [`supersync-final-page-decrypt-failure-9256.spec.ts`](../../e2e/tests/sync/supersync-final-page-decrypt-failure-9256.spec.ts) |
 | Retry, transient download, constraint, and network failure           | [`supersync-rejected-ops-transient-download-8331.spec.ts`](../../e2e/tests/sync/supersync-rejected-ops-transient-download-8331.spec.ts), [`supersync-constraint-error-recovery.spec.ts`](../../e2e/tests/sync/supersync-constraint-error-recovery.spec.ts), [`supersync-network-failure.spec.ts`](../../e2e/tests/sync/supersync-network-failure.spec.ts)                                                                                        |
 | Compaction, snapshot clocks, and vector-clock pruning                | [`supersync-compaction.spec.ts`](../../e2e/tests/sync/supersync-compaction.spec.ts), [`supersync-snapshot-vector-clock.spec.ts`](../../e2e/tests/sync/supersync-snapshot-vector-clock.spec.ts), [`supersync-vector-clock-pruning.spec.ts`](../../e2e/tests/sync/supersync-vector-clock-pruning.spec.ts), [`supersync-vector-clock-max-size.spec.ts`](../../e2e/tests/sync/supersync-vector-clock-max-size.spec.ts)                               |
-| Archive and multi-entity cascade behavior                            | [`supersync-archive-data-sync.spec.ts`](../../e2e/tests/sync/supersync-archive-data-sync.spec.ts), [`supersync-archive-conflict.spec.ts`](../../e2e/tests/sync/supersync-archive-conflict.spec.ts), [`supersync-cascade-delete.spec.ts`](../../e2e/tests/sync/supersync-cascade-delete.spec.ts), [`supersync-cross-entity.spec.ts`](../../e2e/tests/sync/supersync-cross-entity.spec.ts)                                                         |
+| Archive and multi-entity cascade behavior                            | [`supersync-archive-data-sync.spec.ts`](../../e2e/tests/sync/supersync-archive-data-sync.spec.ts), [`supersync-archive-conflict.spec.ts`](../../e2e/tests/sync/supersync-archive-conflict.spec.ts), [`supersync-cascade-delete.spec.ts`](../../e2e/tests/sync/supersync-cascade-delete.spec.ts)                                                                                                                                                  |
 | Provider/account switch and late join                                | [`supersync-provider-switch.spec.ts`](../../e2e/tests/sync/supersync-provider-switch.spec.ts), [`supersync-reenable-and-account-switch.spec.ts`](../../e2e/tests/sync/supersync-reenable-and-account-switch.spec.ts), [`supersync-late-join.spec.ts`](../../e2e/tests/sync/supersync-late-join.spec.ts), [`webdav-provider-switch.spec.ts`](../../e2e/tests/sync/webdav-provider-switch.spec.ts)                                                 |
 | Schema and legacy-provider migration                                 | [`supersync-legacy-migration-sync.spec.ts`](../../e2e/tests/sync/supersync-legacy-migration-sync.spec.ts), [`webdav-legacy-migration-sync.spec.ts`](../../e2e/tests/sync/webdav-legacy-migration-sync.spec.ts)                                                                                                                                                                                                                                   |
 
@@ -68,7 +68,11 @@ branch. It provides the dedicated services and sharded SuperSync jobs. See
 [`e2e/CLAUDE.md`](../../e2e/CLAUDE.md) for focused local commands.
 
 Every sync fix must begin with a reproducible failure against real operation or
-state shapes. Add the narrow focused test first, then add or extend E2E when the
-contract spans clients, persistence/restart, transport, or released-version
-compatibility. Update this index only when a durable scenario family gains or
+state shapes. Every sync bug fix requires an E2E test that exactly reproduces
+the reported failure: write it first and confirm it fails without the fix. A
+narrow focused spec may additionally pin the mechanism, but never replaces the
+E2E. Only when the failure is unreachable from the app (`super-sync-server`
+internals, or behaviour specific to a provider with no E2E harness — Dropbox,
+OneDrive today) use the narrowest test that exercises the real code path, and
+state in the PR why E2E can't reach it. Update this index only when a durable scenario family gains or
 changes its executable owner.

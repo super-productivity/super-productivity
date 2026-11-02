@@ -1,10 +1,10 @@
 import {
   AnyTaskUpdatePayload,
+  LanguageChangePayload,
   PluginAPI,
   TaskCompletePayload,
   TaskUpdatePayload,
 } from '@super-productivity/plugin-api';
-import type { PluginHooks } from '@super-productivity/plugin-api';
 
 declare const plugin: PluginAPI;
 
@@ -39,7 +39,7 @@ plugin.registerShortcut({
 });
 
 // Example: Hook into task completion
-plugin.registerHook(PluginHooks.TASK_COMPLETE, (taskData: TaskCompletePayload) => {
+plugin.registerHook(plugin.Hooks.TASK_COMPLETE, (taskData: TaskCompletePayload) => {
   plugin.log.info('Task completed:', taskData.task.title);
 
   // Example: Show notification
@@ -50,12 +50,12 @@ plugin.registerHook(PluginHooks.TASK_COMPLETE, (taskData: TaskCompletePayload) =
 });
 
 // Example: Hook into task updates
-plugin.registerHook(PluginHooks.TASK_UPDATE, (taskData: TaskUpdatePayload) => {
+plugin.registerHook(plugin.Hooks.TASK_UPDATE, (taskData: TaskUpdatePayload) => {
   plugin.log.info('Task updated:', taskData.task.title);
 });
 
 // Example: Hook into context changes
-plugin.registerHook(PluginHooks.ANY_TASK_UPDATE, async (payload: AnyTaskUpdatePayload) => {
+plugin.registerHook(plugin.Hooks.ANY_TASK_UPDATE, async (payload: AnyTaskUpdatePayload) => {
   const changes = payload.changes;
   if (changes && 'projectId' in changes && changes.projectId) {
     const projects = await plugin.getAllProjects();
@@ -119,12 +119,12 @@ if (plugin.onMessage) {
 }
 
 // Listen for language changes and notify iframe
-plugin.registerHook(PluginHooks.LANGUAGE_CHANGE, (language: string) => {
+plugin.registerHook(plugin.Hooks.LANGUAGE_CHANGE, ({ newLanguage }: LanguageChangePayload) => {
   // Notify the iframe about language change
   const iframe = document.querySelector('iframe[data-plugin-iframe]');
   if (iframe && (iframe as HTMLIFrameElement).contentWindow) {
     (iframe as HTMLIFrameElement).contentWindow!.postMessage(
-      { type: 'languageChanged', language },
+      { type: 'languageChanged', language: newLanguage },
       '*',
     );
   }

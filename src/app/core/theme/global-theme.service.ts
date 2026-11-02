@@ -28,13 +28,17 @@ import { MatIconRegistry } from '@angular/material/icon';
 import { DomSanitizer } from '@angular/platform-browser';
 import { ChromeExtensionInterfaceService } from '../chrome-extension-interface/chrome-extension-interface.service';
 
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import { GlobalConfigService } from '../../features/config/global-config.service';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import { WorkContextThemeCfg } from '../../features/work-context/work-context.model';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import {
   DEFAULT_BACKGROUND_OVERLAY_OPACITY,
   isBackgroundImageSet,
   normalizeBackgroundImageBlur,
 } from '../../features/work-context/work-context.const';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import { WorkContextService } from '../../features/work-context/work-context.service';
 import { combineLatest, fromEvent, Observable, of } from 'rxjs';
 import { IS_FIREFOX } from '../../util/is-firefox';
@@ -49,6 +53,7 @@ import { InputIntentService } from '../input-intent/input-intent.service';
 import { ipcEnterFullScreen$, ipcLeaveFullScreen$ } from '../ipc-events';
 
 import { IS_ANDROID_WEB_VIEW } from '../../util/is-android-web-view';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import { androidInterface } from '../../features/android/android-interface';
 import { HttpClient } from '@angular/common/http';
 import { CapacitorPlatformService } from '../platform/capacitor-platform.service';
@@ -56,6 +61,7 @@ import { registerPlugin } from '@capacitor/core';
 import { StatusBar, Style } from '@capacitor/status-bar';
 import { SafeArea } from 'capacitor-plugin-safe-area';
 import { patchCdkViewportForSafeArea } from './cdk-safe-area-viewport.util';
+import { lockViewportZoom } from './lock-viewport-zoom.util';
 import { LS } from '../persistence/storage-keys.const';
 import { Log, PluginLog } from '../log';
 import { LayoutService } from '../../core-ui/layout/layout.service';
@@ -64,6 +70,7 @@ import { CSS_VAR_KEYBOARD_HEIGHT } from './keyboard-css-vars.const';
 import { OverlayContainer } from '@angular/cdk/overlay';
 import { sanitizeSvgIconContent } from '../../util/sanitize-svg-icon.util';
 import { CustomThemeService, getRequiredThemeMode } from './custom-theme.service';
+import { BUILT_IN_SVG_ICONS } from './built-in-svg-icons.const';
 
 interface NavigationBarPlugin {
   setColor(options: { color: string; style: 'LIGHT' | 'DARK' }): Promise<void>;
@@ -356,38 +363,21 @@ export class GlobalThemeService {
   }
 
   private _initIcons(): void {
-    const icons: [string, string][] = [
-      ['sp', 'assets/icons/sp.svg'],
-      ['github', 'assets/icons/github.svg'],
-      ['gitlab', 'assets/icons/gitlab.svg'],
-      ['jira', 'assets/icons/jira.svg'],
-      ['caldav', 'assets/icons/caldav.svg'],
-      ['calendar', 'assets/icons/calendar.svg'],
-      ['open_project', 'assets/icons/open-project.svg'],
-      ['remove_today', 'assets/icons/remove-today-48px.svg'],
-      ['gitea', 'assets/icons/gitea.svg'],
-      ['redmine', 'assets/icons/redmine.svg'],
-      ['linear', 'assets/icons/linear.svg'],
-      ['clickup', 'assets/icons/clickup.svg'],
-      // trello icon
-      ['trello', 'assets/icons/trello.svg'],
-      ['azure_devops', 'assets/icons/azure_devops.svg'],
-      ['nextcloud_deck', 'assets/icons/nextcloud_deck.svg'],
-      ['plainspace', 'assets/icons/plainspace.svg'],
-    ];
-
+    // Material v22 infers the ligature class from the loaded fonts and would pick
+    // `material-symbols-outlined`; our icon styles are bound to `.material-icons`.
+    this._matIconRegistry.setDefaultFontSetClass('material-icons', 'mat-ligature-font');
     // todo test if can be removed with airplane mode and wifi without internet
-    icons.forEach(([name, path]) => {
+    BUILT_IN_SVG_ICONS.forEach(([name, path]) => {
       this._matIconRegistry.addSvgIcon(
         name,
         this._domSanitizer.bypassSecurityTrustResourceUrl(path),
       );
     });
 
-    this.preloadIcons(icons);
+    this.preloadIcons(BUILT_IN_SVG_ICONS);
   }
 
-  preloadIcons(icons: [string, string][]): Promise<void[]> {
+  preloadIcons(icons: readonly (readonly [string, string])[]): Promise<void[]> {
     // Map each icon name to a promise that fetches and registers the icon.
     const iconPromises = icons.map(([iconName, url]) => {
       // Construct the URL for the SVG file.
@@ -510,6 +500,7 @@ export class GlobalThemeService {
       if (this._platformService.isIOS()) {
         this.document.body.classList.add(BodyClass.isIOS);
         this._iosKeyboardService.init();
+        lockViewportZoom(this.document);
 
         // Add iPad-specific class for tablet optimizations
         if (this._platformService.isIPad()) {
@@ -762,17 +753,16 @@ export class GlobalThemeService {
     // built-in SystemBars). The --safe-area-inset-* vars are no longer written
     // from JS on Android — that would race SystemBars on the same documentElement
     // inline style (last-writer-wins, OS/timing dependent). Each band resolves
-    // them on its own (verified against the bundled SystemBars.java):
-    //   - API >= 35: SystemBars *injects* the real px into --safe-area-inset-*.
-    //   - WebView >= 140 (any API): SystemBars passes the native insets through,
-    //     so the WebView's own env(safe-area-inset-*) is correct (no injection
-    //     below API 35).
-    //   - WebView < 140 / API < 35 tail: SystemBars does nothing here.
+    // them on its own (verified against the bundled SystemBars.java, Capacitor
+    // 8.5.3 — see docs/android-edge-to-edge-keyboard.md, "Capacitor 8.5.2+"):
+    //   - WebView >= 140 (any API, viewport-fit=cover): SystemBars passes the
+    //     native insets through and mirrors them into --safe-area-inset-*
+    //     (bottom 0px while the keyboard is up, which it pads natively).
+    //   - WebView < 140 (any API): SystemBars pads the window natively for the
+    //     system bars and keyboard and writes 0px into --safe-area-inset-*.
     // In every case the SCSS fallback `var(--safe-area-inset-*, env(...))` in
     // _css-variables.scss resolves to the injected px when present, else to
-    // env(). With viewport-fit=cover env(safe-area-inset-top) equals the
-    // status-bar height when the WebView extends under it — exactly the #8283 top
-    // fallback, preserved automatically by not pinning the var here.
+    // env() — which covers the moment before SystemBars' first write.
     // Only iOS (contentInset: 'never') still needs JS-fed insets from
     // capacitor-plugin-safe-area; SystemBars insetsHandling is Android-only.
     if (!this._platformService.isAndroid()) {

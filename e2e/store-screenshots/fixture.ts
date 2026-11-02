@@ -463,6 +463,9 @@ export const test = base.extend<ScreenshotFixtures>({
     if (isMobileProject) {
       await page.addInitScript(() => {
         localStorage.setItem('SUP_NAV_SIDEBAR_EXPANDED', 'false');
+        // Phones open the schedule in the day view unless a view was picked;
+        // the store shot shows the week grid.
+        localStorage.setItem('SELECTED_TIME_VIEW', 'week');
       });
     }
     await page.addInitScript((darkMode) => {
@@ -542,16 +545,14 @@ export const test = base.extend<ScreenshotFixtures>({
   screenshotMaster: async ({ page, electronApp, locale, theme }, use, testInfo) => {
     const viewport = testInfo.project.name as ViewportName;
     const showSyncReadyState = async (): Promise<void> => {
-      await page.evaluate(() => {
-        const syncBtn = document.querySelector('.sync-btn');
-        if (!syncBtn || syncBtn.querySelector('.__sp-sync-ready-check')) return;
-
-        const icon = document.createElement('span');
-        icon.className =
-          'mat-icon notranslate material-icons mat-ligature-font mat-icon-no-color sync-state-ico __sp-sync-ready-check';
-        icon.setAttribute('aria-hidden', 'true');
-        icon.textContent = 'check';
-        syncBtn.appendChild(icon);
+      await page.evaluate(async () => {
+        // Screenshots run without a sync provider. Show the in-sync icon
+        // instead of `sync_off`, as a configured install would. Fetched the
+        // same way the app loads its built-in SVG icons.
+        const icon = document.querySelector('.sync-btn mat-icon');
+        if (!icon) return;
+        const res = await fetch('assets/icons/sync-done.svg');
+        if (res.ok) icon.innerHTML = await res.text();
       });
     };
     const fn = async (scenario: string, name: string): Promise<void> => {

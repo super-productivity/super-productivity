@@ -7,6 +7,9 @@ import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationManagerCompat
 
+/** What getTrackingElapsed() hands the JS recovery. */
+data class BridgeSnapshot(val taskId: String, val elapsedMs: Long, val resume: Boolean)
+
 class TrackingForegroundService : Service() {
 
     companion object {
@@ -23,7 +26,13 @@ class TrackingForegroundService : Service() {
         const val EXTRA_TASK_TITLE = "task_title"
         const val EXTRA_TIME_SPENT = "time_spent_ms"
 
-        // Static state accessible from JavaScriptInterface
+        // Static state accessible from JavaScriptInterface. Mirrored to
+        // TrackingStateStore on every change so a process kill does not lose
+        // the session (#7390); restoreIfIdle() reads it back in a new process.
+        @Volatile
+        internal var taskTitle: String = ""
+            private set
+
         @Volatile
         var currentTaskId: String? = null
             private set
@@ -38,6 +47,12 @@ class TrackingForegroundService : Service() {
 
         @Volatile
         var isTracking: Boolean = false
+            private set
+
+        // False only for a session restored after a user-requested exit: the
+        // JS recovery credits it, then stops tracking instead of resuming.
+        @Volatile
+        var resumeAfterRestore: Boolean = true
             private set
 
         // Marks the window between startForegroundService() and the first
@@ -67,18 +82,41 @@ class TrackingForegroundService : Service() {
             }
         }
 
+        data class ActionSnapshot(val taskId: String, val elapsedMs: Long, val at: Long)
+
         /**
-         * Stop the service from any context — the JS bridge, or the tracking
-         * widget's receiver when no activity exists.
+         * Samples the task total for a notification Pause/Done tap and ends the
+         * session in the same locked step (#10683). Clearing memory AND the
+         * persisted session right away makes getTrackingElapsed() report "not
+         * tracking" before the service is torn down, so neither a live WebView
+         * draining the action nor a later restoreIfIdle() can credit the
+         * post-tap time a second time. Restores first, so a tap that reaches a
+         * new process after a kill still finds the session (#7390).
+         * Returns null when nothing is being tracked, or when [expectedTaskId]
+         * is given and another task is (the session is then left running).
+         */
+        @Synchronized
+        fun takeForNotificationAction(
+            context: Context,
+            expectedTaskId: String? = null
+        ): ActionSnapshot? {
+            restoreIfIdle(context)
+            val taskId = currentTaskId
+            if (!isTracking || taskId == null) return null
+            if (expectedTaskId != null && taskId != expectedTaskId) return null
+            val snapshot = ActionSnapshot(taskId, getElapsedMs(), System.currentTimeMillis())
+            clearState(context)
+            return snapshot
+        }
+
+        /**
+         * Stops the service without risking ForegroundServiceDidNotStartInTimeException:
+         * a start that may still be promoting is stopped through onStartCommand
+         * (ACTION_STOP) so it promotes first; otherwise stopService() is safe.
          */
         fun requestStop(context: Context) {
             val intent = Intent(context, TrackingForegroundService::class.java)
             if (isStartPending || isTracking) {
-                // A startForegroundService() may still be promoting: stopping via
-                // stopService() now could tear it down before startForeground()
-                // runs and crash with ForegroundServiceDidNotStartInTimeException.
-                // Routing as ACTION_STOP through onStartCommand lets it promote
-                // first, then stop cleanly.
                 intent.action = ACTION_STOP
                 try {
                     context.startService(intent)
@@ -91,15 +129,111 @@ class TrackingForegroundService : Service() {
                     Log.d(TAG, "requestStop: app backgrounded, falling back to stopService()", e)
                     if (!isStartPending) {
                         context.stopService(Intent(context, TrackingForegroundService::class.java))
+                        // onDestroy never runs if no instance is alive: clear
+                        // the persisted session directly so it is never recovered.
+                        clearState(context)
                     }
                 }
             } else {
                 context.stopService(intent)
+                // In a fresh process after a kill nothing is in memory, but the
+                // session may still be persisted with no service to clear it.
+                clearState(context)
             }
         }
-    }
 
-    private var taskTitle: String = ""
+        // The state helpers below share the companion lock so a bridge-thread
+        // restoreIfIdle() cannot re-load a session that a main-thread stop is
+        // in the middle of clearing.
+
+        @Synchronized
+        internal fun setState(context: Context, state: TrackingState) {
+            TrackingStateStore.save(context, state)
+            applyInMemory(state)
+            resumeAfterRestore = true
+        }
+
+        @Synchronized
+        fun clearState(context: Context) {
+            isTracking = false
+            currentTaskId = null
+            startTimestamp = 0
+            accumulatedMs = 0
+            taskTitle = ""
+            resumeAfterRestore = true
+            TrackingStateStore.clear(context)
+        }
+
+        /**
+         * After a process kill the companion starts empty while the persisted
+         * session is still on disk (every stop clears both, so this only happens
+         * in a new process). Load it back, with the total frozen at the old
+         * process's death, so getTrackingElapsed() hands the JS cold-start
+         * recovery the time tracked until the kill. The in-memory state wins
+         * whenever it is live, so this never re-anchors a running session.
+         * After a deliberate user stop (API 34+ only) the session is marked
+         * not to resume; below that the reason is unknown or ambiguous and it
+         * always resumes. [exits] is a seam for tests: real exit records can't
+         * be faked on a device.
+         */
+        @Synchronized
+        fun restoreIfIdle(
+            context: Context,
+            exits: (Context) -> List<ProcessExit> = TrackingStateStore::anchorProcessExits
+        ) {
+            if (isTracking) return
+            val persisted = TrackingStateStore.load(context) ?: return
+            val exit = TrackingState.pickExit(exits(context), persisted.startTimestamp)
+            val state = persisted.frozenAtExit(exit?.timestamp, System.currentTimeMillis())
+            val resume = TrackingState.shouldResumeAfter(exit)
+            Log.d(
+                TAG,
+                "Restoring persisted tracking state: taskId=${state.taskId}, " +
+                    "exitKnown=${exit != null}, resume=$resume"
+            )
+            if (resume) {
+                // Persist the re-anchored state too, so a second kill before JS
+                // re-anchors is measured from here rather than the old anchor.
+                setState(context, state)
+            } else {
+                // Frozen (no anchor) so a late bridge read never credits time
+                // after the stop. The old record stays on disk, so a kill before
+                // JS stops this re-derives the same total.
+                applyInMemory(state.copy(startTimestamp = 0))
+                resumeAfterRestore = false
+            }
+        }
+
+        /**
+         * The active session for the JS bridge, restoring a persisted one
+         * first, or null when nothing is tracked. Read under the companion
+         * lock so a main-thread start/update/stop cannot interleave and pair
+         * one task's id with another task's total.
+         */
+        @Synchronized
+        fun snapshotForBridge(context: Context): BridgeSnapshot? {
+            restoreIfIdle(context)
+            val taskId = currentTaskId
+            return if (isTracking && taskId != null) {
+                BridgeSnapshot(taskId, getElapsedMs(), resumeAfterRestore)
+            } else {
+                null
+            }
+        }
+
+        private fun applyInMemory(state: TrackingState) {
+            currentTaskId = state.taskId
+            taskTitle = state.taskTitle
+            // Anchor first, accumulated second: a torn getElapsedMs() read from
+            // the JS bridge thread then under-reports (caught by the
+            // negative-duration keep-app-value path) instead of double-counting
+            // the since-last-anchor gap — which can be hours now that nothing
+            // re-anchors every second.
+            startTimestamp = state.startTimestamp
+            accumulatedMs = state.accumulatedMs
+            isTracking = true
+        }
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -109,6 +243,10 @@ class TrackingForegroundService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         Log.d(TAG, "onStartCommand: action=${intent?.action}")
+        // A fresh process (after a kill) has an empty companion: reload the
+        // persisted session so ACTION_UPDATE/STOP act on it and the
+        // notification shows the task again.
+        restoreIfIdle(this)
 
         // Android documents successful startForeground() as the safe path
         // after startForegroundService(). Promote before handling actions so
@@ -206,11 +344,7 @@ class TrackingForegroundService : Service() {
     }
 
     private fun stopAfterForegroundFailure(startId: Int) {
-        isTracking = false
-        currentTaskId = null
-        startTimestamp = 0
-        accumulatedMs = 0
-        taskTitle = ""
+        clearState(this)
         stopSelf(startId)
     }
 
@@ -225,15 +359,16 @@ class TrackingForegroundService : Service() {
     private fun startTracking(taskId: String, title: String, timeSpentMs: Long): Boolean {
         Log.d(TAG, "Starting tracking: taskId=$taskId, timeSpentMs=$timeSpentMs")
 
-        currentTaskId = taskId
-        taskTitle = title
-        // Anchor first, accumulated second: a torn getElapsedMs() read from the
-        // JS bridge thread then under-reports (caught by the negative-duration
-        // keep-app-value path) instead of double-counting the since-last-anchor
-        // gap — which can be hours now that nothing re-anchors every second.
-        startTimestamp = System.currentTimeMillis()
-        accumulatedMs = timeSpentMs
-        isTracking = true
+        setState(
+            this,
+            TrackingState(
+                taskId,
+                title,
+                System.currentTimeMillis(),
+                timeSpentMs,
+                TrackingStateStore.currentBootCount(this)
+            )
+        )
 
         // The foreground-service start token was already satisfied at the top
         // of onStartCommand(). Replace the placeholder notification without
@@ -250,10 +385,19 @@ class TrackingForegroundService : Service() {
         }
         Log.d(TAG, "Updating time spent: timeSpentMs=$timeSpentMs (was accumulated=$accumulatedMs)")
 
-        // Reset the timer with the new accumulated value. Anchor first (see
-        // startTracking) so a torn bridge-thread read errs toward under-reporting.
-        startTimestamp = System.currentTimeMillis()
-        accumulatedMs = timeSpentMs
+        val taskId = currentTaskId ?: return
+        // Reset the timer with the new accumulated value (anchor ordering: see
+        // applyInMemory).
+        setState(
+            this,
+            TrackingState(
+                taskId,
+                taskTitle,
+                System.currentTimeMillis(),
+                timeSpentMs,
+                TrackingStateStore.currentBootCount(this)
+            )
+        )
 
         // Update notification immediately
         updateNotification()
@@ -262,12 +406,7 @@ class TrackingForegroundService : Service() {
     private fun stopTracking() {
         Log.d(TAG, "Stopping tracking, elapsed=${getElapsedMs()}ms")
 
-        isTracking = false
-
-        // Reset state
-        currentTaskId = null
-        startTimestamp = 0
-        accumulatedMs = 0
+        clearState(this)
 
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
@@ -298,7 +437,10 @@ class TrackingForegroundService : Service() {
     override fun onDestroy() {
         super.onDestroy()
         Log.d(TAG, "Service destroyed")
-        isTracking = false
+        // onDestroy only runs for an explicit stop (stopService/stopSelf); a
+        // process kill skips it, which is exactly when the persisted session
+        // must survive. Clear it here so a stopped session is never recovered.
+        clearState(this)
         // Heal a never-promoted start: if the service was created but torn down
         // before onStartCommand cleared it, drop the stale flag so the next cold
         // stop uses stopService() rather than needlessly re-spawning the service.

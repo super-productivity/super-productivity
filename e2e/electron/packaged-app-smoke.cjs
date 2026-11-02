@@ -69,12 +69,15 @@ const waitForMainPage = async (browser, timeoutMs = 30_000) => {
 
 const stopChild = async (child) => {
   if (child.exitCode !== null || child.signalCode !== null) return;
-  child.kill('SIGTERM');
-  await Promise.race([
-    new Promise((resolve) => child.once('exit', resolve)),
-    new Promise((resolve) => setTimeout(resolve, 8_000)),
-  ]);
-  if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
+  const exited = new Promise((resolve) => child.once('exit', resolve));
+  const killTimeout = setTimeout(() => child.kill('SIGKILL'), 8_000);
+  try {
+    child.kill('SIGTERM');
+    // SIGKILL is asynchronous too: wait for exit before deleting the profile.
+    await exited;
+  } finally {
+    clearTimeout(killTimeout);
+  }
 };
 
 const run = async () => {
@@ -127,7 +130,15 @@ const run = async () => {
       localStorage.setItem('SUP_IS_SHOW_TOUR', 'true');
       localStorage.setItem('SUP_EXAMPLE_TASKS_CREATED', 'true');
     });
+    // The add-task bar is usable before hydration finishes, but only picks the
+    // TODAY default due day once the work context loads. Typing earlier files
+    // the task into Inbox and the Today assertion below fails (run 36058539413).
+    const dataLoaded = page.waitForEvent('console', {
+      predicate: (message) => message.text().includes('[SP_ALL] All Data was loaded'),
+      timeout: 30_000,
+    });
     await page.reload({ waitUntil: 'domcontentloaded' });
+    await dataLoaded;
     await page.locator('.route-wrapper').first().waitFor({ state: 'visible' });
 
     const taskTitle = `Packaged Electron smoke ${Date.now()}`;
@@ -191,5 +202,12 @@ run()
     process.exitCode = 1;
   })
   .finally(() => {
-    fs.rmSync(userDataDir, { recursive: true, force: true });
+    // Late Electron profile writes can cause transient ENOTEMPTY after exit.
+    // Async removal retries traversal too, picking up newly created files.
+    return fs.promises.rm(userDataDir, {
+      recursive: true,
+      force: true,
+      maxRetries: 5,
+      retryDelay: 100,
+    });
   });

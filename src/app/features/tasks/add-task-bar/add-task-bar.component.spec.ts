@@ -1,4 +1,5 @@
 import { ComponentFixture, fakeAsync, flush, TestBed, tick } from '@angular/core/testing';
+import { DEFAULT_DATE_INPUT_LOCALE } from 'src/app/core/date-time-format/date-input-locale';
 import { BehaviorSubject, Observable, of } from 'rxjs';
 import { Store } from '@ngrx/store';
 import { MatDialog } from '@angular/material/dialog';
@@ -20,7 +21,7 @@ import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { signal, Signal } from '@angular/core';
 import { AddTaskSuggestion } from './add-task-suggestions.model';
 import { PlannerActions } from '../../planner/store/planner.actions';
-import { TaskCopy, TaskReminderOptionId } from '../task.model';
+import { TaskCopy, TaskReminderOptionId, TaskWithSubTasks } from '../task.model';
 import { DateTimeFormatService } from 'src/app/core/date-time-format/date-time-format.service';
 import { DEFAULT_LOCALE } from 'src/app/core/locale.constants';
 import { DateService } from '../../../core/date/date.service';
@@ -34,10 +35,9 @@ import { IS_ANDROID_WEB_VIEW_TOKEN } from '../../../util/is-android-web-view';
 type ProjectServiceSignals = {
   list$: Observable<Project[]>;
   listSorted$: Observable<Project[]>;
-  listSortedForUI$: Observable<Project[]>;
   listInTreeOrderForUI$: Observable<Project[]>;
-  listSortedForUI: Signal<Project[]>;
   listInTreeOrderForUI: Signal<Project[]>;
+  listInTreeOrder: Signal<Project[]>;
   listSorted: Signal<Project[]>;
 };
 
@@ -139,10 +139,9 @@ describe('AddTaskBarComponent', () => {
     return {
       list$: projects$,
       listSorted$: projects$,
-      listSortedForUI$: projects$,
       listInTreeOrderForUI$: projects$,
-      listSortedForUI: signal(projects),
       listInTreeOrderForUI: signal(projects),
+      listInTreeOrder: signal(projects),
       listSorted: signal(projects),
     };
   };
@@ -168,8 +167,10 @@ describe('AddTaskBarComponent', () => {
     'textLocale',
     // Reached by the actions bar's date chip as soon as a state has a time on it
     'formatTime',
+    'dateInputLocale',
   ]);
   mockDateTimeFormatService.currentLocale.and.returnValue('en-US');
+  mockDateTimeFormatService.dateInputLocale.and.returnValue(DEFAULT_DATE_INPUT_LOCALE);
   mockDateTimeFormatService.textLocale.and.returnValue('en-US');
   mockDateTimeFormatService.formatTime.and.callFake((timestamp: number) =>
     new Date(timestamp).toLocaleTimeString('en-US', {
@@ -189,6 +190,7 @@ describe('AddTaskBarComponent', () => {
     mockTaskService = jasmine.createSpyObj('TaskService', [
       'add',
       'getByIdOnce$',
+      'getByIdWithSubTaskData$',
       'scheduleTask',
       'moveToCurrentWorkContext',
     ]);
@@ -197,7 +199,7 @@ describe('AddTaskBarComponent', () => {
     });
     mockProjectService = jasmine.createSpyObj(
       'ProjectService',
-      [],
+      ['moveTaskToTodayList'],
       createProjectSignals(mockProjects),
     );
     mockTagService = jasmine.createSpyObj(
@@ -491,6 +493,62 @@ describe('AddTaskBarComponent', () => {
       );
       expect(mockTaskService.moveToCurrentWorkContext).not.toHaveBeenCalled();
     });
+
+    it('moves a backlog task picked in a project to its regular list (#10838)', async () => {
+      const suggestion = {
+        title: 'Existing task',
+        taskId: 'task-1',
+        projectId: 'project-2',
+      } as AddTaskSuggestion;
+
+      await component.onTaskSuggestionSelected(suggestion);
+
+      expect(mockProjectService.moveTaskToTodayList).toHaveBeenCalledOnceWith(
+        'task-1',
+        'project-2',
+      );
+      expect(mockTaskService.moveToCurrentWorkContext).not.toHaveBeenCalled();
+    });
+
+    it('moves a task from another project here, sub tasks included', async () => {
+      const task = {
+        id: 'task-1',
+        title: 'Other task',
+        subTaskIds: ['sub-1'],
+        subTasks: [{ id: 'sub-1' }],
+      } as Partial<TaskWithSubTasks> as TaskWithSubTasks;
+      mockWorkContextService.activeWorkContextType = WorkContextType.PROJECT;
+      mockTaskService.getByIdWithSubTaskData$.and.returnValue(of(task));
+      const emitSpy = spyOn(component.afterTaskAdd, 'emit');
+
+      await component.onTaskSuggestionSelected({
+        title: task.title,
+        taskId: task.id,
+        projectId: 'project-2',
+        isFromOtherContextAndTagOnlySearch: true,
+      } as AddTaskSuggestion);
+
+      expect(mockTaskService.moveToCurrentWorkContext).toHaveBeenCalledOnceWith(task);
+      expect(mockSnackService.open).toHaveBeenCalled();
+      expect(emitSpy).toHaveBeenCalled();
+    });
+
+    it('reports nothing when the picked task no longer exists', async () => {
+      mockWorkContextService.activeWorkContextType = WorkContextType.PROJECT;
+      mockTaskService.getByIdWithSubTaskData$.and.returnValue(of(undefined));
+      const emitSpy = spyOn(component.afterTaskAdd, 'emit');
+
+      await component.onTaskSuggestionSelected({
+        title: 'Deleted task',
+        taskId: 'task-1',
+        projectId: 'project-2',
+        isFromOtherContextAndTagOnlySearch: true,
+      } as AddTaskSuggestion);
+
+      expect(mockTaskService.moveToCurrentWorkContext).not.toHaveBeenCalled();
+      expect(mockSnackService.open).not.toHaveBeenCalled();
+      expect(emitSpy).not.toHaveBeenCalled();
+    });
   });
 
   describe('addTask', () => {
@@ -529,6 +587,24 @@ describe('AddTaskBarComponent', () => {
       const secondCall = mockTaskService.add.calls.mostRecent();
       const secondTaskData = secondCall.args[2] as Partial<TaskCopy>;
       expect(secondTaskData.tagIds).toEqual(['tag-1']);
+    });
+
+    it('should pass a syntax-parsed priority to the new task and reset it after', async () => {
+      mockTaskService.add.and.returnValue('task-1');
+
+      component.stateService.updateInputTxt('Fix login bug p1');
+      component.stateService.updateCleanText('Fix login bug');
+      component.stateService.updatePriority(3);
+      await component.addTask();
+
+      const [title, , taskData] = mockTaskService.add.calls.mostRecent().args as [
+        string,
+        boolean,
+        Partial<TaskCopy>,
+      ];
+      expect(title).toBe('Fix login bug');
+      expect(taskData.priority).toBe(3);
+      expect(component.stateService.state().priority).toBeNull();
     });
 
     // #5461: a repeat-preset task with no explicit date must default to the
@@ -655,6 +731,31 @@ describe('AddTaskBarComponent', () => {
       expect(addRepeatCfgSpy.calls.mostRecent().args[2].startDate).toBe('2026-03-30');
     });
 
+    // The schedule pick offers day/week lead times; a repeat config persists the
+    // option id, which released clients before v19.2.0 cannot convert.
+    it('should not persist a long lead time into a picked repeat config', async () => {
+      mockTaskService.add.and.returnValue('task-1');
+      const addRepeatCfgSpy = spyOn(
+        TestBed.inject(TaskRepeatCfgService),
+        'addTaskRepeatCfgToTask',
+      );
+
+      component.stateService.updateInputTxt('Standup');
+      component.stateService.updateCleanText('Standup');
+      component.stateService.updateDate('2026-03-30', '09:30');
+      component.stateService.updateRemindOption(TaskReminderOptionId.d1);
+      component.stateService.updateRepeatSetting({
+        type: 'PRESET',
+        quickSetting: 'DAILY',
+      });
+
+      await component.addTask();
+
+      expect(addRepeatCfgSpy.calls.mostRecent().args[2].remindAt).toBe(
+        TaskReminderOptionId.h1,
+      );
+    });
+
     // Nothing rolls the fallback to today on the way in — a recurrence with no
     // date never passes a date through the parser — so the config would keep a
     // weekend start date the user cannot see while the task itself is created
@@ -746,6 +847,26 @@ describe('AddTaskBarComponent', () => {
 
       const repeatCfg = addRepeatCfgSpy.calls.mostRecent().args[2];
       expect(repeatCfg.notes).toBe('Join from the meeting room');
+    });
+
+    it('should copy a syntax-parsed priority to an inline repeat config', async () => {
+      mockTaskService.add.and.returnValue('task-1');
+      const addRepeatCfgSpy = spyOn(
+        TestBed.inject(TaskRepeatCfgService),
+        'addTaskRepeatCfgToTask',
+      );
+
+      component.stateService.updateInputTxt('Daily standup p1');
+      component.stateService.updateCleanText('Daily standup');
+      component.stateService.updatePriority(3);
+      component.stateService.updateRepeatSetting({
+        type: 'PRESET',
+        quickSetting: 'DAILY',
+      });
+
+      await component.addTask();
+
+      expect(addRepeatCfgSpy.calls.mostRecent().args[2].priority).toBe(3);
     });
 
     it('seeds skipOverdue ON for an inline Daily repeat (#8644)', async () => {
@@ -1451,6 +1572,22 @@ describe('AddTaskBarComponent', () => {
 
       expect(component.stateService.inputTxt()).toBe('first line second third');
       expect(inputEl.value).toBe('first line second third');
+    });
+  });
+
+  describe('deadline button', () => {
+    const getDeadlineBtn = (): HTMLElement | null =>
+      fixture.nativeElement.querySelector('[data-test="add-task-bar-deadline-btn"]');
+
+    it('is shown with the default config', () => {
+      fixture.detectChanges();
+      expect(getDeadlineBtn()).not.toBeNull();
+    });
+
+    it('is hidden when planForDay is set', () => {
+      fixture.componentRef.setInput('planForDay', '2024-05-20');
+      fixture.detectChanges();
+      expect(getDeadlineBtn()).toBeNull();
     });
   });
 

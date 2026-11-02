@@ -14,11 +14,6 @@ export const isIssueDone = (searchResultItem: SearchResultItem): boolean => {
         (searchResultItem as SearchResultItem<'JIRA'>).issueData.status?.name,
       );
 
-    case 'REDMINE':
-      return ISSUE_DONE_STATE_NAME_GUESSES.includes(
-        (searchResultItem as SearchResultItem<'REDMINE'>).issueData.status?.name,
-      );
-
     case 'OPEN_PROJECT':
       return false;
 

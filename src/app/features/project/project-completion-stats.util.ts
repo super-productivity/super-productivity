@@ -1,4 +1,5 @@
 import { Task } from '../tasks/task.model';
+import { isCompletedTask } from '../tasks/util/is-wont-do-task';
 import { getDiffInDays } from '../../util/get-diff-in-days';
 import { dateStrToUtcDate } from '../../util/date-str-to-utc-date';
 
@@ -33,7 +34,7 @@ export const getProjectCompletionStats = (
   doneOn: number,
 ): ProjectCompletionStats => {
   const nrOfTasksTotal = topLevelTasks.length;
-  const nrOfTasksDone = topLevelTasks.filter((t) => t.isDone).length;
+  const nrOfTasksDone = topLevelTasks.filter(isCompletedTask).length;
   // A parent's timeSpent already aggregates its subtasks, so sum top-level only
   // — summing subtasks too would double-count.
   const timeSpent = topLevelTasks.reduce((acc, t) => acc + (t.timeSpent || 0), 0);

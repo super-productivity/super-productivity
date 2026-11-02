@@ -12,7 +12,10 @@
 import { defineConfig, devices } from '@playwright/test';
 import path from 'path';
 
-const IPHONE_13 = devices['iPhone 13'];
+// Playwright's runtime descriptor includes `screen`, but its type omits it.
+const IPHONE_13 = devices['iPhone 13'] as (typeof devices)['iPhone 13'] & {
+  screen: { width: number; height: number };
+};
 const REPO_ROOT = path.join(__dirname, '..', '..');
 
 const MOBILE_CONTEXT = {

@@ -23,7 +23,6 @@
   <div class="wrap-buttons">
     @if (!data.hideCancelButton) {
       <button
-        tabindex="1"
         #cancelButton
         (click)="close(false)"
         mat-button
@@ -35,8 +34,8 @@
     }
 
     <button
-      tabindex="2"
       #confirmButton
+      [attr.cdkFocusInitial]="data.isFocusConfirm ? '' : null"
       (click)="close(true)"
       e2e="confirmBtn"
       color="primary"

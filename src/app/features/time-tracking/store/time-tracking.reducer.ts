@@ -4,7 +4,7 @@ import {
   syncTimeTracking,
 } from './time-tracking.actions';
 import { createFeature, createReducer, on } from '@ngrx/store';
-import { TimeTrackingState } from '../time-tracking.model';
+import { TimeTrackingState, TTWorkContextData } from '../time-tracking.model';
 import { loadAllData } from '../../../root-store/meta/load-all-data.action';
 import { AppDataComplete } from '../../../op-log/model/model-config';
 import { roundTsToMinutes } from '../../../util/round-ts-to-minutes';
@@ -29,38 +29,56 @@ export const timeTrackingReducer = createReducer(
   ),
   on(TimeTrackingActions.updateWholeState, (state, { newState }) => newState),
 
-  on(TimeTrackingActions.addTimeSpent, (state, { task, date }) => {
-    const isUpdateProject = !!task.projectId;
+  on(TimeTrackingActions.addTimeSpent, (state, { task, date, isBackfill }) => {
+    // Back-filled time for a past day was not worked now: stamping Date.now()
+    // as that day's work end (or start) would be wrong.
+    if (isBackfill) {
+      return state;
+    }
+    const now = Date.now();
+    const e = roundTsToMinutes(now);
+    const startOf = (entry?: TTWorkContextData): number =>
+      roundTsToMinutes(entry?.s || now);
+    const stamp = (entry?: TTWorkContextData): TTWorkContextData => ({
+      ...entry,
+      e,
+      s: startOf(entry),
+    });
+    // Whether stamp() would leave the entry as it is.
+    const isStamped = (entry?: TTWorkContextData): boolean =>
+      !!entry && entry.e === e && entry.s === startOf(entry);
+    const tagIds = [TODAY_TAG.id, ...(task.tagIds || [])] as string[];
+
+    // Start/end are minute-rounded, so this per-second tick changes them at most
+    // once a minute. Keep the state reference otherwise, so selectors built on it
+    // (e.g. the archive merge behind TimeTrackingService.state$) don't recompute
+    // every second while tracking.
+    if (
+      (!task.projectId || isStamped(state.project[task.projectId]?.[date])) &&
+      tagIds.every((tagId) => isStamped(state.tag[tagId]?.[date]))
+    ) {
+      return state;
+    }
 
     return {
       ...state,
-      ...(isUpdateProject
+      ...(task.projectId
         ? {
             project: {
               ...state.project,
               [task.projectId]: {
                 ...state.project[task.projectId],
-                [date]: {
-                  ...state.project[task.projectId]?.[date],
-                  e: roundTsToMinutes(Date.now()),
-                  s: roundTsToMinutes(
-                    state.project[task.projectId]?.[date]?.s || Date.now(),
-                  ),
-                },
+                [date]: stamp(state.project[task.projectId]?.[date]),
               },
             },
           }
         : {}),
       tag: {
         ...state.tag,
-        ...([TODAY_TAG.id, ...(task.tagIds || [])] as string[]).reduce((acc, tagId) => {
+        ...tagIds.reduce((acc, tagId) => {
           acc[tagId] = {
             ...state.tag[tagId],
-            [date]: {
-              ...state.tag[tagId]?.[date],
-              e: roundTsToMinutes(Date.now()),
-              s: roundTsToMinutes(state.tag[tagId]?.[date]?.s || Date.now()),
-            },
+            [date]: stamp(state.tag[tagId]?.[date]),
           };
           return acc;
         }, {}),

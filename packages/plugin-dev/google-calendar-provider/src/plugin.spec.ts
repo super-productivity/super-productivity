@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest';
 import type { IssueProviderPluginDefinition } from '@super-productivity/plugin-api';
 
+let _resetCalendarColorsCache: () => void;
+
 let definition: IssueProviderPluginDefinition;
 
 beforeAll(async () => {
@@ -12,7 +14,7 @@ beforeAll(async () => {
     clearOAuthToken: vi.fn().mockResolvedValue(undefined),
     log: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
   };
-  await import('./plugin');
+  ({ _resetCalendarColorsCache } = await import('./plugin'));
 });
 
 describe('Google Calendar Plugin', () => {
@@ -381,6 +383,8 @@ describe('Google Calendar Plugin', () => {
   });
 
   describe('getNewIssuesForBacklog', () => {
+    beforeEach(() => _resetCalendarColorsCache());
+
     const makeEvent = (over: Record<string, unknown>): Record<string, unknown> => ({
       id: 'real-1',
       summary: 'Real meeting',
@@ -442,6 +446,201 @@ describe('Google Calendar Plugin', () => {
       );
 
       expect(results).toHaveLength(1);
+    });
+
+    it('colors events with their Google calendar color', async () => {
+      const mockHttp = {
+        get: vi.fn().mockImplementation((url: string) =>
+          Promise.resolve(
+            url.endsWith('/users/me/calendarList')
+              ? {
+                  items: [
+                    { id: 'me@example.com', primary: true, backgroundColor: '#fbe983' },
+                    { id: 'work@example.com', backgroundColor: '#9fc6e7' },
+                  ],
+                }
+              : { items: [makeEvent({})] },
+          ),
+        ),
+        post: vi.fn(),
+        put: vi.fn(),
+        patch: vi.fn(),
+        delete: vi.fn(),
+      };
+
+      const results = await definition.getNewIssuesForBacklog!(
+        { readCalendarIds: ['primary', 'work@example.com'] } as any,
+        mockHttp as any,
+      );
+
+      expect(results.map((r) => r.color)).toEqual(['#fbe983', '#9fc6e7']);
+    });
+
+    it('still returns events when the calendar colors cannot be loaded', async () => {
+      const mockHttp = {
+        get: vi
+          .fn()
+          .mockImplementation((url: string) =>
+            url.endsWith('/users/me/calendarList')
+              ? Promise.reject(new Error('forbidden'))
+              : Promise.resolve({ items: [makeEvent({})] }),
+          ),
+        post: vi.fn(),
+        put: vi.fn(),
+        patch: vi.fn(),
+        delete: vi.fn(),
+      };
+
+      const results = await definition.getNewIssuesForBacklog!(
+        { readCalendarIds: ['primary'] } as any,
+        mockHttp as any,
+      );
+
+      expect(results).toHaveLength(1);
+      expect(results[0].color).toBeUndefined();
+    });
+
+    it('keeps calendar colors apart per connected account', async () => {
+      const makeHttp = (backgroundColor: string): any => ({
+        get: vi
+          .fn()
+          .mockImplementation((url: string) =>
+            Promise.resolve(
+              url.endsWith('/users/me/calendarList')
+                ? { items: [{ id: 'me@example.com', primary: true, backgroundColor }] }
+                : { items: [makeEvent({})] },
+            ),
+          ),
+        post: vi.fn(),
+        put: vi.fn(),
+        patch: vi.fn(),
+        delete: vi.fn(),
+      });
+      const poll = (tokenKey: string, http: unknown) =>
+        definition.getNewIssuesForBacklog!(
+          { readCalendarIds: ['primary'], __spOAuthTokenKey: tokenKey } as any,
+          http as any,
+        );
+
+      expect((await poll('provider-a', makeHttp('#fbe983')))[0].color).toBe('#fbe983');
+      expect((await poll('provider-b', makeHttp('#9fc6e7')))[0].color).toBe('#9fc6e7');
+    });
+
+    it('reuses calendar colors across polls and keeps them when a lookup fails', async () => {
+      let isListFailing = false;
+      const mockHttp = {
+        get: vi.fn().mockImplementation((url: string) => {
+          if (!url.endsWith('/users/me/calendarList')) {
+            return Promise.resolve({ items: [makeEvent({})] });
+          }
+          return isListFailing
+            ? Promise.reject(new Error('offline'))
+            : Promise.resolve({
+                items: [
+                  { id: 'me@example.com', primary: true, backgroundColor: '#fbe983' },
+                ],
+              });
+        }),
+        post: vi.fn(),
+        put: vi.fn(),
+        patch: vi.fn(),
+        delete: vi.fn(),
+      };
+      const poll = () =>
+        definition.getNewIssuesForBacklog!(
+          { readCalendarIds: ['primary'] } as any,
+          mockHttp as any,
+        );
+      const listCalls = (): number =>
+        mockHttp.get.mock.calls.filter(([url]) => url.endsWith('/calendarList')).length;
+
+      expect((await poll())[0].color).toBe('#fbe983');
+      expect((await poll())[0].color).toBe('#fbe983');
+      expect(listCalls()).toBe(1);
+
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(Date.now() + 2 * 60 * 60 * 1000);
+      isListFailing = true;
+      expect((await poll())[0].color).toBe('#fbe983');
+      expect(listCalls()).toBe(2);
+    });
+
+    // #10190: Google applies `timeMin` (exclusive) to an event's END time. With
+    // `timeMin = now`, an event dropped out of the schedule/agenda on the first
+    // poll after it ended. The window must start at the user's LOCAL start of
+    // day (or 2h ago, if earlier), not at UTC midnight. Each case pins TZ for
+    // this process, so the result is the same on CI (UTC) and locally.
+    describe('query window start (timeMin)', () => {
+      afterEach(() => {
+        vi.unstubAllEnvs();
+      });
+
+      it.each([
+        {
+          label: 'UTC: 15:00-16:00 meeting, polled at 16:05',
+          tz: 'UTC',
+          offsetMin: 0,
+          now: '2026-05-14T16:05:00Z',
+          eventEnd: '2026-05-14T16:00:00Z',
+          expectedTimeMin: '2026-05-14T00:00:00.000Z',
+        },
+        {
+          // UTC midnight equals the event's end, so a UTC anchor drops it.
+          label: 'America/Los_Angeles: 16:00-17:00 meeting, polled at 17:01',
+          tz: 'America/Los_Angeles',
+          offsetMin: 420,
+          now: '2026-05-15T00:01:00Z',
+          eventEnd: '2026-05-15T00:00:00Z',
+          expectedTimeMin: '2026-05-14T07:00:00.000Z',
+        },
+        {
+          // UTC midnight falls between the event's end and the poll.
+          label: 'Australia/Brisbane: 08:00-09:00 meeting, polled at 10:01',
+          tz: 'Australia/Brisbane',
+          offsetMin: -600,
+          now: '2026-05-15T00:01:00Z',
+          eventEnd: '2026-05-14T23:00:00Z',
+          expectedTimeMin: '2026-05-14T14:00:00.000Z',
+        },
+        {
+          // Local midnight is after the event's end; the 2h lookback keeps it.
+          label: 'America/Los_Angeles: 22:30-23:30 meeting, polled at 00:30 next day',
+          tz: 'America/Los_Angeles',
+          offsetMin: 420,
+          now: '2026-05-15T07:30:00Z',
+          eventEnd: '2026-05-15T06:30:00Z',
+          expectedTimeMin: '2026-05-15T05:30:00.000Z',
+        },
+      ])(
+        'keeps an event that ended earlier: $label',
+        async ({ tz, offsetMin, now, eventEnd, expectedTimeMin }) => {
+          vi.stubEnv('TZ', tz);
+          vi.useFakeTimers();
+          vi.setSystemTime(new Date(now));
+          // Guard: fail loudly if the runtime ignored the TZ override.
+          expect(new Date(now).getTimezoneOffset()).toBe(offsetMin);
+          const mockHttp = {
+            get: vi.fn().mockResolvedValue({
+              items: [makeEvent({ end: { dateTime: eventEnd } })],
+            }),
+            post: vi.fn(),
+            put: vi.fn(),
+            patch: vi.fn(),
+            delete: vi.fn(),
+          };
+
+          await definition.getNewIssuesForBacklog!(
+            { readCalendarIds: ['primary'], syncRangeWeeks: '2' } as any,
+            mockHttp as any,
+          );
+
+          const params = mockHttp.get.mock.calls[0][1].params;
+          expect(params.timeMin).toBe(expectedTimeMin);
+          expect(new Date(params.timeMin).getTime()).toBeLessThan(
+            new Date(eventEnd).getTime(),
+          );
+        },
+      );
     });
   });
 

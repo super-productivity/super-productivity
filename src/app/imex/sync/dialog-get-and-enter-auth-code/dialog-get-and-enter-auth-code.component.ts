@@ -163,7 +163,13 @@ export class DialogGetAndEnterAuthCodeComponent implements OnDestroy {
       }
     }
 
-    return trimmed;
+    // A bare code copied from the address bar is still URL-encoded (e.g. `%24`
+    // for `$`), which Entra rejects with AADSTS70000 (#9546).
+    try {
+      return decodeURIComponent(trimmed);
+    } catch {
+      return trimmed;
+    }
   }
 
   // iOS Safari only opens the keyboard when .focus() runs synchronously in the

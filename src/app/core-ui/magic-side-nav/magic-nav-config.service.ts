@@ -8,6 +8,7 @@ import { WorkContextService } from '../../features/work-context/work-context.ser
 import { TagService } from '../../features/tag/tag.service';
 import { ShepherdService } from '../../features/shepherd/shepherd.service';
 import { TourId } from '../../features/shepherd/shepherd-steps.const';
+import { QuickTourService } from '../../features/onboarding/quick-tour.service';
 import { T } from '../../t.const';
 import { LS } from '../../core/persistence/storage-keys.const';
 import { getGithubErrorUrl } from '../../core/error-handler/global-error-handler.util';
@@ -24,6 +25,7 @@ import {
 } from '../../features/project/store/project.selectors';
 import { toggleHideFromMenu } from '../../features/project/store/project.actions';
 import { NavConfig, NavItem } from './magic-side-nav.model';
+import { NAV_SECTION_ICON } from './nav-section-icons.const';
 import { PluginBridgeService } from '../../plugins/plugin-bridge.service';
 import { PluginService } from '../../plugins/plugin.service';
 import { lsGetBoolean, lsSetItem } from '../../util/ls-util';
@@ -37,6 +39,7 @@ import { GlobalConfigService } from '../../features/config/global-config.service
 import { AppFeaturesConfig } from '../../features/config/global-config.model';
 import { SnackService } from '../../core/snack/snack.service';
 import { IS_DONATION_UI_RESTRICTED } from '../../app.constants';
+import { DIALOG_AUTO_FOCUS_TYPING } from '../../util/dialog-auto-focus';
 
 @Injectable({
   providedIn: 'root',
@@ -45,6 +48,7 @@ export class MagicNavConfigService {
   private readonly _workContextService = inject(WorkContextService);
   private readonly _tagService = inject(TagService);
   private readonly _shepherdService = inject(ShepherdService);
+  private readonly _quickTourService = inject(QuickTourService);
   private readonly _matDialog = inject(MatDialog);
   private readonly _store = inject(Store);
   private readonly _pluginBridge = inject(PluginBridgeService);
@@ -59,6 +63,9 @@ export class MagicNavConfigService {
     lsGetBoolean(LS.IS_PROJECT_LIST_EXPANDED, true),
   );
   private readonly _isTagsExpanded = signal(lsGetBoolean(LS.IS_TAG_LIST_EXPANDED, true));
+  private readonly _isViewsExpanded = signal(
+    lsGetBoolean(LS.IS_VIEW_LIST_EXPANDED, true),
+  );
 
   // Data signals
   private readonly _mainWorkContext = toSignal(
@@ -159,6 +166,9 @@ export class MagicNavConfigService {
       // Separator
       { type: 'separator', id: 'sep-2' },
 
+      // Views Section (boards)
+      ...this._buildViewGroupItems(),
+
       // Projects Section
       {
         type: 'tree',
@@ -237,19 +247,12 @@ export class MagicNavConfigService {
               type: 'route',
               id: 'search',
               label: T.MH.SEARCH,
-              icon: 'search',
+              icon: NAV_SECTION_ICON.SEARCH,
               route: '/search',
               featureConfigKey: 'isSearchEnabled',
             } as NavItem,
           ]
         : []),
-      {
-        type: 'route',
-        id: 'scheduled-list',
-        label: T.MH.ALL_PLANNED_LIST,
-        icon: 'list',
-        route: '/scheduled-list',
-      },
 
       // Help Menu (rendered as mat-menu)
       // Donation links are disabled on native iOS and every macOS desktop build
@@ -260,7 +263,7 @@ export class MagicNavConfigService {
               type: 'route',
               id: 'donate',
               label: T.MH.DONATE,
-              icon: 'favorite',
+              icon: NAV_SECTION_ICON.DONATE,
               route: '/donate',
               featureConfigKey: 'isDonatePageEnabled',
             } as NavItem,
@@ -315,6 +318,13 @@ export class MagicNavConfigService {
           },
           {
             type: 'action',
+            id: 'help-quick-tour',
+            label: T.MH.HM.QUICK_TOUR,
+            icon: 'explore',
+            action: () => this._startQuickTour(),
+          },
+          {
+            type: 'action',
             id: 'tour-create-task',
             label: T.MH.HM.CREATE_TASK,
             icon: 'add_task',
@@ -334,7 +344,7 @@ export class MagicNavConfigService {
         type: 'route',
         id: 'settings',
         label: T.MH.SETTINGS,
-        icon: 'settings',
+        icon: NAV_SECTION_ICON.SETTINGS,
         route: '/config',
         tourClass: 'tour-settingsMenuBtn',
       },
@@ -408,9 +418,10 @@ export class MagicNavConfigService {
         type: 'route',
         id: 'planner',
         label: T.MH.PLANNER,
-        icon: 'edit_calendar',
+        icon: NAV_SECTION_ICON.PLANNER,
         route: '/planner',
         featureConfigKey: 'isPlannerEnabled',
+        tourClass: 'tour-planner',
       });
     }
 
@@ -419,20 +430,9 @@ export class MagicNavConfigService {
         type: 'route',
         id: 'schedule',
         label: T.MH.SCHEDULE,
-        icon: 'schedule',
+        icon: NAV_SECTION_ICON.SCHEDULE,
         route: '/schedule',
         featureConfigKey: 'isSchedulerEnabled',
-      });
-    }
-
-    if (this.isBoardsEnabled()) {
-      items.push({
-        type: 'route',
-        id: 'boards',
-        label: T.MH.BOARDS,
-        icon: 'grid_view',
-        route: '/boards',
-        featureConfigKey: 'isBoardsEnabled',
       });
     }
 
@@ -441,13 +441,31 @@ export class MagicNavConfigService {
         type: 'route',
         id: 'habits',
         label: T.MH.HABITS,
-        icon: 'heart_check',
+        icon: NAV_SECTION_ICON.HABITS,
         route: '/habits',
         featureConfigKey: 'isHabitsEnabled',
       });
     }
 
     return items;
+  }
+
+  // Boards are listed one by one as views, in their own section.
+  private _buildViewGroupItems(): NavItem[] {
+    if (!this.isBoardsEnabled()) {
+      return [];
+    }
+    return [
+      {
+        type: 'viewGroup',
+        id: 'views',
+        label: T.MH.BOARDS,
+        icon: 'expand_more',
+        featureConfigKey: 'isBoardsEnabled',
+        action: () => this._toggleViewsExpanded(),
+      },
+      { type: 'separator', id: 'sep-views' },
+    ];
   }
 
   private _buildPluginItems(): NavItem[] {
@@ -483,6 +501,7 @@ export class MagicNavConfigService {
   // Public computed signals for expansion state (for component to check)
   readonly isProjectsExpanded = computed(() => this._isProjectsExpanded());
   readonly isTagsExpanded = computed(() => this._isTagsExpanded());
+  readonly isViewsExpanded = computed(() => this._isViewsExpanded());
 
   // Public access to projects for visibility menu
   readonly allProjectsExceptInbox = computed(() => this._allProjectsExceptInbox());
@@ -506,12 +525,21 @@ export class MagicNavConfigService {
     lsSetItem(LS.IS_TAG_LIST_EXPANDED, newState);
   }
 
+  private _toggleViewsExpanded(): void {
+    const newState = !this._isViewsExpanded();
+    this._isViewsExpanded.set(newState);
+    lsSetItem(LS.IS_VIEW_LIST_EXPANDED, newState);
+  }
+
   // Simple action handlers
   private async _openCreateProject(): Promise<void> {
     const { DialogCreateProjectComponent } =
       await import('../../features/project/dialogs/create-project/dialog-create-project.component');
     this._matDialog
-      .open(DialogCreateProjectComponent, { restoreFocus: true })
+      .open(DialogCreateProjectComponent, {
+        restoreFocus: true,
+        autoFocus: DIALOG_AUTO_FOCUS_TYPING,
+      })
       .afterClosed()
       .subscribe((newProjectId: string | undefined) => {
         if (newProjectId) {
@@ -523,6 +551,7 @@ export class MagicNavConfigService {
   private _openCreateProjectFolder(): void {
     this._matDialog
       .open(DialogPromptComponent, {
+        autoFocus: DIALOG_AUTO_FOCUS_TYPING,
         restoreFocus: true,
         data: {
           placeholder: T.F.PROJECT_FOLDER.DIALOG.NAME_PLACEHOLDER,
@@ -544,6 +573,7 @@ export class MagicNavConfigService {
   private _openCreateTagFolder(): void {
     this._matDialog
       .open(DialogPromptComponent, {
+        autoFocus: DIALOG_AUTO_FOCUS_TYPING,
         restoreFocus: true,
         data: {
           placeholder: T.F.TAG_FOLDER.DIALOG.NAME_PLACEHOLDER,
@@ -565,6 +595,7 @@ export class MagicNavConfigService {
   private _createNewTag(): void {
     this._matDialog
       .open(DialogCreateTagComponent, {
+        autoFocus: DIALOG_AUTO_FOCUS_TYPING,
         restoreFocus: true,
       })
       .afterClosed()
@@ -581,6 +612,14 @@ export class MagicNavConfigService {
 
   private _openBugReport(): void {
     window.open(getGithubErrorUrl('', undefined, true), '_blank');
+  }
+
+  private _startQuickTour(): void {
+    // Here, not in QuickTourService: ShepherdService already injects it.
+    if (this._shepherdService.isActive) {
+      this._shepherdService.cancel();
+    }
+    this._quickTourService.start();
   }
 
   private _startTour(tourId: TourId): void {

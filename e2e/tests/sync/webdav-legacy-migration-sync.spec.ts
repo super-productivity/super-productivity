@@ -54,6 +54,8 @@ test.describe('@webdav @migration WebDAV Legacy Migration Sync', () => {
     await createSyncFolder(request, SYNC_FOLDER_NAME);
     const WEBDAV_CONFIG = {
       ...WEBDAV_CONFIG_TEMPLATE,
+      // Keep the original legacy-to-v2 migration coverage in either suite mode.
+      isUseSplitSyncFiles: false,
       syncFolderPath: `/${SYNC_FOLDER_NAME}`,
     };
     const url = baseURL || 'http://localhost:4242';
@@ -239,6 +241,7 @@ test.describe('@webdav @migration WebDAV Legacy Migration Sync', () => {
     await createSyncFolder(request, SYNC_FOLDER_NAME);
     const WEBDAV_CONFIG = {
       ...WEBDAV_CONFIG_TEMPLATE,
+      isUseSplitSyncFiles: false,
       syncFolderPath: `/${SYNC_FOLDER_NAME}`,
     };
     const url = baseURL || 'http://localhost:4242';
@@ -382,6 +385,7 @@ test.describe('@webdav @migration WebDAV Legacy Migration Sync', () => {
     await createSyncFolder(request, SYNC_FOLDER_NAME);
     const WEBDAV_CONFIG = {
       ...WEBDAV_CONFIG_TEMPLATE,
+      isUseSplitSyncFiles: false,
       syncFolderPath: `/${SYNC_FOLDER_NAME}`,
     };
     const url = baseURL || 'http://localhost:4242';
@@ -566,6 +570,7 @@ test.describe('@webdav @migration WebDAV Legacy Migration Sync', () => {
     await createSyncFolder(request, SYNC_FOLDER_NAME);
     const WEBDAV_CONFIG = {
       ...WEBDAV_CONFIG_TEMPLATE,
+      isUseSplitSyncFiles: false,
       syncFolderPath: `/${SYNC_FOLDER_NAME}`,
     };
     const url = baseURL || 'http://localhost:4242';

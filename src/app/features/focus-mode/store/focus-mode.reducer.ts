@@ -399,6 +399,17 @@ export const focusModeReducer = createReducer(
       };
     },
   ),
+
+  on(a.restoreFocusSession, (state, { timer, mode, currentCycle, pausedTaskId }) => ({
+    ...state,
+    timer,
+    mode,
+    currentCycle,
+    pausedTaskId,
+    // Non-intrusive like the native restore: overlay visibility is untouched.
+    currentScreen: timer.purpose === 'break' ? FocusScreen.Break : FocusScreen.Main,
+    mainState: FocusMainUIState.InProgress,
+  })),
 );
 
 // For backward compatibility, export the old State interface name

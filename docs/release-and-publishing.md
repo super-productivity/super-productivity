@@ -109,7 +109,8 @@ confirm that GitHub marks the draft as a pre-release.
 Wait for every tag workflow to reach a terminal state. At minimum verify:
 
 - the draft release body contains the intended notes;
-- the expected Linux, macOS, signed Windows, Android, and Snap assets are present;
+- the expected Linux, macOS, signed Windows, Android, and Snap assets are present,
+  including `superProductivity-universal.dmg` and `latest-mac.yml`;
 - Windows signatures passed verification;
 - the Android final build reached the Play `internal` track;
 - Apple upload/submission has the expected final-versus-pre-release behavior; and
@@ -119,20 +120,33 @@ Wait for every tag workflow to reach a terminal state. At minimum verify:
 Do not publish around a red required workflow. Diagnose or deliberately remove the
 affected channel from the release scope first.
 
+Releases are immutable once published: GitHub rejects later asset uploads, so a
+missing asset can only ship in a new version (v19.3.1 lost its universal DMG and
+`latest-mac.yml` this way, leaving DMG users on 19.3.0).
+
 ## What publishing the GitHub release triggers
 
 For a non-prerelease release, publishing the draft starts:
 
-| Channel     | Workflow                                                    | Result                                          |
-| ----------- | ----------------------------------------------------------- | ----------------------------------------------- |
-| Google Play | `.github/workflows/auto-publish-google-play-on-release.yml` | Promote `internal` to `production`              |
-| Snap Store  | `.github/workflows/build-publish-to-snap-on-release.yml`    | Publish the release Snap to `edge` and `stable` |
-| Web app     | `.github/workflows/build-update-web-app-on-release.yml`     | Build and deploy production web assets          |
-| Docker Hub  | `.github/workflows/publish-to-hub-docker.yml`               | Build and publish the application image         |
+| Channel     | Workflow                                                    | Result                                                          |
+| ----------- | ----------------------------------------------------------- | --------------------------------------------------------------- |
+| Google Play | `.github/workflows/auto-publish-google-play-on-release.yml` | Promote `internal` to `production`                              |
+| Snap Store  | `.github/workflows/build-publish-to-snap-on-release.yml`    | Publish the release Snap to `edge` and `stable`                 |
+| Web app     | `.github/workflows/build-update-web-app-on-release.yml`     | Build and deploy production web assets                          |
+| Docker Hub  | `.github/workflows/publish-to-hub-docker.yml`               | Build and publish the application image                         |
+| SuperSync   | `.github/workflows/supersync-docker.yml` (`release-image`)  | Build and publish `ghcr.io/super-productivity/supersync:vX.Y.Z` |
 
 The Docker Hub workflow runs for any published GitHub release and does not contain
 the prerelease guard used by the web, Play, and Snap workflows. Account for
 that before publishing a pre-release.
+
+The SuperSync release image skips pre-releases and never moves `latest`. Its tag
+must look like `vX.Y.Z`; anything else fails the run. A release event runs the
+workflow file at the tag, so a release tagged before `release-image` existed, or a
+pre-release later promoted to a release (which fires `released`, not `published`),
+gets no image automatically. Publish it by dispatching
+`.github/workflows/supersync-docker.yml` from `master` with `release_tag: vX.Y.Z`.
+Re-dispatching rebuilds and overwrites that tag.
 
 The Microsoft Store upload remains manual: download the `WinStoreRelease` artifact
 and use the generated release notes from the workflow summary/artifact in Partner
@@ -143,10 +157,12 @@ Center.
 - A plain `master` push builds desktop artifacts, uploads a development Android
   build to the Play `internal` track, and publishes the branch Snap to `edge`.
 - A `master` push that changes SuperSync server inputs publishes
-  `ghcr.io/super-productivity/supersync:latest`; this image is not release-tagged.
+  `ghcr.io/super-productivity/supersync:latest` and `master-<sha>`. The prune keeps
+  the 15 newest master images and excludes `v*`, so release tags stay available.
 - Pre-release and manual Apple workflows upload builds without submitting them for
-  App Review. See [the TestFlight plan](plans/2026-07-14-ios-testflight-master-builds.md)
-  for proposed additional branch behavior; it is not current behavior.
+  App Review. Public TestFlight builds come only from the PR label workflow, see
+  [Apple release automation](apple-release-automation.md#public-testflight-builds-label-triggered);
+  `master` pushes do not build for TestFlight.
 
 ## Reproducible Android builds
 

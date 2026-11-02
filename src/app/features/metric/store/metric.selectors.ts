@@ -2,7 +2,6 @@ import { createFeatureSelector, createSelector } from '@ngrx/store';
 import { LineChartData, Metric, MetricState } from '../metric.model';
 import { sortWorklogDates } from '../../../util/sortWorklogDates';
 import { METRIC_FEATURE_NAME, metricAdapter } from './metric.reducer';
-import { getDbDateStr } from '../../../util/get-db-date-str';
 import { selectAllSimpleCounters } from '../../simple-counter/store/simple-counter.reducer';
 import { unique } from '../../../util/unique';
 import {
@@ -42,36 +41,14 @@ export const selectMetricById = createSelector(
   },
 );
 
-/**
- * Selects metrics for the last N days from a given date.
- * Returns array of metrics ordered chronologically (oldest to newest).
- */
-export const selectLastNDaysMetrics = createSelector(
-  selectMetricFeatureState,
-  (state: MetricState, props: { days: number; endDate?: string }): Metric[] => {
-    const ids = state.ids as string[];
-    const sorted = sortWorklogDates(ids);
-
-    // Find the index of the end date (or use today if not specified)
-    const endDate = props.endDate || getDbDateStr();
-    const endIndex = sorted.indexOf(endDate);
-
-    // If end date not found, use the latest date
-    const actualEndIndex = endIndex >= 0 ? endIndex : sorted.length - 1;
-
-    // Get the last N days (inclusive)
-    const startIndex = Math.max(0, actualEndIndex - props.days + 1);
-    const selectedIds = sorted.slice(startIndex, actualEndIndex + 1);
-
-    return selectedIds
-      .map((id) => state.entities[id])
-      .filter((metric): metric is Metric => metric != null);
-  },
-);
+// Do not forward each chart's props into the shared entity selector: alternating
+// click/stopwatch subscriptions otherwise evict its memoized array on every tick.
+const selectCounterItemsForCharts = (state: object): SimpleCounter[] =>
+  selectAllSimpleCounters(state);
 
 // STATISTICS
 export const selectSimpleCounterClickCounterLineChartData = createSelector(
-  selectAllSimpleCounters,
+  selectCounterItemsForCharts,
   (simpleCounterItems: SimpleCounter[], props: { howMany: number }): LineChartData => {
     const f = -1 * props.howMany;
     const chart: LineChartData = {
@@ -99,7 +76,7 @@ export const selectSimpleCounterClickCounterLineChartData = createSelector(
 );
 
 export const selectSimpleCounterStopWatchLineChartData = createSelector(
-  selectAllSimpleCounters,
+  selectCounterItemsForCharts,
   (simpleCounterItems: SimpleCounter[], props: { howMany: number }): LineChartData => {
     const f = -1 * props.howMany;
     const chart: LineChartData = {
@@ -169,6 +146,35 @@ export const selectFocusSessionLineChartData = createSelector(
         label: dataset.label,
       })),
     };
+  },
+);
+
+// Full history (no slicing) so the chart's timeframe selector can filter it.
+export const selectEvaluationLineChartData = createSelector(
+  selectMetricFeatureState,
+  (state: MetricState): LineChartData => {
+    const ids = state.ids as string[];
+    const sorted = sortWorklogDates(ids);
+    const chart: LineChartData = {
+      labels: [],
+      datasets: [
+        { data: [], label: 'Impact (1-4)' },
+        { data: [], label: 'Energy (1-3)' },
+      ],
+    };
+
+    sorted.forEach((id) => {
+      const metric = state.entities[id];
+      if (!metric || (!metric.impactOfWork && !metric.energyCheckin)) {
+        return;
+      }
+
+      chart.labels?.push(metric.id);
+      chart.datasets[0].data.push(metric.impactOfWork || undefined);
+      chart.datasets[1].data.push(metric.energyCheckin || undefined);
+    });
+
+    return chart;
   },
 );
 

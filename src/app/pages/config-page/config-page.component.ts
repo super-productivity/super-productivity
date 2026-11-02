@@ -7,9 +7,12 @@ import {
   ElementRef,
   inject,
   OnInit,
+  viewChild,
 } from '@angular/core';
-import { ActivatedRoute, RouterLink } from '@angular/router';
+import { ActivatedRoute } from '@angular/router';
 import { GlobalConfigService } from '../../features/config/global-config.service';
+import { getChangedConfigFields } from '../../features/config/get-changed-config-fields.util';
+import { NEW_INSTALL_CONFIG_SECTION_KEYS } from '../../features/config/new-install-config.const';
 import { TaskWidgetSettingsService } from '../../features/config/task-widget-settings.service';
 import { FocusModeLocalSettingsService } from '../../features/config/focus-mode-local-settings.service';
 import {
@@ -45,6 +48,9 @@ import { getAppVersionStr } from '../../util/get-app-version-str';
 import { UpdateCheckService } from '../../core/update-check/update-check.service';
 import { isUpdateCheckPossible } from '../../core/update-check/is-update-check-possible.util';
 import { ConfigSectionComponent } from '../../features/config/config-section/config-section.component';
+import { ConfigFormComponent } from '../../features/config/config-form/config-form.component';
+import { TIME_TRACKING_SWITCH_FORM_ITEM } from '../../features/config/form-cfgs/app-features-form.const';
+import { FormlyFieldConfig } from '@ngx-formly/core';
 import { ConfigSoundFormComponent } from '../../features/config/config-sound-form/config-sound-form.component';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { SyncProviderManager } from '../../op-log/sync-providers/provider-manager.service';
@@ -57,11 +63,13 @@ import { ThemeSelectorComponent } from '../../core/theme/theme-selector/theme-se
 import { Log } from '../../core/log';
 import { DialogLogsComponent } from '../../ui/dialog-logs/dialog-logs.component';
 import { SnackService } from '../../core/snack/snack.service';
+import { requestBrowserNotificationPermission } from '../../core/notify/browser-notification-permission';
 import { ShareService } from '../../core/share/share.service';
 import { SyncWrapperService } from '../../imex/sync/sync-wrapper.service';
 import { MatDialog } from '@angular/material/dialog';
 import { SyncProviderId } from '../../op-log/sync-providers/provider.const';
 import { MatTab, MatTabGroup, MatTabLabel } from '@angular/material/tabs';
+import { TabHeaderWheelScrollDirective } from '../../ui/tab-header-wheel-scroll/tab-header-wheel-scroll.directive';
 import { MatIcon } from '@angular/material/icon';
 import { MatTooltip } from '@angular/material/tooltip';
 import { MatButton, MatIconButton } from '@angular/material/button';
@@ -75,8 +83,17 @@ import { MatAutocomplete, MatAutocompleteTrigger } from '@angular/material/autoc
 import { MatOption } from '@angular/material/core';
 import {
   searchSettings,
+  SETTINGS_PLUGINS_TAB_INDEX,
+  SETTINGS_SYNC_BACKUP_TAB_INDEX,
   SettingsSearchTarget,
 } from '../../features/config/settings-search.util';
+
+/**
+ * Starts expanded so the feature toggles are visible on opening Settings —
+ * the point of leading the default tab with them. Collapsing it sticks until
+ * the page is left.
+ */
+const OPEN_BY_DEFAULT_SECTION_KEY = 'appFeatures';
 
 /** Kept in sync with `animationDuration` on the settings `mat-tab-group`. */
 const TAB_ANIMATION_DURATION_MS = 200;
@@ -89,17 +106,18 @@ const TAB_ANIMATION_DURATION_MS = 200;
   imports: [
     ThemeSelectorComponent,
     ConfigSectionComponent,
+    ConfigFormComponent,
     ConfigSoundFormComponent,
     TranslatePipe,
     PluginManagementComponent,
     MatTabGroup,
+    TabHeaderWheelScrollDirective,
     MatTab,
     MatTabLabel,
     MatIcon,
     MatTooltip,
     MatButton,
     MatIconButton,
-    RouterLink,
     NgTemplateOutlet,
     FormsModule,
     MatFormField,
@@ -135,6 +153,7 @@ export class ConfigPageComponent implements OnInit {
 
   selectedTabIndex = 0;
   expandedSection: string | null = null;
+  private _isDefaultSectionCollapsed = false;
 
   searchQuery = '';
   /** Flat, cross-tab search hits in tab order. Empty while not searching. */
@@ -145,6 +164,10 @@ export class ConfigPageComponent implements OnInit {
   generalFormCfg: ConfigFormConfig;
   globalTasksFormCfg: ConfigFormConfig;
   timeTrackingFormCfg: ConfigFormConfig;
+  /** The App Features time tracking switch, repeated atop the Time Tracking tab. */
+  readonly timeTrackingSwitchFormCfg: FormlyFieldConfig[] = [
+    TIME_TRACKING_SWITCH_FORM_ITEM,
+  ];
   pluginsShortcutsFormCfg: ConfigFormConfig;
   globalImexFormCfg: ConfigFormConfig;
   globalProductivityConfigFormCfg: ConfigFormConfig;
@@ -190,10 +213,27 @@ export class ConfigPageComponent implements OnInit {
   isUpdateCheckPossible: boolean = isUpdateCheckPossible();
 
   private readonly _destroyRef = inject(DestroyRef);
+  private readonly _tabGroup = viewChild(MatTabGroup);
 
   constructor() {
     // Initialize tab-specific form configurations
-    this.generalFormCfg = GLOBAL_GENERAL_FORM_CONFIG.slice();
+    // The pointer to plugins sits inside App Features, below its switches.
+    this.generalFormCfg = GLOBAL_GENERAL_FORM_CONFIG.map((section) =>
+      section.key === 'appFeatures'
+        ? {
+            ...section,
+            actions: [
+              ...(section.actions ?? []),
+              {
+                label: T.GCF.APP_FEATURES.EXTEND_WITH_PLUGINS,
+                icon: 'extension',
+                isRow: true,
+                onClick: () => this.goToPluginsTab(),
+              },
+            ],
+          }
+        : section,
+    );
     this.timeTrackingFormCfg = GLOBAL_TIME_TRACKING_FORM_CONFIG.slice();
     this.pluginsShortcutsFormCfg = GLOBAL_PLUGINS_FORM_CONFIG.slice();
     // "Browse backups" lives on the Import/Export section so every platform
@@ -250,6 +290,7 @@ export class ConfigPageComponent implements OnInit {
     // Use effect to react to plugin shortcuts changes for live updates
     effect(() => {
       const shortcuts = this._pluginBridgeService.shortcuts();
+      // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
       Log.log('Plugin shortcuts changed:', { shortcuts });
       this._updateKeyboardFormWithPluginShortcuts(shortcuts);
     });
@@ -285,7 +326,11 @@ export class ConfigPageComponent implements OnInit {
       .subscribe((params) => {
         if (params['tab'] !== undefined) {
           const tabIndex = parseInt(params['tab'], 10);
-          if (!isNaN(tabIndex) && tabIndex >= 0 && tabIndex < 5) {
+          if (
+            !isNaN(tabIndex) &&
+            tabIndex >= 0 &&
+            tabIndex <= SETTINGS_SYNC_BACKUP_TAB_INDEX
+          ) {
             this.selectedTabIndex = tabIndex;
             this._cd.detectChanges();
           }
@@ -384,14 +429,40 @@ export class ConfigPageComponent implements OnInit {
 
     // focusModeLocal is per-instance (not synced) — handled by a dedicated service
     if (formSectionKey === 'focusModeLocal') {
-      this.focusModeLocalSettingsService.update(config as Partial<FocusModeLocalConfig>);
+      const localCfg = config as Partial<FocusModeLocalConfig>;
+      const wasNotifyOn =
+        this.focusModeLocalSettingsService.settings().isNotifyOnSessionEnd;
+      this.focusModeLocalSettingsService.update(localCfg);
+      // Prompt only on the opt-in click: browsers ignore prompts without a gesture
+      if (localCfg.isNotifyOnSessionEnd && !wasNotifyOn) {
+        void this._ensureFocusNotificationPermission();
+      }
       return;
     }
 
     // From here on we know it's a real GlobalConfigState section.
     const sectionKey = formSectionKey as GlobalConfigSectionKey;
 
+    if ((NEW_INSTALL_CONFIG_SECTION_KEYS as readonly string[]).includes(sectionKey)) {
+      // Sync only the fields that changed, never this device's untouched defaults.
+      const changed = getChangedConfigFields<Record<string, unknown>>(
+        (this.configService.cfg()?.[sectionKey] as Record<string, unknown>) ?? {},
+        config,
+      );
+      if (Object.keys(changed).length > 0) {
+        this.configService.updateSection(sectionKey, changed);
+      }
+      return;
+    }
+
     this.configService.updateSection(sectionKey, config);
+  }
+
+  saveTimeTrackingSwitch($event: { config: unknown }): void {
+    this.saveGlobalCfg({
+      sectionKey: 'appFeatures',
+      config: $event.config as Record<string, unknown>,
+    });
   }
 
   /**
@@ -421,6 +492,15 @@ export class ConfigPageComponent implements OnInit {
     );
   }
 
+  /**
+   * The plugins action inside App Features. Moves focus to the Plugins tab
+   * header, since the button itself is detached with the outgoing tab body.
+   */
+  goToPluginsTab(): void {
+    this.selectedTabIndex = SETTINGS_PLUGINS_TAB_INDEX;
+    this._tabGroup()?.focusTab(SETTINGS_PLUGINS_TAB_INDEX);
+  }
+
   /** Jumps to a hit: right tab, section expanded, scrolled into view. */
   goToSearchResult(target: SettingsSearchTarget): void {
     this.onSearchChange('');
@@ -442,8 +522,28 @@ export class ConfigPageComponent implements OnInit {
   isSectionExpanded(section: GenericConfigFormSection): boolean {
     return (
       section.key === this.expandedSection ||
-      section.customSection === this.expandedSection
+      section.customSection === this.expandedSection ||
+      (section.key === OPEN_BY_DEFAULT_SECTION_KEY && !this._isDefaultSectionCollapsed)
     );
+  }
+
+  /**
+   * Forgets the expanded section once it is collapsed by hand, so selecting its
+   * search result again changes `[isExpanded]` and reopens it (#9643).
+   */
+  onSectionExpandedChange(section: GenericConfigFormSection, isExpanded: boolean): void {
+    if (section.key === OPEN_BY_DEFAULT_SECTION_KEY) {
+      this._isDefaultSectionCollapsed = !isExpanded;
+      // Only drop `expandedSection` if it points here — another section's
+      // search-driven expansion must survive collapsing this one.
+      if (!isExpanded && this.expandedSection === section.key) {
+        this.expandedSection = null;
+      }
+      return;
+    }
+    if (!isExpanded && this.isSectionExpanded(section)) {
+      this.expandedSection = null;
+    }
   }
 
   getGlobalCfgSection(
@@ -463,6 +563,18 @@ export class ConfigPageComponent implements OnInit {
       width: '600px',
       maxWidth: '95vw',
       data: { logs: Log.exportLogHistory() },
+    });
+  }
+
+  private async _ensureFocusNotificationPermission(): Promise<void> {
+    if (await requestBrowserNotificationPermission()) {
+      return;
+    }
+    // Revert so the checkbox reflects that nothing will be shown
+    this.focusModeLocalSettingsService.update({ isNotifyOnSessionEnd: false });
+    this._snackService.open({
+      type: 'ERROR',
+      msg: T.GCF.FOCUS_MODE_LOCAL.S_NOTIFICATION_PERMISSION_DENIED,
     });
   }
 

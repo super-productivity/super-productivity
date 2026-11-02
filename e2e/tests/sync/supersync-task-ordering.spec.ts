@@ -4,6 +4,7 @@ import {
   getSuperSyncConfig,
   createSimulatedClient,
   closeClient,
+  getTaskTitles,
   waitForTask,
   type SimulatedE2EClient,
 } from '../../utils/supersync-helpers';
@@ -76,21 +77,11 @@ test.describe('@supersync Task Ordering Sync', () => {
       console.log('[Order Test] Client B has all 3 tasks');
 
       // ============ PHASE 4: Verify Order on Both Clients ============
-      // Get task order on both clients using innerText to avoid duplicates
-      const getTaskOrder = async (client: SimulatedE2EClient): Promise<string[]> => {
-        const tasks = client.page.locator('task .task-title');
-        const count = await tasks.count();
-        const order: string[] = [];
-        for (let i = 0; i < count; i++) {
-          const titleEl = tasks.nth(i);
-          const text = await titleEl.innerText();
-          order.push(text.trim());
-        }
-        return order;
-      };
-
-      const orderA = await getTaskOrder(clientA);
-      const orderB = await getTaskOrder(clientB);
+      // Get task order on both clients using innerText to avoid duplicates. One
+      // snapshot per client: count() + nth(i) reads would wait on a row that a
+      // re-render after the sync had just removed.
+      const orderA = await getTaskTitles(clientA);
+      const orderB = await getTaskTitles(clientB);
 
       console.log('[Order Test] Client A order:', orderA);
       console.log('[Order Test] Client B order:', orderB);
@@ -185,14 +176,11 @@ test.describe('@supersync Task Ordering Sync', () => {
       // ============ PHASE 4: Verify Subtask Order ============
       // Get subtask order using innerText to avoid duplicate text issues
       const getSubtaskOrder = async (client: SimulatedE2EClient): Promise<string[]> => {
-        const subtasks = client.page.locator('task.hasNoSubTasks .task-title');
-        const count = await subtasks.count();
-        const order: string[] = [];
-        for (let i = 0; i < count; i++) {
-          const text = await subtasks.nth(i).innerText();
-          order.push(text.trim());
-        }
-        return order;
+        // One snapshot: count() + nth(i) reads would wait on a row a re-render removed.
+        const texts = await client.page
+          .locator('task.hasNoSubTasks .task-title')
+          .allInnerTexts();
+        return texts.map((text) => text.trim());
       };
 
       const subtaskOrderA = await getSubtaskOrder(clientA);
@@ -292,16 +280,15 @@ test.describe('@supersync Task Ordering Sync', () => {
       console.log('[Concurrent Order Test] All clients synced');
 
       // ============ PHASE 4: Verify Consistent State ============
-      const getOrder = async (client: SimulatedE2EClient): Promise<string[]> => {
-        const tasks = client.page.locator('task');
-        const count = await tasks.count();
-        const order: string[] = [];
-        for (let i = 0; i < count; i++) {
-          const title = await tasks.nth(i).locator('.task-title').textContent();
-          order.push(title?.trim() || '');
-        }
-        return order;
-      };
+      const getOrder = async (client: SimulatedE2EClient): Promise<string[]> =>
+        // One snapshot: count() + nth(i) reads would wait on a row a re-render removed.
+        client.page
+          .locator('task')
+          .evaluateAll((tasks) =>
+            tasks.map(
+              (task) => task.querySelector('.task-title')?.textContent?.trim() ?? '',
+            ),
+          );
 
       const orderA = await getOrder(clientA);
       const orderB = await getOrder(clientB);

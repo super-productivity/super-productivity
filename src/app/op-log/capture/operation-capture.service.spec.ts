@@ -251,6 +251,9 @@ describe('OperationCaptureService', () => {
       expect(changes[0].entityType).toBe('TASK');
       expect(changes[0].entityId).toBe('task-1');
       expect(changes[0].opType).toBe(OpType.Update);
+      // Pinned wire shape: the delta's ARGUMENTS, not task fields. Released
+      // clients read this as-is; a receiver maps the action type to the fields
+      // it mutates for conflict detection instead (conflict-disjoint-merge.util).
       expect(changes[0].changes).toEqual({
         taskId: 'task-1',
         date: '2024-01-15',

@@ -77,6 +77,36 @@ test.describe('Task multi-select (desktop)', () => {
     await expect(bar).toBeHidden();
   });
 
+  // #10143: a plain click only focuses a row, so the first Shift+click has no
+  // anchor yet. It must start the range at the focused row (as Shift+Arrow
+  // does) instead of dropping it.
+  test('Shift+click after a plain click keeps the clicked row in the range', async ({
+    page,
+    workViewPage,
+    taskPage,
+    testPrefix,
+  }) => {
+    await workViewPage.waitForTaskList();
+    const titles = ['Range A', 'Range B', 'Range C'].map((t) => `${testPrefix}-${t}`);
+    for (const title of titles) {
+      await workViewPage.addTask(title);
+    }
+    const [a, b, c] = titles.map((t) => taskPage.getTaskByText(t));
+    const bar = page.locator(BAR);
+
+    // A plain click on the row only focuses it; focusing directly gives the
+    // same state without landing on the title (which starts inline editing).
+    await a.focus();
+    await expect(a).toBeFocused();
+    await expect(bar).toBeHidden();
+
+    await c.click({ modifiers: ['Shift'] });
+    await expect(bar).toContainText('3 selected');
+    for (const task of [a, b, c]) {
+      await expect(task).toHaveClass(/isMultiSelected/);
+    }
+  });
+
   test('X toggles the focused task, Ctrl+A selects its list and Escape clears', async ({
     page,
     workViewPage,

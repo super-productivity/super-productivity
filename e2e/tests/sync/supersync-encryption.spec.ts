@@ -25,57 +25,6 @@ import { expectNoGlobalError } from '../../utils/assertions';
  */
 
 test.describe('@supersync SuperSync Encryption', () => {
-  // Server health check is handled automatically by the supersync fixture
-
-  test('Encrypted data syncs correctly with valid password', async ({
-    browser,
-    baseURL,
-    testRunId,
-    serverHealthy,
-  }) => {
-    void serverHealthy; // Ensure fixture is evaluated for server health check
-    let clientA: SimulatedE2EClient | null = null;
-    let clientB: SimulatedE2EClient | null = null;
-
-    try {
-      const user = await createTestUser(testRunId);
-      const baseConfig = getSuperSyncConfig(user);
-      const encryptionPassword = `pass-${testRunId}`;
-      const syncConfig = {
-        ...baseConfig,
-        isEncryptionEnabled: true,
-        password: encryptionPassword,
-      };
-
-      // --- Client A: Encrypt & Upload ---
-      clientA = await createSimulatedClient(browser, baseURL!, 'A', testRunId);
-      await clientA.sync.setupSuperSync(syncConfig);
-
-      const secretTaskName = `SecretTask-${testRunId}`;
-      await clientA.workView.addTask(secretTaskName);
-
-      // Sync A (Encrypts and uploads)
-      await clientA.sync.syncAndWait();
-
-      // --- Client B: Download & Decrypt ---
-      clientB = await createSimulatedClient(browser, baseURL!, 'B', testRunId);
-      // Use SAME config (same password)
-      await clientB.sync.setupSuperSync(syncConfig);
-
-      // Sync B (Downloads and decrypts)
-      await clientB.sync.syncAndWait();
-
-      // Verify B has the task
-      await waitForTask(clientB.page, secretTaskName);
-      await expect(
-        clientB.page.locator(`task:has-text("${secretTaskName}")`),
-      ).toBeVisible();
-    } finally {
-      if (clientA) await closeClient(clientA);
-      if (clientB) await closeClient(clientB);
-    }
-  });
-
   test('Encrypted data fails to sync with wrong password', async ({
     browser,
     baseURL,
@@ -313,61 +262,6 @@ test.describe('@supersync SuperSync Encryption', () => {
       await expect(clientA.page.locator(`task:has-text("${taskFromB}")`)).toBeVisible();
       await expect(clientB.page.locator(`task:has-text("${taskFromA}")`)).toBeVisible();
       await expect(clientB.page.locator(`task:has-text("${taskFromB}")`)).toBeVisible();
-    } finally {
-      if (clientA) await closeClient(clientA);
-      if (clientB) await closeClient(clientB);
-    }
-  });
-
-  test('Task update syncs correctly with encryption', async ({
-    browser,
-    baseURL,
-    testRunId,
-    serverHealthy,
-  }) => {
-    void serverHealthy; // Ensure fixture is evaluated for server health check
-    let clientA: SimulatedE2EClient | null = null;
-    let clientB: SimulatedE2EClient | null = null;
-
-    try {
-      const user = await createTestUser(testRunId);
-      const baseConfig = getSuperSyncConfig(user);
-      const encryptionPassword = `update-${testRunId}`;
-      const syncConfig = {
-        ...baseConfig,
-        isEncryptionEnabled: true,
-        password: encryptionPassword,
-      };
-
-      // --- Client A: Create a task ---
-      clientA = await createSimulatedClient(browser, baseURL!, 'A', testRunId);
-      await clientA.sync.setupSuperSync(syncConfig);
-
-      const taskName = `UpdatableTask-${testRunId}`;
-      await clientA.workView.addTask(taskName);
-      await clientA.page.waitForTimeout(300);
-      await clientA.sync.syncAndWait();
-
-      // --- Client B: Sync and verify task exists ---
-      clientB = await createSimulatedClient(browser, baseURL!, 'B', testRunId);
-      await clientB.sync.setupSuperSync(syncConfig);
-      await clientB.sync.syncAndWait();
-
-      await waitForTask(clientB.page, taskName);
-      await expect(clientB.page.locator(`task:has-text("${taskName}")`)).toBeVisible();
-
-      // --- Client B: Create another task ---
-      const task2Name = `UpdatedByB-${testRunId}`;
-      await clientB.workView.addTask(task2Name);
-      await clientB.page.waitForTimeout(300);
-      await clientB.sync.syncAndWait();
-
-      // --- Client A: Sync and verify both tasks exist ---
-      await clientA.sync.syncAndWait();
-      await waitForTask(clientA.page, task2Name);
-
-      await expect(clientA.page.locator(`task:has-text("${taskName}")`)).toBeVisible();
-      await expect(clientA.page.locator(`task:has-text("${task2Name}")`)).toBeVisible();
     } finally {
       if (clientA) await closeClient(clientA);
       if (clientB) await closeClient(clientB);

@@ -17,6 +17,7 @@ import { TaskFocusService } from '../task-focus.service';
 import { WorkContextType } from '../../work-context/work-context.model';
 import { DEFAULT_TASK, Task } from '../task.model';
 import { DEFAULT_PROJECT } from '../../project/project.const';
+import { T } from '../../../t.const';
 
 describe('TaskMultiSelectBarComponent', () => {
   let fixture: ComponentFixture<TaskMultiSelectBarComponent>;
@@ -152,6 +153,48 @@ describe('TaskMultiSelectBarComponent', () => {
     expect(taskFocusService.isTaskContextMenuOpen()).toBeFalse();
     expect(taskFocusService.closeActiveTaskContextMenu()).toBeNull();
   });
+
+  it('lists None, a divider, then Low, Medium, High in the priority menu', fakeAsync(() => {
+    multiSelect.toggle('a');
+    fixture.detectChanges();
+    const moreBtn = Array.from(
+      fixture.nativeElement.querySelectorAll('.bar button') as NodeListOf<HTMLElement>,
+    ).find((b) => b.textContent?.includes('more_horiz'));
+    moreBtn!.click();
+    fixture.detectChanges();
+    tick();
+    const priorityTrigger = Array.from(
+      document.querySelectorAll<HTMLElement>('.cdk-overlay-container [mat-menu-item]'),
+    ).find((el) => el.textContent?.trim().endsWith(T.F.TASK.CMP.PRIORITY));
+    priorityTrigger!.click();
+    fixture.detectChanges();
+    tick();
+
+    const panels = document.querySelectorAll(
+      '.cdk-overlay-container .mat-mdc-menu-panel',
+    );
+    const entries = Array.from(
+      panels[panels.length - 1].querySelectorAll<HTMLElement>(
+        '[mat-menu-item], mat-divider',
+      ),
+    ).map((el) =>
+      el.tagName === 'MAT-DIVIDER'
+        ? '---'
+        : (el.textContent ?? '').replace('clear', '').trim(),
+    );
+
+    expect(entries).toEqual([
+      T.F.TASK.CMP.PRIORITY_NONE,
+      '---',
+      T.F.TASK.CMP.PRIORITY_LOW,
+      T.F.TASK.CMP.PRIORITY_MEDIUM,
+      T.F.TASK.CMP.PRIORITY_HIGH,
+    ]);
+    fixture.componentInstance.onMenuClosed();
+    multiSelect.toggle('a');
+    fixture.detectChanges();
+    tick(500);
+  }));
 
   it('clears the selection when the bar is destroyed', () => {
     multiSelect.toggle('a');

@@ -348,6 +348,12 @@
 
       /* Bubble menu */
       .bubble-menu {
+        /* TipTap 3 positions this with Floating UI, measuring it before it
+           sets these inline, so out-of-flow sizing must already apply. Sit
+           above the block gutter, like the 2.x tippy popup did. */
+        position: absolute;
+        width: max-content;
+        z-index: 100;
         display: flex;
         gap: 2px;
         background: var(--card-bg, #fff);

@@ -73,7 +73,9 @@ export const skipDuringSyncWindow = <T>(): MonoTypeOperatorFunction<T> => {
       // Verbose-level so it doesn't spam normal logs. Visible when investigating
       // whether the wider sync window is silently dropping legitimate emissions.
       SyncLog.verbose('skipDuringSyncWindow drop', {
+        // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
         initialSyncDone,
+        // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
         inSyncWindow,
       });
     }

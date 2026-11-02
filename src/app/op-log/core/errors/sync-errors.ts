@@ -9,6 +9,7 @@ import {
 } from '@sp/sync-providers/errors';
 import { FILE_BASED_SYNC_CONSTANTS } from '../../sync-providers/file-based/file-based-sync.types';
 import { KNOWN_ACTION_TYPES } from '../action-types.enum';
+import { ConflictReason } from '../../sync-providers/provider.const';
 
 /** Upper bound for the entity count reported in a sync diagnostic. */
 const MAX_REPORTED_ENTITY_COUNT = 9999;
@@ -19,6 +20,7 @@ const MAX_REPORTED_ENTITY_COUNT = 9999;
 // Identity is covered by sync-errors.identity.spec.ts.
 export {
   AuthFailSPError,
+  ClientUpdateRequiredSPError,
   EmptyRemoteBodySPError,
   FileHashCreationAPIError,
   HttpNotOkAPIError,
@@ -88,10 +90,13 @@ export class NoSyncProviderSetError extends Error {
  */
 export class LocalDataConflictError extends Error {
   override name = 'LocalDataConflictError';
+  readonly conflictReason: ConflictReason = ConflictReason.NoLastSync;
 
   constructor(
     public readonly unsyncedCount: number,
-    public readonly remoteSnapshotState: Record<string, unknown>,
+    // `null` when the remote side arrived as ops without a snapshot (#9391) —
+    // there is no full remote state to show.
+    public readonly remoteSnapshotState: Record<string, unknown> | null,
     public readonly remoteVectorClock?: Record<string, number>,
     // The client's vector clock as of its last successful sync. Used by the
     // conflict dialog as an APPROXIMATE baseline for the per-client
@@ -105,6 +110,16 @@ export class LocalDataConflictError extends Error {
   ) {
     super(`Local data conflict: ${unsyncedCount} unsynced changes would be lost`);
   }
+}
+
+/**
+ * The remote snapshot lost changes this device already synced (#10916): with
+ * nothing pending, hydrating it would delete them silently. Routed to the same
+ * dialog as LocalDataConflictError; its reason adds an explanation.
+ */
+export class OwnUploadsMissingConflictError extends LocalDataConflictError {
+  override name = 'OwnUploadsMissingConflictError';
+  override readonly conflictReason = ConflictReason.OwnUploadsMissing;
 }
 
 export class SyncAlreadyInProgressError extends Error {
@@ -125,6 +140,21 @@ export class LockAcquisitionTimeoutError extends Error {
     super(
       `Timed out waiting ${timeoutMs}ms to acquire lock "${lockName}". ` +
         `A previous lock holder may have crashed or stalled.`,
+    );
+  }
+}
+
+/**
+ * flushThenRunExclusive could not find a moment with no capture in flight:
+ * actions kept arriving between the flush and the lock. Transient — retrying
+ * once dispatch activity settles succeeds.
+ */
+export class OperationWriteCutoffError extends Error {
+  override name = 'OperationWriteCutoffError';
+
+  constructor(attempts: number) {
+    super(
+      `Operation write cutoff not reached after ${attempts} attempts — continuous dispatch activity. Try again.`,
     );
   }
 }
@@ -437,6 +467,19 @@ export class ModelValidationError extends Error {
   }
 }
 
+/**
+ * A backup import refused because its data is invalid and repair cannot fix it,
+ * so importing would persist and broadcast state every client rejects (#8279).
+ * UI paths map it to a translated "use an older backup" message.
+ */
+export class BackupRepairFailedError extends Error {
+  override name = 'BackupRepairFailedError';
+
+  constructor() {
+    super('Data validation failed and repair not possible');
+  }
+}
+
 export class DataValidationFailedError extends Error {
   override name = 'DataValidationFailedError';
   additionalLog?: string;
@@ -542,6 +585,9 @@ export class StorageQuotaExceededError extends Error {
  * This can occur when the remote file was written by a different (older or newer)
  * version of the app. Force-uploading is unsafe in this case because the remote
  * may be in a newer format.
+ *
+ * `isRemoteNewer` marks a file written in a format NEWER than this build reads:
+ * it is healthy, so it must never be "recovered" from an older backup (#8764).
  */
 export class SyncDataCorruptedError extends Error {
   override name = 'SyncDataCorruptedError';
@@ -549,6 +595,7 @@ export class SyncDataCorruptedError extends Error {
   constructor(
     message: string,
     public readonly filePath: string,
+    public readonly isRemoteNewer = false,
   ) {
     super(`Sync data incompatible at ${filePath}: ${message}`);
   }

@@ -29,6 +29,8 @@ import { IS_ELECTRON } from '../../app.constants';
 import { GlobalConfigState } from '../../features/config/global-config.model';
 import { IS_ANDROID_WEB_VIEW } from '../../util/is-android-web-view';
 import { androidInterface } from '../../features/android/android-interface';
+import { iosInterface } from '../../features/ios/ios-interface';
+import { IS_IOS_NATIVE } from '../../util/is-native-platform';
 import { ipcResume$, ipcSuspend$ } from '../../core/ipc-events';
 import { IS_TOUCH_PRIMARY } from '../../util/is-mouse-primary';
 import { DataInitStateService } from '../../core/data-init/data-init-state.service';
@@ -154,11 +156,21 @@ export class SyncTriggerService {
   // Fires when the page becomes hidden (tab switch, app backgrounding, close).
   // Not throttled — a "last chance before close" trigger should always attempt a sync.
   // Electron uses execBeforeCloseService (IPC-level blocking close) instead.
-  private _visibilityHiddenTrigger$: Observable<string | never> = !IS_ELECTRON
-    ? fromEvent(document, 'visibilitychange').pipe(
-        filter(() => document.visibilityState === 'hidden'),
-        mapTo('I_VISIBILITY_HIDDEN'),
-      )
+  // iOS pushes inside its BackgroundTask budget (BackgroundExitSyncService via
+  // main.ts) instead: a request here is deferred and never runs once suspended.
+  private _visibilityHiddenTrigger$: Observable<string | never> =
+    !IS_ELECTRON && !IS_IOS_NATIVE
+      ? fromEvent(document, 'visibilitychange').pipe(
+          filter(() => document.visibilityState === 'hidden'),
+          mapTo('I_VISIBILITY_HIDDEN'),
+        )
+      : EMPTY;
+
+  // iOS had no resume trigger: ops other devices pushed while the app was
+  // suspended only arrived after the 15 min user-activity throttle. Not
+  // onResume$ (didBecomeActive): that also fires after Control Center.
+  private _iosResumeTrigger$: Observable<string | never> = IS_IOS_NATIVE
+    ? iosInterface.onWillEnterForeground$.pipe(throttleTime(10000), mapTo('I_RESUME_APP'))
     : EMPTY;
 
   // OTHER INITIAL SYNC STUFF
@@ -252,7 +264,8 @@ export class SyncTriggerService {
             ),
           ),
           androidInterface.onResume$.pipe(throttleTime(10000), mapTo('I_RESUME_APP')),
-          androidInterface.onPause$.pipe(throttleTime(10000), mapTo('I_PAUSE_APP')),
+          // Pause pushes via BackgroundExitSyncService (flushOnPause$) instead: a
+          // request here is deferred by the scheduler's floor and lost on suspension.
           this._isOnlineTrigger$,
         )
       : // EVERYTHING ELSE
@@ -263,6 +276,7 @@ export class SyncTriggerService {
           this._onIdleTrigger$,
           this._onElectronResumeTrigger$,
           this._visibilityHiddenTrigger$,
+          this._iosResumeTrigger$,
           // Periodic interval timer: fires every syncInterval ms to detect external file
           // changes (e.g. Syncthing on Linux) even without user activity.
           // Only for file-based providers — SuperSync uses WebSocket push and doesn't need polling.
@@ -275,6 +289,7 @@ export class SyncTriggerService {
       // once immediately
       _immediateSyncTrigger$.pipe(
         tap((v) => {
+          // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
           SyncLog.log('immediate sync trigger', v);
           // Open BEFORE the downstream debounceTime(100) so the resume → DAY_CHANGE
           // → TODAY_TAG repair cascade (which fires inside that 100ms) sees the

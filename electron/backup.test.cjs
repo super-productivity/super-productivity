@@ -19,11 +19,18 @@ const BACKUP_DIR_WINSTORE = BACKUP_DIR.replace(
   'Local\\Packages\\53707johannesjo.SuperProductivity_ch45amy23cdv6\\LocalCache\\Roaming',
 );
 
+// what the mocked app.getPath('userData') returns; tests may change it after import
+let userDataPath;
 let existingPaths;
 let handleHandlers;
 let onHandlers;
 // fileName -> mtime (ms) served by the mocked readdirSync/statSync
 let backupFiles;
+// resolved path -> contents served by the mocked writeFileSync/readFileSync
+let storedFiles;
+let readPaths;
+// overridable per test; defaults to storing into storedFiles
+let writeFileSyncImpl;
 
 const resetModule = () => {
   delete require.cache[backupModulePath];
@@ -33,7 +40,7 @@ const installMocks = () => {
   Module._load = function patchedLoad(request, parent, isMain) {
     if (request === 'electron') {
       return {
-        app: { getPath: () => USER_DATA },
+        app: { getPath: () => userDataPath },
         ipcMain: {
           on: (channel, handler) => onHandlers.set(channel, handler),
           handle: (channel, handler) => handleHandlers.set(channel, handler),
@@ -58,6 +65,12 @@ const installMocks = () => {
         existsSync: (p) => existingPaths.has(p),
         readdirSync: () => Array.from(backupFiles.keys()),
         statSync: (p) => ({ mtime: new Date(backupFiles.get(path.basename(p))) }),
+        mkdirSync: (p) => existingPaths.add(p),
+        writeFileSync: (...args) => writeFileSyncImpl(...args),
+        readFileSync: (p) => {
+          readPaths.push(p);
+          return storedFiles.get(path.resolve(p));
+        },
       };
     }
 
@@ -72,10 +85,17 @@ const loadBackupModule = () => {
 };
 
 test.beforeEach(() => {
+  userDataPath = USER_DATA;
   existingPaths = new Set();
   handleHandlers = new Map();
   onHandlers = new Map();
   backupFiles = new Map();
+  storedFiles = new Map();
+  readPaths = [];
+  writeFileSyncImpl = (p, data) => {
+    storedFiles.set(path.resolve(p), data);
+    backupFiles.set(path.basename(p), Date.now());
+  };
   installMocks();
 });
 
@@ -169,4 +189,89 @@ test('Store builds fall back to the real backup dir when LocalCache is absent', 
   existingPaths.add(BACKUP_DIR);
 
   assert.equal(getBackupDirForDisplay(), BACKUP_DIR);
+});
+
+// GHSA-x937-wf3j-88q3: the path comes from the renderer, which runs plugin code.
+test('BACKUP_LOAD_DATA refuses paths outside the backup dirs without reading them', () => {
+  const { initBackupAdapter } = loadBackupModule();
+  initBackupAdapter();
+  const loadData = handleHandlers.get('BACKUP_LOAD_DATA');
+
+  for (const outside of [
+    path.join(USER_DATA, 'simpleSettings'),
+    `${BACKUP_DIR}${path.sep}..${path.sep}simpleSettings`,
+    `${BACKUP_DIR}-evil${path.sep}sp-backup.json`,
+  ]) {
+    assert.throws(
+      () => loadData({}, outside),
+      /refused path outside backup directory/,
+      outside,
+    );
+  }
+  assert.deepEqual(readPaths, []);
+});
+
+test('BACKUP_LOAD_DATA reads a backup from the Windows Store dir', () => {
+  const { initBackupAdapter } = loadBackupModule();
+  initBackupAdapter();
+  const storePath = path.join(BACKUP_DIR_WINSTORE, 'sp-backup.json');
+  storedFiles.set(path.resolve(storePath), '{"from":"store"}');
+
+  assert.equal(handleHandlers.get('BACKUP_LOAD_DATA')({}, storePath), '{"from":"store"}');
+});
+
+test('a backup written by BACKUP restores through BACKUP_LOAD_DATA', () => {
+  const { initBackupAdapter } = loadBackupModule();
+  initBackupAdapter();
+  const data = { task: { ids: ['t1'], entities: { t1: { id: 't1', title: 'Report' } } } };
+
+  handleHandlers.get('BACKUP')({}, { data });
+  const newest = handleHandlers.get('BACKUP_IS_AVAILABLE')();
+
+  assert.deepEqual(
+    JSON.parse(handleHandlers.get('BACKUP_LOAD_DATA')({}, newest.path)),
+    data,
+  );
+});
+
+test('BACKUP rejects with a path-free error when the write fails (#10022)', async () => {
+  existingPaths.add(BACKUP_DIR);
+  writeFileSyncImpl = (p) => {
+    const e = new Error(`ENOSPC: no space left on device, open '${p}'`);
+    e.code = 'ENOSPC';
+    throw e;
+  };
+  const { initBackupAdapter } = loadBackupModule();
+  initBackupAdapter();
+
+  // async wrapper: ipcMain.handle rejects the invoke for a sync throw and an
+  // async rejection alike, so the test holds either way.
+  await assert.rejects(
+    async () => handleHandlers.get('BACKUP')({}, { data: {}, maxBackupFiles: 3 }),
+    (e) => {
+      assert.match(e.message, /^BACKUP failed: Error \(code: ENOSPC\)$/);
+      assert.equal(e.code, 'ENOSPC');
+      return true;
+    },
+  );
+});
+
+// backup.ts is imported before userData moves (snap common dir in main.ts,
+// --user-data-dir in start-app.ts), so the dir must be read at use time (#11049).
+test('backups follow a userData path changed after import (#11049)', () => {
+  const { initBackupAdapter } = loadBackupModule();
+  userDataPath = path.join('home', 'u', 'snap', 'sp', 'common', '.config', 'sp');
+  const movedBackupDir = path.join(userDataPath, 'backups');
+  initBackupAdapter();
+
+  handleHandlers.get('BACKUP')({}, { data: { a: 1 } });
+  const newest = handleHandlers.get('BACKUP_IS_AVAILABLE')();
+
+  assert.ok(existingPaths.has(movedBackupDir));
+  assert.equal(newest.folder, movedBackupDir);
+  assert.equal(path.dirname(newest.path), movedBackupDir);
+  assert.ok(storedFiles.has(path.resolve(newest.path)));
+  assert.deepEqual(JSON.parse(handleHandlers.get('BACKUP_LOAD_DATA')({}, newest.path)), {
+    a: 1,
+  });
 });

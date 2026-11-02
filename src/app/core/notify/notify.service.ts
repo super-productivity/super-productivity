@@ -4,11 +4,14 @@ import { environment } from '../../../environments/environment';
 import { IS_ELECTRON } from '../../app.constants';
 import { IS_MOBILE } from '../../util/is-mobile';
 import { TranslateService } from '@ngx-translate/core';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import { UiHelperService } from '../../features/ui-helper/ui-helper.service';
 import { Log } from '../log';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import { generateNotificationId } from '../../features/android/android-notification-id.util';
 import { CapacitorNotificationService } from '../platform/capacitor-notification.service';
 import { CapacitorPlatformService } from '../platform/capacitor-platform.service';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import { androidInterface } from '../../features/android/android-interface';
 
 @Injectable({

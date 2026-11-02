@@ -1,0 +1,33 @@
+{
+  "CFG": {
+    "HOST": "Host (np.: https://redmine.org)",
+    "API_KEY": "Klucz dostępu API",
+    "PROJECT_ID": "Identyfikator projektu",
+    "PROJECT_ID_DESC": "Można znaleźć jako część adresu URL podczas przeglądania projektu w przeglądarce.",
+    "SCOPE": "Zakres",
+    "SCOPE_ALL": "Wszystkie",
+    "SCOPE_CREATED": "Utworzone przeze mnie",
+    "SCOPE_ASSIGNED": "Przypisane do mnie",
+    "IS_SHOW_TIME_TRACKING_DIALOG": "Pokaż okno śledzenia czasu do raportowania do Redmine",
+    "IS_SHOW_TIME_TRACKING_DIALOG_DESC": "Wymaga włączenia modułu śledzenia czasu w projekcie Redmine",
+    "IS_SHOW_TIME_TRACKING_DIALOG_FOR_EACH_SUB_TASK": "Pokaż okno śledzenia czasu po ukończeniu podzadań",
+    "DEFAULT_TIME": "Domyślna wartość czasu dla okna dialogowego",
+    "DEFAULT_TIME_ALL_TIME": "Wypełnij cały czas spędzony na wykonywaniu zadania",
+    "DEFAULT_TIME_ALL_TIME_MINUS_LOGGED": "Wypełnij cały czas spędzony minus czas zarejestrowany",
+    "DEFAULT_TIME_TODAY": "Wypełnij tylko czas spędzony dzisiaj",
+    "DEFAULT_TIME_YESTERDAY": "Wypełnij tylko czas spędzony wczoraj"
+  },
+  "DISPLAY": {
+    "SUMMARY": "Podsumowanie",
+    "STATUS": "Status",
+    "PRIORITY": "Priorytet",
+    "AUTHOR": "Autor",
+    "ASSIGNEE": "Osoba przypisana",
+    "CATEGORY": "Kategoria",
+    "VERSION": "Wersja",
+    "DUE_DATE": "Termin",
+    "TIME_SPENT": "Czas spędzony",
+    "DESCRIPTION": "Opis"
+  },
+  "FORM_HELP": "<p>W tym miejscu można skonfigurować Super Productivity do wyświetlania listy otwartych zgłoszeń Redmine (w wersji online lub w instancji hostowanej samodzielnie) dla określonego projektu w panelu tworzenia zadań w widoku planowania dziennego. Będą one wymienione jako sugestie i będą zawierać link do zgłoszenia, a także więcej informacji na jego temat.</p><p>Ponadto można automatycznie importować wszystkie otwarte zgłoszenia.</p>"
+}

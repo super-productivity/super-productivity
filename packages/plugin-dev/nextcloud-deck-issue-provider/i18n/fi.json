@@ -1,0 +1,28 @@
+{
+  "CFG": {
+    "BASE_URL": "Nextcloud-perusosoite",
+    "USERNAME": "Nextcloud-käyttäjänimesi",
+    "PASSWORD": "Nextcloud-sovellussalasanasi",
+    "BOARD": "Board",
+    "IMPORT_STACKS": "Import from stacks (leave empty for all)",
+    "DONE_STACK": "Done stack (cards are moved here on completion)",
+    "STACKS_DESC": "Select a board first, then use the load button to list its stacks.",
+    "NONE": "None",
+    "FILTER_BY_ASSIGNEE": "Tuo vain minulle osoitetut kortit",
+    "TITLE_TEMPLATE": "Tehtävän otsikkomalli",
+    "TITLE_TEMPLATE_DESC": "Muuttujat: {CARD_TITLE}, {BOARD}, {COLUMN}, {ID}, {LABELS}. Esimerkki: [{BOARD}: {COLUMN}] {CARD_TITLE}. Jätä tyhjäksi käyttääksesi vain kortin otsikkoa."
+  },
+  "DISPLAY": {
+    "SUMMARY": "Yhteenveto",
+    "DESCRIPTION": "Deck-kuvaus",
+    "STACK": "Pino",
+    "DUE_DATE": "Määräpäivä",
+    "ASSIGNED_USERS": "Osoitetut käyttäjät",
+    "LABELS": "Tunnisteet"
+  },
+  "ERRORS": {
+    "NO_BOARD": "Nextcloud Deck: No board selected",
+    "CARD_NOT_FOUND": "Nextcloud Deck: Card not found on the selected board"
+  },
+  "FORM_HELP": "Määritä Nextcloud Deck -integraatiosi tuodaksesi kortteja tehtävinä. Käytä sovellussalasanaa todennukseen."
+}

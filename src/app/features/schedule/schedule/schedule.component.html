@@ -47,25 +47,25 @@
     <mat-menu #calFilterMenu="matMenu">
       <ng-template matMenuContent>
         <div (click)="$event.stopPropagation()">
-          @for (provider of enabledCalendarProviders(); track provider.id) {
+          @for (row of calProviderRows(); track row.id) {
             <button
               mat-menu-item
               role="menuitemcheckbox"
-              [attr.aria-checked]="!hiddenCalendarProviderIds().includes(provider.id)"
-              (click)="toggleCalProvider(provider.id)"
+              [attr.aria-checked]="!hiddenCalendarProviderIds().includes(row.id)"
+              (click)="toggleCalProvider(row.id)"
             >
-              @if (hiddenCalendarProviderIds().includes(provider.id)) {
+              @if (hiddenCalendarProviderIds().includes(row.id)) {
                 <mat-icon>check_box_outline_blank</mat-icon>
               } @else {
                 <mat-icon>check_box</mat-icon>
               }
-              @if (provider.color) {
+              <span class="cal-provider-row">
                 <span
                   class="cal-color-dot"
-                  [style.background]="provider.color"
+                  [style.background]="row.color"
                 ></span>
-              }
-              {{ calProviderLabel(provider) }}
+                <span class="cal-provider-label">{{ row.label }}</span>
+              </span>
             </button>
           }
         </div>
@@ -76,7 +76,7 @@
   <div class="date-nav-group">
     <button
       mat-icon-button
-      (click)="goToPreviousPeriod()"
+      (click)="navigatePrevious()"
       [disabled]="isViewingToday()"
       [attr.aria-label]="
         (isMonthView()
@@ -111,7 +111,7 @@
 
     <button
       mat-icon-button
-      (click)="goToNextPeriod()"
+      (click)="navigateNext()"
       [attr.aria-label]="
         (isMonthView()
           ? T.F.SCHEDULE.NEXT_MONTH
@@ -148,7 +148,34 @@
       [daysToShow]="daysToShow()"
       [weeksToShow]="weeksToShow()"
       [firstDayOfWeek]="firstDayOfWeek()"
+      [deadlineTasksByDay]="deadlineTasksByDay()"
     ></schedule-month>
+  } @else if (isDayView()) {
+    @if (currentDayPage(); as current) {
+      <swipe-pager
+        [prev]="prevDayPage() ?? null"
+        [current]="current"
+        [next]="nextDayPage() ?? null"
+        [trackKey]="dayPageKey"
+        [(isWarm)]="isPagerWarm"
+        (navigate)="onDayPagerNavigate($event)"
+      >
+        <ng-template
+          [swipePagerPage]="current"
+          let-page
+        >
+          <schedule-week
+            [events]="page.events"
+            [beyondBudget]="page.beyondBudget"
+            [daysToShow]="page.daysToShow"
+            [workStartEnd]="workStartEnd() || null"
+            [currentTimeRow]="page.day === _todayDateStr() ? nowRow() : null"
+            [todayDateStr]="_todayDateStr()"
+            [deadlineTasksByDay]="deadlineTasksByDay()"
+          ></schedule-week>
+        </ng-template>
+      </swipe-pager>
+    }
   } @else {
     <schedule-week
       [events]="events()"
@@ -159,6 +186,7 @@
       [todayDateStr]="_todayDateStr()"
       [isHorizontalScrollMode]="shouldEnableHorizontalScroll()"
       [isHScrolled]="isHScrolled()"
+      [deadlineTasksByDay]="deadlineTasksByDay()"
     ></schedule-week>
   }
 </div>

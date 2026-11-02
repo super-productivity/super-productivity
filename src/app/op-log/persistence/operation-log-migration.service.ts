@@ -55,6 +55,9 @@ export class OperationLogMigrationService {
   private translateService = inject(TranslateService);
   private lockService = inject(LockService);
 
+  /** How long the completed migration dialog stays visible; specs set it to 0. */
+  completionDisplayMs = 1000;
+
   /**
    * Checks if the operation log is in a valid state and migrates legacy data if found.
    *
@@ -169,7 +172,7 @@ export class OperationLogMigrationService {
 
         // Brief delay to show completion status. Keep this cosmetic wait outside
         // the operation-log barrier so queued capture writes can proceed.
-        await new Promise((resolve) => setTimeout(resolve, 1000));
+        await new Promise((resolve) => setTimeout(resolve, this.completionDisplayMs));
       }
     } catch (error) {
       OpLog.err('OperationLogMigrationService: Migration failed:', error);

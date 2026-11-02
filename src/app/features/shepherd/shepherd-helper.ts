@@ -23,6 +23,7 @@ export const nextOnObs = (
         .pipe(
           tap((v) => {
             if (debugTitle) {
+              // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
               Log.log('nextOnObs', v, debugTitle);
             }
           }),
@@ -57,6 +58,7 @@ export const twoWayObs = (
       onDestroy$ = new Subject();
       fwd.obs.pipe(first(), takeUntil(onDestroy$)).subscribe((v) => {
         if (debugTitle) {
+          // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
           Log.log(debugTitle, 'fwd', v);
         }
         fwd.cbAfter?.();
@@ -64,6 +66,7 @@ export const twoWayObs = (
       });
       back.obs.pipe(first(), takeUntil(onDestroy$)).subscribe((v) => {
         if (debugTitle) {
+          // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
           Log.log(debugTitle, 'back', v);
         }
         back.cbAfter?.();

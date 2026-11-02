@@ -10,6 +10,11 @@ import { CaldavCfg } from './caldav.model';
 import { CALDAV_POLL_INTERVAL } from './caldav.const';
 import { Task } from '../../../tasks/task.model';
 import { createTask } from '../../../tasks/task.test-helper';
+import { MockStore, provideMockStore } from '@ngrx/store/testing';
+import { signal, WritableSignal } from '@angular/core';
+import { GlobalConfigService } from '../../../config/global-config.service';
+import { selectTaskEntities } from '../../../tasks/store/task.selectors';
+import { SyncConfig } from '../../../config/global-config.model';
 
 const BASE_ISSUE: CaldavIssue = {
   id: 'uid-1',
@@ -62,8 +67,11 @@ describe('CaldavCommonInterfacesService', () => {
   let service: CaldavCommonInterfacesService;
   let caldavClientSpy: jasmine.SpyObj<CaldavClientService>;
   let issueProviderServiceSpy: jasmine.SpyObj<IssueProviderService>;
+  let store: MockStore;
+  let syncCfg: WritableSignal<Partial<SyncConfig> | undefined>;
 
   beforeEach(() => {
+    syncCfg = signal<Partial<SyncConfig> | undefined>({ isEnabled: false });
     caldavClientSpy = jasmine.createSpyObj('CaldavClientService', [
       'getOpenTasks$',
       'searchOpenTasks$',
@@ -81,9 +89,12 @@ describe('CaldavCommonInterfacesService', () => {
         { provide: CaldavClientService, useValue: caldavClientSpy },
         CaldavSyncAdapterService,
         { provide: IssueProviderService, useValue: issueProviderServiceSpy },
+        provideMockStore({ selectors: [{ selector: selectTaskEntities, value: {} }] }),
+        { provide: GlobalConfigService, useValue: { sync: syncCfg } },
       ],
     });
     service = TestBed.inject(CaldavCommonInterfacesService);
+    store = TestBed.inject(MockStore);
   });
 
   describe('pollInterval', () => {
@@ -431,6 +442,39 @@ describe('CaldavCommonInterfacesService', () => {
       issueProviderServiceSpy.getCfgOnce$.and.returnValue(of({ ...BASE_CFG, ...cfg }));
       caldavClientSpy.getOpenTasks$.and.returnValue(of(tasks));
     };
+
+    describe('VTODOs created by Super Productivity (#10098)', () => {
+      const SP_UID = 'sp-todo-task-a@super-productivity';
+
+      it('skips one whose task already exists here (create still linking)', async () => {
+        setupTasks([makeReduced(SP_UID), makeReduced('foreign')]);
+        store.overrideSelector(selectTaskEntities, {
+          ['task-a']: createTask({ id: 'task-a' }),
+        });
+        store.refreshState();
+
+        const result = await service.getNewIssuesToAddToBacklog(PROVIDER_ID, []);
+
+        expect(result.map((t) => t.id)).toEqual(['foreign']);
+      });
+
+      it('skips one from another device while SP sync is on (sync brings the linked task)', async () => {
+        syncCfg.set({ isEnabled: true });
+        setupTasks([makeReduced(SP_UID), makeReduced('foreign')]);
+
+        const result = await service.getNewIssuesToAddToBacklog(PROVIDER_ID, []);
+
+        expect(result.map((t) => t.id)).toEqual(['foreign']);
+      });
+
+      it('imports one from another device when SP sync is off', async () => {
+        setupTasks([makeReduced(SP_UID)]);
+
+        const result = await service.getNewIssuesToAddToBacklog(PROVIDER_ID, []);
+
+        expect(result.map((t) => t.id)).toEqual([SP_UID]);
+      });
+    });
 
     it('should return all tasks when isAddSubTasks is disabled', async () => {
       const tasks = [makeReduced('parent'), makeReduced('child', 'parent')];

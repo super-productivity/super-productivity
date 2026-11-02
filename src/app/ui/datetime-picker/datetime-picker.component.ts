@@ -28,13 +28,20 @@ import { MatOption } from '@angular/material/core';
 import { TranslateModule, TranslatePipe } from '@ngx-translate/core';
 import { T } from '../../t.const';
 import { DateService } from '../../core/date/date.service';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import { GlobalConfigService } from '../../features/config/global-config.service';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import {
   TaskReminderOption,
   TaskReminderOptionId,
 } from '../../features/tasks/task.model';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import { TASK_REMINDER_OPTIONS } from '../../features/planner/dialog-schedule-task/task-reminder-options.const';
 import { TimeStepDirective } from '../time-step/time-step.directive';
+import { TimeHourTypeaheadDirective } from '../time-hour-typeahead/time-hour-typeahead.directive';
+import { MatTimepicker, MatTimepickerInput } from '@angular/material/timepicker';
+import { TimepickerClockStrDirective } from '../timepicker-clock-str/timepicker-clock-str.directive';
+import { DateTimeFormatService } from '../../core/date-time-format/date-time-format.service';
 import { expandFadeAnimation } from '../animations/expand.ani';
 import { fadeAnimation } from '../animations/fade.ani';
 import { getClockStringFromHours } from '../../util/get-clock-string-from-hours';
@@ -75,6 +82,10 @@ const QUICK_ACCESS_ITEMS = [
     TranslateModule,
     TranslatePipe,
     TimeStepDirective,
+    TimeHourTypeaheadDirective,
+    MatTimepicker,
+    MatTimepickerInput,
+    TimepickerClockStrDirective,
   ],
   templateUrl: './datetime-picker.component.html',
   styleUrl: './datetime-picker.component.scss',
@@ -88,6 +99,7 @@ export class DateTimePickerComponent implements AfterViewInit {
   private _el = inject(ElementRef);
   private readonly _isElectron = inject(IS_ELECTRON_TOKEN);
   private readonly _isAndroidWebView = inject(IS_ANDROID_WEB_VIEW_TOKEN);
+  readonly useNativeTimeInput = inject(DateTimeFormatService).useNativeTimeInput;
 
   // Inputs
   selectedDate = input<Date | null>(null);
@@ -115,6 +127,7 @@ export class DateTimePickerComponent implements AfterViewInit {
   @HostBinding('class.sp-initial-focus') isInitialFocus = true;
 
   readonly calendar = viewChild(MatCalendar);
+  private readonly _timepicker = viewChild(MatTimepicker);
 
   readonly isConfigReady = computed(
     () => this._globalConfigService.localization() !== undefined,
@@ -220,6 +233,9 @@ export class DateTimePickerComponent implements AfterViewInit {
       }
 
       if (targetDate) {
+        // mark as synced so the defaulted date doesn't pull the calendar back
+        // from the month the user is browsing (#10528)
+        this._lastSyncedDate = targetDate.getTime();
         this.dateSelected.emit(targetDate);
       }
       this.timeChanged.emit(targetTime);
@@ -263,6 +279,9 @@ export class DateTimePickerComponent implements AfterViewInit {
 
   onTimeKeyDown(ev: KeyboardEvent): void {
     if (ev.key === 'Enter') {
+      // Enter in the open list picks an option; the overlay applies it after
+      // this handler, so submitting here would save the previous time.
+      if (this._timepicker()?.isOpen()) return;
       this.isShowEnterMsg = true;
       if (this._timeCheckVal === this.selectedTime()) {
         this.enterSubmit.emit();

@@ -26,6 +26,8 @@ import { IDBFactory } from 'fake-indexeddb';
 import { asyncScheduler } from 'rxjs';
 import { clearDeferredActions } from './app/op-log/capture/operation-capture.meta-reducer';
 import { _resetDevErrorState } from './app/util/dev-error';
+import { loadIcalModule } from './app/features/schedule/ical/ical-lazy-loader';
+import { MockStore } from '@ngrx/store/testing';
 
 import { getTestBed, TestBed } from '@angular/core/testing';
 import {
@@ -88,6 +90,13 @@ beforeAll(() => {
   jasmine.DEFAULT_TIMEOUT_INTERVAL = 2000;
 });
 
+// loadIcalModule() lazy-loads ical.js with a native import(), which fakeAsync
+// cannot flush. Warm its cache once so fakeAsync specs that parse iCal pass in
+// any spec order, not only after an async spec happened to load it first.
+beforeAll(async () => {
+  await loadIcalModule();
+});
+
 beforeEach(() => {
   // Swap in a fresh fake IDB factory per spec. `window.indexedDB` is
   // getter-only in browsers, so direct assignment throws — same
@@ -121,7 +130,36 @@ beforeEach(() => {
     (window.confirm as jasmine.Spy).calls.reset();
   }
   _resetDevErrorState();
+
+  // MockStore.overrideSelector (also behind provideMockStore({ selectors }))
+  // sets the result on the module-level memoized selector, and MockStore only
+  // resets the overrides it made itself, when asked. An override therefore
+  // outlives its spec, and a later spec that selects through a real store
+  // reads the fixed value: e.g. a partial selectSyncConfig made the sync fuzz
+  // harness's replacements fail validation and loop on REPAIRs, depending on
+  // spec order (#10400).
+  for (const selector of overriddenSelectors) {
+    selector.release();
+    selector.clearResult();
+  }
+  overriddenSelectors.clear();
 });
+
+// The memoized selectors any MockStore overrode, for the beforeEach above.
+const overriddenSelectors = new Set<{ release(): void; clearResult(): void }>();
+const originalOverrideSelector = MockStore.prototype.overrideSelector;
+MockStore.prototype.overrideSelector = function (
+  this: MockStore,
+  ...args: Parameters<MockStore['overrideSelector']>
+) {
+  const [selector] = args;
+  if (typeof selector !== 'string') {
+    overriddenSelectors.add(
+      selector as unknown as { release(): void; clearResult(): void },
+    );
+  }
+  return (originalOverrideSelector as (...a: unknown[]) => unknown).apply(this, args);
+} as MockStore['overrideSelector'];
 
 // Mock browser dialogs globally for tests
 // We need to handle tests that try to spy on alert/confirm after we've already mocked them

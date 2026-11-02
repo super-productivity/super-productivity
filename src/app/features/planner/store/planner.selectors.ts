@@ -3,6 +3,7 @@ import * as fromPlanner from './planner.reducer';
 import {
   selectMapOfAllTasksInActiveProjects,
   selectAllTasksInActiveProjects,
+  selectAllUndoneTasksWithDeadlineSorted,
 } from '../../tasks/store/task.selectors';
 import {
   NoStartTimeRepeatProjection,
@@ -19,11 +20,13 @@ import {
 } from '../../schedule/schedule.model';
 import { Task, TaskCopy, TaskWithDueDay, TaskWithDueTime } from '../../tasks/task.model';
 import { TaskRepeatCfg } from '../../task-repeat-cfg/task-repeat-cfg.model';
-import { getDateTimeFromClockString } from '../../../util/get-date-time-from-clock-string';
+import { getRepeatDueWithTime } from '../../task-repeat-cfg/store/get-repeat-due-with-time.util';
 import { isValidSplitTime } from '../../../util/is-valid-split-time';
 import { devError } from '../../../util/dev-error';
 import { getTimeLeftForTask } from '../../../util/get-time-left-for-task';
+import { sumSubTaskTimeLeft } from '../../tasks/util/sum-sub-task-time-left';
 import { getDbDateStr } from '../../../util/get-db-date-str';
+import { oneDayInMilliseconds } from '../../../util/month-time-conversion';
 import { ScheduleCalendarMapEntry } from '../../schedule/schedule.model';
 import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
 import { calculateAvailableHours } from '../util/calculate-available-hours';
@@ -34,7 +37,7 @@ import {
   selectTodayStr,
 } from '../../../root-store/app-state/app-state.selectors';
 import { isTodayWithOffset } from '../../../util/is-today.util';
-import { selectTaskRepeatCfgsForExactDay } from '../../task-repeat-cfg/store/task-repeat-cfg.selectors';
+import { getTaskRepeatCfgsForExactDayCached } from '../../task-repeat-cfg/store/get-task-repeat-cfgs-for-exact-day-cached.util';
 
 export const selectPlannerState = createFeatureSelector<fromPlanner.PlannerState>(
   fromPlanner.plannerFeatureKey,
@@ -106,6 +109,7 @@ export const selectPlannerDays = (
   // Use Set for O(1) lookup instead of O(n) .includes() in filter
   const allPlannedIdSet = new Set(allPlannedTasks.map((t) => t.id));
   const unplannedTaskIdsToday = todayListTaskIds.filter((id) => !allPlannedIdSet.has(id));
+  const lastDayDate = dayDates.reduce((last, d) => (d > last ? d : last), '');
 
   return createSelector(
     selectMapOfAllTasksInActiveProjects,
@@ -118,6 +122,17 @@ export const selectPlannerDays = (
         activeTasks.values(),
         startOfNextDayDiffMs,
       );
+      // Bucket once instead of re-scanning every planned task and calendar
+      // event for each visible day; this reruns every time-tracking tick.
+      const plannedTasksByDay = groupPlannedTasksByDay(
+        allPlannedTasks,
+        startOfNextDayDiffMs,
+      );
+      const calendarEventsByDay = groupCalendarEventsByDay(
+        calendarEvents,
+        startOfNextDayDiffMs,
+        lastDayDate,
+      );
 
       return dayDates.map((dayDate) =>
         getPlannerDay(
@@ -126,9 +141,10 @@ export const selectPlannerDays = (
           activeTasks,
           plannerState,
           taskRepeatCfgs,
-          allPlannedTasks,
-          calendarEvents,
+          plannedTasksByDay.get(dayDate) || [],
+          calendarEventsByDay.get(dayDate) || [],
           unplannedTaskIdsToday,
+          allPlannedIdSet,
           deadlineMap,
           scheduleConfig,
           startOfNextDayDiffMs,
@@ -146,7 +162,11 @@ export const selectPlannerDayMap = createSelector(
 
     Object.keys(plannerState.days).forEach((dayDate) => {
       const tids = plannerState.days[dayDate] || [];
-      map[dayDate] = tids.map((id) => taskMap.get(id) as TaskCopy).filter((t) => !!t);
+      // A timed task belongs to its dueWithTime slot only; data written before
+      // the #11212 fix can still list it in planner.days.
+      map[dayDate] = tids
+        .map((id) => taskMap.get(id) as TaskCopy)
+        .filter((t) => !!t && typeof t.dueWithTime !== 'number');
     });
 
     return map;
@@ -159,9 +179,10 @@ const getPlannerDay = (
   taskMap: Map<string, Task>,
   plannerState: any,
   taskRepeatCfgs: TaskRepeatCfg[],
-  allPlannedTasks: TaskWithDueTime[],
-  calendarEvents: ScheduleCalendarMapEntry[],
+  plannedTasksForDay: TaskWithDueTime[],
+  calendarEventsForDay: ScheduleFromCalendarEvent[],
   unplannedTaskIdsToday: string[] | false,
+  allPlannedIdSet: Set<string>,
   deadlineTasksByDay: Record<string, TaskCopy[]>,
   scheduleConfig?: ScheduleConfig,
   startOfNextDayDiffMs: number = 0,
@@ -169,10 +190,15 @@ const getPlannerDay = (
   const isTodayI = dayDate === todayStr;
   const currentDayDate = dateStrToUtcDate(dayDate);
   const currentDayTimestamp = currentDayDate.getTime();
+  // Planned (dueWithTime) tasks render as scheduledTaskItems; data written
+  // before the #11212 fix can also list them in planner.days, which would
+  // render them twice and count their estimate twice.
   const tIds =
     isTodayI && unplannedTaskIdsToday
       ? unplannedTaskIdsToday
-      : plannerState.days[dayDate] || [];
+      : ((plannerState.days[dayDate] || []) as string[]).filter(
+          (id) => !allPlannedIdSet.has(id),
+        );
   const normalTasks = tIds
     .map((id) => taskMap.get(id) as TaskCopy)
     .filter((t) => !!t)
@@ -182,12 +208,25 @@ const getPlannerDay = (
   const {
     repeatProjectionsForDay: allRepeatProjectionsForDay,
     noStartTimeRepeatProjections: allNoStartTimeRepeatProjections,
-  } = getAllRepeatableTasksForDay(taskRepeatCfgs, currentDayTimestamp);
+  } = getAllRepeatableTasksForDay(
+    taskRepeatCfgs,
+    currentDayTimestamp,
+    startOfNextDayDiffMs,
+  );
+
+  const isSubTaskCountedOnItsOwn = getIsSubTaskCountedOnItsOwn(
+    dayDate,
+    todayStr,
+    taskMap,
+    normalTasks,
+    plannerState,
+    unplannedTaskIdsToday,
+  );
 
   const scheduledTaskItems = getScheduledTaskItems(
-    allPlannedTasks,
-    dayDate,
-    startOfNextDayDiffMs,
+    plannedTasksForDay,
+    isSubTaskCountedOnItsOwn,
+    taskMap,
   );
 
   // A recurring task can already have a real instance in this day, either in
@@ -212,11 +251,7 @@ const getPlannerDay = (
   const noStartTimeRepeatProjections = allNoStartTimeRepeatProjections.filter(
     (rp) => !coveredRepeatCfgIds.has(rp.repeatCfg.id),
   );
-  const { timedEvents, allDayEvents } = getIcalEventsForDay(
-    calendarEvents,
-    dayDate,
-    startOfNextDayDiffMs,
-  );
+  const { timedEvents, allDayEvents } = getIcalEventsForDay(calendarEventsForDay);
 
   const deadlineTasks = deadlineTasksByDay[dayDate] || [];
 
@@ -225,6 +260,8 @@ const getPlannerDay = (
     repeatProjectionsForDay,
     noStartTimeRepeatProjections,
     scheduledTaskItems,
+    isSubTaskCountedOnItsOwn,
+    taskMap,
   );
 
   // Add calendar event durations (CalDAV/ICAL events) to the total time estimate
@@ -271,14 +308,69 @@ const getPlannerDay = (
   };
 };
 
+// A sub task planned on its own is counted by itself: in this day's list, on
+// another upcoming planner day, on Today's list, in its time slot, or in the
+// Overdue section when its day or time has passed. Planning
+// a parent leaves its sub tasks on their other days (#9019) while the parent's
+// `timeEstimate` still includes them, so the parent must leave them out to
+// count each piece of work once. See #10894.
+const getIsSubTaskCountedOnItsOwn = (
+  dayDate: string,
+  todayStr: string,
+  taskMap: Map<string, Task>,
+  normalTasks: TaskCopy[],
+  plannerState: fromPlanner.PlannerState,
+  unplannedTaskIdsToday: string[] | false,
+): ((subTask: Task) => boolean) => {
+  let countedIds: Set<string> | undefined;
+  const getCountedIds = (): Set<string> => {
+    const ids = new Set(normalTasks.map((t) => t.id));
+    for (const [day, dayIds] of Object.entries(plannerState.days)) {
+      if (day > todayStr && day !== dayDate) dayIds.forEach((id) => ids.add(id));
+    }
+    if (dayDate !== todayStr) {
+      // Same ids and dueDay filter as Today's normalTasks in getPlannerDay.
+      const todayIds =
+        unplannedTaskIdsToday || plannerState.days[todayStr] || ([] as string[]);
+      for (const id of todayIds) {
+        const t = taskMap.get(id);
+        if (t && (!t.dueDay || t.dueDay <= todayStr)) ids.add(id);
+      }
+    }
+    return ids;
+  };
+  return (subTask) =>
+    !!subTask.dueWithTime ||
+    (!!subTask.dueDay && subTask.dueDay < todayStr) ||
+    (countedIds ??= getCountedIds()).has(subTask.id);
+};
+
+const getTimeLeftForPlannerTask = (
+  task: TaskCopy,
+  isSubTaskCountedOnItsOwn: (subTask: Task) => boolean,
+  taskMap: Map<string, Task>,
+): number => {
+  if (task.isDone) return 0;
+  const countedSubTasks = task.subTaskIds
+    .map((id) => taskMap.get(id))
+    .filter((st): st is Task => !!st && isSubTaskCountedOnItsOwn(st));
+  if (!countedSubTasks.length) return getTimeLeftForTask(task);
+  return Math.max(0, task.timeEstimate - sumSubTaskTimeLeft(countedSubTasks));
+};
+
 const getAllTimeSpent = (
   normalTasks: TaskCopy[],
   taskRepeatProjections: ScheduleItemRepeatProjection[],
   noStartTimeRepeatProjections: NoStartTimeRepeatProjection[],
   plannedTaskProjections: ScheduleItemTask[],
+  isSubTaskCountedOnItsOwn: (subTask: Task) => boolean,
+  taskMap: Map<string, Task>,
 ): number => {
   return (
-    normalTasks.reduce((acc, t) => acc + (t.isDone ? 0 : getTimeLeftForTask(t)), 0) +
+    normalTasks.reduce(
+      (acc, t) => acc + getTimeLeftForPlannerTask(t, isSubTaskCountedOnItsOwn, taskMap),
+      0,
+    ) +
     taskRepeatProjections.reduce((acc, rp) => acc + rp.end - rp.start, 0) +
     plannedTaskProjections.reduce((acc, si) => acc + si.end - si.start, 0) +
     noStartTimeRepeatProjections.reduce(
@@ -291,22 +383,25 @@ const getAllTimeSpent = (
 const getAllRepeatableTasksForDay = (
   taskRepeatCfgs: TaskRepeatCfg[],
   currentDayTimestamp: number,
+  startOfNextDayDiffMs: number,
 ): {
   repeatProjectionsForDay: ScheduleItemRepeatProjection[];
   noStartTimeRepeatProjections: NoStartTimeRepeatProjection[];
 } => {
   const repeatProjectionsForDay: ScheduleItemRepeatProjection[] = [];
   const noStartTimeRepeatProjections: NoStartTimeRepeatProjection[] = [];
-  const allRepeatableTasksForDay = selectTaskRepeatCfgsForExactDay.projector(
+  const allRepeatableTasksForDay = getTaskRepeatCfgsForExactDayCached(
     taskRepeatCfgs,
-    {
-      dayDate: currentDayTimestamp,
-    },
+    currentDayTimestamp,
   );
 
   allRepeatableTasksForDay.forEach((repeatCfg) => {
     if (repeatCfg.startTime && isValidSplitTime(repeatCfg.startTime)) {
-      const start = getDateTimeFromClockString(repeatCfg.startTime, currentDayTimestamp);
+      const start = getRepeatDueWithTime(
+        repeatCfg.startTime,
+        currentDayTimestamp,
+        startOfNextDayDiffMs,
+      );
       const end = start + (repeatCfg.defaultEstimate || 0);
       repeatProjectionsForDay.push({
         id: repeatCfg.id,
@@ -332,67 +427,144 @@ const getAllRepeatableTasksForDay = (
   };
 };
 
-const getScheduledTaskItems = (
+const groupPlannedTasksByDay = (
   allPlannedTasks: TaskWithDueTime[],
-  dayDate: string,
-  startOfNextDayDiffMs: number = 0,
+  startOfNextDayDiffMs: number,
+): Map<string, TaskWithDueTime[]> => {
+  const byDay = new Map<string, TaskWithDueTime[]>();
+  for (const task of allPlannedTasks) {
+    const dayKey = getDbDateStr(new Date(task.dueWithTime - startOfNextDayDiffMs));
+    const tasksForDay = byDay.get(dayKey);
+    if (tasksForDay) {
+      tasksForDay.push(task);
+    } else {
+      byDay.set(dayKey, [task]);
+    }
+  }
+  return byDay;
+};
+
+const getScheduledTaskItems = (
+  plannedTasksForDay: TaskWithDueTime[],
+  isSubTaskCountedOnItsOwn: (subTask: Task) => boolean,
+  taskMap: Map<string, Task>,
 ): ScheduleItemTask[] =>
-  allPlannedTasks
-    .filter(
-      (task) =>
-        getDbDateStr(new Date(task.dueWithTime - startOfNextDayDiffMs)) === dayDate,
-    )
-    .map((task) => {
-      const start = task.dueWithTime;
-      // Mirror normalTasks: a done task contributes 0 remaining time. Without
-      // this, a done timed task still adds its full estimate to the day total
-      // (and a done timed recurring task double-counted with its projection
-      // before the dedup above). See #8232.
-      const end = start + (task.isDone ? 0 : getTimeLeftForTask(task));
-      return {
-        id: task.id,
-        type: ScheduleItemType.Task,
-        start,
-        end,
-        task,
-      };
-    });
+  plannedTasksForDay.map((task) => {
+    const start = task.dueWithTime;
+    // Mirror normalTasks: a done task contributes 0 remaining time. Without
+    // this, a done timed task still adds its full estimate to the day total
+    // (and a done timed recurring task double-counted with its projection
+    // before the dedup above). See #8232. A parent leaves out sub tasks that
+    // are counted on their own, as in the day list (#10894).
+    const end =
+      start + getTimeLeftForPlannerTask(task, isSubTaskCountedOnItsOwn, taskMap);
+    return {
+      id: task.id,
+      type: ScheduleItemType.Task,
+      start,
+      end,
+      task,
+    };
+  });
 
 interface IcalEventsForDayResult {
   timedEvents: ScheduleItemEvent[];
   allDayEvents: ScheduleFromCalendarEvent[];
 }
 
-const getIcalEventsForDay = (
+const groupCalendarEventsByDay = (
   calendarEvents: ScheduleCalendarMapEntry[],
-  dayDate: string,
-  startOfNextDayDiffMs: number = 0,
+  startOfNextDayDiffMs: number,
+  lastDayDate: string,
+): Map<string, ScheduleFromCalendarEvent[]> => {
+  const byDay = new Map<string, ScheduleFromCalendarEvent[]>();
+  calendarEvents.forEach((icalMapEntry) => {
+    icalMapEntry.items.forEach((calEv) => {
+      getCalendarEventDayKeys(calEv, startOfNextDayDiffMs, lastDayDate).forEach(
+        (dayKey) => {
+          const eventsForDay = byDay.get(dayKey);
+          if (eventsForDay) {
+            eventsForDay.push(calEv);
+          } else {
+            byDay.set(dayKey, [calEv]);
+          }
+        },
+      );
+    });
+  });
+  return byDay;
+};
+
+/**
+ * Days a calendar event is listed on.
+ *
+ * - Timed events belong to the logical day of their start.
+ * - All-day events are listed on every day they cover, not only the first one.
+ * - Date-valued all-day events (`isAllDay`) belong to calendar dates, so the
+ *   start-of-next-day offset does not apply to them (like `deadlineDay` vs
+ *   `deadlineWithTime`); applying it moved them to the previous day.
+ *
+ * Days after `lastDayDate` are not needed by the caller and are skipped.
+ */
+const getCalendarEventDayKeys = (
+  calEv: ScheduleFromCalendarEvent,
+  startOfNextDayDiffMs: number,
+  lastDayDate: string,
+): string[] => {
+  if (!isAllDayCalendarEvent(calEv)) {
+    return [getDbDateStr(new Date(calEv.start - startOfNextDayDiffMs))];
+  }
+
+  const offsetMs = calEv.isAllDay ? 0 : startOfNextDayDiffMs;
+  const firstDay = new Date(calEv.start - offsetMs);
+  const day = new Date(firstDay.getFullYear(), firstDay.getMonth(), firstDay.getDate());
+  let lastEventDayKey: string;
+  if (calEv.isAllDay) {
+    // A date-valued event covers whole days; rounding absorbs days that DST
+    // makes 23h or 25h long.
+    const dayCount = Math.max(1, Math.round(calEv.duration / oneDayInMilliseconds));
+    lastEventDayKey = getDbDateStr(
+      new Date(day.getFullYear(), day.getMonth(), day.getDate() + dayCount - 1),
+    );
+  } else {
+    // The end is exclusive: an event ending exactly at the start of a day does
+    // not cover that day.
+    lastEventDayKey = getDbDateStr(new Date(calEv.start + calEv.duration - 1 - offsetMs));
+  }
+  const lastKey = lastEventDayKey < lastDayDate ? lastEventDayKey : lastDayDate;
+
+  const dayKeys = [getDbDateStr(day)];
+  while (dayKeys[dayKeys.length - 1] < lastKey) {
+    day.setDate(day.getDate() + 1);
+    dayKeys.push(getDbDateStr(day));
+  }
+  return dayKeys;
+};
+
+const getIcalEventsForDay = (
+  calendarEventsForDay: ScheduleFromCalendarEvent[],
 ): IcalEventsForDayResult => {
   const timedEvents: ScheduleItemEvent[] = [];
   const allDayEvents: ScheduleFromCalendarEvent[] = [];
 
-  calendarEvents.forEach((icalMapEntry) => {
-    icalMapEntry.items.forEach((calEv) => {
-      const start = calEv.start;
-      if (getDbDateStr(new Date(start - startOfNextDayDiffMs)) === dayDate) {
-        if (isAllDayCalendarEvent(calEv)) {
-          // Some providers expose all-day events as 24h timed events.
-          allDayEvents.push({ ...calEv, isAllDay: true });
-        } else {
-          // Timed events go to scheduled items
-          const end = calEv.start + calEv.duration;
-          timedEvents.push({
-            id: calEv.id,
-            type: ScheduleItemType.CalEvent,
-            start,
-            end,
-            calendarEvent: {
-              ...calEv,
-            },
-          });
-        }
-      }
-    });
+  calendarEventsForDay.forEach((calEv) => {
+    const start = calEv.start;
+    if (isAllDayCalendarEvent(calEv)) {
+      // Some providers expose all-day events as 24h timed events.
+      allDayEvents.push({ ...calEv, isAllDay: true });
+    } else {
+      // Timed events go to scheduled items
+      const end = calEv.start + calEv.duration;
+      timedEvents.push({
+        id: calEv.id,
+        type: ScheduleItemType.CalEvent,
+        start,
+        end,
+        calendarEvent: {
+          ...calEv,
+        },
+      });
+    }
   });
   return { timedEvents, allDayEvents };
 };
@@ -401,7 +573,7 @@ const getIcalEventsForDay = (
  * Groups all undone deadline tasks by their effective day string.
  * O(N) single pass — callers can then do O(1) map lookups per day.
  */
-const groupDeadlineTasksByDay = (
+export const groupDeadlineTasksByDay = (
   activeTasks: Iterable<Task>,
   startOfNextDayDiffMs: number = 0,
 ): Record<string, TaskCopy[]> => {
@@ -421,3 +593,12 @@ const groupDeadlineTasksByDay = (
   }
   return result;
 };
+
+// Built from the scheduling snapshot (SPAP-20), so a time-tracking tick does not
+// regroup every deadline the way a grouping of all active tasks does.
+export const selectUndoneDeadlineTasksByDay = createSelector(
+  selectAllUndoneTasksWithDeadlineSorted,
+  selectStartOfNextDayDiffMs,
+  (tasks, startOfNextDayDiffMs): Record<string, TaskCopy[]> =>
+    groupDeadlineTasksByDay(tasks, startOfNextDayDiffMs),
+);

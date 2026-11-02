@@ -1,6 +1,6 @@
 export const isShallowEqual = (
-  a: { [key: string]: boolean | number | string | undefined | null },
-  b: { [key: string]: boolean | number | string | undefined | null },
+  a: Record<string, unknown>,
+  b: Record<string, unknown>,
 ): boolean => {
   const keys1 = Object.keys(a);
   const keys2 = Object.keys(b);

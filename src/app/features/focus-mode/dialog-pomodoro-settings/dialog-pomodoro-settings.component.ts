@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
 import { FormGroup, ReactiveFormsModule } from '@angular/forms';
 import { MatDialogRef, MatDialogTitle, MatDialogContent } from '@angular/material/dialog';
 import { FormlyFieldConfig, FormlyModule } from '@ngx-formly/core';
@@ -9,6 +9,7 @@ import { TranslatePipe } from '@ngx-translate/core';
 import { MatButton } from '@angular/material/button';
 import { Store } from '@ngrx/store';
 import { resetCycles } from '../store/focus-mode.actions';
+import { selectCurrentCycle } from '../store/focus-mode.selectors';
 
 const POMODORO_DURATION_FIELDS: FormlyFieldConfig[] = [
   {
@@ -72,6 +73,7 @@ const POMODORO_DURATION_FIELDS: FormlyFieldConfig[] = [
       <div class="dialog-actions">
         <button
           mat-button
+          [disabled]="isResetDisabled()"
           (click)="resetSessionCounter()"
         >
           {{ T.F.FOCUS_MODE.RESET_CYCLES | translate }}
@@ -112,8 +114,11 @@ export class DialogPomodoroSettingsComponent {
   private readonly _dialogRef = inject(MatDialogRef<DialogPomodoroSettingsComponent>);
   private readonly _globalConfigService = inject(GlobalConfigService);
   private readonly _store = inject(Store);
+  private readonly _currentCycle = this._store.selectSignal(selectCurrentCycle);
 
   T = T;
+  // cycle 1 is the reset target, so resetting there would be a silent no-op (#9893)
+  isResetDisabled = computed(() => this._currentCycle() <= 1);
   form = new FormGroup({});
   fields: FormlyFieldConfig[] = POMODORO_DURATION_FIELDS;
   model: PomodoroConfig;
@@ -134,6 +139,8 @@ export class DialogPomodoroSettingsComponent {
 
   resetSessionCounter(): void {
     this._store.dispatch(resetCycles());
+    // close so the reset cycle counter behind the dialog becomes visible
+    this._dialogRef.close();
   }
 
   close(): void {

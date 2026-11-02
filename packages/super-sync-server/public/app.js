@@ -3,8 +3,12 @@ const API_BASE = '/api';
 // State
 const state = {
   token: null,
-  email: localStorage.getItem('supersync_email') || '',
+  email: '',
 };
+
+// Earlier versions kept the email in localStorage; drop it, because remembering it
+// is a convenience that would need consent under TDDDG §25.
+localStorage.removeItem('supersync_email');
 
 // DOM Elements
 const loginForm = document.getElementById('login-form');
@@ -97,8 +101,6 @@ emailInputs.forEach((input) => {
   input.addEventListener('input', (e) => {
     const newEmail = e.target.value;
     state.email = newEmail;
-    // Save to localStorage for persistence across page reloads
-    localStorage.setItem('supersync_email', newEmail);
     // Sync to other inputs
     emailInputs.forEach((otherInput) => {
       if (otherInput !== e.target) {
@@ -624,15 +626,6 @@ async function registerWithMagicLink() {
   if (token) {
     sessionStorage.removeItem('loginToken');
     showToken(token);
-  }
-})();
-
-// Initialize email inputs from saved state
-(function initEmailInputs() {
-  if (state.email) {
-    emailInputs.forEach((input) => {
-      input.value = state.email;
-    });
   }
 })();
 

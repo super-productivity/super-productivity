@@ -22,6 +22,40 @@ describe('ArchiveStoreService', () => {
     expect(service).toBeTruthy();
   });
 
+  describe('archive existence', () => {
+    const emptyArchive = {
+      task: { ids: [] as string[], entities: {} },
+      timeTracking: { project: {}, tag: {} },
+      lastTimeTrackingFlush: 0,
+    };
+
+    it('distinguishes missing archives from stored empty archives without reading payloads', async () => {
+      const get = spyOn(IDBObjectStore.prototype, 'get').and.callThrough();
+
+      expect(await service.hasArchiveYoung()).toBeFalse();
+      expect(await service.hasArchiveOld()).toBeFalse();
+      await service.saveArchiveYoung(emptyArchive);
+      expect(await service.hasArchiveYoung()).toBeTrue();
+      expect(await service.hasArchiveOld()).toBeFalse();
+      await service.saveArchiveOld(emptyArchive);
+      expect(await service.hasArchiveOld()).toBeTrue();
+      expect(get).not.toHaveBeenCalled();
+    });
+
+    it('does not mistake a different key for the singleton archive', async () => {
+      const db = (service as unknown as { _db: IDBPDatabase })._db;
+      await db.put(STORE_NAMES.ARCHIVE_YOUNG, {
+        id: 'another-key',
+        data: emptyArchive,
+        lastModified: 0,
+      });
+
+      expect(await service.hasArchiveYoung()).toBeFalse();
+      await service.saveArchiveYoung(emptyArchive);
+      expect(await service.hasArchiveYoung()).toBeTrue();
+    });
+  });
+
   describe('connection lifecycle handlers', () => {
     // Open the connection through the lazy `_ensureInit()` path so `_initPromise`
     // is genuinely populated before the event is dispatched.
@@ -81,9 +115,9 @@ describe('ArchiveStoreService', () => {
   });
 
   // #9187: ArchiveStoreService keeps its own copy of the open-with-retry loop,
-  // and it is a live path (both consumers only skip it for a self-managing
-  // adapter). Driving a REAL downgrade beats spying a seam here — this service
-  // inlines `openDB`, and the actual browser rejection is the better oracle.
+  // and it is a live path. Driving a REAL downgrade beats spying a seam here —
+  // this service inlines `openDB`, and the actual browser rejection is the
+  // better oracle.
   describe('downgrade barrier', () => {
     it('fails fast with a classified error when the DB is newer than this build', async () => {
       // Drop the connection opened by the beforeEach so it cannot block the

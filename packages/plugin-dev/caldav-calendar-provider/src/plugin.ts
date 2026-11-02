@@ -4,11 +4,15 @@ import type {
   PluginHttp,
   PluginIssue,
   PluginSearchResult,
+  PluginWorkSession,
 } from '@super-productivity/plugin-api';
 import ICAL from 'ical.js';
 
 declare const PluginAPI: {
   registerIssueProvider(definition: IssueProviderPluginDefinition): void;
+  log: {
+    warn(...args: unknown[]): void;
+  };
 };
 
 // --- Config ---
@@ -22,6 +26,8 @@ interface CaldavCalendarConfig {
   syncRangeWeeks?: string;
   isAutoTimeBlock?: boolean;
   timeBlockCalendarId?: string;
+  isLogWorkSessions?: boolean;
+  workSessionCalendarId?: string;
 }
 
 const getWriteCalendarId = (cfg: CaldavCalendarConfig): string =>
@@ -29,6 +35,9 @@ const getWriteCalendarId = (cfg: CaldavCalendarConfig): string =>
 
 const getTimeBlockCalendarId = (cfg: CaldavCalendarConfig): string =>
   cfg.timeBlockCalendarId || getWriteCalendarId(cfg);
+
+const getWorkSessionCalendarId = (cfg: CaldavCalendarConfig): string =>
+  cfg.workSessionCalendarId || getWriteCalendarId(cfg);
 
 const getReadCalendarIds = (cfg: CaldavCalendarConfig): string[] =>
   cfg.readCalendarIds?.length ? cfg.readCalendarIds : [];
@@ -565,24 +574,25 @@ const parseCalendarList = (xml: string): CalendarInfo[] => {
     const displayName =
       getXmlText(resp, 'displayname') || href.split('/').filter(Boolean).pop() || href;
 
-    // Check supported components
-    let supportsVevent = true; // Default to true if not specified
+    // RFC 4791 section 5.2.3 says an absent component set accepts all types.
+    // If the property is present, however, its advertised components are
+    // authoritative (and the schema requires at least one <comp> child).
     const compSet = resp.getElementsByTagNameNS(
       CALDAV_NS,
       'supported-calendar-component-set',
     )[0];
-    if (compSet) {
-      const comps = compSet.getElementsByTagNameNS(CALDAV_NS, 'comp');
-      if (comps.length > 0) {
-        supportsVevent = false;
-        for (let j = 0; j < comps.length; j++) {
-          if (comps[j].getAttribute('name') === 'VEVENT') {
-            supportsVevent = true;
-            break;
-          }
-        }
-      }
-    }
+    // PROPFIND also includes a requested but absent property as an empty
+    // element inside a 404 propstat. That is absence, not an empty component set.
+    const propstat = compSet?.parentNode?.parentNode as Element | undefined;
+    const compSetStatus = propstat?.getElementsByTagNameNS(DAV_NS, 'status')[0]
+      ?.textContent;
+    const isAbsentCompSet = /\s404(?:\s|$)/.test(compSetStatus ?? '');
+    const supportsVevent =
+      !compSet ||
+      isAbsentCompSet ||
+      Array.from(compSet.getElementsByTagNameNS(CALDAV_NS, 'comp')).some(
+        (comp) => comp.getAttribute('name')?.toUpperCase() === 'VEVENT',
+      );
 
     calendars.push({ href, displayName, supportsVevent });
   }
@@ -632,22 +642,43 @@ const caldavHeaders = (extra?: Record<string, string>): Record<string, string> =
 });
 
 /**
+ * Apple delegates calendar homes from caldav.icloud.com to a numbered partition
+ * host. This is the only cross-origin credential delegation we can verify
+ * without trusting an arbitrary server-supplied hostname.
+ */
+const isTrustedICloudPartition = (server: URL, resolved: URL): boolean =>
+  server.origin.toLowerCase() === 'https://caldav.icloud.com' &&
+  resolved.protocol === 'https:' &&
+  resolved.port === '' &&
+  /^p\d+-caldav\.icloud\.com$/i.test(resolved.hostname);
+
+/**
  * Resolve a server-supplied href against the configured server origin and
- * refuse anything that escapes it. Discovery follows hrefs that the (untrusted)
- * server controls — principal, calendar-home-set — so this is the SSRF
- * boundary: credentials are attached to every request and must never be sent
- * off-origin. Resolving via the URL constructor handles relative, absolute, and
- * protocol-relative (`//host`) forms uniformly; a prefix sniff + string concat
- * would mis-handle `//host` and uppercase schemes. The href is omitted from the
- * error (untrusted content; the log is exportable).
+ * refuse anything that escapes it, except iCloud's validated partition-host
+ * handoff. Discovery follows hrefs that the server controls — principal,
+ * calendar-home-set — so this is the SSRF boundary: credentials are attached
+ * to every request and must never be sent to an arbitrary origin. Resolving via
+ * the URL constructor handles relative, absolute, and protocol-relative
+ * (`//host`) forms uniformly. The href is omitted from the error because log
+ * history is exportable.
  */
 const resolveHref = (cfg: CaldavCalendarConfig, href: string): string => {
-  const serverOrigin = new URL(getServerUrl(cfg)).origin;
-  const resolved = new URL(href, serverOrigin + '/');
-  if (resolved.origin !== serverOrigin) {
+  const server = new URL(getServerUrl(cfg));
+  const resolved = new URL(href, server.origin + '/');
+  if (resolved.origin !== server.origin && !isTrustedICloudPartition(server, resolved)) {
     throw new Error('[CalDAV] Refusing cross-origin href');
   }
   return resolved.toString();
+};
+
+/** Resolve an event href relative to the calendar that returned it. */
+const resolveEventUrl = (
+  cfg: CaldavCalendarConfig,
+  calendarHref: string,
+  eventHref: string,
+): string => {
+  const calendarUrl = ensureTrailingSlash(resolveHref(cfg, calendarHref));
+  return resolveHref(cfg, new URL(eventHref, calendarUrl).toString());
 };
 
 /** Build PROPFIND body to bootstrap discovery: principal + calendar-home-set */
@@ -689,11 +720,23 @@ const propfind = (
 const enumerateCalendars = async (
   http: PluginHttp,
   url: string,
+  cfg: CaldavCalendarConfig,
 ): Promise<{ label: string; value: string }[]> => {
   const xml = await propfind(http, url, buildPropfindBody(), '1');
+  const configuredOrigin = new URL(getServerUrl(cfg)).origin;
+  const collectionOrigin = new URL(url).origin;
   return parseCalendarList(xml)
     .filter((c) => c.supportsVevent)
-    .map((c) => ({ label: c.displayName, value: c.href }));
+    .map((c) => ({
+      label: c.displayName,
+      // Same-origin IDs keep their existing representation. A calendar found
+      // on an iCloud partition needs an absolute ID so later REPORT and write
+      // requests do not resolve its path back onto caldav.icloud.com.
+      value:
+        collectionOrigin === configuredOrigin
+          ? c.href
+          : resolveHref(cfg, new URL(c.href, url).toString()),
+    }));
 };
 
 /**
@@ -739,7 +782,7 @@ const discoverCalendars = async (
   const enteredUrl = ensureTrailingSlash(getServerUrl(cfg));
 
   try {
-    const direct = await enumerateCalendars(http, enteredUrl);
+    const direct = await enumerateCalendars(http, enteredUrl, cfg);
     if (direct.length) return direct;
   } catch {
     // The entered URL may be a principal/root collection that rejects Depth:1.
@@ -748,7 +791,7 @@ const discoverCalendars = async (
 
   const home = await resolveCalendarHome(http, cfg, enteredUrl);
   if (!home) return [];
-  return enumerateCalendars(http, home);
+  return enumerateCalendars(http, home, cfg);
 };
 
 // --- ical.js-based RRULE expansion ---
@@ -879,8 +922,21 @@ const veventToOccurrence = (
 };
 
 /**
+ * Overlap test matching CalDAV time-range semantics: an occurrence that began
+ * before the window but is still running stays visible. A zero-length event
+ * counts when it starts inside the window.
+ */
+const overlapsRange = (
+  startMs: number,
+  durationMs: number,
+  range: { startMs: number; endMs: number },
+): boolean =>
+  startMs < range.endMs &&
+  (startMs >= range.startMs || startMs + durationMs > range.startMs);
+
+/**
  * Parse iCal data with ical.js and emit one PluginSearchResult per occurrence
- * within [rangeStartMs, rangeEndMs). Handles RRULE, EXDATE, and RECURRENCE-ID
+ * overlapping [rangeStartMs, rangeEndMs). Handles RRULE, EXDATE, and RECURRENCE-ID
  * exception instances (overrides + cancellations).
  */
 const expandIcalToSearchResults = (
@@ -931,6 +987,7 @@ const expandIcalToSearchResults = (
 
   const exceptionMap = buildExceptionMap(vevents);
   const out: PluginSearchResult[] = [];
+  const range = { startMs: rangeStartMs, endMs: rangeEndMs };
 
   for (const ve of vevents) {
     // Per-event guard: a single malformed VEVENT must not drop the rest of
@@ -939,6 +996,7 @@ const expandIcalToSearchResults = (
       // Skip exception events here; they're handled together with their master.
       if (icalTimeToMs(ve.getFirstPropertyValue('recurrence-id')) !== null) continue;
       if (isCancelledStatus(ve.getFirstPropertyValue('status'))) continue;
+      if (isSpManagedUid(ve.getFirstPropertyValue('uid'))) continue;
 
       const dtstart = ve.getFirstPropertyValue('dtstart');
       const startMs = icalTimeToMs(dtstart);
@@ -948,7 +1006,7 @@ const expandIcalToSearchResults = (
 
       const rrule = ve.getFirstPropertyValue('rrule');
       if (!rrule) {
-        if (startMs >= rangeStartMs && startMs < rangeEndMs) {
+        if (overlapsRange(startMs, durationMs, range)) {
           out.push(
             veventToOccurrence(
               ve,
@@ -996,7 +1054,7 @@ const expandIcalToSearchResults = (
         const ms = next.toJSDate().getTime();
         if (isNaN(ms)) continue;
         if (ms >= rangeEndMs) break;
-        if (ms < rangeStartMs) continue;
+        if (!overlapsRange(ms, durationMs, range)) continue;
         if (exceptionTimes.has(ms)) continue;
         out.push(
           veventToOccurrence(ve, ms, durationMs, isAllDay, calendarHref, eventHref, ms),
@@ -1008,12 +1066,13 @@ const expandIcalToSearchResults = (
         if (ex.isCancelled) continue;
         const exStartMs = icalTimeToMs(ex.vevent.getFirstPropertyValue('dtstart'));
         if (exStartMs === null) continue;
-        if (exStartMs < rangeStartMs || exStartMs >= rangeEndMs) continue;
+        const exDurationMs = calcDurationMs(ex.vevent, exStartMs);
+        if (!overlapsRange(exStartMs, exDurationMs, range)) continue;
         out.push(
           veventToOccurrence(
             ex.vevent,
             exStartMs,
-            calcDurationMs(ex.vevent, exStartMs),
+            exDurationMs,
             isAllDayIcal(ex.vevent),
             calendarHref,
             eventHref,
@@ -1037,6 +1096,9 @@ const expandIcalToSearchResults = (
   return out;
 };
 
+/** Minimum lookback for the read window, like the iCal provider's START_OFFSET. */
+const LOOKBACK_MS = 2 * 60 * 60 * 1000;
+
 /** Fetch events from a single calendar via REPORT */
 const fetchEventsForCalendar = async (
   http: PluginHttp,
@@ -1045,15 +1107,18 @@ const fetchEventsForCalendar = async (
 ): Promise<PluginSearchResult[]> => {
   const syncRangeWeeks = Math.max(parseInt(cfg.syncRangeWeeks || '', 10) || 2, 1);
   const now = new Date();
-  // Anchor the window to start-of-today (UTC) so events already in progress
-  // earlier on the same day stay visible. Using `now` as the lower bound would
-  // hide an ongoing meeting. UTC anchor keeps the math timezone-independent.
-  const rangeStartMs = Date.UTC(
-    now.getUTCFullYear(),
-    now.getUTCMonth(),
-    now.getUTCDate(),
-  );
-  const rangeEndMs = rangeStartMs + syncRangeWeeks * 7 * 24 * 60 * 60 * 1000;
+  // Start the window at the user's LOCAL start of day, so events that started
+  // earlier today (including one still in progress) stay visible, or
+  // LOOKBACK_MS ago if that is earlier, so a late-evening event is still shown
+  // just after midnight. A UTC-midnight anchor dropped them mid-day for anyone
+  // outside UTC (e.g. at 17:00 in Los Angeles).
+  const localStartOfDayMs = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate(),
+  ).getTime();
+  const rangeStartMs = Math.min(localStartOfDayMs, now.getTime() - LOOKBACK_MS);
+  const rangeEndMs = now.getTime() + syncRangeWeeks * 7 * 24 * 60 * 60 * 1000;
   const start = toIcalUtcDateTime(new Date(rangeStartMs));
   const end = toIcalUtcDateTime(new Date(rangeEndMs));
 
@@ -1088,10 +1153,39 @@ const fetchEvents = async (
 ): Promise<PluginSearchResult[]> => {
   const calendarIds = getReadCalendarIds(cfg);
   if (calendarIds.length === 0) return [];
-  const results = await Promise.all(
+  const results = await Promise.allSettled(
     calendarIds.map((calId) => fetchEventsForCalendar(http, calId, cfg)),
   );
-  let merged = results.flat().sort((a, b) => (a.start ?? 0) - (b.start ?? 0));
+  const failed = results.filter((result) => result.status === 'rejected');
+  results.forEach((result, index) => {
+    if (result.status !== 'rejected') return;
+    const status =
+      typeof result.reason === 'object' &&
+      result.reason !== null &&
+      'status' in result.reason &&
+      typeof result.reason.status === 'number'
+        ? ` (HTTP ${result.reason.status})`
+        : '';
+    PluginAPI.log.warn(
+      `[CalDAV] Failed to query calendar ${index + 1}/${calendarIds.length}${status}`,
+    );
+  });
+  if (failed.length === results.length) {
+    throw failed[0].reason;
+  }
+  const ambiguousFailure = failed.find(
+    (result) => ![400, 403, 404].some((status) => isHttpStatus(result.reason, status)),
+  );
+  if (ambiguousFailure) {
+    // Preserve the host's complete cached snapshot for timeouts and temporary
+    // server failures instead of replacing it with incomplete fresh results.
+    throw ambiguousFailure.reason;
+  }
+
+  let merged = results
+    .filter((result) => result.status === 'fulfilled')
+    .flatMap((result) => result.value)
+    .sort((a, b) => (a.start ?? 0) - (b.start ?? 0));
   if (opts?.maxResults) {
     merged = merged.slice(0, opts.maxResults);
   }
@@ -1111,6 +1205,22 @@ const buildNewEventUrl = (
 /** Derive a deterministic CalDAV UID from a task ID.
  * CalDAV UIDs are opaque strings with no charset restriction (unlike Google Calendar). */
 const taskIdToCaldavUid = (taskId: string): string => `sp-${taskId}@super-productivity`;
+
+/** One UID per session, so a task tracked several times gets several events.
+ * The `sp-` prefix keeps these out of read paths like time blocks (`isSpManagedUid`). */
+const workSessionToCaldavUid = (taskId: string, start: number): string =>
+  `sp-session-${taskId}-${start}@super-productivity`;
+
+/**
+ * True for events SuperProductivity itself wrote as auto-time-block mirrors of a
+ * local task (see `taskIdToCaldavUid`). When a read calendar overlaps the
+ * time-block calendar, the mirror is fetched back and would render next to the
+ * very task that created it — a duplicate (#9830, the CalDAV twin of the Google
+ * plugin's #8171). The local task is the source of truth, so the mirror is
+ * excluded from all read paths (schedule/agenda and search-to-add).
+ */
+const isSpManagedUid = (uid: unknown): boolean =>
+  typeof uid === 'string' && uid.startsWith('sp-') && uid.endsWith('@super-productivity');
 
 const isHttpStatus = (err: unknown, status: number): boolean =>
   typeof err === 'object' &&
@@ -1219,6 +1329,24 @@ PluginAPI.registerIssueProvider({
       options: [],
       loadOptions: loadCalendars,
     },
+    {
+      key: 'isLogWorkSessions',
+      type: 'checkbox' as const,
+      label: 'Add tracked time to calendar',
+      description:
+        'When you stop tracking time on a task or switch tasks, add an event with the actual start and end time. Sessions under a minute are skipped. Only the device that tracked the time adds the event.',
+    },
+    {
+      key: 'workSessionCalendarId',
+      type: 'select' as const,
+      label: 'Tracked time calendar',
+      description:
+        'Which calendar to add tracked time to. Defaults to the default calendar for new events.',
+      required: false,
+      showIf: 'isLogWorkSessions',
+      options: [],
+      loadOptions: loadCalendars,
+    },
   ],
 
   getHeaders(config: Record<string, unknown>): Record<string, string> {
@@ -1253,8 +1381,11 @@ PluginAPI.registerIssueProvider({
     http: PluginHttp,
   ): Promise<PluginIssue> {
     const cfg = config as unknown as CaldavCalendarConfig;
-    const { eventHref, occurrenceMs } = parseCompoundId(issueId, getWriteCalendarId(cfg));
-    const eventUrl = resolveHref(cfg, eventHref);
+    const { calendarHref, eventHref, occurrenceMs } = parseCompoundId(
+      issueId,
+      getWriteCalendarId(cfg),
+    );
+    const eventUrl = resolveEventUrl(cfg, calendarHref, eventHref);
     const icalData = await http.get<string>(eventUrl, { responseType: 'text' });
     const events = parseVEvents(icalData);
     const event = events[0];
@@ -1328,8 +1459,8 @@ PluginAPI.registerIssueProvider({
 
   getIssueLink(issueId: string, config: Record<string, unknown>): string {
     const cfg = config as unknown as CaldavCalendarConfig;
-    const { eventHref } = parseCompoundId(issueId, getWriteCalendarId(cfg));
-    return resolveHref(cfg, eventHref);
+    const { calendarHref, eventHref } = parseCompoundId(issueId, getWriteCalendarId(cfg));
+    return resolveEventUrl(cfg, calendarHref, eventHref);
   },
 
   async testConnection(
@@ -1423,10 +1554,13 @@ PluginAPI.registerIssueProvider({
     http: PluginHttp,
   ): Promise<void> {
     const cfg = config as unknown as CaldavCalendarConfig;
-    const { eventHref, occurrenceMs } = parseCompoundId(id, getWriteCalendarId(cfg));
+    const { calendarHref, eventHref, occurrenceMs } = parseCompoundId(
+      id,
+      getWriteCalendarId(cfg),
+    );
     // Editing one occurrence would rewrite the shared master (whole series).
     if (occurrenceMs !== undefined) throw unsupportedOccurrenceWriteError('edit');
-    const eventUrl = resolveHref(cfg, eventHref);
+    const eventUrl = resolveEventUrl(cfg, calendarHref, eventHref);
 
     // Fetch current iCal data
     const currentIcal = await http.get<string>(eventUrl, { responseType: 'text' });
@@ -1675,6 +1809,33 @@ PluginAPI.registerIssueProvider({
         }
       });
     },
+
+    async logWorkSession(
+      session: PluginWorkSession,
+      config: Record<string, unknown>,
+      http: PluginHttp,
+    ): Promise<void> {
+      const cfg = config as unknown as CaldavCalendarConfig;
+      const calendarHref = getWorkSessionCalendarId(cfg);
+      if (!calendarHref) {
+        throw new Error(
+          'No calendar configured for tracked time. Please select a calendar in the CalDAV settings.',
+        );
+      }
+      const uid = workSessionToCaldavUid(session.taskId, session.start);
+      const icalData = buildICalEvent({
+        uid,
+        summary: session.title,
+        dtstart: toIcalUtcDateTime(new Date(session.start)),
+        dtend: toIcalUtcDateTime(new Date(session.end)),
+      });
+      await withTransientRetry(() =>
+        http.put(buildNewEventUrl(cfg, calendarHref, uid), icalData, {
+          headers: { 'Content-Type': 'text/calendar; charset=utf-8' },
+          responseType: 'text',
+        }),
+      );
+    },
   },
 
   async deleteIssue(
@@ -1683,10 +1844,13 @@ PluginAPI.registerIssueProvider({
     http: PluginHttp,
   ): Promise<void> {
     const cfg = config as unknown as CaldavCalendarConfig;
-    const { eventHref, occurrenceMs } = parseCompoundId(id, getWriteCalendarId(cfg));
+    const { calendarHref, eventHref, occurrenceMs } = parseCompoundId(
+      id,
+      getWriteCalendarId(cfg),
+    );
     // Deleting one occurrence would DELETE the shared master (whole series).
     if (occurrenceMs !== undefined) throw unsupportedOccurrenceWriteError('delete');
-    const eventUrl = resolveHref(cfg, eventHref);
+    const eventUrl = resolveEventUrl(cfg, calendarHref, eventHref);
     await http.delete(eventUrl, { responseType: 'text' });
   },
 });

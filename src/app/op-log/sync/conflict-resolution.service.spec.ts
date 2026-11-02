@@ -1,9 +1,12 @@
+import { OperationCaptureService } from '../capture/operation-capture.service';
+import { PersistentAction } from '../core/persistent-action.interface';
 import { TestBed } from '@angular/core/testing';
-import { SyncConflictBannerService } from './sync-conflict-banner.service';
-import {
-  ConflictResolutionService,
-  getLatestTaskProjectMoveEntityIds,
-} from './conflict-resolution.service';
+import { ConflictResolutionService } from './conflict-resolution.service';
+import { getLatestTaskProjectMoveEntityIds } from './conflict-resolution.util';
+import { ConflictLocalWinOpsService } from './conflict-local-win-ops.service';
+import { ConflictEntityStateService } from './conflict-entity-state.service';
+import { ConflictDetectionService } from './conflict-detection.service';
+import { ConflictResolutionPlannerService } from './conflict-resolution-planner.service';
 import { Store } from '@ngrx/store';
 import { OperationApplierService } from '../apply/operation-applier.service';
 import { HydrationStateService } from '../apply/hydration-state.service';
@@ -30,6 +33,7 @@ import {
 import { CLIENT_ID_PROVIDER } from '../util/client-id.provider';
 import { CURRENT_SCHEMA_VERSION } from '../persistence/schema-migration.service';
 import { MAX_VECTOR_CLOCK_SIZE } from '../core/operation-log.const';
+import { MAX_DATA_LENGTH, OpLog } from '../../core/log';
 import {
   buildEntityRegistry,
   ENTITY_REGISTRY,
@@ -41,7 +45,6 @@ import {
   IncompleteRemoteOperationsError,
   UnsupportedMultiEntityConflictError,
 } from '../core/errors/sync-errors';
-import { ConflictJournalService } from './conflict-journal.service';
 import {
   isLwwUpdateActionType,
   toLwwUpdateActionType,
@@ -78,6 +81,30 @@ describe('ConflictResolutionService', () => {
     vectorClock: { [clientId]: 1 },
     timestamp: Date.now(),
     schemaVersion: 1,
+  });
+
+  // #10420: a pending habit order listing h1 and h2, and single-habit ops.
+  const listedHabitOp = (
+    id: string,
+    clientId: string,
+    actionType: ActionType,
+    actionPayload: Record<string, unknown>,
+    timestamp = Date.now(),
+  ): Operation => ({
+    ...createMockOp(id, clientId),
+    actionType,
+    entityType: 'SIMPLE_COUNTER',
+    entityId: 'h1',
+    payload: { actionPayload, entityChanges: [] },
+    timestamp,
+  });
+  const habitOrderOp = (): Operation => ({
+    ...listedHabitOp('order', 'clientA', ActionType.COUNTER_UPDATE_ORDER, {
+      ids: ['h2', 'h1'],
+    }),
+    opType: OpType.Move,
+    entityId: 'h2',
+    entityIds: ['h2', 'h1'],
   });
 
   const getMixedLocalOps = (): readonly Operation[] =>
@@ -539,9 +566,7 @@ describe('ConflictResolutionService', () => {
       );
       // Local ops should be rejected
       expect(mockOpLogStore.markRejected).toHaveBeenCalledWith(['local-1']);
-      // SPAP-15: the generic count snack was replaced by the journal-driven
-      // summary banner. These ops carry no real field changes (noise), so
-      // nothing unreviewed is journaled and no snack fires.
+      // Routine self-healing remains quiet.
       expect(mockSnackService.open).not.toHaveBeenCalled();
     });
 
@@ -564,8 +589,7 @@ describe('ConflictResolutionService', () => {
         jasmine.arrayContaining([jasmine.objectContaining({ id: 'remote-1' })]),
       );
       expect(mockOpLogStore.markRejected).toHaveBeenCalledWith(['remote-1']);
-      // SPAP-15: count snack replaced by the journal-driven summary banner;
-      // noise-only resolutions journal nothing unreviewed, so no snack fires.
+      // Routine self-healing remains quiet.
       expect(mockSnackService.open).not.toHaveBeenCalled();
     });
 
@@ -616,12 +640,7 @@ describe('ConflictResolutionService', () => {
       expect(mockSnackService.open).not.toHaveBeenCalled();
     });
 
-    describe('content-conflict banner REVIEW action', () => {
-      // This banner fires off the resolutions, NOT off the journal, so its
-      // REVIEW action has to be gated on the journal actually holding rows —
-      // otherwise the producer freeze (or a swallowed record() failure) sends
-      // the user to an empty review page at the exact moment they are worried
-      // about a discarded edit.
+    describe('content-conflict banner without journal review', () => {
       const buildContentLossConflicts = (): EntityConflict[] => {
         const now = Date.now();
         return [
@@ -653,10 +672,6 @@ describe('ConflictResolutionService', () => {
         ];
       };
 
-      const getJournal = (): ConflictJournalService =>
-        (service as unknown as { conflictJournal: ConflictJournalService })
-          .conflictJournal;
-
       const openContentBanner = async (): Promise<jasmine.Spy<BannerService['open']>> => {
         const openBannerSpy = spyOn(TestBed.inject(BannerService), 'open');
         mockStore.select.and.returnValue(of({ id: 'task-1', title: 'Remote title' }));
@@ -668,60 +683,18 @@ describe('ConflictResolutionService', () => {
         return openBannerSpy;
       };
 
-      it('omits the REVIEW action when the journal has nothing to review', async () => {
-        // record() no-ops, so the unreviewed count stays 0 — the state produced
-        // both by the producer freeze and by a swallowed record() failure.
-        spyOn(getJournal(), 'record').and.resolveTo();
-
+      it('preserves the content-loss warning with only a confirming OK button', async () => {
         const openBannerSpy = await openContentBanner();
 
         const banner = openBannerSpy.calls.mostRecent().args[0];
         expect(banner.id).toBe(BannerId.SyncConflictContentResolved);
-        // Message + built-in dismiss = exactly the released v18.14.0 banner.
-        expect(banner.action).toBeUndefined();
+        // #10481: the shared G.DISMISS label reads as "reject" in some locales,
+        // so the banner shows a single "OK" that only closes it.
+        expect(banner.isHideDismissBtn).toBe(true);
+        expect(banner.action?.label).toBe(T.G.OK);
+        expect(banner.action2).toBeUndefined();
+        expect(banner.isKeepVisibleAfterAction).toBeFalsy();
       });
-
-      it('keeps the REVIEW action when the journal holds unreviewed entries', async () => {
-        spyOn(getJournal(), 'record').and.resolveTo();
-        (
-          getJournal() as unknown as {
-            _unreviewedCount: { set: (v: number) => void };
-          }
-        )._unreviewedCount.set(2);
-
-        const openBannerSpy = await openContentBanner();
-
-        const banner = openBannerSpy.calls.mostRecent().args[0];
-        expect(banner.action?.label).toBe(T.F.SYNC.CONFLICT_REVIEW.BANNER_REVIEW);
-      });
-    });
-
-    // Callee half of the producer freeze: remote-ops-processing.service.spec.ts
-    // asserts the production caller PASSES the flag, but without this, deleting
-    // the gate inside autoResolveConflictsLWW leaves every spec green while the
-    // fleet silently resumes persisting the discarded side of every conflict.
-    // The journal-ON default is already covered by the #8956 multi-entity test.
-    it('records nothing when disableConflictJournal is set (producer freeze)', async () => {
-      const journal = (service as unknown as { conflictJournal: ConflictJournalService })
-        .conflictJournal;
-      const recordSpy = spyOn(journal, 'record').and.resolveTo();
-      const now = Date.now();
-      const conflicts = [
-        createConflict(
-          'task-1',
-          [createOpWithTimestamp('local-1', 'client-a', now - 1000)],
-          [createOpWithTimestamp('remote-1', 'client-b', now)],
-        ),
-      ];
-      mockOperationApplier.applyOperations.and.resolveTo({
-        appliedOps: conflicts[0].remoteOps,
-      });
-
-      await service.autoResolveConflictsLWW(conflicts, [], {
-        disableConflictJournal: true,
-      });
-
-      expect(recordSpy).not.toHaveBeenCalled();
     });
 
     it('escapes task titles before putting them in the innerHTML banner (XSS guard)', async () => {
@@ -857,7 +830,7 @@ describe('ConflictResolutionService', () => {
       expect(taskList).toContain('&lt;img');
     });
 
-    it('surfaces the journal-driven summary banner (not the content banner or count snack) for routine field resolutions (SPAP-15)', async () => {
+    it('keeps routine field resolutions quiet', async () => {
       const bannerService = TestBed.inject(BannerService);
       const openBannerSpy = spyOn(bannerService, 'open');
       const now = Date.now();
@@ -894,13 +867,9 @@ describe('ConflictResolutionService', () => {
 
       await service.autoResolveConflictsLWW(conflicts);
 
-      // A dueDay reschedule is a real (non-noise) discarded edit → journaled
-      // unreviewed → the summary banner (NOT the named content banner) surfaces
-      // it, and the old count snack is gone.
+      // Routine rescheduling remains quiet.
       expect(mockSnackService.open).not.toHaveBeenCalled();
-      expect(openBannerSpy).toHaveBeenCalledWith(
-        jasmine.objectContaining({ id: BannerId.SyncConflictsAutoResolved }),
-      );
+      expect(openBannerSpy).not.toHaveBeenCalled();
     });
 
     it('should auto-resolve as remote when timestamps are equal (tie-breaker)', async () => {
@@ -927,6 +896,51 @@ describe('ConflictResolutionService', () => {
       );
       // Local ops should be rejected
       expect(mockOpLogStore.markRejected).toHaveBeenCalledWith(['local-1']);
+    });
+
+    it('keeps a commuting pending habit order pending past a remote winner (#10420)', async () => {
+      const now = Date.now();
+      const order = habitOrderOp();
+      const count = listedHabitOp(
+        'count',
+        'clientA',
+        'test' as ActionType,
+        {},
+        now - 1000,
+      );
+      const remote = {
+        ...listedHabitOp('remote', 'clientB', 'test' as ActionType, {}, now),
+        vectorClock: { clientB: 4 },
+      };
+      const conflicts: EntityConflict[] = [
+        {
+          entityType: 'SIMPLE_COUNTER',
+          entityId: 'h1',
+          localOps: [count],
+          remoteOps: [remote],
+          suggestedResolution: 'manual',
+        },
+      ];
+      mockOpLogStore.getUnsyncedByEntity.and.resolveTo(
+        new Map([
+          ['SIMPLE_COUNTER:h1', [order, count]],
+          ['SIMPLE_COUNTER:h2', [order]],
+        ]),
+      );
+      const getUnsynced = jasmine.createSpy('getUnsynced').and.resolveTo([
+        { seq: 1, source: 'local', op: order },
+        { seq: 2, source: 'local', op: count },
+      ]);
+      const rebase = jasmine.createSpy('rebasePendingLocalOps').and.resolveTo([]);
+      Object.assign(mockOpLogStore, { getUnsynced, rebasePendingLocalOps: rebase });
+
+      await service.autoResolveConflictsLWW(conflicts);
+
+      expect(mockOpLogStore.markRejected).toHaveBeenCalledWith(['count']);
+      expect(mockOpLogStore.markRejected).not.toHaveBeenCalledWith(
+        jasmine.arrayContaining(['order']),
+      );
+      expect(rebase).toHaveBeenCalledOnceWith(['order', 'count'], { clientB: 4 });
     });
 
     it('should not duplicate already rejected local ops while adding superseded pending ops', async () => {
@@ -1004,9 +1018,7 @@ describe('ConflictResolutionService', () => {
         jasmine.arrayContaining([jasmine.objectContaining({ id: 'remote-2' })]),
       );
 
-      // SPAP-15: the generic count snack was removed. Both conflicts here carry
-      // no real field changes (noise), so nothing unreviewed is journaled and
-      // neither the snack nor the summary banner fires.
+      // Routine self-healing remains quiet.
       expect(mockSnackService.open).not.toHaveBeenCalled();
     });
 
@@ -1207,6 +1219,55 @@ describe('ConflictResolutionService', () => {
             .recreatesEntityAfterDelete,
         ).toBeTrue();
       });
+
+      // Released receivers (v18.15.0-v19.1.0) replace a habit with a 'replace'
+      // snapshot that cannot carry its `type`; repair then resets it.
+      for (const remoteOpType of [OpType.Update, OpType.Delete]) {
+        it(`sends a local-win habit snapshot as ${remoteOpType === OpType.Update ? 'a patch' : 'a replace recreation'} over a remote ${remoteOpType}`, async () => {
+          const now = Date.now();
+          mockStore.select.and.returnValue(
+            of({
+              id: 'cnt-1',
+              title: 'Local title',
+              isEnabled: true,
+              icon: null,
+              type: 'StopWatch',
+              countOnDay: {},
+              isOn: false,
+            }),
+          );
+          const habitOp = (
+            id: string,
+            clientId: string,
+            at: number,
+            t: OpType,
+          ): Operation => ({
+            ...createOpWithTimestamp(id, clientId, at, t, 'cnt-1'),
+            entityType: 'SIMPLE_COUNTER' as const,
+          });
+
+          await service.autoResolveConflictsLWW([
+            {
+              entityType: 'SIMPLE_COUNTER',
+              entityId: 'cnt-1',
+              localOps: [habitOp('local-upd', 'client-a', now, OpType.Update)],
+              remoteOps: [habitOp('remote-op', 'client-b', now - 1000, remoteOpType)],
+              suggestedResolution: 'manual',
+            },
+          ]);
+
+          const payload = getFirstMixedLocalOp().payload;
+          if (!isLwwUpdatePayload(payload)) throw new Error('expected an LWW payload');
+          expect(payload.actionPayload['type']).toBe('StopWatch');
+          if (remoteOpType === OpType.Update) {
+            expect(payload.lwwUpdateMode).toBe('patch');
+            expect(payload.clearedFields).toContain('streakMinValue');
+          } else {
+            expect(payload.lwwUpdateMode).toBe('replace');
+            expect(payload.recreatesEntityAfterDelete).toBeTrue();
+          }
+        });
+      }
 
       it('should recreate a locally-winning UPDATE over a concurrent remote DELETE on a client-ID tie (#9024)', async () => {
         const now = Date.now();
@@ -1587,10 +1648,6 @@ describe('ConflictResolutionService', () => {
         mockStore.select.and.returnValue(
           of({ id: 'task-2', title: 'Local winning task' }),
         );
-        const journal = (
-          service as unknown as { conflictJournal: ConflictJournalService }
-        ).conflictJournal;
-        spyOn(journal, 'record').and.resolveTo();
         mockOperationApplier.applyOperations.and.callFake(async (ops, options) => {
           await options?.onReducersCommitted?.(ops);
           return { appliedOps: ops };
@@ -1635,7 +1692,6 @@ describe('ConflictResolutionService', () => {
           [jasmine.any(Number)],
           [remoteMultiOp],
         );
-        expect(journal.record).toHaveBeenCalledTimes(2);
       });
 
       it('applies a remote multi-entity op for unaffected siblings and compensates the local winner', async () => {
@@ -4182,9 +4238,9 @@ describe('ConflictResolutionService', () => {
         );
 
         // Call the private extraction method
-        const extractedEntity = (service as any)._extractEntityFromDeleteOperation(
-          conflict,
-        );
+        const extractedEntity = (
+          TestBed.inject(ConflictEntityStateService) as any
+        )._extractEntityFromDeleteOperation(conflict);
 
         // Verify it extracted the entity from the DELETE operation's payload
         expect(extractedEntity).toEqual(taskEntity);
@@ -4207,9 +4263,9 @@ describe('ConflictResolutionService', () => {
           ],
         );
 
-        const extractedEntity = (service as any)._extractEntityFromDeleteOperation(
-          conflict,
-        );
+        const extractedEntity = (
+          TestBed.inject(ConflictEntityStateService) as any
+        )._extractEntityFromDeleteOperation(conflict);
 
         expect(extractedEntity).toBeUndefined();
       });
@@ -4633,11 +4689,6 @@ describe('ConflictResolutionService', () => {
           appliedOps: [conflicts[0].remoteOps[0], conflicts[2].remoteOps[0]],
         });
 
-        const bannerSpy = spyOn(
-          TestBed.inject(SyncConflictBannerService),
-          'maybeShowSummaryBanner',
-        ).and.resolveTo();
-
         await service.autoResolveConflictsLWW(conflicts);
 
         // Task: remote wins (newer), Tag: remote wins (tie goes to remote).
@@ -4658,11 +4709,6 @@ describe('ConflictResolutionService', () => {
 
         // Project: local wins - remote op rejected separately
         expect(mockOpLogStore.markRejected).toHaveBeenCalledWith(['remote-project']);
-
-        // SPAP-15: the mixed-result count notification is now the journal-driven
-        // summary banner (win-count VALUES are covered by
-        // sync-conflict-banner.service.spec).
-        expect(bannerSpy).toHaveBeenCalled();
       });
     });
 
@@ -4733,9 +4779,10 @@ describe('ConflictResolutionService', () => {
         ];
 
         // Spy on the private method to return a mock local-win op
-        spyOn<any>(service, '_createLocalWinUpdateOp').and.returnValue(
-          Promise.resolve(createMockLocalWinOp('task-1')),
-        );
+        spyOn<any>(
+          TestBed.inject(ConflictLocalWinOpsService),
+          '_createLocalWinUpdateOp',
+        ).and.returnValue(Promise.resolve(createMockLocalWinOp('task-1')));
 
         const result = await service.autoResolveConflictsLWW(conflicts);
 
@@ -4766,9 +4813,11 @@ describe('ConflictResolutionService', () => {
         ];
 
         // Spy on the private method to return mock local-win ops
-        spyOn<any>(service, '_createLocalWinUpdateOp').and.callFake(
-          (conflict: EntityConflict) =>
-            Promise.resolve(createMockLocalWinOp(conflict.entityId)),
+        spyOn<any>(
+          TestBed.inject(ConflictLocalWinOpsService),
+          '_createLocalWinUpdateOp',
+        ).and.callFake((conflict: EntityConflict) =>
+          Promise.resolve(createMockLocalWinOp(conflict.entityId)),
         );
 
         const result = await service.autoResolveConflictsLWW(conflicts);
@@ -4820,9 +4869,11 @@ describe('ConflictResolutionService', () => {
         });
 
         // Spy on the private method to return mock local-win op (only called for task-2)
-        spyOn<any>(service, '_createLocalWinUpdateOp').and.callFake(
-          (conflict: EntityConflict) =>
-            Promise.resolve(createMockLocalWinOp(conflict.entityId)),
+        spyOn<any>(
+          TestBed.inject(ConflictLocalWinOpsService),
+          '_createLocalWinUpdateOp',
+        ).and.callFake((conflict: EntityConflict) =>
+          Promise.resolve(createMockLocalWinOp(conflict.entityId)),
         );
 
         const result = await service.autoResolveConflictsLWW(conflicts);
@@ -4863,7 +4914,10 @@ describe('ConflictResolutionService', () => {
           ),
         ];
         const callOrder: string[] = [];
-        spyOn<any>(service, '_createLocalWinUpdateOp').and.resolveTo(localWinOp);
+        spyOn<any>(
+          TestBed.inject(ConflictLocalWinOpsService),
+          '_createLocalWinUpdateOp',
+        ).and.resolveTo(localWinOp);
         mockOpLogStore.appendMixedSourceBatchSkipDuplicates.and.callFake(
           async (batches) => {
             callOrder.push('persist-mixed-resolution');
@@ -5127,9 +5181,10 @@ describe('ConflictResolutionService', () => {
           ),
         ];
         const persistenceError = new Error('compensation persistence failed');
-        spyOn<any>(service, '_createLocalWinUpdateOp').and.resolveTo(
-          createMockLocalWinOp('task-1'),
-        );
+        spyOn<any>(
+          TestBed.inject(ConflictLocalWinOpsService),
+          '_createLocalWinUpdateOp',
+        ).and.resolveTo(createMockLocalWinOp('task-1'));
         mockOpLogStore.appendMixedSourceBatchSkipDuplicates.and.rejectWith(
           persistenceError,
         );
@@ -5154,9 +5209,10 @@ describe('ConflictResolutionService', () => {
         ];
 
         // Spy on the private method to return undefined (entity not found)
-        spyOn<any>(service, '_createLocalWinUpdateOp').and.returnValue(
-          Promise.resolve(undefined),
-        );
+        spyOn<any>(
+          TestBed.inject(ConflictLocalWinOpsService),
+          '_createLocalWinUpdateOp',
+        ).and.returnValue(Promise.resolve(undefined));
 
         const result = await service.autoResolveConflictsLWW(conflicts);
 
@@ -5189,9 +5245,10 @@ describe('ConflictResolutionService', () => {
           timestamp: now,
           schemaVersion: 1,
         };
-        spyOn<any>(service, '_createLocalWinUpdateOp').and.returnValue(
-          Promise.resolve(mockLocalWinOp),
-        );
+        spyOn<any>(
+          TestBed.inject(ConflictLocalWinOpsService),
+          '_createLocalWinUpdateOp',
+        ).and.returnValue(Promise.resolve(mockLocalWinOp));
 
         await service.autoResolveConflictsLWW(conflicts);
 
@@ -5406,34 +5463,29 @@ describe('ConflictResolutionService', () => {
         const remoteOp = createOpWithTimestamp('remote-1', 'client-b', now);
         const mergedOp = createOpWithTimestamp('merged-1', TEST_CLIENT_ID, now + 1);
         const conflict = createConflict('task-1', [localOp], [remoteOp]);
-        const serviceInternals = service as unknown as {
-          _journalMergedResolution: () => Promise<unknown>;
-          _journalResolution: () => Promise<unknown>;
+        const serviceInternals = TestBed.inject(
+          ConflictResolutionPlannerService,
+        ) as unknown as {
           _resolveConflictsWithLWW: (
             conflicts: EntityConflict[],
             disableDisjointMerge?: boolean,
           ) => Promise<unknown>;
         };
-        spyOn(serviceInternals, '_journalMergedResolution').and.resolveTo();
-        spyOn(serviceInternals, '_journalResolution').and.resolveTo();
         spyOn(serviceInternals, '_resolveConflictsWithLWW').and.callFake(
           async (_conflicts, disableDisjointMerge = false) =>
             disableDisjointMerge
               ? {
                   lwwResolutions: [{ conflict, winner: 'remote' }],
                   mergedResolutions: [],
-                  lwwPlans: [{ conflict }],
                 }
               : {
                   lwwResolutions: [],
                   mergedResolutions: [
                     {
                       conflict,
-                      mergedOp,
-                      plan: { conflict },
+                      mergedOps: [mergedOp],
                     },
                   ],
-                  lwwPlans: [],
                 },
         );
         mockOpLogStore.appendBatchSkipDuplicates.and.resolveTo({
@@ -5465,14 +5517,19 @@ describe('ConflictResolutionService', () => {
         const result = await service.autoResolveConflictsLWW([conflict]);
 
         expect(result).toEqual({ localWinOpsCreated: 0 });
-        const mergeRemoteBatch =
-          mockOpLogStore.appendMixedSourceBatchSkipDuplicates.calls.argsFor(0)[0][0];
-        expect(mergeRemoteBatch).toEqual(
-          jasmine.objectContaining({
-            source: 'remote',
-            options: { pendingApply: true },
-          }),
-        );
+        // The remote side and the re-sent local fields share one transaction;
+        // the fallback re-resolves the remote side alone.
+        expect(
+          mockOpLogStore.appendMixedSourceBatchSkipDuplicates.calls.argsFor(0)[0],
+        ).toEqual([
+          { ops: [remoteOp], source: 'remote', options: { pendingApply: true } },
+          { ops: [mergedOp], source: 'local' },
+        ]);
+        expect(mockOpLogStore.appendBatchSkipDuplicates.calls.argsFor(0)).toEqual([
+          [remoteOp],
+          'remote',
+          { pendingApply: true },
+        ]);
         expect(mockOpLogStore.markReducersCommittedAndMergeClocks).toHaveBeenCalledWith(
           [],
           [],
@@ -5483,8 +5540,6 @@ describe('ConflictResolutionService', () => {
           [remoteOp],
         );
         expect(mockOpLogStore.markRejected).toHaveBeenCalledWith([localOp.id]);
-        expect(serviceInternals._journalMergedResolution).not.toHaveBeenCalled();
-        expect(serviceInternals._journalResolution).toHaveBeenCalled();
       });
 
       it('should keep deferred user actions outside a failed merge fallback rejection', async () => {
@@ -5498,28 +5553,24 @@ describe('ConflictResolutionService', () => {
           now + 2,
         );
         const conflict = createConflict('task-1', [localOp], [remoteOp]);
-        const serviceInternals = service as unknown as {
-          _journalMergedResolution: () => Promise<unknown>;
-          _journalResolution: () => Promise<unknown>;
+        const serviceInternals = TestBed.inject(
+          ConflictResolutionPlannerService,
+        ) as unknown as {
           _resolveConflictsWithLWW: (
             conflicts: EntityConflict[],
             disableDisjointMerge?: boolean,
           ) => Promise<unknown>;
         };
-        spyOn(serviceInternals, '_journalMergedResolution').and.resolveTo();
-        spyOn(serviceInternals, '_journalResolution').and.resolveTo();
         spyOn(serviceInternals, '_resolveConflictsWithLWW').and.callFake(
           async (_conflicts, disableDisjointMerge = false) =>
             disableDisjointMerge
               ? {
                   lwwResolutions: [{ conflict, winner: 'remote' }],
                   mergedResolutions: [],
-                  lwwPlans: [{ conflict }],
                 }
               : {
                   lwwResolutions: [],
-                  mergedResolutions: [{ conflict, mergedOp, plan: { conflict } }],
-                  lwwPlans: [],
+                  mergedResolutions: [{ conflict, mergedOps: [mergedOp] }],
                 },
         );
         mockOpLogStore.appendBatchSkipDuplicates.and.resolveTo({
@@ -5729,109 +5780,16 @@ describe('ConflictResolutionService', () => {
     });
   });
 
-  describe('_deepEqual', () => {
-    // Access private method for testing
-    const deepEqual = (a: unknown, b: unknown): boolean =>
-      (service as any)._deepEqual(a, b);
-
-    it('should return true for identical primitives', () => {
-      expect(deepEqual(1, 1)).toBe(true);
-      expect(deepEqual('hello', 'hello')).toBe(true);
-      expect(deepEqual(true, true)).toBe(true);
-      expect(deepEqual(null, null)).toBe(true);
-    });
-
-    it('should return false for different primitives', () => {
-      expect(deepEqual(1, 2)).toBe(false);
-      expect(deepEqual('hello', 'world')).toBe(false);
-      expect(deepEqual(true, false)).toBe(false);
-    });
-
-    it('should return true for identical objects', () => {
-      expect(deepEqual({ a: 1, b: 2 }, { a: 1, b: 2 })).toBe(true);
-      expect(
-        deepEqual({ nested: { value: 'test' } }, { nested: { value: 'test' } }),
-      ).toBe(true);
-    });
-
-    it('should return true for identical arrays', () => {
-      expect(deepEqual([1, 2, 3], [1, 2, 3])).toBe(true);
-      expect(deepEqual([{ a: 1 }], [{ a: 1 }])).toBe(true);
-    });
-
-    describe('circular reference protection', () => {
-      it('should return false for objects with circular references', () => {
-        const warnSpy = spyOn(console, 'warn');
-        const obj1: Record<string, unknown> = { a: 1 };
-        obj1['self'] = obj1; // Create circular reference
-
-        const obj2: Record<string, unknown> = { a: 1 };
-        obj2['self'] = obj2; // Create circular reference
-
-        const result = deepEqual(obj1, obj2);
-
-        expect(result).toBe(false);
-        expect(warnSpy).toHaveBeenCalled();
-        const warnCalls = warnSpy.calls.allArgs();
-        // OpLog.warn calls console.warn with prefix '[ol]' as first arg, message as second
-        const hasCircularWarning = warnCalls.some((args) =>
-          args.some(
-            (arg) => typeof arg === 'string' && arg.includes('circular reference'),
-          ),
-        );
-        expect(hasCircularWarning).toBe(true);
-      });
-
-      it('should return false for arrays with circular references', () => {
-        const warnSpy = spyOn(console, 'warn');
-        const arr1: unknown[] = [1, 2];
-        arr1.push(arr1); // Create circular reference
-
-        const arr2: unknown[] = [1, 2];
-        arr2.push(arr2); // Create circular reference
-
-        const result = deepEqual(arr1, arr2);
-
-        expect(result).toBe(false);
-        expect(warnSpy).toHaveBeenCalled();
-      });
-    });
-
-    describe('depth limit protection', () => {
-      it('should return false for deeply nested objects exceeding max depth', () => {
-        const warnSpy = spyOn(console, 'warn');
-
-        // Create object with depth > 50
-        let obj1: Record<string, unknown> = { value: 'deep' };
-        let obj2: Record<string, unknown> = { value: 'deep' };
-        for (let i = 0; i < 60; i++) {
-          obj1 = { nested: obj1 };
-          obj2 = { nested: obj2 };
-        }
-
-        const result = deepEqual(obj1, obj2);
-
-        expect(result).toBe(false);
-        expect(warnSpy).toHaveBeenCalled();
-        const warnCalls = warnSpy.calls.allArgs();
-        // OpLog.warn calls console.warn with prefix '[ol]' as first arg, message as second
-        const hasDepthWarning = warnCalls.some((args) =>
-          args.some(
-            (arg) => typeof arg === 'string' && arg.includes('exceeded max depth'),
-          ),
-        );
-        expect(hasDepthWarning).toBe(true);
-      });
-    });
-  });
-
   describe('_suggestResolution', () => {
     // Access private method for testing
     const callSuggestResolution = (
       localOps: Operation[],
       remoteOps: Operation[],
     ): 'local' | 'remote' | 'manual' => {
-      return (service as any)._suggestResolution(localOps, remoteOps);
+      return (TestBed.inject(ConflictDetectionService) as any)._suggestResolution(
+        localOps,
+        remoteOps,
+      );
     };
 
     const createOp = (partial: Partial<Operation>): Operation => ({
@@ -6405,7 +6363,9 @@ describe('ConflictResolutionService', () => {
         of({ id: 'task-1', title: 'Local winner', projectId: 'project-2' }),
       );
 
-      const lwwOp = await (service as any)._createLocalWinUpdateOp(
+      const lwwOp = await (
+        TestBed.inject(ConflictLocalWinOpsService) as any
+      )._createLocalWinUpdateOp(
         createConflict(
           'task-1',
           [localOp],
@@ -6972,6 +6932,48 @@ describe('ConflictResolutionService', () => {
       expect(result.conflicts).toEqual([]);
     });
 
+    it('should log a superseded skip with author counters that survive the log export cap', async () => {
+      // #11184: the skip is permanent, so the exported log must show why.
+      // Full-size clocks must not push the author counters past the cap.
+      const fullClock = (counter: number): VectorClock =>
+        Object.fromEntries(
+          Array.from({ length: MAX_VECTOR_CLOCK_SIZE }, (_, i) => [
+            `client_${String(i).padStart(2, '0')}`,
+            counter,
+          ]),
+        );
+      const remoteOp: Operation = {
+        ...createMockOp('remote-regressed', 'client_00'),
+        entityId: 'task-1',
+        vectorClock: { ...fullClock(99999), client_00: 2 },
+      };
+      const appliedFrontierByEntity = new Map<string, VectorClock>([
+        ['TASK:task-1', { ...fullClock(99999), client_00: 4 }],
+      ]);
+      const verboseSpy = spyOn(OpLog, 'verbose');
+
+      const result = await service.checkOpForConflicts(
+        remoteOp,
+        buildCtx({ appliedFrontierByEntity }),
+      );
+
+      expect(result.isSupersededOrDuplicate).toBeTrue();
+      const args = verboseSpy.calls
+        .allArgs()
+        .find((a) => String(a[0]).includes('Skipping superseded'))!;
+      for (const arg of args.slice(1)) {
+        expect(JSON.stringify(arg).length).toBeLessThanOrEqual(MAX_DATA_LENGTH);
+      }
+      expect(args[1]).toEqual(
+        jasmine.objectContaining({
+          entityKey: 'TASK:task-1',
+          opClientId: 'client_00',
+          localCounter: 4,
+          remoteCounter: 2,
+        }),
+      );
+    });
+
     it('should skip an atomic multi-entity operation when any entity is superseded', async () => {
       const remoteOp: Operation = {
         ...createMockOp('remote-multi-delete', 'clientB'),
@@ -7279,18 +7281,21 @@ describe('ConflictResolutionService', () => {
       });
     });
 
-    it('should still conflict when a section move and removal target different tasks', async () => {
+    // Different tasks commute (#10969); a move of the same task into the
+    // section it is removed from does not.
+    it('should still conflict when a task moves into the section it is removed from', async () => {
       const remoteOp = createSectionMoveOp(
         'remote-move',
         'clientB',
-        'section-left',
+        'section-right',
         'task-1',
+        'section-left',
       );
       const localOp = createSectionRemoveOp(
         'local-remove',
         'clientA',
         'section-left',
-        'task-2',
+        'task-1',
       );
       const localPendingOpsByEntity = new Map<string, Operation[]>([
         ['SECTION:section-left', [localOp]],
@@ -7418,10 +7423,60 @@ describe('ConflictResolutionService', () => {
     });
   });
 
+  describe('checkOpForConflicts — a pending order beside a conflict (#10420)', () => {
+    const ctxFor = (
+      pending: Operation[],
+    ): Parameters<ConflictResolutionService['checkOpForConflicts']>[1] => ({
+      localPendingOpsByEntity: new Map([['SIMPLE_COUNTER:h1', pending]]),
+      appliedFrontierByEntity: new Map(),
+      retainedOpsByEntity: new Map(),
+      snapshotVectorClock: undefined,
+      snapshotEntityKeys: new Set(),
+      hasNoSnapshotClock: true,
+    });
+    const rename = (id: string, clientId: string): Operation =>
+      listedHabitOp(id, clientId, ActionType.COUNTER_UPDATE, {
+        simpleCounter: { id: 'h1', changes: { title: clientId } },
+      });
+
+    it('resolves the edit conflict without the commuting order', async () => {
+      const order = habitOrderOp();
+      const local = rename('local', 'clientA');
+      const result = await service.checkOpForConflicts(
+        rename('remote', 'clientB'),
+        ctxFor([order, local]),
+      );
+      expect(result.conflicts.length).toBe(1);
+      expect(result.conflicts[0].localOps).toEqual([local]);
+    });
+
+    it('lets a habit LWW row cross a pending habit order', async () => {
+      const row = {
+        ...listedHabitOp('row', 'clientB', '[SIMPLE_COUNTER] LWW Update' as ActionType, {
+          id: 'h1',
+          title: 'row',
+        }),
+      };
+      const result = await service.checkOpForConflicts(row, ctxFor([habitOrderOp()]));
+      expect(result).toEqual({ isSupersededOrDuplicate: false, conflicts: [] });
+    });
+
+    it('keeps the order in a conflict it does not commute with', async () => {
+      const order = habitOrderOp();
+      const remoteDelete: Operation = {
+        ...listedHabitOp('delete', 'clientB', ActionType.COUNTER_DELETE, { id: 'h1' }),
+        opType: OpType.Delete,
+      };
+      const result = await service.checkOpForConflicts(remoteDelete, ctxFor([order]));
+      expect(result.conflicts[0].localOps).toEqual([order]);
+    });
+  });
+
   describe('checkOpForConflicts — no-pending CONCURRENT crossing (#9073)', () => {
     const KEY = 'TASK:task-1';
 
     const buildCtx = (overrides: {
+      localPendingOpsByEntity?: Map<string, Operation[]>;
       retainedOpsByEntity?: Map<string, Operation[]>;
       appliedFrontierByEntity?: Map<string, VectorClock>;
     }): {
@@ -7432,7 +7487,7 @@ describe('ConflictResolutionService', () => {
       snapshotEntityKeys: Set<string>;
       hasNoSnapshotClock: boolean;
     } => ({
-      localPendingOpsByEntity: new Map(),
+      localPendingOpsByEntity: overrides.localPendingOpsByEntity ?? new Map(),
       appliedFrontierByEntity: overrides.appliedFrontierByEntity ?? new Map(),
       retainedOpsByEntity: overrides.retainedOpsByEntity ?? new Map(),
       snapshotVectorClock: undefined,
@@ -7516,11 +7571,13 @@ describe('ConflictResolutionService', () => {
     it('resolves the mirrored conflicts to the SAME winner on both sides (convergence)', async () => {
       const onA = await detect(opY, [opX]);
       const onB = await detect(opX, [opY]);
+      // Both sides are retained, already-synced rows.
+      mockOpLogStore.getOpById.and.resolveTo({ source: 'local', syncedAt: 1 } as never);
 
       // A: remote (Y, ts 2000) wins → Y is applied via the pipeline, no local-win op.
       mockStore.select.and.returnValue(of({ id: 'task-1', title: 'from A' }));
       const resolutionA = await service.autoResolveConflictsLWW(onA.conflicts);
-      // B: local (Y) wins → ONE dominating LWW op carries B's state everywhere.
+      // B: local (Y) wins → ONE dominating field patch carries both sides' fields.
       mockStore.select.and.returnValue(of({ id: 'task-1', title: 'from B' }));
       const resolutionB = await service.autoResolveConflictsLWW(onB.conflicts);
 
@@ -7700,6 +7757,229 @@ describe('ConflictResolutionService', () => {
       expect(result).toEqual({ isSupersededOrDuplicate: false, conflicts: [] });
     });
 
+    // #10378: tracking an unscheduled task emits an opaque `planTasksForToday`
+    // beside its delta. Once both are synced, a concurrent delta from another
+    // device must still commute; a local LWW win would emit a snapshot whose
+    // clock claims the remote delta without its time.
+    describe('beside a synced auto-plan (#10378)', () => {
+      const deltaOp = (id: string, clientId: string, clock: VectorClock): Operation => ({
+        ...updateOp({ id, clientId, vectorClock: clock, timestamp: 1000, changes: {} }),
+        actionType: ActionType.TIME_TRACKING_SYNC_TIME_SPENT,
+        payload: {
+          actionPayload: { taskId: 'task-1', date: '2024-01-15', duration: 2000 },
+          entityChanges: [],
+        },
+      });
+      const planOp = (id: string, clientId: string, clock: VectorClock): Operation => ({
+        ...updateOp({ id, clientId, vectorClock: clock, timestamp: 3000, changes: {} }),
+        actionType: ActionType.TASK_SHARED_PLAN_FOR_TODAY,
+        payload: {
+          actionPayload: { taskIds: ['task-1'], today: '2024-01-15' },
+          entityChanges: [],
+        },
+      });
+
+      it('applies a remote delta as-is against a retained [auto-plan, delta] side', async () => {
+        const result = await detect(deltaOp('op-time-r', 'clientB', { clientB: 1 }), [
+          planOp('op-plan-l', 'clientA', { clientA: 1 }),
+          deltaOp('op-time-l', 'clientA', { clientA: 2 }),
+        ]);
+
+        expect(result).toEqual({ isSupersededOrDuplicate: false, conflicts: [] });
+      });
+
+      it('applies a remote auto-plan as-is against a retained delta', async () => {
+        const result = await detect(planOp('op-plan-r', 'clientB', { clientB: 1 }), [
+          deltaOp('op-time-l', 'clientA', { clientA: 1 }),
+        ]);
+
+        expect(result).toEqual({ isSupersededOrDuplicate: false, conflicts: [] });
+      });
+
+      it('still routes a remote delta into a conflict against a retained absolute time write', async () => {
+        const result = await detect(deltaOp('op-time-r', 'clientB', { clientB: 1 }), [
+          planOp('op-plan-l', 'clientA', { clientA: 1 }),
+          updateOp({
+            id: 'op-time-edit',
+            clientId: 'clientA',
+            vectorClock: { clientA: 2 },
+            timestamp: 3500,
+            changes: { timeSpentOnDay: { ['2024-01-15']: 5000 } },
+          }),
+        ]);
+
+        expect(result.conflicts.length).toBe(1);
+      });
+    });
+
+    // Real captured shapes of a syncTimeSpent op (#10146): a non-adapter
+    // actionPayload plus the entityChanges the PRODUCTION extractor declares for
+    // a direct write, or [] for a deferred write. Both must classify alike.
+    const capturedTimeOp = (
+      id: string,
+      clientId: string,
+      clock: VectorClock,
+      form: 'direct' | 'deferred',
+    ): Operation => {
+      const actionPayload = { taskId: 'task-1', date: '2024-01-15', duration: 2000 };
+      const entityChanges =
+        form === 'direct'
+          ? new OperationCaptureService().extractEntityChanges({
+              type: ActionType.TIME_TRACKING_SYNC_TIME_SPENT,
+              ...actionPayload,
+              meta: {
+                isPersistent: true,
+                entityType: 'TASK',
+                entityId: 'task-1',
+                opType: OpType.Update,
+              },
+            } as unknown as PersistentAction)
+          : [];
+      return {
+        ...updateOp({ id, clientId, vectorClock: clock, timestamp: 2000, changes: {} }),
+        actionType: ActionType.TIME_TRACKING_SYNC_TIME_SPENT,
+        payload: { actionPayload, entityChanges },
+      };
+    };
+
+    for (const form of ['direct', 'deferred'] as const) {
+      it(`keeps a remote task-time delta (${form} form) non-conflicting against a retained edit of other fields (#10146)`, async () => {
+        // Desktop tracks time while the phone edits the title: the delta only
+        // touches timeSpent/timeSpentOnDay, so apply-both is lossless.
+        const result = await detect(
+          capturedTimeOp('op-time-r', 'clientB', { clientB: 1 }, form),
+          [opX],
+        );
+
+        expect(result).toEqual({ isSupersededOrDuplicate: false, conflicts: [] });
+      });
+
+      it(`routes a remote task-time delta (${form} form) into a conflict against a retained absolute timeSpentOnDay write (#10146)`, async () => {
+        const localTimeEdit = updateOp({
+          id: 'op-time-edit',
+          clientId: 'clientA',
+          vectorClock: { clientA: 1 },
+          timestamp: 1000,
+          changes: { timeSpentOnDay: { ['2024-01-15']: 5000 } },
+        });
+
+        // The delta is additive and apply-both is order-dependent here, so the
+        // crossing must fall to LWW.
+        const result = await detect(
+          capturedTimeOp('op-time-r', 'clientB', { clientB: 1 }, form),
+          [localTimeEdit],
+        );
+
+        expect(result.isSupersededOrDuplicate).toBe(false);
+        expect(result.conflicts.length).toBe(1);
+        expect(result.conflicts[0].entityId).toBe('task-1');
+      });
+
+      // #10214: two additive deltas commute even when the local side also
+      // renamed the task; whole-entity LWW would drop one device's time.
+      const mixedLocalSide = (): Operation[] => [
+        capturedTimeOp('op-time-l', 'clientA', { clientA: 1 }, form),
+        updateOp({
+          id: 'op-rename-l',
+          clientId: 'clientA',
+          vectorClock: { clientA: 2 },
+          timestamp: 1500,
+          changes: { title: 'renamed on A' },
+        }),
+      ];
+
+      it(`keeps a remote task-time delta (${form} form) non-conflicting against a retained [delta, rename] side (#10214)`, async () => {
+        const result = await detect(
+          capturedTimeOp('op-time-r', 'clientB', { clientB: 1 }, form),
+          mixedLocalSide(),
+        );
+
+        expect(result).toEqual({ isSupersededOrDuplicate: false, conflicts: [] });
+      });
+
+      it(`keeps a remote task-time delta (${form} form) non-conflicting against a pending [delta, rename] side (#10214)`, async () => {
+        const result = await service.checkOpForConflicts(
+          capturedTimeOp('op-time-r', 'clientB', { clientB: 1 }, form),
+          buildCtx({ localPendingOpsByEntity: new Map([[KEY, mixedLocalSide()]]) }),
+        );
+
+        expect(result).toEqual({ isSupersededOrDuplicate: false, conflicts: [] });
+      });
+
+      it(`keeps a remote rename non-conflicting against a pending task-time delta (${form} form) (#10214)`, async () => {
+        const result = await service.checkOpForConflicts(
+          opY,
+          buildCtx({
+            localPendingOpsByEntity: new Map([
+              [KEY, [capturedTimeOp('op-time-l', 'clientA', { clientA: 1 }, form)]],
+            ]),
+          }),
+        );
+
+        expect(result).toEqual({ isSupersededOrDuplicate: false, conflicts: [] });
+      });
+
+      // The pending delta must not widen the commute beyond disjoint fields:
+      // a notes edit beside it commutes with a remote rename, a rename does not.
+      const pendingDeltaWith = (changes: Record<string, unknown>): Operation[] => [
+        capturedTimeOp('op-time-l', 'clientA', { clientA: 1 }, form),
+        updateOp({
+          id: 'op-edit-l',
+          clientId: 'clientA',
+          vectorClock: { clientA: 2 },
+          timestamp: 1500,
+          changes,
+        }),
+      ];
+
+      it(`keeps a remote rename non-conflicting against a pending [delta (${form} form), notes] side (#10214)`, async () => {
+        const result = await service.checkOpForConflicts(
+          opY,
+          buildCtx({
+            localPendingOpsByEntity: new Map([
+              [KEY, pendingDeltaWith({ notes: 'notes on A' })],
+            ]),
+          }),
+        );
+
+        expect(result).toEqual({ isSupersededOrDuplicate: false, conflicts: [] });
+      });
+
+      it(`still conflicts a remote rename with a pending [delta (${form} form), rename] side (#10214)`, async () => {
+        const result = await service.checkOpForConflicts(
+          opY,
+          buildCtx({
+            localPendingOpsByEntity: new Map([
+              [KEY, pendingDeltaWith({ title: 'renamed on A' })],
+            ]),
+          }),
+        );
+
+        expect(result.conflicts.length).toBe(1);
+        expect(result.conflicts[0].entityId).toBe('task-1');
+      });
+
+      it(`still conflicts a remote task-time delta (${form} form) with a pending [delta, absolute time write] side (#10214)`, async () => {
+        const pending = [
+          capturedTimeOp('op-time-l', 'clientA', { clientA: 1 }, form),
+          updateOp({
+            id: 'op-time-edit',
+            clientId: 'clientA',
+            vectorClock: { clientA: 2 },
+            timestamp: 1500,
+            changes: { timeSpentOnDay: { ['2024-01-15']: 5000 } },
+          }),
+        ];
+
+        const result = await service.checkOpForConflicts(
+          capturedTimeOp('op-time-r', 'clientB', { clientB: 1 }, form),
+          buildCtx({ localPendingOpsByEntity: new Map([[KEY, pending]]) }),
+        );
+
+        expect(result.conflicts.length).toBe(1);
+      });
+    }
+
     it('applies multi-entity remote ops as-is (needs the pending path compensation machinery)', async () => {
       const multiRemote = updateOp({
         id: 'op-multi',
@@ -7780,6 +8060,8 @@ describe('ConflictResolutionService', () => {
 
       const onA = await detect(tieY, [tieX]);
       const onB = await detect(tieX, [tieY]);
+      // Both sides are retained, already-synced rows.
+      mockOpLogStore.getOpById.and.resolveTo({ source: 'local', syncedAt: 1 } as never);
 
       // 'clientB' > 'clientA' → Y wins on BOTH sides: remote-wins on A
       // (no local-win op), local-wins on B (one heal op).
@@ -7840,8 +8122,147 @@ describe('ConflictResolutionService', () => {
         [remoteOp],
       );
 
-      const result = (service as any)._convertToLWWUpdatesIfNeeded(conflict);
+      const result = (
+        TestBed.inject(ConflictEntityStateService) as any
+      )._convertToLWWUpdatesIfNeeded(conflict);
       expect(result).toEqual([remoteOp]);
+    });
+
+    describe('winning syncTimeSpent deltas (#10380)', () => {
+      const DAY = '2026-07-13';
+      const deleted = {
+        id: 'task-1',
+        title: 'Deleted',
+        projectId: 'proj-1',
+        timeSpent: 500,
+        timeSpentOnDay: { [DAY]: 500 },
+        subTaskIds: [],
+        subTasks: [],
+      };
+      const localDelete = (): Operation => ({
+        ...createOpWithTimestamp('local-del', 'client-a', 1000, OpType.Delete),
+        actionType: ActionType.TASK_SHARED_DELETE,
+        payload: { actionPayload: { task: deleted }, entityChanges: [] },
+      });
+      // The shape operation capture records for syncTimeSpent.
+      const delta = (id: string, duration: number, timestamp: number): Operation => ({
+        ...createOpWithTimestamp(id, 'client-b', timestamp),
+        actionType: ActionType.TIME_TRACKING_SYNC_TIME_SPENT,
+        payload: {
+          actionPayload: { taskId: 'task-1', date: DAY, duration },
+          entityChanges: [
+            {
+              entityType: 'TASK',
+              entityId: 'task-1',
+              opType: OpType.Update,
+              changes: { taskId: 'task-1', date: DAY, duration },
+            },
+          ],
+        },
+      });
+      const rename = (id: string, title: string, timestamp: number): Operation => ({
+        ...createOpWithTimestamp(id, 'client-b', timestamp),
+        actionType: ActionType.TASK_SHARED_UPDATE,
+        payload: {
+          actionPayload: { task: { id: 'task-1', changes: { title } } },
+          entityChanges: [],
+        },
+      });
+      const convert = (remoteOps: Operation[]): Operation[] =>
+        (TestBed.inject(ConflictEntityStateService) as any)._convertToLWWUpdatesIfNeeded(
+          createConflict('task-1', [localDelete()], remoteOps),
+        );
+      const deletedTask: Record<string, unknown> = { ...deleted };
+      delete deletedTask['subTasks'];
+
+      it('adds the delta to the recreated task instead of reading its arguments as fields', () => {
+        const [result] = convert([delta('d1', 2000, 2000)]);
+
+        expect(result.actionType).toBe('[TASK] LWW Update');
+        expect(extractActionPayload(result.payload)).toEqual({
+          ...deletedTask,
+          timeSpent: 2500,
+          timeSpentOnDay: { [DAY]: 2500 },
+        });
+      });
+
+      it('gives each winner of the entity, one conflict per op, the state after all of them', () => {
+        const remoteOps = [
+          delta('d1', 2000, 2000),
+          rename('r1', 'Renamed', 3000),
+          delta('d2', 1500, 4000),
+        ];
+        const conflicts = remoteOps.map((op) =>
+          createConflict('task-1', [localDelete()], [op]),
+        );
+        const convertWinner = TestBed.inject(
+          ConflictEntityStateService,
+        )._remoteWinnerConverter(
+          conflicts.map((conflict) => ({ winner: 'remote' as const, conflict })),
+        );
+
+        const result = conflicts.flatMap(convertWinner);
+
+        expect(result.map((op) => op.id)).toEqual(['d1', 'r1', 'd2']);
+        for (const op of result) {
+          expect(extractActionPayload(op.payload)).toEqual({
+            ...deletedTask,
+            title: 'Renamed',
+            timeSpent: 4000,
+            timeSpentOnDay: { [DAY]: 4000 },
+          });
+        }
+      });
+
+      it('folds only the winners before a restore; later ones apply to the restored task as they are', () => {
+        const restore: Operation = {
+          ...createOpWithTimestamp('restore', 'client-b', 3000),
+          actionType: ActionType.TASK_SHARED_RESTORE,
+          payload: {
+            actionPayload: { task: deletedTask, subTasks: [] },
+            entityChanges: [],
+          },
+        };
+        const later = [delta('d2', 1500, 4000), rename('r1', 'Renamed', 5000)];
+        const remoteOps = [delta('d1', 2000, 2000), restore, ...later];
+        const conflicts = remoteOps.map((op) =>
+          createConflict('task-1', [localDelete()], [op]),
+        );
+        const convertWinner = TestBed.inject(
+          ConflictEntityStateService,
+        )._remoteWinnerConverter(
+          conflicts.map((conflict) => ({ winner: 'remote' as const, conflict })),
+        );
+
+        const [d1, ...rest] = conflicts.flatMap(convertWinner);
+
+        expect(d1.actionType).toBe('[TASK] LWW Update');
+        expect(extractActionPayload(d1.payload)).toEqual({
+          ...deletedTask,
+          timeSpent: 2500,
+          timeSpentOnDay: { [DAY]: 2500 },
+        });
+        expect(rest).toEqual([restore, ...later]);
+      });
+
+      it('leaves out a remote op of the entity whose conflict the local delete won', () => {
+        const lost = createConflict('task-1', [localDelete()], [delta('d0', 700, 500)]);
+        const won = createConflict('task-1', [localDelete()], [delta('d1', 2000, 2000)]);
+        const convertWinner = TestBed.inject(
+          ConflictEntityStateService,
+        )._remoteWinnerConverter([
+          { winner: 'local', conflict: lost },
+          { winner: 'remote', conflict: won },
+        ]);
+
+        const [result] = convertWinner(won);
+
+        expect(extractActionPayload(result.payload)).toEqual({
+          ...deletedTask,
+          timeSpent: 2500,
+          timeSpentOnDay: { [DAY]: 2500 },
+        });
+      });
     });
 
     it('should convert remote UPDATE to LWW Update with merged entity when local DELETE has flat payload', () => {
@@ -7871,7 +8292,9 @@ describe('ConflictResolutionService', () => {
         ],
       );
 
-      const result = (service as any)._convertToLWWUpdatesIfNeeded(conflict);
+      const result = (
+        TestBed.inject(ConflictEntityStateService) as any
+      )._convertToLWWUpdatesIfNeeded(conflict);
 
       expect(result.length).toBe(1);
       expect(result[0].actionType).toBe('[TASK] LWW Update');
@@ -7919,7 +8342,9 @@ describe('ConflictResolutionService', () => {
         ],
       );
 
-      const result = (service as any)._convertToLWWUpdatesIfNeeded(conflict);
+      const result = (
+        TestBed.inject(ConflictEntityStateService) as any
+      )._convertToLWWUpdatesIfNeeded(conflict);
 
       expect(result.length).toBe(1);
       expect(result[0].actionType).toBe('[TASK] LWW Update');
@@ -7961,7 +8386,9 @@ describe('ConflictResolutionService', () => {
         ],
       );
 
-      const result = (service as any)._convertToLWWUpdatesIfNeeded(conflict);
+      const result = (
+        TestBed.inject(ConflictEntityStateService) as any
+      )._convertToLWWUpdatesIfNeeded(conflict);
 
       const payload = extractActionPayload(result[0].payload);
       expect(payload['notes']).toBe('Some notes');
@@ -7991,7 +8418,9 @@ describe('ConflictResolutionService', () => {
         ],
       );
 
-      const result = (service as any)._convertToLWWUpdatesIfNeeded(conflict);
+      const result = (
+        TestBed.inject(ConflictEntityStateService) as any
+      )._convertToLWWUpdatesIfNeeded(conflict);
 
       expect(result.length).toBe(1);
       expect(result[0].opType).toBe(OpType.Create);
@@ -8024,7 +8453,9 @@ describe('ConflictResolutionService', () => {
         ],
       );
 
-      const result = (service as any)._convertToLWWUpdatesIfNeeded(conflict);
+      const result = (
+        TestBed.inject(ConflictEntityStateService) as any
+      )._convertToLWWUpdatesIfNeeded(conflict);
 
       expect(result[0].actionType).toBe(ActionType.TASK_SHARED_MOVE_TO_ARCHIVE);
       expect(result[0].payload).toBe(archivePayload);
@@ -8066,7 +8497,9 @@ describe('ConflictResolutionService', () => {
         [remoteRestore],
       );
 
-      const result = (service as any)._convertToLWWUpdatesIfNeeded(conflict);
+      const result = (
+        TestBed.inject(ConflictEntityStateService) as any
+      )._convertToLWWUpdatesIfNeeded(conflict);
 
       expect(result).toEqual([remoteRestore]);
     });
@@ -8094,7 +8527,9 @@ describe('ConflictResolutionService', () => {
         ],
       );
 
-      const result = (service as any)._convertToLWWUpdatesIfNeeded(conflict);
+      const result = (
+        TestBed.inject(ConflictEntityStateService) as any
+      )._convertToLWWUpdatesIfNeeded(conflict);
 
       expect(result[0].actionType).toBe('test');
       expect(result[0].payload).toEqual({
@@ -8127,7 +8562,9 @@ describe('ConflictResolutionService', () => {
         ],
       );
 
-      const result = (service as any)._convertToLWWUpdatesIfNeeded(conflict);
+      const result = (
+        TestBed.inject(ConflictEntityStateService) as any
+      )._convertToLWWUpdatesIfNeeded(conflict);
 
       expect(extractActionPayload(result[0].payload)).toEqual({
         id: 'task-1',
@@ -8156,7 +8593,9 @@ describe('ConflictResolutionService', () => {
         ],
       );
 
-      const result = (service as any)._convertToLWWUpdatesIfNeeded(conflict);
+      const result = (
+        TestBed.inject(ConflictEntityStateService) as any
+      )._convertToLWWUpdatesIfNeeded(conflict);
 
       expect(result.length).toBe(1);
       // Fallback returns the remote op unchanged — original actionType + payload preserved.
@@ -8185,7 +8624,9 @@ describe('ConflictResolutionService', () => {
         ],
       );
 
-      const result = (service as any)._convertToLWWUpdatesIfNeeded(conflict);
+      const result = (
+        TestBed.inject(ConflictEntityStateService) as any
+      )._convertToLWWUpdatesIfNeeded(conflict);
 
       // Fallback returns the remote op unchanged — original actionType + payload preserved.
       expect(result[0].actionType).toBe('test');
@@ -8221,103 +8662,14 @@ describe('ConflictResolutionService', () => {
         ],
       );
 
-      const result = (service as any)._convertToLWWUpdatesIfNeeded(conflict);
+      const result = (
+        TestBed.inject(ConflictEntityStateService) as any
+      )._convertToLWWUpdatesIfNeeded(conflict);
 
       // Merged payload has top-level `id` — required by lwwUpdateMetaReducer
       const payload = extractActionPayload(result[0].payload);
       expect(payload['id']).toBe('task-1');
       expect(typeof payload['id']).toBe('string');
-    });
-  });
-
-  describe('_extractEntityFromPayload', () => {
-    it('should extract entity from flat payload using entity key', () => {
-      const entity = { id: 'task-1', title: 'Test' };
-      const payload = { task: entity };
-
-      const result = (service as any)._extractEntityFromPayload(payload, 'TASK');
-      expect(result).toEqual(entity);
-    });
-
-    it('should extract entity from MultiEntityPayload format', () => {
-      const entity = { id: 'task-1', title: 'Test' };
-      const payload = {
-        actionPayload: { task: entity },
-        entityChanges: [],
-      };
-
-      const result = (service as any)._extractEntityFromPayload(payload, 'TASK');
-      expect(result).toEqual(entity);
-    });
-
-    it('should fall back to payload itself when it has an id property', () => {
-      const payload = { id: 'task-1', title: 'Direct Entity' };
-
-      const result = (service as any)._extractEntityFromPayload(payload, 'TASK');
-      expect(result).toEqual(payload);
-    });
-
-    it('should return undefined when entity key is not found and payload has no id', () => {
-      const payload = { unrelatedKey: 'value' };
-
-      const result = (service as any)._extractEntityFromPayload(payload, 'TASK');
-      expect(result).toBeUndefined();
-    });
-
-    it('should return undefined for null payload values under entity key', () => {
-      const payload = { task: null };
-
-      const result = (service as any)._extractEntityFromPayload(payload, 'TASK');
-      expect(result).toBeUndefined();
-    });
-  });
-
-  describe('_extractUpdateChanges', () => {
-    it('should extract changes from NgRx adapter format (id + changes)', () => {
-      const payload = {
-        task: { id: 'task-1', changes: { title: 'New', notes: 'Updated' } },
-      };
-
-      const result = (service as any)._extractUpdateChanges(payload, 'TASK');
-      expect(result).toEqual({ title: 'New', notes: 'Updated' });
-    });
-
-    it('should extract changes from flat format (exclude id)', () => {
-      const payload = { task: { id: 'task-1', title: 'New', notes: 'Updated' } };
-
-      const result = (service as any)._extractUpdateChanges(payload, 'TASK');
-      expect(result).toEqual({ title: 'New', notes: 'Updated' });
-    });
-
-    it('should handle MultiEntityPayload wrapping NgRx adapter format', () => {
-      const payload = {
-        actionPayload: {
-          task: { id: 'task-1', changes: { title: 'New' } },
-        },
-        entityChanges: [],
-      };
-
-      const result = (service as any)._extractUpdateChanges(payload, 'TASK');
-      expect(result).toEqual({ title: 'New' });
-    });
-
-    it('should handle MultiEntityPayload wrapping flat format', () => {
-      const payload = {
-        actionPayload: {
-          task: { id: 'task-1', title: 'New' },
-        },
-        entityChanges: [],
-      };
-
-      const result = (service as any)._extractUpdateChanges(payload, 'TASK');
-      expect(result).toEqual({ title: 'New' });
-    });
-
-    it('should return empty object when entity key is not in payload', () => {
-      const payload = { wrongKey: { id: 'task-1', title: 'New' } };
-
-      const result = (service as any)._extractUpdateChanges(payload, 'TASK');
-      expect(result).toEqual({});
     });
   });
 
@@ -8362,7 +8714,9 @@ describe('ConflictResolutionService', () => {
         suggestedResolution: 'manual',
       };
 
-      const result = (service as any)._extractEntityFromDeleteOperation(conflict);
+      const result = (
+        TestBed.inject(ConflictEntityStateService) as any
+      )._extractEntityFromDeleteOperation(conflict);
       expect(result).toEqual(taskEntity);
     });
 
@@ -8386,7 +8740,9 @@ describe('ConflictResolutionService', () => {
         suggestedResolution: 'manual',
       };
 
-      const result = (service as any)._extractEntityFromDeleteOperation(conflict);
+      const result = (
+        TestBed.inject(ConflictEntityStateService) as any
+      )._extractEntityFromDeleteOperation(conflict);
       expect(result).toEqual(taskEntity);
     });
   });
@@ -8413,7 +8769,11 @@ describe('ConflictResolutionService', () => {
         localFrontierIsEmpty: boolean;
       },
     ): VectorClockComparison => {
-      return (service as any)._adjustForClockCorruption(comparison, entityKey, ctx);
+      return (TestBed.inject(ConflictDetectionService) as any)._adjustForClockCorruption(
+        comparison,
+        entityKey,
+        ctx,
+      );
     };
 
     describe('when NO corruption suspected (normal case)', () => {
@@ -9100,7 +9460,9 @@ describe('ConflictResolutionService', () => {
         ],
       };
 
-      const result = (service as any)._convertToLWWUpdatesIfNeeded(conflict);
+      const result = (
+        TestBed.inject(ConflictEntityStateService) as any
+      )._convertToLWWUpdatesIfNeeded(conflict);
 
       expect(result.length).toBe(1);
       expect(result[0].actionType).toBe('[TASK] LWW Update');

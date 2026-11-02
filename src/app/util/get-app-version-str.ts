@@ -1,6 +1,7 @@
 import { IS_ANDROID_WEB_VIEW, IS_F_DROID_APP } from './is-android-web-view';
 import { IS_IOS } from './is-ios';
 import { IS_ELECTRON } from '../app.constants';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import { androidInterface } from '../features/android/android-interface';
 import { environment } from '../../environments/environment';
 

@@ -6,7 +6,10 @@
  */
 import { FastifyInstance } from 'fastify';
 import { Prisma } from '@prisma/client';
-import { SuperSyncOperationSchema, type SuperSyncOperation } from '@sp/shared-schema';
+import {
+  SuperSyncOperationSchema,
+  type SuperSyncOperation,
+} from '@sp/shared-schema/supersync-http-contract';
 import * as bcrypt from 'bcryptjs';
 import * as jwt from 'jsonwebtoken';
 import { prisma } from './db';
@@ -438,6 +441,27 @@ export const testRoutes = async (fastify: FastifyInstance): Promise<void> => {
           message: (err as Error).message,
         });
       }
+    },
+  );
+
+  /**
+   * Expires every capture lease of a user, so another device can take the
+   * items over without waiting a day (CAPTURE_LEASE_MS).
+   */
+  fastify.post<{ Params: { userId: string } }>(
+    '/user/:userId/expire-capture-leases',
+    { config: { rateLimit: false } },
+    async (request, reply) => {
+      const userId = parseInt(request.params.userId, 10);
+      if (isNaN(userId)) {
+        return reply.status(400).send({ error: 'Invalid userId' });
+      }
+      const { count } = await prisma.captureItem.updateMany({
+        where: { userId, leaseDeviceId: { not: null } },
+        data: { leaseUntil: BigInt(0) },
+      });
+      Logger.info(`[TEST] Expired ${count} capture leases for user ${userId}`);
+      return reply.send({ expired: count });
     },
   );
 

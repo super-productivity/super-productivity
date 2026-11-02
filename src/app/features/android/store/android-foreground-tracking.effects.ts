@@ -6,11 +6,10 @@ import {
   distinctUntilChanged,
   exhaustMap,
   filter,
-  first,
   map,
   pairwise,
   startWith,
-  switchMap,
+  take,
   tap,
   withLatestFrom,
 } from 'rxjs/operators';
@@ -23,22 +22,35 @@ import {
 } from '../../tasks/store/task.selectors';
 import { DroidLog } from '../../../core/log';
 import { Task } from '../../tasks/task.model';
-import { selectTimer } from '../../focus-mode/store/focus-mode.selectors';
-import { combineLatest, firstValueFrom, merge, of, Subject } from 'rxjs';
+import * as focusModeActions from '../../focus-mode/store/focus-mode.actions';
+import {
+  selectIsOvertimeEnabled,
+  selectTimer,
+} from '../../focus-mode/store/focus-mode.selectors';
+import {
+  creditResumeGap,
+  getFocusAutoCompleteCapMs,
+} from '../../focus-mode/resume-gap-credit';
+import { combineLatest, firstValueFrom, merge, Subject } from 'rxjs';
 import { ANDROID_BACKGROUND_TICK_CAP_MS } from '../../../app.constants';
 import { HydrationStateService } from '../../../op-log/apply/hydration-state.service';
 import { SnackService } from '../../../core/snack/snack.service';
 import { GlobalTrackingIntervalService } from '../../../core/global-tracking-interval/global-tracking-interval.service';
 import { OperationWriteFlushService } from '../../../op-log/sync/operation-write-flush.service';
+import { BackgroundExitSyncService } from '../../../imex/sync/background-exit-sync.service';
 import { CapacitorReminderService } from '../../../core/platform/capacitor-reminder.service';
+import { AndroidNotificationActionService } from '../android-notification-action.service';
+import { DataInitStateService } from '../../../core/data-init/data-init-state.service';
 
 export type NativeTrackingData = {
   taskId: string;
   elapsedMs: number;
+  // false after a deliberate force-stop (Android 14+): credit the time but
+  // don't resume. Older native builds omit it and always resume (#7390).
+  resume?: false;
 };
 
 type RecoveryRequest = {
-  data: NativeTrackingData;
   // Diagnostic label for issue #7390 field triage; kept narrow so callers
   // can't accidentally pass user-derived data into the log.
   source: 'cold-start' | 'resume';
@@ -77,7 +89,7 @@ export const parseNativeTrackingData = (
     return null;
   }
 
-  const { taskId, elapsedMs } = parsed as Partial<NativeTrackingData>;
+  const { taskId, elapsedMs, resume } = parsed as Partial<NativeTrackingData>;
   if (
     typeof taskId !== 'string' ||
     typeof elapsedMs !== 'number' ||
@@ -89,47 +101,52 @@ export const parseNativeTrackingData = (
     return null;
   }
 
-  return { taskId, elapsedMs };
+  return resume === false ? { taskId, elapsedMs, resume } : { taskId, elapsedMs };
 };
 
-export type WidgetTrackingStop = {
-  taskId: string;
-  /** Native counter frozen at the tap; null if native wasn't tracking the task. */
-  elapsedMs: number | null;
+export type NativeRecoveryDeps = {
+  syncElapsedTime: (taskId: string, nativeData: NativeTrackingData) => Promise<boolean>;
+  setCurrentId: (taskId: string) => void;
+  flushPendingOps: () => Promise<void>;
+  stopTrackingService: () => void;
 };
 
 /**
- * Parse the JSON string returned by `androidInterface.getWidgetTrackingStopQueue()`.
- * Returns null for an empty queue or any shape mismatch.
- *
- * Exported so unit tests can exercise it without instantiating the effect
- * (which is gated behind IS_ANDROID_WEB_VIEW).
+ * Credits the native session to its task, then resumes it — or stops the
+ * native service when the credit failed or native says not to resume.
+ * Exported so unit tests can exercise it without instantiating the effect.
  */
-export const parseWidgetTrackingStop = (
-  json: string | null | undefined,
-): WidgetTrackingStop | null => {
-  if (!json) {
-    return null;
+export const recoverNativeTracking = async (
+  nativeData: NativeTrackingData,
+  deps: NativeRecoveryDeps,
+): Promise<void> => {
+  const didSync = await deps.syncElapsedTime(nativeData.taskId, nativeData);
+  if (!didSync) {
+    DroidLog.warn('Stopping stale native tracking service after failed recovery', {
+      taskId: nativeData.taskId,
+    });
+    deps.stopTrackingService();
+    return;
   }
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(json);
-  } catch (e) {
-    DroidLog.err('Failed to parse widget tracking stop', e);
-    return null;
+
+  if (nativeData.resume === false) {
+    // The user force-stopped the app: keep the credited time, leave tracking
+    // stopped. Flush first: stopping clears the persisted native session, so
+    // if the flush fails the session must still be there for the next recovery.
+    DroidLog.log('Not resuming tracking after a user-requested stop', {
+      taskId: nativeData.taskId,
+    });
+    await deps.flushPendingOps();
+    deps.stopTrackingService();
+    return;
   }
-  if (!parsed || typeof parsed !== 'object') {
-    return null;
-  }
-  const { taskId, elapsedMs } = parsed as Partial<WidgetTrackingStop>;
-  if (typeof taskId !== 'string' || !taskId) {
-    return null;
-  }
-  return {
-    taskId,
-    elapsedMs:
-      typeof elapsedMs === 'number' && Number.isFinite(elapsedMs) ? elapsedMs : null,
-  };
+
+  // setCurrentId synchronously re-runs the syncTrackingToService$ tap.
+  // The null → task transition there checks native data and calls
+  // updateTrackingService instead of startTrackingService when native is
+  // already tracking this task — so the native counter is preserved.
+  deps.setCurrentId(nativeData.taskId);
+  await deps.flushPendingOps();
 };
 
 /**
@@ -156,40 +173,13 @@ export const isTimeSpentJumpForNotification = (
   currTimeSpent < prevTimeSpent ||
   currTimeSpent - prevTimeSpent > TIME_SPENT_JUMP_THRESHOLD_MS;
 
-/**
- * Credit the backgrounded wall-clock gap (capped at 8h) to tick$ consumers
- * (running stopwatch counters, break tracking) with one wake-up tick, and
- * flush it into a syncTimeSpent op. The 1s interval is paused while the app
- * is backgrounded (see createGlobalInterval$ — the web-layer half of the
- * #8243 battery drain), so without this the gap would never reach them.
- * resetTrackingStart() drops any over-cap remainder from the tick anchor so
- * the restarted interval can't deliver it again; for the current task the
- * native reconcile adds that remainder from the authoritative counter.
- *
- * MUST be called from syncOnResume$ BEFORE _syncElapsedTimeForTask (see the
- * effect comment) — as a separate onResume$ effect it would race the native
- * reconcile and double-count the gap in the op-log.
- *
- * Exported so the spec can exercise it without tripping the
- * IS_ANDROID_WEB_VIEW gate on createEffect.
- */
-export const creditBackgroundTickGap = (
-  globalTracking: GlobalTrackingIntervalService,
-  taskService: TaskService,
-): void => {
-  globalTracking.triggerWakeUpTick(ANDROID_BACKGROUND_TICK_CAP_MS);
-  globalTracking.resetTrackingStart();
-  taskService.flushAccumulatedTimeSpent();
-};
-
 export type AndroidResumeDeps = {
+  store: Store;
   globalTracking: GlobalTrackingIntervalService;
   taskService: TaskService;
-  /** Returns true if it paused `currentTask` (see _applyWidgetTrackingStop). */
-  applyWidgetTrackingStop: (currentTask: Task | null) => boolean;
   syncElapsedTimeForTask: (taskId: string) => Promise<boolean>;
   getNativeTrackingData: () => NativeTrackingData | null;
-  requestRecovery: (data: NativeTrackingData) => void;
+  requestRecovery: () => void;
 };
 
 /**
@@ -197,28 +187,160 @@ export type AndroidResumeDeps = {
  * load-bearing ordering (see the effect comment): the gap credit must run
  * synchronously BEFORE syncElapsedTimeForTask samples the task, else the
  * native reconcile re-emits the same gap as a second syncTimeSpent op and
- * remote devices double-count it on op-log replay.
- *
- * A widget stop tapped while backgrounded is applied FIRST: it pauses the task
- * synchronously, so the gap credit can't book the time after the tap to it.
- * Nothing to reconcile or recover afterwards — native was stopped by the tap.
+ * remote devices double-count it on op-log replay. For the current task the
+ * native reconcile adds any over-cap remainder from the authoritative counter.
  */
 export const handleAndroidResume = async (
   deps: AndroidResumeDeps,
   currentTask: Task | null,
+  focusAutoCompleteCapMs: number | null = null,
 ): Promise<void> => {
-  const isStoppedFromWidget = deps.applyWidgetTrackingStop(currentTask);
-  creditBackgroundTickGap(deps.globalTracking, deps.taskService);
-  if (isStoppedFromWidget) {
-    return;
-  }
+  creditResumeGap(
+    {
+      globalTracking: deps.globalTracking,
+      taskService: deps.taskService,
+      tickFocus: () => deps.store.dispatch(focusModeActions.tick()),
+    },
+    ANDROID_BACKGROUND_TICK_CAP_MS,
+    focusAutoCompleteCapMs,
+  );
   if (currentTask) {
     await deps.syncElapsedTimeForTask(currentTask.id);
   } else {
-    const nativeData = deps.getNativeTrackingData();
-    if (nativeData) {
-      deps.requestRecovery(nativeData);
+    if (deps.getNativeTrackingData()) {
+      deps.requestRecovery();
     }
+  }
+};
+
+export type AndroidPauseDeps = {
+  syncElapsedTimeForTask: (taskId: string) => Promise<boolean>;
+  flushAccumulatedTimeSpent: () => void;
+  flushPendingOperations: () => Promise<void>;
+  pushPendingOps: () => Promise<void>;
+};
+
+/**
+ * Persists tracked time, then pushes pending ops before the WebView freezes.
+ * The push runs last so it includes the time-spent op, and runs even when a
+ * flush step fails: ops persisted earlier are still worth sending.
+ */
+export const handleAndroidPause = async (
+  deps: AndroidPauseDeps,
+  currentTask: Task | null,
+): Promise<void> => {
+  try {
+    if (currentTask) {
+      await deps.syncElapsedTimeForTask(currentTask.id);
+    }
+    // dispatches syncTimeSpent
+    deps.flushAccumulatedTimeSpent();
+    await deps.flushPendingOperations();
+  } finally {
+    await deps.pushPendingOps();
+  }
+};
+
+export type NativeElapsedSyncDeps = {
+  getNativeTrackingData: () => NativeTrackingData | null;
+  getTaskOnce: (taskId: string) => Promise<Task | undefined>;
+  addTimeSpentAndSync: (task: Task, duration: number) => void;
+  resetTrackingStart: () => void;
+  updateTrackingService: (timeSpentMs: number) => void;
+  showWarning: (msg: string) => void;
+};
+
+/**
+ * Reconcile the native foreground-service counter into the task. Native
+ * reports the task's absolute total, so only the difference to the task's
+ * current timeSpent is credited: whether that total comes from the live
+ * service or from the session it persisted across a process kill (#7390), and
+ * however often this runs, the same time is credited exactly once.
+ *
+ * The difference is booked on the logical day of the reconcile
+ * (`addTimeSpentAndSync` → `DateService.todayStr()`), not the day it was
+ * tracked: a session recovered after midnight lands on the new day.
+ *
+ * Effect-independent so the spec exercises the production code.
+ */
+export const syncNativeElapsedTimeForTask = async (
+  deps: NativeElapsedSyncDeps,
+  taskId: string,
+  nativeTrackingData?: NativeTrackingData,
+): Promise<boolean> => {
+  const nativeData = nativeTrackingData ?? deps.getNativeTrackingData();
+  // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
+  DroidLog.log('Syncing elapsed time for task', { taskId, nativeData });
+
+  if (!nativeData) {
+    DroidLog.warn('Native service has no tracking data', { taskId });
+    return false;
+  }
+
+  try {
+    // Only sync if native is tracking the same task
+    if (nativeData.taskId !== taskId) {
+      DroidLog.warn('Native tracking different task, skipping sync', {
+        nativeTaskId: nativeData.taskId,
+        expectedTaskId: taskId,
+      });
+      return false;
+    }
+
+    // Get the task to find its current timeSpent
+    const task = await deps.getTaskOnce(taskId);
+    if (!task) {
+      DroidLog.err('Task not found for sync - data may be corrupted', { taskId });
+      deps.showWarning('Time tracking sync failed - task not found');
+      return false;
+    }
+
+    const currentTimeSpent = task.timeSpent || 0;
+    const duration = nativeData.elapsedMs - currentTimeSpent;
+
+    DroidLog.log('Calculated sync duration', {
+      taskId,
+      nativeElapsed: nativeData.elapsedMs,
+      // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
+      currentTimeSpent,
+      duration,
+    });
+
+    // Handle negative duration (clock skew or service crash)
+    // When native has less time than app, keep the app's value to prevent data loss.
+    // This can happen if the native service crashed and restarted.
+    if (duration < 0) {
+      DroidLog.warn(
+        'Native time less than app time - keeping app value to prevent data loss',
+        {
+          taskId,
+          nativeElapsed: nativeData.elapsedMs,
+          // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
+          currentTimeSpent,
+          duration,
+        },
+      );
+      // Don't update time - app has more accurate/higher value
+      // Update native service to show correct time in notification
+      deps.updateTrackingService(currentTimeSpent);
+      // Reset tracking interval to prevent double-counting
+      deps.resetTrackingStart();
+      return true;
+    }
+
+    if (duration > 0) {
+      deps.addTimeSpentAndSync(task, duration);
+      // Reset the tracking interval to prevent double-counting
+      // The native service has the authoritative time, so we reset the app's
+      // interval timer to avoid adding the same time again from tick$
+      deps.resetTrackingStart();
+    }
+
+    return true;
+  } catch (e) {
+    DroidLog.err('Failed to sync elapsed time', e);
+    deps.showWarning('Time tracking sync failed - please check your tracked time');
+    return false;
   }
 };
 
@@ -231,6 +353,9 @@ export class AndroidForegroundTrackingEffects {
   private _reminderService = inject(CapacitorReminderService);
   private _globalTrackingIntervalService = inject(GlobalTrackingIntervalService);
   private _operationWriteFlush = inject(OperationWriteFlushService);
+  private _backgroundExitSync = inject(BackgroundExitSyncService);
+  private _notificationActions = inject(AndroidNotificationActionService);
+  private _dataInitState = inject(DataInitStateService);
 
   // Recovery requests funnel through this Subject for the cold-start path.
   //   Producers: syncTrackingToService$ tap (cold-start), syncOnResume$ tap.
@@ -354,7 +479,7 @@ export class AndroidForegroundTrackingEffects {
               if (!prevTask) {
                 const nativeData = this._getNativeTrackingData();
                 if (nativeData) {
-                  this._recoveryRequest$.next({ data: nativeData, source: 'cold-start' });
+                  this._recoveryRequest$.next({ source: 'cold-start' });
                   return;
                 }
               }
@@ -375,16 +500,40 @@ export class AndroidForegroundTrackingEffects {
    * onto a single in-flight recovery. The inner promise has its own catch so
    * a rejected recovery resolves the inner observable cleanly — exhaustMap
    * stays subscribed and ready for the next request.
+   *
+   * Startup marks tasks loaded as soon as the snapshot is in the store, before
+   * the op-log tail after it replays. Recovery credits "native total minus task
+   * time", so crediting against the snapshot would count the tail's tracked
+   * time again once it replays. Requests therefore wait for the full hydration
+   * (immediate after startup), then re-read the native counter so the wait
+   * itself is credited too.
+   *
+   * A session that ended natively during the wait is not recovered: a
+   * notification Pause/Done tap ends it and queues its own credit (#10683), so
+   * recovering the stale request would credit that time twice and resume the
+   * task the user paused.
    */
   processRecovery$ =
     IS_ANDROID_WEB_VIEW &&
     createEffect(
       () =>
         this._recoveryRequest$.pipe(
-          exhaustMap(({ data, source }) =>
-            this._doRecover(data, source).catch((e) => {
-              DroidLog.err('Recovery failed', e);
-            }),
+          exhaustMap(({ source }) =>
+            this._dataInitState.isAllDataLoadedInitially$.pipe(
+              take(1),
+              concatMap(async () => {
+                const nativeData = this._getNativeTrackingData();
+                if (!nativeData) {
+                  DroidLog.log('Native session ended before recovery', {
+                    isColdStart: source === 'cold-start',
+                  });
+                  return;
+                }
+                await this._doRecover(nativeData, source).catch((e) => {
+                  DroidLog.err('Recovery failed', e);
+                });
+              }),
+            ),
           ),
         ),
       { dispatch: false },
@@ -395,7 +544,7 @@ export class AndroidForegroundTrackingEffects {
    * to generic tick$ consumers (the 1s interval was paused, #8243), then sync
    * the current task's elapsed time from the native service.
    *
-   * ORDER IS LOAD-BEARING: creditBackgroundTickGap must run synchronously
+   * ORDER IS LOAD-BEARING: creditResumeGap must run synchronously
    * BEFORE _syncElapsedTimeForTask subscribes its task snapshot. That way the
    * native reconcile sees the already-credited timeSpent and computes only
    * the uncredited remainder (cap overflow / sub-second jitter). If the
@@ -403,29 +552,40 @@ export class AndroidForegroundTrackingEffects {
    * effect — both paths would emit a syncTimeSpent op for the SAME gap, and
    * remote devices would double-count it on op-log replay (ops apply
    * state-relative there, unlike the snapshot-based local reducer).
+   * The focus-mode resume tick may complete a Pomodoro and unset the task, so
+   * the task is credited only up to the session end before it (see
+   * handleAndroidResume).
+   * Notification actions tapped while backgrounded are applied FIRST, for the
+   * same reason: a task paused from the notification must be credited only up
+   * to the tap, not the whole gap (#10683). The samples below see the result.
    */
   syncOnResume$ =
     IS_ANDROID_WEB_VIEW &&
     createEffect(
       () =>
         androidInterface.onResume$.pipe(
+          tap(() => void this._notificationActions.drain()),
           withLatestFrom(
             this._store.select(selectCurrentTask),
             this._store.select(selectIsTaskDataLoaded),
+            this._store.select(selectTimer),
+            this._store.select(selectIsOvertimeEnabled),
           ),
+          // Also gates the focus tick: before data load the focus timer is still
+          // idle (tick is a no-op) and the 1s interval catches up afterwards.
           filter(([, , isTaskDataLoaded]) => isTaskDataLoaded),
-          tap(([, currentTask]) =>
+          tap(([, currentTask, , timer, isOvertimeEnabled]) =>
             handleAndroidResume(
               {
+                store: this._store,
                 globalTracking: this._globalTrackingIntervalService,
                 taskService: this._taskService,
-                applyWidgetTrackingStop: (task) => this._applyWidgetTrackingStop(task),
                 syncElapsedTimeForTask: (taskId) => this._syncElapsedTimeForTask(taskId),
                 getNativeTrackingData: () => this._getNativeTrackingData(),
-                requestRecovery: (data) =>
-                  this._recoveryRequest$.next({ data, source: 'resume' }),
+                requestRecovery: () => this._recoveryRequest$.next({ source: 'resume' }),
               },
               currentTask,
+              getFocusAutoCompleteCapMs(timer, isOvertimeEnabled),
             ),
           ),
         ),
@@ -433,33 +593,25 @@ export class AndroidForegroundTrackingEffects {
     );
 
   /**
-   * Widget stop taps outside a resume: while the app is alive (native drain
-   * broadcast) and on cold start, where the replayed onResume$ fires before
-   * task data loads and is filtered out of syncOnResume$. Resume itself goes
-   * through handleAndroidResume, ordered before the background gap credit.
-   * The queue read is get-and-clear, so overlapping triggers apply it once.
+   * Apply tracking/focus notification actions (#10683) queued while the app
+   * was not running (startup) or tapped while it is alive (drain signal).
+   * Resume drains inside syncOnResume$, where the ordering matters.
    */
-  drainWidgetTrackingStop$ =
+  drainNotificationActions$ =
     IS_ANDROID_WEB_VIEW &&
     createEffect(
       () =>
-        merge(of(undefined), androidInterface.onWidgetDoneDrainRequest$).pipe(
-          concatMap(() =>
-            this._store.select(selectIsTaskDataLoaded).pipe(
-              filter(Boolean),
-              first(),
-              switchMap(() => this._store.select(selectCurrentTask).pipe(first())),
-            ),
-          ),
-          tap((currentTask) => this._applyWidgetTrackingStop(currentTask)),
-        ),
+        merge(
+          this._dataInitState.isAllDataLoadedInitially$.pipe(filter(Boolean)),
+          androidInterface.onNotificationActionDrainRequest$,
+        ).pipe(tap(() => void this._notificationActions.drain())),
       { dispatch: false },
     );
 
   /**
-   * When the app goes to background, flush accumulated time to prevent data loss.
-   * This ensures all tracked time is persisted to IndexedDB before the app
-   * potentially gets terminated by the OS.
+   * When the app goes to background, flush accumulated time to prevent data loss,
+   * then push pending ops. This ensures all tracked time is persisted to IndexedDB
+   * and reaches other devices before the OS freezes or terminates the app.
    */
   flushOnPause$ =
     IS_ANDROID_WEB_VIEW &&
@@ -469,19 +621,23 @@ export class AndroidForegroundTrackingEffects {
           withLatestFrom(this._store.select(selectCurrentTask)),
           tap(async ([, currentTask]) => {
             DroidLog.log('App going to background, flushing time tracking data');
-
-            // If there's a current task, sync elapsed time from native service first
-            if (currentTask) {
-              await this._syncElapsedTimeForTask(currentTask.id);
-            }
-
-            // Flush accumulated time from TaskService (dispatches syncTimeSpent)
-            this._taskService.flushAccumulatedTimeSpent();
-
-            // Flush pending operations to IndexedDB to prevent data loss
-            await this._flushPendingOperations();
-
-            DroidLog.log('Time tracking data flushed successfully');
+            // Pushes here, not on a separate onPause$ subscriber, so the push
+            // follows the time flush. Android's beforeExit grants no extra time.
+            // Caught here: a rejection from an async tap is unhandled. The
+            // push already ran (handleAndroidPause's finally).
+            await handleAndroidPause(
+              {
+                syncElapsedTimeForTask: (taskId) => this._syncElapsedTimeForTask(taskId),
+                flushAccumulatedTimeSpent: () =>
+                  this._taskService.flushAccumulatedTimeSpent(),
+                flushPendingOperations: () => this._flushPendingOperations(),
+                pushPendingOps: () => this._backgroundExitSync.flushAndPush(),
+              },
+              currentTask,
+            ).then(
+              () => DroidLog.log('Time tracking data flushed successfully'),
+              (e) => DroidLog.err('Pause flush failed', e),
+            );
           }),
         ),
       { dispatch: false },
@@ -630,45 +786,6 @@ export class AndroidForegroundTrackingEffects {
     }
   }
 
-  /**
-   * Applies a stop tapped on the live-tracking widget. The widget already froze
-   * and stopped the native counter at the tap (TrackingWidgetProvider), so its
-   * `elapsedMs` is the session total up to the tap — booked like recovery
-   * books native time, which also works on cold start with no current task.
-   * A stale stop (another task tracked since the tap) is dropped — same
-   * reasoning as TrackingPresenceCmd's sessionId guard for a remote stop.
-   *
-   * Pauses synchronously, before any await. Returns whether it paused.
-   */
-  private _applyWidgetTrackingStop(currentTask: Task | null): boolean {
-    const stop = parseWidgetTrackingStop(androidInterface.getWidgetTrackingStopQueue?.());
-    if (!stop) {
-      return false;
-    }
-    if (currentTask && currentTask.id !== stop.taskId) {
-      DroidLog.log('Dropping stale widget tracking stop', { taskId: stop.taskId });
-      return false;
-    }
-    DroidLog.log('Stopping tracking from widget', { ...stop });
-    // Without a frozen total (native wasn't tracking this task, e.g. during
-    // focus mode) the pause alone settles time via syncTrackingToService$.
-    if (currentTask) {
-      this._taskService.pauseCurrent();
-    }
-    const frozen = stop.elapsedMs;
-    const synced =
-      frozen === null
-        ? Promise.resolve(false)
-        : this._syncElapsedTimeForTask(stop.taskId, {
-            taskId: stop.taskId,
-            elapsedMs: frozen,
-          });
-    synced
-      .then(() => this._flushPendingOperations())
-      .catch((e) => DroidLog.err('Failed to apply widget tracking stop', e));
-    return !!currentTask;
-  }
-
   private _getNativeTrackingData(): NativeTrackingData | null {
     return parseNativeTrackingData(androidInterface.getTrackingElapsed?.());
   }
@@ -686,28 +803,22 @@ export class AndroidForegroundTrackingEffects {
     // (combineLatest fires before onResume) from the resume path. Used to
     // triage future re-reports — keep this log.
     DroidLog.log('Recovering active tracking from native service', {
+      // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
       source,
+      // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
       ...nativeData,
     });
 
-    const didSync = await this._syncElapsedTimeForTask(nativeData.taskId, nativeData);
-    if (!didSync) {
-      DroidLog.warn('Stopping stale native tracking service after failed recovery', {
-        taskId: nativeData.taskId,
-      });
-      this._safeNativeCall(
-        () => androidInterface.stopTrackingService?.(),
-        'Failed to stop stale tracking service',
-      );
-      return;
-    }
-
-    // setCurrentId synchronously re-runs the syncTrackingToService$ tap.
-    // The null → task transition there checks native data and calls
-    // updateTrackingService instead of startTrackingService when native is
-    // already tracking this task — so the native counter is preserved.
-    this._taskService.setCurrentId(nativeData.taskId);
-    await this._flushPendingOperations();
+    await recoverNativeTracking(nativeData, {
+      syncElapsedTime: (taskId, data) => this._syncElapsedTimeForTask(taskId, data),
+      setCurrentId: (taskId) => this._taskService.setCurrentId(taskId),
+      flushPendingOps: () => this._flushPendingOperations(),
+      stopTrackingService: () =>
+        this._safeNativeCall(
+          () => androidInterface.stopTrackingService?.(),
+          'Failed to stop native tracking service',
+        ),
+    });
   }
 
   /**
@@ -734,96 +845,28 @@ export class AndroidForegroundTrackingEffects {
   /**
    * Sync elapsed time from native service to the task.
    * Only syncs if the native service is tracking the specified task.
-   * Uses async/await with firstValueFrom for reliable observable handling.
    */
-  private async _syncElapsedTimeForTask(
+  private _syncElapsedTimeForTask(
     taskId: string,
     nativeTrackingData?: NativeTrackingData,
   ): Promise<boolean> {
-    const nativeData = nativeTrackingData ?? this._getNativeTrackingData();
-    DroidLog.log('Syncing elapsed time for task', { taskId, nativeData });
-
-    if (!nativeData) {
-      DroidLog.warn('Native service has no tracking data', { taskId });
-      return false;
-    }
-
-    try {
-      // Only sync if native is tracking the same task
-      if (nativeData.taskId !== taskId) {
-        DroidLog.warn('Native tracking different task, skipping sync', {
-          nativeTaskId: nativeData.taskId,
-          expectedTaskId: taskId,
-        });
-        return false;
-      }
-
-      // Get the task to find its current timeSpent
-      const task = await firstValueFrom(this._taskService.getByIdOnce$(taskId));
-      if (!task) {
-        DroidLog.err('Task not found for sync - data may be corrupted', { taskId });
-        this._snackService.open({
-          msg: 'Time tracking sync failed - task not found',
-          type: 'WARNING',
-        });
-        return false;
-      }
-
-      const currentTimeSpent = task.timeSpent || 0;
-      const duration = nativeData.elapsedMs - currentTimeSpent;
-
-      DroidLog.log('Calculated sync duration', {
-        taskId,
-        nativeElapsed: nativeData.elapsedMs,
-        currentTimeSpent,
-        duration,
-      });
-
-      // Handle negative duration (clock skew or service crash)
-      // When native has less time than app, keep the app's value to prevent data loss.
-      // This can happen if the native service crashed and restarted.
-      if (duration < 0) {
-        DroidLog.warn(
-          'Native time less than app time - keeping app value to prevent data loss',
-          {
-            taskId,
-            nativeElapsed: nativeData.elapsedMs,
-            currentTimeSpent,
-            duration,
-          },
-        );
-        // Don't update time - app has more accurate/higher value
-        // Update native service to show correct time in notification — only
-        // while it still tracks this task: after a widget stop it is already
-        // stopped, and an update would restart it just to post and drop a
-        // placeholder notification.
-        if (this._getNativeTrackingData()?.taskId === taskId) {
+    return syncNativeElapsedTimeForTask(
+      {
+        getNativeTrackingData: () => this._getNativeTrackingData(),
+        getTaskOnce: (id) => firstValueFrom(this._taskService.getByIdOnce$(id)),
+        addTimeSpentAndSync: (task, duration) =>
+          this._taskService.addTimeSpentAndSync(task, duration),
+        resetTrackingStart: () =>
+          this._globalTrackingIntervalService.resetTrackingStart(),
+        updateTrackingService: (timeSpentMs) =>
           this._safeNativeCall(
-            () => androidInterface.updateTrackingService?.(currentTimeSpent),
+            () => androidInterface.updateTrackingService?.(timeSpentMs),
             'Failed to update tracking service after negative duration',
-          );
-        }
-        // Reset tracking interval to prevent double-counting
-        this._globalTrackingIntervalService.resetTrackingStart();
-        return true;
-      }
-
-      if (duration > 0) {
-        this._taskService.addTimeSpentAndSync(task, duration);
-        // Reset the tracking interval to prevent double-counting
-        // The native service has the authoritative time, so we reset the app's
-        // interval timer to avoid adding the same time again from tick$
-        this._globalTrackingIntervalService.resetTrackingStart();
-      }
-
-      return true;
-    } catch (e) {
-      DroidLog.err('Failed to sync elapsed time', e);
-      this._snackService.open({
-        msg: 'Time tracking sync failed - please check your tracked time',
-        type: 'WARNING',
-      });
-      return false;
-    }
+          ),
+        showWarning: (msg) => this._snackService.open({ msg, type: 'WARNING' }),
+      },
+      taskId,
+      nativeTrackingData,
+    );
   }
 }

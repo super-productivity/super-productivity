@@ -4,11 +4,11 @@ import { firstValueFrom } from 'rxjs';
 import { androidInterface } from './android-interface';
 import { ANDROID_WIDGET_DATA_KEY, AndroidWidgetData } from './android-widget.model';
 import {
-  buildLocalCurrentTask,
   resolveRemoteCurrentTask,
   selectAndroidWidgetData,
+  withLocalTrackingInfo,
 } from './store/android-widget.selectors';
-import { selectCurrentTaskId, selectTaskEntities } from '../tasks/store/task.selectors';
+import { selectTaskEntities } from '../tasks/store/task.selectors';
 import { TrackingPresenceService } from '../tracking-presence/tracking-presence.service';
 import { DroidLog } from '../../core/log';
 
@@ -24,23 +24,20 @@ export class WidgetDataService {
   private _lastPushedJson: string | null = null;
 
   async pushCurrent(): Promise<void> {
-    const [data, currentTaskId, taskEntities] = await Promise.all([
-      firstValueFrom(this._store.select(selectAndroidWidgetData)),
-      firstValueFrom(this._store.select(selectCurrentTaskId)),
-      firstValueFrom(this._store.select(selectTaskEntities)),
-    ]);
-    // currentTask needs TrackingPresenceService signals (since-timestamp, focus
-    // cycle, remote session), which live outside the store — so it's always
-    // built here, never by the selector. Local wins; fall back to the
-    // last-known remote tracking-presence session (SuperSync only) so the
-    // widget can still say "tracking on <device>".
-    const currentTask =
-      buildLocalCurrentTask(
-        currentTaskId,
+    const data = await firstValueFrom(this._store.select(selectAndroidWidgetData));
+    // The selector only knows about local tracking; when nothing is tracked here,
+    // fall back to the last-known remote tracking-presence session (SuperSync
+    // only) so the widget can still say "tracking on <device>".
+    let currentTask =
+      data.currentTask &&
+      withLocalTrackingInfo(data.currentTask, this._trackingPresence.localTrackingInfo());
+    if (!currentTask) {
+      const taskEntities = await firstValueFrom(this._store.select(selectTaskEntities));
+      currentTask = resolveRemoteCurrentTask(
+        this._trackingPresence.remoteSessionView(),
         taskEntities,
-        this._trackingPresence.localTrackingInfo(),
-      ) ??
-      resolveRemoteCurrentTask(this._trackingPresence.remoteSessionView(), taskEntities);
+      );
+    }
     const payload: AndroidWidgetData = { ...data, currentTask };
     const json = JSON.stringify(payload);
     // Compare the WHOLE blob, not just the tasks: at day rollover the list is often

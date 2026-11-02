@@ -128,6 +128,27 @@ describe('PluginIndexComponent', () => {
     expect(component.error()).toBeNull();
   });
 
+  // ngOnDestroy has already removed the message listener by the time the wait
+  // resumes; a listener added afterwards would never be removed.
+  it('drops a load whose component was destroyed during the wait', async () => {
+    await setup();
+    pluginService.pluginStates.and.returnValue(
+      new Map([[PLUGIN_ID, { status: 'loading' } as never]]),
+    );
+    pluginService.getPluginIndexHtml.and.returnValue(null);
+    pluginService.activatePlugin.and.callFake(async () => {
+      pluginService.getPluginIndexHtml.and.returnValue('<html>late</html>');
+      fixture.destroy();
+      return null;
+    });
+    const addListenerSpy = spyOn(window, 'addEventListener').and.callThrough();
+
+    await component['_loadPluginIndex'](PLUGIN_ID);
+
+    expect(addListenerSpy).not.toHaveBeenCalledWith('message', jasmine.any(Function));
+    expect(String(component.iframeSrcdoc())).not.toContain('<html>late</html>');
+  });
+
   it('still reports a missing index.html when the plugin is not loading', async () => {
     await setup();
     pluginService.getPluginIndexHtml.and.returnValue(null);

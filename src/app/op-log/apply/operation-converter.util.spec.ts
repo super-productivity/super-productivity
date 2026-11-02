@@ -862,6 +862,43 @@ describe('operation-converter utility', () => {
         expect(action.meta.recreatesEntityAfterDelete).toBeTrue();
       });
 
+      it('carries LWW entity fields that the action envelope shadows in meta', () => {
+        const op = createMockOperation({
+          actionType: '[SIMPLE_COUNTER] LWW Update' as ActionType,
+          entityType: 'SIMPLE_COUNTER',
+          entityId: 'cnt-1',
+          payload: {
+            actionPayload: { id: 'cnt-1', title: 'Habit', type: 'StopWatch' },
+            entityChanges: [],
+            lwwUpdateMode: 'patch',
+          },
+        });
+
+        const action = convertOpToAction(op);
+
+        expect(action.type).toBe('[SIMPLE_COUNTER] LWW Update');
+        expect(action.meta.lwwShadowedFields).toEqual({ type: 'StopWatch' });
+      });
+
+      it('carries no shadowed fields for non-LWW actions or payloads without them', () => {
+        const regular = createMockOperation({
+          payload: { actionPayload: { type: 'x', title: 'T' }, entityChanges: [] },
+        });
+        const lwwWithoutType = createMockOperation({
+          actionType: '[SIMPLE_COUNTER] LWW Update' as ActionType,
+          entityType: 'SIMPLE_COUNTER',
+          entityId: 'cnt-1',
+          payload: {
+            actionPayload: { id: 'cnt-1', title: 'Habit' },
+            entityChanges: [],
+            lwwUpdateMode: 'patch',
+          },
+        });
+
+        expect(convertOpToAction(regular).meta.lwwShadowedFields).toBeUndefined();
+        expect(convertOpToAction(lwwWithoutType).meta.lwwShadowedFields).toBeUndefined();
+      });
+
       it('should fall back to legacy payload format when not MultiEntityPayload', () => {
         const op = createMockOperation({
           payload: { directProperty: 'value', nested: { prop: 123 } },

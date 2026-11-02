@@ -30,6 +30,7 @@ import { MatTooltip } from '@angular/material/tooltip';
 import { MatOption } from '@angular/material/core';
 import { TranslatePipe } from '@ngx-translate/core';
 import { AsyncPipe } from '@angular/common';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import { TagComponent } from '../../features/tag/tag/tag.component';
 import { sortByTitle } from '../../util/sort-by-title';
 import { ChipAutocompleteKeysDirective } from '../chip-autocomplete-keys/chip-autocomplete-keys.directive';

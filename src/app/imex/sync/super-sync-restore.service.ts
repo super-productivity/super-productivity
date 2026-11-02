@@ -1,5 +1,6 @@
 import { inject, Injectable } from '@angular/core';
 import { SnackService } from '../../core/snack/snack.service';
+import { BackupRepairFailedError } from '../../op-log/core/errors/sync-errors';
 import { SyncProviderId } from '../../op-log/sync-providers/provider.const';
 import { SuperSyncProvider } from '@sp/sync-providers/super-sync';
 import {
@@ -107,7 +108,9 @@ export class SuperSyncRestoreService {
           type: 'ERROR',
           msg: isEncryptionBlocked
             ? T.F.SYNC.S.RESTORE_ENCRYPTED
-            : T.F.SYNC.S.RESTORE_ERROR,
+            : error instanceof BackupRepairFailedError
+              ? T.FILE_IMEX.S_ERR_IMPORT_UNREPAIRABLE
+              : T.F.SYNC.S.RESTORE_ERROR,
         });
         throw error;
       }

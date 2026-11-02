@@ -14,6 +14,8 @@ import { HydrationStateService } from '../apply/hydration-state.service';
 import { T } from '../../t.const';
 import { alertDialog, confirmDialog } from '../../util/native-dialogs';
 import { recordCriticalErrorTime } from '../../util/critical-error-signal';
+import { LockService } from '../sync/lock.service';
+import { LOCK_NAMES } from '../core/operation-log.const';
 
 let _validateFullPromise:
   | Promise<typeof import('./validation-fn').validateFull>
@@ -29,6 +31,14 @@ const _loadValidateFull = (): Promise<typeof import('./validation-fn').validateF
   }
   return _validateFullPromise;
 };
+
+/** Upper bound for deferring {@link ValidateStateService.validateStateWhenIdle}. */
+const DEFERRED_VALIDATION_IDLE_TIMEOUT_MS = 10000;
+/**
+ * Delay used where `requestIdleCallback` is missing (iOS Safari/WKWebView), so
+ * the validation still lands after the first render instead of during it.
+ */
+export const DEFERRED_VALIDATION_FALLBACK_DELAY_MS = 2000;
 
 /**
  * Result of validating application state.
@@ -70,6 +80,7 @@ export class ValidateStateService {
   private clientIdProvider = inject(CLIENT_ID_PROVIDER);
   private hydrationStateService = inject(HydrationStateService);
   private translateService = inject(TranslateService);
+  private lockService = inject(LockService);
 
   /**
    * Validates current state from NgRx store, repairs if needed, creates a REPAIR operation,
@@ -88,7 +99,7 @@ export class ValidateStateService {
    * - Call endApplyingRemoteOps() or startPostSyncCooldown() (caller's responsibility)
    *
    * @param context - Logging context (e.g., 'sync', 'conflict-resolution')
-   * @param options.callerHoldsLock - If true, skip lock acquisition in repair operation.
+   * @param options.callerHoldsLock - If true, reuse the caller's operation-log lock.
    *        Set to true when calling from within a sp_op_log lock (e.g., during sync).
    * @returns true if state is valid (or was successfully repaired), false otherwise
    */
@@ -115,9 +126,21 @@ export class ValidateStateService {
       return true;
     }
 
+    // Keep archive compression/local archive writes out of the repair's
+    // read-modify-write window. Always acquire OPERATION_LOG before TASK_ARCHIVE.
+    const repair = (): Promise<boolean> =>
+      this.lockService.request(LOCK_NAMES.TASK_ARCHIVE, () =>
+        this._repairCurrentState(context),
+      );
+    return options?.callerHoldsLock
+      ? repair()
+      : this.lockService.request(LOCK_NAMES.OPERATION_LOG, repair);
+  }
+
+  private async _repairCurrentState(context: string): Promise<boolean> {
     // State is invalid — load the full snapshot including archives so the REPAIR
-    // operation carries archive data. A REPAIR op built from the sync snapshot
-    // would ship empty archives and wipe them on every client that applies it.
+    // operation carries archive data. The synchronous snapshot omits archives
+    // and cannot describe repairs to their contents.
     const currentState =
       await this.stateSnapshotService.getStateSnapshotForOperationLogAsync();
 
@@ -161,7 +184,7 @@ export class ValidateStateService {
       result.repairedState,
       result.repairSummary,
       clientId,
-      { skipLock: options?.callerHoldsLock },
+      { skipLock: true },
     );
 
     // Determine if we need to suppress effects (sync-related contexts)
@@ -250,6 +273,35 @@ export class ValidateStateService {
     }
 
     return result;
+  }
+
+  /**
+   * Runs {@link validateState} once the app is idle, for callers that only
+   * need its diagnostics (the error log and the rating-prompt hold-off) and
+   * must not wait for it, e.g. hydration on the startup path. The state is
+   * captured by the caller, so the result is the same as validating now. A
+   * throw (e.g. the validator chunk failing to load) is logged, not raised.
+   */
+  validateStateWhenIdle(state: object, context: string): void {
+    const run = (): void => {
+      this.validateState(state as Record<string, unknown>)
+        .then((result) => {
+          if (!result.isValid) {
+            OpLog.err(`[ValidateStateService:${context}] Deferred validation failed`, {
+              typiaErrorCount: result.typiaErrors.length,
+              crossModelError: result.crossModelError,
+            });
+          }
+        })
+        .catch((e: unknown) =>
+          OpLog.err(`[ValidateStateService:${context}] Deferred validation threw`, e),
+        );
+    };
+    if (typeof requestIdleCallback === 'function') {
+      requestIdleCallback(run, { timeout: DEFERRED_VALIDATION_IDLE_TIMEOUT_MS });
+    } else {
+      setTimeout(run, DEFERRED_VALIDATION_FALLBACK_DELAY_MS);
+    }
   }
 
   /**
@@ -370,6 +422,7 @@ export class ValidateStateService {
       }
 
       OpLog.log('[ValidateStateService] State successfully repaired', {
+        // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
         repairSummary,
       });
 

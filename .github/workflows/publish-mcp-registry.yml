@@ -1,0 +1,52 @@
+---
+name: Publish to MCP Registry
+
+# Publishes tools/mcp-registry/server.json, the hosted SuperSync capture
+# endpoint, to the official MCP Registry. Run it by hand once the hosted server
+# is deployed. Published versions are immutable, so bump "version" in
+# server.json before publishing a change.
+'on':
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  # GitHub OIDC login for the io.github.super-productivity namespace.
+  id-token: write
+
+jobs:
+  publish:
+    # Versions are immutable under the project's namespace; a dispatch from a
+    # feature branch must not publish that branch's server.json.
+    if: github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    env:
+      MCP_PUBLISHER_VERSION: v1.8.1
+      # SHA-256 of mcp-publisher_linux_amd64.tar.gz, as listed in that release's
+      # registry_1.8.1_checksums.txt. Bump both together.
+      MCP_PUBLISHER_SHA256: a06c9096dcb9727c13555b6be26c7effa707b01f06a4c561ba7a3635443cf2cc
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
+        with:
+          persist-credentials: false
+
+      - name: Download and verify mcp-publisher
+        run: |
+          set -euo pipefail
+          archive=mcp-publisher_linux_amd64.tar.gz
+          curl --fail --location --silent --show-error \
+            --output "$RUNNER_TEMP/$archive" \
+            "https://github.com/modelcontextprotocol/registry/releases/download/${MCP_PUBLISHER_VERSION}/$archive"
+          echo "${MCP_PUBLISHER_SHA256}  $RUNNER_TEMP/$archive" | sha256sum --check
+          tar xzf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP" mcp-publisher
+
+      - name: Validate
+        working-directory: tools/mcp-registry
+        run: $RUNNER_TEMP/mcp-publisher validate
+
+      - name: Log in with GitHub OIDC
+        run: $RUNNER_TEMP/mcp-publisher login github-oidc
+
+      - name: Publish
+        working-directory: tools/mcp-registry
+        run: $RUNNER_TEMP/mcp-publisher publish

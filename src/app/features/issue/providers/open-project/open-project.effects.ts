@@ -15,6 +15,7 @@ import { select, Store } from '@ngrx/store';
 import { OPEN_PROJECT_TYPE } from '../../issue.const';
 import { MatDialog } from '@angular/material/dialog';
 import { Task, TaskCopy } from '../../../tasks/task.model';
+import { isWontDoTask } from '../../../tasks/util/is-wont-do-task';
 import { OpenProjectCfg, OpenProjectTransitionOption } from './open-project.model';
 import { EMPTY, from, Observable, of, timer } from 'rxjs';
 import { OpenProjectApiService } from './open-project-api.service';
@@ -52,7 +53,7 @@ export class OpenProjectEffects {
         ofType(TaskSharedActions.updateTask),
         filter(({ task }) => task.changes.isDone === true),
         concatMap(({ task }) => this._taskService.getByIdOnce$(task.id as string)),
-        filter((task) => !!task),
+        filter((task) => !!task && !isWontDoTask(task)),
         concatMap((task) =>
           task.parentId
             ? this._taskService
@@ -141,7 +142,10 @@ export class OpenProjectEffects {
         filter(({ task }): boolean => !!task.changes.isDone),
         // NOTE: as this is only a partial object we need to get the full one
         concatMap(({ task }) => this._taskService.getByIdOnce$(task.id.toString())),
-        filter((task: Task) => task && task.issueType === OPEN_PROJECT_TYPE),
+        filter(
+          (task: Task) =>
+            task && task.issueType === OPEN_PROJECT_TYPE && !isWontDoTask(task),
+        ),
         concatMap((task: Task) => {
           if (!task.issueProviderId) {
             throw new Error('No issueProviderId for task');

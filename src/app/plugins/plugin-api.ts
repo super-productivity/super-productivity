@@ -17,6 +17,7 @@ import {
   PluginHooks,
   PluginManifest,
   PluginMenuEntryCfg,
+  PluginTaskContextMenuEntryCfg,
   PluginNodeScriptRequest,
   PluginNodeScriptResult,
   PluginRequestOptions,
@@ -24,6 +25,7 @@ import {
   PluginSidePanelBtnCfg,
   PluginWorkContextHeaderBtnCfg,
   ActiveWorkContext,
+  PluginDayContext,
   Project,
   SnackCfg,
   Tag,
@@ -128,6 +130,10 @@ export class PluginAPI implements PluginAPIInterface {
     this.#boundMethods.registerMenuEntry(menuEntryCfg);
   }
 
+  registerTaskContextMenuEntry(cfg: PluginTaskContextMenuEntryCfg): void {
+    this.#boundMethods.registerTaskContextMenuEntry(cfg);
+  }
+
   registerConfigHandler(handler: () => void): void {
     PluginLog.log(`Plugin ${this.#pluginId} registered config handler`);
     this.#boundMethods.registerConfigHandler(handler);
@@ -167,6 +173,7 @@ export class PluginAPI implements PluginAPIInterface {
   registerWorkContextHeaderButton(
     cfg: Omit<PluginWorkContextHeaderBtnCfg, 'pluginId'>,
   ): void {
+    // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
     PluginLog.log(`Plugin ${this.#pluginId} registered work-context header button`, cfg);
     this.#boundMethods.registerWorkContextHeaderButton(cfg);
   }
@@ -193,6 +200,20 @@ export class PluginAPI implements PluginAPIInterface {
 
   async getActiveWorkContext(): Promise<ActiveWorkContext | null> {
     return this.#boundMethods.getActiveWorkContext();
+  }
+
+  async getDayContext(): Promise<PluginDayContext> {
+    return this.#boundMethods.getDayContext();
+  }
+
+  async startTracking(taskId: string): Promise<void> {
+    await this.#boundMethods.startTracking(taskId);
+    PluginLog.log(`Plugin ${this.#pluginId} started tracking`, { taskId });
+  }
+
+  async stopTracking(): Promise<void> {
+    PluginLog.log(`Plugin ${this.#pluginId} stopped tracking`);
+    return this.#boundMethods.stopTracking();
   }
 
   async getTasks(): Promise<Task[]> {
@@ -344,6 +365,10 @@ export class PluginAPI implements PluginAPIInterface {
   async getConfig(): Promise<any> {
     PluginLog.log(`Plugin ${this.#pluginId} requested configuration`);
     return this.#boundMethods.getConfig();
+  }
+
+  listSyncedDataKeys(prefix?: string): Promise<string[]> {
+    return this.#boundMethods.listSyncedDataKeys(prefix);
   }
 
   async downloadFile(filename: string, data: string): Promise<void> {
@@ -520,6 +545,7 @@ export class PluginAPI implements PluginAPIInterface {
   async updateSimpleCounter(id: string, updates: Partial<any>): Promise<void> {
     PluginLog.log(
       `Plugin ${this.#pluginId} requested to update simple counter ${id}`,
+      // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
       updates,
     );
     return this.#pluginBridge.updateSimpleCounter(id, updates);

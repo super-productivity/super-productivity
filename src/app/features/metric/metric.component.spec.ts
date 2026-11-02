@@ -11,6 +11,7 @@ import { SimpleMetrics } from './metric.model';
 import { signal } from '@angular/core';
 import { T } from '../../t.const';
 import { INBOX_PROJECT } from '../project/project.const';
+import { DateTimeFormatService } from '../../core/date-time-format/date-time-format.service';
 
 describe('MetricComponent', () => {
   let component: MetricComponent;
@@ -74,7 +75,7 @@ describe('MetricComponent', () => {
       'getSimpleClickCounterMetrics$',
       'getSimpleCounterStopwatchMetrics$',
       'getFocusSessionMetrics$',
-      'getProductivityBreakdown$',
+      'getEvaluationMetrics$',
       'hasData',
     ]);
     const projectMetricsServiceSpy = jasmine.createSpyObj('ProjectMetricsService', [], {
@@ -91,7 +92,7 @@ describe('MetricComponent', () => {
     metricServiceSpy.getSimpleClickCounterMetrics$.and.returnValue(of(null));
     metricServiceSpy.getSimpleCounterStopwatchMetrics$.and.returnValue(of(null));
     metricServiceSpy.getFocusSessionMetrics$.and.returnValue(of(null));
-    metricServiceSpy.getProductivityBreakdown$.and.returnValue(of([]));
+    metricServiceSpy.getEvaluationMetrics$.and.returnValue(of(null));
     metricServiceSpy.hasData.and.returnValue(false);
 
     TestBed.configureTestingModule({
@@ -101,6 +102,10 @@ describe('MetricComponent', () => {
         { provide: ProjectMetricsService, useValue: projectMetricsServiceSpy },
         { provide: AllTasksMetricsService, useValue: allTasksMetricsServiceSpy },
         { provide: WorkContextService, useValue: workContextServiceSpy },
+        {
+          provide: DateTimeFormatService,
+          useValue: { currentLocale: signal('en-US') },
+        },
       ],
     }).overrideComponent(MetricComponent, {
       set: {
@@ -130,12 +135,6 @@ describe('MetricComponent', () => {
       expect(component.projectMetricsService).toBe(projectMetricsService);
       expect(component.allTasksMetricsService).toBe(allTasksMetricsService);
       expect(component.workContextService).toBe(workContextService);
-    });
-
-    it('should request the full productivity breakdown range for chart timeframe filtering', () => {
-      expect(metricService.getProductivityBreakdown$).toHaveBeenCalledWith(
-        Number.MAX_SAFE_INTEGER,
-      );
     });
   });
 

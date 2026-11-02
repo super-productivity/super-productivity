@@ -27,6 +27,7 @@ import { PluginIssueProviderRegistryService } from './issue-provider/plugin-issu
 import { IssueSyncAdapterRegistryService } from '../features/issue/two-way-sync/issue-sync-adapter-registry.service';
 import { PluginHttpService } from './issue-provider/plugin-http.service';
 import { getDbDateStr } from '../util/get-db-date-str';
+import { DateService } from '../core/date/date.service';
 import { DataInitService } from '../core/data-init/data-init.service';
 import { GlobalConfigService } from '../features/config/global-config.service';
 import { signal } from '@angular/core';
@@ -276,6 +277,45 @@ describe('PluginBridgeService.setCounter()', () => {
 
       const action = call.args[0] as any;
       expect(action.type).toBe('[SimpleCounter] Update SimpleCounter');
+    });
+  });
+
+  describe('start of next day', () => {
+    // 01:00 with the next day starting at 04:00 still belongs to the 6th
+    const LOGICAL_TODAY = '2026-01-06';
+
+    beforeEach(() => {
+      jasmine.clock().install();
+      jasmine.clock().mockDate(new Date(2026, 0, 7, 1));
+      TestBed.inject(DateService).setStartOfNextDayDiff('04:00');
+    });
+
+    afterEach(() => jasmine.clock().uninstall());
+
+    it('should read the counter of the logical day', async () => {
+      store.select.and.returnValue(
+        of([createMockCounter('my-counter', { [LOGICAL_TODAY]: 3, '2026-01-07': 9 })]),
+      );
+
+      expect(await service.getCounter('my-counter')).toBe(3);
+    });
+
+    it('should write setCounter to the logical day', async () => {
+      store.select.and.returnValue(of([createMockCounter('my-counter')]));
+
+      await service.setCounter('my-counter', 5);
+
+      const action = store.dispatch.calls.mostRecent().args[0] as any;
+      expect(action.simpleCounter.changes.countOnDay).toEqual({ [LOGICAL_TODAY]: 5 });
+    });
+
+    it('should write setSimpleCounterToday to the logical day', async () => {
+      store.select.and.returnValue(of([createMockCounter('my-counter')]));
+
+      await service.setSimpleCounterToday('my-counter', 7);
+
+      const action = store.dispatch.calls.mostRecent().args[0] as any;
+      expect(action.simpleCounter.changes.countOnDay).toEqual({ [LOGICAL_TODAY]: 7 });
     });
   });
 });

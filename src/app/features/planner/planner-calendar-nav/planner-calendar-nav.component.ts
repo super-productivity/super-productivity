@@ -83,7 +83,7 @@ export class PlannerCalendarNavComponent {
 
   dayLabels = computed(() => {
     const firstDay = this._firstDayOfWeek();
-    const allDays = getWeekdaysMin();
+    const allDays = getWeekdaysMin(this._dateTimeFormatService.textLocale());
     const ordered: string[] = [];
     for (let i = 0; i < 7; i++) {
       ordered.push(allDays[(firstDay + i) % 7]);

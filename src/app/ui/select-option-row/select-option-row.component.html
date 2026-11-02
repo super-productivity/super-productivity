@@ -2,26 +2,27 @@
   class="custom-option-layout"
   [class.has-checkbox]="showCheckbox()"
 >
+  <!-- Icons go through fontIcon, so their names stay out of the row's text,
+       which mat-option uses as its label. -->
   @if (showCheckbox()) {
-    <mat-icon class="check-ico">{{
-      isSelected() ? 'check_box' : 'check_box_outline_blank'
-    }}</mat-icon>
+    <mat-icon
+      class="check-ico"
+      [fontIcon]="isSelected() ? 'check_box' : 'check_box_outline_blank'"
+    ></mat-icon>
   }
 
   @if (isEmoji()) {
     <mat-icon
       class="menu-icon-emoji"
       [style.color]="color()"
-    >
-      {{ effectiveIcon() }}
-    </mat-icon>
+      [fontIcon]="effectiveIcon()"
+    ></mat-icon>
   } @else {
     <mat-icon
       class="option-main-icon"
       [style.color]="color()"
-    >
-      {{ effectiveIcon() }}
-    </mat-icon>
+      [fontIcon]="effectiveIcon()"
+    ></mat-icon>
   }
 
   <span class="option-title">{{ title() }}</span>

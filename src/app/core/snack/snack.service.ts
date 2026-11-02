@@ -9,6 +9,7 @@ import { SnackCustomComponent } from './snack-custom/snack-custom.component';
 import { TranslateService } from '@ngx-translate/core';
 import { MatSnackBar, MatSnackBarRef, SimpleSnackBar } from '@angular/material/snack-bar';
 import { ofType } from '@ngrx/effects';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import { setActiveWorkContext } from '../../features/work-context/store/work-context.actions';
 import { debounce } from '../../util/decorators';
 import { LOCAL_ACTIONS } from '../../util/local-actions.token';

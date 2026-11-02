@@ -3,16 +3,17 @@
  * migration — see docs/sync-and-op-log/sqlite-migration.md).
  *
  * A faithful wrapper of the behavior `OperationLogStoreService` /
- * `ArchiveStoreService` get from `idb` today: shared versioned upgrade,
- * open-retry with the existing budgets, `versionchange`/`close` re-open
- * handling, and the `IndexedDBOpenError` wrapper on exhausted retries. It does
- * NOT translate `ConstraintError` / `QuotaExceededError` — those stay
- * meaningful to callers, which already map them to domain errors. This keeps
- * the wrapper behavior-preserving: the store sees the same exceptions whether
- * it talks to `idb` directly or through this adapter.
+ * `ArchiveStoreService` get from `idb` today. It operates on the connection the
+ * owning service opens and lends it via {@link IndexedDbOpLogAdapter.adoptConnection};
+ * the shared versioned upgrade, open-retry and `versionchange`/`close` re-open
+ * handling live in those services. It does NOT translate `ConstraintError` /
+ * `QuotaExceededError` — those stay meaningful to callers, which already map
+ * them to domain errors. This keeps the wrapper behavior-preserving: the store
+ * sees the same exceptions whether it talks to `idb` directly or through this
+ * adapter.
  */
 
-import { IDBPDatabase, openDB } from 'idb';
+import { IDBPDatabase } from 'idb';
 import {
   assertIterateLimit,
   DbCursorDirection,
@@ -25,19 +26,9 @@ import {
   OpLogDbAdapter,
   OpLogTx,
 } from './op-log-db-adapter';
-import { OP_LOG_DB_SCHEMA, OpLogDbSchema } from './op-log-db-schema';
-import { runDbUpgrade } from './db-upgrade';
-import { Log } from '../../core/log';
-import {
-  IDB_OPEN_RETRIES,
-  IDB_OPEN_RETRIES_NON_LOCK,
-  IDB_OPEN_RETRY_BASE_DELAY_MS,
-} from '../core/operation-log.const';
-import { IndexedDBOpenError } from '../core/errors/indexed-db-open.error';
-import { isIdbVersionError, isLockRelatedIdbOpenError } from './op-log-errors.const';
 
 const ADAPTER_NOT_INITIALIZED =
-  'IndexedDbOpLogAdapter not initialized. Ensure init() is called.';
+  'IndexedDbOpLogAdapter not initialized. Ensure adoptConnection() is called.';
 
 /**
  * Minimal structural views over the `idb` cursor/store/index handles.
@@ -145,26 +136,11 @@ const toIdbIndexQuery = (query?: DbIndexQuery): IDBKeyRange | undefined =>
 
 export class IndexedDbOpLogAdapter implements OpLogDbAdapter {
   private _db?: IDBPDatabase;
-  private _initPromise?: Promise<void>;
-
-  constructor(private readonly _schema: OpLogDbSchema = OP_LOG_DB_SCHEMA) {}
-
-  async init(): Promise<void> {
-    if (this._db) {
-      return;
-    }
-    if (!this._initPromise) {
-      this._initPromise = this._doInit().catch((e) => {
-        this._initPromise = undefined;
-        throw e;
-      });
-    }
-    await this._initPromise;
-  }
 
   /**
-   * Operate on a connection owned by someone else (the existing
-   * `OperationLogStoreService`) instead of opening our own.
+   * Operate on a connection owned by someone else (the owning
+   * `OperationLogStoreService` / `ArchiveStoreService`) instead of opening our
+   * own.
    *
    * This is the seam for the incremental Phase A migration: the store keeps
    * owning/retrying/re-opening its single `IDBPDatabase`, and routes
@@ -176,87 +152,6 @@ export class IndexedDbOpLogAdapter implements OpLogDbAdapter {
    */
   adoptConnection(db: IDBPDatabase | undefined): void {
     this._db = db;
-    this._initPromise = db ? Promise.resolve() : undefined;
-  }
-
-  private async _doInit(): Promise<void> {
-    const db = await this._openDbWithRetry();
-    // The browser can close the connection (tab eviction, iOS backgrounding).
-    // Drop the cached handle so the next access transparently re-opens.
-    db.addEventListener('close', () => {
-      Log.warn(
-        '[OpLogAdapter] IndexedDB connection closed. Will re-open on next access.',
-      );
-      this._db = undefined;
-      this._initPromise = undefined;
-    });
-    // A newer tab is upgrading the DB; close so we don't block it.
-    db.addEventListener('versionchange', () => {
-      db.close();
-      this._db = undefined;
-      this._initPromise = undefined;
-    });
-    this._db = db;
-  }
-
-  /**
-   * Single open attempt. Separate method so specs can inject failures without
-   * mocking the `idb` import (mirrors the existing store's `_openDbOnce` seam).
-   */
-  private _openDbOnce(): Promise<IDBPDatabase> {
-    return openDB(this._schema.name, this._schema.version, {
-      upgrade: (db, oldVersion, _newVersion, transaction) => {
-        runDbUpgrade(db, oldVersion, transaction);
-      },
-    });
-  }
-
-  /**
-   * Open with exponential backoff. Lock-related errors get the full retry
-   * window (they may clear); other errors fail faster so the hydrator can
-   * surface the problem. Preserves the budgets/semantics of the existing store.
-   *
-   * NOTE: dormant in production today. Both stores call `_adapter.init()` only
-   * behind `if (!this._adapter.adoptConnection)`, and this adapter defines
-   * `adoptConnection` — so it runs on the connection the store hands it and
-   * never opens the database itself. Kept in step with the two live loops
-   * (`OperationLogStoreService`, `ArchiveStoreService`) so the path is already
-   * correct if the adapter ever takes ownership of the open.
-   */
-  private async _openDbWithRetry(): Promise<IDBPDatabase> {
-    let maxRetries = IDB_OPEN_RETRIES;
-    let attempt = 1;
-    let lastError: unknown;
-
-    while (attempt <= 1 + maxRetries) {
-      try {
-        return await this._openDbOnce();
-      } catch (e) {
-        lastError = e;
-        // Downgrade barrier: retrying can't change the on-disk version (#9187).
-        if (isIdbVersionError(e)) {
-          break;
-        }
-        if (attempt === 1 && !isLockRelatedIdbOpenError(e)) {
-          maxRetries = IDB_OPEN_RETRIES_NON_LOCK;
-        }
-        const totalAttempts = 1 + maxRetries;
-        if (attempt < totalAttempts) {
-          const delay = IDB_OPEN_RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1);
-          Log.warn(
-            `[OpLogAdapter] IndexedDB open failed (attempt ${attempt}/${totalAttempts}), retrying in ${delay}ms...`,
-            e,
-          );
-          await new Promise((resolve) => setTimeout(resolve, delay));
-        }
-        attempt++;
-      }
-    }
-
-    const err = new IndexedDBOpenError(lastError);
-    // See OperationLogStoreService: the barrier path stops retrying (#9187).
-    Log.err('[OpLogAdapter] IndexedDB open failed.', err);
-    throw err;
   }
 
   private get _database(): IDBPDatabase {
@@ -267,14 +162,14 @@ export class IndexedDbOpLogAdapter implements OpLogDbAdapter {
   }
 
   /**
-   * Close the underlying connection and drop the cached handle. A subsequent
-   * call re-opens via {@link init}. Primarily a testing/teardown hook; runtime
-   * code relies on the `close`/`versionchange` listeners instead.
+   * Close the adopted connection and drop the cached handle; operations throw
+   * until a connection is adopted again. Primarily a testing/teardown hook; at
+   * runtime the owning services release the connection via
+   * `adoptConnection(undefined)` from their `close`/`versionchange` listeners.
    */
   close(): void {
     this._db?.close();
     this._db = undefined;
-    this._initPromise = undefined;
   }
 
   // ── single-store convenience ops ──────────────────────────────────────────
@@ -384,6 +279,9 @@ export class IndexedDbOpLogAdapter implements OpLogDbAdapter {
       } catch {
         // Already aborted/committed — nothing to undo.
       }
+      // Observe the abort rejection even when the body failed before awaiting
+      // tx.done, while preserving the original error (e.g. QuotaExceededError).
+      await tx.done.catch(() => undefined);
       throw e;
     }
   }

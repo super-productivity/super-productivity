@@ -37,7 +37,7 @@ import { LanguageService } from './core/language/language.service';
 import { WorkContextService } from './features/work-context/work-context.service';
 import { SyncTriggerService } from './imex/sync/sync-trigger.service';
 import { ActivatedRoute, RouterOutlet } from '@angular/router';
-import { concatMap, first, take } from 'rxjs/operators';
+import { first, take } from 'rxjs/operators';
 
 import { recordSearchNavDebug } from './util/search-nav-debug';
 import { warpAnimation, warpInAnimation } from './ui/animations/warp.ani';
@@ -60,7 +60,7 @@ import { MatDialog } from '@angular/material/dialog';
 import { MarkdownPasteService } from './features/tasks/markdown-paste.service';
 import { TaskService } from './features/tasks/task.service';
 import { TaskAttachmentService } from './features/tasks/task-attachment/task-attachment.service';
-import { MatMenuItem } from '@angular/material/menu';
+import { MatMenu, MatMenuContent, MatMenuItem } from '@angular/material/menu';
 import { MatIcon } from '@angular/material/icon';
 import { NoteStartupBannerService } from './features/note/note-startup-banner.service';
 import { SyncSafetyBannerService } from './imex/sync/sync-safety-banner.service';
@@ -80,19 +80,22 @@ import { MobileBottomNavComponent } from './core-ui/mobile-bottom-nav/mobile-bot
 import { StartupService } from './core/startup/startup.service';
 import { DataInitStateService } from './core/data-init/data-init-state.service';
 import { AppUriTaskActionsService } from './features/tasks/app-uri-actions/app-uri-task-actions.service';
+import { IosShareService } from './features/tasks/ios-share/ios-share.service';
+import { AgentCaptureService } from './features/tasks/agent-capture/agent-capture.service';
 import { ExampleTasksService } from './core/example-tasks/example-tasks.service';
 import { KeyboardLayoutService } from './core/keyboard-layout/keyboard-layout.service';
 import { setKeyboardLayoutService } from './util/check-key-combo';
-import { OnboardingPresetSelectionComponent } from './features/onboarding/onboarding-preset-selection.component';
 import { TaskMultiSelectBarComponent } from './features/tasks/task-multi-select-bar/task-multi-select-bar.component';
 import { TaskMultiSelectService } from './features/tasks/task-multi-select.service';
 import { OnboardingHintComponent } from './features/onboarding/onboarding-hint.component';
 import { OnboardingHintService } from './features/onboarding/onboarding-hint.service';
+import { QuickTourService } from './features/onboarding/quick-tour.service';
 import { MaterialIconsLoaderService } from './ui/material-icons-loader.service';
 import { BrowserTitleService } from './core/browser-title/browser-title.service';
+import { ViewTaskListRegistry } from './features/tasks/view-task-list-registry.service';
+import { BoardsService } from './features/boards/boards.service';
+import { DIALOG_AUTO_FOCUS_TYPING } from './util/dialog-auto-focus';
 
-const ONBOARDING_PRESET_EXIT_DELAY = 1000;
-const ONBOARDING_ENTRANCE_COMPLETE_DELAY = 2000;
 const ENTRANCE_ANIMATION_DURATION = 1500;
 
 interface BeforeInstallPromptEvent extends Event {
@@ -122,12 +125,13 @@ interface BeforeInstallPromptEvent extends Event {
     RouterOutlet,
     GlobalProgressBarComponent,
     FocusModeOverlayComponent,
+    MatMenu,
+    MatMenuContent,
     MatMenuItem,
     MatIcon,
     TranslatePipe,
     ContextMenuComponent,
     MobileBottomNavComponent,
-    OnboardingPresetSelectionComponent,
     OnboardingHintComponent,
     TaskMultiSelectBarComponent,
   ],
@@ -146,6 +150,7 @@ export class AppComponent implements OnDestroy, AfterViewInit {
   private _matDialog = inject(MatDialog);
   private _markdownPasteService = inject(MarkdownPasteService);
   private _taskService = inject(TaskService);
+  private _boardsService = inject(BoardsService);
   private _taskAttachmentService = inject(TaskAttachmentService);
   private _translateService = inject(TranslateService);
   private _projectService = inject(ProjectService);
@@ -171,11 +176,20 @@ export class AppComponent implements OnDestroy, AfterViewInit {
   // Injected only to trigger its constructor eagerly at app start, so a
   // cold-launch add-task/complete-task URL action is never missed.
   private _appUriTaskActionsService = inject(AppUriTaskActionsService);
+  private _iosShareService = inject(IosShareService);
+  private _agentCaptureService = inject(AgentCaptureService);
   readonly onboardingHintService = inject(OnboardingHintService);
+  readonly quickTourService = inject(QuickTourService);
 
   private _syncTriggerService = inject(SyncTriggerService);
   readonly workContextService = inject(WorkContextService);
   readonly layoutService = inject(LayoutService);
+  private readonly _viewTaskListRegistry = inject(ViewTaskListRegistry);
+  // On a view shown as a task list, the add-task bar adds into the view (its
+  // rules applied) instead of the project or tag that was open before.
+  readonly viewAddTarget = computed(
+    () => this._viewTaskListRegistry.addTarget()?.newTaskTarget() ?? null,
+  );
   readonly globalThemeService = inject(GlobalThemeService);
   readonly _store = inject(Store);
   private _sectionService = inject(SectionService);
@@ -229,31 +243,13 @@ export class AppComponent implements OnDestroy, AfterViewInit {
 
   readonly resolvedBgImage = signal<string | null>(null);
 
-  isShowOnboardingPresets = signal(
-    !localStorage.getItem(LS.ONBOARDING_PRESET_DONE) &&
-      !localStorage.getItem(LS.IS_SKIP_TOUR),
-  );
-
   private _subs: Subscription = new Subscription();
 
   constructor() {
     this._startupService.init();
+    this._iosShareService.start();
+    this._agentCaptureService.start();
     void this._materialIconsLoaderService.ensureFontReady();
-
-    // Skip onboarding for existing users with data
-    if (this.isShowOnboardingPresets()) {
-      this._dataInitStateService.isAllDataLoadedInitially$
-        .pipe(
-          concatMap(() => this._projectService.list$),
-          first(),
-        )
-        .subscribe((projectList) => {
-          if (projectList.length > 2) {
-            localStorage.setItem(LS.ONBOARDING_PRESET_DONE, 'true');
-            this.isShowOnboardingPresets.set(false);
-          }
-        });
-    }
 
     // Clear app entrance animation after it completes
     if (this.isAppEntrance()) {
@@ -421,7 +417,16 @@ export class AppComponent implements OnDestroy, AfterViewInit {
   }
 
   getPage(outlet: RouterOutlet): string {
-    return outlet.activatedRouteData.page || 'one';
+    const page = outlet.activatedRouteData.page || 'one';
+    // A view just created gets its own forward motion (see warpRoute).
+    if (
+      page === 'boards' &&
+      outlet.isActivated &&
+      outlet.activatedRoute.snapshot.params['boardId'] === this._boardsService.arrivalId()
+    ) {
+      return 'view-arrival';
+    }
+    return page;
   }
 
   /**
@@ -441,7 +446,10 @@ export class AppComponent implements OnDestroy, AfterViewInit {
     return this._activeWorkContextId() ?? null;
   }
 
-  onTaskAdded({ taskId }: TaskAddEvent): void {
+  onTaskAdded(ev: TaskAddEvent): void {
+    // Read when the task is added: the view may have closed meanwhile.
+    void this._viewTaskListRegistry.addTarget()?.afterTaskAdd(ev);
+    const { taskId } = ev;
     this.layoutService.setPendingFocusTaskId(taskId);
     this.layoutService.scrollToNewTask(taskId);
     if (this.onboardingHintService.shouldAutoCloseFirstTaskComposer(taskId)) {
@@ -488,7 +496,10 @@ export class AppComponent implements OnDestroy, AfterViewInit {
     if (!ctxId || !ctxType) return;
     const title = await firstValueFrom(
       this._matDialog
-        .open(DialogPromptComponent, { data: { placeholder: T.WW.ADD_SECTION_TITLE } })
+        .open(DialogPromptComponent, {
+          data: { placeholder: T.WW.ADD_SECTION_TITLE },
+          autoFocus: DIALOG_AUTO_FOCUS_TYPING,
+        })
         .afterClosed(),
     );
     if (typeof title === 'string' && title.trim()) {
@@ -496,24 +507,7 @@ export class AppComponent implements OnDestroy, AfterViewInit {
     }
   }
 
-  isAppEntrance = signal(!this.isShowOnboardingPresets());
-
-  onPresetSelected(): void {
-    this.isAppEntrance.set(true);
-    setTimeout(() => {
-      this.isShowOnboardingPresets.set(false);
-    }, ONBOARDING_PRESET_EXIT_DELAY);
-    setTimeout(() => {
-      this.isAppEntrance.set(false);
-      this.onboardingHintService.startAfterPresetSelection();
-    }, ONBOARDING_ENTRANCE_COMPLETE_DELAY);
-  }
-
-  // Returning user set up sync from onboarding: just reveal the app with their
-  // synced data — no preset applied, no new-user hint tour.
-  onOnboardingDismissed(): void {
-    this.isShowOnboardingPresets.set(false);
-  }
+  isAppEntrance = signal(true);
 
   ngAfterViewInit(): void {
     this._ngZone.runOutsideAngular(() => {

@@ -55,6 +55,16 @@ const getDateStrs = (week: ReturnType<typeof getWorklogWeekForDate>): string[] =
     .sort();
 
 describe('getWorklogWeekForDate()', () => {
+  it('reports the full week range, not just up to the relative date', () => {
+    const worklog = createWorklog(['2026-08-31']);
+
+    const result = getWorklogWeekForDate(worklog, parseDbDateStr('2026-09-01'), MONDAY);
+
+    expect(result?.startDateStr).toBe('2026-08-31');
+    expect(result?.endDateStr).toBe('2026-09-06');
+    expect(result?.end).toBe(6);
+  });
+
   it('returns earlier days when the current month has no worklog bucket yet', () => {
     const worklog = createWorklog([
       '2026-07-27',

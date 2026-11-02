@@ -37,6 +37,11 @@ model User {
   devices                     SyncDevice[]
   passkeys                    Passkey[]
   pendingPasskeyRegistrations PendingPasskeyRegistration[]
+  captureKey                  CaptureKey?
+  captureGrants               CaptureGrant[]
+  captureItems                CaptureItem[]
+  captureConnectCode          CaptureConnectCode?
+  captureAuthorizations       CaptureAuth[]
 
   @@index([verificationToken])
   @@index([resetPasswordToken])
@@ -163,4 +168,96 @@ model SyncDevice {
 
   @@id([userId, clientId])
   @@map("sync_devices")
+}
+
+// Agent task capture (docs/plans/2026-10-11-agent-task-capture.md). The server
+// only ever holds sealed captures; the app opens them with a key from synced state.
+
+/// Public half of the user's capture key. The row outlives switching the
+/// feature off: `disabledAt` stops a stale device re-registering that key.
+model CaptureKey {
+  userId      Int     @id @map("user_id")
+  /// Base64 SPKI DER of an ECDH P-256 public key.
+  publicKey   String  @map("public_key")
+  fingerprint String
+  createdAt   BigInt  @map("created_at")
+  disabledAt  BigInt? @map("disabled_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("capture_keys")
+}
+
+/// Capture tokens and OAuth grants store only hashes of bearer credentials.
+model CaptureGrant {
+  id               String  @id
+  userId           Int     @map("user_id")
+  kind             String
+  clientName       String  @map("client_name")
+  secretHash       String  @map("secret_hash")
+  createdAt        BigInt  @map("created_at")
+  expiresAt        BigInt  @map("expires_at")
+  lastUsedAt       BigInt? @map("last_used_at")
+  revokedAt        BigInt? @map("revoked_at")
+  clientId         String? @map("client_id")
+  resource         String?
+  refreshHash      String? @map("refresh_hash")
+  prevRefreshHash  String? @map("prev_refresh_hash")
+  rotatedAt        BigInt? @map("rotated_at")
+  refreshExpiresAt BigInt? @map("refresh_expires_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("capture_grants")
+}
+
+/// One sealed capture waiting for a device. No relation to its grant: items
+/// outlive a grant that is revoked without discarding them.
+model CaptureItem {
+  id            String  @id
+  userId        Int     @map("user_id")
+  grantId       String  @map("grant_id")
+  ciphertext    String
+  /// Task id the claiming device must use; replaced when another device takes over.
+  taskId        String  @map("task_id")
+  createdAt     BigInt  @map("created_at")
+  leaseDeviceId String? @map("lease_device_id")
+  leaseUntil    BigInt? @map("lease_until")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([grantId])
+  @@map("capture_items")
+}
+
+model CaptureConnectCode {
+  userId       Int    @id @map("user_id")
+  codeHash     String @unique @map("code_hash")
+  tokenVersion Int    @map("token_version")
+  expiresAt    BigInt @map("expires_at")
+  user         User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("capture_connect_codes")
+}
+
+model CaptureAuth {
+  id            String  @id
+  userId        Int?    @map("user_id")
+  clientId      String  @map("client_id")
+  clientName    String  @map("client_name")
+  redirectUri   String  @map("redirect_uri")
+  codeChallenge String  @map("code_challenge")
+  resource      String
+  state         String
+  scope         String
+  codeHash      String? @unique @map("code_hash")
+  tokenVersion  Int?    @map("token_version")
+  expiresAt     BigInt  @map("expires_at")
+  user          User?   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("capture_auth")
 }

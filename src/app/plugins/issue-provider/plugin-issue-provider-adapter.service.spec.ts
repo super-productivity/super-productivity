@@ -14,7 +14,7 @@ import {
   RegisteredPluginIssueProvider,
 } from './plugin-issue-provider.model';
 import { IssueProviderPluginType } from '../../features/issue/issue.model';
-import { Task } from '../../features/tasks/task.model';
+import { IssueTask, Task } from '../../features/tasks/task.model';
 import { TaskService } from '../../features/tasks/task.service';
 import { SnackService } from '../../core/snack/snack.service';
 import { T } from '../../t.const';
@@ -416,6 +416,83 @@ describe('PluginIssueProviderAdapterService', () => {
       expect(result.issueLastSyncedValues).toEqual({ labels: ['bug'] });
       expect(result.issueLastUpdated).toBe(2000);
     });
+
+    describe('doneStates', () => {
+      const addTaskDataFor = (
+        state: string,
+        defOverrides: Partial<IssueProviderPluginDefinition> = {},
+      ): IssueTask => {
+        registrySpy.getProvider.and.returnValue(createMockProvider(defOverrides));
+        return service.getAddTaskDataForCfg(
+          { id: 'ISS-1', title: 'Issue', state } as PluginSearchResult,
+          mockPluginCfg,
+        );
+      };
+
+      it('should mark the task done when the state matches doneStates case-insensitively', () => {
+        expect(addTaskDataFor('Shipped', { doneStates: ['shipped'] }).isDone).toBe(true);
+      });
+
+      it('should not fall back to the default done words when doneStates is set', () => {
+        expect(addTaskDataFor('Resolved', { doneStates: ['Closed'] }).isDone).toBe(false);
+      });
+
+      it('should treat no state as done when doneStates is empty', () => {
+        expect(addTaskDataFor('closed', { doneStates: [] }).isDone).toBe(false);
+      });
+
+      it('should use the default done words when doneStates is not set', () => {
+        expect(addTaskDataFor('Resolved').isDone).toBe(true);
+        expect(addTaskDataFor('closed').isDone).toBe(true);
+        expect(addTaskDataFor('Shipped').isDone).toBe(false);
+      });
+
+      const refreshAfterImport = async (
+        state: string,
+        defOverrides: Partial<IssueProviderPluginDefinition>,
+      ): Promise<{ imported: IssueTask; afterRefresh: Partial<Task> }> => {
+        const imported = addTaskDataFor(state, defOverrides);
+        registrySpy.getProvider.and.returnValue(
+          createMockProvider({
+            ...defOverrides,
+            getById: jasmine.createSpy('getById').and.resolveTo({
+              id: 'ISS-1',
+              title: 'Issue (edited)',
+              state,
+              lastUpdated: 2000,
+            } as PluginIssue),
+          }),
+        );
+        const result = await service.getFreshDataForIssueTask({
+          ...imported,
+          id: 'task-1',
+          issueId: 'ISS-1',
+          issueProviderId: PROVIDER_ID,
+          issueLastUpdated: 1000,
+        } as unknown as Task);
+        return { imported, afterRefresh: { ...imported, ...result!.taskChanges } };
+      };
+
+      it('should keep a task imported as done when the issue is refreshed', async () => {
+        const { imported, afterRefresh } = await refreshAfterImport('Shipped', {
+          doneStates: ['shipped'],
+        });
+
+        expect(imported.isDone).toBe(true);
+        expect(afterRefresh.title).toBe('Issue (edited)');
+        expect(afterRefresh.isDone).toBe(true);
+      });
+
+      it('should keep a task imported as open when the issue is refreshed and doneStates is empty', async () => {
+        const { imported, afterRefresh } = await refreshAfterImport('Closed', {
+          doneStates: [],
+        });
+
+        expect(imported.isDone).toBe(false);
+        expect(afterRefresh.title).toBe('Issue (edited)');
+        expect(afterRefresh.isDone).toBe(false);
+      });
+    });
   });
 
   describe('getFreshDataForIssueTask', () => {
@@ -462,6 +539,59 @@ describe('PluginIssueProviderAdapterService', () => {
       expect(result!.taskChanges.issueLastUpdated).toBe(2000);
       expect(result!.taskChanges.title).toBe('Updated Issue');
     });
+
+    // an issue without `state` (e.g. Redmine) says nothing about done-ness,
+    // so a refresh must not reopen a task the user completed
+    for (const state of [undefined, '']) {
+      it(`should not touch isDone when the issue state is ${JSON.stringify(state)}`, async () => {
+        const provider = createMockProvider({
+          getById: jasmine
+            .createSpy('getById')
+            .and.resolveTo({ id: 'ISS-5', title: 'T', state, lastUpdated: 2000 }),
+        });
+        registrySpy.getProvider.and.returnValue(provider);
+        const task = {
+          id: 'task-1',
+          issueId: 'ISS-5',
+          issueProviderId: PROVIDER_ID,
+          issueLastUpdated: 1000,
+          isDone: true,
+        } as Task;
+
+        const result = await service.getFreshDataForIssueTask(task);
+
+        expect(result!.taskChanges.isDone).toBeUndefined();
+      });
+    }
+
+    // calendar providers report 'confirmed' and declare neither doneStates nor
+    // an isDone mapping, so an edited event must not reopen a done task (#9905)
+    for (const doneStates of [undefined, []]) {
+      it(`should not touch isDone without a done concept (doneStates ${JSON.stringify(doneStates)})`, async () => {
+        const provider = createMockProvider({
+          doneStates,
+          getById: jasmine.createSpy('getById').and.resolveTo({
+            id: 'ISS-5',
+            title: 'T',
+            state: 'confirmed',
+            lastUpdated: 2000,
+          }),
+        });
+        registrySpy.getProvider.and.returnValue(provider);
+        const task = {
+          id: 'task-1',
+          issueId: 'ISS-5',
+          issueProviderId: PROVIDER_ID,
+          issueLastUpdated: 1000,
+          isDone: true,
+        } as Task;
+
+        const result = await service.getFreshDataForIssueTask(task);
+
+        expect(result!.taskChanges.title).toBe('T');
+        expect(result!.taskChanges.isDone).toBeUndefined();
+      });
+    }
 
     it('should return null when issue is not updated', async () => {
       const freshIssue: PluginIssue = {
@@ -831,6 +961,59 @@ describe('PluginIssueProviderAdapterService', () => {
 
         expect(result).not.toBeNull();
         expect(result!.taskChanges['title' as keyof Task]).toBeUndefined();
+      });
+
+      // the poll after a push from a baseline-less task: the pushed field must
+      // not flip back, and every other mapped field gets pulled and seeded
+      it('should seed the full baseline after a push without reverting it', async () => {
+        const freshIssue = {
+          id: 'ISS-1',
+          title: 'T',
+          state: 'done',
+          body: 'Remote',
+          lastUpdated: 2000,
+        } as unknown as PluginIssue;
+        const provider = createMockProvider({
+          getById: jasmine.createSpy('getById').and.resolveTo(freshIssue),
+          fieldMappings: [
+            {
+              taskField: 'isDone',
+              issueField: 'state',
+              defaultDirection: 'both',
+              toIssueValue: (v: unknown) => (v ? 'done' : 'open'),
+              toTaskValue: (v: unknown) => v === 'done',
+            },
+            {
+              taskField: 'notes',
+              issueField: 'body',
+              defaultDirection: 'pullOnly',
+              toIssueValue: (v: unknown) => v,
+              toTaskValue: (v: unknown) => v,
+            },
+          ] as PluginFieldMapping[],
+          extractSyncValues: jasmine
+            .createSpy('extractSyncValues')
+            .and.returnValue({ state: 'done', body: 'Remote' }),
+        });
+        registrySpy.getProvider.and.returnValue(provider);
+        const task = {
+          id: 'task-1',
+          issueId: 'ISS-1',
+          issueProviderId: PROVIDER_ID,
+          issueLastUpdated: 1000,
+          isDone: true,
+          notes: 'Local',
+          issueLastSyncedValues: { state: 'done' },
+        } as unknown as Task;
+
+        const result = await service.getFreshDataForIssueTask(task);
+
+        expect(result!.taskChanges.isDone).toBeUndefined();
+        expect(result!.taskChanges.notes).toBe('Remote');
+        expect(result!.taskChanges.issueLastSyncedValues).toEqual({
+          state: 'done',
+          body: 'Remote',
+        });
       });
 
       it('should not overwrite isDone when the status direction is off', async () => {
@@ -1531,6 +1714,108 @@ describe('PluginIssueProviderAdapterService', () => {
 
       expect(result.length).toBe(1);
       expect(result[0].task.id).toBe('task-1');
+    });
+
+    it('should fetch all issues with one getByIds call when provided', async () => {
+      const getById = jasmine.createSpy('getById');
+      const getByIds = jasmine.createSpy('getByIds').and.resolveTo([
+        { id: 'ISS-1', title: 'One', lastUpdated: 5000 },
+        { id: 'ISS-2', title: 'Two', lastUpdated: 5000 },
+      ] as PluginIssue[]);
+      registrySpy.getProvider.and.returnValue(createMockProvider({ getById, getByIds }));
+
+      const tasks = [
+        { id: 'task-1', issueId: 'ISS-1', issueProviderId: PROVIDER_ID } as Task,
+        { id: 'task-2', issueId: 'ISS-2', issueProviderId: PROVIDER_ID } as Task,
+        { id: 'task-3', issueId: 'ISS-1', issueProviderId: PROVIDER_ID } as Task,
+        { id: 'task-4', issueId: 'GONE', issueProviderId: PROVIDER_ID } as Task,
+      ];
+
+      const result = await service.getFreshDataForIssueTasks(tasks);
+
+      expect(getByIds).toHaveBeenCalledOnceWith(
+        ['ISS-1', 'ISS-2', 'GONE'],
+        jasmine.anything(),
+        jasmine.anything(),
+      );
+      expect(getById).not.toHaveBeenCalled();
+      expect(result.map((r) => r.task.id)).toEqual(['task-1', 'task-2', 'task-3']);
+      expect(result[1].taskChanges.title).toBe('Two');
+    });
+
+    it('should apply the provider doneStates to batch-fetched issues', async () => {
+      const getByIds = jasmine.createSpy('getByIds').and.resolveTo([
+        { id: 'ISS-1', title: 'One', state: 'Shipped', lastUpdated: 5000 },
+        { id: 'ISS-2', title: 'Two', state: 'closed', lastUpdated: 5000 },
+      ] as PluginIssue[]);
+      registrySpy.getProvider.and.returnValue(
+        createMockProvider({ getByIds, doneStates: ['shipped'] }),
+      );
+
+      const result = await service.getFreshDataForIssueTasks([
+        { id: 'task-1', issueId: 'ISS-1', issueProviderId: PROVIDER_ID } as Task,
+        { id: 'task-2', issueId: 'ISS-2', issueProviderId: PROVIDER_ID } as Task,
+      ]);
+
+      expect(result.map((r) => r.taskChanges.isDone)).toEqual([true, false]);
+    });
+
+    it('should not set isDone on batch-fetched issues without a done concept', async () => {
+      const getByIds = jasmine.createSpy('getByIds').and.resolveTo([
+        { id: 'ISS-1', title: 'One', state: 'confirmed', lastUpdated: 5000 },
+        { id: 'ISS-2', title: 'Two', state: 'closed', lastUpdated: 5000 },
+      ] as PluginIssue[]);
+      registrySpy.getProvider.and.returnValue(createMockProvider({ getByIds }));
+
+      const result = await service.getFreshDataForIssueTasks([
+        { id: 'task-1', issueId: 'ISS-1', issueProviderId: PROVIDER_ID } as Task,
+        { id: 'task-2', issueId: 'ISS-2', issueProviderId: PROVIDER_ID } as Task,
+      ]);
+
+      expect(result.map((r) => r.taskChanges.title)).toEqual(['One', 'Two']);
+      expect(result.map((r) => r.taskChanges.isDone)).toEqual([undefined, undefined]);
+    });
+
+    it('should batch per provider and fall back to getById without getByIds', async () => {
+      const issue = { id: 'ISS-1', title: 'One', lastUpdated: 5000 } as PluginIssue;
+      const getByIds = jasmine.createSpy('getByIds').and.resolveTo([issue]);
+      const getById = jasmine.createSpy('getById').and.resolveTo(issue);
+      const batched = createMockProvider({ getByIds });
+      const single = createMockProvider({ getById });
+      registrySpy.getProvider.and.callFake((key: string) =>
+        key === 'plugin:single' ? single : batched,
+      );
+      const otherCfg = {
+        ...mockPluginCfg,
+        id: 'other',
+        issueProviderKey: 'plugin:single',
+      };
+      // the per-task fallback reads the config once more
+      storeSpy.select.and.returnValues(of(mockPluginCfg), of(otherCfg), of(otherCfg));
+
+      const result = await service.getFreshDataForIssueTasks([
+        { id: 'task-1', issueId: 'ISS-1', issueProviderId: PROVIDER_ID } as Task,
+        { id: 'task-2', issueId: 'ISS-1', issueProviderId: 'other' } as Task,
+      ]);
+
+      expect(getByIds).toHaveBeenCalledOnceWith(
+        ['ISS-1'],
+        jasmine.anything(),
+        jasmine.anything(),
+      );
+      expect(getById).toHaveBeenCalledTimes(1);
+      expect(result.map((r) => r.task.id)).toEqual(['task-1', 'task-2']);
+    });
+
+    it('should return nothing when getByIds fails', async () => {
+      const getByIds = jasmine.createSpy('getByIds').and.rejectWith(new Error('down'));
+      registrySpy.getProvider.and.returnValue(createMockProvider({ getByIds }));
+
+      const result = await service.getFreshDataForIssueTasks([
+        { id: 'task-1', issueId: 'ISS-1', issueProviderId: PROVIDER_ID } as Task,
+      ]);
+
+      expect(result).toEqual([]);
     });
   });
 

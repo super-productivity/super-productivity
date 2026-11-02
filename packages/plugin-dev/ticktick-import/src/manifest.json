@@ -1,0 +1,27 @@
+{
+  "id": "ticktick-import",
+  "manifestVersion": 1,
+  "name": "TickTick Import",
+  "version": "1.0.0",
+  "minSupVersion": "18.0.0",
+  "description": "One-time import of your open TickTick tasks, sub-tasks, checklists, tags and due dates from a TickTick backup file. Additive — your existing Super Productivity data is never touched.",
+  "author": "SuperProductivity",
+  "homepage": "https://github.com/super-productivity/super-productivity",
+  "hooks": [],
+  "permissions": [
+    "getTasks",
+    "getAllProjects",
+    "addProject",
+    "getAllTags",
+    "addTag",
+    "batchUpdateForProject",
+    "updateTask",
+    "showSnack"
+  ],
+  "iFrame": true,
+  "isSkipMenuEntry": true,
+  "i18n": {
+    "languages": ["en"]
+  },
+  "icon": "icon.svg"
+}

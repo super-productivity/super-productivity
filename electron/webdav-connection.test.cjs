@@ -5,6 +5,10 @@ const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
 
+require('ts-node/register/transpile-only');
+
+const { isGitLabApiUrl } = require(path.resolve(__dirname, 'api-user-agent.ts'));
+
 const readRepoFile = (relative) =>
   fs.readFileSync(path.join(__dirname, '..', relative), 'utf8');
 
@@ -46,7 +50,12 @@ visit(source);
 assert.ok(hook, 'main-window must register its request hook');
 const beforeSendHeaders = vm.runInNewContext(
   ts.transpile(`${helpers.join('\n')}\n(${hook});`),
-  { URL, applyJiraImageAuth() {} },
+  {
+    URL,
+    applyJiraImageAuth() {},
+    isGitLabApiUrl,
+    apiUserAgent: 'SuperProductivity/test',
+  },
 );
 const headersFor = (method, host, requestHeaders = {}) => {
   let result;
@@ -92,4 +101,19 @@ test('consumes the WebDAV marker without forwarding it on non-PUT requests', () 
     'X-SuperProductivity-WebDAV-Upload': '1',
   });
   assert.equal(Object.keys(headers).length, 0);
+});
+
+test('GitLab API requests get a non-browser User-Agent (#10650)', () => {
+  const browserUa = { 'user-agent': 'Mozilla/5.0 Electron/43.2.0' };
+  let result;
+  beforeSendHeaders(
+    {
+      method: 'GET',
+      url: 'https://git.example.org/api/v4/projects/1/issues',
+      requestHeaders: { ...browserUa },
+    },
+    (response) => (result = response.requestHeaders),
+  );
+  assert.deepEqual(result, { 'User-Agent': 'SuperProductivity/test' });
+  assert.deepEqual(headersFor('GET', 'example.com', { ...browserUa }), browserUa);
 });

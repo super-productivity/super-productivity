@@ -44,6 +44,30 @@ export const WEBDAV_CONFIG_TEMPLATE = {
   password: 'admin',
 };
 
+// Test-only default. Individual migration/regression cases can override it via
+// setupWebdavSync({ isUseSplitSyncFiles: ... }). Scheduled runs remain v2.
+export const WEBDAV_SYNC_FORMAT = process.env.E2E_WEBDAV_FORMAT ?? 'v2';
+export const WEBDAV_SYNC_FILE =
+  WEBDAV_SYNC_FORMAT === 'v3' ? 'sync-ops.json' : 'sync-data.json';
+
+/** Read an unencrypted, uncompressed remote fixture (including its real prefix). */
+export const readPrefixedFile = async <T>(
+  request: APIRequestContext,
+  url: string,
+  authorization: string,
+): Promise<T> => {
+  const response = await request.get(url, {
+    headers: { Authorization: authorization },
+  });
+  expect(response.ok(), `Expected remote sync file: ${url}`).toBe(true);
+  const encoded = await response.text();
+  const prefixEnd = encoded.indexOf('__');
+  if (prefixEnd < 0) {
+    throw new Error(`${url} is missing its format prefix`);
+  }
+  return JSON.parse(encoded.slice(prefixEnd + 2)) as T;
+};
+
 /**
  * Generates a unique sync folder name for test isolation.
  * @param prefix - Folder name prefix (default: 'e2e-test')
@@ -111,13 +135,21 @@ export const createWebDavFolder = async (
  *
  * @param browser - Playwright Browser instance
  * @param baseURL - Base URL for the app
+ * @param acceptedConfirms - Exact extra confirmations the test deliberately triggers
  * @returns Object with context and page
  */
 export const setupSyncClient = async (
   browser: Browser,
   baseURL: string | undefined,
+  acceptedConfirms: readonly RegExp[] = [],
 ): Promise<{ context: BrowserContext; page: Page }> => {
-  const context = await browser.newContext({ baseURL });
+  // A context created here does not inherit the config's user agent; the app
+  // needs PLAYWRIGHT in it to start with every app feature on (as in the
+  // regular suite) instead of the new-install set.
+  const context = await browser.newContext({
+    baseURL,
+    userAgent: 'PLAYWRIGHT WEBDAV-SYNC-CLIENT',
+  });
   const page = await context.newPage();
   const pageErrors = attachPageErrorCollector(page, 'WebDAV sync client');
   installDevErrorDialogHandler(page, 'WebDAV sync client');
@@ -146,7 +178,9 @@ export const setupSyncClient = async (
     }
 
     if (dialog.type() === 'confirm') {
-      const isExpectedDialog = FRESH_CLIENT_CONFIRM.test(normalizeDialogMessage(message));
+      const isExpectedDialog = [FRESH_CLIENT_CONFIRM, ...acceptedConfirms].some(
+        (pattern) => pattern.test(normalizeDialogMessage(message)),
+      );
 
       if (!isExpectedDialog) {
         console.error(`[E2E] Unexpected confirm dialog: "${message}"`);
@@ -193,7 +227,7 @@ const readTerminalSyncState = async (
   // Error and conflict states can coexist with the old success icon, so they
   // must always win over the success check below.
   if (await syncPage.syncErrorIcon.isVisible().catch(() => false)) {
-    return { kind: 'error', message: 'sync_problem icon is visible' };
+    return { kind: 'error', message: 'sync error icon is visible' };
   }
 
   const snackBars = page.locator('.mat-mdc-snack-bar-container');
@@ -235,10 +269,10 @@ const readTerminalSyncState = async (
  * @param page - Playwright page
  * @param syncPage - SyncPage instance
  * @param timeout - Maximum wait time in ms (default 30000)
- * @param options.allowResponseOnlyCompletion - Require done_all by default. Conflict
- * resolution paths may opt into a stable idle state after the witnessed response
- * because those actions do not expose a reliable terminal icon. Such callers must
- * assert the exact resulting state.
+ * @param options.allowResponseOnlyCompletion - Require the remote-confirmed state
+ * by default. Conflict resolution paths may opt into a stable idle state after the
+ * witnessed response because those actions do not expose a reliable terminal
+ * state. Such callers must assert the exact resulting state.
  * @returns 'success' | 'conflict' | void
  */
 export const waitForSyncComplete = async (

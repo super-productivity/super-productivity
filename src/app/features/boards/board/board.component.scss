@@ -16,8 +16,31 @@
   }
 }
 
-.empty-board-msg,
-.missing-tags-msg-wrapper {
+:host(.isSingleColumn) {
+  width: 100%;
+  max-width: var(--component-max-width);
+  margin: 0 auto;
+}
+
+// Sections of one list: as tall as their rows, not equal grid rows.
+:host(.isListLayout) {
+  grid-auto-rows: auto;
+  align-content: start;
+}
+
+// Above the columns, across all of them, as tall as its text (the cards'
+// rows share the height that is left). :has() rather than a host class: the
+// callout stays in the DOM while it collapses, and a class flipped at removal
+// would stretch it to a `1fr` row for that time.
+:host:has(> .missing-tags) {
+  grid-template-rows: auto;
+}
+
+.missing-tags {
+  grid-column: 1 / -1;
+}
+
+.empty-board-msg {
   display: flex;
   flex-direction: column;
   justify-content: center;

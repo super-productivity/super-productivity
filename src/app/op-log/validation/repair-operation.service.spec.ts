@@ -166,20 +166,23 @@ describe('RepairOperationService', () => {
 
       await service.createRepairOperation(mockRepairedState, summary, 'test-client');
 
-      expect(mockOpLogStore.appendMixedSourceBatchSkipDuplicates).toHaveBeenCalledWith([
-        {
-          ops: [
-            jasmine.objectContaining({
-              actionType: '[Repair] Auto Repair' as ActionType,
-              opType: OpType.Repair,
-              entityType: 'ALL',
-              clientId: 'test-client',
-              schemaVersion: CURRENT_SCHEMA_VERSION,
-            }),
-          ],
-          source: 'local',
-        },
-      ]);
+      expect(mockOpLogStore.appendMixedSourceBatchSkipDuplicates).toHaveBeenCalledWith(
+        [
+          {
+            ops: [
+              jasmine.objectContaining({
+                actionType: '[Repair] Auto Repair' as ActionType,
+                opType: OpType.Repair,
+                entityType: 'ALL',
+                clientId: 'test-client',
+                schemaVersion: CURRENT_SCHEMA_VERSION,
+              }),
+            ],
+            source: 'local',
+          },
+        ],
+        { archiveYoung: undefined, archiveOld: undefined },
+      );
     });
 
     it('should use the mixed-source batch so the clock is rebased on the durable clock', async () => {

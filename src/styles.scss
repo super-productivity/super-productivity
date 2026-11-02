@@ -18,6 +18,10 @@
   //box-shadow: none !important;
   user-select: none;
   -webkit-touch-callout: none;
+  // The default Android WebView tap highlight is a square grey-blue flash
+  // that ignores border-radius; interactive elements bring their own press
+  // state (Material ripple, `interactiveHighlight` mixin) instead.
+  -webkit-tap-highlight-color: transparent;
 }
 
 p,
@@ -27,6 +31,20 @@ pre,
 [contenteditable] {
   user-select: text;
   -webkit-touch-callout: default;
+}
+
+// Native touch UIs move faster than Material's web defaults, so motion is
+// shortened under touch intent. The shorthands are re-declared because a custom
+// property resolves its var() references where it is declared (:root), not
+// where it is used. Left as is: `-l` (magic-side-nav.component.ts times its
+// collapse against it) and `-enter`/`-leave` (focus-mode-main mirrors the
+// fixed-duration `fadeSwap` Angular animation with them).
+body.isTouchPrimary {
+  --transition-duration-s: 120ms;
+  --transition-duration-m: 175ms;
+  --transition-standard: all var(--transition-duration-m) var(--ani-standard-timing);
+  --transition-enter: all var(--transition-duration-m) var(--ani-enter-timing);
+  --transition-leave: all var(--transition-duration-m) var(--ani-leave-timing);
 }
 
 body.isDisableAnimations {
@@ -54,12 +72,6 @@ body.isNativeMobile {
   &:not(.isKeyboardVisible):not(.hasMobileBottomNav) {
     padding-bottom: var(--safe-area-bottom);
   }
-}
-
-// Native Android's opaque system bars need the full inset, not the iOS half
-// default — see --bottom-nav-safe-area in _css-variables.scss (#8792).
-body.isNativeMobile:not(.isIOS) {
-  --bottom-nav-safe-area: var(--safe-area-bottom);
 }
 
 // iOS-specific adjustments

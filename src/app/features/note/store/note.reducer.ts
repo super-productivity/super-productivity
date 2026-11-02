@@ -79,8 +79,12 @@ const _reducer = createReducer<NoteState>(
     activeContextType !== WorkContextType.PROJECT
       ? {
           ...state,
-          todayOrder: ids,
-          // ids: unique([...ids, ...state.ids]),
+          // A reorder changes positions, not membership. Pins added after the
+          // order was captured stay at the front, as they do when pinning last.
+          todayOrder: [
+            ...state.todayOrder.filter((id) => !ids.includes(id)),
+            ...ids.filter((id) => state.todayOrder.includes(id)),
+          ],
         }
       : state,
   ),
@@ -98,12 +102,17 @@ const _reducer = createReducer<NoteState>(
 
   on(updateNote, (state, { note }) => {
     if ('isPinnedToToday' in note.changes) {
+      // A pin prepends only an absent note: replay applies a rejected pin and
+      // then its reissue.
+      const isListed = state.todayOrder.includes(note.id as string);
       return {
         ...state,
         ...adapter.updateOne(note, state),
-        todayOrder: note.changes.isPinnedToToday
-          ? [note.id as string, ...state.todayOrder]
-          : state.todayOrder.filter((id) => id !== note.id),
+        todayOrder: !note.changes.isPinnedToToday
+          ? state.todayOrder.filter((id) => id !== note.id)
+          : isListed
+            ? state.todayOrder
+            : [note.id as string, ...state.todayOrder],
       };
     }
     return adapter.updateOne(note, state);

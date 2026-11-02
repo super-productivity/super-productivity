@@ -4,109 +4,102 @@ Guidance for AI agents working in this repository. Super Productivity is a todo 
 
 ## Repo map
 
-- `src/app/features/` — feature modules (tasks, planner, project, schedule, boards, …); `tasks/` is the hot core
-- `src/app/root-store/` — NgRx root store; `meta/` holds the cross-entity meta-reducers
-- `src/app/op-log/` — operation-log sync pipeline (capture, apply, persistence, validation)
-- `src/app/pfapi/` — low-level persistence layer (model/database controllers)
-- `src/app/imex/` — import/export and sync setup UI
-- `src/app/core/`, `core-ui/`, `ui/` — core services and shared UI building blocks; `util/` — pure helpers
-- `packages/` — workspace packages: `sync-core` + `sync-providers` (shared sync logic), `shared-schema`, `super-sync-server`, `plugin-api` + `plugin-dev`
-- `electron/` — Electron main process (tests are `*.test.cjs`); `android/` + `ios/` — Capacitor shells
-- `e2e/` — Playwright suite (see [`e2e/CLAUDE.md`](e2e/CLAUDE.md))
+Start with the [repository content map](docs/repository-map.md) (task keywords, code entry points, focused tests) and follow only the relevant links. Layer boundaries: [app map](src/app/README.md). Package ownership and checks: [packages](packages/README.md).
+
+Read by section, not whole: the long sync docs open with a **Sections** index and `ARCHITECTURE-DECISIONS.md` with a **Decisions** index; for any long doc, `rg -n '^#{1,3} ' <file>` gives line numbers for `sed -n`. For large source files, `rg -n` first, then read the range.
 
 ## Product principles
 
-From the project manifesto (_Deep Work, Your Way_), kept to what changes a build decision — weigh them on every feature, and surface the leaner path when a request fights them:
-
-- **Avoid feature creep:** prefer the smallest change that solves the real problem. New UI, settings, and sync surface are permanent costs, so extend existing building blocks before adding new ones, and let a feature ship only if it makes users _faster_, not busier. When scope outgrows the problem, propose the leaner option rather than silently building the larger one — it's still the user's call. Scope guard: this is a personal deep-work tool, not a team-management or reporting product.
-- **Less noise, more depth:** reject _constant_ alerts, vanity dashboards, streaks, and dopamine loops. Opt-in reminders and notifications are core to the app, but anything attention-grabbing ships off by default and stays quiet (flow, not friction).
-- **Adapt, don't impose:** people plan, track, and reflect differently, so ship new behavior as building blocks. Prefer one calm default over a new toggle; add a setting only when real workflows genuinely diverge, never to dodge a default decision (don't build it → calm default → opt-in setting).
-- **Privacy & offline first:** no analytics, tracking, or telemetry (see Project rules → Privacy). Core task and time tracking must work fully offline; sync and online integrations are optional layers that degrade gracefully, never prerequisites.
+- **Avoid feature creep:** extend existing building blocks; new UI, settings and sync surface must make users faster. A personal deep-work tool, not team management or reporting. Surface the leaner alternative when scope outgrows the problem.
+- **Less noise, more depth:** no constant alerts, vanity dashboards, streaks or dopamine loops. Attention-grabbing behavior ships off by default; reminders stay opt-in.
+- **Adapt, don't impose:** one calm default; add a setting only when real workflows diverge. Prefer not building a feature over adding a toggle to dodge a decision.
+- **Privacy & offline first:** no analytics, tracking or telemetry; user data stays local unless explicitly synced. Core tasks and time tracking work offline; sync and integrations are optional and degrade gracefully.
 
 ## Required reading per task
 
-- Styling changes → [`docs/styling-guide.md`](docs/styling-guide.md)
-- User-facing functionality changes → [`docs/documentation-guide.md`](docs/documentation-guide.md)
-- Sync, op-log, vector clocks → [`docs/sync-and-op-log/`](docs/sync-and-op-log/)
-- Effects/reducers/bulk-dispatch touching synced state → [`docs/sync-and-op-log/contributor-sync-model.md`](docs/sync-and-op-log/contributor-sync-model.md)
-- E2E tests → [`e2e/CLAUDE.md`](e2e/CLAUDE.md)
+- Styling → [`docs/styling-guide.md`](docs/styling-guide.md); user-facing functionality → [`docs/documentation-guide.md`](docs/documentation-guide.md)
+- Sync, op-log, vector clocks → [sync index](docs/sync-and-op-log/README.md), then only the relevant contracts. Effects/reducers/bulk dispatch touching synced state → [`contributor-sync-model.md`](docs/sync-and-op-log/contributor-sync-model.md). Judging whether a sync bug is real / how severe → [`sync-severity-triage.md`](docs/sync-and-op-log/sync-severity-triage.md)
+- E2E tests → [`e2e/AGENTS.md`](e2e/AGENTS.md); marketing videos → [`e2e/store-video/AGENTS.md`](e2e/store-video/AGENTS.md)
 - Load-bearing decisions → [`ARCHITECTURE-DECISIONS.md`](ARCHITECTURE-DECISIONS.md)
-- Reviewing a feature or PR → [`docs/feature-review-guide.md`](docs/feature-review-guide.md)
-- Editing a type in `packages/plugin-api/`, `packages/shared-schema/`, `packages/sync-core/`, `src/app/op-log/core/`, or a model a `MODEL_CONFIGS` slice persists → [`docs/feature-review-guide.md`](docs/feature-review-guide.md) § Long-term cost of a change
-- Judging whether a sync bug is real / how severe → [`docs/sync-and-op-log/sync-severity-triage.md`](docs/sync-and-op-log/sync-severity-triage.md)
+- Designing a user-facing feature or writing its plan → [`docs/feature-review-guide.md`](docs/feature-review-guide.md) § Does it earn its place? and § Prior art
+- Reviewing a feature or PR → [`docs/feature-review-guide.md`](docs/feature-review-guide.md); editing a type in `packages/plugin-api/`, `packages/shared-schema/`, `packages/sync-core/`, `src/app/op-log/core/`, or a model a `MODEL_CONFIGS` slice persists → its § Long-term cost of a change
 
 ## Core commands
 
-**ALWAYS run `npm run checkFile <filepath>` on every `.ts` or `.scss` file you modify** before reporting work as done.
+**Run `npm run checkFile <file...>` on every modified `.ts` or `.scss` file before reporting work as done** (pass all files in one call). If root ESLint ignores a file (e.g. in a package), use formatting plus that package's checks in [packages/README.md](packages/README.md#validation); an ignored file is not a lint pass. Regenerate generated files through their owner script.
 
 ```bash
-npm run checkFile <filepath>   # prettier + lint a single file
+npm run checkFile <files...>   # prettier + lint
 npm run prettier               # multi-file format
 npm run lint                   # multi-file lint
-npm test                       # all unit tests (Jasmine/Karma, .spec.ts co-located)
-npm run test:file <filepath>   # single spec
-npm run test:electron          # main-process tests — `electron/*.test.cjs`, NOT .spec.ts
-                               # (tsconfig.electron.json excludes *.spec.ts, so a spec
-                               #  placed under electron/ silently never runs)
-npm run e2e                    # all E2E (Playwright, slow)
-npm run e2e:file <path> -- --retries=0   # single E2E (~20s/test); add --grep "name" for one test
+npm test                       # shared packages + release tooling + Angular specs (Berlin, LA subset; CI: test:ci, full LA)
+npm run test:affected          # Angular specs importing files changed vs master (Berlin + LA subset); `-- --list` to preview
+npm run test:file <filepath>   # single Angular spec; package tests use package scripts
+npm run test:electron          # main-process tests are electron/*.test.cjs; a .spec.ts there never runs
+npm run e2e                    # browser E2E, excludes SuperSync/WebDAV
+npm run e2e:file <path> -- --retries=0             # single non-sync E2E; add --grep "name"
+npm run e2e:supersync:file <path> -- --retries=0   # starts and requires SuperSync
+npm run e2e:webdav:file <path> -- --retries=0      # starts and requires WebDAV
 npm start                      # Electron dev
-ng serve                       # web dev (or npm run startFrontend)
-npm run dist                   # production build (all platforms available locally)
+npm run startFrontend          # web dev, generates environment constants first
+npm run dist                   # validated Electron distribution for the host platform
 ```
 
-**Run the full SuperSync and WebDAV E2E suites via GitHub Actions:** manually dispatch [`E2E Tests (Scheduled)`](.github/workflows/e2e-scheduled.yml) for your branch. This should be preferred over running the full suites locally; the workflow provides dedicated WebDAV and sharded SuperSync jobs. The optional `grep` input filters the SuperSync job only.
+**Wrap test, lint and E2E runs in `npm run quiet -- <script> [args]`** (e.g. `npm run quiet -- test:affected`, `npm run quiet -- e2e:file <path> --retries=0`): the full output goes to `.tmp/logs/`, and only the pass line (with test counts where the runner prints them), or the last 60 log lines on failure, reach your context. `rg` the printed log path for more.
 
-For local SuperSync E2E (docker-compose) and the full E2E reference, see [`e2e/CLAUDE.md`](e2e/CLAUDE.md).
+While iterating on app code, use `npm run test:affected` instead of a full `npm test`. It covers Angular specs only: after editing `packages/*` also run that package's tests, and run `npm test` before opening a PR. It follows static imports, templates and styles; test setup, configs and unimported assets/styles trigger a full run. "Nothing to run" means nothing was tested. CI runs everything (`test:ci`).
+
+For full provider suites prefer the [scheduled E2E workflow](.github/workflows/e2e-scheduled.yml) (`grep` filters SuperSync; `webdav_grep` + `run_webdav` for WebDAV); focused local runs and provider-switch prerequisites are in [e2e/AGENTS.md](e2e/AGENTS.md) (they need both servers and both flags, else they silently skip). Skipped tests do not validate a fix.
+
+`tsc -p tsconfig.json --noEmit` validates nothing (root config has `files: []`); use the app/spec/Electron config or package checks ([why](docs/hardening-earns-its-place.md#the-three-failure-modes-worth-remembering)).
 
 ## Project rules
 
-- **Translations:** UI strings go through `T` / `TranslateService`. Edit only `en.json`; never other locales — **except placeholders**: when an English string gains a `{{placeholder}}`, hand-edit every locale that already translates that string, because the i18n script only fills in keys that are missing entirely → [`docs/TRANSLATING.md`](docs/TRANSLATING.md).
-- **Privacy:** no analytics or tracking — user data stays local unless explicitly synced.
-- **Dependencies:** PRs must not add new packages to the root project's `dependencies` or `devDependencies`; use platform APIs, existing packages, or a small in-repo implementation instead. Dependencies scoped to an individual plugin are allowed when they are necessary and remain isolated to that plugin.
+- **Translations:** `T` holds keys; render with the translate pipe or `TranslateService`. Edit only `en.json`, except when adding placeholders: then update every existing translation to interpolate them. See [translation workflow](docs/TRANSLATING.md).
+- **Dependencies:** never add packages to the root `dependencies`/`devDependencies`; use platform APIs, existing packages or a small in-repo implementation. A plugin may add a necessary dependency isolated to that plugin.
 - **Electron:** check `IS_ELECTRON` before using Electron-specific APIs.
-- **Templates:** plain HTML, minimal CSS/classes, Angular Material sparingly. See [`docs/styling-guide.md`](docs/styling-guide.md).
-- **Styling review:** do not locally restyle Angular Material or shared `src/app/ui/` components for one-off context needs. This includes overriding button styles via `.mat-*`, `.mdc-*`, `button[mat-*]`, or component internals in local SCSS. Prefer existing inputs/classes/tokens; if a variant must exist, make it reusable or add it to the shared style layer.
-- **Strict TypeScript:** no `any` (use `unknown` if truly unknown).
-- **State:** never mutate NgRx state — return new objects in reducers. Prefer Signals to Observables.
+- **Templates & styling:** plain HTML, minimal CSS/classes, Angular Material sparingly ([styling guide](docs/styling-guide.md)). Never restyle Angular Material or shared `src/app/ui/` components for a one-off (local `.mat-*`, `.mdc-*`, `button[mat-*]` or component-internal overrides, re-declared theme styles); use existing inputs/classes/tokens/theme variables, or make the variant reusable in the shared style layer.
+- **State:** never mutate NgRx state — reducers return new objects. Prefer Signals to Observables.
 - **Tests:** add unit tests for new services and state logic.
-- **Service size cap:** no service may exceed 1200 lines (physical lines — blanks and comments count), lint-enforced via `max-lines` on `**/*.service.ts`; specs are exempt. Split by responsibility before crossing the line — extract collaborators, move pure logic to utils or `packages/` — and never grow a service past it. The pre-existing offenders grandfathered to warnings in `eslint.config.js` are debt to pay down when touched, never a license to add lines: that list may only shrink, never grow.
-- **Agent-control files:** never modify `AGENTS.md`, `CLAUDE.md`, `.agents/**`, or `.codex/**` unless the user explicitly requests it in the current task. Keep such changes isolated from product/code changes in a dedicated commit or PR, and describe how they alter future agent behavior. When adding an incident-derived rule to this file, keep it to invariant + enforcement + issue/doc pointers and move the narrative to `docs/` — this file must stay skimmable — and date any statistics you cite ("measured YYYY-MM").
-- **Hardening needs an observed instance:** before adding a guard — a lint-rule branch, a runtime assertion, a defensive check — grep this repo for a real occurrence of the shape it catches; zero occurrences → record a known gap instead. A generated allowlist may only shrink: never grow it to absorb a false positive, fix the check or scope a disable with a reason. Before trusting a check that passed, confirm it can fail. Generalises the sync section's "start from a reproducible problem" → [`docs/hardening-earns-its-place.md`](docs/hardening-earns-its-place.md).
-- **Does it earn its place?** For a new feature, the first review question is whether it should exist at all — not whether the diff is correct. Complexity added is permanent, so the burden is on the change to justify it, and a correct, well-tested implementation of something that doesn't earn its place is still a decline. Treat the stated motivation as a claim to verify, never as context to accept → [`docs/feature-review-guide.md`](docs/feature-review-guide.md).
-- **Code review:** weigh the long-term costs a change introduces — maintenance burden, hard-to-reverse choices (data shapes, public/plugin APIs, sync formats), locked-in dependencies, footguns that surface only at scale or across synced clients — not just whether the immediate diff is correct. Persisted models, the sync wire and the plugin API are permanent once shipped: check them explicitly on every PR that touches them, however small → [`docs/feature-review-guide.md`](docs/feature-review-guide.md).
-- **Task component is a hot path:** every change to `src/app/features/tasks/task/task.component.*` (rendered once per task in long, scrollable lists) must be double-checked for negative performance impact — avoid function/getter calls in the template, extra change-detection work, and uncleaned subscriptions; verify against a large task list.
+- **Service size:** ≤ 1200 physical lines per `*.service.ts` (specs exempt; ESLint `max-lines`). Split by responsibility before crossing; never grow grandfathered offenders — the per-file caps pinned in `eslint.config.js` may only go down.
+- **Agent-control files:** modify `AGENTS.md`, `CLAUDE.md`, `.agents/**` or `.codex/**` only when the user explicitly asks in the current task; keep it in a dedicated commit/PR that says how it changes agent behavior. Incident-derived rules here are invariant + enforcement + issue/doc pointer only (narrative goes to `docs/`; this file must stay skimmable); date cited statistics ("measured YYYY-MM").
+- **Hardening needs evidence:** grep for an observed instance before adding a guard; zero instances → record a gap instead. Allowlists only shrink (fix false positives or scope a justified disable). Verify a check can fail before trusting a pass. [Evidence](docs/hardening-earns-its-place.md).
+- **Does it earn its place?** Verify demand before judging implementation; decline a correct feature that adds unjustified complexity. [Review guide](docs/feature-review-guide.md).
+- **Code review:** assess maintenance cost, dependencies, scale and cross-client behavior; on every change touching persisted models, the sync wire or public/plugin APIs, check them explicitly, however small. [Long-term cost](docs/feature-review-guide.md#long-term-cost-of-a-change).
+- **Task component is a hot path:** `src/app/features/tasks/task/task.component.*` renders once per task in long lists; double-check every change for performance impact — no template function/getter calls, no extra change detection, no uncleaned subscriptions; verify against a large task list.
 
 ## Sync-correctness rules
 
-Touched on most state-related PRs. Read the linked source/doc for full reasoning before editing. Rules 1–3 and 6 are one invariant — _one user intent = one op; replayed/remote ops must not re-trigger effects_ — fully explained in [`docs/sync-and-op-log/contributor-sync-model.md`](docs/sync-and-op-log/contributor-sync-model.md).
+These apply to all state-related work. **One user intent = one op; replayed/remote ops must not re-trigger effects.** Read [the contributor model](docs/sync-and-op-log/contributor-sync-model.md) before editing. Sync changes are high-risk: check replay determinism, concurrent/remote edits, vector-clock conflicts and data-loss modes; report material risks before marking work done.
 
-**Every change to the sync system is high-risk:** a subtle bug can silently corrupt or lose user data across devices and is hard to recover from. Carefully check each change for correctness and possible failure modes (replay determinism, concurrent/remote edits, vector-clock conflicts) and call out the risks before reporting work as done.
+- **Released clients:** `master` auto-publishes to Play internal, Snap `edge` and `supersync:latest`. Prove release inclusion with `git tag --contains`; an unreproduced finding is not a false one. [Severity triage](docs/sync-and-op-log/sync-severity-triage.md).
+- **Reproduce first:** every sync change starts from a reproducible failure with real data shapes, not a mocked seam. A sync bug fix needs an exact E2E reproduction written first (fails without the fix, passes with it); unit tests may supplement it. Only app-unreachable server internals or providers without an E2E harness may use the narrowest real-path test instead — say why in the PR. Question unreproducible hardening rather than adding guards.
 
-**Judging a sync bug's severity** (before you call one low-risk): `master` ships to real users — Play internal track, Snap `edge`, and `supersync:latest` all auto-publish from every push. Never infer "shipped" from dates or the latest tag; prove it with `git tag --contains`. An unreproduced finding is not a false one. → [`docs/sync-and-op-log/sync-severity-triage.md`](docs/sync-and-op-log/sync-severity-triage.md).
-
-**Start from a reproducible problem:** any change to the sync system must begin with a reproducible failure — a failing test or scripted E2E reproduction against real data shapes (a fixture or seeded DB state), not a mocked seam. Hardening added without an observed end-to-end failure is how the sync layer accumulates overly defensive complexity; if you cannot reproduce the problem first, question the change instead of piling on guards.
-
-1. **Effects inject `LOCAL_ACTIONS`**, never `Actions` (`ALL_ACTIONS` only for the op-log capture effect; remote archive side effects → `ArchiveOperationHandler`, not `ALL_ACTIONS`). Lint-enforced (`no-actions-in-effects`). → [contributor-sync-model.md](docs/sync-and-op-log/contributor-sync-model.md), `src/app/util/local-actions.token.ts`.
-2. **Prefer action-based effects**; a selector-based effect needs `skipDuringSyncWindow()`. Lint-enforced (`require-hydration-guard`). → [contributor-sync-model.md](docs/sync-and-op-log/contributor-sync-model.md).
-3. **Multi-entity change = meta-reducer**, not an effect fan-out (one reducer pass = one op). → [contributor-sync-model.md](docs/sync-and-op-log/contributor-sync-model.md), `src/app/root-store/meta/task-shared-meta-reducers/`.
-4. **Logical clock:** route "what day is this?" through `DateService` (`getLogicalTodayDate`, `isToday`, `todayStr`). Pure reducers/selectors take `startOfNextDayDiffMs` as an arg and call `isTodayWithOffset` for replay determinism. The raw `DateService.startOfNextDayDiff` is `private`; use `getStartOfNextDayDiffMs()` at service boundaries.
-5. **`TODAY_TAG` (`'TODAY'`) is virtual** — never add to `task.tagIds`; membership comes from `task.dueWithTime` or `task.dueDay`. `TODAY_TAG.taskIds` only stores ordering. → `ARCHITECTURE-DECISIONS.md` Decision #2.
-6. **Bulk dispatch loop:** `await new Promise(r => setTimeout(r, 0))` after the loop (else 50+ rapid dispatches lose state). → [contributor-sync-model.md](docs/sync-and-op-log/contributor-sync-model.md), `OperationApplierService.applyOperations()`.
+1. **Effects inject `LOCAL_ACTIONS`**, never `Actions` (`ALL_ACTIONS` only for the op-log capture effect; remote archive side effects → `ArchiveOperationHandler`). Lint: `no-actions-in-effects`. → `src/app/util/local-actions.token.ts`.
+2. **Prefer action-based effects**; a selector-based effect needs `skipDuringSyncWindow()`. Lint: `require-hydration-guard`.
+3. **Multi-entity change = meta-reducer**, not an effect fan-out (one reducer pass = one op). → `src/app/root-store/meta/task-shared-meta-reducers/`.
+4. **Logical clock:** "what day is this?" goes through `DateService` (`getLogicalTodayDate`, `isToday`, `todayStr`). Pure reducers/selectors take `startOfNextDayDiffMs` as an arg and call `isTodayWithOffset` for replay determinism. At service boundaries use `getStartOfNextDayDiffMs()` (the raw field is `private`).
+5. **`TODAY_TAG` (`'TODAY'`) is virtual** — never in `task.tagIds`; membership comes from `task.dueWithTime`/`task.dueDay`, `TODAY_TAG.taskIds` only orders. → `ARCHITECTURE-DECISIONS.md` Decision #2.
+6. **Bulk dispatch loop:** needs no `setTimeout(0)` yield: capture is synchronous and writes are ordered under the op-log lock (measured 2026-10, single tab: 50–500 dispatches without yields lost no ops, #10441). Prefer one meta-reducer action (rule 3); if a follow-up depends on the loop's ops, await `OperationWriteFlushService.flushPendingWrites()` (never while holding the op-log lock). Leave existing yields in place. → [atomicity rule](docs/sync-and-op-log/contributor-sync-model.md#the-atomicity-rule--one-replay-atomic-transition-one-op).
 7. **`SYNC_IMPORT` / `BACKUP_IMPORT`** replace state and intentionally drop concurrent ops (CONCURRENT or LESS_THAN by vector clock) — by design, not a bug. → `SyncImportFilterService`.
-8. **Vector clocks:** `MAX_VECTOR_CLOCK_SIZE = 20`. Server prunes after conflict detection, before storage. → `docs/sync-and-op-log/vector-clocks.md`.
-9. **Logging:** `Log.log({ id: task.id })`, never `Log.log(task)` or `Log.log(title)` — log history is exportable, never log user content.
-10. **A schema bump never protects the released fleet, is near-irreversible, and is not free even when safe — default to NOT bumping `CURRENT_SCHEMA_VERSION`.** New op semantics MUST degrade gracefully on older clients (`LwwUpdatePayload` envelope / inert-marker pattern). A change old clients would misapply must not ship behind a bump alone; a change they can tolerate must not ship behind a bump at all. → `packages/shared-schema/src/schema-version.ts`, normative policy in [operation-log-architecture.md](docs/sync-and-op-log/operation-log-architecture.md) §A.7.11 "Bump Policy".
-11. **A new REQUIRED field on a persisted model breaks every existing install — type it optional (`?`) plus a runtime default.** Data already on users' disks lacks the field and typia rejects it on hydration; TypeScript guards only _new_ data, so the build goes green while every existing install fails validation, and the failure stays latent until an unrelated bump drags old data onto the migration path. **Do not assume a heal exists.** Guarded by `src/app/op-log/validation/frozen-state.spec.ts` — if it fails, fix the model, never the fixture. → full analysis: [persisted-model-fields.md](docs/sync-and-op-log/persisted-model-fields.md), #9125, #9124.
+8. **Vector clocks:** `MAX_VECTOR_CLOCK_SIZE = 20`; the server prunes after conflict detection, before storage. → `docs/sync-and-op-log/vector-clocks.md`.
+9. **Logging:** `Log.log({ id: task.id })`, never `Log.log(task)` or a title — log history is exportable; never log user content.
+10. **Don't bump `CURRENT_SCHEMA_VERSION` by default.** A bump does not protect released clients; new semantics must degrade gracefully (`LwwUpdatePayload` / inert markers); incompatible semantics cannot ship behind a bump alone, and compatible changes do not justify one. [Bump policy](docs/sync-and-op-log/operation-log-architecture.md#bump-policy--a-bump-does-not-protect-the-released-fleet).
+11. **New persisted fields must be optional (`?`) with a runtime default** — on-disk data lacks them; don't assume a heal. If [frozen-state.spec.ts](src/app/op-log/validation/frozen-state.spec.ts) fails, fix the model, never the fixture. [Rules](docs/sync-and-op-log/persisted-model-fields.md), #9125, #9124.
+12. **Conflict fixes take generic paths** (field patch, derived membership, admission sets) over per-action logic (admitting an action that meets a set's documented contract is fine; if none fits, make the smallest safe change and say why in the PR), and prove convergence and content preservation in both conflict directions with an E2E. Removing a safety stop alone is not a fix (#10264). → [conflict resolution](docs/sync-and-op-log/contributor-sync-model.md#conflict-resolution--stay-on-generic-paths).
+13. **No new denormalized lists or undeclared cross-entity writes** — store the fact on the child and derive membership (`ARCHITECTURE-DECISIONS.md` Decision #2). True multi-entity transitions still follow rule 3. → same section.
+14. **No new crossing may reach the fail-closed stop** (`UnsupportedMultiEntityConflictError`, ending in the whole-dataset dialog). A PR adding or changing an action that declares several entity ids names its resolution path and covers it with an E2E; without one, reshape it (one declared entity, fact on the child) instead of compensating. → same section.
+15. **A sync fix needs evidence of harm** — it lands only for a user report, a regression on unreleased master (revert first unless that brings back a released bug), or data loss, a sync stop or permanent content divergence on a path released clients or default settings take. Other findings from audits, reviews or fuzzing become issues with a reproduction, not PRs. → [fix intake](docs/sync-and-op-log/contributor-sync-model.md#fix-intake--evidence-before-a-fix).
+16. **At most five open sync PRs; each gets a fresh-context review-and-improve subagent pass before ready**: it sees only the branch, diff, tracker and [`feature-review-guide.md`](docs/feature-review-guide.md), runs the tests and fixes what makes sense; findings go fixed/not fixed in the PR body's "Review" section, not PR comments. Further work waits as a draft PR or issue. An agent session never approves its own sync PR. → [fix intake](docs/sync-and-op-log/contributor-sync-model.md#fix-intake--evidence-before-a-fix).
+
+Rules 12–16 are review-enforced.
 
 ## Anti-patterns
 
-| Avoid                                                                      | Do instead                                |
-| -------------------------------------------------------------------------- | ----------------------------------------- |
-| `any` type                                                                 | proper types, `unknown` if truly unknown  |
-| Direct DOM access                                                          | Angular bindings, `viewChild()`           |
-| Side effects in constructors                                               | `async` pipe or `toSignal`                |
-| Subscribing without cleanup                                                | `takeUntilDestroyed()` or async pipe      |
-| `NgModules` for new code                                                   | standalone components                     |
-| Re-declaring Material theme styles                                         | existing theme variables                  |
-| One-off `.mat-*`, `.mdc-*`, `button[mat-*]`, or shared component overrides | reusable inputs, tokens, or shared styles |
+| Avoid                        | Do instead                               |
+| ---------------------------- | ---------------------------------------- |
+| `any` type                   | proper types, `unknown` if truly unknown |
+| Direct DOM access            | Angular bindings, `viewChild()`          |
+| Side effects in constructors | `async` pipe or `toSignal`               |
+| Subscribing without cleanup  | `takeUntilDestroyed()` or async pipe     |
+| `NgModules` for new code     | standalone components                    |

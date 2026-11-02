@@ -1,0 +1,159 @@
+// Same look as the onboarding hint chip it grows from.
+.card {
+  position: fixed;
+  z-index: var(--z-onboarding-hint);
+  inset-inline-end: var(--s3);
+  bottom: var(--s3);
+  width: 380px;
+  max-width: calc(100vw - 2 * var(--s));
+  max-height: calc(100vh - 2 * var(--s3));
+  overflow: auto;
+  pointer-events: auto;
+  box-sizing: border-box;
+  padding: var(--s2) var(--s) var(--s) var(--s2);
+  background: var(--card-bg);
+  border: 1px solid var(--palette-primary-500);
+  border-radius: var(--s);
+  box-shadow: var(--whiteframe-shadow-8dp);
+  font-size: var(--font-size-md);
+  color: var(--text-color);
+
+  &.is-phone {
+    inset-inline: var(--s);
+    bottom: calc(var(--bottom-nav-height) + var(--bottom-nav-safe-area) + var(--s));
+    width: auto;
+    max-width: none;
+    max-height: calc(
+      100vh - var(--bottom-nav-height) - var(--bottom-nav-safe-area) - 2 * var(--s3)
+    );
+  }
+
+  ::ng-deep {
+    kbd,
+    code {
+      padding: 0 var(--s-half);
+      font-size: var(--font-size-xs);
+      font-family: inherit;
+      background: rgba(var(--ink-on-channel), 0.08);
+      border: 1px solid rgba(var(--ink-on-channel), var(--border-alpha));
+      border-radius: 3px;
+    }
+  }
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: var(--s);
+}
+
+.title {
+  flex: 1;
+  margin: 0;
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+}
+
+.counter {
+  font-size: var(--font-size-sm);
+  color: var(--text-color-muted);
+}
+
+.close-btn {
+  padding: var(--s-half);
+  font-size: var(--font-size-md);
+  line-height: 1;
+  color: var(--text-color);
+  opacity: 0.5;
+  background: none;
+  border: none;
+  cursor: pointer;
+
+  &:hover,
+  &:focus-visible {
+    opacity: 1;
+  }
+
+  &:focus-visible {
+    outline: var(--focus-ring-width) solid var(--focus-ring-color);
+    outline-offset: var(--focus-ring-offset);
+  }
+}
+
+.intro {
+  margin: var(--s-half) 0 var(--s);
+  color: var(--text-color-muted);
+}
+
+.teasers {
+  margin: 0 0 var(--s-half);
+  padding: 0;
+  list-style: none;
+
+  li {
+    display: flex;
+    align-items: center;
+    gap: var(--s-half) var(--s2);
+    padding: var(--s-half) 0;
+    color: var(--text-color-muted);
+
+    mat-icon {
+      flex-shrink: 0;
+      color: var(--palette-primary-500);
+    }
+
+    ::ng-deep b {
+      font-weight: var(--font-weight-semibold);
+      color: var(--text-color);
+    }
+  }
+}
+
+.aside {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  margin: var(--s) 0;
+  font-size: var(--font-size-sm);
+
+  mat-icon {
+    flex-shrink: 0;
+    color: var(--text-color-muted);
+  }
+}
+
+.actions {
+  display: flex;
+  justify-content: space-between;
+  margin-top: var(--s-half);
+}
+
+.card-action {
+  padding: var(--s) var(--s-half) var(--s) 0;
+  font: inherit;
+  font-weight: var(--font-weight-semibold);
+  color: var(--palette-primary-500);
+  background: none;
+  border: none;
+  border-radius: var(--s-half);
+  cursor: pointer;
+
+  &:last-child {
+    padding-inline: var(--s);
+  }
+
+  &:hover {
+    text-decoration: underline;
+  }
+
+  &:focus-visible {
+    outline: var(--focus-ring-width) solid var(--focus-ring-color);
+    outline-offset: var(--focus-ring-offset);
+  }
+}
+
+.foot {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--text-color-muted);
+}
