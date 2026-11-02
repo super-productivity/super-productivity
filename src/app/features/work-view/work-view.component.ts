@@ -9,6 +9,7 @@ import {
   afterNextRender,
   inject,
   input,
+  linkedSignal,
   OnDestroy,
   OnInit,
   signal,
@@ -26,6 +27,7 @@ import { TakeABreakService } from '../take-a-break/take-a-break.service';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import {
   animationFrameScheduler,
+  firstValueFrom,
   from,
   fromEvent,
   Observable,
@@ -108,6 +110,7 @@ import { PluginIndexComponent } from '../../plugins/ui/plugin-index/plugin-index
 import { PluginBridgeService } from '../../plugins/plugin-bridge.service';
 import { PlainspaceClaimPoolComponent } from '../plainspace/claim-pool/claim-pool.component';
 import { PlainspaceSharedTask } from '../plainspace/plainspace-shared-task.model';
+import { DIALOG_AUTO_FOCUS_TYPING } from '../../util/dialog-auto-focus';
 
 // Stable reference used as the toSignal initial value below so the deselect
 // effect can tell "the customized list hasn't emitted yet" apart from a
@@ -315,6 +318,13 @@ export class WorkViewComponent implements OnInit, OnDestroy {
   selectedTaskId = this.taskService.selectedTaskId;
   isOnTodayList = toSignal(this.workContextService.isTodayList$, { initialValue: false });
   isDoneHidden = signal(!!localStorage.getItem(LS.DONE_TASKS_HIDDEN));
+  // Projected content is built even while its collapsible is closed, so the Done
+  // list is created on first expand only; it is kept afterwards so collapsing
+  // animates the rows out and re-expanding is free.
+  isDoneListBuilt = linkedSignal<boolean, boolean>({
+    source: this.isDoneHidden,
+    computation: (isHidden, previous) => !!previous?.value || !isHidden,
+  });
   isLaterTodayHidden = signal(!!localStorage.getItem(LS.LATER_TODAY_TASKS_HIDDEN));
   isOverdueHidden = signal(!!localStorage.getItem(LS.OVERDUE_TASKS_HIDDEN));
   isRepeatCfgsHidden = signal(!!localStorage.getItem(LS.REPEAT_CFGS_HIDDEN));
@@ -565,6 +575,7 @@ export class WorkViewComponent implements OnInit, OnDestroy {
   editSection(id: string, title: string): void {
     this._matDialog
       .open(DialogPromptComponent, {
+        autoFocus: DIALOG_AUTO_FOCUS_TYPING,
         data: {
           placeholder: T.WW.ADD_SECTION_TITLE,
           txtValue: title,
@@ -584,7 +595,9 @@ export class WorkViewComponent implements OnInit, OnDestroy {
   }
 
   async moveDoneToArchive(): Promise<void> {
-    const doneTasks = this.doneTasks();
+    // not this.doneTasks(): on Today that hides done tasks from earlier days,
+    // which should still be swept
+    const doneTasks = await firstValueFrom(this.workContextService.doneTasksToArchive$);
 
     if (!doneTasks || doneTasks.length === 0) {
       return;

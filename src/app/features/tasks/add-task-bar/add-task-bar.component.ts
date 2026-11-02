@@ -48,7 +48,7 @@ import {
 import { IS_ANDROID_WEB_VIEW_TOKEN } from '../../../util/is-android-web-view';
 import { IosKeyboardService } from '../../../core/theme/ios-keyboard.service';
 import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
-import { BehaviorSubject, combineLatest, from, Observable } from 'rxjs';
+import { BehaviorSubject, combineLatest, firstValueFrom, from, Observable } from 'rxjs';
 import { MatDialog } from '@angular/material/dialog';
 import { DialogConfirmComponent } from '../../../ui/dialog-confirm/dialog-confirm.component';
 import {
@@ -182,6 +182,16 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
   isAddToBacklog = signal(false);
   isSearchMode = signal(false);
   isSearchLoading = signal(false);
+  // The term the last search came back empty for; compared to the live input so
+  // the "no matches" row hides while typing instead of flashing per keystroke.
+  private readonly _noMatchesForTerm = signal<string | null>(null);
+  isShowNoSearchMatches = computed(
+    () =>
+      this.isSearchMode() &&
+      !this.isSearchLoading() &&
+      !!this.stateService.inputTxt() &&
+      this._noMatchesForTerm() === this.stateService.inputTxt(),
+  );
   activatedSuggestion$ = new BehaviorSubject<AddTaskSuggestion | null>(null);
   isMentionListShown = signal(false);
   isScheduleDialogOpen = signal(false);
@@ -191,7 +201,9 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
   // Observable version for compatibility with existing code
   projects$ = toObservable(this.projects);
   tags$ = this._tagService.tags$;
-  suggestions$!: Observable<AddTaskSuggestion[]>;
+  // one subscription feeds both the list and the "no matches" row, so the two
+  // can never show results of different searches
+  suggestions = signal<AddTaskSuggestion[]>([]);
   activatedIssueTask = toSignal(this.activatedSuggestion$, { initialValue: null });
 
   // Computed values
@@ -453,21 +465,24 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
   }
 
   private _setupSuggestions(): void {
-    this.suggestions$ = this._addTaskBarIssueSearchService.getFilteredIssueSuggestions$(
-      this.stateService.inputTxt$,
-      this._isSearchIssueProviders$,
-      this.isSearchLoading,
-    );
-
-    // Auto-activate first suggestion when autoActiveFirstOption is true
-    this.suggestions$
+    this._addTaskBarIssueSearchService
+      .getFilteredIssueSuggestions$(
+        this.stateService.inputTxt$,
+        this._isSearchIssueProviders$,
+        this.isSearchLoading,
+      )
       .pipe(takeUntilDestroyed(this._destroyRef))
       .subscribe((suggestions) => {
+        this.suggestions.set(suggestions ?? []);
+        // Auto-activate first suggestion when autoActiveFirstOption is true
         if (suggestions && suggestions.length > 0) {
           this.onTaskSuggestionActivated(suggestions[0]);
         } else {
           this.onTaskSuggestionActivated(null);
         }
+        this._noMatchesForTerm.set(
+          suggestions?.length ? null : this.stateService.inputTxt(),
+        );
       });
   }
 
@@ -739,31 +754,45 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
     if (suggestion.taskId && this.isNoDefaults() && !suggestion.isArchivedTask) {
       taskId = suggestion.taskId;
     } else if (suggestion.taskId && suggestion.isFromOtherContextAndTagOnlySearch) {
+      let isTaskFound = true;
       if (planForDay) {
         await this._planTaskForCurrentDay(suggestion.taskId);
         didPlanForDay = true;
       } else if (this._workContextService.activeWorkContextType === WorkContextType.TAG) {
         const task = await this._taskService.getByIdOnce$(suggestion.taskId).toPromise();
         this._taskService.moveToCurrentWorkContext(task);
+      } else {
+        // moving to another project carries the sub tasks along, so it needs them
+        const task = await firstValueFrom(
+          this._taskService.getByIdWithSubTaskData$(suggestion.taskId),
+        );
+        // deleted (e.g. by sync) since the search ran: nothing to move or report
+        isTaskFound = !!task;
+        if (task) {
+          this._taskService.moveToCurrentWorkContext(task);
+        }
       }
-      this._snackService.open({
-        ico: 'playlist_add',
-        msg: T.F.TASK.S.FOUND_MOVE_FROM_OTHER_LIST,
-        translateParams: {
-          title: truncate(suggestion.title),
-          contextTitle: suggestion.ctx?.title
-            ? truncate(suggestion.ctx.title)
-            : '~the void~',
-        },
-      });
-      taskId = suggestion.taskId;
+      if (isTaskFound) {
+        this._snackService.open({
+          ico: 'playlist_add',
+          msg: T.F.TASK.S.FOUND_MOVE_FROM_OTHER_LIST,
+          translateParams: {
+            title: truncate(suggestion.title),
+            contextTitle: suggestion.ctx?.title
+              ? truncate(suggestion.ctx.title)
+              : '~the void~',
+          },
+        });
+        taskId = suggestion.taskId;
+      }
     } else if (suggestion.taskId) {
       if (planForDay) {
         await this._planTaskForCurrentDay(suggestion.taskId);
         didPlanForDay = true;
       } else if (suggestion.projectId) {
-        // Project contexts only suggest the project's own backlog tasks, so
-        // this is a move from the backlog, like the issue search's one.
+        // Only the project's own backlog tasks get here (other projects' tasks
+        // take the branch above), so this is a move from the backlog, like the
+        // issue search's one.
         this._projectService.moveTaskToTodayList(suggestion.taskId, suggestion.projectId);
       }
 
@@ -863,6 +892,7 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
 
   toggleSearchMode(): void {
     this.isSearchMode.update((mode) => !mode);
+    this._noMatchesForTerm.set(null);
     this.focusInput();
   }
 

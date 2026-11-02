@@ -77,6 +77,9 @@ test.describe('Quick tour', () => {
     await expect(hint).toContainText('Break it down');
     await expect(hint).toContainText('2 of 5');
     await expect(hint).toContainText("Timer's running");
+    // The running task shows ⏸, not ▶, so the note must name that icon.
+    await expect(hint.locator('.inline-icon', { hasText: 'pause' })).toBeVisible();
+    await expect(hint.locator('.inline-icon', { hasText: 'play_arrow' })).toHaveCount(0);
 
     // 2: add a subtask from the task's menu.
     await task.click({ button: 'right' });

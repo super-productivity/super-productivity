@@ -29,7 +29,8 @@ import {
   initializeProtocolHandling,
   processPendingProtocolUrls,
 } from './protocol-handler';
-import { getIsQuiting, setIsLocked } from './shared-state';
+import { getIsQuiting } from './shared-state';
+import { initPowerMonitorHandlers } from './power-monitor-handlers';
 import { evaluateGpuStartupGuard } from './gpu-startup-guard';
 import * as fs from 'fs';
 
@@ -334,7 +335,6 @@ export const startApp = (): void => {
     // Initialize idle time handler
     idleTimeHandler = new IdleTimeHandler();
 
-    let suspendStart: number;
     // Prevent overlapping async idle checks.
     // lazySetInterval schedules the next tick regardless of whether the previous
     // check finished. Our idle detection on Wayland may spawn external commands
@@ -408,39 +408,7 @@ export const startApp = (): void => {
     }, CONFIG.IDLE_PING_INTERVAL);
     // --------END IDLE HANDLING---------
 
-    // Don't raise or focus the window on resume/unlock: it stole focus from the
-    // app the user was in (#10726, #10700). The OS restores the previous
-    // foreground window itself; the electron#20464 workaround that used to run
-    // here targets the post-reboot case and lives in showOrFocus()/ready-to-show.
-    powerMonitor.on('suspend', () => {
-      log('powerMonitor: System suspend detected');
-      setIsLocked(true);
-      suspendStart = Date.now();
-      mainWin.webContents.send(IPC.SUSPEND);
-    });
-
-    powerMonitor.on('lock-screen', () => {
-      log('powerMonitor: Screen lock detected');
-      setIsLocked(true);
-      suspendStart = Date.now();
-      mainWin.webContents.send(IPC.SUSPEND);
-    });
-
-    powerMonitor.on('resume', () => {
-      const idleTime = Date.now() - suspendStart;
-      log(`powerMonitor: System resume detected. Idle time: ${idleTime}ms`);
-      setIsLocked(false);
-      sendIdleMsgIfOverMin(idleTime);
-      mainWin.webContents.send(IPC.RESUME);
-    });
-
-    powerMonitor.on('unlock-screen', () => {
-      const idleTime = Date.now() - suspendStart;
-      log(`powerMonitor: Screen unlock detected. Idle time: ${idleTime}ms`);
-      setIsLocked(false);
-      sendIdleMsgIfOverMin(idleTime);
-      mainWin.webContents.send(IPC.RESUME);
-    });
+    initPowerMonitorHandlers(powerMonitor, mainWin, sendIdleMsgIfOverMin);
   });
 
   appIN.on('will-quit', () => {

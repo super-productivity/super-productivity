@@ -96,7 +96,9 @@ export const hideById = async (page: Page, id: string, fadeMs: number): Promise<
       el.addEventListener('transitioncancel', remove);
       el.classList.remove('visible');
       el.style.opacity = '0';
-      if (args.fadeMs <= 0) el.remove();
+      // getAnimations() flushes style; no running animation means the fade-in
+      // never started (busy renderer), so 0 -> 0 fires no transition event.
+      if (args.fadeMs <= 0 || el.getAnimations().length === 0) el.remove();
     },
     { id, fadeMs },
   );

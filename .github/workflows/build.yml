@@ -215,6 +215,17 @@ jobs:
           fi
           bash tools/assert-deb-desktop-exec.sh "$DEB_FILE"
 
+      # #11136: same for the .rpm, plus the %posttrans that keeps the link on upgrade.
+      - name: Verify .rpm desktop entry Exec
+        run: |
+          set -euo pipefail
+          RPM_FILE=$(find ./.tmp/app-builds -type f -name '*.rpm' -print -quit)
+          if [ -z "$RPM_FILE" ]; then
+            echo "::error::no .rpm produced in .tmp/app-builds"
+            exit 1
+          fi
+          bash tools/assert-rpm-desktop-exec.sh "$RPM_FILE"
+
       - name: Normalize snap file name
         if: false == startsWith(github.ref, 'refs/tags/v')
         run: find ./.tmp/app-builds -type f -name '*.snap' -exec sh -c 'x="{}"; mv "$x" ".tmp/app-builds/sp.snap"' \;

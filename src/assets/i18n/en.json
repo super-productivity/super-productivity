@@ -97,7 +97,7 @@
   "EXAMPLE_TASKS": {
     "GETTING_STARTED": {
       "TITLE": "Optional: getting started tips",
-      "NOTES": "Nothing here is required. Delete this task whenever you like.\n\n- **Today and Inbox**: Today shows what is planned for today. Tasks without a project of your own stay in Inbox. A task can appear in both lists.\n- **Projects**: group tasks by topic with the **+** next to **Projects** in the sidebar.\n- **Sync**: keep your data on several devices under **Settings → Sync & Backup**.\n- **Coming from Todoist or TickTick?** Import your tasks under **Settings → Sync & Backup → Import/Export**.\n- **Tours**: **Help → Quick tour** in the sidebar menu walks you through the basics on your own task, and **Help → How to** shows short syntax and keyboard navigation step by step. Close a tour whenever you like.\n- **Make it yours**: pick a theme or dark mode, and switch features like boards, schedule, habits, focus mode or integrations on or off under **Settings → General**. Plugins add even more."
+      "NOTES": "Nothing here is required. Delete this task whenever you like.\n\n- **Today and Inbox**: Today shows what is planned for today. Tasks without a project of your own stay in Inbox. A task can appear in both lists.\n- **Projects**: group tasks by topic with the **+** next to **Projects** in the sidebar.\n- **Sync**: keep your data on several devices under **Settings → Sync & Backup**.\n- **Coming from Todoist or TickTick?** Import your tasks under **Settings → Sync & Backup → Import/Export**.\n- **Tours**: **Help → Quick tour** in the sidebar menu walks you through the basics on your own task, and **Help → How to** shows short syntax and keyboard navigation step by step. Close a tour whenever you like.\n- **Make it yours**: pick a theme or dark mode, and switch features like views, schedule, habits, focus mode or integrations on or off under **Settings → General**. Plugins add even more."
     }
   },
   "F": {
@@ -155,27 +155,55 @@
         "URGENT_IMPORTANT": "Urgent & Important",
         "URGENT_NOT_IMPORTANT": "Urgent & Not Important"
       },
-      "FORM": {
-        "ADD_NEW_PANEL": "Add new Panel",
-        "BACKLOG_TASK_FILTER_ALL": "All",
-        "BACKLOG_TASK_FILTER_NO_BACKLOG": "Exclude",
-        "BACKLOG_TASK_FILTER_ONLY_BACKLOG": "Backlog only",
-        "BACKLOG_TASK_FILTER_TYPE": "Backlog tasks",
+      "EDITOR": {
+        "ADD_COLUMN": "Add column",
+        "ADD_RULE": "Add rule",
+        "ADD_SECTION": "Add section",
+        "BACKLOG_EXCLUDE": "Exclude backlog",
+        "COLUMN_TITLE": "Column title",
         "COLUMNS": "Columns",
+        "COLUMNS_INVALID": "Whole number, 2 or more",
+        "COUNT": "{{nr}} tasks",
+        "COUNT_ONE": "1 task",
+        "DELETED_PROJECT": "1 archived or deleted project",
+        "DELETED_PROJECTS": "{{nr}} archived or deleted projects",
+        "EVERY_TASK": "Every task",
+        "LAYOUT": "Layout",
+        "LAYOUT_BOARD": "Board",
+        "LAYOUT_BOARD_HINT": "Columns side by side, tasks as cards",
+        "LAYOUT_LIST": "List",
+        "LAYOUT_LIST_HINT": "Sections stack in one task list",
+        "MISSING_TAG": "1 missing tag",
+        "MISSING_TAGS": "{{nr}} missing tags",
+        "MOVE_DOWN": "Move down",
+        "MOVE_UP": "Move up",
+        "NO_RULES": "Every task matches. Add a rule to narrow it down.",
+        "OTHER_KEPT": "Other (kept)",
+        "PLANNED_HAS_DATE": "Has a date",
+        "PLANNED_NO_DATE": "No date",
+        "REMOVE_RULE": "Remove rule",
+        "RULE_BACKLOG": "Backlog",
+        "RULE_DONE": "Completion",
+        "RULE_UNTAGGED": "Without tags",
+        "SECTION_ACTIONS": "More actions for {{title}}",
+        "SECTION_TITLE": "Section title",
+        "SECTIONS": "Sections",
+        "SHOW_TASKS_THAT_MATCH": "Show tasks that match",
+        "SORT_DIR_TOGGLE": "Change sort direction"
+      },
+      "FORM": {
+        "BACKLOG_TASK_FILTER_ONLY_BACKLOG": "Backlog only",
+        "COLUMNS": "Columns",
+        "DUE_STATE_NEXT_7_DAYS": "Next 7 days",
+        "DUE_STATE_OVERDUE": "Overdue",
+        "DUE_STATE_TODAY_OR_OVERDUE": "Today or overdue",
         "ONLY_PARENT_TASKS": "Only parent tasks",
-        "PROJECT": "Project",
-        "PROJECT_ALL": "All Projects",
-        "SCHEDULED_STATE": "Scheduled State",
-        "SCHEDULED_STATE_ALL": "All",
-        "SCHEDULED_STATE_NOT_SCHEDULED": "Not Scheduled",
-        "SCHEDULED_STATE_SCHEDULED": "Scheduled",
+        "RULE_NOT_SET": "Not set",
         "SORT_BY": "Sort by",
         "SORT_BY_CREATED": "Created",
-        "SORT_BY_DUE": "Due date",
         "SORT_BY_MANUAL": "Manual",
         "SORT_BY_TIME_ESTIMATE": "Time estimate",
         "SORT_BY_TITLE": "Title",
-        "SORT_DIR": "Direction",
         "SORT_DIR_ASC": "Ascending",
         "SORT_DIR_DESC": "Descending",
         "TAGS_EXCLUDED": "Excluded Tags",
@@ -186,21 +214,36 @@
         "TAGS_MATCH_ANY": "Match any (OR)",
         "TAGS_MATCH_MODE": "Required tag match",
         "TAGS_REQUIRED": "Required Tags",
-        "TASK_DONE_STATE": "Task Completion State",
-        "TASK_DONE_STATE_ALL": "All",
         "TASK_DONE_STATE_DONE": "Completed",
         "TASK_DONE_STATE_UNDONE": "Not Completed"
       },
       "V": {
-        "ADD_NEW_BOARD": "Add new board",
-        "CONFIRM_DELETE": "Are you sure you want to delete this board?",
+        "ADD_NEW_BOARD": "Create view",
+        "ADD_TASK_TO": "Add task to {{title}}",
+        "CONFIRM_DELETE": "Are you sure you want to delete this view?",
         "CREATE_NEW_TAG_BTN": "Create Tag",
-        "CREATE_NEW_TAG_MSG": "1 new tag needs to be created for this board to work",
         "CREATE_NEW_TAGS_BTN": "Create Tags",
-        "CREATE_NEW_TAGS_MSG": "{{nr}} new tags need to be created for this board to work",
-        "EDIT_BOARD": "Edit board",
-        "NO_PANELS_BTN": "Configure Board",
-        "NO_PANELS_MSG": "This board has no panels configured. Add some panels to it."
+        "EDIT_BOARD": "Edit view",
+        "EDIT_COLUMN": "Edit column",
+        "EMPTY_VIEW_ADD": "Add task",
+        "EMPTY_VIEW_HINT": "Tasks show up here once they match the view's rules. Add one, or change the rules.",
+        "HINT_FILTER_NOT_ONLY_TODAY": "Shows every open task that matches the filter, not only today's. Add a Planned Date rule to narrow it down.",
+        "HINT_FILTER_PART_NOT_SAVED": "Part of the list's filter can't be combined with its project or tag in a view and was left out.",
+        "HINT_GROUPING_NOT_SAVED": "This grouping isn't saved: only grouping by tag becomes sections of a view.",
+        "HINT_TODAY_OR_OVERDUE": "Shows tasks due today or overdue, including the ones the Today list shows in their own section.",
+        "MISSING_TAGS_MSG": "This view uses tags that don't exist yet: {{tags}}",
+        "NO_PANELS_BTN": "Configure view",
+        "NO_PANELS_MSG": "This view has no sections yet. Add one to show tasks.",
+        "NO_TASKS_IN_VIEW": "No tasks match this view",
+        "NO_VIEWS_BTN": "Create view",
+        "NO_VIEWS_MSG": "No views yet. A view shows tasks from all your projects that match its rules, in one or more columns.",
+        "SAVE_AS_VIEW": "Save as view…",
+        "SECTION_OTHER": "Other",
+        "SHOW_ALL": "Show all ({{count}})",
+        "SHOW_AS_BOARD": "Show as board",
+        "SHOW_AS_LIST": "Show as list",
+        "S_CANT_MOVE_HERE": "No change makes this task fit the column's rules, so it can't be moved here",
+        "VIEW_CREATED": "View \"{{title}}\" created"
       }
     },
     "CALDAV": {
@@ -804,12 +847,14 @@
         "PLACEHOLDER_3": "Where did focus slip - and how can you protect it?",
         "PLACEHOLDER_4": "Which task gave you energy? Which drained it?",
         "PLACEHOLDER_5": "One thing to repeat. One thing to change.",
+        "PLACEHOLDER_WEEK": "Wins? What pulled you off track? What changes next week?",
         "REMIND_LABEL": "Remind me tomorrow about this",
         "REMINDER_CREATED": "Reflection reminder scheduled for tomorrow",
         "REMINDER_ERROR": "Could not schedule the reminder",
         "REMINDER_NEEDS_TEXT": "Write a reflection before asking for a reminder",
         "REMINDER_TASK_TITLE": "Revisit reflection note",
-        "TITLE": "Reflection Note"
+        "TITLE": "Reflection Note",
+        "TITLE_WEEK": "Reflect on your week"
       }
     },
     "NOTE": {
@@ -1762,13 +1807,15 @@
       "ADD_TASK_BAR": {
         "ADD_EXISTING_TASK": "Add existing task \"{{taskTitle}}\"",
         "CREATE_NEW_TAGS": "Create new tags",
+        "DEADLINE_BUTTON": "Deadline",
         "DUE_BUTTON": "Schedule",
         "ESTIMATE_BUTTON": "Estimate",
+        "NO_SEARCH_MATCHES": "No matching tasks or issues",
         "NOTE_PLACEHOLDER": "Add a note… (Ctrl+Enter to add task)",
-        "PLACEHOLDER_CREATE": "A task title #tag @16:00 t25m ",
+        "PLACEHOLDER_CREATE": "A task title #tag @16:00 t25m",
         "PLACEHOLDER_SEARCH": "Add existing task or issues...",
         "REPEAT_BUTTON": "Repeat",
-        "SEARCH_INFO_TEXT": "Search and add issues and tasks from archive and other projects",
+        "SEARCH_INFO_TEXT": "Search issues and existing tasks to add here",
         "TAGS_BUTTON": "Tags",
         "TODAY": "Today",
         "TOGGLE_ADD_TOP_OR_BOTTOM": "Toggle adding task to top & bottom of list",
@@ -2292,7 +2339,6 @@
         "DEADLINE_TODAY": "Deadline Today",
         "DEADLINE_TOMORROW": "Deadline Tomorrow",
         "ENTER_PROJECT": "Filter Projects",
-        "ENTER_TAG": "Filter Tag",
         "ESTIMATED_TIME": "Estimated Time",
         "FILTER_BY": "Filter By",
         "FILTER_DEADLINE": "Deadline",
@@ -2304,6 +2350,8 @@
         "FILTER_SCHEDULED_DATE": "Planned Date",
         "FILTER_TAG": "Tag",
         "FILTER_TIME_SPENT": "Time Spent",
+        "TAG_FILTER_OR": "Any tag (OR)",
+        "TAG_FILTER_AND": "All tags (AND)",
         "GROUP_BY": "Group By",
         "GROUP_DEADLINE": "Deadline",
         "GROUP_DEADLINE_NONE": "No deadline",
@@ -2566,8 +2614,8 @@
   },
   "GCF": {
     "APP_FEATURES": {
-      "BOARDS": "Boards",
-      "BOARDS_HINT": "Kanban-style boards with columns that group your tasks by tag, project or done state.",
+      "BOARDS": "Views",
+      "BOARDS_HINT": "Saved views in the side menu. Each shows tasks from all projects by tag, project, due date or done state, in one or more columns, like a Kanban board.",
       "DONATE_PAGE": "Donate page",
       "DONATE_PAGE_HINT": "Shows a menu entry with ways to support the development of the app.",
       "EXTEND_WITH_PLUGINS": "Find more features in Plugins",
@@ -2590,7 +2638,7 @@
       "SEARCH_HINT": "Find any task, including archived ones, and your notes. Opens from the side menu or a keyboard shortcut.",
       "SYNC_BUTTON": "Sync button",
       "SYNC_BUTTON_HINT": "Shows a button in the header to start syncing manually and see the sync status.",
-      "TIME_TRACKING": "Stopwatch time tracking",
+      "TIME_TRACKING": "Time tracking",
       "TIME_TRACKING_HINT": "The play button for starting and stopping a timer on the current task to track how long you work on it.",
       "TITLE": "App Features"
     },
@@ -2694,6 +2742,8 @@
     "FOCUS_MODE_LOCAL": {
       "HELP": "These settings apply only to this device and are not synced.",
       "L_IS_LOOP_BREAK_END_ALARM": "Loop the break-end sound until I dismiss the break (this device only)",
+      "L_IS_NOTIFY_ON_SESSION_END": "Show a browser notification when a Pomodoro session or break ends",
+      "S_NOTIFICATION_PERMISSION_DENIED": "Notifications are not allowed for this site. Allow them in your browser to use this option.",
       "TITLE": "Focus Mode (this device)"
     },
     "TASK_WIDGET": {
@@ -2778,7 +2828,7 @@
       "TOGGLE_PLAY": "Start/stop time tracking for task",
       "TOGGLE_SIDE_NAV": "Focus sidenav",
       "TOGGLE_SIDE_NAV_MODE": "Toggle sidebar compact/full mode",
-      "TOGGLE_TASK_VIEW_CUSTOMIZER_PANEL": "Toggle filter/group/sort panel",
+      "TOGGLE_TASK_VIEW_CUSTOMIZER_PANEL": "Open filter/group/sort menu",
       "TRIGGER_SYNC": "Trigger sync (if configured)",
       "ZOOM_DEFAULT": "Zoom default (desktop only)",
       "ZOOM_IN": "Zoom in (desktop only)",
@@ -2813,7 +2863,7 @@
       "TIME_LOCALE_AUTO": "System default",
       "TIME_LOCALE_CS_CZ": "Czech: 24-hour, DD. MM. YYYY",
       "TIME_LOCALE_DE_DE": "German: 24-hour, DD.MM.YYYY",
-      "TIME_LOCALE_DESCRIPTION": "Sets how dates and times are displayed across the app. \"System default\" follows your browser's language/region — to force 12- or 24-hour display, pick a specific locale. Time entry fields (e.g. when scheduling a task) are drawn by your browser or OS and always follow its clock format. With ISO 8601, weekday labels in Schedule, Habits, and Planner follow the app language.",
+      "TIME_LOCALE_DESCRIPTION": "Sets the date format and the 12/24-hour time format used across the app, including time entry fields. \"System default\" follows your browser's region, or a non-English app language that differs from it (except Arabic and Persian) — to force 12- or 24-hour time, pick a specific locale. With ISO 8601, weekday labels in Schedule, Habits, and Planner follow the app language.",
       "TIME_LOCALE_EN_GB": "English (UK): 24-hour, DD/MM/YYYY",
       "TIME_LOCALE_EN_US": "English (US): 12-hour AM/PM, MM/DD/YYYY",
       "TIME_LOCALE_ES_ES": "Spanish: 24-hour, DD/MM/YYYY",
@@ -2905,7 +2955,7 @@
       "WALLPAPER": "Wallpaper",
       "WALLPAPER_BUTTON": "Set wallpaper",
       "WALLPAPER_DIALOG_TITLE": "Global wallpaper",
-      "WALLPAPER_HINT": "Shown on pages without their own background (Planner, Schedule, Boards, Settings…). Tags and projects with their own image override it."
+      "WALLPAPER_HINT": "Shown on pages without their own background (Planner, Schedule, Views, Settings…). Tags and projects with their own image override it."
     },
     "POMODORO": {
       "BREAK_DURATION": "Short break duration",
@@ -2923,8 +2973,8 @@
       "IS_FOCUS_WINDOW": "Focus application window when reminder is triggered",
       "NOTIFY_ON_DUE_DATE": "Show notifications for tasks planned for today",
       "TITLE": "Reminders",
-      "USE_ALARM_STYLE_REMINDERS": "Use alarm-style notifications (Android only)",
-      "USE_ALARM_STYLE_REMINDERS_DESCRIPTION": "When enabled, reminders use louder alarm sounds and more intrusive notifications. Recommended for critical reminders."
+      "USE_ALARM_STYLE_REMINDERS": "Use alarm-style reminders",
+      "USE_ALARM_STYLE_REMINDERS_DESCRIPTION": "When enabled, reminders use louder alarm sounds and more intrusive notifications. On desktop, a bell rings until you act on the reminder (at most 10 minutes) and the window comes to the front. Recommended for critical reminders."
     },
     "SCHEDULE": {
       "HELP": "The schedule feature provides you with a quick overview over how your planned tasks play out over time. You can find it in the left hand menu under <a href='#/schedule'>'Schedule'</a>. ",
@@ -3077,7 +3127,7 @@
   "MH": {
     "ADD_NEW_TASK": "Add new Task",
     "ADD_SECTION": "Add Section",
-    "BOARDS": "Boards",
+    "BOARDS": "Views",
     "COPY_TASK_LIST_MARKDOWN": "Copy to clipboard",
     "CREATE_PROJECT": "Create project",
     "CREATE_TAG": "Create tag",
@@ -3191,12 +3241,12 @@
       "PLANNER": "Plan the next days in {{plannerIcon}} <b>Planner</b>",
       "TASK_MENU_TOUCH": "Swipe a task left for its menu: {{playIcon}} <b>Start tracking time</b>, {{subtaskIcon}} <b>Add subtask</b>",
       "TASK_MENU_TOUCH_NO_TRACKING": "Swipe a task left for its menu, e.g. {{subtaskIcon}} <b>Add subtask</b>",
-      "TIMER_RUNNING": "Timer's running. Press {{playIcon}} again or <kbd>{{key}}</kbd> to pause.",
-      "TIMER_RUNNING_TOUCH": "Timer's running. Tap {{playIcon}} at the top to pause.",
+      "TIMER_RUNNING": "Timer's running. Press {{pauseIcon}} or <kbd>{{key}}</kbd> to pause.",
+      "TIMER_RUNNING_TOUCH": "Timer's running. Tap {{pauseIcon}} at the top to pause.",
       "TRACK_TIME": "Hover over the task and press {{playIcon}} to track time"
     },
     "WANT_MORE": {
-      "BOARDS": "<b>Boards</b> · Kanban-style columns for your tasks",
+      "BOARDS": "<b>Views</b> · Saved task lists and Kanban boards in the side menu",
       "DONE": "Done",
       "FINISH_DAY": "<b>Finish day</b> · Review and wrap up your day",
       "FOCUS_MODE": "<b>Focus mode</b> · Pomodoro and distraction-free work",
@@ -3214,6 +3264,7 @@
     }
   },
   "PDS": {
+    "ADD_OPEN_TASKS_FROM_WEEK": "Add open tasks from this week",
     "ADD_TASKS_FROM_TODAY": "Add tasks from today",
     "ARCHIVED_TASKS": {
       "ONE": "{{count}} completed parent task has been archived",
@@ -3231,6 +3282,7 @@
     "ESTIMATE_TOTAL": "Total estimate:",
     "EVALUATE_DAY": "Evaluate Day",
     "EXPORT_TASK_LIST": "Export Task List",
+    "FINISH_WEEK": "Finish the week",
     "FOCUS_SUMMARY": "Focus Sessions",
     "NO_TASKS": "There are no tasks for this day",
     "PLAN_TOMORROW": "Plan",
@@ -3249,6 +3301,7 @@
     "START_END": "Start – End",
     "SUMMARY_FOR": "Daily Summary for {{dayStr}}",
     "TASKS_COMPLETED": "Tasks Completed",
+    "THIS_WEEK": "This week",
     "TIME_SPENT_AND_ESTIMATE_LABEL": "Time Spent / Estimated",
     "TIME_SPENT_ESTIMATE_TITLE": "Time Spent: Total time spent today. Archived tasks not included. – Time Estimated: Time estimated for tasks worked on today minus the time already spent on them on other days.",
     "TIME_SPENT_TODAY_BY_TAG": "Time Spent today by Tag",
@@ -3459,6 +3512,8 @@
     "UNABLE_TO_PERSIST_DATA": "Unable to persist data to plugin storage",
     "UNKNOWN_ERROR": "An unknown error occurred",
     "UPLOAD_PLUGIN_INSTRUCTION": "Upload a plugin ZIP file to install it:",
+    "BUILD_YOUR_OWN": "Want to build your own?",
+    "BUILD_YOUR_OWN_LINK": "Read the plugin guide",
     "VALIDATION_FAILED": "Validation failed: {{errors}}",
     "NODE_EXECUTION_BRIDGE_UNAVAILABLE": "Could not connect to the Node.js execution bridge. Please try disabling and re-enabling the plugin.",
     "PLUGIN_LOAD_FAILED": "Plugin \"{{pluginName}}\" failed to load: {{error}}",

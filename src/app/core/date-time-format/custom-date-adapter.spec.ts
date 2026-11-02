@@ -109,3 +109,74 @@ describe('CustomDateAdapter (ISO weekday/month localization)', () => {
     });
   });
 });
+
+describe('CustomDateAdapter.parseTime (#8565)', () => {
+  let adapter: CustomDateAdapter;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [
+        CustomDateAdapter,
+        { provide: MAT_DATE_LOCALE, useValue: 'de' },
+        {
+          provide: DateTimeFormatService,
+          useValue: {
+            dateFormat: () => ({ raw: 'dd.MM.yyyy' }),
+            isoTextLocale: () => null,
+          },
+        },
+        {
+          provide: GlobalConfigService,
+          useValue: { localization: () => ({ firstDayOfWeek: 1 }) },
+        },
+      ],
+    });
+    adapter = TestBed.inject(CustomDateAdapter);
+  });
+
+  const parsedClock = (value: string): string | null => {
+    const d = adapter.parseTime(value, null);
+    return d && adapter.isValid(d) ? `${d.getHours()}:${d.getMinutes()}` : null;
+  };
+
+  it('keeps parsing separated times', () => {
+    expect(parsedClock('14:30')).toBe('14:30');
+    expect(parsedClock('2:30 PM')).toBe('14:30');
+  });
+
+  it('parses a bare hour, including 20-23 (#11252)', () => {
+    expect(parsedClock('9')).toBe('9:0');
+    expect(parsedClock('22')).toBe('22:0');
+  });
+
+  it('parses compact digits', () => {
+    expect(parsedClock('1430')).toBe('14:30');
+    expect(parsedClock('930')).toBe('9:30');
+    expect(parsedClock('2215')).toBe('22:15');
+  });
+
+  it('parses a compact 12h time with AM/PM', () => {
+    expect(parsedClock('2pm')).toBe('14:0');
+    expect(parsedClock('1230am')).toBe('0:30');
+  });
+
+  // the timepicker shows its value formatted, so editing it re-parses that text
+  ['ko-kr', 'zh-tw', 'ar', 'en-us'].forEach((locale) => {
+    it(`reads back a ${locale} formatted 12h time`, () => {
+      adapter.setLocale(locale);
+      const timeInput = { hour: 'numeric', minute: 'numeric' } as const;
+      const am = adapter.format(new Date(2000, 0, 1, 1, 5), timeInput);
+      const pm = adapter.format(new Date(2000, 0, 1, 14, 30), timeInput);
+
+      expect(parsedClock(am)).toBe('1:5');
+      expect(parsedClock(pm)).toBe('14:30');
+    });
+  });
+
+  it('rejects out-of-range or garbage input', () => {
+    expect(parsedClock('2460')).toBeNull();
+    expect(parsedClock('25')).toBeNull();
+    expect(parsedClock('13pm')).toBeNull();
+    expect(parsedClock('abc')).toBeNull();
+  });
+});

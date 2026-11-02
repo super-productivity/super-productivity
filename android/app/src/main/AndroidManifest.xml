@@ -116,6 +116,20 @@
       </intent-filter>
     </activity>
 
+    <!-- Widget quick add: a dialog over the home screen that saves the title to
+         the capture inbox, without loading the app. Own empty taskAffinity and
+         noHistory, like ShareReceiverActivity. Not exported: only the widget's
+         explicit PendingIntent starts it. -->
+    <activity
+      android:name=".widget.QuickAddActivity"
+      android:excludeFromRecents="true"
+      android:exported="false"
+      android:label="@string/quick_add_title"
+      android:noHistory="true"
+      android:taskAffinity=""
+      android:theme="@style/AppTheme.QuickAdd"
+      android:windowSoftInputMode="stateAlwaysVisible|adjustResize" />
+
     <!-- All new Super-Productivity main activity, based on Capacitor to support offline use -->
     <activity
       android:name=".CapacitorMainActivity"

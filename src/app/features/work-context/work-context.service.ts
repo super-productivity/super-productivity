@@ -37,6 +37,7 @@ import { isCompletedTask } from '../tasks/util/is-wont-do-task';
 import {
   hasTasksToWorkOn,
   mapEstimateRemainingFromTasks,
+  isDoneTaskForToday,
   sortDoneTasksByDoneDate,
 } from './work-context.util';
 import {
@@ -513,17 +514,39 @@ export class WorkContextService {
     distinctUntilChanged(),
   );
 
-  doneTasks$: Observable<TaskWithSubTasks[]> = this.isTodayList$.pipe(
-    // Perf note: the isToday branch hydrates EVERY task in the workspace, not
-    // just today's, so this is O(all tasks) whenever Today is the active
-    // context. Tracking done IDs per context (Today included) would avoid the
-    // workspace-wide scan.
+  // Every unarchived done task, workspace-wide on Today. Finish Day and "move
+  // done to archive" sweep this, so done tasks from earlier days that no longer
+  // show in Today's Done list still get archived instead of piling up unseen.
+  doneTasksToArchive$: Observable<TaskWithSubTasks[]> = this.isTodayList$.pipe(
     switchMap((isToday) =>
       isToday ? this._store$.select(selectAllTasksWithSubTasks) : this.mainListTasks$,
     ),
     // Show completed tasks newest-first (by completion time) so the task you
     // just finished is at the top of the Done list.
     map((tasks) => sortDoneTasksByDoneDate(tasks.filter((task) => task && task.isDone))),
+  );
+
+  // On Today only done tasks due or completed today are listed: rendering every
+  // unarchived done task made cold start grow ~linearly with their number.
+  // Re-evaluated on day change so yesterday's tasks drop out after rollover.
+  // Perf note: the source still maps every task in the workspace on each store
+  // emission (O(all tasks)); tracking done IDs per context would avoid the scan.
+  doneTasks$: Observable<TaskWithSubTasks[]> = this.isTodayList$.pipe(
+    switchMap((isToday) =>
+      isToday
+        ? combineLatest([
+            this.doneTasksToArchive$,
+            this._globalTrackingIntervalService.todayDateStr$,
+          ]).pipe(
+            map(([tasks, todayStr]) => {
+              const startOfNextDayDiffMs = this._dateService.getStartOfNextDayDiffMs();
+              return tasks.filter((task) =>
+                isDoneTaskForToday(task, todayStr, startOfNextDayDiffMs),
+              );
+            }),
+          )
+        : this.doneTasksToArchive$,
+    ),
   );
 
   constructor() {

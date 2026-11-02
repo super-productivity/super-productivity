@@ -524,12 +524,24 @@ class JavaScriptInterface(
     @Suppress("unused")
     @JavascriptInterface
     fun acknowledgeCapture(id: String): Boolean {
-        return try {
+        val isAcknowledged = try {
             CaptureInbox.forContext(activity).acknowledge(id)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to acknowledge capture", e)
             false
         }
+        // The widget lists unacknowledged quick adds as pending. Its snapshot
+        // push may run before this and is skipped when unchanged (a quick add
+        // short-syntaxed off Today), so redraw here or the pending row lingers.
+        // Separate try: a failed redraw must not report the ack as failed.
+        if (isAcknowledged) {
+            try {
+                TaskListWidgetProvider.refreshAll(activity)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to refresh widget after acknowledge", e)
+            }
+        }
+        return isAcknowledged
     }
 
     /**
@@ -613,6 +625,35 @@ class JavaScriptInterface(
             BackgroundSyncCredentialStore.clear(activity)
             CaptureKeyStore.set(activity, "")
             SyncReminderScheduler.cancel(activity)
+        }
+    }
+
+    /**
+     * WebDAV/Nextcloud counterpart of [setSuperSyncCredentials]: the worker
+     * GETs [fileUrl] and reads reminders from it. Drops SuperSync credentials.
+     * The E2EE password comes via [setSuperSyncEncryptionPassword].
+     * NEVER log [authorization].
+     */
+    @Suppress("unused")
+    @JavascriptInterface
+    fun setFileSyncCredentials(fileUrl: String, authorization: String, isEncryptionExpected: Boolean) {
+        safeCall("Failed to set file sync credentials") {
+            BackgroundSyncCredentialStore.saveFileSync(
+                activity,
+                BackgroundSyncCredentialStore.FileSyncCredentials(fileUrl, authorization, isEncryptionExpected),
+            )
+            SyncReminderScheduler.ensureScheduled(activity)
+        }
+    }
+
+    @Suppress("unused")
+    @JavascriptInterface
+    fun clearFileSyncCredentials() {
+        safeCall("Failed to clear file sync credentials") {
+            BackgroundSyncCredentialStore.clearFileSync(activity)
+            if (!BackgroundSyncCredentialStore.hasAnyCredentials(activity)) {
+                SyncReminderScheduler.cancel(activity)
+            }
         }
     }
 

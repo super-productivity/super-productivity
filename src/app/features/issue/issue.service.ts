@@ -293,9 +293,14 @@ export class IssueService {
         !this._pendingRemoteIssueDelete.has(issueProviderId, String(issue.id)),
     );
 
+    // Compare as strings: task.issueId is stored as a string, but some providers
+    // (OpenProject) return numeric ids, which never matched and were re-imported
+    // on every poll (#11223).
+    const existingIssueIds = new Set<string>(
+      (allExistingIssueIds as (string | number)[]).map(String),
+    );
     const issuesToAdd: IssueDataReduced[] = potentialIssuesToAdd.filter(
-      (issue: IssueDataReduced): boolean =>
-        !(allExistingIssueIds as string[]).includes(issue.id as string),
+      (issue: IssueDataReduced): boolean => !existingIssueIds.has(String(issue.id)),
     );
 
     // Already-imported recurring issues whose task may sit in the archive: those
@@ -303,7 +308,7 @@ export class IssueService {
     // Kept out of `issuesToAdd` so the import snack below still counts imports.
     const reactivationCandidates: IssueDataReduced[] = potentialIssuesToAdd.filter(
       (issue: IssueDataReduced): boolean =>
-        (allExistingIssueIds as string[]).includes(issue.id as string) &&
+        existingIssueIds.has(String(issue.id)) &&
         isIssueAwaitingNextOccurrence(providerKey, issue),
     );
     if (reactivationCandidates.length) {

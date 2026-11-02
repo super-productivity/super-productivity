@@ -1,17 +1,20 @@
 # Market scorecard
 
-**Snapshot 2026-10** · SP v19.2.0, plus unreleased changes on `master` up to
-`43269ba` (2026-10-21) · target, competitor set and method: [README.md](README.md)
+**Snapshot 2026-11** · SP v19.3.1, plus unreleased changes on `master` up to
+`0df0375` (2026-11-01) · target, competitor set and method: [README.md](README.md)
 
 How this snapshot was gathered:
 
-- **SP facts** were read from the code at the v19.2.0 tag. Later changes on
+- **SP facts** come from the 2026-10 reading of the code, re-checked in 2026-11
+  against the 217 commits since `43269ba` and the issues and PRs linked in the gap
+  list. Dimensions those commits do not touch carry forward. Later changes on
   `master` are listed under [Unreleased on master](#unreleased-on-master).
-- **Competitor facts** come from search-result excerpts of vendor pages, so they
-  count as **snippet** unless marked otherwise. The research environment blocked
-  play.google.com, apps.apple.com, appbrain.com, alternativeto.net, reddit.com and
-  the specialists' vendor sites, and direct fetches of ticktick.com and todoist.com
-  failed. GitHub was reachable, so open-source repos and docs were read directly.
+- **Competitor facts:** in 2026-11 most vendor pages, changelogs and pricing pages
+  were fetched and are marked **read** on the Sources lines. Fetches summarise the
+  page, so quotes are paraphrased. Facts from search excerpts stay **snippet**.
+  Blocked or empty in 2026-11: reddit.com, alternativeto.net (403), the Google Play
+  listings (truncated), appbrain.com (403), several App Store ids (404) and the
+  help-center changelog of TickTick (truncated). GitHub was reachable.
 - Each **Sources** line gives the month checked; prices and ratings are as of
   that month. Check store ratings and prices directly before quoting them.
 
@@ -24,7 +27,7 @@ How this snapshot was gathered:
   - **Time tracking:** Toggl Track and Clockify are better on time entries and
     editing them.
   - **Daily planning:** Sunsama and Akiflow add weekly rituals and two-way
-    Outlook sync.
+    Outlook sync. SP's own "Finish the week" is on `master`, unreleased.
   - **Focus:** a tie with TickTick.
 - **Must not lose badly:** this is where the distance to "best on the market"
   is. SP loses to TickTick and Todoist on all eight of these dimensions.
@@ -68,16 +71,18 @@ app's section below gives the reasons.
 | 22  | Customization                    | Tracked       | Better         | Better         | Better          |
 | 23  | First run                        | Must not lose | Worse          | Worse          | Worse, by far   |
 
-### SP baseline (v19.2.0, read from code)
+### SP baseline (v19.3.1)
 
 1. **Capture**
-   - The add-task bar parses `+project`, `#tag`, `@date`, `30m` estimates and
-     recurrence such as `@every friday`. `!deadline` exists but is off by default
-     (`src/app/features/tasks/short-syntax.ts`).
-   - Dates are English only (chrono-node `casual`). There is no priority token.
-   - The Android share sheet applies this syntax, and so does the local REST API
-     unless a request sets `isIgnoreShortSyntax`. iOS share, the URL scheme and
-     `.eml` drops store titles literally.
+   - The add-task bar parses `+project`, `#tag`, `@date`, `30m` estimates,
+     recurrence such as `@every friday` and priority `p1`–`p3` (#10974). `@` dates
+     follow the UI language and date order (#10970). `!deadline` exists but is off
+     by default (`src/app/features/tasks/short-syntax.ts`).
+   - The local REST API applies this syntax unless a request sets
+     `isIgnoreShortSyntax`. The Android share sheet, MCP (#10251), SuperSync AI
+     capture (#10759), iOS share, the URL scheme and `.eml` drops store titles
+     literally.
+   - Android launcher shortcuts for New task, Today and Inbox (#10971).
    - No voice capture.
 2. **Organization:** projects, Inbox, tags, sections, project folders, priorities.
    - Subtasks go one level deep (`task.component.ts`: `parentId || id`).
@@ -87,20 +92,24 @@ app's section below gives the reasons.
    - Daily, weekly, monthly or yearly every N days, weeks, months or years.
    - Monthly by nth weekday or last day.
    - Repeat from the completion date, skip overdue, pause, subtask templates.
-   - Missing: an end date or count, hourly, yearly by nth weekday.
+   - Optional repeat end date (#10276). Missing: an end count, hourly, yearly by
+     nth weekday.
 4. **Calendar:**
    - The schedule has day, week and month views.
    - iCal subscriptions, Outlook's included, are read-only.
    - The bundled Google Calendar and CalDAV Events plugins read, create, update
      and delete events, and can auto time-block tasks.
-   - The CalDAV tasks (VTODO) provider syncs done, title and notes, but cannot
-     create VTODOs.
+   - The CalDAV tasks (VTODO) provider syncs done, title and notes, and can create
+     and delete VTODOs when you opt in (#10991, #10989).
+   - Deadlines show in the schedule (#10310); the planner colours each calendar
+     (#10965).
 5. **Planning:**
    - A planner that opens with 15 days on desktop (5 on phones), loads more on
      scroll, and shows each day's capacity against work hours.
    - The schedule fits tasks around fixed blocks.
    - "Finish day" review. No weekly review.
-6. **Reminders:** one `remindAt` plus one deadline reminder per task (`task.model.ts`).
+6. **Reminders:** one `remindAt` plus one deadline reminder per task
+   (`task.model.ts`), with 1-day, 3-day and 1-week lead times (#10977).
    - Android: exact alarms, an optional alarm style, and Done or Snooze on the
      notification.
    - No location reminders.
@@ -140,14 +149,18 @@ app's section below gives the reasons.
     - Web/PWA, Android (Play, F-Droid) and iOS (App Store).
     - One Android widget: up to 20 of Today's tasks, tap to complete, no adding.
     - iOS Home Screen quick actions: New task, Today, Inbox.
-    - No watch apps, no iOS widget, no Android launcher shortcuts.
-17. **Mobile polish:** bottom navigation below 600px, swipe gestures. Users call
-    it clunky and dated (#9225, #4864).
+    - No watch apps, no iOS widget.
+17. **Mobile polish:** bottom navigation below 600px with a choosable second slot
+    (#10990), swipe gestures, larger touch targets (#10975), long-press menus in
+    the side navigation (#10992). Users still call it clunky and dated (#9225,
+    #4864, both open).
 18. **Sync:** SuperSync (beta, end-to-end encrypted, self-hostable), Dropbox,
     Nextcloud, OneDrive, WebDAV and local file.
     - Some conflicts fall back to a whole-dataset "keep local or remote" dialog.
-    - Open data-loss reports: #7892 (Android data reset overnight, no sync set
-      up) and #9256 (SuperSync data could not be restored).
+    - #7892 (Android data reset) and #9256 (SuperSync data could not be restored)
+      are closed after #10847 and #10855. Open reports: #11049 (Linux snap
+      IndexedDB corruption), #11184 (Dropbox on iOS), #11344 (server-migration
+      snapshot rejected) and #11192 (task reappearing).
 19. **Privacy:** no account and no telemetry; data stays on the device unless
     you sync it.
     - Encryption (Argon2id + AES-GCM) is required on SuperSync and optional on
@@ -158,65 +171,70 @@ app's section below gives the reasons.
 22. **Customization:** 16 built-in themes plus custom CSS themes, 56 configurable
     shortcuts, feature toggles, 28 languages.
 23. **First run:**
-    - New installs start with fewer features switched on, with first-run hints
-      and a guided tour in the Help menu.
+    - New installs start with fewer features switched on, with first-run hints, a
+      quick tour on the first task, an explanation of Today and the Inbox at the
+      end of the first run (#10913) and a guided tour in the Help menu.
     - Reviews (snippet) and #9225 still call it "intimidating" or "overwhelming".
 
 ### Unreleased on master
 
-Merged after v19.2.0, up to `78139c5`. Re-score these when they ship:
+Everything the 2026-10 snapshot listed here shipped in v19.3.0 (2026-10-23) or
+v19.3.1 (2026-10-25) and is now in the baseline. Merged after v19.3.1, up to
+`0df0375` (2026-11-01). Re-score these when they ship:
 
-- **Capture, extensibility, AI:** an opt-in MCP endpoint on desktop (#10251) and
-  task capture for AI assistants through SuperSync (#10759). Both store titles
-  literally, and so does the Android share sheet now (#10917).
-- **Recurrence:** an optional repeat end date (#10276).
-- **First run:** a quick tour on the first task (#10957) and an explanation of
-  Today and the Inbox at the end of the first run (#10913).
-- **Sync trust:** the last full mobile backup survives a restart with near-empty
-  data (#10847, for #7892); decryption failures get diagnostics, and SP asks
-  before overwriting remote data it can't decrypt (#10855, for #9256).
-
-Merged after `78139c5`, up to `43269ba` (2026-10-21), and so far shown only in
-the gap list:
-
-- **Capture:** `@` dates in the UI language and date order (#10970), and
-  priority with `p1`–`p3` (#10974).
-- **Platforms:** Android launcher shortcuts (#10971).
-- **Mobile polish:**
-  - larger touch targets and readable muted text (#10975)
-  - long-press menus in the side navigation (#10992)
-  - a choosable second slot in the bottom bar (#10990)
-- **Calendar:** opt-in CalDAV VTODO creation (#10991) and deletion (#10989).
-- **Reminders:** 1-day, 3-day and 1-week lead times (#10977).
-- **Metrics:** the productivity and sustainability scores were removed (#10968).
+- **Planning:** "Finish the week" on Fridays: time per day, a weekly reflection
+  and a Plan tab for next week (#11259). No weekly review exists in v19.3.1.
+- **Capture and platforms:**
+  - add a task from the Android widget (#11317)
+  - New task, Today and Inbox in the desktop dock menu and Windows jump list
+    (#11017)
+- **Time tracking:** opt-in logging of finished sessions as CalDAV events with real
+  start and end times (#11181, closes #6378; in-app per-session times and
+  timesheet editing are still missing).
+- **Views:** multi-tag filtering in the view customizer (#11095).
+- **Reminders and focus:**
+  - looping bell for alarm-style reminders on desktop (#11015)
+  - stale and lost Android reminders fixed (#11323)
+  - Android background reminders for WebDAV and Nextcloud (#11364)
+  - opt-in web notification at session or break end (#11316)
+  - explicit cancel of a running session (#11040)
+- **First run:** calmer defaults for new installs (#11315), empty-list
+  explanations (#11176), time-tracking switch on the Time & Tracking tab (#11363).
+- **Extensibility:** plugin hooks and a tracking API (#11359), help for AI
+  assistants writing plugins (#11366, #11345).
+- **Sync:** push pending operations when the mobile app goes to the background
+  (#11330); keep pending edits on a catch-up file snapshot, re-landed (#11171).
+- **In flight, not merged:** Smart Lists, saved views (#11349, for #10347);
+  recurring deadlines (#11279, draft); iOS due-task badge (#11346, a badge, not a
+  widget).
 
 ### TickTick
 
-| #   | SP is          | Why                                                                                                                                                            |
-| --- | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | Worse          | Smart Recognition parses dates and repeats; AI voice add; email to task; Siri, Google Assistant and Alexa                                                      |
-| 2   | Worse          | Subtasks five levels deep plus checklists, folders, saved AND/OR filters (Premium)                                                                             |
-| 3   | Tie            | TickTick: end after N, specific dates, holidays. SP: nth weekday, last day, skip overdue, pause                                                                |
-| 4   | Worse          | Day, 3-day, week, month and year views; two-way Google (one calendar), iCloud, CalDAV                                                                          |
-| 5   | Better         | TickTick has "Plan your day" and drag to calendar. It has no capacity view, no flowing schedule, no end-of-day review                                          |
-| 6   | Worse          | Up to five reminders per task (two free), Constant Reminder that rings through Do Not Disturb, location reminders (platform support conflicts between sources) |
-| 7   | Better, by far | TickTick logs focus sessions against tasks; no timesheet, export or worklog found                                                                              |
-| 8   | Tie            | TickTick: strict mode, watch, cross-device focus, white noise (SP has one too). SP: more modes, enforced breaks, desktop widget                                |
-| 9   | Slightly worse | Both have list, Kanban, Eisenhower and calendar; TickTick adds a timeline (Premium)                                                                            |
-| 10  | Worse          | Habit tracker with goals, streaks, heatmaps and watch complications                                                                                            |
-| 11  | Worse          | Note lists, markdown editor, desktop sticky notes                                                                                                              |
-| 12  | Worse          | Shared lists of up to 29 members, assignees, comments, permissions                                                                                             |
-| 13  | Better, by far | No native Jira, GitHub or GitLab integration; only through Zapier, IFTTT or Zoho Flow                                                                          |
-| 14  | Worse          | Zapier, IFTTT, Gmail add-on, two-way Notion sync, Telegram, email to task                                                                                      |
-| 15  | Better         | TickTick has an open API, an official MCP server and a CLI, but no plugins and it is closed source                                                             |
-| 16  | Worse          | Apple Watch, Wear OS, iOS widgets and Live Activities, browser extensions. SP packages better for Linux                                                        |
-| 17  | Worse          | App Store Editors' Choice                                                                                                                                      |
-| 18  | Worse          | Nothing to set up. Complaints are slow calendar sync and occasional delays, not data loss                                                                      |
-| 19  | Better, by far | Account required, no end-to-end encryption, not offline-first, CSV export. Operated by Appest                                                                  |
-| 20  | Better         | Premium US$49.99/yr. The free tier caps lists at 9, tasks per list at 99, reminders per task at 2 and habits at 5                                              |
-| 21  | Worse          | AI Assistant (2026-10), AI voice add, recording transcription                                                                                                  |
-| 22  | Better         | Themes only, against SP's custom CSS, shortcuts and feature toggles                                                                                            |
-| 23  | Worse          | Reviewers find it easy to start; Zapier calls it a power-user tool next to Todoist                                                                             |
+| #   | SP is          | Why                                                                                                                                                                    |
+| --- | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Worse          | Smart Recognition parses dates and repeats; AI voice add; email to task; Siri, Google Assistant and Alexa                                                              |
+| 2   | Worse          | Subtasks five levels deep plus checklists, folders, saved AND/OR filters (Premium)                                                                                     |
+| 3   | Tie            | TickTick: end after N, specific dates, holidays. SP: nth weekday, last day, skip overdue, pause                                                                        |
+| 4   | Worse          | Day, 3-day, week, month and year views; two-way Google (one calendar), iCloud, CalDAV                                                                                  |
+| 5   | Better         | TickTick has "Plan your day" and drag to calendar. It has no capacity view, no flowing schedule, no end-of-day review                                                  |
+| 6   | Worse          | Up to five reminders per task (two free), Constant Reminder that rings through Do Not Disturb, location reminders (platform support conflicts between sources)         |
+| 7   | Better, by far | TickTick logs focus sessions against tasks; no timesheet, export or worklog found                                                                                      |
+| 8   | Tie            | TickTick: strict mode, watch, cross-device focus, white noise (SP has one too). SP: more modes, enforced breaks, desktop widget                                        |
+| 9   | Slightly worse | Both have list, Kanban, Eisenhower and calendar; TickTick adds a timeline (Premium)                                                                                    |
+| 10  | Worse          | Habit tracker with goals, streaks, heatmaps and watch complications                                                                                                    |
+| 11  | Worse          | Note lists, markdown editor, desktop sticky notes                                                                                                                      |
+| 12  | Worse          | Shared lists of up to 29 members, assignees, comments, permissions                                                                                                     |
+| 13  | Better, by far | No native Jira, GitHub or GitLab integration; only through Zapier, IFTTT or Zoho Flow                                                                                  |
+| 14  | Worse          | Zapier, IFTTT, Gmail add-on, two-way Notion sync, Telegram, email to task                                                                                              |
+| 15  | Better         | TickTick has an open API, an official MCP server and a CLI, but no plugins and it is closed source                                                                     |
+| 16  | Worse          | Apple Watch, Wear OS, iOS widgets and Live Activities, browser extensions. SP packages better for Linux                                                                |
+| 17  | Worse          | App Store Editors' Choice                                                                                                                                              |
+| 18  | Worse          | Nothing to set up. Complaints are slow calendar sync and occasional delays, not data loss                                                                              |
+| 19  | Better, by far | Account required, no end-to-end encryption, not offline-first, CSV export. Operated by Appest                                                                          |
+| 20  | Better         | Premium US$49.99/yr (read), US$4.99/month in the App Store. The free tier caps lists at 9, tasks per list at 99, reminders per task at 2, members at 2 and habits at 5 |
+| 21  | Worse          | AI Assistant (2026-10), AI voice add, recording transcription                                                                                                          |
+| 22  | Better         | Themes only, against SP's custom CSS, shortcuts and feature toggles                                                                                                    |
+| 23  | Worse          | Reviewers find it easy to start; Zapier calls it a power-user tool next to Todoist                                                                                     |
 
 - **Price:**
   - Premium US$49.99/yr, previously $35.99. Third-party trackers report the
@@ -224,15 +242,18 @@ the gap list:
   - Education discount 25%.
 - **Ratings:**
   - Google Play: 4.6 from about 166K reviews, 10M+ installs.
-  - App Store US: 4.9 from about 46K ratings, Editors' Choice.
+  - App Store US: 4.9 from about 47K ratings (read, 2026-11), Editors' Choice.
 - **2026 releases:**
   - 8.0 (Jan): suggested tasks, year view.
   - Official MCP server (Apr).
   - AI voice add and transcription (Apr).
   - Search filters (Jun).
   - Constant Reminder through Do Not Disturb on iOS 26 (Jun).
-  - AI Assistant (2026-10-08).
-- **Sources** (2026-10, snippet): [upgrade](https://ticktick.com/upgrade) ·
+  - AI Assistant (2026-10-08, snippet; plan and limits unknown).
+  - iOS 27 support with Siri AI task creation and extra-large widgets (snippet).
+  - 8.2.41 on iOS (read): iPhone Duo layout, several Eisenhower matrix views and an
+    assignee filter for shared lists.
+- **Sources** (2026-11; upgrade page and App Store read, the rest snippet; the help-center pages came back truncated): [upgrade](https://ticktick.com/upgrade) ·
   [price change](https://vyneron.com/en/blog/ticktick-pricing-2026) ·
   [help center](https://help.ticktick.com/) ·
   [what's new](https://help.ticktick.com/articles/7082552170989486080) ·
@@ -243,31 +264,31 @@ the gap list:
 
 ### Todoist
 
-| #   | SP is          | Why                                                                                                                                                        |
-| --- | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | Worse, by far  | Quick Add parses `#project /section p1 !reminder {deadline}`; Ramble voice capture in 38 languages; tasks from photos and PDFs; email forwarding (Pro)     |
-| 2   | Worse          | Sub-projects, nested subtasks, labels, a filter query language with 150 saved filters on Pro. Limits: 5 projects and 3 filters free, 300 tasks per project |
-| 3   | Slightly worse | Same power, typed in plain English ("every 3rd friday", "every!")                                                                                          |
-| 4   | Worse          | Google or Outlook on every plan; the calendar layout is Pro-only                                                                                           |
-| 5   | Better         | Durations and time-blocking are Pro-only; no start dates; no capacity view or end-of-day review                                                            |
-| 6   | Worse          | Pro: several reminders, location reminders, urgent full-screen alarm. Free: automatic reminders and one urgent reminder per task                           |
-| 7   | Better, by far | No native time tracking; Toggl's extension fills the gap                                                                                                   |
-| 8   | Better, by far | No native focus timer                                                                                                                                      |
-| 9   | Better         | List, board and calendar (Pro). No Eisenhower matrix, planner or schedule                                                                                  |
-| 10  | —              | Karma points, goals and streaks, but no habit tracker                                                                                                      |
-| 11  | Tie            | Descriptions and comments                                                                                                                                  |
-| 12  | Worse, by far  | Shared projects, team workspaces, roles, Business plan                                                                                                     |
-| 13  | Better         | No official Jira or GitHub integration; Jira only through a third-party app                                                                                |
-| 14  | Worse          | Slack, Zapier, Make, n8n, Gmail and Outlook, five browser extensions, Siri, Google Assistant, Alexa                                                        |
-| 15  | Tie            | Todoist: unified API v1, official MCP server and CLI, large ecosystem. SP: plugins that add UI, open source                                                |
-| 16  | Worse          | Apple Watch, Wear OS, Vision Pro, widgets                                                                                                                  |
-| 17  | Worse, by far  | Its reputation is the polished reference; PCMag Editors' Choice                                                                                            |
-| 18  | Worse          | Invisible sync once signed in                                                                                                                              |
-| 19  | Better, by far | Online-first: you must be signed in, and unsynced changes can be lost if the app closes. No end-to-end encryption; backups leave out completed tasks       |
-| 20  | Better         | Pro US$7/month or $60/yr since 2025-12-10 (monthly price up 40%)                                                                                           |
-| 21  | Worse          | Ramble, Task Assist, Filter Assist, Email Assist, Task Capture                                                                                             |
-| 22  | Better         | Themes only                                                                                                                                                |
-| 23  | Worse          | Clean and minimal; easy to start                                                                                                                           |
+| #   | SP is          | Why                                                                                                                                                                                                          |
+| --- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1   | Worse, by far  | Quick Add (redesigned for everyone 2026-10-08) parses `#project /section p1 !reminder {deadline}`; Ramble voice capture in 38 languages, also on widgets; tasks from photos and PDFs; email forwarding (Pro) |
+| 2   | Worse          | Sub-projects, nested subtasks, labels, a filter query language with 150 saved filters on Pro. Limits: 5 projects and 3 filters free, 300 tasks per project                                                   |
+| 3   | Slightly worse | Same power, typed in plain English ("every 3rd friday", "every!")                                                                                                                                            |
+| 4   | Worse          | Google or Outlook on every plan; the calendar layout is Pro-only                                                                                                                                             |
+| 5   | Better         | Durations and time-blocking are Pro-only; no start dates; no capacity view or end-of-day review                                                                                                              |
+| 6   | Worse          | Pro: several reminders, location reminders, urgent full-screen alarm. Free: automatic reminders and one urgent reminder per task                                                                             |
+| 7   | Better, by far | No native time tracking; Toggl's extension fills the gap                                                                                                                                                     |
+| 8   | Better, by far | No native focus timer                                                                                                                                                                                        |
+| 9   | Better         | List, board and calendar (Pro). No Eisenhower matrix, planner or schedule                                                                                                                                    |
+| 10  | —              | Karma points, goals and streaks, but no habit tracker                                                                                                                                                        |
+| 11  | Tie            | Descriptions and comments                                                                                                                                                                                    |
+| 12  | Worse, by far  | Shared projects, team workspaces, roles, Business plan                                                                                                                                                       |
+| 13  | Better         | No official Jira or GitHub integration; Jira only through a third-party app                                                                                                                                  |
+| 14  | Worse          | Slack, Zapier, Make, n8n, Gmail and Outlook, five browser extensions, Siri, Google Assistant, Alexa                                                                                                          |
+| 15  | Tie            | Todoist: unified API v1, official MCP server and CLI, large ecosystem. SP: plugins that add UI, open source                                                                                                  |
+| 16  | Worse          | Apple Watch, Wear OS, Vision Pro, widgets                                                                                                                                                                    |
+| 17  | Worse, by far  | Its reputation is the polished reference; PCMag Editors' Choice                                                                                                                                              |
+| 18  | Worse          | Invisible sync once signed in                                                                                                                                                                                |
+| 19  | Better, by far | Online-first: you must be signed in, and unsynced changes can be lost if the app closes. No end-to-end encryption; backups leave out completed tasks                                                         |
+| 20  | Better         | Pro US$7/month or $60/yr since 2025-12-10 (monthly price up 40%)                                                                                                                                             |
+| 21  | Worse          | Ramble, Task Assist, Filter Assist, Email Assist, Task Capture Assist (left beta 2026-10-22)                                                                                                                 |
+| 22  | Better         | Themes only                                                                                                                                                                                                  |
+| 23  | Worse          | Clean and minimal; easy to start                                                                                                                                                                             |
 
 - **Price:**
   - Pro: US$7/month or $60/yr. Business: $10/user/month or $96/user/yr.
@@ -275,7 +296,7 @@ the gap list:
     2025-12-10.
 - **Ratings** (sources conflict):
   - Google Play: 4.4–4.6 from about 265–300K reviews, 10M+ installs.
-  - App Store: 4.8 from about 106K ratings.
+  - App Store: 4.8 from about 130K ratings (read, 2026-11).
   - About 30M users (2024).
 - **2026 releases:**
   - Ramble generally available (Jan 21).
@@ -284,9 +305,16 @@ the gap list:
   - People tab beta (Apr 23).
   - Gmail extension retired (Jun 30).
   - Urgent reminders.
-  - Calendar colours (Sep).
-  - `%` replaces `@` for labels by the end of 2026 (unverified).
-- **Sources** (2026-10, snippet):
+  - Calendar tasks coloured by priority, project or label, and the Android urgent
+    full-screen alarm (Aug 20, read).
+  - Redesigned Quick Add for everyone (Oct 8); durations without a date (Oct 1);
+    Quick Find by task ID or link (Oct 15); Task Capture Assist out of beta
+    (Oct 22).
+  - Todoist Comms, a team chat tool linked to tasks, opened to first teams with a
+    waitlist in late October (snippet).
+  - `%` for labels is recognised in Quick Add on iOS (Aug 20, read); that it
+    replaces `@` by the end of 2026 is unverified.
+- **Sources** (2026-11; pricing and the 2026 changelog read, first 100K characters of the changelog only; the rest snippet):
   [pricing update](https://www.todoist.com/help/articles/todoist-pro-pricing-update-in-2025-bxBvHZuJZ) ·
   [usage limits](https://www.todoist.com/help/articles/usage-limits-in-todoist-e5rcSY) ·
   [offline](https://todoist.com/help/articles/use-todoist-while-offline-4rbaZw) ·
@@ -326,7 +354,7 @@ the gap list:
 - **Ratings:**
   - Google Play: 4.6 from about 933–960K reviews, 10M+ installs.
   - AppBrain estimates about 41M installs.
-- **Developer:** Splend Apps, Poland. Version 5.1.x; listing updated 2026-10-19.
+- **Developer:** Splend Apps, Poland. Version 5.1.15 (APKPure, read; 5.1.14 on 2026-10-13); listing updated 2026-10-19. Nothing but bug fixes since the 2026-10 snapshot.
 - **Market position:**
   - It has the most reviews of any dedicated to-do app on Play, but every major
     to-do app shows the same 10M+ install badge.
@@ -339,7 +367,7 @@ the gap list:
   - nothing to learn
   - widgets and a notification-bar entry keep it visible
   - free, and cross-promoted from a publisher with about 500M installs
-- **Sources** (2026-10, snippet):
+- **Sources** (2026-11, snippet; [APKPure](https://apkpure.com/to-do-list/com.splendapps.splendo) read for versions and features):
   [Play](https://play.google.com/store/apps/details?id=com.splendapps.splendo) ·
   [AppBrain](https://www.appbrain.com/app/to-do-list/com.splendapps.splendo) ·
   [Galaxy Store](https://galaxystore.samsung.com/detail/com.splendapps.splendosum)
@@ -380,12 +408,23 @@ says which dimensions each group is scored on.
 ### Time trackers: Toggl Track, Clockify
 
 - **Toggl Track:**
-  - "New Toggl" (formerly Toggl 2.0) became the main product in 2026-09. Classic
-    Track continues.
-  - Paid Starter is US$9–12 per user per month.
+  - "New Toggl" (formerly Toggl 2.0) became the flagship on 2026-09-08 (read).
+    Classic Track continues. Releases since are team features: capacity
+    management, forecasting, time accounting and shareable reports.
+  - Paid Starter is US$9–12 per user per month, Premium US$16–24 (read). The free
+    plan is shown as up to 3 users on the pricing FAQ; third-party pages still say
+    5 (conflict).
+  - The new iOS app is rated 3.6 from 8 ratings (snippet), so "mature mobile
+    apps" holds for Classic Track only.
   - No Linux desktop app.
 - **Clockify:**
-  - The free plan was cut on 2026-04-21: up to 5 users, PDF-only exports, a
+  - Activity monitoring launched in 2026-09 (read): a desktop agent records apps,
+    sites, input activity and optional screenshots. It is on Pro (US$7.99–9.99),
+    visible to admins only, so it is outside the personal target.
+  - Plans (read): Basic US$3.99–4.99, Standard 5.49–6.99, Pro 7.99–9.99,
+    Enterprise 11.99–14.99 per user per month.
+  - The free plan was cut (2026-04-21 comes from a snippet; the help page gives no
+    date): up to 5 users, PDF-only exports, a
     31-day report range, and billable rates and estimates moved to paid plans.
   - Paid plans start at US$3.99 per user per month.
 - **Both:**
@@ -406,35 +445,49 @@ says which dimensions each group is scored on.
   - a timer button in about 150 (Toggl) or 100 (Clockify) websites
   - billable rates, for client billing (outside the [target](README.md#target))
   - mature mobile apps
-- **Sources** (2026-10, snippet unless marked):
-  [Toggl pricing](https://toggl.com/pricing) ·
+- **Sources** (2026-11, read unless marked):
+  [Toggl pricing](https://toggl.com/pricing) · [Toggl product updates](https://toggl.com/product) ·
   [Toggl extension](https://github.com/toggl/track-extension) (read) ·
-  [Clockify pricing](https://clockify.me/pricing) ·
+  [Clockify pricing](https://clockify.me/pricing) · [Clockify what's new](https://clockify.me/help/whats-new) ·
   [Clockify free-plan changes](https://clockify.me/help/administration/updates-to-clockify-free-plan) ·
   [Clockify extension](https://github.com/clockify/browser-extension) (read)
 
 ### Daily planners: Sunsama, Akiflow, Motion
 
-- **Price** (unverified, sources conflict; none has a free tier):
-  - Sunsama: about US$17–22 per month.
-  - Akiflow: US$19–34 per month.
-  - Motion: US$19–49 per month, with AI credit limits.
+- **Price** (read 2026-11; none has a free tier):
+  - Sunsama: US$22 per month, or US$17 per month billed yearly. 14-day trial.
+  - Akiflow: one Pro plan, US$34 per month, or US$19 per month billed yearly. The
+    AI Meeting Assistant costs US$19 more.
+  - Motion: Pro AI US$19 per seat (teams, annual) or US$29 (individual, annual),
+    about US$49 on individual monthly billing (snippet); Business AI US$29–39. AI
+    credit limits apply; 7-day trial.
 - **Sunsama:**
   - Guided daily planning and shutdown, weekly planning and a weekly review.
   - Rule-based auto-scheduling that asks "Overcommitted?" when the day is full.
-  - Two-way calendar sync with Google, Outlook and iCloud.
+  - Two-way calendar sync with Google, Outlook and iCloud; CalDAV opened to all
+    users in 2026-10 (read).
+  - Sunny, an AI assistant included in Pro, and Autoplan, which builds a day from
+    a braindump. A hosted MCP server with OAuth.
+  - Integration previews 2.0 (2026-10-30): most fields of a connected task are
+    editable and sync back, but Jira descriptions and many GitHub fields stay
+    read-only.
   - Jira status is written back. GitHub is read-only, there is no GitLab, and
     tracked time is not sent back to the source tool.
   - No offline mode.
 - **Akiflow:**
   - Universal inbox from Gmail, Slack and Teams.
   - Daily and weekly planning and shutdown rituals.
-  - Two-way sync with Jira Cloud and GitHub.
-  - No GitLab, no per-task timer, no Linux app.
+  - Two-way sync with Jira Cloud and GitHub (not re-verified).
+  - 2026-10-08 (release 2.83): two-way iCloud Calendar sync, Travel Time blocks
+    with leave-by reminders, an Apple Watch app. Task attachments (2026-09-24).
+  - An MCP connector for Claude, ChatGPT and Cursor, included in paid plans.
+  - Not re-verified: no GitLab, no per-task timer, no Linux app.
 - **Motion:**
   - Continuous AI auto-scheduling with deadline estimates and overbooking
     warnings.
   - No native developer integrations.
+  - Now a work-management suite: docs, chat, an AI note-taker, and on Business
+    time tracking and Gantt. No public changelog (404).
   - Users complain that the plan "keeps reshuffling itself".
 - **SP better:**
   - GitLab, Gitea, Redmine, OpenProject and Azure DevOps
@@ -444,11 +497,16 @@ says which dimensions each group is scored on.
   - a day-by-day capacity view in the planner
   - free, offline and Linux
 - **They are better:**
-  - weekly rituals
+  - weekly rituals (SP's "Finish the week" is on `master`, unreleased)
   - two-way Outlook sync
   - one-key auto-scheduling
   - email and chat as task sources
-- **Sources** (2026-10, snippet):
+- **Sources** (2026-11; Sunsama and Akiflow changelogs and pricing, Motion pricing read; the rest snippet):
+  [Sunsama changelog](https://sunsama.canny.io/changelog) ·
+  [Sunsama pricing](https://www.sunsama.com/pricing) ·
+  [Akiflow changelog](https://product.akiflow.com/changelog) ·
+  [Akiflow pricing](https://akiflow.com/pricing) ·
+  [Motion pricing](https://www.usemotion.com/pricing) ·
   [Sunsama daily planning](https://help.sunsama.com/docs/daily-planning) ·
   [Sunsama auto-scheduling](https://help.sunsama.com/docs/timeboxing-auto-scheduling) ·
   [Sunsama GitHub](https://help.sunsama.com/docs/github-integration) ·
@@ -458,73 +516,87 @@ says which dimensions each group is scored on.
 
 ### Privacy-first: Tasks.org, Vikunja, Things 3
 
-- **Tasks.org** (GPL-3.0, Android; desktop alpha since 2026-04):
+- **Tasks.org** (GPL-3.0, Android; desktop early access since 2026-04, with a beta
+  channel and signed Windows builds since 15.13 on 2026-10-13):
   - **SP better:**
-    - SP has no telemetry in any build. Tasks.org's Play and desktop builds
-      include Firebase Crashlytics and PostHog, on by default (read:
-      `app/build.gradle.kts`, `Preferences.kt`).
+    - SP has no telemetry in any build. Tasks.org's Play flavour includes Firebase
+      Crashlytics and PostHog, on by default (read: `app/build.gradle.kts`,
+      `Preferences.kt`); its F-Droid flavour has none. Desktop is unverified.
     - Tasks.org Cloud has no end-to-end encryption.
-    - On Play, CalDAV sync costs from US$0.99/yr.
+    - On Play, CalDAV sync costs from US$0.99/yr, and that tier includes the
+      desktop app (read, 2026-11).
   - **Tasks.org better:**
     - Its data is iCalendar, which any CalDAV client opens, with DAVx⁵ and EteSync
       support.
     - Location reminders, widgets, Wear OS, multi-level subtasks, custom filters.
+    - 15.12 (2026-09-11): a desktop MCP server for AI assistants and an Android
+      content provider API (read via summary).
 - **Vikunja** (AGPL-3.0, self-hosted):
   - **SP better:**
     - Vikunja is server-first, with no offline mode and no end-to-end encryption.
-    - Time tracking needs Pro.
-    - The mobile app is alpha.
+    - Time tracking is Pro only, self-hosted only, and Pro is a private beta behind
+      a waitlist (read, 2026-11).
+    - The mobile app is alpha; there is no official iOS app.
   - **Vikunja better:**
     - Multi-user self-hosting with a CalDAV endpoint.
     - Full ZIP export including attachments, and a generic CSV importer.
-- **Things 3:** Apple only; syncing needs a Things Cloud account without
-  end-to-end encryption, and there is no standard export. It is better on native
-  polish.
+    - 2.7.0 (2026-10-02, read) added a built-in MCP server with read-only tokens;
+      2.7.1 (2026-10-20) fixed 41 security advisories.
+- **Things 3:** Apple only; syncing needs a free Things Cloud account. The vendor
+  page (read) lists encryption in transit and at rest and does not mention
+  end-to-end encryption. No built-in standard export was found (unverified). It
+  is better on native polish: 3.25 (2026-10-21) added the iPhone Duo layout,
+  windows and keyboard shortcuts; 3.23 reworked repeating to-dos. Mac is US$49.99
+  (read).
 - **Ideas worth checking against the principles:**
   - DAVx⁵ through Android's tasks provider, as Tasks.org does. This is a narrower
     route to #2719 than full two-way CalDAV.
   - A "what syncs on each backend" table in the docs.
   - An Exodus Privacy report for each SP build, as proof that there are no
     trackers.
-- **Sources** (2026-10, read unless marked):
+- **Sources** (2026-11, read unless marked; Tasks.org changelog and pricing, Vikunja changelog and Pro page, Things release notes read):
+  [Tasks.org changelog](https://github.com/tasks/tasks/blob/main/CHANGELOG.md) ·
+  [Tasks.org pricing](https://tasks.org/pricing) ·
+  [Vikunja 2.7.0](https://vikunja.io/changelog/vikunja-2.7.0-was-released/) ·
+  [Vikunja Pro](https://vikunja.io/pro) ·
+  [Things release notes](https://culturedcode.com/things/support/articles/2409121/) ·
   [Tasks.org sync](https://github.com/tasks/docs/blob/main/docs/sync.md) ·
   [Tasks.org build](https://github.com/tasks/tasks/blob/main/app/build.gradle.kts) ·
   [Exodus](https://reports.exodus-privacy.eu.org/en/reports/search/org.tasks/)
-  (snippet) ·
+  (snippet; 503 in 2026-11) ·
   [Vikunja import and export](https://github.com/go-vikunja/website/blob/main/src/content/help/import-and-export.mdx) ·
   [Vikunja pricing](https://github.com/go-vikunja/website/blob/main/src/pages/pricing.astro) ·
   [Things Cloud](https://culturedcode.com/things/support/articles/2803586/)
-  (snippet)
 
 ## Gaps
 
 Gaps where SP misses its group's bar, in the order the 2026-10 comparison ranked
-them; the last three rows were added in review, unranked. A row is a prompt, not a
+them; the last three rows were added in review, unranked. Rows whose gap a release
+closed (Android app-icon shortcuts, priority in the add-task syntax, dates in the
+user's language, all in v19.3.0) are removed; the Capture and Platforms verdicts
+stand for the remaining gaps. A row is a prompt, not a
 plan: it still has to pass
 [Does it earn its place?](../feature-review-guide.md#does-it-earn-its-place).
 Status values are defined in [README.md](README.md#monthly-refresh) (step 4).
 
-| Gap                                                          | #     | Who has it                                            | Issue                | Status (2026-10)                                                  |
-| ------------------------------------------------------------ | ----- | ----------------------------------------------------- | -------------------- | ----------------------------------------------------------------- |
-| Sync trust: data-loss reports, whole-dataset conflict dialog | 18    | TickTick, Todoist                                     | #7892, #9256, #10393 | Partly on master (#10847, #10855)                                 |
-| Add a task from the Android widget                           | 1, 16 | TickTick, Todoist, To Do List                         | #5139                | Draft PR open (#10612)                                            |
-| Android app-icon shortcuts                                   | 1, 16 | TickTick, Todoist                                     | #7636                | On master (#10971)                                                |
-| Priority in the add-task syntax                              | 1     | Todoist                                               | #10887, #10904       | On master (#10974)                                                |
-| Dates in the user's language                                 | 1     | Todoist                                               | #9340                | On master (#10970)                                                |
-| Multiple reminders per task                                  | 6     | TickTick, Todoist                                     | #4331                | —                                                                 |
-| Two-way Outlook sync; creating CalDAV tasks                  | 4     | Todoist, planners (Outlook); Tasks.org (CalDAV tasks) | #5001, #3938, #2719  | Partly on master (#10991, #10989: CalDAV tasks)                   |
-| Mobile UI refresh                                            | 17    | TickTick, Todoist                                     | #9225, #4864, #7637  | Partly on master (#10975, #10990, #10992)                         |
-| Start and end times per entry, timesheet editing             | 7     | Toggl Track, Clockify                                 | #6378, #7888, #7890  | —                                                                 |
-| Weekly planning and review                                   | 5     | Sunsama, Akiflow                                      | none                 | —                                                                 |
-| Nested subtasks                                              | 2     | TickTick, Todoist, Tasks.org                          | #2657                | —                                                                 |
-| iOS home-screen widget                                       | 16    | TickTick, Todoist                                     | #6373                | —                                                                 |
-| Quick add from a notification                                | 1     | To Do List                                            | none                 | —                                                                 |
-| Voice capture                                                | 1     | TickTick, Todoist, To Do List                         | none                 | —                                                                 |
-| Location reminders                                           | 6     | TickTick, Todoist, Tasks.org                          | #5336                | Proposal ([plan](../long-term-plans/location-based-reminders.md)) |
-| Watch apps                                                   | 16    | TickTick, Todoist, Tasks.org                          | none                 | —                                                                 |
-| First run: time to first task, learning curve                | 23    | TickTick, Todoist, To Do List                         | #8824                | Partly on master (#10913, #10957)                                 |
-| Saved filters                                                | 2     | TickTick, Todoist                                     | #10347               | —                                                                 |
-| Focus: strict mode, focus across devices                     | 8     | TickTick                                              | none                 | —                                                                 |
+| Gap                                                          | #     | Who has it                                            | Issue                                                             | Status (2026-11)                                                          |
+| ------------------------------------------------------------ | ----- | ----------------------------------------------------- | ----------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| Sync trust: data-loss reports, whole-dataset conflict dialog | 18    | TickTick, Todoist                                     | #10393 (#7892, #9256 closed); open reports #11049, #11184, #11344 | Partly released v19.3.0 (#10847, #10855); more on master (#11330, #11171) |
+| Add a task from the Android widget                           | 1, 16 | TickTick, Todoist, To Do List                         | #5139 (closed)                                                    | On master (#11317); draft PR #10612 is superseded                         |
+| Multiple reminders per task                                  | 6     | TickTick, Todoist                                     | #4331                                                             | —                                                                         |
+| Two-way Outlook sync; creating CalDAV tasks                  | 4     | Todoist, planners (Outlook); Tasks.org (CalDAV tasks) | #3938, #2719 (#5001 closed as covered by the calendar plugins)    | Partly released v19.3.0 (#10991, #10989: CalDAV tasks)                    |
+| Mobile UI refresh                                            | 17    | TickTick, Todoist                                     | #9225, #4864, #7637                                               | Partly released v19.3.0 (#10975, #10990, #10992)                          |
+| Start and end times per entry, timesheet editing             | 7     | Toggl Track, Clockify                                 | #7888, #7890 (#6378 closed)                                       | Partly on master (#11181: opt-in CalDAV event log)                        |
+| Weekly planning and review                                   | 5     | Sunsama, Akiflow                                      | none                                                              | On master (#11259, "Finish the week")                                     |
+| Nested subtasks                                              | 2     | TickTick, Todoist, Tasks.org                          | #2657                                                             | —                                                                         |
+| iOS home-screen widget                                       | 16    | TickTick, Todoist                                     | #6373                                                             | —                                                                         |
+| Quick add from a notification                                | 1     | To Do List                                            | none                                                              | —                                                                         |
+| Voice capture                                                | 1     | TickTick, Todoist, To Do List                         | none                                                              | —                                                                         |
+| Location reminders                                           | 6     | TickTick, Todoist, Tasks.org                          | #5336                                                             | Proposal ([plan](../long-term-plans/location-based-reminders.md))         |
+| Watch apps                                                   | 16    | TickTick, Todoist, Tasks.org                          | none                                                              | —                                                                         |
+| First run: time to first task, learning curve                | 23    | TickTick, Todoist, To Do List                         | #8824                                                             | Partly released v19.3.0 (#10913); more on master (#11315)                 |
+| Saved filters                                                | 2     | TickTick, Todoist                                     | #10347                                                            | PR open (#11349)                                                          |
+| Focus: strict mode, focus across devices                     | 8     | TickTick                                              | none                                                              | —                                                                         |
 
 ## Speed benchmark
 

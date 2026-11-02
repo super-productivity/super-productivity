@@ -1,6 +1,6 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
 import { uuidv7 } from 'uuidv7';
-import { SuperSyncUploadSnapshotRequestSchema } from '@sp/shared-schema';
+import { SuperSyncUploadSnapshotRequestSchema } from '@sp/shared-schema/supersync-http-contract';
 import { prisma } from '../db';
 import { Logger } from '../logger';
 import { getAuthUser } from '../middleware';

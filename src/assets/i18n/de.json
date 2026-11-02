@@ -3093,8 +3093,8 @@
       "PLANNER": "Plane die nächsten Tage im {{plannerIcon}} <b>Planer</b>",
       "TASK_MENU_TOUCH": "Wische eine Aufgabe nach links für ihr Menü: {{playIcon}} <b>Starte die Erfassung der Zeit</b>, {{subtaskIcon}} <b>Unteraufgabe hinzufügen</b>",
       "TASK_MENU_TOUCH_NO_TRACKING": "Wische eine Aufgabe nach links für ihr Menü, z. B. {{subtaskIcon}} <b>Unteraufgabe hinzufügen</b>",
-      "TIMER_RUNNING": "Der Timer läuft. Drücke {{playIcon}} erneut oder <kbd>{{key}}</kbd>, um zu pausieren.",
-      "TIMER_RUNNING_TOUCH": "Der Timer läuft. Tippe oben auf {{playIcon}}, um zu pausieren.",
+      "TIMER_RUNNING": "Der Timer läuft. Drücke {{pauseIcon}} erneut oder <kbd>{{key}}</kbd>, um zu pausieren.",
+      "TIMER_RUNNING_TOUCH": "Der Timer läuft. Tippe oben auf {{pauseIcon}}, um zu pausieren.",
       "TRACK_TIME": "Fahre mit der Maus über die Aufgabe und drücke {{playIcon}}, um die Zeit zu erfassen"
     },
     "WANT_MORE": {

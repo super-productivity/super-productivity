@@ -2,27 +2,57 @@
 
 Official TypeScript definitions for developing [Super Productivity](https://github.com/super-productivity/super-productivity) plugins.
 
+Versioned like the app: version X.Y.Z describes the plugin API of Super
+Productivity X.Y.Z. Your manifest's `minSupVersion` is the oldest app version
+your plugin installs on: set it to the oldest version that has every method you
+use, not simply the version you installed. (Versions before 19 were published
+separately and are outdated: if your `package.json` says `^1.0.1`, change it.)
+
+New to plugins? Start from the
+[plugin starter](https://github.com/super-productivity/super-productivity/tree/master/packages/plugin-starter)
+and the
+[plugin development guide](https://github.com/super-productivity/super-productivity/blob/master/docs/plugin-development.md).
+The complete API, with comments, is
+[`src/types.ts`](https://github.com/super-productivity/super-productivity/blob/master/packages/plugin-api/src/types.ts).
+
 ## Installation
 
 ```bash
-npm install @super-productivity/plugin-api
+npm install --save-dev @super-productivity/plugin-api
 ```
 
 ## Usage
 
-### TypeScript Plugin Development
+### Plain JavaScript (`plugin.js`)
+
+The app provides a global `PluginAPI`. Reference the global types at the top of
+your file for autocomplete and, with `// @ts-check`, type checking:
+
+```javascript
+// @ts-check
+/// <reference types="@super-productivity/plugin-api/global" />
+
+PluginAPI.registerHook(PluginAPI.Hooks.TASK_COMPLETE, (payload) => {
+  console.log('Task completed!', payload.taskId);
+});
+```
+
+Code inside a plugin's iframe (`index.html`) gets a filtered subset of the API;
+see "Iframe API Surface" in the guide.
+
+### TypeScript
+
+Declare the global yourself, or instead put
+`/// <reference types="@super-productivity/plugin-api/global" />` at the very
+top of the file and drop the `declare const` line:
 
 ```typescript
-import type {
-  PluginAPI,
-  PluginManifest,
-  PluginHooks,
-} from '@super-productivity/plugin-api';
+import { PluginHooks } from '@super-productivity/plugin-api';
+import type { PluginAPI as PluginAPIType } from '@super-productivity/plugin-api';
 
-// Your plugin code with full type support
-PluginAPI.registerHook(PluginHooks.TASK_COMPLETE, (taskData) => {
-  console.log('Task completed!', taskData);
+declare const PluginAPI: PluginAPIType;
 
+PluginAPI.registerHook(PluginHooks.TASK_COMPLETE, (payload) => {
   PluginAPI.showSnack({
     msg: 'Task completed successfully!',
     type: 'SUCCESS',
@@ -71,7 +101,8 @@ PluginAPI.registerShortcut({
   "id": "my-awesome-plugin",
   "manifestVersion": 1,
   "version": "1.0.0",
-  "minSupVersion": "13.0.0",
+  "minSupVersion": "19.3.0",
+  "author": "Your Name",
   "description": "An awesome plugin for Super Productivity",
   "hooks": ["taskComplete", "taskUpdate"],
   "permissions": ["showSnack", "getTasks", "addTask", "showIndexHtmlAsView"],
@@ -111,17 +142,9 @@ PluginAPI.registerShortcut({
 
 ### 1. Available Hooks
 
-```typescript
-enum PluginHooks {
-  TASK_COMPLETE = 'taskComplete',
-  TASK_UPDATE = 'taskUpdate',
-  TASK_DELETE = 'taskDelete',
-  FINISH_DAY = 'finishDay',
-  LANGUAGE_CHANGE = 'languageChange',
-  PERSISTED_DATA_CHANGED = 'persistedDataChanged',
-  ACTION = 'action',
-}
-```
+See `PluginHooks` in
+[`src/types.ts`](https://github.com/super-productivity/super-productivity/blob/master/packages/plugin-api/src/types.ts)
+for the full list and each hook's payload type.
 
 **`PERSISTED_DATA_CHANGED`** fires on any persistent-data change to this
 plugin after the host has finished its initial boot load — including
