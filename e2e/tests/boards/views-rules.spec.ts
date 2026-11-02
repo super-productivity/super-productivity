@@ -1,6 +1,6 @@
 import { Locator, Page } from '@playwright/test';
 import { expect, test } from '../../fixtures/test.fixture';
-import { waitForStatePersistence } from '../../utils/waits';
+import { waitForMenuSettled, waitForStatePersistence } from '../../utils/waits';
 import {
   createView,
   openViewEditor,
@@ -98,13 +98,19 @@ test.describe('View rules', () => {
 
     // Filter the Inbox to tasks without a planned date.
     await page.locator('.task-filter-btn').click();
+    await waitForMenuSettled(page);
     await page.getByRole('menuitem', { name: /Filter By/ }).click();
+    // Let each parent menu settle before clicking a submenu trigger, or the
+    // moving items can leave the pointer over Project and replace Planned Date.
+    await waitForMenuSettled(page);
     await page.getByRole('menuitem', { name: 'Planned Date', exact: true }).click();
+    await waitForMenuSettled(page);
     await page.getByRole('menuitem', { name: 'Not specified', exact: true }).click();
     await page.keyboard.press('Escape');
     await expect(page.locator('task').filter({ hasText: planned })).toHaveCount(0);
 
     await page.locator('.task-filter-btn').click();
+    await waitForMenuSettled(page);
     await page.getByRole('menuitem', { name: 'Save as view…' }).click();
     const dialog = page.locator('dialog-board-edit');
     await expect(dialog).toBeVisible();
