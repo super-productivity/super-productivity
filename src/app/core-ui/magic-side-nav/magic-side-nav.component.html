@@ -130,6 +130,19 @@
                 ></nav-list-tree>
               </li>
             }
+            @case ('viewGroup') {
+              <li
+                class="nav-item has-children"
+                role="listitem"
+              >
+                <nav-view-group
+                  [item]="item"
+                  [showLabels]="showText()"
+                  [isExpanded]="isGroupExpanded(item)"
+                  (itemClick)="onItemClick($event)"
+                ></nav-view-group>
+              </li>
+            }
             @case ('menu') {
               <nav-mat-menu
                 [item]="item"

@@ -189,7 +189,8 @@ PluginAPI.registerHeaderButton({
   },
 });
 
-PluginAPI.registerHook(PluginAPI.Hooks.TASK_COMPLETE, (taskId) => {
+// Hook handlers receive one payload object (see HookPayloadMap in types.ts)
+PluginAPI.registerHook(PluginAPI.Hooks.TASK_COMPLETE, ({ taskId }) => {
   console.log(`Task ${taskId} completed!`);
 });
 ```
@@ -608,14 +609,15 @@ plugin init, then subscribe to this hook for subsequent updates.
 
 ```javascript
 // Register hook listener
-PluginAPI.registerHook(PluginAPI.Hooks.TASK_COMPLETE, (taskId) => {
+// Hook handlers receive one payload object (see HookPayloadMap in types.ts)
+PluginAPI.registerHook(PluginAPI.Hooks.TASK_COMPLETE, ({ taskId }) => {
   console.log(`Task ${taskId} completed!`);
 });
 
 // Listen to Redux actions
-PluginAPI.registerHook(PluginAPI.Hooks.ACTION, (action) => {
-  if (action.type === 'ADD_TASK_SUCCESS') {
-    console.log('New task added:', action.payload);
+PluginAPI.registerHook(PluginAPI.Hooks.ACTION, ({ action }) => {
+  if (action.type === '[Task Shared] addTask') {
+    console.log('New task added:', action.task.id);
     // Bonus: Increment a counter on task add
     PluginAPI.incrementCounter('tasks-added-today');
   }
@@ -1064,20 +1066,32 @@ Happy plugin development! 🚀
 - Don't test on your real world data! Use a test instance! (you can use https://test-app.super-productivity.com/ if you don't know how get one)
 - Be as specific as possible
 - Outline what APIs your plugin should use
-- Give the assistant [`types.ts`](../packages/plugin-api/src/types.ts): it is the complete, current API, while this guide only covers the most used parts
-- Test for errors (`Ctrl+Shift+i` opens the console) and iterate until it works. Don't expect that everything works on your first try.
+- Give the assistant [`types.ts`](../packages/plugin-api/src/types.ts): it is the complete, current API, while this guide only covers the most used parts. If the assistant can't open links, paste the file into the chat
+- Test for errors (`Ctrl+Shift+i` opens the console) and iterate until it works. Don't expect that everything works on your first try. When the plugin uses a `PluginAPI` method that does not exist, the console names the closest real ones: paste that line back to the assistant
 - Read the code! Don't trust it blindly.
 
 ### Example
 
+The rules in the prompt are the mistakes assistants make most often. Keep them
+even for a small plugin.
+
 ```md
-Can you you write me a plugin for Super Productivity that plays a beep sound every time i click on a header button (You need to add a header button via PluginAPI.registerHeaderButton).
+Write me a plugin for Super Productivity that plays a beep sound every time I click on a header button.
 
-Here is the guide: https://github.com/super-productivity/super-productivity/blob/master/docs/plugin-development.md
-Here is the complete API (the global PluginAPI object): https://github.com/super-productivity/super-productivity/blob/master/packages/plugin-api/src/types.ts
-Start from this starter: https://github.com/super-productivity/super-productivity/tree/master/packages/plugin-starter
+The complete API (the global PluginAPI object): https://raw.githubusercontent.com/super-productivity/super-productivity/master/packages/plugin-api/src/types.ts
+A working starter: https://github.com/super-productivity/super-productivity/tree/master/packages/plugin-starter
 
-Don't use any PluginAPI methods that are not in types.ts.
+Rules:
 
-Please give me the output as flat zip file to download.
+- Only use PluginAPI methods and hooks listed in types.ts. If something is not possible with them, say so instead of inventing a method.
+- manifest.json needs id (letters, numbers and dashes), name, version, "manifestVersion": 1, minSupVersion, "hooks": [] and "permissions": [].
+- plugin.js is not a module: no import/export, no top-level await. Put async startup code in PluginAPI.onReady(async () => { ... }).
+- Header buttons, menu entries, shortcuts and side panel buttons can only be registered from plugin.js, not from index.html.
+- A UI goes in index.html with "iFrame": true in the manifest. Inline all CSS and JavaScript; other files are not served to it.
+- Hook handlers get one payload object, e.g. registerHook(PluginAPI.Hooks.TASK_COMPLETE, ({ taskId, task }) => { ... }).
+- Most methods return Promises: await them.
+- Store data with PluginAPI.persistDataSynced(string) and loadSyncedData(), not localStorage.
+- PluginAPI.request needs "http" in permissions and the host in "allowedHosts".
+
+Give me the files and a flat ZIP (manifest.json at the top level, not inside a folder).
 ```

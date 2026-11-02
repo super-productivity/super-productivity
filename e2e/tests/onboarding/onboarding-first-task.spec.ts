@@ -85,7 +85,7 @@ test.describe('First-run onboarding', () => {
     const sideNav = page.locator('magic-side-nav');
     await expect(sideNav.getByText('Planner', { exact: true })).toBeVisible();
     await expect(page.locator('.tour-playBtn')).toBeVisible();
-    for (const hidden of ['Schedule', 'Boards', 'Habits']) {
+    for (const hidden of ['Schedule', 'Views', 'Habits']) {
       await expect(sideNav.getByText(hidden, { exact: true })).toHaveCount(0);
     }
     assertNoRuntimeBrowserErrors(runtimeErrors, 'onboarding defaults');
@@ -268,7 +268,7 @@ test.describe('First-run onboarding', () => {
     await expect(page.locator('onboarding-hint')).toHaveCount(0);
     // The calm defaults survive the reload.
     await expect(
-      page.locator('magic-side-nav').getByText('Boards', { exact: true }),
+      page.locator('magic-side-nav').getByText('Views', { exact: true }),
     ).toHaveCount(0);
     assertNoRuntimeBrowserErrors(runtimeErrors, 'onboarding reload');
     await page.close();

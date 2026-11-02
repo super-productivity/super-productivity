@@ -16,7 +16,8 @@ export type NavItem =
   | NavActionItem
   | NavTreeItem
   | NavMenuItem
-  | NavPluginItem;
+  | NavPluginItem
+  | NavViewGroupItem;
 
 export interface NavBaseItem {
   id: string;
@@ -87,6 +88,14 @@ export interface NavMenuItem extends NavBaseItem {
   label: string;
   icon: string;
   children: NavItem[];
+}
+
+/** The Views section: every board, in stored order (read by the section). */
+export interface NavViewGroupItem extends NavBaseItem {
+  type: 'viewGroup';
+  label: string;
+  icon: string;
+  action: () => void; // toggles the section
 }
 
 export interface NavPluginItem extends NavBaseItem {
