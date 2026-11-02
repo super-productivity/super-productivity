@@ -1,4 +1,8 @@
-import { ensureAudioContextRunning, getAudioBuffer } from './audio-context';
+import {
+  ensureAudioContextRunning,
+  getAudioBuffer,
+  holdAudioContext,
+} from './audio-context';
 import { Log } from '../core/log';
 
 const BASE = './assets/snd';
@@ -20,8 +24,14 @@ let capTimeoutId: ReturnType<typeof setTimeout> | null = null;
 // guarantees a restart can never leak an orphaned, unstoppable loop — even if
 // two starts overlap.
 let startToken = 0;
+// Keeps the AudioContext out of the idle suspend while a start or loop is active.
+let activeRelease: (() => void) | null = null;
 
 const _teardownNodes = (): void => {
+  if (activeRelease) {
+    activeRelease();
+    activeRelease = null;
+  }
   if (capTimeoutId !== null) {
     clearTimeout(capTimeoutId);
     capTimeoutId = null;
@@ -52,8 +62,10 @@ const _teardownNodes = (): void => {
  * setAudioContextKeepAwake(). The alarm is desktop-oriented — there the
  * AudioContext keeps running while the window is unfocused, which is the whole
  * point (you stepped away from your desk) — and keepAwake is a single-owner
- * flag that white noise relies on. On mobile the context is suspended on
- * app-background (#8243), so the loop stops there by design; the break-end
+ * flag that white noise relies on. The loop holds the context instead
+ * (holdAudioContext()), so the idle suspend does not cut it off. On mobile
+ * the context is suspended on app-background (#8243), so the loop stops
+ * there by design; the break-end
  * setting is per-device precisely because this behavior differs across
  * platforms, and alarm-style reminders only start the loop on desktop.
  *
@@ -70,6 +82,8 @@ export const startLoopingAlarm = async (
   // orphaned source running.
   const myToken = ++startToken;
   _teardownNodes();
+  // Hold the context until this loop ends. Teardown releases the hold.
+  activeRelease = holdAudioContext();
 
   try {
     const ctx = await ensureAudioContextRunning();

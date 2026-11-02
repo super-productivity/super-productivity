@@ -11,6 +11,56 @@ let unlocked = false;
 // the ongoing sound is not cut off. See setAudioContextKeepAwake().
 let keepAwake = false;
 
+// A running AudioContext keeps an OS audio stream open, even when silent.
+// On desktop this blocks system sleep (Windows power request) and wastes power.
+// So the context suspends itself when no sound has played for a short time.
+export const IDLE_SUSPEND_DELAY_MS = 5000;
+// Number of sounds that need the context running (see holdAudioContext()).
+let activeSounds = 0;
+let idleTimer: ReturnType<typeof setTimeout> | null = null;
+
+const clearIdleTimer = (): void => {
+  if (idleTimer !== null) {
+    clearTimeout(idleTimer);
+    idleTimer = null;
+  }
+};
+
+// Suspends the context after IDLE_SUSPEND_DELAY_MS if no sound holds it.
+// This path ignores keepAwake. Sounds that need the context hold it instead.
+const scheduleIdleSuspend = (): void => {
+  clearIdleTimer();
+  if (activeSounds !== 0 || !audioContext) {
+    return;
+  }
+  idleTimer = setTimeout(() => {
+    idleTimer = null;
+    if (activeSounds === 0 && audioContext && audioContext.state === 'running') {
+      void audioContext.suspend().catch(() => {});
+    }
+  }, IDLE_SUSPEND_DELAY_MS);
+};
+
+/**
+ * Marks the context as in use. While held, the idle suspend does not run.
+ * Returns an idempotent release function. Call it when the sound ends.
+ */
+export const holdAudioContext = (): (() => void) => {
+  activeSounds++;
+  clearIdleTimer();
+  let released = false;
+  return (): void => {
+    if (released) {
+      return;
+    }
+    released = true;
+    activeSounds = Math.max(0, activeSounds - 1);
+    if (activeSounds === 0) {
+      scheduleIdleSuspend();
+    }
+  };
+};
+
 /**
  * Returns the singleton AudioContext instance, creating it if necessary.
  */
@@ -19,6 +69,8 @@ export const getAudioContext = (): AudioContext => {
     audioContext = new (
       (window as any).AudioContext || (window as any).webkitAudioContext
     )();
+    // Firefox can create the context already running.
+    scheduleIdleSuspend();
   }
 
   return audioContext!;
@@ -74,29 +126,37 @@ export const playBuffer = async (
   volume: number = 100,
   configureSource?: (source: AudioBufferSourceNode) => void,
 ): Promise<void> => {
-  const audioCtx = await ensureAudioContextRunning();
-  const source = audioCtx.createBufferSource();
-  source.buffer = buffer;
-  configureSource?.(source);
+  // Hold first, so the idle timer cannot fire while resume() is pending.
+  const release = holdAudioContext();
+  try {
+    const audioCtx = await ensureAudioContextRunning();
+    const source = audioCtx.createBufferSource();
+    source.buffer = buffer;
+    configureSource?.(source);
 
-  let gainNode: GainNode | null = null;
-  if (volume !== 100) {
-    gainNode = audioCtx.createGain();
-    gainNode.gain.value = volume / 100;
-    source.connect(gainNode);
-    gainNode.connect(audioCtx.destination);
-  } else {
-    source.connect(audioCtx.destination);
-  }
-
-  source.onended = (): void => {
-    source.disconnect();
-    if (gainNode) {
-      gainNode.disconnect();
+    let gainNode: GainNode | null = null;
+    if (volume !== 100) {
+      gainNode = audioCtx.createGain();
+      gainNode.gain.value = volume / 100;
+      source.connect(gainNode);
+      gainNode.connect(audioCtx.destination);
+    } else {
+      source.connect(audioCtx.destination);
     }
-  };
 
-  source.start(0);
+    source.onended = (): void => {
+      source.disconnect();
+      if (gainNode) {
+        gainNode.disconnect();
+      }
+      release();
+    };
+
+    source.start(0);
+  } catch (e) {
+    release();
+    throw e;
+  }
 };
 
 /**
@@ -146,8 +206,12 @@ export const unlockAudioContext = (): void => {
     ac.abort();
     const ctx = getAudioContext();
     if (ctx.state === 'suspended') {
-      // Fire-and-forget — ensureAudioContextRunning() retries before actual playback
-      ctx.resume().catch(() => {});
+      // Fire-and-forget — ensureAudioContextRunning() retries before actual playback.
+      // Schedule the idle suspend after resume settles, so a slow resume cannot
+      // leave the context running.
+      ctx.resume().then(scheduleIdleSuspend, scheduleIdleSuspend);
+    } else {
+      scheduleIdleSuspend();
     }
   };
 
@@ -175,4 +239,6 @@ export const closeAudioContext = (): void => {
   audioBufferCache.clear();
   unlocked = false;
   keepAwake = false;
+  activeSounds = 0;
+  clearIdleTimer();
 };

@@ -1,5 +1,5 @@
 import { setWhiteNoiseVolume, startWhiteNoise, stopWhiteNoise } from './white-noise';
-import { closeAudioContext } from './audio-context';
+import { closeAudioContext, IDLE_SUSPEND_DELAY_MS } from './audio-context';
 
 describe('white-noise', () => {
   let originalAudioContext: typeof AudioContext;
@@ -19,6 +19,7 @@ describe('white-noise', () => {
       sampleRate: 8,
       resume: jasmine.createSpy('resume').and.returnValue(Promise.resolve()),
       close: jasmine.createSpy('close'),
+      suspend: jasmine.createSpy('suspend').and.returnValue(Promise.resolve()),
       createBuffer: jasmine.createSpy('createBuffer').and.callFake(() => ({
         getChannelData: () => new Float32Array(16),
       })),
@@ -43,6 +44,7 @@ describe('white-noise', () => {
 
   afterEach(() => {
     stopWhiteNoise();
+    closeAudioContext();
     (window as any).AudioContext = originalAudioContext;
   });
 
@@ -69,5 +71,54 @@ describe('white-noise', () => {
 
     expect(mockContext.createGain).toHaveBeenCalled();
     expect(mockGainNode.gain.value).toBeCloseTo(0.1);
+  });
+
+  describe('context hold', () => {
+    beforeEach(() => jasmine.clock().install());
+    afterEach(() => jasmine.clock().uninstall());
+
+    it('keeps the context from idle-suspending while playing', async () => {
+      await startWhiteNoise(40);
+
+      jasmine.clock().tick(IDLE_SUSPEND_DELAY_MS * 2);
+
+      expect(mockContext.suspend).not.toHaveBeenCalled();
+    });
+
+    it('releases the hold on stop', async () => {
+      await startWhiteNoise(40);
+
+      stopWhiteNoise();
+      jasmine.clock().tick(IDLE_SUSPEND_DELAY_MS);
+
+      expect(mockContext.suspend).toHaveBeenCalledTimes(1);
+    });
+
+    it('releases the hold when the start is cancelled while resuming', async () => {
+      let resolveResume!: () => void;
+      mockContext.state = 'suspended';
+      mockContext.resume.and.returnValue(
+        new Promise<void>((resolve) => (resolveResume = resolve)),
+      );
+
+      const started = startWhiteNoise(40);
+      stopWhiteNoise();
+      resolveResume();
+      await started;
+      mockContext.state = 'running';
+      jasmine.clock().tick(IDLE_SUSPEND_DELAY_MS);
+
+      expect(mockContext.suspend).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps a single hold when started twice', async () => {
+      await startWhiteNoise(40);
+      await startWhiteNoise(40);
+
+      stopWhiteNoise();
+      jasmine.clock().tick(IDLE_SUSPEND_DELAY_MS);
+
+      expect(mockContext.suspend).toHaveBeenCalledTimes(1);
+    });
   });
 });

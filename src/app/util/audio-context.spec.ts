@@ -8,6 +8,8 @@ import {
   playBuffer,
   suspendAudioContext,
   setAudioContextKeepAwake,
+  holdAudioContext,
+  IDLE_SUSPEND_DELAY_MS,
 } from './audio-context';
 
 describe('audio-context', () => {
@@ -36,6 +38,8 @@ describe('audio-context', () => {
   });
 
   afterEach(() => {
+    // Clear the singleton and its idle timer, so they do not leak into other specs.
+    closeAudioContext();
     (window as any).AudioContext = originalAudioContext;
     (window as any).fetch = originalFetch;
   });
@@ -455,6 +459,204 @@ describe('audio-context', () => {
       suspendAudioContext();
 
       expect(suspend).toHaveBeenCalled();
+    });
+  });
+
+  describe('idle suspend', () => {
+    let mockContext: any;
+    let mockSource: any;
+    let mockBuffer: AudioBuffer;
+    let suspend: jasmine.Spy;
+
+    const makeContext = (state: string): void => {
+      suspend = jasmine.createSpy('suspend').and.callFake(() => {
+        mockContext.state = 'suspended';
+        return Promise.resolve();
+      });
+      mockContext = {
+        state,
+        resume: jasmine.createSpy('resume').and.callFake(() => {
+          mockContext.state = 'running';
+          return Promise.resolve();
+        }),
+        suspend,
+        close: jasmine.createSpy('close'),
+        createBufferSource: jasmine
+          .createSpy('createBufferSource')
+          .and.callFake(() => mockSource),
+        createGain: jasmine.createSpy('createGain'),
+        destination: {} as AudioDestinationNode,
+      };
+      (window as any).AudioContext = jasmine
+        .createSpy('AudioContext')
+        .and.returnValue(mockContext);
+    };
+
+    const newSource = (): any => ({
+      connect: jasmine.createSpy('connect'),
+      disconnect: jasmine.createSpy('disconnect'),
+      start: jasmine.createSpy('start'),
+      buffer: null,
+      onended: null as (() => void) | null,
+    });
+
+    beforeEach(() => {
+      jasmine.clock().install();
+      mockBuffer = {} as AudioBuffer;
+      mockSource = newSource();
+      makeContext('running');
+      closeAudioContext();
+    });
+
+    afterEach(() => {
+      closeAudioContext();
+      jasmine.clock().uninstall();
+    });
+
+    it('should suspend after the delay once a one-shot sound ended', async () => {
+      await playBuffer(mockBuffer);
+      mockSource.onended();
+
+      jasmine.clock().tick(IDLE_SUSPEND_DELAY_MS - 1);
+      expect(suspend).not.toHaveBeenCalled();
+      jasmine.clock().tick(1);
+      expect(suspend).toHaveBeenCalledTimes(1);
+    });
+
+    it('should not suspend while a sound is playing', async () => {
+      await playBuffer(mockBuffer);
+
+      jasmine.clock().tick(IDLE_SUSPEND_DELAY_MS * 2);
+
+      expect(suspend).not.toHaveBeenCalled();
+    });
+
+    it('should cancel the pending suspend when a new sound starts', async () => {
+      await playBuffer(mockBuffer);
+      mockSource.onended();
+      jasmine.clock().tick(IDLE_SUSPEND_DELAY_MS - 1);
+
+      mockSource = newSource();
+      await playBuffer(mockBuffer);
+      jasmine.clock().tick(IDLE_SUSPEND_DELAY_MS * 2);
+
+      expect(suspend).not.toHaveBeenCalled();
+      mockSource.onended();
+      jasmine.clock().tick(IDLE_SUSPEND_DELAY_MS);
+      expect(suspend).toHaveBeenCalledTimes(1);
+    });
+
+    it('should hold the context while resume is pending', async () => {
+      mockContext.state = 'suspended';
+      let resolveResume!: () => void;
+      mockContext.resume.and.returnValue(
+        new Promise<void>((resolve) => (resolveResume = resolve)),
+      );
+
+      const playing = playBuffer(mockBuffer);
+      mockContext.state = 'running';
+      jasmine.clock().tick(IDLE_SUSPEND_DELAY_MS * 2);
+      expect(suspend).not.toHaveBeenCalled();
+
+      resolveResume();
+      await playing;
+    });
+
+    it('should release the hold when playback setup throws', async () => {
+      await ensureAudioContextRunning();
+      mockContext.createBufferSource.and.throwError('boom');
+
+      await expectAsync(playBuffer(mockBuffer)).toBeRejectedWithError('boom');
+
+      jasmine.clock().tick(IDLE_SUSPEND_DELAY_MS);
+      expect(suspend).toHaveBeenCalledTimes(1);
+    });
+
+    it('should never idle-suspend a held context', () => {
+      getAudioContext();
+      holdAudioContext();
+
+      jasmine.clock().tick(IDLE_SUSPEND_DELAY_MS * 3);
+
+      expect(suspend).not.toHaveBeenCalled();
+    });
+
+    it('should suspend after the last hold is released', () => {
+      getAudioContext();
+      const releaseA = holdAudioContext();
+      const releaseB = holdAudioContext();
+
+      releaseA();
+      jasmine.clock().tick(IDLE_SUSPEND_DELAY_MS);
+      expect(suspend).not.toHaveBeenCalled();
+
+      releaseB();
+      jasmine.clock().tick(IDLE_SUSPEND_DELAY_MS);
+      expect(suspend).toHaveBeenCalledTimes(1);
+    });
+
+    it('should make release idempotent', () => {
+      getAudioContext();
+      const releaseA = holdAudioContext();
+      holdAudioContext();
+
+      releaseA();
+      releaseA();
+      jasmine.clock().tick(IDLE_SUSPEND_DELAY_MS);
+
+      expect(suspend).not.toHaveBeenCalled();
+    });
+
+    it('should suspend a context created already running', () => {
+      getAudioContext();
+
+      jasmine.clock().tick(IDLE_SUSPEND_DELAY_MS);
+
+      expect(suspend).toHaveBeenCalledTimes(1);
+    });
+
+    it('should suspend after the unlock gesture once the delay passes', async () => {
+      makeContext('suspended');
+      unlockAudioContext();
+
+      document.dispatchEvent(new Event('click'));
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(mockContext.resume).toHaveBeenCalled();
+      expect(suspend).not.toHaveBeenCalled();
+
+      jasmine.clock().tick(IDLE_SUSPEND_DELAY_MS);
+      expect(suspend).toHaveBeenCalledTimes(1);
+    });
+
+    it('should not suspend a context that is already suspended', () => {
+      makeContext('suspended');
+      getAudioContext();
+
+      jasmine.clock().tick(IDLE_SUSPEND_DELAY_MS * 2);
+
+      expect(suspend).not.toHaveBeenCalled();
+    });
+
+    it('should reset the hold count on closeAudioContext', () => {
+      getAudioContext();
+      holdAudioContext();
+      closeAudioContext();
+
+      makeContext('running');
+      getAudioContext();
+      jasmine.clock().tick(IDLE_SUSPEND_DELAY_MS);
+
+      expect(suspend).toHaveBeenCalledTimes(1);
+    });
+
+    it('should clear the pending timer on closeAudioContext', () => {
+      getAudioContext();
+      closeAudioContext();
+
+      jasmine.clock().tick(IDLE_SUSPEND_DELAY_MS * 2);
+
+      expect(suspend).not.toHaveBeenCalled();
     });
   });
 

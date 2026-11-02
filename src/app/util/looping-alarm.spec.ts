@@ -1,5 +1,5 @@
 import { startLoopingAlarm, stopLoopingAlarm } from './looping-alarm';
-import { closeAudioContext } from './audio-context';
+import { closeAudioContext, IDLE_SUSPEND_DELAY_MS } from './audio-context';
 
 const SOUND = 'positive.mp3';
 
@@ -32,6 +32,7 @@ describe('looping-alarm', () => {
       state: 'running',
       resume: jasmine.createSpy('resume').and.returnValue(Promise.resolve()),
       close: jasmine.createSpy('close'),
+      suspend: jasmine.createSpy('suspend').and.returnValue(Promise.resolve()),
       createBufferSource: jasmine.createSpy('createBufferSource').and.callFake(() => {
         const s = makeSource();
         createdSources.push(s);
@@ -59,6 +60,7 @@ describe('looping-alarm', () => {
 
   afterEach(() => {
     stopLoopingAlarm();
+    closeAudioContext();
     (window as any).AudioContext = originalAudioContext;
     (window as any).fetch = originalFetch;
   });
@@ -146,6 +148,59 @@ describe('looping-alarm', () => {
     } finally {
       jasmine.clock().uninstall();
     }
+  });
+
+  describe('context hold', () => {
+    beforeEach(() => jasmine.clock().install());
+    afterEach(() => jasmine.clock().uninstall());
+
+    it('keeps the context from idle-suspending while looping', async () => {
+      await startLoopingAlarm(SOUND, 100);
+
+      jasmine.clock().tick(IDLE_SUSPEND_DELAY_MS * 2);
+
+      expect(mockContext.suspend).not.toHaveBeenCalled();
+    });
+
+    it('releases the hold on stop', async () => {
+      await startLoopingAlarm(SOUND, 100);
+
+      stopLoopingAlarm();
+      jasmine.clock().tick(IDLE_SUSPEND_DELAY_MS);
+
+      expect(mockContext.suspend).toHaveBeenCalledTimes(1);
+    });
+
+    it('releases the superseded hold on restart, keeping one hold', async () => {
+      await startLoopingAlarm(SOUND, 100);
+      const second = await startLoopingAlarm(SOUND, 100);
+
+      jasmine.clock().tick(IDLE_SUSPEND_DELAY_MS);
+      expect(mockContext.suspend).not.toHaveBeenCalled();
+
+      stopLoopingAlarm(second);
+      jasmine.clock().tick(IDLE_SUSPEND_DELAY_MS);
+      expect(mockContext.suspend).toHaveBeenCalledTimes(1);
+    });
+
+    it('releases the hold after the hard safety ceiling', async () => {
+      const TEN_MINUTES_MS = 10 * 60 * 1000;
+      await startLoopingAlarm(SOUND, 100);
+
+      jasmine.clock().tick(TEN_MINUTES_MS + 1);
+      jasmine.clock().tick(IDLE_SUSPEND_DELAY_MS);
+
+      expect(mockContext.suspend).toHaveBeenCalledTimes(1);
+    });
+
+    it('releases the hold when start fails', async () => {
+      mockContext.createBufferSource.and.throwError('boom');
+
+      await startLoopingAlarm(SOUND, 100);
+      jasmine.clock().tick(IDLE_SUSPEND_DELAY_MS);
+
+      expect(mockContext.suspend).toHaveBeenCalledTimes(1);
+    });
   });
 
   it('does not throw when stop is called with no active alarm', () => {
