@@ -4,6 +4,8 @@ import { IS_IOS_NATIVE } from '../../util/is-native-platform';
 
 export interface IosInterface {
   onResume$: Subject<void>;
+  /** willEnterForeground only; onResume$ also fires after Control Center. */
+  onWillEnterForeground$: Subject<void>;
 }
 
 // Plain Subject (not ReplaySubject): unlike androidInterface, the producer is a
@@ -12,6 +14,7 @@ export interface IosInterface {
 // in main.ts inside the BackgroundTask.beforeExit budget, not here.
 export const iosInterface: IosInterface = {
   onResume$: new Subject<void>(),
+  onWillEnterForeground$: new Subject<void>(),
 };
 
 if (IS_IOS_NATIVE) {
@@ -19,5 +22,8 @@ if (IS_IOS_NATIVE) {
     if (isActive) {
       iosInterface.onResume$.next();
     }
+  });
+  CapacitorApp.addListener('resume', () => {
+    iosInterface.onWillEnterForeground$.next();
   });
 }

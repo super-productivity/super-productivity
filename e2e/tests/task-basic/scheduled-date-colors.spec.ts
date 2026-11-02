@@ -227,14 +227,9 @@ test('colors overdue Board cards like task rows', async ({
     'overdue',
   );
 
-  await page.goto('/#/boards');
-  await page
-    .getByRole('tab')
-    .filter({ hasText: /kanban/i })
-    .click();
-  const kanban = page.getByRole('tabpanel', { name: 'Kanban', exact: true });
+  await page.goto('/#/boards/KANBAN_DEFAULT');
+  const kanban = page.locator('board');
   await expect(kanban).toBeVisible();
-  await expect(kanban).not.toHaveClass(/mat-tab-body-animating/);
   const createTag = kanban.getByRole('button', { name: 'Create Tag', exact: true });
   await createTag.click();
 

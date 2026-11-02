@@ -59,6 +59,9 @@ updates:
         patterns:
           - 'prisma'
           - '@prisma/*'
+      rollup-native:
+        patterns:
+          - '@rollup/rollup-*'
 
   # ==========================================
   # GitHub Actions (Weekly Updates - SECURITY)

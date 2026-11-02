@@ -1,7 +1,7 @@
 import { inject, Injectable } from '@angular/core';
 import { createEffect } from '@ngrx/effects';
-import { combineLatest } from 'rxjs';
-import { distinctUntilChanged, filter, map, tap } from 'rxjs/operators';
+import { combineLatest, from } from 'rxjs';
+import { distinctUntilChanged, filter, map, switchMap, tap } from 'rxjs/operators';
 import { IS_ANDROID_WEB_VIEW } from '../../../util/is-android-web-view';
 import { androidInterface } from '../android-interface';
 import { SyncProviderManager } from '../../../op-log/sync-providers/provider-manager.service';
@@ -13,6 +13,8 @@ import {
 import { skipWhileApplyingRemoteOps } from '../../../util/skip-during-sync.operator';
 import { DroidLog } from '../../../core/log';
 import { CurrentProviderPrivateCfg } from '../../../op-log/core/types/sync.types';
+import type { WebdavPrivateCfg } from '@sp/sync-providers/webdav';
+import { FILE_BASED_SYNC_CONSTANTS } from '../../../op-log/sync-providers/file-based/file-based-sync.types';
 import { isShallowEqual } from '../../../util/is-shallow-equal';
 import { GlobalConfigService } from '../../config/global-config.service';
 import { CaptureKeyConfig, ReminderConfig } from '../../config/global-config.model';
@@ -51,13 +53,58 @@ export const getSuperSyncCredentialBridgeCommand = (
 };
 
 /**
+ * File-based providers whose sync file the native worker can read. Both share
+ * the WebDAV transport; the other file providers need OAuth refresh natively.
+ */
+const BACKGROUND_FILE_SYNC_PROVIDER_IDS: ReadonlySet<SyncProviderId> = new Set([
+  SyncProviderId.WebDAV,
+  SyncProviderId.Nextcloud,
+]);
+
+export type FileSyncReadRequest = { url: string; authorization: string };
+
+type FileReadRequestProvider = {
+  getFileReadRequest(targetPath: string): Promise<FileSyncReadRequest>;
+};
+
+export type FileSyncCredentialBridgeCommand = {
+  type: 'set-file';
+  /** GET target of the v2 sync file (sync-data.json) */
+  fileUrl: string;
+  authorization: string;
+  /** Local encryption intent: native refuses a plaintext file when true */
+  isEncryptionExpected: boolean;
+  /** E2EE password for decrypting the file natively; '' clears it */
+  encryptionPassword: string;
+};
+
+export type BackgroundSyncBridgeCommand =
+  | SuperSyncCredentialBridgeCommand
+  | FileSyncCredentialBridgeCommand;
+
+export const isBackgroundFileSyncProvider = (providerId: SyncProviderId): boolean =>
+  BACKGROUND_FILE_SYNC_PROVIDER_IDS.has(providerId);
+
+export const getFileSyncCredentialBridgeCommand = (
+  privateCfg: Pick<WebdavPrivateCfg, 'encryptKey' | 'isEncryptionEnabled'>,
+  readRequest: FileSyncReadRequest,
+): FileSyncCredentialBridgeCommand => ({
+  type: 'set-file',
+  fileUrl: readRequest.url,
+  authorization: readRequest.authorization,
+  // Same fallback as the sync config: pre-flag configs encrypt iff a key exists
+  isEncryptionExpected: privateCfg.isEncryptionEnabled ?? !!privateCfg.encryptKey,
+  encryptionPassword: privateCfg.encryptKey || '',
+});
+
+/**
  * Two commands are equal when replaying the second would be a no-op on the
  * native side — comparing commands (not configs) means credential-irrelevant
  * config changes and repeated clears are suppressed automatically.
  */
 export const bridgeCommandEqual = (
-  a: SuperSyncCredentialBridgeCommand | null,
-  b: SuperSyncCredentialBridgeCommand | null,
+  a: BackgroundSyncBridgeCommand | null,
+  b: BackgroundSyncBridgeCommand | null,
 ): boolean => (a === null || b === null ? a === b : isShallowEqual(a, b));
 
 export type BackgroundReminderSettings = {
@@ -89,9 +136,9 @@ export const getCapturePublicKeyForNative = (
   hasSuperSyncCredentials && key?.v === 1 && key.publicKeySpki ? key.publicKeySpki : '';
 
 /**
- * Mirrors SuperSync credentials to native SharedPreferences so the
- * background SyncReminderWorker can authenticate against the server
- * without needing the WebView.
+ * Mirrors SuperSync or WebDAV/Nextcloud credentials to native
+ * SharedPreferences so the background SyncReminderWorker can read synced
+ * reminders without needing the WebView.
  */
 @Injectable()
 export class AndroidSyncBridgeEffects {
@@ -104,11 +151,23 @@ export class AndroidSyncBridgeEffects {
       () =>
         this._providerManager.currentProviderPrivateCfg$.pipe(
           skipWhileApplyingRemoteOps(),
-          map((cfg) => (cfg ? getSuperSyncCredentialBridgeCommand(cfg) : null)),
+          switchMap((cfg) => from(this._toBridgeCommand(cfg))),
           distinctUntilChanged(bridgeCommandEqual),
           filter(isNonNull),
           tap((command) => {
-            if (command.type === 'set') {
+            if (command.type === 'set-file') {
+              DroidLog.log('AndroidSyncBridgeEffects: Setting file sync credentials');
+              // Native drops any SuperSync credentials: one provider at a time.
+              // Optional chaining: old APKs don't have this method yet.
+              androidInterface.setFileSyncCredentials?.(
+                command.fileUrl,
+                command.authorization,
+                command.isEncryptionExpected,
+              );
+              androidInterface.setSuperSyncEncryptionPassword?.(
+                command.encryptionPassword,
+              );
+            } else if (command.type === 'set') {
               DroidLog.log('AndroidSyncBridgeEffects: Setting SuperSync credentials');
               androidInterface.setSuperSyncCredentials?.(
                 command.baseUrl,
@@ -119,21 +178,52 @@ export class AndroidSyncBridgeEffects {
               androidInterface.setSuperSyncEncryptionPassword?.(
                 command.encryptionPassword,
               );
-            } else if (command.reason === 'no-token') {
-              DroidLog.log(
-                'AndroidSyncBridgeEffects: No access token, clearing credentials',
-              );
-              androidInterface.clearSuperSyncCredentials?.();
             } else {
               DroidLog.log(
-                'AndroidSyncBridgeEffects: Non-SuperSync provider, clearing credentials',
+                command.reason === 'no-token'
+                  ? 'AndroidSyncBridgeEffects: No access token, clearing credentials'
+                  : 'AndroidSyncBridgeEffects: No background-readable provider, clearing credentials',
               );
               androidInterface.clearSuperSyncCredentials?.();
+              // Also on 'no-token': a previous WebDAV login must not outlive the switch
+              androidInterface.clearFileSyncCredentials?.();
             }
           }),
         ),
       { dispatch: false },
     );
+
+  private async _toBridgeCommand(
+    cfg: CurrentProviderPrivateCfg | null,
+  ): Promise<BackgroundSyncBridgeCommand | null> {
+    if (!cfg) {
+      return null;
+    }
+    if (isBackgroundFileSyncProvider(cfg.providerId) && cfg.privateCfg) {
+      try {
+        const provider = (await this._providerManager.getProviderById(cfg.providerId)) as
+          | Partial<FileReadRequestProvider>
+          | undefined;
+        const readRequest = await provider?.getFileReadRequest?.(
+          FILE_BASED_SYNC_CONSTANTS.SYNC_FILE,
+        );
+        if (readRequest) {
+          return getFileSyncCredentialBridgeCommand(
+            cfg.privateCfg as WebdavPrivateCfg,
+            readRequest,
+          );
+        }
+      } catch (e) {
+        // Incomplete config (e.g. no base URL yet): clear like any other
+        // provider the worker cannot read. Never log the error's cfg details.
+        DroidLog.log('AndroidSyncBridgeEffects: File sync config not readable', {
+          providerId: cfg.providerId,
+          errorName: (e as Error)?.name,
+        });
+      }
+    }
+    return getSuperSyncCredentialBridgeCommand(cfg);
+  }
 
   /**
    * Mirrors the reminder settings so the background worker does not schedule

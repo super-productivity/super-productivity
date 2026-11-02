@@ -110,6 +110,7 @@ import { PluginIndexComponent } from '../../plugins/ui/plugin-index/plugin-index
 import { PluginBridgeService } from '../../plugins/plugin-bridge.service';
 import { PlainspaceClaimPoolComponent } from '../plainspace/claim-pool/claim-pool.component';
 import { PlainspaceSharedTask } from '../plainspace/plainspace-shared-task.model';
+import { DIALOG_AUTO_FOCUS_TYPING } from '../../util/dialog-auto-focus';
 
 // Stable reference used as the toSignal initial value below so the deselect
 // effect can tell "the customized list hasn't emitted yet" apart from a
@@ -574,6 +575,7 @@ export class WorkViewComponent implements OnInit, OnDestroy {
   editSection(id: string, title: string): void {
     this._matDialog
       .open(DialogPromptComponent, {
+        autoFocus: DIALOG_AUTO_FOCUS_TYPING,
         data: {
           placeholder: T.WW.ADD_SECTION_TITLE,
           txtValue: title,

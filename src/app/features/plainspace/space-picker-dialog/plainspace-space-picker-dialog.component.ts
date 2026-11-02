@@ -22,6 +22,7 @@ import {
   PlainspaceSpace,
 } from '../../issue/providers/plainspace/plainspace-api.service';
 import { DEFAULT_PLAINSPACE_CFG } from '../../issue/providers/plainspace/plainspace-cfg-form.const';
+import { DIALOG_AUTO_FOCUS_TYPING } from '../../../util/dialog-auto-focus';
 
 /** What the user chose: link one of their existing spaces, or create a new one. */
 export type PlainspaceSpaceChoice =
@@ -109,6 +110,7 @@ export class PlainspaceSpacePickerDialogComponent {
     const reconnected = await firstValueFrom(
       this._matDialog
         .open(PlainspaceConnectDialogComponent, {
+          autoFocus: DIALOG_AUTO_FOCUS_TYPING,
           data: { host: this._accountService.host() },
         })
         .afterClosed(),

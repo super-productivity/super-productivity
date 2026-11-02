@@ -122,7 +122,13 @@
   container-type: inline-size;
   container-name: main-content;
 
-  > ::ng-deep router-outlet + * {
+  // The routed page. Not `router-outlet + *`: a sibling combinator on a
+  // universal subject is matched against every element, so Chromium marks
+  // every parent as sibling-dependent and restyles all following siblings on
+  // each insert or removal (moving one card in a 3,700-card column: 1.3 s of
+  // style recalc, measured 2026-11). The leaving page of a route animation
+  // matches too; the animation positions both pages absolutely anyway.
+  > ::ng-deep :not(router-outlet) {
     position: absolute;
     width: 100%;
     height: 100%;
