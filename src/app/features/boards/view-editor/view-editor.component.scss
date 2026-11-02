@@ -3,10 +3,16 @@
 // The title and content are the dialog's own rows (see the component).
 :host {
   display: contents;
+  // The label column, shared with the sections' Rules and Sort rows.
+  --view-editor-label-w: 88px;
 }
 
 // Below xs the dialog is full screen (panelClass 'fullscreen-xs-dialog').
 .content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+
   @include mq(xs) {
     min-width: 540px;
     max-height: 85vh;
@@ -18,27 +24,29 @@
   }
 }
 
-.field-label,
-.sections-heading {
-  color: var(--text-color-muted);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
-  letter-spacing: var(--letter-spacing-wide);
+.hint {
+  margin: 0;
 }
 
-.layout-row {
+// Label column, then the controls: aligned with a flat list's Rules and Sort.
+.form-row {
+  display: grid;
+  grid-template-columns: var(--view-editor-label-w) minmax(0, 1fr);
+  column-gap: var(--s2);
+  align-items: center;
+}
+
+.form-label,
+.cols-label {
+  color: var(--text-color-muted);
+  font-size: var(--font-size-sm);
+}
+
+.layout-controls {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--s) var(--s2);
-  margin-bottom: var(--s3);
-}
-
-// Basis 0: the group's own width is 100%, which would push the columns to
-// the next line.
-.layout-toggle {
-  flex: 1 1 0;
-  min-width: 200px;
 }
 
 .cols {
@@ -51,7 +59,7 @@
   display: inline-flex;
   align-items: center;
   border: 1px solid var(--extra-border-color);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
 }
 
 .cols-value {
@@ -65,46 +73,64 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--s);
-  margin-bottom: var(--s);
+  margin-bottom: calc(-1 * var(--s2));
 }
 
 .sections-heading {
   margin: 0;
+  color: var(--text-color-muted);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
 }
 
 .sections {
   display: flex;
   flex-direction: column;
-  gap: var(--s2);
-}
-
-.add-section {
-  margin-top: var(--s2);
-}
-
-// Phones: what the layout is on wider screens, a quiet row that shows its
-// controls.
-.layout-summary {
-  display: flex;
-  align-items: center;
   gap: var(--s);
-  width: 100%;
-  margin-top: var(--s2);
-  padding: var(--s) 0;
-  border: 0;
-  background: transparent;
-  color: var(--text-color-muted);
-  font: inherit;
-  font-size: var(--font-size-sm);
-  text-align: start;
-  cursor: pointer;
 
-  + .layout-row {
-    margin-top: var(--s);
+  // A phone's section list: rows divided like a list, no gaps.
+  &.is-list {
+    gap: 0;
   }
 }
 
-.layout-summary-value {
-  color: var(--text-color);
-  font-weight: var(--font-weight-medium);
+.is-hidden {
+  display: none;
+}
+
+// A flat list: "Add section" below a rule, quiet.
+.add-section {
+  margin-top: calc(-1 * var(--s));
+  padding-top: var(--s);
+  border-top: 1px solid var(--divider-color);
+}
+
+// Phones: one column, the controls full width, no label beside the layout.
+.content.is-phone {
+  gap: var(--s3);
+
+  .layout-row {
+    grid-template-columns: minmax(0, 1fr);
+
+    .form-label {
+      display: none;
+    }
+  }
+
+  .layout-controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .layout-toggle {
+    display: flex;
+  }
+
+  .layout-option {
+    flex: 1 1 0;
+  }
+
+  .name-field {
+    margin-top: var(--s);
+  }
 }

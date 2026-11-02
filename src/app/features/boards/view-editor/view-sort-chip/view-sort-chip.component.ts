@@ -32,8 +32,9 @@ const SORT_DIRS: readonly { value: SortDir; label: string; arrow: string }[] = [
 ];
 
 /**
- * A section's sort as a chip ("Deadline ↑"): its menu picks the key and,
- * unless the order is manual, the direction.
+ * A section's sort as a chip ("Deadline ↑"), on a phone (`variant` row) a
+ * full-width row: its menu picks the key and, unless the order is manual,
+ * the direction. Picking a key keeps the menu open for the direction.
  */
 @Component({
   selector: 'view-sort-chip',
@@ -50,9 +51,12 @@ const SORT_DIRS: readonly { value: SortDir; label: string; arrow: string }[] = [
   templateUrl: './view-sort-chip.component.html',
   styleUrl: '../view-editor-chip.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  // eslint-disable-next-line @typescript-eslint/naming-convention
+  host: { '[class.is-row]': "variant() === 'row'" },
 })
 export class ViewSortChipComponent {
   readonly panel = input.required<BoardPanelCfg>();
+  readonly variant = input<'chip' | 'row'>('chip');
   readonly panelChange = output<BoardPanelCfg>();
 
   protected readonly T = T;
@@ -79,8 +83,13 @@ export class ViewSortChipComponent {
   readonly dirLabel = computed(
     () => SORT_DIRS.find((sortDir) => sortDir.value === this.dir())?.label ?? '',
   );
+  readonly arrow = computed(() => (this.dir() === 'desc' ? '↓' : '↑'));
 
-  setSort(value: string): void {
+  /** Picks a key; a sorted one keeps the menu open, its direction below it. */
+  setSort(ev: Event, value: string): void {
+    if (value !== SORT_MANUAL) {
+      ev.stopPropagation();
+    }
     this.panelChange.emit(withSortValue(this.panel(), value));
   }
 

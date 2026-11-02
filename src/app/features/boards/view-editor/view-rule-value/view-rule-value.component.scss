@@ -30,3 +30,8 @@ tag,
 .note--warn {
   color: var(--color-warning);
 }
+
+// The value alone (a phone's row): its first item starts the line.
+:host(.no-label) > :first-child {
+  margin-inline-start: 0;
+}

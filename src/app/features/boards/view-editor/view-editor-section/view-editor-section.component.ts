@@ -57,12 +57,17 @@ interface ShownPart {
   items: ReadonlyMap<string, TagComponentTag>;
 }
 
+/** How a section shows (`mode`). */
+type SectionMode = 'card' | 'flat' | 'row' | 'page';
+
 /**
  * One section (List) or column (Board) of the view editor. As a card (when
- * titles show): number, drag handle, title, count and, open, its rules as
- * chips, its sort and a preview of the matching tasks; collapsed, a summary
- * of its rules. The only section of a list shows the rules without a card.
- * Edits are emitted as a new panel; the panel's other fields stay as they are.
+ * titles show): drag handle, title, count and, open, its rules as chips and
+ * its sort; collapsed, a summary of its rules. The only section of a list
+ * shows the rules without a card (`flat`). On a phone the rules are rows; a
+ * section with a title is a row of the view's section list that opens its
+ * own page. Edits are emitted as a new panel; the panel's other fields stay
+ * as they are.
  */
 @Component({
   selector: 'view-editor-section',
@@ -95,11 +100,13 @@ export class ViewEditorSectionComponent {
   /** Its position (0-based), shown as its number. */
   readonly index = input<number>(0);
   readonly count = input<number>(0);
-  /** The titles of its first matching tasks (open sections preview them). */
-  readonly previewTitles = input<readonly string[]>([]);
+  /** How many sections the view has ("Section 2 of 3"). */
+  readonly total = input<number>(1);
+  /** Rows instead of chips; a titled section is a row or, open, a page. */
+  readonly isPhone = input<boolean>(false);
   readonly isFirst = input<boolean>(false);
   readonly isLast = input<boolean>(false);
-  /** With several sections one is open; the others show a summary. */
+  /** With several sections one is open; the others show a summary (on a phone: a row). */
   readonly isCollapsible = input<boolean>(false);
   readonly isOpen = input<boolean>(true);
   /**
@@ -126,6 +133,10 @@ export class ViewEditorSectionComponent {
   private readonly _actions = viewChild('sectionActions', {
     read: ElementRef<HTMLButtonElement>,
   });
+  private readonly _backBtn = viewChild('backBtn', {
+    read: ElementRef<HTMLButtonElement>,
+  });
+  private readonly _rowBtn = viewChild('rowBtn', { read: ElementRef<HTMLButtonElement> });
   private readonly _chips = viewChildren(ViewRuleChipComponent);
 
   // Rules added or edited here stay shown while their control is empty (an
@@ -147,9 +158,25 @@ export class ViewEditorSectionComponent {
     );
   });
 
-  readonly isCollapsed = computed(() => this.isCollapsible() && !this.isOpen());
+  readonly mode = computed<SectionMode>(() => {
+    if (!this.isShowTitle()) {
+      return 'flat';
+    }
+    if (!this.isPhone()) {
+      return 'card';
+    }
+    return this.isOpen() ? 'page' : 'row';
+  });
+  readonly isCollapsed = computed(
+    () => this.mode() === 'card' && this.isCollapsible() && !this.isOpen(),
+  );
   readonly countLabel = computed(() => getCountLabel(this.count(), this.panel()));
-  readonly moreCount = computed(() => this.count() - this.previewTitles().length);
+  readonly groupLabel = computed(() =>
+    this.isBoard() ? T.F.BOARDS.EDITOR.COLUMN_NR : T.F.BOARDS.EDITOR.SECTION_NR,
+  );
+  readonly titleLabel = computed(() =>
+    this.isBoard() ? T.F.BOARDS.EDITOR.COLUMN_TITLE : T.F.BOARDS.EDITOR.SECTION_TITLE,
+  );
 
   private readonly _tagsById = computed(
     () =>
@@ -184,9 +211,11 @@ export class ViewEditorSectionComponent {
 
   /** The open section's chips: every shown rule, empty added ones too. */
   readonly parts = computed(() => this._toShown(this.shownRules()));
-  /** The collapsed section's summary: the set rules only. */
+  /** The summary of a collapsed card or a phone's row: the set rules only. */
   readonly summaryParts = computed(() =>
-    this.isCollapsed() ? this._toShown(getSetRules(this.panel())) : [],
+    this.isCollapsed() || this.mode() === 'row'
+      ? this._toShown(getSetRules(this.panel()))
+      : [],
   );
 
   setTitle(title: string): void {
@@ -195,8 +224,17 @@ export class ViewEditorSectionComponent {
 
   openRules(): void {
     this.toggleOpen.emit();
-    // Opening replaces the chevron. Keep keyboard focus on its replacement.
-    afterNextRender(() => this._actions()?.nativeElement.focus(), {
+    // Opening replaces the chevron (a phone: the row). Keep keyboard focus on
+    // its replacement.
+    afterNextRender(() => (this._backBtn() ?? this._actions())?.nativeElement.focus(), {
+      injector: this._injector,
+    });
+  }
+
+  /** A phone's page: back to the view's section list, focus on its row. */
+  back(): void {
+    this.toggleOpen.emit();
+    afterNextRender(() => this._rowBtn()?.nativeElement.focus(), {
       injector: this._injector,
     });
   }
@@ -232,13 +270,25 @@ export class ViewEditorSectionComponent {
     this._emit(panel);
   }
 
-  /** Shows the title's error; whether it has one (a hidden title has none). */
+  /**
+   * Shows the title's error; whether it has one. A hidden title has none; a
+   * phone's row has no field, so its title is checked as stored.
+   */
   isTitleInvalid(): boolean {
-    return !!this._title()?.isInvalid();
+    const title = this._title();
+    if (title) {
+      return title.isInvalid();
+    }
+    return this.mode() === 'row' && !this.panel().title;
   }
 
-  /** Renames: the title's field, focused. */
+  /** Renames: the title's field, focused (a phone's row opens its page first). */
   focusTitle(): void {
+    if (this.mode() === 'row') {
+      this.toggleOpen.emit();
+      afterNextRender(() => this._title()?.focus(), { injector: this._injector });
+      return;
+    }
     this._title()?.focus();
   }
 

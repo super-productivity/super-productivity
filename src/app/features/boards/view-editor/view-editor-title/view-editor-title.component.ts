@@ -22,7 +22,8 @@ import { T } from '../../../../t.const';
 /**
  * A title shown as text that turns into a required text field to rename it:
  * on a click (or the pencil), back to text on Enter or blur. An empty title
- * keeps the field, with its error, so it is never shown as empty text.
+ * keeps the field, with its error, so it is never shown as empty text. On a
+ * phone (`isFieldAlways`) it is always the field.
  */
 @Component({
   selector: 'view-editor-title',
@@ -53,6 +54,8 @@ export class ViewEditorTitleComponent {
   readonly isPencilShown = input<boolean>(false);
   /** The dialog's first focus (`cdkFocusInitial`) goes to the text. */
   readonly isFocusInitial = input<boolean>(false);
+  /** Always the field, never text (a phone's form). */
+  readonly isFieldAlways = input<boolean>(false);
 
   readonly titleChange = output<string>();
 
@@ -65,9 +68,10 @@ export class ViewEditorTitleComponent {
 
   // Renaming starts on a click and whenever the title is empty (a new view
   // or section); it only ends through `finish`, so typing doesn't end it.
-  readonly isEditing = linkedSignal<string, boolean>({
-    source: this.title,
-    computation: (title, previous) => !title || (previous?.value ?? false),
+  readonly isEditing = linkedSignal<{ title: string; isAlways: boolean }, boolean>({
+    source: () => ({ title: this.title(), isAlways: this.isFieldAlways() }),
+    computation: ({ title, isAlways }, previous) =>
+      isAlways || !title || (previous?.value ?? false),
   });
 
   edit(): void {
@@ -88,6 +92,9 @@ export class ViewEditorTitleComponent {
     }
     if (!this.title()) {
       this._model()?.control.markAsTouched();
+      return;
+    }
+    if (this.isFieldAlways()) {
       return;
     }
     this.isEditing.set(false);

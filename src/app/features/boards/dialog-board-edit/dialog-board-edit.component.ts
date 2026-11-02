@@ -4,25 +4,38 @@ import {
   MatDialog,
   MatDialogActions,
   MatDialogRef,
+  MatDialogTitle,
 } from '@angular/material/dialog';
 import { T } from '../../../t.const';
 import { BoardEditComponent } from '../board-edit/board-edit.component';
 import { BoardCfg } from '../boards.model';
-import { MatButton } from '@angular/material/button';
+import { MatButton, MatIconButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { TranslatePipe } from '@ngx-translate/core';
 import { DialogConfirmComponent } from '../../../ui/dialog-confirm/dialog-confirm.component';
+import { LayoutService } from '../../../core-ui/layout/layout.service';
 
 @Component({
   selector: 'dialog-board-edit',
   standalone: true,
-  imports: [MatDialogActions, BoardEditComponent, MatButton, MatIcon, TranslatePipe],
+  imports: [
+    MatDialogActions,
+    MatDialogTitle,
+    BoardEditComponent,
+    MatButton,
+    MatIconButton,
+    MatIcon,
+    TranslatePipe,
+  ],
   templateUrl: './dialog-board-edit.component.html',
+  styleUrl: './dialog-board-edit.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class DialogBoardEditComponent {
   private _matDialogRef = inject<MatDialogRef<DialogBoardEditComponent>>(MatDialogRef);
   private _matDialog = inject(MatDialog);
+  /** Phones: full screen, with a top bar instead of the action row. */
+  readonly isXs = inject(LayoutService).isXs;
 
   data = inject<{
     board: BoardCfg;

@@ -55,7 +55,7 @@ test.describe('View editor', () => {
     await expect(section).toHaveCount(1);
     await expect(section.getByRole('textbox')).toHaveCount(0);
     await expect(section.locator('.card')).toHaveCount(0);
-    await expect(section).toContainText('Show tasks that match');
+    await expect(section.locator('.form-label').first()).toContainText('Rules');
 
     // Saving without a title shows why and focuses it.
     await save.click();
@@ -100,14 +100,18 @@ test.describe('View editor', () => {
     });
     const columns = dialog.getByRole('group', { name: 'Columns', exact: true });
     await expect(columns).toHaveCount(0);
-    await expect(dialog.getByRole('heading', { name: 'Sections · 2' })).toBeVisible();
+    await expect(
+      dialog.getByRole('heading', { name: 'Sections', exact: true }),
+    ).toBeVisible();
 
     await fillViewEditor(page, dialog, { layout: 'board' });
     await expect(columns.locator('.cols-value')).toHaveText('2');
     await expect(
       columns.getByRole('button', { name: 'Fewer columns', exact: true }),
     ).toBeDisabled();
-    await expect(dialog.getByRole('heading', { name: 'Columns · 2' })).toBeVisible();
+    await expect(
+      dialog.getByRole('heading', { name: 'Columns', exact: true }),
+    ).toBeVisible();
     await expect(dialog.getByRole('button', { name: 'Add column' })).toBeVisible();
 
     await fillViewEditor(page, dialog, { layout: 'list' });
@@ -273,7 +277,9 @@ test.describe('View editor', () => {
     const dialog = await openViewEditor(page);
     const card = (i: number): Locator => viewEditorSection(dialog, i);
     await expect(dialog.locator('view-editor-section')).toHaveCount(3);
-    await expect(dialog.getByRole('heading', { name: 'Columns · 3' })).toBeVisible();
+    await expect(
+      dialog.getByRole('heading', { name: 'Columns', exact: true }),
+    ).toBeVisible();
     // The open card shows its rules as chips and its actions, no summary.
     await expect(card(0).locator('.section-toggle')).toHaveCount(0);
     await expect(card(0).locator('.summary')).toHaveCount(0);

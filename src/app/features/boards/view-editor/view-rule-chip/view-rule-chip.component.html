@@ -1,36 +1,81 @@
 <!-- Menu styles: src/styles/components/_view-editor-menus.scss (overlay). -->
-<span
-  class="chip"
-  [class.chip--warn]="!!part().missingCount"
->
-  @if (kind() === 'flag') {
-    <span class="chip-main">
-      <view-rule-value [part]="part()"></view-rule-value>
-    </span>
-  } @else {
-    <button
-      class="chip-main focus-ring"
-      type="button"
-      [matMenuTriggerFor]="menu"
-      (menuOpened)="onMenuOpened()"
-    >
-      <view-rule-value
-        [part]="part()"
-        [items]="items()"
-      ></view-rule-value>
-    </button>
-  }
-  <button
-    class="chip-remove focus-ring"
-    type="button"
-    [attr.aria-label]="
-      (T.F.BOARDS.EDITOR.REMOVE_RULE | translate) + ': ' + (part().label | translate)
-    "
-    (click)="remove.emit()"
+@if (variant() === 'row') {
+  <div
+    class="row"
+    [class.row--warn]="!!part().missingCount"
   >
-    <mat-icon aria-hidden="true">close</mat-icon>
-  </button>
-</span>
+    <mat-icon
+      class="row-icon"
+      aria-hidden="true"
+      >{{ icon() }}</mat-icon
+    >
+    @if (kind() === 'flag') {
+      <span class="row-main">
+        <span class="row-label">{{ part().label | translate }}</span>
+      </span>
+    } @else {
+      <button
+        class="row-main focus-ring"
+        type="button"
+        [matMenuTriggerFor]="menu"
+        (menuOpened)="onMenuOpened()"
+      >
+        <span class="row-label">{{ part().label | translate }}</span>
+        <span class="row-value">
+          <view-rule-value
+            [part]="part()"
+            [items]="items()"
+            [isLabelShown]="false"
+          ></view-rule-value>
+        </span>
+      </button>
+    }
+    <button
+      class="row-remove"
+      mat-icon-button
+      type="button"
+      [attr.aria-label]="
+        (T.F.BOARDS.EDITOR.REMOVE_RULE | translate) + ': ' + (part().label | translate)
+      "
+      (click)="remove.emit()"
+    >
+      <mat-icon>close</mat-icon>
+    </button>
+  </div>
+} @else {
+  <span
+    class="chip"
+    [class.chip--warn]="!!part().missingCount"
+  >
+    @if (kind() === 'flag') {
+      <span class="chip-main">
+        <view-rule-value [part]="part()"></view-rule-value>
+      </span>
+    } @else {
+      <button
+        class="chip-main focus-ring"
+        type="button"
+        [matMenuTriggerFor]="menu"
+        (menuOpened)="onMenuOpened()"
+      >
+        <view-rule-value
+          [part]="part()"
+          [items]="items()"
+        ></view-rule-value>
+      </button>
+    }
+    <button
+      class="chip-remove focus-ring"
+      type="button"
+      [attr.aria-label]="
+        (T.F.BOARDS.EDITOR.REMOVE_RULE | translate) + ': ' + (part().label | translate)
+      "
+      (click)="remove.emit()"
+    >
+      <mat-icon aria-hidden="true">close</mat-icon>
+    </button>
+  </span>
+}
 
 <mat-menu
   #menu="matMenu"

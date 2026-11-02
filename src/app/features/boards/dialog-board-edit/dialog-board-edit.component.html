@@ -1,3 +1,42 @@
+<!-- Phones: a top bar (close, title, Save); the editor below it. -->
+@if (isXs()) {
+  <div class="phone-bar">
+    <button
+      mat-icon-button
+      type="button"
+      [attr.aria-label]="T.G.CANCEL | translate"
+      (click)="close()"
+    >
+      <mat-icon>close</mat-icon>
+    </button>
+    <h2
+      class="phone-title"
+      mat-dialog-title
+    >
+      {{
+        (data.isCreate ? T.F.BOARDS.V.ADD_NEW_BOARD : T.F.BOARDS.V.EDIT_BOARD) | translate
+      }}
+    </h2>
+    @if (!data.isCreate) {
+      <button
+        mat-icon-button
+        type="button"
+        [attr.aria-label]="T.G.DELETE | translate"
+        (click)="removeBoard()"
+      >
+        <mat-icon>delete_outline</mat-icon>
+      </button>
+    }
+    <button
+      mat-button
+      type="submit"
+      (click)="save()"
+    >
+      {{ T.G.SAVE | translate }}
+    </button>
+  </div>
+}
+
 <!-- The editor renders the title (the view's name) and the content. -->
 @if (data.board) {
   <board-edit
@@ -9,32 +48,34 @@
   ></board-edit>
 }
 
-<mat-dialog-actions align="end">
-  <button
-    (click)="close()"
-    mat-button
-  >
-    {{ T.G.CANCEL | translate }}
-  </button>
-
-  @if (!data.isCreate) {
+@if (!isXs()) {
+  <mat-dialog-actions align="end">
     <button
-      (click)="removeBoard()"
+      (click)="close()"
       mat-button
-      color="warn"
     >
-      <mat-icon>delete_forever</mat-icon>
-      {{ T.G.DELETE | translate }}
+      {{ T.G.CANCEL | translate }}
     </button>
-  }
 
-  <button
-    (click)="save()"
-    color="primary"
-    mat-flat-button
-    type="submit"
-  >
-    <mat-icon>save</mat-icon>
-    {{ T.G.SAVE | translate }}
-  </button>
-</mat-dialog-actions>
+    @if (!data.isCreate) {
+      <button
+        (click)="removeBoard()"
+        mat-button
+        color="warn"
+      >
+        <mat-icon>delete_forever</mat-icon>
+        {{ T.G.DELETE | translate }}
+      </button>
+    }
+
+    <button
+      (click)="save()"
+      color="primary"
+      mat-flat-button
+      type="submit"
+    >
+      <mat-icon>save</mat-icon>
+      {{ T.G.SAVE | translate }}
+    </button>
+  </mat-dialog-actions>
+}

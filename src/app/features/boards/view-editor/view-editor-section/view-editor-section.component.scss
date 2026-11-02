@@ -1,45 +1,30 @@
 :host {
   display: block;
+  // The label column, shared with the view's Layout row.
+  --view-editor-label-w: 88px;
 }
 
+// On the dialog's own surface, outlined: a card is never darker than the
+// dialog (dark themes too). The open card is tinted from the theme.
 .card {
   display: flex;
   align-items: flex-start;
-  gap: var(--s);
-  padding: var(--s) var(--s) var(--s) var(--s);
+  gap: var(--s-half);
+  padding: var(--s-half) var(--s-half) var(--s-half) var(--s-half);
   border: 1px solid var(--extra-border-color);
   border-radius: var(--card-border-radius);
-  background: var(--card-bg);
+  background: transparent;
 }
 
-// The open card: tinted from the theme, so it reads in dark themes too.
 .card.is-open {
+  --view-editor-label-w: 64px;
   border-color: color-mix(in srgb, var(--c-primary) 45%, transparent);
-  background: color-mix(in srgb, var(--c-primary) 7%, var(--card-bg));
-}
-
-.gutter {
-  display: flex;
-  flex: 0 0 auto;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--s-half);
-  padding-top: var(--s);
-}
-
-.nr {
-  min-width: 18px;
-  height: 18px;
-  border-radius: var(--s);
-  background: color-mix(in srgb, var(--text-color) 8%, transparent);
-  color: var(--text-color-muted);
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-bold);
-  line-height: 18px;
-  text-align: center;
+  background: color-mix(in srgb, var(--c-primary) 6%, transparent);
 }
 
 .drag-handle {
+  flex: 0 0 auto;
+  margin-top: calc(var(--s) + var(--s-half));
   font-size: 18px;
   width: 18px;
   height: 18px;
@@ -51,15 +36,16 @@
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
-  gap: var(--s);
+  gap: var(--s-half);
   min-width: 0;
+  padding-inline-end: var(--s);
 }
 
 .section-header {
   display: flex;
   align-items: center;
   gap: var(--s);
-  min-height: var(--s5);
+  min-height: var(--s6);
 }
 
 .section-title {
@@ -67,12 +53,6 @@
   min-width: 0;
   color: var(--text-color);
   font-weight: var(--font-weight-semibold);
-}
-
-.section-header .section-label {
-  color: var(--text-color-muted);
-  font-size: var(--font-size-sm);
-  letter-spacing: var(--letter-spacing-wide);
 }
 
 .count {
@@ -89,7 +69,7 @@
   -webkit-line-clamp: 2;
   line-clamp: 2;
   overflow: hidden;
-  padding-bottom: var(--s-half);
+  padding-bottom: var(--s);
   color: var(--text-color-muted);
   font-size: var(--font-size-sm);
   line-height: var(--line-height-normal);
@@ -99,14 +79,36 @@
 .section-body {
   display: flex;
   flex-direction: column;
-  gap: var(--s);
-  padding-bottom: var(--s-half);
+  gap: var(--s2);
+  padding-bottom: var(--s);
+}
+
+// Label column, then the controls: aligned with the view's Layout row.
+.form-row {
+  display: grid;
+  grid-template-columns: var(--view-editor-label-w) minmax(0, 1fr);
+  column-gap: var(--s2);
+  align-items: start;
+}
+
+.form-label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-quarter);
+  padding-top: var(--s-half);
+  color: var(--text-color-muted);
+  font-size: var(--font-size-sm);
 }
 
 .chips {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: var(--s);
+}
+
+.divider {
+  border-top: 1px solid var(--divider-color);
 }
 
 .rule-note {
@@ -115,27 +117,102 @@
   font-size: var(--font-size-sm);
 }
 
-// Titles only, not task rows: what the rules match, at a glance.
-.preview {
-  margin: 0;
-  padding: var(--s) 0 0 var(--s2);
-  border-top: 1px solid var(--divider-color);
-  color: var(--text-color-muted);
-  font-size: var(--font-size-sm);
-  list-style: circle;
+// Phones: rows edge to edge of the dialog content, a subheading above.
+.section-body.is-rows {
+  gap: 0;
+  margin-inline: calc(-1 * var(--s3));
 
-  li {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+  .rule-note {
+    padding: var(--s) var(--s3);
+  }
+
+  .divider {
+    margin: var(--s) 0;
   }
 }
 
-.preview-more {
-  list-style: none;
+.sub-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s);
+  padding: 0 var(--s3) var(--s-half);
+  color: var(--text-color-muted);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
 }
 
-.preview--empty {
-  padding-left: 0;
-  font-style: italic;
+// A phone's section list: one row per section, divided like a list.
+.phone-row {
+  display: flex;
+  align-items: center;
+  gap: var(--s-half);
+  margin-inline: calc(-1 * var(--s3));
+  padding-inline-start: var(--s);
+  border-bottom: 1px solid var(--divider-color);
+
+  .drag-handle {
+    margin-top: 0;
+  }
+}
+
+.phone-row-main {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--s-quarter);
+  min-width: 0;
+  min-height: var(--s8);
+  padding: var(--s) 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+
+  .summary {
+    padding-bottom: 0;
+  }
+}
+
+.phone-row-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s);
+
+  .section-title {
+    font-size: var(--font-size-lg);
+    font-weight: var(--font-weight-medium);
+  }
+}
+
+.summary--one-line {
+  -webkit-line-clamp: 1;
+  line-clamp: 1;
+}
+
+.chevron {
+  flex: 0 0 auto;
+  margin-inline-end: var(--s2);
+  color: var(--text-color-muted);
+}
+
+// A phone's page of one section.
+.page-head {
+  display: flex;
+  align-items: center;
+  gap: var(--s-half);
+  margin: 0 calc(-1 * var(--s2)) var(--s);
+}
+
+.page-heading {
+  flex: 1 1 auto;
+  margin: 0;
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+}
+
+.page-title {
+  margin-bottom: var(--s2);
 }

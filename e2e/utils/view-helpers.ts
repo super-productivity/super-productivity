@@ -201,7 +201,10 @@ export const setViewRule = async (
   await pickMenuRadio(page, value);
 };
 
-/** Picks a section's sort ("Manual", "Title", …). */
+/**
+ * Picks a section's sort ("Manual", "Title", …). A sort key keeps the menu
+ * open for its direction: Escape closes it.
+ */
 export const setViewSort = async (
   page: Page,
   section: Locator,
@@ -209,7 +212,14 @@ export const setViewSort = async (
 ): Promise<void> => {
   await expandViewSection(section);
   await section.getByRole('button', { name: /^Sort by: / }).click();
-  await pickMenuRadio(page, sort);
+  await page.getByRole('menuitemradio', { name: sort, exact: true }).click();
+  if (sort !== 'Manual') {
+    await expect(
+      page.getByRole('menuitemradio', { name: sort, exact: true }),
+    ).toHaveAttribute('aria-checked', 'true');
+    await page.keyboard.press('Escape');
+  }
+  await expect(page.locator('.mat-mdc-menu-panel')).toHaveCount(0);
 };
 
 /**
@@ -231,17 +241,13 @@ const renameTitle = async (
   }
 };
 
-/** Sets the view's layout and columns; on a phone they show on demand. */
+/** Sets the view's layout and columns. */
 const setViewLayout = async (
   dialog: Locator,
   layout: ViewSpec['layout'],
   columns: number | undefined,
 ): Promise<void> => {
-  const toggle = dialog.locator('view-editor segmented-button-group');
-  const summary = dialog.locator('.layout-summary');
-  if (!(await toggle.isVisible()) && (await summary.isVisible())) {
-    await summary.click();
-  }
+  const toggle = dialog.locator('view-editor mat-button-toggle-group');
   if (layout) {
     await toggle
       .getByRole('radio', { name: layout === 'board' ? 'Board' : 'List', exact: true })

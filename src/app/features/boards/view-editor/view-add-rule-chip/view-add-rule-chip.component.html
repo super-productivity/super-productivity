@@ -1,18 +1,28 @@
 <!-- Menu styles: src/styles/components/_view-editor-menus.scss (overlay). -->
-<span class="chip chip--add">
+@if (variant() === 'row') {
   <button
-    class="chip-main focus-ring"
+    class="row row--add focus-ring"
     type="button"
     [matMenuTriggerFor]="menu"
   >
     <mat-icon
-      class="chip-icon"
+      class="row-icon"
       aria-hidden="true"
       >add</mat-icon
     >
+    <span class="row-label">{{ T.F.BOARDS.EDITOR.ADD_RULE | translate }}</span>
+  </button>
+} @else {
+  <button
+    class="add-rule"
+    mat-button
+    type="button"
+    [matMenuTriggerFor]="menu"
+  >
+    <mat-icon>add</mat-icon>
     {{ T.F.BOARDS.EDITOR.ADD_RULE | translate }}
   </button>
-</span>
+}
 
 <mat-menu
   #menu="matMenu"

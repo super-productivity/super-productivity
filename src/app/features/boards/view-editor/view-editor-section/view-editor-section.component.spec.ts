@@ -90,24 +90,25 @@ describe('ViewEditorSectionComponent', () => {
     expect(filter.value).toBe('Project 1');
   });
 
-  it('shows the only section of a list without a card or title', async () => {
+  it('shows the only section of a list as labelled Rules and Sort rows', async () => {
     const el = await render({}, false);
 
-    expect(el.querySelector('.section-label')?.textContent).toContain(
-      T.F.BOARDS.EDITOR.SHOW_TASKS_THAT_MATCH,
-    );
+    const labels = Array.from(el.querySelectorAll('.form-label')).map(text);
+    expect(labels[0]).toContain(T.F.BOARDS.EDITOR.RULES);
+    // Its count sits under the Rules label: there is no header.
+    expect(labels[0]).toContain(T.F.BOARDS.EDITOR.COUNT);
+    expect(labels[1]).toBe(T.F.BOARDS.FORM.SORT_BY);
     expect(el.querySelector('.card')).toBeNull();
     expect(el.querySelector('view-editor-title')).toBeNull();
     expect(el.querySelector('view-add-rule-chip')).not.toBeNull();
   });
 
-  it('shows a card with number and title as text', async () => {
+  it('shows a card with a drag handle and the title as text', async () => {
     const el = await render();
 
-    expect(el.querySelector('.nr')?.textContent).toBe('1');
+    expect(el.querySelector('.card .drag-handle')).not.toBeNull();
     expect(text(el.querySelector('view-editor-title .title-text'))).toBe('Next');
     expect(el.querySelector('input')).toBeNull();
-    expect(el.querySelector('.section-label')).toBeNull();
   });
 
   it('moves focus to the section actions when opening replaces the chevron', async () => {
@@ -207,7 +208,7 @@ describe('ViewEditorSectionComponent', () => {
 
   it('disables set and contradicting rules in the Add-rule menu', async () => {
     const el = await render({ includedTagIds: ['urgent'] });
-    (el.querySelector('view-add-rule-chip .chip-main') as HTMLElement).click();
+    (el.querySelector('view-add-rule-chip .add-rule') as HTMLElement).click();
     fixture.detectChanges();
     const item = (label: string): HTMLButtonElement =>
       menuItems().find((i) => text(i).includes(label))!;
@@ -223,22 +224,18 @@ describe('ViewEditorSectionComponent', () => {
     expect(item(T.F.BOARDS.EDITOR.RULE_DONE).disabled).toBeFalse();
   });
 
-  it('picks the sort and its direction; manual order has none', async () => {
+  it('picks the sort and, in the same menu, its direction; manual order has none', async () => {
     const el = await render();
-    const openSort = (): void => {
-      (el.querySelector('view-sort-chip .chip-main') as HTMLElement).click();
-      fixture.detectChanges();
-    };
-    openSort();
+    (el.querySelector('view-sort-chip .chip-main') as HTMLElement).click();
+    fixture.detectChanges();
     expect(text(overlay)).not.toContain(T.F.BOARDS.FORM.SORT_DIR_DESC);
     menuItems()
       .find((i) => text(i).includes(T.F.BOARDS.FORM.SORT_BY_TITLE))!
       .click();
     fixture.detectChanges();
     expect(emitted.at(-1)?.sortKey).toBe('title');
-    await fixture.whenStable();
-
-    openSort();
+    // The menu stays open, now with the direction.
+    expect(overlay.querySelector('.mat-mdc-menu-panel')).not.toBeNull();
     menuItems()
       .find((i) => text(i).includes(T.F.BOARDS.FORM.SORT_DIR_DESC))!
       .click();
@@ -371,5 +368,96 @@ describe('ViewEditorSectionComponent', () => {
       }
     }
     expect(emitted).toEqual([]);
+  });
+
+  describe('on a phone', () => {
+    const renderPhone = async (
+      fields: Partial<BoardPanelCfg>,
+      inputs: { isShowTitle: boolean; isOpen?: boolean },
+    ): Promise<HTMLElement> => {
+      const el = await render(fields, inputs.isShowTitle);
+      fixture.componentRef.setInput('isPhone', true);
+      fixture.componentRef.setInput('isCollapsible', true);
+      fixture.componentRef.setInput('isOpen', inputs.isOpen ?? true);
+      fixture.componentRef.setInput('index', 1);
+      fixture.componentRef.setInput('total', 3);
+      fixture.detectChanges();
+      return el;
+    };
+
+    it('shows the rules as rows that open the same menus, then the sort row', async () => {
+      const el = await renderPhone(
+        { includedTagIds: ['urgent'], isParentTasksOnly: true },
+        { isShowTitle: false },
+      );
+
+      expect(el.querySelector('.chip')).toBeNull();
+      const tagRow = el.querySelector('view-rule-chip[data-rule="includedTags"]')!;
+      expect(text(tagRow.querySelector('.row-label'))).toBe(
+        T.F.BOARDS.FORM.TAGS_REQUIRED,
+      );
+      expect(tagRow.querySelectorAll('.row-value tag').length).toBe(1);
+      // A flag has no menu, only its remove button.
+      const flag = el.querySelector('view-rule-chip[data-rule="parentOnly"]')!;
+      expect(flag.querySelector('button.row-main')).toBeNull();
+      expect(flag.querySelector('.row-remove')).not.toBeNull();
+      expect(text(el.querySelector('view-add-rule-chip'))).toContain(
+        T.F.BOARDS.EDITOR.ADD_RULE,
+      );
+      expect(text(el.querySelector('view-sort-chip .row-label'))).toBe(
+        T.F.BOARDS.FORM.SORT_BY,
+      );
+
+      (tagRow.querySelector('button.row-main') as HTMLElement).click();
+      fixture.detectChanges();
+      expect(menuItems().some((i) => text(i).includes('Home'))).toBeTrue();
+    });
+
+    it("shows a closed section as a list row that opens the section's page", async () => {
+      const el = await renderPhone(
+        { priorityRule: '1' },
+        {
+          isShowTitle: true,
+          isOpen: false,
+        },
+      );
+      const toggled = jasmine.createSpy('toggleOpen');
+      fixture.componentInstance.toggleOpen.subscribe(toggled);
+
+      expect(el.querySelector('.card')).toBeNull();
+      expect(text(el.querySelector('.phone-row .section-title'))).toBe('Next');
+      expect(el.querySelector('view-rule-chip')).toBeNull();
+      (el.querySelector('.phone-row-main') as HTMLElement).click();
+      expect(toggled).toHaveBeenCalledTimes(1);
+    });
+
+    it('checks the title of a row as stored, its page shows the field', async () => {
+      await renderPhone({ title: '' }, { isShowTitle: true, isOpen: false });
+      expect(fixture.componentInstance.isTitleInvalid()).toBeTrue();
+      fixture.componentRef.setInput('panel', {
+        ...fixture.componentInstance.panel(),
+        title: 'Named',
+      });
+      fixture.detectChanges();
+      expect(fixture.componentInstance.isTitleInvalid()).toBeFalse();
+    });
+
+    it('shows an open section as its page: back, position, title field, rows', async () => {
+      const el = await renderPhone({}, { isShowTitle: true, isOpen: true });
+      const toggled = jasmine.createSpy('toggleOpen');
+      fixture.componentInstance.toggleOpen.subscribe(toggled);
+
+      expect(text(el.querySelector('.page-heading'))).toBe(T.F.BOARDS.EDITOR.SECTION_OF);
+      // Always a field: no click to rename on a phone.
+      const input = el.querySelector('view-editor-title input') as HTMLInputElement;
+      expect(input.value).toBe('Next');
+      input.dispatchEvent(new Event('blur'));
+      fixture.detectChanges();
+      expect(el.querySelector('view-editor-title input')).not.toBeNull();
+      expect(el.querySelector('view-add-rule-chip .row')).not.toBeNull();
+
+      (el.querySelector('.page-head button') as HTMLElement).click();
+      expect(toggled).toHaveBeenCalledTimes(1);
+    });
   });
 });

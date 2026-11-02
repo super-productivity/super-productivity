@@ -546,12 +546,7 @@ describe('BoardEditComponent with the view editor', () => {
         true,
       ]);
       expect(second.querySelector('[data-rule]')).toBeNull();
-      // Numbered, for screen readers too.
-      expect(cards().map((card) => text(card.querySelector('.nr')))).toEqual([
-        '1',
-        '2',
-        '3',
-      ]);
+      // Numbered for screen readers.
       expect(second.querySelector('.card')!.getAttribute('aria-label')).toBe(
         'F.BOARDS.EDITOR.COLUMN_NR',
       );
@@ -618,6 +613,73 @@ describe('BoardEditComponent with the view editor', () => {
       expect(cards()[2].querySelector('mat-error')).not.toBeNull();
     });
 
+    describe('on a phone', () => {
+      beforeEach(() => isXs.set(true));
+
+      const isHidden = (card: HTMLElement): boolean =>
+        card.classList.contains('is-hidden');
+
+      it('lists the sections as rows; a row opens its page in place of the form', async () => {
+        await open(three);
+        expect(cards().map((card) => !!card.querySelector('.phone-row'))).toEqual([
+          true,
+          true,
+          true,
+        ]);
+        expect(
+          fixture.nativeElement.querySelector('mat-button-toggle-group'),
+        ).not.toBeNull();
+
+        (cards()[1].querySelector('.phone-row-main') as HTMLElement).click();
+        fixture.detectChanges();
+        expect(cards().map(isHidden)).toEqual([true, false, true]);
+        expect(cards()[1].querySelector('.page-head')).not.toBeNull();
+        // The view's form is gone while the page shows.
+        expect(fixture.nativeElement.querySelector('mat-button-toggle-group')).toBeNull();
+
+        (cards()[1].querySelector('.page-head button') as HTMLElement).click();
+        fixture.detectChanges();
+        expect(cards().map(isHidden)).toEqual([false, false, false]);
+        expect(cards()[1].querySelector('.phone-row')).not.toBeNull();
+      });
+
+      it("opens a column's page when its title asked for the editor", async () => {
+        await open(three, 'c');
+        expect(cards().map(isHidden)).toEqual([true, true, false]);
+        expect(cards()[2].querySelector('.page-head')).not.toBeNull();
+      });
+
+      it('opens the page of a section whose title is empty on save', async () => {
+        const cmp = await open(three);
+        editor().updatePanel(2, { ...editor().model().panels[2], title: '' });
+        await settle();
+        cmp.save();
+        await settle();
+        expect(dispatch).not.toHaveBeenCalled();
+        expect(cards().map(isHidden)).toEqual([true, true, false]);
+        expect(cards()[2].querySelector('view-editor-title input')).not.toBeNull();
+      });
+
+      it('goes back to the form for an empty view name', async () => {
+        const cmp = await open(three, 'a');
+        editor().setTitle('');
+        await settle();
+        cmp.save();
+        await settle();
+        expect(dispatch).not.toHaveBeenCalled();
+        expect(cards().map(isHidden)).toEqual([false, false, false]);
+        expect(fixture.nativeElement.querySelector('.name-field input')).not.toBeNull();
+      });
+
+      it("opens an added section's page", async () => {
+        await open(three);
+        editor().addPanel();
+        await settle();
+        expect(cards().map(isHidden)).toEqual([true, true, true, false]);
+        expect(cards()[3].querySelector('.page-head')).not.toBeNull();
+      });
+    });
+
     it('keeps an empty added rule of a card that is collapsed and opened again', async () => {
       await open(three);
       sections()[0].addRule('includedTags');
@@ -665,14 +727,8 @@ describe('BoardEditComponent with the view editor', () => {
     // No translations loaded here: the pipe shows the key.
     expect(fixture.nativeElement.textContent).toContain('F.BOARDS.EDITOR.COUNT_ONE');
   });
-  it('previews the first matching titles and counts a Completed section as done', async () => {
-    tasks.set([
-      task({ id: 'a' }),
-      task({ id: 'b' }),
-      task({ id: 'c' }),
-      task({ id: 'd' }),
-      task({ id: 'x', isDone: true }),
-    ]);
+  it('counts a Completed section as done', async () => {
+    tasks.set([task({ id: 'a' }), task({ id: 'x', isDone: true })]);
     await open({
       id: 'v',
       title: 'V',
@@ -692,25 +748,12 @@ describe('BoardEditComponent with the view editor', () => {
         },
       ],
     });
-    expect(editor().panelStats()).toEqual([
-      { count: 4, previewTitles: ['a', 'b', 'c'] },
-      { count: 1, previewTitles: ['x'] },
-    ]);
-    const [open1, done] = Array.from(
-      fixture.nativeElement.querySelectorAll('view-editor-section'),
-    ) as HTMLElement[];
-    const items = Array.from(open1.querySelectorAll('.preview li')).map((li) =>
-      li.textContent!.trim(),
-    );
-    expect(items).toEqual(['a', 'b', 'c', 'F.BOARDS.EDITOR.PREVIEW_MORE']);
+    expect(editor().counts()).toEqual([1, 1]);
+    const done = fixture.nativeElement.querySelectorAll('view-editor-section')[1];
     expect(done.querySelector('.count')!.textContent).toContain(
       'F.BOARDS.EDITOR.COUNT_DONE',
     );
-    // No match: says so instead of an empty preview.
-    tasks.set([]);
-    fixture.detectChanges();
-    expect(open1.querySelector('.preview--empty')!.textContent).toContain(
-      'F.BOARDS.EDITOR.NO_MATCHES',
-    );
+    // No list of the matching tasks: the count says enough.
+    expect(fixture.nativeElement.querySelector('.preview')).toBeNull();
   });
 });

@@ -1,7 +1,7 @@
 <!-- Menu styles: src/styles/components/_view-editor-menus.scss (overlay). -->
-<span class="chip chip--plain">
+@if (variant() === 'row') {
   <button
-    class="chip-main focus-ring"
+    class="row focus-ring"
     type="button"
     [attr.aria-label]="
       (T.F.BOARDS.FORM.SORT_BY | translate) +
@@ -12,28 +12,62 @@
     [matMenuTriggerFor]="menu"
   >
     <mat-icon
-      class="chip-icon"
+      class="row-icon"
       aria-hidden="true"
       >swap_vert</mat-icon
     >
-    @if (value() === OTHER_VALUE) {
+    <span class="row-text">
+      <span class="row-label">{{ T.F.BOARDS.FORM.SORT_BY | translate }}</span>
+      <span class="row-value"
+        >{{ label() | translate }}
+        @if (isSorted()) {
+          {{ arrow() }} {{ dirLabel() | translate }}
+        }
+      </span>
+    </span>
+    <mat-icon
+      class="row-chevron"
+      aria-hidden="true"
+      >chevron_right</mat-icon
+    >
+  </button>
+} @else {
+  <span class="chip chip--plain">
+    <button
+      class="chip-main focus-ring"
+      type="button"
+      [attr.aria-label]="
+        (T.F.BOARDS.FORM.SORT_BY | translate) +
+        ': ' +
+        (label() | translate) +
+        (isSorted() ? ', ' + (dirLabel() | translate) : '')
+      "
+      [matMenuTriggerFor]="menu"
+    >
       <mat-icon
         class="chip-icon"
         aria-hidden="true"
-        >info_outline</mat-icon
+        >swap_vert</mat-icon
       >
-    }
-    {{ label() | translate }}
-    @if (isSorted()) {
-      {{ dir() === 'desc' ? '↓' : '↑' }}
-    }
-    <mat-icon
-      class="chip-icon"
-      aria-hidden="true"
-      >expand_more</mat-icon
-    >
-  </button>
-</span>
+      @if (value() === OTHER_VALUE) {
+        <mat-icon
+          class="chip-icon"
+          aria-hidden="true"
+          >info_outline</mat-icon
+        >
+      }
+      {{ label() | translate }}
+      @if (isSorted()) {
+        {{ arrow() }}
+      }
+      <mat-icon
+        class="chip-icon"
+        aria-hidden="true"
+        >expand_more</mat-icon
+      >
+    </button>
+  </span>
+}
 
 <mat-menu
   #menu="matMenu"
@@ -55,7 +89,7 @@
         mat-menu-item
         role="menuitemradio"
         [attr.aria-checked]="option.value === value()"
-        (click)="setSort(option.value)"
+        (click)="setSort($event, option.value)"
       >
         <mat-icon>{{
           option.value === value() ? 'radio_button_checked' : 'radio_button_unchecked'

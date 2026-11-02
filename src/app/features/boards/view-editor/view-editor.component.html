@@ -1,66 +1,143 @@
-<h2 mat-dialog-title>
-  <view-editor-title
-    [title]="model().title"
-    [label]="T.G.TITLE | translate"
-    [isPencilShown]="true"
-    (titleChange)="setTitle($event)"
-  ></view-editor-title>
-</h2>
+<!-- A phone's dialog has its own top bar (dialog-board-edit); the name is a field below it. -->
+@if (!isXs()) {
+  <h2 mat-dialog-title>
+    <view-editor-title
+      [title]="model().title"
+      [label]="T.G.TITLE | translate"
+      [isPencilShown]="true"
+      (titleChange)="setTitle($event)"
+    ></view-editor-title>
+  </h2>
+}
 
-<mat-dialog-content class="content">
-  @for (hint of hints(); track hint) {
-    <p>{{ hint | translate }}</p>
-  }
+<mat-dialog-content
+  class="content"
+  [class.is-phone]="isXs()"
+>
+  @if (!phonePage()) {
+    @if (isXs()) {
+      <view-editor-title
+        class="name-field"
+        [title]="model().title"
+        [label]="T.G.TITLE | translate"
+        [isFieldAlways]="true"
+        (titleChange)="setTitle($event)"
+      ></view-editor-title>
+    }
 
-  <!-- Phones always show a list: the layout is set at the end, on demand. -->
-  @if (!isXs()) {
-    <ng-container *ngTemplateOutlet="layoutTpl"></ng-container>
-  }
+    @for (hint of hints(); track hint) {
+      <p class="hint">{{ hint | translate }}</p>
+    }
 
-  @if (isSectionTitleShown()) {
-    <div class="sections-head">
-      <h3 class="sections-heading">
-        {{
-          (isBoard() ? T.F.BOARDS.EDITOR.COLUMNS : T.F.BOARDS.EDITOR.SECTIONS) | translate
-        }}
-        · {{ model().panels.length }}
-      </h3>
-      <button
-        class="add-head"
-        mat-button
-        type="button"
-        (click)="addPanel()"
-      >
-        <mat-icon>add</mat-icon>
-        {{
-          (isBoard() ? T.F.BOARDS.EDITOR.ADD_COLUMN : T.F.BOARDS.EDITOR.ADD_SECTION)
-            | translate
-        }}
-      </button>
+    <div class="form-row layout-row">
+      <span class="form-label">{{ T.F.BOARDS.EDITOR.LAYOUT | translate }}</span>
+      <div class="layout-controls">
+        <mat-button-toggle-group
+          class="layout-toggle"
+          hideSingleSelectionIndicator
+          [attr.aria-label]="T.F.BOARDS.EDITOR.LAYOUT | translate"
+          [value]="layout()"
+          (change)="setLayout($event.value)"
+        >
+          <mat-button-toggle
+            class="layout-option"
+            value="list"
+          >
+            <mat-icon>view_list</mat-icon>
+            {{ T.F.BOARDS.EDITOR.LAYOUT_LIST | translate }}
+          </mat-button-toggle>
+          <mat-button-toggle
+            class="layout-option"
+            value="board"
+          >
+            <mat-icon>view_kanban</mat-icon>
+            {{ T.F.BOARDS.EDITOR.LAYOUT_BOARD | translate }}
+          </mat-button-toggle>
+        </mat-button-toggle-group>
+        @if (isBoard()) {
+          <span
+            class="cols"
+            role="group"
+            [attr.aria-label]="T.F.BOARDS.FORM.COLUMNS | translate"
+          >
+            <span class="stepper">
+              <button
+                mat-icon-button
+                type="button"
+                [disabled]="model().cols <= 2"
+                [attr.aria-label]="T.F.BOARDS.EDITOR.COLUMNS_DECREASE | translate"
+                (click)="setCols(model().cols - 1)"
+              >
+                <mat-icon>remove</mat-icon>
+              </button>
+              <span
+                class="cols-value"
+                aria-live="polite"
+                >{{ model().cols }}</span
+              >
+              <button
+                mat-icon-button
+                type="button"
+                [attr.aria-label]="T.F.BOARDS.EDITOR.COLUMNS_INCREASE | translate"
+                (click)="setCols(model().cols + 1)"
+              >
+                <mat-icon>add</mat-icon>
+              </button>
+            </span>
+            <span class="cols-label">{{ T.F.BOARDS.FORM.COLUMNS | translate }}</span>
+          </span>
+        }
+      </div>
     </div>
+
+    @if (isSectionTitleShown()) {
+      <div class="sections-head">
+        <h3 class="sections-heading">
+          {{
+            (isBoard() ? T.F.BOARDS.EDITOR.COLUMNS : T.F.BOARDS.EDITOR.SECTIONS)
+              | translate
+          }}
+        </h3>
+        <button
+          mat-button
+          type="button"
+          (click)="addPanel()"
+        >
+          <mat-icon>add</mat-icon>
+          {{
+            (isBoard() ? T.F.BOARDS.EDITOR.ADD_COLUMN : T.F.BOARDS.EDITOR.ADD_SECTION)
+              | translate
+          }}
+        </button>
+      </div>
+    }
   }
 
+  <!-- A phone's section page hides the other sections; they keep their state. -->
   <div
     class="sections"
     cdkDropList
     cdkDropListLockAxis="y"
-    [cdkDropListDisabled]="!isSectionTitleShown()"
+    [class.is-list]="isXs()"
+    [cdkDropListDisabled]="!isSectionTitleShown() || !!phonePage()"
     (cdkDropListDropped)="dropPanel($event)"
   >
     @for (panel of model().panels; track panel.id; let i = $index) {
       <view-editor-section
         cdkDrag
-        [cdkDragDisabled]="!isSectionTitleShown()"
+        [class.is-hidden]="!!phonePage() && phonePage() !== panel.id"
+        [cdkDragDisabled]="!isSectionTitleShown() || !!phonePage()"
         [panel]="panel"
         [index]="i"
+        [total]="model().panels.length"
         [isShowTitle]="isSectionTitleShown()"
         [isBoard]="isBoard()"
-        [count]="panelStats()[i].count"
-        [previewTitles]="panelStats()[i].previewTitles"
+        [isPhone]="isXs()"
+        [count]="counts()[i]"
         [isFirst]="$first"
         [isLast]="$last"
         [isCollapsible]="isCollapsible()"
-        [isOpen]="openPanelId() === panel.id"
+        [isOpen]="isXs() ? phonePage() === panel.id : openPanelId() === panel.id"
         [isFocusInitial]="panel.id === initialOpenPanelId()"
         (toggleOpen)="togglePanel(panel.id)"
         (panelChange)="updatePanel(i, $event)"
@@ -73,86 +150,15 @@
   </div>
 
   @if (!isSectionTitleShown()) {
-    <button
-      class="add-section"
-      mat-stroked-button
-      type="button"
-      (click)="addPanel()"
-    >
-      <mat-icon>add</mat-icon>
-      {{ T.F.BOARDS.EDITOR.ADD_SECTION | translate }}
-    </button>
-  }
-
-  @if (isXs()) {
-    <button
-      class="layout-summary focus-ring"
-      type="button"
-      [attr.aria-expanded]="isLayoutShown()"
-      (click)="toggleLayoutShown()"
-    >
-      <mat-icon aria-hidden="true">{{
-        isBoard() ? 'view_kanban' : 'view_list'
-      }}</mat-icon>
-      <span>{{ T.F.BOARDS.EDITOR.LAYOUT_WIDER_SCREENS | translate }}:</span>
-      <span class="layout-summary-value">{{
-        isBoard()
-          ? (T.F.BOARDS.EDITOR.LAYOUT_BOARD_COLS | translate: { nr: model().cols })
-          : (T.F.BOARDS.EDITOR.LAYOUT_LIST | translate)
-      }}</span>
-      <mat-icon aria-hidden="true">{{
-        isLayoutShown() ? 'expand_less' : 'chevron_right'
-      }}</mat-icon>
-    </button>
-    @if (isLayoutShown()) {
-      <ng-container *ngTemplateOutlet="layoutTpl"></ng-container>
-    }
+    <div class="add-section">
+      <button
+        mat-button
+        type="button"
+        (click)="addPanel()"
+      >
+        <mat-icon>add</mat-icon>
+        {{ T.F.BOARDS.EDITOR.ADD_SECTION | translate }}
+      </button>
+    </div>
   }
 </mat-dialog-content>
-
-<ng-template #layoutTpl>
-  <div class="layout-row">
-    <span class="field-label">{{ T.F.BOARDS.EDITOR.LAYOUT | translate }}</span>
-    <segmented-button-group
-      class="layout-toggle"
-      size="md"
-      [options]="LAYOUT_OPTIONS"
-      [selectedId]="layout()"
-      [ariaLabel]="T.F.BOARDS.EDITOR.LAYOUT | translate"
-      (selectionChange)="setLayout($event)"
-    ></segmented-button-group>
-    @if (isBoard()) {
-      <span
-        class="cols"
-        role="group"
-        [attr.aria-label]="T.F.BOARDS.FORM.COLUMNS | translate"
-      >
-        <span class="stepper">
-          <button
-            mat-icon-button
-            type="button"
-            [disabled]="model().cols <= 2"
-            [attr.aria-label]="T.F.BOARDS.EDITOR.COLUMNS_DECREASE | translate"
-            (click)="setCols(model().cols - 1)"
-          >
-            <mat-icon>remove</mat-icon>
-          </button>
-          <span
-            class="cols-value"
-            aria-live="polite"
-            >{{ model().cols }}</span
-          >
-          <button
-            mat-icon-button
-            type="button"
-            [attr.aria-label]="T.F.BOARDS.EDITOR.COLUMNS_INCREASE | translate"
-            (click)="setCols(model().cols + 1)"
-          >
-            <mat-icon>add</mat-icon>
-          </button>
-        </span>
-        <span class="field-label">{{ T.F.BOARDS.FORM.COLUMNS | translate }}</span>
-      </span>
-    }
-  </div>
-</ng-template>

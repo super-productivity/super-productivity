@@ -323,6 +323,22 @@ export const VIEW_RULE_LABELS = Object.fromEntries(
   VIEW_RULE_ORDER.map((rule) => [rule, VIEW_RULES[rule].label]),
 ) as Record<ViewRuleId, string>;
 
+/** The icon leading each rule's row on a phone (Material icon names). */
+export const VIEW_RULE_ICONS: Record<ViewRuleId, string> = {
+  project: 'folder_open',
+  backlog: 'inventory_2',
+  includedTags: 'label',
+  excludedTags: 'label_off',
+  untagged: 'new_label',
+  plannedDate: 'event',
+  deadline: 'flag',
+  done: 'task_alt',
+  parentOnly: 'account_tree',
+  priority: 'priority_high',
+  estimate: 'timer',
+  timeSpent: 'hourglass_bottom',
+};
+
 /** The options of each rule with a select (only those rules are keys). */
 export const VIEW_RULE_OPTIONS = Object.fromEntries(
   VIEW_RULE_ORDER.flatMap((rule) => {
