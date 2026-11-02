@@ -127,6 +127,9 @@
         (addRule)="addRule($event)"
       ></view-add-rule-chip>
     </div>
+    @if (isShowDoneTagHint()) {
+      <p class="rule-note">{{ T.F.BOARDS.EDITOR.DONE_TAG_FILTER_HINT | translate }}</p>
+    }
     @if (count() === 0) {
       <p class="preview preview--empty">
         {{ T.F.BOARDS.EDITOR.NO_MATCHES | translate }}

@@ -109,6 +109,12 @@
   gap: var(--s);
 }
 
+.rule-note {
+  margin: 0;
+  color: var(--text-color-muted);
+  font-size: var(--font-size-sm);
+}
+
 // Titles only, not task rows: what the rules match, at a glance.
 .preview {
   margin: 0;

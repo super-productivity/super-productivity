@@ -203,8 +203,13 @@ OmniFocus 4, Vikunja), not hands-on.
   next to the header's global buttons (play, focus, sync). Left to a
   header-wide decision; the title still opens the editor.
 - **#11386:** editor redesign.
-- **#11388:** sync order bug. Accepted: concurrent edits of one board are
-  last-writer-wins on the board.
+- **#11388 (fixed, 2026-11-02):** a reorder (declared on the panel) and a
+  concurrent editor save (declared on the board, carrying every panel's
+  `taskIds`) never conflicted, so the order diverged by arrival order. The
+  `updateBoard` reducer now keeps the stored `taskIds` of panels the board
+  already has. Accepted: released clients still apply a save's `taskIds`, so
+  between them and current clients the order can still differ until the next
+  reorder of that section.
 
 ### Performance check (2026-11-01)
 

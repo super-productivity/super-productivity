@@ -685,9 +685,11 @@ export const toSavedBoard = (
 /**
  * What saving `saved` changes: only the fields that differ from `opened`, what
  * an untouched save of the board the editor opened stores, so a field synced
- * in meanwhile that the editor didn't touch stays. Changed panels keep the task order they have now, not the one the
- * editor opened with (a reorder synced in while it was open). Null when the
- * save changes nothing.
+ * in meanwhile that the editor didn't touch stays. Changed panels carry the
+ * task order they have now, not the one the editor opened with (a reorder
+ * synced in while it was open): current receivers keep their own order anyway
+ * (boards reducer, #11388), released ones apply this one. Null when the save
+ * changes nothing.
  */
 export const getViewUpdates = (
   opened: BoardCfg,

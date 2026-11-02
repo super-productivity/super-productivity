@@ -2,10 +2,10 @@ import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { OverlayContainer } from '@angular/cdk/overlay';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { ViewEditorSectionComponent } from './view-editor-section.component';
 import { DEFAULT_PANEL_CFG } from '../../boards.const';
-import { BoardPanelCfg } from '../../boards.model';
+import { BoardPanelCfg, BoardPanelCfgTaskDoneState } from '../../boards.model';
 import { ProjectService } from '../../../project/project.service';
 import { MenuTreeService } from '../../../menu-tree/menu-tree.service';
 import { TagService } from '../../../tag/tag.service';
@@ -319,5 +319,41 @@ describe('ViewEditorSectionComponent', () => {
       filterInput().dispatchEvent(escape);
       expect(keepEscape).not.toHaveBeenCalled();
     });
+  });
+
+  it('shows the completion help only for a Done section with tag rules', async () => {
+    const el = await render();
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('en', {
+      [T.F.BOARDS.EDITOR.DONE_TAG_FILTER_HINT]: 'Completion tag help',
+    });
+    translate.use('en');
+
+    for (const taskDoneState of [
+      BoardPanelCfgTaskDoneState.All,
+      BoardPanelCfgTaskDoneState.Done,
+      BoardPanelCfgTaskDoneState.UnDone,
+    ]) {
+      for (const tags of [
+        { includedTagIds: [], excludedTagIds: [] },
+        { includedTagIds: ['urgent'], excludedTagIds: [] },
+        { includedTagIds: [], excludedTagIds: ['home'] },
+      ]) {
+        fixture.componentRef.setInput('panel', {
+          ...DEFAULT_PANEL_CFG,
+          id: 'p',
+          title: 'Next',
+          taskDoneState,
+          ...tags,
+        });
+        fixture.detectChanges();
+
+        expect(text(el).includes('Completion tag help')).toBe(
+          taskDoneState === BoardPanelCfgTaskDoneState.Done &&
+            !!(tags.includedTagIds.length || tags.excludedTagIds.length),
+        );
+      }
+    }
+    expect(emitted).toEqual([]);
   });
 });

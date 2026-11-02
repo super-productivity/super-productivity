@@ -19,7 +19,7 @@ import { MatIcon } from '@angular/material/icon';
 import { MatMenu, MatMenuItem, MatMenuTrigger } from '@angular/material/menu';
 import { MatTooltip } from '@angular/material/tooltip';
 import { TranslatePipe } from '@ngx-translate/core';
-import { BoardPanelCfg } from '../../boards.model';
+import { BoardPanelCfg, BoardPanelCfgTaskDoneState } from '../../boards.model';
 import { T } from '../../../../t.const';
 import { TagService } from '../../../tag/tag.service';
 import { ProjectService } from '../../../project/project.service';
@@ -136,6 +136,15 @@ export class ViewEditorSectionComponent {
     const panel = this.panel();
     const touched = this._touchedRules();
     return VIEW_RULE_ORDER.filter((rule) => touched.has(rule) || isRuleSet(panel, rule));
+  });
+
+  /** Checking off a task doesn't apply a Done section's tag rules (#11418). */
+  readonly isShowDoneTagHint = computed(() => {
+    const panel = this.panel();
+    return (
+      panel.taskDoneState === BoardPanelCfgTaskDoneState.Done &&
+      !!(panel.includedTagIds.length || panel.excludedTagIds.length)
+    );
   });
 
   readonly isCollapsed = computed(() => this.isCollapsible() && !this.isOpen());
