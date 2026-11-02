@@ -449,6 +449,9 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
     if (!fields) {
       return;
     }
+    if (fields.projectId) {
+      this.stateService.updateProjectId(fields.projectId);
+    }
     if (fields.tagIds?.length) {
       this._defaultTagIds = fields.tagIds;
       this.stateService.updateTagIds(

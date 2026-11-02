@@ -579,6 +579,18 @@ describe('AddTaskBarComponent', () => {
       expect(component.isHiddenInView()).toBeFalse();
     });
 
+    it('adds back the work project the view requires', () => {
+      fixture.componentRef.setInput('viewPrefill', {
+        fields: { projectId: 'proj-a' },
+        isHidden: (f: Partial<TaskCopy>) => f.projectId !== 'proj-a',
+      });
+      component.stateService.updateProjectId('proj-b');
+      expect(component.isHiddenInView()).toBeTrue();
+
+      component.applyViewPrefill();
+      expect(component.isHiddenInView()).toBeFalse();
+    });
+
     it('keeps the view tags for the next task', async () => {
       mockTaskService.add.and.returnValue('task-1');
       component.stateService.updateInputTxt('First task');

@@ -923,7 +923,7 @@ export class BoardPanelComponent implements TaskCardList, ViewTaskListHost {
    * and whether the user's changes to them hide the task from the panel.
    */
   readonly newTaskPrefill = computed((): ViewTaskPrefill => {
-    const { tagIds } = this.additionalTaskFields();
+    const { tagIds, projectId: ruleProjectId } = this.additionalTaskFields();
     const criteria = this.criteria();
     const ctx = this.criteriaCtx();
     const existingTagIds = this._viewCtx.tagIdSet();
@@ -938,6 +938,7 @@ export class BoardPanelComponent implements TaskCardList, ViewTaskListHost {
     const dueDay = changesFor({})?.scheduleDay;
     return {
       fields: {
+        ...(ruleProjectId ? { projectId: ruleProjectId } : {}),
         ...(tagIds?.length ? { tagIds } : {}),
         ...(dueDay ? { dueDay } : {}),
       },
