@@ -52,8 +52,13 @@
   color: var(--text-color);
 }
 
+:host(.hasCount) .collapsible-title {
+  flex-grow: 0;
+}
+
+// Takes the free space the title leaves, so the count stays next to it.
 .collapsible-count {
-  margin-left: var(--s);
+  margin-right: auto;
   font-weight: 400;
   color: var(--text-color-muted);
 }
