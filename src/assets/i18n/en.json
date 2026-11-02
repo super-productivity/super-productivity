@@ -1806,11 +1806,13 @@
     },
     "TASK": {
       "ADD_TASK_BAR": {
+        "ADD_BACK_VIEW_VALUES": "Add back",
         "ADD_EXISTING_TASK": "Add existing task \"{{taskTitle}}\"",
         "CREATE_NEW_TAGS": "Create new tags",
         "DEADLINE_BUTTON": "Deadline",
         "DUE_BUTTON": "Schedule",
         "ESTIMATE_BUTTON": "Estimate",
+        "HIDDEN_BY_VIEW": "Hidden by this view",
         "NO_SEARCH_MATCHES": "No matching tasks or issues",
         "NOTE_PLACEHOLDER": "Add a note… (Ctrl+Enter to add task)",
         "PLACEHOLDER_CREATE": "A task title #tag @16:00 t25m",

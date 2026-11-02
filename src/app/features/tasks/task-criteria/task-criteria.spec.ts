@@ -213,6 +213,14 @@ describe('getTagIdsToMatch', () => {
     ).toEqual(['keep', 'a']);
     expect(getTagIdsToMatch(['a'], { isUntagged: true })).toEqual([]);
   });
+
+  it('keeps required tags a task already has, once', () => {
+    expect(getTagIdsToMatch(['b', 'a'], { includedTagIds: ['a', 'b'] })).toEqual([
+      'b',
+      'a',
+    ]);
+    expect(getTagIdsToMatch(['a'], { includedTagIds: ['a', 'b'] })).toEqual(['a', 'b']);
+  });
 });
 
 describe('getChangesToMatch', () => {
@@ -224,6 +232,9 @@ describe('getChangesToMatch', () => {
 
   it('needs no change for a matching task', () => {
     expect(changesFor({ dueDay: TODAY }, { plannedDate: 'today' })).toEqual({});
+    expect(changesFor({ tagIds: ['a', 'b'] }, { includedTagIds: ['a', 'b'] })).toEqual(
+      {},
+    );
   });
 
   it('plans for the day a planned-date rule needs', () => {
