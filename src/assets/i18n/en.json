@@ -3223,12 +3223,12 @@
       "CREATE_TASK": "Click + to add your first task",
       "CREATE_TASK_TOUCH": "Tap + to add your first task",
       "DECLINED": "No problem. It's under Help → Quick tour whenever you like.",
+      "INBOX_CHIP": "Tasks without a project of your own go to {{inboxIcon}} <b>Inbox</b>. This one is planned for today, so it shows here too.",
+      "INBOX_CHIP_PHONE": "Tasks without a project of your own go to {{inboxIcon}} <b>Inbox</b>, under ☰. This one is planned for today, so it shows here too.",
       "MORE_FALLBACK": "There's more already switched on: projects, time tracking, Planner…",
       "NO_THANKS": "No thanks",
       "SHOW_ME_MORE": "Show me more ›",
       "TASK_SWIPE_LEFT_TOUCH": "Swipe task left for more actions",
-      "TODAY_AND_INBOX": "This task is planned for today, so it shows in {{todayIcon}} <b>Today</b>. Tasks without a project of your own stay in {{inboxIcon}} <b>Inbox</b>.",
-      "TODAY_AND_INBOX_PHONE": "This task is planned for today, so it shows in {{todayIcon}} <b>Today</b>. Tasks without a project of your own stay in {{inboxIcon}} <b>Inbox</b>, under ☰.",
       "OR_PRESS": "or press",
       "SKIP_ARIA": "Close tip"
     },
@@ -3247,19 +3247,9 @@
       "TRACK_TIME": "Hover over the task and press {{playIcon}} to track time"
     },
     "WANT_MORE": {
-      "BOARDS": "<b>Views</b> · Saved task lists and Kanban boards in the side menu",
       "DONE": "Done",
-      "FINISH_DAY": "<b>Finish day</b> · Review and wrap up your day",
-      "FOCUS_MODE": "<b>Focus mode</b> · Pomodoro and distraction-free work",
-      "FOOTER": "Find this again under Help → Quick tour.",
-      "HABITS": "<b>Habits</b> · Track routines day by day",
-      "INTRO": "Super Productivity starts calm. More is there when you need it:",
+      "INTRO": "Switched off for now, to keep things calm:",
       "OPEN_SETTINGS": "Open settings ›",
-      "PLUGINS": "<b>Plugins & integrations</b> · Jira, GitHub, CalDAV and more",
-      "SCHEDULE": "<b>Schedule</b> · Your day on a timeline",
-      "SEARCH": "Search everything with <kbd>{{key}}</kbd>.",
-      "SEARCH_PHONE": "Search everything from ☰.",
-      "SHORT_SYNTAX": "Type <code>#tag</code>, <code>+project</code> or <code>@tomorrow</code> while adding a task. Help → How to shows more.",
       "SYNC": "Your data stays on this device. Sync, backups and import from Todoist or TickTick are in Settings.",
       "TITLE": "Want more?"
     }

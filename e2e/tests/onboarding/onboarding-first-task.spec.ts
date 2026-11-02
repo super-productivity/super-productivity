@@ -12,8 +12,8 @@ const pixel5TestOptions = { ...devices['Pixel 5'] };
 Reflect.deleteProperty(pixel5TestOptions, 'defaultBrowserType');
 
 // Up to the inline icons, whose ligature names are part of the text content.
-const MODEL_TIP = 'This task is planned for today, so it shows in';
-const INBOX_TIP = 'Tasks without a project of your own stay in';
+const MODEL_TIP = 'This one is planned for today, so it shows here too';
+const INBOX_TIP = 'Tasks without a project of your own go to';
 const INBOX_NAV_ITEM =
   'magic-side-nav nav-item[data-project-id="INBOX_PROJECT"] .nav-link';
 const TODAY_NAV_ITEM = 'magic-side-nav nav-item[data-tag-id="TODAY"] .nav-link';
