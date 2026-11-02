@@ -126,11 +126,12 @@ const escapeRegExp = (text: string): string =>
 
 /**
  * Opens a section card's rules. With several sections one card is open at a
- * time (it has no toggle); a single section is always open.
+ * time (it has no toggle); a single section of a list is always open, its
+ * rules without a card.
  */
 export const expandViewSection = async (section: Locator): Promise<void> => {
-  // The card first: a toggle counted before it renders would read as none.
-  await expect(section.locator('.section-header')).toBeVisible();
+  // The section first: a toggle counted before it renders would read as none.
+  await expect(section.locator('.section-header, .section-body').first()).toBeVisible();
   const toggle = section.locator('.section-toggle');
   if (await toggle.count()) {
     await toggle.click();

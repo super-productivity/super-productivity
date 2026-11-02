@@ -78,9 +78,6 @@
 
 .sections-heading {
   margin: 0;
-  color: var(--text-color-muted);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
 }
 
 .sections {
@@ -128,9 +125,5 @@
 
   .layout-option {
     flex: 1 1 0;
-  }
-
-  .name-field {
-    margin-top: var(--s);
   }
 }

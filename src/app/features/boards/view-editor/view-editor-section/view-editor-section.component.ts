@@ -25,6 +25,7 @@ import { TagService } from '../../../tag/tag.service';
 import { ProjectService } from '../../../project/project.service';
 import { DEFAULT_PROJECT_ICON } from '../../../project/project.const';
 import { TagComponentTag } from '../../../tag/tag/tag.component';
+import { isTouchActive } from '../../../../util/input-intent';
 import { ViewEditorTitleComponent } from '../view-editor-title/view-editor-title.component';
 import { ViewRuleValueComponent } from '../view-rule-value/view-rule-value.component';
 import { ViewRuleChipComponent } from '../view-rule-chip/view-rule-chip.component';
@@ -225,7 +226,10 @@ export class ViewEditorSectionComponent {
   openRules(): void {
     this.toggleOpen.emit();
     // Opening replaces the chevron (a phone: the row). Keep keyboard focus on
-    // its replacement.
+    // its replacement; a tap needs none (it would only show a focus ring).
+    if (isTouchActive()) {
+      return;
+    }
     afterNextRender(() => (this._backBtn() ?? this._actions())?.nativeElement.focus(), {
       injector: this._injector,
     });
@@ -234,6 +238,9 @@ export class ViewEditorSectionComponent {
   /** A phone's page: back to the view's section list, focus on its row. */
   back(): void {
     this.toggleOpen.emit();
+    if (isTouchActive()) {
+      return;
+    }
     afterNextRender(() => this._rowBtn()?.nativeElement.focus(), {
       injector: this._injector,
     });
