@@ -17,10 +17,23 @@ export class ViewTaskListRegistry {
 
   readonly hosts = computed(() => this._entry()?.hosts ?? []);
 
-  /** The column the add-task bar adds into, if a view list is open. */
-  readonly addTarget = computed(
-    () => this.hosts().find((host) => host.newTaskTarget() !== null) ?? null,
-  );
+  /**
+   * The column the add-task bar adds into, if a view list is open: the first
+   * one that adds no tags and doesn't complete the task (in a matrix, the
+   * "neither" quadrant: a quick capture shouldn't claim to be urgent), else
+   * the first that takes new tasks at all.
+   */
+  readonly addTarget = computed(() => {
+    const takesNew = this.hosts().filter((host) => host.newTaskTarget() !== null);
+    return (
+      takesNew.find((host) => {
+        const target = host.newTaskTarget();
+        return !target?.prefill.fields.tagIds?.length && !target?.additionalFields.isDone;
+      }) ??
+      takesNew[0] ??
+      null
+    );
+  });
 
   /** `owner` keeps a view that is leaving from clearing the next view's columns. */
   set(owner: object, hosts: readonly ViewTaskListHost[]): void {

@@ -41,13 +41,14 @@ import {
   VIEW_TASK_LIST,
   ViewNewTaskTarget,
   ViewTaskListHost,
+  ViewTaskPrefill,
 } from '../../tasks/view-task-list.token';
 import { INBOX_PROJECT } from '../../project/project.const';
 import { selectAllTags } from '../../tag/store/tag.reducer';
 import { Store } from '@ngrx/store';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { T } from '../../../t.const';
-import { TaskCopy, TaskWithSubTasks } from '../../tasks/task.model';
+import { DEFAULT_TASK, TaskCopy, TaskWithSubTasks } from '../../tasks/task.model';
 import { TaskService } from '../../tasks/task.service';
 import { BoardsActions } from '../store/boards.actions';
 import { unique } from '../../../util/unique';
@@ -81,9 +82,11 @@ import {
   getNewTaskTagsToRemove,
   getPanelChangesToMatch,
   hasMissingTag,
+  isHiddenByBarChoices,
   orderPanelTasks,
   PANEL_SHOWN_LIMIT,
   placeInOrder,
+  withoutBarChoices,
   withPartOrder,
 } from './panel-rules';
 import { PanelTaskChangesService } from './panel-task-changes.service';
@@ -101,6 +104,9 @@ export interface BoardPanelNavigation {
  * the add bar. Shown as cards (`board-panel-cards`) or task rows
  * (`board-panel-rows`); both render this state and call these actions.
  */
+// A task the add-task bar is composing; never stored.
+const NEW_TASK_DRAFT_ID = 'NEW_TASK_DRAFT';
+
 @Component({
   selector: 'board-panel',
   standalone: true,
@@ -584,11 +590,13 @@ export class BoardPanelComponent implements TaskCardList, ViewTaskListHost {
         }),
       );
     }
-    // A new task already got tags, done state, project and priority on
-    // creation (`additionalTaskFields`); an existing one found through the add
-    // row gets everything here.
+    // A new task got the bar's chips (`newTaskPrefill`), which the user may
+    // have changed: those stay as they are. An existing one found through the
+    // add row gets everything here.
     const task = await firstValueFrom(this.store.select(selectTaskById, { id: taskId }));
-    const changes = task && this._changesToMatch(task);
+    const allChanges = task && this._changesToMatch(task);
+    const changes =
+      allChanges && (isNewTask ? withoutBarChoices(allChanges) : allChanges);
     if (!task || !changes) {
       return;
     }
@@ -596,18 +604,24 @@ export class BoardPanelComponent implements TaskCardList, ViewTaskListHost {
     if (changes.isAskForSchedule) {
       this.scheduleTask(task);
     }
-    await this._applyDateChanges([taskId]);
+    await this._applyDateChanges([taskId], isNewTask);
     // Added to the bottom of a long column: it shows.
     this._revealAfterRender([taskId]);
   }
 
-  /** Planned day and deadline, by the panel's rules as they are now. */
-  private _applyDateChanges(taskIds: string[]): Promise<void> {
+  /**
+   * Planned day and deadline, by the panel's rules as they are now. A task
+   * just created with the add-task bar keeps the day chosen there.
+   */
+  private _applyDateChanges(taskIds: string[], isNewTask = false): Promise<void> {
     const criteria = this.criteria();
     const ctx = this.criteriaCtx();
     return this._changes.applyDateChanges(
       taskIds,
-      (task) => this._changesToMatch(task, criteria, ctx),
+      (task) => {
+        const changes = this._changesToMatch(task, criteria, ctx);
+        return changes && isNewTask ? withoutBarChoices(changes) : changes;
+      },
       ctx.startOfNextDayDiffMs,
     );
   }
@@ -637,33 +651,46 @@ export class BoardPanelComponent implements TaskCardList, ViewTaskListHost {
 
   // === WHAT THE PANEL SHOWS (both renderers) ===
 
-  /** Cards, or the list layout's top-level rows; done ones in their own group. */
+  /** Cards, or the list layout's top-level rows; done ones after the open ones. */
   private readonly _items = computed(() =>
     getPanelItems(this.tasks(), this.panelCfg(), this.isListLayout()),
   );
   readonly mainItems = computed(() => this._items().main, { equal: fastArrayCompare });
   readonly doneItems = computed(() => this._items().done, { equal: fastArrayCompare });
+  /** Everything the panel shows, open then done (as rendered). */
+  readonly allItems = computed(() => [...this.mainItems(), ...this.doneItems()], {
+    equal: fastArrayCompare,
+  });
   // Same helper as the view editor's live count (`getPanelHeaderCount`).
   readonly headerCount = computed(() => this.mainItems().length);
 
-  // Local only, never synced: the parts past PANEL_SHOWN_LIMIT, shown on
+  // Local only, never synced: the items past PANEL_SHOWN_LIMIT, shown on
   // "Show all" or when a task there is moved, added or focused.
   readonly isShowAll = signal(false);
-  // Local only, never synced: built on first expand (a view across all
-  // projects can hold many done tasks).
-  readonly isDoneListExpanded = signal(false);
-  // Local only, never synced, like the done section.
+  // Local only, never synced.
   readonly isSectionExpanded = signal(true);
 
   /** The main items rendered (capped before anything is built for them). */
   readonly shownMain = computed(() => this._capped(this.mainItems(), this.isShowAll()), {
     equal: fastArrayCompare,
   });
-  /** The done items rendered: none while their group is collapsed. */
+  /**
+   * The done items rendered, after the open ones and within the same cap: a
+   * view across all projects can hold many done tasks.
+   */
   readonly shownDone = computed(
     () =>
-      this.isDoneListExpanded() ? this._capped(this.doneItems(), this.isShowAll()) : [],
+      this.isShowAll()
+        ? this.doneItems()
+        : this.doneItems().slice(
+            0,
+            Math.max(0, PANEL_SHOWN_LIMIT - this.shownMain().length),
+          ),
     { equal: fastArrayCompare },
+  );
+  /** Whether items past the cap aren't rendered ("Show all"). */
+  readonly hasHiddenItems = computed(
+    () => this.allItems().length > this.shownMain().length + this.shownDone().length,
   );
 
   /**
@@ -686,11 +713,11 @@ export class BoardPanelComponent implements TaskCardList, ViewTaskListHost {
   }
 
   /**
-   * "Show all" below a part (`items`): the button goes, so the focus moves to
-   * the first item it revealed.
+   * "Show all" below the items: the button goes, so the focus moves to the
+   * first item it revealed (rendered: open then done).
    */
-  showAll(items: readonly TaskCopy[]): void {
-    const taskId = items[PANEL_SHOWN_LIMIT]?.id;
+  showAll(): void {
+    const taskId = this.allItems()[PANEL_SHOWN_LIMIT]?.id;
     this.isShowAll.set(true);
     afterNextRender(() => this._focusRowNow(PANEL_SHOWN_LIMIT, taskId), {
       injector: this._injector,
@@ -714,11 +741,11 @@ export class BoardPanelComponent implements TaskCardList, ViewTaskListHost {
   /** Shows the whole panel when one of the tasks is past the limit. */
   private _reveal(taskIds: readonly string[]): boolean {
     if (this.isShowAll()) return false;
-    const isHidden = (items: TaskCopy[]): boolean =>
-      items.slice(PANEL_SHOWN_LIMIT).some((task) => taskIds.includes(task.id));
+    const isHidden = (items: TaskCopy[], shown: number): boolean =>
+      items.slice(shown).some((task) => taskIds.includes(task.id));
     if (
-      isHidden(this.mainItems()) ||
-      (this.isDoneListExpanded() && isHidden(this.doneItems()))
+      isHidden(this.mainItems(), this.shownMain().length) ||
+      isHidden(this.doneItems(), this.shownDone().length)
     ) {
       this.isShowAll.set(true);
       return true;
@@ -871,14 +898,51 @@ export class BoardPanelComponent implements TaskCardList, ViewTaskListHost {
     if (this.isAddTaskHidden()) {
       return null;
     }
-    const fields = this.additionalTaskFields();
+    const fields = this.newTaskBarFields();
     return {
       additionalFields: {
         ...fields,
         projectId: fields.projectId ?? this._defaultProjectId(),
       },
+      prefill: this.newTaskPrefill(),
       tagsToRemove: this.tagsToRemoveForInlineCreate(),
       taskIdsToExclude: this.panelCfg().taskIds,
+    };
+  });
+
+  /** What a new task gets besides the chips (done state, project, priority). */
+  readonly newTaskBarFields = computed(
+    (): Partial<TaskCopy> =>
+      Object.fromEntries(
+        Object.entries(this.additionalTaskFields()).filter(([key]) => key !== 'tagIds'),
+      ),
+  );
+
+  /**
+   * The add-task bar's chips for a new task (tags, planned day),
+   * and whether the user's changes to them hide the task from the panel.
+   */
+  readonly newTaskPrefill = computed((): ViewTaskPrefill => {
+    const { tagIds, projectId: ruleProjectId } = this.additionalTaskFields();
+    const criteria = this.criteria();
+    const ctx = this.criteriaCtx();
+    const existingTagIds = this._viewCtx.tagIdSet();
+    const base = { projectId: this._defaultProjectId(), ...this.newTaskBarFields() };
+    const changesFor = (fields: Partial<TaskCopy>): TaskMatchChanges | null =>
+      getPanelChangesToMatch(
+        { ...DEFAULT_TASK, ...base, ...fields, id: NEW_TASK_DRAFT_ID },
+        criteria,
+        ctx,
+        existingTagIds,
+      );
+    const dueDay = changesFor({})?.scheduleDay;
+    return {
+      fields: {
+        ...(ruleProjectId ? { projectId: ruleProjectId } : {}),
+        ...(tagIds?.length ? { tagIds } : {}),
+        ...(dueDay ? { dueDay } : {}),
+      },
+      isHidden: (fields) => isHiddenByBarChoices(changesFor(fields)),
     };
   });
 

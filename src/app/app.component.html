@@ -18,6 +18,7 @@
     (afterTaskAdd)="onTaskAdded($event)"
     [isGlobalBarVariant]="true"
     [additionalFields]="viewAddTarget()?.additionalFields"
+    [viewPrefill]="viewAddTarget()?.prefill"
     [tagsToRemove]="viewAddTarget()?.tagsToRemove ?? []"
     [taskIdsToExclude]="viewAddTarget()?.taskIdsToExclude"
     [isNoDefaults]="!!viewAddTarget()"
