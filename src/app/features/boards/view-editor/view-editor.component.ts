@@ -104,8 +104,7 @@ export class ViewEditorComponent {
   private readonly _injector = inject(Injector);
   readonly isXs = inject(LayoutService).isXs;
 
-  // Absent while a phone shows one section's page.
-  private readonly _nameField = viewChild(ViewEditorTitleComponent);
+  private readonly _nameField = viewChild.required(ViewEditorTitleComponent);
   private readonly _sections = viewChildren(ViewEditorSectionComponent);
   private readonly _sectionEls = viewChildren<
     ViewEditorSectionComponent,
@@ -308,12 +307,9 @@ export class ViewEditorComponent {
    * shows and the first invalid field gets the focus.
    */
   buildBoard(): BoardCfg | null {
+    const name = this._nameField();
     const fields: { isInvalid: () => boolean; focus: () => void }[] = [
-      {
-        // A phone's section page hides the view's name.
-        isInvalid: () => this._nameField()?.isInvalid() ?? !this.model().title,
-        focus: () => this._focusName(),
-      },
+      { isInvalid: () => name.isInvalid(), focus: () => name.focus() },
       ...this._sections().map((section) => ({
         isInvalid: () => section.isTitleInvalid(),
         focus: () => section.focusTitle(),
@@ -338,16 +334,6 @@ export class ViewEditorComponent {
       this.board(),
       this._translate,
     );
-  }
-
-  private _focusName(): void {
-    const name = this._nameField();
-    if (name) {
-      name.focus();
-      return;
-    }
-    this.phonePageId.set(null);
-    afterNextRender(() => this._nameField()?.focus(), { injector: this._injector });
   }
 
   /**

@@ -660,15 +660,19 @@ describe('BoardEditComponent with the view editor', () => {
         expect(cards()[2].querySelector('view-editor-title input')).not.toBeNull();
       });
 
-      it('goes back to the form for an empty view name', async () => {
+      it("keeps the view's name as the dialog title, also on a section's page", async () => {
         const cmp = await open(three, 'a');
+        expect(cards()[0].querySelector('.page-head')).not.toBeNull();
         editor().setTitle('');
         await settle();
         cmp.save();
         await settle();
         expect(dispatch).not.toHaveBeenCalled();
-        expect(cards().map(isHidden)).toEqual([false, false, false]);
-        expect(fixture.nativeElement.querySelector('.name-field input')).not.toBeNull();
+        expect(
+          fixture.nativeElement.querySelector(
+            '[mat-dialog-title] view-editor-title input',
+          ),
+        ).not.toBeNull();
       });
 
       it("opens an added section's page", async () => {

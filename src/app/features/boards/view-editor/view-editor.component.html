@@ -1,30 +1,17 @@
-<!-- A phone's dialog has its own top bar (dialog-board-edit); the name is a field below it. -->
-@if (!isXs()) {
-  <h2 mat-dialog-title>
-    <view-editor-title
-      [title]="model().title"
-      [label]="T.G.TITLE | translate"
-      [isPencilShown]="true"
-      (titleChange)="setTitle($event)"
-    ></view-editor-title>
-  </h2>
-}
+<h2 mat-dialog-title>
+  <view-editor-title
+    [title]="model().title"
+    [label]="T.G.TITLE | translate"
+    [isPencilShown]="true"
+    (titleChange)="setTitle($event)"
+  ></view-editor-title>
+</h2>
 
 <mat-dialog-content
   class="content"
   [class.is-phone]="isXs()"
 >
   @if (!phonePage()) {
-    @if (isXs()) {
-      <view-editor-title
-        class="name-field"
-        [title]="model().title"
-        [label]="T.G.TITLE | translate"
-        [isFieldAlways]="true"
-        (titleChange)="setTitle($event)"
-      ></view-editor-title>
-    }
-
     @for (hint of hints(); track hint) {
       <p class="hint">{{ hint | translate }}</p>
     }
