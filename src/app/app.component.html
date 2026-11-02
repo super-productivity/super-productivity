@@ -103,7 +103,7 @@
 <!-- Background context menu -->
 @if (routeWrapper) {
   <context-menu
-    [contextMenu]="backgroundContextMenu"
+    [menu]="backgroundContextMenu"
     [rightClickTriggerEl]="routeWrapper.nativeElement"
     [isEnabled]="isWorkViewPage()"
     [allowedSelectors]="'
@@ -122,35 +122,37 @@
   ></context-menu>
 }
 
-<ng-template #backgroundContextMenu>
-  <div style="min-width: 200px; max-width: 300px">
-    <button
-      mat-menu-item
-      (click)="openSettings()"
-      class="background-menu-item"
-      style="width: 100%; overflow: hidden"
-    >
-      <mat-icon>settings</mat-icon>
-      <span>{{
-        (workContextService.activeWorkContextType === 'PROJECT'
-          ? T.APP.CONTEXT_MENU.CHANGE_PROJECT_SETTINGS
-          : T.APP.CONTEXT_MENU.CHANGE_TAG_SETTINGS
-        ) | translate
-      }}</span>
-    </button>
-    @if (
-      workContextService.activeWorkContextType === 'PROJECT' ||
-      workContextService.activeWorkContextId === TODAY_TAG_ID
-    ) {
+<mat-menu #backgroundContextMenu="matMenu">
+  <ng-template matMenuContent>
+    <div style="min-width: 200px; max-width: 300px">
       <button
         mat-menu-item
-        (click)="addSection()"
+        (click)="openSettings()"
         class="background-menu-item"
         style="width: 100%; overflow: hidden"
       >
-        <mat-icon>list</mat-icon>
-        <span>{{ T.MH.ADD_SECTION | translate }}</span>
+        <mat-icon>settings</mat-icon>
+        <span>{{
+          (workContextService.activeWorkContextType === 'PROJECT'
+            ? T.APP.CONTEXT_MENU.CHANGE_PROJECT_SETTINGS
+            : T.APP.CONTEXT_MENU.CHANGE_TAG_SETTINGS
+          ) | translate
+        }}</span>
       </button>
-    }
-  </div>
-</ng-template>
+      @if (
+        workContextService.activeWorkContextType === 'PROJECT' ||
+        workContextService.activeWorkContextId === TODAY_TAG_ID
+      ) {
+        <button
+          mat-menu-item
+          (click)="addSection()"
+          class="background-menu-item"
+          style="width: 100%; overflow: hidden"
+        >
+          <mat-icon>list</mat-icon>
+          <span>{{ T.MH.ADD_SECTION | translate }}</span>
+        </button>
+      }
+    </div>
+  </ng-template>
+</mat-menu>

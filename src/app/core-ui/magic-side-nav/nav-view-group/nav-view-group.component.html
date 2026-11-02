@@ -26,23 +26,25 @@
   }
 </div>
 
-<ng-template #sectionMenu>
-  <!-- Also the way to create a view in the compact rail, which hides the +. -->
-  <button
-    mat-menu-item
-    (click)="boardsService.createBoard()"
-  >
-    <mat-icon>add</mat-icon>
-    <span>{{ T.F.BOARDS.V.ADD_NEW_BOARD | translate }}</span>
-  </button>
-  <button
-    mat-menu-item
-    (click)="disableFeature()"
-  >
-    <mat-icon>visibility_off</mat-icon>
-    <span>{{ T.MH.DISABLE_FEATURE | translate }}</span>
-  </button>
-</ng-template>
+<mat-menu #sectionMenu="matMenu">
+  <ng-template matMenuContent>
+    <!-- Also the way to create a view in the compact rail, which hides the +. -->
+    <button
+      mat-menu-item
+      (click)="boardsService.createBoard()"
+    >
+      <mat-icon>add</mat-icon>
+      <span>{{ T.F.BOARDS.V.ADD_NEW_BOARD | translate }}</span>
+    </button>
+    <button
+      mat-menu-item
+      (click)="disableFeature()"
+    >
+      <mat-icon>visibility_off</mat-icon>
+      <span>{{ T.MH.DISABLE_FEATURE | translate }}</span>
+    </button>
+  </ng-template>
+</mat-menu>
 
 @if (isExpanded()) {
   <div
@@ -77,13 +79,14 @@
           [icon]="row.icon"
           [label]="row.board.title"
           [showLabels]="showLabels()"
-          [contextMenu]="viewMenu"
+          [contextMenu]="viewMenu.menu()"
           (clicked)="onRowClick(row.board)"
         ></nav-item>
 
-        <ng-template #viewMenu>
-          <view-menu [board]="row.board"></view-menu>
-        </ng-template>
+        <view-menu
+          #viewMenu
+          [board]="row.board"
+        ></view-menu>
       </div>
     }
   </div>

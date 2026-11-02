@@ -87,7 +87,7 @@ export const cssSelectors = {
   CREATE_PROJECT_BTN:
     'button[aria-label="Create New Project"], button:has-text("Create Project")',
   PROJECT_NAME_INPUT: '[name="projectName"]',
-  WORK_CONTEXT_MENU: 'work-context-menu',
+  WORK_CONTEXT_MENU: '.work-context-menu-panel',
   MOVE_TO_ARCHIVE_BTN: '.e2e-move-done-to-archive',
 
   // ============================================================================
