@@ -14,38 +14,8 @@ import {
 import { toEntityKey } from '../util/entity-key.util';
 import { compareVectorClocks, VectorClockComparison } from '../../core/util/vector-clock';
 import { RepairOperationService } from '../validation/repair-operation.service';
+import { getRepairSummary } from '../validation/repair-summary.util';
 import { OperationLogDownloadService } from './operation-log-download.service';
-
-const REPAIR_SUMMARY_KEYS: readonly (keyof RepairSummary)[] = [
-  'entityStateFixed',
-  'orphanedEntitiesRestored',
-  'invalidReferencesRemoved',
-  'relationshipsFixed',
-  'structureRepaired',
-  'typeErrorsFixed',
-];
-
-const getRepairSummary = (payload: unknown): RepairSummary | undefined => {
-  if (typeof payload !== 'object' || payload === null) {
-    return undefined;
-  }
-  const summary = (payload as Record<string, unknown>)['repairSummary'];
-  if (typeof summary !== 'object' || summary === null) {
-    return undefined;
-  }
-  const summaryRecord = summary as Record<string, unknown>;
-  if (
-    !REPAIR_SUMMARY_KEYS.every(
-      (key) =>
-        typeof summaryRecord[key] === 'number' &&
-        Number.isFinite(summaryRecord[key]) &&
-        (summaryRecord[key] as number) >= 0,
-    )
-  ) {
-    return undefined;
-  }
-  return summaryRecord as unknown as RepairSummary;
-};
 
 const MAX_LOGGED_REJECTION_CLOCK_SAMPLES = 5;
 
