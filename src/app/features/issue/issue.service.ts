@@ -444,16 +444,7 @@ export class IssueService {
         taskCount: tasksIssueIdsByIssueProviderKey[providerKey].length,
         taskIds: tasksIssueIdsByIssueProviderKey[providerKey].map((t) => t.id),
       });
-      const pollingLabelParams = {
-        issueProviderName: this._getProviderName(providerKey),
-        issuesStr: this._translateService.instant(
-          this._getIssueStrings(providerKey).ISSUES_STR,
-        ),
-      };
-
-      this._globalProgressBarService.countUp('POLL', {
-        labelParams: pollingLabelParams,
-      });
+      this._globalProgressBarService.countUp();
 
       const service = this._getService(providerKey);
       if (!service) {

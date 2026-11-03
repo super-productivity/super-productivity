@@ -597,7 +597,6 @@
         "ISSUE_UPDATE_SINGLE": "{{issueProviderName}}: Updated data for \"{{issueTitle}}\"",
         "PLUGIN_NOT_INSTALLED": "Required plugin \"{{pluginName}}\" is not installed.",
         "POLLING_BACKLOG": "{{issueProviderName}}: Polling for new {{issuesStr}}",
-        "POLLING_CHANGES": "{{issueProviderName}}: Polling Changes for {{issuesStr}}",
         "DELETE_REMOTE_FAILED": "Failed to delete remote issue",
         "LOAD_OPTIONS_FAILED": "Failed to load options for {{fieldKey}}",
         "OAUTH_CONNECTED": "OAuth account connected successfully.",
@@ -3172,10 +3171,6 @@
     "SHARE_FAILED_FALLBACK": "Sharing failed. Copied to clipboard instead.",
     "SHARE_UNAVAILABLE_FALLBACK": "Copied to clipboard.",
     "UNPLANNED_TODAY_TASKS": "Unplanned all tasks from Today"
-  },
-  "GPB": {
-    "JIRA_LOAD_ISSUE": "Jira: Load issue data...",
-    "UNKNOWN": "Loading remote data"
   },
   "HEATMAP": {
     "DAY_TOOLTIP": {
