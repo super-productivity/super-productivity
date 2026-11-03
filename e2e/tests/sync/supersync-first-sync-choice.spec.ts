@@ -17,7 +17,8 @@ import { ImportPage } from '../../pages/import.page';
  * on "Replace my account". Keeping the account's tasks saves the device's own
  * tasks as a backup first, and they can be restored from Settings → Sync & Backup.
  * A device with many tasks gets no warning when the account's snapshot holds
- * at least half as many.
+ * at least half as many; with twice as many or more, nothing is preselected and
+ * "Use my account's tasks" warns.
  *
  * Run with: npm run e2e:supersync:file e2e/tests/sync/supersync-first-sync-choice.spec.ts
  */
@@ -143,6 +144,65 @@ test.describe('@supersync First-sync choice when joining with local tasks', () =
       );
       await expect(clientB.sync.firstSyncUseAccountRadio.locator('input')).toBeChecked();
       await expect(dialog.locator('.e2e-first-sync-warning')).toBeHidden();
+    } finally {
+      if (clientA) await closeClient(clientA);
+      if (clientB) await closeClient(clientB);
+    }
+  });
+
+  test("warns before using the account's tasks when the device has far more", async ({
+    browser,
+    baseURL,
+    testRunId,
+  }) => {
+    test.slow();
+
+    let clientA: SimulatedE2EClient | null = null;
+    let clientB: SimulatedE2EClient | null = null;
+
+    try {
+      const user = await createTestUser(testRunId);
+      const syncConfig = getSuperSyncConfig(user);
+
+      // A's task exists before setup, so the account's snapshot holds it.
+      clientA = await createSimulatedClient(browser, baseURL!, 'A', testRunId);
+      await clientA.workView.waitForTaskList();
+      const taskA = `A1-${testRunId}`;
+      await clientA.workView.addTask(taskA);
+      await clientA.sync.setupSuperSync(syncConfig);
+      await clientA.sync.syncAndWait();
+
+      // 10 tasks is the smallest count that warns, and far more than 1.
+      clientB = await createSimulatedClient(browser, baseURL!, 'B', testRunId);
+      for (let i = 1; i <= 10; i++) {
+        await clientB.workView.addTask(`B${i}-${testRunId}`);
+      }
+      await clientB.sync.setupSuperSync({ ...syncConfig, waitForInitialSync: false });
+
+      const dialog = clientB.sync.syncImportConflictDialog;
+      await expect(dialog).toBeVisible({ timeout: 30000 });
+      await expect(dialog.locator('.e2e-first-sync-count')).toHaveText(
+        'Tasks on this device: 10',
+      );
+      const warning = dialog.locator('.e2e-first-sync-warning');
+      const useAccount = clientB.sync.firstSyncUseAccountRadio.locator('input');
+      // Much is at stake either way, so nothing is chosen for the user.
+      await expect(useAccount).not.toBeChecked();
+      await expect(
+        clientB.sync.firstSyncReplaceAccountRadio.locator('input'),
+      ).not.toBeChecked();
+      await expect(clientB.sync.firstSyncSubmitBtn).toBeDisabled();
+      await expect(warning).toBeHidden();
+
+      await useAccount.check();
+      await expect(warning).toContainText('This removes 10 tasks from this device');
+      await expect(clientB.sync.firstSyncSubmitBtn).toHaveText(/Remove 10 tasks/);
+      await expect(clientB.sync.firstSyncSubmitBtn).toBeEnabled();
+
+      await clientB.sync.chooseSyncImportUseRemote();
+      await clientB.sync.syncAndWait();
+      await clientB.page.goto('/#/work-view');
+      await waitForTask(clientB.page, taskA);
     } finally {
       if (clientA) await closeClient(clientA);
       if (clientB) await closeClient(clientB);
