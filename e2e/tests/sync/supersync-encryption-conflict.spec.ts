@@ -5,8 +5,19 @@ import {
   createSimulatedClient,
   closeClient,
   waitForTask,
+  renameTask,
+  markTaskDone,
+  getTaskTitleFromState,
   type SimulatedE2EClient,
 } from '../../utils/supersync-helpers';
+import {
+  createdTitle,
+  getStoreTaskByTitle,
+  getStoreTitlesContaining,
+  holdFirstUpload,
+  recordSyncTraffic,
+  type SyncTraffic,
+} from '../../utils/audit-concurrency-helpers';
 
 /**
  * SuperSync Encryption + Conflict Resolution E2E Tests
@@ -25,28 +36,75 @@ import {
  * Server now returns `existingClock` in conflict rejection responses, allowing
  * the client to create LWW ops that properly dominate the server's state.
  *
- * These tests verify the fix works end-to-end with real encryption.
+ * A sync downloads before it uploads, so an ordinary "A syncs, then B syncs"
+ * never reaches the server rejection: B learns A's op from the download and
+ * resolves it locally. Every test here therefore holds the losing upload
+ * (B's first POST) while the other client uploads its conflicting edit, then
+ * releases it, and asserts that the server rejected it (CONFLICT_CONCURRENT),
+ * that the client's re-uploads stay bounded, and the exact converged value.
  *
  * Run with: npm run e2e:supersync:file e2e/tests/sync/supersync-encryption-conflict.spec.ts
  */
 
+/** Ops uploads the rejected client may need: the rejected batch, a re-upload, slack. */
+const MAX_POSTS_PER_CONFLICT_SYNC = 4;
+
+/**
+ * Syncs `loser` with its first upload held until every `winners` client has
+ * synced, so the server rejects the held upload as CONFLICT_CONCURRENT.
+ */
+const syncWithServerConflict = async (
+  loser: SimulatedE2EClient,
+  winners: SimulatedE2EClient[],
+  traffic: SyncTraffic,
+): Promise<void> => {
+  const postsBefore = traffic.posts[loser.clientName];
+  const hold = await holdFirstUpload(loser, async () => {
+    for (const winner of winners) await winner.sync.syncAndWait();
+  });
+  await loser.sync.syncAndWait();
+  await hold.finish();
+  await expect
+    .poll(() => traffic.rejections)
+    .toContain(`${loser.clientName}:CONFLICT_CONCURRENT`);
+  expect(traffic.posts[loser.clientName] - postsBefore).toBeLessThanOrEqual(
+    MAX_POSTS_PER_CONFLICT_SYNC,
+  );
+};
+
+const setupEncryptedClients = async (
+  browser: Parameters<typeof createSimulatedClient>[0],
+  baseURL: string,
+  testRunId: string,
+  password: string,
+  names: string[],
+): Promise<SimulatedE2EClient[]> => {
+  const user = await createTestUser(testRunId);
+  const syncConfig = {
+    ...getSuperSyncConfig(user),
+    isEncryptionEnabled: true,
+    password,
+  };
+  const clients: SimulatedE2EClient[] = [];
+  for (const name of names) {
+    const client = await createSimulatedClient(browser, baseURL, name, testRunId);
+    clients.push(client);
+    await client.sync.setupSuperSync(syncConfig);
+  }
+  for (const client of clients) await client.sync.syncAndWait();
+  return clients;
+};
+
 test.describe('@supersync @encryption Encryption + Conflict Resolution', () => {
   /**
-   * Regression test: Concurrent modifications with encryption enabled resolve correctly
+   * Regression test: a rejected encrypted upload whose edit wins LWW converges
    *
-   * This is the core test for the existingClock fix. It verifies that when two clients
-   * make concurrent modifications with encryption enabled, conflicts resolve correctly
-   * without an infinite loop.
-   *
-   * Scenario:
-   * 1. Client A and B both set up with encryption (same password)
-   * 2. Client A creates a task, syncs
-   * 3. Client B syncs (downloads encrypted task)
-   * 4. Both clients make concurrent changes to the same task
-   * 5. Client A syncs first (uploads change)
-   * 6. Client B syncs (triggers conflict, should resolve via existingClock)
-   * 7. Final sync round to verify convergence
-   * 8. Verify both clients have consistent state (no infinite loop)
+   * 1. A creates a task; B downloads it
+   * 2. A renames it (earlier), B renames it (later)
+   * 3. B syncs with its upload held until A uploaded: the server rejects B
+   * 4. B's later title wins LWW: its local-win op must dominate the server's
+   *    entity clock (existingClock) and be accepted within bounded uploads
+   * 5. Both clients hold B's title; A's title is gone
    */
   test('Concurrent modifications with encryption resolve without infinite loop (regression)', async ({
     browser,
@@ -54,133 +112,59 @@ test.describe('@supersync @encryption Encryption + Conflict Resolution', () => {
     testRunId,
     serverHealthy,
   }) => {
-    void serverHealthy; // Ensure fixture is evaluated for server health check
-    let clientA: SimulatedE2EClient | null = null;
-    let clientB: SimulatedE2EClient | null = null;
+    void serverHealthy;
+    const clients: SimulatedE2EClient[] = [];
 
     try {
-      const user = await createTestUser(testRunId);
-      const baseConfig = getSuperSyncConfig(user);
-      const encryptionPassword = `conflict-test-${testRunId}`;
-      const syncConfig = {
-        ...baseConfig,
-        isEncryptionEnabled: true,
-        password: encryptionPassword,
-      };
-
-      // ============ PHASE 1: Setup Both Clients with Encryption ============
-      console.log('[EncryptConflict] Phase 1: Setting up clients with encryption');
-
-      clientA = await createSimulatedClient(browser, baseURL!, 'A', testRunId);
-      await clientA.sync.setupSuperSync(syncConfig);
-
-      clientB = await createSimulatedClient(browser, baseURL!, 'B', testRunId);
-      await clientB.sync.setupSuperSync(syncConfig);
-
-      // Initial sync to establish vector clocks
-      await clientA.sync.syncAndWait();
-      await clientB.sync.syncAndWait();
-      console.log('[EncryptConflict] Both clients synced initially with encryption');
-
-      // ============ PHASE 2: Client A Creates Task ============
-      console.log('[EncryptConflict] Phase 2: Client A creating task');
+      clients.push(
+        ...(await setupEncryptedClients(
+          browser,
+          baseURL!,
+          testRunId,
+          `conflict-test-${testRunId}`,
+          ['A', 'B'],
+        )),
+      );
+      const [clientA, clientB] = clients;
+      const traffic = recordSyncTraffic(clients);
 
       const taskName = `EncryptedConflictTask-${testRunId}`;
+      const titleA = `${taskName}-A`;
+      const titleB = `${taskName}-B`;
       await clientA.workView.addTask(taskName);
-      await waitForTask(clientA.page, taskName);
-
       await clientA.sync.syncAndWait();
-      console.log(`[EncryptConflict] Client A created and synced: ${taskName}`);
-
-      // ============ PHASE 3: Client B Downloads Task ============
-      console.log('[EncryptConflict] Phase 3: Client B downloading task');
-
       await clientB.sync.syncAndWait();
       await waitForTask(clientB.page, taskName);
-      console.log('[EncryptConflict] Client B received the encrypted task');
 
-      // ============ PHASE 4: Both Clients Make Concurrent Changes ============
-      console.log('[EncryptConflict] Phase 4: Making concurrent changes');
-
-      // Client A marks task as done
-      const taskLocatorA = clientA.page
-        .locator(`task:not(.ng-animating):has-text("${taskName}")`)
-        .first();
-      await taskLocatorA.hover();
-      await taskLocatorA.locator('done-toggle').click();
-      await expect(taskLocatorA).toHaveClass(/isDone/);
-      console.log('[EncryptConflict] Client A marked task done');
-
-      // Wait for timestamp gap (ensures B's change has later timestamp)
-      await clientB.page.waitForTimeout(500);
-
-      // Client B also marks task as done (concurrent change, later timestamp)
-      const taskLocatorB = clientB.page
-        .locator(`task:not(.ng-animating):has-text("${taskName}")`)
-        .first();
-      await taskLocatorB.hover();
-      await taskLocatorB.locator('done-toggle').click();
-      await expect(taskLocatorB).toHaveClass(/isDone/);
-      console.log('[EncryptConflict] Client B marked task done (later timestamp)');
-
-      // ============ PHASE 5: Client A Syncs First ============
-      console.log('[EncryptConflict] Phase 5: Client A syncing first');
-
-      await clientA.sync.syncAndWait();
-      console.log('[EncryptConflict] Client A synced');
-
-      // ============ PHASE 6: Client B Syncs (Triggers Conflict Resolution) ============
-      console.log('[EncryptConflict] Phase 6: Client B syncing (conflict resolution)');
-
-      // This is where the bug would manifest - without the fix, B would enter
-      // an infinite loop of "conflict was fixed" messages.
-      // With the fix, B receives existingClock and creates a dominating LWW op.
-      await clientB.sync.syncAndWait();
-      console.log('[EncryptConflict] Client B synced');
-
-      // ============ PHASE 7: Final Sync Round for Convergence ============
-      console.log('[EncryptConflict] Phase 7: Final sync round');
-
-      await clientA.sync.syncAndWait();
-      await clientB.sync.syncAndWait();
-
-      // Wait a moment for any lingering operations
-      await clientA.page.waitForTimeout(1000);
+      await renameTask(clientA, taskName, titleA);
       await clientB.page.waitForTimeout(1000);
+      await renameTask(clientB, taskName, titleB);
 
-      // ============ PHASE 8: Verify Consistent State ============
-      console.log('[EncryptConflict] Phase 8: Verifying consistent state');
+      await syncWithServerConflict(clientB, [clientA], traffic);
+      await clientA.sync.syncAndWait();
+      await clientB.sync.syncAndWait();
 
-      // Both clients should have the task marked as done
-      await expect(taskLocatorA).toHaveClass(/isDone/);
-      await expect(taskLocatorB).toHaveClass(/isDone/);
-
-      // Verify no sync errors
-      const hasErrorA = await clientA.sync.hasSyncError();
-      const hasErrorB = await clientB.sync.hasSyncError();
-      expect(hasErrorA).toBe(false);
-      expect(hasErrorB).toBe(false);
-
-      // Verify task count is the same on both clients
-      const countA = await clientA.page.locator(`task:has-text("${taskName}")`).count();
-      const countB = await clientB.page.locator(`task:has-text("${taskName}")`).count();
-      expect(countA).toBe(1);
-      expect(countB).toBe(1);
-
-      console.log(
-        '[EncryptConflict] ✓ Concurrent encrypted modifications resolved correctly',
-      );
+      for (const client of clients) {
+        await expect.poll(() => getTaskTitleFromState(client, titleB)).toBe(titleB);
+        expect(await getTaskTitleFromState(client, titleA)).toBeNull();
+        expect(await getStoreTitlesContaining(client, taskName)).toEqual([titleB]);
+        expect(await client.sync.hasSyncError()).toBe(false);
+      }
+      test.info().annotations.push({
+        type: 'server rejections',
+        description: traffic.rejections.join(', '),
+      });
     } finally {
-      if (clientA) await closeClient(clientA);
-      if (clientB) await closeClient(clientB);
+      for (const client of clients) await closeClient(client);
     }
   });
 
   /**
-   * Test: Multiple tasks with concurrent edits and encryption converge
+   * Multiple tasks with concurrent edits and encryption converge
    *
-   * A scenario with multiple tasks being edited concurrently to verify the
-   * existingClock mechanism handles conflicts across different entities.
+   * A marks task1 done; B, later, marks task1 and task2 done. B's upload is
+   * held until A uploaded, so the server rejects B's task1 op. Exactly task1
+   * and task2 end done, task3 stays open, and no task is lost or duplicated.
    */
   test('Multiple tasks with concurrent edits and encryption converge', async ({
     browser,
@@ -189,108 +173,65 @@ test.describe('@supersync @encryption Encryption + Conflict Resolution', () => {
     serverHealthy,
   }) => {
     void serverHealthy;
-    let clientA: SimulatedE2EClient | null = null;
-    let clientB: SimulatedE2EClient | null = null;
+    const clients: SimulatedE2EClient[] = [];
 
     try {
-      const user = await createTestUser(testRunId);
-      const baseConfig = getSuperSyncConfig(user);
-      const encryptionPassword = `multi-task-${testRunId}`;
-      const syncConfig = {
-        ...baseConfig,
-        isEncryptionEnabled: true,
-        password: encryptionPassword,
-      };
+      clients.push(
+        ...(await setupEncryptedClients(
+          browser,
+          baseURL!,
+          testRunId,
+          `multi-task-${testRunId}`,
+          ['A', 'B'],
+        )),
+      );
+      const [clientA, clientB] = clients;
+      const traffic = recordSyncTraffic(clients);
 
-      // Setup clients with encryption
-      clientA = await createSimulatedClient(browser, baseURL!, 'A', testRunId);
-      await clientA.sync.setupSuperSync(syncConfig);
-
-      clientB = await createSimulatedClient(browser, baseURL!, 'B', testRunId);
-      await clientB.sync.setupSuperSync(syncConfig);
-
-      await clientA.sync.syncAndWait();
-      await clientB.sync.syncAndWait();
-      console.log('[MultiTask] Both clients set up with encryption');
-
-      // Create 3 tasks on client A
       const task1 = `Task1-${testRunId}`;
       const task2 = `Task2-${testRunId}`;
       const task3 = `Task3-${testRunId}`;
-
-      await clientA.workView.addTask(task1);
-      await clientA.page.waitForTimeout(100);
-      await clientA.workView.addTask(task2);
-      await clientA.page.waitForTimeout(100);
-      await clientA.workView.addTask(task3);
-
+      for (const task of [task1, task2, task3]) {
+        await clientA.workView.addTask(task);
+        await waitForTask(clientA.page, task);
+      }
       await clientA.sync.syncAndWait();
-
       await clientB.sync.syncAndWait();
-      await waitForTask(clientB.page, task1);
-      await waitForTask(clientB.page, task2);
-      await waitForTask(clientB.page, task3);
-      console.log('[MultiTask] All 3 tasks synced');
+      for (const task of [task1, task2, task3]) await waitForTask(clientB.page, task);
 
-      // Client A marks task1 as done
-      const task1LocatorA = clientA.page
-        .locator(`task:not(.ng-animating):has-text("${task1}")`)
-        .first();
-      await task1LocatorA.hover();
-      await task1LocatorA.locator('done-toggle').click();
-      console.log('[MultiTask] Client A marked task1 done');
-
-      // Wait for timestamp gap
+      const [stored1, stored2, stored3] = [task1, task2, task3].map((name) =>
+        createdTitle('A', testRunId, name),
+      );
+      await markTaskDone(clientA, task1);
       await clientB.page.waitForTimeout(500);
+      await markTaskDone(clientB, task1);
+      await markTaskDone(clientB, task2);
 
-      // Client B marks task1 AND task2 as done (concurrent, later timestamp)
-      const task1LocatorB = clientB.page
-        .locator(`task:not(.ng-animating):has-text("${task1}")`)
-        .first();
-      await task1LocatorB.hover();
-      await task1LocatorB.locator('done-toggle').click();
-
-      const task2LocatorB = clientB.page
-        .locator(`task:not(.ng-animating):has-text("${task2}")`)
-        .first();
-      await task2LocatorB.hover();
-      await task2LocatorB.locator('done-toggle').click();
-      console.log('[MultiTask] Client B marked task1 and task2 done (later timestamp)');
-
-      // Sync sequence
-      await clientA.sync.syncAndWait();
-      await clientB.sync.syncAndWait();
+      await syncWithServerConflict(clientB, [clientA], traffic);
       await clientA.sync.syncAndWait();
       await clientB.sync.syncAndWait();
 
-      // Wait for convergence
-      await clientA.page.waitForTimeout(1000);
-      await clientB.page.waitForTimeout(1000);
-
-      // Verify no errors
-      const hasErrorA = await clientA.sync.hasSyncError();
-      const hasErrorB = await clientB.sync.hasSyncError();
-      expect(hasErrorA).toBe(false);
-      expect(hasErrorB).toBe(false);
-
-      // All 3 tasks should exist on both clients
-      const countA = await clientA.page.locator('task').count();
-      const countB = await clientB.page.locator('task').count();
-      expect(countA).toBeGreaterThanOrEqual(3);
-      expect(countB).toBeGreaterThanOrEqual(3);
-
-      console.log('[MultiTask] ✓ Multiple tasks with concurrent edits resolved');
+      for (const client of clients) {
+        expect(await getStoreTitlesContaining(client, testRunId)).toEqual(
+          [stored1, stored2, stored3].sort(),
+        );
+        await expect
+          .poll(async () => (await getStoreTaskByTitle(client, stored1))?.isDone)
+          .toBe(true);
+        expect((await getStoreTaskByTitle(client, stored2))?.isDone).toBe(true);
+        expect((await getStoreTaskByTitle(client, stored3))?.isDone).toBe(false);
+        expect(await client.sync.hasSyncError()).toBe(false);
+      }
     } finally {
-      if (clientA) await closeClient(clientA);
-      if (clientB) await closeClient(clientB);
+      for (const client of clients) await closeClient(client);
     }
   });
 
   /**
-   * Test: Title edit conflict with encryption resolves correctly
+   * Title edit conflict with encryption: the earlier write is the rejected one
    *
-   * Tests that more complex entity changes (title edits) also resolve
-   * correctly with encryption enabled.
+   * A renames first, B later. A's upload is held until B uploaded, so the
+   * server rejects A's op, and A's earlier title loses LWW to B's title.
    */
   test('Title edit conflict with encryption resolves correctly', async ({
     browser,
@@ -299,113 +240,60 @@ test.describe('@supersync @encryption Encryption + Conflict Resolution', () => {
     serverHealthy,
   }) => {
     void serverHealthy;
-    let clientA: SimulatedE2EClient | null = null;
-    let clientB: SimulatedE2EClient | null = null;
+    const clients: SimulatedE2EClient[] = [];
 
     try {
-      const user = await createTestUser(testRunId);
-      const baseConfig = getSuperSyncConfig(user);
-      const encryptionPassword = `title-conflict-${testRunId}`;
-      const syncConfig = {
-        ...baseConfig,
-        isEncryptionEnabled: true,
-        password: encryptionPassword,
-      };
+      clients.push(
+        ...(await setupEncryptedClients(
+          browser,
+          baseURL!,
+          testRunId,
+          `title-conflict-${testRunId}`,
+          ['A', 'B'],
+        )),
+      );
+      const [clientA, clientB] = clients;
+      const traffic = recordSyncTraffic(clients);
 
-      // Setup clients with encryption
-      clientA = await createSimulatedClient(browser, baseURL!, 'A', testRunId);
-      await clientA.sync.setupSuperSync(syncConfig);
-
-      clientB = await createSimulatedClient(browser, baseURL!, 'B', testRunId);
-      await clientB.sync.setupSuperSync(syncConfig);
-
-      await clientA.sync.syncAndWait();
-      await clientB.sync.syncAndWait();
-
-      // Create initial task
       const originalTitle = `TitleConflict-${testRunId}`;
       const titleA = `A-Edited-${testRunId}`;
       const titleB = `B-Edited-${testRunId}`;
-
       await clientA.workView.addTask(originalTitle);
       await clientA.sync.syncAndWait();
-
       await clientB.sync.syncAndWait();
       await waitForTask(clientB.page, originalTitle);
-      console.log('[TitleConflict] Initial task synced');
 
-      // Client A edits title
-      const taskLocatorA = clientA.page
-        .locator(`task:not(.ng-animating):has-text("${originalTitle}")`)
-        .first();
-      await taskLocatorA.dblclick();
-      const editInputA = clientA.page.locator(
-        'input.mat-mdc-input-element:focus, textarea:focus',
-      );
-      await editInputA.waitFor({ state: 'visible', timeout: 5000 });
-      await editInputA.fill(titleA);
-      await clientA.page.keyboard.press('Enter');
-      await clientA.page.waitForTimeout(500);
-      console.log('[TitleConflict] Client A edited title');
-
-      // Wait for timestamp gap
+      await renameTask(clientA, originalTitle, titleA);
       await clientB.page.waitForTimeout(1000);
+      await renameTask(clientB, originalTitle, titleB);
 
-      // Client B edits title (concurrent, later timestamp)
-      const taskLocatorB = clientB.page
-        .locator(`task:not(.ng-animating):has-text("${originalTitle}")`)
-        .first();
-      await taskLocatorB.dblclick();
-      const editInputB = clientB.page.locator(
-        'input.mat-mdc-input-element:focus, textarea:focus',
-      );
-      await editInputB.waitFor({ state: 'visible', timeout: 5000 });
-      await editInputB.fill(titleB);
-      await clientB.page.keyboard.press('Enter');
-      await clientB.page.waitForTimeout(500);
-      console.log('[TitleConflict] Client B edited title (later timestamp)');
+      // Positive control: each client holds its own title before syncing.
+      expect(await getTaskTitleFromState(clientA, titleA)).toBe(titleA);
+      expect(await getTaskTitleFromState(clientB, titleB)).toBe(titleB);
 
-      // Sync sequence
-      await clientA.sync.syncAndWait();
+      await syncWithServerConflict(clientA, [clientB], traffic);
       await clientB.sync.syncAndWait();
       await clientA.sync.syncAndWait();
-      await clientB.sync.syncAndWait();
 
-      // Wait for convergence
-      await clientA.page.waitForTimeout(1000);
-      await clientB.page.waitForTimeout(1000);
-
-      // Verify no errors
-      const hasErrorA = await clientA.sync.hasSyncError();
-      const hasErrorB = await clientB.sync.hasSyncError();
-      expect(hasErrorA).toBe(false);
-      expect(hasErrorB).toBe(false);
-
-      // B's title should win (later timestamp) - both clients should have titleB
-      const taskWithBTitleOnA = clientA.page.locator(
-        `task:not(.ng-animating):has-text("${titleB}")`,
-      );
-      const taskWithBTitleOnB = clientB.page.locator(
-        `task:not(.ng-animating):has-text("${titleB}")`,
-      );
-
-      await expect(taskWithBTitleOnA.first()).toBeVisible({ timeout: 10000 });
-      await expect(taskWithBTitleOnB.first()).toBeVisible({ timeout: 10000 });
-
-      console.log(
-        '[TitleConflict] ✓ Title conflict resolved correctly - B won (later ts)',
-      );
+      // B's title wins (later timestamp); A's title is gone everywhere.
+      for (const client of clients) {
+        await expect.poll(() => getTaskTitleFromState(client, titleB)).toBe(titleB);
+        expect(await getTaskTitleFromState(client, titleA)).toBeNull();
+        // The original (prefixed) title is gone as well.
+        expect(await getStoreTitlesContaining(client, originalTitle)).toEqual([]);
+        expect(await client.sync.hasSyncError()).toBe(false);
+      }
     } finally {
-      if (clientA) await closeClient(clientA);
-      if (clientB) await closeClient(clientB);
+      for (const client of clients) await closeClient(client);
     }
   });
 
   /**
-   * Test: Three clients with encryption converge correctly
+   * Three clients with encryption converge on the latest write
    *
-   * Tests that the existingClock mechanism works when more than two clients
-   * are involved in conflicts.
+   * A, B and C rename the same task about 1 s apart (C latest). C's upload is
+   * held until A and B uploaded, so the server rejects C's op; C's title must
+   * still win and reach every client.
    */
   test('Three clients with encryption converge correctly', async ({
     browser,
@@ -414,108 +302,47 @@ test.describe('@supersync @encryption Encryption + Conflict Resolution', () => {
     serverHealthy,
   }) => {
     void serverHealthy;
-    let clientA: SimulatedE2EClient | null = null;
-    let clientB: SimulatedE2EClient | null = null;
-    let clientC: SimulatedE2EClient | null = null;
+    const clients: SimulatedE2EClient[] = [];
 
     try {
-      const user = await createTestUser(testRunId);
-      const baseConfig = getSuperSyncConfig(user);
-      const encryptionPassword = `three-way-${testRunId}`;
-      const syncConfig = {
-        ...baseConfig,
-        isEncryptionEnabled: true,
-        password: encryptionPassword,
-      };
+      clients.push(
+        ...(await setupEncryptedClients(
+          browser,
+          baseURL!,
+          testRunId,
+          `three-way-${testRunId}`,
+          ['A', 'B', 'C'],
+        )),
+      );
+      const [clientA, clientB, clientC] = clients;
+      const traffic = recordSyncTraffic(clients);
 
-      // Setup all three clients with encryption
-      clientA = await createSimulatedClient(browser, baseURL!, 'A', testRunId);
-      await clientA.sync.setupSuperSync(syncConfig);
-
-      clientB = await createSimulatedClient(browser, baseURL!, 'B', testRunId);
-      await clientB.sync.setupSuperSync(syncConfig);
-
-      clientC = await createSimulatedClient(browser, baseURL!, 'C', testRunId);
-      await clientC.sync.setupSuperSync(syncConfig);
-
-      // Initial sync
-      await clientA.sync.syncAndWait();
-      await clientB.sync.syncAndWait();
-      await clientC.sync.syncAndWait();
-      console.log('[ThreeWay] All three clients set up with encryption');
-
-      // Create task on A
       const taskName = `ThreeWayTask-${testRunId}`;
       await clientA.workView.addTask(taskName);
       await clientA.sync.syncAndWait();
+      for (const client of [clientB, clientC]) {
+        await client.sync.syncAndWait();
+        await waitForTask(client.page, taskName);
+      }
 
-      // B and C sync to get task
-      await clientB.sync.syncAndWait();
-      await clientC.sync.syncAndWait();
-      await waitForTask(clientB.page, taskName);
-      await waitForTask(clientC.page, taskName);
-      console.log('[ThreeWay] All clients have the task');
+      const titles = clients.map((client) => `${taskName}-${client.clientName}`);
+      for (const [i, client] of clients.entries()) {
+        if (i > 0) await client.page.waitForTimeout(1000);
+        await renameTask(client, taskName, titles[i]);
+      }
 
-      // All three clients make concurrent changes
-      const taskLocatorA = clientA.page
-        .locator(`task:not(.ng-animating):has-text("${taskName}")`)
-        .first();
-      await taskLocatorA.hover();
-      await taskLocatorA.locator('done-toggle').click();
+      await syncWithServerConflict(clientC, [clientA, clientB], traffic);
+      for (const client of clients) await client.sync.syncAndWait();
 
-      const taskLocatorB = clientB.page
-        .locator(`task:not(.ng-animating):has-text("${taskName}")`)
-        .first();
-      await taskLocatorB.hover();
-      await taskLocatorB.locator('done-toggle').click();
-
-      const taskLocatorC = clientC.page
-        .locator(`task:not(.ng-animating):has-text("${taskName}")`)
-        .first();
-      await taskLocatorC.hover();
-      await taskLocatorC.locator('done-toggle').click();
-
-      console.log('[ThreeWay] All three clients made concurrent changes');
-
-      // Sequential sync with conflict resolution
-      await clientA.sync.syncAndWait();
-      await clientB.sync.syncAndWait();
-      await clientC.sync.syncAndWait();
-
-      // Final sync round to ensure convergence
-      await clientA.sync.syncAndWait();
-      await clientB.sync.syncAndWait();
-      await clientC.sync.syncAndWait();
-
-      // Wait for state to settle
-      await clientA.page.waitForTimeout(1000);
-
-      // Verify no errors on any client
-      const hasErrorA = await clientA.sync.hasSyncError();
-      const hasErrorB = await clientB.sync.hasSyncError();
-      const hasErrorC = await clientC.sync.hasSyncError();
-      expect(hasErrorA).toBe(false);
-      expect(hasErrorB).toBe(false);
-      expect(hasErrorC).toBe(false);
-
-      // All clients should have consistent state
-      await expect(taskLocatorA).toHaveClass(/isDone/);
-      await expect(taskLocatorB).toHaveClass(/isDone/);
-      await expect(taskLocatorC).toHaveClass(/isDone/);
-
-      // Task counts should match
-      const countA = await clientA.page.locator(`task:has-text("${taskName}")`).count();
-      const countB = await clientB.page.locator(`task:has-text("${taskName}")`).count();
-      const countC = await clientC.page.locator(`task:has-text("${taskName}")`).count();
-      expect(countA).toBe(1);
-      expect(countB).toBe(1);
-      expect(countC).toBe(1);
-
-      console.log('[ThreeWay] ✓ Three clients with encryption converged correctly');
+      for (const client of clients) {
+        await expect.poll(() => getTaskTitleFromState(client, titles[2])).toBe(titles[2]);
+        expect(await getTaskTitleFromState(client, titles[0])).toBeNull();
+        expect(await getTaskTitleFromState(client, titles[1])).toBeNull();
+        expect(await getStoreTitlesContaining(client, taskName)).toEqual([titles[2]]);
+        expect(await client.sync.hasSyncError()).toBe(false);
+      }
     } finally {
-      if (clientA) await closeClient(clientA);
-      if (clientB) await closeClient(clientB);
-      if (clientC) await closeClient(clientC);
+      for (const client of clients) await closeClient(client);
     }
   });
 });

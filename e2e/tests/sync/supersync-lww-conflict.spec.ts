@@ -11,8 +11,17 @@ import {
   markSubtaskDone,
   expandTask,
   getTaskElement,
+  getTaskTitleFromState,
   type SimulatedE2EClient,
 } from '../../utils/supersync-helpers';
+import {
+  createdTitle,
+  getStoreTaskByTitle,
+  holdFirstUpload,
+  readStoreTasks,
+  recordSyncTraffic,
+  syncSingleCycle,
+} from '../../utils/audit-concurrency-helpers';
 import {
   expectSubtaskDone,
   expectSubtaskNotDone,
@@ -261,24 +270,21 @@ test.describe('@supersync SuperSync LWW Conflict Resolution', () => {
       await waitForTask(clientB.page, taskName);
       await waitForTask(clientC.page, taskName);
 
-      // 3. All three clients make concurrent changes (mark as done)
-      const taskLocatorA = clientA.page
-        .locator(`task:not(.ng-animating):has-text("${taskName}")`)
-        .first();
-      await taskLocatorA.hover();
-      await taskLocatorA.locator('done-toggle').click();
-
-      const taskLocatorB = clientB.page
-        .locator(`task:not(.ng-animating):has-text("${taskName}")`)
-        .first();
-      await taskLocatorB.hover();
-      await taskLocatorB.locator('done-toggle').click();
-
-      const taskLocatorC = clientC.page
-        .locator(`task:not(.ng-animating):has-text("${taskName}")`)
-        .first();
-      await taskLocatorC.hover();
-      await taskLocatorC.locator('done-toggle').click();
+      // 3. All three clients write distinct titles ~1 s apart (C is latest).
+      const titles = {
+        A: `${taskName}-fromA`,
+        B: `${taskName}-fromB`,
+        C: `${taskName}-fromC`,
+      };
+      await renameTask(clientA, taskName, titles.A);
+      await clientA.page.waitForTimeout(1000);
+      await renameTask(clientB, taskName, titles.B);
+      await clientB.page.waitForTimeout(1000);
+      await renameTask(clientC, taskName, titles.C);
+      // Positive control: each store holds its own title before syncing.
+      expect(await getTaskTitleFromState(clientA, titles.A)).toBe(titles.A);
+      expect(await getTaskTitleFromState(clientB, titles.B)).toBe(titles.B);
+      expect(await getTaskTitleFromState(clientC, titles.C)).toBe(titles.C);
 
       // 4. Sequential syncs (LWW auto-resolves conflicts)
       await clientA.sync.syncAndWait();
@@ -290,18 +296,15 @@ test.describe('@supersync SuperSync LWW Conflict Resolution', () => {
       await clientB.sync.syncAndWait();
       await clientC.sync.syncAndWait();
 
-      // 6. Verify all three clients have identical state
-      await expect(taskLocatorA).toHaveClass(/isDone/);
-      await expect(taskLocatorB).toHaveClass(/isDone/);
-      await expect(taskLocatorC).toHaveClass(/isDone/);
-
-      // Count tasks should be identical
-      const countA = await clientA.page.locator('task').count();
-      const countB = await clientB.page.locator('task').count();
-      const countC = await clientC.page.locator('task').count();
-
-      expect(countA).toBe(countB);
-      expect(countB).toBe(countC);
+      // 6. C's latest title wins everywhere; A's and B's are gone.
+      for (const client of [clientA, clientB, clientC]) {
+        await expect.poll(() => getTaskTitleFromState(client, titles.C)).toBe(titles.C);
+        expect(await getTaskTitleFromState(client, titles.A)).toBeNull();
+        expect(await getTaskTitleFromState(client, titles.B)).toBeNull();
+        expect(
+          (await readStoreTasks(client)).filter((t) => t.title.includes(taskName)),
+        ).toHaveLength(1);
+      }
 
       console.log('[LWW-3Way] ✓ All three clients converged via LWW auto-resolution');
     } finally {
@@ -408,23 +411,16 @@ test.describe('@supersync SuperSync LWW Conflict Resolution', () => {
   /**
    * Scenario: LWW Local-Win Op Uploaded in Same Sync Cycle
    *
-   * This is the critical test for the fix in sync.service.ts that ensures
-   * local-win update ops are uploaded immediately in the same sync cycle,
-   * not deferred to the next sync.
+   * The local-win update op must be re-uploaded inside the sync cycle that
+   * created it (sync-wrapper.service.ts, MAX_LWW_REUPLOAD_RETRIES), not
+   * deferred to the next sync. A sync downloads before it uploads, so the
+   * conflict is created during A's upload: A's POST is held, and B uploads
+   * its earlier rename in between. The server then rejects A's upload as
+   * CONFLICT_CONCURRENT, A's later title wins LWW, and A must upload the
+   * local-win op before that one cycle ends.
    *
-   * Actions:
-   * 1. Client A creates Task with title "Original", syncs
-   * 2. Client B syncs (download task)
-   * 3. Client B edits title to "B-Title" (earlier timestamp T1)
-   * 4. Wait 1 second for timestamp gap
-   * 5. Client A edits title to "A-Title" (later timestamp T2, T2 > T1)
-   * 6. Client B syncs (uploads "B-Title" to server)
-   * 7. Client A syncs ONCE (should: detect conflict, LWW says A wins, re-upload A-Title)
-   * 8. Client B syncs ONCE (should get "A-Title" if fix works)
-   * 9. Verify B has "A-Title" - NOT "B-Title"
-   *
-   * Before the fix: B would keep "B-Title" because A's local-win op wasn't uploaded
-   * After the fix: B gets "A-Title" because A re-uploads in the same sync cycle
+   * One cycle is SuperSyncPage.triggerSync(): no syncAndWait() trailing flush,
+   * which would upload a deferred op and hide the bug.
    */
   test('LWW: Local-win update op is uploaded in same sync cycle', async ({
     browser,
@@ -439,200 +435,49 @@ test.describe('@supersync SuperSync LWW Conflict Resolution', () => {
       const user = await createTestUser(testRunId);
       const syncConfig = getSuperSyncConfig(user);
 
-      // Setup clients
       clientA = await createSimulatedClient(browser, appUrl, 'A', testRunId);
       await clientA.sync.setupSuperSync(syncConfig);
-
       clientB = await createSimulatedClient(browser, appUrl, 'B', testRunId);
       await clientB.sync.setupSuperSync(syncConfig);
 
-      // 1. Client A creates task with original title
       const originalTitle = `Original-${testRunId}`;
       const titleA = `A-Title-${testRunId}`;
       const titleB = `B-Title-${testRunId}`;
 
       await clientA.workView.addTask(originalTitle);
       await clientA.sync.syncAndWait();
-
-      // 2. Client B downloads the task
       await clientB.sync.syncAndWait();
       await waitForTask(clientB.page, originalTitle);
 
-      // 3. Client B edits title FIRST (earlier timestamp)
-      const taskLocatorB = clientB.page
-        .locator(`task:not(.ng-animating):has-text("${originalTitle}")`)
-        .first();
-      await taskLocatorB.dblclick(); // Double-click to edit
-      const editInputB = clientB.page.locator(
-        'input.mat-mdc-input-element:focus, textarea:focus',
-      );
-      await editInputB.waitFor({ state: 'visible', timeout: 5000 });
-      await editInputB.fill(titleB);
-      await clientB.page.keyboard.press('Enter');
-      await clientB.page.waitForTimeout(500);
-
-      // Verify B has the new title locally
-      await waitForTask(clientB.page, titleB);
-
-      // 4. Wait for timestamp gap (ensures A's timestamp > B's timestamp)
+      // B writes first (earlier), A later, so A wins LWW.
+      await renameTask(clientB, originalTitle, titleB);
       await clientB.page.waitForTimeout(1000);
+      await renameTask(clientA, originalTitle, titleA);
 
-      // 5. Client A edits title (later timestamp)
-      const taskLocatorA = clientA.page
-        .locator(`task:not(.ng-animating):has-text("${originalTitle}")`)
-        .first();
-      await taskLocatorA.dblclick(); // Double-click to edit
-      const editInputA = clientA.page.locator(
-        'input.mat-mdc-input-element:focus, textarea:focus',
-      );
-      await editInputA.waitFor({ state: 'visible', timeout: 5000 });
-      await editInputA.fill(titleA);
-      await clientA.page.keyboard.press('Enter');
-      await clientA.page.waitForTimeout(500);
+      const b = clientB;
+      const traffic = recordSyncTraffic([clientA, clientB]);
+      const hold = await holdFirstUpload(clientA, async () => {
+        await b.sync.syncAndWait();
+      });
+      const pendingAfterOneCycle = await syncSingleCycle(clientA);
+      await hold.finish();
 
-      // Verify A has the new title locally
-      await waitForTask(clientA.page, titleA);
+      await expect.poll(() => traffic.rejections).toContain('A:CONFLICT_CONCURRENT');
+      // The local-win op left in the same cycle: nothing is pending, and A
+      // uploaded a second time (rejected original + local-win op), boundedly.
+      expect(pendingAfterOneCycle).toBe(0);
+      expect(traffic.posts.A).toBeGreaterThanOrEqual(2);
+      expect(traffic.posts.A).toBeLessThanOrEqual(4);
+      expect(await getTaskTitleFromState(clientA, titleA)).toBe(titleA);
 
-      // 6. Client B syncs FIRST (uploads "B-Title" to server)
-      await clientB.sync.syncAndWait();
-
-      // 7. Client A syncs ONCE
-      // This should:
-      // - Upload A's "A-Title" op
-      // - Server rejects it (conflict with B's "B-Title")
-      // - A receives B's op as piggybacked
-      // - LWW: A's timestamp > B's, so A wins
-      // - A creates local-win UPDATE op with "A-Title"
-      // - FIX: A immediately re-uploads this op
-      await clientA.sync.syncAndWait();
-
-      // 8. Client B syncs ONCE to receive A's update
-      // CRITICAL: If the fix works, B gets "A-Title" here
-      // If the fix is broken, B still has "B-Title"
-      await clientB.sync.syncAndWait();
-
-      // 9. Verify BOTH clients have A's title (the winner)
-      const taskWithATitleOnA = clientA.page.locator(
-        `task:not(.ng-animating):has-text("${titleA}")`,
-      );
-      const taskWithATitleOnB = clientB.page.locator(
-        `task:not(.ng-animating):has-text("${titleA}")`,
-      );
-
-      // A should have A-Title (it's the local state)
-      await expect(taskWithATitleOnA.first()).toBeVisible({ timeout: 5000 });
-
-      // B should have A-Title (received from server via local-win update op)
-      // This is the KEY assertion that fails without the fix
-      await expect(taskWithATitleOnB.first()).toBeVisible({ timeout: 5000 });
-
-      console.log(
-        '[LWW-Single-Cycle] ✓ Local-win op uploaded in same sync cycle, B has A-Title',
-      );
-    } finally {
-      if (clientA) await closeClient(clientA);
-      if (clientB) await closeClient(clientB);
-    }
-  });
-
-  /**
-   * Scenario: LWW Update Action Updates UI Without Reload
-   *
-   * This test specifically verifies the lwwUpdateMetaReducer fix. When a client
-   * receives an LWW Update operation from another client, the NgRx store should
-   * be updated immediately, and the UI should reflect the change without needing
-   * a page reload.
-   *
-   * Before the fix: UI wouldn't update because [TASK] LWW Update action wasn't handled
-   * After the fix: lwwUpdateMetaReducer handles the action and updates the store
-   *
-   * Actions:
-   * 1. Client A creates Task, syncs
-   * 2. Client B syncs (download task)
-   * 3. Client A edits title and adds notes
-   * 4. Client A syncs (uploads changes)
-   * 5. Client B syncs (receives LWW Update via piggybacked op)
-   * 6. Verify B's UI shows A's changes WITHOUT reload
-   */
-  test('LWW: UI updates immediately after receiving LWW Update operation', async ({
-    browser,
-    baseURL,
-    testRunId,
-  }) => {
-    const appUrl = baseURL || 'http://localhost:4242';
-    let clientA: SimulatedE2EClient | null = null;
-    let clientB: SimulatedE2EClient | null = null;
-
-    try {
-      const user = await createTestUser(testRunId);
-      const syncConfig = getSuperSyncConfig(user);
-
-      // Setup clients
-      clientA = await createSimulatedClient(browser, appUrl, 'A', testRunId);
-      await clientA.sync.setupSuperSync(syncConfig);
-
-      clientB = await createSimulatedClient(browser, appUrl, 'B', testRunId);
-      await clientB.sync.setupSuperSync(syncConfig);
-
-      // 1. Client A creates task with original title
-      const originalTitle = `UI-Update-${testRunId}`;
-      const updatedTitle = `Updated-UI-${testRunId}`;
-
-      await clientA.workView.addTask(originalTitle);
-      await clientA.sync.syncAndWait();
-
-      // 2. Client B downloads the task
-      await clientB.sync.syncAndWait();
-      await waitForTask(clientB.page, originalTitle);
-
-      // Verify B has the original title
-      const taskOnB = clientB.page
-        .locator(`task:not(.ng-animating):has-text("${originalTitle}")`)
-        .first();
-      await expect(taskOnB).toBeVisible({ timeout: 5000 });
-
-      // 3. Client A edits the title
-      const taskOnA = clientA.page
-        .locator(`task:not(.ng-animating):has-text("${originalTitle}")`)
-        .first();
-      await taskOnA.dblclick(); // Double-click to edit
-      const editInput = clientA.page.locator(
-        'input.mat-mdc-input-element:focus, textarea:focus',
-      );
-      await editInput.waitFor({ state: 'visible', timeout: 5000 });
-      await editInput.fill(updatedTitle);
-      await clientA.page.keyboard.press('Enter');
-      await clientA.page.waitForTimeout(500);
-
-      // Verify A has the updated title
-      await waitForTask(clientA.page, updatedTitle);
-
-      // 4. Client A syncs (uploads the change)
-      await clientA.sync.syncAndWait();
-
-      // 5. Client B syncs (receives A's change)
-      // This is where the lwwUpdateMetaReducer fix kicks in:
-      // B receives [TASK] LWW Update action, and the meta-reducer updates the store
-      await clientB.sync.syncAndWait();
-
-      // 6. Verify B's UI shows A's updated title WITHOUT reload
-      // This is the KEY assertion - if lwwUpdateMetaReducer isn't working,
-      // B would still show the old title until a page reload
-      const updatedTaskOnB = clientB.page.locator(
-        `task:not(.ng-animating):has-text("${updatedTitle}")`,
-      );
-
-      await expect(updatedTaskOnB.first()).toBeVisible({ timeout: 5000 });
-
-      // Also verify the old title is no longer visible
-      const oldTaskOnB = clientB.page.locator(
-        `task:not(.ng-animating):has-text("${originalTitle}")`,
-      );
-      await expect(oldTaskOnB).toHaveCount(0);
-
-      console.log(
-        '[LWW-UI-Update] ✓ UI updated immediately after receiving LWW Update operation',
-      );
+      // One cycle on B is enough to receive A's winning title.
+      expect(await syncSingleCycle(clientB)).toBe(0);
+      await expect.poll(() => getTaskTitleFromState(clientB!, titleA)).toBe(titleA);
+      expect(await getTaskTitleFromState(clientB, titleB)).toBeNull();
+      test.info().annotations.push({
+        type: 'server rejections',
+        description: traffic.rejections.join(', '),
+      });
     } finally {
       if (clientA) await closeClient(clientA);
       if (clientB) await closeClient(clientB);
@@ -1489,17 +1334,15 @@ test.describe('@supersync SuperSync LWW Conflict Resolution', () => {
   /**
    * LWW: Subtask changes sync independently from parent changes
    *
-   * Tests that parent and subtask are separate entities where changes
-   * to one sync correctly without affecting the other.
+   * Parent and subtask are separate entities, so concurrent edits to each
+   * must both survive: neither is an LWW loser of the other.
    *
    * Scenario:
-   * 1. Client A creates parent task with subtask, syncs
-   * 2. Client B syncs (gets parent + subtask)
-   * 3. Client B marks subtask as done, syncs
-   * 4. Client A syncs (gets subtask done)
-   * 5. Client A adds another subtask, syncs
-   * 6. Client B syncs (gets new subtask)
-   * 7. Verify: Both clients have consistent state
+   * 1. A creates a parent with Sub1 and Sub2, syncs; B downloads
+   * 2. A marks Sub1 done while B renames the parent (no sync in between)
+   * 3. Sync A, B, A
+   * 4. Verify on both stores: Sub1 done, Sub2 open, parent renamed,
+   *    parent.subTaskIds unchanged
    */
   test('LWW: Subtask conflicts resolve independently from parent', async ({
     browser,
@@ -1521,71 +1364,71 @@ test.describe('@supersync SuperSync LWW Conflict Resolution', () => {
         password: encPassword,
       };
 
-      // Setup clients
       clientA = await createSimulatedClient(browser, appUrl, 'A', testRunId);
       await clientA.sync.setupSuperSync(syncConfig);
-
       clientB = await createSimulatedClient(browser, appUrl, 'B', testRunId);
       await clientB.sync.setupSuperSync(syncConfig);
 
-      // 1. Client A creates parent task
+      // 1. A creates the parent with two subtasks; B downloads them.
       const parentName = `Parent-${uniqueId}`;
+      const renamedParent = `ParentRenamed-${uniqueId}`;
+      const subtask1Name = `Sub1-${uniqueId}`;
+      const subtask2Name = `Sub2-${uniqueId}`;
       await clientA.workView.addTask(parentName);
       await waitForTask(clientA.page, parentName);
-      console.log('[SubtaskLWW] Client A created parent task');
-
-      // 2. Sync: A → Server → B
-      await clientA.sync.syncAndWait();
-      await clientB.sync.syncAndWait();
-      await waitForTask(clientB.page, parentName);
-      console.log('[SubtaskLWW] Both clients have parent task');
-
-      // 3. Client B adds subtask to parent
-      const subtask1Name = `Sub1-${uniqueId}`;
-      const parentTaskB = getTaskElement(clientB, parentName);
-      await clientB.workView.addSubTask(parentTaskB, subtask1Name);
-      await waitForTask(clientB.page, subtask1Name);
-      console.log('[SubtaskLWW] Client B added subtask');
-
-      // 4. Sync: B → Server → A
-      await clientB.sync.syncAndWait();
-      await clientA.sync.syncAndWait();
-
-      await expandTask(clientA, parentName);
+      await clientA.workView.addSubTask(
+        getTaskElement(clientA, parentName),
+        subtask1Name,
+      );
       await waitForTask(clientA.page, subtask1Name);
-      console.log('[SubtaskLWW] Client A received subtask from B');
-
-      // 5. Client A marks subtask as done
-      await markSubtaskDone(clientA, subtask1Name);
-      console.log('[SubtaskLWW] Client A marked subtask done');
-
-      // 6. Client A adds second subtask
-      const subtask2Name = `Sub2-${uniqueId}`;
       await clientA.workView.addSubTask(
         getTaskElement(clientA, parentName),
         subtask2Name,
       );
       await waitForTask(clientA.page, subtask2Name);
-      console.log('[SubtaskLWW] Client A added second subtask');
-
-      // 7. Sync: A → Server → B
       await clientA.sync.syncAndWait();
       await clientB.sync.syncAndWait();
-      console.log('[SubtaskLWW] Synced to Client B');
 
-      // 8. Final verification: both clients have consistent state
+      const storedParentName = createdTitle('A', testRunId, parentName);
+      const parentBefore = await getStoreTaskByTitle(clientA, storedParentName);
+      const sub1Before = await getStoreTaskByTitle(clientA, subtask1Name);
+      const sub2Before = await getStoreTaskByTitle(clientA, subtask2Name);
+      expect(parentBefore?.subTaskIds).toEqual([sub1Before?.id, sub2Before?.id]);
+      await expect
+        .poll(
+          async () => (await getStoreTaskByTitle(clientB!, storedParentName))?.subTaskIds,
+        )
+        .toEqual(parentBefore?.subTaskIds);
+
+      // 2. Concurrent edits on different entities, no sync in between.
       await expandTask(clientA, parentName);
-      await expandTask(clientB, parentName);
+      await markSubtaskDone(clientA, subtask1Name);
+      await expect
+        .poll(async () => (await getStoreTaskByTitle(clientA!, subtask1Name))?.isDone)
+        .toBe(true);
+      await renameTask(clientB, parentName, renamedParent);
+      expect(await getStoreTaskByTitle(clientB, renamedParent)).not.toBeNull();
+      expect((await getStoreTaskByTitle(clientB, subtask1Name))?.isDone).toBe(false);
 
-      // Subtask1 should be done on both clients
-      await expectSubtaskDone(clientA, subtask1Name, 10000);
+      // 3. Sync A, B, A.
+      await clientA.sync.syncAndWait();
+      await clientB.sync.syncAndWait();
+      await clientA.sync.syncAndWait();
+
+      // 4. Both edits survive on both clients.
+      for (const client of [clientA, clientB]) {
+        await expect
+          .poll(async () => (await getStoreTaskByTitle(client, renamedParent))?.id)
+          .toBe(parentBefore?.id);
+        const parent = await getStoreTaskByTitle(client, renamedParent);
+        expect(parent?.subTaskIds).toEqual(parentBefore?.subTaskIds);
+        expect(await getStoreTaskByTitle(client, storedParentName)).toBeNull();
+        expect((await getStoreTaskByTitle(client, subtask1Name))?.isDone).toBe(true);
+        expect((await getStoreTaskByTitle(client, subtask2Name))?.isDone).toBe(false);
+      }
+      await expandTask(clientB, renamedParent);
       await expectSubtaskDone(clientB, subtask1Name, 10000);
-
-      // Subtask2 should exist on both clients (not done)
-      await expectSubtaskNotDone(clientA, subtask2Name, 10000);
       await expectSubtaskNotDone(clientB, subtask2Name, 10000);
-
-      console.log('[SubtaskLWW] ✓ Parent and subtask changes synced independently');
     } finally {
       if (clientA) await closeClient(clientA);
       if (clientB) await closeClient(clientB);
@@ -1690,6 +1533,9 @@ test.describe('@supersync SuperSync LWW Conflict Resolution', () => {
         .first();
       await subtaskLocatorB.waitFor({ state: 'visible', timeout: 10000 });
       console.log('[OrphanSubtask] Subtask visible on Client B');
+      // Positive control for the store-absence checks below.
+      expect(await getTaskTitleFromState(clientA, subtaskName)).toBe(subtaskName);
+      expect(await getTaskTitleFromState(clientB, subtaskName)).toBe(subtaskName);
 
       // 3. Client A deletes the parent task
       // First, click elsewhere to clear any focus/selection
@@ -1788,6 +1634,13 @@ test.describe('@supersync SuperSync LWW Conflict Resolution', () => {
       await expect(
         clientB.page.locator(`task:has-text("${parentName}")`).first(),
       ).not.toBeVisible({ timeout: 5000 });
+
+      // The DOM checks above also pass for a subtask that only stopped
+      // rendering (e.g. an orphan); the store must not hold it at all.
+      for (const client of [clientA, clientB]) {
+        expect(await getTaskTitleFromState(client, subtaskName)).toBeNull();
+        expect(await getTaskTitleFromState(client, parentName)).toBeNull();
+      }
 
       console.log(
         '[CascadeDelete] ✓ Parent delete cascaded to subtask - data consistency maintained',

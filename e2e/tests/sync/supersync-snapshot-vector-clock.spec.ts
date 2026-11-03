@@ -6,8 +6,16 @@ import {
   createSimulatedClient,
   closeClient,
   waitForTask,
+  renameTask,
+  getTaskTitleFromState,
+  isFullStateOpType,
   type SimulatedE2EClient,
 } from '../../utils/supersync-helpers';
+import {
+  getServerOps,
+  holdFirstUpload,
+  recordSyncTraffic,
+} from '../../utils/audit-concurrency-helpers';
 
 // #7810 instrumentation: capture sync network traffic + state for Client A.
 // Captures full response bodies (not truncated) so encrypted op payloads are visible
@@ -267,61 +275,63 @@ test.describe('@supersync SuperSync Snapshot Vector Clock', () => {
       await waitForTask(clientC.page, taskB2);
       console.log('[SnapshotClock] Client C downloaded all tasks');
 
-      // === Phase 4: Client C makes changes ===
-      // This is the critical part - C's changes need to sync without getting stuck
-      console.log('[SnapshotClock] Phase 4: Client C makes changes');
+      // The snapshot optimization only applies behind a full-state op:
+      // setupSuperSync's encryption SYNC_IMPORT is that op here.
+      const serverOps = await getServerOps(user.userId);
+      const fullStateSeqs = serverOps
+        .filter((op) => isFullStateOpType(op.opType))
+        .map((op) => op.serverSeq);
+      console.log(
+        `[SnapshotClock] server ops=${serverOps.length} fullStateSeqs=${fullStateSeqs.join(',')}`,
+      );
+      expect(fullStateSeqs.length).toBeGreaterThan(0);
+
+      // === Phase 4: C's edit crosses a concurrent edit on the server ===
+      // A sync downloads before it uploads, so C's conflict needs A's upload
+      // to land between C's download and C's upload: C's POST is held while A
+      // syncs. A writes first, C later, so C wins LWW and its local-win op
+      // must dominate clocks C only knows from the snapshot download.
+      console.log('[SnapshotClock] Phase 4: C renames across a concurrent rename');
+      const titleA = `B1-fromA-${testRunId}`;
+      const titleC = `B1-fromC-${testRunId}`;
+      await renameTask(clientA, taskB1, titleA);
+      await clientC.page.waitForTimeout(1000);
+      await renameTask(clientC, taskB1, titleC);
       const taskC1 = `C1-${testRunId}`;
-      const taskC2 = `C2-${testRunId}`;
       await clientC.workView.addTask(taskC1);
       await waitForTask(clientC.page, taskC1);
-      await clientC.workView.addTask(taskC2);
-      await waitForTask(clientC.page, taskC2);
 
-      // Client C syncs - without the fix, this could get stuck in infinite loop
-      // Set a shorter timeout to catch infinite loops quickly
-      const syncPromise = clientC.sync.syncAndWait();
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(
-          () => reject(new Error('Sync timed out - possible infinite loop')),
-          30000,
-        ),
+      const traffic = recordSyncTraffic([clientA, clientB, clientC]);
+      const a = clientA;
+      const hold = await holdFirstUpload(clientC, async () => {
+        await a.sync.syncAndWait();
+      });
+      await clientC.sync.syncAndWait();
+      await hold.finish();
+      await expect.poll(() => traffic.rejections).toContain('C:CONFLICT_CONCURRENT');
+      // Bounded: the rejected batch plus one local-win re-upload, with slack.
+      expect(traffic.posts.C).toBeLessThanOrEqual(4);
+      console.log(
+        `[SnapshotClock] C posts=${traffic.posts.C} rejections=${traffic.rejections.join(',')}`,
       );
-
-      await Promise.race([syncPromise, timeoutPromise]);
-      console.log('[SnapshotClock] Client C synced successfully (no infinite loop)');
 
       // === Phase 5: Verify all clients converge ===
       console.log('[SnapshotClock] Phase 5: Verifying convergence');
-
-      // Sync all clients to converge
       await clientA.sync.syncAndWait();
       await clientB.sync.syncAndWait();
       await clientC.sync.syncAndWait();
 
-      // Wait for UI to settle
-      await clientA.page.waitForTimeout(1000);
-      await clientB.page.waitForTimeout(1000);
-      await clientC.page.waitForTimeout(1000);
-
-      // All tasks should be present on all clients
-      const allTasks = [taskA1, taskA2, taskA3, taskB1, taskB2, taskC1, taskC2];
-
-      for (const task of allTasks) {
-        await waitForTask(clientA.page, task);
-        await waitForTask(clientB.page, task);
-        await waitForTask(clientC.page, task);
+      for (const client of [clientA, clientB, clientC]) {
+        await expect.poll(() => getTaskTitleFromState(client, titleC)).toBe(titleC);
+        expect(await getTaskTitleFromState(client, titleA)).toBeNull();
+        for (const task of [taskA1, taskA2, taskA3, taskB2, taskC1]) {
+          await waitForTask(client.page, task);
+        }
+        const count = await client.page.locator(`task:has-text("${testRunId}")`).count();
+        expect(count).toBe(6);
       }
 
-      // Count tasks to ensure consistency
-      const countA = await clientA.page.locator(`task:has-text("${testRunId}")`).count();
-      const countB = await clientB.page.locator(`task:has-text("${testRunId}")`).count();
-      const countC = await clientC.page.locator(`task:has-text("${testRunId}")`).count();
-
-      expect(countA).toBe(7);
-      expect(countB).toBe(7);
-      expect(countC).toBe(7);
-
-      console.log('[SnapshotClock] ✓ All clients converged with 7 tasks each');
+      console.log("[SnapshotClock] ✓ All clients converged on C's title");
     } catch (e) {
       if (!testFailed) {
         console.log('[SnapshotClock-DEBUG] late failure — dumping diagnostics');
@@ -452,122 +462,6 @@ test.describe('@supersync SuperSync Snapshot Vector Clock', () => {
       if (clientB) await closeClient(clientB);
       if (clientC) await closeClient(clientC);
       if (clientD) await closeClient(clientD);
-    }
-  });
-
-  /**
-   * Scenario 3: Fresh client with concurrent modifications
-   *
-   * Tests the scenario where a fresh client joins and immediately
-   * has concurrent modifications with an existing client. This is
-   * the most likely scenario to trigger the infinite loop bug.
-   */
-  test('Fresh client handles concurrent modifications after snapshot', async ({
-    browser,
-    baseURL,
-    testRunId,
-  }) => {
-    test.setTimeout(120000);
-    let clientA: SimulatedE2EClient | null = null;
-    let clientB: SimulatedE2EClient | null = null;
-
-    try {
-      const user = await createTestUser(testRunId);
-      const syncConfig = getSuperSyncConfig(user);
-
-      // Client A: Establishes baseline
-      clientA = await createSimulatedClient(browser, baseURL!, 'A', testRunId);
-      await clientA.sync.setupSuperSync(syncConfig);
-
-      // Create initial tasks
-      const sharedTask = `Shared-${testRunId}`;
-      await clientA.workView.addTask(sharedTask);
-      await waitForTask(clientA.page, sharedTask);
-      await clientA.sync.syncAndWait();
-      console.log('[ConcurrentFresh] Client A created shared task');
-
-      // Add more operations to build up history
-      for (let i = 0; i < 5; i++) {
-        await clientA.workView.addTask(`Filler-${i}-${testRunId}`);
-      }
-      await clientA.sync.syncAndWait();
-      console.log('[ConcurrentFresh] Client A added filler tasks');
-
-      // Client B: Joins fresh
-      clientB = await createSimulatedClient(browser, baseURL!, 'B', testRunId);
-      await clientB.sync.setupSuperSync(syncConfig);
-      await clientB.sync.syncAndWait();
-
-      // Verify B has all tasks
-      await waitForTask(clientB.page, sharedTask);
-      console.log('[ConcurrentFresh] Client B joined and synced');
-
-      // Now create concurrent modifications
-      // Client A: Marks shared task as done
-      const taskLocatorA = clientA.page
-        .locator(`task:not(.ng-animating):has-text("${sharedTask}")`)
-        .first();
-      await taskLocatorA.hover();
-      await taskLocatorA.locator('done-toggle').click();
-      await expect(taskLocatorA).toHaveClass(/isDone/, { timeout: 5000 });
-      console.log('[ConcurrentFresh] Client A marked shared task done');
-
-      // Client B: Also marks shared task as done (concurrent change)
-      const taskLocatorB = clientB.page
-        .locator(`task:not(.ng-animating):has-text("${sharedTask}")`)
-        .first();
-      await taskLocatorB.hover();
-      await taskLocatorB.locator('done-toggle').click();
-      await expect(taskLocatorB).toHaveClass(/isDone/, { timeout: 5000 });
-      console.log('[ConcurrentFresh] Client B marked shared task done (concurrent)');
-
-      // Client A syncs first
-      await clientA.sync.syncAndWait();
-
-      // Client B syncs - this is where the infinite loop could occur
-      // without the snapshotVectorClock fix
-      const syncPromise = clientB.sync.syncAndWait();
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(
-          () => reject(new Error('Sync timed out - possible infinite loop')),
-          30000,
-        ),
-      );
-
-      await Promise.race([syncPromise, timeoutPromise]);
-      console.log('[ConcurrentFresh] Client B synced without infinite loop');
-
-      // Final sync to ensure convergence
-      await clientA.sync.syncAndWait();
-      await clientB.sync.syncAndWait();
-
-      // Wait for UI to settle
-      await clientA.page.waitForTimeout(500);
-      await clientB.page.waitForTimeout(500);
-
-      // Verify both clients show the shared task as done
-      await waitForTask(clientA.page, sharedTask);
-      await waitForTask(clientB.page, sharedTask);
-
-      const finalTaskA = clientA.page
-        .locator(`task:not(.ng-animating):has-text("${sharedTask}")`)
-        .first();
-      const finalTaskB = clientB.page
-        .locator(`task:not(.ng-animating):has-text("${sharedTask}")`)
-        .first();
-
-      await expect(finalTaskA).toHaveClass(/isDone/, { timeout: 5000 });
-      await expect(finalTaskB).toHaveClass(/isDone/, { timeout: 5000 });
-
-      // Verify task counts match
-      const countA = await clientA.page.locator(`task:has-text("${testRunId}")`).count();
-      const countB = await clientB.page.locator(`task:has-text("${testRunId}")`).count();
-      expect(countA).toBe(countB);
-
-      console.log('[ConcurrentFresh] ✓ Concurrent modifications resolved correctly');
-    } finally {
-      if (clientA) await closeClient(clientA);
-      if (clientB) await closeClient(clientB);
     }
   });
 });

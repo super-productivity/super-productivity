@@ -44,19 +44,20 @@ test.describe('@supersync SuperSync Stress Tests', () => {
   // Server health check is handled automatically by the supersync fixture
 
   /**
-   * Scenario: Bulk Sync (Slow Device Recovery)
+   * Scenario: Bulk download
    *
-   * Tests that many operations sync correctly without causing cascade conflicts.
-   * This verifies the fix for the "slow device cascade" problem where user
-   * interactions during sync would create operations with superseded vector clocks.
+   * Many operations from one client download to another in one sync. The
+   * slow-device cascade fix (user actions during a sync creating ops with
+   * superseded clocks) is unit-tested in hydration-state.service.spec.ts; this
+   * test makes no concurrent edits and does not exercise it.
    *
    * Actions:
    * 1. Client A creates many tasks (simulating a day's work)
    * 2. Client B syncs (downloads all operations at once)
    * 3. Verify B has all tasks from A
-   * 4. Verify no spurious conflicts or errors
+   * 4. Verify no errors
    */
-  test('Bulk sync: Many operations sync without cascade conflicts', async ({
+  test('Bulk sync: Many operations download in one sync', async ({
     browser,
     baseURL,
     testRunId,
@@ -150,7 +151,7 @@ test.describe('@supersync SuperSync Stress Tests', () => {
       expect(finalCountA).toBe(taskCount);
       expect(finalCountB).toBe(taskCount);
 
-      console.log('[BulkSync] Bulk sync completed without cascade conflicts');
+      console.log('[BulkSync] Bulk download completed');
     } finally {
       if (clientA) await closeClient(clientA);
       if (clientB) await closeClient(clientB);
@@ -168,17 +169,17 @@ test.describe('@supersync SuperSync Stress Tests', () => {
    * The OperationApplierService uses batched dispatches with event loop yields
    * to prevent NgRx from being overwhelmed by rapid dispatches.
    *
-   * This test also verifies the hasMorePiggyback fix: when the server's piggyback
-   * limit (100 ops) is reached, the client correctly fetches remaining ops via download.
+   * It does not reach a paging or piggyback boundary: the server's
+   * DOWNLOAD_PAGE_SIZE and PIGGYBACK_LIMIT are both 500, far above 197.
    *
    * Actions:
    * 1. Client A creates 50 tasks (50 operations)
    * 2. Client A marks 49 tasks as done (49 × 3 = 147 operations = 197 total)
    * 3. Client A syncs all 197 operations
-   * 4. Client B syncs (piggybacks 100, downloads remaining 97)
+   * 4. Client B syncs (downloads all ops in one page)
    * 5. Verify B has all 50 tasks with correct done states
    */
-  test('High volume sync: 197 operations sync correctly (tests piggyback limit)', async ({
+  test('High volume sync: 197 operations sync correctly', async ({
     browser,
     baseURL,
     testRunId,
@@ -331,52 +332,6 @@ test.describe('@supersync SuperSync Stress Tests', () => {
         .count();
       expect(taskCountB).toBe(taskCount);
       console.log(`[HighVolume] Client B has all ${taskCount} tasks`);
-
-      // DEBUG: Check NgRx store state directly using window.__NGRX_STORE__
-      const storeState = await clientB.page.evaluate((tid: string) => {
-        try {
-          // Access NgRx store via window if available
-          // @ts-expect-error - accessing app internals
-          const store = window.__NGRX_STORE__ || window.__store__;
-          if (store) {
-            const state = store.getState?.() || store.getValue?.();
-            if (state?.task?.entities) {
-              const allTasks = Object.values(state.task.entities) as Array<{
-                id: string;
-                title: string;
-                isDone: boolean;
-              }>;
-              const testTasks = allTasks.filter((t) => t?.title?.includes(tid));
-              const doneTasks = testTasks.filter((t) => t?.isDone);
-              return {
-                method: 'NgRx Store',
-                totalTestTasks: testTasks.length,
-                doneTestTasks: doneTasks.length,
-                sampleTasks: testTasks.slice(0, 3).map((t) => ({
-                  id: t.id,
-                  isDone: t.isDone,
-                })),
-              };
-            }
-          }
-
-          // Fallback to DOM check
-          const allTaskEls = document.querySelectorAll('task');
-          const testTasks = Array.from(allTaskEls).filter((el) =>
-            el.textContent?.includes(tid),
-          );
-          const doneTasks = testTasks.filter((el) => el.classList.contains('isDone'));
-          return {
-            method: 'DOM Fallback',
-            totalTestTasks: testTasks.length,
-            doneTestTasks: doneTasks.length,
-            sampleClasses: testTasks.slice(0, 3).map((el) => el.className),
-          };
-        } catch (e) {
-          return { error: String(e) };
-        }
-      }, testRunId);
-      console.log('[HighVolume] State check:', JSON.stringify(storeState));
 
       // Verify done status (49 should be done, 1 should be open)
       const doneCountB = await clientB.page
