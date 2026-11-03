@@ -6,6 +6,9 @@
     <color name="statusBar">#f8f8f7</color>
     <color name="navigationBar">#f8f8f7</color>
     <color name="windowBackground">#f8f8f7</color>
+    <!-- System splash checkmark (drawable/ic_splash.xml): the web boot
+         splash logo color (src/index.html, light --sp-fg). -->
+    <color name="splash_icon">#2C2C2C</color>
     <color name="webview_block_secondary">#424242</color>
 
     <!-- Home screen widget — mirrors the web app's theme tokens

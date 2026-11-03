@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android 12+ system splash icon (windowSplashScreenAnimatedIcon in
+  values/styles.xml). Just the checkmark, in the same color and size as the
+  web boot splash logo (src/index.html, .app-loading .logo: 72px, --sp-fg),
+  so the hand-off from the system splash to the web splash is seamless.
+
+  Splash icons without an icon background are drawn at 288dp and masked to
+  a 192dp circle; the glyph is 72dp, centred, well inside that mask.
+  Path and 64-unit viewBox match the launcher foreground and the web logo.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="288dp"
+    android:height="288dp"
+    android:viewportWidth="288"
+    android:viewportHeight="288">
+  <group
+      android:scaleX="1.125"
+      android:scaleY="1.125"
+      android:translateX="108"
+      android:translateY="108">
+    <path
+        android:fillColor="@color/splash_icon"
+        android:pathData="M0.6554,34.5828 L32.4523,63.8553 63.7915,0.9436 30.2226,47.722Z" />
+  </group>
+</vector>
