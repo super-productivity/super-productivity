@@ -1,6 +1,6 @@
 # Speak to plan: an optional AI command plugin
 
-Oct 31, 2026 · rev. 7 (Nov 3) · status: **proposal**, nothing implemented · branch
+Oct 31, 2026 · rev. 8 (Nov 3) · status: **implemented** in `packages/plugin-dev/ai-command` · branch
 `claude/ai-plan-today`
 
 **Related:** generative views, parked (`docs/plans/2026-10-30-generative-views.md`
@@ -15,7 +15,8 @@ rev. 4 fixed review findings. Rev. 5 adds extensive prior art, the maintainer's 
 local models, and one model call per request instead of an agent loop.
 Rev. 6 makes the preview optional ("Apply without review", § 8.1) and adds
 § 13 legal; a fresh-context review of rev. 5 and 6 is folded in. Rev. 7
-drops undo from the MVP. Rev. 3
+drops undo from the MVP. Rev. 8 bundles the plugin, off by default
+(maintainer decision). Rev. 3
 followed the maintainer's direction (2026-10-31): many
 users don't want AI, so it stays an optional plugin; and instead of one
 button, a shortcut opens a box you speak or type into, to add or change tasks
@@ -40,8 +41,7 @@ of those commands.
 - **Not:** a chat, a companion, nudges, check-ins, "you're behind", streaks,
   praise, background runs, or time-blocking. Each request stands alone; the
   only memory is the selection on screen ("move these to tomorrow").
-- **Where:** a first-party plugin listed in the plugin directory (one-click
-  install, not bundled), with the user's own Anthropic API key. No core or sync
+- **Where:** a first-party plugin, bundled and off by default (rev. 8), with the user's own Anthropic API key. No core or sync
   change; **two small, optional plugin API additions** (§ 4.1): open the
   plugin's panel from its shortcut, and add tasks without parsing `#tag` and
   `@date` out of titles.
@@ -268,8 +268,12 @@ Motion, Reclaim and earlier complaints: rev. 2 sources
 | Writing            | Existing actions directly                                          | `addTask`, `updateTask`, `deleteTask`, `startTracking`, `selectTask` exist (§ 7)                             |
 | Long-term cost     | Core code and a config slice forever                               | Two optional plugin API additions (§ 4.1)                                                                    |
 
-**Recommendation: a first-party plugin, listed in the plugin directory
-(`src/assets/community-plugins.json`), not bundled.** Source in
+**Decision (rev. 8): a first-party plugin, bundled and off by default.** The
+maintainer chose bundling over the directory listing recommended below: it
+ships in step with the host API it needs and skips the release-zip step.
+Bundled plugins load disabled until enabled in Settings → Plugins.
+Earlier recommendation: listed in the plugin directory
+(`src/assets/community-plugins.json`), not bundled. Source in
 `packages/plugin-dev/ai-command` (name open). One-click install needs a release
 zip, its `downloadUrl` and sha256, published like the Ridonculous plugins
 (#11367). Why not bundled and off by default: bundled plugins ship in every

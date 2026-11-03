@@ -208,8 +208,14 @@ const setupActions = {
       selectionIds(),
       state.host?.currentTaskId ?? null,
     );
-    const ctx = buildContext(snapshot, '');
-    return JSON.stringify({ request: '(your request)', context: ctx.sent }, null, 2);
+    // With text in the box this is the exact next request, word matches included.
+    const request = input.value.trim();
+    const ctx = buildContext(snapshot, request);
+    return JSON.stringify(
+      { request: request || '(your request)', context: ctx.sent },
+      null,
+      2,
+    );
   },
   close: (): void => setView({ kind: 'idle' }),
 };

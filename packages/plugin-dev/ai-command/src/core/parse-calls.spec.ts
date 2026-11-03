@@ -23,6 +23,15 @@ test('shapeError catches unknown tools, fields, missing and wrong types', () => 
     /items/,
   );
   assert.equal(shapeError({ name: 'update_task', input: { id: 't1', day: null } }), null);
+  // Other providers may send null for a required field; it must not crash later.
+  assert.match(
+    shapeError({ name: 'add_task', input: { ref: 'n1', title: null } }) || '',
+    /title is missing/,
+  );
+  assert.match(
+    shapeError({ name: 'say', input: { text: null } }) || '',
+    /text is missing/,
+  );
 });
 
 test('parseCalls sorts calls, drops nulls and keeps errors', () => {

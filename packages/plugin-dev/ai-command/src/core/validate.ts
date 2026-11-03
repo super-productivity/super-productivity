@@ -254,9 +254,18 @@ const parentsFirst = (adds: RawAdd[]): RawAdd[] => {
 const collect = <T>(results: Checked<T>[], dropped: string[]): T[] =>
   results.flatMap((r) => (!r ? [] : 'note' in r ? (dropped.push(r.note), []) : [r.row]));
 
-const isDayOnly = (row: ChangeRow): boolean =>
-  row.kind === 'update' &&
-  Object.keys(row).every((k) => ROW_META.includes(k) || k === 'dueDay');
+/** A day plan moves tasks onto or off today (overdue counts as today, § 6.4) and changes nothing else. */
+const isTodayMove = (row: ChangeRow, env: Env): boolean => {
+  if (
+    row.kind !== 'update' ||
+    !Object.keys(row).every((k) => ROW_META.includes(k) || k === 'dueDay')
+  ) {
+    return false;
+  }
+  const { day } = env.ctx.snapshot;
+  const from = plannedDayOf(env.byId.get(row.taskId) as TaskLike, day);
+  return (!!from && from <= day.todayStr) || row.dueDay === day.todayStr;
+};
 
 const EMPTY: Omit<Proposal, 'isTooMany'> = {
   changes: [],
@@ -303,7 +312,7 @@ export const validateCalls = (
       .map((s) => s.trim())
       .filter(Boolean)
       .join(' ') || null;
-  const isDayPlan = changes.length > 0 && changes.every(isDayOnly);
+  const isDayPlan = changes.length > 0 && changes.every((r) => isTodayMove(r, env));
   return {
     proposal: { changes, selection, say, dropped, isTooMany: false, isDayPlan },
     errors: parsed.errors,

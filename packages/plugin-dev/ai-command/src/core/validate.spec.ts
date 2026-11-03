@@ -80,6 +80,38 @@ test('update: aliases map back, no-op fields are dropped silently', () => {
   assert.equal(moved.isDayPlan, true);
 });
 
+test('day-only moves are a day plan only when they touch today', () => {
+  const s = snapshot([
+    task('a', { title: 'Alpha', dueDay: TODAY }),
+    task('b', { title: 'Bravo' }),
+    task('c', { title: 'Charlie', dueDay: '2026-11-05' }),
+    task('d', { title: 'Delta', dueDay: '2026-11-01' }),
+  ]);
+  const ctx = buildContext(s, 'alpha bravo charlie delta');
+  const alias = (id: string): string =>
+    [...ctx.aliasToId].find(([, taskId]) => taskId === id)?.[0] as string;
+  const plan = (moves: [string, string][]) =>
+    validateCalls(
+      ctx,
+      moves.map(([id, day]) => update({ id: alias(id), day })),
+    ).proposal;
+  assert.equal(
+    plan([
+      ['a', '2026-11-04'],
+      ['b', TODAY],
+    ]).isDayPlan,
+    true,
+  );
+  // "Move X to Friday" for a task that was never on today is a plain change.
+  const friday = plan([['c', '2026-11-06']]);
+  assert.equal(friday.changes.length, 1);
+  assert.equal(friday.isDayPlan, false);
+  assert.equal(plan([['b', '2026-11-06']]).isDayPlan, false);
+  // Overdue counts as on today (§ 6.4): moving it off is part of the plan.
+  assert.equal(plan([['d', '2026-11-04']]).isDayPlan, true);
+  assert.equal(plan([['d', 'none']]).isDayPlan, true);
+});
+
 test('update: "none" unplans; fixed times and deadlines keep their day', () => {
   const s = snapshot([
     task('a', { dueDay: TODAY }),

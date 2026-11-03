@@ -4,6 +4,7 @@
 
 import { readFileSync } from 'node:fs';
 import { ask } from '../core/ask';
+import { canApplyWithoutReview } from '../core/auto-apply';
 import { DEFAULT_MODEL, type RequestFn } from '../core/claude';
 import type { Named, Snapshot, TaskLike } from '../core/types';
 import { checkProposal, type Expect } from './check';
@@ -27,6 +28,8 @@ interface Outcome {
   name: string;
   ms: number;
   isValid: boolean;
+  /** The panel would have applied this answer without review (§ 8.1). */
+  isAuto: boolean;
   problems: string[];
 }
 
@@ -75,7 +78,7 @@ const runCase = async (
 ): Promise<Outcome> => {
   const started = Date.now();
   try {
-    const { proposal, calls } = await ask(
+    const { ctx, proposal, calls } = await ask(
       { request: fetchRequest, apiKey, model },
       toSnapshot(file, c.selection ?? []),
       c.request,
@@ -87,6 +90,7 @@ const runCase = async (
       name: c.name,
       ms,
       isValid,
+      isAuto: canApplyWithoutReview(proposal, ctx),
       problems: [...proposal.dropped, ...checkProposal(proposal, c.expect)],
     };
   } catch (err) {
@@ -94,6 +98,7 @@ const runCase = async (
       name: c.name,
       ms: Date.now() - started,
       isValid: false,
+      isAuto: false,
       problems: [String(err)],
     };
   }
@@ -108,10 +113,13 @@ const report = (model: string, outcomes: Outcome[]): void => {
   const valid = outcomes.filter((o) => o.isValid).length;
   console.log(
     `\n${model}: ${matched}/${outcomes.length} matched, ${valid} valid first try, ` +
-      `p50 ${percentile(ms, 0.5)} ms, p90 ${percentile(ms, 0.9)} ms`,
+      `p50 ${percentile(ms, 0.5)} ms, p90 ${percentile(ms, 0.9)} ms, ` +
+      `${outcomes.filter((o) => o.isAuto && o.problems.length).length} unsafe`,
   );
   for (const o of outcomes.filter((x) => x.problems.length)) {
-    console.log(`  ✗ ${o.name}: ${o.problems.join('; ')}`);
+    // A wrong answer that skips the review is what the § 8.1 gate must rule out.
+    const mark = o.isAuto ? '✗ UNSAFE' : '✗';
+    console.log(`  ${mark} ${o.name}: ${o.problems.join('; ')}`);
   }
 };
 

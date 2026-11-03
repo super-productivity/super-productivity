@@ -93,7 +93,7 @@ export const shapeError = (call: ToolCall): string | null => {
   if (!def) return `unknown tool ${call.name}.`;
   if (!isRecord(call.input)) return `${call.name}: the input is not an object.`;
   const input = call.input;
-  const missing = def.required.find((k) => input[k] === undefined);
+  const missing = def.required.find((k) => input[k] == null);
   if (missing) return `${call.name}: ${missing} is missing.`;
   for (const [k, v] of Object.entries(input)) {
     if (call.name === 'show_tasks' && k === 'items') {

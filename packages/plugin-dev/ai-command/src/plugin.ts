@@ -14,8 +14,10 @@ const API_KEY_SECRET = 'anthropicApiKey';
 // device must not turn it on for another (§ 8.1).
 const SETTINGS_SECRET = 'settings';
 
-// shortcut: the task tracked when the plugin loads is unknown until the next
-// currentTaskChange — read it once the API exposes the current task.
+// shortcut: an app start never resumes tracking (state-snapshot.service.ts
+// clears currentTaskId), so null is right then. Enabling the plugin mid-tracking
+// leaves the task unknown until the next currentTaskChange; read it once the
+// API exposes the current task.
 let currentTaskId: string | null = null;
 
 const readSettings = async (): Promise<Settings> =>

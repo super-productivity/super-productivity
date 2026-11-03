@@ -14,10 +14,20 @@ export const DEFAULT_SETTINGS: Settings = {
   isNoticeAccepted: false,
 };
 
+const parseJson = (raw: string | null): Partial<Settings> | null => {
+  try {
+    const value: unknown = raw ? JSON.parse(raw) : null;
+    return value && typeof value === 'object' ? (value as Partial<Settings>) : null;
+  } catch {
+    // A corrupt value must not lock the panel; the next save overwrites it.
+    return null;
+  }
+};
+
 /** Reads stored settings; unknown or broken values fall back to the defaults. */
 export const parseSettings = (raw: string | null): Settings => {
-  if (!raw) return DEFAULT_SETTINGS;
-  const parsed = JSON.parse(raw) as Partial<Settings>;
+  const parsed = parseJson(raw);
+  if (!parsed) return DEFAULT_SETTINGS;
   return {
     model: MODELS.some((m) => m.id === parsed.model)
       ? (parsed.model as string)

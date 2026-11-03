@@ -72,3 +72,19 @@ test('reports a wrong field, a missing selection item and a missing say', () => 
     ['a: done false ≠ true', 'selection lacks y', 'no say'],
   );
 });
+
+test('fails when the selection lists a task it must leave out', () => {
+  const p = proposal([], {
+    selection: {
+      title: 'Overdue',
+      items: [
+        { taskId: 'x', reason: 'r' },
+        { taskId: 'done1', reason: 'r' },
+      ],
+    },
+  });
+  assert.deepEqual(
+    checkProposal(p, { selectionIncludes: ['x'], selectionExcludes: ['done1', 'z'] }),
+    ['selection lists done1'],
+  );
+});

@@ -51,6 +51,14 @@ const notice = (actions: SetupActions): HTMLElement => {
       'AI can misunderstand. Check the changes before applying them. "Apply without review" applies small changes without asking.',
     ),
   );
+  box.append(
+    el(
+      'p',
+      'muted',
+      // Plugin shortcuts carry no default key (§ 12); binding is the host's job.
+      'To open AI Command with a key, set one under Settings → Keyboard Shortcuts → Plugin Shortcuts. Ctrl+Shift+K is free by default.',
+    ),
+  );
   const pre = el('pre');
   pre.hidden = true;
   box.append(

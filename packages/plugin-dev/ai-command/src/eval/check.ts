@@ -27,6 +27,8 @@ export interface Expect {
   allowTouch?: string[];
   /** The selection must list all of these. */
   selectionIncludes?: string[];
+  /** The selection must list none of these. */
+  selectionExcludes?: string[];
   isDayPlan?: boolean;
   isSay?: boolean;
 }
@@ -88,6 +90,9 @@ const otherProblems = (p: Proposal, e: Expect): string[] => {
     ...(e.deletes ?? [])
       .filter((id) => !of(p, 'delete').some((r) => r.taskId === id))
       .map((id) => `no delete of ${id}`),
+    ...(e.selectionExcludes ?? [])
+      .filter((id) => shown.has(id))
+      .map((id) => `selection lists ${id}`),
     ...(e.selectionIncludes ?? [])
       .filter((id) => !shown.has(id))
       .map((id) => `selection lacks ${id}`),

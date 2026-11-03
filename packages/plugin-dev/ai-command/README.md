@@ -35,6 +35,8 @@ ANTHROPIC_API_KEY=... npm run eval                                  # default mo
 ANTHROPIC_API_KEY=... EVAL_MODELS=claude-haiku-5-5,claude-sonnet-5-5 npm run eval
 ```
 
-The eval makes real, billed requests: about 16 per model, plus one retry per
+The eval makes real, billed requests: about 17 per model, plus one retry per
 unreadable answer. It reports per model how many cases matched, how many
-answers were valid on the first try, and p50/p90 latency.
+answers were valid on the first try, and p50/p90 latency. A failed case that would have
+applied without review is listed as unsafe. Don't turn on apply without review
+for a model with unsafe cases; nothing enforces this.
