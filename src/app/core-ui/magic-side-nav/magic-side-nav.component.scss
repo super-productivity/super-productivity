@@ -53,8 +53,9 @@
   }
 }
 
-// The nav's frame (its edge line) is already painted by the launch screen in
-// index.html, so only the items fade in, once their data is there.
+// The nav's frame needs no entrance: the boot splash covers it on desktop and
+// the bottom bar stands in for it on phones. Only the items fade in, once
+// their data is there.
 :host(.initial-enter) {
   .nav-list,
   .resize-handle {
