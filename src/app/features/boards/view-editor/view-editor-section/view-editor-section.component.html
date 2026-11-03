@@ -16,61 +16,58 @@
         cdkDragHandle
         >drag_indicator</mat-icon
       >
-      <div class="card-body">
-        <!-- The whole bar opens and closes the card, a larger target than the
-             chevron; the chevron is the keyboard control. -->
-        <header
-          class="section-header"
-          (click)="onHeaderClick($event)"
-        >
-          @if (isCollapsed() && panel().title) {
-            <!-- Collapsed, the title is part of the bar; open, it renames. -->
-            <span class="section-title title-static">{{ panel().title }}</span>
-          } @else {
-            <view-editor-title
-              class="section-title"
-              [title]="panel().title"
-              [label]="titleLabel() | translate"
-              [isFocusInitial]="isFocusInitial()"
-              (titleChange)="setTitle($event)"
-            ></view-editor-title>
-          }
-          <ng-container *ngTemplateOutlet="countTpl"></ng-container>
-          <ng-container *ngTemplateOutlet="actionsTpl"></ng-container>
-          @if (isCollapsible()) {
-            <button
-              class="section-toggle"
-              mat-icon-button
-              type="button"
-              [attr.aria-expanded]="!isCollapsed()"
-              [attr.aria-controls]="isCollapsed() ? null : bodyId"
-              [attr.aria-label]="
-                T.F.BOARDS.EDITOR.EDIT_RULES | translate: { title: panel().title }
-              "
-              (click)="openRules()"
-            >
-              <mat-icon>expand_more</mat-icon>
-            </button>
-          }
-        </header>
-        @if (isCollapsed()) {
-          <div
-            class="summary-wrap"
-            @expandFadeFast
-          >
-            <div
-              class="summary"
-              (click)="openRules()"
-            >
-              <ng-container *ngTemplateOutlet="summaryTpl"></ng-container>
-            </div>
-          </div>
+      <!-- The whole bar opens and closes the card, a larger target than the
+           chevron; the chevron is the keyboard control. -->
+      <header
+        class="section-header"
+        (click)="onHeaderClick($event)"
+      >
+        @if (isCollapsed() && panel().title) {
+          <!-- Collapsed, the title is part of the bar; open, it renames. -->
+          <span class="section-title title-static">{{ panel().title }}</span>
         } @else {
-          <div @expandFadeFast>
-            <ng-container *ngTemplateOutlet="rulesTpl"></ng-container>
-          </div>
+          <view-editor-title
+            class="section-title"
+            [title]="panel().title"
+            [label]="titleLabel() | translate"
+            [isFocusInitial]="isFocusInitial()"
+            (titleChange)="setTitle($event)"
+          ></view-editor-title>
         }
-      </div>
+        <ng-container *ngTemplateOutlet="actionsTpl"></ng-container>
+        @if (isCollapsible()) {
+          <button
+            class="section-toggle"
+            mat-icon-button
+            type="button"
+            [attr.aria-expanded]="!isCollapsed()"
+            [attr.aria-controls]="isCollapsed() ? null : bodyId"
+            [attr.aria-label]="
+              T.F.BOARDS.EDITOR.EDIT_RULES | translate: { title: panel().title }
+            "
+            (click)="openRules()"
+          >
+            <mat-icon>expand_more</mat-icon>
+          </button>
+        }
+      </header>
+      @if (isCollapsed()) {
+        <div
+          class="summary-wrap"
+          @expandFadeFast
+        >
+          <div
+            class="summary"
+            (click)="openRules()"
+          >
+            <ng-container *ngTemplateOutlet="summaryTpl"></ng-container>
+          </div>
+        </div>
+      } @else {
+        <div @expandFadeFast>
+          <ng-container *ngTemplateOutlet="rulesTpl"></ng-container>
+        </div>
+      }
     </div>
   }
 
@@ -96,10 +93,7 @@
         "
         (click)="openRules()"
       >
-        <span class="phone-row-head">
-          <span class="section-title">{{ panel().title }}</span>
-          <ng-container *ngTemplateOutlet="countTpl"></ng-container>
-        </span>
+        <span class="section-title">{{ panel().title }}</span>
         <span class="summary summary--one-line">
           <ng-container *ngTemplateOutlet="summaryTpl"></ng-container>
         </span>
@@ -222,9 +216,8 @@
       <div class="form-row">
         <span class="form-label">
           {{ T.F.BOARDS.EDITOR.RULES | translate }}
-          @if (mode() === 'flat') {
-            <ng-container *ngTemplateOutlet="countTpl"></ng-container>
-          }
+          <!-- What the rules match, live, beside them rather than in the bar. -->
+          <ng-container *ngTemplateOutlet="countTpl"></ng-container>
         </span>
         <div class="chips">
           @for (shown of parts(); track shown.part.rule) {

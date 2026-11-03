@@ -294,7 +294,7 @@ test.describe('View editor', () => {
     await expect(
       dialog.getByRole('group', { name: 'Column 1', exact: true }),
     ).toBeVisible();
-    // A collapsed card: its title, count and its rules in one line.
+    // A collapsed card: its title and its rules in one line.
     await expect(card(1).locator('.section-toggle')).toHaveAttribute(
       'aria-expanded',
       'false',
@@ -304,8 +304,6 @@ test.describe('View editor', () => {
     await expect(done.locator('.summary')).toContainText(
       'Backlog: Exclude backlog · Completion: Completed',
     );
-    // A "Completed" column counts its done tasks.
-    await expect(done.locator('.count')).toHaveText(/^\d+ done$/);
     await expect(done.locator('view-rule-chip')).toHaveCount(0);
 
     // Opening one by keyboard keeps the other open and the focus on its chevron.
@@ -319,6 +317,8 @@ test.describe('View editor', () => {
     await expect(doneToggle).toHaveAttribute('aria-expanded', 'true');
     await expect(done.locator('[data-rule="done"]')).toBeVisible();
     await expect(doneToggle).toBeFocused();
+    // Under its Rules label, a "Completed" column counts its done tasks.
+    await expect(done.locator('.form-label .count')).toHaveText(/^\d+ done$/);
     await expect(card(0).locator('[data-rule="done"]')).toBeVisible();
 
     // A click on its bar, the title too, closes it.

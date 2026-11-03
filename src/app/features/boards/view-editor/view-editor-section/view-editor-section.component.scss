@@ -7,11 +7,14 @@
 // On the dialog's own surface, outlined: a card is never darker than the
 // dialog (dark themes too). Open or closed, it looks the same; the chevron
 // and the rules tell them apart.
+// Two columns: the drag handle, centred on the bar, then the bar and below it
+// the summary or rules, all starting where the title starts.
 .card {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--s-half);
-  padding: var(--s-half) var(--s-half) var(--s-half) var(--s-half);
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  column-gap: var(--s-half);
+  padding: var(--s-half) var(--s) var(--s-half) var(--s-half);
   border: 1px solid var(--extra-border-color);
   border-radius: var(--card-border-radius);
   background: transparent;
@@ -22,22 +25,17 @@
   --view-editor-label-w: 64px;
 }
 
+.card > :not(.drag-handle) {
+  grid-column: 2;
+}
+
 .drag-handle {
   flex: 0 0 auto;
-  margin-top: calc(var(--s) + var(--s-half));
   font-size: 18px;
   width: 18px;
   height: 18px;
   color: var(--text-color-muted);
   cursor: grab;
-}
-
-.card-body {
-  display: flex;
-  flex: 1 1 auto;
-  flex-direction: column;
-  min-width: 0;
-  padding-inline-end: var(--s);
 }
 
 .section-header {
@@ -213,15 +211,9 @@
   }
 }
 
-.phone-row-head {
-  display: flex;
-  align-items: baseline;
-  gap: var(--s);
-
-  .section-title {
-    font-size: var(--font-size-lg);
-    font-weight: var(--font-weight-medium);
-  }
+.phone-row-main .section-title {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-medium);
 }
 
 .summary--one-line {

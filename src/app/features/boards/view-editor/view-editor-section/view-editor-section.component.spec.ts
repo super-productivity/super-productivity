@@ -151,9 +151,19 @@ describe('ViewEditorSectionComponent', () => {
       const el = await renderCollapsed();
       (el.querySelector('.section-title') as HTMLElement).click();
       fixture.detectChanges();
-      (el.querySelector('.count') as HTMLElement).click();
+      (el.querySelector('.section-header') as HTMLElement).click();
 
       expect(toggled).toHaveBeenCalledTimes(2);
+    });
+
+    it('counts its tasks under the Rules label once open, not in its bar', async () => {
+      const el = await renderCollapsed();
+      expect(el.querySelector('.count')).toBeNull();
+      (el.querySelector('.section-toggle') as HTMLButtonElement).click();
+      fixture.detectChanges();
+
+      expect(el.querySelector('.section-header .count')).toBeNull();
+      expect(el.querySelector('.form-label .count')).not.toBeNull();
     });
 
     it("doesn't toggle on its bar's buttons other than the chevron", async () => {
