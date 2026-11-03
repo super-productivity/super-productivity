@@ -347,9 +347,12 @@ separate design and out of scope.
   needs no change. It covers the hosted server, which plugin traffic never reaches.
 - **Apple 5.1.2(i)** (guideline text read 2026-11-03): "You must clearly disclose where
   personal data will be shared with third parties, including with third-party AI, and
-  obtain explicit permission before doing so." _To confirm:_ that the per-device
-  consent dialog counts as that permission for AI Command, and that connecting an
-  account in the setup dialog counts as permission for the integrations.
+  obtain explicit permission before doing so." Apple does not define the form of
+  "explicit permission" and says nothing about per-device consent. Our reading: an
+  affirmative action right next to the disclosure qualifies. For integrations, that
+  means the declaration sits beside the button that connects the account, not in a
+  collapsed block. Permission given on one device covers the same user's synced setup.
+  _To confirm with App Review_; only Apple can settle it.
 - **Apple 4.7 / 2.5.2.** Native builds can install community plugins in the app
   (`plugin-management.component.ts:205`). 4.7.3 asks for "explicit consent each time"
   before data is shared with hosted software, and 2.5.2 limits downloaded code. _To
@@ -363,11 +366,16 @@ separate design and out of scope.
   excludes from "sharing" any transfer "based on a specific user-initiated action" where
   the user "reasonably expects the data to be shared". It also excludes a transfer "based
   on a prominent in-app disclosure and consent". Data sent off the device by libraries
-  or SDKs in the app counts. _To confirm:_
-  - whether background polling and two-way sync fall under the disclosure-and-consent
-    exception
-  - whether an integration that arrived through sync, without the setup dialog on
-    that device, is covered
+  or SDKs in the app counts. "Collect" means any transmission off the device, to
+  whoever receives it, so integration traffic must be declared as **collected** even
+  where it is not "sharing". The one related exemption, a user uploading to their own
+  Drive or Dropbox account, requires that the app never accesses the data, which does
+  not fit task data. Connecting one's own account fits the user-initiated exception
+  from sharing. The article attaches nothing to devices or to background sync set up
+  earlier, and the form describes the app, not a device. So an integration that arrived
+  through sync is covered by the action the user took when setting it up. _To confirm:_
+  whether Play agrees that ongoing polling and two-way sync count as that
+  user-initiated action.
 - **First-party plugins and the store binary.** Bundled plugins are built into
   `src/assets/bundled-plugins` and ship in the binary, so they count toward the store
   forms. _Recommendation, to confirm:_ ship AI Command bundled, not as a download, so
