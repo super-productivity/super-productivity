@@ -1,7 +1,92 @@
+import { Component } from '@angular/core';
+import { TestBed } from '@angular/core/testing';
+import { UntypedFormGroup } from '@angular/forms';
 import {
+  FieldType,
+  FormlyFieldConfig,
+  FormlyFormBuilder,
+  FormlyModule,
+} from '@ngx-formly/core';
+import { IssueProviderGitlab } from '../../issue.model';
+import {
+  GITLAB_CONFIG_FORM,
   GITLAB_CONFIG_FORM_SECTION,
   GITLAB_PROJECT_REGEX,
 } from './gitlab-cfg-form.const';
+
+@Component({ selector: 'noop-formly-field', template: '', standalone: true })
+class NoopFormlyFieldComponent extends FieldType {}
+
+describe('GITLAB_CONFIG_FORM source switching', () => {
+  let builder: FormlyFormBuilder;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      imports: [
+        NoopFormlyFieldComponent,
+        FormlyModule.forRoot({
+          types: ['input', 'select'].map((name) => ({
+            name,
+            component: NoopFormlyFieldComponent,
+          })),
+        }),
+      ],
+    });
+    builder = TestBed.inject(FormlyFormBuilder);
+  });
+
+  // Only the source, group and project fields, copied so each test gets fresh field state
+  const buildSourceForm = (
+    model: Partial<IssueProviderGitlab>,
+  ): { fields: FormlyFieldConfig[]; model: Partial<IssueProviderGitlab> } => {
+    const fields = GITLAB_CONFIG_FORM.filter((f) =>
+      ['issueSource', 'group', 'project'].includes(f.key as string),
+    ).map((f) => ({ ...f }) as FormlyFieldConfig);
+    builder.buildForm(new UntypedFormGroup({}), fields, model, {});
+    return { fields, model };
+  };
+
+  // What a select change does in the running dialog: set the value, re-check hide expressions
+  const pickSource = (
+    fields: FormlyFieldConfig[],
+    model: Partial<IssueProviderGitlab>,
+    source: IssueProviderGitlab['issueSource'],
+  ): void => {
+    const sourceField = fields.find((f) => f.key === 'issueSource')!;
+    sourceField.formControl!.setValue(source);
+    model.issueSource = source;
+    const opts = sourceField.options as unknown as {
+      checkExpressions: (field: FormlyFieldConfig) => void;
+    };
+    opts.checkExpressions({ fieldGroup: fields, options: sourceField.options });
+  };
+
+  it('keeps the project when switching to a group source', () => {
+    const { fields, model } = buildSourceForm({
+      issueSource: 'project',
+      project: 'my-org/my-project',
+    });
+
+    pickSource(fields, model, 'group');
+
+    expect(fields.find((f) => f.key === 'project')!.hide).toBe(true);
+    expect(model.project).toBe('my-org/my-project');
+  });
+
+  it('keeps the group when switching back to a project source', () => {
+    const { fields, model } = buildSourceForm({
+      issueSource: 'group',
+      group: 'my-org',
+      project: 'my-org/my-project',
+    });
+
+    pickSource(fields, model, 'project');
+
+    expect(fields.find((f) => f.key === 'group')!.hide).toBe(true);
+    expect(model.group).toBe('my-org');
+    expect(model.project).toBe('my-org/my-project');
+  });
+});
 
 describe('GITLAB_PROJECT_REGEX', () => {
   beforeAll(() => {

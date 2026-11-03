@@ -39,6 +39,17 @@ import { MatTooltip } from '@angular/material/tooltip';
 import { InlineInputComponent } from '../../../../../ui/inline-input/inline-input.component';
 import { MatButton } from '@angular/material/button';
 import { IssueLog } from '../../../../../core/log';
+import { getGitlabIssueSource, getGitlabSourceLabel } from '../gitlab-issue-source.util';
+import { GITLAB_BASE_URL } from '../gitlab.const';
+
+// Host part of the base URL for display; the raw value if it does not parse.
+const getHost = (url: string): string => {
+  try {
+    return new URL(url).host || url;
+  } catch {
+    return url;
+  }
+};
 
 interface TmpTask {
   id: string;
@@ -131,6 +142,30 @@ export class DialogGitlabSubmitWorklogForDayComponent {
     this.data.issueProviderId,
     'GITLAB',
   );
+  // Where the listed issues come from: the project, the group, or the GitLab host.
+  sourceHeading$: Observable<{ labelKey: string; name: string } | null> =
+    this.issueProviderCfg$.pipe(
+      map((cfg) => {
+        const source = getGitlabIssueSource(cfg);
+        if (source === 'all') {
+          return {
+            labelKey: T.F.GITLAB.DIALOG_SUBMIT_WORKLOG.FOR_ALL,
+            name: getHost(cfg.gitlabBaseUrl || GITLAB_BASE_URL),
+          };
+        }
+        const name = getGitlabSourceLabel(cfg);
+        if (!name) {
+          return null;
+        }
+        return {
+          labelKey:
+            source === 'group'
+              ? T.F.GITLAB.DIALOG_SUBMIT_WORKLOG.FOR_GROUP
+              : T.F.GITLAB.DIALOG_SUBMIT_WORKLOG.FOR_PROJECT,
+          name,
+        };
+      }),
+    );
 
   totalTimeToSubmit$: Observable<number> = this.tmpTasksToTrack$.pipe(
     map((tmpTasks) =>

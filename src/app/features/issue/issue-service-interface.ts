@@ -2,6 +2,7 @@ import {
   IssueData,
   IssueDataReduced,
   IssueIntegrationCfg,
+  IssueProvider,
   SearchResultItem,
 } from './issue.model';
 import { IssueTask, Task } from '../tasks/task.model';
@@ -48,6 +49,18 @@ export interface IssueServiceInterface {
     issueProviderId: string,
     allExistingIssueIds: number[] | string[],
   ): Promise<IssueDataReduced[]>;
+
+  /**
+   * Runs before the edit dialog saves a provider, e.g. to ask the user to confirm.
+   * Resolves false to keep the dialog open without saving.
+   * @param savedProvider the stored provider when editing, undefined for a new one
+   * @param isAborted true once the dialog has closed in the meantime
+   */
+  confirmSave?(
+    provider: IssueProvider,
+    savedProvider: IssueProvider | undefined,
+    isAborted: () => boolean,
+  ): Promise<boolean>;
 
   getSubTasks?(
     issueId: string | number,

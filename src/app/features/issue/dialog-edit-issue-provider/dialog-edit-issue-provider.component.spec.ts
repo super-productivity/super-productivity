@@ -184,7 +184,14 @@ describe('DialogEditIssueProviderComponent', () => {
         { provide: Store, useValue: store },
         {
           provide: IssueService,
-          useValue: jasmine.createSpyObj('IssueService', ['testConnection']),
+          useValue: (() => {
+            const issueService = jasmine.createSpyObj('IssueService', [
+              'testConnection',
+              'confirmSave',
+            ]);
+            issueService.confirmSave.and.resolveTo(true);
+            return issueService;
+          })(),
         },
         {
           provide: SnackService,
@@ -480,6 +487,49 @@ describe('DialogEditIssueProviderComponent', () => {
       await component.testConnection();
 
       expect(openedSnack().translateParams.errorMsg).not.toContain('SECRET-TOKEN');
+    });
+  });
+
+  describe('provider check on save', () => {
+    let confirmSave: jasmine.Spy;
+    let dialogRef: jasmine.SpyObj<MatDialogRef<DialogEditIssueProviderComponent>>;
+
+    beforeEach(() => {
+      confirmSave = (TestBed.inject(IssueService) as jasmine.SpyObj<IssueService>)
+        .confirmSave;
+      dialogRef = TestBed.inject(MatDialogRef) as jasmine.SpyObj<
+        MatDialogRef<DialogEditIssueProviderComponent>
+      >;
+    });
+
+    it('saves when the provider allows it', async () => {
+      await component.submit();
+
+      expect(confirmSave).toHaveBeenCalledWith(
+        component.model as IssueProvider,
+        undefined,
+        jasmine.any(Function),
+      );
+      expect(store.dispatch).toHaveBeenCalled();
+      expect(dialogRef.close).toHaveBeenCalled();
+      expect(component.isSaving()).toBe(false);
+    });
+
+    it('keeps the dialog open and saves nothing when the provider refuses', async () => {
+      confirmSave.and.resolveTo(false);
+
+      await component.submit();
+
+      expect(store.dispatch).not.toHaveBeenCalled();
+      expect(dialogRef.close).not.toHaveBeenCalled();
+      expect(component.isSaving()).toBe(false);
+    });
+
+    it('skips the check for the enable toggle', async () => {
+      await component.submit(true);
+
+      expect(confirmSave).not.toHaveBeenCalled();
+      expect(store.dispatch).toHaveBeenCalled();
     });
   });
 });

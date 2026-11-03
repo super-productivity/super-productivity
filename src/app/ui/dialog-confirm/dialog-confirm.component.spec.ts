@@ -261,4 +261,19 @@ describe('DialogConfirmComponent', () => {
       expect(mockDialogRef.close).toHaveBeenCalledWith(true);
     });
   });
+
+  describe('isConfirmDisabled option', () => {
+    const confirmButton = (): HTMLButtonElement =>
+      fixture.debugElement.query(By.css('button[e2e="confirmBtn"]')).nativeElement;
+
+    it('should enable the confirm button by default', async () => {
+      await createComponent({ message: 'Test Message' });
+      expect(confirmButton().disabled).toBe(false);
+    });
+
+    it('should disable the confirm button when isConfirmDisabled is true', async () => {
+      await createComponent({ message: 'Test Message', isConfirmDisabled: true });
+      expect(confirmButton().disabled).toBe(true);
+    });
+  });
 });

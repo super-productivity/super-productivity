@@ -3,24 +3,30 @@ import { firstValueFrom, Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
 import { Task } from 'src/app/features/tasks/task.model';
 import { BaseIssueProviderService } from '../../base/base-issue-provider.service';
-import { IssueData, SearchResultItem } from '../../issue.model';
+import { IssueData, IssueProviderGitlab, SearchResultItem } from '../../issue.model';
+import { GitlabAutoImportConfirmService } from './gitlab-auto-import-confirm.service';
 import { GitlabApiService } from './gitlab-api/gitlab-api.service';
 import { GitlabCfg } from './gitlab.model';
 import { GitlabIssue } from './gitlab-issue.model';
 import { truncate } from '../../../../util/truncate';
 import { GITLAB_BASE_URL, GITLAB_POLL_INTERVAL } from './gitlab.const';
+import {
+  getGitlabActiveProject,
+  isGitlabSourceConfigured,
+} from './gitlab-issue-source.util';
 
 @Injectable({
   providedIn: 'root',
 })
 export class GitlabCommonInterfacesService extends BaseIssueProviderService<GitlabCfg> {
   private readonly _gitlabApiService = inject(GitlabApiService);
+  private readonly _autoImportConfirm = inject(GitlabAutoImportConfirmService);
 
   readonly providerKey = 'GITLAB' as const;
   readonly pollInterval: number = GITLAB_POLL_INTERVAL;
 
   isEnabled(cfg: GitlabCfg): boolean {
-    return !!cfg && cfg.isEnabled && !!cfg.project;
+    return !!cfg && cfg.isEnabled && isGitlabSourceConfigured(cfg);
   }
 
   testConnection(cfg: GitlabCfg): Promise<boolean> {
@@ -31,18 +37,31 @@ export class GitlabCommonInterfacesService extends BaseIssueProviderService<Gitl
     ).then((result) => result ?? false);
   }
 
+  confirmSave(
+    provider: IssueProviderGitlab,
+    savedProvider: IssueProviderGitlab | undefined,
+    isAborted: () => boolean,
+  ): Promise<boolean> {
+    return this._autoImportConfirm.confirmSave(provider, savedProvider, isAborted);
+  }
+
   issueLink(issueId: string, issueProviderId: string): Promise<string> {
     return firstValueFrom(
       this._getCfgOnce$(issueProviderId).pipe(
         map((cfg) => {
-          const project: string | null = cfg.project;
+          const idStr = issueId.toString();
+          // Issue ids are full references ('group/project#123'), so the issue's own
+          // project is used; this is required for group and all-projects sources.
+          const hashIdx = idStr.lastIndexOf('#');
+          const projectFromId = hashIdx > 0 ? idStr.substring(0, hashIdx) : null;
+          const project: string | null = projectFromId || getGitlabActiveProject(cfg);
 
           if (!project) {
             return '';
           }
 
           // Extract just the numeric issue ID from formats like 'project/repo#123' or '#123'
-          const cleanIssueId = issueId.toString().replace(/^.*#/, '');
+          const cleanIssueId = idStr.replace(/^.*#/, '');
 
           if (cfg.gitlabBaseUrl) {
             const fixedUrl = cfg.gitlabBaseUrl.match(/.*\/$/)

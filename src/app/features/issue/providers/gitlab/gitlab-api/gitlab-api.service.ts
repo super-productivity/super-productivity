@@ -12,7 +12,11 @@ import { SnackService } from 'src/app/core/snack/snack.service';
 
 import { GitlabCfg } from '../gitlab.model';
 import { GitlabOriginalComment, GitlabOriginalIssue } from './gitlab-api-responses';
-import { GITLAB_API_BASE_URL } from '../gitlab.const';
+import {
+  GITLAB_API_BASE_URL,
+  GITLAB_MAX_AUTO_IMPORT_PAGES,
+  GITLAB_PAGE_SIZE,
+} from '../gitlab.const';
 import { T } from 'src/app/t.const';
 import {
   catchError,
@@ -25,6 +29,10 @@ import {
   take,
 } from 'rxjs/operators';
 import { GitlabIssue } from '../gitlab-issue.model';
+import {
+  getGitlabIssueSource,
+  isGitlabSourceConfigured,
+} from '../gitlab-issue-source.util';
 import {
   getPartsFromGitlabIssueId,
   mapGitlabIssue,
@@ -57,11 +65,14 @@ export class GitlabApiService {
   }
 
   private getScopeParam(cfg: GitlabCfg): string {
-    if (cfg.scope) {
-      return `&scope=${cfg.scope}`;
-    } else {
+    if (!cfg.scope) {
       return '';
     }
+    // The group and global /issues endpoints document only the underscore values
+    // (created_by_me, assigned_to_me); the project endpoint keeps the stored value.
+    const scope =
+      getGitlabIssueSource(cfg) === 'project' ? cfg.scope : cfg.scope.replace(/-/g, '_');
+    return `&scope=${scope}`;
   }
 
   private getCustomFilterParam(cfg: GitlabCfg): string {
@@ -126,7 +137,7 @@ export class GitlabApiService {
     // burst of thousands of requests that GitLab rate-limited with a 429 — see #9034.
     return this._sendIssueRequestFirstPage$(
       {
-        url: `${this._apiLink(cfg)}/issues?search=${encodeURIComponent(searchText)}${this.getScopeParam(
+        url: `${this._issuesListLink(cfg)}?search=${encodeURIComponent(searchText)}${this.getScopeParam(
           cfg,
         )}&order_by=updated_at${this.getCustomFilterParam(cfg)}`,
       },
@@ -136,15 +147,34 @@ export class GitlabApiService {
 
   getProjectIssues$(cfg: GitlabCfg): Observable<GitlabIssue[]> {
     return this._sendIssuePaginatedRequest$(
-      {
-        url: `${this._apiLink(
-          cfg,
-        )}/issues?state=opened&order_by=updated_at&${this.getScopeParam(
-          cfg,
-        )}${this.getCustomFilterParam(cfg)}`,
-      },
+      { url: this._autoImportIssuesUrl(cfg) },
       cfg,
+      // A group or instance can hold thousands of open issues and this runs on every
+      // auto-import poll: take only the most recently updated ones.
+      getGitlabIssueSource(cfg) === 'project' ? undefined : GITLAB_MAX_AUTO_IMPORT_PAGES,
     ).pipe(take(1));
+  }
+
+  /**
+   * Number of open issues getProjectIssues$ matches, from a single one-item request.
+   * Null when GitLab omits `x-total`, which it does above 10,000 results.
+   */
+  getAutoImportIssueCount$(cfg: GitlabCfg): Observable<number | null> {
+    if (!this._isValidSettings(cfg)) {
+      return EMPTY;
+    }
+    return this._sendPaginatedRequestImpl$(
+      { url: this._autoImportIssuesUrl(cfg) },
+      cfg,
+      1,
+      1,
+    ).pipe(
+      map((res: any) => {
+        const total = res?.headers?.get('x-total');
+        return total ? Number(total) : null;
+      }),
+      take(1),
+    );
   }
 
   addTimeSpentToIssue$(
@@ -210,7 +240,7 @@ export class GitlabApiService {
   }
 
   private _isValidSettings(cfg: GitlabCfg): boolean {
-    if (cfg && cfg.project && cfg.project.length > 0) {
+    if (cfg && isGitlabSourceConfigured(cfg)) {
       return true;
     }
     this._snackService.open({
@@ -226,8 +256,9 @@ export class GitlabApiService {
   private _sendIssuePaginatedRequest$(
     params: HttpRequest<string> | any,
     cfg: GitlabCfg,
+    maxPages?: number,
   ): Observable<GitlabIssue[]> {
-    return this._sendPaginatedRequest$(params, cfg).pipe(
+    return this._sendPaginatedRequest$(params, cfg, maxPages).pipe(
       map((issues: GitlabOriginalIssue[]) =>
         issues ? issues.map((issue) => mapGitlabIssue(issue, cfg)) : [],
       ),
@@ -252,10 +283,12 @@ export class GitlabApiService {
   private _sendPaginatedRequest$(
     params: HttpRequest<string> | any,
     cfg: GitlabCfg,
+    maxPages = Infinity,
   ): Observable<any> {
     return this._sendPaginatedRequestImpl$(params, cfg, 1).pipe(
-      expand((res: any) => {
-        if (res && res.body && res.headers) {
+      // `index` is zero-based, so the response at `index` is page `index + 1`
+      expand((res: any, index: number) => {
+        if (index + 1 < maxPages && res && res.body && res.headers) {
           const headers: HttpHeaders = res.headers;
           const next_page = headers.get('x-next-page');
           if (next_page) {
@@ -272,13 +305,14 @@ export class GitlabApiService {
     params: HttpRequest<string> | any,
     cfg: GitlabCfg,
     page: number,
+    perPage = GITLAB_PAGE_SIZE,
   ): Observable<any> {
     const parsedUrl = parseUrl(params.url);
     params.url = stringifyUrl({
       url: parsedUrl.url,
       query: {
         ...parsedUrl.query,
-        per_page: 100,
+        per_page: perPage,
         page: page,
       },
     });
@@ -335,24 +369,39 @@ export class GitlabApiService {
     return `${this._projectApiLink(cfg, project)}/issues/${projectIssueId}`;
   }
 
-  private _projectApiLink(cfg: GitlabCfg, project: string): string {
-    let apiURL: string = '';
-
+  private _baseApiLink(cfg: GitlabCfg): string {
     if (cfg.gitlabBaseUrl) {
       const fixedUrl = cfg.gitlabBaseUrl.match(/.*\/$/)
         ? cfg.gitlabBaseUrl
         : `${cfg.gitlabBaseUrl}/`;
-      apiURL = fixedUrl + 'api/v4/';
-    } else {
-      apiURL = GITLAB_API_BASE_URL + '/';
+      return fixedUrl + 'api/v4/';
     }
-
-    const projectURL = assertTruthy(project).toString().replace(/\//gi, '%2F');
-    apiURL += 'projects/' + projectURL;
-    return apiURL;
+    return GITLAB_API_BASE_URL + '/';
   }
 
-  private _apiLink(cfg: GitlabCfg): string {
-    return this._projectApiLink(cfg, assertTruthy(cfg.project));
+  private _projectApiLink(cfg: GitlabCfg, project: string): string {
+    const projectURL = assertTruthy(project).toString().replace(/\//gi, '%2F');
+    return this._baseApiLink(cfg) + 'projects/' + projectURL;
+  }
+
+  private _autoImportIssuesUrl(cfg: GitlabCfg): string {
+    return `${this._issuesListLink(cfg)}?state=opened&order_by=updated_at&sort=desc${this.getScopeParam(
+      cfg,
+    )}${this.getCustomFilterParam(cfg)}`;
+  }
+
+  // Issue list endpoint for the configured source: one project, one group, or
+  // every issue the token can access.
+  private _issuesListLink(cfg: GitlabCfg): string {
+    switch (getGitlabIssueSource(cfg)) {
+      case 'all':
+        return this._baseApiLink(cfg) + 'issues';
+      case 'group': {
+        const groupURL = assertTruthy(cfg.group).toString().replace(/\//gi, '%2F');
+        return `${this._baseApiLink(cfg)}groups/${groupURL}/issues`;
+      }
+      default:
+        return `${this._projectApiLink(cfg, assertTruthy(cfg.project))}/issues`;
+    }
   }
 }

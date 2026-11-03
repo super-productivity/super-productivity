@@ -136,6 +136,19 @@ export class IssueService {
     return service.testConnection(issueProviderCfg as IssueIntegrationCfg);
   }
 
+  // Resolves false when the provider wants the save held back.
+  confirmSave(
+    provider: IssueProvider,
+    savedProvider: IssueProvider | undefined,
+    isAborted: () => boolean,
+  ): Promise<boolean> {
+    const service = this._getService(provider.issueProviderKey);
+    if (!service?.confirmSave) {
+      return Promise.resolve(true);
+    }
+    return service.confirmSave(provider, savedProvider, isAborted);
+  }
+
   getById(
     issueType: IssueProviderKey,
     id: string | number,

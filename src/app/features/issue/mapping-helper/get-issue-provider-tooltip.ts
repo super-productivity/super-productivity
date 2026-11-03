@@ -1,4 +1,5 @@
 import { IssueProvider } from '../issue.model';
+import { getGitlabSourceLabel } from '../providers/gitlab/gitlab-issue-source.util';
 
 const SECRET_KEY_PATTERNS = /token|secret|key|password|apikey|api_key/i;
 
@@ -54,7 +55,7 @@ export const getIssueProviderTooltip = (issueProvider: IssueProvider): string =>
       case 'JIRA':
         return issueProvider.host;
       case 'GITLAB':
-        return issueProvider.project;
+        return getGitlabSourceLabel(issueProvider);
       case 'CALDAV':
         // resourceName is a required field the user filled in themselves, so it
         // reads better than the raw URL (#9144).
@@ -128,7 +129,7 @@ export const getIssueProviderInitials = (
       return issueProvider.projectId?.substring(0, 2).toUpperCase();
 
     case 'GITLAB':
-      return getRepoInitials(issueProvider.project);
+      return getRepoInitials(getGitlabSourceLabel(issueProvider) ?? null);
     case 'PLAINSPACE':
       return issueProvider.spaceId?.substring(0, 2)?.toUpperCase() || 'PS';
   }
