@@ -133,7 +133,7 @@ test.describe('@supersync SuperSync Encryption', () => {
       clientA = await createSimulatedClient(browser, baseURL!, 'A', testRunId);
       // Every op A ever sends, recorded from the request body (before the
       // server can accept or reject it).
-      const uploadsA = recordOpsUploads(clientA.page);
+      const uploadsA = await recordOpsUploads(clientA.page);
       await clientA.workView.waitForTaskList();
 
       const task1 = `Pre1-${testRunId}`;
@@ -159,6 +159,7 @@ test.describe('@supersync SuperSync Encryption', () => {
 
       // GHSA-9v8x: no op ever left A unencrypted, and the pre-existing ops
       // were subsumed by the enable-snapshot instead of being uploaded.
+      expect(uploadsA.unreadableBodies, 'every upload body was readable').toBe(0);
       expect(uploadsA.snapshots.length, 'A uploaded the enable-snapshot').toBeGreaterThan(
         0,
       );

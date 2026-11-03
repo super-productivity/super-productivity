@@ -475,7 +475,7 @@ test.describe('@supersync @import-conflict Sync Import Conflict Dialog', () => {
    * device uploaded changes it never saw (LOCAL_IMPORT_FILTERS_REMOTE).
    *
    * Actions:
-   * 1. B syncs first (B is no longer a never-synced device)
+   * 1. B creates a task and syncs (B is no longer a never-synced device)
    * 2. A adds a task and syncs
    * 3. B imports a backup without syncing in between
    * 4. B syncs: A's op is filtered as CONCURRENT with B's local import
@@ -501,12 +501,18 @@ test.describe('@supersync @import-conflict Sync Import Conflict Dialog', () => {
       const syncConfig = getSuperSyncConfig(user);
 
       // ============ PHASE 1: B syncs first, then A uploads a change ============
+      // B must upload an op: a device without synced ops still counts as
+      // never-synced and would get the first-sync layout instead.
       clientB = await createSimulatedClient(browser, baseURL!, 'B', testRunId);
       await clientB.sync.setupSuperSync(syncConfig);
+      const taskBSynced = `Task-B-Synced-${uniqueId}`;
+      await clientB.workView.addTask(taskBSynced);
       await clientB.sync.syncAndWait();
 
       clientA = await createSimulatedClient(browser, baseURL!, 'A', testRunId);
       await clientA.sync.setupSuperSync(syncConfig);
+      await clientA.sync.syncAndWait();
+      await waitForTask(clientA.page, taskBSynced);
       const taskARemote = `Task-A-Unseen-${uniqueId}`;
       await clientA.workView.addTask(taskARemote);
       await clientA.sync.syncAndWait();

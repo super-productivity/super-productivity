@@ -1,9 +1,11 @@
+import { gunzipSync } from 'node:zlib';
 import type { Page, Request } from '@playwright/test';
 import { expect } from '@playwright/test';
 import {
   parseSuperSyncRequestBody,
   routeSuperSyncOps,
   SUPERSYNC_BASE_URL,
+  SUPERSYNC_SNAPSHOT_ROUTE,
 } from './supersync-helpers';
 
 /**
@@ -147,29 +149,62 @@ export interface RecordedUploadOp {
   isPayloadEncrypted?: boolean;
 }
 
+/** Parses a (possibly gzipped) JSON request body from its raw buffer, or null. */
+const readJsonBody = <T>(request: Request): T | null => {
+  const buffer = request.postDataBuffer();
+  if (!buffer || buffer.length === 0) return null;
+  const isGzip = buffer.length >= 2 && buffer[0] === 0x1f && buffer[1] === 0x8b;
+  const text = (isGzip ? gunzipSync(buffer) : buffer).toString('utf-8');
+  return JSON.parse(text) as T;
+};
+
+export interface RecordedUploads {
+  ops: RecordedUploadOp[];
+  snapshots: { isPayloadEncrypted?: boolean }[];
+  /** Uploads whose body could not be read; a test must require 0. */
+  unreadableBodies: number;
+}
+
 /**
  * Records the envelopes of every POST /api/sync/ops and /api/sync/snapshot
  * this page sends. Bodies are parsed when the request is issued, whether or
  * not the server accepts it, so a plaintext upload the server rejects is still
  * recorded. Payloads are not kept (they may hold user content).
+ *
+ * Snapshots are read in a route handler: the `request` event does not carry
+ * the (large, gzipped) snapshot body, a route sees the full buffer.
  */
-export const recordOpsUploads = (
-  page: Page,
-): { ops: RecordedUploadOp[]; snapshots: { isPayloadEncrypted?: boolean }[] } => {
-  const recorded: {
-    ops: RecordedUploadOp[];
-    snapshots: { isPayloadEncrypted?: boolean }[];
-  } = { ops: [], snapshots: [] };
+export const recordOpsUploads = async (page: Page): Promise<RecordedUploads> => {
+  const recorded: RecordedUploads = { ops: [], snapshots: [], unreadableBodies: 0 };
+  await page.route(SUPERSYNC_SNAPSHOT_ROUTE, async (route) => {
+    const request = route.request();
+    if (request.method() === 'POST') {
+      try {
+        const body = readJsonBody<{ isPayloadEncrypted?: boolean }>(request);
+        if (body) {
+          recorded.snapshots.push({ isPayloadEncrypted: body.isPayloadEncrypted });
+        } else {
+          recorded.unreadableBodies += 1;
+        }
+      } catch {
+        recorded.unreadableBodies += 1;
+      }
+    }
+    await route.continue();
+  });
   page.on('request', (request: Request) => {
     if (request.method() !== 'POST') return;
-    const { pathname } = new URL(request.url());
-    if (pathname.endsWith('/api/sync/snapshot')) {
-      const body = parseSuperSyncRequestBody<{ isPayloadEncrypted?: boolean }>(request);
-      recorded.snapshots.push({ isPayloadEncrypted: body.isPayloadEncrypted });
+    if (!new URL(request.url()).pathname.endsWith('/api/sync/ops')) return;
+    let body: { ops?: RecordedUploadOp[] } | null = null;
+    try {
+      body = readJsonBody<{ ops?: RecordedUploadOp[] }>(request);
+    } catch {
+      body = null;
+    }
+    if (!body) {
+      recorded.unreadableBodies += 1;
       return;
     }
-    if (!pathname.endsWith('/api/sync/ops')) return;
-    const body = parseSuperSyncRequestBody<{ ops?: RecordedUploadOp[] }>(request);
     for (const op of body.ops ?? []) {
       recorded.ops.push({
         id: op.id,

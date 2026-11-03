@@ -198,7 +198,7 @@ test.describe('@supersync @encryption Import with Encryption Preservation', () =
    * imports a copy that carries one with encryption enabled and a DIFFERENT
    * key. Matching encryption state means the import must keep A's current
    * key: B joins with A's original password and must decrypt everything
-   * without a password or decrypt-error prompt. After that, both clients
+   * without a decrypt-error prompt. After that, both clients
    * create and sync tasks in both directions without errors.
    */
   test('Bidirectional sync works after importing backup with matching encryption', async ({
@@ -253,10 +253,9 @@ test.describe('@supersync @encryption Import with Encryption Preservation', () =
 
       // ============ Setup Client B with A's ORIGINAL password ============
       clientB = await createSimulatedClient(browser, baseURL!, 'B', testRunId);
-      const watcherB = await watchDialogs(clientB.page, [
-        DIALOG.enterPassword,
-        DIALOG.decryptError,
-      ]);
+      // enter-password is the normal prompt of a device joining an encrypted
+      // account; only a decrypt error tells a changed key apart.
+      const watcherB = await watchDialogs(clientB.page, [DIALOG.decryptError]);
       await clientB.sync.setupSuperSync({
         ...baseConfig,
         isEncryptionEnabled: true,
@@ -265,7 +264,7 @@ test.describe('@supersync @encryption Import with Encryption Preservation', () =
       await clientB.sync.syncAndWait();
       // A decrypt error here would mean A re-encrypted with the imported key.
       await watcherB.expectNeverSeen(
-        [DIALOG.enterPassword, DIALOG.decryptError],
+        [DIALOG.decryptError],
         "B decrypting A's post-import data with A's original password",
       );
 
