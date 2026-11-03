@@ -227,34 +227,25 @@ of the portable plugin contract.
     <meta charset="UTF-8" />
     <title>My Plugin UI</title>
 
-    <!-- CSS must be inlined. Theme variables and UI Kit are injected automatically. -->
-    <style>
-      body {
-        padding: var(--s3);
-      }
-
-      .task-list {
-        background: var(--card-bg);
-        border-radius: var(--card-border-radius);
-        padding: var(--s2);
-        box-shadow: var(--whiteframe-shadow-2dp);
-      }
-
-      .task-item {
-        padding: var(--s);
-        border-bottom: 1px solid var(--divider-color);
-      }
-    </style>
+    <!-- CSS must be inlined. Theme variables and the UI Kit are injected
+         automatically, so most plugins need little or no CSS of their own. -->
   </head>
   <body>
-    <h1>My Plugin</h1>
-    <div id="content">
-      <button id="loadTasks">Load Tasks</button>
-      <div
+    <main class="page">
+      <header class="page-header">
+        <h1>My Plugin</h1>
+        <button
+          id="loadTasks"
+          class="btn-primary"
+        >
+          Load Tasks
+        </button>
+      </header>
+      <ul
         id="taskList"
-        class="task-list"
-      ></div>
-    </div>
+        class="list"
+      ></ul>
+    </main>
 
     <!-- JavaScript must be inlined -->
     <script>
@@ -262,12 +253,11 @@ of the portable plugin contract.
         try {
           const tasks = await PluginAPI.getTasks();
           const taskList = document.getElementById('taskList');
-
-          taskList.innerHTML = '<h3>Your Tasks:</h3>';
+          taskList.replaceChildren();
 
           tasks.forEach((task) => {
-            const taskEl = document.createElement('div');
-            taskEl.className = 'task-item';
+            const taskEl = document.createElement('li');
+            taskEl.className = 'list-item';
             taskEl.textContent = task.title;
             taskList.appendChild(taskEl);
           });
@@ -293,41 +283,119 @@ of the portable plugin contract.
 
 Iframe plugins automatically receive:
 
-1. **CSS variables** — All theme variables (colors, spacing, shadows, transitions) are injected as CSS custom properties on `:root`. Use `var(--c-primary)`, `var(--bg)`, `var(--text-color)`, etc.
+1. **CSS variables**: the host's current theme tokens on `:root` (full list:
+   [`plugin-theme-vars.ts`](../src/app/plugins/util/plugin-theme-vars.ts)).
+   Use them for any custom CSS so your plugin follows all themes and dark mode.
+   Only these variables exist inside the iframe.
+2. **UI Kit**: element defaults and a few classes that match the app's Angular
+   Material look, so plugins look like the app and like each other. The kit lives
+   in a cascade layer (`@layer sp-ui-kit`): **any** CSS of yours wins over it,
+   whatever its specificity. Delete CSS the kit already covers instead of
+   overriding it. Disable the kit with `"uiKit": false` in the manifest.
 
-2. **UI Kit CSS reset** — By default, basic HTML elements (`button`, `input`, `select`, `textarea`, `table`, `a`, `h1`–`h6`, `p`, `code`, `pre`, `hr`, etc.) are styled to match the app's look. This is injected before your plugin's own styles, so your CSS always wins.
+An open plugin view follows dark mode and custom theme switches live; a project
+color change shows after reopening the view. The app's fonts (Open Sans and the
+Material Symbols icon font) are available too: text uses the app font, and
+`<span class="material-icons">edit</span>` renders the same icons as the app
+(any [Material Symbols](https://fonts.google.com/icons) name).
 
-   To disable the UI Kit, add `"uiKit": false` to your manifest.
+**Elements styled by default:** headings, `p`, `a`, lists, `table`, `code`,
+`pre`, `blockquote`, `hr`, `button` (outlined), `input`/`textarea`/`select`
+(filled fields), checkboxes and radios (a `<label>` wrapping one becomes an
+inline control), `progress`, `fieldset`, and `<dialog>` (a dialog surface with
+backdrop). Keyboard focus shows the app's focus ring.
 
-**Button variants:**
+**Buttons:** add a variant class to `<button>`.
 
-- Default `<button>` — Neutral card-background button with border
-- `<button class="btn-primary">` — Filled primary-color button (white text)
-- `<button class="btn-outline">` — Transparent button with primary-color border and text, fills on hover
+| Class                   | Looks like                                       |
+| ----------------------- | ------------------------------------------------ |
+| _(none)_                | Outlined button: secondary or alternative action |
+| `btn-primary`           | Filled primary-color button: the main action     |
+| `btn-outline`           | Outlined in the primary color                    |
+| `btn-text`              | Borderless text button: cancel, dismiss          |
+| `btn-icon`              | Round icon-only button; give it an `aria-label`  |
+| `btn-danger` (modifier) | Destructive: `class="btn-primary btn-danger"`    |
+| `aria-pressed="true"`   | Selected state for toggle buttons                |
 
-**Card component:**
+**Layout:**
 
-- `<div class="card">` — Card with background, shadow, rounded corners, and border
-- `<div class="card card-clickable">` — Adds hover lift effect and primary border highlight
+- `.page`: centered content column (max 800px) with page padding
+- `.page-header`: title row; the heading grows, buttons sit on the right
+- `.stack`: vertical flow with even gaps (child margins removed)
+- `.row`: wrapping horizontal group; `.actions`: right-aligned button row
+- `.grid`: responsive card grid; `.grow`: fills the remaining row space
 
-**Utility classes:**
+**Content:**
 
-- `.text-muted` — Muted text color (`var(--text-color-muted)`)
-- `.text-primary` — Primary theme color (`var(--c-primary)`)
-- `.page-fade` — Fade-in animation (0.3s ease)
+- `.card` and `.card-clickable` (works on `<button class="card">` too)
+- `.list` with `.list-item` rows, like the app's settings rows; `a`/`button`
+  rows get a hover state
+- `.field` wraps a `label`, control and `.field-hint` or `.field-error`; mark
+  invalid controls with `aria-invalid="true"`
+- `.callout` (info), `.callout--success`, `.callout--warning`,
+  `.callout--danger`: tinted message box; an optional leading `<svg>` is tinted
+  too
+- `.chip`, `.empty-state`, `.spinner`
+- `.material-icons`: 24px icon, 18px inside a labelled button; mark it
+  `aria-hidden="true"` and label the button instead
+- Text: `.text-muted`, `.text-primary`, `.text-danger`,
+  `.text-sm`;
+  `.page-fade` fades a view in
+
+```html
+<main class="page stack">
+  <header class="page-header">
+    <h1>Exports</h1>
+    <button class="btn-primary">New export</button>
+  </header>
+  <div class="callout callout--warning"><p>Exports include archived tasks.</p></div>
+  <div class="field">
+    <label for="name">Name</label>
+    <input id="name" />
+    <p class="field-hint">Shown in the file name.</p>
+  </div>
+  <ul class="list">
+    <li class="list-item">
+      <span class="grow">Weekly report</span>
+      <button
+        class="btn-icon btn-danger"
+        aria-label="Delete"
+      >
+        <span
+          class="material-icons"
+          aria-hidden="true"
+          >delete</span
+        >
+      </button>
+    </li>
+  </ul>
+  <div class="actions">
+    <button class="btn-text">Cancel</button>
+    <button class="btn-primary">Save</button>
+  </div>
+</main>
+```
+
+The [API test plugin](../packages/plugin-dev/api-test-plugin/index.html) shows
+every element and class.
 
 **Key CSS variables:**
 
-- `--bg`, `--bg-darker` — Background colors
-- `--text-color`, `--text-color-muted` — Text colors
-- `--c-primary`, `--c-accent`, `--c-warn` — Theme colors
-- `--card-bg`, `--card-shadow`, `--card-border-radius` — Card styling
-- `--divider-color` — Border/divider color
-- `--s`, `--s2`, `--s3`, `--s4`, `--s-half`, `--s-quarter` — Spacing scale
-- `--transition-standard` — Standard transition
-- `--font-primary-stack` — App font stack
-- `--whiteframe-shadow-1dp` through `--whiteframe-shadow-24dp` — Elevation shadows
-- `--is-dark-theme` — `1` if dark theme, `0` if light
+- Surfaces and text: `--bg`, `--card-bg`, `--text-color`, `--text-color-muted`,
+  `--divider-color`
+- Colors: `--c-primary` with `--c-contrast` (text on primary), `--c-warn` with
+  `--c-warn-contrast`, `--color-success`, `--color-warning`, `--color-danger`
+- States: `--state-hover`, `--state-pressed`, `--state-selected`,
+  `--focus-ring-color`
+- Inputs: `--input-bg`, `--input-bg-hover`, `--input-border-color`
+- Spacing: `--s-quarter`, `--s-half`, `--s`, `--s2`, `--s3`, `--s4`
+- Radius: `--radius-xs` … `--radius-xl`, `--radius-pill`,
+  `--card-border-radius`
+- Type: `--font-size-xs` … `--font-size-3xl`, `--font-weight-medium`,
+  `--font-weight-semibold`, `--font-primary-stack`, `--font-mono-stack`
+- Elevation: `--whiteframe-shadow-1dp` … `--whiteframe-shadow-24dp`
+- Motion: `--transition-standard`, `--transition-duration-s`
+- `--is-dark-theme`: `1` in dark mode, `0` in light mode
 
 ## Available API Methods
 
