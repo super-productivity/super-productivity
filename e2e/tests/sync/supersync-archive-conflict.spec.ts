@@ -450,7 +450,10 @@ test.describe('@supersync Archive Conflict Resolution', () => {
         const archived = (await getArchiveYoungTasks(client))?.find(
           (t) => t.id === bugBTaskId,
         );
-        expect(archived?.title, `${label}: archived title`).toBe(taskName);
+        // The harness prefixes titles with a client marker, so match the
+        // original suffix and rule out the rename.
+        expect(archived?.title, `${label}: archived title`).toContain(taskName);
+        expect(archived?.title, `${label}: archived title`).not.toContain(taskRenamed);
       }
       console.log('[BugB] Both clients: task archived under its original title');
 

@@ -7,7 +7,6 @@ import {
   waitForTask,
   markTaskDoneByKey,
   archiveDoneTasks,
-  getLocalOpLogSummary,
   type SimulatedE2EClient,
 } from '../../utils/supersync-helpers';
 import { ImportPage } from '../../pages/import.page';
@@ -18,8 +17,6 @@ import {
   getServerOpTypes,
   getServerOps,
   getTaskIdByTitle,
-  hasEverAppeared,
-  watchNeverAppears,
 } from '../../utils/audit-archive-helpers';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -28,13 +25,22 @@ import * as os from 'os';
 /**
  * SuperSync Backup Recovery E2E Tests
  *
- * A backup import creates a BACKUP_IMPORT op, uploaded with reason='recovery'
- * as a clean slate. The server rejects a reason='initial' snapshot with 409
- * SYNC_IMPORT_EXISTS when the account already holds a full-state op, and the
- * client then silently drops its local import (operation-log-upload.service.ts,
- * SYNC_IMPORT_EXISTS branch) and adopts the server state. So the precondition
- * that matters is a full-state op already on the server, and the failure is
- * silent: only the uploaded op and the resulting data reveal it.
+ * Restoring a backup on an account whose server already holds a full-state op
+ * (here: the SYNC_IMPORT a server migration uploads).
+ *
+ * What actually happens (measured 2026-11, CI run 41735107614): the import
+ * resets lastServerSeq and mints a new clientId (backup.service.ts), so the
+ * next sync downloads the server's SYNC_IMPORT while the BACKUP_IMPORT is still
+ * pending. That raises the sync-import conflict dialog; "Use My Data"
+ * force-uploads the restored state as a clean-slate SYNC_IMPORT. The
+ * BACKUP_IMPORT's own reason='recovery' upload is not reached on this path, so
+ * the test asserts the dialog and the outcome instead.
+ *
+ * The failure it guards: a full-state upload sent as reason='initial' without
+ * a clean slate gets 409 SYNC_IMPORT_EXISTS, and the client SILENTLY drops it
+ * (operation-log-upload.service.ts, SYNC_IMPORT_EXISTS branch) and adopts the
+ * server state, losing the restore. Only the server history and the data a
+ * fresh client receives reveal that.
  *
  * Run with: npm run e2e:supersync:file e2e/tests/sync/supersync-backup-recovery.spec.ts
  */
@@ -63,16 +69,13 @@ test.describe('@supersync Backup Recovery with Existing SYNC_IMPORT', () => {
    * 2. Client A creates a task, archives it, syncs, and exports a backup.
    * 3. Client A creates a "server-only" task and syncs it, so the server state
    *    now differs from the backup.
-   * 4. Client A imports the backup and syncs: the BACKUP_IMPORT must be
-   *    accepted (synced locally, held by the server, nothing older kept).
+   * 4. Client A imports the backup and syncs: the sync-import conflict dialog
+   *    appears (asserted), the user keeps the restored data, and the server
+   *    history must then start at a clean-slate import.
    * 5. Fresh Client B joins: it must get the backup's state (archived task in
    *    archive_young) and NOT the server-only task.
-   *
-   * If the BACKUP_IMPORT were uploaded as reason='initial' without a clean
-   * slate, step 4 would hit 409 SYNC_IMPORT_EXISTS, the client would drop the
-   * import, and B would see the server-only task.
    */
-  test('Backup import should succeed when SYNC_IMPORT already exists on server', async ({
+  test('Backup restore wins over an existing server SYNC_IMPORT via Use My Data', async ({
     browser,
     baseURL,
     testRunId,
@@ -123,6 +126,9 @@ test.describe('@supersync Backup Recovery with Existing SYNC_IMPORT', () => {
       await waitForTask(clientA.page, serverOnlyTask);
       const serverOnlyTaskId = await getTaskIdByTitle(clientA, serverOnlyTask);
       await clientA.sync.syncAndWait();
+      const seqBeforeRestore = Math.max(
+        ...(await getServerOps(user2.userId)).map((op) => op.serverSeq),
+      );
       console.log('[Backup Recovery] Server-only task synced');
 
       // ============ PHASE 4: Import the backup and sync ============
@@ -136,35 +142,31 @@ test.describe('@supersync Backup Recovery with Existing SYNC_IMPORT', () => {
         'Client A after import: the backup predates the server-only task',
       ).toEqual([]);
 
-      // Evidence only: log whether the helper had to answer a conflict dialog.
-      await watchNeverAppears(clientA.page, 'dialog-sync-import-conflict', 'conflict');
-      // Restoring the backup is the user's intent, so keep local if asked.
-      await clientA.sync.setupSuperSync({ ...syncConfig2, syncImportChoice: 'local' });
-      await clientA.sync.syncAndWait({ useLocal: true });
-      console.log(
-        `[Backup Recovery] Conflict dialog during post-import sync: ${await hasEverAppeared(
-          clientA.page,
-          'conflict',
-        )}`,
-      );
+      // The restore conflicts with the server's SYNC_IMPORT: assert the dialog
+      // explicitly instead of letting the helper answer it.
+      await clientA.sync.setupSuperSync({ ...syncConfig2, waitForInitialSync: false });
+      const conflictDialog = clientA.page.locator('dialog-sync-import-conflict');
+      await expect(conflictDialog).toBeVisible({ timeout: 30000 });
+      await clientA.sync.chooseSyncImportUseLocal();
+      await expect(conflictDialog).not.toBeVisible();
+      await clientA.sync.waitForSyncToComplete({
+        timeout: 30000,
+        skipSpinnerCheck: true,
+      });
+      await clientA.sync.syncAndWait();
+      expect(await clientA.sync.hasSyncError()).toBe(false);
 
-      // The BACKUP_IMPORT must have been accepted, not dropped on a 409.
-      const importer = clientA;
-      await expect
-        .poll(
-          async () =>
-            (await getLocalOpLogSummary(importer.page))
-              .filter((e) => e.opType === 'BACKUP_IMPORT')
-              .map((e) => e.isSynced),
-          { message: 'Client A: local BACKUP_IMPORT must be synced', timeout: 15000 },
-        )
-        .toEqual([true]);
+      // The restore must have replaced the server history, not been dropped on
+      // a 409: a clean-slate import first, nothing older (the migration's
+      // SYNC_IMPORT and the server-only task's op must be gone).
       console.log(
         `[Backup Recovery] Server ops: ${(await getServerOpTypes(user2.userId)).join(', ')}`,
       );
-      expect(await expectServerHistoryStartsAtImport(user2.userId, 'Account 2')).toBe(
-        'BACKUP_IMPORT',
-      );
+      await expectServerHistoryStartsAtImport(user2.userId, 'Account 2');
+      const preRestoreOps = (await getServerOps(user2.userId))
+        .filter((op) => op.serverSeq <= seqBeforeRestore)
+        .map((op) => `${op.opType}@${op.serverSeq}`);
+      expect(preRestoreOps, 'Account 2: pre-restore ops must be wiped').toEqual([]);
 
       // ============ PHASE 5: Fresh Client B gets the backup's state ============
       clientB = await createSimulatedClient(browser, baseURL!, 'B', testRunId);

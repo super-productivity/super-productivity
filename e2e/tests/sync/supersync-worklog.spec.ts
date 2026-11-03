@@ -6,6 +6,7 @@ import {
   closeClient,
   markTaskDone,
   archiveDoneTasks,
+  navigateToWorkView,
   type SimulatedE2EClient,
 } from '../../utils/supersync-helpers';
 import { waitForAppReady } from '../../utils/waits';
@@ -111,6 +112,8 @@ test.describe('@supersync Worklog Sync', () => {
       console.log('[Worklog Test] Both tasks visible in worklog on Client B');
 
       // Replaying Client B's persisted state must keep them archived.
+      // (waitForAppReady expects a work-view route, so leave the worklog first.)
+      await navigateToWorkView(clientB);
       await clientB.page.reload({ waitUntil: 'domcontentloaded', timeout: 30000 });
       await waitForAppReady(clientB.page);
       await expectArchivedNotLive(clientB, archivedIds, 'Client B after reload');
