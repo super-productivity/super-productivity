@@ -13,6 +13,8 @@ const json = (route: Route, status: number, body: unknown): Promise<void> =>
 const openSignIn = async (page: Page): Promise<void> => {
   await page.locator('button.sync-btn').first().click({ noWaitAfter: true });
   const signIn = page.locator('dialog-sync-setup');
+  // The recommended path has the focus, not the other providers or the server icon.
+  await expect(signIn.locator('.e2e-sign-in')).toBeFocused();
   await signIn.locator('.e2e-sign-in-change-server').click();
   await signIn.locator('.e2e-sign-in-server').fill(SERVER);
   await signIn.locator('.e2e-sign-in').click();
