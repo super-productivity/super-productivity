@@ -7,11 +7,12 @@
   bottom: 0;
   left: 0;
   right: 0;
+  // Above the banner and main-header layers it overlaps (both positioned with
+  // a z-index); a later sibling wins the tie with main-header.
+  z-index: var(--z-main-header);
   pointer-events: none;
   display: block;
-}
-
-.mat-mdc-progress-bar {
-  height: 3px;
   opacity: 0.3;
+  --mat-progress-bar-track-height: 3px;
+  --mat-progress-bar-active-indicator-height: 3px;
 }
