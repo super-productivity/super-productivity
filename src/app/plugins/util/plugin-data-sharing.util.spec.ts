@@ -68,22 +68,39 @@ describe('renderDataSharingHtml', () => {
     expect(html).toContain(T.PLUGINS.DATA_SHARING.OTHER);
   });
 
-  it('escapes the recipient and drops non-https links', () => {
+  it('escapes the recipient', () => {
+    const html = renderDataSharingHtml(
+      { dataSharing: [{ recipient: '<img src=x onerror=alert(1)>', data: [] }] },
+      { isBundled: false },
+      t,
+    );
+    expect(html).toContain('&lt;img');
+    expect(html).not.toContain('<img');
+  });
+
+  it('never links a non-https privacy policy', () => {
     const html = renderDataSharingHtml(
       {
         dataSharing: [
-          {
-            recipient: '<img src=x onerror=alert(1)>',
-            data: [],
-            privacyPolicyUrl: 'javascript:alert(1)',
-          },
+          { recipient: 'X', data: [], privacyPolicyUrl: 'javascript:alert(1)' },
         ],
       },
       { isBundled: false },
       t,
     );
-    expect(html).not.toContain('<img');
     expect(html).not.toContain('javascript:');
+  });
+
+  // The card renders cached uploaded manifests that skipped validation.
+  it('treats a malformed declaration as undeclared instead of throwing', () => {
+    const html = renderDataSharingHtml(
+      {
+        dataSharing: [{ recipient: 'X' }, null] as unknown as PluginDataDestination[],
+      },
+      { isBundled: false },
+      t,
+    );
+    expect(html).toContain(T.PLUGINS.DATA_SHARING.NOT_DECLARED);
   });
 
   it('marks a changed declaration', () => {

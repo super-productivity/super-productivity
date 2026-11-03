@@ -155,6 +155,17 @@ describe('validatePluginManifest', () => {
           .isValid,
       ).toBeTrue();
     });
+
+    it('matches allowedHosts to declared hosts as PluginAPI.request does', () => {
+      expect(
+        validate({ dataSharing: [dest], allowedHosts: ['API.Example.com.'] }).isValid,
+      ).toBeTrue();
+    });
+
+    it('reports a non-array allowedHosts instead of throwing', () => {
+      const result = validate({ dataSharing: [dest], allowedHosts: 'api.example.com' });
+      expect(result.isValid).toBeFalse();
+    });
   });
 
   describe('i18n.languages', () => {

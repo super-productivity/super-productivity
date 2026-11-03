@@ -27,10 +27,7 @@
     "pollIntervalMs": 60000,
     "icon": "calendar",
     "humanReadableName": "CalDAV Events",
-    "issueStrings": {
-      "singular": "Event",
-      "plural": "Events"
-    },
+    "issueStrings": { "singular": "Event", "plural": "Events" },
     "useAgendaView": true,
     "defaultAutoAddToBacklog": false,
     "allowPrivateNetwork": true

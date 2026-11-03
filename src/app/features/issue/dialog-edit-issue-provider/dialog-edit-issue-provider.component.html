@@ -46,6 +46,10 @@
         }
       </help-section>
     }
+    <!-- Above the credential fields: read before signing in. -->
+    @if (dataSharingHtml) {
+      <div [innerHTML]="dataSharingHtml"></div>
+    }
     @if (isEdit) {
       <div style="margin-bottom: 32px">
         <mat-slide-toggle
@@ -251,9 +255,6 @@
           <!-- -->
         }
       }
-    }
-    @if (dataSharingHtml) {
-      <div [innerHTML]="dataSharingHtml"></div>
     }
   </mat-dialog-content>
 

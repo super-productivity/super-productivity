@@ -8,8 +8,15 @@ import { MAX_PLUGIN_MANIFEST_SIZE } from '../plugin.const';
  * `PluginService.loadPluginFromZip` reports the actual error after it.
  */
 export const readZipManifest = async (file: Blob): Promise<PluginManifest | null> => {
-  const { unzip } = await import('fflate');
-  const zipData = new Uint8Array(await file.arrayBuffer());
+  let zipData: Uint8Array;
+  let unzip: typeof import('fflate').unzip;
+  try {
+    ({ unzip } = await import('fflate'));
+    zipData = new Uint8Array(await file.arrayBuffer());
+  } catch {
+    // Unreadable file or chunk: loadPluginFromZip hits the same failure and reports it.
+    return null;
+  }
   const files = await new Promise<Record<string, Uint8Array> | null>((resolve) => {
     unzip(zipData, { filter: (f) => f.name === 'manifest.json' }, (err, result) =>
       resolve(err ? null : result),

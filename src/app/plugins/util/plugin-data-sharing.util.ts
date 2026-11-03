@@ -24,6 +24,31 @@ export const KNOWN_SHARED_DATA: ReadonlySet<string> = new Set(
   Object.keys(DATA_LABEL_KEYS),
 );
 
+export const isHostname = (h: unknown): boolean =>
+  typeof h === 'string' && h.trim().length > 0 && !/[/:]/.test(h);
+
+const isStringArray = (v: unknown): v is string[] =>
+  Array.isArray(v) && v.every((s) => typeof s === 'string');
+
+export const isValidDestination = (d: unknown): d is PluginDataDestination => {
+  if (typeof d !== 'object' || d === null) {
+    return false;
+  }
+  const dest = d as Record<string, unknown>;
+  return (
+    typeof dest.recipient === 'string' &&
+    dest.recipient.trim().length > 0 &&
+    isStringArray(dest.data) &&
+    (dest.optionalData === undefined || isStringArray(dest.optionalData)) &&
+    (dest.hosts === undefined ||
+      (Array.isArray(dest.hosts) && dest.hosts.every(isHostname))) &&
+    (dest.userServer === undefined || typeof dest.userServer === 'boolean') &&
+    (dest.privacyPolicyUrl === undefined ||
+      (typeof dest.privacyPolicyUrl === 'string' &&
+        dest.privacyPolicyUrl.startsWith('https://')))
+  );
+};
+
 const labelList = (values: string[], t: Translate): string => {
   const keys = values.map((v) =>
     KNOWN_SHARED_DATA.has(v)
@@ -47,9 +72,7 @@ const destinationHtml = (d: PluginDataDestination, t: Translate): string => {
     });
     html += `. ${escapeHtml(optional)}`;
   }
-  // Validation only admits https URLs; re-checked here because the card also renders
-  // manifests that were cached before validation existed.
-  if (d.privacyPolicyUrl?.startsWith('https://')) {
+  if (d.privacyPolicyUrl) {
     html +=
       ` <a href="${escapeHtml(d.privacyPolicyUrl)}" target="_blank" rel="noopener">` +
       `${escapeHtml(t(T.PLUGINS.DATA_SHARING.PRIVACY_POLICY))}</a>`;
@@ -66,15 +89,19 @@ export const renderDataSharingHtml = (
   opts: { isBundled: boolean; isChanged?: boolean },
   t: Translate,
 ): string => {
-  const { dataSharing } = manifest;
-  if (!Array.isArray(dataSharing) && opts.isBundled) {
+  // Cached uploaded manifests reach the card unvalidated; a malformed one counts as absent.
+  const dataSharing =
+    Array.isArray(manifest.dataSharing) && manifest.dataSharing.every(isValidDestination)
+      ? manifest.dataSharing
+      : undefined;
+  if (!dataSharing && opts.isBundled) {
     return '';
   }
   const title = t(
     opts.isChanged ? T.PLUGINS.DATA_SHARING.TITLE_CHANGED : T.PLUGINS.DATA_SHARING.TITLE,
   );
   let body: string;
-  if (!Array.isArray(dataSharing)) {
+  if (!dataSharing) {
     body = `<p>${escapeHtml(t(T.PLUGINS.DATA_SHARING.NOT_DECLARED))}</p>`;
   } else if (dataSharing.length === 0) {
     body = `<p>${escapeHtml(t(T.PLUGINS.DATA_SHARING.NONE))}</p>`;

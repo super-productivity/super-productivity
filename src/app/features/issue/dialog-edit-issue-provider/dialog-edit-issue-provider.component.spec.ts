@@ -171,7 +171,23 @@ describe('DialogEditIssueProviderComponent', () => {
         { provide: MAT_DIALOG_DATA, useValue: data },
         { provide: PluginIssueProviderRegistryService, useValue: pluginRegistry },
         { provide: PluginBridgeService, useValue: pluginBridge },
-        { provide: PluginService, useValue: { pluginStates: () => new Map() } },
+        {
+          provide: PluginService,
+          useValue: {
+            pluginStates: () =>
+              new Map([
+                [
+                  GOOGLE_CALENDAR_PLUGIN_ID,
+                  {
+                    manifest: {
+                      id: GOOGLE_CALENDAR_PLUGIN_ID,
+                      dataSharing: [{ recipient: 'Google Calendar', data: ['ids'] }],
+                    },
+                  },
+                ],
+              ]),
+          },
+        },
         { provide: TranslateService, useValue: { instant: (key: string) => key } },
         PluginOAuthBridgeService,
         PluginOAuthService,
@@ -276,6 +292,30 @@ describe('DialogEditIssueProviderComponent', () => {
         accountId: '2',
         bucketId: '10',
       });
+    });
+  });
+
+  describe('data sharing disclosure', () => {
+    it('shows the plugin declaration when connecting a new account', async () => {
+      await setup({
+        data: { issueProviderKey: GOOGLE_PROVIDER_KEY },
+        pluginProvider: createProvider(GOOGLE_PROVIDER_KEY, GOOGLE_CALENDAR_PLUGIN_ID),
+      });
+      expect(component.dataSharingHtml).toContain('<strong>Google Calendar</strong>');
+    });
+
+    it('shows nothing when editing an existing connection', async () => {
+      await setup({
+        data: {
+          issueProviderKey: GOOGLE_PROVIDER_KEY,
+          issueProvider: createIssueProvider(
+            GOOGLE_PROVIDER_KEY,
+            GOOGLE_CALENDAR_PLUGIN_ID,
+          ),
+        },
+        pluginProvider: createProvider(GOOGLE_PROVIDER_KEY, GOOGLE_CALENDAR_PLUGIN_ID),
+      });
+      expect(component.dataSharingHtml).toBe('');
     });
   });
 

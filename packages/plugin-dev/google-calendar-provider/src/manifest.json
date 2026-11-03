@@ -28,10 +28,7 @@
     "pollIntervalMs": 60000,
     "icon": "calendar",
     "humanReadableName": "Google Calendar",
-    "issueStrings": {
-      "singular": "Event",
-      "plural": "Events"
-    },
+    "issueStrings": { "singular": "Event", "plural": "Events" },
     "useAgendaView": true,
     "defaultAutoAddToBacklog": false
   }

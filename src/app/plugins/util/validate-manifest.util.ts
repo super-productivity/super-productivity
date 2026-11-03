@@ -1,9 +1,12 @@
 import { PluginManifest } from '../plugin-api.model';
-import type { PluginDataDestination } from '@super-productivity/plugin-api';
 import { SUPPORTED_LANGUAGE_CODES } from '../../core/locale.constants';
 import { environment } from '../../../environments/environment';
 import { compareVersions } from './community-plugin.util';
-import { KNOWN_SHARED_DATA } from './plugin-data-sharing.util';
+import {
+  isHostname,
+  isValidDestination,
+  KNOWN_SHARED_DATA,
+} from './plugin-data-sharing.util';
 
 const MAX_REPORTED_INVALID_LANGUAGES = 10;
 const MAX_REPORTED_LANGUAGE_LENGTH = 20;
@@ -59,9 +62,7 @@ export const validatePluginManifest = (
     if (!Array.isArray(manifest.allowedHosts)) {
       errors.push('allowedHosts must be an array of hostnames');
     } else {
-      const badEntries = manifest.allowedHosts.filter(
-        (h) => typeof h !== 'string' || h.trim().length === 0 || /[/:]/.test(h),
-      );
+      const badEntries = manifest.allowedHosts.filter((h) => !isHostname(h));
       if (badEntries.length > 0) {
         errors.push(
           'allowedHosts entries must be non-empty hostnames without scheme, port, or path (e.g. "api.example.com")',
@@ -120,30 +121,9 @@ export const validatePluginManifest = (
   };
 };
 
-const isHostname = (h: unknown): boolean =>
-  typeof h === 'string' && h.trim().length > 0 && !/[/:]/.test(h);
-
-const isStringArray = (v: unknown): v is string[] =>
-  Array.isArray(v) && v.every((s) => typeof s === 'string');
-
-const isValidDestination = (d: unknown): d is PluginDataDestination => {
-  if (typeof d !== 'object' || d === null) {
-    return false;
-  }
-  const dest = d as Record<string, unknown>;
-  return (
-    typeof dest.recipient === 'string' &&
-    dest.recipient.trim().length > 0 &&
-    isStringArray(dest.data) &&
-    (dest.optionalData === undefined || isStringArray(dest.optionalData)) &&
-    (dest.hosts === undefined ||
-      (Array.isArray(dest.hosts) && dest.hosts.every(isHostname))) &&
-    (dest.userServer === undefined || typeof dest.userServer === 'boolean') &&
-    (dest.privacyPolicyUrl === undefined ||
-      (typeof dest.privacyPolicyUrl === 'string' &&
-        dest.privacyPolicyUrl.startsWith('https://')))
-  );
-};
+// Keep in sync with the request-host check in plugin-bridge.service.ts (and the copy in
+// electron/bundled-plugin-ids.test.cjs).
+const normalizeHost = (h: string): string => h.trim().toLowerCase().replace(/\.$/, '');
 
 /**
  * Wrong shapes are errors; unknown data values only warn, so a plugin built for a newer
@@ -161,8 +141,14 @@ const validateDataSharing = (
     );
     return;
   }
-  const declaredHosts = new Set(destinations.flatMap((d) => d.hosts ?? []));
-  const undeclared = (manifest.allowedHosts ?? []).filter((h) => !declaredHosts.has(h));
+  const declaredHosts = new Set(
+    destinations.flatMap((d) => d.hosts ?? []).map(normalizeHost),
+  );
+  // A non-array allowedHosts is already reported above.
+  const allowedHosts = Array.isArray(manifest.allowedHosts) ? manifest.allowedHosts : [];
+  const undeclared = allowedHosts.filter(
+    (h) => typeof h === 'string' && !declaredHosts.has(normalizeHost(h)),
+  );
   if (undeclared.length > 0) {
     errors.push(
       `allowedHosts must also appear in dataSharing hosts: ${undeclared.slice(0, 10).join(', ')}`,
