@@ -492,7 +492,8 @@ test.describe('@webdav automatic file format rollout', () => {
           expect(await preserved.text()).toBe(legacy);
           // Not migrated and not merged over: the app wrote no sync file here.
           expect(targetPuts()).toBe(0);
-          console.log(`[audit-pin] rollout-race legacyReads=${legacyReads}`);
+          // Pinned (measured 2026-11): an extra read is a behavior change.
+          expect(legacyReads).toBe(6);
           expect(
             (
               await request.get(`${remote}sync-ops.json`, {
@@ -517,7 +518,7 @@ test.describe('@webdav automatic file format rollout', () => {
             joining.page.locator('task').filter({ hasText: localTitle }),
           ).toBeVisible();
           expect(targetPuts()).toBe(0);
-          console.log(`[audit-pin] rollout-race final legacyReads=${legacyReads}`);
+          expect(legacyReads).toBe(6);
         } finally {
           await closeContextsSafely(seed.context, joining?.context);
         }

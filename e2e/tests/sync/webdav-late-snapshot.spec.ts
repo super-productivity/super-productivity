@@ -177,7 +177,8 @@ test.describe('@webdav a late snapshot-only v2 file is loaded before uploading',
       await expect(sync.syncSpinner).toBeHidden();
       // The upload was deferred silently; the question comes on the next sync.
       expect(await hasEverAppeared(joining.page, 'setup-conflict')).toBe(false);
-      console.log(`[audit-pin] late-snapshot setup legacyReads=${legacyReads}`);
+      // Pinned read counts (measured 2026-11): a change is a behavior change.
+      expect(legacyReads).toBe(6);
 
       // The seed's state is still the folder's state, and the app never wrote
       // the file (a write before the seed landed would be hidden by it).
@@ -203,7 +204,7 @@ test.describe('@webdav a late snapshot-only v2 file is loaded before uploading',
       expect(appWrites).toBe(0);
       expect(syncFilePuts()).toBe(0);
       expect(await remoteText(request, `${remote}sync-data.json`)).toBe(snapshotOnly);
-      console.log(`[audit-pin] late-snapshot final legacyReads=${legacyReads}`);
+      expect(legacyReads).toBe(9);
     } finally {
       await closeContextsSafely(joining.context);
     }
@@ -276,7 +277,8 @@ test.describe('@webdav a late snapshot-only v2 file is loaded before uploading',
       const prompt = mover.page.locator('dialog-server-migration-confirm');
       await expect(prompt).toBeVisible();
       expect(published).toBe(true);
-      console.log(`[audit-pin] migration-prompt primaryReads=${primaryReads}`);
+      // Pinned read counts (measured 2026-11).
+      expect(primaryReads).toBe(3);
 
       // Answer after the cycle cache expired.
       await mover.page.clock.setFixedTime(new Date(Date.now() + 31_000));
@@ -293,7 +295,7 @@ test.describe('@webdav a late snapshot-only v2 file is loaded before uploading',
       expect(await remoteText(request, `${remote}sync-data.json`)).toBe(seededFile);
       // Cancel promised a download: nothing was ever written to the folder.
       expect(syncFilePuts()).toBe(0);
-      console.log(`[audit-pin] migration-prompt final primaryReads=${primaryReads}`);
+      expect(primaryReads).toBe(5);
     } finally {
       await closeContextsSafely(mover.context);
     }
