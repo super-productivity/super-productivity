@@ -57,10 +57,20 @@ test.describe('@supersync SuperSync browser sign-in', () => {
 
       // The first device sets the encryption password once the setup sync ends.
       await expect(signIn).toBeHidden({ timeout: 15000 });
-      await expect(page.locator('dialog-enable-encryption').first()).toBeVisible({
-        timeout: 20000,
-      });
-      await clientA.sync.enableEncryption(config.password!);
+      const setupPassword = page.locator('dialog-enable-encryption');
+      await expect(setupPassword).toBeVisible({ timeout: 20000 });
+      await setupPassword.locator('.e2e-setup-encrypt-password').fill(config.password!);
+      await setupPassword
+        .locator('.e2e-setup-encrypt-confirm-password')
+        .fill(config.password!);
+      await setupPassword.locator('.e2e-setup-encrypt-submit').click();
+
+      // Then the finish screen confirms sync is on.
+      const finished = page.locator('dialog-sync-finished');
+      await expect(finished).toBeVisible({ timeout: 20000 });
+      await expect(finished.locator('.e2e-sync-finished-count')).toHaveText(/\d+/);
+      await finished.locator('.e2e-sync-finished-close').click();
+      await expect(finished).toBeHidden();
 
       const taskName = `SignedIn-${testRunId}`;
       await clientA.workView.addTask(taskName);

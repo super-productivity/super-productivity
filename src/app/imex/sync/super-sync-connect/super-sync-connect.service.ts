@@ -17,6 +17,7 @@ import { isOnline } from '../../../util/is-online';
 import { IS_IOS_NATIVE, IS_NATIVE_PLATFORM } from '../../../util/is-native-platform';
 import { SyncConfigService } from '../sync-config.service';
 import { SyncWrapperService } from '../sync-wrapper.service';
+import { SuperSyncFinishService } from './super-sync-finish.service';
 import {
   ConnectPlatform,
   ConnectRequest,
@@ -70,6 +71,7 @@ export class SuperSyncConnectService {
   private _syncConfigService = inject(SyncConfigService);
   private _syncWrapperService = inject(SyncWrapperService);
   private _providerManager = inject(SyncProviderManager);
+  private _finish = inject(SuperSyncFinishService);
 
   /** The server saved for SuperSync on this device, else the default. */
   async savedBaseUrl(): Promise<string> {
@@ -156,6 +158,7 @@ export class SuperSyncConnectService {
     // Armed before the online check: an offline device asks for the encryption
     // password when its first sync finally runs.
     this._syncWrapperService.markPromptEncryptionAfterSetupSync();
+    this._finish.arm();
     if (isOnline()) {
       void this._syncWrapperService.sync(true);
     }

@@ -6,6 +6,7 @@ import { SyncProviderManager } from '../../../op-log/sync-providers/provider-man
 import { SyncProviderId } from '../../../op-log/sync-providers/provider.const';
 import { SyncConfigService } from '../sync-config.service';
 import { SyncWrapperService } from '../sync-wrapper.service';
+import { SuperSyncFinishService } from './super-sync-finish.service';
 import {
   getConnectPlatform,
   normalizeSuperSyncBaseUrl,
@@ -59,6 +60,7 @@ describe('SuperSyncConnectService', () => {
   let syncConfig: jasmine.SpyObj<SyncConfigService>;
   let syncWrapper: jasmine.SpyObj<SyncWrapperService>;
   let providerManager: jasmine.SpyObj<SyncProviderManager>;
+  let finish: jasmine.SpyObj<SuperSyncFinishService>;
 
   const formValue = {
     ...DEFAULT_GLOBAL_CONFIG.sync,
@@ -77,11 +79,13 @@ describe('SuperSyncConnectService', () => {
     ]);
     syncWrapper.sync.and.resolveTo();
     providerManager = jasmine.createSpyObj('SyncProviderManager', ['getProviderById']);
+    finish = jasmine.createSpyObj('SuperSyncFinishService', ['arm']);
     TestBed.configureTestingModule({
       providers: [
         { provide: SyncConfigService, useValue: syncConfig },
         { provide: SyncWrapperService, useValue: syncWrapper },
         { provide: SyncProviderManager, useValue: providerManager },
+        { provide: SuperSyncFinishService, useValue: finish },
       ],
     });
     service = TestBed.inject(SuperSyncConnectService);
@@ -114,6 +118,7 @@ describe('SuperSyncConnectService', () => {
       expect(syncWrapper.markPromptEncryptionAfterSetupSync).toHaveBeenCalled();
       expect(syncWrapper.sync).toHaveBeenCalledWith(true);
       expect(syncConfig.updateSettingsFromForm).toHaveBeenCalledBefore(syncWrapper.sync);
+      expect(finish.arm).toHaveBeenCalled();
     });
 
     it('still arms the password prompt offline, without starting a sync', async () => {

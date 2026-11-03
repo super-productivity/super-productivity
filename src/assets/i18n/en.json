@@ -1403,6 +1403,13 @@
         "WAITING_TEXT": "We opened {{host}} in your browser. Sign in there. This window continues by itself.",
         "WAITING_TITLE": "Finish signing in in your browser"
       },
+      "D_SYNC_FINISHED": {
+        "ADD_DEVICE": "To add another device, open Super Productivity there, choose Sync, then Sign in, and enter your encryption password.",
+        "BACK": "Back to my tasks",
+        "TASK_COUNT": "Tasks on this device: {{count}}",
+        "TEXT": "This device is in sync. New changes sync automatically.",
+        "TITLE": "Sync is on"
+      },
       "D_SYNC_IMPORT_CONFLICT": {
         "FILTERED_CHANGES": "Affected changes",
         "FIRST_SYNC_USE_LOCAL_CONFIRM": "This device has never synced before. \"Use My Data\" will permanently replace the data on the server with this device's local data. This cannot be undone. Continue?",
