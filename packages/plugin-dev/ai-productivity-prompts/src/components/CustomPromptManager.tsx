@@ -104,14 +104,24 @@ const PromptCard: Component<{
               onClick={props.onEdit}
               title="Edit prompt"
             >
-              ✏️
+              <span
+                class="material-icons"
+                aria-hidden="true"
+              >
+                edit
+              </span>
             </Button>
             <Button
               variant="icon"
               onClick={props.onDelete}
               title="Delete prompt"
             >
-              🗑️
+              <span
+                class="material-icons"
+                aria-hidden="true"
+              >
+                delete
+              </span>
             </Button>
           </div>
         </div>
