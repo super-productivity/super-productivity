@@ -351,7 +351,7 @@ test.describe('@webdav WebDAV First Sync Conflict', () => {
       // yet. The #9170 assertions below rely on B's next op being the first.
       const remote = await readPrefixedFile<{ recentOps: unknown[] }>(
         request,
-        `${WEBDAV_CONFIG_TEMPLATE.baseUrl}${SYNC_FOLDER_NAME}/DEV/sync-data.json`,
+        `${WEBDAV_CONFIG_TEMPLATE.baseUrl}${SYNC_FOLDER_NAME}/DEV/${WEBDAV_SYNC_FILE}`,
         WEBDAV_AUTHORIZATION,
       );
       expect(remote.recentOps).toEqual([]);

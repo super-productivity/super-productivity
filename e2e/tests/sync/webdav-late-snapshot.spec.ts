@@ -11,9 +11,11 @@ import {
   WEBDAV_CONFIG_TEMPLATE,
 } from '../../utils/sync-helpers';
 import { waitForStatePersistence } from '../../utils/waits';
-import { countWebdavPuts } from '../../utils/audit-webdav-helpers';
-
-const SYNC_FILES = ['sync-data.json', 'sync-ops.json', 'sync-state.json'] as const;
+import {
+  countWebdavWrites,
+  hasEverAppeared,
+  recordIfEverAppears,
+} from '../../utils/audit-webdav-helpers';
 
 const authorization = `Basic ${Buffer.from('admin:admin').toString('base64')}`;
 const root = WEBDAV_CONFIG_TEMPLATE.baseUrl;
@@ -148,9 +150,9 @@ test.describe('@webdav a late snapshot-only v2 file is loaded before uploading',
       await keepSyncManual(joining.page);
       let legacyReads = 0;
       let appWrites = 0;
-      // Every sync file, not only the routed one: a v3 write would also merge
-      // over the seed.
-      const syncFilePuts = countWebdavPuts(joining.page, `${folder}/DEV`, SYNC_FILES);
+      // Every write into the folder, not only to the routed file: a v3 file or
+      // an immutable snapshot would also merge over the seed.
+      const syncFilePuts = countWebdavWrites(joining.page, `${folder}/DEV`);
       let published = false;
       await joining.page.route(`**/${folder}/DEV/sync-data.json`, async (route) => {
         if (route.request().method() === 'PUT') appWrites++;
@@ -166,6 +168,7 @@ test.describe('@webdav a late snapshot-only v2 file is loaded before uploading',
         }
         await route.continue();
       });
+      await recordIfEverAppears(joining.page, 'setup-conflict', 'dialog-sync-conflict');
       await sync.setupWebdavSync(
         { ...WEBDAV_CONFIG_TEMPLATE, syncFolderPath: `/${folder}` },
         { useProductFormatDefault: true },
@@ -173,7 +176,7 @@ test.describe('@webdav a late snapshot-only v2 file is loaded before uploading',
       await expect.poll(() => published).toBe(true);
       await expect(sync.syncSpinner).toBeHidden();
       // The upload was deferred silently; the question comes on the next sync.
-      await expect(joining.page.locator('dialog-sync-conflict')).toBeHidden();
+      expect(await hasEverAppeared(joining.page, 'setup-conflict')).toBe(false);
       console.log(`[audit-pin] late-snapshot setup legacyReads=${legacyReads}`);
 
       // The seed's state is still the folder's state, and the app never wrote
@@ -252,7 +255,7 @@ test.describe('@webdav a late snapshot-only v2 file is loaded before uploading',
 
       let primaryReads = 0;
       let published = false;
-      const syncFilePuts = countWebdavPuts(mover.page, `${folder}/DEV`, SYNC_FILES);
+      const syncFilePuts = countWebdavWrites(mover.page, `${folder}/DEV`);
       await mover.page.route(`**/${folder}/DEV/sync-data.json`, async (route) => {
         if (route.request().method() === 'GET' && ++primaryReads === 2) {
           // The download found no data; the seed lands before the

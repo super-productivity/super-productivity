@@ -151,8 +151,13 @@ test.describe('@webdav WebDAV Delete Cascade Sync', () => {
 
     // Precondition: B holds the archived task, still tagged. Without this the
     // cascade below could pass on a client that never had the task at all.
+    await expect
+      .poll(async () => (await getArchiveYoungTask(pageB, taskId!))?.tagIds ?? null, {
+        timeout: 10000,
+        message: 'B must hold the archived task with its tag',
+      })
+      .toEqual([tagId]);
     expect(await getArchiveYoungTaskIds(pageB)).toContain(taskId!);
-    expect((await getArchiveYoungTask(pageB, taskId!))?.tagIds).toEqual([tagId]);
 
     // --- Client A deletes the tag ---
     await tagPageA.deleteTag(tagName);
@@ -310,7 +315,9 @@ test.describe('@webdav WebDAV Delete Cascade Sync', () => {
 
     // Precondition: B holds the archived project task, so the delete below has
     // something to cascade to.
-    expect(await getArchiveYoungTaskIds(pageB)).toContain(taskId!);
+    await expect
+      .poll(async () => getArchiveYoungTaskIds(pageB), { timeout: 10000 })
+      .toContain(taskId!);
 
     // --- Client A deletes the project ---
     await projectPageA.deleteProject(projectName);

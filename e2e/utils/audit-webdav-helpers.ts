@@ -95,6 +95,20 @@ export const getArchiveYoungTask = async (
     }
   }, taskId);
 
+/**
+ * The store helper is attached after bootstrap via a dynamic import, so right
+ * after a reload it can still be missing. Wait for it instead of throwing.
+ */
+const waitForStoreHelper = async (page: Page): Promise<void> => {
+  await page.waitForFunction(
+    () =>
+      !!(window as unknown as { __e2eTestHelpers?: { store?: unknown } }).__e2eTestHelpers
+        ?.store,
+    undefined,
+    { timeout: 10000 },
+  );
+};
+
 type StoreRoot = {
   tasks: { ids: string[]; entities: Record<string, RawTask | undefined> };
   tag: { ids: string[]; entities: Record<string, { id: string; title: string }> };
@@ -108,8 +122,9 @@ type StoreRoot = {
 export const getStoreTask = async (
   page: Page,
   taskId: string,
-): Promise<AuditTaskFacts | null> =>
-  page.evaluate((id) => {
+): Promise<AuditTaskFacts | null> => {
+  await waitForStoreHelper(page);
+  return page.evaluate((id) => {
     const store = (
       window as unknown as {
         __e2eTestHelpers?: {
@@ -139,13 +154,18 @@ export const getStoreTask = async (
       isDone: !!t.isDone,
     };
   }, taskId);
+};
 
 /**
  * Id of the single live task whose title equals `title` exactly. Throws when
  * none or several match, so a test never asserts on the wrong entity.
  */
-export const getStoreTaskIdByTitle = async (page: Page, title: string): Promise<string> =>
-  page.evaluate((wantedTitle) => {
+export const getStoreTaskIdByTitle = async (
+  page: Page,
+  title: string,
+): Promise<string> => {
+  await waitForStoreHelper(page);
+  return page.evaluate((wantedTitle) => {
     const store = (
       window as unknown as {
         __e2eTestHelpers?: {
@@ -170,13 +190,15 @@ export const getStoreTaskIdByTitle = async (page: Page, title: string): Promise<
     }
     return matches[0].id;
   }, title);
+};
 
 /** Id of the tag whose title equals `title`, or null when no such tag exists. */
 export const getStoreTagIdByTitle = async (
   page: Page,
   title: string,
-): Promise<string | null> =>
-  page.evaluate((wantedTitle) => {
+): Promise<string | null> => {
+  await waitForStoreHelper(page);
+  return page.evaluate((wantedTitle) => {
     const store = (
       window as unknown as {
         __e2eTestHelpers?: {
@@ -196,6 +218,7 @@ export const getStoreTagIdByTitle = async (
     );
     return tag?.id ?? null;
   }, title);
+};
 
 /**
  * Starts recording whether `selector` ever matches an element in the page.
@@ -277,24 +300,31 @@ export const getBrowserLocalDateStr = async (
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
   }, offsetDays);
 
+/** WebDAV methods that change the remote folder. */
+const WRITE_METHODS = new Set(['PUT', 'MOVE', 'COPY', 'DELETE']);
+
 /**
- * Counts PUT requests this page sends to the given WebDAV folder for any of
- * `fileNames` (e.g. sync-data.json). Register it before the sync under test;
- * read the count through the returned getter.
+ * Counts write requests (PUT, MOVE, COPY, DELETE) this page sends into the
+ * given WebDAV folder. With `fileNames` only those files count; without it any
+ * file does, which also covers immutable `sync-state__*` snapshots, backups
+ * and lock files. Register it before the sync under test.
  */
-export const countWebdavPuts = (
+export const countWebdavWrites = (
   page: Page,
   folderPath: string,
-  fileNames: readonly string[],
+  fileNames?: readonly string[],
 ): (() => number) => {
   let count = 0;
   const folder = `/${folderPath.replace(/^\/+|\/+$/g, '')}/`;
   page.on('request', (req) => {
-    if (req.method() !== 'PUT') {
+    if (!WRITE_METHODS.has(req.method())) {
       return;
     }
     const path = new URL(req.url()).pathname;
-    if (fileNames.some((name) => path.endsWith(`${folder}${name}`))) {
+    const isInFolder = fileNames
+      ? fileNames.some((name) => path.endsWith(`${folder}${name}`))
+      : path.includes(folder);
+    if (isInFolder) {
       count++;
     }
   });

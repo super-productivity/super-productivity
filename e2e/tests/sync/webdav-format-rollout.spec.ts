@@ -13,7 +13,7 @@ import {
 } from '../../utils/sync-helpers';
 import { translationRegex, translationText } from '../../utils/i18n-strings';
 import { waitForAppReady, waitForStatePersistence } from '../../utils/waits';
-import { countWebdavPuts } from '../../utils/audit-webdav-helpers';
+import { countWebdavWrites } from '../../utils/audit-webdav-helpers';
 
 const authorization = `Basic ${Buffer.from('admin:admin').toString('base64')}`;
 
@@ -446,11 +446,7 @@ test.describe('@webdav automatic file format rollout', () => {
           await waitForStatePersistence(joining.page);
           let legacyReads = 0;
           let concurrentV2Created = false;
-          const targetPuts = countWebdavPuts(joining.page, `${folder}/DEV`, [
-            'sync-data.json',
-            'sync-ops.json',
-            'sync-state.json',
-          ]);
+          const targetPuts = countWebdavWrites(joining.page, `${folder}/DEV`);
           let releaseLegacyRead: (() => void) | undefined;
           await joining.page.route(`**/${folder}/DEV/sync-data.json`, async (route) => {
             if (route.request().method() === 'GET' && ++legacyReads === 6) {

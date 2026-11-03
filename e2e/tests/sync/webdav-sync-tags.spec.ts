@@ -205,8 +205,6 @@ test.describe('@webdav WebDAV Sync Tags', () => {
     await syncPageB.triggerSync();
     expect(await waitForSync(pageB, syncPageB)).toBe('success');
 
-    // Wait for UI to settle after sync (no reload needed, sync updates UI directly)
-    await pageB.waitForTimeout(1000);
     await workViewPageB.waitForTaskList();
 
     // Verify task still exists but without the specific tag indicator
