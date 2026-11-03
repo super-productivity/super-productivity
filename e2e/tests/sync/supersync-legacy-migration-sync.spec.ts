@@ -146,7 +146,11 @@ test.describe('@supersync @migration SuperSync Legacy Migration Sync', () => {
       await expect(
         syncPageB.conflictDialog.or(syncPageB.syncImportConflictDialog),
       ).toBeVisible({ timeout: 30000 });
-      if (await syncPageB.conflictDialog.isVisible()) {
+      const isWholeDatasetDialog = await syncPageB.conflictDialog.isVisible();
+      console.log(
+        `[Test] Client B prompt: ${isWholeDatasetDialog ? 'dialog-sync-conflict' : 'dialog-sync-import-conflict'}`,
+      );
+      if (isWholeDatasetDialog) {
         await syncPageB.syncAndWait({ conflictDialog: 'local' });
       } else {
         await syncPageB.chooseSyncImportUseLocal();
