@@ -12,8 +12,8 @@ const pixel5TestOptions = { ...devices['Pixel 5'] };
 Reflect.deleteProperty(pixel5TestOptions, 'defaultBrowserType');
 
 // Up to the inline icons, whose ligature names are part of the text content.
-const MODEL_TIP = 'This task is planned for today, so it shows in';
-const INBOX_TIP = 'Tasks without a project of your own stay in';
+const MODEL_TIP = 'This one is planned for today, so it shows here too';
+const INBOX_TIP = 'Tasks without a project of your own go to';
 const INBOX_NAV_ITEM =
   'magic-side-nav nav-item[data-project-id="INBOX_PROJECT"] .nav-link';
 const TODAY_NAV_ITEM = 'magic-side-nav nav-item[data-tag-id="TODAY"] .nav-link';
@@ -85,7 +85,7 @@ test.describe('First-run onboarding', () => {
     const sideNav = page.locator('magic-side-nav');
     await expect(sideNav.getByText('Planner', { exact: true })).toBeVisible();
     await expect(page.locator('.tour-playBtn')).toBeVisible();
-    for (const hidden of ['Schedule', 'Boards', 'Habits']) {
+    for (const hidden of ['Schedule', 'Views', 'Habits']) {
       await expect(sideNav.getByText(hidden, { exact: true })).toHaveCount(0);
     }
     assertNoRuntimeBrowserErrors(runtimeErrors, 'onboarding defaults');
@@ -268,7 +268,7 @@ test.describe('First-run onboarding', () => {
     await expect(page.locator('onboarding-hint')).toHaveCount(0);
     // The calm defaults survive the reload.
     await expect(
-      page.locator('magic-side-nav').getByText('Boards', { exact: true }),
+      page.locator('magic-side-nav').getByText('Views', { exact: true }),
     ).toHaveCount(0);
     assertNoRuntimeBrowserErrors(runtimeErrors, 'onboarding reload');
     await page.close();

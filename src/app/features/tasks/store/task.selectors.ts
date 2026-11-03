@@ -842,6 +842,65 @@ export type TaskWithSubTasksCache = Map<
   { task: Task; subTasks: Task[]; result: TaskWithSubTasks }
 >;
 
+/**
+ * The tasks for `ids` with their subtask entities, skipping unknown ids. Reuses
+ * the cached `TaskWithSubTasks` object of a task whose entity and subtask refs
+ * are unchanged, so rows that didn't change keep their object (and don't
+ * re-render). Prunes cache entries for ids no longer requested.
+ */
+export const mapIdsToTasksWithSubTasks = (
+  ids: readonly string[],
+  entities: TaskState['entities'],
+  cache: TaskWithSubTasksCache,
+): TaskWithSubTasks[] => {
+  const result: TaskWithSubTasks[] = [];
+  const seen = new Set<string>();
+  for (const id of ids) {
+    const task = entities[id];
+    // Same filtering as the legacy selector: drop missing/deleted entities.
+    if (!task) {
+      continue;
+    }
+    seen.add(id);
+
+    // Resolve current subtask entities (same shaping as mapSubTasksToTask).
+    const subTasks: Task[] = [];
+    for (const subTaskId of task.subTaskIds) {
+      const subTask = entities[subTaskId];
+      if (subTask) {
+        subTasks.push(subTask);
+      } else {
+        devError('Task data not found for ' + subTaskId);
+      }
+    }
+
+    const cached = cache.get(id);
+    if (
+      cached &&
+      cached.task === task &&
+      cached.subTasks.length === subTasks.length &&
+      cached.subTasks.every((st, i) => st === subTasks[i])
+    ) {
+      // Nothing referentially changed → reuse the exact previous object.
+      result.push(cached.result);
+    } else {
+      const built: TaskWithSubTasks = { ...task, subTasks };
+      cache.set(id, { task, subTasks, result: built });
+      result.push(built);
+    }
+  }
+  // Prune entries for ids no longer requested so the cache can't grow
+  // unbounded, including a long-lived cache across id-sets.
+  if (cache.size > seen.size) {
+    for (const key of cache.keys()) {
+      if (!seen.has(key)) {
+        cache.delete(key);
+      }
+    }
+  }
+  return result;
+};
+
 export const selectTasksWithSubTasksByIdsFactory = (
   ids: string[],
   // Defaults to a per-selector-instance (per-subscription) cache keyed by task
@@ -852,59 +911,10 @@ export const selectTasksWithSubTasksByIdsFactory = (
   // the other rows' objects too. Entries are only reused when the task and
   // subtask refs are identical, so a shared cache can't serve stale data.
   cache: TaskWithSubTasksCache = new Map(),
-): MemoizedSelector<object, TaskWithSubTasks[]> => {
-  return createSelector(
-    selectTaskFeatureState,
-    (state: TaskState): TaskWithSubTasks[] => {
-      const result: TaskWithSubTasks[] = [];
-      const seen = new Set<string>();
-      for (const id of ids) {
-        const task = state.entities[id];
-        // Same filtering as the legacy selector: drop missing/deleted entities.
-        if (!task) {
-          continue;
-        }
-        seen.add(id);
-
-        // Resolve current subtask entities (same shaping as mapSubTasksToTask).
-        const subTasks: Task[] = [];
-        for (const subTaskId of task.subTaskIds) {
-          const subTask = state.entities[subTaskId];
-          if (subTask) {
-            subTasks.push(subTask);
-          } else {
-            devError('Task data not found for ' + subTaskId);
-          }
-        }
-
-        const cached = cache.get(id);
-        if (
-          cached &&
-          cached.task === task &&
-          cached.subTasks.length === subTasks.length &&
-          cached.subTasks.every((st, i) => st === subTasks[i])
-        ) {
-          // Nothing referentially changed → reuse the exact previous object.
-          result.push(cached.result);
-        } else {
-          const built: TaskWithSubTasks = { ...task, subTasks };
-          cache.set(id, { task, subTasks, result: built });
-          result.push(built);
-        }
-      }
-      // Prune entries for ids no longer requested so the cache can't grow
-      // unbounded, including a long-lived cache across id-sets.
-      if (cache.size > seen.size) {
-        for (const key of cache.keys()) {
-          if (!seen.has(key)) {
-            cache.delete(key);
-          }
-        }
-      }
-      return result;
-    },
+): MemoizedSelector<object, TaskWithSubTasks[]> =>
+  createSelector(selectTaskFeatureState, (state: TaskState): TaskWithSubTasks[] =>
+    mapIdsToTasksWithSubTasks(ids, state.entities, cache),
   );
-};
 
 /**
  * The task plus its subtasks, or `undefined` when the id is unknown.

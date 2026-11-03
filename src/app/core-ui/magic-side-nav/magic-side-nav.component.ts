@@ -22,6 +22,7 @@ import {
 import { NavigationStart, Router, RouterModule } from '@angular/router';
 import { NavItemComponent } from './nav-item/nav-item.component';
 import { NavListTreeComponent } from './nav-list/nav-list-tree.component';
+import { NavViewGroupComponent } from './nav-view-group/nav-view-group.component';
 import { NavItem } from './magic-side-nav.model';
 import { LS } from '../../core/persistence/storage-keys.const';
 import { MagicNavConfigService } from './magic-nav-config.service';
@@ -60,6 +61,16 @@ const INITIAL_ENTER_ANIMATION_DURATION_MS = 425;
 // the last of the collapse; the two numbers have to move together.
 const SIDENAV_WIDTH_ANIMATION_DURATION_MS = 425;
 
+/**
+ * The element at a point, looking through tooltips: one shown by a button the
+ * drag passed over (e.g. "Show/hide projects") can sit on the nav item a task
+ * is dropped on.
+ */
+const elementUnderTooltips = (point: { x: number; y: number }): Element | null =>
+  document
+    .elementsFromPoint(point.x, point.y)
+    .find((el) => !el.closest('.mat-mdc-tooltip-panel')) ?? null;
+
 @Component({
   selector: 'magic-side-nav',
   standalone: true,
@@ -67,6 +78,7 @@ const SIDENAV_WIDTH_ANIMATION_DURATION_MS = 425;
     RouterModule,
     NavItemComponent,
     NavListTreeComponent,
+    NavViewGroupComponent,
     MatMenuModule,
     NavMatMenuComponent,
     SwipeDirective,
@@ -444,13 +456,15 @@ export class MagicSideNavComponent implements OnDestroy, AfterViewInit {
       return this._sideNavConfigService.isProjectsExpanded();
     } else if (item.id === 'tags') {
       return this._sideNavConfigService.isTagsExpanded();
+    } else if (item.id === 'views') {
+      return this._sideNavConfigService.isViewsExpanded();
     }
     // For other groups, default to expanded (or extend service to manage all groups)
     return true;
   }
 
   onItemClick(item: NavItem): void {
-    if (item.type === 'tree') {
+    if (item.type === 'tree' || item.type === 'viewGroup') {
       // All groups now handled consistently through service
       if (item.action) {
         item.action();
@@ -730,8 +744,7 @@ export class MagicSideNavComponent implements OnDestroy, AfterViewInit {
       if (this._multiDrag.isCancelled()) return;
       const position = getPointerPosition(event);
       const projectId = position
-        ? document
-            .elementFromPoint(position.x, position.y)
+        ? elementUnderTooltips(position)
             ?.closest('nav-item[data-project-id]')
             ?.getAttribute('data-project-id')
         : null;
@@ -758,9 +771,7 @@ export class MagicSideNavComponent implements OnDestroy, AfterViewInit {
       return;
     }
 
-    const navItemElement = document
-      .elementFromPoint(pointerPos.x, pointerPos.y)
-      ?.closest('nav-item');
+    const navItemElement = elementUnderTooltips(pointerPos)?.closest('nav-item');
     if (!navItemElement) {
       return;
     }

@@ -15,25 +15,17 @@ test.describe('Dialog auto focus on a phone', () => {
   // touch input mode, as on an Android/iOS device.
   test.use({ viewport: PHONE, hasTouch: true, isMobile: true });
 
-  test('the edit-board dialog focuses itself, not its title field', async ({
-    page,
-    workViewPage,
-  }) => {
+  test('the view editor focuses itself, not a field', async ({ page, workViewPage }) => {
     await workViewPage.waitForTaskList();
-    await page.goto('/#/boards');
-    await expect(page.locator('boards')).toBeVisible({ timeout: 10000 });
-    await page.getByRole('tab', { name: 'Kanban', exact: true }).tap();
-    // A fresh profile lacks the board's tag; once created, the panels show.
-    await page.getByRole('button', { name: 'Create Tag' }).tap();
-
-    const editBtn = page
-      .locator('board-panel header')
-      .getByRole('button', { name: 'Edit' })
-      .first();
-    await editBtn.tap();
+    await page.goto('/#/boards/KANBAN_DEFAULT');
+    // On a phone a view is a list, and its title in the title bar opens the
+    // view editor.
+    await expect(page.locator('board-panel')).toHaveCount(3);
+    const viewTitle = page.locator('page-title .page-title');
+    await viewTitle.tap();
 
     const container = page.locator('mat-dialog-container');
-    await expect(container.locator('board-edit')).toBeVisible();
+    await expect(container.locator('dialog-board-edit')).toBeVisible();
     // The container itself holds focus, so no text field does and the
     // on-screen keyboard stays down.
     await expect(container).toBeFocused();
@@ -42,7 +34,7 @@ test.describe('Dialog auto focus on a phone', () => {
     // Closing hands focus back to the button that opened the dialog.
     await container.getByRole('button', { name: 'Cancel', exact: true }).tap();
     await expect(container).toHaveCount(0);
-    await expect(editBtn).toBeFocused();
+    await expect(viewTitle).toBeFocused();
   });
 
   test('the create-project dialog still focuses its name field', async ({

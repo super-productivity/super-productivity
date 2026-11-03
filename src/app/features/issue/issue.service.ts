@@ -63,7 +63,7 @@ import { getCalendarEventIdCandidates } from '../calendar-integration/get-calend
 import { Store } from '@ngrx/store';
 import { selectEnabledIssueProviders } from './store/issue-provider.selectors';
 import { getErrorTxt } from '../../util/get-error-text';
-import { getDbDateStr } from '../../util/get-db-date-str';
+import { DateService } from '../../core/date/date.service';
 import { TODAY_TAG } from '../tag/tag.const';
 import typia from 'typia';
 import { GlobalProgressBarService } from '../../core-ui/global-progress-bar/global-progress-bar.service';
@@ -111,6 +111,7 @@ export class IssueService {
   private _pluginAdapter = inject(PluginIssueProviderAdapterService);
   private _pluginRegistry = inject(PluginIssueProviderRegistryService);
   private _globalConfigService = inject(GlobalConfigService);
+  private _dateService = inject(DateService);
 
   ISSUE_SERVICE_MAP: { [key: string]: IssueServiceInterface } = {
     [GITLAB_TYPE]: this._gitlabCommonInterfacesService,
@@ -649,7 +650,7 @@ export class IssueService {
       // Default plan for today unless a precise time is provided by provider.
       // Skip when going to backlog — a backlog task that's also "due today"
       // shows up in the Today tab, defeating the point of the backlog.
-      ...(isAddToBacklog ? {} : { dueDay: getDbDateStr() }),
+      ...(isAddToBacklog ? {} : { dueDay: this._dateService.todayStr() }),
       ...additionalFromProviderIssueService,
       ...taskDefaults,
       ...additional,
