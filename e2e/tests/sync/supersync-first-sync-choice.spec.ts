@@ -52,7 +52,7 @@ test.describe('@supersync First-sync choice when joining with local tasks', () =
       const dialog = clientB.sync.syncImportConflictDialog;
       await expect(dialog).toBeVisible({ timeout: 30000 });
       await expect(dialog.locator('.e2e-first-sync-count')).toHaveText(
-        'This device has 2 tasks.',
+        'Tasks on this device: 2',
       );
       const warning = dialog.locator('.e2e-first-sync-warning');
       const useAccount = clientB.sync.firstSyncUseAccountRadio.locator('input');

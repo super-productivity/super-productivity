@@ -1333,7 +1333,7 @@
       "D_FIRST_SYNC": {
         "ACCOUNT_TASKS": "Your account already has tasks, which are also on your other devices.",
         "CONTINUE": "Continue",
-        "DEVICE_TASKS": "This device has {{count}} tasks.",
+        "DEVICE_TASKS": "Tasks on this device: {{count}}",
         "RECOMMENDED": "Recommended.",
         "REMOVE_ACCOUNT_TASKS": "Remove the account's tasks",
         "REMOVE_DEVICE_TASKS": "Remove {{count}} tasks",
