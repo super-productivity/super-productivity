@@ -2,6 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { of } from 'rxjs';
 import { GitlabCommonInterfacesService } from './gitlab-common-interfaces.service';
 import { GitlabApiService } from './gitlab-api/gitlab-api.service';
+import { GitlabAutoImportConfirmService } from './gitlab-auto-import-confirm.service';
 import { IssueProviderService } from '../../issue-provider.service';
 import { DEFAULT_GITLAB_CFG } from './gitlab.const';
 import { GitlabIssue } from './gitlab-issue.model';
@@ -109,6 +110,7 @@ describe('GitlabCommonInterfacesService', () => {
   let service: GitlabCommonInterfacesService;
   let gitlabApiService: jasmine.SpyObj<GitlabApiService>;
   let issueProviderService: jasmine.SpyObj<IssueProviderService>;
+  let autoImportConfirm: jasmine.SpyObj<GitlabAutoImportConfirmService>;
 
   beforeEach(() => {
     gitlabApiService = jasmine.createSpyObj('GitlabApiService', [
@@ -118,15 +120,32 @@ describe('GitlabCommonInterfacesService', () => {
     ]);
     issueProviderService = jasmine.createSpyObj('IssueProviderService', ['getCfgOnce$']);
     issueProviderService.getCfgOnce$.and.returnValue(of(BASE_CFG));
+    autoImportConfirm = jasmine.createSpyObj('GitlabAutoImportConfirmService', [
+      'confirmSave',
+    ]);
 
     TestBed.configureTestingModule({
       providers: [
         GitlabCommonInterfacesService,
         { provide: GitlabApiService, useValue: gitlabApiService },
         { provide: IssueProviderService, useValue: issueProviderService },
+        { provide: GitlabAutoImportConfirmService, useValue: autoImportConfirm },
       ],
     });
     service = TestBed.inject(GitlabCommonInterfacesService);
+  });
+
+  it('leaves the save check to the auto-import confirmation', async () => {
+    autoImportConfirm.confirmSave.and.resolveTo(false);
+    const isAborted = (): boolean => false;
+    const provider = BASE_CFG;
+
+    expect(await service.confirmSave(provider, undefined, isAborted)).toBe(false);
+    expect(autoImportConfirm.confirmSave).toHaveBeenCalledWith(
+      provider,
+      undefined,
+      isAborted,
+    );
   });
 
   describe('getFreshDataForIssueTask', () => {

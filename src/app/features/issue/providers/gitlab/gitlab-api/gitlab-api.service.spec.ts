@@ -6,7 +6,7 @@ import { TestBed } from '@angular/core/testing';
 import { SnackService } from 'src/app/core/snack/snack.service';
 import { GitlabApiService } from './gitlab-api.service';
 import { GitlabCfg } from '../gitlab.model';
-import { DEFAULT_GITLAB_CFG } from '../gitlab.const';
+import { DEFAULT_GITLAB_CFG, GITLAB_MAX_AUTO_IMPORT_PAGES } from '../gitlab.const';
 import { GitlabOriginalIssue, GitlabOriginalUser } from './gitlab-api-responses';
 import { SearchResultItem } from '../../../issue.model';
 import { Log } from 'src/app/core/log';
@@ -294,6 +294,88 @@ describe('GitlabApiService', () => {
       expect(url.pathname).toBe('/api/v4/projects/group%2Fsub%2Fproj/issues');
       expect(url.searchParams.get('scope')).toBe('assigned-to-me');
       req.flush([]);
+    });
+  });
+  describe('auto-import', () => {
+    const groupCfg: GitlabCfg = { ...cfg, issueSource: 'group', group: 'my-org' };
+    const allCfg: GitlabCfg = { ...cfg, project: null, issueSource: 'all' };
+    // eslint-disable-next-line @typescript-eslint/naming-convention
+    const nextPage = (page: number): { 'x-next-page': string } => ({
+      // eslint-disable-next-line @typescript-eslint/naming-convention
+      'x-next-page': String(page + 1),
+    });
+
+    it('sends a single scope param, newest updated first', () => {
+      service.getProjectIssues$({ ...cfg, scope: 'assigned-to-me' }).subscribe();
+
+      const req = httpMock.expectOne(() => true);
+      expect(req.request.url).not.toContain('&&');
+      const url = new URL(req.request.url);
+      expect(url.searchParams.getAll('scope')).toEqual(['assigned-to-me']);
+      expect(url.searchParams.get('sort')).toBe('desc');
+      req.flush([]);
+    });
+
+    [
+      { name: 'group', source: groupCfg },
+      { name: 'all', source: allCfg },
+    ].forEach(({ name, source }) => {
+      it(`stops after the page cap for the ${name} source`, () => {
+        let result: GitlabIssue[] | undefined;
+        service.getProjectIssues$(source).subscribe((r) => (result = r));
+
+        for (let page = 1; page <= GITLAB_MAX_AUTO_IMPORT_PAGES; page++) {
+          const req = httpMock.expectOne(() => true);
+          expect(new URL(req.request.url).searchParams.get('page')).toBe(String(page));
+          req.flush([makeOriginalIssue(page)], { headers: nextPage(page) });
+        }
+
+        httpMock.expectNone(() => true);
+        expect(result?.length).toBe(GITLAB_MAX_AUTO_IMPORT_PAGES);
+      });
+    });
+
+    it('follows every page for a single project', () => {
+      let result: GitlabIssue[] | undefined;
+      service.getProjectIssues$(cfg).subscribe((r) => (result = r));
+
+      const lastPage = GITLAB_MAX_AUTO_IMPORT_PAGES + 1;
+      for (let page = 1; page <= lastPage; page++) {
+        httpMock
+          .expectOne(() => true)
+          .flush([makeOriginalIssue(page)], {
+            headers: page < lastPage ? nextPage(page) : {},
+          });
+      }
+
+      expect(result?.length).toBe(lastPage);
+    });
+
+    it('counts matching issues with one single-item request to the import endpoint', () => {
+      let result: number | null | undefined;
+      service
+        .getAutoImportIssueCount$({ ...groupCfg, filter: 'labels=bug' })
+        .subscribe((r) => (result = r));
+
+      const req = httpMock.expectOne(() => true);
+      const url = new URL(req.request.url);
+      expect(url.pathname).toBe('/api/v4/groups/my-org/issues');
+      expect(url.searchParams.get('per_page')).toBe('1');
+      expect(url.searchParams.get('state')).toBe('opened');
+      expect(url.searchParams.get('labels')).toBe('bug');
+      // eslint-disable-next-line @typescript-eslint/naming-convention
+      req.flush([makeOriginalIssue(1)], { headers: { 'x-total': '1234' } });
+
+      expect(result).toBe(1234);
+    });
+
+    it('returns null when GitLab omits the total', () => {
+      let result: number | null | undefined;
+      service.getAutoImportIssueCount$(allCfg).subscribe((r) => (result = r));
+
+      httpMock.expectOne(() => true).flush([makeOriginalIssue(1)]);
+
+      expect(result).toBeNull();
     });
   });
 });

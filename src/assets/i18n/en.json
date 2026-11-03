@@ -439,6 +439,11 @@
       }
     },
     "GITLAB": {
+      "AUTO_IMPORT": {
+        "BACK_TO_SETTINGS": "Back to settings",
+        "CONFIRM": "Auto-import will add up to <strong>{{nr}}</strong> open issues to your backlog. To import fewer, go back and narrow the scope or filter.",
+        "OVER_LIMIT": "<strong>{{nr}}</strong> open issues match these settings, more than the {{max}} auto-import allows. Go back and narrow the scope or filter, or turn off auto-import."
+      },
       "DIALOG_SUBMIT_WORKLOG": {
         "FOR_ALL": "For all GitLab projects on:",
         "FOR_GROUP": "For GitLab group:",

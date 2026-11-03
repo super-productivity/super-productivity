@@ -12,7 +12,11 @@ import { SnackService } from 'src/app/core/snack/snack.service';
 
 import { GitlabCfg } from '../gitlab.model';
 import { GitlabOriginalComment, GitlabOriginalIssue } from './gitlab-api-responses';
-import { GITLAB_API_BASE_URL } from '../gitlab.const';
+import {
+  GITLAB_API_BASE_URL,
+  GITLAB_MAX_AUTO_IMPORT_PAGES,
+  GITLAB_PAGE_SIZE,
+} from '../gitlab.const';
 import { T } from 'src/app/t.const';
 import {
   catchError,
@@ -143,13 +147,34 @@ export class GitlabApiService {
 
   getProjectIssues$(cfg: GitlabCfg): Observable<GitlabIssue[]> {
     return this._sendIssuePaginatedRequest$(
-      {
-        url: `${this._issuesListLink(cfg)}?state=opened&order_by=updated_at&${this.getScopeParam(
-          cfg,
-        )}${this.getCustomFilterParam(cfg)}`,
-      },
+      { url: this._autoImportIssuesUrl(cfg) },
       cfg,
+      // A group or instance can hold thousands of open issues and this runs on every
+      // auto-import poll: take only the most recently updated ones.
+      getGitlabIssueSource(cfg) === 'project' ? undefined : GITLAB_MAX_AUTO_IMPORT_PAGES,
     ).pipe(take(1));
+  }
+
+  /**
+   * Number of open issues getProjectIssues$ matches, from a single one-item request.
+   * Null when GitLab omits `x-total`, which it does above 10,000 results.
+   */
+  getAutoImportIssueCount$(cfg: GitlabCfg): Observable<number | null> {
+    if (!this._isValidSettings(cfg)) {
+      return EMPTY;
+    }
+    return this._sendPaginatedRequestImpl$(
+      { url: this._autoImportIssuesUrl(cfg) },
+      cfg,
+      1,
+      1,
+    ).pipe(
+      map((res: any) => {
+        const total = res?.headers?.get('x-total');
+        return total ? Number(total) : null;
+      }),
+      take(1),
+    );
   }
 
   addTimeSpentToIssue$(
@@ -231,8 +256,9 @@ export class GitlabApiService {
   private _sendIssuePaginatedRequest$(
     params: HttpRequest<string> | any,
     cfg: GitlabCfg,
+    maxPages?: number,
   ): Observable<GitlabIssue[]> {
-    return this._sendPaginatedRequest$(params, cfg).pipe(
+    return this._sendPaginatedRequest$(params, cfg, maxPages).pipe(
       map((issues: GitlabOriginalIssue[]) =>
         issues ? issues.map((issue) => mapGitlabIssue(issue, cfg)) : [],
       ),
@@ -257,10 +283,12 @@ export class GitlabApiService {
   private _sendPaginatedRequest$(
     params: HttpRequest<string> | any,
     cfg: GitlabCfg,
+    maxPages = Infinity,
   ): Observable<any> {
     return this._sendPaginatedRequestImpl$(params, cfg, 1).pipe(
-      expand((res: any) => {
-        if (res && res.body && res.headers) {
+      // `index` is zero-based, so the response at `index` is page `index + 1`
+      expand((res: any, index: number) => {
+        if (index + 1 < maxPages && res && res.body && res.headers) {
           const headers: HttpHeaders = res.headers;
           const next_page = headers.get('x-next-page');
           if (next_page) {
@@ -277,13 +305,14 @@ export class GitlabApiService {
     params: HttpRequest<string> | any,
     cfg: GitlabCfg,
     page: number,
+    perPage = GITLAB_PAGE_SIZE,
   ): Observable<any> {
     const parsedUrl = parseUrl(params.url);
     params.url = stringifyUrl({
       url: parsedUrl.url,
       query: {
         ...parsedUrl.query,
-        per_page: 100,
+        per_page: perPage,
         page: page,
       },
     });
@@ -353,6 +382,12 @@ export class GitlabApiService {
   private _projectApiLink(cfg: GitlabCfg, project: string): string {
     const projectURL = assertTruthy(project).toString().replace(/\//gi, '%2F');
     return this._baseApiLink(cfg) + 'projects/' + projectURL;
+  }
+
+  private _autoImportIssuesUrl(cfg: GitlabCfg): string {
+    return `${this._issuesListLink(cfg)}?state=opened&order_by=updated_at&sort=desc${this.getScopeParam(
+      cfg,
+    )}${this.getCustomFilterParam(cfg)}`;
   }
 
   // Issue list endpoint for the configured source: one project, one group, or

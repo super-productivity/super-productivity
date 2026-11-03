@@ -36,6 +36,7 @@
     <button
       #confirmButton
       [attr.cdkFocusInitial]="data.isFocusConfirm ? '' : null"
+      [disabled]="!!data.isConfirmDisabled"
       (click)="close(true)"
       e2e="confirmBtn"
       color="primary"

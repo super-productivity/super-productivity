@@ -120,6 +120,7 @@ export class DialogEditIssueProviderComponent {
   isConnectionWorks = signal(false);
   isOAuthConnected = signal(false);
   isOAuthConnecting = signal(false);
+  isSaving = signal(false);
   optionsLoadState = signal<OptionsLoadState>('idle');
   form = new FormGroup({});
   showLoadOptionsButton = false;
@@ -237,7 +238,31 @@ export class DialogEditIssueProviderComponent {
     this._destroyRef.onDestroy(onClose);
   }
 
-  submit(isSkipClose = false): void {
+  async submit(isSkipClose = false): Promise<void> {
+    if (!this.form.valid || this.isSaving()) {
+      return;
+    }
+    // The enable toggle (isSkipClose) saves straight away, without the provider's check
+    if (!isSkipClose) {
+      this.isSaving.set(true);
+      let isConfirmed: boolean;
+      try {
+        isConfirmed = await this._issueService.confirmSave(
+          this.model as IssueProvider,
+          this.isEdit ? this.issueProvider : undefined,
+          () => this._isClosedOrDestroyed,
+        );
+      } finally {
+        this.isSaving.set(false);
+      }
+      if (!isConfirmed) {
+        return;
+      }
+    }
+    this._save(isSkipClose);
+  }
+
+  private _save(isSkipClose: boolean): void {
     if (this.form.valid) {
       if (this.isEdit) {
         this._store.dispatch(

@@ -306,7 +306,7 @@
       color="primary"
       mat-flat-button
       type="submit"
-      [disabled]="form.invalid"
+      [disabled]="form.invalid || isSaving()"
     >
       <mat-icon>save</mat-icon>
       {{ T.G.SAVE | translate }}
