@@ -142,7 +142,7 @@ Of the declared permissions, the app checks only `nodeExecution`, `http`
 together with `allowedHosts`, and `deleteProject`. The rest are shown in the
 plugin's details but not enforced; see [Security Considerations](#security-considerations).
 
-### Declaring what your plugin sends (`dataSharing`)
+### Declaring what your plugin sends (dataSharing)
 
 `dataSharing` lists every place your plugin sends data off the device. The app
 shows it when someone connects an issue provider, in the install and update
