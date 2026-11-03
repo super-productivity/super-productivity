@@ -22,6 +22,18 @@ import { getStoreTaskTitlesContaining } from '../../utils/audit-winners-helpers'
  * subsequent operations sync normally.
  */
 
+/**
+ * Store titles of this run's tasks without the `<client>-<runId>-` prefix that
+ * the simulated clients' addTask adds, sorted.
+ */
+const baseTitles = async (
+  client: SimulatedE2EClient,
+  testRunId: string,
+): Promise<string[]> =>
+  (await getStoreTaskTitlesContaining(client.page, testRunId))
+    .map((title) => title.replace(new RegExp(`^\\w+-${testRunId}-`), ''))
+    .sort();
+
 test.describe('@supersync SuperSync Late Join', () => {
   test('Late joiner adopts server data and then contributes new tasks', async ({
     browser,
@@ -105,9 +117,7 @@ test.describe('@supersync SuperSync Late Join', () => {
       // server's tasks plus B's post-join tasks, on both clients (store read,
       // after the tasks above anchored that both syncs landed).
       for (const client of [clientA, clientB]) {
-        expect(await getStoreTaskTitlesContaining(client.page, testRunId)).toEqual(
-          [...allTasks].sort(),
-        );
+        expect(await baseTitles(client, testRunId)).toEqual([...allTasks].sort());
       }
     } finally {
       if (clientA) await closeClient(clientA);
@@ -180,9 +190,7 @@ test.describe('@supersync SuperSync Late Join', () => {
       // "Use My Data" replaced the server state: both clients hold exactly B's
       // tasks, and A's own tasks are gone (store read, after the anchor above).
       for (const client of [clientA, clientB]) {
-        expect(await getStoreTaskTitlesContaining(client.page, testRunId)).toEqual(
-          [taskB1, taskB2].sort(),
-        );
+        expect(await baseTitles(client, testRunId)).toEqual([taskB1, taskB2].sort());
       }
 
       console.log('SUCCESS: Late joiner kept local data, other client adopted it');
