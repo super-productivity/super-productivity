@@ -8,6 +8,7 @@ import {
   Injector,
   input,
   linkedSignal,
+  signal,
   viewChild,
   viewChildren,
 } from '@angular/core';
@@ -104,6 +105,12 @@ export class ViewEditorComponent {
   private readonly _viewCtx = inject(ViewCriteriaContextService);
   private readonly _injector = inject(Injector);
   readonly isXs = inject(LayoutService).isXs;
+  /** The content is scrolled: the title, which stays, gets a bottom line. */
+  readonly isScrolled = signal(false);
+
+  onContentScroll(ev: Event): void {
+    this.isScrolled.set((ev.target as HTMLElement).scrollTop > 0);
+  }
 
   private readonly _nameField = viewChild.required(ViewEditorTitleComponent);
   private readonly _sections = viewChildren(ViewEditorSectionComponent);

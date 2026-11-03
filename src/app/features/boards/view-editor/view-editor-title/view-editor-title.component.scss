@@ -15,9 +15,54 @@
   margin-bottom: 0;
 }
 
+// A card's bar: a plain field at the title's own size and weight, so the bar
+// keeps its height whether it shows the text or the field.
+.inline-field {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.title-input {
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  border-bottom: 1px solid var(--divider-color);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  outline: 0;
+
+  &:focus {
+    border-bottom-color: var(--c-primary);
+    box-shadow: 0 1px 0 var(--c-primary);
+  }
+
+  &.is-error {
+    border-bottom-color: var(--c-warn);
+    box-shadow: 0 1px 0 var(--c-warn);
+  }
+
+  &::placeholder {
+    color: var(--text-color-muted);
+    font-weight: normal;
+  }
+}
+
+.title-error {
+  color: var(--c-warn);
+  font-size: var(--font-size-sm);
+  font-weight: normal;
+}
+
 // The dialog's title keeps clear of the dialog's top edge and the form below.
 :host-context([mat-dialog-title]) .title-field {
   margin-block: var(--s) var(--s2);
+}
+
+:host-context([mat-dialog-title].is-scrolled) .title-field {
+  margin-bottom: var(--s-half);
 }
 
 // Long titles wrap to two lines, then end in an ellipsis.

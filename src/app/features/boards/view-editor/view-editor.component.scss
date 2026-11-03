@@ -7,6 +7,12 @@
   --view-editor-label-w: 88px;
 }
 
+// Scrolled, the title is a bar over the content: a line, less space below.
+.title.is-scrolled {
+  --mat-dialog-headline-padding: 6px 24px 4px;
+  border-bottom: 1px solid var(--divider-color);
+}
+
 // Below xs the dialog is full screen (panelClass 'fullscreen-xs-dialog').
 .content {
   display: flex;

@@ -1,4 +1,28 @@
-@if (isEditing()) {
+@if (isEditing() && isInline()) {
+  <span class="inline-field">
+    <input
+      #model="ngModel"
+      class="title-input"
+      required
+      [class.is-error]="isError()"
+      [attr.aria-label]="label()"
+      [placeholder]="label()"
+      [attr.aria-invalid]="isError()"
+      [attr.aria-describedby]="isError() ? errorId : null"
+      [ngModel]="title()"
+      (ngModelChange)="titleChange.emit($event)"
+      (keydown.enter)="onEnter($event)"
+      (blur)="finish()"
+    />
+    @if (isError()) {
+      <span
+        class="title-error"
+        [id]="errorId"
+        >{{ T.V.E_REQUIRED | translate }}</span
+      >
+    }
+  </span>
+} @else if (isEditing()) {
   <mat-form-field
     class="title-field"
     subscriptSizing="dynamic"
@@ -8,6 +32,7 @@
       #model="ngModel"
       matInput
       required
+      [errorStateMatcher]="errorMatcher()"
       [ngModel]="title()"
       (ngModelChange)="titleChange.emit($event)"
       (keydown.enter)="onEnter($event)"

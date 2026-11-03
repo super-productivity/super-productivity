@@ -56,6 +56,27 @@
   visibility: hidden;
 }
 
+// With a mouse, the handle shows where the pointer or focus is (and while
+// dragged); touch has no hover, so it always shows there.
+.drag-handle {
+  transition: opacity var(--transition-duration-s);
+
+  @include mousePrimaryDevice {
+    opacity: 0;
+  }
+}
+
+.card:hover > .drag-handle,
+.card:focus-within > .drag-handle {
+  @include mousePrimaryDevice {
+    opacity: 1;
+  }
+}
+
+:host(.cdk-drag-preview) .drag-handle {
+  opacity: 1;
+}
+
 .section-header {
   display: flex;
   align-items: center;
@@ -173,6 +194,12 @@
 
 .divider {
   border-top: 1px solid var(--divider-color);
+
+  // Phones: the line between sections is a full-width border too; a line
+  // inside a section would read as one more boundary.
+  @include mq(xs, max) {
+    display: none;
+  }
 }
 
 .rule-note {

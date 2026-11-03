@@ -1,4 +1,8 @@
-<h2 mat-dialog-title>
+<h2
+  mat-dialog-title
+  class="title"
+  [class.is-scrolled]="isScrolled()"
+>
   <view-editor-title
     [title]="model().title"
     [label]="T.G.TITLE | translate"
@@ -10,6 +14,7 @@
 <mat-dialog-content
   class="content"
   [class.is-phone]="isXs()"
+  (scroll)="onContentScroll($event)"
 >
   @for (hint of hints(); track hint) {
     <p class="hint">{{ hint | translate }}</p>

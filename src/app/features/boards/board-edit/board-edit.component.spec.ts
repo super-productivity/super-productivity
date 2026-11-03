@@ -201,6 +201,19 @@ describe('BoardEditComponent with the view editor', () => {
     expect(board.panels.map((p) => p.title)).toEqual(['Focus']);
   });
 
+  it('flags an empty title only on save, not when it loses focus', async () => {
+    const cmp = await open(DEFAULT_BOARD_CFG);
+    const title: HTMLInputElement = fixture.nativeElement.querySelector('input');
+    title.dispatchEvent(new Event('focus'));
+    title.dispatchEvent(new Event('blur'));
+    await settle();
+    expect(fixture.nativeElement.querySelector('mat-error')).toBeNull();
+
+    cmp.save();
+    await settle();
+    expect(fixture.nativeElement.querySelector('mat-error')).not.toBeNull();
+  });
+
   describe('saving an edited view', () => {
     const stored: BoardCfg = normalizeBoardForSave({
       id: 'v',
@@ -650,7 +663,7 @@ describe('BoardEditComponent with the view editor', () => {
       fixture.detectChanges();
       expect(dispatch).not.toHaveBeenCalled();
       expect(openCards()).toEqual([true, false, false]);
-      expect(cards()[2].querySelector('mat-error')).not.toBeNull();
+      expect(cards()[2].querySelector('.title-error')).not.toBeNull();
     });
 
     describe('on a phone', () => {
