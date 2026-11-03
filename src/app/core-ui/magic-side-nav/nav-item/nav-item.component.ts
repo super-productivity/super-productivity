@@ -1,3 +1,5 @@
+import { of, switchMap } from 'rxjs';
+import { TODAY_TAG } from '../../../features/tag/tag.const';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -27,14 +29,12 @@ import { T } from '../../../t.const';
 import { CdkDragPlaceholder } from '@angular/cdk/drag-drop';
 import { MatIconButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
+import { MatMenu, MatMenuItem, MatMenuModule, MatMenuPanel } from '@angular/material/menu';
+import { toObservable, toSignal } from '@angular/core/rxjs-interop';
 import {
-  MatMenu,
-  MatMenuItem,
-  MatMenuModule,
-  MatMenuPanel,
-} from '@angular/material/menu';
-import { toSignal } from '@angular/core/rxjs-interop';
-import { selectAllDoneIds } from '../../../features/tasks/store/task.selectors';
+  selectAllDoneIds,
+  selectDueTaskCounts,
+} from '../../../features/tasks/store/task.selectors';
 import { Store } from '@ngrx/store';
 import { TranslatePipe } from '@ngx-translate/core';
 import { isSingleEmoji } from '../../../util/extract-first-emoji';
@@ -134,9 +134,26 @@ export class NavItemComponent {
     initialValue: [],
   });
 
+  readonly isTodayContext = computed(
+    () => this.type() === WorkContextType.TAG && this.workContext()?.id === TODAY_TAG.id,
+  );
+
+  // Only Today's row subscribes; project and tag counts keep their own membership.
+  readonly dueTaskCounts = toSignal(
+    toObservable(this.isTodayContext).pipe(
+      switchMap((isToday) =>
+        isToday
+          ? this._store.select(selectDueTaskCounts)
+          : of({ today: 0, overdue: 0, total: 0 }),
+      ),
+    ),
+    { initialValue: { today: 0, overdue: 0, total: 0 } },
+  );
+
   // Memoized computation for better performance
   nrOfOpenTasks = computed<number>(() => {
     const wc = this.workContext();
+    if (this.isTodayContext()) return this.dueTaskCounts().total;
     if (!wc || wc.taskIds.length === 0) return 0;
 
     const allDoneTaskIds = this._allDoneTaskIds();

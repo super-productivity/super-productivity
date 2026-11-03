@@ -5,16 +5,22 @@ type DueTask = Pick<Task, 'id' | 'isDone' | 'dueDay' | 'dueWithTime'> & {
   parentId?: string | null;
 };
 
+export interface DueTaskCounts {
+  today: number;
+  overdue: number;
+  total: number;
+}
+
 /**
  * Count scheduled rows through today, matching Today and overdue nesting.
  * A subtask appears separately when its parent is absent from its day group.
  * Earlier dates share one overdue group; timed tasks later today count too.
  */
-export const countDueTasks = (
+export const getDueTaskCounts = (
   tasks: readonly DueTask[],
   today: string,
   startOfNextDayDiffMs: number,
-): number => {
+): DueTaskCounts => {
   const todayIds = new Set<string>();
   const overdueIds = new Set<string>();
   const dueTasks: { task: DueTask; groupIds: Set<string> }[] = [];
@@ -31,9 +37,18 @@ export const countDueTasks = (
     dueTasks.push({ task, groupIds });
   }
 
-  return dueTasks.reduce(
-    (count, { task, groupIds }) =>
-      count + Number(!task.isDone && (!task.parentId || !groupIds.has(task.parentId))),
-    0,
-  );
+  let todayCount = 0;
+  let overdueCount = 0;
+  for (const { task, groupIds } of dueTasks) {
+    if (task.isDone || (task.parentId && groupIds.has(task.parentId))) continue;
+    if (groupIds === todayIds) todayCount++;
+    else overdueCount++;
+  }
+  return { today: todayCount, overdue: overdueCount, total: todayCount + overdueCount };
 };
+
+export const countDueTasks = (
+  tasks: readonly DueTask[],
+  today: string,
+  startOfNextDayDiffMs: number,
+): number => getDueTaskCounts(tasks, today, startOfNextDayDiffMs).total;

@@ -1,3 +1,4 @@
+import { getDueTaskCounts } from '../util/count-due-tasks';
 import { createFeatureSelector, createSelector, MemoizedSelector } from '@ngrx/store';
 import { TASK_FEATURE_NAME } from './task.reducer';
 import {
@@ -280,6 +281,18 @@ const createSchedulingSnapshotProjector = (): ((
 export const selectTaskSchedulingSnapshot = createSelector(
   selectAllTasksInActiveProjects,
   createSchedulingSnapshotProjector(),
+);
+
+// Shared by the Today navigation count and the desktop badge. Read one settled
+// scheduling snapshot so both the total and tooltip breakdown stay consistent.
+export const selectDueTaskCounts = createSelector(
+  selectTaskSchedulingSnapshot,
+  selectTodayStr,
+  selectStartOfNextDayDiffMs,
+  (tasks, today, dayOffset) =>
+    today
+      ? getDueTaskCounts(tasks, today, dayOffset ?? 0)
+      : { today: 0, overdue: 0, total: 0 },
 );
 
 // Snapshot over ALL tasks (incl. archived-project tasks) — mirrors the unfiltered

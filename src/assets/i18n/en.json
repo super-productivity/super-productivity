@@ -2609,6 +2609,7 @@
     "TITLE": "Title",
     "TODAY": "Today",
     "TODAY_TAG_TITLE": "Today",
+    "TODAY_TASK_COUNT": "{{today}} today · {{overdue}} overdue",
     "TOGGLE_PASSWORD_VISIBILITY": "Toggle password visibility",
     "TOMORROW": "Tomorrow",
     "UNDO": "Undo",

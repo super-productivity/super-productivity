@@ -1,12 +1,7 @@
 import { inject, Injectable } from '@angular/core';
 import { createEffect, ofType } from '@ngrx/effects';
 import { combineLatest } from 'rxjs';
-import { selectTaskSchedulingSnapshot } from './task.selectors';
-import {
-  selectTodayStr,
-  selectStartOfNextDayDiffMs,
-} from '../../../root-store/app-state/app-state.selectors';
-import { countDueTasks } from '../util/count-due-tasks';
+import { selectDueTaskCounts } from './task.selectors';
 import { createDueTaskBadgeIcon } from '../util/create-due-task-badge-icon';
 import { IS_ELECTRON_TOKEN } from '../../../app.constants';
 import { skipDuringSyncWindow } from '../../../util/skip-during-sync-window.operator';
@@ -130,9 +125,7 @@ export class TaskElectronEffects {
   syncDueTaskBadge$ = createEffect(
     () =>
       combineLatest([
-        this._store$.select(selectTaskSchedulingSnapshot),
-        this._store$.select(selectTodayStr),
-        this._store$.select(selectStartOfNextDayDiffMs),
+        this._store$.select(selectDueTaskCounts),
         this._configService.misc$,
         // Re-evaluate the latest count when the window opens, even if the
         // last task emission was suppressed during hydration/remote apply.
@@ -140,11 +133,7 @@ export class TaskElectronEffects {
         this._syncTrigger.initialSyncGateOpen$,
       ]).pipe(
         skipDuringSyncWindow(),
-        map(([tasks, today, dayOffset, misc]) =>
-          misc.isShowDueTaskBadge && today
-            ? countDueTasks(tasks, today, dayOffset ?? 0)
-            : 0,
-        ),
+        map(([counts, misc]) => (misc.isShowDueTaskBadge ? counts.total : 0)),
         distinctUntilChanged(),
         // Opt-in: until a badge was ever shown there is nothing to clear, so
         // users who never enabled it don't touch the taskbar/dock at all.

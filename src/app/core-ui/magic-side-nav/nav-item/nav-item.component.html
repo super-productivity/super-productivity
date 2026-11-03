@@ -1,10 +1,13 @@
 @if (mode() === 'work' && workContext()) {
+  @let countTooltip =
+    isTodayContext() ? (T.G.TODAY_TASK_COUNT | translate: dueTaskCounts()) : null;
   <div
     class="planner-drag-place-holder-shared"
     *cdkDragPlaceholder
   ></div>
 
   <button
+    [attr.title]="countTooltip"
     #routeBtn
     [routerLink]="[type() === 'TAG' ? 'tag' : 'project', workContext()!.id, 'tasks']"
     routerLinkActive="active"
@@ -31,7 +34,12 @@
   </button>
 
   @if (nrOfOpenTasks() > 0) {
-    <div class="task-count">{{ nrOfOpenTasks() }}</div>
+    <div
+      class="task-count"
+      [attr.title]="countTooltip"
+    >
+      {{ nrOfOpenTasks() }}
+    </div>
   }
 
   <button

@@ -1,5 +1,5 @@
 import { DEFAULT_TASK, Task } from '../task.model';
-import { countDueTasks } from './count-due-tasks';
+import { countDueTasks, getDueTaskCounts } from './count-due-tasks';
 
 describe('countDueTasks', () => {
   let nextId = 0;
@@ -42,6 +42,11 @@ describe('countDueTasks', () => {
       task({ id: 'future-parent', dueDay: '2026-11-04' }),
     ];
     expect(countDueTasks(tasks, today, 0)).toBe(15);
+    expect(getDueTaskCounts(tasks, today, 0)).toEqual({
+      today: 8,
+      overdue: 7,
+      total: 15,
+    });
   });
 
   it('counts a parent only once when its child is nested in the same day group', () => {

@@ -133,3 +133,93 @@ describe('NavItemComponent row menu', () => {
     expect(btn.getAttribute('aria-label')).toBeTruthy();
   });
 });
+
+import { TranslateService } from '@ngx-translate/core';
+import { MockStore } from '@ngrx/store/testing';
+import { selectDueTaskCounts } from '../../../features/tasks/store/task.selectors';
+import { WorkContextType } from '../../../features/work-context/work-context.model';
+import { TODAY_TAG } from '../../../features/tag/tag.const';
+
+describe('NavItemComponent Today count', () => {
+  let fixture: ComponentFixture<NavItemComponent>;
+  let store: MockStore;
+
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
+      imports: [NavItemComponent, NoopAnimationsModule, TranslateModule.forRoot()],
+      providers: [
+        provideRouter([]),
+        provideMockStore({
+          selectors: [
+            { selector: selectAllDoneIds, value: ['done'] },
+            { selector: selectDueTaskCounts, value: { today: 8, overdue: 7, total: 15 } },
+          ],
+        }),
+        { provide: GlobalThemeService, useValue: { registerSvgIcon: () => undefined } },
+        { provide: MagicNavConfigService, useValue: {} },
+      ],
+    }).compileComponents();
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('en', {
+      G: { TODAY_TASK_COUNT: '{{today}} today · {{overdue}} overdue' },
+    });
+    translate.use('en');
+    store = TestBed.inject(MockStore);
+    fixture = TestBed.createComponent(NavItemComponent);
+    fixture.componentRef.setInput('type', WorkContextType.TAG);
+    fixture.componentRef.setInput('workContext', { ...TODAY_TAG, taskIds: ['one'] });
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+  });
+
+  it('shows the shared badge total and the Today/overdue tooltip on both the row and count', () => {
+    expect(fixture.componentInstance.nrOfOpenTasks()).toBe(15);
+    expect(fixture.nativeElement.querySelector('.task-count').textContent.trim()).toBe(
+      '15',
+    );
+    expect(fixture.nativeElement.querySelector('.nav-link').getAttribute('title')).toBe(
+      '8 today · 7 overdue',
+    );
+    expect(fixture.nativeElement.querySelector('.task-count').getAttribute('title')).toBe(
+      '8 today · 7 overdue',
+    );
+  });
+
+  it('includes overdue tasks even when the stored Today ordering is empty', () => {
+    fixture.componentRef.setInput('workContext', { ...TODAY_TAG, taskIds: [] });
+    store.overrideSelector(selectDueTaskCounts, { today: 0, overdue: 7, total: 7 });
+    store.refreshState();
+    fixture.detectChanges();
+    expect(fixture.componentInstance.nrOfOpenTasks()).toBe(7);
+    expect(fixture.nativeElement.querySelector('.task-count').getAttribute('title')).toBe(
+      '0 today · 7 overdue',
+    );
+  });
+
+  it('updates the total and breakdown together when tasks change', () => {
+    store.overrideSelector(selectDueTaskCounts, { today: 7, overdue: 6, total: 13 });
+    store.refreshState();
+    fixture.detectChanges();
+    expect(fixture.componentInstance.nrOfOpenTasks()).toBe(13);
+    expect(fixture.nativeElement.querySelector('.nav-link').getAttribute('title')).toBe(
+      '7 today · 6 overdue',
+    );
+  });
+
+  it('preserves project counts and leaves them without the Today tooltip', async () => {
+    fixture.componentRef.setInput('type', WorkContextType.PROJECT);
+    fixture.componentRef.setInput('workContext', {
+      ...TODAY_TAG,
+      id: 'project',
+      taskIds: ['one', 'done'],
+    });
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(fixture.componentInstance.nrOfOpenTasks()).toBe(1);
+    expect(
+      fixture.nativeElement.querySelector('.nav-link').getAttribute('title'),
+    ).toBeNull();
+  });
+});
