@@ -44,18 +44,17 @@
   </button>
 
   <context-menu
-    [contextMenu]="contextMenu"
+    [menu]="workContextMenu.menu()"
     [rightClickTriggerEl]="routeBtn"
     [leftClickTriggerEl]="settingsBtn"
     [isTouchLongPress]="true"
   ></context-menu>
 
-  <ng-template #contextMenu>
-    <work-context-menu
-      [contextId]="workContext()!.id"
-      [contextType]="type()!"
-    ></work-context-menu>
-  </ng-template>
+  <work-context-menu
+    #workContextMenu
+    [contextId]="workContext()!.id"
+    [contextType]="type()!"
+  ></work-context-menu>
 } @else if (mode() === 'folder' && folderId()) {
   <button
     #folderBtn
@@ -89,18 +88,17 @@
   </button>
 
   <context-menu
-    [contextMenu]="folderContextMenu"
+    [menu]="folderContextMenu.menu()"
     [rightClickTriggerEl]="folderBtn"
     [leftClickTriggerEl]="folderSettingsBtn"
     [isTouchLongPress]="true"
   ></context-menu>
 
-  <ng-template #folderContextMenu>
-    <folder-context-menu
-      [folderId]="folderId()!"
-      [treeKind]="treeKind()"
-    ></folder-context-menu>
-  </ng-template>
+  <folder-context-menu
+    #folderContextMenu
+    [folderId]="folderId()!"
+    [treeKind]="treeKind()"
+  ></folder-context-menu>
 } @else {
   <!-- Container + presentational row unified here -->
   @if (container() === 'route') {
@@ -160,21 +158,23 @@
       </button>
 
       <context-menu
-        [contextMenu]="featureContextMenu"
+        [menu]="featureContextMenu"
         [rightClickTriggerEl]="routeLink"
         [leftClickTriggerEl]="featureSettingsBtn"
         [isTouchLongPress]="true"
       ></context-menu>
 
-      <ng-template #featureContextMenu>
-        <button
-          mat-menu-item
-          (click)="disableFeature()"
-        >
-          <mat-icon>visibility_off</mat-icon>
-          <span>{{ T.MH.DISABLE_FEATURE | translate }}</span>
-        </button>
-      </ng-template>
+      <mat-menu #featureContextMenu="matMenu">
+        <ng-template matMenuContent>
+          <button
+            mat-menu-item
+            (click)="disableFeature()"
+          >
+            <mat-icon>visibility_off</mat-icon>
+            <span>{{ T.MH.DISABLE_FEATURE | translate }}</span>
+          </button>
+        </ng-template>
+      </mat-menu>
     } @else if (contextMenu(); as routeContextMenu) {
       <button
         #routeMenuBtn
@@ -186,7 +186,7 @@
       </button>
 
       <context-menu
-        [contextMenu]="routeContextMenu"
+        [menu]="routeContextMenu"
         [rightClickTriggerEl]="routeLink"
         [leftClickTriggerEl]="routeMenuBtn"
         [isTouchLongPress]="true"
@@ -332,7 +332,7 @@
            click toggles the section. -->
       @if (contextMenu(); as plainContextMenu) {
         <context-menu
-          [contextMenu]="plainContextMenu"
+          [menu]="plainContextMenu"
           [rightClickTriggerEl]="plainBtn"
           [isTouchLongPress]="true"
         ></context-menu>

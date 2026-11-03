@@ -1,6 +1,6 @@
 import { Locator, Page } from '@playwright/test';
 import { expect, test } from '../../fixtures/test.fixture';
-import { waitForStatePersistence } from '../../utils/waits';
+import { waitForMenuSettled, waitForStatePersistence } from '../../utils/waits';
 import {
   createView,
   openViewEditor,
@@ -98,13 +98,19 @@ test.describe('View rules', () => {
 
     // Filter the Inbox to tasks without a planned date.
     await page.locator('.task-filter-btn').click();
+    await waitForMenuSettled(page);
     await page.getByRole('menuitem', { name: /Filter By/ }).click();
+    // Let each parent menu settle before clicking a submenu trigger, or the
+    // moving items can leave the pointer over Project and replace Planned Date.
+    await waitForMenuSettled(page);
     await page.getByRole('menuitem', { name: 'Planned Date', exact: true }).click();
+    await waitForMenuSettled(page);
     await page.getByRole('menuitem', { name: 'Not specified', exact: true }).click();
     await page.keyboard.press('Escape');
     await expect(page.locator('task').filter({ hasText: planned })).toHaveCount(0);
 
     await page.locator('.task-filter-btn').click();
+    await waitForMenuSettled(page);
     await page.getByRole('menuitem', { name: 'Save as view…' }).click();
     const dialog = page.locator('dialog-board-edit');
     await expect(dialog).toBeVisible();
@@ -121,7 +127,7 @@ test.describe('View rules', () => {
     await expect(page.locator('boards board')).toHaveClass(/isSingleColumn/);
   });
 
-  test('a task completed in a view saved from a project moves to its Done group', async ({
+  test('a task completed in a view saved from a project stays inline below the open rows', async ({
     page,
     workViewPage,
     testPrefix,
@@ -142,15 +148,13 @@ test.describe('View rules', () => {
     const row = column.locator('task').filter({ hasText: title });
     await row.hover();
     await row.locator('done-toggle').first().click();
-    // The row leaves the open rows (markTaskAsDone would wait for it there).
-    await expect(column.locator('task').filter({ hasText: title })).toHaveCount(0);
-    // Like the list it came from: out of the open rows, into "Completed Tasks".
-    const doneGroup = column
-      .locator('collapsible')
-      .filter({ hasText: 'Completed Tasks' });
-    await expect(doneGroup).toBeVisible();
-    await doneGroup.locator('.collapsible-header').click();
-    await expect(doneGroup.locator('task').filter({ hasText: title })).toHaveCount(1);
+    // Done tasks show inline: the row moves below the open rows, no group.
+    const doneRows = column.locator('task-list.done-rows');
+    await expect(doneRows.locator('task').filter({ hasText: title })).toHaveCount(1);
+    await expect(column.locator('task').filter({ hasText: title })).toHaveCount(1);
+    await expect(
+      column.locator('collapsible').filter({ hasText: 'Completed Tasks' }),
+    ).toHaveCount(0);
   });
 
   test('saves a filtered Today as the filter alone, named after it, and turns Views on', async ({

@@ -13,27 +13,19 @@ import { MatIcon } from '@angular/material/icon';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { T } from '../../../t.const';
 import { LayoutService } from '../../../core-ui/layout/layout.service';
-import { NAV_SECTION_ICON } from '../../../core-ui/magic-side-nav/nav-section-icons.const';
-import { isTouchActive } from '../../../util/input-intent';
 import { GlobalConfigService } from '../../config/global-config.service';
 import { QuickTourService } from '../quick-tour.service';
+import { getOffWantMoreFeatures } from '../want-more-features.const';
 
 /** The chip grows into the card, then the content fades in. */
 const GROW_MS = 400;
 const FADE_MS = 200;
 
-const TEASERS = [
-  { icon: NAV_SECTION_ICON.BOARDS, text: T.ONBOARDING.WANT_MORE.BOARDS },
-  { icon: NAV_SECTION_ICON.HABITS, text: T.ONBOARDING.WANT_MORE.HABITS },
-  { icon: 'center_focus_strong', text: T.ONBOARDING.WANT_MORE.FOCUS_MODE },
-  { icon: NAV_SECTION_ICON.SCHEDULE, text: T.ONBOARDING.WANT_MORE.SCHEDULE },
-  { icon: 'done_all', text: T.ONBOARDING.WANT_MORE.FINISH_DAY },
-  { icon: 'extension', text: T.ONBOARDING.WANT_MORE.PLUGINS },
-] as const;
-
 /**
- * The tour's last step: what is there beyond the calm defaults. Only names
- * features and links to Settings; it switches nothing on itself.
+ * The tour's last step: the features still switched off, and where data and
+ * sync live. Only names them and links to Settings, whose App Features section
+ * describes each switch; it switches nothing on itself. How-to tips (search,
+ * short syntax) are left to the places they are used.
  */
 @Component({
   selector: 'quick-tour-card',
@@ -47,7 +39,6 @@ export class QuickTourCardComponent {
   readonly fromRect = input<DOMRect | null>(null);
 
   readonly T = T;
-  readonly TEASERS = TEASERS;
   readonly quickTourService = inject(QuickTourService);
 
   private _globalConfigService = inject(GlobalConfigService);
@@ -58,17 +49,10 @@ export class QuickTourCardComponent {
   private _contentEl = viewChild.required<ElementRef<HTMLElement>>('contentEl');
 
   readonly isPhone = this._layoutService.isShowMobileBottomNav;
+  readonly offFeatures = computed(() =>
+    getOffWantMoreFeatures(this._globalConfigService.appFeatures()),
+  );
   readonly isSyncLineShown = computed(() => !this._globalConfigService.sync()?.isEnabled);
-  readonly searchKey = computed(
-    () => this._globalConfigService.cfg()?.keyboard?.showSearchBar || null,
-  );
-  readonly isSearchShown = computed(
-    () =>
-      this._globalConfigService.appFeatures().isSearchEnabled &&
-      (this.isPhone() || this.searchKey() !== null),
-  );
-  // Short syntax is typed on a keyboard; phones leave it out.
-  readonly isShortSyntaxShown = computed(() => !this.isPhone() && !isTouchActive());
 
   constructor() {
     afterNextRender(() => {

@@ -60,7 +60,7 @@ import { MatDialog } from '@angular/material/dialog';
 import { MarkdownPasteService } from './features/tasks/markdown-paste.service';
 import { TaskService } from './features/tasks/task.service';
 import { TaskAttachmentService } from './features/tasks/task-attachment/task-attachment.service';
-import { MatMenuItem } from '@angular/material/menu';
+import { MatMenu, MatMenuContent, MatMenuItem } from '@angular/material/menu';
 import { MatIcon } from '@angular/material/icon';
 import { NoteStartupBannerService } from './features/note/note-startup-banner.service';
 import { SyncSafetyBannerService } from './imex/sync/sync-safety-banner.service';
@@ -125,6 +125,8 @@ interface BeforeInstallPromptEvent extends Event {
     RouterOutlet,
     GlobalProgressBarComponent,
     FocusModeOverlayComponent,
+    MatMenu,
+    MatMenuContent,
     MatMenuItem,
     MatIcon,
     TranslatePipe,

@@ -13,7 +13,6 @@ import { MatButton, MatIconButton } from '@angular/material/button';
 import { MatTooltip } from '@angular/material/tooltip';
 import { TranslatePipe } from '@ngx-translate/core';
 import { PlannerTaskComponent } from '../../planner/planner-task/planner-task.component';
-import { CollapsibleComponent } from '../../../ui/collapsible/collapsible.component';
 import { AddTaskBarComponent } from '../../tasks/add-task-bar/add-task-bar.component';
 import { TaskCopy } from '../../tasks/task.model';
 import { LocalDateStrPipe } from '../../../ui/pipes/local-date-str.pipe';
@@ -32,8 +31,8 @@ import { BOARD_PANEL } from './board-panel.token';
 
 /**
  * A board panel as a column of cards (`planner-task`), for columns side by
- * side: header, add bar, the open cards (the drop list) and the collapsed
- * done group, each part capped (`PANEL_SHOWN_LIMIT`). State and moves are the
+ * side: header, add bar, the open cards (the drop list) and the done ones
+ * after them, capped together (`PANEL_SHOWN_LIMIT`). State and moves are the
  * panel's.
  */
 @Component({
@@ -45,7 +44,6 @@ import { BOARD_PANEL } from './board-panel.token';
     CdkScrollable,
     NgTemplateOutlet,
     PlannerTaskComponent,
-    CollapsibleComponent,
     AddTaskBarComponent,
     MatIcon,
     MatButton,

@@ -23,6 +23,7 @@ import { LS } from '../../core/persistence/storage-keys.const';
 import { INBOX_PROJECT } from '../../features/project/project.const';
 import { T } from '../../t.const';
 import { PluginMenuEntryCfg } from '../../plugins/plugin-api.model';
+import { selectAllBoards } from '../../features/boards/store/boards.selectors';
 
 /**
  * Below 600px this nav's panels menu is the ONLY route to every right-panel
@@ -108,12 +109,15 @@ describe('MobileBottomNavComponent', () => {
     dispatch = jasmine.createSpy('dispatch');
     activePluginId$ = new BehaviorSubject<string | null>(null);
     isShowPluginPanel$ = new BehaviorSubject(false);
+    const views$ = of([{ id: 'v1', title: 'Week focus', cols: 1 }]);
     const select = (selector: unknown): unknown =>
       selector === selectActivePluginId
         ? activePluginId$
         : selector === selectIsShowPluginPanel
           ? isShowPluginPanel$
-          : of(null);
+          : selector === selectAllBoards
+            ? views$
+            : of(null);
 
     TestBed.resetTestingModule();
     await TestBed.configureTestingModule({
@@ -316,6 +320,15 @@ describe('MobileBottomNavComponent', () => {
       expect(slotBtn()?.classList).not.toContain('tour-planner');
       slotBtn()?.click();
       expect(navigateByUrl).toHaveBeenCalledOnceWith('/boards');
+    });
+
+    it('opens a pinned view', async () => {
+      localStorage.setItem(LS.BOTTOM_NAV_SLOT, 'view:v1');
+      await renderSlot();
+
+      expect(slotBtn()?.getAttribute('aria-label')).toBe('Week focus');
+      slotBtn()?.click();
+      expect(navigateByUrl).toHaveBeenCalledOnceWith('/boards/v1');
     });
 
     it('hides the slot when Planner is disabled and nothing else was chosen', async () => {

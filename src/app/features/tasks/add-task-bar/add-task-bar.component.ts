@@ -19,7 +19,7 @@ import { takeUntilDestroyed, toObservable, toSignal } from '@angular/core/rxjs-i
 import { FormsModule } from '@angular/forms';
 import { CdkTextareaAutosize } from '@angular/cdk/text-field';
 import { MentionModule } from '../../../ui/mentions';
-import { MatIconButton } from '@angular/material/button';
+import { MatButton, MatIconButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { MatTooltip } from '@angular/material/tooltip';
 import { AsyncPipe, NgTemplateOutlet } from '@angular/common';
@@ -62,6 +62,7 @@ import { IssueIconPipe } from '../../issue/issue-icon/issue-icon.pipe';
 import { TagComponent } from '../../tag/tag/tag.component';
 import { truncate } from '../../../util/truncate';
 import { SnackService } from '../../../core/snack/snack.service';
+import type { ViewTaskPrefill } from '../view-task-list.token';
 import { AddTaskBarStateService } from './add-task-bar-state.service';
 import { AddTaskBarParserService } from './add-task-bar-parser.service';
 import { rollWeekendDateForRepeat } from './roll-weekend-date-for-repeat';
@@ -119,6 +120,7 @@ export interface TaskAddEvent {
     FormsModule,
     CdkTextareaAutosize,
     MatIconButton,
+    MatButton,
     MatIcon,
     MatTooltip,
     AsyncPipe,
@@ -169,6 +171,8 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
   isHideTagTitles = input<boolean>(false);
   tagsToRemove = input<string[]>([]);
   planForDay = input<string>();
+  /** A view's values, shown as chips the user can remove. */
+  viewPrefill = input<ViewTaskPrefill>();
 
   // Outputs
   afterTaskAdd = output<TaskAddEvent>();
@@ -216,6 +220,22 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
   }
 
   hasNewTags = computed(() => this.stateService.state().newTagTitles.length > 0);
+  /** The user's choices leave the new task outside the view it's added in. */
+  isHiddenInView = computed(() => {
+    const prefill = this.viewPrefill();
+    if (!prefill) {
+      return false;
+    }
+    const state = this.stateService.state();
+    const tagsToRemove = this.tagsToRemove();
+    return prefill.isHidden({
+      projectId: state.projectId ?? undefined,
+      tagIds: unique([...state.tagIds, ...state.tagIdsFromTxt]).filter(
+        (id) => !tagsToRemove.includes(id),
+      ),
+      dueDay: state.date ?? undefined,
+    });
+  });
   currentProject = computed(() =>
     this.projects().find((p) => p.id === this.stateService.state().projectId),
   );
@@ -373,6 +393,7 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
     this._setProjectInitially();
     this._setTagInitially();
     this._setupDefaultDate();
+    this.applyViewPrefill();
     this._setupTextParsing();
     this._setupSuggestions();
 
@@ -420,6 +441,26 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
           this.stateService.updateTagIds(this._defaultTagIds);
         }
       });
+  }
+
+  /** Fills in the view's chips again (also the "Add back" of a hidden task). */
+  applyViewPrefill(): void {
+    const fields = this.viewPrefill()?.fields;
+    if (!fields) {
+      return;
+    }
+    if (fields.projectId) {
+      this.stateService.updateProjectId(fields.projectId);
+    }
+    if (fields.tagIds?.length) {
+      this._defaultTagIds = fields.tagIds;
+      this.stateService.updateTagIds(
+        unique([...this.stateService.state().tagIds, ...fields.tagIds]),
+      );
+    }
+    if (fields.dueDay) {
+      this.stateService.updateDate(fields.dueDay);
+    }
   }
 
   private _setupDefaultDate(): void {
