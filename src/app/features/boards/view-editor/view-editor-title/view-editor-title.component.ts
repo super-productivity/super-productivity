@@ -2,17 +2,15 @@ import {
   afterNextRender,
   ChangeDetectionStrategy,
   Component,
-  computed,
   ElementRef,
   inject,
   Injector,
   input,
   linkedSignal,
   output,
-  signal,
   viewChild,
 } from '@angular/core';
-import { FormsModule, NgModel } from '@angular/forms';
+import { FormsModule } from '@angular/forms';
 import { MatIconButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { MatTooltip } from '@angular/material/tooltip';
@@ -54,7 +52,6 @@ export class ViewEditorTitleComponent {
   protected readonly T = T;
 
   private readonly _injector = inject(Injector);
-  private readonly _model = viewChild('model', { read: NgModel });
   private readonly _input = viewChild('model', { read: ElementRef });
   private readonly _textBtn = viewChild('textBtn', { read: ElementRef });
 
@@ -65,9 +62,12 @@ export class ViewEditorTitleComponent {
     computation: (title, previous) => !title || (previous?.value ?? false),
   });
 
-  // Set by Enter or Save on an empty title; a blur alone doesn't flag it.
-  private readonly _isErrorShown = signal(false);
-  readonly isError = computed(() => this._isErrorShown() && !this.title());
+  // Set by Enter or Save on an empty title, cleared once it has one: a blur
+  // alone doesn't flag it, nor does clearing it again.
+  readonly isError = linkedSignal<string, boolean>({
+    source: this.title,
+    computation: (title, previous) => !title && (previous?.value ?? false),
+  });
   readonly errorId = `view-editor-title-error-${nextTitleId++}`;
 
   edit(): void {
@@ -93,7 +93,7 @@ export class ViewEditorTitleComponent {
     }
     if (!this.title()) {
       if (isRefocus) {
-        this._isErrorShown.set(true);
+        this.isError.set(true);
       }
       return;
     }
@@ -105,8 +105,8 @@ export class ViewEditorTitleComponent {
 
   /** Shows the error of an empty title; whether it has one. */
   isInvalid(): boolean {
-    const isInvalid = !!this._model()?.invalid;
-    this._isErrorShown.set(isInvalid);
+    const isInvalid = !this.title();
+    this.isError.set(isInvalid);
     return isInvalid;
   }
 

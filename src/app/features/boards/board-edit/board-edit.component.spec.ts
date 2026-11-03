@@ -201,6 +201,24 @@ describe('BoardEditComponent with the view editor', () => {
     expect(board.panels.map((p) => p.title)).toEqual(['Focus']);
   });
 
+  it('draws a line under the title only while the content is scrolled', async () => {
+    await open(DEFAULT_BOARD_CFG);
+    const heading: HTMLElement =
+      fixture.nativeElement.querySelector('[mat-dialog-title]');
+    const content: HTMLElement =
+      fixture.nativeElement.querySelector('mat-dialog-content');
+    const scrollTo = async (top: number): Promise<void> => {
+      Object.defineProperty(content, 'scrollTop', { value: top, configurable: true });
+      content.dispatchEvent(new Event('scroll'));
+      await settle();
+    };
+    expect(heading.classList).not.toContain('is-scrolled');
+    await scrollTo(40);
+    expect(heading.classList).toContain('is-scrolled');
+    await scrollTo(0);
+    expect(heading.classList).not.toContain('is-scrolled');
+  });
+
   it('flags an empty title only on save, not when it loses focus', async () => {
     const cmp = await open(DEFAULT_BOARD_CFG);
     const title: HTMLInputElement = fixture.nativeElement.querySelector('input');

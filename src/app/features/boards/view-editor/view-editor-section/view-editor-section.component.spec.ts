@@ -113,6 +113,24 @@ describe('ViewEditorSectionComponent', () => {
     expect(el.querySelector('input')).toBeNull();
   });
 
+  it('clears the flagged title error once it has a title, not flagging it again on clearing', async () => {
+    const el = await render({ title: '' });
+    expect(fixture.componentInstance.isTitleInvalid()).toBeTrue();
+    fixture.detectChanges();
+    expect(el.querySelector('.title-error')).not.toBeNull();
+
+    const type = (value: string): void => {
+      const input = el.querySelector('view-editor-title input') as HTMLInputElement;
+      input.value = value;
+      input.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+    };
+    type('A');
+    expect(el.querySelector('.title-error')).toBeNull();
+    type('');
+    expect(el.querySelector('.title-error')).toBeNull();
+  });
+
   describe('a collapsible card', () => {
     let toggled: jasmine.Spy;
 
@@ -156,6 +174,20 @@ describe('ViewEditorSectionComponent', () => {
       (el.querySelector('.section-header') as HTMLElement).click();
 
       expect(toggled).toHaveBeenCalledTimes(2);
+    });
+
+    it("doesn't toggle on a click on its title's error", async () => {
+      const el = await renderCollapsed();
+      fixture.componentRef.setInput('panel', {
+        ...fixture.componentInstance.panel(),
+        title: '',
+      });
+      fixture.detectChanges();
+      expect(fixture.componentInstance.isTitleInvalid()).toBeTrue();
+      fixture.detectChanges();
+      (el.querySelector('.title-error') as HTMLElement).click();
+
+      expect(toggled).not.toHaveBeenCalled();
     });
 
     it('counts its tasks under the Rules label once open, not in its bar', async () => {

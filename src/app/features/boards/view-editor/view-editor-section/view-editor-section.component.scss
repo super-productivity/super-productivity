@@ -56,8 +56,8 @@
   visibility: hidden;
 }
 
-// With a mouse, the handle shows where the pointer or focus is (and while
-// dragged); touch has no hover, so it always shows there.
+// With a mouse, the handle shows where the pointer is (and while dragged);
+// touch has no hover, so it always shows there.
 .drag-handle {
   transition: opacity var(--transition-duration-s);
 
@@ -66,8 +66,7 @@
   }
 }
 
-.card:hover > .drag-handle,
-.card:focus-within > .drag-handle {
+.card:hover > .drag-handle {
   @include mousePrimaryDevice {
     opacity: 1;
   }

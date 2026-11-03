@@ -88,7 +88,8 @@ interface CachedCount {
   templateUrl: './view-editor.component.html',
   styleUrl: './view-editor.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  // The width picker comes and goes with the layout: the rows below slide.
+  // The width picker comes and goes with the layout: it unfolds beside the
+  // List/Board toggle, or below it on a phone, where the rows below slide.
   animations: [expandFadeFastAnimation],
 })
 export class ViewEditorComponent {
