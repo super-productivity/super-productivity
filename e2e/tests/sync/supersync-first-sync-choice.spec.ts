@@ -16,6 +16,8 @@ import { ImportPage } from '../../pages/import.page';
  * task count, "Use my account's tasks" preselected for a few tasks, a warning
  * on "Replace my account". Keeping the account's tasks saves the device's own
  * tasks as a backup first, and they can be restored from Settings → Sync & Backup.
+ * A device with many tasks gets no warning when the account's snapshot holds
+ * at least half as many.
  *
  * Run with: npm run e2e:supersync:file e2e/tests/sync/supersync-first-sync-choice.spec.ts
  */
@@ -98,6 +100,49 @@ test.describe('@supersync First-sync choice when joining with local tasks', () =
       for (const task of tasksB) {
         await waitForTask(clientB.page, task);
       }
+    } finally {
+      if (clientA) await closeClient(clientA);
+      if (clientB) await closeClient(clientB);
+    }
+  });
+
+  test("doesn't warn about the account's tasks when the account has nearly as many", async ({
+    browser,
+    baseURL,
+    testRunId,
+  }) => {
+    test.slow();
+
+    let clientA: SimulatedE2EClient | null = null;
+    let clientB: SimulatedE2EClient | null = null;
+
+    try {
+      const user = await createTestUser(testRunId);
+      const syncConfig = getSuperSyncConfig(user);
+
+      // A's tasks exist before setup, so the account's snapshot holds all 10.
+      clientA = await createSimulatedClient(browser, baseURL!, 'A', testRunId);
+      await clientA.workView.waitForTaskList();
+      for (let i = 1; i <= 10; i++) {
+        await clientA.workView.addTask(`A${i}-${testRunId}`);
+      }
+      await clientA.sync.setupSuperSync(syncConfig);
+      await clientA.sync.syncAndWait();
+
+      // 12 tasks would warn without the account's count, but are not twice 10.
+      clientB = await createSimulatedClient(browser, baseURL!, 'B', testRunId);
+      for (let i = 1; i <= 12; i++) {
+        await clientB.workView.addTask(`B${i}-${testRunId}`);
+      }
+      await clientB.sync.setupSuperSync({ ...syncConfig, waitForInitialSync: false });
+
+      const dialog = clientB.sync.syncImportConflictDialog;
+      await expect(dialog).toBeVisible({ timeout: 30000 });
+      await expect(dialog.locator('.e2e-first-sync-count')).toHaveText(
+        'Tasks on this device: 12',
+      );
+      await expect(clientB.sync.firstSyncUseAccountRadio.locator('input')).toBeChecked();
+      await expect(dialog.locator('.e2e-first-sync-warning')).toBeHidden();
     } finally {
       if (clientA) await closeClient(clientA);
       if (clientB) await closeClient(clientB);
