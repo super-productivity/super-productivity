@@ -103,3 +103,14 @@ test('a child of a failed new parent is not added', async () => {
   assert.match(results[1].error || '', /parent task was not added/);
   assert.equal(calls.length, 1);
 });
+
+test('a parent that gained a subtask meanwhile is not deleted', async () => {
+  const p = task('p', { subTaskIds: ['c1'] });
+  const rows: ChangeRow[] = [
+    { kind: 'delete', key: 'r1', taskId: 'p', stamp: stampOf(p) },
+  ];
+  const { api, calls } = fakeApi([{ ...p, subTaskIds: ['c1', 'c2'] }]);
+  const results = await applyRows(api, rows, snapshot([p]));
+  assert.match(results[0].error || '', /changed in the meantime/);
+  assert.equal(calls.length, 0);
+});

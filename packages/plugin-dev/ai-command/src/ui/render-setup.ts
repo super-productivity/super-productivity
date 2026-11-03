@@ -65,10 +65,17 @@ const notice = (actions: SetupActions): HTMLElement => {
     button(
       'Show what would be sent',
       () => {
-        void actions.preview().then((json) => {
-          pre.textContent = json;
-          pre.hidden = false;
-        });
+        actions
+          .preview()
+          .then((json) => {
+            pre.textContent = json;
+          })
+          .catch((e: unknown) => {
+            pre.textContent = `Could not read your tasks: ${e instanceof Error ? e.message : String(e)}`;
+          })
+          .finally(() => {
+            pre.hidden = false;
+          });
       },
       'btn-outline',
     ),

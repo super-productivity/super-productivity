@@ -73,3 +73,12 @@ test('plan summary counts today after the moves and flags overplanning', () => {
   ];
   assert.equal(planSummary(off, snapshot([a, b])), 'Today: 0 tasks, 0 min of 8 h free');
 });
+
+test('a delete names the subtasks it takes with it', () => {
+  const s = snapshot([task('p', { title: 'Trip', subTaskIds: ['c1', 'c2'] })]);
+  const del = describeRow(
+    { kind: 'delete', key: 'r1', taskId: 'p', stamp: stampOf(s.tasks[0]) },
+    s,
+  );
+  assert.deepEqual(del, { title: 'Trip', what: ['Delete with 2 subtasks'] });
+});

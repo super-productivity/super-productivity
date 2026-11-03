@@ -214,3 +214,10 @@ test('schema errors come back for the retry; say texts join', () => {
   assert.equal(errors.length, 1);
   assert.equal(proposal.say, 'One. Two.');
 });
+
+test('a new task ref that reuses a shown id is dropped', () => {
+  const s = snapshot([task('a', { title: 'Alpha', dueDay: TODAY })]);
+  const { proposal } = run(s, [add({ ref: 't1', title: 'Beta' })]);
+  assert.equal(proposal.changes.length, 0);
+  assert.match(proposal.dropped[0], /ref/);
+});

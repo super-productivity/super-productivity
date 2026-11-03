@@ -95,6 +95,7 @@ export interface TaskStamp {
   projectId: string | null;
   tagIds: string[];
   parentId: string | null;
+  subTaskIds: string[];
   dueDay: string | null;
   dueWithTime: number | null;
   remindAt: number | null;

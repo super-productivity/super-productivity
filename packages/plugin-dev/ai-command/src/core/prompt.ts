@@ -137,7 +137,8 @@ export const userMessage = (
 ): string => {
   const parts = [
     '<context>',
-    JSON.stringify(ctx),
+    // Escaped so a title can't close the block; JSON readers decode it back.
+    JSON.stringify(ctx).replace(/</g, '\\u003c'),
     '</context>',
     '<request>',
     request,

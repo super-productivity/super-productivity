@@ -111,7 +111,8 @@ const runAsk = async (
 
 const submit = (): void => {
   const text = input.value.trim();
-  if (!text || state.view.kind === 'loading') return;
+  // While an apply runs, a new answer would replace its result with a stale proposal.
+  if (!text || state.view.kind === 'loading' || state.isBusy) return;
   const token = ++state.token;
   // Read before the loading view replaces the result that holds the selection.
   const selection = selectionIds();
@@ -225,7 +226,8 @@ function render(): void {
   body.replaceChildren();
   footer.replaceChildren();
   $('ask').hidden = view.kind === 'setup' || view.kind === 'boot';
-  $('settings-btn').hidden = view.kind === 'setup';
+  // Without host state the settings form has nothing to show.
+  $('settings-btn').hidden = view.kind === 'setup' || !state.host;
   if (view.kind === 'setup' && state.host) {
     const { hasApiKey, settings } = state.host;
     return renderSetup(
@@ -276,4 +278,11 @@ const boot = async (): Promise<void> => {
   if (isReady) input.focus();
 };
 
-boot().catch(showError);
+boot().catch((err: unknown) => {
+  // A blank panel would look stuck; the error view keeps the ask box, which retries.
+  const reason = (err instanceof Error ? err.message : String(err)).replace(/\.$/, '');
+  setView({
+    kind: 'error',
+    message: `AI Command could not start (${reason}). Send a request to try again.`,
+  });
+});

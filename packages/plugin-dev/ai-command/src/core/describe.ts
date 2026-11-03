@@ -67,13 +67,19 @@ const describeUpdate = (row: UpdateRow, task: TaskLike, s: Snapshot): RowText =>
   return { title: row.title ?? task.title, what };
 };
 
+/** The host deletes subtasks with their parent; the row must say so. */
+const deleteLabel = (task: TaskLike): string => {
+  const n = task.subTaskIds?.length || 0;
+  return n ? `Delete with ${n} subtask${n === 1 ? '' : 's'}` : 'Delete';
+};
+
 export const describeRow = (row: ChangeRow, s: Snapshot): RowText => {
   if (row.kind === 'add') return describeAdd(row, s);
   const task = s.tasks.find((t) => t.id === row.taskId);
   if (!task) return { title: '', what: [] };
   return row.kind === 'update'
     ? describeUpdate(row, task, s)
-    : { title: task.title, what: ['Delete'] };
+    : { title: task.title, what: [deleteLabel(task)] };
 };
 
 /** "Today: 7 tasks, 4 h 50 min of 5 h 30 min free" after the plan's day changes. */

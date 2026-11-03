@@ -104,6 +104,7 @@ const checkAdd = (env: Env, raw: RawAdd): Checked<AddRow> => {
   const today = env.ctx.snapshot.day.todayStr;
   const problem =
     (env.refs.has(raw.ref) ? 'the answer added it twice' : null) ||
+    (env.ctx.aliasToId.has(raw.ref) ? 'its ref is the id of a shown task' : null) ||
     titleProblem(title) ||
     (raw.day !== undefined ? dayProblem(raw.day, today) : null) ||
     (raw.estimateMin !== undefined ? estimateProblem(raw.estimateMin) : null) ||

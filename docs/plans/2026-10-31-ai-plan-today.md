@@ -41,10 +41,11 @@ of those commands.
 - **Not:** a chat, a companion, nudges, check-ins, "you're behind", streaks,
   praise, background runs, or time-blocking. Each request stands alone; the
   only memory is the selection on screen ("move these to tomorrow").
-- **Where:** a first-party plugin, bundled and off by default (rev. 8), with the user's own Anthropic API key. No core or sync
-  change; **two small, optional plugin API additions** (§ 4.1): open the
-  plugin's panel from its shortcut, and add tasks without parsing `#tag` and
-  `@date` out of titles.
+- **Where:** a first-party plugin, bundled and off by default (rev. 8), with the user's own Anthropic API key. No new sync op
+  or persisted field; **two small, optional plugin API additions** (§ 4.1): open the
+  plugin's panel from its shortcut, and add or rename tasks without parsing `#tag` and
+  `@date` out of titles (the existing `isIgnoreShortSyntax` flag, now passed
+  through plugin task updates).
 - **Voice in v1:** the system's own dictation into the box (macOS, Windows,
   phone keyboards): two keys, no microphone code. Push-to-talk needs a host
   speech service and comes later, on evidence (§ 5).

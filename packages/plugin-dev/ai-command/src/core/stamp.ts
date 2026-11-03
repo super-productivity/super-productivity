@@ -10,6 +10,8 @@ export const stampOf = (t: TaskLike): TaskStamp => ({
   projectId: t.projectId || null,
   tagIds: [...(t.tagIds || [])].sort(),
   parentId: t.parentId || null,
+  // A delete takes the subtasks with it, so a new one makes the row stale.
+  subTaskIds: [...(t.subTaskIds || [])].sort(),
   dueDay: t.dueDay || null,
   dueWithTime: t.dueWithTime || null,
   remindAt: t.remindAt || null,
