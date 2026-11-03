@@ -687,6 +687,74 @@ describe('handlePluginMessage()', () => {
       expect(apiDefinition).toBeLessThan(html.indexOf('window.PluginAPI.showSnack({})'));
     });
 
+    describe('theme and UI kit styling', () => {
+      let iframe: HTMLIFrameElement | undefined;
+      const hostVars: [name: string, value: string][] = [
+        ['--c-primary', 'rgb(1, 2, 3)'],
+        ['--c-contrast', 'rgb(250, 251, 252)'],
+        ['--radius-xs', '5px'],
+      ];
+
+      beforeEach(() => {
+        hostVars.forEach(([name, value]) => document.body.style.setProperty(name, value));
+      });
+
+      afterEach(() => {
+        hostVars.forEach(([name]) => document.body.style.removeProperty(name));
+        iframe?.remove();
+        iframe = undefined;
+      });
+
+      const renderPlugin = async (
+        pluginHtml: string,
+        manifestPatch: Partial<PluginManifest> = {},
+      ): Promise<Document> => {
+        const config = createConfig(pluginBridge);
+        iframe = document.createElement('iframe');
+        const loaded = new Promise((resolve) => (iframe!.onload = resolve));
+        iframe.srcdoc = buildPluginIframeHtml({
+          ...config,
+          manifest: { ...config.manifest, ...manifestPatch },
+          indexHtml: `<html><head></head><body>${pluginHtml}</body></html>`,
+        });
+        document.body.appendChild(iframe);
+        await loaded;
+        return iframe.contentDocument!;
+      };
+
+      const styleOf = (doc: Document, id: string): CSSStyleDeclaration =>
+        doc.defaultView!.getComputedStyle(doc.getElementById(id)!);
+
+      it('styles a primary button from the host theme tokens', async () => {
+        const doc = await renderPlugin('<button id="b" class="btn-primary">Go</button>');
+        const style = styleOf(doc, 'b');
+        expect(style.backgroundColor).toBe('rgb(1, 2, 3)');
+        expect(style.color).toBe('rgb(250, 251, 252)');
+        expect(style.borderTopLeftRadius).toBe('5px');
+      });
+
+      it('lets any plugin rule override the kit, regardless of specificity', async () => {
+        const doc = await renderPlugin(
+          // a bare element selector loses to the kit's `.btn-icon` without the layer
+          '<style>button { padding: 3px; }</style>' +
+            '<button id="b" class="btn-icon">Go</button>',
+        );
+        expect(styleOf(doc, 'b').paddingLeft).toBe('3px');
+      });
+
+      it('skips the kit but keeps theme tokens when uiKit is false', async () => {
+        const doc = await renderPlugin('<button id="b" class="btn-primary">Go</button>', {
+          uiKit: false,
+        });
+        expect(styleOf(doc, 'b').backgroundColor).not.toBe('rgb(1, 2, 3)');
+        expect(
+          doc
+            .defaultView!.getComputedStyle(doc.documentElement)
+            .getPropertyValue('--c-primary'),
+        ).toBe('rgb(1, 2, 3)');
+      });
+    });
+
     it('prepends the API script for fragment HTML without a <head>', () => {
       const html = buildPluginIframeHtml({
         ...createConfig(pluginBridge),
