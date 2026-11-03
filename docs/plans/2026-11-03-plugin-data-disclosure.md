@@ -4,15 +4,20 @@
 
 One declaration, one rendering. Every plugin says in its manifest what user data it
 sends off the device, to whom, and under whose terms. The app renders that statement
-before the first send, on the plugin card and in the community listing. No plugin writes
-its own privacy notice. This covers bundled plugins, community-listed plugins, uploaded
+before the plugin first runs on a device, and on the plugin card. No plugin writes its
+own privacy notice. This covers bundled plugins, community-listed plugins, uploaded
 ZIPs, and the planned AI Command plugin.
 
 Why now: `README.md:95` says the app "does NOT collect any data", and AGENTS.md says
 "user data stays local unless explicitly synced". Both are true of the project itself.
-But 12 bundled plugins already send task data to third parties, and nothing tells the
-user so in one consistent place. AI Command adds a third-party AI recipient, which
+But 13 plugins that ship with the app (12 bundled, plus the discover-only AI
+productivity prompts) already send user data off the device, and nothing tells the user
+so in one consistent place. AI Command adds a third-party AI recipient, which
 Apple guideline 5.1.2(i) singles out.
+
+**Deviation from the brief:** the community listing shows nothing new. The user sees
+the declaration when they turn an installed plugin on, before its code runs (§2). The
+maintainer can overrule this (open question 4).
 
 Not a goal:
 
@@ -42,7 +47,7 @@ Not a goal:
 | `PluginAPI.request`                      | Needs both the `http` permission and an exact host listed in `allowedHosts`; fails closed                                                                                                                                                                                                    | `packages/plugin-api/src/types.ts:178-200`, `src/app/plugins/plugin-bridge.service.ts:586-620`, validation `src/app/plugins/util/validate-manifest.util.ts:55-66`                                                                                                                                                  |
 | Issue-provider HTTP (`createHttpHelper`) | **No host allowlist.** Checks the method, allows only http/https, always blocks metadata hosts, and blocks private hosts unless the provider config allows them. Only bundled plugins can allow them. `types.ts:185` says outright that `allowedHosts` "does not affect issue-provider HTTP" | `src/app/plugins/issue-provider/plugin-http.service.ts:128,182,409`, `plugin-bridge.service.ts:499`; called from the adapter, time tracking, calendar, time blocks and two-way sync (`plugin-issue-provider-adapter.service.ts:435`, `plugin-time-tracking.effects.ts:130`, `calendar-integration.service.ts:353`) |
 | Plain `fetch`, iframes, `window.open`    | **None.** Plugin code runs via `new Function` in the app window, the CSP allows `connect-src *`, and iframes get `allow-same-origin`                                                                                                                                                         | `src/app/plugins/plugin-runner.ts:174`, `src/index.html:106`, `src/app/plugins/ui/plugin-index/plugin-index.component.html:78`                                                                                                                                                                                     |
-| `nodeExecution`                          | Consent dialog in the main process, stored per device, never synced                                                                                                                                                                                                                          | `src/app/plugins/plugin.service.ts:397-451`, `docs/plugin-development.md:769-786`                                                                                                                                                                                                                                  |
+| `nodeExecution`                          | Consent dialog in the main process, stored per device, never synced                                                                                                                                                                                                                          | `src/app/plugins/plugin.service.ts:1739,1777`, `docs/plugin-development.md:769-786`                                                                                                                                                                                                                                |
 
 What the user sees: `PluginSecurityService.getDeclaredApiAccess` lists network access
 only for `http` together with `allowedHosts` (`src/app/plugins/plugin-security.ts:265-290`).
@@ -86,7 +91,9 @@ How the senders were counted: 10 issue and calendar providers send through the
 helper. Todoist uses `request`, automations uses `fetch`, and AI productivity prompts
 opens a link. That makes **13 plugins that send user data** off the device. Voice
 reminder also sends, but only with some voices. Parallel Code passes a task id to a
-local app.
+local app. `api-test-plugin` is a development plugin in `BUNDLED_PLUGIN_IDS`; it sends
+nothing and declares `[]`. Of the 13 senders, 12 are bundled and one (AI productivity
+prompts) is discover-only.
 
 Two findings shape the design:
 
@@ -113,7 +120,7 @@ Checked 2026-11-03 against vendor docs.
 - a fixed vocabulary declared in the manifest
 - an explicit "sends nothing"
 - disclosure at the moment code would first run
-- on update, show only what was added
+- show it again when the declaration changes (Firefox shows only the additions; a full list marked "changed" is simpler)
 - a link to each recipient's privacy policy
 
 **Deliberately don't:**
@@ -141,23 +148,23 @@ export interface PluginDataDestination {
   recipient: string;
   /** Exact hostnames, validated like allowedHosts. */
   hosts?: string[];
-  /** The user enters the server (self-hosted Gitea, CalDAV, webhook, Ollama). */
+  /** The user enters the server (self-hosted Gitea, CalDAV, webhook, local model). */
   userServer?: boolean;
+  /** Sent whenever the plugin is in use. */
   data: PluginSharedData[];
-  /** 'userAction' = only on an explicit action (search, import, Ask); 'automatic' = polling, hooks. */
-  trigger: 'userAction' | 'automatic';
+  /** Sent only after the user turns on a plugin setting, e.g. pushing notes. */
+  optionalData?: PluginSharedData[];
   privacyPolicyUrl?: string;
-  termsUrl?: string;
 }
 
 export type PluginSharedData =
   | 'credentials' // tokens or passwords the user entered for this recipient
-  | 'userText' // text typed for the recipient: search terms, an AI request
+  | 'userText' // free text typed for the recipient: search terms, an AI request
   | 'taskTitles'
   | 'taskNotes'
   | 'taskSchedule' // due dates and times, estimates, free time
   | 'taskStatus' // done state
-  | 'timeTracked' // worklogs, time spent
+  | 'timeTracked' // worklogs and their comments, time spent
   | 'projectAndTagNames'
   | 'ids'; // task, project or tag ids
 ```
@@ -172,89 +179,107 @@ Rules:
   working.
 - **Unknown values warn; they don't reject.** A plugin built for a newer app may use a
   value an older client does not know, and mobile clients update slowly. The warning
-  goes in `manifestValidation.warnings`, and the value renders as "other data (update
-  the app for details)". Only wrong types are rejected.
+  goes in the existing warnings list (`validate-manifest.util.ts:15-19`). The value
+  renders as "other data (update the app for details)". Only wrong types are rejected.
 - **Plugins write no free text.** Labels are host translation keys
   (`T.PLUGINS.DATA.<KEY>`, `en.json` only), so the notice stays translated and
-  uniform. Plugin-specific detail stays inside the plugin, such as AI Command's "Show
-  what would be sent", which the plugin builds itself.
-- **Credentials render apart from content**, as "Your sign-in for X". They are not user
-  content, but they do leave the device.
-- **Terms of service** come from the URLs. For `userServer`, the text is "the server you
-  enter, under its operator's terms".
-- **Declare the maximum** a user can turn on, not the default. A static declaration
-  must not under-state what the plugin can send.
+  uniform. The `userText` label says plainly that it is "whatever you type". The
+  `timeTracked` label includes worklog comments.
+- **Credentials render apart from content**, as "Your sign-in for X".
+- **Always sent vs. optional.** `data` is what goes out as soon as the plugin is used.
+  `optionalData` renders as "only if you turn it on". That keeps the declaration
+  complete without telling every GitHub user that their notes leave the device; pushing
+  notes is off by default (`github-issue-provider/src/plugin.ts:307`).
+- **Whose terms:** the recipient's privacy policy URL. For `userServer`, the text is
+  "the server you enter, under its operator's terms". There is no `termsUrl`: no
+  inventory row needs one.
 
 Examples:
 
 - **GitHub:**
-  `{recipient: "GitHub", hosts: ["api.github.com"], userServer: true, data: ["credentials","userText","taskStatus","taskTitles","taskNotes"], trigger: "automatic", privacyPolicyUrl: "https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement"}`
-- **AI Command:** one destination for Anthropic (`api.anthropic.com`, with its privacy
-  policy and terms URLs), plus a "Your local model server" destination with
-  `userServer: true`. `data: ["userText","taskTitles","taskSchedule","projectAndTagNames"]`,
-  `trigger: "userAction"`.
+  `{recipient: "GitHub", hosts: ["api.github.com"], userServer: true, data: ["credentials","userText","taskTitles","taskStatus"], optionalData: ["taskNotes"], privacyPolicyUrl: "https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement"}`
+  Titles are in `data` because creating an issue sends the title.
+- **AI Command:** one destination for Anthropic (`api.anthropic.com`, Anthropic's
+  privacy policy), plus a "Your local model server" destination with `userServer: true`.
+  Both have `data: ["userText","taskTitles","taskSchedule","projectAndTagNames"]`.
+- **AI Command's local model is not reachable today.** `PluginAPI.request` runs through
+  the shared HTTP helper without `allowPrivateNetwork`
+  (`plugin-bridge.service.ts:572-574`). That helper rejects loopback and private
+  addresses (`plugin-http.service.ts:429-434`). `allowedHosts` also cannot name a server
+  the user types in. The AI Command plan has to choose a transport, for example the
+  bundled-only private-network option that issue providers use
+  (`plugin-bridge.service.ts:499`). The disclosure is unaffected:
+  `userServer: true` describes it either way.
 
-Before freezing the type, check all ten values against the inventory rows. The list is
+Before freezing the type, check all nine values against the inventory rows. The list is
 permanent public API.
 
 ### 2. Show: one component, two places, one gate
 
 One standalone component, `plugin-data-sharing`, renders a destination list. It shows
-the recipient, what is sent and when, and the policy and terms links. It uses plain HTML.
+the recipient, what is always sent, what is sent only if turned on, and the privacy
+policy link. It uses plain HTML.
 
-1. **One gate before plugin code first runs on a device.** A new
-   `PluginDataConsentService` lives in its own file, because `plugin.service.ts` is
-   already over the 1200-line cap. Its `confirmDataSharing(manifest)` is called where
-   `PluginService` loads plugin code, next to the existing `checkNodeExecutionPermission`
-   (`plugin.service.ts:397-451`). That covers every path at once:
-   - the toggle
-   - startup of a plugin that sync enabled
-   - re-upload of an enabled plugin
-   - the import menu (`file-imex.component.ts:336-343`)
-   - the migrations
+1. **One gate before plugin code first runs on a device.**
+   `PluginDataConsentService.confirmDataSharing(manifest)` lives in its own file,
+   because `plugin.service.ts` is already over the 1200-line cap. It is called before
+   both places that load plugin code:
+   - `_loadPluginLazy` (`plugin.service.ts:618`), which every `activatePlugin` path
+     reaches: the toggle, startup, the side panel, the import menu
+     (`file-imex.component.ts:343`) and the migrations.
+   - `loadPluginFromZip` (`plugin.service.ts:1346`), where a re-upload or community
+     update of an enabled plugin runs new code.
 
-   It shows a `DialogConfirmComponent` with the list. OK reads "Turn on". Deny follows
-   the `nodeExecution` pattern (`_handleNodeExecutionConsentDenied`,
-   `plugin.service.ts:740`): the plugin is disabled, and since `isEnabled` syncs, it is
-   disabled on other devices too, as today.
+   On the toggle path, the gate also runs before `setPluginEnabled(true)`. That method is
+   synced and is called first today (`plugin.service.ts:397-403`). A "no" therefore never
+   writes `isEnabled`.
+   - **Saying no stays on this device.** It follows the real
+     `_handleNodeExecutionConsentDenied` (`plugin.service.ts:727-752`): the decision is
+     kept in memory only, the plugin is not loaded, and the synced `isEnabled` is left
+     alone. Other devices are unaffected, and this device asks again on the next start.
+     This keeps one user intent to one op: a local "not now" writes nothing.
+   - **Startup does not wait on a click.** `_loadEnabledPlugins` awaits each plugin in
+     turn (`plugin.service.ts:289-302`). The gate there does not prompt. It skips an
+     unacknowledged plugin and, once loading has finished, opens one dialog per pending
+     plugin, then loads the ones the user accepts. Other plugins and issue-provider
+     polling start as usual.
    - **When it shows:** `dataSharing` is non-empty, or it is absent on a non-bundled
      plugin. The absent case reads "This plugin doesn't say what data it sends".
    - **When it doesn't:** the plugin declares `[]`.
-   - **It shows once per device per declaration.** A local, unsynced record keeps a hash
-     of the acknowledged `dataSharing` per plugin id. It goes in a new `LS` key
+   - **It shows once per device per declaration.** A local, unsynced record maps each
+     plugin id to the canonical declaration it was accepted with, stored as a JSON string
+     with keys and arrays sorted, or `"absent"`. It lives under a new `LS` key
      (`src/app/core/persistence/storage-keys.const.ts:12`), not in a `MODEL_CONFIGS`
-     slice. Per device on purpose, like `nodeExecution`: a phone that only received a
-     synced toggle has shown nothing, and Apple 5.1.2(i) asks for permission before data
-     goes to a third-party AI.
-   - **On a changed hash**, the dialog shows only what was added, Firefox-style. This
-     covers uploaded, community and bundled updates alike, and needs no manifest diff
-     inside `loadPluginFromZip`.
+     slice. Per device on purpose: a phone that only received a synced toggle has shown
+     nothing, and Apple 5.1.2(i) asks for permission before data goes to a third-party AI.
+   - **On any change**, the dialog shows the full list, headed "Changed since you last
+     accepted". There is no diffing.
    - **AI Command** uses this dialog as its "Turn on" step. Its own one-time notice
-     shrinks to the "Show what would be sent" preview, so the user gets no second
-     consent.
+     shrinks to the "Show what would be sent" preview, which the plugin builds, so the
+     user gets no second consent.
 
 2. **On the plugin card**, in the existing collapsed Details block
    (`plugin-management.component.html:105`), in place of today's `CAN_REQUEST_HOSTS`
    line. The sentence "Declared by the author; Super Productivity can't check it" goes
    in the dialog and in Details for non-bundled plugins, and nowhere else.
 
-**The community listing gets no new line or field.** Install from the listing already
-downloads the ZIP into a disabled plugin (`plugin-management.component.ts:441-462`), and
-the gate shows the declaration before its code runs. That is where the user decides.
-The alternative was a `sharesDataWith` field on `community-plugins.json`. It would copy
-the manifest into a second declaration, cost every author a directory PR per release,
-and add an always-visible label. The brief asks for the listing, so this is a
-deliberate deviation. The maintainer can overrule it.
+**The community listing gets no new line or field.** Install from the listing shows the
+existing risk dialog, then installs the plugin disabled
+(`plugin-management.component.ts:441-462`). The declaration appears when the user turns
+it on, before its code runs. The user decides after installing, not at the listing. The
+alternative was a `sharesDataWith` field on `community-plugins.json`. It would copy the
+manifest into a second declaration, cost every author a directory PR per release, and
+add an always-visible label.
 
 ### 3. Keep it accurate
 
-| Check                                              | Applies to | How                                                                                            |
-| -------------------------------------------------- | ---------- | ---------------------------------------------------------------------------------------------- |
-| `allowedHosts` ⊆ declared hosts                    | declaring  | Manifest validation                                                                            |
-| `PluginAPI.request` host ∈ `allowedHosts`          | all        | Already enforced (`plugin-bridge.service.ts:586-620`)                                          |
-| Every bundled manifest declares `dataSharing`      | bundled    | A node test next to `electron/bundled-plugin-ids.test.cjs`                                     |
-| The declaration matches what the code sends        | bundled    | Review: a PR that adds a request, a push mapping or a time-block field also edits the manifest |
-| Issue-provider HTTP, `fetch`, iframes, links, node | all        | **Declared only**                                                                              |
+| Check                                                       | Applies to                | How                                                                                                                                                                                                             |
+| ----------------------------------------------------------- | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `allowedHosts` ⊆ declared hosts                             | declaring                 | Manifest validation                                                                                                                                                                                             |
+| `PluginAPI.request` host ∈ `allowedHosts`                   | all                       | Already enforced (`plugin-bridge.service.ts:586-620`)                                                                                                                                                           |
+| Every plugin in `BUNDLED_PLUGIN_IDS` declares `dataSharing` | bundled and discover-only | A node test next to `electron/bundled-plugin-ids.test.cjs`, iterating `BUNDLED_PLUGIN_IDS` (`bundled-plugins.const.ts`), so the discover-only AI productivity prompts and `api-test-plugin` (`[]`) are included |
+| The declaration matches what the code sends                 | bundled                   | Review: a PR that adds a request, a push mapping or a time-block field also edits the manifest                                                                                                                  |
+| Issue-provider HTTP, `fetch`, iframes, links, node          | all                       | **Declared only**                                                                                                                                                                                               |
 
 There is no new runtime host guard on `createHttpHelper`. The helper has no plugin
 context, and the sync-adapter factory receives it as a callback with no plugin context
@@ -270,12 +295,19 @@ as a gap instead.
   `src/app/op-log/model/model-config.ts:131`) keeps only `isEnabled`. The
   acknowledgement record lives in local storage, never synced, like `nodeExecution`
   consent.
-- **Already-enabled plugins:** the first launch of the release seeds an acknowledgement
-  for each plugin that is enabled on that device, so no one is re-prompted for an
-  integration they already use. Plugins enabled later, including by sync, show the
-  dialog on first load on each device.
-- **Bundled plugins that later widen what they send** get the "added" dialog through the
-  hash. No special rule is needed.
+- **Seeding existing users.** Without it, everyone would be prompted again for
+  integrations they already use. The seed runs once per device, guarded by its own
+  local seed-done flag. It runs after store hydration but before the first sync of that
+  launch: it waits on `isAllDataLoadedInitially$` only, whereas `_initPlugins` also
+  waits for sync (`startup.service.ts:525-540`). It covers only plugins that were already
+  enabled in this device's local state. A plugin another device enabled arrives through
+  sync after the seed, so it still gets the dialog. AI Command cannot be enabled before
+  the release that ships the gate, so it is never seeded.
+- **Fresh installs** have no enabled plugins at seed time, so the seed is empty. A
+  backup import or `SYNC_IMPORT` that enables plugins later shows dialogs.
+- **Migrations** (`plugin.service.ts:146-191`) that auto-enable on a device are seeded
+  only if they ran before this release on that device. On a new device they go through
+  the gate like any other enable.
 - **Plugin API:** additive. Older apps ignore the field, so `minSupVersion` does not
   change. Release a new `@super-productivity/plugin-api` and document the field in
   `docs/plugin-development.md` and the wiki "Develop a Plugin" page.
@@ -307,8 +339,9 @@ separate design and out of scope.
 - **Apple 5.1.2(i)** (guideline text read 2026-11-03): "You must clearly disclose where
   personal data will be shared with third parties, including with third-party AI, and
   obtain explicit permission before doing so." _To confirm:_ that the per-device gate
-  dialog counts as that permission for AI Command. Also to confirm: that plugins enabled
-  before this release need no new prompt. They are seeded, not asked.
+  dialog counts as that permission for AI Command. Also to confirm: that seeded
+  plugins (enabled on that device before this release, none of them AI) need no new
+  prompt.
 - **Apple 4.7 / 2.5.2.** Native builds can install community plugins in the app
   (`plugin-management.component.ts:205`). 4.7.3 asks for "explicit consent each time"
   before data is shared with hosted software, and 2.5.2 limits downloaded code. _To
@@ -325,7 +358,7 @@ separate design and out of scope.
   or SDKs in the app counts. _To confirm:_
   - whether background polling and two-way sync fall under the disclosure-and-consent
     exception
-  - whether integrations that migrations enabled, and that never showed the dialog, are
+  - whether seeded integrations, which never showed the dialog on that device, are
     covered
 - **First-party plugins and the store binary.** Bundled plugins are built into
   `src/assets/bundled-plugins` and ship in the binary, so they count toward the store
@@ -351,17 +384,23 @@ from `packages/plugin-dev/scripts/build-all.js`. Step 2 relies on their manifest
    - `[]` with `allowedHosts` (rejected)
    - an unknown data value (warning)
    - a bad `hosts` entry (scheme, port or path)
-2. Declare `dataSharing` in every bundled manifest, from the inventory.
+2. Declare `dataSharing` in every manifest in `BUNDLED_PLUGIN_IDS`, from the inventory.
    → verify: a node test that fails when one is missing. Make it fail once before
    trusting it.
-3. Build `plugin-data-sharing`, `PluginDataConsentService`, the local acknowledgement
-   record with its first-launch seed, and the card block. Add the `en.json` keys.
-   → verify: service specs for show, skip on `[]`, skip when acknowledged, show added
-   items only, seed, and deny-disables.
-   → verify: E2E 1. Enabling a declaring plugin shows the dialog, and cancel leaves it
-   off.
-   → verify: E2E 2. Re-uploading a ZIP with an added recipient shows only that
-   recipient.
+3. Build `plugin-data-sharing`, `PluginDataConsentService`, the local record with its
+   seed, and the card block. Wire the gate into both load sites and ahead of
+   `setPluginEnabled(true)`. Add the `en.json` keys.
+   → verify: service specs for:
+   - show; skip on `[]`; skip when already accepted
+   - show again on a changed declaration
+   - deny writes nothing synced
+   - the seed covers only locally enabled plugins and runs once
+     → verify: E2E 1. Enabling a declaring plugin shows the dialog. Cancel leaves it off
+     and `isEnabled` unwritten.
+     → verify: E2E 2. Re-uploading an enabled plugin's ZIP with a new recipient shows
+     the dialog before its code runs.
+     → verify: E2E 3. Startup with an unacknowledged enabled plugin loads the other
+     plugins first, then asks.
 4. Release `plugin-api` and update the docs (`docs/plugin-development.md`, the wiki).
    → verify: the package's own checks (`packages/README.md`).
 
@@ -373,10 +412,11 @@ from `packages/plugin-dev/scripts/build-all.js`. Step 2 relies on their manifest
 
 ## Long-term cost
 
-- **Plugin API:** `dataSharing` and `PluginSharedData` are permanent public surface.
-  The vocabulary only grows. Unknown values degrade to "other data" on older clients.
-- **Local storage:** one key holding a hash per plugin id. It stays bounded by the
-  number of installed plugins.
+- **Plugin API:** `dataSharing`, `optionalData` and `PluginSharedData` are permanent
+  public surface. The vocabulary only grows. Unknown values degrade to "other data" on
+  older clients.
+- **Local storage:** one key with a canonical string per plugin id, plus a seed-done
+  flag. It stays bounded by the number of installed plugins.
 - **Persisted model and sync wire:** untouched.
 - **Maintenance:** a bundled integration that sends a new field also edits its
   manifest. Review catches that; the node test only checks that the field exists.
@@ -385,12 +425,14 @@ from `packages/plugin-dev/scripts/build-all.js`. Step 2 relies on their manifest
 
 - **False reassurance.** The list looks authoritative while `fetch` is open.
   Mitigations: the "declared by the author" sentence for non-bundled plugins, and
-  declaring the maximum.
+  `optionalData` instead of under-declaring.
 - **Dialog fatigue.** Mitigations: no dialog for `[]`, the seed for existing users, and
-  only additions on change. A user who enables five plugins on a new phone sees five
-  dialogs. That is acceptable for a first run on a device.
-- **The seed hides a gap.** A device that receives a synced enable before it updates
-  gets seeded without having seen anything. That window is small.
+  no dialog at all when nothing changed. A user who enables five plugins on a new phone
+  sees five dialogs, which is acceptable for a first run on a device.
+- **Seed timing.** If hydration and sync ordering changes in `startup.service.ts`, the
+  seed could start including synced enables. The seed spec pins the ordering.
+- **Re-prompt on every start after a "no".** That is intended, matching the
+  `nodeExecution` deny. A user who wants it gone turns the plugin off, which syncs.
 - **Store interpretation.** A store may want consent per feature or per send. The gate
   is the one place to add that.
 
@@ -400,8 +442,10 @@ from `packages/plugin-dev/scripts/build-all.js`. Step 2 relies on their manifest
 2. Voice reminder: declare a "speech engine" destination, or restrict it to
    `localService` voices? The plugin does not check that flag today.
 3. Should the automations webhook move to `PluginAPI.request`, so it gets the same
-   checks as other plugins? It would need a `userServer` exception to the allowlist.
-4. Should the community listing show recipients after all (see §2)?
+   checks as other plugins? It hits the same private-network and user-server limits as
+   AI Command's local model (§1).
+4. Should the community listing show recipients after all (§2)?
+5. AI Command's transport to a local model (§1). This belongs to the AI Command plan.
 
 ## Review
 
@@ -449,3 +493,35 @@ citations and found none wrong. Findings and what happened to them:
     update flow, and a note that "Show what would be sent" is built by the plugin.
     **Not fixed:** a separate inventory of plugin iframe traffic. It falls under
     "declared only" with `fetch`, and tracing it would not change the design.
+
+### Adversarial review
+
+Fresh-context adversarial subagent, 2026-11-03. Each finding was checked against the
+code before it was applied.
+
+1. **Fixed.** The plan said a "no" disables the plugin on other devices too. The real
+   `nodeExecution` deny is in memory only and never writes the synced `isEnabled`
+   (`plugin.service.ts:727-752`). The gate now runs before `setPluginEnabled(true)` on
+   the toggle path, a "no" stays local, and the device asks again on the next start
+   (§2.1).
+2. **Fixed.** A hash cannot show "only what was added". The local record now keeps the
+   canonical declaration, and any change shows the full list marked "Changed since you
+   last accepted".
+3. **Fixed.** The gate is named at both code-load sites (`_loadPluginLazy` at `:618`,
+   `loadPluginFromZip` at `:1346`). Startup skips unacknowledged plugins and asks after
+   loading, so `_loadEnabledPlugins` never waits on a click. The `nodeExecution`
+   citations are corrected to `:1739` and `:1777`.
+4. **Fixed (moved).** AI Command's local model cannot be reached through
+   `PluginAPI.request`, which blocks loopback and private addresses. The disclosure
+   is unaffected; the transport is open question 5, for the AI Command plan.
+5. **Fixed.** The seed ran after sync and would have covered plugins another device had
+   just enabled. It now runs once per device, after hydration and before sync, on that
+   device's enabled set only, with its own seed-done flag. AI Command is never seeded.
+6. **Fixed.** Counts: 13 senders (12 bundled, one discover-only), nine data values, and
+   `api-test-plugin` added. The node test iterates `BUNDLED_PLUGIN_IDS`.
+7. **Fixed.** The per-destination `trigger` is replaced by `optionalData`, which renders
+   as "only if you turn it on". The GitHub example now lists notes as optional.
+8. **Fixed.** The deviation on the community listing is stated in the Objective.
+9. **Fixed.** `termsUrl` dropped; no inventory row needs it.
+10. **Fixed.** The `userText` label says "whatever you type", and the `timeTracked`
+    label includes worklog comments.
