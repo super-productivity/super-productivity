@@ -632,8 +632,9 @@ test.describe('@supersync Network Failure Recovery', () => {
    * Scenario:
    * 1. Client A creates a task
    * 2. Server returns STORAGE_QUOTA_EXCEEDED error
-   * 3. Client shows an appropriate error message (alert)
-   * 4. Operation is NOT marked as rejected (user needs to free space)
+   * 3. Client shows the storage-full alert
+   * 4. Operation is NOT marked as rejected (user needs to free space): once
+   *    the server accepts uploads again, the same op uploads and B receives it
    *
    * This tests that quota exceeded is treated as a transient error
    * that requires user action, not a permanent rejection.
@@ -645,6 +646,7 @@ test.describe('@supersync Network Failure Recovery', () => {
   }) => {
     test.setTimeout(60000);
     let clientA: SimulatedE2EClient | null = null;
+    let clientB: SimulatedE2EClient | null = null;
 
     try {
       const user = await createTestUser(testRunId);
@@ -655,14 +657,15 @@ test.describe('@supersync Network Failure Recovery', () => {
 
       // Set up dialog handler to dismiss alert dialogs BEFORE setting up route
       // Only handles 'alert' dialogs - 'confirm' dialogs are handled by SuperSyncPage
-      let alertShown = false;
+      const alertMessages: string[] = [];
       clientA.page.on('dialog', async (dialog) => {
         if (dialog.type() === 'alert') {
-          console.log(`[Test] Alert shown: ${dialog.message()}`);
-          alertShown = true;
-          await dialog.accept();
+          alertMessages.push(dialog.message());
+          await dialog.accept().catch(() => undefined);
         }
       });
+      const isQuotaAlert = (message: string): boolean =>
+        message.includes('Sync storage is full');
 
       // Wait for initial sync to complete so we have a baseline
       await clientA.sync.syncAndWait();
@@ -672,19 +675,17 @@ test.describe('@supersync Network Failure Recovery', () => {
       await routeSuperSyncOps(clientA.page, async (route) => {
         if (route.request().method() === 'POST') {
           console.log('[Test] Simulating storage quota exceeded');
+          // The real server's reply (sendQuotaExceededReply in
+          // packages/super-sync-server/src/sync/sync.routes.quota.ts).
           await route.fulfill({
-            status: 413, // Payload too large is typical for quota
+            status: 413,
             contentType: 'application/json',
             body: JSON.stringify({
               error: 'Storage quota exceeded',
-              code: 'STORAGE_QUOTA_EXCEEDED',
-              rejectedOps: [
-                {
-                  opId: 'mock-op-id',
-                  error: 'Storage quota exceeded',
-                  errorCode: 'STORAGE_QUOTA_EXCEEDED',
-                },
-              ],
+              errorCode: 'STORAGE_QUOTA_EXCEEDED',
+              storageUsedBytes: 100 * 1024 * 1024,
+              storageQuotaBytes: 100 * 1024 * 1024,
+              autoCleanupAttempted: true,
             }),
           });
         } else {
@@ -704,7 +705,7 @@ test.describe('@supersync Network Failure Recovery', () => {
         const alertTimeout = 5000;
         const pollInterval = 200;
         let elapsed = 0;
-        while (!alertShown && elapsed < alertTimeout) {
+        while (!alertMessages.some(isQuotaAlert) && elapsed < alertTimeout) {
           await clientA.page.waitForTimeout(pollInterval);
           elapsed += pollInterval;
         }
@@ -717,8 +718,18 @@ test.describe('@supersync Network Failure Recovery', () => {
       const taskLocator = clientA.page.locator(`task:has-text("${taskName}")`);
       await expect(taskLocator).toBeVisible();
 
-      // Verify an alert was shown (quota exceeded shows window.alert)
-      expect(alertShown).toBe(true);
+      // The storage-full alert, not just any alert
+      expect(alertMessages.some(isQuotaAlert)).toBe(true);
+
+      // The op was kept for retry, not rejected: once the server accepts
+      // uploads again it goes up, and a new client receives the task.
+      await unrouteSuperSyncOps(clientA.page);
+      await clientA.sync.syncAndWait();
+
+      clientB = await createSimulatedClient(browser, baseURL!, 'B', testRunId);
+      await clientB.sync.setupSuperSync(syncConfig);
+      await clientB.sync.syncAndWait();
+      await waitForTask(clientB.page, taskName);
 
       console.log('[StorageQuota] ✓ Server quota exceeded handling test PASSED');
     } finally {
@@ -726,6 +737,7 @@ test.describe('@supersync Network Failure Recovery', () => {
         await unrouteSuperSyncOps(clientA.page).catch(() => {});
       }
       if (clientA) await closeClient(clientA);
+      if (clientB) await closeClient(clientB);
     }
   });
 

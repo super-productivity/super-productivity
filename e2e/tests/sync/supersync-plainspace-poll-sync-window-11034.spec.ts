@@ -6,8 +6,10 @@ import {
   createTestUser,
   getSuperSyncConfig,
   routeSuperSyncOps,
+  unrouteSuperSyncOps,
   type SimulatedE2EClient,
 } from '../../utils/supersync-helpers';
+import { isPageInSyncWindow } from '../../utils/audit-error-paths-helpers';
 import { ProjectPage } from '../../pages/project.page';
 import {
   FakePlainspace,
@@ -152,10 +154,12 @@ const renameTask = async (page: Page, title: string, newTitle: string): Promise<
  * Holds every `/tasks` GET of the page, answering it on release with the
  * fake's state from the moment the request arrived: a read that reached
  * Plainspace before what the test does next, but whose answer lands after.
+ * `beforeAnswer` runs after the release, right before the held answer is sent.
  */
 const holdTaskListReads = async (
   page: Page,
   server: FakePlainspace,
+  beforeAnswer?: () => Promise<void>,
 ): Promise<{ held: () => number; release: () => void }> => {
   let held = 0;
   let release!: () => void;
@@ -173,6 +177,7 @@ const holdTaskListReads = async (
       };
       held++;
       await gate;
+      await beforeAnswer?.();
       server.taskListRequests.push({ status: 200 });
       await route.fulfill({
         status: 200,
@@ -367,8 +372,20 @@ test.describe('@supersync Plainspace poll vs the sync window (#11034)', () => {
       server.remoteEdit(TASK_ID, { title: T1 });
 
       // B looks at the app: its update poll reads Plainspace (T1), but the
-      // answer is still in flight.
-      const gate = await holdTaskListReads(b.c.page, server);
+      // answer is still in flight. It is answered once B applied A's ops,
+      // and the test records whether that was still inside B's sync window.
+      const answeredInSyncWindow: boolean[] = [];
+      const gate = await holdTaskListReads(b.c.page, server, async () => {
+        // Inside a route handler: record a failure instead of throwing.
+        const isApplied = await expect
+          .poll(async () => (await readLinkedTask(b.c.page))?.title, { timeout: 10000 })
+          .toBe(MINE)
+          .then(
+            () => true,
+            () => false,
+          );
+        answeredInSyncWindow.push(isApplied && (await isPageInSyncWindow(b.c.page)));
+      });
       const updatePollsBefore = b.updatePolls();
       await b.c.page.evaluate(() => window.dispatchEvent(new Event('focus')));
       await expect.poll(gate.held, { timeout: 15000 }).toBeGreaterThanOrEqual(1);
@@ -388,13 +405,30 @@ test.describe('@supersync Plainspace poll vs the sync window (#11034)', () => {
         .toBe(MINE);
       await a.c.sync.syncAndWait();
 
-      // B syncs A's ops; the poll answer lands right after the apply, inside
-      // the post-sync cooldown.
+      // B syncs A's ops; the gate opens from B's own download, so the poll
+      // answer lands right after the apply, inside the sync window (releasing
+      // it after syncAndWait would land it after the window closed).
+      await routeSuperSyncOps(b.c.page, async (route) => {
+        if (route.request().method() === 'GET') {
+          const response = await route.fetch();
+          await route.fulfill({ response });
+          gate.release();
+          return;
+        }
+        await route.fallback();
+      });
       await b.c.sync.syncAndWait();
-      expect((await readLinkedTask(b.c.page))?.title).toBe(MINE);
-      gate.release();
-      await b.c.page.waitForTimeout(3000);
+      await unrouteSuperSyncOps(b.c.page);
+      await expect.poll(() => answeredInSyncWindow.length).toBe(1);
+      expect(answeredInSyncWindow).toEqual([true]);
       await snapshot('after B stale poll landed', s);
+
+      // Interim state: the stale answer shows the collaborator's title on B
+      // until the next poll, and nothing is pushed back to Plainspace.
+      await expect
+        .poll(async () => (await readLinkedTask(b.c.page))?.title, { timeout: 10000 })
+        .toBe(T1);
+      expect(titlePatches(server)).toEqual([MINE]);
 
       await b.c.sync.syncAndWait();
       await a.c.sync.syncAndWait();

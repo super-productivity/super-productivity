@@ -8,6 +8,7 @@ import {
   closeClient,
   createSimulatedClient,
   createTestUser,
+  getArchiveYoungTaskIds,
   getLocalOpLogSummary,
   getSuperSyncConfig,
   isFullStateOpType,
@@ -17,6 +18,7 @@ import {
   type SimulatedE2EClient,
 } from '../../utils/supersync-helpers';
 import { waitForAppReady } from '../../utils/waits';
+import { getStoreSummary } from '../../utils/audit-error-paths-helpers';
 
 /**
  * #10399: "use remote data" on SuperSync rebuilds the device from the server
@@ -414,6 +416,12 @@ test.describe('@supersync #10399 "use remote" keeps the app features through a r
       await markTaskDoneByKey(remote, titles[0]);
       await remote.workView.addTask(remoteOnlyTask);
       await remote.sync.syncAndWait();
+      // Remote keeps both tasks live (one done, none archived).
+      const remoteTasks = (await getStoreSummary(remote.page)).tasks;
+      const titleTaskIds = titles.map(
+        (title) => remoteTasks.find((task) => task.title === title)?.id,
+      );
+      expect(titleTaskIds.every((id) => !!id)).toBe(true);
 
       await archiveTasks(local, titles);
       for (const title of titles) {
@@ -423,8 +431,24 @@ test.describe('@supersync #10399 "use remote" keeps the app features through a r
       await expect(local.sync.syncSpinner).not.toBeVisible({ timeout: 30000 });
       await local.page.unroute('**/api/sync/**');
 
-      await local.sync.syncAndWait({ conflictDialog: 'remote', timeout: 60000 });
+      // The stop must really happen: a raw click, then the whole-dataset dialog
+      // is required, not merely answered if it shows up.
+      const rebuildCommitted = local.page.waitForEvent('console', {
+        predicate: (message) => message.text().includes(REBUILD_COMMITTED_LOG),
+        timeout: 60000,
+      });
+      await local.sync.clickSyncBtn();
+      await expect(local.sync.conflictDialog).toBeVisible({ timeout: 30000 });
+      await local.sync.resolveConflictDialog('remote');
+      await rebuildCommitted;
+      await local.sync.syncAndWait({ timeout: 60000 });
       await waitForTask(local.page, remoteOnlyTask);
+      // Remote's history has neither task archived, so the rebuilt device
+      // must not keep its local archive of them.
+      const archivedIds = await getArchiveYoungTaskIds(local.page);
+      for (const id of titleTaskIds) {
+        expect(archivedIds).not.toContain(id);
+      }
       await expectNoFullStateOp(local.page);
       await expectNewInstallFeatures(local.page, 'local after use remote');
 

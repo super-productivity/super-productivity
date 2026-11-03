@@ -10,6 +10,26 @@ import {
   type SimulatedE2EClient,
 } from '../../utils/supersync-helpers';
 import { ProjectPage } from '../../pages/project.page';
+import {
+  getStoreSummary,
+  readLocalOpEntries,
+} from '../../utils/audit-error-paths-helpers';
+
+const countFullStateOps = async (page: Page): Promise<number> =>
+  (await readLocalOpEntries(page)).filter((op) =>
+    ['SYNC_IMPORT', 'BACKUP_IMPORT', 'REPAIR'].includes(op.opType),
+  ).length;
+
+/**
+ * The tag is gone from the store and no task still references it. Chip text
+ * cannot tell: a dangling tagId renders no chip, and the repair it triggers
+ * (a REPAIR op) cleans it up behind the test's back.
+ */
+const expectTagGoneFromStore = async (page: Page, tagId: string): Promise<void> => {
+  const summary = await getStoreSummary(page);
+  expect(summary.tagIds).not.toContain(tagId);
+  expect(summary.tasks.filter((task) => task.tagIds.includes(tagId))).toEqual([]);
+};
 
 // Robust helper to create a tag
 const createTagReliably = async (page: Page, tagName: string): Promise<void> => {
@@ -498,6 +518,13 @@ test.describe('@supersync SuperSync Models', () => {
       ).toBeVisible();
       console.log('[BulkTag] Client B sees the tag');
 
+      const tagId = (await getStoreSummary(clientA.page)).tags.find(
+        (tag) => tag.title === tagName,
+      )?.id;
+      expect(tagId).toBeTruthy();
+      const fullStateOpsBeforeA = await countFullStateOps(clientA.page);
+      const fullStateOpsBeforeB = await countFullStateOps(clientB.page);
+
       // 5. Client A deletes the tag
       // Navigate to Today view to ensure sidebar is visible
       await clientA.page.goto('/#/tag/TODAY/work');
@@ -550,6 +577,7 @@ test.describe('@supersync SuperSync Models', () => {
       }).toPass({ timeout: 30000, intervals: [1000, 2000, 3000, 5000] });
 
       console.log('[BulkTag] Tag deleted on Client A');
+      await expectTagGoneFromStore(clientA.page, tagId!);
 
       // 6. Client A syncs
       await clientA.sync.syncAndWait();
@@ -628,6 +656,12 @@ test.describe('@supersync SuperSync Models', () => {
       expect(countA).toBe(countB);
       expect(countA).toBeGreaterThanOrEqual(taskCount);
       console.log(`[BulkTag] ✓ Both clients have ${countA} tasks`);
+
+      // The clean end state came from the delete itself, not from a repair.
+      await expectTagGoneFromStore(clientA.page, tagId!);
+      await expectTagGoneFromStore(clientB.page, tagId!);
+      expect(await countFullStateOps(clientA.page)).toBe(fullStateOpsBeforeA);
+      expect(await countFullStateOps(clientB.page)).toBe(fullStateOpsBeforeB);
 
       console.log('[BulkTag] ✓ Tag deletion atomic cleanup test PASSED!');
     } finally {

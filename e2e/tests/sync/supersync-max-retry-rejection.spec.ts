@@ -10,6 +10,15 @@ import {
   waitForTask,
   type SimulatedE2EClient,
 } from '../../utils/supersync-helpers';
+import {
+  installDomRecorder,
+  readDomRecord,
+  readLocalOpEntries,
+  SNACK_SELECTOR,
+} from '../../utils/audit-error-paths-helpers';
+
+const CONFLICT_RESOLUTION_FAILED_SNACK =
+  'Sync conflict resolution failed. Please reload.';
 
 /**
  * SuperSync Max Retry Rejection E2E Test
@@ -53,7 +62,8 @@ test.describe('@supersync Max Retry Rejection', () => {
    * When the same entity keeps getting CONFLICT_CONCURRENT rejections,
    * the retry counter increments each sync cycle. After exceeding
    * MAX_CONCURRENT_RESOLUTION_ATTEMPTS (3), the ops are permanently
-   * rejected and sync shows ERROR status.
+   * rejected (rejectedAt set, never uploaded) and the "conflict resolution
+   * failed" snack appears.
    */
   test('Op permanently rejected after max concurrent resolution attempts', async ({
     browser,
@@ -80,6 +90,9 @@ test.describe('@supersync Max Retry Rejection', () => {
       const taskName2 = `MaxRetry2-${testRunId}`;
       await clientA.workView.addTask(taskName2);
       await waitForTask(clientA.page, taskName2);
+
+      // The snack is transient: record it from before the first rejected upload.
+      await installDomRecorder(clientA.page, 'snacks', SNACK_SELECTOR);
 
       // Intercept ALL uploads — return CONFLICT_CONCURRENT for every op
       await routeSuperSyncOps(clientA.page, async (route) => {
@@ -129,13 +142,31 @@ test.describe('@supersync Max Retry Rejection', () => {
       await unrouteSuperSyncOps(clientA.page);
 
       // Verify multiple upload attempts happened (confirms retry cycles occurred)
-      // The app silently drops permanently-rejected ops without showing an error icon.
       expect(interceptCount).toBeGreaterThan(1);
       console.log(`[MaxRetry] Total intercepts: ${interceptCount}`);
+
+      // The cap was hit: the user is told, and the task's op is rejected for good.
+      const { texts: snackTexts } = await readDomRecord(clientA.page, 'snacks');
+      expect(
+        snackTexts.some((text) => text.includes(CONFLICT_RESOLUTION_FAILED_SNACK)),
+        'the "conflict resolution failed" snack must have appeared',
+      ).toBe(true);
+      const task2Ops = (await readLocalOpEntries(clientA.page, taskName2)).filter(
+        (op) => op.payloadMatches,
+      );
+      expect(task2Ops.some((op) => op.isRejected)).toBe(true);
 
       // After removing interception, sync should succeed
       // (rejected ops are skipped, no infinite loop)
       await clientA.sync.syncAndWait();
+
+      // Nothing is pending, and no op for taskName2 was retried and accepted:
+      // with no cap, the last merged op would upload now.
+      const opsAfter = await readLocalOpEntries(clientA.page, taskName2);
+      expect(
+        opsAfter.filter((op) => op.source === 'local' && !op.isSynced && !op.isRejected),
+      ).toEqual([]);
+      expect(opsAfter.filter((op) => op.payloadMatches && op.isSynced)).toEqual([]);
 
       // Task still exists locally (not lost)
       await waitForTask(clientA.page, taskName);

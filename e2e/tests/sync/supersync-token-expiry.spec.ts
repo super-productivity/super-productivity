@@ -7,15 +7,42 @@ import {
   waitForTask,
   type SimulatedE2EClient,
 } from '../../utils/supersync-helpers';
+import {
+  installDomRecorder,
+  readDomRecord,
+  SNACK_SELECTOR,
+} from '../../utils/audit-error-paths-helpers';
+
+const AUTH_TOKEN_REJECTED_SNACK = 'Sync token was rejected by the server';
+
+/**
+ * One 401 must surface as an error (icon plus the "token rejected" snack) while
+ * the stored token is kept: SyncWrapperService tolerates two consecutive
+ * SuperSync 401s and clears credentials only on the third.
+ */
+const expectTokenRejectedError = async (client: SimulatedE2EClient): Promise<void> => {
+  await expect(client.sync.syncErrorIcon).toBeVisible({ timeout: 15000 });
+  await expect
+    .poll(
+      async () =>
+        (await readDomRecord(client.page, 'snacks')).texts.some((text) =>
+          text.includes(AUTH_TOKEN_REJECTED_SNACK),
+        ),
+      { message: 'the "token rejected" snack must appear', timeout: 10000 },
+    )
+    .toBe(true);
+};
 
 /**
  * SuperSync Token Expiry Recovery E2E Tests
  *
  * Tests graceful recovery when auth token returns 401 during sync.
- * Uses Playwright route interception to simulate expired token responses.
+ * Uses Playwright route interception to simulate one 401 response.
  *
- * After a 401, the app clears stored credentials and shows a "Configure" snackbar.
- * Recovery requires re-entering credentials via the sync config dialog.
+ * A single 401 shows the sync error icon and a "token rejected" snackbar but
+ * keeps the stored token (two transient 401s are tolerated; the third clears
+ * it). So once the server accepts the token again, a plain sync recovers with
+ * no re-setup.
  *
  * Prerequisites:
  * - super-sync-server running on localhost:1901 with TEST_MODE=true
@@ -26,13 +53,13 @@ import {
 
 test.describe('@supersync Token Expiry Recovery', () => {
   /**
-   * Scenario: Upload gets 401, re-authentication and retry succeeds
+   * Scenario: Upload gets one 401, then a plain retry succeeds
    *
    * Flow:
    * 1. Client A creates task, sets up sync
    * 2. Intercept upload to return 401 once
-   * 3. First sync fails with auth error (app clears credentials)
-   * 4. Remove interception, re-enter credentials via setupSuperSync
+   * 3. First sync fails: error icon and "token rejected" snack; token kept
+   * 4. Remove interception, sync again with the stored token (no re-setup)
    * 5. Client B verifies task synced correctly
    */
   test('recovers from 401 on upload and retries successfully', async ({
@@ -74,29 +101,21 @@ test.describe('@supersync Token Expiry Recovery', () => {
         }
       });
 
-      // First sync - should fail with 401
-      try {
-        await clientA.sync.triggerSync();
-        await clientA.page.waitForTimeout(2000);
-      } catch {
-        console.log('[TokenExpiry] First sync failed with 401 as expected');
-      }
+      await installDomRecorder(clientA.page, 'snacks', SNACK_SELECTOR);
 
-      // Verify the 401 interception actually fired
+      // First sync - should fail with 401
+      // A raw click: triggerSync() waits for a successful cycle and would sit
+      // out its timeout on the expected 401.
+      await clientA.sync.clickSyncBtn();
+
+      // Verify the 401 interception actually fired, and was surfaced
       expect(state.return401).toBe(false);
+      await expectTokenRejectedError(clientA);
 
       // Remove interception
       await clientA.page.unroute('**/api/sync/ops*');
-      await clientA.page.waitForTimeout(500);
 
-      // After 401, the app clears credentials and may show a config dialog.
-      // Close any open dialogs before re-entering credentials.
-      await clientA.sync.ensureOverlaysClosed();
-
-      // Re-enter credentials (app cleared them on auth failure)
-      await clientA.sync.setupSuperSync(syncConfig);
-
-      // Sync again - should succeed now
+      // Sync again with the stored token (no re-setup) - should succeed now
       await clientA.sync.syncAndWait();
       console.log('[TokenExpiry] Retry sync succeeded');
 
@@ -123,13 +142,13 @@ test.describe('@supersync Token Expiry Recovery', () => {
   });
 
   /**
-   * Scenario: Download gets 401, re-authentication and retry succeeds
+   * Scenario: Download gets one 401, then a plain retry succeeds
    *
    * Flow:
    * 1. Client A creates and syncs task
    * 2. Client B sets up, intercept download to return 401 once
-   * 3. First download fails (app clears credentials)
-   * 4. Remove interception, re-enter credentials
+   * 3. First download fails: error icon and "token rejected" snack; token kept
+   * 4. Remove interception, sync again with the stored token (no re-setup)
    * 5. Retry succeeds, Client B gets the task
    */
   test('recovers from 401 on download and retries successfully', async ({
@@ -176,29 +195,21 @@ test.describe('@supersync Token Expiry Recovery', () => {
         }
       });
 
-      // First sync - download should fail
-      try {
-        await clientB.sync.triggerSync();
-        await clientB.page.waitForTimeout(2000);
-      } catch {
-        console.log('[TokenExpiry] First download failed with 401 as expected');
-      }
+      await installDomRecorder(clientB.page, 'snacks', SNACK_SELECTOR);
 
-      // Verify the 401 interception actually fired
+      // First sync - download should fail
+      // A raw click: triggerSync() waits for a successful cycle and would sit
+      // out its timeout on the expected 401.
+      await clientB.sync.clickSyncBtn();
+
+      // Verify the 401 interception actually fired, and was surfaced
       expect(state.return401).toBe(false);
+      await expectTokenRejectedError(clientB);
 
       // Remove interception
       await clientB.page.unroute('**/api/sync/ops*');
-      await clientB.page.waitForTimeout(500);
 
-      // After 401, the app clears credentials and may show a config dialog.
-      // Close any open dialogs before re-entering credentials.
-      await clientB.sync.ensureOverlaysClosed();
-
-      // Re-enter credentials (app cleared them on auth failure)
-      await clientB.sync.setupSuperSync(syncConfig);
-
-      // Sync again - should succeed
+      // Sync again with the stored token (no re-setup) - should succeed
       await clientB.sync.syncAndWait();
 
       // Verify task received

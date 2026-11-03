@@ -18,6 +18,7 @@ import {
   installDevErrorDialogHandler,
   type RuntimeBrowserError,
 } from '../../utils/runtime-errors';
+import { getStoreSummary } from '../../utils/audit-error-paths-helpers';
 
 type ProjectDeleteOpSnapshot = {
   allTaskIds: string[];
@@ -198,6 +199,10 @@ const expectProjectAndTasksDeleted = async (
     .locator('.additional-btns button')
     .filter({ has: page.locator('mat-icon', { hasText: 'visibility' }) })
     .click();
+  // The menu must be open and listing projects, or the absence below is vacuous.
+  await expect(
+    page.locator('button[role="menuitemcheckbox"]').filter({ hasText: 'Inbox' }),
+  ).toBeVisible({ timeout: 15000 });
   await expect(
     page.locator('button[role="menuitemcheckbox"]').filter({ hasText: projectName }),
   ).toHaveCount(0, { timeout: 15000 });
@@ -218,6 +223,13 @@ const expectProjectAndTasksDeleted = async (
   // The UI check above covers visible lists; the store check catches unscheduled
   // orphan entities that would otherwise be invisible after their project is removed.
   await expect.poll(() => getExistingTaskTitles(page, taskNames)).toEqual([]);
+  // A hidden or archived project would also be missing from the menu: the
+  // entity itself must be gone.
+  await expect
+    .poll(async () =>
+      (await getStoreSummary(page)).projects.filter((p) => p.title === projectName),
+    )
+    .toEqual([]);
 };
 
 const installConcurrentTabSupport = async (context: BrowserContext): Promise<void> => {
