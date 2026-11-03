@@ -351,6 +351,21 @@ export const waitForSync = async (
 ): Promise<'success' | 'conflict' | void> => waitForSyncComplete(page, syncPage);
 
 /**
+ * While sync is off, the sync button opens the browser sign-in dialog instead
+ * of the settings. Continues to the settings from either, so provider setup
+ * helpers work on fresh and on configured clients.
+ */
+export const passSyncSignInDialog = async (page: Page): Promise<void> => {
+  const signIn = page.locator('dialog-sync-setup');
+  const settings = page.locator('dialog-sync-cfg');
+  await expect(signIn.or(settings)).toBeVisible({ timeout: 10000 });
+  if (await signIn.isVisible()) {
+    await signIn.locator('.e2e-other-sync-options').click();
+  }
+  await settings.waitFor({ state: 'visible', timeout: 10000 });
+};
+
+/**
  * Completes the optional overwrite-warning step of the ordinary sync conflict
  * dialog. The warning is conditional on the measured change counts, so wait
  * for either that exact dialog or the parent conflict dialog closing instead

@@ -49,6 +49,7 @@ import { toSignal } from '@angular/core/rxjs-interop';
 import { FocusButtonComponent } from './focus-button/focus-button.component';
 import { EmlDropDirective } from '../../core/drop-paste-input/eml-drop.directive';
 import { wheelDeltaPx } from '../../util/wheel-delta-px';
+import { openSyncSettingsDialog } from '../../imex/sync/open-sync-settings-dialog';
 
 /**
  * How long a reveal keeps re-asserting its edge while the row's own box is
@@ -678,9 +679,10 @@ export class MainHeaderComponent implements OnDestroy {
     if (this.dialogSyncCfgRef) {
       return;
     }
-    const { DialogSyncCfgComponent } =
-      await import('../../imex/sync/dialog-sync-cfg/dialog-sync-cfg.component');
-    this.dialogSyncCfgRef = this.matDialog.open(DialogSyncCfgComponent);
+    this.dialogSyncCfgRef = await openSyncSettingsDialog(
+      this.matDialog,
+      this._configService.sync(),
+    );
     this._subs.add(
       this.dialogSyncCfgRef.afterClosed().subscribe(() => {
         this.dialogSyncCfgRef = null;

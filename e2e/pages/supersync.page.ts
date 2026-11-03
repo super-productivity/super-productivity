@@ -8,7 +8,10 @@ import {
 } from '@playwright/test';
 import { BasePage } from './base.page';
 import { normalizeDialogMessage, translationRegex } from '../utils/i18n-strings';
-import { confirmSyncConflictOverwriteIfShown } from '../utils/sync-helpers';
+import {
+  confirmSyncConflictOverwriteIfShown,
+  passSyncSignInDialog,
+} from '../utils/sync-helpers';
 import { cssSelectors } from '../constants/selectors';
 
 export interface SuperSyncConfig {
@@ -427,6 +430,7 @@ export class SuperSyncPage extends BasePage {
     // This allows configuring sync even when already set up
     // Use noWaitAfter to prevent blocking on Angular hash navigation
     await this.clickSyncBtn({ button: 'right', noWaitAfter: true });
+    await passSyncSignInDialog(this.page);
 
     // Wait for the provider select (indicates dialog is open)
     await this.providerSelect.waitFor({ state: 'visible', timeout: 10000 });
@@ -1372,6 +1376,7 @@ export class SuperSyncPage extends BasePage {
   /** Opens the sync settings dialog with the saved SuperSync config loaded. */
   async openSuperSyncSettings(): Promise<Locator> {
     await this.clickSyncBtn({ button: 'right', noWaitAfter: true });
+    await passSyncSignInDialog(this.page);
     await this.providerSelect.waitFor({ state: 'visible', timeout: 10000 });
     await this.selectSuperSyncProviderWithRetry();
     return this.page.locator('dialog-sync-cfg');
