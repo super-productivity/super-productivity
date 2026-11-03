@@ -12,6 +12,7 @@ import {
   PluginAppState,
   PluginBaseCfg,
   PluginCreateTaskData,
+  PluginUpdateTaskOptions,
   PluginHeaderBtnCfg,
   PluginHookHandler,
   PluginHooks,
@@ -255,10 +256,14 @@ export class PluginAPI implements PluginAPIInterface {
     PluginLog.log(`Plugin ${this.#pluginId} requested data re-init`);
     return this.#pluginBridge.reInitData();
   }
-  async updateTask(taskId: string, updates: Partial<Task>): Promise<void> {
+  async updateTask(
+    taskId: string,
+    updates: Partial<Task>,
+    options?: PluginUpdateTaskOptions,
+  ): Promise<void> {
     PluginLog.log(`Plugin ${this.#pluginId} requested to update task ${taskId}`);
     const taskCopyUpdates = taskDataToPartialTaskCopy(updates);
-    return this.#pluginBridge.updateTask(taskId, taskCopyUpdates);
+    return this.#pluginBridge.updateTask(taskId, taskCopyUpdates, options);
   }
 
   async addTask(taskData: PluginCreateTaskData): Promise<string> {

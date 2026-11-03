@@ -397,6 +397,17 @@ describe('TaskService', () => {
       );
     });
 
+    it('should mark the action to skip short syntax only when asked', () => {
+      service.update('task-1', { title: 'Call Bob #work' }, true);
+
+      expect(store.dispatch).toHaveBeenCalledWith(
+        TaskSharedActions.updateTask({
+          task: { id: 'task-1', changes: { title: 'Call Bob #work' } },
+          isIgnoreShortSyntax: true,
+        }),
+      );
+    });
+
     it('should flush pending time before replacing timeSpentOnDay', () => {
       const flushOneSpy = spyOn(taskTimeSync, 'flushOne');
 

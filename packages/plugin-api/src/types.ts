@@ -748,7 +748,11 @@ export interface PluginAPI {
    * follow, and for a recurring task the repeat config and every instance
    * (archived ones included) move without a confirmation.
    */
-  updateTask(taskId: string, updates: Partial<Task>): Promise<void>;
+  updateTask(
+    taskId: string,
+    updates: Partial<Task>,
+    options?: PluginUpdateTaskOptions,
+  ): Promise<void>;
 
   addTask(taskData: PluginCreateTaskData): Promise<string>;
 
@@ -881,7 +885,9 @@ export interface PluginAPI {
   // main-process user consent)
   executeNodeScript?(request: PluginNodeScriptRequest): Promise<PluginNodeScriptResult>;
 
-  // action execution - dispatch NgRx actions (limited to allowed subset)
+  // action execution - dispatch NgRx actions (limited to allowed subset).
+  // `{ type: '[Layout] Show PluginPanel', pluginId }` opens the plugin's own
+  // side panel, e.g. from a shortcut; another plugin's id is rejected.
   dispatchAction(action: { type: string; [key: string]: unknown }): void;
 
   // window state
@@ -926,6 +932,17 @@ export interface PluginCreateTaskData {
   isDone?: boolean;
   /** Due date as ISO date string (YYYY-MM-DD) */
   dueDay?: string | null;
+  /**
+   * Keep the title verbatim: skip short syntax parsing (`#tag`, `@date`,
+   * `+project`, `30m/1h`). Set this when the title comes from user content or
+   * a model rather than from the user typing short syntax.
+   */
+  isIgnoreShortSyntax?: boolean;
+}
+
+export interface PluginUpdateTaskOptions {
+  /** Keep a changed title verbatim, see `PluginCreateTaskData.isIgnoreShortSyntax`. */
+  isIgnoreShortSyntax?: boolean;
 }
 
 export interface PluginShortcutCfg {
