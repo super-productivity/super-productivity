@@ -266,12 +266,12 @@ describe('BoardEditComponent with the view editor', () => {
         { ...DEFAULT_PANEL_CFG, id: 'c', title: 'C' },
       ],
     });
-    // The column stepper only shows for a board.
-    expect(fixture.nativeElement.querySelector('.stepper')).toBeNull();
+    // The width picker only shows for a board.
+    expect(fixture.nativeElement.querySelector('.cols-toggle')).toBeNull();
     editor().setLayout('board');
     fixture.detectChanges();
     expect(editor().model().cols).toBe(3);
-    expect(fixture.nativeElement.querySelector('.stepper')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('.cols-toggle')).not.toBeNull();
     editor().setLayout('list');
     expect(editor().model().cols).toBe(1);
 
@@ -374,30 +374,53 @@ describe('BoardEditComponent with the view editor', () => {
     ).toEqual(['Own', '']);
   });
 
-  it('steps the columns, never below 2 or to a fraction', async () => {
+  it('offers each width, widest first, drawn with its sections', async () => {
     const cmp = await open({
       id: 'v',
       title: 'V',
-      cols: 3,
-      panels: [{ ...DEFAULT_PANEL_CFG, id: 'a', title: 'A' }],
+      cols: 2,
+      panels: ['a', 'b', 'c', 'd'].map((id) => ({ ...DEFAULT_PANEL_CFG, id, title: id })),
     });
-    const [fewer, more] = Array.from(
-      fixture.nativeElement.querySelectorAll('.stepper button'),
-    ) as HTMLButtonElement[];
-    fewer.click();
+    const options = (): HTMLButtonElement[] =>
+      Array.from(fixture.nativeElement.querySelectorAll('.cols-toggle button'));
+    expect(options().map((btn) => btn.getAttribute('aria-label'))).toEqual([
+      'F.BOARDS.EDITOR.COLUMNS_NR',
+      'F.BOARDS.EDITOR.COLUMNS_NR',
+      'F.BOARDS.EDITOR.COLUMNS_NR',
+    ]);
+    expect(editor().colsOptions()).toEqual([4, 3, 2]);
+    // Every preview has a box per section.
+    expect(options()[2].querySelectorAll('.cols-box').length).toBe(4);
+    expect(options()[2].getAttribute('aria-checked')).toBe('true');
+    options()[0].click();
     fixture.detectChanges();
-    expect(editor().model().cols).toBe(2);
-    expect(fewer.disabled).toBeTrue();
+    expect(editor().model().cols).toBe(4);
     for (const value of [2.5, 1, 0]) {
       editor().setCols(value);
-      expect(editor().model().cols).toBe(2);
+      expect(editor().model().cols).toBe(4);
     }
-    more.click();
-    more.click();
-    fixture.detectChanges();
     await settle();
     cmp.save();
     expect(savedBoard().cols).toBe(4);
+  });
+
+  it('keeps a one-row board in one row as sections come and go', async () => {
+    const panels = ['a', 'b', 'c'].map((id) => ({ ...DEFAULT_PANEL_CFG, id, title: id }));
+    await open({ id: 'v', title: 'V', cols: 3, panels });
+    editor().addPanel();
+    expect(editor().model().cols).toBe(4);
+    editor().duplicatePanel(0);
+    expect(editor().model().cols).toBe(5);
+    editor().removePanel(0);
+    expect(editor().model().cols).toBe(4);
+    editor().setCols(2);
+    // A wrapped board (2×2) keeps its width.
+    editor().addPanel();
+    expect(editor().model().cols).toBe(2);
+    // A list stays a list.
+    await open({ id: 'w', title: 'W', cols: 1, panels });
+    editor().addPanel();
+    expect(editor().model().cols).toBe(1);
   });
 
   it('moves, duplicates and removes sections', async () => {
@@ -627,9 +650,7 @@ describe('BoardEditComponent with the view editor', () => {
         toggle(cards()[1])!.click();
         fixture.detectChanges();
         expect(openCards()).toEqual([true, true, false]);
-        expect(
-          fixture.nativeElement.querySelector('mat-button-toggle-group'),
-        ).not.toBeNull();
+        expect(fixture.nativeElement.querySelector('.layout-toggle')).not.toBeNull();
       });
 
       it('opens the column its title asked for', async () => {

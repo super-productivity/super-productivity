@@ -36,8 +36,7 @@
   align-items: center;
 }
 
-.form-label,
-.cols-label {
+.form-label {
   color: var(--text-color-muted);
   font-size: var(--font-size-sm);
 }
@@ -49,23 +48,19 @@
   gap: var(--s) var(--s2);
 }
 
-.cols {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--s);
+// A width's preview: its sections as boxes, wrapped as the board wraps them.
+.cols-preview {
+  display: inline-grid;
+  grid-template-columns: repeat(var(--cols), var(--s));
+  gap: 2px;
+  vertical-align: middle;
 }
 
-.stepper {
-  display: inline-flex;
-  align-items: center;
-  border: 1px solid var(--extra-border-color);
-  border-radius: var(--radius-md);
-}
-
-.cols-value {
-  min-width: var(--s3);
-  text-align: center;
-  font-weight: var(--font-weight-medium);
+.cols-box {
+  height: var(--s);
+  border-radius: 2px;
+  background: currentColor;
+  opacity: 0.6;
 }
 
 .sections-head {
@@ -109,7 +104,8 @@
     align-items: stretch;
   }
 
-  .layout-toggle {
+  .layout-toggle,
+  .cols-toggle {
     display: flex;
   }
 

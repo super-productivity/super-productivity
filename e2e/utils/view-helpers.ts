@@ -248,25 +248,18 @@ const setViewLayout = async (
   layout: ViewSpec['layout'],
   columns: number | undefined,
 ): Promise<void> => {
-  const toggle = dialog.locator('view-editor mat-button-toggle-group');
+  const toggle = dialog.locator('view-editor .layout-toggle');
   if (layout) {
     await toggle
       .getByRole('radio', { name: layout === 'board' ? 'Board' : 'List', exact: true })
       .click();
   }
   if (columns !== undefined) {
-    const value = dialog.locator('.cols-value');
-    for (let i = 0; i < 20; i++) {
-      const current = Number(await value.innerText());
-      if (current === columns) break;
-      await dialog
-        .getByRole('button', {
-          name: current < columns ? 'More columns' : 'Fewer columns',
-          exact: true,
-        })
-        .click();
-    }
-    await expect(value).toHaveText(String(columns));
+    const width = dialog
+      .getByRole('radiogroup', { name: 'Columns per row' })
+      .getByRole('radio', { name: `${columns} per row`, exact: true });
+    await width.click();
+    await expect(width).toBeChecked();
   }
 };
 

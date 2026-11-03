@@ -164,8 +164,8 @@
         "COLUMN_NR": "Column {{nr}}",
         "COLUMN_TITLE": "Column title",
         "COLUMNS": "Columns",
-        "COLUMNS_DECREASE": "Fewer columns",
-        "COLUMNS_INCREASE": "More columns",
+        "COLUMNS_NR": "{{nr}} per row",
+        "COLUMNS_PER_ROW": "Columns per row",
         "CONFLICTS_WITH": "Conflicts with {{rule}}",
         "COUNT": "{{nr}} tasks",
         "COUNT_DONE": "{{nr}} done",
@@ -205,7 +205,6 @@
       },
       "FORM": {
         "BACKLOG_TASK_FILTER_ONLY_BACKLOG": "Backlog only",
-        "COLUMNS": "Columns",
         "DUE_STATE_NEXT_7_DAYS": "Next 7 days",
         "DUE_STATE_OVERDUE": "Overdue",
         "DUE_STATE_TODAY_OR_OVERDUE": "Today or overdue",

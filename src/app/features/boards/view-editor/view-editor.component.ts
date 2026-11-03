@@ -12,10 +12,11 @@ import {
   viewChildren,
 } from '@angular/core';
 import { CdkDrag, CdkDragDrop, CdkDropList } from '@angular/cdk/drag-drop';
-import { MatButton, MatIconButton } from '@angular/material/button';
+import { MatButton } from '@angular/material/button';
 import { MatButtonToggle, MatButtonToggleGroup } from '@angular/material/button-toggle';
 import { MatDialogContent, MatDialogTitle } from '@angular/material/dialog';
 import { MatIcon } from '@angular/material/icon';
+import { MatTooltip } from '@angular/material/tooltip';
 import { Store } from '@ngrx/store';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { nanoid } from 'nanoid';
@@ -76,8 +77,8 @@ interface CachedCount {
     MatButton,
     MatButtonToggle,
     MatButtonToggleGroup,
-    MatIconButton,
     MatIcon,
+    MatTooltip,
     TranslatePipe,
     ViewEditorSectionComponent,
     ViewEditorTitleComponent,
@@ -161,6 +162,16 @@ export class ViewEditorComponent {
   );
   readonly isBoard = computed(() => this.layout() === 'board');
   readonly isSectionTitleShown = computed(() => isSectionTitleShown(this.model()));
+  /** The board widths to pick from, widest (one row) first; always the current. */
+  readonly colsOptions = computed(() => {
+    const { cols, panels } = this.model();
+    const max = Math.max(2, cols, panels.length);
+    return Array.from({ length: max - 1 }, (_, i) => max - i);
+  });
+  /** One box per section in each width's preview. */
+  readonly previewBoxes = computed(() =>
+    Array.from({ length: Math.max(1, this.model().panels.length) }),
+  );
 
   // The live count runs the view's own matching on what would be saved, so it
   // is the number the section header will show for the chosen layout.
@@ -213,7 +224,7 @@ export class ViewEditorComponent {
     this.model.update((model) => ({ ...model, ...getLayoutChanges(model, layout) }));
   }
 
-  /** The column stepper: a whole number, 2 or more. */
+  /** A board's columns per row: a whole number, 2 or more. */
   setCols(value: number): void {
     if (Number.isInteger(value) && value >= 2) {
       this.model.update((model) => ({ ...model, cols: value }));
@@ -336,8 +347,16 @@ export class ViewEditorComponent {
     this.openPanelIds.update((ids) => new Set([...ids, id]));
   }
 
+  /**
+   * A board in one row stays one row as sections come and go; a wrapped one
+   * (a 2×2) keeps its width.
+   */
   private _setPanels(panels: BoardPanelCfg[]): void {
-    this.model.update((model) => ({ ...model, panels }));
+    this.model.update((model) => {
+      const isOneRow = model.cols > 1 && model.cols >= model.panels.length;
+      const cols = isOneRow ? Math.max(2, panels.length) : model.cols;
+      return { ...model, panels, cols };
+    });
   }
 
   private _newPanel(): BoardPanelCfg {

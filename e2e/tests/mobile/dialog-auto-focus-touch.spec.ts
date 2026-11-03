@@ -32,7 +32,7 @@ test.describe('Dialog auto focus on a phone', () => {
     await expect(container).toHaveAttribute('role', 'dialog');
 
     // The layout shows on top, then the cards; nothing scrolls sideways.
-    const layout = container.locator('mat-button-toggle-group');
+    const layout = container.locator('.layout-toggle');
     await expect(
       layout.getByRole('radio', { name: 'Board', exact: true }),
     ).toHaveAttribute('aria-checked', 'true');

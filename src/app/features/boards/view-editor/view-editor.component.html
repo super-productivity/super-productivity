@@ -41,37 +41,32 @@
         </mat-button-toggle>
       </mat-button-toggle-group>
       @if (isBoard()) {
-        <span
-          class="cols"
-          role="group"
-          [attr.aria-label]="T.F.BOARDS.FORM.COLUMNS | translate"
+        <!-- Each width drawn with the view's own columns: 2×2 reads as such. -->
+        <mat-button-toggle-group
+          class="cols-toggle"
+          hideSingleSelectionIndicator
+          [attr.aria-label]="T.F.BOARDS.EDITOR.COLUMNS_PER_ROW | translate"
+          [value]="model().cols"
+          (change)="setCols($event.value)"
         >
-          <span class="stepper">
-            <button
-              mat-icon-button
-              type="button"
-              [disabled]="model().cols <= 2"
-              [attr.aria-label]="T.F.BOARDS.EDITOR.COLUMNS_DECREASE | translate"
-              (click)="setCols(model().cols - 1)"
+          @for (cols of colsOptions(); track cols) {
+            <mat-button-toggle
+              class="layout-option"
+              [value]="cols"
+              [aria-label]="T.F.BOARDS.EDITOR.COLUMNS_NR | translate: { nr: cols }"
+              [matTooltip]="T.F.BOARDS.EDITOR.COLUMNS_NR | translate: { nr: cols }"
             >
-              <mat-icon>remove</mat-icon>
-            </button>
-            <span
-              class="cols-value"
-              aria-live="polite"
-              >{{ model().cols }}</span
-            >
-            <button
-              mat-icon-button
-              type="button"
-              [attr.aria-label]="T.F.BOARDS.EDITOR.COLUMNS_INCREASE | translate"
-              (click)="setCols(model().cols + 1)"
-            >
-              <mat-icon>add</mat-icon>
-            </button>
-          </span>
-          <span class="cols-label">{{ T.F.BOARDS.FORM.COLUMNS | translate }}</span>
-        </span>
+              <span
+                class="cols-preview"
+                [style.--cols]="cols"
+              >
+                @for (box of previewBoxes(); track $index) {
+                  <span class="cols-box"></span>
+                }
+              </span>
+            </mat-button-toggle>
+          }
+        </mat-button-toggle-group>
       }
     </div>
   </div>

@@ -98,17 +98,18 @@ test.describe('View editor', () => {
       title: `${testPrefix}-Layouts`,
       sections: [{ title: 'Alpha' }, { title: 'Beta' }],
     });
-    const columns = dialog.getByRole('group', { name: 'Columns', exact: true });
+    const columns = dialog.getByRole('radiogroup', { name: 'Columns per row' });
     await expect(columns).toHaveCount(0);
     await expect(
       dialog.getByRole('heading', { name: 'Sections', exact: true }),
     ).toBeVisible();
 
     await fillViewEditor(page, dialog, { layout: 'board' });
-    await expect(columns.locator('.cols-value')).toHaveText('2');
+    // Two sections: one row is the only width.
+    await expect(columns.getByRole('radio')).toHaveCount(1);
     await expect(
-      columns.getByRole('button', { name: 'Fewer columns', exact: true }),
-    ).toBeDisabled();
+      columns.getByRole('radio', { name: '2 per row', exact: true }),
+    ).toBeChecked();
     await expect(
       dialog.getByRole('heading', { name: 'Columns', exact: true }),
     ).toBeVisible();
