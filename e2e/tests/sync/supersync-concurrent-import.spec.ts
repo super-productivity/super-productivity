@@ -18,7 +18,9 @@ import { getServerOps, writeMarkedBackup } from '../../utils/audit-concurrency-h
  *
  * Two synced clients each import a different backup with no sync in between,
  * so both hold an unsynced full-state op that knows nothing of the other.
- * A uploads first: its BACKUP_IMPORT replaces the server state. B then
+ * A uploads first; its import is concurrent with an op B uploaded earlier,
+ * so A is asked too and keeps its own data: its BACKUP_IMPORT replaces the
+ * server state. B then
  * downloads A's import while its own import is still pending, so B must ask
  * (sync-import conflict dialog) instead of silently picking one. B accepts the
  * server's data. Afterwards every client holds exactly A's backup and the
@@ -69,6 +71,11 @@ test.describe('@supersync @concurrent-import Concurrent BACKUP_IMPORT handling',
       await clientB.sync.setupSuperSync(syncConfig);
       await clientB.sync.syncAndWait();
       await waitForTask(clientB.page, baseline);
+      // B's op reaches the server before either import, so A's own first sync
+      // after its import meets remote ops concurrent with it and must ask.
+      const fromB = `FromB-${testRunId}`;
+      await clientB.workView.addTask(fromB);
+      await clientB.sync.syncAndWait();
 
       // ============ Concurrent imports, no sync in between ============
       for (const [client, backup, marker] of [
@@ -83,10 +90,17 @@ test.describe('@supersync @concurrent-import Concurrent BACKUP_IMPORT handling',
         await client.page.evaluate(blockBackgroundSync);
         await expect.poll(() => getTaskTitleFromState(client, marker)).toBe(marker);
         expect(await getTaskTitleFromState(client, baseline)).toBeNull();
+        expect(await getTaskTitleFromState(client, fromB)).toBeNull();
       }
 
       // ============ A uploads its import first ============
+      // syncAndWait() would answer this dialog with USE_REMOTE and silently
+      // drop A's import (observed in E2E run 41735806038); answer it explicitly.
+      await clientA.sync.clickSyncBtn();
+      await expect(clientA.sync.syncImportConflictDialog).toBeVisible({ timeout: 30000 });
+      await clientA.sync.chooseSyncImportUseLocal();
       await clientA.sync.syncAndWait();
+      await expect.poll(() => getTaskTitleFromState(clientA, markerA)).toBe(markerA);
 
       // ============ B downloads A's import while its own is pending ============
       await clientB.sync.clickSyncBtn();
@@ -100,6 +114,7 @@ test.describe('@supersync @concurrent-import Concurrent BACKUP_IMPORT handling',
         await expect.poll(() => getTaskTitleFromState(client, markerA)).toBe(markerA);
         expect(await getTaskTitleFromState(client, markerB)).toBeNull();
         expect(await getTaskTitleFromState(client, baseline)).toBeNull();
+        expect(await getTaskTitleFromState(client, fromB)).toBeNull();
       }
 
       const fullStateOps = (await getServerOps(user.userId)).filter((op) =>

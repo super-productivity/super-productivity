@@ -8,6 +8,7 @@ import {
 } from '../../utils/supersync-helpers';
 import {
   getStoreCounterByTitle,
+  readStoreCounters,
   type StoreCounter,
 } from '../../utils/audit-concurrency-helpers';
 
@@ -162,6 +163,8 @@ test.describe('@supersync Simple Counter delete-vs-update (#7330)', () => {
       await clientB.sync.setupSuperSync(syncConfig);
       await clientB.sync.syncAndWait();
       expect(await counterCount(clientB)).toBe(1);
+      const counterId = (await getStoreCounterByTitle(clientA, counterTitle))?.id;
+      expect(counterId).toBeTruthy();
 
       // ===== Phase 3: concurrent edits (offline) =====
       // A deletes the counter; B increments it. Neither has synced yet.
@@ -199,13 +202,14 @@ test.describe('@supersync Simple Counter delete-vs-update (#7330)', () => {
           isEnabled: c.isEnabled,
           countOnDay: c.countOnDay,
         };
+      // By id: a counter resurrected from an {id}-only payload may lack its title.
+      const byId = async (client: SimulatedE2EClient): Promise<StoreCounter | null> =>
+        (await readStoreCounters(client)).find((c) => c.id === counterId) ?? null;
       await expect
-        .poll(async () =>
-          comparable(await getStoreCounterByTitle(clientB!, counterTitle)),
-        )
+        .poll(async () => comparable(await byId(clientB!)))
         .toEqual(expect.objectContaining({ title: counterTitle, type: 'ClickCounter' }));
-      const counterA = comparable(await getStoreCounterByTitle(clientA, counterTitle));
-      const counterB = comparable(await getStoreCounterByTitle(clientB, counterTitle));
+      const counterA = comparable(await byId(clientA));
+      const counterB = comparable(await byId(clientB));
       console.log('[7330] counter A:', JSON.stringify(counterA));
       console.log('[7330] counter B:', JSON.stringify(counterB));
       expect(counterA).toEqual(counterB);

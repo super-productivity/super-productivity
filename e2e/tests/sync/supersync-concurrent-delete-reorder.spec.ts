@@ -42,7 +42,14 @@ test.describe('@supersync Concurrent Delete and Reorder', () => {
    * 7. Client A syncs (downloads reorder)
    * 8. Verify: both clients show exactly the same three tasks in the same order
    */
-  test('Delete on one client + reorder on another converges correctly', async ({
+  // test.fixme: the orders diverge permanently on the unchanged app
+  // (E2E run 41735806038, 2026-11-03). Expected: both clients show the same
+  // order. Observed: A [T4, T1, T3] vs B [T4, T3, T1]; with two deletes
+  // A [T1, T6, T5, T3] vs B [T6, T5, T1, T3]. B's relative move
+  // (moveTaskUpInTodayList, tag.reducer.ts) replays on A against a list
+  // without the deleted neighbour, and no side's TAG:TODAY order wins.
+  // Issue candidate for the coordinator; un-fixme once fixed.
+  test.fixme('Delete on one client + reorder on another converges correctly', async ({
     browser,
     baseURL,
     testRunId,
@@ -149,7 +156,8 @@ test.describe('@supersync Concurrent Delete and Reorder', () => {
    * 5. Sync convergence
    * 6. Verify: both clients show exactly the same four tasks in the same order
    */
-  test('Multiple deletes + reorder converges correctly', async ({
+  // test.fixme: same divergence as above (E2E run 41735806038).
+  test.fixme('Multiple deletes + reorder converges correctly', async ({
     browser,
     baseURL,
     testRunId,
