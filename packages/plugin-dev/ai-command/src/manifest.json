@@ -1,0 +1,33 @@
+{
+  "name": "AI Command",
+  "id": "ai-command",
+  "manifestVersion": 1,
+  "version": "0.1.0",
+  "minSupVersion": "19.3.1",
+  "description": "Type or dictate what you want: add tasks, change several at once, plan your day or ask what to focus on. Uses your own Anthropic API key; your request and the relevant tasks are sent to Anthropic (see the notice on first use).",
+  "author": "Super Productivity",
+  "permissions": [
+    "http",
+    "getTasks",
+    "getAllProjects",
+    "getAllTags",
+    "getDayContext",
+    "addTask",
+    "updateTask",
+    "deleteTask",
+    "selectTask",
+    "startTracking",
+    "setSecret",
+    "getSecret",
+    "deleteSecret",
+    "dispatchAction",
+    "showSnack"
+  ],
+  "allowedHosts": ["api.anthropic.com"],
+  "hooks": ["dayChange", "currentTaskChange"],
+  "iFrame": true,
+  "sidePanel": true,
+  "isSkipMenuEntry": false,
+  "uiKit": true,
+  "icon": "icon.svg"
+}

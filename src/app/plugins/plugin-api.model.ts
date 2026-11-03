@@ -12,6 +12,7 @@ export {
   PluginInstance,
   PluginHookHandlerRegistration,
   PluginCreateTaskData,
+  PluginUpdateTaskOptions,
   PluginShortcutCfg,
   PluginMenuEntryCfg,
   PluginTaskContextMenuContext,

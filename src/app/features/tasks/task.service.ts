@@ -510,7 +510,7 @@ export class TaskService {
     this._store.dispatch(TaskSharedActions.deleteTasks({ taskIds, tasks }));
   }
 
-  update(id: string, changedFields: Partial<Task>): void {
+  update(id: string, changedFields: Partial<Task>, isIgnoreShortSyntax = false): void {
     if (Object.prototype.hasOwnProperty.call(changedFields, 'timeSpentOnDay')) {
       this._taskTimeSync.flushOne(id);
     }
@@ -536,6 +536,7 @@ export class TaskService {
       TaskSharedActions.updateTask({
         task: { id, changes: changedFields },
         ...(projectMoveSubTaskIds !== undefined && { projectMoveSubTaskIds }),
+        ...(isIgnoreShortSyntax && { isIgnoreShortSyntax }),
       }),
     );
   }
