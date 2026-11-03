@@ -40,8 +40,9 @@
           {{ T.F.BOARDS.EDITOR.LAYOUT_BOARD | translate }}
         </mat-button-toggle>
       </mat-button-toggle-group>
-      @if (isBoard()) {
-        <!-- Each width drawn with the view's own columns: 2×2 reads as such. -->
+      <!-- Only with a choice: two columns can only sit side by side. Each width
+           is drawn with the view's own columns, so 2×2 reads as such. -->
+      @if (isBoard() && colsOptions().length > 1) {
         <mat-button-toggle-group
           class="cols-toggle"
           hideSingleSelectionIndicator

@@ -105,11 +105,8 @@ test.describe('View editor', () => {
     ).toBeVisible();
 
     await fillViewEditor(page, dialog, { layout: 'board' });
-    // Two sections: one row is the only width.
-    await expect(columns.getByRole('radio')).toHaveCount(1);
-    await expect(
-      columns.getByRole('radio', { name: '2 per row', exact: true }),
-    ).toBeChecked();
+    // Two sections can only sit side by side: no width to pick.
+    await expect(columns).toHaveCount(0);
     await expect(
       dialog.getByRole('heading', { name: 'Columns', exact: true }),
     ).toBeVisible();
@@ -130,6 +127,11 @@ test.describe('View editor', () => {
     await expect
       .poll(() => sectionTitles(dialog))
       .toEqual(['Beta', 'Beta (copy)', 'Alpha']);
+    // A third column: the board stays one row, and now has a width to pick.
+    await expect(
+      columns.getByRole('radio', { name: '3 per row', exact: true }),
+    ).toBeChecked();
+    await expect(columns.getByRole('radio')).toHaveCount(2);
 
     // The drag handle moves the open card too, keeping its identity and rules.
     // The menu's backdrop would take the press; every card is open, so the
