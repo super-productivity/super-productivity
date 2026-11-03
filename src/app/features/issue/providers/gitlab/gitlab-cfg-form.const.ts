@@ -48,6 +48,7 @@ export const GITLAB_CONFIG_FORM: LimitedFormlyFieldConfig<IssueProviderGitlab>[]
     key: 'group',
     type: 'input',
     hideExpression: (model: IssueProviderGitlab) => model.issueSource !== 'group',
+    resetOnHide: false,
     templateOptions: {
       required: true,
       label: T.F.GITLAB.FORM.GROUP,
@@ -60,6 +61,7 @@ export const GITLAB_CONFIG_FORM: LimitedFormlyFieldConfig<IssueProviderGitlab>[]
     type: 'input',
     hideExpression: (model: IssueProviderGitlab) =>
       !!model.issueSource && model.issueSource !== 'project',
+    resetOnHide: false,
     templateOptions: {
       required: true,
       label: T.F.GITLAB.FORM.PROJECT,
