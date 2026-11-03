@@ -355,7 +355,9 @@ test.describe('@supersync @encryption #9256 final-page decrypt failure', () => {
       const decryptErrorDialog = clientB.page.locator('dialog-handle-decrypt-error');
       await expect(decryptErrorDialog).toBeVisible({ timeout: 30000 });
       await expect(
-        decryptErrorDialog.locator('h2:has-text("Decryption Failed")'),
+        decryptErrorDialog.locator('h2', {
+          hasText: translationText('F.SYNC.D_DECRYPT_ERROR.TITLE'),
+        }),
       ).toBeVisible();
       await expect
         .poll(() =>
@@ -372,8 +374,9 @@ test.describe('@supersync @encryption #9256 final-page decrypt failure', () => {
       const retryPagesStart = observedPages.length;
       await decryptErrorDialog.locator('input[type="password"]').fill(encryptionPassword);
       await decryptErrorDialog
-        .locator('button')
-        .filter({ hasText: /retry.*decrypt/i })
+        .locator('button', {
+          hasText: translationText('F.SYNC.D_DECRYPT_ERROR.CHANGE_PW_AND_DECRYPT'),
+        })
         .click();
 
       await expect
