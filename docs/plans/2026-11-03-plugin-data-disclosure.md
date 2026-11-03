@@ -248,9 +248,9 @@ the declaration is shown at that moment.
    - **For a non-bundled plugin**, a missing declaration reads "This plugin doesn't say
      what data it sends". `[]` reads "Says it sends nothing". Both add "Declared by the
      author; Super Productivity can't check it".
-3. **Plugin card Details** (`plugin-management.component.html:105-113`), in place of
-   today's `CAN_REQUEST_HOSTS` line when `dataSharing` is present. Without it, the
-   existing hosts line stays (`plugin-security.ts:278-283`).
+3. **Plugin card Details** (`plugin-management.component.html:105-113`), next to
+   today's `CAN_REQUEST_HOSTS` line, which stays (`plugin-security.ts:278-283`).
+   Replacing it saved one line and needed a branch, so Phase 1 kept both.
 
 **Per-device consent, only where it is required.** A plugin with
 `requiresDataConsent: true` (AI Command) gets the component in a dialog before it first
@@ -386,13 +386,19 @@ separate design and out of scope.
 
 Each step is paired with its check.
 
-**Prerequisite:** confirm how Gitea, Linear, Trello, Azure DevOps, Redmine, Nextcloud
-Deck and brain-dump get into the release. They are in `BUNDLED_PLUGIN_PATHS` but missing
-from `packages/plugin-dev/scripts/build-all.js`. Step 2 relies on their manifests.
+**Prerequisite (resolved):** release builds take every plugin dir with a
+`package.json` (`packages/build-packages.js` `getPlugins`); `build-all.js` serves only
+E2E. A node test in `electron/bundled-plugin-ids.test.cjs` already guards this.
 
-**Phase 1: declare and show** (one PR, before AI Command)
+**Phase 1: declare and show** (one PR, before AI Command). Implemented on this
+branch: steps 1–3 and 5 except the `plugin-api` release and the wiki. Step 3 reads the
+manifest with `read-zip-manifest.util.ts` instead of splitting `loadPluginFromZip`
+(keeps `plugin.service.ts` under its cap), renders through
+`plugin-data-sharing.util.ts`, and is covered by util and component specs; the
+"Changed in this version" E2E is not written yet. Community installs now download and
+verify before the confirmation, so it can show the declaration.
 
-1. Add the `dataSharing` and `requiresDataConsent` types and their validation: the
+1. Add the `dataSharing` type and its validation: the
    `hosts` rules, the `allowedHosts` cross-check, `https:` privacy links, and unknown
    values as warnings.
    → verify: specs in `validate-manifest.util.spec.ts` covering:
@@ -410,7 +416,8 @@ from `packages/plugin-dev/scripts/build-all.js`. Step 2 relies on their manifest
    → verify: component specs for always / optional / user server / absent / `[]`.
    → verify: E2E. Re-uploading a plugin's ZIP with a new recipient shows "Changed in
    this version" before its code runs; cancel keeps the old version.
-4. Add `requiresDataConsent`: the local consent set and the check at both enable paths
+4. **Moved to the AI Command PR**, the first plugin that needs it (YAGNI).
+   Add `requiresDataConsent`: the local consent set and the check at both enable paths
    and in `activatePlugin`.
    → verify: service specs: ask once per device, deny writes nothing synced, startup
    skips and asks after loading.
