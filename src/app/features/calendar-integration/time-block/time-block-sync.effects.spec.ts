@@ -741,16 +741,26 @@ describe('TimeBlockSyncEffects', () => {
 
     describe('when the setting changes', () => {
       let resyncSub: Subscription;
-      let dueWithTime: number;
 
       beforeEach(() => {
         const oneHourMs = 60 * 60 * 1000;
-        dueWithTime = Date.now() + oneHourMs;
-        const tasks = ['task-1', 'task-2'].map(
-          (id) => createTask(id, { dueWithTime }) as TaskWithDueTime,
-        );
+        const fiveWeeksMs = 5 * 7 * 24 * oneHourMs;
+        const startOfToday = new Date();
+        startOfToday.setHours(0, 0, 0, 0);
+        const tasks = [
+          createTask('task-yesterday', {
+            dueWithTime: startOfToday.getTime() - oneHourMs,
+          }),
+          // Still on today's calendar, so it is re-written too.
+          createTask('task-1', { dueWithTime: startOfToday.getTime() }),
+          createTask('task-2', { dueWithTime: Date.now() + oneHourMs }),
+          // Beyond the 2-week sync range, but it has a block as well.
+          createTask('task-3', { dueWithTime: Date.now() + fiveWeeksMs }),
+        ] as TaskWithDueTime[];
         store.overrideSelector(selectAllTasksWithDueTimeSorted, tasks);
-        getByIdOnce$Spy.and.callFake((id: string) => of(createTask(id, { dueWithTime })));
+        getByIdOnce$Spy.and.callFake((id: string) =>
+          of(tasks.find((task) => task.id === id)),
+        );
         resyncSub = effects.resyncOnTimeBlockTitleChange$.subscribe();
       });
 
@@ -771,6 +781,7 @@ describe('TimeBlockSyncEffects', () => {
         expect(writtenTitles()).toEqual([
           ['task-1', 'Focus time'],
           ['task-2', 'Focus time'],
+          ['task-3', 'Focus time'],
         ]);
         flush();
       }));
@@ -785,6 +796,7 @@ describe('TimeBlockSyncEffects', () => {
         expect(writtenTitles()).toEqual([
           ['task-1', 'Task task-1'],
           ['task-2', 'Task task-2'],
+          ['task-3', 'Task task-3'],
         ]);
         flush();
       }));

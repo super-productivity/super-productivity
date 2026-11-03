@@ -100,6 +100,7 @@ export class TimeBlockSyncEffects {
   private readonly _deletesSidecar = inject(TimeBlockDeleteSidecarService);
   private readonly _backfilledProviderIds = new Set<string>();
   private readonly _taskWriteQueues = new Map<string, TimeBlockTaskQueue>();
+  private readonly _scheduleCfg = this._store.selectSignal(selectTimelineConfig);
 
   /**
    * When a task is scheduled, rescheduled, or a synced field (title,
@@ -229,7 +230,17 @@ export class TimeBlockSyncEffects {
         concatMap((action) =>
           this._withTimeBlockContext$((ctx) => {
             if (this._backfilledProviderIds.has(ctx.providerId)) return EMPTY;
-            return this._upsertTasksInSyncRange$(ctx).pipe(
+
+            const syncRangeWeeks =
+              parseInt(
+                (ctx.config as Record<string, unknown>)['syncRangeWeeks'] as string,
+                10,
+              ) || 2;
+            const now = Date.now();
+            const rangeMs = syncRangeWeeks * 7 * 24 * 60 * 60 * 1000;
+            const rangeEnd = now + rangeMs;
+
+            return this._upsertScheduledTasks$(ctx, now, rangeEnd).pipe(
               // Mark as backfilled only after all upserts complete successfully
               tap({
                 complete: () => this._backfilledProviderIds.add(ctx.providerId),
@@ -244,6 +255,10 @@ export class TimeBlockSyncEffects {
   /**
    * When the time block title setting changes, re-write the existing blocks so
    * they show the new title, or the task titles again once it is cleared.
+   * Covers every task scheduled from the start of today, since blocks exist
+   * beyond the sync range and earlier today ones are still on the calendar.
+   * Only the device where the setting is changed writes; a synced change is
+   * applied by the next write for each task.
    *
    * The store emits the new state right before effects see the action that
    * produced it, so the latest state pair is the title before and after this
@@ -267,7 +282,12 @@ export class TimeBlockSyncEffects {
         filter(([, [prevTitle, nextTitle]]) => prevTitle !== nextTitle),
         debounceTime(TIME_BLOCK_TITLE_RESYNC_MS),
         switchMap(() =>
-          this._withTimeBlockContext$((ctx) => this._upsertTasksInSyncRange$(ctx)),
+          this._withTimeBlockContext$((ctx) => {
+            // Calendar day, like the plugins' read window: what the calendar shows.
+            const startOfToday = new Date();
+            startOfToday.setHours(0, 0, 0, 0);
+            return this._upsertScheduledTasks$(ctx, startOfToday.getTime(), Infinity);
+          }),
         ),
       ),
     { dispatch: false },
@@ -276,22 +296,19 @@ export class TimeBlockSyncEffects {
   // --- Helpers ---
 
   /**
-   * Queue an upsert for every task scheduled from now to the end of the
-   * provider's sync range. Completes once all of them are written.
+   * Queue an upsert for every task scheduled between rangeStart and rangeEnd.
+   * Completes once all of them are written.
    */
-  private _upsertTasksInSyncRange$(ctx: TimeBlockContext): Observable<unknown> {
-    const syncRangeWeeks =
-      parseInt((ctx.config as Record<string, unknown>)['syncRangeWeeks'] as string, 10) ||
-      2;
-    const now = Date.now();
-    const rangeMs = syncRangeWeeks * 7 * 24 * 60 * 60 * 1000;
-    const rangeEnd = now + rangeMs;
-
+  private _upsertScheduledTasks$(
+    ctx: TimeBlockContext,
+    rangeStart: number,
+    rangeEnd: number,
+  ): Observable<unknown> {
     return this._store.select(selectAllTasksWithDueTimeSorted).pipe(
       first(),
       concatMap((tasks) => {
         const tasksInRange = tasks.filter(
-          (t) => t.dueWithTime >= now && t.dueWithTime <= rangeEnd,
+          (t) => t.dueWithTime >= rangeStart && t.dueWithTime <= rangeEnd,
         );
         if (!tasksInRange.length) return EMPTY;
         Log.log(`[TimeBlock] Upserting ${tasksInRange.length} existing scheduled tasks`);
@@ -395,21 +412,17 @@ export class TimeBlockSyncEffects {
       // Re-read the latest task when the queued write actually starts. If
       // edits arrived while a previous HTTP write was in flight, this makes
       // the trailing write reflect the final settled state.
-      this._taskService.getByIdOnce$(taskId).pipe(
-        withLatestFrom(this._store.select(selectTimelineConfig)),
-        concatMap(([task, scheduleCfg]) =>
-          task?.dueWithTime
-            ? from(
-                this._upsertEvent(
-                  ctx,
-                  task,
-                  task.dueWithTime,
-                  getCustomTimeBlockTitle(scheduleCfg),
-                ),
-              ).pipe(catchError((err) => this._handleError(err, ctx)))
-            : EMPTY,
-        ),
-      );
+      this._taskService
+        .getByIdOnce$(taskId)
+        .pipe(
+          concatMap((task) =>
+            task?.dueWithTime
+              ? from(this._upsertEvent(ctx, task, task.dueWithTime)).pipe(
+                  catchError((err) => this._handleError(err, ctx)),
+                )
+              : EMPTY,
+          ),
+        );
 
     return queuedCtx ? runWithCtx(queuedCtx) : this._withTimeBlockContext$(runWithCtx);
   }
@@ -474,7 +487,6 @@ export class TimeBlockSyncEffects {
     ctx: TimeBlockContext,
     task: Task,
     dueWithTime: number,
-    customTitle: string | undefined,
   ): Promise<void> {
     // An imported task is already represented by its source calendar event.
     // Writing a second, task-id-based time block to the same provider duplicates it.
@@ -487,7 +499,7 @@ export class TimeBlockSyncEffects {
       task.id,
       {
         // The plugin still adds its done marker to a custom title.
-        title: customTitle ?? task.title,
+        title: getCustomTimeBlockTitle(this._scheduleCfg()) ?? task.title,
         dueWithTime,
         durationMs,
         // A won't-do task wasn't completed, so its block gets no done marker.
