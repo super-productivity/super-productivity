@@ -1930,6 +1930,48 @@ describe('OperationLogUploadService', () => {
           expect(mockRepairOperationService.rebaseStaleRepair).not.toHaveBeenCalled();
         });
 
+        it('leaves a first-connect server migration to the migration flow', async () => {
+          // ServerMigrationService ran just before and either seeded again or the
+          // user declined to overwrite a non-empty remote; a reseed here would
+          // push local state the user just refused to upload.
+          mockApiProvider.providerMode = 'fileSnapshotOps';
+          const rejectedMigration = createFullStateEntry(
+            1,
+            'rejected-migration',
+            'client-1',
+            OpType.SyncImport,
+          );
+          rejectedMigration.op.syncImportReason = 'SERVER_MIGRATION';
+          stuckWith(rejectedMigration);
+          mockApiProvider.getLastServerSeq.and.resolveTo(0);
+
+          const result = await service.uploadPendingOps(mockApiProvider);
+
+          expect(mockRepairOperationService.rebaseStaleRepair).not.toHaveBeenCalled();
+          expect(result.blockedByRejectedFullState).toBe(true);
+        });
+
+        it('reseeds a rejected server migration once this client has a remote cursor', async () => {
+          mockApiProvider.providerMode = 'fileSnapshotOps';
+          const rejectedMigration = createFullStateEntry(
+            1,
+            'rejected-migration',
+            'client-1',
+            OpType.SyncImport,
+          );
+          rejectedMigration.op.syncImportReason = 'SERVER_MIGRATION';
+          stuckWith(rejectedMigration);
+
+          await service.uploadPendingOps(mockApiProvider);
+
+          expect(mockRepairOperationService.rebaseStaleRepair).toHaveBeenCalledOnceWith(
+            jasmine.objectContaining({
+              staleRepairOpId: 'rejected-migration',
+              repairBaseServerSeq: 7,
+            }),
+          );
+        });
+
         it('keeps the barrier on SuperSync, whose server can reject on the merits', async () => {
           const dependentOp = stuckWith(
             createFullStateEntry(1, 'rejected-repair', 'client-1', OpType.Repair),

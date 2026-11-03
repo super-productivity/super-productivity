@@ -1002,12 +1002,24 @@ export class OperationLogUploadService {
    * adapter writes a REPAIR only on the remote rev this client last downloaded
    * and applied, so a remote that moved on is not overwritten: it answers
    * REPAIR_STALE and the shared rebase path downloads first.
+   * A rejected BACKUP_IMPORT or SYNC_IMPORT becomes a REPAIR too: its result is
+   * already in the local state, but receivers replay concurrent work on top
+   * instead of dropping it, since the import never reached them as one.
    */
   private async _reseedRejectedFullStateForFileSync(
     syncProvider: OperationSyncCapable,
   ): Promise<void> {
     const { rejectedFullState, isBlocking } = await this._getRejectedFullStateBarrier();
     if (!rejectedFullState || !isBlocking) {
+      return;
+    }
+    const lastServerSeq = await syncProvider.getLastServerSeq();
+    // On a first connect, ServerMigrationService (run just before) owns this op:
+    // it seeds again, or the user declined to overwrite a non-empty remote (#11344).
+    if (
+      lastServerSeq === 0 &&
+      rejectedFullState.op.syncImportReason === 'SERVER_MIGRATION'
+    ) {
       return;
     }
     OpLog.warn(
@@ -1021,7 +1033,7 @@ export class OperationLogUploadService {
         getRepairSummary(rejectedFullState.op.payload) ??
         RepairOperationService.createEmptyRepairSummary(),
       clientId: rejectedFullState.op.clientId,
-      repairBaseServerSeq: await syncProvider.getLastServerSeq(),
+      repairBaseServerSeq: lastServerSeq,
     });
   }
 

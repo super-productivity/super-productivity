@@ -151,21 +151,24 @@ test.describe('@webdav a rejected REPAIR does not stop file sync for good', () =
 
       // What an older version left behind: the REPAIR is marked rejected.
       expect(await markPendingRepairRejected(a.page)).toBe(1);
-      await a.page.unroute(`**/${folder}/**`);
       await workA.addTask(whileStuck);
       await waitForStatePersistence(a.page);
-      // Drop in-memory op-log caches so the persisted state is what runs.
-      await a.page.reload();
-      await waitForAppReady(a.page);
-      await workA.waitForTaskList();
 
-      // Meanwhile B keeps working: one change uploaded, one still local.
+      // Meanwhile B keeps working: one change uploaded, one still local. Done
+      // before A reloads, so the remote has moved on whenever A's first sync
+      // after the reload runs (startup or the explicit one below).
       await workB.addTask(fromBMeanwhile);
       await waitForStatePersistence(b.page);
       await syncB.triggerSync();
       expect(await waitForSyncComplete(b.page, syncB)).toBe('success');
       await workB.addTask(bPending);
       await waitForStatePersistence(b.page);
+
+      await a.page.unroute(`**/${folder}/**`);
+      // Drop in-memory op-log caches so the persisted state is what runs.
+      await a.page.reload();
+      await waitForAppReady(a.page);
+      await workA.waitForTaskList();
 
       // A heals: it takes B's uploaded change and uploads its own work.
       await syncA.triggerSync();
