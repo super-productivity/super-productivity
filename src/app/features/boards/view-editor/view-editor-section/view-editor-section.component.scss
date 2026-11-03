@@ -27,6 +27,17 @@
   --view-editor-label-w: 64px;
 }
 
+// Phones: full-width rows, the list's own top and bottom lines only (the
+// editor overlaps neighbours so two cards share one line).
+.card {
+  @include mq(xs, max) {
+    border-inline: 0;
+    border-radius: 0;
+    // The chevron's icon ends where the dialog's content does.
+    padding-inline-end: var(--s2);
+  }
+}
+
 .card > :not(.drag-handle) {
   grid-column: 2;
 }
@@ -38,6 +49,11 @@
   height: 18px;
   color: var(--text-color-muted);
   cursor: grab;
+}
+
+// Keeps a bar-less card's rules where they are once it has a bar.
+.drag-handle.is-placeholder {
+  visibility: hidden;
 }
 
 .section-header {

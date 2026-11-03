@@ -72,26 +72,24 @@
     </div>
   </div>
 
-  @if (isSectionTitleShown()) {
-    <div class="sections-head">
-      <h3 class="sections-heading">
-        {{
-          (isBoard() ? T.F.BOARDS.EDITOR.COLUMNS : T.F.BOARDS.EDITOR.SECTIONS) | translate
-        }}
-      </h3>
-      <button
-        mat-stroked-button
-        type="button"
-        (click)="addPanel()"
-      >
-        <mat-icon>{{ isBoard() ? 'view_week' : 'playlist_add' }}</mat-icon>
-        {{
-          (isBoard() ? T.F.BOARDS.EDITOR.ADD_COLUMN : T.F.BOARDS.EDITOR.ADD_SECTION)
-            | translate
-        }}
-      </button>
-    </div>
-  }
+  <div class="sections-head">
+    <h3 class="sections-heading">
+      {{
+        (isBoard() ? T.F.BOARDS.EDITOR.COLUMNS : T.F.BOARDS.EDITOR.SECTIONS) | translate
+      }}
+    </h3>
+    <button
+      mat-stroked-button
+      type="button"
+      (click)="addPanel()"
+    >
+      <mat-icon>{{ isBoard() ? 'view_week' : 'playlist_add' }}</mat-icon>
+      {{
+        (isBoard() ? T.F.BOARDS.EDITOR.ADD_COLUMN : T.F.BOARDS.EDITOR.ADD_SECTION)
+          | translate
+      }}
+    </button>
+  </div>
 
   <div
     class="sections"
@@ -124,18 +122,4 @@
       ></view-editor-section>
     }
   </div>
-
-  @if (!isSectionTitleShown()) {
-    <!-- A structural action, apart from the rules: outlined, its own icon. -->
-    <div class="add-section">
-      <button
-        mat-stroked-button
-        type="button"
-        (click)="addPanel()"
-      >
-        <mat-icon>playlist_add</mat-icon>
-        {{ T.F.BOARDS.EDITOR.ADD_SECTION | translate }}
-      </button>
-    </div>
-  }
 </mat-dialog-content>

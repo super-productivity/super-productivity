@@ -622,6 +622,18 @@ describe('BoardEditComponent with the view editor', () => {
       expect(openCards()).toEqual([true, false, false, true]);
     });
 
+    it("keeps a list's only section open when a second one is added", async () => {
+      await open({
+        id: 'v',
+        title: 'V',
+        cols: 1,
+        panels: [{ ...DEFAULT_PANEL_CFG, id: 'a', title: 'A' }],
+      });
+      editor().addPanel();
+      fixture.detectChanges();
+      expect(openCards()).toEqual([true, true]);
+    });
+
     it('has no toggle with a single section', async () => {
       await open(DEFAULT_BOARD_CFG);
       expect(cards().length).toBe(1);

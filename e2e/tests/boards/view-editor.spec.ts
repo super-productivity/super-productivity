@@ -50,11 +50,12 @@ test.describe('View editor', () => {
     // No error before the title was touched; Save stays enabled.
     await expect(dialog.locator('mat-error')).toHaveCount(0);
     await expect(save).toBeEnabled();
-    // A new view starts with one section, a list, its title hidden: no card.
+    // A new view starts with one section, a list, its title hidden: an open
+    // card without a bar.
     const section = viewEditorSection(dialog, 0);
     await expect(section).toHaveCount(1);
     await expect(section.getByRole('textbox')).toHaveCount(0);
-    await expect(section.locator('.card')).toHaveCount(0);
+    await expect(section.locator('.section-header')).toHaveCount(0);
     await expect(section.locator('.form-label').first()).toContainText('Rules');
 
     // Saving without a title shows why and focuses it.

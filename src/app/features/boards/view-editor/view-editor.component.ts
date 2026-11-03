@@ -238,6 +238,11 @@ export class ViewEditorComponent {
   /** Appends a section, open, its title field focused. */
   addPanel(): void {
     const panel = this._newPanel();
+    // A list's only section was shown open, without a bar: it stays open.
+    const only = this.isSectionTitleShown() ? undefined : this.model().panels[0];
+    if (only) {
+      this._open(only.id);
+    }
     this._setPanels([...this._withHiddenTitleShown(), panel]);
     this._open(panel.id);
     afterNextRender(() => this._sections().at(-1)?.focusTitle(), {

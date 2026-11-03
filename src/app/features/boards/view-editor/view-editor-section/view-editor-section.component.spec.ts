@@ -98,7 +98,9 @@ describe('ViewEditorSectionComponent', () => {
     // Its count sits under the Rules label: there is no header.
     expect(labels[0]).toContain(T.F.BOARDS.EDITOR.COUNT);
     expect(labels[1]).toBe(T.F.BOARDS.FORM.SORT_BY);
-    expect(el.querySelector('.card')).toBeNull();
+    // The same open card as with several sections, only without its bar.
+    expect(el.querySelector('.card.is-open')).not.toBeNull();
+    expect(el.querySelector('.section-header')).toBeNull();
     expect(el.querySelector('view-editor-title')).toBeNull();
     expect(el.querySelector('view-add-rule-chip')).not.toBeNull();
   });
@@ -427,5 +429,4 @@ describe('ViewEditorSectionComponent', () => {
     }
     expect(emitted).toEqual([]);
   });
-
 });

@@ -81,12 +81,6 @@
   gap: var(--s);
 }
 
-// A flat list: "Add section" below a rule, apart from the section's rules.
-.add-section {
-  padding-top: var(--s2);
-  border-top: 1px solid var(--divider-color);
-}
-
 // Phones: one column, the controls full width, no label beside the layout.
 .content.is-phone {
   gap: var(--s3);
@@ -111,5 +105,16 @@
 
   .layout-option {
     flex: 1 1 0;
+  }
+
+  // Edge to edge, one line between cards. shortcut: 24px is Material's
+  // dialog-content-padding default; read the token if a theme changes it.
+  .sections {
+    gap: 0;
+    margin-inline: -24px;
+  }
+
+  view-editor-section + view-editor-section {
+    margin-top: -1px;
   }
 }

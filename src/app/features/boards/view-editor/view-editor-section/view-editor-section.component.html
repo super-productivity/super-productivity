@@ -72,7 +72,16 @@
   }
 
   @case ('flat') {
-    <ng-container *ngTemplateOutlet="rulesTpl"></ng-container>
+    <!-- The same open card, without its bar: adding a section only adds the
+         bars, the rules stay where they are. -->
+    <div class="card is-open">
+      <mat-icon
+        class="drag-handle is-placeholder"
+        aria-hidden="true"
+        >drag_indicator</mat-icon
+      >
+      <ng-container *ngTemplateOutlet="rulesTpl"></ng-container>
+    </div>
   }
 }
 
@@ -142,9 +151,7 @@
     @if (isShowDoneTagHint()) {
       <p class="rule-note">{{ T.F.BOARDS.EDITOR.DONE_TAG_FILTER_HINT | translate }}</p>
     }
-    @if (mode() === 'card') {
-      <div class="divider"></div>
-    }
+    <div class="divider"></div>
     <div class="form-row">
       <span class="form-label">{{ T.F.BOARDS.FORM.SORT_BY | translate }}</span>
       <div class="chips">
