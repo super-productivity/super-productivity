@@ -4,7 +4,8 @@
 
 One declaration, one rendering. Every plugin says in its manifest what user data it
 sends off the device, to whom, and under whose terms. The app renders that statement
-before the plugin first runs on a device, and on the plugin card. No plugin writes its
+where the user already decides: the install dialog, the integration setup dialog, and
+the plugin card. No plugin writes its
 own privacy notice. This covers bundled plugins, community-listed plugins, uploaded
 ZIPs, and the planned AI Command plugin.
 
@@ -139,7 +140,7 @@ Add one optional field to `PluginManifest` (`packages/plugin-api/src/types.ts:16
 ```ts
 /**
  * What user data this plugin sends off the device. `[]` = sends nothing.
- * Absent = not declared. The host shows this before the plugin first runs on a device.
+ * Absent = not declared. Shown at install, at integration setup and on the plugin card.
  */
 dataSharing?: PluginDataDestination[];
 
@@ -156,6 +157,9 @@ export interface PluginDataDestination {
   optionalData?: PluginSharedData[];
   privacyPolicyUrl?: string;
 }
+
+/** Ask on each device before this plugin first runs there. Today: AI Command only. */
+requiresDataConsent?: boolean;
 
 export type PluginSharedData =
   | 'credentials' // tokens or passwords the user entered for this recipient
@@ -220,73 +224,71 @@ Examples:
 Before freezing the type, check all nine values against the inventory rows. The list is
 permanent public API.
 
-### 2. Show: one component, two places, one gate
+### 2. Show: one component, in places that already exist
 
 One standalone component, `plugin-data-sharing`, renders a destination list. It shows
 the recipient, what is always sent, what is sent only if turned on, and the privacy
-policy link. It uses plain HTML.
+policy link. It uses plain HTML. It adds **no new dialog** for ordinary plugins. The
+user already gives consent when they connect their own account or install a plugin, and
+the declaration is shown at that moment.
 
-1. **One gate before plugin code first runs on a device.**
-   `PluginDataConsentService.confirmDataSharing(manifest)` lives in its own file,
-   because `plugin.service.ts` is already over the 1200-line cap. It is called in three
-   places:
-   - **Enabling.** Both toggle paths write the synced flag before loading: the plugin
-     page (`plugin-management.component.ts:292-299`) and the issue-panel setup through
-     `enableAndActivatePlugin` (`plugin.service.ts:397-403`). Both go through one
-     `PluginService` method that asks first, then calls `setPluginEnabled(true)`, then
-     activates. A "no" therefore never writes `isEnabled`.
-   - **Activating.** In `activatePlugin`, before the `'loading'` status is set
-     (`plugin.service.ts:526`), so a concurrent call does not time out waiting on a
-     dialog (`:466-486`). This covers startup, the side panel
-     (`plugin-index.component.ts:210`), the import menu (`file-imex.component.ts:343`),
-     `reloadPlugin` (`:1627`) and the migrations. A "no" throws a named sentinel, like
-     `NodeExecutionConsentDeniedError` (`:552`), so it does not end in the error snack
-     and `'error'` status. `activatePlugin` gets a mode argument: interactive callers
-     prompt, startup only checks the record.
-   - **Updating.** In `loadPluginFromZip`, after the new manifest is read and before the
-     old plugin's state, translations, icons and `index.html` are replaced
-     (`plugin.service.ts:1236-1262`). A "no" cancels the update and keeps the previous
-     version.
-   - **Saying no stays on this device.** It follows the real
-     `_handleNodeExecutionConsentDenied` (`plugin.service.ts:727-752`): the decision is
-     kept in memory only, the plugin is not loaded, and the synced `isEnabled` is left
-     alone. Other devices are unaffected, and this device asks again on the next start.
-     This keeps one user intent to one op: a local "not now" writes nothing.
-   - **Startup does not wait on a click.** `_loadEnabledPlugins` awaits each plugin in
-     turn (`plugin.service.ts:289-302`). The gate there does not prompt. It skips an
-     unacknowledged plugin and, once loading has finished, opens one dialog per pending
-     plugin, then loads the ones the user accepts. Other plugins and issue-provider
-     polling start as usual.
-   - **When it shows:** `dataSharing` is non-empty, or it is absent on a non-bundled
-     plugin. The absent case reads "This plugin doesn't say what data it sends".
-   - **When it doesn't:** a bundled plugin declares `[]`. A non-bundled plugin that
-     declares `[]` still gets a one-line notice: "Says it sends nothing; Super
-     Productivity can't check this." Its code is unreviewed and can call `fetch`.
-   - **It shows once per device per declaration.** A local, unsynced record maps each
-     plugin id to the canonical declaration it was accepted with, stored as a JSON string
-     with keys and arrays sorted, or `"absent"`. It lives under a new `LS` key
-     (`src/app/core/persistence/storage-keys.const.ts:12`), not in a `MODEL_CONFIGS`
-     slice. Per device on purpose: a phone that only received a synced toggle has shown
-     nothing, and Apple 5.1.2(i) asks for permission before data goes to a third-party AI.
-   - **On any change**, the dialog shows the full list, headed "Changed since you last
-     accepted". There is no diffing.
-   - **AI Command** uses this dialog as its "Turn on" step. Its own one-time notice
-     shrinks to the "Show what would be sent" preview, which the plugin builds, so the
-     user gets no second consent.
+1. **Integration setup dialog**, on create only, above the credential fields.
+   `DialogEditIssueProviderComponent` is the single creation path for plugin issue
+   providers (`addIssueProvider`, `dialog-edit-issue-provider.component.ts:253`). Every
+   opener goes through it: the issue panel, the provider tab, the setup overview and the
+   time-block reconnect. Google OAuth runs inside it (`:404-409`).
+2. **Install and update confirmation** for uploaded and community ZIPs. Today
+   `_confirmInstall` (`plugin-management.component.ts:565-583`) shows a generic risk list
+   before the ZIP is read. The manifest is read only inside `loadPluginFromZip`
+   (`plugin.service.ts:1070`), which then installs and, for an enabled plugin, runs the
+   new code straight away (`:1222`, `:1345-1350`). Split it: read and validate the
+   manifest, show the confirmation with the declaration, then install.
+   - **On an update**, compare with the installed manifest. If the declaration changed,
+     the block is headed "Changed in this version". No local record is needed.
+   - **For a non-bundled plugin**, a missing declaration reads "This plugin doesn't say
+     what data it sends". `[]` reads "Says it sends nothing". Both add "Declared by the
+     author; Super Productivity can't check it".
+3. **Plugin card Details** (`plugin-management.component.html:105-113`), in place of
+   today's `CAN_REQUEST_HOSTS` line when `dataSharing` is present. Without it, the
+   existing hosts line stays (`plugin-security.ts:278-283`).
 
-2. **On the plugin card**, in the existing collapsed Details block
-   (`plugin-management.component.html:105`), in place of today's `CAN_REQUEST_HOSTS`
-   line when `dataSharing` is present. Without it, the existing hosts line stays
-   (`plugin-security.ts:278-283`). The sentence "Declared by the author; Super Productivity can't check it" goes
-   in the dialog and in Details for non-bundled plugins, and nowhere else.
+**Per-device consent, only where it is required.** A plugin with
+`requiresDataConsent: true` (AI Command) gets the component in a dialog before it first
+runs on each device. Apple 5.1.2(i) asks for explicit permission before data goes to a
+third-party AI. `pluginMetadata.isEnabled` syncs, so a phone that only received a synced
+"on" would otherwise send without asking.
 
-**The community listing gets no new line or field.** Install from the listing shows the
-existing risk dialog, then installs the plugin disabled
-(`plugin-management.component.ts:441-462`). The declaration appears when the user turns
-it on, before its code runs. The user decides after installing, not at the listing. The
-alternative was a `sharesDataWith` field on `community-plugins.json`. It would copy the
-manifest into a second declaration, cost every author a directory PR per release, and
-add an always-visible label.
+- **Record:** a local, unsynced set of consented plugin ids under a new `LS` key
+  (`src/app/core/persistence/storage-keys.const.ts:12`), like `nodeExecution` consent.
+  No seed is needed: AI Command is new, so nobody has consented yet.
+- **Where it asks:** the same places as `checkNodeExecutionPermission`. Both toggle paths
+  write the synced flag before loading: the plugin page
+  (`plugin-management.component.ts:292-299`) and `enableAndActivatePlugin`
+  (`plugin.service.ts:397-403`). Both go through one `PluginService` method that asks
+  first, so a "no" never writes `isEnabled`.
+- **Synced enable:** `activatePlugin` checks the record before the `'loading'` status is
+  set (`plugin.service.ts:526`). At startup it does not prompt: it skips the plugin and
+  asks once loading has finished. A "no" stays on this device, in memory, as with
+  `_handleNodeExecutionConsentDenied` (`plugin.service.ts:727-752`).
+- **AI Command** uses this dialog as its "Turn on" step. Its own notice shrinks to the
+  "Show what would be sent" preview. `PluginAPI.openDialog` (`types.ts:705`) takes only
+  HTML, so a plugin-built notice could not reuse the translated component; the flag can.
+
+**Accepted, not shown again:**
+
+- An integration whose provider config arrived through sync starts on a second device
+  without the setup dialog. The user set it up themselves on the first device.
+- Automations and Todoist import have no setup dialog; the user types the webhook URL or
+  token in the plugin's own UI. They show the declaration only in card Details.
+- Migrations that auto-enable a bundled provider (`plugin.service.ts:146-191`) continue a
+  data flow the user set up before this release.
+- Turning a bundled integration on from the card sends nothing until credentials are
+  entered in the setup dialog.
+
+**The community listing gets no new line or field.** The install confirmation above is
+where the user sees it. The alternative, a `sharesDataWith` field on
+`community-plugins.json`, would copy the manifest into a second declaration and cost
+every author a directory PR per release.
 
 ### 3. Keep it accurate
 
@@ -309,30 +311,14 @@ as a gap instead.
 ### 4. Migration
 
 - **Persisted model and sync:** no change. `pluginMetadata` (synced,
-  `src/app/op-log/model/model-config.ts:131`) keeps only `isEnabled`. The
-  acknowledgement record lives in local storage, never synced, like `nodeExecution`
-  consent.
-- **Seeding existing users.** Without it, everyone would be prompted again for
-  integrations they already use. The seed runs once per device, guarded by its own
-  local seed-done flag, after store hydration (`isAllDataLoadedInitially$`). It covers
-  plugins enabled in local state at that moment, limited to a **frozen list**: the
-  bundled ids that shipped before the gate, plus uploaded and community plugins
-  installed on this device. Anything newer, AI Command included, is never seeded, even
-  if its synced `isEnabled` arrived from a device on a newer release
-  (`plugin-meta-persistence.service.ts:29-38` reads store state only).
-- **Seed and sync are not ordered.** Sync also starts on `isAllDataLoadedInitially$`
-  (`sync.effects.ts`), so the first sync of that launch may land before the seed. Then
-  a frozen-list integration enabled on another device is seeded without a dialog.
-  Accepted: those integrations already run unasked on every device today, and the
-  frozen list keeps AI out of it. Ordering the two would mean coupling plugin startup to
-  the sync effects.
-- **Fresh installs** have no enabled plugins at seed time, so the seed is empty. A
-  backup import or `SYNC_IMPORT` that enables plugins later shows dialogs.
-- **Migrations** (`plugin.service.ts:146-191`) that auto-enable on a device are seeded
-  only if they ran before this release on that device. On a new device they go through
-  the gate like any other enable.
-- **Plugin API:** additive. Older apps ignore the field, so `minSupVersion` does not
-  change. Release a new `@super-productivity/plugin-api` and document the field in
+  `src/app/op-log/model/model-config.ts:131`) keeps only `isEnabled`. The consent set
+  for `requiresDataConsent` plugins lives in local storage, never synced.
+- **Existing users** see nothing new until they install, update or set up something, or
+  open card Details. Nobody is prompted again.
+- **Plugin API:** additive. Older apps ignore both fields, so `minSupVersion` does not
+  change. An older app would run AI Command without the consent dialog; AI Command sets
+  `minSupVersion` to the release that ships it. Release a new
+  `@super-productivity/plugin-api` and document the fields in
   `docs/plugin-development.md` and the wiki "Develop a Plugin" page.
 
 ### 5. What the host can and cannot promise
@@ -361,10 +347,9 @@ separate design and out of scope.
   needs no change. It covers the hosted server, which plugin traffic never reaches.
 - **Apple 5.1.2(i)** (guideline text read 2026-11-03): "You must clearly disclose where
   personal data will be shared with third parties, including with third-party AI, and
-  obtain explicit permission before doing so." _To confirm:_ that the per-device gate
-  dialog counts as that permission for AI Command. Also to confirm: that seeded
-  plugins (enabled on that device before this release, none of them AI) need no new
-  prompt.
+  obtain explicit permission before doing so." _To confirm:_ that the per-device
+  consent dialog counts as that permission for AI Command, and that connecting an
+  account in the setup dialog counts as permission for the integrations.
 - **Apple 4.7 / 2.5.2.** Native builds can install community plugins in the app
   (`plugin-management.component.ts:205`). 4.7.3 asks for "explicit consent each time"
   before data is shared with hosted software, and 2.5.2 limits downloaded code. _To
@@ -381,8 +366,8 @@ separate design and out of scope.
   or SDKs in the app counts. _To confirm:_
   - whether background polling and two-way sync fall under the disclosure-and-consent
     exception
-  - whether seeded integrations, which never showed the dialog on that device, are
-    covered
+  - whether an integration that arrived through sync, without the setup dialog on
+    that device, is covered
 - **First-party plugins and the store binary.** Bundled plugins are built into
   `src/assets/bundled-plugins` and ship in the binary, so they count toward the store
   forms. _Recommendation, to confirm:_ ship AI Command bundled, not as a download, so
@@ -397,51 +382,47 @@ Each step is paired with its check.
 Deck and brain-dump get into the release. They are in `BUNDLED_PLUGIN_PATHS` but missing
 from `packages/plugin-dev/scripts/build-all.js`. Step 2 relies on their manifests.
 
-**Phase 1: declare and gate** (one PR, before AI Command)
+**Phase 1: declare and show** (one PR, before AI Command)
 
-1. Add the `dataSharing` type and its validation: the `hosts` rules, the `allowedHosts`
-   cross-check, and unknown values as warnings.
+1. Add the `dataSharing` and `requiresDataConsent` types and their validation: the
+   `hosts` rules, the `allowedHosts` cross-check, `https:` privacy links, and unknown
+   values as warnings.
    → verify: specs in `validate-manifest.util.spec.ts` covering:
    - `dataSharing` absent, and `[]`
    - `allowedHosts` with no `dataSharing` (still valid)
    - `[]` with `allowedHosts` (rejected)
    - an unknown data value (warning)
-   - a bad `hosts` entry (scheme, port or path)
+   - a bad `hosts` entry (scheme, port or path), a non-`https:` privacy link
 2. Declare `dataSharing` in every manifest in `BUNDLED_PLUGIN_IDS`, from the inventory.
    → verify: a node test that fails when one is missing. Make it fail once before
    trusting it.
-3. Build `plugin-data-sharing`, `PluginDataConsentService`, the local record with its
-   seed, and the card block. Wire the gate into both load sites and ahead of
-   `setPluginEnabled(true)`. Add the `en.json` keys.
-   → verify: service specs for:
-   - show; skip on `[]`; skip when already accepted
-   - show again on a changed declaration
-   - deny writes nothing synced
-   - the seed covers only frozen-list ids, never AI Command, and runs once
-   - `[]` from a non-bundled plugin still shows the notice
-   - a `privacyPolicyUrl` that is not `https:` is rejected
-     → verify: E2E 1. Enabling a declaring plugin shows the dialog. Cancel leaves it off
-     and `isEnabled` unwritten.
-     → verify: E2E 2. Re-uploading an enabled plugin's ZIP with a new recipient shows
-     the dialog before its code runs.
-     → verify: E2E 3. Startup with an unacknowledged enabled plugin loads the other
-     plugins first, then asks.
-4. Release `plugin-api` and update the docs (`docs/plugin-development.md`, the wiki).
+3. Build `plugin-data-sharing` and render it in the setup dialog, the card Details and
+   the install confirmation; split `loadPluginFromZip` so the manifest is read before
+   confirming. Add the `en.json` keys.
+   → verify: component specs for always / optional / user server / absent / `[]`.
+   → verify: E2E. Re-uploading a plugin's ZIP with a new recipient shows "Changed in
+   this version" before its code runs; cancel keeps the old version.
+4. Add `requiresDataConsent`: the local consent set and the check at both enable paths
+   and in `activatePlugin`.
+   → verify: service specs: ask once per device, deny writes nothing synced, startup
+   skips and asks after loading.
+   → verify: E2E. A synced enable of a consent plugin asks on the second device before
+   it runs.
+5. Release `plugin-api` and update the docs (`docs/plugin-development.md`, the wiki).
    → verify: the package's own checks (`packages/README.md`).
 
 **Phase 2: texts**, after the §6 questions are confirmed
 
-5. The README line, the website privacy section, and the bundled-plugin table.
-6. The store forms (App Store Connect, Play Console; neither is in the repo).
+6. The README line, the website privacy section, and the bundled-plugin table.
+7. The store forms (App Store Connect, Play Console; neither is in the repo).
    → verify: a maintainer checklist in the release PR.
 
 ## Long-term cost
 
-- **Plugin API:** `dataSharing`, `optionalData` and `PluginSharedData` are permanent
-  public surface. The vocabulary only grows. Unknown values degrade to "other data" on
-  older clients.
-- **Local storage:** one key with a canonical string per plugin id, plus a seed-done
-  flag. It stays bounded by the number of installed plugins.
+- **Plugin API:** `dataSharing`, `optionalData`, `PluginSharedData` and
+  `requiresDataConsent` are permanent public surface. The vocabulary only grows.
+  Unknown values degrade to "other data" on older clients.
+- **Local storage:** one set of plugin ids, bounded by the consent plugins installed.
 - **Persisted model and sync wire:** untouched.
 - **Maintenance:** a bundled integration that sends a new field also edits its
   manifest. Review catches that; the node test only checks that the field exists.
@@ -451,16 +432,11 @@ from `packages/plugin-dev/scripts/build-all.js`. Step 2 relies on their manifest
 - **False reassurance.** The list looks authoritative while `fetch` is open.
   Mitigations: the "declared by the author" sentence for non-bundled plugins, and
   `optionalData` instead of under-declaring.
-- **Dialog fatigue.** Mitigations: no dialog for `[]`, the seed for existing users, and
-  no dialog at all when nothing changed. A user who enables five plugins on a new phone
-  sees five dialogs, which is acceptable for a first run on a device.
-- **Seed race.** A frozen-list integration enabled elsewhere can be seeded without a
-  dialog on its first launch (§4). The frozen list is the guard; a spec checks that an
-  id outside it is never seeded.
-- **Re-prompt on every start after a "no".** That is intended, matching the
-  `nodeExecution` deny. A user who wants it gone turns the plugin off, which syncs.
-- **Store interpretation.** A store may want consent per feature or per send. The gate
-  is the one place to add that.
+- **Seen too late or not at all.** Integrations that arrive through sync, and plugins
+  without a setup dialog, show the declaration only in card Details (§2). Accepted:
+  the user set them up.
+- **Store interpretation.** A store may want explicit consent for integrations too.
+  `requiresDataConsent` is the one switch to extend it to more plugins.
 
 ## Open questions
 
@@ -578,3 +554,26 @@ re-verified against the code before applying.
     until open question 2 is settled.
 11. **Not fixed.** `ids` and `optionalData` stay; both have inventory rows, and §1
     already requires re-checking all nine values before the type is frozen.
+
+### Lean redesign
+
+After the second review the maintainer judged a dialog for every declaring plugin too
+inconvenient. A fresh-context subagent checked the leaner design against the code:
+
+1. **Changed.** No new dialog for ordinary plugins. The declaration shows in the
+   integration setup dialog (the single creation path for plugin issue providers), the
+   install and update confirmation, and card Details. This drops the per-device
+   acknowledgement record, the seed and its sync race, the startup deferral and the
+   update re-prompt. The earlier review items about those parts are superseded.
+2. **Fixed.** `_confirmInstall` showed only generic text before the ZIP was read, and an
+   enabled plugin's update ran at once. The plan now splits `loadPluginFromZip` so the
+   confirmation shows the declaration, marked "Changed in this version" when it differs.
+3. **Fixed.** AI Command still needs per-device consent: a synced `isEnabled` would run it
+   on a phone without asking. `requiresDataConsent` keeps a small local consent set for
+   flagged plugins only, with no seed.
+4. **Fixed.** `PluginAPI.openDialog` takes only HTML, so AI Command could not reuse the
+   translated component. The host renders it for flagged plugins.
+5. **Accepted, stated in §2.** Integrations that arrive through sync, Automations and
+   Todoist import, and migrated providers show the declaration only in card Details.
+6. **Not changed.** The reviewer noted the schema is heavy for two or three display
+   places. Kept: it is the single source for the store forms and the website table.
