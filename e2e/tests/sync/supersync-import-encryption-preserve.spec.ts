@@ -1,3 +1,4 @@
+import { readFileSync, writeFileSync } from 'node:fs';
 import { test, expect } from '../../fixtures/supersync.fixture';
 import {
   createTestUser,
@@ -8,6 +9,54 @@ import {
   type SimulatedE2EClient,
 } from '../../utils/supersync-helpers';
 import { ImportPage } from '../../pages/import.page';
+import { DIALOG, watchDialogs } from '../../utils/audit-import-encryption-helpers';
+
+/**
+ * Imports the backup at `backupPath` through the file input and waits for the
+ * import to finish. Both sides have encryption enabled here, so the "Encryption
+ * Settings Will Change" warning (`dialog-import-encryption-warning`) must never
+ * appear; the import would wait on it, so it fails fast instead of timing out.
+ */
+const importWithoutEncryptionWarning = async (
+  client: SimulatedE2EClient,
+  backupPath: string,
+): Promise<void> => {
+  const importPage = new ImportPage(client.page);
+  await importPage.navigateToImportPage();
+  const watcher = await watchDialogs(client.page, [DIALOG.importEncryptionWarning]);
+  const importCompletePromise = client.page.waitForEvent('console', {
+    predicate: (msg) => msg.text().includes('Load(import) all data'),
+    timeout: 60000,
+  });
+  await client.page.locator('file-imex input[type="file"]').setInputFiles(backupPath);
+
+  const outcome = await Promise.race([
+    client.page
+      .locator(DIALOG.importEncryptionWarning)
+      .waitFor({ state: 'visible', timeout: 60000 })
+      .then(() => 'encryption_dialog' as const),
+    importCompletePromise.then(() => 'import_completed' as const),
+  ]);
+  expect(outcome, 'import with matching encryption shows no warning').toBe(
+    'import_completed',
+  );
+  await watcher.expectNeverSeen(
+    [DIALOG.importEncryptionWarning],
+    'importing an encrypted backup while encrypted sync is active',
+  );
+  await expect(
+    client.page.locator(
+      'mat-dialog-container:has-text("Encryption Settings Will Change")',
+    ),
+  ).toHaveCount(0);
+};
+
+/** Dialogs that would mean the import touched A's encryption setup. */
+const ENCRYPTION_SETUP_DIALOGS = [
+  DIALOG.enterPassword,
+  DIALOG.enableEncryption,
+  DIALOG.decryptError,
+];
 
 /**
  * SuperSync Import with Encryption Preservation E2E Tests
@@ -66,52 +115,11 @@ test.describe('@supersync @encryption Import with Encryption Preservation', () =
       // ============ PHASE 2: Import Encrypted Backup ============
       console.log('[EncPreserve] Phase 2: Client A importing encrypted backup');
 
-      const importPage = new ImportPage(clientA.page);
-      await importPage.navigateToImportPage();
-
-      // Import the encrypted backup (has isEncryptionEnabled: true)
-      const backupPath = ImportPage.getFixturePath('test-backup-encrypted.json');
-      const fileInput = clientA.page.locator('file-imex input[type="file"]');
-
-      // Start listening for import completion BEFORE triggering the import
-      const importCompletePromise = clientA.page.waitForEvent('console', {
-        predicate: (msg) => msg.text().includes('Load(import) all data'),
-        timeout: 60000,
-      });
-
-      await fileInput.setInputFiles(backupPath);
-
-      // Since both current and imported states have encryption enabled,
-      // the "Encryption Settings Will Change" dialog should NOT appear.
-      // Handle both cases defensively with Promise.race.
-      const encryptionChangeDialog = clientA.page.locator(
-        'mat-dialog-container:has-text("Encryption Settings Will Change")',
+      // The backup has globalConfig.sync.isEncryptionEnabled: true.
+      await importWithoutEncryptionWarning(
+        clientA,
+        ImportPage.getFixturePath('test-backup-encrypted.json'),
       );
-
-      const importOutcome = await Promise.race([
-        encryptionChangeDialog
-          .waitFor({ state: 'visible', timeout: 10000 })
-          .then(() => 'encryption_dialog' as const),
-        importCompletePromise.then(() => 'import_completed' as const),
-      ]).catch(() => 'timeout' as const);
-
-      if (importOutcome === 'encryption_dialog') {
-        console.log(
-          '[EncPreserve] Encryption change dialog appeared (unexpected but handled)',
-        );
-        const importAndChangeBtn = encryptionChangeDialog.locator(
-          'button:has-text("Import and Change Encryption")',
-        );
-        await importAndChangeBtn.click();
-        await encryptionChangeDialog.waitFor({ state: 'hidden', timeout: 15000 });
-        await importCompletePromise;
-      } else if (importOutcome === 'import_completed') {
-        console.log(
-          '[EncPreserve] Import completed without encryption dialog (expected)',
-        );
-      } else {
-        throw new Error('Import timed out waiting for completion');
-      }
 
       // Navigate to work view
       await clientA.page.goto('/#/work-view');
@@ -121,18 +129,18 @@ test.describe('@supersync @encryption Import with Encryption Preservation', () =
       await waitForTask(clientA.page, 'E2E Import Test - Encrypted Task With Subtask');
       console.log('[EncPreserve] Client A has imported tasks visible');
 
-      // ============ PHASE 3: Re-setup Sync with Encryption and Sync ============
-      console.log('[EncPreserve] Phase 3: Re-setup sync with encryption');
+      // ============ PHASE 3: Sync without re-setup ============
+      console.log('[EncPreserve] Phase 3: Syncing with the preserved setup');
 
-      // Import overwrites globalConfig, so re-setup SuperSync with encryption
-      await clientA.sync.setupSuperSync({
-        ...baseConfig,
-        isEncryptionEnabled: true,
-        password: encryptionPassword,
-        syncImportChoice: 'local',
-      });
-
-      await clientA.sync.syncAndWait();
+      // The import keeps the local-only sync settings (provider, enabled,
+      // encryption), so A syncs with its existing setup. Any password or
+      // encryption prompt would mean the import changed that setup.
+      const watcherA = await watchDialogs(clientA.page, ENCRYPTION_SETUP_DIALOGS);
+      await clientA.sync.syncAndWait({ useLocal: true });
+      await watcherA.expectNeverSeen(
+        ENCRYPTION_SETUP_DIALOGS,
+        'A syncing after an import with matching encryption',
+      );
       console.log('[EncPreserve] Client A synced successfully after import');
 
       // ============ PHASE 4: Client B Syncs with Same Encryption ============
@@ -156,17 +164,18 @@ test.describe('@supersync @encryption Import with Encryption Preservation', () =
       await clientB.page.goto('/#/work-view');
       await clientB.page.waitForLoadState('networkidle');
 
-      // Pre-import task should be GONE (import replaces state)
-      const preImportOnA = clientA.page.locator(`task:has-text("${preImportTask}")`);
-      const preImportOnB = clientB.page.locator(`task:has-text("${preImportTask}")`);
-      await expect(preImportOnA).not.toBeVisible({ timeout: 5000 });
-      await expect(preImportOnB).not.toBeVisible({ timeout: 5000 });
-      console.log('[EncPreserve] Pre-import task is GONE on both clients');
-
-      // Imported tasks should be visible on both clients
+      // Imported tasks first: they anchor the absence checks below to a
+      // rendered list (an empty or still-loading view hides every task).
       await waitForTask(clientA.page, 'E2E Import Test - Encrypted Task With Subtask');
       await waitForTask(clientB.page, 'E2E Import Test - Encrypted Task With Subtask');
       console.log('[EncPreserve] Both clients have imported tasks');
+
+      // Pre-import task should be GONE (import replaces state)
+      const preImportOnA = clientA.page.locator(`task:has-text("${preImportTask}")`);
+      const preImportOnB = clientB.page.locator(`task:has-text("${preImportTask}")`);
+      await expect(preImportOnA).toHaveCount(0, { timeout: 5000 });
+      await expect(preImportOnB).toHaveCount(0, { timeout: 5000 });
+      console.log('[EncPreserve] Pre-import task is GONE on both clients');
 
       // No sync errors on either client (proves encryption works correctly)
       const hasErrorA = await clientA.sync.hasSyncError();
@@ -185,14 +194,18 @@ test.describe('@supersync @encryption Import with Encryption Preservation', () =
   /**
    * Bidirectional sync works after importing backup with matching encryption
    *
-   * After encrypted import with encryption preserved, both clients should
-   * be able to create and sync tasks in both directions without errors.
+   * The checked-in fixture has no `globalConfig.sync.superSync`, so this test
+   * imports a copy that carries one with encryption enabled and a DIFFERENT
+   * key. Matching encryption state means the import must keep A's current
+   * key: B joins with A's original password and must decrypt everything
+   * without a password or decrypt-error prompt. After that, both clients
+   * create and sync tasks in both directions without errors.
    */
   test('Bidirectional sync works after importing backup with matching encryption', async ({
     browser,
     baseURL,
     testRunId,
-  }) => {
+  }, testInfo) => {
     const uniqueId = Date.now();
     let clientA: SimulatedE2EClient | null = null;
     let clientB: SimulatedE2EClient | null = null;
@@ -213,64 +226,48 @@ test.describe('@supersync @encryption Import with Encryption Preservation', () =
       // Initial sync to establish account
       await clientA.sync.syncAndWait();
 
-      // Import encrypted backup
-      const importPage = new ImportPage(clientA.page);
-      await importPage.navigateToImportPage();
-      const backupPath = ImportPage.getFixturePath('test-backup-encrypted.json');
-      const fileInput = clientA.page.locator('file-imex input[type="file"]');
-
-      // Start listening for import completion BEFORE triggering the import
-      const importCompletePromise = clientA.page.waitForEvent('console', {
-        predicate: (msg) => msg.text().includes('Load(import) all data'),
-        timeout: 60000,
-      });
-
-      await fileInput.setInputFiles(backupPath);
-
-      // Handle dialog or wait for completion
-      const encryptionChangeDialog = clientA.page.locator(
-        'mat-dialog-container:has-text("Encryption Settings Will Change")',
-      );
-
-      const importOutcome = await Promise.race([
-        encryptionChangeDialog
-          .waitFor({ state: 'visible', timeout: 10000 })
-          .then(() => 'encryption_dialog' as const),
-        importCompletePromise.then(() => 'import_completed' as const),
-      ]).catch(() => 'timeout' as const);
-
-      if (importOutcome === 'encryption_dialog') {
-        const importBtn = encryptionChangeDialog.locator(
-          'button:has-text("Import and Change Encryption")',
-        );
-        await importBtn.click();
-        await encryptionChangeDialog.waitFor({ state: 'hidden', timeout: 15000 });
-        await importCompletePromise;
-      } else if (importOutcome === 'timeout') {
-        throw new Error('Import timed out waiting for completion');
-      }
+      // Import a copy of the encrypted backup whose SuperSync config has
+      // encryption enabled with another key (the key itself is not secret).
+      const backup = JSON.parse(
+        readFileSync(ImportPage.getFixturePath('test-backup-encrypted.json'), 'utf-8'),
+      ) as { data: { globalConfig: { sync: Record<string, unknown> } } };
+      backup.data.globalConfig.sync.superSync = {
+        isEncryptionEnabled: true,
+        encryptKey: `imported-other-key-${testRunId}`,
+      };
+      const matchingBackupPath = testInfo.outputPath('backup-matching-encryption.json');
+      writeFileSync(matchingBackupPath, JSON.stringify(backup));
+      await importWithoutEncryptionWarning(clientA, matchingBackupPath);
 
       await clientA.page.goto('/#/work-view');
       await clientA.page.waitForLoadState('networkidle');
       await waitForTask(clientA.page, 'E2E Import Test - Encrypted Task With Subtask');
 
-      // Re-setup sync with encryption and sync
-      await clientA.sync.setupSuperSync({
-        ...baseConfig,
-        isEncryptionEnabled: true,
-        password: encryptionPassword,
-        syncImportChoice: 'local',
-      });
-      await clientA.sync.syncAndWait();
+      // Sync with the preserved setup (no re-setup, see test 1).
+      const watcherA = await watchDialogs(clientA.page, ENCRYPTION_SETUP_DIALOGS);
+      await clientA.sync.syncAndWait({ useLocal: true });
+      await watcherA.expectNeverSeen(
+        ENCRYPTION_SETUP_DIALOGS,
+        'A syncing after an import with matching encryption',
+      );
 
-      // ============ Setup Client B ============
+      // ============ Setup Client B with A's ORIGINAL password ============
       clientB = await createSimulatedClient(browser, baseURL!, 'B', testRunId);
+      const watcherB = await watchDialogs(clientB.page, [
+        DIALOG.enterPassword,
+        DIALOG.decryptError,
+      ]);
       await clientB.sync.setupSuperSync({
         ...baseConfig,
         isEncryptionEnabled: true,
         password: encryptionPassword,
       });
       await clientB.sync.syncAndWait();
+      // A decrypt error here would mean A re-encrypted with the imported key.
+      await watcherB.expectNeverSeen(
+        [DIALOG.enterPassword, DIALOG.decryptError],
+        "B decrypting A's post-import data with A's original password",
+      );
 
       await clientB.page.goto('/#/work-view');
       await clientB.page.waitForLoadState('networkidle');

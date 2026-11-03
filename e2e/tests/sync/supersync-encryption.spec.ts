@@ -6,8 +6,14 @@ import {
   createSimulatedClient,
   closeClient,
   waitForTask,
+  isFullStateOpType,
   type SimulatedE2EClient,
 } from '../../utils/supersync-helpers';
+import {
+  getLocalOpIds,
+  getServerOperations,
+  recordOpsUploads,
+} from '../../utils/audit-import-encryption-helpers';
 import { expectConsistentState, expectTaskCount } from '../../utils/supersync-assertions';
 import { expectNoGlobalError } from '../../utils/assertions';
 
@@ -125,6 +131,9 @@ test.describe('@supersync SuperSync Encryption', () => {
 
       // --- Client A: create tasks BEFORE any sync/encryption is configured ---
       clientA = await createSimulatedClient(browser, baseURL!, 'A', testRunId);
+      // Every op A ever sends, recorded from the request body (before the
+      // server can accept or reject it).
+      const uploadsA = recordOpsUploads(clientA.page);
       await clientA.workView.waitForTaskList();
 
       const task1 = `Pre1-${testRunId}`;
@@ -135,6 +144,9 @@ test.describe('@supersync SuperSync Encryption', () => {
       await clientA.workView.addTask(task2);
       await clientA.page.waitForTimeout(100);
       await clientA.workView.addTask(task3);
+      await waitForTask(clientA.page, task3);
+      const preExistingOpIds = await getLocalOpIds(clientA.page);
+      expect(preExistingOpIds.length).toBeGreaterThan(0);
 
       // First-time encrypted setup runs with the tasks already present.
       await clientA.sync.setupSuperSync(syncConfig);
@@ -144,6 +156,26 @@ test.describe('@supersync SuperSync Encryption', () => {
 
       await expectTaskCount(clientA, 3);
       await expectNoGlobalError(clientA.page);
+
+      // GHSA-9v8x: no op ever left A unencrypted, and the pre-existing ops
+      // were subsumed by the enable-snapshot instead of being uploaded.
+      expect(
+        uploadsA.ops.filter((op) => op.isPayloadEncrypted !== true),
+        'every uploaded op is encrypted',
+      ).toEqual([]);
+      expect(
+        uploadsA.ops.filter((op) => preExistingOpIds.includes(op.id)),
+        'no pre-existing op is uploaded on top of the snapshot',
+      ).toEqual([]);
+      const serverOps = await getServerOperations(user.userId);
+      expect(
+        serverOps.filter((op) => isFullStateOpType(op.opType)),
+        'the server holds exactly one full-state op (the enable-snapshot)',
+      ).toHaveLength(1);
+      expect(
+        serverOps.filter((op) => preExistingOpIds.includes(op.id)),
+        'no pre-existing op is stored on the server',
+      ).toEqual([]);
 
       // --- Client B: same password → must receive exactly the 3 tasks ---
       clientB = await createSimulatedClient(browser, baseURL!, 'B', testRunId);

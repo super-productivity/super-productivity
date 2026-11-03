@@ -10,6 +10,11 @@ import {
   type SimulatedE2EClient,
   type TestUser,
 } from '../../utils/supersync-helpers';
+import {
+  DIALOG,
+  getServerOperations,
+  watchDialogs,
+} from '../../utils/audit-import-encryption-helpers';
 
 /** Default encryption password used by setupSuperSync's mandatory encryption dialog */
 const ENCRYPTION_PASSWORD = 'e2e-default-encryption-pw';
@@ -107,12 +112,33 @@ test.describe('@supersync SuperSync Account Reset', () => {
       // 3. Reset account data on server
       await resetUserData(user.token);
       console.log('[Reset] Account data cleared on server');
+      // Read the server directly: a client's view cannot tell an empty server
+      // from one it has not downloaded yet.
+      expect(
+        await getServerOperations(user.userId, { limit: 1 }),
+        'the reset leaves no operations on the server',
+      ).toEqual([]);
 
       // 4. Create a new client (C) to verify server has no data
       // This simulates a fresh device connecting after reset
       const clientC = await createSimulatedClient(browser, appUrl, 'C', testRunId);
+      // An empty account has no encrypted data to unlock, so C must be asked
+      // to SET UP encryption (ALWAYS) and never to enter an existing password.
+      // setupSuperSync answers both silently, so watch them.
+      const watcherC = await watchDialogs(clientC.page, [
+        DIALOG.enableEncryption,
+        DIALOG.enterPassword,
+      ]);
       await clientC.sync.setupSuperSync(syncConfig);
       await clientC.sync.syncAndWait();
+      await watcherC.expectSeen(
+        [DIALOG.enableEncryption],
+        'a fresh client joining the reset account',
+      );
+      await watcherC.expectNeverSeen(
+        [DIALOG.enterPassword],
+        'a fresh client joining the reset account',
+      );
 
       // Client C should NOT have the old tasks (server was reset)
       const hasOldTask1 = await hasTask(clientC.page, task1);
