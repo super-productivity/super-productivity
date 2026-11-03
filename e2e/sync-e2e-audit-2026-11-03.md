@@ -171,3 +171,114 @@ Expected conflicts: of the `waitForSyncComplete` call sites in these 12 specs, o
   - Pin the read counts, assert the dialog is hidden after 168, and count PUTs (expect 0).
 - webdav-multi-archive-recovery:170-180 [NEW MED]
   - Task count 0 in the work view plus archive_young containing the ids.
+
+## Verify 5 (import / encryption). 10 confirmed (+2 new), 2 refuted, 3 plausible.
+
+Dialog contract below: NEVER means the dialog must not appear; ALWAYS means it must.
+
+- import-clean-slate D.4:771-795 [HIGH REBUILD, depends on helper]
+  - The path is never reached, and any dialog gets auto-clicked.
+  - Rebuild: client C syncs before the import, then creates a task offline. Hold C's upload with routeSuperSyncOps until B's SYNC_IMPORT is on the server, then release it. A syncs.
+  - Assert NEVER `dialog-sync-import-conflict` on A, C's task absent on A (store read), and no error.
+  - Mutation: drop `&& processResult.isLocalUnsyncedImport` at operation-log-sync.service.ts:1255.
+- import-clean-slate:616-626 [MED FIX, depends on helper]
+  - Click sync directly. Assert ALWAYS `dialog-sync-import-conflict` with the MSG_INCOMING text ("1 local changes"), then call chooseSyncImportUseRemote.
+  - Mutation: the gate returns no dialogData when hasMeaningfulPending is true.
+- import-conflict-dialog tests 1-4 [HIGH RENAME + REBUILD]
+  - These actually cover first-sync on a never-synced device with a local import. Rename them.
+  - Add a test: B syncs first, A adds a task and syncs, B imports without syncing, then B syncs.
+  - Assert ALWAYS the MSG_LOCAL_FILTERS text ("cannot be automatically merged") with no first-sync radios. Answer local, and A converges.
+  - Mutation: make the condition at operation-log-sync.service.ts:1252 `false && …`.
+- import-encryption-preserve:91-114, 235-251 [HIGH FIX]
+  - Assert NEVER "Encryption Settings Will Change" (count 0).
+  - Mutation: `willChange = currentEnabled !== importedEnabled` (import-encryption-handler.service.ts:105).
+- import-encryption-preserve:127-133, 257-263 [HIGH FIX, depends on helper]
+  - Drop the re-setup and call `syncAndWait({useLocal:true})`.
+  - Assert NEVER enter-password, enable-encryption or decrypt-error on A. sync-import may appear (answer local).
+  - Mutation: `hasLocalSettings=false` (global-config.reducer.ts:189), or remove isEnabled from LOCAL_ONLY_SYNC_DEVICE_KEYS.
+- import-encryption-preserve:154-163 [MED FIX]
+  - Move the anchor before the absence checks.
+- import-encryption-preserve [NEW MED]
+  - The fixture has no `sync.superSync`, so the "matching encryption" case is never modelled.
+  - Fold test 1 into import-encryption-change, or give the fixture `superSync{isEncryptionEnabled:true, encryptKey:'other'}` and assert the current key is kept.
+- import-encryption-change:61-64 [LOW]
+  - Assert NEVER enable-encryption during the re-setup.
+- encryption-password-preservation [REFUTED]
+  - A lost key hits the upload guard and syncAndWait fails anyway. Optionally assert NEVER enter-password or decrypt-error on A.
+  - The header of test 1 is stale, and the test nearly duplicates test 2 (LOW).
+- encryption-password-change:386-391 [MED FIX, depends on helper]
+  - Await changeEncryptionPassword before B syncs.
+  - Then ALWAYS decrypt-error on B, and after the new password ALWAYS sync-import. Answer remote and remove the `.catch`.
+  - Mutation: the gate skips the dialog for PASSWORD_CHANGED.
+- encryption-password-change:465-488 [NEW HIGH FIX, depends on helper]
+  - Assert NEVER decrypt-error or enter-password on A at :487. A adds a task after the change, and B must see it.
+  - Mutation: after the upload, write the old encryptKey back via setProviderConfig.
+- encryption.spec:101-161 [MED FIX]
+  - Record the POST /api/sync/ops bodies. Every op must have `isPayloadEncrypted` true, and none of the pre-existing op ids may be re-uploaded.
+  - The server holds one full-state op and no Pre\* regular ops.
+  - Mutation: remove the GHSA guard (operation-log-upload.service.ts:242).
+- account-deletion:157-165 [MED FIX]
+  - Join a second client on configB and waitForTask for task1 and task2, or check that the server has a SERVER_MIGRATION SYNC_IMPORT.
+  - Mutation: `if(!hasSyncedOps)` → `if(true)` (server-migration.service.ts:161).
+- account-reset:108-121 [MED PLAUSIBLE FIX, depends on helper]
+  - Assert the server is empty right after the reset (latestSeq==0).
+  - For C: ALWAYS enable-encryption, NEVER enter-password.
+  - Mutation: DELETE /api/sync/data returns 200 without deleting.
+- advanced:161-164 [MED FIX]
+  - waitForTask on A first, then a store read: the task exists and its tagIds exclude the tag.
+- agent-capture:405-408, 426-429 and 565-566 [MED PLAUSIBLE FIX]
+  - Await B's claim response and the import log, assert the claim was empty, and only then count.
+
+## Verify 2 (winner / reorder). 18 confirmed, 2 plausible.
+
+GLOBAL_CONFIG `misc` resolves by whole-section LWW: the LWW Update replaces the section. No field merge happens.
+
+- lww-singleton:176-192 [HIGH FIX]
+  - Assert anim=ON and celeb=OFF on both clients. Optionally check for a synced `[GLOBAL_CONFIG] LWW Update`.
+  - Mutation: flip `localMaxTimestamp > remoteMaxTimestamp` (packages/sync-core/src/conflict-resolution.ts:521).
+- global-config-edge-cases:98-101, 136 [HIGH FIX]
+  - C sets celebration to false. All three clients must end at anim=ON, celeb=OFF.
+  - Mutation: the same flip.
+- global-config-edge-cases:188-210 [HIGH FIX]
+  - Use 3 toggles. B equals `!initial`, and B equals `initial` before the sync.
+  - Mutation: `isPersistent:false` in the updateGlobalConfigSection meta.
+- reorder-conflict-wedge:659-663 [MED FIX]
+  - `expect(converged.order).toEqual(reordered)`.
+  - Mutation (setup): re-dispatch the original order on reorderClient.
+- reorder-conflict-wedge:1244 [MED FIX]
+  - Expect the dragged order, or `reversed`.
+- reorder-single-entity-rule:723-725 [MED FIX]
+  - Assert the reorder survives in all 36 cases (they commute). The header at l.25 is wrong.
+  - Mutation (setup): re-dispatch `before.order`.
+- reorder-single-entity-rule:1050-1068 [MED FIX]
+  - Snapshot the reissued order and pin it.
+- reorder-competing-and-delete:221-222 [NEW MED FIX]
+  - First-to-server wins and the arrival order is fixed, so assert `final.order==otherSide.order`.
+- reorder-competing-and-delete:420-444 [MED FIX] (released)
+  - order: the released order wins.
+  - Today order: order is current's, and second is the released Today order.
+  - delete + pending: kept(current).
+  - delete + !pending: kept(released).
+- reorder-beside-conflict:149, 202-207 [MED REBUILD/DELETE variant]
+  - The !bNewer variant never makes B upload an LWW row. Add the "B uploaded a habit LWW row" assertion (pattern at :391-397), then drop or rebuild that variant.
+- round-time-conflict:381-395 [MED FIX]
+  - The parent title is `${parentName}-A` on both clients and after reload, with no `-B`.
+  - Mutation: flip isNewer (conflict-field-patch.util.ts).
+- remote-winner-server-order:192-206 [MED PLAUSIBLE] and [NEW HIGH PLAUSIBLE REBUILD]
+  - After #10422, B probably uploads a title-only patch, so #10423's `orderIncomingPrefix` is never exercised.
+  - To settle: run CI with orderIncomingPrefix disabled (fold-sync-time-spent.util.ts).
+  - If the time loss turns out to be a replace-snapshot winner, it's a documented open gap (decision 7), so it becomes an issue, not a test pin.
+- rejected-ops-transient-download-8331:262-272 [MED FIX]
+  - Both clients end at `-ModifiedByB`.
+- forced-download-pruned-import:385-391 [LOW FIX]
+  - `-A` wins on both clients.
+- legacy-migration-sync:148-168 Keep local [HIGH FIX]
+  - Copy the genesis test pattern (:556-577): `waitForInitialSync:false`, expect the conflictDialog visible, then `syncAndWait({conflictDialog:'local'})`.
+  - Assert B's SYNC_IMPORT is on the server. A syncs and ends with B1-B3 and no A1/A2 (store read).
+  - Mutation: make the import gate report no conflict.
+- legacy-migration-sync:424-443 ID collision [HIGH FIX, possible ISSUE]
+  - A must show Version B plus "Version B Extra Task". If that goes red, open an issue.
+- legacy-migration-sync:594-596 [MED FIX]
+  - Check A1's absence through store titles.
+- late-join:62-101 and 170-173 [MED FIX]
+  - Assert BLocal1/2 are absent on B and A (after an anchor), and that A1/A2 are absent on both.
