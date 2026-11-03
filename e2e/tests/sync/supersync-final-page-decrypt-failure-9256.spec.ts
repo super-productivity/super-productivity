@@ -684,9 +684,9 @@ test.describe('@supersync @encryption #9256 final-page decrypt failure', () => {
     });
   }
   // The kept prefix carries client A's SYNC_IMPORT, so a device with its own
-  // local data gets the import-conflict dialog; its "Use My Data" force-uploads
-  // a clean slate through SyncImportConflictCoordinatorService.
-  test('warns before import-conflict "Use My Data" deletes the remote ops this device could not decrypt', async ({
+  // local data gets the import-conflict dialog; replacing the account's tasks
+  // force-uploads a clean slate through SyncImportConflictCoordinatorService.
+  test('warns before import-conflict "Replace my account" deletes the remote ops this device could not decrypt', async ({
     browser,
     baseURL,
     testRunId,
@@ -737,16 +737,14 @@ test.describe('@supersync @encryption #9256 final-page decrypt failure', () => {
         await route.fulfill({ response: await route.fetch({ url: url.toString() }) });
       });
 
-      // Accept the existing "use my data" and fresh-client confirms; decline
-      // and record anything else.
+      // Accept the fresh-client confirm; decline and record anything else. The
+      // never-synced first-sync choice has its own inline warning instead of
+      // a native "use my data" confirm.
       const declinedMessages: string[] = [];
-      const useLocalConfirm = translationRegex(
-        'F.SYNC.D_SYNC_IMPORT_CONFLICT.FIRST_SYNC_USE_LOCAL_CONFIRM',
-      );
       const handler = async (dialog: Dialog): Promise<void> => {
         if (dialog.type() !== 'confirm') return;
         const message = normalizeDialogMessage(dialog.message());
-        if (useLocalConfirm.test(message) || FRESH_CLIENT_CONFIRM.test(message)) {
+        if (FRESH_CLIENT_CONFIRM.test(message)) {
           await dialog.accept().catch(() => {});
           return;
         }
@@ -758,11 +756,15 @@ test.describe('@supersync @encryption #9256 final-page decrypt failure', () => {
       await clientB.sync.setupSuperSync({ ...syncConfig, waitForInitialSync: false });
       const importConflict = clientB.page.locator('dialog-sync-import-conflict');
       await expect(importConflict).toBeVisible({ timeout: 30000 });
-      await importConflict
-        .getByRole('button', {
-          name: translationText('F.SYNC.D_SYNC_IMPORT_CONFLICT.USE_LOCAL'),
-        })
-        .click();
+      // B never synced, so the import dialog is the first-sync choice. Replacing
+      // the account always shows its warning before the submit button deletes.
+      const { firstSyncReplaceAccountRadio, firstSyncSubmitBtn } = clientB.sync;
+      await firstSyncReplaceAccountRadio.locator('input').check();
+      await expect(importConflict.locator('.e2e-first-sync-warning')).toBeVisible();
+      await expect(firstSyncSubmitBtn).toHaveText(
+        translationText('F.SYNC.D_FIRST_SYNC.REMOVE_ACCOUNT_TASKS'),
+      );
+      await firstSyncSubmitBtn.click();
 
       await expect.poll(() => declinedMessages.length, { timeout: 30000 }).toBe(1);
       clientB.page.off('dialog', handler);

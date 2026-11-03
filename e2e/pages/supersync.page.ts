@@ -176,7 +176,9 @@ export class SuperSyncPage extends BasePage {
    * multi-entity conflict preflight refuses to auto-resolve
    * (UnsupportedMultiEntityConflictError, SYNC_MULTI_ENTITY_UNSUPPORTED).
    * "Keep local" force-uploads a SYNC_IMPORT, "Keep remote" replaces local
-   * state with the server's: either way ALL data on one side is lost.
+   * state with the server's: either way ALL data on one side is lost. On
+   * SuperSync a never-synced device sees them as `sync-first-choice` instead
+   * (see firstSyncSubmitBtn); resolveConflictDialog() answers both layouts.
    *
    * syncAndWait() and the other completion helpers therefore FAIL when it
    * appears. A test that intentionally exercises it asserts on it and answers
@@ -185,6 +187,15 @@ export class SuperSyncPage extends BasePage {
   readonly conflictDialog: Locator;
   readonly conflictUseLocalBtn: Locator;
   readonly conflictUseRemoteBtn: Locator;
+  /**
+   * First-sync choice (`sync-first-choice`, 2b): what a never-synced SuperSync
+   * device with tasks sees in place of either conflict dialog's content, most
+   * often the sync-import dialog when it joins an account. "Use my account's
+   * tasks" = remote, "Replace my account…" = local. No native confirm follows.
+   */
+  readonly firstSyncUseAccountRadio: Locator;
+  readonly firstSyncReplaceAccountRadio: Locator;
+  readonly firstSyncSubmitBtn: Locator;
   /** Sync import conflict dialog - appears when SYNC_IMPORT filters remote ops */
   readonly syncImportConflictDialog: Locator;
   readonly syncImportUseLocalBtn: Locator;
@@ -243,6 +254,14 @@ export class SuperSyncPage extends BasePage {
     this.conflictUseRemoteBtn = this.conflictDialog.locator('button', {
       hasText: /Keep remote/i,
     });
+    // The first-sync choice renders inside either conflict dialog.
+    this.firstSyncUseAccountRadio = page.locator(
+      'sync-first-choice .e2e-first-sync-use-account',
+    );
+    this.firstSyncReplaceAccountRadio = page.locator(
+      'sync-first-choice .e2e-first-sync-replace-account',
+    );
+    this.firstSyncSubmitBtn = page.locator('sync-first-choice .e2e-first-sync-submit');
     // Sync import conflict dialog elements
     this.syncImportConflictDialog = page.locator('dialog-sync-import-conflict');
     this.syncImportUseLocalBtn = page.locator(
@@ -667,11 +686,7 @@ export class SuperSyncPage extends BasePage {
         console.log(
           `[SuperSyncPage] Sync import conflict dialog - using ${useLocal ? 'local' : 'remote'}`,
         );
-        if (useLocal) {
-          await this.syncImportUseLocalBtn.click();
-        } else {
-          await this.syncImportUseRemoteBtn.click();
-        }
+        await this._clickSyncImportChoice(useLocal ? 'local' : 'remote');
         await this.syncImportConflictDialog.waitFor({ state: 'hidden', timeout: 5000 });
 
         // After handling sync import, check for password dialog
@@ -907,11 +922,7 @@ export class SuperSyncPage extends BasePage {
             console.log(
               `[SuperSyncPage] Post-encryption sync_import_conflict — using ${useLocal ? 'local' : 'remote'}`,
             );
-            if (useLocal) {
-              await this.syncImportUseLocalBtn.click();
-            } else {
-              await this.syncImportUseRemoteBtn.click();
-            }
+            await this._clickSyncImportChoice(useLocal ? 'local' : 'remote');
             await this.syncImportConflictDialog.waitFor({
               state: 'hidden',
               timeout: 5000,
@@ -1044,11 +1055,9 @@ export class SuperSyncPage extends BasePage {
           .isVisible()
           .catch(() => false);
         if (syncImportDialogVisible) {
-          if (config.syncImportChoice === 'local') {
-            await this.syncImportUseLocalBtn.click();
-          } else {
-            await this.syncImportUseRemoteBtn.click();
-          }
+          await this._clickSyncImportChoice(
+            config.syncImportChoice === 'local' ? 'local' : 'remote',
+          );
           await this.syncImportConflictDialog.waitFor({
             state: 'hidden',
             timeout: 5000,
@@ -1849,8 +1858,6 @@ export class SuperSyncPage extends BasePage {
     choice: 'local' | 'remote',
     timeout: number,
   ): Promise<void> {
-    const button =
-      choice === 'local' ? this.syncImportUseLocalBtn : this.syncImportUseRemoteBtn;
     const context =
       choice === 'local' ? 'chooseSyncImportUseLocal' : 'chooseSyncImportUseRemote';
     const dialogHandler = async (dialog: Dialog): Promise<void> => {
@@ -1859,7 +1866,7 @@ export class SuperSyncPage extends BasePage {
 
     this.page.on('dialog', dialogHandler);
     try {
-      await button.click({ timeout });
+      await this._clickSyncImportChoice(choice, timeout);
       // The confirm is answered synchronously inside the click, so the dialog
       // must be gone before the handler is removed — otherwise a late prompt
       // would hang the next action instead of failing here.
@@ -1890,12 +1897,47 @@ export class SuperSyncPage extends BasePage {
    */
   async resolveConflictDialog(choice: ConflictDialogChoice): Promise<void> {
     await expect(this.conflictDialog).toBeVisible({ timeout: 5000 });
-    if (choice === 'local') {
+    if (await this.firstSyncSubmitBtn.isVisible()) {
+      await this._answerFirstSyncChoice(choice);
+    } else if (choice === 'local') {
       await this.conflictUseLocalBtn.click();
     } else {
       await this.conflictUseRemoteBtn.click();
     }
     await confirmSyncConflictOverwriteIfShown(this.page, this.conflictDialog);
+  }
+
+  /**
+   * Answers the sync-import dialog in either layout: the full dialog, or the
+   * first-sync choice a never-synced SuperSync device gets (2b).
+   */
+  private async _clickSyncImportChoice(
+    choice: ConflictDialogChoice,
+    timeout?: number,
+  ): Promise<void> {
+    await expect(this.syncImportConflictDialog).toBeVisible({ timeout });
+    if (await this.firstSyncSubmitBtn.isVisible()) {
+      await this._answerFirstSyncChoice(choice);
+      return;
+    }
+    const button =
+      choice === 'local' ? this.syncImportUseLocalBtn : this.syncImportUseRemoteBtn;
+    await button.click({ timeout });
+  }
+
+  /**
+   * The first-sync layout (`sync-first-choice`): pick a side, then submit. The
+   * radios stay disabled until the device's tasks are counted, and the choice
+   * shows its own warning, so no overwrite confirm follows.
+   */
+  private async _answerFirstSyncChoice(choice: ConflictDialogChoice): Promise<void> {
+    const radio =
+      choice === 'local'
+        ? this.firstSyncReplaceAccountRadio
+        : this.firstSyncUseAccountRadio;
+    await radio.locator('input').check();
+    await expect(this.firstSyncSubmitBtn).toBeEnabled();
+    await this.firstSyncSubmitBtn.click();
   }
 
   /**

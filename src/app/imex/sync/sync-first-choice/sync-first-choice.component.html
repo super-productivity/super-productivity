@@ -1,0 +1,65 @@
+<h1 mat-dialog-title>{{ T.F.SYNC.D_FIRST_SYNC.TITLE | translate }}</h1>
+
+<mat-dialog-content>
+  <p class="e2e-first-sync-count">
+    @if (taskCount() !== null) {
+      {{ T.F.SYNC.D_FIRST_SYNC.DEVICE_TASKS | translate: { count: taskCount() } }}
+    }
+  </p>
+  <p>{{ T.F.SYNC.D_FIRST_SYNC.ACCOUNT_TASKS | translate }}</p>
+
+  <mat-radio-group
+    class="choices"
+    [attr.aria-label]="T.F.SYNC.D_FIRST_SYNC.TITLE | translate"
+    [disabled]="taskCount() === null"
+    [value]="choice()"
+    (change)="choice.set($event.value)"
+  >
+    <mat-radio-button
+      class="e2e-first-sync-use-account"
+      value="USE_REMOTE"
+    >
+      <strong>{{ T.F.SYNC.D_FIRST_SYNC.USE_ACCOUNT | translate }}</strong>
+      <div>
+        @if (isUseAccountRecommended()) {
+          {{ T.F.SYNC.D_FIRST_SYNC.RECOMMENDED | translate }}
+        }
+        {{ T.F.SYNC.D_FIRST_SYNC.USE_ACCOUNT_HINT | translate }}
+      </div>
+    </mat-radio-button>
+    <mat-radio-button
+      class="e2e-first-sync-replace-account"
+      value="USE_LOCAL"
+    >
+      <strong>{{ T.F.SYNC.D_FIRST_SYNC.REPLACE_ACCOUNT | translate }}</strong>
+      <div>{{ T.F.SYNC.D_FIRST_SYNC.REPLACE_ACCOUNT_HINT | translate }}</div>
+    </mat-radio-button>
+  </mat-radio-group>
+
+  @if (isBigLoss()) {
+    <div class="callout callout--danger e2e-first-sync-warning">
+      <mat-icon aria-hidden="true">warning</mat-icon>
+      <p [innerHTML]="warningKey() | translate: { count: taskCount() }"></p>
+    </div>
+  }
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button
+    mat-button
+    type="button"
+    (click)="chosen.emit(undefined)"
+  >
+    {{ T.G.CANCEL | translate }}
+  </button>
+  <button
+    class="e2e-first-sync-submit"
+    mat-flat-button
+    type="button"
+    [color]="isBigLoss() ? 'warn' : 'primary'"
+    [disabled]="!choice()"
+    (click)="submit()"
+  >
+    {{ submitKey() | translate: { count: taskCount() } }}
+  </button>
+</mat-dialog-actions>

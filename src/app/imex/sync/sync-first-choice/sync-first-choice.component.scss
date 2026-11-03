@@ -1,0 +1,11 @@
+// Title, content and actions stay direct parts of the dialog's layout.
+:host {
+  display: contents;
+}
+
+.choices {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s);
+  margin-bottom: var(--s2);
+}

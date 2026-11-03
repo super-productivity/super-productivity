@@ -1330,6 +1330,21 @@
         "PASSWORD_LABEL": "Encryption password",
         "TITLE": "Unlock your tasks"
       },
+      "D_FIRST_SYNC": {
+        "ACCOUNT_TASKS": "Your account already has tasks, which are also on your other devices.",
+        "CONTINUE": "Continue",
+        "DEVICE_TASKS": "This device has {{count}} tasks.",
+        "RECOMMENDED": "Recommended.",
+        "REMOVE_ACCOUNT_TASKS": "Remove the account's tasks",
+        "REMOVE_DEVICE_TASKS": "Remove {{count}} tasks",
+        "REPLACE_ACCOUNT": "Replace my account with this device's tasks",
+        "REPLACE_ACCOUNT_HINT": "Your account and your other devices lose their tasks and get this device's tasks.",
+        "TITLE": "This device already has tasks",
+        "USE_ACCOUNT": "Use my account's tasks",
+        "USE_ACCOUNT_HINT": "This device's tasks are saved as a backup first, in Settings \u2192 Sync & Backup.",
+        "WARN_REMOVE_DEVICE_TASKS": "<strong>This removes {{count}} tasks from this device</strong> and keeps your account's tasks. That's a lot: did you mean to keep this device's tasks? They are saved as a backup first.",
+        "WARN_REPLACE_ACCOUNT": "<strong>This removes all tasks from your account and from every other device</strong> and keeps only this device's tasks. The app can't count your account's tasks before it downloads them. Each other device saves its own tasks as a backup before it replaces them."
+      },
       "D_FRESH_CLIENT_CONFIRM": {
         "MESSAGE": "This appears to be a fresh installation. Remote data with {{count}} changes was found. Do you want to download and overwrite your local data with it?",
         "OK": "Download Remote Data",
