@@ -50,9 +50,11 @@ const STACK_PAGES = query(
   { optional: true },
 );
 
-// No `animateChild()` on either page: it would run the children's own
-// `:enter`/`:leave` motions *after* the page's, a second animation once the
-// page has already arrived, and keep the leaving page in the DOM until they end.
+// The faded page stays in the DOM, under the entering one, until the whole
+// transition ends. Triggers inside either page don't run with it: Angular
+// blocks a child's transition while an ancestor animates in the same pass (its
+// `.done` still fires). `animateChild()` would only run triggers bound on the
+// page host itself, and no page has one, so there is none here.
 const LEAVE_PAGE = query(
   ':leave',
   [style({ opacity: 1 }), animate(PAGE_LEAVE_TIMING, style({ opacity: 0 }))],

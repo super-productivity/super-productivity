@@ -9,8 +9,11 @@
  * For each route change it prints:
  * - `settle` — navigation to the end of the last animation it started: how long
  *   the page is in motion.
- * - `anims`  — the animations that ran, as `target:delay+duration`. A child
- *   starting after the page's own motion has ended is a second, chained motion.
+ * - `anims`  — the animations that ran, as `start target:delay+duration`. Angular
+ *   folds a step's delay into its keyframes, so a delayed enter prints as
+ *   `0+<delay + duration>`, and a `style()`-only step (the page stacking) as
+ *   `0+0`. A child starting after the page's own motion has ended is a second,
+ *   chained motion.
  * - `max gap` / `>34ms` — the longest frame gap and the number of frames slower
  *   than two vsyncs during that window (CPU throttled by MEASURE_CPU_THROTTLE).
  *

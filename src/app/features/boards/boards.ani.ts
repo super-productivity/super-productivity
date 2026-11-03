@@ -31,9 +31,8 @@ export const getViewSwitchState = (board: Pick<BoardCfg, 'id' | 'cols'>): string
  * enters the same way.
  *
  * Between two view ids only, unless a view was just created: on entering the
- * page `warpRoute` already animates it (and its `animateChild()` would replay
- * an `:enter` afterwards), and a leaving board must not animate. A created
- * view does enter from the empty `/boards` page: a new page, but `warpRoute`
+ * page `warpRoute` already animates it, and a leaving board must not animate.
+ * A created view does enter from the empty `/boards` page: a new page, but `warpRoute`
  * leaves `boards => view-arrival` unanimated so this enter runs instead, and
  * it reads as somewhere new. From another page the page itself arrives:
  * `AppComponent.getPage` reports `view-arrival` and `warpRoute` slides the page

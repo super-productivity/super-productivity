@@ -5,8 +5,8 @@ import { PAGE_ENTER_FROM, PAGE_LEAVE_TIMING, PAGE_SWITCH_TIMING } from './warp-r
  * Switching from one work context to another (project to project, tag to tag):
  * the router reuses the page, and the work view re-creates its content
  * (`isContextChangingWithDelay$`), so this is the only motion the switch gets.
- * Same motion as a page change (`warpRoute`). No `animateChild()`: the lists'
- * own enter motions would replay after this one.
+ * Same motion as a page change (`warpRoute`). Coming from another page, the
+ * content mounts with the page and `warpRoute` blocks this enter.
  */
 export const workViewProjectChangeAnimation = [
   trigger('projectChange', [
