@@ -16,6 +16,22 @@
       </button>
     }
 
+    @if (
+      isForProject
+        ? contextId !== INBOX_PROJECT.id && !(isArchived$ | async)
+        : contextId !== TODAY_TAG_ID
+    ) {
+      <button
+        (click)="togglePinned()"
+        mat-menu-item
+      >
+        <mat-icon>{{ isPinned() ? 'keep_off' : 'keep' }}</mat-icon>
+        <span class="text">{{
+          (isPinned() ? T.MH.UNPIN_FROM_TOP : T.MH.PIN_TO_TOP) | translate
+        }}</span>
+      </button>
+    }
+
     <button
       [routerLink]="[base, contextId, 'history']"
       mat-menu-item

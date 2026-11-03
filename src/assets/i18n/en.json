@@ -3170,6 +3170,7 @@
     "NOTES": "Notes",
     "NOTES_PANEL_INFO": "Notes can only be shown in the schedule and the regular task list views.",
     "OPEN_APP_FEATURES": "Open Settings",
+    "PIN_TO_TOP": "Pin to top",
     "PLANNER": "Planner",
     "PROCRASTINATE": "Procrastinate",
     "PROJECT_MENU": "Project Menu",
@@ -3196,6 +3197,7 @@
     "TOGGLE_SHOW_NOTES": "Show/hide project notes",
     "TOGGLE_TRACK_TIME": "Start/stop tracking time",
     "TRIGGER_SYNC": "Sync!",
+    "UNPIN_FROM_TOP": "Unpin from top",
     "UNPLAN_ALL_TASKS": "Unplan all tasks",
     "ARCHIVED_PROJECTS": "Archived Projects"
   },

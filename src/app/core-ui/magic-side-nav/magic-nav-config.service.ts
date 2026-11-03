@@ -24,11 +24,12 @@ import {
   selectUnarchivedVisibleProjects,
 } from '../../features/project/store/project.selectors';
 import { toggleHideFromMenu } from '../../features/project/store/project.actions';
+import { DEFAULT_PROJECT_ICON } from '../../features/project/project.const';
 import { NavConfig, NavItem } from './magic-side-nav.model';
 import { NAV_SECTION_ICON } from './nav-section-icons.const';
 import { PluginBridgeService } from '../../plugins/plugin-bridge.service';
 import { PluginService } from '../../plugins/plugin.service';
-import { lsGetBoolean, lsSetItem } from '../../util/ls-util';
+import { lsGetBoolean, lsGetJSON, lsSetItem, lsSetJSON } from '../../util/ls-util';
 import { MenuTreeService } from '../../features/menu-tree/menu-tree.service';
 import { Router } from '@angular/router';
 import {
@@ -40,6 +41,30 @@ import { AppFeaturesConfig } from '../../features/config/global-config.model';
 import { SnackService } from '../../core/snack/snack.service';
 import { IS_DONATION_UI_RESTRICTED } from '../../app.constants';
 import { DIALOG_AUTO_FOCUS_TYPING } from '../../util/dialog-auto-focus';
+
+// Projects and tags pinned below Today and Inbox, as `PROJECT:<id>` /
+// `TAG:<id>` in pin order. Device-local, like the expansion state. Kept apart
+// from MagicNavConfigService so context menus can use it without its deps.
+@Injectable({
+  providedIn: 'root',
+})
+export class PinnedNavService {
+  readonly pinnedKeys = signal<string[]>(
+    lsGetJSON<string[]>(LS.PINNED_NAV_WORK_CONTEXTS, []),
+  );
+
+  isPinned(type: WorkContextType, id: string): boolean {
+    return this.pinnedKeys().includes(`${type}:${id}`);
+  }
+
+  togglePinned(type: WorkContextType, id: string): void {
+    const key = `${type}:${id}`;
+    const keys = this.pinnedKeys();
+    const next = keys.includes(key) ? keys.filter((k) => k !== key) : [...keys, key];
+    this.pinnedKeys.set(next);
+    lsSetJSON(LS.PINNED_NAV_WORK_CONTEXTS, next);
+  }
+}
 
 @Injectable({
   providedIn: 'root',
@@ -57,6 +82,7 @@ export class MagicNavConfigService {
   private readonly _configService = inject(GlobalConfigService);
   private readonly _snackService = inject(SnackService);
   private readonly _router = inject(Router);
+  private readonly _pinnedNavService = inject(PinnedNavService);
 
   // Simple state signals
   private readonly _isProjectsExpanded = signal(
@@ -407,7 +433,41 @@ export class MagicNavConfigService {
       });
     }
 
+    return [...items, ...this._buildPinnedItems()];
+  }
+
+  // Pins of deleted or archived contexts are skipped, not dropped: an
+  // unarchived project shows up pinned again.
+  private _buildPinnedItems(): NavItem[] {
+    const projects = new Map(this._allUnarchivedProjects().map((p) => [p.id, p]));
+    const tags = new Map(this._tags().map((t) => [t.id, t]));
+    const items: NavItem[] = [];
+    for (const key of this._pinnedNavService.pinnedKeys()) {
+      const [type, id] = this._splitPinKey(key);
+      const workContext =
+        type === WorkContextType.PROJECT ? projects.get(id) : tags.get(id);
+      if (!workContext) {
+        continue;
+      }
+      const isProject = type === WorkContextType.PROJECT;
+      const defaultIcon = isProject ? DEFAULT_PROJECT_ICON : 'label';
+      items.push({
+        type: 'workContext',
+        id: `pinned-${key}`,
+        label: workContext.title,
+        icon: workContext.icon || defaultIcon,
+        route: `/${isProject ? 'project' : 'tag'}/${id}/tasks`,
+        workContext,
+        workContextType: type,
+        defaultIcon,
+      });
+    }
     return items;
+  }
+
+  private _splitPinKey(key: string): [WorkContextType, string] {
+    const i = key.indexOf(':');
+    return [key.slice(0, i) as WorkContextType, key.slice(i + 1)];
   }
 
   private _buildMainRoutesItems(): NavItem[] {

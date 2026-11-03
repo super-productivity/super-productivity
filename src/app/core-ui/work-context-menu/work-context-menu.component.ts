@@ -52,6 +52,7 @@ import { Log } from '../../core/log';
 import { PlainspaceShareService } from '../../features/issue/providers/plainspace/plainspace-share.service';
 import { selectIsProjectSharedOnPlainspace } from '../../features/issue/store/issue-provider.selectors';
 import { DIALOG_AUTO_FOCUS_TYPING } from '../../util/dialog-auto-focus';
+import { PinnedNavService } from '../magic-side-nav/magic-nav-config.service';
 
 @Component({
   selector: 'work-context-menu',
@@ -86,6 +87,7 @@ export class WorkContextMenuComponent implements OnInit, OnChanges {
   private _store = inject(Store);
   private _dateService = inject(DateService);
   private _plainspaceShareService = inject(PlainspaceShareService);
+  private _pinnedNavService = inject(PinnedNavService);
 
   /** For a trigger: `[matMenuTriggerFor]="workContextMenu.menu()"`. */
   readonly menu = viewChild.required(MatMenu);
@@ -138,6 +140,18 @@ export class WorkContextMenuComponent implements OnInit, OnChanges {
   async ngOnInit(): Promise<void> {
     const support = await this._shareService.getShareSupport();
     this._setShareSupport(support);
+  }
+
+  private get _contextType(): WorkContextType {
+    return this.isForProject ? WorkContextType.PROJECT : WorkContextType.TAG;
+  }
+
+  isPinned(): boolean {
+    return this._pinnedNavService.isPinned(this._contextType, this.contextId);
+  }
+
+  togglePinned(): void {
+    this._pinnedNavService.togglePinned(this._contextType, this.contextId);
   }
 
   async deleteTag(): Promise<void> {
