@@ -57,6 +57,7 @@ For full provider suites prefer the [scheduled E2E workflow](.github/workflows/e
 
 - **Translations:** `T` holds keys; render with the translate pipe or `TranslateService`. Edit only `en.json`, except when adding placeholders: then update every existing translation to interpolate them. See [translation workflow](docs/TRANSLATING.md).
 - **Dependencies:** never add packages to the root `dependencies`/`devDependencies`; use platform APIs, existing packages or a small in-repo implementation. A plugin may add a necessary dependency isolated to that plugin.
+- **GitHub issues:** every issue gets a type (`Bug`, `Feature`, `Task`, `Epic` for trackers); pass `gh issue create --type <type>`, since only the issue templates set one.
 - **Electron:** check `IS_ELECTRON` before using Electron-specific APIs.
 - **Templates & styling:** plain HTML, minimal CSS/classes, Angular Material sparingly ([styling guide](docs/styling-guide.md)). Never restyle Angular Material or shared `src/app/ui/` components for a one-off (local `.mat-*`, `.mdc-*`, `button[mat-*]` or component-internal overrides, re-declared theme styles); use existing inputs/classes/tokens/theme variables, or make the variant reusable in the shared style layer.
 - **State:** never mutate NgRx state — reducers return new objects. Prefer Signals to Observables.
