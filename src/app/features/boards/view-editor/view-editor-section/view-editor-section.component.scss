@@ -5,7 +5,8 @@
 }
 
 // On the dialog's own surface, outlined: a card is never darker than the
-// dialog (dark themes too). The open card is tinted from the theme.
+// dialog (dark themes too). Open or closed, it looks the same; the chevron
+// and the rules tell them apart.
 .card {
   display: flex;
   align-items: flex-start;
@@ -19,8 +20,6 @@
 
 .card.is-open {
   --view-editor-label-w: 64px;
-  border-color: color-mix(in srgb, var(--c-primary) 45%, transparent);
-  background: color-mix(in srgb, var(--c-primary) 6%, transparent);
 }
 
 .drag-handle {
