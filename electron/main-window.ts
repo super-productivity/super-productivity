@@ -47,6 +47,7 @@ import {
 import { markGpuStartupSuccess } from './gpu-startup-guard';
 import { isAppOriginUrl } from './navigation-guard';
 import { assertSecureWebPreferences } from './web-preferences-guard';
+import { isAllowedSessionPermission } from './session-permissions';
 import { applyJiraImageAuth } from './jira-image-auth';
 
 // Long enough to outlast a resize or move gesture, so a drag records one
@@ -328,15 +329,13 @@ export const createWindow = async ({
   });
 
   // Deny unnecessary permissions (webcam, microphone, geolocation, etc.)
-  // The app only needs notifications for desktop reminders
-  const allowedPermissions = ['notifications'];
   mainWin.webContents.session.setPermissionRequestHandler(
     (_webContents, permission, callback) => {
-      callback(allowedPermissions.includes(permission));
+      callback(isAllowedSessionPermission(permission));
     },
   );
   mainWin.webContents.session.setPermissionCheckHandler((_webContents, permission) => {
-    return allowedPermissions.includes(permission);
+    return isAllowedSessionPermission(permission);
   });
 
   mainWindowState.manage(mainWin);
