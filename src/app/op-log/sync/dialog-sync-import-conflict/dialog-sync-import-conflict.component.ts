@@ -31,6 +31,11 @@ export interface SyncImportConflictData {
    * explicit extra confirmation. See the fresh-client first-sync data-loss-trap plan.
    */
   isNeverSynced?: boolean;
+  /**
+   * Tasks in the incoming snapshot, archives included; unset when none are
+   * countable. Ops after the snapshot are not counted.
+   */
+  accountTaskCount?: number;
 }
 
 export type SyncImportConflictResolution = 'USE_LOCAL' | 'USE_REMOTE' | 'CANCEL';

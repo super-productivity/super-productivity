@@ -9,3 +9,8 @@
   gap: var(--s);
   margin-bottom: var(--s2);
 }
+
+// A <label> may only hold inline content, so the hint is a block-level span.
+.hint {
+  display: block;
+}

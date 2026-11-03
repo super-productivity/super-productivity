@@ -18,6 +18,17 @@ describe('isBigLoss', () => {
     expect(isBigLoss('USE_REMOTE', 9)).toBe(false);
     expect(isBigLoss('USE_REMOTE', 10)).toBe(true);
   });
+
+  it('warns before using the account only when this device has at least twice its tasks', () => {
+    expect(isBigLoss('USE_REMOTE', 12, 3000)).toBe(false);
+    expect(isBigLoss('USE_REMOTE', 19, 10)).toBe(false);
+    expect(isBigLoss('USE_REMOTE', 20, 10)).toBe(true);
+    expect(isBigLoss('USE_REMOTE', 9, 1)).toBe(false);
+  });
+
+  it('still warns before replacing an account that looks small, since its count can miss tasks', () => {
+    expect(isBigLoss('USE_LOCAL', 500, 1)).toBe(true);
+  });
 });
 
 describe('SyncFirstChoiceComponent', () => {
@@ -25,9 +36,11 @@ describe('SyncFirstChoiceComponent', () => {
 
   const render = async (
     taskCount: number,
+    accountTaskCount?: number,
   ): Promise<ComponentFixture<SyncFirstChoiceComponent>> => {
     snapshot.getStateSnapshotAsync.and.resolveTo(withTasks(taskCount) as never);
     const fixture = TestBed.createComponent(SyncFirstChoiceComponent);
+    fixture.componentRef.setInput('accountTaskCount', accountTaskCount);
     await fixture.whenStable();
     fixture.detectChanges();
     return fixture;
@@ -102,6 +115,16 @@ describe('SyncFirstChoiceComponent', () => {
       T.F.SYNC.D_FIRST_SYNC.REMOVE_DEVICE_TASKS,
     );
     expect(submitBtn(fixture).disabled).toBe(false);
+  });
+
+  it("preselects the account's tasks without a warning when the account has far more", async () => {
+    const fixture = await render(380, 3000);
+
+    expect(fixture.componentInstance.choice()).toBe('USE_REMOTE');
+    expect(text(fixture, '.e2e-first-sync-warning')).toBe('');
+    expect(text(fixture, '.e2e-first-sync-submit')).toContain(
+      T.F.SYNC.D_FIRST_SYNC.CONTINUE,
+    );
   });
 
   it('still counts the active tasks when the archives fail to load', async () => {

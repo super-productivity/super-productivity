@@ -20,19 +20,21 @@
       value="USE_REMOTE"
     >
       <strong>{{ T.F.SYNC.D_FIRST_SYNC.USE_ACCOUNT | translate }}</strong>
-      <div>
+      <span class="hint">
         @if (isUseAccountRecommended()) {
           {{ T.F.SYNC.D_FIRST_SYNC.RECOMMENDED | translate }}
         }
         {{ T.F.SYNC.D_FIRST_SYNC.USE_ACCOUNT_HINT | translate }}
-      </div>
+      </span>
     </mat-radio-button>
     <mat-radio-button
       class="e2e-first-sync-replace-account"
       value="USE_LOCAL"
     >
       <strong>{{ T.F.SYNC.D_FIRST_SYNC.REPLACE_ACCOUNT | translate }}</strong>
-      <div>{{ T.F.SYNC.D_FIRST_SYNC.REPLACE_ACCOUNT_HINT | translate }}</div>
+      <span class="hint">{{
+        T.F.SYNC.D_FIRST_SYNC.REPLACE_ACCOUNT_HINT | translate
+      }}</span>
     </mat-radio-button>
   </mat-radio-group>
 

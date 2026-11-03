@@ -2,10 +2,12 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
+import { By } from '@angular/platform-browser';
 import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
 import { StateSnapshotService } from '../../backup/state-snapshot.service';
 import { SyncProviderManager } from '../../sync-providers/provider-manager.service';
 import { SyncProviderId } from '../../sync-providers/provider.const';
+import { SyncFirstChoiceComponent } from '../../../imex/sync/sync-first-choice/sync-first-choice.component';
 import {
   DialogSyncImportConflictComponent,
   SyncImportConflictData,
@@ -62,7 +64,9 @@ describe('DialogSyncImportConflictComponent', () => {
   };
 
   // Renders the real template.
-  const render = (data: Partial<SyncImportConflictData>): HTMLElement => {
+  const renderFixture = (
+    data: Partial<SyncImportConflictData>,
+  ): ComponentFixture<DialogSyncImportConflictComponent> => {
     TestBed.configureTestingModule({
       imports: [DialogSyncImportConflictComponent, TranslateModule.forRoot()],
       providers: [
@@ -92,8 +96,10 @@ describe('DialogSyncImportConflictComponent', () => {
     });
     const fixture = TestBed.createComponent(DialogSyncImportConflictComponent);
     fixture.detectChanges();
-    return fixture.nativeElement as HTMLElement;
+    return fixture;
   };
+  const render = (data: Partial<SyncImportConflictData>): HTMLElement =>
+    renderFixture(data).nativeElement as HTMLElement;
 
   beforeEach(() => {
     activeProviderId = SyncProviderId.WebDAV;
@@ -218,6 +224,17 @@ describe('DialogSyncImportConflictComponent', () => {
 
       expect(el.querySelector('sync-first-choice')).not.toBeNull();
       expect(el.textContent).not.toContain('cloud_download');
+    });
+
+    it("passes the account's task count to the choice", () => {
+      activeProviderId = SyncProviderId.SuperSync;
+      const choice = renderFixture({
+        isNeverSynced: true,
+        accountTaskCount: 3000,
+      }).debugElement.query(By.directive(SyncFirstChoiceComponent))
+        .componentInstance as SyncFirstChoiceComponent;
+
+      expect(choice.accountTaskCount()).toBe(3000);
     });
 
     it('keeps the full dialog for a device that synced before', () => {

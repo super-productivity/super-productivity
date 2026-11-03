@@ -1,5 +1,8 @@
 @if (isFirstSuperSync) {
-  <sync-first-choice (chosen)="closeFirstSync($event)" />
+  <sync-first-choice
+    [accountTaskCount]="data.accountTaskCount"
+    (chosen)="closeFirstSync($event)"
+  />
 } @else {
   <h1 mat-dialog-title>
     <mat-icon

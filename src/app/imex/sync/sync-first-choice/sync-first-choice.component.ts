@@ -3,6 +3,7 @@ import {
   Component,
   computed,
   inject,
+  input,
   linkedSignal,
   output,
 } from '@angular/core';
@@ -31,15 +32,26 @@ import { DialogConflictResolutionResult } from '../sync.model';
  */
 export const BIG_LOSS_MIN_TASKS = 10;
 
+/** "Vastly more": this device needs at least this many times the account's tasks. */
+const MUCH_BIGGER_FACTOR = 2;
+
 type FirstSyncChoice = Exclude<DialogConflictResolutionResult, false>;
 
 /**
  * Whether a choice gets the strong warning. Replacing the account always does:
- * SuperSync can't count the account's tasks before downloading them, so its
- * loss can't be measured.
+ * its count comes from its last snapshot, which misses later tasks, so a small
+ * count doesn't prove a small loss. Keeping the account's tasks warns when this
+ * device has many tasks, and, if the account was counted, at least twice as many.
  */
-export const isBigLoss = (choice: FirstSyncChoice, deviceTaskCount: number): boolean =>
-  choice === 'USE_LOCAL' || deviceTaskCount >= BIG_LOSS_MIN_TASKS;
+export const isBigLoss = (
+  choice: FirstSyncChoice,
+  deviceTaskCount: number,
+  accountTaskCount?: number,
+): boolean =>
+  choice === 'USE_LOCAL' ||
+  (deviceTaskCount >= BIG_LOSS_MIN_TASKS &&
+    (accountTaskCount === undefined ||
+      deviceTaskCount >= accountTaskCount * MUCH_BIGGER_FACTOR));
 
 /**
  * The local-data choice when a device that already has tasks joins a SuperSync
@@ -65,6 +77,8 @@ export const isBigLoss = (choice: FirstSyncChoice, deviceTaskCount: number): boo
 export class SyncFirstChoiceComponent {
   private _stateSnapshotService = inject(StateSnapshotService);
 
+  /** Tasks in the account's last snapshot, when known. */
+  readonly accountTaskCount = input<number | undefined>();
   readonly chosen = output<FirstSyncChoice | undefined>();
   readonly T = T;
 
@@ -72,7 +86,7 @@ export class SyncFirstChoiceComponent {
   readonly taskCount = toSignal(from(this._countTasks()), { initialValue: null });
   readonly isUseAccountRecommended = computed(() => {
     const count = this.taskCount();
-    return count !== null && !isBigLoss('USE_REMOTE', count);
+    return count !== null && !isBigLoss('USE_REMOTE', count, this.accountTaskCount());
   });
   // Preselect the safe choice only when nothing big is at stake.
   readonly choice = linkedSignal<FirstSyncChoice | null>(() =>
@@ -81,7 +95,11 @@ export class SyncFirstChoiceComponent {
   readonly isBigLoss = computed(() => {
     const choice = this.choice();
     const count = this.taskCount();
-    return choice !== null && count !== null && isBigLoss(choice, count);
+    return (
+      choice !== null &&
+      count !== null &&
+      isBigLoss(choice, count, this.accountTaskCount())
+    );
   });
   readonly warningKey = computed(() =>
     this.choice() === 'USE_LOCAL'
