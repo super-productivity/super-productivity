@@ -1,4 +1,4 @@
-import { Action, ActionReducer, MetaReducer } from '@ngrx/store';
+import { Action, MetaReducer } from '@ngrx/store';
 import { Update } from '@ngrx/entity';
 import { RootState } from '../../root-state';
 import { TaskSharedActions } from '../task-shared.actions';
@@ -7,7 +7,7 @@ import {
   taskAdapter,
 } from '../../../features/tasks/store/task.reducer';
 import { Task } from '../../../features/tasks/task.model';
-import { ActionHandlerMap } from './task-shared-helpers';
+import { ActionHandlerMap, createActionHandlerMetaReducer } from './task-shared-helpers';
 
 // =============================================================================
 // ACTION HANDLERS
@@ -50,17 +50,5 @@ const createActionHandlers = (state: RootState, action: Action): ActionHandlerMa
   },
 });
 
-export const taskRepeatCfgSharedMetaReducer: MetaReducer = (
-  reducer: ActionReducer<any, Action>,
-) => {
-  return (state: unknown, action: Action) => {
-    if (!state) return reducer(state, action);
-
-    const rootState = state as RootState;
-    const actionHandlers = createActionHandlers(rootState, action);
-    const handler = actionHandlers[action.type];
-    const updatedState = handler ? handler(rootState) : rootState;
-
-    return reducer(updatedState, action);
-  };
-};
+export const taskRepeatCfgSharedMetaReducer: MetaReducer =
+  createActionHandlerMetaReducer(createActionHandlers);

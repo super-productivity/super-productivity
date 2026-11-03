@@ -1,4 +1,4 @@
-import { Action, ActionReducer, MetaReducer } from '@ngrx/store';
+import { Action, MetaReducer } from '@ngrx/store';
 import { Update } from '@ngrx/entity';
 import { RootState } from '../../root-state';
 import {
@@ -40,6 +40,7 @@ import { moveItemAfterAnchor } from '../../../features/work-context/store/work-c
 import { canApplyConvertToSubTask } from '../../../features/tasks/util/can-convert-task-to-sub-task';
 import {
   ActionHandlerMap,
+  createActionHandlerMetaReducer,
   addTaskToListAtAnchor,
   addTaskToPlannerDay,
   collectTaskAndSubTaskIds,
@@ -1130,17 +1131,5 @@ const createActionHandlers = (state: RootState, action: Action): ActionHandlerMa
   },
 });
 
-export const taskSharedCrudMetaReducer: MetaReducer = (
-  reducer: ActionReducer<any, Action>,
-) => {
-  return (state: unknown, action: Action) => {
-    if (!state) return reducer(state, action);
-
-    const rootState = state as RootState;
-    const actionHandlers = createActionHandlers(rootState, action);
-    const handler = actionHandlers[action.type];
-    const updatedState = handler ? handler(rootState) : rootState;
-
-    return reducer(updatedState, action);
-  };
-};
+export const taskSharedCrudMetaReducer: MetaReducer =
+  createActionHandlerMetaReducer(createActionHandlers);
