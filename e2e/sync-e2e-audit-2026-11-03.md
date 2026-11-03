@@ -282,3 +282,97 @@ GLOBAL_CONFIG `misc` resolves by whole-section LWW: the LWW Update replaces the 
   - Check A1's absence through store titles.
 - late-join:62-101 and 170-173 [MED FIX]
   - Assert BLocal1/2 are absent on B and A (after an anchor), and that A1/A2 are absent on both.
+
+## Verify 3 (concurrency). 20 confirmed (incl. 1 new), 2 refuted, 1 plausible.
+
+Facts
+
+- setupSuperSync blocks WS, immediate upload and auto-sync, so edits made before syncAndWait really are concurrent. A full page reload clears those blocks; a hash goto does not.
+- A sync downloads before it uploads, so the server-side CONFLICT_CONCURRENT/existingClock path needs another client to upload between this client's download and its upload. Use a held POST via routeSuperSyncOps, as supersync-time-delta-rejected-upload-new-delta.spec.ts:33-64 does.
+- Ctrl+Shift+ArrowUp is moveTaskUp. A centre `task.click()` enters title edit mode, where the shortcut never fires. Use `task.focus()` + `toBeFocused()` (see webdav-sync-today-tag.spec.ts:120-149).
+- New tasks are added at the top, so moving the newest task up is a no-op.
+- The live store is `window.__e2eTestHelpers.store`. `__NGRX_STORE__` does not exist.
+
+lww-conflict
+
+- :429-528 "same sync cycle" [HIGH REBUILD]
+  - Fix: create the conflict during the upload phase. A's POST is held by a route handler; inside it, B renames and syncs. Assert one cycle with no trailing flush, and that B's store title equals A's.
+  - Mutation: MAX_LWW_REUPLOAD_RETRIES=0.
+- :557-640 [HIGH DELETE or RENAME to "remote update renders without reload"]
+  - :332-410 already covers this, together with lww-update.meta-reducer.spec.ts.
+- :1504-1593 subtask conflicts [HIGH REBUILD]
+  - Fix: A marks Sub1 done while B renames the parent, with no sync in between. Then sync A, B, A. Both stores end with Sub1 done, the parent renamed and subTaskIds intact.
+- :264-304 [MED FIX]
+  - Fix: three distinct renames about 1 s apart. C's title wins on all clients, and A's and B's titles return null (after a positive control).
+- :1772-1790 [MED PLAUSIBLE FIX]
+  - Fix: assert `getTaskTitleFromState(subtask)===null` on both clients, after a positive control.
+- :1011-1020 and :1230-1258: REFUTED. A is the losing side and is checked. LOW: anchor the absence checks.
+
+simple-counter
+
+- :198-290 [MED REBUILD]
+  - Fix: A increments twice and B once, with no sync in between, then sync A, B, A and let C join. Increments are absolute set values, so all clients must hold the later writer's value, not 0.
+
+simple-counter-delete-update-7330
+
+- :174-193 [MED FIX + likely ISSUE]
+  - Fix: compare the counter entity's title, type, isEnabled and countOnDay on both clients.
+  - The comment admits A's counter comes back `isEnabled:false` (lww-update.meta-reducer.ts:941-968). That is permanent divergence, so expect red: test.fixme plus an issue candidate.
+
+encryption-conflict
+
+- All tests [HIGH REBUILD]
+  - Fix: hold B's first POST, let A upload a conflicting edit, then release. Assert the B:CONFLICT_CONCURRENT rejection is recorded, the POST count is bounded, and both stores end with the final value.
+  - Mutation: drop existingClock in rejected-ops-handler.service.ts.
+- :235-280 [HIGH FIX]
+  - Fix: on both clients, task1 and task2 are isDone, task3 is not, and the exact title set matches.
+- :105-124, 459-476 [MED FIX]
+  - Fix: use distinct edits and assert the exact winner on every client.
+- :341-348, 384-393 [MED FIX]
+  - Fix: before syncing, the store titles are A=titleA and B=titleB. After syncing, titleA is null on both.
+
+concurrent-import
+
+- Whole file [HIGH REBUILD]
+  - Fix: A and B both import distinct fixtures with no sync in between. Choose the import-dialog answer explicitly. Each client then holds exactly one backup's marker task, and the server holds one winning full-state op.
+  - Delete test 2, which duplicates import-same-client-ops test 1.
+  - Mutation: SyncImportFilterService keeps concurrent full-state ops.
+
+concurrent-delete-reorder
+
+- :84-87, 187-192 [HIGH FIX + likely ISSUE]
+  - Fix: focus T1 (at the bottom) and move it up. Assert B's local order [T4,T3,T1,T2] before syncing, then exactly equal orders after.
+  - Likely issue: the relative move replay (tag.reducer.ts:262-287) against A's neighbour delete makes the orders diverge permanently. Expect red.
+
+task-ordering
+
+- :258-302 [HIGH REBUILD]
+  - Fix: use the focus/press/toHaveText pattern. A moves T1 up twice, B moves T3 down twice. Assert both local orders before syncing, then the converged exact order. This is a real same-entity TAG:TODAY conflict.
+  - Mutation: make moveTaskUp a no-op.
+- :32 [MED RENAME to "initial order replicates", or delete]
+
+snapshot-vector-clock
+
+- :270-291 [HIGH REBUILD]
+  - Fix: A creates T, B renames it and syncs. Then do a non-wiping full-state upload (BACKUP_IMPORT), checking first that the server keeps earlier ops. A fresh C renames T. Assert C's upload is accepted with bounded POSTs and that A and B show C's title.
+  - Mutation: pass undefined for snapshotVectorClock (rejected-ops-handler.service.ts:493-552).
+- :465-566 [MED fold into the rebuild above, or delete]
+
+vector-clock-max-size
+
+- :152-154, 208-216 [MED RENAME]
+  - The docblock is false; task-ordering's rebuild covers the real TAG:TODAY crossing.
+
+edge-cases
+
+- :438-548 [HIGH DELETE/RENAME "new task syncs after a resolved conflict"]
+  - Unit-covered by vector-clock.service.spec.ts:558.
+- :331-430 undo-delete [NEW MED FIX]
+  - Fix: check A's op log for a synced delete plus a synced restore, or have B sync between the delete and the undo.
+
+stress
+
+- :171-180, 311-315 [HIGH RENAME]
+  - DOWNLOAD_PAGE_SIZE and PIGGYBACK_LIMIT are both 500, so the limit is never hit. Drop the claim and the dead `__NGRX_STORE__` block.
+- :46-58 [MED RENAME "bulk download"]
+  - The cascade fix is unit-tested in hydration-state.service.spec.ts:134-261.
