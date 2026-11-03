@@ -1293,12 +1293,12 @@
         "UNKNOWN_ERROR": "Unknown Sync Error: {{err}}"
       },
       "D_DECRYPT_ERROR": {
-        "CHANGE_PW_AND_DECRYPT": "Retry Decrypt",
-        "P1": "Your remote data is encrypted and decryption failed.",
-        "P2_FORGOT_PW": "If you <strong>forgot your password</strong>, enter the correct password and click \"Retry Decrypt\".",
+        "CHANGE_PW_AND_DECRYPT": "Unlock",
+        "P1": "This password doesn't unlock your synced tasks. Check it for typos, or try the password you use on your other devices.",
+        "P2_FORGOT_PW": "<strong>Forgot it?</strong> On a device that still syncs, open the sync settings and choose Change Password. Then enter the new password here.",
         "P3_START_OVER": "If you cannot recover the password, leave the sync server as it is \u2014 your data there stays intact. To erase it and start over from this device, close this window and use <strong>Force Overwrite</strong> in Settings \u2192 Sync & Backup \u2192 Sync.",
-        "PASSWORD": "Password",
-        "TITLE": "Decryption Failed"
+        "PASSWORD": "Encryption password",
+        "TITLE": "Can't unlock your tasks"
       },
       "D_DEVICES": {
         "BTN_SIGN_OUT_OTHERS": "Sign out other devices",
@@ -1320,14 +1320,30 @@
         "TITLE": "Connected Devices"
       },
       "D_ENTER_PASSWORD": {
-        "BTN_FORCE_OVERWRITE": "Use Local Data",
-        "BTN_SAVE_AND_SYNC": "Save & Sync",
-        "FORCE_OVERWRITE_CONFIRM": "This will <strong>delete all data on the server</strong> and upload your local data encrypted with this password. Continue?",
-        "FORCE_OVERWRITE_INFO": "If you prefer to keep your local data, you can overwrite the server instead.",
-        "FORCE_OVERWRITE_TITLE": "Overwrite Server Data?",
-        "MESSAGE": "The sync server contains encrypted data, but no encryption password is configured on this device. Please enter your encryption password to decrypt and sync your data.",
-        "PASSWORD_LABEL": "Encryption Password",
-        "TITLE": "Encryption Password Required"
+        "BTN_FORCE_OVERWRITE": "Start over from this device",
+        "BTN_SAVE_AND_SYNC": "Unlock",
+        "FORCE_OVERWRITE_CONFIRM": "This <strong>deletes all synced data on the server</strong> and uploads this device's tasks, encrypted with the password you typed. Your other devices then need this new password. Continue?",
+        "FORCE_OVERWRITE_INFO": "Lost the password for good? Type a new one and start over from this device. This deletes your synced tasks.",
+        "FORCE_OVERWRITE_TITLE": "Start over from this device?",
+        "FORGOT_HINT": "Forgot it? On a device that still syncs, open the sync settings and choose Change Password. Then enter the new password here.",
+        "MESSAGE": "Your synced tasks are encrypted. Enter the encryption password you chose on your first device.",
+        "PASSWORD_LABEL": "Encryption password",
+        "TITLE": "Unlock your tasks"
+      },
+      "D_FIRST_SYNC": {
+        "ACCOUNT_TASKS": "Your account already has data from another device.",
+        "CONTINUE": "Continue",
+        "DEVICE_TASKS": "Tasks on this device: {{count}}",
+        "RECOMMENDED": "Recommended.",
+        "REMOVE_ACCOUNT_TASKS": "Remove the account's tasks",
+        "REMOVE_DEVICE_TASKS": "Remove {{count}} tasks",
+        "REPLACE_ACCOUNT": "Replace my account with this device's tasks",
+        "REPLACE_ACCOUNT_HINT": "Your account and your other devices lose their tasks and get this device's tasks.",
+        "TITLE": "This device already has data",
+        "USE_ACCOUNT": "Use my account's tasks",
+        "USE_ACCOUNT_HINT": "This device's tasks are saved as a backup first, in Settings \u2192 Sync & Backup.",
+        "WARN_REMOVE_DEVICE_TASKS": "<strong>This removes {{count}} tasks from this device</strong> and keeps your account's tasks. That's a lot: did you mean to keep this device's tasks? They are saved as a backup first.",
+        "WARN_REPLACE_ACCOUNT": "<strong>This removes all tasks from your account and from every other device</strong> and keeps only this device's tasks. Each other device saves its own tasks as a backup before it replaces them."
       },
       "D_FRESH_CLIENT_CONFIRM": {
         "MESSAGE": "This appears to be a fresh installation. Remote data with {{count}} changes was found. Do you want to download and overwrite your local data with it?",
@@ -1374,6 +1390,39 @@
         "SKIP": "Cancel",
         "TITLE": "Server Already Contains Data"
       },
+      "D_SIGN_IN": {
+        "BACK": "Back",
+        "BROWSER_HINT": "Browser didn't open? Use Open again.",
+        "CHANGE_SERVER": "Change server",
+        "CODE_HINT": "The browser will show this code:",
+        "INTRO": "Use your tasks on all your devices.",
+        "INTRO_HINT": "Free and end-to-end encrypted: only your devices can read them.",
+        "INVALID_SERVER": "Enter a server address that starts with https://",
+        "L_ACCESS_TOKEN": "Access token",
+        "L_SERVER": "Server address",
+        "MANUAL_TEXT": "{{host}} doesn't support signing in from the app yet. It probably runs an older version. Get an access token on the server page and paste it here.",
+        "MANUAL_TITLE": "Set up sync manually",
+        "NOT_NOW": "Not now",
+        "OPEN_AGAIN": "Open again",
+        "OPEN_SERVER_PAGE": "Open server page",
+        "OTHER_OPTIONS": "Use WebDAV, Dropbox or a folder",
+        "SERVER": "Server: {{host}}",
+        "SIGN_IN": "Sign in with SuperSync",
+        "START_FAILED": "Couldn't reach {{host}}. Check your connection and try again.",
+        "TIMED_OUT_TEXT": "Sign-in has to be finished within 10 minutes, or it was cancelled in the browser.",
+        "TIMED_OUT_TITLE": "Sign-in timed out",
+        "TITLE": "Sync your tasks",
+        "TRY_AGAIN": "Try again",
+        "WAITING_TEXT": "We opened {{host}} in your browser. Sign in there. This window continues by itself.",
+        "WAITING_TITLE": "Finish signing in in your browser"
+      },
+      "D_SYNC_FINISHED": {
+        "ADD_DEVICE": "To add another device, open Super Productivity there, choose Sync, then Sign in, and enter your encryption password.",
+        "BACK": "Back to my tasks",
+        "TASK_COUNT": "Tasks on this device: {{count}}",
+        "TEXT": "This device is in sync. New changes sync automatically.",
+        "TITLE": "Sync is on"
+      },
       "D_SYNC_IMPORT_CONFLICT": {
         "FILTERED_CHANGES": "Affected changes",
         "FIRST_SYNC_USE_LOCAL_CONFIRM": "This device has never synced before. \"Use My Data\" will permanently replace the data on the server with this device's local data. This cannot be undone. Continue?",
@@ -1396,7 +1445,7 @@
         "USE_REMOTE_CONFIRM": "This replaces this device's data with the server's and discards {{count}} local change(s). Continue?"
       },
       "D_UNDECRYPTABLE_REMOTE": {
-        "MESSAGE": "Your sync server holds at least {{count}} change(s) that this device has not applied because it could not decrypt them. They may be your work from another device, saved under a different or older encryption password.\n\nOverwriting the server deletes them permanently, and this device cannot bring them back.\n\nBefore you overwrite, sync again and try your older encryption passwords with Retry Decrypt in the Decryption Failed dialog. Only continue if you are sure you no longer need these changes.",
+        "MESSAGE": "Your sync server holds at least {{count}} change(s) that this device has not applied because it could not decrypt them. They may be your work from another device, saved under a different or older encryption password.\n\nOverwriting the server deletes them permanently, and this device cannot bring them back.\n\nBefore you overwrite, sync again and try your older encryption passwords when this device asks you to unlock your tasks. Only continue if you are sure you no longer need these changes.",
         "TITLE": "Some synced data could not be decrypted"
       },
       "FORM": {
@@ -1564,7 +1613,7 @@
           "ENABLE_ENCRYPTION_WARNING": "WARNING: This will permanently delete ALL unencrypted sync data on the server! This is necessary because encrypted operations cannot be mixed with unencrypted ones. If you forget your encryption password, your data cannot be recovered.",
           "ENABLE_ENCRYPTION_WHAT_HAPPENS": "What will happen:",
           "ENCRYPTION_ENCOURAGED": "Encryption is required for SuperSync. Please enable encryption to protect your data.",
-          "ENCRYPTION_SETUP_INTRO": "<strong>SuperSync password-encrypts your data before it leaves your device</strong>, so the contents of your tasks and notes can't be read on the server. Technical details like IDs and timestamps are not encrypted.",
+          "ENCRYPTION_SETUP_INTRO": "<strong>Your tasks are encrypted on this device before they are uploaded</strong>, so the server can't read them. Only technical details like IDs and timestamps stay unencrypted.",
           "ENCRYPTION_WARNING": "WARNING: If you forget your encryption password, your data cannot be recovered. This password is separate from your login password. You must use the same password on all devices.",
           "FORCE_OVERWRITE_CONFIRM": "This will <strong>delete all data on the server</strong> and upload your local data with the new password. Unsynced local changes may be lost. Are you sure you want to continue?",
           "FORCE_OVERWRITE_INFO": "If you can't sync because you don't know the current encryption password, you can overwrite the server with your local data and a new password.",
@@ -1587,8 +1636,8 @@
           "SERVER_URL_DESCRIPTION": "Leave as-is for the official server, or enter a custom server URL",
           "SETUP_DISABLE_SUPERSYNC_BTN": "Disable SuperSync",
           "SETUP_ENCRYPTION_BTN": "Set Password",
-          "SETUP_ENCRYPTION_PASSWORD_WARNING": "Use the same password on all devices. If you forget it, you can set a new one, but the encrypted data on the server is then replaced with this device's data.",
-          "SETUP_ENCRYPTION_TITLE": "SuperSync: Set Password"
+          "SETUP_ENCRYPTION_PASSWORD_WARNING": "You enter this password once on each new device. Save it in your password manager: if you lose it and all your devices, your synced tasks can't be recovered.",
+          "SETUP_ENCRYPTION_TITLE": "Choose an encryption password"
         },
         "NEXTCLOUD": {
           "FILE_USER_NAME_DESCRIPTION": "Your Nextcloud user ID — not your email or display name. To find it, open Files in Nextcloud, click the settings gear (bottom-left corner), and copy the <user-id> from the WebDAV URL shown there (.../remote.php/dav/files/<user-id>/).",

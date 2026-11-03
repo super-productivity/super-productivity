@@ -15,6 +15,9 @@ import { ShortTimePipe } from '../../../ui/pipes/short-time.pipe';
 import type { SyncImportReason } from '../../core/operation.types';
 import { confirmDialog } from '../../../util/native-dialogs';
 import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
+import { SyncFirstChoiceComponent } from '../../../imex/sync/sync-first-choice/sync-first-choice.component';
+import { SyncProviderManager } from '../../sync-providers/provider-manager.service';
+import { SyncProviderId } from '../../sync-providers/provider.const';
 
 export interface SyncImportConflictData {
   filteredOpCount: number;
@@ -28,6 +31,11 @@ export interface SyncImportConflictData {
    * explicit extra confirmation. See the fresh-client first-sync data-loss-trap plan.
    */
   isNeverSynced?: boolean;
+  /**
+   * Tasks in the incoming snapshot, archives included; unset when none are
+   * countable. Ops after the snapshot are not counted.
+   */
+  accountTaskCount?: number;
 }
 
 export type SyncImportConflictResolution = 'USE_LOCAL' | 'USE_REMOTE' | 'CANCEL';
@@ -46,6 +54,7 @@ export type SyncImportConflictResolution = 'USE_LOCAL' | 'USE_REMOTE' | 'CANCEL'
     TranslatePipe,
     LocaleDatePipe,
     ShortTimePipe,
+    SyncFirstChoiceComponent,
   ],
 })
 export class DialogSyncImportConflictComponent {
@@ -54,6 +63,11 @@ export class DialogSyncImportConflictComponent {
   private _translateService = inject(TranslateService);
   private _dateTimeFormatService = inject(DateTimeFormatService);
   data = inject<SyncImportConflictData>(MAT_DIALOG_DATA);
+  // A device that never synced, joining a SuperSync account that has tasks (2b).
+  readonly isFirstSuperSync =
+    this.data.scenario === 'INCOMING_IMPORT' &&
+    !!this.data.isNeverSynced &&
+    inject(SyncProviderManager).getActiveProvider()?.id === SyncProviderId.SuperSync;
 
   // Exposed so the template can pass the reactive locale to the now-pure
   // `localeDate` pipe, preserving re-render on a locale change.
@@ -97,6 +111,11 @@ export class DialogSyncImportConflictComponent {
 
   constructor() {
     this._matDialogRef.disableClose = true;
+  }
+
+  /** The first-sync choice already showed its warning, so no confirm follows. */
+  closeFirstSync(choice: 'USE_LOCAL' | 'USE_REMOTE' | undefined): void {
+    this._matDialogRef.close(choice ?? 'CANCEL');
   }
 
   close(result?: SyncImportConflictResolution): void {

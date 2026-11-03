@@ -1,6 +1,10 @@
 import type { Dialog } from '@playwright/test';
 import { test, expect } from '../../fixtures/supersync.fixture';
-import { normalizeDialogMessage, translationRegex } from '../../utils/i18n-strings';
+import {
+  normalizeDialogMessage,
+  translationRegex,
+  translationText,
+} from '../../utils/i18n-strings';
 import {
   createTestUser,
   getSuperSyncConfig,
@@ -174,8 +178,9 @@ test.describe('@supersync @encryption Wrong Password Error Handling', () => {
       console.log('[WrongPassword] Filled in correct password');
 
       const resyncBtn = decryptErrorDialog
-        .locator('button')
-        .filter({ hasText: /retry.*decrypt/i })
+        .locator('button', {
+          hasText: translationText('F.SYNC.D_DECRYPT_ERROR.CHANGE_PW_AND_DECRYPT'),
+        })
         .first();
       await expect(resyncBtn).toBeEnabled();
       await resyncBtn.click();

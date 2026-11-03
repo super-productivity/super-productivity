@@ -1,0 +1,32 @@
+<h1 mat-dialog-title>{{ T.F.SYNC.D_SYNC_FINISHED.TITLE | translate }}</h1>
+
+<mat-dialog-content>
+  <div class="centered">
+    <mat-icon
+      class="hero-icon"
+      aria-hidden="true"
+      >cloud_done</mat-icon
+    >
+    <p>{{ T.F.SYNC.D_SYNC_FINISHED.TEXT | translate }}</p>
+    <p class="e2e-sync-finished-count">
+      {{ T.F.SYNC.D_SYNC_FINISHED.TASK_COUNT | translate: { count: data.taskCount } }}
+    </p>
+  </div>
+
+  <div class="callout callout--info">
+    <mat-icon aria-hidden="true">devices</mat-icon>
+    <p>{{ T.F.SYNC.D_SYNC_FINISHED.ADD_DEVICE | translate }}</p>
+  </div>
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button
+    class="e2e-sync-finished-close"
+    mat-flat-button
+    color="primary"
+    type="button"
+    mat-dialog-close
+  >
+    {{ T.F.SYNC.D_SYNC_FINISHED.BACK | translate }}
+  </button>
+</mat-dialog-actions>

@@ -2,7 +2,12 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
+import { By } from '@angular/platform-browser';
 import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
+import { StateSnapshotService } from '../../backup/state-snapshot.service';
+import { SyncProviderManager } from '../../sync-providers/provider-manager.service';
+import { SyncProviderId } from '../../sync-providers/provider.const';
+import { SyncFirstChoiceComponent } from '../../../imex/sync/sync-first-choice/sync-first-choice.component';
 import {
   DialogSyncImportConflictComponent,
   SyncImportConflictData,
@@ -12,6 +17,11 @@ describe('DialogSyncImportConflictComponent', () => {
   let closeSpy: jasmine.Spy;
   // window.confirm is installed as a global spy in src/test.ts — reuse it.
   let confirmSpy: jasmine.Spy;
+  let activeProviderId: SyncProviderId;
+  const providerManagerMock = {
+    provide: SyncProviderManager,
+    useValue: { getActiveProvider: () => ({ id: activeProviderId }) },
+  };
 
   const setup = (
     data: Partial<SyncImportConflictData>,
@@ -43,6 +53,7 @@ describe('DialogSyncImportConflictComponent', () => {
           provide: DateTimeFormatService,
           useValue: { currentLocale: () => 'en-US', formatTime: () => '00:00' },
         },
+        providerManagerMock,
       ],
     });
     // Avoid rendering the template (translate pipes etc.) — we only test close() logic.
@@ -52,7 +63,46 @@ describe('DialogSyncImportConflictComponent', () => {
     return TestBed.createComponent(DialogSyncImportConflictComponent);
   };
 
+  // Renders the real template.
+  const renderFixture = (
+    data: Partial<SyncImportConflictData>,
+  ): ComponentFixture<DialogSyncImportConflictComponent> => {
+    TestBed.configureTestingModule({
+      imports: [DialogSyncImportConflictComponent, TranslateModule.forRoot()],
+      providers: [
+        provideNoopAnimations(),
+        { provide: MatDialogRef, useValue: { close: () => {}, disableClose: false } },
+        {
+          provide: MAT_DIALOG_DATA,
+          useValue: {
+            filteredOpCount: 1,
+            localImportTimestamp: 0,
+            scenario: 'INCOMING_IMPORT',
+            ...data,
+          } as SyncImportConflictData,
+        },
+        {
+          provide: DateTimeFormatService,
+          useValue: { currentLocale: () => 'en-US', formatTime: () => '00:00' },
+        },
+        {
+          provide: StateSnapshotService,
+          useValue: {
+            getStateSnapshotAsync: () => Promise.resolve({ task: { ids: ['a'] } }),
+          },
+        },
+        providerManagerMock,
+      ],
+    });
+    const fixture = TestBed.createComponent(DialogSyncImportConflictComponent);
+    fixture.detectChanges();
+    return fixture;
+  };
+  const render = (data: Partial<SyncImportConflictData>): HTMLElement =>
+    renderFixture(data).nativeElement as HTMLElement;
+
   beforeEach(() => {
+    activeProviderId = SyncProviderId.WebDAV;
     confirmSpy = window.confirm as jasmine.Spy;
     confirmSpy.calls.reset();
     confirmSpy.and.returnValue(true);
@@ -146,30 +196,7 @@ describe('DialogSyncImportConflictComponent', () => {
     // make the keyboard default discard the user's just-made local import.
     const renderWithScenario = (
       scenario: SyncImportConflictData['scenario'],
-    ): HTMLElement => {
-      TestBed.configureTestingModule({
-        imports: [DialogSyncImportConflictComponent, TranslateModule.forRoot()],
-        providers: [
-          provideNoopAnimations(),
-          { provide: MatDialogRef, useValue: { close: () => {}, disableClose: false } },
-          {
-            provide: MAT_DIALOG_DATA,
-            useValue: {
-              filteredOpCount: 1,
-              localImportTimestamp: 0,
-              scenario,
-            } as SyncImportConflictData,
-          },
-          {
-            provide: DateTimeFormatService,
-            useValue: { currentLocale: () => 'en-US', formatTime: () => '00:00' },
-          },
-        ],
-      });
-      const fixture = TestBed.createComponent(DialogSyncImportConflictComponent);
-      fixture.detectChanges();
-      return fixture.nativeElement as HTMLElement;
-    };
+    ): HTMLElement => render({ scenario });
 
     it('focuses USE_REMOTE for an INCOMING_IMPORT (USE_LOCAL would overwrite the server)', () => {
       const el = renderWithScenario('INCOMING_IMPORT');
@@ -187,6 +214,58 @@ describe('DialogSyncImportConflictComponent', () => {
       expect(focused.length).toBe(1);
       // USE_LOCAL carries the cloud_upload icon.
       expect(focused[0].textContent).toContain('cloud_upload');
+    });
+  });
+
+  describe('first sync on SuperSync (2b)', () => {
+    it('shows the first-sync choice for a never-synced SuperSync device', () => {
+      activeProviderId = SyncProviderId.SuperSync;
+      const el = render({ isNeverSynced: true });
+
+      expect(el.querySelector('sync-first-choice')).not.toBeNull();
+      expect(el.textContent).not.toContain('cloud_download');
+    });
+
+    it("passes the account's task count to the choice", () => {
+      activeProviderId = SyncProviderId.SuperSync;
+      const choice = renderFixture({
+        isNeverSynced: true,
+        accountTaskCount: 3000,
+      }).debugElement.query(By.directive(SyncFirstChoiceComponent))
+        .componentInstance as SyncFirstChoiceComponent;
+
+      expect(choice.accountTaskCount()).toBe(3000);
+    });
+
+    it('keeps the full dialog for a device that synced before', () => {
+      activeProviderId = SyncProviderId.SuperSync;
+      const el = render({ isNeverSynced: false });
+
+      expect(el.querySelector('sync-first-choice')).toBeNull();
+      expect(el.textContent).toContain('cloud_download');
+    });
+
+    it('keeps the full dialog for a local import and for other providers', () => {
+      activeProviderId = SyncProviderId.SuperSync;
+      expect(
+        setup({ isNeverSynced: true, scenario: 'LOCAL_IMPORT_FILTERS_REMOTE' })
+          .componentInstance.isFirstSuperSync,
+      ).toBeFalse();
+      TestBed.resetTestingModule();
+      activeProviderId = SyncProviderId.WebDAV;
+      expect(
+        setup({ isNeverSynced: true }).componentInstance.isFirstSuperSync,
+      ).toBeFalse();
+    });
+
+    it('closes with the choice and skips the confirms, which it already warned for', () => {
+      const cmp = setup({ isNeverSynced: true }).componentInstance;
+
+      cmp.closeFirstSync('USE_LOCAL');
+      cmp.closeFirstSync(undefined);
+
+      expect(confirmSpy).not.toHaveBeenCalled();
+      expect(closeSpy.calls.allArgs()).toEqual([['USE_LOCAL'], ['CANCEL']]);
     });
   });
 });

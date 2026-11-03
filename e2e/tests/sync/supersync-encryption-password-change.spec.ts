@@ -1,4 +1,5 @@
 import { test, expect } from '../../fixtures/supersync.fixture';
+import { translationText } from '../../utils/i18n-strings';
 import {
   createTestUser,
   getSuperSyncConfig,
@@ -105,7 +106,12 @@ const recoverWithNewPasswordAndServerData = async (
     await passwordInput.waitFor({ state: 'visible', timeout: 5000 });
     await passwordInput.fill(newPassword);
 
-    await decryptErrorDialog.locator('button:has-text("Retry Decrypt")').first().click();
+    await decryptErrorDialog
+      .locator('button', {
+        hasText: translationText('F.SYNC.D_DECRYPT_ERROR.CHANGE_PW_AND_DECRYPT'),
+      })
+      .first()
+      .click();
     await decryptErrorDialog.waitFor({ state: 'hidden', timeout: 10000 });
   }
 
@@ -629,8 +635,9 @@ test.describe('@supersync SuperSync Encryption Password Change', () => {
       await passwordInput.waitFor({ state: 'visible', timeout: 5000 });
       await passwordInput.fill(newPassword);
 
-      // Click "Update Password & Resync" button
-      const updateButton = decryptErrorDialog.locator('button:has-text("Retry Decrypt")');
+      const updateButton = decryptErrorDialog.locator('button', {
+        hasText: translationText('F.SYNC.D_DECRYPT_ERROR.CHANGE_PW_AND_DECRYPT'),
+      });
       await updateButton.first().click();
 
       // Wait for dialog to close
