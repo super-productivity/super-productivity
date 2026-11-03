@@ -286,6 +286,8 @@ export type ScheduleConfig = Readonly<{
   isLunchBreakEnabled: boolean;
   lunchBreakStart: string;
   lunchBreakEnd: string;
+  // Title for every auto time block in connected calendars; empty uses task titles.
+  timeBlockTitle?: string;
 }>;
 
 export type ReminderConfig = Readonly<{

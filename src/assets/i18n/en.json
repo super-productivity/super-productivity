@@ -2985,10 +2985,12 @@
       "L_IS_WORK_START_END_ENABLED": "Limit unscheduled task flow to specific work times",
       "L_LUNCH_BREAK_END": "Lunch break end",
       "L_LUNCH_BREAK_START": "Lunch break start",
+      "L_TIME_BLOCK_TITLE": "Calendar time block title",
       "L_WORK_END": "Work Day End",
       "L_WORK_START": "Work Day Start",
       "LUNCH_BREAK_START_END_DESCRIPTION": "e.g. 13:00",
       "MONTH": "Month",
+      "TIME_BLOCK_TITLE_DESCRIPTION": "Title for every auto time block in your connected calendars, e.g. \"Focus time\". Leave empty to use the task titles.",
       "TITLE": "Schedule",
       "WORK_END_DESCRIPTION": "e.g. 17:00",
       "WORK_START_DESCRIPTION": "e.g. 9:00"

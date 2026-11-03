@@ -1573,6 +1573,18 @@ END:VCALENDAR`);
       expect(mockHttp.post).not.toHaveBeenCalled();
     });
 
+    it('prefixes the title of a done task with [DONE]', async () => {
+      await definition.timeBlock!.upsertEvent(
+        'task-1',
+        { ...eventData, title: 'Focus time', isDone: true },
+        cfg as any,
+        mockHttp as any,
+      );
+
+      const [, icalData] = mockHttp.put.mock.calls[0];
+      expect(icalData).toContain('SUMMARY:[DONE] Focus time');
+    });
+
     it('retries on a 429 (rate limited) and then succeeds', async () => {
       vi.useFakeTimers();
       mockHttp.put.mockRejectedValueOnce({ status: 429 }).mockResolvedValueOnce('');

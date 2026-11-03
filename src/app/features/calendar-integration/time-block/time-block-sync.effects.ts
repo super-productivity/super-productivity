@@ -14,7 +14,10 @@ import {
   groupBy,
   map,
   mergeMap,
+  pairwise,
+  switchMap,
   tap,
+  withLatestFrom,
 } from 'rxjs/operators';
 import { LOCAL_ACTIONS } from '../../../util/local-actions.token';
 import { TaskService } from '../../tasks/task.service';
@@ -36,6 +39,9 @@ import { selectAllTasksWithDueTimeSorted } from '../../tasks/store/task.selector
 import { T } from '../../../t.const';
 import { Log } from '../../../core/log';
 import { shouldScopePluginOAuth } from '../../../plugins/oauth/plugin-oauth-token-key.util';
+import { updateGlobalConfigSection } from '../../config/store/global-config.actions';
+import { selectTimelineConfig } from '../../config/store/global-config.reducer';
+import { ScheduleConfig } from '../../config/global-config.model';
 
 type TimeBlockOperation = 'upsert' | 'upsertIfScheduled' | 'delete';
 
@@ -70,6 +76,16 @@ export const COALESCE_MS = 1000;
  * strictly sequential.
  */
 const MAX_PARALLEL_TIME_BLOCK_HTTP = 3;
+
+/**
+ * The settings form saves the time block title on every keystroke. Wait this
+ * long after the last change before re-writing all existing blocks.
+ */
+export const TIME_BLOCK_TITLE_RESYNC_MS = 3 * COALESCE_MS;
+
+/** The custom time block title, or undefined to use the task title. */
+const getCustomTimeBlockTitle = (scheduleCfg: ScheduleConfig): string | undefined =>
+  scheduleCfg.timeBlockTitle?.trim() || undefined;
 
 @Injectable()
 export class TimeBlockSyncEffects {
@@ -213,45 +229,10 @@ export class TimeBlockSyncEffects {
         concatMap((action) =>
           this._withTimeBlockContext$((ctx) => {
             if (this._backfilledProviderIds.has(ctx.providerId)) return EMPTY;
-
-            const syncRangeWeeks =
-              parseInt(
-                (ctx.config as Record<string, unknown>)['syncRangeWeeks'] as string,
-                10,
-              ) || 2;
-            const now = Date.now();
-            const rangeMs = syncRangeWeeks * 7 * 24 * 60 * 60 * 1000;
-            const rangeEnd = now + rangeMs;
-
-            return this._store.select(selectAllTasksWithDueTimeSorted).pipe(
-              first(),
-              concatMap((tasks) => {
-                const tasksInRange = tasks.filter(
-                  (t) => t.dueWithTime >= now && t.dueWithTime <= rangeEnd,
-                );
-                if (!tasksInRange.length) {
-                  this._backfilledProviderIds.add(ctx.providerId);
-                  return EMPTY;
-                }
-                Log.log(
-                  `[TimeBlock] Backfilling ${tasksInRange.length} existing scheduled tasks`,
-                );
-                return from(tasksInRange).pipe(
-                  mergeMap(
-                    (task) =>
-                      from(
-                        this._queueTimeBlockOperation(task.id, {
-                          type: 'upsertIfScheduled',
-                          ctx,
-                        }),
-                      ),
-                    MAX_PARALLEL_TIME_BLOCK_HTTP,
-                  ),
-                  // Mark as backfilled only after all upserts complete successfully
-                  tap({
-                    complete: () => this._backfilledProviderIds.add(ctx.providerId),
-                  }),
-                );
+            return this._upsertTasksInSyncRange$(ctx).pipe(
+              // Mark as backfilled only after all upserts complete successfully
+              tap({
+                complete: () => this._backfilledProviderIds.add(ctx.providerId),
               }),
             );
           }, action.issueProvider.id as string),
@@ -260,7 +241,75 @@ export class TimeBlockSyncEffects {
     { dispatch: false },
   );
 
+  /**
+   * When the time block title setting changes, re-write the existing blocks so
+   * they show the new title, or the task titles again once it is cleared.
+   *
+   * The store emits the new state right before effects see the action that
+   * produced it, so the latest state pair is the title before and after this
+   * action. Saving another schedule field leaves the title as it was and does
+   * not trigger a re-write.
+   */
+  resyncOnTimeBlockTitleChange$: Observable<unknown> = createEffect(
+    () =>
+      this._actions$.pipe(
+        ofType(updateGlobalConfigSection),
+        filter(
+          ({ sectionKey, sectionCfg }) =>
+            sectionKey === 'schedule' && 'timeBlockTitle' in sectionCfg,
+        ),
+        withLatestFrom(
+          this._store.pipe(
+            map((state) => getCustomTimeBlockTitle(selectTimelineConfig(state))),
+            pairwise(),
+          ),
+        ),
+        filter(([, [prevTitle, nextTitle]]) => prevTitle !== nextTitle),
+        debounceTime(TIME_BLOCK_TITLE_RESYNC_MS),
+        switchMap(() =>
+          this._withTimeBlockContext$((ctx) => this._upsertTasksInSyncRange$(ctx)),
+        ),
+      ),
+    { dispatch: false },
+  );
+
   // --- Helpers ---
+
+  /**
+   * Queue an upsert for every task scheduled from now to the end of the
+   * provider's sync range. Completes once all of them are written.
+   */
+  private _upsertTasksInSyncRange$(ctx: TimeBlockContext): Observable<unknown> {
+    const syncRangeWeeks =
+      parseInt((ctx.config as Record<string, unknown>)['syncRangeWeeks'] as string, 10) ||
+      2;
+    const now = Date.now();
+    const rangeMs = syncRangeWeeks * 7 * 24 * 60 * 60 * 1000;
+    const rangeEnd = now + rangeMs;
+
+    return this._store.select(selectAllTasksWithDueTimeSorted).pipe(
+      first(),
+      concatMap((tasks) => {
+        const tasksInRange = tasks.filter(
+          (t) => t.dueWithTime >= now && t.dueWithTime <= rangeEnd,
+        );
+        if (!tasksInRange.length) return EMPTY;
+        Log.log(`[TimeBlock] Upserting ${tasksInRange.length} existing scheduled tasks`);
+        return from(tasksInRange).pipe(
+          mergeMap(
+            (task) =>
+              from(
+                this._queueTimeBlockOperation(task.id, {
+                  type: 'upsertIfScheduled',
+                  ctx,
+                }),
+              ),
+            MAX_PARALLEL_TIME_BLOCK_HTTP,
+          ),
+        );
+      }),
+    );
+  }
 
   private _hasTimeBlockContext$(filterProviderId?: string): Observable<boolean> {
     return this._store.select(selectEnabledIssueProviders).pipe(
@@ -346,17 +395,21 @@ export class TimeBlockSyncEffects {
       // Re-read the latest task when the queued write actually starts. If
       // edits arrived while a previous HTTP write was in flight, this makes
       // the trailing write reflect the final settled state.
-      this._taskService
-        .getByIdOnce$(taskId)
-        .pipe(
-          concatMap((task) =>
-            task?.dueWithTime
-              ? from(this._upsertEvent(ctx, task, task.dueWithTime)).pipe(
-                  catchError((err) => this._handleError(err, ctx)),
-                )
-              : EMPTY,
-          ),
-        );
+      this._taskService.getByIdOnce$(taskId).pipe(
+        withLatestFrom(this._store.select(selectTimelineConfig)),
+        concatMap(([task, scheduleCfg]) =>
+          task?.dueWithTime
+            ? from(
+                this._upsertEvent(
+                  ctx,
+                  task,
+                  task.dueWithTime,
+                  getCustomTimeBlockTitle(scheduleCfg),
+                ),
+              ).pipe(catchError((err) => this._handleError(err, ctx)))
+            : EMPTY,
+        ),
+      );
 
     return queuedCtx ? runWithCtx(queuedCtx) : this._withTimeBlockContext$(runWithCtx);
   }
@@ -421,6 +474,7 @@ export class TimeBlockSyncEffects {
     ctx: TimeBlockContext,
     task: Task,
     dueWithTime: number,
+    customTitle: string | undefined,
   ): Promise<void> {
     // An imported task is already represented by its source calendar event.
     // Writing a second, task-id-based time block to the same provider duplicates it.
@@ -432,7 +486,8 @@ export class TimeBlockSyncEffects {
     await ctx.definition.timeBlock!.upsertEvent(
       task.id,
       {
-        title: task.title,
+        // The plugin still adds its done marker to a custom title.
+        title: customTitle ?? task.title,
         dueWithTime,
         durationMs,
         // A won't-do task wasn't completed, so its block gets no done marker.
