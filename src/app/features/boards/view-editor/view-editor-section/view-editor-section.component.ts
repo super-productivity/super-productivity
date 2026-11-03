@@ -13,10 +13,7 @@ import {
   viewChildren,
 } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
-import {
-  expandAnimation,
-  expandFadeAnimation,
-} from '../../../../ui/animations/expand.ani';
+import { expandFadeFastAnimation } from '../../../../ui/animations/expand.ani';
 import { CdkDragHandle } from '@angular/cdk/drag-drop';
 import { MatIconButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
@@ -96,7 +93,9 @@ type SectionMode = 'card' | 'flat' | 'row' | 'page';
   templateUrl: './view-editor-section.component.html',
   styleUrl: './view-editor-section.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  animations: [expandAnimation, expandFadeAnimation],
+  // One timing for enter and leave: the summary and the rules swap, and their
+  // heights only sum to a steady grow or shrink when they ease alike.
+  animations: [expandFadeFastAnimation],
 })
 export class ViewEditorSectionComponent {
   readonly panel = input.required<BoardPanelCfg>();

@@ -14,6 +14,7 @@
   border: 1px solid var(--extra-border-color);
   border-radius: var(--card-border-radius);
   background: transparent;
+  transition: var(--transition-standard);
 }
 
 .card.is-open {
@@ -36,7 +37,6 @@
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
-  gap: var(--s-half);
   min-width: 0;
   padding-inline-end: var(--s);
 }
@@ -58,6 +58,20 @@
 // The bar of a card that opens and closes: all of it is the target.
 .card.is-collapsible .section-header {
   cursor: pointer;
+}
+
+// A closed card answers the pointer, as its bar and summary open it.
+@media (hover: hover) {
+  .card.is-collapsible:not(.is-open):hover {
+    background: var(--state-hover);
+  }
+}
+
+// Below the bar, inside what animates: a gap between the bar and the summary
+// or rules would count twice while one leaves and the other enters.
+.card .summary,
+.card .section-body {
+  padding-top: var(--s-half);
 }
 
 // A collapsed card's title, as the open card's text shows it.

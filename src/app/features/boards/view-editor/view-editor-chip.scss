@@ -136,9 +136,13 @@ button.row {
   color: inherit;
 }
 
-button.row:hover,
-button.row-main:hover {
-  background: var(--state-hover);
+// Hovering a rule's text lights up its whole row, icon to ×. Pointer only:
+// a tap leaves no sticky hover behind.
+@media (hover: hover) {
+  button.row:hover,
+  .row:has(> button.row-main:hover) {
+    background: var(--state-hover);
+  }
 }
 
 .row-icon,
