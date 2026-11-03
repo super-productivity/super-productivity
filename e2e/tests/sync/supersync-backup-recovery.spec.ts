@@ -178,7 +178,7 @@ test.describe('@supersync Backup Recovery with Existing SYNC_IMPORT', () => {
       await waitForTask(clientB.page, seedTask);
       expect(
         await getLiveIds(clientB, [serverOnlyTaskId]),
-        'Client B: the server-only task must be gone after the BACKUP_IMPORT',
+        'Client B: the server-only task must be gone after the restore',
       ).toEqual([]);
       console.log('[Backup Recovery] ✓ Client B has the backup state only');
     } finally {

@@ -267,6 +267,12 @@ test.describe('@supersync @archive Sync-import conflict dialog with server archi
         waitUntil: 'domcontentloaded',
       });
       await clientB.page.waitForLoadState('networkidle');
+      // Positive anchor for the store absence check in phase 4: the fixture's
+      // task ids are live on B after the import.
+      const importedClient = clientB;
+      await expect
+        .poll(() => getLiveIds(importedClient, IMPORTED_TASK_IDS), { timeout: 15000 })
+        .toEqual(IMPORTED_TASK_IDS);
 
       // ============ PHASE 3: Client B syncs and chooses Use Server Data ============
       console.log('[UseServer] Phase 3: Client B chooses Use Server Data');
