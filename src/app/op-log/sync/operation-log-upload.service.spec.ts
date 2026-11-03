@@ -1930,6 +1930,24 @@ describe('OperationLogUploadService', () => {
           expect(mockRepairOperationService.rebaseStaleRepair).not.toHaveBeenCalled();
         });
 
+        it('uploads nothing when the reseed fails', async () => {
+          // Dependent ops must never ship on top of the rejected baseline.
+          mockApiProvider.providerMode = 'fileSnapshotOps';
+          const dependentOp = stuckWith(
+            createFullStateEntry(1, 'rejected-repair', 'client-1', OpType.Repair),
+          );
+          mockRepairOperationService.rebaseStaleRepair.and.rejectWith(
+            new Error('reseed failed'),
+          );
+
+          await expectAsync(
+            service.uploadPendingOps(mockApiProvider),
+          ).toBeRejectedWithError('reseed failed');
+          expect(mockApiProvider.uploadSnapshot).not.toHaveBeenCalled();
+          expect(mockApiProvider.uploadOps).not.toHaveBeenCalled();
+          expect(mockOpLogStore.markSynced).not.toHaveBeenCalledWith([dependentOp.seq]);
+        });
+
         it('leaves a first-connect server migration to the migration flow', async () => {
           // ServerMigrationService ran just before and either seeded again or the
           // user declined to overwrite a non-empty remote; a reseed here would
