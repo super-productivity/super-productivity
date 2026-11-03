@@ -40,14 +40,16 @@ mat-dialog-content {
   margin: var(--s) 0 0;
 }
 
-// Keeps the server icon at the start of the actions row, the other buttons at the end.
+// Keeps the server icon at the start of the actions row, the other buttons at
+// the end; the logical margin keeps that in right-to-left languages.
 .change-server {
-  margin-right: auto;
+  margin-inline-end: auto;
 }
 
 .callout {
   margin-bottom: var(--s2);
 }
+
 .hint {
   margin: var(--s-half) 0 0;
   font-size: var(--font-size-sm);
