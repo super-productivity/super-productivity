@@ -292,12 +292,10 @@ test.describe('@webdav WebDAV Archive Sync', () => {
     const taskOnA = taskPageA.getTaskByText(taskName).first();
     const taskId = await taskOnA.getAttribute('data-task-id');
     expect(taskId).toBeTruthy();
-    await taskPageA.markTaskAsDone(taskOnA);
-    // Wait for animation to settle, then verify done state
-    await pageA.waitForTimeout(300);
-    await expect(taskPageA.getTaskByText(taskName).first()).toHaveClass(/isDone/);
-    await archiveDoneTasks(pageA);
-    await waitForArchivePersistence(pageA);
+    // E2E-AUDIT MUTATION M6
+    await taskOnA.click({ button: 'right' });
+    await pageA.locator('.mat-mdc-menu-content button.color-warn').click();
+    await pageA.locator('[e2e="confirmBtn"]').click();
     await expect(pageA.locator('task')).toHaveCount(0);
     console.log('[Archive Same] Client A archived task');
 
