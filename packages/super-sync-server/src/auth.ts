@@ -134,6 +134,17 @@ export const verifyEmail = async (token: string): Promise<boolean> => {
 };
 
 /**
+ * A normal account token, the same as login issues. The caller must have read
+ * `tokenVersion` under a lock on the user row, so a concurrent sign-out wins.
+ */
+export const signAccountToken = (
+  userId: number,
+  email: string,
+  tokenVersion: number,
+): string =>
+  jwt.sign({ userId, email, tokenVersion }, JWT_SECRET, { expiresIn: JWT_EXPIRY });
+
+/**
  * Revoke all existing tokens for a user by incrementing their token version.
  * Call this when the user explicitly logs out all devices.
  */
