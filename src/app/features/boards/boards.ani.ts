@@ -1,10 +1,10 @@
 import { animate, style, transition, trigger } from '@angular/animations';
-import { ANI_ENTER_TIMING } from '../../ui/animations/animation.const';
+import { PAGE_ENTER_FROM, PAGE_SWITCH_TIMING } from '../../ui/animations/warp-route';
 import { BoardCfg } from './boards.model';
 import { getViewLayout } from './boards.util';
 
-/** Where the board starts its enter: the work view's project-change zoom. */
-export const VIEW_SWITCH_FROM = 'scale(1.2)';
+/** Where the board starts its enter: the same rise as a page change. */
+export const VIEW_SWITCH_FROM = PAGE_ENTER_FROM;
 /** A view just created, on a phone: it comes in from the right, forward. */
 export const VIEW_ARRIVAL_FROM_XS = 'translateX(25%)';
 
@@ -48,7 +48,7 @@ export const viewSwitchAnimation = [
         to !== 'void' && (from !== 'void' || !!params?.isArrival),
       [
         style({ opacity: 0, transform: '{{ from }}' }),
-        animate(ANI_ENTER_TIMING, style({ opacity: 1, transform: 'none' })),
+        animate(PAGE_SWITCH_TIMING, style({ opacity: 1, transform: 'none' })),
       ],
       { params: { from: VIEW_SWITCH_FROM } },
     ),

@@ -1,6 +1,6 @@
 import {
   animate,
-  animateChild,
+  AnimationMetadata,
   group,
   query,
   style,
@@ -9,55 +9,85 @@ import {
 } from '@angular/animations';
 import {
   ANI_ENTER_TIMING,
+  ANI_ENTER_TIMING_,
   ANI_LONG_TIMING,
   ANI_STANDARD_TIMING_,
   TRANSITION_DURATION_L,
   TRANSITION_DURATION_S,
 } from './animation.const';
 
+/**
+ * Where a page starts its enter: a short rise, the same one the cold-start
+ * entrance settles from (`entrance-settle`, app.component.scss). A translate
+ * rather than a zoom: it never re-rasterizes the page, and the page keeps its
+ * real size while it moves, so a rect read mid-enter is off by at most this
+ * offset instead of a scale factor.
+ */
+export const PAGE_ENTER_FROM = 'translateY(8px)';
+
+/**
+ * Fade-through: the leaving page is gone before the entering one is more than
+ * faintly visible, so two pages never show through each other (a crossfade of
+ * two full task lists reads as a double exposure for most of its run). The
+ * enter starts while the leave finishes, so the whole change still takes no
+ * longer than one standard transition (225ms).
+ */
+export const PAGE_LEAVE_TIMING = `75ms ${ANI_STANDARD_TIMING_}`;
+const PAGE_ENTER_TIMING = `180ms 45ms ${ANI_ENTER_TIMING_}`;
+/**
+ * The same enter where nothing leaves alongside it (a reused page swapping its
+ * content, e.g. one project for another), so it need not wait for a leave.
+ */
+export const PAGE_SWITCH_TIMING = `180ms ${ANI_ENTER_TIMING_}`;
+
 // starts shortly after the headline so the page still reads top to bottom
 const CONTENT_FADE_TIMING = `${TRANSITION_DURATION_L} ${TRANSITION_DURATION_S} ${ANI_STANDARD_TIMING_}`;
 
+// Both pages sit on top of each other while they animate.
+const STACK_PAGES = query(
+  ':enter, :leave',
+  style({ position: 'absolute', width: '100%', minHeight: '100%', height: '100%' }),
+  { optional: true },
+);
+
+// No `animateChild()` on either page: it would run the children's own
+// `:enter`/`:leave` motions *after* the page's, a second animation once the
+// page has already arrived, and keep the leaving page in the DOM until they end.
+const LEAVE_PAGE = query(
+  ':leave',
+  [style({ opacity: 1 }), animate(PAGE_LEAVE_TIMING, style({ opacity: 0 }))],
+  { optional: true },
+);
+
+const enterPage = (...alongside: AnimationMetadata[]): AnimationMetadata =>
+  query(
+    ':enter',
+    [
+      style({ opacity: 0, transform: PAGE_ENTER_FROM }),
+      group([
+        animate(PAGE_ENTER_TIMING, style({ opacity: 1, transform: 'none' })),
+        ...alongside,
+      ]),
+    ],
+    { optional: true },
+  );
+
 export const warpRouteAnimation = trigger('warpRoute', [
   transition('* => daily-summary', [
-    /* 1 */ query(
-      ':enter, :leave',
-      style({ position: 'absolute', width: '100%', minHeight: '100%', height: '100%' }),
-      { optional: true },
-    ),
+    STACK_PAGES,
     group([
-      query(
-        ':leave',
-        [
-          style({ opacity: 1, transform: 'scale(1)' }),
-          animate(ANI_ENTER_TIMING, style({ opacity: 0, transform: 'scale(1.1)' })),
-          animateChild(),
-        ],
-        { optional: true },
-      ),
-      query(
-        ':enter',
-        [
-          style({ opacity: 0, transform: 'scale(1.2)' }),
-          // One group so the content fades in while the headline does, instead
-          // of the content appearing only after the headline has finished.
-          group([
-            animate(ANI_ENTER_TIMING, style({ opacity: 1, transform: 'scale(1)' })),
-            query('h1', [
-              style({ opacity: 0 }),
-              animate(ANI_LONG_TIMING, style({ opacity: 1 })),
-            ]),
-            query(
-              '.daily-summary-summary, .simple-counter-summary, .day-end-note, mat-tab-group',
-              [
-                style({ opacity: 0 }),
-                animate(CONTENT_FADE_TIMING, style({ opacity: 1 })),
-              ],
-            ),
-          ]),
-          animateChild(),
-        ],
-        { optional: true },
+      LEAVE_PAGE,
+      // The content fades in while the headline does, instead of appearing
+      // only after the headline has finished.
+      enterPage(
+        query('h1', [
+          style({ opacity: 0 }),
+          animate(ANI_LONG_TIMING, style({ opacity: 1 })),
+        ]),
+        query(
+          '.daily-summary-summary, .simple-counter-summary, .day-end-note, mat-tab-group',
+          [style({ opacity: 0 }), animate(CONTENT_FADE_TIMING, style({ opacity: 1 }))],
+        ),
       ),
     ]),
   ]),
@@ -69,11 +99,7 @@ export const warpRouteAnimation = trigger('warpRoute', [
   // back to `boards` afterwards must not animate the page again.
   transition('boards => view-arrival, view-arrival => boards', []),
   transition('* => view-arrival', [
-    query(
-      ':enter, :leave',
-      style({ position: 'absolute', width: '100%', minHeight: '100%', height: '100%' }),
-      { optional: true },
-    ),
+    STACK_PAGES,
     group([
       query(
         ':leave',
@@ -94,31 +120,5 @@ export const warpRouteAnimation = trigger('warpRoute', [
     ]),
   ]),
 
-  transition('* <=> *', [
-    /* 1 */ query(
-      ':enter, :leave',
-      style({ position: 'absolute', width: '100%', minHeight: '100%', height: '100%' }),
-      { optional: true },
-    ),
-    group([
-      query(
-        ':leave',
-        [
-          style({ opacity: 1, transform: 'scale(1)' }),
-          animate(ANI_ENTER_TIMING, style({ opacity: 0, transform: 'scale(1.1)' })),
-          animateChild(),
-        ],
-        { optional: true },
-      ),
-      query(
-        ':enter',
-        [
-          style({ opacity: 0, transform: 'scale(1.2)' }),
-          animate(ANI_ENTER_TIMING, style({ opacity: 1, transform: 'scale(1)' })),
-          animateChild(),
-        ],
-        { optional: true },
-      ),
-    ]),
-  ]),
+  transition('* <=> *', [STACK_PAGES, group([LEAVE_PAGE, enterPage()])]),
 ]);
