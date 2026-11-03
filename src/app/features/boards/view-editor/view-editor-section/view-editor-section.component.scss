@@ -75,15 +75,25 @@
 // A finger needs more than the 18px glyph, which on phones also sits at the
 // screen's edge: a press beside it landed on the card and scrolled the list
 // instead. On touch the handle is a finger-wide strip down the whole card,
-// the glyph still level with the bar.
+// the glyph still level with the bar. The placeholder keeps the same width,
+// so a flat list's rules stay put once it gets bars.
+.drag-handle {
+  @include touchPrimaryDevice {
+    box-sizing: content-box;
+    padding-inline: 11px;
+  }
+}
+
 .drag-handle:not(.is-placeholder) {
   @include touchPrimaryDevice {
     grid-row: span 2;
     align-self: stretch;
-    box-sizing: content-box;
     height: auto;
     min-height: 18px;
-    padding: calc((var(--s6) - 18px) / 2) 11px 0;
+    padding-top: calc((var(--s6) - 18px) / 2);
+    // The strip drags, never pans: the browser can't claim the gesture as a
+    // scroll before the drag starts (as on notes, note.component.scss).
+    touch-action: none;
   }
 }
 
