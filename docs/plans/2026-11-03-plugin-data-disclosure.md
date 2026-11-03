@@ -234,7 +234,8 @@ policy link. It uses plain HTML. It adds **no new dialog** for ordinary plugins.
 user already gives consent when they connect their own account or install a plugin, and
 the declaration is shown at that moment.
 
-1. **Integration setup dialog**, on create only, above the credential fields.
+1. **Integration setup dialog**, on create only, below the credential fields (above, its privacy link
+   would take the dialog's first-tabbable autofocus from them).
    `DialogEditIssueProviderComponent` is the single creation path for plugin issue
    providers (`addIssueProvider`, `dialog-edit-issue-provider.component.ts:253`). Every
    opener goes through it: the issue panel, the provider tab, the setup overview and the

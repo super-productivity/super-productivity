@@ -46,10 +46,6 @@
         }
       </help-section>
     }
-    <!-- Above the credential fields: read before signing in. -->
-    @if (dataSharingHtml) {
-      <div [innerHTML]="dataSharingHtml"></div>
-    }
     @if (isEdit) {
       <div style="margin-bottom: 32px">
         <mat-slide-toggle
@@ -224,6 +220,11 @@
         [fields]="fields"
         [form]="form"
       ></formly-form>
+      <!-- Below the credential fields, not above: its privacy link would be the
+           first tabbable element and take the dialog's autofocus from them. -->
+      @if (dataSharingHtml) {
+        <div [innerHTML]="dataSharingHtml"></div>
+      }
 
       @if (!isAgendaView) {
         <chip-list-input
