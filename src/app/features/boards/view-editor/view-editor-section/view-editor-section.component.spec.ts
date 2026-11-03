@@ -111,22 +111,70 @@ describe('ViewEditorSectionComponent', () => {
     expect(el.querySelector('input')).toBeNull();
   });
 
-  it('moves focus to the section actions when opening replaces the chevron', async () => {
-    const el = await render();
-    fixture.componentRef.setInput('isCollapsible', true);
-    fixture.componentRef.setInput('isOpen', false);
-    fixture.componentInstance.toggleOpen.subscribe(() =>
-      fixture.componentRef.setInput('isOpen', true),
-    );
-    fixture.detectChanges();
-    const toggle = el.querySelector('.section-toggle') as HTMLButtonElement;
-    toggle.focus();
-    toggle.click();
-    fixture.detectChanges();
-    await fixture.whenStable();
+  describe('a collapsible card', () => {
+    let toggled: jasmine.Spy;
 
-    expect(el.querySelector('.section-toggle')).toBeNull();
-    expect(document.activeElement).toBe(el.querySelector('.section-menu-btn'));
+    const renderCollapsed = async (): Promise<HTMLElement> => {
+      const el = await render();
+      fixture.componentRef.setInput('isCollapsible', true);
+      fixture.componentRef.setInput('isOpen', false);
+      toggled = jasmine
+        .createSpy('toggleOpen')
+        .and.callFake(() =>
+          fixture.componentRef.setInput('isOpen', !fixture.componentInstance.isOpen()),
+        );
+      fixture.componentInstance.toggleOpen.subscribe(toggled);
+      fixture.detectChanges();
+      return el;
+    };
+
+    it('keeps its chevron, and the focus on it, when it opens and closes', async () => {
+      const el = await renderCollapsed();
+      const toggle = el.querySelector('.section-toggle') as HTMLButtonElement;
+      toggle.focus();
+      toggle.click();
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      expect(toggle.getAttribute('aria-expanded')).toBe('true');
+      expect(el.querySelector('view-rule-chip, view-add-rule-chip')).not.toBeNull();
+      expect(document.activeElement).toBe(toggle);
+
+      toggle.click();
+      fixture.detectChanges();
+      await fixture.whenStable();
+      expect(toggle.getAttribute('aria-expanded')).toBe('false');
+      expect(el.querySelector('.summary')).not.toBeNull();
+    });
+
+    it('toggles on a click anywhere on its bar, its title too', async () => {
+      const el = await renderCollapsed();
+      (el.querySelector('.section-title') as HTMLElement).click();
+      fixture.detectChanges();
+      (el.querySelector('.count') as HTMLElement).click();
+
+      expect(toggled).toHaveBeenCalledTimes(2);
+    });
+
+    it("doesn't toggle on its bar's buttons other than the chevron", async () => {
+      const el = await renderCollapsed();
+      (el.querySelector('.section-menu-btn') as HTMLButtonElement).click();
+      fixture.detectChanges();
+
+      expect(toggled).not.toHaveBeenCalled();
+    });
+
+    it('renames on a click on the title once open', async () => {
+      const el = await renderCollapsed();
+      expect(el.querySelector('view-editor-title')).toBeNull();
+      (el.querySelector('.section-toggle') as HTMLButtonElement).click();
+      fixture.detectChanges();
+      (el.querySelector('view-editor-title .title-text') as HTMLElement).click();
+      fixture.detectChanges();
+
+      expect(el.querySelector('view-editor-title input')).not.toBeNull();
+      expect(toggled).toHaveBeenCalledTimes(1);
+    });
   });
 
   it('renames on a click on the title, back to text on Enter', async () => {

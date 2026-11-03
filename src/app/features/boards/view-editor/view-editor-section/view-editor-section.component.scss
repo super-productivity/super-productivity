@@ -55,6 +55,30 @@
   font-weight: var(--font-weight-semibold);
 }
 
+// The bar of a card that opens and closes: all of it is the target.
+.card.is-collapsible .section-header {
+  cursor: pointer;
+}
+
+// A collapsed card's title, as the open card's text shows it.
+.title-static {
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow-wrap: anywhere;
+}
+
+.section-toggle mat-icon {
+  // --transition-standard already embeds `all`; do not prefix a property
+  transition: var(--transition-standard);
+
+  .card.is-open & {
+    transform: rotate(180deg);
+  }
+}
+
 .count {
   color: var(--text-color-muted);
   font-size: var(--font-size-sm);

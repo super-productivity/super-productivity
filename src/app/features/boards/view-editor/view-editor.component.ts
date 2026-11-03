@@ -124,20 +124,23 @@ export class ViewEditorComponent {
   });
 
   /**
-   * The section card that shows its rules when there are several (one at a
-   * time): the one asked for (a column's title) or the first when the editor
-   * opens, a new or duplicated one once added; none after removing the open
-   * one. Kept by id when moving.
+   * The section cards that show their rules when there are several (any
+   * number, each opened and closed on its own): when the editor opens, the
+   * one asked for (a column's title) or the first; a new or duplicated one
+   * once added. Kept by id when moving.
    */
-  readonly openPanelId = linkedSignal<
+  readonly openPanelIds = linkedSignal<
     { board: BoardCfg; initialId: string | undefined },
-    string | null
+    ReadonlySet<string>
   >({
     source: () => ({ board: this.board(), initialId: this.initialOpenPanelId() }),
-    computation: ({ board, initialId }) =>
-      (initialId && board.panels.some((panel) => panel.id === initialId)
-        ? initialId
-        : board.panels[0]?.id) ?? null,
+    computation: ({ board, initialId }) => {
+      const id =
+        initialId && board.panels.some((panel) => panel.id === initialId)
+          ? initialId
+          : board.panels[0]?.id;
+      return new Set(id ? [id] : []);
+    },
   });
   readonly isCollapsible = computed(() => this.model().panels.length > 1);
   /**
@@ -169,9 +172,9 @@ export class ViewEditorComponent {
     // behind the collapsed cards before it. The first focus on its toggle
     // (`isFocusInitial`) would only bring the toggle itself into view.
     afterNextRender(() => {
-      const id = this.openPanelId();
+      const id = this.initialOpenPanelId();
       const index = this.model().panels.findIndex((panel) => panel.id === id);
-      if (this.initialOpenPanelId() && index > 0 && !this.isXs()) {
+      if (index > 0 && !this.isXs()) {
         this._sectionEls()[index]?.nativeElement.scrollIntoView({ block: 'start' });
       }
     });
@@ -249,7 +252,7 @@ export class ViewEditorComponent {
   addPanel(): void {
     const panel = this._newPanel();
     this._setPanels([...this._withHiddenTitleShown(), panel]);
-    this.openPanelId.set(panel.id);
+    this._open(panel.id);
     this.phonePageId.set(panel.id);
     afterNextRender(() => this._sections().at(-1)?.focusTitle(), {
       injector: this._injector,
@@ -262,7 +265,13 @@ export class ViewEditorComponent {
       this.phonePageId.set(this.phonePage() === id ? null : id);
       return;
     }
-    this.openPanelId.update((openId) => (openId === id ? null : id));
+    this.openPanelIds.update((ids) => {
+      const next = new Set(ids);
+      if (!next.delete(id)) {
+        next.add(id);
+      }
+      return next;
+    });
   }
 
   movePanel(index: number, offset: -1 | 1): void {
@@ -294,7 +303,7 @@ export class ViewEditorComponent {
       title: `${source.title} (copy)`,
     });
     this._setPanels(panels);
-    this.openPanelId.set(id);
+    this._open(id);
     this.phonePageId.set(id);
   }
 
@@ -351,6 +360,10 @@ export class ViewEditorComponent {
     const isFollowing =
       !only.title || (!!storedTitle && only.title === this._translate(storedTitle));
     return [isFollowing ? { ...only, title: model.title } : only];
+  }
+
+  private _open(id: string): void {
+    this.openPanelIds.update((ids) => new Set([...ids, id]));
   }
 
   private _setPanels(panels: BoardPanelCfg[]): void {

@@ -1,10 +1,13 @@
 @switch (mode()) {
   @case ('card') {
+    <!-- No expand animation for how the card first shows (`isReady`). -->
     <div
       class="card"
       role="group"
       [class.is-open]="!isCollapsed()"
+      [class.is-collapsible]="isCollapsible()"
       [attr.aria-label]="groupLabel() | translate: { nr: index() + 1 }"
+      [@.disabled]="!isReady()"
     >
       <!-- Keyboard users move it with the ⋮ menu. -->
       <mat-icon
@@ -14,21 +17,33 @@
         >drag_indicator</mat-icon
       >
       <div class="card-body">
-        <header class="section-header">
-          <view-editor-title
-            class="section-title"
-            [title]="panel().title"
-            [label]="titleLabel() | translate"
-            [isFocusInitial]="isFocusInitial()"
-            (titleChange)="setTitle($event)"
-          ></view-editor-title>
+        <!-- The whole bar opens and closes the card, a larger target than the
+             chevron; the chevron is the keyboard control. -->
+        <header
+          class="section-header"
+          (click)="onHeaderClick($event)"
+        >
+          @if (isCollapsed() && panel().title) {
+            <!-- Collapsed, the title is part of the bar; open, it renames. -->
+            <span class="section-title title-static">{{ panel().title }}</span>
+          } @else {
+            <view-editor-title
+              class="section-title"
+              [title]="panel().title"
+              [label]="titleLabel() | translate"
+              [isFocusInitial]="isFocusInitial()"
+              (titleChange)="setTitle($event)"
+            ></view-editor-title>
+          }
           <ng-container *ngTemplateOutlet="countTpl"></ng-container>
-          @if (isCollapsed()) {
+          <ng-container *ngTemplateOutlet="actionsTpl"></ng-container>
+          @if (isCollapsible()) {
             <button
               class="section-toggle"
               mat-icon-button
               type="button"
-              aria-expanded="false"
+              [attr.aria-expanded]="!isCollapsed()"
+              [attr.aria-controls]="isCollapsed() ? null : bodyId"
               [attr.aria-label]="
                 T.F.BOARDS.EDITOR.EDIT_RULES | translate: { title: panel().title }
               "
@@ -36,20 +51,24 @@
             >
               <mat-icon>expand_more</mat-icon>
             </button>
-          } @else {
-            <ng-container *ngTemplateOutlet="actionsTpl"></ng-container>
           }
         </header>
         @if (isCollapsed()) {
-          <!-- A larger target than the chevron; the chevron is the keyboard control. -->
           <div
-            class="summary"
-            (click)="openRules()"
+            class="summary-wrap"
+            @expandFade
           >
-            <ng-container *ngTemplateOutlet="summaryTpl"></ng-container>
+            <div
+              class="summary"
+              (click)="openRules()"
+            >
+              <ng-container *ngTemplateOutlet="summaryTpl"></ng-container>
+            </div>
           </div>
         } @else {
-          <ng-container *ngTemplateOutlet="rulesTpl"></ng-container>
+          <div @expand>
+            <ng-container *ngTemplateOutlet="rulesTpl"></ng-container>
+          </div>
         }
       </div>
     </div>
@@ -148,7 +167,6 @@
 
 <ng-template #actionsTpl>
   <button
-    #sectionActions
     class="section-menu-btn"
     mat-icon-button
     type="button"

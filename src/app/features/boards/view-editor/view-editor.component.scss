@@ -13,14 +13,14 @@
   flex-direction: column;
   gap: var(--s3);
 
+  // A set width: opening a card (wrapping chips) doesn't resize the dialog.
   @include mq(xs) {
-    min-width: 540px;
+    width: 540px;
     max-height: 85vh;
   }
   // One column of section cards: a wider dialog would only stretch the rows.
   @include mq(sm) {
-    min-width: 640px;
-    max-width: 800px;
+    width: 720px;
   }
 }
 

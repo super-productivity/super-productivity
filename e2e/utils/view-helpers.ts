@@ -125,14 +125,14 @@ const escapeRegExp = (text: string): string =>
   text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /**
- * Opens a section card's rules. With several sections one card is open at a
- * time (it has no toggle); a single section of a list is always open, its
- * rules without a card.
+ * Opens a section card's rules. With several sections each card opens and
+ * closes on its own (its chevron); a single section is always open, a list's
+ * without a card.
  */
 export const expandViewSection = async (section: Locator): Promise<void> => {
   // The section first: a toggle counted before it renders would read as none.
   await expect(section.locator('.section-header, .section-body').first()).toBeVisible();
-  const toggle = section.locator('.section-toggle');
+  const toggle = section.locator('.section-toggle[aria-expanded="false"]');
   if (await toggle.count()) {
     await toggle.click();
   }
@@ -299,6 +299,11 @@ export const fillViewEditor = async (
   }
   for (const [i, section] of sections.entries()) {
     const card = viewEditorSection(dialog, i);
+    // A closed card shows its title as part of its bar: open it to rename.
+    const closed = card.locator('.section-toggle[aria-expanded="false"]');
+    if (section.title !== undefined && (await closed.count())) {
+      await closed.click();
+    }
     if (section.title !== undefined) {
       await renameTitle(
         card.getByRole('textbox', { name: /^(Section|Column) title$/ }),

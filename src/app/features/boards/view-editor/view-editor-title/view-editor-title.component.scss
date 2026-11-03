@@ -1,5 +1,7 @@
 :host {
   display: flex;
+  // The field takes the row's width (in a flex row, e.g. the dialog title).
+  flex: 1 1 auto;
   align-items: center;
   gap: var(--s-half);
   min-width: 0;

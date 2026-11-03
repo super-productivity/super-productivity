@@ -13,6 +13,10 @@ import {
   viewChildren,
 } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
+import {
+  expandAnimation,
+  expandFadeAnimation,
+} from '../../../../ui/animations/expand.ani';
 import { CdkDragHandle } from '@angular/cdk/drag-drop';
 import { MatIconButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
@@ -92,6 +96,7 @@ type SectionMode = 'card' | 'flat' | 'row' | 'page';
   templateUrl: './view-editor-section.component.html',
   styleUrl: './view-editor-section.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  animations: [expandAnimation, expandFadeAnimation],
 })
 export class ViewEditorSectionComponent {
   readonly panel = input.required<BoardPanelCfg>();
@@ -107,7 +112,7 @@ export class ViewEditorSectionComponent {
   readonly isPhone = input<boolean>(false);
   readonly isFirst = input<boolean>(false);
   readonly isLast = input<boolean>(false);
-  /** With several sections one is open; the others show a summary (on a phone: a row). */
+  /** With several sections each opens and closes; closed, a summary (on a phone: a row). */
   readonly isCollapsible = input<boolean>(false);
   readonly isOpen = input<boolean>(true);
   /**
@@ -131,9 +136,6 @@ export class ViewEditorSectionComponent {
   private readonly _projectService = inject(ProjectService);
 
   private readonly _title = viewChild(ViewEditorTitleComponent);
-  private readonly _actions = viewChild('sectionActions', {
-    read: ElementRef<HTMLButtonElement>,
-  });
   private readonly _backBtn = viewChild('backBtn', {
     read: ElementRef<HTMLButtonElement>,
   });
@@ -143,6 +145,12 @@ export class ViewEditorSectionComponent {
   // Rules added or edited here stay shown while their control is empty (an
   // empty project or tag list is no rule and saves as none). Local only.
   private readonly _touchedRules = signal<ReadonlySet<ViewRuleId>>(new Set());
+  /** Set after the first render: a card shows as it is, then animates. */
+  readonly isReady = signal(false);
+
+  constructor() {
+    afterNextRender(() => this.isReady.set(true));
+  }
 
   readonly shownRules = computed(() => {
     const panel = this.panel();
@@ -223,16 +231,30 @@ export class ViewEditorSectionComponent {
     this._emit({ ...this.panel(), title });
   }
 
+  /** Opens or closes the section: a card in place, a phone's row its page. */
   openRules(): void {
     this.toggleOpen.emit();
-    // Opening replaces the chevron (a phone: the row). Keep keyboard focus on
-    // its replacement; a tap needs none (it would only show a focus ring).
-    if (isTouchActive()) {
+    // A phone's page replaces the row: keep keyboard focus on its back
+    // button; a tap needs none (it would only show a focus ring).
+    if (this.mode() !== 'row' || isTouchActive()) {
       return;
     }
-    afterNextRender(() => (this._backBtn() ?? this._actions())?.nativeElement.focus(), {
+    afterNextRender(() => this._backBtn()?.nativeElement.focus(), {
       injector: this._injector,
     });
+  }
+
+  /** A click on the card's bar, not on one of its controls, toggles it. */
+  onHeaderClick(ev: MouseEvent): void {
+    const target = ev.target;
+    if (
+      !this.isCollapsible() ||
+      !(target instanceof Element) ||
+      target.closest('button, input, mat-form-field')
+    ) {
+      return;
+    }
+    this.openRules();
   }
 
   /** A phone's page: back to the view's section list, focus on its row. */
@@ -289,9 +311,12 @@ export class ViewEditorSectionComponent {
     return this.mode() === 'row' && !this.panel().title;
   }
 
-  /** Renames: the title's field, focused (a phone's row opens its page first). */
+  /**
+   * Renames: the title's field, focused (a phone's row opens its page, a
+   * collapsed card opens, first).
+   */
   focusTitle(): void {
-    if (this.mode() === 'row') {
+    if (this.mode() === 'row' || (this.isCollapsed() && !this._title())) {
       this.toggleOpen.emit();
       afterNextRender(() => this._title()?.focus(), { injector: this._injector });
       return;

@@ -22,7 +22,7 @@ import {
 /** The section titles, shown as text. */
 const sectionTitles = (dialog: Locator): Promise<string[]> =>
   dialog
-    .locator('view-editor-section view-editor-title .title-text')
+    .locator('view-editor-section .section-title')
     .evaluateAll((els) => els.map((el) => el.textContent!.trim()));
 
 const viewIdFromUrl = (page: Page): string => {
@@ -131,6 +131,10 @@ test.describe('View editor', () => {
       .toEqual(['Beta', 'Beta (copy)', 'Alpha']);
 
     // The drag handle moves the open card too, keeping its identity and rules.
+    // The menu's backdrop would take the press; every card is open, so the
+    // content scrolls: the top one into view first.
+    await expect(page.locator('.mat-mdc-menu-panel')).toHaveCount(0);
+    await viewEditorSection(dialog, 0).scrollIntoViewIfNeeded();
     const handle = await viewEditorSection(dialog, 1)
       .locator('.drag-handle')
       .boundingBox();
@@ -266,7 +270,7 @@ test.describe('View editor', () => {
     await expect(page).toHaveURL(/#\/boards\/KANBAN_DEFAULT$/);
   });
 
-  test('shows one section of a board at a time, the others as a summary', async ({
+  test('opens and closes the sections of a board each on its own, closed as a summary', async ({
     page,
     workViewPage,
   }) => {
@@ -280,8 +284,11 @@ test.describe('View editor', () => {
     await expect(
       dialog.getByRole('heading', { name: 'Columns', exact: true }),
     ).toBeVisible();
-    // The open card shows its rules as chips and its actions, no summary.
-    await expect(card(0).locator('.section-toggle')).toHaveCount(0);
+    // The first card starts open: its rules as chips, no summary.
+    await expect(card(0).locator('.section-toggle')).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
     await expect(card(0).locator('.summary')).toHaveCount(0);
     await expect(card(0).locator('[data-rule="done"]')).toBeVisible();
     await expect(
@@ -293,7 +300,7 @@ test.describe('View editor', () => {
       'false',
     );
     const done = card(2);
-    await expect(done.locator('view-editor-title')).toHaveText('Done');
+    await expect(done.locator('.section-title')).toHaveText('Done');
     await expect(done.locator('.summary')).toContainText(
       'Backlog: Exclude backlog · Completion: Completed',
     );
@@ -301,14 +308,25 @@ test.describe('View editor', () => {
     await expect(done.locator('.count')).toHaveText(/^\d+ done$/);
     await expect(done.locator('view-rule-chip')).toHaveCount(0);
 
-    // Opening one closes the other.
-    await done.locator('.section-toggle').focus();
+    // Opening one by keyboard keeps the other open and the focus on its chevron.
+    const doneToggle = done.locator('.section-toggle');
+    // The dialog's own first focus first, or it takes the focus back.
+    await expect(
+      dialog.getByRole('button', { name: 'Rename', exact: true }),
+    ).toBeFocused();
+    await doneToggle.focus();
     await page.keyboard.press('Enter');
-    await expect(done.locator('.section-toggle')).toHaveCount(0);
+    await expect(doneToggle).toHaveAttribute('aria-expanded', 'true');
     await expect(done.locator('[data-rule="done"]')).toBeVisible();
-    await expect(done.locator('.section-menu-btn')).toBeFocused();
-    await expect(card(0).locator('.section-toggle')).toBeVisible();
-    await expect(card(0).locator('view-rule-chip')).toHaveCount(0);
+    await expect(doneToggle).toBeFocused();
+    await expect(card(0).locator('[data-rule="done"]')).toBeVisible();
+
+    // A click on its bar, the title too, closes it.
+    await done.locator('.section-title').click();
+    await expect(doneToggle).toHaveAttribute('aria-expanded', 'false');
+    // One summary once the earlier one's leave animation is over.
+    await expect(done.locator('.summary')).toHaveCount(1);
+    await expect(done.locator('.summary')).toBeVisible();
   });
 
   test("a column's title opens the editor with that column open", async ({
@@ -329,7 +347,10 @@ test.describe('View editor', () => {
     await expect(dialog).toBeVisible();
     const doneCard = viewEditorSection(dialog, 2);
     await expect(doneCard.locator('.section-body')).toBeVisible();
-    await expect(viewEditorSection(dialog, 0).locator('.section-toggle')).toBeVisible();
+    await expect(viewEditorSection(dialog, 0).locator('.section-toggle')).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
     // Focus starts on that column's title, as text (not the view's name),
     // which also brings it into view below the collapsed cards.
     const title = doneCard.getByRole('button', { name: 'Rename Done', exact: true });
