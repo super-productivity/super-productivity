@@ -45,6 +45,12 @@ const tagDiff = (task: TaskLike, next: string[], s: Snapshot): string[] => [
     .map((id) => `− tag ${nameOf(s.tags, id)}`),
 ];
 
+/** Deletes and project moves take the subtasks along; the row must say so. */
+const subtasksNote = (task: TaskLike): string => {
+  const n = task.subTaskIds?.length || 0;
+  return n ? ` with ${n} subtask${n === 1 ? '' : 's'}` : '';
+};
+
 const describeUpdate = (row: UpdateRow, task: TaskLike, s: Snapshot): RowText => {
   const what: string[] = [];
   const today = s.day.todayStr;
@@ -60,17 +66,11 @@ const describeUpdate = (row: UpdateRow, task: TaskLike, s: Snapshot): RowText =>
   if (row.isDone !== undefined) what.push(row.isDone ? 'Marked done' : 'Marked not done');
   if (row.projectId)
     what.push(
-      `${nameOf(s.projects, task.projectId)} → ${nameOf(s.projects, row.projectId)}`,
+      `${nameOf(s.projects, task.projectId)} → ${nameOf(s.projects, row.projectId)}${subtasksNote(task) && `,${subtasksNote(task)}`}`,
     );
   if (row.tagIds) what.push(...tagDiff(task, row.tagIds, s));
   if (row.appendNote) what.push('+ note');
   return { title: row.title ?? task.title, what };
-};
-
-/** The host deletes subtasks with their parent; the row must say so. */
-const deleteLabel = (task: TaskLike): string => {
-  const n = task.subTaskIds?.length || 0;
-  return n ? `Delete with ${n} subtask${n === 1 ? '' : 's'}` : 'Delete';
 };
 
 export const describeRow = (row: ChangeRow, s: Snapshot): RowText => {
@@ -79,7 +79,7 @@ export const describeRow = (row: ChangeRow, s: Snapshot): RowText => {
   if (!task) return { title: '', what: [] };
   return row.kind === 'update'
     ? describeUpdate(row, task, s)
-    : { title: task.title, what: [deleteLabel(task)] };
+    : { title: task.title, what: [`Delete${subtasksNote(task)}`] };
 };
 
 /** "Today: 7 tasks, 4 h 50 min of 5 h 30 min free" after the plan's day changes. */

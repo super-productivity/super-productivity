@@ -10,8 +10,9 @@ Design and rules: [`docs/plans/2026-10-31-ai-plan-today.md`](../../../docs/plans
 ## What it sends
 
 Only when you send a request: the request, the logical day and free time,
-project and tag names, and the tasks relevant to the request (titles, days,
-estimates, done state, priority, deadlines) under short aliases. Never notes,
+project and tag names, and the tasks relevant to the request under short
+aliases: title, done state, estimate, time spent, day, deadline, priority,
+project, tags, parent, and whether it repeats or has a time or reminder. Never notes,
 attachments or task ids. The settings screen shows the exact JSON. Requests go
 from this device straight to `api.anthropic.com` with your own API key; the key
 and settings stay on this device and are never synced.

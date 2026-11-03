@@ -33,7 +33,7 @@ const changeRow = (row: ChangeRow, input: ResultInput): HTMLLIElement => {
     input.onToggle(row.key, box.checked);
   });
   li.classList.toggle('off', !box.checked);
-  const what = row.kind === 'delete' ? KEPT : text.what.join(' · ');
+  const what = [...text.what, ...(row.kind === 'delete' ? [KEPT] : [])].join(' · ');
   label.append(box, el('span', 'title', text.title), el('span', 'what', what));
   li.append(label);
   return li;

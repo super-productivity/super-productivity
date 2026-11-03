@@ -82,3 +82,12 @@ test('a delete names the subtasks it takes with it', () => {
   );
   assert.deepEqual(del, { title: 'Trip', what: ['Delete with 2 subtasks'] });
 });
+
+test('a project move names the subtasks that move along', () => {
+  const t = task('p', { title: 'Trip', subTaskIds: ['c1'] });
+  const text = describeRow(
+    { kind: 'update', key: 'r1', taskId: 'p', stamp: stampOf(t), projectId: 'p2' },
+    snapshot([t]),
+  );
+  assert.deepEqual(text.what, ['Inbox → Website, with 1 subtask']);
+});

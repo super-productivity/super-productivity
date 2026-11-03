@@ -456,7 +456,8 @@ other tasks into an auto-applied change.
 - **Stale rows:** on Apply the plugin re-reads each target task and drops rows
   whose task changed or was deleted since the proposal (`dueDay`,
   `dueWithTime`, `remindAt`, deadline, `isDone`, title, estimate, project,
-  tags, `parentId`, `repeatCfgId`). A `dayChange` discards day plans.
+  tags, `parentId`, `subTaskIds`, `repeatCfgId`). A `dayChange` discards any
+  open or pending proposal, since its days were resolved against yesterday.
 
 Cost per request (estimate; one call, ~8k input with the fixed prefix cached,
 ~1k output plus thinking at `low` effort; prices from the Claude API reference

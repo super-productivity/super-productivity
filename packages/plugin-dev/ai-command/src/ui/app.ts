@@ -100,7 +100,15 @@ const runAsk = async (
     hostState.settings.isApplyWithoutReview &&
     canApplyWithoutReview(proposal, result.ctx)
   ) {
-    return applyAndShow(result, new Set(proposal.changes.map((r) => r.key)), true);
+    // Busy blocks Cancel and a new request until the writes are done.
+    state.isBusy = true;
+    return applyAndShow(
+      result,
+      new Set(proposal.changes.map((r) => r.key)),
+      true,
+    ).finally(() => {
+      state.isBusy = false;
+    });
   }
   // Deletes start unticked (§ 3): the user opts into each one.
   const ticked = new Set(
@@ -124,6 +132,7 @@ const submit = (): void => {
 };
 
 const cancel = (): void => {
+  if (state.isBusy) return; // writes have started; their result is shown
   // The host request can't be aborted from the iframe; its answer is ignored.
   state.token++;
   setView({ kind: 'idle' });
@@ -264,11 +273,13 @@ const boot = async (): Promise<void> => {
   );
   document.addEventListener('keydown', onKey);
   host().registerHook(PluginHooks.DAY_CHANGE, () => {
-    // A day plan made for yesterday must not be applied today (§ 6.6).
-    if (state.view.kind === 'result' && state.view.result.proposal.isDayPlan) {
+    // Days in a proposal were resolved against yesterday (§ 6.6), plans or not.
+    const kind = state.view.kind;
+    if ((kind === 'result' || kind === 'loading') && !state.isBusy) {
+      state.token++;
       setView({
         kind: 'idle',
-        note: 'The day changed, so the plan was discarded. Ask again.',
+        note: 'The day changed, so the answer was discarded. Ask again.',
       });
     }
   });
