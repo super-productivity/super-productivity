@@ -102,13 +102,12 @@ const editContent = async (
   edit: PersistentAction,
 ): Promise<void> => {
   if (family !== 'boards') return dispatch(page, edit);
-  // A real editor save: one `updateBoard` carrying only the changed fields
-  // (`title`, `cols`), a content UPD on this board crossing the reorder.
+  // A real editor save: one `updateBoard` carrying only the changed field
+  // (`title`), a content UPD on this board crossing the reorder.
   await page.goto(`/#/boards/${edit.id as string}`);
   await page.locator('board:visible button').filter({ hasText: 'edit' }).click();
   const dialog = page.locator('dialog-board-edit');
-  // A board with cols: 2 opens in the Board layout, which has the Columns field.
-  await fillViewEditor(page, dialog, { title: 'edited concurrently', columns: 3 });
+  await fillViewEditor(page, dialog, { title: 'edited concurrently' });
   await saveViewEditor(dialog);
 };
 
@@ -338,7 +337,7 @@ const fixture = (
       // What the editor dispatches in `editContent` (only the changed fields).
       edit: action('[Boards] Update Board', 'BOARD', a, 'UPD', {
         id: a,
-        updates: { title: 'edited concurrently', cols: 3 },
+        updates: { title: 'edited concurrently' },
       }),
     };
   }

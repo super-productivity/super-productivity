@@ -8,9 +8,11 @@ import {
 import { DEFAULT_PANEL_CFG } from '../boards.const';
 import { normalizeBoardForSave, toEditorModel } from '../boards.util';
 import {
-  getAddableRuleGroups,
+  getAddRuleMenu,
+  getCountLabel,
   getPlannedDateChoice,
-  getRuleSummary,
+  getRuleConflict,
+  getRuleParts,
   getRuleValue,
   getSetRules,
   getSortValue,
@@ -26,9 +28,11 @@ import {
   withoutRule,
   withPlannedDateChoice,
   withRuleAdded,
+  withProjectToggled,
   withRuleValue,
   withSortValue,
 } from './view-editor.util';
+import { T } from '../../../t.const';
 import { UNTOUCHED_SAVE_FIXTURES } from '../testing/view-editor-fixtures';
 
 const panel = (fields: Partial<BoardPanelCfg> = {}): BoardPanelCfg => ({
@@ -118,13 +122,19 @@ describe('view editor rules', () => {
     expect('includedTagsMatch' in out).toBeFalse();
   });
 
-  it('lets "Without tags" and the tag rules hide each other in the menu only', () => {
-    const flat = (shown: Parameters<typeof getAddableRuleGroups>[0]): string[] =>
-      getAddableRuleGroups(shown).flat();
-    expect(flat(['includedTags'])).not.toContain('untagged');
-    expect(flat(['untagged'])).not.toContain('includedTags');
-    expect(flat(['untagged'])).not.toContain('excludedTags');
-    expect(flat([])).toEqual([...VIEW_RULE_ORDER]);
+  it('marks "Without tags" and the tag rules as conflicting in the menu only', () => {
+    expect(getRuleConflict(['includedTags'], 'untagged')).toBe('includedTags');
+    expect(getRuleConflict(['excludedTags'], 'untagged')).toBe('excludedTags');
+    expect(getRuleConflict(['untagged'], 'includedTags')).toBe('untagged');
+    expect(getRuleConflict(['untagged'], 'excludedTags')).toBe('untagged');
+    expect(getRuleConflict(['includedTags'], 'excludedTags')).toBeUndefined();
+    // Only those pairs: every other rule combines.
+    for (const rule of VIEW_RULE_ORDER) {
+      const others = VIEW_RULE_ORDER.filter(
+        (r) => r !== rule && !['untagged', 'includedTags', 'excludedTags'].includes(r),
+      );
+      expect(getRuleConflict(others, rule)).withContext(rule).toBeUndefined();
+    }
     // A stored panel with both shows both.
     expect(
       getSetRules(panel({ isUntagged: true, excludedTagIds: ['a'] })).filter((r) =>
@@ -144,12 +154,27 @@ describe('view editor rules', () => {
     expect(getSetRules(withoutRule(model, 'includedTags'))).toEqual([]);
   });
 
-  it('drops empty groups from the Add-rule menu', () => {
-    expect(getAddableRuleGroups(['project', 'backlog'])[0]).toEqual([
-      'includedTags',
-      'excludedTags',
-      'untagged',
+  it('lists every rule in its group, marking shown and conflicting ones', () => {
+    const menu = getAddRuleMenu(['includedTags', 'parentOnly']);
+    expect(menu.map((g) => g.label)).toEqual([
+      T.F.BOARDS.EDITOR.GROUP_WHERE,
+      T.F.BOARDS.EDITOR.GROUP_TAGS,
+      T.F.BOARDS.EDITOR.GROUP_WHEN,
+      T.F.BOARDS.EDITOR.GROUP_STATUS,
+      T.F.BOARDS.EDITOR.GROUP_EFFORT,
     ]);
+    expect(menu.flatMap((g) => g.items.map((i) => i.rule))).toEqual([...VIEW_RULE_ORDER]);
+    expect(menu[1].items).toEqual([
+      { rule: 'includedTags', isShown: true },
+      { rule: 'excludedTags', isShown: false },
+      { rule: 'untagged', isShown: false, conflictsWith: 'includedTags' },
+    ]);
+    expect(menu[3].items[1]).toEqual({ rule: 'parentOnly', isShown: true });
+    expect(
+      getAddRuleMenu([]).every((g) =>
+        g.items.every((i) => !i.isShown && !i.conflictsWith),
+      ),
+    ).toBeTrue();
   });
 });
 
@@ -366,91 +391,142 @@ describe('getViewUpdates', () => {
   });
 });
 
-describe('getRuleSummary', () => {
-  const ctx = {
-    projects: [
-      { id: 'p1', title: 'Work' },
-      { id: 'p2', title: 'Home' },
-    ],
-    tags: [
-      { id: 't1', title: 'Urgent' },
-      { id: 't2', title: 'Important' },
-    ],
+describe('getRuleParts', () => {
+  const known = {
+    projects: new Set(['p1', 'p2']),
+    tags: new Set(['t1', 't2']),
   };
-  // Labels as their English text, so the joined line reads as shown.
-  const LABELS = new Map<string, string>([
-    ['F.TASK_VIEW.CUSTOMIZER.FILTER_PROJECT', 'Project'],
-    ['F.TASK_VIEW.CUSTOMIZER.FILTER_PRIORITY', 'Priority'],
-    ['F.TASK.CMP.PRIORITY_HIGH', 'High'],
-    ['F.BOARDS.EDITOR.RULE_DONE', 'Completion'],
-    ['F.BOARDS.FORM.TASK_DONE_STATE_UNDONE', 'Not Completed'],
-    ['F.BOARDS.FORM.TAGS_REQUIRED', 'Required Tags'],
-    ['F.BOARDS.FORM.TAGS_EXCLUDED', 'Excluded Tags'],
-    ['F.BOARDS.EDITOR.RULE_UNTAGGED', 'Without tags'],
-    ['F.BOARDS.FORM.ONLY_PARENT_TASKS', 'Only parent tasks'],
-    ['F.TASK_VIEW.CUSTOMIZER.FILTER_DEADLINE', 'Deadline'],
-    ['F.BOARDS.EDITOR.OTHER_KEPT', 'Other (kept)'],
-    ['F.BOARDS.EDITOR.EVERY_TASK', 'Every task'],
-  ]);
-  const t = (key: string): string => LABELS.get(key) ?? key;
+  const parts = (p: BoardPanelCfg): ReturnType<typeof getRuleParts> =>
+    getRuleParts(p, getSetRules(p), known);
 
-  it('reads "Every task" without rules', () => {
-    expect(getRuleSummary(panel(), ctx, t)).toBe('Every task');
+  it('has no parts without rules', () => {
+    expect(parts(panel())).toEqual([]);
   });
 
   it('names select rules by their option, in rule order', () => {
     expect(
-      getRuleSummary(
-        panel({
-          taskDoneState: BoardPanelCfgTaskDoneState.UnDone,
-          priorityRule: '3',
-        }),
-        ctx,
-        t,
+      parts(
+        panel({ taskDoneState: BoardPanelCfgTaskDoneState.UnDone, priorityRule: '3' }),
       ),
-    ).toBe('Completion: Not Completed · Priority: High');
+    ).toEqual([
+      {
+        rule: 'done',
+        label: T.F.BOARDS.EDITOR.RULE_DONE,
+        value: T.F.BOARDS.FORM.TASK_DONE_STATE_UNDONE,
+      },
+      {
+        rule: 'priority',
+        label: T.F.TASK_VIEW.CUSTOMIZER.FILTER_PRIORITY,
+        value: T.F.TASK.CMP.PRIORITY_HIGH,
+      },
+    ]);
   });
 
-  it('shows a value this client does not know as "Other (kept)"', () => {
-    expect(getRuleSummary(panel({ deadlineState: 'someday' }), ctx, t)).toBe(
-      'Deadline: Other (kept)',
+  it('marks a value this client does not know as other', () => {
+    expect(parts(panel({ deadlineState: 'someday' }))).toEqual([
+      {
+        rule: 'deadline',
+        label: T.F.TASK_VIEW.CUSTOMIZER.FILTER_DEADLINE,
+        isOther: true,
+      },
+    ]);
+  });
+
+  it('lists the known projects and tags in stored order and counts the missing', () => {
+    const [project, required, excluded] = parts(
+      panel({
+        projectIds: ['p2', 'gone', 'p1'],
+        includedTagIds: ['t1', 'missing'],
+        excludedTagIds: ['t2'],
+      }),
+    );
+    expect(project).toEqual(
+      jasmine.objectContaining({ rule: 'project', ids: ['p2', 'p1'], missingCount: 1 }),
+    );
+    expect(required).toEqual(
+      jasmine.objectContaining({ rule: 'includedTags', ids: ['t1'], missingCount: 1 }),
+    );
+    expect(excluded).toEqual(
+      jasmine.objectContaining({ rule: 'excludedTags', ids: ['t2'], missingCount: 0 }),
     );
   });
 
-  it('names projects and tags by title, the known ones only', () => {
-    expect(
-      getRuleSummary(
-        panel({
-          projectIds: ['p2', 'gone', 'p1'],
-          includedTagIds: ['t1', 'missing'],
-          excludedTagIds: ['t2'],
-        }),
-        ctx,
-        t,
-      ),
-    ).toBe('Project: Home, Work · Required Tags: Urgent · Excluded Tags: Important');
-  });
-
-  it('shows the label alone when no project or tag is known', () => {
-    expect(
-      getRuleSummary(
-        panel({ projectIds: ['gone'], includedTagIds: ['missing'] }),
-        ctx,
-        t,
-      ),
-    ).toBe('Project · Required Tags');
+  it('shows a match mode only when it is not the default and there are several tags', () => {
+    const match = (fields: Partial<BoardPanelCfg>): (string | undefined)[] =>
+      parts(panel(fields)).map((p) => p.match);
+    expect(match({ includedTagIds: ['t1', 't2'] })).toEqual([undefined]);
+    expect(match({ includedTagIds: ['t1', 't2'], includedTagsMatch: 'all' })).toEqual([
+      undefined,
+    ]);
+    expect(match({ includedTagIds: ['t1', 't2'], includedTagsMatch: 'any' })).toEqual([
+      T.F.BOARDS.FORM.TAGS_MATCH_ANY,
+    ]);
+    expect(match({ includedTagIds: ['t1'], includedTagsMatch: 'any' })).toEqual([
+      undefined,
+    ]);
+    expect(match({ excludedTagIds: ['t1', 't2'] })).toEqual([undefined]);
+    expect(match({ excludedTagIds: ['t1', 't2'], excludedTagsMatch: 'all' })).toEqual([
+      T.F.BOARDS.FORM.TAGS_EXCLUDED_MATCH_ALL,
+    ]);
   });
 
   it('shows rules without a value by their label', () => {
-    expect(
-      getRuleSummary(panel({ isUntagged: true, isParentTasksOnly: true }), ctx, t),
-    ).toBe('Without tags · Only parent tasks');
+    expect(parts(panel({ isUntagged: true, isParentTasksOnly: true }))).toEqual([
+      { rule: 'untagged', label: T.F.BOARDS.EDITOR.RULE_UNTAGGED },
+      { rule: 'parentOnly', label: T.F.BOARDS.FORM.ONLY_PARENT_TASKS },
+    ]);
   });
 
-  it('leaves out an added rule that is still empty', () => {
+  it('gives an added rule that is still empty no ids', () => {
     // An empty project rule is stored as [''] and an empty tag rule as [].
-    expect(getRuleSummary(panel({ projectIds: [''], includedTagIds: [] }), ctx, t)).toBe(
-      'Every task',
-    );
+    const p = panel({ projectIds: [''], includedTagIds: [] });
+    expect(parts(p)).toEqual([]);
+    expect(getRuleParts(p, ['project', 'includedTags'], known)).toEqual([
+      {
+        rule: 'project',
+        label: T.F.TASK_VIEW.CUSTOMIZER.FILTER_PROJECT,
+        ids: [],
+        missingCount: 0,
+      },
+      {
+        rule: 'includedTags',
+        label: T.F.BOARDS.FORM.TAGS_REQUIRED,
+        ids: [],
+        missingCount: 0,
+      },
+    ]);
+  });
+});
+
+describe('getCountLabel', () => {
+  it('counts tasks, or done tasks for a "Completed" section', () => {
+    expect(getCountLabel(1, panel())).toEqual({
+      key: T.F.BOARDS.EDITOR.COUNT_ONE,
+      nr: 1,
+    });
+    expect(getCountLabel(0, panel())).toEqual({ key: T.F.BOARDS.EDITOR.COUNT, nr: 0 });
+    expect(
+      getCountLabel(3, panel({ taskDoneState: BoardPanelCfgTaskDoneState.UnDone })),
+    ).toEqual({ key: T.F.BOARDS.EDITOR.COUNT, nr: 3 });
+    for (const nr of [0, 1, 4]) {
+      expect(
+        getCountLabel(nr, panel({ taskDoneState: BoardPanelCfgTaskDoneState.Done })),
+      ).toEqual({ key: T.F.BOARDS.EDITOR.COUNT_DONE, nr });
+    }
+  });
+});
+
+describe('withProjectToggled', () => {
+  it('toggles one project, keeping deleted ones, and stores none as all projects', () => {
+    const p = panel({ projectIds: ['gone'] });
+    const added = withProjectToggled(p, 'p1');
+    expect(added.projectIds).toEqual(['gone', 'p1']);
+    expect(withProjectToggled(added, 'p1').projectIds).toEqual(['gone']);
+    expect(withProjectToggled(panel({ projectIds: ['p1'] }), 'p1').projectIds).toEqual([
+      '',
+    ]);
+    expect(withProjectToggled(panel({ projectIds: [''] }), 'p1').projectIds).toEqual([
+      'p1',
+    ]);
   });
 });
