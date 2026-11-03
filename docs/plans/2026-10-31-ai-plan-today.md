@@ -1,6 +1,6 @@
 # Speak to plan: an optional AI command plugin
 
-Oct 31, 2026 · rev. 5 · status: **proposal**, nothing implemented · branch
+Oct 31, 2026 · rev. 6 (Nov 3) · status: **proposal**, nothing implemented · branch
 `claude/ai-plan-today`
 
 **Related:** generative views, parked (`docs/plans/2026-10-30-generative-views.md`
@@ -12,7 +12,9 @@ on `claude/generative-ui-todo-app-h4o6e8`) · agent endpoint / MCP plan
 
 **Revisions:** rev. 1 was a one-shot "Help me plan today" button. Rev. 2 and
 rev. 4 fixed review findings. Rev. 5 adds extensive prior art, the maintainer's decisions on voice and
-local models, and one model call per request instead of an agent loop. Rev. 3
+local models, and one model call per request instead of an agent loop.
+Rev. 6 makes the preview optional (auto-apply with undo, § 8.1) and adds
+§ 13 legal; a fresh-context review of rev. 5 and 6 is folded in. Rev. 3
 followed the maintainer's direction (2026-10-31): many
 users don't want AI, so it stays an optional plugin; and instead of one
 button, a shortcut opens a box you speak or type into, to add or change tasks
@@ -287,10 +289,10 @@ saved.
 Both optional, both small, both useful to other plugins (a third, the scoped
 `localNetwork` permission, comes with local models, § 6.6):
 
-| Addition                                                                  | Why                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| ------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `showPluginPanel` in `ALLOWED_PLUGIN_ACTIONS` (or a `showPanel()` method) | Only the host's side-panel button opens a plugin panel (`plugin-side-panel-btns.component.ts:129`); plugins may only hide it. A shortcut that opens the box is the core of the feature                                                                                                                                                                                                                                       |
-| `isIgnoreShortSyntax?: boolean` on `addTask` data and `updateTask`        | Plugin `addTask` parses short syntax (`plugin-bridge.service.ts:991-996`; `short-syntax.effects.ts:60-75`), so "Call mom #errands 15m @3pm" would set tags, an estimate and a time, and may open the "create tags?" dialog. A title-only `updateTask` is parsed too. `TaskService.add` already has the flag for untrusted titles; the bridge only needs to pass it. Default unchanged, so Brain Dump and others keep parsing |
+| Addition                                                                  | Why                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `showPluginPanel` in `ALLOWED_PLUGIN_ACTIONS` (or a `showPanel()` method) | Only the host's side-panel button opens a plugin panel (`plugin-side-panel-btns.component.ts:129`); plugins may only hide it. A shortcut that opens the box is the core of the feature                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `isIgnoreShortSyntax?: boolean` on `addTask` data and `updateTask`        | Plugin `addTask` parses short syntax (`plugin-bridge.service.ts:991-996`; `short-syntax.effects.ts:60-75`), so "Call mom #errands 15m @3pm" would set tags, an estimate and a time, and may open the "create tags?" dialog. A title-only `updateTask` is parsed too. `TaskService.add` already has the flag for untrusted titles; the bridge only needs to pass it. The subtask path skips tags but still strips time syntax (`x 1h/2h`) via `_parseSubTaskTitleTimeProps` (`plugin-bridge.service.ts:960-985`); the flag must bypass that too Default unchanged, so Brain Dump and others keep parsing |
 
 **Challenge to "the proposal appears in the Planner".** A plugin cannot draw
 inside the Planner. The panel sits next to it, and the Planner updates on
@@ -429,15 +431,21 @@ request after the cache breakpoint. It says: do only what was asked; never
 guess between several matching tasks, show them instead; reasons use only the
 given facts. Task titles can come from GitHub or Jira issues and are data, not
 instructions. A hostile title can at worst steer proposals among the user's
-own tasks, which the user sees before Apply; it cannot reach the network or
-other tools.
+own tasks; it cannot reach the network or other tools. With the preview on,
+the user sees every proposal before Apply. Auto-apply is narrower (§ 8.1):
+it applies only to tasks the user's own words or the on-screen selection
+named, never to tasks that are merely on the radar, so a title cannot pull
+other tasks into an auto-applied change.
 
 ### 6.6 Latency, failures, cost
 
 - **Latency target:** the whole result within 5 s for a simple add, 10 s
   typical, 20 s worst, with a spinner and Cancel. Not streamed (§ 4). Measured
   in the eval.
-- **Timeout** 30 s; **offline, no key, 401, 429, refusal:** a plain message,
+- **Timeout** per provider, passed as `request()`'s `timeout` (host default
+  30 s, max 120 s, `plugin-http.service.ts:13-15`): 30 s cloud, 90 s local.
+  On native (Capacitor) `timeout` and `signal` are ignored, so Cancel there
+  only discards the result. **Offline, no key, 401, 429, refusal:** a plain message,
   nothing changed. If the proposal fails the schema, one retry with the error;
   then what is valid is shown.
 - **Stale rows:** on Apply the plugin re-reads each target task and drops rows
@@ -462,17 +470,22 @@ cached 2026-10-06):
 **Local models (decision 2026-10-31: yes, scoped).** Ollama and LM Studio
 accept the Anthropic Messages format, so the same client works; only the base
 URL and model name change. What blocks it today: `request()` refuses private
-and loopback addresses for every plugin (`plugin-http.service.ts:429`); the
-only way past is `allowPrivateNetwork`, honoured just for bundled issue
-providers (`plugin-bridge.service.ts:499`). Rather than a special case for this
-plugin id, a small general permission:
+and loopback addresses for every plugin (`_validateUrl`,
+`issue-provider/plugin-http.service.ts:409-433`); the only way past is
+`allowPrivateNetwork`, honoured just for bundled issue providers
+(`plugin-bridge.service.ts:499`). `allowedHosts` is static, exact-match,
+ignores the port and is shown at install (`types.ts:178-210`). So, rather than
+a special case for this plugin id, a general permission:
 
-- the manifest declares `localNetwork`;
-- honoured only for bundled plugins and for directory installs whose sha256
-  matches the listing (not for uploaded zips);
-- off until the user turns it on in the plugin's settings, and then only for
-  the one base URL they enter (for example `http://localhost:11434`), not the
-  whole local network; cloud metadata addresses stay blocked as today.
+- the manifest lists `localhost` (and `127.0.0.1`) in `allowedHosts` and
+  declares `localNetwork`;
+- off until the user turns it on in the plugin's settings and enters one
+  port; `_assertRequestAllowed` (`plugin-bridge.service.ts:587-612`) then
+  admits loopback on that port only, not the local network; cloud metadata
+  addresses stay blocked;
+- honoured for bundled plugins; directory installs need a new trust path
+  (a runtime check that the installed zip matches the listing does not exist
+  yet, to be designed); never for uploaded zips.
 
 That is one more optional plugin API surface (§ 4.1 grows to three), built
 after Phase 1a. In practice desktop only: on a phone, `localhost` is the
@@ -525,34 +538,64 @@ the same delete (to Recently deleted).
 - **Conflicts.** A concurrent edit to the same task elsewhere resolves like any
   manual edit. Phase 2 adds one E2E: apply on A while B edits one of the
   tasks; both converge.
-- **Undo** is in v1, because auto-apply needs it (§ 8.1). Deletes are not
+- **Undo** comes with auto-apply (§ 8.1) and is limited by design: it
+  reverts fields the plugin wrote, not side effects. Deletes are not
   undoable from the panel; they are always previewed, unticked by default
   and kept in Recently deleted on this device.
 
 ### 8.1 Auto-apply and undo
 
-**Setting:** "Review changes before applying", on by default. Turned off,
-a proposal applies at once **unless** it contains a delete, a project move,
-more than 10 changes, or a row the validator flagged; those still show the
-change list. Selections never change anything; day plans follow the same
-rule.
+**Setting:** "Review changes before applying", on by default, stored per
+device (local plugin storage, not `persistDataSynced`), so turning it off on
+one device doesn't change another.
+
+**What auto-applies.** With the setting off, a proposal applies at once only
+if every row passes; otherwise the whole change list is shown as usual:
+
+- every touched task was named by the user's words (on-device match, § 6.2)
+  or is in the on-screen selection, not merely on the radar (§ 6.5);
+- no delete, no project move, at most 10 changes, no row the validator
+  flagged;
+- no "done" on a task that has a reminder or time, is being tracked, or has
+  a parent or subtasks (marking those done triggers other ops: dismissed
+  reminder, parent auto-done, next task started, which undo cannot reverse).
+
+Selections never change anything; day plans follow the same rule.
 
 **After applying** (auto or Apply) the panel lists what was done, one row per
-task, each with **Undo**, plus **Undo all** (Ctrl+Z while the panel has
-focus). The list stays until the next request or until the panel closes;
-undo is not persisted and not synced.
+task, each with **Undo**, plus an **Undo all** button (no Ctrl+Z: the request
+box has focus and Ctrl+Z there undoes typing). The list stays until the next
+request or until the panel closes; undo is not persisted and not synced.
 
-**Undo is compare-and-set**, never "restore the old state": for each field
-the plugin wrote, it re-reads the task and writes the old value back only if
-the task still holds the value the plugin wrote. A field someone changed in
-the meantime (on this device or synced in from another) is left alone and the
-row says so. An added task is undone by `deleteTask` (it goes to Recently
-deleted). Each undo is one ordinary `updateTask` or `deleteTask` op, so no
-new action, op or sync surface; a remote device sees an edit and a later
-edit back.
+**Undo is compare-and-set**, never "restore the old state". It re-reads the
+task and, per field, writes the old value back only if the task still holds
+the value the plugin wrote; otherwise it leaves that field and the row says
+"changed since, left alone". Each undo is one ordinary `updateTask` or
+`deleteTask` call (both existing), so no new action, op or sync surface; a
+remote device sees an edit and a later edit back.
+
+| Field           | Compare                                                                                                       | Write back                                     | Not restored                                                                                        |
+| --------------- | ------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `title`         | equals the written title                                                                                      | old title, short syntax off (§ 4.1)            | —                                                                                                   |
+| `dueDay`        | equals the written day                                                                                        | old day, `null` if there was none (§ 7)        | position in Today and the planner day: the reducer appends (`task-shared-crud.reducer.ts:944-1000`) |
+| `timeEstimate`  | equals the written estimate                                                                                   | old estimate                                   | —                                                                                                   |
+| `tagIds`        | per tag: an added tag is still there / a removed tag is still absent                                          | that tag delta only, not the whole array       | —                                                                                                   |
+| `isDone`        | still done                                                                                                    | `isDone: false` (the reducer clears `doneOn`)  | side effects, which is why those cases don't auto-apply                                             |
+| note (appended) | the note still ends with the appended text                                                                    | the note without it                            | —                                                                                                   |
+| added task      | unchanged since added: same title, project and tags, not done, no time spent, no subtasks beyond the plugin's | `deleteTask` (Recently deleted on this device) | deleting a synced task deletes it on every device; any other case is left alone                     |
+
+The re-read and the write are not atomic against a sync applying in
+between; the loser is one field reverted over a just-arrived remote edit,
+which then resolves like any manual edit. Accepted for v1; covered by the
+E2E below.
 
 **Why deletes stay reviewed:** restoring a deleted task needs a restore call
 the plugin API lacks, and Recently deleted is device-local.
+
+**Gate:** auto-apply ships only after (a) the hostile-title eval fixtures pass
+(§ 10) and (b) one SuperSync E2E proves apply and undo converge with a
+concurrent edit on a second device, in both orders (AGENTS.md rule 12).
+Until then Phase 1a ships preview-only.
 
 ## 9. Built-in vs external assistants
 
@@ -587,7 +630,8 @@ expected result:
   sets; "what's overdue in Work".
 - **Day plans:** overfull day, empty day, after a holiday, weekend, meeting day
   (the calendar gap), no estimates, 80 tasks.
-- **Hostile:** a title that tries prompt injection; a request to change 200
+- **Hostile:** a title that tries prompt injection, including one that asks
+  to change other tasks (must not reach auto-apply, § 8.1); a request to change 200
   tasks; spoken text with `#`, `@` or `+` in it; "move this repeating task to
   Work".
 
@@ -606,15 +650,15 @@ become fixtures. Nothing is counted on the device or sent anywhere.
 
 ## 11. Phases
 
-| Phase                                      | Scope                                                                                                                                     | Exit                                                                                                        |
-| ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| **0. Eval first** (no app change)          | Fixtures, prompt, tools, validator, rule-based draft; Haiku, Sonnet and Opus 5.5                                                          | Bar met → Phase 1. Not met → record why, stop                                                               |
-| **1a. Capture and changes**, desktop + web | Shortcut, panel, typed and dictated requests, change list + Apply, auto-apply + undo (§ 8.1); § 4.1; directory listing                    | Eval capture and edit fixtures pass in the shipped plugin; unit tests for validator, alias map, stale check |
-| **1b. Selections and day plans**           | `show_tasks`, row actions, day plans with free time; only once their eval fixtures pass                                                   | Selection and day-plan fixtures pass; day plans beat the draft                                              |
-| **2. Mobile + E2E**                        | Android and iOS (check `request()` to the Anthropic API on both); concurrent-edit E2E                                                     | E2E green on SuperSync                                                                                      |
-| **3. Push-to-talk** (on evidence)          | Host speech service and its plugin API (§ 5)                                                                                              | Separate plan                                                                                               |
-| **2b. Local models**, desktop              | `localNetwork` permission (§ 6.6); Ollama or LM Studio through their Anthropic-compatible endpoint; a local model must pass the same eval | A local model passes; labelled "slower" in the picker                                                       |
-| **Later, on evidence**                     | Times and reminders via a `scheduleTask`-style API; calendar busy minutes                                                                 | A user request                                                                                              |
+| Phase                                                                                 | Scope                                                                                                                                                                     | Exit                                                                                                                                                                                     |
+| ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **0. Eval first** (no app change)                                                     | Fixtures (incl. hostile titles), prompt, tools, validator, rule-based draft; Haiku, Sonnet and Opus 5.5; check `request()` to the Anthropic API from the web build (CORS) | Bar met → Phase 1. Not met → record why, stop                                                                                                                                            |
+| **1a. Capture and changes**, desktop (+ web if Phase 0 shows `request()` works there) | Shortcut, panel, typed and dictated requests, change list + Apply, undo list; § 4.1; directory listing. Auto-apply behind its gate (§ 8.1)                                | Eval capture and edit fixtures pass in the shipped plugin; unit tests for validator, alias map, stale check, compare-and-set undo; apply/undo SuperSync E2E before auto-apply is enabled |
+| **1b. Selections and day plans**                                                      | `show_tasks`, row actions, day plans with free time; only once their eval fixtures pass                                                                                   | Selection and day-plan fixtures pass; day plans beat the draft                                                                                                                           |
+| **2. Mobile + E2E**                                                                   | Android and iOS (check `request()` to the Anthropic API on both); concurrent-edit E2E for preview-mode Apply                                                              | E2E green on SuperSync                                                                                                                                                                   |
+| **2b. Local models**, desktop                                                         | `localNetwork` permission (§ 6.6); Ollama or LM Studio through their Anthropic-compatible endpoint; a local model must pass the same eval                                 | A local model passes; labelled "slower" in the picker                                                                                                                                    |
+| **3. Push-to-talk** (on evidence)                                                     | Host speech service and its plugin API (§ 5)                                                                                                                              | Separate plan                                                                                                                                                                            |
+| **Later, on evidence**                                                                | Times and reminders via a `scheduleTask`-style API; calendar busy minutes                                                                                                 | A user request                                                                                                                                                                           |
 
 **Smallest useful version:** Phase 0 + 1a, with system dictation as the voice.
 
@@ -627,11 +671,13 @@ reordering Today, saved views, sending audio to a model.
 
 - **Wrong change applied.** Preview of every change by default, ticked rows
   only, ambiguity shown instead of guessed, deletes recoverable, a 50-change
-  cap. With auto-apply: only small, delete-free, unflagged sets skip the
-  preview, and every applied row has a compare-and-set undo.
+  cap. Auto-apply is opt-in and narrow (§ 8.1): only tasks the user named,
+  no deletes, project moves or risky "done", and an undo that reverts fields,
+  not side effects.
 - **Undo over sync.** Undo writes the old value only where the task still
   holds the plugin's value; an edit made in between, here or on another
-  device, wins. Covered by the Phase 2 concurrent-edit E2E (undo variant).
+  device, wins. Order in Today is not restored. Covered by the apply/undo
+  E2E that gates auto-apply (§ 8.1).
 - **Short syntax in titles** would turn spoken words into tags, dates and
   times. Fixed by § 4.1 and covered by eval fixtures.
 - **More data leaves the device** than in rev. 2: project and tag names and
@@ -642,8 +688,9 @@ reordering Today, saved views, sending audio to a model.
 - **"Voice" feels half-done** without push-to-talk. Accepted for v1: two keys
   instead of one, no host change. Phase 3 only if used.
 - **Prompt injection via issue titles.** Bounded to proposals over the user's
-  own tasks: previewed by default, and with auto-apply never a delete or a
-  project move, always undoable.
+  own tasks: previewed by default; auto-apply only touches tasks the user
+  named, never deletes or moves projects, and is gated on hostile-title
+  fixtures.
 - **Scope creep into a chat app.** Guarded by design: no history, no persona,
   no proactive messages; one request, one result.
 
@@ -680,18 +727,21 @@ publishing.
   device to the provider under the user's own contract; SP receives nothing,
   so it is neither controller nor processor. A shared key, proxy or hosted
   tier would change that and is out of scope. No sign-in with a consumer
-  Claude subscription; API keys only (**check** Anthropic's current terms).
+  Claude subscription; API keys only (secondary sources, Feb 2026; **check** Anthropic's primary
+  terms).
 - **Disclosure:** the README's "does NOT collect any data" stays true, but
   the website privacy policy and the plugin listing must say this plugin
   sends the § 6.1 fields to the chosen provider, linking to the provider's
   terms rather than restating them. A general solution for all plugins is
-  planned separately (`docs/plans/2026-11-03-plugin-data-disclosure.md`).
+  being planned separately (not yet written).
 - **Stores (Phase 2, check):** Apple 5.1.2(i) requires disclosure and
   explicit permission before sharing personal data with third-party AI (the
   notice and **Turn on** step). Whether in-app plugin installs on iOS fit
   2.5.2, and whether App Privacy labels or Play Data safety change, are open.
-- **EU AI Act Art. 50** (from 2026-08-02, check): users must know they are
-  using AI; "AI" in the name and the notice cover it. Task titles restating
+- **EU AI Act Art. 50** (from 2026-08-02, check): Art. 50(1) makes the
+  provider of an AI system, which the plugin author may be, tell users they
+  are interacting with AI unless that is obvious from context; "AI" in the
+  name and the notice should cover it. Task titles restating
   the user's words likely fall under the assistive-editing exception to
   output marking.
 - **Mistakes:** the notice says "AI can misunderstand; check changes;
@@ -758,11 +808,33 @@ Anthropic-compatible `/v1/messages` (tools yes, `tool_choice` and caching no),
 "receipts" (marked secondhand). Design changes from the research: one model
 call with on-device search instead of an agent loop (§ 6.2), local models
 through a scoped permission (§ 6.6), batch undo recorded as a later candidate
-(§ 8). Rev. 5 was not given a separate fresh-context review.
+(§ 8; moved into v1 by rev. 6).
 
 ### Rev. 6
 
 Maintainer direction: the preview should be optional. Added opt-in
 auto-apply with a compare-and-set undo list (§ 8.1), which moves undo from
 "later" into v1; deletes, project moves, sets over 10 changes and flagged rows
-are always previewed. Not given a separate fresh-context review.
+are always previewed.
+
+### Rev. 6 review (fresh context, covering rev. 5 and rev. 6)
+
+| #   | Finding                                                                                        | Severity | Status                                                                                                                           |
+| --- | ---------------------------------------------------------------------------------------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Undo of an add was an unguarded `deleteTask` (takes subtasks and tracked time added since)     | High     | **Fixed:** only while the task is unchanged since added (§ 8.1 table)                                                            |
+| 2   | `isDone` undo isn't an inverse: reminder dismissal, parent auto-done, next task started        | High     | **Fixed:** those cases never auto-apply; undo reverts fields only                                                                |
+| 3   | Injection bound overstated with auto-apply                                                     | High     | **Fixed:** auto-apply only on tasks the user named; hostile-title fixtures gate it                                               |
+| 4   | Auto-apply shipped in 1a before its E2E (rule 12)                                              | High     | **Fixed:** apply/undo SuperSync E2E gates auto-apply; 1a is preview-only until then                                              |
+| 5   | Compare-and-set under-specified for tags, day order, `null`, short syntax, races               | Med      | **Fixed:** per-field table; Today order not restored; race accepted and stated                                                   |
+| 6   | 30 s timeout vs 25–45 s local models; Cancel can't abort on native                             | Med      | **Fixed:** per-provider timeout; native Cancel only discards                                                                     |
+| 7   | `localNetwork` didn't fit static `allowedHosts`; wrong file cited; no runtime sha check exists | Med      | **Fixed:** rewritten around `localhost` + user port in `_assertRequestAllowed`; trust path for directory installs left to design |
+| 8   | Stale header, revisions and rev. 5 note                                                        | Med      | **Fixed**                                                                                                                        |
+| 9   | § 13 linked a doc that doesn't exist                                                           | Med      | **Fixed:** marked "not yet written"                                                                                              |
+| 10  | Short-syntax flag missed the subtask time-syntax path                                          | Med      | **Fixed** in § 4.1                                                                                                               |
+| 11  | Ctrl+Z collides with text undo; setting would sync                                             | Low      | **Fixed:** button only; setting per device                                                                                       |
+| 12  | Art. 50 wording                                                                                | Low      | **Fixed:** cites 50(1), keeps **check**                                                                                          |
+| 13  | Anthropic terms only from secondary sources                                                    | Low      | **Not fixed:** marked; read the primary terms before publishing                                                                  |
+| 14  | Phase rows out of order                                                                        | Low      | **Fixed**                                                                                                                        |
+| 15  | Web build: browser call to Anthropic unverified (CORS)                                         | Low      | **Fixed:** checked in Phase 0; 1a is desktop, web only if it works                                                               |
+
+Verdict: ready for Phase 0. Rev. 6 fixes were not re-reviewed.
