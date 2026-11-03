@@ -7,6 +7,11 @@ import {
   waitForTask,
   type SimulatedE2EClient,
 } from '../../utils/supersync-helpers';
+import {
+  expectArchivedNotLive,
+  getActiveTasks,
+  getTaskIdByTitle,
+} from '../../utils/audit-archive-helpers';
 
 /**
  * SuperSync Archive with Subtasks E2E Tests
@@ -127,15 +132,22 @@ const archiveDoneTasks = async (page: SimulatedE2EClient['page']): Promise<void>
 };
 
 /**
- * Check for console errors indicating orphan subtasks
+ * Asserts the parent and its subtasks are archived on this client and that no
+ * live task still points at the parent. The orphan check reads the store: in
+ * dev builds the orphan devError goes to an alert that the harness dismisses,
+ * so console.error never sees it.
  */
-const checkForOrphanSubtaskError = (consoleMessages: string[]): boolean => {
-  return consoleMessages.some(
-    (msg) =>
-      msg.includes('Lonely Sub Task') ||
-      msg.includes('Inconsistent Task State') ||
-      msg.includes('orphan subtask'),
-  );
+const expectArchivedWithoutOrphans = async (
+  client: SimulatedE2EClient,
+  parentId: string,
+  subTaskIds: string[],
+  label: string,
+): Promise<void> => {
+  await expectArchivedNotLive(client, [parentId, ...subTaskIds], label);
+  const orphans = (await getActiveTasks(client))
+    .filter((t) => t.parentId === parentId)
+    .map((t) => t.id);
+  expect(orphans, `${label}: live subtasks of the archived parent`).toEqual([]);
 };
 
 test.describe('@supersync Archive Subtasks Sync', () => {
@@ -152,7 +164,7 @@ test.describe('@supersync Archive Subtasks Sync', () => {
    * 5. Client A syncs
    * 6. Client B syncs
    * 7. Verify Client B has no tasks in Today view (all archived)
-   * 8. Verify no orphan subtask errors in console
+   * 8. Verify both clients archived parent + subtasks with no live orphans (store)
    */
   test('Archive parent task with subtasks syncs without leaving orphans', async ({
     browser,
@@ -161,7 +173,6 @@ test.describe('@supersync Archive Subtasks Sync', () => {
   }) => {
     let clientA: SimulatedE2EClient | null = null;
     let clientB: SimulatedE2EClient | null = null;
-    const consoleErrors: string[] = [];
 
     try {
       const user = await createTestUser(testRunId);
@@ -171,13 +182,8 @@ test.describe('@supersync Archive Subtasks Sync', () => {
       clientA = await createSimulatedClient(browser, baseURL!, 'A', testRunId);
       await clientA.sync.setupSuperSync(syncConfig);
 
-      // Setup Client B with console monitoring
+      // Setup Client B
       clientB = await createSimulatedClient(browser, baseURL!, 'B', testRunId);
-      clientB.page.on('console', (msg) => {
-        if (msg.type() === 'error') {
-          consoleErrors.push(msg.text());
-        }
-      });
       await clientB.sync.setupSuperSync(syncConfig);
 
       // 1. Client A creates parent task
@@ -203,6 +209,11 @@ test.describe('@supersync Archive Subtasks Sync', () => {
       // 4. Now mark parent as done
       await markTaskDone(clientA.page, parentName, false);
       console.log('[ArchiveSubtasks] Marked parent as done');
+      const parentId = await getTaskIdByTitle(clientA, parentName);
+      const subTaskIds = [
+        await getTaskIdByTitle(clientA, subtask1Name),
+        await getTaskIdByTitle(clientA, subtask2Name),
+      ];
 
       // 4. Archive via Daily Summary
       await archiveDoneTasks(clientA.page);
@@ -227,9 +238,9 @@ test.describe('@supersync Archive Subtasks Sync', () => {
       expect(taskCount).toBe(0);
       console.log('[ArchiveSubtasks] Verified no tasks on Client B (all archived)');
 
-      // 8. Verify no orphan subtask errors
-      const hasOrphanError = checkForOrphanSubtaskError(consoleErrors);
-      expect(hasOrphanError).toBe(false);
+      // 8. Verify the archive reached the store on both clients, no orphans
+      await expectArchivedWithoutOrphans(clientA, parentId, subTaskIds, 'Client A');
+      await expectArchivedWithoutOrphans(clientB, parentId, subTaskIds, 'Client B');
 
       console.log('[ArchiveSubtasks] ✓ Archive with subtasks synced successfully');
     } finally {
@@ -259,28 +270,16 @@ test.describe('@supersync Archive Subtasks Sync', () => {
   }) => {
     let clientA: SimulatedE2EClient | null = null;
     let clientB: SimulatedE2EClient | null = null;
-    const consoleErrorsA: string[] = [];
-    const consoleErrorsB: string[] = [];
 
     try {
       const user = await createTestUser(testRunId);
       const syncConfig = getSuperSyncConfig(user);
 
-      // Setup clients with console monitoring
+      // Setup clients
       clientA = await createSimulatedClient(browser, baseURL!, 'A', testRunId);
-      clientA.page.on('console', (msg) => {
-        if (msg.type() === 'error') {
-          consoleErrorsA.push(msg.text());
-        }
-      });
       await clientA.sync.setupSuperSync(syncConfig);
 
       clientB = await createSimulatedClient(browser, baseURL!, 'B', testRunId);
-      clientB.page.on('console', (msg) => {
-        if (msg.type() === 'error') {
-          consoleErrorsB.push(msg.text());
-        }
-      });
       await clientB.sync.setupSuperSync(syncConfig);
 
       // 1. Create parent task
@@ -307,6 +306,11 @@ test.describe('@supersync Archive Subtasks Sync', () => {
         await markTaskDone(clientA.page, `Sub${i}-${testRunId}`, true);
       }
       await markTaskDone(clientA.page, parentName, false);
+      const multiParentId = await getTaskIdByTitle(clientA, parentName);
+      const multiSubTaskIds: string[] = [];
+      for (let i = 1; i <= 3; i++) {
+        multiSubTaskIds.push(await getTaskIdByTitle(clientA, `Sub${i}-${testRunId}`));
+      }
       await archiveDoneTasks(clientA.page);
       console.log('[MultiSubtask] Client A archived all');
 
@@ -326,8 +330,18 @@ test.describe('@supersync Archive Subtasks Sync', () => {
       expect(tasksOnA).toBe(0);
       expect(tasksOnB).toBe(0);
 
-      expect(checkForOrphanSubtaskError(consoleErrorsA)).toBe(false);
-      expect(checkForOrphanSubtaskError(consoleErrorsB)).toBe(false);
+      await expectArchivedWithoutOrphans(
+        clientA,
+        multiParentId,
+        multiSubTaskIds,
+        'Client A',
+      );
+      await expectArchivedWithoutOrphans(
+        clientB,
+        multiParentId,
+        multiSubTaskIds,
+        'Client B',
+      );
 
       console.log('[MultiSubtask] ✓ Multiple subtasks archived without orphans');
     } finally {
@@ -357,7 +371,6 @@ test.describe('@supersync Archive Subtasks Sync', () => {
   }) => {
     let clientA: SimulatedE2EClient | null = null;
     let clientB: SimulatedE2EClient | null = null;
-    const consoleErrorsB: string[] = [];
 
     try {
       const user = await createTestUser(testRunId);
@@ -368,11 +381,6 @@ test.describe('@supersync Archive Subtasks Sync', () => {
       await clientA.sync.setupSuperSync(syncConfig);
 
       clientB = await createSimulatedClient(browser, baseURL!, 'B', testRunId);
-      clientB.page.on('console', (msg) => {
-        if (msg.type() === 'error') {
-          consoleErrorsB.push(msg.text());
-        }
-      });
       await clientB.sync.setupSuperSync(syncConfig);
 
       // Create parent and sync both clients
@@ -390,6 +398,8 @@ test.describe('@supersync Archive Subtasks Sync', () => {
       // 3. Immediately mark subtask and parent done, then archive (NO SYNC BETWEEN)
       await markTaskDone(clientA.page, subtaskName, true);
       await markTaskDone(clientA.page, parentName, false);
+      const raceParentId = await getTaskIdByTitle(clientA, parentName);
+      const raceSubTaskId = await getTaskIdByTitle(clientA, subtaskName);
       await archiveDoneTasks(clientA.page);
       console.log('[RaceTest] Archived (without intermediate sync)');
 
@@ -408,7 +418,12 @@ test.describe('@supersync Archive Subtasks Sync', () => {
         .count();
       expect(tasksOnB).toBe(0);
 
-      expect(checkForOrphanSubtaskError(consoleErrorsB)).toBe(false);
+      await expectArchivedWithoutOrphans(
+        clientB,
+        raceParentId,
+        [raceSubTaskId],
+        'Client B',
+      );
 
       console.log('[RaceTest] ✓ Add subtask + immediate archive synced correctly');
     } finally {

@@ -9,6 +9,10 @@ import {
   type SimulatedE2EClient,
 } from '../../utils/supersync-helpers';
 import { waitForAppReady } from '../../utils/waits';
+import {
+  expectArchivedNotLive,
+  getTaskIdByTitle,
+} from '../../utils/audit-archive-helpers';
 
 /**
  * SuperSync Worklog/Archive E2E Tests
@@ -58,6 +62,10 @@ test.describe('@supersync Worklog Sync', () => {
       await markTaskDone(clientA, task1Name);
       await markTaskDone(clientA, task2Name);
       console.log('[Worklog Test] Client A marked tasks done');
+      const archivedIds = [
+        await getTaskIdByTitle(clientA, task1Name),
+        await getTaskIdByTitle(clientA, task2Name),
+      ];
 
       // ============ PHASE 2: Client A Archives ============
       await archiveDoneTasks(clientA);
@@ -72,6 +80,10 @@ test.describe('@supersync Worklog Sync', () => {
       await clientB.sync.setupSuperSync(syncConfig);
       await clientB.sync.syncAndWait();
       console.log('[Worklog Test] Client B synced');
+
+      // The worklog lists live tasks too: prove the archive op was applied.
+      await expectArchivedNotLive(clientA, archivedIds, 'Client A');
+      await expectArchivedNotLive(clientB, archivedIds, 'Client B');
 
       // Navigate to worklog
       await clientB.page.goto('/#/tag/TODAY/history');
@@ -97,6 +109,11 @@ test.describe('@supersync Worklog Sync', () => {
       await expect(task1InWorklog).toBeVisible({ timeout: 10000 });
       await expect(task2InWorklog).toBeVisible({ timeout: 10000 });
       console.log('[Worklog Test] Both tasks visible in worklog on Client B');
+
+      // Replaying Client B's persisted state must keep them archived.
+      await clientB.page.reload({ waitUntil: 'domcontentloaded', timeout: 30000 });
+      await waitForAppReady(clientB.page);
+      await expectArchivedNotLive(clientB, archivedIds, 'Client B after reload');
     } finally {
       if (clientA) await closeClient(clientA);
       if (clientB) await closeClient(clientB);
@@ -135,6 +152,7 @@ test.describe('@supersync Worklog Sync', () => {
       await clientA.workView.addTask(taskA1);
 
       await markTaskDone(clientA, taskA1);
+      const taskA1Id = await getTaskIdByTitle(clientA, taskA1);
       await archiveDoneTasks(clientA);
       console.log('[Multi Archive Test] Client A archived first batch');
 
@@ -149,6 +167,7 @@ test.describe('@supersync Worklog Sync', () => {
       await clientB.workView.addTask(taskB1);
 
       await markTaskDone(clientB, taskB1);
+      const taskB1Id = await getTaskIdByTitle(clientB, taskB1);
       await archiveDoneTasks(clientB);
       console.log('[Multi Archive Test] Client B archived second batch');
 
@@ -156,6 +175,12 @@ test.describe('@supersync Worklog Sync', () => {
       await clientB.sync.syncAndWait();
       await clientA.sync.syncAndWait();
       console.log('[Multi Archive Test] Both synced');
+
+      // Both directions, before the reload: each client applied the other's
+      // archive op (the worklog alone would also list live tasks).
+      const bothIds = [taskA1Id, taskB1Id];
+      await expectArchivedNotLive(clientA, bothIds, 'Client A before reload');
+      await expectArchivedNotLive(clientB, bothIds, 'Client B before reload');
 
       // Reload both clients to ensure archive data from sync is loaded
       // Archive data is stored in a separate IndexedDB store and may need reload to appear in UI
@@ -170,6 +195,8 @@ test.describe('@supersync Worklog Sync', () => {
       });
       await waitForAppReady(clientB.page);
       console.log('[Multi Archive Test] Both clients reloaded after sync');
+      await expectArchivedNotLive(clientA, bothIds, 'Client A after reload');
+      await expectArchivedNotLive(clientB, bothIds, 'Client B after reload');
 
       // ============ PHASE 4: Verify All Archives in Worklog ============
       // Check Client A worklog

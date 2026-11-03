@@ -5,9 +5,22 @@ import {
   createSimulatedClient,
   closeClient,
   waitForTask,
-  handleEncryptionWarningDialog,
+  markTaskDoneByKey,
+  archiveDoneTasks,
+  getLocalOpLogSummary,
   type SimulatedE2EClient,
 } from '../../utils/supersync-helpers';
+import { ImportPage } from '../../pages/import.page';
+import {
+  expectArchivedNotLive,
+  expectServerHistoryStartsAtImport,
+  getLiveIds,
+  getServerOpTypes,
+  getServerOps,
+  getTaskIdByTitle,
+  hasEverAppeared,
+  watchNeverAppears,
+} from '../../utils/audit-archive-helpers';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
@@ -15,342 +28,158 @@ import * as os from 'os';
 /**
  * SuperSync Backup Recovery E2E Tests
  *
- * These tests verify that backup imports use OpType.BackupImport (reason='recovery')
- * which allows imports even when a SYNC_IMPORT already exists on the server.
- *
- * Bug fixed: backup.service.ts was using OpType.SyncImport (reason='initial') which
- * caused 409 SYNC_IMPORT_EXISTS errors when trying to recover via backup import.
- *
- * Server behavior:
- * - reason='initial' → 409 if SYNC_IMPORT exists (prevents duplicate initial snapshots)
- * - reason='recovery' → Allowed (user-initiated recovery should always work)
- *
- * Prerequisites:
- * - super-sync-server running on localhost:1901 with TEST_MODE=true
- * - Frontend running on localhost:4242
+ * A backup import creates a BACKUP_IMPORT op, uploaded with reason='recovery'
+ * as a clean slate. The server rejects a reason='initial' snapshot with 409
+ * SYNC_IMPORT_EXISTS when the account already holds a full-state op, and the
+ * client then silently drops its local import (operation-log-upload.service.ts,
+ * SYNC_IMPORT_EXISTS branch) and adopts the server state. So the precondition
+ * that matters is a full-state op already on the server, and the failure is
+ * silent: only the uploaded op and the resulting data reveal it.
  *
  * Run with: npm run e2e:supersync:file e2e/tests/sync/supersync-backup-recovery.spec.ts
  */
 
-/**
- * Helper to mark a task as done using keyboard shortcut
- */
-const markTaskDone = async (
-  page: SimulatedE2EClient['page'],
-  taskName: string,
-): Promise<void> => {
-  const task = page.locator(`task:not(.ng-animating):has-text("${taskName}")`).first();
-  await task.waitFor({ state: 'visible', timeout: 10000 });
-
-  await task.focus();
-  await page.waitForTimeout(100);
-  await task.press('d');
-
-  await expect(task).toHaveClass(/isDone/, { timeout: 10000 });
-};
-
-/**
- * Helper to archive done tasks via Daily Summary
- */
-const archiveDoneTasks = async (page: SimulatedE2EClient['page']): Promise<void> => {
-  const finishDayBtn = page.locator('.e2e-finish-day');
-  await finishDayBtn.waitFor({ state: 'visible', timeout: 10000 });
-  await finishDayBtn.click();
-
-  await page.waitForURL(/daily-summary/);
-
-  const saveAndGoHomeBtn = page.locator(
-    'daily-summary button[mat-flat-button]:has(mat-icon:has-text("wb_sunny"))',
-  );
-  await saveAndGoHomeBtn.waitFor({ state: 'visible', timeout: 10000 });
-  await saveAndGoHomeBtn.click();
-
-  await page.waitForURL(/(active\/tasks|tag\/TODAY\/tasks)/);
-};
-
-/**
- * Helper to check worklog for archived task entries
- */
-const checkWorklogForArchivedTasks = async (
-  page: SimulatedE2EClient['page'],
-): Promise<number> => {
-  await page.goto('/#/tag/TODAY/history');
-  await page.waitForLoadState('networkidle');
-  await page.waitForTimeout(1000);
-
-  // Try to expand week rows to see task entries
-  const weekRows = page.locator('.week-row');
-  const weekCount = await weekRows.count();
-  for (let i = 0; i < Math.min(weekCount, 3); i++) {
-    const row = weekRows.nth(i);
-    if (await row.isVisible()) {
-      await row.click().catch(() => {});
-      await page.waitForTimeout(300);
-    }
-  }
-
-  // Count task entries in worklog
-  const taskEntries = await page
-    .locator('.task-summary-table .task-title, .worklog-task, worklog-task')
-    .count()
-    .catch(() => 0);
-
-  return taskEntries;
-};
-
-/**
- * Helper to export backup from the app by reading IndexedDB directly
- */
+/** Export a backup through the UI (Settings > Sync & Backup > Export Data). */
 const exportBackup = async (page: SimulatedE2EClient['page']): Promise<string> => {
-  // Get backup data directly from IndexedDB (more reliable than Angular DI)
-  const backupData = await page.evaluate(async () => {
-    // Helper to get value from IndexedDB store
-    const getFromStore = <T>(
-      database: IDBDatabase,
-      storeName: string,
-      key: string,
-    ): Promise<T | undefined> => {
-      return new Promise((resolve, reject) => {
-        const tx = database.transaction(storeName, 'readonly');
-        const store = tx.objectStore(storeName);
-        const request = store.get(key);
-        request.onsuccess = () => resolve(request.result as T);
-        request.onerror = () => reject(request.error);
-      });
-    };
-
-    // Open the SUP_OPS database (stores state cache and archives)
-    const db = await new Promise<IDBDatabase>((resolve, reject) => {
-      const request = indexedDB.open('SUP_OPS');
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error);
-    });
-
-    // Get state cache from state_cache store
-    const stateCacheEntry = await getFromStore<{
-      id: string;
-      state: Record<string, unknown>;
-    }>(db, 'state_cache', 'current');
-
-    // Get archive data from SUP_OPS database (same DB, different stores)
-    // Archives are stored as { id: 'current', data: ArchiveModel, lastModified: number }
-    const archiveYoungEntry = await getFromStore<{
-      id: string;
-      data: { task: { ids: string[]; entities: Record<string, unknown> } };
-    }>(db, 'archive_young', 'current');
-
-    const archiveOldEntry = await getFromStore<{
-      id: string;
-      data: { task: { ids: string[]; entities: Record<string, unknown> } };
-    }>(db, 'archive_old', 'current');
-
-    const state = stateCacheEntry?.state || {};
-    const defaultArchive = { task: { ids: [], entities: {} } };
-
-    return {
-      timestamp: Date.now(),
-      lastUpdate: Date.now(),
-      crossModelVersion: 4.5,
-      data: {
-        ...state,
-        archiveYoung: archiveYoungEntry?.data || defaultArchive,
-        archiveOld: archiveOldEntry?.data || defaultArchive,
-      },
-    };
-  });
-
-  // Write to temp file
-  const tempDir = os.tmpdir();
-  const backupPath = path.join(tempDir, `sp-backup-${Date.now()}.json`);
-  fs.writeFileSync(backupPath, JSON.stringify(backupData, null, 2));
-
+  const importPage = new ImportPage(page);
+  await importPage.navigateToImportPage();
+  const backupPath = path.join(os.tmpdir(), `sp-backup-recovery-${Date.now()}.json`);
+  const downloadPromise = page.waitForEvent('download', { timeout: 30000 });
+  // Exact name: a sibling "Export Data (anonymized)" button shares the prefix.
+  await page.getByRole('button', { name: 'Export Data', exact: true }).click();
+  const download = await downloadPromise;
+  await download.saveAs(backupPath);
+  await page.goto('/#/tag/TODAY/tasks');
+  await page.waitForLoadState('networkidle');
   return backupPath;
-};
-
-/**
- * Helper to import backup file
- */
-const importBackup = async (
-  page: SimulatedE2EClient['page'],
-  backupPath: string,
-): Promise<void> => {
-  // Navigate to settings/import page
-  await page.goto('/#/config');
-  await page.waitForLoadState('networkidle');
-  await page.waitForTimeout(1000);
-
-  // Navigate to Sync & Backup tab where Import/Export section is located
-  const syncBackupTab = page.locator(
-    'mat-tab-header .mat-mdc-tab:has-text("Sync & Backup"), mat-tab-header .mat-tab-label:has-text("Sync & Backup")',
-  );
-  await syncBackupTab.waitFor({ state: 'visible', timeout: 10000 });
-  await syncBackupTab.click();
-  await page.waitForTimeout(500);
-
-  // Expand Import/Export section
-  const importExportSection = page.locator('collapsible:has-text("Import/Export")');
-  await importExportSection.scrollIntoViewIfNeeded();
-  await page.waitForTimeout(300);
-
-  const collapsibleHeader = importExportSection.locator('.collapsible-header, .header');
-  await collapsibleHeader.click();
-  await page.waitForTimeout(500);
-
-  // Set file on hidden input
-  const fileInput = page.locator('file-imex input[type="file"]');
-  await fileInput.setInputFiles(backupPath);
-
-  await handleEncryptionWarningDialog(page, '[importBackup]');
-
-  // Wait for import to complete (app navigates to TODAY tag)
-  const startTime = Date.now();
-  const timeout = 30000;
-  while (Date.now() - startTime < timeout) {
-    const url = page.url();
-    if (url.includes('tag') && url.includes('TODAY')) {
-      break;
-    }
-    await page.waitForTimeout(500);
-  }
-
-  await page.waitForLoadState('networkidle');
-  await page.waitForTimeout(1000);
 };
 
 test.describe('@supersync Backup Recovery with Existing SYNC_IMPORT', () => {
   /**
-   * CRITICAL TEST: Backup import should succeed even when SYNC_IMPORT exists
-   *
-   * This test verifies the fix for the bug where backup imports used
-   * OpType.SyncImport (reason='initial') instead of OpType.BackupImport (reason='recovery').
-   *
-   * The bug caused 409 SYNC_IMPORT_EXISTS errors when users tried to recover
-   * by importing a backup after a SYNC_IMPORT already existed on the server.
-   *
    * Steps:
-   * 1. Client A connects and syncs (creates SYNC_IMPORT on server)
-   * 2. Client A creates a task, marks it done, archives it
-   * 3. Client A syncs (uploads archive data)
-   * 4. Client A exports backup (includes archive data)
-   * 5. Client A imports the backup (should create BACKUP_IMPORT with reason='recovery')
-   * 6. Client A syncs - BACKUP_IMPORT should be ACCEPTED (not 409)
-   * 7. Client B connects and syncs
-   * 8. Verify Client B has archived task in worklog
+   * 1. Client A syncs a seed task to account 1, then switches to the empty
+   *    account 2: the server migration uploads a SYNC_IMPORT there. This is
+   *    the precondition (asserted on the server).
+   * 2. Client A creates a task, archives it, syncs, and exports a backup.
+   * 3. Client A creates a "server-only" task and syncs it, so the server state
+   *    now differs from the backup.
+   * 4. Client A imports the backup and syncs: the BACKUP_IMPORT must be
+   *    accepted (synced locally, held by the server, nothing older kept).
+   * 5. Fresh Client B joins: it must get the backup's state (archived task in
+   *    archive_young) and NOT the server-only task.
    *
-   * Before the fix: Step 6 would fail with 409 SYNC_IMPORT_EXISTS
-   * After the fix: Step 6 succeeds because BACKUP_IMPORT uses reason='recovery'
+   * If the BACKUP_IMPORT were uploaded as reason='initial' without a clean
+   * slate, step 4 would hit 409 SYNC_IMPORT_EXISTS, the client would drop the
+   * import, and B would see the server-only task.
    */
   test('Backup import should succeed when SYNC_IMPORT already exists on server', async ({
     browser,
     baseURL,
     testRunId,
   }) => {
+    test.setTimeout(240000);
     let clientA: SimulatedE2EClient | null = null;
     let clientB: SimulatedE2EClient | null = null;
     let backupPath: string | null = null;
 
     try {
-      // Create a single sync provider (user)
-      const user = await createTestUser(testRunId + '-backup-recovery');
-      const syncConfig = getSuperSyncConfig(user);
+      const user1 = await createTestUser(`${testRunId}-recovery-1`);
+      const user2 = await createTestUser(`${testRunId}-recovery-2`);
+      const syncConfig2 = getSuperSyncConfig(user2);
 
-      // ============ PHASE 1: Client A connects and syncs ============
-      console.log('[Backup Recovery] Phase 1: Client A connecting and syncing');
-
+      // ============ PHASE 1: Put a SYNC_IMPORT on account 2 ============
       clientA = await createSimulatedClient(browser, baseURL!, 'A', testRunId);
-      await clientA.sync.setupSuperSync(syncConfig);
+      await clientA.sync.setupSuperSync(getSuperSyncConfig(user1));
+      const seedTask = `RecoverySeed-${testRunId}`;
+      await clientA.workView.addTask(seedTask);
       await clientA.sync.syncAndWait();
-      console.log('[Backup Recovery] Client A connected - SYNC_IMPORT created on server');
 
-      // ============ PHASE 2: Client A creates and archives a task ============
-      console.log('[Backup Recovery] Phase 2: Creating and archiving task');
+      await clientA.sync.setupSuperSync(syncConfig2);
+      await clientA.sync.syncAndWait();
+      await waitForTask(clientA.page, seedTask);
+      const opsAfterMigration = await getServerOps(user2.userId);
+      expect(
+        opsAfterMigration.map((op) => op.opType),
+        'precondition: account 2 must hold a SYNC_IMPORT before the backup import',
+      ).toContain('SYNC_IMPORT');
+      console.log('[Backup Recovery] Account 2 holds a SYNC_IMPORT');
 
-      const archivedTaskName = `BackupRecoveryTest-${testRunId}`;
+      // ============ PHASE 2: Archived task, synced, then exported ============
+      const archivedTaskName = `BackupRecoveryArchived-${testRunId}`;
       await clientA.workView.addTask(archivedTaskName);
       await waitForTask(clientA.page, archivedTaskName);
-      console.log(`[Backup Recovery] Created task: ${archivedTaskName}`);
-
-      // Mark task as done
-      await markTaskDone(clientA.page, archivedTaskName);
-      console.log('[Backup Recovery] Marked task as done');
-
-      // Archive the task via Daily Summary
-      await archiveDoneTasks(clientA.page);
-      console.log('[Backup Recovery] Archived task');
-
-      // ============ PHASE 3: Client A syncs (uploads archive) ============
-      console.log('[Backup Recovery] Phase 3: Syncing to upload archive');
-
+      const archivedTaskId = await getTaskIdByTitle(clientA, archivedTaskName);
+      await markTaskDoneByKey(clientA, archivedTaskName);
+      await archiveDoneTasks(clientA);
       await clientA.sync.syncAndWait();
-      console.log('[Backup Recovery] Client A synced with archived task');
-
-      // Verify archived task appears in worklog
-      const worklogCountBefore = await checkWorklogForArchivedTasks(clientA.page);
-      console.log(
-        `[Backup Recovery] Client A worklog entries before import: ${worklogCountBefore}`,
-      );
-      expect(worklogCountBefore).toBeGreaterThan(0);
-
-      // ============ PHASE 4: Export backup ============
-      console.log('[Backup Recovery] Phase 4: Exporting backup');
+      await expectArchivedNotLive(clientA, [archivedTaskId], 'Client A before export');
 
       backupPath = await exportBackup(clientA.page);
-      console.log(`[Backup Recovery] Exported backup to: ${backupPath}`);
+      console.log('[Backup Recovery] Exported backup');
 
-      // ============ PHASE 5: Import backup (CRITICAL - should use reason='recovery') ============
-      console.log('[Backup Recovery] Phase 5: Importing backup');
-
-      await importBackup(clientA.page, backupPath);
-      console.log('[Backup Recovery] Backup imported');
-
-      // ============ PHASE 6: Sync after import (CRITICAL - should NOT get 409) ============
-      console.log(
-        '[Backup Recovery] Phase 6: Syncing after import (should succeed, not 409)',
-      );
-
-      // Re-setup sync after import (import resets state)
-      await clientA.sync.setupSuperSync(syncConfig);
+      // ============ PHASE 3: Make the server differ from the backup ============
+      const serverOnlyTask = `BackupRecoveryServerOnly-${testRunId}`;
+      await clientA.workView.addTask(serverOnlyTask);
+      await waitForTask(clientA.page, serverOnlyTask);
+      const serverOnlyTaskId = await getTaskIdByTitle(clientA, serverOnlyTask);
       await clientA.sync.syncAndWait();
-      console.log(
-        '[Backup Recovery] Client A synced after import - BACKUP_IMPORT accepted!',
-      );
+      console.log('[Backup Recovery] Server-only task synced');
 
-      // Verify archived task still in worklog
-      const worklogCountAfter = await checkWorklogForArchivedTasks(clientA.page);
-      console.log(
-        `[Backup Recovery] Client A worklog entries after import: ${worklogCountAfter}`,
-      );
-      expect(worklogCountAfter).toBeGreaterThan(0);
-
-      // ============ PHASE 7: Client B connects and syncs ============
-      console.log('[Backup Recovery] Phase 7: Client B joining and syncing');
-
-      clientB = await createSimulatedClient(browser, baseURL!, 'B', testRunId);
-      await clientB.sync.setupSuperSync(syncConfig);
-      await clientB.sync.syncAndWait();
-      console.log('[Backup Recovery] Client B synced');
-
-      // Wait for state to settle
-      await clientB.page.waitForTimeout(2000);
-
-      // ============ PHASE 8: Verify Client B has archived task ============
-      console.log('[Backup Recovery] Phase 8: Verifying Client B has archived task');
-
-      const worklogCountB = await checkWorklogForArchivedTasks(clientB.page);
-      console.log(`[Backup Recovery] Client B worklog entries: ${worklogCountB}`);
-
-      // CRITICAL ASSERTION: Client B should have archived task from backup import
+      // ============ PHASE 4: Import the backup and sync ============
+      const importPage = new ImportPage(clientA.page);
+      await importPage.navigateToImportPage();
+      await importPage.importBackupFile(backupPath);
+      await clientA.page.goto('/#/tag/TODAY/tasks', { waitUntil: 'domcontentloaded' });
+      await clientA.page.waitForLoadState('networkidle');
       expect(
-        worklogCountB,
-        'Client B should have archived task entries from BACKUP_IMPORT',
-      ).toBeGreaterThan(0);
+        await getLiveIds(clientA, [serverOnlyTaskId]),
+        'Client A after import: the backup predates the server-only task',
+      ).toEqual([]);
 
-      console.log('[Backup Recovery] ✓ Backup recovery test PASSED!');
+      // Evidence only: log whether the helper had to answer a conflict dialog.
+      await watchNeverAppears(clientA.page, 'dialog-sync-import-conflict', 'conflict');
+      // Restoring the backup is the user's intent, so keep local if asked.
+      await clientA.sync.setupSuperSync({ ...syncConfig2, syncImportChoice: 'local' });
+      await clientA.sync.syncAndWait({ useLocal: true });
       console.log(
-        '[Backup Recovery] BACKUP_IMPORT was accepted by server (reason=recovery bypassed 409)',
+        `[Backup Recovery] Conflict dialog during post-import sync: ${await hasEverAppeared(
+          clientA.page,
+          'conflict',
+        )}`,
       );
+
+      // The BACKUP_IMPORT must have been accepted, not dropped on a 409.
+      const importer = clientA;
+      await expect
+        .poll(
+          async () =>
+            (await getLocalOpLogSummary(importer.page))
+              .filter((e) => e.opType === 'BACKUP_IMPORT')
+              .map((e) => e.isSynced),
+          { message: 'Client A: local BACKUP_IMPORT must be synced', timeout: 15000 },
+        )
+        .toEqual([true]);
+      console.log(
+        `[Backup Recovery] Server ops: ${(await getServerOpTypes(user2.userId)).join(', ')}`,
+      );
+      expect(await expectServerHistoryStartsAtImport(user2.userId, 'Account 2')).toBe(
+        'BACKUP_IMPORT',
+      );
+
+      // ============ PHASE 5: Fresh Client B gets the backup's state ============
+      clientB = await createSimulatedClient(browser, baseURL!, 'B', testRunId);
+      await clientB.sync.setupSuperSync(syncConfig2);
+      await clientB.sync.syncAndWait();
+
+      // Positive anchor: the backup's archived task is in B's archive.
+      await expectArchivedNotLive(clientB, [archivedTaskId], 'Client B');
+      await waitForTask(clientB.page, seedTask);
+      expect(
+        await getLiveIds(clientB, [serverOnlyTaskId]),
+        'Client B: the server-only task must be gone after the BACKUP_IMPORT',
+      ).toEqual([]);
+      console.log('[Backup Recovery] ✓ Client B has the backup state only');
     } finally {
-      // Cleanup
       if (clientA) await closeClient(clientA);
       if (clientB) await closeClient(clientB);
       if (backupPath && fs.existsSync(backupPath)) {

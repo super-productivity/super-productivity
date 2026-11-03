@@ -11,32 +11,38 @@ import {
   type SimulatedE2EClient,
 } from '../../utils/supersync-helpers';
 import { ImportPage } from '../../pages/import.page';
+import {
+  expectArchivedNotLive,
+  expectNotInArchive,
+  getLiveIds,
+  getTaskIdByTitle,
+  hasEverAppeared,
+  watchNeverAppears,
+} from '../../utils/audit-archive-helpers';
+
+/** Task ids in e2e/fixtures/test-backup.json. */
+const IMPORTED_TASK_IDS = ['active-task-1', 'active-task-subtask-1', 'active-task-2'];
 
 /**
- * SuperSync "Keep Local" Archive Preservation E2E Tests
+ * SuperSync sync-import conflict dialog with a server that holds archives.
  *
- * These tests verify the bug fix for archive corruption during "Keep Local"
- * conflict resolution. The bug was:
+ * Client A archives a task and syncs; client B imports a backup and then
+ * enables sync, which raises the sync-import conflict dialog. These tests cover
+ * both dialog choices on SuperSync: "Use My Data" keeps the import (A's live and
+ * archived task stay off B) and "Use Server Data" replaces it with the server
+ * state, including A's archive.
  *
- * 1. downloadOps() wrote REMOTE archives to IndexedDB immediately
- * 2. LocalDataConflictError was thrown
- * 3. User clicked "Keep local" (Use My Data)
- * 4. forceUploadLocalState read archives from IndexedDB (now had REMOTE data!)
- * 5. NgRx still had LOCAL entity data (projects/tasks)
- * 6. Validation failed: archived tasks referenced entities that didn't exist
- *
- * The fix: Archives are now written only during hydrateFromRemoteSync() AFTER
- * conflict resolution, ensuring local archives remain intact when choosing
- * "Keep Local".
- *
- * Prerequisites:
- * - super-sync-server running on localhost:1901 with TEST_MODE=true
- * - Frontend running on localhost:4242
+ * Scope note: the "Keep Local" archive-preservation fix (archives written in
+ * hydrateFromRemoteSync after the conflict is resolved, not during download)
+ * lives in the file-based adapter only and is unit-tested in
+ * file-based-sync-adapter.service.spec.ts ("downloadOps" > "should NOT write
+ * archive ..."). SuperSync never took that path, so these tests are not a
+ * regression test for that fix; covering it end to end needs a WebDAV test.
  *
  * Run with: npm run e2e:supersync:file e2e/tests/sync/supersync-keep-local-archive-preservation.spec.ts
  */
 
-test.describe('@supersync @archive Keep Local Archive Preservation', () => {
+test.describe('@supersync @archive Sync-import conflict dialog with server archives', () => {
   /**
    * Scenario: Keep local (Use My Data) works without validation errors
    *
@@ -58,7 +64,7 @@ test.describe('@supersync @archive Keep Local Archive Preservation', () => {
    * - Client B keeps imported data
    * - Sync works after "Use My Data"
    */
-  test('Keep local works without validation errors when server has archives', async ({
+  test('Use My Data keeps the import and no server task when the server has archives', async ({
     browser,
     baseURL,
     testRunId,
@@ -85,7 +91,8 @@ test.describe('@supersync @archive Keep Local Archive Preservation', () => {
       const taskAName = `TaskA-Remote-${uniqueId}`;
       await clientA.workView.addTask(taskAName);
       await waitForTask(clientA.page, taskAName);
-      console.log(`[KeepLocal] Client A created: ${taskAName}`);
+      const taskAId = await getTaskIdByTitle(clientA, taskAName);
+      console.log('[KeepLocal] Client A created its task');
 
       // Archive the task
       await archiveTask(clientA, taskAName);
@@ -137,6 +144,9 @@ test.describe('@supersync @archive Keep Local Archive Preservation', () => {
       // the keep-local conflict path, so only collect errors from that point onward.
       consoleErrors.length = 0;
 
+      // Positive control for the "never appears" watcher other specs rely on:
+      // it must record this dialog, which is expected here.
+      await watchNeverAppears(clientB.page, 'dialog-sync-import-conflict', 'conflict');
       await clientB.sync.setupSuperSync({ ...syncConfig, waitForInitialSync: false });
 
       const dialog = clientB.page.locator('dialog-sync-import-conflict');
@@ -174,12 +184,13 @@ test.describe('@supersync @archive Keep Local Archive Preservation', () => {
       await waitForTask(clientB.page, 'E2E Import Test - Active Task With Subtask');
       console.log('[KeepLocal] ✓ Imported data preserved');
 
-      // Verify remote task is NOT present
-      const hasRemoteTask = await clientB.page
-        .locator(`task:has-text("${taskAName}")`)
-        .isVisible()
-        .catch(() => false);
-      expect(hasRemoteTask).toBe(false);
+      expect(await hasEverAppeared(clientB.page, 'conflict')).toBe(true);
+
+      // Verify A's archived task is NOT on B. It is archived on A, so the work
+      // view could never show it: read B's store and archive instead (the
+      // imported task above and the archive entry are the positive anchors).
+      expect(await getLiveIds(clientB, [taskAId])).toEqual([]);
+      await expectNotInArchive(clientB, [taskAId], '[KeepLocal] Client B');
       console.log('[KeepLocal] ✓ Remote data NOT present');
 
       // Verify sync works after "Use My Data"
@@ -213,7 +224,7 @@ test.describe('@supersync @archive Keep Local Archive Preservation', () => {
    * - Client B gets server data (including A's archived task)
    * - Imported data is replaced
    */
-  test('Use Server Data correctly downloads remote archives', async ({
+  test('Use Server Data replaces the import with server data including archives', async ({
     browser,
     baseURL,
     testRunId,
@@ -236,6 +247,7 @@ test.describe('@supersync @archive Keep Local Archive Preservation', () => {
       const taskAName = `TaskA-Server-${uniqueId}`;
       await clientA.workView.addTask(taskAName);
       await waitForTask(clientA.page, taskAName);
+      const taskAId = await getTaskIdByTitle(clientA, taskAName);
       await archiveTask(clientA, taskAName);
       await navigateToWorkView(clientA);
       await clientA.sync.syncAndWait();
@@ -277,18 +289,18 @@ test.describe('@supersync @archive Keep Local Archive Preservation', () => {
       // ============ PHASE 4: Verify server data received ============
       console.log('[UseServer] Phase 4: Verifying server data received');
 
-      // Client B should have A's archived task in worklog
-      const hasRemoteArchive = await hasTaskInWorklog(clientB, taskAName);
-      expect(hasRemoteArchive).toBe(true);
+      // Client B should hold A's archived task in its archive, not live
+      // (the worklog alone would also list a live task).
+      await expectArchivedNotLive(clientB, [taskAId], '[UseServer] Client B');
+      expect(await hasTaskInWorklog(clientB, taskAName)).toBe(true);
       console.log('[UseServer] ✓ Remote archive DOWNLOADED');
 
-      // Client B should NOT have imported task
-      await navigateToWorkView(clientB);
-      const hasImportedTask = await clientB.page
-        .locator('task:has-text("E2E Import Test - Active Task With Subtask")')
-        .isVisible()
-        .catch(() => false);
-      expect(hasImportedTask).toBe(false);
+      // Client B should NOT have the imported tasks. The archive above anchors
+      // that the server state was applied; read the store, not the work view.
+      const serverDataClient = clientB;
+      await expect
+        .poll(() => getLiveIds(serverDataClient, IMPORTED_TASK_IDS), { timeout: 15000 })
+        .toEqual([]);
       console.log('[UseServer] ✓ Imported data REPLACED');
 
       console.log('[UseServer] ✓ Use Server Data test PASSED!');
@@ -319,7 +331,7 @@ test.describe('@supersync @archive Keep Local Archive Preservation', () => {
    * - Note: The import replaces local state, so B's pre-import archive is gone
    *   but the import's state is preserved (not corrupted by remote archives)
    */
-  test('Keep local preserves imported state without corruption', async ({
+  test('Use My Data keeps the imported state across a later sync', async ({
     browser,
     baseURL,
     testRunId,
@@ -342,6 +354,7 @@ test.describe('@supersync @archive Keep Local Archive Preservation', () => {
       const taskAName = `ServerArchive-${uniqueId}`;
       await clientA.workView.addTask(taskAName);
       await waitForTask(clientA.page, taskAName);
+      const taskAId = await getTaskIdByTitle(clientA, taskAName);
       await archiveTask(clientA, taskAName);
       await navigateToWorkView(clientA);
       await clientA.sync.syncAndWait();
@@ -397,9 +410,10 @@ test.describe('@supersync @archive Keep Local Archive Preservation', () => {
       expect(hasError).toBe(false);
       console.log('[Preserve] ✓ Sync works, no corruption');
 
-      // Server data should NOT be present
-      const hasServerArchive = await hasTaskInWorklog(clientB, taskAName);
-      expect(hasServerArchive).toBe(false);
+      // Server data should NOT be present: anchored on the imported task
+      // (waitForTask above) and on B's archive entry existing.
+      expect(await getLiveIds(clientB, [taskAId])).toEqual([]);
+      await expectNotInArchive(clientB, [taskAId], '[Preserve] Client B');
       console.log('[Preserve] ✓ Server archive NOT present');
 
       console.log('[Preserve] ✓ State preservation test PASSED!');
