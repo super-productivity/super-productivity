@@ -93,6 +93,8 @@
 .count {
   color: var(--text-color-muted);
   font-size: var(--font-size-sm);
+  // A live preview, not a label: set apart from "Rules" above it.
+  font-style: italic;
   white-space: nowrap;
 }
 
