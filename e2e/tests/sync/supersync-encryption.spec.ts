@@ -159,9 +159,16 @@ test.describe('@supersync SuperSync Encryption', () => {
 
       // GHSA-9v8x: no op ever left A unencrypted, and the pre-existing ops
       // were subsumed by the enable-snapshot instead of being uploaded.
+      expect(uploadsA.snapshots.length, 'A uploaded the enable-snapshot').toBeGreaterThan(
+        0,
+      );
+      expect(
+        uploadsA.snapshots.filter((snap) => snap.isPayloadEncrypted !== true),
+        'every uploaded snapshot is encrypted',
+      ).toEqual([]);
       expect(
         uploadsA.ops.filter((op) => op.isPayloadEncrypted !== true),
-        'every uploaded op is encrypted',
+        'every uploaded regular op is encrypted',
       ).toEqual([]);
       expect(
         uploadsA.ops.filter((op) => preExistingOpIds.includes(op.id)),

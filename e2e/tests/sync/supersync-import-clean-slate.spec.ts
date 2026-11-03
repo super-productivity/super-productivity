@@ -712,7 +712,11 @@ test.describe('@supersync @cleanslate Import Clean Slate Semantics', () => {
    * download ran before the import existed). After A accepted the import, the
    * captured upload is sent again without its `lastKnownServerSeq` — with the
    * cursor the server's state-replacement fence would reject it, because it
-   * is below the import.
+   * is below the import. Holding C's request and releasing it later (the
+   * audit's plan) therefore cannot reach this path. A current client always
+   * sends the cursor, so the replay models an uploader without one (a client
+   * or server from before the fence); the client-side filter it exercises is
+   * the same either way.
    *
    * Actions:
    * 1. A creates a task and syncs; C joins and syncs (has A's task)
@@ -811,6 +815,10 @@ test.describe('@supersync @cleanslate Import Clean Slate Semantics', () => {
       });
       await waitForTask(clientA.page, 'E2E Import Test - Active Task With Subtask');
 
+      // Watch A before the op exists on the server, so no sync of A can
+      // download it unobserved.
+      const watcherA = await watchDialogs(clientA.page, [DIALOG.syncImportConflict]);
+
       // ============ PHASE 5: C's concurrent op lands AFTER the import ============
       const replay = await replayOpsUploadWithoutCursor(cUpload);
       expect(
@@ -827,7 +835,6 @@ test.describe('@supersync @cleanslate Import Clean Slate Semantics', () => {
       ).toBeGreaterThan(0);
 
       // ============ PHASE 6: A syncs again — the op is silently filtered ============
-      const watcherA = await watchDialogs(clientA.page, [DIALOG.syncImportConflict]);
       await clientA.sync.syncAndWait();
       await watcherA.expectNeverSeen(
         [DIALOG.syncImportConflict],

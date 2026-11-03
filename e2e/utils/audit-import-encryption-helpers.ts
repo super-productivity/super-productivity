@@ -148,17 +148,27 @@ export interface RecordedUploadOp {
 }
 
 /**
- * Records the op envelopes of every POST /api/sync/ops this page sends. Bodies
- * are parsed when the request is issued, whether or not the server accepts it,
- * so a plaintext upload the server rejects is still recorded. Payloads are not
- * kept (they may hold user content).
+ * Records the envelopes of every POST /api/sync/ops and /api/sync/snapshot
+ * this page sends. Bodies are parsed when the request is issued, whether or
+ * not the server accepts it, so a plaintext upload the server rejects is still
+ * recorded. Payloads are not kept (they may hold user content).
  */
-export const recordOpsUploads = (page: Page): { ops: RecordedUploadOp[] } => {
-  const recorded: { ops: RecordedUploadOp[] } = { ops: [] };
+export const recordOpsUploads = (
+  page: Page,
+): { ops: RecordedUploadOp[]; snapshots: { isPayloadEncrypted?: boolean }[] } => {
+  const recorded: {
+    ops: RecordedUploadOp[];
+    snapshots: { isPayloadEncrypted?: boolean }[];
+  } = { ops: [], snapshots: [] };
   page.on('request', (request: Request) => {
     if (request.method() !== 'POST') return;
-    const url = new URL(request.url());
-    if (!url.pathname.endsWith('/api/sync/ops')) return;
+    const { pathname } = new URL(request.url());
+    if (pathname.endsWith('/api/sync/snapshot')) {
+      const body = parseSuperSyncRequestBody<{ isPayloadEncrypted?: boolean }>(request);
+      recorded.snapshots.push({ isPayloadEncrypted: body.isPayloadEncrypted });
+      return;
+    }
+    if (!pathname.endsWith('/api/sync/ops')) return;
     const body = parseSuperSyncRequestBody<{ ops?: RecordedUploadOp[] }>(request);
     for (const op of body.ops ?? []) {
       recorded.ops.push({
@@ -273,7 +283,15 @@ export const captureAndBlockOpsUploads = async (
     }
     await route.fulfill({ status: 503, json: { error: 'held by test' } });
   });
-  return { firstUpload };
+  // Fail with a clear message instead of hanging until the test timeout.
+  const timedFirstUpload = Promise.race([
+    firstUpload,
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('No ops upload was captured within 30s')), 30000),
+    ),
+  ]);
+  timedFirstUpload.catch(() => undefined);
+  return { firstUpload: timedFirstUpload };
 };
 
 /**

@@ -522,16 +522,19 @@ test.describe('@supersync @import-conflict Sync Import Conflict Dialog', () => {
       await clientB.page.waitForLoadState('networkidle');
 
       // ============ PHASE 3: B syncs → MSG_LOCAL_FILTERS dialog ============
-      // A sync started by the reload may already have opened the dialog; the
-      // sync button is behind its backdrop then. Otherwise click it directly
-      // (syncAndWait would answer the dialog silently).
+      // A sync started by the reload may open the dialog by itself; the sync
+      // button is behind its backdrop then. Let that sync settle first, then
+      // click directly only if no dialog is up (syncAndWait would answer the
+      // dialog silently).
       const dialog = clientB.sync.syncImportConflictDialog;
+      await expect(clientB.sync.syncSpinner).toBeHidden({ timeout: 30000 });
       if (!(await dialog.isVisible())) {
         await clientB.sync.syncBtn.click();
       }
       await expect(dialog).toBeVisible({ timeout: 30000 });
+      // Exactly A's one task op was filtered.
       await expect(dialog).toContainText(
-        'Your local data was imported/restored, but the server has',
+        'Your local data was imported/restored, but the server has 1 changes',
       );
       await expect(dialog).toContainText('cannot be automatically merged');
       await expect(clientB.sync.firstSyncUseAccountRadio).toHaveCount(0);

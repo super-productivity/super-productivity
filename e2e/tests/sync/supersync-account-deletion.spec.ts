@@ -10,7 +10,10 @@ import {
   type SimulatedE2EClient,
 } from '../../utils/supersync-helpers';
 
-/** Password setupSuperSync/syncAndWait use when a test gives none. */
+/**
+ * Password setupSuperSync/syncAndWait use when a test gives none
+ * (`_encryptionPassword` in e2e/pages/supersync.page.ts, not exported).
+ */
 const DEFAULT_ENCRYPTION_PASSWORD = 'e2e-default-encryption-pw';
 
 /**
