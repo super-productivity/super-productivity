@@ -222,7 +222,7 @@ export class ViewEditorSectionComponent {
     if (
       !this.isCollapsible() ||
       !(target instanceof Element) ||
-      target.closest('button, input, mat-form-field')
+      target.closest('button, input')
     ) {
       return;
     }

@@ -7,16 +7,8 @@
   min-width: 0;
 }
 
-.title-field {
-  flex: 1 1 auto;
-  min-width: 0;
-  // Not the form's usual space below: a section's field sits centred in its
-  // bar, as the text it replaces.
-  margin-bottom: 0;
-}
-
-// A card's bar: a plain field at the title's own size and weight, so the bar
-// keeps its height whether it shows the text or the field.
+// A plain field at the title's own size and weight: the row keeps its height
+// whether it shows the text or the field.
 .inline-field {
   display: flex;
   flex: 1 1 auto;
@@ -50,19 +42,16 @@
   }
 }
 
+// The dialog's title sits on the bar's own line: its underline shows only
+// while typing or flagged, never as a second line above the bar's.
+:host-context([mat-dialog-title]) .title-input:not(:focus, .is-error) {
+  border-bottom-color: transparent;
+}
+
 .title-error {
   color: var(--c-warn);
   font-size: var(--font-size-sm);
   font-weight: normal;
-}
-
-// The dialog's title keeps clear of the dialog's top edge and the form below.
-:host-context([mat-dialog-title]) .title-field {
-  margin-block: var(--s) var(--s2);
-}
-
-:host-context([mat-dialog-title].is-scrolled) .title-field {
-  margin-bottom: var(--s-half);
 }
 
 // Long titles wrap to two lines, then end in an ellipsis.

@@ -7,10 +7,17 @@
   --view-editor-label-w: 88px;
 }
 
-// Scrolled, the title is a bar over the content: a line, less space below.
-.title.is-scrolled {
+// The title stays over the scrolling content as a bar: tight below, and a
+// line once the content scrolls under it. Only the line changes, so nothing
+// moves when scrolling starts.
+.title {
   --mat-dialog-headline-padding: 6px 24px 4px;
-  border-bottom: 1px solid var(--divider-color);
+  border-bottom: 1px solid transparent;
+  transition: border-color var(--transition-duration-s);
+}
+
+.title.is-scrolled {
+  border-bottom-color: var(--divider-color);
 }
 
 // Below xs the dialog is full screen (panelClass 'fullscreen-xs-dialog').

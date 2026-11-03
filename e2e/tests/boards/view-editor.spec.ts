@@ -48,7 +48,7 @@ test.describe('View editor', () => {
     const dialog = await openCreateViewDialog(page);
     const save = dialog.getByRole('button', { name: 'Save', exact: true });
     // No error before the title was touched; Save stays enabled.
-    await expect(dialog.locator('mat-error')).toHaveCount(0);
+    await expect(dialog.locator('.title-error')).toHaveCount(0);
     await expect(save).toBeEnabled();
     // A new view starts with one section, a list, its title hidden: an open
     // card without a bar.
@@ -62,7 +62,7 @@ test.describe('View editor', () => {
     await save.click();
     const title = dialog.getByRole('textbox', { name: 'Title', exact: true });
     await expect(title).toBeFocused();
-    await expect(dialog.locator('mat-error')).toContainText('required');
+    await expect(dialog.locator('.title-error')).toContainText('required');
 
     await title.fill(`${testPrefix}-Urgent`);
     const count = section.locator('.count');

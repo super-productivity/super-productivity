@@ -14,10 +14,7 @@ import {
 } from '@angular/core';
 import { FormsModule, NgModel } from '@angular/forms';
 import { MatIconButton } from '@angular/material/button';
-import { MatError, MatFormField, MatLabel } from '@angular/material/form-field';
 import { MatIcon } from '@angular/material/icon';
-import { MatInput } from '@angular/material/input';
-import { ErrorStateMatcher } from '@angular/material/core';
 import { MatTooltip } from '@angular/material/tooltip';
 import { TranslatePipe } from '@ngx-translate/core';
 import { T } from '../../../../t.const';
@@ -25,7 +22,9 @@ import { T } from '../../../../t.const';
 let nextTitleId = 0;
 
 /**
- * A title shown as text that turns into a required text field to rename it:
+ * A title shown as text that turns into a required text field to rename it,
+ * a plain one at the text's own size (named by its placeholder and
+ * `aria-label`), so the row keeps its height:
  * on a click (or the pencil), back to text on Enter or blur. An empty title
  * keeps the field, so it is never shown as empty text; its error shows only
  * once the user tries to leave it empty (Enter or Save), not on a blur.
@@ -33,17 +32,7 @@ let nextTitleId = 0;
 @Component({
   selector: 'view-editor-title',
   standalone: true,
-  imports: [
-    FormsModule,
-    MatFormField,
-    MatLabel,
-    MatError,
-    MatInput,
-    MatIcon,
-    MatIconButton,
-    MatTooltip,
-    TranslatePipe,
-  ],
+  imports: [FormsModule, MatIcon, MatIconButton, MatTooltip, TranslatePipe],
   templateUrl: './view-editor-title.component.html',
   styleUrl: './view-editor-title.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -59,11 +48,6 @@ export class ViewEditorTitleComponent {
   readonly isPencilShown = input<boolean>(false);
   /** The dialog's first focus (`cdkFocusInitial`) goes to the text. */
   readonly isFocusInitial = input<boolean>(false);
-  /**
-   * A plain field at the text's own size, for a card's bar: no label (the
-   * placeholder and `aria-label` name it), so the bar keeps its height.
-   */
-  readonly isInline = input<boolean>(false);
 
   readonly titleChange = output<string>();
 
@@ -85,11 +69,6 @@ export class ViewEditorTitleComponent {
   private readonly _isErrorShown = signal(false);
   readonly isError = computed(() => this._isErrorShown() && !this.title());
   readonly errorId = `view-editor-title-error-${nextTitleId++}`;
-  /** Material's field shows the error when `isError` says, not on touch. */
-  readonly errorMatcher = computed<ErrorStateMatcher>(() => {
-    const isError = this.isError();
-    return { isErrorState: () => isError };
-  });
 
   edit(): void {
     this.isEditing.set(true);

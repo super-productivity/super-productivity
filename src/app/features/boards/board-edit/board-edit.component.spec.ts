@@ -183,12 +183,12 @@ describe('BoardEditComponent with the view editor', () => {
     expect(editor().model().panels.length).toBe(1);
     // The only section of a list has no title field.
     expect(fixture.nativeElement.querySelectorAll('input').length).toBe(1);
-    expect(fixture.nativeElement.querySelector('mat-error')).toBeNull();
+    expect(fixture.nativeElement.querySelector('.title-error')).toBeNull();
 
     cmp.save();
     fixture.detectChanges();
     expect(dispatch).not.toHaveBeenCalled();
-    expect(fixture.nativeElement.querySelector('mat-error')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('.title-error')).not.toBeNull();
 
     editor().setTitle('Focus');
     await settle();
@@ -207,11 +207,11 @@ describe('BoardEditComponent with the view editor', () => {
     title.dispatchEvent(new Event('focus'));
     title.dispatchEvent(new Event('blur'));
     await settle();
-    expect(fixture.nativeElement.querySelector('mat-error')).toBeNull();
+    expect(fixture.nativeElement.querySelector('.title-error')).toBeNull();
 
     cmp.save();
     await settle();
-    expect(fixture.nativeElement.querySelector('mat-error')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('.title-error')).not.toBeNull();
   });
 
   describe('saving an edited view', () => {

@@ -1,4 +1,4 @@
-@if (isEditing() && isInline()) {
+@if (isEditing()) {
   <span class="inline-field">
     <input
       #model="ngModel"
@@ -22,24 +22,6 @@
       >
     }
   </span>
-} @else if (isEditing()) {
-  <mat-form-field
-    class="title-field"
-    subscriptSizing="dynamic"
-  >
-    <mat-label>{{ label() }}</mat-label>
-    <input
-      #model="ngModel"
-      matInput
-      required
-      [errorStateMatcher]="errorMatcher()"
-      [ngModel]="title()"
-      (ngModelChange)="titleChange.emit($event)"
-      (keydown.enter)="onEnter($event)"
-      (blur)="finish()"
-    />
-    <mat-error>{{ T.V.E_REQUIRED | translate }}</mat-error>
-  </mat-form-field>
 } @else if (isPencilShown()) {
   <!-- The pencil is the keyboard control; the text is a larger click target. -->
   <span
