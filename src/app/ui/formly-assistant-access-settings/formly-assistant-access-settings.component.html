@@ -15,7 +15,7 @@
     >
       @switch (state()?.error) {
         @case ('PORT_IN_USE') {
-          {{ T.GCF.MISC.LOCAL_REST_API_STATUS_PORT_IN_USE | translate: { port } }}
+          {{ T.GCF.MISC.LOCAL_REST_API_STATUS_PORT_IN_USE | translate: { port: port() } }}
         }
         @case ('PERMISSION_DENIED') {
           {{ T.GCF.MISC.LOCAL_REST_API_STATUS_PERMISSION_DENIED | translate }}
@@ -25,7 +25,7 @@
         }
         @default {
           @if (state()?.isListening) {
-            {{ T.GCF.MISC.LOCAL_REST_API_STATUS_LISTENING | translate: { url } }}
+            {{ T.GCF.MISC.LOCAL_REST_API_STATUS_LISTENING | translate: { url: url() } }}
           }
         }
       }

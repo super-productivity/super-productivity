@@ -22,6 +22,7 @@ describe('FormlyAssistantAccessSettingsComponent', () => {
     scopes: [],
     hasCredential: false,
     isListening: true,
+    port: 3876,
     ...overrides,
   });
 
@@ -141,6 +142,23 @@ describe('FormlyAssistantAccessSettingsComponent', () => {
         },
       },
     });
+  });
+
+  it('uses the port main reports in the setup snippets', async () => {
+    // The default until the state arrives.
+    expect(component.url()).toBe('http://127.0.0.1:3876/mcp');
+
+    setEa({
+      getAssistantAccessState: jasmine.createSpy().and.resolveTo(state({ port: 3877 })),
+    });
+    fixture.detectChanges();
+    await settle();
+
+    expect(component.url()).toBe('http://127.0.0.1:3877/mcp');
+    expect(component.claudeCodeSnippet()).toContain('http://127.0.0.1:3877/mcp --header');
+    expect(JSON.parse(component.jsonSnippet()).mcpServers['super-productivity'].url).toBe(
+      'http://127.0.0.1:3877/mcp',
+    );
   });
 
   it('reports a change that could not be saved', async () => {

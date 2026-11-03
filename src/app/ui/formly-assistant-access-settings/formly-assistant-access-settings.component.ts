@@ -64,13 +64,16 @@ export class FormlyAssistantAccessSettingsComponent
   implements OnInit
 {
   readonly T = T;
-  readonly url = `http://${LOCAL_REST_API_HOST}:${LOCAL_REST_API_PORT}${ASSISTANT_ACCESS_PATH}`;
-  readonly port = LOCAL_REST_API_PORT;
   readonly claudeDesktopExtensionUrl = CLAUDE_DESKTOP_EXTENSION_URL;
   readonly isClaudeDesktopOffered = canUseClaudeDesktopExtension(
     window.ea?.getDistChannel?.(),
   );
   readonly state = signal<AssistantAccessState | null>(null);
+  // Main can be started on another port (`--rest-api-port`), so show the one it reports.
+  readonly port = computed(() => this.state()?.port ?? LOCAL_REST_API_PORT);
+  readonly url = computed(
+    () => `http://${LOCAL_REST_API_HOST}:${this.port()}${ASSISTANT_ACCESS_PATH}`,
+  );
   readonly isBusy = signal(false);
   /** Only set right after generating; never read back from main. */
   readonly newKey = signal<string | null>(null);
@@ -81,7 +84,7 @@ export class FormlyAssistantAccessSettingsComponent
 
   readonly claudeCodeSnippet = computed(
     () =>
-      `claude mcp add --scope user --transport http super-productivity ${this.url} ` +
+      `claude mcp add --scope user --transport http super-productivity ${this.url()} ` +
       `--header "Authorization: Bearer ${this.newKey() ?? KEY_PLACEHOLDER}"`,
   );
   readonly jsonSnippet = computed(() =>
@@ -91,7 +94,7 @@ export class FormlyAssistantAccessSettingsComponent
           // eslint-disable-next-line @typescript-eslint/naming-convention
           'super-productivity': {
             type: 'http',
-            url: this.url,
+            url: this.url(),
             headers: { Authorization: `Bearer ${this.newKey() ?? KEY_PLACEHOLDER}` },
           },
         },

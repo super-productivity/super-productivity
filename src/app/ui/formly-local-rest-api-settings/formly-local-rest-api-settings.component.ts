@@ -41,9 +41,10 @@ export class FormlyLocalRestApiSettingsComponent
   implements OnInit
 {
   readonly T = T;
-  readonly url = `http://${LOCAL_REST_API_HOST}:${LOCAL_REST_API_PORT}`;
-  readonly port = LOCAL_REST_API_PORT;
   readonly state = signal<LocalRestApiState | null>(null);
+  // Main can be started on another port (`--rest-api-port`), so show the one it reports.
+  readonly port = computed(() => this.state()?.port ?? LOCAL_REST_API_PORT);
+  readonly url = computed(() => `http://${LOCAL_REST_API_HOST}:${this.port()}`);
   readonly isEnabled = computed(() => !!this.state()?.isEnabled);
   readonly isToggling = signal(false);
   readonly token = signal<string | null>(null);

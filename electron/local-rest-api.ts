@@ -15,6 +15,7 @@ import { IPC } from './shared-with-frontend/ipc-events.const';
 import { getIsAppReady, getWin } from './main-window';
 import { loadSimpleStoreAll, saveSimpleStore } from './simple-store';
 import { SimpleStoreKey } from './shared-with-frontend/simple-store.const';
+import { resolveLocalRestApiPort } from './local-rest-api-port';
 import {
   LOCAL_REST_API_HOST,
   LOCAL_REST_API_MAX_BODY_BYTES,
@@ -26,6 +27,14 @@ import {
   LocalRestApiResponsePayload,
   LocalRestApiState,
 } from './shared-with-frontend/local-rest-api.model';
+
+// Read once at startup: `--rest-api-port=<n>`, then SP_LOCAL_REST_API_PORT,
+// then the default. Lets two profiles run side by side.
+const PORT = resolveLocalRestApiPort({
+  argv: process.argv,
+  env: process.env,
+  defaultPort: LOCAL_REST_API_PORT,
+});
 
 let server: Server | null = null;
 let isInitialized = false;
@@ -255,8 +264,8 @@ const handleResponse = (_event: unknown, payload: LocalRestApiResponsePayload): 
 };
 
 const ALLOWED_HOSTS = new Set([
-  `${LOCAL_REST_API_HOST}:${LOCAL_REST_API_PORT}`,
-  `localhost:${LOCAL_REST_API_PORT}`,
+  `${LOCAL_REST_API_HOST}:${PORT}`,
+  `localhost:${PORT}`,
   LOCAL_REST_API_HOST,
   'localhost',
 ]);
@@ -568,7 +577,7 @@ export const initLocalRestApi = (): void => {
     listenError = toListenError(error.code);
     if (error.code === 'EADDRINUSE') {
       warn(
-        `[local-rest-api] Port ${LOCAL_REST_API_PORT} is in use — API could not start. ` +
+        `[local-rest-api] Port ${PORT} is in use — API could not start. ` +
           `Another process is holding it; free it and toggle the API off/on to retry.`,
       );
       return;
@@ -587,6 +596,7 @@ export const initLocalRestApi = (): void => {
     },
     getListenerStatus: () => ({
       isListening,
+      port: PORT,
       ...(listenError ? { error: listenError } : {}),
     }),
   });
@@ -635,11 +645,9 @@ const startServer = (): void => {
   }
 
   listenError = undefined;
-  server.listen(LOCAL_REST_API_PORT, LOCAL_REST_API_HOST, () => {
+  server.listen(PORT, LOCAL_REST_API_HOST, () => {
     isListening = true;
-    log(
-      `[local-rest-api] Listening on http://${LOCAL_REST_API_HOST}:${LOCAL_REST_API_PORT}`,
-    );
+    log(`[local-rest-api] Listening on http://${LOCAL_REST_API_HOST}:${PORT}`);
   });
 };
 
@@ -729,6 +737,7 @@ const applyEnabled = (enabled: boolean): void => {
 export const getLocalRestApiState = (): LocalRestApiState => ({
   isEnabled: isEnabledDesired,
   isListening,
+  port: PORT,
   ...(isTokenStorageFailed
     ? { error: 'TOKEN_STORAGE' as const }
     : isEnabledDesired && listenError
