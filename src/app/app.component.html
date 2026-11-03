@@ -75,15 +75,18 @@
           <banner></banner>
         </header>
 
-        <!-- The first route arrives with the data, whose entrance animates it in. -->
-        <div
-          #routeWrapper
-          [@warpRoute]="getPage(o)"
-          [@.disabled]="isAppEntrance()"
-          class="route-wrapper"
-        >
-          <router-outlet #o="outlet"></router-outlet>
-        </div>
+        <!-- Pages render only with their data (not every route has a guard that
+             waits for it); the entrance animates the first one in. -->
+        @if (isDataLoaded()) {
+          <div
+            #routeWrapper
+            [@warpRoute]="getPage(o)"
+            [@.disabled]="isAppEntrance()"
+            class="route-wrapper"
+          >
+            <router-outlet #o="outlet"></router-outlet>
+          </div>
+        }
       </right-panel>
       <global-progress-bar></global-progress-bar>
       <task-multi-select-bar></task-multi-select-bar>
