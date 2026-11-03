@@ -26,7 +26,9 @@ of those commands.
   there is nothing to do:
   - **Changes:** "add call mom tomorrow, 15 minutes, to Home", "mark the
     invoice tasks done", "move everything from Work on Today to Monday".
-    Shown as a change list; nothing changes before **Apply**.
+    Shown as a change list; nothing changes before **Apply**. Opt-in
+    **auto-apply** skips the list for small change sets and shows what was
+    done with **Undo** instead (§ 8.1).
   - **A temporary selection:** "what should I focus on today, top 10", "show
     what's overdue in Work". A list with a reason per task, gone when the
     panel closes. Rows have the usual done, track and open actions.
@@ -163,8 +165,10 @@ everything; Akiflow users ask for _lighter_ auto-scheduling.
 
 **Take:**
 
-1. Every edit and delete is previewed and applied only on Apply (Morgen,
-   Raycast, Aki; against TickTick, Gemini, Motion).
+1. By default every edit and delete is previewed and applied only on Apply
+   (Morgen, Raycast, Aki; against TickTick, Gemini, Motion). Opt-in
+   auto-apply follows Gemini and Notion instead: apply, then undo. Deletes
+   are always previewed.
 2. Per-row opt-out (Apple's "Add" / "Include All").
 3. Project and tag names and today's date in the prompt; no retrieval service.
 4. Capture literally; to correct, edit the request and run it again (Ramble).
@@ -182,7 +186,7 @@ everything; Akiflow users ask for _lighter_ auto-scheduling.
 11. An eval set of real typed and dictated requests.
 
 **Deliberately don't:** send audio to a cloud model (Ramble); apply directly
-or reshuffle continuously (Motion, Gemini); keep chat history (Ramble: "quick
+by default or reshuffle continuously (Motion, Gemini); keep chat history (Ramble: "quick
 capture, not conversation"); give the model any outbound channel such as URLs
 or web tools (Notion's leak needed one); turn it on by default (Sunny).
 
@@ -240,6 +244,9 @@ Motion, Reclaim and earlier complaints: rev. 2 sources
    - **A sentence** when there is nothing to do or the request is unclear ("Two
      tasks match 'report'"), together with a selection to pick from.
 4. **Apply** (button or Ctrl+Enter) applies the ticked rows. Esc discards.
+   With auto-apply on (a setting, off by default), small change sets apply
+   at once and the panel lists what was done, each row with **Undo**, plus
+   **Undo all** (§ 8.1).
 5. **Follow up.** A new request sees the ids of the selection on screen as
    "these" ("move these to tomorrow"). No earlier request, answer or sentence
    is sent: no conversation history, by design.
@@ -517,13 +524,34 @@ the same delete (to Recently deleted).
 - **Conflicts.** A concurrent edit to the same task elsewhere resolves like any
   manual edit. Phase 2 adds one E2E: apply on A while B edits one of the
   tasks; both converge.
-- **No undo in v1.** Restoring "the previous state" blindly would overwrite
-  edits other devices made after Apply. The preview is the safeguard; deletes
-  are unticked by default and kept in Recently deleted on this device. Prior
-  art favours a batch undo (Notion; Sunsama reportedly). A safe version only
-  reverts a field if the task still holds the value the plugin wrote
-  (compare-and-set), and needs a restore call for deleted tasks that the
-  plugin API lacks. Candidate for Phase 2 if users ask.
+- **Undo** is in v1, because auto-apply needs it (§ 8.1). Deletes are not
+  undoable from the panel; they are always previewed, unticked by default
+  and kept in Recently deleted on this device.
+
+### 8.1 Auto-apply and undo
+
+**Setting:** "Review changes before applying", on by default. Turned off,
+a proposal applies at once **unless** it contains a delete, a project move,
+more than 10 changes, or a row the validator flagged; those still show the
+change list. Selections never change anything; day plans follow the same
+rule.
+
+**After applying** (auto or Apply) the panel lists what was done, one row per
+task, each with **Undo**, plus **Undo all** (Ctrl+Z while the panel has
+focus). The list stays until the next request or until the panel closes;
+undo is not persisted and not synced.
+
+**Undo is compare-and-set**, never "restore the old state": for each field
+the plugin wrote, it re-reads the task and writes the old value back only if
+the task still holds the value the plugin wrote. A field someone changed in
+the meantime (on this device or synced in from another) is left alone and the
+row says so. An added task is undone by `deleteTask` (it goes to Recently
+deleted). Each undo is one ordinary `updateTask` or `deleteTask` op, so no
+new action, op or sync surface; a remote device sees an edit and a later
+edit back.
+
+**Why deletes stay reviewed:** restoring a deleted task needs a restore call
+the plugin API lacks, and Recently deleted is device-local.
 
 ## 9. Built-in vs external assistants
 
@@ -580,12 +608,12 @@ become fixtures. Nothing is counted on the device or sent anywhere.
 | Phase                                      | Scope                                                                                                                                     | Exit                                                                                                        |
 | ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
 | **0. Eval first** (no app change)          | Fixtures, prompt, tools, validator, rule-based draft; Haiku, Sonnet and Opus 5.5                                                          | Bar met → Phase 1. Not met → record why, stop                                                               |
-| **1a. Capture and changes**, desktop + web | Shortcut, panel, typed and dictated requests, change list + Apply; § 4.1; directory listing. Covers the voice-capture gap                 | Eval capture and edit fixtures pass in the shipped plugin; unit tests for validator, alias map, stale check |
+| **1a. Capture and changes**, desktop + web | Shortcut, panel, typed and dictated requests, change list + Apply, auto-apply + undo (§ 8.1); § 4.1; directory listing                    | Eval capture and edit fixtures pass in the shipped plugin; unit tests for validator, alias map, stale check |
 | **1b. Selections and day plans**           | `show_tasks`, row actions, day plans with free time; only once their eval fixtures pass                                                   | Selection and day-plan fixtures pass; day plans beat the draft                                              |
 | **2. Mobile + E2E**                        | Android and iOS (check `request()` to the Anthropic API on both); concurrent-edit E2E                                                     | E2E green on SuperSync                                                                                      |
 | **3. Push-to-talk** (on evidence)          | Host speech service and its plugin API (§ 5)                                                                                              | Separate plan                                                                                               |
 | **2b. Local models**, desktop              | `localNetwork` permission (§ 6.6); Ollama or LM Studio through their Anthropic-compatible endpoint; a local model must pass the same eval | A local model passes; labelled "slower" in the picker                                                       |
-| **Later, on evidence**                     | Times and reminders via a `scheduleTask`-style API; calendar busy minutes; batch undo                                                     | A user request                                                                                              |
+| **Later, on evidence**                     | Times and reminders via a `scheduleTask`-style API; calendar busy minutes                                                                 | A user request                                                                                              |
 
 **Smallest useful version:** Phase 0 + 1a, with system dictation as the voice.
 
@@ -596,8 +624,13 @@ reordering Today, saved views, sending audio to a model.
 
 **Risks**
 
-- **Wrong change applied.** Preview of every change, ticked rows only,
-  ambiguity shown instead of guessed, deletes recoverable, a 50-change cap.
+- **Wrong change applied.** Preview of every change by default, ticked rows
+  only, ambiguity shown instead of guessed, deletes recoverable, a 50-change
+  cap. With auto-apply: only small, delete-free, unflagged sets skip the
+  preview, and every applied row has a compare-and-set undo.
+- **Undo over sync.** Undo writes the old value only where the task still
+  holds the plugin's value; an edit made in between, here or on another
+  device, wins. Covered by the Phase 2 concurrent-edit E2E (undo variant).
 - **Short syntax in titles** would turn spoken words into tags, dates and
   times. Fixed by § 4.1 and covered by eval fixtures.
 - **More data leaves the device** than in rev. 2: project and tag names and
@@ -608,7 +641,8 @@ reordering Today, saved views, sending audio to a model.
 - **"Voice" feels half-done** without push-to-talk. Accepted for v1: two keys
   instead of one, no host change. Phase 3 only if used.
 - **Prompt injection via issue titles.** Bounded to proposals over the user's
-  own tasks, previewed.
+  own tasks: previewed by default, and with auto-apply never a delete or a
+  project move, always undoable.
 - **Scope creep into a chat app.** Guarded by design: no history, no persona,
   no proactive messages; one request, one result.
 
@@ -631,6 +665,8 @@ reordering Today, saved views, sending audio to a model.
   evidence (§ 5).
 - Local models: yes, through a scoped `localNetwork` permission rather than a
   special case for this plugin id (§ 6.6), after Phase 1a.
+- Preview is optional (2026-11-03): opt-in auto-apply with compare-and-set
+  undo in v1; deletes, project moves and large sets always previewed (§ 8.1).
 
 ## Review
 
@@ -689,3 +725,10 @@ Anthropic-compatible `/v1/messages` (tools yes, `tool_choice` and caching no),
 call with on-device search instead of an agent loop (§ 6.2), local models
 through a scoped permission (§ 6.6), batch undo recorded as a later candidate
 (§ 8). Rev. 5 was not given a separate fresh-context review.
+
+### Rev. 6
+
+Maintainer direction: the preview should be optional. Added opt-in
+auto-apply with a compare-and-set undo list (§ 8.1), which moves undo from
+"later" into v1; deletes, project moves, sets over 10 changes and flagged rows
+are always previewed. Not given a separate fresh-context review.
