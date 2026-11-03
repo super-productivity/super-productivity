@@ -6,6 +6,10 @@ export enum SimpleStoreKey {
   ALLOWED_COMMANDS = 'allowedCommands',
   // Main-owned sync folder path (issue #8228); the renderer no longer holds it.
   SYNC_FOLDER_PATH = 'syncFolderPath',
+  // Main-owned automatic backup folder (issue #7054). Unset means the default
+  // `<userData>/backups`. Device-specific, so it must not live in the synced
+  // globalConfig, and main-owned so the renderer cannot redirect backup writes.
+  BACKUP_FOLDER_PATH = 'backupFolderPath',
   // Main-owned, never-synced persisted nodeExecution consent (issue #8512 Phase 2).
   // The renderer has no IPC write path that can grant consent into this key — only
   // a native Allow dialog in main writes it — so XSS/un-granted code cannot self-grant.

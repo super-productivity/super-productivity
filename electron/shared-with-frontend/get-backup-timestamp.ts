@@ -19,3 +19,11 @@ export const getBackupTimestamp = (): string => {
   const ss = String(now.getSeconds()).padStart(2, '0');
   return `${yyyy}-${MM}-${dd}_${HH}${mm}${ss}`;
 };
+
+/**
+ * Matches only filenames produced by getBackupTimestamp(). Used to keep backup
+ * discovery, cleanup and restore from touching unrelated files in a user-picked
+ * backup folder (#7054).
+ */
+export const isAutoBackupFilename = (f: string): boolean =>
+  /^\d{4}-\d{2}-\d{2}_\d{6}\.json$/.test(f);
