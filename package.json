@@ -291,7 +291,7 @@
     "core-js": "^3.49.0",
     "cross-env": "^10.1.0",
     "detect-it": "^4.0.1",
-    "dotenv": "^17.4.2",
+    "dotenv": "^18.0.9",
     "electron": "44.10.0",
     "electron-builder": "^26.16.1",
     "eslint": "^9.39.2",
