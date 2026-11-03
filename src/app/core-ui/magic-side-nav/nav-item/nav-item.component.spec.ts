@@ -1,4 +1,10 @@
-import { Component, signal } from '@angular/core';
+import { TranslateService } from '@ngx-translate/core';
+import { MockStore } from '@ngrx/store/testing';
+import { selectDueTaskCounts } from '../../../features/tasks/store/task.selectors';
+import { WorkContextType } from '../../../features/work-context/work-context.model';
+import { TODAY_TAG } from '../../../features/tag/tag.const';
+import { WorkContextMenuComponent } from '../../work-context-menu/work-context-menu.component';
+import { Component, input, signal, viewChild } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MatMenu, MatMenuItem } from '@angular/material/menu';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
@@ -134,31 +140,43 @@ describe('NavItemComponent row menu', () => {
   });
 });
 
-import { TranslateService } from '@ngx-translate/core';
-import { MockStore } from '@ngrx/store/testing';
-import { selectDueTaskCounts } from '../../../features/tasks/store/task.selectors';
-import { WorkContextType } from '../../../features/work-context/work-context.model';
-import { TODAY_TAG } from '../../../features/tag/tag.const';
-
+@Component({
+  selector: 'work-context-menu',
+  imports: [MatMenu],
+  template: '<mat-menu />',
+})
+class CountTestContextMenuComponent {
+  readonly contextId = input('');
+  readonly contextType = input<WorkContextType>();
+  readonly menu = viewChild.required(MatMenu);
+}
 describe('NavItemComponent Today count', () => {
   let fixture: ComponentFixture<NavItemComponent>;
   let store: MockStore;
 
   beforeEach(async () => {
-    await TestBed.configureTestingModule({
-      imports: [NavItemComponent, NoopAnimationsModule, TranslateModule.forRoot()],
-      providers: [
-        provideRouter([]),
-        provideMockStore({
-          selectors: [
-            { selector: selectAllDoneIds, value: ['done'] },
-            { selector: selectDueTaskCounts, value: { today: 8, overdue: 7, total: 15 } },
-          ],
-        }),
-        { provide: GlobalThemeService, useValue: { registerSvgIcon: () => undefined } },
-        { provide: MagicNavConfigService, useValue: {} },
-      ],
-    }).compileComponents();
+    await TestBed.overrideComponent(NavItemComponent, {
+      remove: { imports: [WorkContextMenuComponent] },
+      add: { imports: [CountTestContextMenuComponent] },
+    })
+      .configureTestingModule({
+        imports: [NavItemComponent, NoopAnimationsModule, TranslateModule.forRoot()],
+        providers: [
+          provideRouter([]),
+          provideMockStore({
+            selectors: [
+              { selector: selectAllDoneIds, value: ['done'] },
+              {
+                selector: selectDueTaskCounts,
+                value: { today: 8, overdue: 7, total: 15 },
+              },
+            ],
+          }),
+          { provide: GlobalThemeService, useValue: { registerSvgIcon: () => undefined } },
+          { provide: MagicNavConfigService, useValue: {} },
+        ],
+      })
+      .compileComponents();
     const translate = TestBed.inject(TranslateService);
     translate.setTranslation('en', {
       G: { TODAY_TASK_COUNT: '{{today}} today · {{overdue}} overdue' },

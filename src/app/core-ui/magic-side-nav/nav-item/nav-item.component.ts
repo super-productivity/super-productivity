@@ -29,7 +29,12 @@ import { T } from '../../../t.const';
 import { CdkDragPlaceholder } from '@angular/cdk/drag-drop';
 import { MatIconButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
-import { MatMenu, MatMenuItem, MatMenuModule, MatMenuPanel } from '@angular/material/menu';
+import {
+  MatMenu,
+  MatMenuItem,
+  MatMenuModule,
+  MatMenuPanel,
+} from '@angular/material/menu';
 import { toObservable, toSignal } from '@angular/core/rxjs-interop';
 import {
   selectAllDoneIds,
