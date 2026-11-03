@@ -181,6 +181,8 @@ Rules:
   value an older client does not know, and mobile clients update slowly. The warning
   goes in the existing warnings list (`validate-manifest.util.ts:15-19`). The value
   renders as "other data (update the app for details)". Only wrong types are rejected.
+- **`privacyPolicyUrl` must be `https:`.** It renders as a link inside the app, so any
+  other scheme is rejected.
 - **Plugins write no free text.** Labels are host translation keys
   (`T.PLUGINS.DATA.<KEY>`, `en.json` only), so the notice stays translated and
   uniform. The `userText` label says plainly that it is "whatever you type". The
@@ -201,7 +203,11 @@ Examples:
   Titles are in `data` because creating an issue sends the title.
 - **AI Command:** one destination for Anthropic (`api.anthropic.com`, Anthropic's
   privacy policy), plus a "Your local model server" destination with `userServer: true`.
-  Both have `data: ["userText","taskTitles","taskSchedule","projectAndTagNames"]`.
+  Both have `data: ["userText","taskTitles","taskSchedule","projectAndTagNames"]`; the
+  Anthropic destination adds `"credentials"` for the user's API key.
+- **Parallel Code** declares `[]`: the task id goes to a local app, not off the device.
+  **Voice reminder** declares a "System speech engine" destination with `taskTitles`
+  until open question 2 is settled, because some voices are online.
 - **AI Command's local model is not reachable today.** `PluginAPI.request` runs through
   the shared HTTP helper without `allowPrivateNetwork`
   (`plugin-bridge.service.ts:572-574`). That helper rejects loopback and private
@@ -222,17 +228,25 @@ policy link. It uses plain HTML.
 
 1. **One gate before plugin code first runs on a device.**
    `PluginDataConsentService.confirmDataSharing(manifest)` lives in its own file,
-   because `plugin.service.ts` is already over the 1200-line cap. It is called before
-   both places that load plugin code:
-   - `_loadPluginLazy` (`plugin.service.ts:618`), which every `activatePlugin` path
-     reaches: the toggle, startup, the side panel, the import menu
-     (`file-imex.component.ts:343`) and the migrations.
-   - `loadPluginFromZip` (`plugin.service.ts:1346`), where a re-upload or community
-     update of an enabled plugin runs new code.
-
-   On the toggle path, the gate also runs before `setPluginEnabled(true)`. That method is
-   synced and is called first today (`plugin.service.ts:397-403`). A "no" therefore never
-   writes `isEnabled`.
+   because `plugin.service.ts` is already over the 1200-line cap. It is called in three
+   places:
+   - **Enabling.** Both toggle paths write the synced flag before loading: the plugin
+     page (`plugin-management.component.ts:292-299`) and the issue-panel setup through
+     `enableAndActivatePlugin` (`plugin.service.ts:397-403`). Both go through one
+     `PluginService` method that asks first, then calls `setPluginEnabled(true)`, then
+     activates. A "no" therefore never writes `isEnabled`.
+   - **Activating.** In `activatePlugin`, before the `'loading'` status is set
+     (`plugin.service.ts:526`), so a concurrent call does not time out waiting on a
+     dialog (`:466-486`). This covers startup, the side panel
+     (`plugin-index.component.ts:210`), the import menu (`file-imex.component.ts:343`),
+     `reloadPlugin` (`:1627`) and the migrations. A "no" throws a named sentinel, like
+     `NodeExecutionConsentDeniedError` (`:552`), so it does not end in the error snack
+     and `'error'` status. `activatePlugin` gets a mode argument: interactive callers
+     prompt, startup only checks the record.
+   - **Updating.** In `loadPluginFromZip`, after the new manifest is read and before the
+     old plugin's state, translations, icons and `index.html` are replaced
+     (`plugin.service.ts:1236-1262`). A "no" cancels the update and keeps the previous
+     version.
    - **Saying no stays on this device.** It follows the real
      `_handleNodeExecutionConsentDenied` (`plugin.service.ts:727-752`): the decision is
      kept in memory only, the plugin is not loaded, and the synced `isEnabled` is left
@@ -245,7 +259,9 @@ policy link. It uses plain HTML.
      polling start as usual.
    - **When it shows:** `dataSharing` is non-empty, or it is absent on a non-bundled
      plugin. The absent case reads "This plugin doesn't say what data it sends".
-   - **When it doesn't:** the plugin declares `[]`.
+   - **When it doesn't:** a bundled plugin declares `[]`. A non-bundled plugin that
+     declares `[]` still gets a one-line notice: "Says it sends nothing; Super
+     Productivity can't check this." Its code is unreviewed and can call `fetch`.
    - **It shows once per device per declaration.** A local, unsynced record maps each
      plugin id to the canonical declaration it was accepted with, stored as a JSON string
      with keys and arrays sorted, or `"absent"`. It lives under a new `LS` key
@@ -260,7 +276,8 @@ policy link. It uses plain HTML.
 
 2. **On the plugin card**, in the existing collapsed Details block
    (`plugin-management.component.html:105`), in place of today's `CAN_REQUEST_HOSTS`
-   line. The sentence "Declared by the author; Super Productivity can't check it" goes
+   line when `dataSharing` is present. Without it, the existing hosts line stays
+   (`plugin-security.ts:278-283`). The sentence "Declared by the author; Super Productivity can't check it" goes
    in the dialog and in Details for non-bundled plugins, and nowhere else.
 
 **The community listing gets no new line or field.** Install from the listing shows the
@@ -297,12 +314,18 @@ as a gap instead.
   consent.
 - **Seeding existing users.** Without it, everyone would be prompted again for
   integrations they already use. The seed runs once per device, guarded by its own
-  local seed-done flag. It runs after store hydration but before the first sync of that
-  launch: it waits on `isAllDataLoadedInitially$` only, whereas `_initPlugins` also
-  waits for sync (`startup.service.ts:525-540`). It covers only plugins that were already
-  enabled in this device's local state. A plugin another device enabled arrives through
-  sync after the seed, so it still gets the dialog. AI Command cannot be enabled before
-  the release that ships the gate, so it is never seeded.
+  local seed-done flag, after store hydration (`isAllDataLoadedInitially$`). It covers
+  plugins enabled in local state at that moment, limited to a **frozen list**: the
+  bundled ids that shipped before the gate, plus uploaded and community plugins
+  installed on this device. Anything newer, AI Command included, is never seeded, even
+  if its synced `isEnabled` arrived from a device on a newer release
+  (`plugin-meta-persistence.service.ts:29-38` reads store state only).
+- **Seed and sync are not ordered.** Sync also starts on `isAllDataLoadedInitially$`
+  (`sync.effects.ts`), so the first sync of that launch may land before the seed. Then
+  a frozen-list integration enabled on another device is seeded without a dialog.
+  Accepted: those integrations already run unasked on every device today, and the
+  frozen list keeps AI out of it. Ordering the two would mean coupling plugin startup to
+  the sync effects.
 - **Fresh installs** have no enabled plugins at seed time, so the seed is empty. A
   backup import or `SYNC_IMPORT` that enables plugins later shows dialogs.
 - **Migrations** (`plugin.service.ts:146-191`) that auto-enable on a device are seeded
@@ -394,7 +417,9 @@ from `packages/plugin-dev/scripts/build-all.js`. Step 2 relies on their manifest
    - show; skip on `[]`; skip when already accepted
    - show again on a changed declaration
    - deny writes nothing synced
-   - the seed covers only locally enabled plugins and runs once
+   - the seed covers only frozen-list ids, never AI Command, and runs once
+   - `[]` from a non-bundled plugin still shows the notice
+   - a `privacyPolicyUrl` that is not `https:` is rejected
      → verify: E2E 1. Enabling a declaring plugin shows the dialog. Cancel leaves it off
      and `isEnabled` unwritten.
      → verify: E2E 2. Re-uploading an enabled plugin's ZIP with a new recipient shows
@@ -429,8 +454,9 @@ from `packages/plugin-dev/scripts/build-all.js`. Step 2 relies on their manifest
 - **Dialog fatigue.** Mitigations: no dialog for `[]`, the seed for existing users, and
   no dialog at all when nothing changed. A user who enables five plugins on a new phone
   sees five dialogs, which is acceptable for a first run on a device.
-- **Seed timing.** If hydration and sync ordering changes in `startup.service.ts`, the
-  seed could start including synced enables. The seed spec pins the ordering.
+- **Seed race.** A frozen-list integration enabled elsewhere can be seeded without a
+  dialog on its first launch (§4). The frozen list is the guard; a spec checks that an
+  id outside it is never seeded.
 - **Re-prompt on every start after a "no".** That is intended, matching the
   `nodeExecution` deny. A user who wants it gone turns the plugin off, which syncs.
 - **Store interpretation.** A store may want consent per feature or per send. The gate
@@ -525,3 +551,30 @@ code before it was applied.
 9. **Fixed.** `termsUrl` dropped; no inventory row needs it.
 10. **Fixed.** The `userText` label says "whatever you type", and the `timeTracked`
     label includes worklog comments.
+
+### Second review
+
+Fresh-context subagent, 2026-11-03. About 35 citations spot-checked; findings 2 and 5
+re-verified against the code before applying.
+
+1. **Fixed.** "AI Command is never seeded" was false: a synced `isEnabled` from a newer
+   device would be seeded on update. The seed is now limited to a frozen list of
+   pre-gate ids (§4).
+2. **Fixed.** The plugin-page toggle writes `isEnabled` itself
+   (`plugin-management.component.ts:292`), so a gate in `_loadPluginLazy` came too late.
+   Both toggle paths now go through one `PluginService` method that asks first (§2.1).
+3. **Fixed (accepted).** Seed and first sync both wait on hydration and are not ordered.
+   The race is stated, and the frozen list keeps AI Command out of it. The claim that
+   a spec pins the ordering is removed.
+4. **Fixed.** The activate gate sits before the `'loading'` status, has a mode
+   argument, and denies via a named sentinel.
+5. **Fixed.** The ZIP gate runs before the old plugin is torn down; a "no" keeps the
+   previous version.
+6. **Fixed.** `[]` skips the dialog only for bundled plugins.
+7. **Fixed.** The card keeps today's hosts line when `dataSharing` is absent.
+8. **Fixed.** `privacyPolicyUrl` must be `https:`.
+9. **Fixed.** The Anthropic destination declares `credentials`.
+10. **Fixed.** Parallel Code declares `[]`. Voice reminder declares the speech engine
+    until open question 2 is settled.
+11. **Not fixed.** `ids` and `optionalData` stay; both have inventory rows, and §1
+    already requires re-checking all nine values before the type is frozen.
