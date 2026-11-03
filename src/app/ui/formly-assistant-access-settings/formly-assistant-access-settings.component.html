@@ -104,7 +104,7 @@
       (focus)="selectText($event)"
       [attr.aria-label]="T.GCF.MISC.ASSISTANT_ACCESS_SETUP_CLAUDE_CODE | translate"
     ></textarea>
-    @if (isClaudeDesktopOffered) {
+    @if (isClaudeDesktopOffered()) {
       <p class="hint">
         <a
           [href]="claudeDesktopExtensionUrl"

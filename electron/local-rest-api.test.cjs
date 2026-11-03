@@ -1294,6 +1294,38 @@ test('SP_LOCAL_REST_API_PORT moves the listener, the Host check and the state', 
   }
 });
 
+test('a rejected SP_LOCAL_REST_API_PORT is logged and the default is used', async () => {
+  const profileDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sp-lra-bad-port-'));
+  const port = takeIsolatedPort();
+  const ctx = createContext({ port, userDataDir: profileDir });
+  const originalEnv = process.env.SP_LOCAL_REST_API_PORT;
+  process.env.SP_LOCAL_REST_API_PORT = '80';
+  let isolated;
+  try {
+    isolated = loadModule(ctx);
+  } finally {
+    if (originalEnv === undefined) {
+      delete process.env.SP_LOCAL_REST_API_PORT;
+    } else {
+      process.env.SP_LOCAL_REST_API_PORT = originalEnv;
+    }
+  }
+
+  try {
+    isolated.initLocalRestApi();
+    assert.ok(
+      ctx.warnings.some((args) =>
+        String(args[0]).includes('Ignoring SP_LOCAL_REST_API_PORT="80"'),
+      ),
+      'the rejected value must be logged',
+    );
+    assert.equal(isolated.getLocalRestApiState().port, port);
+  } finally {
+    isolated.applyLocalRestApiEnabled(false);
+    fs.rmSync(profileDir, { recursive: true, force: true });
+  }
+});
+
 // The switch is device-local now: a fresh profile starts off, whatever any
 // synced config says, and nothing is written until the user chooses.
 test('a fresh profile starts disabled and does not listen', async () => {

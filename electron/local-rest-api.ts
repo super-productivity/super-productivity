@@ -29,8 +29,9 @@ import {
 } from './shared-with-frontend/local-rest-api.model';
 
 // Read once at startup: `--rest-api-port=<n>`, then SP_LOCAL_REST_API_PORT,
-// then the default. Lets two profiles run side by side.
-const PORT = resolveLocalRestApiPort({
+// then the default. Lets two profiles run side by side. The warnings are logged
+// by initLocalRestApi().
+const { port: PORT, warnings: PORT_WARNINGS } = resolveLocalRestApiPort({
   argv: process.argv,
   env: process.env,
   defaultPort: LOCAL_REST_API_PORT,
@@ -506,6 +507,7 @@ export const initLocalRestApi = (): void => {
     return;
   }
   isInitialized = true;
+  PORT_WARNINGS.forEach((message) => warn(`[local-rest-api] ${message}`));
 
   ipcMain.on(IPC.LOCAL_REST_API_RESPONSE, handleResponse);
 

@@ -65,14 +65,19 @@ export class FormlyAssistantAccessSettingsComponent
 {
   readonly T = T;
   readonly claudeDesktopExtensionUrl = CLAUDE_DESKTOP_EXTENSION_URL;
-  readonly isClaudeDesktopOffered = canUseClaudeDesktopExtension(
-    window.ea?.getDistChannel?.(),
-  );
   readonly state = signal<AssistantAccessState | null>(null);
   // Main can be started on another port (`--rest-api-port`), so show the one it reports.
   readonly port = computed(() => this.state()?.port ?? LOCAL_REST_API_PORT);
   readonly url = computed(
     () => `http://${LOCAL_REST_API_HOST}:${this.port()}${ASSISTANT_ACCESS_PATH}`,
+  );
+  private readonly _canUseClaudeDesktop = canUseClaudeDesktopExtension(
+    window.ea?.getDistChannel?.(),
+  );
+  // The extension always connects to the default port, and Claude Desktop has no
+  // way to pass it another one (tools/mcpb/manifest.json).
+  readonly isClaudeDesktopOffered = computed(
+    () => this._canUseClaudeDesktop && this.port() === LOCAL_REST_API_PORT,
   );
   readonly isBusy = signal(false);
   /** Only set right after generating; never read back from main. */
