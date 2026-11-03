@@ -191,7 +191,9 @@ Rules:
   (`T.PLUGINS.DATA.<KEY>`, `en.json` only), so the notice stays translated and
   uniform. The `userText` label says plainly that it is "whatever you type". The
   `timeTracked` label includes worklog comments.
-- **Credentials render apart from content**, as "Your sign-in for X".
+- **Credentials render first in the recipient's line**, as "**X**: your sign-in, …".
+  Phase 1 dropped the separate "Your sign-in for X" line: the recipient prefix already
+  says whose sign-in it is, without another branch and key.
 - **Always sent vs. optional.** `data` is what goes out as soon as the plugin is used.
   `optionalData` renders as "only if you turn it on". That keeps the declaration
   complete without telling every GitHub user that their notes leave the device; pushing
@@ -391,11 +393,12 @@ Each step is paired with its check.
 E2E. A node test in `electron/bundled-plugin-ids.test.cjs` already guards this.
 
 **Phase 1: declare and show** (one PR, before AI Command). Implemented on this
-branch: steps 1–3 and 5 except the `plugin-api` release and the wiki. Step 3 reads the
+branch: steps 1–3 and 5 except the `plugin-api` release. Step 3 reads the
 manifest with `read-zip-manifest.util.ts` instead of splitting `loadPluginFromZip`
 (keeps `plugin.service.ts` under its cap), renders through
 `plugin-data-sharing.util.ts`, and is covered by util and component specs; the
-"Changed in this version" E2E is not written yet. Community installs now download and
+"Changed in this version" E2E and a card spec are left for a follow-up PR; the
+comparison itself is unit-tested. Community installs now download and
 verify before the confirmation, so it can show the declaration.
 
 1. Add the `dataSharing` type and its validation: the
