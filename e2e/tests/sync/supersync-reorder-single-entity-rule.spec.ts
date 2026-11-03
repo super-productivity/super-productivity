@@ -22,8 +22,9 @@ import { waitForAppReady } from '../../utils/waits';
  * Both crossing actions come from the real UI; only the baseline is seeded
  * through the store. The strict sync helper fails on the whole-dataset
  * "Sync: Conflicting Data" dialog and never picks Keep local or Keep remote.
- * Either device's order may win; both devices must converge and the edit and
- * the unrelated work of both devices must survive. Today membership against a
+ * The reorder and the edit commute, so the reorder survives in every case
+ * whichever side is pending or newer; both devices must converge on it and the
+ * edit and the unrelated work of both devices must survive. Today membership against a
  * tag order stays behind the safety stop, which must lose nothing.
  */
 type Row = CompactOperationLogEntry;
@@ -698,7 +699,7 @@ for (const crossing of crossings) {
           testInfo.outputPath('evidence.json'),
           async (harness) => {
             const fixtures = { browser, baseURL, testRunId };
-            const { a, b, ids, before, edited, fullStateBefore, config } =
+            const { a, b, ids, before, edited, reordered, fullStateBefore, config } =
               await runCrossing(fixtures, harness, crossing, pendingOrder, incomingNewer);
 
             // B uploads first; A resolves while its own crossing op is pending.
@@ -720,9 +721,13 @@ for (const crossing of crossings) {
               ...before.entities,
               [ids[0]]: edited.entities[ids[0]],
             });
-            // One converged, unique order over the same members (either winner).
+            // The edit does not write the list, so the reorder commutes with it
+            // and survives in every direction: one converged order, the
+            // reordering device's, over the same members.
             expect(new Set(final.order).size).toBe(final.order.length);
             expect([...final.order].sort()).toEqual([...before.order].sort());
+            expect(final.order).not.toEqual(before.order);
+            expect(final.order).toEqual(reordered.order);
             if (list.endsWith('notes')) {
               expect(new Set(final.other).size).toBe(final.other.length);
               expect([...final.other].sort()).toEqual(
@@ -1017,6 +1022,8 @@ test.describe('@supersync released reorder rule (#10364)', () => {
             );
 
             // The released UI pins in place; the current UI drags or pins.
+            // The reorder commutes with the pin: snapshot it to pin the winner.
+            let reorderedOrder: string[] = [];
             if (releasedPins) {
               await perform(
                 current,
@@ -1025,6 +1032,7 @@ test.describe('@supersync released reorder rule (#10364)', () => {
                 ids,
                 '',
               );
+              reorderedOrder = (await snapshot(current.page, 'project notes', ids)).order;
               const note = released.page.locator(`#n-${ids[0]}`);
               await note.hover();
               await note.locator('button:has(mat-icon:text-is("wb_sunny"))').click();
@@ -1040,6 +1048,7 @@ test.describe('@supersync released reorder rule (#10364)', () => {
                 '',
               );
               await perform(other, true, { list: 'project notes', edit: 'pin' }, ids, '');
+              reorderedOrder = (await snapshot(other.page, 'project notes', ids)).order;
             }
             await sync(other);
             await sync(current);
@@ -1052,6 +1061,9 @@ test.describe('@supersync released reorder rule (#10364)', () => {
               expect(await snapshot(other.page, 'project notes', ids)).toEqual(final);
             expect(final.entities[ids[0]].isPinnedToToday).toBe(true);
             expect(final.other.filter((id) => id === ids[0])).toHaveLength(1);
+            // The only reorder (the one current reissues) survives the crossing.
+            expect(reorderedOrder).not.toEqual([]);
+            expect(final.order).toEqual(reorderedOrder);
             const rejected = (await rows(current.page)).filter(
               (r) => r.source === 'local' && !!r.rejectedAt,
             );
