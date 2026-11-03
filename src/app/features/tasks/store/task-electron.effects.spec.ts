@@ -163,6 +163,35 @@ describe('TaskElectronEffects', () => {
       sub.unsubscribe();
     });
 
+    it('sends standalone scheduled subtask rows to the desktop badge', () => {
+      store.overrideSelector(selectTaskSchedulingSnapshot, [
+        schedulingTask({
+          id: 'today-child',
+          parentId: 'unscheduled-parent',
+          dueDay: '2026-10-03',
+        }),
+        schedulingTask({
+          id: 'late-child',
+          parentId: 'future-parent',
+          dueDay: '2026-10-02',
+        }),
+        schedulingTask({ id: 'future-parent', dueDay: '2026-10-04' }),
+        schedulingTask({ id: 'today-parent', dueDay: '2026-10-03' }),
+        schedulingTask({
+          id: 'nested-child',
+          parentId: 'today-parent',
+          dueDay: '2026-10-03',
+        }),
+      ]);
+      store.refreshState();
+      const sub = effects.syncDueTaskBadge$.subscribe();
+      expect(window.ea.setDueTaskBadge).toHaveBeenCalledWith(
+        3,
+        jasmine.stringMatching(/^data:image\/png;base64,/),
+      );
+      sub.unsubscribe();
+    });
+
     it('sends nothing to the main process while the badge was never enabled', () => {
       misc$.next({ isShowDueTaskBadge: false });
       const counts: number[] = [];
