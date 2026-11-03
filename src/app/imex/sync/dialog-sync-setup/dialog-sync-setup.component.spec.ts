@@ -96,6 +96,20 @@ describe('DialogSyncSetupComponent', () => {
     expect(serverName()).toBe('');
   });
 
+  it('keeps Sign in focusable while the saved server loads, and ignores a click until then', async () => {
+    // The dialog focuses its first enabled button on open; a disabled Sign in
+    // hands that focus to the other-providers button.
+    connect.savedBaseUrl.and.returnValue(new Promise(() => {}));
+    fixture = TestBed.createComponent(DialogSyncSetupComponent);
+    await settle();
+    const signIn: HTMLButtonElement = fixture.nativeElement.querySelector('.e2e-sign-in');
+    expect(signIn.disabled).toBe(false);
+
+    signIn.click();
+    await settle();
+    expect(connect.start).not.toHaveBeenCalled();
+  });
+
   it('opens the browser at the request and shows the match code', async () => {
     const tab = {} as Window;
     connect.openBlankTab.and.returnValue(tab);

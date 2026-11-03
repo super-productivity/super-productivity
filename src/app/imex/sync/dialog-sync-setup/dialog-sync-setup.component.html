@@ -41,12 +41,14 @@
         </div>
       }
 
+      <!-- Not disabled while the saved server loads: the dialog focuses its first
+        enabled button on open, and signIn() ignores a click until then. -->
       <button
         class="sign-in e2e-sign-in"
         mat-flat-button
         color="primary"
         type="button"
-        [disabled]="isBusy() || !baseUrl()"
+        [disabled]="isBusy()"
         (click)="signIn()"
       >
         <mat-icon aria-hidden="true">login</mat-icon>
