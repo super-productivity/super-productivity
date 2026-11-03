@@ -9,7 +9,10 @@ import {
   ConnectUnsupportedError,
   SignInOutcome,
 } from '../super-sync-connect/super-sync-connect.api';
-import { SuperSyncConnectService } from '../super-sync-connect/super-sync-connect.service';
+import {
+  normalizeSuperSyncBaseUrl,
+  SuperSyncConnectService,
+} from '../super-sync-connect/super-sync-connect.service';
 import { DialogSyncCfgComponent } from '../dialog-sync-cfg/dialog-sync-cfg.component';
 import { DialogSyncSetupComponent } from './dialog-sync-setup.component';
 
@@ -79,6 +82,18 @@ describe('DialogSyncSetupComponent', () => {
   it('starts at the saved server', () => {
     expect(component.baseUrl()).toBe(BASE);
     expect(component.host()).toBe('sync.example.com');
+  });
+
+  it('names the server under the button only when it is not the default', async () => {
+    const serverName = (): string =>
+      fixture.nativeElement.querySelector('.e2e-sign-in-server-name')?.textContent ?? '';
+    // BASE is not this build's default server.
+    expect(serverName()).toContain(T.F.SYNC.D_SIGN_IN.SERVER);
+
+    connect.savedBaseUrl.and.resolveTo(normalizeSuperSyncBaseUrl('')!);
+    fixture = TestBed.createComponent(DialogSyncSetupComponent);
+    await settle();
+    expect(serverName()).toBe('');
   });
 
   it('opens the browser at the request and shows the match code', async () => {

@@ -8,7 +8,7 @@ import {
 } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
-import { MatButton } from '@angular/material/button';
+import { MatButton, MatIconButton } from '@angular/material/button';
 import {
   MatDialog,
   MatDialogActions,
@@ -20,6 +20,7 @@ import { MatFormField, MatLabel } from '@angular/material/form-field';
 import { MatIcon } from '@angular/material/icon';
 import { MatInput } from '@angular/material/input';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
+import { MatTooltip } from '@angular/material/tooltip';
 import { TranslatePipe } from '@ngx-translate/core';
 import { from } from 'rxjs';
 import { SyncLog } from '../../../core/log';
@@ -63,9 +64,11 @@ const hostOf = (baseUrl: string): string => {
     MatDialogTitle,
     MatFormField,
     MatIcon,
+    MatIconButton,
     MatInput,
     MatLabel,
     MatProgressSpinner,
+    MatTooltip,
     TranslatePipe,
   ],
 })
@@ -87,6 +90,12 @@ export class DialogSyncSetupComponent {
   private readonly _chosenBaseUrl = signal<string | null>(null);
   readonly baseUrl = computed(() => this._chosenBaseUrl() ?? this._savedBaseUrl() ?? '');
   readonly host = computed(() => hostOf(this.baseUrl()));
+  // The server hides behind an icon, so a non-default one is named under the
+  // button. Empty input normalizes to the default server.
+  readonly isCustomServer = computed(() => {
+    const baseUrl = this.baseUrl();
+    return !!baseUrl && baseUrl !== normalizeSuperSyncBaseUrl('');
+  });
 
   private _link = '';
   // Bumped by Cancel, a new attempt and closing, which ends the older poll.

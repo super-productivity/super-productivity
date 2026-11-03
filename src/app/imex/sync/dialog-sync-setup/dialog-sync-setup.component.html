@@ -2,67 +2,32 @@
   @case ('choose') {
     <h1 mat-dialog-title>{{ T.F.SYNC.D_SIGN_IN.TITLE | translate }}</h1>
     <mat-dialog-content>
-      <p>{{ T.F.SYNC.D_SIGN_IN.INTRO | translate }}</p>
-
-      <section class="provider">
+      <div class="intro">
         <mat-icon
-          class="provider-icon"
+          class="hero-icon"
           aria-hidden="true"
           >cloud_sync</mat-icon
         >
-        <div>
-          <h2>
-            SuperSync
-            <span class="recommended">{{
-              T.F.SYNC.D_SIGN_IN.RECOMMENDED | translate
-            }}</span>
-          </h2>
-          <p>{{ T.F.SYNC.D_SIGN_IN.SUPER_SYNC_TEXT | translate }}</p>
+        <p class="lead">{{ T.F.SYNC.D_SIGN_IN.INTRO | translate }}</p>
+        <p class="hint">{{ T.F.SYNC.D_SIGN_IN.INTRO_HINT | translate }}</p>
+      </div>
 
-          @if (isEditingServer()) {
-            <mat-form-field
-              class="server-field"
-              appearance="outline"
-            >
-              <mat-label>{{ T.F.SYNC.D_SIGN_IN.L_SERVER | translate }}</mat-label>
-              <input
-                class="e2e-sign-in-server"
-                matInput
-                type="url"
-                autocomplete="url"
-                [(ngModel)]="serverInput"
-                (keyup.enter)="signIn()"
-              />
-            </mat-form-field>
-          }
-
-          <button
-            class="e2e-sign-in"
-            mat-flat-button
-            color="primary"
-            type="button"
-            [disabled]="isBusy() || !baseUrl()"
-            (click)="signIn()"
-          >
-            <mat-icon aria-hidden="true">login</mat-icon>
-            {{ T.F.SYNC.D_SIGN_IN.SIGN_IN | translate }}
-          </button>
-
-          @if (!isEditingServer()) {
-            <p class="server">
-              {{ T.F.SYNC.D_SIGN_IN.SERVER | translate: { host: host() } }}
-              <button
-                class="e2e-sign-in-change-server"
-                mat-button
-                type="button"
-                (click)="editServer()"
-              >
-                {{ T.F.SYNC.D_SIGN_IN.CHANGE_SERVER | translate }}
-              </button>
-            </p>
-          }
-        </div>
-      </section>
+      @if (isEditingServer()) {
+        <mat-form-field
+          class="server-field"
+          appearance="outline"
+        >
+          <mat-label>{{ T.F.SYNC.D_SIGN_IN.L_SERVER | translate }}</mat-label>
+          <input
+            class="e2e-sign-in-server"
+            matInput
+            type="url"
+            autocomplete="url"
+            [(ngModel)]="serverInput"
+            (keyup.enter)="signIn()"
+          />
+        </mat-form-field>
+      }
 
       @if (errorKey(); as key) {
         <div
@@ -77,18 +42,48 @@
       }
 
       <button
-        class="other-options e2e-other-sync-options"
-        mat-stroked-button
+        class="sign-in e2e-sign-in"
+        mat-flat-button
+        color="primary"
         type="button"
-        (click)="openOtherOptions()"
+        [disabled]="isBusy() || !baseUrl()"
+        (click)="signIn()"
       >
-        <mat-icon aria-hidden="true">tune</mat-icon>
-        {{ T.F.SYNC.D_SIGN_IN.OTHER_OPTIONS | translate }}
+        <mat-icon aria-hidden="true">login</mat-icon>
+        {{ T.F.SYNC.D_SIGN_IN.SIGN_IN | translate }}
       </button>
-      <p class="hint">{{ T.F.SYNC.D_SIGN_IN.OTHER_OPTIONS_HINT | translate }}</p>
+      @if (isCustomServer() && !isEditingServer()) {
+        <p class="hint server-name e2e-sign-in-server-name">
+          {{ T.F.SYNC.D_SIGN_IN.SERVER | translate: { host: host() } }}
+        </p>
+      }
+
+      <p class="other-options">
+        <button
+          class="e2e-other-sync-options"
+          mat-button
+          type="button"
+          (click)="openOtherOptions()"
+        >
+          {{ T.F.SYNC.D_SIGN_IN.OTHER_OPTIONS | translate }}
+        </button>
+      </p>
     </mat-dialog-content>
 
     <mat-dialog-actions align="end">
+      @if (!isEditingServer()) {
+        <!-- A power-user setting, so only an icon; the tooltip names the server. -->
+        <button
+          class="change-server e2e-sign-in-change-server"
+          mat-icon-button
+          type="button"
+          [attr.aria-label]="T.F.SYNC.D_SIGN_IN.CHANGE_SERVER | translate"
+          [matTooltip]="T.F.SYNC.D_SIGN_IN.SERVER | translate: { host: host() }"
+          (click)="editServer()"
+        >
+          <mat-icon aria-hidden="true">dns</mat-icon>
+        </button>
+      }
       <button
         mat-button
         type="button"

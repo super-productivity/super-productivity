@@ -1,51 +1,53 @@
-mat-dialog-content > p:first-child {
-  margin-top: 0;
+mat-dialog-content {
+  // Same width as the other sync dialogs (enter password, decrypt error).
+  max-width: 400px;
 }
 
-.provider {
-  display: flex;
-  gap: var(--s2);
-  padding: var(--s2);
+.intro {
   margin-bottom: var(--s2);
-  border: 1px solid var(--separator-color);
-  border-radius: var(--radius-sm);
+  text-align: center;
 
-  h2 {
-    margin: 0;
-    font-size: var(--font-size-md);
+  .hero-icon {
+    color: var(--palette-primary-500);
   }
 
-  p {
-    margin: var(--s-half) 0 var(--s);
+  .lead {
+    margin: var(--s) 0 var(--s-half);
+    font-size: var(--font-size-lg);
+    // The dialog body text is muted; the lead stands out from the hint below.
+    color: var(--text-color);
   }
-}
 
-.provider-icon {
-  flex-shrink: 0;
-  color: var(--palette-primary-500);
-}
-
-.recommended {
-  margin-left: var(--s);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
-  color: var(--palette-primary-500);
+  .hint {
+    line-height: var(--line-height-snug);
+  }
 }
 
 .server-field {
   display: block;
 }
 
-p.server {
-  margin-bottom: 0;
-  font-size: var(--font-size-sm);
-  color: var(--text-color-muted);
+.sign-in {
+  width: 100%;
+}
+
+.server-name,
+.other-options {
+  text-align: center;
+}
+
+.other-options {
+  margin: var(--s) 0 0;
+}
+
+// Keeps the server icon at the start of the actions row, the other buttons at the end.
+.change-server {
+  margin-right: auto;
 }
 
 .callout {
   margin-bottom: var(--s2);
 }
-
 .hint {
   margin: var(--s-half) 0 0;
   font-size: var(--font-size-sm);
