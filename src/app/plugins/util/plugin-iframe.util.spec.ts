@@ -7,6 +7,7 @@ import { PluginBridgeService } from '../plugin-bridge.service';
 import {
   buildPluginIframeHtml,
   createPluginApiScript,
+  refreshPluginTheme,
   handlePluginMessage,
   PluginIframeConfig,
   PLUGIN_IFRAME_SANDBOX,
@@ -752,6 +753,62 @@ describe('handlePluginMessage()', () => {
             .defaultView!.getComputedStyle(doc.documentElement)
             .getPropertyValue('--c-primary'),
         ).toBe('rgb(1, 2, 3)');
+      });
+    });
+
+    describe('host fonts and live theme', () => {
+      let iframe: HTMLIFrameElement | undefined;
+      let hostStyle: HTMLStyleElement | undefined;
+
+      afterEach(() => {
+        iframe?.remove();
+        hostStyle?.remove();
+        document.body.style.removeProperty('--c-primary');
+        iframe = hostStyle = undefined;
+      });
+
+      const renderPlugin = async (pluginHtml: string): Promise<Document> => {
+        iframe = document.createElement('iframe');
+        const loaded = new Promise((resolve) => (iframe!.onload = resolve));
+        iframe.srcdoc = buildPluginIframeHtml({
+          ...createConfig(pluginBridge),
+          indexHtml: `<html><head></head><body>${pluginHtml}</body></html>`,
+        });
+        document.body.appendChild(iframe);
+        await loaded;
+        return iframe.contentDocument!;
+      };
+
+      it('copies host @font-face rules with absolute URLs', async () => {
+        hostStyle = document.createElement('style');
+        hostStyle.textContent =
+          "@font-face { font-family: 'Host Test Font'; src: url('media/host-test.woff2'); }";
+        document.head.appendChild(hostStyle);
+
+        const doc = await renderPlugin('');
+        const fontRule = Array.from(doc.styleSheets)
+          .flatMap((sheet) => Array.from(sheet.cssRules))
+          .find((rule) => rule.cssText.includes('Host Test Font'));
+        expect(fontRule?.cssText).toContain(
+          new URL('media/host-test.woff2', document.baseURI).href,
+        );
+      });
+
+      it('applies a host theme change to a rendered plugin', async () => {
+        document.body.style.setProperty('--c-primary', 'rgb(1, 2, 3)');
+        const doc = await renderPlugin(
+          // no transition, so the computed color is the end value right away
+          '<style>button { transition: none; }</style>' +
+            '<button id="b" class="btn-primary">Go</button>',
+        );
+        const button = doc.getElementById('b')!;
+
+        document.body.style.setProperty('--c-primary', 'rgb(4, 5, 6)');
+        refreshPluginTheme(iframe!);
+
+        expect(doc.defaultView!.getComputedStyle(button).backgroundColor).toBe(
+          'rgb(4, 5, 6)',
+        );
       });
     });
 

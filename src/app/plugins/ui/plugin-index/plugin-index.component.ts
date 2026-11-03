@@ -1,6 +1,7 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  effect,
   ElementRef,
   inject,
   Input,
@@ -20,6 +21,7 @@ import {
   PluginIframeConfig,
   buildPluginIframeHtml,
   handlePluginMessage,
+  refreshPluginTheme,
 } from '../../util/plugin-iframe.util';
 import {
   MatCard,
@@ -34,6 +36,8 @@ import { LayoutService } from '../../../core-ui/layout/layout.service';
 import { MatButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
+import { GlobalThemeService } from '../../../core/theme/global-theme.service';
+import { CustomThemeService } from '../../../core/theme/custom-theme.service';
 
 @Component({
   selector: 'plugin-index',
@@ -87,6 +91,8 @@ export class PluginIndexComponent implements OnInit, OnDestroy {
   private readonly _cleanupService = inject(PluginCleanupService);
   private readonly _translateService = inject(TranslateService);
   private readonly _layoutService = inject(LayoutService);
+  private readonly _globalThemeService = inject(GlobalThemeService);
+  private readonly _customThemeService = inject(CustomThemeService);
 
   T = T;
 
@@ -95,6 +101,19 @@ export class PluginIndexComponent implements OnInit, OnDestroy {
   readonly error = signal<string | null>(null);
   readonly iframeSrcdoc = signal<SafeHtml | null>(null);
   readonly isResizing = this._layoutService.isPanelResizing;
+
+  // The iframe holds a copy of the theme tokens; re-copy them on a theme switch
+  // so an open plugin view follows without reloading.
+  // shortcut: tracks dark mode and custom themes — a project color change
+  // while a plugin view is open still needs a reopen.
+  private readonly _themeSync = effect(() => {
+    this._globalThemeService.isDarkTheme();
+    this._customThemeService.appliedThemeVersion();
+    const iframe = this.iframeRef?.nativeElement;
+    if (iframe) {
+      refreshPluginTheme(iframe);
+    }
+  });
 
   private _messageListener?: EventListener;
   private _routeSubscription?: Subscription;

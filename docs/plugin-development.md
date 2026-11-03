@@ -293,8 +293,11 @@ Iframe plugins automatically receive:
    whatever its specificity. Delete CSS the kit already covers instead of
    overriding it. Disable the kit with `"uiKit": false` in the manifest.
 
-The token values are captured when the plugin view opens; reopen the view to pick
-up a theme change.
+An open plugin view follows dark mode and custom theme switches live; a project
+color change shows after reopening the view. The app's fonts (Open Sans and the
+Material Symbols icon font) are available too: text uses the app font, and
+`<span class="material-icons">edit</span>` renders the same icons as the app
+(any [Material Symbols](https://fonts.google.com/icons) name).
 
 **Elements styled by default:** headings, `p`, `a`, lists, `table`, `code`,
 `pre`, `blockquote`, `hr`, `button` (outlined), `input`/`textarea`/`select`
@@ -333,6 +336,8 @@ backdrop). Keyboard focus shows the app's focus ring.
   `.callout--danger`: tinted message box; an optional leading `<svg>` is tinted
   too
 - `.chip`, `.empty-state`, `.spinner`
+- `.material-icons`: 24px icon, 18px inside a labelled button; mark it
+  `aria-hidden="true"` and label the button instead
 - Text: `.text-muted`, `.text-primary`, `.text-danger`,
   `.text-sm`;
   `.page-fade` fades a view in
@@ -356,7 +361,11 @@ backdrop). Keyboard focus shows the app's focus ring.
         class="btn-icon btn-danger"
         aria-label="Delete"
       >
-        ✕
+        <span
+          class="material-icons"
+          aria-hidden="true"
+          >delete</span
+        >
       </button>
     </li>
   </ul>

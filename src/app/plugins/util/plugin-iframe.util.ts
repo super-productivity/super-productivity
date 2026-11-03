@@ -121,18 +121,14 @@ const getPluginSurfaceVar = (
 
 const HAS_DIALOG_BUTTON_HANDLER = '__hasDialogButtonHandler';
 
-/**
- * Create CSS injection for plugins - KISS approach
- */
-export const createPluginCssInjection = (): string => {
+const THEME_VARS_STYLE_ID = 'injected-theme-vars';
+
+/** The host's theme tokens as a `:root` rule; see PLUGIN_THEME_VAR_NAMES. */
+const createThemeVarsCss = (): string => {
   const isDarkTheme = document.body.classList.contains('isDarkTheme');
   // CSS variables are defined on body, not :root!
   const computedStyle = getComputedStyle(document.body);
-
-  // Just get the essential theme variables we need
-  const getVar = (name: string): string => {
-    return computedStyle.getPropertyValue(name).trim();
-  };
+  const getVar = (name: string): string => computedStyle.getPropertyValue(name).trim();
   const cardBg = getPluginSurfaceVar(
     getVar('--card-bg'),
     getVar('--bg-lighter'),
@@ -143,14 +139,54 @@ export const createPluginCssInjection = (): string => {
   ).join('\n');
 
   return `
-    <style id="injected-theme-vars">
       :root {
 ${themeVars}
         --card-bg: ${cardBg};
         --c-warn-contrast: ${getVar('--palette-warn-contrast-500')};
         --is-dark-theme: ${isDarkTheme ? '1' : '0'};
-      }
+      }`;
+};
 
+const readCssRules = (sheet: CSSStyleSheet): CSSRule[] => {
+  try {
+    return Array.from(sheet.cssRules);
+  } catch {
+    // Cross-origin sheets refuse rule access; the app bundles its fonts, so
+    // such a sheet holds none of them.
+    return [];
+  }
+};
+
+/**
+ * The host's `@font-face` rules (bundled Open Sans, Material Symbols) with
+ * absolute URLs. A srcdoc iframe shares no stylesheets with the host: without
+ * these, plugin text falls back to a system font wherever the app ships its own
+ * (e.g. Linux), and icon ligatures render as plain words.
+ */
+const createHostFontFaceCss = (): string =>
+  Array.from(document.styleSheets)
+    .flatMap((sheet) => {
+      // `href` can be relative in some hosts; resolve it before using it as a base
+      const baseUrl = new URL(sheet.href ?? document.baseURI, document.baseURI);
+      return readCssRules(sheet)
+        .filter((rule): rule is CSSFontFaceRule => rule instanceof CSSFontFaceRule)
+        .map((rule) =>
+          rule.cssText.replace(
+            /url\((['"]?)([^'")]+)\1\)/g,
+            (_match, _quote, url: string) => `url("${new URL(url, baseUrl).href}")`,
+          ),
+        );
+    })
+    .join('\n');
+
+/**
+ * Create CSS injection for plugins: host fonts, theme tokens and base styles.
+ */
+export const createPluginCssInjection = (): string => {
+  return `
+    <style id="injected-fonts">${createHostFontFaceCss()}</style>
+    <style id="${THEME_VARS_STYLE_ID}">${createThemeVarsCss()}</style>
+    <style id="injected-base">
       body {
         background: transparent;
         color: var(--text-color);
@@ -186,6 +222,17 @@ ${themeVars}
       }
     </style>
   `;
+};
+
+/**
+ * Re-copy the host theme tokens into a rendered plugin iframe, so a theme
+ * switch reaches open plugin views without reloading them (and their state).
+ */
+export const refreshPluginTheme = (iframe: HTMLIFrameElement): void => {
+  const style = iframe.contentDocument?.getElementById(THEME_VARS_STYLE_ID);
+  if (style) {
+    style.textContent = createThemeVarsCss();
+  }
 };
 
 /**

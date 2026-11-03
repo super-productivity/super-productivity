@@ -10,6 +10,8 @@ import { PluginService } from '../../plugin.service';
 import { PluginBridgeService } from '../../plugin-bridge.service';
 import { PluginCleanupService } from '../../plugin-cleanup.service';
 import { LayoutService } from '../../../core-ui/layout/layout.service';
+import { GlobalThemeService } from '../../../core/theme/global-theme.service';
+import { CustomThemeService } from '../../../core/theme/custom-theme.service';
 
 const PLUGIN_ID = 'test-plugin';
 
@@ -61,6 +63,8 @@ describe('PluginIndexComponent', () => {
         { provide: PluginBridgeService, useValue: pluginBridge },
         { provide: PluginCleanupService, useValue: cleanupService },
         { provide: LayoutService, useValue: { isPanelResizing: signal(false) } },
+        { provide: GlobalThemeService, useValue: { isDarkTheme: signal(false) } },
+        { provide: CustomThemeService, useValue: { appliedThemeVersion: signal(0) } },
         { provide: ActivatedRoute, useValue: { paramMap: EMPTY } },
         { provide: Router, useValue: jasmine.createSpyObj('Router', ['navigate']) },
       ],

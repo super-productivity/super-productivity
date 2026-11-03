@@ -181,6 +181,24 @@ export const PLUGIN_UI_KIT_COMPONENTS_CSS = `
     white-space: nowrap;
   }
 
+  /* Icons: the app's Material Symbols font, e.g. <span class="material-icons">edit</span> */
+  .material-icons {
+    display: inline-block;
+    font-family: 'Material Symbols Outlined';
+    font-size: 24px;
+    font-style: normal;
+    font-weight: normal;
+    font-feature-settings: 'liga';
+    line-height: 1;
+    letter-spacing: normal;
+    text-transform: none;
+    white-space: nowrap;
+    overflow-wrap: normal;
+    direction: ltr;
+  }
+  /* Next to a button label icons shrink to Material's 18px */
+  button:not(.btn-icon) .material-icons { font-size: 18px; }
+
   /* Feedback states */
   .empty-state {
     padding: var(--s4) var(--s2);
