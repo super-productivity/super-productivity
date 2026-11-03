@@ -97,7 +97,7 @@
   "EXAMPLE_TASKS": {
     "GETTING_STARTED": {
       "TITLE": "Optional: getting started tips",
-      "NOTES": "Nothing here is required. Delete this task whenever you like.\n\n- **Today and Inbox**: Today shows what is planned for today. Tasks without a project of your own stay in Inbox. A task can appear in both lists.\n- **Projects**: group tasks by topic with the **+** next to **Projects** in the sidebar.\n- **Sync**: keep your data on several devices under **Settings → Sync & Backup**.\n- **Coming from Todoist or TickTick?** Import your tasks under **Settings → Sync & Backup → Import/Export**.\n- **Tours**: **Help → Quick tour** in the sidebar menu walks you through the basics on your own task, and **Help → How to** shows short syntax and keyboard navigation step by step. Close a tour whenever you like.\n- **Make it yours**: pick a theme or dark mode, and switch features like boards, schedule, habits, focus mode or integrations on or off under **Settings → General**. Plugins add even more."
+      "NOTES": "Nothing here is required. Delete this task whenever you like.\n\n- **Today and Inbox**: Today shows what is planned for today. Tasks without a project of your own stay in Inbox. A task can appear in both lists.\n- **Projects**: group tasks by topic with the **+** next to **Projects** in the sidebar.\n- **Sync**: keep your data on several devices under **Settings → Sync & Backup**.\n- **Coming from Todoist or TickTick?** Import your tasks under **Settings → Sync & Backup → Import/Export**.\n- **Tours**: **Help → Quick tour** in the sidebar menu walks you through the basics on your own task, and **Help → How to** shows short syntax and keyboard navigation step by step. Close a tour whenever you like.\n- **Make it yours**: pick a theme or dark mode, and switch features like views, schedule, habits, focus mode or integrations on or off under **Settings → General**. Plugins add even more."
     }
   },
   "F": {
@@ -155,27 +155,56 @@
         "URGENT_IMPORTANT": "Urgent & Important",
         "URGENT_NOT_IMPORTANT": "Urgent & Not Important"
       },
-      "FORM": {
-        "ADD_NEW_PANEL": "Add new Panel",
-        "BACKLOG_TASK_FILTER_ALL": "All",
-        "BACKLOG_TASK_FILTER_NO_BACKLOG": "Exclude",
-        "BACKLOG_TASK_FILTER_ONLY_BACKLOG": "Backlog only",
-        "BACKLOG_TASK_FILTER_TYPE": "Backlog tasks",
+      "EDITOR": {
+        "ADD_COLUMN": "Add column",
+        "ADD_RULE": "Add rule",
+        "ADD_SECTION": "Add section",
+        "BACKLOG_EXCLUDE": "Exclude backlog",
+        "COLUMN_TITLE": "Column title",
         "COLUMNS": "Columns",
+        "COLUMNS_INVALID": "Whole number, 2 or more",
+        "COUNT": "{{nr}} tasks",
+        "COUNT_ONE": "1 task",
+        "DELETED_PROJECT": "1 archived or deleted project",
+        "DELETED_PROJECTS": "{{nr}} archived or deleted projects",
+        "EVERY_TASK": "Every task",
+        "DONE_TAG_FILTER_HINT": "Checked-off tasks appear here only if they also match these tag filters. Checking off does not apply these tag rules; moving a task here does.",
+        "LAYOUT": "Layout",
+        "LAYOUT_BOARD": "Board",
+        "LAYOUT_BOARD_HINT": "Columns side by side, tasks as cards",
+        "LAYOUT_LIST": "List",
+        "LAYOUT_LIST_HINT": "Sections stack in one task list",
+        "MISSING_TAG": "1 missing tag",
+        "MISSING_TAGS": "{{nr}} missing tags",
+        "MOVE_DOWN": "Move down",
+        "MOVE_UP": "Move up",
+        "NO_RULES": "Every task matches. Add a rule to narrow it down.",
+        "OTHER_KEPT": "Other (kept)",
+        "PLANNED_HAS_DATE": "Has a date",
+        "PLANNED_NO_DATE": "No date",
+        "REMOVE_RULE": "Remove rule",
+        "RULE_BACKLOG": "Backlog",
+        "RULE_DONE": "Completion",
+        "RULE_UNTAGGED": "Without tags",
+        "SECTION_ACTIONS": "More actions for {{title}}",
+        "SECTION_TITLE": "Section title",
+        "SECTIONS": "Sections",
+        "SHOW_TASKS_THAT_MATCH": "Show tasks that match",
+        "SORT_DIR_TOGGLE": "Change sort direction"
+      },
+      "FORM": {
+        "BACKLOG_TASK_FILTER_ONLY_BACKLOG": "Backlog only",
+        "COLUMNS": "Columns",
+        "DUE_STATE_NEXT_7_DAYS": "Next 7 days",
+        "DUE_STATE_OVERDUE": "Overdue",
+        "DUE_STATE_TODAY_OR_OVERDUE": "Today or overdue",
         "ONLY_PARENT_TASKS": "Only parent tasks",
-        "PROJECT": "Project",
-        "PROJECT_ALL": "All Projects",
-        "SCHEDULED_STATE": "Scheduled State",
-        "SCHEDULED_STATE_ALL": "All",
-        "SCHEDULED_STATE_NOT_SCHEDULED": "Not Scheduled",
-        "SCHEDULED_STATE_SCHEDULED": "Scheduled",
+        "RULE_NOT_SET": "Not set",
         "SORT_BY": "Sort by",
         "SORT_BY_CREATED": "Created",
-        "SORT_BY_DUE": "Due date",
         "SORT_BY_MANUAL": "Manual",
         "SORT_BY_TIME_ESTIMATE": "Time estimate",
         "SORT_BY_TITLE": "Title",
-        "SORT_DIR": "Direction",
         "SORT_DIR_ASC": "Ascending",
         "SORT_DIR_DESC": "Descending",
         "TAGS_EXCLUDED": "Excluded Tags",
@@ -186,21 +215,36 @@
         "TAGS_MATCH_ANY": "Match any (OR)",
         "TAGS_MATCH_MODE": "Required tag match",
         "TAGS_REQUIRED": "Required Tags",
-        "TASK_DONE_STATE": "Task Completion State",
-        "TASK_DONE_STATE_ALL": "All",
         "TASK_DONE_STATE_DONE": "Completed",
         "TASK_DONE_STATE_UNDONE": "Not Completed"
       },
       "V": {
-        "ADD_NEW_BOARD": "Add new board",
-        "CONFIRM_DELETE": "Are you sure you want to delete this board?",
+        "ADD_NEW_BOARD": "Create view",
+        "ADD_TASK_TO": "Add task to {{title}}",
+        "CONFIRM_DELETE": "Are you sure you want to delete this view?",
         "CREATE_NEW_TAG_BTN": "Create Tag",
-        "CREATE_NEW_TAG_MSG": "1 new tag needs to be created for this board to work",
         "CREATE_NEW_TAGS_BTN": "Create Tags",
-        "CREATE_NEW_TAGS_MSG": "{{nr}} new tags need to be created for this board to work",
-        "EDIT_BOARD": "Edit board",
-        "NO_PANELS_BTN": "Configure Board",
-        "NO_PANELS_MSG": "This board has no panels configured. Add some panels to it."
+        "EDIT_BOARD": "Edit view",
+        "EDIT_COLUMN": "Edit column",
+        "EMPTY_VIEW_ADD": "Add task",
+        "EMPTY_VIEW_HINT": "Tasks show up here once they match the view's rules. Add one, or change the rules.",
+        "HINT_FILTER_NOT_ONLY_TODAY": "Shows every open task that matches the filter, not only today's. Add a Planned Date rule to narrow it down.",
+        "HINT_FILTER_PART_NOT_SAVED": "Part of the list's filter can't be combined with its project or tag in a view and was left out.",
+        "HINT_GROUPING_NOT_SAVED": "This grouping isn't saved: only grouping by tag becomes sections of a view.",
+        "HINT_TODAY_OR_OVERDUE": "Shows tasks due today or overdue, including the ones the Today list shows in their own section.",
+        "MISSING_TAGS_MSG": "This view uses tags that don't exist yet: {{tags}}",
+        "NO_PANELS_BTN": "Configure view",
+        "NO_PANELS_MSG": "This view has no sections yet. Add one to show tasks.",
+        "NO_TASKS_IN_VIEW": "No tasks match this view",
+        "NO_VIEWS_BTN": "Create view",
+        "NO_VIEWS_MSG": "No views yet. A view shows tasks from all your projects that match its rules, in one or more columns.",
+        "SAVE_AS_VIEW": "Save as view…",
+        "SECTION_OTHER": "Other",
+        "SHOW_ALL": "Show all ({{count}})",
+        "SHOW_AS_BOARD": "Show as board",
+        "SHOW_AS_LIST": "Show as list",
+        "S_CANT_MOVE_HERE": "No change makes this task fit the column's rules, so it can't be moved here",
+        "VIEW_CREATED": "View \"{{title}}\" created"
       }
     },
     "CALDAV": {
@@ -1249,12 +1293,12 @@
         "UNKNOWN_ERROR": "Unknown Sync Error: {{err}}"
       },
       "D_DECRYPT_ERROR": {
-        "CHANGE_PW_AND_DECRYPT": "Retry Decrypt",
-        "P1": "Your remote data is encrypted and decryption failed.",
-        "P2_FORGOT_PW": "If you <strong>forgot your password</strong>, enter the correct password and click \"Retry Decrypt\".",
+        "CHANGE_PW_AND_DECRYPT": "Unlock",
+        "P1": "This password doesn't unlock your synced tasks. Check it for typos, or try the password you use on your other devices.",
+        "P2_FORGOT_PW": "<strong>Forgot it?</strong> On a device that still syncs, open the sync settings and choose Change Password. Then enter the new password here.",
         "P3_START_OVER": "If you cannot recover the password, leave the sync server as it is \u2014 your data there stays intact. To erase it and start over from this device, close this window and use <strong>Force Overwrite</strong> in Settings \u2192 Sync & Backup \u2192 Sync.",
-        "PASSWORD": "Password",
-        "TITLE": "Decryption Failed"
+        "PASSWORD": "Encryption password",
+        "TITLE": "Can't unlock your tasks"
       },
       "D_DEVICES": {
         "BTN_SIGN_OUT_OTHERS": "Sign out other devices",
@@ -1276,14 +1320,30 @@
         "TITLE": "Connected Devices"
       },
       "D_ENTER_PASSWORD": {
-        "BTN_FORCE_OVERWRITE": "Use Local Data",
-        "BTN_SAVE_AND_SYNC": "Save & Sync",
-        "FORCE_OVERWRITE_CONFIRM": "This will <strong>delete all data on the server</strong> and upload your local data encrypted with this password. Continue?",
-        "FORCE_OVERWRITE_INFO": "If you prefer to keep your local data, you can overwrite the server instead.",
-        "FORCE_OVERWRITE_TITLE": "Overwrite Server Data?",
-        "MESSAGE": "The sync server contains encrypted data, but no encryption password is configured on this device. Please enter your encryption password to decrypt and sync your data.",
-        "PASSWORD_LABEL": "Encryption Password",
-        "TITLE": "Encryption Password Required"
+        "BTN_FORCE_OVERWRITE": "Start over from this device",
+        "BTN_SAVE_AND_SYNC": "Unlock",
+        "FORCE_OVERWRITE_CONFIRM": "This <strong>deletes all synced data on the server</strong> and uploads this device's tasks, encrypted with the password you typed. Your other devices then need this new password. Continue?",
+        "FORCE_OVERWRITE_INFO": "Lost the password for good? Type a new one and start over from this device. This deletes your synced tasks.",
+        "FORCE_OVERWRITE_TITLE": "Start over from this device?",
+        "FORGOT_HINT": "Forgot it? On a device that still syncs, open the sync settings and choose Change Password. Then enter the new password here.",
+        "MESSAGE": "Your synced tasks are encrypted. Enter the encryption password you chose on your first device.",
+        "PASSWORD_LABEL": "Encryption password",
+        "TITLE": "Unlock your tasks"
+      },
+      "D_FIRST_SYNC": {
+        "ACCOUNT_TASKS": "Your account already has data from another device.",
+        "CONTINUE": "Continue",
+        "DEVICE_TASKS": "Tasks on this device: {{count}}",
+        "RECOMMENDED": "Recommended.",
+        "REMOVE_ACCOUNT_TASKS": "Remove the account's tasks",
+        "REMOVE_DEVICE_TASKS": "Remove {{count}} tasks",
+        "REPLACE_ACCOUNT": "Replace my account with this device's tasks",
+        "REPLACE_ACCOUNT_HINT": "Your account and your other devices lose their tasks and get this device's tasks.",
+        "TITLE": "This device already has data",
+        "USE_ACCOUNT": "Use my account's tasks",
+        "USE_ACCOUNT_HINT": "This device's tasks are saved as a backup first, in Settings \u2192 Sync & Backup.",
+        "WARN_REMOVE_DEVICE_TASKS": "<strong>This removes {{count}} tasks from this device</strong> and keeps your account's tasks. That's a lot: did you mean to keep this device's tasks? They are saved as a backup first.",
+        "WARN_REPLACE_ACCOUNT": "<strong>This removes all tasks from your account and from every other device</strong> and keeps only this device's tasks. Each other device saves its own tasks as a backup before it replaces them."
       },
       "D_FRESH_CLIENT_CONFIRM": {
         "MESSAGE": "This appears to be a fresh installation. Remote data with {{count}} changes was found. Do you want to download and overwrite your local data with it?",
@@ -1330,6 +1390,39 @@
         "SKIP": "Cancel",
         "TITLE": "Server Already Contains Data"
       },
+      "D_SIGN_IN": {
+        "BACK": "Back",
+        "BROWSER_HINT": "Browser didn't open? Use Open again.",
+        "CHANGE_SERVER": "Change server",
+        "CODE_HINT": "The browser will show this code:",
+        "INTRO": "Use your tasks on all your devices.",
+        "INTRO_HINT": "Free and end-to-end encrypted: only your devices can read them.",
+        "INVALID_SERVER": "Enter a server address that starts with https://",
+        "L_ACCESS_TOKEN": "Access token",
+        "L_SERVER": "Server address",
+        "MANUAL_TEXT": "{{host}} doesn't support signing in from the app yet. It probably runs an older version. Get an access token on the server page and paste it here.",
+        "MANUAL_TITLE": "Set up sync manually",
+        "NOT_NOW": "Not now",
+        "OPEN_AGAIN": "Open again",
+        "OPEN_SERVER_PAGE": "Open server page",
+        "OTHER_OPTIONS": "Use WebDAV, Dropbox or a folder",
+        "SERVER": "Server: {{host}}",
+        "SIGN_IN": "Sign in with SuperSync",
+        "START_FAILED": "Couldn't reach {{host}}. Check your connection and try again.",
+        "TIMED_OUT_TEXT": "Sign-in has to be finished within 10 minutes, or it was cancelled in the browser.",
+        "TIMED_OUT_TITLE": "Sign-in timed out",
+        "TITLE": "Sync your tasks",
+        "TRY_AGAIN": "Try again",
+        "WAITING_TEXT": "We opened {{host}} in your browser. Sign in there. This window continues by itself.",
+        "WAITING_TITLE": "Finish signing in in your browser"
+      },
+      "D_SYNC_FINISHED": {
+        "ADD_DEVICE": "To add another device, open Super Productivity there, choose Sync, then Sign in, and enter your encryption password.",
+        "BACK": "Back to my tasks",
+        "TASK_COUNT": "Tasks on this device: {{count}}",
+        "TEXT": "This device is in sync. New changes sync automatically.",
+        "TITLE": "Sync is on"
+      },
       "D_SYNC_IMPORT_CONFLICT": {
         "FILTERED_CHANGES": "Affected changes",
         "FIRST_SYNC_USE_LOCAL_CONFIRM": "This device has never synced before. \"Use My Data\" will permanently replace the data on the server with this device's local data. This cannot be undone. Continue?",
@@ -1352,7 +1445,7 @@
         "USE_REMOTE_CONFIRM": "This replaces this device's data with the server's and discards {{count}} local change(s). Continue?"
       },
       "D_UNDECRYPTABLE_REMOTE": {
-        "MESSAGE": "Your sync server holds at least {{count}} change(s) that this device has not applied because it could not decrypt them. They may be your work from another device, saved under a different or older encryption password.\n\nOverwriting the server deletes them permanently, and this device cannot bring them back.\n\nBefore you overwrite, sync again and try your older encryption passwords with Retry Decrypt in the Decryption Failed dialog. Only continue if you are sure you no longer need these changes.",
+        "MESSAGE": "Your sync server holds at least {{count}} change(s) that this device has not applied because it could not decrypt them. They may be your work from another device, saved under a different or older encryption password.\n\nOverwriting the server deletes them permanently, and this device cannot bring them back.\n\nBefore you overwrite, sync again and try your older encryption passwords when this device asks you to unlock your tasks. Only continue if you are sure you no longer need these changes.",
         "TITLE": "Some synced data could not be decrypted"
       },
       "FORM": {
@@ -1520,7 +1613,7 @@
           "ENABLE_ENCRYPTION_WARNING": "WARNING: This will permanently delete ALL unencrypted sync data on the server! This is necessary because encrypted operations cannot be mixed with unencrypted ones. If you forget your encryption password, your data cannot be recovered.",
           "ENABLE_ENCRYPTION_WHAT_HAPPENS": "What will happen:",
           "ENCRYPTION_ENCOURAGED": "Encryption is required for SuperSync. Please enable encryption to protect your data.",
-          "ENCRYPTION_SETUP_INTRO": "<strong>SuperSync password-encrypts your data before it leaves your device</strong>, so the contents of your tasks and notes can't be read on the server. Technical details like IDs and timestamps are not encrypted.",
+          "ENCRYPTION_SETUP_INTRO": "<strong>Your tasks are encrypted on this device before they are uploaded</strong>, so the server can't read them. Only technical details like IDs and timestamps stay unencrypted.",
           "ENCRYPTION_WARNING": "WARNING: If you forget your encryption password, your data cannot be recovered. This password is separate from your login password. You must use the same password on all devices.",
           "FORCE_OVERWRITE_CONFIRM": "This will <strong>delete all data on the server</strong> and upload your local data with the new password. Unsynced local changes may be lost. Are you sure you want to continue?",
           "FORCE_OVERWRITE_INFO": "If you can't sync because you don't know the current encryption password, you can overwrite the server with your local data and a new password.",
@@ -1543,8 +1636,8 @@
           "SERVER_URL_DESCRIPTION": "Leave as-is for the official server, or enter a custom server URL",
           "SETUP_DISABLE_SUPERSYNC_BTN": "Disable SuperSync",
           "SETUP_ENCRYPTION_BTN": "Set Password",
-          "SETUP_ENCRYPTION_PASSWORD_WARNING": "Use the same password on all devices. If you forget it, you can set a new one, but the encrypted data on the server is then replaced with this device's data.",
-          "SETUP_ENCRYPTION_TITLE": "SuperSync: Set Password"
+          "SETUP_ENCRYPTION_PASSWORD_WARNING": "You enter this password once on each new device. Save it in your password manager: if you lose it and all your devices, your synced tasks can't be recovered.",
+          "SETUP_ENCRYPTION_TITLE": "Choose an encryption password"
         },
         "NEXTCLOUD": {
           "FILE_USER_NAME_DESCRIPTION": "Your Nextcloud user ID — not your email or display name. To find it, open Files in Nextcloud, click the settings gear (bottom-left corner), and copy the <user-id> from the WebDAV URL shown there (.../remote.php/dav/files/<user-id>/).",
@@ -1762,11 +1855,13 @@
     },
     "TASK": {
       "ADD_TASK_BAR": {
+        "ADD_BACK_VIEW_VALUES": "Add back",
         "ADD_EXISTING_TASK": "Add existing task \"{{taskTitle}}\"",
         "CREATE_NEW_TAGS": "Create new tags",
         "DEADLINE_BUTTON": "Deadline",
         "DUE_BUTTON": "Schedule",
         "ESTIMATE_BUTTON": "Estimate",
+        "HIDDEN_BY_VIEW": "Hidden by this view",
         "NO_SEARCH_MATCHES": "No matching tasks or issues",
         "NOTE_PLACEHOLDER": "Add a note… (Ctrl+Enter to add task)",
         "PLACEHOLDER_CREATE": "A task title #tag @16:00 t25m",
@@ -2571,8 +2666,8 @@
   },
   "GCF": {
     "APP_FEATURES": {
-      "BOARDS": "Boards",
-      "BOARDS_HINT": "Kanban-style boards with columns that group your tasks by tag, project or done state.",
+      "BOARDS": "Views",
+      "BOARDS_HINT": "Saved views in the side menu. Each shows tasks from all projects by tag, project, due date or done state, in one or more columns, like a Kanban board.",
       "DONATE_PAGE": "Donate page",
       "DONATE_PAGE_HINT": "Shows a menu entry with ways to support the development of the app.",
       "EXTEND_WITH_PLUGINS": "Find more features in Plugins",
@@ -2912,7 +3007,7 @@
       "WALLPAPER": "Wallpaper",
       "WALLPAPER_BUTTON": "Set wallpaper",
       "WALLPAPER_DIALOG_TITLE": "Global wallpaper",
-      "WALLPAPER_HINT": "Shown on pages without their own background (Planner, Schedule, Boards, Settings…). Tags and projects with their own image override it."
+      "WALLPAPER_HINT": "Shown on pages without their own background (Planner, Schedule, Views, Settings…). Tags and projects with their own image override it."
     },
     "POMODORO": {
       "BREAK_DURATION": "Short break duration",
@@ -3084,7 +3179,7 @@
   "MH": {
     "ADD_NEW_TASK": "Add new Task",
     "ADD_SECTION": "Add Section",
-    "BOARDS": "Boards",
+    "BOARDS": "Views",
     "COPY_TASK_LIST_MARKDOWN": "Copy to clipboard",
     "CREATE_PROJECT": "Create project",
     "CREATE_TAG": "Create tag",
@@ -3179,12 +3274,12 @@
       "CREATE_TASK": "Click + to add your first task",
       "CREATE_TASK_TOUCH": "Tap + to add your first task",
       "DECLINED": "No problem. It's under Help → Quick tour whenever you like.",
+      "INBOX_CHIP": "Tasks without a project of your own go to {{inboxIcon}} <b>Inbox</b>. This one is planned for today, so it shows here too.",
+      "INBOX_CHIP_PHONE": "Tasks without a project of your own go to {{inboxIcon}} <b>Inbox</b>, under ☰. This one is planned for today, so it shows here too.",
       "MORE_FALLBACK": "There's more already switched on: projects, time tracking, Planner…",
       "NO_THANKS": "No thanks",
       "SHOW_ME_MORE": "Show me more ›",
       "TASK_SWIPE_LEFT_TOUCH": "Swipe task left for more actions",
-      "TODAY_AND_INBOX": "This task is planned for today, so it shows in {{todayIcon}} <b>Today</b>. Tasks without a project of your own stay in {{inboxIcon}} <b>Inbox</b>.",
-      "TODAY_AND_INBOX_PHONE": "This task is planned for today, so it shows in {{todayIcon}} <b>Today</b>. Tasks without a project of your own stay in {{inboxIcon}} <b>Inbox</b>, under ☰.",
       "OR_PRESS": "or press",
       "SKIP_ARIA": "Close tip"
     },
@@ -3203,19 +3298,9 @@
       "TRACK_TIME": "Hover over the task and press {{playIcon}} to track time"
     },
     "WANT_MORE": {
-      "BOARDS": "<b>Boards</b> · Kanban-style columns for your tasks",
       "DONE": "Done",
-      "FINISH_DAY": "<b>Finish day</b> · Review and wrap up your day",
-      "FOCUS_MODE": "<b>Focus mode</b> · Pomodoro and distraction-free work",
-      "FOOTER": "Find this again under Help → Quick tour.",
-      "HABITS": "<b>Habits</b> · Track routines day by day",
-      "INTRO": "Super Productivity starts calm. More is there when you need it:",
+      "INTRO": "Switched off for now, to keep things calm:",
       "OPEN_SETTINGS": "Open settings ›",
-      "PLUGINS": "<b>Plugins & integrations</b> · Jira, GitHub, CalDAV and more",
-      "SCHEDULE": "<b>Schedule</b> · Your day on a timeline",
-      "SEARCH": "Search everything with <kbd>{{key}}</kbd>.",
-      "SEARCH_PHONE": "Search everything from ☰.",
-      "SHORT_SYNTAX": "Type <code>#tag</code>, <code>+project</code> or <code>@tomorrow</code> while adding a task. Help → How to shows more.",
       "SYNC": "Your data stays on this device. Sync, backups and import from Todoist or TickTick are in Settings.",
       "TITLE": "Want more?"
     }

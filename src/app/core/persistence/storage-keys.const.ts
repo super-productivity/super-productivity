@@ -35,6 +35,7 @@ export enum LS {
   CHECK_STRAY_PERSISTENCE_BACKUP = 'SUP_CHECK_STRAY_PERSISTENCE_BACKUP',
   IS_PROJECT_LIST_EXPANDED = 'SUP_IS_PROJECT_LIST_EXPANDED',
   IS_TAG_LIST_EXPANDED = 'SUP_IS_TAG_LIST_EXPANDED',
+  IS_VIEW_LIST_EXPANDED = 'SUP_IS_VIEW_LIST_EXPANDED',
 
   LAST_NOTE_BANNER_DAY = 'SUP_LAST_NOTE_BANNER_DAY',
 
@@ -119,6 +120,10 @@ export enum LS {
   NAV_SIDEBAR_EXPANDED = 'SUP_NAV_SIDEBAR_EXPANDED',
   NAV_SIDEBAR_WIDTH = 'SUP_NAV_SIDEBAR_WIDTH',
   RIGHT_PANEL_WIDTH = 'SUP_RIGHT_PANEL_WIDTH',
+
+  // Colors and bars of the last rendered frame, painted by the launch screen in
+  // index.html before any JS runs (see launch-frame.ts). Device-local.
+  LAUNCH_FRAME = 'SUP_LAUNCH_FRAME',
 
   // Destination of the phone bottom nav's second slot. Device-local, never
   // synced: the bar only exists on narrow screens.

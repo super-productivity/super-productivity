@@ -53,12 +53,9 @@
   }
 }
 
-:host(.initial-shell-enter) {
-  .nav-sidenav {
-    animation: sidenav-fade-in var(--transition-duration-l) var(--ani-enter-timing) both;
-  }
-}
-
+// The nav's frame needs no entrance: the boot splash covers it on desktop and
+// the bottom bar stands in for it on phones. Only the items fade in, once
+// their data is there.
 :host(.initial-enter) {
   .nav-list,
   .resize-handle {

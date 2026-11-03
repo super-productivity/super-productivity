@@ -56,6 +56,7 @@ import { discoverNextcloudUserId } from '../../../op-log/sync-providers/file-bas
 import type { OneDrivePrivateCfg } from '../../../op-log/sync-providers/file-based/onedrive/onedrive.model';
 import type { LocalFileSyncPrivateCfg } from '@sp/sync-providers/local-file';
 import type { SuperSyncPrivateCfg } from '@sp/sync-providers/super-sync';
+import { DIALOG_AUTO_FOCUS_TYPING } from '../../../util/dialog-auto-focus';
 
 // `testWebdavConnection` reports a 404 (auth ok, wrong DAV path) via this
 // HTTP status; the package-side `WebDavHttpStatus` enum is not exported to
@@ -844,6 +845,7 @@ export class DialogSyncCfgComponent implements AfterViewInit {
     const { DialogEnableEncryptionComponent } =
       await import('../dialog-enable-encryption/dialog-enable-encryption.component');
     const dialogRef = this._matDialog.open(DialogEnableEncryptionComponent, {
+      autoFocus: DIALOG_AUTO_FOCUS_TYPING,
       width: '450px',
       disableClose: true,
       data: {

@@ -165,6 +165,11 @@ function switchTab(tab) {
 }
 
 function showToken(token) {
+  // Signing in a new device (connect.js): never show the long-lived token.
+  if (CONNECT_REQUEST_ID) {
+    showConnectPanel(token, { showMessage, logout });
+    return;
+  }
   state.token = token;
   tokenArea.value = token;
   authForms.classList.add('hidden');
@@ -524,7 +529,7 @@ async function registerWithPasskey() {
     const verifyRes = await fetch(`${API_BASE}/register/passkey/verify`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, credential }),
+      body: JSON.stringify({ email, credential, r: CONNECT_REQUEST_ID }),
     });
 
     const verifyData = await verifyRes.json();
@@ -586,7 +591,7 @@ async function registerWithMagicLink() {
       headers: { 'Content-Type': 'application/json' },
       // JSON.stringify omits undefined-valued properties, so an instance with no legal
       // pages simply sends { email }.
-      body: JSON.stringify({ email, termsAccepted }),
+      body: JSON.stringify({ email, termsAccepted, r: CONNECT_REQUEST_ID }),
     });
 
     const data = await res.json();
@@ -646,7 +651,7 @@ async function requestMagicLink() {
     const res = await fetch(`${API_BASE}/login/magic-link`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email }),
+      body: JSON.stringify({ email, r: CONNECT_REQUEST_ID }),
     });
 
     const data = await res.json();

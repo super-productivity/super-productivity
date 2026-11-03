@@ -3,6 +3,7 @@ import { takeInterpretableOpPrefix } from './remote-op-block.util';
 import { OperationLogStoreService } from '../persistence/operation-log-store.service';
 import {
   ActionType,
+  extractFullStateFromPayload,
   FULL_STATE_OP_TYPES,
   Operation,
   OperationLogEntry,
@@ -12,6 +13,7 @@ import { OperationWriteFlushService } from './operation-write-flush.service';
 import { SyncImportConflictData } from './dialog-sync-import-conflict/dialog-sync-import-conflict.component';
 import { isExampleTaskCreateOp } from '../validation/is-example-task-op.util';
 import { OpLog } from '../../core/log';
+import { countAllTasks } from '../../imex/local-backup/backup-ring.util';
 
 /**
  * Enabling/configuring sync on a never-synced client necessarily writes the
@@ -128,9 +130,10 @@ export class SyncImportConflictGateService {
     // op after it — or one whose own syncImportReason is unknown — must not
     // open a conflict dialog the user cannot evaluate and this client will
     // refuse anyway.
-    const fullStateOp = takeInterpretableOpPrefix(incomingOps).find((op) =>
+    const fullStateOps = takeInterpretableOpPrefix(incomingOps).filter((op) =>
       FULL_STATE_OP_TYPES.has(op.opType),
     );
+    const fullStateOp = fullStateOps[0];
 
     if (!fullStateOp) {
       return {
@@ -218,6 +221,12 @@ export class SyncImportConflictGateService {
         syncImportReason: fullStateOp.syncImportReason,
         scenario: 'INCOMING_IMPORT',
         isNeverSynced,
+        // The last full-state op is the state that gets applied. 0 counts as
+        // unknown: tasks added after an empty snapshot are missed, and 0 would
+        // make any device look vastly bigger than the account.
+        accountTaskCount:
+          countAllTasks(extractFullStateFromPayload(fullStateOps.at(-1)?.payload)) ||
+          undefined,
       },
     };
   }

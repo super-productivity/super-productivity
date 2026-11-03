@@ -293,13 +293,10 @@ export class AddTaskBarIssueSearchService {
     );
   }
 
+  // Literal, not String.match: "c++" or "(" are no valid regex, and the
+  // thrown error carried the typed text into the exportable log
   private _filterBacklog(searchText: string, task: Task): boolean {
-    try {
-      return !!task.title?.toLowerCase().match(searchText.toLowerCase());
-    } catch (e) {
-      TaskLog.err('RegEx Error', e);
-      return false;
-    }
+    return !!task.title?.toLowerCase().includes(searchText.toLowerCase());
   }
 
   private async _getCtxForTaskSuggestion({
