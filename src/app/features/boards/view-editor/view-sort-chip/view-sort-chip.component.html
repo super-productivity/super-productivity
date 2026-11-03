@@ -1,7 +1,7 @@
 <!-- Menu styles: src/styles/components/_view-editor-menus.scss (overlay). -->
-@if (variant() === 'row') {
+<span class="chip chip--plain">
   <button
-    class="row focus-ring"
+    class="chip-main focus-ring"
     type="button"
     [attr.aria-label]="
       (T.F.BOARDS.FORM.SORT_BY | translate) +
@@ -12,62 +12,28 @@
     [matMenuTriggerFor]="menu"
   >
     <mat-icon
-      class="row-icon"
+      class="chip-icon"
       aria-hidden="true"
       >swap_vert</mat-icon
     >
-    <span class="row-text">
-      <span class="row-label">{{ T.F.BOARDS.FORM.SORT_BY | translate }}</span>
-      <span class="row-value"
-        >{{ label() | translate }}
-        @if (isSorted()) {
-          {{ arrow() }} {{ dirLabel() | translate }}
-        }
-      </span>
-    </span>
+    @if (value() === OTHER_VALUE) {
+      <mat-icon
+        class="chip-icon"
+        aria-hidden="true"
+        >info_outline</mat-icon
+      >
+    }
+    {{ label() | translate }}
+    @if (isSorted()) {
+      {{ arrow() }}
+    }
     <mat-icon
-      class="row-chevron"
+      class="chip-icon"
       aria-hidden="true"
-      >chevron_right</mat-icon
+      >expand_more</mat-icon
     >
   </button>
-} @else {
-  <span class="chip chip--plain">
-    <button
-      class="chip-main focus-ring"
-      type="button"
-      [attr.aria-label]="
-        (T.F.BOARDS.FORM.SORT_BY | translate) +
-        ': ' +
-        (label() | translate) +
-        (isSorted() ? ', ' + (dirLabel() | translate) : '')
-      "
-      [matMenuTriggerFor]="menu"
-    >
-      <mat-icon
-        class="chip-icon"
-        aria-hidden="true"
-        >swap_vert</mat-icon
-      >
-      @if (value() === OTHER_VALUE) {
-        <mat-icon
-          class="chip-icon"
-          aria-hidden="true"
-          >info_outline</mat-icon
-        >
-      }
-      {{ label() | translate }}
-      @if (isSorted()) {
-        {{ arrow() }}
-      }
-      <mat-icon
-        class="chip-icon"
-        aria-hidden="true"
-        >expand_more</mat-icon
-      >
-    </button>
-  </span>
-}
+</span>
 
 <mat-menu
   #menu="matMenu"

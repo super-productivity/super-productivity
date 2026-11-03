@@ -44,7 +44,6 @@ import {
   SelectRuleId,
   TAGS_MATCH_OPTIONS,
   TagRuleId,
-  VIEW_RULE_ICONS,
   VIEW_RULE_OPTIONS,
   withIdToggled,
   withProjectToggled,
@@ -67,8 +66,7 @@ const byTitle = <R>(rows: R[], text: string, title: (row: R) => string): R[] => 
 /**
  * One rule of an open section as a chip: `Label: value` opens a menu with
  * the rule's controls (options, tags or projects), × removes the rule.
- * Flags ("Without tags", "Only parent tasks") have no menu. On a phone
- * (`variant` row) a full-width row instead: icon, label over value, ×.
+ * Flags ("Without tags", "Only parent tasks") have no menu.
  */
 @Component({
   selector: 'view-rule-chip',
@@ -92,14 +90,13 @@ const byTitle = <R>(rows: R[], text: string, title: (row: R) => string): R[] => 
   styleUrl: '../view-editor-chip.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
   // eslint-disable-next-line @typescript-eslint/naming-convention
-  host: { '[attr.data-rule]': 'part().rule', '[class.is-row]': "variant() === 'row'" },
+  host: { '[attr.data-rule]': 'part().rule' },
 })
 export class ViewRuleChipComponent {
   readonly part = input.required<RulePart>();
   readonly panel = input.required<BoardPanelCfg>();
   /** The tags (or, for the project rule, projects) by id, for the value. */
   readonly items = input<ReadonlyMap<string, TagComponentTag>>(new Map());
-  readonly variant = input<'chip' | 'row'>('chip');
 
   readonly panelChange = output<BoardPanelCfg>();
   readonly remove = output<void>();
@@ -118,8 +115,6 @@ export class ViewRuleChipComponent {
 
   /** The tag or project menu's filter text; cleared whenever the menu opens. */
   readonly filter = signal('');
-
-  readonly icon = computed(() => VIEW_RULE_ICONS[this.part().rule]);
 
   readonly kind = computed<ChipKind>(() => {
     const rule = this.part().rule;

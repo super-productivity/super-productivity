@@ -1,13 +1,11 @@
-// The controls of an open section: rule chips, sort and "Add rule"; on a
-// phone (`.is-row`) full-width rows. Unfilled: they sit on the surface of the
-// dialog or the open card, never darker than it.
+@use '../../../../styles/_globals.scss' as *;
+
+// The controls of an open section: rule chips, sort and "Add rule".
+// Unfilled: they sit on the surface of the dialog or the card, never darker
+// than it.
 :host {
   display: inline-flex;
   max-width: 100%;
-}
-
-:host(.is-row) {
-  display: block;
 }
 
 // One outline around the value button and ×; a long value wraps between its
@@ -22,6 +20,12 @@
   background: transparent;
   font-size: var(--font-size-sm);
   line-height: var(--line-height-snug);
+
+  // A finger's target: taller, and a wider × apart from the value.
+  @include touchPrimaryDevice {
+    min-height: var(--s5);
+    --chip-remove-pad: var(--s);
+  }
 }
 
 // "Add rule": an action at the end of the rules, not a rule.
@@ -81,7 +85,7 @@ button.chip-main {
   flex: 0 0 auto;
   align-self: stretch;
   align-items: center;
-  padding: 0 var(--s-half);
+  padding: 0 var(--chip-remove-pad, var(--s-half));
   border: 0;
   border-radius: var(--radius-md);
   background: transparent;
@@ -96,94 +100,5 @@ button.chip-main {
     font-size: 16px;
     width: 16px;
     height: 16px;
-  }
-}
-
-// A phone's row: icon, the rule's label over its value, then × or ›. At
-// least 56px tall, a full-width touch target.
-.row {
-  display: flex;
-  align-items: center;
-  gap: var(--s2);
-  width: 100%;
-  min-height: var(--s7);
-  padding: 0 0 0 var(--s2);
-  color: var(--text-color);
-}
-
-button.row,
-.row-main {
-  border: 0;
-  background: transparent;
-  font: inherit;
-  text-align: start;
-}
-
-button.row {
-  padding-inline-end: var(--s);
-  cursor: pointer;
-}
-
-.row-main {
-  display: flex;
-  flex: 1 1 auto;
-  flex-direction: column;
-  justify-content: center;
-  gap: var(--s-quarter);
-  min-width: 0;
-  min-height: var(--s7);
-  padding: var(--s) 0;
-  color: inherit;
-}
-
-// Hovering a rule's text lights up its whole row, icon to ×. Pointer only:
-// a tap leaves no sticky hover behind.
-@media (hover: hover) {
-  button.row:hover,
-  .row:has(> button.row-main:hover) {
-    background: var(--state-hover);
-  }
-}
-
-.row-icon,
-.row-chevron {
-  flex: 0 0 auto;
-  color: var(--text-color-muted);
-}
-
-.row-text {
-  display: flex;
-  flex: 1 1 auto;
-  flex-direction: column;
-  gap: var(--s-quarter);
-  min-width: 0;
-}
-
-.row-label {
-  font-size: var(--font-size-lg);
-}
-
-.row-value {
-  overflow: hidden;
-  color: var(--text-color-muted);
-  font-size: var(--font-size-md);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.row--warn .row-value {
-  color: var(--color-warning);
-}
-
-.row-remove {
-  flex: 0 0 auto;
-  color: var(--text-color-muted);
-}
-
-.row--add {
-  color: var(--c-primary);
-
-  .row-icon {
-    color: inherit;
   }
 }

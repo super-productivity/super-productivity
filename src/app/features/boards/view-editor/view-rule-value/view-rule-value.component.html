@@ -1,6 +1,4 @@
-@if (isLabelShown()) {
-  <span class="label">{{ part().label | translate }}{{ hasValue() ? ':' : '' }}</span>
-}
+<span class="label">{{ part().label | translate }}{{ hasValue() ? ':' : '' }}</span>
 @if (part().value) {
   {{ part().value! | translate }}
 } @else if (part().isOther) {

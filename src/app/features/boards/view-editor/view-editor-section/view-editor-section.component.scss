@@ -1,3 +1,5 @@
+@use '../../../../../styles/_globals.scss' as *;
+
 :host {
   display: block;
   // The label column, shared with the view's Layout row.
@@ -120,21 +122,30 @@
   padding-bottom: var(--s);
 }
 
-// Label column, then the controls: aligned with the view's Layout row.
+// Label column, then the controls: aligned with the view's Layout row. On a
+// phone the label goes above, so the chips get the card's whole width.
 .form-row {
   display: grid;
-  grid-template-columns: var(--view-editor-label-w) minmax(0, 1fr);
-  column-gap: var(--s2);
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s-half) var(--s2);
   align-items: start;
+
+  @include mq(xs) {
+    grid-template-columns: var(--view-editor-label-w) minmax(0, 1fr);
+  }
 }
 
 .form-label {
   display: flex;
-  flex-direction: column;
-  gap: var(--s-quarter);
-  padding-top: var(--s-half);
+  flex-wrap: wrap;
+  gap: var(--s-quarter) var(--s);
   color: var(--text-color-muted);
   font-size: var(--font-size-sm);
+
+  @include mq(xs) {
+    flex-direction: column;
+    padding-top: var(--s-half);
+  }
 }
 
 .chips {
@@ -152,98 +163,4 @@
   margin: 0;
   color: var(--text-color-muted);
   font-size: var(--font-size-sm);
-}
-
-// Phones: rows edge to edge of the dialog content, a subheading above.
-.section-body.is-rows {
-  gap: 0;
-  margin-inline: calc(-1 * var(--s3));
-
-  .rule-note {
-    padding: var(--s) var(--s3);
-  }
-
-  .divider {
-    margin: var(--s) 0;
-  }
-}
-
-.sub-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--s);
-  padding: 0 var(--s3) var(--s-half);
-  color: var(--text-color-muted);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
-}
-
-// A phone's section list: one row per section, divided like a list.
-.phone-row {
-  display: flex;
-  align-items: center;
-  gap: var(--s-half);
-  margin-inline: calc(-1 * var(--s3));
-  padding-inline-start: var(--s);
-  border-bottom: 1px solid var(--divider-color);
-
-  .drag-handle {
-    margin-top: 0;
-  }
-}
-
-.phone-row-main {
-  display: flex;
-  flex: 1 1 auto;
-  flex-direction: column;
-  gap: var(--s-quarter);
-  min-width: 0;
-  min-height: var(--s8);
-  padding: var(--s) 0;
-  border: 0;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  text-align: start;
-  cursor: pointer;
-
-  .summary {
-    padding-bottom: 0;
-  }
-}
-
-.phone-row-main .section-title {
-  font-size: var(--font-size-lg);
-  font-weight: var(--font-weight-medium);
-}
-
-.summary--one-line {
-  -webkit-line-clamp: 1;
-  line-clamp: 1;
-}
-
-.chevron {
-  flex: 0 0 auto;
-  margin-inline-end: var(--s2);
-  color: var(--text-color-muted);
-}
-
-// A phone's page of one section.
-.page-head {
-  display: flex;
-  align-items: center;
-  gap: var(--s-half);
-  margin: 0 calc(-1 * var(--s2)) var(--s);
-}
-
-.page-heading {
-  flex: 1 1 auto;
-  margin: 0;
-  font-size: var(--font-size-lg);
-  font-weight: var(--font-weight-semibold);
-}
-
-.page-title {
-  margin-bottom: var(--s2);
 }

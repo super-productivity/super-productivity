@@ -11,120 +11,113 @@
   class="content"
   [class.is-phone]="isXs()"
 >
-  @if (!phonePage()) {
-    @for (hint of hints(); track hint) {
-      <p class="hint">{{ hint | translate }}</p>
-    }
-
-    <div class="form-row layout-row">
-      <span class="form-label">{{ T.F.BOARDS.EDITOR.LAYOUT | translate }}</span>
-      <div class="layout-controls">
-        <mat-button-toggle-group
-          class="layout-toggle"
-          hideSingleSelectionIndicator
-          [attr.aria-label]="T.F.BOARDS.EDITOR.LAYOUT | translate"
-          [value]="layout()"
-          (change)="setLayout($event.value)"
-        >
-          <mat-button-toggle
-            class="layout-option"
-            value="list"
-          >
-            <mat-icon>view_list</mat-icon>
-            {{ T.F.BOARDS.EDITOR.LAYOUT_LIST | translate }}
-          </mat-button-toggle>
-          <mat-button-toggle
-            class="layout-option"
-            value="board"
-          >
-            <mat-icon>view_kanban</mat-icon>
-            {{ T.F.BOARDS.EDITOR.LAYOUT_BOARD | translate }}
-          </mat-button-toggle>
-        </mat-button-toggle-group>
-        @if (isBoard()) {
-          <span
-            class="cols"
-            role="group"
-            [attr.aria-label]="T.F.BOARDS.FORM.COLUMNS | translate"
-          >
-            <span class="stepper">
-              <button
-                mat-icon-button
-                type="button"
-                [disabled]="model().cols <= 2"
-                [attr.aria-label]="T.F.BOARDS.EDITOR.COLUMNS_DECREASE | translate"
-                (click)="setCols(model().cols - 1)"
-              >
-                <mat-icon>remove</mat-icon>
-              </button>
-              <span
-                class="cols-value"
-                aria-live="polite"
-                >{{ model().cols }}</span
-              >
-              <button
-                mat-icon-button
-                type="button"
-                [attr.aria-label]="T.F.BOARDS.EDITOR.COLUMNS_INCREASE | translate"
-                (click)="setCols(model().cols + 1)"
-              >
-                <mat-icon>add</mat-icon>
-              </button>
-            </span>
-            <span class="cols-label">{{ T.F.BOARDS.FORM.COLUMNS | translate }}</span>
-          </span>
-        }
-      </div>
-    </div>
-
-    @if (isSectionTitleShown()) {
-      <div class="sections-head">
-        <h3 class="sections-heading">
-          {{
-            (isBoard() ? T.F.BOARDS.EDITOR.COLUMNS : T.F.BOARDS.EDITOR.SECTIONS)
-              | translate
-          }}
-        </h3>
-        <button
-          mat-stroked-button
-          type="button"
-          (click)="addPanel()"
-        >
-          <mat-icon>{{ isBoard() ? 'view_week' : 'playlist_add' }}</mat-icon>
-          {{
-            (isBoard() ? T.F.BOARDS.EDITOR.ADD_COLUMN : T.F.BOARDS.EDITOR.ADD_SECTION)
-              | translate
-          }}
-        </button>
-      </div>
-    }
+  @for (hint of hints(); track hint) {
+    <p class="hint">{{ hint | translate }}</p>
   }
 
-  <!-- A phone's section page hides the other sections; they keep their state. -->
+  <div class="form-row layout-row">
+    <span class="form-label">{{ T.F.BOARDS.EDITOR.LAYOUT | translate }}</span>
+    <div class="layout-controls">
+      <mat-button-toggle-group
+        class="layout-toggle"
+        hideSingleSelectionIndicator
+        [attr.aria-label]="T.F.BOARDS.EDITOR.LAYOUT | translate"
+        [value]="layout()"
+        (change)="setLayout($event.value)"
+      >
+        <mat-button-toggle
+          class="layout-option"
+          value="list"
+        >
+          <mat-icon>view_list</mat-icon>
+          {{ T.F.BOARDS.EDITOR.LAYOUT_LIST | translate }}
+        </mat-button-toggle>
+        <mat-button-toggle
+          class="layout-option"
+          value="board"
+        >
+          <mat-icon>view_kanban</mat-icon>
+          {{ T.F.BOARDS.EDITOR.LAYOUT_BOARD | translate }}
+        </mat-button-toggle>
+      </mat-button-toggle-group>
+      @if (isBoard()) {
+        <span
+          class="cols"
+          role="group"
+          [attr.aria-label]="T.F.BOARDS.FORM.COLUMNS | translate"
+        >
+          <span class="stepper">
+            <button
+              mat-icon-button
+              type="button"
+              [disabled]="model().cols <= 2"
+              [attr.aria-label]="T.F.BOARDS.EDITOR.COLUMNS_DECREASE | translate"
+              (click)="setCols(model().cols - 1)"
+            >
+              <mat-icon>remove</mat-icon>
+            </button>
+            <span
+              class="cols-value"
+              aria-live="polite"
+              >{{ model().cols }}</span
+            >
+            <button
+              mat-icon-button
+              type="button"
+              [attr.aria-label]="T.F.BOARDS.EDITOR.COLUMNS_INCREASE | translate"
+              (click)="setCols(model().cols + 1)"
+            >
+              <mat-icon>add</mat-icon>
+            </button>
+          </span>
+          <span class="cols-label">{{ T.F.BOARDS.FORM.COLUMNS | translate }}</span>
+        </span>
+      }
+    </div>
+  </div>
+
+  @if (isSectionTitleShown()) {
+    <div class="sections-head">
+      <h3 class="sections-heading">
+        {{
+          (isBoard() ? T.F.BOARDS.EDITOR.COLUMNS : T.F.BOARDS.EDITOR.SECTIONS) | translate
+        }}
+      </h3>
+      <button
+        mat-stroked-button
+        type="button"
+        (click)="addPanel()"
+      >
+        <mat-icon>{{ isBoard() ? 'view_week' : 'playlist_add' }}</mat-icon>
+        {{
+          (isBoard() ? T.F.BOARDS.EDITOR.ADD_COLUMN : T.F.BOARDS.EDITOR.ADD_SECTION)
+            | translate
+        }}
+      </button>
+    </div>
+  }
+
   <div
     class="sections"
     cdkDropList
     cdkDropListLockAxis="y"
-    [class.is-list]="isXs()"
-    [cdkDropListDisabled]="!isSectionTitleShown() || !!phonePage()"
+    [cdkDropListDisabled]="!isSectionTitleShown()"
     (cdkDropListDropped)="dropPanel($event)"
   >
     @for (panel of model().panels; track panel.id; let i = $index) {
       <view-editor-section
         cdkDrag
-        [class.is-hidden]="!!phonePage() && phonePage() !== panel.id"
-        [cdkDragDisabled]="!isSectionTitleShown() || !!phonePage()"
+        [cdkDragDisabled]="!isSectionTitleShown()"
         [panel]="panel"
         [index]="i"
         [total]="model().panels.length"
         [isShowTitle]="isSectionTitleShown()"
         [isBoard]="isBoard()"
-        [isPhone]="isXs()"
         [count]="counts()[i]"
         [isFirst]="$first"
         [isLast]="$last"
         [isCollapsible]="isCollapsible()"
-        [isOpen]="isXs() ? phonePage() === panel.id : openPanelIds().has(panel.id)"
+        [isOpen]="openPanelIds().has(panel.id)"
         [isFocusInitial]="panel.id === initialOpenPanelId()"
         (toggleOpen)="togglePanel(panel.id)"
         (panelChange)="updatePanel(i, $event)"

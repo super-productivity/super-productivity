@@ -160,10 +160,8 @@
         "ADD_RULE": "Add rule",
         "ADD_SECTION": "Add section",
         "ALREADY_SET": "Already set",
-        "BACK_TO_VIEW": "Back to the view",
         "BACKLOG_EXCLUDE": "Exclude backlog",
         "COLUMN_NR": "Column {{nr}}",
-        "COLUMN_OF": "Column {{nr}} of {{count}}",
         "COLUMN_TITLE": "Column title",
         "COLUMNS": "Columns",
         "COLUMNS_DECREASE": "Fewer columns",
@@ -202,7 +200,6 @@
         "RULE_UNTAGGED": "Without tags",
         "SECTION_ACTIONS": "More actions for {{title}}",
         "SECTION_NR": "Section {{nr}}",
-        "SECTION_OF": "Section {{nr}} of {{count}}",
         "SECTION_TITLE": "Section title",
         "SECTIONS": "Sections"
       },

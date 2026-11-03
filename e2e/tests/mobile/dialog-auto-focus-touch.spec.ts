@@ -31,7 +31,7 @@ test.describe('Dialog auto focus on a phone', () => {
     await expect(container).toBeFocused();
     await expect(container).toHaveAttribute('role', 'dialog');
 
-    // The layout shows on top; the sections are rows; nothing scrolls sideways.
+    // The layout shows on top, then the cards; nothing scrolls sideways.
     const layout = container.locator('mat-button-toggle-group');
     await expect(
       layout.getByRole('radio', { name: 'Board', exact: true }),
@@ -39,11 +39,24 @@ test.describe('Dialog auto focus on a phone', () => {
     const content = container.locator('mat-dialog-content');
     expect(await content.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
 
-    // A section's row opens its page in place of the form.
+    // The first card starts open; another opens in place, beside it.
     const first = container.locator('view-editor-section').first();
-    await first.locator('.phone-row-main').tap();
-    await expect(first.locator('.page-head')).toBeVisible();
-    await expect(layout).toHaveCount(0);
+    const second = container.locator('view-editor-section').nth(1);
+    await expect(first.locator('.section-toggle')).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
+    await second.locator('.section-toggle').tap();
+    await expect(second.locator('.section-toggle')).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
+    await expect(first.locator('.section-toggle')).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
+    await expect(layout).toBeVisible();
+    expect(await content.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
 
     // Opening a tag picker by touch also leaves the keyboard down.
     await first.getByRole('button', { name: /^Excluded Tags/ }).tap();
@@ -52,11 +65,6 @@ test.describe('Dialog auto focus on a phone', () => {
     await expect(filter).not.toBeFocused();
     await page.keyboard.press('Escape');
     await expect(filter).toBeHidden();
-
-    // Back to the view's form.
-    await first.getByRole('button', { name: 'Back to the view', exact: true }).tap();
-    await expect(first.locator('.phone-row')).toBeVisible();
-    await expect(layout).toBeVisible();
 
     // Closing hands focus back to the button that opened the dialog.
     await container.getByRole('button', { name: 'Cancel', exact: true }).tap();

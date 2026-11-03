@@ -3,7 +3,6 @@ import {
   ChangeDetectionStrategy,
   Component,
   computed,
-  ElementRef,
   inject,
   Injector,
   input,
@@ -26,7 +25,6 @@ import { TagService } from '../../../tag/tag.service';
 import { ProjectService } from '../../../project/project.service';
 import { DEFAULT_PROJECT_ICON } from '../../../project/project.const';
 import { TagComponentTag } from '../../../tag/tag/tag.component';
-import { isTouchActive } from '../../../../util/input-intent';
 import { ViewEditorTitleComponent } from '../view-editor-title/view-editor-title.component';
 import { ViewRuleValueComponent } from '../view-rule-value/view-rule-value.component';
 import { ViewRuleChipComponent } from '../view-rule-chip/view-rule-chip.component';
@@ -60,16 +58,15 @@ interface ShownPart {
 }
 
 /** How a section shows (`mode`). */
-type SectionMode = 'card' | 'flat' | 'row' | 'page';
+type SectionMode = 'card' | 'flat';
 
 /**
  * One section (List) or column (Board) of the view editor. As a card (when
  * titles show): drag handle, title, count and, open, its rules as chips and
  * its sort; collapsed, a summary of its rules. The only section of a list
- * shows the rules without a card (`flat`). On a phone the rules are rows; a
- * section with a title is a row of the view's section list that opens its
- * own page. Edits are emitted as a new panel; the panel's other fields stay
- * as they are.
+ * shows the rules without a card (`flat`). Phones show the same cards.
+ * Edits are emitted as a new panel; the panel's other fields stay as they
+ * are.
  */
 @Component({
   selector: 'view-editor-section',
@@ -107,11 +104,9 @@ export class ViewEditorSectionComponent {
   readonly count = input<number>(0);
   /** How many sections the view has ("Section 2 of 3"). */
   readonly total = input<number>(1);
-  /** Rows instead of chips; a titled section is a row or, open, a page. */
-  readonly isPhone = input<boolean>(false);
   readonly isFirst = input<boolean>(false);
   readonly isLast = input<boolean>(false);
-  /** With several sections each opens and closes; closed, a summary (on a phone: a row). */
+  /** With several sections each opens and closes; closed, a summary. */
   readonly isCollapsible = input<boolean>(false);
   readonly isOpen = input<boolean>(true);
   /**
@@ -135,10 +130,6 @@ export class ViewEditorSectionComponent {
   private readonly _projectService = inject(ProjectService);
 
   private readonly _title = viewChild(ViewEditorTitleComponent);
-  private readonly _backBtn = viewChild('backBtn', {
-    read: ElementRef<HTMLButtonElement>,
-  });
-  private readonly _rowBtn = viewChild('rowBtn', { read: ElementRef<HTMLButtonElement> });
   private readonly _chips = viewChildren(ViewRuleChipComponent);
 
   // Rules added or edited here stay shown while their control is empty (an
@@ -166,15 +157,7 @@ export class ViewEditorSectionComponent {
     );
   });
 
-  readonly mode = computed<SectionMode>(() => {
-    if (!this.isShowTitle()) {
-      return 'flat';
-    }
-    if (!this.isPhone()) {
-      return 'card';
-    }
-    return this.isOpen() ? 'page' : 'row';
-  });
+  readonly mode = computed<SectionMode>(() => (this.isShowTitle() ? 'card' : 'flat'));
   readonly isCollapsed = computed(
     () => this.mode() === 'card' && this.isCollapsible() && !this.isOpen(),
   );
@@ -219,28 +202,18 @@ export class ViewEditorSectionComponent {
 
   /** The open section's chips: every shown rule, empty added ones too. */
   readonly parts = computed(() => this._toShown(this.shownRules()));
-  /** The summary of a collapsed card or a phone's row: the set rules only. */
+  /** The summary of a collapsed card: the set rules only. */
   readonly summaryParts = computed(() =>
-    this.isCollapsed() || this.mode() === 'row'
-      ? this._toShown(getSetRules(this.panel()))
-      : [],
+    this.isCollapsed() ? this._toShown(getSetRules(this.panel())) : [],
   );
 
   setTitle(title: string): void {
     this._emit({ ...this.panel(), title });
   }
 
-  /** Opens or closes the section: a card in place, a phone's row its page. */
+  /** Opens or closes the card in place. */
   openRules(): void {
     this.toggleOpen.emit();
-    // A phone's page replaces the row: keep keyboard focus on its back
-    // button; a tap needs none (it would only show a focus ring).
-    if (this.mode() !== 'row' || isTouchActive()) {
-      return;
-    }
-    afterNextRender(() => this._backBtn()?.nativeElement.focus(), {
-      injector: this._injector,
-    });
   }
 
   /** A click on the card's bar, not on one of its controls, toggles it. */
@@ -254,17 +227,6 @@ export class ViewEditorSectionComponent {
       return;
     }
     this.openRules();
-  }
-
-  /** A phone's page: back to the view's section list, focus on its row. */
-  back(): void {
-    this.toggleOpen.emit();
-    if (isTouchActive()) {
-      return;
-    }
-    afterNextRender(() => this._rowBtn()?.nativeElement.focus(), {
-      injector: this._injector,
-    });
   }
 
   addRule(rule: ViewRuleId): void {
@@ -299,23 +261,16 @@ export class ViewEditorSectionComponent {
   }
 
   /**
-   * Shows the title's error; whether it has one. A hidden title has none; a
-   * phone's row has no field, so its title is checked as stored.
+   * Shows the title's error; whether it has one. A hidden title has none, nor
+   * a collapsed card's (it shows as text only when set).
    */
   isTitleInvalid(): boolean {
-    const title = this._title();
-    if (title) {
-      return title.isInvalid();
-    }
-    return this.mode() === 'row' && !this.panel().title;
+    return this._title()?.isInvalid() ?? false;
   }
 
-  /**
-   * Renames: the title's field, focused (a phone's row opens its page, a
-   * collapsed card opens, first).
-   */
+  /** Renames: the title's field, focused (a collapsed card opens first). */
   focusTitle(): void {
-    if (this.mode() === 'row' || (this.isCollapsed() && !this._title())) {
+    if (this.isCollapsed() && !this._title()) {
       this.toggleOpen.emit();
       afterNextRender(() => this._title()?.focus(), { injector: this._injector });
       return;

@@ -143,38 +143,14 @@ export class ViewEditorComponent {
     },
   });
   readonly isCollapsible = computed(() => this.model().panels.length > 1);
-  /**
-   * Phones: the section whose page shows in place of the view's form; none
-   * shows the form with the section list. A column's title opens its page.
-   */
-  readonly phonePageId = linkedSignal<
-    { board: BoardCfg; initialId: string | undefined },
-    string | null
-  >({
-    source: () => ({ board: this.board(), initialId: this.initialOpenPanelId() }),
-    computation: ({ board, initialId }) =>
-      initialId && board.panels.some((panel) => panel.id === initialId)
-        ? initialId
-        : null,
-  });
-  /** The section page shown: only on a phone, only for a titled section. */
-  readonly phonePage = computed(() => {
-    const id = this.phonePageId();
-    return this.isXs() &&
-      this.isSectionTitleShown() &&
-      this.model().panels.some((panel) => panel.id === id)
-      ? id
-      : null;
-  });
-
   constructor() {
-    // A column's title asked for its card: on a phone it sits below the fold,
-    // behind the collapsed cards before it. The first focus on its toggle
+    // A column's title asked for its card: it can sit below the fold, behind
+    // the collapsed cards before it. The first focus on its toggle
     // (`isFocusInitial`) would only bring the toggle itself into view.
     afterNextRender(() => {
       const id = this.initialOpenPanelId();
       const index = this.model().panels.findIndex((panel) => panel.id === id);
-      if (index > 0 && !this.isXs()) {
+      if (index > 0) {
         this._sectionEls()[index]?.nativeElement.scrollIntoView({ block: 'start' });
       }
     });
@@ -248,23 +224,18 @@ export class ViewEditorComponent {
     this._setPanels(this.model().panels.map((p, i) => (i === index ? panel : p)));
   }
 
-  /** Appends a section, open (a phone: its page), its title field focused. */
+  /** Appends a section, open, its title field focused. */
   addPanel(): void {
     const panel = this._newPanel();
     this._setPanels([...this._withHiddenTitleShown(), panel]);
     this._open(panel.id);
-    this.phonePageId.set(panel.id);
     afterNextRender(() => this._sections().at(-1)?.focusTitle(), {
       injector: this._injector,
     });
   }
 
-  /** Opens or closes a section: its card, on a phone its page. */
+  /** Opens or closes a section's card; others stay as they are. */
   togglePanel(id: string): void {
-    if (this.isXs()) {
-      this.phonePageId.set(this.phonePage() === id ? null : id);
-      return;
-    }
     this.openPanelIds.update((ids) => {
       const next = new Set(ids);
       if (!next.delete(id)) {
@@ -304,7 +275,6 @@ export class ViewEditorComponent {
     });
     this._setPanels(panels);
     this._open(id);
-    this.phonePageId.set(id);
   }
 
   removePanel(index: number): void {

@@ -1,34 +1,19 @@
 <!-- Menu styles: src/styles/components/_view-editor-menus.scss (overlay). -->
-@if (variant() === 'row') {
+<!-- A dashed chip: the next rule of the row, not a section. -->
+<span class="chip chip--add">
   <button
-    class="row row--add focus-ring"
+    class="chip-main add-rule focus-ring"
     type="button"
     [matMenuTriggerFor]="menu"
   >
     <mat-icon
-      class="row-icon"
+      class="chip-icon"
       aria-hidden="true"
       >add</mat-icon
     >
-    <span class="row-label">{{ T.F.BOARDS.EDITOR.ADD_RULE | translate }}</span>
+    {{ T.F.BOARDS.EDITOR.ADD_RULE | translate }}
   </button>
-} @else {
-  <!-- A dashed chip: the next rule of the row, not a section. -->
-  <span class="chip chip--add">
-    <button
-      class="chip-main add-rule focus-ring"
-      type="button"
-      [matMenuTriggerFor]="menu"
-    >
-      <mat-icon
-        class="chip-icon"
-        aria-hidden="true"
-        >add</mat-icon
-      >
-      {{ T.F.BOARDS.EDITOR.ADD_RULE | translate }}
-    </button>
-  </span>
-}
+</span>
 
 <mat-menu
   #menu="matMenu"

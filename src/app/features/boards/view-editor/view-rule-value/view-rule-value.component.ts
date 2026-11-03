@@ -17,15 +17,11 @@ import { RulePart } from '../view-editor.util';
   templateUrl: './view-rule-value.component.html',
   styleUrl: './view-rule-value.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  // eslint-disable-next-line @typescript-eslint/naming-convention
-  host: { '[class.no-label]': '!isLabelShown()' },
 })
 export class ViewRuleValueComponent {
   readonly part = input.required<RulePart>();
   /** The tags (or, for the project rule, projects) by id. */
   readonly items = input<ReadonlyMap<string, TagComponentTag>>(new Map());
-  /** Without: the value alone, below a label shown elsewhere (a phone's row). */
-  readonly isLabelShown = input<boolean>(true);
 
   protected readonly T = T;
 
