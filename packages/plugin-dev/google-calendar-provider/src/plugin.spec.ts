@@ -679,7 +679,6 @@ describe('Google Calendar Plugin', () => {
       expect(body.summary).toBe('My Task');
       expect(body.start.dateTime).toBeDefined();
       expect(body.end.dateTime).toBeDefined();
-      expect(body).not.toHaveProperty('visibility');
     });
 
     it('falls back to insert with the full body when the event does not exist (patch 404)', async () => {
@@ -698,85 +697,6 @@ describe('Google Calendar Plugin', () => {
       expect(postUrl).toContain('/calendars/cal-1/events');
       expect(postBody.id).toBeDefined();
       expect(postBody.extendedProperties.private.spTaskId).toBe('task-1');
-      expect(postBody.summary).toBe('My Task');
-      expect(postBody).not.toHaveProperty('visibility');
-    });
-
-    describe('with isTimeBlockTitleHidden', () => {
-      const hiddenCfg = { ...cfg, isTimeBlockTitleHidden: true };
-
-      it('offers the setting only when auto time blocking is on', () => {
-        const field = definition.configFields.find(
-          (f) => f.key === 'isTimeBlockTitleHidden',
-        );
-        expect(field?.type).toBe('checkbox');
-        expect(field?.showIf).toBe('isAutoTimeBlock');
-      });
-
-      it('patches with the generic title and no visibility change', async () => {
-        await definition.timeBlock!.upsertEvent(
-          'task-1',
-          eventData,
-          hiddenCfg as any,
-          mockHttp as any,
-        );
-
-        const [, body] = mockHttp.patch.mock.calls[0];
-        expect(body.summary).toBe('Focus time');
-        expect(body).not.toHaveProperty('visibility');
-        expect(JSON.stringify(body)).not.toContain('My Task');
-      });
-
-      it('inserts with the generic title and the task tag, and no visibility', async () => {
-        mockHttp.patch.mockRejectedValueOnce({ status: 404 });
-
-        await definition.timeBlock!.upsertEvent(
-          'task-1',
-          eventData,
-          hiddenCfg as any,
-          mockHttp as any,
-        );
-
-        const [, postBody] = mockHttp.post.mock.calls[0];
-        expect(postBody.summary).toBe('Focus time');
-        expect(postBody).not.toHaveProperty('visibility');
-        expect(postBody.extendedProperties.private.spTaskId).toBe('task-1');
-        expect(JSON.stringify(postBody)).not.toContain('My Task');
-      });
-
-      it('keeps the done marker', async () => {
-        await definition.timeBlock!.upsertEvent(
-          'task-1',
-          { ...eventData, isDone: true },
-          hiddenCfg as any,
-          mockHttp as any,
-        );
-
-        const [, body] = mockHttp.patch.mock.calls[0];
-        expect(body.summary).toBe('[DONE] Focus time');
-      });
-
-      it('writes to the same event as without the setting, so blocks are updated in place', async () => {
-        mockHttp.patch.mockRejectedValue({ status: 404 });
-
-        await definition.timeBlock!.upsertEvent(
-          'task-1',
-          eventData,
-          cfg as any,
-          mockHttp as any,
-        );
-        await definition.timeBlock!.upsertEvent(
-          'task-1',
-          eventData,
-          hiddenCfg as any,
-          mockHttp as any,
-        );
-
-        const [offUrl] = mockHttp.patch.mock.calls[0];
-        const [onUrl] = mockHttp.patch.mock.calls[1];
-        expect(onUrl).toBe(offUrl);
-        expect(mockHttp.post.mock.calls[1][1].id).toBe(mockHttp.post.mock.calls[0][1].id);
-      });
     });
 
     it('recovers when a concurrent create wins the race (insert returns 409)', async () => {

@@ -53,7 +53,6 @@ interface GoogleCalendarConfig {
   showDeclinedEvents?: boolean;
   isAutoTimeBlock?: boolean;
   timeBlockCalendarId?: string;
-  isTimeBlockTitleHidden?: boolean;
   // Legacy field — migrated at runtime
   calendarId?: string;
 }
@@ -245,13 +244,6 @@ const withRateLimitRetry = async <T>(fn: () => Promise<T>): Promise<T> => {
 
 const isDeclined = (event: GoogleCalendarEvent): boolean =>
   event.attendees?.some((a) => a.self && a.responseStatus === 'declined') ?? false;
-
-/**
- * Title of every time block while `isTimeBlockTitleHidden` is on, so the task
- * title never reaches Google. Safe because time blocks are matched by their
- * deterministic event ID and never read back (see `isSpManagedEvent`).
- */
-const HIDDEN_TIME_BLOCK_TITLE = 'Focus time';
 
 /**
  * True for events SuperProductivity itself wrote as auto-time-block mirrors of a
@@ -477,14 +469,6 @@ PluginAPI.registerIssueProvider({
       showIf: 'isAutoTimeBlock',
       options: [{ label: 'Primary', value: 'primary' }],
       loadOptions: loadWritableCalendars,
-    },
-    {
-      key: 'isTimeBlockTitleHidden',
-      type: 'checkbox' as const,
-      label: 'Hide task titles in time blocks',
-      description:
-        'Time blocks are titled "Focus time" instead of the task title, so people who can see this calendar don\'t see what you\'re working on.',
-      showIf: 'isAutoTimeBlock',
     },
   ],
 
@@ -786,11 +770,7 @@ PluginAPI.registerIssueProvider({
       const cfg = migrateConfig(config);
       const calendarId = getTimeBlockCalendarId(cfg);
       const gcalEventId = taskIdToGcalEventId(taskId);
-      // Sent on every patch too, so existing blocks follow on their next sync.
-      const title = cfg.isTimeBlockTitleHidden
-        ? HIDDEN_TIME_BLOCK_TITLE
-        : eventData.title;
-      const summary = eventData.isDone ? `[DONE] ${title}` : title;
+      const summary = eventData.isDone ? `[DONE] ${eventData.title}` : eventData.title;
       const body = {
         id: gcalEventId,
         summary,
