@@ -56,6 +56,8 @@ import { isLwwUpdateActionType } from '../core/lww-update-action-types';
 import { StateSnapshotService } from '../backup/state-snapshot.service';
 import { isRebasedTimeDeltaReceipt } from '../persistence/acknowledge-operations.util';
 import { isSyncTimeSpentOp } from './fold-sync-time-spent.util';
+import { RepairOperationService } from '../validation/repair-operation.service';
+import { getRepairSummary } from '../validation/repair-summary.util';
 
 // Re-export for consumers that import from this service
 export type {
@@ -165,6 +167,14 @@ export class OperationLogUploadService {
         await options.preUploadCallback();
       }
 
+      if (syncProvider.providerMode === 'fileSnapshotOps') {
+        this.providerManager.assertSyncEpochUnchanged(
+          options?.fenceEpoch,
+          'rejected full-state reseed',
+        );
+        await this._reseedRejectedFullStateForFileSync(syncProvider);
+      }
+
       // Fix the pending-op set and the file snapshot under the same operation-log
       // boundary. A task-time action applied by reducers while waiting for this
       // lock remains visible to snapshot projection as an in-flight delta.
@@ -195,14 +205,9 @@ export class OperationLogUploadService {
       );
       selectedPendingOps = pendingOps;
 
-      const rejectedFullState = await this.opLogStore.getLatestRejectedFullStateOpEntry();
-      const latestActiveFullState = rejectedFullState
-        ? await this.opLogStore.getLatestFullStateOpEntry()
-        : undefined;
-      if (
-        rejectedFullState &&
-        (!latestActiveFullState || latestActiveFullState.seq <= rejectedFullState.seq)
-      ) {
+      const { rejectedFullState, latestActiveFullState, isBlocking } =
+        await this._getRejectedFullStateBarrier();
+      if (rejectedFullState && isBlocking) {
         blockedByRejectedFullState = true;
         OpLog.warn(
           `OperationLogUploadService: Upload remains blocked because rejected ` +
@@ -963,6 +968,61 @@ export class OperationLogUploadService {
 
       return { accepted: false, error: message, errorCode };
     }
+  }
+
+  /**
+   * The newest rejected local full-state op blocks uploads until a newer
+   * full-state op (higher local seq) supersedes it.
+   */
+  private async _getRejectedFullStateBarrier(): Promise<{
+    rejectedFullState?: OperationLogEntry;
+    latestActiveFullState?: OperationLogEntry;
+    isBlocking: boolean;
+  }> {
+    const rejectedFullState = await this.opLogStore.getLatestRejectedFullStateOpEntry();
+    if (!rejectedFullState) {
+      return { isBlocking: false };
+    }
+    const latestActiveFullState = await this.opLogStore.getLatestFullStateOpEntry();
+    return {
+      rejectedFullState,
+      latestActiveFullState,
+      isBlocking:
+        !latestActiveFullState || latestActiveFullState.seq <= rejectedFullState.seq,
+    };
+  }
+
+  /**
+   * #11352: a file-based remote is plain storage and never rejects a full-state
+   * op on its merits (its only verdict, REPAIR_STALE, is rebased, not kept as a
+   * rejection). A rejection found here is a misclassified upload error from an
+   * older version (#11344), and without a newer full-state op it blocks every
+   * later upload for good. Replace it with a REPAIR of the current state, which
+   * includes every later local change and every remote op applied since. The
+   * adapter writes a REPAIR only on the remote rev this client last downloaded
+   * and applied, so a remote that moved on is not overwritten: it answers
+   * REPAIR_STALE and the shared rebase path downloads first.
+   */
+  private async _reseedRejectedFullStateForFileSync(
+    syncProvider: OperationSyncCapable,
+  ): Promise<void> {
+    const { rejectedFullState, isBlocking } = await this._getRejectedFullStateBarrier();
+    if (!rejectedFullState || !isBlocking) {
+      return;
+    }
+    OpLog.warn(
+      `OperationLogUploadService: Rejected ${rejectedFullState.op.opType} ` +
+        `${rejectedFullState.op.id} blocks file-based uploads; replacing it with a ` +
+        'REPAIR of the current state.',
+    );
+    await this.injector.get(RepairOperationService).rebaseStaleRepair({
+      staleRepairOpId: rejectedFullState.op.id,
+      repairSummary:
+        getRepairSummary(rejectedFullState.op.payload) ??
+        RepairOperationService.createEmptyRepairSummary(),
+      clientId: rejectedFullState.op.clientId,
+      repairBaseServerSeq: await syncProvider.getLastServerSeq(),
+    });
   }
 
   private _getLegacyErrorCode(message: string): string | undefined {

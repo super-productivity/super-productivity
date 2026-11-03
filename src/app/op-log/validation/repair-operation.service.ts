@@ -159,7 +159,8 @@ export class RepairOperationService {
 
   /**
    * Rebuilds a stale automatic repair after its missing server suffix was applied.
-   * The old rejection marker and the new repair are persisted atomically so a
+   * Also replaces any rejected local full-state op on a file-based provider,
+   * whose remote cannot reject one on its merits (#11352). The old rejection marker and the new repair are persisted atomically so a
    * crash cannot strand the repaired state without an uploadable boundary.
    */
   async rebaseStaleRepair(options: RebaseStaleRepairOptions): Promise<number> {
