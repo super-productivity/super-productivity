@@ -139,6 +139,11 @@
     }
   }
 
+  // Uncollapsed, so it has no form wrapper: match config-section's padding.
+  .time-tracking-switch {
+    padding: var(--s2) var(--s2) var(--s);
+  }
+
   .settings-col {
     margin-bottom: var(--s4);
 

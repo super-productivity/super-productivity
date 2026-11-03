@@ -19,6 +19,7 @@ import { CollapsibleComponent } from './collapsible.component';
     </collapsible>
     <collapsible
       [title]="'Group Two'"
+      [count]="0"
       [isGroup]="true"
     ></collapsible>
     <collapsible
@@ -134,6 +135,63 @@ describe('CollapsibleComponent', () => {
 
     expect(collapsible.isExpanded).toBe(false);
     expect(ev.defaultPrevented).toBe(false);
+  });
+
+  it('toggles on a header click, but not on one a header action handled', () => {
+    const collapsible = collapsibleInstances[0];
+    headerElements[0].click();
+    expect(collapsible.isExpanded).toBe(true);
+
+    const actionBtn: HTMLElement = fixture.nativeElement.querySelector('.header-action');
+    const handled = (ev: Event): void => ev.preventDefault();
+    actionBtn.addEventListener('click', handled);
+    let isSeenByDocument = false;
+    const onDocumentClick = (): void => {
+      isSeenByDocument = true;
+    };
+    document.addEventListener('click', onDocumentClick);
+    try {
+      // TestBed attaches the fixture to the document.
+      expect(actionBtn.isConnected).toBe(true);
+      actionBtn.click();
+    } finally {
+      document.removeEventListener('click', onDocumentClick);
+      actionBtn.removeEventListener('click', handled);
+    }
+    expect(collapsible.isExpanded).toBe(true);
+    expect(isSeenByDocument).toBe(true);
+
+    actionBtn.click();
+    expect(collapsible.isExpanded).toBe(false);
+  });
+
+  it('shows a count after the title only when given, zero included', () => {
+    const counts = fixture.debugElement
+      .queryAll(By.css('.collapsible-count'))
+      .map((el) => (el.nativeElement as HTMLElement).textContent?.trim());
+    expect(counts).toEqual(['0']);
+  });
+
+  it('makes every header a keyboard button, groups or not', () => {
+    headerElements.forEach((header) => {
+      expect(header.getAttribute('tabindex')).toBe('0');
+      expect(header.getAttribute('role')).toBe('button');
+      expect(header.getAttribute('aria-expanded')).toBe('false');
+    });
+  });
+
+  it('should toggle a non-group collapsible with Enter and Space', () => {
+    const header = headerElements[2];
+    const collapsible = collapsibleInstances[2];
+
+    header.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    fixture.detectChanges();
+    expect(collapsible.isExpanded).toBe(true);
+    expect(header.getAttribute('aria-expanded')).toBe('true');
+
+    header.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+    fixture.detectChanges();
+    expect(collapsible.isExpanded).toBe(false);
   });
 
   it('should not toggle a non-group collapsible with Arrow keys', () => {

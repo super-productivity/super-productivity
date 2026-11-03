@@ -1,17 +1,5 @@
 import { createAction } from '@ngrx/store';
 
-export const showTaskViewCustomizerPanel = createAction(
-  '[Layout] Show TaskViewCustomizerPanel',
-);
-
-export const hideTaskViewCustomizerPanel = createAction(
-  '[Layout] Hide TaskViewCustomizerPanel',
-);
-
-export const toggleTaskViewCustomizerPanel = createAction(
-  '[Layout] Toggle TaskViewCustomizerPanel',
-);
-
 export const showAddTaskBar = createAction('[Layout] Show AddTaskBar');
 
 export const hideAddTaskBar = createAction('[Layout] Hide AddTaskBar');

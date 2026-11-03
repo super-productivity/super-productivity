@@ -6,7 +6,10 @@
  */
 import { FastifyInstance } from 'fastify';
 import { Prisma } from '@prisma/client';
-import { SuperSyncOperationSchema, type SuperSyncOperation } from '@sp/shared-schema';
+import {
+  SuperSyncOperationSchema,
+  type SuperSyncOperation,
+} from '@sp/shared-schema/supersync-http-contract';
 import * as bcrypt from 'bcryptjs';
 import * as jwt from 'jsonwebtoken';
 import { prisma } from './db';

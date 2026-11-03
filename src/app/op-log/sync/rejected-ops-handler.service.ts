@@ -12,6 +12,7 @@ import {
   REPAIR_STALE_ERROR_CODE,
 } from '../core/operation-log.const';
 import { toEntityKey } from '../util/entity-key.util';
+import { compareVectorClocks, VectorClockComparison } from '../../core/util/vector-clock';
 import { RepairOperationService } from '../validation/repair-operation.service';
 import { OperationLogDownloadService } from './operation-log-download.service';
 
@@ -504,6 +505,30 @@ export class RejectedOpsHandlerService {
           // This means our local clock is likely missing entries the server has.
           // Try a FORCE download from seq 0 to get ALL op clocks.
           await this._logUnexplainedRejectionClocks(stillPendingOps);
+
+          // Unless the local clock already covers every server clock the
+          // rejections named: then nothing is missing, and the forced
+          // download would skip each named op as re-delivered anyway. On a
+          // long history it is a full re-download that a mobile sync rarely
+          // finishes, leaving the edits pending and sync spinning.
+          if (await this._isLocalClockCoveringRejections(stillPendingOps)) {
+            OpLog.normal(
+              `RejectedOpsHandlerService: Local clock already covers the server clocks of ` +
+                `${stillPendingOps.length} rejected op(s). Resolving without a forced download.`,
+            );
+            mergedOpsCreated +=
+              await this.supersededOperationResolver.resolveSupersededLocalOps(
+                stillPendingOps,
+                extractEntityClocks(stillPendingOps),
+                downloadResult.snapshotVectorClock,
+              );
+            return {
+              kind: 'completed',
+              mergedOpsCreated,
+              retryExceededCount: opsExceededRetries.length,
+            };
+          }
+
           OpLog.normal(
             `RejectedOpsHandlerService: Download returned no new ops but ${stillPendingOps.length} ` +
               `concurrent ops still pending. Forcing full download from seq 0...`,
@@ -670,6 +695,29 @@ export class RejectedOpsHandlerService {
       // Diagnostics only — never block conflict resolution.
       OpLog.verbose('RejectedOpsHandlerService: rejection clock diagnostics failed', e);
     }
+  }
+
+  /**
+   * True when every op carries the server's clock for its entity and the
+   * local clock is equal to or ahead of each one.
+   */
+  private async _isLocalClockCoveringRejections(
+    ops: ReadonlyArray<{ existingClock?: VectorClock }>,
+  ): Promise<boolean> {
+    const localClock = await this.opLogStore.getVectorClock();
+    if (!localClock) {
+      return false;
+    }
+    return ops.every(({ existingClock }) => {
+      if (!existingClock) {
+        return false;
+      }
+      const comparison = compareVectorClocks(localClock, existingClock);
+      return (
+        comparison === VectorClockComparison.GREATER_THAN ||
+        comparison === VectorClockComparison.EQUAL
+      );
+    });
   }
 
   private _rollbackResolutionAttempts(ops: ReadonlyArray<{ op: Operation }>): void {

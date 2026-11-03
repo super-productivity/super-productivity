@@ -95,7 +95,7 @@ test.describe('Recurring Task - Move Start Date Earlier With No Live Instance (#
     //    too). No live instance was recreated, so every day is a projection.
     await gotoHashRoute(page, '/#/planner', page.locator('planner-day').first());
 
-    for (const date of [/^2\/5$/, /^3\/5$/, /^4\/5$/, /^5\/5$/]) {
+    for (const date of [/^02\/05$/, /^03\/05$/, /^04\/05$/, /^05\/05$/]) {
       const day = page
         .locator('planner-day')
         .filter({ has: page.locator('.date', { hasText: date }) });

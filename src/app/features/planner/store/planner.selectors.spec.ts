@@ -1264,3 +1264,78 @@ describe('Planner Selectors - selectPlannerDays across several days with offset'
     ]);
   });
 });
+
+describe('Planner Selectors - selectUndoneDeadlineTasksByDay', () => {
+  const createTask = (overrides: Partial<Task> & { id: string }): Task => ({
+    title: `Task ${overrides.id}`,
+    created: 0,
+    isDone: false,
+    subTaskIds: [],
+    tagIds: [],
+    projectId: 'project1',
+    timeSpentOnDay: {},
+    timeEstimate: 0,
+    timeSpent: 0,
+    attachments: [],
+    ...overrides,
+  });
+
+  const createState = (
+    tasks: Task[],
+    startOfNextDayDiffMs = 0,
+    // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
+  ) => ({
+    [appStateFeatureKey]: { todayStr: '2026-01-19', startOfNextDayDiffMs },
+    [TASK_FEATURE_NAME]: {
+      ids: tasks.map((t) => t.id),
+      entities: Object.fromEntries(tasks.map((t) => [t.id, t])),
+      currentTaskId: null,
+      selectedTaskId: null,
+      lastCurrentTaskId: null,
+      isDataLoaded: true,
+      taskDetailTargetPanel: null,
+    } as TaskState,
+    [PROJECT_FEATURE_NAME]: { ids: [], entities: {} },
+  });
+
+  it('groups undone tasks by their deadline day', () => {
+    const result = fromSelectors.selectUndoneDeadlineTasksByDay(
+      createState([
+        createTask({ id: 'a', deadlineDay: '2026-01-20' }),
+        createTask({ id: 'b', deadlineWithTime: getLocalTime(2026, 1, 21, 15) }),
+        createTask({ id: 'done', deadlineDay: '2026-01-20', isDone: true }),
+        createTask({ id: 'none' }),
+      ]),
+    );
+
+    expect(Object.keys(result).sort()).toEqual(['2026-01-20', '2026-01-21']);
+    expect(result['2026-01-20'].map((t) => t.id)).toEqual(['a']);
+    expect(result['2026-01-21'].map((t) => t.id)).toEqual(['b']);
+  });
+
+  it('keys a timed deadline before the day boundary to the previous day', () => {
+    const result = fromSelectors.selectUndoneDeadlineTasksByDay(
+      createState(
+        [createTask({ id: 'late', deadlineWithTime: getLocalTime(2026, 1, 21, 2) })],
+        4 * 60 * 60 * 1000,
+      ),
+    );
+
+    expect(result['2026-01-20'].map((t) => t.id)).toEqual(['late']);
+  });
+
+  // A tracked task's timeSpent changes every second; the schedule must not
+  // regroup and re-render every deadline badge for it
+  it('keeps its result when only a tracked time changes', () => {
+    const deadlineTask = createTask({ id: 'a', deadlineDay: '2026-01-20' });
+    const tracked = createTask({ id: 'tracked', timeSpent: 1000 });
+    const first = fromSelectors.selectUndoneDeadlineTasksByDay(
+      createState([deadlineTask, tracked]),
+    );
+    const second = fromSelectors.selectUndoneDeadlineTasksByDay(
+      createState([deadlineTask, { ...tracked, timeSpent: 2000 }]),
+    );
+
+    expect(second).toBe(first);
+  });
+});

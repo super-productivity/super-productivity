@@ -390,6 +390,15 @@ describe('PluginManagementComponent', () => {
     });
   });
 
+  it('links the plugin guide from the install card', () => {
+    fixture.detectChanges();
+    const guideLink = fixture.nativeElement.querySelector(
+      '.install-card a[href$="/docs/plugin-development.md"]',
+    );
+
+    expect(guideLink?.textContent?.trim()).toBe('PLUGINS.BUILD_YOUR_OWN_LINK');
+  });
+
   it('navigates to the work view and opens the issue panel', async () => {
     await component.goToIssuePanel();
 
@@ -728,7 +737,7 @@ describe('PluginManagementComponent', () => {
         data: {
           message: T.PLUGINS.CONFIRM_CLEAR_CACHE,
           translateParams: { count: 2 },
-          okTxt: T.PLUGINS.CLEAR_PLUGIN_CACHE,
+          okTxt: T.PLUGINS.REMOVE_ALL_UPLOADED_PLUGINS,
         },
       });
       expect(clearCacheSpy).toHaveBeenCalledTimes(1);

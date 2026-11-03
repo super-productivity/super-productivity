@@ -79,21 +79,20 @@
       <section class="metric-metrics">
         <h1>{{ T.F.METRIC.CMP.GLOBAL_METRICS | translate }}</h1>
         <section class="line-charts">
-          @if (productivityBreakdownChartData(); as breakdownChart) {
-            @if (breakdownChart) {
+          @if (evaluationData(); as evaluation) {
+            @if (evaluation.labels?.length) {
               <section>
-                <h3>{{ T.F.METRIC.CMP.PRODUCTIVITY_BREAKDOWN_OVER_TIME | translate }}</h3>
+                <h3>{{ T.F.METRIC.CMP.EVALUATION_OVER_TIME | translate }}</h3>
                 <lazy-chart
                   [type]="lineChartType"
-                  [datasets]="breakdownChart.datasets"
-                  [labels]="breakdownChart.labels"
+                  [datasets]="evaluation.datasets"
+                  [labels]="evaluation.labels"
                   [legend]="true"
-                  [options]="lineChartOptions"
+                  [options]="evaluationChartOptions"
                   height="400px"
-                  [shareFileName]="'productivity-sustainability-breakdown.png'"
+                  [shareFileName]="'impact-energy-over-time.png'"
                   [enableTimeframeSelector]="true"
-                >
-                </lazy-chart>
+                ></lazy-chart>
               </section>
             }
           }

@@ -3029,8 +3029,8 @@
       "PLANNER": "Zaplanuj kolejne dni w {{plannerIcon}} <b>Planer</b>",
       "TASK_MENU_TOUCH": "Przesuń zadanie w lewo, aby zobaczyć jego menu: {{playIcon}} <b>Rozpocznij śledzenie czasu</b>, {{subtaskIcon}} <b>Dodaj podzadanie</b>",
       "TASK_MENU_TOUCH_NO_TRACKING": "Przesuń zadanie w lewo, aby zobaczyć jego menu, np. {{subtaskIcon}} <b>Dodaj podzadanie</b>",
-      "TIMER_RUNNING": "Stoper działa. Naciśnij ponownie {{playIcon}} lub <kbd>{{key}}</kbd>, aby wstrzymać.",
-      "TIMER_RUNNING_TOUCH": "Stoper działa. Stuknij {{playIcon}} u góry, aby wstrzymać.",
+      "TIMER_RUNNING": "Stoper działa. Naciśnij ponownie {{pauseIcon}} lub <kbd>{{key}}</kbd>, aby wstrzymać.",
+      "TIMER_RUNNING_TOUCH": "Stoper działa. Stuknij {{pauseIcon}} u góry, aby wstrzymać.",
       "TRACK_TIME": "Najedź na zadanie i naciśnij {{playIcon}}, aby śledzić czas"
     },
     "WANT_MORE": {

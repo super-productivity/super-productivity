@@ -16,7 +16,11 @@ import {
   TaskWithSubTasks,
   TaskReminderOptionId,
 } from '../../tasks/task.model';
-import { DEFAULT_TASK_REPEAT_CFG, TaskRepeatCfgCopy } from '../task-repeat-cfg.model';
+import {
+  DEFAULT_TASK_REPEAT_CFG,
+  TASK_REPEAT_WEEKDAY_MAP,
+  TaskRepeatCfgCopy,
+} from '../task-repeat-cfg.model';
 import { addSubTask } from '../../tasks/store/task.actions';
 import { TestScheduler } from 'rxjs/testing';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
@@ -738,11 +742,12 @@ describe('TaskRepeatCfgEffects - Repeatable Subtasks', () => {
       setTimeout(() => {
         expect(emitted).toBe(false);
 
-        // Should still update created (duplicate prevention)
+        // Should still update created (duplicate prevention), but NOT dueDay:
+        // scheduleTaskWithTime owns timed scheduling and clears dueDay; setting
+        // it here re-adds the task to planner.days and shows it twice (#11212)
         const firstOccurrenceStr = getDbDateStr(firstOccurrence);
         expect(taskService.update).toHaveBeenCalledWith('parent-task-id', {
           created: firstOccurrence.getTime(),
-          dueDay: firstOccurrenceStr,
         });
         // Should still update lastTaskCreationDay to the future date
         expect(taskRepeatCfgService.updateTaskRepeatCfg).toHaveBeenCalledWith(
@@ -2999,6 +3004,221 @@ describe('TaskRepeatCfgEffects - Repeatable Subtasks', () => {
       }, 0);
     });
 
+    // #11213: a yearly "on demand" series whose last copy was completed and
+    // archived is replanned by moving its startDate forward to today. Today
+    // is now an occurrence, so today's copy must appear right away instead of
+    // after the next day change.
+    it('should trigger addAllDueToday when startDate is moved forward to today and no live instance exists (#11213)', (done) => {
+      const today = new Date();
+      const todayStr = getDbDateStr(today);
+      const lastCreationStr = getDbDateStr(addDays(today, -10));
+
+      const updatedCfg: TaskRepeatCfgCopy = {
+        ...mockRepeatCfg,
+        repeatCycle: 'YEARLY',
+        repeatEvery: 1,
+        startDate: todayStr,
+        lastTaskCreationDay: lastCreationStr,
+      };
+      actions$ = of(
+        updateTaskRepeatCfg({
+          taskRepeatCfg: { id: 'repeat-cfg-id', changes: { startDate: todayStr } },
+        }),
+      );
+      taskRepeatCfgService.getTaskRepeatCfgById$.and.returnValue(of(updatedCfg));
+      taskService.getTasksByRepeatCfgId$.and.returnValue(of([]));
+
+      const emitted: unknown[] = [];
+      effects.rescheduleTaskOnRepeatCfgUpdate$.subscribe((a) => emitted.push(a));
+
+      setTimeout(() => {
+        expect(emitted).toEqual([]);
+        // The anchor is already before today; it must not be moved.
+        expect(taskRepeatCfgService.updateTaskRepeatCfg).not.toHaveBeenCalled();
+        expect(addTasksForTomorrowService.addAllDueToday).toHaveBeenCalled();
+        done();
+      }, 0);
+    });
+
+    // Completing a repeat-from-completion copy re-anchors startDate and
+    // lastTaskCreationDay to today (updateStartDateOnComplete$). Today is
+    // already processed, so this must not start a full addAllDueToday sweep.
+    it('should not trigger addAllDueToday when today was already processed', (done) => {
+      const todayStr = getDbDateStr(new Date());
+      const updatedCfg: TaskRepeatCfgCopy = {
+        ...mockRepeatCfg,
+        repeatCycle: 'DAILY',
+        repeatEvery: 1,
+        repeatFromCompletionDate: true,
+        startDate: todayStr,
+        lastTaskCreationDay: todayStr,
+      };
+      actions$ = of(
+        updateTaskRepeatCfg({
+          taskRepeatCfg: {
+            id: 'repeat-cfg-id',
+            changes: { startDate: todayStr, lastTaskCreationDay: todayStr },
+          },
+        }),
+      );
+      taskRepeatCfgService.getTaskRepeatCfgById$.and.returnValue(of(updatedCfg));
+      taskService.getTasksByRepeatCfgId$.and.returnValue(of([]));
+
+      effects.rescheduleTaskOnRepeatCfgUpdate$.subscribe();
+
+      setTimeout(() => {
+        expect(addTasksForTomorrowService.addAllDueToday).not.toHaveBeenCalled();
+        done();
+      }, 0);
+    });
+
+    // #3589: resuming a paused series on a scheduled day must create today's
+    // copy right away, not after the next day change.
+    it('should trigger addAllDueToday when a series is resumed on a scheduled day', (done) => {
+      const today = new Date();
+      const resumedCfg: TaskRepeatCfgCopy = {
+        ...mockRepeatCfg,
+        repeatCycle: 'DAILY',
+        repeatEvery: 1,
+        isPaused: false,
+        lastTaskCreationDay: getDbDateStr(addDays(today, -1)),
+      };
+      actions$ = of(
+        updateTaskRepeatCfg({
+          taskRepeatCfg: { id: 'repeat-cfg-id', changes: { isPaused: false } },
+        }),
+      );
+      taskRepeatCfgService.getTaskRepeatCfgById$.and.returnValue(of(resumedCfg));
+      taskService.getTasksByRepeatCfgId$.and.returnValue(of([]));
+
+      effects.rescheduleTaskOnRepeatCfgUpdate$.subscribe();
+
+      setTimeout(() => {
+        expect(addTasksForTomorrowService.addAllDueToday).toHaveBeenCalled();
+        done();
+      }, 0);
+    });
+
+    it('should not trigger addAllDueToday when a series is resumed on a day without an occurrence', (done) => {
+      const today = new Date();
+      const tomorrowWeekday = TASK_REPEAT_WEEKDAY_MAP[addDays(today, 1).getDay()];
+      const resumedCfg: TaskRepeatCfgCopy = {
+        ...mockRepeatCfg,
+        repeatCycle: 'WEEKLY',
+        repeatEvery: 1,
+        monday: false,
+        tuesday: false,
+        wednesday: false,
+        thursday: false,
+        friday: false,
+        saturday: false,
+        sunday: false,
+        [tomorrowWeekday]: true,
+        isPaused: false,
+        startDate: getDbDateStr(addDays(today, -6)),
+        lastTaskCreationDay: getDbDateStr(addDays(today, -1)),
+      };
+      actions$ = of(
+        updateTaskRepeatCfg({
+          taskRepeatCfg: { id: 'repeat-cfg-id', changes: { isPaused: false } },
+        }),
+      );
+      taskRepeatCfgService.getTaskRepeatCfgById$.and.returnValue(of(resumedCfg));
+      taskService.getTasksByRepeatCfgId$.and.returnValue(of([]));
+
+      effects.rescheduleTaskOnRepeatCfgUpdate$.subscribe();
+
+      setTimeout(() => {
+        expect(addTasksForTomorrowService.addAllDueToday).not.toHaveBeenCalled();
+        done();
+      }, 0);
+    });
+
+    // Resuming moves no occurrence: an open overdue copy stays overdue instead
+    // of jumping to the next occurrence and out of Overdue and Today.
+    it('should leave an open overdue copy in place when a series is resumed', (done) => {
+      const today = new Date();
+      const yesterdayStr = getDbDateStr(addDays(today, -1));
+      const twoDaysAgo = addDays(today, -2);
+      const weekday = TASK_REPEAT_WEEKDAY_MAP[twoDaysAgo.getDay()];
+      const resumedCfg: TaskRepeatCfgCopy = {
+        ...mockRepeatCfg,
+        repeatCycle: 'WEEKLY',
+        repeatEvery: 1,
+        monday: false,
+        tuesday: false,
+        wednesday: false,
+        thursday: false,
+        friday: false,
+        saturday: false,
+        sunday: false,
+        [weekday]: true,
+        isPaused: false,
+        startDate: getDbDateStr(addDays(today, -30)),
+        lastTaskCreationDay: yesterdayStr,
+      };
+      const overdueCopy: Task = {
+        ...mockTask,
+        isDone: false,
+        dueDay: getDbDateStr(twoDaysAgo),
+      };
+      actions$ = of(
+        updateTaskRepeatCfg({
+          taskRepeatCfg: {
+            id: 'repeat-cfg-id',
+            changes: { isPaused: false, lastTaskCreationDay: yesterdayStr },
+          },
+        }),
+      );
+      taskRepeatCfgService.getTaskRepeatCfgById$.and.returnValue(of(resumedCfg));
+      taskService.getTasksByRepeatCfgId$.and.returnValue(of([overdueCopy]));
+
+      const emitted: unknown[] = [];
+      effects.rescheduleTaskOnRepeatCfgUpdate$.subscribe((a) => emitted.push(a));
+
+      setTimeout(() => {
+        expect(emitted).toEqual([]);
+        expect(taskRepeatCfgService.updateTaskRepeatCfg).not.toHaveBeenCalled();
+        done();
+      }, 0);
+    });
+
+    it("should still create today's copy when a series with an open copy is resumed on a scheduled day", (done) => {
+      const today = new Date();
+      const yesterdayStr = getDbDateStr(addDays(today, -1));
+      const resumedCfg: TaskRepeatCfgCopy = {
+        ...mockRepeatCfg,
+        repeatCycle: 'DAILY',
+        repeatEvery: 1,
+        isPaused: false,
+        lastTaskCreationDay: yesterdayStr,
+      };
+      const overdueCopy: Task = {
+        ...mockTask,
+        isDone: false,
+        dueDay: getDbDateStr(addDays(today, -5)),
+      };
+      actions$ = of(
+        updateTaskRepeatCfg({
+          taskRepeatCfg: {
+            id: 'repeat-cfg-id',
+            changes: { isPaused: false, lastTaskCreationDay: yesterdayStr },
+          },
+        }),
+      );
+      taskRepeatCfgService.getTaskRepeatCfgById$.and.returnValue(of(resumedCfg));
+      taskService.getTasksByRepeatCfgId$.and.returnValue(of([overdueCopy]));
+
+      const emitted: unknown[] = [];
+      effects.rescheduleTaskOnRepeatCfgUpdate$.subscribe((a) => emitted.push(a));
+
+      setTimeout(() => {
+        expect(emitted).toEqual([]);
+        expect(addTasksForTomorrowService.addAllDueToday).toHaveBeenCalled();
+        done();
+      }, 0);
+    });
+
     // Editing a monthly anchor ("2nd Tuesday" -> "3rd Tuesday", or toggling
     // last-day-of-month) changes which day the next occurrence lands on, just
     // like editing the weekly weekday booleans does -- but the monthly anchor
@@ -4245,10 +4465,10 @@ describe('TaskRepeatCfgEffects - Deterministic Date Scenarios', () => {
       });
 
       expect(emitted).toBe(false);
-      // Should still update created for duplicate prevention
+      // Should still update created for duplicate prevention, but not dueDay
+      // (timed scheduling clears it; #11212)
       expect(taskService.update).toHaveBeenCalledWith('test-task-id', {
         created: new Date(2025, 0, 17, 12, 0, 0, 0).getTime(),
-        dueDay: '2025-01-17',
       });
       expect(taskRepeatCfgService.updateTaskRepeatCfg).toHaveBeenCalledWith(
         'repeat-cfg-id',

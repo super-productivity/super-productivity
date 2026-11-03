@@ -284,6 +284,10 @@ const SHARED_FIELDS: Readonly<Record<string, Readonly<Record<string, string>>>> 
     STORAGE_QUOTA_SNACK_DEDUPE_MS: CONSTANT,
     _deferredProcessingChain: 'settled at every step boundary: _settle drains it',
   },
+  ArchiveOperationHandler: {
+    _localQueue:
+      'settled at every step boundary: _settle waits for every queued local operation',
+  },
   OperationCaptureService: { PENDING_WARNING_THRESHOLD: CONSTANT },
   OperationLogMigrationService: { completionDisplayMs: CONSTANT },
   OperationWriteFlushService: {
@@ -709,6 +713,9 @@ export class SyncFuzzHarness {
     // not end, and the device swap out, before they wrote to this device's
     // database.
     this._trackInFlight(TestBed.inject(ArchiveOperationHandler), 'handleOperation');
+    // A queued local archive write is in flight from the moment it is queued,
+    // not only once it starts.
+    this._trackInFlight(TestBed.inject(ArchiveOperationHandler), 'enqueueLocalOperation');
     this._trackInFlight(TestBed.inject(OperationLogCompactionService), 'compact');
     this._trackInFlight(
       TestBed.inject(OperationLogCompactionService),

@@ -5,13 +5,17 @@ import {
   OnDestroy,
   effect,
   inject,
+  signal,
+  untracked,
 } from '@angular/core';
 import { Store } from '@ngrx/store';
-import { Subscription } from 'rxjs';
+import { merge, Subscription } from 'rxjs';
+import { startWith } from 'rxjs/operators';
 import { TranslateService } from '@ngx-translate/core';
 import { IS_ANDROID_WEB_VIEW } from '../../util/is-android-web-view';
 import { androidInterface } from '../android/android-interface';
 import { TrackingPresenceService } from './tracking-presence.service';
+import { TrackingPresenceState } from './tracking-presence.model';
 import { selectTaskEntities } from '../tasks/store/task.selectors';
 import { DateTimeFormatService } from '../../core/date-time-format/date-time-format.service';
 import { T } from '../../t.const';
@@ -22,6 +26,30 @@ import { T } from '../../t.const';
  * (which a killed WebView would otherwise leave dangling) stays re-armed.
  */
 const MIN_REPOST_MS = 60_000;
+
+/**
+ * A queued Stop tap older than this is dropped instead of applied: it matches
+ * the native notification's self-destruct timeout, after which the session the
+ * user saw may long be over (or replaced by one they never saw).
+ */
+export const REMOTE_STOP_TTL_MS = 150_000;
+
+/** What to do with a queued Stop tap made at `stopAt`, given the remote state now. */
+export const resolvePendingRemoteStop = (
+  stopAt: number,
+  now: number,
+  remoteState: TrackingPresenceState | undefined,
+): 'apply' | 'drop' | 'wait' => {
+  if (now - stopAt > REMOTE_STOP_TTL_MS) {
+    return 'drop';
+  }
+  // Unknown (WS not connected yet): wait. Already stopped: the tap is done —
+  // keeping it would stop a session started there within the TTL.
+  if (remoteState === undefined) {
+    return 'wait';
+  }
+  return remoteState === 'tracking' ? 'apply' : 'drop';
+};
 
 /**
  * Drives the native Android notification mirroring another device's tracking
@@ -49,7 +77,11 @@ export class RemoteTrackingAndroidNotifierService implements OnDestroy {
   private _lastPosted: { text: string; showStop: boolean; at: number } | null = null;
 
   private _effectRef: EffectRef | null = null;
+  private _stopEffectRef: EffectRef | null = null;
   private _stopSub: Subscription | null = null;
+  private _stopQueueSub: Subscription | null = null;
+  /** Epoch ms of a Stop tap waiting for the remote session to be known. */
+  private _pendingStopAt = signal<number | null>(null);
 
   start(): void {
     if (!IS_ANDROID_WEB_VIEW || this._isStarted) {
@@ -57,9 +89,21 @@ export class RemoteTrackingAndroidNotifierService implements OnDestroy {
     }
     this._isStarted = true;
     this._effectRef = effect(() => this._update(), { injector: this._injector });
+    // Push path of APKs predating the persisted Stop queue (#10683).
     this._stopSub = androidInterface.onRemoteTrackingStop$.subscribe(() =>
       this._presenceService.requestRemoteStop(),
     );
+    // The Stop tap opens the activity; on a cold start the WebView isn't ready
+    // for a push, so native persists it and we pull it once we're running.
+    this._stopQueueSub = merge(
+      androidInterface.onResume$,
+      androidInterface.onNotificationActionDrainRequest$,
+    )
+      .pipe(startWith(undefined))
+      .subscribe(() => this._pullPendingStop());
+    this._stopEffectRef = effect(() => this._applyPendingStop(), {
+      injector: this._injector,
+    });
   }
 
   stop(): void {
@@ -71,11 +115,44 @@ export class RemoteTrackingAndroidNotifierService implements OnDestroy {
     this._effectRef = null;
     this._stopSub?.unsubscribe();
     this._stopSub = null;
+    this._stopQueueSub?.unsubscribe();
+    this._stopQueueSub = null;
+    this._stopEffectRef?.destroy();
+    this._stopEffectRef = null;
+    this._pendingStopAt.set(null);
     this._cancel();
   }
 
   ngOnDestroy(): void {
     this.stop();
+  }
+
+  private _pullPendingStop(): void {
+    const raw = androidInterface.getRemoteTrackingStopQueue?.();
+    const at = raw ? Number(raw) : NaN;
+    if (Number.isFinite(at)) {
+      this._pendingStopAt.set(at);
+    }
+  }
+
+  /** Applies a queued Stop as soon as the remote session is known (WS connect). */
+  private _applyPendingStop(): void {
+    const at = this._pendingStopAt();
+    if (at === null) {
+      return;
+    }
+    const decision = resolvePendingRemoteStop(
+      at,
+      Date.now(),
+      this._presenceService.remoteSession()?.payload.state,
+    );
+    if (decision === 'wait') {
+      return;
+    }
+    this._pendingStopAt.set(null);
+    if (decision === 'apply') {
+      untracked(() => this._presenceService.requestRemoteStop());
+    }
   }
 
   private _update(): void {

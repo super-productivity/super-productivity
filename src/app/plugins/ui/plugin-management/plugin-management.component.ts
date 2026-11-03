@@ -69,10 +69,6 @@ const COMMUNITY_DOWNLOAD_ERROR_KEYS: Record<CommunityPluginDownloadFailure, stri
   manifestMismatch: T.PLUGINS.COMMUNITY_MANIFEST_MISMATCH,
 };
 
-interface PluginManifestAuthor {
-  author?: unknown;
-}
-
 /**
  * The app's Chinese codes stand for scripts, not regions: `zh` is Simplified
  * and `zh-tw` is Traditional. Read literally, `zh-tw` would be "Chinese (Taiwan)".
@@ -369,7 +365,8 @@ export class PluginManagementComponent {
   }
 
   getPluginAuthor(plugin: PluginInstance): string | null {
-    const author = (plugin.manifest as PluginManifestAuthor).author;
+    // Manifests are third-party JSON: the declared type is not a guarantee.
+    const author: unknown = plugin.manifest.author;
     return typeof author === 'string' && author.trim().length > 0 ? author.trim() : null;
   }
 
@@ -494,7 +491,7 @@ export class PluginManagementComponent {
       !(await this._confirmInDialog(
         T.PLUGINS.CONFIRM_CLEAR_CACHE,
         { count: uploadedCount },
-        T.PLUGINS.CLEAR_PLUGIN_CACHE,
+        T.PLUGINS.REMOVE_ALL_UPLOADED_PLUGINS,
       ))
     ) {
       return;
@@ -509,13 +506,13 @@ export class PluginManagementComponent {
       // plugin before the method returns (issue #8512 Phase 2 — see the service method).
       await this._pluginService.clearUploadedPluginsFromMemory();
 
-      PluginLog.log('Plugin cache cleared successfully');
+      PluginLog.log('Uploaded plugins removed');
     } catch (error) {
-      PluginLog.err('Failed to clear plugin cache:', error);
+      PluginLog.err('Failed to remove uploaded plugins:', error);
       this.uploadError.set(
         error instanceof Error
           ? error.message
-          : this._translateService.instant(T.PLUGINS.FAILED_TO_CLEAR_CACHE),
+          : this._translateService.instant(T.PLUGINS.FAILED_TO_REMOVE_UPLOADED_PLUGINS),
       );
     } finally {
       this.isUploading.set(false);

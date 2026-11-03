@@ -124,24 +124,21 @@ export class ProjectService {
   list$: Observable<Project[]> = this._store$.pipe(select(selectUnarchivedProjects));
   list = toSignal(this.list$, { initialValue: [] });
 
-  private _listInTreeOrder = computed(() =>
+  // Unarchived projects in menu-tree order, including those hidden from the menu:
+  // isHiddenFromMenu only governs menu presence, so pickers that assign a project
+  // need the full list. Menu-facing consumers use listInTreeOrderForUI below.
+  listInTreeOrder = computed(() =>
     this._menuTreeService.buildProjectListInTreeOrder(this.list()),
   );
-  listInTreeOrder$ = toObservable(this._listInTreeOrder);
+  listInTreeOrder$ = toObservable(this.listInTreeOrder);
 
   listSorted$: Observable<Project[]> = this.list$.pipe(
     map((projects) => sortByTitle(projects)),
   );
   listSorted = toSignal(this.listSorted$, { initialValue: [] });
 
-  // Filtered and sorted list for UI (excludes archived and hidden projects)
-  listSortedForUI$: Observable<Project[]> = this.listSorted$.pipe(
-    map((projects) => projects.filter((p) => !p.isArchived && !p.isHiddenFromMenu)),
-  );
-  listSortedForUI = toSignal(this.listSortedForUI$, { initialValue: [] });
-
   listInTreeOrderForUI = computed(() =>
-    this._listInTreeOrder().filter((p) => !p.isArchived && !p.isHiddenFromMenu),
+    this.listInTreeOrder().filter((p) => !p.isArchived && !p.isHiddenFromMenu),
   );
 
   archived$: Observable<Project[]> = this._store$.pipe(select(selectArchivedProjects));
@@ -549,6 +546,7 @@ export class ProjectService {
         created,
         timeSpent,
         timeSpentOnDay,
+        repeatCfgId,
         ...taskDataToCopy
       } = p;
       /* eslint-enable @typescript-eslint/no-unused-vars */
@@ -589,6 +587,7 @@ export class ProjectService {
             created: _created,
             timeSpent: _timeSpent,
             timeSpentOnDay: _timeSpentOnDay,
+            repeatCfgId: _repeatCfgId,
             ...subTaskDataToCopy
           } = st;
           /* eslint-enable @typescript-eslint/no-unused-vars */

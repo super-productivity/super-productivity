@@ -92,19 +92,22 @@
     visibility 0s linear var(--transition-duration-xs, 0.09s);
 }
 
-// On touch devices the .additional-btn is always visible, so let the counter
-// flow inline beside it instead of overlapping.
+// On touch the row's menu opens on long-press (`isTouchLongPress` on its
+// context-menu), so the "more" button is taken out of the layout: a kebab on
+// every row doubled the drawer's weight. It stays in the accessibility tree and
+// the tab order, and shows again while focused. `:focus`, not `:focus-visible`:
+// a finger cannot focus it, so only a keyboard or screen reader does, and a
+// VoiceOver double-tap must then land on the button, not the row beneath.
 :host-context(.isTouchPrimary) {
-  .task-count {
-    position: static;
-    transform: none;
-    padding: 0 var(--s);
-    flex-shrink: 0;
-    pointer-events: auto;
+  .additional-btn:not(:focus) {
+    position: absolute;
+    inset-inline-end: 0;
+    opacity: 0;
+    pointer-events: none;
   }
 
-  button:first-of-type.has-tasks {
-    padding-right: var(--s);
+  &:has(.additional-btn:focus) .task-count {
+    display: none;
   }
 }
 
@@ -414,16 +417,5 @@ button[mat-menu-item].nav-link.active {
     transition:
       opacity var(--transition-duration-xs, 0.09s) linear,
       visibility 0s linear var(--transition-duration-xs, 0.09s);
-
-    // Touch layouts flow the counter inline (see the touch block above): there
-    // `padding: 0 var(--s)` and `flex-shrink: 0` keep a *static* flex item's
-    // full width reserved in the button even while it is faded out. Inside the
-    // 56px rail that leaves the icon less room than the button's own padding
-    // plus the 24px icon needs, and the button's `overflow: hidden` then clips
-    // it — so touch keeps master's hard hide. Touch has no hover for the
-    // counter to get out of the way of either.
-    :host-context(.isTouchPrimary) & {
-      display: none;
-    }
   }
 }

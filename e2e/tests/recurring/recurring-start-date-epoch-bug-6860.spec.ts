@@ -75,7 +75,7 @@ test.describe('Recurring Task - Start Date Epoch Bug (#6860)', () => {
     // 5. Verify the date input/val does not show epoch
     const dateVal = repeatDialog.locator('.planned-date-val');
     await expect(dateVal).toBeVisible();
-    const valText = await dateVal.innerText();
+    const valText = await dateVal.inputValue();
     expect(valText).not.toBe('');
     expect(valText).not.toContain('1970');
 

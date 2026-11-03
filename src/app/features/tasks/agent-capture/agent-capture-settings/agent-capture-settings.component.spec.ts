@@ -53,6 +53,7 @@ describe('AgentCaptureSettingsComponent', () => {
         'isSuperSyncActive',
         'getMcpUrl',
         'listGrants',
+        'countPending',
         'switchOn',
         'switchOff',
         'createToken',
@@ -63,6 +64,7 @@ describe('AgentCaptureSettingsComponent', () => {
     );
     capture.getMcpUrl.and.resolveTo('https://sync.example/mcp');
     capture.listGrants.and.resolveTo([GRANT]);
+    capture.countPending.and.resolveTo(GRANT.pendingCount);
     snack = jasmine.createSpyObj<SnackService>('SnackService', ['open']);
 
     await TestBed.configureTestingModule({

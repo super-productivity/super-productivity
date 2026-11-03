@@ -41,6 +41,7 @@ export class TaskDuplicateService {
       const subTaskObj = this._taskService.createNewTaskWithDefaults({
         title: subTask.title,
         additional: {
+          parentId: taskId,
           isDone: subTask.isDone,
           ...(isWontDoTask(subTask) && {
             doneOn: subTask.doneOn,

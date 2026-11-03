@@ -389,7 +389,7 @@ describe('OnboardingHintService', () => {
       const service = createService();
       addFirstTask();
       service.showMeMore();
-      expect(startQuickTour).toHaveBeenCalledOnceWith('task-1');
+      expect(startQuickTour).toHaveBeenCalledOnceWith('task-1', false);
       expect(service.currentStep()).toBeNull();
       expect(OnboardingHintService.isOnboardingInProgress()).toBeFalse();
     });
@@ -399,7 +399,7 @@ describe('OnboardingHintService', () => {
       addFirstTask();
       navigateTo('/config');
       service.showMeMore();
-      expect(startQuickTour).toHaveBeenCalledOnceWith('task-1');
+      expect(startQuickTour).toHaveBeenCalledOnceWith('task-1', false);
     });
 
     it('No thanks names the way back, then ends without a tour', () => {
@@ -454,6 +454,19 @@ describe('OnboardingHintService', () => {
       expect(service.currentStep()).toBeNull();
       isMobileSideNavOpen.set(false);
       expect(service.currentStep()).toBe('task-swipe-left');
+    });
+
+    it('tells the tour that the swipe menu was already learned', () => {
+      const service = createPhoneService();
+      addFirstTask([EXAMPLE_TASK]);
+      isTaskContextMenuOpen.set(true);
+      TestBed.tick();
+      isTaskContextMenuOpen.set(false);
+      TestBed.tick();
+      expect(service.currentStep()).toBe('today-and-inbox');
+
+      service.showMeMore();
+      expect(startQuickTour).toHaveBeenCalledOnceWith('task-1', true);
     });
 
     it('introduces swipe left, then Today and the Inbox', () => {

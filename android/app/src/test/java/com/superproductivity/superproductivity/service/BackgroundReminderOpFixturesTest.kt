@@ -114,8 +114,27 @@ class BackgroundReminderOpFixturesTest {
         }
     }
 
+    @Test
+    fun `flags a task whose op it cannot read yet, until the session key is derived`() {
+        // A done op from a desktop session this phone has no key for yet
+        val fixture = JSONObject(javaClass.classLoader!!.getResource(ENCRYPTED_DONE_RESOURCE)!!.readText())
+        val password = fixture.getString("password")
+        val taskId = fixture.getString("taskId")
+        val op = fixture.getJSONObject("op")
+        val cache = InMemoryKeyCache()
+
+        val cold = parseSingleOp(SuperSyncBackgroundProvider(OpPayloadDecryptor(password, cache, deriveOnMiss = false)), op)
+        assertEquals(emptySet<String>(), cold.taskIdsToCancel)
+        assertEquals(setOf(taskId), cold.unreadableTaskIds)
+
+        val derived = parseSingleOp(SuperSyncBackgroundProvider(OpPayloadDecryptor(password, cache)), op)
+        assertEquals(setOf(taskId), derived.taskIdsToCancel)
+        assertEquals(emptySet<String>(), derived.unreadableTaskIds)
+    }
+
     companion object {
         private const val FIXTURE_RESOURCE = "background-reminder-ops.json"
+        private const val ENCRYPTED_DONE_RESOURCE = "encrypted-done-op.json"
 
         // Must match tools/generate-android-crypto-fixtures.mjs
         private const val LIVE_ENTRY_PREFIX = "reminder-op:"

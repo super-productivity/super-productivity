@@ -147,6 +147,28 @@ describe('GlobalConfigReducer', () => {
       );
     });
 
+    it('should turn priority short syntax on for a config that predates it', () => {
+      const { isEnablePriority, ...legacyShortSyntax } =
+        DEFAULT_GLOBAL_CONFIG.shortSyntax;
+      expect(isEnablePriority).toBe(true);
+
+      const load = (shortSyntax: object): GlobalConfigState =>
+        globalConfigReducer(
+          initialGlobalConfigState,
+          loadAllData({
+            appDataComplete: {
+              globalConfig: { ...initialGlobalConfigState, shortSyntax },
+            } as AppDataComplete,
+          }),
+        );
+
+      expect(load(legacyShortSyntax).shortSyntax.isEnablePriority).toBe(true);
+      expect(
+        load({ ...legacyShortSyntax, isEnablePriority: false }).shortSyntax
+          .isEnablePriority,
+      ).toBe(false);
+    });
+
     it('should coerce a legacy null defaultProjectId to the Inbox default (#7891)', () => {
       // Older configs stored `null` (the removed "None" default). With the "None"
       // option gone, that value no longer matches a dropdown option, so it must be

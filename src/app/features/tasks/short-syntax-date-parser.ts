@@ -38,8 +38,19 @@ export interface ShortSyntaxDateParser {
 const loadEn = (): Promise<ChronoLocale & { Chrono: typeof Chrono }> =>
   import('chrono-node/en').then((m) => ({
     Chrono: m.Chrono,
-    createCasualConfiguration: (littleEndian) =>
-      m.configuration.createCasualConfiguration(littleEndian),
+    createCasualConfiguration: (littleEndian) => {
+      const configuration = m.configuration.createCasualConfiguration(littleEndian);
+      // chrono's day-first flag also stops "dec 20" to "dec 25" without a year
+      // from reading as a day (en-GB's guess that "Dec 25" means 2025), so
+      // "@dec 24" became 2024-12-01. The date order is only about numeric
+      // dates; month names keep reading the number as the day.
+      configuration.parsers.forEach((parser) => {
+        if ('shouldSkipYearLikeDate' in parser) {
+          parser.shouldSkipYearLikeDate = false;
+        }
+      });
+      return configuration;
+    },
   }));
 
 // UI language (LanguageCode) → chrono-node locale shipped in the installed
@@ -121,13 +132,25 @@ const isBetterMatch = (a: ParsedResult, b: ParsedResult, isTieWinner: boolean): 
   (a.index === b.index &&
     (a.text.length > b.text.length || (a.text.length === b.text.length && isTieWinner)));
 
+// A UI-language short word (German "so" and "do", Dutch "zo") counts only at
+// the start of the token, after the trigger char: further in it is an ordinary
+// word, and the match would consume the title text up to it ("max@firma.de so
+// bald" → due Sunday). A longer match may start further in, because chrono
+// leaves a leading article or preposition out of it ("@le 5 mars", "@el
+// lunes", "@um 15 Uhr").
+const isShortWord = (text: string): boolean => /^\p{L}{1,3}\.?$/u.test(text.trim());
+const isTrustedUiResult = (text: string, result: ParsedResult): boolean =>
+  /^[@!]?\s*$/.test(text.slice(0, result.index)) || !isShortWord(result.text);
+
 const combine = (
   uiParser: Chrono,
   enParser: Chrono,
   isUiTieWinner: boolean,
 ): ShortSyntaxDateParser => ({
   parse: (text, ref, option) => {
-    const uiResults = uiParser.parse(text, ref, option);
+    const uiResults = uiParser
+      .parse(text, ref, option)
+      .filter((result) => isTrustedUiResult(text, result));
     const enResults = enParser.parse(text, ref, option);
     if (!uiResults.length) {
       return enResults;

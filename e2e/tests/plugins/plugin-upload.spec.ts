@@ -328,7 +328,7 @@ test.describe.serial('Plugin Upload', () => {
     expect(removalResult.removed).toBeTruthy();
   });
 
-  test('clear plugin cache asks before removing uploaded plugins', async ({ page }) => {
+  test('remove all uploaded plugins asks before removing them', async ({ page }) => {
     test.setTimeout(process.env.CI ? 90000 : 60000);
     expect(await waitForPluginManagementInit(page)).toBe(true);
 
@@ -342,7 +342,7 @@ test.describe.serial('Plugin Upload', () => {
     await expect(uploadedCard).toBeVisible({ timeout: 15000 });
 
     const clearCacheBtn = page.locator('plugin-management button', {
-      hasText: 'Clear Plugin Cache',
+      hasText: 'Remove all uploaded plugins',
     });
     const confirmDialog = page.locator('dialog-confirm');
 

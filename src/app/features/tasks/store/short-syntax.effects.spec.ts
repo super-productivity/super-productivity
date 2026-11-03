@@ -23,6 +23,7 @@ import { DEFAULT_GLOBAL_CONFIG } from '../../config/default-global-config.const'
 import { DEFAULT_TASK, Task } from '../task.model';
 import { WorkContextType } from '../../work-context/work-context.model';
 import { TaskTimeSyncService } from '../task-time-sync.service';
+import { IssueSharedTitleService } from '../../issue/two-way-sync/issue-shared-title.service';
 
 describe('ShortSyntaxEffects', () => {
   let effects: ShortSyntaxEffects;
@@ -51,6 +52,7 @@ describe('ShortSyntaxEffects', () => {
     activeWorkContextId: string;
   };
   let taskTimeSyncServiceSpy: jasmine.SpyObj<TaskTimeSyncService>;
+  let sharedTitleSpy: jasmine.SpyObj<IssueSharedTitleService>;
   let dateInputLocale: DateInputLocale;
 
   const createTask = (id: string, partial: Partial<Task> = {}): Task => ({
@@ -121,6 +123,8 @@ describe('ShortSyntaxEffects', () => {
       activeWorkContextId: 'project-1',
     };
     taskTimeSyncServiceSpy = jasmine.createSpyObj('TaskTimeSyncService', ['flushOne']);
+    sharedTitleSpy = jasmine.createSpyObj('IssueSharedTitleService', ['getSharedTitle']);
+    sharedTitleSpy.getSharedTitle.and.resolveTo(undefined);
     dateInputLocale = DEFAULT_DATE_INPUT_LOCALE;
 
     TestBed.configureTestingModule({
@@ -142,6 +146,7 @@ describe('ShortSyntaxEffects', () => {
           useValue: { dateInputLocale: () => dateInputLocale },
         },
         { provide: TaskTimeSyncService, useValue: taskTimeSyncServiceSpy },
+        { provide: IssueSharedTitleService, useValue: sharedTitleSpy },
       ],
     });
 
@@ -299,6 +304,88 @@ describe('ShortSyntaxEffects', () => {
       tick(100);
 
       expect(taskTimeSyncServiceSpy.flushOne).toHaveBeenCalledOnceWith('task-1');
+    }));
+
+    describe('title edit of a task whose title syncs both ways', () => {
+      const editTitle = (title: string): any[] => {
+        const task = createTask('task-1', {
+          title,
+          issueId: 'item-1',
+          issueType: 'PLAINSPACE',
+          issueProviderId: 'provider-1',
+        });
+        taskServiceMock.getByIdOnce$.and.returnValue(of(task));
+        const emitted: any[] = [];
+        effects.shortSyntax$.subscribe((action) => emitted.push(action));
+        actions$.next(
+          TaskSharedActions.updateTask({
+            task: { id: 'task-1', changes: { title } },
+          }),
+        );
+        tick(100);
+        return emitted;
+      };
+
+      it('leaves the short syntax already in the shared title as text', fakeAsync(() => {
+        sharedTitleSpy.getSharedTitle.and.resolveTo('Prep #existingTag for @fri 30m');
+
+        expect(editTitle('Prepare #existingTag for @fri 30m')).toEqual([]);
+      }));
+
+      it('applies the short syntax typed in this edit', fakeAsync(() => {
+        sharedTitleSpy.getSharedTitle.and.resolveTo('Prep #urgent for @fri 30m');
+
+        const [action] = editTitle('Prep #urgent for @fri 30m #existingTag 1h');
+
+        expect(action.type).toBe(TaskSharedActions.applyShortSyntax.type);
+        expect(action.taskChanges).toEqual({
+          title: 'Prep #urgent for @fri 30m',
+          timeEstimate: 3600000,
+          tagIds: ['tag-1'],
+        });
+      }));
+
+      it('is not asked for a new task', fakeAsync(() => {
+        const task = createTask('task-1', { title: 'Buy #existingTag' });
+        taskServiceMock.getByIdOnce$.and.returnValue(of(task));
+        effects.shortSyntax$.subscribe();
+        actions$.next(
+          TaskSharedActions.addTask({
+            task,
+            workContextId: 'project-1',
+            workContextType: WorkContextType.PROJECT,
+            isAddToBacklog: false,
+            isAddToBottom: false,
+          }),
+        );
+        tick(100);
+
+        expect(sharedTitleSpy.getSharedTitle).not.toHaveBeenCalled();
+      }));
+    });
+
+    it('should set priority from a title edit with the default config', fakeAsync(() => {
+      globalConfigServiceMock.cfg.and.returnValue(DEFAULT_GLOBAL_CONFIG);
+      const task = createTask('task-1', { title: 'Fix login bug p1', priority: 1 });
+      taskServiceMock.getByIdOnce$.and.returnValue(of(task));
+
+      let emittedAction: any = null;
+      effects.shortSyntax$.subscribe((action) => {
+        emittedAction = action;
+      });
+
+      actions$.next(
+        TaskSharedActions.updateTask({
+          task: { id: 'task-1', changes: { title: task.title } },
+        }),
+      );
+      tick(100);
+
+      expect(emittedAction.type).toBe(TaskSharedActions.applyShortSyntax.type);
+      expect(emittedAction.taskChanges).toEqual({
+        priority: 3,
+        title: 'Fix login bug',
+      });
     }));
 
     it('should add URL as attachment when updating task title with a URL', fakeAsync(() => {

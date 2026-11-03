@@ -158,7 +158,13 @@ test('auto-created issue excludes short syntax tokens (#10024)', async ({
   await page.getByRole('option', { name: projectName }).click();
 
   await dialog.getByRole('button', { name: /Two-Way Sync/i }).click();
-  await dialog.locator('mat-checkbox[id*="isAutoCreateIssues"]').click();
+  // A click while the section is still expanding can focus the checkbox
+  // without toggling it, saving the provider with auto-create off (#11077).
+  // check() throws when the click did not toggle; retry until it did.
+  const autoCreateCheckbox = dialog.locator('input[id*="isAutoCreateIssues"]');
+  await expect(async () => {
+    await autoCreateCheckbox.check();
+  }).toPass();
 
   await dialog.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(dialog).toBeHidden();

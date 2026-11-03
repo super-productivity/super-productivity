@@ -17,6 +17,9 @@ Update these alongside the behavior or workflow they describe:
 - [Plugin development](plugin-development.md)
 - [Adding an issue integration](add-new-integration.md)
 - [Feature and PR review guide](feature-review-guide.md)
+- [Market position](market/README.md) — where SP must be best, the competitor set
+  and the monthly refresh; its [scorecard](market/scorecard.md) is a dated
+  snapshot that the refresh updates
 - [Styling guide](styling-guide.md) and [theming contract](theming-contract.md)
 - [Android edge-to-edge and keyboard behavior](android-edge-to-edge-keyboard.md)
 - [Android home-screen widget](android-home-screen-widget.md)

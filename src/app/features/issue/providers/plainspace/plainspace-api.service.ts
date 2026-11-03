@@ -1,7 +1,7 @@
 import { Injectable, InjectionToken, inject } from '@angular/core';
 import { HttpClient, HttpErrorResponse, HttpHeaders } from '@angular/common/http';
 import { Capacitor, CapacitorHttp, HttpOptions, HttpResponse } from '@capacitor/core';
-import { Observable, defer, of } from 'rxjs';
+import { Observable, defer, of, throwError } from 'rxjs';
 import { catchError, map, retry } from 'rxjs/operators';
 import { SearchResultItem } from '../../issue.model';
 import { PlainspaceCfg } from './plainspace.model';
@@ -42,8 +42,9 @@ export const PLAINSPACE_NATIVE_HTTP = new InjectionToken<PlainspaceNativeHttp | 
  * here, keeping the real contract isolated to this file — the DTO interfaces
  * below are the endpoint contract.
  *
- * Reads fail soft (empty list / null) so a Plainspace outage never blocks the SP
- * UI; `createSpace$` lets errors propagate so the share flow can report them.
+ * `getMyTasks$` and `getById$` let errors propagate (offline, 401, 5xx) so no
+ * caller can mistake a failed request for "no tasks"; the poll decides what to
+ * show. The token check and claim pool fail soft (see each).
  */
 @Injectable({ providedIn: 'root' })
 export class PlainspaceApiService {
@@ -127,18 +128,31 @@ export class PlainspaceApiService {
     );
   }
 
-  /** Tasks assigned to me in this provider's space — imported as SP tasks. */
+  /**
+   * Tasks assigned to me in this provider's space — imported as SP tasks. Errors
+   * propagate: an empty list must only ever mean "nothing is assigned to me".
+   */
   getMyTasks$(cfg: PlainspaceCfg): Observable<PlainspaceIssue[]> {
     return this._http
       .get<SPTasksResponse>(`${this._base(cfg)}/tasks`, { headers: this._headers(cfg) })
       .pipe(
-        // /tasks spans all my spaces; keep only this provider's space.
-        map((res) =>
-          (Array.isArray(res?.tasks) ? res.tasks : [])
+        map((res) => {
+          // A 200 without a task list (HttpClient gives null for an empty body:
+          // a proxy or captive portal answering for the host) is no answer at
+          // all, like a token check's empty body (#9988). Read as "no tasks", it
+          // would mark every linked task as no longer in my list.
+          if (!Array.isArray(res?.tasks)) {
+            throw new HttpErrorResponse({
+              status: 0,
+              statusText: 'No task list in the response',
+              url: `${this._base(cfg)}/tasks`,
+            });
+          }
+          // /tasks spans all my spaces; keep only this provider's space.
+          return res.tasks
             .filter((t) => matchesSpace(t, cfg.spaceId))
-            .map(mapSPTaskToIssue),
-        ),
-        catchError(() => of([])),
+            .map(mapSPTaskToIssue);
+        }),
       );
   }
 
@@ -161,6 +175,11 @@ export class PlainspaceApiService {
       );
   }
 
+  /**
+   * One task, or null when the server answers 404 (deleted, unassigned or no
+   * longer a member — the server does not say which). Every other error
+   * propagates, so an offline fetch is never read as a missing task.
+   */
   getById$(id: string, cfg: PlainspaceCfg): Observable<PlainspaceIssue | null> {
     return this._http
       .get<SPTaskResponse>(`${this._base(cfg)}/tasks/${encodeURIComponent(id)}`, {
@@ -168,7 +187,11 @@ export class PlainspaceApiService {
       })
       .pipe(
         map((res) => mapSPTaskToIssue(res.task)),
-        catchError(() => of(null)),
+        catchError((err: unknown) =>
+          err instanceof HttpErrorResponse && err.status === 404
+            ? of(null)
+            : throwError(() => err),
+        ),
       );
   }
 
@@ -190,21 +213,34 @@ export class PlainspaceApiService {
   }
 
   /**
-   * Pushes a completion change back to Plainspace; null on failure.
+   * The members of the bound space a task can be handed to (everyone but me).
+   * Errors propagate: a 404 is a server too old to hand tasks off.
+   */
+  getSpaceMembers$(cfg: PlainspaceCfg): Observable<PlainspaceMember[]> {
+    return this._http
+      .get<SPSpaceMembersResponse>(
+        `${this._base(cfg)}/spaces/${encodeURIComponent(cfg.spaceId ?? '')}/members`,
+        { headers: this._headers(cfg) },
+      )
+      .pipe(map((res) => (Array.isArray(res?.members) ? res.members : [])));
+  }
+
+  /**
+   * Pushes completion and/or title back to Plainspace, or hands the task off.
+   * Resolves to the echoed task, or null when the answer is not a task. HTTP
+   * errors propagate: the sync adapter tells a server too old for a field
+   * (422) apart from offline and server errors.
    */
   patchTask$(
     id: string,
-    fields: { done: boolean },
+    fields: PlainspaceTaskPatch,
     cfg: PlainspaceCfg,
-  ): Observable<PlainspaceCompletionConfirmation | null> {
+  ): Observable<PlainspacePatchConfirmation | null> {
     return this._http
       .patch<unknown>(`${this._base(cfg)}/tasks/${encodeURIComponent(id)}`, fields, {
         headers: this._headers(cfg),
       })
-      .pipe(
-        map(parsePlainspaceCompletionConfirmation),
-        catchError(() => of(null)),
-      );
+      .pipe(map(parsePlainspacePatchConfirmation));
   }
 
   /**
@@ -394,7 +430,35 @@ interface SPTaskResponse {
   task: SPTask;
 }
 
-type PlainspaceCompletionConfirmation = Pick<PlainspaceIssue, 'id' | 'isDone'>;
+/** Fields the integration PATCH takes; at least one is sent. */
+export interface PlainspaceTaskPatch {
+  done?: boolean;
+  title?: string;
+  /** ISO instant, or null for "no time". */
+  scheduledAt?: string | null;
+  /** Hands the task to this member of its space; null releases it to the space. */
+  assigneeId?: string | null;
+}
+
+/** A member of a space, as `GET /spaces/:id/members` lists them. */
+export interface PlainspaceMember {
+  id: string;
+  displayName: string;
+}
+
+interface SPSpaceMembersResponse {
+  members: PlainspaceMember[];
+}
+
+/**
+ * What a PATCH answer echoes; `title`, `scheduledAt` and `updatedAt` are absent
+ * when the answer omits them.
+ */
+export type PlainspacePatchConfirmation = Pick<PlainspaceIssue, 'id' | 'isDone'> & {
+  title?: string;
+  scheduledAt?: string | null;
+  updatedAt?: string;
+};
 
 interface SPTasksResponse {
   tasks: SPTask[];
@@ -423,9 +487,9 @@ const matchesSpace = (t: SPTask, spaceId: string | null | undefined): boolean =>
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null;
 
-const parsePlainspaceCompletionConfirmation = (
+const parsePlainspacePatchConfirmation = (
   value: unknown,
-): PlainspaceCompletionConfirmation | null => {
+): PlainspacePatchConfirmation | null => {
   if (!isRecord(value) || !isRecord(value['task'])) {
     return null;
   }
@@ -437,7 +501,15 @@ const parsePlainspaceCompletionConfirmation = (
   ) {
     return null;
   }
-  return { id: task['id'], isDone: task['done'] };
+  return {
+    id: task['id'],
+    isDone: task['done'],
+    ...(typeof task['title'] === 'string' ? { title: task['title'] } : {}),
+    ...(typeof task['scheduledAt'] === 'string' || task['scheduledAt'] === null
+      ? { scheduledAt: task['scheduledAt'] }
+      : {}),
+    ...(typeof task['updatedAt'] === 'string' ? { updatedAt: task['updatedAt'] } : {}),
+  };
 };
 
 const mapSPTaskToIssue = (t: SPTask): PlainspaceIssue => ({

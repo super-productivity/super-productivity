@@ -18,6 +18,9 @@
  * Ciphertext is base64-encoded for transport. `detectFormat()` discriminates
  * by length: < 28 bytes is invalid, < 44 bytes is unambiguously legacy,
  * >= 44 bytes is treated as Argon2id with a legacy fallback on auth failure.
+ * When both paths fail, `DecryptFailedError` reports the Argon2id step (KDF or
+ * AES) and both error names, so a KDF crash cannot pass for a wrong password
+ * (a fallback `WebCryptoNotAvailableError` is rethrown unchanged).
  * The Android background sync reads the Argon2id format independently
  * (android `crypto/OpPayloadDecryptor.kt`) — changes here must be mirrored
  * there and its fixtures regenerated (see the note in encryption/argon2.ts).
@@ -67,6 +70,7 @@ import {
   setDecryptCache,
 } from './encryption/session-cache';
 import { decryptLegacy } from './encryption/legacy';
+import { type Argon2FailureStage, toDecryptFailure } from './encryption/decrypt-failure';
 import { toSyncLogError } from './sync-logger';
 
 // Re-export the test-and-host-facing pieces from submodules.
@@ -82,6 +86,7 @@ export {
 } from './encryption/session-cache';
 export { isCryptoSubtleAvailable } from './encryption/web-crypto';
 export { setLegacyKdfWarningHandler } from './encryption/legacy';
+export { DecryptFailedError } from './encryption/decrypt-failure';
 
 // ============================================================================
 // MAIN ENCRYPTION/DECRYPTION FUNCTIONS
@@ -132,23 +137,20 @@ export const encrypt = async (data: string, password: string): Promise<string> =
   return encryptWithDerivedKey(data, key);
 };
 
-/** Decrypts an Argon2id-format ciphertext given an already-decoded buffer. */
-const decryptArgonFromBuffer = async (
+/** Returns the (cached) Argon2id key for an Argon2id-format ciphertext buffer. */
+const getOrDeriveDecryptKey = async (
   buffer: ArrayBuffer,
   password: string,
-): Promise<string> => {
+): Promise<DerivedKey> => {
   const salt = new Uint8Array(buffer, 0, SALT_LENGTH);
-  const passwordHash = hashPasswordForCache(password);
-  const saltBase64 = encodeBase64(salt);
-  const cacheKey = `${passwordHash}:${saltBase64}`;
+  const cacheKey = `${hashPasswordForCache(password)}:${encodeBase64(salt)}`;
 
   let key = getDecryptCache(cacheKey);
   if (!key) {
     key = await deriveKeyFromPassword(password, salt);
     setDecryptCache(cacheKey, key);
   }
-
-  return decryptWithDerivedKey(buffer, key);
+  return key;
 };
 
 export const decrypt = async (data: string, password: string): Promise<string> => {
@@ -162,13 +164,22 @@ export const decrypt = async (data: string, password: string): Promise<string> =
     return decryptLegacy(data, password);
   }
 
+  let stage: Argon2FailureStage = 'kdf';
   try {
-    return await decryptArgonFromBuffer(buffer, password);
-  } catch {
+    const key = await getOrDeriveDecryptKey(buffer, password);
+    stage = 'aes';
+    return await decryptWithDerivedKey(buffer, key);
+  } catch (primaryError) {
     // Argon2 failed — fall back to legacy in case the data is a long legacy
     // ciphertext that happens to be >= 44 bytes (the length heuristic can't
     // disambiguate). Mobile clients without WebCrypto get a clear error.
-    return decryptLegacy(data, password);
+    try {
+      return await decryptLegacy(data, password);
+    } catch (fallbackError) {
+      // Keep the Argon2 failure visible (#4514): a key-derivation crash must
+      // not be reported as the legacy path's wrong-key error.
+      throw toDecryptFailure(primaryError, stage, fallbackError);
+    }
   }
 };
 
@@ -287,11 +298,16 @@ export const decryptBatch = async (
         index: item.index,
         result: await decryptWithDerivedKey(item.buffer, key),
       };
-    } catch {
+    } catch (primaryError) {
       // Argon2 failed — fall back to legacy in case the data is a long legacy
-      // ciphertext that happens to be >= 44 bytes.
+      // ciphertext that happens to be >= 44 bytes. (Key derivation ran in
+      // Phase 2, outside this fallback, so only the AES step can land here.)
       const data = dataItems[item.index];
-      return { index: item.index, result: await decryptLegacy(data, password) };
+      try {
+        return { index: item.index, result: await decryptLegacy(data, password) };
+      } catch (fallbackError) {
+        throw toDecryptFailure(primaryError, 'aes', fallbackError);
+      }
     }
   });
 

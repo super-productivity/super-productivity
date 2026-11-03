@@ -21,6 +21,7 @@ import { DialogImportFromUrlComponent } from '../dialog-import-from-url/dialog-i
 import { createAppDataCompleteMock } from '../../util/app-data-mock';
 import { ImportEncryptionHandlerService } from '../sync/import-encryption-handler.service';
 import { PluginService } from '../../plugins/plugin.service';
+import { DIALOG_AUTO_FOCUS_TYPING } from '../../util/dialog-auto-focus';
 
 describe('FileImexComponent', () => {
   let component: FileImexComponent;
@@ -316,6 +317,7 @@ describe('FileImexComponent', () => {
       component.openUrlImportDialog();
 
       expect(mockMatDialog.open).toHaveBeenCalledWith(DialogImportFromUrlComponent, {
+        autoFocus: DIALOG_AUTO_FOCUS_TYPING,
         width: '500px',
       });
       expect(component.importFromUrlHandler).toHaveBeenCalledWith(

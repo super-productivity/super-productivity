@@ -269,7 +269,7 @@ export class OnboardingHintService {
   showMeMore(): void {
     const taskId = this.firstTaskId();
     this._markDone();
-    this._quickTourService.start(taskId);
+    this._quickTourService.start(taskId, this._wasTaskMenuOpened);
   }
 
   /** No thanks: say where the tour lives, then go. */

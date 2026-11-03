@@ -884,6 +884,19 @@ IDs deduplicate ops still in the local log, while vector clocks carry causality.
 3. **Gap:** a version reset, snapshot replacement, or trimmed operation needed by
    this client signals a gap. The caller retries from seq 0 and installs the
    causal baseline instead of pretending the remaining buffer is complete.
+   One upload is one batch under one `syncVersion`, so trimming cuts only at a
+   batch boundary: a partial oldest batch at `sinceSeq + 1` would look
+   contiguous to a client whose cursor sits just before it, and that client
+   would never receive the batch's head (#10973). Writers since #10973 drop the
+   rest of a batch the cap would cut into (a newest batch larger than the cap
+   stays whole until the next upload drops it) and set the optional
+   envelope field `oldestBatchComplete`. Released writers trimmed per op and
+   omit the field, so a reader treats an uncertified oldest batch at
+   `sinceSeq + 1` as a gap when the buffer may have been trimmed: a v2 buffer
+   at `MAX_RECENT_OPS`, or a v3 batch at or below the compaction snapshot's
+   `syncVersion`. Released readers need no change for fixed writers' files: a
+   dropped batch shows as `oldestOpSyncVersion > sinceSeq + 1`. Buffers trimmed
+   by pre-v18.14 writers (cap 500) are not detected.
    A replacement's tail ops can advance the watermark back past this client's
    and refill the buffer, hiding all three. So the file's vector clock must
    also equal or dominate the last-seen one, which is persisted and also
@@ -911,6 +924,28 @@ IDs deduplicate ops still in the local log, while vector clocks carry causality.
    but older writers can omit it. Masked dominating replacements written by,
    or subsequently rewritten by, those clients remain a mixed-version gap;
    the older version/lineage/trim checks still apply to files without the marker.
+   A gap that is only a trim (the file's `syncVersion` did not go backwards,
+   its base is seen, and its clock equals or dominates the last-seen one) is a
+   catch-up, not a replacement (`snapshotExtendsLastSeen`, #10972). A client
+   that completed a sync with this target (seq cursor above 0) and has no
+   pending full-state op then hydrates the snapshot and keeps its pending ops
+   (after a target switch the adapter can hold a last-seen baseline staged by
+   a download it never applied, so having synced elsewhere is not enough): they move past the baseline with
+   ids and clocks unchanged, replay on top of it, and upload normally.
+   Receivers resolve any crossing on the no-pending LWW path. A pending op the
+   snapshot clock already covers (uploaded before a crash skipped
+   `markSynced`) is settled, not replayed twice. A kept op the snapshot state
+   cannot take (its project was deleted remotely) is reducer-rejected with the
+   discard snack, as receivers drop it. A full-state op that lands during the
+   download (a backup import) still asks. Known residual: once the
+   other client compacted its crossing op (`COMPACTION_RETENTION_MS`, 7
+   days), the receiver finds no local op to compare and applies the kept edit
+   even when it is older, as on the #9073 path. Second residual: a
+   replacement written before v19.2.0 leaves no snapshot base and resets only
+   `syncVersion`, so one whose later uploads climbed back past the expected
+   version reads as a catch-up; if its `SYNC_IMPORT` then filters the kept op
+   on receivers, they diverge where a dialog used to ask. Any other concurrent
+   snapshot still asks Keep local / Keep remote.
 4. **Commit:** the downloaded `rev`, vector clock, and expected synthetic
    watermark remain staged until the caller confirms that baseline and ops were
    durably applied. Cancelling a data-conflict decision does not advance the

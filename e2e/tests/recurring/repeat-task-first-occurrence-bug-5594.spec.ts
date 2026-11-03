@@ -59,23 +59,21 @@ test.describe('Issue #5594: First repeat occurrence should not always be today',
     const weekdaysContainer = repeatDialog.locator('.weekdays');
     await expect(weekdaysContainer).toBeVisible({ timeout: 5000 });
 
-    // Get all checkbox fields
-    const tuesdayCheckbox = weekdaysContainer
-      .locator('formly-field')
-      .nth(1)
-      .locator('input[type="checkbox"]');
-    const thursdayCheckbox = weekdaysContainer
-      .locator('formly-field')
-      .nth(3)
-      .locator('input[type="checkbox"]');
+    // Each day is a chip: a native checkbox named by the day, inside its label.
+    const tuesdayCheckbox = weekdaysContainer.getByRole('checkbox', { name: 'Tuesday' });
+    const thursdayCheckbox = weekdaysContainer.getByRole('checkbox', {
+      name: 'Thursday',
+    });
 
     // Uncheck Tuesday and Thursday
     if (await tuesdayCheckbox.isChecked()) {
-      await tuesdayCheckbox.click();
+      await weekdaysContainer.locator('label').filter({ hasText: 'Tue' }).click();
     }
     if (await thursdayCheckbox.isChecked()) {
-      await thursdayCheckbox.click();
+      await weekdaysContainer.locator('label').filter({ hasText: 'Thu' }).click();
     }
+    await expect(tuesdayCheckbox).not.toBeChecked();
+    await expect(thursdayCheckbox).not.toBeChecked();
 
     // 8. Save the repeat config
     await saveRecurDialog(page);
