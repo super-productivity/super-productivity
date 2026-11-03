@@ -43,7 +43,9 @@ export function ConditionInput(props: ConditionInputProps) {
         title="Remove Condition"
         aria-label="Remove Condition"
       >
-        ✕
+        <span class="material-icons" aria-hidden="true">
+          close
+        </span>
       </button>
     </div>
   );

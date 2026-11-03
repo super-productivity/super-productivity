@@ -264,7 +264,9 @@ export function RuleEditor(props: RuleEditorProps) {
                                 aria-label="Remove condition"
                                 onClick={() => handleRemoveCondition(i())}
                               >
-                                ✕
+                                <span class="material-icons" aria-hidden="true">
+                                  close
+                                </span>
                               </button>
                             </div>
                           </td>
@@ -323,7 +325,9 @@ export function RuleEditor(props: RuleEditorProps) {
                             aria-label="Remove action"
                             onClick={() => handleRemoveAction(i())}
                           >
-                            ✕
+                            <span class="material-icons" aria-hidden="true">
+                              close
+                            </span>
                           </button>
                         </div>
                       </td>

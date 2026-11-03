@@ -45,7 +45,9 @@ export function ActionInput(props: ActionInputProps) {
         title="Remove Action"
         aria-label="Remove Action"
       >
-        ✕
+        <span class="material-icons" aria-hidden="true">
+          close
+        </span>
       </button>
     </div>
   );

@@ -34,7 +34,9 @@ export function Dialog(props: DialogProps) {
         <header class="page-header">
           <h3>{props.title}</h3>
           <button aria-label="Close" class="btn-icon" onClick={props.onClose}>
-            ✕
+            <span class="material-icons" aria-hidden="true">
+              close
+            </span>
           </button>
         </header>
         {props.children}
