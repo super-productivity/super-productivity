@@ -51,6 +51,11 @@ No token is stored. The claim refuses when the account's token version changed
 since approval, so any sign-out in between stops it. Unknown id, wrong secret
 and an already used request all answer `expired`.
 
+The page opens as `/?r=<request id>`. Magic-link login and both sign-up routes
+accept the same optional `r`; while that request is still pending, the emailed
+link carries it, so the email lands on the Connect step even when opened in
+another browser. In Connect mode the page never shows the long-lived token.
+
 ## Account Activation and Login
 
 ### Passkey Registration

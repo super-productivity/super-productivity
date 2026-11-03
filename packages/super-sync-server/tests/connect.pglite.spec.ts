@@ -21,6 +21,7 @@ import {
   CONNECT_REQUEST_TTL_MS,
   createConnectRequest,
   deleteExpiredConnectRequests,
+  pendingConnectRequestId,
   pollConnectRequest,
 } from '../src/connect/connect-request.store';
 import { revokeAllTokens, signAccountToken, verifyToken } from '../src/auth';
@@ -233,6 +234,14 @@ describe('browser sign-in of a new device (real routes and SQL)', () => {
     expect((await asUser('GET', req.requestId)).statusCode).toBe(200);
     expect(await deleteExpiredConnectRequests(later)).toBe(1);
     expect((await asUser('GET', req.requestId)).statusCode).toBe(404);
+  });
+
+  it('lets emails link only a request that can still be connected', async () => {
+    const req = await created();
+    expect(await pendingConnectRequestId(req.requestId)).toBe(req.requestId);
+    await asUser('POST', `${req.requestId}/approve`);
+    expect(await pendingConnectRequestId(req.requestId)).toBeUndefined();
+    expect(await pendingConnectRequestId(undefined)).toBeUndefined();
   });
 
   it('prunes expired requests on every create', async () => {

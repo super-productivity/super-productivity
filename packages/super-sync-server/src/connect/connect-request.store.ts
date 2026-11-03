@@ -94,6 +94,12 @@ export const getPendingConnectRequest = async (
     : null;
 };
 
+/** The id while its request can still be approved, so emails never link a dead one. */
+export const pendingConnectRequestId = async (
+  requestId: string | undefined,
+): Promise<string | undefined> =>
+  requestId && (await getPendingConnectRequest(requestId)) ? requestId : undefined;
+
 /** Verified user's token version, locked against a concurrent sign-out. */
 const lockVerifiedUser = async (
   tx: Tx,
