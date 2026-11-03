@@ -8,12 +8,30 @@
   "icon": "icon.svg",
   "iFrame": false,
   "permissions": ["oauth", "http"],
+  "dataSharing": [
+    {
+      "recipient": "Google Calendar",
+      "hosts": ["www.googleapis.com", "oauth2.googleapis.com", "accounts.google.com"],
+      "data": [
+        "credentials",
+        "taskTitles",
+        "taskNotes",
+        "taskSchedule",
+        "taskStatus",
+        "ids"
+      ],
+      "privacyPolicyUrl": "https://policies.google.com/privacy"
+    }
+  ],
   "hooks": [],
   "issueProvider": {
     "pollIntervalMs": 60000,
     "icon": "calendar",
     "humanReadableName": "Google Calendar",
-    "issueStrings": { "singular": "Event", "plural": "Events" },
+    "issueStrings": {
+      "singular": "Event",
+      "plural": "Events"
+    },
     "useAgendaView": true,
     "defaultAutoAddToBacklog": false
   }

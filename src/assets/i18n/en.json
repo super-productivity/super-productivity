@@ -3531,7 +3531,27 @@
     "CAN_RUN_SYSTEM_COMMANDS": "Run system commands and access your files (desktop app only)",
     "CAN_REQUEST_HOSTS": "Send plugin API requests to {{hosts}}",
     "CAN_DELETE_PROJECTS": "Delete projects through the plugin API",
-    "OTHER_PERMISSIONS": "Other declared permissions"
+    "OTHER_PERMISSIONS": "Other declared permissions",
+    "DATA_SHARING": {
+      "TITLE": "Data this plugin sends off your device",
+      "TITLE_CHANGED": "Data this plugin sends off your device (changed in this version)",
+      "NONE": "Sends no data off your device.",
+      "NOT_DECLARED": "This plugin doesn't say what data it sends.",
+      "DECLARED_BY_AUTHOR": "Declared by the plugin's author; Super Productivity can't check it.",
+      "USER_SERVER": "{{recipient}} (the server you enter, under its operator's terms)",
+      "ONLY_IF_TURNED_ON": "Only if you turn it on: {{data}}",
+      "PRIVACY_POLICY": "Privacy policy",
+      "CREDENTIALS": "your sign-in",
+      "USER_TEXT": "whatever you type for it",
+      "TASK_TITLES": "task titles",
+      "TASK_NOTES": "task notes",
+      "TASK_SCHEDULE": "due dates, estimates and free time",
+      "TASK_STATUS": "done state",
+      "TIME_TRACKED": "time tracked and worklog comments",
+      "PROJECT_AND_TAG_NAMES": "project and tag names",
+      "IDS": "task, project or tag ids",
+      "OTHER": "other data (update the app for details)"
+    }
   },
   "PM": {
     "ALL_TASKS_TITLE": "Metrics (all tasks)",

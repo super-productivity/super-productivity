@@ -8,12 +8,29 @@
   "icon": "icon.svg",
   "iFrame": false,
   "permissions": ["http"],
+  "dataSharing": [
+    {
+      "recipient": "CalDAV",
+      "userServer": true,
+      "data": [
+        "credentials",
+        "taskTitles",
+        "taskNotes",
+        "taskSchedule",
+        "taskStatus",
+        "ids"
+      ]
+    }
+  ],
   "hooks": [],
   "issueProvider": {
     "pollIntervalMs": 60000,
     "icon": "calendar",
     "humanReadableName": "CalDAV Events",
-    "issueStrings": { "singular": "Event", "plural": "Events" },
+    "issueStrings": {
+      "singular": "Event",
+      "plural": "Events"
+    },
     "useAgendaView": true,
     "defaultAutoAddToBacklog": false,
     "allowPrivateNetwork": true

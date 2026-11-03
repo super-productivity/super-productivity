@@ -11,6 +11,8 @@ import { IssueProvider, IssueProviderKey } from '../issue.model';
 import { PluginIssueProviderRegistryService } from '../../../plugins/issue-provider/plugin-issue-provider-registry.service';
 import { RegisteredPluginIssueProvider } from '../../../plugins/issue-provider/plugin-issue-provider.model';
 import { PluginBridgeService } from '../../../plugins/plugin-bridge.service';
+import { PluginService } from '../../../plugins/plugin.service';
+import { TranslateService } from '@ngx-translate/core';
 import { PluginHttpService } from '../../../plugins/issue-provider/plugin-http.service';
 import { IssueService } from '../issue.service';
 import { SnackService } from '../../../core/snack/snack.service';
@@ -169,6 +171,8 @@ describe('DialogEditIssueProviderComponent', () => {
         { provide: MAT_DIALOG_DATA, useValue: data },
         { provide: PluginIssueProviderRegistryService, useValue: pluginRegistry },
         { provide: PluginBridgeService, useValue: pluginBridge },
+        { provide: PluginService, useValue: { pluginStates: () => new Map() } },
+        { provide: TranslateService, useValue: { instant: (key: string) => key } },
         PluginOAuthBridgeService,
         PluginOAuthService,
         { provide: HttpClient, useValue: jasmine.createSpyObj('HttpClient', ['post']) },

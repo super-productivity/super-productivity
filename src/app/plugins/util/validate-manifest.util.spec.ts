@@ -104,6 +104,59 @@ describe('validatePluginManifest', () => {
     });
   });
 
+  describe('dataSharing', () => {
+    const dest = {
+      recipient: 'Example',
+      hosts: ['api.example.com'],
+      data: ['taskTitles'],
+    };
+    const validate = (
+      extra: Record<string, unknown>,
+    ): ReturnType<typeof validatePluginManifest> =>
+      validatePluginManifest({ ...baseManifest, ...extra } as PluginManifest);
+
+    it('accepts absent and []', () => {
+      expect(validate({}).isValid).toBeTrue();
+      expect(validate({ dataSharing: [] }).isValid).toBeTrue();
+    });
+
+    it('still accepts allowedHosts without dataSharing', () => {
+      expect(validate({ allowedHosts: ['api.example.com'] }).isValid).toBeTrue();
+    });
+
+    it('rejects allowedHosts missing from the declared hosts', () => {
+      expect(
+        validate({ dataSharing: [], allowedHosts: ['api.example.com'] }).isValid,
+      ).toBeFalse();
+      expect(
+        validate({ dataSharing: [dest], allowedHosts: ['api.example.com'] }).isValid,
+      ).toBeTrue();
+    });
+
+    it('warns on unknown data values instead of rejecting', () => {
+      const result = validate({ dataSharing: [{ ...dest, data: ['futureThing'] }] });
+      expect(result.isValid).toBeTrue();
+      expect(result.warnings.join()).toContain('futureThing');
+    });
+
+    it('rejects bad shapes, hosts and privacy links', () => {
+      expect(validate({ dataSharing: {} }).isValid).toBeFalse();
+      expect(validate({ dataSharing: [{ recipient: 'X' }] }).isValid).toBeFalse();
+      expect(
+        validate({ dataSharing: [{ ...dest, hosts: ['https://api.example.com'] }] })
+          .isValid,
+      ).toBeFalse();
+      expect(
+        validate({ dataSharing: [{ ...dest, privacyPolicyUrl: 'javascript:alert(1)' }] })
+          .isValid,
+      ).toBeFalse();
+      expect(
+        validate({ dataSharing: [{ ...dest, privacyPolicyUrl: 'https://example.com' }] })
+          .isValid,
+      ).toBeTrue();
+    });
+  });
+
   describe('i18n.languages', () => {
     it('warns about unsupported codes without rejecting the manifest', () => {
       const result = validatePluginManifest({

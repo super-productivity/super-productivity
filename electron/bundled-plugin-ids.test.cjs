@@ -173,3 +173,32 @@ test('every BUNDLED_PLUGIN_PATHS plugin has a package.json so release builds inc
       'packages/build-packages.js skips them, so release builds would ship without the plugin.',
   );
 });
+
+// The setup dialog, install confirmation and plugin card show a bundled plugin's
+// dataSharing; a bundled plugin without one would silently show nothing.
+test('every bundled plugin declares dataSharing in its manifest', () => {
+  const source = fs.readFileSync(BUNDLED_PLUGINS_CONST_PATH, 'utf8');
+  const bundledPaths = extractStringLiteralList(source, 'BUNDLED_PLUGIN_PATHS = [', ']');
+  assert.ok(bundledPaths.length > 0, 'Parsed zero entries from BUNDLED_PLUGIN_PATHS.');
+  // Discover-only plugin loaded beside BUNDLED_PLUGIN_PATHS in plugin.service.ts.
+  const dirNames = [
+    ...bundledPaths.map((assetPath) => assetPath.split('/').pop()),
+    'ai-productivity-prompts',
+  ];
+
+  const missing = dirNames.filter((dirName) => {
+    const manifestPath = findManifestPath(dirName);
+    if (!manifestPath) {
+      return true;
+    }
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+    return !Array.isArray(manifest.dataSharing);
+  });
+
+  assert.deepEqual(
+    missing,
+    [],
+    `Bundled plugin(s) without a dataSharing array in manifest.json: ${missing.join(', ')}. ` +
+      'Declare what they send off the device, or [] if nothing.',
+  );
+});

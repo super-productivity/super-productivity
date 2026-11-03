@@ -225,6 +225,29 @@ describe('PluginManagementComponent', () => {
     expect(component.isUploading()).toBe(false);
   });
 
+  it('shows the declared data sharing in the confirmation before installing', async () => {
+    const manifest = {
+      id: 'zipped',
+      dataSharing: [{ recipient: 'Example Cloud', data: ['taskTitles'] }],
+    };
+    const input = document.createElement('input');
+    const file = new File(
+      // eslint-disable-next-line @typescript-eslint/naming-convention
+      [zipSync({ 'manifest.json': strToU8(JSON.stringify(manifest)) })],
+      'plugin.zip',
+    );
+    Object.defineProperty(input, 'files', { value: [file] });
+    const openSpy = stubConfirmDialog(undefined);
+
+    await component.onFileSelected({ target: input } as unknown as Event);
+
+    const message: string = openSpy.calls.mostRecent().args[1].data.message;
+    expect(message).toContain('<strong>Example Cloud</strong>');
+    expect(message).toContain(T.PLUGINS.DATA_SHARING.TASK_TITLES);
+    expect(message).toContain(T.PLUGINS.DATA_SHARING.DECLARED_BY_AUTHOR);
+    expect(loadPluginFromZipSpy).not.toHaveBeenCalled();
+  });
+
   const baseManifest: PluginManifest = {
     id: 'github-issue-provider',
     name: 'GitHub Issues',
@@ -621,13 +644,14 @@ describe('PluginManagementComponent', () => {
       expect(component.isUploading()).toBe(false);
     });
 
-    it('downloads nothing when the risk warning is cancelled', async () => {
+    // Downloaded first so the warning can show the plugin's dataSharing declaration.
+    it('installs nothing when the risk warning is cancelled', async () => {
       stubConfirmDialog(undefined);
 
       await component.installCommunityPlugin(listed);
 
-      expect(fetchSpy).not.toHaveBeenCalled();
       expect(loadPluginFromZipSpy).not.toHaveBeenCalled();
+      expect(component.isUploading()).toBe(false);
     });
 
     it('installs nothing and says so when the download does not match the hash', async () => {

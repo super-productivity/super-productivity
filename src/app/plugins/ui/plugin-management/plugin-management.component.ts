@@ -8,7 +8,7 @@ import {
 import { toSignal } from '@angular/core/rxjs-interop';
 import { map } from 'rxjs/operators';
 import { PluginService } from '../../plugin.service';
-import { PluginInstance } from '../../plugin-api.model';
+import { PluginInstance, PluginManifest } from '../../plugin-api.model';
 import { PluginMetaPersistenceService } from '../../plugin-meta-persistence.service';
 import { PluginCacheService } from '../../plugin-cache.service';
 import { PluginConfigService } from '../../plugin-config.service';
@@ -49,7 +49,15 @@ import { selectAll as selectAllIssueProviders } from '../../../features/issue/st
 import { LayoutService } from '../../../core-ui/layout/layout.service';
 import COMMUNITY_PLUGINS_DATA from '../../../../assets/community-plugins.json';
 import { PluginApiAccess, PluginSecurityService } from '../../plugin-security';
-import { DEV_ONLY_BUNDLED_PLUGIN_IDS } from '../../bundled-plugins.const';
+import {
+  BUNDLED_PLUGIN_IDS,
+  DEV_ONLY_BUNDLED_PLUGIN_IDS,
+} from '../../bundled-plugins.const';
+import {
+  isDataSharingChanged,
+  renderDataSharingHtml,
+} from '../../util/plugin-data-sharing.util';
+import { readZipManifest } from '../../util/read-zip-manifest.util';
 import { environment } from '../../../../environments/environment';
 import { Capacitor } from '@capacitor/core';
 import {
@@ -400,7 +408,7 @@ export class PluginManagementComponent {
     }
 
     this.uploadError.set(null);
-    if (!(await this._confirmInstall())) {
+    if (!(await this._confirmInstall(file))) {
       input.value = '';
       return;
     }
@@ -443,14 +451,14 @@ export class PluginManagementComponent {
     if (!id || !release || this.isUploading()) {
       return;
     }
-    // Re-checked: another install may have started while the dialog was open.
-    if (!(await this._confirmInstall()) || this.isUploading()) {
-      return;
-    }
-
     this.isUploading.set(true);
     try {
+      // Downloaded before confirming, so the confirmation can show what the plugin
+      // declares it sends. Nothing runs until the user confirms.
       const file = await downloadVerifiedCommunityPlugin(id, release);
+      if (!(await this._confirmInstall(file))) {
+        return;
+      }
       const installed = await this._pluginService.loadPluginFromZip(file);
       if (!installed.error) {
         this._snackService.open({
@@ -562,8 +570,9 @@ export class PluginManagementComponent {
   /** Resolves true only for the OK button; Cancel, Esc and backdrop resolve false. */
   // Uploaded code is unreviewed, so the full risk list is shown here, right before it
   // is installed, instead of above every plugin on the page.
-  private async _confirmInstall(): Promise<boolean> {
+  private async _confirmInstall(file: Blob): Promise<boolean> {
     const t = (key: string): string => escapeHtml(this._translateService.instant(key));
+    const manifest = await readZipManifest(file);
     const risks = [
       T.PLUGINS.RISK_DATA_ACCESS,
       T.PLUGINS.RISK_MALICIOUS_CODE,
@@ -573,7 +582,8 @@ export class PluginManagementComponent {
     const message =
       `<p>${t(T.PLUGINS.SECURITY_WARNING)}</p>` +
       `<ul>${risks.map((risk) => `<li>${t(risk)}</li>`).join('')}</ul>` +
-      `<p>${t(T.PLUGINS.RECOMMENDATION)}</p>`;
+      `<p>${t(T.PLUGINS.RECOMMENDATION)}</p>` +
+      (manifest ? this._dataSharingHtml(manifest) : '');
     const result = await firstValueFrom(
       this._dialog
         .open(DialogConfirmComponent, {
@@ -646,6 +656,27 @@ export class PluginManagementComponent {
    */
   getApiAccess(plugin: PluginInstance): PluginApiAccess[] {
     return this._pluginSecurity.getDeclaredApiAccess(plugin.manifest);
+  }
+
+  /** What the plugin declares it sends off the device, for its card Details. */
+  getDataSharingHtml(plugin: PluginInstance): string {
+    return renderDataSharingHtml(
+      plugin.manifest,
+      { isBundled: BUNDLED_PLUGIN_IDS.has(plugin.manifest.id) },
+      (key, params) => this._translateService.instant(key, params),
+    );
+  }
+
+  private _dataSharingHtml(manifest: PluginManifest): string {
+    const installed = this._pluginService.pluginStates().get(manifest.id)?.manifest;
+    return renderDataSharingHtml(
+      manifest,
+      {
+        isBundled: false,
+        isChanged: isDataSharingChanged(installed, manifest),
+      },
+      (key, params) => this._translateService.instant(key, params),
+    );
   }
 
   /** Declared permissions not described by getApiAccess (nothing checks them). */

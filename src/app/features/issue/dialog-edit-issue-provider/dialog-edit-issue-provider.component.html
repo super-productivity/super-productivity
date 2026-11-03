@@ -252,6 +252,9 @@
         }
       }
     }
+    @if (dataSharingHtml) {
+      <div [innerHTML]="dataSharingHtml"></div>
+    }
   </mat-dialog-content>
 
   <mat-dialog-actions align="end">

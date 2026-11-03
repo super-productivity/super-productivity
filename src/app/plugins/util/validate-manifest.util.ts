@@ -1,7 +1,9 @@
 import { PluginManifest } from '../plugin-api.model';
+import type { PluginDataDestination } from '@super-productivity/plugin-api';
 import { SUPPORTED_LANGUAGE_CODES } from '../../core/locale.constants';
 import { environment } from '../../../environments/environment';
 import { compareVersions } from './community-plugin.util';
+import { KNOWN_SHARED_DATA } from './plugin-data-sharing.util';
 
 const MAX_REPORTED_INVALID_LANGUAGES = 10;
 const MAX_REPORTED_LANGUAGE_LENGTH = 20;
@@ -68,6 +70,10 @@ export const validatePluginManifest = (
     }
   }
 
+  if (manifest?.dataSharing !== undefined) {
+    validateDataSharing(manifest, errors, warnings);
+  }
+
   // Validate i18n configuration if present
   if (manifest?.i18n) {
     if (!Array.isArray(manifest.i18n.languages)) {
@@ -112,6 +118,67 @@ export const validatePluginManifest = (
     errors,
     warnings,
   };
+};
+
+const isHostname = (h: unknown): boolean =>
+  typeof h === 'string' && h.trim().length > 0 && !/[/:]/.test(h);
+
+const isStringArray = (v: unknown): v is string[] =>
+  Array.isArray(v) && v.every((s) => typeof s === 'string');
+
+const isValidDestination = (d: unknown): d is PluginDataDestination => {
+  if (typeof d !== 'object' || d === null) {
+    return false;
+  }
+  const dest = d as Record<string, unknown>;
+  return (
+    typeof dest.recipient === 'string' &&
+    dest.recipient.trim().length > 0 &&
+    isStringArray(dest.data) &&
+    (dest.optionalData === undefined || isStringArray(dest.optionalData)) &&
+    (dest.hosts === undefined ||
+      (Array.isArray(dest.hosts) && dest.hosts.every(isHostname))) &&
+    (dest.userServer === undefined || typeof dest.userServer === 'boolean') &&
+    (dest.privacyPolicyUrl === undefined ||
+      (typeof dest.privacyPolicyUrl === 'string' &&
+        dest.privacyPolicyUrl.startsWith('https://')))
+  );
+};
+
+/**
+ * Wrong shapes are errors; unknown data values only warn, so a plugin built for a newer
+ * app still installs on an older one (they render as "other data").
+ */
+const validateDataSharing = (
+  manifest: PluginManifest,
+  errors: string[],
+  warnings: string[],
+): void => {
+  const destinations: unknown = manifest.dataSharing;
+  if (!Array.isArray(destinations) || !destinations.every(isValidDestination)) {
+    errors.push(
+      'dataSharing must be an array of { recipient, data[], optionalData?[], hosts?[], userServer?, privacyPolicyUrl? (https) }',
+    );
+    return;
+  }
+  const declaredHosts = new Set(destinations.flatMap((d) => d.hosts ?? []));
+  const undeclared = (manifest.allowedHosts ?? []).filter((h) => !declaredHosts.has(h));
+  if (undeclared.length > 0) {
+    errors.push(
+      `allowedHosts must also appear in dataSharing hosts: ${undeclared.slice(0, 10).join(', ')}`,
+    );
+  }
+  const unknown = destinations
+    .flatMap((d) => [...d.data, ...(d.optionalData ?? [])])
+    .filter((v) => !KNOWN_SHARED_DATA.has(v));
+  if (unknown.length > 0) {
+    warnings.push(
+      `Unknown dataSharing values: ${unknown
+        .slice(0, MAX_REPORTED_INVALID_LANGUAGES)
+        .map((v) => v.slice(0, MAX_REPORTED_LANGUAGE_LENGTH))
+        .join(', ')} - shown as "other data"`,
+    );
+  }
 };
 
 /**
