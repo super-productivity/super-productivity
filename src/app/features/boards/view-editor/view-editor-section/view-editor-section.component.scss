@@ -72,6 +72,21 @@
   }
 }
 
+// A finger needs more than the 18px glyph, which on phones also sits at the
+// screen's edge: a press beside it landed on the card and scrolled the list
+// instead. On touch the handle is a finger-wide strip down the whole card,
+// the glyph still level with the bar.
+.drag-handle:not(.is-placeholder) {
+  @include touchPrimaryDevice {
+    grid-row: span 2;
+    align-self: stretch;
+    box-sizing: content-box;
+    height: auto;
+    min-height: 18px;
+    padding: calc((var(--s6) - 18px) / 2) 11px 0;
+  }
+}
+
 :host(.cdk-drag-preview) .drag-handle {
   opacity: 1;
 }
