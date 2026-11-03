@@ -386,5 +386,9 @@ export class PluginIndexComponent implements OnInit, OnDestroy {
     if (this.iframeRef?.nativeElement && this.pluginId()) {
       this._cleanupService.registerIframe(this.pluginId(), this.iframeRef.nativeElement);
     }
+    // A theme switch before load reached the initial about:blank document
+    if (this.iframeRef?.nativeElement) {
+      refreshPluginTheme(this.iframeRef.nativeElement);
+    }
   }
 }

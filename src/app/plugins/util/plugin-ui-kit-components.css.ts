@@ -189,6 +189,7 @@ export const PLUGIN_UI_KIT_COMPONENTS_CSS = `
     font-style: normal;
     font-weight: normal;
     font-feature-settings: 'liga';
+    font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
     line-height: 1;
     letter-spacing: normal;
     text-transform: none;

@@ -97,6 +97,24 @@ describe('PluginIndexComponent', () => {
     expect(component.isLoading()).toBe(false);
   });
 
+  // A theme switch between building srcdoc and its load hits about:blank, so
+  // the load itself must re-copy the tokens.
+  it('re-copies the theme tokens when the plugin iframe loads', async () => {
+    await setup();
+    const iframe = getIframe();
+    const getThemeStyle = (): HTMLElement | null | undefined =>
+      iframe.contentDocument?.getElementById('injected-theme-vars');
+    const start = Date.now();
+    while (!getThemeStyle() && Date.now() - start < 2000) {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+    getThemeStyle()!.textContent = 'stale';
+
+    component.onIframeLoad();
+
+    expect(getThemeStyle()!.textContent).toContain(':root');
+  });
+
   // Enabling a plugin flips isEnabled before its assets are fetched; opening the
   // plugin in that window used to fail with "Plugin index.html not loaded".
   it('waits for an in-flight activation before reading index.html', async () => {
