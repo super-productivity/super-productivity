@@ -102,6 +102,12 @@
               <td>{{ getPluginLanguages(plugin) }}</td>
             </tr>
           </table>
+          @if (getDataSharingHtml(plugin); as dataSharingHtml) {
+            <div
+              class="plugin-info-section"
+              [innerHTML]="dataSharingHtml"
+            ></div>
+          }
           @if (getApiAccess(plugin); as apiAccess) {
             @if (apiAccess.length > 0) {
               <div class="plugin-info-section">

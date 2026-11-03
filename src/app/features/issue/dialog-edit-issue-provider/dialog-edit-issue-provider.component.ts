@@ -60,6 +60,10 @@ import { IS_ANDROID_WEB_VIEW } from '../../../util/is-android-web-view';
 import { IssueLog } from '../../../core/log';
 import { PluginIssueProviderRegistryService } from '../../../plugins/issue-provider/plugin-issue-provider-registry.service';
 import { PluginBridgeService } from '../../../plugins/plugin-bridge.service';
+import { PluginService } from '../../../plugins/plugin.service';
+import { BUNDLED_PLUGIN_IDS } from '../../../plugins/bundled-plugins.const';
+import { renderDataSharingHtml } from '../../../plugins/util/plugin-data-sharing.util';
+import { TranslateService } from '@ngx-translate/core';
 import { PluginHttpService } from '../../../plugins/issue-provider/plugin-http.service';
 import { OAuthFlowConfig, PluginSyncDirection } from '@super-productivity/plugin-api';
 import { applyPluginOAuthOverrides } from './plugin-oauth-config-overrides.util';
@@ -133,6 +137,10 @@ export class DialogEditIssueProviderComponent {
     this.d.issueProviderKey) as IssueProviderKey;
   issueProvider?: IssueProvider = this.d.issueProvider;
   isEdit: boolean = !!this.issueProvider && !this.d.isDuplicate;
+  private _pluginService = inject(PluginService);
+  private _translateService = inject(TranslateService);
+  // Shown when the user connects an account: that is the moment they agree to send it data.
+  readonly dataSharingHtml: string = this.isEdit ? '' : this._getDataSharingHtml();
 
   model: Partial<IssueProvider> = this.isEdit
     ? this._migratePluginConfigForEdit({ ...this.issueProvider })
@@ -932,6 +940,20 @@ export class DialogEditIssueProviderComponent {
 
   async loadDynamicOptions(): Promise<void> {
     await this._loadAndSetDynamicOptionsState();
+  }
+
+  private _getDataSharingHtml(): string {
+    const pluginId = this._pluginRegistry.getProvider(this.issueProviderKey)?.pluginId;
+    const manifest =
+      pluginId && this._pluginService.pluginStates().get(pluginId)?.manifest;
+    if (!manifest) {
+      return '';
+    }
+    return renderDataSharingHtml(
+      manifest,
+      { isBundled: BUNDLED_PLUGIN_IDS.has(manifest.id) },
+      (key, params) => this._translateService.instant(key, params),
+    );
   }
 }
 

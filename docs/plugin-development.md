@@ -142,6 +142,38 @@ Of the declared permissions, the app checks only `nodeExecution`, `http`
 together with `allowedHosts`, and `deleteProject`. The rest are shown in the
 plugin's details but not enforced; see [Security Considerations](#security-considerations).
 
+### Declaring what your plugin sends (dataSharing)
+
+`dataSharing` lists every place your plugin sends data off the device. The app
+shows it when someone connects an issue provider, in the install and update
+confirmation, and in the plugin's details. Use `[]` if the plugin sends
+nothing. Without the field, users see "This plugin doesn't say what data it sends."
+The app shows what you declare and does not verify it.
+
+```json
+"allowedHosts": ["api.example.com"],
+"dataSharing": [
+  {
+    "recipient": "Example",
+    "hosts": ["api.example.com"],
+    "data": ["credentials", "taskTitles"],
+    "optionalData": ["taskNotes"],
+    "privacyPolicyUrl": "https://example.com/privacy"
+  }
+]
+```
+
+- `data` / `optionalData`: `credentials`, `userText`, `taskTitles`,
+  `taskNotes`, `taskSchedule`, `taskStatus`, `timeTracked`,
+  `projectAndTagNames`, `ids`. `optionalData` is sent only after the user
+  turns a setting on. Unknown values install with a warning and show as
+  "other data".
+- `userServer: true` when the user enters the server address (self-hosted
+  instances, webhooks).
+- `privacyPolicyUrl` must use `https://`.
+- If `dataSharing` is present, every `allowedHosts` entry must appear in some
+  destination's `hosts`.
+
 ### Complete Manifest Example
 
 ```json
