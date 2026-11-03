@@ -7,6 +7,7 @@ import {
 } from '@playwright/test';
 import { expect } from '@playwright/test';
 import { waitForAppReady } from './waits';
+import { recordSyncAudit } from './sync-audit';
 import type { SyncPage } from '../pages/sync.page';
 import {
   attachPageErrorCollector,
@@ -336,7 +337,15 @@ export const waitForSyncComplete = async (
     throw new Error(`Sync failed with error: ${state.message}`);
   }
   if (state.kind === 'conflict') {
+    recordSyncAudit('webdav:conflict-returned');
     return 'conflict';
+  }
+
+  if (allowResponseOnlyCompletion) {
+    const confirmed = await syncPage.syncConfirmedIcon.isVisible().catch(() => false);
+    if (!confirmed) {
+      recordSyncAudit('webdav:response-only-completion');
+    }
   }
 
   return 'success';

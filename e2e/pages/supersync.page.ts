@@ -13,6 +13,7 @@ import {
   passSyncSignInDialog,
 } from '../utils/sync-helpers';
 import { cssSelectors } from '../constants/selectors';
+import { recordSyncAudit } from '../utils/sync-audit';
 
 export interface SuperSyncConfig {
   baseUrl: string;
@@ -365,6 +366,20 @@ export class SuperSyncPage extends BasePage {
     try {
       await this._setupSuperSync(config);
       this._throwIfUnexpectedNativeDialog();
+      if (config.waitForInitialSync !== false) {
+        // Measurement only: setup ends on the 'uploaded' marker, which ignores
+        // the spinner and the error state. Record setups that end anywhere
+        // other than a confirmed, idle, error-free, fully uploaded state.
+        const snapshot = await this._getSyncCompletionSnapshot();
+        if (
+          snapshot.errorVisible ||
+          snapshot.spinnerVisible ||
+          !snapshot.checkVisible ||
+          snapshot.unsyncedCount !== 0
+        ) {
+          recordSyncAudit('setup:initial-sync-unwitnessed', JSON.stringify(snapshot));
+        }
+      }
     } finally {
       this.page.off('dialog', setupDialogHandler);
     }
@@ -1803,6 +1818,7 @@ export class SuperSyncPage extends BasePage {
       console.log(
         `[${context}] Expected native sync confirmation: "${message.substring(0, 80)}..."`,
       );
+      recordSyncAudit('auto-answer:native-confirm', `${context} ${intent}`);
       try {
         await dialog.accept();
       } catch {
@@ -1997,6 +2013,7 @@ export class SuperSyncPage extends BasePage {
     // 1. Fresh client confirmation dialog (Angular Material)
     if (await this.freshClientDialog.isVisible().catch(() => false)) {
       console.log('[syncAndWait] Fresh client dialog detected, confirming...');
+      recordSyncAudit('auto-answer:fresh-client');
       await this.freshClientConfirmBtn.click();
       await this.freshClientDialog.waitFor({ state: 'hidden', timeout: 5000 });
       return true;
@@ -2024,6 +2041,7 @@ export class SuperSyncPage extends BasePage {
       console.log(
         `[syncAndWait] Sync import conflict detected, using ${useLocal ? 'local' : 'remote'} data...`,
       );
+      recordSyncAudit('auto-answer:sync-import', useLocal ? 'local' : 'remote');
       await this._chooseSyncImportResolution(useLocal ? 'local' : 'remote', 10000);
       return true;
     }
@@ -2033,6 +2051,7 @@ export class SuperSyncPage extends BasePage {
     const enterPasswordDialog = this.page.locator('dialog-enter-encryption-password');
     if (await enterPasswordDialog.isVisible().catch(() => false)) {
       console.log('[syncAndWait] Enter-password dialog detected, entering password');
+      recordSyncAudit('auto-answer:enter-password');
       const passwordInput = enterPasswordDialog.locator('input[type="password"]');
       await passwordInput.fill(this._encryptionPassword);
       const saveAndSyncBtn = enterPasswordDialog.locator(
@@ -2048,6 +2067,7 @@ export class SuperSyncPage extends BasePage {
     const enableEncryptionDialog = this.page.locator('dialog-enable-encryption');
     if (await enableEncryptionDialog.isVisible().catch(() => false)) {
       console.log('[syncAndWait] Enable-encryption dialog detected, setting password');
+      recordSyncAudit('auto-answer:enable-encryption');
       const topDialog = enableEncryptionDialog.last();
       await topDialog
         .locator('input[type="password"]')
@@ -2068,6 +2088,7 @@ export class SuperSyncPage extends BasePage {
       console.log(
         '[syncAndWait] Decryption Failed dialog detected, entering password to retry',
       );
+      recordSyncAudit('auto-answer:decrypt-error');
       const passwordInput = decryptErrorDialog.locator('input[type="password"]');
       await passwordInput.fill(this._encryptionPassword);
       const retryBtn = decryptErrorDialog.locator(

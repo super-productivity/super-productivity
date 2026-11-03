@@ -1,4 +1,5 @@
 import type { BrowserContext, Page } from '@playwright/test';
+import { recordSyncAudit } from './sync-audit';
 
 export type RuntimeBrowserError = {
   type: 'pageerror';
@@ -62,6 +63,9 @@ export const installDevErrorDialogHandler = (page: Page, label: string): void =>
     console.warn(
       `[${label}] Auto-dismissing devError dialog (${dialog.type()}): ${message}`,
     );
+    if (isDevErrorAlert) {
+      recordSyncAudit('dev-error-dismissed', message);
+    }
     try {
       await dialog.dismiss();
     } catch {
