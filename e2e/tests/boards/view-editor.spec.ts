@@ -312,10 +312,9 @@ test.describe('View editor', () => {
 
     // Opening one by keyboard keeps the other open and the focus on its chevron.
     const doneToggle = done.locator('.section-toggle');
-    // The dialog's own first focus first, or it takes the focus back.
-    await expect(
-      dialog.getByRole('button', { name: 'Rename', exact: true }),
-    ).toBeFocused();
+    // The dialog's own first focus (the dialog itself) first, or it takes
+    // the focus back.
+    await expect(page.locator('mat-dialog-container')).toBeFocused();
     await doneToggle.focus();
     await page.keyboard.press('Enter');
     await expect(doneToggle).toHaveAttribute('aria-expanded', 'true');

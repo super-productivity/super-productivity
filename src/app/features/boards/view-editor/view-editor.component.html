@@ -22,7 +22,10 @@
 
   <div class="form-row layout-row">
     <span class="form-label">{{ T.F.BOARDS.EDITOR.LAYOUT | translate }}</span>
-    <div class="layout-controls">
+    <div
+      class="layout-controls"
+      [@.disabled]="!isReady()"
+    >
       <mat-button-toggle-group
         class="layout-toggle"
         hideSingleSelectionIndicator
@@ -50,6 +53,7 @@
       @if (isBoard() && colsOptions().length > 1) {
         <mat-button-toggle-group
           class="cols-toggle"
+          @expandFadeFast
           hideSingleSelectionIndicator
           [attr.aria-label]="T.F.BOARDS.EDITOR.COLUMNS_PER_ROW | translate"
           [value]="model().cols"

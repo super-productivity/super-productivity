@@ -40,6 +40,7 @@ import { TaskCriteriaCtx } from '../../tasks/task-criteria/task-criteria.model';
 import { matchesTaskCriteria } from '../../tasks/task-criteria/task-criteria';
 import { Project } from '../../project/project.model';
 import { ViewEditorSectionComponent } from './view-editor-section/view-editor-section.component';
+import { expandFadeFastAnimation } from '../../../ui/animations/expand.ani';
 import { ViewEditorTitleComponent } from './view-editor-title/view-editor-title.component';
 import {
   isSectionTitleShown,
@@ -87,6 +88,8 @@ interface CachedCount {
   templateUrl: './view-editor.component.html',
   styleUrl: './view-editor.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  // The width picker comes and goes with the layout: the rows below slide.
+  animations: [expandFadeFastAnimation],
 })
 export class ViewEditorComponent {
   /** The stored board (a new one has an id and no panels). */
@@ -151,11 +154,15 @@ export class ViewEditorComponent {
     },
   });
   readonly isCollapsible = computed(() => this.model().panels.length > 1);
+  /** Set after the first render: the editor opens as it is, then animates. */
+  readonly isReady = signal(false);
+
   constructor() {
     // A column's title asked for its card: it can sit below the fold, behind
     // the collapsed cards before it. The first focus on its toggle
     // (`isFocusInitial`) would only bring the toggle itself into view.
     afterNextRender(() => {
+      this.isReady.set(true);
       const id = this.initialOpenPanelId();
       const index = this.model().panels.findIndex((panel) => panel.id === id);
       if (index > 0) {
