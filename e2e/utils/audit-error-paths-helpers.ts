@@ -148,6 +148,12 @@ export const readLocalOpEntries = async (
     }
   }, payloadNeedle);
 
+/** Full-state ops (SYNC_IMPORT, BACKUP_IMPORT, REPAIR) in the local op log. */
+export const countLocalFullStateOps = async (page: Page): Promise<number> =>
+  (await readLocalOpEntries(page)).filter((op) =>
+    ['SYNC_IMPORT', 'BACKUP_IMPORT', 'REPAIR'].includes(op.opType),
+  ).length;
+
 export interface TaskSummary {
   id: string;
   title: string;

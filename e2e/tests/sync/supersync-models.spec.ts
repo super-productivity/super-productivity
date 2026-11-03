@@ -11,14 +11,9 @@ import {
 } from '../../utils/supersync-helpers';
 import { ProjectPage } from '../../pages/project.page';
 import {
+  countLocalFullStateOps as countFullStateOps,
   getStoreSummary,
-  readLocalOpEntries,
 } from '../../utils/audit-error-paths-helpers';
-
-const countFullStateOps = async (page: Page): Promise<number> =>
-  (await readLocalOpEntries(page)).filter((op) =>
-    ['SYNC_IMPORT', 'BACKUP_IMPORT', 'REPAIR'].includes(op.opType),
-  ).length;
 
 /**
  * The tag is gone from the store and no task still references it. Chip text

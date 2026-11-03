@@ -12,12 +12,7 @@ import { WorkViewPage } from '../../pages/work-view.page';
 import { waitForAppReady } from '../../utils/waits';
 import { ImportPage } from '../../pages/import.page';
 import type { BrowserContext, Page } from '@playwright/test';
-import { readLocalOpEntries } from '../../utils/audit-error-paths-helpers';
-
-const countFullStateOps = async (page: Page): Promise<number> =>
-  (await readLocalOpEntries(page)).filter((op) =>
-    ['SYNC_IMPORT', 'BACKUP_IMPORT', 'REPAIR'].includes(op.opType),
-  ).length;
+import { countLocalFullStateOps as countFullStateOps } from '../../utils/audit-error-paths-helpers';
 
 const UPLOAD_LOCK_NAME = 'sp_op_log_upload';
 

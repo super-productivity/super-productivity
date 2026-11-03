@@ -223,8 +223,8 @@ const expectProjectAndTasksDeleted = async (
   // The UI check above covers visible lists; the store check catches unscheduled
   // orphan entities that would otherwise be invisible after their project is removed.
   await expect.poll(() => getExistingTaskTitles(page, taskNames)).toEqual([]);
-  // A hidden or archived project would also be missing from the menu: the
-  // entity itself must be gone.
+  // An archived project would also be missing from the menu: the entity
+  // itself must be gone.
   await expect
     .poll(async () =>
       (await getStoreSummary(page)).projects.filter((p) => p.title === projectName),

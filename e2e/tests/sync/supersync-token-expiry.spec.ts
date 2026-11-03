@@ -109,8 +109,8 @@ test.describe('@supersync Token Expiry Recovery', () => {
       await clientA.sync.clickSyncBtn();
 
       // Verify the 401 interception actually fired, and was surfaced
-      expect(state.return401).toBe(false);
       await expectTokenRejectedError(clientA);
+      expect(state.return401).toBe(false);
 
       // Remove interception
       await clientA.page.unroute('**/api/sync/ops*');
@@ -203,8 +203,8 @@ test.describe('@supersync Token Expiry Recovery', () => {
       await clientB.sync.clickSyncBtn();
 
       // Verify the 401 interception actually fired, and was surfaced
-      expect(state.return401).toBe(false);
       await expectTokenRejectedError(clientB);
+      expect(state.return401).toBe(false);
 
       // Remove interception
       await clientB.page.unroute('**/api/sync/ops*');

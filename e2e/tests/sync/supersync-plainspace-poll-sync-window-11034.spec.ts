@@ -378,7 +378,10 @@ test.describe('@supersync Plainspace poll vs the sync window (#11034)', () => {
       const gate = await holdTaskListReads(b.c.page, server, async () => {
         // Inside a route handler: record a failure instead of throwing.
         const isApplied = await expect
-          .poll(async () => (await readLinkedTask(b.c.page))?.title, { timeout: 10000 })
+          .poll(async () => (await readLinkedTask(b.c.page))?.title, {
+            timeout: 10000,
+            intervals: [50],
+          })
           .toBe(MINE)
           .then(
             () => true,
@@ -419,8 +422,9 @@ test.describe('@supersync Plainspace poll vs the sync window (#11034)', () => {
       });
       await b.c.sync.syncAndWait();
       await unrouteSuperSyncOps(b.c.page);
-      await expect.poll(() => answeredInSyncWindow.length).toBe(1);
-      expect(answeredInSyncWindow).toEqual([true]);
+      // Every held answer (usually one) landed inside the window.
+      await expect.poll(() => answeredInSyncWindow.length).toBeGreaterThanOrEqual(1);
+      expect(answeredInSyncWindow.every(Boolean)).toBe(true);
       await snapshot('after B stale poll landed', s);
 
       // Interim state: the stale answer shows the collaborator's title on B

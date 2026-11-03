@@ -151,10 +151,13 @@ test.describe('@supersync Max Retry Rejection', () => {
         snackTexts.some((text) => text.includes(CONFLICT_RESOLUTION_FAILED_SNACK)),
         'the "conflict resolution failed" snack must have appeared',
       ).toBe(true);
+      // The newest op for taskName2 (merged ops replace their predecessors,
+      // which are rejected either way) must itself be rejected, not pending.
       const task2Ops = (await readLocalOpEntries(clientA.page, taskName2)).filter(
         (op) => op.payloadMatches,
       );
-      expect(task2Ops.some((op) => op.isRejected)).toBe(true);
+      expect(task2Ops.length).toBeGreaterThan(0);
+      expect(task2Ops[task2Ops.length - 1].isRejected).toBe(true);
 
       // After removing interception, sync should succeed
       // (rejected ops are skipped, no infinite loop)
