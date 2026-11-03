@@ -63,6 +63,7 @@ of those commands.
 [9. Built-in vs external assistants](#9-built-in-vs-external-assistants) ·
 [10. Evaluating quality without telemetry](#10-evaluating-quality-without-telemetry) ·
 [11. Phases](#11-phases) · [12. Risks and open questions](#12-risks-and-open-questions) ·
+[13. Legal and store compliance](#13-legal-and-store-compliance) ·
 [Review](#review)
 
 ## 1. Demand and fit
@@ -667,6 +668,39 @@ reordering Today, saved views, sending audio to a model.
   special case for this plugin id (§ 6.6), after Phase 1a.
 - Preview is optional (2026-11-03): opt-in auto-apply with compare-and-set
   undo in v1; deletes, project moves and large sets always previewed (§ 8.1).
+
+## 13. Legal and store compliance
+
+Not legal advice; items marked **check** need confirmation before
+publishing.
+
+- **License:** MIT, like the app; its "as is" clause covers warranty. No
+  EULA.
+- **Bring your own key keeps SP out of the data flow.** Requests go from the
+  device to the provider under the user's own contract; SP receives nothing,
+  so it is neither controller nor processor. A shared key, proxy or hosted
+  tier would change that and is out of scope. No sign-in with a consumer
+  Claude subscription; API keys only (**check** Anthropic's current terms).
+- **Disclosure:** the README's "does NOT collect any data" stays true, but
+  the website privacy policy and the plugin listing must say this plugin
+  sends the § 6.1 fields to the chosen provider, linking to the provider's
+  terms rather than restating them. A general solution for all plugins is
+  planned separately (`docs/plans/2026-11-03-plugin-data-disclosure.md`).
+- **Stores (Phase 2, check):** Apple 5.1.2(i) requires disclosure and
+  explicit permission before sharing personal data with third-party AI (the
+  notice and **Turn on** step). Whether in-app plugin installs on iOS fit
+  2.5.2, and whether App Privacy labels or Play Data safety change, are open.
+- **EU AI Act Art. 50** (from 2026-08-02, check): users must know they are
+  using AI; "AI" in the name and the notice cover it. Task titles restating
+  the user's words likely fall under the assistive-editing exception to
+  output marking.
+- **Mistakes:** the notice says "AI can misunderstand; check changes;
+  auto-apply applies them without asking". Costs are shown as estimates; the
+  user pays the provider.
+- **Trademarks:** "works with the Anthropic API" is descriptive; no "Claude"
+  in the plugin name, no Anthropic logo without their brand guidelines.
+- **Dictation:** audio goes to the OS vendor under their terms, never
+  through the plugin; the notice says so.
 
 ## Review
 
