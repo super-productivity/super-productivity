@@ -282,25 +282,22 @@
         <mat-icon>delete_forever</mat-icon>
         {{ T.G.DELETE | translate }}
       </button>
+    }
+    @if (isConnectionWorks()) {
+      <div class="success-info">
+        <mat-icon>check</mat-icon>
+      </div>
     } @else {
-      <!-- -->
-      @if (isConnectionWorks()) {
-        <div class="success-info">
-          <mat-icon>check</mat-icon>
-        </div>
-      } @else {
-        <button
-          (click)="testConnection()"
-          mat-button
-          color="primary"
-          type="button"
-          [disabled]="form.invalid"
-        >
-          <mat-icon>online_prediction</mat-icon>
-          {{ T.F.ISSUE.DIALOG.TEST_CONNECTION | translate }}
-        </button>
-      }
-      <!-- -->
+      <button
+        (click)="testConnection()"
+        mat-button
+        color="primary"
+        type="button"
+        [disabled]="form.invalid"
+      >
+        <mat-icon>online_prediction</mat-icon>
+        {{ T.F.ISSUE.DIALOG.TEST_CONNECTION | translate }}
+      </button>
     }
     <button
       color="primary"
