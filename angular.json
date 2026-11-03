@@ -52,8 +52,7 @@
               "stacktrace-gps",
               "error-stack-parser",
               "chrono-node",
-              "dayjs",
-              "query-string"
+              "dayjs"
             ],
             "externalDependencies": ["marked-katex-extension"]
           },

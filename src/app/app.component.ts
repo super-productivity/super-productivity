@@ -13,6 +13,8 @@ import {
   OnDestroy,
   signal,
   ViewChild,
+  afterRenderEffect,
+  viewChild,
 } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { ShortcutService } from './core-ui/shortcut/shortcut.service';
@@ -95,8 +97,12 @@ import { BrowserTitleService } from './core/browser-title/browser-title.service'
 import { ViewTaskListRegistry } from './features/tasks/view-task-list-registry.service';
 import { BoardsService } from './features/boards/boards.service';
 import { DIALOG_AUTO_FOCUS_TYPING } from './util/dialog-auto-focus';
-
-const ENTRANCE_ANIMATION_DURATION = 1500;
+import {
+  fadeOutBootSplash,
+  showShellUnderBootSplash,
+  whenAnimationsSettle,
+} from './core/startup/boot-splash';
+import { saveLaunchFrame } from './core/startup/launch-frame';
 
 interface BeforeInstallPromptEvent extends Event {
   prompt(): Promise<void>;
@@ -247,16 +253,33 @@ export class AppComponent implements OnDestroy, AfterViewInit {
 
   constructor() {
     this._startupService.init();
+    // Once the shell has rendered, uncover the phone bottom bar; once data is
+    // loaded too, fade the boot splash out, and end the entrance when its
+    // animation has played (at once if animations are off).
+    afterRenderEffect({
+      write: () => {
+        const mainContent = this._mainContent()?.nativeElement;
+        if (!mainContent) {
+          return;
+        }
+        const doc = this._document ?? undefined;
+        if (!this.isDataLoaded()) {
+          showShellUnderBootSplash(doc);
+          return;
+        }
+        fadeOutBootSplash(doc);
+        if (this.isAppEntrance() && !this._isEntranceEndScheduled) {
+          this._isEntranceEndScheduled = true;
+          void whenAnimationsSettle(mainContent).then(() => {
+            this.isAppEntrance.set(false);
+            this._saveLaunchFrame();
+          });
+        }
+      },
+    });
     this._iosShareService.start();
     this._agentCaptureService.start();
     void this._materialIconsLoaderService.ensureFontReady();
-
-    // Clear app entrance animation after it completes
-    if (this.isAppEntrance()) {
-      setTimeout(() => {
-        this.isAppEntrance.set(false);
-      }, ENTRANCE_ANIMATION_DURATION);
-    }
 
     // Use effect to react to language RTL changes
     effect(() => {
@@ -507,7 +530,18 @@ export class AppComponent implements OnDestroy, AfterViewInit {
     }
   }
 
-  isAppEntrance = signal(true);
+  /**
+   * The shell renders before data is loaded, so on phones the bottom bar shows
+   * early while the boot splash (index.html) still covers the content area; on
+   * desktop the splash covers the window until then. Once data is loaded, the content's CSS entrance plays while the splash fades out.
+   */
+  readonly isDataLoaded = toSignal(this._dataInitStateService.isAllDataLoadedInitially$, {
+    initialValue: false,
+  });
+  /** Cleared when the entrance ends, so rebuilding the shell (focus mode) does not replay it. */
+  readonly isAppEntrance = signal(true);
+  private _isEntranceEndScheduled = false;
+  private readonly _mainContent = viewChild<ElementRef<HTMLElement>>('mainContent');
 
   ngAfterViewInit(): void {
     this._ngZone.runOutsideAngular(() => {
@@ -533,16 +567,36 @@ export class AppComponent implements OnDestroy, AfterViewInit {
         });
       };
 
+      // Keep the launch screen's frame current: theme or layout changes made in
+      // this session show from the next launch on. Hidden covers mobile
+      // backgrounding, pagehide a closing window.
+      const onVisibilityChange = (): void => {
+        if (doc.visibilityState === 'hidden') {
+          this._saveLaunchFrame();
+        }
+      };
+      const onPageHide = (): void => this._saveLaunchFrame();
+
       doc.addEventListener('dragover', onDragOver, { passive: false });
       doc.addEventListener('drop', onDrop, { passive: false });
       doc.addEventListener('keydown', onKeyDown);
+      doc.addEventListener('visibilitychange', onVisibilityChange);
+      window.addEventListener('pagehide', onPageHide);
 
       this._destroyRef.onDestroy(() => {
         doc.removeEventListener('dragover', onDragOver);
         doc.removeEventListener('drop', onDrop);
         doc.removeEventListener('keydown', onKeyDown);
+        doc.removeEventListener('visibilitychange', onVisibilityChange);
+        window.removeEventListener('pagehide', onPageHide);
       });
     });
+  }
+
+  private _saveLaunchFrame(): void {
+    if (this._document) {
+      saveLaunchFrame(this._document, this._globalThemeService.isDarkTheme());
+    }
   }
 
   ngOnDestroy(): void {

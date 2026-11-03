@@ -44,7 +44,7 @@ test.describe('@supersync @import-conflict Sync Import Conflict Dialog', () => {
    * Verify:
    * - Dialog appears on Client B
    * - Dialog shows correct filtered op count
-   * - Dialog has all three buttons
+   * - Dialog offers both first-sync choices and Cancel (B never synced)
    */
   test('Dialog appears when all remote ops are filtered by local import', async ({
     browser,
@@ -109,20 +109,18 @@ test.describe('@supersync @import-conflict Sync Import Conflict Dialog', () => {
       await expect(dialog).toBeVisible({ timeout: 15000 });
       console.log('[Conflict Dialog] Dialog appeared');
 
-      // Verify dialog title
+      // B has never synced, so the dialog shows its first-sync layout (2b).
       const dialogTitle = dialog.locator('h1');
-      await expect(dialogTitle).toContainText('Sync Conflict');
+      await expect(dialogTitle).toContainText('This device already has data');
       console.log('[Conflict Dialog] ✓ Dialog title is correct');
 
-      // Verify dialog has all three buttons
+      // Verify dialog offers both choices and Cancel
       const cancelButton = dialog.getByRole('button', { name: /cancel/i });
-      const useRemoteButton = dialog.getByRole('button', { name: /server/i });
-      const useLocalButton = dialog.getByRole('button', { name: /my data/i });
-
       await expect(cancelButton).toBeVisible();
-      await expect(useRemoteButton).toBeVisible();
-      await expect(useLocalButton).toBeVisible();
-      console.log('[Conflict Dialog] ✓ All three buttons are visible');
+      await expect(clientB.sync.firstSyncUseAccountRadio).toBeVisible();
+      await expect(clientB.sync.firstSyncReplaceAccountRadio).toBeVisible();
+      await expect(clientB.sync.firstSyncSubmitBtn).toBeVisible();
+      console.log('[Conflict Dialog] ✓ Both choices and Cancel are visible');
 
       // Close dialog by clicking Cancel
       await cancelButton.click();

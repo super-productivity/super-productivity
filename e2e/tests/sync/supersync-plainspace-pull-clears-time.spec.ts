@@ -16,12 +16,15 @@ import {
 } from '../../utils/plainspace-fake';
 
 const TASK_ID = 'task-1';
-const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
-// A week ahead, on a whole minute: a time already past fires the task's
-// reminder, whose dialog covers the sync button (a fixed date broke on the day).
-const REMOTE_TIME = new Date(
-  Math.floor((Date.now() + WEEK_MS) / 60000) * 60000,
-).toISOString();
+// A time in the future: a past time would fire its reminder and the reminder
+// dialog would block the rest of the test. Whole minutes keep ISO round-trips exact.
+const inDays = (days: number): string => {
+  const offsetMs = days * 24 * 60 * 60 * 1000;
+  const d = new Date(Date.now() + offsetMs);
+  d.setUTCSeconds(0, 0);
+  return d.toISOString();
+};
+const REMOTE_TIME = inDays(7);
 
 /** The task's `dueWithTime` as this client's store has it, or null. */
 const dueWithTime = (page: Page): Promise<number | null> =>
