@@ -50,7 +50,7 @@ test.describe('@webdav WebDAV Sync Tags', () => {
 
     // Sync Client A (Upload)
     await syncPageA.triggerSync();
-    await waitForSync(pageA, syncPageA);
+    expect(await waitForSync(pageA, syncPageA)).toBe('success');
 
     // --- Client B ---
     const { context: contextB, page: pageB } = await setupClient(browser, url);
@@ -65,7 +65,7 @@ test.describe('@webdav WebDAV Sync Tags', () => {
 
     // Sync Client B (Download)
     await syncPageB.triggerSync();
-    await waitForSync(pageB, syncPageB);
+    expect(await waitForSync(pageB, syncPageB)).toBe('success');
 
     // Verify tag appears on Client B
     const tagExistsOnB = await tagPageB.tagExistsInSidebar(tagName);
@@ -112,7 +112,7 @@ test.describe('@webdav WebDAV Sync Tags', () => {
 
     // Sync Client A
     await syncPageA.triggerSync();
-    await waitForSync(pageA, syncPageA);
+    expect(await waitForSync(pageA, syncPageA)).toBe('success');
 
     // --- Client B ---
     const { context: contextB, page: pageB } = await setupClient(browser, url);
@@ -126,7 +126,7 @@ test.describe('@webdav WebDAV Sync Tags', () => {
 
     // Sync Client B
     await syncPageB.triggerSync();
-    await waitForSync(pageB, syncPageB);
+    expect(await waitForSync(pageB, syncPageB)).toBe('success');
 
     // Verify task appears on B
     const taskB = pageB.locator('task', { hasText: taskName }).first();
@@ -174,7 +174,7 @@ test.describe('@webdav WebDAV Sync Tags', () => {
 
     // Sync to B first
     await syncPageA.triggerSync();
-    await waitForSync(pageA, syncPageA);
+    expect(await waitForSync(pageA, syncPageA)).toBe('success');
 
     // --- Client B: Setup and initial sync ---
     const { context: contextB, page: pageB } = await setupClient(browser, url);
@@ -184,23 +184,26 @@ test.describe('@webdav WebDAV Sync Tags', () => {
 
     await syncPageB.setupWebdavSync(WEBDAV_CONFIG);
     await syncPageB.triggerSync();
-    await waitForSync(pageB, syncPageB);
+    expect(await waitForSync(pageB, syncPageB)).toBe('success');
 
     // Verify task with tag exists on B
     const taskB = pageB.locator('task', { hasText: taskName }).first();
     await expect(taskB).toBeVisible();
+    // Precondition: B shows the tag, so its later absence proves the removal.
+    const tagPageB = new TagPage(pageB);
+    await expect(tagPageB.getTagOnTask(taskB, tagName)).toBeVisible();
 
     // --- Client A: Remove tag ---
     await tagPageA.removeTagFromTask(taskA, tagName);
-    await pageA.waitForTimeout(500);
+    await expect(tagPageA.getTagOnTask(taskA, tagName)).toHaveCount(0);
 
     // Sync Client A
     await syncPageA.triggerSync();
-    await waitForSync(pageA, syncPageA);
+    expect(await waitForSync(pageA, syncPageA)).toBe('success');
 
     // --- Client B: Sync and verify tag removed ---
     await syncPageB.triggerSync();
-    await waitForSync(pageB, syncPageB);
+    expect(await waitForSync(pageB, syncPageB)).toBe('success');
 
     // Wait for UI to settle after sync (no reload needed, sync updates UI directly)
     await pageB.waitForTimeout(1000);
@@ -209,6 +212,7 @@ test.describe('@webdav WebDAV Sync Tags', () => {
     // Verify task still exists but without the specific tag indicator
     const taskBAfter = pageB.locator('task', { hasText: taskName }).first();
     await expect(taskBAfter).toBeVisible();
+    await expect(tagPageB.getTagOnTask(taskBAfter, tagName)).toHaveCount(0);
 
     // Cleanup
     await contextA.close();

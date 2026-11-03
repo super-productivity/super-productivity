@@ -84,7 +84,7 @@ test.describe('@webdav WebDAV Sync Full Flow', () => {
 
     // Sync Client A (Upload)
     await syncPageA.triggerSync();
-    await waitForSyncComplete(pageA, syncPageA);
+    expect(await waitForSyncComplete(pageA, syncPageA)).toBe('success');
     console.log('[Test] Sync completed on Client A');
 
     // Prove the selected suite format reached the remote, independently of the
@@ -150,7 +150,7 @@ test.describe('@webdav WebDAV Sync Full Flow', () => {
 
     // Sync Client B (Download)
     await syncPageB.triggerSync();
-    await waitForSyncComplete(pageB, syncPageB);
+    expect(await waitForSyncComplete(pageB, syncPageB)).toBe('success');
     console.log('[Test] Sync completed on Client B');
 
     // Debug: Check task count
@@ -174,11 +174,11 @@ test.describe('@webdav WebDAV Sync Full Flow', () => {
     await workViewPageA.addTask(taskName2);
 
     await syncPageA.triggerSync();
-    await waitForSyncComplete(pageA, syncPageA);
+    expect(await waitForSyncComplete(pageA, syncPageA)).toBe('success');
 
     // Sync Client B
     await syncPageB.triggerSync();
-    await waitForSyncComplete(pageB, syncPageB);
+    expect(await waitForSyncComplete(pageB, syncPageB)).toBe('success');
 
     await expect(pageB.locator('task')).toHaveCount(2);
     await expect(pageB.locator('task').first()).toContainText(taskName2);
@@ -203,33 +203,17 @@ test.describe('@webdav WebDAV Sync Full Flow', () => {
     await pageA.waitForTimeout(1000);
 
     await syncPageA.triggerSync();
-    await waitForSyncComplete(pageA, syncPageA);
+    expect(await waitForSyncComplete(pageA, syncPageA)).toBe('success');
 
-    // Retry sync on B up to 3 times to handle eventual consistency
-    let taskCountOnB = 2;
-    for (let attempt = 1; attempt <= 3 && taskCountOnB !== 1; attempt++) {
-      console.log(`Deletion sync attempt ${attempt} on Client B...`);
-
-      // Wait before syncing
-      await pageB.waitForTimeout(500);
-
-      await syncPageB.triggerSync();
-      await waitForSyncComplete(pageB, syncPageB);
-
-      // Wait for sync state to persist
-      await waitForStatePersistence(pageB);
-      await pageB.waitForTimeout(500);
-
-      // Reload to ensure UI reflects synced state
-      await pageB.reload();
-      await waitForAppReady(pageB);
-      await workViewPageB.waitForTaskList();
-
-      taskCountOnB = await pageB.locator('task').count();
-      console.log(`After attempt ${attempt}: ${taskCountOnB} tasks on Client B`);
-    }
+    // One sync must deliver the deletion, live, without a reload: retrying or
+    // reloading here would hide a delete that only lands on a later cycle.
+    await syncPageB.triggerSync();
+    expect(await waitForSyncComplete(pageB, syncPageB)).toBe('success');
 
     await expect(pageB.locator('task')).toHaveCount(1, { timeout: 5000 });
+    // The newest task was on top and was deleted; the first one remains.
+    await expect(pageB.locator('task').first()).toContainText(taskName);
+    await expect(pageB.locator('task', { hasText: taskName2 })).toHaveCount(0);
 
     // --- Conflict Resolution ---
     console.log('Testing Conflict Resolution...');
@@ -244,7 +228,7 @@ test.describe('@webdav WebDAV Sync Full Flow', () => {
     await waitForStatePersistence(pageA);
 
     await syncPageA.triggerSync();
-    await waitForSyncComplete(pageA, syncPageA);
+    expect(await waitForSyncComplete(pageA, syncPageA)).toBe('success');
 
     // Wait for WebDAV server to process A's upload
     await pageA.waitForTimeout(2000);
@@ -259,7 +243,7 @@ test.describe('@webdav WebDAV Sync Full Flow', () => {
     // Setup sync on fresh Client B
     await syncPageB2.setupWebdavSync(WEBDAV_CONFIG);
     await syncPageB2.triggerSync();
-    await waitForSyncComplete(pageB2, syncPageB2);
+    expect(await waitForSyncComplete(pageB2, syncPageB2)).toBe('success');
 
     // Wait for state persistence
     await waitForStatePersistence(pageB2);
@@ -300,7 +284,7 @@ test.describe('@webdav WebDAV Sync Full Flow', () => {
 
     // Sync A (Uploads "A")
     await syncPageA.triggerSync();
-    await waitForSyncComplete(pageA, syncPageA);
+    expect(await waitForSyncComplete(pageA, syncPageA)).toBe('success');
 
     // Sync B2 (Downloads "A" but has "B") -> Conflict
     await syncPageB2.triggerSync();
@@ -316,6 +300,15 @@ test.describe('@webdav WebDAV Sync Full Flow', () => {
     ).not.toBeVisible();
 
     await expect(pageB2.locator('task')).toHaveCount(2);
+
+    // Convergence: B2's winning edit must reach A on its next sync. Without
+    // the local-win update op B2 keeps its title while A keeps its own.
+    await waitForStatePersistence(pageB2);
+    await syncPageA.triggerSync();
+    expect(await waitForSyncComplete(pageA, syncPageA)).toBe('success');
+    await expect(pageA.locator('task', { hasText: 'Conflict Task B' })).toBeVisible();
+    await expect(pageA.locator('task', { hasText: 'Conflict Task A' })).toHaveCount(0);
+    await expect(pageA.locator('task')).toHaveCount(2);
 
     // Cleanup
     await contextA.close();
@@ -414,12 +407,12 @@ test.describe('@webdav WebDAV Sync Full Flow', () => {
       await waitForStatePersistence(pageA);
 
       await syncPageA.triggerSync();
-      await waitForSyncComplete(pageA, syncPageA);
+      expect(await waitForSyncComplete(pageA, syncPageA)).toBe('success');
       console.log('[Concurrent] Client A synced TaskA');
 
       // --- Step 2: Client B downloads TaskA ---
       await syncPageB.triggerSync();
-      await waitForSyncComplete(pageB, syncPageB);
+      expect(await waitForSyncComplete(pageB, syncPageB)).toBe('success');
       await expect(pageB.locator('task')).toHaveCount(1, { timeout: 10000 });
       await expect(pageB.locator('task').first()).toContainText('TaskA');
       console.log('[Concurrent] Client B downloaded TaskA');

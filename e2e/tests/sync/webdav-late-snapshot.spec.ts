@@ -11,6 +11,9 @@ import {
   WEBDAV_CONFIG_TEMPLATE,
 } from '../../utils/sync-helpers';
 import { waitForStatePersistence } from '../../utils/waits';
+import { countWebdavPuts } from '../../utils/audit-webdav-helpers';
+
+const SYNC_FILES = ['sync-data.json', 'sync-ops.json', 'sync-state.json'] as const;
 
 const authorization = `Basic ${Buffer.from('admin:admin').toString('base64')}`;
 const root = WEBDAV_CONFIG_TEMPLATE.baseUrl;
@@ -85,12 +88,12 @@ const seedSnapshotOnlyFolder = async (
       ...WEBDAV_CONFIG_TEMPLATE,
       syncFolderPath: `/${seedFolder}`,
     });
-    await waitForSyncComplete(seed.page, sync);
+    expect(await waitForSyncComplete(seed.page, sync)).toBe('success');
     await sync.setupWebdavSync(
       { ...WEBDAV_CONFIG_TEMPLATE, syncFolderPath: `/${movedFolder}` },
       { isReconfigure: true },
     );
-    await waitForSyncComplete(seed.page, sync);
+    expect(await waitForSyncComplete(seed.page, sync)).toBe('success');
   } finally {
     await closeContextsSafely(seed.context);
   }
@@ -145,6 +148,9 @@ test.describe('@webdav a late snapshot-only v2 file is loaded before uploading',
       await keepSyncManual(joining.page);
       let legacyReads = 0;
       let appWrites = 0;
+      // Every sync file, not only the routed one: a v3 write would also merge
+      // over the seed.
+      const syncFilePuts = countWebdavPuts(joining.page, `${folder}/DEV`, SYNC_FILES);
       let published = false;
       await joining.page.route(`**/${folder}/DEV/sync-data.json`, async (route) => {
         if (route.request().method() === 'PUT') appWrites++;
@@ -166,6 +172,9 @@ test.describe('@webdav a late snapshot-only v2 file is loaded before uploading',
       );
       await expect.poll(() => published).toBe(true);
       await expect(sync.syncSpinner).toBeHidden();
+      // The upload was deferred silently; the question comes on the next sync.
+      await expect(joining.page.locator('dialog-sync-conflict')).toBeHidden();
+      console.log(`[audit-pin] late-snapshot setup legacyReads=${legacyReads}`);
 
       // The seed's state is still the folder's state, and the app never wrote
       // the file (a write before the seed landed would be hidden by it).
@@ -189,7 +198,9 @@ test.describe('@webdav a late snapshot-only v2 file is loaded before uploading',
 
       await expectNextSyncToAskFirst(joining.page, sync);
       expect(appWrites).toBe(0);
+      expect(syncFilePuts()).toBe(0);
       expect(await remoteText(request, `${remote}sync-data.json`)).toBe(snapshotOnly);
+      console.log(`[audit-pin] late-snapshot final legacyReads=${legacyReads}`);
     } finally {
       await closeContextsSafely(joining.context);
     }
@@ -241,6 +252,7 @@ test.describe('@webdav a late snapshot-only v2 file is loaded before uploading',
 
       let primaryReads = 0;
       let published = false;
+      const syncFilePuts = countWebdavPuts(mover.page, `${folder}/DEV`, SYNC_FILES);
       await mover.page.route(`**/${folder}/DEV/sync-data.json`, async (route) => {
         if (route.request().method() === 'GET' && ++primaryReads === 2) {
           // The download found no data; the seed lands before the
@@ -261,6 +273,7 @@ test.describe('@webdav a late snapshot-only v2 file is loaded before uploading',
       const prompt = mover.page.locator('dialog-server-migration-confirm');
       await expect(prompt).toBeVisible();
       expect(published).toBe(true);
+      console.log(`[audit-pin] migration-prompt primaryReads=${primaryReads}`);
 
       // Answer after the cycle cache expired.
       await mover.page.clock.setFixedTime(new Date(Date.now() + 31_000));
@@ -275,6 +288,9 @@ test.describe('@webdav a late snapshot-only v2 file is loaded before uploading',
 
       await expectNextSyncToAskFirst(mover.page, sync);
       expect(await remoteText(request, `${remote}sync-data.json`)).toBe(seededFile);
+      // Cancel promised a download: nothing was ever written to the folder.
+      expect(syncFilePuts()).toBe(0);
+      console.log(`[audit-pin] migration-prompt final primaryReads=${primaryReads}`);
     } finally {
       await closeContextsSafely(mover.context);
     }
