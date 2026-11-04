@@ -256,7 +256,11 @@ test.describe('@webdav Upload must not acknowledge unseen operations (#10239)', 
           // Recognize the replacement even though its version equals our cursor;
           // the unseen snapshot base identifies it without a version decrease.
           await observerSync.triggerSync();
-          expect(await waitForSyncComplete(observer.page, observerSync)).toBe('conflict');
+          expect(
+            await waitForSyncComplete(observer.page, observerSync, 30000, {
+              expectConflict: true,
+            }),
+          ).toBe('conflict');
           const conflict = observer.page.locator('dialog-sync-conflict');
           observerSync.prepareForNextSyncCycle('read');
           await conflict.getByRole('button', { name: /Keep remote/i }).click();
