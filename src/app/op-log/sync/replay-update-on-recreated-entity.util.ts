@@ -17,10 +17,14 @@ type EntityReducer = (
  * The recreate folds each remote update onto the deleted entity. A field
  * write (`{ <payloadKey>: { id, changes } }`) folds as fields, but a semantic
  * update does not: `setSimpleCounterCounterToday({ id, newVal, today })`
- * would otherwise be read as the fields `newVal` and `today`, leaving
- * `countOnDay` stale and adding junk keys, so the recreating device diverges
- * from the device that made the update (#11465). Replaying the op through its
- * own reducer gives the exact state every other device reached.
+ * (likewise `setSimpleCounterCounterForDate`, `syncSimpleCounterTime`) has no
+ * field payload, so the field read finds no changes and leaves `countOnDay`
+ * stale: the recreating device diverges from the device that made the update
+ * (#11465). Replaying the op through its own reducer gives the exact state
+ * every other device reached. Field writes (`updateSimpleCounter`, a
+ * single-counter `updateAllSimpleCounters`) replay to the same result as the
+ * field read. `convertOpToAction` marks the action remote, which
+ * `syncSimpleCounterTime` requires to apply.
  *
  * List a type here when its persisted single-entity updates include semantic
  * actions and its feature reducer applies them from the entity alone (no

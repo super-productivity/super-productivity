@@ -8175,7 +8175,8 @@ describe('ConflictResolutionService', () => {
             recreatesEntityAfterDelete: true,
           }),
         );
-        // No `newVal`/`today` junk: the op is replayed, not read as fields.
+        // Replayed by the reducer: the field read found no changes in
+        // `{ id, newVal, today }` and left `countOnDay` stale.
         expect(extractActionPayload(result.payload)).toEqual({
           ...counter,
           countOnDay: { [PREV_DAY]: 4, [DAY]: 2 },
