@@ -14,7 +14,7 @@ import { EncryptAndCompressHandlerService } from '../../encryption/encrypt-and-c
 import { extractSyncFileStateFromPrefix } from '../../util/sync-file-prefix';
 import { EncryptAndCompressCfg } from '../../core/types/sync.types';
 import {
-  isRepairBuiltFromCommittedVersion,
+  isRepairBuiltAtCommittedSeq,
   repairStaleResponse,
 } from './file-based-repair-base.util';
 import { VectorClock } from '../../core/operation.types';
@@ -638,7 +638,7 @@ export class FileBasedSyncAdapterService {
         _isCleanSlate?: boolean, // Not used - file-based sync replaces entire file
         snapshotOpType?: RestorePointType, // REPAIR triggers a rev-based concurrency guard; see _uploadSnapshot
         _syncImportReason?: string, // Not used - file-based sync has no server-side conflict dialog
-        repairBaseServerSeq?: number, // #11483: the syncVersion a REPAIR was built from
+        repairBaseServerSeq?: number, // #11483: the server seq a REPAIR was built at
       ): Promise<SnapshotUploadResponse> => {
         return this._uploadSnapshot(
           provider,
@@ -1351,9 +1351,9 @@ export class FileBasedSyncAdapterService {
     // rev guard below cannot tell, as that download advanced `_lastSeenRevs`.
     if (
       snapshotOpType === 'REPAIR' &&
-      !isRepairBuiltFromCommittedVersion(
+      !isRepairBuiltAtCommittedSeq(
         repairBaseServerSeq,
-        this._expectedSyncVersions.get(providerKey),
+        this._localSeqCounters.get(providerKey),
       )
     ) {
       OpLog.warn('FileBasedSyncAdapter: REPAIR predates the last download; rebasing.');

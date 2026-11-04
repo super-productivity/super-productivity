@@ -1935,7 +1935,7 @@ describe('FileBasedSyncAdapterService', () => {
       mockProvider.downloadFile.calls.reset();
     };
 
-    // `base` is the syncVersion the REPAIR was built from (null: none); seedBaseRev
+    // `base` is the server seq the REPAIR was built at (null: none); seedBaseRev
     // commits 2.
     const uploadRepair = (
       base: number | null = 2,
@@ -2142,6 +2142,21 @@ describe('FileBasedSyncAdapterService', () => {
 
         expect(result.accepted).toBe(true);
         expect(primaryOf(writes)[0].rev).toBe('rev-2');
+      });
+
+      it('writes a REPAIR built at the committed cursor even when it differs from the syncVersion', async () => {
+        // The rebase path and the rejected-full-state reseed stamp the REPAIR
+        // with getLastServerSeq(). A cursor committed without a staged download
+        // (e.g. a legacy read-only or missing-file download) leaves the expected
+        // syncVersion behind; comparing against that would re-stale every rebase.
+        await seedBaseRev('rev-1');
+        await adapter.setLastServerSeq(7);
+        const writes = captureWrites();
+
+        const result = await uploadRepair(await adapter.getLastServerSeq());
+
+        expect(result.accepted).toBe(true);
+        expect(primaryOf(writes)[0].rev).toBe('rev-1');
       });
 
       it('answers REPAIR_STALE for a REPAIR without a base, which cannot prove it is current', async () => {

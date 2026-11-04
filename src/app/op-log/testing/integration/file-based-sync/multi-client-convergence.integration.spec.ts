@@ -2,7 +2,10 @@ import {
   FileBasedSyncTestHarness,
   HarnessClient,
 } from '../helpers/file-based-sync-test-harness';
-import { OpDownloadResponse } from '../../../sync-providers/provider.interface';
+import {
+  OpDownloadResponse,
+  SyncOperation,
+} from '../../../sync-providers/provider.interface';
 import { uuidv7 } from 'uuidv7';
 
 describe('File-Based Sync Integration - Multi-Client Convergence', () => {
@@ -367,7 +370,17 @@ describe('File-Based Sync Integration - Multi-Client Convergence', () => {
       await client.adapter.setLastServerSeq(download.latestSeq);
     };
 
-    // `base` is the syncVersion the REPAIR was built from (#11483).
+    // Like the real upload service, commit the cursor after the upload.
+    const upload = async (
+      client: HarnessClient,
+      ops: SyncOperation[],
+    ): Promise<number> => {
+      const { latestSeq } = await client.uploadOps(ops);
+      await client.adapter.setLastServerSeq(latestSeq);
+      return latestSeq;
+    };
+
+    // `base` is the server seq the REPAIR was built at (#11483).
     const repair = (
       client: HarnessClient,
       state: unknown,
@@ -399,11 +412,9 @@ describe('File-Based Sync Integration - Multi-Client Convergence', () => {
       const b = harness.createClient('client-b');
 
       // A and B both start synced on A's first op.
-      const aBase = (
-        await a.uploadOps([
-          a.createOp('Task', 'task-a', 'CRT', 'TaskActionTypes.ADD_TASK', { title: 'A' }),
-        ])
-      ).latestSeq;
+      const aBase = await upload(a, [
+        a.createOp('Task', 'task-a', 'CRT', 'TaskActionTypes.ADD_TASK', { title: 'A' }),
+      ]);
       await applyDownload(b, await b.downloadOps(0));
 
       // B uploads a concurrent op that A never downloads.
@@ -439,7 +450,7 @@ describe('File-Based Sync Integration - Multi-Client Convergence', () => {
 
     it('publishes a REPAIR snapshot when the remote has not advanced (no false stale)', async () => {
       const a = harness.createClient('client-a');
-      const { latestSeq } = await a.uploadOps([
+      const latestSeq = await upload(a, [
         a.createOp('Task', 'task-a', 'CRT', 'TaskActionTypes.ADD_TASK', { title: 'A' }),
       ]);
 
