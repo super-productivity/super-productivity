@@ -246,8 +246,6 @@ export class ArchiveOperationHandler implements ArchiveSideEffectPort<Persistent
       return; // Local: already written by ArchiveService before dispatch
     }
     const tasks = (action as ReturnType<typeof TaskSharedActions.moveToArchive>).tasks;
-    // E2E-AUDIT MUTATION M10: remote archive ops never reach archive_young
-    if (tasks) return;
     await this._getArchiveService().writeTasksToArchiveForRemoteSync(tasks);
   }
 
