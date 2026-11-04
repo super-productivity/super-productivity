@@ -142,7 +142,7 @@ export class ShortSyntaxEffects {
                 this._dateTimeFormatService.dateInputLocale(),
               ),
             )
-            .then(async (r) => {
+            .then((r) => {
               if (environment.production) {
                 TaskLog.log('shortSyntax', {
                   taskId: task.id,
@@ -233,72 +233,76 @@ export class ShortSyntaxEffects {
                 finalTaskChanges.tagIds = unique(tagIds);
               }
 
-              // The REST create action can carry an explicit reminder that must
-              // survive the later, asynchronously parsed scheduling action.
+              const createActions = (): Action[] => {
+                // Add parsed URL attachments to task (merge with existing)
+                if (attachments.length > 0) {
+                  finalTaskChanges.attachments = [
+                    ...(task.attachments || []),
+                    ...attachments,
+                  ];
+                }
+
+                // Use compound action for atomic state update
+                const autoPlanFields = getDeadlineAutoPlanFields(
+                  this._dateService,
+                  finalTaskChanges.deadlineDay,
+                  finalTaskChanges.deadlineWithTime,
+                );
+
+                delete finalTaskChanges.hasDeadlineTime;
+                delete finalTaskChanges.dueTimeStr;
+
+                // The parser writes an absolute per-day total. Persist any earlier
+                // additive timer batch first so replay observes the same order as
+                // the live store: delta, then absolute replacement.
+                if (finalTaskChanges.timeSpentOnDay) {
+                  this._taskTimeSyncService.flushOne(task.id);
+                }
+
+                actions.push(
+                  TaskSharedActions.applyShortSyntax({
+                    task,
+                    taskChanges: finalTaskChanges,
+                    targetProjectId,
+                    schedulingInfo,
+                    ...autoPlanFields,
+                  }),
+                );
+
+                // New tag creation requires user confirmation, so remains separate
+                if (r.newTagTitles.length) {
+                  actions.push(
+                    addNewTagsFromShortSyntax({
+                      taskId: task.id,
+                      newTitles: r.newTagTitles,
+                    }),
+                  );
+                }
+
+                return actions;
+              };
+
+              // Only REST creates with an explicit reminder need a fresh read.
               if (
                 originalAction.type !== TaskSharedActions.updateTask.type &&
                 originalAction.isPreserveExplicitReminder &&
                 typeof originalAction.task.remindAt === 'number'
               ) {
-                const latestTask = await firstValueFrom(
-                  this._taskService.getByIdOnce$(task.id),
-                );
-                if (typeof latestTask?.remindAt === 'number') {
-                  finalTaskChanges.remindAt = latestTask.remindAt;
-                } else {
-                  delete finalTaskChanges.remindAt;
-                }
-                if (schedulingInfo?.dueWithTime) {
-                  schedulingInfo.remindAt = latestTask?.remindAt;
-                }
-              }
-
-              // Add parsed URL attachments to task (merge with existing)
-              if (attachments.length > 0) {
-                finalTaskChanges.attachments = [
-                  ...(task.attachments || []),
-                  ...attachments,
-                ];
-              }
-
-              // Use compound action for atomic state update
-              const autoPlanFields = getDeadlineAutoPlanFields(
-                this._dateService,
-                finalTaskChanges.deadlineDay,
-                finalTaskChanges.deadlineWithTime,
-              );
-
-              delete finalTaskChanges.hasDeadlineTime;
-              delete finalTaskChanges.dueTimeStr;
-
-              // The parser writes an absolute per-day total. Persist any earlier
-              // additive timer batch first so replay observes the same order as
-              // the live store: delta, then absolute replacement.
-              if (finalTaskChanges.timeSpentOnDay) {
-                this._taskTimeSyncService.flushOne(task.id);
-              }
-
-              actions.push(
-                TaskSharedActions.applyShortSyntax({
-                  task,
-                  taskChanges: finalTaskChanges,
-                  targetProjectId,
-                  schedulingInfo,
-                  ...autoPlanFields,
-                }),
-              );
-
-              // New tag creation requires user confirmation, so remains separate
-              if (r.newTagTitles.length) {
-                actions.push(
-                  addNewTagsFromShortSyntax({
-                    taskId: task.id,
-                    newTitles: r.newTagTitles,
-                  }),
+                return firstValueFrom(this._taskService.getByIdOnce$(task.id)).then(
+                  (latestTask) => {
+                    if (typeof latestTask?.remindAt === 'number') {
+                      finalTaskChanges.remindAt = latestTask.remindAt;
+                    } else {
+                      delete finalTaskChanges.remindAt;
+                    }
+                    if (schedulingInfo?.dueWithTime) {
+                      schedulingInfo.remindAt = latestTask?.remindAt;
+                    }
+                    return createActions();
+                  },
                 );
               }
-
-              return actions;
+              return createActions();
             }),
         ).pipe(mergeMap((actions) => actions));
       }),
