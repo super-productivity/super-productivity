@@ -2829,8 +2829,8 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
   }
 
   /**
-   * Atomically retires a stale local REPAIR and installs its rebased replacement.
-   * Keeping the rejection marker, replacement op, vector clock, and state cache in
+   * Atomically retires a stale or rejected local full-state op (#11352) and
+   * installs its replacement REPAIR. Writing marker, op, clock and cache in
    * one transaction prevents a crash from leaving the repaired state without an
    * uploadable full-state boundary.
    */

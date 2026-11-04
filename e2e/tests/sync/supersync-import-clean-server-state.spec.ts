@@ -6,11 +6,39 @@ import {
   closeClient,
   waitForTask,
   archiveTask,
-  hasTaskInWorklog,
   navigateToWorkView,
   type SimulatedE2EClient,
 } from '../../utils/supersync-helpers';
 import { ImportPage } from '../../pages/import.page';
+import {
+  expectNotInArchive,
+  expectServerHistoryStartsAtImport,
+  getLiveIds,
+  getTaskIdByTitle,
+  hasEverAppeared,
+  watchNeverAppears,
+} from '../../utils/audit-archive-helpers';
+
+const IMPORTED_TASK = 'E2E Import Test - Active Task With Subtask';
+const SYNC_IMPORT_CONFLICT_DIALOG = 'dialog-sync-import-conflict';
+
+/**
+ * Fresh client B must hold the imported fixture (positive anchor) and none of
+ * `oldIds`, live or archived; the server must hold nothing older than the
+ * import. `hasSyncError` is checked last.
+ */
+const expectOnlyImportedData = async (
+  clientB: SimulatedE2EClient,
+  userId: number,
+  oldIds: string[],
+  label: string,
+): Promise<void> => {
+  await waitForTask(clientB.page, IMPORTED_TASK);
+  expect(await getLiveIds(clientB, oldIds), `${label}: old ids live on B`).toEqual([]);
+  await expectNotInArchive(clientB, oldIds, `${label}: B`);
+  const importType = await expectServerHistoryStartsAtImport(userId, label);
+  console.log(`${label} server history starts at ${importType}`);
+};
 
 /**
  * SuperSync Import Clean Server State E2E Tests
@@ -81,7 +109,8 @@ test.describe('@supersync @import SYNC_IMPORT Clean Server State', () => {
       const taskOld = `Task-OLD-${uniqueId}`;
       await clientA.workView.addTask(taskOld);
       await waitForTask(clientA.page, taskOld);
-      console.log(`[CleanState] Client A created: ${taskOld}`);
+      const taskOldId = await getTaskIdByTitle(clientA, taskOld);
+      console.log('[CleanState] Client A created the old task');
 
       // Archive the old task
       await archiveTask(clientA, taskOld);
@@ -95,6 +124,7 @@ test.describe('@supersync @import SYNC_IMPORT Clean Server State', () => {
       // Create another active task (not archived)
       const taskOldActive = `TaskOldActive-${uniqueId}`;
       await clientA.workView.addTask(taskOldActive);
+      const taskOldActiveId = await getTaskIdByTitle(clientA, taskOldActive);
       await clientA.sync.syncAndWait();
       console.log(`[CleanState] Old active task synced: ${taskOldActive}`);
 
@@ -130,36 +160,24 @@ test.describe('@supersync @import SYNC_IMPORT Clean Server State', () => {
       console.log('[CleanState] Phase 4: Fresh Client B joins');
 
       clientB = await createSimulatedClient(browser, baseURL!, 'B', testRunId);
+      await watchNeverAppears(clientB.page, SYNC_IMPORT_CONFLICT_DIALOG, 'conflict');
       await clientB.sync.setupSuperSync(encSyncConfig);
       console.log('[CleanState] Client B synced');
 
       // ============ PHASE 5: Verify Client B only has imported data ============
       console.log('[CleanState] Phase 5: Verifying Client B state');
 
-      // Client B should have the imported task from backup
-      await waitForTask(clientB.page, 'E2E Import Test - Active Task With Subtask');
-      console.log('[CleanState] ✓ Client B has imported task');
-
-      // Client B should NOT have the old task (was superseded by import)
-      const hasOldTask = await clientB.page
-        .locator(`task:has-text("${taskOld}")`)
-        .isVisible()
-        .catch(() => false);
-      expect(hasOldTask).toBe(false);
-      console.log('[CleanState] ✓ Client B does NOT have old task');
-
-      // Client B should NOT have the old active task
-      const hasOldActiveTask = await clientB.page
-        .locator(`task:has-text("${taskOldActive}")`)
-        .isVisible()
-        .catch(() => false);
-      expect(hasOldActiveTask).toBe(false);
-      console.log('[CleanState] ✓ Client B does NOT have old active task');
-
-      // Client B should NOT have old archived task in worklog
-      const hasOldInWorklog = await hasTaskInWorklog(clientB, taskOld);
-      expect(hasOldInWorklog).toBe(false);
-      console.log('[CleanState] ✓ Client B does NOT have old archived task in worklog');
+      // Store + archive, not the work view: an old task could survive in a
+      // project view or the archive and never render on TODAY.
+      await expectOnlyImportedData(
+        clientB,
+        user.userId,
+        [taskOldId, taskOldActiveId],
+        '[CleanState]',
+      );
+      // A fresh client has no local data to defend: it must never be asked.
+      expect(await hasEverAppeared(clientB.page, 'conflict')).toBe(false);
+      console.log('[CleanState] ✓ Client B has only the imported data');
 
       // Verify no sync errors
       const hasError = await clientB.sync.hasSyncError();
@@ -242,6 +260,7 @@ test.describe('@supersync @import SYNC_IMPORT Clean Server State', () => {
 
       const markerTask = `Import1-Marker-${uniqueId}`;
       await clientA.workView.addTask(markerTask);
+      const markerTaskId = await getTaskIdByTitle(clientA, markerTask);
       await clientA.sync.syncAndWait();
       console.log(`[MultiImport] Created marker: ${markerTask}`);
 
@@ -269,23 +288,17 @@ test.describe('@supersync @import SYNC_IMPORT Clean Server State', () => {
       console.log('[MultiImport] Phase 4: Fresh Client B joins');
 
       clientB = await createSimulatedClient(browser, baseURL!, 'B', testRunId);
+      await watchNeverAppears(clientB.page, SYNC_IMPORT_CONFLICT_DIALOG, 'conflict');
       await clientB.sync.setupSuperSync(encSyncConfig);
       console.log('[MultiImport] Client B synced');
 
       // ============ PHASE 5: Verify Client B only has second import data ============
       console.log('[MultiImport] Phase 5: Verifying Client B state');
 
-      // Client B should have the imported task
-      await waitForTask(clientB.page, 'E2E Import Test - Active Task With Subtask');
-      console.log('[MultiImport] ✓ Client B has imported task');
-
-      // Client B should NOT have the marker task from first import
-      // (second import superseded it)
-      const hasMarker = await clientB.page
-        .locator(`task:has-text("${markerTask}")`)
-        .isVisible()
-        .catch(() => false);
-      expect(hasMarker).toBe(false);
+      // The marker was synced between the imports; the second import's clean
+      // slate must have removed it from the server and from B.
+      await expectOnlyImportedData(clientB, user.userId, [markerTaskId], '[MultiImport]');
+      expect(await hasEverAppeared(clientB.page, 'conflict')).toBe(false);
       console.log('[MultiImport] ✓ Client B does NOT have marker from first import');
 
       // Verify no sync errors
@@ -346,6 +359,7 @@ test.describe('@supersync @import SYNC_IMPORT Clean Server State', () => {
       const oldArchived = `OldArchived-${uniqueId}`;
       await clientA.workView.addTask(oldArchived);
       await waitForTask(clientA.page, oldArchived);
+      const oldArchivedId = await getTaskIdByTitle(clientA, oldArchived);
       await archiveTask(clientA, oldArchived);
       await navigateToWorkView(clientA);
       await clientA.sync.syncAndWait();
@@ -374,16 +388,24 @@ test.describe('@supersync @import SYNC_IMPORT Clean Server State', () => {
       console.log('[ArchiveClean] Phase 3: Fresh Client B joins');
 
       clientB = await createSimulatedClient(browser, baseURL!, 'B', testRunId);
+      await watchNeverAppears(clientB.page, SYNC_IMPORT_CONFLICT_DIALOG, 'conflict');
       await clientB.sync.setupSuperSync(encSyncConfig);
       console.log('[ArchiveClean] Client B synced');
 
       // ============ PHASE 4: Verify old archive is gone ============
       console.log('[ArchiveClean] Phase 4: Verifying old archive is cleared');
 
-      // Client B should NOT have the old archived task in worklog
-      const hasOldArchived = await hasTaskInWorklog(clientB, oldArchived);
-      expect(hasOldArchived).toBe(false);
-      console.log('[ArchiveClean] ✓ Old archived task NOT in Client B worklog');
+      // archive_young must exist on B (the import's archive was applied) and
+      // must not hold the old archived id; the server must not hold the op
+      // that archived it either.
+      await expectOnlyImportedData(
+        clientB,
+        user.userId,
+        [oldArchivedId],
+        '[ArchiveClean]',
+      );
+      expect(await hasEverAppeared(clientB.page, 'conflict')).toBe(false);
+      console.log('[ArchiveClean] ✓ Old archived task NOT on Client B');
 
       // Verify no sync errors
       const hasError = await clientB.sync.hasSyncError();

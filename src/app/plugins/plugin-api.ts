@@ -13,6 +13,7 @@ import {
   PluginBeforeCloseHandler,
   PluginBaseCfg,
   PluginCreateTaskData,
+  PluginUpdateTaskOptions,
   PluginHeaderBtnCfg,
   PluginHookHandler,
   PluginHooks,
@@ -26,6 +27,7 @@ import {
   PluginSidePanelBtnCfg,
   PluginWorkContextHeaderBtnCfg,
   ActiveWorkContext,
+  PluginDayContext,
   Project,
   SnackCfg,
   Tag,
@@ -205,6 +207,20 @@ export class PluginAPI implements PluginAPIInterface {
     return this.#boundMethods.getActiveWorkContext();
   }
 
+  async getDayContext(): Promise<PluginDayContext> {
+    return this.#boundMethods.getDayContext();
+  }
+
+  async startTracking(taskId: string): Promise<void> {
+    await this.#boundMethods.startTracking(taskId);
+    PluginLog.log(`Plugin ${this.#pluginId} started tracking`, { taskId });
+  }
+
+  async stopTracking(): Promise<void> {
+    PluginLog.log(`Plugin ${this.#pluginId} stopped tracking`);
+    return this.#boundMethods.stopTracking();
+  }
+
   async getTasks(): Promise<Task[]> {
     PluginLog.log(`Plugin ${this.#pluginId} requested all tasks`);
     const tasks = await this.#pluginBridge.getTasks();
@@ -244,10 +260,14 @@ export class PluginAPI implements PluginAPIInterface {
     PluginLog.log(`Plugin ${this.#pluginId} requested data re-init`);
     return this.#pluginBridge.reInitData();
   }
-  async updateTask(taskId: string, updates: Partial<Task>): Promise<void> {
+  async updateTask(
+    taskId: string,
+    updates: Partial<Task>,
+    options?: PluginUpdateTaskOptions,
+  ): Promise<void> {
     PluginLog.log(`Plugin ${this.#pluginId} requested to update task ${taskId}`);
     const taskCopyUpdates = taskDataToPartialTaskCopy(updates);
-    return this.#pluginBridge.updateTask(taskId, taskCopyUpdates);
+    return this.#pluginBridge.updateTask(taskId, taskCopyUpdates, options);
   }
 
   async addTask(taskData: PluginCreateTaskData): Promise<string> {

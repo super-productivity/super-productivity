@@ -10,6 +10,7 @@ import {
   Hooks,
   NotifyCfg,
   PluginCreateTaskData,
+  PluginUpdateTaskOptions,
   PluginHeaderBtnCfg,
   PluginHookHandler,
   PluginMenuEntryCfg,
@@ -19,10 +20,8 @@ import {
   PluginShortcutCfg,
   PluginSidePanelBtnCfg,
   PluginWorkContextHeaderBtnCfg,
-  ActiveWorkContext,
   Task,
 } from './plugin-api.model';
-import { toActiveWorkContext } from './util/active-work-context.util';
 import {
   assertPluginPersistenceKey,
   composeId,
@@ -49,9 +48,8 @@ import { TaskMoveToProjectService } from '../features/tasks/task-move-to-project
 import { getDomFocusedTaskId } from '../features/tasks/get-dom-focused-task-id';
 import { addSubTask } from '../features/tasks/store/task.actions';
 import { selectTaskFeatureState } from '../features/tasks/store/task.selectors';
-import { parseTimeSpentChanges } from '../features/tasks/short-syntax';
+import { parsePluginSubTaskTitle } from './util/parse-plugin-sub-task-title';
 import { GlobalConfigService } from '../features/config/global-config.service';
-import { DEFAULT_GLOBAL_CONFIG } from '../features/config/default-global-config.const';
 import { selectConfigFeatureState } from '../features/config/store/global-config.reducer';
 import { TaskSharedActions } from '../root-store/meta/task-shared.actions';
 import { nanoid } from 'nanoid';
@@ -59,7 +57,7 @@ import { WorkContextService } from '../features/work-context/work-context.servic
 import { ProjectService } from '../features/project/project.service';
 import { INBOX_PROJECT } from '../features/project/project.const';
 import { TagService } from '../features/tag/tag.service';
-import { distinctUntilChanged, first, map, take, timeout } from 'rxjs/operators';
+import { distinctUntilChanged, first, map, take } from 'rxjs/operators';
 import { firstValueFrom } from 'rxjs';
 import { selectProjectFeatureState } from '../features/project/store/project.selectors';
 import { selectNoteFeatureState } from '../features/note/store/note.reducer';
@@ -93,6 +91,10 @@ import { ISSUE_PROVIDER_TYPES } from '../features/issue/issue.const';
 import { PluginService } from './plugin.service';
 import { PluginI18nService } from './plugin-i18n.service';
 import { pluginAssert } from './plugin-bridge-asserts';
+import {
+  PluginBridgeContextService,
+  PluginContextBoundMethods,
+} from './plugin-bridge-context.service';
 import { PluginTaskContextMenuRegistryService } from './plugin-task-context-menu-registry.service';
 import { formatDateForPlugin } from './plugin-i18n-date.util';
 
@@ -170,6 +172,7 @@ export class PluginBridgeService implements OnDestroy {
   private _globalConfigService = inject(GlobalConfigService);
   private _dateService = inject(DateService);
   private _taskContextMenuRegistry = inject(PluginTaskContextMenuRegistryService);
+  private _contextBridge = inject(PluginBridgeContextService);
   readonly #nodeExecutionGrantTokens = new Map<string, string>();
   readonly #nodeExecutionApi = this._consumeNodeExecutionApi();
 
@@ -240,7 +243,7 @@ export class PluginBridgeService implements OnDestroy {
   createBoundMethods(
     pluginId: string,
     manifest?: PluginManifest,
-  ): {
+  ): PluginContextBoundMethods & {
     persistDataSynced: (dataStr: string, key?: string) => Promise<void>;
     loadPersistedData: (key?: string) => Promise<string | null>;
     listSyncedDataKeys: (prefix?: string) => Promise<string[]>;
@@ -258,7 +261,6 @@ export class PluginBridgeService implements OnDestroy {
     showIndexHtmlAsView: () => void;
     showInWorkContext: () => void;
     closeWorkContextView: () => void;
-    getActiveWorkContext: () => Promise<ActiveWorkContext | null>;
     getSelectedTask: () => Promise<TaskCopy | null>;
     getFocusedTask: () => Promise<TaskCopy | null>;
     triggerSync: () => Promise<void>;
@@ -333,7 +335,7 @@ export class PluginBridgeService implements OnDestroy {
       showIndexHtmlAsView: () => this._showIndexHtmlAsView(pluginId),
       showInWorkContext: () => this._showInWorkContext(pluginId),
       closeWorkContextView: () => this._closeWorkContextView(pluginId),
-      getActiveWorkContext: () => this.getActiveWorkContext(),
+      ...this._contextBridge.createBoundMethods(),
       getSelectedTask: () => this.getSelectedTask(),
       getFocusedTask: () => this.getFocusedTask(),
 
@@ -687,7 +689,6 @@ export class PluginBridgeService implements OnDestroy {
           // width: '500px',
           // maxWidth: '90vw',
           // maxHeight: '80vh',
-          autoFocus: true,
           restoreFocus: true,
           disableClose: false,
           closeOnNavigation: false,
@@ -729,29 +730,6 @@ export class PluginBridgeService implements OnDestroy {
   private _closeWorkContextView(pluginId: string): void {
     if (this._workContextEmbedPluginId() === pluginId) {
       this._workContextEmbedPluginId.set(null);
-    }
-  }
-
-  /**
-   * Snapshot of the active work context for plugins. A context is always
-   * active once the app has loaded — it stays set even on non-work-view
-   * routes — so this normally resolves to that context. It resolves to
-   * null only if the initial data load has not completed within the
-   * timeout (e.g. a plugin calling this very early from its init hook),
-   * which is preferable to a Promise that never resolves.
-   */
-  async getActiveWorkContext(): Promise<ActiveWorkContext | null> {
-    try {
-      const ctx = await firstValueFrom(
-        this._workContextService.activeWorkContext$.pipe(
-          // 10s is well past normal data-load time but still bounded so
-          // a plugin can fall back to other behaviour instead of hanging.
-          timeout({ first: 10_000 }),
-        ),
-      );
-      return toActiveWorkContext(ctx);
-    } catch {
-      return null;
     }
   }
 
@@ -882,9 +860,14 @@ export class PluginBridgeService implements OnDestroy {
   /**
    * Update a task
    */
-  async updateTask(taskId: string, updates: Partial<TaskCopy>): Promise<void> {
+  async updateTask(
+    taskId: string,
+    updates: Partial<TaskCopy>,
+    options?: PluginUpdateTaskOptions,
+  ): Promise<void> {
     pluginAssert.string(taskId);
     pluginAssert.partialTask(updates);
+    pluginAssert.updateTaskOptions(options);
 
     // Relational fields are rejected rather than applied: they reach the reducer
     // as plain values, so setting `parentId` writes a task that no parent lists
@@ -938,7 +921,7 @@ export class PluginBridgeService implements OnDestroy {
     }
 
     if (Object.keys(otherUpdates).length > 0) {
-      this._taskService.update(taskId, otherUpdates);
+      this._taskService.update(taskId, otherUpdates, !!options?.isIgnoreShortSyntax);
     }
 
     PluginLog.log('PluginBridge: Task updated successfully', { taskId });
@@ -982,7 +965,11 @@ export class PluginBridgeService implements OnDestroy {
       // subtasks created via the plugin API intentionally inherit tags/project from
       // the parent and must not have them reassigned from the title (see addSubTask
       // reducer).
-      const subTaskTitleProps = this._parseSubTaskTitleTimeProps(taskData.title);
+      const subTaskTitleProps = parsePluginSubTaskTitle(
+        taskData.title,
+        this._globalConfigService.cfg()?.shortSyntax,
+        !!taskData.isIgnoreShortSyntax,
+      );
       const newTask = this._taskService.createNewTaskWithDefaults({
         title: subTaskTitleProps.title,
         additional: {
@@ -1014,6 +1001,7 @@ export class PluginBridgeService implements OnDestroy {
         false, // isAddToBacklog
         additional,
         false, // isAddToBottom
+        !!taskData.isIgnoreShortSyntax,
       );
 
       PluginLog.log('PluginBridge: Task added successfully', { taskId });
@@ -1779,26 +1767,6 @@ export class PluginBridgeService implements OnDestroy {
   /**
    * Validate that referenced project, tags, and parent task exist
    */
-  // Mirrors MarkdownPasteService._parseTimeProps: respects the user's
-  // shortSyntax.isEnableDue config, returns the cleaned title and any parsed
-  // time fields. Used for subtasks created via the plugin API, which opt out of
-  // the ShortSyntaxEffects pipeline (isIgnoreShortSyntax) to parse time only and
-  // keep tags/project inherited from the parent.
-  private _parseSubTaskTitleTimeProps(originalTitle: string): {
-    title: string;
-    timeProps: Partial<TaskCopy>;
-  } {
-    const shortSyntaxConfig =
-      this._globalConfigService.cfg()?.shortSyntax ?? DEFAULT_GLOBAL_CONFIG.shortSyntax;
-    if (!shortSyntaxConfig.isEnableDue) {
-      return { title: originalTitle, timeProps: {} };
-    }
-    const { title: cleanedTitle, ...timeProps } = parseTimeSpentChanges({
-      title: originalTitle,
-    });
-    return { title: cleanedTitle ?? originalTitle, timeProps };
-  }
-
   private async _validateTaskReferences(
     projectId?: string | null,
     tagIds?: string[],
@@ -1872,7 +1840,7 @@ export class PluginBridgeService implements OnDestroy {
     action: { type: string; [key: string]: unknown },
   ): void {
     // Check if the action is in the allowed list
-    if (!isAllowedPluginAction(action)) {
+    if (!isAllowedPluginAction(action, pluginId)) {
       PluginLog.err(
         `PluginBridge: Action type '${action.type}' is not allowed for plugins`,
       );

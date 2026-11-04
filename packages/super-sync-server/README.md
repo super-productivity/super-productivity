@@ -422,6 +422,7 @@ is no production password-based `/api/register` or `/api/login` endpoint.
 | `/api/login/magic-link*`   | Request and consume a one-time login link                         |
 | `/api/recover/passkey*`    | Replace a passkey after email-token recovery                      |
 | `/api/replace-token`       | Revoke all earlier JWTs and return a replacement                  |
+| `/api/connect/requests*`   | Sign in a new device through the browser                          |
 
 See [Authentication Architecture](./docs/authentication.md) for lifecycle and
 security boundaries. Executable routes and schemas live in

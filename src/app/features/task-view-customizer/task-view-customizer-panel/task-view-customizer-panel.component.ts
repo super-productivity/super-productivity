@@ -3,8 +3,12 @@ import {
   Component,
   computed,
   inject,
+  Injector,
   ViewChild,
 } from '@angular/core';
+import { firstValueFrom } from 'rxjs';
+import { WorkContextService } from '../../work-context/work-context.service';
+import { BoardsService } from '../../boards/boards.service';
 import { FormsModule } from '@angular/forms';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatSelectModule } from '@angular/material/select';
@@ -57,6 +61,8 @@ import { ChipListInputComponent } from '../../../ui/chip-list-input/chip-list-in
 export class TaskViewCustomizerPanelComponent {
   customizerService = inject(TaskViewCustomizerService);
   private _tagService = inject(TagService);
+  private _injector = inject(Injector);
+  private _workContextService = inject(WorkContextService);
 
   @ViewChild('customizerMenu', { static: false })
   menu!: MatMenu;
@@ -138,5 +144,24 @@ export class TaskViewCustomizerPanelComponent {
 
   onResetAll(): void {
     this.customizerService.resetAll();
+  }
+
+  /** Opens the create-view dialog prefilled with this list's filter and sort. */
+  async saveAsView(): Promise<void> {
+    const [list, undoneTasks] = await Promise.all([
+      firstValueFrom(this._workContextService.activeWorkContext$),
+      firstValueFrom(this._workContextService.undoneTasks$),
+    ]);
+    const { board, hints } = this.customizerService.buildViewFromList(
+      {
+        type: list.type,
+        id: list.id,
+        // Not used for Today: its view is named after the filter.
+        title: list.title,
+        taskIds: list.taskIds,
+      },
+      undoneTasks,
+    );
+    await this._injector.get(BoardsService).createBoard(board, hints);
   }
 }

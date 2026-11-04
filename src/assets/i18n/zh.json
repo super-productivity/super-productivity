@@ -3063,8 +3063,8 @@
       "PLANNER": "在{{plannerIcon}} <b>规划表</b>中规划接下来几天",
       "TASK_MENU_TOUCH": "向左滑动任务以打开菜单：{{playIcon}} <b>开始计时</b>、{{subtaskIcon}} <b>添加子任务</b>",
       "TASK_MENU_TOUCH_NO_TRACKING": "向左滑动任务以打开菜单，例如{{subtaskIcon}} <b>添加子任务</b>",
-      "TIMER_RUNNING": "计时器正在运行。再按一次{{playIcon}}或 <kbd>{{key}}</kbd> 即可暂停。",
-      "TIMER_RUNNING_TOUCH": "计时器正在运行。点击顶部的{{playIcon}}即可暂停。",
+      "TIMER_RUNNING": "计时器正在运行。再按一次{{pauseIcon}}或 <kbd>{{key}}</kbd> 即可暂停。",
+      "TIMER_RUNNING_TOUCH": "计时器正在运行。点击顶部的{{pauseIcon}}即可暂停。",
       "TRACK_TIME": "将鼠标悬停在任务上，按下{{playIcon}}即可开始计时"
     },
     "WANT_MORE": {

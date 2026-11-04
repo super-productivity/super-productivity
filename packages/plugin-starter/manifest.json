@@ -1,0 +1,12 @@
+{
+  "id": "my-plugin",
+  "name": "My Plugin",
+  "version": "1.0.0",
+  "manifestVersion": 1,
+  "minSupVersion": "19.3.0",
+  "description": "Says hello from the header and cheers when you finish a task.",
+  "author": "Your Name",
+  "hooks": ["taskComplete"],
+  "permissions": ["getCurrentContextTasks", "showSnack"],
+  "icon": "icon.svg"
+}

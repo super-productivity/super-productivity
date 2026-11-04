@@ -8,6 +8,7 @@ import { SnackService } from '../core/snack/snack.service';
 import { PluginCleanupService } from './plugin-cleanup.service';
 import { PluginLog } from '../core/log';
 import { ExecBeforeCloseService } from '../core/electron/exec-before-close.service';
+import { withUnknownMemberWarning } from './util/unknown-plugin-api-member.util';
 
 /**
  * Simplified plugin runner following KISS principles.
@@ -194,7 +195,10 @@ export class PluginRunner {
         );
 
         // Execute with API (pass same object for both parameter names)
-        pluginFunction(api, api);
+        const guardedApi = withUnknownMemberWarning(api, (msg) =>
+          PluginLog.warn(`[${manifest.id}] ${msg}`),
+        );
+        pluginFunction(guardedApi, guardedApi);
         resolve();
       } catch (error) {
         reject(error);
