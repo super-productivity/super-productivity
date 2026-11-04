@@ -348,3 +348,35 @@ export const getServerOps = async (
   };
   return body.ops;
 };
+
+/**
+ * The whole simple counter entity with this id as the live store holds it, or
+ * null. Unlike `readStoreCounters`, no field is dropped or coerced, so specs
+ * can compare every persisted field across clients. Callers log test-generated
+ * values only.
+ */
+export const readStoreCounterEntity = async (
+  client: Pick<SimulatedE2EClient, 'page'>,
+  id: string,
+): Promise<Record<string, unknown> | null> =>
+  client.page.evaluate((counterId) => {
+    type Root = {
+      simpleCounter?: { entities?: Record<string, Record<string, unknown>> };
+    };
+    const store = (
+      window as unknown as {
+        __e2eTestHelpers?: {
+          store?: { subscribe: (fn: (s: Root) => void) => { unsubscribe: () => void } };
+        };
+      }
+    ).__e2eTestHelpers?.store;
+    if (!store) {
+      throw new Error('window.__e2eTestHelpers.store is not available');
+    }
+    let root: Root | undefined;
+    store.subscribe((s) => (root = s)).unsubscribe();
+    const entity = root?.simpleCounter?.entities?.[counterId];
+    return entity
+      ? (JSON.parse(JSON.stringify(entity)) as Record<string, unknown>)
+      : null;
+  }, id);

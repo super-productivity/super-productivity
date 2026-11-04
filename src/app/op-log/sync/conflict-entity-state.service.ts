@@ -27,6 +27,7 @@ import { firstValueFrom } from 'rxjs';
 import { ENTITY_REGISTRY, isSingletonEntityId } from '../core/entity-registry';
 import { CURRENT_SCHEMA_VERSION } from '../persistence/schema-migration.service';
 import { foldSyncTimeSpentDeltas, isSyncTimeSpentOp } from './fold-sync-time-spent.util';
+import { replayUpdateOnRecreatedEntity } from './replay-update-on-recreated-entity.util';
 
 /**
  * Reads current entity state and entity-shaped payloads for conflict resolution.
@@ -186,10 +187,12 @@ export class ConflictEntityStateService {
         },
         // A winning syncTimeSpent delta adds to the recreated task's time, as
         // its reducer does everywhere else; its arguments are no fields (#10380).
+        // Types with semantic updates (a counter's `setSimpleCounterCounterToday`)
+        // replay them through their own reducer instead (#11465).
         applyAdditiveUpdate: (entity, op) =>
           isSyncTimeSpentOp(op)
             ? foldSyncTimeSpentDeltas(conflict.entityId, entity, [op])
-            : undefined,
+            : replayUpdateOnRecreatedEntity(entity, op),
         onMissingBaseEntity: ({ localDeletePayloadKeys, remoteOp }) => {
           // Fallback: no full base entity available. Returning the op unchanged
           // is equivalent to rewriting actionType to LWW Update — both no-op at

@@ -63,9 +63,12 @@ export interface LocalDeleteRemoteUpdateConversionOptions<
     entityType: string,
   ) => Record<string, unknown>;
   /**
-   * Applies an additive UPDATE (one whose payload holds arguments such as a
-   * delta, not field values) to `entity`, or returns undefined when `op` is
-   * not additive. Without it, every payload is read as field values.
+   * Applies an UPDATE whose payload is not field values to `entity` and
+   * returns the resulting entity: an additive delta (a task's
+   * `syncTimeSpent`) or a semantic action the host replays with its reducer
+   * (a counter's `setSimpleCounterCounterToday`). Returns undefined when the
+   * host does not apply `op` itself; the payload is then read as field
+   * values, as it is for every op when this hook is absent.
    */
   applyAdditiveUpdate?: (
     entity: Record<string, unknown>,
@@ -139,8 +142,9 @@ const getPayloadKeys = (payload: unknown): string[] | undefined => {
  * converted op replaces it with the state after all of them. Each op is
  * stored and replayed, so built from the delete payload alone, whichever
  * applied last would erase the others (#10380); carrying the same final state
- * also leaves their apply order irrelevant. An additive op (see
- * `applyAdditiveUpdate`) is applied by the host, never read as fields.
+ * also leaves their apply order irrelevant. An op the host applies itself
+ * (an additive delta or a semantic action, see `applyAdditiveUpdate`) is
+ * never read as fields.
  */
 export const convertLocalDeleteRemoteUpdatesToLww = <
   TOperation extends Operation<string> = Operation,
