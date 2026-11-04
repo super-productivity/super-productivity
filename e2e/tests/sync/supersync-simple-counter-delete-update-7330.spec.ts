@@ -6,6 +6,11 @@ import {
   closeClient,
   type SimulatedE2EClient,
 } from '../../utils/supersync-helpers';
+import {
+  getStoreCounterByTitle,
+  readStoreCounters,
+  type StoreCounter,
+} from '../../utils/audit-concurrency-helpers';
 
 /**
  * SuperSync regression test for issue #7330 (recurrence on SIMPLE_COUNTER).
@@ -130,7 +135,17 @@ const counterCount = async (client: SimulatedE2EClient): Promise<number> => {
 };
 
 test.describe('@supersync Simple Counter delete-vs-update (#7330)', () => {
-  test('concurrent delete + update resurrects a valid counter without a repair dialog', async ({
+  // test.fixme: the counter diverges permanently on the unchanged app (E2E
+  // runs 41735806038 and 41754121263, 2026-11-04). Expected: both clients
+  // hold the same counter entity. Observed after A, B, A, B syncs:
+  //   A: {"title":"","type":"ClickCounter","isEnabled":false,"countOnDay":{}}
+  //   B: {"title":"C7330-…","type":"ClickCounter","isEnabled":true,
+  //       "countOnDay":{"<today>":2}}
+  // A rebuilds the counter from its {id}-only delete payload (RECREATE_FALLBACK,
+  // lww-update.meta-reducer.ts) and never adopts B's winning state, so title,
+  // enabled state and counts are lost on A. No repair dialog fires.
+  // Issue candidate for the coordinator; un-fixme once fixed.
+  test.fixme('concurrent delete + update resurrects a valid counter without a repair dialog', async ({
     browser,
     baseURL,
     testRunId,
@@ -158,6 +173,8 @@ test.describe('@supersync Simple Counter delete-vs-update (#7330)', () => {
       await clientB.sync.setupSuperSync(syncConfig);
       await clientB.sync.syncAndWait();
       expect(await counterCount(clientB)).toBe(1);
+      const counterId = (await getStoreCounterByTitle(clientA, counterTitle))?.id;
+      expect(counterId).toBeTruthy();
 
       // ===== Phase 3: concurrent edits (offline) =====
       // A deletes the counter; B increments it. Neither has synced yet.
@@ -182,15 +199,34 @@ test.describe('@supersync Simple Counter delete-vs-update (#7330)', () => {
       expect(repairDialogsA).toEqual([]);
       expect(repairDialogsB).toEqual([]);
 
-      // No-data-loss sanity check on B: update wins over delete
-      // (suggestConflictResolution → 'local' for B's local-update-vs-remote-
-      // delete), and B never disabled the counter, so it stays visible in B's
-      // header. NOTE: we deliberately do NOT assert A's header here — A's
-      // counter is resurrected from a {id}-only payload, so it comes back
-      // `isEnabled: false` and lives in the (collapsed) "Disabled Habits"
-      // section, not the header. That disabled-resurrection is the documented
-      // known limitation, not a failure.
+      // Update wins over a concurrent delete, so the counter must exist on
+      // both clients with the same entity: same title, type, enabled state
+      // and per-day counts. A counter that one client resurrects as disabled
+      // (from its {id}-only delete payload, lww-update.meta-reducer.ts) while
+      // the other keeps it enabled is a permanent divergence, not a cosmetic
+      // limitation.
+      const comparable = (c: StoreCounter | null): Omit<StoreCounter, 'id'> | null =>
+        c && {
+          title: c.title,
+          type: c.type,
+          isEnabled: c.isEnabled,
+          countOnDay: c.countOnDay,
+        };
+      // By id: a counter resurrected from an {id}-only payload may lack its title.
+      const byId = async (client: SimulatedE2EClient): Promise<StoreCounter | null> =>
+        (await readStoreCounters(client)).find((c) => c.id === counterId) ?? null;
+      await expect
+        .poll(async () => comparable(await byId(clientB!)))
+        .toEqual(expect.objectContaining({ title: counterTitle, type: 'ClickCounter' }));
+      const counterA = comparable(await byId(clientA));
+      const counterB = comparable(await byId(clientB));
+      console.log('[7330] counter A:', JSON.stringify(counterA));
+      console.log('[7330] counter B:', JSON.stringify(counterB));
+      expect(counterA).toEqual(counterB);
+      expect(counterB?.isEnabled).toBe(true);
+      expect(Object.values(counterB?.countOnDay ?? {})).toEqual([2]);
       expect(await counterCount(clientB)).toBe(1);
+      expect(await counterCount(clientA)).toBe(1);
     } finally {
       if (clientA) await closeClient(clientA);
       if (clientB) await closeClient(clientB);
