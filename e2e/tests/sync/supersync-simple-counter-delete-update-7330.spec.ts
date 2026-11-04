@@ -1,3 +1,4 @@
+import type { Browser } from '@playwright/test';
 import { test, expect } from '../../fixtures/supersync.fixture';
 import {
   createTestUser,
@@ -20,14 +21,65 @@ import {
  * heal — so the deleting client dead-ended on a native "Data Cleanup Needed" /
  * "Repair attempted but failed" dialog after every sync.
  *
- * This test fails (the dialog fires) without the RECREATE_FALLBACK +
- * auto-fix-typia-errors changes and passes with them.
+ * The dialog assertions fail without the RECREATE_FALLBACK +
+ * auto-fix-typia-errors changes. The entity comparison (#11465) fails while the
+ * deleting client recreates the counter from an `{id}`-only delete payload: it
+ * ends with a blank, disabled counter while the other client keeps the real one.
+ * Both arrival orders are covered so convergence holds in both conflict
+ * directions.
  *
  * NOTE: the data-damage prompts are NATIVE confirm()/alert() dialogs. The
  * default E2E handler only auto-dismisses devError dialogs, so this test
  * attaches its own listener to capture (and dismiss, to avoid a hang) any
  * repair/cleanup dialog and assert none fired.
  */
+
+/** A simple counter as the live store holds it. */
+interface StoreCounter {
+  id: string;
+  title: string;
+  type: string | null;
+  isEnabled: boolean | null;
+  countOnDay: Record<string, number>;
+}
+
+/** Every simple counter in the live NgRx store (read synchronously). */
+const readStoreCounters = async (client: SimulatedE2EClient): Promise<StoreCounter[]> =>
+  client.page.evaluate(() => {
+    type Slice = { entities?: Record<string, Record<string, unknown>> };
+    const store = (
+      window as unknown as {
+        __e2eTestHelpers?: {
+          store?: {
+            subscribe: (fn: (s: { simpleCounter?: Slice }) => void) => {
+              unsubscribe: () => void;
+            };
+          };
+        };
+      }
+    ).__e2eTestHelpers?.store;
+    if (!store) {
+      throw new Error('window.__e2eTestHelpers.store is not available');
+    }
+    let root: { simpleCounter?: Slice } | undefined;
+    store.subscribe((s) => (root = s)).unsubscribe();
+    return Object.values(root?.simpleCounter?.entities ?? {}).map((c) => ({
+      id: String(c.id),
+      title: String(c.title),
+      type: typeof c.type === 'string' ? c.type : null,
+      isEnabled: typeof c.isEnabled === 'boolean' ? c.isEnabled : null,
+      countOnDay:
+        typeof c.countOnDay === 'object' && c.countOnDay !== null
+          ? (c.countOnDay as Record<string, number>)
+          : {},
+    }));
+  });
+
+const getStoreCounterByTitle = async (
+  client: SimulatedE2EClient,
+  title: string,
+): Promise<StoreCounter | null> =>
+  (await readStoreCounters(client)).find((c) => c.title === title) ?? null;
 
 const REPAIR_DIALOG_RE =
   /Repair attempted but failed|Data Cleanup Needed|automatic cleanup|references are inconsistent/i;
@@ -129,71 +181,129 @@ const counterCount = async (client: SimulatedE2EClient): Promise<number> => {
   return client.page.locator('.counters-action-group simple-counter-button').count();
 };
 
-test.describe('@supersync Simple Counter delete-vs-update (#7330)', () => {
-  test('concurrent delete + update resurrects a valid counter without a repair dialog', async ({
+/**
+ * Which device's concurrent edit reaches the server first.
+ * - `update-first`: A pulls B's update while holding its own unsynced delete,
+ *   so A resolves local-DELETE vs remote-UPDATE (remote wins) and recreates the
+ *   counter from its delete payload plus B's update (#11465).
+ * - `delete-first`: B pulls A's delete while holding its own unsynced update,
+ *   so B resolves local-UPDATE vs remote-DELETE (local wins) and A recreates
+ *   the counter from B's re-uploaded winning state.
+ */
+type ArrivalOrder = 'update-first' | 'delete-first';
+
+const runDeleteVsUpdate = async (
+  {
+    browser,
+    baseURL,
+    testRunId,
+  }: {
+    browser: Browser;
+    baseURL: string | undefined;
+    testRunId: string;
+  },
+  order: ArrivalOrder,
+): Promise<void> => {
+  const counterTitle = `C7330-${order}-${Date.now()}`;
+  let clientA: SimulatedE2EClient | null = null;
+  let clientB: SimulatedE2EClient | null = null;
+
+  try {
+    const user = await createTestUser(testRunId);
+    const syncConfig = getSuperSyncConfig(user);
+
+    // ===== Phase 1: A creates + seeds the counter, syncs to server =====
+    clientA = await createSimulatedClient(browser, baseURL!, 'A', testRunId);
+    const repairDialogsA = captureRepairDialogs(clientA);
+    await clientA.sync.setupSuperSync(syncConfig);
+
+    await createClickCounter(clientA, counterTitle);
+    await incrementCounter(clientA);
+    await clientA.sync.syncAndWait();
+
+    // ===== Phase 2: B downloads the counter =====
+    clientB = await createSimulatedClient(browser, baseURL!, 'B', testRunId);
+    const repairDialogsB = captureRepairDialogs(clientB);
+    await clientB.sync.setupSuperSync(syncConfig);
+    await clientB.sync.syncAndWait();
+    expect(await counterCount(clientB)).toBe(1);
+    const counterId = (await getStoreCounterByTitle(clientA, counterTitle))?.id;
+    expect(counterId).toBeTruthy();
+
+    // ===== Phase 3: concurrent edits (offline) =====
+    // A deletes the counter; B increments it. Neither has synced yet.
+    await deleteCounter(clientA, counterTitle);
+    await incrementCounter(clientB);
+
+    // ===== Phase 4: exchange in the chosen arrival order =====
+    if (order === 'update-first') {
+      // A resolves local-DELETE vs remote-UPDATE → remote wins → A recreates
+      // the counter from its delete payload plus B's update.
+      await clientB.sync.syncAndWait();
+      await clientA.sync.syncAndWait();
+      await clientB.sync.syncAndWait();
+    } else {
+      // B resolves local-UPDATE vs remote-DELETE → local wins → B re-uploads
+      // the counter; A recreates it from B's winning state.
+      await clientA.sync.syncAndWait();
+      await clientB.sync.syncAndWait();
+      await clientA.sync.syncAndWait();
+    }
+    await clientB.sync.syncAndWait();
+    await clientA.sync.syncAndWait();
+
+    // ===== Phase 5: assertions =====
+    // No native data-repair/cleanup dialog fired (the original #7330 net).
+    expect(repairDialogsA).toEqual([]);
+    expect(repairDialogsB).toEqual([]);
+
+    // Update wins over a concurrent delete, so the counter must exist on both
+    // clients as the same entity: same title, type, enabled state and per-day
+    // counts (#11465). A blank, disabled shell on the deleting client is a
+    // permanent divergence.
+    const comparable = (c: StoreCounter | null): Omit<StoreCounter, 'id'> | null =>
+      c && {
+        title: c.title,
+        type: c.type,
+        isEnabled: c.isEnabled,
+        countOnDay: c.countOnDay,
+      };
+    // By id: a counter resurrected from an {id}-only payload may lack its title.
+    const byId = async (client: SimulatedE2EClient): Promise<StoreCounter | null> =>
+      (await readStoreCounters(client)).find((c) => c.id === counterId) ?? null;
+    await expect
+      .poll(async () => comparable(await byId(clientB!)))
+      .toEqual(expect.objectContaining({ title: counterTitle, type: 'ClickCounter' }));
+    const counterA = comparable(await byId(clientA));
+    const counterB = comparable(await byId(clientB));
+    // Test-generated title and counts only; no user content.
+    console.log(`[7330 ${order}] counter A:`, JSON.stringify(counterA));
+    console.log(`[7330 ${order}] counter B:`, JSON.stringify(counterB));
+    expect(counterA).toEqual(counterB);
+    expect(counterB?.isEnabled).toBe(true);
+    expect(Object.values(counterB?.countOnDay ?? {})).toEqual([2]);
+    expect(await counterCount(clientB)).toBe(1);
+    expect(await counterCount(clientA)).toBe(1);
+  } finally {
+    if (clientA) await closeClient(clientA);
+    if (clientB) await closeClient(clientB);
+  }
+};
+
+test.describe('@supersync Simple Counter delete-vs-update (#7330, #11465)', () => {
+  test('update reaches the server first: the deleting client adopts the full counter', async ({
     browser,
     baseURL,
     testRunId,
   }) => {
-    const counterTitle = `C7330-${Date.now()}`;
-    let clientA: SimulatedE2EClient | null = null;
-    let clientB: SimulatedE2EClient | null = null;
+    await runDeleteVsUpdate({ browser, baseURL, testRunId }, 'update-first');
+  });
 
-    try {
-      const user = await createTestUser(testRunId);
-      const syncConfig = getSuperSyncConfig(user);
-
-      // ===== Phase 1: A creates + seeds the counter, syncs to server =====
-      clientA = await createSimulatedClient(browser, baseURL!, 'A', testRunId);
-      const repairDialogsA = captureRepairDialogs(clientA);
-      await clientA.sync.setupSuperSync(syncConfig);
-
-      await createClickCounter(clientA, counterTitle);
-      await incrementCounter(clientA);
-      await clientA.sync.syncAndWait();
-
-      // ===== Phase 2: B downloads the counter =====
-      clientB = await createSimulatedClient(browser, baseURL!, 'B', testRunId);
-      const repairDialogsB = captureRepairDialogs(clientB);
-      await clientB.sync.setupSuperSync(syncConfig);
-      await clientB.sync.syncAndWait();
-      expect(await counterCount(clientB)).toBe(1);
-
-      // ===== Phase 3: concurrent edits (offline) =====
-      // A deletes the counter; B increments it. Neither has synced yet.
-      await deleteCounter(clientA, counterTitle);
-      await incrementCounter(clientB);
-
-      // ===== Phase 4: B's update reaches the server first, then A pulls it =====
-      // This guarantees A resolves local-DELETE vs remote-UPDATE → 'remote'
-      // wins → A recreates the counter from its {id}-only delete payload (the
-      // exact path that produced `type === undefined` in the report).
-      await clientB.sync.syncAndWait();
-      await clientA.sync.syncAndWait();
-
-      // A re-uploads the resurrected counter; B converges on it.
-      await clientB.sync.syncAndWait();
-
-      // ===== Phase 5: assertions =====
-      // THE regression net: NO native data-repair/cleanup dialog fired. Before
-      // the fix, A's recreated typeless counter fails post-sync validation and
-      // pops the "Data Cleanup Needed" / "Repair attempted but failed" native
-      // dialog; with the fix the recreated counter is valid, so nothing fires.
-      expect(repairDialogsA).toEqual([]);
-      expect(repairDialogsB).toEqual([]);
-
-      // No-data-loss sanity check on B: update wins over delete
-      // (suggestConflictResolution → 'local' for B's local-update-vs-remote-
-      // delete), and B never disabled the counter, so it stays visible in B's
-      // header. NOTE: we deliberately do NOT assert A's header here — A's
-      // counter is resurrected from a {id}-only payload, so it comes back
-      // `isEnabled: false` and lives in the (collapsed) "Disabled Habits"
-      // section, not the header. That disabled-resurrection is the documented
-      // known limitation, not a failure.
-      expect(await counterCount(clientB)).toBe(1);
-    } finally {
-      if (clientA) await closeClient(clientA);
-      if (clientB) await closeClient(clientB);
-    }
+  test('delete reaches the server first: the deleting client adopts the full counter', async ({
+    browser,
+    baseURL,
+    testRunId,
+  }) => {
+    await runDeleteVsUpdate({ browser, baseURL, testRunId }, 'delete-first');
   });
 });
