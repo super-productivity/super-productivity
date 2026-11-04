@@ -227,9 +227,8 @@ test.describe('@webdav a rejected REPAIR does not stop file sync for good', () =
   // snapshot, with no whole-dataset dialog. Today every file-based snapshot
   // upload resets the remote's snapshot base, so a peer with meaningful
   // pending ops cannot keep them and gets the dialog (long-standing, not
-  // caused by #11352's fix). Issue to be filed by coordinator: file-based
-  // REPAIR snapshot forces peers with pending work into the whole-dataset
-  // dialog.
+  // caused by #11352's fix). Tracked in #11470: file-based REPAIR snapshot
+  // forces peers with pending work into the whole-dataset dialog.
   test.fixme('a peer with pending work keeps it when the healed client uploads its REPAIR', async ({
     browser,
     baseURL,
