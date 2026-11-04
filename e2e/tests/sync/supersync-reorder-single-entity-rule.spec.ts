@@ -1023,6 +1023,8 @@ test.describe('@supersync released reorder rule (#10364)', () => {
 
             // The released UI pins in place; the current UI drags or pins.
             // The reorder commutes with the pin: snapshot it to pin the winner.
+            const orderBefore = (await snapshot(current.page, 'project notes', ids))
+              .order;
             let reorderedOrder: string[] = [];
             if (releasedPins) {
               await perform(
@@ -1063,7 +1065,8 @@ test.describe('@supersync released reorder rule (#10364)', () => {
             expect(final.other.filter((id) => id === ids[0])).toHaveLength(1);
             // The only reorder (current's drag when the released client pins,
             // otherwise B's) commutes with the pin and survives the crossing.
-            expect(reorderedOrder).not.toEqual([]);
+            // A drag that left the order unchanged would make the pin vacuous.
+            expect(reorderedOrder).not.toEqual(orderBefore);
             expect(final.order).toEqual(reorderedOrder);
             const rejected = (await rows(current.page)).filter(
               (r) => r.source === 'local' && !!r.rejectedAt,
