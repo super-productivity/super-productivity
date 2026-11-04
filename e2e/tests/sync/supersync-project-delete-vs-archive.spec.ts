@@ -23,7 +23,8 @@ import {
  * Same class as #11466 (tag delete vs archive): the remote moveToArchive and
  * the remote deleteProject each touch only the receiving client's archive, so
  * the archived task can survive on one side with a dangling projectId while
- * the other side removed it. Both archives must agree in both upload orders.
+ * the other side removed it. Project deletes win, so the archived task must
+ * be gone on both clients in both upload orders.
  * See webdav-project-delete-vs-archive.spec.ts.
  */
 
@@ -40,8 +41,8 @@ const setWsDownloadBlocked = async (
 
 test.describe('@supersync Project delete vs archive', () => {
   for (const order of ['delete syncs first', 'archive syncs first'] as const) {
-    // #11486: A keeps the archived task with a dangling projectId, B drops it.
-    test.fixme(`concurrent project delete and archive converge on the archive (${order}) @supersync`, async ({
+    // #11486: A kept the archived task with a dangling projectId, B dropped it.
+    test(`concurrent project delete and archive remove the archived task on both clients (#11486, ${order}) @supersync`, async ({
       browser,
       baseURL,
       testRunId,
@@ -147,17 +148,15 @@ test.describe('@supersync Project delete vs archive', () => {
           );
           archived[label] = await getArchiveYoungTaskProjectId(client.page, task1Id!);
         }
-        // Which outcome is right (kept or removed) is a design question for
-        // deleteProject's delete-wins handling; only record it. Load-bearing:
-        // both archives must agree about the archived task.
+        // Delete wins: B's delete cleanup (removeAllArchiveTasksForProject) drops
+        // the archived task, so A must not keep it either.
         console.log(
           `[project-delete-vs-archive] ${order}: archived Task1 projectId per client ${JSON.stringify(archived)}`,
         );
-        test.info().annotations.push({
-          type: 'archived Task1 projectId',
-          description: JSON.stringify(archived),
+        expect(archived, 'archived Task1 must be gone on A and B').toEqual({
+          A: null,
+          B: null,
         });
-        expect(archived.A, 'A and B archives must agree on Task1').toBe(archived.B);
       } finally {
         if (clientA) await closeClient(clientA);
         if (clientB) await closeClient(clientB);

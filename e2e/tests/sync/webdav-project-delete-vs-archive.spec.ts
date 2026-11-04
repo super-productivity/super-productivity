@@ -26,8 +26,8 @@ import { Page } from 'playwright';
 /**
  * Client A deletes a project while client B archives one of its tasks.
  * Same class as #11466 (tag delete vs archive). Both archives must agree about
- * the archived task in both sync orders. Whether it is kept or removed is
- * only recorded. See supersync-project-delete-vs-archive.spec.ts.
+ * the archived task in both sync orders: project deletes win, so it must be
+ * gone on both. See supersync-project-delete-vs-archive.spec.ts.
  */
 
 const syncOk = async (page: Page, syncPage: SyncPage): Promise<void> => {
@@ -38,8 +38,8 @@ const syncOk = async (page: Page, syncPage: SyncPage): Promise<void> => {
 
 test.describe('@webdav Project delete vs archive', () => {
   for (const order of ['delete syncs first', 'archive syncs first'] as const) {
-    // #11486: A keeps the archived task with a dangling projectId, B drops it.
-    test.fixme(`concurrent project delete and archive converge on the archive (${order})`, async ({
+    // #11486: A kept the archived task with a dangling projectId, B dropped it.
+    test(`concurrent project delete and archive remove the archived task on both clients (#11486, ${order})`, async ({
       browser,
       baseURL,
       request,
@@ -128,17 +128,15 @@ test.describe('@webdav Project delete vs archive', () => {
         expect(await isTaskInStore(page, task2Id!), `${label}: Task2 live`).toBe(false);
         archived[label] = await getArchiveYoungTaskProjectId(page, task1Id!);
       }
-      // Which outcome is right (kept or removed) is a design question for
-      // deleteProject's delete-wins handling; only record it. Load-bearing:
-      // both archives must agree about the archived task.
+      // Delete wins: B's delete cleanup (removeAllArchiveTasksForProject) drops
+      // the archived task, so A must not keep it either.
       console.log(
         `[project-delete-vs-archive] ${order}: archived Task1 projectId per client ${JSON.stringify(archived)}`,
       );
-      test.info().annotations.push({
-        type: 'archived Task1 projectId',
-        description: JSON.stringify(archived),
+      expect(archived, 'archived Task1 must be gone on A and B').toEqual({
+        A: null,
+        B: null,
       });
-      expect(archived.A, 'A and B archives must agree on Task1').toBe(archived.B);
 
       await closeContextsSafely(contextA, contextB);
     });
