@@ -30,6 +30,16 @@ describe('privacyExport', () => {
       expect(result.token).not.toBe('abc123xyz');
     });
 
+    it('should mask the agent capture private key', () => {
+      const input = {
+        sync: {
+          captureKey: { v: 1, privateKeyPkcs8: 'MIGHAgEA', publicKeySpki: 'MFkw' },
+        },
+      };
+      const result = JSON.parse(privacyExport(input));
+      expect(result.sync.captureKey.privateKeyPkcs8).toMatch(/^privateKeyPkcs8__\d+$/);
+    });
+
     it('should mask title field', () => {
       const input = { title: 'My Private Task' };
       const result = JSON.parse(privacyExport(input));

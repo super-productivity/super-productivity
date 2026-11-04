@@ -17,6 +17,23 @@ cross-version migration is active.
 > unified client operation-log pipeline; use the field guide and its focused
 > source map for current behavior.
 
+**Sections:**
+
+- [Introduction: The Core Architecture](#introduction-the-core-architecture)
+- [Overview](#overview)
+- [Why this architecture: rejected alternatives](#why-this-architecture-rejected-alternatives)
+- [Part A: Local Persistence](#part-a-local-persistence): [A.1 Database Architecture](#a1-database-architecture) · [A.2 Write Path](#a2-write-path) · [A.3 Read Path (Hydration)](#a3-read-path-hydration) · [A.4 Compaction](#a4-compaction) · [A.5 Multi-Tab Coordination](#a5-multi-tab-coordination) · [A.6 LOCAL_ACTIONS Token for Effects](#a6-local_actions-token-for-effects) · [A.6.1 Disaster Recovery](#a61-disaster-recovery) · [A.7 Schema Migrations](#a7-schema-migrations)
+- [Part B: File-Based Sync](#part-b-file-based-sync): [B.1 Two Current Wire Formats](#b1-two-current-wire-formats) · [B.2 Bootstrap, Incremental Catch-up, and Gaps](#b2-bootstrap-incremental-catch-up-and-gaps) · [B.3 Archive Boundary](#b3-archive-boundary) · [B.4 Executable Owners](#b4-executable-owners)
+- [Part C: Server Sync](#part-c-server-sync): [C.1 How Server Sync Differs from File-Based](#c1-how-server-sync-differs-from-file-based) · [C.2 Operation Sync Protocol](#c2-operation-sync-protocol) · [C.3 Full-State Operations via Snapshot Endpoint](#c3-full-state-operations-via-snapshot-endpoint) · [C.4 Conflict Detection](#c4-conflict-detection) · [C.5 Conflict Resolution (LWW Auto-Resolution)](#c5-conflict-resolution-lww-auto-resolution) · [C.6 Full-State Filtering](#c6-full-state-filtering)
+- [Part D: Data Validation & Repair](#part-d-data-validation--repair): [D.1 Validation Architecture](#d1-validation-architecture) · [D.2 REPAIR Operation Type](#d2-repair-operation-type) · [D.3 Checkpoint A: Payload Validation](#d3-checkpoint-a-payload-validation) · [D.4 Checkpoints B & C: Hydration Validation](#d4-checkpoints-b--c-hydration-validation) · [D.5 Checkpoint D: Post-Sync Validation](#d5-checkpoint-d-post-sync-validation) · [D.6 Executable Owners](#d6-executable-owners)
+- [Operational Boundaries](#operational-boundaries)
+- [Part E: Smart Archive Handling](#part-e-smart-archive-handling): [E.1 The Problem with Syncing Archives](#e1-the-problem-with-syncing-archives) · [E.2 New Strategy: Deterministic Local Side Effects](#e2-new-strategy-deterministic-local-side-effects) · [E.6 Time Tracking Sync Semantics](#e6-time-tracking-sync-semantics) · [E.7 Archive Payload Boundary](#e7-archive-payload-boundary)
+- [Part F: Atomic State Consistency](#part-f-atomic-state-consistency): [F.1 The Problem: Effects Create Non-Atomic Changes](#f1-the-problem-effects-create-non-atomic-changes) · [F.2 The Solution: Meta-Reducers for Atomic Changes](#f2-the-solution-meta-reducers-for-atomic-changes) · [F.3 Multi-Entity Operation Capture](#f3-multi-entity-operation-capture) · [F.4 When to Use Meta-Reducers vs Effects](#f4-when-to-use-meta-reducers-vs-effects) · [F.5 Board-Style Hybrid Pattern](#f5-board-style-hybrid-pattern) · [F.6 Guidelines for New Features](#f6-guidelines-for-new-features)
+- [Source Map](#source-map)
+- [References](#references)
+
+Line numbers: `rg -n '^#{1,3} ' <this file>`, then read one section with `sed -n`.
+
 ---
 
 ## Introduction: The Core Architecture
@@ -76,7 +93,7 @@ The Operation Log enables two types of synchronization:
 - **Resolution:** Semantic precedence and eligible disjoint-field merge run first;
   remaining conflicts resolve deterministically with LWW. Ordinary operation
   conflicts do not block on a winner dialog. Rejected rows are retained only until
-  compaction, and production conflict-journal emission is currently disabled.
+  compaction. The device-local conflict journal and review UI are retired.
 
 **B. File-provider operation transport**
 
@@ -212,7 +229,7 @@ the application in
 those interfaces into design docs: both the envelope and row metadata evolve.
 
 Synced application-model recovery data lives in `SUP_OPS`. Provider credentials,
-conflict-journal records, plugin caches, and local UI/browser settings have
+plugin caches, and local UI/browser settings have
 separate owners; see the [user-data reference](../wiki/3.06-User-Data.md).
 
 ### Remote Apply Checkpoints
@@ -330,6 +347,47 @@ the recovery operation plus snapshot are committed atomically. See
 [`operation-log-hydrator.service.ts`](../../src/app/op-log/persistence/operation-log-hydrator.service.ts)
 and
 [`operation-log-recovery.service.ts`](../../src/app/op-log/persistence/operation-log-recovery.service.ts).
+
+A genesis op (`MIGRATION` / `RECOVERY`) is not replayable by other clients — it
+carries this client's whole state as an ordinary Batch op that receivers apply
+as a no-op. A client whose history is still only that genesis op (never synced,
+no full-state op) is therefore treated like a fresh client with local data at
+join time: it gets the local-data conflict dialog on a non-empty server, or
+seeds an empty server with a `SYNC_IMPORT`
+(`SyncLocalStateService.isNeverSyncedGenesisClient`, #9863). Because that
+download-side decision is what actually ships the state, API-based providers
+(SuperSync) never upload the genesis op itself: `OperationLogUploadService`
+leaves it out of the upload set and marks it synced locally once the round's
+full-state ops are settled (`isGenesisEntityType`, #9921). While the upload is
+still blocked (no encryption key yet), or when this client's own `SYNC_IMPORT`
+was just dropped on `SYNC_IMPORT_EXISTS`, the op stays pending, because a
+pending genesis op is what makes the incoming-import gate prompt. File-based
+providers keep uploading it: there the ops upload is what writes the state
+snapshot. Servers may still hold genesis ops uploaded by older clients;
+receivers apply them as no-ops as before.
+
+Both join-time decisions are gated on `SyncLocalStateService.hasMeaningfulStoreData`,
+which uses `hasAnyUserData` — `hasMeaningfulStateData` widened with archives, live
+time tracking and repeat configs, since a legacy client's work can be entirely
+archived. Archived tasks and flushed time tracking live only in IndexedDB and the
+synchronous store snapshot substitutes an empty archive, so the gate falls back to
+the archive-inclusive snapshot when the narrow check finds nothing (#9932).
+Everything it counts is strictly non-default, keeping it a subset of the seeding's
+own check (`hasServerMigrationStateData`).
+
+The wider notion is deliberately confined to that gate. `hasMeaningfulStateData`
+itself stays narrow because `hasNothingWorthUploading` consumes it in the refusing
+direction (#9256), where over-reporting "has data" would let a device holding
+nothing overwrite the server — time tracked against onboarding example tasks being
+exactly such a false positive.
+`ServerMigrationService.handleServerMigration` reports `created` /
+`reused_pending` / `skipped` (with a reason). On the server-reset branch only a
+genuine failure to ship existing state — validation failed, or no client id —
+answers `server_migration_skipped`, so the upload waits for the next cycle
+instead of settling the client onto a server without its base state. A state
+judged empty has nothing to ship, and a server that is no longer empty has been
+seeded by someone else; both continue with the ordinary upload, because blocking
+either would strand the cycle with the client's ops still pending.
 
 ## A.4 Compaction
 
@@ -656,6 +714,32 @@ Therefore:
 2. A change that older clients would MISAPPLY must not ship behind a bump alone. No fleet percentage makes it safe while released v17–v18.14 clients still sync: one lagging device silently misapplies the ops for its whole account and writes the result back with dominating clocks. Treat such changes as blocked until the v17–v18.14 sync fleet is effectively extinct — or redesign them to degrade (option 1).
 3. **Precondition: any bump PR must address the downgrade relabel (#8770).** Local hydration has no future-version gate — `stateNeedsMigration()` is `version < target` — so a vN client reading a v(N+1) state cache (rollback, snap channel lag, old sideloaded APK) loads it unmigrated (Checkpoint B validation is non-fatal and never repairs), and the next snapshot/compaction write stamps it `CURRENT_SCHEMA_VERSION`. The cache is then v(N+1)-shaped under a vN label — additive residue survives because typia's `createValidate` does not strip excess properties — and on re-upgrade the N→N+1 migration runs a **second** time on already-migrated state. Until #8770 ships a guard (repro-first, per the sync-change rule), every migration MUST be a no-op on already-migrated state (v1→v2 guards via `hasMigratedFields`; barrier migrations are no-ops by construction), and the bump PR must state how downgraded clients are handled.
 
+#### Widening a wire vocabulary needs no bump — but the receiver must block
+
+`opType`, `syncImportReason`, and restore-point `type` are strict enums only on
+the REQUEST side of the SuperSync contract, where the server validates per op.
+On the RESPONSE side they are loose strings, and the receiver decides per op
+(`remote-op-block.util.ts`, the one block predicate shared by
+`remote-ops-processing.service.ts`, the full-state conflict gate's prefix cut,
+and the USE_REMOTE preflight): an unknown
+value blocks the batch at that op exactly like `VERSION_TOO_NEW` — prefix
+applied, cursor frozen, "update your app" snack — never a skip, which would
+advance the cursor past data the client never understood. (Restore points of
+an unknown type are simply kept in the list and rendered generically.) Before this the
+transport parser rejected the whole page with a generic error and wedged every
+not-yet-updated device (#8764). Two consequences:
+
+- Adding a value to one of these unions does not require a schema bump; per
+  rule 0 above, don't add one for it.
+- Clients released before this receiver change still wedge on any widening,
+  so a widening must wait for a release-lag window after it shipped. The
+  window covers servers too: `validation.service.ts` rejects unknown op types
+  on upload, so self-hosted servers must carry the new value first.
+
+A type-level assertion in `super-sync.ts` keeps the sync-core `OpType` enum
+and `SUPER_SYNC_OP_TYPES` identical, so a value added to one side fails the
+build instead of surfacing as a runtime block on other devices.
+
 #### Executable sources and release checks
 
 Follow the executable contracts instead of copying their shapes into this guide:
@@ -703,7 +787,14 @@ fallbacks:
 - WebDAV/Nextcloud can enforce atomic replacement when a read returns a strong
   ETag, which the upload sends as `If-Match`. Without a strong ETag, `rev` falls
   back to a content hash; the pre-upload GET detects an already-stale writer but
-  cannot close the GET→PUT race, so concurrency protection is best effort.
+  cannot close the GET→PUT race, so concurrency protection is best effort. A
+  strong generic-WebDAV ETag with a content-coding suffix (`-gzip`, `-br`,
+  `-deflate`) counts as missing: the origin compares `If-Match` against the bare
+  tag, and deriving that tag could match a different revision (#9251, #10808).
+  When the pre-upload GET also carries ownCloud/Nextcloud's `OC-ETag`, the PUT
+  sends that as `If-Match`, narrowing the race. Those servers keep the same tag
+  for two writes within one second, so the content-hash check stays, and a
+  write landing in that same second can still slip through.
 - LocalFile also uses a content hash and a read/check/write sequence with no
   cross-process CAS. It is a single-writer, backup-only transport, not a safe
   concurrent multi-device writer.
@@ -711,6 +802,16 @@ fallbacks:
 Where the provider enforces CAS, a revision mismatch aborts the write and a
 later cycle downloads before retrying. The best-effort backends cannot broadly
 guarantee that every simultaneous write race will abort.
+
+With no saved format preference, discovery joins existing v2/v3 files, and an
+empty folder gets `EMPTY_FOLDER_SYNC_FORMAT` in `file-based-sync-format.ts`: v2,
+as in v19.1. The v3 empty-folder default (#10289) stays off until its snapshot,
+interrupted-write and legacy-overwrite follow-ups land. Discovery ignores v16
+`__meta_` files; the v2/v3 readers still stop normal syncs with
+`LegacySyncFormatDetectedError`, and a confirmed force overwrite writes the
+empty-folder format. Saved `isUseSplitSyncFiles: false` keeps v2 behavior;
+`true` explicitly opts into migration. Provider errors never establish
+emptiness. Discovery is target-scoped, in memory, and does not persist a choice.
 
 The v3 migration is one-way for a sync folder. It leaves a v3 tombstone in the
 legacy `sync-data.json` location so clients that do not understand the split
@@ -724,10 +825,58 @@ treats file `syncVersion` as a synthetic transport watermark and exposes it as
 it once; snapshot replacement can reset it, which the gap path detects. It is
 not the provider `rev`/ETag and does not prove per-operation ordering. One upload
 can carry multiple operations under the same new watermark; stable operation
-IDs provide durable deduplication, while vector clocks carry causality.
+IDs deduplicate ops still in the local log, while vector clocks carry causality.
 
 1. **Normal catch-up:** download the bounded ops buffer and pass every retained
-   candidate through the common applied-ID and conflict pipeline.
+   candidate through the common applied-ID and conflict pipeline. Each retained
+   op carries the `syncVersion` it was written at (`sv`), which the adapter
+   exposes as its `serverSeq`. The applied-ID set alone cannot recognise an op
+   that local compaction already pruned (7-day retention), so the download
+   also skips an op when its `sv` is at or below the persisted cursor **and**
+   the local vector clock covers its author counter (#10119). Otherwise an old
+   create op still in the buffer would re-create an entity archived or deleted
+   here since. Keep both checks: older clients could advance their cursor past
+   unseen ops during upload, and a restored local log can lag its saved cursor.
+   Ordinary uploads now reject a cold read whose revision differs from the last
+   committed revision (#10239). The next cycle downloads/applies that baseline
+   before retrying; rejection does not acknowledge local ops, write the file, or
+   advance the cursor. Warm-cache uploads retain the conditional PUT check.
+   An empty revision (OneDrive reports `''` without an ETag) never counts as a
+   match. Whether OneDrive's content-response ETag equals its metadata `eTag`
+   for one file version is unverified; a mismatch would repeatedly defer upload.
+   V2 and v3 ops uploads only extend a file this client applied, with or without
+   retained ops: an unapplied migration probe or a cold read without a matching
+   committed revision defers before dedup acknowledgements or compaction
+   (#10395). An applied cycle cache also permits healing a corrupt primary from
+   its backup. A snapshot-only file (for example another device's `SYNC_IMPORT`
+   seed) appearing after this client's download must be loaded first. Full-state
+   snapshot uploads still write unconditionally (except REPAIR), so a device answering an empty download
+   with its own `SYNC_IMPORT` can still replace a seed that landed after its
+   check. Format migration can publish the equivalent v3 representation first;
+   a subsequent download/apply permits pending operations to append safely.
+   Browser coverage in `webdav-stale-monolith.spec.ts` exercises encrypted/plain
+   v3 and compaction at the real buffer cap, including fresh-client restart.
+   `webdav-upgrade-baseline.spec.ts` removes only `lastSeenClocks` from persisted
+   adapter metadata: v2/v3 must retain baseline content when a replacement plus
+   tail masks the counter reset, while an already hydrated base and a pending
+   backup restore retain their normal behavior (#10469/#10478). Dropbox/OneDrive
+   have no browser harness; their unchanged-revision upgrade prechecks run
+   through the adapter's provider transport seam in its focused specs.
+   Legacy ops without `sv` use the file's
+   `syncVersion` as a conservative upper bound. After local compaction prunes
+   such an op's applied ID, a later file write advances this upper bound past
+   the cursor, so the old op can be re-applied (reproduced for v2 and v3 with
+   an archived task). Skipping it on clock coverage alone is unsafe: conflict
+   resolution can merge a remote clock even when its op was not applied locally.
+   Seq-0 downloads and downloads after a gap reset do not use this filter. A
+   remote op whose apply failed is no longer retried once compaction prunes it,
+   matching SuperSync. Counter reuse remains a separate concern for snapshot
+   hydration: its local-clock-dominates shortcut assumes equal/covered counters
+   represent the same operations. A reset that violates that assumption needs
+   its own app-level reproduction. The #10239 browser replacement has an unseen
+   snapshot base and a file clock that dominates the last committed remote
+   clock, but is concurrent with the observer's pending local edit. This does
+   not establish safety when the local clock already covers the replacement.
 2. **Fresh client / forced seq-0:** return a full state/archive baseline. In v2,
    that baseline represents the monolith and its retained ops. In v3, the ops
    file points to a validated snapshot generation; retained ops newer than the
@@ -735,6 +884,68 @@ IDs provide durable deduplication, while vector clocks carry causality.
 3. **Gap:** a version reset, snapshot replacement, or trimmed operation needed by
    this client signals a gap. The caller retries from seq 0 and installs the
    causal baseline instead of pretending the remaining buffer is complete.
+   One upload is one batch under one `syncVersion`, so trimming cuts only at a
+   batch boundary: a partial oldest batch at `sinceSeq + 1` would look
+   contiguous to a client whose cursor sits just before it, and that client
+   would never receive the batch's head (#10973). Writers since #10973 drop the
+   rest of a batch the cap would cut into (a newest batch larger than the cap
+   stays whole until the next upload drops it) and set the optional
+   envelope field `oldestBatchComplete`. Released writers trimmed per op and
+   omit the field, so a reader treats an uncertified oldest batch at
+   `sinceSeq + 1` as a gap when the buffer may have been trimmed: a v2 buffer
+   at `MAX_RECENT_OPS`, or a v3 batch at or below the compaction snapshot's
+   `syncVersion`. Released readers need no change for fixed writers' files: a
+   dropped batch shows as `oldestOpSyncVersion > sinceSeq + 1`. Buffers trimmed
+   by pre-v18.14 writers (cap 500) are not detected.
+   A replacement's tail ops can advance the watermark back past this client's
+   and refill the buffer, hiding all three. So the file's vector clock must
+   also equal or dominate the last-seen one, which is persisted and also
+   recorded on upload. Otherwise the lineage broke (#9170).
+   A replacement can also dominate the reader's clock. Explicit snapshot uploads
+   therefore record `snapshotBaseClock` in the file envelope; ordinary uploads,
+   trimming, split compaction, and format migration preserve it. If the reader's
+   last-seen clock does not cover this base, it must hydrate the snapshot before
+   consuming the tail, regardless of the watermark. After commit, the last-seen
+   clock covers the base and incremental sync resumes. Writers apply the same
+   rule: an upload that finds an unseen base is refused as a retryable
+   conflict, so a stale client cannot append to a replacement it never
+   hydrated (in v2, overwriting its snapshot with stale state). Before the
+   first recorded clock (e.g. the first sync after upgrading) the reader
+   judges the base by its op-log vector clock instead: every snapshot it
+   hydrated or wrote is merged into that clock, so an uncovered base is one it
+   never loaded, and pending local ops alone do not flag it (#10258). It skips
+   the check while a local full-state op is unsynced: a backup restore or
+   clean slate resets the clock to a fresh client id, and that op's upload
+   replaces the remote anyway. The writer check still needs a recorded clock; a sync cycle downloads before it
+   uploads, so the reader check runs first. The rev pre-check also waits for a
+   recorded clock, so that first sync reads the file once and commits its
+   clock.
+   This optional metadata requires no schema bump: older readers ignore it,
+   but older writers can omit it. Masked dominating replacements written by,
+   or subsequently rewritten by, those clients remain a mixed-version gap;
+   the older version/lineage/trim checks still apply to files without the marker.
+   A gap that is only a trim (the file's `syncVersion` did not go backwards,
+   its base is seen, and its clock equals or dominates the last-seen one) is a
+   catch-up, not a replacement (`snapshotExtendsLastSeen`, #10972). A client
+   that completed a sync with this target (seq cursor above 0) and has no
+   pending full-state op then hydrates the snapshot and keeps its pending ops
+   (after a target switch the adapter can hold a last-seen baseline staged by
+   a download it never applied, so having synced elsewhere is not enough): they move past the baseline with
+   ids and clocks unchanged, replay on top of it, and upload normally.
+   Receivers resolve any crossing on the no-pending LWW path. A pending op the
+   snapshot clock already covers (uploaded before a crash skipped
+   `markSynced`) is settled, not replayed twice. A kept op the snapshot state
+   cannot take (its project was deleted remotely) is reducer-rejected with the
+   discard snack, as receivers drop it. A full-state op that lands during the
+   download (a backup import) still asks. Known residual: once the
+   other client compacted its crossing op (`COMPACTION_RETENTION_MS`, 7
+   days), the receiver finds no local op to compare and applies the kept edit
+   even when it is older, as on the #9073 path. Second residual: a
+   replacement written before v19.2.0 leaves no snapshot base and resets only
+   `syncVersion`, so one whose later uploads climbed back past the expected
+   version reads as a catch-up; if its `SYNC_IMPORT` then filters the kept op
+   on receivers, they diverge where a dialog used to ask. Any other concurrent
+   snapshot still asks Keep local / Keep remote.
 4. **Commit:** the downloaded `rev`, vector clock, and expected synthetic
    watermark remain staged until the caller confirms that baseline and ops were
    durably applied. Cancelling a data-conflict decision does not advance the
@@ -802,8 +1013,10 @@ but differ in pagination and baseline behavior. For SuperSync, one normal cycle:
    effects, applied IDs, and clocks are durable;
 4. uploads pending local rows in bounded batches and processes per-operation
    acceptance/rejection results plus any piggybacked remote operations; and
-5. re-uploads newly synthesized local-win operations in the same cycle through a
-   bounded reconciliation loop.
+5. re-uploads newly synthesized local-win operations, plus any operation the
+   server rejected with a retryable `INTERNAL_ERROR`, in the same cycle through
+   a bounded reconciliation loop; whatever is still pending after the budget is
+   reported as `UNKNOWN_OR_CHANGED`, never `IN_SYNC`.
 
 An incompatible operation, failed apply, or cancelled full-state decision leaves
 its operation and suffix uncommitted, so a later cycle downloads them again. The
@@ -881,7 +1094,7 @@ Arrival-order behavior remains only where the client cannot construct a safe,
 deterministic local side: for example, its evidence was compacted into the
 snapshot frontier, an operation is multi-entity, or the retained side is a local
 delete/archive that needs compensation machinery. Those fallback cases do not
-create a conflict object or journal row. See
+create a conflict object. See
 [Composition residual (pre-existing class)](./conflict-journal-and-review.md#composition-residual-pre-existing-class)
 for the remaining composition and mixed-receiver limitations.
 
@@ -895,8 +1108,8 @@ Conflicts first apply explicit semantic precedence and eligible disjoint-field m
 fall back to Last-Write-Wins (LWW) via
 `ConflictResolutionService.autoResolveConflictsLWW()`. For the current high-level policy, see
 the field guide's [causality section](./sync-architecture.html#causality); the focused
-[conflict journal and review contract](./conflict-journal-and-review.md) owns the more volatile
-merge and review details.
+[conflict merge contract](./conflict-journal-and-review.md) owns the more volatile
+merge and composition details.
 
 ### LWW Resolution Strategy
 
@@ -906,11 +1119,10 @@ merge and review details.
    the maximum-timestamp operations chooses the winner, so either the local or remote side can
    win deterministically
 
-Winner selection and disjoint-field merging remain active in production. Conflict journaling is
-an observe-only capability and is not required for resolution: the production remote-processing
-path currently sets `disableConflictJournal: true`, so it does not emit journal entries. The
-journal store and review UI therefore remain dormant/incomplete rather than a complete record of
-resolved conflicts. See the focused contract above for current status and lifecycle details.
+Winner selection and disjoint-field merging remain active in production. The
+former journal was device-local observation only; its removal changes neither
+resolution nor the sync wire. See the focused contract above for retirement and
+composition limits.
 
 ### When Local Wins
 
@@ -927,6 +1139,13 @@ When local state is newer, we can't just reject the remote ops - that would caus
 
 A warning-level log is emitted: `OpLog.warn('LWW local wins - creating update op for ${entityType}:${entityId}')`
 
+When a replacement snapshot includes incoming task-time changes (including a
+subtask's contribution to its parent), project them in received order using the
+time reducers. Persist the incoming prefix before the replacement: moving only
+a timer delta ahead of an earlier absolute edit, removal, or rounding can lose
+tracked time or make parent totals differ between live state and restart replay.
+The replacement's clock must include every time operation it incorporates.
+
 ### Rejected Operations
 
 When operations are rejected (either local or remote):
@@ -935,19 +1154,101 @@ When operations are rejected (either local or remote):
 - `getUnsynced()` excludes rejected ops (won't re-upload)
 - Compaction may eventually delete old rejected ops
 
+A rejection explained by a commuting task-time crossing is not replaced
+(#10214): conflict detection applies a remote edit that commutes with a task's
+pending time work and leaves the pending ops alone, so their clocks miss it and
+the server rejects them. When the rejection's `existingClock` is the clock of
+that applied remote row, every pending op of the task moves past it in place
+(`rebaseCommutingTimeDeltaRejections` → `rebasePendingLocalOps`): same id, seq
+and payload, fresh clock. A replacement op would replay a `syncTimeSpent` delta
+twice (the rejected original still replays, or a snapshot already holds it), and
+an LWW snapshot would turn the delta into an absolute write over a third
+device's concurrent time. The applied row is the causal proof, so no seq-0
+re-download is needed. The snapshot path runs instead unless every condition
+below holds:
+
+- **Every moved op was rejected by this upload**, which stored none of them on
+  the server. Any other pending op may be one that another tab uploaded and has
+  not marked synced yet (acknowledgements are deferred past piggyback
+  processing). The move also holds the UPLOAD lock, so no other tab uploads
+  meanwhile. A pending `syncTimeSpent` delta of this client is the exception,
+  e.g. one tracked while the rejected upload was in flight (#10614): if it was
+  stored after all and this tab re-uploads it first,
+  [receipt recovery](time-delta-retry-recovery.md) restores its clock. If the
+  uploading tab acknowledges it first, the local clock can differ from the
+  stored one; the op id is unchanged, so its time still counts once.
+- **Moved ops commute with every later op of the task the server already
+  accepted from this client** (`isDisjointMergeEligible`). Next to a crossing
+  delta the server accepts this client's own delta and then each later op, which
+  dominates it. Receivers apply the moved ops after those, so a moved first
+  rename would win over an accepted second rename. Ops of any entity type that
+  declare the task count, such as a planner move.
+- **Neither side touches `tagIds`, `projectId`, `parentId`, `dueDay` or
+  `dueWithTime`** (`touchesCrossEntityTaskFields`). Ops of other entity types
+  write those fields in their reducers without declaring the task (deleting a
+  tag rewrites every task's `tagIds`), so no check here sees them. A moved tag
+  assignment would land after a tag deletion and revive the deleted tag.
+
+A raised counter of an op the state cache covers is written into the cache clock
+too, because boot rebuilds the durable clock from that clock plus the op tail.
+Snapshot saves and compaction clear the per-tab clock cache before they read the
+clock, so no tab writes a state cache that misses a counter another tab raised
+in place. The write re-asserts the sync epoch first (see "The sync-epoch fence"
+in the contributor sync model).
+
 ### Archive-Wins Rule
 
 When a `moveToArchive` operation conflicts with a field-level update (e.g., rename, time tracking changes), the archive operation **always wins** regardless of timestamps. This bypasses the normal LWW timestamp comparison because archiving represents explicit user intent that should not be reversed by a concurrent field update.
 
 **Rationale:** If Client A archives a task and Client B concurrently renames it, the archive must win — otherwise, the LWW update would "resurrect" the archived task back into the active store by replacing its state.
 
-**Implementation:** `ConflictResolutionService` checks whether either the local or remote side contains a `TASK_SHARED_MOVE_TO_ARCHIVE` action. If so, the archive side wins automatically, and a new archive operation is created with a merged vector clock (via `_createArchiveWinOp()`).
+**Implementation:** `ConflictResolutionService` checks whether either the local or remote side contains a `TASK_SHARED_MOVE_TO_ARCHIVE` action. If so, the archive side wins automatically, and a new archive operation is created with a merged vector clock (via `buildArchiveWinOp()`).
+
+- **One op per archive intent (#10102):** a bulk archive that wins several rows emits ONE recreation shared by all of them; pending exact copies of one intent left by pre-fix clients are folded back into one (`bulk-archive-intent.util.ts`).
+- **Restored tasks are never re-archived (#10220):** the archive is re-emitted scoped to the other tasks (`buildScopedArchiveReplacementOp()`, or dropped if none remain), and each restored top-level task gets a current-state LWW Update:
+  - _own row conflicted_ — the update replaces the rejected `restoreTask` and resolves as a local win, overriding the concurrent remote edit regardless of timestamps (as in the partial-archive path of #9537);
+  - _no row_ — the `restoreTask` stays pending and the update follows it to carry `isDone: false`, because other devices never saw the archive and ignore a restore of an active task.
+  - _subtasks_ — each live subtask without a row of its own in the batch gets a current-state update too, in both cases: a `restoreToToday` restore clears their schedule, which the rejected or ignored `restoreTask` does not carry.
+- **Known limitation:** that update is an ordinary pending op. A newer concurrent remote edit of the task arriving in a LATER sync beats it by whole-op LWW and both local ops are rejected, so other devices keep the task done while this one keeps `isDone: false` until `isDone` changes again — the pre-existing [composition residual](./conflict-journal-and-review.md#composition-residual-pre-existing-class) class.
 
 This is the **first level** of archive resurrection prevention. The **second level** is the [bulk archive filter](../../src/app/op-log/apply/bulk-archive-filter.util.ts), which pre-scans operation batches for archive operations and skips any LWW Update operations targeting entities being archived in the same batch. This two-level defense handles the 3+ client scenario where LWW Updates can arrive before or after archive ops in the same batch.
 
+Same-batch restores (#10220) — restart replay is status-blind, so a rejected bulk archive still precedes the restore and the local-win update that re-asserts it:
+
+- Ops AFTER a `restoreTask` treat the task it brings back as active; ops between the archive and the restore still skip it, so a stale update cannot recreate the task and turn the restore into a no-op.
+- A later archive makes the task archived again; a later delete leaves it deleted but not archived, so a `recreatesEntityAfterDelete` update still applies.
+- A `restoreTask` whose root is already active is ignored, as `handleRestoreTask` ignores it: its payload subtasks are not treated as restored and the restore point does not move.
+- Ordinary task updates do not create missing tasks in the pre-scan: a rejected update between archive and restore cannot make the restore look like a duplicate or suppress a later winning update.
+- Logs replayed after upgrading may apply an LWW Update the pre-#10220 filter skipped; state moves to what op-by-op apply produces.
+- A whole-task `recreatesEntityAfterDelete` update after a same-batch delete counts as a restore (#10381). A fresh device or a restart gets the delete, the recreate and later snapshots of the task in one batch, and must apply those snapshots like a device that got them in separate syncs. A `'patch'` recreate does not count: `lwwUpdateMetaReducer` ignores it for an absent task. Like a restore of an active root, a recreate of a task that is already back does not move the restore point. A recreate that reducer drops because its project or parent is gone still counts, so a later unflagged update re-adds the task with that dangling `projectId`/`parentId`, as it does op by op; skipping it only in bulk would bring the divergence back.
+- Known gaps (no observed occurrence yet): a subtask restored on its own under a still-archived parent is not detected; `restoreDeletedTask` (undo delete) is not treated as a restore, so a same-batch LWW Update after it is still skipped; the pre-scan keeps one restore point per task, so when one batch archives and restores the same task more than once, an LWW Update between an earlier restore and a later archive is still skipped (as before #10220).
+
+Both levels only work if the archive op DECLARES the entity. A client awake on
+the websocket downloads one op per trigger, so an LWW Update that escaped level
+1 arrives in its own batch, where level 2 has no archive op to match — and the
+update recreates the task next to its archived copy. There is deliberately no
+receiver-side "is it in the archive?" guard: such a check cannot tell an update
+concurrent with the archive from a legitimate later re-introduction (a
+superseded `restoreTask` followed by later edits of the same task, or one from a
+released client, is re-emitted as a plain LWW Update — a sole one keeps its
+semantic type since #10196, with live task/subtask snapshots and no original
+`restoreToToday` instruction that could undo a later Planner move), and skipping
+the latter diverges clients permanently. The fix is upstream — declare the full
+footprint so level 1 never lets the update through. A pre-fix sender can still
+cause one visible, re-archivable resurrection during a mixed-fleet rollout.
+
+**Footprint:** `moveToArchive.meta.entityIds` lists the top-level tasks AND the
+subtasks its reducer cascades to (`collectArchivedTaskEntityIds`), so archive
+precedence applies to concurrent subtask edits on both the client and the
+server conflict probe. Old ops carry top-level ids only; every consumer
+re-derives the cascade. Partial-rejection re-scoping keys on the payload's
+top-level `tasks` and re-derives the footprint from the scoped tasks
+(`scopeBulkArchivePayload`).
+
 **Key files:**
 
-- `src/app/op-log/sync/conflict-resolution.service.ts` — Archive-wins check and `_createArchiveWinOp()`
+- `src/app/op-log/sync/conflict-resolution.service.ts` — Archive-wins check
+- `src/app/op-log/sync/bulk-archive-intent.util.ts` — `buildArchiveWinOp()`, one recreation per archive intent; `buildScopedArchiveReplacementOp()`, the narrowed re-emit
 - `src/app/op-log/apply/bulk-hydration.meta-reducer.ts` — Pre-scan archive filtering
 
 ### Superseded Operation Handling for moveToArchive
@@ -957,6 +1258,8 @@ The `SupersededOperationResolverService` treats `moveToArchive` as a special cas
 This is necessary because `moveToArchive` removes entities from the NgRx store (via the archive reducer), so `getCurrentEntityState()` returns `undefined` for archived entities. Without this special handling, the superseded operation resolver would be unable to re-create the operation, and archived tasks would be lost.
 
 **Implementation:** Before entity-by-entity processing, `SupersededOperationResolverService` identifies bulk semantic operations like `moveToArchive` and re-creates them with the original payload and a merged vector clock, preserving the full task data in `MultiEntityPayload` format.
+
+Known gap: this re-creation does not check for tasks restored after the archive was captured (unlike the conflict path, #10220), so a superseded bulk archive can re-archive a restored task — not reproduced yet.
 
 **Key file:** `src/app/op-log/sync/superseded-operation-resolver.service.ts`
 
@@ -1063,7 +1366,7 @@ which the repair was based. The authoritative payload and summary types live in
 ### REPAIR Operation Behavior
 
 - **During startup**: A terminal REPAIR can use the safe full-state direct-load shortcut when no row in the replay range has pending reducer work. Otherwise the range is migrated and replayed normally.
-- **During sync**: REPAIR is narrower than an explicit import. Operations concurrent with it are replayed on top of the repaired snapshot (including a concurrent prefix that must move after the full-state boundary). On SuperSync, REPAIR never requests a clean slate; the server locks the user's sequence row and accepts the snapshot only when `repairBaseServerSeq` still equals the current server sequence. A stale repair is retired locally before the concurrent server suffix is downloaded.
+- **During sync**: REPAIR is narrower than an explicit import. Operations concurrent with it are replayed on top of the repaired snapshot (including a concurrent prefix that must move after the full-state boundary). On SuperSync, REPAIR never requests a clean slate; the server locks the user's sequence row and accepts the snapshot only when `repairBaseServerSeq` still equals the current server sequence. A stale repair is retired locally before the concurrent server suffix is downloaded. On file-based providers, a REPAIR is written only conditionally on the remote rev this client last downloaded and applied (#9023), and only when its `repairBaseServerSeq` is still the server seq committed after that download (#11483): a REPAIR that stayed pending across a later download predates that download's ops. Either mismatch answers `REPAIR_STALE`, and the same rebase path rebuilds it from the current state.
 - **Upload ordering**: If a full-state upload fails, later regular operations stay pending. Permanent snapshot failures are classified by the central rejection handler after any remote work has been applied. A rejected local explicit import/restore remains a durable upload barrier across later sync cycles; incremental operations resume only after a newer full-state snapshot succeeds. Rejected remote imports are conflict-resolution history, and stale automatic REPAIR is excluded so its concurrent suffix can download and trigger a fresh repair if still necessary.
 - **User notification**: automatic/in-lock repair is non-blocking; explicitly
   interactive repair may use the acknowledgement dialog.
@@ -1135,12 +1438,17 @@ and
 
 ### Compaction Trigger Coordination
 
-The 500-ops compaction trigger uses a persistent counter stored in `state_cache.compactionCounter`:
+The 500-ops compaction trigger (`COMPACTION_THRESHOLD`) counts in memory, in
+`OperationLogEffects`:
 
-- Each atomic append increments the durable counter
-- Counter persists across app restarts
-- Counter is reset after successful compaction
-- The in-memory mirror avoids an IndexedDB read on every threshold check
+- Each local operation write increments the counter; at the threshold a
+  background compaction starts
+- The counter resets after a compaction that ran; it does not survive a restart
+- Across restarts, the hydrator's startup check (`compactIfBloated()`) compacts
+  once per boot when the log holds more than `STARTUP_COMPACTION_OP_THRESHOLD`
+  ops, some of them synced
+- Nothing increments `state_cache.compactionCounter` any more: it only seeds the
+  in-memory counter (in practice 0), and compaction resets it
 
 ### Device Identity and Legacy Data
 
@@ -1154,6 +1462,34 @@ migration source: the first read on a not-yet-migrated device copies the id
 forward (`ClientIdService`). The clientId is non-regenerable (it keys the vector
 clock), so a transient IndexedDB read failure propagates rather than minting a
 fresh id.
+
+### Full-State Replacement Transactions
+
+Five store methods replace durable state, each with its own policy:
+`commitFileSnapshotBaseline` (exact `lastAppliedOpSeq` tail check),
+`runRemoteStateReplacement` (raw-rebuild marker that resumes after a crash),
+`runDestructiveStateReplacement` (backup restore and clean slate; rotates
+`client_id`), `replaceRejectedRepair` (stale-repair rebase) and the
+genesis/recovery anchors for legacy data. They share only the adapter
+transaction wrapper and are deliberately not merged: a common helper would need
+a policy switch per invariant. Re-audit before proposing one.
+
+- **Acknowledgement must not lead durable work.** A provider cursor may lag
+  durable state (redelivery is deduplicated by retained op ids, and after
+  pruning by cursor plus author-clock coverage) but never run ahead of it.
+- **Multi-commit flows are not one transaction.** Raw rebuild keeps
+  `rawRebuildIncomplete` until the replay finishes, so a crash forces another
+  raw download; the original safety backup is reused, not overwritten.
+- **Locks do not extend the IDB transaction.** The operation-log lock
+  serializes writers; NgRx state, localStorage cursors and other databases are
+  outside it.
+- **Archive retry is at least once**; assert final state and additive totals,
+  not call or row counts.
+- **Originating repair persists both archive partitions with the `REPAIR` row**
+  (inside the mixed-source append). Empty incoming partitions never clear a
+  nonempty archive, matching released receivers. The `state_cache` write is
+  optional: if it fails, the live repair still completes and restart recovers
+  from the retained `REPAIR` tail.
 
 ### Compaction During Active Sync
 

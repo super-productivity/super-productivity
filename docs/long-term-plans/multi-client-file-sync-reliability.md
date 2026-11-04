@@ -216,6 +216,11 @@ The question is whether to go **1 → 3** (quick fix now, proper solution later)
 
 ### Do we need `listFiles()`?
 
+> **Update (2026-09):** no provider implements `listFiles()` any more. It had no
+> caller and was removed from every provider, the Electron IPC bridge and the
+> Android SAF stub (#10343), so Level 3 has to restore it. Master commit
+> `878c9a3b4c` still has the implementations.
+
 **Yes, but only for peer discovery** — and it can be minimized with a manifest approach.
 
 Level 3 needs `listFiles()` for two things:
@@ -269,12 +274,12 @@ Level 3 needs `clients/<id>/ops/` directories to exist:
 
 ### Level 3 prerequisites by provider
 
-| Prerequisite                  | WebDAV       | Dropbox                  | Electron                          | Android                        |
-| ----------------------------- | ------------ | ------------------------ | --------------------------------- | ------------------------------ |
-| `listFiles()`                 | exists       | exists                   | **needs IPC handler** (~10 lines) | **needs implementation**       |
-| Directory creation            | auto (MKCOL) | needs `createDir()` call | needs `mkdirSync()` call          | needs `createDirectory()` call |
-| `uploadFile()` to subdirs     | works        | works                    | works                             | works                          |
-| `downloadFile()` from subdirs | works        | works                    | works                             | works                          |
+| Prerequisite                  | WebDAV       | Dropbox                  | Electron                  | Android                        |
+| ----------------------------- | ------------ | ------------------------ | ------------------------- | ------------------------------ |
+| `listFiles()`                 | **restore**  | **restore**              | **restore** (IPC handler) | **needs implementation**       |
+| Directory creation            | auto (MKCOL) | needs `createDir()` call | needs `mkdirSync()` call  | needs `createDirectory()` call |
+| `uploadFile()` to subdirs     | works        | works                    | works                     | works                          |
+| `downloadFile()` from subdirs | works        | works                    | works                     | works                          |
 
 ---
 
@@ -294,7 +299,7 @@ Recent commit `87d884ed17` ("fix(sync): prevent recurring task duplication acros
 
 ### Electron LocalFile also missing `listFiles()`
 
-The IPC event `FILE_SYNC_LIST_FILES` is defined in `ipc-events.const.ts:46` and exposed in `preload.ts:47-48`, but there is **no `ipcMain.handle()` implementation** in the Electron main process. So `listFiles()` is missing on both Android SAF and Electron LocalFile.
+Superseded: the Electron `FILE_SYNC_LIST_FILES` handler was added later (April 2026), then removed with every other `listFiles()` implementation (#10343). See the note in [Level 3 Coordination Design](#level-3-coordination-design).
 
 ### Directory creation varies by provider
 

@@ -10,6 +10,7 @@ A custom, high-performance synchronization server for Super Productivity.
 > - [Sync Architecture Field Guide](../../docs/sync-and-op-log/sync-architecture.html) - Whole-system maintainer overview
 > - [Server Architecture](./docs/architecture.md) - Server-only contracts and trust boundaries
 > - [Backup & Disaster Recovery](./docs/backup-and-recovery.md) - Backup setup and recovery procedures
+> - [Production Capacity](./docs/production-capacity.md) - Measured I/O limits of the hosted deployment and what they mean when you write a query
 
 ## Architecture
 
@@ -26,22 +27,42 @@ The server uses an **append-on-write retained operation log** backed by **Postgr
 | ------------------------------ | -------------------------------------------------------------------------------------------------- |
 | **Scoped server authority**    | Server owns per-user order and accepted upload results, not app-state semantics                    |
 | **Two-part conflict handling** | Server detects upload conflicts; clients resolve rejections and download-side concurrency          |
-| **E2E encryption support**     | Optional payload encryption leaves routing and causal metadata plaintext                           |
+| **E2E encryption support**     | Client-enforced payload encryption; routing and causal metadata stay plaintext                     |
 | **Idempotent uploads**         | Durable operation-ID uniqueness is the backstop; request IDs add a five-minute process-local cache |
 
 ## Quick Start
 
+SuperSync is in **beta**. Before choosing it, compare it with the other sync
+providers in the
+[sync provider comparison](../../docs/wiki/3.08-Sync-Integration-Comparison.md);
+Nextcloud remains a valid choice for new installs; generic WebDAV also works
+but is experimental (the app lists it as "not recommended / no support").
+
+### Prerequisites
+
+Self-hosting is possible, but support for it is limited. The tested
+self-hosted setup is the bundled Docker Compose stack
+(SuperSync + PostgreSQL + Caddy), with the desktop (Electron), Android or iOS
+app as clients. It needs:
+
+- **An AMD64 (x86-64) Linux host.** The published image is built for
+  `linux/amd64` only.
+- **A domain and ports 80/443.** A DNS record for your sync domain (e.g.
+  `sync.example.com`) must point at the host, and ports 80 and 443 must be
+  reachable from the internet and not used by another service: Caddy obtains
+  and renews the TLS certificate for `DOMAIN` automatically. Running without a
+  public domain, or behind an existing reverse proxy, is not a tested recipe.
+- **A working SMTP account.** Every sign-up is confirmed by an emailed
+  verification link, and login and recovery links are emailed too. The server
+  starts without `SMTP_HOST`, but with `NODE_ENV=production` (the Docker
+  default) every email then fails and nobody can finish signing up. Never
+  enable `TEST_MODE` to skip email: it exposes test routes and is rejected in
+  production.
+- Docker with the Compose plugin, `curl`, `git`, and `jq` on the deploy host.
+  The image revision check requires Docker Compose support for
+  `docker compose config --format json`.
+
 ### Docker (Recommended)
-
-The easiest way to run the server is using the provided Docker Compose configuration.
-Deploy hosts need Docker with the Compose plugin, `curl`, `git`, and `jq`.
-The image revision check requires Docker Compose support for
-`docker compose config --format json`.
-
-> **There are no release tags.** `ghcr.io/super-productivity/supersync` publishes
-> only `latest` and `master-<sha>`, both built from `master`, so a default deploy
-> tracks upstream `master` rather than a released version. Pin `SUPERSYNC_IMAGE`
-> to a `master-<sha>` tag if you need a fixed one.
 
 ```bash
 # 1. Clone the repo (deploy.sh runs from this checkout) and enter this directory
@@ -51,12 +72,77 @@ cd super-productivity/packages/super-sync-server
 # 2. Copy environment example
 cp env.example .env
 
-# 3. Configure .env (Set JWT_SECRET, DOMAIN, POSTGRES_PASSWORD)
+# 3. Configure .env — see "Required settings" below
 nano .env
 
 # 4. Deploy the stack and run database migrations
 ./scripts/deploy.sh
 ```
+
+> **The default deploy tracks `master`.** `latest` and `master-<sha>` are built
+> from `master`. Releases also publish `vX.Y.Z`; older releases have one only if
+> it was backfilled, so check the tag exists before pinning. `deploy.sh` runs
+> `git pull --ff-only` on your checkout first and requires the image's revision
+> label to match the latest commit that touched the server's image inputs there.
+> To run a release, deploy from its tag:
+>
+> ```bash
+> git fetch --tags && git checkout vX.Y.Z
+> # in .env: SUPERSYNC_IMAGE=ghcr.io/super-productivity/supersync:vX.Y.Z
+> ./scripts/deploy.sh
+> ```
+>
+> On a tag checkout `deploy.sh` warns that `git pull` failed; that is expected and
+> leaves the checkout untouched. A `master-<sha>` pin works the same way with
+> `git checkout <sha>`. The deploy scripts and compose file come from the
+> checkout; migrations run from the image.
+>
+> Right after a push to `master` the image can lag behind it (the build takes
+> from several minutes to about an hour). `deploy.sh` then stops with "image
+> revision does not match" before touching the running stack: wait for the
+> [image build](https://github.com/super-productivity/super-productivity/actions/workflows/supersync-docker.yml)
+> to finish and run it again.
+
+#### Required settings
+
+Set these in `.env` before the first deploy (`env.example` explains each one
+and uses `sync.your-domain.com` as the placeholder domain):
+
+| Setting                           | What to set                                                                                                                                                                                                                                                     |
+| :-------------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DOMAIN`                          | Your sync domain without protocol, e.g. `sync.example.com`. Caddy requests the certificate for it.                                                                                                                                                              |
+| `PUBLIC_URL`                      | `https://` + your domain. Used in emailed links; the server refuses to start in production if it is not HTTPS.                                                                                                                                                  |
+| `WEBAUTHN_RP_ID`                  | Your domain without protocol or port. Passkeys bind to it — changing it later invalidates every registered passkey.                                                                                                                                             |
+| `WEBAUTHN_ORIGIN`                 | Normally the same as `PUBLIC_URL`.                                                                                                                                                                                                                              |
+| `JWT_SECRET`, `POSTGRES_PASSWORD` | `openssl rand -base64 32` for `JWT_SECRET`, `openssl rand -hex 24` for `POSTGRES_PASSWORD` (it is embedded in `DATABASE_URL`, where a base64 `/` breaks parsing); both ship empty and the stack will not start without them. Keep `.env` private (`chmod 600`). |
+| `SMTP_*`                          | Host, port, TLS mode, user, password and sender address of your mail provider. Without them, sign-up emails fail.                                                                                                                                               |
+| `ALLOWED_EMAILS`                  | **Set this for a private install**, e.g. `you@example.com` or `*@example.com`. Left empty, anyone who can reach the server may register.                                                                                                                        |
+
+Leave `CORS_ORIGINS` at its default unless you also host the web app yourself
+(see [Configuration](#configuration)).
+
+#### Deploying and upgrading
+
+`./scripts/deploy.sh` is both the install and the upgrade command. Run it again
+to update, or to apply a changed `.env` (a plain `docker compose up -d` does not
+run migrations, see the upgrade note below). Your data volumes are kept. Besides
+the stack above, it also starts the optional monitoring containers from
+`docker-compose.monitoring.yml` whenever that file is in the checkout: Dozzle
+(log viewer, read-only Docker socket) on `127.0.0.1:8080` and Uptime Kuma on
+`127.0.0.1:3001`. Both listen on loopback only; reach them through an SSH
+tunnel, or delete that file to skip them.
+
+On a first install the output shows several `Error: P3018` blocks, each followed
+by `Recovering ... outside Prisma migrate`. That is the automatic handling of
+`CREATE INDEX CONCURRENTLY` migrations described below, not a failure; the
+migration step is done when it prints `All migrations have been successfully
+applied`.
+
+After a successful deploy, `deploy.sh` prints a **Monitoring status** block.
+Its warnings (for example that `health-alert.sh` is not in your crontab) are
+advisory: they report on the optional alerting described in
+[scripts/MONITORING-README.md](./scripts/MONITORING-README.md) and do not mean
+the deploy failed.
 
 `./scripts/deploy.sh --build` builds the image locally instead of pulling it.
 That compiles the whole monorepo **on the deploy host**, beside the running
@@ -80,7 +166,9 @@ connection uses `postgres:5432`; existing installs that already set
 > **Upgrade note:** because `RUN_MIGRATIONS_ON_STARTUP` defaults to `false`,
 > `docker compose pull && docker compose up -d` can leave the app running
 > against unapplied migrations. Use `./scripts/deploy.sh` for production
-> updates, or `./scripts/deploy.sh --build` for local image builds.
+> updates, or `./scripts/deploy.sh --build` for local image builds. The server
+> logs an error naming any missing migrations at startup, and logs the image
+> revision in its `Server started on …` line.
 
 `deploy.sh` verifies that the pulled/built `supersync` image has an
 `org.opencontainers.image.revision` label matching the latest commit that
@@ -144,10 +232,19 @@ printf '%s\n' \
 >
 > - **Database created with `prisma db push`** (no migration history): its
 >   logical schema already matches the latest `schema.prisma`, but `db push`
->   cannot represent the `operations_entity_ids_gin` storage reloption. Apply
->   that database-only state and drain the old pending list before baselining
->   the whole chain. The explicit transaction keeps `SET LOCAL` scoped to the
->   `ALTER`; if its lock timeout fires, retry this off-hours.
+>   cannot represent storage reloptions — neither the
+>   `operations_entity_ids_gin` fastupdate setting nor the `operations`
+>   autovacuum factors. Apply that database-only state and drain the old pending
+>   list before baselining the whole chain, or the loop below marks those two
+>   reloption migrations applied on a database that never received them. (This
+>   closes the reloption gap only — the partial indexes in `20260512000000`,
+>   `20260514000000` and `20260514000002` are equally unrepresentable in
+>   `db push` and remain a known gap, tracked with `schema.prisma`'s partial
+>   index notes.) Each explicit transaction keeps `SET LOCAL` scoped to its
+>   statement; if a lock timeout fires, retry off-hours. The autovacuum `ALTER`
+>   takes only `SHARE UPDATE EXCLUSIVE` so it never blocks app traffic, but SUE
+>   does conflict with itself, so it is bounded too rather than left to wait
+>   behind a running `VACUUM` with no feedback.
 >
 >   ```bash
 >   (
@@ -156,6 +253,11 @@ printf '%s\n' \
 >       'BEGIN;' \
 >       "SET LOCAL lock_timeout = '1s';" \
 >       'ALTER INDEX "operations_entity_ids_gin" SET (fastupdate = off);' \
+>       'COMMIT;' | npx prisma db execute --schema prisma/schema.prisma --stdin
+>     printf '%s\n' \
+>       'BEGIN;' \
+>       "SET LOCAL lock_timeout = '5s';" \
+>       'ALTER TABLE "operations" SET (autovacuum_vacuum_insert_scale_factor = 0.02);' \
 >       'COMMIT;' | npx prisma db execute --schema prisma/schema.prisma --stdin
 >     printf '%s\n' \
 >       'BEGIN;' \
@@ -181,11 +283,29 @@ app/proxy services with compose dependencies disabled so the bundled Postgres
 container is not required. Prisma migrations still run against the configured
 `DATABASE_URL`.
 
-### Payload byte backfill and batch uploads
+**PostgreSQL 16 or newer is the supported version**, and it is what CI and
+production run (the bundled compose image is `postgres:16-alpine`). PostgreSQL
+14 and 15 still work and still receive every migration — `migrate-deploy.sh`
+warns and continues — they are simply not covered by the test suite.
 
-The `payload_bytes` column must be fully backfilled before enabling batched
-uploads in production. During a partial backfill, quota reconciles use a slower
-fallback for old operation rows with `payload_bytes = 0`.
+**PostgreSQL 14 on a Linux host is the hard floor**, and it is enforced by the
+connection rather than documented: the migration pipeline sets
+`client_connection_check_interval` on its connections so an abandoned
+`CREATE INDEX CONCURRENTLY` cancels itself instead of holding the table lock. An
+older or non-Linux server rejects that startup option with a FATAL
+`unrecognized configuration parameter` error on every migration connection, so
+nothing is ever applied. That also covers the chain's own PG13 requirement —
+migration `20260828000003` sets `autovacuum_vacuum_insert_scale_factor`, and on
+an older server the resulting `22023` would match no recovery gate in the
+script, leaving the migration failed and every later deploy dying on `P3009`.
+
+### Payload byte backfill
+
+Backfilling is optional for startup: the incremental storage counter keeps
+working without it. But while a user still has legacy rows with
+`payload_bytes = 0`, exact quota reconciles for that user are deferred (the
+server refuses to overwrite the exact counter with an approximate sum), so run
+the backfill if you want reconciliation to work for legacy accounts.
 
 Run the backfill to completion:
 
@@ -199,16 +319,6 @@ In a source checkout before `npm run build`, use:
 npm run migrate-payload-bytes:dev
 ```
 
-Only then set both rollout flags:
-
-```bash
-SUPERSYNC_BATCH_UPLOAD=true
-SUPERSYNC_PAYLOAD_BYTES_BACKFILL_COMPLETE=true
-```
-
-The server refuses to start with `SUPERSYNC_BATCH_UPLOAD=true` unless the
-completion flag is also set.
-
 ### Manual Setup (Development)
 
 ```bash
@@ -220,7 +330,9 @@ npx prisma generate
 
 # Set up .env
 cp env.example .env
-# Edit .env to point to your PostgreSQL instance (DATABASE_URL)
+# Edit .env: point DATABASE_URL at your PostgreSQL instance and set JWT_SECRET —
+# it ships empty and the server refuses to start without it (POSTGRES_PASSWORD
+# is only read by the Docker Compose stack)
 
 # Push schema to DB
 npx prisma db push
@@ -237,20 +349,25 @@ npm start
 
 All configuration is done via environment variables.
 
-| Variable                                | Default                              | Description                                                                                                                                    |
-| :-------------------------------------- | :----------------------------------- | :--------------------------------------------------------------------------------------------------------------------------------------------- |
-| `PORT`                                  | `1900`                               | Server port                                                                                                                                    |
-| `HOST`                                  | `0.0.0.0`                            | Server bind address. Use `::` for IPv6-only deployments.                                                                                       |
-| `DATABASE_URL`                          | -                                    | PostgreSQL connection string (e.g. `postgresql://user:pass@localhost:5432/db`)                                                                 |
-| `JWT_SECRET`                            | -                                    | **Required.** Secret for signing JWTs (min 32 chars)                                                                                           |
-| `PUBLIC_URL`                            | -                                    | **Required.** Public URL used for email links (e.g. `https://sync.example.com`)                                                                |
-| `CORS_ORIGINS`                          | `https://app.super-productivity.com` | Allowed CORS origins. `*` allows any origin — never do this in production, CORS runs with `credentials: true`.                                 |
-| `SMTP_HOST`                             | -                                    | SMTP Server for emails                                                                                                                         |
-| `WEBAUTHN_RP_ID`                        | `localhost`                          | **Required for passkeys.** Your domain, without protocol or port. Passkeys bind to this — changing it invalidates every registered credential. |
-| `WEBAUTHN_ORIGIN`                       | `http://localhost:1900`              | **Required for passkeys.** Where users reach the auth UI, with protocol.                                                                       |
-| `WEBAUTHN_RP_NAME`                      | value of `WEBAUTHN_RP_ID`            | Name shown in your users' OS passkey prompt.                                                                                                   |
-| `ALLOWED_EMAILS`                        | - (anyone may register)              | Comma-separated exact addresses and/or `*@domain` rules.                                                                                       |
-| `SUPERSYNC_DEFAULT_STORAGE_QUOTA_BYTES` | `104857600` (100 MB)                 | Quota for accounts created from now on. Existing accounts keep the value stored on their row.                                                  |
+| Variable                                | Default                              | Description                                                                                                                                                                                                                  |
+| :-------------------------------------- | :----------------------------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PORT`                                  | `1900`                               | Server port                                                                                                                                                                                                                  |
+| `HOST`                                  | `0.0.0.0`                            | Server bind address. Use `::` for IPv6-only deployments.                                                                                                                                                                     |
+| `DATABASE_URL`                          | -                                    | PostgreSQL connection string (e.g. `postgresql://user:pass@localhost:5432/db`)                                                                                                                                               |
+| `JWT_SECRET`                            | -                                    | **Required.** Secret for signing JWTs (min 32 chars)                                                                                                                                                                         |
+| `PUBLIC_URL`                            | -                                    | **Required.** Public URL used for email links (e.g. `https://sync.example.com`). Must be `https://` in production.                                                                                                           |
+| `CORS_ORIGINS`                          | `https://app.super-productivity.com` | Allowed browser origins, comma-separated. The desktop and mobile apps need no entry. Add the exact origin (e.g. `https://sp.example.com`) only if you host the web app separately. `*` is rejected at startup in production. |
+| `TRUST_PROXY`                           | `loopback,uniquelocal`               | Peers whose `X-Forwarded-*` headers are trusted: proxy-addr keywords, IPs or CIDR ranges. Add e.g. `100.64.0.0/10` for a Tailscale proxy.                                                                                    |
+| `SMTP_HOST`                             | -                                    | SMTP server for verification, login and recovery emails. **Required in production** — without it the server starts, but every email fails.                                                                                   |
+| `WEBAUTHN_RP_ID`                        | `localhost`                          | **Required for passkeys.** Your domain, without protocol or port. Passkeys bind to this — changing it invalidates every registered credential.                                                                               |
+| `WEBAUTHN_ORIGIN`                       | `http://localhost:1900`              | **Required for passkeys.** Where users reach the auth UI, with protocol.                                                                                                                                                     |
+| `WEBAUTHN_RP_NAME`                      | value of `WEBAUTHN_RP_ID`            | Name shown in your users' OS passkey prompt.                                                                                                                                                                                 |
+| `ALLOWED_EMAILS`                        | - (anyone may register)              | Comma-separated exact addresses and/or `*@domain` rules. **Set it for a private install**; empty means open public registration.                                                                                             |
+| `SUPERSYNC_DEFAULT_STORAGE_QUOTA_BYTES` | `104857600` (100 MB)                 | Quota for accounts created from now on. Existing accounts keep the value stored on their row.                                                                                                                                |
+| `CAPTURE_OAUTH_CLIENTS`                 | Claude and Claude Code               | JSON array of `{ "clientId": "https://…", "name": "…", "redirectUris": ["https://…"] }`; replaces the pinned OAuth client allowlist. No dynamic registration or URL fetching.                                                |
+| `CAPTURE_CONNECTOR_ENABLED`             | `false`                              | Agent task capture: the `/mcp` endpoint and `/api/capture`. Single instance only (in-process retry window and per-grant limit).                                                                                              |
+| `CAPTURE_REVIEW_EMAIL`                  | -                                    | With `CAPTURE_REVIEW_CODE`: the one verified account the reviewer code connects to. Set both or neither. See [Capture OAuth](#capture-oauth).                                                                                |
+| `CAPTURE_REVIEW_CODE`                   | -                                    | Reusable consent-page code for connector directory reviewers: 20–32 letters, digits or dashes. Only for `CAPTURE_REVIEW_EMAIL`, only while that account has capture switched on. Unset it after review.                      |
 
 ### Legal pages
 
@@ -305,6 +422,7 @@ is no production password-based `/api/register` or `/api/login` endpoint.
 | `/api/login/magic-link*`   | Request and consume a one-time login link                         |
 | `/api/recover/passkey*`    | Replace a passkey after email-token recovery                      |
 | `/api/replace-token`       | Revoke all earlier JWTs and return a replacement                  |
+| `/api/connect/requests*`   | Sign in a new device through the browser                          |
 
 See [Authentication Architecture](./docs/authentication.md) for lifecycle and
 security boundaries. Executable routes and schemas live in
@@ -343,12 +461,85 @@ Check sync status and storage info. Not used by the production client — intend
 GET /api/sync/status
 ```
 
+## Capture OAuth
+
+When `CAPTURE_CONNECTOR_ENABLED=true`, `/mcp` advertises OAuth discovery. Set
+`PUBLIC_URL` to the externally reachable server origin (HTTPS in production).
+The pinned clients are Claude (`https://claude.ai/oauth/mcp-oauth-client-metadata`)
+and Claude Code (`https://claude.ai/oauth/claude-code-client-metadata`), verified
+against Anthropic's public metadata on 2026-10-12, and ChatGPT
+(`https://chatgpt.com/oauth/client.json`), taken from OpenAI's connector auth
+docs. The Claude web callback is exactly `https://claude.ai/api/mcp/auth_callback`;
+Code uses `/callback` on HTTP `localhost` or `127.0.0.1`, with any port.
+ChatGPT's callback is exactly `https://chatgpt.com/connector_platform_oauth_redirect`,
+which ChatGPT uses because authorization responses carry `iss` (RFC 9207);
+per-connection `chatgpt.com/connector/oauth/…` callbacks are rejected.
+`CAPTURE_OAUTH_CLIENTS` replaces this list for operators who need another
+client. Redirects require HTTPS except loopback callbacks; unknown clients and
+redirects are rejected without a redirect.
+
+Users enable capture in the app, create a connection code in AI assistants
+settings, and enter it on the consent page their assistant opens. Access is
+limited to `tasks:capture`; `offline_access` enables refresh. Access lasts an
+hour, refresh credentials expire after 90 days unused, and each refresh rotates
+them. A retry with the preceding refresh token within two minutes returns the
+same successor; older issued tokens revoke that connection. A forged token
+cannot revoke a grant. Keep `JWT_SECRET` stable: domain-separated HMACs use it
+for refresh authenticity and retry derivation. Rotating it requires OAuth
+clients to reconnect. Only hashes of codes and bearer secrets are stored.
+
+Discovery and token requests bypass the shared-IP request quota. Failed token
+requests use the MCP authentication limiter; authorization pages allow 20 per
+hour per IP, and code approvals allow 10 per minute per IP. There is no global
+approval quota: invalid guesses must not block other users from connecting.
+This remains a single-instance feature. Sign-out everywhere
+and switching capture off revoke grants and invalidate unconsumed codes in one
+transaction. Apply the Prisma migration before starting the updated server.
+
+Connector directories (Claude, ChatGPT) review a connector days after
+submission, from their own infrastructure, so a 10-minute connection code from
+a running app cannot reach their reviewers. For that, set `CAPTURE_REVIEW_EMAIL`
+to a demo account with capture switched on and `CAPTURE_REVIEW_CODE` to a
+random code, and give reviewers that code. It approves only that account, can
+be reused (each approval is its own connection), is rate-limited like a
+connection code, and is never stored, only its hash. The server logs a warning
+while it is set and each approval it makes. Unset both once the review is done;
+existing connections stay until revoked in the demo account's app.
+
+The local browser test covers app code → consent → token → refresh → Inbox
+and a second device. Real Claude web reconnection must also be checked after
+deployment; local tests do not validate Anthropic's hosted connector UI.
+
 ## Client Configuration
 
-In Super Productivity, configure the Custom Sync provider with:
+These steps use the desktop or mobile app.
 
-- **Base URL**: `https://sync.your-domain.com` (or your deployed URL)
-- **Auth Token**: JWT token from login
+**First device**
+
+1. Open **Settings** → **Sync & Backup**, click **Set up sync** (or **Configure**),
+   and in the **Configure Sync** dialog choose **SuperSync (Beta)** as the
+   **Sync provider**.
+2. Open **Advanced Config** and set **Server URL** to your `PUBLIC_URL`
+   (e.g. `https://sync.example.com`). Do this first, or the next button opens
+   the official hosted server instead of yours.
+3. Click **Open Server & Get Token**. In the browser, sign up with your email,
+   then open the verification link from the email to activate the account. The
+   page does not sign you in: choose **Return to Login** and sign in with your
+   passkey or an emailed login link.
+4. Copy the token shown after signing in, paste it into **Access Token**, and
+   click **Save & Enable Sync** (**Save** if sync was already enabled).
+5. SuperSync requires end-to-end encryption. Follow the **SuperSync: Set
+   Password** dialog to choose an encryption password. It is separate from your
+   login and cannot be recovered — store it somewhere safe.
+
+**Each additional device**
+
+Repeat steps 1–4 with the same Server URL and account: either paste the same
+token or sign in again on the server page to get another one. When the app asks
+for the encryption password, enter the one you set on the first device. Do
+**not** use **Revoke & Replace Token** on the server page when adding a device —
+it invalidates every existing token and disconnects all your other devices. Use
+it when a device is lost or a token has leaked.
 
 ## Maintenance
 
@@ -457,6 +648,13 @@ limitations do not apply. Process restarts still clear in-memory coordination.
 ## Security Notes
 
 - **Set JWT_SECRET** to a secure random value in production (min 32 characters).
+- **If you deployed before env.example stopped shipping a placeholder, check your
+  `.env` now.** Earlier versions shipped
+  `JWT_SECRET=your-secure-jwt-secret-minimum-32-characters`, which is 32+ chars and
+  so passed validation. If your `.env` still contains it, your token signing key is
+  public: anyone can mint a token for any user. Replace it
+  (`openssl rand -base64 32`) and restart. Rotating invalidates every issued token,
+  so all users must log in again.
 - **Treat email verification, login, and recovery links as credentials.** Their
   tokens are currently stored in plaintext. Expiry prevents use but is not a
   general automatic-deletion boundary: records are cleared when their flow
@@ -474,5 +672,19 @@ limitations do not apply. Process restarts still clear in-memory coordination.
   suffix. Custom setups must provide equivalent protection. See
   [Authentication Architecture](./docs/authentication.md) for why this is a
   full-access, 365-day credential.
-- **Restrict CORS origins** in production.
-- **Database backups** are recommended for production deployments.
+- **Keep `CORS_ORIGINS` to the exact origins you use.**
+- **Back up the database.** See
+  [Backup & Disaster Recovery](./docs/backup-and-recovery.md) for the backup
+  script, retention and restore procedures. The stack's data lives in the named
+  Docker volumes `postgres-data` (database), `supersync-data` (app data such as
+  your Terms of Service file), and `caddy-data` / `caddy-config` (TLS
+  certificates and Caddy state); Compose prefixes them with the project name,
+  e.g. `super-sync-server_postgres-data`. Treat backups as credentials: the
+  database holds account emails, sync metadata and email/login tokens, and
+  `caddy-data` holds the TLS private key. `.env` (`JWT_SECRET`, `SMTP_PASS`,
+  `POSTGRES_PASSWORD`) is in no volume; back it up separately and keep it
+  private.
+- **Keep the encryption password separately.** Synced data is end-to-end
+  encrypted with the password your users chose in the app; it is not stored on
+  the server, so the task data in a server backup is unreadable without it.
+  Each user must keep that password outside the server backups.

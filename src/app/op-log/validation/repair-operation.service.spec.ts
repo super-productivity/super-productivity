@@ -74,6 +74,7 @@ describe('RepairOperationService', () => {
     ]);
     mockStateSnapshotService = jasmine.createSpyObj('StateSnapshotService', [
       'getStateSnapshotAsync',
+      'getStateSnapshotForOperationLogAsync',
     ]);
     mockSnackService = jasmine.createSpyObj('SnackService', ['open']);
 
@@ -88,6 +89,9 @@ describe('RepairOperationService', () => {
       Promise.resolve({ clientA: 5 }),
     );
     mockStateSnapshotService.getStateSnapshotAsync.and.resolveTo(
+      mockRepairedState as never,
+    );
+    mockStateSnapshotService.getStateSnapshotForOperationLogAsync.and.resolveTo(
       mockRepairedState as never,
     );
     mockTranslateService.instant.and.callFake((key: string) => key);
@@ -141,7 +145,9 @@ describe('RepairOperationService', () => {
         'sp_op_log',
         jasmine.any(Function),
       );
-      expect(mockStateSnapshotService.getStateSnapshotAsync).toHaveBeenCalled();
+      expect(
+        mockStateSnapshotService.getStateSnapshotForOperationLogAsync,
+      ).toHaveBeenCalled();
       expect(mockOpLogStore.replaceRejectedRepair).toHaveBeenCalledWith({
         staleRepairOpId: 'stale-repair',
         replacementOp: jasmine.objectContaining({
@@ -158,6 +164,33 @@ describe('RepairOperationService', () => {
       expect(alertSpy).not.toHaveBeenCalled();
       expect(seq).toBe(101);
     });
+
+    it('builds from the op-log projection, without task time still pending capture (#11483)', async () => {
+      // The live store already holds time a later time-sync op will carry; a
+      // REPAIR built from it would count that time twice on peers and on replay.
+      const liveState = { task: { ids: ['t1'], entities: { t1: { timeSpent: 600 } } } };
+      const projectedState = {
+        task: { ids: ['t1'], entities: { t1: { timeSpent: 0 } } },
+      };
+      mockStateSnapshotService.getStateSnapshotAsync.and.resolveTo(liveState as never);
+      mockStateSnapshotService.getStateSnapshotForOperationLogAsync.and.resolveTo(
+        projectedState as never,
+      );
+
+      await service.rebaseStaleRepair({
+        staleRepairOpId: 'stale-repair',
+        repairSummary: createRepairSummary({ entityStateFixed: 1 }),
+        clientId: 'test-client',
+        repairBaseServerSeq: 12,
+      });
+
+      const { replacementOp, repairedState } =
+        mockOpLogStore.replaceRejectedRepair.calls.mostRecent().args[0];
+      expect(
+        (replacementOp.payload as { appDataComplete: unknown }).appDataComplete,
+      ).toBe(projectedState);
+      expect(repairedState).toBe(projectedState);
+    });
   });
 
   describe('createRepairOperation', () => {
@@ -166,20 +199,23 @@ describe('RepairOperationService', () => {
 
       await service.createRepairOperation(mockRepairedState, summary, 'test-client');
 
-      expect(mockOpLogStore.appendMixedSourceBatchSkipDuplicates).toHaveBeenCalledWith([
-        {
-          ops: [
-            jasmine.objectContaining({
-              actionType: '[Repair] Auto Repair' as ActionType,
-              opType: OpType.Repair,
-              entityType: 'ALL',
-              clientId: 'test-client',
-              schemaVersion: CURRENT_SCHEMA_VERSION,
-            }),
-          ],
-          source: 'local',
-        },
-      ]);
+      expect(mockOpLogStore.appendMixedSourceBatchSkipDuplicates).toHaveBeenCalledWith(
+        [
+          {
+            ops: [
+              jasmine.objectContaining({
+                actionType: '[Repair] Auto Repair' as ActionType,
+                opType: OpType.Repair,
+                entityType: 'ALL',
+                clientId: 'test-client',
+                schemaVersion: CURRENT_SCHEMA_VERSION,
+              }),
+            ],
+            source: 'local',
+          },
+        ],
+        { archiveYoung: undefined, archiveOld: undefined },
+      );
     });
 
     it('should use the mixed-source batch so the clock is rebased on the durable clock', async () => {

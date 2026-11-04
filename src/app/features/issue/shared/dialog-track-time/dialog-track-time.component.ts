@@ -174,7 +174,12 @@ export class DialogTrackTimeComponent implements OnDestroy {
       return;
     }
 
-    if (this.defaultTimeCheckboxContent?.isChecked === true) {
+    if (
+      this.defaultTimeCheckboxContent?.isChecked === true &&
+      this.data.saveDefaultTime
+    ) {
+      this.data.saveDefaultTime(this.defaultTimeCheckboxContent.value);
+    } else if (this.defaultTimeCheckboxContent?.isChecked === true) {
       this._store.dispatch(
         IssueProviderActions.updateIssueProvider({
           issueProvider: {

@@ -9,6 +9,7 @@ export const testState = {
   syncDevices: new Map<string, any>(),
   userSyncStates: new Map<number, any>(),
   users: new Map<number, any>(),
+  pendingPasskeyRegistrations: new Map<string, any>(),
   serverSeqCounter: 0,
   batchConflictQueryCount: 0,
   entityConflictFindFirstCount: 0,
@@ -21,6 +22,7 @@ export function resetTestState(): void {
   testState.syncDevices = new Map();
   testState.userSyncStates = new Map();
   testState.users = new Map();
+  testState.pendingPasskeyRegistrations = new Map();
   testState.serverSeqCounter = 0;
   testState.batchConflictQueryCount = 0;
   testState.entityConflictFindFirstCount = 0;
@@ -35,17 +37,90 @@ export function resetTestState(): void {
  *
  * `AS "maxSeq"` is the load-bearing half of the discriminator: only this query
  * aggregates to a maxSeq. Keep `entity_ids @>` as well, but do not rely on it —
- * this inspects the template LITERALS, and both batch queries moved their `@>` into
+ * this inspects the template LITERALS, and the multi-entity lookup moved its `@>` into
  * an interpolated `Prisma.sql` fragment, so it is a bound VALUE there and invisible
  * here. Which is the general hazard worth remembering: every tx mock discriminates on
  * template literals, so extracting SQL into a `Prisma.sql` fragment silently removes
- * that text from all of their views. The dangerous direction is prefetch losing
- * `touched(entity_type` from its literals while `scalar_hits` survives — it would then
- * be answered by detect's branch. (Losing `scalar_hits` throws, which is loud.)
+ * that text from all of their views. (An unmatched query throws, which is loud.)
  */
+/**
+ * Text of a `$queryRaw` call, however Prisma delivered it.
+ *
+ * A tagged template arrives as the template's string array; a pre-built `Prisma.Sql`
+ * (which is how the causal full-state lookup ships, so its op_type values stay LITERALS)
+ * arrives as ONE object argument. `String(sqlObject)` is "[object Object]", so a mock
+ * that only handles the array form silently stops recognising anything — which is the
+ * hazard the comment above warns about, now reached from the other direction.
+ */
+export function rawQueryText(strings: unknown): string {
+  if (typeof strings === 'string') return strings;
+  if (Array.isArray(strings)) return strings.join('');
+  const sql = strings as { sql?: string; strings?: readonly string[] } | null;
+  return sql?.sql ?? (sql?.strings ?? []).join('');
+}
+
+/** Bound values, from the rest-args (tagged template) or off the `Prisma.Sql`. */
+export function rawQueryValues(strings: unknown, params: unknown[]): unknown[] {
+  if (params.length > 0) return params;
+  return (strings as { values?: unknown[] } | null)?.values ?? [];
+}
+
 export function isEntityArrayBranchQuery(strings: unknown): boolean {
-  const sql = Array.isArray(strings) ? strings.join('') : String(strings);
+  const sql = rawQueryText(strings);
   return sql.includes('AS "maxSeq"') && sql.includes('entity_ids @>');
+}
+
+/**
+ * The download path's newest-causal-full-state lookup (`latestCausalFullStateSql`).
+ * The selected columns distinguish this from the old-ops aged-prefix fallback,
+ * which uses the same causal predicate but binds a retention cutoff as well.
+ */
+export function isLatestCausalFullStateQuery(strings: unknown): boolean {
+  const sql = rawQueryText(strings);
+  return (
+    sql.includes('SELECT server_seq, client_id') &&
+    sql.includes('repair_base_server_seq IS NOT NULL')
+  );
+}
+
+/**
+ * The UPLOAD path's variant of the same statement (`resolveFullStateAuthor`): identical
+ * predicate, no `server_seq` bound, so it binds `user_id` alone. Distinguishing it is
+ * what lets a spec pin the lookup to one-per-transaction.
+ */
+export function isUnboundedCausalFullStateQuery(
+  strings: unknown,
+  params: unknown[],
+): boolean {
+  return (
+    isLatestCausalFullStateQuery(strings) && rawQueryValues(strings, params).length === 1
+  );
+}
+
+/**
+ * Answers it from in-memory ops, mirroring latestCausalFullStateSql: full-state
+ * ops, except legacy REPAIRs with no base cursor, newest first. Returns the raw snake_case
+ * row shape the service parses.
+ *
+ * `maxServerSeq` is absent for the upload path's unbounded author lookup, which binds
+ * `user_id` alone.
+ */
+export function latestCausalFullStateRows(
+  operations: Map<string, any>,
+  values: unknown[],
+): Array<{ server_seq: number; client_id: string }> {
+  const [userId, maxServerSeq] = values as [number, number | undefined];
+  const newest = Array.from(operations.values())
+    .filter(
+      (op: any) =>
+        op.userId === userId &&
+        (maxServerSeq === undefined || op.serverSeq <= maxServerSeq) &&
+        (op.opType === 'SYNC_IMPORT' ||
+          op.opType === 'BACKUP_IMPORT' ||
+          (op.opType === 'REPAIR' && op.repairBaseServerSeq != null)),
+    )
+    .sort((a: any, b: any) => b.serverSeq - a.serverSeq)[0];
+  return newest ? [{ server_seq: newest.serverSeq, client_id: newest.clientId }] : [];
 }
 
 /**

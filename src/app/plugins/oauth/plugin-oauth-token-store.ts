@@ -62,6 +62,48 @@ export const loadOAuthTokens = async (key: string): Promise<string | null> => {
   }
 };
 
+/**
+ * Atomically moves a legacy credential without overwriting a scoped account.
+ * Read the source inside the transaction: stale in-memory tokens from another
+ * tab must not recreate a legacy credential that has already been consumed.
+ */
+export const moveOAuthTokens = async (
+  sourceKey: string,
+  targetKey: string,
+): Promise<string | null> => {
+  const store = await ensureDb();
+  const tx = store.transaction(DB_STORE_NAME, 'readwrite');
+  try {
+    const target = await tx.store.get(targetKey);
+    const source = await tx.store.get(sourceKey);
+    if (target === undefined && source !== undefined) {
+      await tx.store.put(source, targetKey);
+    }
+    await tx.store.delete(sourceKey);
+    await tx.done;
+    return target ?? source ?? null;
+  } catch (error) {
+    // Consume the transaction rejection as well as the failed request.
+    await tx.done.catch(() => undefined);
+    throw error;
+  }
+};
+
+export const deleteOAuthTokensByPrefix = async (prefix: string): Promise<void> => {
+  try {
+    const store = await ensureDb();
+    const keys = await store.getAllKeys(DB_STORE_NAME);
+    await Promise.all(
+      keys
+        .filter((key): key is string => typeof key === 'string' && key.startsWith(prefix))
+        .map((key) => store.delete(DB_STORE_NAME, key)),
+    );
+  } catch (error) {
+    PluginLog.err('PluginOAuthTokenStore: Failed to delete tokens by prefix:', error);
+    throw error;
+  }
+};
+
 export const deleteOAuthTokens = async (key: string): Promise<void> => {
   try {
     const store = await ensureDb();

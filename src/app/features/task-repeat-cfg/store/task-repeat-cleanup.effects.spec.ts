@@ -22,13 +22,17 @@ import { getDateTimeFromClockString } from '../../../util/get-date-time-from-clo
 import { remindOptionToMilliseconds } from '../../tasks/util/remind-option-to-milliseconds';
 import { TODAY_TAG } from '../../tag/tag.const';
 import { TaskTimeSyncService } from '../../tasks/task-time-sync.service';
+import { selectConfigFeatureState } from '../../config/store/global-config.reducer';
+import { GlobalConfigState } from '../../config/global-config.model';
 
 describe('TaskRepeatCleanupEffects', () => {
   let effects: TaskRepeatCleanupEffects;
   let store: jasmine.SpyObj<Store>;
   let repeatableTasks$: BehaviorSubject<TaskWithSubTasks[]>;
   let repeatCfgs$: BehaviorSubject<TaskRepeatCfg[]>;
+  let globalCfg$: BehaviorSubject<Partial<GlobalConfigState>>;
   let taskTimeSync: jasmine.SpyObj<TaskTimeSyncService>;
+  let startOfNextDayDiffMs: number;
 
   const DAY_MS = 24 * 60 * 60 * 1000;
   const todayMs = new Date().setHours(12, 0, 0, 0);
@@ -54,12 +58,21 @@ describe('TaskRepeatCleanupEffects', () => {
   beforeEach(() => {
     repeatableTasks$ = new BehaviorSubject<TaskWithSubTasks[]>([]);
     repeatCfgs$ = new BehaviorSubject<TaskRepeatCfg[]>([]);
+    globalCfg$ = new BehaviorSubject<Partial<GlobalConfigState>>({
+      timeTracking: {
+        defaultEstimate: 0,
+        defaultEstimateSubTasks: 0,
+      } as GlobalConfigState['timeTracking'],
+    });
+    startOfNextDayDiffMs = 0;
 
     const storeSpy = jasmine.createSpyObj<Store>('Store', ['select', 'dispatch']);
     storeSpy.select.and.callFake((selector: unknown) =>
       selector === selectAllTaskRepeatCfgs
         ? (repeatCfgs$.asObservable() as ReturnType<Store['select']>)
-        : (repeatableTasks$.asObservable() as ReturnType<Store['select']>),
+        : selector === selectConfigFeatureState
+          ? (globalCfg$.asObservable() as ReturnType<Store['select']>)
+          : (repeatableTasks$.asObservable() as ReturnType<Store['select']>),
     );
 
     const syncTriggerSpy = {
@@ -97,7 +110,13 @@ describe('TaskRepeatCleanupEffects', () => {
         { provide: HydrationStateService, useValue: hydrationStateSpy },
         { provide: DeletedTaskIssueSidecarService, useValue: sidecarSpy },
         { provide: TaskTimeSyncService, useValue: taskTimeSync },
-        { provide: DateService, useValue: { todayStr: () => getDbDateStr(todayMs) } },
+        {
+          provide: DateService,
+          useValue: {
+            todayStr: () => getDbDateStr(todayMs),
+            getStartOfNextDayDiffMs: () => startOfNextDayDiffMs,
+          },
+        },
       ],
     });
 
@@ -403,6 +422,190 @@ describe('TaskRepeatCleanupEffects', () => {
       sub.unsubscribe();
     }));
 
+    it('deletes late-night overdue instances placed after the day boundary (#3378)', fakeAsync(() => {
+      startOfNextDayDiffMs = 5 * 60 * 60 * 1000;
+      repeatCfgs$.next([
+        skipOverdueCfg('cfg-late-night', '', {
+          title: 'Make the bed',
+          startTime: '02:00',
+          remindAt: TaskReminderOptionId.AtStart,
+        }),
+      ]);
+      const lateNightInstance = (id: string, logicalDayMs: number): Task => {
+        const dueWithTime = getDateTimeFromClockString('02:00', logicalDayMs + DAY_MS);
+        return {
+          ...DEFAULT_TASK,
+          projectId: 'p1',
+          id,
+          title: 'Make the bed',
+          repeatCfgId: 'cfg-late-night',
+          created: logicalDayMs,
+          dueDay: undefined,
+          dueWithTime,
+          remindAt: dueWithTime,
+          isDone: false,
+          timeSpent: 0,
+        };
+      };
+      // created for logical yesterday -> due today 02:00, still logical yesterday
+      const yesterdayInstance = lateNightInstance('late-night-yesterday', yesterdayMs);
+      // written by a client without #3378: due on the calendar day itself
+      const legacyInstance: Task = {
+        ...lateNightInstance('late-night-legacy', yesterdayMs - DAY_MS),
+        dueWithTime: getDateTimeFromClockString('02:00', yesterdayMs),
+        remindAt: getDateTimeFromClockString('02:00', yesterdayMs),
+      };
+      const todayInstance = lateNightInstance('late-night-today', todayMs);
+
+      repeatableTasks$.next([
+        wrapWithSubTasks(legacyInstance),
+        wrapWithSubTasks(yesterdayInstance),
+        wrapWithSubTasks(todayInstance),
+      ]);
+
+      const sub = effects.cleanupDuplicateRepeatInstances$.subscribe();
+      tick(3001);
+
+      expect(getDispatchedDeleteIds().sort()).toEqual([
+        'late-night-legacy',
+        'late-night-yesterday',
+      ]);
+
+      sub.unsubscribe();
+    }));
+
+    it('deletes timed overdue instances whose reminder was cleared or snoozed', fakeAsync(() => {
+      // remindAt is app-managed: firing + dismissing clears it, snoozing rewrites
+      // it to a new time. Neither is a user edit, so both must still be reaped.
+      const weekMs = 7 * DAY_MS;
+      const lastWeekMs = todayMs - weekMs;
+      const twoDaysAgoMs = yesterdayMs - DAY_MS;
+      const oneHourMs = 60 * 60 * 1000;
+      const yesterdayDue = getDateTimeFromClockString('20:00', yesterdayMs);
+      const lastWeekDue = getDateTimeFromClockString('20:00', lastWeekMs);
+      const twoDaysAgoDue = getDateTimeFromClockString('20:00', twoDaysAgoMs);
+      repeatCfgs$.next([
+        skipOverdueCfg('cfg-reminder', '', {
+          title: 'Export Bookmarks',
+          startTime: '20:00',
+          remindAt: TaskReminderOptionId.AtStart,
+        }),
+      ]);
+      const base = {
+        ...DEFAULT_TASK,
+        projectId: 'p1',
+        title: 'Export Bookmarks',
+        repeatCfgId: 'cfg-reminder',
+        dueDay: undefined,
+        isDone: false,
+        timeSpent: 0,
+      };
+      const dismissed: Task = {
+        ...base,
+        id: 'reminder-dismissed',
+        created: yesterdayMs,
+        dueWithTime: yesterdayDue,
+        // fired, then dismissed -> dismissReminderOnly cleared remindAt
+        remindAt: undefined,
+      };
+      const snoozed: Task = {
+        ...base,
+        id: 'reminder-snoozed',
+        created: lastWeekMs,
+        dueWithTime: lastWeekDue,
+        // snoozed 1h from the notification -> rewritten, dueWithTime untouched
+        remindAt: lastWeekDue + oneHourMs,
+      };
+      const snoozedActive: Task = {
+        ...base,
+        id: 'reminder-snoozed-active',
+        created: twoDaysAgoMs,
+        dueWithTime: twoDaysAgoDue,
+        // snoozed into the FUTURE and not fired again yet. Still reaped: making
+        // the verdict depend on Date.now() would make it depend on when the
+        // reaper runs.
+        remindAt: todayMs + oneHourMs,
+      };
+      const todayInstance: Task = {
+        ...base,
+        id: 'reminder-today',
+        created: todayMs,
+        dueDay: getDbDateStr(todayMs),
+      };
+
+      repeatableTasks$.next([
+        wrapWithSubTasks(dismissed),
+        wrapWithSubTasks(snoozed),
+        wrapWithSubTasks(snoozedActive),
+        wrapWithSubTasks(todayInstance),
+      ]);
+
+      const sub = effects.cleanupDuplicateRepeatInstances$.subscribe();
+      tick(3001);
+
+      expect(getDispatchedDeleteIds().sort()).toEqual([
+        'reminder-dismissed',
+        'reminder-snoozed',
+        'reminder-snoozed-active',
+      ]);
+
+      sub.unsubscribe();
+    }));
+
+    it('keeps a day-planned overdue instance that carries a reminder', fakeAsync(() => {
+      // No in-app path sets remindAt without a dueWithTime, so a day-planned
+      // instance that has one was marked deliberately via PluginAPI.updateTask.
+      // Covers both branches that still compare it: the timed config's
+      // "scheduled action not run yet" shape, and the untimed config.
+      repeatCfgs$.next([
+        skipOverdueCfg('cfg-timed-plugin', '', {
+          title: 'Timed Plugin Reminder',
+          startTime: '20:00',
+          remindAt: TaskReminderOptionId.AtStart,
+        }),
+        skipOverdueCfg('cfg-untimed-plugin', '', { title: 'Untimed Plugin Reminder' }),
+      ]);
+      const base = {
+        ...DEFAULT_TASK,
+        projectId: 'p1',
+        isDone: false,
+        timeSpent: 0,
+      };
+      const mkPair = (cfgId: string, title: string): Task[] => [
+        {
+          ...base,
+          id: `${cfgId}-yesterday`,
+          title,
+          repeatCfgId: cfgId,
+          created: yesterdayMs,
+          dueDay: getDbDateStr(yesterdayMs),
+          remindAt: getDateTimeFromClockString('20:00', yesterdayMs),
+        },
+        {
+          ...base,
+          id: `${cfgId}-today`,
+          title,
+          repeatCfgId: cfgId,
+          created: todayMs,
+          dueDay: getDbDateStr(todayMs),
+        },
+      ];
+
+      repeatableTasks$.next(
+        [
+          ...mkPair('cfg-timed-plugin', 'Timed Plugin Reminder'),
+          ...mkPair('cfg-untimed-plugin', 'Untimed Plugin Reminder'),
+        ].map(wrapWithSubTasks),
+      );
+
+      const sub = effects.cleanupDuplicateRepeatInstances$.subscribe();
+      tick(3001);
+
+      expect(getDispatchedDeleteIds()).toEqual([]);
+
+      sub.unsubscribe();
+    }));
+
     it('keeps an overdue instance whose schedule differs from the template', fakeAsync(() => {
       const editedDueWithTime = getDateTimeFromClockString('10:00', yesterdayMs);
       repeatCfgs$.next([
@@ -538,6 +741,97 @@ describe('TaskRepeatCleanupEffects', () => {
       sub.unsubscribe();
     }));
 
+    for (const [cfgPriority, taskPriority, shouldDelete] of [
+      [3, 3, true],
+      ['high', 3, true],
+      [3, null, false],
+      [undefined, 3, false],
+    ] as const) {
+      it(`compares template priority ${cfgPriority} with occurrence priority ${taskPriority} before cleanup`, fakeAsync(() => {
+        repeatCfgs$.next([
+          skipOverdueCfg('cfg-priority', '', {
+            title: 'Water plants',
+            priority: cfgPriority,
+          }),
+        ]);
+        const task: Task = {
+          ...DEFAULT_TASK,
+          projectId: 'p1',
+          title: 'Water plants',
+          id: 'priority-yesterday',
+          repeatCfgId: 'cfg-priority',
+          created: yesterdayMs,
+          dueDay: getDbDateStr(yesterdayMs),
+          priority: taskPriority,
+        };
+        repeatableTasks$.next([
+          wrapWithSubTasks(task),
+          wrapWithSubTasks({
+            ...task,
+            id: 'priority-today',
+            created: todayMs,
+            dueDay: getDbDateStr(todayMs),
+          }),
+        ]);
+        const sub = effects.cleanupDuplicateRepeatInstances$.subscribe();
+        tick(3001);
+        expect(getDispatchedDeleteIds()).toEqual(
+          shouldDelete ? ['priority-yesterday'] : [],
+        );
+        sub.unsubscribe();
+      }));
+    }
+
+    // Providers that push every new task (Plainspace) link each copy to its own
+    // remote item; keeping those would pile them up locally and remotely
+    it('reaps an overdue issue-linked instance and hands its issue to the remote delete', fakeAsync(() => {
+      repeatCfgs$.next([skipOverdueCfg('cfg-issue', '', { title: 'Water plants' })]);
+      const yesterdayLinked: Task = {
+        ...DEFAULT_TASK,
+        projectId: 'p1',
+        id: 'issue-yesterday',
+        title: 'Water plants',
+        repeatCfgId: 'cfg-issue',
+        created: yesterdayMs,
+        dueDay: getDbDateStr(yesterdayMs),
+        isDone: false,
+        timeSpent: 0,
+        issueId: 'ps-yesterday',
+        issueType: 'PLAINSPACE',
+        issueProviderId: 'plainspace-provider',
+      };
+      const todayInstance: Task = {
+        ...DEFAULT_TASK,
+        projectId: 'p1',
+        id: 'issue-today',
+        title: 'Water plants',
+        repeatCfgId: 'cfg-issue',
+        created: todayMs,
+        dueDay: getDbDateStr(todayMs),
+        isDone: false,
+        timeSpent: 0,
+      };
+
+      repeatableTasks$.next([
+        wrapWithSubTasks(yesterdayLinked),
+        wrapWithSubTasks(todayInstance),
+      ]);
+
+      const sub = effects.cleanupDuplicateRepeatInstances$.subscribe();
+      tick(3001);
+
+      expect(getDispatchedDeleteIds()).toEqual(['issue-yesterday']);
+      expect(TestBed.inject(DeletedTaskIssueSidecarService).set).toHaveBeenCalledWith([
+        {
+          issueId: 'ps-yesterday',
+          issueType: 'PLAINSPACE',
+          issueProviderId: 'plainspace-provider',
+        },
+      ]);
+
+      sub.unsubscribe();
+    }));
+
     it('keeps an overdue instance whose title differs from the template', fakeAsync(() => {
       repeatCfgs$.next([skipOverdueCfg('cfg-title', '', { title: 'Water plants' })]);
       const yesterdayEdited: Task = {
@@ -624,6 +918,136 @@ describe('TaskRepeatCleanupEffects', () => {
 
       sub.unsubscribe();
     }));
+
+    describe('global default estimate (#10202)', () => {
+      const MIN = 60 * 1000;
+      const setGlobalDefaults = (defaultEstimate: number, subTasks = 0): void =>
+        globalCfg$.next({
+          timeTracking: {
+            defaultEstimate,
+            defaultEstimateSubTasks: subTasks,
+          } as GlobalConfigState['timeTracking'],
+        });
+      // Shape the app produces: the template has no estimate, so
+      // setDefaultEstimateIfNonGiven$ fills in the global default on creation.
+      const instance = (id: string, createdMs: number, timeEstimate: number): Task => ({
+        ...DEFAULT_TASK,
+        projectId: 'p1',
+        id,
+        title: 'Water plants',
+        repeatCfgId: 'cfg-global-est',
+        created: createdMs,
+        dueDay: getDbDateStr(createdMs),
+        isDone: false,
+        timeSpent: 0,
+        timeEstimate,
+      });
+
+      it('reaps an instance left from the last open N days ago when the global default estimate filled it', fakeAsync(() => {
+        setGlobalDefaults(30 * MIN);
+        repeatCfgs$.next([
+          skipOverdueCfg('cfg-global-est', '', { title: 'Water plants' }),
+        ]);
+        const daysClosedMs = 4 * DAY_MS;
+        const lastOpenedMs = todayMs - daysClosedMs;
+
+        repeatableTasks$.next([
+          wrapWithSubTasks(instance('global-est-old', lastOpenedMs, 30 * MIN)),
+          wrapWithSubTasks(instance('global-est-today', todayMs, 30 * MIN)),
+        ]);
+
+        const sub = effects.cleanupDuplicateRepeatInstances$.subscribe();
+        tick(3001);
+
+        expect(getDispatchedDeleteIds())
+          .withContext('an untouched instance carrying the global default is a template')
+          .toEqual(['global-est-old']);
+
+        sub.unsubscribe();
+      }));
+
+      it('still reaps a 0-estimate instance created before the global default was set', fakeAsync(() => {
+        setGlobalDefaults(30 * MIN);
+        repeatCfgs$.next([
+          skipOverdueCfg('cfg-global-est', '', { title: 'Water plants' }),
+        ]);
+
+        repeatableTasks$.next([
+          wrapWithSubTasks(instance('global-est-old', yesterdayMs, 0)),
+          wrapWithSubTasks(instance('global-est-today', todayMs, 30 * MIN)),
+        ]);
+
+        const sub = effects.cleanupDuplicateRepeatInstances$.subscribe();
+        tick(3001);
+
+        expect(getDispatchedDeleteIds())
+          .withContext('the template estimate itself stays valid')
+          .toEqual(['global-est-old']);
+
+        sub.unsubscribe();
+      }));
+
+      it('keeps an instance whose estimate matches neither template nor global default', fakeAsync(() => {
+        setGlobalDefaults(30 * MIN);
+        repeatCfgs$.next([
+          skipOverdueCfg('cfg-global-est', '', { title: 'Water plants' }),
+        ]);
+
+        repeatableTasks$.next([
+          wrapWithSubTasks(instance('global-est-old', yesterdayMs, 45 * MIN)),
+          wrapWithSubTasks(instance('global-est-today', todayMs, 30 * MIN)),
+        ]);
+
+        const sub = effects.cleanupDuplicateRepeatInstances$.subscribe();
+        tick(3001);
+
+        expect(getDispatchedDeleteIds())
+          .withContext('a user-edited estimate must be preserved')
+          .toEqual([]);
+
+        sub.unsubscribe();
+      }));
+
+      it('reaps an instance whose subtask got the global subtask default estimate', fakeAsync(() => {
+        setGlobalDefaults(0, 10 * MIN);
+        repeatCfgs$.next([
+          skipOverdueCfg('cfg-global-est', '', {
+            title: 'Water plants',
+            shouldInheritSubtasks: true,
+            subTaskTemplates: [{ title: 'Check soil', timeEstimate: 0, notes: '' }],
+          }),
+        ]);
+        const withSubTask = (parent: Task): TaskWithSubTasks => ({
+          ...parent,
+          subTasks: [
+            {
+              ...DEFAULT_TASK,
+              projectId: 'p1',
+              id: `${parent.id}-sub`,
+              title: 'Check soil',
+              parentId: parent.id,
+              isDone: false,
+              timeSpent: 0,
+              timeEstimate: 10 * MIN,
+            },
+          ],
+        });
+
+        repeatableTasks$.next([
+          withSubTask(instance('global-est-old', yesterdayMs, 0)),
+          withSubTask(instance('global-est-today', todayMs, 0)),
+        ]);
+
+        const sub = effects.cleanupDuplicateRepeatInstances$.subscribe();
+        tick(3001);
+
+        expect(getDispatchedDeleteIds())
+          .withContext('an untouched subtask carrying the global default is a template')
+          .toEqual(['global-est-old']);
+
+        sub.unsubscribe();
+      }));
+    });
 
     it('keeps an overdue instance whose tags differ from the template', fakeAsync(() => {
       repeatCfgs$.next([

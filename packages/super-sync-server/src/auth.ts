@@ -8,6 +8,7 @@ import { loadConfigFromEnv, isConsentRequired } from './config';
 import { Prisma } from '@prisma/client';
 import { authCache } from './auth-cache';
 import { getDefaultStorageQuotaBytes } from './sync/services/storage-quota.service';
+import { revokeAllCaptureGrants } from './capture/capture-grant.store';
 
 // Auth constants
 const MIN_JWT_SECRET_LENGTH = 32;
@@ -133,15 +134,29 @@ export const verifyEmail = async (token: string): Promise<boolean> => {
 };
 
 /**
+ * A normal account token, the same as login issues. The caller must have read
+ * `tokenVersion` under a lock on the user row, so a concurrent sign-out wins.
+ */
+export const signAccountToken = (
+  userId: number,
+  email: string,
+  tokenVersion: number,
+): string =>
+  jwt.sign({ userId, email, tokenVersion }, JWT_SECRET, { expiresIn: JWT_EXPIRY });
+
+/**
  * Revoke all existing tokens for a user by incrementing their token version.
  * Call this when the user explicitly logs out all devices.
  */
 export const revokeAllTokens = async (userId: number): Promise<void> => {
   // AUTH_CACHE_INVALIDATION: keep adjacent to tokenVersion writes.
   authCache.invalidate(userId);
-  await prisma.user.update({
-    where: { id: userId },
-    data: { tokenVersion: { increment: 1 } },
+  await prisma.$transaction(async (tx) => {
+    await tx.user.update({
+      where: { id: userId },
+      data: { tokenVersion: { increment: 1 } },
+    });
+    await revokeAllCaptureGrants(tx, userId);
   });
   // AUTH_CACHE_INVALIDATION: keep adjacent to tokenVersion writes.
   authCache.invalidate(userId);
@@ -166,6 +181,7 @@ export const replaceToken = async (
       data: { tokenVersion: { increment: 1 } },
       select: { tokenVersion: true },
     });
+    await revokeAllCaptureGrants(tx, userId);
     return user.tokenVersion;
   });
   // AUTH_CACHE_INVALIDATION: keep adjacent to tokenVersion writes.
@@ -181,7 +197,7 @@ export const replaceToken = async (
 };
 
 export type TokenVerificationResult =
-  | { valid: true; userId: number; email: string }
+  | { valid: true; userId: number; email: string; tokenVersion: number }
   | { valid: false; reason: string };
 
 export const verifyToken = async (token: string): Promise<TokenVerificationResult> => {
@@ -200,7 +216,7 @@ export const verifyToken = async (token: string): Promise<TokenVerificationResul
     const tokenVersion = payload.tokenVersion ?? 0;
     const cachedUser = authCache.get(payload.userId);
     if (cachedUser && cachedUser.isVerified && cachedUser.tokenVersion === tokenVersion) {
-      return { valid: true, userId: payload.userId, email: payload.email };
+      return { valid: true, userId: payload.userId, email: payload.email, tokenVersion };
     }
     const cacheVersionBeforeRead = authCache.getInvalidationVersion(payload.userId);
 
@@ -241,7 +257,7 @@ export const verifyToken = async (token: string): Promise<TokenVerificationResul
     }
 
     authCache.setIfCurrent(payload.userId, currentVersion, true, cacheVersionBeforeRead);
-    return { valid: true, userId: payload.userId, email: payload.email };
+    return { valid: true, userId: payload.userId, email: payload.email, tokenVersion };
   } catch (err) {
     if (err instanceof TokenExpiredError) {
       return {
@@ -268,6 +284,7 @@ export const verifyToken = async (token: string): Promise<TokenVerificationResul
  */
 export const requestLoginMagicLink = async (
   email: string,
+  connectRequestId?: string,
 ): Promise<{ message: string }> => {
   const successMessage = {
     message: 'If an account with that email exists, a login link has been sent.',
@@ -317,7 +334,7 @@ export const requestLoginMagicLink = async (
   });
   if (claim.count === 0) return successMessage;
 
-  const emailSent = await sendLoginMagicLinkEmail(email, loginToken);
+  const emailSent = await sendLoginMagicLinkEmail(email, loginToken, connectRequestId);
   if (!emailSent) {
     await prisma.user.updateMany({
       where: { id: user.id, loginToken },
@@ -397,6 +414,7 @@ export const verifyLoginMagicLink = async (
 export const registerWithMagicLink = async (
   email: string,
   termsAcceptedAt?: number,
+  connectRequestId?: string,
 ): Promise<{ message: string }> => {
   const normalizedEmail = email.toLowerCase();
 
@@ -425,7 +443,11 @@ export const registerWithMagicLink = async (
 
       if (!config.testMode?.autoVerifyUsers) {
         // Send email BEFORE updating DB to avoid invalidating the old token on failure
-        const emailSent = await sendVerificationEmail(normalizedEmail, verificationToken);
+        const emailSent = await sendVerificationEmail(
+          normalizedEmail,
+          verificationToken,
+          connectRequestId,
+        );
         if (!emailSent) {
           return { message: REGISTRATION_SUCCESS_MESSAGE };
         }
@@ -475,7 +497,11 @@ export const registerWithMagicLink = async (
       if (!config.testMode?.autoVerifyUsers) {
         // Keep the unverified row on delivery failure. Deleting it can race a
         // concurrent registration that has already started using the same row.
-        const emailSent = await sendVerificationEmail(normalizedEmail, verificationToken);
+        const emailSent = await sendVerificationEmail(
+          normalizedEmail,
+          verificationToken,
+          connectRequestId,
+        );
         if (!emailSent) {
           return { message: REGISTRATION_SUCCESS_MESSAGE };
         }

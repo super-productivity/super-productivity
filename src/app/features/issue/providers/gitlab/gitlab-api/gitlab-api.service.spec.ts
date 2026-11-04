@@ -9,6 +9,8 @@ import { GitlabCfg } from '../gitlab.model';
 import { DEFAULT_GITLAB_CFG } from '../gitlab.const';
 import { GitlabOriginalIssue, GitlabOriginalUser } from './gitlab-api-responses';
 import { SearchResultItem } from '../../../issue.model';
+import { Log } from 'src/app/core/log';
+import { GitlabIssue } from '../gitlab-issue.model';
 
 const USER: GitlabOriginalUser = {
   id: 1,
@@ -94,7 +96,34 @@ describe('GitlabApiService', () => {
     httpMock = TestBed.inject(HttpTestingController);
   });
 
-  afterEach(() => httpMock.verify());
+  afterEach(() => {
+    httpMock.verify();
+    Log.clearLogHistory();
+  });
+
+  it('keeps a private GitLab host and project path out of exported logs during lookup', () => {
+    const privateHost = 'private-gitlab.example.test';
+    const privateProject = 'private-group/private-project';
+    const privateCfg = { ...cfg, gitlabBaseUrl: `https://${privateHost}` };
+    let result: GitlabIssue | undefined;
+    Log.clearLogHistory();
+
+    service.getById$(`${privateProject}#1`, privateCfg).subscribe((issue) => {
+      result = issue;
+    });
+
+    const issueReq = httpMock.expectOne((req) => req.url.includes(privateHost));
+    expect(issueReq.request.url).toContain('private-group%2Fprivate-project');
+    issueReq.flush([makeOriginalIssue(1)]);
+
+    const commentsReq = httpMock.expectOne((req) => req.url.includes('/notes'));
+    commentsReq.flush([]);
+
+    expect(result?.number).toBe(1);
+    expect(result?.comments).toEqual([]);
+    expect(Log.exportLogHistory()).not.toContain(privateHost);
+    expect(Log.exportLogHistory()).not.toContain(privateProject);
+  });
 
   describe('searchIssueInProject$', () => {
     it('fetches only the first page and never requests per-issue notes/comments (#9034)', () => {
@@ -122,6 +151,30 @@ describe('GitlabApiService', () => {
       expect(result?.length).toBe(2);
       expect(result?.[0].title).toBe('#group/sub/proj#1 Issue 1');
       expect(result?.[0].issueType).toBe('GITLAB');
+    });
+
+    it('URL-encodes the search term so "#" and "&" do not break the query (#9907)', () => {
+      service.searchIssueInProject$('fix #42 & bug', cfg).subscribe();
+
+      const req = httpMock.expectOne(() => true);
+      const url = new URL(req.request.url);
+      expect(url.searchParams.get('search')).toBe('fix #42 & bug');
+      expect(url.searchParams.get('scope')).toBe('all');
+      expect(url.searchParams.get('order_by')).toBe('updated_at');
+      req.flush([]);
+    });
+
+    it('keeps a "#" in the custom filter from truncating the query (#10151)', () => {
+      service
+        .searchIssueInProject$('bug', { ...cfg, filter: 'labels=C#&state=opened' })
+        .subscribe();
+
+      const req = httpMock.expectOne(() => true);
+      const url = new URL(req.request.url);
+      expect(url.searchParams.get('labels')).toBe('C#');
+      expect(url.searchParams.get('state')).toBe('opened');
+      expect(url.searchParams.get('search')).toBe('bug');
+      req.flush([]);
     });
 
     it('resolves to [] and sends no request when settings are invalid', () => {

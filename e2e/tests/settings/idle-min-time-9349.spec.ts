@@ -74,6 +74,19 @@ const setMinIdleTime = async (page: Page, value: string): Promise<void> => {
 
 /** Re-read after a full reload so the value comes from IndexedDB, not the DOM. */
 const reloadAndReadMinIdleTime = async (page: Page): Promise<string> => {
+  // The save's op is written to IndexedDB asynchronously; a reload a few ms
+  // later dropped it on a slow CI runner, so wait for the write to land.
+  await page.evaluate(async () => {
+    const helpers = (
+      window as unknown as {
+        __e2eTestHelpers?: { flushPendingWrites: () => Promise<unknown> };
+      }
+    ).__e2eTestHelpers;
+    if (!helpers) {
+      throw new Error('E2E test helpers are not exposed');
+    }
+    await helpers.flushPendingWrites();
+  });
   await page.reload();
   await openIdleSection(page);
   await enableIdleTracking(page);

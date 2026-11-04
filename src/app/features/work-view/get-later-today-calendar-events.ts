@@ -3,7 +3,10 @@ import {
   ScheduleCalendarMapEntry,
   ScheduleFromCalendarEvent,
 } from '../schedule/schedule.model';
-import { dateStrToUtcDate } from '../../util/date-str-to-utc-date';
+import {
+  getEndOfTodayTime,
+  isInLaterTodayWindow,
+} from '../tasks/util/later-today-window';
 
 /**
  * Timed calendar events starting between `now` and the end of `todayStr`
@@ -23,17 +26,14 @@ export const getLaterTodayCalendarEvents = (
     return [];
   }
 
-  const todayDate = dateStrToUtcDate(todayStr);
-  todayDate.setHours(23, 59, 59, 999);
-  const todayEndTime = todayDate.getTime() + startOfNextDayDiffMs;
+  const todayEndTime = getEndOfTodayTime(todayStr, startOfNextDayDiffMs);
 
   const events: ScheduleFromCalendarEvent[] = [];
   for (const entry of calendarEventEntries) {
     for (const calEv of entry.items) {
       if (
         !isAllDayCalendarEvent(calEv) &&
-        calEv.start >= now &&
-        calEv.start <= todayEndTime
+        isInLaterTodayWindow(calEv.start, now, todayEndTime)
       ) {
         events.push(calEv);
       }

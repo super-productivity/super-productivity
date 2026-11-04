@@ -1,6 +1,6 @@
 /**
- * Plan guard for the batch conflict lookups on a REAL PostgreSQL — production's major
- * version, not PGlite's.
+ * Plan guard for the multi-entity conflict lookup on a REAL PostgreSQL — production's
+ * major version, not PGlite's.
  *
  * WHY THIS EXISTS SEPARATELY FROM batch-conflict-plan.pglite.spec.ts. That spec is the
  * primary guard and covers far more shapes (fan-out, wide arrays, dirty pending list),
@@ -39,10 +39,7 @@
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { PrismaClient, Prisma } from '@prisma/client';
-import {
-  detectConflictForEntities,
-  prefetchLatestEntityOpsForBatch,
-} from '../../src/sync/conflict';
+import { detectConflictForEntities } from '../../src/sync/conflict';
 import {
   explainGeneric,
   type ExplainRunner,
@@ -243,18 +240,6 @@ describeWithDb('Batch conflict lookup plans (real PostgreSQL)', () => {
     );
 
     expect(result.hasConflict).toBe(false);
-    expect(measured).toHaveLength(1);
-    expectNoSliceScan(measured[0]);
-  }, 120_000);
-
-  it('prefetchLatestEntityOpsForBatch does not scan the slice on an all-new batch', async () => {
-    const measured: Measured[] = [];
-    const pairs = brandNewIds().map((entityId) => ({ entityType: 'TASK', entityId }));
-    const latest = await prisma.$transaction(async (tx) =>
-      prefetchLatestEntityOpsForBatch(OWN_USER_ID, pairs, makeExplainingTx(tx, measured)),
-    );
-
-    expect(latest.size).toBe(0);
     expect(measured).toHaveLength(1);
     expectNoSliceScan(measured[0]);
   }, 120_000);

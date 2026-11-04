@@ -77,6 +77,92 @@ const createWorklogData = (
 };
 
 describe('createRows', () => {
+  it('should accumulate each day independently without changing input task data', () => {
+    const shared = createTask({
+      id: 'shared',
+      notes: 'Shared note',
+      timeSpentOnDay: { [dateKey1]: oneHour, [dateKey2]: twoHours },
+    });
+    const first = createTask({ id: 'first', notes: 'First note' });
+    const second = createTask({
+      id: 'second',
+      notes: 'Second note',
+      timeSpentOnDay: { [dateKey2]: oneHour },
+    });
+    const tasks = [shared, first, second];
+    const tag = createTag('tag', ...tasks);
+    tasks.forEach((task) => {
+      Object.freeze(task.timeSpentOnDay);
+      Object.freeze(task.tagIds);
+      Object.freeze(task);
+    });
+    Object.freeze(tasks);
+
+    const rows = createRows(
+      createWorklogData({ tasks, tags: [tag] }),
+      WorklogGrouping.DATE,
+    );
+
+    expect(rows.map((row) => row.titles)).toEqual([
+      ['shared', 'first'],
+      ['shared', 'second'],
+    ]);
+    expect(rows.map((row) => row.notes)).toEqual([
+      ['Shared note', 'First note'],
+      ['Shared note', 'Second note'],
+    ]);
+    expect(rows.map((row) => row.tasks)).toEqual([
+      [shared, first],
+      [shared, second],
+    ]);
+    expect(rows.map((row) => row.tags)).toEqual([['tag'], ['tag']]);
+    expect(rows.map((row) => row.timeSpent)).toEqual([twoHours, oneHour + twoHours]);
+  });
+
+  // Characterizes a legacy inconsistency, not a requirement: only merged rows were
+  // ever deduplicated, so a lone task keeps two same-titled tags. Safe to change.
+  it('should retain duplicate display tags for a single task but deduplicate merged rows', () => {
+    const task = createTask({
+      id: 'shared',
+      timeSpentOnDay: { [dateKey1]: oneHour, [dateKey2]: oneHour },
+    });
+    const other = createTask({ id: 'other' });
+    const tags = [createTag('a', task), createTag('b', task)].map((tag) => ({
+      ...tag,
+      title: 'Same name',
+    }));
+
+    const rows = createRows(
+      createWorklogData({ tasks: [task, other], tags }),
+      WorklogGrouping.DATE,
+    );
+
+    expect(rows.map((row) => row.tags)).toEqual([
+      ['Same name'],
+      ['Same name', 'Same name'],
+    ]);
+  });
+
+  it('should retain the first matching metadata entry when IDs are repeated', () => {
+    const parent = createTask({ id: 'parent', title: 'First parent' });
+    const child = createSubTask({ id: 'child' }, parent);
+    const tag = createTag('tag', parent);
+    const project = createProject('project', parent, child);
+    const rows = createRows(
+      createWorklogData({
+        tasks: [parent, child, { ...parent, title: 'Second parent' }],
+        tags: [tag, { ...tag, title: 'Second tag' }],
+        projects: [project, { ...project, title: 'Second project' }],
+      }),
+      WorklogGrouping.TASK,
+    );
+
+    expect(rows.length).toBe(1);
+    expect(rows[0].titles).toEqual(['First parent']);
+    expect(rows[0].tags).toEqual(['tag']);
+    expect(rows[0].projects).toEqual(['project']);
+  });
+
   describe('time', () => {
     it('should have correct time fields', () => {
       const tasks = [

@@ -10,10 +10,23 @@ import { Injectable } from '@angular/core';
  */
 @Injectable({ providedIn: 'root' })
 export class RepairSyncContextService {
-  private _baseServerSeqStack: number[] = [];
+  private _baseServerSeqStack: (number | undefined)[] = [];
 
   get baseServerSeq(): number | undefined {
     return this._baseServerSeqStack.at(-1);
+  }
+
+  /**
+   * Withdraws the base for the innermost `runWithBaseServerSeq` run — used
+   * once the remote batch turned out to be blocked at an op, so the cursor
+   * the caller supplied no longer proves what the resulting state includes.
+   * Any REPAIR created afterwards in this run is a legacy (non-causal) one,
+   * which receivers treat non-destructively. No-op outside a run.
+   */
+  dropBaseServerSeqForCurrentRun(): void {
+    if (this._baseServerSeqStack.length > 0) {
+      this._baseServerSeqStack[this._baseServerSeqStack.length - 1] = undefined;
+    }
   }
 
   async runWithBaseServerSeq<T>(

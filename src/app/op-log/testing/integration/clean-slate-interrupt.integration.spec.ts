@@ -8,6 +8,7 @@ import { CURRENT_SCHEMA_VERSION } from '../../persistence/schema-migration.servi
 import { Operation } from '../../core/operation.types';
 import { SINGLETON_KEY, STORE_NAMES } from '../../persistence/db-keys.const';
 import { TaskTimeSyncService } from '../../../features/tasks/task-time-sync.service';
+import { OperationLogDownloadService } from '../../sync/operation-log-download.service';
 
 /**
  * Integration tests for issue #7709 — `createCleanSlate` / `BackupService` import
@@ -67,6 +68,12 @@ describe('CleanSlate / Backup interrupt (issue #7709 regression)', () => {
         { provide: StateSnapshotService, useValue: mockStateSnapshot },
         { provide: TaskTimeSyncService, useValue: mockTaskTimeSync },
         { provide: TranslateService, useValue: mockTranslate },
+        {
+          provide: OperationLogDownloadService,
+          useValue: jasmine.createSpyObj('OperationLogDownloadService', [
+            'getUndecryptableRemoteOps',
+          ]),
+        },
       ],
     });
 
@@ -223,7 +230,7 @@ describe('CleanSlate / Backup interrupt (issue #7709 regression)', () => {
       // throw `LocalDataConflictError(0, {})` — the #7709 chain.
       expect(await storeService.getLastSeq()).toBe(seqBefore);
       expect(await storeService.loadStateCache()).toBeNull();
-      expect(syncLocalState.hasMeaningfulStoreData()).toBe(true);
+      expect(await syncLocalState.hasMeaningfulStoreData()).toBe(true);
       // The device is NOT classified as wholly fresh — even though state_cache
       // was missing before the destructive call too, the surviving op-log keeps
       // `lastSeq > 0` so `isWhollyFreshClient()` is false.

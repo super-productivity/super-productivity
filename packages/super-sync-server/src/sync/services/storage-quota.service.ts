@@ -12,7 +12,10 @@ import { prisma } from '../../db';
 import { Logger } from '../../logger';
 import { parsePositiveIntegerEnv } from '../../util/env';
 import { APPROX_BYTES_PER_OP } from '../sync.const';
-import { CAUSAL_FULL_STATE_OPERATION_WHERE } from '../sync.types';
+import {
+  agedPrefixCausalFullStateSql,
+  CAUSAL_FULL_STATE_OPERATION_WHERE,
+} from '../sync.types';
 
 /**
  * Default storage quota per user in bytes (100MB).
@@ -34,13 +37,20 @@ export const getDefaultStorageQuotaBytes = (): number =>
     'SUPERSYNC_DEFAULT_STORAGE_QUOTA_BYTES',
     DEFAULT_STORAGE_QUOTA_BYTES,
   );
+// serverSeq WINDOW WIDTH per DELETE statement, which also caps the rows it can
+// delete (server_seq is unique per user) — see deleteOldSyncedOpsBatch.
 const OLD_OPS_CLEANUP_DELETE_BATCH_SIZE = 5_000;
 const OLD_OPS_CLEANUP_MAX_DELETED_PER_RUN = 25_000;
-// Operator-DoS guardrail: a 1M `take:` materializes 1M ids in Node memory and
-// then sends a 1M-element array param to Postgres — exactly the pressure the
-// throttle is meant to avoid. Cap so misconfiguration can't unwind the bound.
+// Operator-DoS guardrail: the window width caps the index entries one DELETE
+// statement can touch — exactly the bound that keeps a statement inside the
+// 60s statement_timeout. Cap so misconfiguration can't unwind it.
 const OLD_OPS_CLEANUP_DELETE_BATCH_SIZE_MAX = 50_000;
 const OLD_OPS_CLEANUP_MAX_DELETED_PER_RUN_MAX = 1_000_000;
+/**
+ * Consecutive per-candidate failures that end a sweep. Per-user containment must not turn a
+ * SYSTEMIC fault into a fleet-long run of statement_timeouts (see the loop for why).
+ */
+const MAX_CONSECUTIVE_CANDIDATE_FAILURES = 10;
 
 const getOldOpsCleanupDeleteBatchSize = (): number =>
   parsePositiveIntegerEnv(
@@ -390,52 +400,6 @@ export class StorageQuotaService {
     this.forcedReconciles.delete(userId);
   }
 
-  /**
-   * Backfill self-check. When SUPERSYNC_BATCH_UPLOAD=true the operator is
-   * trusted to have set SUPERSYNC_PAYLOAD_BYTES_BACKFILL_COMPLETE=true only
-   * after `npm run migrate-payload-bytes` finished. If the flag was flipped
-   * too early, batch uploads still write `payload_bytes` correctly but the
-   * SUM-based reconcile in `calculateStorageUsage` would mix exact bytes with
-   * the CASE-WHEN fallback for legacy rows — small drift, but unnecessary
-   * given the env-flag's whole purpose.
-   *
-   * One indexed probe at startup closes the trust hole, but its cost is the
-   * opposite way round from how it reads. A *partially* backfilled table is the
-   * cheap case: `operations_payload_bytes_unbackfilled_idx` still holds live
-   * entries and the scan stops at the first one. The *completed* backfill is the
-   * expensive case — proving that no row matches means reading the whole index.
-   * `payload_bytes` sits in that index's predicate, so every backfill update was
-   * non-HOT and left entries pointing at dead heap tuples, each of which must be
-   * visited until VACUUM or LP_DEAD hints clear them; and with statistics still
-   * describing the pre-backfill distribution the planner may abandon the index and
-   * sequentially scan the table instead. On a multi-GB `operations` that is minutes,
-   * not one round-trip — and it runs before `/health` is registered, so the container
-   * never reports healthy while it is happening (#9504 §2).
-   *
-   * Which of the two costs dominates has not been measured on a real instance, so
-   * neither `scripts/migrate-payload-bytes.ts` nor this probe tries to pre-empt it:
-   * refreshing statistics does nothing about dead index entries, and vice versa. The
-   * migration that creates the index makes the same wrong claim ("physically drains
-   * to empty"), but applied migrations are never edited in place
-   * (`prisma/migrations/README.md`), so this is the correction of record. Worst case
-   * (zero rows in `operations`, e.g. a fresh deployment) is still one round-trip.
-   */
-  async assertPayloadBytesBackfillComplete(): Promise<void> {
-    const result = await prisma.$queryRaw<[{ exists: boolean }]>`
-      SELECT EXISTS (
-        SELECT 1 FROM operations WHERE payload_bytes = 0 LIMIT 1
-      ) AS "exists"
-    `;
-    if (result[0]?.exists) {
-      throw new Error(
-        'SUPERSYNC_BATCH_UPLOAD is enabled but the operations table still ' +
-          'contains rows with payload_bytes = 0. Run ' +
-          '`npm run migrate-payload-bytes` to complete the backfill before ' +
-          'setting SUPERSYNC_PAYLOAD_BYTES_BACKFILL_COMPLETE=true.',
-      );
-    }
-  }
-
   async deleteOldSyncedOpsForAllUsers(
     cutoffTime: number,
   ): Promise<{ totalDeleted: number; affectedUserIds: number[] }> {
@@ -521,144 +485,244 @@ export class StorageQuotaService {
     // Every reason the sweep declines a candidate is counted and reported.
     // #9688 was exactly a fleet-wide exemption from retention that nobody
     // could see; a silent skip re-creates that blind spot in narrower form.
-    // `skippedFreshPrefix` in particular can pin a user forever: anyone
-    // emitting a causal full-state op more often than once per retention
-    // window is skipped on every single run while their log grows unbounded.
+    // A fresh prefix is skipped only when no older causal checkpoint can
+    // protect a wholly aged prefix either.
     let skippedFreshPrefix = 0;
     let skippedBoundaryAtOne = 0;
     let drainFailures = 0;
+    let candidateFailures = 0;
+    let consecutiveCandidateFailures = 0;
 
     for (const candidate of candidates) {
       if (remainingDeleteBudget <= 0) break;
+      // Containment below turns one user's failure into a skip, which removes the only
+      // thing that used to stop a SYSTEMIC failure: a dead pool or a fleet-wide cold cache
+      // makes EVERY candidate fail, and a skipped candidate consumes no delete budget, so
+      // the loop would run the whole fleet at up to a full statement_timeout each.
+      // cleanup.ts schedules this on a bare setInterval with no re-entrancy guard, so a
+      // sweep that outran 24h would overlap itself. Consecutive, not total: isolated bad
+      // users must not abort a run that is otherwise making progress.
+      if (consecutiveCandidateFailures >= MAX_CONSECUTIVE_CANDIDATE_FAILURES) {
+        Logger.error(
+          'Cleanup [old-ops]: abandoned the run after ' +
+            `${MAX_CONSECUTIVE_CANDIDATE_FAILURES} consecutive candidate failures — ` +
+            'this looks systemic (pool, cold cache, statement_timeout), not per-user.',
+        );
+        break;
+      }
 
-      // Snapshot AGE is deliberately not a gate (see #9670): safety comes from
-      // the causal boundary plus the receivedAt cutoff, not snapshot recency.
-      //
-      // But while a cached-snapshot CURSOR exists (legacy plaintext cohort),
-      // the boundary must not pass it: `generateSnapshotAtSeq` replays the
-      // cached base forward through (lastSnapshotSeq, targetSeq], so pruning
-      // above the cursor would break historical restore points that are still
-      // servable. The cap resolves to the newest causal full-state op at or
-      // below the cursor, and lifts once the E2EE eradication sweep clears
-      // the cached snapshot fields.
-      const { snapshotCap } = candidate;
-      let protectedFromSeq = candidate.causalBoundarySeq;
-      if (snapshotCap > 0 && protectedFromSeq > snapshotCap) {
-        const cappedFullStateOp = await prisma.operation.findFirst({
-          where: {
-            userId: candidate.userId,
-            serverSeq: { lte: snapshotCap },
-            // Legacy REPAIR rows carry no causal base cursor, so they must
-            // never authorize history pruning
-            // (see CAUSAL_FULL_STATE_OPERATION_WHERE).
-            ...CAUSAL_FULL_STATE_OPERATION_WHERE,
-          },
-          orderBy: { serverSeq: 'desc' },
-          select: { serverSeq: true },
-        });
-        if (!cappedFullStateOp) {
-          cappedUsersWithoutReplayBase++;
+      let candidateFailed = false;
+      try {
+        // Snapshot AGE is deliberately not a gate (see #9670): safety comes from
+        // the causal boundary plus the receivedAt cutoff, not snapshot recency.
+        //
+        // But while a cached-snapshot CURSOR exists (legacy plaintext cohort),
+        // the boundary must not pass it: `generateSnapshotAtSeq` replays the
+        // cached base forward through (lastSnapshotSeq, targetSeq], so pruning
+        // above the cursor would break historical restore points that are still
+        // servable. The cap resolves to the newest causal full-state op at or
+        // below the cursor, and lifts once the E2EE eradication sweep clears
+        // the cached snapshot fields.
+        const { snapshotCap } = candidate;
+        let protectedFromSeq = candidate.causalBoundarySeq;
+        if (snapshotCap > 0 && protectedFromSeq > snapshotCap) {
+          const cappedFullStateOp = await prisma.operation.findFirst({
+            where: {
+              userId: candidate.userId,
+              serverSeq: { lte: snapshotCap },
+              // Legacy REPAIR rows carry no causal base cursor, so they must
+              // never authorize history pruning
+              // (see CAUSAL_FULL_STATE_OPERATION_WHERE).
+              ...CAUSAL_FULL_STATE_OPERATION_WHERE,
+            },
+            orderBy: { serverSeq: 'desc' },
+            select: { serverSeq: true },
+          });
+          if (!cappedFullStateOp) {
+            cappedUsersWithoutReplayBase++;
+            continue;
+          }
+          protectedFromSeq = cappedFullStateOp.serverSeq;
+        }
+
+        if (protectedFromSeq <= 1) {
+          skippedBoundaryAtOne++;
           continue;
         }
-        protectedFromSeq = cappedFullStateOp.serverSeq;
-      }
 
-      if (protectedFromSeq <= 1) {
-        skippedBoundaryAtOne++;
-        continue;
-      }
-
-      // Prune the prefix whole, or not at all. Deletion filters on `receivedAt
-      // < cutoffTime` as well as `serverSeq < protectedFromSeq`, so a prefix
-      // holding one op newer than the cutoff would be pruned around it and
-      // leave a plain delta as the lowest surviving row. Replay then breaks:
-      // `_resolveExpectedFirstSeq` (op-replay.ts) tolerates a leading gap ONLY
-      // when the lowest surviving op is a causal full-state op that resets
-      // state — otherwise it throws SNAPSHOT_REPLAY_INCOMPLETE, which the
-      // restore route surfaces as a 500. Skipping the user keeps the whole
-      // prefix intact until it ages out, so this sweep never NEWLY breaks the
-      // invariant that path documents ("the surviving lowest-seq op is
-      // guaranteed to be a full-state op"). Costs retention lag, never
-      // over-deletion. Note the invariant is not globally true: quota
-      // recovery's deleteOldestRestorePointAndOps deletes up to a restore
-      // point and can leave a delta lowest — pre-existing, tracked separately.
-      const freshOpBelowBoundary = await prisma.operation.findFirst({
-        where: {
-          userId: candidate.userId,
-          serverSeq: { lt: protectedFromSeq },
-          receivedAt: { gte: BigInt(cutoffTime) },
-        },
-        select: { serverSeq: true },
-      });
-      if (freshOpBelowBoundary) {
-        skippedFreshPrefix++;
-        continue;
-      }
-
-      // Drain this user to completion. The budget gates which users we
-      // START, never where we stop inside one: batches delete ascending by
-      // serverSeq, so cutting a user off mid-prefix deletes ops 1..k and
-      // leaves a plain delta at k+1 as the lowest surviving row — the exact
-      // state the fresh-op probe above rejects, and one that makes every
-      // restore target 500 with SNAPSHOT_REPLAY_INCOMPLETE until a later run
-      // finishes the prefix. Overshoot is bounded by one user's backlog and
-      // costs a longer run; a truncated prefix costs that user their restore.
-      //
-      // One user's DB error must not cost the rest of the fleet a day of
-      // retention, so the drain is scoped: log, count, move to the next user.
-      // A throw mid-drain still leaves that user's prefix truncated — the
-      // batches are separate committed statements, not one transaction — and
-      // the next run repairs it, since the surviving prefix ops are still
-      // older than the (by then later) cutoff.
-      let userDeleted = 0;
-      try {
-        for (;;) {
-          const { selectedCount, deletedCount } = await this.deleteOldSyncedOpsBatch(
-            candidate.userId,
-            protectedFromSeq,
-            cutoffTime,
-            deleteBatchSize,
+        // Prune the prefix whole, or not at all. Deletion filters on `receivedAt
+        // < cutoffTime` as well as `serverSeq < protectedFromSeq`, so a prefix
+        // holding one op newer than the cutoff would be pruned around it and
+        // leave a plain delta as the lowest surviving row. Replay then breaks:
+        // `_resolveExpectedFirstSeq` (op-replay.ts) tolerates a leading gap ONLY
+        // when the lowest surviving op is a causal full-state op that resets
+        // state — otherwise it throws SNAPSHOT_REPLAY_INCOMPLETE, which the
+        // restore route surfaces as a 500. Try an older causal boundary before
+        // skipping the user (#9962), so frequent checkpoints cannot strand an
+        // older complete prefix. This sweep never NEWLY breaks the
+        // invariant that path documents ("the surviving lowest-seq op is
+        // guaranteed to be a full-state op"). Costs retention lag, never
+        // over-deletion. Note the invariant is not globally true: quota
+        // recovery's deleteOldestRestorePointAndOps deletes up to a restore
+        // point and can leave a delta lowest — pre-existing, tracked separately.
+        //
+        // `orderBy: receivedAt` is load-bearing, not cosmetic. The predicate is a
+        // 2D range (`server_seq <` AND `received_at >=`) and no index answers both
+        // as search bounds, so one of them is always a filter and the planner is
+        // free to pick which. Down `(user_id, server_seq)` a NO answer walks the
+        // user's ENTIRE prefix — the deepest histories, which is precisely the
+        // cohort this sweep exists to prune, so it fails worst where it matters
+        // most and gets worse every day it fails.
+        //
+        // And the planner could not tell the two apart: MEASURED on PG 16 under
+        // force_generic_plan (which is what Prisma's prepared statements get), the
+        // two candidates cost BIT-IDENTICALLY — `0.29..32.17 rows=2` each — because
+        // both are "equality on user_id plus one range at default selectivity", while
+        // one touches 9 buffers and the other 60,329. A tie is settled by internals
+        // no version promises to keep stable, so the same statement is instant on one
+        // server and fatal on another. That coin flip, not a mis-costing, is the bug.
+        //
+        // Ordering by receivedAt does not pin the `(user_id, received_at)` path and is
+        // not a hint; it removes the tie. That index already emits receivedAt order
+        // under an equality qual on user_id, so it sorts for free AND keeps LIMIT-1
+        // pushdown (16.23), while `(user_id, server_seq)` must add a blocking Sort and
+        // lose the early exit (30.86) — a ~2x margin where there was none. Its NO
+        // answer is then bounded by the user's ops inside the retention window: not
+        // free — a heavy user's window is still thousands of rows, each costing a heap
+        // fetch because server_seq is not in that index — but bounded by activity
+        // rather than history depth, which is what makes it stop growing. The full fix
+        // is a covering `(user_id, received_at, server_seq)` index (index-only scan,
+        // ordering free); left out here because that is a migration on a multi-GB
+        // table, not a code change.
+        //
+        // Guarded by tests/integration/old-ops-probe-plan.integration.spec.ts, which
+        // measures all of the above against a real PostgreSQL. Mocked Prisma cannot
+        // see any of it: delete this orderBy and every unit test still passes.
+        //
+        // The obvious O(log n) rewrite — take the newest op below the boundary and
+        // compare its receivedAt — is REJECTED: it assumes receivedAt rises with
+        // serverSeq, and concurrent uploads for one user can invert them. The
+        // delete filters on receivedAt as well, so a missed fresh op would not be
+        // deleted; it would be left as the lowest surviving row, a plain delta,
+        // which is the SNAPSHOT_REPLAY_INCOMPLETE state this probe exists to
+        // prevent. Exact semantics over a faster plan.
+        const freshOpBelowBoundary = await prisma.operation.findFirst({
+          where: {
+            userId: candidate.userId,
+            serverSeq: { lt: protectedFromSeq },
+            receivedAt: { gte: BigInt(cutoffTime) },
+          },
+          orderBy: { receivedAt: 'asc' },
+          select: { serverSeq: true },
+        });
+        if (freshOpBelowBoundary) {
+          const [olderBoundary] = await prisma.$queryRaw<{ server_seq: number }[]>(
+            agedPrefixCausalFullStateSql(
+              candidate.userId,
+              protectedFromSeq,
+              BigInt(cutoffTime),
+            ),
           );
-          if (selectedCount === 0) break;
-
-          // Mark on the *first* successful batch (not after the loop) so that
-          // if a later batch throws, the counter still self-heals. Without
-          // this, batch-1 commits would leave the counter stale-high until the
-          // next daily pass or process restart.
-          //
-          // Deliberately leave storageUsedBytes stale-high here. A count-based
-          // approximate decrement can undercount users with many tiny ops and
-          // let them bypass quota indefinitely. The marker tells the next
-          // request to run an exact reconcile so drift self-heals.
-          //
-          // NOTE: the marker is in-memory (process-local). A persistent
-          // `users.storage_needs_reconcile` column would survive restarts; see
-          // TODO below.
-          // TODO: persist the reconcile marker in a DB column so it survives
-          // restarts of a single-instance deployment and works correctly across
-          // a multi-instance deployment behind a load balancer.
-          if (userDeleted === 0) {
-            affectedUserIds.push(candidate.userId);
-            this.markNeedsReconcile(candidate.userId);
+          if (!olderBoundary) {
+            skippedFreshPrefix++;
+            continue;
           }
+          protectedFromSeq = olderBoundary.server_seq;
+        }
 
-          userDeleted += deletedCount;
-          totalDeleted += deletedCount;
-          // May go negative — the outer loop's budget check then stops the run
-          // before starting another user.
-          remainingDeleteBudget -= deletedCount;
-          // Stop on the SELECTED count, never the deleted one. A short delete
-          // means those rows were already gone (concurrent quota recovery),
-          // not that the prefix is drained — see deleteOldSyncedOpsBatch.
-          if (selectedCount < deleteBatchSize) break;
+        // Drain this user to completion. The budget gates which users we
+        // START, never where we stop inside one: windows advance ascending by
+        // serverSeq, so cutting a user off mid-prefix deletes ops 1..k and
+        // leaves a plain delta at k+1 as the lowest surviving row — the exact
+        // state the fresh-op probe above rejects, and one that makes every
+        // restore target 500 with SNAPSHOT_REPLAY_INCOMPLETE until a later run
+        // finishes the prefix. Overshoot is bounded by one user's backlog and
+        // costs a longer run; a truncated prefix costs that user their restore.
+        //
+        // The prefix is walked in STATED serverSeq windows of deleteBatchSize —
+        // see deleteOldSyncedOpsBatch for why the range must be stated rather
+        // than discovered. An empty window proves nothing about the rest of the
+        // prefix (already pruned, or emptied concurrently by quota recovery),
+        // so the walk always runs to the boundary; a window over an already
+        // pruned range costs a few index pages.
+        //
+        // One user's DB error must not cost the rest of the fleet a day of
+        // retention, so the drain is scoped: log, count, move to the next user.
+        // A throw mid-drain still leaves that user's prefix truncated — the
+        // windows are separate committed statements, not one transaction — and
+        // the next run repairs it, since the surviving prefix ops are still
+        // older than the (by then later) cutoff.
+        let userDeleted = 0;
+        try {
+          for (let lo = 1; lo < protectedFromSeq; lo += deleteBatchSize) {
+            const hi = Math.min(lo + deleteBatchSize, protectedFromSeq);
+            const deletedCount = await this.deleteOldSyncedOpsBatch(
+              candidate.userId,
+              lo,
+              hi,
+              cutoffTime,
+            );
+            if (deletedCount === 0) continue;
+
+            // Mark on the *first* deleting window (not after the loop) so that
+            // if a later window throws, the counter still self-heals. Without
+            // this, window-1 commits would leave the counter stale-high until the
+            // next daily pass or process restart.
+            //
+            // Deliberately leave storageUsedBytes stale-high here. A count-based
+            // approximate decrement can undercount users with many tiny ops and
+            // let them bypass quota indefinitely. The marker tells the next
+            // request to run an exact reconcile so drift self-heals.
+            //
+            // NOTE: the marker is in-memory (process-local). A persistent
+            // `users.storage_needs_reconcile` column would survive restarts; see
+            // TODO below.
+            // TODO: persist the reconcile marker in a DB column so it survives
+            // restarts of a single-instance deployment and works correctly across
+            // a multi-instance deployment behind a load balancer.
+            if (userDeleted === 0) {
+              affectedUserIds.push(candidate.userId);
+              this.markNeedsReconcile(candidate.userId);
+            }
+
+            userDeleted += deletedCount;
+            totalDeleted += deletedCount;
+            // May go negative — the outer loop's budget check then stops the run
+            // before starting another user.
+            remainingDeleteBudget -= deletedCount;
+          }
+        } catch (error) {
+          drainFailures++;
+          Logger.error(
+            `Cleanup [old-ops]: drain failed for user ${candidate.userId} ` +
+              `(boundary ${protectedFromSeq}, ${userDeleted} ops deleted before the ` +
+              `error); their prefix may be truncated until the next run: ${error}`,
+          );
         }
       } catch (error) {
-        drainFailures++;
+        // Scoped to ONE candidate on purpose. Every statement in this body reads or
+        // writes a single user's history and can fail on that user alone (a
+        // `statement_timeout` on a deep prefix is what production hit). Unscoped, the
+        // throw escaped the loop, aborted the whole sweep, and — because `candidates`
+        // is deterministically ordered — the same user re-blocked it every night while
+        // every user behind them silently kept their full history: a fleet-wide
+        // retention outage reported as one log line. Wrapping the whole body rather
+        // than each query keeps that true for anything added here later. The drain's
+        // own catch is nested inside and does not rethrow, so it still reports the
+        // distinct 'prefix may be truncated' case before this one is reached.
+        candidateFailed = true;
+        candidateFailures++;
         Logger.error(
-          `Cleanup [old-ops]: drain failed for user ${candidate.userId} ` +
-            `(boundary ${protectedFromSeq}, ${userDeleted} ops deleted before the ` +
-            `error); their prefix may be truncated until the next run: ${error}`,
+          `Cleanup [old-ops]: user ${candidate.userId} was skipped; their history was ` +
+            `left intact and the run continued: ${error}`,
         );
+      } finally {
+        // `finally`, not the end of the `try`: the body reaches `continue` on three
+        // ordinary skip paths (snapshot-capped with no replay base, boundary at seq 1,
+        // fresh prefix) and those are successes that must clear the streak.
+        consecutiveCandidateFailures = candidateFailed
+          ? consecutiveCandidateFailures + 1
+          : 0;
       }
     }
 
@@ -686,6 +750,14 @@ export class StorageQuotaService {
       );
     }
 
+    if (candidateFailures > 0) {
+      Logger.warn(
+        `Cleanup [old-ops]: ${candidateFailures} user(s) threw before their drain and were ` +
+          'skipped. A count that never falls means those users are permanently exempt ' +
+          'from retention — check for a statement_timeout on a deep prefix.',
+      );
+    }
+
     if (remainingDeleteBudget <= 0) {
       Logger.warn(
         `Cleanup [old-ops]: per-run budget exhausted after ${totalDeleted} ops ` +
@@ -699,51 +771,54 @@ export class StorageQuotaService {
   }
 
   /**
-   * Delete one batch of the user's aged prefix.
+   * Delete one serverSeq WINDOW of the user's aged prefix: rows in
+   * `[windowStart, windowEnd)` that are also older than the cutoff.
    *
-   * Returns BOTH counts because they answer different questions and are not
-   * interchangeable. `selectedCount` is how many doomed rows this batch found,
-   * and is the only sound basis for "is this user drained?": a short
-   * `deletedCount` means those rows were already gone (quota recovery deleted
-   * them concurrently — the sweep does not hold `runWithStorageUsageLock`,
-   * the upload path does), NOT that the prefix is exhausted. Reading a short
-   * `deletedCount` as "drained" stops the loop mid-prefix and leaves a plain
-   * delta as the lowest surviving row, which is the SNAPSHOT_REPLAY_INCOMPLETE
-   * state the whole-or-nothing rule exists to prevent. `deletedCount` is what
-   * actually left the table, so it — and only it — feeds the budget and the
-   * storage counter.
+   * The window is STATED, never discovered. The previous shape —
+   * `findMany({ serverSeq: { lt: boundary }, take: limit })` feeding a
+   * `deleteMany` by id — bounded the rows RETURNED but not the rows SCANNED,
+   * and production found three independent ways for that scan to blow the 60s
+   * `statement_timeout` (#9692):
+   *   1. low match density: when few rows below the boundary are older than
+   *      the cutoff, the LIMIT never fills and the scan heap-filters the
+   *      user's whole prefix (measured: 4x the block cost while deleting
+   *      nothing);
+   *   2. cold I/O: even at 100% density, `take: 5000` is ~5000 random heap
+   *      fetches to check `received_at` — ~48s at the host's measured ~9.5ms
+   *      cold reads;
+   *   3. dead tuples: a prefix already deleted by quota recovery leaves its
+   *      index entries behind until vacuum, and the scan visits every one —
+   *      measured 88s / 6,787 cold pages to return zero rows. (How long that
+   *      backlog survives is an autovacuum scale factor, tuned per-table in
+   *      20260828000003; the measurement above predates it.)
+   * A two-sided `serverSeq` range caps the index entries a statement can touch
+   * at the window width regardless of match density, tuple liveness, or plan
+   * choice, so none of the three can recur. `server_seq` is unique per user,
+   * so the width also caps the rows deleted per statement — no `take`, no id
+   * round-trip, one statement instead of two.
+   *
+   * Returns the rows that actually left the table — a window can legitimately
+   * delete zero (already pruned, or emptied concurrently by quota recovery,
+   * which holds `runWithStorageUsageLock`; this sweep does not) and the caller
+   * just advances to the next window.
    */
   private async deleteOldSyncedOpsBatch(
     userId: number,
-    protectedFromSeq: number,
+    windowStart: number,
+    windowEnd: number,
     cutoffTime: number,
-    limit: number,
-  ): Promise<{ selectedCount: number; deletedCount: number }> {
-    const doomedOps = await prisma.operation.findMany({
-      where: {
-        userId,
-        serverSeq: { lt: protectedFromSeq },
-        // Not redundant with the caller's fresh-op probe: a concurrent
-        // deleteAllUserData / clean slate resets lastSeq to 0, so the user's
-        // re-import reuses low seq numbers. Only this filter stops a stale
-        // protectedFromSeq from shredding that brand-new history.
-        receivedAt: { lt: BigInt(cutoffTime) },
-      },
-      orderBy: { serverSeq: 'asc' },
-      take: limit,
-      select: { id: true },
-    });
-
-    if (doomedOps.length === 0) return { selectedCount: 0, deletedCount: 0 };
-
+  ): Promise<number> {
     const result = await prisma.operation.deleteMany({
       where: {
         userId,
-        id: { in: doomedOps.map((op) => op.id) },
+        serverSeq: { gte: windowStart, lt: windowEnd },
+        // Older servers reset lastSeq during DELETE /data and can re-import
+        // at low sequences. Keep the age filter so a stale protectedFromSeq
+        // cannot delete that fresh history during an upgrade.
+        receivedAt: { lt: BigInt(cutoffTime) },
       },
     });
-
-    return { selectedCount: doomedOps.length, deletedCount: result.count };
+    return result.count;
   }
 
   /**

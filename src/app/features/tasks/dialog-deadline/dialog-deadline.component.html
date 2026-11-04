@@ -8,13 +8,15 @@
       [minDate]="minDate"
       [timeLabel]="T.F.TASK.D_DEADLINE.ADD_TIME | translate"
       [reminderLabel]="T.F.TASK.D_DEADLINE.REMIND_AT"
-      [quickAccessTranslationPrefix]="'F.TASK.D_DEADLINE'"
       (dateSelected)="dateSelected($event)"
       (timeChanged)="selectedTime = $event"
       (reminderChanged)="selectedReminderCfgId = $event"
       (quickAccessClick)="onQuickAccessClick($event)"
       (enterSubmit)="submit()"
     ></datetime-picker>
+    @if (selectedTime && selectedReminderCfgId !== DO_NOT_REMIND) {
+      <exact-alarm-hint />
+    }
   }
 
   <div class="dialog-actions-and-warnings">

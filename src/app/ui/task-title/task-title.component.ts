@@ -11,16 +11,21 @@ import {
   output,
   signal,
   viewChild,
+  effect,
 } from '@angular/core';
 import { T } from 'src/app/t.const';
+import { isMultiSelectModifierEvent } from '../../util/is-multi-select-modifier-event';
+import { isLinkTarget } from '../../util/dom-element';
 import { TranslateModule } from '@ngx-translate/core';
 import { IS_ANDROID_WEB_VIEW } from '../../util/is-android-web-view';
 import { Log } from '../../core/log';
 import { MentionConfig, MentionModule } from '../mentions';
 import { AsyncPipe } from '@angular/common';
 import { Observable } from 'rxjs';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import { MentionConfigService } from '../../features/tasks/mention-config.service';
 import { hasLinkHints, RenderLinksPipe } from '../pipes/render-links.pipe';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import { SubmitTrigger } from 'src/app/features/tasks/task.model';
 
 /**
@@ -97,6 +102,13 @@ export class TaskTitleComponent implements OnDestroy {
 
   private readonly _isFocused = signal(false);
   private readonly _isEditing = signal(false);
+  // Becoming readonly mid-edit removes the textarea without a blur; end the
+  // edit explicitly so the editing state cannot get stuck.
+  private readonly _cancelEditWhenReadonly = effect(() => {
+    if (this.readonly() && this._isEditing()) {
+      this.cancelEditing();
+    }
+  });
   private _focusTimeoutId: number | undefined;
   private _submitTrigger: SubmitTrigger = TaskTitleComponent._DEFAULT_SUBMIT_TRIGGER;
 
@@ -114,9 +126,17 @@ export class TaskTitleComponent implements OnDestroy {
   onClick(event: MouseEvent): void {
     const target = event.target as HTMLElement | null;
 
-    // Let link clicks propagate to the browser but not to parent components
-    if (target?.tagName === 'A' || target?.closest('a')) {
+    // Let link clicks propagate to the browser but not to parent components.
+    // Checked BEFORE the modifier bail-out: Ctrl/Cmd+click on a link is the
+    // browser's "open in new tab", and letting it bubble would open the tab
+    // AND toggle the row's selection.
+    if (isLinkTarget(target)) {
       event.stopPropagation();
+      return;
+    }
+
+    // Shift / Ctrl / Cmd + click selects the task row; let it bubble untouched.
+    if (!this.isEditing() && isMultiSelectModifierEvent(event)) {
       return;
     }
 
@@ -145,7 +165,10 @@ export class TaskTitleComponent implements OnDestroy {
 
   cancelEditing(): void {
     const textarea = this.textarea()?.nativeElement;
-    if (textarea) {
+    // A blur only fires when the textarea actually has focus (focusInput()
+    // focuses on a timeout); otherwise end the edit directly so the editing
+    // state can never get stuck.
+    if (textarea && document.activeElement === textarea) {
       textarea.blur();
     } else {
       this._endEditing();

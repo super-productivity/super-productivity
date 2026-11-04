@@ -9,6 +9,7 @@ import { OnboardingHintService } from '../../features/onboarding/onboarding-hint
 import { selectTaskFeatureState } from '../../features/tasks/store/task.selectors';
 import { devError } from '../../util/dev-error';
 import { T } from '../../t.const';
+import { openSyncSettingsDialog } from './open-sync-settings-dialog';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -18,7 +19,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const MIN_DAYS_SINCE_FIRST_USE = 7;
 
 // ...and there must be a non-trivial amount of data actually worth protecting:
-// a fresh install seeds only 4 example tasks, so this keeps us from nudging an
+// a fresh install seeds only 1 example task, so this keeps us from nudging an
 // empty/dormant app even after the time threshold passes.
 const MIN_TASKS = 20;
 
@@ -101,8 +102,6 @@ export class SyncSafetyBannerService {
   }
 
   private async _openSyncCfgDialog(): Promise<void> {
-    const { DialogSyncCfgComponent } =
-      await import('./dialog-sync-cfg/dialog-sync-cfg.component');
-    this._matDialog.open(DialogSyncCfgComponent);
+    await openSyncSettingsDialog(this._matDialog, this._globalConfigService.sync());
   }
 }

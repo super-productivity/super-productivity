@@ -6,8 +6,6 @@ import {
   getDoneSubtaskElement,
   getUndoneSubtaskElement,
   getTaskCount,
-  getTaskTitles,
-  hasTaskOnClient,
   type SimulatedE2EClient,
 } from './supersync-helpers';
 
@@ -139,38 +137,6 @@ export const expectTaskOnAllClients = async (
 };
 
 /**
- * Assert a task does NOT exist on any of the provided clients.
- *
- * @param clients - Array of simulated E2E clients
- * @param taskName - The task name to check
- * @param timeout - Optional timeout in ms (default: 10000)
- */
-export const expectTaskNotOnAnyClient = async (
-  clients: SimulatedE2EClient[],
-  taskName: string,
-  timeout = 10000,
-): Promise<void> => {
-  await Promise.all(
-    clients.map((client) => expectTaskNotVisible(client, taskName, timeout)),
-  );
-};
-
-/**
- * Assert a task is done on all provided clients.
- *
- * @param clients - Array of simulated E2E clients
- * @param taskName - The task name to check
- * @param timeout - Optional timeout in ms (default: 10000)
- */
-export const expectTaskDoneOnAllClients = async (
-  clients: SimulatedE2EClient[],
-  taskName: string,
-  timeout = 10000,
-): Promise<void> => {
-  await Promise.all(clients.map((client) => expectTaskDone(client, taskName, timeout)));
-};
-
-/**
  * Assert task count is equal across all clients.
  *
  * @param clients - Array of simulated E2E clients
@@ -200,54 +166,6 @@ export const expectTaskCount = (
   });
 };
 
-/**
- * Assert task order matches across clients.
- *
- * @param clientA - First client
- * @param clientB - Second client
- */
-export const expectTaskOrderMatches = async (
-  clientA: SimulatedE2EClient,
-  clientB: SimulatedE2EClient,
-): Promise<void> => {
-  const orderA = await getTaskTitles(clientA);
-  const orderB = await getTaskTitles(clientB);
-  expect(orderA).toEqual(orderB);
-};
-
-/**
- * Assert all clients have the same task order.
- *
- * @param clients - Array of simulated E2E clients
- */
-export const expectSameTaskOrder = async (
-  clients: SimulatedE2EClient[],
-): Promise<void> => {
-  if (clients.length < 2) return;
-
-  const orders = await Promise.all(clients.map((client) => getTaskTitles(client)));
-  const firstOrder = orders[0];
-  for (let i = 1; i < orders.length; i++) {
-    expect(orders[i]).toEqual(firstOrder);
-  }
-};
-
-/**
- * Assert a task exists on a client (boolean check).
- *
- * @param client - The simulated E2E client
- * @param taskName - The task name to check
- * @param exists - Whether the task should exist (default: true)
- */
-export const expectTaskExists = async (
-  client: SimulatedE2EClient,
-  taskName: string,
-  exists = true,
-): Promise<void> => {
-  const hasIt = await hasTaskOnClient(client, taskName);
-  expect(hasIt).toBe(exists);
-};
-
 // ============================================================================
 // Consistency Assertions
 // ============================================================================
@@ -266,38 +184,4 @@ export const expectConsistentState = async (
   for (const taskName of taskNames) {
     await expectTaskOnAllClients(clients, taskName);
   }
-};
-
-/**
- * Assert time tracking indicator is visible on a task.
- *
- * @param client - The simulated E2E client
- * @param taskName - The task name
- * @param timeout - Optional timeout in ms (default: 5000)
- */
-export const expectTimeTrackingActive = async (
-  client: SimulatedE2EClient,
-  taskName: string,
-  timeout = 5000,
-): Promise<void> => {
-  const task = getTaskElement(client, taskName);
-  const indicator = task.locator('.play-indicator');
-  await expect(indicator).toBeVisible({ timeout });
-};
-
-/**
- * Assert time tracking indicator is NOT visible on a task.
- *
- * @param client - The simulated E2E client
- * @param taskName - The task name
- * @param timeout - Optional timeout in ms (default: 5000)
- */
-export const expectTimeTrackingInactive = async (
-  client: SimulatedE2EClient,
-  taskName: string,
-  timeout = 5000,
-): Promise<void> => {
-  const task = getTaskElement(client, taskName);
-  const indicator = task.locator('.play-indicator');
-  await expect(indicator).not.toBeVisible({ timeout });
 };

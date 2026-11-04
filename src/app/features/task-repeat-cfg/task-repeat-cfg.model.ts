@@ -1,5 +1,5 @@
 import { EntityState } from '@ngrx/entity';
-import { TaskReminderOptionId } from '../tasks/task.model';
+import { Task, TaskReminderOptionId } from '../tasks/task.model';
 import { getDbDateStr } from '../../util/get-db-date-str';
 
 export const TASK_REPEAT_WEEKDAY_MAP: (keyof TaskRepeatCfg)[] = [
@@ -46,6 +46,8 @@ export interface TaskRepeatCfgCopy {
    */
   order: number;
   defaultEstimate?: number;
+  /** Default for new occurrences; absent on older configs means no priority. */
+  priority?: Task['priority'];
   startTime?: string;
   remindAt?: TaskReminderOptionId;
 
@@ -56,6 +58,9 @@ export interface TaskRepeatCfgCopy {
   repeatCycle: RepeatCycleOption;
   // worklog string; only in effect for monthly/yearly
   startDate?: string;
+  // Inclusive last day (YYYY-MM-DD) an occurrence may fall on; unset = repeat
+  // forever. Optional on purpose: existing persisted configs lack it (#10091).
+  repeatUntilDay?: string;
   repeatEvery: number;
   monday?: boolean;
   tuesday?: boolean;

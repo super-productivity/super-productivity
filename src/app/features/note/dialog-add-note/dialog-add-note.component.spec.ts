@@ -6,6 +6,7 @@ import { MarkdownModule } from 'ngx-markdown';
 import { EMPTY, of } from 'rxjs';
 import { ClipboardImageService } from '../../../core/clipboard-image/clipboard-image.service';
 import { ClipboardPasteHandlerService } from '../../../core/clipboard-image/clipboard-paste-handler.service';
+import { GlobalConfigService } from '../../config/global-config.service';
 import { SS } from '../../../core/persistence/storage-keys.const';
 import { SnackService } from '../../../core/snack/snack.service';
 import { TaskAttachmentService } from '../../tasks/task-attachment/task-attachment.service';
@@ -56,6 +57,17 @@ describe('DialogAddNoteComponent', () => {
         { provide: ClipboardImageService, useValue: mockClipboardImageService },
         { provide: TaskAttachmentService, useValue: {} },
         { provide: ClipboardPasteHandlerService, useValue: {} },
+        // Formatting off keeps these specs on the plain-textarea editor; the
+        // live markdown editor (#9910) is covered by its own specs and an e2e.
+        {
+          provide: GlobalConfigService,
+          useValue: {
+            misc: jasmine.createSpy().and.returnValue({}),
+            tasks: jasmine
+              .createSpy()
+              .and.returnValue({ isMarkdownFormattingInNotesEnabled: false }),
+          },
+        },
         { provide: NoteService, useValue: mockNoteService },
         {
           provide: SnackService,
@@ -95,6 +107,18 @@ describe('DialogAddNoteComponent', () => {
 
     expect(sessionStorage.getItem(SS.NOTE_TMP)).toBe('recovered note');
     expect(mockDialogRef.close).not.toHaveBeenCalled();
+  });
+
+  it('should close after an external discard confirmation without prompting again', () => {
+    sessionStorage.setItem(SS.NOTE_TMP, 'recovered note');
+    createComponent();
+    const confirmDialogSpy = spyOn(component['_matDialog'], 'open');
+
+    component.closeAfterConfirmedDiscard();
+
+    expect(confirmDialogSpy).not.toHaveBeenCalled();
+    expect(sessionStorage.getItem(SS.NOTE_TMP)).toBeNull();
+    expect(mockDialogRef.close).toHaveBeenCalled();
   });
 
   it('should add the note and clear the storage on save', () => {

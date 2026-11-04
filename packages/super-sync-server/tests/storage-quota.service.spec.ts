@@ -131,20 +131,6 @@ describe('StorageQuotaService', () => {
     });
   });
 
-  describe('assertPayloadBytesBackfillComplete', () => {
-    it('should resolve when no unbackfilled rows exist', async () => {
-      vi.mocked(prisma.$queryRaw).mockResolvedValue([{ exists: false }]);
-      await expect(service.assertPayloadBytesBackfillComplete()).resolves.toBeUndefined();
-    });
-
-    it('should throw when any row has payload_bytes = 0', async () => {
-      vi.mocked(prisma.$queryRaw).mockResolvedValue([{ exists: true }]);
-      await expect(service.assertPayloadBytesBackfillComplete()).rejects.toThrow(
-        /SUPERSYNC_BATCH_UPLOAD is enabled but the operations table still contains rows with payload_bytes = 0/,
-      );
-    });
-  });
-
   describe('checkStorageQuota', () => {
     it('should allow upload when under quota', async () => {
       vi.mocked(prisma.user.findUnique).mockResolvedValue({

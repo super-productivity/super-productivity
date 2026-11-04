@@ -94,8 +94,10 @@ export class CleanSlateService {
         );
         OpLog.normal('[CleanSlate] Starting clean slate process', {
           reason,
+          // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
           syncImportReason,
           priorUnsyncedCount: priorUnsynced.length,
+          // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
           priorUnsyncedByOpType: priorOpTypeBreakdown,
           priorClockSize: priorClock ? Object.keys(priorClock).length : 0,
         });

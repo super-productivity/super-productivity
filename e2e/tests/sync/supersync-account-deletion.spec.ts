@@ -1,4 +1,5 @@
 import { test, expect } from '../../fixtures/supersync.fixture';
+import { cssSelectors } from '../../constants/selectors';
 import {
   createTestUser,
   getSuperSyncConfig,
@@ -8,6 +9,12 @@ import {
   waitForTask,
   type SimulatedE2EClient,
 } from '../../utils/supersync-helpers';
+
+/**
+ * Password setupSuperSync/syncAndWait use when a test gives none
+ * (`_encryptionPassword` in e2e/pages/supersync.page.ts, not exported).
+ */
+const DEFAULT_ENCRYPTION_PASSWORD = 'e2e-default-encryption-pw';
 
 /**
  * SuperSync Account Deletion E2E Tests
@@ -68,7 +75,7 @@ test.describe('@supersync SuperSync Account Deletion', () => {
       await client.sync.syncBtn.click();
 
       // 4. Wait for error indicator to appear
-      // The sync button should show error state (sync_problem icon),
+      // The sync button should show error state (sync error icon),
       // or a snackbar with error message should appear
       // Note: App uses snack-custom component, not simple-snack-bar
       const errorIndicator = client.page.locator(
@@ -78,7 +85,7 @@ test.describe('@supersync SuperSync Account Deletion', () => {
           '.mat-mdc-snack-bar-container:has-text("Configure"), ' +
           '.mat-mdc-snack-bar-container:has-text("Authentication"), ' +
           // Or sync button showing error icon
-          '.sync-btn mat-icon:has-text("sync_problem")',
+          cssSelectors.SYNC_ERROR,
       );
 
       await expect(errorIndicator.first()).toBeVisible({ timeout: 20000 });
@@ -108,6 +115,7 @@ test.describe('@supersync SuperSync Account Deletion', () => {
   }) => {
     const appUrl = baseURL || 'http://localhost:4242';
     let client: SimulatedE2EClient | null = null;
+    let verifier: SimulatedE2EClient | null = null;
 
     try {
       // 1. Create first user and sync
@@ -162,9 +170,24 @@ test.describe('@supersync SuperSync Account Deletion', () => {
 
       // Verify task exists
       await waitForTask(client.page, task2);
+
+      // The client's own view proves nothing about the server. A second
+      // device on account B must receive BOTH tasks: task1 was already synced
+      // to account A, so it only reaches account B through the server
+      // migration (a SERVER_MIGRATION SYNC_IMPORT of the full local state).
+      verifier = await createSimulatedClient(browser, appUrl, 'Verifier', testRunId);
+      await verifier.sync.setupSuperSync({
+        ...configB,
+        isEncryptionEnabled: true,
+        password: DEFAULT_ENCRYPTION_PASSWORD,
+      });
+      await verifier.sync.syncAndWait();
+      await waitForTask(verifier.page, task1);
+      await waitForTask(verifier.page, task2);
       console.log('[Reconfigure] ✓ User B sync successful - reconfiguration complete');
     } finally {
       if (client) await closeClient(client);
+      if (verifier) await closeClient(verifier);
     }
   });
 });

@@ -1381,7 +1381,7 @@ describe('SnapshotService', () => {
       );
     });
 
-    it('should reject historical snapshot generation when replay cannot reach targetSeq', async () => {
+    it('should reject a historical target when no retained history is available', async () => {
       vi.mocked(prisma.$transaction).mockImplementation(async (fn) => {
         const mockTx = {
           userSyncState: {
@@ -1403,7 +1403,7 @@ describe('SnapshotService', () => {
       });
 
       await expect(service.generateSnapshotAtSeq(1, 5)).rejects.toThrow(
-        'SNAPSHOT_REPLAY_INCOMPLETE',
+        'Target sequence 5 is no longer available',
       );
     });
 

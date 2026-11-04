@@ -19,6 +19,7 @@ const AUTOMATION_TRIGGER_TYPES = [
   'taskStarted',
   'taskStopped',
   'timeBased',
+  'shortcut',
 ] as const satisfies readonly AutomationTriggerType[];
 const _exhaustiveTriggers: _AssertEq<
   AutomationTriggerType,

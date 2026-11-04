@@ -23,7 +23,10 @@ export type DropListModelSource =
   | 'BACKLOG'
   | 'ADD_TASK_PANEL'
   | 'OVERDUE'
-  | 'LATER_TODAY';
+  | 'LATER_TODAY'
+  // A view column's rows, and its collapsed done rows (accepts no drops).
+  | 'VIEW'
+  | 'VIEW_DONE';
 
 // NOTE: do not change these, as they are used inside task repeat model directly
 // (new can be added though)
@@ -35,6 +38,11 @@ export enum TaskReminderOptionId {
   m15 = 'm15',
   m30 = 'm30',
   h1 = 'h1',
+  // long lead times; not offered where the option id itself is persisted
+  // (global default, repeat cfgs), see TASK_REMINDER_OPTIONS_WITHOUT_LONG_LEAD
+  d1 = 'd1',
+  d3 = 'd3',
+  w1 = 'w1',
 }
 
 export interface TaskReminderOption {
@@ -70,6 +78,9 @@ export interface IssueFieldsForTask {
   issueLastSyncedValues?: Record<string, unknown>;
 }
 
+/** 1 = Low, 2 = Medium, 3 = High. Higher numbers are more important. */
+export type TaskPriority = 1 | 2 | 3;
+
 // Extend the plugin Task type with app-specific fields
 // Omit issue fields from PluginTask to avoid conflict with IssueFieldsForTask
 export interface TaskCopy
@@ -90,6 +101,15 @@ export interface TaskCopy
   timeSpentOnDay: TimeSpentOnDay;
 
   // Additional app-specific fields
+
+  /**
+   * Optional priority: 1/low = Low, 2/medium = Medium, 3/high = High. `undefined` and `null` both
+   * mean "no priority" and are treated the same by sorting and filtering.
+   * Preserve historical string encodings on reads; explicit changes write numbers.
+   * Clients predating priorities ignore the field. Older priority-aware builds
+   * accept only one encoding and must upgrade before syncing mixed data.
+   */
+  priority?: TaskPriority | 'high' | 'medium' | 'low' | null;
 
   /**
    * Scheduled time as Unix timestamp (ms). For tasks scheduled with a specific time.
@@ -136,6 +156,18 @@ export interface TaskCopy
   // Ensure type compatibility for internal fields
   modified?: number;
   doneOn?: number;
+
+  /**
+   * When a task was finished as "won't do" rather than completed: the
+   * `doneOn` of that finish. It only counts while it equals `doneOn` and the
+   * task is done, so read it through `isWontDoTask()`. Reopening clears
+   * `doneOn` and every completion stamps a new one, on clients predating the
+   * field too, so a value left behind does not count again; those clients show
+   * a plain done task. Exception: the plugin batch update writes `isDone`
+   * without touching `doneOn`, so a won't-do task it unchecks and re-checks is
+   * won't do again.
+   */
+  wontDoOn?: number;
   parentId?: string;
   remindAt?: number;
   repeatCfgId?: string;

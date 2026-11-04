@@ -10,9 +10,6 @@ import {
 } from '../../helpers/plugin-test.helpers';
 
 const { SIDENAV } = cssSelectors;
-
-// Plugin-related selectors
-const API_TEST_PLUGIN_NAV_ITEM = `${SIDENAV} nav-item button:has-text("API Test Plugin")`;
 const TIMEOUT_MULTIPLIER = getCITimeoutMultiplier();
 const TEST_TIMEOUT_MS = 30000 * TIMEOUT_MULTIPLIER;
 
@@ -49,41 +46,6 @@ test.describe('Plugin Lifecycle', () => {
       15000 * TIMEOUT_MULTIPLIER,
     );
     expect(pluginVisible).toBe(true);
-  });
-
-  test('verify plugin is initially loaded', async ({ page }) => {
-    test.setTimeout(TEST_TIMEOUT_MS);
-    // Wait for magic-side-nav to be ready
-    await page.locator(SIDENAV).waitFor({ state: 'visible' });
-
-    // Plugin doesn't show snack bar on load, check plugin nav item instead
-    await expect(page.locator(API_TEST_PLUGIN_NAV_ITEM)).toBeVisible({ timeout: 10000 });
-    await expect(page.locator(API_TEST_PLUGIN_NAV_ITEM)).toContainText('API Test Plugin');
-  });
-
-  test('test plugin navigation', async ({ page }) => {
-    test.setTimeout(TEST_TIMEOUT_MS);
-
-    // Click on the plugin nav item to navigate to plugin
-    const pluginNavItem = page.locator(API_TEST_PLUGIN_NAV_ITEM);
-    await expect(pluginNavItem).toBeVisible({ timeout: 10000 });
-    await Promise.all([
-      page.waitForURL(/\/plugins\/api-test-plugin\/index/, { timeout: 15000 }),
-      pluginNavItem.click(),
-    ]);
-
-    // Verify we navigated to the plugin page
-    await expect(page).toHaveURL(/\/plugins\/api-test-plugin\/index/, { timeout: 10000 });
-
-    // Wait for Angular component initialization after navigation
-    await expect(async () => {
-      const iframe = page.locator('iframe');
-      await expect(iframe).toBeAttached({ timeout: 2000 });
-      await expect(iframe).toBeVisible({ timeout: 2000 });
-    }).toPass({ timeout: 10000, intervals: [500, 1000] });
-
-    // Go back to work view
-    await page.goto('/#/tag/TODAY/tasks');
   });
 
   test('disable plugin and verify cleanup', async ({ page }) => {

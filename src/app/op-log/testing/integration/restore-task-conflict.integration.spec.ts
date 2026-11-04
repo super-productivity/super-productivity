@@ -1,4 +1,3 @@
-import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { Action, ActionReducer, createSelector, Store } from '@ngrx/store';
 import { of } from 'rxjs';
@@ -8,6 +7,7 @@ import { SnackService } from '../../../core/snack/snack.service';
 import { ArchiveModel } from '../../../features/archive/archive.model';
 import { ArchiveService } from '../../../features/archive/archive.service';
 import { TaskArchiveService } from '../../../features/archive/task-archive.service';
+import { PlannerActions } from '../../../features/planner/store/planner.actions';
 import { TAG_FEATURE_NAME } from '../../../features/tag/store/tag.reducer';
 import { TODAY_TAG } from '../../../features/tag/tag.const';
 import { DEFAULT_TASK, Task, TaskWithSubTasks } from '../../../features/tasks/task.model';
@@ -30,9 +30,9 @@ import { buildEntityRegistry, ENTITY_REGISTRY } from '../../core/entity-registry
 import { EntityConflict, Operation } from '../../core/operation.types';
 import { PersistentAction } from '../../core/persistent-action.interface';
 import { OperationLogStoreService } from '../../persistence/operation-log-store.service';
-import { ConflictJournalService } from '../../sync/conflict-journal.service';
 import { ConflictResolutionService } from '../../sync/conflict-resolution.service';
-import { SyncConflictBannerService } from '../../sync/sync-conflict-banner.service';
+import { SupersededOperationResolverService } from '../../sync/superseded-operation-resolver.service';
+import { StateSnapshotService } from '../../backup/state-snapshot.service';
 import { SyncSessionValidationService } from '../../sync/sync-session-validation.service';
 import { CLIENT_ID_PROVIDER } from '../../util/client-id.provider';
 import { ValidateStateService } from '../../validation/validate-state.service';
@@ -224,17 +224,6 @@ describe('restoreTask delete-conflict integration (#9263)', () => {
       ['processDeferredActions'],
     );
     operationLogEffects.processDeferredActions.and.resolveTo();
-    const conflictJournal = jasmine.createSpyObj<ConflictJournalService>(
-      'ConflictJournalService',
-      ['record'],
-      { unreviewedCount: signal(0) },
-    );
-    conflictJournal.record.and.resolveTo();
-    const syncConflictBanner = jasmine.createSpyObj<SyncConflictBannerService>(
-      'SyncConflictBannerService',
-      ['maybeShowSummaryBanner', 'navigateToReview'],
-    );
-    syncConflictBanner.maybeShowSummaryBanner.and.resolveTo();
     const snack = jasmine.createSpyObj<SnackService>('SnackService', [
       'open',
       'hasPendingPersistentAction',
@@ -263,8 +252,6 @@ describe('restoreTask delete-conflict integration (#9263)', () => {
         { provide: OperationApplierService, useValue: operationApplier },
         { provide: ValidateStateService, useValue: validateState },
         { provide: OperationLogEffects, useValue: operationLogEffects },
-        { provide: ConflictJournalService, useValue: conflictJournal },
-        { provide: SyncConflictBannerService, useValue: syncConflictBanner },
         { provide: SnackService, useValue: snack },
         {
           provide: BannerService,
@@ -286,6 +273,7 @@ describe('restoreTask delete-conflict integration (#9263)', () => {
           },
         },
         { provide: ENTITY_REGISTRY, useValue: entityRegistry },
+        { provide: StateSnapshotService, useValue: {} },
         { provide: ArchiveService, useValue: {} },
         { provide: TimeTrackingService, useValue: {} },
       ],
@@ -375,6 +363,98 @@ describe('restoreTask delete-conflict integration (#9263)', () => {
 
     const deleteClientProjection = restoredProjection(localState);
     expect(restoredProjection(restartedState)).toEqual(deleteClientProjection);
+  });
+
+  it('re-creates a superseded restore as restoreTask so receivers clear the archived copy (#10196)', async () => {
+    currentClientId = REMOTE_CLIENT_ID;
+    const restoreClient = new TestClient(REMOTE_CLIENT_ID);
+    const restoreAction = TaskSharedActions.restoreTask({
+      task: deletedParent,
+      subTasks: [subtask],
+    }) as PersistentAction;
+    const localRestore = captureOperation(restoreAction, restoreClient, 2_000);
+
+    localState = reducer(localState, restoreAction);
+    await archiveHandler.handleOperation(restoreAction);
+    await opLogStore.append(localRestore, 'local');
+
+    // The server answered SUPERSEDED: the resolver must re-emit the restore.
+    await TestBed.inject(SupersededOperationResolverService).resolveSupersededLocalOps([
+      { opId: localRestore.id, op: localRestore },
+    ]);
+
+    const pendingOps = (await opLogStore.getUnsynced()).map(({ op }) => op);
+    expect(pendingOps.length).toBe(1);
+    const [replacement] = pendingOps;
+    expect(replacement.id).not.toBe(localRestore.id);
+    expect(replacement.actionType).toBe(TaskSharedActions.restoreTask.type);
+
+    // A receiver still holding the archived task: the restore recreates it
+    // AND its archive side effect removes the archived copies.
+    const deleteAction = TaskSharedActions.deleteTask({
+      task: deletedParentWithSubtasks,
+    }) as PersistentAction;
+    const archivedReceiver = replay(reducer(initialState, deleteAction), [replacement]);
+    expect(restoredProjection(archivedReceiver)).toEqual(restoredProjection(localState));
+
+    await archiveDb.saveArchiveYoung(archiveModel([deletedParent, subtask]));
+    await archiveHandler.handleOperation(convertOpToAction(replacement));
+    expect((await archiveDb.loadArchiveYoung())?.task.ids).toEqual([]);
+  });
+
+  it('preserves a later Planner move when recovering a sole superseded restore', async () => {
+    currentClientId = REMOTE_CLIENT_ID;
+    const restoreClient = new TestClient(REMOTE_CLIENT_ID);
+    const restoreAction = TaskSharedActions.restoreTask({
+      task: deletedParent,
+      subTasks: [subtask],
+      restoreToToday: { today: RESTORE_DAY, startOfNextDayDiffMs: 0 },
+    }) as PersistentAction;
+    const localRestore = captureOperation(restoreAction, restoreClient, 2_000);
+    const archivedState = localState;
+    localState = reducer(localState, restoreAction);
+    await archiveHandler.handleOperation(restoreAction);
+    await opLogStore.append(localRestore, 'local');
+
+    const laterDay = '2026-07-24';
+    const transferAction = PlannerActions.transferTask({
+      task: localState.tasks.entities[PARENT_ID] as Task,
+      prevDay: RESTORE_DAY,
+      newDay: laterDay,
+      today: RESTORE_DAY,
+      targetIndex: 0,
+    }) as PersistentAction;
+    const transfer = captureOperation(transferAction, restoreClient, 3_000);
+    localState = reducer(localState, transferAction);
+    // A Planner op has its own server conflict boundary: it can upload while
+    // the TASK restore is rejected, and never joins its superseded TASK group.
+    expect(transfer.entityType).toBe('PLANNER');
+    const transferSeq = await opLogStore.append(transfer, 'local');
+    await opLogStore.markSynced([transferSeq]);
+
+    await TestBed.inject(SupersededOperationResolverService).resolveSupersededLocalOps([
+      { opId: localRestore.id, op: localRestore },
+    ]);
+
+    const pendingOps = (await opLogStore.getUnsynced()).map(({ op }) => op);
+    expect(pendingOps.length).toBe(1);
+    const [replacement] = pendingOps;
+    expect(replacement.actionType).toBe(TaskSharedActions.restoreTask.type);
+    const storedOperations = (await opLogStore.getOpsAfterSeq(0)).map(({ op }) => op);
+    const receivers = [
+      replay(localState, [replacement]),
+      replay(archivedState, [transfer, replacement]),
+      replay(archivedState, storedOperations),
+    ];
+    for (const receiver of receivers) {
+      expect(restoredProjection(receiver)).toEqual(restoredProjection(localState));
+      expect(receiver.tasks.entities[PARENT_ID]?.dueDay).toBe(laterDay);
+      expect(receiver.planner.days[laterDay]).toEqual([PARENT_ID]);
+    }
+
+    await archiveDb.saveArchiveYoung(archiveModel([deletedParent, subtask]));
+    await archiveHandler.handleOperation(convertOpToAction(replacement));
+    expect((await archiveDb.loadArchiveYoung())?.task.ids).toEqual([]);
   });
 
   it('re-emits a winning local restore after a remote delete for replay and archive convergence', async () => {

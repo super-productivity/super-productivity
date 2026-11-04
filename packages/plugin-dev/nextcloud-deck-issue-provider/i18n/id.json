@@ -1,0 +1,28 @@
+{
+  "CFG": {
+    "BASE_URL": "URL Dasar Nextcloud",
+    "USERNAME": "Nama pengguna Nextcloud Anda",
+    "PASSWORD": "Kata sandi aplikasi Nextcloud Anda",
+    "BOARD": "Board",
+    "IMPORT_STACKS": "Import from stacks (leave empty for all)",
+    "DONE_STACK": "Done stack (cards are moved here on completion)",
+    "STACKS_DESC": "Select a board first, then use the load button to list its stacks.",
+    "NONE": "None",
+    "FILTER_BY_ASSIGNEE": "Hanya impor kartu yang ditugaskan ke saya",
+    "TITLE_TEMPLATE": "Template judul tugas",
+    "TITLE_TEMPLATE_DESC": "Variabel: {CARD_TITLE}, {BOARD}, {COLUMN}, {ID}, {LABELS}. Contoh: [{BOARD}: {COLUMN}] {CARD_TITLE}. Kosongkan untuk judul kartu saja."
+  },
+  "DISPLAY": {
+    "SUMMARY": "Ringkasan",
+    "DESCRIPTION": "Deskripsi Deck",
+    "STACK": "Tumpukan",
+    "DUE_DATE": "Tanggal Jatuh Tempo",
+    "ASSIGNED_USERS": "Pengguna yang Ditugaskan",
+    "LABELS": "Label"
+  },
+  "ERRORS": {
+    "NO_BOARD": "Nextcloud Deck: No board selected",
+    "CARD_NOT_FOUND": "Nextcloud Deck: Card not found on the selected board"
+  },
+  "FORM_HELP": "Konfigurasikan integrasi Nextcloud Deck Anda untuk mengimpor kartu sebagai tugas. Gunakan kata sandi aplikasi untuk autentikasi."
+}

@@ -90,7 +90,7 @@ describe('PluginIssueProviderRegistryService', () => {
       );
       // The first registration should be preserved
       expect(service.getName('plugin:dup')).toBe('First');
-      expect(service.getIcon('plugin:dup')).toBe('icon1');
+      expect(service.getProvider('plugin:dup')!.icon).toBe('icon1');
     });
   });
 
@@ -201,27 +201,35 @@ describe('PluginIssueProviderRegistryService', () => {
     });
   });
 
-  describe('getIcon', () => {
-    it('should return the icon for a registered provider', () => {
-      registerProvider(
-        service,
-        'icon-test',
-        createMockDefinition(),
-        'N',
-        'N',
-        'custom_icon',
-        0,
-        {
-          singular: 'a',
-          plural: 'as',
-        },
-      );
+  describe('getSvgIcon', () => {
+    const registerWithIcon = (pluginId: string, icon: string): void =>
+      registerProvider(service, pluginId, createMockDefinition(), 'N', 'N', icon, 0, {
+        singular: 'a',
+        plural: 'as',
+      });
 
-      expect(service.getIcon('plugin:icon-test')).toBe('custom_icon');
+    it('should return a built-in SVG icon name', () => {
+      registerWithIcon('builtin-svg', 'github');
+      expect(service.getSvgIcon('plugin:builtin-svg')).toBe('github');
     });
 
-    it('should return "extension" as default for an unregistered key', () => {
-      expect(service.getIcon('plugin:unknown')).toBe('extension');
+    it("should return the plugin's own registered SVG icon name", () => {
+      registerWithIcon('own-svg', 'plugin-own-svg-icon');
+      expect(service.getSvgIcon('plugin:own-svg')).toBe('plugin-own-svg-icon');
+    });
+
+    it('should return undefined for a Material icon ligature (#10550)', () => {
+      registerWithIcon('ligature', 'confirmation_number');
+      expect(service.getSvgIcon('plugin:ligature')).toBeUndefined();
+    });
+
+    it("should return undefined for another plugin's SVG icon name", () => {
+      registerWithIcon('thief', 'plugin-other-icon');
+      expect(service.getSvgIcon('plugin:thief')).toBeUndefined();
+    });
+
+    it('should return undefined for an unregistered key', () => {
+      expect(service.getSvgIcon('plugin:unknown')).toBeUndefined();
     });
   });
 

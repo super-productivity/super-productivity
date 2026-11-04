@@ -214,8 +214,11 @@ body.isDarkTheme a[href]:hover {
 /* Smooth hover states, scoped to the row under the pointer. */
 @media (hover: hover) {
   body.isDarkTheme
-    task:not(.isSelected):not(.isCurrent):hover:not(:has(task:hover))
+    task:not(.isSelected):not(.isCurrent):not(.isMultiSelected):hover:not(
+      :has(task:hover)
+    )
     > swipe-block
+    > .inner-wrapper
     > .inner-wrapper
     > .box {
     background-color: var(--task-c-selected-bg);

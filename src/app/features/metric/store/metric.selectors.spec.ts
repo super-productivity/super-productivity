@@ -1,10 +1,12 @@
 import {
+  selectEvaluationLineChartData,
   selectFocusSessionLineChartData,
   selectFocusSessionLineChartDataComplete,
   selectSimpleCounterClickCounterLineChartData,
   selectSimpleCounterStopWatchLineChartData,
 } from './metric.selectors';
 import { MetricState } from '../metric.model';
+import { initialSimpleCounterState } from '../../simple-counter/store/simple-counter.reducer';
 import {
   SimpleCounter,
   SimpleCounterType,
@@ -158,6 +160,49 @@ describe('Metric Selectors - SimpleCounter StopWatch', () => {
   });
 });
 
+describe('Metric Selectors - Shared counter dates', () => {
+  for (const [type, selector] of [
+    [SimpleCounterType.ClickCounter, selectSimpleCounterClickCounterLineChartData],
+    [SimpleCounterType.StopWatch, selectSimpleCounterStopWatchLineChartData],
+  ] as const) {
+    it(`deduplicates and sorts ${type} dates before limiting the chart`, () => {
+      const unit = type === SimpleCounterType.StopWatch ? 60000 : 1;
+      const counters = [
+        createMockSimpleCounter({
+          id: 'first',
+          type,
+          countOnDay: { '2024-01-03': unit, '2024-01-01': unit, '2024-01-02': 0 },
+        }),
+        createMockSimpleCounter({
+          id: 'second',
+          type,
+          countOnDay: { '2024-01-02': 2 * unit, '2024-01-01': unit },
+        }),
+      ];
+      counters.forEach((counter) => {
+        Object.freeze(counter.countOnDay);
+        Object.freeze(counter);
+      });
+      Object.freeze(counters);
+
+      const chart = selector.projector(counters, { howMany: 2 });
+
+      expect(chart.labels).toEqual(['2024-01-02', '2024-01-03']);
+      expect(chart.datasets.map((dataset) => dataset.label)).toEqual(['first', 'second']);
+      expect(chart.datasets.map((dataset) => dataset.data)).toEqual([
+        [undefined, 1],
+        [2, undefined],
+      ]);
+      // Zero retains the existing "all days" slice behavior.
+      expect(selector.projector(counters, { howMany: 0 }).labels).toEqual([
+        '2024-01-01',
+        '2024-01-02',
+        '2024-01-03',
+      ]);
+    });
+  }
+});
+
 describe('Metric Selectors - Focus Sessions', () => {
   const dayOne = '2024-01-01';
   const dayTwo = '2024-01-02';
@@ -193,5 +238,94 @@ describe('Metric Selectors - Focus Sessions', () => {
     expect(sliced.labels).toEqual([dayTwo]);
     expect(sliced.datasets[0].data).toEqual([0]);
     expect(sliced.datasets[1].data).toEqual([0]);
+  });
+});
+
+describe('Metric Selectors - Evaluation', () => {
+  it('should chart impact and energy for rated days in date order', () => {
+    const mockState: MetricState = {
+      ids: ['2024-01-03', '2024-01-01', '2024-01-02'],
+      entities: {
+        '2024-01-01': { id: '2024-01-01', impactOfWork: 3, energyCheckin: 2 },
+        '2024-01-02': { id: '2024-01-02', focusSessions: [60000] },
+        '2024-01-03': { id: '2024-01-03', impactOfWork: null, energyCheckin: 1 },
+      },
+    };
+
+    const chart = selectEvaluationLineChartData.projector(mockState);
+
+    expect(chart.labels).toEqual(['2024-01-01', '2024-01-03']);
+    expect(chart.datasets[0].label).toBe('Impact (1-4)');
+    expect(chart.datasets[0].data).toEqual([3, undefined]);
+    expect(chart.datasets[1].label).toBe('Energy (1-3)');
+    expect(chart.datasets[1].data).toEqual([2, 1]);
+  });
+
+  it('should treat a cleared impact rating (0) as a gap', () => {
+    const mockState: MetricState = {
+      ids: ['2024-01-01'],
+      entities: { '2024-01-01': { id: '2024-01-01', impactOfWork: 0, energyCheckin: 3 } },
+    };
+
+    const chart = selectEvaluationLineChartData.projector(mockState);
+
+    expect(chart.labels).toEqual(['2024-01-01']);
+    expect(chart.datasets[0].data).toEqual([undefined]);
+    expect(chart.datasets[1].data).toEqual([3]);
+  });
+
+  it('should return no labels when no day is rated', () => {
+    const mockState: MetricState = {
+      ids: ['2024-01-01'],
+      entities: { '2024-01-01': { id: '2024-01-01', focusSessions: [] } },
+    };
+
+    expect(selectEvaluationLineChartData.projector(mockState).labels).toEqual([]);
+  });
+});
+
+describe('Metric chart selectors with concurrent chart subscriptions', () => {
+  it('keeps unchanged chart references across unrelated tracking ticks', () => {
+    const clickProps = { howMany: 60 };
+    const stopwatchProps = { howMany: 60 };
+    const state = { simpleCounter: initialSimpleCounterState, tick: 0 };
+    const clicks = selectSimpleCounterClickCounterLineChartData(state, clickProps);
+    const stopwatch = selectSimpleCounterStopWatchLineChartData(state, stopwatchProps);
+    const next = { ...state, tick: 1 };
+
+    expect(selectSimpleCounterClickCounterLineChartData(next, clickProps)).toBe(clicks);
+    expect(selectSimpleCounterStopWatchLineChartData(next, stopwatchProps)).toBe(
+      stopwatch,
+    );
+  });
+
+  it('still updates both charts when their counter data changes', () => {
+    const clickProps = { howMany: 60 };
+    const stopwatchProps = { howMany: 60 };
+    const state = { simpleCounter: initialSimpleCounterState };
+    const clicks = selectSimpleCounterClickCounterLineChartData(state, clickProps);
+    const stopwatch = selectSimpleCounterStopWatchLineChartData(state, stopwatchProps);
+    const next = {
+      simpleCounter: {
+        ids: ['click', 'watch'],
+        entities: {
+          click: createMockSimpleCounter({
+            id: 'click',
+            countOnDay: { '2026-10-23': 3 },
+          }),
+          watch: createMockSimpleCounter({
+            id: 'watch',
+            type: SimpleCounterType.StopWatch,
+            countOnDay: { '2026-10-23': 120000 },
+          }),
+        },
+      },
+    };
+    const nextClicks = selectSimpleCounterClickCounterLineChartData(next, clickProps);
+    const nextStopwatch = selectSimpleCounterStopWatchLineChartData(next, stopwatchProps);
+    expect(nextClicks).not.toBe(clicks);
+    expect(nextStopwatch).not.toBe(stopwatch);
+    expect(nextClicks.datasets[0].data).toEqual([3]);
+    expect(nextStopwatch.datasets[0].data).toEqual([2]);
   });
 });

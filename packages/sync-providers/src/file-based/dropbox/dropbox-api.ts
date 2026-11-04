@@ -44,23 +44,6 @@ interface TokenResponse {
 
 type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH' | 'HEAD' | 'OPTIONS';
 
-/**
- * Dropbox file/folder entry from list_folder API
- */
-interface DropboxListEntry {
-  '.tag': 'file' | 'folder' | 'deleted';
-  name: string;
-  path_lower: string;
-  path_display: string;
-  id: string;
-}
-
-interface DropboxListFolderResult {
-  entries: DropboxListEntry[];
-  cursor: string;
-  has_more: boolean;
-}
-
 interface DropboxErrorResponse {
   error_summary?: string;
   error?: {
@@ -107,36 +90,6 @@ export class DropboxApi {
   // ==============================
   // File Operations
   // ==============================
-
-  /**
-   * List folder contents
-   */
-  async listFiles(path: string, targetPath: string = path): Promise<string[]> {
-    this._deps.logger.normal(`${DropboxApi.L}.listFiles()`, { targetPath });
-    try {
-      const response = await this._request({
-        method: 'POST',
-        url: 'https://api.dropboxapi.com/2/files/list_folder',
-        headers: { 'Content-Type': 'application/json' },
-        data: { path },
-        targetPath,
-      });
-      const result = (await response.json()) as DropboxListFolderResult;
-      if (!result || !result.entries) {
-        return [];
-      }
-      return result.entries
-        .filter((entry) => entry['.tag'] === 'file') // Only return files
-        .map((entry) => entry.path_lower); // Return full path in lower case
-    } catch (e) {
-      this._deps.logger.critical(
-        `${DropboxApi.L}.listFiles() error`,
-        errorMeta(e, { targetPath }),
-      );
-      this._checkCommonErrors(e, targetPath);
-      throw e;
-    }
-  }
 
   /**
    * Retrieve metadata for a file or folder

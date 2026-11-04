@@ -8,6 +8,8 @@ import { GlobalConfigService } from '../config/global-config.service';
 import { Router } from '@angular/router';
 import { WorkContextService } from '../work-context/work-context.service';
 import { LOCAL_ACTIONS } from '../../util/local-actions.token';
+import { OnboardingHintService } from '../onboarding/onboarding-hint.service';
+import { QuickTourService } from '../onboarding/quick-tour.service';
 
 @Injectable({
   providedIn: 'root',
@@ -19,6 +21,8 @@ export class ShepherdService {
   private globalConfigService = inject(GlobalConfigService);
   private _router = inject(Router);
   private workContextService = inject(WorkContextService);
+  private _onboardingHintService = inject(OnboardingHintService);
+  private _quickTourService = inject(QuickTourService);
 
   isActive = false;
   tour?: any; // Will be Shepherd.Tour when loaded
@@ -47,6 +51,11 @@ export class ShepherdService {
   }
 
   async show(id: TourId): Promise<void> {
+    // A tour replaces the first-run hints and the quick tour; never show both at once.
+    if (OnboardingHintService.isOnboardingInProgress()) {
+      this._onboardingHintService.skip();
+    }
+    this._quickTourService.end();
     if (!this._initPromise) {
       this._initPromise = this.init();
     }

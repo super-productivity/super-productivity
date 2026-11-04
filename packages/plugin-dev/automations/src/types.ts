@@ -6,7 +6,8 @@ export type AutomationTriggerType =
   | 'taskUpdated'
   | 'taskStarted'
   | 'taskStopped'
-  | 'timeBased';
+  | 'timeBased'
+  | 'shortcut';
 
 export interface AutomationTrigger {
   type: AutomationTriggerType;

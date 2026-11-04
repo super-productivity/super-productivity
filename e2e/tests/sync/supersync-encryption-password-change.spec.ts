@@ -1,4 +1,5 @@
 import { test, expect } from '../../fixtures/supersync.fixture';
+import { translationText } from '../../utils/i18n-strings';
 import {
   createTestUser,
   getSuperSyncConfig,
@@ -16,7 +17,8 @@ import {
   SuperSyncDownloadOpsResponseSchema,
   SuperSyncUploadOpsResponseSchema,
   type SuperSyncServerOperation,
-} from '../../../packages/shared-schema/src';
+} from '../../../packages/shared-schema/src/supersync-http-contract';
+import { DIALOG, watchDialogs } from '../../utils/audit-import-encryption-helpers';
 
 interface SyncStatusResponse {
   storageUsedBytes: number;
@@ -73,48 +75,6 @@ const getServerOperations = async (
   return SuperSyncDownloadOpsResponseSchema.parse(await response.json()).ops;
 };
 
-const useServerDataIfPrompted = async (client: SimulatedE2EClient): Promise<void> => {
-  const appeared = await client.sync.syncImportConflictDialog
-    .waitFor({ state: 'visible', timeout: 15000 })
-    .then(() => true)
-    .catch(() => false);
-
-  if (!appeared) return;
-
-  await client.sync.chooseSyncImportUseRemote();
-};
-
-const recoverWithNewPasswordAndServerData = async (
-  client: SimulatedE2EClient,
-  newPassword: string,
-): Promise<void> => {
-  const decryptErrorDialog = client.page.locator('dialog-handle-decrypt-error');
-
-  const dialogAlreadyVisible = await decryptErrorDialog.isVisible().catch(() => false);
-  if (!dialogAlreadyVisible) {
-    await client.sync.syncBtn.click();
-  }
-
-  const decryptAppeared = await decryptErrorDialog
-    .waitFor({ state: 'visible', timeout: 15000 })
-    .then(() => true)
-    .catch(() => false);
-
-  if (decryptAppeared) {
-    const passwordInput = decryptErrorDialog.locator('input[type="password"]');
-    await passwordInput.waitFor({ state: 'visible', timeout: 5000 });
-    await passwordInput.fill(newPassword);
-
-    await decryptErrorDialog.locator('button:has-text("Retry Decrypt")').first().click();
-    await decryptErrorDialog.waitFor({ state: 'hidden', timeout: 10000 });
-  }
-
-  await useServerDataIfPrompted(client);
-  await client.sync.syncSpinner.waitFor({ state: 'hidden', timeout: 30000 });
-  await client.sync.syncAndWait();
-  await useServerDataIfPrompted(client);
-};
-
 /**
  * SuperSync Encryption Password Change E2E Tests
  *
@@ -128,108 +88,6 @@ const recoverWithNewPasswordAndServerData = async (
  */
 
 test.describe('@supersync SuperSync Encryption Password Change', () => {
-  test('Password change preserves existing data', async ({
-    browser,
-    baseURL,
-    testRunId,
-  }) => {
-    let clientA: SimulatedE2EClient | null = null;
-
-    try {
-      const user = await createTestUser(testRunId);
-      const baseConfig = getSuperSyncConfig(user);
-      const oldPassword = `oldpass-${testRunId}`;
-      const newPassword = `newpass-${testRunId}`;
-
-      // --- Setup with initial password ---
-      clientA = await createSimulatedClient(browser, baseURL!, 'A', testRunId);
-      await clientA.sync.setupSuperSync({
-        ...baseConfig,
-        isEncryptionEnabled: true,
-        password: oldPassword,
-      });
-
-      // Create tasks (names must be distinct - no substring overlap)
-      const task1 = `TaskA-${testRunId}`;
-      const task2 = `TaskB-${testRunId}`;
-      await clientA.workView.addTask(task1);
-      await clientA.page.waitForTimeout(100);
-      await clientA.workView.addTask(task2);
-
-      // Sync with old password
-      await clientA.sync.syncAndWait();
-
-      // Verify tasks exist
-      await waitForTask(clientA.page, task1);
-      await waitForTask(clientA.page, task2);
-
-      // --- Change password ---
-      await clientA.sync.changeEncryptionPassword(newPassword);
-
-      // --- Verify tasks still exist after password change ---
-      await expectTaskVisible(clientA, task1);
-      await expectTaskVisible(clientA, task2);
-
-      // Trigger another sync to verify everything works
-      await clientA.sync.syncAndWait();
-
-      // Tasks should still be there
-      await expectTaskVisible(clientA, task1);
-      await expectTaskVisible(clientA, task2);
-    } finally {
-      if (clientA) await closeClient(clientA);
-    }
-  });
-
-  test('New client can sync with new password after password change', async ({
-    browser,
-    baseURL,
-    testRunId,
-  }) => {
-    let clientA: SimulatedE2EClient | null = null;
-    let clientB: SimulatedE2EClient | null = null;
-
-    try {
-      const user = await createTestUser(testRunId);
-      const baseConfig = getSuperSyncConfig(user);
-      const oldPassword = `oldpass-${testRunId}`;
-      const newPassword = `newpass-${testRunId}`;
-
-      // --- Client A: Setup and create data ---
-      clientA = await createSimulatedClient(browser, baseURL!, 'A', testRunId);
-      await clientA.sync.setupSuperSync({
-        ...baseConfig,
-        isEncryptionEnabled: true,
-        password: oldPassword,
-      });
-
-      const taskName = `BeforeChange-${testRunId}`;
-      await clientA.workView.addTask(taskName);
-      await clientA.sync.syncAndWait();
-
-      // --- Client A: Change password ---
-      await clientA.sync.changeEncryptionPassword(newPassword);
-
-      // --- Client B: Setup with NEW password ---
-      clientB = await createSimulatedClient(browser, baseURL!, 'B', testRunId);
-      await clientB.sync.setupSuperSync({
-        ...baseConfig,
-        isEncryptionEnabled: true,
-        password: newPassword,
-      });
-
-      // Sync should succeed with new password
-      await clientB.sync.syncAndWait();
-
-      // Verify task synced to Client B
-      await waitForTask(clientB.page, taskName);
-      await expectTaskVisible(clientB, taskName);
-    } finally {
-      if (clientA) await closeClient(clientA);
-      if (clientB) await closeClient(clientB);
-    }
-  });
-
   test('Old password fails after password change', async ({
     browser,
     baseURL,
@@ -479,18 +337,34 @@ test.describe('@supersync SuperSync Encryption Password Change', () => {
       await clientB.workView.addTask(staleTaskFromB);
       await waitForTask(clientB.page, staleTaskFromB);
 
-      const passwordChange = clientA.sync.changeEncryptionPassword(newPassword);
-      await clientB.sync.syncBtn.click();
-      await clientB.sync.syncSpinner
-        .waitFor({ state: 'hidden', timeout: 30000 })
-        .catch(() => undefined);
-      await passwordChange;
+      // The change must be on the server before B syncs, or B's sync can run
+      // against the old history and the steps below test nothing.
+      await clientA.sync.changeEncryptionPassword(newPassword);
 
       const taskFromAAfterChange = `A-AfterChange-${testRunId}`;
       await clientA.workView.addTask(taskFromAAfterChange);
       await clientA.sync.syncAndWait();
 
-      await recoverWithNewPasswordAndServerData(clientB, newPassword);
+      // B still has the old password: its sync must fail to decrypt (ALWAYS).
+      // Click sync directly; syncAndWait would answer both dialogs silently.
+      await clientB.sync.syncBtn.click();
+      const decryptErrorDialog = clientB.page.locator(DIALOG.decryptError);
+      await expect(decryptErrorDialog).toBeVisible({ timeout: 30000 });
+      const passwordInput = decryptErrorDialog.locator('input[type="password"]');
+      await passwordInput.fill(newPassword);
+      await decryptErrorDialog
+        .locator('button', {
+          hasText: translationText('F.SYNC.D_DECRYPT_ERROR.CHANGE_PW_AND_DECRYPT'),
+        })
+        .first()
+        .click();
+      await expect(decryptErrorDialog).toBeHidden({ timeout: 10000 });
+
+      // With the new password B reads the PASSWORD_CHANGED SYNC_IMPORT. B's
+      // stale task is a meaningful pending op, so the import must ask (ALWAYS).
+      await expect(clientB.sync.syncImportConflictDialog).toBeVisible({ timeout: 30000 });
+      await clientB.sync.chooseSyncImportUseRemote();
+      await clientB.sync.syncAndWait();
 
       await waitForTask(clientB.page, taskFromA);
       await waitForTask(clientB.page, taskFromAAfterChange);
@@ -560,6 +434,18 @@ test.describe('@supersync SuperSync Encryption Password Change', () => {
       // --- Client A changes password ---
       await clientA.sync.changeEncryptionPassword(newPassword);
 
+      // From here on A must keep the new key: a prompt on A would mean it fell
+      // back to the old one (syncAndWait would answer it silently).
+      const watcherA = await watchDialogs(clientA.page, [
+        DIALOG.decryptError,
+        DIALOG.enterPassword,
+      ]);
+
+      // A task created after the change must be encrypted with the new key.
+      const taskFromAAfterChange = `FromA-AfterChange-${testRunId}`;
+      await clientA.workView.addTask(taskFromAAfterChange);
+      await clientA.sync.syncAndWait();
+
       // --- Client B must reconfigure with new password ---
       // Close and recreate with new password (simulating user entering new password)
       await closeClient(clientB);
@@ -571,8 +457,9 @@ test.describe('@supersync SuperSync Encryption Password Change', () => {
       });
       await clientB.sync.syncAndWait();
 
-      // Verify B has the task
+      // Verify B has the tasks from before and after the change
       await waitForTask(clientB.page, taskFromA);
+      await waitForTask(clientB.page, taskFromAAfterChange);
 
       // --- Client B creates a new task ---
       const taskFromB = `FromB-${testRunId}`;
@@ -582,6 +469,10 @@ test.describe('@supersync SuperSync Encryption Password Change', () => {
       // --- Client A syncs and should get B's task ---
       await clientA.sync.syncAndWait();
       await waitForTask(clientA.page, taskFromB);
+      await watcherA.expectNeverSeen(
+        [DIALOG.decryptError, DIALOG.enterPassword],
+        'A syncing with its own new password after the change',
+      );
 
       // Verify both clients have both tasks
       await expectTaskVisible(clientA, taskFromA);
@@ -731,8 +622,9 @@ test.describe('@supersync SuperSync Encryption Password Change', () => {
       await passwordInput.waitFor({ state: 'visible', timeout: 5000 });
       await passwordInput.fill(newPassword);
 
-      // Click "Update Password & Resync" button
-      const updateButton = decryptErrorDialog.locator('button:has-text("Retry Decrypt")');
+      const updateButton = decryptErrorDialog.locator('button', {
+        hasText: translationText('F.SYNC.D_DECRYPT_ERROR.CHANGE_PW_AND_DECRYPT'),
+      });
       await updateButton.first().click();
 
       // Wait for dialog to close

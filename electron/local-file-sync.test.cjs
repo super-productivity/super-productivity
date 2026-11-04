@@ -255,21 +255,6 @@ test('CHECK_DIR_EXISTS rejects when no sync folder is configured', async () => {
   assert.ok(result instanceof Error);
 });
 
-test('FILE_SYNC_LIST_FILES lists the sync root', async () => {
-  await configureSyncFolder(externalDir);
-  fs.writeFileSync(path.join(externalDir, 'a.json'), '{}');
-  fs.writeFileSync(path.join(externalDir, 'b.json'), '{}');
-  const result = await handlers['FILE_SYNC_LIST_FILES']({}, {});
-  assert.ok(Array.isArray(result));
-  assert.deepEqual(result.sort(), ['a.json', 'b.json']);
-});
-
-test('FILE_SYNC_LIST_FILES rejects a subdirectory that escapes the root', async () => {
-  await configureSyncFolder(externalDir);
-  const result = await handlers['FILE_SYNC_LIST_FILES']({}, { relativePath: '..' });
-  assert.ok(result instanceof Error);
-});
-
 test('GET_SYNC_FOLDER_PATH returns null when unconfigured, then the configured path', async () => {
   assert.equal(await handlers['GET_SYNC_FOLDER_PATH']({}), null);
   await configureSyncFolder(externalDir);

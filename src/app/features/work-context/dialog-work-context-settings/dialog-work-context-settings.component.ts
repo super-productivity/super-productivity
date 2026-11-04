@@ -11,14 +11,16 @@ import { FormlyFieldConfig, FormlyModule } from '@ngx-formly/core';
 import { T } from '../../../t.const';
 import { Project } from '../../project/project.model';
 import { Tag } from '../../tag/tag.model';
-import { WorkContextThemeCfg } from '../work-context.model';
+import { WorkContextThemeCfg, WorkContextType } from '../work-context.model';
 import { DEFAULT_TAG_COLOR } from '../work-context.const';
+import { getDefaultWorkContextTheme } from '../work-context-default-theme.util';
 import { ProjectService } from '../../project/project.service';
 import { TagService } from '../../tag/tag.service';
 import { buildWorkContextSettingsFormCfg } from './work-context-settings-form-cfg.const';
 import { adjustToLiveFormlyForm } from '../../../util/adjust-to-live-formly-form';
 import { MatButton } from '@angular/material/button';
 import { TranslatePipe } from '@ngx-translate/core';
+import { SnackService } from 'src/app/core/snack/snack.service';
 
 export interface WorkContextSettingsDialogData {
   isProject: boolean;
@@ -45,6 +47,7 @@ export class DialogWorkContextSettingsComponent {
   private _data = inject<WorkContextSettingsDialogData>(MAT_DIALOG_DATA);
   private _projectService = inject(ProjectService);
   private _tagService = inject(TagService);
+  private _snackService = inject(SnackService);
   private _matDialogRef =
     inject<MatDialogRef<DialogWorkContextSettingsComponent>>(MatDialogRef);
 
@@ -67,7 +70,20 @@ export class DialogWorkContextSettingsComponent {
 
   constructor() {
     const entity = this._data.entity;
-    const theme = { ...entity.theme };
+    // #9156: `{ ...undefined }` is `{}`, which validation accepts and never heals,
+    // so a missing or empty theme starts from the default. "Empty" includes
+    // keys holding only `undefined` (older versions of this dialog stored
+    // `{ primary: undefined }`; sync JSON turns it into `{}`). A partial theme is
+    // kept as stored: merging defaults into it would change how it renders, e.g.
+    // legacy themes lack `isDisableBackgroundTint`, which TODAY's default sets.
+    const storedTheme: WorkContextThemeCfg =
+      entity.theme && Object.values(entity.theme).some((v) => v !== undefined)
+        ? entity.theme
+        : getDefaultWorkContextTheme(
+            this._data.isProject ? WorkContextType.PROJECT : WorkContextType.TAG,
+            entity.id,
+          );
+    const theme = { ...storedTheme };
     let tagColor: string | null | undefined;
     // For tags: align the displayed Tag Color and Primary fields with
     // the tag's actually rendered color. If one is missing or still at
@@ -91,7 +107,7 @@ export class DialogWorkContextSettingsComponent {
     // original store state instead of pushing the prefilled values.
     this._originalEntityData = {
       ...entity,
-      theme: { ...entity.theme },
+      theme: { ...storedTheme },
     } as Project | Tag;
     // If the user opens settings on a tag whose stored theme.primary
     // matches the auto-default (or has just been prefilled to tag.color),
@@ -99,8 +115,8 @@ export class DialogWorkContextSettingsComponent {
     // theme.primary in sync.
     this._userTouchedThemePrimary = this._data.isProject
       ? false
-      : entity.theme?.primary !== DEFAULT_TAG_COLOR &&
-        entity.theme?.primary !== (entity as Tag).color;
+      : this._originalEntityData.theme.primary !== DEFAULT_TAG_COLOR &&
+        this._originalEntityData.theme.primary !== (entity as Tag).color;
     this.fields = adjustToLiveFormlyForm(
       buildWorkContextSettingsFormCfg(this._data.isProject),
     );
@@ -149,21 +165,30 @@ export class DialogWorkContextSettingsComponent {
   }
 
   cancelEdit(): void {
-    this._applyChanges(this._originalEntityData);
+    this._applyChanges(this._originalEntityData, true);
+    this._snackService.open({
+      type: 'CUSTOM',
+      msg: T.F.PROJECT.S.DISCARDED,
+      ico: 'history',
+    });
     this._matDialogRef.close();
   }
 
-  private _applyChanges(data: Project | Tag): void {
+  private _applyChanges(data: Project | Tag, isSkipSnack?: boolean): void {
     const theme: WorkContextThemeCfg = { ...data.theme };
     if (this.isProject) {
       const p = data as Project;
-      this._projectService.update(p.id, {
-        title: p.title,
-        icon: p.icon,
-        isEnableBacklog: p.isEnableBacklog,
-        isHiddenFromMenu: p.isHiddenFromMenu,
-        theme,
-      });
+      this._projectService.update(
+        p.id,
+        {
+          title: p.title,
+          icon: p.icon,
+          isEnableBacklog: p.isEnableBacklog,
+          isHiddenFromMenu: p.isHiddenFromMenu,
+          theme,
+        },
+        isSkipSnack,
+      );
     } else {
       const t = data as Tag;
       const orig = this._originalEntityData as Tag;

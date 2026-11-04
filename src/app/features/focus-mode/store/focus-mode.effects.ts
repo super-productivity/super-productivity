@@ -9,6 +9,7 @@ import {
   filter,
   map,
   pairwise,
+  startWith,
   switchMap,
   take,
   tap,
@@ -21,21 +22,31 @@ import { FocusModeStrategyFactory } from '../focus-mode-strategies';
 import { GlobalConfigService } from '../../config/global-config.service';
 import { TaskService } from '../../tasks/task.service';
 import { playSound } from '../../../util/play-sound';
-import { startWhiteNoise, stopWhiteNoise } from '../../../util/white-noise';
-import { startBreakEndAlarm, stopBreakEndAlarm } from '../../../util/break-end-alarm';
+import {
+  setWhiteNoiseVolume,
+  startWhiteNoise,
+  stopWhiteNoise,
+} from '../../../util/white-noise';
+import { startLoopingAlarm, stopLoopingAlarm } from '../../../util/looping-alarm';
 import { FocusModeLocalSettingsService } from '../../config/focus-mode-local-settings.service';
-import { IS_ELECTRON } from '../../../app.constants';
+import { IS_ELECTRON, IS_ELECTRON_TOKEN } from '../../../app.constants';
 import { setCurrentTask, unsetCurrentTask } from '../../tasks/store/task.actions';
 import { selectLastCurrentTask, selectTaskById } from '../../tasks/store/task.selectors';
 import { openIdleDialog } from '../../idle/store/idle.actions';
 import { LS } from '../../../core/persistence/storage-keys.const';
 import {
   selectFocusModeConfig,
+  selectSoundConfig,
   selectIsFocusModeEnabled,
   selectPomodoroConfig,
 } from '../../config/store/global-config.reducer';
 import { updateGlobalConfigSection } from '../../config/store/global-config.actions';
-import { FocusModeMode, FocusScreen, getBreakCycle } from '../focus-mode.model';
+import {
+  FocusModeMode,
+  FocusScreen,
+  getBreakCycle,
+  getFocusModeSoundVolume,
+} from '../focus-mode.model';
 import { MetricService } from '../../metric/metric.service';
 import { FocusModeStorageService } from '../focus-mode-storage.service';
 import { TakeABreakService } from '../../take-a-break/take-a-break.service';
@@ -48,13 +59,12 @@ import { BannerId } from '../../../core/banner/banner.model';
 
 const SESSION_DONE_SOUND = 'positive.mp3';
 const TICK_SOUND = 'tick.mp3';
-/** Focus-mode ambient sounds play at 40% of the user's main volume to avoid being intrusive. */
-const FOCUS_SOUND_VOLUME_FACTOR = 0.4;
 
 @Injectable()
 export class FocusModeEffects {
   private actions$ = inject(LOCAL_ACTIONS);
   private store = inject(Store);
+  private _isElectron = inject(IS_ELECTRON_TOKEN);
   private strategyFactory = inject(FocusModeStrategyFactory);
   private globalConfigService = inject(GlobalConfigService);
   private taskService = inject(TaskService);
@@ -65,6 +75,7 @@ export class FocusModeEffects {
   private bannerService = inject(BannerService);
   private isAndroidWebView = inject(IS_ANDROID_WEB_VIEW_TOKEN);
   private focusModeLocalSettingsService = inject(FocusModeLocalSettingsService);
+  private _breakEndAlarm: Promise<number> | null = null;
 
   // Sync: When tracking starts → resume/skip-break or auto-spawn a new session.
   //
@@ -307,7 +318,7 @@ export class FocusModeEffects {
         tap(() => {
           // When the looping break-end alarm is enabled it owns the break-end
           // sound (breakEndAlarmSound$); skip the one-shot here so they don't
-          // double up. The window focus/flash still fires.
+          // double up. The window flash still fires.
           this._notifyUser(false, this._isLoopBreakEndAlarmOn());
         }),
       ),
@@ -320,7 +331,7 @@ export class FocusModeEffects {
   // lifecycle, so any leave-break transition (completeBreak / skipBreak /
   // starting the next session — all of which flip timer.purpose away from
   // 'break' or set it running again) naturally stops the loop via
-  // distinctUntilChanged. A hard safety ceiling inside startBreakEndAlarm()
+  // distinctUntilChanged. A hard safety ceiling inside startLoopingAlarm()
   // stops it regardless if the user truly walked away.
   breakEndAlarmSound$ = createEffect(
     () =>
@@ -335,9 +346,10 @@ export class FocusModeEffects {
         tap((shouldAlarm) => {
           if (shouldAlarm) {
             const soundVolume = this.globalConfigService.sound()?.volume || 0;
-            startBreakEndAlarm(SESSION_DONE_SOUND, soundVolume);
+            this._breakEndAlarm = startLoopingAlarm(SESSION_DONE_SOUND, soundVolume);
           } else {
-            stopBreakEndAlarm();
+            this._breakEndAlarm?.then(stopLoopingAlarm);
+            this._breakEndAlarm = null;
           }
         }),
       ),
@@ -854,41 +866,48 @@ export class FocusModeEffects {
   // Action-based effect to update Windows taskbar progress (fixes #6061)
   // Throttled to prevent excessive IPC calls (timer ticks every 1s)
   // Follows action-based pattern (CLAUDE.md Section 8) instead of selector-based
-  setTaskBarProgress$ =
-    IS_ELECTRON &&
-    createEffect(
-      () =>
-        this.actions$.pipe(
-          ofType(
-            actions.tick,
-            actions.startFocusSession,
-            actions.pauseFocusSession,
-            actions.unPauseFocusSession,
-            actions.startBreak,
-            actions.skipBreak,
-            actions.completeBreak,
-            actions.completeFocusSession,
-            actions.cancelFocusSession,
-            actions.selectFocusTask,
-          ),
-          // Throttle to prevent excessive IPC calls (timer ticks every 1s)
-          // Use leading + trailing to ensure immediate feedback and final state
-          throttleTime(500, undefined, { leading: true, trailing: true }),
-          withLatestFrom(
-            this.store.select(selectors.selectProgress),
-            this.store.select(selectors.selectIsRunning),
-          ),
-          tap(([_action, progress, isRunning]) => {
-            window.ea.setProgressBar({
-              progress: progress / 100,
-              progressBarMode: isRunning ? 'normal' : 'pause',
-            });
-          }),
+  setTaskBarProgress$ = createEffect(
+    () =>
+      // Gated inside the pipe, not by returning a shared EMPTY: createEffect
+      // tags the returned observable, and a singleton cannot be tagged twice.
+      this.actions$.pipe(
+        filter(() => this._isElectron),
+        ofType(
+          actions.tick,
+          actions.startFocusSession,
+          actions.pauseFocusSession,
+          actions.unPauseFocusSession,
+          actions.startBreak,
+          actions.skipBreak,
+          actions.completeBreak,
+          actions.completeFocusSession,
+          actions.cancelFocusSession,
+          actions.selectFocusTask,
         ),
-      { dispatch: false },
-    );
+        // Throttle to prevent excessive IPC calls (timer ticks every 1s)
+        // Use leading + trailing to ensure immediate feedback and final state
+        throttleTime(500, undefined, { leading: true, trailing: true }),
+        withLatestFrom(this.store.select(selectors.selectOsProgressBar)),
+        map(([_action, osProgressBar]) => osProgressBar),
+        // null = the session owns nothing (open-ended Flowtime, or a timed
+        // session that was paused/cancelled) and task-electron.effects
+        // publishes the task's own progress instead. Clear the bar exactly
+        // once on the owned -> null handoff, else it stays frozen at the last
+        // session value; nothing else clears it since focus mode dispatches
+        // unsetCurrentTask, not the setCurrentTask that setTaskBarNoProgress$
+        // listens for. Consecutive nulls (Flowtime ticks) send nothing so we
+        // don't fight the task writer every 500ms.
+        startWith(null),
+        pairwise(),
+        filter(([prev, curr]) => curr !== null || prev !== null),
+        tap(([_prev, curr]) => {
+          window.ea.setProgressBar(curr ?? { progress: -1, progressBarMode: 'none' });
+        }),
+      ),
+    { dispatch: false },
+  );
 
-  focusWindowOnBreakStart$ =
+  notifyOnBreakStart$ =
     IS_ELECTRON &&
     createEffect(
       () =>
@@ -916,9 +935,12 @@ export class FocusModeEffects {
         ),
         withLatestFrom(this.store.select(selectFocusModeConfig)),
         tap(([, focusModeConfig]) => {
-          const soundVolume = this.globalConfigService.sound()?.volume || 0;
-          if (focusModeConfig?.focusModeSound === 'tick' && soundVolume > 0) {
-            playSound(TICK_SOUND, Math.round(soundVolume * FOCUS_SOUND_VOLUME_FACTOR));
+          const volume = getFocusModeSoundVolume(
+            this.globalConfigService.sound()?.volume,
+            focusModeConfig?.focusModeSoundVolume,
+          );
+          if (focusModeConfig?.focusModeSound === 'tick' && volume > 0) {
+            playSound(TICK_SOUND, volume);
           }
         }),
       ),
@@ -931,25 +953,33 @@ export class FocusModeEffects {
       combineLatest([
         this.store.select(selectors.selectTimer),
         this.store.select(selectFocusModeConfig),
+        this.store.select(selectSoundConfig),
       ]).pipe(
         skipWhileApplyingRemoteOps(),
-        map(([timer, focusModeConfig]) => {
-          const soundVolume = this.globalConfigService.sound()?.volume || 0;
-          return (
+        // 0 = not playing; a changed non-zero value only adjusts the running loop
+        map(([timer, focusModeConfig, soundConfig]) => {
+          const isActive =
             focusModeConfig?.focusModeSound === 'whiteNoise' &&
             timer.isRunning &&
             timer.purpose === 'work' &&
-            timer.elapsed > 0 &&
-            soundVolume > 0
-          );
+            timer.elapsed > 0;
+          return isActive
+            ? getFocusModeSoundVolume(
+                soundConfig?.volume,
+                focusModeConfig?.focusModeSoundVolume,
+              )
+            : 0;
         }),
         distinctUntilChanged(),
-        tap((shouldPlay) => {
-          if (shouldPlay) {
-            const soundVolume = this.globalConfigService.sound()?.volume || 0;
-            startWhiteNoise(Math.round(soundVolume * FOCUS_SOUND_VOLUME_FACTOR));
-          } else {
+        startWith(0),
+        pairwise(),
+        tap(([prevVolume, volume]) => {
+          if (volume === 0) {
             stopWhiteNoise();
+          } else if (prevVolume === 0) {
+            startWhiteNoise(volume);
+          } else {
+            setWhiteNoiseVolume(volume);
           }
         }),
       ),
@@ -971,9 +1001,9 @@ export class FocusModeEffects {
       playSound(SESSION_DONE_SOUND, soundVolume);
     }
 
-    // Focus window if in Electron
-    if (IS_ELECTRON) {
-      window.ea.showOrFocus();
+    // Flash instead of focusing the window so a session or break end doesn't
+    // steal keyboard focus from whatever the user is working in (#10476)
+    if (this._isElectron) {
       window.ea.flashFrame();
       window.ea.setProgressBar({
         progress: 1,

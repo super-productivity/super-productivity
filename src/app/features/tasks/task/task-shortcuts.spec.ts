@@ -1,9 +1,16 @@
-import { signal } from '@angular/core';
+import {
+  createComponent,
+  EnvironmentInjector,
+  Injector,
+  signal,
+  WritableSignal,
+} from '@angular/core';
+import { VIEW_TASK_LIST, ViewTaskListHost } from '../view-task-list.token';
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { Location } from '@angular/common';
 import { MatDialog, MatDialogState } from '@angular/material/dialog';
 import { Store } from '@ngrx/store';
-import { of } from 'rxjs';
+import { BehaviorSubject, of } from 'rxjs';
 import { DialogFullscreenMarkdownComponent } from '../../../ui/dialog-fullscreen-markdown/dialog-fullscreen-markdown.component';
 import { DateAdapter } from '@angular/material/core';
 import { PlannerActions } from '../../planner/store/planner.actions';
@@ -16,7 +23,12 @@ import { ProjectService } from '../../project/project.service';
 import { TaskRepeatCfgService } from '../../task-repeat-cfg/task-repeat-cfg.service';
 import { TaskAttachmentService } from '../task-attachment/task-attachment.service';
 import { TaskFocusService } from '../task-focus.service';
-import { DEFAULT_TASK, HideSubTasksMode, TaskWithSubTasks } from '../task.model';
+import {
+  DEFAULT_TASK,
+  HideSubTasksMode,
+  TaskDetailTargetPanel,
+  TaskWithSubTasks,
+} from '../task.model';
 import { TaskService } from '../task.service';
 import { WorkContextService } from '../../work-context/work-context.service';
 import { TaskComponent } from './task.component';
@@ -25,13 +37,17 @@ import { TranslateService } from '@ngx-translate/core';
 import { LocaleDatePipe } from '../../../ui/pipes/locale-date.pipe';
 import { PlannerService } from '../../planner/planner.service';
 import { AddSubtaskInputService } from '../add-subtask-input/add-subtask-input.service';
+import { TaskDuplicateService } from '../task-duplicate.service';
+import { TaskMultiSelectService } from '../task-multi-select.service';
 
 describe('TaskComponent shortcut handling', () => {
   let fixture: import('@angular/core/testing').ComponentFixture<TaskComponent>;
   let component: TaskComponent;
   let taskServiceSpy: jasmine.SpyObj<TaskService>;
+  let taskDuplicateServiceSpy: jasmine.SpyObj<TaskDuplicateService>;
   let addSubtaskInputServiceSpy: jasmine.SpyObj<AddSubtaskInputService>;
   let storeSpy: jasmine.SpyObj<Store>;
+  let activeWorkContext$: BehaviorSubject<{ isEnableBacklog: boolean }>;
 
   const createSubTask = (title: string): TaskWithSubTasks =>
     ({
@@ -58,6 +74,11 @@ describe('TaskComponent shortcut handling', () => {
     }) as TaskWithSubTasks;
 
   beforeEach(async () => {
+    // Default to a project context that has a backlog; the move-to-backlog specs
+    // flip this to cover Today and tag views.
+    activeWorkContext$ = new BehaviorSubject<{ isEnableBacklog: boolean }>({
+      isEnableBacklog: true,
+    });
     taskServiceSpy = jasmine.createSpyObj<TaskService>(
       'TaskService',
       [
@@ -77,6 +98,7 @@ describe('TaskComponent shortcut handling', () => {
         'getByIdWithSubTaskData$',
         'focusTaskById',
         'scheduleTask',
+        'markIssueUpdatesAsRead',
       ],
       {
         currentTaskId: signal<string | null>(null),
@@ -96,6 +118,10 @@ describe('TaskComponent shortcut handling', () => {
         subTaskIds: [],
       } as unknown as TaskWithSubTasks),
     );
+    taskDuplicateServiceSpy = jasmine.createSpyObj<TaskDuplicateService>(
+      'TaskDuplicateService',
+      ['duplicate'],
+    );
     addSubtaskInputServiceSpy = jasmine.createSpyObj<AddSubtaskInputService>(
       'AddSubtaskInputService',
       ['requestOpen', 'consume'],
@@ -109,7 +135,29 @@ describe('TaskComponent shortcut handling', () => {
     await TestBed.configureTestingModule({
       imports: [TaskComponent],
       providers: [
+        {
+          provide: TaskMultiSelectService,
+          useValue: {
+            selectedIds: signal(new Set<string>()),
+            anchorId: signal(null),
+            count: signal(0),
+            isActive: signal(false),
+            menuOpenRequest: signal(null),
+            has: () => false,
+            toggle: () => {},
+            selectRange: () => {},
+            remove: () => {},
+            removeWhenUnrendered: () => {},
+            clear: () => {},
+            requestMenuOpen: () => {},
+            isBulkFeedbackSuppressed: signal(false),
+            isSelecting: signal(false),
+            isTouchSelectionMode: signal(false),
+          },
+        },
+
         { provide: TaskService, useValue: taskServiceSpy },
+        { provide: TaskDuplicateService, useValue: taskDuplicateServiceSpy },
         {
           provide: TaskRepeatCfgService,
           useValue: jasmine.createSpyObj('TaskRepeatCfgService', [
@@ -169,7 +217,7 @@ describe('TaskComponent shortcut handling', () => {
           provide: DateService,
           useValue: jasmine.createSpyObj(
             'DateService',
-            ['isToday', 'getLogicalTodayDate'],
+            ['isToday', 'getLogicalTodayDate', 'getStartOfNextDayDiffMs'],
             {
               isToday: () => false,
             },
@@ -179,6 +227,8 @@ describe('TaskComponent shortcut handling', () => {
           provide: GlobalTrackingIntervalService,
           useValue: jasmine.createSpyObj('GlobalTrackingIntervalService', [], {
             todayDateStr: signal('2026-05-05'),
+            clockTimestamp: signal(new Date(2026, 4, 5, 12).getTime()),
+            clockMinute: signal(Math.floor(new Date(2026, 4, 5, 12).getTime() / 60000)),
           }),
         },
         {
@@ -191,6 +241,7 @@ describe('TaskComponent shortcut handling', () => {
           provide: WorkContextService,
           useValue: {
             isTodayList: signal(false),
+            activeWorkContext$,
           },
         },
         {
@@ -212,6 +263,142 @@ describe('TaskComponent shortcut handling', () => {
     fixture.componentRef.setInput('task', createSubTask(''));
     fixture.componentRef.setInput('isInSubTaskList', true);
     fixture.componentRef.setInput('isBacklog', false);
+  });
+
+  describe('focused component lifetime', () => {
+    it('releases a focused component when its row is destroyed', () => {
+      const focus = TestBed.inject(TaskFocusService);
+      focus.lastFocusedTaskComponent.set(component);
+
+      fixture.destroy();
+
+      expect(focus.lastFocusedTaskComponent()).toBeNull();
+    });
+
+    it('keeps a newer focused copy of the same task when the old row is destroyed', () => {
+      const newer = TestBed.createComponent(TaskComponent);
+      newer.componentRef.setInput('task', createSubTask(''));
+      newer.componentRef.setInput('isInSubTaskList', true);
+      newer.componentRef.setInput('isBacklog', false);
+      const focus = TestBed.inject(TaskFocusService);
+      focus.lastFocusedTaskComponent.set(newer.componentInstance);
+
+      fixture.destroy();
+
+      expect(focus.lastFocusedTaskComponent()).toBe(newer.componentInstance);
+      newer.destroy();
+    });
+  });
+
+  describe('scheduled-date badge colors', () => {
+    beforeEach(() => {
+      const dateService = TestBed.inject(DateService) as jasmine.SpyObj<DateService>;
+      dateService.getStartOfNextDayDiffMs.and.returnValue(0);
+    });
+
+    it('updates when the shared logical day changes', () => {
+      fixture.componentRef.setInput('task', {
+        ...createTopLevelTask('Task'),
+        dueDay: '2026-05-06',
+      });
+      expect(component.scheduledDateColor()).toBe('');
+      const clock = TestBed.inject(GlobalTrackingIntervalService);
+      (clock.todayDateStr as WritableSignal<string>).set('2026-05-06');
+      expect(component.scheduledDateColor()).toBe('');
+      (clock.todayDateStr as WritableSignal<string>).set('2026-05-07');
+      expect(component.scheduledDateColor()).toBe('overdue');
+    });
+
+    it('updates an untouched timed task when the shared clock reaches its time', () => {
+      const clock = TestBed.inject(GlobalTrackingIntervalService);
+      const scheduled = new Date(2026, 4, 5, 13).getTime();
+      fixture.componentRef.setInput('task', {
+        ...createTopLevelTask('Task'),
+        dueWithTime: scheduled,
+      });
+      expect(component.scheduledDateColor()).toBe('');
+      (clock.clockTimestamp as WritableSignal<number>).set(scheduled);
+      (clock.clockMinute as WritableSignal<number>).set(scheduled / 60000);
+      expect(component.scheduledDateColor()).toBe('overdue');
+    });
+
+    it('removes schedule colors while tracking and restores the current state on pause', () => {
+      const clock = TestBed.inject(GlobalTrackingIntervalService);
+      const currentId = taskServiceSpy.currentTaskId as unknown as WritableSignal<
+        string | null
+      >;
+      const scheduled = new Date(2026, 4, 5, 13).getTime();
+      fixture.componentRef.setInput('task', {
+        ...createTopLevelTask('Task'),
+        dueWithTime: scheduled,
+      });
+      expect(component.scheduledDateColor()).toBe('');
+      currentId.set('top-1');
+      expect(component.scheduledDateColor()).toBe('');
+      (clock.clockTimestamp as WritableSignal<number>).set(scheduled + 1);
+      (clock.clockMinute as WritableSignal<number>).set(scheduled / 60000);
+      expect(component.scheduledDateColor()).toBe('');
+      currentId.set(null);
+      expect(component.scheduledDateColor()).toBe('overdue');
+      currentId.set('some-other-task');
+      expect(component.scheduledDateColor()).toBe('overdue');
+    });
+  });
+
+  describe('touch selection mode', () => {
+    let multiSelect: {
+      isTouchSelectionMode: WritableSignal<boolean>;
+      toggle: jasmine.Spy;
+    };
+
+    // TestBed mounts the component on a <div>, so make the target resolve
+    // `closest('task')` to that host; every other selector stays real.
+    const clickHost = (target: HTMLElement): MouseEvent => {
+      const host = fixture.nativeElement as HTMLElement;
+      host.appendChild(target);
+      const realClosest = target.closest.bind(target);
+      target.closest = ((selector: string) =>
+        selector === 'task' ? host : realClosest(selector)) as Element['closest'];
+      const ev = new MouseEvent('click', { bubbles: true, cancelable: true });
+      target.dispatchEvent(ev);
+      return ev;
+    };
+
+    beforeEach(() => {
+      multiSelect = TestBed.inject(
+        TaskMultiSelectService,
+      ) as unknown as typeof multiSelect;
+      multiSelect.toggle = jasmine.createSpy('toggle');
+      multiSelect.isTouchSelectionMode.set(true);
+      fixture.detectChanges();
+    });
+
+    it('a plain tap on the row toggles it in the selection', () => {
+      const ev = clickHost(document.createElement('span'));
+      expect(multiSelect.toggle).toHaveBeenCalledWith('sub-1');
+      expect(ev.defaultPrevented).toBeTrue();
+    });
+
+    it('a tap on a real control keeps its own behaviour', () => {
+      const ev = clickHost(document.createElement('button'));
+      expect(multiSelect.toggle).not.toHaveBeenCalled();
+      expect(ev.defaultPrevented).toBeFalse();
+    });
+
+    it('a plain tap does nothing outside the mode', () => {
+      multiSelect.isTouchSelectionMode.set(false);
+      clickHost(document.createElement('span'));
+      expect(multiSelect.toggle).not.toHaveBeenCalled();
+    });
+  });
+
+  it('delegates duplication of the current task', () => {
+    const task = createTopLevelTask('Task to duplicate');
+    fixture.componentRef.setInput('task', task);
+
+    component.duplicateTask();
+
+    expect(taskDuplicateServiceSpy.duplicate).toHaveBeenCalledOnceWith(task);
   });
 
   it('does not delete an empty subtask on Escape', () => {
@@ -770,6 +957,189 @@ describe('TaskComponent shortcut handling', () => {
 
         expectScheduledForToday();
       }));
+    });
+  });
+
+  describe('moveToBacklogWithFocus — Shift+B (#9374)', () => {
+    let projectService: jasmine.SpyObj<ProjectService>;
+
+    beforeEach(() => {
+      projectService = TestBed.inject(ProjectService) as jasmine.SpyObj<ProjectService>;
+      fixture.componentRef.setInput('task', createTopLevelTask('Move me'));
+      fixture.componentRef.setInput('isInSubTaskList', false);
+    });
+
+    it('moves the task when the active context has a backlog', () => {
+      activeWorkContext$.next({ isEnableBacklog: true });
+
+      component.moveToBacklogWithFocus();
+
+      expect(projectService.moveTaskToBacklog).toHaveBeenCalledWith('top-1', 'project-1');
+    });
+
+    it('does nothing in a context without a backlog, like the context menu', () => {
+      activeWorkContext$.next({ isEnableBacklog: false });
+
+      component.moveToBacklogWithFocus();
+
+      expect(projectService.moveTaskToBacklog).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('detail panel toggle button (#9850)', () => {
+    const setTask = (overrides: Partial<TaskWithSubTasks>): void => {
+      fixture.componentRef.setInput('task', {
+        ...createTopLevelTask('Task'),
+        ...overrides,
+      });
+      fixture.componentRef.setInput('isInSubTaskList', false);
+      fixture.detectChanges();
+    };
+    const selectedTaskId = (): WritableSignal<string | null> =>
+      taskServiceSpy.selectedTaskId as unknown as WritableSignal<string | null>;
+    const isXs = (): WritableSignal<boolean> =>
+      TestBed.inject(LayoutService).isXs as unknown as WritableSignal<boolean>;
+
+    it('opens the notes section directly when the task has notes', () => {
+      setTask({ notes: 'some notes' });
+
+      component.onToggleDetailPanelBtnClick();
+
+      expect(taskServiceSpy.setSelectedId).toHaveBeenCalledWith(
+        'top-1',
+        TaskDetailTargetPanel.Notes,
+      );
+    });
+
+    it('opens the notes section on mobile, where the bug was reported', () => {
+      isXs().set(true);
+      setTask({ notes: 'some notes' });
+
+      component.onToggleDetailPanelBtnClick();
+
+      expect(taskServiceSpy.setSelectedId).toHaveBeenCalledWith(
+        'top-1',
+        TaskDetailTargetPanel.Notes,
+      );
+    });
+
+    it('prefers the notes section for an issue-linked task that has notes', () => {
+      setTask({ notes: 'some notes', issueId: 'GH-1', issueType: 'GITHUB' });
+
+      component.onToggleDetailPanelBtnClick();
+
+      expect(taskServiceSpy.setSelectedId).toHaveBeenCalledWith(
+        'top-1',
+        TaskDetailTargetPanel.Notes,
+      );
+    });
+
+    it('opens the default panel for an issue-linked task without notes', () => {
+      setTask({ notes: '', issueId: 'GH-1', issueType: 'GITHUB' });
+
+      component.onToggleDetailPanelBtnClick();
+
+      expect(taskServiceSpy.setSelectedId).toHaveBeenCalledWith(
+        'top-1',
+        TaskDetailTargetPanel.Default,
+      );
+    });
+
+    it('opens the default panel and clears the badge in the issue-updated state', () => {
+      setTask({ notes: 'some notes', issueId: 'GH-1', issueWasUpdated: true });
+
+      component.onToggleDetailPanelBtnClick();
+
+      expect(taskServiceSpy.markIssueUpdatesAsRead).toHaveBeenCalledWith('top-1');
+      expect(taskServiceSpy.setSelectedId).toHaveBeenCalledWith(
+        'top-1',
+        TaskDetailTargetPanel.Default,
+      );
+    });
+
+    it('closes the panel when it is already open for this task', () => {
+      setTask({ notes: 'some notes' });
+      selectedTaskId().set('top-1');
+
+      component.onToggleDetailPanelBtnClick();
+
+      expect(taskServiceSpy.setSelectedId).toHaveBeenCalledWith(null);
+    });
+
+    it('closes the panel on mobile where the icon stays "chat" while open', () => {
+      isXs().set(true);
+      setTask({ notes: 'some notes' });
+      selectedTaskId().set('top-1');
+
+      component.onToggleDetailPanelBtnClick();
+
+      expect(taskServiceSpy.setSelectedId).toHaveBeenCalledWith(null);
+    });
+  });
+
+  describe('inside a view (VIEW_TASK_LIST)', () => {
+    const createInView = (
+      host: Partial<ViewTaskListHost>,
+    ): { component: TaskComponent; destroy: () => void } => {
+      const ref = createComponent(TaskComponent, {
+        environmentInjector: TestBed.inject(EnvironmentInjector),
+        elementInjector: Injector.create({
+          providers: [{ provide: VIEW_TASK_LIST, useValue: host }],
+        }),
+      });
+      ref.setInput('task', createTopLevelTask('In a view'));
+      return { component: ref.instance, destroy: () => ref.destroy() };
+    };
+
+    it('reorders the view, not the list that was open before', () => {
+      const moveRow = jasmine.createSpy('moveRow');
+      const { component: inView, destroy } = createInView({
+        isRow: () => true,
+        moveRow,
+      });
+
+      inView.moveTaskUp();
+      inView.moveTaskToBottom();
+
+      expect(moveRow.calls.allArgs()).toEqual([
+        ['top-1', 'up'],
+        ['top-1', 'bottom'],
+      ]);
+      expect(taskServiceSpy.moveUp).not.toHaveBeenCalled();
+      destroy();
+    });
+
+    it('refocuses a row that stays, not one that left for another section', fakeAsync(() => {
+      const { component: inView, destroy } = createInView({
+        isRow: () => true,
+        moveRow: (_id: string, to: string) => to === 'down',
+      });
+      const focusSelf = spyOn(inView, 'focusSelf');
+
+      inView.moveTaskUp();
+      tick(20);
+      expect(focusSelf).toHaveBeenCalledTimes(2);
+
+      focusSelf.calls.reset();
+      inView.moveTaskDown();
+      tick(20);
+      expect(focusSelf).not.toHaveBeenCalled();
+      destroy();
+    }));
+
+    it('never treats the view as the Today list and has no backlog key', () => {
+      const { component: inView, destroy } = createInView({ isRow: () => true });
+      expect(inView.isTodayListActive()).toBeFalse();
+      expect(inView.isInView).toBeTrue();
+      destroy();
+    });
+
+    it("hides the column's required tags, and nothing extra outside a view", () => {
+      const tagsToHide = signal(['required']);
+      const { component: inView, destroy } = createInView({ tagsToHide });
+      expect(inView.viewTagsToHide()).toEqual(['required']);
+      destroy();
+      expect(component.viewTagsToHide()).toBeUndefined();
     });
   });
 });

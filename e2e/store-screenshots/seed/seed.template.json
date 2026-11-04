@@ -176,8 +176,7 @@
         "isIssuesPanelEnabled": true,
         "isProjectNotesEnabled": true,
         "isSyncIconEnabled": true,
-        "isDonatePageEnabled": false,
-        "isEnableUserProfiles": false
+        "isDonatePageEnabled": false
       },
       "localization": {},
       "evaluation": { "isHideEvaluationSheet": true },

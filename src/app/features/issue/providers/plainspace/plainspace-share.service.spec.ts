@@ -1,7 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { MatDialog } from '@angular/material/dialog';
 import { Store } from '@ngrx/store';
-import { of } from 'rxjs';
+import { firstValueFrom, of, throwError } from 'rxjs';
 import { PlainspaceShareService } from './plainspace-share.service';
 import { PlainspaceApiService } from './plainspace-api.service';
 import { SnackService } from '../../../../core/snack/snack.service';
@@ -9,13 +9,11 @@ import { T } from '../../../../t.const';
 import { PlainspaceAccountService } from '../../../plainspace/plainspace-account.service';
 import { PlainspaceConnectDialogComponent } from '../../../plainspace/connect-dialog/plainspace-connect-dialog.component';
 import { PlainspaceSpacePickerDialogComponent } from '../../../plainspace/space-picker-dialog/plainspace-space-picker-dialog.component';
+import { LS } from '../../../../core/persistence/storage-keys.const';
 
 describe('PlainspaceShareService', () => {
   let service: PlainspaceShareService;
-  let account: {
-    isLoggedIn: jasmine.Spy;
-    account: jasmine.Spy;
-  };
+  let account: PlainspaceAccountService;
   let matDialog: jasmine.SpyObj<MatDialog>;
   let api: jasmine.SpyObj<PlainspaceApiService>;
   let snack: jasmine.SpyObj<SnackService>;
@@ -30,12 +28,10 @@ describe('PlainspaceShareService', () => {
     matDialog.open.calls.allArgs().some((a) => a[0] === PlainspaceConnectDialogComponent);
 
   beforeEach(() => {
-    account = {
-      isLoggedIn: jasmine.createSpy('isLoggedIn').and.returnValue(true),
-      account: jasmine
-        .createSpy('account')
-        .and.returnValue({ host: 'https://plainspace.org', token: 'pat_x', email: 'e' }),
-    };
+    localStorage.setItem(
+      LS.PLAINSPACE_ACCOUNT,
+      JSON.stringify({ host: 'https://plainspace.org', token: 'pat_x', email: 'e' }),
+    );
 
     matDialog = jasmine.createSpyObj('MatDialog', ['open']);
     connectResult = true;
@@ -52,6 +48,7 @@ describe('PlainspaceShareService', () => {
 
     api = jasmine.createSpyObj('PlainspaceApiService', ['createSpace$', 'getSpaceUrl$']);
     api.createSpace$.and.returnValue(of({ id: 'space-1' }));
+    api.getSpaceUrl$.and.returnValue(of(null));
     snack = jasmine.createSpyObj('SnackService', ['open']);
     store = jasmine.createSpyObj('Store', ['dispatch', 'select']);
     store.select.and.returnValue(of(undefined));
@@ -59,7 +56,7 @@ describe('PlainspaceShareService', () => {
     TestBed.configureTestingModule({
       providers: [
         PlainspaceShareService,
-        { provide: PlainspaceAccountService, useValue: account },
+        PlainspaceAccountService,
         { provide: MatDialog, useValue: matDialog },
         { provide: PlainspaceApiService, useValue: api },
         { provide: SnackService, useValue: snack },
@@ -67,10 +64,13 @@ describe('PlainspaceShareService', () => {
       ],
     });
     service = TestBed.inject(PlainspaceShareService);
+    account = TestBed.inject(PlainspaceAccountService);
     // Default to online; the offline test flips this. (The Karma runner reports
     // navigator.onLine === false, so we must spy it for the online path.)
     onlineSpy = spyOnProperty(navigator, 'onLine').and.returnValue(true);
   });
+
+  afterEach(() => localStorage.removeItem(LS.PLAINSPACE_ACCOUNT));
 
   it('shows a calm offline message and does nothing when offline', async () => {
     onlineSpy.and.returnValue(false);
@@ -86,7 +86,6 @@ describe('PlainspaceShareService', () => {
   });
 
   it('skips the connect dialog when already logged in', async () => {
-    account.isLoggedIn.and.returnValue(true);
     spaceResult = undefined; // user cancels the space picker
 
     const result = await service.shareProjectOnPlainspace('p1', 'Proj');
@@ -98,7 +97,7 @@ describe('PlainspaceShareService', () => {
   });
 
   it('opens the connect dialog when there is no account, and reports cancel', async () => {
-    account.isLoggedIn.and.returnValue(false);
+    account.logout();
     connectResult = false; // user backs out of connect
 
     const result = await service.shareProjectOnPlainspace('p1', 'Proj');
@@ -111,17 +110,122 @@ describe('PlainspaceShareService', () => {
     });
   });
 
+  // A sign-up from Share creates the account's first Space, named after the
+  // project; it is linked as is, never offered for a second create.
+  it('links the Space a sign-up created, without the picker', async () => {
+    account.logout();
+    connectResult = { createdSpaceId: 'signup-space' };
+
+    const result = await service.shareProjectOnPlainspace('p1', 'Proj');
+
+    const connectCall = matDialog.open.calls
+      .allArgs()
+      .find((a) => a[0] === PlainspaceConnectDialogComponent);
+    expect(connectCall?.[1]?.data).toEqual(
+      jasmine.objectContaining({ spaceName: 'Proj' }),
+    );
+    expect(result).toBe('signup-space');
+    expect(
+      matDialog.open.calls
+        .allArgs()
+        .some((a) => a[0] === PlainspaceSpacePickerDialogComponent),
+    ).toBe(false);
+    expect(api.createSpace$).not.toHaveBeenCalled();
+    expect(store.dispatch).toHaveBeenCalledWith(
+      jasmine.objectContaining({
+        issueProvider: jasmine.objectContaining({
+          spaceId: 'signup-space',
+          defaultProjectId: 'p1',
+        }),
+      }),
+    );
+  });
+
+  it('prompts for connection again after disconnecting from the space picker', async () => {
+    matDialog.open.and.callFake((comp: unknown) => {
+      if (comp === PlainspaceSpacePickerDialogComponent) {
+        account.logout();
+      }
+      return { afterClosed: () => of(undefined) } as ReturnType<MatDialog['open']>;
+    });
+
+    expect(await service.shareProjectOnPlainspace('p1', 'Proj')).toBeNull();
+    expect(account.isLoggedIn()).toBe(false);
+    expect(snack.open).not.toHaveBeenCalled();
+    matDialog.open.calls.reset();
+
+    expect(await service.shareProjectOnPlainspace('p1', 'Proj')).toBeNull();
+    expect(openedConnectDialog()).toBe(true);
+    expect(matDialog.open).toHaveBeenCalledTimes(1);
+    expect(api.createSpace$).not.toHaveBeenCalled();
+    expect(store.dispatch).not.toHaveBeenCalled();
+  });
+
   it('provisions a new space and registers a bound provider on success', async () => {
-    account.isLoggedIn.and.returnValue(true);
     spaceResult = { action: 'create' };
 
     const result = await service.shareProjectOnPlainspace('p1', 'Proj');
 
     expect(result).toBe('space-1');
-    expect(store.dispatch).toHaveBeenCalled();
+    expect(store.dispatch).toHaveBeenCalledWith(
+      jasmine.objectContaining({
+        issueProvider: jasmine.objectContaining({
+          defaultProjectId: 'p1',
+          spaceId: 'space-1',
+          token: 'pat_x',
+        }),
+      }),
+    );
     expect(snack.open).toHaveBeenCalledWith({
       type: 'SUCCESS',
       msg: T.PLAINSPACE.SHARE_SUCCESS,
+    });
+  });
+
+  it('offers to copy the invite link on the share success snack', async () => {
+    spaceResult = { action: 'create' };
+    api.getSpaceUrl$.and.returnValue(of('https://plainspace.org/proj'));
+    const writeText = spyOn(navigator.clipboard, 'writeText').and.resolveTo();
+
+    await service.shareProjectOnPlainspace('p1', 'Proj');
+
+    expect(api.getSpaceUrl$).toHaveBeenCalledWith(
+      jasmine.objectContaining({ spaceId: 'space-1', token: 'pat_x' }),
+    );
+    const params = snack.open.calls.mostRecent().args[0] as {
+      actionStr?: string;
+      actionFn?: () => Promise<void>;
+    };
+    expect(params.actionStr).toBe(T.PLAINSPACE.COPY_INVITE_LINK);
+    await params.actionFn!();
+    expect(writeText).toHaveBeenCalledWith('https://plainspace.org/proj');
+    expect(snack.open).toHaveBeenCalledWith({
+      type: 'SUCCESS',
+      msg: T.PLAINSPACE.INVITE_LINK_COPIED,
+    });
+  });
+
+  it('binds the selected existing space without creating another one', async () => {
+    spaceResult = { action: 'link', spaceId: 'selected-space' };
+
+    expect(await service.shareProjectOnPlainspace('p1', 'Proj')).toBe('selected-space');
+    expect(api.createSpace$).not.toHaveBeenCalled();
+    expect(store.dispatch).toHaveBeenCalledWith(
+      jasmine.objectContaining({
+        issueProvider: jasmine.objectContaining({ spaceId: 'selected-space' }),
+      }),
+    );
+  });
+
+  it('shows a visible error and creates no provider when space creation fails', async () => {
+    spaceResult = { action: 'create' };
+    api.createSpace$.and.returnValue(throwError(() => new Error('API failure')));
+
+    expect(await service.shareProjectOnPlainspace('p1', 'Proj')).toBeNull();
+    expect(store.dispatch).not.toHaveBeenCalled();
+    expect(snack.open).toHaveBeenCalledOnceWith({
+      type: 'ERROR',
+      msg: T.PLAINSPACE.SHARE_FAILED,
     });
   });
 
@@ -172,6 +276,57 @@ describe('PlainspaceShareService', () => {
       expect(snack.open).toHaveBeenCalledWith({
         type: 'ERROR',
         msg: T.PLAINSPACE.OPEN_FAILED,
+      });
+    });
+  });
+
+  describe('invite link', () => {
+    const provider = {
+      id: 'ip1',
+      issueProviderKey: 'PLAINSPACE',
+      host: 'https://plainspace.org',
+      spaceId: 'space-1',
+      token: 'pat_x',
+    } as unknown;
+
+    it('resolves the space URL, which Plainspace turns into its join page', async () => {
+      store.select.and.returnValue(of(provider));
+      api.getSpaceUrl$.and.returnValue(of('https://plainspace.org/my-slug'));
+
+      expect(await firstValueFrom(service.inviteUrl$('p1'))).toBe(
+        'https://plainspace.org/my-slug',
+      );
+      expect(api.getSpaceUrl$).toHaveBeenCalledWith(provider as never);
+    });
+
+    it('resolves null without a request when the project is not shared', async () => {
+      store.select.and.returnValue(of(undefined));
+
+      expect(await firstValueFrom(service.inviteUrl$('p1'))).toBeNull();
+      expect(api.getSpaceUrl$).not.toHaveBeenCalled();
+    });
+
+    it('copies the URL synchronously from the call (inside the click)', async () => {
+      const writeText = spyOn(navigator.clipboard, 'writeText').and.resolveTo();
+
+      const copying = service.copyInviteUrl('https://plainspace.org/my-slug');
+      // WebKit needs the write inside the click: no await before it.
+      expect(writeText).toHaveBeenCalledWith('https://plainspace.org/my-slug');
+      await copying;
+      expect(snack.open).toHaveBeenCalledWith({
+        type: 'SUCCESS',
+        msg: T.PLAINSPACE.INVITE_LINK_COPIED,
+      });
+    });
+
+    it('reports a failure when the clipboard refuses the write', async () => {
+      spyOn(navigator.clipboard, 'writeText').and.rejectWith(new Error('denied'));
+
+      await service.copyInviteUrl('https://plainspace.org/my-slug');
+
+      expect(snack.open).toHaveBeenCalledWith({
+        type: 'ERROR',
+        msg: T.PLAINSPACE.COPY_INVITE_LINK_FAILED,
       });
     });
   });

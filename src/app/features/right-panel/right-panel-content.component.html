@@ -1,5 +1,6 @@
 @if (panelContent() === 'ISSUE_PANEL') {
-  @defer (prefetch on idle) {
+  <!-- Opening the panel must not wait for browser idle time. -->
+  @defer (on immediate; prefetch on idle) {
     <issue-panel [@slideInFromRight]></issue-panel>
   }
 } @else if (panelContent() === 'NOTES') {

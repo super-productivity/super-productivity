@@ -7,6 +7,7 @@ import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import android.util.Log
+import android.view.HapticFeedbackConstants
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import android.widget.Toast
@@ -16,12 +17,18 @@ import com.superproductivity.superproductivity.BuildConfig
 import com.superproductivity.superproductivity.FullscreenActivity.Companion.WINDOW_INTERFACE_PROPERTY
 import com.superproductivity.superproductivity.app.LaunchDecider
 import com.superproductivity.superproductivity.review.InAppReview
+import com.superproductivity.superproductivity.service.BackgroundReminderSettingsStore
 import com.superproductivity.superproductivity.service.BackgroundSyncCredentialStore
 import com.superproductivity.superproductivity.service.FocusModeForegroundService
 import com.superproductivity.superproductivity.service.ForegroundServiceFailure
 import com.superproductivity.superproductivity.service.ReminderNotificationHelper
+import com.superproductivity.superproductivity.service.RemoteTrackingNotificationHelper
 import com.superproductivity.superproductivity.service.SyncReminderScheduler
 import com.superproductivity.superproductivity.service.TrackingForegroundService
+import com.superproductivity.superproductivity.share.CaptureKeyStore
+import com.superproductivity.superproductivity.share.ShareUploadWorker
+import com.superproductivity.superproductivity.widget.CaptureInbox
+import com.superproductivity.superproductivity.widget.NotificationActionQueue
 import com.superproductivity.superproductivity.widget.ReminderDoneQueue
 import com.superproductivity.superproductivity.widget.ReminderSnoozeQueue
 import com.superproductivity.superproductivity.widget.ReminderTapQueue
@@ -85,6 +92,13 @@ class JavaScriptInterface(
         return "${versionName}_L$launchMode"
     }
 
+    // Tells the web bundle that snooze/tap events carry the reminder type, so it
+    // may schedule native deadline alarms (online-only mode can pair a newer
+    // bundle with an older APK that lacks this).
+    @Suppress("unused")
+    @JavascriptInterface
+    fun supportsTypedReminderActions(): Boolean = true
+
     @Suppress("unused")
     @JavascriptInterface
     fun getTextZoom(): Int {
@@ -103,6 +117,30 @@ class JavaScriptInterface(
         activity.runOnUiThread {
             InAppReview.request(activity)
         }
+    }
+
+    // Tactile confirmation for touch gestures. performHapticFeedback follows the
+    // system "touch feedback" setting and needs no VIBRATE permission. Unknown
+    // types are ignored so a newer bundle can't crash an older shell's mapping.
+    @Suppress("unused")
+    @JavascriptInterface
+    fun performHapticFeedback(type: String) {
+        val constant = when (type) {
+            "confirm" -> if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                HapticFeedbackConstants.CONFIRM
+            } else {
+                HapticFeedbackConstants.VIRTUAL_KEY
+            }
+            "threshold" -> if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                HapticFeedbackConstants.GESTURE_THRESHOLD_ACTIVATE
+            } else {
+                HapticFeedbackConstants.CLOCK_TICK
+            }
+            "longPress" -> HapticFeedbackConstants.LONG_PRESS
+            else -> return
+        }
+        // JavascriptInterface calls arrive on a background thread.
+        webView.post { webView.performHapticFeedback(constant) }
     }
 
     @Suppress("unused")
@@ -148,14 +186,22 @@ class JavaScriptInterface(
         callJavaScriptFunction(FN_PREFIX + "clearDbCallback(" + JSONObject.quote(requestId) + ")")
     }
 
+    /** The web app finished initialising, including after a reload. */
+    @Suppress("unused")
+    @JavascriptInterface
+    fun notifyFrontendReady() {
+        if (activity is com.superproductivity.superproductivity.CapacitorMainActivity) {
+            activity.runOnUiThread {
+                activity.onFrontendReady()
+            }
+        }
+    }
+
+    /** The former name of [notifyFrontendReady], still called by older web bundles. */
     @Suppress("unused")
     @JavascriptInterface
     fun triggerGetShareData() {
-        if (activity is com.superproductivity.superproductivity.CapacitorMainActivity) {
-            activity.runOnUiThread {
-                activity.flushPendingShareIntent()
-            }
-        }
+        notifyFrontendReady()
     }
 
     @Suppress("unused")
@@ -185,30 +231,7 @@ class JavaScriptInterface(
     @JavascriptInterface
     fun stopTrackingService() {
         safeCall("Failed to stop tracking service") {
-            val intent = Intent(activity, TrackingForegroundService::class.java)
-            if (TrackingForegroundService.isStartPending || TrackingForegroundService.isTracking) {
-                // A startForegroundService() may still be promoting: stopping via
-                // stopService() now could tear it down before startForeground()
-                // runs and crash with ForegroundServiceDidNotStartInTimeException.
-                // Routing as ACTION_STOP through onStartCommand lets it promote
-                // first, then stop cleanly.
-                intent.action = TrackingForegroundService.ACTION_STOP
-                try {
-                    activity.startService(intent)
-                } catch (e: IllegalStateException) {
-                    // App is in the background: startService() is disallowed here.
-                    // Only fall back to stopService() if no start is still pending
-                    // — stopping a not-yet-promoted service would re-trigger the
-                    // same crash. If a start IS pending, leave it: the pending
-                    // start promotes and a later foreground sync stops it cleanly.
-                    Log.d(TAG, "stopTrackingService: app backgrounded, falling back to stopService()", e)
-                    if (!TrackingForegroundService.isStartPending) {
-                        activity.stopService(Intent(activity, TrackingForegroundService::class.java))
-                    }
-                }
-            } else {
-                activity.stopService(intent)
-            }
+            TrackingForegroundService.requestStop(activity)
         }
     }
 
@@ -220,6 +243,9 @@ class JavaScriptInterface(
                 action = TrackingForegroundService.ACTION_UPDATE
                 putExtra(TrackingForegroundService.EXTRA_TIME_SPENT, timeSpentMs)
             }
+            // Plain startService is safe: the service is either already started
+            // (exempt from the background-start ban) or, after a restore in a new
+            // process, this comes from the JS recovery at launch or onResume.
             activity.startService(intent)
         }
     }
@@ -227,13 +253,34 @@ class JavaScriptInterface(
     @Suppress("unused")
     @JavascriptInterface
     fun getTrackingElapsed(): String {
-        val taskId = TrackingForegroundService.currentTaskId
-        val elapsedMs = TrackingForegroundService.getElapsedMs()
-        val isTracking = TrackingForegroundService.isTracking
-        return if (isTracking && taskId != null) {
-            """{"taskId":"$taskId","elapsedMs":$elapsedMs}"""
-        } else {
-            "null"
+        // After a process kill the companion is empty but the session may be
+        // persisted; restoring it here is what lets the JS cold-start recovery
+        // credit the time tracked while the process was gone (#7390).
+        val snapshot = TrackingForegroundService.snapshotForBridge(activity) ?: return "null"
+        return JSONObject()
+            .put("taskId", snapshot.taskId)
+            .put("elapsedMs", snapshot.elapsedMs)
+            .put("resume", snapshot.resume)
+            .toString()
+    }
+
+    @Suppress("unused")
+    @JavascriptInterface
+    fun updateRemoteTrackingNotification(
+        title: String,
+        text: String,
+        showStopAction: Boolean
+    ) {
+        safeCall("Failed to update remote tracking notification") {
+            RemoteTrackingNotificationHelper.show(activity, title, text, showStopAction)
+        }
+    }
+
+    @Suppress("unused")
+    @JavascriptInterface
+    fun cancelRemoteTrackingNotification() {
+        safeCall("Failed to cancel remote tracking notification") {
+            RemoteTrackingNotificationHelper.cancel(activity)
         }
     }
 
@@ -259,6 +306,7 @@ class JavaScriptInterface(
                 putExtra(FocusModeForegroundService.EXTRA_REMAINING_MS, remainingMs)
                 putExtra(FocusModeForegroundService.EXTRA_IS_BREAK, isBreak)
                 putExtra(FocusModeForegroundService.EXTRA_IS_PAUSED, isPaused)
+                FocusModeForegroundService.attachPendingTaskUpdate(this)
             }
             FocusModeForegroundService.markStartPending()
             try {
@@ -317,6 +365,45 @@ class JavaScriptInterface(
         }
     }
 
+    @Suppress("unused")
+    @JavascriptInterface
+    fun updateFocusTask(taskId: String?, timeSpentMs: Long, isTracking: Boolean) {
+        safeCall("Failed to update focus task time") {
+            val sequence = FocusModeForegroundService.stageTaskUpdate(
+                taskId,
+                timeSpentMs,
+                isTracking
+            )
+            if (!FocusModeForegroundService.isRunning && !FocusModeForegroundService.isStartPending) {
+                return@safeCall
+            }
+            val intent = Intent(activity, FocusModeForegroundService::class.java).apply {
+                action = FocusModeForegroundService.ACTION_UPDATE_TASK
+                putExtra(FocusModeForegroundService.EXTRA_TASK_ID, taskId)
+                putExtra(FocusModeForegroundService.EXTRA_TASK_TIME_SPENT_MS, timeSpentMs)
+                putExtra(FocusModeForegroundService.EXTRA_TASK_IS_TRACKING, isTracking)
+                putExtra(FocusModeForegroundService.EXTRA_TASK_UPDATE_SEQUENCE, sequence)
+            }
+            activity.startService(intent)
+        }
+    }
+
+    @Suppress("unused")
+    @JavascriptInterface
+    fun adjustFocusTaskTime(taskId: String, timeSpentDeltaMs: Long) {
+        safeCall("Failed to adjust focus task time") {
+            if (!FocusModeForegroundService.isRunning && !FocusModeForegroundService.isStartPending) {
+                return@safeCall
+            }
+            val intent = Intent(activity, FocusModeForegroundService::class.java).apply {
+                action = FocusModeForegroundService.ACTION_ADJUST_TASK
+                putExtra(FocusModeForegroundService.EXTRA_TASK_ID, taskId)
+                putExtra(FocusModeForegroundService.EXTRA_TASK_TIME_DELTA_MS, timeSpentDeltaMs)
+            }
+            activity.startService(intent)
+        }
+    }
+
     /**
      * Read back the live focus-mode session so the WebView can recover it after
      * being recreated (app reopened from recents). Returns "null" when no focus
@@ -331,7 +418,16 @@ class JavaScriptInterface(
             val remainingMs = FocusModeForegroundService.liveRemainingMs()
             val isBreak = FocusModeForegroundService.isBreak
             val isPaused = FocusModeForegroundService.isPaused
-            """{"durationMs":$durationMs,"remainingMs":$remainingMs,"isBreak":$isBreak,"isPaused":$isPaused}"""
+            val task = FocusModeForegroundService.taskSnapshot()
+            JSONObject()
+                .put("durationMs", durationMs)
+                .put("remainingMs", remainingMs)
+                .put("isBreak", isBreak)
+                .put("isPaused", isPaused)
+                .put("taskId", task.taskId ?: JSONObject.NULL)
+                .put("taskTimeSpentMs", task.timeSpentMs)
+                .put("isTaskTracking", task.isTracking)
+                .toString()
         } else {
             "null"
         }
@@ -373,13 +469,79 @@ class JavaScriptInterface(
     }
 
     /**
-     * Get queued tasks from the widget and clear the queue.
-     * Returns JSON string of tasks or null if empty.
+     * Non-destructive read of natively captured tasks as a JSON array, oldest first.
+     * Returns null if the inbox could not be read. Entries stay until acknowledged.
      */
     @Suppress("unused")
     @JavascriptInterface
-    fun getWidgetTaskQueue(): String? {
-        return WidgetTaskQueue.getAndClearQueue(activity)
+    fun getPendingCaptures(): String? {
+        return try {
+            val inbox = CaptureInbox.forContext(activity)
+            WidgetTaskQueue.migrateInto(activity, inbox)
+            inbox.pendingJson()
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to read capture inbox", e)
+            null
+        }
+    }
+
+    /**
+     * Non-destructive read of the shares the app may import, as a JSON array of
+     * v1 capture payloads with their `id`, oldest first. Takes over shares still
+     * waiting for their SuperSync upload (none in flight), since the app is
+     * open, and moves a share queued by the previous app version into the
+     * inbox first. Returns null if the inbox could not be read.
+     */
+    @Suppress("unused")
+    @JavascriptInterface
+    fun getPendingShares(): String? {
+        return try {
+            val inbox = CaptureInbox.forContext(activity)
+            ShareIntentQueue.migrateInto(activity, inbox)
+            for (id in inbox.takeOverUploads()) {
+                ShareUploadWorker.cancel(activity, id)
+            }
+            inbox.pendingSharesJson()
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to read shares from the capture inbox", e)
+            null
+        }
+    }
+
+    /**
+     * Mirrors the account's SuperSync capture public key (base64 SPKI) while
+     * capture is on; an empty string clears it and stops share uploads.
+     */
+    @Suppress("unused")
+    @JavascriptInterface
+    fun setCapturePublicKey(publicKeySpki: String) {
+        safeCall("Failed to set capture public key") {
+            CaptureKeyStore.set(activity, publicKeySpki)
+        }
+    }
+
+    /** Delete one capture after the app has persisted its task. */
+    @Suppress("unused")
+    @JavascriptInterface
+    fun acknowledgeCapture(id: String): Boolean {
+        val isAcknowledged = try {
+            CaptureInbox.forContext(activity).acknowledge(id)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to acknowledge capture", e)
+            false
+        }
+        // The widget lists unacknowledged quick adds as pending. Its snapshot
+        // push may run before this and is skipped when unchanged (a quick add
+        // short-syntaxed off Today), so redraw here or the pending row lingers.
+        // Separate try: a failed redraw must not report the ack as failed.
+        if (isAcknowledged) {
+            try {
+                TaskListWidgetProvider.refreshAll(activity)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to refresh widget after acknowledge", e)
+            }
+        }
+        return isAcknowledged
     }
 
     /**
@@ -402,23 +564,6 @@ class JavaScriptInterface(
         TaskListWidgetProvider.refreshAll(activity)
     }
 
-    /**
-     * Pull-based retrieval of pending share data persisted in SharedPreferences.
-     * Clears both SharedPreferences and in-memory pendingShareIntent to prevent duplicates.
-     * @return JSON string of share data, or null if none pending
-     */
-    @Suppress("unused")
-    @JavascriptInterface
-    fun getPendingShareData(): String? {
-        val data = ShareIntentQueue.getAndClear(activity)
-        if (activity is com.superproductivity.superproductivity.CapacitorMainActivity) {
-            activity.runOnUiThread {
-                activity.clearPendingShareIntent()
-            }
-        }
-        return data
-    }
-
     @Suppress("unused")
     @JavascriptInterface
     fun getReminderTapQueue(): String? {
@@ -438,48 +583,30 @@ class JavaScriptInterface(
     }
 
     /**
-     * Phase 1: Get partial text from the startup overlay without hiding it.
-     * The native input stays visible so the user sees a seamless transition.
+     * Tracking notification Pause/Done taps, applied natively already (#10683).
+     * JSON array of `{type, taskId, elapsedMs, at}` or null; clears the queue.
      */
     @Suppress("unused")
     @JavascriptInterface
-    fun getStartupOverlayPartialText(): String? {
-        var partialText: String? = null
-        if (activity is com.superproductivity.superproductivity.CapacitorMainActivity) {
-            val latch = java.util.concurrent.CountDownLatch(1)
-            activity.runOnUiThread {
-                partialText = activity.getStartupOverlayPartialText()
-                latch.countDown()
-            }
-            latch.await(2, java.util.concurrent.TimeUnit.SECONDS)
-        }
-        return partialText
+    fun getTrackingActionQueue(): String? {
+        return NotificationActionQueue.getAndClearTracking(activity)
     }
 
     /**
-     * Phase 2: Hide the startup overlay after the web input is ready.
+     * Focus-mode notification Pause/Resume/Skip/Complete taps (#10683).
+     * JSON array of `{type, at}` or null; clears the queue.
      */
     @Suppress("unused")
     @JavascriptInterface
-    fun hideStartupOverlay() {
-        if (activity is com.superproductivity.superproductivity.CapacitorMainActivity) {
-            activity.runOnUiThread {
-                activity.hideStartupOverlay()
-            }
-        }
+    fun getFocusActionQueue(): String? {
+        return NotificationActionQueue.getAndClearFocus(activity)
     }
 
-    /**
-     * Dismiss startup overlay immediately (no partial text transfer).
-     */
+    /** Epoch ms of the latest remote-tracking Stop tap, or null; clears it. */
     @Suppress("unused")
     @JavascriptInterface
-    fun dismissStartupOverlay() {
-        if (activity is com.superproductivity.superproductivity.CapacitorMainActivity) {
-            activity.runOnUiThread {
-                activity.dismissStartupOverlay()
-            }
-        }
+    fun getRemoteTrackingStopQueue(): String? {
+        return NotificationActionQueue.getAndClearRemoteStop(activity)
     }
 
     @Suppress("unused")
@@ -496,7 +623,49 @@ class JavaScriptInterface(
     fun clearSuperSyncCredentials() {
         safeCall("Failed to clear SuperSync credentials") {
             BackgroundSyncCredentialStore.clear(activity)
+            CaptureKeyStore.set(activity, "")
             SyncReminderScheduler.cancel(activity)
+        }
+    }
+
+    /**
+     * WebDAV/Nextcloud counterpart of [setSuperSyncCredentials]: the worker
+     * GETs [fileUrl] and reads reminders from it. Drops SuperSync credentials.
+     * The E2EE password comes via [setSuperSyncEncryptionPassword].
+     * NEVER log [authorization].
+     */
+    @Suppress("unused")
+    @JavascriptInterface
+    fun setFileSyncCredentials(fileUrl: String, authorization: String, isEncryptionExpected: Boolean) {
+        safeCall("Failed to set file sync credentials") {
+            BackgroundSyncCredentialStore.saveFileSync(
+                activity,
+                BackgroundSyncCredentialStore.FileSyncCredentials(fileUrl, authorization, isEncryptionExpected),
+            )
+            SyncReminderScheduler.ensureScheduled(activity)
+        }
+    }
+
+    @Suppress("unused")
+    @JavascriptInterface
+    fun clearFileSyncCredentials() {
+        safeCall("Failed to clear file sync credentials") {
+            BackgroundSyncCredentialStore.clearFileSync(activity)
+            if (!BackgroundSyncCredentialStore.hasAnyCredentials(activity)) {
+                SyncReminderScheduler.cancel(activity)
+            }
+        }
+    }
+
+    /**
+     * Mirrors the reminder settings [com.superproductivity.superproductivity.service.SyncReminderWorker]
+     * must honor when it schedules alarms from synced ops while the app is closed.
+     */
+    @Suppress("unused")
+    @JavascriptInterface
+    fun setBackgroundReminderSettings(isDisabled: Boolean, useAlarmStyle: Boolean) {
+        safeCall("Failed to set background reminder settings") {
+            BackgroundReminderSettingsStore.save(activity, isDisabled, useAlarmStyle)
         }
     }
 

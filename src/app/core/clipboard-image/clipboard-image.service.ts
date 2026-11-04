@@ -2,6 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { IS_ELECTRON } from '../../app.constants';
 import { SnackService } from '../snack/snack.service';
 import { T } from '../../t.const';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import { GlobalConfigService } from '../../features/config/global-config.service';
 import { getDefaultClipboardImagesPath } from '../../util/get-default-clipboard-images-path';
 import { MIME_TYPE_EXTENSIONS } from '../../../../electron/shared-with-frontend/mime-type-mapping.const';

@@ -1,4 +1,10 @@
-import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  ErrorHandler,
+  inject,
+} from '@angular/core';
 import { MatIconButton } from '@angular/material/button';
 import { MatTooltip } from '@angular/material/tooltip';
 import { MatIcon } from '@angular/material/icon';
@@ -13,7 +19,6 @@ import { DateService } from '../../../core/date/date.service';
 import { FocusModeMode } from '../../../features/focus-mode/focus-mode.model';
 import { ProgressCircleComponent } from '../../../ui/progress-circle/progress-circle.component';
 import { MatDialog } from '@angular/material/dialog';
-import { DialogFocusSessionEditComponent } from '../../../features/metric/dialog-focus-session-edit/dialog-focus-session-edit.component';
 import { LongPressDirective } from '../../../ui/longpress/longpress.directive';
 import { first } from 'rxjs/operators';
 
@@ -37,6 +42,7 @@ export class FocusButtonComponent {
   private readonly _configService = inject(GlobalConfigService);
   private readonly _dateService = inject(DateService);
   private readonly _matDialog = inject(MatDialog);
+  private readonly _errorHandler = inject(ErrorHandler);
   readonly focusModeService = inject(FocusModeService);
 
   T: typeof T = T;
@@ -82,12 +88,10 @@ export class FocusButtonComponent {
       const progress = this.progress();
       return typeof progress === 'number' ? Math.min(100, Math.max(0, progress)) : 0;
     }
-    return null;
+    // Flowtime has no end to show progress towards. A static full ring marks
+    // the session; a looping animation would redraw every frame for hours.
+    return 100;
   });
-
-  readonly circleShouldPulse = computed(
-    () => this.circleVisible() && this.mode() === FocusModeMode.Flowtime,
-  );
 
   readonly buttonColor = computed(() => (this.circleVisible() ? 'accent' : undefined));
 
@@ -121,13 +125,18 @@ export class FocusButtonComponent {
       .getMetricForDay$(dayStr)
       .pipe(first())
       .subscribe((metric) => {
-        this._matDialog.open(DialogFocusSessionEditComponent, {
-          restoreFocus: true,
-          data: {
-            day: dayStr,
-            focusSessions: metric.focusSessions ?? [],
-          },
-        });
+        // Loaded on demand; the pages barrel is already a preloaded chunk.
+        import('../../../routes/pages.routes')
+          .then(({ DialogFocusSessionEditComponent }) => {
+            this._matDialog.open(DialogFocusSessionEditComponent, {
+              restoreFocus: true,
+              data: {
+                day: dayStr,
+                focusSessions: metric.focusSessions ?? [],
+              },
+            });
+          })
+          .catch((err) => this._errorHandler.handleError(err));
       });
   }
 }

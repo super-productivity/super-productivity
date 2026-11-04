@@ -1,9 +1,11 @@
-import { inject, Injectable } from '@angular/core';
+import { inject, Injectable, Injector } from '@angular/core';
 import {
   planRegularOpsAfterFullStateUpload,
   planUploadLastServerSeqUpdate,
 } from '@sp/sync-core';
 import { OperationLogStoreService } from '../persistence/operation-log-store.service';
+import { SupersededOperationResolverService } from './superseded-operation-resolver.service';
+import { isReissuableReorder } from './reorder-conflict.util';
 import { LockService } from './lock.service';
 import {
   Operation,
@@ -13,10 +15,16 @@ import {
   extractFullStateFromPayload,
   assertValidFullStatePayload,
   ActionType,
+  isGenesisEntityType,
   isMultiEntityPayload,
 } from '../core/operation.types';
 import { OpLog } from '../../core/log';
-import { LOCK_NAMES, MAX_OPS_PER_UPLOAD_REQUEST } from '../core/operation-log.const';
+import {
+  LOCK_NAMES,
+  MAX_OPS_PER_UPLOAD_REQUEST,
+  DOWNLOAD_PAGE_SIZE,
+  MAX_DOWNLOAD_ITERATIONS,
+} from '../core/operation-log.const';
 import { chunkArray } from '../../util/chunk-array';
 import {
   OperationSyncCapable,
@@ -32,8 +40,9 @@ import {
   UploadOptions,
 } from '../core/types/sync-results.types';
 import { isRetryableUploadError } from '@sp/sync-providers/http';
-import { handleStorageQuotaError } from './sync-error-utils';
+import { getSyncErrorCode, handleStorageQuotaError } from './sync-error-utils';
 import {
+  ClientUpdateRequiredSPError,
   DecryptNoPasswordError,
   EncryptNoPasswordError,
 } from '../core/errors/sync-errors';
@@ -45,6 +54,10 @@ import {
 } from '../../features/config/local-only-sync-settings.util';
 import { isLwwUpdateActionType } from '../core/lww-update-action-types';
 import { StateSnapshotService } from '../backup/state-snapshot.service';
+import { isRebasedTimeDeltaReceipt } from '../persistence/acknowledge-operations.util';
+import { isSyncTimeSpentOp } from './fold-sync-time-spent.util';
+import { RepairOperationService } from '../validation/repair-operation.service';
+import { getRepairSummary } from '../validation/repair-summary.util';
 
 // Re-export for consumers that import from this service
 export type {
@@ -70,6 +83,7 @@ export class OperationLogUploadService {
   private encryptionService = inject(OperationEncryptionService);
   private stateSnapshotService = inject(StateSnapshotService);
   private providerManager = inject(SyncProviderManager);
+  private injector = inject(Injector);
 
   async uploadPendingOps(
     syncProvider: OperationSyncCapable,
@@ -96,6 +110,7 @@ export class OperationLogUploadService {
     let hasMorePiggyback = false;
     let selectedPendingOps: OperationLogEntry[] = [];
     const pendingAcknowledgementSeqs: number[] = [];
+    const pendingAcknowledgementOriginals = new Map<string, Operation>();
     const pendingAcknowledgementSeqSet = new Set<number>();
     const acknowledge = async (seqs: number[]): Promise<void> => {
       if (seqs.length === 0) {
@@ -132,6 +147,10 @@ export class OperationLogUploadService {
     // unsynced, so the caller can report an honest not-in-sync status (not IN_SYNC).
     let encryptionRequiredKeyMissing = false;
     let blockedByRejectedFullState = false;
+    // Set when a full-state op hit a retryable server error (e.g. a Postgres
+    // serialization conflict). The op stays pending, but nothing reached the
+    // server this round, so the caller must not report IN_SYNC.
+    let fullStateUploadDeferred = false;
     let rejectedFullStateBarrierSeq: number | undefined;
 
     await this.lockService.request(LOCK_NAMES.UPLOAD, async () => {
@@ -148,13 +167,33 @@ export class OperationLogUploadService {
         await options.preUploadCallback();
       }
 
+      if (syncProvider.providerMode === 'fileSnapshotOps') {
+        this.providerManager.assertSyncEpochUnchanged(
+          options?.fenceEpoch,
+          'rejected full-state reseed',
+        );
+        await this._reseedRejectedFullStateForFileSync(syncProvider);
+      }
+
       // Fix the pending-op set and the file snapshot under the same operation-log
       // boundary. A task-time action applied by reducers while waiting for this
       // lock remains visible to snapshot projection as an in-flight delta.
       const { pendingOps, localStateSnapshot } = await this.lockService.request(
         LOCK_NAMES.OPERATION_LOG,
         async () => {
-          const capturedPendingOps = await this.opLogStore.getUnsynced();
+          // #10377: a pending note or habit order that crossed an applied
+          // remote op is reissued first; one whose reissue had to wait never
+          // uploads stale, which a file-based provider would accept.
+          let capturedPendingOps = await this.opLogStore.getUnsynced();
+          if (capturedPendingOps.some(({ op }) => isReissuableReorder(op))) {
+            const { created, deferredOpIds } = await this.injector
+              .get(SupersededOperationResolverService)
+              .reissueCrossedPendingReorders();
+            if (created > 0) capturedPendingOps = await this.opLogStore.getUnsynced();
+            capturedPendingOps = capturedPendingOps.filter(
+              ({ op }) => !deferredOpIds.includes(op.id),
+            );
+          }
           return {
             pendingOps: capturedPendingOps,
             localStateSnapshot:
@@ -166,14 +205,9 @@ export class OperationLogUploadService {
       );
       selectedPendingOps = pendingOps;
 
-      const rejectedFullState = await this.opLogStore.getLatestRejectedFullStateOpEntry();
-      const latestActiveFullState = rejectedFullState
-        ? await this.opLogStore.getLatestFullStateOpEntry()
-        : undefined;
-      if (
-        rejectedFullState &&
-        (!latestActiveFullState || latestActiveFullState.seq <= rejectedFullState.seq)
-      ) {
+      const { rejectedFullState, latestActiveFullState, isBlocking } =
+        await this._getRejectedFullStateBarrier();
+      if (rejectedFullState && isBlocking) {
         blockedByRejectedFullState = true;
         OpLog.warn(
           `OperationLogUploadService: Upload remains blocked because rejected ` +
@@ -246,12 +280,22 @@ export class OperationLogUploadService {
         );
       }
 
+      // Genesis ops (MIGRATION / RECOVERY) replay as a no-op on every other
+      // client, so API-based providers never upload them (acknowledged below once
+      // this round's full-state ops are settled). File-based providers keep
+      // uploading them: there the ops upload is what writes the state snapshot,
+      // which a genesis-only client must still do. (#9921)
+      const isGenesisToSkip = (entry: OperationLogEntry): boolean =>
+        syncProvider.providerMode !== 'fileSnapshotOps' &&
+        isGenesisEntityType(entry.op.entityType);
+      const uploadableOps = pendingOps.filter((entry) => !isGenesisToSkip(entry));
+
       // Separate full-state operations (backup imports, repairs) from regular ops
       // Full-state ops are uploaded via snapshot endpoint for better efficiency
-      const fullStateOps = pendingOps.filter((entry) =>
+      const fullStateOps = uploadableOps.filter((entry) =>
         FULL_STATE_OP_TYPES.has(entry.op.opType as OpType),
       );
-      let regularOps = pendingOps.filter(
+      let regularOps = uploadableOps.filter(
         (entry) => !FULL_STATE_OP_TYPES.has(entry.op.opType as OpType),
       );
 
@@ -274,6 +318,7 @@ export class OperationLogUploadService {
       // can order a post-snapshot op BEFORE the full-state op after a clock
       // rollback, which would mark it synced without ever uploading it.
       let lastUploadedFullStateOpSeq: number | undefined;
+      let droppedFullStateOnExists = false;
       for (const entry of fullStateOps) {
         // BACKUP_IMPORT is an explicit restore and intentionally wipes remote
         // history. SYNC_IMPORT only does so when explicitly requested. REPAIR
@@ -323,6 +368,7 @@ export class OperationLogUploadService {
             await this.opLogStore.deleteOpsWhere(
               (logEntry) => logEntry.op.id === entry.op.id,
             );
+            droppedFullStateOnExists = true;
             // Don't count as rejected - this is expected behavior when joining existing group
             continue;
           }
@@ -334,6 +380,7 @@ export class OperationLogUploadService {
               `OperationLogUploadService: Full-state op ${entry.op.id} failed due to network error, will retry: ${result.error}`,
             );
             // Don't mark as rejected - leave as unsynced for retry
+            fullStateUploadDeferred = true;
           } else {
             // Keep the op pending until OperationLogSyncService has processed
             // piggybacked ops and the central rejection handler has classified
@@ -359,6 +406,25 @@ export class OperationLogUploadService {
 
       if (fullStateUploadBlocked) {
         return;
+      }
+
+      // Settle the skipped genesis ops (see isGenesisToSkip) only now: while the
+      // upload was still blocked above, or when this client's own SYNC_IMPORT was
+      // just dropped in favour of a remote one, the pending genesis op is what
+      // makes the incoming-import gate prompt on the next cycle instead of
+      // silently replacing this client's state. (#9921)
+      const genesisSeqs = pendingOps.filter(isGenesisToSkip).map((entry) => entry.seq);
+      if (genesisSeqs.length > 0 && droppedFullStateOnExists) {
+        OpLog.normal(
+          'OperationLogUploadService: Keeping genesis op(s) pending — the local SYNC_IMPORT ' +
+            'was superseded by a remote one.',
+        );
+      } else if (genesisSeqs.length > 0) {
+        OpLog.normal(
+          `OperationLogUploadService: Marking ${genesisSeqs.length} genesis op(s) synced ` +
+            'without uploading them (no receiver on any other client).',
+        );
+        await acknowledge(genesisSeqs);
       }
 
       // Skip regular ops processing if none exist
@@ -458,8 +524,71 @@ export class OperationLogUploadService {
         } catch (err) {
           const message = err instanceof Error ? err.message : 'Unknown error';
           OpLog.error(`OperationLogUploadService: Upload failed: ${message}`);
-          handleStorageQuotaError(message);
+          handleStorageQuotaError(err);
           throw err; // Re-throw to propagate the error
+        }
+
+        const ambiguousDeltas = entries.filter(
+          ({ op }) =>
+            syncProvider.providerMode === 'superSyncOps' &&
+            isSyncTimeSpentOp(op) &&
+            response.results.some(
+              (result) => result.opId === op.id && result.errorCode === 'INVALID_OP_ID',
+            ),
+        );
+        if (ambiguousDeltas.length > 0) {
+          // Conflict resolution can rebase a pending delta after a lost upload
+          // response. Recover only a matching authenticated server receipt;
+          // an id collision or different content must keep the normal error.
+          const originals = new Map<string, Operation>();
+          let sinceSeq = 0;
+          for (let page = 0; page < MAX_DOWNLOAD_ITERATIONS; page++) {
+            const receipt = await syncProvider.downloadOps(
+              sinceSeq,
+              undefined,
+              DOWNLOAD_PAGE_SIZE,
+            );
+            const matches = receipt.ops
+              .map(({ op }) => op)
+              .filter((op) => ambiguousDeltas.some((entry) => entry.op.id === op.id));
+            assertOpsEncryptedWhenExpected(matches, isEncryptionEnabled);
+            const decoded = encryptKey
+              ? await this.encryptionService.decryptOperations(matches, encryptKey)
+              : matches;
+            decoded.forEach((op) => originals.set(op.id, syncOpToOperation(op)));
+            if (!receipt.hasMore || originals.size === ambiguousDeltas.length) break;
+            const nextSeq = receipt.ops.at(-1)?.serverSeq;
+            if (nextSeq === undefined || nextSeq <= sinceSeq)
+              throw new Error('Non-progressing time delta receipt lookup');
+            sinceSeq = nextSeq;
+            if (page === MAX_DOWNLOAD_ITERATIONS - 1)
+              throw new Error('Time delta receipt lookup exceeded the download limit');
+          }
+          const recovered = ambiguousDeltas.filter(({ op }) => {
+            const original = originals.get(op.id);
+            return original && isRebasedTimeDeltaReceipt(op, original);
+          });
+          if (recovered.length > 0) {
+            if (options?.deferAcknowledgement) {
+              for (const { op } of recovered)
+                pendingAcknowledgementOriginals.set(op.id, originals.get(op.id)!);
+            } else {
+              await this.lockService.request(LOCK_NAMES.OPERATION_LOG, async () => {
+                this.providerManager.assertSyncEpochUnchanged(
+                  options?.fenceEpoch,
+                  'time delta receipt',
+                );
+                await this.opLogStore.markSynced(
+                  recovered.map(({ seq }) => seq),
+                  originals,
+                );
+              });
+            }
+            const recoveredIds = new Set(recovered.map(({ op }) => op.id));
+            response.results = response.results.map((result) =>
+              recoveredIds.has(result.opId) ? { ...result, accepted: true } : result,
+            );
+          }
         }
 
         // Mark successfully accepted ops as synced
@@ -614,8 +743,15 @@ export class OperationLogUploadService {
       ...(lastServerSeqToPersist !== undefined ? { lastServerSeqToPersist } : {}),
       ...(encryptionRequiredKeyMissing ? { encryptionRequiredKeyMissing: true } : {}),
       ...(blockedByRejectedFullState ? { blockedByRejectedFullState: true } : {}),
+      ...(fullStateUploadDeferred ? { fullStateUploadDeferred: true } : {}),
       ...(options?.deferAcknowledgement
-        ? { selectedPendingOps, pendingAcknowledgementSeqs }
+        ? {
+            selectedPendingOps,
+            pendingAcknowledgementSeqs,
+            ...(pendingAcknowledgementOriginals.size > 0
+              ? { pendingAcknowledgementOriginals }
+              : {}),
+          }
         : {}),
     };
   }
@@ -806,18 +942,106 @@ export class OperationLogUploadService {
       );
       return response;
     } catch (err) {
+      // The server refused this app version, not this op: turning the error into
+      // a result would classify the full-state op as rejected. Re-throw, as for
+      // a missing encryption key, so it stays pending until the app is updated.
+      if (err instanceof ClientUpdateRequiredSPError) {
+        throw err;
+      }
       const message = err instanceof Error ? err.message : 'Unknown error';
       OpLog.error(`OperationLogUploadService: Snapshot upload failed: ${message}`);
-      handleStorageQuotaError(message);
-
-      // Extract errorCode from error message if present (server returns JSON with errorCode)
-      let errorCode: string | undefined;
-      if (message.includes('SYNC_IMPORT_EXISTS')) {
-        errorCode = 'SYNC_IMPORT_EXISTS';
+      handleStorageQuotaError(err);
+      // #11344/#11352: a file-based remote is plain storage. It cannot judge a
+      // snapshot: the adapter returns its only verdict (REPAIR_STALE) as a
+      // result. A thrown error (auth, permission, a network message the
+      // retryable patterns miss, a target switch) says nothing about the op.
+      // Classifying it as rejected made the snapshot a permanent upload barrier,
+      // so re-throw: the op stays pending and the error reaches the user.
+      if (
+        syncProvider.providerMode === 'fileSnapshotOps' &&
+        !isRetryableUploadError(err instanceof Error ? err : message)
+      ) {
+        throw err;
       }
+
+      const errorCode = getSyncErrorCode(err) ?? this._getLegacyErrorCode(message);
 
       return { accepted: false, error: message, errorCode };
     }
+  }
+
+  /**
+   * The newest rejected local full-state op blocks uploads until a newer
+   * full-state op (higher local seq) supersedes it.
+   */
+  private async _getRejectedFullStateBarrier(): Promise<{
+    rejectedFullState?: OperationLogEntry;
+    latestActiveFullState?: OperationLogEntry;
+    isBlocking: boolean;
+  }> {
+    const rejectedFullState = await this.opLogStore.getLatestRejectedFullStateOpEntry();
+    if (!rejectedFullState) {
+      return { isBlocking: false };
+    }
+    const latestActiveFullState = await this.opLogStore.getLatestFullStateOpEntry();
+    return {
+      rejectedFullState,
+      latestActiveFullState,
+      isBlocking:
+        !latestActiveFullState || latestActiveFullState.seq <= rejectedFullState.seq,
+    };
+  }
+
+  /**
+   * #11352: a file-based remote is plain storage and never rejects a full-state
+   * op on its merits (its only verdict, REPAIR_STALE, is rebased, not kept as a
+   * rejection). A rejection found here is a misclassified upload error from an
+   * older version (#11344), and without a newer full-state op it blocks every
+   * later upload for good. Replace it with a REPAIR of the current state, which
+   * includes every later local change and every remote op applied since. The
+   * adapter writes a REPAIR only on the remote rev this client last downloaded
+   * and applied, so a remote that moved on is not overwritten: it answers
+   * REPAIR_STALE and the shared rebase path downloads first.
+   * A rejected BACKUP_IMPORT or SYNC_IMPORT becomes a REPAIR too: its result is
+   * already in the local state, but receivers replay concurrent work on top
+   * instead of dropping it, since the import never reached them as one.
+   */
+  private async _reseedRejectedFullStateForFileSync(
+    syncProvider: OperationSyncCapable,
+  ): Promise<void> {
+    const { rejectedFullState, isBlocking } = await this._getRejectedFullStateBarrier();
+    if (!rejectedFullState || !isBlocking) {
+      return;
+    }
+    const lastServerSeq = await syncProvider.getLastServerSeq();
+    // On a first connect, ServerMigrationService (run just before) owns this op:
+    // it seeds again, or the user declined to overwrite a non-empty remote (#11344).
+    if (
+      lastServerSeq === 0 &&
+      rejectedFullState.op.syncImportReason === 'SERVER_MIGRATION'
+    ) {
+      return;
+    }
+    OpLog.warn(
+      `OperationLogUploadService: Rejected ${rejectedFullState.op.opType} ` +
+        `${rejectedFullState.op.id} blocks file-based uploads; replacing it with a ` +
+        'REPAIR of the current state.',
+    );
+    await this.injector.get(RepairOperationService).rebaseStaleRepair({
+      staleRepairOpId: rejectedFullState.op.id,
+      repairSummary:
+        getRepairSummary(rejectedFullState.op.payload) ??
+        RepairOperationService.createEmptyRepairSummary(),
+      clientId: rejectedFullState.op.clientId,
+      repairBaseServerSeq: lastServerSeq,
+    });
+  }
+
+  private _getLegacyErrorCode(message: string): string | undefined {
+    if (message.includes('SYNC_IMPORT_EXISTS')) {
+      return 'SYNC_IMPORT_EXISTS';
+    }
+    return undefined;
   }
 
   /**

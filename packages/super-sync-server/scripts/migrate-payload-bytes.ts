@@ -138,8 +138,8 @@ const run = async (): Promise<void> => {
     // Backfill then reconcile, per user — and a cancel in the gap between them is not
     // recoverable by re-running. The user has no unbackfilled rows left, so
     // fetchUserIdsWithUnbackfilledRows never returns them again and their
-    // storage_used_bytes stays stale; assertPayloadBytesBackfillComplete cannot see it
-    // either, since it only reads `operations`. Recover by calling
+    // storage_used_bytes stays stale — nothing that only reads `operations`
+    // can detect it. Recover by calling
     // reconcileUserStorageUsage for those ids directly.
     for (const userId of userIds) {
       updated += await backfillUser(userId, batchSize);

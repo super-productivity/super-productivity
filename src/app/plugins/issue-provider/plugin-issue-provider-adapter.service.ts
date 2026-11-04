@@ -23,6 +23,19 @@ import { sortTagLabels } from './plugin-tag-utils';
 import { getDbDateStr } from '../../util/get-db-date-str';
 import { T } from '../../t.const';
 import { PluginLog } from '../../core/log';
+import { withPluginOAuthTokenKey } from '../oauth/plugin-oauth-token-key.util';
+
+// Same shape as short-syntax-shared.reducer.ts: Task's fields are readonly,
+// so a partial that fields can be deleted from needs the modifier stripped.
+type MutableTaskChanges = { -readonly [K in keyof Task]?: Task[K] };
+
+const DEFAULT_DONE_STATES = ['closed', 'done', 'completed', 'resolved'];
+
+interface FreshTaskData {
+  task: Task;
+  taskChanges: Partial<Task>;
+  issue: IssueData;
+}
 
 @Injectable({ providedIn: 'root' })
 export class PluginIssueProviderAdapterService implements IssueServiceInterface {
@@ -60,7 +73,10 @@ export class PluginIssueProviderAdapterService implements IssueServiceInterface 
         `[PluginIssueAdapter] testConnection failed for ${pluginCfg.issueProviderKey}:`,
         e,
       );
-      return false;
+      // Rethrow rather than collapsing to `false`: the only caller is the provider
+      // dialog's Test connection button, and swallowing the reason left every
+      // plugin provider with nothing to show but "Connection failed" (#9635).
+      throw e;
     }
   }
 
@@ -207,52 +223,7 @@ export class PluginIssueProviderAdapterService implements IssueServiceInterface 
         cfg.pluginConfig,
         resolved.http,
       );
-      if (!issue) {
-        return null;
-      }
-
-      // Check if the issue state indicates remote deletion
-      const deletedStates = resolved.provider.definition.deletedStates;
-      if (deletedStates?.length && issue.state) {
-        const stateLower = issue.state.toLowerCase();
-        if (deletedStates.some((s) => s.toLowerCase() === stateLower)) {
-          this._handleRemoteDeletion(task);
-          return null;
-        }
-      }
-
-      const isUpdated =
-        issue.lastUpdated != null && issue.lastUpdated > (task.issueLastUpdated || 0);
-      if (isUpdated) {
-        // Compute sync values once and pass through to avoid redundant calls
-        const issueLastSyncedValues = this._extractSyncValues(issue, resolved.provider);
-        const addTaskData = this._getAddTaskDataForProvider(
-          issue,
-          resolved.provider,
-          issueLastSyncedValues,
-        );
-
-        // Apply field mappings to pull changes from issue to task
-        const fieldChanges = this._applyFieldMappingPull(
-          resolved.provider,
-          issueLastSyncedValues,
-          task,
-          cfg,
-          issue,
-        );
-
-        return {
-          taskChanges: {
-            ...addTaskData,
-            ...fieldChanges,
-            issueWasUpdated: true,
-            issueLastSyncedValues,
-          },
-          issue,
-          issueTitle: issue.title,
-        };
-      }
-      return null;
+      return issue ? this._toFreshData(task, issue, cfg, resolved) : null;
     } catch (e) {
       // Detect 404 = issue deleted remotely
       if (e instanceof HttpErrorResponse && (e.status === 404 || e.status === 410)) {
@@ -267,17 +238,57 @@ export class PluginIssueProviderAdapterService implements IssueServiceInterface 
     }
   }
 
-  async getFreshDataForIssueTasks(
-    tasks: Task[],
-  ): Promise<{ task: Task; taskChanges: Partial<Task>; issue: IssueData }[]> {
-    const results: { task: Task; taskChanges: Partial<Task>; issue: IssueData }[] = [];
+  async getFreshDataForIssueTasks(tasks: Task[]): Promise<FreshTaskData[]> {
+    const results: FreshTaskData[] = [];
+    const tasksByProviderId = new Map<string, Task[]>();
     for (const task of tasks) {
-      const result = await this.getFreshDataForIssueTask(task);
-      if (result) {
-        results.push({ task, taskChanges: result.taskChanges, issue: result.issue });
+      if (task.issueProviderId && task.issueId) {
+        const group = tasksByProviderId.get(task.issueProviderId) ?? [];
+        group.push(task);
+        tasksByProviderId.set(task.issueProviderId, group);
       }
     }
+    for (const [issueProviderId, group] of tasksByProviderId) {
+      results.push(...(await this._getFreshDataForProviderTasks(issueProviderId, group)));
+    }
     return results;
+  }
+
+  private async _getFreshDataForProviderTasks(
+    issueProviderId: string,
+    tasks: Task[],
+  ): Promise<FreshTaskData[]> {
+    const cfg = await this._getCfg(issueProviderId);
+    const resolved = cfg && this._resolve(cfg);
+    const getByIds = resolved?.provider.definition.getByIds;
+    if (!cfg || !resolved || !getByIds) {
+      const results: FreshTaskData[] = [];
+      for (const task of tasks) {
+        const result = await this.getFreshDataForIssueTask(task);
+        if (result) {
+          results.push({ task, taskChanges: result.taskChanges, issue: result.issue });
+        }
+      }
+      return results;
+    }
+    try {
+      const ids = [...new Set(tasks.map((task) => task.issueId as string))];
+      const issues = await getByIds(ids, cfg.pluginConfig, resolved.http);
+      const issuesById = new Map(issues.map((issue) => [String(issue.id), issue]));
+      return tasks.flatMap((task) => {
+        const issue = issuesById.get(task.issueId as string);
+        const result = issue && this._toFreshData(task, issue, cfg, resolved);
+        return result
+          ? [{ task, taskChanges: result.taskChanges, issue: result.issue }]
+          : [];
+      });
+    } catch (e) {
+      PluginLog.err(
+        `[PluginIssueAdapter] getByIds failed for ${cfg.issueProviderKey}:`,
+        e,
+      );
+      return [];
+    }
   }
 
   async getNewIssuesToAddToBacklog(
@@ -327,6 +338,85 @@ export class PluginIssueProviderAdapterService implements IssueServiceInterface 
     return cfg as unknown as IssueProviderPluginType;
   }
 
+  private _toFreshData(
+    task: Task,
+    issue: PluginIssue,
+    cfg: IssueProviderPluginType,
+    resolved: { provider: RegisteredPluginIssueProvider },
+  ): { taskChanges: Partial<Task>; issue: IssueData; issueTitle: string } | null {
+    // Check if the issue state indicates remote deletion
+    const deletedStates = resolved.provider.definition.deletedStates;
+    if (deletedStates?.length && issue.state) {
+      const stateLower = issue.state.toLowerCase();
+      if (deletedStates.some((s) => s.toLowerCase() === stateLower)) {
+        this._handleRemoteDeletion(task);
+        return null;
+      }
+    }
+
+    const isUpdated =
+      issue.lastUpdated != null && issue.lastUpdated > (task.issueLastUpdated || 0);
+    if (isUpdated) {
+      // Compute sync values once and pass through to avoid redundant calls
+      const issueLastSyncedValues = this._extractSyncValues(issue, resolved.provider);
+
+      // _buildBaseIssueTask emits content fields — title, isDone, and a due
+      // date when the issue carries one — straight from the raw issue. Two
+      // of them must not survive into a refresh:
+      //
+      // A field mapping declares OWNERSHIP of its task field. Where one
+      // exists, _applyFieldMappingPull is the only writer, because it alone
+      // honours the per-field sync direction and "the remote changed this
+      // since the last sync". Letting base through underneath it is what
+      // overwrote a field the user had set to `off`/`pushOnly` — and with the
+      // RAW value, skipping the mapping's toTaskValue, so a GitHub title also
+      // lost the `#123 ` prefix it had before. Where NO mapping exists there
+      // is no direction to violate, so base stays the fallback and the task
+      // keeps following the issue as it always has.
+      //
+      // Due dates are dropped either way: they are set on task creation and
+      // never re-pulled, so a refresh cannot reschedule what the user has
+      // planned. Same rule as BaseIssueProviderService.getFreshDataForIssueTask.
+      const baseTaskData: MutableTaskChanges = this._buildBaseIssueTask(
+        issue,
+        resolved.provider.definition.doneStates,
+      );
+      delete baseTaskData.dueDay;
+      delete baseTaskData.dueWithTime;
+      // Completion is only re-pulled from a provider that declares what done
+      // means. Without doneStates the default word list is a guess, and a
+      // calendar's 'confirmed' would reopen a task the user completed (#9905);
+      // no state means the issue says nothing about done-ness (e.g. Redmine).
+      if (!issue.state || !resolved.provider.definition.doneStates?.length) {
+        delete baseTaskData.isDone;
+      }
+      for (const mapping of resolved.provider.definition.fieldMappings ?? []) {
+        delete baseTaskData[mapping.taskField];
+      }
+
+      // Apply field mappings to pull changes from issue to task
+      const fieldChanges = this._applyFieldMappingPull(
+        resolved.provider,
+        issueLastSyncedValues,
+        task,
+        cfg,
+        issue,
+      );
+
+      return {
+        taskChanges: {
+          ...baseTaskData,
+          ...fieldChanges,
+          issueWasUpdated: true,
+          issueLastSyncedValues,
+        },
+        issue,
+        issueTitle: issue.title,
+      };
+    }
+    return null;
+  }
+
   private _resolve(cfg: IssueProviderPluginType):
     | {
         provider: RegisteredPluginIssueProvider;
@@ -337,8 +427,13 @@ export class PluginIssueProviderAdapterService implements IssueServiceInterface 
     if (!provider) {
       return undefined;
     }
+    const pluginConfig = withPluginOAuthTokenKey(
+      provider.pluginId,
+      cfg.pluginConfig,
+      cfg.id,
+    );
     const http = this._pluginHttp.createHttpHelper(
-      () => provider.definition.getHeaders(cfg.pluginConfig),
+      () => provider.definition.getHeaders(pluginConfig),
       { allowPrivateNetwork: provider.allowPrivateNetwork },
     );
     return { provider, http };
@@ -394,6 +489,12 @@ export class PluginIssueProviderAdapterService implements IssueServiceInterface 
     return result;
   }
 
+  /**
+   * Maps issue fields onto task fields for the IMPORT path only, where there is
+   * no local content to protect and every mapping applies. Refreshing an
+   * existing task goes through `_applyFieldMappingPull` instead, which honours
+   * the per-field sync direction.
+   */
   private _extractTaskFieldsFromIssueWithSyncValues(
     issue: PluginIssue,
     provider: RegisteredPluginIssueProvider,
@@ -430,7 +531,7 @@ export class PluginIssueProviderAdapterService implements IssueServiceInterface 
     syncValues: Record<string, unknown>,
   ): IssueTask {
     const data = issueData as PluginIssue;
-    const base = this._buildBaseIssueTask(data);
+    const base = this._buildBaseIssueTask(data, provider.definition.doneStates);
     const fieldValues = this._extractTaskFieldsFromIssueWithSyncValues(
       data,
       provider,
@@ -439,8 +540,8 @@ export class PluginIssueProviderAdapterService implements IssueServiceInterface 
     return { ...base, ...fieldValues } as IssueTask;
   }
 
-  private _buildBaseIssueTask(data: PluginIssue): IssueTask {
-    const isDone = this._computeIsDone(data);
+  private _buildBaseIssueTask(data: PluginIssue, doneStates?: string[]): IssueTask {
+    const isDone = this._computeIsDone(data, doneStates);
     const raw = data as Record<string, unknown>;
     const dueWithTime =
       typeof raw['dueWithTime'] === 'number' ? (raw['dueWithTime'] as number) : undefined;
@@ -464,12 +565,12 @@ export class PluginIssueProviderAdapterService implements IssueServiceInterface 
     };
   }
 
-  private _computeIsDone(issue: PluginIssue): boolean {
+  private _computeIsDone(issue: PluginIssue, doneStates?: string[]): boolean {
     const state = issue.state?.toLowerCase();
     if (!state) {
       return false;
     }
-    return ['closed', 'done', 'completed', 'resolved'].includes(state);
+    return (doneStates ?? DEFAULT_DONE_STATES).some((s) => s.toLowerCase() === state);
   }
 
   private _handleRemoteDeletion(requestedTask: Task): void {

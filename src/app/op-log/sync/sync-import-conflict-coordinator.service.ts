@@ -14,6 +14,8 @@ import {
   ForceUploadPendingOpsError,
 } from '../core/errors/sync-errors';
 import { OperationLogStoreService } from '../persistence/operation-log-store.service';
+import { SyncLocalStateService } from './sync-local-state.service';
+import { OperationLogDownloadService } from './operation-log-download.service';
 
 type SyncImportConflictActions = {
   useLocal: () => Promise<ForceUploadResult>;
@@ -32,6 +34,8 @@ export class SyncImportConflictCoordinatorService {
   private serverMigrationService = inject(ServerMigrationService);
   private uploadService = inject(OperationLogUploadService);
   private opLogStore = inject(OperationLogStoreService);
+  private syncLocalStateService = inject(SyncLocalStateService);
+  private downloadService = inject(OperationLogDownloadService);
 
   async handleSyncImportConflict(
     dialogData: SyncImportConflictData,
@@ -43,6 +47,12 @@ export class SyncImportConflictCoordinatorService {
 
     switch (resolution) {
       case 'USE_LOCAL':
+        // #9256: the force upload deletes remote ops this device could not
+        // decrypt (a kept prefix can raise this dialog); declining is CANCEL.
+        if (!this.syncLocalStateService.confirmOverwriteOfUndecryptableRemoteOps()) {
+          OpLog.normal(`${logPrefix}: USE_LOCAL declined over undecryptable remote ops.`);
+          return 'CANCEL';
+        }
         OpLog.normal(`${logPrefix}: User chose USE_LOCAL. Force uploading local state.`);
         if ((await actions.useLocal()).hasUnresolvedOps) {
           throw new ForceUploadPendingOpsError(
@@ -70,7 +80,7 @@ export class SyncImportConflictCoordinatorService {
       'SyncImportConflictCoordinatorService: Force uploading local state - creating SYNC_IMPORT to override remote.',
     );
 
-    const forceUploadOpId = await this.serverMigrationService.handleServerMigration(
+    const migrationOutcome = await this.serverMigrationService.handleServerMigration(
       syncProvider,
       {
         skipServerEmptyCheck: true,
@@ -78,11 +88,14 @@ export class SyncImportConflictCoordinatorService {
       },
     );
 
-    if (!forceUploadOpId) {
+    // FORCE_UPLOAD never reuses a pending SERVER_MIGRATION import, so anything
+    // but `created` means no SYNC_IMPORT exists to force-upload.
+    if (migrationOutcome.kind !== 'created') {
       throw new ForceUploadFailedError(
         'Force upload failed because no SYNC_IMPORT was created.',
       );
     }
+    const forceUploadOpId = migrationOutcome.opId;
 
     const uploadResult = await this.uploadService.uploadPendingOps(syncProvider, {
       skipPiggybackProcessing: true,
@@ -102,6 +115,8 @@ export class SyncImportConflictCoordinatorService {
       );
     }
 
+    // The clean slate deleted the server ops this device could not decrypt.
+    this.downloadService.clearUndecryptableRemoteOps();
     OpLog.normal('SyncImportConflictCoordinatorService: Force upload complete.');
     return { hasUnresolvedOps: uploadResult.rejectedCount > 0 };
   }

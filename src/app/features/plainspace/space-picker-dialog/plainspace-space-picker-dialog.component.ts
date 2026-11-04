@@ -11,6 +11,7 @@ import { MatFormField, MatLabel } from '@angular/material/form-field';
 import { MatSelect } from '@angular/material/select';
 import { MatOption } from '@angular/material/core';
 import { MatButton } from '@angular/material/button';
+import { MatIcon } from '@angular/material/icon';
 import { TranslatePipe } from '@ngx-translate/core';
 import { firstValueFrom } from 'rxjs';
 import { T } from '../../../t.const';
@@ -21,6 +22,7 @@ import {
   PlainspaceSpace,
 } from '../../issue/providers/plainspace/plainspace-api.service';
 import { DEFAULT_PLAINSPACE_CFG } from '../../issue/providers/plainspace/plainspace-cfg-form.const';
+import { DIALOG_AUTO_FOCUS_TYPING } from '../../../util/dialog-auto-focus';
 
 /** What the user chose: link one of their existing spaces, or create a new one. */
 export type PlainspaceSpaceChoice =
@@ -53,6 +55,7 @@ export type PlainspaceSpaceChoice =
     MatSelect,
     MatOption,
     MatButton,
+    MatIcon,
     TranslatePipe,
   ],
 })
@@ -66,6 +69,10 @@ export class PlainspaceSpacePickerDialogComponent {
   private _matDialog = inject(MatDialog);
 
   readonly T = T;
+  // Where shared task data is stored, named in the data notice.
+  readonly hostLabel = (this._accountService.host() ?? DEFAULT_PLAINSPACE_CFG.host ?? '')
+    .replace(/^https?:\/\//, '')
+    .replace(/\/+$/, '');
   readonly spaces = signal<PlainspaceSpace[]>([]);
   readonly isLoading = signal(true);
   readonly hasError = signal(false);
@@ -90,6 +97,11 @@ export class PlainspaceSpacePickerDialogComponent {
     this._dialogRef.close();
   }
 
+  disconnect(): void {
+    this._accountService.logout();
+    this._dialogRef.close();
+  }
+
   /**
    * Recovery for a stale/revoked token: opens the guided connect dialog (which
    * validates and stores a fresh token), then retries loading the spaces.
@@ -98,11 +110,12 @@ export class PlainspaceSpacePickerDialogComponent {
     const reconnected = await firstValueFrom(
       this._matDialog
         .open(PlainspaceConnectDialogComponent, {
+          autoFocus: DIALOG_AUTO_FOCUS_TYPING,
           data: { host: this._accountService.host() },
         })
         .afterClosed(),
     );
-    if (reconnected === true) {
+    if (reconnected) {
       await this._loadSpaces();
     }
   }

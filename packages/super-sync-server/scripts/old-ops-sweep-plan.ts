@@ -65,7 +65,9 @@ export const affectedUsers = (rows: PerUserRow[]): PerUserRow[] =>
  * Boundary resolution mirrors production (storage-quota.service.ts): the newest
  * causal full-state op with server_seq > 1 authorizes pruning; while a cached
  * snapshot blob exists the boundary may not pass last_snapshot_seq and drops to
- * the newest causal full-state op at or below that cursor. The
+ * the newest causal full-state op at or below that cursor. If its prefix has
+ * recent operations, use the newest causal boundary at or before the lowest
+ * recent sequence instead (#9962); a boundary itself may still be recent. The
  * latest_full_state_seq marker is not consulted (stale for ~90% of users, no
  * backfill in #8973).
  */
@@ -79,6 +81,7 @@ export const fetchOldOpsSweepPlan = (
         o.user_id,
         count(*) AS op_count,
         max(o.received_at) AS last_received_at,
+        min(o.server_seq) FILTER (WHERE o.received_at >= ${cutoff}) AS first_fresh_seq,
         max(o.server_seq) FILTER (
           WHERE o.server_seq > 1 AND ${causalFullStateSql('o')}
         ) AS causal_boundary_seq,
@@ -114,10 +117,8 @@ export const fetchOldOpsSweepPlan = (
         ) AS was_capped
       FROM joined j
     ),
-    -- MATERIALIZED is already the default here (two CTE references below), so
-    -- this only pins it: an edit that leaves a single reference must not let
-    -- Postgres inline the correlated cap aggregate and re-run it per row.
-    resolved AS MATERIALIZED (
+    -- Resolve the cached-blob cap once before the retention fallback.
+    snapshot_resolved AS MATERIALIZED (
       SELECT
         c.*,
         CASE WHEN c.was_capped THEN (
@@ -127,6 +128,17 @@ export const fetchOldOpsSweepPlan = (
             AND ${causalFullStateSql('o')}
         ) ELSE c.causal_boundary_seq END AS protected_from_seq
       FROM capped c
+    ),
+    resolved AS MATERIALIZED (
+      SELECT s.*,
+        CASE WHEN s.first_fresh_seq < s.protected_from_seq THEN COALESCE((
+          SELECT max(o.server_seq) FROM operations o
+          WHERE o.user_id = s.user_id
+            AND o.server_seq > 1
+            AND o.server_seq <= s.first_fresh_seq
+            AND ${causalFullStateSql('o')}
+        ), s.protected_from_seq) ELSE s.protected_from_seq END AS aged_boundary_seq
+      FROM snapshot_resolved s
     ),
     -- Only the prefix ranges are joined, so retained_from_boundary can be
     -- derived from op_count and the largest of the three ranges is never
@@ -141,8 +153,8 @@ export const fetchOldOpsSweepPlan = (
       FROM operations o
       JOIN resolved r
         ON r.user_id = o.user_id
-        AND r.protected_from_seq > 1
-        AND o.server_seq < r.protected_from_seq
+        AND r.aged_boundary_seq > 1
+        AND o.server_seq < r.aged_boundary_seq
       GROUP BY r.user_id
     )
     SELECT
@@ -155,13 +167,13 @@ export const fetchOldOpsSweepPlan = (
       r.has_legacy_repair,
       r.has_plaintext_rows,
       r.was_capped,
-      r.protected_from_seq,
+      r.aged_boundary_seq AS protected_from_seq,
       -- No CASE needed: the counts join filters protected_from_seq > 1, so a
       -- non-prunable user has no row there and COALESCE already yields 0.
       COALESCE(ct.would_delete, 0) AS would_delete,
       COALESCE(ct.fresh_prefix, 0) AS fresh_prefix,
       -- This one DOES need the CASE — op_count - 0 - 0 is op_count, not 0.
-      CASE WHEN r.protected_from_seq > 1
+      CASE WHEN r.aged_boundary_seq > 1
         THEN r.op_count - COALESCE(ct.would_delete, 0) - COALESCE(ct.fresh_prefix, 0)
         ELSE 0 END AS retained_from_boundary
     FROM resolved r

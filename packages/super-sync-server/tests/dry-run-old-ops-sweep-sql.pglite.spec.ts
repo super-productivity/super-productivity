@@ -80,7 +80,7 @@ const SCHEMA = `
   );
   CREATE UNIQUE INDEX operations_user_id_server_seq_key
     ON operations (user_id, server_seq);
-  CREATE INDEX operations_user_id_received_at_idx ON operations (user_id, received_at);
+  CREATE INDEX operations_user_id_received_at_server_seq_idx ON operations (user_id, received_at, server_seq);
   CREATE INDEX operations_user_id_full_state_server_seq_idx
     ON operations (user_id, server_seq)
     WHERE op_type IN ('SYNC_IMPORT', 'BACKUP_IMPORT', 'REPAIR');

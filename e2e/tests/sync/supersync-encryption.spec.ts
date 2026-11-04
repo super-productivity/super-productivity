@@ -1,12 +1,19 @@
 import { test, expect } from '../../fixtures/supersync.fixture';
+import { translationText } from '../../utils/i18n-strings';
 import {
   createTestUser,
   getSuperSyncConfig,
   createSimulatedClient,
   closeClient,
   waitForTask,
+  isFullStateOpType,
   type SimulatedE2EClient,
 } from '../../utils/supersync-helpers';
+import {
+  getLocalOpIds,
+  getServerOperations,
+  recordOpsUploads,
+} from '../../utils/audit-import-encryption-helpers';
 import { expectConsistentState, expectTaskCount } from '../../utils/supersync-assertions';
 import { expectNoGlobalError } from '../../utils/assertions';
 
@@ -25,57 +32,6 @@ import { expectNoGlobalError } from '../../utils/assertions';
  */
 
 test.describe('@supersync SuperSync Encryption', () => {
-  // Server health check is handled automatically by the supersync fixture
-
-  test('Encrypted data syncs correctly with valid password', async ({
-    browser,
-    baseURL,
-    testRunId,
-    serverHealthy,
-  }) => {
-    void serverHealthy; // Ensure fixture is evaluated for server health check
-    let clientA: SimulatedE2EClient | null = null;
-    let clientB: SimulatedE2EClient | null = null;
-
-    try {
-      const user = await createTestUser(testRunId);
-      const baseConfig = getSuperSyncConfig(user);
-      const encryptionPassword = `pass-${testRunId}`;
-      const syncConfig = {
-        ...baseConfig,
-        isEncryptionEnabled: true,
-        password: encryptionPassword,
-      };
-
-      // --- Client A: Encrypt & Upload ---
-      clientA = await createSimulatedClient(browser, baseURL!, 'A', testRunId);
-      await clientA.sync.setupSuperSync(syncConfig);
-
-      const secretTaskName = `SecretTask-${testRunId}`;
-      await clientA.workView.addTask(secretTaskName);
-
-      // Sync A (Encrypts and uploads)
-      await clientA.sync.syncAndWait();
-
-      // --- Client B: Download & Decrypt ---
-      clientB = await createSimulatedClient(browser, baseURL!, 'B', testRunId);
-      // Use SAME config (same password)
-      await clientB.sync.setupSuperSync(syncConfig);
-
-      // Sync B (Downloads and decrypts)
-      await clientB.sync.syncAndWait();
-
-      // Verify B has the task
-      await waitForTask(clientB.page, secretTaskName);
-      await expect(
-        clientB.page.locator(`task:has-text("${secretTaskName}")`),
-      ).toBeVisible();
-    } finally {
-      if (clientA) await closeClient(clientA);
-      if (clientB) await closeClient(clientB);
-    }
-  });
-
   test('Encrypted data fails to sync with wrong password', async ({
     browser,
     baseURL,
@@ -131,7 +87,9 @@ test.describe('@supersync SuperSync Encryption', () => {
       // The decrypt error dialog itself IS the error indicator.
       // Verify it contains the expected error heading.
       await expect(
-        decryptErrorDialog.locator('h2:has-text("Decryption Failed")'),
+        decryptErrorDialog.locator('h2', {
+          hasText: translationText('F.SYNC.D_DECRYPT_ERROR.TITLE'),
+        }),
       ).toBeVisible();
 
       // Close the dialog
@@ -173,6 +131,9 @@ test.describe('@supersync SuperSync Encryption', () => {
 
       // --- Client A: create tasks BEFORE any sync/encryption is configured ---
       clientA = await createSimulatedClient(browser, baseURL!, 'A', testRunId);
+      // Every op A ever sends, recorded from the request body (before the
+      // server can accept or reject it).
+      const uploadsA = await recordOpsUploads(clientA.page);
       await clientA.workView.waitForTaskList();
 
       const task1 = `Pre1-${testRunId}`;
@@ -183,6 +144,9 @@ test.describe('@supersync SuperSync Encryption', () => {
       await clientA.workView.addTask(task2);
       await clientA.page.waitForTimeout(100);
       await clientA.workView.addTask(task3);
+      await waitForTask(clientA.page, task3);
+      const preExistingOpIds = await getLocalOpIds(clientA.page);
+      expect(preExistingOpIds.length).toBeGreaterThan(0);
 
       // First-time encrypted setup runs with the tasks already present.
       await clientA.sync.setupSuperSync(syncConfig);
@@ -193,6 +157,30 @@ test.describe('@supersync SuperSync Encryption', () => {
       await expectTaskCount(clientA, 3);
       await expectNoGlobalError(clientA.page);
 
+      // GHSA-9v8x: no op ever left A unencrypted, and the pre-existing ops
+      // were subsumed by the enable-snapshot instead of being uploaded.
+      expect(uploadsA.unreadableBodies, 'every upload body was readable').toBe(0);
+      expect(uploadsA.snapshots.length, 'A uploaded the enable-snapshot').toBeGreaterThan(
+        0,
+      );
+      expect(
+        uploadsA.snapshots.filter((snap) => snap.isPayloadEncrypted !== true),
+        'every uploaded snapshot is encrypted',
+      ).toEqual([]);
+      expect(
+        uploadsA.ops.filter((op) => preExistingOpIds.includes(op.id)),
+        'no pre-existing op is uploaded on top of the snapshot',
+      ).toEqual([]);
+      const serverOps = await getServerOperations(user.userId);
+      expect(
+        serverOps.filter((op) => isFullStateOpType(op.opType)),
+        'the server holds exactly one full-state op (the enable-snapshot)',
+      ).toHaveLength(1);
+      expect(
+        serverOps.filter((op) => preExistingOpIds.includes(op.id)),
+        'no pre-existing op is stored on the server',
+      ).toEqual([]);
+
       // --- Client B: same password → must receive exactly the 3 tasks ---
       clientB = await createSimulatedClient(browser, baseURL!, 'B', testRunId);
       await clientB.sync.setupSuperSync(syncConfig);
@@ -202,6 +190,18 @@ test.describe('@supersync SuperSync Encryption', () => {
       await expectConsistentState([clientA, clientB], [task1, task2, task3]);
       await expectTaskCount(clientB, 3);
       await expectNoGlobalError(clientB.page);
+
+      // A regular op after setup must be encrypted too. A creates one, so the
+      // check below cannot pass on an empty list.
+      const task4 = `Post-${testRunId}`;
+      await clientA.workView.addTask(task4);
+      await clientA.sync.syncAndWait();
+      expect(uploadsA.unreadableBodies, 'every upload body was readable').toBe(0);
+      expect(uploadsA.ops.length, 'A uploaded regular ops').toBeGreaterThan(0);
+      expect(
+        uploadsA.ops.filter((op) => op.isPayloadEncrypted !== true),
+        'every uploaded regular op is encrypted',
+      ).toEqual([]);
     } finally {
       if (clientA) await closeClient(clientA);
       if (clientB) await closeClient(clientB);
@@ -313,61 +313,6 @@ test.describe('@supersync SuperSync Encryption', () => {
       await expect(clientA.page.locator(`task:has-text("${taskFromB}")`)).toBeVisible();
       await expect(clientB.page.locator(`task:has-text("${taskFromA}")`)).toBeVisible();
       await expect(clientB.page.locator(`task:has-text("${taskFromB}")`)).toBeVisible();
-    } finally {
-      if (clientA) await closeClient(clientA);
-      if (clientB) await closeClient(clientB);
-    }
-  });
-
-  test('Task update syncs correctly with encryption', async ({
-    browser,
-    baseURL,
-    testRunId,
-    serverHealthy,
-  }) => {
-    void serverHealthy; // Ensure fixture is evaluated for server health check
-    let clientA: SimulatedE2EClient | null = null;
-    let clientB: SimulatedE2EClient | null = null;
-
-    try {
-      const user = await createTestUser(testRunId);
-      const baseConfig = getSuperSyncConfig(user);
-      const encryptionPassword = `update-${testRunId}`;
-      const syncConfig = {
-        ...baseConfig,
-        isEncryptionEnabled: true,
-        password: encryptionPassword,
-      };
-
-      // --- Client A: Create a task ---
-      clientA = await createSimulatedClient(browser, baseURL!, 'A', testRunId);
-      await clientA.sync.setupSuperSync(syncConfig);
-
-      const taskName = `UpdatableTask-${testRunId}`;
-      await clientA.workView.addTask(taskName);
-      await clientA.page.waitForTimeout(300);
-      await clientA.sync.syncAndWait();
-
-      // --- Client B: Sync and verify task exists ---
-      clientB = await createSimulatedClient(browser, baseURL!, 'B', testRunId);
-      await clientB.sync.setupSuperSync(syncConfig);
-      await clientB.sync.syncAndWait();
-
-      await waitForTask(clientB.page, taskName);
-      await expect(clientB.page.locator(`task:has-text("${taskName}")`)).toBeVisible();
-
-      // --- Client B: Create another task ---
-      const task2Name = `UpdatedByB-${testRunId}`;
-      await clientB.workView.addTask(task2Name);
-      await clientB.page.waitForTimeout(300);
-      await clientB.sync.syncAndWait();
-
-      // --- Client A: Sync and verify both tasks exist ---
-      await clientA.sync.syncAndWait();
-      await waitForTask(clientA.page, task2Name);
-
-      await expect(clientA.page.locator(`task:has-text("${taskName}")`)).toBeVisible();
-      await expect(clientA.page.locator(`task:has-text("${task2Name}")`)).toBeVisible();
     } finally {
       if (clientA) await closeClient(clientA);
       if (clientB) await closeClient(clientB);

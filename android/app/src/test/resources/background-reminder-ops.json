@@ -1,0 +1,379 @@
+[
+  {
+    "name": "scheduleTaskWithTime",
+    "expectSchedule": [
+      {
+        "taskId": "task-sched",
+        "isDeadline": false,
+        "remindAt": 4102444200000,
+        "title": "Buy milk"
+      }
+    ],
+    "expectCancel": [],
+    "op": {
+      "actionType": "[Task Shared] scheduleTaskWithTime",
+      "opType": "UPD",
+      "entityType": "TASK",
+      "entityId": "task-sched",
+      "payload": {
+        "actionPayload": {
+          "task": {
+            "id": "task-sched",
+            "subTaskIds": [],
+            "timeSpentOnDay": {},
+            "timeSpent": 0,
+            "timeEstimate": 0,
+            "isDone": false,
+            "title": "Buy milk",
+            "tagIds": [],
+            "created": 1755700000000,
+            "attachments": [],
+            "projectId": "INBOX_PROJECT"
+          },
+          "dueWithTime": 4102444800000,
+          "remindAt": 4102444200000,
+          "isMoveToBacklog": false
+        },
+        "entityChanges": []
+      }
+    }
+  },
+  {
+    "name": "shortSyntaxWithTime",
+    "expectSchedule": [
+      {
+        "taskId": "task-ss-time",
+        "isDeadline": false,
+        "remindAt": 4102444200000,
+        "title": "Call mom"
+      }
+    ],
+    "expectCancel": [],
+    "op": {
+      "actionType": "[Task Shared] applyShortSyntax",
+      "opType": "UPD",
+      "entityType": "TASK",
+      "entityId": "task-ss-time",
+      "payload": {
+        "actionPayload": {
+          "task": {
+            "id": "task-ss-time",
+            "subTaskIds": [],
+            "timeSpentOnDay": {},
+            "timeSpent": 0,
+            "timeEstimate": 0,
+            "isDone": false,
+            "title": "Call mom @15:00",
+            "tagIds": [],
+            "created": 1755700000000,
+            "attachments": [],
+            "projectId": "INBOX_PROJECT"
+          },
+          "taskChanges": {
+            "title": "Call mom",
+            "dueWithTime": 4102444800000
+          },
+          "schedulingInfo": {
+            "dueWithTime": 4102444800000,
+            "remindAt": 4102444200000,
+            "isMoveToBacklog": false
+          }
+        },
+        "entityChanges": []
+      }
+    }
+  },
+  {
+    "name": "shortSyntaxDayOnly",
+    "expectSchedule": [],
+    "expectCancel": [],
+    "op": {
+      "actionType": "[Task Shared] applyShortSyntax",
+      "opType": "UPD",
+      "entityType": "TASK",
+      "entityId": "task-ss-day",
+      "payload": {
+        "actionPayload": {
+          "task": {
+            "id": "task-ss-day",
+            "subTaskIds": [],
+            "timeSpentOnDay": {},
+            "timeSpent": 0,
+            "timeEstimate": 0,
+            "isDone": false,
+            "title": "Call mom @tomorrow",
+            "tagIds": [],
+            "created": 1755700000000,
+            "attachments": [],
+            "projectId": "INBOX_PROJECT"
+          },
+          "taskChanges": {
+            "title": "Call mom"
+          },
+          "schedulingInfo": {
+            "day": "2100-01-01",
+            "isAddToTop": false
+          }
+        },
+        "entityChanges": []
+      }
+    }
+  },
+  {
+    "name": "updateTaskReminder",
+    "expectSchedule": [
+      {
+        "taskId": "task-upd",
+        "isDeadline": false,
+        "remindAt": 4102444200000,
+        "title": "Task reminder"
+      },
+      {
+        "taskId": "task-upd",
+        "isDeadline": true,
+        "remindAt": 4102444500000,
+        "title": "Task reminder"
+      }
+    ],
+    "expectCancel": [],
+    "op": {
+      "actionType": "[Task Shared] updateTask",
+      "opType": "UPD",
+      "entityType": "TASK",
+      "entityId": "task-upd",
+      "payload": {
+        "actionPayload": {
+          "task": {
+            "id": "task-upd",
+            "changes": {
+              "remindAt": 4102444200000,
+              "deadlineRemindAt": 4102444500000
+            }
+          }
+        },
+        "entityChanges": []
+      }
+    }
+  },
+  {
+    "name": "updateTaskDone",
+    "expectSchedule": [],
+    "expectCancel": ["task-done"],
+    "op": {
+      "actionType": "[Task Shared] updateTask",
+      "opType": "UPD",
+      "entityType": "TASK",
+      "entityId": "task-done",
+      "payload": {
+        "actionPayload": {
+          "task": {
+            "id": "task-done",
+            "changes": {
+              "isDone": true
+            }
+          }
+        },
+        "entityChanges": []
+      }
+    }
+  },
+  {
+    "name": "updateTasksBulkDone",
+    "expectSchedule": [],
+    "expectCancel": ["task-bulk-1", "task-bulk-2"],
+    "op": {
+      "actionType": "[Task Shared] updateTasks",
+      "opType": "UPD",
+      "entityType": "TASK",
+      "entityId": "task-bulk-1",
+      "entityIds": ["task-bulk-1", "task-bulk-2"],
+      "payload": {
+        "actionPayload": {
+          "tasks": [
+            {
+              "id": "task-bulk-1",
+              "changes": {
+                "isDone": true
+              }
+            },
+            {
+              "id": "task-bulk-2",
+              "changes": {
+                "isDone": true
+              }
+            }
+          ]
+        },
+        "entityChanges": []
+      }
+    }
+  },
+  {
+    "name": "addTaskWithReminder",
+    "expectSchedule": [
+      {
+        "taskId": "task-add",
+        "isDeadline": false,
+        "remindAt": 4102444200000,
+        "title": "Dentist"
+      }
+    ],
+    "expectCancel": [],
+    "op": {
+      "actionType": "[Task Shared] addTask",
+      "opType": "CRT",
+      "entityType": "TASK",
+      "entityId": "task-add",
+      "payload": {
+        "actionPayload": {
+          "task": {
+            "id": "task-add",
+            "subTaskIds": [],
+            "timeSpentOnDay": {},
+            "timeSpent": 0,
+            "timeEstimate": 0,
+            "isDone": false,
+            "title": "Dentist",
+            "tagIds": [],
+            "created": 1755700000000,
+            "attachments": [],
+            "projectId": "INBOX_PROJECT",
+            "dueWithTime": 4102444800000,
+            "remindAt": 4102444200000
+          },
+          "workContextId": "INBOX_PROJECT",
+          "workContextType": "PROJECT",
+          "isAddToBacklog": false,
+          "isAddToBottom": false
+        },
+        "entityChanges": []
+      }
+    }
+  },
+  {
+    "name": "lwwReplaceWithReminder",
+    "expectSchedule": [
+      {
+        "taskId": "task-lww",
+        "isDeadline": false,
+        "remindAt": 4102444200000,
+        "title": "Winner"
+      }
+    ],
+    "expectCancel": [],
+    "op": {
+      "actionType": "[TASK] LWW Update",
+      "opType": "UPD",
+      "entityType": "TASK",
+      "entityId": "task-lww",
+      "payload": {
+        "actionPayload": {
+          "id": "task-lww",
+          "subTaskIds": [],
+          "timeSpentOnDay": {},
+          "timeSpent": 0,
+          "timeEstimate": 0,
+          "isDone": false,
+          "title": "Winner",
+          "tagIds": [],
+          "created": 1755700000000,
+          "attachments": [],
+          "projectId": "INBOX_PROJECT",
+          "dueWithTime": 4102444800000,
+          "remindAt": 4102444200000
+        },
+        "entityChanges": [],
+        "lwwUpdateMode": "replace"
+      }
+    }
+  },
+  {
+    "name": "lwwReplaceWithoutReminder",
+    "expectSchedule": [],
+    "expectCancel": ["task-lww-none"],
+    "op": {
+      "actionType": "[TASK] LWW Update",
+      "opType": "UPD",
+      "entityType": "TASK",
+      "entityId": "task-lww-none",
+      "payload": {
+        "actionPayload": {
+          "id": "task-lww-none",
+          "subTaskIds": [],
+          "timeSpentOnDay": {},
+          "timeSpent": 0,
+          "timeEstimate": 0,
+          "isDone": false,
+          "title": "No reminder",
+          "tagIds": [],
+          "created": 1755700000000,
+          "attachments": [],
+          "projectId": "INBOX_PROJECT"
+        },
+        "entityChanges": [],
+        "lwwUpdateMode": "replace"
+      }
+    }
+  },
+  {
+    "name": "lwwTimePreservingPatch",
+    "expectSchedule": [
+      {
+        "taskId": "task-lww-tp",
+        "isDeadline": false,
+        "remindAt": 4102444200000,
+        "title": "Tracked"
+      }
+    ],
+    "expectCancel": ["task-lww-tp"],
+    "op": {
+      "actionType": "[TASK] LWW Update",
+      "opType": "UPD",
+      "entityType": "TASK",
+      "entityId": "task-lww-tp",
+      "payload": {
+        "actionPayload": {
+          "id": "task-lww-tp",
+          "subTaskIds": [],
+          "timeEstimate": 0,
+          "isDone": false,
+          "title": "Tracked",
+          "tagIds": [],
+          "created": 1755700000000,
+          "attachments": [],
+          "projectId": "INBOX_PROJECT",
+          "dueWithTime": 4102444800000,
+          "remindAt": 4102444200000
+        },
+        "entityChanges": [],
+        "lwwUpdateMode": "patch",
+        "clearedFields": [
+          "notes",
+          "updated",
+          "doneOn",
+          "wontDoOn",
+          "parentId",
+          "repeatCfgId",
+          "_hideSubTasksMode",
+          "issueId",
+          "issueProviderId",
+          "issueType",
+          "issueWasUpdated",
+          "issueLastUpdated",
+          "issueAttachmentNr",
+          "issueTimeTracked",
+          "issuePoints",
+          "issueLastSyncedValues",
+          "priority",
+          "dueDay",
+          "hasPlannedTime",
+          "deadlineDay",
+          "deadlineWithTime",
+          "deadlineRemindAt",
+          "reminderId",
+          "modified"
+        ]
+      }
+    }
+  }
+]

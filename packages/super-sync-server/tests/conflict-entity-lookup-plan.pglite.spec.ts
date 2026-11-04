@@ -560,7 +560,7 @@ describe('detectConflictForEntity behaviour is unchanged by the query split (PGl
     // @@unique([userId, serverSeq]) makes an equal server_seq the same row, the
     // findUnique would be pure waste. Pins "fetch only when it BEATS the scalar":
     // relaxing `>` to `>=` still returns the right answer, so only the round-trip
-    // count can catch it — and this lookup runs twice per uploaded op.
+    // count can catch it — and this lookup runs on every uploaded op.
     await seed({
       id: 'op-tie',
       serverSeq: 20,

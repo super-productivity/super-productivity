@@ -18,7 +18,6 @@ test.describe('App Features - Focus Mode', () => {
     const focusModeOverlay = page.locator('focus-mode-overlay');
 
     // elements on settings page
-    const appFeaturesSection = page.locator('collapsible', { hasText: 'App Features' });
     const focusModeSwitch = page.getByRole('switch', {
       name: 'Focus Mode',
     });
@@ -31,9 +30,6 @@ test.describe('App Features - Focus Mode', () => {
 
     // Go to settings page
     await page.goto('/#/config');
-
-    // expand "App Features"
-    await appFeaturesSection.click();
 
     // Ensure focus mode feature is enabled (default value)
     await expect(focusModeSwitch).toBeChecked();
@@ -57,9 +53,6 @@ test.describe('App Features - Focus Mode', () => {
 
     // Re-enable the feature
     await page.goto('/#/config');
-
-    // expand "App Features"
-    await appFeaturesSection.click();
 
     // click toggle button to enable
     await focusModeSwitch.click();

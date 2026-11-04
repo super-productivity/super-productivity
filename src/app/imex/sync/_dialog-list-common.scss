@@ -1,5 +1,5 @@
-// Shared styles for sync dialogs that render an async list.
-// Used by: dialog-restore-point, dialog-sync-devices
+// Shared styles for dialogs that render an async list.
+// Used by: dialog-restore-point, dialog-sync-devices, dialog-backups-list
 //
 // Values are kept in `rem` rather than moved onto the spacing/font tokens:
 // `html` sets `font-size: var(--font-size-md)` (14px), so 1rem is 14px here and

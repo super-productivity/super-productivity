@@ -1,11 +1,13 @@
 import { inject, Injectable } from '@angular/core';
 import { createEffect } from '@ngrx/effects';
 import type { DeferredLocalActionsPort } from '@sp/sync-core';
-import { ALL_ACTIONS } from '../../util/local-actions.token';
-import { concatMap, filter } from 'rxjs/operators';
+import { ALL_ACTIONS, LOCAL_ACTIONS } from '../../util/local-actions.token';
+import { Subject } from 'rxjs';
+import { concatMap, filter, map, startWith, tap } from 'rxjs/operators';
 import { LockService } from '../sync/lock.service';
 import {
   LockAcquisitionTimeoutError,
+  OperationWriteCutoffError,
   PermanentDeferredWriteError,
 } from '../core/errors/sync-errors';
 import { OperationLogStoreService } from '../persistence/operation-log-store.service';
@@ -34,10 +36,12 @@ import { OperationCaptureService } from './operation-capture.service';
 import { ImmediateUploadService } from '../sync/immediate-upload.service';
 import {
   acknowledgeDeferredAction,
+  consumeDeferredBufferStuckNotice,
   getDeferredActions,
   isDeferredAction,
 } from './operation-capture.meta-reducer';
 import { ClientIdService } from '../../core/util/client-id.service';
+import { isReducerRejectedAction } from '../../root-store/meta/reducer-failure-guard.meta-reducer';
 import { SuperSyncStatusService } from '../sync/super-sync-status.service';
 
 interface WriteOperationOptions {
@@ -61,8 +65,9 @@ export class OperationLogEffects implements DeferredLocalActionsPort {
   private writeCount = 0;
   /**
    * PERF: In-memory compaction counter to avoid IndexedDB transaction on every operation.
-   * The persistent counter in state_cache is only used for cross-tab/restart recovery.
-   * Initialized lazily from persisted value on first operation.
+   * Initialized lazily from the persisted state_cache counter on first operation. Nothing
+   * increments that counter any more, so this starts at 0 in practice and does not
+   * survive a restart (compactIfBloated() covers cross-restart growth).
    */
   private inMemoryCompactionCounter: number | null = null;
 
@@ -71,6 +76,8 @@ export class OperationLogEffects implements DeferredLocalActionsPort {
    * double-persist the same buffered action (see processDeferredActions).
    */
   private _deferredProcessingChain: Promise<void> = Promise.resolve();
+  /** Emits after every deferred drain, succeeded or not. */
+  private _deferredDrainSettled$ = new Subject<void>();
   /**
    * Dedupe timestamp for the storage-quota snackbar. #7700: when quota fires
    * inside the deferred-action retry loop, the retry loop calls handleQuotaExceeded
@@ -82,6 +89,7 @@ export class OperationLogEffects implements DeferredLocalActionsPort {
   private readonly STORAGE_QUOTA_SNACK_DEDUPE_MS = 5000;
   // Uses ALL_ACTIONS because this effect captures all persistent actions and handles isRemote filtering internally
   private actions$ = inject(ALL_ACTIONS);
+  private localActions$ = inject(LOCAL_ACTIONS);
   private lockService = inject(LockService);
   private opLogStore = inject(OperationLogStoreService);
   private vectorClockService = inject(VectorClockService);
@@ -99,6 +107,9 @@ export class OperationLogEffects implements DeferredLocalActionsPort {
    * 1. Non-persistent actions (actions without PersistentActionMeta)
    * 2. Remote actions (actions replayed from sync, marked with isRemote: true)
    * 3. Deferred actions (buffered during sync, processed later by processDeferredActions)
+   * 4. Rejected actions (reducer threw, #10195): no state change happened, so
+   *    no operation may be built from the payload — and the meta-reducer never
+   *    incremented the pending counter for them, so decrementing would underflow.
    *
    * Note: We do NOT filter by `isApplyingRemoteOps()` here because of a race
    * condition: the meta-reducer may capture (increment the pending counter for)
@@ -117,10 +128,43 @@ export class OperationLogEffects implements DeferredLocalActionsPort {
           (action): action is PersistentAction =>
             isPersistentAction(action) &&
             !action.meta.isRemote &&
-            !isDeferredAction(action),
+            !isDeferredAction(action) &&
+            !isReducerRejectedAction(action),
         ),
         // concatMap for sequential, ordered processing (one write at a time).
         concatMap((action) => this.writeOperationFromEffect(action)),
+      ),
+    { dispatch: false },
+  );
+
+  /**
+   * The deferred buffer only grows this large when the remote-apply window is
+   * stuck, and then nothing the user does is written as an operation. Tell
+   * them in every build, not just via the dev-only devError dialog (#8297).
+   * Runs after the reducer pass that raised the notice: a snackbar must not
+   * open inside one.
+   */
+  notifyStuckDeferredBuffer$ = createEffect(
+    () =>
+      this.localActions$.pipe(
+        filter(() => consumeDeferredBufferStuckNotice()),
+        tap(() =>
+          this.snackService.open({
+            type: 'ERROR',
+            msg: T.F.SYNC.S.DEFERRED_ACTIONS_STUCK,
+            actionStr: T.PS.RELOAD,
+            actionFn: (): void => {
+              window.location.reload();
+            },
+            config: { duration: 0 },
+            // Close once the buffer drains: a stale sticky notice would also
+            // hold the snack slot against every ordinary notification.
+            showWhile$: this._deferredDrainSettled$.pipe(
+              startWith(undefined),
+              map(() => getDeferredActions().length > 0),
+            ),
+          }),
+        ),
       ),
     { dispatch: false },
   );
@@ -467,6 +511,14 @@ export class OperationLogEffects implements DeferredLocalActionsPort {
         this.inMemoryCompactionCounter = 0;
       })
       .catch((e) => {
+        if (e instanceof OperationWriteCutoffError) {
+          // Transient, not a failure: the counter stays at the threshold, so
+          // the next write retries once the dispatch burst settles.
+          // shortcut: dispatch that never settles never warns the user — count
+          // consecutive deferrals if that ever shows up in logs.
+          OpLog.warn('OperationLogEffects: Compaction deferred by dispatch activity');
+          return;
+        }
         OpLog.err('OperationLogEffects: Compaction failed', e);
         devError('Compaction failed: ' + e);
         this.compactionFailures++;
@@ -701,8 +753,8 @@ export class OperationLogEffects implements DeferredLocalActionsPort {
     // Keep the chain alive even if this run rejects; errors still surface to
     // this invocation's caller via `run`.
     this._deferredProcessingChain = run.then(
-      () => undefined,
-      () => undefined,
+      () => this._deferredDrainSettled$.next(),
+      () => this._deferredDrainSettled$.next(),
     );
     return run;
   }

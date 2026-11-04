@@ -12,7 +12,7 @@
   flex-direction: row;
   padding-top: var(--s-quarter);
   padding-bottom: var(--s-quarter);
-  border: 1px solid var(--separator-color);
+  border: var(--task-border);
   border-radius: var(--task-border-radius);
   opacity: 0.9;
   cursor: pointer;

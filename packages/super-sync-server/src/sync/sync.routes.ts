@@ -1,7 +1,8 @@
 import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { SuperSyncDownloadOpsQuerySchema } from '@sp/shared-schema';
+import { SuperSyncDownloadOpsQuerySchema } from '@sp/shared-schema/supersync-http-contract';
 import { authenticate, getAuthUser } from '../middleware';
 import { getSyncService } from './sync.service';
+import { parseAppVersion } from './checkpoint-gate';
 import { Logger } from '../logger';
 import {
   UploadOpsRequest,
@@ -128,13 +129,19 @@ export const syncRoutes = async (fastify: FastifyInstance): Promise<void> => {
             .send(createValidationErrorResponse(parseResult.error.issues));
         }
 
-        const { sinceSeq, limit = 500, excludeClient } = parseResult.data;
+        const { sinceSeq, limit = 500, excludeClient, appVersion } = parseResult.data;
         const syncService = getSyncService();
 
         // `excludeClient` is the caller's own id (it means "don't echo my ops
-        // back"), so a caller that omits it simply isn't recorded.
+        // back"), so a caller that omits it simply isn't recorded. `appVersion`
+        // rides along for checkpoint diagnostics (#9962). Missing/invalid
+        // versions clear the remembered version; only heartbeats preserve it.
         if (excludeClient) {
-          syncService.touchDevice(userId, excludeClient);
+          syncService.touchDevice(
+            userId,
+            excludeClient,
+            parseAppVersion(appVersion) ?? null,
+          );
         }
 
         Logger.debug(
@@ -407,7 +414,8 @@ export const syncRoutes = async (fastify: FastifyInstance): Promise<void> => {
         const message = errorMessage(err);
         if (
           message.includes('exceeds latest sequence') ||
-          message.includes('must be at least')
+          message.includes('must be at least') ||
+          message.includes('is no longer available')
         ) {
           Logger.warn(
             `[user:${getAuthUser(req).userId}] Invalid restore request: ${message}`,

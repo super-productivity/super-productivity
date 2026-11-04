@@ -259,8 +259,7 @@ export class RightPanelComponent implements AfterViewInit, OnDestroy {
                 closeOnNavigation: false,
                 panelClass: 'bottom-panel-sheet',
                 // Default 'first-tabbable' otherwise focuses the tag-edit
-                // input (the bottom-panel close-btn is display:none and gets
-                // skipped), which on touch makes mat-autocomplete pop open
+                // input, which on touch makes mat-autocomplete pop open
                 // immediately on every task open in portrait.
                 autoFocus: false,
               },
@@ -413,7 +412,6 @@ export class RightPanelComponent implements AfterViewInit, OnDestroy {
     this._taskService.setSelectedId(null);
     this._layoutService.hideNotes();
     this._layoutService.hideAddTaskPanel();
-    this._layoutService.hideTaskViewCustomizerPanel();
     this._layoutService.hideScheduleDayPanel();
     this._store.dispatch(hidePluginPanel());
 

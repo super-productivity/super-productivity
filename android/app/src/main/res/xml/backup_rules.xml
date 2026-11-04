@@ -4,4 +4,38 @@
   <exclude
     domain="sharedpref"
     path="com.superproductivity.superproductivity_preferences.xml" />
+  <!--
+    BackgroundSyncCredentialStore is EncryptedSharedPreferences. Its master key
+    lives in the device-bound Android Keystore, which backup never carries over,
+    so a restored file is undecryptable ciphertext that makes every read throw.
+    Keep it device-local; the WebView re-supplies the credentials on next sync.
+  -->
+  <exclude
+    domain="sharedpref"
+    path="SuperProductivitySync.xml" />
+  <!--
+    Per-device WebView verdict. block_override is the user's decision to bypass
+    the block screen on THIS device; restoring it elsewhere silently disarms a
+    guard that exists because users otherwise uninstall their WebView updates,
+    which resets the Chromium profile and takes the app's local data with it.
+    last_known_good_major_version is device-specific for the same reason.
+  -->
+  <exclude
+    domain="sharedpref"
+    path="webview_compatibility.xml" />
+  <!--
+    The live tracking session (#7390) is bound to this device's boot count and
+    process ids; restored elsewhere it could resume tracking a stale task.
+  -->
+  <exclude
+    domain="sharedpref"
+    path="SuperProductivityTracking.xml" />
+  <!--
+    LaunchUrlReplayGuard's last base URL is stamped against THIS install's
+    update time; restored onto a newer install it would drop the first
+    identical launch URL as a replay (#11153).
+  -->
+  <exclude
+    domain="sharedpref"
+    path="SuperProductivityLaunchUrl.xml" />
 </full-backup-content>

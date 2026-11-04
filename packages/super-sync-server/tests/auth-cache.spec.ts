@@ -46,11 +46,13 @@ describe('auth verification cache', () => {
 
     await expect(verifyToken(token)).resolves.toEqual({
       valid: true,
+      tokenVersion: 0,
       userId: 1,
       email: 'user@example.com',
     });
     await expect(verifyToken(token)).resolves.toEqual({
       valid: true,
+      tokenVersion: 0,
       userId: 1,
       email: 'user@example.com',
     });

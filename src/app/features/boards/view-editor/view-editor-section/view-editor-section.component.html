@@ -1,0 +1,198 @@
+@switch (mode()) {
+  @case ('card') {
+    <!-- No expand animation for how the card first shows (`isReady`). -->
+    <div
+      class="card"
+      role="group"
+      [class.is-open]="!isCollapsed()"
+      [class.is-collapsible]="isCollapsible()"
+      [attr.aria-label]="groupLabel() | translate: { nr: index() + 1 }"
+      [@.disabled]="!isReady()"
+    >
+      <!-- Keyboard users move it with the ⋮ menu. -->
+      <mat-icon
+        class="drag-handle"
+        aria-hidden="true"
+        cdkDragHandle
+        >drag_indicator</mat-icon
+      >
+      <!-- The whole bar opens and closes the card, a larger target than the
+           chevron; the chevron is the keyboard control. -->
+      <header
+        class="section-header"
+        (click)="onHeaderClick($event)"
+      >
+        @if (isCollapsed() && panel().title) {
+          <!-- Collapsed, the title is part of the bar; open, it renames. -->
+          <span class="section-title title-static">{{ panel().title }}</span>
+        } @else {
+          <view-editor-title
+            class="section-title"
+            [title]="panel().title"
+            [label]="titleLabel() | translate"
+            [isFocusInitial]="isFocusInitial()"
+            (titleChange)="setTitle($event)"
+          ></view-editor-title>
+        }
+        <ng-container *ngTemplateOutlet="actionsTpl"></ng-container>
+        @if (isCollapsible()) {
+          <button
+            class="section-toggle"
+            mat-icon-button
+            type="button"
+            [attr.aria-expanded]="!isCollapsed()"
+            [attr.aria-controls]="isCollapsed() ? null : bodyId"
+            [attr.aria-label]="
+              T.F.BOARDS.EDITOR.EDIT_RULES | translate: { title: panel().title }
+            "
+            (click)="openRules()"
+          >
+            <mat-icon>expand_more</mat-icon>
+          </button>
+        }
+      </header>
+      @if (isCollapsed()) {
+        <div
+          class="summary-wrap"
+          @expandFadeFast
+        >
+          <div
+            class="summary"
+            (click)="openRules()"
+          >
+            <ng-container *ngTemplateOutlet="summaryTpl"></ng-container>
+          </div>
+        </div>
+      } @else {
+        <div @expandFadeFast>
+          <ng-container *ngTemplateOutlet="rulesTpl"></ng-container>
+        </div>
+      }
+    </div>
+  }
+
+  @case ('flat') {
+    <!-- The same open card, without its bar: adding a section only adds the
+         bars, the rules stay where they are. -->
+    <div class="card is-open">
+      <mat-icon
+        class="drag-handle is-placeholder"
+        aria-hidden="true"
+        >drag_indicator</mat-icon
+      >
+      <ng-container *ngTemplateOutlet="rulesTpl"></ng-container>
+    </div>
+  }
+}
+
+<ng-template #countTpl>
+  <span class="count">{{ countLabel().key | translate: { nr: countLabel().nr } }}</span>
+</ng-template>
+
+<ng-template #summaryTpl>
+  @for (shown of summaryParts(); track shown.part.rule; let isLast = $last) {
+    <view-rule-value
+      [part]="shown.part"
+      [items]="shown.items"
+    ></view-rule-value>
+    @if (!isLast) {
+      <span class="dot"> · </span>
+    }
+  } @empty {
+    {{ T.F.BOARDS.EDITOR.EVERY_TASK | translate }}
+  }
+</ng-template>
+
+<ng-template #actionsTpl>
+  <button
+    class="section-menu-btn"
+    mat-icon-button
+    type="button"
+    [matMenuTriggerFor]="sectionMenu"
+    [attr.aria-label]="
+      panel().title
+        ? (T.F.BOARDS.EDITOR.SECTION_ACTIONS | translate: { title: panel().title })
+        : (T.G.MORE_ACTIONS | translate)
+    "
+    [matTooltip]="T.G.MORE_ACTIONS | translate"
+  >
+    <mat-icon>more_vert</mat-icon>
+  </button>
+</ng-template>
+
+<!-- Rules, then sort: chips beside a label column (on a phone, below it). -->
+<ng-template #rulesTpl>
+  <div
+    class="section-body"
+    [id]="bodyId"
+  >
+    <div class="form-row">
+      <span class="form-label">
+        {{ T.F.BOARDS.EDITOR.RULES | translate }}
+        <!-- What the rules match, live, beside them rather than in the bar. -->
+        <ng-container *ngTemplateOutlet="countTpl"></ng-container>
+      </span>
+      <div class="chips">
+        @for (shown of parts(); track shown.part.rule) {
+          <view-rule-chip
+            [part]="shown.part"
+            [items]="shown.items"
+            [panel]="panel()"
+            (panelChange)="setRule(shown.part.rule, $event)"
+            (remove)="removeRule(shown.part.rule)"
+          ></view-rule-chip>
+        }
+        <view-add-rule-chip
+          [shownRules]="shownRules()"
+          (addRule)="addRule($event)"
+        ></view-add-rule-chip>
+      </div>
+    </div>
+    @if (isShowDoneTagHint()) {
+      <p class="rule-note">{{ T.F.BOARDS.EDITOR.DONE_TAG_FILTER_HINT | translate }}</p>
+    }
+    <div class="divider"></div>
+    <div class="form-row">
+      <span class="form-label">{{ T.F.BOARDS.FORM.SORT_BY | translate }}</span>
+      <div class="chips">
+        <view-sort-chip
+          [panel]="panel()"
+          (panelChange)="setPanel($event)"
+        ></view-sort-chip>
+      </div>
+    </div>
+  </div>
+</ng-template>
+
+<mat-menu #sectionMenu="matMenu">
+  <button
+    mat-menu-item
+    [disabled]="isFirst()"
+    (click)="moveUp.emit()"
+  >
+    <mat-icon>arrow_upward</mat-icon>
+    {{ T.F.BOARDS.EDITOR.MOVE_UP | translate }}
+  </button>
+  <button
+    mat-menu-item
+    [disabled]="isLast()"
+    (click)="moveDown.emit()"
+  >
+    <mat-icon>arrow_downward</mat-icon>
+    {{ T.F.BOARDS.EDITOR.MOVE_DOWN | translate }}
+  </button>
+  <button
+    mat-menu-item
+    (click)="duplicate.emit()"
+  >
+    <mat-icon>content_copy</mat-icon>
+    {{ T.G.DUPLICATE | translate }}
+  </button>
+  <button
+    mat-menu-item
+    (click)="remove.emit()"
+  >
+    <mat-icon>delete</mat-icon>
+    {{ T.G.DELETE | translate }}
+  </button>
+</mat-menu>

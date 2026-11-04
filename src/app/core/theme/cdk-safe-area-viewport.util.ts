@@ -1,5 +1,65 @@
 import { FlexibleConnectedPositionStrategy } from '@angular/cdk/overlay';
 import { BodyClass } from '../../app.constants';
+import { CSS_VAR_KEYBOARD_OVERLAY_OFFSET } from './keyboard-css-vars.const';
+
+interface PositionStrategyForPush {
+  _viewportRect: { top: number; height: number };
+  _getViewportMarginTop: () => number;
+}
+
+/**
+ * `_pushOverlayOnScreen`'s vertical overflow check computes `overflowBottom`
+ * as `start.y + overlayHeight - viewport.height`, which silently assumes the
+ * narrowed viewport starts at y=0. Once `_getViewportMarginTop` below makes
+ * `viewport.top` nonzero, `viewport.height` no longer spans the full screen,
+ * so a candidate position that fits comfortably within the real screen
+ * bounds gets reported as overflowing the bottom by exactly `marginTop`, and
+ * is pushed up by that amount — visibly detaching overlays anchored near the
+ * bottom of the screen (e.g. the mobile bottom-nav's panel menu) from their
+ * trigger. Confirmed on-device via a live breakpoint in `_getExactOverlayY`.
+ *
+ * `_pushOverlayOnScreen` itself is not reimplemented here — it is tightly
+ * coupled to private CDK helpers (rounding, locked-position replay, the
+ * oversized-overlay branch) that would be fragile to duplicate. Instead this
+ * corrects the push amount using the *real* viewport bottom
+ * (`viewport.top - scrollPosition.top + viewport.height`, matching how CDK's
+ * own `overflowTop` already subtracts `scrollPosition.top` from
+ * `viewport.top`): when the overlay truly fits there, the push is undone
+ * entirely; when it genuinely overflows by `d`, the push is corrected to
+ * exactly `d` instead of `d + marginTop`. A genuine top overflow, or the
+ * oversized-overlay branch, is left exactly as CDK computed it.
+ */
+const correctPushOnScreen = (
+  original: (
+    this: PositionStrategyForPush,
+    start: { x: number; y: number },
+    rawOverlayRect: { height: number },
+    scrollPosition: { top: number },
+  ) => { x: number; y: number },
+) =>
+  function (
+    this: PositionStrategyForPush,
+    start: { x: number; y: number },
+    rawOverlayRect: { height: number },
+    scrollPosition: { top: number },
+  ): { x: number; y: number } {
+    const result = original.call(this, start, rawOverlayRect, scrollPosition);
+    const viewport = this._viewportRect;
+    if (rawOverlayRect.height > viewport.height || result.y >= start.y) {
+      return result;
+    }
+    const overflowTop = Math.max(viewport.top - scrollPosition.top - start.y, 0);
+    if (overflowTop > 0) {
+      return result;
+    }
+    const trueOverflowBottom = Math.max(
+      start.y +
+        rawOverlayRect.height -
+        (viewport.top - scrollPosition.top + viewport.height),
+      0,
+    );
+    return { x: result.x, y: start.y - trueOverflowBottom };
+  };
 
 /**
  * Resolved inset tokens from `_css-variables.scss`:
@@ -12,10 +72,9 @@ import { BodyClass } from '../../app.constants';
  */
 const CSS_VAR_RESOLVED_SAFE_AREA_TOP = '--safe-area-top';
 const CSS_VAR_RESOLVED_SAFE_AREA_BOTTOM = '--safe-area-bottom';
-const CSS_VAR_KEYBOARD_OVERLAY_OFFSET = '--keyboard-overlay-offset';
 
-const readPx = (doc: Document, name: string): number =>
-  parseInt(getComputedStyle(doc.documentElement).getPropertyValue(name), 10) || 0;
+const readPx = (el: Element, name: string): number =>
+  parseInt(getComputedStyle(el).getPropertyValue(name), 10) || 0;
 
 /**
  * Teach CDK about the native mobile insets, so connected overlays (menus,
@@ -42,12 +101,23 @@ const readPx = (doc: Document, name: string): number =>
  * (`(height - top - bottom) - origin.y + top + bottom`), which is why the
  * placement is then correct for any inset combination.
  *
+ * `overlayContainerEl` is where IosKeyboardService writes the keyboard offset
+ * (never `<html>`, see there); connected overlays live inside it.
+ *
  * Idempotent: patching twice would add the inset twice.
  */
-export const patchCdkViewportForSafeArea = (doc: Document): void => {
+export const patchCdkViewportForSafeArea = (
+  doc: Document,
+  overlayContainerEl: HTMLElement,
+): void => {
   const proto = FlexibleConnectedPositionStrategy.prototype as unknown as {
     _getViewportMarginTop: () => number;
     _getViewportMarginBottom: () => number;
+    _pushOverlayOnScreen: (
+      start: { x: number; y: number },
+      rawOverlayRect: { height: number },
+      scrollPosition: { top: number },
+    ) => { x: number; y: number };
     _spSafeAreaPatched?: boolean;
   };
   if (proto._spSafeAreaPatched) {
@@ -59,18 +129,21 @@ export const patchCdkViewportForSafeArea = (doc: Document): void => {
   const originalBottom = proto._getViewportMarginBottom;
 
   proto._getViewportMarginTop = function (this: unknown): number {
-    return originalTop.call(this) + readPx(doc, CSS_VAR_RESOLVED_SAFE_AREA_TOP);
+    return (
+      originalTop.call(this) + readPx(doc.documentElement, CSS_VAR_RESOLVED_SAFE_AREA_TOP)
+    );
   };
   proto._getViewportMarginBottom = function (this: unknown): number {
     const keyboardOverlayOffset =
       doc.body.classList.contains(BodyClass.isIOS) &&
       doc.body.classList.contains(BodyClass.isKeyboardVisible)
-        ? readPx(doc, CSS_VAR_KEYBOARD_OVERLAY_OFFSET)
+        ? readPx(overlayContainerEl, CSS_VAR_KEYBOARD_OVERLAY_OFFSET)
         : 0;
     return (
       originalBottom.call(this) +
-      readPx(doc, CSS_VAR_RESOLVED_SAFE_AREA_BOTTOM) +
+      readPx(doc.documentElement, CSS_VAR_RESOLVED_SAFE_AREA_BOTTOM) +
       keyboardOverlayOffset
     );
   };
+  proto._pushOverlayOnScreen = correctPushOnScreen(proto._pushOverlayOnScreen);
 };

@@ -7,6 +7,8 @@ import {
   DialogCfg,
   DialogResult,
   NotifyCfg,
+  PluginManifest,
+  PluginAPI as PublicPluginAPI,
 } from '@super-productivity/plugin-api';
 
 describe('PluginAPI', () => {
@@ -15,8 +17,11 @@ describe('PluginAPI', () => {
   let reInitDataSpy: jasmine.Spy;
   let dispatchActionSpy: jasmine.Spy;
   let requestSpy: jasmine.Spy;
+  let triggerSyncSpy: jasmine.Spy;
+  let listSyncedDataKeysSpy: jasmine.Spy;
   let getSelectedTaskSpy: jasmine.Spy;
   let getFocusedTaskSpy: jasmine.Spy;
+  let registerTaskContextMenuEntrySpy: jasmine.Spy;
   let mockBridge: jasmine.SpyObj<{
     createBoundMethods: () => Record<string, unknown>;
     getAppState: () => Promise<unknown>;
@@ -38,12 +43,17 @@ describe('PluginAPI', () => {
     reInitDataSpy = jasmine.createSpy('reInitData').and.resolveTo();
     dispatchActionSpy = jasmine.createSpy('dispatchAction');
     requestSpy = jasmine.createSpy('request').and.resolveTo({ ok: true });
+    triggerSyncSpy = jasmine.createSpy('triggerSync').and.resolveTo();
+    listSyncedDataKeysSpy = jasmine
+      .createSpy('listSyncedDataKeys')
+      .and.resolveTo(['a:b']);
     getSelectedTaskSpy = jasmine
       .createSpy('getSelectedTask')
       .and.resolveTo({ id: 'selected-task', title: 'Selected Task' });
     getFocusedTaskSpy = jasmine
       .createSpy('getFocusedTask')
       .and.resolveTo({ id: 'focused-task', title: 'Focused Task' });
+    registerTaskContextMenuEntrySpy = jasmine.createSpy('registerTaskContextMenuEntry');
 
     mockBridge = jasmine.createSpyObj('PluginBridgeService', [
       'createBoundMethods',
@@ -58,9 +68,12 @@ describe('PluginAPI', () => {
       showIndexHtmlAsView: showIndexHtmlAsViewSpy,
       dispatchAction: dispatchActionSpy,
       request: requestSpy,
+      triggerSync: triggerSyncSpy,
+      listSyncedDataKeys: listSyncedDataKeysSpy,
       getSelectedTask: getSelectedTaskSpy,
       getFocusedTask: getFocusedTaskSpy,
       persistDataSynced: jasmine.createSpy('persistDataSynced'),
+      registerTaskContextMenuEntry: registerTaskContextMenuEntrySpy,
       log: {
         critical: jasmine.createSpy(),
         err: jasmine.createSpy(),
@@ -93,13 +106,64 @@ describe('PluginAPI', () => {
       'test-plugin',
       mockBridge as unknown as PluginBridgeService,
       mockI18nService,
+      {
+        id: 'test-plugin',
+        name: 'Test Plugin',
+        manifestVersion: 1,
+        version: '1.0.0',
+        minSupVersion: '1.0.0',
+        hooks: [],
+        permissions: [],
+      } as PluginManifest,
+      undefined,
     );
   });
 
+  it('exposes a public sync request that waits for the bound operation', async () => {
+    let finish!: () => void;
+    triggerSyncSpy.and.returnValue(new Promise<void>((resolve) => (finish = resolve)));
+    const publicAPI: Pick<PublicPluginAPI, 'triggerSync'> = pluginAPI;
+    const pending: Promise<void> = publicAPI.triggerSync();
+    let settled = false;
+    pending.then(() => (settled = true));
+    await Promise.resolve();
+    expect(settled).toBeFalse();
+    expect(triggerSyncSpy).toHaveBeenCalledOnceWith();
+    finish();
+    expect(await pending).toBeUndefined();
+  });
+
+  it('forwards sync errors through the public API without retrying', async () => {
+    triggerSyncSpy.and.rejectWith(new Error('sync unavailable'));
+    const publicAPI: Pick<PublicPluginAPI, 'triggerSync'> = pluginAPI;
+    await expectAsync(publicAPI.triggerSync()).toBeRejectedWithError('sync unavailable');
+    expect(triggerSyncSpy).toHaveBeenCalledOnceWith();
+  });
+
+  it('forwards the key prefix to the bound API', async () => {
+    expect(await pluginAPI.listSyncedDataKeys('a:')).toEqual(['a:b']);
+    expect(listSyncedDataKeysSpy).toHaveBeenCalledOnceWith('a:');
+  });
+
+  it('lists all keys when the prefix is omitted', async () => {
+    expect(await pluginAPI.listSyncedDataKeys()).toEqual(['a:b']);
+    expect(listSyncedDataKeysSpy).toHaveBeenCalledOnceWith(undefined);
+  });
   describe('showIndexHtmlAsView()', () => {
     it('should delegate to the bridge method', () => {
       pluginAPI.showIndexHtmlAsView();
       expect(showIndexHtmlAsViewSpy).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('registerTaskContextMenuEntry()', () => {
+    it('delegates the entry registration to the bound bridge method', () => {
+      const onClick = jasmine.createSpy('onClick');
+      const cfg = { id: 'set-color', label: 'Set color', onClick };
+
+      pluginAPI.registerTaskContextMenuEntry(cfg);
+
+      expect(registerTaskContextMenuEntrySpy).toHaveBeenCalledOnceWith(cfg);
     });
   });
 

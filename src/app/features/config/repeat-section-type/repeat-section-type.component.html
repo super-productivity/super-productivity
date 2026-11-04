@@ -1,5 +1,5 @@
 <div
-  [@standardList]="field.fieldGroup?.length"
+  [@standardList]="$safeNavigationMigration(field.fieldGroup?.length)"
   class="list-wrapper"
 >
   @for (
@@ -23,39 +23,41 @@
       </button>
 
       <context-menu
-        [contextMenu]="contextMenu"
+        [menu]="contextMenu"
         [rightClickTriggerEl]="triggerBtn"
         [leftClickTriggerEl]="triggerBtn"
       ></context-menu>
 
-      <ng-template #contextMenu>
-        @if (i > 0) {
+      <mat-menu #contextMenu="matMenu">
+        <ng-template matMenuContent>
+          @if (i > 0) {
+            <button
+              mat-menu-item
+              (click)="moveItem(i, i - 1)"
+            >
+              <mat-icon>arrow_back</mat-icon>
+              {{ T.G.MOVE_BACKWARD | translate }}
+            </button>
+          }
+          @if (i < field.fieldGroup?.length - 1) {
+            <button
+              mat-menu-item
+              (click)="moveItem(i, i + 1)"
+            >
+              <mat-icon>arrow_forward</mat-icon>
+              {{ T.G.MOVE_FORWARD | translate }}
+            </button>
+          }
           <button
             mat-menu-item
-            (click)="moveItem(i, i - 1)"
+            class="color-warn-i"
+            (click)="removeItem(i)"
           >
-            <mat-icon>arrow_back</mat-icon>
-            {{ T.G.MOVE_BACKWARD | translate }}
+            <mat-icon class="color-warn-i">delete_forever</mat-icon>
+            {{ T.G.DELETE | translate }}
           </button>
-        }
-        @if (i < field.fieldGroup?.length - 1) {
-          <button
-            mat-menu-item
-            (click)="moveItem(i, i + 1)"
-          >
-            <mat-icon>arrow_forward</mat-icon>
-            {{ T.G.MOVE_FORWARD | translate }}
-          </button>
-        }
-        <button
-          mat-menu-item
-          class="color-warn-i"
-          (click)="removeItem(i)"
-        >
-          <mat-icon class="color-warn-i">delete_forever</mat-icon>
-          {{ T.G.DELETE | translate }}
-        </button>
-      </ng-template>
+        </ng-template>
+      </mat-menu>
     </div>
   }
 </div>

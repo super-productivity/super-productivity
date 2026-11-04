@@ -3,7 +3,12 @@
     style="text-align: center"
     (click)="isShowAddTask = true"
   >
-    <button mat-button>
+    <!-- Marked so keyboard focus recovery can find THIS button and never a
+         button inside the add-task-bar that replaces it while open. -->
+    <button
+      mat-button
+      data-add-task-btn
+    >
       <mat-icon>add</mat-icon>
       {{ T.G.ADD | translate }}
     </button>

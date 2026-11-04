@@ -21,6 +21,10 @@ export interface SyncCollapsibleProps extends FormlyFieldProps {
 import { IS_NATIVE_PLATFORM } from '../../../util/is-native-platform';
 import { SUPER_SYNC_DEFAULT_BASE_URL } from '@sp/sync-providers/super-sync';
 import {
+  MAX_DEVICE_LABEL_LENGTH,
+  getDeviceLabel,
+} from '../../tracking-presence/get-device-label.util';
+import {
   closeAllDialogs,
   openDisableEncryptionDialogForFileBased,
   openEnableEncryptionDialog,
@@ -478,6 +482,9 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
       fieldGroup: [
         {
           type: 'tpl',
+          // Custom app registration steps: noise with the built-in sign-in.
+          hideExpression: (m: any) =>
+            HAS_OFFICIAL_ONEDRIVE_CLIENT_ID && !m?.oneDrive?.useCustomApp,
           templateOptions: {
             tag: 'p',
             text: T.F.SYNC.FORM.ONEDRIVE.INFO_TEXT,
@@ -650,28 +657,34 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
           hideExpression: (m, v, field) =>
             isNotSyncProvider(field, 2, SyncProviderId.SuperSync),
           type: 'btn',
+          className: 'e2e-get-token-btn',
           templateOptions: {
             text: T.F.SYNC.FORM.SUPER_SYNC.BTN_GET_TOKEN,
-            tooltip: T.F.SYNC.FORM.SUPER_SYNC.LOGIN_INSTRUCTIONS,
             btnType: 'primary',
             btnStyle: 'stroked',
-            centerBtn: true,
             onClick: (field: any) => {
               const baseUrl = field.model.baseUrl || SUPER_SYNC_DEFAULT_BASE_URL;
               window.open(baseUrl, '_blank');
             },
+          },
+          // First step of setup: filled. Later only for a replacement token,
+          // so outlined to leave Save as the main action. Fixed per dialog
+          // session, so the button is never swapped while typing.
+          expressions: {
+            'props.btnStyle': (field: FormlyFieldConfig) =>
+              field.parent?.parent?.model?._isInitialSetup === true ? 'flat' : 'stroked',
           },
         },
         {
           hideExpression: (m, v, field) =>
             isNotSyncProvider(field, 2, SyncProviderId.SuperSync),
           key: 'accessToken',
-          type: 'textarea',
+          type: 'input',
           className: 'e2e-accessToken',
           templateOptions: {
             label: T.F.SYNC.FORM.SUPER_SYNC.L_ACCESS_TOKEN,
             description: T.F.SYNC.FORM.SUPER_SYNC.ACCESS_TOKEN_DESCRIPTION,
-            rows: 3,
+            attributes: { autocomplete: 'off', spellcheck: 'false' },
           },
           expressions: {
             'props.required': (field: FormlyFieldConfig) =>
@@ -735,6 +748,15 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
             },
           },
         },
+        // Agent task capture: shown during setup too, so the option is
+        // discoverable. It acts only on the active, persisted provider and
+        // asks to save SuperSync first until then (isSuperSyncActive).
+        {
+          hideExpression: (m: any, v: any, field?: FormlyFieldConfig) =>
+            isNotSyncProvider(field, 2, SyncProviderId.SuperSync),
+          type: 'agent-capture-settings',
+          className: 'e2e-agent-capture',
+        },
         // Advanced settings for SuperSync
         {
           type: 'collapsible',
@@ -754,6 +776,34 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
                 label: T.F.SYNC.FORM.SUPER_SYNC.L_SERVER_URL,
                 description: T.F.SYNC.FORM.SUPER_SYNC.SERVER_URL_DESCRIPTION,
                 placeholder: SUPER_SYNC_DEFAULT_BASE_URL,
+              },
+            },
+            {
+              // Experimental opt-in (default off): live tracking presence
+              // over the SuperSync WebSocket
+              key: 'isTrackingPresenceEnabled',
+              type: 'checkbox',
+              templateOptions: {
+                label: T.F.SYNC.FORM.SUPER_SYNC.L_ENABLE_TRACKING_PRESENCE,
+                description: T.F.SYNC.FORM.SUPER_SYNC.TRACKING_PRESENCE_DESCRIPTION,
+              },
+            },
+            {
+              // Optional text field: listed in CLEARABLE_FIELDS
+              // (sync-config.service.ts) so an emptied input clears the name.
+              key: 'deviceName',
+              type: 'input',
+              className: 'e2e-presenceDeviceName',
+              hideExpression: (m: { isTrackingPresenceEnabled?: boolean }) =>
+                !m?.isTrackingPresenceEnabled,
+              // Untick → re-tick within one dialog session must show the saved
+              // name again, not an empty input that a save would silently keep.
+              resetOnHide: false,
+              templateOptions: {
+                label: T.F.SYNC.FORM.SUPER_SYNC.L_PRESENCE_DEVICE_NAME,
+                description: T.F.SYNC.FORM.SUPER_SYNC.PRESENCE_DEVICE_NAME_DESCRIPTION,
+                placeholder: getDeviceLabel(),
+                maxLength: MAX_DEVICE_LABEL_LENGTH,
               },
             },
           ],

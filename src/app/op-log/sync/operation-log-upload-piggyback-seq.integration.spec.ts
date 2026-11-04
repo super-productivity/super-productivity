@@ -158,7 +158,6 @@ describe('OperationLogSyncService + OperationLogUploadService — piggyback seq 
       'getLastSeq',
       'getOpById',
       'setVectorClock',
-      'clearFullStateOps',
       'getVectorClock',
       'appendBatchSkipDuplicates',
       'hasSyncedOps',
@@ -174,7 +173,6 @@ describe('OperationLogSyncService + OperationLogUploadService — piggyback seq 
     opLogStoreSpy.markSynced.and.resolveTo(undefined);
     opLogStoreSpy.markRejected.and.resolveTo(undefined);
     opLogStoreSpy.setVectorClock.and.resolveTo();
-    opLogStoreSpy.clearFullStateOps.and.resolveTo();
     opLogStoreSpy.getVectorClock.and.resolveTo(null);
     opLogStoreSpy.deleteOpsWhere.and.resolveTo();
     opLogStoreSpy.appendBatchSkipDuplicates.and.resolveTo({
@@ -221,12 +219,22 @@ describe('OperationLogSyncService + OperationLogUploadService — piggyback seq 
       'handleServerMigration',
     ]);
     serverMigrationServiceSpy.checkAndHandleMigration.and.resolveTo();
-    serverMigrationServiceSpy.handleServerMigration.and.resolveTo();
+    serverMigrationServiceSpy.handleServerMigration.and.resolveTo({
+      kind: 'created',
+      opId: 'sync-import',
+    });
 
     const stateSnapshotServiceSpy = jasmine.createSpyObj('StateSnapshotService', [
       'getStateSnapshot',
+      'getStateSnapshotAsync',
     ]);
     stateSnapshotServiceSpy.getStateSnapshot.and.returnValue({
+      task: { ids: [] },
+      project: { ids: [INBOX_PROJECT.id] },
+      tag: { ids: [TODAY_TAG.id] },
+      note: { ids: [] },
+    } as any);
+    stateSnapshotServiceSpy.getStateSnapshotAsync.and.resolveTo({
       task: { ids: [] },
       project: { ids: [INBOX_PROJECT.id] },
       tag: { ids: [TODAY_TAG.id] },
@@ -335,6 +343,9 @@ describe('OperationLogSyncService + OperationLogUploadService — piggyback seq 
           provide: OperationLogDownloadService,
           useValue: jasmine.createSpyObj('OperationLogDownloadService', [
             'downloadRemoteOps',
+            'hasUnseenRemoteOps',
+            'getUndecryptableRemoteOps',
+            'clearUndecryptableRemoteOps',
           ]),
         },
         {

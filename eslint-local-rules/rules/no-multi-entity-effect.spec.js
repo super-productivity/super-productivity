@@ -122,5 +122,4 @@ ruleTester.run('no-multi-entity-effect', rule, {
   ],
 });
 
-// eslint-disable-next-line no-console
 console.log('no-multi-entity-effect: all RuleTester cases passed');

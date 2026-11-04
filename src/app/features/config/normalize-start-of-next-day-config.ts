@@ -22,7 +22,7 @@ export const normalizeStartOfNextDayConfig = (
   // `startOfNextDayTime` wins when valid. When both fields arrive together
   // from sync/REST/plugin payloads we keep minute precision from
   // `startOfNextDayTime` and derive a legacy hour-only `startOfNextDay`.
-  // If the time string is invalid, fall back to a valid legacy numeric value.
+  // If the time string is invalid, reset both fields to the default boundary.
   const normalized: NormalizedMiscConfig = { ...misc };
 
   if (misc.startOfNextDayTime != null) {
@@ -33,11 +33,13 @@ export const normalizeStartOfNextDayConfig = (
     if (hour != null) {
       normalized.startOfNextDay = hour;
     } else {
-      const legacyHour =
-        getValidStartOfNextDayHour(misc.startOfNextDay) ??
-        DEFAULT_GLOBAL_CONFIG.misc.startOfNextDay;
-      normalized.startOfNextDay = legacyHour;
-      normalized.startOfNextDayTime = formatStartOfNextDayTime(legacyHour);
+      // #7645: mirrors getStartOfNextDayDiffMs -- an invalid time string makes the
+      // whole pair untrustworthy, because v18.5.0-v18.6.x derived the legacy hour
+      // from that same string ('24:00' -> 23) and synced both. Repair to the default
+      // (see that util for why we do not try to tell derived values from intent).
+      const defaultHour = DEFAULT_GLOBAL_CONFIG.misc.startOfNextDay;
+      normalized.startOfNextDay = defaultHour;
+      normalized.startOfNextDayTime = formatStartOfNextDayTime(defaultHour);
     }
   }
 

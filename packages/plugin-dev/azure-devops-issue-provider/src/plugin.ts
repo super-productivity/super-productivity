@@ -1,40 +1,28 @@
 import type {
-  IssueProviderPluginDefinition,
-  PluginFieldMapping,
   PluginHttp,
   PluginIssue,
   PluginSearchResult,
 } from '@super-productivity/plugin-api';
-
-declare const PluginAPI: {
-  registerIssueProvider(definition: IssueProviderPluginDefinition): void;
-  translate(key: string, params?: Record<string, string | number>): string;
-};
+import {
+  asConfig,
+  basicAuth,
+  canConnect,
+  isDoneMapping,
+  pickSyncValues,
+  registerIssueProvider,
+  t,
+  toMs,
+} from '../../issue-provider-kit';
 
 const API_VERSION = '6.0';
+// The work item type states endpoint is still preview in 6.0 (Server 2020).
+const STATES_API_VERSION = '6.0-preview.1';
 const DEFAULT_WORK_ITEM_LIMIT = 50;
 const MAX_WORK_ITEM_LIMIT = 200;
 
-// Work item fields fetched for the list views (kept identical to the built-in
-// provider so behavior is unchanged after migration). getById fetches the full
-// work item (no field filter) so it additionally returns System.Description.
-const WORK_ITEM_FIELDS = [
-  'System.Id',
-  'System.Title',
-  'System.WorkItemType',
-  'System.State',
-  'Microsoft.VSTS.Common.Priority',
-  'System.CreatedDate',
-  'System.ChangedDate',
-  'System.AssignedTo',
-  'Microsoft.VSTS.Scheduling.DueDate',
-  'Microsoft.VSTS.Scheduling.TargetDate',
-  'Microsoft.VSTS.Scheduling.StartDate',
-].join(',');
-
 // Azure DevOps "done" state categories. The backlog query excludes
 // Closed/Done/Removed; Resolved is the Agile resolved-but-not-closed state.
-const DONE_STATES = ['closed', 'done', 'removed', 'resolved'];
+const DONE_STATES = ['closed', 'done', 'removed'];
 
 type AzureScope = 'all' | 'created-by-me' | 'assigned-to-me';
 
@@ -68,18 +56,25 @@ interface AzureWiqlResponse {
   workItems?: { id: number }[];
 }
 
-const t = (key: string, params?: Record<string, string | number>): string => {
-  try {
-    return PluginAPI.translate(key, params);
-  } catch {
-    return key;
-  }
-};
+// Azure's state categories: each process template names its states freely
+// (Closed, Done, Finished…) but files each under one of these.
+type AzureStateCategory =
+  | 'Proposed'
+  | 'InProgress'
+  | 'Resolved'
+  | 'Completed'
+  | 'Removed';
 
-const toMs = (date: unknown): number => {
-  const str = typeof date === 'string' ? date : '';
-  return str ? new Date(str).getTime() : 0;
-};
+interface AzureWorkItemState {
+  name: string;
+  category: AzureStateCategory;
+}
+
+// What the isDone mapping sends to updateIssue. These are intents, not state
+// names: the state to write depends on the work item's type and process
+// (Agile Task → Closed, Scrum PBI → Done), so updateIssue resolves them.
+const DONE_INTENT = 'Closed';
+const OPEN_INTENT = 'Active';
 
 // Azure DevOps Server (on-prem) uses a custom host; cloud falls back to the
 // dev.azure.com/<org> URL the built-in provider built from `organization`.
@@ -97,6 +92,21 @@ const clampLimit = (cfg: AzureDevOpsConfig): number => {
   const raw = Number(cfg.autoImportLimit);
   const limit = Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_WORK_ITEM_LIMIT;
   return Math.min(Math.max(Math.floor(limit), 1), MAX_WORK_ITEM_LIMIT);
+};
+
+const isDoneCategory = (category: AzureStateCategory | undefined): boolean =>
+  category === 'Completed' || category === 'Removed';
+
+/** The state to move a work item to, by category; undefined if its type has none. */
+const pickTargetState = (
+  states: AzureWorkItemState[],
+  isDone: boolean,
+): string | undefined => {
+  const byCategory = (category: AzureStateCategory): string | undefined =>
+    states.find((s) => s.category === category)?.name;
+  return isDone
+    ? byCategory('Completed')
+    : (byCategory('InProgress') ?? byCategory('Proposed'));
 };
 
 const summaryOf = (item: AzureWorkItem): string =>
@@ -171,18 +181,59 @@ const runWiqlAndFetch = async (
     return [];
   }
   const ids = refs.map((r) => r.id).slice(0, limit);
+  // No `fields` filter: naming a field the process template lacks (e.g.
+  // Microsoft.VSTS.Scheduling.DueDate on on-prem Scrum) fails the whole request
+  // with HTTP 400 TF51535. Unfiltered, each item returns just the fields it
+  // has; the mappers treat optional ones (priority, due/target/start date) as
+  // absent. (#9473)
   const res = await http.get<AzureWorkItemsResponse>(
     `${baseUrl}/${cfg.project}/_apis/wit/workitems`,
     {
       params: {
         ids: ids.join(','),
-        fields: WORK_ITEM_FIELDS,
         // eslint-disable-next-line @typescript-eslint/naming-convention
         'api-version': API_VERSION,
       },
     },
   );
   return res?.value || [];
+};
+
+// Moves a work item to its type's done (or open) state. Skips the write when
+// the item is already there, and never touches a Removed item: reopening the
+// task must not bring back a work item someone deleted in Azure DevOps.
+const setWorkItemDone = async (
+  cfg: AzureDevOpsConfig,
+  http: PluginHttp,
+  id: string,
+  isDone: boolean,
+): Promise<void> => {
+  const witUrl = `${getBaseUrl(cfg)}/${cfg.project}/_apis/wit`;
+  const itemUrl = `${witUrl}/workitems/${id}?api-version=${API_VERSION}`;
+  const item = await http.get<AzureWorkItem>(itemUrl);
+  const type = String(item.fields['System.WorkItemType'] || '');
+  const res = await http.get<{ value?: AzureWorkItemState[] }>(
+    `${witUrl}/workitemtypes/${encodeURIComponent(type)}/states?api-version=${STATES_API_VERSION}`,
+  );
+  const states = res?.value || [];
+  const current = String(item.fields['System.State'] || '');
+  const currentCategory = states.find((s) => s.name === current)?.category;
+  const isCurrentlyDone = currentCategory
+    ? isDoneCategory(currentCategory)
+    : DONE_STATES.includes(current.toLowerCase());
+  if (currentCategory === 'Removed' || isCurrentlyDone === isDone) {
+    return;
+  }
+  const target = pickTargetState(states, isDone);
+  if (!target) {
+    throw new Error(t('ERRORS.NO_TARGET_STATE', { type }));
+  }
+  await http.patch(
+    itemUrl,
+    [{ op: 'add', path: '/fields/System.State', value: target }],
+    // eslint-disable-next-line @typescript-eslint/naming-convention
+    { headers: { 'Content-Type': 'application/json-patch+json' } },
+  );
 };
 
 // Build the WIQL query used for auto backlog import. When the user provides a
@@ -210,7 +261,7 @@ const backlogQuery = (cfg: AzureDevOpsConfig): string => {
   return query;
 };
 
-PluginAPI.registerIssueProvider({
+registerIssueProvider({
   configFields: [
     {
       key: 'host',
@@ -258,23 +309,20 @@ PluginAPI.registerIssueProvider({
     },
   ],
 
-  getHeaders(config: Record<string, unknown>): Record<string, string> {
-    const cfg = config as unknown as AzureDevOpsConfig;
-    // Azure DevOps PAT auth: HTTP Basic with an empty username and the PAT as
-    // the password. Content-Type is set globally for the WIQL POST body.
-    return {
-      // eslint-disable-next-line @typescript-eslint/naming-convention
-      'Content-Type': 'application/json',
-      Authorization: `Basic ${btoa(`:${cfg.token || ''}`)}`,
-    };
-  },
+  // Azure DevOps PAT auth: HTTP Basic with an empty username and the PAT as
+  // the password. No Content-Type here: these headers override per-request
+  // ones, which would break the json-patch PATCH; JSON bodies get
+  // application/json from the HTTP client.
+  getHeaders: (config) => ({
+    Authorization: basicAuth('', asConfig<AzureDevOpsConfig>(config).token || ''),
+  }),
 
   async searchIssues(
     searchTerm: string,
     config: Record<string, unknown>,
     http: PluginHttp,
   ): Promise<PluginSearchResult[]> {
-    const cfg = config as unknown as AzureDevOpsConfig;
+    const cfg = asConfig<AzureDevOpsConfig>(config);
     const term = escapeWiql(searchTerm);
     const project = escapeWiql(cfg.project);
     let query =
@@ -294,7 +342,7 @@ PluginAPI.registerIssueProvider({
     config: Record<string, unknown>,
     http: PluginHttp,
   ): Promise<PluginIssue> {
-    const cfg = config as unknown as AzureDevOpsConfig;
+    const cfg = asConfig<AzureDevOpsConfig>(config);
     const item = await http.get<AzureWorkItem>(
       `${getBaseUrl(cfg)}/${cfg.project}/_apis/wit/workitems/${issueId}?api-version=${API_VERSION}`,
     );
@@ -304,7 +352,7 @@ PluginAPI.registerIssueProvider({
   // Azure DevOps work item URLs are derivable from host + project + id, so the
   // link is built without a request (the html href the API returns for an item).
   getIssueLink(issueId: string, config: Record<string, unknown>): string {
-    const cfg = config as unknown as AzureDevOpsConfig;
+    const cfg = asConfig<AzureDevOpsConfig>(config);
     const baseUrl = getBaseUrl(cfg);
     if (!baseUrl || !cfg.project) {
       return '';
@@ -312,24 +360,18 @@ PluginAPI.registerIssueProvider({
     return `${baseUrl}/${cfg.project}/_workitems/edit/${issueId}`;
   },
 
-  async testConnection(
-    config: Record<string, unknown>,
-    http: PluginHttp,
-  ): Promise<boolean> {
-    const cfg = config as unknown as AzureDevOpsConfig;
-    try {
-      await http.get(`${getBaseUrl(cfg)}/_apis/connectionData?api-version=5.1-preview`);
-      return true;
-    } catch {
-      return false;
-    }
-  },
+  testConnection: (config, http) =>
+    canConnect(() =>
+      http.get(
+        `${getBaseUrl(asConfig<AzureDevOpsConfig>(config))}/_apis/connectionData?api-version=5.1-preview`,
+      ),
+    ),
 
   async getNewIssuesForBacklog(
     config: Record<string, unknown>,
     http: PluginHttp,
   ): Promise<PluginSearchResult[]> {
-    const cfg = config as unknown as AzureDevOpsConfig;
+    const cfg = asConfig<AzureDevOpsConfig>(config);
     const query = backlogQuery(cfg);
     const items = await runWiqlAndFetch(cfg, http, query, clampLimit(cfg));
     return items.map(mapReduced);
@@ -344,23 +386,29 @@ PluginAPI.registerIssueProvider({
     { field: 'body', label: t('DISPLAY.DESCRIPTION'), type: 'markdown' },
   ],
 
-  // Read-only provider: pull-only mapping drives remote-update detection only.
-  fieldMappings: [
-    {
-      taskField: 'isDone',
-      issueField: 'state',
-      defaultDirection: 'pullOnly',
-      toIssueValue: (taskValue: unknown): string => (taskValue ? 'Closed' : 'Active'),
-      toTaskValue: (issueValue: unknown): boolean =>
-        DONE_STATES.includes(String(issueValue).toLowerCase()),
-    },
-  ] satisfies PluginFieldMapping[],
+  doneStates: DONE_STATES,
 
-  extractSyncValues(issue: PluginIssue): Record<string, unknown> {
-    return {
-      state: issue.state,
-      title: issue.title,
-      body: issue.body,
-    };
+  // Pull-only by default; pushing the done state is opt-in (it needs a token
+  // with work item write access).
+  fieldMappings: [
+    isDoneMapping({
+      done: DONE_INTENT,
+      open: OPEN_INTENT,
+      isDone: (issueValue) => DONE_STATES.includes(String(issueValue).toLowerCase()),
+    }),
+  ],
+
+  async updateIssue(
+    id: string,
+    changes: Record<string, unknown>,
+    config: Record<string, unknown>,
+    http: PluginHttp,
+  ): Promise<void> {
+    if ('state' in changes) {
+      const cfg = asConfig<AzureDevOpsConfig>(config);
+      await setWorkItemDone(cfg, http, id, changes['state'] === DONE_INTENT);
+    }
   },
-} satisfies IssueProviderPluginDefinition as IssueProviderPluginDefinition);
+
+  extractSyncValues: pickSyncValues('state', 'title', 'body'),
+});

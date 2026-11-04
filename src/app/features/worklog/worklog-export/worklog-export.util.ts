@@ -18,11 +18,29 @@ import {
   ItemsByKey,
   RowItem,
   TaskFields,
+  TimeFields,
   WorklogExportData,
 } from './worklog-export.model';
 
 const LINE_SEPARATOR = '\n';
 const EMPTY_VAL = ' - ';
+
+interface ExportLookups {
+  tasks: Map<string, WorklogTask>;
+  projects: Map<string, ProjectCopy>;
+  tags: Map<string, TagCopy>;
+}
+
+const indexById = <T extends { id: string }>(items: T[]): Map<string, T> => {
+  const index = new Map<string, T>();
+  for (const item of items) {
+    // Match Array.find: the first occurrence wins.
+    if (!index.has(item.id)) {
+      index.set(item.id, item);
+    }
+  }
+  return index;
+};
 /**
  * Leading `= + - @ TAB CR LF` make Excel/LibreOffice evaluate the cell as a
  * formula, so a task title like `=cmd|' /C calc'!A0` would execute on open
@@ -51,17 +69,22 @@ export const createRows = (
   groupBy: WorklogGrouping,
 ): RowItem[] => {
   let groups: ItemsByKey<RowItem> = {};
+  const lookups: ExportLookups = {
+    tasks: indexById(data.tasks),
+    projects: indexById(data.projects),
+    tags: indexById(data.tags),
+  };
 
   switch (groupBy) {
     case WorklogGrouping.DATE:
-      groups = handleDateGroup(data);
+      groups = handleDateGroup(data, lookups);
       break;
     case WorklogGrouping.WORKLOG: // don't group at all
-      groups = handleWorklogGroup(data);
+      groups = handleWorklogGroup(data, lookups);
       break;
     default:
       // group by TASK/PARENT
-      groups = handleTaskGroup(data, groupBy);
+      groups = handleTaskGroup(data, groupBy, lookups);
   }
 
   const rows: RowItem[] = [];
@@ -78,13 +101,16 @@ export const createRows = (
  * For each task it sets taskFields and iterates over timeSpentOnDay.
  * For each timeSpentOnDay it sets timeFields and either creates a new taskGroup or pushes to a previous one.
  */
-const handleDateGroup = (data: WorklogExportData): ItemsByKey<RowItem> => {
+const handleDateGroup = (
+  data: WorklogExportData,
+  lookups: ExportLookups,
+): ItemsByKey<RowItem> => {
   const taskGroups: ItemsByKey<RowItem> = {};
   for (const task of data.tasks) {
     if (!task.timeSpentOnDay) {
       continue;
     }
-    const taskFields = getTaskFields(task, data);
+    const taskFields = getTaskFields(task, lookups);
     const numDays = Object.keys(task.timeSpentOnDay).length;
     let timeEstimate = 0;
     let timeSpent = 0;
@@ -94,48 +120,50 @@ const handleDateGroup = (data: WorklogExportData): ItemsByKey<RowItem> => {
         timeEstimate = task.timeEstimate / numDays;
       }
 
-      const rowItem: RowItem = {
+      const timeFields: TimeFields = {
         dates: [day],
         workStart: data.workTimes.start[day],
         workEnd: data.workTimes.end[day],
         timeSpent,
         timeEstimate,
-        ...taskFields,
       };
 
-      if (!taskGroups[day]) {
-        taskGroups[day] = rowItem;
+      const group = taskGroups[day];
+      if (!group) {
+        // cloneTaskFields is the only way taskFields reaches a row, so no two
+        // days of the same task can share an array that the merge below mutates.
+        taskGroups[day] = { ...timeFields, ...cloneTaskFields(taskFields) };
       } else {
-        taskGroups[day].titles = unique([...taskGroups[day].titles, ...rowItem.titles]);
-        taskGroups[day].titlesWithSub = [
-          ...taskGroups[day].titlesWithSub,
-          ...rowItem.titlesWithSub,
-        ];
-        taskGroups[day].tasks = [...taskGroups[day].tasks, ...rowItem.tasks];
-        taskGroups[day].notes = [...taskGroups[day].notes, ...rowItem.notes];
-        taskGroups[day].projects = unique([
-          ...taskGroups[day].projects,
-          ...rowItem.projects,
-        ]);
-        taskGroups[day].tags = unique([...taskGroups[day].tags, ...rowItem.tags]);
-        if (taskGroups[day].workStart !== undefined) {
+        group.titles.push(...taskFields.titles);
+        group.titlesWithSub.push(...taskFields.titlesWithSub);
+        group.tasks.push(...taskFields.tasks);
+        group.notes.push(...taskFields.notes);
+        group.projects.push(...taskFields.projects);
+        group.tags.push(...taskFields.tags);
+        if (group.workStart !== undefined) {
           // TODO check if this works as intended
-          taskGroups[day].workStart = Math.min(
-            taskGroups[day].workStart as number,
-            rowItem.workStart as number,
+          group.workStart = Math.min(
+            group.workStart as number,
+            timeFields.workStart as number,
           );
         }
-        if (taskGroups[day].workEnd !== undefined) {
+        if (group.workEnd !== undefined) {
           // TODO check if this works as intended
-          taskGroups[day].workEnd = Math.min(
-            taskGroups[day].workEnd as number,
-            rowItem.workEnd as number,
-          );
+          group.workEnd = Math.min(group.workEnd as number, timeFields.workEnd as number);
         }
-        taskGroups[day].timeEstimate += rowItem.timeEstimate;
-        taskGroups[day].timeSpent += rowItem.timeSpent;
+        group.timeEstimate += timeFields.timeEstimate;
+        group.timeSpent += timeFields.timeSpent;
       }
     });
+  }
+  for (const row of Object.values(taskGroups)) {
+    // Historically only merged rows are deduplicated. Keep a single task's
+    // display tags intact, including different tags that share a title.
+    if (row.tasks.length > 1) {
+      row.titles = unique(row.titles);
+      row.projects = unique(row.projects);
+      row.tags = unique(row.tags);
+    }
   }
   return taskGroups;
 };
@@ -158,6 +186,7 @@ const skipTask = (task: WorklogTask, groupBy: WorklogGrouping): boolean => {
 const handleTaskGroup = (
   data: WorklogExportData,
   groupBy: WorklogGrouping,
+  lookups: ExportLookups,
 ): ItemsByKey<RowItem> => {
   const taskGroups: ItemsByKey<RowItem> = {};
   for (const task of data.tasks) {
@@ -167,7 +196,7 @@ const handleTaskGroup = (
     if (!task.timeSpentOnDay) {
       continue;
     }
-    const taskFields = getTaskFields(task, data);
+    const taskFields = getTaskFields(task, lookups);
     const dates = sortDateStrings(Object.keys(task.timeSpentOnDay));
     taskGroups[task.id] = {
       dates,
@@ -185,7 +214,10 @@ const handleTaskGroup = (
  * For each task creates a new rowItem without needing to push to previous taskGroups, unlike handleDateGroup.
  * We're still creating a map since we will use the key for sorting in the next step.
  */
-const handleWorklogGroup = (data: WorklogExportData): ItemsByKey<RowItem> => {
+const handleWorklogGroup = (
+  data: WorklogExportData,
+  lookups: ExportLookups,
+): ItemsByKey<RowItem> => {
   const taskGroups: ItemsByKey<RowItem> = {};
   for (const task of data.tasks) {
     if (!task.timeSpentOnDay) {
@@ -193,7 +225,7 @@ const handleWorklogGroup = (data: WorklogExportData): ItemsByKey<RowItem> => {
     }
     Object.keys(task.timeSpentOnDay).forEach((day) => {
       const groupKey = day + '_' + task.id;
-      const taskFields = getTaskFields(task, data);
+      const taskFields = getTaskFields(task, lookups);
       taskGroups[groupKey] = {
         dates: [day],
         timeEstimate: task.subTaskIds.length > 0 ? 0 : task.timeEstimate,
@@ -226,31 +258,45 @@ const clearRepeatedWorklogDayTimes = (rows: RowItem[]): RowItem[] => {
 /**
  * Unfolds task into taskFields while mapping id's to titles, and minor formatting
  */
-const getTaskFields = (task: WorklogTask, data: WorklogExportData): TaskFields => {
+const getTaskFields = (task: WorklogTask, lookups: ExportLookups): TaskFields => {
   const titlesWithSub = [task.title];
   const parentTask = task.parentId
     ? // NOTE: we use 'ERR' to still throw an error for invalid data
-      (data.tasks.find((t) => t.id === task.parentId) as WorklogTask) || 'ERR'
+      (lookups.tasks.get(task.parentId) as WorklogTask) || 'ERR'
     : undefined;
 
   const titles = parentTask ? [parentTask.title] : [task.title];
 
   const notes = task.notes ? [task.notes.replace(/\n/g, ' - ')] : [];
   const projects = task.projectId
-    ? [
-        (data.projects.find((project) => project.id === task.projectId) as ProjectCopy)
-          .title,
-      ]
+    ? [(lookups.projects.get(task.projectId) as ProjectCopy).title]
     : [];
 
   const tags = resolveDisplayTagIds(
     task,
     typeof parentTask === 'object' ? parentTask : undefined,
-  ).map((tagId) => (data.tags.find((tag) => tag.id === tagId) as TagCopy).title);
+  ).map((tagId) => (lookups.tags.get(tagId) as TagCopy).title);
 
   const tasks = [task];
   return { tasks, titlesWithSub, titles, notes, projects, tags };
 };
+
+/**
+ * getTaskFields is computed once per task but its arrays end up in every day that
+ * task contributed to, and handleDateGroup accumulates into them by mutation, so
+ * each day needs its own copies. Returning TaskFields makes a newly added required
+ * field a compile error here; an optional one would still need adding by hand.
+ * handleTaskGroup/handleWorklogGroup spread taskFields directly on purpose —
+ * neither ever merges, so nothing mutates what they store.
+ */
+const cloneTaskFields = (fields: TaskFields): TaskFields => ({
+  tasks: [...fields.tasks],
+  titles: [...fields.titles],
+  titlesWithSub: [...fields.titlesWithSub],
+  notes: [...fields.notes],
+  projects: [...fields.projects],
+  tags: [...fields.tags],
+});
 
 const sortDateStrings = (dates: string[]): string[] => {
   return dates.sort((a: string, b: string) => {

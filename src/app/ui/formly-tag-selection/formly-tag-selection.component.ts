@@ -3,6 +3,7 @@ import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { FieldType } from '@ngx-formly/material';
 import { FormlyFieldConfig, FormlyModule } from '@ngx-formly/core';
 import { T } from 'src/app/t.const';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import { TagEditComponent } from '../../features/tag/tag-edit/tag-edit.component';
 
 @Component({

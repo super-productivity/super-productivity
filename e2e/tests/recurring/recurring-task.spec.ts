@@ -1,7 +1,6 @@
 import { test, expect } from '../../fixtures/test.fixture';
 import { type Page } from '@playwright/test';
 
-const DB_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const ONE_HOUR = 60 * 60 * 1000;
 const THIRTY_MINUTES = 30 * 60 * 1000;
 
@@ -11,6 +10,14 @@ type TaskStateSnapshot = {
   timeEstimate?: number | null;
 };
 
+/**
+ * The suite runs in Europe/Berlin (e2e/global-setup.ts) at whatever wall-clock
+ * time CI fires, so a test can straddle local midnight: a task created at
+ * 23:59:5x is stored under the previous day while the assertion a second later
+ * resolves to the next one (run 33808991651). Callers therefore sample this
+ * once before creating the task and once at assertion time and accept either
+ * side of the rollover.
+ */
 const getDbDateStr = async (page: Page, offsetDays = 0): Promise<string> =>
   page.evaluate((offset) => {
     const date = new Date();
@@ -96,14 +103,34 @@ const addTaskWithoutWaitingForTodayList = async (
   await page.locator('.e2e-add-task-submit').click();
 };
 
+/**
+ * Waits until the short syntax token is gone from the task's title and returns
+ * the task's state.
+ *
+ * "The task exists" and "it has a due day" both hold before the syntax is
+ * applied. The add bar submits whatever it had parsed at click time. When that
+ * parse has not landed yet (the first "@date" of a page load waits for the lazy
+ * chrono-node chunk) the task is created with the raw title and the bar's
+ * default due day, which is today in the Today context and so already looks
+ * like a date. ShortSyntaxEffects then re-parses the created task and
+ * dispatches applyShortSyntax, which rewrites title, due day and estimate in one
+ * reducer pass. A single read after either earlier condition can therefore see
+ * "<title> @tomorrow" with today's date. The title only becomes exactly
+ * `taskTitle` once that pass is applied, so wait for it before reading the
+ * other fields.
+ */
 const expectTaskTitleWithoutShortSyntax = async (
   page: Page,
   taskTitle: string,
   token: string,
 ): Promise<TaskStateSnapshot> => {
   await expect
-    .poll(async () => (await getTaskStateByTitle(page, taskTitle))?.title ?? null)
-    .not.toBeNull();
+    .poll(
+      async () =>
+        (await getTaskStateByTitle(page, taskTitle))?.title ??
+        `<no task containing "${taskTitle}">`,
+    )
+    .toBe(taskTitle);
 
   const taskState = await getTaskStateByTitle(page, taskTitle);
   expect(taskState).not.toBeNull();
@@ -125,47 +152,6 @@ const expectTaskTitleWithoutShortSyntax = async (
  */
 
 test.describe('Scheduled Task Operations', () => {
-  test('should create task scheduled for today using short syntax', async ({
-    page,
-    workViewPage,
-    testPrefix,
-  }) => {
-    await workViewPage.waitForTaskList();
-
-    // Create task with @today short syntax
-    const taskTitle = `${testPrefix}-Scheduled Task`;
-    await workViewPage.addTask(`${taskTitle} @today`);
-
-    // Verify task is visible
-    const task = page.locator('task').filter({ hasText: taskTitle });
-    await expect(task).toBeVisible({ timeout: 10000 });
-    await expect(task.locator('task-title')).not.toContainText('@today');
-
-    const expectedDueDay = await getDbDateStr(page);
-    const taskState = await expectTaskTitleWithoutShortSyntax(page, taskTitle, '@today');
-    expect(taskState.dueDay).toBe(expectedDueDay);
-  });
-
-  test('should create task with time estimate using short syntax', async ({
-    page,
-    workViewPage,
-    testPrefix,
-  }) => {
-    await workViewPage.waitForTaskList();
-
-    // Create task with 1h short syntax for 1 hour estimate
-    const taskTitle = `${testPrefix}-Estimated Task`;
-    await workViewPage.addTask(`${taskTitle} 1h`);
-
-    // Verify task is visible
-    const task = page.locator('task').filter({ hasText: taskTitle });
-    await expect(task).toBeVisible({ timeout: 10000 });
-    await expect(task.locator('task-title')).not.toContainText('1h');
-
-    const taskState = await expectTaskTitleWithoutShortSyntax(page, taskTitle, '1h');
-    expect(taskState.timeEstimate).toBe(ONE_HOUR);
-  });
-
   test('should open context menu on task', async ({ page, workViewPage, testPrefix }) => {
     await workViewPage.waitForTaskList();
 
@@ -229,18 +215,16 @@ test.describe('Scheduled Task Operations', () => {
     // used because it waits for the new task in the today list and tomorrow's
     // task does not show up there.
     const taskTitle = `${testPrefix}-Tomorrow Task`;
+    const dueDayBeforeAdd = await getDbDateStr(page, 1);
     await addTaskWithoutWaitingForTodayList(page, `${taskTitle} @tomorrow`);
 
-    const expectedDueDay = await getDbDateStr(page, 1);
-    await expect
-      .poll(async () => (await getTaskStateByTitle(page, taskTitle))?.dueDay ?? '')
-      .toBe(expectedDueDay);
     const taskState = await expectTaskTitleWithoutShortSyntax(
       page,
       taskTitle,
       '@tomorrow',
     );
-    expect(taskState.dueDay).toMatch(DB_DATE_RE);
+    const dueDayAfterAdd = await getDbDateStr(page, 1);
+    expect([dueDayBeforeAdd, dueDayAfterAdd]).toContain(taskState.dueDay);
 
     // Navigate back to work view to verify app is responsive
     await page.goto('/#/tag/TODAY/tasks');
@@ -258,6 +242,7 @@ test.describe('Scheduled Task Operations', () => {
     await workViewPage.waitForTaskList();
 
     // Create multiple tasks with different schedules/estimates
+    const dueDayBeforeAdd = await getDbDateStr(page);
     await workViewPage.addTask(`${testPrefix}-Task1 @today 30m`);
     await workViewPage.addTask(`${testPrefix}-Task2 @today 1h`);
 
@@ -270,23 +255,24 @@ test.describe('Scheduled Task Operations', () => {
     await expect(task1.locator('task-title')).not.toContainText(/@today|30m/);
     await expect(task2.locator('task-title')).not.toContainText(/@today|1h/);
 
-    const expectedDueDay = await getDbDateStr(page);
     const task1State = await expectTaskTitleWithoutShortSyntax(
       page,
       `${testPrefix}-Task1`,
       '@today',
     );
-    expect(task1State.title).not.toContain('30m');
-    expect(task1State.dueDay).toBe(expectedDueDay);
-    expect(task1State.timeEstimate).toBe(THIRTY_MINUTES);
-
     const task2State = await expectTaskTitleWithoutShortSyntax(
       page,
       `${testPrefix}-Task2`,
       '@today',
     );
+    const dueDayAfterAdd = await getDbDateStr(page);
+
+    expect(task1State.title).not.toContain('30m');
+    expect([dueDayBeforeAdd, dueDayAfterAdd]).toContain(task1State.dueDay);
+    expect(task1State.timeEstimate).toBe(THIRTY_MINUTES);
+
     expect(task2State.title).not.toContain('1h');
-    expect(task2State.dueDay).toBe(expectedDueDay);
+    expect([dueDayBeforeAdd, dueDayAfterAdd]).toContain(task2State.dueDay);
     expect(task2State.timeEstimate).toBe(ONE_HOUR);
   });
 });

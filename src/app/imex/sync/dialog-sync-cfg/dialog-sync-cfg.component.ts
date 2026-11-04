@@ -43,6 +43,7 @@ import { isSyncTargetChanged } from '../../../op-log/sync-providers/sync-target-
 import { GlobalConfigService } from '../../../features/config/global-config.service';
 import { isOnline } from '../../../util/is-online';
 import { SnackService } from '../../../core/snack/snack.service';
+import { SyncLocalStateService } from '../../../op-log/sync/sync-local-state.service';
 import { DialogRestorePointComponent } from '../dialog-restore-point/dialog-restore-point.component';
 import { DialogSyncDevicesComponent } from '../dialog-sync-devices/dialog-sync-devices.component';
 import {
@@ -55,6 +56,7 @@ import { discoverNextcloudUserId } from '../../../op-log/sync-providers/file-bas
 import type { OneDrivePrivateCfg } from '../../../op-log/sync-providers/file-based/onedrive/onedrive.model';
 import type { LocalFileSyncPrivateCfg } from '@sp/sync-providers/local-file';
 import type { SuperSyncPrivateCfg } from '@sp/sync-providers/super-sync';
+import { DIALOG_AUTO_FOCUS_TYPING } from '../../../util/dialog-auto-focus';
 
 // `testWebdavConnection` reports a 404 (auth ok, wrong DAV path) via this
 // HTTP status; the package-side `WebDavHttpStatus` enum is not exported to
@@ -89,6 +91,7 @@ export class DialogSyncCfgComponent implements AfterViewInit {
   private _globalConfigService = inject(GlobalConfigService);
   private _matDialog = inject(MatDialog);
   private _snackService = inject(SnackService);
+  private _syncLocalStateService = inject(SyncLocalStateService);
 
   private _destroyRef = inject(DestroyRef);
 
@@ -842,6 +845,7 @@ export class DialogSyncCfgComponent implements AfterViewInit {
     const { DialogEnableEncryptionComponent } =
       await import('../dialog-enable-encryption/dialog-enable-encryption.component');
     const dialogRef = this._matDialog.open(DialogEnableEncryptionComponent, {
+      autoFocus: DIALOG_AUTO_FOCUS_TYPING,
       width: '450px',
       disableClose: true,
       data: {
@@ -895,8 +899,12 @@ export class DialogSyncCfgComponent implements AfterViewInit {
   }
 
   /** Confirmation handled inside `SyncWrapperService.forceUpload` (native
-   *  confirm, shared with snackbar action callers). */
+   *  confirm, shared with snackbar action callers). The clean slate deletes
+   *  remote ops this device could not decrypt, so name those first (#9256). */
   forceOverwrite(): void {
+    if (!this._syncLocalStateService.confirmOverwriteOfUndecryptableRemoteOps()) {
+      return;
+    }
     this.syncWrapperService.forceUpload();
   }
 

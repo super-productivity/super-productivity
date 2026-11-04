@@ -1,6 +1,7 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  effect,
   ElementRef,
   inject,
   Input,
@@ -20,6 +21,7 @@ import {
   PluginIframeConfig,
   buildPluginIframeHtml,
   handlePluginMessage,
+  refreshPluginTheme,
 } from '../../util/plugin-iframe.util';
 import {
   MatCard,
@@ -34,6 +36,8 @@ import { LayoutService } from '../../../core-ui/layout/layout.service';
 import { MatButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
+import { GlobalThemeService } from '../../../core/theme/global-theme.service';
+import { CustomThemeService } from '../../../core/theme/custom-theme.service';
 
 @Component({
   selector: 'plugin-index',
@@ -87,6 +91,8 @@ export class PluginIndexComponent implements OnInit, OnDestroy {
   private readonly _cleanupService = inject(PluginCleanupService);
   private readonly _translateService = inject(TranslateService);
   private readonly _layoutService = inject(LayoutService);
+  private readonly _globalThemeService = inject(GlobalThemeService);
+  private readonly _customThemeService = inject(CustomThemeService);
 
   T = T;
 
@@ -96,8 +102,22 @@ export class PluginIndexComponent implements OnInit, OnDestroy {
   readonly iframeSrcdoc = signal<SafeHtml | null>(null);
   readonly isResizing = this._layoutService.isPanelResizing;
 
+  // The iframe holds a copy of the theme tokens; re-copy them on a theme switch
+  // so an open plugin view follows without reloading.
+  // shortcut: tracks dark mode and custom themes — a project color change
+  // while a plugin view is open still needs a reopen.
+  private readonly _themeSync = effect(() => {
+    this._globalThemeService.isDarkTheme();
+    this._customThemeService.appliedThemeVersion();
+    const iframe = this.iframeRef?.nativeElement;
+    if (iframe) {
+      refreshPluginTheme(iframe);
+    }
+  });
+
   private _messageListener?: EventListener;
   private _routeSubscription?: Subscription;
+  private _isDestroyed = false;
 
   async ngOnInit(): Promise<void> {
     // If directPluginId is provided, load that plugin directly
@@ -180,6 +200,7 @@ export class PluginIndexComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this._isDestroyed = true;
     this._cleanupIframeCommunication();
     if (this._routeSubscription) {
       this._routeSubscription.unsubscribe();
@@ -190,11 +211,36 @@ export class PluginIndexComponent implements OnInit, OnDestroy {
     this._router.navigate(['/config'], { fragment: 'plugins' });
   }
 
+  /**
+   * Enabling a plugin flips its toggle before its assets finish loading, so a
+   * user who opens the plugin right away hits an empty index.html cache.
+   * Wait for an in-flight activation instead of failing on the first read.
+   */
+  private async _getIndexHtmlWhenLoaded(pluginId: string): Promise<string | null> {
+    const indexContent = this._pluginService.getPluginIndexHtml(pluginId);
+    if (indexContent) {
+      return indexContent;
+    }
+    if (this._pluginService.pluginStates().get(pluginId)?.status !== 'loading') {
+      return null;
+    }
+    PluginLog.log(`Plugin ${pluginId} is still loading, waiting before opening index`);
+    // activatePlugin() blocks until an in-flight load settles
+    await this._pluginService.activatePlugin(pluginId);
+    return this._pluginService.getPluginIndexHtml(pluginId);
+  }
+
   private async _loadPluginIndex(pluginId: string): Promise<void> {
     PluginLog.log(`Loading plugin index for: ${pluginId}`);
 
     // Get the plugin index.html content
-    const indexContent = this._pluginService.getPluginIndexHtml(pluginId);
+    const indexContent = await this._getIndexHtmlWhenLoaded(pluginId);
+    // The wait above can take seconds; if the user switched plugins meanwhile,
+    // the newer navigation owns the iframe and this load must not overwrite it.
+    if (this.pluginId() !== pluginId) {
+      PluginLog.log(`Plugin ${pluginId} load superseded by ${this.pluginId()}`);
+      return;
+    }
     if (!indexContent) {
       PluginLog.err(`No index.html content found for plugin: ${pluginId}`);
       // Try to get the plugin instance to check if it should have an index.html
@@ -224,6 +270,11 @@ export class PluginIndexComponent implements OnInit, OnDestroy {
     }
 
     const baseCfg = await this._pluginService.getBaseCfg();
+    // Checked after the LAST await: ngOnDestroy has already run cleanup, so a
+    // message listener added below would never be removed.
+    if (this._isDestroyed) {
+      return;
+    }
 
     // Create simple plugin config
     const config: PluginIframeConfig = {
@@ -334,6 +385,10 @@ export class PluginIndexComponent implements OnInit, OnDestroy {
     // race-sensitive. Do not "unify" this with the listener's DOM lookup.
     if (this.iframeRef?.nativeElement && this.pluginId()) {
       this._cleanupService.registerIframe(this.pluginId(), this.iframeRef.nativeElement);
+    }
+    // A theme switch before load reached the initial about:blank document
+    if (this.iframeRef?.nativeElement) {
+      refreshPluginTheme(this.iframeRef.nativeElement);
     }
   }
 }

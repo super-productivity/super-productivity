@@ -1,6 +1,7 @@
 @use 'angular-material-css-vars' as mat-css-vars;
 @use '../../../../styles/_globals.scss' as *;
 @use '../schedule-constants.scss' as *;
+@use '../schedule-deadline' as schedule-deadline;
 
 :host {
   --schedule-time-width: #{$schedule-time-column-width};
@@ -175,6 +176,7 @@
 
 .week-header {
   --over-budget-badge-bg: var(--schedule-event-bg);
+  --deadline-badge-bg: var(--schedule-event-bg);
 
   width: 100%;
   box-sizing: border-box;
@@ -192,22 +194,28 @@
 
   &.isInPanel {
     //border: 0;
-    justify-content: center;
+    // Day navigation buttons are projected in left and right of the date.
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
     border-top: 0;
     box-shadow: none;
-    background: transparent;
+    // Opaque, so the sticky date stays readable over the scrolled grid.
+    background: var(--schedule-panel-header-bg, transparent);
     border: none;
     --over-budget-badge-bg: var(--schedule-event-bg-in-side-panel);
+
+    .week-header-dates {
+      grid-template-columns: 1fr;
+    }
 
     .day {
       border: none !important;
     }
 
     // Panel is a single, full-width day cell with centered content. Anchoring
-    // the badge absolutely to the right edge leaves a large gap from the
-    // centered date; let it flow as a centered flex child next to the date
-    // instead (the week-view multi-column layout keeps the absolute variant).
-    .over-budget-badge {
+    // the badge container absolutely to the right edge leaves a large gap from
+    // the centered date; let it flow next to the date instead.
+    .day-badges {
       position: static;
       transform: none;
     }
@@ -272,17 +280,27 @@
   font-weight: 100;
 }
 
-.over-budget-badge {
+.day-badges {
   position: absolute;
   top: 50%;
   right: var(--s-half);
   transform: translateY(-50%);
   display: inline-flex;
   align-items: center;
+  gap: var(--s-half);
+  max-width: calc(100% - var(--s-half));
+
+  @include mq(xs, max) {
+    right: var(--s-quarter);
+  }
+}
+
+.over-budget-badge {
+  display: inline-flex;
+  align-items: center;
   justify-content: center;
   gap: var(--s-quarter);
   box-sizing: border-box;
-  max-width: calc(100% - var(--s-half));
   height: calc(var(--s2) + var(--s-quarter));
   min-width: calc(var(--s2) + var(--s-quarter));
   padding: 0 var(--s-quarter);
@@ -292,18 +310,13 @@
   background: var(--over-budget-badge-bg);
   color: var(--c-warn);
   font: inherit;
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   line-height: 1;
   white-space: nowrap;
 
   &:focus-visible {
     outline: var(--focus-ring-width) solid var(--focus-ring-color);
     outline-offset: var(--focus-ring-offset);
-  }
-
-  @include mq(xs, max) {
-    right: var(--s-quarter);
-    font-size: 10px;
   }
 }
 
@@ -313,6 +326,18 @@
 
 .over-budget-count {
   font-weight: 700;
+}
+
+.deadline-badge {
+  @include schedule-deadline.badge(var(--deadline-badge-bg));
+}
+
+.deadline-badge .deadline-icon {
+  @include schedule-deadline.badge-icon;
+}
+
+.deadline-count {
+  @include schedule-deadline.badge-count(var(--bg-lighter));
 }
 
 .time {
@@ -414,7 +439,7 @@
   > div {
     left: 0;
     font-weight: bold;
-    font-size: 10px;
+    font-size: var(--font-size-xs);
     position: absolute;
     bottom: 100%;
     line-height: 1;

@@ -95,6 +95,29 @@ test.describe('Keyboard Shortcuts', () => {
     await expect(newerTask).toBeFocused();
   });
 
+  test('should unfocus the current task with Escape', async ({
+    page,
+    workViewPage,
+    taskPage,
+    testPrefix,
+  }) => {
+    await workViewPage.waitForTaskList();
+
+    const taskName = `${testPrefix}-Escape Task`;
+    await workViewPage.addTask(taskName);
+
+    const task = taskPage.getTaskByText(taskName);
+    await task.focus();
+    await expect(task).toBeFocused();
+
+    await page.keyboard.press('Escape');
+    await expect(task).not.toBeFocused();
+
+    // With no task focused, the navigation keys stop moving focus around.
+    await page.keyboard.press('ArrowDown');
+    await expect(page.locator('task:focus')).toHaveCount(0);
+  });
+
   test('should mark a focused task done with D', async ({
     page,
     workViewPage,

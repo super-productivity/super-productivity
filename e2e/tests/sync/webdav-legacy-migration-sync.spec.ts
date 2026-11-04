@@ -54,6 +54,8 @@ test.describe('@webdav @migration WebDAV Legacy Migration Sync', () => {
     await createSyncFolder(request, SYNC_FOLDER_NAME);
     const WEBDAV_CONFIG = {
       ...WEBDAV_CONFIG_TEMPLATE,
+      // Keep the original legacy-to-v2 migration coverage in either suite mode.
+      isUseSplitSyncFiles: false,
       syncFolderPath: `/${SYNC_FOLDER_NAME}`,
     };
     const url = baseURL || 'http://localhost:4242';
@@ -96,7 +98,7 @@ test.describe('@webdav @migration WebDAV Legacy Migration Sync', () => {
       await syncPageA.setupWebdavSync(WEBDAV_CONFIG);
       await waitForStatePersistence(clientA.page);
       await syncPageA.triggerSync();
-      await waitForSyncComplete(clientA.page, syncPageA);
+      expect(await waitForSyncComplete(clientA.page, syncPageA)).toBe('success');
       console.log('[Test] Client A: Data uploaded to WebDAV');
 
       // === Client B: Legacy migration (different data) ===
@@ -149,9 +151,11 @@ test.describe('@webdav @migration WebDAV Legacy Migration Sync', () => {
 
       await confirmSyncConflictOverwriteIfShown(clientB.page, conflictDialog);
 
-      await waitForSyncComplete(clientB.page, syncPageB, 30000, {
-        allowResponseOnlyCompletion: true,
-      });
+      expect(
+        await waitForSyncComplete(clientB.page, syncPageB, 30000, {
+          allowResponseOnlyCompletion: true,
+        }),
+      ).toBe('success');
       console.log('[Test] Client B sync completed');
 
       // Navigate to B's project and verify data
@@ -169,38 +173,16 @@ test.describe('@webdav @migration WebDAV Legacy Migration Sync', () => {
       console.log('[Test] Client B verified: kept local data');
 
       // === Client A syncs - with divergent MIGRATION_GENESIS operations ===
-      // Note: When both clients have independent MIGRATION_GENESIS_IMPORT operations,
-      // they're on divergent timelines. Client A may also see a conflict.
+      // Both clients have independent MIGRATION_GENESIS_IMPORT operations, but
+      // A has nothing unsynced, so it adopts B's replacement without a dialog.
       console.log('[Test] Client A syncing...');
       await syncPageA.triggerSync();
       const syncResultA = await waitForSyncComplete(clientA.page, syncPageA);
 
-      // A conflict is allowed for the divergent migration timelines, but it must
-      // be resolved before asserting that both clients converged on B's snapshot.
-      const conflictDialogA = clientA.page.locator('mat-dialog-container', {
-        hasText: 'Conflicting Data',
-      });
-      if (syncResultA === 'conflict') {
-        await expect(conflictDialogA).toBeVisible();
-        console.log(
-          '[Test] Client A also sees conflict dialog (expected with divergent timelines)',
-        );
-        const useRemoteBtn = conflictDialogA.locator('button', {
-          hasText: /Keep remote/i,
-        });
-        syncPageA.prepareForNextSyncCycle('read');
-        await useRemoteBtn.click();
-
-        await confirmSyncConflictOverwriteIfShown(clientA.page, conflictDialogA);
-      } else {
-        expect(syncResultA).toBe('success');
-      }
-
-      if (syncResultA === 'conflict') {
-        await waitForSyncComplete(clientA.page, syncPageA, 30000, {
-          allowResponseOnlyCompletion: true,
-        });
-      }
+      // A is clean (no local changes since its migration upload), so B's
+      // replacement must hydrate silently (#9170). A conflict dialog here
+      // would make the user pick a side for data they never diverged on.
+      expect(syncResultA).toBe('success');
 
       await expect(
         sidenavA.locator('nav-item', { hasText: 'Client B Project' }),
@@ -239,6 +221,7 @@ test.describe('@webdav @migration WebDAV Legacy Migration Sync', () => {
     await createSyncFolder(request, SYNC_FOLDER_NAME);
     const WEBDAV_CONFIG = {
       ...WEBDAV_CONFIG_TEMPLATE,
+      isUseSplitSyncFiles: false,
       syncFolderPath: `/${SYNC_FOLDER_NAME}`,
     };
     const url = baseURL || 'http://localhost:4242';
@@ -279,7 +262,7 @@ test.describe('@webdav @migration WebDAV Legacy Migration Sync', () => {
       await syncPageA.setupWebdavSync(WEBDAV_CONFIG);
       await waitForStatePersistence(clientA.page);
       await syncPageA.triggerSync();
-      await waitForSyncComplete(clientA.page, syncPageA);
+      expect(await waitForSyncComplete(clientA.page, syncPageA)).toBe('success');
       console.log('[Test] Client A: Data uploaded');
 
       // === Client B: Legacy migration + conflict resolution ===
@@ -330,9 +313,11 @@ test.describe('@webdav @migration WebDAV Legacy Migration Sync', () => {
 
       // USE_REMOTE performs a fresh seq-0 rebuild download. The witness was armed
       // before the click so the setup response cannot be reused.
-      await waitForSyncComplete(clientB.page, syncPageB, 30000, {
-        allowResponseOnlyCompletion: true,
-      });
+      expect(
+        await waitForSyncComplete(clientB.page, syncPageB, 30000, {
+          allowResponseOnlyCompletion: true,
+        }),
+      ).toBe('success');
       console.log('[Test] Client B sync completed');
 
       // Navigate to A's project (which should now exist on B after adopting remote data)
@@ -382,6 +367,7 @@ test.describe('@webdav @migration WebDAV Legacy Migration Sync', () => {
     await createSyncFolder(request, SYNC_FOLDER_NAME);
     const WEBDAV_CONFIG = {
       ...WEBDAV_CONFIG_TEMPLATE,
+      isUseSplitSyncFiles: false,
       syncFolderPath: `/${SYNC_FOLDER_NAME}`,
     };
     const url = baseURL || 'http://localhost:4242';
@@ -423,7 +409,7 @@ test.describe('@webdav @migration WebDAV Legacy Migration Sync', () => {
       await syncPageA.setupWebdavSync(WEBDAV_CONFIG);
       await waitForStatePersistence(clientA.page);
       await syncPageA.triggerSync();
-      await waitForSyncComplete(clientA.page, syncPageA);
+      expect(await waitForSyncComplete(clientA.page, syncPageA)).toBe('success');
       console.log('[Test] Client A: Version A data uploaded');
 
       // === Client B: Same IDs but Version B content ===
@@ -472,9 +458,11 @@ test.describe('@webdav @migration WebDAV Legacy Migration Sync', () => {
 
       await confirmSyncConflictOverwriteIfShown(clientB.page, conflictDialog);
 
-      await waitForSyncComplete(clientB.page, syncPageB, 30000, {
-        allowResponseOnlyCompletion: true,
-      });
+      expect(
+        await waitForSyncComplete(clientB.page, syncPageB, 30000, {
+          allowResponseOnlyCompletion: true,
+        }),
+      ).toBe('success');
       console.log('[Test] Client B sync completed');
 
       // Navigate back to project and verify
@@ -507,26 +495,9 @@ test.describe('@webdav @migration WebDAV Legacy Migration Sync', () => {
       await syncPageA.triggerSync();
       const syncResultA = await waitForSyncComplete(clientA.page, syncPageA);
 
-      // Resolve a divergent-timeline conflict if one is raised. Either route
-      // must end with Client A adopting the snapshot B just uploaded.
-      const conflictDialogA = clientA.page.locator('mat-dialog-container', {
-        hasText: 'Conflicting Data',
-      });
-      if (syncResultA === 'conflict') {
-        await expect(conflictDialogA).toBeVisible();
-        console.log('[Test] Client A sees conflict dialog - choosing Keep remote');
-        const useRemoteBtn = conflictDialogA.locator('button', {
-          hasText: /Keep remote/i,
-        });
-        syncPageA.prepareForNextSyncCycle('read');
-        await useRemoteBtn.click();
-        await confirmSyncConflictOverwriteIfShown(clientA.page, conflictDialogA);
-        await waitForSyncComplete(clientA.page, syncPageA, 30000, {
-          allowResponseOnlyCompletion: true,
-        });
-      } else {
-        expect(syncResultA).toBe('success');
-      }
+      // A has no changes since its upload, so B's replacement must hydrate
+      // silently (#9170) instead of asking A to pick a side.
+      expect(syncResultA).toBe('success');
 
       // Navigate to shared project and verify
       await sidenavA.locator('nav-item', { hasText: 'Shared Project' }).click();
@@ -566,6 +537,7 @@ test.describe('@webdav @migration WebDAV Legacy Migration Sync', () => {
     await createSyncFolder(request, SYNC_FOLDER_NAME);
     const WEBDAV_CONFIG = {
       ...WEBDAV_CONFIG_TEMPLATE,
+      isUseSplitSyncFiles: false,
       syncFolderPath: `/${SYNC_FOLDER_NAME}`,
     };
     const url = baseURL || 'http://localhost:4242';
@@ -607,7 +579,7 @@ test.describe('@webdav @migration WebDAV Legacy Migration Sync', () => {
       await syncPageA.setupWebdavSync(WEBDAV_CONFIG);
       await waitForStatePersistence(clientA.page);
       await syncPageA.triggerSync();
-      await waitForSyncComplete(clientA.page, syncPageA);
+      expect(await waitForSyncComplete(clientA.page, syncPageA)).toBe('success');
       console.log('[Test] Client A: Data uploaded (including archive)');
 
       // === Client B: Fresh client (no legacy data), syncs ===
@@ -645,7 +617,7 @@ test.describe('@webdav @migration WebDAV Legacy Migration Sync', () => {
 
       // Setup sync - fresh client downloads data
       await syncPageB.setupWebdavSync(WEBDAV_CONFIG);
-      await waitForSyncComplete(pageB, syncPageB, 30000);
+      expect(await waitForSyncComplete(pageB, syncPageB, 30000)).toBe('success');
       console.log('[Test] Client B: Synced (downloaded A data)');
 
       // Navigate to A's project (which should now exist on B after sync)

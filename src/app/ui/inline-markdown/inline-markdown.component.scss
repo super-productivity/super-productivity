@@ -31,11 +31,11 @@
   }
 }
 
-.markdown-unparsed,
-.markdown-parsed {
-  // The textarea (unparsed) is the focusable half and sat at 14px via
-  // .mat-body-2, so it triggered the iOS zoom. Both halves are raised together
-  // so the description does not change size when the editor opens (#9556).
+.markdown-unparsed {
+  // The textarea sat at 14px via .mat-body-2, so it triggered the iOS zoom. The
+  // live editor raises its own font size to match (see live-markdown-theme), so
+  // the description does not change size when markdown formatting is turned off
+  // (#9556).
   @include noIosFocusZoomOnTouch();
   //transition: height 1.3s;
   border: 0;
@@ -52,44 +52,21 @@
   cursor: text;
 }
 
-:host ::ng-deep .markdown-parsed,
-:host ::ng-deep .markdown-parsed * {
-  user-select: text !important;
-  -webkit-user-select: text !important;
-  -webkit-touch-callout: default !important;
-}
-
-// The checkbox is a Material Icons ligature, so its textContent is the literal
-// glyph name (e.g. `check_box_outline_blank`). With selection enabled above, a
-// drag across a checklist would otherwise drop that name into the clipboard, so
-// keep the glyph itself unselectable while its label stays copyable.
-:host ::ng-deep .markdown-parsed .checkbox {
-  user-select: none !important;
-  -webkit-user-select: none !important;
-}
-
 .markdown-unparsed {
   white-space: pre-wrap;
 }
 
 :host:has(.controls) {
+  // Reserve space below the note so the hover controls (checklist, fullscreen)
+  // sit under the text instead of over its last line — otherwise they hide the
+  // text and, being buttons, swallow the clicks meant to select it (#10544).
+  // The live editor (#10068) needs the same reservation the textarea has; it
+  // only ever covered `.markdown-unparsed`, so the live path had none.
   .markdown-unparsed,
-  .markdown-parsed {
+  live-markdown-editor {
     padding-bottom: var(--s5);
   }
 }
-
-.markdown-parsed.preview-while-editing {
-  position: relative;
-  margin-top: var(--s2);
-  padding-top: var(--s2);
-  border-top: 1px solid var(--extra-border-color);
-  opacity: 0.8;
-  pointer-events: none;
-}
-
-// NOTE:
-// see global marked.scss for more styles
 
 textarea {
   outline: none;

@@ -61,47 +61,45 @@ describeWithDb('causal REPAIR serialization (PostgreSQL)', () => {
     await prisma.$disconnect();
   });
 
-  for (const batchUpload of [false, true]) {
-    it(`serializes a concurrent delta against REPAIR (batchUpload=${batchUpload})`, async () => {
-      const service = new SyncService({ batchUpload });
+  it('serializes a concurrent delta against REPAIR', async () => {
+    const service = new SyncService();
 
-      for (let attempt = 0; attempt < 5; attempt++) {
-        await prisma.operation.deleteMany({ where: { userId } });
-        await prisma.syncDevice.deleteMany({ where: { userId } });
-        await prisma.userSyncState.upsert({
-          where: { userId },
-          create: { userId, lastSeq: 0 },
-          update: {
-            lastSeq: 0,
-            latestFullStateSeq: null,
-            latestFullStateVectorClock: Prisma.DbNull,
-          },
-        });
+    for (let attempt = 0; attempt < 5; attempt++) {
+      await prisma.operation.deleteMany({ where: { userId } });
+      await prisma.syncDevice.deleteMany({ where: { userId } });
+      await prisma.userSyncState.upsert({
+        where: { userId },
+        create: { userId, lastSeq: 0 },
+        update: {
+          lastSeq: 0,
+          latestFullStateSeq: null,
+          latestFullStateVectorClock: Prisma.DbNull,
+        },
+      });
 
-        const repair = makeRepair();
-        const delta = makeDelta();
-        const [repairResults, deltaResults] = await Promise.all([
-          service.uploadOps(userId, repair.clientId, [repair], false, undefined, 0),
-          service.uploadOps(userId, delta.clientId, [delta]),
-        ]);
-        const repairResult = repairResults[0];
-        const deltaResult = deltaResults[0];
+      const repair = makeRepair();
+      const delta = makeDelta();
+      const [repairResults, deltaResults] = await Promise.all([
+        service.uploadOps(userId, repair.clientId, [repair], false, undefined, 0),
+        service.uploadOps(userId, delta.clientId, [delta]),
+      ]);
+      const repairResult = repairResults[0];
+      const deltaResult = deltaResults[0];
 
-        expect(repairResult.accepted || deltaResult.accepted).toBe(true);
-        if (repairResult.accepted && deltaResult.accepted) {
-          expect(repairResult.serverSeq ?? Number.MAX_SAFE_INTEGER).toBeLessThan(
-            deltaResult.serverSeq ?? 0,
-          );
-        } else if (!repairResult.accepted) {
-          expect(deltaResult.accepted).toBe(true);
-          expect([
-            SYNC_ERROR_CODES.REPAIR_STALE,
-            SYNC_ERROR_CODES.INTERNAL_ERROR,
-          ]).toContain(repairResult.errorCode);
-        } else {
-          expect(deltaResult.errorCode).toBe(SYNC_ERROR_CODES.INTERNAL_ERROR);
-        }
+      expect(repairResult.accepted || deltaResult.accepted).toBe(true);
+      if (repairResult.accepted && deltaResult.accepted) {
+        expect(repairResult.serverSeq ?? Number.MAX_SAFE_INTEGER).toBeLessThan(
+          deltaResult.serverSeq ?? 0,
+        );
+      } else if (!repairResult.accepted) {
+        expect(deltaResult.accepted).toBe(true);
+        expect([
+          SYNC_ERROR_CODES.REPAIR_STALE,
+          SYNC_ERROR_CODES.INTERNAL_ERROR,
+        ]).toContain(repairResult.errorCode);
+      } else {
+        expect(deltaResult.errorCode).toBe(SYNC_ERROR_CODES.INTERNAL_ERROR);
       }
-    });
-  }
+    }
+  });
 });

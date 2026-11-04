@@ -225,6 +225,16 @@ describe('RenderLinksPipe', () => {
       expect(result).toContain('>Email</a>');
     });
 
+    it('should render mid: URLs in markdown links (shared allowlist)', () => {
+      const result = html(
+        pipe.transform(
+          '[Email-Message](mid:C64456A5-3E51-42D7-AB0B-B47B7DAFFEF3@example.com)',
+        ),
+      );
+      expect(result).toContain('Email-Message');
+      expect(result).toContain('<a ');
+    });
+
     // #8429: app deep-links must behave the same here as in markdown notes.
     it('should render app deep-link schemes (obsidian:, vscode:) verbatim as links', () => {
       const result = html(

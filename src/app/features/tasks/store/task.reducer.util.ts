@@ -291,6 +291,14 @@ export const deleteTaskHelper = (
   state: TaskState,
   taskToDelete: TaskWithSubTasks | Task,
 ): TaskState => {
+  // #9946: without this, an id-less task makes the `parentId === taskToDelete.id`
+  // subtask lookup below match every top-level task (whose parentId is also
+  // undefined) and delete the entire list. Deleting nothing is the safe outcome.
+  if (!taskToDelete.id) {
+    devError('[deleteTaskHelper] Refusing to delete a task without an id');
+    return state;
+  }
+
   let stateCopy: TaskState = taskAdapter.removeOne(taskToDelete.id, state);
 
   let currentTaskId =

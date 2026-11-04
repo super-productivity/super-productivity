@@ -7,6 +7,7 @@ import {
 } from '@playwright/test';
 import { expect } from '@playwright/test';
 import { waitForAppReady } from './waits';
+import { recordSyncAudit } from './sync-audit';
 import type { SyncPage } from '../pages/sync.page';
 import {
   attachPageErrorCollector,
@@ -44,13 +45,39 @@ export const WEBDAV_CONFIG_TEMPLATE = {
   password: 'admin',
 };
 
+// Test-only default. Individual migration/regression cases can override it via
+// setupWebdavSync({ isUseSplitSyncFiles: ... }). Scheduled runs remain v2.
+export const WEBDAV_SYNC_FORMAT = process.env.E2E_WEBDAV_FORMAT ?? 'v2';
+export const WEBDAV_SYNC_FILE =
+  WEBDAV_SYNC_FORMAT === 'v3' ? 'sync-ops.json' : 'sync-data.json';
+
+/** Read an unencrypted, uncompressed remote fixture (including its real prefix). */
+export const readPrefixedFile = async <T>(
+  request: APIRequestContext,
+  url: string,
+  authorization: string,
+): Promise<T> => {
+  const response = await request.get(url, {
+    headers: { Authorization: authorization },
+  });
+  expect(response.ok(), `Expected remote sync file: ${url}`).toBe(true);
+  const encoded = await response.text();
+  const prefixEnd = encoded.indexOf('__');
+  if (prefixEnd < 0) {
+    throw new Error(`${url} is missing its format prefix`);
+  }
+  return JSON.parse(encoded.slice(prefixEnd + 2)) as T;
+};
+
 /**
  * Generates a unique sync folder name for test isolation.
  * @param prefix - Folder name prefix (default: 'e2e-test')
- * @returns Unique folder name with timestamp
+ * @returns Unique folder name with timestamp and random suffix
  */
 export const generateSyncFolderName = (prefix: string = 'e2e-test'): string => {
-  return `${prefix}-${Date.now()}`;
+  // Random suffix: parallel workers can start in the same millisecond (two
+  // parametrized tests shared one WebDAV folder in scheduled run 41564833512).
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 };
 
 /**
@@ -111,13 +138,21 @@ export const createWebDavFolder = async (
  *
  * @param browser - Playwright Browser instance
  * @param baseURL - Base URL for the app
+ * @param acceptedConfirms - Exact extra confirmations the test deliberately triggers
  * @returns Object with context and page
  */
 export const setupSyncClient = async (
   browser: Browser,
   baseURL: string | undefined,
+  acceptedConfirms: readonly RegExp[] = [],
 ): Promise<{ context: BrowserContext; page: Page }> => {
-  const context = await browser.newContext({ baseURL });
+  // A context created here does not inherit the config's user agent; the app
+  // needs PLAYWRIGHT in it to start with every app feature on (as in the
+  // regular suite) instead of the new-install set.
+  const context = await browser.newContext({
+    baseURL,
+    userAgent: 'PLAYWRIGHT WEBDAV-SYNC-CLIENT',
+  });
   const page = await context.newPage();
   const pageErrors = attachPageErrorCollector(page, 'WebDAV sync client');
   installDevErrorDialogHandler(page, 'WebDAV sync client');
@@ -146,7 +181,9 @@ export const setupSyncClient = async (
     }
 
     if (dialog.type() === 'confirm') {
-      const isExpectedDialog = FRESH_CLIENT_CONFIRM.test(normalizeDialogMessage(message));
+      const isExpectedDialog = [FRESH_CLIENT_CONFIRM, ...acceptedConfirms].some(
+        (pattern) => pattern.test(normalizeDialogMessage(message)),
+      );
 
       if (!isExpectedDialog) {
         console.error(`[E2E] Unexpected confirm dialog: "${message}"`);
@@ -193,7 +230,7 @@ const readTerminalSyncState = async (
   // Error and conflict states can coexist with the old success icon, so they
   // must always win over the success check below.
   if (await syncPage.syncErrorIcon.isVisible().catch(() => false)) {
-    return { kind: 'error', message: 'sync_problem icon is visible' };
+    return { kind: 'error', message: 'sync error icon is visible' };
   }
 
   const snackBars = page.locator('.mat-mdc-snack-bar-container');
@@ -235,17 +272,21 @@ const readTerminalSyncState = async (
  * @param page - Playwright page
  * @param syncPage - SyncPage instance
  * @param timeout - Maximum wait time in ms (default 30000)
- * @param options.allowResponseOnlyCompletion - Require done_all by default. Conflict
- * resolution paths may opt into a stable idle state after the witnessed response
- * because those actions do not expose a reliable terminal icon. Such callers must
- * assert the exact resulting state.
+ * @param options.allowResponseOnlyCompletion - Require the remote-confirmed state
+ * by default. Conflict resolution paths may opt into a stable idle state after the
+ * witnessed response because those actions do not expose a reliable terminal
+ * state. Such callers must assert the exact resulting state.
+ * @param options.expectConflict - The whole-dataset conflict dialog is a
+ * terminal state only for callers that expect it: they get 'conflict' back and
+ * resolve the dialog themselves. For everyone else the dialog fails the wait,
+ * so a spurious conflict cannot pass as a completed sync.
  * @returns 'success' | 'conflict' | void
  */
 export const waitForSyncComplete = async (
   page: Page,
   syncPage: SyncPage,
   timeout: number = 30000,
-  options: { allowResponseOnlyCompletion?: boolean } = {},
+  options: { allowResponseOnlyCompletion?: boolean; expectConflict?: boolean } = {},
 ): Promise<'success' | 'conflict' | void> => {
   const startTime = Date.now();
   const allowResponseOnlyCompletion = options.allowResponseOnlyCompletion ?? false;
@@ -300,7 +341,21 @@ export const waitForSyncComplete = async (
     throw new Error(`Sync failed with error: ${state.message}`);
   }
   if (state.kind === 'conflict') {
+    recordSyncAudit('webdav:conflict-returned');
+    if (!options.expectConflict) {
+      throw new Error(
+        'Sync stopped at the whole-dataset conflict dialog. Pass { expectConflict: true } ' +
+          'if the test expects it; otherwise this is the regression the test should catch.',
+      );
+    }
     return 'conflict';
+  }
+
+  if (allowResponseOnlyCompletion) {
+    const confirmed = await syncPage.syncConfirmedIcon.isVisible().catch(() => false);
+    if (!confirmed) {
+      recordSyncAudit('webdav:response-only-completion');
+    }
   }
 
   return 'success';
@@ -315,6 +370,21 @@ export const waitForSync = async (
 ): Promise<'success' | 'conflict' | void> => waitForSyncComplete(page, syncPage);
 
 /**
+ * While sync is off, the sync button opens the browser sign-in dialog instead
+ * of the settings. Continues to the settings from either, so provider setup
+ * helpers work on fresh and on configured clients.
+ */
+export const passSyncSignInDialog = async (page: Page): Promise<void> => {
+  const signIn = page.locator('dialog-sync-setup');
+  const settings = page.locator('dialog-sync-cfg');
+  await expect(signIn.or(settings)).toBeVisible({ timeout: 10000 });
+  if (await signIn.isVisible()) {
+    await signIn.locator('.e2e-other-sync-options').click();
+  }
+  await settings.waitFor({ state: 'visible', timeout: 10000 });
+};
+
+/**
  * Completes the optional overwrite-warning step of the ordinary sync conflict
  * dialog. The warning is conditional on the measured change counts, so wait
  * for either that exact dialog or the parent conflict dialog closing instead
@@ -324,9 +394,11 @@ export const confirmSyncConflictOverwriteIfShown = async (
   page: Page,
   conflictDialog: Locator,
 ): Promise<void> => {
+  // Both wordings must match: OVERWRITE_WARNING (known counts) says
+  // "overwrite", OVERWRITE_WARNING_UNKNOWN says "replace the entire … dataset".
   const overwriteConfirm = page
     .locator('dialog-confirm')
-    .filter({ hasText: /WARNING:[\s\S]*overwrit/i });
+    .filter({ hasText: /WARNING:[\s\S]*(overwrit|replace)/i });
 
   await expect
     .poll(

@@ -692,8 +692,8 @@ Old local op logs, remote history, snapshots, and backups may contain
 previously stored secrets. V1 prevents new leaks and warns; cleanup is a
 follow-up:
 
-- Rewrite/purge `OPS`, `STATE_CACHE` current/backup, `IMPORT_BACKUP`,
-  `PROFILE_DATA`, file-sync `sync-data.json.state` + `recentOps`, and remote
+- Rewrite/purge `OPS`, `STATE_CACHE` current/backup, `IMPORT_BACKUP`, file-sync
+  `sync-data.json.state` + `recentOps`, and remote
   SuperSync snapshots/ops where supported; compact local op logs after the
   gate clears; force-upload stripped snapshots for file-based sync.
 - For SuperSync, verify whether retention/compaction bounds old raw payloads;

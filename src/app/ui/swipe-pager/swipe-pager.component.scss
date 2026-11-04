@@ -1,0 +1,17 @@
+:host {
+  display: block;
+  // clip, not hidden: hidden would make the pager a scroll container and pin
+  // sticky headers inside the pages to it instead of the outer scroller.
+  overflow-x: clip;
+}
+
+// All pages share one grid cell, so the row is as tall as the tallest page and
+// neighbours keep the current page's vertical scroll position.
+.track {
+  display: grid;
+}
+
+.page {
+  grid-area: 1 / 1;
+  min-width: 0;
+}

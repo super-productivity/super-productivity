@@ -14,12 +14,11 @@ import { IndexedDbOpLogAdapter } from './indexed-db-op-log-adapter';
 export type OpLogDbAdapterFactory = () => OpLogDbAdapter;
 
 /**
- * DI seam for the op-log persistence backend (Phase B of the SQLite migration;
- * see docs/sync-and-op-log/sqlite-migration.md).
+ * DI seam for the op-log persistence backend. The stores only know
+ * `OpLogDbAdapter`, so a backend swap would not touch them.
  *
- * Defaults to IndexedDB on every platform. Phase B will override this provider
- * to return a `SqliteOpLogAdapter` when `PlatformService.isNative`, leaving the
- * stores untouched — they only know `OpLogDbAdapter`.
+ * Always IndexedDB: the native SQLite backend is parked and its adapter was
+ * removed (see docs/sync-and-op-log/sqlite-migration.md).
  */
 export const OP_LOG_DB_ADAPTER_FACTORY = new InjectionToken<OpLogDbAdapterFactory>(
   'OP_LOG_DB_ADAPTER_FACTORY',

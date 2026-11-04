@@ -18,6 +18,10 @@
  *   - and the read-only pre-flight gate (`scripts/dry-run-old-ops-sweep.ts`)
  *     predicts, row for row, what the sweep then does.
  *
+ * Prerequisites:
+ *   `npm run supersync:db` — the db has no fixed host port, so this publishes
+ *   one on 55432 and applies the schema.
+ *
  * Run with:
  *   DATABASE_URL=postgresql://supersync:superpassword@localhost:55432/supersync_db \
  *     npx vitest run --config vitest.integration.config.ts \
@@ -361,6 +365,53 @@ describeWithDb('Old-ops sweep (PostgreSQL)', () => {
     expect(await survivingSeqs(SNAPSHOTLESS_IMPORT_USER_ID)).toEqual([1, 2, 3]);
     expect(affectedUserIds).not.toContain(SNAPSHOTLESS_IMPORT_USER_ID);
   });
+
+  it.each([
+    { name: 'recent checkpoint', freshSeq: 4, snapshotCap: 0, boundary: 3 },
+    { name: 'fresh checkpoint itself', freshSeq: 3, snapshotCap: 0, boundary: 3 },
+    { name: 'out-of-order receipt times', freshSeq: 2, snapshotCap: 0, boundary: 1 },
+    { name: 'cached snapshot cap', freshSeq: 6, snapshotCap: 3, boundary: 3 },
+  ])(
+    'uses the newest wholly aged prefix: $name',
+    async ({ freshSeq, snapshotCap, boundary }) => {
+      // Two older full-state bases and a recent one. A recent checkpoint must
+      // not strand an older, complete prefix; receipt times need not follow seq.
+      for (let seq = 1; seq <= 7; seq++) {
+        const receivedAt =
+          seq === freshSeq || seq === 7 ? BigInt(cutoffTime) : oldReceivedAt;
+        if ([1, 3, 5, 7].includes(seq)) {
+          await seedImportOp(ENCRYPTED_USER_ID, seq, {
+            opType: 'REPAIR',
+            repairBaseServerSeq: seq - 1,
+            isPayloadEncrypted: true,
+            receivedAt,
+          });
+        } else {
+          await seedOp(ENCRYPTED_USER_ID, seq, { isPayloadEncrypted: true, receivedAt });
+        }
+      }
+      if (snapshotCap) {
+        await prisma.userSyncState.create({
+          data: {
+            userId: ENCRYPTED_USER_ID,
+            lastSeq: 7,
+            lastSnapshotSeq: snapshotCap,
+            snapshotData: Buffer.from('legacy-cached-snapshot'),
+          },
+        });
+      }
+      const plan = await fetchOldOpsSweepPlan(prisma, BigInt(cutoffTime));
+      const predicted = affectedUsers(plan).find(
+        (row) => row.user_id === ENCRYPTED_USER_ID,
+      );
+      const { totalDeleted } = await runSweep();
+      expect(totalDeleted).toBe(boundary - 1);
+      expect(predicted ? toNum(predicted.would_delete) : 0).toBe(boundary - 1);
+      expect(await survivingSeqs(ENCRYPTED_USER_ID)).toEqual(
+        Array.from({ length: 8 - boundary }, (_, index) => boundary + index),
+      );
+    },
+  );
 
   it('caps the boundary at lastSnapshotSeq while a cached snapshot blob exists', async () => {
     // Stuck-snapshot cohort (e.g. issue user 1515): cached snapshot frozen at

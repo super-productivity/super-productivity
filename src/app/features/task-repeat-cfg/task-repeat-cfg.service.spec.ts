@@ -32,6 +32,9 @@ import { getRepeatableTaskId } from './get-repeatable-task-id.util';
 import { DateService } from '../../core/date/date.service';
 import { getDateTimeFromClockString } from '../../util/get-date-time-from-clock-string';
 import { remindOptionToMilliseconds } from '../tasks/util/remind-option-to-milliseconds';
+import { addTaskToSection } from '../section/store/section.actions';
+import { selectSectionFeatureState } from '../section/store/section.selectors';
+import { Section, SectionState } from '../section/section.model';
 
 describe('TaskRepeatCfgService', () => {
   let service: TaskRepeatCfgService;
@@ -334,6 +337,29 @@ describe('TaskRepeatCfgService', () => {
   });
 
   describe('createRepeatableTask', () => {
+    for (const [priority, expected] of [
+      [3, 3],
+      ['high', 3],
+      [null, null],
+      [undefined, null],
+    ] as const) {
+      it(`creates occurrences with priority ${String(priority)}`, async () => {
+        taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(of([]));
+        taskService.createNewTaskWithDefaults.and.returnValue(mockTask);
+
+        await service.createRepeatableTask(
+          { ...mockTaskRepeatCfg, priority },
+          Date.now(),
+        );
+
+        expect(taskService.createNewTaskWithDefaults).toHaveBeenCalledWith(
+          jasmine.objectContaining({
+            additional: jasmine.objectContaining({ priority: expected }),
+          }),
+        );
+      });
+    }
+
     it('should create actions for a new repeatable task', async () => {
       const today = new Date();
       const targetDayDate = today.getTime();
@@ -586,6 +612,18 @@ describe('TaskRepeatCfgService', () => {
   });
 
   describe('getActionsForTaskRepeatCfg', () => {
+    it('creates nothing for a paused config, even when a copy is completed', async () => {
+      taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(of([]));
+
+      const actions = await service._getActionsForTaskRepeatCfg(
+        { ...mockTaskRepeatCfg, isPaused: true, waitForCompletion: true },
+        Date.now(),
+      );
+
+      expect(actions).toEqual([]);
+      expect(taskService.createNewTaskWithDefaults).not.toHaveBeenCalled();
+    });
+
     it('should return updateTaskRepeatCfg (not addTask) when task already exists for day (#7923)', async () => {
       const today = new Date();
       const targetDayDate = today.getTime();
@@ -1407,6 +1445,65 @@ describe('TaskRepeatCfgService', () => {
     });
   });
 
+  describe('startTime before the start-of-next-day offset (#3378)', () => {
+    const OFFSET_MS = 5 * 60 * 60 * 1000;
+
+    it('schedules the instance on the late night of its logical day', async () => {
+      const dateService = TestBed.inject(DateService) as unknown as Record<
+        string,
+        unknown
+      >;
+      dateService.getStartOfNextDayDiffMs = () => OFFSET_MS;
+      dateService.isToday = (date: number | Date) =>
+        getDbDateStr(new Date(new Date(date).getTime() - OFFSET_MS)) === getDbDateStr();
+
+      const logicalToday = new Date();
+      logicalToday.setHours(12, 0, 0, 0);
+      const yesterday = new Date(logicalToday);
+      yesterday.setDate(yesterday.getDate() - 1);
+      const cfg: TaskRepeatCfg = {
+        ...DEFAULT_TASK_REPEAT_CFG,
+        id: 'late-night-cfg',
+        title: 'Make the bed',
+        projectId: 'project-A',
+        repeatCycle: 'DAILY',
+        repeatEvery: 1,
+        startDate: formatIsoDate(yesterday),
+        lastTaskCreationDay: formatIsoDate(yesterday),
+        startTime: '02:00',
+        remindAt: TaskReminderOptionId.AtStart,
+        tagIds: [],
+      };
+
+      taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(of([]));
+      taskService.createNewTaskWithDefaults.and.callFake((args: any) => ({
+        ...mockTask,
+        id: args.id || mockTask.id,
+        dueDay: args.additional?.dueDay,
+        projectId: args.additional?.projectId || mockTask.projectId,
+      }));
+
+      const actions = await service._getActionsForTaskRepeatCfg(
+        cfg,
+        logicalToday.getTime(),
+      );
+
+      const addTaskAction = actions[0] as ReturnType<typeof TaskSharedActions.addTask>;
+      expect(addTaskAction.task.id).toBe(
+        getRepeatableTaskId(cfg.id, formatIsoDate(logicalToday)),
+      );
+      const scheduleAction = actions[2] as ReturnType<
+        typeof TaskSharedActions.scheduleTaskWithTime
+      >;
+      const expectedDue = new Date(logicalToday);
+      expectedDue.setDate(expectedDue.getDate() + 1);
+      expectedDue.setHours(2, 0, 0, 0);
+      expect(scheduleAction.type).toBe(TaskSharedActions.scheduleTaskWithTime.type);
+      expect(scheduleAction.dueWithTime).toBe(expectedDue.getTime());
+      expect(scheduleAction.isSkipAutoRemoveFromToday).toBe(true);
+    });
+  });
+
   describe('Sync scenario: lastTaskCreationDay set but task missing (#6269)', () => {
     // Reproduction test: When Device A creates a task and syncs the repeat config
     // (with updated lastTaskCreationDay) but the task entity hasn't synced yet,
@@ -2128,6 +2225,99 @@ describe('TaskRepeatCfgService', () => {
       expect(addTaskAction?.task?.id)
         .withContext('task must use deterministic id')
         .toBe(expectedId);
+    });
+  });
+
+  describe('a repeat instance goes into the section of the previous one (#10812)', () => {
+    const DAY_MS = 24 * 60 * 60 * 1000;
+    const previous: TaskWithSubTasks = {
+      ...mockTaskWithSubTasks,
+      id: 'previous-instance',
+      repeatCfgId: mockTaskRepeatCfg.id,
+      created: Date.now() - DAY_MS,
+    };
+    const older: TaskWithSubTasks = {
+      ...previous,
+      id: 'older-instance',
+      created: previous.created - DAY_MS,
+    };
+    const section = (
+      id: string,
+      taskIds: string[],
+      contextId = 'test-project',
+      contextType = WorkContextType.PROJECT,
+    ): Section => ({ id, contextId, contextType, title: id, taskIds });
+    const withSections = (...sections: Section[]): void => {
+      store.overrideSelector(selectSectionFeatureState, {
+        ids: sections.map((s) => s.id),
+        entities: Object.fromEntries(sections.map((s) => [s.id, s])),
+      } as SectionState);
+      store.refreshState();
+    };
+    const actionsFor = async (
+      cfg: TaskRepeatCfg = mockTaskRepeatCfg,
+    ): Promise<{ type: string }[]> => {
+      taskService.createNewTaskWithDefaults.and.callFake(
+        (args: any) => ({ ...mockTask, ...args.additional, id: args.id }) as Task,
+      );
+      return service._getActionsForTaskRepeatCfg(cfg, Date.now());
+    };
+    const newId = getRepeatableTaskId(mockTaskRepeatCfg.id, getDbDateStr());
+
+    it('adds it to the project section right before the previous instance, after addTask', async () => {
+      taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(
+        of([older, previous]),
+      );
+      withSections(
+        section('first', ['previous-instance', 'x']),
+        section('later', ['a', 'previous-instance']),
+        section('older-only', ['older-instance']),
+      );
+
+      const actions = await actionsFor();
+
+      expect(actions[0].type).toBe(TaskSharedActions.addTask.type);
+      expect(actions.slice(1, 3)).toEqual([
+        addTaskToSection({
+          sectionId: 'first',
+          taskId: newId,
+          afterTaskId: null,
+          sourceSectionId: null,
+        }),
+        addTaskToSection({
+          sectionId: 'later',
+          taskId: newId,
+          afterTaskId: 'a',
+          sourceSectionId: null,
+        }),
+      ]);
+      expect(actions[3].type).toBe(updateTaskRepeatCfg.type);
+    });
+
+    it('leaves the sections of other contexts alone', async () => {
+      taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(of([previous]));
+      withSections(
+        section('other-project', ['previous-instance'], 'other-project'),
+        section('today', ['previous-instance'], TODAY_TAG.id, WorkContextType.TAG),
+      );
+
+      const actions = await actionsFor();
+
+      expect(actions.some((a) => a.type === addTaskToSection.type)).toBe(false);
+    });
+
+    it('adds it to no section for the first instance, or a config without project', async () => {
+      withSections(section('first', ['previous-instance']));
+      taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(of([]));
+      expect((await actionsFor()).some((a) => a.type === addTaskToSection.type)).toBe(
+        false,
+      );
+
+      taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(of([previous]));
+      const noProject = { ...mockTaskRepeatCfg, projectId: null };
+      expect(
+        (await actionsFor(noProject)).some((a) => a.type === addTaskToSection.type),
+      ).toBe(false);
     });
   });
 });

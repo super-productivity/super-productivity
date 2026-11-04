@@ -1,7 +1,9 @@
 import { inject, Injectable } from '@angular/core';
+import { takeInterpretableOpPrefix } from './remote-op-block.util';
 import { OperationLogStoreService } from '../persistence/operation-log-store.service';
 import {
   ActionType,
+  extractFullStateFromPayload,
   FULL_STATE_OP_TYPES,
   Operation,
   OperationLogEntry,
@@ -10,6 +12,8 @@ import {
 import { OperationWriteFlushService } from './operation-write-flush.service';
 import { SyncImportConflictData } from './dialog-sync-import-conflict/dialog-sync-import-conflict.component';
 import { isExampleTaskCreateOp } from '../validation/is-example-task-op.util';
+import { OpLog } from '../../core/log';
+import { countAllTasks } from '../../imex/local-backup/backup-ring.util';
 
 /**
  * Enabling/configuring sync on a never-synced client necessarily writes the
@@ -32,7 +36,19 @@ export interface IncomingFullStateConflictGateResult {
   hasMeaningfulPending: boolean;
   discardablePendingOpIds: string[];
   dialogData?: SyncImportConflictData;
+  /**
+   * Incoming causal REPAIR to skip this cycle rather than prompt for (#9773).
+   * Set only when this device holds meaningful pending work.
+   */
+  deferredRepairOpId?: string;
 }
+
+/**
+ * A causal REPAIR proves its snapshot covered the whole server prefix; a legacy
+ * one carries no base cursor and proves nothing, so it keeps import handling.
+ */
+const isCausalRepair = (op: Operation): boolean =>
+  op.opType === OpType.Repair && op.repairBaseServerSeq !== undefined;
 
 /**
  * Decides whether an incoming full-state operation would discard meaningful local work.
@@ -109,7 +125,15 @@ export class SyncImportConflictGateService {
       preCapturedPendingOps?: OperationLogEntry[];
     } = {},
   ): Promise<IncomingFullStateConflictGateResult> {
-    const fullStateOp = incomingOps.find((op) => FULL_STATE_OP_TYPES.has(op.opType));
+    // Only the prefix this client can process may prompt: processRemoteOps
+    // blocks at the first op with unknown vocabulary (#8764), so a full-state
+    // op after it — or one whose own syncImportReason is unknown — must not
+    // open a conflict dialog the user cannot evaluate and this client will
+    // refuse anyway.
+    const fullStateOps = takeInterpretableOpPrefix(incomingOps).filter((op) =>
+      FULL_STATE_OP_TYPES.has(op.opType),
+    );
+    const fullStateOp = fullStateOps[0];
 
     if (!fullStateOp) {
       return {
@@ -173,6 +197,22 @@ export class SyncImportConflictGateService {
       return result;
     }
 
+    // An automatic repair must not put the user in front of the import dialog:
+    // every answer it offers is wrong here. Force-upload would replace remote
+    // state with this device's (destroying the repair and every other device's
+    // concurrent work), force-download would discard this device's pending work,
+    // and cancel just re-prompts next cycle. Defer the repair instead — this
+    // device keeps its work, and its own post-sync repair pass fixes the same
+    // shared corruption locally. (#9773)
+    if (isCausalRepair(fullStateOp)) {
+      OpLog.normal(
+        `SyncImportConflictGateService: Deferring incoming causal REPAIR ` +
+          `${fullStateOp.id} from client ${fullStateOp.clientId}; ` +
+          `${pendingOps.length} pending local op(s) stay put.`,
+      );
+      return { ...result, deferredRepairOpId: fullStateOp.id };
+    }
+
     return {
       ...result,
       dialogData: {
@@ -181,6 +221,12 @@ export class SyncImportConflictGateService {
         syncImportReason: fullStateOp.syncImportReason,
         scenario: 'INCOMING_IMPORT',
         isNeverSynced,
+        // The last full-state op is the state that gets applied. 0 counts as
+        // unknown: tasks added after an empty snapshot are missed, and 0 would
+        // make any device look vastly bigger than the account.
+        accountTaskCount:
+          countAllTasks(extractFullStateFromPayload(fullStateOps.at(-1)?.payload)) ||
+          undefined,
       },
     };
   }

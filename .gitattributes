@@ -4,3 +4,7 @@
 *.html text eol=lf
 *.js text eol=lf
 *.ts text eol=lf
+# Tools parse these line-exactly without a YAML parser (none is allowed as a
+# dependency), so keep them LF in the working tree on Windows checkouts too.
+*.yml text eol=lf
+*.yaml text eol=lf

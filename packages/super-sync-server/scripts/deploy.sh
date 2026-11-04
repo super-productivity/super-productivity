@@ -179,6 +179,11 @@ fi
 COMPOSE_FILES="-f docker-compose.yml"
 if [ -f "docker-compose.monitoring.yml" ]; then
     COMPOSE_FILES="$COMPOSE_FILES -f docker-compose.monitoring.yml"
+    # The monitoring file declares the shared network as external, which makes
+    # the merged config external too, so compose never creates it on a new host.
+    if ! docker network inspect super-sync-server_internal >/dev/null 2>&1; then
+        docker network create super-sync-server_internal >/dev/null
+    fi
 fi
 
 # Validate Caddyfile syntax before deploying
@@ -535,6 +540,32 @@ report_monitoring_status() {
         echo "             Checks are running but nobody is being told. Verify \`mail\` works."
     else
         echo "    alert email: no recorded failure (verified only when mail is attempted)"
+    fi
+
+    # Deliberately NOT an alert-mail problem: a blind OOM check is a broken capability, not
+    # an unhealthy service. health-alert.sh keeps it out of PROBLEMS so the dedupe hash and
+    # the recovery mail keep working; this is where the operator finds out instead.
+    if [ -f "$state_dir/oom-check-blind" ]; then
+        # Line 1 timestamp, line 2 reason -- same shape as mail-failed, same sanitize on read.
+        local oom_ts oom_reason
+        oom_ts=$(head -1 "$state_dir/oom-check-blind" 2>/dev/null | sanitize_untrusted 40) || true
+        oom_reason=$(sed -n '2p' "$state_dir/oom-check-blind" 2>/dev/null | sanitize_untrusted 40) || true
+        if [ "$oom_reason" = "no-journalctl" ]; then
+            # Not the operator's to fix: no systemd, so no journal and no group to join.
+            printf '    NOTE: no journalctl on this host, so the OOM check is unavailable (since %s).\n' "$oom_ts"
+            echo "          Not a misconfiguration — every other check is unaffected."
+        elif [ "$oom_reason" = "journal-error" ]; then
+            printf '    WARNING: OOM detection is BLIND (journal read failed, since %s).\n' "$oom_ts"
+            echo "             Check journalctl -k and journal configuration."
+        elif [ "$oom_reason" = "no-kernel-log" ]; then
+            printf '    NOTE: no kernel log entries are available, so the OOM check is unavailable\n'
+            printf '          (since %s). Check journal configuration and host kernel-log access.\n' "$oom_ts"
+        else
+            printf '    WARNING: OOM detection is BLIND (kernel log unreadable, since %s).\n' "$oom_ts"
+            echo "             Container OOM kills will not be alerted on. Add the cron user to"
+            echo "             group 'systemd-journal' (narrower than 'adm', which also opens /var/log):"
+            echo "               sudo usermod -aG systemd-journal \$USER   # then re-login"
+        fi
     fi
 }
 

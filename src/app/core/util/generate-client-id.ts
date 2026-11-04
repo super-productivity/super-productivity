@@ -83,7 +83,7 @@ export const getClientIdPlatformCode = (clientId: string): PlatformCode | null =
     : null;
 };
 
-const _getEnvironmentId = (): PlatformCode =>
+export const getCurrentPlatformCode = (): PlatformCode =>
   getPlatformCode({
     isElectron: IS_ELECTRON,
     // `window.SUPAndroid`, injected by both Android activities
@@ -116,7 +116,7 @@ const _generateBase62 = (length: number): string => {
  * Generates a compact client ID: {platform}_{6-char-base62}, e.g. "B_a7Kx9Z".
  */
 export const generateClientId = (): string => {
-  return `${_getEnvironmentId()}_${_generateBase62(6)}`;
+  return `${getCurrentPlatformCode()}_${_generateBase62(6)}`;
 };
 
 /**

@@ -66,6 +66,7 @@ export class NoteService {
         id: note.id,
         projectId: note.projectId,
         isPinnedToToday: note.isPinnedToToday,
+        note,
       }),
     );
   }

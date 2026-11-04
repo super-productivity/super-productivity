@@ -175,6 +175,23 @@ describe('operation-sync utility', () => {
       expect(op.entityId).toBe('task-456');
     });
 
+    it('should pass an unknown opType through so the receiver can block at that op (#8764)', () => {
+      const op = syncOpToOperation(
+        createMockSyncOp({ opType: 'FUTURE_OP' as unknown as OpType }),
+      );
+
+      expect(op.opType as string).toBe('FUTURE_OP');
+    });
+
+    it('should still reject a structurally missing opType', () => {
+      expect(() =>
+        syncOpToOperation(createMockSyncOp({ opType: undefined as unknown as OpType })),
+      ).toThrowError(/missing opType/);
+      expect(() =>
+        syncOpToOperation(createMockSyncOp({ opType: '' as unknown as OpType })),
+      ).toThrowError(/missing opType/);
+    });
+
     it('should preserve payload', () => {
       const syncOp = createMockSyncOp({
         payload: { title: 'My Task', done: true, timeSpent: 3600 },

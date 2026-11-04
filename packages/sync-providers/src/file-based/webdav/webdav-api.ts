@@ -24,6 +24,18 @@ import type { WebdavPrivateCfg } from './webdav.model';
  */
 const STRONG_ETAG_RE = /^"[\x21\x23-\x7e\x80-\xff]*"$/;
 
+/**
+ * Content-coding suffix Apache appends to the strong ETag it serves on a
+ * compressed response (`mod_deflate`'s default `DeflateAlterETag AddSuffix`,
+ * `mod_brotli` likewise). The DAV backend keeps comparing `If-Match` against
+ * the bare tag, so echoing the served tag fails with 412 on every upload
+ * (#9154, #10808). Such a tag is treated like a weak one: it never drives
+ * `If-Match`, and the rev falls back to the content hash. The bare spelling is
+ * never derived from it, so no rewritten tag can match a concurrent revision;
+ * see `_canonicalTagBehindRewrittenEtag` for the tag the server does supply.
+ */
+const CONTENT_CODING_ETAG_SUFFIX_RE = /-(?:gzip|br|deflate)"$/;
+
 export interface WebdavApiDeps {
   logger: SyncLogger;
   /**
@@ -35,10 +47,29 @@ export interface WebdavApiDeps {
   httpAdapter: WebDavHttpAdapter;
   /** Nextcloud's DAV layer exposes its canonical validator in `OC-ETag`. */
   useCanonicalOcEtag?: boolean;
+  /**
+   * Injectable sleep for the post-upload verification backoff, so tests do not
+   * pay the real wait. Defaults to a plain `setTimeout`.
+   */
+  delay?: (ms: number) => Promise<void>;
 }
 
 export class WebdavApi {
   private static readonly L = 'WebdavApi';
+
+  /**
+   * Read-back budget for `_verifyUpload`. The PUT has already been accepted by
+   * the time we verify, so re-reading is idempotent and never re-writes.
+   *
+   * #9985: some servers answer a GET that reuses the PUT's keep-alive
+   * connection with the *previous* version's body and `ETag`, or truncate it
+   * mid-stream (`net::ERR_CONTENT_LENGTH_MISMATCH`). The stored file is
+   * correct; only the read is transiently wrong, so one bad read must not be
+   * reported as a conflict. A genuine concurrent write still shows up on every
+   * attempt and is reported after the budget is spent.
+   */
+  private static readonly VERIFY_MAX_ATTEMPTS = 3;
+  private static readonly VERIFY_RETRY_DELAY_MS = 1000;
   private readonly xmlParser: WebdavXmlParser;
   private readonly directoryCreationQueue = new Map<string, Promise<void>>();
 
@@ -59,11 +90,36 @@ export class WebdavApi {
     headers: Record<string, string>,
     headerName: string,
   ): string | undefined {
-    const entry = Object.entries(headers).find(
-      ([name]) => name.toLowerCase() === headerName,
-    );
-    const etag = entry?.[1]?.trim();
-    return etag && STRONG_ETAG_RE.test(etag) ? etag : undefined;
+    const etag = this._readHeader(headers, headerName);
+    return etag && this._isConditionalEtag(etag) ? etag : undefined;
+  }
+
+  private _readHeader(
+    headers: Record<string, string>,
+    headerName: string,
+  ): string | undefined {
+    return Object.entries(headers)
+      .find(([name]) => name.toLowerCase() === headerName)?.[1]
+      ?.trim();
+  }
+
+  /**
+   * ownCloud and Nextcloud, which the generic provider also serves, send their
+   * canonical tag as `OC-ETag` next to an `ETag` that mod_deflate rewrote
+   * (#10808; verified on ownCloud 10.15 and Nextcloud 35 in their stock
+   * images). Read from the response whose body just passed the content-hash
+   * check, it makes the following PUT conditional and narrows the GET→PUT race:
+   * these servers keep the same tag for two writes within one second, so a
+   * write in that second still slips through. For the same reason the rev
+   * stays the content hash, which catches those writes before the PUT.
+   */
+  private _canonicalTagBehindRewrittenEtag(
+    headers: Record<string, string>,
+  ): string | undefined {
+    const etag = this._readHeader(headers, 'etag') ?? '';
+    return CONTENT_CODING_ETAG_SUFFIX_RE.test(etag)
+      ? this._readStrongEtag(headers, 'oc-etag')
+      : undefined;
   }
 
   /**
@@ -75,7 +131,8 @@ export class WebdavApi {
    * extension; generic WebDAV entity tags are opaque and must never be
    * rewritten. If browser CORS hides `OC-ETag`, Nextcloud falls back to the
    * existing content-hash check instead of trusting a potentially rewritten
-   * HTTP `ETag`.
+   * HTTP `ETag`. A generic `ETag` carrying a content-coding suffix likewise
+   * falls back to the content hash (see `CONTENT_CODING_ETAG_SUFFIX_RE`).
    */
   private _readStrongRevision(headers: Record<string, string>): string | undefined {
     if (this._deps.useCanonicalOcEtag) {
@@ -85,8 +142,9 @@ export class WebdavApi {
     return this._readStrongEtag(headers, 'etag');
   }
 
-  private _isStrongEtag(value: string): boolean {
-    return STRONG_ETAG_RE.test(value);
+  /** A strong tag the server can be expected to compare `If-Match` against. */
+  private _isConditionalEtag(value: string): boolean {
+    return STRONG_ETAG_RE.test(value) && !CONTENT_CODING_ETAG_SUFFIX_RE.test(value);
   }
 
   private _isHttpStatus(error: unknown, status: number): boolean {
@@ -103,58 +161,23 @@ export class WebdavApi {
   // File Operations
   // ==============================
 
-  async listFiles(dirPath: string): Promise<string[]> {
+  /**
+   * URL and Authorization header value of a GET for `path`, as this API sends
+   * it — for a reader outside this runtime (the Android background reminder
+   * worker). The header carries credentials: never log it.
+   */
+  async getReadRequest(path: string): Promise<{ url: string; authorization: string }> {
     const cfg = await this._deps.getCfg();
-    const fullPath = this._buildFullPath(cfg.baseUrl, dirPath);
-
-    try {
-      const response = await this._makeRequest({
-        url: fullPath,
-        method: WebDavHttpMethod.PROPFIND,
-        body: WebdavXmlParser.PROPFIND_XML,
-        headers: {
-          [WebDavHttpHeader.CONTENT_TYPE]: 'application/xml; charset=utf-8',
-          [WebDavHttpHeader.DEPTH]: '1', // Get direct children
-        },
-      });
-
-      if (response.status === WebDavHttpStatus.MULTI_STATUS) {
-        const filesAndFolders = this.xmlParser.parseMultiplePropsFromXml(
-          response.data,
-          dirPath,
-        );
-        // Filter out directories and the current folder itself, return only file paths
-        return filesAndFolders
-          .filter(
-            (item) => item.type === 'file' && item.path !== dirPath, // Don't include the folder itself
-          )
-          .map((item) => item.path);
-      } else if (response.status === WebDavHttpStatus.NOT_FOUND) {
-        return []; // Directory not found, return empty list
-      }
-      const safeStatus =
-        response.status >= 200 && response.status <= 599 ? response.status : 500;
-      const errorResponse = new Response(response.data, { status: safeStatus });
-      throw new HttpNotOkAPIError(errorResponse);
-    } catch (e) {
-      // Handle "Not Found" error specifically to return empty array
-      if (
-        e instanceof HttpNotOkAPIError &&
-        e.response?.status === WebDavHttpStatus.NOT_FOUND
-      ) {
-        return [];
-      }
-      this._deps.logger.critical(
-        `${WebdavApi.L}.listFiles() error`,
-        errorMeta(e, { dirPath }),
-      );
-      throw e;
-    }
+    return {
+      url: this._buildFullPath(cfg.baseUrl, path),
+      authorization: getAuthorizationHeader(cfg),
+    };
   }
 
   /**
    * Retrieve metadata for a file or folder via PROPFIND.
-   * Used for testConnection() and listFiles(), not for revision tracking.
+   * Only caller: the #9030 upload pre-check, which swallows failures and falls
+   * back to GET — hence errors log at `normal`, not `critical`.
    */
   async getFileMeta(path: string): Promise<FileMeta> {
     const cfg = await this._deps.getCfg();
@@ -178,7 +201,7 @@ export class WebdavApi {
         }
       }
     } catch (e) {
-      this._deps.logger.critical(
+      this._deps.logger.normal(
         `${WebdavApi.L}.getFileMeta() error`,
         errorMeta(e, { path }),
       );
@@ -253,12 +276,16 @@ export class WebdavApi {
     const expectedHash = await this._computeContentHash(data);
 
     try {
+      // A `-gzip` tag stored by an earlier version is not conditional either. A
+      // normal cycle's download already replaces it with a hash rev; an upload
+      // keyed on the stored rev (e.g. the REPAIR snapshot) mismatches once instead.
       const strongExpectedRev =
-        expectedRev && this._isStrongEtag(expectedRev) ? expectedRev : undefined;
+        expectedRev && this._isConditionalEtag(expectedRev) ? expectedRev : undefined;
 
       // Servers without a strong ETag retain the legacy content-hash check. This
       // detects stale writers but cannot close the GET→PUT race; strong ETags do
       // close it through the HTTP precondition attached to the PUT below.
+      let canonicalIfMatch: string | undefined;
       if (!isForceOverwrite && expectedRev && !strongExpectedRev) {
         try {
           const currentResponse = await this._makeRequest({
@@ -269,6 +296,9 @@ export class WebdavApi {
           if (currentHash !== expectedRev) {
             throw this._remoteChanged(path);
           }
+          canonicalIfMatch = this._canonicalTagBehindRewrittenEtag(
+            currentResponse.headers,
+          );
         } catch (e) {
           // A revision was supplied, so disappearance is itself a conflicting
           // remote change. Proceeding would silently recreate over that change.
@@ -276,12 +306,17 @@ export class WebdavApi {
           throw e;
         }
       }
+      if (!isForceOverwrite && strongExpectedRev) {
+        await this._assertStrongRevUnchanged(path, fullPath, strongExpectedRev);
+      }
 
       const headers: Record<string, string> = {
         [WebDavHttpHeader.CONTENT_TYPE]: 'application/octet-stream',
       };
       if (!isForceOverwrite && strongExpectedRev) {
         headers[WebDavHttpHeader.IF_MATCH] = strongExpectedRev;
+      } else if (!isForceOverwrite && canonicalIfMatch) {
+        headers[WebDavHttpHeader.IF_MATCH] = canonicalIfMatch;
       } else if (!isForceOverwrite && expectedRev === null) {
         headers[WebDavHttpHeader.IF_NONE_MATCH] = '*';
       }
@@ -363,6 +398,47 @@ export class WebdavApi {
   }
 
   /**
+   * #9030: some servers serve strong ETags but PUT unconditionally, ignoring
+   * `If-Match` (e.g. hacdias/webdav v5, our self-hosting compose), which would silently
+   * clobber a concurrent write. This best-effort pre-check narrows that to the
+   * PROPFIND→PUT window; on compliant servers `If-Match` still closes it.
+   */
+  private async _assertStrongRevUnchanged(
+    path: string,
+    fullPath: string,
+    expectedRev: string,
+  ): Promise<void> {
+    // Cheap path: PROPFIND carries no file body. Any failure falls through to
+    // the GET below, which reports a missing file as a conflict.
+    const propfindRev = await this.getFileMeta(path).then(
+      (meta) => meta.data['etag'],
+      () => undefined,
+    );
+    if (propfindRev === expectedRev) {
+      return;
+    }
+
+    // `getetag` may be formatted differently from the served `ETag` (e.g.
+    // without mod_deflate's -gzip suffix, #9154), so only the same GET that
+    // produced `expectedRev` may report a conflict — else it recurs every sync.
+    try {
+      const response = await this._makeRequest({
+        url: fullPath,
+        method: WebDavHttpMethod.GET,
+      });
+      const currentRev =
+        this._readStrongRevision(response.headers) ??
+        (await this._computeContentHash(response.data));
+      if (currentRev !== expectedRev) {
+        throw this._remoteChanged(path);
+      }
+    } catch (e) {
+      if (e instanceof RemoteFileNotFoundAPIError) throw this._remoteChanged(path);
+      throw e;
+    }
+  }
+
+  /**
    * Re-GETs the just-uploaded file and verifies its content hash matches what
    * we sent. Protects against silent truncation (e.g. flaky network, proxy
    * buffering, Nextcloud accepting a partial body) since WebDAV enforces no
@@ -372,8 +448,53 @@ export class WebdavApi {
    * concurrent write by another client landing in the same window. Both cases
    * are surfaced as RemoteFileChangedUnexpectedly so the adapter's existing
    * self-healing path (re-download and retry) handles them uniformly.
+   *
+   * Every failure mode is re-read up to `VERIFY_MAX_ATTEMPTS` times first —
+   * see the constant for why a single bad read is not evidence of a conflict.
    */
   private async _verifyUpload(
+    path: string,
+    fullPath: string,
+    expectedHash: string,
+  ): Promise<string> {
+    for (let attempt = 1; ; attempt++) {
+      try {
+        return await this._readBackUpload(path, fullPath, expectedHash);
+      } catch (e) {
+        if (attempt >= WebdavApi.VERIFY_MAX_ATTEMPTS) {
+          throw e;
+        }
+        this._deps.logger.normal(
+          `${WebdavApi.L}._verifyUpload() re-reading after a failed attempt`,
+          errorMeta(e, { path, attempt }),
+        );
+        await this._sleep(WebdavApi.VERIFY_RETRY_DELAY_MS);
+      }
+    }
+  }
+
+  private async _sleep(ms: number): Promise<void> {
+    if (this._deps.delay) {
+      await this._deps.delay(ms);
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  /**
+   * One read-back attempt. Deliberately sends no `Cache-Control`: it is not a
+   * CORS-safelisted request header, so on the web build it forces a preflight
+   * that many WebDAV servers reject. The fetch path already passes
+   * `cache: 'no-store'` and the native path adds its own no-cache headers.
+   *
+   * Known gap (#9985): only the body is checked, so a response pairing the
+   * correct body with the *previous* version's `ETag` — possible on a stale
+   * connection when both versions happen to be the same length — is accepted
+   * and its stale rev stored, costing a 412 on the next conditional PUT. Not
+   * guarded because no report shows that combination: STRATO's stale headers
+   * came with a stale or truncated body, which the hash check already catches.
+   */
+  private async _readBackUpload(
     path: string,
     fullPath: string,
     expectedHash: string,
@@ -381,9 +502,6 @@ export class WebdavApi {
     const remoteResponse = await this._makeRequest({
       url: fullPath,
       method: WebDavHttpMethod.GET,
-      headers: {
-        [WebDavHttpHeader.CACHE_CONTROL]: 'no-cache',
-      },
     });
 
     if (!remoteResponse.data || remoteResponse.data.length === 0) {
@@ -535,16 +653,8 @@ export class WebdavApi {
   }): Promise<WebDavHttpResponse> {
     const cfg = await this._deps.getCfg();
 
-    let authHeaderVal;
-    if (cfg.accessToken) {
-      authHeaderVal = `Bearer ${cfg.accessToken}`;
-    } else {
-      const auth = btoa(`${cfg.userName}:${cfg.password}`);
-      authHeaderVal = `Basic ${auth}`;
-    }
-
     const allHeaders = {
-      [WebDavHttpHeader.AUTHORIZATION]: authHeaderVal,
+      [WebDavHttpHeader.AUTHORIZATION]: getAuthorizationHeader(cfg),
       ...headers,
     };
 
@@ -690,3 +800,8 @@ export class WebdavApi {
     }
   }
 }
+
+const getAuthorizationHeader = (cfg: WebdavPrivateCfg): string =>
+  cfg.accessToken
+    ? `Bearer ${cfg.accessToken}`
+    : `Basic ${btoa(`${cfg.userName}:${cfg.password}`)}`;

@@ -14,11 +14,22 @@
  * Activated only by `REEL_VARIANT=keyboard` so the default capture run
  * still produces the canonical marketing reel.
  */
+import { expect } from '@playwright/test';
 import { test } from '../fixture';
-import { loopBoundary, showEndCard, showKeyChip, showOverlay } from '../overlays';
+import {
+  loopBoundary,
+  markScene,
+  setCursorVisible,
+  showEndCard,
+  showKeyChip,
+  showOverlay,
+} from '../../video-kit';
 
 const VARIANT = process.env.REEL_VARIANT ?? '';
 const NEW_TASK_TITLE = 'Read book 30m';
+// Tuned before the kit's above-caption default; the corner keeps chips clear
+// of this reel's centered overlays.
+const CHIP = { position: 'top-right' } as const;
 
 const parkCursor = async (page: import('@playwright/test').Page): Promise<void> => {
   try {
@@ -64,41 +75,6 @@ const clearShortcutBlockers = async (
   });
 };
 
-/**
- * Drive SP's task focus state from the test side, without using the store.
- *
- * The shortcut handler needs TWO things to route `focusNext()`:
- *   1. `_taskFocusService.focusedTaskId()` set, OR an active `<task>` element
- *      whose `data-task-id` the recovery path can read.
- *   2. `_taskFocusService.lastFocusedTaskComponent()` set — this only happens
- *      from the task component's `focusin` HostListener, gated by
- *      `_isInnermostTaskFor(ev.target)` which requires
- *      `ev.target.closest('task') === host`.
- *
- * Both `taskEl.focus()` (real focus) and a follow-up `dispatchEvent(new
- * FocusEvent('focusin', { bubbles: true }))` are issued. The browser already
- * fires focusin on `.focus()` in normal pages, but we re-dispatch to harden
- * against any test-runner edge case where the bubbling focusin doesn't run
- * the Angular HostListener in time.
- *
- * Returns the `data-task-id` of the newly focused task, or `null` if no
- * `<task>` exists.
- */
-const ensureTaskFocused = async (
-  page: import('@playwright/test').Page,
-): Promise<string | null> => {
-  return await page.evaluate(() => {
-    const active = document.activeElement as HTMLElement | null;
-    const currentTaskEl = active?.closest('task') as HTMLElement | null;
-    const taskEl =
-      currentTaskEl ?? (document.querySelector('task') as HTMLElement | null);
-    if (!taskEl) return null;
-    taskEl.focus();
-    taskEl.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
-    return taskEl.getAttribute('data-task-id');
-  });
-};
-
 test.describe('@video keyboard reel', () => {
   test.skip(VARIANT !== 'keyboard', 'keyboard reel only runs when REEL_VARIANT=keyboard');
   test.use({ locale: 'en', theme: 'dark' });
@@ -133,46 +109,37 @@ test.describe('@video keyboard reel', () => {
     await loopBoundary(page, 'in', 460);
 
     // ── Beat 1 — "Keyboard-first." ───────────────────────────────────────
+    markScene(page, 'Keyboard-first.');
     const b1 = await showOverlay(page, 'Keyboard-first.');
     await page.waitForTimeout(900);
     void b1.hide();
     await page.waitForTimeout(200);
 
     // ── Beat 2 — Shift+A → quick capture ─────────────────────────────────
-    const chipAdd = await showKeyChip(page, 'Shift+A');
+    markScene(page, 'Shift+A capture');
+    const chipAdd = await showKeyChip(page, 'Shift+A', CHIP);
     await clearShortcutBlockers(page);
     await page.keyboard.press('Shift+A');
     const globalInput = page.locator('add-task-bar.global .main-input').first();
-    if (!(await globalInput.isVisible().catch(() => false))) {
-      await page.evaluate(() => {
-        const helper = (
-          window as unknown as {
-            __e2eTestHelpers?: { store?: { dispatch: (a: unknown) => void } };
-          }
-        ).__e2eTestHelpers;
-        helper?.store?.dispatch({ type: '[Layout] Show AddTaskBar' });
-      });
-    }
-    await globalInput.waitFor({ state: 'visible', timeout: 5_000 });
+    await expect(globalInput).toBeFocused({ timeout: 5_000 });
     await page.waitForTimeout(220);
-    await page.evaluate(() => document.body.classList.add('__sp-hide-cursor-highlight'));
+    await setCursorVisible(page, false);
     await globalInput.pressSequentially(NEW_TASK_TITLE, { delay: 55 });
     await page.waitForTimeout(360);
     await page.keyboard.press('Enter');
     await page.waitForTimeout(450);
-    await page.evaluate(() =>
-      document.body.classList.remove('__sp-hide-cursor-highlight'),
-    );
+    await setCursorVisible(page, true);
+    await expect(
+      page.locator('task').filter({ hasText: 'Read book' }).first(),
+    ).toBeVisible();
     const backdrop = page.locator('.backdrop').first();
     if (await backdrop.isVisible().catch(() => false)) {
       await backdrop.click({ force: true });
-      await backdrop.waitFor({ state: 'hidden', timeout: 2_000 }).catch(() => undefined);
+      await expect(backdrop).toBeHidden({ timeout: 2_000 });
     }
-    await page
-      .locator('add-task-bar.global')
-      .first()
-      .waitFor({ state: 'hidden', timeout: 3_000 })
-      .catch(() => undefined);
+    await expect(page.locator('add-task-bar.global').first()).toBeHidden({
+      timeout: 3_000,
+    });
     await chipAdd.hide();
 
     // Focus the first task before pressing J/K. SP's focusin handler only
@@ -183,133 +150,54 @@ test.describe('@video keyboard reel', () => {
     // styling — no panel side effects.
     await clearShortcutBlockers(page);
     const firstTask = page.locator('task').first();
-    await firstTask.scrollIntoViewIfNeeded().catch(() => undefined);
-    const initialTaskId = await ensureTaskFocused(page);
-    await page.evaluate((id) => {
-      const tasks = Array.from(document.querySelectorAll('task'));
-      const msg =
-        `[keyboard-reel] initial focus task=${id ?? 'null'} ` +
-        `taskCount=${tasks.length}`;
-      console.log(msg);
-    }, initialTaskId);
+    const secondTask = page.locator('task').nth(1);
+    const thirdTask = page.locator('task').nth(2);
+    await firstTask.scrollIntoViewIfNeeded();
+    await thirdTask.waitFor({ state: 'attached' });
+    await firstTask.focus();
+    await expect(firstTask).toBeFocused();
     await page.waitForTimeout(200);
 
-    /**
-     * One step in the J/K navigation beat. Chip already up; press the real
-     * key. SP's task-shortcut service calls `focusNext()` / `focusPrevious()`
-     * on the focused task component, which moves DOM focus to the next /
-     * previous `<task>` host element — the `:focus` border (from
-     * `_task-base.scss`) is the visible cue.
-     *
-     * Logs activeElement + task index + overlay-pane count before each
-     * press, then the activeElement + task index after, so trace inspection
-     * can confirm focus actually moved. If `taskIndex` is unchanged, the
-     * shortcut handler bailed (overlay pane present, component reference
-     * null/mismatched) — check the forwarded `[page:warning]` lines.
-     */
-    const step = async (direction: 'next' | 'prev'): Promise<void> => {
-      await clearShortcutBlockers(page);
-      await ensureTaskFocused(page);
-      const snap = async (label: string): Promise<void> => {
-        const info = await page.evaluate(() => {
-          const a = document.activeElement as HTMLElement | null;
-          const taskEl = a?.closest('task') as HTMLElement | null;
-          const all = Array.from(document.querySelectorAll('task'));
-          const idx = taskEl ? all.indexOf(taskEl) : -1;
-          const paneCount = Array.from(
-            document.querySelectorAll('.cdk-overlay-pane'),
-          ).filter(
-            (p) =>
-              !p.classList.contains('mat-mdc-tooltip-panel') && p.childElementCount > 0,
-          ).length;
-          return {
-            tag: a?.tagName ?? null,
-            taskId: taskEl?.getAttribute('data-task-id') ?? null,
-            taskIndex: idx,
-            taskCount: all.length,
-            paneCount,
-          };
-        });
-        await page.evaluate(
-          (payload) => {
-            const msg =
-              `[keyboard-reel] ${payload.label} tag=${payload.tag} ` +
-              `task=${payload.taskId} ` +
-              `idx=${payload.taskIndex}/${payload.taskCount} ` +
-              `panes=${payload.paneCount}`;
-            console.log(msg);
-          },
-          { ...info, label },
-        );
-      };
-      await snap(`before-${direction}`);
-      await page.keyboard.press(direction === 'next' ? 'j' : 'k');
-      await snap(`after-${direction}`);
-    };
-
     // ── Beat 3 — J / K → navigate task list ──────────────────────────────
-    const chipJ = await showKeyChip(page, 'J');
-    await step('next');
+    markScene(page, 'J / K navigate');
+    const chipJ = await showKeyChip(page, 'J', CHIP);
+    await page.keyboard.press('j');
+    await expect(secondTask).toBeFocused();
     await page.waitForTimeout(420);
-    await step('next');
+    await page.keyboard.press('j');
+    await expect(thirdTask).toBeFocused();
     await page.waitForTimeout(420);
     await chipJ.hide();
     await page.waitForTimeout(80);
-    const chipK = await showKeyChip(page, 'K');
-    await step('prev');
+    const chipK = await showKeyChip(page, 'K', CHIP);
+    await page.keyboard.press('k');
+    await expect(secondTask).toBeFocused();
     await page.waitForTimeout(420);
     await chipK.hide();
     await page.waitForTimeout(120);
 
     // ── Beat 4 — F → focus mode ──────────────────────────────────────────
-    const chipF = await showKeyChip(page, 'F');
+    markScene(page, 'F focus mode');
+    const chipF = await showKeyChip(page, 'F', CHIP);
     await clearShortcutBlockers(page);
     await page.keyboard.press('f');
-    const focusVisible = await page
-      .locator('focus-mode-main')
-      .first()
-      .waitFor({ state: 'visible', timeout: 2_000 })
-      .then(() => true)
-      .catch(() => false);
-    if (!focusVisible) {
-      const focusedTaskId = await page.evaluate(() => {
-        const focused = document.querySelector(
-          'task:focus, task.isCurrent, task[class*="isSelected"]',
-        );
-        return focused?.getAttribute('data-task-id') ?? null;
-      });
-      await page.evaluate((id) => {
-        const helper = (
-          window as unknown as {
-            __e2eTestHelpers?: { store?: { dispatch: (a: unknown) => void } };
-          }
-        ).__e2eTestHelpers;
-        if (!helper?.store) return;
-        if (id) helper.store.dispatch({ type: '[Task] SetCurrentTask', id });
-        helper.store.dispatch({ type: '[FocusMode] Show Overlay' });
-        helper.store.dispatch({
-          type: '[FocusMode] Start Session',
-          duration: 1500000,
-        });
-      }, focusedTaskId);
-      await page
-        .locator('focus-mode-main')
-        .first()
-        .waitFor({ state: 'visible', timeout: 8_000 })
-        .catch(() => undefined);
-    }
-    await page.clock.runFor(5500).catch(() => undefined);
-    await page
-      .locator('focus-mode-main .bottom-controls')
-      .first()
-      .waitFor({ state: 'visible', timeout: 5_000 })
-      .catch(() => undefined);
-    await page.clock.resume().catch(() => undefined);
+    await expect(page.locator('focus-mode-main')).toBeVisible({ timeout: 5_000 });
+    await page.locator('focus-mode-main .task-title-placeholder').click();
+    const selector = page.locator('focus-mode-task-selector .task-selector-overlay');
+    await expect(selector).toBeVisible();
+    await selector.locator('input').fill('Read book');
+    await page.getByRole('option', { name: 'Read book' }).click();
+    await expect(page.locator('focus-mode-main task-title')).toContainText('Read book');
+    await page.locator('focus-mode-main button.play-button').click();
+    await page.clock.runFor(5500);
+    await expect(page.locator('focus-mode-main .bottom-controls')).toBeVisible();
+    await page.clock.resume();
     await page.waitForTimeout(1500);
     await chipF.hide();
     await page.waitForTimeout(200);
 
     // ── Beat 4 → 5 — dismiss focus mode behind the end card ──────────────
+    markScene(page, 'Made for keyboards.');
     await showEndCard(
       page,
       {

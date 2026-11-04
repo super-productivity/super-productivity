@@ -3,6 +3,7 @@ import { loadAllDataFailureGuardMetaReducer } from '../../op-log/apply/load-all-
 import { operationCaptureMetaReducer } from '../../op-log/capture/operation-capture.meta-reducer';
 import { bulkOperationsMetaReducer } from '../../op-log/apply/bulk-hydration.meta-reducer';
 import { undoTaskDeleteMetaReducer } from './undo-task-delete.meta-reducer';
+import { reducerFailureGuardMetaReducer } from './reducer-failure-guard.meta-reducer';
 
 describe('META_REDUCERS registry', () => {
   // The dev-mode validateMetaReducerOrdering() covers index 0/1/last; this
@@ -16,7 +17,10 @@ describe('META_REDUCERS registry', () => {
   });
 
   it('keeps the hard ordering constraints intact', () => {
-    expect(META_REDUCERS[0]).toBe(operationCaptureMetaReducer);
-    expect(META_REDUCERS[1]).toBe(bulkOperationsMetaReducer);
+    // #10195: the guard must be outermost so a throw never reaches
+    // operationCaptureMetaReducer's incrementPending.
+    expect(META_REDUCERS[0]).toBe(reducerFailureGuardMetaReducer);
+    expect(META_REDUCERS[1]).toBe(operationCaptureMetaReducer);
+    expect(META_REDUCERS[2]).toBe(bulkOperationsMetaReducer);
   });
 });

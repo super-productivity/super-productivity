@@ -93,52 +93,6 @@
       //flex: 1 0 auto;
     }
 
-    .task-type-indicator {
-      display: flex;
-      align-items: center;
-      gap: var(--s-half);
-      font-size: 10px;
-      padding: var(--s-quarter) 6px;
-      border-radius: 12px;
-      font-weight: 500;
-
-      @include mq(xs, max) {
-        font-size: 9px;
-        padding: 1px var(--s-half);
-      }
-
-      &.create {
-        background-color: color-mix(in srgb, var(--c-accent) 15%, transparent);
-        color: var(--c-accent);
-      }
-
-      &.select {
-        background-color: color-mix(in srgb, var(--c-primary) 15%, transparent);
-        color: var(--c-primary);
-      }
-
-      mat-icon {
-        font-size: 12px;
-        width: 12px;
-        height: 12px;
-
-        @include mq(xs, max) {
-          font-size: 10px;
-          width: 10px;
-          height: 10px;
-        }
-      }
-
-      span {
-        @include truncateText();
-        max-width: 120px;
-
-        @include mq(xs, max) {
-          max-width: 80px;
-        }
-      }
-    }
-
     .mode-hint {
       font-size: 12px;
       color: var(--text-color-muted);

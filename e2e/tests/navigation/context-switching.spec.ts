@@ -154,7 +154,6 @@ test.describe('Context Switching', () => {
     page,
     workViewPage,
     projectPage,
-    taskPage,
     testPrefix,
   }) => {
     await workViewPage.waitForTaskList();
@@ -191,6 +190,10 @@ test.describe('Context Switching', () => {
     // Navigate back to the project
     await projectPage.navigateToProjectByName(projectName);
 
+    // The route transition briefly renders a second, animating copy of each
+    // task; wait for it to settle so the per-task locators below stay unique.
+    await expect(page.locator('task')).toHaveCount(3);
+
     // Verify all tasks are still there
     await expect(
       page.locator('task').filter({ hasText: `${testPrefix}-Task A` }),
@@ -201,10 +204,6 @@ test.describe('Context Switching', () => {
     await expect(
       page.locator('task').filter({ hasText: `${testPrefix}-Task C` }),
     ).toBeVisible();
-
-    // Verify task count
-    const taskCount = await taskPage.getTaskCount();
-    expect(taskCount).toBe(3);
   });
 
   test('should update URL when switching contexts', async ({

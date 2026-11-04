@@ -253,8 +253,7 @@ export class SnapshotUploadService {
     // unencrypted (encryption turned off, or on without a usable key) rather
     // than silently leaking. Complements the op-upload guard in
     // OperationLogUploadService so the invariant holds regardless of caller
-    // (e.g. a keyless import, or a future disable-encryption wiring — currently
-    // UI-unreachable for SuperSync).
+    // (e.g. a keyless import).
     if (syncProvider.isEncryptionMandatory && !(isEncryptionEnabled && encryptKey)) {
       throw new Error(
         `${logPrefix}: refusing to upload an unencrypted snapshot for an ` +

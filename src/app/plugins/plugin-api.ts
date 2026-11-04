@@ -12,11 +12,13 @@ import {
   PluginAppState,
   PluginBaseCfg,
   PluginCreateTaskData,
+  PluginUpdateTaskOptions,
   PluginHeaderBtnCfg,
   PluginHookHandler,
   PluginHooks,
   PluginManifest,
   PluginMenuEntryCfg,
+  PluginTaskContextMenuEntryCfg,
   PluginNodeScriptRequest,
   PluginNodeScriptResult,
   PluginRequestOptions,
@@ -24,6 +26,7 @@ import {
   PluginSidePanelBtnCfg,
   PluginWorkContextHeaderBtnCfg,
   ActiveWorkContext,
+  PluginDayContext,
   Project,
   SnackCfg,
   Tag,
@@ -128,6 +131,10 @@ export class PluginAPI implements PluginAPIInterface {
     this.#boundMethods.registerMenuEntry(menuEntryCfg);
   }
 
+  registerTaskContextMenuEntry(cfg: PluginTaskContextMenuEntryCfg): void {
+    this.#boundMethods.registerTaskContextMenuEntry(cfg);
+  }
+
   registerConfigHandler(handler: () => void): void {
     PluginLog.log(`Plugin ${this.#pluginId} registered config handler`);
     this.#boundMethods.registerConfigHandler(handler);
@@ -152,6 +159,11 @@ export class PluginAPI implements PluginAPIInterface {
     this.#boundMethods.registerShortcut(shortcut);
   }
 
+  unregisterShortcut(shortcutId: string): void {
+    PluginLog.log(`Plugin ${this.#pluginId} unregistered shortcut`);
+    this.#boundMethods.unregisterShortcut(shortcutId);
+  }
+
   registerSidePanelButton(
     sidePanelBtnCfg: Omit<PluginSidePanelBtnCfg, 'pluginId'>,
   ): void {
@@ -162,6 +174,7 @@ export class PluginAPI implements PluginAPIInterface {
   registerWorkContextHeaderButton(
     cfg: Omit<PluginWorkContextHeaderBtnCfg, 'pluginId'>,
   ): void {
+    // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
     PluginLog.log(`Plugin ${this.#pluginId} registered work-context header button`, cfg);
     this.#boundMethods.registerWorkContextHeaderButton(cfg);
   }
@@ -188,6 +201,20 @@ export class PluginAPI implements PluginAPIInterface {
 
   async getActiveWorkContext(): Promise<ActiveWorkContext | null> {
     return this.#boundMethods.getActiveWorkContext();
+  }
+
+  async getDayContext(): Promise<PluginDayContext> {
+    return this.#boundMethods.getDayContext();
+  }
+
+  async startTracking(taskId: string): Promise<void> {
+    await this.#boundMethods.startTracking(taskId);
+    PluginLog.log(`Plugin ${this.#pluginId} started tracking`, { taskId });
+  }
+
+  async stopTracking(): Promise<void> {
+    PluginLog.log(`Plugin ${this.#pluginId} stopped tracking`);
+    return this.#boundMethods.stopTracking();
   }
 
   async getTasks(): Promise<Task[]> {
@@ -229,10 +256,14 @@ export class PluginAPI implements PluginAPIInterface {
     PluginLog.log(`Plugin ${this.#pluginId} requested data re-init`);
     return this.#pluginBridge.reInitData();
   }
-  async updateTask(taskId: string, updates: Partial<Task>): Promise<void> {
+  async updateTask(
+    taskId: string,
+    updates: Partial<Task>,
+    options?: PluginUpdateTaskOptions,
+  ): Promise<void> {
     PluginLog.log(`Plugin ${this.#pluginId} requested to update task ${taskId}`);
     const taskCopyUpdates = taskDataToPartialTaskCopy(updates);
-    return this.#pluginBridge.updateTask(taskId, taskCopyUpdates);
+    return this.#pluginBridge.updateTask(taskId, taskCopyUpdates, options);
   }
 
   async addTask(taskData: PluginCreateTaskData): Promise<string> {
@@ -261,6 +292,11 @@ export class PluginAPI implements PluginAPIInterface {
     PluginLog.log(`Plugin ${this.#pluginId} requested to update project ${projectId}`);
     const projectCopyUpdates = projectDataToPartialProjectCopy(updates);
     return this.#pluginBridge.updateProject(projectId, projectCopyUpdates);
+  }
+
+  async deleteProject(projectId: string): Promise<void> {
+    PluginLog.log(`Plugin ${this.#pluginId} requested to delete project ${projectId}`);
+    return this.#boundMethods.deleteProject(projectId);
   }
 
   async getAllTags(): Promise<Tag[]> {
@@ -334,6 +370,10 @@ export class PluginAPI implements PluginAPIInterface {
   async getConfig(): Promise<any> {
     PluginLog.log(`Plugin ${this.#pluginId} requested configuration`);
     return this.#boundMethods.getConfig();
+  }
+
+  listSyncedDataKeys(prefix?: string): Promise<string[]> {
+    return this.#boundMethods.listSyncedDataKeys(prefix);
   }
 
   async downloadFile(filename: string, data: string): Promise<void> {
@@ -510,6 +550,7 @@ export class PluginAPI implements PluginAPIInterface {
   async updateSimpleCounter(id: string, updates: Partial<any>): Promise<void> {
     PluginLog.log(
       `Plugin ${this.#pluginId} requested to update simple counter ${id}`,
+      // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
       updates,
     );
     return this.#pluginBridge.updateSimpleCounter(id, updates);
@@ -597,18 +638,23 @@ export class PluginAPI implements PluginAPIInterface {
     return this.#pluginI18nService.getCurrentLanguage();
   }
 
-  async startOAuthFlow(config: OAuthFlowConfig): Promise<OAuthTokenResult> {
+  // tokenKey is an internal host ↔ bundled Google Calendar contract.
+  // Third-party plugins use the published, unscoped OAuth API.
+  async startOAuthFlow(
+    config: OAuthFlowConfig,
+    tokenKey?: string,
+  ): Promise<OAuthTokenResult> {
     PluginLog.log(`Plugin ${this.#pluginId} requested OAuth flow`);
-    return this.#boundMethods.startOAuthFlow(config);
+    return this.#boundMethods.startOAuthFlow(config, tokenKey);
   }
 
-  async getOAuthToken(): Promise<string | null> {
-    return this.#boundMethods.getOAuthToken();
+  async getOAuthToken(tokenKey?: string): Promise<string | null> {
+    return this.#boundMethods.getOAuthToken(tokenKey);
   }
 
-  async clearOAuthToken(): Promise<void> {
+  async clearOAuthToken(tokenKey?: string): Promise<void> {
     PluginLog.log(`Plugin ${this.#pluginId} requested OAuth token clear`);
-    return this.#boundMethods.clearOAuthToken();
+    return this.#boundMethods.clearOAuthToken(tokenKey);
   }
 
   async setSecret(key: string, value: string): Promise<void> {

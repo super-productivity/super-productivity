@@ -1,0 +1,124 @@
+-- Causal-boundary index for the old-ops sweep's fleet-wide boundary scan (#9692
+-- follow-up). ADDITIVE: operations_user_id_full_state_server_seq_idx
+-- (20260512000000) stays, and must — see "why the broad index survives" below.
+--
+-- WHAT BROKE. deleteOldSyncedOpsForAllUsers opens with one fleet-wide groupBy
+-- (storage-quota.service.ts) that computes every user's causal boundary:
+--
+--   SELECT user_id, MAX(server_seq) FROM operations
+--   WHERE server_seq > 1
+--     AND ( op_type IN ('SYNC_IMPORT','BACKUP_IMPORT')
+--           OR (op_type = 'REPAIR' AND repair_base_server_seq IS NOT NULL) )
+--   GROUP BY user_id;
+--
+-- It is the only statement in that function OUTSIDE the per-candidate try, so
+-- its failure is not one user's skip — it is the whole fleet's retention pass.
+-- On 2026-08-29 it was cancelled at the 60s statement_timeout (57014) and the
+-- sweep pruned nothing; the ERROR line carried no accompanying "removed N".
+--
+-- MEASURED on production (PG 16, 9.1M rows, 7 GB heap, ~150 IOPS host):
+--   BitmapOr over the broad partial index ....... 2.5 ms, 92 buffers, all hits
+--   Bitmap Heap Scan ............................ 33,728 ms, 3,930 heap blocks
+--                                                 (hit=1913 read=2109)
+-- ~100% of the runtime is random heap access. op_type and repair_base_server_seq
+-- are not in the broad index, so the residual Filter costs one heap visit per
+-- candidate row. At ~150 IOPS those 3,930 blocks are ~24s of pure I/O, which is
+-- why the statement sat bistable around the 60s cap: it completed at 33.7s with
+-- a half-warm cache and blew the timeout when an autovacuum was competing for
+-- the same disk.
+--
+-- WHY "INCLUDE" IS NOT THE FIX, and this is structural rather than a costing
+-- accident. Adding INCLUDE (op_type, repair_base_server_seq) to the BROAD index
+-- leaves the plan byte-identical (measured: same BitmapOr, same heap blocks).
+-- predicate_implied_by cannot prove
+--   (A OR B) => op_type IN ('SYNC_IMPORT','BACKUP_IMPORT','REPAIR')
+-- because predtest.c's rule for a disjunctive predicate is "the clause implies
+-- SOME ONE disjunct", and a clause that is itself an OR needs case analysis the
+-- prover does not perform. So predOK is false, no plain or index-only path is
+-- generated at all, and the only route into that index is
+-- generate_bitmap_or_paths splitting the OR into two arms it can prove
+-- separately -- which is exactly the DUPLICATED BitmapOr in the production
+-- plan, the same index scanned twice and OR'd with itself. A Bitmap Heap Scan
+-- discards the index tuple, so INCLUDE columns are unreachable by construction.
+-- Confirmed from the other side: adding a redundant top-level
+-- op_type IN (3-set) conjunct makes predOK true and the INCLUDE variant does
+-- flip to an index-only scan. It is the proof that is missing, not the columns.
+--
+-- WHAT THIS INDEX DOES INSTEAD. Its predicate is CAUSAL_FULL_STATE_OPERATION_WHERE
+-- (sync.types.ts) verbatim, so the query predicate and the index predicate are
+-- the same expression. create_indexscan_plan then drops the whole OR as
+-- implied-by-predicate, leaving only server_seq > 1, which server_seq answers as
+-- a key column.
+--
+-- MEASURED on PostgreSQL 16.15 against a 60k-row / 2,000-user fixture that
+-- reproduces production's plan shape (tests/integration/old-ops-boundary-plan):
+--   with this index ... Index Only Scan, Heap Fetches: 0, 12 buffers, cost 91
+--   without it ....... the production plan verbatim -- duplicated BitmapOr over
+--                      the broad index, Bitmap Heap Scan, Rows Removed by
+--                      Filter: 500, 1,099 buffers, cost 1,424
+-- ~92x fewer buffers. Scale transfers, absolute numbers do not: production's
+-- fixture-equivalent is 3,930 heap blocks on a ~150 IOPS host.
+--
+-- `Heap Fetches: 0` is the FIXTURE's number and production will not match it on
+-- day one. An index-only scan still visits the heap for every tuple whose page
+-- the visibility map does not mark all-visible, and the fixture is vacuumed
+-- immediately before measuring. Production's map measured 82.8% coverage on
+-- 2026-08-25 (docs/production-capacity.md), so expect a non-zero count that
+-- falls as 20260828000003's autovacuum tuning takes effect. The saving does not
+-- depend on reaching zero -- it is bounded by map coverage instead of by the
+-- number of candidate rows, which is what stops it growing with the table.
+--
+-- WHY THE BROAD INDEX SURVIVES -- do NOT "clean up" by dropping it. Three live
+-- queries need full-state rows this predicate EXCLUDES, i.e. legacy REPAIRs
+-- carrying no causal base cursor:
+--   * sync.routes.quota.ts findExistingSyncImport -- on the snapshot-upload
+--     path (409 SYNC_IMPORT_EXISTS / idempotent retry). Measured falling back to
+--     a whole-history bitmap+Sort or a backward walk of
+--     operations_user_id_server_seq_key without it: the #9692 pathology, moved
+--     onto a user-facing route.
+--   * snapshot-generation.service.ts -- counts op_type = 'REPAIR' AND
+--     repair_base_server_seq IS NULL, the exact complement of this predicate.
+--   * storage-quota.service.ts's $queryRaw, which inlines the broad 3-value list.
+-- The 20260512000000 comment about restore-point op_type lookups is still
+-- accurate and this migration does not falsify it. Tightening that index in
+-- place would; it would also leave the table with NO such index for the whole
+-- concurrent build window (7 GB, two heap passes, 150 IOPS) while the download
+-- and upload hot paths seq-scan.
+--
+-- THE ONE DEPENDENCY, stated because it is invisible in the plan. Prisma sends
+-- op_type as bind parameters, and with Param nodes there are no Consts for
+-- operator_predicate_proof to evaluate, so predOK is false and NO partial index
+-- on this table is reachable -- this one included. Only a CUSTOM plan, where the
+-- params are folded to Consts, gets the index-only scan. Measured on production:
+--   custom  ... BitmapOr, cost 22,844
+--   generic ... Parallel Seq Scan, cost 982,701
+-- choose_custom_plan switches to generic only when generic cost is at or below
+-- the average custom cost, so a 43x margin pins this statement on custom plans
+-- (and the margin widens to ~10,000x once this index lands). That is why no
+-- $queryRaw is needed here: it would buy nothing and add a third copy of the
+-- causal predicate to keep in lockstep with sync.types.ts and
+-- scripts/old-ops-sweep-plan.ts. The dependency is pinned instead by
+-- tests/integration/old-ops-boundary-plan.integration.spec.ts, which asserts the
+-- generic form still seq-scans -- so if that margin ever inverts, CI says so
+-- rather than production.
+--
+-- SIZE AND WRITE COST. ~3,200 entries against the broad index's ~3,966 (the
+-- difference is the legacy REPAIRs production reports as "Rows Removed by
+-- Filter: 651"), same two int4 key columns: ~320 kB, against ~3,374 MB of
+-- existing indexes on this table. A partial index takes a tuple only when its
+-- predicate holds, and full-state ops are ~0.044% of rows, so 99.96% of inserts
+-- pay two comparisons on an already-resident tuple -- no index page, no WAL, no
+-- split. The table takes no UPDATEs, so there is no HOT penalty.
+--
+-- DEPLOY. CREATE INDEX CONCURRENTLY does two heap passes over 7 GB on a
+-- ~150 IOPS host. deploy.sh's MIGRATION_TIMEOUT defaults to 900s and should be
+-- raised for this deploy (env.example suggests 3600 for a large operations
+-- table). Drop-then-create is the recoverable shape from
+-- prisma/migrations/README.md: an interrupted build leaves an INVALID index that
+-- a re-run rebuilds rather than skips, which is why this is not
+-- CREATE INDEX CONCURRENTLY IF NOT EXISTS.
+DROP INDEX CONCURRENTLY IF EXISTS "operations_user_id_causal_full_state_server_seq_idx";
+CREATE INDEX CONCURRENTLY "operations_user_id_causal_full_state_server_seq_idx"
+  ON "operations"("user_id", "server_seq")
+  WHERE "op_type" IN ('SYNC_IMPORT', 'BACKUP_IMPORT')
+     OR ("op_type" = 'REPAIR' AND "repair_base_server_seq" IS NOT NULL);

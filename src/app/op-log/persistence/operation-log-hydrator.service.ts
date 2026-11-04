@@ -16,6 +16,7 @@ import { OperationLogRecoveryService } from './operation-log-recovery.service';
 import { SyncHydrationService } from './sync-hydration.service';
 import { ArchiveMigrationService } from './archive-migration.service';
 import { OpLog } from '../../core/log';
+import { markBoot } from '../../core/startup/boot-timing';
 import { StateSnapshotService, AppStateSnapshot } from '../backup/state-snapshot.service';
 import {
   Operation,
@@ -157,6 +158,7 @@ export class OperationLogHydratorService {
         OpLog.normal('OperationLogHydratorService: Restored from backup.');
       }
 
+      markBoot('hydrate-checks-done');
       // 1. Load snapshot
       let snapshot = await this.opLogStore.loadStateCache();
 
@@ -315,6 +317,7 @@ export class OperationLogHydratorService {
           await this._replayAllOpsFromScratch(pendingRemoteOps);
       }
 
+      markBoot('hydrate-state-loaded');
       // Retry any failed remote ops from previous conflict resolution attempts
       // Now that state is fully hydrated, dependencies might be resolved
       await this.retryFailedRemoteOps();
@@ -471,6 +474,7 @@ export class OperationLogHydratorService {
     await this._assertOpLogReplayFallbackViable(cause);
     OpLog.err(
       `OperationLogHydratorService: ${reason}. Skipping the snapshot for this boot and replaying the op-log from the start.`,
+      // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
       cause,
     );
     await this._replayAllOpsFromScratch(pendingRemoteOps, cause);
@@ -602,14 +606,18 @@ export class OperationLogHydratorService {
     // tab's append during it cannot end up inside the save's anchor.
     this.tabSeqFrontier.establishFrontier(coveredSeq);
 
-    // CHECKPOINT C: Validate state after replaying tail operations.
-    // If invalid, we keep the data on screen but skip the snapshot save so
-    // we don't cache corrupted state for next boot.
-    const isStateValid = await this._validateCurrentStateForHydration('tail-replay');
+    // CHECKPOINT C: validate the replayed state. If invalid, keep the data on
+    // screen but skip the snapshot save so we don't cache corrupted state. With
+    // <= 10 ops there is no save to gate, so validate when idle, off the boot path.
+    if (opsToReplay.length <= 10) {
+      const state = this.stateSnapshotService.getStateSnapshot();
+      this.validateStateService.validateStateWhenIdle(state, 'tail-replay');
+      return false;
+    }
 
-    // 5. If we replayed many ops AND state is valid, save a new snapshot
+    // 5. We replayed many ops: if the state is valid, save a new snapshot
     // for faster future loads.
-    if (isStateValid && opsToReplay.length > 10) {
+    if (await this._validateCurrentStateForHydration('tail-replay')) {
       OpLog.normal(
         `OperationLogHydratorService: Saving new snapshot after replaying ${opsToReplay.length} ops`,
       );
@@ -731,6 +739,7 @@ export class OperationLogHydratorService {
       replayBatch,
       localClientId,
       pendingRemoteOps.filter((entry) => allOpIds.has(entry.op.id)),
+      { isReplayFromEmptyBaseline: true },
     );
 
     if (fallbackCause !== undefined) {
@@ -772,6 +781,7 @@ export class OperationLogHydratorService {
     replayBatch: HydrationReplayBatch,
     localClientId: string | undefined,
     pendingRemoteOps: OperationLogEntry[],
+    options: { isReplayFromEmptyBaseline?: boolean } = {},
   ): Promise<void> {
     const {
       operations,
@@ -791,6 +801,9 @@ export class OperationLogHydratorService {
               operations,
               localClientId,
               ...(atomicReplayGroups.length > 0 ? { atomicReplayGroups } : {}),
+              ...(options.isReplayFromEmptyBaseline
+                ? { isReplayFromEmptyBaseline: true }
+                : {}),
             }),
           ),
       );

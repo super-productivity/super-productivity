@@ -76,3 +76,28 @@ test('the argv wrapper execs the binary afterPack actually renames', () => {
   const wrapper = readRoot('build', 'linux', 'snap-wrapper.sh');
   assert.match(wrapper, new RegExp(`/${RENAMED}"`));
 });
+
+test('the Windows Store config is loaded after repository config checks', () => {
+  const workflow = readRoot(
+    '.github',
+    'workflows',
+    'build-create-windows-store-on-release.yml',
+  );
+  const buildStep = workflow.indexOf('- name: Build Frontend & Electron');
+  const loadStoreConfigStep = workflow.indexOf(
+    '- name: Load Electron Builder Windows Store Config',
+  );
+  const packageStep = workflow.indexOf('- name: Build/Release Electron app');
+
+  assert.notEqual(buildStep, -1, 'Windows Store frontend build step not found');
+  assert.notEqual(loadStoreConfigStep, -1, 'Windows Store config-loading step not found');
+  assert.notEqual(packageStep, -1, 'Windows Store packaging step not found');
+  assert.ok(
+    loadStoreConfigStep > buildStep,
+    'the Store-only config must not replace electron-builder.yaml before npm run build checks the repository config',
+  );
+  assert.ok(
+    loadStoreConfigStep < packageStep,
+    'the Store-only config must replace electron-builder.yaml before electron-builder packages the app',
+  );
+});

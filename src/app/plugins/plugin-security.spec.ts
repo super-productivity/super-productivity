@@ -1,11 +1,57 @@
 import { TestBed } from '@angular/core/testing';
 import { PluginSecurityService } from './plugin-security';
+import { PluginManifest } from './plugin-api.model';
+import { T } from '../t.const';
 
 describe('PluginSecurityService', () => {
   let service: PluginSecurityService;
 
   beforeEach(() => {
     service = TestBed.inject(PluginSecurityService);
+  });
+
+  describe('getDeclaredApiAccess', () => {
+    const manifest = (extra: Partial<PluginManifest>): PluginManifest => ({
+      id: 'p',
+      name: 'P',
+      manifestVersion: 1,
+      version: '1.0.0',
+      minSupVersion: '1.0.0',
+      hooks: [],
+      permissions: [],
+      ...extra,
+    });
+
+    it('describes only the permissions the plugin API checks', () => {
+      expect(
+        service.getDeclaredApiAccess(
+          manifest({
+            permissions: ['getTasks', 'nodeExecution', 'http', 'deleteProject'],
+            allowedHosts: ['api.example.com', 'auth.example.com'],
+          }),
+        ),
+      ).toEqual([
+        { permission: 'nodeExecution', key: T.PLUGINS.CAN_RUN_SYSTEM_COMMANDS },
+        {
+          permission: 'http',
+          key: T.PLUGINS.CAN_REQUEST_HOSTS,
+          params: { hosts: 'api.example.com, auth.example.com' },
+        },
+        { permission: 'deleteProject', key: T.PLUGINS.CAN_DELETE_PROJECTS },
+      ]);
+    });
+
+    it('gives "http" without allowed hosts no entry (every request is blocked)', () => {
+      expect(service.getDeclaredApiAccess(manifest({ permissions: ['http'] }))).toEqual(
+        [],
+      );
+    });
+
+    it('describes nothing for declared-only permissions', () => {
+      expect(
+        service.getDeclaredApiAccess(manifest({ permissions: ['getTasks'] })),
+      ).toEqual([]);
+    });
   });
 
   describe('sanitizeHtml', () => {

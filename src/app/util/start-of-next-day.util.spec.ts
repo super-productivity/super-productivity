@@ -122,8 +122,15 @@ describe('start-of-next-day util', () => {
       expect(getStartOfNextDayDiffMs('24:00', undefined)).toBe(0);
     });
 
-    it('falls back to the legacy numeric hour when the time string is invalid', () => {
-      expect(getStartOfNextDayDiffMs('24:00', 2)).toBe(2 * 60 * 60 * 1000);
+    // #7645: the legacy hour is not independent intent when a time string is
+    // present but invalid -- v18.5.0-v18.6.x derived it from that same string.
+    it('ignores the legacy numeric hour when the time string is invalid', () => {
+      expect(getStartOfNextDayDiffMs('24:00', 2)).toBe(0);
+      expect(getStartOfNextDayDiffMs('24:00', 23)).toBe(0);
+      // Also for strings the old deriver could not parse, where the legacy hour
+      // may be real intent -- a deliberate trade-off, see the util.
+      expect(getStartOfNextDayDiffMs('abc', 4)).toBe(0);
+      expect(getStartOfNextDayDiffMs('', 4)).toBe(0);
     });
 
     it('returns 0 for invalid legacy numeric values', () => {

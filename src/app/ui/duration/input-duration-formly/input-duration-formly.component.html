@@ -5,8 +5,8 @@
   [formControl]="formControl"
   [formlyAttributes]="field"
   inputDuration
-  [isAllowSeconds]="field.templateOptions?.isAllowSeconds"
-  [isShowZeroVal]="field.templateOptions?.isShowZeroVal"
+  [isAllowSeconds]="$safeNavigationMigration(field.templateOptions?.isAllowSeconds)"
+  [isShowZeroVal]="$safeNavigationMigration(field.templateOptions?.isShowZeroVal)"
   [isValidate]="!!field.templateOptions?.required"
   (change)="onInputValueChange($event)"
   matInput

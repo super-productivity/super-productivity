@@ -1,15 +1,17 @@
 import type {
-  IssueProviderPluginDefinition,
-  PluginFieldMapping,
   PluginHttp,
   PluginIssue,
   PluginSearchResult,
 } from '@super-productivity/plugin-api';
-
-declare const PluginAPI: {
-  registerIssueProvider(definition: IssueProviderPluginDefinition): void;
-  translate(key: string, params?: Record<string, string | number>): string;
-};
+import {
+  asConfig,
+  canConnect,
+  COMMENTS_CONFIG,
+  isDoneMapping,
+  pickSyncValues,
+  registerIssueProvider,
+  t,
+} from '../../issue-provider-kit';
 
 const LINEAR_API_URL = 'https://api.linear.app/graphql';
 
@@ -56,14 +58,6 @@ interface LinearRawIssue extends LinearRawIssueReduced {
     }>;
   };
 }
-
-const t = (key: string): string => {
-  try {
-    return PluginAPI.translate(key);
-  } catch {
-    return key;
-  }
-};
 
 const SEARCH_ISSUES_QUERY = `
   query SearchIssues($first: Int!, $team: TeamFilter, $project: NullableProjectFilter) {
@@ -166,7 +160,7 @@ const searchAssignedIssues = async (
   return issues.map(mapReduced);
 };
 
-PluginAPI.registerIssueProvider({
+registerIssueProvider({
   configFields: [
     {
       key: 'apiKey',
@@ -194,21 +188,18 @@ PluginAPI.registerIssueProvider({
     },
   ],
 
-  getHeaders(config: Record<string, unknown>): Record<string, string> {
-    const cfg = config as unknown as LinearConfig;
-    return {
-      // eslint-disable-next-line @typescript-eslint/naming-convention
-      'Content-Type': 'application/json',
-      Authorization: cfg.apiKey || '',
-    };
-  },
+  getHeaders: (config) => ({
+    // eslint-disable-next-line @typescript-eslint/naming-convention
+    'Content-Type': 'application/json',
+    Authorization: asConfig<LinearConfig>(config).apiKey || '',
+  }),
 
   searchIssues(
     searchTerm: string,
     config: Record<string, unknown>,
     http: PluginHttp,
   ): Promise<PluginSearchResult[]> {
-    return searchAssignedIssues(searchTerm, config as unknown as LinearConfig, http);
+    return searchAssignedIssues(searchTerm, asConfig<LinearConfig>(config), http);
   },
 
   async getById(
@@ -261,23 +252,14 @@ PluginAPI.registerIssueProvider({
     return '';
   },
 
-  async testConnection(
-    _config: Record<string, unknown>,
-    http: PluginHttp,
-  ): Promise<boolean> {
-    try {
-      await graphql(http, GET_VIEWER_QUERY, {});
-      return true;
-    } catch {
-      return false;
-    }
-  },
+  testConnection: (_config, http) =>
+    canConnect(() => graphql(http, GET_VIEWER_QUERY, {})),
 
   getNewIssuesForBacklog(
     config: Record<string, unknown>,
     http: PluginHttp,
   ): Promise<PluginSearchResult[]> {
-    return searchAssignedIssues('', config as unknown as LinearConfig, http);
+    return searchAssignedIssues('', asConfig<LinearConfig>(config), http);
   },
 
   issueDisplay: [
@@ -289,31 +271,17 @@ PluginAPI.registerIssueProvider({
     { field: 'body', label: t('DISPLAY.DESCRIPTION'), type: 'markdown' },
   ],
 
-  commentsConfig: {
-    authorField: 'author',
-    bodyField: 'body',
-    createdField: 'created',
-    avatarField: 'avatarUrl',
-  },
+  commentsConfig: COMMENTS_CONFIG,
 
   // Read-only provider: pull-only mapping drives remote-update detection only.
   fieldMappings: [
-    {
-      taskField: 'isDone',
+    isDoneMapping({
       issueField: 'stateType',
-      defaultDirection: 'pullOnly',
-      toIssueValue: (taskValue: unknown): string =>
-        taskValue ? 'completed' : 'unstarted',
-      toTaskValue: (issueValue: unknown): boolean =>
-        DONE_STATE_TYPES.includes(issueValue as string),
-    },
-  ] satisfies PluginFieldMapping[],
+      done: 'completed',
+      open: 'unstarted',
+      isDone: (issueValue) => DONE_STATE_TYPES.includes(issueValue as string),
+    }),
+  ],
 
-  extractSyncValues(issue: PluginIssue): Record<string, unknown> {
-    return {
-      stateType: issue.stateType,
-      title: issue.title,
-      body: issue.body,
-    };
-  },
+  extractSyncValues: pickSyncValues('stateType', 'title', 'body'),
 });

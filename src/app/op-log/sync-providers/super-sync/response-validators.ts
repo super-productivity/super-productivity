@@ -1,4 +1,8 @@
 import {
+  SuperSyncCaptureClaimResponseSchema,
+  SuperSyncCaptureGrantsResponseSchema,
+  SuperSyncCaptureTokenResponseSchema,
+  SuperSyncCaptureConnectCodeResponseSchema,
   SuperSyncDeleteAllDataResponseSchema,
   SuperSyncDevicesResponseSchema,
   SuperSyncDownloadOpsResponseSchema,
@@ -7,8 +11,12 @@ import {
   SuperSyncRestoreSnapshotResponseSchema,
   SuperSyncSnapshotUploadResponseSchema,
   SuperSyncUploadOpsResponseSchema,
-} from '@sp/shared-schema';
+} from '@sp/shared-schema/supersync-http-contract';
 import type {
+  SuperSyncCaptureClaimResult,
+  SuperSyncCaptureGrantList,
+  SuperSyncCaptureTokenResult,
+  SuperSyncCaptureConnectCodeResult,
   SuperSyncDeviceListResponse,
   SuperSyncReplaceTokenResult,
 } from '@sp/sync-providers/super-sync';
@@ -109,6 +117,11 @@ export const validateSnapshotUploadResponse = (data: unknown): SnapshotUploadRes
 /**
  * Validates RestorePointsResponse from server.
  * Throws InvalidDataSPError if the response structure is invalid.
+ *
+ * `type` is a loose string on the wire (#8764): a restore point of a kind this
+ * client does not know is kept — the dialog renders unknown types with a
+ * generic icon/label and restoring works by serverSeq — so a newer client's
+ * snapshot never hides the list, and never fails it.
  */
 export const validateRestorePointsResponse = (data: unknown): RestorePointsResponse =>
   parseResponse(
@@ -158,3 +171,38 @@ export const validateReplaceTokenResponse = (
     data,
     'ReplaceTokenResponse',
   ) as SuperSyncReplaceTokenResult;
+
+/** Validates the capture claim response; unknown statuses pass through. */
+export const validateCaptureClaimResponse = (
+  data: unknown,
+): SuperSyncCaptureClaimResult =>
+  parseResponse(
+    SuperSyncCaptureClaimResponseSchema,
+    data,
+    'CaptureClaimResponse',
+  ) as SuperSyncCaptureClaimResult;
+
+export const validateCaptureGrantsResponse = (data: unknown): SuperSyncCaptureGrantList =>
+  parseResponse(
+    SuperSyncCaptureGrantsResponseSchema,
+    data,
+    'CaptureGrantsResponse',
+  ) as SuperSyncCaptureGrantList;
+
+export const validateCaptureTokenResponse = (
+  data: unknown,
+): SuperSyncCaptureTokenResult =>
+  parseResponse(
+    SuperSyncCaptureTokenResponseSchema,
+    data,
+    'CaptureTokenResponse',
+  ) as SuperSyncCaptureTokenResult;
+
+export const validateCaptureConnectCodeResponse = (
+  data: unknown,
+): SuperSyncCaptureConnectCodeResult =>
+  parseResponse(
+    SuperSyncCaptureConnectCodeResponseSchema,
+    data,
+    'CaptureConnectCodeResponse',
+  ) as SuperSyncCaptureConnectCodeResult;

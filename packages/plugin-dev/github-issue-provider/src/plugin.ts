@@ -1,15 +1,20 @@
 import type {
-  IssueProviderPluginDefinition,
   PluginFieldMapping,
   PluginHttp,
   PluginIssue,
   PluginSearchResult,
 } from '@super-productivity/plugin-api';
-
-declare const PluginAPI: {
-  registerIssueProvider(definition: IssueProviderPluginDefinition): void;
-  translate(key: string, params?: Record<string, string | number>): string;
-};
+import {
+  asConfig,
+  canConnect,
+  COMMENTS_CONFIG,
+  isDoneMapping,
+  pickSyncValues,
+  registerIssueProvider,
+  t,
+  textMapping,
+  tokenAuth,
+} from '../../issue-provider-kit';
 
 const DEFAULT_API_BASE = 'https://api.github.com';
 
@@ -93,14 +98,6 @@ const mapSearchResult = (issue: GithubIssueResponse): PluginSearchResult => ({
   assignee: issue.assignee?.login,
 });
 
-const t = (key: string): string => {
-  try {
-    return PluginAPI.translate(key);
-  } catch {
-    return key;
-  }
-};
-
 const isAuthOrNotFoundError = (err: unknown): boolean => {
   if (typeof err === 'object' && err !== null && 'status' in err) {
     const status = (err as { status: unknown }).status;
@@ -116,7 +113,7 @@ const isAuthOrNotFoundError = (err: unknown): boolean => {
 const encodeGithubQuery = (query: string): string =>
   encodeURIComponent(query).replace(/\(/g, '%28').replace(/\)/g, '%29');
 
-PluginAPI.registerIssueProvider({
+registerIssueProvider({
   configFields: [
     {
       key: 'repo',
@@ -165,23 +162,17 @@ PluginAPI.registerIssueProvider({
     },
   ],
 
-  getHeaders(config: Record<string, unknown>): Record<string, string> {
-    const cfg = config as unknown as GithubConfig;
-    const headers: Record<string, string> = {
-      Accept: 'application/vnd.github.v3+json',
-    };
-    if (cfg.token) {
-      headers['Authorization'] = `token ${cfg.token}`;
-    }
-    return headers;
-  },
+  getHeaders: (config) => ({
+    Accept: 'application/vnd.github.v3+json',
+    ...tokenAuth(asConfig<GithubConfig>(config).token),
+  }),
 
   async searchIssues(
     searchTerm: string,
     config: Record<string, unknown>,
     http: PluginHttp,
   ): Promise<PluginSearchResult[]> {
-    const cfg = config as unknown as GithubConfig;
+    const cfg = asConfig<GithubConfig>(config);
     const { owner, repo } = parseRepo(cfg);
     // Ensure we only search issues (not PRs) unless the user opted in via
     // config or explicitly typed an is: filter in their search term.
@@ -199,7 +190,7 @@ PluginAPI.registerIssueProvider({
     config: Record<string, unknown>,
     http: PluginHttp,
   ): Promise<PluginIssue> {
-    const cfg = config as unknown as GithubConfig;
+    const cfg = asConfig<GithubConfig>(config);
     const { owner, repo } = parseRepo(cfg);
     const issueUrl = `${getApiBaseUrl(cfg)}/repos/${owner}/${repo}/issues/${issueId}`;
     const issue = await http.get<GithubIssueResponse>(issueUrl);
@@ -264,7 +255,7 @@ PluginAPI.registerIssueProvider({
   },
 
   getIssueLink(issueId: string, config: Record<string, unknown>): string {
-    const { owner, repo } = parseRepo(config as unknown as GithubConfig);
+    const { owner, repo } = parseRepo(asConfig<GithubConfig>(config));
     return `https://github.com/${owner}/${repo}/issues/${issueId}`;
   },
 
@@ -272,21 +263,16 @@ PluginAPI.registerIssueProvider({
     config: Record<string, unknown>,
     http: PluginHttp,
   ): Promise<boolean> {
-    const cfg = config as unknown as GithubConfig;
+    const cfg = asConfig<GithubConfig>(config);
     const { owner, repo } = parseRepo(cfg);
-    try {
-      await http.get(`${getApiBaseUrl(cfg)}/repos/${owner}/${repo}`);
-      return true;
-    } catch {
-      return false;
-    }
+    return canConnect(() => http.get(`${getApiBaseUrl(cfg)}/repos/${owner}/${repo}`));
   },
 
   async getNewIssuesForBacklog(
     config: Record<string, unknown>,
     http: PluginHttp,
   ): Promise<PluginSearchResult[]> {
-    const cfg = config as unknown as GithubConfig;
+    const cfg = asConfig<GithubConfig>(config);
     const { owner, repo } = parseRepo(cfg);
     // `assignee:@me` requires an authenticated request; without a token the
     // GitHub Search API returns 422. Fall back to a token-less default so
@@ -311,21 +297,10 @@ PluginAPI.registerIssueProvider({
     { field: 'body', label: t('DISPLAY.DESCRIPTION'), type: 'markdown' },
   ],
 
-  commentsConfig: {
-    authorField: 'author',
-    bodyField: 'body',
-    createdField: 'created',
-    avatarField: 'avatarUrl',
-  },
+  commentsConfig: COMMENTS_CONFIG,
 
   fieldMappings: [
-    {
-      taskField: 'isDone',
-      issueField: 'state',
-      defaultDirection: 'pullOnly',
-      toIssueValue: (taskValue: unknown): string => (taskValue ? 'closed' : 'open'),
-      toTaskValue: (issueValue: unknown): boolean => issueValue === 'closed',
-    },
+    isDoneMapping(),
     {
       taskField: 'title',
       issueField: 'title',
@@ -349,13 +324,7 @@ PluginAPI.registerIssueProvider({
         return str.startsWith(prefix) ? str : `${prefix}${str}`;
       },
     },
-    {
-      taskField: 'notes',
-      issueField: 'body',
-      defaultDirection: 'off',
-      toIssueValue: (taskValue: unknown): string => (taskValue as string) ?? '',
-      toTaskValue: (issueValue: unknown): string => (issueValue as string) ?? '',
-    },
+    textMapping('notes', 'body', 'off'),
   ] satisfies PluginFieldMapping[],
 
   async updateIssue(
@@ -364,7 +333,7 @@ PluginAPI.registerIssueProvider({
     config: Record<string, unknown>,
     http: PluginHttp,
   ): Promise<void> {
-    const cfg = config as unknown as GithubConfig;
+    const cfg = asConfig<GithubConfig>(config);
     if (!cfg.token) {
       throw new Error(t('ERRORS.TOKEN_REQUIRED'));
     }
@@ -386,7 +355,7 @@ PluginAPI.registerIssueProvider({
     config: Record<string, unknown>,
     http: PluginHttp,
   ): Promise<{ issueId: string; issueNumber: number; issueData: PluginIssue }> {
-    const cfg = config as unknown as GithubConfig;
+    const cfg = asConfig<GithubConfig>(config);
     if (!cfg.token) {
       throw new Error(t('ERRORS.TOKEN_REQUIRED'));
     }
@@ -416,11 +385,5 @@ PluginAPI.registerIssueProvider({
     };
   },
 
-  extractSyncValues(issue: PluginIssue): Record<string, unknown> {
-    return {
-      state: issue.state,
-      title: issue.title,
-      body: issue.body,
-    };
-  },
+  extractSyncValues: pickSyncValues('state', 'title', 'body'),
 });

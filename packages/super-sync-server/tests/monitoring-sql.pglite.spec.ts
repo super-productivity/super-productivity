@@ -105,7 +105,7 @@ const SCHEMA = `
   -- received_at-bounded reports depend on, so a query that only performs
   -- acceptably *because* of this index would look identical here to one that
   -- does not.
-  CREATE INDEX operations_user_id_received_at_idx ON operations (user_id, received_at);
+  CREATE INDEX operations_user_id_received_at_server_seq_idx ON operations (user_id, received_at, server_seq);
   CREATE TABLE user_sync_state (
     user_id integer PRIMARY KEY,
     last_seq integer NOT NULL DEFAULT 0,

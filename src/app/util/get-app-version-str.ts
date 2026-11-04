@@ -1,6 +1,7 @@
 import { IS_ANDROID_WEB_VIEW, IS_F_DROID_APP } from './is-android-web-view';
 import { IS_IOS } from './is-ios';
 import { IS_ELECTRON } from '../app.constants';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import { androidInterface } from '../features/android/android-interface';
 import { environment } from '../../environments/environment';
 
@@ -80,8 +81,23 @@ export const detectChannel = (): DistChannel => {
   return 'web';
 };
 
-export const getAppVersionStr = (): string => {
-  const base =
-    (IS_ANDROID_WEB_VIEW && androidInterface?.getVersion?.()) || environment.version;
-  return `${base}${distChannelSuffix(detectChannel())}`;
-};
+const rawAppVersion = (): string =>
+  (IS_ANDROID_WEB_VIEW && androidInterface?.getVersion?.()) || environment.version;
+
+/**
+ * Leading `MAJOR.MINOR.PATCH` of a build version string, or `undefined` when
+ * there is none. The Android bridge appends a launch-mode marker
+ * (`18.22.0_L1`), which must not leak into anything compared as a version.
+ */
+export const extractSemver = (raw: string): string | undefined =>
+  /^\d+\.\d+\.\d+/.exec(raw)?.[0];
+
+/**
+ * The bare semver of the running build, for machine-to-machine reporting
+ * (SuperSync sends it so the server can gate automatic checkpoints, #9962).
+ * Never carries the display channel suffix.
+ */
+export const getAppSemver = (): string | undefined => extractSemver(rawAppVersion());
+
+export const getAppVersionStr = (): string =>
+  `${rawAppVersion()}${distChannelSuffix(detectChannel())}`;

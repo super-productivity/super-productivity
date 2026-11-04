@@ -20,11 +20,11 @@ Operation capture is **Phase 1 of the meta-reducer registry — the outermost wr
   feature reducers               OperationLogStoreService
         │                               │
         ▼                    OP_LOG_DB_ADAPTER_FACTORY
-  live projection                ┌──────┴──────┐
-  (what the UI renders)          ▼             ▼
-                             IndexedDB      SQLite
-                                      │
-                                      ▼
+  live projection                       │
+  (what the UI renders)                 ▼
+                                    IndexedDB
+                                        │
+                                        ▼
                     op-log/sync → op-log/sync-providers
                           (SuperSync | file-based)
 ```
@@ -40,7 +40,7 @@ A **remote** operation runs this in reverse: `op-log/apply` converts it back int
 | Understand or reorder meta-reducers                   | [`root-store/meta/meta-reducer-registry.ts`](root-store/meta/meta-reducer-registry.ts) — documents phases 1, 2, 2.5, 3, 3.5, 4–8 and throws in dev on violation |
 | Know how a change becomes durable and syncable        | `op-log/capture/`, then `op-log/persistence/operation-log-store.service.ts`                                                                                     |
 | Trace how a remote change is applied                  | `op-log/apply/operation-applier.service.ts`                                                                                                                     |
-| Change where bytes actually land                      | `op-log/persistence/` — `indexed-db-op-log-adapter.ts` / `sqlite-op-log-adapter.ts`, both behind `op-log-db-adapter.token.ts`                                   |
+| Change where bytes actually land                      | `op-log/persistence/` — `indexed-db-op-log-adapter.ts`, behind `op-log-db-adapter.token.ts`                                                                     |
 | Work on sync transport, conflicts, or a provider      | `op-log/sync/`, `op-log/sync-providers/`, plus `packages/sync-core` and `packages/sync-providers`                                                               |
 | Change import/export, backup, or the sync setup UI    | `imex/`                                                                                                                                                         |
 | Add a reusable, feature-agnostic widget               | `ui/`                                                                                                                                                           |
@@ -74,6 +74,6 @@ core-ui/ · pages/ · routes/     the shell — composes features
 
 ## Legacy
 
-`pfapi/` is dead code, not a live layer. It is four compiled `.js` files from the pre-op-log sync system, its own header reads `LEGACY CODE — do not modify`, and **nothing imports it** — every `pfapi` mention in `.ts` sources is a comment or a string describing the legacy on-disk `__meta_` format written by v16.x clients. It cannot even load (`api/index.js` requires modules absent from the tree) and is excluded from the TS build, so it ships in no bundle. Despite the name it is **not** the current persistence layer; that is `op-log/persistence/`.
+The unused compiled files from the pre-op-log `pfapi/` sync system have been removed. Current persistence lives in `op-log/persistence/`.
 
-Note that `core/persistence/legacy-pf-db.service.ts` is unrelated to it — that service reads the legacy `pf` IndexedDB directly and is live migration code.
+`core/persistence/legacy-pf-db.service.ts` remains live migration code: it reads the legacy `pf` IndexedDB directly.

@@ -7,12 +7,47 @@ import { PluginBridgeService } from '../plugin-bridge.service';
 import {
   buildPluginIframeHtml,
   createPluginApiScript,
+  refreshPluginTheme,
   handlePluginMessage,
   PluginIframeConfig,
   PLUGIN_IFRAME_SANDBOX,
 } from './plugin-iframe.util';
 
 describe('handlePluginMessage()', () => {
+  it('routes iframe key listing to the owning plugin API', async () => {
+    const listSyncedDataKeys = jasmine
+      .createSpy('listSyncedDataKeys')
+      .and.resolveTo(['attachment:task:file']);
+    const source = jasmine.createSpyObj<{ postMessage: jasmine.Spy }>('iframe', [
+      'postMessage',
+    ]);
+    const bridge = {
+      createBoundMethods: () => ({ listSyncedDataKeys }),
+    } as unknown as PluginBridgeService;
+    await handlePluginMessage(
+      {
+        source,
+        data: {
+          type: PluginIframeMessageType.API_CALL,
+          bridgeToken: 'test-bridge-token',
+          bridgeGeneration: 4,
+          method: 'listSyncedDataKeys',
+          callId: 45,
+          args: ['attachment:task:'],
+        },
+      } as unknown as MessageEvent,
+      createConfig(bridge),
+    );
+    expect(listSyncedDataKeys).toHaveBeenCalledOnceWith('attachment:task:');
+    expect(source.postMessage).toHaveBeenCalledWith(
+      {
+        type: PluginIframeMessageType.API_RESPONSE,
+        callId: 45,
+        result: ['attachment:task:file'],
+      },
+      '*',
+    );
+  });
   const createConfig = (
     pluginBridge: PluginBridgeService,
     boundMethods?: PluginIframeConfig['boundMethods'],
@@ -38,6 +73,128 @@ describe('handlePluginMessage()', () => {
     bridgeToken: 'test-bridge-token',
     bridgeGeneration: 4,
     boundMethods,
+  });
+
+  const loadGeneratedIframeApi = (
+    config: PluginIframeConfig,
+  ): {
+    frame: { PluginAPI?: { triggerSync: () => Promise<void> } };
+    parent: { postMessage: jasmine.Spy };
+    source: { postMessage: (data: unknown) => void };
+  } => {
+    const listeners = new Map<string, (event: MessageEvent) => void>();
+    const parent = { postMessage: jasmine.createSpy('postMessage') };
+    const frame: {
+      parent: typeof parent;
+      addEventListener: (name: string, listener: (event: MessageEvent) => void) => void;
+      PluginAPI?: { triggerSync: () => Promise<void> };
+    } = { parent, addEventListener: (name, listener) => listeners.set(name, listener) };
+    const wrapped = createPluginApiScript(config).trim();
+    expect(wrapped.startsWith('<script>')).toBeTrue();
+    expect(wrapped.endsWith('</script>')).toBeTrue();
+    const code = wrapped.slice('<script>'.length, -'</script>'.length);
+    new Function('window', 'setTimeout', code)(frame, window.setTimeout);
+    const source = {
+      postMessage: (data: unknown) =>
+        listeners.get('message')!({ source: parent, data } as unknown as MessageEvent),
+    };
+    return { frame, parent, source };
+  };
+
+  for (const fails of [false, true]) {
+    it(`routes generated triggerSync to the bound API and ${fails ? 'rejects' : 'resolves'} its result`, async () => {
+      let finish!: () => void;
+      let fail!: (error: Error) => void;
+      const operation = new Promise<void>((resolve, reject) => {
+        finish = resolve;
+        fail = reject;
+      });
+      const triggerSync = jasmine.createSpy('triggerSync').and.returnValue(operation);
+      const config = createConfig({
+        createBoundMethods: () => ({ triggerSync }),
+      } as unknown as PluginBridgeService);
+      const { frame, parent, source } = loadGeneratedIframeApi(config);
+      const pending = frame.PluginAPI!.triggerSync();
+      const call = parent.postMessage.calls.mostRecent().args[0];
+      expect(call.method).toBe('triggerSync');
+      const handled = handlePluginMessage(
+        { source, data: call } as unknown as MessageEvent,
+        config,
+      );
+      expect(triggerSync).toHaveBeenCalledOnceWith();
+      let settled = false;
+      pending.then(
+        () => (settled = true),
+        () => (settled = true),
+      );
+      await Promise.resolve();
+      expect(settled).toBeFalse();
+      if (fails) {
+        const rejected = expectAsync(pending).toBeRejectedWithError('sync unavailable');
+        fail(new Error('sync unavailable'));
+        await handled;
+        await rejected;
+      } else {
+        finish();
+        await handled;
+        expect(await pending).toBeUndefined();
+      }
+    });
+  }
+
+  it('names real alternatives when iframe code reads a missing PluginAPI member', () => {
+    const warn = spyOn(console, 'warn');
+    const { frame } = loadGeneratedIframeApi(
+      createConfig({ createBoundMethods: () => ({}) } as unknown as PluginBridgeService),
+    );
+    const api = frame.PluginAPI as unknown as Record<string, unknown>;
+
+    expect(api['showIframe']).toBeUndefined();
+    expect(warn.calls.mostRecent().args[0]).toContain(
+      'PluginAPI.showIframe does not exist. Did you mean: show',
+    );
+
+    expect(api['getSecret']).toBeUndefined();
+    expect(warn.calls.mostRecent().args[0]).toContain(
+      'PluginAPI.getSecret is only available in plugin.js',
+    );
+
+    warn.calls.reset();
+    expect(typeof api['getTasks']).toBe('function');
+    expect(api['showIframe']).toBeUndefined();
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it('does not cancel the bound sync when the generated iframe request times out', async () => {
+    let finish!: () => void;
+    let completed = false;
+    const operation = new Promise<void>((resolve) => (finish = resolve)).then(() => {
+      completed = true;
+    });
+    const triggerSync = jasmine.createSpy('triggerSync').and.returnValue(operation);
+    const config = createConfig({
+      createBoundMethods: () => ({ triggerSync }),
+    } as unknown as PluginBridgeService);
+    jasmine.clock().install();
+    try {
+      const { frame, parent, source } = loadGeneratedIframeApi(config);
+      const pending = frame.PluginAPI!.triggerSync();
+      const call = parent.postMessage.calls.mostRecent().args[0];
+      const handled = handlePluginMessage(
+        { source, data: call } as unknown as MessageEvent,
+        config,
+      );
+      const rejected = expectAsync(pending).toBeRejectedWithError('API call timeout');
+      jasmine.clock().tick(30001);
+      await rejected;
+      expect(completed).toBeFalse();
+      expect(triggerSync).toHaveBeenCalledOnceWith();
+      finish();
+      await handled;
+      expect(completed).toBeTrue();
+    } finally {
+      jasmine.clock().uninstall();
+    }
   });
 
   it('rebuilds iframe dialog button handlers and returns the selected result', async () => {
@@ -330,6 +487,47 @@ describe('handlePluginMessage()', () => {
     );
   });
 
+  it('routes getAllSimpleCounters iframe API calls through plugin-bound methods', async () => {
+    const sourceWindow = jasmine.createSpyObj<{ postMessage: jasmine.Spy }>(
+      'sourceWindow',
+      ['postMessage'],
+    );
+    const simpleCounters = [{ id: 'sc1', title: 'Water', countOnDay: {} }];
+    const getAllSimpleCounters = jasmine
+      .createSpy('getAllSimpleCounters')
+      .and.resolveTo(simpleCounters);
+    const pluginBridge = {
+      createBoundMethods: () => ({
+        getAllSimpleCounters,
+      }),
+    } as unknown as PluginBridgeService;
+
+    await handlePluginMessage(
+      {
+        data: {
+          type: PluginIframeMessageType.API_CALL,
+          bridgeToken: 'test-bridge-token',
+          bridgeGeneration: 4,
+          method: 'getAllSimpleCounters',
+          callId: 16,
+          args: [],
+        },
+        source: sourceWindow,
+      } as unknown as MessageEvent,
+      createConfig(pluginBridge),
+    );
+
+    expect(getAllSimpleCounters).toHaveBeenCalledTimes(1);
+    expect(sourceWindow.postMessage).toHaveBeenCalledWith(
+      {
+        type: PluginIframeMessageType.API_RESPONSE,
+        callId: 16,
+        result: simpleCounters,
+      },
+      '*',
+    );
+  });
+
   it('routes request iframe API calls through plugin-bound methods', async () => {
     const sourceWindow = jasmine.createSpyObj<{ postMessage: jasmine.Spy }>(
       'sourceWindow',
@@ -419,16 +617,24 @@ describe('handlePluginMessage()', () => {
 
     expect(script).toContain('Promise.resolve()');
     expect(script).toContain('.then(() => handler())');
+    expect(script).toContain(
+      "listSyncedDataKeys: (prefix) => callApi('listSyncedDataKeys', [prefix])",
+    );
     expect(script).toContain('Unknown dialog button error');
     expect(script).toContain('const bridgeToken = "test-bridge-token"');
     expect(script).toContain('const bridgeGeneration = 4');
     expect(script).toContain("getSelectedTask: () => callApi('getSelectedTask')");
     expect(script).toContain("getFocusedTask: () => callApi('getFocusedTask')");
+    // a snack action callback cannot be cloned across postMessage
+    expect(script).toContain('const { action, ...rest } = cfg || {};');
     expect(script).toContain(
       "request: (url, options) => callApi('request', [url, options])",
     );
     expect(script).toContain(
       "registerHeaderButton: unsupportedIframeRegistration('registerHeaderButton')",
+    );
+    expect(script).toContain(
+      "registerTaskContextMenuEntry: unsupportedIframeRegistration('registerTaskContextMenuEntry')",
     );
   });
 
@@ -476,10 +682,134 @@ describe('handlePluginMessage()', () => {
           '<html><head><script>window.PluginAPI.getTasks();</script></head>' +
           '<body><script>window.PluginAPI.showSnack({});</script></body></html>',
       });
-      const apiDefinition = html.indexOf('window.PluginAPI = {');
+      const apiDefinition = html.indexOf('window.PluginAPI = new Proxy(');
       expect(apiDefinition).toBeGreaterThan(-1);
       expect(apiDefinition).toBeLessThan(html.indexOf('window.PluginAPI.getTasks()'));
       expect(apiDefinition).toBeLessThan(html.indexOf('window.PluginAPI.showSnack({})'));
+    });
+
+    describe('theme and UI kit styling', () => {
+      let iframe: HTMLIFrameElement | undefined;
+      const hostVars: [name: string, value: string][] = [
+        ['--c-primary', 'rgb(1, 2, 3)'],
+        ['--c-contrast', 'rgb(250, 251, 252)'],
+        ['--radius-xs', '5px'],
+      ];
+
+      beforeEach(() => {
+        hostVars.forEach(([name, value]) => document.body.style.setProperty(name, value));
+      });
+
+      afterEach(() => {
+        hostVars.forEach(([name]) => document.body.style.removeProperty(name));
+        iframe?.remove();
+        iframe = undefined;
+      });
+
+      const renderPlugin = async (
+        pluginHtml: string,
+        manifestPatch: Partial<PluginManifest> = {},
+      ): Promise<Document> => {
+        const config = createConfig(pluginBridge);
+        iframe = document.createElement('iframe');
+        const loaded = new Promise((resolve) => (iframe!.onload = resolve));
+        iframe.srcdoc = buildPluginIframeHtml({
+          ...config,
+          manifest: { ...config.manifest, ...manifestPatch },
+          indexHtml: `<html><head></head><body>${pluginHtml}</body></html>`,
+        });
+        document.body.appendChild(iframe);
+        await loaded;
+        return iframe.contentDocument!;
+      };
+
+      const styleOf = (doc: Document, id: string): CSSStyleDeclaration =>
+        doc.defaultView!.getComputedStyle(doc.getElementById(id)!);
+
+      it('styles a primary button from the host theme tokens', async () => {
+        const doc = await renderPlugin('<button id="b" class="btn-primary">Go</button>');
+        const style = styleOf(doc, 'b');
+        expect(style.backgroundColor).toBe('rgb(1, 2, 3)');
+        expect(style.color).toBe('rgb(250, 251, 252)');
+        expect(style.borderTopLeftRadius).toBe('5px');
+      });
+
+      it('lets any plugin rule override the kit, regardless of specificity', async () => {
+        const doc = await renderPlugin(
+          // a bare element selector loses to the kit's `.btn-icon` without the layer
+          '<style>button { padding: 3px; }</style>' +
+            '<button id="b" class="btn-icon">Go</button>',
+        );
+        expect(styleOf(doc, 'b').paddingLeft).toBe('3px');
+      });
+
+      it('skips the kit but keeps theme tokens when uiKit is false', async () => {
+        const doc = await renderPlugin('<button id="b" class="btn-primary">Go</button>', {
+          uiKit: false,
+        });
+        expect(styleOf(doc, 'b').backgroundColor).not.toBe('rgb(1, 2, 3)');
+        expect(
+          doc
+            .defaultView!.getComputedStyle(doc.documentElement)
+            .getPropertyValue('--c-primary'),
+        ).toBe('rgb(1, 2, 3)');
+      });
+    });
+
+    describe('host fonts and live theme', () => {
+      let iframe: HTMLIFrameElement | undefined;
+      let hostStyle: HTMLStyleElement | undefined;
+
+      afterEach(() => {
+        iframe?.remove();
+        hostStyle?.remove();
+        document.body.style.removeProperty('--c-primary');
+        iframe = hostStyle = undefined;
+      });
+
+      const renderPlugin = async (pluginHtml: string): Promise<Document> => {
+        iframe = document.createElement('iframe');
+        const loaded = new Promise((resolve) => (iframe!.onload = resolve));
+        iframe.srcdoc = buildPluginIframeHtml({
+          ...createConfig(pluginBridge),
+          indexHtml: `<html><head></head><body>${pluginHtml}</body></html>`,
+        });
+        document.body.appendChild(iframe);
+        await loaded;
+        return iframe.contentDocument!;
+      };
+
+      it('copies host @font-face rules with absolute URLs', async () => {
+        hostStyle = document.createElement('style');
+        hostStyle.textContent =
+          "@font-face { font-family: 'Host Test Font'; src: url('media/host-test.woff2'); }";
+        document.head.appendChild(hostStyle);
+
+        const doc = await renderPlugin('');
+        const fontRule = Array.from(doc.styleSheets)
+          .flatMap((sheet) => Array.from(sheet.cssRules))
+          .find((rule) => rule.cssText.includes('Host Test Font'));
+        expect(fontRule?.cssText).toContain(
+          new URL('media/host-test.woff2', document.baseURI).href,
+        );
+      });
+
+      it('applies a host theme change to a rendered plugin', async () => {
+        document.body.style.setProperty('--c-primary', 'rgb(1, 2, 3)');
+        const doc = await renderPlugin(
+          // no transition, so the computed color is the end value right away
+          '<style>button { transition: none; }</style>' +
+            '<button id="b" class="btn-primary">Go</button>',
+        );
+        const button = doc.getElementById('b')!;
+
+        document.body.style.setProperty('--c-primary', 'rgb(4, 5, 6)');
+        refreshPluginTheme(iframe!);
+
+        expect(doc.defaultView!.getComputedStyle(button).backgroundColor).toBe(
+          'rgb(4, 5, 6)',
+        );
+      });
     });
 
     it('prepends the API script for fragment HTML without a <head>', () => {

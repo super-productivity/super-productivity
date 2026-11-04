@@ -381,6 +381,8 @@ describe('File-Based Sync Integration - Edge Cases', () => {
         ),
       ];
       await staleClientA.uploadOps([staleOps[0]]);
+      const downloaded = await staleClientB.downloadOps(0);
+      await staleClientB.adapter.setLastServerSeq(downloaded.latestSeq);
       await staleClientB.uploadOps([staleOps[1]]);
 
       const download = await importClient.downloadOps(0);
@@ -467,7 +469,8 @@ describe('File-Based Sync Integration - Sync Cycle Cache', () => {
     provider.clearHistory();
 
     // Client B downloads (caches the data)
-    await clientB.downloadOps(0);
+    const downloaded = await clientB.downloadOps(0);
+    await clientB.adapter.setLastServerSeq(downloaded.latestSeq);
 
     // Get download call count
     const downloadCallsAfterDownload = provider.getCallsTo('downloadFile').length;
@@ -496,7 +499,8 @@ describe('File-Based Sync Integration - Sync Cycle Cache', () => {
     await clientA.uploadOps([opA]);
 
     // Client B downloads (caches data)
-    await clientB.downloadOps(0);
+    const downloaded = await clientB.downloadOps(0);
+    await clientB.adapter.setLastServerSeq(downloaded.latestSeq);
 
     // Client B uploads (invalidates cache)
     const opB = clientB.createOp('Task', 'task-b', 'CRT', 'TaskActionTypes.ADD_TASK', {
@@ -628,7 +632,8 @@ describe('File-Based Sync Integration - Encryption Round-Trip', () => {
         { title: 'Initial' },
       );
       await clientA.uploadOps([initialOp]);
-      await clientB.downloadOps(0);
+      const downloaded = await clientB.downloadOps(0);
+      await clientB.adapter.setLastServerSeq(downloaded.latestSeq);
 
       // Client A uploads
       const opA = clientA.createOp('Task', 'task-a', 'CRT', 'TaskActionTypes.ADD_TASK', {
@@ -646,7 +651,8 @@ describe('File-Based Sync Integration - Encryption Round-Trip', () => {
       );
 
       // Client B downloads (next sync cycle: picks up A's new op and fresh rev)
-      await clientB.downloadOps();
+      const retryDownload = await clientB.downloadOps();
+      await clientB.adapter.setLastServerSeq(retryDownload.latestSeq);
 
       // Client B retries upload — succeeds with the fresh merged state
       const responseB = await clientB.uploadOps([opB]);

@@ -13,6 +13,9 @@ import androidx.work.WorkerParameters
  * Runs every 15 minutes when network is available. Does NOT apply full state changes —
  * only manages reminders for tasks that changed on another device (done, deleted,
  * archived, dismissed, or newly created/updated).
+ *
+ * WebDAV/Nextcloud have no op API, so for them it reads the sync file instead
+ * ([runFileSyncReminderCheck]).
  */
 class SyncReminderWorker(
     appContext: Context,
@@ -26,6 +29,10 @@ class SyncReminderWorker(
     override suspend fun doWork(): Result {
         val credentials = BackgroundSyncCredentialStore.get(applicationContext)
         if (credentials == null) {
+            val fileCredentials = BackgroundSyncCredentialStore.getFileSync(applicationContext)
+            if (fileCredentials != null) {
+                return runFileSyncReminderCheck(applicationContext, fileCredentials)
+            }
             Log.d(TAG, "No sync credentials configured, skipping")
             return Result.success()
         }
@@ -36,6 +43,9 @@ class SyncReminderWorker(
         var lastSeq = BackgroundSyncCredentialStore.getLastServerSeq(
             applicationContext, credentials.baseUrl
         )
+
+        // Read once per run: the WebView mirrors changes, and a run is short
+        val reminderSettings = BackgroundReminderSettingsStore.get(applicationContext)
 
         Log.d(TAG, "Starting sync check from seq=$lastSeq")
 
@@ -64,10 +74,14 @@ class SyncReminderWorker(
                 totalCancelled++
             }
 
-            // Schedule new reminders
-            for (reminder in result.remindersToSchedule) {
-                scheduleReminderFromSync(applicationContext, reminder)
-                totalScheduled++
+            // Schedule new reminders — unless the user disabled reminders. The
+            // cursor still advances: re-enabling them in the app reschedules
+            // every reminder from its full state, so nothing is lost.
+            if (!reminderSettings.isDisabled) {
+                for (reminder in result.remindersToSchedule) {
+                    scheduleReminderFromSync(applicationContext, reminder, reminderSettings.useAlarmStyle)
+                    totalScheduled++
+                }
             }
 
             // Update sequence cursor.

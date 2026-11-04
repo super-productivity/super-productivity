@@ -12,7 +12,6 @@ import { TaskDetailTargetPanel, TaskWithSubTasks } from '../tasks/task.model';
 import { filter, map, startWith } from 'rxjs/operators';
 import { TaskService } from '../tasks/task.service';
 import { LayoutService } from '../../core-ui/layout/layout.service';
-import { slideInFromTopAni } from '../../ui/animations/slide-in-from-top.ani';
 import { slideInFromRightAni } from '../../ui/animations/slide-in-from-right.ani';
 import { taskDetailPanelTaskChangeAnimation } from '../tasks/task-detail-panel/task-detail-panel.ani';
 import { IssuePanelComponent } from '../issue-panel/issue-panel.component';
@@ -46,11 +45,7 @@ export type RightPanelContentPanelType = PanelContentType;
   templateUrl: './right-panel-content.component.html',
   styleUrls: ['./right-panel-content.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  animations: [
-    taskDetailPanelTaskChangeAnimation,
-    slideInFromTopAni,
-    slideInFromRightAni,
-  ],
+  animations: [taskDetailPanelTaskChangeAnimation, slideInFromRightAni],
   imports: [
     IssuePanelComponent,
     NotesComponent,
@@ -167,7 +162,6 @@ export class RightPanelContentComponent implements OnDestroy {
     const {
       isShowNotes,
       isShowIssuePanel: isShowAddTaskPanel,
-      isShowTaskViewCustomizerPanel,
       isShowPluginPanel,
       isShowScheduleDayPanel,
     } = layoutState;
@@ -186,7 +180,6 @@ export class RightPanelContentComponent implements OnDestroy {
         selectedTask ||
         isShowNotes ||
         isShowAddTaskPanel ||
-        isShowTaskViewCustomizerPanel ||
         isShowPluginPanel ||
         isShowScheduleDayPanel
       ) && targetPanel !== TaskDetailTargetPanel.DONT_OPEN_PANEL
@@ -250,6 +243,7 @@ export class RightPanelContentComponent implements OnDestroy {
         if (shouldClose) {
           Log.log('RightPanel: Closing panel on navigation', {
             from: prev.url,
+            // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
             to: currentRoute,
             fromIsWorkView: prev.isWorkView,
             toIsWorkView: isCurrentWorkView,
@@ -289,7 +283,6 @@ export class RightPanelContentComponent implements OnDestroy {
     this.taskService.setSelectedId(null);
     this.layoutService.hideNotes();
     this.layoutService.hideAddTaskPanel();
-    this.layoutService.hideTaskViewCustomizerPanel();
     this.layoutService.hideScheduleDayPanel();
     this.store.dispatch(hidePluginPanel());
     this.onClose();

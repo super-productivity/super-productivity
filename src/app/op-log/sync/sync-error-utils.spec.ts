@@ -5,6 +5,11 @@ describe('sync-error-utils', () => {
     it('should return true for storage quota errors', () => {
       expect(isStorageQuotaError('STORAGE_QUOTA_EXCEEDED')).toBe(true);
       expect(isStorageQuotaError('Storage quota exceeded for this account')).toBe(true);
+      expect(
+        isStorageQuotaError({
+          errorCode: 'STORAGE_QUOTA_EXCEEDED',
+        }),
+      ).toBe(true);
     });
 
     it('should return false for other errors', () => {

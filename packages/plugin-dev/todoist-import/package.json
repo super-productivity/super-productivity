@@ -4,14 +4,15 @@
   "description": "One-time import of active Todoist projects, tasks, labels and due dates into Super Productivity",
   "private": true,
   "scripts": {
-    "build": "node scripts/build.js",
+    "build": "node ../scripts/build-with-esbuild.js --ui src/ui/main.ts",
     "test": "jest",
-    "test:watch": "jest --watch"
+    "test:watch": "jest --watch",
+    "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "@types/jest": "^30.0.0",
     "@types/node": "^22.15.33",
-    "esbuild": "^0.28.1",
+    "esbuild": "^0.28.2",
     "jest": "^30.0.4",
     "jest-environment-jsdom": "^30.0.4",
     "ts-jest": "^29.4.0",

@@ -5,10 +5,8 @@ import {
   type TokenizerExtensionFunction,
   type TokenizerStartFunction,
 } from 'marked';
-import {
-  isExternalUrlSchemeAllowed,
-  isPathSafeToOpen,
-} from '../../../electron/shared-with-frontend/is-external-url-allowed';
+import { isPathSafeToOpen } from '../../../electron/shared-with-frontend/is-external-url-allowed';
+import { toRenderableHref } from './link-href.util';
 import { escapeHtml } from '../util/escape-html';
 
 /**
@@ -54,8 +52,12 @@ export const parseImageDimensionsFromTitle = (
 export const preprocessMarkdown = (markdown: string): string => {
   // Match: ![alt](url =WIDTHxHEIGHT) or ![alt](url =WIDTHx) or ![alt](url =xHEIGHT)
   // Capture groups: 1=alt, 2=url, 3=width, 4=height
+  // The `\s*` right after `\(` keeps this in sync with SIZED_IMAGE_RE in
+  // live-markdown-ranges.ts, which already tolerates a leading space before the
+  // URL — without it, `![a]( u =10x20)` parsed differently depending on which
+  // renderer was on screen (#10153).
   return markdown.replace(
-    /!\[([^\]]*)\]\(([^\s)]+)\s+=(\d*)x(\d*)\)/g,
+    /!\[([^\]]*)\]\(\s*([^\s)]+)\s+=(\d*)x(\d*)\)/g,
     (match, alt, url, width, height) => {
       // Create title attribute with width|height format
       const dimensions = `${width || ''}|${height || ''}`;
@@ -165,10 +167,11 @@ export const markedOptionsFactory = (): MarkedOptions => {
     // Block unsafe URL schemes from rendering as clickable links. On click the
     // href is passed verbatim to shell.openExternal (Electron), which would let
     // note content silently invoke OS protocol handlers. See GHSA-hr87-735w-hfq3.
-    if (!isExternalUrlSchemeAllowed(href)) {
+    const url = toRenderableHref(href);
+    if (!url) {
       return `<span class="markdown-blocked-link" title="Link blocked: unsafe URL scheme">${text}</span>`;
     }
-    return `<a target="_blank" rel="noopener noreferrer" href="${escapeHtmlAttr(href)}" title="${escapeHtmlAttr(title || '')}">${text}</a>`;
+    return `<a target="_blank" rel="noopener noreferrer" href="${escapeHtmlAttr(url)}" title="${escapeHtmlAttr(title || '')}">${text}</a>`;
   };
 
   // Custom image renderer with support for sizing syntax

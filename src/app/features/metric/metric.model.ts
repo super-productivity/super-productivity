@@ -18,10 +18,8 @@ export interface MetricCopy {
   remindTomorrow?: boolean;
   reflections?: ReflectionEntry[];
 
-  // v2.4 Productivity scoring fields (impact-driven)
+  // Daily evaluation ratings
   impactOfWork?: number | null; // 1-4 scale
-
-  // v2.3 Sustainability scoring fields
   energyCheckin?: number | null; // 1-3 scale (simple: 1=exhausted, 2=ok, 3=good)
 
   // TODO remove

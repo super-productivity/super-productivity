@@ -13,6 +13,7 @@ import {
   switchMap,
 } from 'rxjs/operators';
 import { getWeekNumber } from '../../util/get-week-number';
+import { getWeekStartDate } from '../../util/get-week-start-date';
 import { WorkContextService } from '../work-context/work-context.service';
 import { WorkContext } from '../work-context/work-context.model';
 import { mapArchiveToWorklog } from './util/map-archive-to-worklog';
@@ -41,9 +42,9 @@ export const getWorklogWeekForDate = (
     relativeDate.getMonth(),
     relativeDate.getDate(),
   );
-  const daysSinceStart = (rangeEnd.getDay() - normalizedFirstDayOfWeek + 7) % 7;
-  const rangeStart = new Date(rangeEnd);
-  rangeStart.setDate(rangeStart.getDate() - daysSinceStart);
+  const rangeStart = getWeekStartDate(rangeEnd, firstDayOfWeek);
+  const weekEnd = new Date(rangeStart);
+  weekEnd.setDate(weekEnd.getDate() + 6);
 
   const ent: WorklogWeek['ent'] = {};
   let daysWorked = 0;
@@ -70,7 +71,9 @@ export const getWorklogWeekForDate = (
 
   return {
     start: rangeStart.getDate(),
-    end: rangeEnd.getDate(),
+    end: weekEnd.getDate(),
+    startDateStr: getDbDateStr(rangeStart),
+    endDateStr: getDbDateStr(weekEnd),
     weekNr: getWeekNumber(relativeDate, normalizedFirstDayOfWeek),
     timeSpent,
     daysWorked,

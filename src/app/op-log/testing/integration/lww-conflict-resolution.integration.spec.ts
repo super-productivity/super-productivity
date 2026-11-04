@@ -1081,7 +1081,7 @@ describe('LWW Conflict Resolution Integration', () => {
         entityType: 'TASK',
         entityId: 'task-1',
         entityIds: ['task-1', 'task-2', 'task-3'],
-        payload: { priority: 'high' },
+        payload: { priority: 3 },
       });
       (batchA as any).timestamp = now;
 
@@ -1092,7 +1092,7 @@ describe('LWW Conflict Resolution Integration', () => {
         entityType: 'TASK',
         entityId: 'task-2',
         entityIds: ['task-2', 'task-3', 'task-4'],
-        payload: { priority: 'low' },
+        payload: { priority: 1 },
       });
       (batchB as any).timestamp = now - 500;
 

@@ -6,12 +6,19 @@ import {
   type SuperSyncDeps,
 } from '@sp/sync-providers/super-sync';
 import type { NativeHttpResponse } from '@sp/sync-providers/http';
+import type { SuperSyncImportReason, SuperSyncOpType } from '@sp/shared-schema';
+import { OpType, type SyncImportReason } from '../../core/operation.types';
 import { OP_LOG_SYNC_LOGGER } from '../../core/sync-logger.adapter';
 import { SyncCredentialStore } from '../credential-store.service';
 import { APP_PROVIDER_PLATFORM_INFO } from '../platform/app-provider-platform-info';
 import { APP_WEB_FETCH } from '../platform/app-web-fetch';
 import { SyncProviderId } from '../provider.const';
+import { getAppSemver } from '../../../util/get-app-version-str';
 import {
+  validateCaptureClaimResponse,
+  validateCaptureGrantsResponse,
+  validateCaptureTokenResponse,
+  validateCaptureConnectCodeResponse,
   validateDeleteAllDataResponse,
   validateDevicesResponse,
   validateOpDownloadResponse,
@@ -29,6 +36,23 @@ type AssertSuperSyncId = SyncProviderId.SuperSync extends typeof PROVIDER_ID_SUP
   : never;
 const _idCheck: AssertSuperSyncId = true;
 void _idCheck;
+
+// Type-level parity between the two op vocabularies. `@sp/sync-core` may not
+// import shared-schema (lint-enforced), so its `OpType` enum duplicates
+// `SUPER_SYNC_OP_TYPES` by hand; the app imports both, so it is the one place
+// that can fail the BUILD when they drift instead of surfacing the drift as a
+// runtime "unknown opType" block on every other device (#8764). Both
+// directions are checked: a value added to one side only breaks compilation.
+type MutuallyAssignable<A, B> = [A] extends [B]
+  ? [B] extends [A]
+    ? true
+    : never
+  : never;
+const _opTypeParity: MutuallyAssignable<`${OpType}`, SuperSyncOpType> = true;
+void _opTypeParity;
+const _importReasonParity: MutuallyAssignable<SyncImportReason, SuperSyncImportReason> =
+  true;
+void _importReasonParity;
 
 export type { SuperSyncPrivateCfg } from '@sp/sync-providers/super-sync';
 /**
@@ -62,6 +86,10 @@ export const createSuperSyncProvider = (): PackageSuperSyncProvider => {
     validateDeleteAllData: validateDeleteAllDataResponse,
     validateDevices: validateDevicesResponse,
     validateReplaceToken: validateReplaceTokenResponse,
+    validateCaptureClaim: validateCaptureClaimResponse,
+    validateCaptureGrants: validateCaptureGrantsResponse,
+    validateCaptureConnectCode: validateCaptureConnectCodeResponse,
+    validateCaptureToken: validateCaptureTokenResponse,
   };
 
   const deps: SuperSyncDeps = {
@@ -79,6 +107,7 @@ export const createSuperSyncProvider = (): PackageSuperSyncProvider => {
     // framework-agnostic and never implicitly assumes the SP-hosted
     // server URL.
     defaultBaseUrl: SUPER_SYNC_DEFAULT_BASE_URL,
+    appVersion: getAppSemver(),
   };
   return new PackageSuperSyncProvider(deps);
 };

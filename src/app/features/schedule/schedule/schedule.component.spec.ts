@@ -6,11 +6,15 @@ import { ScheduleService } from '../schedule.service';
 import { MatDialog } from '@angular/material/dialog';
 import { GlobalTrackingIntervalService } from '../../../core/global-tracking-interval/global-tracking-interval.service';
 import { DateAdapter } from '@angular/material/core';
-import { signal } from '@angular/core';
+import { signal, WritableSignal } from '@angular/core';
 import { of } from 'rxjs';
 import { MockStore, provideMockStore } from '@ngrx/store/testing';
-import { selectCalendarProviders } from '../../issue/store/issue-provider.selectors';
+import {
+  selectCalendarProviders,
+  selectEnabledIssueProviders,
+} from '../../issue/store/issue-provider.selectors';
 import { HiddenCalendarProvidersService } from '../../calendar-integration/hidden-calendar-providers.service';
+import { PluginIssueProviderRegistryService } from '../../../plugins/issue-provider/plugin-issue-provider-registry.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { SCHEDULE_CONSTANTS } from '../schedule.constants';
 import { GlobalConfigService } from '../../config/global-config.service';
@@ -18,6 +22,10 @@ import { ScheduleDay } from '../schedule.model';
 import { CalendarEventActionsService } from '../../calendar-integration/calendar-event-actions.service';
 import { registerLocaleData } from '@angular/common';
 import localeSv from '@angular/common/locales/sv';
+import { selectUndoneDeadlineTasksByDay } from '../../planner/store/planner.selectors';
+import { DEFAULT_TASK } from '../../tasks/task.model';
+import { DateService } from '../../../core/date/date.service';
+import { LS } from '../../../core/persistence/storage-keys.const';
 
 describe('ScheduleComponent', () => {
   const mockLocalization = signal({ firstDayOfWeek: 1, dateTimeLocale: 'en-US' });
@@ -25,7 +33,9 @@ describe('ScheduleComponent', () => {
   let fixture: ComponentFixture<ScheduleComponent>;
   let mockTaskService: jasmine.SpyObj<TaskService>;
   let mockLayoutService: jasmine.SpyObj<LayoutService>;
+  let mockIsXs: WritableSignal<boolean>;
   let mockScheduleService: jasmine.SpyObj<ScheduleService>;
+  let calendarColorByProviderId: WritableSignal<Map<string, string>>;
   let mockMatDialog: jasmine.SpyObj<MatDialog>;
   let mockGlobalTrackingIntervalService: jasmine.SpyObj<GlobalTrackingIntervalService>;
   let mockGlobalConfigService: jasmine.SpyObj<GlobalConfigService>;
@@ -39,21 +49,29 @@ describe('ScheduleComponent', () => {
     mockTaskService = jasmine.createSpyObj('TaskService', ['currentTaskId']);
     (mockTaskService as any).currentTaskId = signal(null);
 
+    mockIsXs = signal(false);
     mockLayoutService = jasmine.createSpyObj('LayoutService', [], {
       selectedTimeView: signal('week'),
+      isXs: mockIsXs,
     });
 
-    mockScheduleService = jasmine.createSpyObj('ScheduleService', [
-      'getDaysToShow',
-      'getMonthDaysToShow',
-      'buildScheduleDays',
-      'scheduleRefreshTick',
-      'getTodayStr',
-      'createScheduleDaysWithContext',
-      'getDayClass',
-      'hasEventsForDay',
-      'getEventsForDay',
-    ]);
+    calendarColorByProviderId = signal(new Map<string, string>());
+    mockScheduleService = jasmine.createSpyObj(
+      'ScheduleService',
+      [
+        'getDaysToShow',
+        'getMonthDaysToShow',
+        'getMonthWeeksToShow',
+        'buildScheduleDays',
+        'scheduleRefreshTick',
+        'getTodayStr',
+        'createScheduleDaysWithContext',
+        'getDayClass',
+        'hasEventsForDay',
+        'getEventsForDay',
+      ],
+      { calendarColorByProviderId: calendarColorByProviderId },
+    );
     mockScheduleService.getDaysToShow.and.returnValue([
       '2026-01-20',
       '2026-01-21',
@@ -64,6 +82,9 @@ describe('ScheduleComponent', () => {
       '2026-01-02',
       '2026-01-03',
     ]);
+    // The month view derives its row count from the displayed month; tests that
+    // care about the number override this.
+    mockScheduleService.getMonthWeeksToShow.and.returnValue(6);
     mockScheduleService.buildScheduleDays.and.returnValue([]);
     mockScheduleService.getTodayStr.and.callFake((timestamp?: number | Date) => {
       const date = timestamp ? new Date(timestamp) : new Date();
@@ -126,9 +147,17 @@ describe('ScheduleComponent', () => {
       ],
     }).compileComponents();
 
+    const store = TestBed.inject(MockStore);
+    store.overrideSelector(selectUndoneDeadlineTasksByDay, {});
+
     fixture = TestBed.createComponent(ScheduleComponent);
     component = fixture.componentInstance;
     fixture.detectChanges();
+  });
+
+  afterEach(() => {
+    fixture.destroy();
+    TestBed.inject(MockStore).resetSelectors();
   });
 
   describe('headerTitle computed', () => {
@@ -346,6 +375,34 @@ describe('ScheduleComponent', () => {
       component['_selectedDate'].set(new Date('2026-01-13'));
       expect(component.isViewingToday()).toBe(false);
     });
+
+    // #10451: today (Jan 20) is a leading padding day of the next month's grid
+    describe('month view with today in the padding days of the next month', () => {
+      beforeEach(() => {
+        mockLayoutService.selectedTimeView.set('month');
+        mockScheduleService.getMonthDaysToShow.and.returnValue([
+          '2026-01-19',
+          '2026-01-20',
+          '2026-01-21',
+          '2026-02-01',
+        ]);
+        component['_selectedDate'].set(new Date(2026, 1, 1)); // Feb 1, 2026
+        fixture.detectChanges();
+      });
+
+      it('should return false', () => {
+        expect(component.isViewingToday()).toBe(false);
+      });
+
+      it('should allow navigating back to the current month', () => {
+        component.goToPreviousPeriod();
+
+        const newDate = component['_selectedDate']();
+        expect(newDate?.getFullYear()).toBe(2026);
+        expect(newDate?.getMonth()).toBe(0); // January
+        expect(component.isViewingToday()).toBe(true);
+      });
+    });
   });
 
   describe('goToPreviousPeriod', () => {
@@ -420,7 +477,7 @@ describe('ScheduleComponent', () => {
     it('should go to previous year when navigating from January in month view', () => {
       // Arrange
       mockLayoutService.selectedTimeView.set('month');
-      const startDate = new Date(2026, 0, 15); // Jan 15, 2026
+      const startDate = new Date(2027, 0, 15); // Jan 15, 2027 (future → nav enabled)
       component['_selectedDate'].set(startDate);
 
       // Act
@@ -428,12 +485,103 @@ describe('ScheduleComponent', () => {
 
       // Assert
       const newDate = component['_selectedDate']();
-      expect(newDate?.getFullYear()).toBe(2025);
+      expect(newDate?.getFullYear()).toBe(2026);
       expect(newDate?.getMonth()).toBe(11); // December
     });
   });
 
   describe('goToNextPeriod', () => {
+    describe('with a shifted day start', () => {
+      beforeEach(() => {
+        jasmine.clock().install();
+        const dateService = TestBed.inject(DateService);
+        dateService.setStartOfNextDayDiff('04:00');
+        const calendarService = {
+          _dateService: dateService,
+        } as unknown as ScheduleService;
+        mockScheduleService.getMonthDaysToShow.and.callFake((...args) =>
+          ScheduleService.prototype.getMonthDaysToShow.apply(calendarService, args),
+        );
+        mockScheduleService.getMonthWeeksToShow.and.callFake((...args) =>
+          ScheduleService.prototype.getMonthWeeksToShow.apply(calendarService, args),
+        );
+        mockScheduleService.getDaysToShow.and.callFake((...args) =>
+          ScheduleService.prototype.getDaysToShow.apply(calendarService, args),
+        );
+        mockLayoutService.selectedTimeView.set('month');
+      });
+
+      afterEach(() => jasmine.clock().uninstall());
+
+      it('advances from the displayed September 30 to October 1 before the day starts in day view', () => {
+        mockLayoutService.selectedTimeView.set('day');
+        jasmine.clock().mockDate(new Date(2026, 9, 1, 1));
+        expect(component.daysToShow()).toEqual(['2026-09-30']);
+
+        component.goToNextPeriod();
+
+        expect(component['_selectedDate']()).toEqual(new Date(2026, 9, 1));
+        expect(component.daysToShow()).toEqual(['2026-10-01']);
+      });
+
+      it('goes back from October 2 to October 1 before the day starts in day view', () => {
+        mockLayoutService.selectedTimeView.set('day');
+        jasmine.clock().mockDate(new Date(2026, 9, 1, 1));
+
+        component.goToNextPeriod();
+        component.goToNextPeriod();
+        expect(component.daysToShow()).toEqual(['2026-10-02']);
+
+        component.goToPreviousPeriod();
+        expect(component['_selectedDate']()).toEqual(new Date(2026, 9, 1));
+        expect(component.daysToShow()).toEqual(['2026-10-01']);
+
+        component.goToPreviousPeriod();
+        expect(component['_selectedDate']()).toBeNull();
+        expect(component.daysToShow()).toEqual(['2026-09-30']);
+      });
+
+      it('advances from the displayed September to October before the day starts', () => {
+        jasmine.clock().mockDate(new Date(2026, 9, 1, 1));
+        expect(component.headerTitle()).toBe('September 2026');
+
+        component.goToNextPeriod();
+
+        expect(component['_selectedDate']()).toEqual(new Date(2026, 9, 1));
+        expect(component.headerTitle()).toBe('October 2026');
+      });
+
+      it('advances from December to January before the first logical day of the year', () => {
+        jasmine.clock().mockDate(new Date(2027, 0, 1, 1));
+        expect(component.headerTitle()).toBe('December 2026');
+
+        component.goToNextPeriod();
+
+        expect(component['_selectedDate']()).toEqual(new Date(2027, 0, 1));
+        expect(component.headerTitle()).toBe('January 2027');
+      });
+
+      it('advances from October to November after the day starts', () => {
+        jasmine.clock().mockDate(new Date(2026, 9, 1, 5));
+        expect(component.headerTitle()).toBe('October 2026');
+
+        component.goToNextPeriod();
+
+        expect(component['_selectedDate']()).toEqual(new Date(2026, 10, 1));
+      });
+
+      it('uses an explicitly selected month without shifting it again', () => {
+        jasmine.clock().mockDate(new Date(2026, 9, 1, 1));
+        component['_selectedDate'].set(new Date(2026, 11, 1));
+
+        component.goToNextPeriod();
+
+        expect(component['_selectedDate']()).toEqual(new Date(2027, 0, 1));
+        component.goToPreviousPeriod();
+        expect(component['_selectedDate']()).toEqual(new Date(2026, 11, 1));
+      });
+    });
+
     it('should advance exactly one day in day view', () => {
       mockLayoutService.selectedTimeView.set('day');
       mockScheduleService.getDaysToShow.and.returnValue(['2027-06-15']);
@@ -554,26 +702,37 @@ describe('ScheduleComponent', () => {
   });
 
   describe('_contextNow computed', () => {
-    it('should return current time when viewing today (selectedDate is null)', () => {
-      // Arrange
+    it('should return the live now while today is day 0 of the displayed range', () => {
+      // Arrange - the default getDaysToShow mock starts on the mocked today
+      // (2026-01-20), so day 0 contains the pinned clock.
+      const clock = new Date(2026, 0, 20, 9, 0, 0).getTime();
+      spyOn(Date, 'now').and.callFake(() => clock);
+      // Fresh array instance: the computed already ran against the real clock
+      // on init, and the default mock hands back the same cached instance, so
+      // daysToShow would otherwise not register as changed.
+      mockScheduleService.getDaysToShow.and.returnValue([
+        '2026-01-20',
+        '2026-01-21',
+        '2026-01-22',
+      ]);
+      component['_selectedDate'].set(new Date(2026, 0, 21));
       component['_selectedDate'].set(null);
 
       // Act
       const contextNow = component['_contextNow']();
 
-      // Assert - just check it's a reasonable timestamp (within last hour and next minute)
-      const now = Date.now();
-      // eslint-disable-next-line no-mixed-operators
-      const oneHourAgo = now - 60 * 60 * 1000;
-      // eslint-disable-next-line no-mixed-operators
-      const oneMinuteFromNow = now + 60 * 1000;
-      expect(contextNow).toBeGreaterThan(oneHourAgo);
-      expect(contextNow).toBeLessThan(oneMinuteFromNow);
+      // Assert
+      expect(contextNow).toBe(clock);
     });
 
-    it('should return midnight of selected date when viewing a different date', () => {
+    it('should return midnight of day 0 when viewing a different date', () => {
       // Arrange
       const selectedDate = new Date(2026, 0, 25, 14, 30, 45); // Jan 25, 2026, 2:30:45 PM
+      mockScheduleService.getDaysToShow.and.returnValue([
+        '2026-01-25',
+        '2026-01-26',
+        '2026-01-27',
+      ]);
       component['_selectedDate'].set(selectedDate);
 
       // Act
@@ -595,8 +754,15 @@ describe('ScheduleComponent', () => {
       // tick this pins the layout to whenever the view was first rendered.
       let clock = new Date(2026, 0, 20, 9, 0, 0).getTime();
       spyOn(Date, 'now').and.callFake(() => clock);
-      // Round-trip through a date: the computed already ran against the real
-      // clock on init, and re-setting null over null would not invalidate it.
+      // Fresh array instance + a date round-trip: the computed already ran
+      // against the real clock on init, and the default mock hands back the
+      // same cached instance, so daysToShow would otherwise not register as
+      // changed.
+      mockScheduleService.getDaysToShow.and.returnValue([
+        '2026-01-20',
+        '2026-01-21',
+        '2026-01-22',
+      ]);
       component['_selectedDate'].set(new Date(2026, 0, 21));
       component['_selectedDate'].set(null);
       expect(component['_contextNow']()).toBe(clock);
@@ -613,6 +779,11 @@ describe('ScheduleComponent', () => {
       const clock = new Date(2026, 0, 20, 9, 0, 0).getTime();
       spyOn(Date, 'now').and.callFake(() => clock);
 
+      mockScheduleService.getDaysToShow.and.returnValue([
+        '2026-01-19',
+        '2026-01-20',
+        '2026-01-21',
+      ]);
       component['_selectedDate'].set(new Date(2026, 0, 19));
 
       expect(component['_contextNow']()).toBe(new Date(2026, 0, 19).setHours(0, 0, 0, 0));
@@ -626,6 +797,11 @@ describe('ScheduleComponent', () => {
       const clock = new Date(2026, 0, 21, 2, 0, 0).getTime();
       spyOn(Date, 'now').and.callFake(() => clock);
 
+      mockScheduleService.getDaysToShow.and.returnValue([
+        '2026-01-20',
+        '2026-01-21',
+        '2026-01-22',
+      ]);
       component['_selectedDate'].set(new Date(2026, 0, 20));
 
       const contextNow = component['_contextNow']();
@@ -640,6 +816,11 @@ describe('ScheduleComponent', () => {
       // view does not move, so the day it shows silently becomes today.
       let clock = new Date(2026, 0, 20, 22, 0, 0).getTime();
       spyOn(Date, 'now').and.callFake(() => clock);
+      mockScheduleService.getDaysToShow.and.returnValue([
+        '2026-01-21',
+        '2026-01-22',
+        '2026-01-23',
+      ]);
       component['_selectedDate'].set(new Date(2026, 0, 21));
       expect(component['_contextNow']()).toBe(new Date(2026, 0, 21).setHours(0, 0, 0, 0));
 
@@ -650,12 +831,87 @@ describe('ScheduleComponent', () => {
 
       expect(component['_contextNow']()).toBe(clock);
     });
+
+    // Month view pads the grid back to the first day of the week containing
+    // the 1st, so day 0 is usually a cell from the previous month while the
+    // selected date stays on the 1st. The anchor has to follow the grid cell,
+    // not the selected date (#9071).
+    const monthGridFrom = (start: Date, nrOfDays: number): string[] =>
+      Array.from({ length: nrOfDays }, (_, i) => {
+        const d = new Date(start);
+        d.setDate(start.getDate() + i);
+        return [
+          d.getFullYear(),
+          String(d.getMonth() + 1).padStart(2, '0'),
+          String(d.getDate()).padStart(2, '0'),
+        ].join('-');
+      });
+
+    it('should anchor to the month grid`s first cell, not the selected month`s 1st', () => {
+      // Viewing Feb 2026 (firstDayOfWeek=1): the grid starts on Mon Jan 26.
+      const clock = new Date(2026, 0, 10, 9, 0, 0).getTime();
+      spyOn(Date, 'now').and.callFake(() => clock);
+      mockLayoutService.selectedTimeView.set('month');
+      mockScheduleService.getMonthDaysToShow.and.returnValue(
+        monthGridFrom(new Date(2026, 0, 26), 42),
+      );
+      component['_selectedDate'].set(new Date(2026, 1, 1));
+
+      expect(component['_contextNow']()).toBe(new Date(2026, 0, 26).setHours(0, 0, 0, 0));
+    });
+
+    it('should anchor to the first grid cell when viewing the current month untraveled', () => {
+      // Today (Feb 15) sits mid-grid; day 0 is still the Jan 26 padding cell,
+      // so the live now must not leak into it.
+      const clock = new Date(2026, 1, 15, 10, 0, 0).getTime();
+      spyOn(Date, 'now').and.callFake(() => clock);
+      mockLayoutService.selectedTimeView.set('month');
+      mockScheduleService.getMonthDaysToShow.and.returnValue(
+        monthGridFrom(new Date(2026, 0, 26), 42),
+      );
+      // Round-trip to invalidate the cached computed after pinning the clock.
+      component['_selectedDate'].set(new Date(2026, 1, 1));
+      component['_selectedDate'].set(null);
+
+      expect(component['_contextNow']()).toBe(new Date(2026, 0, 26).setHours(0, 0, 0, 0));
+    });
+
+    it('should return the live now in month view when today is the first grid cell', () => {
+      // Feb 1 2026 is a Sunday: with firstDayOfWeek=0 the grid starts on
+      // today itself, so the anchor keeps tracking the wall clock.
+      const clock = new Date(2026, 1, 1, 10, 0, 0).getTime();
+      spyOn(Date, 'now').and.callFake(() => clock);
+      mockLayoutService.selectedTimeView.set('month');
+      mockScheduleService.getMonthDaysToShow.and.returnValue(
+        monthGridFrom(new Date(2026, 1, 1), 42),
+      );
+      component['_selectedDate'].set(new Date(2026, 1, 1));
+      component['_selectedDate'].set(null);
+
+      expect(component['_contextNow']()).toBe(clock);
+    });
+
+    it('should return the live now in day view while viewing today', () => {
+      const clock = new Date(2026, 0, 20, 9, 0, 0).getTime();
+      spyOn(Date, 'now').and.callFake(() => clock);
+      mockLayoutService.selectedTimeView.set('day');
+      mockScheduleService.getDaysToShow.and.returnValue(['2026-01-20']);
+      component['_selectedDate'].set(new Date(2026, 0, 21));
+      component['_selectedDate'].set(null);
+
+      expect(component['_contextNow']()).toBe(clock);
+    });
   });
 
   describe('scheduleDays computed', () => {
     it('should call createScheduleDaysWithContext with contextNow', () => {
       // Arrange
       const selectedDate = new Date(2026, 0, 25);
+      mockScheduleService.getDaysToShow.and.returnValue([
+        '2026-01-25',
+        '2026-01-26',
+        '2026-01-27',
+      ]);
       component['_selectedDate'].set(selectedDate);
       mockScheduleService.createScheduleDaysWithContext.calls.reset();
 
@@ -667,7 +923,7 @@ describe('ScheduleComponent', () => {
       const callArgs =
         mockScheduleService.createScheduleDaysWithContext.calls.mostRecent().args[0];
       expect(callArgs.contextNow).toBeDefined();
-      // Context now should be midnight of selected date
+      // Context now should be midnight of day 0 of the displayed range
       const contextDate = new Date(callArgs.contextNow);
       expect(contextDate.getHours()).toBe(0);
       expect(contextDate.getMinutes()).toBe(0);
@@ -676,6 +932,11 @@ describe('ScheduleComponent', () => {
     it('should always pass realNow as actual current time', () => {
       // Arrange
       const selectedDate = new Date(2026, 0, 25);
+      mockScheduleService.getDaysToShow.and.returnValue([
+        '2026-01-25',
+        '2026-01-26',
+        '2026-01-27',
+      ]);
       component['_selectedDate'].set(selectedDate);
       mockScheduleService.createScheduleDaysWithContext.calls.reset();
       const before = Date.now();
@@ -697,6 +958,11 @@ describe('ScheduleComponent', () => {
       // would pass for arbitrary wrong values.
       const clock = new Date(2026, 0, 20, 9, 0, 0).getTime();
       spyOn(Date, 'now').and.callFake(() => clock);
+      mockScheduleService.getDaysToShow.and.returnValue([
+        '2026-01-27',
+        '2026-01-28',
+        '2026-01-29',
+      ]);
       component['_selectedDate'].set(new Date(2026, 0, 27));
       mockScheduleService.createScheduleDaysWithContext.calls.reset();
 
@@ -730,6 +996,13 @@ describe('ScheduleComponent', () => {
         },
       ];
       mockScheduleService.createScheduleDaysWithContext.and.returnValue(scheduleDays);
+      // Fresh array instance so daysToShow registers as changed and the
+      // scheduleDays computed re-runs against the overridden mock above.
+      mockScheduleService.getDaysToShow.and.returnValue([
+        '2026-01-20',
+        '2026-01-21',
+        '2026-01-22',
+      ]);
       component['_selectedDate'].set(new Date(2026, 0, 20));
 
       const result = component.monthEvents();
@@ -860,35 +1133,126 @@ describe('ScheduleComponent', () => {
       expect(daysToShowCount).toBe(7);
     });
 
-    it('should return a value between MIN_WEEKS and MAX_WEEKS in month view', () => {
-      // Arrange
+    // The row count follows the displayed month, not a constant and not the
+    // window. `_daysToShowCount` deliberately does not answer for month view:
+    // it reads neither `selectedDate` nor `firstDayOfWeek`.
+    it("should ask the service for the displayed month's week count", () => {
+      mockScheduleService.getMonthWeeksToShow.and.returnValue(5);
       mockLayoutService.selectedTimeView.set('month');
+      fixture.detectChanges();
 
-      // Act
-      const daysToShowCount = component['_daysToShowCount']();
+      component.daysToShow();
 
-      // Assert - should be bounded by constants
-      expect(daysToShowCount).toBeGreaterThanOrEqual(
-        SCHEDULE_CONSTANTS.MONTH_VIEW.MIN_WEEKS,
-      );
-      expect(daysToShowCount).toBeLessThanOrEqual(
-        SCHEDULE_CONSTANTS.MONTH_VIEW.MAX_WEEKS,
+      const [weeks, firstDayOfWeek] =
+        mockScheduleService.getMonthDaysToShow.calls.mostRecent().args;
+      expect(weeks).toBe(5);
+      expect(mockScheduleService.getMonthWeeksToShow).toHaveBeenCalledWith(
+        firstDayOfWeek,
+        null,
       );
     });
 
-    it('should use MONTH_VIEW constants for calculation', () => {
-      // This test verifies the constants are being used by checking
-      // that the result is consistent with the constant values
+    it('should not shrink the month grid on a short window (#9449)', () => {
+      // The month grid used to be sized from the viewport, so a short window
+      // dropped the tail of the month (a task on Mon 31 Aug 2026 had no cell
+      // and therefore no events computed at all). Height must not influence it.
+      mockScheduleService.getMonthWeeksToShow.and.returnValue(6);
       mockLayoutService.selectedTimeView.set('month');
 
-      const daysToShowCount = component['_daysToShowCount']();
+      // One signal, mutated with .set(): replacing the field instead would not
+      // invalidate the computed, so the second read would return the first
+      // read's cached value and the test could not fail.
+      const windowSize = signal({ width: 1280, height: 1400 });
+      component['_windowSize'] = windowSize;
+      fixture.detectChanges();
+      component.daysToShow();
+      const onTallWindow =
+        mockScheduleService.getMonthDaysToShow.calls.mostRecent().args[0];
 
-      // The result must be an integer (whole number of weeks)
-      expect(Number.isInteger(daysToShowCount)).toBe(true);
+      windowSize.set({ width: 1280, height: 500 });
+      fixture.detectChanges();
+      component.daysToShow();
+      const onShortWindow =
+        mockScheduleService.getMonthDaysToShow.calls.mostRecent().args[0];
 
-      // Must be within the defined bounds
-      expect(daysToShowCount).toBeGreaterThanOrEqual(3); // MIN_WEEKS
-      expect(daysToShowCount).toBeLessThanOrEqual(6); // MAX_WEEKS
+      expect(onShortWindow).toBe(onTallWindow);
+      expect(onShortWindow).toBe(6);
+    });
+  });
+
+  describe('scroll position on view change', () => {
+    // Six rows overflow the wrapper on a short window, so a scroll position
+    // carried over from week view clamped to the bottom and opened the month
+    // with its first row above the viewport (#9463 review).
+    const scrollWrapper = (): HTMLElement =>
+      fixture.nativeElement.querySelector('.scroll-wrapper');
+
+    beforeEach(() => jasmine.clock().install());
+    afterEach(() => jasmine.clock().uninstall());
+
+    it('should reset the wrapper to the top when entering month view', () => {
+      mockLayoutService.selectedTimeView.set('week');
+      fixture.detectChanges();
+
+      // Cast because Element.scrollTo is overloaded; we always call the
+      // options form.
+      const scrollToSpy = spyOn(scrollWrapper(), 'scrollTo') as jasmine.Spy;
+
+      mockLayoutService.selectedTimeView.set('month');
+      fixture.detectChanges();
+      jasmine.clock().tick(1);
+
+      expect(scrollToSpy).toHaveBeenCalled();
+      const [opts] = scrollToSpy.calls.mostRecent().args as [ScrollToOptions];
+      expect(opts.top).toBe(0);
+      expect(opts.left).toBe(0);
+    });
+
+    // schedule-day-panel renders its own schedule-week, so a second
+    // `#work-start` can exist outside this component. Resolving it through the
+    // document would anchor on whichever came first.
+    it('should ignore a work-start element outside its own host', () => {
+      const stray = document.createElement('div');
+      stray.id = 'work-start';
+      document.body.insertBefore(stray, document.body.firstChild);
+      const scrollIntoViewSpy = spyOn(stray, 'scrollIntoView');
+
+      try {
+        // Month view, so the only #work-start in the document is the stray one:
+        // this component renders schedule-month, which has none.
+        mockLayoutService.selectedTimeView.set('month');
+        fixture.detectChanges();
+        jasmine.clock().tick(1);
+
+        component['_scrollAnchorToTop']('work-start');
+
+        expect(scrollIntoViewSpy).not.toHaveBeenCalled();
+      } finally {
+        stray.remove();
+      }
+    });
+
+    it('should not reset the wrapper while staying in month view', () => {
+      mockLayoutService.selectedTimeView.set('month');
+      fixture.detectChanges();
+      jasmine.clock().tick(1);
+
+      const scrollToSpy = spyOn(scrollWrapper(), 'scrollTo') as jasmine.Spy;
+
+      // A *different* array, not just a navigation: the mock returns one fixed
+      // reference, and a computed that yields the same reference is treated as
+      // unchanged, so dependents never re-run. Without this the test only rules
+      // out a reset wired to every change-detection pass.
+      mockScheduleService.getMonthDaysToShow.and.returnValue([
+        '2026-02-01',
+        '2026-02-02',
+        '2026-02-03',
+      ]);
+      component.goToNextPeriod();
+      fixture.detectChanges();
+      jasmine.clock().tick(1);
+
+      expect(scrollToSpy).not.toHaveBeenCalled();
     });
   });
 
@@ -938,12 +1302,6 @@ describe('ScheduleComponent', () => {
       hidden.setHidden([]);
     });
 
-    // overrideSelector mutates the selector itself, so always reset to avoid
-    // leaking provider lists into unrelated tests later in the file.
-    afterEach(() => {
-      TestBed.inject(MockStore).resetSelectors();
-    });
-
     it('should be false when no providers are enabled', () => {
       const store = TestBed.inject(MockStore);
       store.overrideSelector(selectCalendarProviders, []);
@@ -979,6 +1337,156 @@ describe('ScheduleComponent', () => {
       store.refreshState();
       fixture.detectChanges();
       expect(component.showCalFilterBtn()).toBe(true);
+    });
+  });
+
+  describe('plugin calendar providers', () => {
+    const icalProvider = (id: string): any => ({
+      id,
+      isEnabled: true,
+      issueProviderKey: 'ICAL',
+      icalUrl: `https://example.com/${id}.ics`,
+    });
+    const pluginProvider = (id: string, key = 'plugin:cal'): any => ({
+      id,
+      isEnabled: true,
+      issueProviderKey: key,
+      pluginId: 'cal',
+      pluginConfig: {},
+    });
+
+    beforeEach(() => {
+      localStorage.removeItem('SUP_HIDDEN_CALENDAR_PROVIDER_IDS');
+      TestBed.inject(HiddenCalendarProvidersService).setHidden([]);
+    });
+
+    afterEach(() => {
+      TestBed.inject(MockStore).resetSelectors();
+    });
+
+    it('includes plugin issue providers that opt into the agenda view', () => {
+      const store = TestBed.inject(MockStore);
+      spyOn(
+        TestBed.inject(PluginIssueProviderRegistryService),
+        'getUseAgendaView',
+      ).and.returnValue(true);
+      store.overrideSelector(selectCalendarProviders, []);
+      store.overrideSelector(selectEnabledIssueProviders, [pluginProvider('p1')]);
+      store.refreshState();
+      fixture.detectChanges();
+      expect(component.enabledCalendarProviders().map((p) => p.id)).toEqual(['p1']);
+    });
+
+    it('excludes plugin providers that do not use the agenda view', () => {
+      const store = TestBed.inject(MockStore);
+      spyOn(
+        TestBed.inject(PluginIssueProviderRegistryService),
+        'getUseAgendaView',
+      ).and.returnValue(false);
+      store.overrideSelector(selectCalendarProviders, []);
+      store.overrideSelector(selectEnabledIssueProviders, [pluginProvider('p1')]);
+      store.refreshState();
+      fixture.detectChanges();
+      expect(component.enabledCalendarProviders()).toEqual([]);
+    });
+
+    it('materializes color and label per provider row', () => {
+      const store = TestBed.inject(MockStore);
+      spyOn(
+        TestBed.inject(PluginIssueProviderRegistryService),
+        'getUseAgendaView',
+      ).and.returnValue(true);
+      store.overrideSelector(selectCalendarProviders, [
+        { ...icalProvider('ical'), color: '#123456' },
+      ]);
+      store.overrideSelector(selectEnabledIssueProviders, [pluginProvider('plug')]);
+      store.refreshState();
+      fixture.detectChanges();
+      expect(component.calProviderRows()).toEqual([
+        { id: 'ical', color: '#123456', label: 'example.com' },
+        { id: 'plug', color: jasmine.stringMatching(/^hsl\(/), label: 'plugin:cal' },
+      ]);
+    });
+
+    it('uses the color the calendar source reported for a provider without one', () => {
+      const store = TestBed.inject(MockStore);
+      spyOn(
+        TestBed.inject(PluginIssueProviderRegistryService),
+        'getUseAgendaView',
+      ).and.returnValue(true);
+      store.overrideSelector(selectCalendarProviders, []);
+      store.overrideSelector(selectEnabledIssueProviders, [pluginProvider('plug')]);
+      store.refreshState();
+      calendarColorByProviderId.set(new Map([['plug', '#fbe983']]));
+      fixture.detectChanges();
+      expect(component.calProviderRows()).toEqual([
+        { id: 'plug', color: '#fbe983', label: 'plugin:cal' },
+      ]);
+    });
+
+    it('shows the filter button for one iCal plus one plugin calendar provider', () => {
+      const store = TestBed.inject(MockStore);
+      spyOn(
+        TestBed.inject(PluginIssueProviderRegistryService),
+        'getUseAgendaView',
+      ).and.returnValue(true);
+      store.overrideSelector(selectCalendarProviders, [icalProvider('ical')]);
+      store.overrideSelector(selectEnabledIssueProviders, [
+        icalProvider('ical'),
+        pluginProvider('plug'),
+      ]);
+      store.refreshState();
+      fixture.detectChanges();
+      expect(component.showCalFilterBtn()).toBe(true);
+    });
+  });
+
+  describe('calProviderLabel', () => {
+    it('normalizes a URL-shaped label to host-only', () => {
+      expect(
+        component.calProviderLabel({
+          id: 'p',
+          isEnabled: true,
+          issueProviderKey: 'plugin:cal',
+          pluginId: 'cal',
+          pluginConfig: { serverUrl: 'https://calendar.example.com/dav/' },
+        } as any),
+      ).toBe('calendar.example.com');
+    });
+
+    it('collapses an opaque-scheme plugin label to the provider key', () => {
+      expect(
+        component.calProviderLabel({
+          id: 'p',
+          isEnabled: true,
+          issueProviderKey: 'plugin:cal',
+          pluginId: 'cal',
+          pluginConfig: { serverUrl: 'javascript:alert(1)' },
+        } as any),
+      ).toBe('plugin:cal');
+    });
+
+    it('leaves a plain plugin label untouched', () => {
+      expect(
+        component.calProviderLabel({
+          id: 'p',
+          isEnabled: true,
+          issueProviderKey: 'plugin:cal',
+          pluginId: 'cal',
+          pluginConfig: { name: 'Work: shared' },
+        } as any),
+      ).toBe('Work: shared');
+    });
+
+    it('leaves an already host-only iCal label untouched', () => {
+      expect(
+        component.calProviderLabel({
+          id: 'p',
+          isEnabled: true,
+          issueProviderKey: 'ICAL',
+          icalUrl: 'https://feeds.example.com/cal.ics',
+        } as any),
+      ).toBe('feeds.example.com');
     });
   });
 
@@ -1167,6 +1675,33 @@ describe('ScheduleComponent', () => {
       expect(el.querySelector('schedule-month')).toBeFalsy();
     });
 
+    it('passes deadline tasks to the paged day view badge', fakeAsync(() => {
+      const store = TestBed.inject(MockStore);
+      store.overrideSelector(selectUndoneDeadlineTasksByDay, {
+        // eslint-disable-next-line @typescript-eslint/naming-convention
+        '2026-01-20': [
+          {
+            ...DEFAULT_TASK,
+            id: 'task-1',
+            projectId: 'project-1',
+            title: 'Day-view deadline',
+            deadlineDay: '2026-01-20',
+          },
+        ],
+      });
+      store.refreshState();
+      mockScheduleService.getDaysToShow.and.returnValue(['2026-01-20']);
+      mockLayoutService.selectedTimeView.set('day');
+
+      fixture.detectChanges();
+      tick();
+      fixture.detectChanges();
+
+      const el: HTMLElement = fixture.nativeElement;
+      expect(el.querySelector('schedule-week .deadline-badge')).toBeTruthy();
+      expect(el.querySelector('schedule-week planner-deadline-task')).toBeFalsy();
+    }));
+
     it('has a day-view toggle button that selects day mode', () => {
       const el: HTMLElement = fixture.nativeElement;
       const dayBtn = el.querySelector<HTMLButtonElement>(
@@ -1224,8 +1759,8 @@ describe('ScheduleComponent', () => {
       const plainTop = plainWrapper.scrollTop;
 
       plainWrapper.scrollTop = 0;
-      // warpRoute starts the view at scale(1.2); the scroll runs on a
-      // setTimeout(0) while that is still in flight.
+      // warpRoute transforms the view (it once zoomed from scale(1.2)); the
+      // scroll runs on a setTimeout(0) while that is still in flight.
       const scaledHost = renderScrollable('scale(1.2)');
       const scaledWrapper = scaledHost.querySelector('.scroll-wrapper') as HTMLElement;
       component['_scrollAnchorToTop']('current-time');
@@ -1233,6 +1768,54 @@ describe('ScheduleComponent', () => {
       // Rect-based math landed 20% of the distance from midnight too far —
       // hundreds of pixels. What is left here is sub-pixel rounding.
       expect(Math.abs(scaledWrapper.scrollTop - plainTop)).toBeLessThan(2);
+    });
+  });
+
+  describe('initial time view', () => {
+    let savedView: string | null;
+
+    beforeEach(() => {
+      savedView = localStorage.getItem(LS.SELECTED_TIME_VIEW);
+    });
+
+    afterEach(() => {
+      if (savedView === null) {
+        localStorage.removeItem(LS.SELECTED_TIME_VIEW);
+      } else {
+        localStorage.setItem(LS.SELECTED_TIME_VIEW, savedView);
+      }
+    });
+
+    const createWith = (isXs: boolean, saved: string | null): void => {
+      if (saved === null) {
+        localStorage.removeItem(LS.SELECTED_TIME_VIEW);
+      } else {
+        localStorage.setItem(LS.SELECTED_TIME_VIEW, saved);
+      }
+      mockIsXs.set(isXs);
+      TestBed.createComponent(ScheduleComponent);
+    };
+
+    it('starts on the day view on a phone without a saved choice', () => {
+      createWith(true, null);
+      expect(mockLayoutService.selectedTimeView()).toBe('day');
+      // Not persisted, so a wider window later still starts on the week view.
+      expect(localStorage.getItem(LS.SELECTED_TIME_VIEW)).toBeNull();
+    });
+
+    it('starts on the week view on wider screens without a saved choice', () => {
+      createWith(false, null);
+      expect(mockLayoutService.selectedTimeView()).toBe('week');
+    });
+
+    it('keeps a saved week view on a phone', () => {
+      createWith(true, 'week');
+      expect(mockLayoutService.selectedTimeView()).toBe('week');
+    });
+
+    it('keeps a saved month view on a phone', () => {
+      createWith(true, 'month');
+      expect(mockLayoutService.selectedTimeView()).toBe('month');
     });
   });
 });

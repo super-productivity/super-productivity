@@ -56,7 +56,13 @@
         android:resource="@xml/file_paths" />
     </provider>
 
-    <!-- Set FullscreenActivity as the default launcher -->
+    <!-- Set FullscreenActivity as the default launcher.
+         Standard launchMode on purpose: in offline mode this activity is only a
+         trampoline that finishes after forwarding to CapacitorMainActivity. As
+         singleTask, a launcher tap on the backgrounded app found no instance in
+         the task and created a new one (splash + forward) over the running app,
+         which flashed. Standard mode lets the launcher just bring the task to
+         the front. -->
     <activity
       android:name=".FullscreenActivity"
       android:allowTaskReparenting="true"
@@ -64,7 +70,6 @@
       android:exported="true"
       android:hardwareAccelerated="true"
       android:label="@string/title_activity_fullscreen"
-      android:launchMode="singleTask"
       android:theme="@style/AppTheme.NoActionBarLaunch"
       android:windowSoftInputMode="adjustResize">
 
@@ -76,7 +81,59 @@
         <action android:name="com.superproductivity.superproductivity.DONE" />
         <action android:name="com.superproductivity.superproductivity.PAUSE" />
       </intent-filter>
+
+      <!-- Launcher shortcuts (long-press the app icon). Must sit on the
+           MAIN/LAUNCHER activity; they target AppShortcutActivity below. -->
+      <meta-data
+        android:name="android.app.shortcuts"
+        android:resource="@xml/shortcuts" />
     </activity>
+
+    <!-- Trampoline for the launcher shortcuts in res/xml/shortcuts.xml: forwards
+         the shortcut's URL to CapacitorMainActivity without the CLEAR_TASK flag
+         Android forces on static shortcuts (see AppShortcutActivity.kt). Empty
+         taskAffinity + excludeFromRecents keep it out of the app's task and
+         recents. Not exported: the launcher starts shortcuts as this app, so
+         nothing else needs to reach it. -->
+    <activity
+      android:name=".AppShortcutActivity"
+      android:excludeFromRecents="true"
+      android:exported="false"
+      android:noHistory="true"
+      android:taskAffinity=""
+      android:theme="@android:style/Theme.NoDisplay" />
+
+    <!-- Text share target: saves the share to the capture inbox and finishes, so
+         the user stays in the app they shared from. Own empty taskAffinity and
+         noHistory, like AppShortcutActivity, so it never joins the app's task. -->
+    <activity
+      android:name=".share.ShareReceiverActivity"
+      android:excludeFromRecents="true"
+      android:exported="true"
+      android:label="@string/title_activity_fullscreen"
+      android:noHistory="true"
+      android:taskAffinity=""
+      android:theme="@android:style/Theme.NoDisplay">
+      <intent-filter>
+        <action android:name="android.intent.action.SEND" />
+        <category android:name="android.intent.category.DEFAULT" />
+        <data android:mimeType="text/*" />
+      </intent-filter>
+    </activity>
+
+    <!-- Widget quick add: a dialog over the home screen that saves the title to
+         the capture inbox, without loading the app. Own empty taskAffinity and
+         noHistory, like ShareReceiverActivity. Not exported: only the widget's
+         explicit PendingIntent starts it. -->
+    <activity
+      android:name=".widget.QuickAddActivity"
+      android:excludeFromRecents="true"
+      android:exported="false"
+      android:label="@string/quick_add_title"
+      android:noHistory="true"
+      android:taskAffinity=""
+      android:theme="@style/AppTheme.QuickAdd"
+      android:windowSoftInputMode="stateAlwaysVisible|adjustResize" />
 
     <!-- All new Super-Productivity main activity, based on Capacitor to support offline use -->
     <activity
@@ -89,12 +146,6 @@
       android:launchMode="singleTask"
       android:theme="@style/AppTheme.NoActionBarLaunch"
       android:windowSoftInputMode="adjustResize">
-      <intent-filter>
-        <action android:name="android.intent.action.SEND" />
-        <category android:name="android.intent.category.DEFAULT" />
-        <data android:mimeType="text/*" />
-      </intent-filter>
-
       <!-- OAuth callback handler for Dropbox authentication -->
       <intent-filter>
         <action android:name="android.intent.action.VIEW" />
@@ -123,6 +174,35 @@
         <data
           android:scheme="com.superproductivity.superproductivity"
           android:pathPrefix="/plugin-oauth-callback" />
+      </intent-filter>
+
+      <!-- URL Scheme actions, same scheme and trust model as the OAuth
+           callbacks above. Task actions (create-task / complete-task) are
+           parsed by parse-app-uri-task-action.ts, UI actions (add-task /
+           today / inbox) by parse-app-uri-quick-action.ts, both via
+           Capacitor's appUrlOpen. Android routes per declared host, so a host
+           missing here never reaches the app; tools/verify-android-url-hosts
+           .test.js checks this list against both parsers. Docs:
+           docs/wiki/3.01-API.md §4 -->
+      <intent-filter>
+        <action android:name="android.intent.action.VIEW" />
+        <category android:name="android.intent.category.DEFAULT" />
+        <category android:name="android.intent.category.BROWSABLE" />
+        <data
+          android:scheme="com.super-productivity.app"
+          android:host="create-task" />
+        <data
+          android:scheme="com.super-productivity.app"
+          android:host="complete-task" />
+        <data
+          android:scheme="com.super-productivity.app"
+          android:host="add-task" />
+        <data
+          android:scheme="com.super-productivity.app"
+          android:host="today" />
+        <data
+          android:scheme="com.super-productivity.app"
+          android:host="inbox" />
       </intent-filter>
     </activity>
 
@@ -162,6 +242,11 @@
       android:exported="false" />
 
     <receiver
+      android:name=".receiver.NotificationActionReceiver"
+      android:enabled="true"
+      android:exported="false" />
+
+    <receiver
       android:name=".receiver.BootReceiver"
       android:enabled="true"
       android:exported="true"
@@ -171,6 +256,18 @@
       </intent-filter>
       <intent-filter>
         <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+      </intent-filter>
+    </receiver>
+
+    <!-- Re-registers reminder alarms as exact when the user grants "Alarms &
+      reminders" (issue #10684). exported="true" so the system broadcast is
+      delivered; the action is a protected broadcast, so other apps can't send it. -->
+    <receiver
+      android:name=".receiver.ExactAlarmPermissionReceiver"
+      android:enabled="true"
+      android:exported="true">
+      <intent-filter>
+        <action android:name="android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED" />
       </intent-filter>
     </receiver>
 

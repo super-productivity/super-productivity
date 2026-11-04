@@ -21,7 +21,7 @@
 # This wrapper deliberately does NOT pass --class: Electron ignores that switch.
 # See tools/verify-linux-wm-class.test.js and #9674.
 #
-# See docs/research/snap-wayland-gpu-fix-research.md §18.
+# See docs/research/snap-wayland-gpu-fix-research.md.
 
 # Derive the real ELF path. Inside our snap confinement, $SNAP is the
 # revision mount root and is more reliable than $0 resolution through

@@ -36,14 +36,22 @@ mat-dialog-actions {
   }
 }
 
+// One width for every preset and with Options open, so nothing reflows.
 .form-wrapper {
+  width: 620px;
   min-width: 280px;
-  max-width: 620px;
+  max-width: 100%;
 }
 
+// The field or line above already ends in a 16px gap; a top margin here would
+// double it whenever nothing collapses it (e.g. after the start/end row).
 :host collapsible {
-  margin-top: var(--s2);
   margin-bottom: var(--s2);
+}
+
+// Space between the Options header and its first field, as below "Repeat on".
+.options-body {
+  padding-top: var(--s);
 }
 
 :host ::ng-deep .collapsible-title {
@@ -52,21 +60,20 @@ mat-dialog-actions {
   font-size: 17px;
 }
 
+// Flush with the fields above and below; the last field or chip row inside
+// brings the gap to what follows.
 :host::ng-deep .repeat-config-container {
   display: block;
-  border-radius: var(--card-border-radius);
-  margin-left: var(--s2);
-  margin-bottom: var(--s5);
 }
 
+// One row of seven day chips, also on a phone.
 :host::ng-deep .weekdays {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0 var(--s);
+  gap: var(--s-half);
+  margin-bottom: var(--s2);
 
   > * {
-    width: auto;
-    max-width: 48%;
+    flex: 1 1 0;
     min-width: 0;
   }
 }
@@ -83,7 +90,6 @@ mat-dialog-actions {
   color: var(--c-warn);
   font-size: var(--font-size-sm);
   margin: 0 0 var(--s2);
-  margin-inline-start: var(--s2);
 }
 :host::ng-deep .repeat-cycle {
   display: flex;
@@ -91,42 +97,46 @@ mat-dialog-actions {
   > * {
     width: 100%;
     min-width: 0;
-    margin-left: var(--s2);
+    margin-inline-start: var(--s2);
 
     &:first-child {
-      margin-left: 0;
+      margin-inline-start: 0;
       width: auto;
     }
   }
 }
 
-.planned-start-date-field-wrapper {
-  margin-bottom: var(--s2);
-  width: 100%;
-}
-
-.planned-start-date-btn {
-  width: 100%;
-  text-align: start !important;
-  justify-content: start !important;
-  height: 48px !important;
-  padding: 0 var(--s2) !important;
-}
-
-.planned-start-date-btn-content {
+// Start and end side by side; they stack on narrow screens.
+.start-end-row {
   display: flex;
-  align-items: center;
-  gap: var(--s);
-  width: 100%;
-  text-align: start;
-}
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 0 var(--s2);
 
-.planned-date-label {
-  font-weight: bold;
+  > * {
+    flex: 1 1 240px;
+    min-width: 0;
+  }
 }
 
 .planned-date-val {
-  flex-grow: 1;
+  cursor: pointer;
+}
+
+// Reminder badge and button side by side in one suffix slot.
+.start-date-suffix {
+  display: inline-flex;
+  align-items: center;
+}
+
+.inherited-subtasks {
+  margin-bottom: var(--s2);
+  color: var(--text-color-muted);
+
+  ul {
+    margin: var(--s-half) 0 0;
+    padding-inline-start: var(--s3);
+  }
 }
 
 .reminder-badge {
@@ -134,4 +144,25 @@ mat-dialog-actions {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+}
+
+.spacer {
+  flex: 1 1 auto;
+}
+
+// The result of the rule and dates, as quiet caption lines below them.
+// The live region may hold only screen-reader text, so spacing keys off the
+// visible lines rather than a flex gap.
+.rule-result {
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-snug);
+  color: var(--text-color-muted);
+
+  &:has(.rule-summary div, .next-occurrence) {
+    margin-bottom: var(--s2);
+  }
+
+  &:has(.rule-summary div) .next-occurrence {
+    margin-top: var(--s-half);
+  }
 }

@@ -1,0 +1,28 @@
+{
+  "CFG": {
+    "BASE_URL": "URL base de Nextcloud",
+    "USERNAME": "Su nombre de usuario de Nextcloud",
+    "PASSWORD": "Su contraseña de aplicación de Nextcloud",
+    "BOARD": "Board",
+    "IMPORT_STACKS": "Import from stacks (leave empty for all)",
+    "DONE_STACK": "Done stack (cards are moved here on completion)",
+    "STACKS_DESC": "Select a board first, then use the load button to list its stacks.",
+    "NONE": "None",
+    "FILTER_BY_ASSIGNEE": "Solo importar tarjetas asignadas a mí",
+    "TITLE_TEMPLATE": "Plantilla de título de tarea",
+    "TITLE_TEMPLATE_DESC": "Variables: {CARD_TITLE}, {BOARD}, {COLUMN}, {ID}, {LABELS}. Ejemplo: [{BOARD}: {COLUMN}] {CARD_TITLE}. Dejar vacío para solo el título de la tarjeta."
+  },
+  "DISPLAY": {
+    "SUMMARY": "Resumen",
+    "DESCRIPTION": "Descripción de Deck",
+    "STACK": "Pila",
+    "DUE_DATE": "Fecha de vencimiento",
+    "ASSIGNED_USERS": "Usuarios asignados",
+    "LABELS": "Etiquetas"
+  },
+  "ERRORS": {
+    "NO_BOARD": "Nextcloud Deck: No board selected",
+    "CARD_NOT_FOUND": "Nextcloud Deck: Card not found on the selected board"
+  },
+  "FORM_HELP": "Configure su integración de Nextcloud Deck para importar tarjetas como tareas. Use una contraseña de aplicación para la autenticación."
+}

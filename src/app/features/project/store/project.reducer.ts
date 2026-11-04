@@ -12,7 +12,11 @@ import {
   moveTaskToTopInTodayList,
   moveTaskUpInTodayList,
 } from '../../work-context/store/work-context-meta.actions';
-import { moveItemAfterAnchor } from '../../work-context/store/work-context-meta.helper';
+import {
+  moveItemAfterAnchor,
+  moveUndoneTaskDownInList,
+  moveUndoneTaskUpInList,
+} from '../../work-context/store/work-context-meta.helper';
 import {
   arrayMoveLeftUntil,
   arrayMoveRightUntil,
@@ -362,10 +366,10 @@ export const projectReducer = createReducer<ProjectState>(
             {
               id: workContextId,
               changes: {
-                taskIds: arrayMoveLeftUntil(
+                taskIds: moveUndoneTaskUpInList(
                   (state.entities[workContextId] as Project).taskIds,
                   taskId,
-                  (id) => !undoneTaskIds.includes(id),
+                  undoneTaskIds,
                 ),
               },
             },
@@ -383,10 +387,10 @@ export const projectReducer = createReducer<ProjectState>(
             {
               id: workContextId,
               changes: {
-                taskIds: arrayMoveRightUntil(
+                taskIds: moveUndoneTaskDownInList(
                   (state.entities[workContextId] as Project).taskIds,
                   taskId,
-                  (id) => !undoneTaskIds.includes(id),
+                  undoneTaskIds,
                 ),
               },
             },
@@ -572,19 +576,26 @@ export const projectReducer = createReducer<ProjectState>(
       : state,
   ),
 
-  on(updateNoteOrder, (state, { ids, activeContextType, activeContextId }) =>
-    activeContextType === WorkContextType.PROJECT
+  on(updateNoteOrder, (state, { ids, activeContextType, activeContextId }) => {
+    const project = state.entities[activeContextId as string];
+    return activeContextType === WorkContextType.PROJECT && project
       ? projectAdapter.updateOne(
           {
-            id: activeContextId as string,
+            id: project.id,
+            // A reorder changes positions, not membership (as for Today): a
+            // remote order must neither bring back a note this device deleted
+            // or moved away, nor drop one it added meanwhile (#10377).
             changes: {
-              noteIds: ids,
+              noteIds: [
+                ...project.noteIds.filter((id) => !ids.includes(id)),
+                ...ids.filter((id) => project.noteIds.includes(id)),
+              ],
             },
           },
           state,
         )
-      : state,
-  ),
+      : state;
+  }),
 
   // Task Actions
   // ------------

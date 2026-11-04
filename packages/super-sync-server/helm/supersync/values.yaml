@@ -7,10 +7,10 @@ image:
   repository: ghcr.io/super-productivity/supersync
   # -- Image pull policy
   pullPolicy: IfNotPresent
-  # -- Image tag to deploy. Defaults to "latest" because CI publishes only `latest`
-  # and `master-<sha>` — the chart appVersion has never been published as a tag, so
-  # falling back to it produced ImagePullBackOff on a default install.
-  # Pin this to a specific tag for reproducible deploys.
+  # -- Image tag to deploy. Defaults to "latest" because the chart appVersion has
+  # never been published as a tag, so falling back to it produced ImagePullBackOff
+  # on a default install. CI publishes `latest`, `master-<sha>` and, for published
+  # releases, `vX.Y.Z`. Pin this to a release tag for reproducible deploys.
   tag: "latest"
 
 # -- Docker registry pull secrets
@@ -43,16 +43,17 @@ supersync:
   cors:
     # -- Comma-separated list of allowed CORS origins
     origins: "https://app.super-productivity.com"
+  # -- Peers whose X-Forwarded-* headers are trusted (proxy-addr keywords, IPs or
+  # CIDR ranges). Empty keeps the server default of "loopback,uniquelocal".
+  trustProxy: ""
   cleanup:
     # -- Max old operation ids selected/deleted for one user in a cleanup pass.
     oldOpsDeleteBatchSize: 5000
     # -- Max old operations deleted across all users in one cleanup pass.
     oldOpsMaxDeletedPerRun: 25000
-  batchUpload:
-    # -- Enable the batched upload implementation. Requires payloadBytesBackfillComplete=true.
-    enabled: false
-    # -- Set only after running `npm run migrate-payload-bytes` to completion.
-    payloadBytesBackfillComplete: false
+    # -- UTC hour (0-23) to run the daily cleanup job at.
+    # Empty runs it 10s after start, then every 24h.
+    hourUtc: ""
   webauthn:
     # -- WebAuthn relying party display name, shown in your users' OS passkey prompt.
     # Defaults to the relying-party ID when empty — do not ship someone else's brand here.
@@ -105,6 +106,9 @@ supersync:
   # -- Per-user storage quota in bytes for accounts created from now on.
   # Empty uses the built-in default (104857600 = 100 MB).
   defaultStorageQuotaBytes: ""
+  # -- Agent task capture: the /mcp endpoint and /api/capture. Keep false on a
+  # multi-replica deployment; the retry window and per-grant limit are in-process.
+  captureConnectorEnabled: false
   persistence:
     # -- Enable persistent storage for /app/data
     enabled: true
@@ -169,6 +173,12 @@ externalDatabase:
   # and pool_timeout value. A pre-upgrade hook validates both before replacing
   # a running pod, and the migration init container rechecks them, e.g.
   # postgresql://user:pass@host:5432/dbname?connection_limit=60&pool_timeout=10
+  # The server must be PostgreSQL 14+ on a Linux host: migrations set
+  # client_connection_check_interval, which an older or non-Linux server
+  # rejects at connect (see the server README).
+  # Rendered as a plain pod env value, so the password is visible in
+  # `helm get manifest`, `kubectl describe pod` and release-history Secrets.
+  # Prefer existingSecret below for anything but a throwaway cluster.
   url: ""
   # -- Use an existing Kubernetes secret for the database URL.
   # The secret must contain a DATABASE_URL key with the same pool parameters.

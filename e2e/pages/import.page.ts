@@ -114,6 +114,12 @@ export class ImportPage extends BasePage {
 
     // Now the file-imex component should be visible in the active tab
     await this.importFromFileBtn.waitFor({ state: 'visible', timeout: 10000 });
+
+    // Controls become visible before the panel finishes expanding. Wait for
+    // Angular's animation to finish so clicks land on the intended button.
+    await importExportSection
+      .locator('.collapsible-panel:not(.ng-animating)')
+      .waitFor({ state: 'visible', timeout: 10000 });
   }
 
   /**

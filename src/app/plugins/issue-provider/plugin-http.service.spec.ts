@@ -3,7 +3,7 @@ import {
   HttpTestingController,
   provideHttpClientTesting,
 } from '@angular/common/http/testing';
-import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClient, withXhr } from '@angular/common/http';
 import type { NativeHttpResponse } from '@sp/sync-providers/http';
 import {
   PluginHttpService,
@@ -17,7 +17,11 @@ describe('PluginHttpService', () => {
 
   beforeEach(() => {
     TestBed.configureTestingModule({
-      providers: [PluginHttpService, provideHttpClient(), provideHttpClientTesting()],
+      providers: [
+        PluginHttpService,
+        provideHttpClient(withXhr()),
+        provideHttpClientTesting(),
+      ],
     });
     service = TestBed.inject(PluginHttpService);
     httpMock = TestBed.inject(HttpTestingController);
@@ -210,7 +214,7 @@ describe('PluginHttpService - native WebDAV/CalDAV method routing (#8558)', () =
     TestBed.configureTestingModule({
       providers: [
         PluginHttpService,
-        provideHttpClient(),
+        provideHttpClient(withXhr()),
         provideHttpClientTesting(),
         { provide: PLUGIN_HTTP_IS_NATIVE, useValue: true },
         { provide: PLUGIN_HTTP_NATIVE_EXECUTOR, useValue: nativeHttp },
@@ -283,6 +287,21 @@ describe('PluginHttpService - native WebDAV/CalDAV method routing (#8558)', () =
     await expectAsync(promise).toBeResolved();
     expect(nativeHttp).not.toHaveBeenCalled();
   });
+
+  // Android's HttpURLConnection (behind CapacitorHttp) accepts PATCH, and
+  // HttpClient keeps the JSON body and error body the providers rely on (#8579).
+  it('does NOT reroute PATCH — it stays on HttpClient with its JSON body', async () => {
+    const http = service.createHttpHelper(authHeaders);
+    const url = 'https://api.github.com/repos/o/r/issues/1';
+    const promise = http.patch(url, { state: 'closed' });
+    await new Promise((r) => setTimeout(r, 0));
+    const req = httpMock.expectOne(url);
+    expect(req.request.method).toBe('PATCH');
+    expect(req.request.body).toEqual({ state: 'closed' });
+    req.flush({ ok: true });
+    await expectAsync(promise).toBeResolved();
+    expect(nativeHttp).not.toHaveBeenCalled();
+  });
 });
 
 describe('PluginHttpService - blockRedirects (PluginAPI.request path)', () => {
@@ -292,7 +311,11 @@ describe('PluginHttpService - blockRedirects (PluginAPI.request path)', () => {
 
   beforeEach(() => {
     TestBed.configureTestingModule({
-      providers: [PluginHttpService, provideHttpClient(), provideHttpClientTesting()],
+      providers: [
+        PluginHttpService,
+        provideHttpClient(withXhr()),
+        provideHttpClientTesting(),
+      ],
     });
     service = TestBed.inject(PluginHttpService);
     httpMock = TestBed.inject(HttpTestingController);
@@ -462,7 +485,7 @@ describe('PluginHttpService - blockRedirects falls back to HttpClient on native'
     TestBed.configureTestingModule({
       providers: [
         PluginHttpService,
-        provideHttpClient(),
+        provideHttpClient(withXhr()),
         provideHttpClientTesting(),
         { provide: PLUGIN_HTTP_IS_NATIVE, useValue: true },
       ],

@@ -15,6 +15,10 @@
  * 0, and a client whose cursor predates the replacement can upload deltas built
  * on superseded state — resurrecting what the replacement removed.
  *
+ * Prerequisites:
+ *   `npm run supersync:db` — the db has no fixed host port, so this publishes
+ *   one on 55432 and applies the schema.
+ *
  * Run with:
  *   DATABASE_URL=postgresql://supersync:superpassword@localhost:55432/supersync_db \
  *     npx vitest run --config vitest.integration.config.ts \

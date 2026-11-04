@@ -10,6 +10,8 @@ import { MatNativeDateModule } from '@angular/material/core';
 import { MockStore, provideMockStore } from '@ngrx/store/testing';
 import { TranslateModule, TranslateService, TranslateStore } from '@ngx-translate/core';
 import { SnackService } from '../../../core/snack/snack.service';
+import { SnackParams } from '../../../core/snack/snack.model';
+import { T } from 'src/app/t.const';
 import { LocaleDatePipe } from 'src/app/ui/pipes/locale-date.pipe';
 import { TaskService } from '../../../features/tasks/task.service';
 import { WorkContextService } from '../../../features/work-context/work-context.service';
@@ -23,6 +25,7 @@ import {
 import { TaskCopy, TaskReminderOptionId, TaskWithDueTime } from '../../tasks/task.model';
 import { ReminderService } from '../../reminder/reminder.service';
 import { PlannerActions } from '../store/planner.actions';
+import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { getDbDateStr } from '../../../util/get-db-date-str';
 import { selectAllTasksWithDueTimeSorted } from '../../tasks/store/task.selectors';
 import { ScheduleConfig } from '../../config/global-config.model';
@@ -437,6 +440,51 @@ describe('DialogScheduleTaskComponent', () => {
       );
       expect(dialogRefSpy.close).toHaveBeenCalledWith(true);
     });
+
+    // Issue #9776: updateTask({ changes: { remindAt: undefined } }) loses the
+    // key at JSON.stringify, so the clear never replayed on other devices.
+    // dismissReminderOnly clears remindAt inside its reducer (replay-safe).
+    it('should dispatch dismissReminderOnly (not a lossy updateTask) when "Do not remind" is picked', async () => {
+      const today = new Date();
+      const mockTask = {
+        id: 'taskWithReminder',
+        title: 'Task With Reminder',
+        tagIds: [] as string[],
+        projectId: 'DEFAULT',
+        timeSpentOnDay: {},
+        attachments: [],
+        timeEstimate: 0,
+        timeSpent: 0,
+        isDone: false,
+        created: 1640995200000,
+        subTaskIds: [],
+        dueWithTime: today.getTime(),
+        dueDay: getDbDateStr(today),
+        remindAt: today.getTime(),
+      } as unknown as TaskCopy;
+
+      const dispatchSpy = spyOn(store, 'dispatch');
+
+      component.task = mockTask;
+      component.data = { task: mockTask } as any;
+      component.selectedDate = new Date(today);
+      component.selectedTime = null;
+      component.selectedReminderCfgId = TaskReminderOptionId.DoNotRemind;
+
+      await component.submit();
+
+      expect(dispatchSpy).toHaveBeenCalledWith(
+        TaskSharedActions.dismissReminderOnly({ id: 'taskWithReminder' }),
+      );
+      const updateTaskCalls = dispatchSpy.calls
+        .allArgs()
+        .filter(
+          (args) =>
+            (args[0] as unknown as { type: string }).type ===
+            TaskSharedActions.updateTask.type,
+        );
+      expect(updateTaskCalls).toEqual([]);
+    });
   });
 
   describe('ngAfterViewInit - dueWithTime initialization (issue #5515)', () => {
@@ -541,6 +589,159 @@ describe('DialogScheduleTaskComponent', () => {
       expect(selectedDate.getMonth()).toBe(originalDate.getMonth());
       expect(selectedDate.getDate()).toBe(originalDate.getDate());
       expect(component.selectedTime).toBe('14:45');
+    });
+  });
+
+  describe('remove()', () => {
+    it('should unschedule the task and show an undo snack for a day-only planned task', () => {
+      const mockTask = {
+        id: 'taskDayOnly',
+        title: 'Day Only Task',
+        tagIds: [] as string[],
+        projectId: 'DEFAULT',
+        timeSpentOnDay: {},
+        attachments: [],
+        timeEstimate: 0,
+        timeSpent: 0,
+        isDone: false,
+        created: 1640995200000,
+        subTaskIds: [],
+        dueDay: '2026-03-01',
+      } as unknown as TaskCopy;
+
+      const dispatchSpy = spyOn(store, 'dispatch');
+      component.data = { task: mockTask } as any;
+
+      component.remove();
+
+      expect(dispatchSpy).toHaveBeenCalledWith(
+        TaskSharedActions.unscheduleTask({ id: 'taskDayOnly', isSkipToast: true }),
+      );
+      expect(snackServiceSpy.open).toHaveBeenCalled();
+      const snackParams = snackServiceSpy.open.calls.mostRecent().args[0] as SnackParams;
+      expect(snackParams.actionStr).toBe(T.G.UNDO);
+      expect(snackParams.actionFn).toBeDefined();
+      expect(dialogRefSpy.close).toHaveBeenCalledWith(true);
+    });
+
+    it('should restore the original dueDay when undo is clicked on a day-only task', () => {
+      const mockTask = {
+        id: 'taskDayOnly',
+        title: 'Day Only Task',
+        tagIds: [] as string[],
+        projectId: 'DEFAULT',
+        timeSpentOnDay: {},
+        attachments: [],
+        timeEstimate: 0,
+        timeSpent: 0,
+        isDone: false,
+        created: 1640995200000,
+        subTaskIds: [],
+        dueDay: '2026-03-01',
+      } as unknown as TaskCopy;
+
+      const dispatchSpy = spyOn(store, 'dispatch');
+      component.data = { task: mockTask } as any;
+
+      component.remove();
+
+      const snackParams = snackServiceSpy.open.calls.mostRecent().args[0] as SnackParams;
+      snackParams.actionFn!();
+
+      expect(dispatchSpy).toHaveBeenCalledWith(
+        PlannerActions.planTaskForDay({
+          task: mockTask,
+          day: '2026-03-01',
+        }),
+      );
+    });
+
+    it('should restore the original dueWithTime when undo is clicked on a time-scheduled task without a reminder', () => {
+      const dueWithTime = new Date(2026, 2, 1, 10, 0).getTime();
+      const mockTask = {
+        id: 'taskWithTime',
+        title: 'Time Scheduled Task',
+        tagIds: [] as string[],
+        projectId: 'DEFAULT',
+        timeSpentOnDay: {},
+        attachments: [],
+        timeEstimate: 0,
+        timeSpent: 0,
+        isDone: false,
+        created: 1640995200000,
+        subTaskIds: [],
+        dueDay: '2026-03-01',
+        dueWithTime,
+      } as unknown as TaskCopy;
+
+      const dispatchSpy = spyOn(store, 'dispatch');
+      component.data = { task: mockTask } as any;
+
+      component.remove();
+
+      const snackParams = snackServiceSpy.open.calls.mostRecent().args[0] as SnackParams;
+      snackParams.actionFn!();
+
+      expect(dispatchSpy).toHaveBeenCalledWith(
+        TaskSharedActions.reScheduleTaskWithTime({
+          task: mockTask,
+          dueWithTime,
+          remindAt: undefined,
+          isMoveToBacklog: false,
+        }),
+      );
+    });
+
+    it('should show the undo snack and restore dueWithTime + remindAt together when unscheduling a task with an active reminder', () => {
+      // Removing a schedule clears dueDay/dueWithTime/remindAt in one action
+      // regardless of whether a reminder was set, so Undo must be offered -
+      // and must restore all three - consistently either way.
+      const dueWithTime = new Date(2026, 2, 1, 10, 0).getTime();
+      const remindAt = new Date(2026, 2, 1, 9, 45).getTime();
+      const mockTask = {
+        id: 'taskWithReminder',
+        title: 'Reminder Task',
+        tagIds: [] as string[],
+        projectId: 'DEFAULT',
+        timeSpentOnDay: {},
+        attachments: [],
+        timeEstimate: 0,
+        timeSpent: 0,
+        isDone: false,
+        created: 1640995200000,
+        subTaskIds: [],
+        dueDay: '2026-03-01',
+        dueWithTime,
+        remindAt,
+      } as unknown as TaskCopy;
+
+      const dispatchSpy = spyOn(store, 'dispatch');
+      component.data = { task: mockTask } as any;
+
+      component.remove();
+
+      expect(dispatchSpy).toHaveBeenCalledWith(
+        TaskSharedActions.unscheduleTask({ id: 'taskWithReminder', isSkipToast: true }),
+      );
+      const snackParams = snackServiceSpy.open.calls.mostRecent().args[0] as SnackParams;
+      expect(snackParams.actionStr).toBe(T.G.UNDO);
+
+      snackParams.actionFn!();
+
+      expect(dispatchSpy).toHaveBeenCalledWith(
+        TaskSharedActions.reScheduleTaskWithTime({
+          task: mockTask,
+          dueWithTime,
+          remindAt,
+          isMoveToBacklog: false,
+        }),
+      );
+    });
+
+    it('should close the dialog when no task is provided', () => {
+      component.data = {} as any;
+      component.remove();
+      expect(dialogRefSpy.close).toHaveBeenCalledWith(false);
     });
   });
 });

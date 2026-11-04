@@ -7,7 +7,10 @@
 {
   "compilerOptions": {
     "esModuleInterop": true,
-    "outDir": "./dist"
+    "outDir": "./dist",
+    // Read by ts-node in the Electron main-process tests (test:electron).
+    "rootDir": ".",
+    "target": "ES2022"
   },
   "files": [],
   "references": [

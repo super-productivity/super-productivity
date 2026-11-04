@@ -95,7 +95,7 @@ import { ArchiveService } from '../archive/archive.service';
 import { TaskArchiveService } from '../archive/task-archive.service';
 import { TODAY_TAG } from '../tag/tag.const';
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
-import { getDbDateStr, isDBDateStr } from '../../util/get-db-date-str';
+import { isDBDateStr } from '../../util/get-db-date-str';
 import { INBOX_PROJECT } from '../project/project.const';
 import { GlobalConfigService } from '../config/global-config.service';
 import { TaskLog } from '../../core/log';
@@ -106,7 +106,6 @@ import { DeletedTaskIssueSidecarService } from '../issue/two-way-sync/deleted-ta
 import { TimeBlockDeleteSidecarService } from '../calendar-integration/time-block/time-block-delete-sidecar.service';
 import { getDeadlineAutoPlanFields } from './util/get-deadline-auto-plan-fields';
 import { TaskTimeSyncService } from './task-time-sync.service';
-
 @Injectable({
   providedIn: 'root',
 })
@@ -125,13 +124,11 @@ export class TaskService {
   private readonly _timeBlockDeleteSidecar = inject(TimeBlockDeleteSidecarService);
   private readonly _archiveTaskPromisesById = new Map<string, Promise<void>>();
   private readonly _taskTimeSync = inject(TaskTimeSyncService);
-
   currentTaskId$: Observable<string | null> = this._store.pipe(
     select(selectCurrentTaskId),
     distinctUntilChanged(),
   );
   currentTaskId = toSignal(this.currentTaskId$, { initialValue: null });
-
   currentTask$: Observable<Task | null> = this._store.pipe(
     select(selectCurrentTask),
     // NOTE: we can't use share here, as we need the last emitted value
@@ -197,7 +194,7 @@ export class TaskService {
     ),
   );
 
-  private _lastFocusedTaskEl: HTMLElement | null = null;
+  private _lastFocusedTaskEl: WeakRef<HTMLElement> | null = null;
   private _allTasks$: Observable<Task[]> = this._store.pipe(select(selectAllTasks));
   private _taskEntities = this._store.selectSignal(selectTaskEntities);
 
@@ -215,7 +212,7 @@ export class TaskService {
           ev.target instanceof HTMLElement &&
           ev.target.tagName.toLowerCase() === 'task'
         ) {
-          this._lastFocusedTaskEl = ev.target;
+          this._lastFocusedTaskEl = new WeakRef(ev.target);
         }
       },
       true,
@@ -398,6 +395,7 @@ export class TaskService {
     // tokens out of the title. Only spread when true to keep the dispatched
     // action byte-identical for all existing callers.
     isIgnoreShortSyntax: boolean = false,
+    isPreserveExplicitReminder: boolean = false,
   ): string {
     const workContextId = this._workContextService.activeWorkContextId as string;
     const workContextType = this._workContextService
@@ -408,9 +406,7 @@ export class TaskService {
       workContextType,
       workContextId,
     });
-
     TaskLog.log('addTask', { taskId: task.id, workContextId, workContextType });
-
     this._store.dispatch(
       TaskSharedActions.addTask({
         task,
@@ -419,6 +415,7 @@ export class TaskService {
         isAddToBacklog,
         isAddToBottom,
         ...(isIgnoreShortSyntax ? { isIgnoreShortSyntax: true } : {}),
+        ...(isPreserveExplicitReminder ? { isPreserveExplicitReminder: true } : {}),
         ...getDeadlineAutoPlanFields(
           this._dateService,
           task.deadlineDay,
@@ -434,8 +431,9 @@ export class TaskService {
     additional: Partial<Task> = {},
     due: number,
     remindCfg?: TaskReminderOptionId,
+    isIgnoreShortSyntax = false,
   ): Promise<string> {
-    const id = this.add(title, undefined, additional, undefined);
+    const id = this.add(title, undefined, additional, undefined, isIgnoreShortSyntax);
     const task = await this.getByIdOnce$(id).toPromise();
     this.scheduleTask(
       task,
@@ -509,7 +507,7 @@ export class TaskService {
     this._store.dispatch(TaskSharedActions.deleteTasks({ taskIds, tasks }));
   }
 
-  update(id: string, changedFields: Partial<Task>): void {
+  update(id: string, changedFields: Partial<Task>, isIgnoreShortSyntax = false): void {
     if (Object.prototype.hasOwnProperty.call(changedFields, 'timeSpentOnDay')) {
       this._taskTimeSync.flushOne(id);
     }
@@ -535,6 +533,7 @@ export class TaskService {
       TaskSharedActions.updateTask({
         task: { id, changes: changedFields },
         ...(projectMoveSubTaskIds !== undefined && { projectMoveSubTaskIds }),
+        ...(isIgnoreShortSyntax && { isIgnoreShortSyntax }),
       }),
     );
   }
@@ -702,7 +701,6 @@ export class TaskService {
       const workContextType = this._workContextService
         .activeWorkContextType as WorkContextType;
 
-      // this.
       if (isBacklog) {
         const undoneBacklogTaskIds = await this._workContextService.undoneBacklogTaskIds$
           .pipe(take(1))
@@ -813,20 +811,23 @@ export class TaskService {
     }
   }
 
-  addSubTaskTo(parentId: string, additional: Partial<Task> = {}): string {
+  addSubTaskTo(
+    parentId: string,
+    additional: Partial<Task> = {},
+    isPreserveExplicitReminder = false,
+  ): string {
     const task = this.createNewTaskWithDefaults({
       title: additional.title || '',
       additional: { dueDay: additional.dueDay || undefined, ...additional },
     });
     TaskLog.log('addSubTaskTo', { taskId: task.id, parentId });
-
     this._store.dispatch(
       addSubTask({
         task,
         parentId,
+        ...(isPreserveExplicitReminder ? { isPreserveExplicitReminder: true } : {}),
       }),
     );
-
     if (!task.title?.trim().length) {
       this.focusTaskById(task.id, true);
     }
@@ -882,31 +883,27 @@ export class TaskService {
     duration: number,
     date: string = this._dateService.todayStr(),
     isFromTrackingReminder = false,
+    isBackfill = false,
   ): void {
-    this._store.dispatch(
-      TimeTrackingActions.addTimeSpent({ task, date, duration, isFromTrackingReminder }),
-    );
+    const props = { task, date, duration, isFromTrackingReminder, isBackfill };
+    this._store.dispatch(TimeTrackingActions.addTimeSpent(props));
   }
 
   /**
    * Adds time spent to a task AND dispatches the persistent syncTimeSpent action.
    * Use this instead of addTimeSpent when the caller is NOT using BatchedTimeSyncAccumulator
    * (e.g. idle dialog, tracking reminder). The tick path uses the accumulator instead.
+   * A `date` other than today is back-filled (see `isBackfill` on `addTimeSpent`).
    */
-  addTimeSpentAndSync(task: Task, duration: number): void {
+  addTimeSpentAndSync(task: Task, duration: number, date?: string): void {
     if (duration <= 0) {
       return;
     }
     this._taskTimeSync.flushOne(task.id);
-    const date = this._dateService.todayStr();
-    this.addTimeSpent(task, duration, date);
-    this._store.dispatch(
-      syncTimeSpent({
-        taskId: task.id,
-        date,
-        duration,
-      }),
-    );
+    const today = this._dateService.todayStr();
+    const day = date ?? today;
+    this.addTimeSpent(task, duration, day, false, day !== today);
+    this._store.dispatch(syncTimeSpent({ taskId: task.id, date: day, duration }));
   }
 
   removeTimeSpent(
@@ -927,9 +924,7 @@ export class TaskService {
   }
 
   focusLastFocusedTask(): void {
-    if (this._lastFocusedTaskEl) {
-      this._lastFocusedTaskEl.focus();
-    }
+    this._lastFocusedTaskEl?.deref()?.focus();
   }
 
   focusTaskIfPossible(id: string): void {
@@ -991,6 +986,7 @@ export class TaskService {
       } else {
         // when on a tag such as today, we simply remove the tag instead of attempting to move to archive
         const tagToRemove = this._workContextService.activeWorkContextId;
+        // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
         TaskLog.log('[TaskService] Removing tag from subtasks:', tagToRemove);
         subTasks.forEach((st) => {
           this.updateTags(
@@ -1196,7 +1192,8 @@ export class TaskService {
     return this._store.pipe(select(selectTasksByIdFactory(ids)));
   }
 
-  getByIdWithSubTaskData$(id: string): Observable<TaskWithSubTasks> {
+  /** Emits `undefined` for an unknown id — always check before use (#9946). */
+  getByIdWithSubTaskData$(id: string): Observable<TaskWithSubTasks | undefined> {
     return this._store.pipe(select(selectTaskByIdWithSubTaskData, { id }), take(1));
   }
 
@@ -1491,7 +1488,7 @@ export class TaskService {
       !additional.parentId &&
       !additional.dueWithTime &&
       !('dueDay' in additional)
-        ? { dueDay: getDbDateStr() }
+        ? { dueDay: this._dateService.todayStr() }
         : {}),
 
       ...additional,

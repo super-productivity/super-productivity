@@ -5,6 +5,9 @@ import {
 import * as TaskRepeatCfgActions from './task-repeat-cfg.actions';
 import { loadAllData } from '../../../root-store/meta/load-all-data.action';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
+import { convertOpToAction } from '../../../op-log/apply/operation-converter.util';
+import { ActionType, Operation } from '../../../op-log/core/operation.types';
+import { TaskReminderOptionId } from '../../tasks/task.model';
 import {
   DEFAULT_TASK_REPEAT_CFG,
   TaskRepeatCfg,
@@ -196,6 +199,51 @@ describe('TaskRepeatCfgReducer', () => {
 
       expect(result.entities['cfg1']!.repeatEvery).toBe(2);
       expect(result.entities['cfg1']!.projectId).toBe('project-1');
+    });
+
+    // Issue #9776: clearing a field dispatches `changes: { someField: undefined }`,
+    // but JSON.stringify drops undefined-valued keys from the op payload, so the
+    // clear replayed as a no-op on every other device. The action creator lists
+    // cleared keys out-of-band in `clearedFields` (a string[] that survives
+    // JSON) and the reducer restores them before applying the update.
+    it('should round-trip clearing fields through capture, serialization and replay', () => {
+      const existingCfg = createTaskRepeatCfg('cfg1', {
+        startTime: '10:00',
+        remindAt: TaskReminderOptionId.AtStart,
+      });
+      const existingState = createStateWithCfgs([existingCfg]);
+
+      const action = TaskRepeatCfgActions.updateTaskRepeatCfg({
+        taskRepeatCfg: {
+          id: 'cfg1',
+          changes: { startTime: undefined, remindAt: undefined },
+        },
+      });
+
+      // Mirror the capture effect exactly: everything except type/meta becomes
+      // the op's actionPayload (operation-log.effects.ts).
+      const { type, meta, ...rawActionPayload } = action;
+      const op: Operation = {
+        id: 'op-9776',
+        actionType: type as ActionType,
+        opType: meta.opType,
+        entityType: meta.entityType,
+        entityId: meta.entityId as string,
+        payload: { actionPayload: rawActionPayload, entityChanges: [] },
+        clientId: 'clientA',
+        vectorClock: { clientA: 1 },
+        timestamp: 0,
+        schemaVersion: 1,
+      };
+
+      const wireOp = JSON.parse(JSON.stringify(op)) as Operation;
+      const replayAction = convertOpToAction(wireOp);
+      const replayed = taskRepeatCfgReducer(existingState, replayAction);
+
+      expect(replayed.entities['cfg1']!.startTime).toBeUndefined();
+      expect(replayed.entities['cfg1']!.remindAt).toBeUndefined();
+      // A defined value in the same update must still apply.
+      expect(replayed.entities['cfg1']!.title).toBe('Repeat Config cfg1');
     });
   });
 

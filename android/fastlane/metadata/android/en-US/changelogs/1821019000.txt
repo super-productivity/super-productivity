@@ -1,0 +1,4 @@
+Added opt-in live tracking presence for SuperSync.
+Fixed an Android beta startup crash and credential handling during device migration.
+Improved the Finish Day button.
+Improved SuperSync deployment recovery from orphaned index builds.

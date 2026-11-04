@@ -241,17 +241,6 @@
       fmBottom
       class="bottom-controls"
     >
-      <!-- Back to Planning (cancels the session + closes the focus overlay) -->
-      <button
-        mat-icon-button
-        class="exit-session-btn"
-        [matTooltip]="T.F.FOCUS_MODE.BACK_TO_PLANNING | translate"
-        [attr.aria-label]="T.F.FOCUS_MODE.BACK_TO_PLANNING | translate"
-        (click)="exitToPlanning()"
-      >
-        <mat-icon>arrow_back</mat-icon>
-      </button>
-
       <!-- Pause / resume the session (the task-row time stack is read-only). -->
       @if (focusModeService.isSessionPaused()) {
         <button
@@ -287,7 +276,7 @@
         </button>
       }
 
-      @if (isXs() && (isPomodoro() || displayed)) {
+      @if (isXs()) {
         <button
           mat-icon-button
           class="secondary-actions-menu-btn"
@@ -302,6 +291,7 @@
           <button
             mat-icon-button
             class="reset-cycles-btn"
+            [disabled]="isResetCyclesDisabled()"
             [matTooltip]="T.F.FOCUS_MODE.RESET_CYCLES | translate"
             [attr.aria-label]="T.F.FOCUS_MODE.RESET_CYCLES | translate"
             (click)="resetCycles()"
@@ -342,6 +332,17 @@
             }
           </button>
         }
+
+        <!-- Cancel discards the session, so it sits last, away from pause. -->
+        <button
+          mat-icon-button
+          class="cancel-session-btn"
+          [matTooltip]="T.F.FOCUS_MODE.CANCEL_SESSION | translate"
+          [attr.aria-label]="T.F.FOCUS_MODE.CANCEL_SESSION | translate"
+          (click)="cancelSession()"
+        >
+          <mat-icon>stop_circle</mat-icon>
+        </button>
       }
     </section>
   }
@@ -352,6 +353,7 @@
     @if (isShowCompleteSessionButton() && isPomodoro()) {
       <button
         mat-menu-item
+        [disabled]="isResetCyclesDisabled()"
         (click)="resetCycles()"
       >
         <mat-icon>restart_alt</mat-icon>
@@ -384,6 +386,14 @@
         <span>{{ T.F.FOCUS_MODE.SHOW_HIDE_NOTES_AND_ATTACHMENTS | translate }}</span>
       </button>
     }
+
+    <button
+      mat-menu-item
+      (click)="cancelSession()"
+    >
+      <mat-icon>stop_circle</mat-icon>
+      <span>{{ T.F.FOCUS_MODE.CANCEL_SESSION | translate }}</span>
+    </button>
   </ng-template>
 </mat-menu>
 
@@ -420,15 +430,12 @@
     </button>
 
     <div class="notes-panel">
-      <!-- No [isFocus]: the panel opens showing the rendered note (read mode);
-           tapping it enters edit mode. isHidePreviewWhileEditing keeps the
-           compact panel to a single view at a time — rendered note when
-           reading, plain textarea when editing — never both at once. -->
+      <!-- No [isFocus]: the panel opens without stealing focus, so tapping is
+           what starts editing. -->
       <inline-markdown
         (blur)="isFocusNotes.set(false)"
         (blurred)="isFocusNotes.set(false)"
         (changed)="changeTaskNotes($event); isFocusNotes.set(false)"
-        [isHidePreviewWhileEditing]="true"
         [isShowControls]="true"
         [isDefaultText]="!displayed.notes"
         [model]="displayed.notes || defaultTaskNotes()"

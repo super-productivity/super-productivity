@@ -4,6 +4,7 @@ let activeSource: AudioBufferSourceNode | null = null;
 let activeGain: GainNode | null = null;
 let cachedBuffer: AudioBuffer | null = null;
 let startCancelled = false;
+let activeVolume = 0;
 
 const getOrCreateWhiteNoiseBuffer = (ctx: AudioContext): AudioBuffer => {
   if (cachedBuffer) {
@@ -23,6 +24,7 @@ const getOrCreateWhiteNoiseBuffer = (ctx: AudioContext): AudioBuffer => {
 
 export const startWhiteNoise = async (volume: number): Promise<void> => {
   startCancelled = false;
+  activeVolume = volume;
   const ctx = await ensureAudioContextRunning();
   if (startCancelled) {
     return;
@@ -33,7 +35,8 @@ export const startWhiteNoise = async (volume: number): Promise<void> => {
   source.loop = true;
 
   const gain = ctx.createGain();
-  gain.gain.value = volume / 100;
+  // activeVolume, not volume: setWhiteNoiseVolume() may run while awaiting the context
+  gain.gain.value = activeVolume / 100;
   source.connect(gain);
   gain.connect(ctx.destination);
 
@@ -42,6 +45,14 @@ export const startWhiteNoise = async (volume: number): Promise<void> => {
   activeGain = gain;
   // Keep the context running while backgrounded so the focus sound keeps playing.
   setAudioContextKeepAwake(true);
+};
+
+/** Changes the volume of the running loop without restarting it. */
+export const setWhiteNoiseVolume = (volume: number): void => {
+  activeVolume = volume;
+  if (activeGain) {
+    activeGain.gain.value = volume / 100;
+  }
 };
 
 export const stopWhiteNoise = (): void => {

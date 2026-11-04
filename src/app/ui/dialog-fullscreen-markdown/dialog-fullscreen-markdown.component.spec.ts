@@ -6,6 +6,7 @@ import { MarkdownModule } from 'ngx-markdown';
 import { EMPTY, of, Subject } from 'rxjs';
 import { ClipboardImageService } from '../../core/clipboard-image/clipboard-image.service';
 import { ClipboardPasteHandlerService } from '../../core/clipboard-image/clipboard-paste-handler.service';
+import { GlobalConfigService } from '../../features/config/global-config.service';
 import { TaskAttachmentService } from '../../features/tasks/task-attachment/task-attachment.service';
 import { DialogFullscreenMarkdownComponent } from './dialog-fullscreen-markdown.component';
 import { MOD, shortcutLabels } from './markdown-shortcuts.const';
@@ -51,6 +52,17 @@ describe('DialogFullscreenMarkdownComponent', () => {
         { provide: ClipboardImageService, useValue: mockClipboardImageService },
         { provide: TaskAttachmentService, useValue: {} },
         { provide: ClipboardPasteHandlerService, useValue: {} },
+        // Formatting off keeps these specs on the plain-textarea editor; the
+        // live markdown editor (#9910) is covered by its own specs and an e2e.
+        {
+          provide: GlobalConfigService,
+          useValue: {
+            misc: jasmine.createSpy().and.returnValue({}),
+            tasks: jasmine
+              .createSpy()
+              .and.returnValue({ isMarkdownFormattingInNotesEnabled: false }),
+          },
+        },
       ],
     }).compileComponents();
 
@@ -383,6 +395,38 @@ describe('DialogFullscreenMarkdownComponent', () => {
   });
 
   describe('close with discard', () => {
+    it('detects changes against the original content, including clearing and reverting', () => {
+      const original = component.data.content;
+      expect(component.hasUnsavedChanges).toBe(false);
+
+      component.data.content = '';
+      expect(component.hasUnsavedChanges).toBe(true);
+
+      component.data.content = original;
+      expect(component.hasUnsavedChanges).toBe(false);
+    });
+
+    it('treats a recovered draft as unsaved even before further editing', () => {
+      dialogData.originalContent = 'Persisted note';
+      const recoveredComponent = TestBed.createComponent(
+        DialogFullscreenMarkdownComponent,
+      ).componentInstance;
+
+      expect(recoveredComponent.hasUnsavedChanges).toBe(true);
+    });
+
+    it('closes an already-confirmed discard without opening another confirmation', () => {
+      const confirmDialogSpy = spyOn(component['_matDialog'], 'open');
+      component.data.content = 'Edited note';
+
+      component.closeAfterConfirmedDiscard();
+
+      expect(confirmDialogSpy).not.toHaveBeenCalled();
+      expect(component._matDialogRef.close).toHaveBeenCalledOnceWith({
+        action: 'DISCARD',
+      });
+    });
+
     it('should close without confirmation when the content is unmodified', () => {
       const confirmDialogSpy = spyOn(component['_matDialog'], 'open');
 

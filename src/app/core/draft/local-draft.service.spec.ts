@@ -1,5 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import {
+  LOCAL_DRAFT_ENTITY_TYPES,
   DRAFT_MAX_CONTENT_LENGTH,
   DRAFT_RETENTION_MS,
   getDraftOpenAction,
@@ -8,45 +9,28 @@ import {
 } from './local-draft.service';
 import { LS_LOCAL_DRAFT_PREFIX } from '../persistence/storage-keys.const';
 import { Log } from '../log';
-import { UserProfileService } from '../../features/user-profile/user-profile.service';
-import { UserProfileStorageService } from '../../features/user-profile/user-profile-storage.service';
-import { DEFAULT_PROFILE_ID } from '../../features/user-profile/user-profile.model';
 
 describe('LocalDraftService', () => {
   let service: LocalDraftService;
-  let activeProfileId: string | null;
-  let persistedProfileId: string | null;
 
-  const keyFor = (profileId: string, entityId: string): string =>
+  const keyFor = (entityId: string): string => `${LS_LOCAL_DRAFT_PREFIX}NOTE:${entityId}`;
+  const legacyKeyFor = (profileId: string, entityId: string): string =>
     `${LS_LOCAL_DRAFT_PREFIX}${profileId}:NOTE:${entityId}`;
 
   const clearDraftKeys = (): void => {
     Object.keys(localStorage)
       .filter((key) => key.startsWith(LS_LOCAL_DRAFT_PREFIX))
       .forEach((key) => localStorage.removeItem(key));
+    Object.keys(localStorage)
+      .filter((key) => key.startsWith('sp_profile_data_'))
+      .forEach((key) => localStorage.removeItem(key));
+    localStorage.removeItem('sp_profile_meta');
+    localStorage.removeItem('sp_user_profiles_enabled');
   };
 
   beforeEach(() => {
-    activeProfileId = 'p1';
-    persistedProfileId = null;
-
     TestBed.configureTestingModule({
-      providers: [
-        LocalDraftService,
-        {
-          provide: UserProfileService,
-          useValue: {
-            activeProfile: () => (activeProfileId ? { id: activeProfileId } : null),
-          },
-        },
-        {
-          provide: UserProfileStorageService,
-          useValue: {
-            loadProfileMetadataSync: () =>
-              persistedProfileId ? { activeProfileId: persistedProfileId } : null,
-          },
-        },
-      ],
+      providers: [LocalDraftService],
     });
     service = TestBed.inject(LocalDraftService);
     clearDraftKeys();
@@ -86,11 +70,11 @@ describe('LocalDraftService', () => {
       service.clearDraft('NOTE', 'n1');
 
       expect(service.loadDraft('NOTE', 'n1')).toBeUndefined();
-      expect(localStorage.getItem(keyFor('p1', 'n1'))).toBeNull();
+      expect(localStorage.getItem(keyFor('n1'))).toBeNull();
     });
 
     it('returns undefined for an unparseable stored value', () => {
-      localStorage.setItem(keyFor('p1', 'n1'), '{ not json');
+      localStorage.setItem(keyFor('n1'), '{ not json');
 
       expect(service.loadDraft('NOTE', 'n1')).toBeUndefined();
     });
@@ -98,7 +82,7 @@ describe('LocalDraftService', () => {
     it('never passes the raw value or its parse error to logging (draft text is user content)', () => {
       // V8 SyntaxErrors quote a fragment of the parsed input, and the log
       // history is exportable — the corrupt value must not travel with it.
-      localStorage.setItem(keyFor('p1', 'n1'), 'SECRET RAW NOTE TEXT');
+      localStorage.setItem(keyFor('n1'), 'SECRET RAW NOTE TEXT');
       const errSpy = spyOn(Log, 'err');
 
       expect(service.loadDraft('NOTE', 'n1')).toBeUndefined();
@@ -112,7 +96,7 @@ describe('LocalDraftService', () => {
     });
 
     it('returns undefined for a value with a foreign shape', () => {
-      localStorage.setItem(keyFor('p1', 'n1'), JSON.stringify({ content: 'x' }));
+      localStorage.setItem(keyFor('n1'), JSON.stringify({ content: 'x' }));
 
       expect(service.loadDraft('NOTE', 'n1')).toBeUndefined();
     });
@@ -179,75 +163,15 @@ describe('LocalDraftService', () => {
     });
   });
 
-  describe('profile keying', () => {
-    it('isolates drafts per profile', () => {
-      service.saveDraft({
-        entityType: 'NOTE',
-        entityId: 'n1',
-        content: 'p1 text',
-        baseContent: 'base',
-      });
+  describe('deleteAllDrafts', () => {
+    it('deletes every draft', () => {
+      localStorage.setItem(keyFor('n1'), '{}');
+      localStorage.setItem(keyFor('n2'), '{}');
 
-      activeProfileId = 'p2';
-      expect(service.loadDraft('NOTE', 'n1')).toBeUndefined();
+      service.deleteAllDrafts();
 
-      activeProfileId = 'p1';
-      expect(service.loadDraft('NOTE', 'n1')?.content).toBe('p1 text');
-    });
-
-    it('falls back to the persisted profile id when the profile feature is not initialized', () => {
-      service.saveDraft({
-        entityType: 'NOTE',
-        entityId: 'n1',
-        content: 'typed',
-        baseContent: 'base',
-      });
-
-      activeProfileId = null;
-      persistedProfileId = 'p1';
-
-      expect(service.loadDraft('NOTE', 'n1')?.content).toBe('typed');
-    });
-
-    it('falls back to the default profile id when nothing is persisted either', () => {
-      activeProfileId = null;
-      persistedProfileId = null;
-
-      service.saveDraft({
-        entityType: 'NOTE',
-        entityId: 'n1',
-        content: 'typed',
-        baseContent: 'base',
-      });
-
-      expect(localStorage.getItem(keyFor(DEFAULT_PROFILE_ID, 'n1'))).not.toBeNull();
-    });
-  });
-
-  describe('deleteDraftsForProfile', () => {
-    it('deletes only the given profiles drafts, with an exact prefix boundary', () => {
-      localStorage.setItem(keyFor('p1', 'n1'), '{}');
-      localStorage.setItem(keyFor('p1', 'n2'), '{}');
-      // A profile id that merely starts with the deleted one must survive.
-      localStorage.setItem(keyFor('p10', 'n1'), '{}');
-      localStorage.setItem(keyFor('p2', 'n1'), '{}');
-
-      service.deleteDraftsForProfile('p1');
-
-      expect(localStorage.getItem(keyFor('p1', 'n1'))).toBeNull();
-      expect(localStorage.getItem(keyFor('p1', 'n2'))).toBeNull();
-      expect(localStorage.getItem(keyFor('p10', 'n1'))).not.toBeNull();
-      expect(localStorage.getItem(keyFor('p2', 'n1'))).not.toBeNull();
-    });
-
-    it('deleteDraftsForActiveProfile deletes the active profiles drafts', () => {
-      localStorage.setItem(keyFor('p1', 'n1'), '{}');
-      localStorage.setItem(keyFor('p2', 'n1'), '{}');
-
-      service.deleteDraftsForActiveProfile();
-
-      expect(localStorage.getItem(keyFor('p1', 'n1'))).toBeNull();
-      expect(localStorage.getItem(keyFor('p2', 'n1'))).not.toBeNull();
+      expect(localStorage.getItem(keyFor('n1'))).toBeNull();
+      expect(localStorage.getItem(keyFor('n2'))).toBeNull();
     });
   });
 
@@ -258,38 +182,30 @@ describe('LocalDraftService', () => {
     it('keeps a draft exactly at the retention boundary', () => {
       // Pins the strict `<` comparison: exactly 14 days old is still offered.
       const now = Date.now();
-      localStorage.setItem(keyFor('p1', 'edge'), storedDraft(now - DRAFT_RETENTION_MS));
+      localStorage.setItem(keyFor('edge'), storedDraft(now - DRAFT_RETENTION_MS));
 
       service.pruneOnStart(now);
 
-      expect(localStorage.getItem(keyFor('p1', 'edge'))).not.toBeNull();
+      expect(localStorage.getItem(keyFor('edge'))).not.toBeNull();
     });
 
-    it('removes drafts past the retention window and keeps fresh ones, across profiles', () => {
+    it('removes drafts past the retention window and keeps fresh ones', () => {
       const now = Date.now();
-      localStorage.setItem(
-        keyFor('p1', 'old'),
-        storedDraft(now - DRAFT_RETENTION_MS - 1),
-      );
-      localStorage.setItem(keyFor('p1', 'fresh'), storedDraft(now - 1000));
-      localStorage.setItem(
-        keyFor('p2', 'old'),
-        storedDraft(now - DRAFT_RETENTION_MS - 1),
-      );
+      localStorage.setItem(keyFor('old'), storedDraft(now - DRAFT_RETENTION_MS - 1));
+      localStorage.setItem(keyFor('fresh'), storedDraft(now - 1000));
 
       service.pruneOnStart(now);
 
-      expect(localStorage.getItem(keyFor('p1', 'old'))).toBeNull();
-      expect(localStorage.getItem(keyFor('p1', 'fresh'))).not.toBeNull();
-      expect(localStorage.getItem(keyFor('p2', 'old'))).toBeNull();
+      expect(localStorage.getItem(keyFor('old'))).toBeNull();
+      expect(localStorage.getItem(keyFor('fresh'))).not.toBeNull();
     });
 
     it('removes unparseable leftovers', () => {
-      localStorage.setItem(keyFor('p1', 'corrupt'), '{ not json');
+      localStorage.setItem(keyFor('corrupt'), '{ not json');
 
       service.pruneOnStart();
 
-      expect(localStorage.getItem(keyFor('p1', 'corrupt'))).toBeNull();
+      expect(localStorage.getItem(keyFor('corrupt'))).toBeNull();
     });
 
     it('leaves non-draft localStorage keys alone', () => {
@@ -299,6 +215,126 @@ describe('LocalDraftService', () => {
 
       expect(localStorage.getItem('SUP_SOMETHING_ELSE_TEST')).toBe('keep me');
       localStorage.removeItem('SUP_SOMETHING_ELSE_TEST');
+    });
+
+    it('keeps the active profile draft while removing legacy profile storage', () => {
+      const now = Date.now();
+      localStorage.setItem('sp_profile_meta', JSON.stringify({ activeProfileId: 'p1' }));
+      localStorage.setItem('sp_user_profiles_enabled', 'true');
+      localStorage.setItem('sp_profile_data_p1', 'active backup');
+      localStorage.setItem('sp_profile_data_p2', 'inactive backup');
+      localStorage.setItem(legacyKeyFor('p1', 'active'), storedDraft(now));
+      localStorage.setItem(legacyKeyFor('p2', 'inactive'), storedDraft(now));
+
+      service.pruneOnStart(now);
+
+      expect(localStorage.getItem(keyFor('active'))).toBe(storedDraft(now));
+      expect(localStorage.getItem(legacyKeyFor('p1', 'active'))).toBeNull();
+      expect(localStorage.getItem(legacyKeyFor('p2', 'inactive'))).toBeNull();
+      expect(localStorage.getItem('sp_profile_meta')).toBeNull();
+      expect(localStorage.getItem('sp_user_profiles_enabled')).toBeNull();
+      expect(localStorage.getItem('sp_profile_data_p1')).toBeNull();
+      expect(localStorage.getItem('sp_profile_data_p2')).toBeNull();
+    });
+
+    // The overwhelmingly common cohort: never enabled profiles, so no metadata
+    // was ever written and their drafts sit under the implicit 'default' id.
+    it('migrates the default profile drafts when no legacy metadata exists', () => {
+      const now = Date.now();
+      localStorage.setItem(legacyKeyFor('default', 'n1'), storedDraft(now));
+
+      service.pruneOnStart(now);
+
+      expect(localStorage.getItem(keyFor('n1'))).toBe(storedDraft(now));
+      expect(localStorage.getItem(legacyKeyFor('default', 'n1'))).toBeNull();
+    });
+
+    it('falls back to the default profile when legacy metadata is unparseable', () => {
+      const now = Date.now();
+      localStorage.setItem('sp_profile_meta', '{ not json');
+      localStorage.setItem(legacyKeyFor('default', 'n1'), storedDraft(now));
+
+      service.pruneOnStart(now);
+
+      expect(localStorage.getItem(keyFor('n1'))).toBe(storedDraft(now));
+      expect(localStorage.getItem('sp_profile_meta')).toBeNull();
+    });
+
+    it('lets an already-migrated draft win over its legacy twin', () => {
+      const now = Date.now();
+      const migrated = storedDraft(now);
+      const legacy = storedDraft(now - 1000);
+      localStorage.setItem(keyFor('n1'), migrated);
+      localStorage.setItem(legacyKeyFor('default', 'n1'), legacy);
+
+      service.pruneOnStart(now);
+
+      expect(localStorage.getItem(keyFor('n1'))).toBe(migrated);
+      expect(localStorage.getItem(legacyKeyFor('default', 'n1'))).toBeNull();
+    });
+
+    // Guards the drift the LOCAL_DRAFT_ENTITY_TYPES single source of truth
+    // exists to prevent: a new-format key must never be read as a legacy one
+    // and deleted, for EVERY declared entity type.
+    it('treats a new-format key for every entity type as already migrated', () => {
+      const now = Date.now();
+      LOCAL_DRAFT_ENTITY_TYPES.forEach((entityType) => {
+        localStorage.setItem(
+          `${LS_LOCAL_DRAFT_PREFIX}${entityType}:kept`,
+          storedDraft(now),
+        );
+      });
+
+      service.pruneOnStart(now);
+
+      LOCAL_DRAFT_ENTITY_TYPES.forEach((entityType) => {
+        expect(localStorage.getItem(`${LS_LOCAL_DRAFT_PREFIX}${entityType}:kept`))
+          .withContext(entityType)
+          .toBe(storedDraft(now));
+      });
+    });
+
+    // The migration's only error path: if the copy to the new key fails there
+    // is nothing to fall back on, so it must leave the legacy draft AND the
+    // metadata naming the active profile in place for a later attempt.
+    describe('when the migrating write fails', () => {
+      it('keeps the legacy draft and the metadata needed to retry', () => {
+        const now = Date.now();
+        localStorage.setItem(
+          'sp_profile_meta',
+          JSON.stringify({ activeProfileId: 'p1' }),
+        );
+        localStorage.setItem('sp_user_profiles_enabled', 'true');
+        localStorage.setItem(legacyKeyFor('p1', 'n1'), storedDraft(now));
+        spyOn(Storage.prototype, 'setItem').and.throwError('QuotaExceededError');
+
+        expect(() => service.pruneOnStart(now)).not.toThrow();
+
+        expect(localStorage.getItem(legacyKeyFor('p1', 'n1'))).toBe(storedDraft(now));
+        expect(localStorage.getItem('sp_profile_meta')).not.toBeNull();
+      });
+
+      it('recovers the draft on the next start once the write succeeds', () => {
+        const now = Date.now();
+        localStorage.setItem(
+          'sp_profile_meta',
+          JSON.stringify({ activeProfileId: 'p1' }),
+        );
+        localStorage.setItem(legacyKeyFor('p1', 'n1'), storedDraft(now));
+
+        const setItem = spyOn(Storage.prototype, 'setItem').and.throwError(
+          'QuotaExceededError',
+        );
+        service.pruneOnStart(now);
+        expect(localStorage.getItem(keyFor('n1'))).toBeNull();
+
+        setItem.and.callThrough();
+        service.pruneOnStart(now);
+
+        expect(localStorage.getItem(keyFor('n1'))).toBe(storedDraft(now));
+        expect(localStorage.getItem(legacyKeyFor('p1', 'n1'))).toBeNull();
+        expect(localStorage.getItem('sp_profile_meta')).toBeNull();
+      });
     });
   });
 });
