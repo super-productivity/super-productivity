@@ -10,12 +10,21 @@ import {
   getArchiveYoungTaskIds,
   type SimulatedE2EClient,
 } from '../../utils/supersync-helpers';
+import type { Page } from '@playwright/test';
 import { TagPage } from '../../pages/tag.page';
 import {
-  getArchiveYoungTaskTagIds,
+  getArchiveYoungTask,
   getStoreTagIdByTitle,
-  getStoreTaskTagIds,
-} from '../../utils/archive-tag-facts';
+  getStoreTask,
+} from '../../utils/audit-webdav-helpers';
+
+const getArchiveYoungTaskTagIds = async (
+  page: Page,
+  taskId: string,
+): Promise<string[] | null> => (await getArchiveYoungTask(page, taskId))?.tagIds ?? null;
+
+const getStoreTaskTagIds = async (page: Page, taskId: string): Promise<string[] | null> =>
+  (await getStoreTask(page, taskId))?.tagIds ?? null;
 
 /**
  * #11466 on SuperSync: client A deletes a tag while client B archives a task
