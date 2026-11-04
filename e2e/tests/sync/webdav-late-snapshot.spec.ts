@@ -60,7 +60,9 @@ const cancelSyncConflict = async (page: Page, sync: SyncPage): Promise<void> => 
 const expectNextSyncToAskFirst = async (page: Page, sync: SyncPage): Promise<void> => {
   await expect(sync.syncErrorIcon).toBeHidden();
   await sync.triggerSync();
-  expect(await waitForSyncComplete(page, sync)).toBe('conflict');
+  expect(await waitForSyncComplete(page, sync, 30000, { expectConflict: true })).toBe(
+    'conflict',
+  );
   await cancelSyncConflict(page, sync);
 };
 

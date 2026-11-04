@@ -120,7 +120,11 @@ test.describe('@webdav Lost upload overwritten by a stale-base writer (#10916)',
 
         // --- Phone syncs: it must ask instead of dropping its uploaded task ---
         await syncPhone.triggerSync();
-        expect(await waitForSyncComplete(phone.page, syncPhone)).toBe('conflict');
+        expect(
+          await waitForSyncComplete(phone.page, syncPhone, 30000, {
+            expectConflict: true,
+          }),
+        ).toBe('conflict');
         const conflictDialog = phone.page.locator('dialog-sync-conflict');
         await expect(conflictDialog).toContainText(
           'Changes this device already synced are missing',

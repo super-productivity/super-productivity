@@ -176,7 +176,9 @@ test.describe('@supersync Network Failure Recovery', () => {
       await unrouteSuperSyncOps(clientB.page);
 
       // Retry sync - should succeed
-      await clientB.sync.syncAndWait();
+      // B joined with waitForInitialSync: false, so its first successful
+      // download asks for the account's encryption password (joiner flow).
+      await clientB.sync.syncAndWait({ allowDialogs: ['enter-password'] });
 
       // Verify task now present
       await waitForTask(clientB.page, taskName);
@@ -909,7 +911,9 @@ test.describe('@supersync Network Failure Recovery', () => {
       await clientB.page.waitForTimeout(500);
 
       // Retry - should succeed
-      await clientB.sync.syncAndWait();
+      // B joined with waitForInitialSync: false, so its first successful
+      // download asks for the account's encryption password (joiner flow).
+      await clientB.sync.syncAndWait({ allowDialogs: ['enter-password'] });
 
       // Verify task was received
       await waitForTask(clientB.page, taskName);
