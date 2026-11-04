@@ -259,15 +259,10 @@ export class LocalRestApiTaskRepeatCfgRoutesService implements LocalRestApiFeatu
       priority: getTaskPriority(task.priority),
     };
 
-    const built = this._applySchedule(
-      requestId,
-      initial,
-      {
-        quickSetting: 'DAILY',
-        ...schedule,
-      },
-      true,
-    );
+    const built = this._applySchedule(requestId, initial, {
+      quickSetting: 'DAILY',
+      ...schedule,
+    });
     if (!built.ok) {
       return built.response;
     }
@@ -379,7 +374,6 @@ export class LocalRestApiTaskRepeatCfgRoutesService implements LocalRestApiFeatu
     requestId: string,
     base: Omit<TaskRepeatCfgCopy, 'id'>,
     schedule: ScheduleFields & { quickSetting: RepeatQuickSetting },
-    isCreate = false,
   ): LocalRestApiResult<Omit<TaskRepeatCfgCopy, 'id'>> {
     const { quickSetting, startDate, ...custom } = schedule;
     const customKeys = Object.keys(custom);
@@ -422,14 +416,10 @@ export class LocalRestApiTaskRepeatCfgRoutesService implements LocalRestApiFeatu
       };
     }
 
-    // Custom weekday fields describe the entire selected set, not incremental
-    // additions to a preset. For new weekly configs, an omitted set is empty
-    // and will fail the existing "at least one weekday" validation.
-    // PATCH without weekday fields preserves the existing selection.
+    // Supplied custom weekdays replace the selection; omitting all weekday
+    // fields preserves the existing selection or the defaults on creation.
     const replaceWeekdays =
-      quickSetting === 'CUSTOM' &&
-      (WEEKDAYS.some((day) => custom[day] !== undefined) ||
-        (isCreate && custom.repeatCycle === 'WEEKLY'));
+      quickSetting === 'CUSTOM' && WEEKDAYS.some((day) => custom[day] !== undefined);
     let result: Omit<TaskRepeatCfgCopy, 'id'> = {
       ...base,
       ...(replaceWeekdays ? EMPTY_WEEKDAYS : {}),
