@@ -411,7 +411,6 @@ export class ArchiveOperationHandler implements ArchiveSideEffectPort<Persistent
     const projectId = (action as ReturnType<typeof TaskSharedActions.deleteProject>)
       .projectId;
     const isRemote = !!action.meta?.isRemote;
-    if (isRemote) return; // E2E-AUDIT MUTATION M2
     await this._getTaskArchiveService().removeAllArchiveTasksForProject(
       projectId,
       isRemote ? { isIgnoreDBLock: true } : undefined,
