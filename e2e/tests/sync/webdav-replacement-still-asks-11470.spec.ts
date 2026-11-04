@@ -15,11 +15,10 @@ import {
 import { waitForStatePersistence } from '../../utils/waits';
 
 /**
- * #11470: a peer's automatic REPAIR now continues the file it was written on,
- * so a device with pending work keeps it on top
- * (webdav-rejected-repair-recovery-11352.spec.ts). A real replacement must
- * still ask before it drops anything (#9170, #10916): it starts the file over
- * with its own snapshot base.
+ * #11470: a peer's automatic REPAIR now marks what it covers, so a device with
+ * pending work that saw the REPAIR's base rev keeps it on top
+ * (webdav-rejected-repair-recovery-11352.spec.ts). A real replacement writes no
+ * such marker and must still ask before it drops anything (#9170, #10916).
  *
  * Both directions: A's backup restore reaches B with a pending task, and B's
  * Keep local (USE_LOCAL) then reaches A with a pending task. Each receiver gets
