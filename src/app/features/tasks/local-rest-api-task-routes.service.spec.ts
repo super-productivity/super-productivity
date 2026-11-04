@@ -1,3 +1,9 @@
+import { shortSyntaxSharedMetaReducer } from '../../root-store/meta/task-shared-meta-reducers/short-syntax-shared.reducer';
+import { Action } from '@ngrx/store';
+import { RootState } from '../../root-store/root-state';
+import { createCombinedTaskSharedMetaReducer } from '../../root-store/meta/task-shared-meta-reducers/test-helpers';
+import { createStateWithExistingTasks } from '../../root-store/meta/task-shared-meta-reducers/test-utils';
+import { TASK_FEATURE_NAME } from './store/task.reducer';
 import { TestBed } from '@angular/core/testing';
 import { MockStore, provideMockStore } from '@ngrx/store/testing';
 import { of } from 'rxjs';
@@ -474,6 +480,165 @@ describe('LocalRestApiTaskRoutesService', () => {
         expect(response.body.ok).toBe(true);
         expectTaskIds(response, ['task-1']);
         expect(taskServiceMock.getAllTasksEverywhere).toHaveBeenCalled();
+      });
+    });
+
+    describe('remindAt input', () => {
+      for (const invalid of [null, '123', true, {}, []]) {
+        it(`rejects ${JSON.stringify(invalid)} on POST and PATCH before mutation`, async () => {
+          for (const [method, path, body] of [
+            ['POST', '/tasks', { title: 'Task', remindAt: invalid }],
+            ['PATCH', '/tasks/task-1', { remindAt: invalid }],
+          ] as const) {
+            const response = await sendRequestAndWait(
+              createRequest(method, path, { body }),
+            );
+            expect(response.status).toBe(400);
+          }
+          expect(taskServiceMock.add).not.toHaveBeenCalled();
+          expect(taskServiceMock.update).not.toHaveBeenCalled();
+          expect(dispatchSpy).not.toHaveBeenCalled();
+        });
+      }
+
+      it('keeps the explicit reminder after deadline auto-planning and serialized replay', async () => {
+        const initial = createStateWithExistingTasks(['task-1'], [], [], []);
+        initial[TASK_FEATURE_NAME].entities['task-1'] = createMockTask('task-1', {
+          projectId: 'project1',
+          dueWithTime: new Date(2026, 4, 10, 12).getTime(),
+          remindAt: new Date(2026, 4, 10, 11).getTime(),
+        });
+        let state: RootState = initial;
+        const actions: Action[] = [];
+        const reduce = createCombinedTaskSharedMetaReducer(
+          shortSyntaxSharedMetaReducer((current) => current),
+        );
+        dispatchSpy.and.callFake((action: Action) => {
+          actions.push(action);
+          state = reduce(state, action);
+        });
+        taskServiceMock.update.and.callFake((id, changes) => {
+          dispatchSpy(TaskSharedActions.updateTask({ task: { id, changes } }));
+        });
+        Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+          get: () => (id: string) => of(state[TASK_FEATURE_NAME].entities[id]),
+        });
+        const response = await sendRequestAndWait(
+          createRequest('PATCH', '/tasks/task-1', {
+            body: { deadlineDay: '2026-05-12', remindAt: 123 },
+          }),
+        );
+        expect(response.status).toBe(200);
+        expect(state[TASK_FEATURE_NAME].entities['task-1']?.remindAt).toBe(123);
+        expect(state[TASK_FEATURE_NAME].entities['task-1']?.dueWithTime).toBeUndefined();
+        const replayed = actions.reduce(
+          (current, action) => reduce(current, JSON.parse(JSON.stringify(action))),
+          initial,
+        );
+        expect(replayed[TASK_FEATURE_NAME].entities['task-1']?.remindAt).toBe(123);
+      });
+
+      it('preserves a POST reminder when the requested deadline auto-plans', async () => {
+        const initial = createStateWithExistingTasks(['new-task-id'], [], [], []);
+        initial[TASK_FEATURE_NAME].entities['new-task-id'] = createMockTask(
+          'new-task-id',
+          {
+            projectId: 'project1',
+            dueWithTime: new Date(2026, 4, 10, 12).getTime(),
+            remindAt: 123,
+          },
+        );
+        let state: RootState = initial;
+        const actions: Action[] = [];
+        const reduce = createCombinedTaskSharedMetaReducer(
+          shortSyntaxSharedMetaReducer((current) => current),
+        );
+        dispatchSpy.and.callFake((action: Action) => {
+          actions.push(action);
+          state = reduce(state, action);
+        });
+        Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+          get: () => (id: string) => of(state[TASK_FEATURE_NAME].entities[id]),
+        });
+        const response = await sendRequestAndWait(
+          createRequest('POST', '/tasks', {
+            body: { title: 'Task', deadlineDay: '2026-05-12', remindAt: 123 },
+          }),
+        );
+        expect(response.status).toBe(201);
+        expect(actions.length).toBe(1);
+        expect(state[TASK_FEATURE_NAME].entities['new-task-id']?.remindAt).toBe(123);
+        const replayed = actions.reduce(
+          (current, action) => reduce(current, JSON.parse(JSON.stringify(action))),
+          initial,
+        );
+        expect(replayed[TASK_FEATURE_NAME].entities['new-task-id']?.remindAt).toBe(123);
+      });
+
+      it('passes a reminder-only timestamp to task creation', async () => {
+        await sendRequestAndWait(
+          createRequest('POST', '/tasks', {
+            body: { title: 'Task', remindAt: 123 },
+          }),
+        );
+        expect(taskServiceMock.add).toHaveBeenCalledWith(
+          'Task',
+          false,
+          {
+            title: 'Task',
+            remindAt: 123,
+          },
+          false,
+          false,
+          true,
+        );
+      });
+
+      it('sets a reminder without a due date on PATCH', async () => {
+        Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+          get: () => (_id: string) => of(createMockTask('task-1')),
+        });
+        const response = await sendRequestAndWait(
+          createRequest('PATCH', '/tasks/task-1', {
+            body: { remindAt: 123 },
+          }),
+        );
+        expect(response.status).toBe(200);
+        expect(taskServiceMock.update).toHaveBeenCalledWith('task-1', { remindAt: 123 });
+      });
+
+      it('passes an explicit reminder with a changed due time without recalculation', async () => {
+        Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+          get: () => (_id: string) => of(createMockTask('task-1')),
+        });
+        const response = await sendRequestAndWait(
+          createRequest('PATCH', '/tasks/task-1', {
+            body: { dueWithTime: 456, remindAt: 123 },
+          }),
+        );
+        expect(response.status).toBe(200);
+        expect(taskServiceMock.update).toHaveBeenCalledWith('task-1', {
+          dueWithTime: 456,
+          remindAt: 123,
+        });
+        expect(featureBridgeMock.updateTaskWithDueTime).not.toHaveBeenCalled();
+      });
+
+      it('passes an explicit reminder and due time directly to update', async () => {
+        Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+          get: () => (_id: string) => of(createMockTask('task-1')),
+        });
+        const response = await sendRequestAndWait(
+          createRequest('PATCH', '/tasks/task-1', {
+            body: { dueWithTime: null, remindAt: 123 },
+          }),
+        );
+        expect(response.status).toBe(200);
+        expect(taskServiceMock.update).toHaveBeenCalledWith('task-1', {
+          dueWithTime: null,
+          remindAt: 123,
+        });
+        expect(featureBridgeMock.updateTaskWithDueTime).not.toHaveBeenCalled();
       });
     });
 

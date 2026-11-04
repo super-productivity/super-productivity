@@ -1,3 +1,7 @@
+import { shortSyntaxSharedMetaReducer } from '../../../root-store/meta/task-shared-meta-reducers/short-syntax-shared.reducer';
+import { taskSharedDeadlineMetaReducer } from '../../../root-store/meta/task-shared-meta-reducers/task-shared-deadline.reducer';
+import { createStateWithExistingTasks } from '../../../root-store/meta/task-shared-meta-reducers/test-utils';
+import { TASK_FEATURE_NAME } from './task.reducer';
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
 import {
@@ -203,6 +207,62 @@ describe('ShortSyntaxEffects', () => {
       expect(emittedAction).toBeDefined();
       expect(emittedAction.type).toBe(TaskSharedActions.applyShortSyntax.type);
     }));
+
+    it('preserves an explicit reminder through asynchronous short-syntax scheduling and replay', async () => {
+      dateInputLocale = { language: 'de', isDayFirst: true };
+      const task = createTask('task-1', { title: 'Call @morgen 15 Uhr', remindAt: 123 });
+      taskServiceMock.getByIdOnce$.and.returnValue(of(task));
+      const emitted = firstValueFrom(effects.shortSyntax$);
+      actions$.next(
+        TaskSharedActions.addTask({
+          task,
+          workContextId: 'project-1',
+          workContextType: WorkContextType.PROJECT,
+          isAddToBacklog: false,
+          isAddToBottom: false,
+          isPreserveExplicitReminder: true,
+        }),
+      );
+      const action = (await emitted) as ReturnType<
+        typeof TaskSharedActions.applyShortSyntax
+      >;
+      expect(action.schedulingInfo?.dueWithTime).toEqual(jasmine.any(Number));
+      const initial = createStateWithExistingTasks(['task-1'], [], [], []);
+      initial[TASK_FEATURE_NAME].entities['task-1'] = task;
+      const reduce = taskSharedDeadlineMetaReducer(
+        shortSyntaxSharedMetaReducer((state) => state),
+      );
+      const local = reduce(initial, action);
+      const replay = reduce(initial, JSON.parse(JSON.stringify(action)));
+      expect(local[TASK_FEATURE_NAME].entities['task-1']?.remindAt).toBe(123);
+      expect(replay[TASK_FEATURE_NAME].entities['task-1']?.remindAt).toBe(123);
+      expect(replay[TASK_FEATURE_NAME].entities['task-1']?.dueWithTime).toBe(
+        local[TASK_FEATURE_NAME].entities['task-1']?.dueWithTime,
+      );
+    });
+
+    it('does not replace a reminder changed while short syntax is being parsed', async () => {
+      dateInputLocale = { language: 'de', isDayFirst: true };
+      let current = createTask('task-1', { title: 'Call @morgen 15 Uhr', remindAt: 123 });
+      taskServiceMock.getByIdOnce$.and.callFake(() => of(current));
+      const emitted = firstValueFrom(effects.shortSyntax$);
+      actions$.next(
+        TaskSharedActions.addTask({
+          task: current,
+          workContextId: 'project-1',
+          workContextType: WorkContextType.PROJECT,
+          isAddToBacklog: false,
+          isAddToBottom: false,
+          isPreserveExplicitReminder: true,
+        }),
+      );
+      current = { ...current, remindAt: 456 };
+      const action = (await emitted) as ReturnType<
+        typeof TaskSharedActions.applyShortSyntax
+      >;
+      expect(action.taskChanges.remindAt).toBe(456);
+      expect(action.schedulingInfo?.remindAt).toBe(456);
+    });
 
     it('should parse dates in the date input locale', async () => {
       dateInputLocale = { language: 'de', isDayFirst: true };

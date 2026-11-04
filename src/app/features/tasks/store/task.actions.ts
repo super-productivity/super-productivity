@@ -151,7 +151,12 @@ export const removeTimeSpent = createAction(
 
 export const addSubTask = createAction(
   '[Task] Add SubTask',
-  (taskProps: { task: Task; parentId: string; isIgnoreShortSyntax?: boolean }) => ({
+  (taskProps: {
+    task: Task;
+    parentId: string;
+    isIgnoreShortSyntax?: boolean;
+    isPreserveExplicitReminder?: boolean;
+  }) => ({
     ...taskProps,
     meta: {
       isPersistent: true,

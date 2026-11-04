@@ -17,7 +17,7 @@ import {
 import { GlobalConfigService } from '../../config/global-config.service';
 import { unique } from '../../../util/unique';
 import { TaskService } from '../task.service';
-import { EMPTY, from, of } from 'rxjs';
+import { EMPTY, firstValueFrom, from, of } from 'rxjs';
 import { ProjectService } from '../../project/project.service';
 import { TagService } from '../../tag/tag.service';
 import { shortSyntaxForNewWords } from '../util/short-syntax-for-new-words';
@@ -142,7 +142,7 @@ export class ShortSyntaxEffects {
                 this._dateTimeFormatService.dateInputLocale(),
               ),
             )
-            .then((r) => {
+            .then(async (r) => {
               if (environment.production) {
                 TaskLog.log('shortSyntax', {
                   taskId: task.id,
@@ -231,6 +231,26 @@ export class ShortSyntaxEffects {
               const finalTaskChanges = { ...taskChanges };
               if (tagIds && tagIds.length && !isEqualTags) {
                 finalTaskChanges.tagIds = unique(tagIds);
+              }
+
+              // The REST create action can carry an explicit reminder that must
+              // survive the later, asynchronously parsed scheduling action.
+              if (
+                originalAction.type !== TaskSharedActions.updateTask.type &&
+                originalAction.isPreserveExplicitReminder &&
+                typeof originalAction.task.remindAt === 'number'
+              ) {
+                const latestTask = await firstValueFrom(
+                  this._taskService.getByIdOnce$(task.id),
+                );
+                if (typeof latestTask?.remindAt === 'number') {
+                  finalTaskChanges.remindAt = latestTask.remindAt;
+                } else {
+                  delete finalTaskChanges.remindAt;
+                }
+                if (schedulingInfo?.dueWithTime) {
+                  schedulingInfo.remindAt = latestTask?.remindAt;
+                }
               }
 
               // Add parsed URL attachments to task (merge with existing)

@@ -106,7 +106,6 @@ import { DeletedTaskIssueSidecarService } from '../issue/two-way-sync/deleted-ta
 import { TimeBlockDeleteSidecarService } from '../calendar-integration/time-block/time-block-delete-sidecar.service';
 import { getDeadlineAutoPlanFields } from './util/get-deadline-auto-plan-fields';
 import { TaskTimeSyncService } from './task-time-sync.service';
-
 @Injectable({
   providedIn: 'root',
 })
@@ -125,13 +124,11 @@ export class TaskService {
   private readonly _timeBlockDeleteSidecar = inject(TimeBlockDeleteSidecarService);
   private readonly _archiveTaskPromisesById = new Map<string, Promise<void>>();
   private readonly _taskTimeSync = inject(TaskTimeSyncService);
-
   currentTaskId$: Observable<string | null> = this._store.pipe(
     select(selectCurrentTaskId),
     distinctUntilChanged(),
   );
   currentTaskId = toSignal(this.currentTaskId$, { initialValue: null });
-
   currentTask$: Observable<Task | null> = this._store.pipe(
     select(selectCurrentTask),
     // NOTE: we can't use share here, as we need the last emitted value
@@ -398,6 +395,7 @@ export class TaskService {
     // tokens out of the title. Only spread when true to keep the dispatched
     // action byte-identical for all existing callers.
     isIgnoreShortSyntax: boolean = false,
+    isPreserveExplicitReminder: boolean = false,
   ): string {
     const workContextId = this._workContextService.activeWorkContextId as string;
     const workContextType = this._workContextService
@@ -408,9 +406,7 @@ export class TaskService {
       workContextType,
       workContextId,
     });
-
     TaskLog.log('addTask', { taskId: task.id, workContextId, workContextType });
-
     this._store.dispatch(
       TaskSharedActions.addTask({
         task,
@@ -419,6 +415,7 @@ export class TaskService {
         isAddToBacklog,
         isAddToBottom,
         ...(isIgnoreShortSyntax ? { isIgnoreShortSyntax: true } : {}),
+        ...(isPreserveExplicitReminder ? { isPreserveExplicitReminder: true } : {}),
         ...getDeadlineAutoPlanFields(
           this._dateService,
           task.deadlineDay,
@@ -814,20 +811,23 @@ export class TaskService {
     }
   }
 
-  addSubTaskTo(parentId: string, additional: Partial<Task> = {}): string {
+  addSubTaskTo(
+    parentId: string,
+    additional: Partial<Task> = {},
+    isPreserveExplicitReminder = false,
+  ): string {
     const task = this.createNewTaskWithDefaults({
       title: additional.title || '',
       additional: { dueDay: additional.dueDay || undefined, ...additional },
     });
     TaskLog.log('addSubTaskTo', { taskId: task.id, parentId });
-
     this._store.dispatch(
       addSubTask({
         task,
         parentId,
+        ...(isPreserveExplicitReminder ? { isPreserveExplicitReminder: true } : {}),
       }),
     );
-
     if (!task.title?.trim().length) {
       this.focusTaskById(task.id, true);
     }
