@@ -66,7 +66,7 @@ test.describe('@supersync @encryption Wrong Password Error Handling', () => {
       const newPassword = `pass2-${testRunId}`;
 
       // ============ PHASE 1: Client A sets up with initial password ============
-      console.log('[WrongPassword] Phase 1: Client A setup with password:', oldPassword);
+      console.log('[WrongPassword] Phase 1: Client A setup with initial password');
 
       clientA = await createSimulatedClient(browser, baseURL!, 'A', testRunId);
       await clientA.sync.setupSuperSync({
@@ -83,7 +83,7 @@ test.describe('@supersync @encryption Wrong Password Error Handling', () => {
       console.log(`[WrongPassword] Client A created and synced: ${taskName}`);
 
       // ============ PHASE 2: Client A changes password ============
-      console.log('[WrongPassword] Phase 2: Client A changing password to:', newPassword);
+      console.log('[WrongPassword] Phase 2: Client A changing password');
 
       await clientA.sync.changeEncryptionPassword(newPassword);
       console.log('[WrongPassword] Client A password changed successfully');
@@ -92,10 +92,7 @@ test.describe('@supersync @encryption Wrong Password Error Handling', () => {
       await waitForTask(clientA.page, taskName);
 
       // ============ PHASE 3: Client B sets up with OLD password ============
-      console.log(
-        '[WrongPassword] Phase 3: Client B setup with old password:',
-        oldPassword,
-      );
+      console.log('[WrongPassword] Phase 3: Client B setup with old password');
 
       clientB = await createSimulatedClient(browser, baseURL!, 'B', testRunId);
       await clientB.sync.setupSuperSync({
@@ -166,10 +163,8 @@ test.describe('@supersync @encryption Wrong Password Error Handling', () => {
       // ============ PHASE 6: User corrects password and retries ============
       console.log('[WrongPassword] Phase 6: User entering correct password');
 
-      // The dialog should have options:
-      // - Update password field
-      // - "Re-sync" button
-      // - "Overwrite Remote" button
+      // The dialog offers a password field and "change password and decrypt";
+      // it no longer offers to overwrite the server (#9256, see the next test).
 
       // Look for the password input in the dialog
       const passwordInput = decryptErrorDialog.locator('input[type="password"]');
@@ -204,10 +199,8 @@ test.describe('@supersync @encryption Wrong Password Error Handling', () => {
   });
 
   /**
-   * Scenario: User chooses "Overwrite Remote" option instead of correcting password
-   *
-   * This verifies the alternative path where the user decides to upload their
-   * local data instead of correcting the password.
+   * Scenario: the decrypt dialog offers no "overwrite remote" option; replacing
+   * the server with this device's data is done via Change Password in Settings.
    */
   // #9256: the Decryption Failed dialog cannot tell a wrong password from a
   // corrupt or foreign-key op, so it no longer offers to overwrite the server.
