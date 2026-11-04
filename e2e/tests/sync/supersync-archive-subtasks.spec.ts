@@ -238,7 +238,9 @@ test.describe('@supersync Archive Subtasks Sync', () => {
       expect(taskCount).toBe(0);
       console.log('[ArchiveSubtasks] Verified no tasks on Client B (all archived)');
 
-      // 8. Verify the archive reached the store on both clients, no orphans
+      // 8. Verify the archive reached the store on both clients, no orphans.
+      // B first sees these tasks in the same batch as the archive, so it never
+      // creates them live: A's reducer pass is the load-bearing orphan check.
       await expectArchivedWithoutOrphans(clientA, parentId, subTaskIds, 'Client A');
       await expectArchivedWithoutOrphans(clientB, parentId, subTaskIds, 'Client B');
 

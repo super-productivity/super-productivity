@@ -36,11 +36,14 @@ import * as os from 'os';
  * BACKUP_IMPORT's own reason='recovery' upload is not reached on this path, so
  * the test asserts the dialog and the outcome instead.
  *
- * The failure it guards: a full-state upload sent as reason='initial' without
- * a clean slate gets 409 SYNC_IMPORT_EXISTS, and the client SILENTLY drops it
- * (operation-log-upload.service.ts, SYNC_IMPORT_EXISTS branch) and adopts the
- * server state, losing the restore. Only the server history and the data a
- * fresh client receives reveal that.
+ * What it guards: the restore must end up as the server's clean-slate history
+ * (no pre-restore op left) and be what a fresh client receives. It does NOT
+ * guard the original reason='initial' → 409 SYNC_IMPORT_EXISTS bug: the "Use
+ * My Data" force upload is always a clean slate, and the server only answers
+ * 409 for reason='initial' WITHOUT a clean slate
+ * (sync.routes.snapshot-handler.ts), so mapping BackupImport to 'initial' in
+ * operation-log-upload.service.ts would not fail this test. That mapping is
+ * covered by the upload service's unit tests.
  *
  * Run with: npm run e2e:supersync:file e2e/tests/sync/supersync-backup-recovery.spec.ts
  */

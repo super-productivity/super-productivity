@@ -47,8 +47,9 @@ test.describe('@supersync @archive Sync-import conflict dialog with server archi
    * Scenario: Keep local (Use My Data) works without validation errors
    *
    * This test verifies that when a client imports data and chooses "Use My Data"
-   * during a sync conflict, no validation errors occur. This was the main
-   * symptom of the archive corruption bug.
+   * during a sync conflict, no validation errors occur and A's archived task
+   * stays off B (store and archive_young). See the scope note above: this is
+   * not a regression test for the file-based archive fix.
    *
    * Setup:
    * - Client A creates and archives a task, syncs (server has A's data with archive)
@@ -317,15 +318,14 @@ test.describe('@supersync @archive Sync-import conflict dialog with server archi
   });
 
   /**
-   * Scenario: Keep local preserves local archives created before import
+   * Scenario: Use My Data keeps the imported state across a later sync
    *
-   * Tests that archives created locally BEFORE importing a backup are preserved
-   * when choosing "Use My Data".
+   * After "Use My Data", a further sync must keep the imported state and must
+   * not pull in A's archived task.
    *
    * Setup:
    * - Client A creates and archives a task, syncs
-   * - Client B creates and archives a local task
-   * - Client B imports backup (SYNC_IMPORT)
+   * - Client B (fresh) imports backup (SYNC_IMPORT)
    *
    * Actions:
    * 1. Client B configures sync
@@ -334,8 +334,7 @@ test.describe('@supersync @archive Sync-import conflict dialog with server archi
    *
    * Verify:
    * - Sync completes without errors
-   * - Note: The import replaces local state, so B's pre-import archive is gone
-   *   but the import's state is preserved (not corrupted by remote archives)
+   * - Imported task still present; A's task neither live nor in archive_young
    */
   test('Use My Data keeps the imported state across a later sync', async ({
     browser,
