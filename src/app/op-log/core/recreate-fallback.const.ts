@@ -3,6 +3,7 @@ import { DEFAULT_TASK } from '../../features/tasks/task.model';
 import { DEFAULT_PROJECT, INBOX_PROJECT } from '../../features/project/project.const';
 import { DEFAULT_TAG } from '../../features/tag/tag.const';
 import { EMPTY_SIMPLE_COUNTER } from '../../features/simple-counter/simple-counter.const';
+import { SimpleCounter } from '../../features/simple-counter/simple-counter.model';
 
 /**
  * Per-entity-type fallback used when an LWW Update recreates an entity that
@@ -75,6 +76,14 @@ import { EMPTY_SIMPLE_COUNTER } from '../../features/simple-counter/simple-count
 export type RecreateFallback = {
   defaults: Record<string, unknown>;
   requiredKeys: readonly string[];
+  /**
+   * Every key a whole entity of this type has (its schema-required keys). A
+   * recreate payload that has all of them is a whole entity, e.g. the snapshot
+   * a delete op carries, and is added as it is: the backfill would give it
+   * optional fields the original never had, a persisted difference from every
+   * other device (#11496). Without it, every recreate is backfilled.
+   */
+  wholeEntityKeys?: readonly string[];
 };
 
 export const RECREATE_FALLBACK: Partial<Record<EntityType, RecreateFallback>> = {
@@ -98,5 +107,17 @@ export const RECREATE_FALLBACK: Partial<Record<EntityType, RecreateFallback>> = 
     // branch). Listing them would also make the meta-reducer warn misreport a
     // legitimately-null `icon` as "missing". `defaults` still backfills them.
     requiredKeys: ['title', 'type', 'countOnDay'],
+    // The snapshot `deleteSimpleCounter` carries (#11465) has them all. An
+    // `{id}`-only delete (a released client) does not, so it keeps the
+    // backfill #8646 added for it.
+    wholeEntityKeys: [
+      'id',
+      'title',
+      'isEnabled',
+      'icon',
+      'type',
+      'countOnDay',
+      'isOn',
+    ] satisfies readonly (keyof SimpleCounter)[],
   },
 };

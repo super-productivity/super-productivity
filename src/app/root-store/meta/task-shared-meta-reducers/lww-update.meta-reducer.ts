@@ -953,13 +953,22 @@ export const lwwUpdateMetaReducer: MetaReducer = (
               `produced a partial merged entity on its happy path.`,
           );
         }
-        // Spread does not skip null/undefined-valued keys; strip them so they
-        // can't clobber a backfilled default.
-        const stripped: Record<string, unknown> = { modified: Date.now() };
-        for (const k of Object.keys(entityData)) {
-          if (entityData[k] != null) stripped[k] = entityData[k];
+        // A whole entity (a delete snapshot) needs no backfill and must not
+        // gain optional fields the original lacks (#11496). A nullable field
+        // (`icon: null`) counts as present.
+        const isWholeEntity =
+          fallback.wholeEntityKeys?.every((k) => entityData[k] !== undefined) ?? false;
+        if (isWholeEntity) {
+          entityToAdd = { ...entityData, modified: Date.now() };
+        } else {
+          // Spread does not skip null/undefined-valued keys; strip them so they
+          // can't clobber a backfilled default.
+          const stripped: Record<string, unknown> = { modified: Date.now() };
+          for (const k of Object.keys(entityData)) {
+            if (entityData[k] != null) stripped[k] = entityData[k];
+          }
+          entityToAdd = { ...fallback.defaults, ...stripped };
         }
-        entityToAdd = { ...fallback.defaults, ...stripped };
 
         // INBOX_PROJECT may legitimately be missing from state (corrupted
         // import, partial migration). Mirror normalizeRestoredTask's guard at
