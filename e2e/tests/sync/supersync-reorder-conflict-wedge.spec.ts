@@ -214,7 +214,7 @@ const habitOrder = (page: Page): Promise<string[]> =>
 
 /** Exercise the CDK drop handler, including its enabled-only footprint. */
 const dragHabit = async (page: Page): Promise<void> => {
-  // warpRoute enters at scale(1.2); boxes read mid-animation miss the rows.
+  // warpRoute moves the entering page; boxes read mid-animation miss the rows.
   await expect(page.locator('.ng-animating')).toHaveCount(0);
   const before = await habitOrder(page);
   const from = await page.locator('.habit-row').last().boundingBox();
