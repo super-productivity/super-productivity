@@ -625,6 +625,24 @@ describe('OperationLogStoreService', () => {
     });
   });
 
+  describe('markUnsynced', () => {
+    it('re-queues acknowledged operations for upload', async () => {
+      const op1 = createTestOperation();
+      const op2 = createTestOperation();
+      await service.append(op1);
+      await service.append(op2);
+      const [entry1, entry2] = await service.getOpsAfterSeq(0);
+      await service.markSynced([entry1.seq, entry2.seq]);
+      expect(await service.getUnsynced()).toEqual([]);
+
+      await service.markUnsynced([op2.id]);
+
+      const unsynced = await service.getUnsynced();
+      expect(unsynced.map((e) => e.op.id)).toEqual([op2.id]);
+      expect((await service.getOpById(op1.id))?.syncedAt).toBeDefined();
+    });
+  });
+
   describe('deleteOpsWhere', () => {
     it('should delete operations matching predicate', async () => {
       const op1 = createTestOperation({ actionType: '[Task] Create' as ActionType });

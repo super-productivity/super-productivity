@@ -38,6 +38,7 @@ import { SuperSyncStatusService } from './super-sync-status.service';
 import { DownloadResult } from '../core/types/sync-results.types';
 import { CLIENT_ID_PROVIDER } from '../util/client-id.provider';
 import { SyncProviderManager } from '../sync-providers/provider-manager.service';
+import { ServerRewindReseedService } from './server-rewind-reseed.service';
 
 /**
  * True when this client's vector clock already accounts for `op`: an author's
@@ -169,6 +170,7 @@ export class OperationLogDownloadService implements OnDestroy {
   private superSyncStatusService = inject(SuperSyncStatusService);
   private clientIdProvider = inject(CLIENT_ID_PROVIDER);
   private providerManager = inject(SyncProviderManager);
+  private serverRewindReseedService = inject(ServerRewindReseedService);
 
   /** Track if we've already warned about clock drift this session */
   private hasWarnedClockDrift = false;
@@ -432,6 +434,9 @@ export class OperationLogDownloadService implements OnDestroy {
       let hasMore = true;
       let sinceSeq = resumeFrom ? resumeFrom.sinceSeq : lastServerSeq;
       let hasResetForGap = false;
+      // The server is behind this client's cursor but not empty: it was
+      // restored to an earlier point and lost ops this client uploaded (#11467).
+      let isServerRewound = false;
       let iterationCount = 0;
       // Run-level password evidence for the failure log: ops decrypted on
       // earlier pages of THIS run prove the key even when nothing in a later
@@ -508,6 +513,7 @@ export class OperationLogDownloadService implements OnDestroy {
             `OperationLogDownloadService: Gap detected (sinceSeq=${sinceSeq}, latestSeq=${response.latestSeq}). ` +
               `Resetting to 0 and re-downloading.`,
           );
+          isServerRewound = sinceSeq > response.latestSeq && response.latestSeq > 0;
           // Reset and re-download from the beginning
           sinceSeq = 0;
           hasResetForGap = true;
@@ -769,6 +775,22 @@ export class OperationLogDownloadService implements OnDestroy {
       // Loop ended without throwing: done, or failed in a way a resume won't fix.
       if (checkpointKey !== undefined) {
         this.forcedDownloadCheckpoint = null;
+      }
+
+      // Before the caller persists the restored server's cursor: if this
+      // throws, the next sync sees the gap again and retries (#11467).
+      if (
+        isServerRewound &&
+        finalLatestSeq > 0 &&
+        !downloadFailed &&
+        !decryptErrorAfterKeptPrefix &&
+        clientId &&
+        syncProvider.providerMode === 'superSyncOps'
+      ) {
+        await this.serverRewindReseedService.requeueOwnOpsLostByRewind(
+          syncProvider,
+          clientId,
+        );
       }
 
       // NOTE: We don't call acknowledgeOps here anymore.

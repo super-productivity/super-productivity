@@ -105,14 +105,16 @@ then follow the same steps.
 
 **Why this is preferred:**
 
-- Avoids `SYNC_IMPORT_EXISTS` conflicts that occur with partial restores
+- Every device re-uploads its whole state, so it does not matter which
+  devices come back or in what order
 - Clients hold the complete data — they are the authoritative source
 - Produces a clean, consistent server state
 - Verified by e2e tests (`supersync-server-backup-revert.spec.ts`)
 
 ### Fallback: Full Database Restore
 
-Use this only if **all client devices are lost** (no client can re-upload data).
+Use this when **no client device has the data** (all devices are lost), or
+when you prefer to keep the server's history.
 
 ```bash
 # 1. Stop the server
@@ -137,7 +139,27 @@ docker compose start supersync
 > **Note:** The database name (`supersync` above) must match your deployment's
 > `POSTGRES_DB` setting. Check your `.env` or `docker-compose.yml` for the actual value.
 
-**Known limitation:** If clients reconnect after a full restore, the server's existing `SYNC_IMPORT` operation can conflict with the client's gap detection mechanism (`SYNC_IMPORT_EXISTS` error). To resolve this, use the "Reset Account" feature in the app to clear server sync data, then re-sync.
+**What clients do after a full restore:** the server is now behind each
+device's last known position. On its next sync a device notices this, lists
+what the server still holds, and uploads its own changes that the restore
+removed. There is nothing to show the user and nothing for them to do. Each
+device re-uploads only its own changes, so:
+
+- A device that never syncs again cannot restore its changes.
+- A device that stays offline until other devices have pushed the server
+  back past its last known position cannot notice the restore, and its lost
+  changes stay off the server.
+- Changes are re-sent as ordinary operations, so the usual conflict rules
+  apply.
+
+If you need every device's data back for certain, prefer the accounts-only
+restore above. To start one account over from a single device's state, the
+user can still use "Reset Account" (server web page) and then sync from that
+device.
+
+Do the restore with the server stopped, as above. The server caches upload
+results in memory for a few minutes; a restore under a running server could
+answer a re-upload from that cache and store nothing.
 
 ### Recovery Decision Tree
 

@@ -29,6 +29,7 @@ import { SuperSyncStatusService } from './super-sync-status.service';
 import { CLIENT_ID_PROVIDER } from '../util/client-id.provider';
 import { OperationIntegrityError } from '../core/errors/sync-errors';
 import { SyncProviderManager } from '../sync-providers/provider-manager.service';
+import { ServerRewindReseedService } from './server-rewind-reseed.service';
 
 describe('OperationLogDownloadService', () => {
   let service: OperationLogDownloadService;
@@ -44,8 +45,13 @@ describe('OperationLogDownloadService', () => {
     getActiveProvider: () => { id: string } | null;
   };
   let activeProvider: { id: string } | null;
+  let mockReseedService: jasmine.SpyObj<ServerRewindReseedService>;
 
   beforeEach(() => {
+    mockReseedService = jasmine.createSpyObj('ServerRewindReseedService', [
+      'requeueOwnOpsLostByRewind',
+    ]);
+    mockReseedService.requeueOwnOpsLostByRewind.and.resolveTo(0);
     mockOpLogStore = jasmine.createSpyObj('OperationLogStoreService', [
       'getAppliedOpIds',
       'hasSyncedOps',
@@ -94,6 +100,7 @@ describe('OperationLogDownloadService', () => {
         { provide: SuperSyncStatusService, useValue: mockSuperSyncStatusService },
         { provide: CLIENT_ID_PROVIDER, useValue: mockClientIdProvider },
         { provide: SyncProviderManager, useValue: mockProviderManager },
+        { provide: ServerRewindReseedService, useValue: mockReseedService },
       ],
     });
 
@@ -133,6 +140,73 @@ describe('OperationLogDownloadService', () => {
         mockApiProvider.downloadOps.and.returnValue(
           Promise.resolve({ ops: [], hasMore: false, latestSeq: 0 }),
         );
+      });
+
+      // #11467: a server restored from a backup is behind this client's cursor
+      // but not empty; the client re-queues the ops the restore lost.
+      describe('server restored to an earlier point', () => {
+        const gapThenEmpty = (latestSeq: number): void => {
+          mockApiProvider.downloadOps.and.returnValues(
+            Promise.resolve({ ops: [], hasMore: false, latestSeq, gapDetected: true }),
+            Promise.resolve({ ops: [], hasMore: false, latestSeq }),
+          );
+        };
+
+        it('re-queues lost own ops when the server is behind the cursor', async () => {
+          mockApiProvider.getLastServerSeq.and.resolveTo(5);
+          gapThenEmpty(2);
+
+          const result = await service.downloadRemoteOps(mockApiProvider);
+
+          expect(mockReseedService.requeueOwnOpsLostByRewind).toHaveBeenCalledOnceWith(
+            mockApiProvider,
+            'test-client-id',
+          );
+          expect(result.latestServerSeq).toBe(2);
+        });
+
+        it('does not re-queue when the server is empty (seeded via SYNC_IMPORT)', async () => {
+          mockApiProvider.getLastServerSeq.and.resolveTo(5);
+          gapThenEmpty(0);
+
+          await service.downloadRemoteOps(mockApiProvider);
+
+          expect(mockReseedService.requeueOwnOpsLostByRewind).not.toHaveBeenCalled();
+        });
+
+        it('does not re-queue for a gap with the server ahead (purged history)', async () => {
+          mockApiProvider.getLastServerSeq.and.resolveTo(5);
+          gapThenEmpty(9);
+
+          await service.downloadRemoteOps(mockApiProvider);
+
+          expect(mockReseedService.requeueOwnOpsLostByRewind).not.toHaveBeenCalled();
+        });
+
+        it('does not re-queue without a gap', async () => {
+          mockApiProvider.getLastServerSeq.and.resolveTo(2);
+          mockApiProvider.downloadOps.and.resolveTo({
+            ops: [],
+            hasMore: false,
+            latestSeq: 2,
+          });
+
+          await service.downloadRemoteOps(mockApiProvider);
+
+          expect(mockReseedService.requeueOwnOpsLostByRewind).not.toHaveBeenCalled();
+        });
+
+        it('fails the download when re-queueing fails, so the next sync retries', async () => {
+          mockApiProvider.getLastServerSeq.and.resolveTo(5);
+          gapThenEmpty(2);
+          const error = new Error('network');
+          mockReseedService.requeueOwnOpsLostByRewind.and.rejectWith(error);
+
+          await expectAsync(service.downloadRemoteOps(mockApiProvider)).toBeRejectedWith(
+            error,
+          );
+          expect(mockApiProvider.setLastServerSeq).not.toHaveBeenCalled();
+        });
       });
 
       it('should use API download for operation-sync-capable providers', async () => {

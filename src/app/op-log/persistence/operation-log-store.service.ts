@@ -1811,21 +1811,8 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
   }
 
   async markRejected(opIds: string[]): Promise<void> {
-    await this._ensureInit();
     const now = Date.now();
-    await this._adapter.transaction([STORE_NAMES.OPS], 'readwrite', async (tx) => {
-      for (const opId of opIds) {
-        const entry = await tx.getFromIndex<StoredOperationLogEntry>(
-          STORE_NAMES.OPS,
-          OPS_INDEXES.BY_ID,
-          opId,
-        );
-        if (entry) {
-          entry.rejectedAt = now;
-          await tx.put(STORE_NAMES.OPS, entry);
-        }
-      }
-    });
+    await this._updateOpsById(opIds, (entry) => (entry.rejectedAt = now));
     this._invalidateUnsyncedCache();
   }
 
@@ -1835,6 +1822,22 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
    * retried often: rejection would hide incomplete downloaded state from sync.
    */
   async markFailed(opIds: string[]): Promise<void> {
+    await this._updateOpsById(opIds, (entry) => {
+      entry.applicationStatus = 'failed';
+      entry.retryCount = (entry.retryCount ?? 0) + 1;
+    });
+  }
+
+  /** Re-queues acknowledged ops for upload: a server restore lost them (#11467). */
+  async markUnsynced(opIds: string[]): Promise<void> {
+    await this._updateOpsById(opIds, (entry) => delete entry.syncedAt);
+    this._invalidateUnsyncedCache();
+  }
+
+  private async _updateOpsById(
+    opIds: string[],
+    mutate: (entry: StoredOperationLogEntry) => unknown,
+  ): Promise<void> {
     await this._ensureInit();
     await this._adapter.transaction([STORE_NAMES.OPS], 'readwrite', async (tx) => {
       for (const opId of opIds) {
@@ -1843,13 +1846,9 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
           OPS_INDEXES.BY_ID,
           opId,
         );
-        if (entry) {
-          const newRetryCount = (entry.retryCount ?? 0) + 1;
-
-          entry.applicationStatus = 'failed';
-          entry.retryCount = newRetryCount;
-          await tx.put(STORE_NAMES.OPS, entry);
-        }
+        if (!entry) continue;
+        mutate(entry);
+        await tx.put(STORE_NAMES.OPS, entry);
       }
     });
   }
