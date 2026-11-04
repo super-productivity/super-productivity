@@ -17,7 +17,7 @@ import {
 import {
   createdTitle,
   getStoreTaskByTitle,
-  holdFirstUpload,
+  syncWithHeldUpload,
   readStoreTasks,
   recordSyncTraffic,
   syncSingleCycle,
@@ -456,11 +456,12 @@ test.describe('@supersync SuperSync LWW Conflict Resolution', () => {
 
       const b = clientB;
       const traffic = recordSyncTraffic([clientA, clientB]);
-      const hold = await holdFirstUpload(clientA, async () => {
-        await b.sync.syncAndWait();
-      });
-      const pendingAfterOneCycle = await syncSingleCycle(clientA);
-      await hold.finish();
+      const a = clientA;
+      const pendingAfterOneCycle = await syncWithHeldUpload(
+        clientA,
+        () => b.sync.syncAndWait(),
+        () => syncSingleCycle(a),
+      );
 
       await expect.poll(() => traffic.rejections).toContain('A:CONFLICT_CONCURRENT');
       // The local-win op left in the same cycle: nothing is pending, and A

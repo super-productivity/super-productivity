@@ -13,7 +13,7 @@ import {
 } from '../../utils/supersync-helpers';
 import {
   getServerOps,
-  holdFirstUpload,
+  syncWithHeldUpload,
   recordSyncTraffic,
 } from '../../utils/audit-concurrency-helpers';
 
@@ -132,6 +132,11 @@ const snapshotSyncState = async (page: Page, label: string): Promise<void> => {
  * Without this fix, fresh clients would get stuck in infinite loops because
  * their merged updates would never dominate (missing clock entries from
  * other clients whose ops were skipped).
+ *
+ * Scope: these tests prove that a client which joined via the snapshot
+ * download converges, including through a server-side CONFLICT_CONCURRENT
+ * rejection. They do not retain task ops behind the snapshot, so they do not
+ * isolate the snapshotVectorClock aggregate itself.
  */
 
 test.describe('@supersync SuperSync Snapshot Vector Clock', () => {
@@ -276,7 +281,12 @@ test.describe('@supersync SuperSync Snapshot Vector Clock', () => {
       console.log('[SnapshotClock] Client C downloaded all tasks');
 
       // The snapshot optimization only applies behind a full-state op:
-      // setupSuperSync's encryption SYNC_IMPORT is that op here.
+      // setupSuperSync's encryption SYNC_IMPORT is that op here. It is written
+      // before any task exists, so no task op sits behind it and C's
+      // snapshotVectorClock covers no skipped task history. A test of that
+      // aggregate needs task ops retained behind a non-wiping full-state op;
+      // BACKUP_IMPORT always wipes (operation-log-upload.service.ts), so this
+      // spec cannot build that precondition.
       const serverOps = await getServerOps(user.userId);
       const fullStateSeqs = serverOps
         .filter((op) => isFullStateOpType(op.opType))
@@ -290,7 +300,7 @@ test.describe('@supersync SuperSync Snapshot Vector Clock', () => {
       // A sync downloads before it uploads, so C's conflict needs A's upload
       // to land between C's download and C's upload: C's POST is held while A
       // syncs. A writes first, C later, so C wins LWW and its local-win op
-      // must dominate clocks C only knows from the snapshot download.
+      // must be accepted by the server without looping.
       console.log('[SnapshotClock] Phase 4: C renames across a concurrent rename');
       const titleA = `B1-fromA-${testRunId}`;
       const titleC = `B1-fromC-${testRunId}`;
@@ -302,12 +312,12 @@ test.describe('@supersync SuperSync Snapshot Vector Clock', () => {
       await waitForTask(clientC.page, taskC1);
 
       const traffic = recordSyncTraffic([clientA, clientB, clientC]);
-      const a = clientA;
-      const hold = await holdFirstUpload(clientC, async () => {
-        await a.sync.syncAndWait();
-      });
-      await clientC.sync.syncAndWait();
-      await hold.finish();
+      const [a, c] = [clientA, clientC];
+      await syncWithHeldUpload(
+        clientC,
+        () => a.sync.syncAndWait(),
+        () => c.sync.syncAndWait({ timeout: 90000 }),
+      );
       await expect.poll(() => traffic.rejections).toContain('C:CONFLICT_CONCURRENT');
       // Bounded: the rejected batch plus one local-win re-upload, with slack.
       expect(traffic.posts.C).toBeLessThanOrEqual(4);

@@ -14,7 +14,7 @@ import {
   createdTitle,
   getStoreTaskByTitle,
   getStoreTitlesContaining,
-  holdFirstUpload,
+  syncWithHeldUpload,
   recordSyncTraffic,
   type SyncTraffic,
 } from '../../utils/audit-concurrency-helpers';
@@ -59,11 +59,15 @@ const syncWithServerConflict = async (
   traffic: SyncTraffic,
 ): Promise<void> => {
   const postsBefore = traffic.posts[loser.clientName];
-  const hold = await holdFirstUpload(loser, async () => {
-    for (const winner of winners) await winner.sync.syncAndWait();
-  });
-  await loser.sync.syncAndWait();
-  await hold.finish();
+  // The winners' full syncs run inside the loser's sync, so its budget must
+  // cover them as well.
+  await syncWithHeldUpload(
+    loser,
+    async () => {
+      for (const winner of winners) await winner.sync.syncAndWait();
+    },
+    () => loser.sync.syncAndWait({ timeout: 90000 }),
+  );
   await expect
     .poll(() => traffic.rejections)
     .toContain(`${loser.clientName}:CONFLICT_CONCURRENT`);

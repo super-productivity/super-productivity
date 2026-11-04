@@ -23,8 +23,7 @@ import {
  * on another client results in consistent, correct ordering after sync.
  *
  * These tests cover:
- * - Deferred action handling (actions buffered during sync are properly persisted)
- * - Task ordering preservation when concurrent modifications overlap
+ * - Task ordering convergence when a reorder crosses a neighbour's delete
  * - No silent data loss (tasks not duplicated or dropped)
  */
 
@@ -124,6 +123,8 @@ test.describe('@supersync Concurrent Delete and Reorder', () => {
       // ============ PHASE 5: Verify Convergence ============
       await expect(taskTitleLocator(clientA)).toHaveCount(3);
       await expect(taskTitleLocator(clientB)).toHaveCount(3);
+      // Let the order settle: B's order must reach A (retrying assertion).
+      await expect(taskTitleLocator(clientA)).toHaveText(await getTaskTitles(clientB));
       const titlesA = await getTaskTitles(clientA);
       const titlesB = await getTaskTitles(clientB);
 
@@ -146,7 +147,7 @@ test.describe('@supersync Concurrent Delete and Reorder', () => {
   /**
    * Scenario: Multiple deletes on one client, reorders on the other
    *
-   * Stress-tests the deferred action pipeline with more operations.
+   * The same crossing with two deletes and a three-step move.
    *
    * Actions:
    * 1. Client A creates 6 tasks, syncs
@@ -218,6 +219,8 @@ test.describe('@supersync Concurrent Delete and Reorder', () => {
       // ============ PHASE 5: Verify ============
       await expect(taskTitleLocator(clientA)).toHaveCount(4);
       await expect(taskTitleLocator(clientB)).toHaveCount(4);
+      // Let the order settle: B's order must reach A (retrying assertion).
+      await expect(taskTitleLocator(clientA)).toHaveText(await getTaskTitles(clientB));
       const titlesA = await getTaskTitles(clientA);
       const titlesB = await getTaskTitles(clientB);
 

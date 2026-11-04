@@ -77,6 +77,11 @@ test.describe('@supersync @concurrent-import Concurrent BACKUP_IMPORT handling',
       await clientB.workView.addTask(fromB);
       await clientB.sync.syncAndWait();
 
+      const fullStateOpCount = async (): Promise<number> =>
+        (await getServerOps(user.userId)).filter((op) => isFullStateOpType(op.opType))
+          .length;
+      const fullStateOpsBeforeImports = await fullStateOpCount();
+
       // ============ Concurrent imports, no sync in between ============
       for (const [client, backup, marker] of [
         [clientA, backupA, markerA],
@@ -92,6 +97,9 @@ test.describe('@supersync @concurrent-import Concurrent BACKUP_IMPORT handling',
         expect(await getTaskTitleFromState(client, baseline)).toBeNull();
         expect(await getTaskTitleFromState(client, fromB)).toBeNull();
       }
+
+      // Neither import reached the server yet, so they really are concurrent.
+      expect(await fullStateOpCount()).toBe(fullStateOpsBeforeImports);
 
       // ============ A uploads its import first ============
       // syncAndWait() would answer this dialog with USE_REMOTE and silently

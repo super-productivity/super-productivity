@@ -282,12 +282,7 @@ test.describe('@supersync Task Ordering Sync', () => {
       await clientB.sync.syncAndWait();
 
       // ============ PHASE 4: Verify Converged Order ============
-      const finalA = await getTaskTitles(clientA);
-      const finalB = await getTaskTitles(clientB);
-      console.log('[Concurrent Order Test] Client A final order:', finalA);
-      console.log('[Concurrent Order Test] Client B final order:', finalB);
-
-      expect(finalA).toEqual(finalB);
+      // Retrying assertions first: the list may still re-render after sync.
       await expect(taskTitleLocator(clientA)).toHaveText(orderB);
       await expect(taskTitleLocator(clientB)).toHaveText(orderB);
     } finally {

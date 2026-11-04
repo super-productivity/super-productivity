@@ -247,19 +247,21 @@ export const recordSyncTraffic = (clients: SimulatedE2EClient[]): SyncTraffic =>
 };
 
 /**
- * Holds `client`'s first ops upload (POST) and runs `duringHold` before
- * releasing it. A sync downloads before it uploads, so this is the only way to
- * get another client's op onto the server between this client's download and
- * its upload: the server then rejects the held upload as CONFLICT_CONCURRENT.
- * Pattern: supersync-time-delta-rejected-upload-new-delta.spec.ts.
+ * Runs `sync` on `client` with its first ops upload (POST) held until
+ * `duringHold` finished. A sync downloads before it uploads, so this is the
+ * only way to get another client's op onto the server between this client's
+ * download and its upload: the server then rejects the held upload as
+ * CONFLICT_CONCURRENT. Pattern: supersync-time-delta-rejected-upload-new-delta.spec.ts.
  *
- * Call `finish()` after the held client's sync returned: it removes the route,
- * rethrows an error from `duringHold`, and fails if no upload was held.
+ * The route is always removed. An error from `duringHold` is reported in
+ * preference to the sync's own failure, which it usually causes; the call
+ * fails if no upload was held.
  */
-export const holdFirstUpload = async (
+export const syncWithHeldUpload = async <T>(
   client: SimulatedE2EClient,
   duringHold: () => Promise<void>,
-): Promise<{ finish: () => Promise<void> }> => {
+  sync: () => Promise<T>,
+): Promise<T> => {
   let held = false;
   let holdError: unknown;
   await routeSuperSyncOps(client.page, async (route: Route) => {
@@ -276,13 +278,17 @@ export const holdFirstUpload = async (
       await route.continue();
     }
   });
-  return {
-    finish: async () => {
-      await unrouteSuperSyncOps(client.page);
-      if (holdError) throw holdError;
-      expect(held, `${client.clientName}: no upload was held`).toBe(true);
-    },
-  };
+  let result: T;
+  try {
+    result = await sync();
+  } catch (syncError) {
+    throw holdError ?? syncError;
+  } finally {
+    await unrouteSuperSyncOps(client.page);
+  }
+  if (holdError) throw holdError;
+  expect(held, `${client.clientName}: no upload was held`).toBe(true);
+  return result;
 };
 
 /**
