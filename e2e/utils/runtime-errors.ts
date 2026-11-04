@@ -43,16 +43,24 @@ const isDevErrorAllowed = (message: string): boolean => {
 };
 
 /**
- * Reports devError() calls on `page` into an existing collector, e.g. for a
- * page a client opens later in the same context with context.newPage().
+ * Reports page errors and devError() calls on `page` into an existing
+ * collector, e.g. for a page a client opens later in the same context with
+ * context.newPage(). A page that already has a collector is left alone.
  */
 export const registerPageWithErrorCollector = (
   page: Page,
   errors: RuntimeBrowserError[],
+  label: string,
 ): void => {
-  if (!collectorsByPage.has(page)) {
-    collectorsByPage.set(page, errors);
+  if (collectorsByPage.has(page)) {
+    return;
   }
+  collectorsByPage.set(page, errors);
+  page.on('pageerror', (error) => {
+    const message = error.stack ?? error.message;
+    console.error(`[${label}] Page error:`, message);
+    errors.push({ type: 'pageerror', message });
+  });
 };
 
 export const attachPageErrorCollector = (

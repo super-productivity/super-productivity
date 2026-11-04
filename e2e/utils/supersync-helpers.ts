@@ -414,9 +414,10 @@ export const createSimulatedClient = async (
   const page = await context.newPage();
   const runtimeErrors = attachPageErrorCollector(page, `Client ${clientName}`);
   // Pages a spec opens later in this context (context.newPage() after closing
-  // the first) report devError() into the same list closeClient() checks.
+  // the first) report page errors and devError() into the same list
+  // closeClient() checks.
   context.on('page', (contextPage) => {
-    registerPageWithErrorCollector(contextPage, runtimeErrors);
+    registerPageWithErrorCollector(contextPage, runtimeErrors, `Client ${clientName}`);
   });
 
   // Skip onboarding, hints, and example tasks before the app boots.

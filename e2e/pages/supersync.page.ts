@@ -403,8 +403,9 @@ export class SuperSyncPage extends BasePage {
    * confirmed and nothing pending. Setup's own waits end on the 'uploaded'
    * marker, which ignores the spinner and the error state. Ops captured right
    * after the first sync (e.g. TaskDueEffects re-planning TODAY) are flushed
-   * with one more cycle, as syncAndWait() does, since setup has already blocked
-   * auto-sync and immediate upload.
+   * with up to three more cycles, as syncAndWait() does: unless a test opted
+   * into WebSocket sync, setup has blocked auto-sync and immediate upload, so
+   * nothing else would upload them.
    */
   private async _expectSettledAfterSetup(timeout = 15000): Promise<void> {
     const deadline = Date.now() + timeout;
@@ -413,18 +414,45 @@ export class SuperSyncPage extends BasePage {
       !state.spinnerVisible &&
       state.checkVisible &&
       state.unsyncedCount === 0;
-    let flushed = false;
+    const fail = (
+      state: SyncCompletionSnapshot,
+      openDialog: boolean,
+      cause?: unknown,
+    ): never => {
+      recordSyncAudit(
+        'setup:initial-sync-unwitnessed',
+        JSON.stringify({ ...state, openDialog }),
+      );
+      throw new Error(
+        `setupSuperSync(): the initial sync did not settle (error, still running, ` +
+          `pending ops or a sync dialog left open). Last state: ` +
+          `${JSON.stringify({ ...state, openDialog })}`,
+        cause === undefined ? undefined : { cause },
+      );
+    };
+    let flushes = 0;
     let snapshot = await this._getSyncCompletionSnapshot();
     while (!isSettled(snapshot) && !snapshot.errorVisible && Date.now() < deadline) {
-      if (!flushed && !snapshot.spinnerVisible) {
-        flushed = true;
+      if (snapshot.spinnerVisible) {
+        await this.page.waitForTimeout(250);
+      } else {
         await this._waitForSyncWindowToClose();
         snapshot = await this._getSyncCompletionSnapshot();
-        if (!isSettled(snapshot) && !snapshot.errorVisible && !snapshot.spinnerVisible) {
-          await this._triggerSuperSyncCycle(Math.max(1000, deadline - Date.now()));
+        if (
+          flushes < 3 &&
+          !isSettled(snapshot) &&
+          !snapshot.errorVisible &&
+          !snapshot.spinnerVisible
+        ) {
+          flushes++;
+          try {
+            await this._triggerSuperSyncCycle(Math.max(1000, deadline - Date.now()));
+          } catch (error) {
+            fail(await this._getSyncCompletionSnapshot(), false, error);
+          }
+        } else if (flushes >= 3) {
+          await this.page.waitForTimeout(250);
         }
-      } else {
-        await this.page.waitForTimeout(250);
       }
       snapshot = await this._getSyncCompletionSnapshot();
     }
@@ -436,15 +464,7 @@ export class SuperSyncPage extends BasePage {
       .isVisible()
       .catch(() => false);
     if (!isSettled(snapshot) || openDialog) {
-      recordSyncAudit(
-        'setup:initial-sync-unwitnessed',
-        JSON.stringify({ ...snapshot, openDialog }),
-      );
-      throw new Error(
-        `setupSuperSync(): the initial sync did not settle (error, still running, ` +
-          `pending ops or a sync dialog left open). Last state: ` +
-          `${JSON.stringify({ ...snapshot, openDialog })}`,
-      );
+      fail(snapshot, openDialog);
     }
   }
 
@@ -1806,8 +1826,9 @@ export class SuperSyncPage extends BasePage {
 
   /**
    * Trigger a manual sync via the sync button and wait for it to complete.
-   * Waits with syncAndWait()'s default dialog handling, so the whole-dataset
-   * conflict dialog fails it too; it cannot opt in to answering that dialog.
+   * Unlike syncAndWait(), it still answers the fresh-client, sync-import
+   * (remote), password and decrypt-error dialogs on its own. Only the
+   * whole-dataset conflict dialog fails it; it cannot opt in to answering that.
    *
    * @internal Use syncAndWait() instead for most cases
    */
@@ -2464,8 +2485,9 @@ export class SuperSyncPage extends BasePage {
       allowedDialogs.add('sync-import');
     }
     // Choosing remote in either import dialog can raise the data-repair
-    // confirm on the forced download; declining it aborts the sync.
-    if (allowedDialogs.has('sync-import') || conflictDialog) {
+    // confirm on the forced download; declining it aborts the sync. Keeping
+    // local never runs that download, so a repair confirm there stays strict.
+    if ((allowedDialogs.has('sync-import') && !useLocal) || conflictDialog === 'remote') {
       allowedDialogs.add('repair-confirm');
     }
     const dialogChoices: SyncDialogChoices = { useLocal, conflictDialog, allowedDialogs };
