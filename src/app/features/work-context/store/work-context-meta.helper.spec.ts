@@ -169,9 +169,12 @@ describe('moveUndoneTaskUpInList() / moveUndoneTaskDownInList() (#11464)', () =>
       };
       for (let run = 0; run < 300; run++) {
         const list = Array.from({ length: 1 + rand(8) }, (_, i) => `t${i}`);
-        const undone = list.filter(() => rand(3) > 0);
+        // Like the real payload: computeOrderedTaskIdsForToday/-ForTag append
+        // members missing from the stored order after the listed ones.
+        const unlisted = Array.from({ length: rand(3) }, (_, i) => `u${i}`);
+        const undone = [...list.filter(() => rand(3) > 0), ...unlisted];
         const isSkipped = (id: string): boolean => !undone.includes(id);
-        for (const id of list) {
+        for (const id of [...list, ...unlisted]) {
           expect(moveUndoneTaskUpInList(list, id, undone)).toEqual(
             arrayMoveLeftUntil(list, id, isSkipped),
           );

@@ -131,13 +131,15 @@ export const moveItemInList = (
  * `doneTaskIds` field).
  *
  * The user's intent is "put the task right before its upper neighbour", the
- * snapshot's previous id. When that neighbour is still the first snapshot
- * task above the task, this is exactly the legacy `arrayMoveLeftUntil` move.
- * When the neighbour is gone (deleted or moved out of the list on another
- * device), the legacy move would jump the task over the next task instead,
- * while the moving device, applying the delete after its move, keeps the task
- * in the neighbour's slot. So the task goes right after the nearest earlier
- * snapshot task instead, which makes the move commute with the delete.
+ * snapshot's previous id. Without a concurrent change that neighbour is the
+ * first snapshot task above the task, and this is exactly the legacy
+ * `arrayMoveLeftUntil` move. When the first snapshot task above is earlier in
+ * the snapshot than the neighbour, the neighbour is gone (deleted or moved out
+ * of the list on another device) or already below the task. The legacy move
+ * would then jump the task over that earlier task, while the moving device,
+ * applying the delete after its move, keeps the task in the neighbour's slot.
+ * So the task goes right after that earlier task instead, which makes the
+ * move commute with the delete.
  */
 export const moveUndoneTaskUpInList = (
   list: string[],

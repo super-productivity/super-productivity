@@ -130,6 +130,8 @@ test.describe('@supersync Concurrent Delete and Reorder', () => {
       // Exact membership: T2 deleted, nothing duplicated or lost.
       expect([...titlesA].sort()).toEqual([task1, task3, task4].map(full).sort());
       expect([...titlesB].sort()).toEqual([task1, task3, task4].map(full).sort());
+      // B's move put T1 right before T2; with T2 gone, T1 keeps its slot.
+      expect(titlesB).toEqual([task4, task3, task1].map(full));
       // Both clients must converge to the same order.
       expect(titlesA).toEqual(titlesB);
 
@@ -225,6 +227,8 @@ test.describe('@supersync Concurrent Delete and Reorder', () => {
       // Exact membership: T2 and T4 deleted, nothing duplicated or lost.
       expect([...titlesA].sort()).toEqual([t1, t3, t5, t6].sort());
       expect([...titlesB].sort()).toEqual([t1, t3, t5, t6].sort());
+      // B's order [T6, T5, T1, T4, T3, T2] without the deleted T2 and T4.
+      expect(titlesB).toEqual([t6, t5, t1, t3]);
       // Both clients must converge to the same order.
       expect(titlesA).toEqual(titlesB);
 
