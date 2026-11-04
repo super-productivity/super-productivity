@@ -1271,6 +1271,8 @@ describe('OperationLogStoreService', () => {
     it('should throw on a duplicate operation ID and keep the original', async () => {
       const op = createTestOperation();
       await service.append(op, 'remote');
+      // Prime the applied-op-ids cache before the failing append.
+      expect(await service.getAppliedOpIds()).toEqual(new Set([op.id]));
 
       await expectAsync(service.append(op, 'remote')).toBeRejectedWithError(
         /Duplicate operation detected/,
@@ -1278,6 +1280,28 @@ describe('OperationLogStoreService', () => {
 
       const allOps = await service.getOpsAfterSeq(0);
       expect(allOps.length).toBe(1);
+      // The failed append aborts its transaction, so the cache (keyed on the
+      // last seq) stays valid without an explicit invalidation (#11469).
+      expect(await service.getAppliedOpIds()).toEqual(new Set([op.id]));
+    });
+
+    it('should keep the applied-op-ids cache exact across a failed append and a later write', async () => {
+      const existing = createTestOperation();
+      await service.append(existing, 'remote');
+      await service.getAppliedOpIds();
+
+      // A rejected duplicate must not leak ids into the cache, and a later
+      // successful write must still be picked up incrementally.
+      await expectAsync(service.append(existing, 'remote')).toBeRejectedWithError(
+        /Duplicate operation detected/,
+      );
+      const neverWritten = createTestOperation();
+      const later = createTestOperation();
+      await service.append(later, 'remote');
+
+      const applied = await service.getAppliedOpIds();
+      expect(applied).toEqual(new Set([existing.id, later.id]));
+      expect(applied.has(neverWritten.id)).toBeFalse();
     });
   });
 
