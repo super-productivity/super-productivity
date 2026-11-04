@@ -26,7 +26,8 @@ import { OpType } from '../core/operation.types';
 import { LockService } from '../sync/lock.service';
 import { LOCK_NAMES } from '../core/operation-log.const';
 import { selectAllTagIds } from '../../features/tag/store/tag.reducer';
-import { dropDeletedTagsFromArchivedTasks } from './drop-deleted-tags-from-archived-tasks';
+import { selectAllProjectIds } from '../../features/project/store/project.selectors';
+import { dropDeletedParentsFromArchivedTasks } from './drop-deleted-parents-from-archived-tasks';
 
 /**
  * Creates an empty ArchiveModel with default values.
@@ -99,7 +100,7 @@ export const isArchiveAffectingAction = (action: Action): action is PersistentAc
  *
  * ## Operations Handled
  *
- * - **moveToArchive**: Writes archived tasks to archiveYoung storage (minus deleted tags)
+ * - **moveToArchive**: Writes archived tasks to archiveYoung storage (minus deleted tags/projects)
  * - **restoreTask**: Removes task from archive storage
  * - **flushYoungToOld**: Moves old tasks from archiveYoung to archiveOld
  * - **deleteProject**: Removes all tasks for the deleted project from archive
@@ -243,8 +244,9 @@ export class ArchiveOperationHandler implements ArchiveSideEffectPort<Persistent
    * Writes archived tasks to archiveYoung storage.
    *
    * @localBehavior SKIP - Archive written by ArchiveService.moveToArchive() before dispatch
-   * @remoteBehavior Executes - Writes tasks to archiveYoung, without tag ids
-   *   deleted locally (#11466; see dropDeletedTagsFromArchivedTasks)
+   * @remoteBehavior Executes - Writes tasks to archiveYoung, without references
+   *   to tags (#11466) or projects (#11486) deleted locally; see
+   *   dropDeletedParentsFromArchivedTasks
    */
   private async _handleMoveToArchive(action: PersistentAction): Promise<void> {
     if (!action.meta?.isRemote) {
@@ -252,12 +254,14 @@ export class ArchiveOperationHandler implements ArchiveSideEffectPort<Persistent
     }
     const tasks = (action as ReturnType<typeof TaskSharedActions.moveToArchive>).tasks;
     // Archive side effects run after the whole batch's reducers, so this is the
-    // tag state including every delete this client has applied.
-    const existingTagIds = new Set(
-      (await firstValueFrom(this._getStore().select(selectAllTagIds))) as string[],
-    );
+    // tag/project state including every delete this client has applied.
+    const store = this._getStore();
+    const existing = {
+      tagIds: new Set((await firstValueFrom(store.select(selectAllTagIds))) as string[]),
+      projectIds: new Set(await firstValueFrom(store.select(selectAllProjectIds))),
+    };
     await this._getArchiveService().writeTasksToArchiveForRemoteSync(
-      dropDeletedTagsFromArchivedTasks(tasks, existingTagIds),
+      dropDeletedParentsFromArchivedTasks(tasks, existing),
     );
   }
 
