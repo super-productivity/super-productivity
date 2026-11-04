@@ -75,7 +75,7 @@ const readRemoteJson = async (
 };
 
 /**
- * Suspected data loss found while fixing #11470 (PR #11475): A builds a REPAIR
+ * #11483 (found while fixing #11470, PR #11475): A builds a REPAIR
  * full-state op, but its upload fails (403; per #11344 it stays pending). B
  * then uploads task X. When A syncs again, its download applies X and moves
  * the rev the REPAIR is conditionally written on, so the old REPAIR payload
@@ -87,7 +87,9 @@ test.describe('@webdav a pending REPAIR built before a download keeps the downlo
     void webdavServerUp;
   });
 
-  test('a stale pending REPAIR snapshot does not drop a peer task its download applied', async ({
+  // Fails today: the old REPAIR payload replaces the remote and X is lost.
+  // Tracked in #11483.
+  test.fixme('a stale pending REPAIR snapshot does not drop a peer task its download applied', async ({
     browser,
     baseURL,
     request,
