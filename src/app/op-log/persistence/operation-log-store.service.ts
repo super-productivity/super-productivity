@@ -818,7 +818,8 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
    * It checks each op's ID against the IndexedDB `byId` unique index within
    * the same readwrite transaction before inserting. This eliminates the
    * TOCTOU race between a separate getAppliedOpIds() filter and a throwing
-   * batch append (since removed, #11469) that caused persistent "Duplicate operation detected" errors (issue #6343).
+   * batch append (since removed, #11469) that caused persistent
+   * "Duplicate operation detected" errors (issue #6343).
    *
    * @param ops Operations to append
    * @param source Whether these are local or remote operations

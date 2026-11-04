@@ -12,18 +12,12 @@ import {
 /**
  * SuperSync ConstraintError Recovery E2E Tests
  *
- * These tests verify the bug fix for appliedOpIds cache not being invalidated
- * when appendBatch() fails with ConstraintError. The bug caused:
- *
- * 1. appendBatch() partially succeeds (some ops written to IndexedDB)
- * 2. ConstraintError is thrown (duplicate op ID)
- * 3. appliedOpIds cache was NOT invalidated
- * 4. Next sync: the applied-op-ID filter returns the same ops (cache says they're new)
- * 5. appendBatch() fails again with ConstraintError
- * 6. Infinite loop
- *
- * The fix: Invalidate appliedOpIds cache when ConstraintError occurs, so
- * the filter re-reads from IndexedDB on next sync.
+ * Regression coverage for a ConstraintError sync loop (#6213, #6343): a
+ * remote batch containing an already-stored op ID failed with "Duplicate
+ * operation detected" on every sync. Remote ops are now written through
+ * appendBatchSkipDuplicates(), which checks the byId index inside the same
+ * readwrite transaction and skips existing ops instead of throwing. The
+ * throwing appendBatch() and its cache invalidation were removed (#11469).
  *
  * Prerequisites:
  * - super-sync-server running on localhost:1901 with TEST_MODE=true
