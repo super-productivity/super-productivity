@@ -103,7 +103,9 @@ test.describe('@webdav a real replacement still asks a peer with pending work (#
 
         // B must ask instead of keeping its pending task on top of the restore.
         await syncB.triggerSync();
-        expect(await waitForSyncComplete(b.page, syncB)).toBe('conflict');
+        expect(
+          await waitForSyncComplete(b.page, syncB, 30000, { expectConflict: true }),
+        ).toBe('conflict');
         const conflictB = b.page.locator('dialog-sync-conflict');
         await expect(conflictB).toBeVisible();
 
@@ -123,7 +125,9 @@ test.describe('@webdav a real replacement still asks a peer with pending work (#
 
         // A must ask instead of keeping its pending task on top of B's choice.
         await syncA.triggerSync();
-        expect(await waitForSyncComplete(a.page, syncA)).toBe('conflict');
+        expect(
+          await waitForSyncComplete(a.page, syncA, 30000, { expectConflict: true }),
+        ).toBe('conflict');
         const conflictA = a.page.locator('dialog-sync-conflict');
         await expect(conflictA).toBeVisible();
         await conflictA.locator('button', { hasText: /Keep remote/i }).click();
