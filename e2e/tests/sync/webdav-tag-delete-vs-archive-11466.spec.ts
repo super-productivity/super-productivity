@@ -53,8 +53,6 @@ const syncOk = async (page: Page, syncPage: SyncPage): Promise<void> => {
 };
 
 test.describe('@webdav Tag delete vs archive (#11466)', () => {
-  test.describe.configure({ mode: 'serial' });
-
   for (const order of ['delete syncs first', 'archive syncs first'] as const) {
     test(`concurrent tag delete and archive converge without the tag (${order})`, async ({
       browser,

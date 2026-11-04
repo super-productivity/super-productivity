@@ -7,6 +7,7 @@ import {
   waitForTask,
   markTaskDoneByKey,
   archiveDoneTasks,
+  getArchiveYoungTaskIds,
   type SimulatedE2EClient,
 } from '../../utils/supersync-helpers';
 import { TagPage } from '../../pages/tag.page';
@@ -34,8 +35,6 @@ const setWsDownloadBlocked = async (
 };
 
 test.describe('@supersync Tag delete vs archive (#11466)', () => {
-  test.describe.configure({ mode: 'serial' });
-
   for (const order of ['delete syncs first', 'archive syncs first'] as const) {
     test(`concurrent tag delete and archive converge without the tag (${order}) @supersync`, async ({
       browser,
@@ -81,30 +80,45 @@ test.describe('@supersync Tag delete vs archive (#11466)', () => {
         await waitForTask(clientB.page, task2Name);
         expect(await getStoreTaskTagIds(clientB.page, task1Id!)).toEqual([tagId]);
 
-        // Keep the two edits truly concurrent.
+        // Keep the edits concurrent: neither client may pull the other's op
+        // before acting. All later downloads go through explicit syncs, so a
+        // WS-triggered download cannot race syncAndWait.
         await setWsDownloadBlocked(clientA, true);
         await setWsDownloadBlocked(clientB, true);
 
-        // --- Concurrent: A deletes the tag, B archives Task1 ---
-        await tagPageA.deleteTag(tagName);
-        await markTaskDoneByKey(clientB, task1Name);
-        await archiveDoneTasks(clientB);
-        await expect
-          .poll(async () => getArchiveYoungTaskTagIds(clientB!.page, task1Id!), {
-            timeout: 10000,
-            message: "B's own archived copy must still carry the tag",
-          })
-          .toEqual([tagId]);
+        const deleteTagOnA = async (): Promise<void> => {
+          await tagPageA.deleteTag(tagName);
+        };
+        // Finish Day syncs on its own, so B uploads its archive right away.
+        const archiveTask1OnB = async (): Promise<void> => {
+          await markTaskDoneByKey(clientB!, task1Name);
+          await archiveDoneTasks(clientB!);
+          await expect
+            .poll(async () => getArchiveYoungTaskIds(clientB!.page), {
+              timeout: 10000,
+              message: 'B must have archived Task1',
+            })
+            .toContain(task1Id!);
+        };
 
-        await setWsDownloadBlocked(clientA, false);
-        await setWsDownloadBlocked(clientB, false);
-
-        const [first, second] =
-          order === 'delete syncs first' ? [clientA, clientB] : [clientB, clientA];
-        await first.sync.syncAndWait();
-        await second.sync.syncAndWait();
-        await first.sync.syncAndWait();
-        await second.sync.syncAndWait();
+        if (order === 'delete syncs first') {
+          // A uploads the delete; B archives without having seen it.
+          await deleteTagOnA();
+          await clientA.sync.syncAndWait();
+          await archiveTask1OnB();
+          await clientB.sync.syncAndWait();
+          await clientA.sync.syncAndWait();
+        } else {
+          // B uploads the archive; A deletes without having seen it.
+          await archiveTask1OnB();
+          await clientB.sync.syncAndWait();
+          await deleteTagOnA();
+          await clientA.sync.syncAndWait();
+          await clientB.sync.syncAndWait();
+        }
+        // One extra round for eventual consistency.
+        await clientA.sync.syncAndWait();
+        await clientB.sync.syncAndWait();
 
         for (const client of [clientA, clientB]) {
           const label = client.clientName;
