@@ -55,7 +55,7 @@ describe('dropDeletedTagsFromArchivedTasks', () => {
     expect(result[0].subTaskIds).toEqual(['s1']);
   });
 
-  it('drops a root task orphaned by the removal, with its subtasks, like removeTagsFromAllTasks', () => {
+  it('keeps a root task orphaned by the removal, like removeTagsFromAllTasks does', () => {
     const orphan = task('o', {
       projectId: '',
       tagIds: ['deleted'],
@@ -64,10 +64,13 @@ describe('dropDeletedTagsFromArchivedTasks', () => {
     });
     const other = task('t2', { tagIds: ['kept'] });
     const result = dropDeletedTagsFromArchivedTasks([orphan, other], existing);
-    expect(result).toEqual([other]);
+    expect(result.map((t) => t.id)).toEqual(['o', 't2']);
+    expect(result[0].tagIds).toEqual([]);
+    expect(result[0].subTasks.map((st) => st.id)).toEqual(['s1']);
+    expect(result[1]).toBe(other);
   });
 
-  it('keeps a task that was already orphaned without losing a tag', () => {
+  it('keeps an already orphaned task untouched', () => {
     const t = task('o', { projectId: '', tagIds: [] });
     expect(dropDeletedTagsFromArchivedTasks([t], existing)).toEqual([t]);
   });

@@ -18,37 +18,26 @@ const keepExistingTags = <T extends Task>(task: T, existing: Set<string>): T =>
  * good. The archiving client scrubs its copy when the delete reaches it; this
  * gives the same result on the deleting client, whichever op arrives first.
  *
- * Matches that cleanup's orphan rule too: a root task left with no project,
- * no tag and no parent by the removal is dropped with its subtasks, as
- * `removeTagsFromAllTasks` drops it from an existing archive. A task that was
- * already orphaned without losing a tag is kept.
+ * Tasks are never dropped here: `removeTagsFromAllTasks` checks orphans on the
+ * archive as loaded before the removal, so on the archiving client a task left
+ * without project, tag and parent by the delete stays archived with no tags.
+ * Keeping it here converges with that and loses no content.
  */
 export const dropDeletedTagsFromArchivedTasks = (
   tasks: TaskWithSubTasks[],
   existingTagIds: Set<string>,
 ): TaskWithSubTasks[] =>
-  tasks.flatMap((task) => {
+  tasks.map((task) => {
     const subTasks = task?.subTasks ?? [];
     if (
       !hasMissingTag(task, existingTagIds) &&
       !subTasks.some((st) => hasMissingTag(st, existingTagIds))
     ) {
       // Nothing deleted here; malformed entries are left to sanitizeTasksForArchiving.
-      return [task];
+      return task;
     }
-    const scrubbed = keepExistingTags(task, existingTagIds);
-    if (
-      scrubbed !== task &&
-      !scrubbed.projectId &&
-      !scrubbed.tagIds.length &&
-      !scrubbed.parentId
-    ) {
-      return [];
-    }
-    return [
-      {
-        ...scrubbed,
-        subTasks: subTasks.map((st) => (st ? keepExistingTags(st, existingTagIds) : st)),
-      },
-    ];
+    return {
+      ...keepExistingTags(task, existingTagIds),
+      subTasks: subTasks.map((st) => (st ? keepExistingTags(st, existingTagIds) : st)),
+    };
   });
