@@ -279,8 +279,9 @@ test.describe.serial('@supersync SuperSync Server Backup Revert', () => {
    * re-downloads, then tries to re-upload its full state, but the server still
    * holds the original SYNC_IMPORT and rejects the snapshot with 409
    * SYNC_IMPORT_EXISTS. That rejection only reaches the console: no error is
-   * shown to the user, and ops lost by the revert stay off the server. This
-   * test does NOT pin that server-side divergence; it only covers the client.
+   * shown to the user, and that upload does not restore the ops lost by the
+   * revert. This test does NOT pin the server-side state; it only covers the
+   * client.
    *
    * What we verify:
    * - Client A preserves all local data after partial revert
@@ -359,8 +360,8 @@ test.describe.serial('@supersync SuperSync Server Backup Revert', () => {
       expect(taskCount).toBe(3);
 
       // NOTE: After a partial revert the client's full-state re-upload is
-      // rejected (409 SYNC_IMPORT_EXISTS, console only), so the ops deleted
-      // from the server stay missing and no error is shown. Recovery needs the
+      // rejected (409 SYNC_IMPORT_EXISTS, console only), so it does not restore
+      // the ops deleted from the server, and no error is shown. Recovery needs the
       // "Reset Account" feature (see the full-dump restore test below).
       console.log(
         '[Partial] Test passed - client preserved data and can continue working',
@@ -560,8 +561,8 @@ test.describe.serial('@supersync SuperSync Server Backup Revert', () => {
    * Tests the documented workaround for full database restores:
    * 1. Restore full dump (server is reverted to the backup point)
    * 2. Client syncs: its full-state re-upload is rejected with 409
-   *    SYNC_IMPORT_EXISTS (console only, no error shown), so ops written after
-   *    the backup stay missing on the server
+   *    SYNC_IMPORT_EXISTS (console only, no error shown), so it does not
+   *    restore ops written after the backup
    * 3. Use "Reset Account" (DELETE /api/sync/data) to clear stale state
    * 4. Client re-syncs cleanly and re-uploads its full state
    */
@@ -617,8 +618,8 @@ test.describe.serial('@supersync SuperSync Server Backup Revert', () => {
       expect(await getLatestServerSeq(user.userId)).toBe(seqAtDump);
 
       // 5. Client A syncs against the restored server. Its full-state
-      // re-upload is rejected (SYNC_IMPORT_EXISTS), so task2 stays missing on
-      // the server (known limitation, no error shown).
+      // re-upload is rejected (SYNC_IMPORT_EXISTS), so it does not restore
+      // task2 (known limitation, no error shown; not asserted here).
       await clientA.sync.syncAndWait();
       console.log('[FullRestore] Client A synced against the restored server');
 

@@ -119,9 +119,11 @@ const getExistingTaskTitles = async (
     });
     subscription.unsubscribe();
 
-    const expected = new Set(titles);
+    // workView.addTask prefixes titles, so match by substring.
     return Object.values(latestState?.tasks?.entities ?? {}).flatMap((task) =>
-      task?.title && expected.has(task.title) ? [task.title] : [],
+      task?.title && titles.some((title) => task.title!.includes(title))
+        ? [task.title]
+        : [],
     );
   }, expectedTitles);
 

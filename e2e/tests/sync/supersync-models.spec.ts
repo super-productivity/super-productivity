@@ -11,7 +11,7 @@ import {
 } from '../../utils/supersync-helpers';
 import { ProjectPage } from '../../pages/project.page';
 import {
-  countLocalFullStateOps as countFullStateOps,
+  countLocalRepairOps,
   getStoreSummary,
 } from '../../utils/audit-error-paths-helpers';
 
@@ -517,8 +517,8 @@ test.describe('@supersync SuperSync Models', () => {
         (tag) => tag.title === tagName,
       )?.id;
       expect(tagId).toBeTruthy();
-      const fullStateOpsBeforeA = await countFullStateOps(clientA.page);
-      const fullStateOpsBeforeB = await countFullStateOps(clientB.page);
+      const repairOpsBeforeA = await countLocalRepairOps(clientA.page);
+      const repairOpsBeforeB = await countLocalRepairOps(clientB.page);
 
       // 5. Client A deletes the tag
       // Navigate to Today view to ensure sidebar is visible
@@ -655,8 +655,8 @@ test.describe('@supersync SuperSync Models', () => {
       // The clean end state came from the delete itself, not from a repair.
       await expectTagGoneFromStore(clientA.page, tagId!);
       await expectTagGoneFromStore(clientB.page, tagId!);
-      expect(await countFullStateOps(clientA.page)).toBe(fullStateOpsBeforeA);
-      expect(await countFullStateOps(clientB.page)).toBe(fullStateOpsBeforeB);
+      expect(await countLocalRepairOps(clientA.page)).toBe(repairOpsBeforeA);
+      expect(await countLocalRepairOps(clientB.page)).toBe(repairOpsBeforeB);
 
       console.log('[BulkTag] ✓ Tag deletion atomic cleanup test PASSED!');
     } finally {

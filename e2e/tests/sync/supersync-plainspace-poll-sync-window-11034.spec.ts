@@ -154,7 +154,8 @@ const renameTask = async (page: Page, title: string, newTitle: string): Promise<
  * Holds every `/tasks` GET of the page, answering it on release with the
  * fake's state from the moment the request arrived: a read that reached
  * Plainspace before what the test does next, but whose answer lands after.
- * `beforeAnswer` runs after the release, right before the held answer is sent.
+ * `beforeAnswer` runs after the release, right before the FIRST held answer is
+ * sent; later held reads are answered without it.
  */
 const holdTaskListReads = async (
   page: Page,
@@ -176,8 +177,11 @@ const holdTaskListReads = async (
         tasks: [...server.assignedIds].map((id) => ({ ...server.tasks.get(id)! })),
       };
       held++;
+      const isFirstHeld = held === 1;
       await gate;
-      await beforeAnswer?.();
+      if (isFirstHeld) {
+        await beforeAnswer?.();
+      }
       server.taskListRequests.push({ status: 200 });
       await route.fulfill({
         status: 200,
@@ -422,9 +426,9 @@ test.describe('@supersync Plainspace poll vs the sync window (#11034)', () => {
       });
       await b.c.sync.syncAndWait();
       await unrouteSuperSyncOps(b.c.page);
-      // Every held answer (usually one) landed inside the window.
-      await expect.poll(() => answeredInSyncWindow.length).toBeGreaterThanOrEqual(1);
-      expect(answeredInSyncWindow.every(Boolean)).toBe(true);
+      // The first held answer landed inside the window.
+      await expect.poll(() => answeredInSyncWindow.length).toBe(1);
+      expect(answeredInSyncWindow).toEqual([true]);
       await snapshot('after B stale poll landed', s);
 
       // Interim state: the stale answer shows the collaborator's title on B

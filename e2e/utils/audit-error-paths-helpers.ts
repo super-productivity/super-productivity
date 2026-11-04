@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test';
-import { SUPERSYNC_BASE_URL } from './supersync-helpers';
+import { isFullStateOpType, SUPERSYNC_BASE_URL } from './supersync-helpers';
 
 /**
  * Helpers for the sync E2E audit (2026-11-03), theme "error paths": tests that
@@ -150,9 +150,11 @@ export const readLocalOpEntries = async (
 
 /** Full-state ops (SYNC_IMPORT, BACKUP_IMPORT, REPAIR) in the local op log. */
 export const countLocalFullStateOps = async (page: Page): Promise<number> =>
-  (await readLocalOpEntries(page)).filter((op) =>
-    ['SYNC_IMPORT', 'BACKUP_IMPORT', 'REPAIR'].includes(op.opType),
-  ).length;
+  (await readLocalOpEntries(page)).filter((op) => isFullStateOpType(op.opType)).length;
+
+/** REPAIR ops in the local op log (a repair means state needed healing). */
+export const countLocalRepairOps = async (page: Page): Promise<number> =>
+  (await readLocalOpEntries(page)).filter((op) => op.opType === 'REPAIR').length;
 
 export interface TaskSummary {
   id: string;
