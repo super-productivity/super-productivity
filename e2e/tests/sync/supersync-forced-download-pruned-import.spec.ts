@@ -7,11 +7,11 @@ import {
   createSimulatedClient,
   closeClient,
   waitForTask,
-  hasTask,
   renameTask,
   type SimulatedE2EClient,
   SUPERSYNC_BASE_URL,
 } from '../../utils/supersync-helpers';
+import { getStoreTaskTitles } from '../../utils/audit-winners-helpers';
 import { waitForAppReady } from '../../utils/waits';
 import { readRecoveryRing } from '../../utils/recovery-ring-helpers';
 
@@ -375,20 +375,21 @@ test.describe('@supersync Forced download re-delivering a pruned SYNC_IMPORT', (
       expect(Number(skippedMatch?.[1])).toBeGreaterThanOrEqual(1);
       expect(await readRecoveryRing(clientA.page)).toEqual(ringBefore);
 
-      // 7. Recovery proof: both clients converge on one title for the shared
-      //    task and keep the post-import task.
+      // 7. Recovery proof: both clients converge on A's title for the shared
+      //    task (A renamed last, so A's edit wins LWW) and keep the
+      //    post-import task.
       await clientA.sync.syncAndWait();
       await clientB.sync.syncAndWait();
       await clientA.sync.syncAndWait();
       await waitForTask(clientA.page, postImportTask);
       await waitForTask(clientB.page, postImportTask);
-      const aHasA = await hasTask(clientA.page, titleFromA);
-      const aHasB = await hasTask(clientA.page, titleFromB);
-      const bHasA = await hasTask(clientB.page, titleFromA);
-      const bHasB = await hasTask(clientB.page, titleFromB);
-      expect(aHasA || aHasB).toBe(true);
-      expect(aHasA).toBe(bHasA);
-      expect(aHasB).toBe(bHasB);
+      // Store read: A's title is the only one left on both clients.
+      for (const client of [clientA, clientB]) {
+        const titles = (await getStoreTaskTitles(client.page)).filter(
+          (title) => title === titleFromA || title === titleFromB,
+        );
+        expect(titles).toEqual([titleFromA]);
+      }
     } finally {
       if (clientA) await closeClient(clientA);
       if (clientB) await closeClient(clientB);
