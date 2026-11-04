@@ -134,28 +134,20 @@ test.describe('@supersync @migration SuperSync Legacy Migration Sync', () => {
       console.log('[Test] Client B added task after migration');
 
       // Setup sync without the helper's silent dialog handling: B holds real
-      // local data and the server holds A's, so B must be asked. Either the
-      // whole-dataset dialog or the incoming-import dialog is a valid prompt;
-      // silently merging or silently taking either side is not.
+      // local data and the server holds A's, so B must be asked; silently
+      // merging or silently taking either side is wrong.
       console.log('[Test] Client B setting up sync — expecting a conflict dialog...');
       await syncPageB.setupSuperSync({
         ...syncConfig,
         syncImportChoice: 'local',
         waitForInitialSync: false,
       });
-      await expect(
-        syncPageB.conflictDialog.or(syncPageB.syncImportConflictDialog),
-      ).toBeVisible({ timeout: 30000 });
-      const isWholeDatasetDialog = await syncPageB.conflictDialog.isVisible();
-      console.log(
-        `[Test] Client B prompt: ${isWholeDatasetDialog ? 'dialog-sync-conflict' : 'dialog-sync-import-conflict'}`,
-      );
-      if (isWholeDatasetDialog) {
-        await syncPageB.syncAndWait({ conflictDialog: 'local' });
-      } else {
-        await syncPageB.chooseSyncImportUseLocal();
-        await syncPageB.syncAndWait({ useLocal: true });
-      }
+      // B meets the incoming-import gate (A's encrypted setup uploaded a
+      // SYNC_IMPORT), so the sync-import dialog is the prompt (observed in CI).
+      await expect(syncPageB.syncImportConflictDialog).toBeVisible({ timeout: 30000 });
+      await expect(syncPageB.conflictDialog).toBeHidden();
+      await syncPageB.chooseSyncImportUseLocal();
+      await syncPageB.syncAndWait({ useLocal: true });
       console.log('[Test] Client B kept local data');
 
       // B's choice shipped its state as a full-state op that reached the server.
