@@ -14,6 +14,8 @@ import {
 import { DEFAULT_TASK_REPEAT_CFG, TaskRepeatCfg } from './task-repeat-cfg.model';
 import { of } from 'rxjs';
 import { WorkContextType } from '../work-context/work-context.model';
+import { addTaskToSection } from '../section/store/section.actions';
+import { selectSectionsByContextIdMap } from '../section/store/section.selectors';
 import {
   selectAllTaskRepeatCfgs,
   selectAllUnprocessedTaskRepeatCfgs,
@@ -116,6 +118,7 @@ describe('TaskRepeatCfgService', () => {
     taskService = TestBed.inject(TaskService) as jasmine.SpyObj<TaskService>;
 
     dispatchSpy = spyOn(store, 'dispatch');
+    store.overrideSelector(selectSectionsByContextIdMap, new Map());
   });
 
   describe('taskRepeatCfgs$', () => {
@@ -379,6 +382,58 @@ describe('TaskRepeatCfgService', () => {
               lastTaskCreationDay: expectedDueDay,
             },
           },
+        }),
+      );
+    });
+
+    it('places the new task after its latest predecessor in the same project section', async () => {
+      const targetDayDate = new Date().getTime();
+      const previousTask = {
+        ...mockTaskWithSubTasks,
+        id: 'previous-repeat-instance',
+        created: targetDayDate - 86_400_000,
+      };
+      const olderTask = {
+        ...previousTask,
+        id: 'older-repeat-instance',
+        created: targetDayDate - 172_800_000,
+      };
+      taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(
+        of([olderTask, previousTask]),
+      );
+      taskService.createNewTaskWithDefaults.and.returnValue({
+        ...mockTask,
+        id: 'new-repeat-instance',
+      });
+      store.overrideSelector(
+        selectSectionsByContextIdMap,
+        new Map([
+          [
+            mockTaskRepeatCfg.projectId as string,
+            [
+              {
+                id: 'section-a',
+                contextId: mockTaskRepeatCfg.projectId as string,
+                contextType: WorkContextType.PROJECT,
+                title: 'A',
+                taskIds: [olderTask.id, previousTask.id],
+              },
+            ],
+          ],
+        ]),
+      );
+      store.refreshState();
+
+      await service.createRepeatableTask(mockTaskRepeatCfg, targetDayDate);
+
+      expect(dispatchSpy).toHaveBeenCalledTimes(3);
+      expect(dispatchSpy.calls.argsFor(1)[0]).toEqual(
+        jasmine.objectContaining({
+          type: addTaskToSection.type,
+          sectionId: 'section-a',
+          taskId: 'new-repeat-instance',
+          afterTaskId: previousTask.id,
+          sourceSectionId: null,
         }),
       );
     });

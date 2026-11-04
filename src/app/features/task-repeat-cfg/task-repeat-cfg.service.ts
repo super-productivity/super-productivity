@@ -23,6 +23,8 @@ import { TaskService } from '../tasks/task.service';
 import { Task } from '../tasks/task.model';
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 import { addSubTask } from '../tasks/store/task.actions';
+import { addTaskToSection } from '../section/store/section.actions';
+import { selectSectionsByContextIdMap } from '../section/store/section.selectors';
 import { WorkContextService } from '../work-context/work-context.service';
 import { WorkContextType } from '../work-context/work-context.model';
 import { isValidSplitTime } from '../../util/is-valid-split-time';
@@ -180,6 +182,7 @@ export class TaskRepeatCfgService {
       | ReturnType<typeof updateTaskRepeatCfg>
       | ReturnType<typeof TaskSharedActions.scheduleTaskWithTime>
       | ReturnType<typeof addSubTask>
+      | ReturnType<typeof addTaskToSection>
     )[]
   > {
     // NOTE: there might be multiple configs in case something went wrong
@@ -299,6 +302,7 @@ export class TaskRepeatCfgService {
       | ReturnType<typeof updateTaskRepeatCfg>
       | ReturnType<typeof TaskSharedActions.scheduleTaskWithTime>
       | ReturnType<typeof addSubTask>
+      | ReturnType<typeof addTaskToSection>
     )[] = [
       TaskSharedActions.addTask({
         task: taskWithTargetDates,
@@ -330,6 +334,45 @@ export class TaskRepeatCfgService {
         },
       }),
     ];
+
+    if (taskRepeatCfg.projectId) {
+      const previousTask = existingTaskInstances.reduce<Task | undefined>(
+        (latest, candidate) =>
+          candidate.projectId === taskRepeatCfg.projectId &&
+          candidate.created < targetCreated.getTime() &&
+          (!latest || candidate.created > latest.created)
+            ? candidate
+            : latest,
+        undefined,
+      );
+
+      if (previousTask) {
+        const sectionsByContextId = await this._store$
+          .select(selectSectionsByContextIdMap)
+          .pipe(take(1))
+          .toPromise();
+        const previousSection = sectionsByContextId
+          ?.get(taskRepeatCfg.projectId)
+          ?.find(
+            (section) =>
+              section.contextType === WorkContextType.PROJECT &&
+              section.taskIds.includes(previousTask.id),
+          );
+
+        if (previousSection) {
+          createNewActions.splice(
+            1,
+            0,
+            addTaskToSection({
+              sectionId: previousSection.id,
+              taskId: taskWithTargetDates.id,
+              afterTaskId: previousTask.id,
+              sourceSectionId: null,
+            }),
+          );
+        }
+      }
+    }
 
     // Schedule if given
     if (isValidSplitTime(taskRepeatCfg.startTime) && taskRepeatCfg.remindAt) {
