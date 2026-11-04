@@ -13,8 +13,17 @@ test('keeps the priority when creating the next recurring occurrence', async ({
   await workViewPage.addTask('Recurring priority');
   const task = taskPage.getTaskByText('Recurring priority').first();
   await task.click({ button: 'right' });
-  await page.getByRole('menuitem', { name: 'Priority', exact: true }).click();
-  await page.getByRole('menuitemradio', { name: 'High', exact: true }).click();
+  const priority = page.getByRole('menuitem', { name: 'Priority', exact: true });
+  const contextMenu = page.getByRole('menu').filter({ has: priority });
+  await expect(contextMenu).toBeVisible();
+  // The overlay can still be positioning while its menu items look stable.
+  await expect(contextMenu).not.toHaveClass(/mat-menu-panel-animating/);
+  await priority.click();
+  const high = page.getByRole('menuitemradio', { name: 'High', exact: true });
+  const priorityMenu = page.getByRole('menu').filter({ has: high });
+  await expect(priorityMenu).toBeVisible();
+  await expect(priorityMenu).not.toHaveClass(/mat-menu-panel-animating/);
+  await high.click();
   await expect(task.locator('task-priority-indicator')).toHaveAttribute(
     'data-priority',
     '3',
