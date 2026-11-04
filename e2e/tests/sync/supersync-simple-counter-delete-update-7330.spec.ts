@@ -331,11 +331,10 @@ const runDeleteVsUpdate = async (
  * A deletes a RUNNING stopwatch while B renames it; B's update reaches the
  * server first, so A loses and recreates the counter from its delete snapshot.
  *
- * PINS CURRENT BEHAVIOUR (follow-up issue: flush the stopwatch before clearing
- * it on delete). `deleteSimpleCounter` clears the stopwatch accumulator
- * without flushing it, and the snapshot is taken while the stopwatch runs, so
- * on A the recreated counter comes back running (`isOn: true`) and carries the
- * locally ticked time that never reached the server; B never sees that time.
+ * The restored counter must be the one B and a fresh client C hold (#11495):
+ * stopped, without the time A ticked but never flushed (no other device ever
+ * had it), and without streak fields the original lacks (#11496; created with
+ * streaks off, so it has none).
  */
 const runDeleteRunningStopwatch = async ({
   browser,
@@ -350,6 +349,7 @@ const runDeleteRunningStopwatch = async ({
   const renamedTitle = `${counterTitle}-renamed`;
   let clientA: SimulatedE2EClient | null = null;
   let clientB: SimulatedE2EClient | null = null;
+  let clientC: SimulatedE2EClient | null = null;
 
   try {
     const user = await createTestUser(testRunId);
@@ -400,19 +400,45 @@ const runDeleteRunningStopwatch = async ({
     expect(counterB?.['title']).toBe(renamedTitle);
     expect(recreatedA?.['type']).toBe('StopWatch');
     expect(counterB?.['type']).toBe('StopWatch');
+    // Not running again on A: it is stopped everywhere else.
+    expect(recreatedA?.['isOn']).toBe(false);
 
-    // Pinned current behaviour (see the docblock): A's counter comes back
-    // running, with the unsynced time A ticked before the delete; B has none.
-    const daySum = (c: Record<string, unknown> | null): number =>
-      Object.values(
-        (c?.['countOnDay'] as Record<string, number> | undefined) ?? {},
-      ).reduce((sum, v) => sum + v, 0);
-    expect(recreatedA?.['isOn']).toBe(true);
-    expect(daySum(recreatedA)).toBeGreaterThan(0);
-    expect(daySum(counterB)).toBe(0);
+    // A fresh client builds the counter from the server alone.
+    clientC = await createSimulatedClient(browser, baseURL!, 'C', testRunId);
+    const repairDialogsC = captureRepairDialogs(clientC);
+    await clientC.sync.setupSuperSync(syncConfig);
+    await clientC.sync.syncAndWait();
+    const counterC = await readStoreCounterEntity(clientC, counterId!);
+    console.log('[7330 stopwatch] C after sync:', JSON.stringify(counterC));
+
+    // The whole counter, live on A (no reload, which would reset `isOn`), is
+    // the same on all three: every field but the per-device `modified`.
+    const withoutModified = (
+      c: Record<string, unknown> | null,
+    ): Record<string, unknown> | null => {
+      if (!c) return null;
+      const rest = { ...c };
+      delete rest['modified'];
+      return rest;
+    };
+    expect(withoutModified(counterB)).not.toBeNull();
+    expect(withoutModified(recreatedA)).toEqual(withoutModified(counterB));
+    expect(withoutModified(counterC)).toEqual(withoutModified(counterB));
+    // Spelled out: the streak fields (#11496) and the per-day time (#11495).
+    for (const key of [
+      'isTrackStreaks',
+      'streakMinValue',
+      'streakMode',
+      'streakWeekDays',
+    ]) {
+      expect(recreatedA?.[key]).toEqual(counterB?.[key]);
+    }
+    expect(recreatedA?.['countOnDay']).toEqual(counterB?.['countOnDay']);
+    expect(repairDialogsC).toEqual([]);
   } finally {
     if (clientA) await closeClient(clientA);
     if (clientB) await closeClient(clientB);
+    if (clientC) await closeClient(clientC);
   }
 };
 
@@ -433,7 +459,7 @@ test.describe('@supersync Simple Counter delete-vs-update (#7330, #11465)', () =
     await runDeleteVsUpdate({ browser, baseURL, testRunId }, 'delete-first');
   });
 
-  test('a running stopwatch deleted while renamed elsewhere comes back running on the deleting client', async ({
+  test('a running stopwatch deleted while renamed elsewhere is restored stopped and identical everywhere', async ({
     browser,
     baseURL,
     testRunId,
