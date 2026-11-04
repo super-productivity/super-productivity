@@ -20,7 +20,6 @@ import { LockService } from '../sync/lock.service';
 import { LOCK_NAMES } from '../core/operation-log.const';
 import { MockStore, provideMockStore } from '@ngrx/store/testing';
 import { selectAllTagIds } from '../../features/tag/store/tag.reducer';
-import { selectAllProjectIds } from '../../features/project/store/project.selectors';
 
 describe('isArchiveAffectingAction', () => {
   it('should return true for moveToArchive action', () => {
@@ -201,10 +200,7 @@ describe('ArchiveOperationHandler', () => {
         { provide: TimeTrackingService, useValue: mockTimeTrackingService },
         { provide: LockService, useValue: mockLockService },
         provideMockStore({
-          selectors: [
-            { selector: selectAllTagIds, value: ['tag-kept'] },
-            { selector: selectAllProjectIds, value: ['INBOX', 'project-kept'] },
-          ],
+          selectors: [{ selector: selectAllTagIds, value: ['tag-kept'] }],
         }),
       ],
     });
@@ -371,62 +367,6 @@ describe('ArchiveOperationHandler', () => {
           mockArchiveService.writeTasksToArchiveForRemoteSync.calls.mostRecent().args[0];
         expect(written.map((t) => t.tagIds)).toEqual([['tag-kept']]);
         expect(tasks[0].tagIds).toEqual(['tag-deleted', 'tag-kept']);
-      });
-
-      it('should drop archived tasks whose project was deleted locally (#11486)', async () => {
-        const tasks = [
-          {
-            ...createMockTaskWithSubTasks('task-gone', [
-              {
-                id: 'sub-gone',
-                parentId: 'task-gone',
-                projectId: 'project-deleted',
-              } as Task,
-            ]),
-            projectId: 'project-deleted',
-            tagIds: [],
-          } as TaskWithSubTasks,
-          {
-            ...createMockTaskWithSubTasks('task-kept'),
-            projectId: 'project-kept',
-            tagIds: [],
-          } as TaskWithSubTasks,
-        ];
-        const action = {
-          type: TaskSharedActions.moveToArchive.type,
-          tasks,
-          meta: { isPersistent: true, isRemote: true },
-        } as unknown as PersistentAction;
-
-        await service.handleOperation(action);
-
-        const written =
-          mockArchiveService.writeTasksToArchiveForRemoteSync.calls.mostRecent().args[0];
-        expect(written.map((t) => t.id)).toEqual(['task-kept']);
-        expect(tasks.length).toBe(2);
-      });
-
-      it('should read the project state at apply time (project created in the same batch)', async () => {
-        store.overrideSelector(selectAllProjectIds, ['INBOX', 'project-new']);
-        store.refreshState();
-        const tasks = [
-          {
-            ...createMockTaskWithSubTasks('task-1'),
-            projectId: 'project-new',
-            tagIds: [],
-          } as TaskWithSubTasks,
-        ];
-        const action = {
-          type: TaskSharedActions.moveToArchive.type,
-          tasks,
-          meta: { isPersistent: true, isRemote: true },
-        } as unknown as PersistentAction;
-
-        await service.handleOperation(action);
-
-        const written =
-          mockArchiveService.writeTasksToArchiveForRemoteSync.calls.mostRecent().args[0];
-        expect(written.map((t) => t.id)).toEqual(['task-1']);
       });
 
       it('should read the tag state at apply time, not at construction', async () => {

@@ -8,12 +8,8 @@ import { Log } from '../../../core/log';
 
 export const selectProjectFeatureState =
   createFeatureSelector<ProjectState>(PROJECT_FEATURE_NAME);
-const { selectAll, selectIds } = projectAdapter.getSelectors();
+const { selectAll } = projectAdapter.getSelectors();
 export const selectAllProjects = createSelector(selectProjectFeatureState, selectAll);
-export const selectAllProjectIds = createSelector(
-  selectProjectFeatureState,
-  (state) => selectIds(state) as string[],
-);
 export const selectAllProjectsExceptInbox = createSelector(selectAllProjects, (ps) =>
   ps.filter((p) => p.id !== INBOX_PROJECT.id),
 );
