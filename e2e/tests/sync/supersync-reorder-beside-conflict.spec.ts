@@ -206,10 +206,10 @@ for (const { list, direction } of cases) {
         const editB = (): Promise<void> => editListed(b.page, list, target, valueB);
         // Real UI action order decides the timestamps.
         if (direction === 'reorderer receives the resolution') {
-          if (!bNewer) await editB();
+          // Only the B-newer variant runs here (see `bNewerVariants`).
           await editA();
           await sync(a);
-          if (bNewer) await editB();
+          await editB();
           await reorder(a.page, list, 0);
         } else {
           const actA = async (): Promise<void> => {

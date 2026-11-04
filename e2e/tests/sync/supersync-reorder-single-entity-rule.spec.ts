@@ -1061,7 +1061,8 @@ test.describe('@supersync released reorder rule (#10364)', () => {
               expect(await snapshot(other.page, 'project notes', ids)).toEqual(final);
             expect(final.entities[ids[0]].isPinnedToToday).toBe(true);
             expect(final.other.filter((id) => id === ids[0])).toHaveLength(1);
-            // The only reorder (the one current reissues) survives the crossing.
+            // The only reorder (current's drag when the released client pins,
+            // otherwise B's) commutes with the pin and survives the crossing.
             expect(reorderedOrder).not.toEqual([]);
             expect(final.order).toEqual(reorderedOrder);
             const rejected = (await rows(current.page)).filter(

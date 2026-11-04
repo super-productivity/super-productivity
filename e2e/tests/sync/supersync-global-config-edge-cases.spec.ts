@@ -84,6 +84,10 @@ test.describe('@supersync Global Config Sync Edge Cases', () => {
       // Drive celebration ON too, so C's later change below is a real edit
       // regardless of the shipped default.
       await ensureSettingState(clientA.page, 'Disable celebration', true);
+      // Leave the config page so formly modelChange cannot re-dispatch during
+      // the later syncs and overwrite the winning section.
+      await clientA.page.goto('/#/tag/TODAY/tasks');
+      await clientA.page.waitForURL(/tag\/TODAY/);
       await clientA.sync.syncAndWait();
       console.log('[3Client] Client A set animations=ON, celebration=ON, synced');
 
@@ -94,6 +98,8 @@ test.describe('@supersync Global Config Sync Edge Cases', () => {
       // Client B toggles "Disable all animations" OFF (earlier timestamp)
       await navigateToMiscSettings(clientB.page, true);
       await ensureSettingState(clientB.page, 'Disable all animations', false);
+      await clientB.page.goto('/#/tag/TODAY/tasks');
+      await clientB.page.waitForURL(/tag\/TODAY/);
       await clientB.sync.syncAndWait();
       console.log('[3Client] Client B set animations=OFF, synced');
 

@@ -1,4 +1,5 @@
 import type { Page } from '@playwright/test';
+import { rows } from './reorder-crossing';
 
 /**
  * Helpers for pinning the single correct conflict winner in sync E2E specs
@@ -46,53 +47,31 @@ export const getStoreTaskTitlesContaining = async (
 ): Promise<string[]> =>
   (await getStoreTaskTitles(page)).filter((title) => title.includes(fragment));
 
-interface OpLogRow {
-  source: 'local' | 'remote';
-  syncedAt?: number;
-  rejectedAt?: number;
-  op: { a: string; e: string; d?: string; ds?: string[]; p: unknown };
-}
-
 /**
  * Synced, non-rejected local op-log rows of one entity, reduced to the action
  * code and the top-level-or-nested payload keys they write. Values are never
  * returned, so nothing user-written can reach a log.
  */
-export const getSyncedLocalRowsOf = (
+export const getSyncedLocalRowsOf = async (
   page: Page,
   entityId: string,
-): Promise<{ a: string; keys: string[] }[]> =>
-  page.evaluate(async (id) => {
-    const db = await new Promise<IDBDatabase>((resolve, reject) => {
-      const r = indexedDB.open('SUP_OPS');
-      r.onsuccess = () => resolve(r.result);
-      r.onerror = () => reject(r.error);
-    });
-    try {
-      const rows = await new Promise<OpLogRow[]>((resolve, reject) => {
-        const r = db.transaction('ops').objectStore('ops').getAll();
-        r.onsuccess = () => resolve(r.result as OpLogRow[]);
-        r.onerror = () => reject(r.error);
-      });
-      const keysOf = (value: unknown, out: Set<string>): Set<string> => {
-        if (value && typeof value === 'object' && !Array.isArray(value)) {
-          for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-            out.add(k);
-            keysOf(v, out);
-          }
-        }
-        return out;
-      };
-      return rows
-        .filter(
-          (row) =>
-            row.source === 'local' &&
-            !!row.syncedAt &&
-            !row.rejectedAt &&
-            (row.op.d === id || !!row.op.ds?.includes(id)),
-        )
-        .map((row) => ({ a: row.op.a, keys: [...keysOf(row.op.p, new Set())].sort() }));
-    } finally {
-      db.close();
+): Promise<{ a: string; keys: string[] }[]> => {
+  const keysOf = (value: unknown, out: Set<string>): Set<string> => {
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+        out.add(k);
+        keysOf(v, out);
+      }
     }
-  }, entityId);
+    return out;
+  };
+  return (await rows(page))
+    .filter(
+      (row) =>
+        row.source === 'local' &&
+        !!row.syncedAt &&
+        !row.rejectedAt &&
+        (row.op.d === entityId || !!row.op.ds?.includes(entityId)),
+    )
+    .map((row) => ({ a: row.op.a, keys: [...keysOf(row.op.p, new Set())].sort() }));
+};
