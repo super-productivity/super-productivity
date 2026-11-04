@@ -47,6 +47,15 @@
 
   <mat-divider></mat-divider>
 
+  <!-- Also while Views are off: saving one turns them on -->
+  <button
+    mat-menu-item
+    (click)="saveAsView()"
+  >
+    <mat-icon>bookmark_add</mat-icon>
+    <span>{{ T.F.BOARDS.V.SAVE_AS_VIEW | translate }}</span>
+  </button>
+
   <!-- Reset All -->
   <button
     mat-menu-item

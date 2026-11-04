@@ -8,6 +8,7 @@ import {
   type SimulatedE2EClient,
 } from '../../utils/supersync-helpers';
 import { ImportPage } from '../../pages/import.page';
+import { DIALOG, watchDialogs } from '../../utils/audit-import-encryption-helpers';
 
 /**
  * SuperSync requires encryption. Importing an older backup whose global sync
@@ -58,11 +59,19 @@ test.describe('@supersync @encryption Import preserves mandatory encryption', ()
         ),
       ).toHaveCount(0);
 
+      // Encryption stays enabled through the import, so re-opening the setup
+      // must not ask to enable it again (setupSuperSync would answer that
+      // prompt silently with a default password).
+      const watcherA = await watchDialogs(clientA.page, [DIALOG.enableEncryption]);
       await clientA.sync.setupSuperSync({
         ...baseConfig,
         syncImportChoice: 'local',
       });
       await clientA.sync.syncAndWait();
+      await watcherA.expectNeverSeen(
+        [DIALOG.enableEncryption],
+        'A re-opening SuperSync setup after a legacy unencrypted import',
+      );
 
       clientB = await createSimulatedClient(browser, baseURL!, 'B', testRunId);
       await clientB.sync.setupSuperSync({

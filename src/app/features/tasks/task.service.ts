@@ -95,7 +95,7 @@ import { ArchiveService } from '../archive/archive.service';
 import { TaskArchiveService } from '../archive/task-archive.service';
 import { TODAY_TAG } from '../tag/tag.const';
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
-import { getDbDateStr, isDBDateStr } from '../../util/get-db-date-str';
+import { isDBDateStr } from '../../util/get-db-date-str';
 import { INBOX_PROJECT } from '../project/project.const';
 import { GlobalConfigService } from '../config/global-config.service';
 import { TaskLog } from '../../core/log';
@@ -510,7 +510,7 @@ export class TaskService {
     this._store.dispatch(TaskSharedActions.deleteTasks({ taskIds, tasks }));
   }
 
-  update(id: string, changedFields: Partial<Task>): void {
+  update(id: string, changedFields: Partial<Task>, isIgnoreShortSyntax = false): void {
     if (Object.prototype.hasOwnProperty.call(changedFields, 'timeSpentOnDay')) {
       this._taskTimeSync.flushOne(id);
     }
@@ -536,6 +536,7 @@ export class TaskService {
       TaskSharedActions.updateTask({
         task: { id, changes: changedFields },
         ...(projectMoveSubTaskIds !== undefined && { projectMoveSubTaskIds }),
+        ...(isIgnoreShortSyntax && { isIgnoreShortSyntax }),
       }),
     );
   }
@@ -1487,7 +1488,7 @@ export class TaskService {
       !additional.parentId &&
       !additional.dueWithTime &&
       !('dueDay' in additional)
-        ? { dueDay: getDbDateStr() }
+        ? { dueDay: this._dateService.todayStr() }
         : {}),
 
       ...additional,

@@ -37,6 +37,7 @@ import { HydrationStateService } from '../../../op-log/apply/hydration-state.ser
 import { SnackService } from '../../../core/snack/snack.service';
 import { GlobalTrackingIntervalService } from '../../../core/global-tracking-interval/global-tracking-interval.service';
 import { OperationWriteFlushService } from '../../../op-log/sync/operation-write-flush.service';
+import { BackgroundExitSyncService } from '../../../imex/sync/background-exit-sync.service';
 import { CapacitorReminderService } from '../../../core/platform/capacitor-reminder.service';
 import { AndroidNotificationActionService } from '../android-notification-action.service';
 import { DataInitStateService } from '../../../core/data-init/data-init-state.service';
@@ -212,6 +213,34 @@ export const handleAndroidResume = async (
   }
 };
 
+export type AndroidPauseDeps = {
+  syncElapsedTimeForTask: (taskId: string) => Promise<boolean>;
+  flushAccumulatedTimeSpent: () => void;
+  flushPendingOperations: () => Promise<void>;
+  pushPendingOps: () => Promise<void>;
+};
+
+/**
+ * Persists tracked time, then pushes pending ops before the WebView freezes.
+ * The push runs last so it includes the time-spent op, and runs even when a
+ * flush step fails: ops persisted earlier are still worth sending.
+ */
+export const handleAndroidPause = async (
+  deps: AndroidPauseDeps,
+  currentTask: Task | null,
+): Promise<void> => {
+  try {
+    if (currentTask) {
+      await deps.syncElapsedTimeForTask(currentTask.id);
+    }
+    // dispatches syncTimeSpent
+    deps.flushAccumulatedTimeSpent();
+    await deps.flushPendingOperations();
+  } finally {
+    await deps.pushPendingOps();
+  }
+};
+
 export type NativeElapsedSyncDeps = {
   getNativeTrackingData: () => NativeTrackingData | null;
   getTaskOnce: (taskId: string) => Promise<Task | undefined>;
@@ -324,6 +353,7 @@ export class AndroidForegroundTrackingEffects {
   private _reminderService = inject(CapacitorReminderService);
   private _globalTrackingIntervalService = inject(GlobalTrackingIntervalService);
   private _operationWriteFlush = inject(OperationWriteFlushService);
+  private _backgroundExitSync = inject(BackgroundExitSyncService);
   private _notificationActions = inject(AndroidNotificationActionService);
   private _dataInitState = inject(DataInitStateService);
 
@@ -579,9 +609,9 @@ export class AndroidForegroundTrackingEffects {
     );
 
   /**
-   * When the app goes to background, flush accumulated time to prevent data loss.
-   * This ensures all tracked time is persisted to IndexedDB before the app
-   * potentially gets terminated by the OS.
+   * When the app goes to background, flush accumulated time to prevent data loss,
+   * then push pending ops. This ensures all tracked time is persisted to IndexedDB
+   * and reaches other devices before the OS freezes or terminates the app.
    */
   flushOnPause$ =
     IS_ANDROID_WEB_VIEW &&
@@ -591,19 +621,23 @@ export class AndroidForegroundTrackingEffects {
           withLatestFrom(this._store.select(selectCurrentTask)),
           tap(async ([, currentTask]) => {
             DroidLog.log('App going to background, flushing time tracking data');
-
-            // If there's a current task, sync elapsed time from native service first
-            if (currentTask) {
-              await this._syncElapsedTimeForTask(currentTask.id);
-            }
-
-            // Flush accumulated time from TaskService (dispatches syncTimeSpent)
-            this._taskService.flushAccumulatedTimeSpent();
-
-            // Flush pending operations to IndexedDB to prevent data loss
-            await this._flushPendingOperations();
-
-            DroidLog.log('Time tracking data flushed successfully');
+            // Pushes here, not on a separate onPause$ subscriber, so the push
+            // follows the time flush. Android's beforeExit grants no extra time.
+            // Caught here: a rejection from an async tap is unhandled. The
+            // push already ran (handleAndroidPause's finally).
+            await handleAndroidPause(
+              {
+                syncElapsedTimeForTask: (taskId) => this._syncElapsedTimeForTask(taskId),
+                flushAccumulatedTimeSpent: () =>
+                  this._taskService.flushAccumulatedTimeSpent(),
+                flushPendingOperations: () => this._flushPendingOperations(),
+                pushPendingOps: () => this._backgroundExitSync.flushAndPush(),
+              },
+              currentTask,
+            ).then(
+              () => DroidLog.log('Time tracking data flushed successfully'),
+              (e) => DroidLog.err('Pause flush failed', e),
+            );
           }),
         ),
       { dispatch: false },

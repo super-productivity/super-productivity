@@ -7,6 +7,7 @@ import { PluginBridgeService } from '../plugin-bridge.service';
 import {
   buildPluginIframeHtml,
   createPluginApiScript,
+  refreshPluginTheme,
   handlePluginMessage,
   PluginIframeConfig,
   PLUGIN_IFRAME_SANDBOX,
@@ -181,6 +182,29 @@ describe('handlePluginMessage()', () => {
       }
     });
   }
+
+  it('names real alternatives when iframe code reads a missing PluginAPI member', () => {
+    const warn = spyOn(console, 'warn');
+    const { frame } = loadGeneratedIframeApi(
+      createConfig({ createBoundMethods: () => ({}) } as unknown as PluginBridgeService),
+    );
+    const api = frame.PluginAPI as unknown as Record<string, unknown>;
+
+    expect(api['showIframe']).toBeUndefined();
+    expect(warn.calls.mostRecent().args[0]).toContain(
+      'PluginAPI.showIframe does not exist. Did you mean: show',
+    );
+
+    expect(api['getSecret']).toBeUndefined();
+    expect(warn.calls.mostRecent().args[0]).toContain(
+      'PluginAPI.getSecret is only available in plugin.js',
+    );
+
+    warn.calls.reset();
+    expect(typeof api['getTasks']).toBe('function');
+    expect(api['showIframe']).toBeUndefined();
+    expect(warn).not.toHaveBeenCalled();
+  });
 
   it('does not cancel the bound sync when the generated iframe request times out', async () => {
     let finish!: () => void;
@@ -702,10 +726,134 @@ describe('handlePluginMessage()', () => {
           '<html><head><script>window.PluginAPI.getTasks();</script></head>' +
           '<body><script>window.PluginAPI.showSnack({});</script></body></html>',
       });
-      const apiDefinition = html.indexOf('window.PluginAPI = {');
+      const apiDefinition = html.indexOf('window.PluginAPI = new Proxy(');
       expect(apiDefinition).toBeGreaterThan(-1);
       expect(apiDefinition).toBeLessThan(html.indexOf('window.PluginAPI.getTasks()'));
       expect(apiDefinition).toBeLessThan(html.indexOf('window.PluginAPI.showSnack({})'));
+    });
+
+    describe('theme and UI kit styling', () => {
+      let iframe: HTMLIFrameElement | undefined;
+      const hostVars: [name: string, value: string][] = [
+        ['--c-primary', 'rgb(1, 2, 3)'],
+        ['--c-contrast', 'rgb(250, 251, 252)'],
+        ['--radius-xs', '5px'],
+      ];
+
+      beforeEach(() => {
+        hostVars.forEach(([name, value]) => document.body.style.setProperty(name, value));
+      });
+
+      afterEach(() => {
+        hostVars.forEach(([name]) => document.body.style.removeProperty(name));
+        iframe?.remove();
+        iframe = undefined;
+      });
+
+      const renderPlugin = async (
+        pluginHtml: string,
+        manifestPatch: Partial<PluginManifest> = {},
+      ): Promise<Document> => {
+        const config = createConfig(pluginBridge);
+        iframe = document.createElement('iframe');
+        const loaded = new Promise((resolve) => (iframe!.onload = resolve));
+        iframe.srcdoc = buildPluginIframeHtml({
+          ...config,
+          manifest: { ...config.manifest, ...manifestPatch },
+          indexHtml: `<html><head></head><body>${pluginHtml}</body></html>`,
+        });
+        document.body.appendChild(iframe);
+        await loaded;
+        return iframe.contentDocument!;
+      };
+
+      const styleOf = (doc: Document, id: string): CSSStyleDeclaration =>
+        doc.defaultView!.getComputedStyle(doc.getElementById(id)!);
+
+      it('styles a primary button from the host theme tokens', async () => {
+        const doc = await renderPlugin('<button id="b" class="btn-primary">Go</button>');
+        const style = styleOf(doc, 'b');
+        expect(style.backgroundColor).toBe('rgb(1, 2, 3)');
+        expect(style.color).toBe('rgb(250, 251, 252)');
+        expect(style.borderTopLeftRadius).toBe('5px');
+      });
+
+      it('lets any plugin rule override the kit, regardless of specificity', async () => {
+        const doc = await renderPlugin(
+          // a bare element selector loses to the kit's `.btn-icon` without the layer
+          '<style>button { padding: 3px; }</style>' +
+            '<button id="b" class="btn-icon">Go</button>',
+        );
+        expect(styleOf(doc, 'b').paddingLeft).toBe('3px');
+      });
+
+      it('skips the kit but keeps theme tokens when uiKit is false', async () => {
+        const doc = await renderPlugin('<button id="b" class="btn-primary">Go</button>', {
+          uiKit: false,
+        });
+        expect(styleOf(doc, 'b').backgroundColor).not.toBe('rgb(1, 2, 3)');
+        expect(
+          doc
+            .defaultView!.getComputedStyle(doc.documentElement)
+            .getPropertyValue('--c-primary'),
+        ).toBe('rgb(1, 2, 3)');
+      });
+    });
+
+    describe('host fonts and live theme', () => {
+      let iframe: HTMLIFrameElement | undefined;
+      let hostStyle: HTMLStyleElement | undefined;
+
+      afterEach(() => {
+        iframe?.remove();
+        hostStyle?.remove();
+        document.body.style.removeProperty('--c-primary');
+        iframe = hostStyle = undefined;
+      });
+
+      const renderPlugin = async (pluginHtml: string): Promise<Document> => {
+        iframe = document.createElement('iframe');
+        const loaded = new Promise((resolve) => (iframe!.onload = resolve));
+        iframe.srcdoc = buildPluginIframeHtml({
+          ...createConfig(pluginBridge),
+          indexHtml: `<html><head></head><body>${pluginHtml}</body></html>`,
+        });
+        document.body.appendChild(iframe);
+        await loaded;
+        return iframe.contentDocument!;
+      };
+
+      it('copies host @font-face rules with absolute URLs', async () => {
+        hostStyle = document.createElement('style');
+        hostStyle.textContent =
+          "@font-face { font-family: 'Host Test Font'; src: url('media/host-test.woff2'); }";
+        document.head.appendChild(hostStyle);
+
+        const doc = await renderPlugin('');
+        const fontRule = Array.from(doc.styleSheets)
+          .flatMap((sheet) => Array.from(sheet.cssRules))
+          .find((rule) => rule.cssText.includes('Host Test Font'));
+        expect(fontRule?.cssText).toContain(
+          new URL('media/host-test.woff2', document.baseURI).href,
+        );
+      });
+
+      it('applies a host theme change to a rendered plugin', async () => {
+        document.body.style.setProperty('--c-primary', 'rgb(1, 2, 3)');
+        const doc = await renderPlugin(
+          // no transition, so the computed color is the end value right away
+          '<style>button { transition: none; }</style>' +
+            '<button id="b" class="btn-primary">Go</button>',
+        );
+        const button = doc.getElementById('b')!;
+
+        document.body.style.setProperty('--c-primary', 'rgb(4, 5, 6)');
+        refreshPluginTheme(iframe!);
+
+        expect(doc.defaultView!.getComputedStyle(button).backgroundColor).toBe(
+          'rgb(4, 5, 6)',
+        );
+      });
     });
 
     it('prepends the API script for fragment HTML without a <head>', () => {

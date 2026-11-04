@@ -1,0 +1,36 @@
+// The view editor's chip menus (src/app/features/boards/view-editor): they
+// render in the overlay, outside the components' styles.
+.view-editor-menu {
+  // A group's name in the Add-rule menu, typed like a section heading.
+  .menu-caption {
+    padding: var(--s) var(--s2) var(--s-half);
+    color: var(--text-color-muted);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    letter-spacing: var(--letter-spacing-wide);
+  }
+
+  // The tag or project filter at the top of the menu.
+  .menu-filter {
+    padding: var(--s) var(--s2);
+    min-width: 250px;
+  }
+
+  .menu-filter-field {
+    width: 100%;
+  }
+
+  // Why an item is disabled, below its label.
+  .menu-item-sub {
+    display: block;
+    color: var(--text-color-muted);
+    font-size: var(--font-size-xs);
+    line-height: var(--line-height-tight);
+  }
+
+  // Keeps the labels aligned with the checked items. Specific enough to beat
+  // the global icon visibility rule.
+  .mat-icon.menu-hidden-icon {
+    visibility: hidden;
+  }
+}

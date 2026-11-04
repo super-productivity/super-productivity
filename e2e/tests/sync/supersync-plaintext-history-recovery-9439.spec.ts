@@ -1,7 +1,7 @@
 import {
   SuperSyncDownloadOpsResponseSchema,
   SuperSyncOperationSchema,
-} from '@sp/shared-schema';
+} from '@sp/shared-schema/supersync-http-contract';
 import { decrypt } from '@sp/sync-core';
 import { expect, test } from '../../fixtures/supersync.fixture';
 import {

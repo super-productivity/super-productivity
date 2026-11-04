@@ -1,0 +1,250 @@
+/* The panel is an iframe: the app's styles don't reach it, only the UI kit and
+   theme variables. Layout follows the mockups in the plan. */
+html,
+body {
+  height: 100%;
+  margin: 0;
+}
+[hidden] {
+  display: none !important;
+}
+.aic {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: var(--s2);
+  gap: var(--s2);
+  box-sizing: border-box;
+  color: var(--text-color);
+  font-size: 14px;
+}
+.aic h2 {
+  font-size: 16px;
+  line-height: 24px;
+  font-weight: 600;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.aic h3 {
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-color-muted);
+  margin: var(--s) 0 4px;
+}
+.aic p {
+  margin: 0;
+}
+.aic .muted {
+  color: var(--text-color-muted);
+  font-size: 12px;
+}
+.aic textarea {
+  width: 100%;
+  box-sizing: border-box;
+  resize: none;
+  font: inherit;
+  padding: 10px 12px;
+  border: 1px solid var(--divider-color);
+  border-radius: var(--card-border-radius);
+  background: var(--card-bg);
+  color: inherit;
+  min-height: 64px;
+  max-height: 120px;
+  field-sizing: content;
+}
+.aic textarea:focus {
+  outline: 2px solid var(--c-primary);
+  outline-offset: -1px;
+  border-color: transparent;
+}
+.aic .hint {
+  margin-top: 4px;
+}
+.aic .result {
+  flex: 1;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.aic .say,
+.aic .summary,
+.aic .notice {
+  padding: 10px 12px;
+  border-radius: var(--card-border-radius);
+  background: var(--card-bg);
+}
+.aic ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.aic li.row {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 8px 4px;
+  border-bottom: 1px solid var(--divider-color);
+}
+.aic li.row input {
+  margin-top: 3px;
+  accent-color: var(--c-primary);
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+.aic .row .main {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.aic .row .title {
+  display: block;
+}
+.aic .row .what {
+  display: block;
+  font-size: 12px;
+  color: var(--text-color-muted);
+}
+.aic .row .what.warn {
+  color: var(--c-warn);
+}
+.aic .row.off .title {
+  color: var(--text-color-muted);
+}
+.aic .row.del .title {
+  text-decoration: line-through;
+  text-decoration-color: var(--text-color-muted);
+}
+.aic .acts {
+  display: flex;
+  flex: none;
+  gap: 4px;
+}
+.aic .rank {
+  flex: none;
+  width: 18px;
+  text-align: right;
+  color: var(--text-color-muted);
+  font-variant-numeric: tabular-nums;
+  margin-top: 1px;
+}
+.aic .dropped {
+  list-style: disc;
+  padding-left: 18px;
+  color: var(--text-color-muted);
+  font-size: 12px;
+}
+.aic footer {
+  display: flex;
+  gap: var(--s);
+  justify-content: flex-end;
+  align-items: center;
+  padding-top: var(--s);
+  border-top: 1px solid var(--divider-color);
+}
+.aic footer:empty {
+  display: none;
+}
+.aic footer button {
+  white-space: nowrap;
+}
+.aic footer .count {
+  margin-right: auto;
+}
+.aic .stack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.aic .notice {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.aic .notice ul {
+  list-style: disc;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.aic pre {
+  max-height: 240px;
+  overflow: auto;
+  font-size: 11px;
+}
+.aic label.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text-color-muted);
+}
+.aic label.field input,
+.aic label.field select {
+  font: inherit;
+  font-size: 14px;
+  color: var(--text-color);
+  padding: 8px 10px;
+  border: 1px solid var(--divider-color);
+  border-radius: var(--card-border-radius);
+  background: var(--card-bg);
+}
+.aic label.check {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.aic label.check input {
+  accent-color: var(--c-primary);
+  width: 16px;
+  height: 16px;
+}
+.aic .msg {
+  padding: 10px 12px;
+  border-radius: var(--card-border-radius);
+  border: 1px solid var(--divider-color);
+}
+.aic .msg.warn,
+.aic .error {
+  border-color: var(--c-warn);
+}
+.aic .error {
+  color: var(--c-warn);
+}
+.aic .error:empty {
+  display: none;
+}
+.aic .loading {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: var(--text-color-muted);
+}
+.aic .spin {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 3px solid var(--divider-color);
+  border-top-color: var(--c-primary);
+  animation: aic-spin 0.8s linear infinite;
+}
+@keyframes aic-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .aic .spin {
+    animation-duration: 3s;
+  }
+}

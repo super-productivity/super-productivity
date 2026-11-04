@@ -208,6 +208,15 @@ export interface AndroidInterface {
   // Mirrors the E2EE password so the background worker can decrypt op payloads;
   // '' clears it. Optional: older APKs don't have it.
   setSuperSyncEncryptionPassword?(password: string): void;
+  // WebDAV/Nextcloud variant: native GETs the sync file and drops any SuperSync
+  // credentials. The password goes via setSuperSyncEncryptionPassword (one
+  // shared slot). Optional: older APKs don't have it.
+  setFileSyncCredentials?(
+    fileUrl: string,
+    authorization: string,
+    isEncryptionExpected: boolean,
+  ): void;
+  clearFileSyncCredentials?(): void;
   // Mirrors the SuperSync capture public key (base64 SPKI) so shares upload
   // sealed while the app is closed; '' clears it. Optional: older APKs.
   setCapturePublicKey?(publicKeySpki: string): void;

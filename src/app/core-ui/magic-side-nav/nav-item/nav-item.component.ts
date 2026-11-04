@@ -27,7 +27,12 @@ import { T } from '../../../t.const';
 import { CdkDragPlaceholder } from '@angular/cdk/drag-drop';
 import { MatIconButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
-import { MatMenuItem, MatMenuModule, MatMenuPanel } from '@angular/material/menu';
+import {
+  MatMenu,
+  MatMenuItem,
+  MatMenuModule,
+  MatMenuPanel,
+} from '@angular/material/menu';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { selectAllDoneIds } from '../../../features/tasks/store/task.selectors';
 import { Store } from '@ngrx/store';
@@ -118,6 +123,9 @@ export class NavItemComponent {
 
   // Feature flag key for disable-feature context menu
   featureConfigKey = input<keyof AppFeaturesConfig | undefined>(undefined);
+  // Menu for a route row (more-button, right-click, long-press) or a section
+  // header (right-click, long-press). Ignored when `featureConfigKey` is set.
+  contextMenu = input<MatMenu | null>(null);
 
   // Events
   clicked = output<void>();

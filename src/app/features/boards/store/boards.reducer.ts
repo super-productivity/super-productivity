@@ -1,6 +1,6 @@
 import { createFeature, createReducer, on } from '@ngrx/store';
 import { BoardsActions } from './boards.actions';
-import { BoardCfg } from '../boards.model';
+import { BoardCfg, BoardPanelCfg } from '../boards.model';
 import { DEFAULT_BOARDS } from '../boards.const';
 import { loadAllData } from '../../../root-store/meta/load-all-data.action';
 import { nanoid } from 'nanoid';
@@ -11,6 +11,26 @@ const sanitizeBoard = (board: BoardCfg): BoardCfg => ({
   ...board,
   panels: (board.panels || []).map(sanitizePanelCfg),
 });
+
+/**
+ * A panel's manual order belongs to `updatePanelCfgTaskIds` (#11388). An
+ * `updateBoard` only echoes the order its device last saw, and it declares the
+ * board while a reorder declares the panel: the two never conflict, so they
+ * arrive in either order. Keeping the stored order of the panels the board
+ * already has makes them commute; a panel the update adds brings its own.
+ * Released receivers still apply the update's order, which is why the editor
+ * sends the current one (`getViewUpdates`).
+ */
+const keepStoredTaskIds = (
+  panels: BoardPanelCfg[],
+  stored: BoardCfg,
+): BoardPanelCfg[] => {
+  const storedTaskIds = new Map((stored.panels || []).map((p) => [p.id, p.taskIds]));
+  return panels.map((panel) => {
+    const taskIds = storedTaskIds.get(panel.id);
+    return taskIds ? { ...panel, taskIds } : panel;
+  });
+};
 
 const sanitizeBoardsState = (state: BoardsState): BoardsState => ({
   ...state,
@@ -143,17 +163,21 @@ export const boardsReducer = createReducer(
     };
   }),
 
-  on(BoardsActions.updateBoard, (state, { id, updates }) => {
-    const sanitizedUpdates = updates.panels
-      ? { ...updates, panels: updates.panels.map(sanitizePanelCfg) }
-      : updates;
-    return {
-      ...state,
-      boardCfgs: state.boardCfgs.map((cfg) =>
-        cfg.id === id ? { ...cfg, ...sanitizedUpdates } : cfg,
-      ),
-    };
-  }),
+  on(BoardsActions.updateBoard, (state, { id, updates }) => ({
+    ...state,
+    boardCfgs: state.boardCfgs.map((cfg) => {
+      if (cfg.id !== id) {
+        return cfg;
+      }
+      return updates.panels
+        ? {
+            ...cfg,
+            ...updates,
+            panels: keepStoredTaskIds(updates.panels.map(sanitizePanelCfg), cfg),
+          }
+        : { ...cfg, ...updates };
+    }),
+  })),
 
   on(BoardsActions.removeBoard, (state, { id }) => {
     return {

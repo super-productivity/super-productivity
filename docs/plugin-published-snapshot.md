@@ -1,129 +1,128 @@
-# Чтение опубликованного снимка для вложений
+# Reading a published snapshot for attachments
 
-`PluginAPI.readPublishedSnapshot()` возвращает ограниченную проекцию
-опубликованного primary. Он использует `readPublishedPluginSnapshot` и
-`projectPublishedPluginSnapshot`. Метод доступен через прямой API и iframe.
-Он не запускает синхронизацию или очистку.
+`PluginAPI.readPublishedSnapshot()` returns a scoped projection of the published
+primary. It uses `readPublishedPluginSnapshot` and
+`projectPublishedPluginSnapshot`. The method is available to the direct API and
+iframes. It does not start synchronization or cleanup.
 
-## Почему нельзя использовать обычное чтение задач
+## Why ordinary task reads are insufficient
 
-Локальное состояние может содержать ещё не опубликованные изменения.
-Завершение обычной синхронизации не является квитанцией публикации: обработанная
-ошибка или пропущенный проход также могут завершиться без исключения. UI-методы
-чтения архивов могут вернуть пустой массив при ошибке. Такое поведение подходит
-интерфейсу, но не подтверждает отсутствие задачи перед физическим удалением файла.
+Local state may contain changes that have not been published yet. Completing
+normal synchronization is not a publication receipt: handled errors and skipped
+cycles may also complete without throwing. UI archive reads may return an empty
+array on error. That behavior serves the UI, but does not establish that a task
+is absent before physically deleting an external file.
 
-Для формата v2 основной `sync-data.json` содержит полный `state`, `archiveYoung`,
-`archiveOld` и `vectorClock`. `recentOps` хранит уже представленные в этом снимке
-операции. Отдельное воспроизведение этих операций при чтении v2 не требуется.
+In v2, the primary `sync-data.json` contains the complete `state`, `archiveYoung`,
+`archiveOld` and `vectorClock`. `recentOps` contains operations already represented
+in that snapshot. Reading v2 does not require replaying those operations separately.
 
-## Контракт чтения
+## Read contract
 
-1. Reader фиксирует активный provider, локальные config/sync epochs и копию
-   приватной конфигурации. Он не выдаёт конфигурацию вызывающему коду.
-2. Reader проверяет отсутствие `sync-ops.json`. Только
-   `RemoteFileNotFoundAPIError` подтверждает отсутствие. Другие ошибки завершают
-   чтение отказом. Найденный split-head тоже означает отказ.
-3. Reader скачивает только основной `sync-data.json`. Он использует штатную
-   расшифровку и распаковку с намерением шифрования из конфигурации provider.
-   Он не использует `.bak`, кэш адаптера, восстановление или миграцию.
-4. Projector требует `taskArchiveSnapshotVersion: 1` и проверяет поддерживаемую
-   схему, v2 envelope, clock, активные задачи,
-   оба архива и массив plugin-data. Отсутствие архива не считается пустым архивом.
-   Дубли и несогласованные `ids`/`entities` тоже приводят к отказу.
-5. Projector возвращает только идентификаторы задач, их расположение и `isDone`,
-   а также строки собственного пространства плагина. Архивная задача без
-   `isDone` получает `null`, а не предположение о выполнении. Собственные
-   сжатые строки декодируются строго. Ошибка декодирования не означает
-   отсутствие метаданных. Чужие значения не декодируются и не возвращаются.
-6. Reader повторно проверяет ревизию primary, отсутствие split-head и локальную
-   конфигурацию. Изменение любого из них означает отказ. Ошибки транспорта и
-   декодирования скрыты за общим сообщением без remote payload и credentials.
+1. The reader captures the active provider, local config/sync epochs and a copy
+   of the private configuration. It does not expose that configuration to callers.
+2. The reader checks that `sync-ops.json` is absent. Only
+   `RemoteFileNotFoundAPIError` establishes absence. Other errors reject the read.
+   An existing split head also rejects the read.
+3. The reader downloads only the primary `sync-data.json`. It uses the normal
+   decryption and decompression path with the provider configuration's encryption
+   intent. It does not use `.bak`, adapter caches, repair or migration.
+4. The projector requires `taskArchiveSnapshotVersion: 1` and validates the
+   supported schema, v2 envelope, clock, active tasks, both archives and the
+   plugin-data array. A missing archive is not an empty archive. Duplicates and
+   inconsistent `ids`/`entities` also cause rejection.
+5. The projector returns only task IDs, location and `isDone`, plus strings from
+   the caller plugin's namespace. An archived task without `isDone` gets `null`,
+   rather than an assumption of completion. Own compressed strings are decoded
+   strictly. A decoding failure does not mean metadata is absent. Other plugins'
+   values are neither decoded nor returned.
+6. The reader rechecks the primary revision, absence of a split head and local
+   configuration. Any change rejects the read. Transport and decoding errors are
+   hidden behind a generic message without remote payloads or credentials.
 
 ```text
-фиксировать конфигурацию → исключить split → прочитать primary
-                                                   ↓
-отдать проекцию ← повторить проверки ← проверить задачи и оба архива
+capture configuration -> exclude split -> read primary
+                                               |
+return projection <- repeat checks <- validate tasks and both archives
 ```
 
-Результат содержит `format: 'file-v2'`, `revision`, `clock`, `tasks` и
-`pluginData`. Пустой ключ обозначает старую корневую запись плагина. Значения
-сохраняют исходную строковую форму Plugin API после декодирования.
+The result contains `format: 'file-v2'`, `revision`, `clock`, `tasks` and
+`pluginData`. An empty key identifies the plugin's legacy root entry. Values
+preserve their original Plugin API string representation after decoding.
 
-## Границы гарантии
+## Guarantee boundaries
 
-- Это наблюдение снимка на момент чтения. Оно не является блокировкой WebDAV
-  или самостоятельным разрешением удалить файл.
-- Reader требует отметку writer о согласованном capture. Он не пересчитывает
-  историю операций и не проверяет происхождение среза независимо от writer.
-  Публикация с отметкой writer получает active state и архивы на одном срезе
-  под `OPERATION_LOG → TASK_ARCHIVE`. При пустом наборе pending upload не создаётся;
-  известный split сохраняет прежний raw-путь без отметки. Смена настройки после
-  hint может оставить v2 без отметки до новой загрузки с pending операциями;
-  [контракт и воспроизведение](sync-and-op-log/file-snapshot-archive-cutoff.md)
-  описывают восстановление задачи после capture. Отметка writer обязательна;
-  непроверенная нормализация архивных задач, raw upload и full-state upload её
-  не получают. Старый writer, который пересобирает envelope перечислением
-  полей, теряет отметку. Reader отказывает для таких публикаций. Отметка
-  подтверждает путь capture, а не право удалить конкретный объект.
-- Проверка ревизии обнаруживает обычную замену primary. Она не превращает слабый
-  ETag или best-effort provider в атомарный CAS.
-- Локальные epochs не являются межклиентным подтверждением публикации. Кэш
-  credentials может скрыть изменение конфигурации в другом контексте. Поэтому
-  будущий протокол обязан проверять опубликованный идентификатор набора данных
-  и причинную связь с конкретным intent, а не выводить identity из epochs.
-- Незавершённый или неизвестный PUT нельзя считать осиротевшим по возрасту.
-  Безопасность владения объектом и гонки PUT/DELETE решаются отдельным протоколом.
-- Split v3, SuperSync и provider с ограничением одного файла пока не
-  поддерживаются. Reader не меняет выбранный владельцем формат синхронизации.
-- Отказ означает «полнота не подтверждена». Он никогда не означает
-  «задач нет». Reader ничего не записывает на удалённое хранилище и не меняет
-  состояние приложения или отметки синхронизации.
+- This observes a snapshot at read time. It is not a WebDAV lock or independent
+  authorization to delete a file.
+- The reader requires the writer's coherent-capture marker. It does not
+  recalculate operation history or establish the cutoff's provenance independently
+  of the writer. A marked publication captures active state and archives at one
+  cutoff under `OPERATION_LOG -> TASK_ARCHIVE`. Empty pending sets produce no
+  upload; known split uploads retain the unmarked raw-state path. A setting change
+  after the hint may leave v2 unmarked until a later upload with pending
+  operations. The [contract and reproduction](sync-and-op-log/file-snapshot-archive-cutoff.md)
+  cover task restoration after capture. The writer marker is required;
+  unverified archive-task normalization, raw uploads and full-state uploads do
+  not receive it. An older writer that rebuilds the envelope by enumerating its
+  fields drops the marker. The reader rejects such publications. The marker
+  proves the capture path, not permission to delete a particular object.
+- Revision checks detect ordinary primary replacement. They do not turn a weak
+  ETag or best-effort provider into atomic CAS.
+- Local epochs are not cross-client publication receipts. Credential caches may
+  conceal configuration changes in another context. A future protocol must
+  therefore verify a published dataset identifier and its causal connection to
+  a particular intent, rather than derive identity from epochs.
+- An unfinished or unknown PUT must not be classified as orphaned by age.
+  Object ownership and PUT/DELETE races require a separate protocol.
+- Split v3, SuperSync and single-file providers are not supported. The reader
+  does not change the owner's chosen synchronization format.
+- Rejection means completeness is unproven. It never means there are no tasks.
+  The reader performs no remote writes and does not change application state or
+  synchronization acknowledgements.
 
-## Граница с протоколом очистки
+## Boundary with the cleanup protocol
 
-Reader не реализует очистку вложений и не подтверждает конкретную локальную
-запись. Он не добавляет публичный способ запуска синхронизации. Его контракт
-не зависит от API, которые могут появиться в других изменениях.
+The reader does not implement attachment cleanup or confirm a particular local
+write. It does not add a public synchronization trigger. Its contract does not
+depend on APIs that may be introduced by other changes.
 
-Отдельный протокол плагина должен определить владение объектом, идентификатор
-набора данных, публикацию конкретного запроса и гонки с незавершёнными операциями.
-Например, случайный nonce в собственной записи позволяет проверить точное
-совпадение опубликованного запроса. Однако одного nonce недостаточно для
-разрешения DELETE: протокол должен связать запрос с ожидаемым хранилищем,
-проверить актуальную привязку и исключить конкурирующие операции. Локальный
-vector clock или завершение синхронизации этого не доказывают. Одновременные
-запросы могут вытеснить друг друга по LWW; проигравший проход должен отказаться.
+A separate plugin protocol must define object ownership, dataset identity,
+publication of a particular request and races with unfinished operations. For
+example, a random nonce in an own entry lets the plugin check an exact published
+request. A nonce alone does not authorize DELETE: the protocol must bind the
+request to the expected store, validate the current attachment binding and exclude
+competing operations. A local vector clock or completed sync does not prove
+these conditions. Concurrent requests may supersede each other through LWW; the
+losing cleanup pass must refuse to proceed.
 
-После full-state upload может потребоваться обычная загрузка новой операции,
-чтобы primary получил проверяемую отметку. Отсутствие отметки не мешает обычной
-синхронизации Super Productivity. Reader для такого primary отказывает. Даже
-при успешном чтении он не блокирует смену ревизии и не предоставляет атомарный
-протокол удаления. Включать автоматическую очистку только на основании этого
-API нельзя.
+After a full-state upload, an ordinary upload of a new operation may be needed
+before the primary receives a verifiable marker. A missing marker does not stop
+normal Super Productivity synchronization. The reader rejects that primary.
+Even a successful read does not prevent revision changes or provide an atomic
+deletion protocol. This API alone must not enable automatic cleanup.
 
-## Воспроизводимые проверки
+## Reproducible checks
 
 ```sh
 npm run quiet -- checkFile src/app/plugins/plugin-published-snapshot.ts src/app/plugins/plugin-published-snapshot.spec.ts src/app/plugins/plugin-published-snapshot-reader.ts src/app/plugins/plugin-published-snapshot-reader.spec.ts
 npm run quiet -- test:file src/app/plugins/plugin-published-snapshot.spec.ts --include src/app/plugins/plugin-published-snapshot-reader.spec.ts
 ```
 
-Projector проверяется на формах данных замороженной фикстуры предыдущего
-выпуска. Отдельный тест меняет исходные задачи, архивы, clock и plugin-data
-во время асинхронного декодирования и проверяет единый захваченный срез.
-Транспорт проверяется на настоящем кодеке с тестовыми строками,
-шифрованием и сжатием. Provider в этих unit-тестах — изолированная фикстура.
+The projector is tested against data shapes from the previous release's frozen
+fixture. A separate test mutates the source tasks, archives, clock and plugin data
+during asynchronous decoding and verifies one captured cutoff. Transport tests
+use the actual codec with test strings, encryption and compression. The provider
+in these unit tests is an isolated fixture.
 
 ```sh
 npm run quiet -- e2e:webdav:file e2e/tests/sync/webdav-plugin-published-snapshot.spec.ts --retries=0
 ```
 
-Два сквозных сценария используют настоящий WebDAV и установленный iframe-плагин:
-обычный primary и primary с шифрованием. Они проверяют активную задачу,
-архивную задачу, декодирование собственной строки и изоляцию пространств
-двух плагинов. Повреждённый primary при исправном backup и существующий
-split-head должны приводить к отказу. Успешное чтение выполняет только
-read-only HTTP-запросы. Отдельный old-архив проверяют unit-тесты projector.
-Эти сценарии не проверяют Dropbox, OneDrive, межклиентный протокол публикации
-или удаление файлов. Протокол очистки требует отдельной приёмки перед включением.
+Two end-to-end scenarios use real WebDAV and an installed iframe plugin: a plain
+primary and an encrypted primary. They verify an active task, an archived task,
+decoding an own string and isolation between two plugin namespaces. A corrupt
+primary despite a valid backup, and a present split head, must cause rejection.
+Successful reads use only read-only HTTP requests. Projector unit tests cover the
+old archive separately. These scenarios do not test Dropbox, OneDrive, a
+cross-client publication protocol or file deletion. The cleanup protocol requires
+separate acceptance before it is enabled.

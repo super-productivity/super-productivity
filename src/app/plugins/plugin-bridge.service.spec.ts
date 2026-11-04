@@ -42,6 +42,7 @@ import { getDbDateStr } from '../util/get-db-date-str';
 import { DataInitService } from '../core/data-init/data-init.service';
 import { Log } from '../core/log';
 import { updateGlobalConfigSection } from '../features/config/store/global-config.actions';
+import { showPluginPanel } from '../core-ui/layout/store/layout.actions';
 import { PluginDialogComponent } from './ui/plugin-dialog/plugin-dialog.component';
 import { T } from '../t.const';
 import { INBOX_PROJECT } from '../features/project/project.const';
@@ -624,6 +625,23 @@ describe('PluginBridgeService - dispatchAction privacy (#7619)', () => {
       { type },
     );
   });
+
+  it('lets a plugin open its own panel', () => {
+    const bound = service.createBoundMethods('test-plugin');
+
+    bound.dispatchAction({ type: showPluginPanel.type, pluginId: 'test-plugin' });
+
+    expect(store.dispatch).toHaveBeenCalledOnceWith(showPluginPanel('test-plugin'));
+  });
+
+  it("refuses to open another plugin's panel", () => {
+    const bound = service.createBoundMethods('test-plugin');
+
+    expect(() =>
+      bound.dispatchAction({ type: showPluginPanel.type, pluginId: 'other-plugin' }),
+    ).toThrowError('Action type is not allowed');
+    expect(store.dispatch).not.toHaveBeenCalled();
+  });
 });
 
 describe('PluginBridgeService - iframe task selection methods', () => {
@@ -980,11 +998,15 @@ describe('PluginBridgeService - openDialog', () => {
       PluginDialogComponent,
       jasmine.objectContaining({
         data: dialogCfg,
-        autoFocus: true,
         restoreFocus: true,
         disableClose: false,
         closeOnNavigation: false,
       }),
+    );
+    // Plugin dialogs follow the touch-aware default (no keyboard on touch).
+    // An explicit `autoFocus: undefined` would also override the default.
+    expect(Object.keys(matDialog.open.calls.mostRecent().args[1] ?? {})).not.toContain(
+      'autoFocus',
     );
   });
 

@@ -2,6 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { OperationWriteFlushService } from './operation-write-flush.service';
 import { LockService } from './lock.service';
 import { OperationCaptureService } from '../capture/operation-capture.service';
+import { OperationWriteCutoffError } from '../core/errors/sync-errors';
 
 describe('OperationWriteFlushService', () => {
   let service: OperationWriteFlushService;
@@ -165,6 +166,7 @@ describe('OperationWriteFlushService', () => {
       const fn = jasmine.createSpy('fn');
 
       await expectAsync(service.flushThenRunExclusive(fn)).toBeRejectedWithError(
+        OperationWriteCutoffError,
         /cutoff not reached/,
       );
       expect(fn).not.toHaveBeenCalled();

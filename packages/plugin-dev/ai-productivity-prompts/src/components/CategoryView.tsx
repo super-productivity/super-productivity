@@ -9,21 +9,16 @@ interface CategoryViewProps {
 
 const CategoryView: Component<CategoryViewProps> = (props) => {
   return (
-    <div class="category-container page-fade">
-      <div class="selected-category">
-        <h2 class="text-primary">{props.category.title}</h2>
-      </div>
+    <div class="stack page-fade">
+      <h2 class="intro">{props.category.title}</h2>
 
       <h3>Available Prompts:</h3>
 
-      <div class="prompt-list">
+      <div class="stack">
         <For each={props.category.prompts}>
           {(prompt) => (
-            <Card
-              onClick={() => props.onSelectPrompt(prompt)}
-              class="prompt-item"
-            >
-              <h4 class="prompt-title">{prompt.title}</h4>
+            <Card onClick={() => props.onSelectPrompt(prompt)}>
+              <h4>{prompt.title}</h4>
             </Card>
           )}
         </For>

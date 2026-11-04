@@ -30,7 +30,7 @@ export class ProjectPage extends BasePage {
       .locator('dialog-create-project input[type="text"]')
       .first();
     this.submitBtn = page.locator('dialog-create-project button[type=submit]');
-    this.workCtxMenu = page.locator('work-context-menu');
+    this.workCtxMenu = page.locator('.work-context-menu-panel');
     // Use more specific selector to avoid matching titles in other areas
     this.workCtxTitle = page
       .locator('main .page-title, .route-wrapper .page-title')

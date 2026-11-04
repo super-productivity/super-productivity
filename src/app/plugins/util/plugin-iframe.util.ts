@@ -3,6 +3,13 @@ import { PluginBaseCfg, PluginManifest } from '../plugin-api.model';
 import { PluginHooks, PluginIframeMessageType } from '@super-productivity/plugin-api';
 import { PluginLog } from '../../core/log';
 import { PLUGIN_UI_KIT_CSS } from './plugin-ui-kit.css';
+import { PLUGIN_THEME_VAR_NAMES } from './plugin-theme-vars';
+import {
+  IGNORED_PROBES,
+  PLUGIN_API_MEMBER_NAMES,
+  PLUGIN_API_TYPES_URL,
+  unknownPluginApiMemberMessage,
+} from './unknown-plugin-api-member.util';
 
 /**
  * Simplified plugin iframe utilities following KISS principles.
@@ -66,6 +73,9 @@ const ALLOWED_IFRAME_API_METHODS = new Set([
   'showInWorkContext',
   'closeWorkContextView',
   'getActiveWorkContext',
+  'getDayContext',
+  'startTracking',
+  'stopTracking',
   'getAppState',
   'persistDataSynced',
   'loadPersistedData',
@@ -112,101 +122,72 @@ const getPluginSurfaceVar = (
 
 const HAS_DIALOG_BUTTON_HANDLER = '__hasDialogButtonHandler';
 
-/**
- * Create CSS injection for plugins - KISS approach
- */
-export const createPluginCssInjection = (): string => {
+const THEME_VARS_STYLE_ID = 'injected-theme-vars';
+
+/** The host's theme tokens as a `:root` rule; see PLUGIN_THEME_VAR_NAMES. */
+const createThemeVarsCss = (): string => {
   const isDarkTheme = document.body.classList.contains('isDarkTheme');
   // CSS variables are defined on body, not :root!
   const computedStyle = getComputedStyle(document.body);
-
-  // Just get the essential theme variables we need
-  const getVar = (name: string): string => {
-    return computedStyle.getPropertyValue(name).trim();
-  };
-  const bg = getVar('--bg');
-  const bgLighter = getVar('--bg-lighter');
-  const cardBg = getPluginSurfaceVar(getVar('--card-bg'), bgLighter, bg);
+  const getVar = (name: string): string => computedStyle.getPropertyValue(name).trim();
+  const cardBg = getPluginSurfaceVar(
+    getVar('--card-bg'),
+    getVar('--bg-lighter'),
+    getVar('--bg'),
+  );
+  const themeVars = PLUGIN_THEME_VAR_NAMES.map(
+    (name) => `        ${name}: ${getVar(name)};`,
+  ).join('\n');
 
   return `
-    <style id="injected-theme-vars">
       :root {
-        --bg: ${bg};
-        --bg-darker: ${getVar('--bg-darker')};
-        --bg-lighter: ${bgLighter};
-        --text-color: ${getVar('--text-color')};
-        --text-color-less-intense: ${getVar('--text-color-less-intense')};
-        --text-color-muted: ${getVar('--text-color-muted')};
+${themeVars}
         --card-bg: ${cardBg};
-        --card-shadow: ${getVar('--card-shadow')};
-        --card-border-radius: ${getVar('--card-border-radius')};
-        --divider-color: ${getVar('--divider-color')};
-        --extra-border-color: ${getVar('--extra-border-color')};
-        --select-hover-bg: ${getVar('--select-hover-bg')};
-        --c-primary: ${getVar('--c-primary')};
-        --c-accent: ${getVar('--c-accent')};
-        --c-warn: ${getVar('--c-warn')};
-        --color-success: ${getVar('--color-success')};
-        --color-danger: ${getVar('--color-danger')};
-        --color-warning: ${getVar('--color-warning')};
+        --c-warn-contrast: ${getVar('--palette-warn-contrast-500')};
         --is-dark-theme: ${isDarkTheme ? '1' : '0'};
-        --scrollbar-thumb: ${getVar('--scrollbar-thumb')};
-        --scrollbar-thumb-hover: ${getVar('--scrollbar-thumb-hover')};
-        --scrollbar-track: ${getVar('--scrollbar-track')};
+      }`;
+};
 
-        /* Shadow system */
-        --whiteframe-shadow-1dp: ${getVar('--whiteframe-shadow-1dp')};
-        --whiteframe-shadow-2dp: ${getVar('--whiteframe-shadow-2dp')};
-        --whiteframe-shadow-3dp: ${getVar('--whiteframe-shadow-3dp')};
-        --whiteframe-shadow-4dp: ${getVar('--whiteframe-shadow-4dp')};
-        --whiteframe-shadow-6dp: ${getVar('--whiteframe-shadow-6dp')};
-        --whiteframe-shadow-8dp: ${getVar('--whiteframe-shadow-8dp')};
-        --whiteframe-shadow-12dp: ${getVar('--whiteframe-shadow-12dp')};
-        --whiteframe-shadow-24dp: ${getVar('--whiteframe-shadow-24dp')};
+const readCssRules = (sheet: CSSStyleSheet): CSSRule[] => {
+  try {
+    return Array.from(sheet.cssRules);
+  } catch {
+    // Cross-origin sheets refuse rule access; the app bundles its fonts, so
+    // such a sheet holds none of them.
+    return [];
+  }
+};
 
-        /* Spacing system */
-        --s: ${getVar('--s')};
-        --s-quarter: ${getVar('--s-quarter')};
-        --s-half: ${getVar('--s-half')};
-        --s2: ${getVar('--s2')};
-        --s3: ${getVar('--s3')};
-        --s4: ${getVar('--s4')};
+/**
+ * The host's `@font-face` rules (bundled Open Sans, Material Symbols) with
+ * absolute URLs. A srcdoc iframe shares no stylesheets with the host: without
+ * these, plugin text falls back to a system font wherever the app ships its own
+ * (e.g. Linux), and icon ligatures render as plain words.
+ */
+const createHostFontFaceCss = (): string =>
+  Array.from(document.styleSheets)
+    .flatMap((sheet) => {
+      // `href` can be relative in some hosts; resolve it before using it as a base
+      const baseUrl = new URL(sheet.href ?? document.baseURI, document.baseURI);
+      return readCssRules(sheet)
+        .filter((rule): rule is CSSFontFaceRule => rule instanceof CSSFontFaceRule)
+        .map((rule) =>
+          rule.cssText.replace(
+            /url\((['"]?)([^'")]+)\1\)/g,
+            (_match, _quote, url: string) => `url("${new URL(url, baseUrl).href}")`,
+          ),
+        );
+    })
+    .join('\n');
 
-        /* Transition system */
-        --transition-duration-xs: ${getVar('--transition-duration-xs')};
-        --transition-duration-s: ${getVar('--transition-duration-s')};
-        --transition-duration-m: ${getVar('--transition-duration-m')};
-        --transition-duration-l: ${getVar('--transition-duration-l')};
-        --transition-standard: ${getVar('--transition-standard')};
-        --ani-standard-timing: ${getVar('--ani-standard-timing')};
-
-        /* Font stack */
-        --font-primary-stack: ${getVar('--font-primary-stack')};
-
-        /* Task-related variables */
-        --task-first-line-min-height: ${getVar('--task-first-line-min-height')};
-        --task-icon-default-opacity: ${getVar('--task-icon-default-opacity')};
-        --task-inner-padding-top-bottom: ${getVar('--task-inner-padding-top-bottom')};
-        --task-is-done-dim-opacity: ${getVar('--task-is-done-dim-opacity')};
-        --task-border-radius: ${getVar('--task-border-radius')};
-        --task-c-bg: ${getVar('--task-c-bg')};
-        --task-c-selected-bg: ${getVar('--task-c-selected-bg')};
-        --sub-task-c-bg: ${getVar('--sub-task-c-bg')};
-        --sub-task-c-bg-done: ${getVar('--sub-task-c-bg-done')};
-        --task-c-bg-done: ${getVar('--task-c-bg-done')};
-        --task-c-current-bg: ${getVar('--task-c-current-bg')};
-        --task-c-drag-drop-bg: ${getVar('--task-c-drag-drop-bg')};
-        --sub-task-c-bg-in-selected: ${getVar('--sub-task-c-bg-in-selected')};
-        --task-shadow: ${getVar('--task-shadow')};
-        --task-shadow-sub-task: ${getVar('--task-shadow-sub-task')};
-        --task-current-shadow: ${getVar('--task-current-shadow')};
-        --task-selected-shadow: ${getVar('--task-selected-shadow')};
-        --task-detail-value-color: ${getVar('--task-detail-value-color')};
-        --task-detail-bg: ${getVar('--task-detail-bg')};
-        --task-detail-bg-hover: ${getVar('--task-detail-bg-hover')};
-        --task-detail-shadow: ${getVar('--task-detail-shadow')};
-      }
-
+/**
+ * Create CSS injection for plugins: host fonts, theme tokens and base styles.
+ */
+export const createPluginCssInjection = (): string => {
+  return `
+    <style id="injected-fonts">${createHostFontFaceCss()}</style>
+    <style id="${THEME_VARS_STYLE_ID}">${createThemeVarsCss()}</style>
+    <style id="injected-base">
       body {
         background: transparent;
         color: var(--text-color);
@@ -242,6 +223,17 @@ export const createPluginCssInjection = (): string => {
       }
     </style>
   `;
+};
+
+/**
+ * Re-copy the host theme tokens into a rendered plugin iframe, so a theme
+ * switch reaches open plugin views without reloading them (and their state).
+ */
+export const refreshPluginTheme = (iframe: HTMLIFrameElement): void => {
+  const style = iframe.contentDocument?.getElementById(THEME_VARS_STYLE_ID);
+  if (style) {
+    style.textContent = createThemeVarsCss();
+  }
 };
 
 /**
@@ -403,7 +395,7 @@ export const createPluginApiScript = (config: PluginIframeConfig): string => {
         }
 
         // Create the PluginAPI object with all methods
-        window.PluginAPI = {
+        const pluginApi = {
           cfg: ${JSON.stringify(config.baseCfg)},
 
           // Add Hooks enum (kept in sync with PluginHooks via JSON.stringify
@@ -418,7 +410,8 @@ export const createPluginApiScript = (config: PluginIframeConfig): string => {
           getFocusedTask: () => callApi('getFocusedTask'),
           selectTask: (taskId) => callApi('selectTask', [taskId]),
           reInitData: () => callApi('reInitData'),
-          updateTask: (taskId, updates) => callApi('updateTask', [taskId, updates]),
+          updateTask: (taskId, updates, options) =>
+            callApi('updateTask', options ? [taskId, updates, options] : [taskId, updates]),
           addTask: (taskData) => callApi('addTask', [taskData]),
           deleteTask: (taskId) => callApi('deleteTask', [taskId]),
           batchUpdateForProject: (request) => callApi('batchUpdateForProject', [request]),
@@ -452,6 +445,9 @@ export const createPluginApiScript = (config: PluginIframeConfig): string => {
           showInWorkContext: () => callApi('showInWorkContext'),
           closeWorkContextView: () => callApi('closeWorkContextView'),
           getActiveWorkContext: () => callApi('getActiveWorkContext'),
+          getDayContext: () => callApi('getDayContext'),
+          startTracking: (taskId) => callApi('startTracking', [taskId]),
+          stopTracking: () => callApi('stopTracking'),
           getAppState: () => callApi('getAppState'),
 
           // Persistence methods (optional second arg = key, forwarded by callApi)
@@ -559,6 +555,30 @@ export const createPluginApiScript = (config: PluginIframeConfig): string => {
             });
           }
         };
+
+        // Name the real alternatives when plugin code reads a member the
+        // iframe lacks (see unknown-plugin-api-member.util.ts); reads still
+        // return undefined so feature detection keeps working.
+        const unknownMemberMessage = (${unknownPluginApiMemberMessage.toString()});
+        const knownMembers = ${JSON.stringify(PLUGIN_API_MEMBER_NAMES)};
+        const ignoredProbes = ${JSON.stringify([...IGNORED_PROBES])};
+        const warnedMembers = new Set();
+        window.PluginAPI = new Proxy(pluginApi, {
+          get: (target, prop) => {
+            if (
+              typeof prop === 'string' &&
+              !(prop in target) &&
+              !ignoredProbes.includes(prop) &&
+              !warnedMembers.has(prop)
+            ) {
+              warnedMembers.add(prop);
+              console.warn('[Plugin] ' + (knownMembers.includes(prop)
+                ? 'PluginAPI.' + prop + ' is only available in plugin.js, not in iframe index.html.'
+                : unknownMemberMessage(prop, knownMembers, '${PLUGIN_API_TYPES_URL}')));
+            }
+            return target[prop];
+          },
+        });
 
         // Notify parent that plugin is ready
         window.parent.postMessage({

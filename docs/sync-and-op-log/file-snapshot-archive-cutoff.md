@@ -1,80 +1,76 @@
-## Срез задач и архивов при файловой загрузке
+## Task and archive cutoff for file uploads
 
-Отметка `taskArchiveSnapshotVersion: 1` в опубликованном v2 envelope означает,
-что writer получил общий срез active state и обоих архивов без подмены
-повреждённых task-разделов. Она не требуется у каждой публикации и не
-добавляет такую гарантию формату split. Потребитель, которому нужно доказательство
-отсутствия владельца, должен отказаться от чтения без отметки. Отметка сама по
-себе не разрешает удаление: потребитель также проверяет форму данных и свой
-протокол владения.
+`taskArchiveSnapshotVersion: 1` in a published v2 envelope means the writer
+captured active state and both archives at one cutoff without replacing damaged
+task sections. Not every publication requires it, and it adds no such guarantee
+to split format. A consumer that needs proof of an absent owner must refuse
+unmarked reads. The marker alone does not authorize deletion: the consumer must
+also validate the data shape and its ownership protocol.
 
-Для такого среза `OperationLogUploadService` берёт блокировки в порядке
-`UPLOAD → OPERATION_LOG → TASK_ARCHIVE` и вызывает
-`getStateSnapshotWithArchiveIntegrity()`. Active state и архивы фиксируются до
-удалённых запросов загрузки. Нельзя ждать сброса очереди записи операций или
-завершения archive effects внутри этой пары блокировок.
+For this cutoff, `OperationLogUploadService` acquires locks in the order
+`UPLOAD -> OPERATION_LOG -> TASK_ARCHIVE` and calls
+`getStateSnapshotWithArchiveIntegrity()`. Active state and archives are captured
+before remote upload requests. Do not wait for operation-write flushing or
+archive effects to finish while holding this pair of locks.
 
-Это нужно для восстановления архивной задачи во время загрузки. Если сначала
-зафиксировать active state без задачи, затем восстановить задачу и только потом
-прочитать архив, опубликованный файл потеряет задачу в обоих разделах. Запись
-плагина, которая ссылается на эту задачу, при этом может сохраниться.
+This matters when an archived task is restored during upload. If active state is
+captured without the task, the task is then restored, and the archive is read
+afterwards, the published file omits the task from both sections. A plugin entry
+referencing that task may remain.
 
-Это неполный опубликованный срез, а не доказательство постоянной потери данных
-задачи. Восстановление может оставаться локальной неопубликованной операцией;
-следующая обычная синхронизация публикует её и возвращает задачу в active state.
-Поэтому снимок до этой синхронизации нельзя использовать как доказательство
-отсутствия задачи для внешнего удаления. Общий срез и отметка его происхождения
-нужны для проверяемого чтения опубликованных данных. Они не заменяют протокол
-владения вложениями или подтверждение конкретного запроса очистки.
+This is an incomplete published cutoff, not proof of permanent task data loss.
+The restoration may remain a local unpublished operation; the next ordinary sync
+publishes it and returns the task to active state. The earlier snapshot therefore
+cannot establish task absence for external deletion. The common cutoff and its
+provenance marker support verified reads of published data. They do not replace
+attachment ownership or acknowledgement of a particular cleanup request.
 
-Внутренний `CapturedFileState` передаёт state и архивы через существующий
-непрозрачный аргумент `uploadOps`. Адаптер использует эти архивы без повторного
-чтения IndexedDB.
-Wrapper не попадает в файл. Архивы остаются в прежних верхних полях wire;
-повторно вкладывать их содержимое внутрь `state` не требуется. Версия файла,
-схема хранимых моделей и публичная сигнатура provider не меняются.
+The internal `CapturedFileState` passes state and archives through the existing
+opaque `uploadOps` argument. The adapter uses those archives without rereading
+IndexedDB. The wrapper is not serialized. Archives retain their existing top-level
+wire fields; their contents need not be nested again in `state`. File version,
+persisted-model schema and the public provider signature do not change.
 
-В v2 envelope добавлено необязательное поле `taskArchiveSnapshotVersion: 1`.
-Оно появляется только у явного capture, который не подменял повреждённые
-архивные задачи пустым разделом. Обычная нормализация для интерфейса и sync
-сохраняется, но такая публикация не получает отметку. Отметка описывает путь
-создания снимка. Читатель должен отдельно проверить форму задач и архивов;
-сама отметка не доказывает полноту произвольного загруженного файла.
-Существующая строка IndexedDB без `data` тоже не равна отсутствующему архиву:
-capture проверяет наличие строк через `hasArchiveYoung` и `hasArchiveOld`
-под той же блокировкой. Отметка не подтверждает неприменённые операции другой
-активной вкладки. Контракт опирается на штатную защиту запуска второй вкладки;
-обход этой защиты не входит в поддерживаемый путь.
-Старый клиент может прочитать файл с дополнительным полем; его обычный writer
-пересобирает envelope и не наследует отметку из предыдущего primary или backup.
+The v2 envelope gains optional `taskArchiveSnapshotVersion: 1`. Only an explicit
+capture that did not replace damaged archive tasks with an empty section receives
+it. Normal UI and sync normalization remain available, but such a publication
+does not receive the marker. The marker describes the snapshot's capture path.
+Readers must separately validate task and archive shapes; the marker alone does
+not prove completeness of an arbitrary downloaded file. An existing IndexedDB
+row without `data` is also not an absent archive: capture checks row existence
+through `hasArchiveYoung` and `hasArchiveOld` under the same lock. The marker does
+not acknowledge unapplied operations in another active tab. The contract relies
+on the ordinary second-tab startup protection; bypassing it is unsupported.
+An older client can read the additional field; its normal writer rebuilds the
+envelope without inheriting the marker from an earlier primary or backup.
 
-### Цена обычной split-загрузки
+### Cost of ordinary split uploads
 
-Синхронный app-only hint `requiresTaskArchiveSnapshot()` не обнаруживает формат
-через сеть. Явная настройка v2 требует capture. Явная настройка split и уже
-обнаруженный v3 при отсутствующей настройке сохраняют прежний raw active-state
-срез под `OPERATION_LOG`. Обычное добавление split-операций не читает архивы.
-Compaction читает их через прежний fallback `resolveFileState`, без новой
-гарантии общего среза и без отметки. Этот helper не меняет публичный интерфейс
-пакета providers.
+The synchronous app-only hint `requiresTaskArchiveSnapshot()` does not discover
+the format over the network. Explicit v2 settings require capture. Explicit split
+settings and already-discovered v3 with no explicit setting retain the previous
+raw active-state cutoff under `OPERATION_LOG`. Ordinary split appends do not read
+archives. Compaction reads them through the previous `resolveFileState` fallback,
+without a new common-cutoff guarantee or marker. This helper does not change the
+public providers-package interface.
 
-Неизвестный формат и отсутствие hint требуют capture. Поэтому первое
-автообнаружение v3 может прочитать архивы лишний раз. При пустом наборе pending
-операций uploader не читает active state и архивы.
+Unknown format and an absent hint require capture. The first automatic v3
+discovery may therefore incur an extra archive read. With no pending operations,
+the uploader reads neither active state nor archives.
 
-Hint не закрепляет формат на время загрузки. Если настройка изменится со split
-на v2 после hint, writer может опубликовать raw v2 snapshot без отметки.
-Потребитель proof откажется от него. Следующая обычная загрузка v2 с pending
-операциями выполнит capture. Это ограничение доступности доказательства, а не
-ложное доказательство согласованности.
+The hint does not pin the format for the duration of the upload. If the setting
+changes from split to v2 after the hint, the writer may publish a raw v2 snapshot
+without the marker. A proof consumer rejects it. The next ordinary v2 upload with
+pending operations performs capture. This limits proof availability; it does not
+produce false consistency evidence.
 
-Прямой вызов адаптера без capture и отдельный full-state upload сохраняют
-прежний путь чтения архивов. Они не получают гарантию общего среза только от
-наличия этого helper. Общий срез обычной загрузки не доказывает логическую
-полноту файлов, которые опубликовал другой клиент, и не является разрешением
-плагину физически удалять вложения.
+Direct adapter calls without capture and separate full-state uploads retain the
+previous archive-read path. The helper's presence gives them no common-cutoff
+guarantee. An ordinary upload's common cutoff does not prove logical completeness
+of files published by another client, nor authorize a plugin to physically delete
+attachments.
 
-### Проверка
+### Verification
 
 ```sh
 npm run quiet -- test:file src/app/op-log/sync/operation-log-upload.service.spec.ts --include src/app/op-log/sync-providers/file-based/file-based-sync-adapter.service.spec.ts --include src/app/op-log/sync-providers/wrapped-provider.service.spec.ts
@@ -82,9 +78,9 @@ npm run quiet -- e2e:webdav:file e2e/tests/sync/webdav-archive-restore-cutoff.sp
 npm run quiet -- e2e:webdav:file e2e/tests/sync/webdav-snapshot-integrity.spec.ts --retries=0
 ```
 
-Сквозной сценарий использует настоящий reducer, archive effects, IndexedDB и
-файл WebDAV. Барьер задерживает возврат уже завершившегося capture callback,
-затем сценарий восстанавливает задачу и проверяет опубликованный primary.
-Проверка должна падать без общего среза и проходить с ним. Второй сценарий
-проверяет сохранение владельца при young→old; успешный результат этого сценария
-сам по себе не доказывает отдельную ошибку переноса архивов.
+The end-to-end scenario uses real reducers, archive effects, IndexedDB and a
+WebDAV file. A barrier delays the return of an already-completed capture callback;
+the scenario then restores the task and inspects the published primary. It must
+fail without the common cutoff and pass with it. The second scenario verifies
+owner preservation during a young-to-old move; that scenario passing does not
+itself establish a separate archive-move bug.
