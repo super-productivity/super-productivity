@@ -13,9 +13,10 @@ import { DIALOG, watchDialogs } from '../../utils/audit-import-encryption-helper
 
 /**
  * Imports the backup at `backupPath` through the file input and waits for the
- * import to finish. Both sides have encryption enabled here, so the "Encryption
- * Settings Will Change" warning (`dialog-import-encryption-warning`) must never
- * appear; the import would wait on it, so it fails fast instead of timing out.
+ * import to finish. SuperSync encryption is already on, and an import can only
+ * enable encryption, never disable it, so the "Encryption Settings Will Change"
+ * warning (`dialog-import-encryption-warning`) must never appear here. The
+ * import would wait on it, so this fails fast instead of timing out.
  */
 const importWithoutEncryptionWarning = async (
   client: SimulatedE2EClient,
@@ -115,7 +116,9 @@ test.describe('@supersync @encryption Import with Encryption Preservation', () =
       // ============ PHASE 2: Import Encrypted Backup ============
       console.log('[EncPreserve] Phase 2: Client A importing encrypted backup');
 
-      // The backup has globalConfig.sync.isEncryptionEnabled: true.
+      // The checked-in backup has no `globalConfig.sync.superSync`, so the
+      // import handler sees it as "encryption not enabled" (importedEnabled =
+      // false) while A is encrypted. Test 2 covers both sides enabled.
       await importWithoutEncryptionWarning(
         clientA,
         ImportPage.getFixturePath('test-backup-encrypted.json'),

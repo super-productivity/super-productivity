@@ -14,6 +14,7 @@ import { waitForAppReady } from '../../utils/waits';
 import {
   captureAndBlockOpsUploads,
   DIALOG,
+  getLocalLastServerSeq,
   getServerOperations,
   getTasksFromStore,
   replayOpsUploadWithoutCursor,
@@ -843,6 +844,14 @@ test.describe('@supersync @cleanslate Import Clean Slate Semantics', () => {
 
       expect(await clientA.sync.hasSyncError()).toBe(false);
       await expect(clientA.sync.syncCheckIcon).toBeVisible({ timeout: 5000 });
+
+      // Anchor: A's cursor moved past C's op, so A really downloaded it and
+      // the absence below means filtered, not "never arrived".
+      const highestCSeq = Math.max(...cOpsAfterImport.map((op) => op.serverSeq));
+      expect(
+        await getLocalLastServerSeq(clientA.page),
+        "A's server cursor covers C's concurrent op",
+      ).toBeGreaterThanOrEqual(highestCSeq);
 
       expect(
         await getTasksFromStore(clientA.page, taskCConcurrent),

@@ -59,12 +59,19 @@ export const watchDialogs = async (
   });
 
   const install = ({ name, selectors }: { name: string; selectors: string[] }): void => {
-    const report = (window as unknown as Record<string, (s: string) => void>)[name];
+    const win = window as unknown as Record<string, unknown>;
+    const report = win[name] as (s: string) => void;
+    // Also kept in the page, so a read does not depend on the binding call
+    // having reached Node before the dialog closed again.
+    const seenKey = `${name}_seen`;
+    const seenInPage = (win[seenKey] as string[] | undefined) ?? [];
+    win[seenKey] = seenInPage;
     const reported = new Set<string>();
     const check = (): void => {
       for (const selector of selectors) {
         if (!reported.has(selector) && document.querySelector(selector)) {
           reported.add(selector);
+          seenInPage.push(selector);
           void report(selector);
         }
       }
@@ -88,14 +95,20 @@ export const watchDialogs = async (
   await page.evaluate(install, args);
 
   const readSeen = async (): Promise<WatchedDialog[]> => {
-    // A dialog still open now counts even if its binding call is in flight.
-    const openNow = await page
+    // A dialog still open now, or recorded in the page, counts even if its
+    // binding call is still in flight.
+    const inPage = await page
       .evaluate(
-        (selectors) => selectors.filter((s) => !!document.querySelector(s)),
-        dialogs,
+        ({ selectors, seenKey }) => [
+          ...selectors.filter((s) => !!document.querySelector(s)),
+          ...(((window as unknown as Record<string, unknown>)[seenKey] as
+            | string[]
+            | undefined) ?? []),
+        ],
+        { selectors: dialogs, seenKey: `${bindingName}_seen` },
       )
       .catch(() => [] as string[]);
-    for (const selector of openNow) seen.add(selector as WatchedDialog);
+    for (const selector of inPage) seen.add(selector as WatchedDialog);
     return [...seen];
   };
 
@@ -358,3 +371,19 @@ export const replayOpsUploadWithoutCursor = async (
     results: { opId: string; accepted: boolean; error?: string }[];
   };
 };
+
+/**
+ * Highest SuperSync `lastServerSeq` this page has persisted (localStorage keys
+ * `super_sync_last_server_seq_*`), or null when none is stored.
+ */
+export const getLocalLastServerSeq = async (page: Page): Promise<number | null> =>
+  page.evaluate(() => {
+    let max: number | null = null;
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (!key || !key.startsWith('super_sync_last_server_seq_')) continue;
+      const value = Number.parseInt(localStorage.getItem(key) ?? '', 10);
+      if (Number.isFinite(value)) max = max === null ? value : Math.max(max, value);
+    }
+    return max;
+  });

@@ -168,10 +168,6 @@ test.describe('@supersync SuperSync Encryption', () => {
         'every uploaded snapshot is encrypted',
       ).toEqual([]);
       expect(
-        uploadsA.ops.filter((op) => op.isPayloadEncrypted !== true),
-        'every uploaded regular op is encrypted',
-      ).toEqual([]);
-      expect(
         uploadsA.ops.filter((op) => preExistingOpIds.includes(op.id)),
         'no pre-existing op is uploaded on top of the snapshot',
       ).toEqual([]);
@@ -194,6 +190,18 @@ test.describe('@supersync SuperSync Encryption', () => {
       await expectConsistentState([clientA, clientB], [task1, task2, task3]);
       await expectTaskCount(clientB, 3);
       await expectNoGlobalError(clientB.page);
+
+      // A regular op after setup must be encrypted too. A creates one, so the
+      // check below cannot pass on an empty list.
+      const task4 = `Post-${testRunId}`;
+      await clientA.workView.addTask(task4);
+      await clientA.sync.syncAndWait();
+      expect(uploadsA.unreadableBodies, 'every upload body was readable').toBe(0);
+      expect(uploadsA.ops.length, 'A uploaded regular ops').toBeGreaterThan(0);
+      expect(
+        uploadsA.ops.filter((op) => op.isPayloadEncrypted !== true),
+        'every uploaded regular op is encrypted',
+      ).toEqual([]);
     } finally {
       if (clientA) await closeClient(clientA);
       if (clientB) await closeClient(clientB);

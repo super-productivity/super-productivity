@@ -122,9 +122,11 @@ test.describe('@supersync SuperSync Account Reset', () => {
       // 4. Create a new client (C) to verify server has no data
       // This simulates a fresh device connecting after reset
       const clientC = await createSimulatedClient(browser, appUrl, 'C', testRunId);
-      // An empty account has no encrypted data to unlock, so C must be asked
-      // to SET UP encryption (ALWAYS) and never to enter an existing password.
-      // setupSuperSync answers both silently, so watch them.
+      // An empty account has no encrypted data to unlock, so C is never asked
+      // for an existing password; that, with the server read above, is the
+      // reset evidence. C is asked to set up encryption instead (a fresh
+      // client without a key always is). setupSuperSync answers both
+      // silently, so watch them.
       const watcherC = await watchDialogs(clientC.page, [
         DIALOG.enableEncryption,
         DIALOG.enterPassword,
