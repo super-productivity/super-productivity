@@ -698,6 +698,29 @@ describe('TaskRepeatCfgService', () => {
       );
     });
 
+    it('should give each occurrence a deadline offset from its day (#10983)', async () => {
+      const targetDayDate = new Date().getTime();
+      const dueDay = getDbDateStr(targetDayDate);
+      taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(of([]));
+      taskService.createNewTaskWithDefaults.and.returnValue({ ...mockTask, dueDay });
+
+      await service._getActionsForTaskRepeatCfg(
+        { ...mockTaskRepeatCfg, deadlineOffsetDays: 4 },
+        targetDayDate,
+      );
+
+      const expected = new Date(targetDayDate);
+      expected.setDate(expected.getDate() + 4);
+      expect(taskService.createNewTaskWithDefaults).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          additional: jasmine.objectContaining({
+            dueDay,
+            deadlineDay: getDbDateStr(expected),
+          }),
+        }),
+      );
+    });
+
     it('should create task if no task with matching ID or created date exists', async () => {
       // Use today's date since mockTaskRepeatCfg has startDate=today
       const today = new Date();
