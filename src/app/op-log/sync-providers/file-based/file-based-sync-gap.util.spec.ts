@@ -10,6 +10,7 @@ import {
   getSnapshotLineage,
   isSingleFileBufferPossiblyTrimmed,
   isSplitBufferPossiblyTrimmed,
+  keepSnapshotLineage,
   OpLogClockSource,
 } from './file-based-sync-gap.util';
 
@@ -450,7 +451,8 @@ describe('doesRemoteExtendLastSeen (#10972)', () => {
 describe('getSnapshotLineage (#11470)', () => {
   // The writer last committed rev-7 at syncVersion 7; the peer saw the same rev.
   const BASE_REV_CLOCK = { writer: 5, peer: 3 };
-  const REPAIR_CLOCK = { writer: 6, peer: 2 };
+  // Built after applying rev-7, so it covers rev-7's clock.
+  const REPAIR_CLOCK = { writer: 6, peer: 3 };
   const lineage = (
     overrides: Partial<Parameters<typeof getSnapshotLineage>[0]> = {},
   ): ReturnType<typeof getSnapshotLineage> =>
@@ -463,18 +465,19 @@ describe('getSnapshotLineage (#11470)', () => {
       expectedSyncVersion: 7,
       ...overrides,
     });
-  // How a peer that committed `lastSeen` at syncVersion 7 reads the written file.
+  // How a current peer that committed `lastSeen` at syncVersion 7 reads the file.
   const readByPeer = (
-    written: ReturnType<typeof getSnapshotLineage>,
+    remote: Partial<GapDetectionRemote>,
     lastSeen: Record<string, number>,
   ): { gap: boolean; extends: boolean } => {
-    const remote = {
-      ...written,
-      clientId: 'writer',
-      recentOps: [],
-    };
     const gap = detectDownloadGap({
-      remote,
+      remote: {
+        syncVersion: 1,
+        vectorClock: {},
+        clientId: 'writer',
+        recentOps: [],
+        ...remote,
+      },
       sinceSeq: 7,
       excludeClient: 'peer',
       previousExpectedVersion: 7,
@@ -485,66 +488,108 @@ describe('getSnapshotLineage (#11470)', () => {
     return { gap: gap.needsGapDetection, extends: gap.snapshotExtendsLastSeen };
   };
 
-  it('continues the base rev: next syncVersion, its clock as base, a covering file clock', () => {
+  /**
+   * The gap decision of v18.13.0's downloadOps, verbatim (see `git show
+   * v18.13.0:src/app/op-log/sync-providers/file-based/file-based-sync-adapter.service.ts`).
+   * Its trim check also needs a full buffer (SPAP-33 dropped that in v18.14.0),
+   * so a continued file with one tail op would read as contiguous to it.
+   */
+  const v1813NeedsGap = (
+    file: {
+      syncVersion: number;
+      clientId: string;
+      recentOps: unknown[];
+      oldestOpSyncVersion?: number;
+    },
+    sinceSeq: number,
+    previousExpectedVersion: number,
+  ): boolean => {
+    const versionWasReset =
+      previousExpectedVersion > 0 && file.syncVersion < previousExpectedVersion;
+    const snapshotReplacement =
+      sinceSeq > 0 && file.recentOps.length === 0 && file.clientId !== 'peer';
+    const partialTrimGap =
+      sinceSeq > 0 &&
+      file.oldestOpSyncVersion !== undefined &&
+      file.oldestOpSyncVersion > sinceSeq &&
+      file.recentOps.length >= 500;
+    return versionWasReset || snapshotReplacement || partialTrimGap;
+  };
+
+  it('starts over like any snapshot and says which committed clock it covers', () => {
     expect(lineage()).toEqual({
-      syncVersion: 8,
-      vectorClock: { writer: 6, peer: 3 },
-      snapshotBaseClock: BASE_REV_CLOCK,
+      syncVersion: 1,
+      vectorClock: REPAIR_CLOCK,
+      snapshotBaseClock: REPAIR_CLOCK,
+      snapshotBaseCovers: { base: REPAIR_CLOCK, clock: BASE_REV_CLOCK },
     });
   });
 
-  it('a peer that saw the base rev hydrates it as a catch-up and keeps pending ops', () => {
+  it('a peer that saw the base rev hydrates it and keeps its pending ops', () => {
     expect(readByPeer(lineage(), BASE_REV_CLOCK)).toEqual({ gap: true, extends: true });
   });
 
-  it('a peer behind the base rev still hydrates it, but must ask', () => {
+  it('a peer at an earlier rev of that file keeps its pending ops too', () => {
     expect(readByPeer(lineage(), { writer: 4, peer: 3 })).toEqual({
+      gap: true,
+      extends: true,
+    });
+  });
+
+  it('a peer whose upload the REPAIR lacks must ask', () => {
+    expect(readByPeer(lineage(), { writer: 5, peer: 4 })).toEqual({
       gap: true,
       extends: false,
     });
   });
 
-  it('a reader that ignores the snapshot base (as released ones up to v19.1.0) still hydrates it', () => {
-    // v19.1.0 and older never read snapshotBaseClock: the empty buffer alone
-    // (snapshotReplacement) sends them to the snapshot, as for a replacement.
-    const written = lineage();
-    const gap = detectDownloadGap({
-      remote: {
-        syncVersion: written.syncVersion,
-        vectorClock: written.vectorClock,
-        clientId: 'writer',
-        recentOps: [],
-      },
-      sinceSeq: 7,
-      excludeClient: 'peer',
-      previousExpectedVersion: 7,
-      lastSeenClock: BASE_REV_CLOCK,
-      hasSnapshot: true,
-      isPossiblyTrimmed: false,
-    });
-    expect(gap.needsGapDetection).toBe(true);
-    expect(gap.reason).toContain('snapshot replacement');
+  it('later tail uploads cannot hide it from a peer that has not loaded it (#9170)', () => {
+    // The tail climbed back to the peer's version with a contiguous buffer;
+    // only the REPAIR's own base, unseen by the peer, reveals it.
+    const tail = {
+      ...lineage(),
+      vectorClock: { writer: 13, peer: 3 },
+      syncVersion: 8,
+      recentOps: [{}],
+      oldestOpSyncVersion: 8,
+      oldestBatchComplete: true,
+    };
+    expect(readByPeer(tail, BASE_REV_CLOCK)).toEqual({ gap: true, extends: true });
   });
 
-  it('later tail uploads cannot hide it from a peer that has not loaded it', () => {
-    const written = lineage();
-    const gap = detectDownloadGap({
-      remote: {
-        ...written,
-        syncVersion: 9,
-        clientId: 'writer',
-        recentOps: [{}],
-        oldestOpSyncVersion: 9,
-        oldestBatchComplete: true,
-      },
-      sinceSeq: 7,
-      excludeClient: 'peer',
-      previousExpectedVersion: 7,
-      lastSeenClock: BASE_REV_CLOCK,
-      hasSnapshot: true,
-      isPossiblyTrimmed: false,
+  it('a released writer that drops the marker brings back the dialog, nothing worse', () => {
+    const { snapshotBaseCovers, ...withoutMarker } = lineage();
+    expect(snapshotBaseCovers).toBeDefined();
+    expect(readByPeer(withoutMarker, BASE_REV_CLOCK)).toEqual({
+      gap: true,
+      extends: false,
     });
-    expect(gap.needsGapDetection).toBe(true);
+  });
+
+  it('a marker left beside another base does not count', () => {
+    const replaced = { ...lineage(), snapshotBaseClock: { writer: 9, peer: 3 } };
+    expect(readByPeer(replaced, BASE_REV_CLOCK)).toEqual({ gap: true, extends: false });
+  });
+
+  it('a v18.13 reader still reloads it, also after a tail upload', () => {
+    // v17.0–v18.13 read no base and need a version reset or an empty buffer.
+    const written = { ...lineage(), clientId: 'writer', recentOps: [] as unknown[] };
+    expect(v1813NeedsGap(written, 7, 7)).toBe(true);
+    const withTail = {
+      ...written,
+      syncVersion: 2,
+      recentOps: [{}],
+      oldestOpSyncVersion: 2,
+    };
+    expect(v1813NeedsGap(withTail, 7, 7)).toBe(true);
+    // The rejected design continued at syncVersion 8; one tail op at 9 hid it.
+    const continued = {
+      ...written,
+      syncVersion: 9,
+      recentOps: [{}],
+      oldestOpSyncVersion: 9,
+    };
+    expect(v1813NeedsGap(continued, 7, 7)).toBe(false);
   });
 
   for (const [name, overrides] of [
@@ -558,15 +603,28 @@ describe('getSnapshotLineage (#11470)', () => {
       'a REPAIR without a base cursor (e.g. minted at startup)',
       { repairBaseServerSeq: undefined },
     ],
+    // Its clock does not cover the committed one: another lineage, or a target switch.
+    ['a REPAIR from another lineage', { vectorClock: { writer: 6, peer: 2 } }],
   ] as const) {
-    it(`${name} starts over, so a peer that has not loaded it must ask`, () => {
+    it(`${name} writes no marker, so a peer with pending work must ask`, () => {
       const written = lineage(overrides);
-      expect(written).toEqual({
-        syncVersion: 1,
-        vectorClock: REPAIR_CLOCK,
-        snapshotBaseClock: REPAIR_CLOCK,
-      });
+      expect(written.syncVersion).toBe(1);
+      expect(written.snapshotBaseClock).toEqual(written.vectorClock);
+      expect(written.snapshotBaseCovers).toBeUndefined();
       expect(readByPeer(written, BASE_REV_CLOCK)).toEqual({ gap: true, extends: false });
     });
   }
+});
+
+describe('keepSnapshotLineage (#11470)', () => {
+  it('carries the base and its marker over, and nothing for a file without them', () => {
+    const covers = { base: { a: 2 }, clock: { a: 1 } };
+    expect(
+      keepSnapshotLineage({ snapshotBaseClock: { a: 2 }, snapshotBaseCovers: covers }),
+    ).toEqual({ snapshotBaseClock: { a: 2 }, snapshotBaseCovers: covers });
+    expect(keepSnapshotLineage({ snapshotBaseClock: { a: 2 } })).toEqual({
+      snapshotBaseClock: { a: 2 },
+    });
+    expect(keepSnapshotLineage(null)).toEqual({ snapshotBaseClock: undefined });
+  });
 });

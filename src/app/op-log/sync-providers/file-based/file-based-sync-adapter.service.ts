@@ -55,6 +55,7 @@ import {
   getOpLogBaselineClock,
   getSnapshotLineage,
   isSnapshotBaseUnseen,
+  keepSnapshotLineage,
   SnapshotLineage,
   toSnapshotGapFlags,
 } from './file-based-sync-gap.util';
@@ -771,7 +772,7 @@ export class FileBasedSyncAdapterService {
       syncVersion: newSyncVersion,
       schemaVersion: ops[0]?.schemaVersion || currentData?.schemaVersion || 1,
       vectorClock: mergedClock,
-      snapshotBaseClock: currentData?.snapshotBaseClock,
+      ...keepSnapshotLineage(currentData),
       lastModified: Date.now(),
       clientId,
       state: currentState,
@@ -1348,7 +1349,7 @@ export class FileBasedSyncAdapterService {
     OpLog.normal(`FileBasedSyncAdapter: Uploading snapshot (reason=${reason})`);
 
     const isSplit = await this._shouldUseSplitSync(provider);
-    // #11470: a replacement starts over at syncVersion 1; a REPAIR continues.
+    // #11470: every snapshot starts over; a REPAIR also says what it covers.
     const lineage = this._lineage(providerKey, vectorClock, snapshotOpType, repairBase);
     // SPAP-11: split writes state THEN ops, so snapshotRef never names a missing snapshot.
     if (isSplit) {
@@ -1370,7 +1371,6 @@ export class FileBasedSyncAdapterService {
     // store could leak later timer deltas its vector clock does not cover.
     const currentState = stripLocalOnlySyncSettingsFromAppData(state);
 
-    // Load archive data from IndexedDB to include in snapshot
     const archiveYoung = await this._archiveDbAdapter.loadArchiveYoung();
     const archiveOld = await this._archiveDbAdapter.loadArchiveOld();
 
@@ -1379,7 +1379,7 @@ export class FileBasedSyncAdapterService {
       syncVersion: newSyncVersion,
       schemaVersion,
       vectorClock: lineage.vectorClock,
-      snapshotBaseClock: lineage.snapshotBaseClock,
+      ...keepSnapshotLineage(lineage),
       lastModified: Date.now(),
       clientId,
       state: currentState,
@@ -1943,7 +1943,7 @@ export class FileBasedSyncAdapterService {
       syncVersion: legacy.syncVersion,
       schemaVersion,
       vectorClock: legacy.vectorClock,
-      snapshotBaseClock: legacy.snapshotBaseClock,
+      ...keepSnapshotLineage(legacy),
       lastModified: Date.now(),
       clientId,
       recentOps: legacy.recentOps ?? [],
@@ -2450,7 +2450,7 @@ export class FileBasedSyncAdapterService {
       syncVersion: newSyncVersion,
       schemaVersion,
       vectorClock: mergedClock,
-      snapshotBaseClock: opsFile?.snapshotBaseClock,
+      ...keepSnapshotLineage(opsFile),
       lastModified: Date.now(),
       clientId,
       ...recent.fields,
@@ -2839,7 +2839,7 @@ export class FileBasedSyncAdapterService {
       syncVersion: newSyncVersion,
       schemaVersion,
       vectorClock: clock,
-      snapshotBaseClock: lineage.snapshotBaseClock,
+      ...keepSnapshotLineage(lineage),
       lastModified: Date.now(),
       clientId,
       recentOps: [],

@@ -1947,6 +1947,7 @@ describe('FileBasedSyncAdapterService', () => {
 
     const uploadRepair = (
       repairBaseServerSeq: number | undefined = 2,
+      vectorClock: Record<string, number> = { client1: 2 },
     ): Promise<{
       accepted: boolean;
       errorCode?: string;
@@ -1956,7 +1957,7 @@ describe('FileBasedSyncAdapterService', () => {
         { tasks: [] },
         'client1',
         'recovery',
-        { client1: 2 },
+        vectorClock,
         1,
         undefined, // isPayloadEncrypted
         'repair-op-id',
@@ -2091,10 +2092,12 @@ describe('FileBasedSyncAdapterService', () => {
       expect(written.syncVersion).toBe(1);
       expect(written.snapshotBaseClock).toEqual({ client1: 2 });
       expect(written.vectorClock).toEqual({ client1: 2 });
+      expect(written.snapshotBaseCovers).toBeUndefined();
     });
 
-    // #11470: a REPAIR holds everything its base rev held, so it continues that
-    // file; a peer that saw the rev then keeps its pending ops on top of it.
+    // #11470: every snapshot starts the file over, so every released reader
+    // reloads it; a REPAIR built from its base rev also says which committed
+    // clock it covers, so a current peer that saw that rev keeps its pending ops.
     const uploadedFile = (path: string): FileBasedSyncData => {
       const call = mockProvider.uploadFile.calls.allArgs().find(([p]) => p === path) as
         | [string, string]
@@ -2102,31 +2105,40 @@ describe('FileBasedSyncAdapterService', () => {
       expect(call).toBeDefined();
       return parseWithPrefix(call![1]);
     };
+    const BASE_CLOCK = { client1: 1, client2: 4 };
+    const REPAIR_CLOCK = { client1: 2, client2: 4 };
 
-    it('continues the file it was written on: next syncVersion, base rev clock as base (#11470)', async () => {
-      await seedBaseRev('rev-1', { client1: 1, client2: 4 });
+    it('starts over and marks the committed clock it covers (#11470)', async () => {
+      await seedBaseRev('rev-1', BASE_CLOCK);
       captureWrites();
-      const result = await uploadRepair();
+      const result = await uploadRepair(2, REPAIR_CLOCK);
 
-      expect(result.accepted).toBe(true);
-      expect(result.serverSeq).toBe(3);
+      expect(result).toEqual({ accepted: true, serverSeq: 1 });
       const written = uploadedFile(FILE_BASED_SYNC_CONSTANTS.SYNC_FILE);
-      expect(written.syncVersion).toBe(3);
+      expect(written.syncVersion).toBe(1);
       expect(written.recentOps).toEqual([]);
-      expect(written.snapshotBaseClock).toEqual({ client1: 1, client2: 4 });
-      // The file clock covers the base, so this client can append to it.
-      expect(written.vectorClock).toEqual({ client1: 2, client2: 4 });
-      await expectAsync(adapter.getLastServerSeq()).toBeResolvedTo(3);
+      expect(written.vectorClock).toEqual(REPAIR_CLOCK);
+      expect(written.snapshotBaseClock).toEqual(REPAIR_CLOCK);
+      expect(written.snapshotBaseCovers).toEqual({
+        base: REPAIR_CLOCK,
+        clock: BASE_CLOCK,
+      });
+      await expectAsync(adapter.getLastServerSeq()).toBeResolvedTo(1);
 
+      // This client's next upload keeps the marker beside the base.
+      mockProvider.uploadFile.calls.reset();
       mockProvider.downloadFile.and.returnValue(
         Promise.resolve({ dataStr: addPrefix(written), rev: 'new-rev' }),
       );
-      mockProvider.uploadFile.and.returnValue(Promise.resolve({ rev: 'rev-4' }));
+      mockProvider.uploadFile.and.returnValue(Promise.resolve({ rev: 'rev-2' }));
       const upload = await adapter.uploadOps([createMockSyncOp()], 'client1');
-      expect(upload.latestSeq).toBe(4);
+      expect(upload.latestSeq).toBe(2);
+      const appended = uploadedFile(FILE_BASED_SYNC_CONSTANTS.SYNC_FILE);
+      expect(appended.snapshotBaseClock).toEqual(REPAIR_CLOCK);
+      expect(appended.snapshotBaseCovers).toEqual(written.snapshotBaseCovers);
     });
 
-    it('starts over without a committed base rev (#11470)', async () => {
+    it('marks nothing without a committed base rev (#11470)', async () => {
       captureWrites();
       const result = await uploadRepair();
 
@@ -2134,40 +2146,48 @@ describe('FileBasedSyncAdapterService', () => {
       const written = uploadedFile(FILE_BASED_SYNC_CONSTANTS.SYNC_FILE);
       expect(written.syncVersion).toBe(1);
       expect(written.snapshotBaseClock).toEqual({ client1: 2 });
+      expect(written.snapshotBaseCovers).toBeUndefined();
     });
 
     // Built at syncVersion 1, uploaded after the client applied rev-1 (syncVersion
-    // 2): the conditional write passes, but its payload lacks rev-1's ops.
-    it('starts over when built from an earlier version than its base rev (#11470)', async () => {
-      await seedBaseRev('rev-1', { client1: 1, client2: 4 });
+    // 2): the conditional write passes, but its payload lacks rev-1's ops (#11483).
+    it('marks nothing when built from an earlier version than its base rev (#11470)', async () => {
+      await seedBaseRev('rev-1', BASE_CLOCK);
       captureWrites();
-      const result = await uploadRepair(1);
-
-      expect(result).toEqual({ accepted: true, serverSeq: 1 });
-      const written = uploadedFile(FILE_BASED_SYNC_CONSTANTS.SYNC_FILE);
-      expect(written.syncVersion).toBe(1);
-      expect(written.snapshotBaseClock).toEqual({ client1: 2 });
+      await uploadRepair(1, REPAIR_CLOCK);
+      expect(
+        uploadedFile(FILE_BASED_SYNC_CONSTANTS.SYNC_FILE).snapshotBaseCovers,
+      ).toBeUndefined();
     });
 
-    it('split format: continues the ops file it was written on (#11470)', async () => {
-      await seedBaseRev('rev-1', { client1: 1, client2: 4 });
+    it('marks nothing when its clock does not cover the committed one (#11470)', async () => {
+      await seedBaseRev('rev-1', BASE_CLOCK);
+      captureWrites();
+      await uploadRepair(2, { client1: 2 });
+      expect(
+        uploadedFile(FILE_BASED_SYNC_CONSTANTS.SYNC_FILE).snapshotBaseCovers,
+      ).toBeUndefined();
+    });
+
+    it('split format: marks the ops file it writes (#11470)', async () => {
+      await seedBaseRev('rev-1', BASE_CLOCK);
       splitSyncEnabled = true;
       mockProvider.getFileRev.and.callFake(async (path: string) => {
         if (path === FILE_BASED_SYNC_CONSTANTS.OPS_FILE) return { rev: 'rev-1' };
         throw new RemoteFileNotFoundAPIError('not found');
       });
       captureWrites();
-      const result = await uploadRepair();
+      const result = await uploadRepair(2, REPAIR_CLOCK);
 
-      expect(result).toEqual({ accepted: true, serverSeq: 3 });
+      expect(result).toEqual({ accepted: true, serverSeq: 1 });
       const ops = uploadedFile(
         FILE_BASED_SYNC_CONSTANTS.OPS_FILE,
       ) as unknown as FileBasedOpsFile;
-      expect(ops.syncVersion).toBe(3);
-      expect(ops.snapshotBaseClock).toEqual({ client1: 1, client2: 4 });
-      expect(ops.vectorClock).toEqual({ client1: 2, client2: 4 });
-      expect(ops.snapshotRef.syncVersion).toBe(3);
-      expect(ops.snapshotRef.vectorClock).toEqual(ops.vectorClock);
+      expect(ops.syncVersion).toBe(1);
+      expect(ops.snapshotBaseClock).toEqual(REPAIR_CLOCK);
+      expect(ops.snapshotBaseCovers).toEqual({ base: REPAIR_CLOCK, clock: BASE_CLOCK });
+      expect(ops.snapshotRef.syncVersion).toBe(1);
+      expect(ops.snapshotRef.vectorClock).toEqual(REPAIR_CLOCK);
     });
 
     it('split format: rejects as REPAIR_STALE when the remote ops-file rev advanced past our base', async () => {

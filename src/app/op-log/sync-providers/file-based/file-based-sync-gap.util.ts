@@ -1,5 +1,5 @@
 import { OperationLogEntry, VectorClock } from '../../core/operation.types';
-import { compareVectorClocks, mergeVectorClocks } from '../../../core/util/vector-clock';
+import { compareVectorClocks } from '../../../core/util/vector-clock';
 import { FILE_BASED_SYNC_CONSTANTS } from './file-based-sync.types';
 
 /** The fields of a downloaded sync/ops file that gap detection reads. */
@@ -7,6 +7,8 @@ export interface GapDetectionRemote {
   syncVersion: number;
   vectorClock: VectorClock;
   snapshotBaseClock?: VectorClock;
+  /** See {@link SnapshotBaseCovers} (#11470). */
+  snapshotBaseCovers?: SnapshotBaseCovers;
   clientId: string;
   recentOps: readonly unknown[];
   oldestOpSyncVersion?: number;
@@ -291,18 +293,53 @@ export const detectDownloadGap = ({
  * snapshot base. A replacement writes a new base (v19.2.0+); older ones leave
  * none but reset syncVersion to 1. A legacy replacement whose tail uploads
  * climbed back past our expected version still passes: a documented residual.
+ * An automatic REPAIR also starts over, but passes when its
+ * {@link SnapshotBaseCovers} holds everything this client last saw (#11470).
  */
 export const doesRemoteExtendLastSeen = (
-  remote: Pick<GapDetectionRemote, 'syncVersion' | 'vectorClock' | 'snapshotBaseClock'>,
+  remote: Pick<
+    GapDetectionRemote,
+    'syncVersion' | 'vectorClock' | 'snapshotBaseClock' | 'snapshotBaseCovers'
+  >,
   lastSeenClock: VectorClock | undefined,
   previousExpectedVersion: number,
 ): boolean => {
   if (!lastSeenClock || previousExpectedVersion <= 0) return false;
+  if (isCoveredByRepairBase(remote, lastSeenClock)) return true;
   if (remote.syncVersion < previousExpectedVersion) return false;
   if (!remote.snapshotBaseClock && remote.syncVersion === 1) return false;
   if (isSnapshotBaseUnseen(remote.snapshotBaseClock, lastSeenClock)) return false;
   const comparison = compareVectorClocks(remote.vectorClock, lastSeenClock);
   return comparison === 'GREATER_THAN' || comparison === 'EQUAL';
+};
+
+/**
+ * #11470: whether the file's base is an automatic REPAIR that holds everything
+ * this client last saw, so the REPAIR is a catch-up even though it starts over
+ * like a replacement. The marker counts only beside the base it was written
+ * with: any writer that replaces the base drops or rewrites it.
+ */
+const isCoveredByRepairBase = (
+  remote: Pick<
+    GapDetectionRemote,
+    'vectorClock' | 'snapshotBaseClock' | 'snapshotBaseCovers'
+  >,
+  lastSeenClock: VectorClock,
+): boolean => {
+  const covers = remote.snapshotBaseCovers;
+  if (
+    !covers ||
+    !remote.snapshotBaseClock ||
+    compareVectorClocks(covers.base, remote.snapshotBaseClock) !== 'EQUAL'
+  ) {
+    return false;
+  }
+  const seen = compareVectorClocks(lastSeenClock, covers.clock);
+  const current = compareVectorClocks(remote.vectorClock, lastSeenClock);
+  return (
+    (seen === 'EQUAL' || seen === 'LESS_THAN') &&
+    (current === 'GREATER_THAN' || current === 'EQUAL')
+  );
 };
 
 /** The gap verdicts a file download response forwards to the caller. */
@@ -395,33 +432,44 @@ export const appendRecentOpsAtBatchBoundary = <T extends { sv?: number }>(
   };
 };
 
+/**
+ * #11470: written beside the snapshot base by an automatic REPAIR: the snapshot
+ * with base `base` holds everything up to `clock`, the clock committed for the
+ * rev the REPAIR was written on. Optional: released readers ignore it and
+ * released writers drop it, which only brings back the dialog.
+ */
+export interface SnapshotBaseCovers {
+  base: VectorClock;
+  clock: VectorClock;
+}
+
 /** The lineage fields a full-state snapshot upload writes into the file. */
 export interface SnapshotLineage {
+  /** Always 1: every snapshot starts the file over, as released readers expect. */
   syncVersion: number;
   vectorClock: VectorClock;
   snapshotBaseClock: VectorClock;
+  snapshotBaseCovers?: SnapshotBaseCovers;
 }
 
 /**
  * #11470: the lineage a full-state snapshot upload writes.
  *
- * A replacement (SYNC_IMPORT, BACKUP_IMPORT, USE_LOCAL, initial, recovery)
- * starts over: syncVersion 1 and its own clock as the base, so every peer that
- * has not loaded it is asked first (#9170, #10916).
+ * Every snapshot starts the file over: syncVersion 1 and its own clock as the
+ * base. Every released reader (v17 on) then reloads it, and a peer that has not
+ * loaded it cannot append to it or have it masked by later uploads (#9170,
+ * #10916). A replacement (SYNC_IMPORT, BACKUP_IMPORT, USE_LOCAL, initial,
+ * recovery) asks a peer with pending work, as before.
  *
  * An automatic REPAIR is written only on the rev this client last downloaded
- * and applied (#9023). When it was also built from that rev (its
- * repairBaseServerSeq is the committed syncVersion), it holds everything that
- * rev held; a REPAIR built earlier and uploaded after a later download does
- * not, since its payload predates the ops that download applied. It continues
- * that file instead: the next syncVersion, the clock committed for that rev as its
- * base, and a file clock that covers the base. A peer that saw that rev then
- * reads it as a catch-up (doesRemoteExtendLastSeen) and keeps its pending ops on
- * top, as for a trimmed file (#10972). Its empty retained-ops buffer still makes
- * every peer that has not loaded it hydrate it (snapshotReplacement, or a trim
- * gap once later uploads land), released readers included. Without a committed
- * rev, clock and version for this target, or built from another version, it
- * falls back to a replacement.
+ * and applied (#9023). When it was also built from that rev, it holds
+ * everything that rev held, and it adds {@link SnapshotBaseCovers} with that
+ * rev's clock. A peer that saw that rev, or an earlier one, then keeps its
+ * pending ops on top of it (doesRemoteExtendLastSeen), as for a trimmed file
+ * (#10972). "Built from that rev" needs its repairBaseServerSeq to be the
+ * committed syncVersion and its clock to cover the committed one: a REPAIR built
+ * before a later download lacks that download's ops (#11483), and one from
+ * another lineage does not cover its clock.
  */
 export const getSnapshotLineage = ({
   isRepair,
@@ -441,18 +489,28 @@ export const getSnapshotLineage = ({
   /** The expected syncVersion committed for that rev. */
   expectedSyncVersion: number | undefined;
 }): SnapshotLineage => {
+  const lineage = { syncVersion: 1, vectorClock, snapshotBaseClock: vectorClock };
+  const comparison = lastSeenClock && compareVectorClocks(vectorClock, lastSeenClock);
   if (
     !isRepair ||
     !baseRev ||
     !lastSeenClock ||
     !expectedSyncVersion ||
-    repairBaseServerSeq !== expectedSyncVersion
+    repairBaseServerSeq !== expectedSyncVersion ||
+    (comparison !== 'GREATER_THAN' && comparison !== 'EQUAL')
   ) {
-    return { syncVersion: 1, vectorClock, snapshotBaseClock: vectorClock };
+    return lineage;
   }
-  return {
-    syncVersion: expectedSyncVersion + 1,
-    vectorClock: mergeVectorClocks(vectorClock, lastSeenClock),
-    snapshotBaseClock: lastSeenClock,
-  };
+  return { ...lineage, snapshotBaseCovers: { base: vectorClock, clock: lastSeenClock } };
 };
+
+/** The lineage fields an ordinary upload, compaction or migration carries over. */
+export const keepSnapshotLineage = (
+  file:
+    | Pick<GapDetectionRemote, 'snapshotBaseClock' | 'snapshotBaseCovers'>
+    | null
+    | undefined,
+): Pick<GapDetectionRemote, 'snapshotBaseClock' | 'snapshotBaseCovers'> => ({
+  snapshotBaseClock: file?.snapshotBaseClock,
+  ...(file?.snapshotBaseCovers ? { snapshotBaseCovers: file.snapshotBaseCovers } : {}),
+});

@@ -49,6 +49,13 @@ export interface FileBasedSyncData<
   snapshotBaseClock?: VectorClock;
 
   /**
+   * Written beside snapshotBaseClock by an automatic REPAIR (#11470): the
+   * snapshot with base `base` holds everything up to `clock`. Preserve it with
+   * the base. Optional: older readers ignore it and older writers drop it.
+   */
+  snapshotBaseCovers?: { base: VectorClock; clock: VectorClock };
+
+  /**
    * Timestamp of last successful sync (epoch ms).
    */
   lastModified: number;
@@ -140,6 +147,8 @@ export interface FileBasedOpsFile<
   vectorClock: VectorClock;
   /** Last explicit replacement clock; same meaning as FileBasedSyncData. */
   snapshotBaseClock?: VectorClock;
+  /** Same meaning as FileBasedSyncData.snapshotBaseCovers (#11470). */
+  snapshotBaseCovers?: { base: VectorClock; clock: VectorClock };
   lastModified: number;
   clientId: string;
   recentOps: SyncFileCompactOp<TCompactOperation>[];

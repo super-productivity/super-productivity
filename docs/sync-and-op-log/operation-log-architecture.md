@@ -932,17 +932,20 @@ IDs deduplicate ops still in the local log, while vector clocks carry causality.
    (after a target switch the adapter can hold a last-seen baseline staged by
    a download it never applied, so having synced elsewhere is not enough): they move past the baseline with
    ids and clocks unchanged, replay on top of it, and upload normally.
-   An automatic `REPAIR` snapshot is such a catch-up too (#11470): it is
-   written only on the rev its writer last downloaded and applied (#9023), so
-   it continues that file with the next `syncVersion`, the clock committed for
-   that rev as its base, and a file clock covering that base, provided its
-   `repairBaseServerSeq` is that rev's `syncVersion` (a REPAIR built before a
-   later download lacks that download's ops, so it starts over). A peer that saw
-   the rev keeps its pending ops on top; one behind it, or any reader of a
-   replacement (`SYNC_IMPORT`, `BACKUP_IMPORT`, USE_LOCAL), which still starts
-   over at `syncVersion` 1 with its own clock as base, still asks. The empty
-   retained-ops buffer sends every reader that has not loaded the `REPAIR` to
-   the snapshot, released readers included.
+   An automatic `REPAIR` snapshot can be such a catch-up too (#11470). Like
+   every snapshot, it starts the file over (`syncVersion` 1, its own clock as
+   base), so every released reader reloads it: v17.0–v18.13 notice only a
+   version reset or an empty buffer, and their trim check needs a full one.
+   A `REPAIR` is written only on the rev its writer last downloaded and
+   applied (#9023). When it was also built from that rev (its
+   `repairBaseServerSeq` is that rev's `syncVersion` and its clock covers the
+   rev's clock), it adds the optional envelope field `snapshotBaseCovers`:
+   its base and the rev's clock. A current reader whose last-seen clock is
+   covered by that clock keeps its pending ops on top; any other reader, and
+   every reader of a replacement (`SYNC_IMPORT`, `BACKUP_IMPORT`, USE_LOCAL),
+   still asks. Current writers carry the field with the base; released
+   writers drop it, which only brings back the dialog. A `REPAIR` built before
+   a later download lacks that download's ops (#11483) and writes no marker.
    Receivers resolve any crossing on the no-pending LWW path. A pending op the
    snapshot clock already covers (uploaded before a crash skipped
    `markSynced`) is settled, not replayed twice. A kept op the snapshot state
