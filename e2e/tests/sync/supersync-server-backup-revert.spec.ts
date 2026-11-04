@@ -6,6 +6,7 @@ import {
   closeClient,
   waitForTask,
   hasTask,
+  renameTask,
   SUPERSYNC_BASE_URL,
   type SimulatedE2EClient,
   type TestUser,
@@ -401,7 +402,7 @@ test.describe.serial('@supersync SuperSync Server Backup Revert', () => {
       baseURL,
       testRunId,
     }, testInfo) => {
-      testInfo.setTimeout(240000);
+      testInfo.setTimeout(300000);
       const appUrl = baseURL || 'http://localhost:4242';
       let clientA: SimulatedE2EClient | null = null;
       let clientB: SimulatedE2EClient | null = null;
@@ -444,6 +445,20 @@ test.describe.serial('@supersync SuperSync Server Backup Revert', () => {
         await clientB.sync.syncAndWait();
         await clientA.sync.syncAndWait();
         await waitForTask(clientA.page, taskB, 30000);
+
+        // Both devices also edit the same pre-backup task, B after seeing A's
+        // edit. With B syncing first after the restore, A's re-sent rename
+        // meets B's newer one on the server and must lose to it.
+        const renamedByA = `RenamedByA-${testRunId}`;
+        const renamedByB = `RenamedByB-${testRunId}`;
+        await renameTask(clientA, taskBefore, renamedByA);
+        await clientA.sync.syncAndWait();
+        await clientB.sync.syncAndWait();
+        await waitForTask(clientB.page, renamedByA, 30000);
+        await renameTask(clientB, renamedByA, renamedByB);
+        await clientB.sync.syncAndWait();
+        await clientA.sync.syncAndWait();
+        await waitForTask(clientA.page, renamedByB, 30000);
         expect(await getLatestServerSeq(user.userId)).toBeGreaterThan(seqAtDump);
 
         // The operator restores the backup: both tasks are gone from the server.
@@ -467,12 +482,15 @@ test.describe.serial('@supersync SuperSync Server Backup Revert', () => {
         clientC = await createSimulatedClient(browser, appUrl, 'C', testRunId);
         await clientC.sync.setupSuperSync(joinConfig);
         await clientC.sync.syncAndWait();
-        for (const title of [taskBefore, taskA, taskB]) {
+        for (const title of [renamedByB, taskA, taskB]) {
           await waitForTask(clientC.page, title, 30000);
         }
 
-        // Every device holds exactly the three tasks: nothing lost, nothing doubled.
+        // Every device holds exactly the three tasks with B's later rename:
+        // nothing lost, nothing doubled, all converged.
         for (const client of [clientA, clientB, clientC]) {
+          await waitForTask(client.page, renamedByB, 30000);
+          expect(await hasTask(client.page, renamedByA)).toBe(false);
           await expect(client.page.locator(`task:has-text("${testRunId}")`)).toHaveCount(
             3,
           );
