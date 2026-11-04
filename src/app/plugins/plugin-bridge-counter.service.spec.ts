@@ -32,6 +32,7 @@ import { DataInitService } from '../core/data-init/data-init.service';
 import { GlobalConfigService } from '../features/config/global-config.service';
 import { signal } from '@angular/core';
 import { DEFAULT_GLOBAL_CONFIG } from '../features/config/default-global-config.const';
+import { deleteSimpleCounter } from '../features/simple-counter/store/simple-counter.actions';
 
 /* eslint-disable @typescript-eslint/naming-convention */
 describe('PluginBridgeService.setCounter()', () => {
@@ -316,6 +317,27 @@ describe('PluginBridgeService.setCounter()', () => {
 
       const action = store.dispatch.calls.mostRecent().args[0] as any;
       expect(action.simpleCounter.changes.countOnDay).toEqual({ [LOGICAL_TODAY]: 7 });
+    });
+  });
+
+  describe('deleteSimpleCounter', () => {
+    it('should carry the deleted counter so a winning remote update restores it (#11465)', async () => {
+      const counter = createMockCounter('my-counter', { '2026-01-08': 3 });
+      store.select.and.returnValue(of({ [counter.id]: counter }));
+
+      await service.deleteSimpleCounter('my-counter');
+
+      expect(store.dispatch).toHaveBeenCalledWith(
+        deleteSimpleCounter({ id: 'my-counter', simpleCounter: counter }),
+      );
+    });
+
+    it('should dispatch an id-only delete for an unknown counter', async () => {
+      store.select.and.returnValue(of({}));
+
+      await service.deleteSimpleCounter('missing');
+
+      expect(store.dispatch).toHaveBeenCalledWith(deleteSimpleCounter({ id: 'missing' }));
     });
   });
 });

@@ -8106,6 +8106,173 @@ describe('ConflictResolutionService', () => {
       suggestedResolution: 'manual',
     });
 
+    describe('SIMPLE_COUNTER delete vs update (#11465)', () => {
+      const DAY = '2026-11-04';
+      const PREV_DAY = '2026-11-03';
+      const counter = {
+        id: 'counter-1',
+        title: 'Push-ups',
+        type: 'ClickCounter',
+        isEnabled: true,
+        isOn: false,
+        icon: null,
+        countOnDay: { [PREV_DAY]: 4, [DAY]: 1 },
+      };
+      const counterOp = (
+        id: string,
+        clientId: string,
+        timestamp: number,
+        opType: OpType,
+        actionType: ActionType,
+        actionPayload: Record<string, unknown>,
+      ): Operation => ({
+        ...createOpWithTimestamp(id, clientId, timestamp, opType, 'counter-1'),
+        entityType: 'SIMPLE_COUNTER',
+        actionType,
+        payload: { actionPayload, entityChanges: [] },
+      });
+      const localDelete = (actionPayload: Record<string, unknown>): Operation =>
+        counterOp(
+          'local-del',
+          'client-a',
+          1000,
+          OpType.Delete,
+          ActionType.COUNTER_DELETE,
+          actionPayload,
+        );
+      const setToday = (id: string, newVal: number, timestamp: number): Operation =>
+        counterOp(
+          id,
+          'client-b',
+          timestamp,
+          OpType.Update,
+          ActionType.COUNTER_SET_TODAY,
+          {
+            id: 'counter-1',
+            newVal,
+            today: DAY,
+          },
+        );
+      const convert = (deleteOp: Operation, remoteOps: Operation[]): Operation[] =>
+        (TestBed.inject(ConflictEntityStateService) as any)._convertToLWWUpdatesIfNeeded({
+          entityType: 'SIMPLE_COUNTER',
+          entityId: 'counter-1',
+          localOps: [deleteOp],
+          remoteOps,
+          suggestedResolution: 'manual',
+        } satisfies EntityConflict);
+
+      it('recreates the whole deleted counter with the winning count replayed by its reducer', () => {
+        const [result] = convert(
+          localDelete({ id: 'counter-1', simpleCounter: counter }),
+          [setToday('s1', 2, 2000)],
+        );
+
+        expect(result.actionType).toBe('[SIMPLE_COUNTER] LWW Update');
+        expect(result.payload).toEqual(
+          jasmine.objectContaining({
+            lwwUpdateMode: 'replace',
+            recreatesEntityAfterDelete: true,
+          }),
+        );
+        // Replayed by the reducer: the field read found no changes in
+        // `{ id, newVal, today }` and left `countOnDay` stale.
+        expect(extractActionPayload(result.payload)).toEqual({
+          ...counter,
+          countOnDay: { [PREV_DAY]: 4, [DAY]: 2 },
+        });
+      });
+
+      it('folds semantic and field updates in order', () => {
+        const rename = counterOp(
+          'r1',
+          'client-b',
+          3000,
+          OpType.Update,
+          ActionType.COUNTER_UPDATE,
+          { simpleCounter: { id: 'counter-1', changes: { title: 'Squats' } } },
+        );
+        const forDate = counterOp(
+          'f1',
+          'client-b',
+          4000,
+          OpType.Update,
+          ActionType.COUNTER_SET_FOR_DATE,
+          { id: 'counter-1', date: PREV_DAY, newVal: 7 },
+        );
+
+        const result = convert(localDelete({ id: 'counter-1', simpleCounter: counter }), [
+          setToday('s1', 2, 2000),
+          rename,
+          forDate,
+        ]);
+
+        for (const op of result) {
+          expect(extractActionPayload(op.payload)).toEqual({
+            ...counter,
+            title: 'Squats',
+            countOnDay: { [PREV_DAY]: 7, [DAY]: 2 },
+          });
+        }
+      });
+
+      it('adds a winning stopwatch duration to the recreated counter', () => {
+        const sync = counterOp(
+          'sync-1',
+          'client-b',
+          2000,
+          OpType.Update,
+          ActionType.COUNTER_SYNC_TIME,
+          { id: 'counter-1', date: DAY, duration: 60000 },
+        );
+        const stopwatch = { ...counter, type: 'StopWatch', countOnDay: { [DAY]: 1000 } };
+
+        const [result] = convert(
+          localDelete({ id: 'counter-1', simpleCounter: stopwatch }),
+          [sync],
+        );
+
+        expect(extractActionPayload(result.payload)).toEqual({
+          ...stopwatch,
+          countOnDay: { [DAY]: 61000 },
+        });
+      });
+
+      it('keeps the field read for a counter update its reducer does not handle', () => {
+        // A future or unknown counter action the reducer ignores must not be
+        // replayed as a no-op: its fields still apply.
+        const unknownUpdate = counterOp(
+          'u1',
+          'client-b',
+          2000,
+          OpType.Update,
+          '[SimpleCounter] Not handled by the reducer' as ActionType,
+          { simpleCounter: { id: 'counter-1', changes: { title: 'Squats' } } },
+        );
+
+        const [result] = convert(
+          localDelete({ id: 'counter-1', simpleCounter: counter }),
+          [unknownUpdate],
+        );
+
+        expect(extractActionPayload(result.payload)).toEqual({
+          ...counter,
+          title: 'Squats',
+        });
+      });
+
+      it('still recreates from an id-only delete of an older client', () => {
+        const [result] = convert(localDelete({ id: 'counter-1' }), [
+          setToday('s1', 2, 2000),
+        ]);
+
+        expect(extractActionPayload(result.payload)).toEqual({
+          id: 'counter-1',
+          countOnDay: { [DAY]: 2 },
+        });
+      });
+    });
+
     it('should return remote ops unchanged when no local DELETE exists', () => {
       const remoteOp = {
         ...createOpWithTimestamp('remote-upd', 'client-b', Date.now()),

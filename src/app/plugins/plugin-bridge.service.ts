@@ -115,7 +115,10 @@ const toPluginTaskCopy = (
 };
 
 // New imports for simple counters
-import { selectAllSimpleCounters } from '../features/simple-counter/store/simple-counter.reducer';
+import {
+  selectAllSimpleCounters,
+  selectSimpleCounterEntities,
+} from '../features/simple-counter/store/simple-counter.reducer';
 import { selectTaskRepeatCfgFeatureState } from '../features/task-repeat-cfg/store/task-repeat-cfg.selectors';
 import {
   SimpleCounter,
@@ -2247,7 +2250,14 @@ export class PluginBridgeService implements OnDestroy {
    * @param id The counter ID.
    */
   async deleteSimpleCounter(id: string): Promise<void> {
-    this._store.dispatch(deleteSimpleCounter({ id }));
+    // Carry the deleted counter so a concurrent remote update that wins can
+    // restore it intact (#11465).
+    const simpleCounter = (
+      await firstValueFrom(this._store.select(selectSimpleCounterEntities))
+    )[id];
+    this._store.dispatch(
+      deleteSimpleCounter(simpleCounter ? { id, simpleCounter } : { id }),
+    );
   }
 
   /**

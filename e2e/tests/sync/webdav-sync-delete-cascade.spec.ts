@@ -540,17 +540,14 @@ test.describe('@webdav WebDAV Delete Cascade Sync', () => {
       const task2State = await getStoreTask(page, task2Id!);
       expect(task2State, `${label}: Task2 live`).not.toBeNull();
       expect(task2State!.tagIds).not.toContain(tagId!);
-      // Recorded, not pinned: writeTasksToArchiveForRemoteSync may keep the
-      // deleted tag id on A's copy of the archived task (issue candidate).
+      // #11466: A's archived copy used to keep the deleted tag id, because the
+      // remote archive write ran after A's own tag-delete cleanup.
       const archivedTask1 = await getArchiveYoungTask(page, task1Id!);
-      const keepsDeletedTag = !!archivedTask1?.tagIds.includes(tagId!);
-      console.log(
-        `[Concurrent] ${label}: archived Task1 keeps deleted tag id: ${keepsDeletedTag}`,
-      );
-      test.info().annotations.push({
-        type: 'issue-candidate',
-        description: `${label}: archived Task1 keeps deleted tag id: ${keepsDeletedTag}`,
-      });
+      expect(archivedTask1, `${label}: archived Task1`).not.toBeNull();
+      expect(
+        archivedTask1!.tagIds,
+        `${label}: archived Task1 must not keep the deleted tag id`,
+      ).not.toContain(tagId!);
     }
 
     console.log(

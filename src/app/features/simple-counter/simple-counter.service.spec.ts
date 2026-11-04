@@ -228,11 +228,25 @@ describe('SimpleCounterService', () => {
   });
 
   describe('deleteSimpleCounter', () => {
-    it('should dispatch deleteSimpleCounter action', fakeAsync(() => {
+    it('should dispatch deleteSimpleCounter carrying the deleted counter (#11465)', fakeAsync(() => {
       service.deleteSimpleCounter('counter1');
       tick();
 
-      expect(dispatchSpy).toHaveBeenCalledWith(deleteSimpleCounter({ id: 'counter1' }));
+      expect(dispatchSpy).toHaveBeenCalledWith(
+        deleteSimpleCounter({
+          id: 'counter1',
+          simpleCounter: createCounter('counter1', {
+            countOnDay: { '2024-01-15': 5 },
+          }),
+        }),
+      );
+    }));
+
+    it('should dispatch an id-only delete for an unknown counter', fakeAsync(() => {
+      service.deleteSimpleCounter('missing');
+      tick();
+
+      expect(dispatchSpy).toHaveBeenCalledWith(deleteSimpleCounter({ id: 'missing' }));
     }));
   });
 
