@@ -1,5 +1,18 @@
 [
   {
+    "name": "Task Colors",
+    "shortDescription": "Choose colors for tasks and subtasks, or apply them automatically by priority. Includes a configurable palette, bulk application and recovery; requires Super Productivity 19.3.1.",
+    "url": "https://github.com/Zombiehamser/sp-task-color-plugin",
+    "author": "Zombiehamser",
+    "authorUrl": "https://github.com/Zombiehamser",
+    "id": "sp-task-color-plugin",
+    "release": {
+      "version": "0.3.0",
+      "downloadUrl": "https://github.com/Zombiehamser/sp-task-color-plugin/releases/download/v0.3.0/sp-task-color-plugin-0.3.0.zip",
+      "sha256": "1e031b01fbe318d5d72345d7ee8e0f494eb8bb76f64aef1337a96c9cdcb7ed0b"
+    }
+  },
+  {
     "name": "Markdown Notes",
     "shortDescription": "Read-only viewer for Markdown and Obsidian notes from a local folder, grouped by directory and rendered in a side panel.",
     "url": "https://github.com/Zoriot/sp-markdown-notes",
