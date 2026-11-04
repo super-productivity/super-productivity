@@ -464,7 +464,6 @@ export class MagicNavConfigService {
         featureConfigKey: 'isBoardsEnabled',
         action: () => this._toggleViewsExpanded(),
       },
-      { type: 'separator', id: 'sep-views' },
     ];
   }
 
