@@ -175,7 +175,9 @@ test.describe('@webdav @migration WebDAV Legacy Migration Sync', () => {
       // they're on divergent timelines. Client A may also see a conflict.
       console.log('[Test] Client A syncing...');
       await syncPageA.triggerSync();
-      const syncResultA = await waitForSyncComplete(clientA.page, syncPageA);
+      const syncResultA = await waitForSyncComplete(clientA.page, syncPageA, 30000, {
+        expectConflict: true,
+      });
 
       // A conflict is allowed for the divergent migration timelines, but it must
       // be resolved before asserting that both clients converged on B's snapshot.
@@ -509,7 +511,9 @@ test.describe('@webdav @migration WebDAV Legacy Migration Sync', () => {
       // === Client A syncs - with divergent timelines ===
       console.log('[Test] Client A syncing...');
       await syncPageA.triggerSync();
-      const syncResultA = await waitForSyncComplete(clientA.page, syncPageA);
+      const syncResultA = await waitForSyncComplete(clientA.page, syncPageA, 30000, {
+        expectConflict: true,
+      });
 
       // Resolve a divergent-timeline conflict if one is raised. Either route
       // must end with Client A adopting the snapshot B just uploaded.
