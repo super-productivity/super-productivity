@@ -453,7 +453,7 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
 
   /**
    * Builds a StoredOperationLogEntry (minus auto-incremented seq) from an
-   * Operation, encoding it to compact format. Shared by append/appendBatch/
+   * Operation, encoding it to compact format. Shared by append/
    * appendBatchSkipDuplicates/appendWithVectorClockOverwrite.
    */
   private _buildStoredEntry(
@@ -474,12 +474,11 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
   /**
    * Shared error handler for append operations.
    * Translates IndexedDB DOMExceptions into typed application errors.
-   * ConstraintError also invalidates the applied-op-ids cache (issue #6213).
+   * A ConstraintError aborts the transaction, so nothing is written and the
+   * applied-op-ids cache (keyed on the last seq) stays valid (#11469).
    */
   private _handleAppendError(e: unknown): never {
     if (e instanceof DOMException && e.name === 'ConstraintError') {
-      this._appliedOpIdsCache = null;
-      this._cacheLastSeq = 0;
       throw new Error(DUPLICATE_OPERATION_ERROR_MSG);
     }
     if (e instanceof DOMException && e.name === 'QuotaExceededError') {
@@ -812,48 +811,14 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
     return this._appendOperationAndSnapshot(op, 'local', snapshot, op.vectorClock);
   }
 
-  async appendBatch(
-    ops: Operation[],
-    source: 'local' | 'remote' = 'local',
-    options?: { pendingApply?: boolean },
-  ): Promise<number[]> {
-    await this._ensureInit();
-    try {
-      const storeNames: OpLogStoreName[] = [STORE_NAMES.OPS];
-      if (ops.some((op) => isFullStateOpType(op.opType))) {
-        storeNames.push(STORE_NAMES.META);
-      }
-      const seqs = await this._adapter.transaction(
-        storeNames,
-        'readwrite',
-        async (tx) => {
-          const writtenSeqs: number[] = [];
-          for (const op of ops) {
-            const entry = this._buildStoredEntry(op, source, options);
-            const seq = await tx.add(STORE_NAMES.OPS, entry);
-            await this._recordFullStateOpInTx(tx, entry.op, seq);
-            writtenSeqs.push(seq);
-          }
-          return writtenSeqs;
-        },
-      );
-      for (const seq of seqs) {
-        this._tabSeqFrontier.observeOwnWrite(seq);
-      }
-      return seqs;
-    } catch (e) {
-      this._handleAppendError(e);
-    }
-  }
-
   /**
    * Appends operations to the store, silently skipping any that already exist.
    *
-   * Unlike appendBatch(), this method does NOT throw on duplicate operations.
+   * Unlike append(), this method does NOT throw on duplicate operations.
    * It checks each op's ID against the IndexedDB `byId` unique index within
    * the same readwrite transaction before inserting. This eliminates the
-   * TOCTOU race between a separate getAppliedOpIds() filter and appendBatch()
-   * that caused persistent "Duplicate operation detected" errors (issue #6343).
+   * TOCTOU race between a separate getAppliedOpIds() filter and a throwing
+   * batch append (since removed, #11469) that caused persistent "Duplicate operation detected" errors (issue #6343).
    *
    * @param ops Operations to append
    * @param source Whether these are local or remote operations
