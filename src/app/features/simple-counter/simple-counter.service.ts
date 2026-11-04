@@ -6,6 +6,7 @@ import {
   selectEnabledSimpleCounters,
   selectEnabledSimpleStopWatchCounters,
   selectSimpleCounterById,
+  selectSimpleCounterEntities,
 } from './store/simple-counter.reducer';
 import {
   addSimpleCounter,
@@ -53,6 +54,7 @@ export class SimpleCounterService implements OnDestroy {
     (id, date, _duration) => this._syncStopwatchAbsoluteValue(id, date),
   );
   private _subscriptions = new Subscription();
+  private _counterEntities = this._store$.selectSignal(selectSimpleCounterEntities);
   private _visibilityHandler: (() => void) | null = null;
 
   // Cache for countdown remaining time (survives component destruction/recreation)
@@ -323,7 +325,10 @@ export class SimpleCounterService implements OnDestroy {
     // Clean up accumulators to prevent memory leak
     this._stopwatchAccumulator.clearOne(id);
     this.clearCountdownRemaining(id);
-    this._store$.dispatch(deleteSimpleCounter({ id }));
+    const simpleCounter = this._counterEntities()[id];
+    this._store$.dispatch(
+      deleteSimpleCounter(simpleCounter ? { id, simpleCounter } : { id }),
+    );
   }
 
   deleteSimpleCounters(ids: string[]): void {
