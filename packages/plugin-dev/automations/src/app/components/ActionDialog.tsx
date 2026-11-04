@@ -122,13 +122,7 @@ export function ActionDialog(props: ActionDialogProps) {
         )}
       </label>
       {action().type === 'webhook' && (
-        <p
-          style={{
-            color: 'var(--color-warning)',
-            'font-size': '0.875em',
-            'margin-top': 'var(--s)',
-          }}
-        >
+        <p class="callout callout--warning text-sm">
           ⚠️ Warning: Your full task data (including title, description, etc.) will be sent to this
           URL. Ensure the endpoint is secure.
         </p>

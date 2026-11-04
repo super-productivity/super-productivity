@@ -26,6 +26,7 @@ import { moveItemInArray } from '../../../util/move-item-in-array';
 import { dragDelayForTouch } from '../../../util/input-intent';
 import { LocaleDatePipe } from 'src/app/ui/pipes/locale-date.pipe';
 import { DateTimeFormatService } from 'src/app/core/date-time-format/date-time-format.service';
+import { DIALOG_AUTO_FOCUS_TYPING } from '../../../util/dialog-auto-focus';
 
 interface HabitDay {
   str: string;
@@ -285,6 +286,7 @@ export class HabitTrackerComponent {
     };
 
     this._matDialog.open(DialogSimpleCounterEditSettingsComponent, {
+      autoFocus: DIALOG_AUTO_FOCUS_TYPING,
       data: { simpleCounter: newHabit },
       restoreFocus: true,
       width: '600px',

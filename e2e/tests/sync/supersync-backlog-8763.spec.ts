@@ -4,7 +4,7 @@ import {
   SuperSyncOperationSchema,
   SuperSyncUploadOpsResponseSchema,
   type SuperSyncOperation,
-} from '@sp/shared-schema';
+} from '@sp/shared-schema/supersync-http-contract';
 import { expect, test } from '../../fixtures/supersync.fixture';
 import {
   SUPERSYNC_BASE_URL,

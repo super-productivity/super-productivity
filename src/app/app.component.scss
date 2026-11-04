@@ -122,7 +122,13 @@
   container-type: inline-size;
   container-name: main-content;
 
-  > ::ng-deep router-outlet + * {
+  // The routed page. Not `router-outlet + *`: a sibling combinator on a
+  // universal subject is matched against every element, so Chromium marks
+  // every parent as sibling-dependent and restyles all following siblings on
+  // each insert or removal (moving one card in a 3,700-card column: 1.3 s of
+  // style recalc, measured 2026-11). The leaving page of a route animation
+  // matches too; the animation positions both pages absolutely anyway.
+  > ::ng-deep :not(router-outlet) {
     position: absolute;
     width: 100%;
     height: 100%;
@@ -244,42 +250,24 @@ mat-sidenav {
   }
 }
 
-// App entrance animation after onboarding preset selection
-@keyframes entrance-slide-left {
+// Cold-start entrance: plays once data is loaded, while the launch screen
+// (index.html) fades out over the content area. The nav is already shown
+// (rendered before data, where the launch screen painted its frame), so the
+// chrome stays put and only the content settles into place. Motion only, no fade: content is
+// readable from its first frame. The end of this animation clears
+// `.app-entrance` (AppComponent).
+@keyframes entrance-settle {
   from {
-    opacity: 0;
-    transform: translateX(-30px);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateX(0);
+    transform: translateY(8px);
   }
 }
 
-@keyframes entrance-slide-up {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.app-entrance {
-  // Main content area fades + slides up as a whole
-  .main-content {
-    animation: entrance-slide-up 450ms ease-out 150ms backwards;
-  }
+.app-entrance .main-content {
+  animation: entrance-settle 280ms var(--ani-enter-timing) backwards;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .app-entrance {
-    .main-content {
-      animation: none;
-    }
+  .app-entrance .main-content {
+    animation: none;
   }
 }

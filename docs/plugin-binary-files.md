@@ -1,81 +1,86 @@
-# Двоичное сохранение файлов плагина
+# Binary file saving for plugins
 
-`saveBinaryFile` дополняет текстовый `downloadFile`. Метод сохраняет исходные
-байты и различает отмену, сохранение на диск и запрос скачивания браузером.
-Он доступен в `plugin.js` и через iframe API. Проверяйте наличие метода на
-старых клиентах: `typeof PluginAPI.saveBinaryFile === 'function'`.
+`saveBinaryFile` complements the text-based `downloadFile`. It preserves the
+original bytes and distinguishes cancellation, saving to disk, and a browser
+download request. It is available in `plugin.js` and through the iframe API.
+Feature-detect it on older clients:
+`typeof PluginAPI.saveBinaryFile === 'function'`.
 
-## Контракт
+## Contract
 
 ```typescript
 const result = await PluginAPI.saveBinaryFile({
   filename: 'Документ.pdf',
-  data: bytes, // ArrayBuffer, до 10 МиБ
+  data: bytes, // ArrayBuffer, up to 10 MiB
   openAfterSave: true,
 });
 ```
 
-`filename` содержит одно имя длиной до 180 символов. Каталоги, URL, команды,
-управляющие символы, завершающие точки и пробелы не допускаются. Поле `path`
-во входном запросе запрещено. Проверка выполняется в renderer и повторно в
-Electron main. Метод не меняет формат задач, синхронизацию или модель данных.
+`filename` contains a single filename of up to 180 characters. Directories,
+URLs, commands, control characters, trailing dots, and trailing spaces are not
+allowed. The input request must not contain a `path` field. Validation runs in
+the renderer and again in Electron main. The method does not change the task
+format, synchronization, or data model.
 
-| Результат                    | Значение                                                                                       |
-| ---------------------------- | ---------------------------------------------------------------------------------------------- |
-| `kind: 'canceled'`           | Пользователь отменил системный диалог; метод не записывает файл и не вызывает открытие.        |
-| `kind: 'saved'`              | Electron завершил запись исходных байтов в выбранный файл; `path` указывает результат диалога. |
-| `kind: 'download-requested'` | Браузеру передан запрос скачивания. Фактическое сохранение и местоположение файла неизвестны.  |
+| Result                       | Meaning                                                                                     |
+| ---------------------------- | ------------------------------------------------------------------------------------------- |
+| `kind: 'canceled'`           | The user canceled the native dialog; the method neither writes nor opens a file.            |
+| `kind: 'saved'`              | Electron wrote the original bytes to the selected file; `path` is the dialog result.        |
+| `kind: 'download-requested'` | A download was requested from the browser. Actual saving and the file location are unknown. |
 
-Для `saved` поле `openStatus` имеет отдельное значение:
+For `saved`, `openStatus` reports a separate outcome:
 
-| `openStatus`    | Значение                                                                                                   |
-| --------------- | ---------------------------------------------------------------------------------------------------------- |
-| `not-requested` | Плагин не запросил открытие.                                                                               |
-| `requested`     | ОС приняла запрос открытия без сообщения об ошибке. Запуск программы и открытие документа не подтверждены. |
-| `blocked`       | Открытие выбранного типа файла запрещено приложением. Файл уже сохранён.                                   |
-| `failed`        | ОС сообщила об ошибке или отклонила запрос. Файл уже сохранён и остаётся на диске.                         |
+| `openStatus`    | Meaning                                                                                                                 |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `not-requested` | The plugin did not request opening.                                                                                     |
+| `requested`     | The OS accepted the open request without reporting an error. Application launch and document display are not confirmed. |
+| `blocked`       | The application forbids opening the selected file type. The file has already been saved.                                |
+| `failed`        | The OS reported an error or rejected the request. The saved file remains on disk.                                       |
 
-В браузере `openStatus` — `unavailable`, если плагин запросил открытие, или
-`not-requested`. Браузерный API не обещает запуск системного приложения.
+In the browser, `openStatus` is `unavailable` if the plugin requested opening,
+or `not-requested` otherwise. The browser API does not promise to launch a
+system application.
 
-## Ограничения безопасности и ожидания
+## Safety and waiting limits
 
-1. Путь выбирает пользователь в системном диалоге Electron. Входной запрос не
-   позволяет открыть существующий произвольный путь.
-2. Main копирует байты до ожидания решения пользователя и записывает их после
-   выбора. Ошибка записи не вызывает открытие. Ошибка открытия не удаляет файл.
-3. Main проверяет фактическое имя из диалога. Пользователь мог изменить `.pdf`
-   на `.exe`. Общие проверки `isPathSafeToOpen` и `hasExecutableFileExtension`
-   применяются независимо от политики расширений конкретного плагина.
-4. Исполняемые имена из одного расширения, например `.cmd` и `.exe`, тоже
-   блокируются. Обычный `.gitignore` не входит в список исполняемых расширений.
-5. Пока диалог или открытие не завершены, второй двоичный вызов отклоняется.
-   Он не создаёт ещё один диалог. Автоматических повторов нет.
-6. Iframe не применяет к этому методу обычный тайм-аут API в 30 секунд.
-   Пользователь может выбирать путь дольше. Закрытие интерфейса само по себе
-   не доказывает отмену системной операции; перед ручным повтором нужно
-   проверить выбранное место сохранения.
+1. The user selects the path in Electron's native dialog. The input request
+   cannot open an arbitrary existing path.
+2. Main copies the bytes before waiting for the user's choice and writes them
+   after selection. A write failure does not trigger opening. An opening failure
+   does not delete the file.
+3. Main validates the actual filename from the dialog. The user may have changed
+   `.pdf` to `.exe`. The shared `isPathSafeToOpen` and
+   `hasExecutableFileExtension` checks apply independently of a plugin's own
+   extension policy.
+4. Executable filenames consisting of an extension alone, such as `.cmd` and
+   `.exe`, are also blocked. An ordinary `.gitignore` is not an executable type.
+5. While a dialog or opening operation is pending, a second binary call is
+   rejected. It does not create another dialog. There are no automatic retries.
+6. The iframe does not apply the usual 30-second API timeout to this method.
+   The user may take longer to select a path. Closing the plugin view does not
+   prove that the native operation was canceled; check the selected save
+   location before retrying manually.
 
 ```text
-ArrayBuffer → проверка → системный диалог → запись → результат saved
-                                                    ↓
-                         проверка фактического пути → запрос открытия ОС
+ArrayBuffer → validate → native dialog → write → saved result
+                                                   ↓
+                         validate actual path → OS open request
 ```
 
-Метод не передаёт имена, пути и содержимое в журналы. Исходный метод
-`downloadFile(filename, text)` сохраняет прежний контракт.
+The method does not log filenames, paths, or content. The original
+`downloadFile(filename, text)` method retains its existing contract.
 
-## Воспроизведение проверок
+## Reproducing the checks
 
 - `node --test electron/save-plugin-binary-file.test.cjs electron/open-url.test.cjs`
-  проверяет настоящую запись синтетических байтов с фикстурами диалога и shell.
-  Эти тесты не запускают приложения ОС.
-- `npm run test:file -- src/app/plugins/plugin-file-download.spec.ts --include src/app/plugins/plugin-api.spec.ts --include src/app/plugins/util/plugin-iframe.util.spec.ts --include src/app/ui/is-external-url-allowed.spec.ts`
-  проверяет браузерный Blob, прямой API, iframe, поздний результат после 66 секунд,
-  обычный тайм-аут других API и общий запрет расширений.
-- `npm --prefix packages/plugin-api run typecheck` проверяет публичные типы.
-- `npm run electron:build` проверяет main и preload.
+  tests real writes of synthetic bytes with dialog and shell fixtures.
+  These tests do not launch OS applications.
+- `npm run quiet -- test:file src/app/plugins/plugin-file-download.spec.ts --include src/app/plugins/plugin-api.spec.ts --include src/app/plugins/util/plugin-iframe.util.spec.ts --include src/app/ui/is-external-url-allowed.spec.ts`
+  tests the browser Blob, direct API, iframe, a delayed result after 66 seconds,
+  the normal timeout for other APIs, and the shared extension restrictions.
+- `npm --prefix packages/plugin-api run typecheck` checks the public types.
+- `npm run electron:build` checks main and preload.
 
-Для приёмки конкретной платформы отдельно проверяйте системный диалог и
-ассоциации файлов в изолированном профиле. Результат `requested` сохраняет своё
-ограниченное значение и после такой проверки.
+For platform acceptance, test the native dialog and file associations
+separately in an isolated profile. The `requested` outcome retains its limited
+meaning after those checks.

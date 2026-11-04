@@ -16,8 +16,8 @@ export function ConditionInput(props: ConditionInputProps) {
   ];
 
   return (
-    <div class="grid" style={{ 'margin-bottom': '0.5rem' }}>
-      <div>
+    <div class="row">
+      <div class="grow">
         <select
           value={props.condition.type}
           onChange={(e) =>
@@ -29,7 +29,7 @@ export function ConditionInput(props: ConditionInputProps) {
           ))}
         </select>
       </div>
-      <div>
+      <div class="grow">
         <input
           type="text"
           value={props.condition.value}
@@ -37,16 +37,16 @@ export function ConditionInput(props: ConditionInputProps) {
           placeholder="Value"
         />
       </div>
-      <div style={{ width: 'auto', flex: '0' }}>
-        <button
-          class="secondary outline"
-          onClick={props.onRemove}
-          style={{ width: 'auto' }}
-          title="Remove Condition"
-        >
-          ✕
-        </button>
-      </div>
+      <button
+        class="btn-icon"
+        onClick={props.onRemove}
+        title="Remove Condition"
+        aria-label="Remove Condition"
+      >
+        <span class="material-icons" aria-hidden="true">
+          close
+        </span>
+      </button>
     </div>
   );
 }

@@ -1,3 +1,4 @@
+import { TestBed } from '@angular/core/testing';
 import { BehaviorSubject } from 'rxjs';
 import { distinctUntilChanged, filter, map } from 'rxjs/operators';
 import { SyncProviderId } from '../../../op-log/sync-providers/provider.const';
@@ -6,11 +7,18 @@ import type { SuperSyncPrivateCfg } from '@sp/sync-providers/super-sync';
 import type { DropboxPrivateCfg } from '@sp/sync-providers/dropbox';
 import type { WebdavPrivateCfg } from '@sp/sync-providers/webdav';
 import { ReminderConfig } from '../../config/global-config.model';
+import { SyncProviderManager } from '../../../op-log/sync-providers/provider-manager.service';
+import { GlobalConfigService } from '../../config/global-config.service';
+import { DataInitStateService } from '../../../core/data-init/data-init-state.service';
 import {
+  AndroidSyncBridgeEffects,
+  BackgroundSyncBridgeCommand,
   bridgeCommandEqual,
   getBackgroundReminderSettings,
   getCapturePublicKeyForNative,
+  getFileSyncCredentialBridgeCommand,
   getSuperSyncCredentialBridgeCommand,
+  isBackgroundFileSyncProvider,
   SuperSyncCredentialBridgeCommand,
 } from './android-sync-bridge.effects';
 
@@ -172,6 +180,196 @@ describe('AndroidSyncBridgeEffects - credential mirroring logic', () => {
         type: 'clear',
         reason: 'not-supersync',
       });
+    });
+  });
+
+  describe('file sync command (WebDAV/Nextcloud)', () => {
+    const readRequest = {
+      url: 'https://dav.example.com/sp/sync-data.json',
+      authorization: 'Basic abc',
+    };
+
+    it('only treats WebDAV and Nextcloud as background-readable file providers', () => {
+      expect(isBackgroundFileSyncProvider(SyncProviderId.WebDAV)).toBe(true);
+      expect(isBackgroundFileSyncProvider(SyncProviderId.Nextcloud)).toBe(true);
+      expect(isBackgroundFileSyncProvider(SyncProviderId.Dropbox)).toBe(false);
+      expect(isBackgroundFileSyncProvider(SyncProviderId.OneDrive)).toBe(false);
+      expect(isBackgroundFileSyncProvider(SyncProviderId.LocalFile)).toBe(false);
+      expect(isBackgroundFileSyncProvider(SyncProviderId.SuperSync)).toBe(false);
+    });
+
+    it('carries the read request and the encryption password', () => {
+      expect(
+        getFileSyncCredentialBridgeCommand(
+          { encryptKey: 'pw', isEncryptionEnabled: true },
+          readRequest,
+        ),
+      ).toEqual({
+        type: 'set-file',
+        fileUrl: readRequest.url,
+        authorization: readRequest.authorization,
+        isEncryptionExpected: true,
+        encryptionPassword: 'pw',
+      });
+    });
+
+    it('expects encryption from the key alone on configs without the flag', () => {
+      expect(
+        getFileSyncCredentialBridgeCommand({ encryptKey: 'pw' }, readRequest)
+          .isEncryptionExpected,
+      ).toBe(true);
+      expect(
+        getFileSyncCredentialBridgeCommand({}, readRequest).isEncryptionExpected,
+      ).toBe(false);
+    });
+
+    it('keeps expecting encryption when the flag is set but the key was dropped', () => {
+      const command = getFileSyncCredentialBridgeCommand(
+        { isEncryptionEnabled: true },
+        readRequest,
+      );
+      expect(command.isEncryptionExpected).toBe(true);
+      expect(command.encryptionPassword).toBe('');
+    });
+
+    it('re-emits only when the file target or credentials change', () => {
+      const a = getFileSyncCredentialBridgeCommand({}, readRequest);
+      expect(
+        bridgeCommandEqual(a, getFileSyncCredentialBridgeCommand({}, readRequest)),
+      ).toBe(true);
+      expect(
+        bridgeCommandEqual(
+          a,
+          getFileSyncCredentialBridgeCommand({}, { ...readRequest, authorization: 'x' }),
+        ),
+      ).toBe(false);
+      expect(bridgeCommandEqual(a, cmd(webdavCfg()))).toBe(false);
+    });
+  });
+
+  describe('command from the active provider (_toBridgeCommand)', () => {
+    const readRequest = {
+      url: 'https://dav.example.com/sp/sync-data.json',
+      authorization: 'Basic abc',
+    };
+
+    const toCommand = (
+      provider: unknown,
+      cfg: CurrentProviderPrivateCfg | null,
+    ): ReturnType<AndroidSyncBridgeEffects['_toBridgeCommand']> => {
+      TestBed.configureTestingModule({
+        providers: [
+          AndroidSyncBridgeEffects,
+          {
+            provide: SyncProviderManager,
+            useValue: { getProviderById: () => Promise.resolve(provider) },
+          },
+          { provide: GlobalConfigService, useValue: {} },
+        ],
+      });
+      return TestBed.inject(AndroidSyncBridgeEffects)['_toBridgeCommand'](cfg);
+    };
+
+    it('asks the WebDAV provider for the sync-data.json read request', async () => {
+      const getFileReadRequest = jasmine
+        .createSpy('getFileReadRequest')
+        .and.resolveTo(readRequest);
+      const command = await toCommand({ getFileReadRequest }, webdavCfg());
+      expect(getFileReadRequest).toHaveBeenCalledWith('sync-data.json');
+      expect(command).toEqual(getFileSyncCredentialBridgeCommand({}, readRequest));
+    });
+
+    it('clears when the provider cannot build a read request yet', async () => {
+      const getFileReadRequest = (): Promise<never> =>
+        Promise.reject(new Error('WebDAV base URL is not configured'));
+      expect(await toCommand({ getFileReadRequest }, webdavCfg())).toEqual(
+        cmd(webdavCfg()),
+      );
+    });
+
+    it('clears for a provider without a read request', async () => {
+      expect(await toCommand(undefined, webdavCfg())).toEqual(cmd(webdavCfg()));
+    });
+
+    it('keeps the SuperSync path for SuperSync', async () => {
+      expect(await toCommand(undefined, superSyncCfg('tok', 'https://s'))).toEqual(
+        cmd(superSyncCfg('tok', 'https://s')),
+      );
+    });
+  });
+
+  describe('command stream (sync on/off)', () => {
+    const setup = (): {
+      cfg$: BehaviorSubject<CurrentProviderPrivateCfg | null>;
+      sync$: BehaviorSubject<{ isEnabled: boolean }>;
+      emissions: (BackgroundSyncBridgeCommand | null)[];
+      markDataLoaded: () => void;
+    } => {
+      const cfg$ = new BehaviorSubject<CurrentProviderPrivateCfg | null>(null);
+      const sync$ = new BehaviorSubject({ isEnabled: false });
+      TestBed.configureTestingModule({
+        providers: [
+          AndroidSyncBridgeEffects,
+          {
+            provide: SyncProviderManager,
+            useValue: {
+              currentProviderPrivateCfg$: cfg$,
+              getProviderById: () => Promise.resolve(undefined),
+            },
+          },
+          { provide: GlobalConfigService, useValue: { sync$ } },
+        ],
+      });
+      const effects = TestBed.inject(AndroidSyncBridgeEffects);
+      const emissions: (BackgroundSyncBridgeCommand | null)[] = [];
+      effects['_bridgeCommand$'].subscribe((c) => emissions.push(c));
+      const dataInit = TestBed.inject(DataInitStateService);
+      return {
+        cfg$,
+        sync$,
+        emissions,
+        markDataLoaded: () => dataInit._neverUpdateOutsideDataInitService$.next(true),
+      };
+    };
+    const flush = (): Promise<void> => new Promise((r) => setTimeout(r));
+
+    it('clears the stored credentials when sync is turned off', async () => {
+      const { cfg$, sync$, emissions, markDataLoaded } = setup();
+      sync$.next({ isEnabled: true });
+      markDataLoaded();
+      cfg$.next(superSyncCfg('tok'));
+      await flush();
+      expect(emissions.at(-1)?.type).toBe('set');
+
+      // disabling sync: the provider manager only emits a null cfg
+      sync$.next({ isEnabled: false });
+      cfg$.next(null);
+      await flush();
+      expect(emissions.at(-1)).toEqual({ type: 'clear', reason: 'sync-disabled' });
+    });
+
+    it('clears leftover credentials on startup with sync off', async () => {
+      const { emissions, markDataLoaded } = setup();
+      markDataLoaded();
+      await flush();
+      expect(emissions).toEqual([{ type: 'clear', reason: 'sync-disabled' }]);
+    });
+
+    it('does not clear from the pre-hydration default config', async () => {
+      const { emissions } = setup();
+      await flush();
+      expect(emissions).toEqual([]);
+    });
+
+    it('does not clear for the transient null while switching providers', async () => {
+      const { cfg$, sync$, emissions, markDataLoaded } = setup();
+      sync$.next({ isEnabled: true });
+      markDataLoaded();
+      cfg$.next(superSyncCfg('tok'));
+      await flush();
+      cfg$.next(null);
+      await flush();
+      expect(emissions.filter((c) => c?.type === 'clear')).toEqual([]);
     });
   });
 
