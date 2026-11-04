@@ -418,6 +418,15 @@ test.describe('@supersync Archive Subtasks Sync', () => {
         .count();
       expect(tasksOnB).toBe(0);
 
+      // Client A first: on B the same-batch archive filter
+      // (collectTaskRemovalEntityIdsFromBatch) never creates the subtask, so
+      // only A's reducer pass shows whether the subtask removal ran.
+      await expectArchivedWithoutOrphans(
+        clientA,
+        raceParentId,
+        [raceSubTaskId],
+        'Client A',
+      );
       await expectArchivedWithoutOrphans(
         clientB,
         raceParentId,
