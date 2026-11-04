@@ -41,14 +41,10 @@ test.describe('@supersync Concurrent Delete and Reorder', () => {
    * 7. Client A syncs (downloads reorder)
    * 8. Verify: both clients show exactly the same three tasks in the same order
    */
-  // test.fixme: the orders diverge permanently on the unchanged app
-  // (E2E run 41735806038, 2026-11-03). Expected: both clients show the same
-  // order. Observed: A [T4, T1, T3] vs B [T4, T3, T1]; with two deletes
-  // A [T1, T6, T5, T3] vs B [T6, T5, T1, T3]. B's relative move
-  // (moveTaskUpInTodayList, tag.reducer.ts) replays on A against a list
-  // without the deleted neighbour, and no side's TAG:TODAY order wins.
-  // Issue candidate for the coordinator; un-fixme once fixed.
-  test.fixme('Delete on one client + reorder on another converges correctly', async ({
+  // Issue #11464: before the fix, B's relative move replayed on A against a
+  // list without the deleted neighbour, so A ended [T4, T1, T3] and B
+  // [T4, T3, T1] (E2E run 41735806038).
+  test('Delete on one client + reorder on another converges correctly', async ({
     browser,
     baseURL,
     testRunId,
@@ -134,6 +130,8 @@ test.describe('@supersync Concurrent Delete and Reorder', () => {
       // Exact membership: T2 deleted, nothing duplicated or lost.
       expect([...titlesA].sort()).toEqual([task1, task3, task4].map(full).sort());
       expect([...titlesB].sort()).toEqual([task1, task3, task4].map(full).sort());
+      // B's move put T1 right before T2; with T2 gone, T1 keeps its slot.
+      expect(titlesB).toEqual([task4, task3, task1].map(full));
       // Both clients must converge to the same order.
       expect(titlesA).toEqual(titlesB);
 
@@ -157,8 +155,7 @@ test.describe('@supersync Concurrent Delete and Reorder', () => {
    * 5. Sync convergence
    * 6. Verify: both clients show exactly the same four tasks in the same order
    */
-  // test.fixme: same divergence as above (E2E run 41735806038).
-  test.fixme('Multiple deletes + reorder converges correctly', async ({
+  test('Multiple deletes + reorder converges correctly', async ({
     browser,
     baseURL,
     testRunId,
@@ -230,10 +227,97 @@ test.describe('@supersync Concurrent Delete and Reorder', () => {
       // Exact membership: T2 and T4 deleted, nothing duplicated or lost.
       expect([...titlesA].sort()).toEqual([t1, t3, t5, t6].sort());
       expect([...titlesB].sort()).toEqual([t1, t3, t5, t6].sort());
+      // B's order [T6, T5, T1, T4, T3, T2] without the deleted T2 and T4.
+      expect(titlesB).toEqual([t6, t5, t1, t3]);
       // Both clients must converge to the same order.
       expect(titlesA).toEqual(titlesB);
 
       console.log('[MultiDeleteReorder] Both clients converged correctly');
+    } finally {
+      if (clientA) await closeClient(clientA);
+      if (clientB) await closeClient(clientB);
+    }
+  });
+
+  /**
+   * Scenario: the reorder reaches the server before the delete (#11464,
+   * reverse direction), and the move goes down past the deleted neighbour.
+   *
+   * Actions:
+   * 1. Client A creates 4 tasks, syncs; Client B syncs
+   * 2. Client A deletes Task2 (offline): A shows [T4, T3, T1]
+   * 3. Client B moves Task3 down past Task2 (offline): B shows [T4, T2, T3, T1]
+   * 4. Client B syncs first (uploads the move), then A (applies the move on a
+   *    list without Task2, uploads the delete), then B (applies the delete)
+   * 5. Verify: both clients show the same three tasks in the same order
+   */
+  test('Reorder uploaded before a neighbour delete converges correctly', async ({
+    browser,
+    baseURL,
+    testRunId,
+  }) => {
+    const uniqueId = Date.now();
+    let clientA: SimulatedE2EClient | null = null;
+    let clientB: SimulatedE2EClient | null = null;
+
+    try {
+      const user = await createTestUser(testRunId);
+      const syncConfig = getSuperSyncConfig(user);
+
+      clientA = await createSimulatedClient(browser, baseURL!, 'A', testRunId);
+      await clientA.sync.setupSuperSync(syncConfig);
+
+      const task1 = `T1-${uniqueId}`;
+      const task2 = `T2-${uniqueId}`;
+      const task3 = `T3-${uniqueId}`;
+      const task4 = `T4-${uniqueId}`;
+
+      await clientA.workView.addTask(task1);
+      await clientA.workView.addTask(task2);
+      await clientA.workView.addTask(task3);
+      await clientA.workView.addTask(task4);
+      await clientA.sync.syncAndWait();
+
+      clientB = await createSimulatedClient(browser, baseURL!, 'B', testRunId);
+      await clientB.sync.setupSuperSync(syncConfig);
+      await clientB.sync.syncAndWait();
+      await waitForTask(clientB.page, task1);
+      await waitForTask(clientB.page, task4);
+
+      const full = (name: string): string => createdTitle('A', testRunId, name);
+
+      // ============ Concurrent Modifications (Offline) ============
+      await deleteTask(clientA, task2);
+      await expect(taskTitleLocator(clientA)).toHaveText([task4, task3, task1].map(full));
+
+      await expect(taskTitleLocator(clientB)).toHaveText(
+        [task4, task3, task2, task1].map(full),
+      );
+      await moveTaskWithKeyboard(getTaskElement(clientB, task3), 'down', 1);
+      await expect(taskTitleLocator(clientB)).toHaveText(
+        [task4, task2, task3, task1].map(full),
+      );
+      console.log('[ReorderBeforeDelete] A deleted T2, B moved T3 down');
+
+      // ============ Sync: the move reaches the server first ============
+      await clientB.sync.syncAndWait();
+      await clientA.sync.syncAndWait();
+      await clientB.sync.syncAndWait();
+
+      // ============ Verify Convergence ============
+      await expect(taskTitleLocator(clientA)).toHaveCount(3);
+      await expect(taskTitleLocator(clientB)).toHaveCount(3);
+      await expect(taskTitleLocator(clientA)).toHaveText(await getTaskTitles(clientB));
+      const titlesA = await getTaskTitles(clientA);
+      const titlesB = await getTaskTitles(clientB);
+
+      console.log('[ReorderBeforeDelete] Client A tasks:', titlesA);
+      console.log('[ReorderBeforeDelete] Client B tasks:', titlesB);
+
+      expect([...titlesA].sort()).toEqual([task1, task3, task4].map(full).sort());
+      // B's move put T3 right after T2; with T2 gone, T3 keeps its slot.
+      expect(titlesB).toEqual([task4, task3, task1].map(full));
+      expect(titlesA).toEqual(titlesB);
     } finally {
       if (clientA) await closeClient(clientA);
       if (clientB) await closeClient(clientB);

@@ -244,9 +244,11 @@ export class ArchiveOperationHandler implements ArchiveSideEffectPort<Persistent
    * Writes archived tasks to archiveYoung storage.
    *
    * @localBehavior SKIP - Archive written by ArchiveService.moveToArchive() before dispatch
-   * @remoteBehavior Executes - Writes tasks to archiveYoung, without references
-   *   to tags (#11466) or projects (#11486) deleted locally; see
-   *   dropDeletedParentsFromArchivedTasks
+   * @remoteBehavior Executes - Writes tasks to archiveYoung, without tag ids
+   *   (#11466) or projects (#11486) this client does not have. A tag delete is
+   *   last-write-wins, so a concurrent rename can bring the tag back afterwards
+   *   (#11489); see dropDeletedParentsFromArchivedTasks for what this does and
+   *   does not settle.
    */
   private async _handleMoveToArchive(action: PersistentAction): Promise<void> {
     if (!action.meta?.isRemote) {
@@ -254,7 +256,7 @@ export class ArchiveOperationHandler implements ArchiveSideEffectPort<Persistent
     }
     const tasks = (action as ReturnType<typeof TaskSharedActions.moveToArchive>).tasks;
     // Archive side effects run after the whole batch's reducers, so this is the
-    // tag/project state including every delete this client has applied.
+    // tag/project state after every op in the batch, deletes and recreations alike.
     const store = this._getStore();
     const existing = {
       tagIds: new Set((await firstValueFrom(store.select(selectAllTagIds))) as string[]),

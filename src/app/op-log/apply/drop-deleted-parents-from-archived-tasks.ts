@@ -25,25 +25,40 @@ const keepExistingTags = <T extends Task>(
     : task;
 
 /**
- * Removes references to parents deleted locally from the tasks of a remote
- * moveToArchive, before they are written to the archive.
+ * Removes references to parents that do not exist locally from the tasks of a
+ * remote moveToArchive, before they are written to the archive.
  *
- * A tag or project deleted here, concurrently with the archive on another
- * client, has already run its archive cleanup before the archived task
- * arrives, so the incoming copy would keep the deleted reference for good. The
- * archiving client runs that cleanup when the delete reaches it; this gives the
- * same result on the deleting client, whichever op arrives first:
+ * Guarantee: an archived copy written here never references a tag or project
+ * this client does not have when the op is applied. A tag or project deleted
+ * here concurrently with an archive elsewhere has already run its archive
+ * cleanup, so the incoming copy used to keep the deleted reference for good,
+ * while the archiving client ran that cleanup when the delete reached it. Both
+ * clients now end the same way, whichever op arrives first:
  *
  * - **Tags (#11466)** mirror `removeTagsFromAllTasks`: deleted tag ids are
- *   removed, the task is kept. That cleanup checks orphans on the archive as
- *   loaded before the removal, so a task left without project, tag and parent
- *   stays archived with no tags there too; keeping it loses no content.
+ *   removed, the task is kept. `removeTagsFromAllTasks` checks orphans on the
+ *   archive as loaded before the removal, so on the archiving client a task
+ *   left without project, tag and parent stays archived with no tags. One
+ *   leftover: when the delete follows the archive in the same remote batch, the
+ *   delete's cleanup sees the task written here as already orphaned and drops
+ *   it, so a legacy task without a project is kept or dropped depending on
+ *   batching.
  * - **Projects (#11486)** mirror `removeAllArchiveTasksForProject`: a task
  *   whose project is gone is dropped, with its subtasks. Project deletes win
  *   (`isProjectDeleteWinsOperation`), so the project cannot come back. A live
  *   task never points at a missing project (data repair moves it to INBOX,
  *   which always exists), and a project created in the same batch already
  *   exists here, so a missing project means it was deleted.
+ *
+ * Not guaranteed for tags: a tag delete is last-write-wins, not delete-wins.
+ * If the archiving client renames the tag before it downloads the delete, its
+ * update wins and recreates the tag here, but this client's archived copy
+ * already lost the id while the archiving client's copy keeps it. Live tasks
+ * diverge the same way on master: #11489, pinned in
+ * e2e/tests/sync/supersync-tag-delete-rename-race-11489.spec.ts.
+ * Tag ids can also come back through the board's "create missing tags" action,
+ * which recreates fixed ids (EM_URGENT, EM_IMPORTANT); archived copies scrubbed
+ * here stay without them.
  *
  * Malformed entries are passed through for sanitizeTasksForArchiving.
  */
