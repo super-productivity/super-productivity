@@ -106,10 +106,17 @@ class FullscreenActivity : AppCompatActivity() {
         // Determines which launch mode to use. (Online-old or Offline-new)
         val launchDecider = LaunchDecider(this)
         if (launchDecider.shouldSwitchToNewActivity()) {
-            // Switch to CapacitorMainActivity
-            val intent = intent.setComponent(ComponentName(this, CapacitorMainActivity::class.java))
+            // Switch to CapacitorMainActivity. This hop runs on every launch, under
+            // the system splash: without NO_ANIMATION (open) and the zero pending
+            // transition (close) the default activity animation plays between the
+            // two windows and reads as a flash on app open.
+            val intent = intent
+                .setComponent(ComponentName(this, CapacitorMainActivity::class.java))
+                .addFlags(Intent.FLAG_ACTIVITY_NO_ANIMATION)
             startActivity(intent)
             finish()
+            @Suppress("DEPRECATION")
+            overridePendingTransition(0, 0)
             return
         }
 
