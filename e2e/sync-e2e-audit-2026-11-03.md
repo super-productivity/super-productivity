@@ -40,7 +40,12 @@ The strengthened tests exposed these app bugs on the unchanged app. Each has an 
 | #11467 a SuperSync backup restore silently loses later ops          | operator path, no fixme                                                        | #11478 (follow-up #11481) |
 | #11470 a file-based REPAIR forces the whole-dataset dialog on peers | `webdav-rejected-repair-recovery-11352` (pending-on-B)                         | #11475                    |
 
-Also filed: #11469, a unit gap in the `_appliedOpIdsCache` invalidation (PR #11473). #11468 was closed as not planned (see Verify 5).
+Also filed:
+
+- #11469: a unit gap in the `_appliedOpIdsCache` invalidation (PR #11473).
+- #11483: found while fixing #11470. A stale pending file-based REPAIR snapshot overwrites peer ops downloaded after it was built (data loss). The reproduction is `webdav-stale-pending-repair-snapshot` in #11484, and a fix is in progress.
+
+#11468 was closed as not planned (see Verify 5).
 
 ## Cross-cutting causes (shared helpers, coordinator PR)
 
