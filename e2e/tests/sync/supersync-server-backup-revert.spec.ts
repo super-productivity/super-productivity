@@ -95,8 +95,8 @@ const USER_SYNC_TABLES = ['operations', 'user_sync_state', 'sync_devices'] as co
  * The generated script deletes the user's current rows and re-inserts the
  * snapshotted rows via COPY, all in one transaction scoped to this user. It
  * preserves exact values — including `user_sync_state.last_seq`, which the
- * `/ops-after` test route deletes and therefore cannot reproduce the
- * SYNC_IMPORT_EXISTS scenario these tests exercise.
+ * `/ops-after` test route deletes and therefore cannot reproduce an exact
+ * full-dump restore.
  */
 const dumpUserData = (userId: number): string => {
   const dumpPath = `/tmp/supersync_e2e_userdump_${userId}_${Date.now()}.sql`;
@@ -125,8 +125,13 @@ const dumpUserData = (userId: number): string => {
  * Restore a user's sync data from a snapshot created by dumpUserData().
  * Atomic (ON_ERROR_STOP aborts the transaction) and scoped to the snapshotted
  * user — it never touches other users' rows.
+ *
+ * The documented restore stops and restarts the server, which drops its
+ * in-memory caches. The test server keeps running, so clear them explicitly:
+ * otherwise the request-dedup cache answers a re-upload with the results of
+ * the pre-restore upload and nothing is stored.
  */
-const restoreUserData = (dumpPath: string): void => {
+const restoreUserData = async (dumpPath: string, userId: number): Promise<void> => {
   execSync(
     `cat ${dumpPath} | docker compose -f docker-compose.yaml exec -T db ` +
       `psql -U supersync supersync_db -v ON_ERROR_STOP=1`,
@@ -135,6 +140,13 @@ const restoreUserData = (dumpPath: string): void => {
       timeout: 30000,
     },
   );
+  const response = await fetch(
+    `${SUPERSYNC_BASE_URL}/api/test/user/${userId}/clear-process-caches`,
+    { method: 'POST' },
+  );
+  if (!response.ok) {
+    throw new Error(`Failed to clear server caches: ${response.status}`);
+  }
 };
 
 /**
@@ -173,9 +185,12 @@ const revertServerToSeq = async (userId: number, serverSeq: number): Promise<num
  * Tested scenarios:
  * 1. Complete server data loss — client re-uploads full state via gap detection
  * 2. Partial server revert — client preserves local data, verifies server state
+ * 3. Server restored from a backup — each device re-seeds the ops it lost
  *
  * Key mechanism: gap detection (sinceSeq > latestSeq) triggers client to
- * reset its sync position and re-download from seq 0, then re-upload state.
+ * reset its sync position and re-download from seq 0. An empty server is
+ * seeded with a full-state SYNC_IMPORT; a restored, non-empty one gets back
+ * each device's own ops it no longer has (#11467).
  *
  * Prerequisites:
  * - super-sync-server running on localhost:1901 with TEST_MODE=true
@@ -275,15 +290,16 @@ test.describe.serial('@supersync SuperSync Server Backup Revert', () => {
    * This simulates a partial backup restore where the server has older
    * but non-empty data (e.g., pg_dump from yesterday, missing today's ops).
    *
-   * Known limitation: When the server still has the original SYNC_IMPORT,
-   * gap detection triggers a SYNC_IMPORT upload attempt which gets rejected
-   * with 409 SYNC_IMPORT_EXISTS. The client's local ops (already marked as
-   * uploaded) are not re-sent as individual operations.
+   * The `/ops-after` test route also deletes `user_sync_state`, including the
+   * sequence counter, so the server reports itself empty while ops remain.
+   * The client then tries a full-state re-upload that the server rejects with
+   * 409 SYNC_IMPORT_EXISTS. A real restore keeps the counter consistent with
+   * the ops and takes the re-seed path instead: see "Restored server" above
+   * (#11467). This test only covers the client.
    *
    * What we verify:
    * - Client A preserves all local data after partial revert
-   * - Client A can continue creating and syncing new tasks
-   * - The sync process doesn't crash or corrupt data
+   * - Client A can continue creating tasks locally
    */
   test('Client preserves local data after partial server revert', async ({
     browser,
@@ -357,12 +373,9 @@ test.describe.serial('@supersync SuperSync Server Backup Revert', () => {
         .count();
       expect(taskCount).toBe(3);
 
-      // NOTE: After a partial revert, sync may show errors due to
-      // SYNC_IMPORT_EXISTS conflict (the original SYNC_IMPORT is still on
-      // the server). The client preserves local data and can continue
-      // working, but sync recovery requires manual intervention (e.g.,
-      // a full data reset via the "Reset Account" feature).
-      // See test 1 for full data loss recovery which works automatically.
+      // NOTE: the route leaves ops without a sequence counter (see above), so
+      // the client's full-state re-upload is rejected with SYNC_IMPORT_EXISTS
+      // here. A real restore re-seeds instead ("Restored server" tests).
       console.log(
         '[Partial] Test passed - client preserved data and can continue working',
       );
@@ -370,6 +383,108 @@ test.describe.serial('@supersync SuperSync Server Backup Revert', () => {
       if (clientA) await closeClient(clientA);
     }
   });
+
+  /**
+   * Scenario: Server restored from a backup — every device re-seeds what it lost (#11467)
+   *
+   * Devices A and B each upload a task after the backup was taken. The server
+   * is then restored from that backup, so both tasks are gone from it while
+   * A and B still hold them as synced. On their next sync each device must
+   * put its own lost ops back, so a fresh device C receives everything.
+   * Before the fix the restored server never got them back and no error was
+   * shown. Run in both sync orders: whichever device syncs first must not
+   * keep the other from re-seeding.
+   */
+  for (const firstToSync of ['A', 'B'] as const) {
+    test(`Restored server: both devices re-seed their lost ops (${firstToSync} syncs first)`, async ({
+      browser,
+      baseURL,
+      testRunId,
+    }, testInfo) => {
+      testInfo.setTimeout(240000);
+      const appUrl = baseURL || 'http://localhost:4242';
+      let clientA: SimulatedE2EClient | null = null;
+      let clientB: SimulatedE2EClient | null = null;
+      let clientC: SimulatedE2EClient | null = null;
+      let user: TestUser | null = null;
+      let dumpPath: string | null = null;
+
+      try {
+        user = await createTestUser(`${testRunId}-reseed-${firstToSync}`);
+        const syncConfig = getSuperSyncConfig(user);
+        const joinConfig = {
+          ...syncConfig,
+          isEncryptionEnabled: true,
+          password: ENCRYPTION_PASSWORD,
+        };
+
+        clientA = await createSimulatedClient(browser, appUrl, 'A', testRunId);
+        await clientA.sync.setupSuperSync(syncConfig);
+        const taskBefore = `BeforeBackup-${testRunId}`;
+        await clientA.workView.addTask(taskBefore);
+        await clientA.sync.syncAndWait();
+
+        clientB = await createSimulatedClient(browser, appUrl, 'B', testRunId);
+        await clientB.sync.setupSuperSync(joinConfig);
+        await clientB.sync.syncAndWait();
+        await waitForTask(clientB.page, taskBefore, 30000);
+
+        // The operator's backup.
+        dumpPath = dumpUserData(user.userId);
+        const seqAtDump = await getLatestServerSeq(user.userId);
+
+        // Both devices upload after the backup and see each other's task.
+        const taskA = `LostFromA-${testRunId}`;
+        const taskB = `LostFromB-${testRunId}`;
+        await clientA.workView.addTask(taskA);
+        await clientA.sync.syncAndWait();
+        await clientB.sync.syncAndWait();
+        await waitForTask(clientB.page, taskA, 30000);
+        await clientB.workView.addTask(taskB);
+        await clientB.sync.syncAndWait();
+        await clientA.sync.syncAndWait();
+        await waitForTask(clientA.page, taskB, 30000);
+        expect(await getLatestServerSeq(user.userId)).toBeGreaterThan(seqAtDump);
+
+        // The operator restores the backup: both tasks are gone from the server.
+        await restoreUserData(dumpPath, user.userId);
+        expect(await getLatestServerSeq(user.userId)).toBe(seqAtDump);
+
+        const [first, second] =
+          firstToSync === 'A' ? [clientA, clientB] : [clientB, clientA];
+        await first.sync.syncAndWait();
+        const seqAfterFirst = await getLatestServerSeq(user.userId);
+        expect(seqAfterFirst).toBeGreaterThan(seqAtDump);
+        await second.sync.syncAndWait();
+        const seqAfterSecond = await getLatestServerSeq(user.userId);
+        expect(seqAfterSecond).toBeGreaterThan(seqAfterFirst);
+
+        // Re-seeding happens once: further syncs upload nothing.
+        await first.sync.syncAndWait();
+        await second.sync.syncAndWait();
+        expect(await getLatestServerSeq(user.userId)).toBe(seqAfterSecond);
+
+        clientC = await createSimulatedClient(browser, appUrl, 'C', testRunId);
+        await clientC.sync.setupSuperSync(joinConfig);
+        await clientC.sync.syncAndWait();
+        for (const title of [taskBefore, taskA, taskB]) {
+          await waitForTask(clientC.page, title, 30000);
+        }
+
+        // Every device holds exactly the three tasks: nothing lost, nothing doubled.
+        for (const client of [clientA, clientB, clientC]) {
+          await expect(client.page.locator(`task:has-text("${testRunId}")`)).toHaveCount(
+            3,
+          );
+        }
+      } finally {
+        if (dumpPath) cleanupDump(dumpPath);
+        if (clientA) await closeClient(clientA);
+        if (clientB) await closeClient(clientB);
+        if (clientC) await closeClient(clientC);
+      }
+    });
+  }
 
   /**
    * Scenario: Accounts-only restore — wipe sync data, clients re-upload
@@ -380,8 +495,9 @@ test.describe.serial('@supersync SuperSync Server Backup Revert', () => {
    * 3. Clients reconnect, detect empty server, re-upload full state
    * 4. New clients can join and receive all data
    *
-   * This avoids the SYNC_IMPORT_EXISTS conflict from partial restores
-   * and produces a clean, consistent server state.
+   * Each device re-uploads its whole state, so nothing depends on which
+   * devices come back after the restore. This produces a clean, consistent
+   * server state.
    */
   test('Accounts-only restore: wipe sync data, two clients re-sync cleanly', async ({
     browser,
@@ -555,15 +671,17 @@ test.describe.serial('@supersync SuperSync Server Backup Revert', () => {
   });
 
   /**
-   * Scenario: Full dump restore + Reset Account to resolve SYNC_IMPORT conflict
+   * Scenario: Full dump restore, then Reset Account
    *
-   * Tests the documented workaround for full database restores:
-   * 1. Restore full dump (server has old SYNC_IMPORT)
-   * 2. Client encounters SYNC_IMPORT_EXISTS errors
-   * 3. Use "Reset Account" (DELETE /api/sync/data) to clear stale state
-   * 4. Client re-syncs cleanly
+   * 1. Restore full dump (server is reverted to the backup point)
+   * 2. Client syncs: it re-seeds the ops the restore lost (#11467)
+   * 3. Use "Reset Account" (DELETE /api/sync/data) to clear server sync data
+   * 4. Client re-syncs cleanly and re-uploads its full state
+   *
+   * Reset Account is no longer needed after a restore; this keeps it working
+   * as the clean-slate fallback.
    */
-  test('Full dump restore + Reset Account resolves SYNC_IMPORT conflict', async ({
+  test('Full dump restore: client re-seeds, Reset Account still recovers', async ({
     browser,
     baseURL,
     testRunId,
@@ -592,6 +710,7 @@ test.describe.serial('@supersync SuperSync Server Backup Revert', () => {
 
       // 2. Snapshot this user's sync data (this is our "backup")
       dumpPath = dumpUserData(user.userId);
+      const seqAtDump = await getLatestServerSeq(user.userId);
       console.log(`[FullRestore] User data snapshot created at ${dumpPath}`);
 
       // 3. Add more data after the backup
@@ -599,15 +718,24 @@ test.describe.serial('@supersync SuperSync Server Backup Revert', () => {
       await clientA.workView.addTask(task2);
       await clientA.sync.syncAndWait();
       await waitForTask(clientA.page, task2);
+      const seqWithTask2 = await getLatestServerSeq(user.userId);
+      expect(seqWithTask2).toBeGreaterThan(seqAtDump);
       console.log('[FullRestore] Task 2 synced (after backup)');
 
       // 4. Simulate disaster: restore this user's data from the snapshot
-      restoreUserData(dumpPath);
+      await restoreUserData(dumpPath, user.userId);
       console.log('[FullRestore] User data restored from snapshot');
 
-      // 5. Client A syncs — will encounter SYNC_IMPORT_EXISTS
+      // The restore must really have reverted the server: every op written
+      // after the dump (task2's ops, which are encrypted so can't be read by
+      // title) is gone. Without this the steps below prove nothing about
+      // recovering from a restore.
+      expect(await getLatestServerSeq(user.userId)).toBe(seqAtDump);
+
+      // 5. Client A syncs against the restored server and re-seeds task2.
       await clientA.sync.syncAndWait();
-      console.log('[FullRestore] Client A synced (with SYNC_IMPORT conflict)');
+      expect(await getLatestServerSeq(user.userId)).toBeGreaterThan(seqAtDump);
+      console.log('[FullRestore] Client A synced against the restored server');
 
       // Client A still has both tasks locally
       expect(await hasTask(clientA.page, task1)).toBe(true);
@@ -693,7 +821,7 @@ test.describe.serial('@supersync SuperSync Server Backup Revert', () => {
       console.log('[AllLost] Client A closed (all devices lost)');
 
       // 4. Simulate disaster: restore this user's data from the snapshot
-      restoreUserData(dumpPath);
+      await restoreUserData(dumpPath, user.userId);
       console.log('[AllLost] User data restored from snapshot');
 
       // 5. Fresh client B connects — should download everything

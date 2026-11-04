@@ -510,10 +510,7 @@ export class SyncService {
       // Include request dedup so a retry from before the wipe cannot return
       // cached results that reference now-deleted state.
       if (shouldCleanSlate) {
-        this.rateLimitService.clearForUser(userId);
-        this.snapshotService.clearForUser(userId);
-        this.storageQuotaService.clearForUser(userId);
-        this.requestDeduplicationService.clearForUser(userId);
+        this.clearProcessCachesForUser(userId);
       }
 
       // Outside the RepeatableRead transaction on purpose: the download route
@@ -971,10 +968,16 @@ export class SyncService {
       });
     });
 
-    // Clear caches. Include the request-dedup cache so a retry of an
-    // ops-upload from the pre-wipe state cannot resurrect its cached results
-    // post-wipe. (Process-local only; persists across requests within the
-    // single instance.)
+    this.clearProcessCachesForUser(userId);
+  }
+
+  /**
+   * Drops this process's in-memory caches for a user (rate limit, snapshot,
+   * storage quota, request dedup); a restart does the same. Call when the
+   * user's stored data is replaced, so a retry from the old state cannot get
+   * cached results that reference data which no longer exists.
+   */
+  clearProcessCachesForUser(userId: number): void {
     this.rateLimitService.clearForUser(userId);
     this.snapshotService.clearForUser(userId);
     this.storageQuotaService.clearForUser(userId);

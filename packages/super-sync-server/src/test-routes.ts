@@ -17,6 +17,7 @@ import { Logger } from './logger';
 import { getJwtSecret, JWT_EXPIRY } from './auth';
 import { authCache } from './auth-cache';
 import { computeOpStorageBytes } from './sync/sync.const';
+import { getSyncService } from './sync/sync.service';
 
 const BCRYPT_ROUNDS = 12;
 
@@ -441,6 +442,25 @@ export const testRoutes = async (fastify: FastifyInstance): Promise<void> => {
           message: (err as Error).message,
         });
       }
+    },
+  );
+
+  /**
+   * Drops the server's in-memory caches for a user, as the server restart in
+   * a documented backup restore does. Lets E2E tests restore a user's rows
+   * via SQL while the server keeps running (#11467).
+   */
+  fastify.post<{ Params: { userId: string } }>(
+    '/user/:userId/clear-process-caches',
+    { config: { rateLimit: false } },
+    async (request, reply) => {
+      const userId = parseInt(request.params.userId, 10);
+      if (isNaN(userId)) {
+        return reply.status(400).send({ error: 'Invalid userId' });
+      }
+      getSyncService().clearProcessCachesForUser(userId);
+      Logger.info(`[TEST] Cleared process caches for user ${userId}`);
+      return reply.send({ cleared: true });
     },
   );
 
