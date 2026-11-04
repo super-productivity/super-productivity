@@ -954,10 +954,15 @@ export const lwwUpdateMetaReducer: MetaReducer = (
           );
         }
         // A whole entity (a delete snapshot) needs no backfill and must not
-        // gain optional fields the original lacks (#11496). A nullable field
-        // (`icon: null`) counts as present.
+        // gain optional fields the original lacks (#11496). `null` counts as
+        // missing, as for the warn above, unless the field's default is `null`
+        // itself (`icon`): a `type: null` payload still gets the #7330 backfill.
         const isWholeEntity =
-          fallback.wholeEntityKeys?.every((k) => entityData[k] !== undefined) ?? false;
+          fallback.wholeEntityKeys?.every(
+            (k) =>
+              entityData[k] != null ||
+              (entityData[k] === null && fallback.defaults[k] === null),
+          ) ?? false;
         if (isWholeEntity) {
           entityToAdd = { ...entityData, modified: Date.now() };
         } else {

@@ -1148,6 +1148,15 @@ describe('lwwUpdateMetaReducer', () => {
         expect(appDataValidators.simpleCounter(counterState as never).success).toBe(true);
       });
 
+      it('backfills a counter whose non-nullable whole-entity key is null', () => {
+        const nulled = { ...wholeCounter, id: 'cnt_null', title: null, type: null };
+        const counterState = recreate(nulled);
+        const counter = counterState?.entities['cnt_null'] as SimpleCounter;
+        expect(counter.type).toBe(EMPTY_SIMPLE_COUNTER.type);
+        expect(counter.title).toBe(EMPTY_SIMPLE_COUNTER.title);
+        expect(appDataValidators.simpleCounter(counterState as never).success).toBe(true);
+      });
+
       it('still backfills a counter that lacks a whole-entity key', () => {
         const partial: Record<string, unknown> = { ...wholeCounter, id: 'cnt_part' };
         delete partial['isOn'];
