@@ -126,12 +126,13 @@ test.describe('@webdav a real replacement still asks a peer with pending work (#
         expect(await waitForSyncComplete(a.page, syncA)).toBe('conflict');
         const conflictA = a.page.locator('dialog-sync-conflict');
         await expect(conflictA).toBeVisible();
-        syncA.prepareForNextSyncCycle('write');
         await conflictA.locator('button', { hasText: /Keep remote/i }).click();
         await confirmSyncConflictOverwriteIfShown(a.page, conflictA);
-        await waitForSyncComplete(a.page, syncA, 30000, {
-          allowResponseOnlyCompletion: true,
-        });
+        // Keep remote adopts the snapshot already downloaded, without a provider
+        // request; its Undo snack marks the finished replace.
+        await expect(
+          a.page.locator('snack-custom', { hasText: /replaced with the server/i }),
+        ).toBeVisible({ timeout: 30000 });
 
         // Both devices converge on B's Keep local, as the dialogs said.
         await syncA.triggerSync();
