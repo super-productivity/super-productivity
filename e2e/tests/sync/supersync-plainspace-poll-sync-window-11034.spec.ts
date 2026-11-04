@@ -424,11 +424,15 @@ test.describe('@supersync Plainspace poll vs the sync window (#11034)', () => {
         }
         await route.fallback();
       });
-      await b.c.sync.syncAndWait();
-      await unrouteSuperSyncOps(b.c.page);
+      // startSync, not syncAndWait: the stale answer creates a local op while
+      // the cycle runs, so this cycle may legitimately end with one op pending
+      // (no confirmed check). The syncAndWait below flushes it.
+      await b.c.sync.startSync();
       // The first held answer landed inside the window.
-      await expect.poll(() => answeredInSyncWindow.length).toBe(1);
+      await expect.poll(() => answeredInSyncWindow.length, { timeout: 20000 }).toBe(1);
       expect(answeredInSyncWindow).toEqual([true]);
+      await expect(b.c.sync.syncSpinner).toBeHidden({ timeout: 30000 });
+      await unrouteSuperSyncOps(b.c.page);
       await snapshot('after B stale poll landed', s);
 
       // Interim state: the stale answer shows the collaborator's title on B
