@@ -464,10 +464,10 @@ test.describe('@webdav WebDAV Delete Cascade Sync', () => {
 
     // Client B archives Task1 (before sync)
     const task1OnB = taskPageB.getTaskByText(task1Name).first();
-    // E2E-AUDIT MUTATION M3
-    await task1OnB.click({ button: 'right' });
-    await pageB.locator('.mat-mdc-menu-content button.color-warn').click();
-    await pageB.locator('[e2e="confirmBtn"]').click();
+    await taskPageB.markTaskAsDone(task1OnB);
+    await pageB.waitForTimeout(300);
+    await archiveDoneTasks(pageB);
+    await waitForArchivePersistence(pageB);
     await expect(pageB.locator('task')).toHaveCount(1); // Only Task2 visible
     console.log('[Concurrent] Client B archived Task1 (not synced yet)');
 

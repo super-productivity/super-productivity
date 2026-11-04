@@ -90,18 +90,15 @@ export class FileBasedEncryptionService {
       isDisable ? undefined : encryptKey,
     );
 
-    // E2E-AUDIT MUTATION M9
-    const result = isDisable
-      ? ({ accepted: true } as Awaited<ReturnType<typeof adapter.uploadSnapshot>>)
-      : await adapter.uploadSnapshot(
-          state,
-          clientId,
-          'recovery',
-          vectorClock,
-          CURRENT_SCHEMA_VERSION,
-          !isDisable,
-          uuidv7(),
-        );
+    const result = await adapter.uploadSnapshot(
+      state,
+      clientId,
+      'recovery',
+      vectorClock,
+      CURRENT_SCHEMA_VERSION,
+      !isDisable,
+      uuidv7(),
+    );
 
     if (!result.accepted) {
       throw new Error(`Snapshot upload failed: ${result.error}`);

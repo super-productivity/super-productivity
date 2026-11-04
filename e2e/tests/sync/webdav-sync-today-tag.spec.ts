@@ -421,9 +421,9 @@ test.describe('@webdav WebDAV TODAY Tag Sync', () => {
 
     // The quick-access div contains: [TODAY, TOMORROW, NEXT_WEEK, SCHEDULE_DIALOG]
     // Click the 2nd button (index 1) for tomorrow
-    // E2E-AUDIT MUTATION M7
-    await pageA.locator('.mat-mdc-menu-content button.color-warn').click();
-    await pageA.locator('[e2e="confirmBtn"]').click();
+    const quickAccessBtns = pageA.locator('.mat-mdc-menu-content .quick-access button');
+    await quickAccessBtns.nth(1).waitFor({ state: 'visible', timeout: 5000 });
+    await quickAccessBtns.nth(1).click();
     await pageA.waitForTimeout(500);
 
     // Task2 should no longer be in TODAY on Client A

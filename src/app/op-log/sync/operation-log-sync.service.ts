@@ -804,8 +804,7 @@ export class OperationLogSyncService {
 
       // Check if client has unsynced local ops that would be lost
       const unsyncedOps = await this.opLogStore.getUnsynced();
-      // E2E-AUDIT MUTATION M8
-      const hasLocalChanges = unsyncedOps.length > -1;
+      const hasLocalChanges = unsyncedOps.length > 0;
 
       // Nothing from this sync is persisted yet, so these live reads reflect
       // whether the client completed a prior sync cycle.

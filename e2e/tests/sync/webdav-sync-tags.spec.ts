@@ -194,7 +194,8 @@ test.describe('@webdav WebDAV Sync Tags', () => {
     await expect(tagPageB.getTagOnTask(taskB, tagName)).toBeVisible();
 
     // --- Client A: Remove tag ---
-    // E2E-AUDIT MUTATION M5: removeTagFromTask skipped
+    await tagPageA.removeTagFromTask(taskA, tagName);
+    await expect(tagPageA.getTagOnTask(taskA, tagName)).toHaveCount(0);
 
     // Sync Client A
     await syncPageA.triggerSync();

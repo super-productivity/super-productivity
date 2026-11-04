@@ -90,8 +90,6 @@ export class ConflictLocalWinOpsService {
     entityPlans: LwwConflictResolutionPlan<EntityConflict>[],
     nonConflictingOps: Operation[],
   ): Promise<MergedResolution | undefined> {
-    // E2E-AUDIT MUTATION M4
-    if (!(globalThis as { __noMut?: boolean }).__noMut) return undefined;
     const conflict =
       entityPlans.length === 1
         ? entityPlans[0].conflict
@@ -215,8 +213,6 @@ export class ConflictLocalWinOpsService {
   async _createLocalWinUpdateOp(
     conflict: EntityConflict,
   ): Promise<Operation | undefined> {
-    // E2E-AUDIT MUTATION M4
-    if (!(globalThis as { __noMut?: boolean }).__noMut) return undefined;
     const [semanticRestoreOp] = conflict.localOps;
     const [remoteDeleteOp] = conflict.remoteOps;
     const remoteDeleteIds = remoteDeleteOp ? getOpEntityIds(remoteDeleteOp) : [];
