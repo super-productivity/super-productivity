@@ -13,7 +13,7 @@ import {
   WEBDAV_SYNC_FILE,
   WEBDAV_SYNC_FORMAT,
 } from '../../utils/sync-helpers';
-import { waitForStatePersistence } from '../../utils/waits';
+import { waitForAppReady, waitForStatePersistence } from '../../utils/waits';
 import { allowDevErrorsInCurrentTest } from '../../utils/runtime-errors';
 
 const task = (page: Page, title: string): ReturnType<Page['locator']> =>
@@ -144,6 +144,11 @@ test.describe('@webdav a pending REPAIR built before a download keeps the downlo
 
       // 3. A syncs again: its download applies X, then the pending REPAIR uploads.
       await a.page.unroute(`**/${folder}/**`);
+      // Clear the refused upload's error UI (the REPAIR and the last-seen rev
+      // are persisted, so they survive the reload).
+      await a.page.reload();
+      await waitForAppReady(a.page);
+      await workA.waitForTaskList();
       await syncA.triggerSync();
       expect(await waitForSyncComplete(a.page, syncA)).toBe('success');
       await expect(task(a.page, fromB)).toBeVisible();
