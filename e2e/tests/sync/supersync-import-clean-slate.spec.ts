@@ -634,8 +634,9 @@ test.describe('@supersync @cleanslate Import Clean Slate Semantics', () => {
       // 4. Clean slate semantics: B's pending ops are filtered/dropped
       //
       // B's pending op is meaningful, so the incoming import must ask first
-      // (MSG_INCOMING, "1 local changes"). Click sync directly: syncAndWait
-      // would answer the dialog silently and pass even if it never appeared.
+      // (MSG_INCOMING, "1 local changes"). Click sync directly and assert the
+      // dialog and its text, then answer it explicitly (server data drops the
+      // pending task).
       await clientB.sync.syncBtn.click();
       const incomingImportDialog = clientB.sync.syncImportConflictDialog;
       await expect(incomingImportDialog).toBeVisible({ timeout: 30000 });
