@@ -462,7 +462,7 @@ describe('getSnapshotLineage (#11470)', () => {
       vectorClock: REPAIR_CLOCK,
       baseRev: 'rev-7',
       lastSeenClock: BASE_REV_CLOCK,
-      expectedSyncVersion: 7,
+      committedServerSeq: 7,
       ...overrides,
     });
   // How a current peer that committed `lastSeen` at syncVersion 7 reads the file.
@@ -596,7 +596,7 @@ describe('getSnapshotLineage (#11470)', () => {
     ['a replacement (import, restore, USE_LOCAL)', { isRepair: false }],
     ['a REPAIR without a committed base rev', { baseRev: null }],
     ['a REPAIR without a recorded clock', { lastSeenClock: undefined }],
-    ['a REPAIR without a committed syncVersion', { expectedSyncVersion: undefined }],
+    ['a REPAIR without a committed server seq', { committedServerSeq: undefined }],
     // Built at rev-6 and uploaded after rev-7 was applied: its payload lacks rev-7's ops.
     ['a REPAIR built from an earlier version', { repairBaseServerSeq: 6 }],
     [

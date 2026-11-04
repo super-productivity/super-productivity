@@ -3052,7 +3052,7 @@ export class FileBasedSyncAdapterService {
       vectorClock: clock,
       baseRev: this._lastSeenRevs.get(key),
       lastSeenClock: this._lastSeenVectorClocks.get(key),
-      expectedSyncVersion: this._expectedSyncVersions.get(key),
+      committedServerSeq: this._localSeqCounters.get(key),
     });
   }
 

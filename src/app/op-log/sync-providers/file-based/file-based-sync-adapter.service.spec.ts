@@ -2138,6 +2138,29 @@ describe('FileBasedSyncAdapterService', () => {
       expect(appended.snapshotBaseCovers).toEqual(written.snapshotBaseCovers);
     });
 
+    // The committed cursor can move without a staged download (a legacy
+    // read-only split download, a missing remote file, the upload-ops cursor
+    // plan), so the expected syncVersion stays behind. Every REPAIR base is
+    // stamped from the cursor; #11483 checks the same one.
+    it('keys on the committed server seq, not the expected syncVersion (#11470)', async () => {
+      await seedBaseRev('rev-1', BASE_CLOCK);
+      await adapter.setLastServerSeq(5);
+      captureWrites();
+      await uploadRepair(5, REPAIR_CLOCK);
+      expect(
+        uploadedFile(FILE_BASED_SYNC_CONSTANTS.SYNC_FILE).snapshotBaseCovers,
+      ).toEqual({
+        base: REPAIR_CLOCK,
+        clock: BASE_CLOCK,
+      });
+
+      mockProvider.uploadFile.calls.reset();
+      await uploadRepair(2, REPAIR_CLOCK);
+      expect(
+        uploadedFile(FILE_BASED_SYNC_CONSTANTS.SYNC_FILE).snapshotBaseCovers,
+      ).toBeUndefined();
+    });
+
     it('marks nothing without a committed base rev (#11470)', async () => {
       captureWrites();
       const result = await uploadRepair();

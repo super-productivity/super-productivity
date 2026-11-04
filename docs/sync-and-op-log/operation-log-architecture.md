@@ -938,8 +938,9 @@ IDs deduplicate ops still in the local log, while vector clocks carry causality.
    version reset or an empty buffer, and their trim check needs a full one.
    A `REPAIR` is written only on the rev its writer last downloaded and
    applied (#9023). When it was also built from that rev (its
-   `repairBaseServerSeq` is that rev's `syncVersion` and its clock covers the
-   rev's clock), it adds the optional envelope field `snapshotBaseCovers`:
+   `repairBaseServerSeq` is the committed server seq, the cursor #11483 checks,
+   and its clock covers the rev's clock), it adds the optional envelope field
+   `snapshotBaseCovers`:
    its base and the rev's clock. A current reader whose last-seen clock is
    covered by that clock keeps its pending ops on top; any other reader, and
    every reader of a replacement (`SYNC_IMPORT`, `BACKUP_IMPORT`, USE_LOCAL),

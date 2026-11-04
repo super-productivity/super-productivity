@@ -467,7 +467,7 @@ export interface SnapshotLineage {
  * rev's clock. A peer that saw that rev, or an earlier one, then keeps its
  * pending ops on top of it (doesRemoteExtendLastSeen), as for a trimmed file
  * (#10972). "Built from that rev" needs its repairBaseServerSeq to be the
- * committed syncVersion and its clock to cover the committed one: a REPAIR built
+ * committed server seq and its clock to cover the committed one: a REPAIR built
  * before a later download lacks that download's ops (#11483), and one from
  * another lineage does not cover its clock.
  */
@@ -477,7 +477,7 @@ export const getSnapshotLineage = ({
   vectorClock,
   baseRev,
   lastSeenClock,
-  expectedSyncVersion,
+  committedServerSeq,
 }: {
   isRepair: boolean;
   /** The syncVersion the REPAIR's state was built from (its op's base cursor). */
@@ -486,8 +486,11 @@ export const getSnapshotLineage = ({
   /** The rev the REPAIR write is conditional on (`_lastSeenRevs`). */
   baseRev: string | null | undefined;
   lastSeenClock: VectorClock | undefined;
-  /** The expected syncVersion committed for that rev. */
-  expectedSyncVersion: number | undefined;
+  /**
+   * The committed server seq (`getLastServerSeq()`), which every REPAIR base is
+   * stamped from; the same cursor #11483 checks (`isRepairBuiltAtCommittedSeq`).
+   */
+  committedServerSeq: number | undefined;
 }): SnapshotLineage => {
   const lineage = { syncVersion: 1, vectorClock, snapshotBaseClock: vectorClock };
   const comparison = lastSeenClock && compareVectorClocks(vectorClock, lastSeenClock);
@@ -495,8 +498,8 @@ export const getSnapshotLineage = ({
     !isRepair ||
     !baseRev ||
     !lastSeenClock ||
-    !expectedSyncVersion ||
-    repairBaseServerSeq !== expectedSyncVersion ||
+    !committedServerSeq ||
+    repairBaseServerSeq !== committedServerSeq ||
     (comparison !== 'GREATER_THAN' && comparison !== 'EQUAL')
   ) {
     return lineage;
