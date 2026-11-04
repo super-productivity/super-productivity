@@ -1565,6 +1565,139 @@ describe('ConflictResolutionService', () => {
         ]);
       });
 
+      describe('tag delete-wins (#11489)', () => {
+        const createTagDelete = (
+          id: string,
+          clientId: string,
+          timestamp: number,
+          marked: boolean = true,
+        ): Operation => ({
+          ...createOpWithTimestamp(id, clientId, timestamp, OpType.Delete, 'tag-1'),
+          actionType: ActionType.TAG_DELETE,
+          entityType: 'TAG',
+          payload: {
+            actionPayload: { id: 'tag-1', ...(marked ? { tagDeleteWins: true } : {}) },
+            entityChanges: [],
+          },
+        });
+        const createTagUpdate = (
+          id: string,
+          clientId: string,
+          timestamp: number,
+        ): Operation => ({
+          ...createOpWithTimestamp(id, clientId, timestamp, OpType.Update, 'tag-1'),
+          actionType: ActionType.TAG_UPDATE,
+          entityType: 'TAG',
+          payload: {
+            actionPayload: { tag: { id: 'tag-1', changes: { title: 'Renamed' } } },
+            entityChanges: [],
+          },
+        });
+        const tagConflict = (
+          localOps: Operation[],
+          remoteOps: Operation[],
+        ): EntityConflict => ({
+          entityType: 'TAG',
+          entityId: 'tag-1',
+          localOps,
+          remoteOps,
+          suggestedResolution: 'manual',
+        });
+
+        it('keeps a marked local tag deletion when a concurrent rename is newer', async () => {
+          const localDelete = createTagDelete('local-tag-delete', 'client-a', 1_000);
+          const remoteRename = createTagUpdate('remote-tag-rename', 'client-b', 2_000);
+
+          const result = await service.autoResolveConflictsLWW([
+            tagConflict([localDelete], [remoteRename]),
+          ]);
+
+          const replacementDelete = getFirstMixedLocalOp();
+          expect(replacementDelete.opType).toBe(OpType.Delete);
+          expect(replacementDelete.actionType).toBe(ActionType.TAG_DELETE);
+          expect(replacementDelete.entityId).toBe('tag-1');
+          // The replacement keeps the marker, so it still wins downstream.
+          expect(replacementDelete.payload).toEqual(localDelete.payload);
+          expect(replacementDelete.timestamp).toBe(localDelete.timestamp);
+          expect(replacementDelete.vectorClock['client-a']).toBeGreaterThanOrEqual(1);
+          expect(replacementDelete.vectorClock['client-b']).toBeGreaterThanOrEqual(1);
+          expect(replacementDelete.vectorClock[TEST_CLIENT_ID]).toBeGreaterThanOrEqual(1);
+          expect(mockOpLogStore.markRejected).toHaveBeenCalledWith(['remote-tag-rename']);
+          expect(result.localWinOpsCreated).toBe(1);
+        });
+
+        it('applies a marked remote tag deletion even when the local rename is newer', async () => {
+          const localRename = createTagUpdate('local-tag-rename', 'client-a', 2_000);
+          const remoteDelete = createTagDelete('remote-tag-delete', 'client-b', 1_000);
+          mockOperationApplier.applyOperations.and.resolveTo({
+            appliedOps: [remoteDelete],
+          });
+
+          const result = await service.autoResolveConflictsLWW([
+            tagConflict([localRename], [remoteDelete]),
+          ]);
+
+          expect(mockOpLogStore.appendBatchSkipDuplicates).toHaveBeenCalledWith(
+            [remoteDelete],
+            'remote',
+            { pendingApply: true },
+          );
+          expect(mockOpLogStore.markRejected).toHaveBeenCalledWith(['local-tag-rename']);
+          expect(getMixedLocalOps()).toEqual([]);
+          const appliedOps = mockOperationApplier.applyOperations.calls.mostRecent()
+            .args[0] as Operation[];
+          expect(appliedOps).toContain(remoteDelete);
+          expect(result.localWinOpsCreated).toBe(0);
+        });
+
+        it('keeps timestamp LWW for an unmarked tag deletion (released client)', async () => {
+          const localRename = createTagUpdate('local-tag-rename', 'client-a', 2_000);
+          const remoteDelete = createTagDelete(
+            'remote-tag-delete',
+            'client-b',
+            1_000,
+            false,
+          );
+          mockOperationApplier.applyOperations.and.resolveTo({ appliedOps: [] });
+
+          await service.autoResolveConflictsLWW([
+            tagConflict([localRename], [remoteDelete]),
+          ]);
+
+          expect(mockOpLogStore.appendBatchSkipDuplicates).not.toHaveBeenCalledWith(
+            [remoteDelete],
+            'remote',
+            { pendingApply: true },
+          );
+          expect(mockOpLogStore.markRejected).toHaveBeenCalledWith(['remote-tag-delete']);
+        });
+
+        it('ignores a marked tag deletion retargeted onto another tag', async () => {
+          const retargeted: Operation = {
+            ...createTagDelete('remote-retargeted-delete', 'client-b', 1_000),
+            payload: {
+              actionPayload: { id: 'tag-original', tagDeleteWins: true },
+              entityChanges: [],
+            },
+          };
+          const localRename = createTagUpdate('local-tag-rename', 'client-a', 2_000);
+          mockOperationApplier.applyOperations.and.resolveTo({ appliedOps: [] });
+
+          await service.autoResolveConflictsLWW([
+            tagConflict([localRename], [retargeted]),
+          ]);
+
+          expect(mockOpLogStore.appendBatchSkipDuplicates).not.toHaveBeenCalledWith(
+            [retargeted],
+            'remote',
+            { pendingApply: true },
+          );
+          expect(mockOpLogStore.markRejected).toHaveBeenCalledWith([
+            'remote-retargeted-delete',
+          ]);
+        });
+      });
+
       it('restamps a converted remote update to the current schema version (#8990)', async () => {
         // Conversion wraps an older-schema remote update in the v3-only
         // replacement envelope; the stored row's version must match its
