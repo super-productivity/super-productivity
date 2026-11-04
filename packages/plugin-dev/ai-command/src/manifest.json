@@ -24,6 +24,22 @@
     "showSnack"
   ],
   "allowedHosts": ["api.anthropic.com"],
+  "dataSharing": [
+    {
+      "recipient": "Anthropic",
+      "hosts": ["api.anthropic.com"],
+      "data": [
+        "credentials",
+        "userText",
+        "taskTitles",
+        "taskSchedule",
+        "taskStatus",
+        "timeTracked",
+        "projectAndTagNames"
+      ],
+      "privacyPolicyUrl": "https://www.anthropic.com/legal/privacy"
+    }
+  ],
   "hooks": ["dayChange", "currentTaskChange"],
   "iFrame": true,
   "sidePanel": true,
