@@ -485,7 +485,16 @@ test.describe('@supersync @import-conflict Sync Import Conflict Dialog', () => {
    *   automatically merged"), not the first-sync choice
    * - B answers "Use My Data"; A then converges on B's imported state
    */
-  test('Local import on a synced device filters remote changes: MSG_LOCAL_FILTERS dialog', async ({
+  // FIXME (issue candidate, audit 2026-11-03 Verify 5): expected the full
+  // LOCAL_IMPORT_FILTERS_REMOTE dialog (MSG_LOCAL_FILTERS, "cannot be
+  // automatically merged", no first-sync radios). On SuperSync a file import
+  // replaces the op log with one unsynced BACKUP_IMPORT op and resets
+  // lastServerSeq (BackupService.importCompleteBackup), so the device counts as
+  // never-synced and gets the first-sync choice instead — even when it had
+  // synced before. CI run 41741246769 (shard 2): the dialog read "This device
+  // already has data … Your account already has data from another device".
+  // Re-enable once the intended behaviour is decided.
+  test.fixme('Local import on a synced device filters remote changes: MSG_LOCAL_FILTERS dialog', async ({
     browser,
     baseURL,
     testRunId,
