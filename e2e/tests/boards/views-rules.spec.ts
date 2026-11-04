@@ -138,7 +138,17 @@ test.describe('View rules', () => {
     const title = `${testPrefix}-Finish me`;
     await workViewPage.addTask(title);
 
+    // "Save as view…" is only offered once the list is customized.
     await page.locator('.task-filter-btn').click();
+    await waitForMenuSettled(page);
+    await expect(page.getByRole('menuitem', { name: 'Save as view…' })).toHaveCount(0);
+    await page.getByRole('menuitem', { name: 'Sort', exact: true }).click();
+    await waitForMenuSettled(page);
+    await page.getByRole('menuitem', { name: 'Name', exact: true }).click();
+    await expect(page.locator('.mat-mdc-menu-panel')).toHaveCount(0);
+
+    await page.locator('.task-filter-btn').click();
+    await waitForMenuSettled(page);
     await page.getByRole('menuitem', { name: 'Save as view…' }).click();
     const dialog = page.locator('dialog-board-edit');
     await dialog.getByRole('button', { name: 'Save', exact: true }).click();
