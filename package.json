@@ -84,6 +84,7 @@
     "screenshots:capture:flathub": "SP_SCREENSHOT_BG_DISABLE=1 npm run screenshots:capture:electron",
     "screenshots:electron": "npm run screenshots:capture:electron && npm run screenshots:build",
     "screenshots:flathub": "npm run screenshots:capture:flathub && npm run screenshots:build:flathub",
+    "screenshots:flathub:gnome": "node -e \"require('fs').rmSync('dist/screenshots/_master_electron',{recursive:true,force:true})\" && SP_SCREENSHOT_GNOME=1 SP_SCREENSHOT_FORCE_THEME=light npm run screenshots:capture:flathub && SP_SCREENSHOT_GNOME=1 npm run screenshots:build:flathub",
     "video": "npm run video:capture && npm run video:build && npm run video:open",
     "video:capture": "npx playwright test --config e2e/playwright.store-video.config.ts",
     "video:kit-test": "npx playwright test --config e2e/playwright.video-kit.config.ts",

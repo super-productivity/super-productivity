@@ -235,3 +235,32 @@ export const STORE_RULES: readonly StoreRule[] = [
 export const SCREENSHOT_BASE_DATE = new Date(
   process.env.SCREENSHOT_BASE_DATE ?? '2026-05-06T09:30:00',
 );
+
+/**
+ * GNOME capture mode (`npm run screenshots:flathub:gnome`).
+ *
+ * GNOME Shell only lets its own screenshot tool capture a single window with
+ * native decoration, rounded corners and shadow, which is what Flathub's
+ * quality review asks for. In this mode the Electron pipeline drives the app
+ * into each Flathub scene, then waits for the user to press Alt+Print and
+ * picks the new PNG up from the GNOME screenshots folder.
+ */
+export const IS_GNOME_CAPTURE = process.env.SP_SCREENSHOT_GNOME === '1';
+
+/**
+ * Window size for GNOME capture. Flathub asks for at most 1000×700 logical
+ * pixels (2000×1400 on HiDPI).
+ */
+export const GNOME_CAPTURE_WINDOW = { width: 1000, height: 700 } as const;
+
+/** Optional theme override applied to every scene (e.g. `light` for Flathub's
+ *  "default settings" check). */
+export const FORCED_THEME: Theme | undefined =
+  process.env.SP_SCREENSHOT_FORCE_THEME === 'light' ||
+  process.env.SP_SCREENSHOT_FORCE_THEME === 'dark'
+    ? process.env.SP_SCREENSHOT_FORCE_THEME
+    : undefined;
+
+/** Scenarios that end up in the Flathub gallery, in gallery order. */
+export const FLATHUB_SCENARIOS: readonly string[] =
+  STORE_RULES.find((rule) => rule.store === 'flathub')?.scenarioOrder ?? [];

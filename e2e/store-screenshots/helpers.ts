@@ -9,6 +9,7 @@
 
 import type { Page } from '@playwright/test';
 import { waitForAppReady } from '../utils/waits';
+import { FORCED_THEME } from './matrix';
 
 /**
  * Toggle the right-hand notes panel. Selector from
@@ -98,7 +99,11 @@ export const resetView = async (page: Page): Promise<void> => {
  * new DARK_MODE setter on top of the fixture's initial setter wins from here
  * on. We then reload so GlobalThemeService picks up the new value at boot.
  */
-export const applyTheme = async (page: Page, theme: 'dark' | 'light'): Promise<void> => {
+export const applyTheme = async (
+  page: Page,
+  requestedTheme: 'dark' | 'light',
+): Promise<void> => {
+  const theme = FORCED_THEME ?? requestedTheme;
   await page.addInitScript((darkMode) => {
     try {
       localStorage.setItem('DARK_MODE', darkMode);
@@ -283,8 +288,7 @@ export const setPlannerCalendarExpanded = async (
     type NgDebug = { getComponent?: (el: Element) => unknown };
     const ng = (window as unknown as { ng?: NgDebug }).ng;
     const cmp = ng?.getComponent?.(nav) as
-      | { isExpanded?: { set: (v: boolean) => void } }
-      | undefined;
+      { isExpanded?: { set: (v: boolean) => void } } | undefined;
     if (!cmp?.isExpanded?.set) {
       throw new Error(
         'planner-calendar-nav isExpanded signal not accessible — run against an ngDevMode build',

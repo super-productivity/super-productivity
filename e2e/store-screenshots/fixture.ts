@@ -22,10 +22,14 @@ import {
   type Page,
 } from '@playwright/test';
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 import { ImportPage } from '../pages/import.page';
 import { waitForAppReady } from '../utils/waits';
 import {
+  FLATHUB_SCENARIOS,
+  FORCED_THEME,
+  IS_GNOME_CAPTURE,
   MASTER_DIR_ELECTRON,
   MASTER_DIR_WEB,
   MOBILE_VIEWPORTS,
@@ -211,6 +215,81 @@ const captureWindowWithChrome = async (
       caret: 'hide',
     });
   }
+};
+
+/** How long GNOME capture waits for the user's Alt+Print in one scene. */
+const GNOME_WAIT_MS = 120_000;
+let gnomeShotIndex = 0;
+
+const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+
+/** Where GNOME Shell saves screenshots: `$(xdg-user-dir PICTURES)/Screenshots`. */
+const gnomeScreenshotDir = async (): Promise<string> => {
+  const override = process.env.SP_SCREENSHOT_GNOME_DIR?.trim();
+  if (override) return override;
+  try {
+    const { stdout } = await run('xdg-user-dir', ['PICTURES']);
+    const pictures = stdout.toString().trim();
+    if (pictures) return path.join(pictures, 'Screenshots');
+  } catch {
+    /* xdg-user-dir missing: fall back to the default location */
+  }
+  return path.join(os.homedir(), 'Pictures', 'Screenshots');
+};
+
+/**
+ * GNOME capture: bring the window forward, ask the user to press Alt+Print
+ * (GNOME's native window screenshot, with decoration, rounded corners and
+ * shadow), then copy the new PNG from the screenshots folder to `outPath`.
+ */
+const captureViaGnome = async (
+  electronApp: ElectronApplication,
+  outPath: string,
+  scenario: string,
+): Promise<void> => {
+  const dir = await gnomeScreenshotDir();
+  fs.mkdirSync(dir, { recursive: true });
+  const before = new Set(fs.readdirSync(dir));
+
+  await electronApp
+    .evaluate(({ BrowserWindow }) => {
+      const w = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
+      w?.show();
+      w?.focus();
+    })
+    .catch(() => undefined);
+
+  gnomeShotIndex += 1;
+  console.log(
+    `\n📸 [${gnomeShotIndex}/${FLATHUB_SCENARIOS.length}] ${scenario}\n` +
+      '   Click the Super Productivity title bar, then press Alt+Print.\n' +
+      `   Waiting for a new PNG in ${dir} …`,
+  );
+
+  const deadline = Date.now() + GNOME_WAIT_MS;
+  while (Date.now() < deadline) {
+    await sleep(500);
+    const fresh = fs
+      .readdirSync(dir)
+      .filter((f) => f.toLowerCase().endsWith('.png') && !before.has(f));
+    if (!fresh.length) continue;
+    const src = path.join(dir, fresh[0]);
+    // GNOME writes the file asynchronously; wait until its size settles.
+    let lastSize = -1;
+    for (let i = 0; i < 20; i++) {
+      const size = fs.statSync(src).size;
+      if (size > 0 && size === lastSize) break;
+      lastSize = size;
+      await sleep(250);
+    }
+    fs.copyFileSync(src, outPath);
+    console.log(`   ✓ saved ${path.relative(process.cwd(), outPath)}`);
+    return;
+  }
+  throw new Error(
+    `No new screenshot appeared in ${dir} within ${GNOME_WAIT_MS / 1000}s ` +
+      `for ${scenario}. Set SP_SCREENSHOT_GNOME_DIR if GNOME saves elsewhere.`,
+  );
 };
 
 const ONBOARDING_INIT = (): void => {
@@ -400,7 +479,7 @@ export const test = base.extend<ScreenshotFixtures>({
             /* localStorage may be unavailable until renderer ready */
           }
         },
-        { darkMode: theme, customThemeId: customTheme },
+        { darkMode: FORCED_THEME ?? theme, customThemeId: customTheme },
       );
       await page.evaluate(() => location.reload());
       await page.waitForLoadState('domcontentloaded');
@@ -474,7 +553,7 @@ export const test = base.extend<ScreenshotFixtures>({
       } catch {
         /* noop */
       }
-    }, theme);
+    }, FORCED_THEME ?? theme);
     // Mirror the DARK_MODE init script for the custom-theme picker. The
     // CustomThemeService reads LS.CUSTOM_THEME at construction; for E2E
     // screenshots we point it at a built-in theme by id (e.g. 'dracula').
@@ -556,6 +635,8 @@ export const test = base.extend<ScreenshotFixtures>({
       });
     };
     const fn = async (scenario: string, name: string): Promise<void> => {
+      // GNOME capture only stops for scenes that end up in the Flathub gallery.
+      if (IS_GNOME_CAPTURE && !FLATHUB_SCENARIOS.includes(scenario)) return;
       // Read live theme + locale from the page so one test can span multiple
       // (locale × theme) variants. helpers.applyTheme flips DARK_MODE in
       // localStorage; helpers.applyLocale stamps the current locale on
@@ -584,7 +665,9 @@ export const test = base.extend<ScreenshotFixtures>({
       } catch {
         /* electron pages with no mouse host shouldn't ever fail this */
       }
-      if (MODE === 'electron' && electronApp) {
+      if (MODE === 'electron' && electronApp && IS_GNOME_CAPTURE) {
+        await captureViaGnome(electronApp, file, scenario);
+      } else if (MODE === 'electron' && electronApp) {
         await captureWindowWithChrome(electronApp, page, file);
       } else {
         await page.screenshot({
