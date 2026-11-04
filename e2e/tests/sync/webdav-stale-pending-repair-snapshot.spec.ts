@@ -54,7 +54,7 @@ const readRemoteJson = async (
   request: APIRequestContext,
   folder: string,
 ): Promise<string> => {
-  const folderUrl = `${WEBDAV_CONFIG_TEMPLATE.baseUrl}${folder}/`;
+  const folderUrl = `${WEBDAV_CONFIG_TEMPLATE.baseUrl}${folder}/DEV/`;
   const authorization = `Basic ${Buffer.from(
     `${WEBDAV_CONFIG_TEMPLATE.username}:${WEBDAV_CONFIG_TEMPLATE.password}`,
   ).toString('base64')}`;
