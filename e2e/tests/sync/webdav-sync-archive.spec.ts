@@ -616,8 +616,10 @@ test.describe('@webdav WebDAV Archive Sync', () => {
 
     console.log('[Archive Subtasks] Client A marked all tasks done');
 
-    // Archive
-    await archiveDoneTasks(pageA);
+    // E2E-AUDIT MUTATION M6b: delete the parent (and its subtasks) instead of archiving
+    await parentOnA.click({ button: 'right' });
+    await pageA.locator('.mat-mdc-menu-content button.color-warn').click();
+    await pageA.locator('[e2e="confirmBtn"]').click();
     await expect(pageA.locator('task')).toHaveCount(0);
     console.log('[Archive Subtasks] Client A archived all tasks');
 
