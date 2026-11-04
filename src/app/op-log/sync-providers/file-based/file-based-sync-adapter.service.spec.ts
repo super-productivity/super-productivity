@@ -2122,6 +2122,7 @@ describe('FileBasedSyncAdapterService', () => {
       expect(written.snapshotBaseCovers).toEqual({
         base: REPAIR_CLOCK,
         clock: BASE_CLOCK,
+        version: 2,
         from: { client1: 1 },
       });
       await expectAsync(adapter.getLastServerSeq()).toBeResolvedTo(1);
@@ -2153,6 +2154,7 @@ describe('FileBasedSyncAdapterService', () => {
       ).toEqual({
         base: REPAIR_CLOCK,
         clock: BASE_CLOCK,
+        version: 5,
         from: { client1: 1 },
       });
 
@@ -2161,6 +2163,34 @@ describe('FileBasedSyncAdapterService', () => {
       expect(
         uploadedFile(FILE_BASED_SYNC_CONSTANTS.SYNC_FILE).snapshotBaseCovers,
       ).toBeUndefined();
+    });
+
+    // A file first created by a plain ops upload carries no base; the marker
+    // then records only the version, which a reader checks instead.
+    it('marks a rev without a base with its version only (#11470)', async () => {
+      mockProvider.downloadFile.and.returnValue(
+        Promise.resolve({
+          dataStr: addPrefix(
+            createMockSyncData({
+              syncVersion: 2,
+              recentOps: [],
+              vectorClock: BASE_CLOCK,
+            }),
+          ),
+          rev: 'rev-1',
+        }),
+      );
+      await adapter.downloadOps(0);
+      await adapter.setLastServerSeq(2);
+      captureWrites();
+      await uploadRepair(2, REPAIR_CLOCK);
+      expect(
+        uploadedFile(FILE_BASED_SYNC_CONSTANTS.SYNC_FILE).snapshotBaseCovers,
+      ).toEqual({
+        base: REPAIR_CLOCK,
+        clock: BASE_CLOCK,
+        version: 2,
+      });
     });
 
     // The replaced base comes only from this cycle's download of the base rev.
@@ -2226,6 +2256,7 @@ describe('FileBasedSyncAdapterService', () => {
       expect(ops.snapshotBaseCovers).toEqual({
         base: REPAIR_CLOCK,
         clock: BASE_CLOCK,
+        version: 2,
         from: { client1: 1 },
       });
       expect(ops.snapshotRef.syncVersion).toBe(1);

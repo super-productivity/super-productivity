@@ -305,7 +305,7 @@ export const doesRemoteExtendLastSeen = (
   previousExpectedVersion: number,
 ): boolean => {
   if (!lastSeenClock || previousExpectedVersion <= 0) return false;
-  if (isCoveredByRepairBase(remote, lastSeenClock)) return true;
+  if (isCoveredByRepairBase(remote, lastSeenClock, previousExpectedVersion)) return true;
   if (remote.syncVersion < previousExpectedVersion) return false;
   if (!remote.snapshotBaseClock && remote.syncVersion === 1) return false;
   if (isSnapshotBaseUnseen(remote.snapshotBaseClock, lastSeenClock)) return false;
@@ -318,9 +318,12 @@ export const doesRemoteExtendLastSeen = (
  * this client last saw, so the REPAIR is a catch-up even though it starts over
  * like a replacement. The marker counts only beside the base it was written
  * with: any writer that replaces the base drops or rewrites it. This client
- * must also have loaded the base the REPAIR replaced: a merged clock can cover
+ * must also be on the lineage the REPAIR replaced: a merged clock can cover
  * what it last saw while a replacement it never loaded (a Keep-local
- * SYNC_IMPORT built on that clock) sits in between.
+ * SYNC_IMPORT built on that clock) sits in between. With a base (`from`), it
+ * must have loaded it. Without one, its last committed version must not be
+ * ahead of the replaced rev's, the rule doesRemoteExtendLastSeen applies to
+ * files without a base (and its documented legacy residual).
  */
 const isCoveredByRepairBase = (
   remote: Pick<
@@ -328,13 +331,17 @@ const isCoveredByRepairBase = (
     'vectorClock' | 'snapshotBaseClock' | 'snapshotBaseCovers'
   >,
   lastSeenClock: VectorClock,
+  previousExpectedVersion: number,
 ): boolean => {
   const covers = remote.snapshotBaseCovers;
   if (
-    !covers?.from ||
+    !covers ||
+    typeof covers.version !== 'number' ||
     !remote.snapshotBaseClock ||
     compareVectorClocks(covers.base, remote.snapshotBaseClock) !== 'EQUAL' ||
-    isSnapshotBaseUnseen(covers.from, lastSeenClock)
+    (covers.from
+      ? isSnapshotBaseUnseen(covers.from, lastSeenClock)
+      : previousExpectedVersion > covers.version)
   ) {
     return false;
   }
@@ -439,14 +446,15 @@ export const appendRecentOpsAtBatchBoundary = <T extends { sv?: number }>(
 /**
  * #11470: written beside the snapshot base by an automatic REPAIR: the snapshot
  * with base `base` holds everything up to `clock`, the clock committed for the
- * rev the REPAIR was written on, whose own base was `from`. Optional: released
- * readers ignore it and released writers drop it, which only brings back the
- * dialog.
+ * rev the REPAIR was written on, at syncVersion `version`, whose own base was
+ * `from` (absent: that rev had none). Optional: released readers ignore it and
+ * released writers drop it, which only brings back the dialog.
  */
 export interface SnapshotBaseCovers {
   base: VectorClock;
   clock: VectorClock;
-  from: VectorClock;
+  version: number;
+  from?: VectorClock;
 }
 
 /** The lineage fields a full-state snapshot upload writes into the file. */
@@ -472,12 +480,13 @@ export interface SnapshotLineage {
  * everything that rev held, and it adds {@link SnapshotBaseCovers} with that
  * rev's clock. A peer that saw that rev, or an earlier one, then keeps its
  * pending ops on top of it (doesRemoteExtendLastSeen), as for a trimmed file
- * (#10972), provided it also loaded the base that rev carried (`from`).
+ * (#10972), provided it is on the lineage that rev continued (see
+ * isCoveredByRepairBase).
  * "Built from that rev" needs its repairBaseServerSeq to be the committed server
  * seq and its clock to cover the committed one: a REPAIR built before a later
  * download lacks that download's ops (#11483), and one from another lineage does
- * not cover its clock. A rev without a known base gets no marker: nothing
- * proves which lineage a reader would continue.
+ * not cover its clock. When it is unknown whether that rev had a base (it was
+ * not downloaded this cycle), there is no marker.
  */
 export const getSnapshotLineage = ({
   isRepair,
@@ -495,8 +504,8 @@ export const getSnapshotLineage = ({
   /** The rev the REPAIR write is conditional on (`_lastSeenRevs`). */
   baseRev: string | null | undefined;
   lastSeenClock: VectorClock | undefined;
-  /** The snapshotBaseClock of that rev, from its applied download. */
-  replacedBaseClock: VectorClock | undefined;
+  /** That rev's snapshotBaseClock: null when it had none, undefined when unknown. */
+  replacedBaseClock: VectorClock | null | undefined;
   /**
    * The committed server seq (`getLastServerSeq()`), which every REPAIR base is
    * stamped from; the same cursor #11483 checks (`isRepairBuiltAtCommittedSeq`).
@@ -509,19 +518,21 @@ export const getSnapshotLineage = ({
     !isRepair ||
     !baseRev ||
     !lastSeenClock ||
-    !replacedBaseClock ||
+    replacedBaseClock === undefined ||
     !committedServerSeq ||
     repairBaseServerSeq !== committedServerSeq ||
     (comparison !== 'GREATER_THAN' && comparison !== 'EQUAL')
   ) {
     return lineage;
   }
+  const from = replacedBaseClock ? { from: replacedBaseClock } : {};
   return {
     ...lineage,
     snapshotBaseCovers: {
       base: vectorClock,
       clock: lastSeenClock,
-      from: replacedBaseClock,
+      version: committedServerSeq,
+      ...from,
     },
   };
 };

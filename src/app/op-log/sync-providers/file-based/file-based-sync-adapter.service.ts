@@ -3049,7 +3049,8 @@ export class FileBasedSyncAdapterService {
       vectorClock: clock,
       baseRev,
       lastSeenClock: this._lastSeenVectorClocks.get(key),
-      replacedBaseClock: dl?.rev === baseRev ? dl?.data.snapshotBaseClock : undefined,
+      replacedBaseClock:
+        dl && dl.rev === baseRev ? (dl.data.snapshotBaseClock ?? null) : undefined,
       committedServerSeq: this._localSeqCounters.get(key),
     });
   }

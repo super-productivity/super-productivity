@@ -472,6 +472,7 @@ describe('getSnapshotLineage (#11470)', () => {
   const readByPeer = (
     remote: Partial<GapDetectionRemote>,
     lastSeen: Record<string, number>,
+    previousExpectedVersion = 7,
   ): { gap: boolean; extends: boolean } => {
     const gap = detectDownloadGap({
       remote: {
@@ -483,7 +484,7 @@ describe('getSnapshotLineage (#11470)', () => {
       },
       sinceSeq: 7,
       excludeClient: 'peer',
-      previousExpectedVersion: 7,
+      previousExpectedVersion,
       lastSeenClock: lastSeen,
       hasSnapshot: true,
       isPossiblyTrimmed: false,
@@ -527,6 +528,7 @@ describe('getSnapshotLineage (#11470)', () => {
       snapshotBaseCovers: {
         base: REPAIR_CLOCK,
         clock: BASE_REV_CLOCK,
+        version: 7,
         from: REPLACED_BASE,
       },
     });
@@ -566,9 +568,31 @@ describe('getSnapshotLineage (#11470)', () => {
     });
   });
 
-  it('a marker without the replaced base does not count', () => {
+  it('a rev without a base: the peer must not be ahead of its version', () => {
+    // Files created by a plain ops upload, or rewritten by a writer before
+    // v19.2.0, carry no base. Then, as doesRemoteExtendLastSeen does for such
+    // files, the version decides: a reset since the peer last synced shows as
+    // the peer's version being ahead of the replaced rev's.
+    const written = lineage({ replacedBaseClock: null });
+    expect(written.snapshotBaseCovers).toEqual({
+      base: REPAIR_CLOCK,
+      clock: BASE_REV_CLOCK,
+      version: 7,
+    });
+    expect(readByPeer(written, BASE_REV_CLOCK, 7)).toEqual({ gap: true, extends: true });
+    expect(readByPeer(written, { writer: 4, peer: 3 }, 5)).toEqual({
+      gap: true,
+      extends: true,
+    });
+    expect(readByPeer(written, { writer: 4, peer: 3 }, 9)).toEqual({
+      gap: true,
+      extends: false,
+    });
+  });
+
+  it('a marker without its version does not count', () => {
     const written = lineage();
-    const covers = { base: REPAIR_CLOCK, clock: BASE_REV_CLOCK };
+    const covers = { base: REPAIR_CLOCK, clock: BASE_REV_CLOCK, from: REPLACED_BASE };
     expect(
       readByPeer(
         {
@@ -649,7 +673,7 @@ describe('getSnapshotLineage (#11470)', () => {
     ],
     // Its clock does not cover the committed one: another lineage, or a target switch.
     ['a REPAIR from another lineage', { vectorClock: { writer: 6, peer: 2 } }],
-    // The rev's base is unknown (not downloaded this cycle, or a file without one).
+    // Whether the rev had a base is unknown: it was not downloaded this cycle.
     ['a REPAIR whose replaced base is unknown', { replacedBaseClock: undefined }],
   ] as const) {
     it(`${name} writes no marker, so a peer with pending work must ask`, () => {
@@ -664,7 +688,7 @@ describe('getSnapshotLineage (#11470)', () => {
 
 describe('keepSnapshotLineage (#11470)', () => {
   it('carries the base and its marker over, and nothing for a file without them', () => {
-    const covers = { base: { a: 2 }, clock: { a: 1 }, from: { a: 1 } };
+    const covers = { base: { a: 2 }, clock: { a: 1 }, version: 3, from: { a: 1 } };
     expect(
       keepSnapshotLineage({ snapshotBaseClock: { a: 2 }, snapshotBaseCovers: covers }),
     ).toEqual({ snapshotBaseClock: { a: 2 }, snapshotBaseCovers: covers });
