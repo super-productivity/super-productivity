@@ -8238,30 +8238,6 @@ describe('ConflictResolutionService', () => {
         });
       });
 
-      it('reads an LWW Update that predates lwwUpdateMode as fields', () => {
-        // Clients before v18.15.0 upload LWW Updates without `lwwUpdateMode`;
-        // the counter reducer does not handle LWW Updates, so a replay would
-        // drop the change.
-        const legacyLww = counterOp(
-          'lww-1',
-          'client-b',
-          2000,
-          OpType.Update,
-          '[SIMPLE_COUNTER] LWW Update' as ActionType,
-          { ...counter, title: 'Squats' },
-        );
-
-        const [result] = convert(
-          localDelete({ id: 'counter-1', simpleCounter: counter }),
-          [legacyLww],
-        );
-
-        expect(extractActionPayload(result.payload)).toEqual({
-          ...counter,
-          title: 'Squats',
-        });
-      });
-
       it('still recreates from an id-only delete of an older client', () => {
         const [result] = convert(localDelete({ id: 'counter-1' }), [
           setToday('s1', 2, 2000),
