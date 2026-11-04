@@ -218,23 +218,48 @@ const captureWindowWithChrome = async (
 };
 
 /** How long GNOME capture waits for the user's Alt+Print in one scene. */
-const GNOME_WAIT_MS = 120_000;
+const GNOME_WAIT_MS = 300_000;
 let gnomeShotIndex = 0;
 
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
-/** Where GNOME Shell saves screenshots: `$(xdg-user-dir PICTURES)/Screenshots`. */
-const gnomeScreenshotDir = async (): Promise<string> => {
+/**
+ * Root folder to watch for GNOME screenshots. GNOME Shell saves to
+ * `$(xdg-user-dir PICTURES)/<localized "Screenshots">` (e.g. `Bildschirmfotos`
+ * on a German desktop), so we watch the Pictures folder and its direct
+ * subfolders rather than guessing the translated name.
+ */
+const gnomeScreenshotRoot = async (): Promise<string> => {
   const override = process.env.SP_SCREENSHOT_GNOME_DIR?.trim();
   if (override) return override;
   try {
     const { stdout } = await run('xdg-user-dir', ['PICTURES']);
     const pictures = stdout.toString().trim();
-    if (pictures) return path.join(pictures, 'Screenshots');
+    if (pictures) return pictures;
   } catch {
     /* xdg-user-dir missing: fall back to the default location */
   }
-  return path.join(os.homedir(), 'Pictures', 'Screenshots');
+  return path.join(os.homedir(), 'Pictures');
+};
+
+/** Absolute paths of all PNGs in `root` and its direct subfolders. */
+const listPngs = (root: string): string[] => {
+  const out: string[] = [];
+  const scan = (dir: string, depth: number): void => {
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const e of entries) {
+      const p = path.join(dir, e.name);
+      if (e.isDirectory() && depth > 0) scan(p, depth - 1);
+      else if (e.isFile() && e.name.toLowerCase().endsWith('.png')) out.push(p);
+    }
+  };
+  scan(root, 1);
+  return out;
 };
 
 /**
@@ -247,9 +272,8 @@ const captureViaGnome = async (
   outPath: string,
   scenario: string,
 ): Promise<void> => {
-  const dir = await gnomeScreenshotDir();
-  fs.mkdirSync(dir, { recursive: true });
-  const before = new Set(fs.readdirSync(dir));
+  const dir = await gnomeScreenshotRoot();
+  const before = new Set(listPngs(dir));
 
   await electronApp
     .evaluate(({ BrowserWindow }) => {
@@ -263,17 +287,16 @@ const captureViaGnome = async (
   console.log(
     `\n📸 [${gnomeShotIndex}/${FLATHUB_SCENARIOS.length}] ${scenario}\n` +
       '   Click the Super Productivity title bar, then press Alt+Print.\n' +
-      `   Waiting for a new PNG in ${dir} …`,
+      `   Waiting for a new PNG in ${dir} (or a folder directly inside it) …`,
   );
 
   const deadline = Date.now() + GNOME_WAIT_MS;
   while (Date.now() < deadline) {
     await sleep(500);
-    const fresh = fs
-      .readdirSync(dir)
-      .filter((f) => f.toLowerCase().endsWith('.png') && !before.has(f));
+    const fresh = listPngs(dir).filter((p) => !before.has(p));
     if (!fresh.length) continue;
-    const src = path.join(dir, fresh[0]);
+    const src = fresh[0];
+    console.log(`   ↳ found ${src}`);
     // GNOME writes the file asynchronously; wait until its size settles.
     let lastSize = -1;
     for (let i = 0; i < 20; i++) {
@@ -287,8 +310,9 @@ const captureViaGnome = async (
     return;
   }
   throw new Error(
-    `No new screenshot appeared in ${dir} within ${GNOME_WAIT_MS / 1000}s ` +
-      `for ${scenario}. Set SP_SCREENSHOT_GNOME_DIR if GNOME saves elsewhere.`,
+    `No new screenshot appeared in ${dir} or its subfolders within ` +
+      `${GNOME_WAIT_MS / 1000}s for ${scenario}. Set SP_SCREENSHOT_GNOME_DIR ` +
+      'if GNOME saves elsewhere.',
   );
 };
 

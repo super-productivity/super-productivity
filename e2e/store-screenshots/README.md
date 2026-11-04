@@ -122,7 +122,8 @@ that way, so this mode is semi-manual:
 2. The pipeline seeds the demo data, forces the light theme, sizes the window
    to 1000×700 and walks through the Flathub scenes only.
 3. At each `📸 [n/8]` prompt, click the app's title bar and press **Alt+Print**.
-   The new PNG is picked up from `$(xdg-user-dir PICTURES)/Screenshots`
+   The new PNG is picked up from `$(xdg-user-dir PICTURES)` or any folder directly
+   inside it (GNOME localizes the `Screenshots` folder name)
    (override with `SP_SCREENSHOT_GNOME_DIR`).
 4. Output lands in `dist/screenshots/flathub/` without the drawn-on frame,
    ready to copy into the Flathub packaging repo.
