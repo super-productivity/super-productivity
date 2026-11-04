@@ -73,7 +73,7 @@ test.describe('@webdav a real replacement still asks a peer with pending work (#
         await workB.waitForTaskList();
         await syncB.setupWebdavSync(cfg);
         expect(await waitForSyncComplete(b.page, syncB)).toBe('success');
-        await expect(task(b.page, shared)).toBeVisible();
+        await expect(task(b.page, shared).first()).toBeVisible();
 
         // --- A → B: A restores a backup (BACKUP_IMPORT) while B has pending work ---
         await workB.addTask(bPending);
@@ -118,7 +118,7 @@ test.describe('@webdav a real replacement still asks a peer with pending work (#
           allowResponseOnlyCompletion: true,
         });
         await b.page.goto(INBOX_URL);
-        await expect(task(b.page, bPending)).toBeVisible();
+        await expect(task(b.page, bPending).first()).toBeVisible();
         await expect(task(b.page, BACKUP_TASK)).toHaveCount(0);
 
         // A must ask instead of keeping its pending task on top of B's choice.
@@ -140,8 +140,8 @@ test.describe('@webdav a real replacement still asks a peer with pending work (#
         expect(await waitForSyncComplete(b.page, syncB)).toBe('success');
         for (const page of [a.page, b.page]) {
           await page.goto(INBOX_URL);
-          await expect(task(page, shared)).toBeVisible();
-          await expect(task(page, bPending)).toBeVisible();
+          await expect(task(page, shared).first()).toBeVisible();
+          await expect(task(page, bPending).first()).toBeVisible();
           await expect(task(page, BACKUP_TASK)).toHaveCount(0);
           await expect(task(page, aPending)).toHaveCount(0);
         }
