@@ -9,9 +9,11 @@ import {
 } from '../../utils/supersync-helpers';
 import {
   getStoreCounterByTitle,
+  readStoreCounterEntity,
   readStoreCounters,
   type StoreCounter,
 } from '../../utils/audit-concurrency-helpers';
+import { waitForAppReady } from '../../utils/waits';
 
 /**
  * SuperSync regression test for issue #7330 (recurrence on SIMPLE_COUNTER).
@@ -64,9 +66,10 @@ const captureRepairDialogs = (client: SimulatedE2EClient): string[] => {
   return messages;
 };
 
-const createClickCounter = async (
+const createCounter = async (
   client: SimulatedE2EClient,
   title: string,
+  typeLabel: 'Click Counter' | 'Stopwatch' = 'Click Counter',
 ): Promise<void> => {
   await client.page.goto('/#/habits');
   await client.page.waitForURL(/habits/);
@@ -85,7 +88,7 @@ const createClickCounter = async (
   const typeSelect = dialog.locator('mat-select').first();
   await typeSelect.waitFor({ state: 'visible', timeout: 5000 });
   await typeSelect.click();
-  await client.page.locator('mat-option:has-text("Click Counter")').click();
+  await client.page.locator(`mat-option:has-text("${typeLabel}")`).click();
 
   await dialog.locator('button[type="submit"]').click();
   await dialog.waitFor({ state: 'hidden', timeout: 10000 });
@@ -133,6 +136,54 @@ const deleteCounter = async (
   await client.page.waitForURL(/(active\/tasks|tag\/TODAY\/tasks)/);
 };
 
+/** Rename the counter titled `title` via its edit-settings dialog. */
+const renameCounter = async (
+  client: SimulatedE2EClient,
+  title: string,
+  newTitle: string,
+): Promise<void> => {
+  await client.page.goto('/#/habits');
+  await client.page.waitForURL(/habits/);
+
+  const habitTitle = client.page.locator('.habit-title', { hasText: title }).first();
+  await habitTitle.waitFor({ state: 'visible', timeout: 10000 });
+  await habitTitle.click();
+
+  const dialog = client.page.locator('dialog-simple-counter-edit-settings');
+  await dialog.waitFor({ state: 'visible', timeout: 10000 });
+  const titleInput = dialog.locator('formly-form input').first();
+  await titleInput.waitFor({ state: 'visible', timeout: 5000 });
+  await titleInput.fill(newTitle);
+  await dialog.locator('button[type="submit"]').click();
+  await dialog.waitFor({ state: 'hidden', timeout: 10000 });
+
+  await client.page.goto('/#/tag/TODAY/tasks');
+  await client.page.waitForURL(/(active\/tasks|tag\/TODAY\/tasks)/);
+};
+
+/** Reload the app and wait until it is ready again (rehydrates from the op log). */
+const reloadClient = async (client: SimulatedE2EClient): Promise<void> => {
+  await client.page.reload({ waitUntil: 'domcontentloaded' });
+  await waitForAppReady(client.page);
+};
+
+/**
+ * The persisted counter without the fields that are legitimately per device:
+ * `isOn` (a stopwatch's running state is local and reset on load) and
+ * `modified` (stamped with local time when an LWW Update is applied).
+ */
+const persistedCounter = async (
+  client: SimulatedE2EClient,
+  id: string,
+): Promise<Record<string, unknown> | null> => {
+  const entity = await readStoreCounterEntity(client, id);
+  if (!entity) return null;
+  const rest = { ...entity };
+  delete rest['isOn'];
+  delete rest['modified'];
+  return rest;
+};
+
 /** Number of counters visible in the header on this client. */
 const counterCount = async (client: SimulatedE2EClient): Promise<number> => {
   await client.page.waitForTimeout(500);
@@ -165,6 +216,7 @@ const runDeleteVsUpdate = async (
   const counterTitle = `C7330-${order}-${Date.now()}`;
   let clientA: SimulatedE2EClient | null = null;
   let clientB: SimulatedE2EClient | null = null;
+  let clientC: SimulatedE2EClient | null = null;
 
   try {
     const user = await createTestUser(testRunId);
@@ -175,7 +227,7 @@ const runDeleteVsUpdate = async (
     const repairDialogsA = captureRepairDialogs(clientA);
     await clientA.sync.setupSuperSync(syncConfig);
 
-    await createClickCounter(clientA, counterTitle);
+    await createCounter(clientA, counterTitle);
     await incrementCounter(clientA);
     await clientA.sync.syncAndWait();
 
@@ -242,6 +294,118 @@ const runDeleteVsUpdate = async (
     expect(Object.values(counterB?.countOnDay ?? {})).toEqual([2]);
     expect(await counterCount(clientB)).toBe(1);
     expect(await counterCount(clientA)).toBe(1);
+
+    // ===== Phase 6: whole entity, after reload and on a fresh client =====
+    // A reloads (rehydrates from its own op log) and a fresh client C builds
+    // the counter from the server alone. All three must hold the same
+    // persisted counter, every field except the per-device `isOn`/`modified`.
+    await reloadClient(clientA);
+    clientC = await createSimulatedClient(browser, baseURL!, 'C', testRunId);
+    const repairDialogsC = captureRepairDialogs(clientC);
+    await clientC.sync.setupSuperSync(syncConfig);
+    await clientC.sync.syncAndWait();
+
+    const wholeA = await persistedCounter(clientA, counterId!);
+    const wholeB = await persistedCounter(clientB, counterId!);
+    const wholeC = await persistedCounter(clientC, counterId!);
+    console.log(`[7330 ${order}] whole A:`, JSON.stringify(wholeA));
+    console.log(`[7330 ${order}] whole B:`, JSON.stringify(wholeB));
+    console.log(`[7330 ${order}] whole C:`, JSON.stringify(wholeC));
+    expect(wholeB).not.toBeNull();
+    expect(wholeA).toEqual(wholeB);
+    expect(wholeC).toEqual(wholeB);
+    expect(repairDialogsA).toEqual([]);
+    expect(repairDialogsC).toEqual([]);
+  } finally {
+    if (clientA) await closeClient(clientA);
+    if (clientB) await closeClient(clientB);
+    if (clientC) await closeClient(clientC);
+  }
+};
+
+/**
+ * A deletes a RUNNING stopwatch while B renames it; B's update reaches the
+ * server first, so A loses and recreates the counter from its delete snapshot.
+ *
+ * PINS CURRENT BEHAVIOUR (follow-up issue: flush the stopwatch before clearing
+ * it on delete). `deleteSimpleCounter` clears the stopwatch accumulator
+ * without flushing it, and the snapshot is taken while the stopwatch runs, so
+ * on A the recreated counter comes back running (`isOn: true`) and carries the
+ * locally ticked time that never reached the server; B never sees that time.
+ */
+const runDeleteRunningStopwatch = async ({
+  browser,
+  baseURL,
+  testRunId,
+}: {
+  browser: Browser;
+  baseURL: string | undefined;
+  testRunId: string;
+}): Promise<void> => {
+  const counterTitle = `C7330-stopwatch-${Date.now()}`;
+  const renamedTitle = `${counterTitle}-renamed`;
+  let clientA: SimulatedE2EClient | null = null;
+  let clientB: SimulatedE2EClient | null = null;
+
+  try {
+    const user = await createTestUser(testRunId);
+    const syncConfig = getSuperSyncConfig(user);
+
+    clientA = await createSimulatedClient(browser, baseURL!, 'A', testRunId);
+    const repairDialogsA = captureRepairDialogs(clientA);
+    await clientA.sync.setupSuperSync(syncConfig);
+    await createCounter(clientA, counterTitle, 'Stopwatch');
+    await clientA.sync.syncAndWait();
+
+    clientB = await createSimulatedClient(browser, baseURL!, 'B', testRunId);
+    const repairDialogsB = captureRepairDialogs(clientB);
+    await clientB.sync.setupSuperSync(syncConfig);
+    await clientB.sync.syncAndWait();
+    const counterId = (await getStoreCounterByTitle(clientA, counterTitle))?.id;
+    expect(counterId).toBeTruthy();
+
+    // A starts the stopwatch and lets it tick: the elapsed time is the point.
+    await incrementCounter(clientA);
+    await expect
+      .poll(async () => (await readStoreCounterEntity(clientA!, counterId!))?.['isOn'])
+      .toBe(true);
+    await clientA.page.waitForTimeout(3000);
+    const runningA = await readStoreCounterEntity(clientA, counterId!);
+    console.log('[7330 stopwatch] A before delete:', JSON.stringify(runningA));
+
+    // Concurrent, offline: A deletes the running stopwatch, B renames it.
+    await deleteCounter(clientA, counterTitle);
+    await renameCounter(clientB, counterTitle, renamedTitle);
+
+    // B's update reaches the server first; A loses its delete and recreates.
+    await clientB.sync.syncAndWait();
+    await clientA.sync.syncAndWait();
+    await clientB.sync.syncAndWait();
+    await clientA.sync.syncAndWait();
+
+    expect(repairDialogsA).toEqual([]);
+    expect(repairDialogsB).toEqual([]);
+
+    const recreatedA = await readStoreCounterEntity(clientA, counterId!);
+    const counterB = await readStoreCounterEntity(clientB, counterId!);
+    console.log('[7330 stopwatch] A after sync:', JSON.stringify(recreatedA));
+    console.log('[7330 stopwatch] B after sync:', JSON.stringify(counterB));
+
+    // Converged: the counter exists on both with B's title and A's type.
+    expect(recreatedA?.['title']).toBe(renamedTitle);
+    expect(counterB?.['title']).toBe(renamedTitle);
+    expect(recreatedA?.['type']).toBe('StopWatch');
+    expect(counterB?.['type']).toBe('StopWatch');
+
+    // Pinned current behaviour (see the docblock): A's counter comes back
+    // running, with the unsynced time A ticked before the delete; B has none.
+    const daySum = (c: Record<string, unknown> | null): number =>
+      Object.values(
+        (c?.['countOnDay'] as Record<string, number> | undefined) ?? {},
+      ).reduce((sum, v) => sum + v, 0);
+    expect(recreatedA?.['isOn']).toBe(true);
+    expect(daySum(recreatedA)).toBeGreaterThan(0);
+    expect(daySum(counterB)).toBe(0);
   } finally {
     if (clientA) await closeClient(clientA);
     if (clientB) await closeClient(clientB);
@@ -263,5 +427,13 @@ test.describe('@supersync Simple Counter delete-vs-update (#7330, #11465)', () =
     testRunId,
   }) => {
     await runDeleteVsUpdate({ browser, baseURL, testRunId }, 'delete-first');
+  });
+
+  test('a running stopwatch deleted while renamed elsewhere comes back running on the deleting client', async ({
+    browser,
+    baseURL,
+    testRunId,
+  }) => {
+    await runDeleteRunningStopwatch({ browser, baseURL, testRunId });
   });
 });

@@ -8238,6 +8238,29 @@ describe('ConflictResolutionService', () => {
         });
       });
 
+      it('keeps the field read for a counter update its reducer does not handle', () => {
+        // A future or unknown counter action the reducer ignores must not be
+        // replayed as a no-op: its fields still apply.
+        const unknownUpdate = counterOp(
+          'u1',
+          'client-b',
+          2000,
+          OpType.Update,
+          '[SimpleCounter] Not handled by the reducer' as ActionType,
+          { simpleCounter: { id: 'counter-1', changes: { title: 'Squats' } } },
+        );
+
+        const [result] = convert(
+          localDelete({ id: 'counter-1', simpleCounter: counter }),
+          [unknownUpdate],
+        );
+
+        expect(extractActionPayload(result.payload)).toEqual({
+          ...counter,
+          title: 'Squats',
+        });
+      });
+
       it('still recreates from an id-only delete of an older client', () => {
         const [result] = convert(localDelete({ id: 'counter-1' }), [
           setToday('s1', 2, 2000),

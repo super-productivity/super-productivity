@@ -39,8 +39,11 @@ const RECREATE_REPLAY_REDUCERS: Partial<Record<EntityType, EntityReducer>> = {
 
 /**
  * Applies `op` to `entity` with the entity type's own reducer and returns the
- * resulting entity, or `undefined` when the type has no replay reducer (the
- * caller then reads the payload as field values).
+ * resulting entity, or `undefined` when the type has no replay reducer or the
+ * reducer does not handle the op (it returns the state it was given). The
+ * caller then reads the payload as field values, so an update the reducer
+ * does not know (an action added later, or a legacy LWW Update) keeps the
+ * field read instead of being silently dropped.
  */
 export const replayUpdateOnRecreatedEntity = (
   entity: Record<string, unknown>,
@@ -49,9 +52,11 @@ export const replayUpdateOnRecreatedEntity = (
   const reducer = RECREATE_REPLAY_REDUCERS[op.entityType];
   if (!reducer || !op.entityId) return undefined;
   const id = op.entityId;
-  const projected = reducer(
-    { ids: [id], entities: { [id]: { ...entity, id } } },
-    convertOpToAction(op),
-  );
+  const state: EntityState<unknown> = {
+    ids: [id],
+    entities: { [id]: { ...entity, id } },
+  };
+  const projected = reducer(state, convertOpToAction(op));
+  if (projected === state) return undefined;
   return (projected.entities[id] as Record<string, unknown> | undefined) ?? entity;
 };
