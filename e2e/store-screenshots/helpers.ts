@@ -288,7 +288,8 @@ export const setPlannerCalendarExpanded = async (
     type NgDebug = { getComponent?: (el: Element) => unknown };
     const ng = (window as unknown as { ng?: NgDebug }).ng;
     const cmp = ng?.getComponent?.(nav) as
-      { isExpanded?: { set: (v: boolean) => void } } | undefined;
+      | { isExpanded?: { set: (v: boolean) => void } }
+      | undefined;
     if (!cmp?.isExpanded?.set) {
       throw new Error(
         'planner-calendar-nav isExpanded signal not accessible — run against an ngDevMode build',
