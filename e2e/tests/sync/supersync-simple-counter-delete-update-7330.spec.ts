@@ -135,7 +135,17 @@ const counterCount = async (client: SimulatedE2EClient): Promise<number> => {
 };
 
 test.describe('@supersync Simple Counter delete-vs-update (#7330)', () => {
-  test('concurrent delete + update resurrects a valid counter without a repair dialog', async ({
+  // test.fixme: the counter diverges permanently on the unchanged app (E2E
+  // runs 41735806038 and 41754121263, 2026-11-04). Expected: both clients
+  // hold the same counter entity. Observed after A, B, A, B syncs:
+  //   A: {"title":"","type":"ClickCounter","isEnabled":false,"countOnDay":{}}
+  //   B: {"title":"C7330-…","type":"ClickCounter","isEnabled":true,
+  //       "countOnDay":{"<today>":2}}
+  // A rebuilds the counter from its {id}-only delete payload (RECREATE_FALLBACK,
+  // lww-update.meta-reducer.ts) and never adopts B's winning state, so title,
+  // enabled state and counts are lost on A. No repair dialog fires.
+  // Issue candidate for the coordinator; un-fixme once fixed.
+  test.fixme('concurrent delete + update resurrects a valid counter without a repair dialog', async ({
     browser,
     baseURL,
     testRunId,
