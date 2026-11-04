@@ -1,5 +1,5 @@
 import { OperationLogEntry, VectorClock } from '../../core/operation.types';
-import { compareVectorClocks } from '../../../core/util/vector-clock';
+import { compareVectorClocks, mergeVectorClocks } from '../../../core/util/vector-clock';
 import { FILE_BASED_SYNC_CONSTANTS } from './file-based-sync.types';
 
 /** The fields of a downloaded sync/ops file that gap detection reads. */
@@ -392,5 +392,54 @@ export const appendRecentOpsAtBatchBoundary = <T extends { sv?: number }>(
       ...(isComplete ? { oldestBatchComplete: true as const } : {}),
     },
     trimmedCount: start,
+  };
+};
+
+/** The lineage fields a full-state snapshot upload writes into the file. */
+export interface SnapshotLineage {
+  syncVersion: number;
+  vectorClock: VectorClock;
+  snapshotBaseClock: VectorClock;
+}
+
+/**
+ * #11470: the lineage a full-state snapshot upload writes.
+ *
+ * A replacement (SYNC_IMPORT, BACKUP_IMPORT, USE_LOCAL, initial, recovery)
+ * starts over: syncVersion 1 and its own clock as the base, so every peer that
+ * has not loaded it is asked first (#9170, #10916).
+ *
+ * An automatic REPAIR is written only on the rev this client last downloaded
+ * and applied (#9023), so it holds everything that rev held. It continues that
+ * file instead: the next syncVersion, the clock committed for that rev as its
+ * base, and a file clock that covers the base. A peer that saw that rev then
+ * reads it as a catch-up (doesRemoteExtendLastSeen) and keeps its pending ops on
+ * top, as for a trimmed file (#10972). Its empty retained-ops buffer still makes
+ * every peer that has not loaded it hydrate it (snapshotReplacement, or a trim
+ * gap once later uploads land), released readers included. Without a committed
+ * rev, clock and version for this target it falls back to a replacement.
+ */
+export const getSnapshotLineage = ({
+  isRepair,
+  vectorClock,
+  baseRev,
+  lastSeenClock,
+  expectedSyncVersion,
+}: {
+  isRepair: boolean;
+  vectorClock: VectorClock;
+  /** The rev the REPAIR write is conditional on (`_lastSeenRevs`). */
+  baseRev: string | null | undefined;
+  lastSeenClock: VectorClock | undefined;
+  /** The expected syncVersion committed for that rev. */
+  expectedSyncVersion: number | undefined;
+}): SnapshotLineage => {
+  if (!isRepair || !baseRev || !lastSeenClock || !expectedSyncVersion) {
+    return { syncVersion: 1, vectorClock, snapshotBaseClock: vectorClock };
+  }
+  return {
+    syncVersion: expectedSyncVersion + 1,
+    vectorClock: mergeVectorClocks(vectorClock, lastSeenClock),
+    snapshotBaseClock: lastSeenClock,
   };
 };

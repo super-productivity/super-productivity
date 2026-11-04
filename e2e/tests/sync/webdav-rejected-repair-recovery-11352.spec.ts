@@ -103,7 +103,10 @@ const runRejectedRepairScenario = async (
     baseURL,
     request,
   }: { browser: Browser; baseURL: string | undefined; request: APIRequestContext },
-  { bHasPendingWhenRepairLands }: { bHasPendingWhenRepairLands: boolean },
+  {
+    bHasPendingWhenRepairLands,
+    isUseSplitSyncFiles,
+  }: { bHasPendingWhenRepairLands: boolean; isUseSplitSyncFiles?: boolean },
 ): Promise<void> => {
   const folder = generateSyncFolderName('rejected-repair');
   const shared = `Shared ${folder}`;
@@ -111,7 +114,11 @@ const runRejectedRepairScenario = async (
   const fromBMeanwhile = `From B meanwhile ${folder}`;
   const bPending = `B pending ${folder}`;
   const afterRecovery = `After recovery ${folder}`;
-  const cfg = { ...WEBDAV_CONFIG_TEMPLATE, syncFolderPath: `/${folder}` };
+  const cfg = {
+    ...WEBDAV_CONFIG_TEMPLATE,
+    syncFolderPath: `/${folder}`,
+    ...(isUseSplitSyncFiles === undefined ? {} : { isUseSplitSyncFiles }),
+  };
   await createSyncFolder(request, folder);
 
   const a = await setupSyncClient(browser, baseURL);
@@ -225,16 +232,18 @@ test.describe('@webdav a rejected REPAIR does not stop file sync for good', () =
 
   // #11470: a peer's non-wiping REPAIR snapshot already holds everything B
   // last saw, so B keeps its pending change on top, with no whole-dataset
-  // dialog.
-  test('a peer with pending work keeps it when the healed client uploads its REPAIR', async ({
-    browser,
-    baseURL,
-    request,
-  }) => {
-    test.setTimeout(240000);
-    await runRejectedRepairScenario(
-      { browser, baseURL, request },
-      { bHasPendingWhenRepairLands: true },
-    );
-  });
+  // dialog. Both file formats write the REPAIR.
+  for (const isUseSplitSyncFiles of [false, true]) {
+    test(`a peer with pending work keeps it when the healed client uploads its REPAIR (split=${isUseSplitSyncFiles})`, async ({
+      browser,
+      baseURL,
+      request,
+    }) => {
+      test.setTimeout(240000);
+      await runRejectedRepairScenario(
+        { browser, baseURL, request },
+        { bHasPendingWhenRepairLands: true, isUseSplitSyncFiles },
+      );
+    });
+  }
 });

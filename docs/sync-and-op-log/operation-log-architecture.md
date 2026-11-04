@@ -932,6 +932,15 @@ IDs deduplicate ops still in the local log, while vector clocks carry causality.
    (after a target switch the adapter can hold a last-seen baseline staged by
    a download it never applied, so having synced elsewhere is not enough): they move past the baseline with
    ids and clocks unchanged, replay on top of it, and upload normally.
+   An automatic `REPAIR` snapshot is such a catch-up too (#11470): it is
+   written only on the rev its writer last downloaded and applied (#9023), so
+   it continues that file with the next `syncVersion`, the clock committed for
+   that rev as its base, and a file clock covering that base. A peer that saw
+   the rev keeps its pending ops on top; one behind it, or any reader of a
+   replacement (`SYNC_IMPORT`, `BACKUP_IMPORT`, USE_LOCAL), which still starts
+   over at `syncVersion` 1 with its own clock as base, still asks. The empty
+   retained-ops buffer sends every reader that has not loaded the `REPAIR` to
+   the snapshot, released readers included.
    Receivers resolve any crossing on the no-pending LWW path. A pending op the
    snapshot clock already covers (uploaded before a crash skipped
    `markSynced`) is settled, not replayed twice. A kept op the snapshot state

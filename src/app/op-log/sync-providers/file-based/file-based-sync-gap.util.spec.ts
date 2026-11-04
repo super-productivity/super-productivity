@@ -7,6 +7,7 @@ import {
   GapDetectionInput,
   GapDetectionRemote,
   getOpLogBaselineClock,
+  getSnapshotLineage,
   isSingleFileBufferPossiblyTrimmed,
   isSplitBufferPossiblyTrimmed,
   OpLogClockSource,
@@ -444,4 +445,121 @@ describe('doesRemoteExtendLastSeen (#10972)', () => {
       doesRemoteExtendLastSeen(remote({ vectorClock: { clientA: 2503 } }), LAST_SEEN, 4),
     ).toBeFalse();
   });
+});
+
+describe('getSnapshotLineage (#11470)', () => {
+  // The writer last committed rev-7 at syncVersion 7; the peer saw the same rev.
+  const BASE_REV_CLOCK = { writer: 5, peer: 3 };
+  const REPAIR_CLOCK = { writer: 6, peer: 2 };
+  const lineage = (
+    overrides: Partial<Parameters<typeof getSnapshotLineage>[0]> = {},
+  ): ReturnType<typeof getSnapshotLineage> =>
+    getSnapshotLineage({
+      isRepair: true,
+      vectorClock: REPAIR_CLOCK,
+      baseRev: 'rev-7',
+      lastSeenClock: BASE_REV_CLOCK,
+      expectedSyncVersion: 7,
+      ...overrides,
+    });
+  // How a peer that committed `lastSeen` at syncVersion 7 reads the written file.
+  const readByPeer = (
+    written: ReturnType<typeof getSnapshotLineage>,
+    lastSeen: Record<string, number>,
+  ): { gap: boolean; extends: boolean } => {
+    const remote = {
+      ...written,
+      clientId: 'writer',
+      recentOps: [],
+    };
+    const gap = detectDownloadGap({
+      remote,
+      sinceSeq: 7,
+      excludeClient: 'peer',
+      previousExpectedVersion: 7,
+      lastSeenClock: lastSeen,
+      hasSnapshot: true,
+      isPossiblyTrimmed: false,
+    });
+    return { gap: gap.needsGapDetection, extends: gap.snapshotExtendsLastSeen };
+  };
+
+  it('continues the base rev: next syncVersion, its clock as base, a covering file clock', () => {
+    expect(lineage()).toEqual({
+      syncVersion: 8,
+      vectorClock: { writer: 6, peer: 3 },
+      snapshotBaseClock: BASE_REV_CLOCK,
+    });
+  });
+
+  it('a peer that saw the base rev hydrates it as a catch-up and keeps pending ops', () => {
+    expect(readByPeer(lineage(), BASE_REV_CLOCK)).toEqual({ gap: true, extends: true });
+  });
+
+  it('a peer behind the base rev still hydrates it, but must ask', () => {
+    expect(readByPeer(lineage(), { writer: 4, peer: 3 })).toEqual({
+      gap: true,
+      extends: false,
+    });
+  });
+
+  it('a released reader that ignores the snapshot base still hydrates it', () => {
+    // v19.1.0 and older never read snapshotBaseClock: the empty buffer alone
+    // (snapshotReplacement) sends them to the snapshot, as for a replacement.
+    const written = lineage();
+    const gap = detectDownloadGap({
+      remote: {
+        syncVersion: written.syncVersion,
+        vectorClock: written.vectorClock,
+        clientId: 'writer',
+        recentOps: [],
+      },
+      sinceSeq: 7,
+      excludeClient: 'peer',
+      previousExpectedVersion: 7,
+      lastSeenClock: BASE_REV_CLOCK,
+      hasSnapshot: true,
+      isPossiblyTrimmed: false,
+    });
+    expect(gap.needsGapDetection).toBe(true);
+    expect(gap.reason).toContain('snapshot replacement');
+  });
+
+  it('later tail uploads cannot hide it from a peer that has not loaded it', () => {
+    const written = lineage();
+    const gap = detectDownloadGap({
+      remote: {
+        ...written,
+        syncVersion: 9,
+        clientId: 'writer',
+        recentOps: [{}],
+        oldestOpSyncVersion: 9,
+        oldestBatchComplete: true,
+      },
+      sinceSeq: 7,
+      excludeClient: 'peer',
+      previousExpectedVersion: 7,
+      lastSeenClock: BASE_REV_CLOCK,
+      hasSnapshot: true,
+      isPossiblyTrimmed: false,
+    });
+    expect(gap.needsGapDetection).toBe(true);
+  });
+
+  for (const [name, overrides] of [
+    ['a replacement (import, restore, USE_LOCAL)', { isRepair: false }],
+    ['a REPAIR without a committed base rev', { baseRev: null }],
+    ['a REPAIR without a recorded clock', { lastSeenClock: undefined }],
+    ['a REPAIR without a committed syncVersion', { expectedSyncVersion: undefined }],
+  ] as const) {
+    it(`${name} starts over, so a peer that has not loaded it must ask`, () => {
+      const written = lineage(overrides);
+      expect(written).toEqual({
+        syncVersion: 1,
+        vectorClock: REPAIR_CLOCK,
+        snapshotBaseClock: REPAIR_CLOCK,
+      });
+      expect(readByPeer(written, BASE_REV_CLOCK)).toEqual({ gap: true, extends: false });
+    });
+  }
 });

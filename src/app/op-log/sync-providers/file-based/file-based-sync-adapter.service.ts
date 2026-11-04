@@ -53,7 +53,9 @@ import {
   isSingleFileBufferPossiblyTrimmed,
   isSplitBufferPossiblyTrimmed,
   getOpLogBaselineClock,
+  getSnapshotLineage,
   isSnapshotBaseUnseen,
+  SnapshotLineage,
   toSnapshotGapFlags,
 } from './file-based-sync-gap.util';
 import { ArchiveDbAdapter } from '../../../core/persistence/archive-db-adapter.service';
@@ -1334,11 +1336,9 @@ export class FileBasedSyncAdapterService {
     schemaVersion: number,
     snapshotOpType?: RestorePointType,
   ): Promise<SnapshotUploadResponse> {
-    // Same in-flight target guard as _uploadOps: this is the second remote-write
-    // entry point (initial/recovery/migration + REPAIR snapshot writes, incl.
-    // _conditionalUploadRepairSnapshot and backups). A mid-operation target
-    // switch aborts before any write instead of committing this target's
-    // snapshot to the next one. (Task 2.)
+    // Same in-flight target guard as _uploadOps, for every snapshot write (incl.
+    // REPAIR and backups): a mid-operation target switch aborts before any write
+    // instead of committing this target's snapshot to the next one. (Task 2.)
     const provider = this._withTargetGuard(rawProvider, this._targetGeneration);
     const providerKey = this._getProviderKey(provider);
 
@@ -1361,8 +1361,9 @@ export class FileBasedSyncAdapterService {
       );
     }
 
-    // For snapshots, we start fresh with syncVersion = 1
-    const newSyncVersion = 1;
+    // #11470: a replacement starts over at syncVersion 1; a REPAIR continues.
+    const lineage = this._getSnapshotLineage(providerKey, vectorClock, snapshotOpType);
+    const newSyncVersion = lineage.syncVersion;
 
     // The caller captures this state at the same boundary as the full-state op.
     // Re-reading the live store here would let later timer deltas leak into a
@@ -1377,8 +1378,8 @@ export class FileBasedSyncAdapterService {
       version: FILE_BASED_SYNC_CONSTANTS.FILE_VERSION,
       syncVersion: newSyncVersion,
       schemaVersion,
-      vectorClock,
-      snapshotBaseClock: vectorClock,
+      vectorClock: lineage.vectorClock,
+      snapshotBaseClock: lineage.snapshotBaseClock,
       lastModified: Date.now(),
       clientId,
       state: currentState,
@@ -1396,18 +1397,13 @@ export class FileBasedSyncAdapterService {
     this._assertUploadDataNotEmpty(uploadData, 'FileBasedSyncAdapter._uploadSnapshot');
     let snapshotUploadRes: { rev: string };
     if (snapshotOpType === 'REPAIR') {
-      // #9023: an automatic REPAIR recovery snapshot must never overwrite a remote
-      // that advanced since this client last synced — otherwise a concurrent edit
-      // from another device (uploaded after our last download) is silently dropped.
-      // Mirror the SuperSync repairBaseServerSeq guard by writing CONDITIONALLY on
-      // the rev we last downloaded+applied (`_lastSeenRevs` — the repair's base).
-      // A rev, not a vector clock, is used deliberately: two independently-pruned
-      // clocks (MAX_VECTOR_CLOCK_SIZE) can compare CONCURRENT even when one
-      // dominates, which would wedge the repair forever. On a rev mismatch we
-      // signal REPAIR_STALE so the shared rebase path (RejectedOpsHandlerService)
-      // downloads the concurrent ops and rebuilds the repair; that download
-      // promotes `_lastSeenRevs`, so the retry converges. BACKUP_IMPORT / initial /
-      // migration keep force-overwrite: explicit restores or first-time uploads.
+      // #9023: a REPAIR must not overwrite a remote that advanced since our last
+      // sync (a concurrent edit would be dropped), so it writes CONDITIONALLY on
+      // the rev we last downloaded and applied (`_lastSeenRevs`), like SuperSync's
+      // repairBaseServerSeq. A rev, not a clock: independently pruned clocks can
+      // compare CONCURRENT and wedge the repair. A mismatch answers REPAIR_STALE;
+      // the rebase path downloads, which promotes `_lastSeenRevs`, and retries.
+      // Explicit restores and first-time uploads keep force-overwrite.
       const baseRev = this._lastSeenRevs.get(providerKey) ?? null;
       try {
         snapshotUploadRes = await this._conditionalUploadRepairSnapshot(
@@ -1447,7 +1443,7 @@ export class FileBasedSyncAdapterService {
     // SPAP-10: record the rev of the snapshot we just wrote as the last-seen rev
     // so the next poll can skip a redundant full download.
     this._commitLastSeenRev(providerKey, snapshotUploadRes.rev);
-    this._lastSeenVectorClocks.set(providerKey, vectorClock);
+    this._lastSeenVectorClocks.set(providerKey, lineage.vectorClock);
     this._persistState();
 
     OpLog.warn(
@@ -2794,19 +2790,13 @@ export class FileBasedSyncAdapterService {
     state: unknown,
     snapshotOpType?: RestorePointType,
   ): Promise<SnapshotUploadResponse> {
-    const newSyncVersion = 1;
-    const clock = vectorClock as VectorClock;
+    const lineage = this._getSnapshotLineage(providerKey, vectorClock, snapshotOpType);
+    const { syncVersion: newSyncVersion, vectorClock: clock } = lineage;
 
-    // #9023: same concurrency guard as the single-file path — a REPAIR recovery
-    // snapshot must not overwrite a remote that advanced since our last sync.
-    // The commit-point sync-ops.json is what other clients read, so gate on ITS
-    // rev vs the rev we last downloaded+applied (`_lastSeenRevs`). A rev, not a
-    // vector clock, is used deliberately (see _uploadSnapshot). `getFileRev`
-    // reads metadata only — no decode — so a torn/undecryptable remote does not
-    // block the repair. Missing ops file → no history to clobber, safe.
-    // NOTE: this pre-check closes the concurrent *merge* window; a conditional
-    // (rev-matched) write across the two-file (state + ops) protocol to close the
-    // residual sub-second check→write race is tracked as a follow-up.
+    // #9023: the single-file REPAIR guard (see _uploadSnapshot), on the rev of the
+    // commit-point sync-ops.json. `getFileRev` reads metadata only, so a torn or
+    // undecryptable remote does not block the repair; no ops file, no history.
+    // Residual: a sub-second check→write race across the two files (follow-up).
     if (snapshotOpType === 'REPAIR') {
       const baseRev = this._lastSeenRevs.get(providerKey) ?? null;
       let remoteOpsRev: string | null = null;
@@ -2851,7 +2841,7 @@ export class FileBasedSyncAdapterService {
       syncVersion: newSyncVersion,
       schemaVersion,
       vectorClock: clock,
-      snapshotBaseClock: clock,
+      snapshotBaseClock: lineage.snapshotBaseClock,
       lastModified: Date.now(),
       clientId,
       recentOps: [],
@@ -2900,15 +2890,10 @@ export class FileBasedSyncAdapterService {
 
   /**
    * Writes `data` to a `.bak` recovery artifact before its primary file is
-   * overwritten (two-phase write).
-   *
-   * MUST be non-fatal: a provider that cannot write the backup (e.g. no copy
-   * support, transient failure) must still be able to sync. The backup is a
-   * recovery artifact — losing it only degrades recoverability, never sync.
-   *
-   * Force-overwrite is used here because .bak is a disposable recovery artifact,
-   * NOT a source-of-truth sync file — the lost-update guarantee on the primary
-   * (conditional PUT) is unaffected.
+   * overwritten (two-phase write). MUST be non-fatal: losing the backup (no copy
+   * support, transient failure) only degrades recoverability, never sync. It is
+   * force-written: .bak is disposable, not a source-of-truth sync file, so the
+   * primary's lost-update guarantee (conditional PUT) is unaffected.
    */
   private async _writeBakFile<T>(
     provider: GuardedFileSyncProvider,
@@ -3054,6 +3039,21 @@ export class FileBasedSyncAdapterService {
     // cursor update cannot promote stale pre-write values over it.
     this._pendingExpectedSyncVersions.delete(providerKey);
     this._pendingVectorClocks.delete(providerKey);
+  }
+
+  /** #11470: {@link getSnapshotLineage}, read before the write commits a rev. */
+  private _getSnapshotLineage(
+    key: string,
+    clock: VectorClock,
+    type?: string,
+  ): SnapshotLineage {
+    return getSnapshotLineage({
+      isRepair: type === 'REPAIR',
+      vectorClock: clock,
+      baseRev: this._lastSeenRevs.get(key),
+      lastSeenClock: this._lastSeenVectorClocks.get(key),
+      expectedSyncVersion: this._expectedSyncVersions.get(key),
+    });
   }
 
   /**
