@@ -11,6 +11,11 @@ import {
   WEBDAV_CONFIG_TEMPLATE,
 } from '../../utils/sync-helpers';
 import { waitForStatePersistence } from '../../utils/waits';
+import {
+  countWebdavWrites,
+  hasEverAppeared,
+  recordIfEverAppears,
+} from '../../utils/audit-webdav-helpers';
 
 const authorization = `Basic ${Buffer.from('admin:admin').toString('base64')}`;
 const root = WEBDAV_CONFIG_TEMPLATE.baseUrl;
@@ -87,12 +92,12 @@ const seedSnapshotOnlyFolder = async (
       ...WEBDAV_CONFIG_TEMPLATE,
       syncFolderPath: `/${seedFolder}`,
     });
-    await waitForSyncComplete(seed.page, sync);
+    expect(await waitForSyncComplete(seed.page, sync)).toBe('success');
     await sync.setupWebdavSync(
       { ...WEBDAV_CONFIG_TEMPLATE, syncFolderPath: `/${movedFolder}` },
       { isReconfigure: true },
     );
-    await waitForSyncComplete(seed.page, sync);
+    expect(await waitForSyncComplete(seed.page, sync)).toBe('success');
   } finally {
     await closeContextsSafely(seed.context);
   }
@@ -147,6 +152,9 @@ test.describe('@webdav a late snapshot-only v2 file is loaded before uploading',
       await keepSyncManual(joining.page);
       let legacyReads = 0;
       let appWrites = 0;
+      // Every write into the folder, not only to the routed file: a v3 file or
+      // an immutable snapshot would also merge over the seed.
+      const syncFilePuts = countWebdavWrites(joining.page, `${folder}/DEV`);
       let published = false;
       await joining.page.route(`**/${folder}/DEV/sync-data.json`, async (route) => {
         if (route.request().method() === 'PUT') appWrites++;
@@ -162,12 +170,18 @@ test.describe('@webdav a late snapshot-only v2 file is loaded before uploading',
         }
         await route.continue();
       });
+      await recordIfEverAppears(joining.page, 'setup-conflict', 'dialog-sync-conflict');
       await sync.setupWebdavSync(
         { ...WEBDAV_CONFIG_TEMPLATE, syncFolderPath: `/${folder}` },
         { useProductFormatDefault: true },
       );
       await expect.poll(() => published).toBe(true);
       await expect(sync.syncSpinner).toBeHidden();
+      // The upload was deferred silently; the question comes on the next sync.
+      expect(await hasEverAppeared(joining.page, 'setup-conflict')).toBe(false);
+      // Read counts pinned (measured 2026-11) to catch unexpected extra
+      // round-trips; the real guards are the zero writes and the seed file.
+      expect(legacyReads).toBe(6);
 
       // The seed's state is still the folder's state, and the app never wrote
       // the file (a write before the seed landed would be hidden by it).
@@ -191,7 +205,9 @@ test.describe('@webdav a late snapshot-only v2 file is loaded before uploading',
 
       await expectNextSyncToAskFirst(joining.page, sync);
       expect(appWrites).toBe(0);
+      expect(syncFilePuts()).toBe(0);
       expect(await remoteText(request, `${remote}sync-data.json`)).toBe(snapshotOnly);
+      expect(legacyReads).toBe(9);
     } finally {
       await closeContextsSafely(joining.context);
     }
@@ -243,6 +259,7 @@ test.describe('@webdav a late snapshot-only v2 file is loaded before uploading',
 
       let primaryReads = 0;
       let published = false;
+      const syncFilePuts = countWebdavWrites(mover.page, `${folder}/DEV`);
       await mover.page.route(`**/${folder}/DEV/sync-data.json`, async (route) => {
         if (route.request().method() === 'GET' && ++primaryReads === 2) {
           // The download found no data; the seed lands before the
@@ -263,6 +280,8 @@ test.describe('@webdav a late snapshot-only v2 file is loaded before uploading',
       const prompt = mover.page.locator('dialog-server-migration-confirm');
       await expect(prompt).toBeVisible();
       expect(published).toBe(true);
+      // Pinned read counts (measured 2026-11).
+      expect(primaryReads).toBe(3);
 
       // Answer after the cycle cache expired.
       await mover.page.clock.setFixedTime(new Date(Date.now() + 31_000));
@@ -277,6 +296,9 @@ test.describe('@webdav a late snapshot-only v2 file is loaded before uploading',
 
       await expectNextSyncToAskFirst(mover.page, sync);
       expect(await remoteText(request, `${remote}sync-data.json`)).toBe(seededFile);
+      // Cancel promised a download: nothing was ever written to the folder.
+      expect(syncFilePuts()).toBe(0);
+      expect(primaryReads).toBe(5);
     } finally {
       await closeContextsSafely(mover.context);
     }

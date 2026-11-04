@@ -162,10 +162,17 @@ device re-uploads only its own changes, so:
 - Changes are re-sent as ordinary operations, so the usual conflict rules
   apply.
 
+**When "Reset Account" is still needed:** if a user reports changes missing
+on other devices after a full restore — typically from a device that synced
+late, a device that is gone, or a full-state import made after the backup —
+they can use "Reset Account" (server web page) and then sync from the device
+that holds the complete data; that device uploads its whole state. Making
+the restore detectable without relying on each device's position is tracked
+in #11481.
+
 If you need every device's data back, prefer the accounts-only restore
-above. To start one account over from a single device's state, the
-user can still use "Reset Account" (server web page) and then sync from that
-device.
+above. After it, a device that holds changes the first device's upload lacks
+is asked whether to keep its local data or use the server's.
 
 Do the restore with the server stopped, as above. The server caches upload
 results in memory for a few minutes; a restore under a running server could
