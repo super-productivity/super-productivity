@@ -367,9 +367,11 @@ describe('File-Based Sync Integration - Multi-Client Convergence', () => {
       await client.adapter.setLastServerSeq(download.latestSeq);
     };
 
+    // `base` is the syncVersion the REPAIR was built from (#11483).
     const repair = (
       client: HarnessClient,
       state: unknown,
+      base: number,
     ): Promise<{ accepted: boolean; errorCode?: string }> =>
       client.adapter.uploadSnapshot(
         state,
@@ -381,6 +383,8 @@ describe('File-Based Sync Integration - Multi-Client Convergence', () => {
         uuidv7(), // opId
         false, // isCleanSlate
         'REPAIR', // snapshotOpType — engages the concurrency guard
+        undefined, // syncImportReason
+        base,
       );
 
     const taskState = (...ids: string[]): unknown => ({
@@ -395,9 +399,11 @@ describe('File-Based Sync Integration - Multi-Client Convergence', () => {
       const b = harness.createClient('client-b');
 
       // A and B both start synced on A's first op.
-      await a.uploadOps([
-        a.createOp('Task', 'task-a', 'CRT', 'TaskActionTypes.ADD_TASK', { title: 'A' }),
-      ]);
+      const aBase = (
+        await a.uploadOps([
+          a.createOp('Task', 'task-a', 'CRT', 'TaskActionTypes.ADD_TASK', { title: 'A' }),
+        ])
+      ).latestSeq;
       await applyDownload(b, await b.downloadOps(0));
 
       // B uploads a concurrent op that A never downloads.
@@ -406,7 +412,7 @@ describe('File-Based Sync Integration - Multi-Client Convergence', () => {
       ]);
 
       // A tries to publish a REPAIR snapshot from its now-stale view of the remote.
-      const stale = await repair(a, taskState('task-a'));
+      const stale = await repair(a, taskState('task-a'), aBase);
 
       // The guard fires: A yields instead of force-overwriting.
       expect(stale.accepted).toBe(false);
@@ -417,8 +423,9 @@ describe('File-Based Sync Integration - Multi-Client Convergence', () => {
       expect(afterStale.ops.map((o) => o.op.entityId)).toContain('task-b');
 
       // Rebase: A pulls in B's op, then re-publishes a merged REPAIR snapshot.
-      await applyDownload(a, await a.downloadOps(0));
-      const merged = await repair(a, taskState('task-a', 'task-b'));
+      const rebased = await a.downloadOps(0);
+      await applyDownload(a, rebased);
+      const merged = await repair(a, taskState('task-a', 'task-b'), rebased.latestSeq);
 
       // The retry converges (no wedge) — the rebased base rev now matches the remote.
       expect(merged.accepted).toBe(true);
@@ -432,14 +439,49 @@ describe('File-Based Sync Integration - Multi-Client Convergence', () => {
 
     it('publishes a REPAIR snapshot when the remote has not advanced (no false stale)', async () => {
       const a = harness.createClient('client-a');
-      await a.uploadOps([
+      const { latestSeq } = await a.uploadOps([
         a.createOp('Task', 'task-a', 'CRT', 'TaskActionTypes.ADD_TASK', { title: 'A' }),
       ]);
 
       // No other client wrote since A's upload → the repair's base rev matches the
       // remote → it publishes rather than needlessly rebasing.
-      const result = await repair(a, taskState('task-a'));
+      const result = await repair(a, taskState('task-a'), latestSeq);
       expect(result.accepted).toBe(true);
+    });
+
+    it('does not publish a pending REPAIR built before a later download (#11483)', async () => {
+      const a = harness.createClient('client-a');
+      const b = harness.createClient('client-b');
+      await a.uploadOps([
+        a.createOp('Task', 'task-a', 'CRT', 'TaskActionTypes.ADD_TASK', { title: 'A' }),
+      ]);
+      await applyDownload(b, await b.downloadOps(0));
+      // A builds its REPAIR here; its upload fails, so it stays pending.
+      const builtAt = await a.downloadOps(0);
+      await applyDownload(a, builtAt);
+
+      // B uploads X; A downloads and applies it, which advances the rev the
+      // REPAIR's conditional write is keyed on.
+      await b.uploadOps([
+        b.createOp('Task', 'task-x', 'CRT', 'TaskActionTypes.ADD_TASK', { title: 'X' }),
+      ]);
+      const withX = await a.downloadOps(0);
+      await applyDownload(a, withX);
+      expect(withX.latestSeq).toBeGreaterThan(builtAt.latestSeq);
+
+      // The old payload (no X) must not replace the remote.
+      const stale = await repair(a, taskState('task-a'), builtAt.latestSeq);
+      expect(stale.accepted).toBe(false);
+      expect(stale.errorCode).toBe('REPAIR_STALE');
+      const afterStale = await harness.createClient('observer-1').downloadOps(0);
+      expect(afterStale.ops.map((o) => o.op.entityId)).toContain('task-x');
+
+      // Rebuilt from the current state at the current version, it publishes.
+      const rebuilt = await repair(a, taskState('task-a', 'task-x'), withX.latestSeq);
+      expect(rebuilt.accepted).toBe(true);
+      const finalState = (await harness.createClient('observer-2').downloadOps(0))
+        .snapshotState as { task: { ids: string[] } };
+      expect(finalState.task.ids).toContain('task-x');
     });
   });
 
