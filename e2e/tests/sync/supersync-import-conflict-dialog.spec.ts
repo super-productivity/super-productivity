@@ -13,17 +13,14 @@ import { ImportPage } from '../../pages/import.page';
  * SuperSync Import Conflict Dialog E2E Tests
  *
  * These tests cover the user-facing dialog (`dialog-sync-import-conflict`) for
- * a SYNC_IMPORT that conflicts with other work. Two paths reach it:
+ * a SYNC_IMPORT that conflicts with other work. Two paths are covered here:
  *
- * - First sync (tests 1-4): a device that NEVER synced imports a backup and
- *   then connects to an account that already has data. It gets the first-sync
- *   layout (`sync-first-choice`: use the account's data or replace it), not
- *   the LOCAL_IMPORT_FILTERS_REMOTE message.
- * - Local import filters remote (the MSG_LOCAL_FILTERS test): a device that
- *   already synced imports a backup, while another device uploaded changes
- *   it never saw. On sync, all of those remote ops are filtered as CONCURRENT
- *   with the local import, and the full dialog explains that they "cannot be
- *   automatically merged".
+ * - First sync (tests 1-4): a device that imports a backup and then syncs
+ *   with an account that already has data. It gets the first-sync layout
+ *   (`sync-first-choice`: use the account's data or replace it). On SuperSync
+ *   this holds even for a device that synced before: a file import is a new
+ *   sync baseline (new clientId, fresh clock), so the full
+ *   LOCAL_IMPORT_FILTERS_REMOTE message is not shown (#11468).
  * - Incoming import (last two tests): another device's SYNC_IMPORT arrives.
  *
  * The dialog offers three options:
@@ -43,8 +40,7 @@ test.describe('@supersync @import-conflict Sync Import Conflict Dialog', () => {
    * Scenario: first sync of a never-synced device that holds a local import
    *
    * B imports before it ever syncs, so its first sync shows the first-sync
-   * layout. The LOCAL_IMPORT_FILTERS_REMOTE message is covered by the
-   * MSG_LOCAL_FILTERS test below.
+   * layout.
    *
    * Setup: Client A and B with shared SuperSync account
    *
@@ -464,119 +460,6 @@ test.describe('@supersync @import-conflict Sync Import Conflict Dialog', () => {
       console.log('[CANCEL] ✓ Server state unchanged (A still has original task)');
 
       console.log('[CANCEL] ✓ CANCEL test PASSED!');
-    } finally {
-      if (clientA) await closeClient(clientA);
-      if (clientB) await closeClient(clientB);
-    }
-  });
-
-  /**
-   * Scenario: a device that already synced imports a backup while another
-   * device uploaded changes it never saw (LOCAL_IMPORT_FILTERS_REMOTE).
-   *
-   * Actions:
-   * 1. B creates a task and syncs (B is no longer a never-synced device)
-   * 2. A adds a task and syncs
-   * 3. B imports a backup without syncing in between
-   * 4. B syncs: A's op is filtered as CONCURRENT with B's local import
-   *
-   * Verify:
-   * - The full dialog appears with the MSG_LOCAL_FILTERS text ("cannot be
-   *   automatically merged"), not the first-sync choice
-   * - B answers "Use My Data"; A then converges on B's imported state
-   */
-  // FIXME (issue candidate, audit 2026-11-03 Verify 5): expected the full
-  // LOCAL_IMPORT_FILTERS_REMOTE dialog (MSG_LOCAL_FILTERS, "cannot be
-  // automatically merged", no first-sync radios). On SuperSync a file import
-  // replaces the op log with one unsynced BACKUP_IMPORT op and resets
-  // lastServerSeq (BackupService.importCompleteBackup), so the device counts as
-  // never-synced and gets the first-sync choice instead — even when it had
-  // synced before. CI run 41741246769 (shard 2): the dialog read "This device
-  // already has data … Your account already has data from another device".
-  // Re-enable once the intended behaviour is decided.
-  test.fixme('Local import on a synced device filters remote changes: MSG_LOCAL_FILTERS dialog', async ({
-    browser,
-    baseURL,
-    testRunId,
-  }) => {
-    test.slow();
-
-    const uniqueId = Date.now();
-    let clientA: SimulatedE2EClient | null = null;
-    let clientB: SimulatedE2EClient | null = null;
-
-    try {
-      const user = await createTestUser(testRunId);
-      const syncConfig = getSuperSyncConfig(user);
-
-      // ============ PHASE 1: B syncs first, then A uploads a change ============
-      // B must upload an op: a device without synced ops still counts as
-      // never-synced and would get the first-sync layout instead.
-      clientB = await createSimulatedClient(browser, baseURL!, 'B', testRunId);
-      await clientB.sync.setupSuperSync(syncConfig);
-      const taskBSynced = `Task-B-Synced-${uniqueId}`;
-      await clientB.workView.addTask(taskBSynced);
-      await clientB.sync.syncAndWait();
-
-      clientA = await createSimulatedClient(browser, baseURL!, 'A', testRunId);
-      await clientA.sync.setupSuperSync(syncConfig);
-      await clientA.sync.syncAndWait();
-      await waitForTask(clientA.page, taskBSynced);
-      const taskARemote = `Task-A-Unseen-${uniqueId}`;
-      await clientA.workView.addTask(taskARemote);
-      await clientA.sync.syncAndWait();
-
-      // ============ PHASE 2: B imports without syncing first ============
-      const importPage = new ImportPage(clientB.page);
-      await importPage.navigateToImportPage();
-      await importPage.importBackupFile(ImportPage.getFixturePath('test-backup.json'));
-      await clientB.page.goto(clientB.page.url(), {
-        waitUntil: 'domcontentloaded',
-        timeout: 30000,
-      });
-      await clientB.page.waitForLoadState('networkidle');
-
-      // ============ PHASE 3: B syncs → MSG_LOCAL_FILTERS dialog ============
-      // A sync started by the reload may open the dialog by itself; the sync
-      // button is behind its backdrop then. Let that sync settle first, then
-      // click directly only if no dialog is up (syncAndWait would answer the
-      // dialog silently).
-      const dialog = clientB.sync.syncImportConflictDialog;
-      await expect(clientB.sync.syncSpinner).toBeHidden({ timeout: 30000 });
-      if (!(await dialog.isVisible())) {
-        await clientB.sync.syncBtn.click();
-      }
-      await expect(dialog).toBeVisible({ timeout: 30000 });
-      // Exactly A's one task op was filtered.
-      await expect(dialog).toContainText(
-        'Your local data was imported/restored, but the server has 1 changes',
-      );
-      await expect(dialog).toContainText('cannot be automatically merged');
-      await expect(clientB.sync.firstSyncUseAccountRadio).toHaveCount(0);
-      await expect(clientB.sync.firstSyncReplaceAccountRadio).toHaveCount(0);
-      await expect(clientB.sync.syncImportUseLocalBtn).toBeVisible();
-      await expect(clientB.sync.syncImportUseRemoteBtn).toBeVisible();
-
-      await clientB.sync.chooseSyncImportUseLocal();
-      await clientB.sync.syncAndWait();
-
-      await clientB.page.goto('/#/work-view');
-      await clientB.page.waitForLoadState('networkidle');
-      await waitForTask(clientB.page, 'E2E Import Test - Active Task With Subtask');
-      await expect(clientB.page.locator(`task:has-text("${taskARemote}")`)).toHaveCount(
-        0,
-      );
-
-      // ============ PHASE 4: A converges on B's imported state ============
-      await clientA.sync.syncAndWait();
-      await clientA.page.goto('/#/work-view');
-      await clientA.page.waitForLoadState('networkidle');
-      await waitForTask(clientA.page, 'E2E Import Test - Active Task With Subtask');
-      await expect(clientA.page.locator(`task:has-text("${taskARemote}")`)).toHaveCount(
-        0,
-      );
-      expect(await clientA.sync.hasSyncError()).toBe(false);
-      expect(await clientB.sync.hasSyncError()).toBe(false);
     } finally {
       if (clientA) await closeClient(clientA);
       if (clientB) await closeClient(clientB);
