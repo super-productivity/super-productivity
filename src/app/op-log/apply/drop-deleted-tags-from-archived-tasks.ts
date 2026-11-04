@@ -9,19 +9,35 @@ const keepExistingTags = <T extends Task>(task: T, existing: Set<string>): T =>
     : task;
 
 /**
- * Removes tag ids that no longer exist locally from the tasks of a remote
+ * Removes tag ids that do not exist locally from the tasks of a remote
  * moveToArchive, before they are written to the archive (#11466).
  *
- * A tag deleted here, concurrently with the archive on another client, has
- * already run its archive cleanup (`removeTagsFromAllTasks`) before the
- * archived task arrives, so the incoming copy would keep the deleted id for
- * good. The archiving client scrubs its copy when the delete reaches it; this
- * gives the same result on the deleting client, whichever op arrives first.
+ * Guarantee: an archived copy written here never references a tag this client
+ * does not have when the op is applied. That closes #11466: a tag deleted here
+ * concurrently with an archive elsewhere has already run its archive cleanup
+ * (`removeTagsFromAllTasks`), so the incoming copy used to keep the deleted id
+ * for good, while the archiving client scrubbed its copy when the delete
+ * reached it. Both clients now end with the tag stripped, as long as the
+ * delete stays applied everywhere.
+ *
+ * Not guaranteed: a tag delete is last-write-wins, not delete-wins (only
+ * project deletes win outright, `isProjectDeleteWinsOperation`). If the
+ * archiving client renames the tag before it downloads the delete, its update
+ * wins and recreates the tag here, but this client's archived copy already
+ * lost the id while the archiving client's copy keeps it. Live tasks diverge
+ * the same way on master: #11489, pinned in
+ * e2e/tests/sync/supersync-tag-delete-rename-race-11489.spec.ts.
+ * Tag ids can also come back through the board's "create missing tags" action,
+ * which recreates fixed ids (EM_URGENT, EM_IMPORTANT); archived copies scrubbed
+ * here stay without them.
  *
  * Tasks are never dropped here: `removeTagsFromAllTasks` checks orphans on the
  * archive as loaded before the removal, so on the archiving client a task left
  * without project, tag and parent by the delete stays archived with no tags.
- * Keeping it here converges with that and loses no content.
+ * One leftover: when the delete follows the archive in the same remote batch,
+ * the delete's cleanup sees the task written here as already orphaned and
+ * drops it, so a legacy task without a project is kept or dropped depending on
+ * batching.
  */
 export const dropDeletedTagsFromArchivedTasks = (
   tasks: TaskWithSubTasks[],
