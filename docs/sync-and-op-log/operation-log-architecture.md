@@ -940,13 +940,19 @@ IDs deduplicate ops still in the local log, while vector clocks carry causality.
    applied (#9023). When it was also built from that rev (its
    `repairBaseServerSeq` is the committed server seq, the cursor #11483 checks,
    and its clock covers the rev's clock), it adds the optional envelope field
-   `snapshotBaseCovers`:
-   its base and the rev's clock. A current reader whose last-seen clock is
-   covered by that clock keeps its pending ops on top; any other reader, and
-   every reader of a replacement (`SYNC_IMPORT`, `BACKUP_IMPORT`, USE_LOCAL),
-   still asks. Current writers carry the field with the base; released
-   writers drop it, which only brings back the dialog. A `REPAIR` built before
-   a later download lacks that download's ops (#11483) and writes no marker.
+   `snapshotBaseCovers`: its base, the rev's clock, and the base that rev
+   carried (`from`, taken from this cycle's applied download of the rev; no
+   marker without it). A current reader keeps its pending ops on top only if
+   it has loaded `from` and its last-seen clock is covered by the rev's clock.
+   The clock alone is not enough: a Keep-local `SYNC_IMPORT` merges every local
+   clock, so a later file clock can cover what a reader saw before that
+   replacement, which it never loaded
+   (`webdav-repair-after-keep-local-11470.spec.ts`). Any other reader asks, as
+   does every reader of a replacement it has not loaded (`SYNC_IMPORT`,
+   `BACKUP_IMPORT`, USE_LOCAL) that carries no such marker. Current writers
+   carry the field with the base; released writers drop it, which only brings
+   back the dialog. A `REPAIR` built before a later download lacks that
+   download's ops (#11483) and writes no marker.
    Receivers resolve any crossing on the no-pending LWW path. A pending op the
    snapshot clock already covers (uploaded before a crash skipped
    `markSynced`) is settled, not replayed twice. A kept op the snapshot state

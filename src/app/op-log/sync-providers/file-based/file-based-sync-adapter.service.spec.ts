@@ -2122,6 +2122,7 @@ describe('FileBasedSyncAdapterService', () => {
       expect(written.snapshotBaseCovers).toEqual({
         base: REPAIR_CLOCK,
         clock: BASE_CLOCK,
+        from: { client1: 1 },
       });
       await expectAsync(adapter.getLastServerSeq()).toBeResolvedTo(1);
 
@@ -2152,9 +2153,23 @@ describe('FileBasedSyncAdapterService', () => {
       ).toEqual({
         base: REPAIR_CLOCK,
         clock: BASE_CLOCK,
+        from: { client1: 1 },
       });
 
       mockProvider.uploadFile.calls.reset();
+      await uploadRepair(2, REPAIR_CLOCK);
+      expect(
+        uploadedFile(FILE_BASED_SYNC_CONSTANTS.SYNC_FILE).snapshotBaseCovers,
+      ).toBeUndefined();
+    });
+
+    // The replaced base comes only from this cycle's download of the base rev.
+    it('marks nothing when the base rev was not downloaded this cycle (#11470)', async () => {
+      await seedBaseRev('rev-1', BASE_CLOCK);
+      (
+        service as unknown as { _syncCycleCache: Map<string, unknown> }
+      )._syncCycleCache.clear();
+      captureWrites();
       await uploadRepair(2, REPAIR_CLOCK);
       expect(
         uploadedFile(FILE_BASED_SYNC_CONSTANTS.SYNC_FILE).snapshotBaseCovers,
@@ -2208,7 +2223,11 @@ describe('FileBasedSyncAdapterService', () => {
       ) as unknown as FileBasedOpsFile;
       expect(ops.syncVersion).toBe(1);
       expect(ops.snapshotBaseClock).toEqual(REPAIR_CLOCK);
-      expect(ops.snapshotBaseCovers).toEqual({ base: REPAIR_CLOCK, clock: BASE_CLOCK });
+      expect(ops.snapshotBaseCovers).toEqual({
+        base: REPAIR_CLOCK,
+        clock: BASE_CLOCK,
+        from: { client1: 1 },
+      });
       expect(ops.snapshotRef.syncVersion).toBe(1);
       expect(ops.snapshotRef.vectorClock).toEqual(REPAIR_CLOCK);
     });

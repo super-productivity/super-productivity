@@ -56,7 +56,7 @@ import {
   getSnapshotLineage,
   isSnapshotBaseUnseen,
   keepSnapshotLineage,
-  SnapshotLineage,
+  SnapshotLineage as Lineage,
   toSnapshotGapFlags,
 } from './file-based-sync-gap.util';
 import { ArchiveDbAdapter } from '../../../core/persistence/archive-db-adapter.service';
@@ -2784,7 +2784,7 @@ export class FileBasedSyncAdapterService {
     cfg: EncryptAndCompressCfg,
     encryptKey: string | undefined,
     clientId: string,
-    lineage: SnapshotLineage,
+    lineage: Lineage,
     schemaVersion: number,
     providerKey: string,
     state: unknown,
@@ -3039,19 +3039,17 @@ export class FileBasedSyncAdapterService {
     this._pendingVectorClocks.delete(providerKey);
   }
 
-  /** #11470: {@link getSnapshotLineage}, read before the write commits a rev. */
-  private _lineage(
-    key: string,
-    clock: VectorClock,
-    type?: string,
-    repairBaseServerSeq?: number,
-  ): SnapshotLineage {
+  /** #11470: read before the write; `from` is this cycle's download of the base rev. */
+  private _lineage(key: string, clock: VectorClock, op?: string, seq?: number): Lineage {
+    const baseRev = this._lastSeenRevs.get(key);
+    const dl = this._getCachedSyncData(key) ?? this._getCachedOpsData(key);
     return getSnapshotLineage({
-      isRepair: type === 'REPAIR',
-      repairBaseServerSeq,
+      isRepair: op === 'REPAIR',
+      repairBaseServerSeq: seq,
       vectorClock: clock,
-      baseRev: this._lastSeenRevs.get(key),
+      baseRev,
       lastSeenClock: this._lastSeenVectorClocks.get(key),
+      replacedBaseClock: dl?.rev === baseRev ? dl?.data.snapshotBaseClock : undefined,
       committedServerSeq: this._localSeqCounters.get(key),
     });
   }

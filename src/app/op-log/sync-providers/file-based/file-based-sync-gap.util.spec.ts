@@ -453,6 +453,8 @@ describe('getSnapshotLineage (#11470)', () => {
   const BASE_REV_CLOCK = { writer: 5, peer: 3 };
   // Built after applying rev-7, so it covers rev-7's clock.
   const REPAIR_CLOCK = { writer: 6, peer: 3 };
+  // The base rev-7 carried: the last snapshot the file started over from.
+  const REPLACED_BASE = { writer: 2, peer: 1 };
   const lineage = (
     overrides: Partial<Parameters<typeof getSnapshotLineage>[0]> = {},
   ): ReturnType<typeof getSnapshotLineage> =>
@@ -462,6 +464,7 @@ describe('getSnapshotLineage (#11470)', () => {
       vectorClock: REPAIR_CLOCK,
       baseRev: 'rev-7',
       lastSeenClock: BASE_REV_CLOCK,
+      replacedBaseClock: REPLACED_BASE,
       committedServerSeq: 7,
       ...overrides,
     });
@@ -521,7 +524,11 @@ describe('getSnapshotLineage (#11470)', () => {
       syncVersion: 1,
       vectorClock: REPAIR_CLOCK,
       snapshotBaseClock: REPAIR_CLOCK,
-      snapshotBaseCovers: { base: REPAIR_CLOCK, clock: BASE_REV_CLOCK },
+      snapshotBaseCovers: {
+        base: REPAIR_CLOCK,
+        clock: BASE_REV_CLOCK,
+        from: REPLACED_BASE,
+      },
     });
   });
 
@@ -534,6 +541,43 @@ describe('getSnapshotLineage (#11470)', () => {
       gap: true,
       extends: true,
     });
+  });
+
+  it('a peer that missed the replacement the REPAIR sits on must ask', () => {
+    // The peer last saw K, then went offline with pending work. Another device
+    // chose Keep local: its SYNC_IMPORT merges every local clock, so its base
+    // covers K. A third device loaded it, then wrote a marked REPAIR whose
+    // covered clock covers K as well. Only `from`, that SYNC_IMPORT's base,
+    // shows the peer never loaded the replacement; keeping its ops would let
+    // every receiver of the SYNC_IMPORT drop them as concurrent.
+    const lastSeen = { writer: 5, peer: 3 };
+    const keepLocalBase = { writer: 5, peer: 3, keeper: 1 };
+    const written = lineage({
+      vectorClock: { writer: 6, peer: 3, keeper: 2 },
+      lastSeenClock: { writer: 5, peer: 3, keeper: 2 },
+      replacedBaseClock: keepLocalBase,
+    });
+    expect(written.snapshotBaseCovers?.from).toEqual(keepLocalBase);
+    expect(readByPeer(written, lastSeen)).toEqual({ gap: true, extends: false });
+    // A peer that loaded that replacement keeps its pending work.
+    expect(readByPeer(written, { writer: 5, peer: 3, keeper: 2 })).toEqual({
+      gap: true,
+      extends: true,
+    });
+  });
+
+  it('a marker without the replaced base does not count', () => {
+    const written = lineage();
+    const covers = { base: REPAIR_CLOCK, clock: BASE_REV_CLOCK };
+    expect(
+      readByPeer(
+        {
+          ...written,
+          snapshotBaseCovers: covers as unknown as typeof written.snapshotBaseCovers,
+        },
+        BASE_REV_CLOCK,
+      ),
+    ).toEqual({ gap: true, extends: false });
   });
 
   it('a peer whose upload the REPAIR lacks must ask', () => {
@@ -605,6 +649,8 @@ describe('getSnapshotLineage (#11470)', () => {
     ],
     // Its clock does not cover the committed one: another lineage, or a target switch.
     ['a REPAIR from another lineage', { vectorClock: { writer: 6, peer: 2 } }],
+    // The rev's base is unknown (not downloaded this cycle, or a file without one).
+    ['a REPAIR whose replaced base is unknown', { replacedBaseClock: undefined }],
   ] as const) {
     it(`${name} writes no marker, so a peer with pending work must ask`, () => {
       const written = lineage(overrides);
@@ -618,7 +664,7 @@ describe('getSnapshotLineage (#11470)', () => {
 
 describe('keepSnapshotLineage (#11470)', () => {
   it('carries the base and its marker over, and nothing for a file without them', () => {
-    const covers = { base: { a: 2 }, clock: { a: 1 } };
+    const covers = { base: { a: 2 }, clock: { a: 1 }, from: { a: 1 } };
     expect(
       keepSnapshotLineage({ snapshotBaseClock: { a: 2 }, snapshotBaseCovers: covers }),
     ).toEqual({ snapshotBaseClock: { a: 2 }, snapshotBaseCovers: covers });
