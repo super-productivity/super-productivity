@@ -17,14 +17,8 @@ import { getSyncedLocalRowsOf } from '../../utils/audit-winners-helpers';
  * winners used to be persisted and applied before every nonconflicting op of
  * the batch, so an op that a winner causally dominates, which reached the
  * server first, was applied after it and restored the older value on that
- * device only.
- *
- * Here C only tracked time while A and B renamed the task: A's rename beat
- * B's first one (A's field-patch row) and B's second rename then beat A's
- * row with a whole-task snapshot. C's delta commutes with A's row (no time
- * key), so the row is nonconflicting, but B's snapshot writes time and wins.
- * C must apply A's row before B's snapshot, as the server ordered them, and
- * end on B's last rename like every other device, also after a restart.
+ * device only. C must apply the dominated row first and end on the winner's
+ * value like every other device, also after a restart.
  */
 
 /** Only explicit syncs run, so every crossing happens in the stated order. */
@@ -143,88 +137,12 @@ const taskIdOf = async (client: SimulatedE2EClient, name: string): Promise<strin
   }, name);
 
 test.describe('@supersync remote winners in server order (#10423)', () => {
-  test('an incoming row a remote winner dominates applies before it', async ({
-    browser,
-    baseURL,
-    testRunId,
-  }) => {
-    test.setTimeout(300000);
-    const name = `ServerOrder-${Date.now()}`;
-    const clients: SimulatedE2EClient[] = [];
-
-    try {
-      const syncConfig = getSuperSyncConfig(await createTestUser(testRunId));
-      const clientA = await createSimulatedClient(browser, baseURL!, 'A', testRunId);
-      clients.push(clientA);
-      await clientA.sync.setupSuperSync(syncConfig);
-      await clientA.workView.addTask(name);
-      await waitForTask(clientA.page, name);
-      await clientA.sync.syncAndWait();
-      const clientB = await createSimulatedClient(browser, baseURL!, 'B', testRunId);
-      clients.push(clientB);
-      await clientB.sync.setupSuperSync(syncConfig);
-      await clientB.sync.syncAndWait();
-      const clientC = await createSimulatedClient(browser, baseURL!, 'C', testRunId);
-      clients.push(clientC);
-      await clientC.sync.setupSuperSync(syncConfig);
-      await clientC.sync.syncAndWait();
-      await waitForTask(clientC.page, name);
-      for (const client of clients) {
-        await blockBackgroundSync(client);
-      }
-      const id = await taskIdOf(clientA, name);
-
-      await onTask(clientB, id, { title: `${name} B first` });
-      await sync(clientB);
-      // A's later rename wins the crossing: A uploads a field-patch row.
-      await onTask(clientA, id, { title: `${name} A` });
-      await sync(clientA);
-      await recordTaskTimeDelta(clientC, name, '2026-07-13', 3000);
-      // B's second rename beats A's opaque row: B uploads a whole-task snapshot.
-      await onTask(clientB, id, { title: `${name} B last` });
-      await sync(clientB);
-      await sync(clientA);
-      await onTask(clientA, id, { notes: 'Notes written on A' });
-
-      for (const client of [clientA, clientB, clientC, clientA, clientB, clientC]) {
-        await sync(client);
-      }
-
-      const expected: TaskView = {
-        title: `${name} B last`,
-        notes: 'Notes written on A',
-      };
-      const expectConverged = async (): Promise<void> => {
-        await expect
-          .poll(
-            async () => ({
-              A: await onTask(clientA, id),
-              B: await onTask(clientB, id),
-              C: await onTask(clientC, id),
-            }),
-            { timeout: 30000 },
-          )
-          .toEqual({ A: expected, B: expected, C: expected });
-      };
-      await expectConverged();
-
-      for (const client of clients) {
-        await client.page.reload({ waitUntil: 'domcontentloaded', timeout: 30000 });
-        await waitForAppReady(client.page);
-      }
-      await expectConverged();
-    } finally {
-      for (const client of clients) {
-        await closeClient(client);
-      }
-    }
-  });
-
   /**
-   * Rebuild of the scenario above (sync E2E audit 2026-11-03, Verify 2). Since
-   * per-field winners (#10422) B's second rename uploads a title-only patch,
-   * which commutes with C's delta: C sees no remote winner at all, so
-   * `orderIncomingPrefix` never runs. Here B's second edit also writes time
+   * Rebuilt in the sync E2E audit 2026-11-03 (Verify 2). The earlier shape
+   * (B's second edit a plain rename) stayed green with `orderIncomingPrefix`
+   * disabled: since per-field winners (#10422) B uploads a title-only patch
+   * that commutes with C's delta, so C saw no remote winner at all. Here B's
+   * second edit also writes time
    * (an absolute edit, as the time editor dispatches), so B's re-sent row
    * writes time, conflicts with C's pending delta and wins it (newer). That
    * winner causally dominates A's title row, which reached the server first
