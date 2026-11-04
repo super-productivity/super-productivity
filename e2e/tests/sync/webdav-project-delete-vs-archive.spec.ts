@@ -30,23 +30,6 @@ import { Page } from 'playwright';
  * only recorded. See supersync-project-delete-vs-archive.spec.ts.
  */
 
-const archiveDoneTasks = async (page: Page): Promise<void> => {
-  const finishDayBtn = page.locator('.e2e-finish-day');
-  await finishDayBtn.waitFor({ state: 'visible', timeout: 10000 });
-  await finishDayBtn.click();
-  await page.waitForURL(/daily-summary/, { timeout: 15000 });
-  const saveAndGoHomeBtn = page.locator(
-    'daily-summary button[mat-flat-button]:has(mat-icon:has-text("wb_sunny"))',
-  );
-  await saveAndGoHomeBtn.waitFor({ state: 'visible', timeout: 10000 });
-  await Promise.all([
-    page.waitForURL(/(active\/tasks|tag\/TODAY(?!\/daily-summary)|project\/.+\/tasks)/, {
-      timeout: 15000,
-    }),
-    saveAndGoHomeBtn.click(),
-  ]);
-};
-
 const syncOk = async (page: Page, syncPage: SyncPage): Promise<void> => {
   await waitForStatePersistence(page);
   await syncPage.triggerSync();
@@ -112,7 +95,8 @@ test.describe('@webdav Project delete vs archive', () => {
       await deleteOpenProject(pageA, projectName);
       await taskPageB.markTaskAsDone(taskPageB.getTaskByText(task1Name).first());
       await pageB.waitForTimeout(300);
-      await archiveDoneTasks(pageB);
+      // Finish Day only shows on Today; archive from the project's done list.
+      await new ProjectPage(pageB).archiveDoneTasks();
       await waitForArchivePersistence(pageB);
       // Precondition: B's own archived copy points at the project.
       expect(await getArchiveYoungTaskProjectId(pageB, task1Id!)).toBe(projectId);

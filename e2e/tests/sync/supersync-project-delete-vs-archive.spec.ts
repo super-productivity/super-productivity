@@ -8,7 +8,6 @@ import {
   createProjectReliably,
   waitForTask,
   markTaskDoneByKey,
-  archiveDoneTasks,
   getArchiveYoungTaskIds,
   type SimulatedE2EClient,
 } from '../../utils/supersync-helpers';
@@ -99,7 +98,8 @@ test.describe('@supersync Project delete vs archive', () => {
         };
         const archiveTask1OnB = async (): Promise<void> => {
           await markTaskDoneByKey(clientB!, task1Name);
-          await archiveDoneTasks(clientB!);
+          // Finish Day only shows on Today; archive from the project's done list.
+          await new ProjectPage(clientB!.page).archiveDoneTasks();
           await expect
             .poll(async () => getArchiveYoungTaskIds(clientB!.page), {
               timeout: 10000,
