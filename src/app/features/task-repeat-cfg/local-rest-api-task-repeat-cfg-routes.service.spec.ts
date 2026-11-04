@@ -403,12 +403,41 @@ describe('LocalRestApiTaskRepeatCfgRoutesService', () => {
       );
     });
 
-    it('rejects a new custom weekly schedule with no weekday selection', async () => {
+    it('preserves default weekdays when a custom weekly create omits weekdays', async () => {
+      for (const schedule of [{ repeatCycle: 'WEEKLY' }, {}] as const) {
+        const response = await handle(
+          request('POST', '/task-repeat-cfgs', {
+            taskId: 't1',
+            quickSetting: 'CUSTOM',
+            repeatEvery: 2,
+            ...schedule,
+          }),
+        );
+
+        expect(response.status).toBe(201);
+        expect(createdCfg()).toEqual(
+          jasmine.objectContaining({
+            repeatCycle: 'WEEKLY',
+            repeatEvery: 2,
+            monday: true,
+            tuesday: true,
+            wednesday: true,
+            thursday: true,
+            friday: true,
+            saturday: false,
+            sunday: false,
+          }),
+        );
+      }
+    });
+
+    it('rejects an explicitly empty custom weekly weekday selection', async () => {
       const response = await handle(
         request('POST', '/task-repeat-cfgs', {
           taskId: 't1',
           quickSetting: 'CUSTOM',
           repeatCycle: 'WEEKLY',
+          wednesday: false,
         }),
       );
 
