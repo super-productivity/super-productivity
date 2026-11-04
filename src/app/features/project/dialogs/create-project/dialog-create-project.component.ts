@@ -33,12 +33,13 @@ import { WORK_CONTEXT_THEME_CONFIG_FORM_CONFIG } from '../../../work-context/wor
 import { GitlabCfg } from 'src/app/features/issue/providers/gitlab/gitlab.model';
 import { CaldavCfg } from 'src/app/features/issue/providers/caldav/caldav.model';
 import { OpenProjectCfg } from '../../../issue/providers/open-project/open-project.model';
-import { getRandomWorkContextColor } from '../../../../ui/work-context-color';
+import { getRandomProjectColor } from '../../../../ui/work-context-color';
 import { removeDebounceFromFormItems } from '../../../../util/remove-debounce-from-form-items';
 import { MatButton } from '@angular/material/button';
 import { TranslatePipe } from '@ngx-translate/core';
 import { Log } from '../../../../core/log';
 import { PlainspaceShareService } from '../../../issue/providers/plainspace/plainspace-share.service';
+import { GlobalThemeService } from '../../../../core/theme/global-theme.service';
 
 @Component({
   selector: 'dialog-create-project',
@@ -60,13 +61,17 @@ export class DialogCreateProjectComponent implements OnInit, OnDestroy {
   private _project = inject<Project>(MAT_DIALOG_DATA);
   private _projectService = inject(ProjectService);
   private _plainspaceShareService = inject(PlainspaceShareService);
+  private _globalThemeService = inject(GlobalThemeService);
   private _matDialogRef =
     inject<MatDialogRef<DialogCreateProjectComponent>>(MatDialogRef);
 
   T: typeof T = T;
   projectData: ProjectCopy | Partial<ProjectCopy> = {
     ...DEFAULT_PROJECT,
-    theme: { ...DEFAULT_PROJECT.theme, primary: getRandomWorkContextColor() },
+    theme: {
+      ...DEFAULT_PROJECT.theme,
+      primary: getRandomProjectColor(this._globalThemeService.isDarkTheme()),
+    },
   };
   jiraCfg?: JiraCfg;
   gitlabCfg?: GitlabCfg;
