@@ -103,7 +103,7 @@ MED
 
 - constraint-error-recovery (all 3 tests) [HIGH CONFIRMED DELETE]
   - Production never calls appendBatch for remote ops; it uses appendBatchSkipDuplicates (conflict-resolution.service.ts:1121, operation-log-sync.service.ts:2300).
-  - Covered by the operation-log-store.service.spec.ts appendBatchSkipDuplicates and #6213 tests.
+  - Covered by the operation-log-store.service.spec.ts appendBatchSkipDuplicates and append duplicate-handling tests (#11469 removed appendBatch and the #6213 tests).
   - NEW, LOW, plausible: the #6213 unit tests (:1356, :1383) may still pass with `_appliedOpIdsCache = null` removed (store.service.ts:480). To settle, delete it and run test:file.
 - server-migration-abort:43-89 [HIGH CONFIRMED DELETE]
   - B is fresh, so `hasSyncedOps` is false and the function returns early.
