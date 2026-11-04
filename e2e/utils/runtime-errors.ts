@@ -42,6 +42,19 @@ const isDevErrorAllowed = (message: string): boolean => {
   return !!allowed?.some((pattern) => pattern.test(message));
 };
 
+/**
+ * Reports devError() calls on `page` into an existing collector, e.g. for a
+ * page a client opens later in the same context with context.newPage().
+ */
+export const registerPageWithErrorCollector = (
+  page: Page,
+  errors: RuntimeBrowserError[],
+): void => {
+  if (!collectorsByPage.has(page)) {
+    collectorsByPage.set(page, errors);
+  }
+};
+
 export const attachPageErrorCollector = (
   page: Page,
   label: string,
@@ -100,13 +113,18 @@ export const installDevErrorDialogHandler = (page: Page, label: string): void =>
     console.warn(
       `[${label}] Auto-dismissing devError dialog (${dialog.type()}): ${message}`,
     );
-    if (isDevErrorAlert) {
-      recordSyncAudit('dev-error-dismissed', message);
+    if (isDevErrorConfirm) {
       // devError() marks a broken internal invariant. In dev builds (CI runs
       // one) it never reaches console.error or a pageerror, so record it as a
-      // runtime error unless the test expects it.
-      if (!isDevErrorAllowed(message)) {
-        collectorsByPage.get(page)?.push({ type: 'devError', message });
+      // runtime error unless the test expects it. Read it from the confirm:
+      // devError() shows its alert only once per page load, but asks the
+      // confirm on every call.
+      const devErrorMessage = message.replace(/^Throw an error for error\? –+ ?/, '');
+      recordSyncAudit('dev-error-dismissed', devErrorMessage);
+      if (!isDevErrorAllowed(devErrorMessage)) {
+        collectorsByPage
+          .get(page)
+          ?.push({ type: 'devError', message: `devERR: ${devErrorMessage}` });
       }
     }
     try {

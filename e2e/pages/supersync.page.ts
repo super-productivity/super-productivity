@@ -398,6 +398,56 @@ export class SuperSyncPage extends BasePage {
     }
   }
 
+  /**
+   * Fails setup unless the initial sync settled: no error, no spinner, remote
+   * confirmed and nothing pending. Setup's own waits end on the 'uploaded'
+   * marker, which ignores the spinner and the error state. Ops captured right
+   * after the first sync (e.g. TaskDueEffects re-planning TODAY) are flushed
+   * with one more cycle, as syncAndWait() does, since setup has already blocked
+   * auto-sync and immediate upload.
+   */
+  private async _expectSettledAfterSetup(timeout = 15000): Promise<void> {
+    const deadline = Date.now() + timeout;
+    const isSettled = (state: SyncCompletionSnapshot): boolean =>
+      !state.errorVisible &&
+      !state.spinnerVisible &&
+      state.checkVisible &&
+      state.unsyncedCount === 0;
+    let flushed = false;
+    let snapshot = await this._getSyncCompletionSnapshot();
+    while (!isSettled(snapshot) && !snapshot.errorVisible && Date.now() < deadline) {
+      if (!flushed && !snapshot.spinnerVisible) {
+        flushed = true;
+        await this._waitForSyncWindowToClose();
+        snapshot = await this._getSyncCompletionSnapshot();
+        if (!isSettled(snapshot) && !snapshot.errorVisible && !snapshot.spinnerVisible) {
+          await this._triggerSuperSyncCycle(Math.max(1000, deadline - Date.now()));
+        }
+      } else {
+        await this.page.waitForTimeout(250);
+      }
+      snapshot = await this._getSyncCompletionSnapshot();
+    }
+    const openDialog = await this.page
+      .locator(
+        'dialog-sync-import-conflict, dialog-sync-conflict, dialog-enter-encryption-password, dialog-enable-encryption, dialog-handle-decrypt-error',
+      )
+      .first()
+      .isVisible()
+      .catch(() => false);
+    if (!isSettled(snapshot) || openDialog) {
+      recordSyncAudit(
+        'setup:initial-sync-unwitnessed',
+        JSON.stringify({ ...snapshot, openDialog }),
+      );
+      throw new Error(
+        `setupSuperSync(): the initial sync did not settle (error, still running, ` +
+          `pending ops or a sync dialog left open). Last state: ` +
+          `${JSON.stringify({ ...snapshot, openDialog })}`,
+      );
+    }
+  }
+
   private async _setupSuperSync(config: SuperSyncConfig): Promise<void> {
     // Block WebSocket connections and immediate uploads by default so tests have
     // controlled, sequential sync via syncAndWait() only.
@@ -1410,30 +1460,6 @@ export class SuperSyncPage extends BasePage {
    *
    * Prerequisites: SuperSync must already be configured without encryption
    */
-  private async _expectSettledAfterSetup(timeout = 15000): Promise<void> {
-    const deadline = Date.now() + timeout;
-    let snapshot = await this._getSyncCompletionSnapshot();
-    const isSettled = (state: SyncCompletionSnapshot): boolean =>
-      !state.errorVisible &&
-      !state.spinnerVisible &&
-      state.checkVisible &&
-      state.unsyncedCount === 0;
-    while (!isSettled(snapshot) && Date.now() < deadline) {
-      if (snapshot.errorVisible) {
-        break;
-      }
-      await this.page.waitForTimeout(250);
-      snapshot = await this._getSyncCompletionSnapshot();
-    }
-    if (!isSettled(snapshot)) {
-      recordSyncAudit('setup:initial-sync-unwitnessed', JSON.stringify(snapshot));
-      throw new Error(
-        `setupSuperSync(): the initial sync did not settle (error, still running, or ` +
-          `pending ops). Last state: ${JSON.stringify(snapshot)}`,
-      );
-    }
-  }
-
   /** Opens the sync settings dialog with the saved SuperSync config loaded. */
   async openSuperSyncSettings(): Promise<Locator> {
     await this.clickSyncBtn({ button: 'right', noWaitAfter: true });
@@ -1860,16 +1886,22 @@ export class SuperSyncPage extends BasePage {
       console.log(
         `[${context}] Expected native sync confirmation: "${message.substring(0, 80)}..."`,
       );
-      recordSyncAudit('auto-answer:native-confirm', `${context} ${intent}`);
       try {
         await dialog.accept();
+        recordSyncAudit('auto-answer:native-confirm', `${context} ${intent}`);
       } catch {
         // Another narrowly-scoped listener already handled this dialog.
       }
       return;
     }
 
-    this._unexpectedNativeDialog = `${dialog.type()}: ${message}`;
+    const strictHint =
+      intent === 'fresh'
+        ? " (pass allowDialogs: ['fresh-client'] if the test expects it)"
+        : intent === 'repair'
+          ? " (pass allowDialogs: ['repair-confirm'] if the test expects it)"
+          : '';
+    this._unexpectedNativeDialog = `${dialog.type()}: ${message}${strictHint}`;
     console.error(
       `[${context}] Unexpected native dialog: ${this._unexpectedNativeDialog}`,
     );
@@ -2430,6 +2462,11 @@ export class SuperSyncPage extends BasePage {
     const allowedDialogs = new Set<SyncHelperDialog>(options.allowDialogs ?? []);
     if (options.useLocal !== undefined) {
       allowedDialogs.add('sync-import');
+    }
+    // Choosing remote in either import dialog can raise the data-repair
+    // confirm on the forced download; declining it aborts the sync.
+    if (allowedDialogs.has('sync-import') || conflictDialog) {
+      allowedDialogs.add('repair-confirm');
     }
     const dialogChoices: SyncDialogChoices = { useLocal, conflictDialog, allowedDialogs };
 

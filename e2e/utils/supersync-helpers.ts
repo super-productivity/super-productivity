@@ -28,6 +28,7 @@ import {
   assertNoRuntimeBrowserErrors,
   attachPageErrorCollector,
   installDevErrorDialogHandler,
+  registerPageWithErrorCollector,
   type RuntimeBrowserError,
 } from './runtime-errors';
 
@@ -412,6 +413,11 @@ export const createSimulatedClient = async (
 
   const page = await context.newPage();
   const runtimeErrors = attachPageErrorCollector(page, `Client ${clientName}`);
+  // Pages a spec opens later in this context (context.newPage() after closing
+  // the first) report devError() into the same list closeClient() checks.
+  context.on('page', (contextPage) => {
+    registerPageWithErrorCollector(contextPage, runtimeErrors);
+  });
 
   // Skip onboarding, hints, and example tasks before the app boots.
   // This runs before any page JavaScript, so Angular sees the flags immediately.
