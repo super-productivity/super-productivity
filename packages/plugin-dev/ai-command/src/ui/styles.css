@@ -126,6 +126,38 @@ body {
   flex: none;
   gap: 4px;
 }
+.aic .row label.main {
+  align-items: flex-start;
+  margin: 0;
+}
+.aic .row .text {
+  flex: 1;
+  min-width: 0;
+}
+.aic .acts button {
+  white-space: nowrap;
+}
+/* Popover menu: placed by menu.ts, so not centered like a default popover */
+.aic .menu {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  padding: 4px 0;
+  border: 1px solid var(--divider-color);
+  border-radius: var(--card-border-radius);
+  background: var(--card-bg);
+  color: var(--text-color);
+  box-shadow: var(--whiteframe-shadow-8dp);
+}
+.aic .menu:popover-open {
+  display: flex;
+  flex-direction: column;
+}
+.aic .menu button {
+  justify-content: flex-start;
+  border: none;
+  border-radius: 0;
+}
 .aic .rank {
   flex: none;
   width: 18px;
@@ -156,6 +188,7 @@ body {
 }
 .aic footer .count {
   margin-right: auto;
+  white-space: nowrap;
 }
 .aic .stack {
   display: flex;

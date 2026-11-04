@@ -1,14 +1,16 @@
 // The AI Command panel: ask, review, apply. Views are re-rendered from
-// `state`; nothing here is persisted except settings, via plugin.js.
+// `state`. Settings persist via plugin.js; the view is only kept there in
+// memory, so closing and reopening the panel shows it again.
 
 import { PluginHooks } from '@super-productivity/plugin-api';
 import { applyRows } from '../core/apply';
+import { canAddToToday } from '../core/day';
 import { ask, type AskResult } from '../core/ask';
 import { canApplyWithoutReview } from '../core/auto-apply';
 import { errorMessage } from '../core/claude';
 import { buildContext } from '../core/context';
 import type { Settings } from '../core/settings';
-import type { AppliedRow } from '../core/types';
+import type { AppliedRow, TaskLike } from '../core/types';
 import {
   getApiKey,
   getHostState,
@@ -31,14 +33,22 @@ type View =
   | { kind: 'idle'; note?: string }
   | { kind: 'loading' }
   | { kind: 'error'; message: string }
-  | { kind: 'result'; result: AskResult; ticked: Set<string> }
+  | { kind: 'result'; result: AskResult; ticked: Set<string>; picked: Set<string> }
   | { kind: 'applied'; rows: AppliedRow[]; isWithoutReview: boolean; say: string | null };
 
-const state: { view: View; host: HostState | null; token: number; isBusy: boolean } = {
+const state: {
+  view: View;
+  host: HostState | null;
+  token: number;
+  isBusy: boolean;
+  /** Current tasks, re-read after a row action so the rows show its effect. */
+  live: Map<string, TaskLike>;
+} = {
   view: { kind: 'boot' },
   host: null,
   token: 0,
   isBusy: false,
+  live: new Map(),
 };
 
 const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
@@ -53,19 +63,77 @@ const showError = (err: unknown): void => {
   });
 };
 
+/** Views shown again on reopen. Loading can't resume in a new panel; after an
+ * error the kept text is enough to retry. */
+const isKept = (view: View): boolean =>
+  // Mid-apply, a kept result could be applied twice after a reopen.
+  (view.kind === 'result' && !state.isBusy) ||
+  view.kind === 'applied' ||
+  (view.kind === 'idle' && !!view.note);
+
+// postMessage clones structurally, so the Sets and Maps in a result survive.
+const savePanel = (patch: { view?: View | null; text?: string }): void => {
+  sendToBackground({ type: 'savePanel', panel: patch }).catch((err: unknown) =>
+    // Losing the kept view only costs a reopen; a snack would be noise.
+    console.warn('AI Command: could not keep the panel state', err),
+  );
+};
+
+const saveView = (): void =>
+  savePanel({ view: isKept(state.view) ? state.view : null, text: input.value });
+
 const setView = (view: View): void => {
   state.view = view;
   render();
+  saveView();
 };
 
-/** Ids of the selection on screen: the "these" of the next request. */
-const selectionIds = (): string[] =>
-  state.view.kind === 'result'
-    ? (state.view.result.proposal.selection?.items.map((i) => i.taskId) ?? [])
-    : [];
+/** Ids of the selection on screen: the "these" of the next request. Picked rows narrow it. */
+const selectionIds = (): string[] => {
+  const view = state.view;
+  if (view.kind !== 'result') return [];
+  const all = view.result.proposal.selection?.items.map((i) => i.taskId) ?? [];
+  const picked = all.filter((id) => view.picked.has(id));
+  return picked.length ? picked : all;
+};
+
+const readLive = async (): Promise<Map<string, TaskLike>> =>
+  new Map((await writeApi.getTasks()).map((t) => [t.id, t]));
+
+const refreshLive = async (): Promise<void> => {
+  state.live = await readLive();
+  render();
+};
+
+/** Writes each task in turn, then unpicks them and shows their new state. */
+const actOn = (ids: string[], write: (id: string) => Promise<unknown>): void => {
+  const written: string[] = [];
+  const writeAll = async (): Promise<void> => {
+    for (const id of ids) {
+      await write(id);
+      written.push(id);
+    }
+  };
+  writeAll()
+    .catch(showError)
+    .finally(() => {
+      // After a failure the unwritten tasks stay picked, ready for a retry.
+      const view = state.view;
+      if (view.kind === 'result') written.forEach((id) => view.picked.delete(id));
+      saveView();
+      refreshLive().catch(showError);
+    });
+};
 
 const selectionActions = {
-  done: (id: string) => void host().updateTask(id, { isDone: true }).catch(showError),
+  addToToday: (ids: string[]): void => {
+    const view = state.view;
+    if (view.kind !== 'result') return;
+    const today = view.result.ctx.snapshot.day.todayStr;
+    actOn(ids, (id) => host().updateTask(id, { dueDay: today }));
+  },
+  done: (ids: string[]): void =>
+    actOn(ids, (id) => host().updateTask(id, { isDone: true })),
   start: (id: string) => void host().startTracking?.(id).catch(showError),
   open: (id: string) => void host().selectTask(id).catch(showError),
   canStart: typeof host().startTracking === 'function',
@@ -114,7 +182,8 @@ const runAsk = async (
   const ticked = new Set(
     proposal.changes.filter((r) => r.kind !== 'delete').map((r) => r.key),
   );
-  setView({ kind: 'result', result, ticked });
+  state.live = new Map(snapshot.tasks.map((t) => [t.id, t]));
+  setView({ kind: 'result', result, ticked, picked: new Set() });
 };
 
 const submit = (): void => {
@@ -140,23 +209,52 @@ const cancel = (): void => {
 
 const apply = (): void => {
   const view = state.view;
-  if (view.kind !== 'result' || !view.ticked.size || state.isBusy) return;
+  // While rows are picked their footer replaces Apply; Ctrl+Enter must not apply unseen.
+  if (view.kind !== 'result' || !view.ticked.size || view.picked.size || state.isBusy) {
+    return;
+  }
   state.isBusy = true;
   render();
+  saveView();
   applyAndShow(view.result, view.ticked, false)
     .catch(showError)
     .finally(() => {
       state.isBusy = false;
       render();
+      // A failed apply leaves the result on screen; keep it for a reopen again.
+      saveView();
     });
 };
 
 const discard = (): void => setView({ kind: 'idle' });
 
+/** Bulk actions on the picked selection rows. */
+const renderPickedFooter = (
+  picked: string[],
+  snapshot: AskResult['ctx']['snapshot'],
+): void => {
+  const live = (id: string): TaskLike | undefined => state.live.get(id);
+  const toDo = picked.filter((id) => live(id) && !live(id)?.isDone);
+  const toToday = picked.filter((id) => canAddToToday(live(id), snapshot.day));
+  const doneBtn = button(`Mark ${toDo.length} done`, () => selectionActions.done(toDo));
+  doneBtn.disabled = !toDo.length;
+  const todayBtn = button(
+    `Add ${toToday.length} to today`,
+    () => selectionActions.addToToday(toToday),
+    'btn-primary',
+  );
+  todayBtn.disabled = !toToday.length;
+  footer.append(el('span', 'count muted', `${picked.length} picked`), doneBtn, todayBtn);
+};
+
 const renderFooter = (): void => {
   const view = state.view;
   if (view.kind === 'loading') footer.append(button('Cancel', cancel));
   if (view.kind !== 'result') return;
+  // Picks come first: change rows rarely share a result with a selection.
+  if (view.picked.size) {
+    return renderPickedFooter([...view.picked], view.result.ctx.snapshot);
+  }
   const total = view.result.proposal.changes.length;
   if (!total) return void footer.append(button('Clear', discard));
   footer.append(
@@ -185,6 +283,14 @@ const renderBody = (): void => {
       else ticked.delete(key);
       footer.replaceChildren();
       renderFooter();
+      saveView();
+    };
+    const onPick = (taskId: string, isOn: boolean): void => {
+      if (isOn) view.picked.add(taskId);
+      else view.picked.delete(taskId);
+      footer.replaceChildren();
+      renderFooter();
+      saveView();
     };
     renderResult(body, {
       ...view.result.ctx,
@@ -192,6 +298,9 @@ const renderBody = (): void => {
       ticked,
       onToggle,
       selection: selectionActions,
+      picked: view.picked,
+      onPick,
+      live: state.live,
     });
   }
   if (view.kind === 'applied')
@@ -251,6 +360,8 @@ function render(): void {
 
 const onKey = (e: KeyboardEvent): void => {
   const kind = state.view.kind;
+  // Esc on an open row menu only closes the menu, not the whole result.
+  if (e.key === 'Escape' && document.querySelector(':popover-open')) return;
   if (e.key === 'Escape' && kind === 'loading') return cancel();
   if (e.key === 'Escape' && kind === 'result') return discard();
   if (e.key !== 'Enter' || e.isComposing) return;
@@ -262,6 +373,27 @@ const onKey = (e: KeyboardEvent): void => {
     e.preventDefault();
     submit();
   }
+};
+
+const DAY_CHANGED = 'The day changed, so the answer was discarded. Ask again.';
+
+/** What the panel showed before it was closed, or idle. */
+const keptView = async (): Promise<View> => {
+  const kept = (await sendToBackground({ type: 'getPanel' })) as {
+    view?: View | null;
+    text?: string;
+  } | null;
+  input.value = kept?.text ?? '';
+  const view = kept?.view;
+  if (!view) return { kind: 'idle' };
+  if (view.kind !== 'result') return view;
+  // The day-change hook can't fire while the panel is closed.
+  const day = await host().getDayContext?.();
+  if (day?.todayStr !== view.result.ctx.snapshot.day.todayStr) {
+    return { kind: 'idle', note: DAY_CHANGED };
+  }
+  state.live = await readLive();
+  return view;
 };
 
 const boot = async (): Promise<void> => {
@@ -277,15 +409,20 @@ const boot = async (): Promise<void> => {
     const kind = state.view.kind;
     if ((kind === 'result' || kind === 'loading') && !state.isBusy) {
       state.token++;
-      setView({
-        kind: 'idle',
-        note: 'The day changed, so the answer was discarded. Ask again.',
-      });
+      setView({ kind: 'idle', note: DAY_CHANGED });
     }
   });
+  input.addEventListener('input', () => savePanel({ text: input.value }));
   state.host = await getHostState();
   const isReady = state.host.hasApiKey && state.host.settings.isNoticeAccepted;
-  setView(isReady ? { kind: 'idle' } : { kind: 'setup', isFirstRun: true });
+  const restored = isReady
+    ? await keptView().catch((err: unknown): View => {
+        // Restoring is a convenience: without it the panel still works.
+        console.warn('AI Command: could not restore the panel', err);
+        return { kind: 'idle' };
+      })
+    : null;
+  setView(restored ?? { kind: 'setup', isFirstRun: true });
   if (isReady) input.focus();
 };
 

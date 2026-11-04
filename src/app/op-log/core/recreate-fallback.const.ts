@@ -49,11 +49,12 @@ import { EMPTY_SIMPLE_COUNTER } from '../../features/simple-counter/simple-count
  * devices recreated a counter with `type === undefined`, which typia rejects
  * and dataRepair/auto-fix had no rule for, leaving the user stuck on the
  * "Repair attempted but failed" dialog. Defaults come from
- * EMPTY_SIMPLE_COUNTER. KNOWN LIMITATION: `type` is unrecoverable from a
- * `{id}`-only delete, so the counter comes back as ClickCounter and disabled
- * (`isEnabled: false`) on the deleting device only — the holder keeps its real
- * type via `updateOne` merge, so the fleet diverges on `type`. Acceptable vs.
- * the previous dead-end; a full fix needs a tombstone (snapshot) delete op.
+ * EMPTY_SIMPLE_COUNTER. `deleteSimpleCounter` now carries the deleted counter
+ * (optional `simpleCounter`, #11465), so the recreate has the whole entity and
+ * the winning updates are replayed onto it (`replayUpdateOnRecreatedEntity`).
+ * REMAINING LIMITATION: a delete without it (a released client, or one stored
+ * before) is still `{id}`-only, so the counter comes back blank and disabled
+ * (`isEnabled: false`) on that deleting device only.
  * TASK_REPEAT_CFG, METRIC, ISSUE_PROVIDER still fall through to the
  * legacy behavior — add an entry here when there is evidence the
  * partial-payload path fires for them. TASK_REPEAT_CFG resolves per field
