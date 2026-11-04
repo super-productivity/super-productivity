@@ -1945,7 +1945,9 @@ describe('FileBasedSyncAdapterService', () => {
       mockProvider.downloadFile.calls.reset();
     };
 
-    const uploadRepair = (): Promise<{
+    const uploadRepair = (
+      repairBaseServerSeq: number | undefined = 2,
+    ): Promise<{
       accepted: boolean;
       errorCode?: string;
       serverSeq?: number;
@@ -1960,6 +1962,8 @@ describe('FileBasedSyncAdapterService', () => {
         'repair-op-id',
         false, // isCleanSlate
         'REPAIR', // snapshotOpType — triggers the guard
+        undefined, // syncImportReason
+        repairBaseServerSeq, // the syncVersion seedBaseRev commits
       );
 
     // Records every write (path, rev-to-match, force) in call order.
@@ -2127,6 +2131,19 @@ describe('FileBasedSyncAdapterService', () => {
       const result = await uploadRepair();
 
       expect(result.serverSeq).toBe(1);
+      const written = uploadedFile(FILE_BASED_SYNC_CONSTANTS.SYNC_FILE);
+      expect(written.syncVersion).toBe(1);
+      expect(written.snapshotBaseClock).toEqual({ client1: 2 });
+    });
+
+    // Built at syncVersion 1, uploaded after the client applied rev-1 (syncVersion
+    // 2): the conditional write passes, but its payload lacks rev-1's ops.
+    it('starts over when built from an earlier version than its base rev (#11470)', async () => {
+      await seedBaseRev('rev-1', { client1: 1, client2: 4 });
+      captureWrites();
+      const result = await uploadRepair(1);
+
+      expect(result).toEqual({ accepted: true, serverSeq: 1 });
       const written = uploadedFile(FILE_BASED_SYNC_CONSTANTS.SYNC_FILE);
       expect(written.syncVersion).toBe(1);
       expect(written.snapshotBaseClock).toEqual({ client1: 2 });

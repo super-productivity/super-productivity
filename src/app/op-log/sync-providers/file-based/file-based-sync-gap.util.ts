@@ -410,23 +410,30 @@ export interface SnapshotLineage {
  * has not loaded it is asked first (#9170, #10916).
  *
  * An automatic REPAIR is written only on the rev this client last downloaded
- * and applied (#9023), so it holds everything that rev held. It continues that
- * file instead: the next syncVersion, the clock committed for that rev as its
+ * and applied (#9023). When it was also built from that rev (its
+ * repairBaseServerSeq is the committed syncVersion), it holds everything that
+ * rev held; a REPAIR built earlier and uploaded after a later download does
+ * not, since its payload predates the ops that download applied. It continues
+ * that file instead: the next syncVersion, the clock committed for that rev as its
  * base, and a file clock that covers the base. A peer that saw that rev then
  * reads it as a catch-up (doesRemoteExtendLastSeen) and keeps its pending ops on
  * top, as for a trimmed file (#10972). Its empty retained-ops buffer still makes
  * every peer that has not loaded it hydrate it (snapshotReplacement, or a trim
  * gap once later uploads land), released readers included. Without a committed
- * rev, clock and version for this target it falls back to a replacement.
+ * rev, clock and version for this target, or built from another version, it
+ * falls back to a replacement.
  */
 export const getSnapshotLineage = ({
   isRepair,
+  repairBaseServerSeq,
   vectorClock,
   baseRev,
   lastSeenClock,
   expectedSyncVersion,
 }: {
   isRepair: boolean;
+  /** The syncVersion the REPAIR's state was built from (its op's base cursor). */
+  repairBaseServerSeq: number | undefined;
   vectorClock: VectorClock;
   /** The rev the REPAIR write is conditional on (`_lastSeenRevs`). */
   baseRev: string | null | undefined;
@@ -434,7 +441,13 @@ export const getSnapshotLineage = ({
   /** The expected syncVersion committed for that rev. */
   expectedSyncVersion: number | undefined;
 }): SnapshotLineage => {
-  if (!isRepair || !baseRev || !lastSeenClock || !expectedSyncVersion) {
+  if (
+    !isRepair ||
+    !baseRev ||
+    !lastSeenClock ||
+    !expectedSyncVersion ||
+    repairBaseServerSeq !== expectedSyncVersion
+  ) {
     return { syncVersion: 1, vectorClock, snapshotBaseClock: vectorClock };
   }
   return {

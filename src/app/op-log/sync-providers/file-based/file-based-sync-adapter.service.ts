@@ -637,6 +637,7 @@ export class FileBasedSyncAdapterService {
         _isCleanSlate?: boolean, // Not used - file-based sync replaces entire file
         snapshotOpType?: RestorePointType, // REPAIR triggers a rev-based concurrency guard; see _uploadSnapshot
         _syncImportReason?: string, // Not used - file-based sync has no server-side conflict dialog
+        repairBaseServerSeq?: number, // #11470: the syncVersion a REPAIR was built from
       ): Promise<SnapshotUploadResponse> => {
         return this._uploadSnapshot(
           provider,
@@ -648,6 +649,7 @@ export class FileBasedSyncAdapterService {
           vectorClock,
           schemaVersion,
           snapshotOpType,
+          repairBaseServerSeq,
         );
       },
 
@@ -1335,6 +1337,7 @@ export class FileBasedSyncAdapterService {
     vectorClock: Record<string, number>,
     schemaVersion: number,
     snapshotOpType?: RestorePointType,
+    repairBase?: number,
   ): Promise<SnapshotUploadResponse> {
     // Same in-flight target guard as _uploadOps, for every snapshot write (incl.
     // REPAIR and backups): a mid-operation target switch aborts before any write
@@ -1344,30 +1347,27 @@ export class FileBasedSyncAdapterService {
 
     OpLog.normal(`FileBasedSyncAdapter: Uploading snapshot (reason=${reason})`);
 
-    // SPAP-11: split-file force-upload / recovery / initial — write both files
-    // (state THEN ops) so the ops file's snapshotRef always points at a snapshot
-    // that is already on the remote.
-    if (await this._shouldUseSplitSync(provider)) {
+    const isSplit = await this._shouldUseSplitSync(provider);
+    // #11470: a replacement starts over at syncVersion 1; a REPAIR continues.
+    const lineage = this._lineage(providerKey, vectorClock, snapshotOpType, repairBase);
+    // SPAP-11: split writes state THEN ops, so snapshotRef never names a missing snapshot.
+    if (isSplit) {
       return this._uploadSnapshotSplit(
         provider,
         cfg,
         encryptKey,
         clientId,
-        vectorClock,
+        lineage,
         schemaVersion,
         providerKey,
         state,
         snapshotOpType,
       );
     }
-
-    // #11470: a replacement starts over at syncVersion 1; a REPAIR continues.
-    const lineage = this._getSnapshotLineage(providerKey, vectorClock, snapshotOpType);
     const newSyncVersion = lineage.syncVersion;
 
-    // The caller captures this state at the same boundary as the full-state op.
-    // Re-reading the live store here would let later timer deltas leak into a
-    // snapshot whose vector clock does not cover them.
+    // The caller captured this state with the full-state op; re-reading the live
+    // store could leak later timer deltas its vector clock does not cover.
     const currentState = stripLocalOnlySyncSettingsFromAppData(state);
 
     // Load archive data from IndexedDB to include in snapshot
@@ -2784,15 +2784,13 @@ export class FileBasedSyncAdapterService {
     cfg: EncryptAndCompressCfg,
     encryptKey: string | undefined,
     clientId: string,
-    vectorClock: Record<string, number>,
+    lineage: SnapshotLineage,
     schemaVersion: number,
     providerKey: string,
     state: unknown,
     snapshotOpType?: RestorePointType,
   ): Promise<SnapshotUploadResponse> {
-    const lineage = this._getSnapshotLineage(providerKey, vectorClock, snapshotOpType);
     const { syncVersion: newSyncVersion, vectorClock: clock } = lineage;
-
     // #9023: the single-file REPAIR guard (see _uploadSnapshot), on the rev of the
     // commit-point sync-ops.json. `getFileRev` reads metadata only, so a torn or
     // undecryptable remote does not block the repair; no ops file, no history.
@@ -3042,13 +3040,15 @@ export class FileBasedSyncAdapterService {
   }
 
   /** #11470: {@link getSnapshotLineage}, read before the write commits a rev. */
-  private _getSnapshotLineage(
+  private _lineage(
     key: string,
     clock: VectorClock,
     type?: string,
+    repairBaseServerSeq?: number,
   ): SnapshotLineage {
     return getSnapshotLineage({
       isRepair: type === 'REPAIR',
+      repairBaseServerSeq,
       vectorClock: clock,
       baseRev: this._lastSeenRevs.get(key),
       lastSeenClock: this._lastSeenVectorClocks.get(key),

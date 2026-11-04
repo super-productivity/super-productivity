@@ -456,6 +456,7 @@ describe('getSnapshotLineage (#11470)', () => {
   ): ReturnType<typeof getSnapshotLineage> =>
     getSnapshotLineage({
       isRepair: true,
+      repairBaseServerSeq: 7,
       vectorClock: REPAIR_CLOCK,
       baseRev: 'rev-7',
       lastSeenClock: BASE_REV_CLOCK,
@@ -503,7 +504,7 @@ describe('getSnapshotLineage (#11470)', () => {
     });
   });
 
-  it('a released reader that ignores the snapshot base still hydrates it', () => {
+  it('a reader that ignores the snapshot base (as released ones up to v19.1.0) still hydrates it', () => {
     // v19.1.0 and older never read snapshotBaseClock: the empty buffer alone
     // (snapshotReplacement) sends them to the snapshot, as for a replacement.
     const written = lineage();
@@ -551,6 +552,12 @@ describe('getSnapshotLineage (#11470)', () => {
     ['a REPAIR without a committed base rev', { baseRev: null }],
     ['a REPAIR without a recorded clock', { lastSeenClock: undefined }],
     ['a REPAIR without a committed syncVersion', { expectedSyncVersion: undefined }],
+    // Built at rev-6 and uploaded after rev-7 was applied: its payload lacks rev-7's ops.
+    ['a REPAIR built from an earlier version', { repairBaseServerSeq: 6 }],
+    [
+      'a REPAIR without a base cursor (e.g. minted at startup)',
+      { repairBaseServerSeq: undefined },
+    ],
   ] as const) {
     it(`${name} starts over, so a peer that has not loaded it must ask`, () => {
       const written = lineage(overrides);

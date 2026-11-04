@@ -935,7 +935,9 @@ IDs deduplicate ops still in the local log, while vector clocks carry causality.
    An automatic `REPAIR` snapshot is such a catch-up too (#11470): it is
    written only on the rev its writer last downloaded and applied (#9023), so
    it continues that file with the next `syncVersion`, the clock committed for
-   that rev as its base, and a file clock covering that base. A peer that saw
+   that rev as its base, and a file clock covering that base, provided its
+   `repairBaseServerSeq` is that rev's `syncVersion` (a REPAIR built before a
+   later download lacks that download's ops, so it starts over). A peer that saw
    the rev keeps its pending ops on top; one behind it, or any reader of a
    replacement (`SYNC_IMPORT`, `BACKUP_IMPORT`, USE_LOCAL), which still starts
    over at `syncVersion` 1 with its own clock as base, still asks. The empty
