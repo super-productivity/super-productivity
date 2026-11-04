@@ -89,6 +89,10 @@ const createCounter = async (
   await typeSelect.waitFor({ state: 'visible', timeout: 5000 });
   await typeSelect.click();
   await client.page.locator(`mat-option:has-text("${typeLabel}")`).click();
+  if (typeLabel === 'Stopwatch') {
+    // Streaks would require a daily time goal; the type is all this needs.
+    await dialog.getByRole('switch', { name: 'Track streaks' }).click();
+  }
 
   await dialog.locator('button[type="submit"]').click();
   await dialog.waitFor({ state: 'hidden', timeout: 10000 });
