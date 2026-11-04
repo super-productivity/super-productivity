@@ -11,6 +11,7 @@ import {
   WEBDAV_CONFIG_TEMPLATE,
 } from '../../utils/sync-helpers';
 import { waitForAppReady, waitForStatePersistence } from '../../utils/waits';
+import { allowDevErrorsInCurrentTest } from '../../utils/runtime-errors';
 
 const task = (page: Page, title: string): ReturnType<Page['locator']> =>
   page.locator('task').filter({ hasText: title });
@@ -23,6 +24,9 @@ const task = (page: Page, title: string): ReturnType<Page['locator']> =>
 const addGhostTagReference = async (page: Page, title: string): Promise<void> => {
   const taskId = await task(page, title).first().getAttribute('data-task-id');
   expect(taskId).toBeTruthy();
+  // The dangling tag reference is the corruption under test; the validator
+  // reports it through devError().
+  allowDevErrorsInCurrentTest(/tagId from task not existing/);
   await page.evaluate((id) => {
     const helpers = (
       window as unknown as {

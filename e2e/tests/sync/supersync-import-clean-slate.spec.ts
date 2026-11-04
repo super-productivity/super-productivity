@@ -623,7 +623,9 @@ test.describe('@supersync @cleanslate Import Clean Slate Semantics', () => {
       // 2. B receives SYNC_IMPORT
       // 3. B's pending ops are CONCURRENT to SYNC_IMPORT
       // 4. Clean slate semantics: B's pending ops are filtered/dropped
-      await clientB.sync.syncAndWait();
+      // B's pending task is meaningful local work, so the import asks first;
+      // the default answer (server data) drops it.
+      await clientB.sync.syncAndWait({ allowDialogs: ['sync-import'] });
       console.log('[Pending Invalidation] Client B synced (received SYNC_IMPORT)');
 
       // Wait for state to settle - allow UI to update
