@@ -7,6 +7,11 @@ import {
   closeClient,
   type SimulatedE2EClient,
 } from '../../utils/supersync-helpers';
+import {
+  getStoreCounterByTitle,
+  readStoreCounters,
+  type StoreCounter,
+} from '../../utils/audit-concurrency-helpers';
 
 /**
  * SuperSync regression test for issue #7330 (recurrence on SIMPLE_COUNTER).
@@ -33,53 +38,6 @@ import {
  * attaches its own listener to capture (and dismiss, to avoid a hang) any
  * repair/cleanup dialog and assert none fired.
  */
-
-/** A simple counter as the live store holds it. */
-interface StoreCounter {
-  id: string;
-  title: string;
-  type: string | null;
-  isEnabled: boolean | null;
-  countOnDay: Record<string, number>;
-}
-
-/** Every simple counter in the live NgRx store (read synchronously). */
-const readStoreCounters = async (client: SimulatedE2EClient): Promise<StoreCounter[]> =>
-  client.page.evaluate(() => {
-    type Slice = { entities?: Record<string, Record<string, unknown>> };
-    const store = (
-      window as unknown as {
-        __e2eTestHelpers?: {
-          store?: {
-            subscribe: (fn: (s: { simpleCounter?: Slice }) => void) => {
-              unsubscribe: () => void;
-            };
-          };
-        };
-      }
-    ).__e2eTestHelpers?.store;
-    if (!store) {
-      throw new Error('window.__e2eTestHelpers.store is not available');
-    }
-    let root: { simpleCounter?: Slice } | undefined;
-    store.subscribe((s) => (root = s)).unsubscribe();
-    return Object.values(root?.simpleCounter?.entities ?? {}).map((c) => ({
-      id: String(c.id),
-      title: String(c.title),
-      type: typeof c.type === 'string' ? c.type : null,
-      isEnabled: typeof c.isEnabled === 'boolean' ? c.isEnabled : null,
-      countOnDay:
-        typeof c.countOnDay === 'object' && c.countOnDay !== null
-          ? (c.countOnDay as Record<string, number>)
-          : {},
-    }));
-  });
-
-const getStoreCounterByTitle = async (
-  client: SimulatedE2EClient,
-  title: string,
-): Promise<StoreCounter | null> =>
-  (await readStoreCounters(client)).find((c) => c.title === title) ?? null;
 
 const REPAIR_DIALOG_RE =
   /Repair attempted but failed|Data Cleanup Needed|automatic cleanup|references are inconsistent/i;
