@@ -492,7 +492,8 @@ test.describe('@webdav automatic file format rollout', () => {
           expect(await preserved.text()).toBe(legacy);
           // Not migrated and not merged over: the app wrote no sync file here.
           expect(targetPuts()).toBe(0);
-          // Pinned (measured 2026-11): an extra read is a behavior change.
+          // Pinned (measured 2026-11) to catch unexpected extra round-trips; the
+          // real guards are the zero writes and the unchanged remote file.
           expect(legacyReads).toBe(6);
           expect(
             (

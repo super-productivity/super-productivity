@@ -485,7 +485,8 @@ test.describe('@webdav WebDAV TODAY Tag Sync', () => {
     await expect(taskPageB.getTaskByText(task2Name)).not.toBeVisible();
 
     // Out of TODAY must mean rescheduled, not deleted: Task2 still exists on
-    // both clients with dueDay = tomorrow.
+    // both clients with dueDay = tomorrow. Uses the browser's calendar date,
+    // which matches the app's logical day with the default start-of-day.
     const tomorrow = await getBrowserLocalDateStr(pageA, 1);
     for (const page of [pageA, pageB]) {
       const task2 = await getStoreTask(page, task2Id!);

@@ -177,7 +177,8 @@ test.describe('@webdav a late snapshot-only v2 file is loaded before uploading',
       await expect(sync.syncSpinner).toBeHidden();
       // The upload was deferred silently; the question comes on the next sync.
       expect(await hasEverAppeared(joining.page, 'setup-conflict')).toBe(false);
-      // Pinned read counts (measured 2026-11): a change is a behavior change.
+      // Read counts pinned (measured 2026-11) to catch unexpected extra
+      // round-trips; the real guards are the zero writes and the seed file.
       expect(legacyReads).toBe(6);
 
       // The seed's state is still the folder's state, and the app never wrote

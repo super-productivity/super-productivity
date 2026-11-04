@@ -313,6 +313,12 @@ test.describe('@webdav WebDAV Delete Cascade Sync', () => {
     await projectPageB.navigateToProjectByName(projectName);
     console.log('[Delete Project] Verified project exists on Client B (navigated to it)');
 
+    // Precondition: A holds the archived project task too (not yet flushed to
+    // archive_old), so A's absence check below cannot pass vacuously.
+    await expect
+      .poll(async () => getArchiveYoungTaskIds(pageA), { timeout: 10000 })
+      .toContain(taskId!);
+
     // Precondition: B holds the archived project task, so the delete below has
     // something to cascade to.
     await expect
@@ -360,6 +366,7 @@ test.describe('@webdav WebDAV Delete Cascade Sync', () => {
           message: 'archived task of the deleted project must be gone',
         })
         .not.toContain(taskId!);
+      // Guards only against the task coming back to life in the live store.
       expect(await getStoreTask(page, taskId!)).toBeNull();
     }
     console.log('[Delete Project] ✓ Delete project with archived tasks synced correctly');
@@ -536,9 +543,14 @@ test.describe('@webdav WebDAV Delete Cascade Sync', () => {
       // Recorded, not pinned: writeTasksToArchiveForRemoteSync may keep the
       // deleted tag id on A's copy of the archived task (issue candidate).
       const archivedTask1 = await getArchiveYoungTask(page, task1Id!);
+      const keepsDeletedTag = !!archivedTask1?.tagIds.includes(tagId!);
       console.log(
-        `[Concurrent] ${label}: archived Task1 keeps deleted tag id: ${archivedTask1?.tagIds.includes(tagId!)}`,
+        `[Concurrent] ${label}: archived Task1 keeps deleted tag id: ${keepsDeletedTag}`,
       );
+      test.info().annotations.push({
+        type: 'issue-candidate',
+        description: `${label}: archived Task1 keeps deleted tag id: ${keepsDeletedTag}`,
+      });
     }
 
     console.log(

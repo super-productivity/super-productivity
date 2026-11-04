@@ -185,7 +185,8 @@ test.describe('@webdav WebDAV Sync Full Flow', () => {
 
     // --- Deletion Sync (A -> B) ---
     console.log('Testing Deletion Sync...');
-    // Delete first task on Client A
+    // Delete first task on Client A (the newest one, Task 2)
+    await expect(pageA.locator('task').first()).toContainText(taskName2);
     await pageA.locator('task').first().click({ button: 'right' });
     await pageA.locator('.mat-mdc-menu-content button.color-warn').click();
 

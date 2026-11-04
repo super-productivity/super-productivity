@@ -110,6 +110,8 @@ test.describe('@webdav @encryption WebDAV Encryption Disable', () => {
     await syncPageA.disableEncryptionForFileBased();
     console.log('[EncryptDisable] Client A disabled encryption');
 
+    // v2 only: the v3 split format keeps state in other files, so a v3 run
+    // does not prove the re-upload here.
     if (WEBDAV_SYNC_FORMAT === 'v2') {
       // The disable itself uploads an unencrypted snapshot: right away, before
       // any further sync, the file parses as plain JSON and holds the task.
