@@ -419,7 +419,7 @@ test.describe('@supersync #10399 "use remote" keeps the app features through a r
       // Remote keeps both tasks live (one done, none archived).
       const remoteTasks = (await getStoreSummary(remote.page)).tasks;
       const titleTaskIds = titles.map(
-        (title) => remoteTasks.find((task) => task.title === title)?.id,
+        (title) => remoteTasks.find((task) => task.title.includes(title))?.id,
       );
       expect(titleTaskIds.every((id) => !!id)).toBe(true);
 

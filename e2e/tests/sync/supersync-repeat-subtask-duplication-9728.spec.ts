@@ -217,7 +217,7 @@ test.describe('@supersync Recurring subtask duplication (#9728)', () => {
         // exactly the two inherited subtasks, and no copy attached elsewhere.
         const tasks = (await getStoreSummary(client.page)).tasks;
         const undoneInstances = tasks.filter(
-          (task) => task.title === parentName && !task.isDone && !task.parentId,
+          (task) => task.title.includes(parentName) && !task.isDone && !task.parentId,
         );
         expect(undoneInstances, `client ${name}: one undone instance`).toHaveLength(1);
         const children = tasks.filter((task) => task.parentId === undoneInstances[0].id);

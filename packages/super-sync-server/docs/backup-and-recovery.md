@@ -105,7 +105,7 @@ then follow the same steps.
 
 **Why this is preferred:**
 
-- Avoids the silent data gap of partial restores (see the known limitation below)
+- Avoids the `SYNC_IMPORT_EXISTS` rejection and silent data gap of partial restores (see the known limitation below)
 - Clients hold the complete data — they are the authoritative source
 - Produces a clean, consistent server state
 - Verified by e2e tests (`supersync-server-backup-revert.spec.ts`)
@@ -137,7 +137,7 @@ docker compose start supersync
 > **Note:** The database name (`supersync` above) must match your deployment's
 > `POSTGRES_DB` setting. Check your `.env` or `docker-compose.yml` for the actual value.
 
-**Known limitation:** After a full restore the server is not empty, so a reconnecting client resets its sync position and re-downloads, but does not re-upload operations it had already uploaded after the backup was taken. Those changes stay missing on the server, and no error is shown. To resolve this, use the "Reset Account" feature in the app to clear server sync data, then re-sync: the client then uploads its full state.
+**Known limitation:** After a full restore the server still holds its original `SYNC_IMPORT`. A reconnecting client resets its sync position, re-downloads and tries to re-upload its full state, but the server rejects that with `SYNC_IMPORT_EXISTS`. The rejection is only logged; the app shows no error, and changes made after the backup was taken stay missing on the server. To resolve this, use the "Reset Account" feature in the app to clear server sync data, then re-sync: the client then uploads its full state.
 
 ### Recovery Decision Tree
 
