@@ -27,8 +27,9 @@ const setWsDownloadBlocked = async (
   blocked: boolean,
 ): Promise<void> => {
   await client.page.evaluate((b) => {
-    (globalThis as unknown as { __SP_E2E_BLOCK_WS_DOWNLOAD?: boolean }).__SP_E2E_BLOCK_WS_DOWNLOAD =
-      b;
+    (
+      globalThis as unknown as { __SP_E2E_BLOCK_WS_DOWNLOAD?: boolean }
+    ).__SP_E2E_BLOCK_WS_DOWNLOAD = b;
   }, blocked);
 };
 

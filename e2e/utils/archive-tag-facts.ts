@@ -26,7 +26,8 @@ export const getArchiveYoungTaskTagIds = async (
         return null;
       }
       const archive = await new Promise<
-        { data?: { task?: { entities?: Record<string, { tagIds?: string[] }> } } } | undefined
+        | { data?: { task?: { entities?: Record<string, { tagIds?: string[] }> } } }
+        | undefined
       >((resolve, reject) => {
         const tx = db.transaction('archive_young', 'readonly');
         const request = tx.objectStore('archive_young').get('current');

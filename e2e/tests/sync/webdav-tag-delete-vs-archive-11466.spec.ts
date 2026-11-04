@@ -132,8 +132,14 @@ test.describe('@webdav Tag delete vs archive (#11466)', () => {
         ['A', pageA],
         ['B', pageB],
       ] as const) {
-        expect(await getStoreTagIdByTitle(page, tagName), `${label}: tag gone`).toBeNull();
-        expect(await getStoreTaskTagIds(page, task1Id!), `${label}: Task1 live`).toBeNull();
+        expect(
+          await getStoreTagIdByTitle(page, tagName),
+          `${label}: tag gone`,
+        ).toBeNull();
+        expect(
+          await getStoreTaskTagIds(page, task1Id!),
+          `${label}: Task1 live`,
+        ).toBeNull();
         expect(await getStoreTaskTagIds(page, task2Id!), `${label}: Task2 tags`).toEqual(
           [],
         );
