@@ -8,6 +8,45 @@ Verdicts:
 - FIX: strengthen the assertion. REBUILD: the setup never reaches the claimed path. DELETE/RENAME: the test adds nothing or claims the wrong thing. ISSUE: the strengthened check may expose an app bug.
 - "Mutation" is the temporary change that must make the strengthened test fail. That run is the proof the test can fail at all.
 
+## Outcome (2026-11-04)
+
+Merged, test-only. Each PR body lists its mutation (red) and green runs and its review passes.
+
+| Section                                                            | PR     |
+| ------------------------------------------------------------------ | ------ |
+| Cross-cutting causes 1, 2, 4, 5 (strict helpers)                   | #11463 |
+| Verify 1 (archive / worklog / absence)                             | #11458 |
+| Verify 2 (winner / reorder)                                        | #11460 |
+| Verify 3 (concurrency)                                             | #11461 |
+| Verify 4 + 7 (wrong-path / error, misc)                            | #11462 |
+| Verify 5 (import / encryption)                                     | #11454 |
+| Verify 6 (WebDAV)                                                  | #11459 |
+| CI unblock: #11352 rejected-REPAIR spec split by B's pending state | #11471 |
+
+The strict helpers now fail a test when it hits something it didn't declare:
+
+- A dialog. Opt in with `syncAndWait({ allowDialogs })`.
+- A WebDAV whole-dataset conflict. Opt in with `waitForSyncComplete(..., { expectConflict: true })`.
+- A devError. Opt in with `allowDevErrorsInCurrentTest(pattern)`.
+- A SuperSync setup that hasn't settled.
+
+The strengthened tests exposed these app bugs on the unchanged app. Each has an issue and a draft fix PR. The middle column says how master's tests cover it until the fix lands:
+
+| Issue                                                               | Test on master                                                                 | Fix PR                    |
+| ------------------------------------------------------------------- | ------------------------------------------------------------------------------ | ------------------------- |
+| #11464 delete + relative TODAY reorder diverges                     | `supersync-concurrent-delete-reorder` (2 tests)                                | #11476                    |
+| #11465 deleted + updated counter comes back blank on one device     | `supersync-simple-counter-delete-update-7330`                                  | #11474                    |
+| #11466 deleted tag stays on the other device's archived copy        | `webdav-sync-delete-cascade` 1.3 records it as an annotation, not an assertion | #11477                    |
+| #11467 a SuperSync backup restore silently loses later ops          | operator path, no fixme                                                        | #11478 (follow-up #11481) |
+| #11470 a file-based REPAIR forces the whole-dataset dialog on peers | `webdav-rejected-repair-recovery-11352` (pending-on-B)                         | #11475                    |
+
+Also filed:
+
+- #11469: a unit gap in the `_appliedOpIdsCache` invalidation (PR #11473).
+- #11483: found while fixing #11470. A stale pending file-based REPAIR snapshot overwrites peer ops downloaded after it was built (data loss). The reproduction is `webdav-stale-pending-repair-snapshot` in #11484, and a fix is in progress.
+
+#11468 was closed as not planned (see Verify 5).
+
 ## Cross-cutting causes (shared helpers, coordinator PR)
 
 1. `syncAndWait`/`setupSuperSync` silently answer the sync-import conflict, enter-password, enable-encryption and decrypt-error dialogs, plus the DATA_REPAIR confirm.
@@ -186,9 +225,7 @@ Dialog contract below: NEVER means the dialog must not appear; ALWAYS means it m
   - Mutation: the gate returns no dialogData when hasMeaningfulPending is true.
 - import-conflict-dialog tests 1-4 [HIGH RENAME + REBUILD]
   - These actually cover first-sync on a never-synced device with a local import. Rename them.
-  - Add a test: B syncs first, A adds a task and syncs, B imports without syncing, then B syncs.
-  - Assert ALWAYS the MSG_LOCAL_FILTERS text ("cannot be automatically merged") with no first-sync radios. Answer local, and A converges.
-  - Mutation: make the condition at operation-log-sync.service.ts:1252 `false && …`.
+  - Dropped: the planned MSG_LOCAL_FILTERS test ("cannot be automatically merged"). A file import resets `lastServerSeq`, so the LOCAL_IMPORT_FILTERS_REMOTE branch can't be reached through the UI. #11468 was closed as not planned. The rename shipped in #11454.
 - import-encryption-preserve:91-114, 235-251 [HIGH FIX]
   - Assert NEVER "Encryption Settings Will Change" (count 0).
   - Mutation: `willChange = currentEnabled !== importedEnabled` (import-encryption-handler.service.ts:105).
