@@ -18,7 +18,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { loadSharp } from './load-sharp';
 import {
-  IS_GNOME_CAPTURE,
+  IS_NATIVE_CAPTURE,
   LOCALES,
   MASTER_DIR_ELECTRON,
   MASTER_DIR_WEB,
@@ -199,7 +199,7 @@ const frameFlathubWindow = async (src: string): Promise<Buffer> => {
 const renderSource = async (src: string, frame?: StoreRule['frame']): Promise<Buffer> => {
   // GNOME captures already carry native decoration, rounded corners and
   // shadow; drawing our own frame on top would double them up.
-  if (frame === 'flathub-window' && !IS_GNOME_CAPTURE) return frameFlathubWindow(src);
+  if (frame === 'flathub-window' && !IS_NATIVE_CAPTURE) return frameFlathubWindow(src);
   return fs.readFileSync(src);
 };
 

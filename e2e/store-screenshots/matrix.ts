@@ -237,21 +237,23 @@ export const SCREENSHOT_BASE_DATE = new Date(
 );
 
 /**
- * GNOME capture mode (`npm run screenshots:flathub:gnome`).
+ * Native window capture mode (`npm run screenshots:flathub:native`).
  *
- * GNOME Shell only lets its own screenshot tool capture a single window with
- * native decoration, rounded corners and shadow, which is what Flathub's
- * quality review asks for. In this mode the Electron pipeline drives the app
- * into each Flathub scene, then waits for the user to press Alt+Print and
- * picks the new PNG up from the GNOME screenshots folder.
+ * Flathub's quality review asks for screenshots with the desktop's own window
+ * decoration, rounded corners and shadow. In this mode the app uses the system
+ * title bar and the desktop's screenshot tool captures each Flathub scene:
+ * - KDE: Spectacle captures the active window automatically.
+ * - GNOME: Shell only lets its own tool capture a single window, so the
+ *   pipeline waits for the user to press Alt+Print and picks the PNG up.
+ * - anything else: falls back to the X11/Wayland region capture.
  */
-export const IS_GNOME_CAPTURE = process.env.SP_SCREENSHOT_GNOME === '1';
+export const IS_NATIVE_CAPTURE = process.env.SP_SCREENSHOT_NATIVE === '1';
 
 /**
- * Window size for GNOME capture. Flathub asks for at most 1000×700 logical
+ * Window size for native capture. Flathub asks for at most 1000×700 logical
  * pixels (2000×1400 on HiDPI).
  */
-export const GNOME_CAPTURE_WINDOW = { width: 1000, height: 700 } as const;
+export const NATIVE_CAPTURE_WINDOW = { width: 1000, height: 700 } as const;
 
 /** Optional theme override applied to every scene (e.g. `light` for Flathub's
  *  "default settings" check). */

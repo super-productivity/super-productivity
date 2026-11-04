@@ -29,7 +29,7 @@ import { waitForAppReady } from '../utils/waits';
 import {
   FLATHUB_SCENARIOS,
   FORCED_THEME,
-  IS_GNOME_CAPTURE,
+  IS_NATIVE_CAPTURE,
   MASTER_DIR_ELECTRON,
   MASTER_DIR_WEB,
   MOBILE_VIEWPORTS,
@@ -262,6 +262,67 @@ const listPngs = (root: string): string[] => {
   return out;
 };
 
+const currentDesktop = (process.env.XDG_CURRENT_DESKTOP ?? '').toUpperCase();
+const IS_KDE = currentDesktop.includes('KDE');
+const IS_GNOME = currentDesktop.includes('GNOME');
+
+/** Width and height from a PNG's IHDR chunk. */
+const pngSize = (file: string): { width: number; height: number } => {
+  const header = Buffer.alloc(24);
+  const fd = fs.openSync(file, 'r');
+  try {
+    fs.readSync(fd, header, 0, 24, 0);
+  } finally {
+    fs.closeSync(fd);
+  }
+  return { width: header.readUInt32BE(16), height: header.readUInt32BE(20) };
+};
+
+/**
+ * KDE capture: raise and focus the window, then let Spectacle grab the active
+ * window in the background. Spectacle includes KWin's title bar, rounded
+ * corners and shadow (per its "Include window titlebar/shadow" settings).
+ */
+const captureViaSpectacle = async (
+  electronApp: ElectronApplication,
+  outPath: string,
+  scenario: string,
+): Promise<void> => {
+  const bounds = await electronApp.evaluate(({ BrowserWindow }) => {
+    const w = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
+    if (!w) throw new Error('No Electron window to capture');
+    w.show();
+    w.moveTop();
+    w.focus();
+    return w.getBounds();
+  });
+  // Let KWin finish activating the window and the renderer finish painting.
+  await sleep(800);
+  if (fs.existsSync(outPath)) fs.rmSync(outPath);
+  console.log(`[screenshot] ${scenario} → spectacle --activewindow`);
+  await run('spectacle', [
+    '--background',
+    '--nonotify',
+    '--activewindow',
+    '--output',
+    outPath,
+  ]);
+  if (!fs.existsSync(outPath)) {
+    throw new Error(`Spectacle did not write ${outPath} for ${scenario}`);
+  }
+  // Sanity check: the capture should be the app window (plus title bar and
+  // shadow), not e.g. the terminal that happened to keep focus.
+  const size = pngSize(outPath);
+  const ratio = size.width / size.height / (bounds.width / bounds.height);
+  if (ratio < 0.85 || ratio > 1.15) {
+    throw new Error(
+      `${scenario}: captured ${size.width}x${size.height}, but the app window is ` +
+        `${bounds.width}x${bounds.height}. Was another window active? Keep the ` +
+        'Super Productivity window in front while the capture runs.',
+    );
+  }
+};
+
 /**
  * GNOME capture: bring the window forward, ask the user to press Alt+Print
  * (GNOME's native window screenshot, with decoration, rounded corners and
@@ -355,6 +416,15 @@ export const test = base.extend<ScreenshotFixtures>({
       `worker-${testInfo.workerIndex}-${Date.now()}`,
     );
     fs.mkdirSync(userDataDir, { recursive: true });
+    // Native capture: start with the system title bar so the desktop draws
+    // real decoration and shadow. main-window.ts reads this before the
+    // window exists; the seed sets the matching renderer config.
+    if (IS_NATIVE_CAPTURE) {
+      fs.writeFileSync(
+        path.join(userDataDir, 'simpleSettings'),
+        JSON.stringify({ isUseCustomWindowTitleBar: false }),
+      );
+    }
 
     // NODE_ENV is intentionally NOT set to 'DEV': start-app.js binds
     // `isShowDevTools = IS_DEV`, and electron/debug.ts auto-opens DevTools on
@@ -660,7 +730,7 @@ export const test = base.extend<ScreenshotFixtures>({
     };
     const fn = async (scenario: string, name: string): Promise<void> => {
       // GNOME capture only stops for scenes that end up in the Flathub gallery.
-      if (IS_GNOME_CAPTURE && !FLATHUB_SCENARIOS.includes(scenario)) return;
+      if (IS_NATIVE_CAPTURE && !FLATHUB_SCENARIOS.includes(scenario)) return;
       // Read live theme + locale from the page so one test can span multiple
       // (locale × theme) variants. helpers.applyTheme flips DARK_MODE in
       // localStorage; helpers.applyLocale stamps the current locale on
@@ -689,7 +759,9 @@ export const test = base.extend<ScreenshotFixtures>({
       } catch {
         /* electron pages with no mouse host shouldn't ever fail this */
       }
-      if (MODE === 'electron' && electronApp && IS_GNOME_CAPTURE) {
+      if (MODE === 'electron' && electronApp && IS_NATIVE_CAPTURE && IS_KDE) {
+        await captureViaSpectacle(electronApp, file, scenario);
+      } else if (MODE === 'electron' && electronApp && IS_NATIVE_CAPTURE && IS_GNOME) {
         await captureViaGnome(electronApp, file, scenario);
       } else if (MODE === 'electron' && electronApp) {
         await captureWindowWithChrome(electronApp, page, file);
