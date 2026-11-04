@@ -87,9 +87,7 @@ test.describe('@webdav a pending REPAIR built before a download keeps the downlo
     void webdavServerUp;
   });
 
-  // Fails today: the old REPAIR payload replaces the remote and X is lost.
-  // Tracked in #11483.
-  test.fixme('a stale pending REPAIR snapshot does not drop a peer task its download applied', async ({
+  test('a stale pending REPAIR snapshot does not drop a peer task its download applied', async ({
     browser,
     baseURL,
     request,
