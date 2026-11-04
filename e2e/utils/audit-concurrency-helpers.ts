@@ -54,10 +54,10 @@ export interface StoreCounter {
  */
 const readStoreSlices = async (
   client: Pick<SimulatedE2EClient, 'page'>,
-): Promise<{ tasks: StoreTask[]; counters: StoreCounter[]; todayIds: string[] }> =>
+): Promise<{ tasks: StoreTask[]; counters: StoreCounter[] }> =>
   client.page.evaluate(() => {
     type Slice = { ids?: string[]; entities?: Record<string, Record<string, unknown>> };
-    type Root = { tasks?: Slice; simpleCounter?: Slice; tag?: Slice };
+    type Root = { tasks?: Slice; simpleCounter?: Slice };
     const store = (
       window as unknown as {
         __e2eTestHelpers?: {
@@ -89,9 +89,7 @@ const readStoreSlices = async (
           ? (c.countOnDay as Record<string, number>)
           : {},
     }));
-    const today = root?.tag?.entities?.['TODAY'];
-    const todayIds = Array.isArray(today?.taskIds) ? (today.taskIds as string[]) : [];
-    return { tasks, counters, todayIds };
+    return { tasks, counters };
   });
 
 /** Every task in the live store. */
@@ -185,7 +183,7 @@ export const readOpLogEntries = async (
   });
 
 /** Ops that are neither synced nor rejected (what syncAndWait() would flush). */
-export const getPendingOpCount = async (
+const getPendingOpCount = async (
   client: Pick<SimulatedE2EClient, 'page'>,
 ): Promise<number> =>
   (await readOpLogEntries(client)).filter((e) => !e.isSynced && !e.isRejected).length;

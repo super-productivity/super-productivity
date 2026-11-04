@@ -169,8 +169,9 @@ test.describe('@supersync SuperSync Stress Tests', () => {
    * The OperationApplierService uses batched dispatches with event loop yields
    * to prevent NgRx from being overwhelmed by rapid dispatches.
    *
-   * It does not reach a paging or piggyback boundary: the server's
-   * DOWNLOAD_PAGE_SIZE and PIGGYBACK_LIMIT are both 500, far above 197.
+   * It does not reach a paging or piggyback boundary: the
+   * client's download page size (DOWNLOAD_PAGE_SIZE) and the server's
+   * PIGGYBACK_LIMIT are both 500, far above 197.
    *
    * Actions:
    * 1. Client A creates 50 tasks (50 operations)

@@ -90,8 +90,8 @@ test.describe('@supersync @concurrent-import Concurrent BACKUP_IMPORT handling',
         const importPage = new ImportPage(client.page);
         await importPage.navigateToImportPage();
         await importPage.importBackupFile(backup);
-        // An import may reload the app, which clears setupSuperSync's
-        // background-sync blocks; nothing may upload before the explicit syncs.
+        // Defensive: re-assert setupSuperSync's background-sync blocks so
+        // nothing uploads before the explicit syncs (checked on the server below).
         await client.page.evaluate(blockBackgroundSync);
         await expect.poll(() => getTaskTitleFromState(client, marker)).toBe(marker);
         expect(await getTaskTitleFromState(client, baseline)).toBeNull();

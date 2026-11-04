@@ -1537,6 +1537,8 @@ test.describe('@supersync SuperSync LWW Conflict Resolution', () => {
       // Positive control for the store-absence checks below.
       expect(await getTaskTitleFromState(clientA, subtaskName)).toBe(subtaskName);
       expect(await getTaskTitleFromState(clientB, subtaskName)).toBe(subtaskName);
+      expect(await getTaskTitleFromState(clientA, parentName)).not.toBeNull();
+      expect(await getTaskTitleFromState(clientB, parentName)).not.toBeNull();
 
       // 3. Client A deletes the parent task
       // First, click elsewhere to clear any focus/selection
