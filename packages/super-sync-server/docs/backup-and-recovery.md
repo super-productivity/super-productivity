@@ -105,8 +105,10 @@ then follow the same steps.
 
 **Why this is preferred:**
 
-- Every device re-uploads its whole state, so it does not matter which
-  devices come back or in what order
+- The first device to sync re-uploads its whole state; the others receive
+  it. A device that still holds changes that state lacks is asked whether
+  to keep its local data or use the server's, instead of losing them
+  silently
 - Clients hold the complete data — they are the authoritative source
 - Produces a clean, consistent server state
 - Verified by e2e tests (`supersync-server-backup-revert.spec.ts`)
@@ -146,14 +148,22 @@ removed. There is nothing to show the user and nothing for them to do. Each
 device re-uploads only its own changes, so:
 
 - A device that never syncs again cannot restore its changes.
-- A device that stays offline until other devices have pushed the server
-  back past its last known position cannot notice the restore, and its lost
-  changes stay off the server.
+- A device notices the restore only while the server is still behind its
+  last known position. Once other devices' re-uploads (or new changes) have
+  pushed the server back to or past that position, a device that syncs later
+  no longer notices: its own lost changes stay off the server, and it can
+  miss some of the changes the other devices re-sent. This is likely when
+  that device was behind the others before the restore, so have every device
+  sync soon after the restore, starting with the ones that synced least
+  recently.
+- Only ordinary changes are re-sent. A full-state import made after the
+  backup (for example a backup file imported in the app) is not re-sent, so
+  devices that join later can end up without it.
 - Changes are re-sent as ordinary operations, so the usual conflict rules
   apply.
 
-If you need every device's data back for certain, prefer the accounts-only
-restore above. To start one account over from a single device's state, the
+If you need every device's data back, prefer the accounts-only restore
+above. To start one account over from a single device's state, the
 user can still use "Reset Account" (server web page) and then sync from that
 device.
 
