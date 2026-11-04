@@ -1,4 +1,5 @@
 import { Injectable, inject } from '@angular/core';
+import { HttpErrorResponse } from '@angular/common/http';
 import { createEffect, ofType } from '@ngrx/effects';
 import { LOCAL_ACTIONS } from '../../../util/local-actions.token';
 import { combineLatest, EMPTY, from, merge, Observable, timer } from 'rxjs';
@@ -24,6 +25,9 @@ import { DELAY_BEFORE_ISSUE_POLLING } from '../issue.const';
 import { IssueLog } from '../../../core/log';
 import { PluginIssueProviderRegistryService } from '../../../plugins/issue-provider/plugin-issue-provider-registry.service';
 import { skipDuringSyncWindow } from '../../../util/skip-during-sync-window.operator';
+import { getRefreshOnLook$ } from './refresh-on-look';
+import { IS_ONLINE$ } from '../../../util/is-online.token';
+import { pollWhileOnline } from '../../../util/poll-while-online';
 
 @Injectable()
 export class PollToBacklogEffects {
@@ -34,12 +38,13 @@ export class PollToBacklogEffects {
   private readonly _snackService = inject(SnackService);
   private readonly _store = inject(Store);
   private readonly _pluginRegistry = inject(PluginIssueProviderRegistryService);
+  private readonly _isOnline$ = inject(IS_ONLINE$);
 
   /**
    * Created here because the operator calls inject() -- the timers themselves are
    * built lazily inside switchMap(), outside of any injection context.
    */
-  private readonly _skipDuringSyncWindow = skipDuringSyncWindow<number>();
+  private readonly _skipDuringSyncWindow = skipDuringSyncWindow<unknown>();
 
   pollToBacklogActions$: Observable<unknown> = this._actions$.pipe(
     ofType(setActiveWorkContext),
@@ -138,9 +143,18 @@ export class PollToBacklogEffects {
     provider: IssueProvider,
     stopOnContextSwitch = true,
   ): Observable<unknown> {
-    const timer$ = timer(
+    const timer$ = pollWhileOnline(
+      this._isOnline$,
+      [
+        timer(
+          DELAY_BEFORE_ISSUE_POLLING,
+          this._issueService.getPollInterval(provider.issueProviderKey),
+        ),
+        getRefreshOnLook$(provider),
+      ],
+      // Reconnecting also starts a sync; give it the same head start as at boot so
+      // this tick isn't dropped by the sync-window guard below.
       DELAY_BEFORE_ISSUE_POLLING,
-      this._issueService.getPollInterval(provider.issueProviderKey),
     );
 
     return (
@@ -162,7 +176,11 @@ export class PollToBacklogEffects {
           ),
         ).pipe(
           catchError((e) => {
-            IssueLog.err(e);
+            // The error response carries the provider's URL: log its status only.
+            IssueLog.err(
+              'Backlog import poll failed for ' + provider.id,
+              e instanceof HttpErrorResponse ? { status: e.status } : e,
+            );
             this._snackService.open({
               type: 'ERROR',
               // TODO translate

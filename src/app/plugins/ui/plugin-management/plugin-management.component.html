@@ -102,6 +102,12 @@
               <td>{{ getPluginLanguages(plugin) }}</td>
             </tr>
           </table>
+          @if (getDataSharingHtml(plugin); as dataSharingHtml) {
+            <div
+              class="plugin-info-section"
+              [innerHTML]="dataSharingHtml"
+            ></div>
+          }
           @if (getApiAccess(plugin); as apiAccess) {
             @if (apiAccess.length > 0) {
               <div class="plugin-info-section">
@@ -328,7 +334,7 @@
         [disabled]="isUploading()"
       >
         <mat-icon>delete_sweep</mat-icon>
-        {{ T.PLUGINS.CLEAR_PLUGIN_CACHE | translate }}
+        {{ T.PLUGINS.REMOVE_ALL_UPLOADED_PLUGINS | translate }}
       </button>
     </div>
     @if (uploadError()) {
@@ -336,6 +342,14 @@
         {{ uploadError() }}
       </mat-error>
     }
+    <p>
+      {{ T.PLUGINS.BUILD_YOUR_OWN | translate }}
+      <a
+        href="https://github.com/super-productivity/super-productivity/blob/master/docs/plugin-development.md"
+        target="_blank"
+        >{{ T.PLUGINS.BUILD_YOUR_OWN_LINK | translate }}</a
+      >
+    </p>
   </mat-card-content>
 </mat-card>
 

@@ -41,7 +41,7 @@ describe('DesktopPanelButtonsComponent', () => {
   };
 
   const NONE: Partial<AppFeaturesConfig> = {
-    isScheduleDayPanelEnabled: false,
+    isSchedulerEnabled: false,
     isIssuesPanelEnabled: false,
     isProjectNotesEnabled: false,
   };
@@ -59,7 +59,7 @@ describe('DesktopPanelButtonsComponent', () => {
     ['none enabled', NONE, []],
     [
       'only schedule',
-      { ...NONE, isScheduleDayPanelEnabled: true },
+      { ...NONE, isSchedulerEnabled: true },
       ['e2e-toggle-schedule-day-panel'],
     ],
     [

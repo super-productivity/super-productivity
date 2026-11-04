@@ -6,6 +6,8 @@ import {
   ElementRef,
   inject,
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { filter } from 'rxjs/operators';
 import {
   MAT_DIALOG_DATA,
   MatDialog,
@@ -91,6 +93,22 @@ export class DialogTimeEstimateComponent implements AfterViewInit {
     this._taskService = _taskService;
     this.taskCopy = createTaskCopy(this.task);
     this.timeSpentOnDayCopy = this.taskCopy.timeSpentOnDay || {};
+
+    // Tapping outside keeps the edit (#10823): spinning the duration dial is
+    // tedious to redo. Escape and Cancel still discard. Closing is handled here
+    // because the default backdrop close would race a second close().
+    this._matDialogRef.disableClose = true;
+    this._matDialogRef
+      .backdropClick()
+      .pipe(takeUntilDestroyed())
+      .subscribe(() => (this._isChanged() ? this.submit() : this._matDialogRef.close()));
+    this._matDialogRef
+      .keydownEvents()
+      .pipe(
+        filter((ev) => ev.key === 'Escape'),
+        takeUntilDestroyed(),
+      )
+      .subscribe(() => this._matDialogRef.close());
   }
 
   ngAfterViewInit(): void {
@@ -133,6 +151,16 @@ export class DialogTimeEstimateComponent implements AfterViewInit {
     delete rest[strDate];
     this.timeSpentOnDayCopy = rest;
     this.taskCopy.timeSpentOnDay = this.timeSpentOnDayCopy;
+  }
+
+  private _isChanged(): boolean {
+    if ((this.taskCopy.timeEstimate || 0) !== (this.task.timeEstimate || 0)) {
+      return true;
+    }
+    const before = this.task.timeSpentOnDay || {};
+    const after = this.timeSpentOnDayCopy;
+    const days = new Set([...Object.keys(before), ...Object.keys(after)]);
+    return [...days].some((day) => (before[day] || 0) !== (after[day] || 0));
   }
 
   trackByIndex(i: number, p: any): number {

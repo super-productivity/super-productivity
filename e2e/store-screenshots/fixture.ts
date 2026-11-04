@@ -463,6 +463,9 @@ export const test = base.extend<ScreenshotFixtures>({
     if (isMobileProject) {
       await page.addInitScript(() => {
         localStorage.setItem('SUP_NAV_SIDEBAR_EXPANDED', 'false');
+        // Phones open the schedule in the day view unless a view was picked;
+        // the store shot shows the week grid.
+        localStorage.setItem('SELECTED_TIME_VIEW', 'week');
       });
     }
     await page.addInitScript((darkMode) => {

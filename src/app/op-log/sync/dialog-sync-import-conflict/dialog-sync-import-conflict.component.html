@@ -1,84 +1,91 @@
-<h1 mat-dialog-title>
-  <mat-icon
-    class="warning-icon"
-    aria-hidden="true"
-    >warning</mat-icon
-  >
-  {{ T.F.SYNC.D_SYNC_IMPORT_CONFLICT.TITLE | translate }}
-</h1>
+@if (isFirstSuperSync) {
+  <sync-first-choice
+    [accountTaskCount]="data.accountTaskCount"
+    (chosen)="closeFirstSync($event)"
+  />
+} @else {
+  <h1 mat-dialog-title>
+    <mat-icon
+      class="warning-icon"
+      aria-hidden="true"
+      >warning</mat-icon
+    >
+    {{ T.F.SYNC.D_SYNC_IMPORT_CONFLICT.TITLE | translate }}
+  </h1>
 
-<mat-dialog-content>
-  <p class="message">
-    {{ messageKey | translate: { filteredOpCount: data.filteredOpCount } }}
-  </p>
-
-  <p class="reason">
-    {{ reasonKey | translate }}
-  </p>
-
-  @if (isIncomingImport) {
-    <p class="recommendation">
-      {{ T.F.SYNC.D_SYNC_IMPORT_CONFLICT.RECOMMEND_SERVER | translate }}
+  <mat-dialog-content>
+    <p class="message">
+      {{ messageKey | translate: { filteredOpCount: data.filteredOpCount } }}
     </p>
-  }
 
-  @if (isNeverSynced) {
-    <p class="first-sync-warning">
-      <mat-icon
-        class="warning-icon"
-        aria-hidden="true"
-        >warning</mat-icon
-      >
-      {{ T.F.SYNC.D_SYNC_IMPORT_CONFLICT.FIRST_SYNC_WARNING | translate }}
+    <p class="reason">
+      {{ reasonKey | translate }}
     </p>
-  }
 
-  <div class="import-info">
-    <div class="info-row">
-      <span class="label"
-        >{{ T.F.SYNC.D_SYNC_IMPORT_CONFLICT.IMPORT_DATE | translate }}:</span
-      >
-      <span class="value">
-        {{ data.localImportTimestamp | localeDate: 'shortDate' : undefined : locale() }}
-        {{ data.localImportTimestamp | shortTime }}
-      </span>
-    </div>
-    @if (data.filteredOpCount > 0) {
+    @if (isIncomingImport) {
+      <p class="recommendation">
+        {{ T.F.SYNC.D_SYNC_IMPORT_CONFLICT.RECOMMEND_SERVER | translate }}
+      </p>
+    }
+
+    @if (isNeverSynced) {
+      <p class="first-sync-warning">
+        <mat-icon
+          class="warning-icon"
+          aria-hidden="true"
+          >warning</mat-icon
+        >
+        {{ T.F.SYNC.D_SYNC_IMPORT_CONFLICT.FIRST_SYNC_WARNING | translate }}
+      </p>
+    }
+
+    <div class="import-info">
       <div class="info-row">
         <span class="label"
-          >{{ T.F.SYNC.D_SYNC_IMPORT_CONFLICT.FILTERED_CHANGES | translate }}:</span
+          >{{ T.F.SYNC.D_SYNC_IMPORT_CONFLICT.IMPORT_DATE | translate }}:</span
         >
-        <span class="value highlight">{{ data.filteredOpCount }}</span>
+        <span class="value">
+          {{ data.localImportTimestamp | localeDate: 'shortDate' : undefined : locale() }}
+          {{ data.localImportTimestamp | shortTime }}
+        </span>
       </div>
-    }
-  </div>
-</mat-dialog-content>
+      @if (data.filteredOpCount > 0) {
+        <div class="info-row">
+          <span class="label"
+            >{{ T.F.SYNC.D_SYNC_IMPORT_CONFLICT.FILTERED_CHANGES | translate }}:</span
+          >
+          <span class="value highlight">{{ data.filteredOpCount }}</span>
+        </div>
+      }
+    </div>
+  </mat-dialog-content>
 
-<mat-dialog-actions align="end">
-  <div class="wrap-buttons">
-    <button
-      (click)="close('CANCEL')"
-      mat-button
-    >
-      {{ T.G.CANCEL | translate }}
-    </button>
-    <button
-      (click)="close('USE_REMOTE')"
-      [color]="isIncomingImport ? 'primary' : undefined"
-      [attr.cdkFocusInitial]="isIncomingImport ? '' : null"
-      mat-stroked-button
-    >
-      <mat-icon aria-hidden="true">cloud_download</mat-icon>
-      {{ T.F.SYNC.D_SYNC_IMPORT_CONFLICT.USE_REMOTE | translate }}
-    </button>
-    <button
-      (click)="close('USE_LOCAL')"
-      [color]="isIncomingImport ? undefined : 'primary'"
-      [attr.cdkFocusInitial]="isIncomingImport ? null : ''"
-      mat-stroked-button
-    >
-      <mat-icon aria-hidden="true">cloud_upload</mat-icon>
-      {{ T.F.SYNC.D_SYNC_IMPORT_CONFLICT.USE_LOCAL | translate }}
-    </button>
-  </div>
-</mat-dialog-actions>
+  <mat-dialog-actions align="end">
+    <div class="wrap-buttons">
+      <button
+        (click)="close('CANCEL')"
+        mat-button
+      >
+        {{ T.G.CANCEL | translate }}
+      </button>
+      <button
+        (click)="close('USE_REMOTE')"
+        [color]="isIncomingImport ? 'primary' : undefined"
+        [attr.cdkFocusInitial]="isIncomingImport ? '' : null"
+        mat-stroked-button
+      >
+        <mat-icon aria-hidden="true">cloud_download</mat-icon>
+        {{ T.F.SYNC.D_SYNC_IMPORT_CONFLICT.USE_REMOTE | translate }}
+      </button>
+      <button
+        (click)="close('USE_LOCAL')"
+        [color]="isIncomingImport ? undefined : 'primary'"
+        [attr.cdkFocusInitial]="isIncomingImport ? null : ''"
+        mat-stroked-button
+      >
+        <mat-icon aria-hidden="true">cloud_upload</mat-icon>
+        {{ T.F.SYNC.D_SYNC_IMPORT_CONFLICT.USE_LOCAL | translate }}
+      </button>
+    </div>
+  </mat-dialog-actions>
+}

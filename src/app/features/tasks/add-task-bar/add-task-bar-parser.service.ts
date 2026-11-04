@@ -12,9 +12,14 @@ import {
 } from '../short-syntax';
 import { ShortSyntaxConfig } from '../../config/global-config.model';
 import { getDbDateStr } from '../../../util/get-db-date-str';
-import { TimeSpentOnDay, TaskReminderOptionId } from '../task.model';
+import { TimeSpentOnDay, TaskPriority, TaskReminderOptionId } from '../task.model';
 import { TaskAttachment } from '../task-attachment/task-attachment.model';
-import { millisecondsDiffToDeadlineRemindOption } from '../util/remind-option-to-milliseconds';
+import { millisecondsDiffToRemindOption } from '../util/remind-option-to-milliseconds';
+import { getTaskPriority } from '../task-priority.const';
+import {
+  DateInputLocale,
+  DEFAULT_DATE_INPUT_LOCALE,
+} from '../../../core/date-time-format/date-input-locale';
 
 interface PreviousParseResult {
   cleanText: string | null;
@@ -32,6 +37,7 @@ interface PreviousParseResult {
   isDeadlineFromSyntax: boolean;
   repeat: AddTaskBarRepeat | null;
   isRepeatFromSyntax: boolean;
+  priority: TaskPriority | null;
 }
 
 const isSameRepeat = (
@@ -84,6 +90,7 @@ export class AddTaskBarParserService {
     defaultProject: Project,
     defaultDate?: string,
     defaultTime?: string,
+    dateLocale: DateInputLocale = DEFAULT_DATE_INPUT_LOCALE,
   ): Promise<void> {
     const parseRunId = ++this._parseRunId;
 
@@ -117,6 +124,7 @@ export class AddTaskBarParserService {
       undefined,
       'replace',
       true,
+      dateLocale,
     );
 
     if (parseRunId !== this._parseRunId) {
@@ -185,6 +193,7 @@ export class AddTaskBarParserService {
         isDeadlineFromSyntax: false,
         repeat: wasRepeatFromSyntax ? null : currentState.repeat || null,
         isRepeatFromSyntax: false,
+        priority: null,
       };
     } else {
       // Extract parsed values
@@ -237,7 +246,7 @@ export class AddTaskBarParserService {
         }
 
         if (parseResult.taskChanges.deadlineRemindAt) {
-          deadlineRemindOption = millisecondsDiffToDeadlineRemindOption(
+          deadlineRemindOption = millisecondsDiffToRemindOption(
             parseResult.taskChanges.deadlineWithTime,
             parseResult.taskChanges.deadlineRemindAt,
           );
@@ -275,6 +284,7 @@ export class AddTaskBarParserService {
         isDeadlineFromSyntax: hasParsedDeadline,
         repeat,
         isRepeatFromSyntax: !!parseResult.repeat,
+        priority: getTaskPriority(parseResult.taskChanges.priority),
       };
     }
 
@@ -395,6 +405,13 @@ export class AddTaskBarParserService {
       } else if (currentState.repeat) {
         this._stateService.clearRepeatSetting();
       }
+    }
+
+    if (
+      !this._previousParseResult ||
+      this._previousParseResult.priority !== currentResult.priority
+    ) {
+      this._stateService.updatePriority(currentResult.priority);
     }
 
     // Store current result as previous for next comparison

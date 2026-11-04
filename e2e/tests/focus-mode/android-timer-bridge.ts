@@ -2,7 +2,8 @@
  * Native boundary for the Android timer regressions. The application, effects,
  * reducers and IndexedDB are real. These two services survive a page reload via
  * sessionStorage, modelling WebView recreation, NOT Android process death.
- * Payloads match JavaScriptInterface.get{FocusMode,Tracking}Elapsed().
+ * Payloads match JavaScriptInterface.get{FocusMode,Tracking}Elapsed() and
+ * getTrackingActionQueue().
  */
 export const installAndroidTimerBridge = (): void => {
   if (window !== window.top) return;
@@ -77,12 +78,27 @@ export const installAndroidTimerBridge = (): void => {
     },
     getTrackingElapsed: (): string => {
       const tracking = readTracking();
-      return JSON.stringify(
-        tracking && {
-          taskId: tracking.taskId,
-          elapsedMs: tracking.elapsedMs + Date.now() - tracking.anchor,
-        },
-      );
+      const snapshot = tracking && {
+        taskId: tracking.taskId,
+        elapsedMs: tracking.elapsedMs + Date.now() - tracking.anchor,
+      };
+      // A notification tap (NotificationActionReceiver) right after this read:
+      // native samples the total, queues the action and ends its session.
+      const tapType = sessionStorage.getItem('test-tap-after-next-tracking-read');
+      if (snapshot && tapType) {
+        sessionStorage.removeItem('test-tap-after-next-tracking-read');
+        sessionStorage.setItem(
+          'test-native-tracking-actions',
+          JSON.stringify([{ type: tapType, ...snapshot, at: Date.now() }]),
+        );
+        writeTracking(null);
+      }
+      return JSON.stringify(snapshot);
+    },
+    getTrackingActionQueue: (): string | null => {
+      const queue = sessionStorage.getItem('test-native-tracking-actions');
+      sessionStorage.removeItem('test-native-tracking-actions');
+      return queue;
     },
     startFocusModeService: (
       _title: string,

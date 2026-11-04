@@ -19,8 +19,19 @@ import { TaskService } from '../tasks/task.service';
 import { TaskFocusService } from '../tasks/task-focus.service';
 import { selectTaskEntities } from '../tasks/store/task.selectors';
 import { WorkContextService } from '../work-context/work-context.service';
+import { QuickTourService } from './quick-tour.service';
 
-export type OnboardingStep = 'create-task' | 'task-swipe-left' | 'today-and-inbox';
+export type OnboardingStep =
+  | 'create-task'
+  | 'task-swipe-left'
+  | 'today-and-inbox'
+  // Shown once on the next page when the user left Today on the last tip.
+  | 'quick-tour-offer'
+  // "No thanks": names the way back, then guidance ends.
+  | 'quick-tour-declined';
+
+/** How long the "It's under Help → Quick tour" line stays after No thanks. */
+export const QUICK_TOUR_DECLINED_MS = 2500;
 
 type OnboardingPhase = 'idle' | 'await-first-task' | OnboardingStep;
 
@@ -39,11 +50,15 @@ const RETURNING_USER_MIN_PROJECTS = 3;
  *    task is deleted).
  * 3. Point at the first task's "Inbox" label and explain it (#8824): it shows
  *    in Today because it is planned for today, and lives in the Inbox because
- *    it has no project. Only shown while that is true. Ends when closed or
- *    once the user navigates anywhere.
+ *    it has no project. Only shown while that is true.
+ *
+ * The last tip offers the quick tour (Show me more / No thanks). Leaving Today
+ * while it shows offers it once more on the next page; leaving again, ✕ or an
+ * earlier tip closed ends guidance without it. Help → Quick tour always works.
  *
  * Starting a Help tour ends guidance, so only one of them is ever on screen.
- * No step advances on a timer. Reloading after the first task ends guidance.
+ * No step advances on a timer; only the No thanks line goes away on its own.
+ * Reloading after the first task ends guidance.
  */
 @Injectable({ providedIn: 'root' })
 export class OnboardingHintService {
@@ -57,6 +72,7 @@ export class OnboardingHintService {
   private _workContextService = inject(WorkContextService);
   private _store = inject(Store);
   private _localActions$: Observable<Action> = inject(LOCAL_ACTIONS);
+  private _quickTourService = inject(QuickTourService);
 
   private _phase = signal<OnboardingPhase>('idle');
   private _wasTaskMenuOpened = false;
@@ -65,6 +81,7 @@ export class OnboardingHintService {
   private _taskAddSub: Subscription | null = null;
   private _taskDoneSub: Subscription | null = null;
   private _navigationSub: Subscription | null = null;
+  private _declinedTimeout: ReturnType<typeof setTimeout> | null = null;
   private _taskEntities = this._store.selectSignal(selectTaskEntities);
   private _activeWorkContextId = toSignal(this._workContextService.activeWorkContextId$, {
     initialValue: null,
@@ -146,6 +163,13 @@ export class OnboardingHintService {
       }
     });
 
+    // Help → Quick tour during guidance: only one of them is on screen.
+    effect(() => {
+      if (this._quickTourService.isActive() && untracked(this._phase) !== 'idle') {
+        untracked(() => this._markDone());
+      }
+    });
+
     // A returning user who sets up sync needs no new-user guidance.
     effect(() => {
       if (this._globalConfigService.sync()?.isEnabled) {
@@ -182,11 +206,15 @@ export class OnboardingHintService {
       )
       .subscribe(({ task }) => this._onFirstTaskCandidate(task.id));
 
-    // The last tip is done once the user moves on to any page, e.g. the Inbox.
+    // The last tip is done once the user moves on to any page, e.g. the Inbox;
+    // the tour is offered there once more, and leaving again ends it.
     this._navigationSub = this._router.events
       .pipe(filter((event) => event instanceof NavigationEnd))
       .subscribe(() => {
-        if (this._phase() === 'today-and-inbox') {
+        const phase = this._phase();
+        if (phase === 'today-and-inbox') {
+          this._phase.set('quick-tour-offer');
+        } else if (phase === 'quick-tour-offer' || phase === 'quick-tour-declined') {
           this._markDone();
         }
       });
@@ -232,8 +260,23 @@ export class OnboardingHintService {
     return isTouchActive() && this._layoutService.isShowMobileBottomNav();
   }
 
+  /** ✕ / Esc: ends guidance quietly, without offering the tour. */
   skip(): void {
     this._markDone();
+  }
+
+  /** Show me more: the tour continues on the task the last tip explained. */
+  showMeMore(): void {
+    const taskId = this.firstTaskId();
+    this._markDone();
+    this._quickTourService.start(taskId, this._wasTaskMenuOpened);
+  }
+
+  /** No thanks: say where the tour lives, then go. */
+  decline(): void {
+    this._phase.set('quick-tour-declined');
+    this._clearDeclinedTimeout();
+    this._declinedTimeout = setTimeout(() => this._markDone(), QUICK_TOUR_DECLINED_MS);
   }
 
   private _onFirstTaskCandidate(taskId: string): void {
@@ -255,7 +298,8 @@ export class OnboardingHintService {
   /**
    * The last tip explains the first task's own place, so it only shows where
    * that holds: in the Inbox and on Today. A task created in a project or
-   * elsewhere, or already deleted, ends guidance instead.
+   * elsewhere, or already deleted, ends guidance instead, so there is no place
+   * to offer the tour; Help → Quick tour still has it.
    */
   private _advanceToLastStep(): void {
     const id = this.firstTaskId();
@@ -270,6 +314,13 @@ export class OnboardingHintService {
     }
   }
 
+  private _clearDeclinedTimeout(): void {
+    if (this._declinedTimeout !== null) {
+      clearTimeout(this._declinedTimeout);
+      this._declinedTimeout = null;
+    }
+  }
+
   private _markDone(): void {
     localStorage.setItem(LS.ONBOARDING_PRESET_DONE, 'true');
     localStorage.setItem(LS.ONBOARDING_HINTS_DONE, 'true');
@@ -281,6 +332,7 @@ export class OnboardingHintService {
     this._taskDoneSub = null;
     this._navigationSub?.unsubscribe();
     this._navigationSub = null;
+    this._clearDeclinedTimeout();
     this.firstTaskId.set(null);
     this._phase.set('idle');
   }

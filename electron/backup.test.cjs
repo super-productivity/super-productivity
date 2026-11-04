@@ -19,6 +19,8 @@ const BACKUP_DIR_WINSTORE = BACKUP_DIR.replace(
   'Local\\Packages\\53707johannesjo.SuperProductivity_ch45amy23cdv6\\LocalCache\\Roaming',
 );
 
+// what the mocked app.getPath('userData') returns; tests may change it after import
+let userDataPath;
 let existingPaths;
 let handleHandlers;
 let onHandlers;
@@ -38,7 +40,7 @@ const installMocks = () => {
   Module._load = function patchedLoad(request, parent, isMain) {
     if (request === 'electron') {
       return {
-        app: { getPath: () => USER_DATA },
+        app: { getPath: () => userDataPath },
         ipcMain: {
           on: (channel, handler) => onHandlers.set(channel, handler),
           handle: (channel, handler) => handleHandlers.set(channel, handler),
@@ -83,6 +85,7 @@ const loadBackupModule = () => {
 };
 
 test.beforeEach(() => {
+  userDataPath = USER_DATA;
   existingPaths = new Set();
   handleHandlers = new Map();
   onHandlers = new Map();
@@ -251,4 +254,24 @@ test('BACKUP rejects with a path-free error when the write fails (#10022)', asyn
       return true;
     },
   );
+});
+
+// backup.ts is imported before userData moves (snap common dir in main.ts,
+// --user-data-dir in start-app.ts), so the dir must be read at use time (#11049).
+test('backups follow a userData path changed after import (#11049)', () => {
+  const { initBackupAdapter } = loadBackupModule();
+  userDataPath = path.join('home', 'u', 'snap', 'sp', 'common', '.config', 'sp');
+  const movedBackupDir = path.join(userDataPath, 'backups');
+  initBackupAdapter();
+
+  handleHandlers.get('BACKUP')({}, { data: { a: 1 } });
+  const newest = handleHandlers.get('BACKUP_IS_AVAILABLE')();
+
+  assert.ok(existingPaths.has(movedBackupDir));
+  assert.equal(newest.folder, movedBackupDir);
+  assert.equal(path.dirname(newest.path), movedBackupDir);
+  assert.ok(storedFiles.has(path.resolve(newest.path)));
+  assert.deepEqual(JSON.parse(handleHandlers.get('BACKUP_LOAD_DATA')({}, newest.path)), {
+    a: 1,
+  });
 });

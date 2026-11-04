@@ -1,4 +1,5 @@
 import { test, expect } from '../../fixtures/supersync.fixture';
+import { translationText } from '../../utils/i18n-strings';
 import type { Page } from '@playwright/test';
 import {
   createTestUser,
@@ -162,7 +163,12 @@ const recoverWithNewPassword = async (
   const passwordInput = decryptErrorDialog.locator('input[type="password"]');
   await passwordInput.waitFor({ state: 'visible', timeout: 5000 });
   await passwordInput.fill(newPassword);
-  await decryptErrorDialog.locator('button:has-text("Retry Decrypt")').first().click();
+  await decryptErrorDialog
+    .locator('button', {
+      hasText: translationText('F.SYNC.D_DECRYPT_ERROR.CHANGE_PW_AND_DECRYPT'),
+    })
+    .first()
+    .click();
   await decryptErrorDialog.waitFor({ state: 'hidden', timeout: 10000 });
 
   const importDialogAppeared = await client.sync.syncImportConflictDialog

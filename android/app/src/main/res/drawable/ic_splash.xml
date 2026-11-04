@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android 12+ system splash icon (windowSplashScreenAnimatedIcon in
+  values/styles.xml). Just the checkmark, in the same color and size as the
+  web boot splash logo (src/index.html, .app-loading .logo: 72px, sp-fg
+  color), so the hand-off from the system splash to the web splash is
+  seamless. (No double hyphens in these comments: invalid XML, aapt2 fails.)
+
+  Splash icons without an icon background are drawn at 288dp and masked to
+  a 192dp circle (AOSP SplashscreenContentDrawer: 160dp * 192/160 view, the
+  drawable laid out at 1.5x that), so 1 viewport unit = 1dp; the glyph is
+  72dp, well inside the mask. Path and 64-unit viewBox match the launcher
+  foreground and the web logo.
+
+  The system splash centres the icon on the whole screen; on phones the web
+  logo is centred above the 44px bottom bar plus the bottom inset (24dp with
+  gesture navigation), i.e. (44 + 24) / 2 = 34dp higher. The glyph is shifted
+  up by that much (translateY 108 - 34 = 74) so it does not jump at the
+  hand-off. drawable-w600dp/ic_splash.xml is the centred variant for wider
+  windows, where the web splash has no bottom bar (its max-width: 599px query).
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="288dp"
+    android:height="288dp"
+    android:viewportWidth="288"
+    android:viewportHeight="288">
+  <group
+      android:scaleX="1.125"
+      android:scaleY="1.125"
+      android:translateX="108"
+      android:translateY="74">
+    <path
+        android:fillColor="@color/splash_icon"
+        android:pathData="M0.6554,34.5828 L32.4523,63.8553 63.7915,0.9436 30.2226,47.722Z" />
+  </group>
+</vector>

@@ -297,6 +297,50 @@ export const fieldPatchGroups = (
 };
 
 /**
+ * Types without a RECREATE_FALLBACK whose per-field resolution re-sends ONE
+ * full `'replace'` snapshot of the merged entity instead of `'patch'` rows
+ * (#10958). Every released client (v18.15.0 on) already receives whole-entity
+ * replace snapshots for these types and applies them with `setOne`, or
+ * `addOne` when it applied a concurrent delete, so the entity it recreates is
+ * whole: a partial patch would be added raw, invalid, with no repair rule.
+ *
+ * Admission needs a user-reported loss (fix intake), an adapter entity, and
+ * no derived upkeep on LWW apply: NOTE stays out (#10393 decision 4).
+ */
+export const MERGED_SNAPSHOT_TYPES: ReadonlySet<EntityType> = new Set<EntityType>([
+  'TASK_REPEAT_CFG',
+]);
+
+/**
+ * The entity a `MERGED_SNAPSHOT_TYPES` resolution re-sends, or undefined for
+ * whole-entity LWW: the state on the resolving device after the remote ops
+ * apply and the local fields that won are patched on top, without cleared
+ * fields (a replace drops them).
+ *
+ * The remote side must be readable ops only: an LWW row's values are never
+ * read (#10393 decision 5), so the snapshot could not carry them and would
+ * overwrite them on every device.
+ */
+export const mergedSnapshotState = (
+  current: Record<string, unknown>,
+  sides: FieldPatchSides,
+  groups: ReturnType<typeof localWinningFieldGroups>,
+): Record<string, unknown> | undefined => {
+  const { remoteOps, payloadKey, entityId } = sides;
+  if (groups.length === 0 || remoteOps.some((op) => isLwwUpdatePayload(op.payload))) {
+    return undefined;
+  }
+  const merged: Record<string, unknown> = {
+    ...current,
+    ...mergeChangedFields(fieldOps(remoteOps), payloadKey, entityId),
+    ...Object.assign({}, ...groups.map(({ changes }) => changes)),
+  };
+  return Object.fromEntries(
+    Object.entries(merged).filter(([, value]) => value !== undefined),
+  );
+};
+
+/**
  * One conflict per entity: detection emits one conflict per remote op, all
  * sharing the entity's pending local ops. Two resolvers with staggered
  * batches must build a patch from the SAME two sides, so an entity's

@@ -1,4 +1,5 @@
 import {
+  getCountdownDurationForTask,
   TimerState,
   FocusScreen,
   FocusModeMode,
@@ -236,6 +237,43 @@ describe('FocusModeModel', () => {
     it('should clamp out-of-range focus sound volumes', () => {
       expect(getFocusModeSoundVolume(50, 150)).toBe(50);
       expect(getFocusModeSoundVolume(50, -10)).toBe(0);
+    });
+  });
+
+  describe('getCountdownDurationForTask', () => {
+    const MIN = 60_000;
+
+    it('uses the remaining estimate when shorter than the default', () => {
+      expect(
+        getCountdownDurationForTask(25 * MIN, {
+          timeEstimate: 20 * MIN,
+          timeSpent: 5 * MIN,
+        }),
+      ).toBe(15 * MIN);
+    });
+
+    it('rounds the remaining estimate up to whole minutes', () => {
+      expect(
+        getCountdownDurationForTask(25 * MIN, {
+          timeEstimate: 10 * MIN,
+          timeSpent: 30_000,
+        }),
+      ).toBe(10 * MIN);
+    });
+
+    it('keeps the default when the estimate is longer, missing or used up', () => {
+      expect(
+        getCountdownDurationForTask(25 * MIN, { timeEstimate: 60 * MIN, timeSpent: 0 }),
+      ).toBe(25 * MIN);
+      expect(
+        getCountdownDurationForTask(25 * MIN, { timeEstimate: 0, timeSpent: 0 }),
+      ).toBe(25 * MIN);
+      expect(
+        getCountdownDurationForTask(25 * MIN, {
+          timeEstimate: 10 * MIN,
+          timeSpent: 12 * MIN,
+        }),
+      ).toBe(25 * MIN);
     });
   });
 });

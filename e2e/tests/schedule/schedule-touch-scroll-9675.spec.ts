@@ -86,6 +86,9 @@ const seedScheduledTaskAndOpenSchedule = async (
   // before it, or the schedule comes back empty.
   await waitForStatePersistence(page);
 
+  // A phone opens the schedule in the day view unless a view was picked; this
+  // test drags tomorrow's event, so it keeps the week grid like a user who chose it.
+  await page.evaluate(() => localStorage.setItem('SELECTED_TIME_VIEW', 'week'));
   await page.setViewportSize(MOBILE_VIEWPORT);
   await page.reload();
   await expect(page.locator('schedule-week')).toBeVisible();

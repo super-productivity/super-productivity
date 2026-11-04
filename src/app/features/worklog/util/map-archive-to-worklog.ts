@@ -1,7 +1,7 @@
 import { Dictionary, EntityState } from '@ngrx/entity';
 import { Task } from '../../tasks/task.model';
-import { getWeeksInMonth } from '../../../util/get-weeks-in-month';
 import { getWeekNumber } from '../../../util/get-week-number';
+import { getWeekStartDate } from '../../../util/get-week-start-date';
 import {
   Worklog,
   WorklogDataForDay,
@@ -152,36 +152,62 @@ export const mapArchiveToWorklog = (
       const days = Object.keys(month.ent);
       month.daysWorked = days.length;
       year.daysWorked += days.length;
-
-      const weeks = getWeeksInMonth(+monthIN - 1, +yearIN, firstDayOfWeek);
-
-      month.weeks = weeks
-        .map((week) => {
-          const weekForMonth: WorklogWeek = {
-            ...week,
-            timeSpent: 0,
-            daysWorked: 0,
-            ent: {},
-            weekNr: getWeekNumber(
-              new Date(+yearIN, +monthIN - 1, week.start),
-              firstDayOfWeek,
-            ),
-          };
-
-          days.forEach((dayIN: string) => {
-            const day: WorklogDay = month.ent[+dayIN];
-            if (+dayIN >= week.start && +dayIN <= week.end) {
-              weekForMonth.timeSpent += month.ent[+dayIN].timeSpent;
-              weekForMonth.daysWorked += 1;
-              weekForMonth.ent[+dayIN] = day;
-            }
-          });
-
-          return weekForMonth;
-        })
-        .filter((week) => week.daysWorked > 0);
     });
   });
 
+  _assignWeeksToMonths(worklog, firstDayOfWeek);
+
   return { worklog, totalTimeSpent };
+};
+
+// A week crossing a month boundary is kept whole (#9950) and listed in every month it
+// has worked days in, like a calendar's month view showing whole weeks. Week rows of a
+// month can therefore include days of the neighbouring month; month totals don't.
+const _assignWeeksToMonths = (worklog: Worklog, firstDayOfWeek: number): void => {
+  const weeksByStart = new Map<string, WorklogWeek>();
+  const monthsByStart = new Map<string, Set<WorklogMonth>>();
+  // day keys are local date strings, already shifted by the logical day offset when
+  // tracked, so weeks are built from them directly
+  const allDays: WorklogDay[] = Object.values(worklog)
+    .flatMap((year: WorklogYear) => Object.values(year.ent))
+    .flatMap((month: WorklogMonth) => Object.values(month.ent))
+    .sort((a: WorklogDay, b: WorklogDay) => a.dateStr.localeCompare(b.dateStr));
+
+  allDays.forEach((day) => {
+    const [y, m, d] = day.dateStr.split('-').map((v) => parseInt(v, 10));
+    const weekStart = getWeekStartDate(new Date(y, m - 1, d), firstDayOfWeek);
+    // malformed keys (e.g. "undefined") only log a devError in production; keep them
+    // out of weeks as before rather than breaking the whole worklog
+    if (isNaN(weekStart.getTime())) {
+      return;
+    }
+    const startDateStr = getDbDateStr(weekStart);
+
+    let week = weeksByStart.get(startDateStr);
+    if (!week) {
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekEnd.getDate() + 6);
+      week = {
+        start: weekStart.getDate(),
+        end: weekEnd.getDate(),
+        startDateStr,
+        endDateStr: getDbDateStr(weekEnd),
+        weekNr: getWeekNumber(weekStart, firstDayOfWeek),
+        timeSpent: 0,
+        daysWorked: 0,
+        ent: {},
+      };
+      weeksByStart.set(startDateStr, week);
+    }
+    const months = monthsByStart.get(startDateStr) ?? new Set<WorklogMonth>();
+    monthsByStart.set(startDateStr, months.add(worklog[y].ent[m]));
+    week.timeSpent += day.timeSpent;
+    week.daysWorked += 1;
+    week.ent[d] = day;
+  });
+
+  // insertion order is by week start, keeping each month's weeks in date order
+  weeksByStart.forEach((week, startDateStr) => {
+    monthsByStart.get(startDateStr)!.forEach((month) => month.weeks.push(week));
+  });
 };

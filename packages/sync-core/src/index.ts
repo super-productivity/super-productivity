@@ -58,6 +58,7 @@ export {
   decryptBatchSettled,
   deriveKeyFromPassword,
   clearSessionKeyCache,
+  DecryptFailedError,
   getSessionKeyCacheStats,
   getArgon2Params,
   isCryptoSubtleAvailable,

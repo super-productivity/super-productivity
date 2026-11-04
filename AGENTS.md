@@ -11,7 +11,7 @@ Read by section, not whole: the long sync docs open with a **Sections** index an
 ## Product principles
 
 - **Avoid feature creep:** extend existing building blocks; new UI, settings and sync surface must make users faster. A personal deep-work tool, not team management or reporting. Surface the leaner alternative when scope outgrows the problem.
-- **Less noise, more depth:** no constant alerts, vanity dashboards, streaks or dopamine loops. Attention-grabbing behavior ships off by default; reminders stay opt-in.
+- **Less noise, more depth:** no constant alerts, vanity dashboards, streaks or dopamine loops. Attention-grabbing behavior ships off by default; reminders stay opt-in. No always-visible explanatory UI (status lines, "what syncs" labels, badges): explain at the moment it matters (an error, a tooltip, the settings that own it).
 - **Adapt, don't impose:** one calm default; add a setting only when real workflows diverge. Prefer not building a feature over adding a toggle to dodge a decision.
 - **Privacy & offline first:** no analytics, tracking or telemetry; user data stays local unless explicitly synced. Core tasks and time tracking work offline; sync and integrations are optional and degrade gracefully.
 
@@ -45,6 +45,8 @@ npm run startFrontend          # web dev, generates environment constants first
 npm run dist                   # validated Electron distribution for the host platform
 ```
 
+**Wrap test, lint and E2E runs in `npm run quiet -- <script> [args]`** (e.g. `npm run quiet -- test:affected`, `npm run quiet -- e2e:file <path> --retries=0`): the full output goes to `.tmp/logs/`, and only the pass line (with test counts where the runner prints them), or the last 60 log lines on failure, reach your context. `rg` the printed log path for more.
+
 While iterating on app code, use `npm run test:affected` instead of a full `npm test`. It covers Angular specs only: after editing `packages/*` also run that package's tests, and run `npm test` before opening a PR. It follows static imports, templates and styles; test setup, configs and unimported assets/styles trigger a full run. "Nothing to run" means nothing was tested. CI runs everything (`test:ci`).
 
 For full provider suites prefer the [scheduled E2E workflow](.github/workflows/e2e-scheduled.yml) (`grep` filters SuperSync; `webdav_grep` + `run_webdav` for WebDAV); focused local runs and provider-switch prerequisites are in [e2e/AGENTS.md](e2e/AGENTS.md) (they need both servers and both flags, else they silently skip). Skipped tests do not validate a fix.
@@ -61,6 +63,7 @@ For full provider suites prefer the [scheduled E2E workflow](.github/workflows/e
 - **Tests:** add unit tests for new services and state logic.
 - **Service size:** ≤ 1200 physical lines per `*.service.ts` (specs exempt; ESLint `max-lines`). Split by responsibility before crossing; never grow grandfathered offenders — the per-file caps pinned in `eslint.config.js` may only go down.
 - **Agent-control files:** modify `AGENTS.md`, `CLAUDE.md`, `.agents/**` or `.codex/**` only when the user explicitly asks in the current task; keep it in a dedicated commit/PR that says how it changes agent behavior. Incident-derived rules here are invariant + enforcement + issue/doc pointer only (narrative goes to `docs/`; this file must stay skimmable); date cited statistics ("measured YYYY-MM").
+- **Issues & PRs:** one closing keyword per issue (`Fixes #1, fixes #2`; a list or "Related to" leaves issues open, e.g. #9551); create issues with a type (`gh issue create --type Bug|Feature|Task`).
 - **Hardening needs evidence:** grep for an observed instance before adding a guard; zero instances → record a gap instead. Allowlists only shrink (fix false positives or scope a justified disable). Verify a check can fail before trusting a pass. [Evidence](docs/hardening-earns-its-place.md).
 - **Does it earn its place?** Verify demand before judging implementation; decline a correct feature that adds unjustified complexity. [Review guide](docs/feature-review-guide.md).
 - **Code review:** assess maintenance cost, dependencies, scale and cross-client behavior; on every change touching persisted models, the sync wire or public/plugin APIs, check them explicitly, however small. [Long-term cost](docs/feature-review-guide.md#long-term-cost-of-a-change).

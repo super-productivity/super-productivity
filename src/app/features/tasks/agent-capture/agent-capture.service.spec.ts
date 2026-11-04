@@ -36,6 +36,7 @@ describe('AgentCaptureService', () => {
     id: SyncProviderId;
     registerCaptureKey: jasmine.Spy;
     disableCaptureKey: jasmine.Spy;
+    listCaptureGrants: jasmine.Spy;
   };
   let importer: jasmine.SpyObj<NativeCaptureImporter>;
   let calls: string[];
@@ -96,6 +97,7 @@ describe('AgentCaptureService', () => {
         return 'registered';
       }),
       disableCaptureKey: jasmine.createSpy().and.callFake(record('disable')),
+      listCaptureGrants: jasmine.createSpy().and.resolveTo({ grants: [] }),
     };
     importer = jasmine.createSpyObj<NativeCaptureImporter>('Importer', ['importPending']);
     importer.importPending.and.resolveTo({ created: 0, invalid: 0 });
@@ -259,6 +261,17 @@ describe('AgentCaptureService', () => {
     tick(60_000);
     expect(importer.importPending).not.toHaveBeenCalled();
   }));
+
+  it('counts grant captures and Android shares as pending', async () => {
+    provider.listCaptureGrants.and.resolveTo({
+      grants: [{ pendingCount: 2 }, { pendingCount: 1 }],
+      otherPendingCount: 4,
+    });
+    expect(await service.countPending()).toBe(7);
+    // An older server sends no share count.
+    provider.listCaptureGrants.and.resolveTo({ grants: [{ pendingCount: 2 }] });
+    expect(await service.countPending()).toBe(2);
+  });
 
   it('keeps the synced key when the server could not be told', async () => {
     provider.disableCaptureKey.and.rejectWith(new Error('offline'));

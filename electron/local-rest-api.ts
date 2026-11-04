@@ -604,8 +604,8 @@ export const initLocalRestApi = (): void => {
 
 /**
  * Applies the persisted switch once userData is final. initLocalRestApi() runs
- * from initIpcInterfaces(), before start-app.ts moves userData for Snap and
- * --user-data-dir; reading earlier would restore another profile's setting.
+ * from initIpcInterfaces(), before start-app.ts applies --user-data-dir;
+ * reading earlier would restore another profile's setting.
  */
 const restorePersistedEnabled = async (): Promise<void> => {
   await app.whenReady();

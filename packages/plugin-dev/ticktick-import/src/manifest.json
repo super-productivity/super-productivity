@@ -18,6 +18,7 @@
     "updateTask",
     "showSnack"
   ],
+  "dataSharing": [],
   "iFrame": true,
   "isSkipMenuEntry": true,
   "i18n": {

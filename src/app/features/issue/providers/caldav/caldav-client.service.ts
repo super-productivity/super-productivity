@@ -60,6 +60,7 @@ interface CalDavTaskData {
   url: string;
   etag: string;
   update?: () => Promise<void>;
+  delete?: (headers?: Record<string, string>) => Promise<void>;
 }
 
 @Injectable({
@@ -418,6 +419,21 @@ export class CaldavClientService {
     );
   }
 
+  createTask$(
+    caldavCfg: CaldavCfg,
+    task: { uid: string; summary: string },
+  ): Observable<CaldavIssue> {
+    return from(this._createTask(caldavCfg, task)).pipe(
+      catchError((err) => throwError({ [HANDLED_ERROR_PROP_STR]: 'Caldav: ' + err })),
+    );
+  }
+
+  deleteTask$(caldavCfg: CaldavCfg, issueId: string): Observable<void> {
+    return from(this._deleteTask(caldavCfg, issueId)).pipe(
+      catchError((err) => throwError({ [HANDLED_ERROR_PROP_STR]: 'Caldav: ' + err })),
+    );
+  }
+
   protected get isNativePlatform(): boolean {
     return Capacitor.isNativePlatform();
   }
@@ -505,7 +521,9 @@ export class CaldavClientService {
         },
 
         setRequestHeader: (name: string, value: string): void => {
-          headers[name] = value;
+          // Coerce like a real XHR: cdav-library passes numeric Depth values, and
+          // the iOS plugin drops all headers if any value is not a string (#11232).
+          headers[name] = String(value);
         },
 
         send: (body?: string | null): void => {
@@ -649,6 +667,119 @@ export class CaldavClientService {
     }
 
     return await CaldavClientService._mapTask(task[0]);
+  }
+
+  private async _createTask(
+    cfg: CaldavCfg,
+    { uid, summary }: { uid: string; summary: string },
+  ): Promise<CaldavIssue> {
+    const cal = await this._getCalendar(cfg);
+
+    if (cal.readOnly) {
+      this._snackService.open({
+        type: 'ERROR',
+        translateParams: {
+          calendarName: cfg.resourceName as string,
+        },
+        msg: T.F.CALDAV.S.CALENDAR_READ_ONLY,
+      });
+      throw new Error('CALENDAR READ ONLY: ' + cfg.resourceName);
+    }
+
+    const ICAL = await loadIcalModule();
+    // UTC: RFC 5545 requires it for DTSTAMP, CREATED and LAST-MODIFIED.
+    const now = ICAL.Time.fromJSDate(new Date(), true);
+    const vcalendar = new ICAL.Component(['vcalendar', [], []]);
+    vcalendar.updatePropertyWithValue('version', '2.0');
+    vcalendar.updatePropertyWithValue('prodid', '-//Super Productivity//EN');
+    const todo = new ICAL.Component('vtodo');
+    todo.updatePropertyWithValue('uid', uid);
+    todo.updatePropertyWithValue('dtstamp', now);
+    todo.updatePropertyWithValue('created', now);
+    todo.updatePropertyWithValue('last-modified', now);
+    todo.updatePropertyWithValue('summary', summary);
+    todo.updatePropertyWithValue('status', CaldavIssueStatus.NEEDS_ACTION);
+    todo.updatePropertyWithValue('sequence', 0);
+    // Import keeps only VTODOs carrying the category filter, so without it the
+    // new VTODO would be filtered out of every later import and look lost.
+    if (cfg.categoryFilter) {
+      todo.updatePropertyWithValue('categories', cfg.categoryFilter);
+    }
+    vcalendar.addSubcomponent(todo);
+
+    let createErr: unknown;
+    try {
+      // The resource name derives from the UID, and If-None-Match: * never
+      // overwrites: a repeated create finds the first VTODO (412) instead of
+      // writing a second one.
+      await cal.createObject(
+        encodeURIComponent(uid) + '.ics',
+        {
+          // eslint-disable-next-line @typescript-eslint/naming-convention
+          'Content-Type': 'text/calendar; charset=utf-8',
+          // eslint-disable-next-line @typescript-eslint/naming-convention
+          'If-None-Match': '*',
+        },
+        vcalendar.toString(),
+      );
+    } catch (err) {
+      // createObject PUTs and then PROPFINDs the new resource, so an error
+      // doesn't prove the VTODO is missing — whether the UID now exists decides.
+      createErr = err;
+    }
+    const created = await CaldavClientService._findTaskByUid(cal, uid).catch((err) =>
+      this._handleNetErr(err),
+    );
+    if (created.length < 1) {
+      this._handleNetErr(createErr ?? 'created VTODO not found: ' + uid);
+    }
+    return CaldavClientService._mapTask(created[0]);
+  }
+
+  private async _deleteTask(cfg: CaldavCfg, uid: string): Promise<void> {
+    const cal = await this._getCalendar(cfg);
+
+    if (cal.readOnly) {
+      this._snackService.open({
+        type: 'ERROR',
+        translateParams: {
+          calendarName: cfg.resourceName as string,
+        },
+        msg: T.F.CALDAV.S.CALENDAR_READ_ONLY,
+      });
+      throw new Error('CALENDAR READ ONLY: ' + cfg.resourceName);
+    }
+
+    const tasks = await CaldavClientService._findTaskByUid(cal, uid).catch((err) =>
+      this._handleNetErr(err),
+    );
+    // The UID text-match is a substring match (RFC 4791 §9.7.5), so it can also
+    // return VTODOs whose UID merely contains this one; delete only the exact one.
+    const ICAL = await loadIcalModule();
+    const task = tasks.find(
+      (t) =>
+        new ICAL.Component(ICAL.parse(t.data))
+          .getFirstSubcomponent('vtodo')
+          ?.getFirstPropertyValue('uid') === uid,
+    );
+    // Already gone on the server (deleted there, or by another device) — the
+    // goal state is reached, so stay silent.
+    if (!task) {
+      return;
+    }
+    if (task.delete) {
+      // If-Match on the ETag just fetched: a write that lands between this
+      // lookup and the DELETE fails it instead of being deleted unseen.
+      // eslint-disable-next-line @typescript-eslint/naming-convention
+      const headers: Record<string, string> = task.etag ? { 'If-Match': task.etag } : {};
+      await task.delete(headers).catch((err: { status?: number } | undefined) => {
+        // Deleted elsewhere between the lookup and the DELETE: same as above.
+        if (err?.status === 404 || err?.status === 410) {
+          return;
+        }
+        this._handleNetErr(err);
+      });
+    }
   }
 
   private async _updateTask(

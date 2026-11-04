@@ -631,6 +631,50 @@ END:VCALENDAR</cal:calendar-data>
       }
     });
 
+    it('skips time-block events Super Productivity wrote itself (#9830)', async () => {
+      // When the time-block calendar is also a read calendar, the REPORT returns
+      // the mirror of each scheduled task; it must not show up as a second entry.
+      const withOwnTimeBlock = NEXTCLOUD_REPORT_RESPONSE.replace(
+        '</d:multistatus>',
+        `  <d:response>
+    <d:href>/remote.php/dav/calendars/admin/personal/sp-task1%40super-productivity.ics</d:href>
+    <d:propstat>
+      <d:prop>
+        <d:getetag>"def456"</d:getetag>
+        <cal:calendar-data>BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:sp-task1@super-productivity
+DTSTART:20260320T120000Z
+DTEND:20260320T130000Z
+SUMMARY:Scheduled task
+END:VEVENT
+END:VCALENDAR</cal:calendar-data>
+      </d:prop>
+      <d:status>HTTP/1.1 200 OK</d:status>
+    </d:propstat>
+  </d:response>
+</d:multistatus>`,
+      );
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-03-15T00:00:00Z'));
+      try {
+        const mockHttp = { request: vi.fn().mockResolvedValue(withOwnTimeBlock) };
+        const cfg = {
+          serverUrl: 'https://example.com/dav',
+          readCalendarIds: ['/remote.php/dav/calendars/admin/personal/'],
+        } as any;
+
+        const events = await definition.getNewIssuesForBacklog!(cfg, mockHttp as any);
+        expect(events.map((e) => e.title)).toEqual(['Test Meeting']);
+
+        const found = await definition.searchIssues('task', cfg, mockHttp as any);
+        expect(found).toEqual([]);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
     it('returns successful calendar events when another selected calendar fails', async () => {
       vi.useFakeTimers();
       vi.setSystemTime(new Date('2026-03-15T00:00:00Z'));
@@ -1623,6 +1667,84 @@ END:VCALENDAR`);
         definition.timeBlock!.deleteEvent('task-1', cfg as any, mockHttp as any),
       ).rejects.toBeDefined();
       expect(mockHttp.delete).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('timeBlock.logWorkSession', () => {
+    const session = {
+      taskId: 'task-1',
+      title: 'Write report',
+      start: new Date('2026-05-14T09:00:00Z').getTime(),
+      end: new Date('2026-05-14T09:45:00Z').getTime(),
+    };
+    let mockHttp: { get: any; post: any; put: any; patch: any; delete: any };
+
+    beforeEach(() => {
+      mockHttp = {
+        get: vi.fn(),
+        post: vi.fn(),
+        put: vi.fn().mockResolvedValue(''),
+        patch: vi.fn(),
+        delete: vi.fn(),
+      };
+    });
+
+    it('PUTs an event with the session start and end to the tracked time calendar', async () => {
+      const cfg = {
+        serverUrl: 'https://dav.example.com/',
+        writeCalendarId: 'https://dav.example.com/default/',
+        workSessionCalendarId: 'https://dav.example.com/worked/',
+      };
+
+      await definition.timeBlock!.logWorkSession!(session, cfg as any, mockHttp as any);
+
+      expect(mockHttp.put).toHaveBeenCalledTimes(1);
+      const [url, body] = mockHttp.put.mock.calls[0];
+      expect(url.startsWith('https://dav.example.com/worked/')).toBe(true);
+      expect(body).toContain('SUMMARY:Write report');
+      expect(body).toContain('DTSTART:20260514T090000Z');
+      expect(body).toContain('DTEND:20260514T094500Z');
+    });
+
+    it('falls back to the default calendar for new events', async () => {
+      const cfg = {
+        serverUrl: 'https://dav.example.com/',
+        writeCalendarId: 'https://dav.example.com/default/',
+      };
+
+      await definition.timeBlock!.logWorkSession!(session, cfg as any, mockHttp as any);
+
+      expect(
+        mockHttp.put.mock.calls[0][0].startsWith('https://dav.example.com/default/'),
+      ).toBe(true);
+    });
+
+    it('writes a separate event for each session of the same task', async () => {
+      const cfg = {
+        serverUrl: 'https://dav.example.com/',
+        writeCalendarId: 'https://dav.example.com/default/',
+      };
+      const later = {
+        ...session,
+        start: session.end + 60_000,
+        end: session.end + 3_600_000,
+      };
+
+      await definition.timeBlock!.logWorkSession!(session, cfg as any, mockHttp as any);
+      await definition.timeBlock!.logWorkSession!(later, cfg as any, mockHttp as any);
+
+      expect(mockHttp.put.mock.calls[0][0]).not.toBe(mockHttp.put.mock.calls[1][0]);
+    });
+
+    it('rejects when no calendar is configured', async () => {
+      await expect(
+        definition.timeBlock!.logWorkSession!(
+          session,
+          { serverUrl: 'https://dav.example.com/' } as any,
+          mockHttp as any,
+        ),
+      ).rejects.toThrow();
+      expect(mockHttp.put).not.toHaveBeenCalled();
     });
   });
 

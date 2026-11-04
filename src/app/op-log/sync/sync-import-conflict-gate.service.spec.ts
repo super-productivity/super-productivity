@@ -91,7 +91,49 @@ describe('SyncImportConflictGateService', () => {
       syncImportReason: 'SERVER_MIGRATION',
       scenario: 'INCOMING_IMPORT',
       isNeverSynced: true,
+      // The fixture's snapshot payload has no tasks, which counts as unknown.
+      accountTaskCount: undefined,
     });
+  });
+
+  it("should count the account's tasks from the incoming snapshot, archives included", async () => {
+    const incomingSyncImport = createOperation({
+      payload: {
+        appDataComplete: {
+          task: { ids: ['t1', 't2'] },
+          archiveYoung: { task: { ids: ['t3'] } },
+        },
+      },
+    });
+    opLogStoreSpy.getUnsynced.and.resolveTo([
+      createEntry(
+        createOperation({
+          id: 'local-task-update',
+          actionType: 'test' as ActionType,
+          opType: OpType.Update,
+          entityType: 'TASK',
+          entityId: 'task-1',
+          payload: { title: 'Local title' },
+          clientId: 'client-A',
+          vectorClock: { clientA: 1 },
+        }),
+      ),
+    ]);
+
+    const result = await service.checkIncomingFullStateConflict([incomingSyncImport]);
+
+    expect(result.dialogData?.accountTaskCount).toBe(3);
+
+    // With several full-state ops, the last one is the state that gets applied.
+    const laterImport = createOperation({
+      id: 'later-import',
+      payload: { task: { ids: ['t1'] } },
+    });
+    const twoImports = await service.checkIncomingFullStateConflict([
+      incomingSyncImport,
+      laterImport,
+    ]);
+    expect(twoImports.dialogData?.accountTaskCount).toBe(1);
   });
 
   it('should not prompt for a full-state op this client cannot interpret, nor for anything after it (#8764)', async () => {
@@ -404,6 +446,8 @@ describe('SyncImportConflictGateService', () => {
       syncImportReason: undefined,
       scenario: 'INCOMING_IMPORT',
       isNeverSynced: true,
+      // The fixture's snapshot payload has no tasks, which counts as unknown.
+      accountTaskCount: undefined,
     });
   });
 

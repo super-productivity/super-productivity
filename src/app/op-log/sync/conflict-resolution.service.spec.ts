@@ -33,6 +33,7 @@ import {
 import { CLIENT_ID_PROVIDER } from '../util/client-id.provider';
 import { CURRENT_SCHEMA_VERSION } from '../persistence/schema-migration.service';
 import { MAX_VECTOR_CLOCK_SIZE } from '../core/operation-log.const';
+import { MAX_DATA_LENGTH, OpLog } from '../../core/log';
 import {
   buildEntityRegistry,
   ENTITY_REGISTRY,
@@ -6931,6 +6932,48 @@ describe('ConflictResolutionService', () => {
       expect(result.conflicts).toEqual([]);
     });
 
+    it('should log a superseded skip with author counters that survive the log export cap', async () => {
+      // #11184: the skip is permanent, so the exported log must show why.
+      // Full-size clocks must not push the author counters past the cap.
+      const fullClock = (counter: number): VectorClock =>
+        Object.fromEntries(
+          Array.from({ length: MAX_VECTOR_CLOCK_SIZE }, (_, i) => [
+            `client_${String(i).padStart(2, '0')}`,
+            counter,
+          ]),
+        );
+      const remoteOp: Operation = {
+        ...createMockOp('remote-regressed', 'client_00'),
+        entityId: 'task-1',
+        vectorClock: { ...fullClock(99999), client_00: 2 },
+      };
+      const appliedFrontierByEntity = new Map<string, VectorClock>([
+        ['TASK:task-1', { ...fullClock(99999), client_00: 4 }],
+      ]);
+      const verboseSpy = spyOn(OpLog, 'verbose');
+
+      const result = await service.checkOpForConflicts(
+        remoteOp,
+        buildCtx({ appliedFrontierByEntity }),
+      );
+
+      expect(result.isSupersededOrDuplicate).toBeTrue();
+      const args = verboseSpy.calls
+        .allArgs()
+        .find((a) => String(a[0]).includes('Skipping superseded'))!;
+      for (const arg of args.slice(1)) {
+        expect(JSON.stringify(arg).length).toBeLessThanOrEqual(MAX_DATA_LENGTH);
+      }
+      expect(args[1]).toEqual(
+        jasmine.objectContaining({
+          entityKey: 'TASK:task-1',
+          opClientId: 'client_00',
+          localCounter: 4,
+          remoteCounter: 2,
+        }),
+      );
+    });
+
     it('should skip an atomic multi-entity operation when any entity is superseded', async () => {
       const remoteOp: Operation = {
         ...createMockOp('remote-multi-delete', 'clientB'),
@@ -7238,18 +7281,21 @@ describe('ConflictResolutionService', () => {
       });
     });
 
-    it('should still conflict when a section move and removal target different tasks', async () => {
+    // Different tasks commute (#10969); a move of the same task into the
+    // section it is removed from does not.
+    it('should still conflict when a task moves into the section it is removed from', async () => {
       const remoteOp = createSectionMoveOp(
         'remote-move',
         'clientB',
-        'section-left',
+        'section-right',
         'task-1',
+        'section-left',
       );
       const localOp = createSectionRemoveOp(
         'local-remove',
         'clientA',
         'section-left',
-        'task-2',
+        'task-1',
       );
       const localPendingOpsByEntity = new Map<string, Operation[]>([
         ['SECTION:section-left', [localOp]],

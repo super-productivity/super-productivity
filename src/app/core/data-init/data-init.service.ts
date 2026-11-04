@@ -6,6 +6,7 @@ import { allDataWasLoaded } from '../../root-store/meta/all-data-was-loaded.acti
 import { DataInitStateService } from './data-init-state.service';
 import { OperationLogHydratorService } from '../../op-log/persistence/operation-log-hydrator.service';
 import { OpLog } from '../log';
+import { markBoot } from '../startup/boot-timing';
 
 @Injectable({ providedIn: 'root' })
 export class DataInitService {
@@ -21,6 +22,7 @@ export class DataInitService {
     // TODO better construction than this
     this._isAllDataLoadedInitially$.pipe(take(1)).subscribe({
       next: (v) => {
+        markBoot('data-loaded');
         // here because to avoid circular dependencies
         this._store$.dispatch(allDataWasLoaded());
         this._dataInitStateService._neverUpdateOutsideDataInitService$.next(v);
@@ -35,6 +37,7 @@ export class DataInitService {
   // NOTE: it's important to remember that this doesn't mean that no changes are occurring any more
   // because the data load is triggered, but not necessarily already reflected inside the store
   async reInit(): Promise<void> {
+    markBoot('hydrate-start');
     // Hydrate from Operation Log (which handles migration from legacy if needed)
     await this._operationLogHydratorService.hydrateStore();
   }

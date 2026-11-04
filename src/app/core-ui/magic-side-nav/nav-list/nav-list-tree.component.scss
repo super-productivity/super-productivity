@@ -38,6 +38,12 @@
     }
   }
 
+  // The quick tour points at a + without a hover to reveal it.
+  .additional-btn.onboarding-pulse {
+    visibility: visible;
+    pointer-events: auto;
+  }
+
   // Folder header drop zone styling
   &.folder-header-drop-zone {
     border-radius: var(--card-border-radius);

@@ -95,11 +95,12 @@ sync primitives.
 
 - ESLint rejects Angular, NgRx, app, shared-schema, sync-core deep imports, and
   dynamic imports inside package sources
-- `@sp/sync-core` has no runtime dependencies and owns vector-clock algorithms
-  used by client/server compatibility paths
-- `packages/shared-schema` compatibility-re-exports generic vector-clock
-  algorithms from `@sp/sync-core`; `@sp/sync-core` must not import
-  `@sp/shared-schema`
+- `@sp/sync-core` owns the vector-clock algorithms that the app and the
+  SuperSync server import directly; its only runtime dependencies are
+  `@noble/ciphers` and `hash-wasm`, used by its encryption primitives
+- `packages/shared-schema` owns schema contracts and validators shared by app
+  and server and has no dependency on `@sp/sync-core`; `@sp/sync-core` must
+  not import `@sp/shared-schema`
 - `@sp/sync-providers` depends on public `@sp/sync-core` plus provider runtime
   helpers, while app factories inject credentials, platform bridges, validators,
   OAuth routing, and config
@@ -468,10 +469,13 @@ The boundary today:
 
 **Implementation**:
 
-- Contract: `timeBlock: { upsertEvent, deleteEvent }` in
+- Contract: `timeBlock: { upsertEvent, deleteEvent, logWorkSession? }` in
   [`packages/plugin-api/src/issue-provider-types.ts`](packages/plugin-api/src/issue-provider-types.ts)
 - Driver: [`time-block-sync.effects.ts`](src/app/features/calendar-integration/time-block/time-block-sync.effects.ts),
   registered in [`feature-stores.module.ts`](src/app/root-store/feature-stores.module.ts)
+- Tracked work sessions (#6378, append-only, written only by the tracking device;
+  unwritten sessions wait in device-local `LS.WORK_SESSION_LOG`, never synced):
+  [`work-session-log.effects.ts`](src/app/features/calendar-integration/time-block/work-session-log.effects.ts)
 - Manual per-event actions (reschedule, delete): [`calendar-event-actions.service.ts`](src/app/features/calendar-integration/calendar-event-actions.service.ts)
 - Events themselves are **not** op-log entities — a converted task is an ordinary
   task with a derived stable id

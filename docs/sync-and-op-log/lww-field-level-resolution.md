@@ -5,7 +5,7 @@ implemented (see [Implementation](#implementation-pr-1)); "How it works today"
 below describes the code before it. Tracker: #10393, queue item 1. Findings:
 #10382.
 
-**Sections:** [Problem](#problem) · [How it works today](#how-it-works-today) · [Options](#options) · [Released clients and graceful degradation](#released-clients-and-graceful-degradation) · [Fuzz pins and E2E proof](#fuzz-pins-and-e2e-proof) · [Recommendation](#recommendation) · [Decisions for @johannesjo](#decisions-for-johannesjo) · [Outcome](#outcome) · [Implementation (PR 1)](#implementation-pr-1) · [Per-field winners (#10422)](#per-field-winners-10422)
+**Sections:** [Problem](#problem) · [How it works today](#how-it-works-today) · [Options](#options) · [Released clients and graceful degradation](#released-clients-and-graceful-degradation) · [Fuzz pins and E2E proof](#fuzz-pins-and-e2e-proof) · [Recommendation](#recommendation) · [Decisions for @johannesjo](#decisions-for-johannesjo) · [Outcome](#outcome) · [Implementation (PR 1)](#implementation-pr-1) · [Per-field winners (#10422)](#per-field-winners-10422) · [Merged snapshot types (#10958)](#merged-snapshot-types-10958)
 
 Line numbers: `rg -n '^#{1,3} ' <this file>`, then read one section with `sed -n`.
 
@@ -629,3 +629,53 @@ against any row; it now meets rows stamped at their fields' own, older times.
   side has already applied, so the whole-entity fallback re-resolves over
   that state; a local-win snapshot then carries the remote values of the
   shared fields. Before #10422 the remote ops stayed unapplied for it.
+
+## Merged snapshot types (#10958)
+
+**The report.** Enabling a repeat config's `skipOverdue` on one device was
+reverted when another device's repeat generation wrote `lastTaskCreation*`
+to the same config concurrently. TASK_REPEAT_CFG has no
+`RECREATE_FALLBACK` entry, so the crossing took whole-entity LWW, and the
+later generation's replace snapshot carried the stale `skipOverdue`.
+
+**The rule.** A type in `MERGED_SNAPSHOT_TYPES`
+([`conflict-field-patch.util.ts`](../../src/app/op-log/sync/conflict-field-patch.util.ts),
+today only TASK_REPEAT_CFG) decides per field like the types above, but
+re-sends ONE full `'replace'` snapshot instead of `'patch'` rows
+(`mergedSnapshotState`): the resolving device's entity, then every remote
+write, then the local fields that won, without cleared fields. It is stamped
+at the newest local write that won. A remote LWW row on the remote side
+keeps whole-entity LWW, since its values are never read (decision 5).
+
+**Why not a `RECREATE_FALLBACK` entry.** Every released client lacks an
+entry for this type. One that applied a concurrent `deleteTaskRepeatCfg` and
+loses to a patch adds the partial config raw; it fails validation and data
+repair has no rule for it. A replace snapshot is the shape every released
+client already receives for this type, so it recreates the config whole
+(`lww-update.meta-reducer.spec.ts`, "merged snapshot on a receiver").
+
+**What it leaves (residuals):**
+
+- The snapshot claims every field at its timestamp. A third device's
+  concurrent edit of another field that is older than the snapshot loses to
+  it, as it lost to the whole-entity snapshot before.
+- Like every local-win snapshot, it is read before the batch's other ops
+  apply (#10385 class), so a same-batch undeclared write to the config, such
+  as a tag delete's `tagIds` cleanup, is overwritten. The only such writers
+  are `deleteTag(s)` and `deleteProject`: the config keeps the deleted id or
+  comes back, the same on every device. A task it generates then fails
+  validation and data repair drops the id from that task; repair clears a
+  stale `projectId` on the config but not stale `tagIds`. No data is lost.
+  On master only the local-win direction had this.
+- A released device that resolves the crossing still uses whole-entity LWW.
+- A device that receives the snapshot while it holds its own pending edit of
+  the config meets a row, so it resolves whole-entity (decision 5). If its
+  edit is newer, its snapshot of its pre-batch config carries the old values
+  again, as on master. Two devices suffice: when the editing device resolved,
+  the other device's next-day generation reverts the edit if it runs before
+  that device downloads the snapshot (offline, or a sync that fails or
+  outlasts the 30s `waitForSyncWindow` wait). Reading the row's values would
+  need a new decision (#11003).
+
+Admitting another type needs a reported loss (fix intake), an adapter
+entity, and no derived upkeep on LWW apply (NOTE stays out, decision 4).

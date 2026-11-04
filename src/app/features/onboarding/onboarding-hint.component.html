@@ -1,6 +1,9 @@
-@if (hintPosition(); as pos) {
+@if (isWantMore()) {
+  <quick-tour-card [fromRect]="cardFromRect()"></quick-tour-card>
+} @else if (hintPosition(); as pos) {
   <div
     class="hint-container"
+    [class.is-sliding]="isSliding()"
     [style.top.px]="pos.top"
     [style.left.px]="pos.left"
   >
@@ -8,35 +11,100 @@
       class="hint-arrow"
       [class.arrow-up]="pos.arrowDirection === 'up'"
       [class.arrow-down]="pos.arrowDirection === 'down'"
-      [style.left.px]="pos.arrowOffset"
+      [class.arrow-left]="pos.arrowDirection === 'left'"
+      [style.left.px]="pos.arrowDirection === 'left' ? null : pos.arrowOffset"
+      [style.top.px]="pos.arrowDirection === 'left' ? pos.arrowOffset : null"
     ></div>
     <div
       #hintChipEl
       class="hint-chip"
     >
-      <div class="hint-text">
-        @if (hintMessage()) {
-          <div class="hint-message">
-            @if (hintIcon(); as icon) {
-              <mat-icon aria-hidden="true">{{ icon }}</mat-icon>
-            }
-            <span>{{ hintMessage() | translate }}</span>
-          </div>
-        }
-        @if (shortcutHint(); as shortcut) {
-          <span class="shortcut-hint">
-            {{ T.ONBOARDING.HINTS.OR_PRESS | translate }} <kbd>{{ shortcut }}</kbd>
-          </span>
-        }
+      <div class="hint-top">
+        <div class="hint-text">
+          @if (hintMessage()) {
+            <div class="hint-message">
+              @if (hintIcon(); as icon) {
+                <mat-icon aria-hidden="true">{{ icon }}</mat-icon>
+              }
+              <span>
+                @if (quickTourService.isAcknowledging()) {
+                  <span
+                    class="ack"
+                    aria-hidden="true"
+                    >✓</span
+                  >
+                }
+                <span [innerHTML]="hintMessage() | translate: ICON_PARAMS"></span>
+              </span>
+            </div>
+          }
+          @if (timerNote(); as note) {
+            <div
+              class="timer-note"
+              [innerHTML]="note.message | translate: note.params"
+            ></div>
+          }
+          @if (!actions() && shortcutHint(); as shortcut) {
+            <span class="shortcut-hint">
+              {{ T.ONBOARDING.HINTS.OR_PRESS | translate }} <kbd>{{ shortcut }}</kbd>
+            </span>
+          }
+        </div>
+        <button
+          type="button"
+          class="close-btn"
+          [attr.aria-label]="T.ONBOARDING.HINTS.SKIP_ARIA | translate"
+          (click)="close()"
+        >
+          <span aria-hidden="true">✕</span>
+        </button>
       </div>
-      <button
-        type="button"
-        class="close-btn"
-        [attr.aria-label]="T.ONBOARDING.HINTS.SKIP_ARIA | translate"
-        (click)="skip()"
-      >
-        <span aria-hidden="true">✕</span>
-      </button>
+      @if (actions(); as action) {
+        <div class="hint-footer">
+          <span class="hint-meta">
+            @if (isTourStep()) {
+              {{
+                T.ONBOARDING.TOUR.COUNTER
+                  | translate
+                    : {
+                        nr: quickTourService.stepNr(),
+                        total: quickTourService.stepCount(),
+                      }
+              }}
+            }
+            @if (shortcutHint(); as shortcut) {
+              @if (isTourStep()) {
+                ·
+              }
+              {{ T.ONBOARDING.HINTS.OR_PRESS | translate }} <kbd>{{ shortcut }}</kbd>
+            }
+          </span>
+          @if (action === 'offer') {
+            <button
+              type="button"
+              class="hint-action is-quiet"
+              (click)="onboardingHintService.decline()"
+            >
+              {{ T.ONBOARDING.HINTS.NO_THANKS | translate }}
+            </button>
+            <button
+              type="button"
+              class="hint-action"
+              (click)="onboardingHintService.showMeMore()"
+            >
+              {{ T.ONBOARDING.HINTS.SHOW_ME_MORE | translate }}
+            </button>
+          } @else if (!quickTourService.isAcknowledging()) {
+            <button
+              type="button"
+              class="hint-action"
+              (click)="quickTourService.next()"
+            >
+              {{ T.ONBOARDING.TOUR.NEXT | translate }}
+            </button>
+          }
+        </div>
+      }
     </div>
   </div>
 }

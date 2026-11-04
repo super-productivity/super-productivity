@@ -174,6 +174,224 @@ describe('CaldavClientService.updateFields$ – completion push', () => {
   });
 });
 
+describe('CaldavClientService.createTask$', () => {
+  let svc: CaldavClientService;
+  let snack: jasmine.SpyObj<SnackService>;
+  const UID = 'sp-todo-task-1@super-productivity';
+  const existing = (
+    data = 'BEGIN:VCALENDAR\r\nBEGIN:VTODO\r\nUID:' +
+      UID +
+      '\r\nSUMMARY:Buy milk\r\nEND:VTODO\r\nEND:VCALENDAR',
+  ): object => ({
+    data,
+    url: 'https://cal.example.com/x.ics',
+    etag: '"e1"',
+  });
+
+  beforeEach(() => {
+    snack = jasmine.createSpyObj('SnackService', ['open']);
+    TestBed.configureTestingModule({
+      providers: [CaldavClientService, { provide: SnackService, useValue: snack }],
+    });
+    svc = TestBed.inject(CaldavClientService);
+  });
+
+  afterEach(() => TestBed.resetTestingModule());
+
+  it('PUTs a VTODO named after its UID without overwriting an existing one', async () => {
+    const cal = { readOnly: false, createObject: jasmine.createSpy().and.resolveTo({}) };
+    spyOn(svc as any, '_getCalendar').and.resolveTo(cal);
+    spyOn(CaldavClientService as any, '_findTaskByUid').and.resolveTo([existing()]);
+
+    const issue = await firstValueFrom(
+      svc.createTask$(
+        { ...MOCK_CFG, categoryFilter: 'work' },
+        { uid: UID, summary: 'Buy milk' },
+      ),
+    );
+
+    const [name, headers, data] = cal.createObject.calls.mostRecent().args;
+    expect(name).toBe(encodeURIComponent(UID) + '.ics');
+    expect(headers['If-None-Match']).toBe('*');
+    expect(data).toContain('BEGIN:VTODO');
+    expect(data).toContain('UID:' + UID);
+    expect(data).toContain('SUMMARY:Buy milk');
+    expect(data).toContain('STATUS:NEEDS-ACTION');
+    // without the filter's category the VTODO would vanish from every import
+    expect(data).toContain('CATEGORIES:work');
+    expect(issue.id).toBe(UID);
+  });
+
+  it('writes no CATEGORIES without a category filter', async () => {
+    const cal = { readOnly: false, createObject: jasmine.createSpy().and.resolveTo({}) };
+    spyOn(svc as any, '_getCalendar').and.resolveTo(cal);
+    spyOn(CaldavClientService as any, '_findTaskByUid').and.resolveTo([existing()]);
+
+    await firstValueFrom(svc.createTask$(MOCK_CFG, { uid: UID, summary: 'Buy milk' }));
+
+    expect(cal.createObject.calls.mostRecent().args[2]).not.toContain('CATEGORIES');
+  });
+
+  it('resolves to the existing VTODO when it was already created (412)', async () => {
+    const cal = {
+      readOnly: false,
+      createObject: jasmine.createSpy().and.rejectWith({ status: 412 }),
+    };
+    spyOn(svc as any, '_getCalendar').and.resolveTo(cal);
+    spyOn(CaldavClientService as any, '_findTaskByUid').and.resolveTo([existing()]);
+
+    const issue = await firstValueFrom(
+      svc.createTask$(MOCK_CFG, { uid: UID, summary: 'Buy milk' }),
+    );
+
+    expect(issue.id).toBe(UID);
+    expect(snack.open).not.toHaveBeenCalled();
+  });
+
+  it('succeeds when the PUT landed but the follow-up lookup of createObject failed', async () => {
+    const cal = {
+      readOnly: false,
+      createObject: jasmine.createSpy().and.rejectWith({ status: 500 }),
+    };
+    spyOn(svc as any, '_getCalendar').and.resolveTo(cal);
+    spyOn(CaldavClientService as any, '_findTaskByUid').and.resolveTo([existing()]);
+
+    const issue = await firstValueFrom(
+      svc.createTask$(MOCK_CFG, { uid: UID, summary: 'Buy milk' }),
+    );
+
+    expect(issue.id).toBe(UID);
+  });
+
+  it('fails when the VTODO is missing after a failed PUT', async () => {
+    const cal = {
+      readOnly: false,
+      createObject: jasmine.createSpy().and.rejectWith({ status: 500 }),
+    };
+    spyOn(svc as any, '_getCalendar').and.resolveTo(cal);
+    spyOn(CaldavClientService as any, '_findTaskByUid').and.resolveTo([]);
+
+    await expectAsync(
+      firstValueFrom(svc.createTask$(MOCK_CFG, { uid: UID, summary: 'Buy milk' })),
+    ).toBeRejected();
+    expect(snack.open).toHaveBeenCalled();
+  });
+
+  it('refuses to create in a read-only calendar', async () => {
+    const cal = { readOnly: true, createObject: jasmine.createSpy() };
+    spyOn(svc as any, '_getCalendar').and.resolveTo(cal);
+
+    await expectAsync(
+      firstValueFrom(svc.createTask$(MOCK_CFG, { uid: UID, summary: 'Buy milk' })),
+    ).toBeRejected();
+    expect(cal.createObject).not.toHaveBeenCalled();
+  });
+});
+
+describe('CaldavClientService.deleteTask$', () => {
+  let svc: CaldavClientService;
+  let snack: jasmine.SpyObj<SnackService>;
+
+  beforeEach(() => {
+    snack = jasmine.createSpyObj('SnackService', ['open']);
+    TestBed.configureTestingModule({
+      providers: [CaldavClientService, { provide: SnackService, useValue: snack }],
+    });
+    svc = TestBed.inject(CaldavClientService);
+  });
+
+  afterEach(() => TestBed.resetTestingModule());
+
+  const davTodo = (
+    uid: string,
+    etag: string,
+  ): { data: string; url: string; etag: string; delete: jasmine.Spy } => ({
+    data: [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'BEGIN:VTODO',
+      `UID:${uid}`,
+      'SUMMARY:x',
+      'END:VTODO',
+      'END:VCALENDAR',
+    ].join('\r\n'),
+    url: `https://cal.example.com/${uid}.ics`,
+    etag,
+    delete: jasmine.createSpy('delete').and.resolveTo(undefined),
+  });
+
+  it('deletes the VTODO guarded by the ETag it just fetched', async () => {
+    const davTask = davTodo('todo-del-1', '"etag-1"');
+    spyOn(svc as any, '_getCalendar').and.resolveTo({ readOnly: false });
+    spyOn(CaldavClientService as any, '_findTaskByUid').and.resolveTo([davTask]);
+
+    await firstValueFrom(svc.deleteTask$(MOCK_CFG, 'todo-del-1'));
+
+    // eslint-disable-next-line @typescript-eslint/naming-convention
+    expect(davTask.delete).toHaveBeenCalledOnceWith({ 'If-Match': '"etag-1"' });
+  });
+
+  it('deletes only the exact UID, not one the substring UID match also returned', async () => {
+    const containing = davTodo('x-todo-del-1-y', '"etag-other"');
+    const exact = davTodo('todo-del-1', '"etag-1"');
+    spyOn(svc as any, '_getCalendar').and.resolveTo({ readOnly: false });
+    spyOn(CaldavClientService as any, '_findTaskByUid').and.resolveTo([
+      containing,
+      exact,
+    ]);
+
+    await firstValueFrom(svc.deleteTask$(MOCK_CFG, 'todo-del-1'));
+
+    expect(containing.delete).not.toHaveBeenCalled();
+    expect(exact.delete).toHaveBeenCalledTimes(1);
+  });
+
+  it('treats a VTODO that is already gone as deleted, without a snack', async () => {
+    spyOn(svc as any, '_getCalendar').and.resolveTo({ readOnly: false });
+    spyOn(CaldavClientService as any, '_findTaskByUid').and.resolveTo([]);
+
+    await firstValueFrom(svc.deleteTask$(MOCK_CFG, 'gone'));
+
+    expect(snack.open).not.toHaveBeenCalled();
+  });
+
+  it('treats a VTODO deleted between the lookup and the DELETE as deleted', async () => {
+    const davTask = davTodo('todo-del-1', '"etag-1"');
+    davTask.delete.and.rejectWith({ status: 404 });
+    spyOn(svc as any, '_getCalendar').and.resolveTo({ readOnly: false });
+    spyOn(CaldavClientService as any, '_findTaskByUid').and.resolveTo([davTask]);
+
+    await firstValueFrom(svc.deleteTask$(MOCK_CFG, 'todo-del-1'), {
+      defaultValue: undefined,
+    });
+
+    expect(snack.open).not.toHaveBeenCalled();
+  });
+
+  it('reports a DELETE that fails for another reason', async () => {
+    const davTask = davTodo('todo-del-1', '"etag-1"');
+    davTask.delete.and.rejectWith({ status: 412 });
+    spyOn(svc as any, '_getCalendar').and.resolveTo({ readOnly: false });
+    spyOn(CaldavClientService as any, '_findTaskByUid').and.resolveTo([davTask]);
+
+    await expectAsync(
+      firstValueFrom(svc.deleteTask$(MOCK_CFG, 'todo-del-1')),
+    ).toBeRejected();
+
+    expect(snack.open).toHaveBeenCalled();
+  });
+
+  it('refuses to delete from a read-only calendar', async () => {
+    const findSpy = spyOn(CaldavClientService as any, '_findTaskByUid');
+    spyOn(svc as any, '_getCalendar').and.resolveTo({ readOnly: true });
+
+    await expectAsync(firstValueFrom(svc.deleteTask$(MOCK_CFG, 'x'))).toBeRejected();
+
+    expect(findSpy).not.toHaveBeenCalled();
+    expect(snack.open).toHaveBeenCalled();
+  });
+});
+
 // ─── _getXhrProvider / _getAndroidXhrProvider ─────────────────────────────────
 
 const MOCK_CFG: CaldavCfg = {
@@ -723,6 +941,22 @@ describe('CaldavClientService._getNativeXhrProvider – native platform', () => 
     const callArgs = svc.webDavRequestSpy.calls.mostRecent().args[0];
     expect(callArgs.headers?.['Depth']).toBe('1');
     expect(callArgs.data).toBe('<body/>');
+  });
+
+  // #11232: cdav-library's propFind() and principal REPORTs set a numeric Depth
+  // (`headers.Depth = 0`). The iOS plugin casts headers to [String: String], so
+  // one non-string value made it drop every header and Nextcloud returned 404.
+  it('send() stringifies numeric header values like a real XHR', async () => {
+    const xhr = getFakeXhr();
+    xhr.open('PROPFIND', 'https://cal.example.com/');
+    xhr.setRequestHeader('Depth', 0 as unknown as string);
+    xhr.send('<body/>');
+    await Promise.resolve();
+    const callArgs = svc.webDavRequestSpy.calls.mostRecent().args[0];
+    expect(callArgs.headers?.['Depth']).toBe('0');
+    expect(
+      Object.values(callArgs.headers ?? {}).every((v) => typeof v === 'string'),
+    ).toBeTrue();
   });
 
   it('fires onload and sets status/responseText after send() resolves', async () => {

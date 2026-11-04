@@ -1,4 +1,5 @@
 import { test, expect } from '../../fixtures/supersync.fixture';
+import { translationText } from '../../utils/i18n-strings';
 import {
   createTestUser,
   getSuperSyncConfig,
@@ -80,7 +81,9 @@ test.describe('@supersync SuperSync Encryption', () => {
       // The decrypt error dialog itself IS the error indicator.
       // Verify it contains the expected error heading.
       await expect(
-        decryptErrorDialog.locator('h2:has-text("Decryption Failed")'),
+        decryptErrorDialog.locator('h2', {
+          hasText: translationText('F.SYNC.D_DECRYPT_ERROR.TITLE'),
+        }),
       ).toBeVisible();
 
       // Close the dialog

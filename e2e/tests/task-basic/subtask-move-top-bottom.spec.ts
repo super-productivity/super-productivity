@@ -25,10 +25,13 @@ const seedParentWithSubTasks = async (
   return { parent, subTasks };
 };
 
-const clickContextMenuItem = async (page: Page, name: RegExp): Promise<void> => {
-  const menu = page.locator('.mat-mdc-menu-panel');
-  await expect(menu).toBeVisible();
-  await menu.getByRole('menuitem', { name }).click();
+// Move to top/bottom live in the context menu's "Reorder" submenu.
+const clickReorderItem = async (page: Page, name: RegExp): Promise<void> => {
+  const panels = page.locator('.mat-mdc-menu-panel');
+  await expect(panels).toHaveCount(1);
+  await panels.getByRole('menuitem', { name: /reorder/i }).click();
+  await expect(panels).toHaveCount(2);
+  await panels.last().getByRole('menuitem', { name }).click();
 };
 
 test.describe('Subtask move to top/bottom', () => {
@@ -71,11 +74,11 @@ test.describe('Subtask move to top/bottom', () => {
 
     const subC = subTasks.filter({ hasText: 'Sub C' });
     await subC.locator('task-title').click({ button: 'right' });
-    await clickContextMenuItem(page, /move to top/i);
+    await clickReorderItem(page, /move to top/i);
     await expect(subTasks.locator('task-title')).toHaveText([/Sub C/, /Sub A/, /Sub B/]);
 
     await subC.locator('task-title').click({ button: 'right' });
-    await clickContextMenuItem(page, /move to bottom/i);
+    await clickReorderItem(page, /move to bottom/i);
     await expect(subTasks.locator('task-title')).toHaveText([/Sub A/, /Sub B/, /Sub C/]);
   });
 
@@ -144,7 +147,7 @@ test.describe('Subtask move to top/bottom', () => {
 
     const firstTitle = await backlogTasks.first().locator('task-title').innerText();
     await backlogTasks.first().locator('task-title').click({ button: 'right' });
-    await clickContextMenuItem(page, /move to bottom/i);
+    await clickReorderItem(page, /move to bottom/i);
 
     await expect(backlogTasks.last().locator('task-title')).toHaveText(firstTitle);
     await expect(backlogTasks.first().locator('task-title')).not.toHaveText(firstTitle);

@@ -12,6 +12,8 @@ owners are:
 - `src/app/op-log/sync/superseded-operation-resolver.service.ts`
 - `src/app/op-log/sync/superseded-operation-resolver.service.spec.ts`
 - `e2e/tests/sync/supersync-section-convergence.spec.ts`
+- `e2e/tests/sync/supersync-section-move-vs-section-edit.spec.ts`
+- `src/app/op-log/testing/integration/section-move-conflict-stop.integration.spec.ts`
 - `src/app/op-log/testing/integration/reorder-conflict-wedge.integration.spec.ts`
 - `e2e/tests/sync/supersync-reorder-conflict-wedge.spec.ts`
 - `e2e/tests/sync/supersync-issue-provider-reorder-conflict.spec.ts`
@@ -63,10 +65,34 @@ when all of the following hold:
 The recognized crossings are:
 
 - a move and removal of the same task from the move's source section;
+- two placements or removals of different tasks (#10969): each writes only its
+  own task's section membership (a removal also its own task's slot in the
+  work context's order), so membership commutes in either order. Position in a
+  shared list can depend on order; the device whose upload the server rejects
+  reissues its op from the merged state, which converges it. The reissue
+  repositions only the rejected op's task, so an op anchored on a task the
+  other op moves within the anchor's list (`afterTaskId` in the destination
+  section, `workContextAfterTaskId` in the work context's order) keeps the
+  stop, as do two ops
+  of the same task other than the move/removal pair above. File-based
+  providers never reject an upload and only reissue note and habit orders, so
+  two such ops that land at the same position of one list (both at the top, or
+  both after one anchor) can order differently per device until one of the
+  two tasks is moved again (membership converges, order does not; no E2E
+  covers this);
 - a section-order update crossing a placement/removal that touches one of the
   ordered sections;
 - a content reorder crossing a single-entity patch of an entity it lists, under
-  the structural rule below; and
+  the structural rule below;
+- a section placement or removal crossing a `SECTION_UPDATE` patch of a section
+  it declares, under the same rule: a placement writes only the declared
+  sections' `taskIds` (a removal also the work context's task order, which no
+  section patch writes), so a collapse or rename of either section of a
+  cross-section move commutes with it (#10969). A section delete still stops:
+  a rejected delete has no causal replay. So does a move
+  beside a pending edit of the same section that the remote edit conflicts
+  with (an expand, also the work view's auto-expand on focus, crossing a
+  collapse): section ops beside a conflict keep the stop; and
 - two note orders or two habit orders, or a note order and the delete of a
   note it lists (#10377, below).
 
@@ -265,15 +291,19 @@ the replacement payload must be checked against the released-fleet rules in
 Content reorder recovery reuses existing action payloads without a schema or
 persisted-model change. Its E2E covers both note and dated-habit resolution
 histories consumed by unmodified v19.1.0. Older clients that resolve first retain
-their original safety gate; see the [S2 validation report](../plans/2026-09-26-sync-S2-result.md)
-and [dated-habit result](../plans/2026-09-26-sync-habit-date-reorder-result.md)
+their original safety gate; see [#10275](https://github.com/super-productivity/super-productivity/pull/10275)
+and [#10295](https://github.com/super-productivity/super-productivity/pull/10295)
 for released-asset provenance and the tested limits.
 
 The provider suite checks both GitLab and Jira replacement histories against
 unmodified v19.1.0 assets, including restart and the rendered tab order. If that
 released client encounters the conflict first, it still stops with pending work intact;
-the new resolver cannot change old-client behavior. See the
-[provider fix validation](../plans/2026-09-26-sync-issue-provider-reorder-reproduction.md#provider-independent-recovery).
+the new resolver cannot change old-client behavior. Admission is
+provider-independent: any `ISSUE_PROVIDER_UPDATE` with a nonempty `changes`
+object whose `id` is absent or equals the declared provider qualifies, because
+`updateOne` leaves the ordered IDs unchanged unless the identity changes.
+Deletions, competing reorders, malformed changes and identity changes stay
+unsupported ([#10294](https://github.com/super-productivity/super-productivity/pull/10294)).
 
 The structural rule's E2E checks, against unmodified v19.1.0 assets, that a
 released receiver renders a reissued pin once, that it consumes a project order

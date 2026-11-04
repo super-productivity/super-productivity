@@ -158,6 +158,7 @@ describe('Magic Link Registration', () => {
       expect(mockSendVerificationEmail).toHaveBeenCalledWith(
         testEmail,
         expect.any(String),
+        undefined,
       );
     });
 
@@ -272,6 +273,7 @@ describe('Magic Link Registration', () => {
       expect(mockSendVerificationEmail).toHaveBeenCalledWith(
         testEmail,
         expect.any(String),
+        undefined,
       );
       expect(mockPrisma.user.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({

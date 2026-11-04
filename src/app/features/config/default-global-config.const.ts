@@ -54,6 +54,7 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
     isConfirmBeforeExit: false,
     isConfirmBeforeExitWithoutFinishDay: true,
     isMinimizeToTray: false,
+    isShowDueTaskBadge: false,
     isCheckForUpdates: true,
     isTrayShowCurrentCountdown: true,
     startOfNextDay: 0,
@@ -80,6 +81,7 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
     isEnableProject: true,
     isEnableDue: true,
     isEnableDeadline: false,
+    isEnablePriority: true,
     isEnableTag: true,
     urlBehavior: 'keep',
   },
@@ -88,7 +90,7 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
   },
   idle: {
     isOnlyOpenIdleWhenCurrentTask: false,
-    isSuppressIdleDuringFocusMode: false,
+    isSuppressIdleDuringFocusMode: true,
     isEnableIdleTimeTracking: true,
     minIdleTime: 5 * minute,
   },
@@ -157,6 +159,7 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
     goToFocusMode: 'F',
     goToWorkView: 'W',
     goToScheduledView: 'Shift+S',
+    goToPlanner: 'Shift+L',
     goToTimeline: 'Shift+T',
     // goToDailyAgenda: null,
     // goToFocusMode: 'Shift+F',
@@ -225,7 +228,7 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
     defaultTaskRemindOption: TaskReminderOptionId.AtStart, // The hard-coded default prior to this changeable setting
     isFocusWindow: false,
     useAlarmStyleReminders: false,
-    notifyOnDueDate: true,
+    notifyOnDueDate: false,
     dueDateNotificationHour: 9,
   },
   schedule: {

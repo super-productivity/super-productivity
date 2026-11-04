@@ -2,6 +2,7 @@ import { LiveAnnouncer } from '@angular/cdk/a11y';
 import {
   ChangeDetectionStrategy,
   Component,
+  computed,
   DestroyRef,
   ElementRef,
   effect,
@@ -14,7 +15,17 @@ import {
 } from '@angular/core';
 import { MatIcon } from '@angular/material/icon';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
-import { OnboardingHintService, OnboardingStep } from './onboarding-hint.service';
+import { OnboardingHintService } from './onboarding-hint.service';
+import { QuickTourService } from './quick-tour.service';
+import {
+  HINT_ICON_PARAMS,
+  HINT_ICON_PARAMS_EMPTY,
+  HINT_STEP_CONFIGS,
+  HintCandidate,
+  HintStep,
+  HintStepConfig,
+} from './onboarding-hint-steps.const';
+import { QuickTourCardComponent } from './quick-tour-card/quick-tour-card.component';
 import { isTouchActive } from '../../util/input-intent';
 import { GlobalConfigService } from '../config/global-config.service';
 import { LayoutService } from '../../core-ui/layout/layout.service';
@@ -26,6 +37,16 @@ const POSITION_RETRY_DELAY_MS = 120;
 const HINT_GAP_PX = 12;
 /** Must match the glow spread in styles/components/onboarding-pulse.scss */
 const PULSE_GLOW_PX = 8;
+/** Must match max-width in onboarding-hint.component.scss */
+const HINT_WIDTH_PX = 260;
+const VIEWPORT_MARGIN_PX = 8;
+/** Where the left arrow sits from the chip's top when the chip is beside its target */
+const SIDE_ARROW_TOP_PX = 18;
+/** Slightly longer than the slide transition (--transition-duration-l) */
+const SLIDE_MS = 400;
+// shortcut: polls while a polled step is up (only `organize`) — observe the
+// nav's expanded state instead if more steps need it.
+const POLL_TARGET_MS = 500;
 
 const ANIMATION_DONE_EVENTS = [
   'animationend',
@@ -34,133 +55,124 @@ const ANIMATION_DONE_EVENTS = [
   'transitioncancel',
 ] as const;
 
-const UNDONE_TASK_ROW_SELECTOR = 'task-list .task-list-inner > task:not(.isDone)';
-
-const swipeTargetSelector = (swipeTargetTaskId: string | null): string =>
-  swipeTargetTaskId
-    ? `task[data-task-id="${CSS.escape(swipeTargetTaskId)}"]`
-    : UNDONE_TASK_ROW_SELECTOR;
-
-interface StepConfig {
-  /** Candidate targets in order of preference; the first visible one is used. */
-  selector: (
-    swipeTargetTaskId: string | null,
-    firstTaskId: string | null,
-  ) => string | string[];
-  message: string;
-  touchMessage?: string;
-  /** Replaces the message on the phone layout (bottom nav, Inbox behind ☰) */
-  phoneMessage?: string;
-  /** Gesture icon shown before the message */
-  icon?: string;
-  showShortcut: boolean;
-  /** Pulse the target element to draw attention to it */
-  isPulse: boolean;
-  /**
-   * End guidance when no target shows up. Only for the last, purely informative
-   * tip: otherwise an invisible step would keep onboarding "in progress", which
-   * holds back the install prompt, sync reminder and task snacks.
-   */
-  isEndedWhenMissing?: boolean;
-}
-
-const STEP_CONFIGS = new Map<OnboardingStep, StepConfig>([
-  [
-    'create-task',
-    {
-      // The header + on wide layouts, the bottom-nav + at phone width. Which one
-      // exists follows the layout, not the input: a mouse in a narrow window, or a
-      // touch device that switches to a mouse, only has the bottom-nav +.
-      selector: () => ['.tour-addBtn', '.add-task-button'],
-      message: T.ONBOARDING.HINTS.CREATE_TASK,
-      touchMessage: T.ONBOARDING.HINTS.CREATE_TASK_TOUCH,
-      showShortcut: true,
-      isPulse: true,
-    },
-  ],
-  // Phones only. Anchored to the task row; task.component itself is untouched.
-  [
-    'task-swipe-left',
-    {
-      selector: (swipeTargetTaskId) => swipeTargetSelector(swipeTargetTaskId),
-      message: T.ONBOARDING.HINTS.TASK_SWIPE_LEFT_TOUCH,
-      icon: 'swipe_left',
-      showShortcut: false,
-      isPulse: false,
-    },
-  ],
-  [
-    'today-and-inbox',
-    {
-      // The "Inbox" chip of the first task, which the tip explains (#8824).
-      selector: (_, firstTaskId) =>
-        firstTaskId ? `task[data-task-id="${CSS.escape(firstTaskId)}"] tag-list tag` : [],
-      message: T.ONBOARDING.HINTS.TODAY_AND_INBOX,
-      // On the phone layout the Inbox is behind the menu button.
-      phoneMessage: T.ONBOARDING.HINTS.TODAY_AND_INBOX_PHONE,
-      isEndedWhenMissing: true,
-      showShortcut: false,
-      isPulse: false,
-    },
-  ],
-]);
-
-const isVisible = (el: HTMLElement): boolean => {
+export const isVisible = (el: HTMLElement): boolean => {
   const rect = el.getBoundingClientRect();
   return (
     rect.width > 0 &&
     rect.height > 0 &&
+    // Off-screen boxes, e.g. the closed mobile drawer's rows where
+    // checkVisibility is missing (iOS < 17.4).
+    rect.right > 0 &&
+    rect.left < window.innerWidth &&
     (typeof el.checkVisibility !== 'function' ||
       el.checkVisibility({ opacityProperty: true, visibilityProperty: true }))
   );
 };
 
+const prefersReducedMotion = (): boolean =>
+  window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+
+const stripTags = (html: string): string =>
+  new DOMParser().parseFromString(html, 'text/html').body.textContent ?? '';
+
 interface HintPosition {
   top: number;
   left: number;
   arrowOffset: number;
-  arrowDirection: 'up' | 'down';
+  arrowDirection: 'up' | 'down' | 'left';
+}
+
+interface ResolvedTarget {
+  el: HTMLElement;
+  message?: string;
 }
 
 @Component({
   selector: 'onboarding-hint',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [TranslatePipe, MatIcon],
+  imports: [TranslatePipe, MatIcon, QuickTourCardComponent],
   templateUrl: './onboarding-hint.component.html',
   styleUrl: './onboarding-hint.component.scss',
 })
 export class OnboardingHintComponent {
   T = T;
+  readonly ICON_PARAMS = HINT_ICON_PARAMS;
   onboardingHintService = inject(OnboardingHintService);
+  quickTourService = inject(QuickTourService);
   hintPosition = signal<HintPosition | null>(null);
   hintMessage = signal<string>('');
   hintIcon = signal<string | null>(null);
   shortcutHint = signal<string | null>(null);
+  isSliding = signal(false);
+  /** Where the card grows from: the last chip, if the user just saw one. */
+  cardFromRect = signal<DOMRect | null>(null);
+
+  /** Part 1 wins: the tour starts only once part 1 is done. */
+  readonly activeStep = computed(
+    () => this.onboardingHintService.currentStep() ?? this.quickTourService.currentStep(),
+  );
+  readonly isWantMore = computed(() => this.activeStep() === 'want-more');
+  readonly isTourStep = computed(
+    () =>
+      this.onboardingHintService.currentStep() === null &&
+      this.quickTourService.currentStep() !== null,
+  );
+  readonly actions = computed(() => {
+    const step = this.activeStep();
+    return step && step !== 'want-more'
+      ? (HINT_STEP_CONFIGS.get(step)?.actions ?? null)
+      : null;
+  });
+  readonly timerNote = computed(() => {
+    if (!this.quickTourService.isTimerNoteShown()) {
+      return null;
+    }
+    const key = this._globalConfigService.cfg()?.keyboard?.togglePlay;
+    return isTouchActive() || !key
+      ? { message: T.ONBOARDING.TOUR.TIMER_RUNNING_TOUCH, params: HINT_ICON_PARAMS }
+      : {
+          message: T.ONBOARDING.TOUR.TIMER_RUNNING,
+          params: { ...HINT_ICON_PARAMS, key },
+        };
+  });
 
   private _globalConfigService = inject(GlobalConfigService);
   private _layoutService = inject(LayoutService);
   private _liveAnnouncer = inject(LiveAnnouncer);
   private _translateService = inject(TranslateService);
-  private _activeStep: OnboardingStep | null = null;
+  private _ngZone = inject(NgZone);
+  private _activeStep: HintStep | null = null;
+  // Step and message: a step's tip can change, e.g. once the side nav expands.
+  private _announced: { step: HintStep; messageKey: string } | null = null;
   private _targetEl: HTMLElement | null = null;
   private _repositionFrame: number | null = null;
   private _pulsingEl: HTMLElement | null = null;
   private _resizeObserver: ResizeObserver | null = null;
   private _positionTimeout: ReturnType<typeof setTimeout> | null = null;
   private _repositionTimeout: ReturnType<typeof setTimeout> | null = null;
+  private _slideTimeout: ReturnType<typeof setTimeout> | null = null;
+  private _pollInterval: ReturnType<typeof setInterval> | null = null;
   readonly hintChipEl = viewChild<ElementRef<HTMLDivElement>>('hintChipEl');
 
   constructor() {
     effect((onCleanup) => {
-      const step = this.onboardingHintService.currentStep();
+      const step = this.activeStep();
+      if (step === 'want-more') {
+        // Measured before the chip leaves the DOM, so the card grows from it.
+        untracked(() => {
+          this.cardFromRect.set(
+            this.hintChipEl()?.nativeElement.getBoundingClientRect() ?? null,
+          );
+          this.hintPosition.set(null);
+        });
+        return;
+      }
       if (step === null) {
         return;
       }
       this._activeStep = step;
       this._targetEl = null;
-      this.hintPosition.set(null);
-      untracked(() => this._announce(step));
-      this._schedulePosition(step, 0);
+      untracked(() => this._startStep(step));
 
       onCleanup(() => {
         this._activeStep = null;
@@ -168,6 +180,7 @@ export class OnboardingHintComponent {
         this._cleanupPulse();
         this._clearPositionTimeout();
         this._clearRepositionTimeout();
+        this._stopPolling();
         this._resizeObserver?.disconnect();
       });
     });
@@ -175,8 +188,7 @@ export class OnboardingHintComponent {
     // The hint is position: fixed, so follow its target when anything scrolls
     // (capture phase: the task list scrolls inside its own container).
     const onViewportChange = (): void => this._scheduleReposition();
-    const ngZone = inject(NgZone);
-    ngZone.runOutsideAngular(() => {
+    this._ngZone.runOutsideAngular(() => {
       document.addEventListener('scroll', onViewportChange, {
         capture: true,
         passive: true,
@@ -199,38 +211,80 @@ export class OnboardingHintComponent {
       if (this._repositionFrame !== null) {
         cancelAnimationFrame(this._repositionFrame);
       }
+      this._clearSlideTimeout();
     });
   }
 
   @HostListener('document:keydown.escape', ['$event'])
   onEscape(event: KeyboardEvent): void {
+    // An open menu or dialog handles Esc first.
     if (event.defaultPrevented) {
       return;
     }
-    if (this.onboardingHintService.currentStep()) {
-      this.skip();
+    if (this.activeStep()) {
+      this.close();
     }
   }
 
-  skip(): void {
-    this.onboardingHintService.skip();
+  /** ✕: part 1 ends quietly, the tour ends. */
+  close(): void {
+    if (this.onboardingHintService.currentStep()) {
+      this.onboardingHintService.skip();
+    } else {
+      this.quickTourService.end();
+    }
   }
 
-  private _announce(step: OnboardingStep): void {
-    const config = STEP_CONFIGS.get(step);
-    if (!config) {
+  /** The chip stays and slides to the next target instead of popping up anew. */
+  private _startStep(step: HintStep): void {
+    const isSlide = this.hintPosition() !== null && !prefersReducedMotion();
+    if (isSlide) {
+      this._clearSlideTimeout();
+      this.isSliding.set(true);
+      this._slideTimeout = setTimeout(() => this.isSliding.set(false), SLIDE_MS);
+    } else {
+      this.hintPosition.set(null);
+    }
+    this._schedulePosition(step, 0);
+    if (HINT_STEP_CONFIGS.get(step)?.isPolled) {
+      this._ngZone.runOutsideAngular(() => {
+        this._pollInterval = setInterval(
+          () => this._scheduleReposition(),
+          POLL_TARGET_MS,
+        );
+      });
+    }
+  }
+
+  private _announce(step: HintStep, messageKey: string): void {
+    if (this._announced?.step === step && this._announced.messageKey === messageKey) {
       return;
     }
-    void this._liveAnnouncer.announce(
-      this._translateService.instant(this._messageKey(config)),
-    );
+    this._announced = { step, messageKey };
+    const html = this._translateService.instant(messageKey, HINT_ICON_PARAMS_EMPTY);
+    void this._liveAnnouncer.announce(stripTags(html));
   }
 
-  private _messageKey(config: StepConfig): string {
-    if (config.phoneMessage && this._layoutService.isShowMobileBottomNav()) {
-      return config.phoneMessage;
+  private _messageKey(config: HintStepConfig): string {
+    return config.message({
+      isTouch: isTouchActive(),
+      isPhone: this._layoutService.isShowMobileBottomNav(),
+      isTimeTrackingEnabled:
+        this._globalConfigService.appFeatures().isTimeTrackingEnabled,
+    });
+  }
+
+  private _isMissingHandled(step: HintStep): boolean {
+    if (!HINT_STEP_CONFIGS.get(step)?.isEndedWhenMissing) {
+      return false;
     }
-    return isTouchActive() ? (config.touchMessage ?? config.message) : config.message;
+    const tourStep = this.quickTourService.currentStep();
+    if (this.onboardingHintService.currentStep() === step) {
+      this.onboardingHintService.skip();
+    } else if (tourStep === step) {
+      this.quickTourService.skipStep(tourStep);
+    }
+    return true;
   }
 
   /** Re-anchor on scroll/resize, or attach once the target appears. */
@@ -245,11 +299,11 @@ export class OnboardingHintComponent {
         return;
       }
       // Re-resolve: a better target may have appeared (e.g. the opened side nav).
-      const config = STEP_CONFIGS.get(step);
+      const config = HINT_STEP_CONFIGS.get(step);
       // Keep following the current target when nothing resolves, e.g. while the
       // layout swaps the header + for the bottom-nav one.
       const targetEl =
-        (config ? this._resolveTarget(config) : null) ??
+        (config ? this._resolveTarget(config)?.el : null) ??
         (this._targetEl?.isConnected ? this._targetEl : null);
       if (targetEl && targetEl === this._targetEl) {
         this._calculatePosition(targetEl, step);
@@ -266,15 +320,24 @@ export class OnboardingHintComponent {
     });
   }
 
-  private _resolveTarget(config: StepConfig): HTMLElement | null {
-    const selectors = config.selector(
-      this.onboardingHintService.swipeTargetTaskId(),
-      this.onboardingHintService.firstTaskId(),
-    );
-    for (const selector of Array.isArray(selectors) ? selectors : [selectors]) {
-      const el = document.querySelector<HTMLElement>(selector);
-      if (el && isVisible(el)) {
-        return el;
+  private _resolveTarget(config: HintStepConfig): ResolvedTarget | null {
+    const candidates = config.candidates({
+      swipeTargetTaskId: this.onboardingHintService.swipeTargetTaskId(),
+      firstTaskId: this.onboardingHintService.firstTaskId(),
+      tourTaskId: this.quickTourService.tourTaskId(),
+    });
+    for (const candidate of candidates) {
+      const { selector, message, visibleWith }: HintCandidate =
+        typeof candidate === 'string' ? { selector: candidate } : candidate;
+      // All matches: the side nav and the bottom nav may both render one.
+      const el = Array.from(document.querySelectorAll<HTMLElement>(selector)).find(
+        (match) => {
+          const shownEl = visibleWith ? match.closest<HTMLElement>(visibleWith) : match;
+          return !!shownEl && isVisible(shownEl);
+        },
+      );
+      if (el) {
+        return { el, message };
       }
     }
     return null;
@@ -284,7 +347,7 @@ export class OnboardingHintComponent {
     return this.hintChipEl()?.nativeElement.getBoundingClientRect().height || undefined;
   }
 
-  private _schedulePosition(step: OnboardingStep, retryCount: number): void {
+  private _schedulePosition(step: HintStep, retryCount: number): void {
     this._positionTimeout = setTimeout(
       () => {
         const found = this._positionHintForStep(step);
@@ -293,8 +356,8 @@ export class OnboardingHintComponent {
         }
         if (retryCount < MAX_POSITION_RETRIES) {
           this._schedulePosition(step, retryCount + 1);
-        } else if (STEP_CONFIGS.get(step)?.isEndedWhenMissing) {
-          this.skip();
+        } else {
+          this._isMissingHandled(step);
         }
       },
       retryCount === 0 ? 0 : POSITION_RETRY_DELAY_MS,
@@ -315,19 +378,34 @@ export class OnboardingHintComponent {
     }
   }
 
-  private _positionHintForStep(step: OnboardingStep): boolean {
-    const config = STEP_CONFIGS.get(step);
+  private _clearSlideTimeout(): void {
+    if (this._slideTimeout !== null) {
+      clearTimeout(this._slideTimeout);
+      this._slideTimeout = null;
+    }
+  }
+
+  private _stopPolling(): void {
+    if (this._pollInterval !== null) {
+      clearInterval(this._pollInterval);
+      this._pollInterval = null;
+    }
+  }
+
+  private _positionHintForStep(step: HintStep): boolean {
+    const config = HINT_STEP_CONFIGS.get(step);
     if (!config) {
       return false;
     }
 
-    this._updateMessage(config);
-
-    const targetEl = this._resolveTarget(config);
-    if (!targetEl) {
+    const target = this._resolveTarget(config);
+    if (!target) {
       return false;
     }
+    const { el: targetEl } = target;
 
+    this._updateMessage(config, target.message);
+    this._announce(step, this.hintMessage());
     this._targetEl = targetEl;
     if (config.isPulse) {
       this._applyPulse(targetEl);
@@ -351,43 +429,69 @@ export class OnboardingHintComponent {
     return true;
   }
 
-  private _updateMessage(config: StepConfig): void {
-    this.hintMessage.set(this._messageKey(config));
+  private _updateMessage(config: HintStepConfig, candidateMessage?: string): void {
+    this.hintMessage.set(candidateMessage ?? this._messageKey(config));
     this.hintIcon.set(config.icon ?? null);
-    if (!isTouchActive() && config.showShortcut) {
-      const shortcut = this._globalConfigService.cfg()?.keyboard?.addNewTask;
-      this.shortcutHint.set(shortcut || null);
-    } else {
-      this.shortcutHint.set(null);
-    }
+    const shortcut =
+      !isTouchActive() && config.shortcut
+        ? this._globalConfigService.cfg()?.keyboard?.[config.shortcut]
+        : null;
+    this.shortcutHint.set(shortcut || null);
   }
 
-  private _calculatePosition(targetEl: HTMLElement, step: OnboardingStep): void {
+  private _calculatePosition(targetEl: HTMLElement, step: HintStep): void {
+    const config = HINT_STEP_CONFIGS.get(step);
     const rect = targetEl.getBoundingClientRect();
-    // Must match max-width in onboarding-hint.component.scss
-    const hintWidth = 260;
     // Prefer the rendered height: an estimate that is too small makes a hint
     // placed above its target (e.g. the mobile + button) cover it.
     const estimatedHintHeight = isTouchActive() ? 76 : 48;
     const hintHeight = this._measureHintHeight() ?? estimatedHintHeight;
     // Clear the target's pulse glow (8px box-shadow ring) and the hint's arrow.
-    const gap = STEP_CONFIGS.get(step)?.isPulse
-      ? HINT_GAP_PX + PULSE_GLOW_PX
-      : HINT_GAP_PX;
+    const gap = config?.isPulse ? HINT_GAP_PX + PULSE_GLOW_PX : HINT_GAP_PX;
+
+    // Beside the desktop side nav, so the chip does not cover the nav below.
+    const isInSideNav =
+      !!targetEl.closest('magic-side-nav') && !targetEl.closest('.nav-sidenav.mobile');
+    if (
+      isInSideNav &&
+      rect.right + gap + HINT_WIDTH_PX + VIEWPORT_MARGIN_PX <= window.innerWidth
+    ) {
+      const targetMiddle = (rect.top + rect.bottom) / 2;
+      const top = Math.min(
+        Math.max(VIEWPORT_MARGIN_PX, targetMiddle - SIDE_ARROW_TOP_PX),
+        window.innerHeight - hintHeight - VIEWPORT_MARGIN_PX,
+      );
+      this.hintPosition.set({
+        top,
+        left: rect.right + gap,
+        arrowOffset: targetMiddle - top,
+        arrowDirection: 'left',
+      });
+      return;
+    }
 
     const spaceBelow = window.innerHeight - rect.bottom;
     const placeBelow = spaceBelow > hintHeight + gap;
-    const top = Math.max(8, placeBelow ? rect.bottom + gap : rect.top - hintHeight - gap);
-
-    const halfTargetWidth = rect.width / 2;
-    const halfHintWidth = hintWidth / 2;
-    const targetCenter = rect.left + halfTargetWidth;
-    const left = Math.min(
-      Math.max(8, targetCenter - halfHintWidth),
-      window.innerWidth - hintWidth - 8,
+    const top = Math.max(
+      VIEWPORT_MARGIN_PX,
+      placeBelow ? rect.bottom + gap : rect.top - hintHeight - gap,
     );
 
-    const arrowOffset = Math.max(12, Math.min(targetCenter - left, hintWidth - 12));
+    // A task row spans the list: point at its title, not the middle of nowhere.
+    const pointOffset = config?.isWide
+      ? Math.min(rect.width / 2, this._layoutService.isShowMobileBottomNav() ? 60 : 120)
+      : rect.width / 2;
+    const targetX = rect.left + pointOffset;
+    const halfHintWidth = HINT_WIDTH_PX / 2;
+    const left = Math.min(
+      Math.max(
+        VIEWPORT_MARGIN_PX,
+        config?.isWide ? targetX - SIDE_ARROW_TOP_PX : targetX - halfHintWidth,
+      ),
+      window.innerWidth - HINT_WIDTH_PX - VIEWPORT_MARGIN_PX,
+    );
+
+    const arrowOffset = Math.max(12, Math.min(targetX - left, HINT_WIDTH_PX - 12));
     const direction: 'up' | 'down' = placeBelow ? 'up' : 'down';
 
     this.hintPosition.set({ top, left, arrowOffset, arrowDirection: direction });

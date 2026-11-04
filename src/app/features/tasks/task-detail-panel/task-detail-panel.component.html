@@ -117,13 +117,10 @@
       </ng-container>
       <ng-container input-value>
         <span class="time-val">
-          <span [innerHTML]="task().timeSpent || 0 | msToString"></span>
+          <span>{{ task().timeSpent || 0 | msToString }}</span>
         </span>
         <span class="separator">/</span>
-        <span
-          [innerHTML]="task().timeEstimate || 0 | msToString"
-          class="time-val"
-        ></span>
+        <span class="time-val">{{ task().timeEstimate || 0 | msToString }}</span>
       </ng-container>
       <ng-container input-additional>
         <progress-bar [progress]="progress()"></progress-bar>
@@ -219,6 +216,7 @@
         <issue-header [task]="task()"></issue-header>
       </ng-container>
       <ng-container panel-content>
+        <issue-sync-state [task]="task()"></issue-sync-state>
         @if (!isIssueDataLoadedForCurrentType()) {
           <mat-progress-bar [mode]="'indeterminate'"></mat-progress-bar>
         }

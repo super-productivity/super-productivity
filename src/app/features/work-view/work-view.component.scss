@@ -277,6 +277,12 @@ finish-day-btn,
   padding: 0 0 var(--s-half);
 }
 
+// Muted like the collapsible heading it sits in. A <button>, not an <a>:
+// themes color every anchor with the link color, which would win here.
+.all-repeat-cfgs-btn {
+  --mat-icon-button-icon-color: var(--text-color-muted);
+}
+
 // Read-only calendar event outlines below the Later Today task list.
 .later-today-cal-events {
   display: flex;
@@ -320,4 +326,10 @@ finish-day-btn,
       opacity: 1;
     }
   }
+}
+
+.empty-state-hint {
+  max-width: 420px;
+  margin: 0 auto var(--s2);
+  color: var(--text-color-muted);
 }

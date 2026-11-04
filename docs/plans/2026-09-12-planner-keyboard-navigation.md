@@ -185,3 +185,42 @@ repeat previews, bulk drag, full inline task editing, and touch selection parity
 Regression tests reproduce the date/reminder and delayed-completion failures, and
 the bulk-menu tests cover replacement rows while old hosts remain rendered. A
 browser regression exercises actual overdue completion and subsequent focus.
+
+## Boards reuse the Planner card
+
+Board panels reuse `PlannerTaskComponent` for shortcuts, selection styling and
+task actions. The optional `TASK_CARD_LIST` token
+(`src/app/features/tasks/task-card-list.token.ts`) lets the containing
+`BoardPanelComponent` take over navigation, reordering and adjacent-panel
+moves; without it the card keeps Planner behavior, and cards never import
+Boards.
+
+- `BoardComponent.adjacentPanel()` picks the neighbor from rendered panel
+  rectangles, so responsive columns and RTL follow visual direction and
+  navigation never wraps between grid rows. Empty panels expose their add
+  button as the focus target.
+- Selection is transient task ids. Range select and select-all stay within a
+  panel; modifier-click can select across panels. Group moves, reordering and
+  dragging need every selected task to be present in the source panel, so
+  mixed-panel selections do not move. A task can appear in several panels, so
+  the focused row index is remembered as well.
+- Arrow keys navigate. The configured move up/down/top/bottom shortcuts reorder
+  a manual panel (no `sortBy`); sorted panels accept moves but not manual
+  reordering. Moving the first card up (or last down) hands it to the panel
+  visually above (below), appended (prepended) to that panel's order.
+  Ctrl+Shift+Left/Right moves the focused task, or the selection if it includes
+  that task, to the adjacent panel; in Planner the same keys shift a task by
+  one day.
+- `BoardPanelComponent.moveTasks()` shares one placement path between keyboard
+  moves and drag/drop: destination tag/project/completion/scheduling/backlog
+  rules apply, source membership is not exclusive, a required schedule is asked
+  once up front (cancelling cancels the move), and the panel order is updated
+  once. No schema change.
+- Focus returns to the originating panel after ordinary actions and to the
+  destination after an explicit move; selection clears on board change.
+- On desktop a board card click only focuses it; double-click or Enter opens
+  details. Touch keeps tap-to-open outside selection mode. Planner is unchanged.
+
+Tests worth keeping green: duplicate cards, panel-scoped ranges, navigation
+through empty panels, sorted panels, schedule cancellation (see
+`board-panel.component.spec.ts`).
