@@ -56,7 +56,22 @@ export const registerPageWithErrorCollector = (
     return;
   }
   collectorsByPage.set(page, errors);
+  // A page opened with context.newPage() runs the context's init scripts on
+  // about:blank before its first navigation, where localStorage access throws
+  // a SecurityError. That is the test harness, not the app (seen in the
+  // multi-tab specs), so only errors after the first real navigation count.
+  // Playwright delivers page events in order, so a flag is race-free here,
+  // unlike reading page.url() when the error event is handled.
+  let hasNavigated = false;
+  page.on('framenavigated', (frame) => {
+    if (frame === page.mainFrame() && frame.url() !== 'about:blank') {
+      hasNavigated = true;
+    }
+  });
   page.on('pageerror', (error) => {
+    if (!hasNavigated) {
+      return;
+    }
     const message = error.stack ?? error.message;
     console.error(`[${label}] Page error:`, message);
     errors.push({ type: 'pageerror', message });
