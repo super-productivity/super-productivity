@@ -1,6 +1,5 @@
 import { inject, Injectable, Injector } from '@angular/core';
-import { Action, Store } from '@ngrx/store';
-import { firstValueFrom } from 'rxjs';
+import { Action } from '@ngrx/store';
 import type { ArchiveSideEffectPort } from '@sp/sync-core';
 import { PersistentAction } from '../core/persistent-action.interface';
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
@@ -25,8 +24,6 @@ import { ArchiveDbAdapter } from '../../core/persistence/archive-db-adapter.serv
 import { OpType } from '../core/operation.types';
 import { LockService } from '../sync/lock.service';
 import { LOCK_NAMES } from '../core/operation-log.const';
-import { selectAllTagIds } from '../../features/tag/store/tag.reducer';
-import { dropDeletedTagsFromArchivedTasks } from './drop-deleted-tags-from-archived-tasks';
 
 /**
  * Creates an empty ArchiveModel with default values.
@@ -99,7 +96,7 @@ export const isArchiveAffectingAction = (action: Action): action is PersistentAc
  *
  * ## Operations Handled
  *
- * - **moveToArchive**: Writes archived tasks to archiveYoung storage (minus deleted tags)
+ * - **moveToArchive**: Writes archived tasks to archiveYoung storage
  * - **restoreTask**: Removes task from archive storage
  * - **flushYoungToOld**: Moves old tasks from archiveYoung to archiveOld
  * - **deleteProject**: Removes all tasks for the deleted project from archive
@@ -138,7 +135,6 @@ export class ArchiveOperationHandler implements ArchiveSideEffectPort<Persistent
   private _injector = inject(Injector);
   private _archiveDbAdapter = inject(ArchiveDbAdapter);
   private _lockService = inject(LockService);
-  private _getStore = lazyInject<Store>(this._injector, Store);
   private _getArchiveService = lazyInject(this._injector, ArchiveService);
   private _getTaskArchiveService = lazyInject(this._injector, TaskArchiveService);
   private _getTimeTrackingService = lazyInject(this._injector, TimeTrackingService);
@@ -243,22 +239,14 @@ export class ArchiveOperationHandler implements ArchiveSideEffectPort<Persistent
    * Writes archived tasks to archiveYoung storage.
    *
    * @localBehavior SKIP - Archive written by ArchiveService.moveToArchive() before dispatch
-   * @remoteBehavior Executes - Writes tasks to archiveYoung, without tag ids
-   *   deleted locally (#11466; see dropDeletedTagsFromArchivedTasks)
+   * @remoteBehavior Executes - Writes tasks to archiveYoung
    */
   private async _handleMoveToArchive(action: PersistentAction): Promise<void> {
     if (!action.meta?.isRemote) {
       return; // Local: already written by ArchiveService before dispatch
     }
     const tasks = (action as ReturnType<typeof TaskSharedActions.moveToArchive>).tasks;
-    // Archive side effects run after the whole batch's reducers, so this is the
-    // tag state including every delete this client has applied.
-    const existingTagIds = new Set(
-      (await firstValueFrom(this._getStore().select(selectAllTagIds))) as string[],
-    );
-    await this._getArchiveService().writeTasksToArchiveForRemoteSync(
-      dropDeletedTagsFromArchivedTasks(tasks, existingTagIds),
-    );
+    await this._getArchiveService().writeTasksToArchiveForRemoteSync(tasks);
   }
 
   /**
