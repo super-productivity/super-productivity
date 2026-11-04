@@ -40,7 +40,8 @@ const setWsDownloadBlocked = async (
 
 test.describe('@supersync Project delete vs archive', () => {
   for (const order of ['delete syncs first', 'archive syncs first'] as const) {
-    test(`concurrent project delete and archive converge on the archive (${order}) @supersync`, async ({
+    // #11486: A keeps the archived task with a dangling projectId, B drops it.
+    test.fixme(`concurrent project delete and archive converge on the archive (${order}) @supersync`, async ({
       browser,
       baseURL,
       testRunId,

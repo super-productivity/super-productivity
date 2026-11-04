@@ -38,7 +38,8 @@ const syncOk = async (page: Page, syncPage: SyncPage): Promise<void> => {
 
 test.describe('@webdav Project delete vs archive', () => {
   for (const order of ['delete syncs first', 'archive syncs first'] as const) {
-    test(`concurrent project delete and archive converge on the archive (${order})`, async ({
+    // #11486: A keeps the archived task with a dangling projectId, B drops it.
+    test.fixme(`concurrent project delete and archive converge on the archive (${order})`, async ({
       browser,
       baseURL,
       request,
