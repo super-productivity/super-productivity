@@ -299,7 +299,9 @@ test.describe('@supersync SuperSync Models', () => {
         .first();
       const tagId = await tagNavItem.getAttribute('data-tag-id');
       if (tagId) {
-        await clientB.page.goto(`/#/tag/${tagId}/work`);
+        // `/tag/:id/work` is no route: it fell through to the start page
+        // (Today), so the tag view itself was never checked.
+        await clientB.page.goto(`/#/tag/${tagId}/tasks`);
       } else {
         await tagNavItem.click({ force: true });
       }
