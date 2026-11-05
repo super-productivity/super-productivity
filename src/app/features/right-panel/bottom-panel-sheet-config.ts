@@ -4,10 +4,11 @@ import { MatBottomSheetConfig } from '@angular/material/bottom-sheet';
 /**
  * Config for the bottom sheet that hosts the right panel on xs screens.
  *
- * `openModality` is the input that opened the sheet. Focus is handed back to
- * the opener on close only for keyboard users: after a tap it just leaves a
- * focus ring on e.g. the bottom-nav button, which then reads like a second
- * active nav item.
+ * `openModality` is the input that opened the sheet. On close, focus is
+ * restored (to the element focused at open) only for keyboard users: after a
+ * tap it just leaves a focus ring on e.g. the bottom-nav button, which then
+ * reads like a second active nav item. Decided at open, not close: typing in
+ * the sheet (even on a soft keyboard) makes the close modality 'keyboard'.
  */
 export const getBottomPanelSheetConfig = (
   openModality: InputModality,
