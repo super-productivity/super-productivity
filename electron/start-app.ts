@@ -408,7 +408,7 @@ export const startApp = (): void => {
     }, CONFIG.IDLE_PING_INTERVAL);
     // --------END IDLE HANDLING---------
 
-    initPowerMonitorHandlers(powerMonitor, mainWin, sendIdleMsgIfOverMin);
+    initPowerMonitorHandlers(powerMonitor, () => mainWin, sendIdleMsgIfOverMin);
   });
 
   appIN.on('will-quit', () => {
