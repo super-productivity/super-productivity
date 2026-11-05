@@ -232,9 +232,9 @@
     "authorUrl": "https://github.com/AshrafByte",
     "id": "sp-timesheet",
     "release": {
-      "version": "2.0.1",
-      "downloadUrl": "https://github.com/AshrafByte/sp-timesheet/releases/download/v2.0.1/sp-timesheet-v2.0.1.zip",
-      "sha256": "627d56200730436d0cc70586422ad30512d49da80c041e4e6eb1cf405f4471d0"
+      "version": "2.2.0",
+      "downloadUrl": "https://github.com/AshrafByte/sp-timesheet/releases/download/v2.2.0/sp-timesheet-v2.2.0.zip",
+      "sha256": "6322b69ae3b08bb31d75b1dd630cb96be0076fec677a8810da92d46ac2129306"
     }
   },
   {
