@@ -5,10 +5,11 @@
 # Wayland session. This is load-bearing: the programmatic
 # app.commandLine.appendSwitch('ozone-platform','x11') in electron/start-app.ts
 # is not enough in practice — field reports on issue #7270 show Chromium's
-# Ozone init dlopens libEGL/libgbm on the core22 Mesa path before
+# Ozone init dlopens libEGL/libgbm on the confined Mesa path before
 # appendSwitch is honored, which segfaults under host-vs-snap Mesa ABI
 # drift. Putting the flag into argv before Electron's argv parser runs
-# bypasses that.
+# bypasses that. Retire once core24 + gpu-2404 Wayland is field-verified
+# (docs/research/snap-wayland-gpu-fix-research.md "Removal conditions").
 #
 # Same mechanism used by Signal Desktop and Mattermost Desktop snaps
 # (snapcrafters/signal-desktop, snapcrafters/mattermost-desktop).

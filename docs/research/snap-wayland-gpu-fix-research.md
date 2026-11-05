@@ -1,15 +1,19 @@
 # Snap + Wayland GPU init failure — root cause and shipped fix
 
-> **Status:** Fixed and shipped. Three files cite this document for why their
-> guards exist — `electron-builder.yaml`, `tools/afterPack.js` and
+> **Status:** Workaround fixed and shipped (forced X11 on Snap+Wayland). The
+> structural fix is migrating the Snap to **core24 + `gpu-2404`** — packaging
+> for that lands in the open migration PR; the argv wrapper stays until
+> Wayland is field-verified on that stack. Three files cite this document for
+> why their guards exist — `electron-builder.yaml`, `tools/afterPack.js` and
 > `build/linux/snap-wrapper.sh` — so it is maintained rather than deleted. (The
 > guards in `electron/start-app.ts` are covered here too but do not cite it.)
 > Before deleting, re-derive the citer list with
 > `grep -rn snap-wayland-gpu-fix-research`; do not trust this line.
 >
-> **Snapshot:** 2026-04-21. The 2026-04 investigation log (18 sections of
-> review passes, options analysis, field-data triage and multi-agent
-> verification) was removed once its conclusions landed in code — recover it with
+> **Snapshot:** 2026-04-21 (workaround); packaging migration started 2026-11.
+> The 2026-04 investigation log (18 sections of review passes, options analysis,
+> field-data triage and multi-agent verification) was removed once its
+> conclusions landed in code — recover it with
 > `git show 07511ab45c:docs/research/snap-wayland-gpu-fix-research.md`.
 >
 > **Issues:** #5672, #7270, PR #7273. **Removal condition:** see
@@ -142,10 +146,16 @@ fail the build if `superproductivity-bin` is absent from the Linux `appOutDir`.
 
 Retire the wrapper when either holds:
 
-- **The Snap migrates to core24 + `gpu-2404`.** That resolves the Mesa ABI drift
-  and the Wayland path works again. Note the wrapper costs nothing after that —
-  the X11 fallback only fires under our `$SNAP` — so migration permits removal
-  rather than requiring it.
+- **The Snap migrates to core24 + `gpu-2404` and Wayland is field-verified.**
+  Packaging alone is not enough: after the Snap is on core24 with the GNOME
+  extension (which wires `gnome-46-2404` + `gpu-2404` / `mesa-2404`), confirm on
+  at least AMD (`radeonsi`), Intel, and NVIDIA that
+  `snap run superproductivity --ozone-platform=wayland` shows a window without
+  GPU-process death, then remove `build/linux/snap-wrapper.sh` / the afterPack
+  rename and the Snap X11 wideners in `electron/start-app.ts`. Until that
+  verification, keep the wrapper even on core24 — it only fires under our
+  `$SNAP` on Wayland, so it is cheap insurance. Forcing Wayland on today's
+  core22 + `gnome-42-2204` Snap is expected to fail (#5672).
 - **Chromium's argv/`appendSwitch` divergence is fixed upstream.** Unlikely: the
   §18.7 trace shows the divergence is structural (a memoized read that precedes
   JS), not a bug awaiting a patch.
