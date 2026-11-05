@@ -2,6 +2,7 @@ import { expect, test } from '../../fixtures/supersync.fixture';
 import type { APIResponse, Page, Route } from '@playwright/test';
 import { SuperSyncPage } from '../../pages/supersync.page';
 import { WorkViewPage } from '../../pages/work-view.page';
+import { allowDevErrorsInCurrentTest } from '../../utils/runtime-errors';
 import {
   closeClient,
   createSimulatedClient,
@@ -128,6 +129,9 @@ const addGhostTagReference = async (
   taskTitle: string,
   ghostTagId: string,
 ): Promise<void> => {
+  // The dangling tag reference is the corruption under test; the validator
+  // reports it through devError() before the REPAIR replaces it.
+  allowDevErrorsInCurrentTest(/tagId from task not existing/);
   await page.evaluate(
     ({ title, tagId }) => {
       type TaskLike = {

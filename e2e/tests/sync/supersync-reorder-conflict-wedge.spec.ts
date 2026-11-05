@@ -659,7 +659,9 @@ test.describe('@supersync reorder crossing content (#10264)', () => {
             const converged = await snapshot(a.page, family, ids);
             expect(await snapshot(b.page, family, ids)).toEqual(converged);
             expect(converged.entities).toEqual(edited.entities);
-            expect([...converged.order].sort()).toEqual([...ids].sort());
+            // The reorder and the content edit commute: the reorder must survive
+            // the crossing in both directions, not just keep the same id set.
+            expect(converged.order).toEqual(reordered);
             expect(converged.otherOrder).toEqual(before.otherOrder);
 
             // Exercise persisted replay and sequence-zero replay for both note
@@ -1181,6 +1183,7 @@ test.describe('@supersync released reorder compatibility (#10264)', () => {
           const reversed = [...ids].reverse();
           data.reorder.ids = reversed;
           data.reorder.meta.entityIds = reversed;
+          let expectedOrder: string[] = reversed;
           if (oldReorders) {
             await dispatch(current.page, data.edit);
             // Real CDK drag from the released UI, no injected action or modified bundle.
@@ -1211,6 +1214,8 @@ test.describe('@supersync released reorder compatibility (#10264)', () => {
             await released.page.mouse.up();
             await expect(released.page.locator('.cdk-drag-preview')).toBeHidden();
             await expect.poll(uiOrder).not.toEqual(ids);
+            // The released client's drag is the only reorder: it must win.
+            expectedOrder = await uiOrder();
           } else {
             await dispatch(current.page, data.reorder);
             await notes.editNote(notes.getNoteByContent(ids[0]), 'edited concurrently');
@@ -1241,7 +1246,9 @@ test.describe('@supersync released reorder compatibility (#10264)', () => {
           expect(finalState.entities[ids[0]].content).toBe('edited concurrently');
           expect(finalState.entities[ids[1]].content).toBe(ids[1]);
           expect(finalState.entities[ids[2]].content).toBe(ids[2]);
-          expect([...finalState.order].sort()).toEqual([...ids].sort());
+          // The only reorder (the released drag, or current's reversed order)
+          // commutes with the content edit and must survive, not merely the id set.
+          expect(finalState.order).toEqual(expectedOrder);
           await expect.poll(uiOrder).toEqual(finalState.order);
           await expect(notes.getNoteByContent('edited concurrently')).toBeVisible();
           await expect(notes.getNoteByContent(ids[1])).toBeVisible();

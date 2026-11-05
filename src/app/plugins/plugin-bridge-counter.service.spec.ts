@@ -29,6 +29,7 @@ import { PluginHttpService } from './issue-provider/plugin-http.service';
 import { getDbDateStr } from '../util/get-db-date-str';
 import { DateService } from '../core/date/date.service';
 import { DataInitService } from '../core/data-init/data-init.service';
+import { SimpleCounterService } from '../features/simple-counter/simple-counter.service';
 import { GlobalConfigService } from '../features/config/global-config.service';
 import { signal } from '@angular/core';
 import { DEFAULT_GLOBAL_CONFIG } from '../features/config/default-global-config.const';
@@ -111,6 +112,10 @@ describe('PluginBridgeService.setCounter()', () => {
         { provide: IssueSyncAdapterRegistryService, useValue: {} },
         { provide: PluginHttpService, useValue: {} },
         { provide: DataInitService, useValue: dataInitServiceSpy },
+        {
+          provide: SimpleCounterService,
+          useValue: jasmine.createSpyObj('SimpleCounterService', ['deleteSimpleCounter']),
+        },
         {
           provide: GlobalConfigService,
           useValue: { cfg: signal(DEFAULT_GLOBAL_CONFIG) },
@@ -316,6 +321,20 @@ describe('PluginBridgeService.setCounter()', () => {
 
       const action = store.dispatch.calls.mostRecent().args[0] as any;
       expect(action.simpleCounter.changes.countOnDay).toEqual({ [LOGICAL_TODAY]: 7 });
+    });
+  });
+
+  describe('deleteSimpleCounter', () => {
+    // The service builds the snapshot the delete carries (#11465, #11495).
+    it('should delete through SimpleCounterService', async () => {
+      const simpleCounterService = TestBed.inject(
+        SimpleCounterService,
+      ) as jasmine.SpyObj<SimpleCounterService>;
+
+      await service.deleteSimpleCounter('my-counter');
+
+      expect(simpleCounterService.deleteSimpleCounter).toHaveBeenCalledWith('my-counter');
+      expect(store.dispatch).not.toHaveBeenCalled();
     });
   });
 });

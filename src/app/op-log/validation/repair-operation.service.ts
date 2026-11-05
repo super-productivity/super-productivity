@@ -171,7 +171,10 @@ export class RepairOperationService {
     }
 
     return this.lockService.request(LOCK_NAMES.OPERATION_LOG, async () => {
-      const repairedState = await this.stateSnapshotService.getStateSnapshotAsync();
+      // Pending task time is not in the op log yet; a later time-sync op carries
+      // it, so a snapshot that already held it would count it twice (#11483).
+      const repairedState =
+        await this.stateSnapshotService.getStateSnapshotForOperationLogAsync();
       const replacementOp = await this._buildRepairOperation(
         repairedState,
         repairSummary,

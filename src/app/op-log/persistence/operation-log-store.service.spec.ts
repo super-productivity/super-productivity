@@ -1267,144 +1267,41 @@ describe('OperationLogStoreService', () => {
     });
   });
 
-  describe('appendBatch', () => {
-    it('should append multiple operations in a single transaction', async () => {
-      const ops = [
-        createTestOperation({ entityId: 'task1' }),
-        createTestOperation({ entityId: 'task2' }),
-        createTestOperation({ entityId: 'task3' }),
-      ];
+  describe('append duplicate handling', () => {
+    it('should throw on a duplicate operation ID and keep the original', async () => {
+      const op = createTestOperation();
+      await service.append(op, 'remote');
+      // Prime the applied-op-ids cache before the failing append.
+      expect(await service.getAppliedOpIds()).toEqual(new Set([op.id]));
 
-      const seqs = await service.appendBatch(ops);
-
-      expect(seqs.length).toBe(3);
-      const storedOps = await service.getOpsAfterSeq(0);
-      expect(storedOps.length).toBe(3);
-    });
-
-    it('should return sequential sequence numbers', async () => {
-      const ops = [
-        createTestOperation({ entityId: 'task1' }),
-        createTestOperation({ entityId: 'task2' }),
-      ];
-
-      const seqs = await service.appendBatch(ops);
-
-      expect(seqs[1]).toBe(seqs[0] + 1);
-    });
-
-    it('should set source and syncedAt for remote batch', async () => {
-      const ops = [
-        createTestOperation({ entityId: 'task1' }),
-        createTestOperation({ entityId: 'task2' }),
-      ];
-
-      await service.appendBatch(ops, 'remote');
-
-      const storedOps = await service.getOpsAfterSeq(0);
-      expect(storedOps[0].source).toBe('remote');
-      expect(storedOps[0].syncedAt).toBeDefined();
-      expect(storedOps[1].source).toBe('remote');
-      expect(storedOps[1].syncedAt).toBeDefined();
-    });
-
-    it('should set applicationStatus to pending when pendingApply is true', async () => {
-      const ops = [createTestOperation({ entityId: 'task1' })];
-
-      await service.appendBatch(ops, 'remote', { pendingApply: true });
-
-      const storedOps = await service.getOpsAfterSeq(0);
-      expect(storedOps[0].applicationStatus).toBe('pending');
-    });
-
-    it('should handle empty array', async () => {
-      const seqs = await service.appendBatch([]);
-
-      expect(seqs).toEqual([]);
-    });
-
-    it('should throw on duplicate operation IDs', async () => {
-      const ops = [createTestOperation(), createTestOperation()];
-
-      // Insert first time - should succeed
-      const seqs1 = await service.appendBatch(ops, 'remote');
-      expect(seqs1.length).toBe(2);
-
-      // Insert same ops again - should throw
-      await expectAsync(service.appendBatch(ops, 'remote')).toBeRejectedWithError(
+      await expectAsync(service.append(op, 'remote')).toBeRejectedWithError(
         /Duplicate operation detected/,
       );
 
-      // Original ops should still be in store
       const allOps = await service.getOpsAfterSeq(0);
-      expect(allOps.length).toBe(2);
+      expect(allOps.length).toBe(1);
+      // The failed append aborts its transaction, so the cache (keyed on the
+      // last seq) stays valid without an explicit invalidation (#11469).
+      expect(await service.getAppliedOpIds()).toEqual(new Set([op.id]));
     });
 
-    // =========================================================================
-    // Regression test: appliedOpIds cache must be invalidated on ConstraintError
-    // =========================================================================
-    // Issue #6213: When appendBatch throws ConstraintError, the appliedOpIds cache
-    // becomes stale (it doesn't know about ops from a previous failed sync).
-    // The cache must be invalidated so filtering against it returns correct results.
-
-    // Filters ops against the applied-op-ID cache, like the sync download path.
-    const filterUnapplied = async (ops: Operation[]): Promise<Operation[]> => {
-      const appliedIds = await service.getAppliedOpIds();
-      return ops.filter((op) => !appliedIds.has(op.id));
-    };
-
-    it('should invalidate appliedOpIds cache on ConstraintError to fix sync retry (issue #6213)', async () => {
-      // Setup: Insert some ops initially
-      const existingOps = [createTestOperation(), createTestOperation()];
-      await service.appendBatch(existingOps, 'remote');
-
-      // Prime the appliedOpIds cache by calling getAppliedOpIds
-      const appliedIds1 = await service.getAppliedOpIds();
-      expect(appliedIds1.size).toBe(2);
-
-      // Now try to insert a batch that includes a duplicate (simulating stale cache scenario)
-      const newOp = createTestOperation();
-      const mixedOps = [existingOps[0], newOp]; // One duplicate, one new
-
-      // This should throw ConstraintError
-      await expectAsync(service.appendBatch(mixedOps, 'remote')).toBeRejectedWithError(
-        /Duplicate operation detected/,
-      );
-
-      // After the error, filtering against the applied IDs should still work correctly
-      // The cache should have been invalidated, so it will rebuild from IndexedDB
-      const newOps = await filterUnapplied(mixedOps);
-
-      // Only the new op should be returned (the duplicate should be filtered out)
-      expect(newOps.length).toBe(1);
-      expect(newOps[0].id).toBe(newOp.id);
-    });
-
-    it('should allow successful retry after ConstraintError invalidates cache (issue #6213)', async () => {
-      // Simulate: ops were written in a previous session but cache doesn't know about them
-      const previouslyWrittenOps = [createTestOperation(), createTestOperation()];
-      await service.appendBatch(previouslyWrittenOps, 'remote');
-
-      // Prime cache
+    it('should keep the applied-op-ids cache exact across a failed append and a later write', async () => {
+      const existing = createTestOperation();
+      await service.append(existing, 'remote');
       await service.getAppliedOpIds();
 
-      // First sync attempt: mix of duplicates and new ops - fails
-      const newOp = createTestOperation();
-      const firstAttemptOps = [previouslyWrittenOps[0], newOp];
-      await expectAsync(
-        service.appendBatch(firstAttemptOps, 'remote'),
-      ).toBeRejectedWithError(/Duplicate operation detected/);
+      // A rejected duplicate must not leak ids into the cache, and a later
+      // successful write must still be picked up incrementally.
+      await expectAsync(service.append(existing, 'remote')).toBeRejectedWithError(
+        /Duplicate operation detected/,
+      );
+      const neverWritten = createTestOperation();
+      const later = createTestOperation();
+      await service.append(later, 'remote');
 
-      // Retry: filter first, then append only new ops - should succeed
-      const trulyNewOps = await filterUnapplied(firstAttemptOps);
-      expect(trulyNewOps.length).toBe(1);
-
-      const seqs = await service.appendBatch(trulyNewOps, 'remote');
-      expect(seqs.length).toBe(1);
-
-      // Verify final state
-      const allOps = await service.getOpsAfterSeq(0);
-      expect(allOps.length).toBe(3); // 2 original + 1 new
+      const applied = await service.getAppliedOpIds();
+      expect(applied).toEqual(new Set([existing.id, later.id]));
+      expect(applied.has(neverWritten.id)).toBeFalse();
     });
   });
 
@@ -1429,7 +1326,7 @@ describe('OperationLogStoreService', () => {
       const ops = [createTestOperation(), createTestOperation()];
 
       // Insert first time
-      await service.appendBatch(ops, 'remote');
+      await service.appendBatchSkipDuplicates(ops, 'remote');
 
       // Insert same ops again with appendBatchSkipDuplicates - should NOT throw
       const result = await service.appendBatchSkipDuplicates(ops, 'remote');
@@ -1445,7 +1342,7 @@ describe('OperationLogStoreService', () => {
 
     it('should write new ops and skip duplicates in the same batch', async () => {
       const existingOps = [createTestOperation(), createTestOperation()];
-      await service.appendBatch(existingOps, 'remote');
+      await service.appendBatchSkipDuplicates(existingOps, 'remote');
 
       const newOp = createTestOperation();
       const mixedOps = [existingOps[0], newOp, existingOps[1]];
@@ -1830,7 +1727,10 @@ describe('OperationLogStoreService', () => {
       const firstPredecessor = createTestOperation({ id: 'first-predecessor' });
       const secondPredecessor = createTestOperation({ id: 'second-predecessor' });
       const replacement = createTestOperation({ id: 'replacement' });
-      await service.appendBatch([firstPredecessor, secondPredecessor], 'local');
+      await service.appendBatchSkipDuplicates(
+        [firstPredecessor, secondPredecessor],
+        'local',
+      );
 
       // Populate the unsynced cache before the atomic transition.
       expect((await service.getUnsynced()).map(({ op }) => op.id)).toEqual([
@@ -2719,7 +2619,9 @@ describe('OperationLogStoreService', () => {
       const op1 = createTestOperation({ entityId: 'task1' });
       const op2 = createTestOperation({ entityId: 'task2' });
 
-      await service.appendBatch([op1, op2], 'remote', { pendingApply: true });
+      await service.appendBatchSkipDuplicates([op1, op2], 'remote', {
+        pendingApply: true,
+      });
 
       // Simulating "restart" - get pending ops for recovery
       const pending = await service.getPendingRemoteOps();
@@ -2735,7 +2637,9 @@ describe('OperationLogStoreService', () => {
         createTestOperation({ entityId: 'task3' }),
       ];
 
-      const seqs = await service.appendBatch(ops, 'remote', { pendingApply: true });
+      const { seqs } = await service.appendBatchSkipDuplicates(ops, 'remote', {
+        pendingApply: true,
+      });
 
       // Simulate: first op applied, then crash
       await service.markApplied([seqs[0]]);

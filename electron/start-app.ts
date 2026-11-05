@@ -32,6 +32,7 @@ import {
 import { getIsQuiting } from './shared-state';
 import { initPowerMonitorHandlers } from './power-monitor-handlers';
 import { evaluateGpuStartupGuard } from './gpu-startup-guard';
+import { START_MINIMIZED_ARG } from './start-minimized';
 import * as fs from 'fs';
 
 const ICONS_FOLDER = __dirname + '/assets/icons/';
@@ -52,6 +53,7 @@ let isShowDevTools: boolean = IS_DEV;
 let customUrl: string;
 let isDisableTray = false;
 let forceDarkTray = false;
+let isStartMinimized = false;
 
 if (IS_DEV) {
   log('Starting in DEV Mode!!!');
@@ -125,6 +127,11 @@ export const startApp = (): void => {
     if (val && val.includes('--force-dark-tray')) {
       forceDarkTray = true;
       log('Force dark mode for tray icon');
+    }
+
+    if (val && val.includes(START_MINIMIZED_ARG)) {
+      isStartMinimized = true;
+      log('Start minimized');
     }
 
     if (val && val.includes('--user-data-dir=')) {
@@ -500,6 +507,7 @@ export const startApp = (): void => {
       ICONS_FOLDER,
       quitApp,
       customUrl,
+      isStartMinimized,
     });
 
     initPluginOAuth(mainWin);

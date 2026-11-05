@@ -15,6 +15,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import { IS_NATIVE_CAPTURE } from '../matrix';
 
 const TEMPLATE_PATH = path.resolve(__dirname, 'seed.template.json');
 
@@ -94,6 +95,14 @@ export const buildSeed = (baseDate: Date, opts: SeedOptions = {}): AnyRecord => 
   if (opts.locale) {
     const gc = data.globalConfig as AnyRecord;
     gc.localization = { ...(gc.localization as AnyRecord), lng: opts.locale };
+  }
+
+  // Native window capture: use the system title bar so the desktop draws real
+  // decoration, rounded corners and shadow. Must match the Electron simple
+  // store value the fixture writes before launch (see fixture.ts).
+  if (IS_NATIVE_CAPTURE) {
+    const gc = data.globalConfig as AnyRecord;
+    gc.misc = { ...(gc.misc as AnyRecord), isUseCustomWindowTitleBar: false };
   }
 
   // Custom theme: the active selection lives in localStorage (LS.CUSTOM_THEME)
