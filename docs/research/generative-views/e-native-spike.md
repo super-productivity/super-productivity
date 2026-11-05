@@ -2,7 +2,7 @@
 
 Throwaway spike. Question: does a generative view drawn with SP's own Angular components feel clearly better than the plugin's look-alike rendering, and what hidden dependencies and side effects appear when hosting those components outside their usual pages? Decides "plugin draws look-alikes" vs "plugin + generic host `showNativeView(spec)` API".
 
-Everything is uncommitted on branch `claude/generative-ui-todo-app-h4o6e8`; every new file starts with `// SPIKE: throwaway, do not merge`, and each edit to an existing file has a SPIKE comment.
+The code is on the never-merge branch `spike/native-view-components`; every new file starts with `// SPIKE: throwaway, do not merge`, and each edit to an existing file has a SPIKE comment.
 
 ## 1. Result in one paragraph
 
