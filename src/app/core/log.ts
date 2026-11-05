@@ -36,7 +36,7 @@ const truncateSerialized = (value: string): string =>
 // The lookbehind skips URL paths like https://host/home/feed.
 // Windows usernames may contain spaces but none of these: " / \ [ ] : ; | = , + * ? < >
 const WINDOWS_HOME_RE =
-  /(?<![\w.-])([a-z]:[\\/]+users[\\/]+)[^\\/"'[\]:;|=,+*?<>()\r\n\t]+/gi;
+  /(?<![\w.-])([a-z]:[\\/]+users[\\/]+)[^\\/"'[\]:;|=,+*?<>\r\n\t]+/gi;
 const POSIX_HOME_RE = /(?<![\w.-])(\/(?:Users|home)\/)[^\\/"'\s:)]+/g;
 
 const redactHomePaths = (value: string): string =>

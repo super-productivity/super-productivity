@@ -66,13 +66,16 @@ describe('Log', () => {
       Log.err({ error: 'Global Shortcut registration failed', stack: WIN_STACK });
       Log.err(JSON.stringify({ stack: WIN_STACK }));
 
-      expect(Log.exportLogHistory()).not.toContain('alice');
+      const exported = Log.exportLogHistory();
+      expect(exported).not.toContain('alice');
+      expect(() => JSON.parse(exported)).not.toThrow();
     });
 
     it('redacts Windows user folders with spaces, forward slashes and lowercase', () => {
       Log.err('at C:\\Users\\Alice Smith\\app.js');
       Log.err('file:///C:/Users/alice/app.asar/index.html');
       Log.err('at c:\\users\\alice\\app.js');
+      Log.err('at C:\\Users\\alice (work)\\app.js');
 
       const exported = Log.exportLogHistory();
       expect(exported).not.toMatch(/alice/i);
