@@ -346,47 +346,17 @@ recoverable via local undo, not via sync.
 - Do not add per-task/note restoration operations or project-sized snapshots to
   compensate a losing marked project delete.
 
-**Extension — single-tag deletion (#11489, since November 2026)**: new
-`deleteTag` actions carry `tagDeleteWins: true` and win the same way. Under
-timestamp LWW, a concurrent tag rename recreated the tag on the deleting device,
-while that device's delete cascade had already stripped the tag from its live and
-archived tasks. Nothing re-applied the membership, so the devices stayed
-different for good. Restoring that cascade would need affected live and archived
-task ids in the delete payload, and still could not bring back what the cascade
-dropped (orphaned tasks, repeat-config tags, issue-provider default tags). That is
-the same reasoning as for projects.
-
-- Trade-off: a tag rename or other tag edit concurrent with the delete is lost,
-  whichever timestamp is newer.
-- **No schema barrier and no bump.** The marker alone is the discriminator; the
-  classifier still requires the authenticated payload `id` to match the
-  plaintext `entityId` and tolerates a null payload. A released client ignores
-  the marker and resolves the delete by timestamp exactly as before. That leaves
-  the pre-existing membership divergence for that pair, not data loss (unlike the
-  empty project shell that justified v4, which itself needed no bump, see
-  [Bump Policy](docs/sync-and-op-log/operation-log-architecture.md#bump-policy--a-bump-does-not-protect-the-released-fleet)).
-- Mixed fleet: two updated clients converge on the delete in both directions;
-  any pair with a released client behaves as before; deletes stored before this
-  change carry no marker and keep LWW.
-- `deleteTags` (several tag ids in one op) is excluded: it is never stamped and
-  the classifier accepts only `[Tag] Delete Tag`. Delete-wins for a
-  multi-entity op is a new conflict crossing that needs its own resolution
-  path and E2E (AGENTS.md sync rule 14).
-- Proof: [`supersync-tag-delete-rename-race-11489.spec.ts`](e2e/tests/sync/supersync-tag-delete-rename-race-11489.spec.ts)
-  covers both directions, live and archived.
-
 **Key Files**:
 
 - [`task-shared.actions.ts`](src/app/root-store/meta/task-shared.actions.ts) — the `PROJECT_DELETE_WINS_MARKER` producer
-- [`tag.actions.ts`](src/app/features/tag/store/tag.actions.ts) — the `TAG_DELETE_WINS_MARKER` producer
 - [`conflict-resolution.ts`](packages/sync-core/src/conflict-resolution.ts)
-- [`conflict-resolution.util.ts`](src/app/op-log/sync/conflict-resolution.util.ts) — the delete-wins classifier (`isDeleteWinsOperation`)
+- [`conflict-resolution.service.ts`](src/app/op-log/sync/conflict-resolution.service.ts) — the delete-wins classifier
 - [`schema-version.ts`](packages/shared-schema/src/schema-version.ts)
 - [`project-delete-wins-barrier-v3-to-v4.ts`](packages/shared-schema/src/migrations/project-delete-wins-barrier-v3-to-v4.ts) (registered in [`migrations/index.ts`](packages/shared-schema/src/migrations/index.ts))
 
 **When to Update This Pattern**:
 
-- Changing the cascade performed by `deleteProject` or `deleteTag`
+- Changing the cascade performed by `deleteProject`
 - Adding another operation with delete-wins conflict semantics
 - Changing schema compatibility or LWW replacement behavior
 
