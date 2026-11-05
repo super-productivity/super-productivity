@@ -1,6 +1,7 @@
 import { TestBed, fakeAsync, flush, tick } from '@angular/core/testing';
 import { MockStore, provideMockStore } from '@ngrx/store/testing';
-import { BehaviorSubject, of, Subscription, throwError } from 'rxjs';
+import { Action } from '@ngrx/store';
+import { BehaviorSubject, of, Subject, Subscription, throwError } from 'rxjs';
 import { CalendarIntegrationEffects } from './calendar-integration.effects';
 import { GlobalTrackingIntervalService } from '../../../core/global-tracking-interval/global-tracking-interval.service';
 import { BannerService } from '../../../core/banner/banner.service';
@@ -18,8 +19,10 @@ import { IssueProviderCalendar } from '../../issue/issue.model';
 import { CalendarIntegrationEvent } from '../calendar-integration.model';
 import { selectTaskFeatureState } from '../../tasks/store/task.selectors';
 import { initialTaskState } from '../../tasks/store/task.reducer';
-import { TaskState } from '../../tasks/task.model';
+import { Task, TaskState, TaskWithSubTasks } from '../../tasks/task.model';
 import { IS_ONLINE$ } from '../../../util/is-online.token';
+import { LOCAL_ACTIONS } from '../../../util/local-actions.token';
+import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 
 describe('CalendarIntegrationEffects pollChanges$ startup guard', () => {
   let effects: CalendarIntegrationEffects;
@@ -33,6 +36,8 @@ describe('CalendarIntegrationEffects pollChanges$ startup guard', () => {
   let isOnline$: BehaviorSubject<boolean>;
   let isInitialSyncDoneSyncSpy: jasmine.Spy;
   let isInSyncWindowSpy: jasmine.Spy;
+  let unskipCalendarEventsSpy: jasmine.Spy;
+  let localActions$: Subject<Action>;
   let taskStateForSelector: TaskState & {
     dismissedCalendarAutoImportEventIdsByProvider?: Record<string, string[]>;
   };
@@ -88,6 +93,8 @@ describe('CalendarIntegrationEffects pollChanges$ startup guard', () => {
       .and.returnValue(true);
     isInSyncWindowSpy = jasmine.createSpy('isInSyncWindow').and.returnValue(false);
     getCachedEventsSpy = jasmine.createSpy('getCachedEvents').and.returnValue([]);
+    unskipCalendarEventsSpy = jasmine.createSpy('unskipCalendarEvents');
+    localActions$ = new Subject<Action>();
     isOnline$ = new BehaviorSubject<boolean>(true);
 
     todayDateStr$ = new BehaviorSubject<string>('2026-05-20');
@@ -126,6 +133,7 @@ describe('CalendarIntegrationEffects pollChanges$ startup guard', () => {
           useValue: {
             requestEvents$: requestEvents$Spy,
             getCachedEvents: getCachedEventsSpy,
+            unskipCalendarEvents: unskipCalendarEventsSpy,
             skippedEventIds$: new BehaviorSubject<string[]>([]),
           },
         },
@@ -155,6 +163,7 @@ describe('CalendarIntegrationEffects pollChanges$ startup guard', () => {
           useValue: { isInSyncWindow: isInSyncWindowSpy },
         },
         { provide: IS_ONLINE$, useValue: isOnline$ },
+        { provide: LOCAL_ACTIONS, useValue: localActions$ },
       ],
     });
 
@@ -406,6 +415,50 @@ describe('CalendarIntegrationEffects pollChanges$ startup guard', () => {
     )._currentlyShownBanners$.getValue();
     expect(banners.length).toBe(0);
   }));
+
+  describe('unskipEventsOfDeletedTasks$', () => {
+    const buildTask = (id: string, issueType?: 'ICAL' | 'JIRA'): Task =>
+      ({
+        id,
+        issueId: `${id}-issue`,
+        issueType,
+        issueProviderId: issueType && PROVIDER_ID,
+      }) as Task;
+
+    beforeEach(() => {
+      sub = effects.unskipEventsOfDeletedTasks$.subscribe();
+    });
+
+    it('unskips the events of a deleted task and its subtasks', () => {
+      const task = {
+        ...buildTask('parent', 'ICAL'),
+        subTasks: [buildTask('sub', 'ICAL'), buildTask('other', 'JIRA')],
+      } as TaskWithSubTasks;
+
+      localActions$.next(TaskSharedActions.deleteTask({ task }));
+
+      expect(unskipCalendarEventsSpy).toHaveBeenCalledOnceWith([
+        'parent-issue',
+        'sub-issue',
+      ]);
+    });
+
+    it('handles a deleted task without a subTasks array', () => {
+      const task = buildTask('parent', 'ICAL') as TaskWithSubTasks;
+
+      localActions$.next(TaskSharedActions.deleteTask({ task }));
+
+      expect(unskipCalendarEventsSpy).toHaveBeenCalledOnceWith(['parent-issue']);
+    });
+
+    it('unskips the events of bulk deleted tasks', () => {
+      const tasks = [buildTask('a', 'ICAL'), buildTask('b')];
+
+      localActions$.next(TaskSharedActions.deleteTasks({ taskIds: ['a', 'b'], tasks }));
+
+      expect(unskipCalendarEventsSpy).toHaveBeenCalledOnceWith(['a-issue']);
+    });
+  });
 
   describe('offline', () => {
     const getBannerIds = (): string[] =>

@@ -442,6 +442,26 @@ export class CalendarIntegrationService {
     localStorage.setItem(LS.CALENDER_EVENTS_LAST_SKIP_DAY, getDbDateStr());
   }
 
+  unskipCalendarEvents(eventIds: string[]): void {
+    const current = this.skippedEventIds$.getValue();
+    if (!eventIds.some((id) => current.includes(id))) {
+      return;
+    }
+
+    // Skipping also stored the event's legacy ids, which only the event itself knows.
+    const idsToRemove = new Set([
+      ...eventIds,
+      ...this._getCalProviderFromCache().flatMap(({ items }) =>
+        items
+          .filter((calEv) => matchesAnyCalendarEventId(calEv, eventIds))
+          .flatMap((calEv) => getCalendarEventIdCandidates(calEv)),
+      ),
+    ]);
+    const updated = current.filter((id) => !idsToRemove.has(id));
+    this.skippedEventIds$.next(updated);
+    localStorage.setItem(LS.CALENDER_EVENTS_SKIPPED_TODAY, JSON.stringify(updated));
+  }
+
   requestEvents$(
     calProvider: IssueProviderCalendar,
     start = getStartOfDayTimestamp(),
