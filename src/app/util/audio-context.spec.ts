@@ -562,6 +562,42 @@ describe('audio-context', () => {
       await playing;
     });
 
+    it('should resume for a sound that started while the idle suspend was pending', async () => {
+      // Firefox: state stays 'running' until suspend() settles.
+      let resolveSuspend!: () => void;
+      suspend.and.callFake(
+        () =>
+          new Promise<void>((resolve) => {
+            resolveSuspend = () => {
+              mockContext.state = 'suspended';
+              resolve();
+            };
+          }),
+      );
+      getAudioContext();
+      jasmine.clock().tick(IDLE_SUSPEND_DELAY_MS);
+      expect(suspend).toHaveBeenCalledTimes(1);
+
+      await playBuffer(mockBuffer);
+      expect(mockContext.resume).not.toHaveBeenCalled();
+
+      resolveSuspend();
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(mockContext.resume).toHaveBeenCalledTimes(1);
+      expect(mockContext.state).toBe('running');
+    });
+
+    it('should not resume after the idle suspend when no sound started', async () => {
+      getAudioContext();
+      jasmine.clock().tick(IDLE_SUSPEND_DELAY_MS);
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(suspend).toHaveBeenCalledTimes(1);
+      expect(mockContext.resume).not.toHaveBeenCalled();
+    });
+
     it('should release the hold when playback setup throws', async () => {
       await ensureAudioContextRunning();
       mockContext.createBufferSource.and.throwError('boom');

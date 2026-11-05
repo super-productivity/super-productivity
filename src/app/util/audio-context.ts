@@ -35,8 +35,20 @@ const scheduleIdleSuspend = (): void => {
   }
   idleTimer = setTimeout(() => {
     idleTimer = null;
-    if (activeSounds === 0 && audioContext && audioContext.state === 'running') {
-      void audioContext.suspend().catch(() => {});
+    const ctx = audioContext;
+    if (activeSounds === 0 && ctx && ctx.state === 'running') {
+      // Firefox keeps state 'running' until suspend() settles, so a sound that
+      // starts in that window skips resume() in ensureAudioContextRunning().
+      // Resume for it once the suspend is done.
+      ctx
+        .suspend()
+        .then(() => {
+          if (activeSounds > 0 && ctx === audioContext) {
+            return ctx.resume();
+          }
+          return undefined;
+        })
+        .catch(() => {});
     }
   }, IDLE_SUSPEND_DELAY_MS);
 };
