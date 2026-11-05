@@ -285,7 +285,7 @@
     <activity
       android:name=".widget.TaskListWidgetConfigureActivity"
       android:exported="true"
-      android:theme="@style/AppTheme.NoActionBar">
+      android:theme="@style/AppTheme.WidgetConfigure">
       <intent-filter>
         <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
       </intent-filter>

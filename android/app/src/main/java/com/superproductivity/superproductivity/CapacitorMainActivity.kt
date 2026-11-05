@@ -159,19 +159,21 @@ class CapacitorMainActivity : BridgeActivity() {
 
         // On Activity recreation (config change / process death) getIntent() still
         // holds the original launch intent and BridgeActivity.load() replays it
-        // through onNewIntent — without the LAUNCHED_FROM_HISTORY flag, so the
-        // recents guard in onNewIntent doesn't catch it. A stale VIEW data URI
-        // would re-fire appUrlOpen and duplicate the URL scheme task action;
-        // clear it (mirrors the savedInstanceState guard for handleIntent below).
-        var isReplayedLaunch = false
+        // through onNewIntent during super.onCreate() — without the
+        // LAUNCHED_FROM_HISTORY flag, so the recents guards in onNewIntent don't
+        // catch it. A stale VIEW data URI would re-fire appUrlOpen and duplicate the
+        // URL scheme task action, and a stale widget project extra would reopen that
+        // project unasked; strip both before load() runs (mirrors the
+        // savedInstanceState guard for handleIntent below).
         if (savedInstanceState != null) {
             intent?.data = null
+            intent?.removeExtra(TaskListWidgetProvider.EXTRA_OPEN_PROJECT_ID)
         } else if (intent != null &&
             !LaunchUrlReplayGuard.shouldDispatchFreshLaunch(this)
         ) {
             // The system relaunched the task after a package update (#11153).
             intent.data = null
-            isReplayedLaunch = true
+            intent.removeExtra(TaskListWidgetProvider.EXTRA_OPEN_PROJECT_ID)
         }
         try {
             super.onCreate(savedInstanceState)
@@ -296,14 +298,6 @@ class CapacitorMainActivity : BridgeActivity() {
             IntentFilter(TaskListWidgetProvider.ACTION_WIDGET_PROJECT_OPEN_DRAIN)
         )
         isWidgetProjectOpenDrainReceiverRegistered = true
-
-        // Direct widget activity PendingIntents arrive here on both cold and warm
-        // starts. Keep the project ID in the native queue for the existing pull path;
-        // the drain broadcast additionally wakes an already-running frontend.
-        // A base intent the system replays after a package update is not a new tap.
-        if (savedInstanceState == null && !isReplayedLaunch) {
-            handleWidgetProjectOpenIntent(intent)
-        }
 
         // Schedule background sync worker if credentials are configured.
         // Off the main thread: the first credential read opens the
