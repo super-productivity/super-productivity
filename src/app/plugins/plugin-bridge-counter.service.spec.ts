@@ -29,10 +29,10 @@ import { PluginHttpService } from './issue-provider/plugin-http.service';
 import { getDbDateStr } from '../util/get-db-date-str';
 import { DateService } from '../core/date/date.service';
 import { DataInitService } from '../core/data-init/data-init.service';
+import { SimpleCounterService } from '../features/simple-counter/simple-counter.service';
 import { GlobalConfigService } from '../features/config/global-config.service';
 import { signal } from '@angular/core';
 import { DEFAULT_GLOBAL_CONFIG } from '../features/config/default-global-config.const';
-import { deleteSimpleCounter } from '../features/simple-counter/store/simple-counter.actions';
 
 /* eslint-disable @typescript-eslint/naming-convention */
 describe('PluginBridgeService.setCounter()', () => {
@@ -112,6 +112,10 @@ describe('PluginBridgeService.setCounter()', () => {
         { provide: IssueSyncAdapterRegistryService, useValue: {} },
         { provide: PluginHttpService, useValue: {} },
         { provide: DataInitService, useValue: dataInitServiceSpy },
+        {
+          provide: SimpleCounterService,
+          useValue: jasmine.createSpyObj('SimpleCounterService', ['deleteSimpleCounter']),
+        },
         {
           provide: GlobalConfigService,
           useValue: { cfg: signal(DEFAULT_GLOBAL_CONFIG) },
@@ -321,23 +325,16 @@ describe('PluginBridgeService.setCounter()', () => {
   });
 
   describe('deleteSimpleCounter', () => {
-    it('should carry the deleted counter so a winning remote update restores it (#11465)', async () => {
-      const counter = createMockCounter('my-counter', { '2026-01-08': 3 });
-      store.select.and.returnValue(of({ [counter.id]: counter }));
+    // The service builds the snapshot the delete carries (#11465, #11495).
+    it('should delete through SimpleCounterService', async () => {
+      const simpleCounterService = TestBed.inject(
+        SimpleCounterService,
+      ) as jasmine.SpyObj<SimpleCounterService>;
 
       await service.deleteSimpleCounter('my-counter');
 
-      expect(store.dispatch).toHaveBeenCalledWith(
-        deleteSimpleCounter({ id: 'my-counter', simpleCounter: counter }),
-      );
-    });
-
-    it('should dispatch an id-only delete for an unknown counter', async () => {
-      store.select.and.returnValue(of({}));
-
-      await service.deleteSimpleCounter('missing');
-
-      expect(store.dispatch).toHaveBeenCalledWith(deleteSimpleCounter({ id: 'missing' }));
+      expect(simpleCounterService.deleteSimpleCounter).toHaveBeenCalledWith('my-counter');
+      expect(store.dispatch).not.toHaveBeenCalled();
     });
   });
 });

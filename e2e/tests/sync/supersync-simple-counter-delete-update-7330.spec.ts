@@ -328,28 +328,33 @@ const runDeleteVsUpdate = async (
 };
 
 /**
- * A deletes a RUNNING stopwatch while B renames it; B's update reaches the
- * server first, so A loses and recreates the counter from its delete snapshot.
+ * A deletes a RUNNING stopwatch while B renames it, in either arrival order
+ * (see `ArrivalOrder`). Update-first: A loses and recreates the counter from
+ * its delete snapshot. Delete-first: B's local win re-uploads B's counter as a
+ * whole replace, and A recreates it from that.
  *
- * PINS CURRENT BEHAVIOUR (follow-up issue: flush the stopwatch before clearing
- * it on delete). `deleteSimpleCounter` clears the stopwatch accumulator
- * without flushing it, and the snapshot is taken while the stopwatch runs, so
- * on A the recreated counter comes back running (`isOn: true`) and carries the
- * locally ticked time that never reached the server; B never sees that time.
+ * The restored counter must be the one B and a fresh client C hold (#11495):
+ * stopped, without the time A ticked but never flushed (no other device ever
+ * had it), and without streak fields the original lacks (#11496; created with
+ * streaks off, so it has none).
  */
-const runDeleteRunningStopwatch = async ({
-  browser,
-  baseURL,
-  testRunId,
-}: {
-  browser: Browser;
-  baseURL: string | undefined;
-  testRunId: string;
-}): Promise<void> => {
-  const counterTitle = `C7330-stopwatch-${Date.now()}`;
+const runDeleteRunningStopwatch = async (
+  {
+    browser,
+    baseURL,
+    testRunId,
+  }: {
+    browser: Browser;
+    baseURL: string | undefined;
+    testRunId: string;
+  },
+  order: ArrivalOrder,
+): Promise<void> => {
+  const counterTitle = `C7330-stopwatch-${order}-${Date.now()}`;
   const renamedTitle = `${counterTitle}-renamed`;
   let clientA: SimulatedE2EClient | null = null;
   let clientB: SimulatedE2EClient | null = null;
+  let clientC: SimulatedE2EClient | null = null;
 
   try {
     const user = await createTestUser(testRunId);
@@ -375,15 +380,23 @@ const runDeleteRunningStopwatch = async ({
       .toBe(true);
     await clientA.page.waitForTimeout(3000);
     const runningA = await readStoreCounterEntity(clientA, counterId!);
-    console.log('[7330 stopwatch] A before delete:', JSON.stringify(runningA));
+    console.log(`[7330 stopwatch ${order}] A before delete:`, JSON.stringify(runningA));
 
     // Concurrent, offline: A deletes the running stopwatch, B renames it.
     await deleteCounter(clientA, counterTitle);
     await renameCounter(clientB, counterTitle, renamedTitle);
 
-    // B's update reaches the server first; A loses its delete and recreates.
-    await clientB.sync.syncAndWait();
-    await clientA.sync.syncAndWait();
+    if (order === 'update-first') {
+      // B's update reaches the server first; A loses its delete and recreates.
+      await clientB.sync.syncAndWait();
+      await clientA.sync.syncAndWait();
+    } else {
+      // A's delete reaches the server first; B's update wins locally and B
+      // re-uploads the counter, which A recreates.
+      await clientA.sync.syncAndWait();
+      await clientB.sync.syncAndWait();
+      await clientA.sync.syncAndWait();
+    }
     await clientB.sync.syncAndWait();
     await clientA.sync.syncAndWait();
 
@@ -392,27 +405,53 @@ const runDeleteRunningStopwatch = async ({
 
     const recreatedA = await readStoreCounterEntity(clientA, counterId!);
     const counterB = await readStoreCounterEntity(clientB, counterId!);
-    console.log('[7330 stopwatch] A after sync:', JSON.stringify(recreatedA));
-    console.log('[7330 stopwatch] B after sync:', JSON.stringify(counterB));
+    console.log(`[7330 stopwatch ${order}] A after sync:`, JSON.stringify(recreatedA));
+    console.log(`[7330 stopwatch ${order}] B after sync:`, JSON.stringify(counterB));
 
     // Converged: the counter exists on both with B's title and A's type.
     expect(recreatedA?.['title']).toBe(renamedTitle);
     expect(counterB?.['title']).toBe(renamedTitle);
     expect(recreatedA?.['type']).toBe('StopWatch');
     expect(counterB?.['type']).toBe('StopWatch');
+    // Not running again on A: it is stopped everywhere else.
+    expect(recreatedA?.['isOn']).toBe(false);
 
-    // Pinned current behaviour (see the docblock): A's counter comes back
-    // running, with the unsynced time A ticked before the delete; B has none.
-    const daySum = (c: Record<string, unknown> | null): number =>
-      Object.values(
-        (c?.['countOnDay'] as Record<string, number> | undefined) ?? {},
-      ).reduce((sum, v) => sum + v, 0);
-    expect(recreatedA?.['isOn']).toBe(true);
-    expect(daySum(recreatedA)).toBeGreaterThan(0);
-    expect(daySum(counterB)).toBe(0);
+    // A fresh client builds the counter from the server alone.
+    clientC = await createSimulatedClient(browser, baseURL!, 'C', testRunId);
+    const repairDialogsC = captureRepairDialogs(clientC);
+    await clientC.sync.setupSuperSync(syncConfig);
+    await clientC.sync.syncAndWait();
+    const counterC = await readStoreCounterEntity(clientC, counterId!);
+    console.log(`[7330 stopwatch ${order}] C after sync:`, JSON.stringify(counterC));
+
+    // The whole counter, live on A (no reload, which would reset `isOn`), is
+    // the same on all three: every field but the per-device `modified`.
+    const withoutModified = (
+      c: Record<string, unknown> | null,
+    ): Record<string, unknown> | null => {
+      if (!c) return null;
+      const rest = { ...c };
+      delete rest['modified'];
+      return rest;
+    };
+    expect(withoutModified(counterB)).not.toBeNull();
+    expect(withoutModified(recreatedA)).toEqual(withoutModified(counterB));
+    expect(withoutModified(counterC)).toEqual(withoutModified(counterB));
+    // Spelled out: the streak fields (#11496) and the per-day time (#11495).
+    for (const key of [
+      'isTrackStreaks',
+      'streakMinValue',
+      'streakMode',
+      'streakWeekDays',
+    ]) {
+      expect(recreatedA?.[key]).toEqual(counterB?.[key]);
+    }
+    expect(recreatedA?.['countOnDay']).toEqual(counterB?.['countOnDay']);
+    expect(repairDialogsC).toEqual([]);
   } finally {
     if (clientA) await closeClient(clientA);
     if (clientB) await closeClient(clientB);
+    if (clientC) await closeClient(clientC);
   }
 };
 
@@ -433,11 +472,19 @@ test.describe('@supersync Simple Counter delete-vs-update (#7330, #11465)', () =
     await runDeleteVsUpdate({ browser, baseURL, testRunId }, 'delete-first');
   });
 
-  test('a running stopwatch deleted while renamed elsewhere comes back running on the deleting client', async ({
+  test('a running stopwatch deleted while renamed elsewhere is restored stopped and identical everywhere', async ({
     browser,
     baseURL,
     testRunId,
   }) => {
-    await runDeleteRunningStopwatch({ browser, baseURL, testRunId });
+    await runDeleteRunningStopwatch({ browser, baseURL, testRunId }, 'update-first');
+  });
+
+  test('a running stopwatch deleted while renamed elsewhere, delete first: identical everywhere', async ({
+    browser,
+    baseURL,
+    testRunId,
+  }) => {
+    await runDeleteRunningStopwatch({ browser, baseURL, testRunId }, 'delete-first');
   });
 });
