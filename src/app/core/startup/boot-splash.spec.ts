@@ -5,6 +5,7 @@ import {
   fadeOutBootSplash,
   showShellUnderBootSplash,
 } from './boot-splash';
+import { LS } from '../persistence/storage-keys.const';
 
 describe('showShellUnderBootSplash', () => {
   it('marks the shell as shown', () => {
@@ -81,5 +82,26 @@ describe('fadeOutBootSplash', () => {
     splash.remove();
 
     expect(() => fadeOutBootSplash()).not.toThrow();
+  });
+
+  it('saves how long the start took, for the next launch screen', () => {
+    localStorage.removeItem(LS.LAST_BOOT_MS);
+    spyOn(performance, 'now').and.returnValue(1234.4);
+
+    fadeOutBootSplash();
+
+    expect(localStorage.getItem(LS.LAST_BOOT_MS)).toBe('1234');
+    localStorage.removeItem(LS.LAST_BOOT_MS);
+  });
+
+  it('saves the duration only once, on the first fade', () => {
+    localStorage.removeItem(LS.LAST_BOOT_MS);
+    fadeOutBootSplash();
+    localStorage.setItem(LS.LAST_BOOT_MS, 'kept');
+
+    fadeOutBootSplash();
+
+    expect(localStorage.getItem(LS.LAST_BOOT_MS)).toBe('kept');
+    localStorage.removeItem(LS.LAST_BOOT_MS);
   });
 });
