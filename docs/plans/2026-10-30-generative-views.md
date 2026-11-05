@@ -3,7 +3,7 @@
 Oct 30, 2026 · rev. 3 (after research, a native spike, the first eval and an
 adversarial review; § Review) · status: Phase 1 implemented on branch
 `feature/ai-view-builder`; Phase 1b (P-plus, §6.12) built; paused before the
-native decision.
+native decision (#11530).
 
 People will increasingly shape their own to-do tools instead of adapting to one.
 The goal is that they do it inside Super Productivity (SP): say or type what
