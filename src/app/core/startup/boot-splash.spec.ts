@@ -27,8 +27,14 @@ describe('showShellUnderBootSplash', () => {
 describe('fadeOutBootSplash', () => {
   let splash: HTMLElement;
   let style: HTMLStyleElement;
+  let savedBootMs: string | null;
 
   beforeEach(() => {
+    savedBootMs = localStorage.getItem(LS.LAST_BOOT_MS);
+    localStorage.removeItem(LS.LAST_BOOT_MS);
+    spyOn(performance, 'getEntriesByType').and.returnValue([
+      { type: 'navigate' } as PerformanceNavigationTiming,
+    ]);
     style = document.createElement('style');
     style.textContent = `#${BOOT_SPLASH_ID}.${BOOT_SPLASH_HIDING_CLASS} { opacity: 0; transition: opacity 60ms; }`;
     document.head.appendChild(style);
@@ -42,6 +48,11 @@ describe('fadeOutBootSplash', () => {
   afterEach(() => {
     splash.remove();
     style.remove();
+    if (savedBootMs === null) {
+      localStorage.removeItem(LS.LAST_BOOT_MS);
+    } else {
+      localStorage.setItem(LS.LAST_BOOT_MS, savedBootMs);
+    }
   });
 
   const waitMs = (ms: number): Promise<void> =>
@@ -85,23 +96,29 @@ describe('fadeOutBootSplash', () => {
   });
 
   it('saves how long the start took, for the next launch screen', () => {
-    localStorage.removeItem(LS.LAST_BOOT_MS);
     spyOn(performance, 'now').and.returnValue(1234.4);
 
     fadeOutBootSplash();
 
     expect(localStorage.getItem(LS.LAST_BOOT_MS)).toBe('1234');
-    localStorage.removeItem(LS.LAST_BOOT_MS);
   });
 
   it('saves the duration only once, on the first fade', () => {
-    localStorage.removeItem(LS.LAST_BOOT_MS);
     fadeOutBootSplash();
     localStorage.setItem(LS.LAST_BOOT_MS, 'kept');
 
     fadeOutBootSplash();
 
     expect(localStorage.getItem(LS.LAST_BOOT_MS)).toBe('kept');
-    localStorage.removeItem(LS.LAST_BOOT_MS);
+  });
+
+  it('does not save the duration of an in-app reload', () => {
+    (performance.getEntriesByType as jasmine.Spy).and.returnValue([
+      { type: 'reload' } as PerformanceNavigationTiming,
+    ]);
+
+    fadeOutBootSplash();
+
+    expect(localStorage.getItem(LS.LAST_BOOT_MS)).toBeNull();
   });
 });

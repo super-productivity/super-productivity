@@ -38,10 +38,18 @@ export const fadeOutBootSplash = (doc: Document = document): void => {
 /**
  * Remembers how long this start took (ms since navigation start), so the next
  * launch screen can skip its tip when starts are quick (index.html,
- * data-sp-quick-boot). Never throws: storage may be full or unavailable.
+ * data-sp-quick-boot). In-app reloads (language change, sync recovery) are
+ * warm and not representative of a launch, so they are skipped. Never throws:
+ * storage may be full or unavailable.
  */
 const saveBootDuration = (): void => {
   try {
+    const nav = performance.getEntriesByType?.('navigation')[0] as
+      | PerformanceNavigationTiming
+      | undefined;
+    if (nav?.type === 'reload') {
+      return;
+    }
     localStorage.setItem(LS.LAST_BOOT_MS, String(Math.round(performance.now())));
   } catch {
     // the next launch screen then just shows its tip
