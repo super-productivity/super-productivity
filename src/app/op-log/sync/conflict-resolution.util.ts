@@ -87,8 +87,8 @@ const isProjectDeleteWinsOperation = (operation: Operation): boolean => {
  *
  * This only classifies the op. Whether it wins is decided by the shared
  * planner's frontier guard (`hasFrontierDeleteWins` in @sp/sync-core): a
- * same-side op causally after the delete (a re-create or edit of the tag)
- * returns the entity to timestamp LWW.
+ * same-side op causally after the delete that re-creates the tag (a Create or
+ * an LWW Update) returns the entity to timestamp LWW.
  */
 const isTagDeleteWinsOperation = (operation: Operation): boolean => {
   // Same hardening as the project classifier: a null/undefined payload must not
@@ -132,8 +132,18 @@ export const mergeMarkedDeleteWinsOps = (
   const deletes = localOps.filter(isProjectDeleteWinsOperation);
   if (deletes.length === 0) {
     // A marked tag delete cascades by tag id alone (`{ id }` payload), so any
-    // of several same-tag deletes is a complete replacement.
-    return localOps.find(isTagDeleteWinsOperation);
+    // same-tag delete is a complete replacement. Take the LATEST one: the
+    // replacement keeps its timestamp, which released clients compare by LWW,
+    // and an earlier one may predate a re-create. Ties break by op id.
+    let latest: Operation | undefined;
+    for (const op of localOps.filter(isTagDeleteWinsOperation)) {
+      const isLater =
+        !latest ||
+        op.timestamp > latest.timestamp ||
+        (op.timestamp === latest.timestamp && op.id > latest.id);
+      if (isLater) latest = op;
+    }
+    return latest;
   }
   if (deletes.length === 1) {
     return deletes[0];

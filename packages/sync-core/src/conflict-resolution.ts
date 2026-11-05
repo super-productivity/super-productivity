@@ -45,6 +45,11 @@ export interface LwwConflictResolutionPlanningOptions<
   TOperation extends Operation<string> = Operation,
 > {
   isArchiveAction: (op: TOperation) => boolean;
+  /**
+   * Opts an op into delete-wins precedence over concurrent edits. It wins only
+   * while no same-side op re-creates the entity after it (frontier guard);
+   * otherwise the entity is resolved by timestamp LWW.
+   */
   isDeleteWinsAction?: (op: TOperation) => boolean;
   toEntityKey?: (entityType: string, entityId: string) => string;
 }
@@ -432,15 +437,34 @@ const winningClientId = (
 ): string => ops.find((op) => op.timestamp === maxTimestamp)?.clientId ?? '';
 
 /**
- * Frontier guard for delete-wins (#11489): a delete-wins op wins only while it
- * is the latest write on its side for that entity. A same-side op that is
- * causally AFTER it (vector clock GREATER_THAN, i.e. it saw the delete and then
- * re-created or edited the entity, such as a released client's re-creating
- * LWW update or a same-id re-create) means that side moved past the delete, so
+ * Whether replaying `op` would re-create its entity after a delete: a Create,
+ * or an LWW Update (the host's LWW reducer re-creates an absent entity). The
+ * action-type suffix also covers released clients, whose LWW Updates carry no
+ * `lwwUpdateMode` envelope. A recreate-marked 'patch' delta is excluded: it is
+ * ignored when the entity is absent. A plain update of a missing id is a no-op
+ * on replay, so it does not count.
+ */
+const isEntityRecreatingOp = (op: Operation<string>): boolean => {
+  if (op.opType === OpType.Create) return true;
+  if (!op.actionType.endsWith('] LWW Update')) return false;
+  return !(
+    isLwwUpdatePayload(op.payload) &&
+    op.payload.lwwUpdateMode === 'patch' &&
+    op.payload.recreatesEntityAfterDelete === true
+  );
+};
+
+/**
+ * Frontier guard for delete-wins (#11489): a delete-wins op wins only while no
+ * same-side op RE-CREATES the entity after it. Such an op is causally after the
+ * delete (vector clock GREATER_THAN: it saw the delete) and would re-create the
+ * entity on replay (`isEntityRecreatingOp`), e.g. a released client's
+ * re-creating LWW update or a same-id add. That side moved past the delete, so
  * the entity falls back to timestamp LWW, exactly as before delete-wins.
- * Concurrent ops do not block: beating them is what delete-wins is for. Other
- * delete-wins ops never block. `ops` must hold ALL of the side's ops for the
- * entity, across conflicts, because detection emits one conflict per remote op.
+ * Concurrent ops and plain later updates (a no-op on a deleted entity) do not
+ * block, and nor do other delete-wins ops. `ops` must hold ALL of the side's
+ * ops for the entity, across conflicts, because detection emits one conflict
+ * per remote op.
  */
 const hasFrontierDeleteWins = <TOperation extends Operation<string>>(
   ops: readonly TOperation[],
@@ -452,6 +476,7 @@ const hasFrontierDeleteWins = <TOperation extends Operation<string>>(
       !ops.some(
         (op) =>
           !isDeleteWinsAction(op) &&
+          isEntityRecreatingOp(op) &&
           compareVectorClocks(op.vectorClock, deleteOp.vectorClock) ===
             VectorClockComparison.GREATER_THAN,
       ),
@@ -462,7 +487,10 @@ const hasFrontierDeleteWins = <TOperation extends Operation<string>>(
  * creating operations.
  *
  * The host supplies archive-action detection and may opt specific operations
- * into delete-wins precedence because both policies are domain-specific. The
+ * into delete-wins precedence because both policies are domain-specific. A
+ * delete-wins op only wins while no same-side op re-creates the entity after
+ * it (the frontier guard, `hasFrontierDeleteWins`); otherwise the entity is
+ * resolved by timestamp LWW. The
  * returned plan tells the host whether a local-win op must be created and which
  * app-side factory should create it.
  */

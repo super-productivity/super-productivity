@@ -1684,8 +1684,11 @@ describe('ConflictResolutionService', () => {
             ...createTagDelete('remote-tag-delete', 'client-a', 1_000),
             vectorClock: { clientA: 1 },
           };
+          // A released client's re-creating LWW Update (no lwwUpdateMode).
           const remoteRecreate: Operation = {
             ...createTagUpdate('remote-tag-recreate', 'client-o', 2_000),
+            actionType: '[TAG] LWW Update' as ActionType,
+            payload: { id: 'tag-1', title: 'Renamed', taskIds: [] },
             vectorClock: { clientA: 1, clientO: 1 },
           };
           mockOperationApplier.applyOperations.and.resolveTo({ appliedOps: [] });
@@ -1737,6 +1740,31 @@ describe('ConflictResolutionService', () => {
             false,
           );
           expect(mockOpLogStore.markRejected).toHaveBeenCalledWith(['remote-tag-rename']);
+        });
+
+        it('keeps a marked local tag delete winning past a later plain tag update', async () => {
+          // A plain update of a deleted id is a no-op on replay and must not
+          // block the delete (it would be rejected without a replacement).
+          const localDelete: Operation = {
+            ...createTagDelete('local-tag-delete', 'client-a', 1_000),
+            vectorClock: { clientA: 1 },
+          };
+          const localStrayUpdate: Operation = {
+            ...createTagUpdate('local-tag-stray-update', 'client-a', 3_000),
+            vectorClock: { clientA: 2 },
+          };
+          const remoteRename: Operation = {
+            ...createTagUpdate('remote-tag-rename', 'client-b', 2_000),
+            vectorClock: { clientB: 1 },
+          };
+
+          await service.autoResolveConflictsLWW([
+            tagConflict([localDelete, localStrayUpdate], [remoteRename]),
+          ]);
+
+          const replacement = getFirstMixedLocalOp();
+          expect(replacement.opType).toBe(OpType.Delete);
+          expect(replacement.actionType).toBe(ActionType.TAG_DELETE);
         });
 
         it('ignores a marked tag deletion retargeted onto another tag', async () => {
@@ -8304,6 +8332,42 @@ describe('ConflictResolutionService', () => {
       localOps,
       remoteOps,
       suggestedResolution: 'manual',
+    });
+
+    // #11489: the losing marked tag delete is the re-create base here.
+    it('drops the tag delete-wins marker from the re-created tag', () => {
+      const localDelete: Operation = {
+        ...createOpWithTimestamp('local-del', 'client-a', 1000, OpType.Delete, 'tag-1'),
+        entityType: 'TAG',
+        actionType: ActionType.TAG_DELETE,
+        payload: {
+          actionPayload: { id: 'tag-1', tagDeleteWins: true },
+          entityChanges: [],
+        },
+      };
+      const remoteRename: Operation = {
+        ...createOpWithTimestamp('remote-upd', 'client-b', 2000, OpType.Update, 'tag-1'),
+        entityType: 'TAG',
+        actionType: ActionType.TAG_UPDATE,
+        payload: {
+          actionPayload: { tag: { id: 'tag-1', changes: { title: 'Renamed' } } },
+          entityChanges: [],
+        },
+      };
+
+      const [converted] = (
+        TestBed.inject(ConflictEntityStateService) as any
+      )._convertToLWWUpdatesIfNeeded({
+        entityType: 'TAG',
+        entityId: 'tag-1',
+        localOps: [localDelete],
+        remoteOps: [remoteRename],
+        suggestedResolution: 'manual',
+      } satisfies EntityConflict) as Operation[];
+
+      const recreated = extractActionPayload(converted.payload);
+      expect(recreated['title']).toBe('Renamed');
+      expect('tagDeleteWins' in recreated).toBe(false);
     });
 
     describe('SIMPLE_COUNTER delete vs update (#11465)', () => {

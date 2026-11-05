@@ -20,6 +20,7 @@ import {
   OpType,
 } from '../core/operation.types';
 import { toLwwUpdateActionType } from '../core/lww-update-action-types';
+import { TAG_DELETE_WINS_MARKER } from '../../features/tag/store/tag.actions';
 import { OpLog } from '../../core/log';
 import { getOpEntityIds } from '../util/get-op-entity-ids.util';
 import { toEntityKey } from '../util/entity-key.util';
@@ -179,7 +180,14 @@ export class ConflictEntityStateService {
           toLwwUpdateActionType(entityType as EntityType),
         isSingletonEntityId,
         // A task delete carries `TaskWithSubTasks`; `subTasks` is no task field.
+        // A tag delete's `{ id, tagDeleteWins }` payload is read as the entity;
+        // the delete-wins marker is no tag field (#11489).
         toBaseEntity: (entity, entityType) => {
+          if (entityType === 'TAG' && TAG_DELETE_WINS_MARKER in entity) {
+            const tag = { ...entity };
+            delete tag[TAG_DELETE_WINS_MARKER];
+            return tag;
+          }
           if (entityType !== 'TASK' || !('subTasks' in entity)) return entity;
           const task = { ...entity };
           delete task['subTasks'];

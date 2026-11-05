@@ -387,6 +387,7 @@ describe('planLwwConflictResolutions', () => {
       });
       const remoteRecreate = createOp({
         id: 'remote-recreate',
+        actionType: '[TASK] LWW Update',
         clientId: 'o',
         vectorClock: { a: 1, o: 1 },
         timestamp: 2_000,
@@ -459,6 +460,77 @@ describe('planLwwConflictResolutions', () => {
         [
           createConflict([localEdit], [remoteDelete]),
           createConflict([localEdit], [remoteConcurrentEdit]),
+        ],
+        options,
+      );
+
+      expect(plans[0].reason).toBe('remote-delete-wins');
+      // The concurrent edit's own conflict holds no delete, so it stays on
+      // timestamp LWW (pre-existing split, unchanged by the guard).
+      expect([plans[1].winner, plans[1].reason]).toEqual(['local', 'local-timestamp']);
+    });
+
+    it('keeps delete-wins when the only later same-side op is a plain update', () => {
+      // A plain update of a deleted id (e.g. a plugin update without an
+      // existence check) is a no-op on replay and must not block the delete,
+      // or the local delete would be rejected without a replacement.
+      const localDelete = deleteWins({
+        id: 'local-delete',
+        vectorClock: { client1: 1 },
+        timestamp: 1_000,
+      });
+      const localStrayUpdate = createOp({
+        id: 'local-stray-update',
+        vectorClock: { client1: 2 },
+        timestamp: 3_000,
+      });
+      const remoteEdit = createOp({
+        id: 'remote-edit',
+        clientId: 'client2',
+        vectorClock: { client2: 1 },
+        timestamp: 2_000,
+      });
+
+      const [plan] = planLwwConflictResolutions(
+        [createConflict([localDelete, localStrayUpdate], [remoteEdit])],
+        options,
+      );
+
+      expect(plan.reason).toBe('local-delete-wins');
+      expect(plan.localWinOperationKind).toBe('delete-win');
+    });
+
+    it('does not count a recreate-marked patch delta as a re-create', () => {
+      const remoteDelete = deleteWins({
+        id: 'remote-delete',
+        clientId: 'a',
+        vectorClock: { a: 1 },
+        timestamp: 1_000,
+      });
+      const remotePatch = createOp({
+        id: 'remote-patch',
+        actionType: '[TASK] LWW Update',
+        clientId: 'o',
+        vectorClock: { a: 1, o: 1 },
+        timestamp: 2_000,
+        payload: {
+          actionPayload: { id: 'task-1' },
+          entityChanges: [],
+          lwwUpdateMode: 'patch',
+          recreatesEntityAfterDelete: true,
+        },
+      });
+      const localEdit = createOp({
+        id: 'local-edit',
+        clientId: 'n2',
+        vectorClock: { n2: 1 },
+        timestamp: 3_000,
+      });
+
+      const plans = planLwwConflictResolutions(
+        [
+          createConflict([localEdit], [remoteDelete]),
+          createConflict([localEdit], [remotePatch]),
         ],
         options,
       );

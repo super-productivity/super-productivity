@@ -114,4 +114,14 @@ describe('tag delete-wins classifier (#11489)', () => {
     expect(merged?.payload).toEqual(marked.payload);
     expect(mergeMarkedDeleteWinsOps([tagDelete({}, { id: 'tag-1' })])).toBeUndefined();
   });
+  it('takes the latest marked tag delete as the replacement base (#11489)', () => {
+    const older = tagDelete({ id: 'del-old', timestamp: 1_000 });
+    const newer = tagDelete({ id: 'del-new', timestamp: 2_000 });
+    const tieA = tagDelete({ id: 'del-a', timestamp: 3_000 });
+    const tieB = tagDelete({ id: 'del-b', timestamp: 3_000 });
+    expect(mergeMarkedDeleteWinsOps([newer, older])?.id).toBe('del-new');
+    expect(mergeMarkedDeleteWinsOps([older, newer])?.id).toBe('del-new');
+    expect(mergeMarkedDeleteWinsOps([tieB, tieA])?.id).toBe('del-b');
+    expect(mergeMarkedDeleteWinsOps([tieA, tieB])?.id).toBe('del-b');
+  });
 });

@@ -341,16 +341,21 @@ recoverable via local undo, not via sync.
   marked delete is applied regardless of timestamps. A local marked delete is
   replaced with one operation whose vector clock dominates both conflict sides.
 - **Frontier guard (#11489, applies to projects and tags):** a marked delete
-  wins only while it is the latest write on its side for that entity. If a
-  same-side op is causally after it (vector clock greater: it saw the delete
-  and then re-created or edited the entity, e.g. a released client's
-  re-creating LWW update, the board's same-id `createTags`, or a pending
-  same-id `addTag`), the whole entity falls back to timestamp LWW. The planner
-  judges this across all conflicts of the entity, because detection emits one
-  conflict per remote op; without it one entity could get split plans (the
-  delete applied here while a local-win snapshot re-creates it elsewhere).
-  Concurrent same-side ops do not block the delete. For projects the guard is
-  effectively inert: nothing re-creates a project id after a marked delete.
+  wins only while no same-side op re-creates the entity after it. Such an op
+  is causally after the delete (vector clock greater: it saw the delete) and
+  would re-create the entity on replay: a Create, or an LWW Update (matched by
+  its `] LWW Update` action type, so released clients' envelope-less ones
+  count), e.g. a released client's re-creating LWW update, the board's same-id
+  `createTags`, or a pending same-id `addTag`. Then the whole entity falls
+  back to timestamp LWW. A plain update of a deleted id does not block (it is
+  a no-op on replay; blocking on it would reject the delete without a
+  replacement), nor does a recreate-marked `'patch'` delta (ignored while the
+  entity is absent). The planner judges this across all conflicts of the
+  entity, because detection emits one conflict per remote op; without it one
+  entity could get split plans (the delete applied here while a local-win
+  snapshot re-creates it elsewhere). Concurrent same-side ops do not block the
+  delete. For projects the guard is effectively inert: nothing re-creates a
+  project id after a marked delete.
 - SuperSync keeps its generic conflict protocol: if the first delete upload is
   rejected, the existing retry path uploads the causally dominant replacement.
   File-based providers use the same client planner and marker.
@@ -379,8 +384,8 @@ the same reasoning as for projects.
 - Mixed fleet: two updated clients converge on the delete in both directions;
   any pair with a released client behaves as before; deletes stored before this
   change carry no marker and keep LWW.
-- The frontier guard above applies: a later same-side re-create or edit of the
-  tag returns the entity to timestamp LWW.
+- The frontier guard above applies: a later same-side re-create of the tag
+  returns the entity to timestamp LWW.
 - Trade-off reach: references to the tag that another device adds concurrently
   (task tags, repeat-config tags, issue-provider default tags) are dropped on
   that device by the cascade, or left dangling on the deleting device. That
