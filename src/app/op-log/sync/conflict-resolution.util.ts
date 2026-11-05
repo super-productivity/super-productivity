@@ -84,6 +84,11 @@ const isProjectDeleteWinsOperation = (operation: Operation): boolean => {
  * (ARCHITECTURE-DECISIONS.md #7). The marker is therefore the only
  * discriminator. `deleteTags` declares several tag ids and stays LWW: it is
  * never stamped, and the action type is checked as well.
+ *
+ * This only classifies the op. Whether it wins is decided by the shared
+ * planner's frontier guard (`hasFrontierDeleteWins` in @sp/sync-core): a
+ * same-side op causally after the delete (a re-create or edit of the tag)
+ * returns the entity to timestamp LWW.
  */
 const isTagDeleteWinsOperation = (operation: Operation): boolean => {
   // Same hardening as the project classifier: a null/undefined payload must not

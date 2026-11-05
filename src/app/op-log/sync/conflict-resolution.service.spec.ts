@@ -1672,6 +1672,73 @@ describe('ConflictResolutionService', () => {
           expect(mockOpLogStore.markRejected).toHaveBeenCalledWith(['remote-tag-delete']);
         });
 
+        it('does not apply a remote marked tag delete that a later remote re-create superseded', async () => {
+          // A deleted (t1); a released client then won by timestamp and
+          // uploaded a re-creating update that saw the delete (t2); this
+          // device's rename (t3) is newer. One conflict per remote op.
+          const localRename: Operation = {
+            ...createTagUpdate('local-tag-rename', 'client-n', 3_000),
+            vectorClock: { clientN: 1 },
+          };
+          const remoteDelete: Operation = {
+            ...createTagDelete('remote-tag-delete', 'client-a', 1_000),
+            vectorClock: { clientA: 1 },
+          };
+          const remoteRecreate: Operation = {
+            ...createTagUpdate('remote-tag-recreate', 'client-o', 2_000),
+            vectorClock: { clientA: 1, clientO: 1 },
+          };
+          mockOperationApplier.applyOperations.and.resolveTo({ appliedOps: [] });
+
+          await service.autoResolveConflictsLWW([
+            tagConflict([localRename], [remoteDelete]),
+            tagConflict([localRename], [remoteRecreate]),
+          ]);
+
+          expect(mockOpLogStore.appendBatchSkipDuplicates).not.toHaveBeenCalledWith(
+            jasmine.arrayContaining([
+              jasmine.objectContaining({ id: 'remote-tag-delete' }),
+            ]),
+            'remote',
+            { pendingApply: true },
+          );
+          expect(mockOpLogStore.markRejected).toHaveBeenCalledWith(
+            jasmine.arrayContaining(['remote-tag-delete']),
+          );
+        });
+
+        it('does not let a local marked tag delete win over its own later same-id re-create', async () => {
+          const localDelete: Operation = {
+            ...createTagDelete('local-tag-delete', 'client-a', 1_000),
+            vectorClock: { clientA: 1 },
+          };
+          const localRecreate: Operation = {
+            ...createOpWithTimestamp(
+              'local-tag-recreate',
+              'client-a',
+              3_000,
+              OpType.Create,
+              'tag-1',
+            ),
+            actionType: ActionType.TAG_ADD,
+            entityType: 'TAG',
+            vectorClock: { clientA: 2 },
+          };
+          const remoteRename: Operation = {
+            ...createTagUpdate('remote-tag-rename', 'client-b', 2_000),
+            vectorClock: { clientB: 1 },
+          };
+
+          await service.autoResolveConflictsLWW([
+            tagConflict([localDelete, localRecreate], [remoteRename]),
+          ]);
+
+          expect(getMixedLocalOps().some((op) => op.opType === OpType.Delete)).toBe(
+            false,
+          );
+          expect(mockOpLogStore.markRejected).toHaveBeenCalledWith(['remote-tag-rename']);
+        });
+
         it('ignores a marked tag deletion retargeted onto another tag', async () => {
           const retargeted: Operation = {
             ...createTagDelete('remote-retargeted-delete', 'client-b', 1_000),

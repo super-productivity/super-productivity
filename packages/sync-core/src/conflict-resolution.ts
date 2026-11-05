@@ -7,6 +7,7 @@ import {
 } from './operation.types';
 import type { EntityConflict, LwwUpdatePayload, Operation } from './operation.types';
 import { NOOP_SYNC_LOGGER } from './sync-logger';
+import { compareVectorClocks, VectorClockComparison } from './vector-clock';
 import type { SyncLogger } from './sync-logger';
 
 export type ConflictResolutionSuggestion = 'local' | 'remote' | 'manual';
@@ -431,6 +432,32 @@ const winningClientId = (
 ): string => ops.find((op) => op.timestamp === maxTimestamp)?.clientId ?? '';
 
 /**
+ * Frontier guard for delete-wins (#11489): a delete-wins op wins only while it
+ * is the latest write on its side for that entity. A same-side op that is
+ * causally AFTER it (vector clock GREATER_THAN, i.e. it saw the delete and then
+ * re-created or edited the entity, such as a released client's re-creating
+ * LWW update or a same-id re-create) means that side moved past the delete, so
+ * the entity falls back to timestamp LWW, exactly as before delete-wins.
+ * Concurrent ops do not block: beating them is what delete-wins is for. Other
+ * delete-wins ops never block. `ops` must hold ALL of the side's ops for the
+ * entity, across conflicts, because detection emits one conflict per remote op.
+ */
+const hasFrontierDeleteWins = <TOperation extends Operation<string>>(
+  ops: readonly TOperation[],
+  isDeleteWinsAction: (op: TOperation) => boolean,
+): boolean =>
+  ops.some(
+    (deleteOp) =>
+      isDeleteWinsAction(deleteOp) &&
+      !ops.some(
+        (op) =>
+          !isDeleteWinsAction(op) &&
+          compareVectorClocks(op.vectorClock, deleteOp.vectorClock) ===
+            VectorClockComparison.GREATER_THAN,
+      ),
+  );
+
+/**
  * Plans last-write-wins conflict resolution without looking up host state or
  * creating operations.
  *
@@ -453,6 +480,20 @@ export const planLwwConflictResolutions = <
   const entitiesWithLocalArchive = new Set<string>();
   const entitiesWithRemoteArchive = new Set<string>();
 
+  // Every op per entity and side, across conflicts, for the delete-wins
+  // frontier guard (detection emits one conflict per remote op).
+  const localOpsByEntity = new Map<string, Map<string, TOperation>>();
+  const remoteOpsByEntity = new Map<string, Map<string, TOperation>>();
+  const collect = (
+    byEntity: Map<string, Map<string, TOperation>>,
+    entityKey: string,
+    ops: readonly TOperation[],
+  ): void => {
+    const byId = byEntity.get(entityKey) ?? new Map<string, TOperation>();
+    ops.forEach((op) => byId.set(op.id, op));
+    byEntity.set(entityKey, byId);
+  };
+
   for (const conflict of conflicts) {
     const entityKey = toEntityKey(conflict.entityType, conflict.entityId);
     if (conflict.localOps.some(options.isArchiveAction)) {
@@ -461,7 +502,20 @@ export const planLwwConflictResolutions = <
     if (conflict.remoteOps.some(options.isArchiveAction)) {
       entitiesWithRemoteArchive.add(entityKey);
     }
+    collect(localOpsByEntity, entityKey, conflict.localOps);
+    collect(remoteOpsByEntity, entityKey, conflict.remoteOps);
   }
+
+  const isDeleteWinsAction = options.isDeleteWinsAction;
+  const sideDeleteWins = (
+    byEntity: Map<string, Map<string, TOperation>>,
+    entityKey: string,
+  ): boolean =>
+    !!isDeleteWinsAction &&
+    hasFrontierDeleteWins(
+      [...(byEntity.get(entityKey)?.values() ?? [])],
+      isDeleteWinsAction,
+    );
 
   return conflicts.map((conflict) => {
     const entityKey = toEntityKey(conflict.entityType, conflict.entityId);
@@ -487,13 +541,14 @@ export const planLwwConflictResolutions = <
       };
     }
 
-    const isDeleteWinsAction = options.isDeleteWinsAction;
-    const remoteHasDeleteWins = isDeleteWinsAction
-      ? conflict.remoteOps.some(isDeleteWinsAction)
-      : false;
-    const localHasDeleteWins = isDeleteWinsAction
-      ? conflict.localOps.some(isDeleteWinsAction)
-      : false;
+    const remoteHasDeleteWins =
+      !!isDeleteWinsAction &&
+      conflict.remoteOps.some(isDeleteWinsAction) &&
+      sideDeleteWins(remoteOpsByEntity, entityKey);
+    const localHasDeleteWins =
+      !!isDeleteWinsAction &&
+      conflict.localOps.some(isDeleteWinsAction) &&
+      sideDeleteWins(localOpsByEntity, entityKey);
 
     if (remoteHasDeleteWins) {
       return {
