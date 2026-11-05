@@ -1,3 +1,5 @@
+import { LS } from '../persistence/storage-keys.const';
+
 /** Id of the boot splash in `src/index.html`; a sibling of `<app-root>`. */
 export const BOOT_SPLASH_ID = 'app-splash';
 /** Starts the splash fade-out (styles live in `src/index.html`). */
@@ -29,7 +31,21 @@ export const fadeOutBootSplash = (doc: Document = document): void => {
     return;
   }
   splash.classList.add(BOOT_SPLASH_HIDING_CLASS);
+  saveBootDuration();
   void whenAnimationsSettle(splash).then(() => splash.remove());
+};
+
+/**
+ * Remembers how long this start took (ms since navigation start), so the next
+ * launch screen can skip its tip when starts are quick (index.html,
+ * data-sp-quick-boot). Never throws: storage may be full or unavailable.
+ */
+const saveBootDuration = (): void => {
+  try {
+    localStorage.setItem(LS.LAST_BOOT_MS, String(Math.round(performance.now())));
+  } catch {
+    // the next launch screen then just shows its tip
+  }
 };
 
 /**
