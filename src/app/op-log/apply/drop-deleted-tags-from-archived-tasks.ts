@@ -20,13 +20,14 @@ const keepExistingTags = <T extends Task>(task: T, existing: Set<string>): T =>
  * reached it. Both clients now end with the tag stripped, as long as the
  * delete stays applied everywhere.
  *
- * Not guaranteed: a tag delete is last-write-wins, not delete-wins (only
- * project deletes win outright, `isProjectDeleteWinsOperation`). If the
- * archiving client renames the tag before it downloads the delete, its update
- * wins and recreates the tag here, but this client's archived copy already
- * lost the id while the archiving client's copy keeps it. Live tasks diverge
- * the same way on master: #11489, pinned in
- * e2e/tests/sync/supersync-tag-delete-rename-race-11489.spec.ts.
+ * A marked single-tag delete wins over a concurrent edit of the tag
+ * (`tagDeleteWins`, #11489), so the archiving client applies the delete and
+ * scrubs its copy too: e2e/tests/sync/supersync-tag-delete-rename-race-11489.spec.ts.
+ * Not guaranteed: an unmarked delete (`deleteTags`, a released client, or one
+ * stored before #11489) is still last-write-wins. If the archiving client edits
+ * the tag before it downloads such a delete, its update wins and recreates the
+ * tag here, but this client's archived copy already lost the id while the
+ * archiving client's copy keeps it.
  * Tag ids can also come back through the board's "create missing tags" action,
  * which recreates fixed ids (EM_URGENT, EM_IMPORTANT); archived copies scrubbed
  * here stay without them.
