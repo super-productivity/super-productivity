@@ -65,6 +65,7 @@ const PLUGIN_API_MEMBERS: Record<keyof PluginAPIInterface, true> = {
   deleteSecret: true,
   request: true,
   downloadFile: true,
+  saveBinaryFile: true,
   executeNodeScript: true,
   dispatchAction: true,
   isWindowFocused: true,

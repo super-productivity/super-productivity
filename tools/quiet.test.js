@@ -9,8 +9,10 @@ const quiet = path.join(__dirname, 'quiet.js');
 
 // A throwaway package whose npm scripts stand in for test runners.
 const makePackage = () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'quiet-test-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'quiet test '));
   const write = (name, body) => fs.writeFileSync(path.join(dir, name), body);
+  fs.mkdirSync(path.join(dir, 'tools'));
+  write('tools/quiet.js', fs.readFileSync(quiet, 'utf8'));
   write(
     'pass.js',
     'for (let i = 0; i < 200; i++) console.log(`noise ${i}`);\n' +
@@ -34,10 +36,13 @@ const makePackage = () => {
 };
 
 const run = (dir, ...args) =>
-  spawnSync(process.execPath, [quiet, ...args], { cwd: dir, encoding: 'utf8' });
+  spawnSync(process.execPath, [path.join(dir, 'tools', 'quiet.js'), ...args], {
+    cwd: dir,
+    encoding: 'utf8',
+  });
 
 const logPathOf = (dir, output) =>
-  path.resolve(dir, output.match(/(?:log: |lines of )(\S+)/)[1]);
+  path.resolve(dir, output.match(/(?:log: |lines of )(.+?)(?: ---)?\r?$/m)[1]);
 
 test('quiet prints one result line and the test counts for a passing script', () => {
   const dir = makePackage();
@@ -65,6 +70,7 @@ test('quiet keeps the exit code and prints the end of the log on failure', () =>
     assert.match(result.stderr, /line 100\nboom/);
     assert.doesNotMatch(result.stderr, /line 1\n/);
     assert.doesNotMatch(result.stderr, /\[WebServer\]/);
+    assert.match(fs.readFileSync(log, 'utf8'), /line 1\n/);
   } finally {
     fs.rmSync(log, { force: true });
     fs.rmSync(dir, { recursive: true, force: true });
@@ -81,5 +87,13 @@ test('quiet forwards args and drops a copied inner "--"', () => {
   } finally {
     fs.rmSync(log, { force: true });
     fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('quiet log paths retain spaces with CRLF output', () => {
+  const dir = os.tmpdir();
+  const log = path.resolve(dir, 'quiet test', 'pass.log');
+  for (const output of [`   log: ${log}\r\n`, `--- last 60 lines of ${log} ---\r\n`]) {
+    assert.equal(logPathOf(dir, output), log);
   }
 });

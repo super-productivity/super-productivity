@@ -17,6 +17,10 @@ import { Task } from '../src/app/features/tasks/task.model';
 import { LocalBackupMeta } from '../src/app/imex/local-backup/local-backup.model';
 import { AppDataComplete } from '../src/app/op-log/model/model-config';
 import { PluginNodeExecutionElectronApi } from './shared-with-frontend/plugin-node-execution.model';
+import type {
+  PluginBinaryFileRequest,
+  PluginBinaryFileResult,
+} from '../packages/plugin-api/src/types';
 import {
   LocalRestApiRequestPayload,
   LocalRestApiResponsePayload,
@@ -145,6 +149,8 @@ export interface ElectronAPI {
     filename: string,
     data: string,
   ): Promise<{ success: boolean; path?: string }>;
+
+  saveBinaryFile(request: PluginBinaryFileRequest): Promise<PluginBinaryFileResult>;
 
   shareNative(payload: {
     text?: string;

@@ -10,6 +10,8 @@ import { LocalBackupMeta } from '../src/app/imex/local-backup/local-backup.model
 import {
   PluginNodeScriptRequest,
   PluginNodeScriptResult,
+  PluginBinaryFileRequest,
+  PluginBinaryFileResult,
 } from '../packages/plugin-api/src/types';
 import {
   LocalRestApiRequestPayload,
@@ -180,6 +182,8 @@ const ea: ElectronAPI = {
   informAboutAppReady: () => _send('APP_READY'),
 
   openPath: (path: string) => _send('OPEN_PATH', path),
+  saveBinaryFile: (request: PluginBinaryFileRequest) =>
+    _invoke('SAVE_BINARY_FILE_DIALOG', request) as Promise<PluginBinaryFileResult>,
   openExternalUrl: (url: string) => _send('OPEN_EXTERNAL', url),
   saveFileDialog: (filename: string, data: string) =>
     _invoke('SAVE_FILE_DIALOG', { filename, data }) as Promise<{

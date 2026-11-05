@@ -188,6 +188,12 @@ describe('isExternalUrlSchemeAllowed', () => {
 });
 
 describe('hasExecutableFileExtension (shell.openPath execution gate)', () => {
+  it('flags a basename consisting only of a dangerous extension', () => {
+    ['.cmd', '.exe', '.ps1', 'C:\\Temp\\.cmd', '/tmp/.exe'].forEach((p) =>
+      expect(hasExecutableFileExtension(p)).toBeTrue(),
+    );
+    expect(hasExecutableFileExtension('.gitignore')).toBeFalse();
+  });
   it('flags executable / script extensions across platforms', () => {
     [
       'C:\\Users\\me\\evil.bat',

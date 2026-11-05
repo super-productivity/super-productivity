@@ -17,6 +17,7 @@ describe('PluginAPI', () => {
   let reInitDataSpy: jasmine.Spy;
   let dispatchActionSpy: jasmine.Spy;
   let requestSpy: jasmine.Spy;
+  let saveBinaryFileSpy: jasmine.Spy;
   let triggerSyncSpy: jasmine.Spy;
   let listSyncedDataKeysSpy: jasmine.Spy;
   let getSelectedTaskSpy: jasmine.Spy;
@@ -43,6 +44,9 @@ describe('PluginAPI', () => {
     reInitDataSpy = jasmine.createSpy('reInitData').and.resolveTo();
     dispatchActionSpy = jasmine.createSpy('dispatchAction');
     requestSpy = jasmine.createSpy('request').and.resolveTo({ ok: true });
+    saveBinaryFileSpy = jasmine
+      .createSpy('saveBinaryFile')
+      .and.resolveTo({ kind: 'saved', path: 'chosen.pdf', openStatus: 'failed' });
     triggerSyncSpy = jasmine.createSpy('triggerSync').and.resolveTo();
     listSyncedDataKeysSpy = jasmine
       .createSpy('listSyncedDataKeys')
@@ -68,6 +72,7 @@ describe('PluginAPI', () => {
       showIndexHtmlAsView: showIndexHtmlAsViewSpy,
       dispatchAction: dispatchActionSpy,
       request: requestSpy,
+      saveBinaryFile: saveBinaryFileSpy,
       triggerSync: triggerSyncSpy,
       listSyncedDataKeys: listSyncedDataKeysSpy,
       getSelectedTask: getSelectedTaskSpy,
@@ -117,6 +122,20 @@ describe('PluginAPI', () => {
       } as PluginManifest,
       undefined,
     );
+  });
+
+  it('forwards binary bytes and the separate saved/open result without a text conversion', async () => {
+    const request = {
+      filename: 'Смета.pdf',
+      data: new Uint8Array([0, 255]).buffer,
+      openAfterSave: true,
+    };
+    expect(await pluginAPI.saveBinaryFile(request)).toEqual({
+      kind: 'saved',
+      path: 'chosen.pdf',
+      openStatus: 'failed',
+    });
+    expect(saveBinaryFileSpy).toHaveBeenCalledOnceWith(request);
   });
 
   it('exposes a public sync request that waits for the bound operation', async () => {
