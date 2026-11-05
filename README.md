@@ -93,7 +93,7 @@
 - Back up and synchronize your data across multiple devices with **SuperSync**, **Dropbox** and **WebDAV** support. SuperSync is our own sync service, end-to-end encrypted with a password only you hold, which you can also [host yourself](https://github.com/super-productivity/super-productivity/tree/master/packages/super-sync-server).
 - Attach context information to tasks and projects. Create **notes**, attach **files** or create **project-level bookmarks** for links, files, and even commands.
 - Super Productivity **respects your privacy** and **does NOT collect any data**. No account or registration is required. **You decide where you store your data!**
-- Extend and restyle the app with **[plugins](https://github.com/super-productivity/super-productivity/wiki/2.15-Develop-a-Plugin)** and **[custom themes](https://github.com/super-productivity/super-productivity/wiki/3.09-Theming)**.
+- Extend and restyle the app with **[plugins](https://github.com/super-productivity/super-productivity/wiki/2.15-Develop-a-Plugin)** and **[custom themes](https://github.com/super-productivity/super-productivity/wiki/3.09-Theming)**. Plugin configuration follows the resolved app theme, including system dark mode.
 - Runs on **Linux**, **macOS**, **Windows**, **Android**, **iOS** and in the **browser**.
 - It's **free** and **open source** and always will be.
 
