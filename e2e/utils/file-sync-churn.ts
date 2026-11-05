@@ -50,8 +50,9 @@ export const dispatchTaskUpdates = async (
       ).__e2eTestHelpers;
       // Small chunks, each flushed and followed by a quiet local compaction:
       // past the local compaction threshold every write starts a compaction,
-      // which fails while dispatches keep arriving (an artefact of dispatching
-      // thousands of ops in one burst, not of the sync path under test).
+      // which is deferred while dispatches keep arriving (an artefact of
+      // dispatching thousands of ops in one burst, not of the sync path under
+      // test). This direct compact() does not reset the write-path counter.
       const CHUNK = 50;
       for (let i = 0; i < n; i += CHUNK) {
         for (let j = i; j < Math.min(n, i + CHUNK); j++) {

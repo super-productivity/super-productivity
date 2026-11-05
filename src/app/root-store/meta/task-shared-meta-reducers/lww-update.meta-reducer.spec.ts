@@ -21,6 +21,7 @@ import { TIME_TRACKING_FEATURE_KEY } from '../../../features/time-tracking/store
 import { appStateFeatureKey } from '../../app-state/app-state.reducer';
 import { getDbDateStr } from '../../../util/get-db-date-str';
 import { SIMPLE_COUNTER_FEATURE_NAME } from '../../../features/simple-counter/store/simple-counter.reducer';
+import { EMPTY_SIMPLE_COUNTER } from '../../../features/simple-counter/simple-counter.const';
 import { TASK_REPEAT_CFG_FEATURE_NAME } from '../../../features/task-repeat-cfg/store/task-repeat-cfg.selectors';
 import {
   DEFAULT_TASK_REPEAT_CFG,
@@ -1095,6 +1096,76 @@ describe('lwwUpdateMetaReducer', () => {
         );
       }
       expect(result.success).toBe(true);
+    });
+
+    // Since #11474 the losing delete carries the whole counter. Backfilling it
+    // gave the copy streak fields the original (streaks off) never had (#11496).
+    describe('recreating from a whole counter (#11496)', () => {
+      const wholeCounter = {
+        id: 'cnt_whole',
+        title: 'Stopwatch',
+        isEnabled: true,
+        icon: null,
+        type: SimpleCounterType.StopWatch,
+        countOnDay: {},
+        isOn: false,
+        isTrackStreaks: false,
+      };
+      const recreateOp = (actionPayload: Record<string, unknown>): Operation => ({
+        id: 'op-counter-recreate',
+        actionType: '[SIMPLE_COUNTER] LWW Update' as ActionType,
+        opType: OpType.Update,
+        entityType: 'SIMPLE_COUNTER',
+        entityId: actionPayload['id'] as string,
+        payload: {
+          actionPayload,
+          entityChanges: [],
+          lwwUpdateMode: 'replace',
+          recreatesEntityAfterDelete: true,
+        },
+        clientId: 'clientB',
+        vectorClock: { clientB: 2 },
+        timestamp: 1700000000000,
+        schemaVersion: 1,
+      });
+      const recreate = (
+        actionPayload: Record<string, unknown>,
+      ): { entities: Record<string, unknown> } | undefined => {
+        reducer(makeStateWithCounters(), convertOpToAction(recreateOp(actionPayload)));
+        const updated = mockReducer.calls.mostRecent().args[0] as Record<
+          string,
+          { entities: Record<string, unknown> } | undefined
+        >;
+        return updated[SIMPLE_COUNTER_FEATURE_NAME];
+      };
+
+      it('adds it as it is, without fields the original lacks', () => {
+        const counterState = recreate(wholeCounter);
+        const counter = counterState?.entities['cnt_whole'] as Record<string, unknown>;
+        const withoutModified = { ...counter };
+        delete withoutModified['modified'];
+        expect(withoutModified).toEqual(wholeCounter);
+        expect(appDataValidators.simpleCounter(counterState as never).success).toBe(true);
+      });
+
+      it('backfills a counter whose non-nullable whole-entity key is null', () => {
+        const nulled = { ...wholeCounter, id: 'cnt_null', title: null, type: null };
+        const counterState = recreate(nulled);
+        const counter = counterState?.entities['cnt_null'] as SimpleCounter;
+        expect(counter.type).toBe(EMPTY_SIMPLE_COUNTER.type);
+        expect(counter.title).toBe(EMPTY_SIMPLE_COUNTER.title);
+        expect(appDataValidators.simpleCounter(counterState as never).success).toBe(true);
+      });
+
+      it('still backfills a counter that lacks a whole-entity key', () => {
+        const partial: Record<string, unknown> = { ...wholeCounter, id: 'cnt_part' };
+        delete partial['isOn'];
+        const counterState = recreate(partial);
+        const counter = counterState?.entities['cnt_part'] as SimpleCounter;
+        expect(counter.isOn).toBe(false);
+        expect(counter.streakMode).toBe(EMPTY_SIMPLE_COUNTER.streakMode);
+        expect(appDataValidators.simpleCounter(counterState as never).success).toBe(true);
+      });
     });
 
     // A local-win conflict resolution ships the whole habit as a 'replace'

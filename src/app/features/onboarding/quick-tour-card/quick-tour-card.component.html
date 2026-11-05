@@ -15,13 +15,6 @@
       >
         {{ T.ONBOARDING.WANT_MORE.TITLE | translate }}
       </h2>
-      <span class="counter">
-        {{
-          T.ONBOARDING.TOUR.COUNTER
-            | translate
-              : { nr: quickTourService.stepNr(), total: quickTourService.stepCount() }
-        }}
-      </span>
       <button
         type="button"
         class="close-btn"
@@ -32,38 +25,22 @@
       </button>
     </header>
 
-    <p class="intro">{{ T.ONBOARDING.WANT_MORE.INTRO | translate }}</p>
-    <ul class="teasers">
-      @for (teaser of TEASERS; track teaser.text) {
-        <li>
-          <mat-icon aria-hidden="true">{{ teaser.icon }}</mat-icon>
-          <span [innerHTML]="teaser.text | translate"></span>
-        </li>
-      }
-    </ul>
+    @if (offFeatures().length) {
+      <p class="intro">{{ T.ONBOARDING.WANT_MORE.INTRO | translate }}</p>
+      <ul class="features">
+        @for (feature of offFeatures(); track feature.key) {
+          <li>
+            <mat-icon aria-hidden="true">{{ feature.icon }}</mat-icon>
+            <span>{{ feature.label | translate }}</span>
+          </li>
+        }
+      </ul>
+    }
 
     @if (isSyncLineShown()) {
       <p class="aside">
         <mat-icon aria-hidden="true">cloud_off</mat-icon>
         <span>{{ T.ONBOARDING.WANT_MORE.SYNC | translate }}</span>
-      </p>
-    }
-    @if (isSearchShown()) {
-      <p class="aside">
-        <mat-icon aria-hidden="true">search</mat-icon>
-        @if (isPhone()) {
-          <span>{{ T.ONBOARDING.WANT_MORE.SEARCH_PHONE | translate }}</span>
-        } @else {
-          <span
-            [innerHTML]="T.ONBOARDING.WANT_MORE.SEARCH | translate: { key: searchKey() }"
-          ></span>
-        }
-      </p>
-    }
-    @if (isShortSyntaxShown()) {
-      <p class="aside">
-        <mat-icon aria-hidden="true">keyboard</mat-icon>
-        <span [innerHTML]="T.ONBOARDING.WANT_MORE.SHORT_SYNTAX | translate"></span>
       </p>
     }
 
@@ -83,6 +60,5 @@
         {{ T.ONBOARDING.WANT_MORE.DONE | translate }}
       </button>
     </div>
-    <p class="foot">{{ T.ONBOARDING.WANT_MORE.FOOTER | translate }}</p>
   </div>
 </section>

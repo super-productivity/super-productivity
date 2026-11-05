@@ -36,7 +36,7 @@
       : $safeNavigationMigration(filteredTasks()?.length)
   "
   [attr.data-id]="listModelId()"
-  [class.is-multi-dragging]="multiDrag.isListGroupDrag()"
+  [class.is-multi-dragging]="!isInView && multiDrag.isListGroupDrag()"
   class="task-list-inner"
 >
   @for (task of filteredTasks(); track trackByFn($index, task); let i = $index) {
@@ -50,7 +50,7 @@
       [cdkDragDisabled]="listModelId() === 'LATER_TODAY' || isTouchSelectionMode()"
       [cdkDragData]="task"
       [class.multi-drag-source]="
-        multiDrag.isListGroupDrag() && multiDrag.draggedIds().has(task.id)
+        !isInView && multiDrag.isListGroupDrag() && multiDrag.draggedIds().has(task.id)
       "
       (pointerdown)="onDragPointerDown(task, $event)"
       (cdkDragStarted)="onDragStarted(task, $event)"

@@ -3122,8 +3122,8 @@
       "PLANNER": "Suunnittele tulevat päivät kohdassa {{plannerIcon}} <b>Suunnittelija</b>",
       "TASK_MENU_TOUCH": "Pyyhkäise tehtävää vasemmalle nähdäksesi sen valikon: {{playIcon}} <b>Aloita ajan seuraaminen</b>, {{subtaskIcon}} <b>Lisää alitehtävä</b>",
       "TASK_MENU_TOUCH_NO_TRACKING": "Pyyhkäise tehtävää vasemmalle nähdäksesi sen valikon, esim. {{subtaskIcon}} <b>Lisää alitehtävä</b>",
-      "TIMER_RUNNING": "Ajastin käy. Keskeytä painamalla {{playIcon}} uudelleen tai <kbd>{{key}}</kbd>.",
-      "TIMER_RUNNING_TOUCH": "Ajastin käy. Keskeytä napauttamalla ylhäällä {{playIcon}}.",
+      "TIMER_RUNNING": "Ajastin käy. Keskeytä painamalla {{pauseIcon}} uudelleen tai <kbd>{{key}}</kbd>.",
+      "TIMER_RUNNING_TOUCH": "Ajastin käy. Keskeytä napauttamalla ylhäällä {{pauseIcon}}.",
       "TRACK_TIME": "Vie hiiri tehtävän päälle ja seuraa aikaa painamalla {{playIcon}}"
     },
     "WANT_MORE": {

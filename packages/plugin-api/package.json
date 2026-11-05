@@ -4,12 +4,19 @@
   "description": "TypeScript definitions for Super Productivity plugin development",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "typesVersions": {
+    "*": {
+      "global": [
+        "global.d.ts"
+      ]
+    }
+  },
   "scripts": {
     "build": "tsc",
     "build:watch": "tsc --emitDeclarationOnly --watch",
     "clean": "rm -rf dist",
     "typecheck": "tsc --noEmit",
-    "prepublishOnly": "npm run clean && npm run build",
+    "prepack": "npm run clean && npm run build",
     "version": "npm run build"
   },
   "keywords": [
@@ -34,6 +41,7 @@
   "files": [
     "dist/**/*.js",
     "dist/**/*.d.ts",
+    "global.d.ts",
     "README.md"
   ],
   "publishConfig": {

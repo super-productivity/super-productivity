@@ -194,6 +194,31 @@ describe('PluginBridgeService.addTask() — subtask creation', () => {
     expect(factoryCall.args[0].additional?.timeEstimate).toBe(0);
   });
 
+  it('keeps a subtask title verbatim when isIgnoreShortSyntax is set', async () => {
+    const { service, taskService } = setup(true);
+
+    await service.addTask({
+      title: 'subtask1 15m',
+      parentId: 'parent-1',
+      isIgnoreShortSyntax: true,
+    });
+
+    const factoryCall = taskService.createNewTaskWithDefaults.calls.mostRecent();
+    expect(factoryCall.args[0].title).toBe('subtask1 15m');
+    expect(factoryCall.args[0].additional?.timeEstimate).toBe(0);
+  });
+
+  it('forwards isIgnoreShortSyntax to TaskService.add for main tasks', async () => {
+    const { service, taskService } = setup(true);
+
+    await service.addTask({ title: 'Call Bob #work', isIgnoreShortSyntax: true });
+    await service.addTask({ title: 'Call Bob #work' });
+
+    const [withFlag, withoutFlag] = taskService.add.calls.all();
+    expect(withFlag.args[4]).toBeTrue();
+    expect(withoutFlag.args[4]).toBeFalse();
+  });
+
   // PluginCreateTaskData advertises dueDay, and TaskService.addSubTaskTo (used by
   // the local REST API) honours it — the plugin path used to drop it silently.
   it('passes dueDay through for subtasks', async () => {
@@ -288,9 +313,27 @@ describe('PluginBridgeService.addTask() — subtask creation', () => {
 
       await service.updateTask('parent-1', { title: 'renamed' });
 
-      expect(taskService.update).toHaveBeenCalledWith('parent-1', {
-        title: 'renamed',
-      });
+      expect(taskService.update).toHaveBeenCalledWith(
+        'parent-1',
+        { title: 'renamed' },
+        false,
+      );
+    });
+
+    it('forwards isIgnoreShortSyntax from the options', async () => {
+      const { service, taskService } = setup(true);
+
+      await service.updateTask(
+        'parent-1',
+        { title: 'Call Bob #work' },
+        { isIgnoreShortSyntax: true },
+      );
+
+      expect(taskService.update).toHaveBeenCalledWith(
+        'parent-1',
+        { title: 'Call Bob #work' },
+        true,
+      );
     });
   });
 
@@ -314,6 +357,8 @@ describe('PluginBridgeService.addTask() — subtask creation', () => {
       tagIds: 'parentInherited',
       // Selects the branch rather than being copied onto the task.
       parentId: 'structural',
+      // Controls title parsing, covered by the isIgnoreShortSyntax tests above.
+      isIgnoreShortSyntax: 'title',
     };
 
     const ALL_FIELDS: PluginCreateTaskData = {

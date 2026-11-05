@@ -4,7 +4,7 @@ import { defineConfig } from 'tsup';
 const DTS_COMPILER_OPTIONS = { ignoreDeprecations: '6.0' };
 
 export default defineConfig({
-  entry: ['src/index.ts'],
+  entry: ['src/index.ts', 'src/supersync-http-contract.ts'],
   format: ['esm', 'cjs'],
   dts: { compilerOptions: DTS_COMPILER_OPTIONS },
   sourcemap: true,

@@ -8,14 +8,17 @@ import android.graphics.Rect
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.util.Log
 import android.view.View
 import android.view.ViewGroup
+import android.view.ViewTreeObserver
 import android.webkit.WebView
 import android.widget.Toast
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import com.anggrayudi.storage.SimpleStorageHelper
 import com.getcapacitor.BridgeActivity
+import com.getcapacitor.WebViewListener
 import com.superproductivity.superproductivity.app.LaunchUrlReplayGuard
 import com.superproductivity.superproductivity.plugins.NavigationBarPlugin
 import com.superproductivity.superproductivity.plugins.SafBridgePlugin
@@ -177,6 +180,7 @@ class CapacitorMainActivity : BridgeActivity() {
             showWebViewInitFailure("Bridge or WebView is null after onCreate")
             return
         }
+        holdSystemSplashUntilPageVisible()
 
         try {
             printWebViewVersion(webView)
@@ -290,7 +294,7 @@ class CapacitorMainActivity : BridgeActivity() {
         val appContext = applicationContext
         Thread({
             try {
-                if (BackgroundSyncCredentialStore.get(appContext) != null) {
+                if (BackgroundSyncCredentialStore.hasAnyCredentials(appContext)) {
                     SyncReminderScheduler.ensureScheduled(appContext)
                 }
             } catch (e: Exception) {
@@ -447,6 +451,47 @@ class CapacitorMainActivity : BridgeActivity() {
         // Restore scoped storage permission on Android 10+
         storageHelper.onRestoreInstanceState(savedInstanceState)
         bridge?.webView?.restoreState(savedInstanceState)
+    }
+
+    /**
+     * Keeps the system splash up until the WebView shows index.html's boot
+     * splash, which looks the same. The system removes its splash on the
+     * activity's first frame; at that point the WebView has not painted the page
+     * yet, so a few frames of blank background (no logo) showed before the web
+     * splash, read as a flash on every launch. Withholding the first draw keeps
+     * the system splash on screen; onPageCommitVisible is the first frame with
+     * the page's content. A timeout (and page load/error) releases it, so a slow
+     * or failing page can never leave the app stuck on the splash.
+     */
+    private fun holdSystemSplashUntilPageVisible() {
+        val content = findViewById<View>(android.R.id.content) ?: return
+        var isReady = false
+        val handler = Handler(Looper.getMainLooper())
+        val preDrawListener = object : ViewTreeObserver.OnPreDrawListener {
+            override fun onPreDraw(): Boolean {
+                if (!isReady) return false
+                content.viewTreeObserver.removeOnPreDrawListener(this)
+                return true
+            }
+        }
+        val release = {
+            if (!isReady) {
+                isReady = true
+                handler.removeCallbacksAndMessages(SPLASH_HOLD_TOKEN)
+                content.invalidate()
+            }
+        }
+        content.viewTreeObserver.addOnPreDrawListener(preDrawListener)
+        handler.postAtTime(
+            release,
+            SPLASH_HOLD_TOKEN,
+            SystemClock.uptimeMillis() + SPLASH_HOLD_MAX_MS,
+        )
+        bridge?.addWebViewListener(object : WebViewListener() {
+            override fun onPageCommitVisible(view: WebView?, url: String?) = release()
+            override fun onPageLoaded(webView: WebView?) = release()
+            override fun onReceivedError(webView: WebView?) = release()
+        })
     }
 
     override fun onPause() {
@@ -670,5 +715,7 @@ class CapacitorMainActivity : BridgeActivity() {
     companion object {
         const val WINDOW_INTERFACE_PROPERTY: String = "SUPAndroid"
         const val WINDOW_PROPERTY_F_DROID: String = "SUPFDroid"
+        private const val SPLASH_HOLD_MAX_MS = 2_000L
+        private val SPLASH_HOLD_TOKEN = Any()
     }
 }

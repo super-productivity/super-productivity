@@ -3137,8 +3137,8 @@
       "PLANNER": "Naplánujte další dny v {{plannerIcon}} <b>Plánovač</b>",
       "TASK_MENU_TOUCH": "Přejetím úkolu doleva otevřete jeho menu: {{playIcon}} <b>Začít sledovat čas</b>, {{subtaskIcon}} <b>Přidat podúkol</b>",
       "TASK_MENU_TOUCH_NO_TRACKING": "Přejetím úkolu doleva otevřete jeho menu, např. {{subtaskIcon}} <b>Přidat podúkol</b>",
-      "TIMER_RUNNING": "Časovač běží. Znovu stiskněte {{playIcon}} nebo <kbd>{{key}}</kbd> pro pozastavení.",
-      "TIMER_RUNNING_TOUCH": "Časovač běží. Pro pozastavení klepněte nahoře na {{playIcon}}.",
+      "TIMER_RUNNING": "Časovač běží. Znovu stiskněte {{pauseIcon}} nebo <kbd>{{key}}</kbd> pro pozastavení.",
+      "TIMER_RUNNING_TOUCH": "Časovač běží. Pro pozastavení klepněte nahoře na {{pauseIcon}}.",
       "TRACK_TIME": "Najeďte na úkol a stisknutím {{playIcon}} spusťte sledování času"
     },
     "WANT_MORE": {

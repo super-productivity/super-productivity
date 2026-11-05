@@ -1653,7 +1653,7 @@ export class SyncWrapperService {
 
   /**
    * Offers whole-dataset replacement when automatic merging cannot proceed.
-   * Unknown remote metadata keeps the dialog's overwrite confirmation mandatory.
+   * Unknown remote metadata forces the overwrite confirm, except in the first-sync choice.
    */
   private async _handleDataConflict(
     error: LocalDataConflictError | UnsupportedMultiEntityConflictError,
