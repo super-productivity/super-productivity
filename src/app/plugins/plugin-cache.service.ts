@@ -33,8 +33,17 @@ export class PluginCacheService {
       const request = indexedDB.open(this.DB_NAME, 1);
 
       request.onsuccess = () => {
-        this._db = request.result;
-        resolve(this._db);
+        const db = request.result;
+        const clearConnection = (): void => {
+          if (this._db === db) this._db = null;
+        };
+        db.addEventListener('close', clearConnection);
+        db.addEventListener('versionchange', () => {
+          db.close();
+          clearConnection();
+        });
+        this._db = db;
+        resolve(db);
       };
 
       request.onerror = () => reject(new Error('Failed to open IndexedDB'));
