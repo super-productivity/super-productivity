@@ -37,6 +37,8 @@ describe('audio-context', () => {
   });
 
   afterEach(() => {
+    // clears the idle-suspend timer so it cannot fire into a later spec
+    closeAudioContext();
     (window as any).AudioContext = originalAudioContext;
     (window as any).fetch = originalFetch;
   });
