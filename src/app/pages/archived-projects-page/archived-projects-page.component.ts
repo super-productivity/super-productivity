@@ -49,7 +49,7 @@ export class ArchivedProjectsPageComponent {
 
   readonly T = T;
   readonly DEFAULT_PROJECT_ICON = DEFAULT_PROJECT_ICON;
-  readonly locale = this._dateTimeFormatService.currentLocale;
+  readonly textLocale = this._dateTimeFormatService.textLocale;
 
   readonly searchTerm = signal('');
 

@@ -58,7 +58,7 @@ export class DialogProjectCompleteComponent implements AfterViewInit, OnDestroy 
 
   readonly data = inject<DialogProjectCompleteData>(MAT_DIALOG_DATA);
   readonly T: typeof T = T;
-  readonly locale = this._dateTimeFormatService.currentLocale;
+  readonly textLocale = this._dateTimeFormatService.textLocale;
   readonly resolvedBgImage = signal<string | null>(null);
   readonly isDisableBackgroundTint = computed(
     () => !!this.data.project.theme?.isDisableBackgroundTint,

@@ -59,7 +59,7 @@ export class DialogBackupsListComponent implements OnInit {
   private _dateTimeFormatService = inject(DateTimeFormatService);
 
   T = T;
-  readonly locale = this._dateTimeFormatService.currentLocale;
+  readonly textLocale = this._dateTimeFormatService.textLocale;
   KIND_ICON = KIND_ICON;
 
   entries = signal<BackupListEntry[]>([]);
@@ -121,7 +121,7 @@ export class DialogBackupsListComponent implements OnInit {
             message: T.GCF.AUTO_BACKUPS.D_LIST.CONFIRM_MSG,
             translateParams: {
               timestamp: entry.createdAt
-                ? new Date(entry.createdAt).toLocaleString(this.locale(), {
+                ? new Date(entry.createdAt).toLocaleString(this.textLocale(), {
                     dateStyle: 'medium',
                     timeStyle: 'medium',
                   })
