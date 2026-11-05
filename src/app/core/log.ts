@@ -30,6 +30,18 @@ export const MAX_DATA_LENGTH = 400;
 const truncateSerialized = (value: string): string =>
   value.length > MAX_DATA_LENGTH ? 'short:' + value.substring(0, MAX_DATA_LENGTH) : value;
 
+// Stack traces and OS errors embed absolute paths, and the home folder names
+// the OS user (#11502). Applied to the final export string so every arg and
+// every escaping level (a stack inside a JSON string inside JSON) is covered.
+// The lookbehind skips URL paths like https://host/home/feed.
+// Windows usernames may contain spaces but none of these: " / \ [ ] : ; | = , + * ? < >
+const WINDOWS_HOME_RE =
+  /(?<![\w.-])([a-z]:[\\/]+users[\\/]+)[^\\/"'[\]:;|=,+*?<>()\r\n\t]+/gi;
+const POSIX_HOME_RE = /(?<![\w.-])(\/(?:Users|home)\/)[^\\/"'\s:)]+/g;
+
+const redactHomePaths = (value: string): string =>
+  value.replace(WINDOWS_HOME_RE, '$1<user>').replace(POSIX_HOME_RE, '$1<user>');
+
 const isDomRelatedObject = (value: unknown): boolean => {
   if (!value || typeof value !== 'object') {
     return false;
@@ -292,12 +304,12 @@ export class Log {
       }),
     }));
 
-    return JSON.stringify(safeHistory, null, 2);
+    return redactHomePaths(JSON.stringify(safeHistory, null, 2));
   }
 
   /** Export log history as formatted text for download */
   static exportLogHistoryAsText(): string {
-    return this.logHistory
+    const text = this.logHistory
       .map((entry) => {
         const date = new Date(entry.time).toISOString();
         const context = entry.ctx ? `[${entry.ctx}] ` : '';
@@ -306,6 +318,7 @@ export class Log {
         return `${date} [${entry.lvl}] ${context}${entry.msg}${argsStr}`;
       })
       .join('\n');
+    return redactHomePaths(text);
   }
 
   /**
