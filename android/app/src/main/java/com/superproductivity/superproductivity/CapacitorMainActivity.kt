@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.graphics.Rect
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -12,8 +13,8 @@ import android.os.SystemClock
 import android.util.Log
 import android.view.View
 import android.view.ViewGroup
-import android.view.ViewTreeObserver
 import android.webkit.WebView
+import android.window.SplashScreenView
 import android.widget.Toast
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import com.anggrayudi.storage.SimpleStorageHelper
@@ -454,34 +455,39 @@ class CapacitorMainActivity : BridgeActivity() {
     }
 
     /**
-     * Keeps the system splash up until the WebView shows index.html's boot
-     * splash, which looks the same. The system removes its splash on the
-     * activity's first frame; at that point the WebView has not painted the page
-     * yet, so a few frames of blank background (no logo) showed before the web
-     * splash, read as a flash on every launch. Withholding the first draw keeps
-     * the system splash on screen; onPageCommitVisible is the first frame with
-     * the page's content. A timeout (and page load/error) releases it, so a slow
-     * or failing page can never leave the app stuck on the splash.
+     * Keeps the Android 12+ system splash up until the WebView shows index.html's
+     * boot splash, which looks the same. By default the system removes its splash
+     * on the activity's first frame, before the WebView has painted the page, so
+     * a few frames of blank background (no logo) showed before the web splash.
+     *
+     * Taking over the splash's exit leaves it on screen as an overlay while the
+     * window keeps drawing underneath, so the WebView can render and report
+     * onPageCommitVisible (its first frame with the page's content); only then is
+     * the overlay removed. (Withholding the window's first draw instead would also
+     * keep the WebView from drawing, so that signal could not arrive.) Page load,
+     * a load error, or a 2s cap also release it, so a slow or failing page never
+     * leaves the app stuck on the splash. Older Android shows no icon splash.
      */
     private fun holdSystemSplashUntilPageVisible() {
-        val content = findViewById<View>(android.R.id.content) ?: return
-        var isReady = false
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return
+        var isPageVisible = false
+        var splashView: SplashScreenView? = null
         val handler = Handler(Looper.getMainLooper())
-        val preDrawListener = object : ViewTreeObserver.OnPreDrawListener {
-            override fun onPreDraw(): Boolean {
-                if (!isReady) return false
-                content.viewTreeObserver.removeOnPreDrawListener(this)
-                return true
-            }
-        }
         val release = {
-            if (!isReady) {
-                isReady = true
+            if (!isPageVisible) {
+                isPageVisible = true
                 handler.removeCallbacksAndMessages(SPLASH_HOLD_TOKEN)
-                content.invalidate()
+                splashView?.remove()
+                splashView = null
             }
         }
-        content.viewTreeObserver.addOnPreDrawListener(preDrawListener)
+        splashScreen.setOnExitAnimationListener { view ->
+            if (isPageVisible) {
+                view.remove()
+            } else {
+                splashView = view
+            }
+        }
         handler.postAtTime(
             release,
             SPLASH_HOLD_TOKEN,
