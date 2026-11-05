@@ -22,13 +22,6 @@ import { DateTimeFormatService } from '../../core/date-time-format/date-time-for
 import { LineChartData } from './metric.model';
 import { dateStrToUtcDate } from '../../util/date-str-to-utc-date';
 
-type LineChartOptions = ChartConfiguration<
-  'line',
-  (number | undefined)[],
-  string
->['options'];
-type LineScaleOptions = NonNullable<NonNullable<LineChartOptions>['scales']>['y'];
-
 @Component({
   selector: 'metric',
   templateUrl: './metric.component.html',
@@ -102,21 +95,37 @@ export class MetricComponent {
   );
   evaluationData = computed(() => this._localizeChartData(this._evaluationData(), true));
 
-  clickCounterChartOptions = computed(() =>
-    this._buildLineChartOptions(T.F.METRIC.CMP.CHART_Y_COUNT),
-  );
-  stopWatchChartOptions = computed(() =>
-    this._buildLineChartOptions(T.F.METRIC.CMP.CHART_Y_MINUTES),
-  );
-  focusSessionChartOptions = computed(() => this._buildLineChartOptions());
+  lineChartOptions: ChartConfiguration<
+    'line',
+    (number | undefined)[],
+    string
+  >['options'] = {
+    responsive: true,
+    scales: {
+      y: {
+        ticks: {
+          precision: 0,
+        },
+      },
+    },
+  };
   // Fixed 0-4 axis so the 1-4 impact and 1-3 energy ratings read on the same scale.
-  evaluationChartOptions = computed(() =>
-    this._buildLineChartOptions(T.F.METRIC.CMP.CHART_Y_RATING, {
-      min: 0,
-      max: 4,
-      ticks: { stepSize: 1 },
-    }),
-  );
+  evaluationChartOptions: ChartConfiguration<
+    'line',
+    (number | undefined)[],
+    string
+  >['options'] = {
+    responsive: true,
+    scales: {
+      y: {
+        min: 0,
+        max: 4,
+        ticks: {
+          stepSize: 1,
+        },
+      },
+    },
+  };
   lineChartType: ChartType = 'line';
 
   /**
@@ -183,30 +192,6 @@ export class MetricComponent {
             label: dataset.label && this._translateService.instant(dataset.label),
           }))
         : chart.datasets,
-    };
-  }
-
-  private _buildLineChartOptions(
-    yTitleKey?: string,
-    yScale: LineScaleOptions = { ticks: { precision: 0 } },
-  ): LineChartOptions {
-    this._langChange();
-    return {
-      responsive: true,
-      scales: {
-        x: {
-          title: {
-            display: true,
-            text: this._translateService.instant(T.F.METRIC.CMP.CHART_X_DAY),
-          },
-        },
-        y: {
-          ...yScale,
-          ...(yTitleKey && {
-            title: { display: true, text: this._translateService.instant(yTitleKey) },
-          }),
-        },
-      },
     };
   }
 }
