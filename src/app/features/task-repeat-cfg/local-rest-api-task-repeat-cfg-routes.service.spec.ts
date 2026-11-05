@@ -658,6 +658,58 @@ describe('LocalRestApiTaskRepeatCfgRoutesService', () => {
       expectNoDispatch();
     });
 
+    // An API call can't answer the dialog's "update all instances?" question,
+    // so only instances created from now on get the new title and notes.
+    it('changes title and notes for the next instances only', async () => {
+      const response = await handle(
+        request('PATCH', '/task-repeat-cfgs/daily', {
+          title: '  Renamed  ',
+          notes: 'New notes',
+        }),
+      );
+
+      expect(response.status).toBe(200);
+      expect(repeatCfgServiceMock.updateTaskRepeatCfg).toHaveBeenCalledOnceWith(
+        'daily',
+        { title: 'Renamed', notes: 'New notes' },
+        false,
+      );
+    });
+
+    it('clears the notes with an empty string', async () => {
+      cfgs$.next([createCfg('daily', { notes: 'Old notes' })]);
+
+      await handle(request('PATCH', '/task-repeat-cfgs/daily', { notes: '' }));
+
+      expect(repeatCfgServiceMock.updateTaskRepeatCfg).toHaveBeenCalledOnceWith(
+        'daily',
+        { notes: undefined },
+        false,
+      );
+    });
+
+    it('does not need quickSetting for a title change', async () => {
+      const response = await handle(
+        request('PATCH', '/task-repeat-cfgs/daily', { title: 'Renamed' }),
+      );
+
+      expect(response.status).toBe(200);
+      expect(repeatCfgServiceMock.updateTaskRepeatCfg).toHaveBeenCalledOnceWith(
+        'daily',
+        { title: 'Renamed' },
+        false,
+      );
+    });
+
+    it('rejects an empty title and a non-string title or notes', async () => {
+      for (const body of [{ title: '   ' }, { title: 1 }, { notes: null }]) {
+        const response = await handle(request('PATCH', '/task-repeat-cfgs/daily', body));
+        expect(response.status).toBe(400);
+        expect(errorCode(response)).toBe('INVALID_INPUT');
+      }
+      expectNoDispatch();
+    });
+
     it('rejects unsupported fields and invalid types', async () => {
       const unsupported = await handle(
         request('PATCH', '/task-repeat-cfgs/daily', { taskId: 't1' }),

@@ -61,9 +61,18 @@ interface CfgFlagFields {
   skipOverdue?: boolean;
 }
 
-type UpdateRepeatCfgFields = ScheduleFields & CfgFlagFields;
+/**
+ * What the next instances are created with. Only on update: a new config
+ * copies them from its task.
+ */
+interface CfgContentFields {
+  title?: string;
+  notes?: string;
+}
 
-interface CreateRepeatCfgFields extends UpdateRepeatCfgFields {
+type UpdateRepeatCfgFields = ScheduleFields & CfgFlagFields & CfgContentFields;
+
+interface CreateRepeatCfgFields extends ScheduleFields, CfgFlagFields {
   taskId: string;
 }
 
@@ -76,7 +85,7 @@ const WEEKDAYS = [
   'saturday',
   'sunday',
 ] as const;
-const UPDATE_KEYS: ReadonlySet<string> = new Set([
+const CFG_KEYS = [
   'quickSetting',
   'startDate',
   'repeatCycle',
@@ -84,8 +93,9 @@ const UPDATE_KEYS: ReadonlySet<string> = new Set([
   ...WEEKDAYS,
   'isPaused',
   'skipOverdue',
-]);
-const CREATE_KEYS: ReadonlySet<string> = new Set([...UPDATE_KEYS, 'taskId']);
+] as const;
+const UPDATE_KEYS: ReadonlySet<string> = new Set([...CFG_KEYS, 'title', 'notes']);
+const CREATE_KEYS: ReadonlySet<string> = new Set([...CFG_KEYS, 'taskId']);
 
 /** The repeat dialog's limits for "repeat every". */
 const MAX_REPEAT_EVERY = 1000;
@@ -289,7 +299,10 @@ export class LocalRestApiTaskRepeatCfgRoutesService implements LocalRestApiFeatu
     if (!parsed.ok) {
       return parsed.response;
     }
-    const { isPaused, skipOverdue, ...schedule } = parsed.value;
+    const { isPaused, skipOverdue, title, notes, ...schedule } = parsed.value;
+    if (title !== undefined && !title.trim()) {
+      return this._invalid(requestId, 'title must be a non-empty string');
+    }
 
     const cfg = await this._getCfg(cfgId);
     if (!cfg) {
@@ -317,6 +330,9 @@ export class LocalRestApiTaskRepeatCfgRoutesService implements LocalRestApiFeatu
       ...final,
       ...(isPaused !== undefined ? { isPaused } : {}),
       ...(skipOverdue !== undefined ? { skipOverdue } : {}),
+      ...(title !== undefined ? { title: title.trim() } : {}),
+      // An empty string clears the notes, stored as on create
+      ...(notes !== undefined ? { notes: notes || undefined } : {}),
     };
 
     // Only the fields that really change: the reschedule effect reacts to
@@ -330,10 +346,10 @@ export class LocalRestApiTaskRepeatCfgRoutesService implements LocalRestApiFeatu
       ...getResumeCursorChanges(cfg, final, getDbDateStr(logicalYesterday)),
     };
     if (Object.keys(changes).length > 0) {
-      // `false`, as the dialog passes for these fields: it only asks to
-      // update all instances (in a confirmation dialog) when title, notes,
-      // tags, priority, estimate, time or reminder change, which this route
-      // does not accept.
+      // `false`: the dialog asks in a confirmation dialog whether to update
+      // all instances when title, notes, tags, priority, estimate, time or
+      // reminder change. An API call can't answer it, so a new title or notes
+      // only reach instances created from now on; existing ones keep theirs.
       this._taskRepeatCfgService.updateTaskRepeatCfg(cfgId, changes, false);
     }
 
