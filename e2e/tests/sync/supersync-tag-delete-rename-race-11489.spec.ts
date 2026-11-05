@@ -31,8 +31,9 @@ import {
  *
  * - delete first: A's delete reaches the server, then B renames before
  *   downloading it. B applies the remote delete; its rename loses.
- * - rename first: B's rename reaches the server, then A deletes before
- *   downloading it. A's local delete wins and its replacement reaches B.
+ * - rename first: A deletes, then B renames (the newer write) and uploads
+ *   first; A syncs its older pending delete. A's local delete wins and its
+ *   replacement reaches B.
  *
  * In both, B archives T1 (tagged X) first, so the archive cleanup is covered.
  */
@@ -165,12 +166,14 @@ const runRace = async (
       expect(await getStoreTagIdByTitle(clientB.page, renamedTag)).toBe(tagId);
       await clientB.sync.syncAndWait();
     } else {
-      // B renames X and uploads archive + rename; A deletes X before
-      // downloading either, then syncs.
+      // A deletes X first (not synced yet), then B renames X, so the rename
+      // is the NEWER write. B uploads archive + rename first; A then syncs
+      // with its older delete pending. Under timestamp LWW the rename won
+      // here; the marked delete must win instead.
+      await tagPageA.deleteTag(tagName);
       await renameTag(clientB.page, tagName, renamedTag);
       expect(await getStoreTagIdByTitle(clientB.page, renamedTag)).toBe(tagId);
       await clientB.sync.syncAndWait();
-      await tagPageA.deleteTag(tagName);
       await clientA.sync.syncAndWait();
     }
 
