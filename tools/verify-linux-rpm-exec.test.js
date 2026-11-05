@@ -27,7 +27,7 @@ const yamlLine = (key) => {
 };
 
 test('the app-builder-lib patch points the rpm desktop entry at /usr/bin', () => {
-  const patch = readRoot('patches', 'app-builder-lib+26.16.1.patch');
+  const patch = readRoot('patches', 'app-builder-lib+26.18.1.patch');
   const execLine = patch.match(/^\+\s*const exec = (.+)$/m);
   assert.ok(execLine, 'no Exec override in the app-builder-lib patch');
   assert.match(execLine[1], /target === "rpm"/, 'rpm must use the spaceless Exec');
