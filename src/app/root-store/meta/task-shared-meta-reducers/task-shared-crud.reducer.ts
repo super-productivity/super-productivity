@@ -36,6 +36,7 @@ import { IN_PROGRESS_TAG, TODAY_TAG } from '../../../features/tag/tag.const';
 import { unique } from '../../../util/unique';
 import { appStateFeatureKey } from '../../app-state/app-state.reducer';
 import { getDbDateStr } from '../../../util/get-db-date-str';
+import { isTodayWithOffset } from '../../../util/is-today.util';
 import { moveItemAfterAnchor } from '../../../features/work-context/store/work-context-meta.helper';
 import { canApplyConvertToSubTask } from '../../../features/tasks/util/can-convert-task-to-sub-task';
 import {
@@ -64,6 +65,18 @@ import { plannerFeatureKey } from '../../../features/planner/store/planner.reduc
 // ACTION HANDLERS
 // =============================================================================
 
+/**
+ * dueWithTime wins over dueDay (ARCHITECTURE-DECISIONS.md Decision #1).
+ * REST / plugins can still send both; clearing here keeps planner.days and
+ * Today membership consistent so the same task is not placed twice (#11263).
+ */
+const withExclusiveDueFields = <T extends Partial<Task>>(fields: T): T => {
+  if (typeof fields.dueWithTime !== 'number') {
+    return fields;
+  }
+  return { ...fields, dueDay: undefined };
+};
+
 const handleAddTask = (
   state: RootState,
   task: TaskWithTags,
@@ -72,24 +85,32 @@ const handleAddTask = (
 ): RootState => {
   let updatedState = state;
 
+  // dueWithTime takes priority; drop a conflicting dueDay before Today /
+  // planner placement so a dual-field create cannot land in both buckets.
+  const exclusiveTask = withExclusiveDueFields(task);
+
   // Determine if task should be added to Today tag
   const todayStr = state[appStateFeatureKey]?.todayStr ?? getDbDateStr();
-  const shouldAddToToday = task.dueDay === todayStr;
+  const startOfNextDayDiffMs = state[appStateFeatureKey]?.startOfNextDayDiffMs ?? 0;
+  const shouldAddToToday =
+    typeof exclusiveTask.dueWithTime === 'number'
+      ? isTodayWithOffset(exclusiveTask.dueWithTime, todayStr, startOfNextDayDiffMs)
+      : exclusiveTask.dueDay === todayStr;
 
   // Add task to task state
   // IMPORTANT: TODAY_TAG should NEVER be in task.tagIds (virtual tag pattern)
-  // Membership is determined by task.dueDay, TODAY_TAG.taskIds only stores ordering
+  // Membership is determined by dueDay/dueWithTime, TODAY_TAG.taskIds only stores ordering
   // See: ARCHITECTURE-DECISIONS.md Decision #2
-  const taskTagIds = task.tagIds.filter((id) => id !== TODAY_TAG.id);
+  const taskTagIds = exclusiveTask.tagIds.filter((id) => id !== TODAY_TAG.id);
   // A repeat instance takes the place of the previous one (#10812)
-  const anchorId = getPreviousRepeatInstanceId(state, task);
+  const anchorId = getPreviousRepeatInstanceId(state, exclusiveTask);
 
   const newTask: Task = {
     ...DEFAULT_TASK,
-    ...task,
+    ...exclusiveTask,
     tagIds: taskTagIds,
-    timeSpent: calcTotalTimeSpent(task.timeSpentOnDay || {}),
-    projectId: task.projectId || '',
+    timeSpent: calcTotalTimeSpent(exclusiveTask.timeSpentOnDay || {}),
+    projectId: exclusiveTask.projectId || '',
   };
   updatedState = {
     ...updatedState,
@@ -140,13 +161,14 @@ const handleAddTask = (
 
   updatedState = updateTags(updatedState, tagUpdates);
 
-  // Update planner days if task has a future dueDay
-  if (task.dueDay && task.dueDay !== todayStr) {
+  // Untimed future dueDay only — a timed task belongs in its dueWithTime slot
+  // (#11263); exclusiveTask.dueDay is already cleared when dueWithTime is set.
+  if (exclusiveTask.dueDay && exclusiveTask.dueDay !== todayStr) {
     const plannerState = updatedState[plannerFeatureKey as keyof RootState] as any;
     const daysCopy = { ...plannerState.days };
-    const existingTaskIds = daysCopy[task.dueDay] || [];
+    const existingTaskIds = daysCopy[exclusiveTask.dueDay] || [];
 
-    daysCopy[task.dueDay] = unique(
+    daysCopy[exclusiveTask.dueDay] = unique(
       isAddToBottom ? [...existingTaskIds, task.id] : [task.id, ...existingTaskIds],
     );
 
@@ -827,6 +849,15 @@ const handleUpdateTask = (
     sanitizedTaskUpdate,
     currentTask,
   );
+
+  // Mutual exclusivity: setting dueWithTime clears dueDay so planner.days and
+  // the timed slot cannot both claim the same task (#11263 / Decision #1).
+  if (typeof cleanedTaskUpdate.changes.dueWithTime === 'number') {
+    cleanedTaskUpdate = {
+      ...cleanedTaskUpdate,
+      changes: withExclusiveDueFields(cleanedTaskUpdate.changes),
+    };
+  }
 
   // Subtasks inherit their project from the parent, and only an existing
   // project (or '' for no project) is a usable destination for a top-level

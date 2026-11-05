@@ -296,6 +296,27 @@ describe('taskSharedCrudMetaReducer', () => {
       );
     });
 
+    // #11263: REST clients often POST both dueDay and dueWithTime. dueWithTime
+    // wins; the task must not also land in planner.days (that caused a second,
+    // untimed block packed into free space next to the timed one).
+    it('should not add a timed task to planner days when dueDay is also set (#11263)', () => {
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const tomorrowStr = getDbDateStr(tomorrow);
+      const dueWithTime = new Date(tomorrow).setHours(16, 0, 0, 0);
+
+      const action = createAddTaskAction({
+        dueDay: tomorrowStr,
+        dueWithTime: dueWithTime,
+      });
+
+      const result = metaReducer(baseState, action);
+      const stored = result[TASK_FEATURE_NAME].entities['task1'] as Task;
+      expect(stored.dueWithTime).toBe(dueWithTime);
+      expect(stored.dueDay).toBeUndefined();
+      expect(result.planner.days[tomorrowStr] ?? []).not.toContain('task1');
+    });
+
     it('should not add task to planner days when due today (should go to TODAY tag instead)', () => {
       const today = getDbDateStr();
       const action = createAddTaskAction({ dueDay: today });
