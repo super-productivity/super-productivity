@@ -2,6 +2,8 @@
 // Never pass user-generated content (task titles, notes, project names, etc.)
 // to Log methods — use IDs and counts instead.
 
+import { redactLogPaths, redactLogValue } from './log-path-redaction';
+
 export enum LogLevel {
   CRITICAL = 0,
   ERROR = 1,
@@ -292,7 +294,8 @@ export class Log {
       }),
     }));
 
-    return JSON.stringify(safeHistory, null, 2);
+    // Exported logs are shared publicly: never let an OS user name leave the app
+    return JSON.stringify(redactLogValue(safeHistory), null, 2);
   }
 
   /** Export log history as formatted text for download */
@@ -303,7 +306,7 @@ export class Log {
         const context = entry.ctx ? `[${entry.ctx}] ` : '';
         const argsStr =
           entry.args.length > 0 ? ` ${entry.args.map(String).join(' ')}` : '';
-        return `${date} [${entry.lvl}] ${context}${entry.msg}${argsStr}`;
+        return redactLogPaths(`${date} [${entry.lvl}] ${context}${entry.msg}${argsStr}`);
       })
       .join('\n');
   }

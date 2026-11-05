@@ -1,3 +1,4 @@
+import { redactLogDatum } from './log-path-redaction';
 import { initIpcInterfaces } from './ipc-handler';
 import { initPluginOAuth } from './plugin-oauth';
 import electronLog, { info, log, warn } from 'electron-log/main';
@@ -70,6 +71,12 @@ export const startApp = (): void => {
   initIpcInterfaces();
 
   electronLog.initialize();
+  // main.log is attached to bug reports, so strip the OS user name from paths
+  // (see #11502) before anything reaches a transport.
+  electronLog.hooks.push((message) => {
+    message.data = message.data.map(redactLogDatum);
+    return message;
+  });
 
   app.commandLine.appendSwitch('enable-speech-dispatcher');
 
