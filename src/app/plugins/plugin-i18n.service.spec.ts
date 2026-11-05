@@ -1,23 +1,51 @@
 import { TestBed } from '@angular/core/testing';
+import { signal } from '@angular/core';
+import { LanguageService } from '../core/language/language.service';
+import { LanguageCode } from '../core/locale.constants';
 import { PluginI18nService } from './plugin-i18n.service';
 import { GlobalConfigService } from '../features/config/global-config.service';
 
 describe('PluginI18nService', () => {
   let service: PluginI18nService;
+  const localization = signal<{ lng?: LanguageCode }>({ lng: LanguageCode.en });
 
   beforeEach(() => {
+    localization.set({ lng: LanguageCode.en });
     const globalConfigSpy = jasmine.createSpyObj('GlobalConfigService', [], {
-      localization: jasmine.createSpy().and.returnValue({ lng: 'en' }),
+      localization,
     });
 
     TestBed.configureTestingModule({
       providers: [
         PluginI18nService,
         { provide: GlobalConfigService, useValue: globalConfigSpy },
+        { provide: LanguageService, useValue: { detect: () => LanguageCode.de } },
       ],
     });
 
     service = TestBed.inject(PluginI18nService);
+  });
+
+  it('uses the detected UI language under System default', () => {
+    localization.set({});
+    service.loadPluginTranslationsFromContent('test-plugin', {
+      en: JSON.stringify({ GREETING: 'Hello' }),
+      de: JSON.stringify({ GREETING: 'Hallo' }),
+    });
+    TestBed.tick();
+
+    expect(service.getCurrentLanguage()).toBe('de');
+    expect(service.translate('test-plugin', 'GREETING')).toBe('Hallo');
+  });
+
+  it('returns from an explicit language to the detected UI language', () => {
+    localization.set({ lng: LanguageCode.zh });
+    TestBed.tick();
+    expect(service.getCurrentLanguage()).toBe('zh');
+
+    localization.set({});
+    TestBed.tick();
+    expect(service.getCurrentLanguage()).toBe('de');
   });
 
   describe('loadPluginTranslationsFromContent', () => {

@@ -60,6 +60,7 @@ import { diffChangedPluginIds } from './util/plugin-data-diff.util';
 import { GlobalTrackingIntervalService } from '../core/global-tracking-interval/global-tracking-interval.service';
 import { BeforeFinishDayService } from '../features/before-finish-day/before-finish-day.service';
 import { PluginLog } from '../core/log';
+import { LanguageService } from '../core/language/language.service';
 
 // Coalesces a sync batch or bulk action into one DATA_CHANGED call while
 // keeping views responsive. Time tracking updates the tracked task once a
@@ -77,6 +78,7 @@ export class PluginHooksEffects {
   private readonly _dataInitState = inject(DataInitStateService);
   private readonly _beforeFinishDayService = inject(BeforeFinishDayService);
   private readonly _globalTrackingInterval = inject(GlobalTrackingIntervalService);
+  private readonly _languageService = inject(LanguageService);
 
   taskComplete$ = createEffect(
     () =>
@@ -245,7 +247,10 @@ export class PluginHooksEffects {
         ofType(updateGlobalConfigSection),
         filter((action) => action.sectionKey === 'localization'),
         withLatestFrom(this.store.pipe(select(selectLocalizationConfig))),
-        map(([_, localizationConfig]) => localizationConfig.lng),
+        map(
+          ([_, localizationConfig]) =>
+            localizationConfig.lng || this._languageService.detect(),
+        ),
         filter((lng): lng is LanguageCode => typeof lng === 'string' && lng.length > 0),
         distinctUntilChanged(),
         tap((newLanguage) => {
