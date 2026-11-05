@@ -292,6 +292,12 @@ test.describe('@supersync SuperSync Models', () => {
         clientB.page.locator('nav-list-tree').filter({ hasText: tagName }),
       ).toBeVisible();
 
+      // B still shows Today, where A created the task: its chip shows the synced tag
+      await waitForTask(clientB.page, taskName);
+      const taskB = clientB.page.locator(`task:has-text("${taskName}")`);
+      await expect(taskB).toBeVisible();
+      await expect(taskB).toContainText(tagName);
+
       // Switch to the tag view and verify the task is present
       const tagNavItem = tagsTreeB
         .locator('nav-item')
@@ -306,12 +312,16 @@ test.describe('@supersync SuperSync Models', () => {
         await tagNavItem.click({ force: true });
       }
       await clientB.page.waitForLoadState('networkidle');
+      await expect(clientB.page.locator('page-title .page-title-text')).toHaveText(
+        tagName,
+      );
 
-      await waitForTask(clientB.page, taskName);
-      const taskB = clientB.page.locator(`task:has-text("${taskName}")`);
-      await expect(taskB).toBeVisible();
-      // Check for tag text content in the task (more robust than finding specific tag element structure)
-      await expect(taskB).toContainText(tagName);
+      // A tag view hides the chip of its own tag (TagListComponent). That also
+      // tells its row apart from Today's, which fades out for 75ms after the
+      // switch, long enough for an unfiltered locator to match it instead.
+      await expect(
+        clientB.page.locator('task', { hasText: taskName, hasNotText: tagName }),
+      ).toBeVisible();
     } finally {
       if (clientA) await closeClient(clientA);
       if (clientB) await closeClient(clientB);
