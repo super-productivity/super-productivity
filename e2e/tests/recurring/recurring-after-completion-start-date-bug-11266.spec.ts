@@ -22,6 +22,7 @@ import {
 const FIRST_DAY = new Date('2026-05-01T10:00:00');
 const LATER_DAY = new Date('2026-05-11T10:00:00');
 const LATER_DAY_DDMMYYYY = '11/05/2026';
+const NEXT_DAY_DDMMYYYY = '12/05/2026';
 
 test.describe('Recurring Task - Move first occurrence of an after-completion repeat to today (#11266)', () => {
   test('moving "First one on" past the last completion to today creates a copy in Today', async ({
@@ -76,6 +77,37 @@ test.describe('Recurring Task - Move first occurrence of an after-completion rep
 
     // 5. An open copy must be in Today without waiting for a day change.
     await gotoHashRoute(page, '/#/tag/TODAY/tasks', page.locator('task').first());
+    await expect(taskPage.getUndoneTasks().filter({ hasText: taskTitle })).toHaveCount(
+      1,
+      { timeout: 15000 },
+    );
+
+    // 6. Move the date a day ahead: the open copy leaves Today.
+    await taskPage.openTaskDetail(
+      taskPage.getUndoneTasks().filter({ hasText: taskTitle }),
+    );
+    await openRecurDialog(page);
+    await setRecurStartDate(page, NEXT_DAY_DDMMYYYY);
+    await saveRecurDialog(page);
+    await page.keyboard.press('Escape');
+    await expect(taskPage.getUndoneTasks().filter({ hasText: taskTitle })).toHaveCount(
+      0,
+      { timeout: 15000 },
+    );
+
+    // 7. Move it back to today: the open copy follows it into Today.
+    const openCopy = taskPage.getUndoneTasks().filter({ hasText: taskTitle });
+    await gotoHashRoute(page, '/#/project/INBOX_PROJECT/tasks', openCopy);
+    await taskPage.openTaskDetail(openCopy);
+    await openRecurDialog(page);
+    await setRecurStartDate(page, LATER_DAY_DDMMYYYY);
+    await saveRecurDialog(page);
+    await page.keyboard.press('Escape');
+    // Reload: right after the hash change the project list is still shown, where
+    // the copy is visible whatever its day.
+    await page.goto('/#/tag/TODAY/tasks');
+    await page.reload();
+    await workViewPage.waitForTaskList();
     await expect(taskPage.getUndoneTasks().filter({ hasText: taskTitle })).toHaveCount(
       1,
       { timeout: 15000 },

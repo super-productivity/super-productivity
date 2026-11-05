@@ -312,10 +312,11 @@ export class TaskRepeatCfgEffects {
 
                 // If the user moved startDate earlier than the existing
                 // lastTaskCreationDay, the anchor is stale — re-anchor on
-                // the new startDate (#7423). Skip for repeatFromCompletionDate
-                // configs: there scheduling counts from lastTaskCreationDay and
-                // only a later startDate moves it (#11266), so moving startDate
-                // earlier must not clear completion history.
+                // the new startDate (#7423). A repeatFromCompletionDate config
+                // does so only with an open copy: there is no completion after
+                // it to protect, and moving the copy forward moved the anchor
+                // along (#11266). Without one, the anchor is the completion day,
+                // which an earlier startDate must not clear.
                 const changes = taskRepeatCfg.changes as Partial<TaskRepeatCfgCopy>;
                 // A pause or resume alone moves no occurrence: the open copy
                 // stays where it is, as for an end date (#10091). Relocating
@@ -326,7 +327,7 @@ export class TaskRepeatCfgEffects {
                 const lastCreationDay = getEffectiveLastTaskCreationDay(fullCfg);
                 const isStartDateMovedEarlier =
                   'startDate' in changes &&
-                  !fullCfg.repeatFromCompletionDate &&
+                  (!fullCfg.repeatFromCompletionDate || undoneInstances.length > 0) &&
                   !!fullCfg.startDate &&
                   !!lastCreationDay &&
                   fullCfg.startDate < lastCreationDay;
