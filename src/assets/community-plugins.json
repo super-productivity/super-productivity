@@ -262,5 +262,18 @@
       "downloadUrl": "https://github.com/super-productivity/ridonculous/releases/download/stadium-mode-v0.4.0/ridonculous-stadium-mode-0.4.0.zip",
       "sha256": "bc0b07947d2be371471fc50ac2359683c54deff4ffc0d8deb737d96f0d7d69a8"
     }
+  },
+  {
+    "name": "Habits",
+    "shortDescription": "Build positive habits and keep unwanted habits within limits, with daily or rolling goals, counters, calendar history, statistics, and recurring task links. Works offline without a separate account or server.",
+    "url": "https://github.com/KingKord/sp-habits",
+    "author": "KingKord",
+    "authorUrl": "https://github.com/KingKord",
+    "id": "sp-habit-limits",
+    "release": {
+      "version": "0.18.1",
+      "downloadUrl": "https://github.com/KingKord/sp-habits/releases/download/v0.18.1/sp-habits.zip",
+      "sha256": "74d9774ff0afd733006af6be3651afb9b800d160f9a24c7966e2170409da46bf"
+    }
   }
 ]
