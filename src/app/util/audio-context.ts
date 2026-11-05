@@ -130,29 +130,36 @@ export const playBuffer = async (
 ): Promise<void> => {
   const audioCtx = await ensureAudioContextRunning();
   const release = holdAudioContext();
-  const source = audioCtx.createBufferSource();
-  source.buffer = buffer;
-  configureSource?.(source);
+  try {
+    const source = audioCtx.createBufferSource();
+    source.buffer = buffer;
+    configureSource?.(source);
 
-  let gainNode: GainNode | null = null;
-  if (volume !== 100) {
-    gainNode = audioCtx.createGain();
-    gainNode.gain.value = volume / 100;
-    source.connect(gainNode);
-    gainNode.connect(audioCtx.destination);
-  } else {
-    source.connect(audioCtx.destination);
-  }
-
-  source.onended = (): void => {
-    release();
-    source.disconnect();
-    if (gainNode) {
-      gainNode.disconnect();
+    let gainNode: GainNode | null = null;
+    if (volume !== 100) {
+      gainNode = audioCtx.createGain();
+      gainNode.gain.value = volume / 100;
+      source.connect(gainNode);
+      gainNode.connect(audioCtx.destination);
+    } else {
+      source.connect(audioCtx.destination);
     }
-  };
 
-  source.start(0);
+    source.onended = (): void => {
+      release();
+      source.disconnect();
+      if (gainNode) {
+        gainNode.disconnect();
+      }
+    };
+
+    source.start(0);
+  } catch (e) {
+    // onended never fires for a source that did not start; a leaked hold would
+    // keep the context running for the rest of the session.
+    release();
+    throw e;
+  }
 };
 
 /**
@@ -213,11 +220,11 @@ export const unlockAudioContext = (): void => {
       // Fire-and-forget — ensureAudioContextRunning() retries before actual playback.
       // resume() must run synchronously inside the gesture for iOS, so this does
       // not go through ensureAudioContextRunning().
-      ctx
-        .resume()
-        .then(scheduleIdleSuspend)
-        .catch(() => {});
+      ctx.resume().catch(() => {});
     }
+    // Also when already running: a context created inside the gesture starts
+    // 'running', and nothing else would suspend it if no sound ever plays.
+    scheduleIdleSuspend();
   };
 
   const opts = { once: true, signal: ac.signal };

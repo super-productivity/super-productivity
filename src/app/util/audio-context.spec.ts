@@ -349,6 +349,28 @@ describe('audio-context', () => {
         expect(mockContext.suspend).toHaveBeenCalledTimes(1);
       });
 
+      // A context created inside the click gesture starts out 'running'.
+      it('should suspend after the first-click unlock when the context starts running', () => {
+        unlockAudioContext();
+        document.dispatchEvent(new Event('click'));
+
+        jasmine.clock().tick(5000);
+
+        expect(mockContext.suspend).toHaveBeenCalledTimes(1);
+      });
+
+      it('should release the hold when setting up the source throws', async () => {
+        await expectAsync(
+          playBuffer(mockAudioBuffer, 100, () => {
+            throw new Error('configure failed');
+          }),
+        ).toBeRejected();
+
+        jasmine.clock().tick(5000);
+
+        expect(mockContext.suspend).toHaveBeenCalledTimes(1);
+      });
+
       it('should wait for an in-flight suspend before resuming for the next sound', async () => {
         let finishSuspend!: () => void;
         mockContext.suspend.and.returnValue(
