@@ -606,7 +606,8 @@
         "REMOTE_ISSUE_DELETED": "Remote issue was deleted. Delete linked task \"{{taskTitle}}\"?",
         "REMOTE_ISSUE_DELETED_WITH_TIME": "Remote issue was deleted but task \"{{taskTitle}}\" has tracked time. Delete anyway?",
         "TWO_WAY_SYNC_PUSH_FAILED": "Two-way sync push failed: {{errorMsg}}",
-        "POST_TIME_SUCCESS": "{{providerName}}: Successfully created time entry for {{issueTitle}}"
+        "POST_TIME_SUCCESS": "{{providerName}}: Successfully created time entry for {{issueTitle}}",
+        "WORKLOG_FOR_DAY_SUCCESS": "{{providerName}}: Time submitted (issues: {{nrOfIssues}})"
       },
       "SYNC_STATE": {
         "COULD_NOT_SYNC": "Couldn't sync: {{reason}}",
@@ -646,6 +647,14 @@
         "RELOAD_OPTIONS": "Reload Options",
         "SETUP_TITLE": "Setup {{title}} Config",
         "TEST_CONNECTION": "Test Connection"
+      },
+      "DIALOG_SUBMIT_WORKLOG": {
+        "OTHER_DAYS_INFO": "Includes unsubmitted time from other days",
+        "T_ALREADY_LOGGED": "Already logged",
+        "T_TITLE": "Title",
+        "T_TO_BE_SUBMITTED": "To be submitted",
+        "TITLE": "{{providerName}}: Submit Time for the Day",
+        "TOTAL_MSG": "Total to submit: <em>{{totalTime}}</em> (issues: <em>{{nrOfIssues}}</em>)"
       },
       "DIALOG_TRACK_TIME": {
         "ACTIVITY": "Activity",

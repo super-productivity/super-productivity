@@ -512,6 +512,29 @@ describe('PluginIssueProviderAdapterService', () => {
       expect(result).toBeNull();
     });
 
+    // the finish-day worklog reads this marker; a remote edit must not reset it
+    it('keeps the submitted-time marker when the issue is refreshed', async () => {
+      const day = '2026-08-05';
+      const provider = createMockProvider({
+        getById: jasmine
+          .createSpy('getById')
+          .and.resolveTo({ id: 'ISS-5', title: 'Updated Issue', lastUpdated: 2000 }),
+      });
+      registrySpy.getProvider.and.returnValue(provider);
+      const task = {
+        id: 'task-1',
+        issueId: 'ISS-5',
+        issueProviderId: PROVIDER_ID,
+        issueLastUpdated: 1000,
+        issueTimeTracked: { [day]: 3600000 },
+      } as unknown as Task;
+
+      const result = await service.getFreshDataForIssueTask(task);
+
+      expect(result!.taskChanges.issueWasUpdated).toBe(true);
+      expect(Object.keys(result!.taskChanges)).not.toContain('issueTimeTracked');
+    });
+
     it('should return fresh data with taskChanges when issue is updated', async () => {
       const freshIssue: PluginIssue = {
         id: 'ISS-5',

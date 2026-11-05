@@ -254,7 +254,13 @@ export interface IssueProviderPluginDefinition {
    *  - `isShowTimeTrackingDialog` (checkbox) — show the dialog when a task is done
    *  - `isShowTimeTrackingDialogForEachSubTask` (checkbox) — show it per subtask instead
    *  - `timeTrackingDialogDefaultTime` (select: `AllTime` | `AllTimeMinusLogged` |
-   *    `TimeToday` | `TimeYesterday`) — preselected time; the dialog can update it */
+   *    `TimeToday` | `TimeYesterday`) — preselected time; the dialog can update it
+   *  - `isSubmitWorklogOnFinishDay` (checkbox) — when the user finishes a day, offer
+   *    one dialog that submits the unlogged time of every linked task worked on that
+   *    day, via `logTime` and `getTimeLogged`. `started` is the start of the finished
+   *    day, but `timeSpentMs` also includes time from earlier days not yet submitted.
+   *    Offer it as an alternative to `isShowTimeTrackingDialog`: time logged in that
+   *    dialog is not tracked as submitted, so enabling both can log it twice. */
   timeTracking?: PluginTimeTracking;
 }
 
