@@ -7,6 +7,16 @@ import {
   PluginHttpOptions,
 } from './issue-provider-types';
 
+/** A verified published v2 primary: an observation, not a lock. */
+export interface PluginPublishedSnapshot {
+  format: 'file-v2';
+  revision: string;
+  clock: Record<string, number>;
+  tasks: { id: string; location: 'active' | 'archive'; isDone: boolean | null }[];
+  /** Only the caller plugin's data. An empty key identifies a legacy entry. */
+  pluginData: { key: string; value: string }[];
+}
+
 export interface PluginMenuEntryCfg {
   pluginId: string;
   label: string;
@@ -852,6 +862,17 @@ export interface PluginAPI {
   persistDataSynced(dataStr: string, key?: string): Promise<void>;
 
   loadSyncedData(key?: string): Promise<string | null>;
+
+  /**
+   * Reads the current file-sync primary with a coherent task/archive cutoff.
+   * Does not start sync or use a backup. Requires a v2 multi-file provider and
+   * writer provenance. Unsupported formats, corruption, or changed revision or
+   * configuration reject the read rather than return an empty collection.
+   * Does not acknowledge publication of a local write or authorize file deletion.
+   * The plugin must separately check ownership, unfinished operations and the
+   * current published attachment binding.
+   */
+  readPublishedSnapshot(): Promise<PluginPublishedSnapshot>;
 
   /**
    * Requests normal sync with the configured provider from plugin.js or an iframe.

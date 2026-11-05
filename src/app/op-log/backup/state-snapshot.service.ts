@@ -179,6 +179,24 @@ export class StateSnapshotService {
     return { ...snapshot, archiveYoung, archiveOld };
   }
 
+  /** Вызывающий код держит OPERATION_LOG → TASK_ARCHIVE; repair не доказывает отсутствие. */
+  async getStateSnapshotWithArchiveIntegrity(): Promise<{
+    snapshot: AppStateSnapshot;
+    taskDataUnmodified: boolean;
+  }> {
+    const snapshot = this.getStateSnapshotForOperationLog();
+    const { archiveYoung, archiveOld, taskDataUnmodified } =
+      await this._archiveDbAdapter.loadArchivesForSnapshot();
+    return {
+      snapshot: {
+        ...snapshot,
+        archiveYoung: archiveYoung ?? DEFAULT_ARCHIVE,
+        archiveOld: archiveOld ?? DEFAULT_ARCHIVE,
+      },
+      taskDataUnmodified,
+    };
+  }
+
   /**
    * Alias for getStateSnapshotAsync() for backward compatibility
    * @deprecated Use getStateSnapshotAsync() instead

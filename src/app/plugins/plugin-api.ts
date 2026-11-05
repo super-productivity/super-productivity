@@ -17,6 +17,7 @@ import {
   PluginHookHandler,
   PluginHooks,
   PluginManifest,
+  PluginPublishedSnapshot,
   PluginMenuEntryCfg,
   PluginTaskContextMenuEntryCfg,
   PluginNodeScriptRequest,
@@ -365,6 +366,10 @@ export class PluginAPI implements PluginAPIInterface {
       keyLen: key?.length ?? 0,
     });
     return this.#boundMethods.loadPersistedData(key);
+  }
+
+  readPublishedSnapshot(): Promise<PluginPublishedSnapshot> {
+    return this.#boundMethods.readPublishedSnapshot();
   }
 
   async getConfig(): Promise<any> {
