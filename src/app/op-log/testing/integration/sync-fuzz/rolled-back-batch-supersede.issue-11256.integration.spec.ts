@@ -61,6 +61,8 @@ describe('#11256 rolled-back upload batch followed by an accepted one', () => {
       if (call === 1) {
         // The server's transaction catch: nothing committed, every op retryable.
         expect(ops.length).toBe(MAX_OPS_PER_UPLOAD_REQUEST);
+        // Fail here, not later, if the batch boundary moves off the create.
+        expect(ops.some((o) => o.opType === 'CRT' && o.entityId === 'x1')).toBeTrue();
         return {
           results: ops.map((op) => ({
             opId: op.id,
