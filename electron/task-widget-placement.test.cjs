@@ -17,6 +17,8 @@ const DISPLAY = {
 let cursor;
 let isWayland;
 let isMac;
+let platform;
+const realPlatform = Object.getOwnPropertyDescriptor(process, 'platform');
 
 class FakeWindow {
   constructor() {
@@ -27,6 +29,7 @@ class FakeWindow {
     this.previews = [];
     this.ignoring = [];
     this.visible = true;
+    this.visibleChecks = 0;
     this.handlers = new Map();
     this.webContents = {
       send: (channel, payload) => {
@@ -43,6 +46,7 @@ class FakeWindow {
     return false;
   }
   isVisible() {
+    this.visibleChecks += 1;
     return this.visible;
   }
   getBounds() {
@@ -103,7 +107,15 @@ const setup = (t, initialState, isIdle = false) => {
   t.mock.timers.enable({ apis: ['setInterval', 'setTimeout', 'Date'] });
 
   delete require.cache[placementPath];
-  const { createTaskWidgetPlacement, getTaskWidgetWindowBounds } = require(placementPath);
+  // The module decides at load time which platform's drag handling it uses.
+  Object.defineProperty(process, 'platform', { ...realPlatform, value: platform });
+  let loaded;
+  try {
+    loaded = require(placementPath);
+  } finally {
+    Object.defineProperty(process, 'platform', realPlatform);
+  }
+  const { createTaskWidgetPlacement, getTaskWidgetWindowBounds } = loaded;
   const win = new FakeWindow();
   win.bounds = getTaskWidgetWindowBounds(initialState, isWayland, isIdle);
   const saved = [];
@@ -146,6 +158,7 @@ test.beforeEach(() => {
   cursor = { x: 5000, y: 5000 };
   isWayland = false;
   isMac = false;
+  platform = 'win32';
 });
 
 test.afterEach(() => {
@@ -817,4 +830,87 @@ test('the hint matches the shorter bar when nothing is running', (t) => {
   win.drag({ x: 1590, y: 300 }, t);
 
   assert.equal(hint.updates.at(-1).bounds.height - 48, 96);
+});
+
+// Outside Windows a drag has no end event, and a held button looks like a still one.
+const holdAt = (win, position) => {
+  cursor = {
+    x: (position.x ?? win.bounds.x) + 150,
+    y: (position.y ?? win.bounds.y) + 18,
+  };
+  win.dragBy(position);
+};
+
+test('outside Windows, a pause near an edge mid-drag does not dock', (t) => {
+  platform = 'linux';
+  const { win, saved } = setup(t, FLOATING);
+
+  holdAt(win, { x: 1590 });
+  advance(t, 900);
+
+  assert.equal(saved.length, 0, 'the button may still be held');
+  assert.notEqual(win.layouts.at(-1)?.dock, 'right');
+});
+
+test('outside Windows, the drag ends once the cursor leaves its spot', (t) => {
+  platform = 'linux';
+  const { win, saved } = setup(t, FLOATING);
+
+  holdAt(win, { x: 1590 });
+  advance(t, 600);
+  cursor = { x: 1400, y: 500 };
+  advance(t, 400);
+
+  assert.equal(saved.at(-1).edge, 'right');
+  assert.equal(win.bounds.x + win.bounds.width, 1920);
+});
+
+test('outside Windows, a long pause ends the drag anyway', (t) => {
+  platform = 'linux';
+  const { saved, win } = setup(t, FLOATING);
+
+  holdAt(win, { x: 1590 });
+  advance(t, 2400);
+
+  assert.equal(saved.at(-1).edge, 'right');
+});
+
+test('on Linux the cursor check alone lets clicks back in, with no forwarded events', (t) => {
+  platform = 'linux';
+  const { win } = setup(t, FLOATING);
+
+  hoverAt(520, 180);
+  advance(t, 100);
+  assert.equal(win.ignoring.at(-1), true);
+
+  hoverAt(520, 120);
+  advance(t, 100);
+  assert.equal(win.ignoring.at(-1), false);
+});
+
+test('on Wayland the window is only as tall as the widget, so nothing below it is blocked', (t) => {
+  isWayland = true;
+  const { win, placement } = setup(t, FLOATING);
+  assert.equal(win.bounds.height, placement.getShape().height);
+  assert.equal(win.bounds.height, 100);
+
+  placement.setIdle(true);
+  assert.equal(win.bounds.height, 56);
+});
+
+test('the cursor check sleeps while the widget is hidden', (t) => {
+  const { win } = setup(t, FLOATING);
+  advance(t, 200);
+
+  win.visible = false;
+  win.emit('hide');
+  const checks = win.visibleChecks;
+  advance(t, 2000);
+  assert.equal(win.visibleChecks, checks, 'nothing wakes while hidden');
+
+  win.visible = true;
+  win.emit('show');
+  hoverAt(520, 180);
+  advance(t, 100);
+  assert.equal(win.ignoring.at(-1), true, 'it works again once shown');
 });

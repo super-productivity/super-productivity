@@ -51,11 +51,17 @@ const CLOSE_ANIMATION_MS = 220;
 // Matches the morph in the CSS, so the bar lands on the hint before it goes.
 const HINT_LINGER_MS = 340;
 const DRAG_SETTLE_MS = 300;
+// Outside Windows a held button looks the same as a still one, so a pause this
+// long ends the drag even if the cursor never left its spot on the widget.
+const DRAG_HOLD_MAX_MS = 2000;
 const UNDOCK_DISTANCE = 32;
 // Fractional display scaling rounds window positions by a pixel or two.
 const MOVE_TOLERANCE = 3;
 
 const IS_WINDOWS = process.platform === 'win32';
+
+// Wayland hides the cursor and window positions from apps.
+const isCursorHidden = (): boolean => isWaylandEnv(process.platform, process.env);
 
 const isSameRect = (a: WidgetRect, b: WidgetRect): boolean =>
   a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height;
@@ -80,7 +86,13 @@ export const getTaskWidgetWindowBounds = (
   timeWidth?: number,
 ): WidgetRect => {
   const shape = getTaskWidgetShape(state, isOpen, isIdle, timeWidth);
-  return IS_MAC ? shape : getWindowBounds(shape, state.edge, state.width);
+  if (IS_MAC) {
+    return shape;
+  }
+  const bounds = getWindowBounds(shape, state.edge, state.width);
+  // Without the cursor nothing can let clicks through the empty part of the
+  // window, so on Wayland the window is only as tall as the widget.
+  return isCursorHidden() ? { ...bounds, height: shape.height } : bounds;
 };
 
 export const createTaskWidgetPlacement = (
@@ -92,7 +104,7 @@ export const createTaskWidgetPlacement = (
 ): TaskWidgetPlacement => {
   // Wayland hides the cursor and window positions from apps, so closing on
   // leave and docking cannot work there. Staying open keeps Done and Open reachable.
-  const isCursorKnown = !isWaylandEnv(process.platform, process.env);
+  const isCursorKnown = !isCursorHidden();
 
   let state = initialState;
   let isIdle = isInitiallyIdle;
@@ -105,6 +117,9 @@ export const createTaskWidgetPlacement = (
   let expectedBounds = getTaskWidgetWindowBounds(state, isOpen, isIdle);
   let shrinkTimer: NodeJS.Timeout | null = null;
   let dragSettleTimer: NodeJS.Timeout | null = null;
+  let lastDragMoveAt = 0;
+  let grabOffset: Readonly<{ x: number; y: number }> | null = null;
+  let cursorInterval: NodeJS.Timeout | null = null;
   let dockHint: TaskWidgetDockHint | null = null;
   let hintTimer: NodeJS.Timeout | null = null;
   let lastPreviewKey = '';
@@ -304,6 +319,30 @@ export const createTaskWidgetPlacement = (
     onStateChange(state);
   };
 
+  const getCursorOffset = (): { x: number; y: number } => {
+    const cursor = screen.getCursorScreenPoint();
+    const bounds = win.getBounds();
+    return { x: cursor.x - bounds.x, y: cursor.y - bounds.y };
+  };
+
+  // While the button is held the window moves with the cursor, so the cursor stays
+  // on the same spot of the widget. Docking waits until it leaves that spot, so a
+  // pause near an edge mid-drag doesn't dock under a held button.
+  const settleDrag = (): void => {
+    dragSettleTimer = null;
+    const offset = isCursorKnown ? getCursorOffset() : null;
+    const mayStillBeHeld =
+      !!offset &&
+      !!grabOffset &&
+      Math.abs(offset.x - grabOffset.x) <= MOVE_TOLERANCE &&
+      Math.abs(offset.y - grabOffset.y) <= MOVE_TOLERANCE;
+    if (mayStillBeHeld && Date.now() - lastDragMoveAt < DRAG_HOLD_MAX_MS) {
+      dragSettleTimer = setTimeout(settleDrag, DRAG_SETTLE_MS);
+      return;
+    }
+    finishDrag();
+  };
+
   const onMove = (): void => {
     if (!hasMovedFromExpected()) {
       return;
@@ -313,12 +352,29 @@ export const createTaskWidgetPlacement = (
     updateDockPreview();
 
     // Only Windows reports the end of a drag. Elsewhere it counts as finished
-    // once the window has stopped moving for a moment.
+    // once the window has stopped moving and the button seems to be up.
     if (!IS_WINDOWS) {
+      lastDragMoveAt = Date.now();
+      grabOffset = isCursorKnown ? getCursorOffset() : null;
       if (dragSettleTimer) {
         clearTimeout(dragSettleTimer);
       }
-      dragSettleTimer = setTimeout(finishDrag, DRAG_SETTLE_MS);
+      dragSettleTimer = setTimeout(settleDrag, DRAG_SETTLE_MS);
+    }
+  };
+
+  // The cursor check only runs while the widget can be seen.
+  const startCursorCheck = (): void => {
+    if (isCursorKnown && !cursorInterval) {
+      cursorInterval = setInterval(checkCursor, POLL_MS);
+      cursorInterval.unref();
+    }
+  };
+
+  const stopCursorCheck = (): void => {
+    if (cursorInterval) {
+      clearInterval(cursorInterval);
+      cursorInterval = null;
     }
   };
 
@@ -326,9 +382,11 @@ export const createTaskWidgetPlacement = (
   if (IS_WINDOWS) {
     win.on('moved', finishDrag);
   }
-
-  const cursorInterval = isCursorKnown ? setInterval(checkCursor, POLL_MS) : null;
-  cursorInterval?.unref();
+  win.on('show', startCursorCheck);
+  win.on('hide', stopCursorCheck);
+  if (win.isVisible()) {
+    startCursorCheck();
+  }
   applyBounds();
 
   return {
@@ -396,9 +454,7 @@ export const createTaskWidgetPlacement = (
       if (hintTimer) {
         clearTimeout(hintTimer);
       }
-      if (cursorInterval) {
-        clearInterval(cursorInterval);
-      }
+      stopCursorCheck();
       if (dragSettleTimer) {
         clearTimeout(dragSettleTimer);
       }

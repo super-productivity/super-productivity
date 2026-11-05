@@ -13,6 +13,7 @@ import {
   withLatestFrom,
 } from 'rxjs/operators';
 import { IPC } from '../../../../../electron/shared-with-frontend/ipc-events.const';
+import { TaskWidgetTheme } from '../../../../../electron/shared-with-frontend/task-widget-view.model';
 import { CustomThemeService } from '../../../core/theme/custom-theme.service';
 import { GlobalThemeService } from '../../../core/theme/global-theme.service';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
@@ -70,6 +71,9 @@ export class TaskWidgetEffects {
     this._workContextService.currentTheme$,
   ).pipe(debounceTime(150));
   private _shownTask$ = this._store$.pipe(select(selectTaskWidgetTask));
+  // Reading the theme makes a canvas, and the view goes out up to twice a second,
+  // so the colors are read again only when they can have changed.
+  private _theme: TaskWidgetTheme | null = null;
 
   constructor() {
     window.ea.on(IPC.REQUEST_CURRENT_TASK_FOR_TASK_WIDGET, () => {
@@ -103,8 +107,9 @@ export class TaskWidgetEffects {
             tick,
           ),
         ),
-        this._viewRequest$,
-        this._themeChange$,
+        merge(this._viewRequest$, this._themeChange$).pipe(
+          tap(() => (this._theme = null)),
+        ),
         this._translateService.onLangChange,
       ).pipe(
         filter(() => this._taskWidgetSettingsService.settings().isEnabled),
@@ -125,7 +130,7 @@ export class TaskWidgetEffects {
               projectColor: project?.theme.primary,
               focusTimer: timer.purpose === 'work' ? timer : null,
               isDark: this._globalThemeService.isDarkTheme(),
-              theme: readTaskWidgetTheme(),
+              theme: this._getTheme(),
               translate: (key, params) => this._translateService.instant(key, params),
             }),
           );
@@ -133,4 +138,9 @@ export class TaskWidgetEffects {
       ),
     { dispatch: false },
   );
+
+  private _getTheme(): TaskWidgetTheme {
+    this._theme = this._theme ?? readTaskWidgetTheme();
+    return this._theme;
+  }
 }

@@ -32,6 +32,7 @@ describe('TaskWidgetEffects', () => {
   let updateViewSpy: jasmine.Spy;
   let setDoneSpy: jasmine.Spy;
   let isEnabled: WritableSignal<boolean>;
+  let projectTheme$: Subject<unknown>;
 
   const task: Task = {
     ...DEFAULT_TASK,
@@ -63,6 +64,7 @@ describe('TaskWidgetEffects', () => {
     updateViewSpy = jasmine.createSpy('updateTaskWidgetView');
     setDoneSpy = jasmine.createSpy('setDone');
     isEnabled = signal(true);
+    projectTheme$ = new Subject();
     (window as any).ea = {
       on: (channel: string, listener: () => void) => ipcListeners.set(channel, listener),
       updateTaskWidgetView: updateViewSpy,
@@ -83,7 +85,7 @@ describe('TaskWidgetEffects', () => {
         { provide: TaskService, useValue: { setDone: setDoneSpy } },
         { provide: GlobalThemeService, useValue: { isDarkTheme: signal(true) } },
         { provide: CustomThemeService, useValue: { appliedThemeVersion: signal(0) } },
-        { provide: WorkContextService, useValue: { currentTheme$: new Subject() } },
+        { provide: WorkContextService, useValue: { currentTheme$: projectTheme$ } },
         {
           provide: TranslateService,
           useValue: { instant: (key: string) => key, onLangChange: new Subject() },
@@ -165,6 +167,23 @@ describe('TaskWidgetEffects', () => {
     requestView();
 
     expect(updateViewSpy.calls.mostRecent().args[0].theme.primary).toBe('rgb(1, 2, 3)');
+    document.body.style.removeProperty('--brand');
+  }));
+
+  it('reads the theme again only when it can have changed', fakeAsync(() => {
+    document.body.style.setProperty('--brand', 'rgb(1, 2, 3)');
+    start();
+    requestView();
+
+    // A change the app never announced, so nothing reads it yet.
+    document.body.style.setProperty('--brand', 'rgb(4, 5, 6)');
+    actions$.next(unsetCurrentTask());
+    tick(600);
+    expect(updateViewSpy.calls.mostRecent().args[0].theme.primary).toBe('rgb(1, 2, 3)');
+
+    projectTheme$.next({});
+    tick(800);
+    expect(updateViewSpy.calls.mostRecent().args[0].theme.primary).toBe('rgb(4, 5, 6)');
     document.body.style.removeProperty('--brand');
   }));
 
