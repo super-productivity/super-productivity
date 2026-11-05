@@ -79,7 +79,7 @@
 
 ## :heavy_check_mark: Features
 
-- **Keep organized and focused!** Plan and categorize your tasks using sub-tasks, projects and tags and color code them as needed.
+- **Keep organized and focused!** Plan and categorize your tasks using sub-tasks, projects and tags and color code them as needed. Tag badges count open tasks in active projects.
 - **Plan ahead** with the **planner** and see your day laid out on the **schedule** timeline, next to your calendar events.
 - Sort tasks visually on **boards**, like the built-in **Kanban** and **Eisenhower Matrix**, or build your own.
 - Use **timeboxing** and **track your time**. Create time sheets and work summaries in a breeze to easily export them to your company's time tracking system.
