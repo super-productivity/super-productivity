@@ -731,6 +731,15 @@ export interface PluginAPI {
   // the host always provides it.
   onUnload?(fn: () => void | Promise<void>): void;
 
+  /**
+   * Регистрирует один обработчик штатного выхода для этого экземпляра плагина.
+   * Electron ожидает его после подтверждения выхода и штатной синхронизации,
+   * не дольше 15 секунд. null снимает регистрацию. Браузер возвращает false.
+   * Сохраняйте очередь до сетевых действий; выход и сбой процесса не гарантируют
+   * завершение. Прекратите новые действия при signal.aborted или deadlineAt.
+   */
+  onBeforeAppClose?(handler: PluginBeforeCloseHandler | null): Promise<boolean>;
+
   // cross-process communication
   onMessage?(handler: (message: unknown) => Promise<unknown> | unknown): void;
 
@@ -1055,6 +1064,16 @@ export interface BatchUpdateError {
   message: string;
 }
 
+/** Ограниченный срок фоновой работы при штатном выходе Electron. */
+export interface PluginBeforeCloseContext {
+  deadlineAt: number;
+  signal: AbortSignal;
+}
+
+export type PluginBeforeCloseHandler = (
+  context: PluginBeforeCloseContext,
+) => void | Promise<void>;
+
 /**
  * Enum for plugin iframe message types - used for communication between
  * plugin iframes and the host application
@@ -1082,4 +1101,7 @@ export enum PluginIframeMessageType {
 
   // Plugin lifecycle
   READY = 'plugin-ready',
+  BEFORE_CLOSE = 'PLUGIN_BEFORE_CLOSE',
+  BEFORE_CLOSE_RESULT = 'PLUGIN_BEFORE_CLOSE_RESULT',
+  BEFORE_CLOSE_ABORT = 'PLUGIN_BEFORE_CLOSE_ABORT',
 }

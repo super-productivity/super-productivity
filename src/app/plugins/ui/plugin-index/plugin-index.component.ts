@@ -32,6 +32,8 @@ import {
 import { TranslateService, TranslatePipe } from '@ngx-translate/core';
 import { T } from '../../../t.const';
 import { PluginLog } from '../../../core/log';
+import { ExecBeforeCloseService } from '../../../core/electron/exec-before-close.service';
+import { PluginBeforeCloseIframe } from '../../util/plugin-before-close-iframe';
 import { LayoutService } from '../../../core-ui/layout/layout.service';
 import { MatButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
@@ -91,6 +93,7 @@ export class PluginIndexComponent implements OnInit, OnDestroy {
   private readonly _cleanupService = inject(PluginCleanupService);
   private readonly _translateService = inject(TranslateService);
   private readonly _layoutService = inject(LayoutService);
+  private readonly _beforeCloseService = inject(ExecBeforeCloseService);
   private readonly _globalThemeService = inject(GlobalThemeService);
   private readonly _customThemeService = inject(CustomThemeService);
 
@@ -118,6 +121,7 @@ export class PluginIndexComponent implements OnInit, OnDestroy {
   private _messageListener?: EventListener;
   private _routeSubscription?: Subscription;
   private _isDestroyed = false;
+  private _beforeCloseIframe?: PluginBeforeCloseIframe;
 
   async ngOnInit(): Promise<void> {
     // If directPluginId is provided, load that plugin directly
@@ -287,6 +291,21 @@ export class PluginIndexComponent implements OnInit, OnDestroy {
       bridgeGeneration: this._pluginService.getPluginIframeGeneration(pluginId),
       boundMethods: this._pluginBridge.createBoundMethods(pluginId, plugin.manifest),
     };
+    this._beforeCloseIframe = new PluginBeforeCloseIframe({
+      bridgeToken: config.bridgeToken,
+      bridgeGeneration: config.bridgeGeneration,
+      isAlive: () =>
+        !this._isDestroyed &&
+        this._pluginService.getPluginIframeGeneration(pluginId) ===
+          config.bridgeGeneration,
+      register: (handler) =>
+        this._beforeCloseService.registerPluginFinalizer(
+          pluginId,
+          config.bridgeToken,
+          handler,
+        ),
+    });
+    config.beforeClose = this._beforeCloseIframe;
 
     // Build the iframe document (loaded via srcdoc, not a blob: URL)
     const iframeHtml = buildPluginIframeHtml(config);
@@ -351,6 +370,8 @@ export class PluginIndexComponent implements OnInit, OnDestroy {
   }
 
   private _cleanupIframeCommunication(): void {
+    this._beforeCloseIframe?.dispose();
+    this._beforeCloseIframe = undefined;
     const currentPluginId = this.pluginId();
     PluginLog.log(`Cleaning up iframe communication for plugin: ${currentPluginId}`);
 
