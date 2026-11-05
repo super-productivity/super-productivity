@@ -60,7 +60,7 @@ export const getIssueProviderTooltip = (issueProvider: IssueProvider): string =>
         // reads better than the raw URL (#9144).
         return issueProvider.resourceName || issueProvider.caldavUrl;
       case 'ICAL':
-        return sanitizeIcalUrlForDisplay(issueProvider.icalUrl);
+        return issueProvider.name || sanitizeIcalUrlForDisplay(issueProvider.icalUrl);
       case 'OPEN_PROJECT':
         return issueProvider.projectId;
       case 'PLAINSPACE':
@@ -117,6 +117,7 @@ export const getIssueProviderInitials = (
         ?.substring(0, 2)
         ?.toUpperCase();
     case 'ICAL':
+      if (issueProvider.name) return issueProvider.name.substring(0, 2).toUpperCase();
       if (issueProvider.icalUrl?.includes('google')) return 'G';
       if (issueProvider.icalUrl?.includes('office365')) return 'MS';
       // Route through the sanitizer so credentials embedded in user/path/query
