@@ -373,6 +373,11 @@ export class FocusModeEffects {
   // Bug #5954 fix: Only stop tracking if isPauseTrackingDuringBreak is enabled
   // Bug #5996 fix: Also stop tracking on automatic completion for modes without auto-break
   // Bug #5737 fix: Store pausedTaskId before unsetting to avoid race condition
+  // Bug #3191 / #7681: Defer for BOTH manual and automatic completion when a break
+  // will follow. Unsetting after startBreak lets syncTrackingStopToSession$ pause the
+  // just-started break (timer full, no countdown — same symptom as the old Pomodoro
+  // isManualPause carry-over). autoStartBreakOnSessionComplete$ / the Flowtime
+  // break-start effect unset in the same batch, before startBreak.
   stopTrackingOnSessionEnd$ = createEffect(() =>
     this.actions$.pipe(
       ofType(actions.completeFocusSession),
@@ -381,22 +386,16 @@ export class FocusModeEffects {
         this.store.select(selectors.selectMode),
         this.taskService.currentTaskId$,
       ),
-      filter(([action, config, mode, taskId]) => {
+      filter(([_action, config, mode, taskId]) => {
         if (!config?.isPauseTrackingDuringBreak) {
           return false;
         }
         if (!taskId) {
           return false;
         }
-        // For manual completion, always stop tracking
-        if (action.isManual) {
-          return true;
-        }
-        // Bug #6510 fix: For automatic completion, only stop tracking if no break will start.
-        // When a break will start, tracking pause is deferred to break-start (autoStartBreakOnSessionComplete$).
+        // When a break will start, tracking pause is deferred to break-start.
         const strategy = this.strategyFactory.getStrategy(mode);
-        const breakWillStart = strategy.shouldStartBreakAfterSession;
-        return !breakWillStart;
+        return !strategy.shouldStartBreakAfterSession;
       }),
       // Bug #5737 fix: Store pausedTaskId before unsetting current task
       // This ensures the task can be resumed after break even with manual "End Session"

@@ -221,12 +221,18 @@ describe('FocusMode Bug #5875: Pomodoro timer sync issues', () => {
   });
 
   describe('Bug 2: Manual End Session should stop time tracking', () => {
-    it('should dispatch unsetCurrentTask when session is manually ended and sync is enabled', (done) => {
-      // Setup: Session is running, sync is enabled, task is being tracked
-      // isPauseTrackingDuringBreak must be true for this effect to fire (Bug #5954 fix)
+    it('should dispatch unsetCurrentTask when Countdown session is manually ended and sync is enabled', (done) => {
+      // Countdown has no following break, so this effect owns the unset.
+      // Pomodoro defers to autoStartBreakOnSessionComplete$ (Bug #3191).
       store.overrideSelector(selectFocusModeConfig, {
         isSkipPreparation: false,
         isPauseTrackingDuringBreak: true,
+      });
+      store.overrideSelector(selectors.selectMode, FocusModeMode.Countdown);
+      strategyFactoryMock.getStrategy.and.returnValue({
+        shouldStartBreakAfterSession: false,
+        shouldAutoStartNextSession: false,
+        getBreakDuration: () => null,
       });
       currentTaskId$.next('task-123'); // Task is being tracked
       store.refreshState();
@@ -240,11 +246,16 @@ describe('FocusMode Bug #5875: Pomodoro timer sync issues', () => {
       });
     });
 
-    it('should dispatch setPausedTaskId before unsetCurrentTask (Bug #5737 race condition fix)', (done) => {
-      // Setup: Session is running, sync is enabled, task is being tracked
+    it('should dispatch setPausedTaskId before unsetCurrentTask on Countdown end (Bug #5737)', (done) => {
       store.overrideSelector(selectFocusModeConfig, {
         isSkipPreparation: false,
         isPauseTrackingDuringBreak: true,
+      });
+      store.overrideSelector(selectors.selectMode, FocusModeMode.Countdown);
+      strategyFactoryMock.getStrategy.and.returnValue({
+        shouldStartBreakAfterSession: false,
+        shouldAutoStartNextSession: false,
+        getBreakDuration: () => null,
       });
       currentTaskId$.next('task-123');
       store.refreshState();
@@ -264,6 +275,28 @@ describe('FocusMode Bug #5875: Pomodoro timer sync issues', () => {
           expect(actionsArr[1].type).toEqual(unsetCurrentTask.type);
           done();
         });
+    });
+
+    it('should NOT unset on manual Pomodoro complete when a break will start (Bug #3191)', (done) => {
+      store.overrideSelector(selectFocusModeConfig, {
+        isSkipPreparation: false,
+        isPauseTrackingDuringBreak: true,
+      });
+      store.overrideSelector(selectors.selectMode, FocusModeMode.Pomodoro);
+      strategyFactoryMock.getStrategy.and.returnValue({
+        shouldStartBreakAfterSession: true,
+        shouldAutoStartNextSession: true,
+        getBreakDuration: () => ({ duration: 5 * 60 * 1000, isLong: false }),
+      });
+      currentTaskId$.next('task-123');
+      store.refreshState();
+
+      actions$ = of(actions.completeFocusSession({ isManual: true }));
+
+      effects.stopTrackingOnSessionEnd$.pipe(toArray()).subscribe((actionsArr) => {
+        expect(actionsArr.length).toBe(0);
+        done();
+      });
     });
 
     it('should NOT dispatch unsetCurrentTask when session ends automatically in Pomodoro mode (break auto-starts)', (done) => {

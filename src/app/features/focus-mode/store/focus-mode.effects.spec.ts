@@ -597,17 +597,40 @@ describe('FocusModeEffects', () => {
     });
 
     describe('stopTrackingOnSessionEnd$', () => {
-      it('should dispatch setPausedTaskId and unsetCurrentTask when isManual=true AND isPauseTrackingDuringBreak=true AND currentTaskId exists (Bug #5737)', (done) => {
+      it('should NOT unset on manual Pomodoro complete when a break will start (Bug #3191 / #7681)', (done) => {
+        // Unsetting here races with autoStartBreakOnSessionComplete$ and lets
+        // syncTrackingStopToSession$ pause the just-started break. Break-start
+        // owns the unset (and pausedTaskId) instead.
         currentTaskId$.next('task-123');
         actions$ = of(actions.completeFocusSession({ isManual: true }));
         store.overrideSelector(selectFocusModeConfig, {
           isPauseTrackingDuringBreak: true,
           isSkipPreparation: false,
         });
+        store.overrideSelector(selectors.selectMode, FocusModeMode.Pomodoro);
         store.refreshState();
 
-        // Bug #5737 fix: Should dispatch both setPausedTaskId and unsetCurrentTask
-        // to preserve task for resumption after break
+        effects.stopTrackingOnSessionEnd$.pipe(toArray()).subscribe((actionsArr) => {
+          expect(actionsArr.length).toBe(0);
+          done();
+        });
+      });
+
+      it('should dispatch setPausedTaskId and unsetCurrentTask on manual Countdown complete (Bug #5737)', (done) => {
+        currentTaskId$.next('task-123');
+        actions$ = of(actions.completeFocusSession({ isManual: true }));
+        store.overrideSelector(selectFocusModeConfig, {
+          isPauseTrackingDuringBreak: true,
+          isSkipPreparation: false,
+        });
+        store.overrideSelector(selectors.selectMode, FocusModeMode.Countdown);
+        strategyFactoryMock.getStrategy.and.returnValue({
+          shouldStartBreakAfterSession: false,
+          shouldAutoStartNextSession: false,
+          getBreakDuration: () => null,
+        });
+        store.refreshState();
+
         effects.stopTrackingOnSessionEnd$.pipe(toArray()).subscribe((actionsArr) => {
           expect(actionsArr.length).toBe(2);
           expect(actionsArr[0]).toEqual(
@@ -2999,17 +3022,39 @@ describe('FocusModeEffects', () => {
     });
 
     describe('stopTrackingOnSessionEnd$ edge cases', () => {
-      it('should respect isPauseTrackingDuringBreak=true for manual session end and store pausedTaskId (Bug #5737)', (done) => {
+      it('should defer unset on manual Pomodoro complete when a break will start (Bug #3191)', (done) => {
         store.overrideSelector(selectFocusModeConfig, {
           isSkipPreparation: false,
           isPauseTrackingDuringBreak: true,
+        });
+        store.overrideSelector(selectors.selectMode, FocusModeMode.Pomodoro);
+        currentTaskId$.next('task-123');
+        store.refreshState();
+
+        actions$ = of(actions.completeFocusSession({ isManual: true }));
+
+        effects.stopTrackingOnSessionEnd$.pipe(toArray()).subscribe((actionsArr) => {
+          expect(actionsArr.length).toBe(0);
+          done();
+        });
+      });
+
+      it('should store pausedTaskId and unset on manual Countdown complete (Bug #5737)', (done) => {
+        store.overrideSelector(selectFocusModeConfig, {
+          isSkipPreparation: false,
+          isPauseTrackingDuringBreak: true,
+        });
+        store.overrideSelector(selectors.selectMode, FocusModeMode.Countdown);
+        strategyFactoryMock.getStrategy.and.returnValue({
+          shouldStartBreakAfterSession: false,
+          shouldAutoStartNextSession: false,
+          getBreakDuration: () => null,
         });
         currentTaskId$.next('task-123');
         store.refreshState();
 
         actions$ = of(actions.completeFocusSession({ isManual: true }));
 
-        // Bug #5737: Now dispatches both setPausedTaskId and unsetCurrentTask
         effects.stopTrackingOnSessionEnd$.pipe(toArray()).subscribe((actionsArr) => {
           expect(actionsArr.length).toBe(2);
           expect(actionsArr[0].type).toEqual('[FocusMode] Set Paused Task Id');
