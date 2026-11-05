@@ -370,7 +370,9 @@ test.describe('@supersync SuperSync Models', () => {
         throw new Error('Project id not found after creation');
       }
 
-      await clientA.page.goto(`/#/project/${projectId}`);
+      // `/project/:id` alone matches the componentless parent route and renders
+      // an empty outlet; the task list lives at `/project/:id/tasks`.
+      await clientA.page.goto(`/#/project/${projectId}/tasks`);
       await clientA.page.waitForLoadState('networkidle');
 
       // Add Note
@@ -405,7 +407,7 @@ test.describe('@supersync SuperSync Models', () => {
         }
       }
 
-      await clientB.page.goto(`/#/project/${projectId}`);
+      await clientB.page.goto(`/#/project/${projectId}/tasks`);
       await clientB.page.waitForLoadState('networkidle');
 
       // Verify Note
