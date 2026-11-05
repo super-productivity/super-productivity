@@ -23,7 +23,8 @@ import { distinctUntilChangedObject } from '../../../util/distinct-until-changed
 import { WorkContextAdvancedCfg } from '../../work-context/work-context.model';
 import { WORKLOG_EXPORT_DEFAULTS } from '../../work-context/work-context.const';
 import { WorkContextService } from '../../work-context/work-context.service';
-import { ProjectService } from '../../project/project.service';
+import { Store } from '@ngrx/store';
+import { selectAllProjects } from '../../project/store/project.selectors';
 import { TagService } from '../../tag/tag.service';
 import {
   createRows,
@@ -81,7 +82,7 @@ export class WorklogExportComponent implements OnInit, OnDestroy {
   private _worklogService = inject(WorklogService);
   private _workContextService = inject(WorkContextService);
   private _changeDetectorRef = inject(ChangeDetectorRef);
-  private _projectService = inject(ProjectService);
+  private _store = inject(Store);
   private _tagService = inject(TagService);
   private _timeTrackingService = inject(TimeTrackingService);
 
@@ -180,7 +181,8 @@ export class WorklogExportComponent implements OnInit, OnDestroy {
           true,
           this.projectId(),
         ),
-        this._projectService.list$,
+        // Historical worklogs also reference archived and completed projects.
+        this._store.select(selectAllProjects),
         this._tagService.tags$,
         this._workContextService.activeWorkContext$.pipe(
           switchMap((ac) =>
