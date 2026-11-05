@@ -46,6 +46,23 @@ describe('white-noise', () => {
     (window as any).AudioContext = originalAudioContext;
   });
 
+  // #11417: a running-but-silent context keeps the OS audio stream open.
+  it('keeps the context running while playing and suspends it after stop', async () => {
+    mockContext.suspend = jasmine.createSpy('suspend').and.returnValue(Promise.resolve());
+    jasmine.clock().install();
+    try {
+      await startWhiteNoise(40);
+      jasmine.clock().tick(60000);
+      expect(mockContext.suspend).not.toHaveBeenCalled();
+
+      stopWhiteNoise();
+      jasmine.clock().tick(5000);
+      expect(mockContext.suspend).toHaveBeenCalledTimes(1);
+    } finally {
+      jasmine.clock().uninstall();
+    }
+  });
+
   it('updates the gain of the running loop', async () => {
     await startWhiteNoise(40);
     expect(mockGainNode.gain.value).toBeCloseTo(0.4);

@@ -1,4 +1,8 @@
-import { ensureAudioContextRunning, getAudioBuffer } from './audio-context';
+import {
+  ensureAudioContextRunning,
+  getAudioBuffer,
+  holdAudioContext,
+} from './audio-context';
 import { Log } from '../core/log';
 
 const BASE = './assets/snd';
@@ -14,6 +18,7 @@ const MAX_ALARM_DURATION = 10 * 60 * 1000; // 10 minutes
 let activeSource: AudioBufferSourceNode | null = null;
 let activeGain: GainNode | null = null;
 let capTimeoutId: ReturnType<typeof setTimeout> | null = null;
+let releaseHold: (() => void) | null = null;
 // Monotonic generation counter. Every start() and non-stale stop() bumps it, so an
 // in-flight start() whose awaits resolve late can detect that a newer start()
 // or a stop() has superseded it and bail before creating a second source. This
@@ -39,6 +44,8 @@ const _teardownNodes = (): void => {
     activeGain.disconnect();
     activeGain = null;
   }
+  releaseHold?.();
+  releaseHold = null;
 };
 
 /**
@@ -72,8 +79,10 @@ export const startLoopingAlarm = async (
   _teardownNodes();
 
   try {
-    const ctx = await ensureAudioContextRunning();
+    // Fetch before resuming: a slow first fetch must not outlast the idle
+    // suspend that ensureAudioContextRunning() schedules.
     const buffer = await getAudioBuffer(`${BASE}/${filePath}`);
+    const ctx = await ensureAudioContextRunning();
     // A newer start() or a stop() may have superseded us while we awaited.
     if (myToken !== startToken) {
       return myToken;
@@ -91,6 +100,7 @@ export const startLoopingAlarm = async (
     source.start(0);
     activeSource = source;
     activeGain = gain;
+    releaseHold = holdAudioContext();
 
     capTimeoutId = setTimeout(() => stopLoopingAlarm(myToken), MAX_ALARM_DURATION);
   } catch (e) {

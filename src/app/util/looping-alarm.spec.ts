@@ -63,6 +63,23 @@ describe('looping-alarm', () => {
     (window as any).fetch = originalFetch;
   });
 
+  // #11417: a running-but-silent context keeps the OS audio stream open.
+  it('keeps the context running while playing and suspends it after stop', async () => {
+    mockContext.suspend = jasmine.createSpy('suspend').and.returnValue(Promise.resolve());
+    jasmine.clock().install();
+    try {
+      await startLoopingAlarm(SOUND, 50);
+      jasmine.clock().tick(60000);
+      expect(mockContext.suspend).not.toHaveBeenCalled();
+
+      stopLoopingAlarm();
+      jasmine.clock().tick(5000);
+      expect(mockContext.suspend).toHaveBeenCalledTimes(1);
+    } finally {
+      jasmine.clock().uninstall();
+    }
+  });
+
   it('starts a looping source at the given volume', async () => {
     await startLoopingAlarm(SOUND, 50);
 

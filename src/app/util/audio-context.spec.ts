@@ -8,6 +8,7 @@ import {
   playBuffer,
   suspendAudioContext,
   setAudioContextKeepAwake,
+  holdAudioContext,
 } from './audio-context';
 
 describe('audio-context', () => {
@@ -281,6 +282,91 @@ describe('audio-context', () => {
 
       expect(mockBufferSource.disconnect).toHaveBeenCalled();
       expect(mockGainNode.disconnect).toHaveBeenCalled();
+    });
+
+    // #11417: Firefox keeps the device stream open for a running-but-silent
+    // context, which blocks OS sleep on Windows.
+    describe('idle suspend (#11417)', () => {
+      beforeEach(() => {
+        mockContext.suspend = jasmine
+          .createSpy('suspend')
+          .and.returnValue(Promise.resolve());
+        jasmine.clock().install();
+      });
+
+      afterEach(() => {
+        jasmine.clock().uninstall();
+      });
+
+      it('should suspend the context once playback has ended', async () => {
+        await playBuffer(mockAudioBuffer);
+        mockBufferSource.onended!();
+
+        jasmine.clock().tick(5000);
+
+        expect(mockContext.suspend).toHaveBeenCalledTimes(1);
+      });
+
+      it('should not suspend while a sound is still playing', async () => {
+        await playBuffer(mockAudioBuffer);
+
+        jasmine.clock().tick(60000);
+
+        expect(mockContext.suspend).not.toHaveBeenCalled();
+      });
+
+      it('should not suspend immediately so back-to-back sounds do not thrash', async () => {
+        await playBuffer(mockAudioBuffer);
+        mockBufferSource.onended!();
+
+        jasmine.clock().tick(100);
+
+        expect(mockContext.suspend).not.toHaveBeenCalled();
+      });
+
+      it('should keep the context running while held and suspend after release', async () => {
+        await ensureAudioContextRunning();
+        const release = holdAudioContext();
+
+        jasmine.clock().tick(60000);
+        expect(mockContext.suspend).not.toHaveBeenCalled();
+
+        release();
+        jasmine.clock().tick(5000);
+        expect(mockContext.suspend).toHaveBeenCalledTimes(1);
+      });
+
+      it('should suspend after the first-click unlock when nothing plays', async () => {
+        mockContext.state = 'suspended';
+        unlockAudioContext();
+        document.dispatchEvent(new Event('click'));
+        await Promise.resolve();
+        await Promise.resolve();
+        mockContext.state = 'running';
+
+        jasmine.clock().tick(5000);
+
+        expect(mockContext.suspend).toHaveBeenCalledTimes(1);
+      });
+
+      it('should wait for an in-flight suspend before resuming for the next sound', async () => {
+        let finishSuspend!: () => void;
+        mockContext.suspend.and.returnValue(
+          new Promise<void>((resolve) => (finishSuspend = resolve)),
+        );
+        await playBuffer(mockAudioBuffer);
+        mockBufferSource.onended!();
+        jasmine.clock().tick(5000);
+
+        const next = playBuffer(mockAudioBuffer);
+        await Promise.resolve();
+        // the context only reports 'suspended' once suspend() settles
+        mockContext.state = 'suspended';
+        finishSuspend();
+        await next;
+
+        expect(mockContext.resume).toHaveBeenCalled();
+      });
     });
   });
 
