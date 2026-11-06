@@ -275,5 +275,18 @@
       "downloadUrl": "https://github.com/super-productivity/ridonculous/releases/download/stadium-mode-v0.4.0/ridonculous-stadium-mode-0.4.0.zip",
       "sha256": "bc0b07947d2be371471fc50ac2359683c54deff4ffc0d8deb737d96f0d7d69a8"
     }
+  },
+  {
+    "name": "DDL Board",
+    "shortDescription": "Month-calendar board for deadline todos tagged DDL, with in-cell create, click-to-edit and overdue highlighting.",
+    "url": "https://github.com/zhanghu-god/ddl-board",
+    "author": "zhanghu-god",
+    "authorUrl": "https://github.com/zhanghu-god",
+    "id": "ddl-board",
+    "release": {
+      "version": "1.7.1",
+      "downloadUrl": "https://github.com/zhanghu-god/ddl-board/releases/download/v1.7.1/ddl-board.zip",
+      "sha256": "58f0be3549fc5924630442d2df184ca698d0ffbec3f9435a942758184eafb973"
+    }
   }
 ]
