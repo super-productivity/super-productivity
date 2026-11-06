@@ -1,6 +1,7 @@
 import { expect, test } from '../../fixtures/test.fixture';
 import {
   gotoHashRoute,
+  gotoToday,
   openRecurDialog,
   saveRecurDialog,
   setRecurQuickSetting,
@@ -76,7 +77,7 @@ test.describe('Recurring Task - Move first occurrence of an after-completion rep
     await page.keyboard.press('Escape');
 
     // 5. An open copy must be in Today without waiting for a day change.
-    await gotoHashRoute(page, '/#/tag/TODAY/tasks', page.locator('task').first());
+    await gotoToday(page);
     await expect(taskPage.getUndoneTasks().filter({ hasText: taskTitle })).toHaveCount(
       1,
       { timeout: 15000 },
@@ -103,10 +104,9 @@ test.describe('Recurring Task - Move first occurrence of an after-completion rep
     await setRecurStartDate(page, LATER_DAY_DDMMYYYY);
     await saveRecurDialog(page);
     await page.keyboard.press('Escape');
-    // Reload: right after the hash change the project list is still shown, where
-    // the copy is visible whatever its day.
-    await page.goto('/#/tag/TODAY/tasks');
-    await page.reload();
+    // Wait for the Today title: right after the hash change the project list can
+    // still be shown, where the copy is visible whatever its day.
+    await gotoToday(page);
     await workViewPage.waitForTaskList();
     await expect(taskPage.getUndoneTasks().filter({ hasText: taskTitle })).toHaveCount(
       1,
