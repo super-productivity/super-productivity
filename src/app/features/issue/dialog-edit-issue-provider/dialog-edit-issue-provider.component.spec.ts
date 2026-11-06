@@ -6,7 +6,11 @@ import { Store } from '@ngrx/store';
 import { OAuthFlowConfig } from '@super-productivity/plugin-api';
 import { firstValueFrom, of, Subject } from 'rxjs';
 import { DialogEditIssueProviderComponent } from './dialog-edit-issue-provider.component';
-import { ICAL_TYPE } from '../issue.const';
+import { CALDAV_TYPE, ICAL_TYPE } from '../issue.const';
+import { CALDAV_CONFIG_FORM } from '../providers/caldav/caldav.const';
+import { CaldavClientService } from '../providers/caldav/caldav-client.service';
+import { CaldavCfg } from '../providers/caldav/caldav.model';
+import { FormlyFieldConfig } from '@ngx-formly/core';
 import { IssueProvider, IssueProviderKey } from '../issue.model';
 import { PluginIssueProviderRegistryService } from '../../../plugins/issue-provider/plugin-issue-provider-registry.service';
 import { RegisteredPluginIssueProvider } from '../../../plugins/issue-provider/plugin-issue-provider.model';
@@ -33,6 +37,13 @@ describe('DialogEditIssueProviderComponent', () => {
   let beforeClosed$: Subject<void>;
   let pluginBridge: jasmine.SpyObj<PluginBridgeService>;
   let store: jasmine.SpyObj<Store>;
+  let caldavClient: jasmine.SpyObj<CaldavClientService>;
+  const CALDAV_OPTIONS = [
+    { value: 'Inbox', label: 'Inbox' },
+    { value: 'Work', label: 'Work' },
+  ];
+  let listCaldavCalendars = (): Promise<{ value: string; label: string }[]> =>
+    Promise.resolve(CALDAV_OPTIONS);
   let cleanupPending: Promise<void> = Promise.resolve();
 
   const GOOGLE_PROVIDER_KEY = `plugin:${GOOGLE_CALENDAR_PLUGIN_ID}` as IssueProviderKey;
@@ -136,6 +147,10 @@ describe('DialogEditIssueProviderComponent', () => {
     beforeClosed$ = new Subject<void>();
     pluginBridge = bridge as jasmine.SpyObj<PluginBridgeService>;
     store = jasmine.createSpyObj<Store>('Store', ['dispatch', 'select', 'pipe']);
+    caldavClient = jasmine.createSpyObj<CaldavClientService>('CaldavClientService', [
+      'listTaskCalendarOptions',
+    ]);
+    caldavClient.listTaskCalendarOptions.and.callFake(() => listCaldavCalendars());
 
     const pluginRegistry = jasmine.createSpyObj<PluginIssueProviderRegistryService>(
       'PluginIssueProviderRegistryService',
@@ -212,6 +227,7 @@ describe('DialogEditIssueProviderComponent', () => {
         },
         { provide: TaskService, useValue: { allTasks$: of([]) } },
         { provide: TagService, useValue: { tagsNoMyDayAndNoList$: of([]) } },
+        { provide: CaldavClientService, useValue: caldavClient },
       ],
     })
       // Render nothing: we only exercise the component logic, not the
@@ -480,6 +496,119 @@ describe('DialogEditIssueProviderComponent', () => {
       beforeClosed$.next();
       await cleanupPending;
       expect(await loadOAuthTokens('other-provider__oauth')).toBe('connected-credential');
+    });
+  });
+
+  describe('CalDAV calendar dropdown', () => {
+    const resourceField = (): FormlyFieldConfig | undefined =>
+      (component.fields as FormlyFieldConfig[]).find(
+        (f) => (f.key as string) === 'resourceName',
+      );
+    const resourceOptions = (): unknown => resourceField()?.templateOptions?.options;
+    const caldavProvider = (resourceName: string | null): IssueProvider =>
+      ({
+        id: 'caldav-provider',
+        isEnabled: true,
+        issueProviderKey: CALDAV_TYPE,
+        caldavUrl: 'https://dav.example',
+        username: 'me',
+        password: 'pw',
+        resourceName,
+      }) as unknown as IssueProvider;
+
+    it('loads the calendars quietly when an existing provider opens and keeps the saved name', async () => {
+      await setup({ data: { issueProvider: caldavProvider('tasks-uri') } });
+
+      expect(caldavClient.listTaskCalendarOptions).toHaveBeenCalledOnceWith(
+        jasmine.objectContaining({ resourceName: 'tasks-uri' }),
+        true,
+      );
+      expect(component.showLoadOptionsButton).toBe(true);
+      expect(component.optionsLoadState()).toBe('loaded');
+      expect(resourceOptions()).toEqual([
+        { value: 'Inbox', label: 'Inbox' },
+        { value: 'Work', label: 'Work' },
+        { value: 'tasks-uri', label: 'tasks-uri' },
+      ]);
+    });
+
+    it('falls back to a text input with the saved name when loading fails', async () => {
+      listCaldavCalendars = () => Promise.reject(new Error('offline'));
+      try {
+        await setup({ data: { issueProvider: caldavProvider('Inbox') } });
+      } finally {
+        listCaldavCalendars = () => Promise.resolve(CALDAV_OPTIONS);
+      }
+
+      expect(component.optionsLoadState()).toBe('failed');
+      expect(resourceField()?.type).toBe('input');
+      expect(resourceField()?.templateOptions?.required).toBe(true);
+      expect((component.model as Partial<CaldavCfg>).resourceName).toBe('Inbox');
+    });
+
+    it('falls back to a text input when the server lists no calendars', async () => {
+      listCaldavCalendars = () => Promise.resolve([]);
+      try {
+        await setup({ data: { issueProvider: caldavProvider('tasks-uri') } });
+      } finally {
+        listCaldavCalendars = () => Promise.resolve(CALDAV_OPTIONS);
+      }
+
+      expect(component.optionsLoadState()).toBe('empty');
+      expect(resourceField()?.type).toBe('input');
+    });
+
+    it('returns to the dropdown when a reload finds calendars', async () => {
+      listCaldavCalendars = () => Promise.reject(new Error('offline'));
+      try {
+        await setup({ data: { issueProvider: caldavProvider('Inbox') } });
+      } finally {
+        listCaldavCalendars = () => Promise.resolve(CALDAV_OPTIONS);
+      }
+      expect(resourceField()?.type).toBe('input');
+
+      await component.loadDynamicOptions();
+
+      expect(resourceField()?.type).toBe('select');
+      expect(resourceOptions()).toEqual(CALDAV_OPTIONS);
+    });
+
+    it('does not add the saved name again when the server lists it', async () => {
+      listCaldavCalendars = () =>
+        Promise.resolve([
+          { value: 'personal', label: 'Personal (personal)' },
+          { value: 'shared', label: 'Personal (shared)' },
+        ]);
+      try {
+        await setup({ data: { issueProvider: caldavProvider('shared') } });
+      } finally {
+        listCaldavCalendars = () => Promise.resolve(CALDAV_OPTIONS);
+      }
+
+      expect(resourceOptions()).toEqual([
+        { value: 'personal', label: 'Personal (personal)' },
+        { value: 'shared', label: 'Personal (shared)' },
+      ]);
+    });
+
+    it('waits for "Load Options" on a new provider and leaves the shared form untouched', async () => {
+      await setup({ data: { issueProviderKey: CALDAV_TYPE } });
+      expect(caldavClient.listTaskCalendarOptions).not.toHaveBeenCalled();
+
+      await component.loadDynamicOptions();
+
+      expect(caldavClient.listTaskCalendarOptions).toHaveBeenCalledOnceWith(
+        jasmine.anything(),
+        false,
+      );
+      expect(resourceOptions()).toEqual([
+        { value: 'Inbox', label: 'Inbox' },
+        { value: 'Work', label: 'Work' },
+      ]);
+      expect(
+        CALDAV_CONFIG_FORM.find((f) => f.key === 'resourceName')?.templateOptions
+          ?.options,
+      ).toEqual([]);
     });
   });
 

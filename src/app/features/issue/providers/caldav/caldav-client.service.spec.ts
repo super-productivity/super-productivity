@@ -759,6 +759,135 @@ describe('CaldavClientService._getCalendar', () => {
   });
 });
 
+describe('CaldavClientService.listTaskCalendarOptions', () => {
+  let svc: TestableCaldavClientService;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: CaldavClientService, useClass: TestableCaldavClientService },
+        {
+          provide: SnackService,
+          useValue: jasmine.createSpyObj('SnackService', ['open']),
+        },
+      ],
+    });
+    svc = TestBed.inject(CaldavClientService) as TestableCaldavClientService;
+  });
+
+  afterEach(() => TestBed.resetTestingModule());
+
+  const withComponents = (
+    calendar: TestCalendarLike,
+    components: string[],
+  ): TestCalendarLike => ({ ...calendar, components }) as TestCalendarLike;
+
+  it('lists the task calendars of every home, by the name _getCalendar matches', async () => {
+    const firstHome = makeCalendarHome('/dav/calendars/', [
+      withComponents(makeCalendar('/dav/calendars/inbox/', 'Inbox'), ['VTODO']),
+      withComponents(makeCalendar('/dav/calendars/events/', 'Events'), ['VEVENT']),
+      makeCalendar('/dav/calendars/b123/'),
+    ]);
+    const secondHome = makeCalendarHome('/dav/projects/', [
+      makeCalendar('/dav/projects/', 'projects', false),
+      withComponents(makeCalendar('/dav/projects/12/', 'Work'), ['VEVENT', 'VTODO']),
+    ]);
+    spyOn(svc as unknown as TestGetClientTarget, '_get_client').and.resolveTo({
+      client: { calendarHomes: [firstHome, secondHome] },
+      calendars: new Map<string, TestCalendarLike>(),
+    });
+
+    const options = await svc.listTaskCalendarOptions({
+      ...MOCK_CFG,
+      resourceName: null,
+    });
+
+    expect(options).toEqual([
+      { value: 'Inbox', label: 'Inbox' },
+      { value: 'b123', label: 'b123' },
+      { value: 'Work', label: 'Work' },
+    ]);
+  });
+
+  it('selects calendars that share a name by their URL segment', async () => {
+    const home = makeCalendarHome('/dav/calendars/', [
+      makeCalendar('/dav/calendars/personal/', 'Personal'),
+      makeCalendar('/dav/calendars/personal_shared_by_bob/', 'Personal'),
+      makeCalendar('/dav/calendars/work/', 'Work'),
+    ]);
+    spyOn(svc as unknown as TestGetClientTarget, '_get_client').and.resolveTo({
+      client: { calendarHomes: [home] },
+      calendars: new Map<string, TestCalendarLike>(),
+    });
+
+    expect(await svc.listTaskCalendarOptions(MOCK_CFG)).toEqual([
+      { value: 'personal', label: 'Personal (personal)' },
+      { value: 'personal_shared_by_bob', label: 'Personal (personal_shared_by_bob)' },
+      { value: 'Work', label: 'Work' },
+    ]);
+  });
+
+  it('skips a failing home when another home answers', async () => {
+    const brokenHome = makeFailingCalendarHome('/dav/broken/', new Error('failure'));
+    const home = makeCalendarHome('/dav/calendars/', [
+      makeCalendar('/dav/calendars/inbox/', 'Inbox'),
+    ]);
+    spyOn(svc as unknown as TestGetClientTarget, '_get_client').and.resolveTo({
+      client: { calendarHomes: [brokenHome, home] },
+      calendars: new Map<string, TestCalendarLike>(),
+    });
+
+    expect(await svc.listTaskCalendarOptions(MOCK_CFG)).toEqual([
+      { value: 'Inbox', label: 'Inbox' },
+    ]);
+  });
+
+  it('surfaces a network error when all calendar homes fail', async () => {
+    spyOn(svc as unknown as TestGetClientTarget, '_get_client').and.resolveTo({
+      client: {
+        calendarHomes: [makeFailingCalendarHome('/dav/broken/', new Error('failure'))],
+      },
+      calendars: new Map<string, TestCalendarLike>(),
+    });
+
+    await expectAsync(svc.listTaskCalendarOptions(MOCK_CFG)).toBeRejectedWithError(
+      /CALDAV NETWORK ERROR/,
+    );
+  });
+
+  it('shows no snack for a quiet load that fails', async () => {
+    spyOn(svc as unknown as TestGetClientTarget, '_get_client').and.resolveTo({
+      client: {
+        calendarHomes: [makeFailingCalendarHome('/dav/broken/', new Error('failure'))],
+      },
+      calendars: new Map<string, TestCalendarLike>(),
+    });
+
+    await expectAsync(svc.listTaskCalendarOptions(MOCK_CFG, true)).toBeRejected();
+    expect(
+      (TestBed.inject(SnackService) as jasmine.SpyObj<SnackService>).open,
+    ).not.toHaveBeenCalled();
+  });
+
+  it('shows no snack for a quiet load without connection settings', async () => {
+    await expectAsync(
+      svc.listTaskCalendarOptions({ ...MOCK_CFG, password: null }, true),
+    ).toBeRejected();
+    expect(
+      (TestBed.inject(SnackService) as jasmine.SpyObj<SnackService>).open,
+    ).not.toHaveBeenCalled();
+  });
+
+  it('rejects with a snack when the connection settings are missing', async () => {
+    await expectAsync(
+      svc.listTaskCalendarOptions({ ...MOCK_CFG, password: null }),
+    ).toBeRejected();
+    expect(
+      (TestBed.inject(SnackService) as jasmine.SpyObj<SnackService>).open,
+    ).toHaveBeenCalled();
+  });
+});
+
 // ─── _get_client – real cdav-library connect() ────────────────────────────────
 
 // Regression test for servers (e.g. Rustical) that omit <principal-collection-set>
