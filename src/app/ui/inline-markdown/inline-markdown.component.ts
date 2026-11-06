@@ -349,6 +349,8 @@ export class InlineMarkdownComponent implements OnChanges, OnInit, OnDestroy {
   }
 
   keypressHandler(ev: KeyboardEvent): void {
+    // Leave a key that confirms or cancels an IME candidate to the IME.
+    if (ev.isComposing || ev.keyCode === 229) return;
     this.resizeTextareaToFit();
 
     if ((ev.key === 'Enter' && ev.ctrlKey) || ev.code === 'Escape') {
