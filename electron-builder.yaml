@@ -158,6 +158,12 @@ snapcraft:
     grade: stable
     confinement: strict
     autoStart: true
+    # Chromium's setuid/namespace sandbox fails under strict confinement
+    # (FATAL credentials.cc: Permission denied). The snap is the sandbox.
+    # electron-builder also adds this when allow-sandbox is not set; keep it
+    # explicit so a later plug change cannot turn the sandbox back on.
+    executableArgs:
+      - --no-sandbox
     # Leave forceX11 unset so core24 allows native Wayland. The afterPack
     # snap-wrapper.sh still injects --ozone-platform=x11 for our Snap on
     # Wayland until field verification retires that guard (research doc
@@ -185,12 +191,10 @@ snapcraft:
     #
     # Setting `plugs` at all disables electron-builder's browser-support
     # auto-inject. Without that interface Chromium cannot create files in
-    # /dev/shm and aborts (Permission denied, then SIGTRAP). allow-sandbox
-    # keeps Chromium's sandbox; otherwise electron-builder passes --no-sandbox.
+    # /dev/shm and aborts. Do not set allow-sandbox: the namespace sandbox
+    # still dies in credentials.cc, and --no-sandbox above is what runs.
     plugs:
-      - browser-support:
-          interface: browser-support
-          allow-sandbox: true
+      - browser-support
       - password-manager-service
       - system-observe
       - login-session-observe
