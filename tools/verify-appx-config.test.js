@@ -56,6 +56,9 @@ test('Store workflow builds from the in-repo appx config', () => {
     join(ROOT, '.github', 'workflows', 'build-create-windows-store-on-release.yml'),
     'utf8',
   );
-  assert.match(workflow, new RegExp(`--config ${APPX_CONFIG.replace(/\./g, '\\.')}`));
+  assert.ok(
+    workflow.includes(`--config ${APPX_CONFIG}`),
+    `Store workflow must pass --config ${APPX_CONFIG}`,
+  );
   assert.doesNotMatch(workflow, /WIN_STORE_ELECTRON_BUILDER_YML/);
 });
