@@ -1,4 +1,7 @@
 import { TestBed } from '@angular/core/testing';
+import { Store } from '@ngrx/store';
+import { TaskSharedActions } from '../../../../root-store/meta/task-shared.actions';
+import { getDeferredActions } from '../../../capture/operation-capture.meta-reducer';
 import { PluginUserDataState } from '../../../../plugins/plugin-persistence.model';
 import { TaskState } from '../../../../features/tasks/task.model';
 import { TaskHistoryEnvelope } from '../../../../features/tasks/task-history/task-history.model';
@@ -53,9 +56,10 @@ describe('Task history during superseded-operation recovery', () => {
       // when downloaded clocks leave server-rejected local edits pending.
       // Capture, IndexedDB writes, replacement, retirement and hydration are
       // real; neither the recorder nor the resolver is mocked here.
-      await TestBed.inject(SupersededOperationResolverService).resolveSupersededLocalOps(
-        originals.map((op) => ({ opId: op.id, op })),
-      );
+      const replacementCount = await TestBed.inject(
+        SupersededOperationResolverService,
+      ).resolveSupersededLocalOps(originals.map((op) => ({ opId: op.id, op })));
+      expect(replacementCount).toBe(1);
       for (const op of originals) {
         expect((await db.getOpById(op.id))?.rejectedAt).toBeDefined();
       }
@@ -80,6 +84,61 @@ describe('Task history during superseded-operation recovery', () => {
     expect((await taskState(fresh)).taskHistory!.t2).toEqual(expected);
     expect(await harness.pendingOpCount(author)).toBe(0);
     expect(await harness.pendingOpCount(fresh)).toBe(0);
+    expect(harness.events).toEqual([]);
+  }, 60_000);
+
+  it('persists a user edit arriving during delivery replay before recovery returns', async () => {
+    const harness = await SyncFuzzHarness.create();
+    const author = await harness.addDevice('A');
+    await harness.as(author, async () => {
+      for (const intent of SETUP_INTENTS) await executeIntent(harness, intent);
+    });
+    expect(await harness.sync(author)).toBeTrue();
+    await harness.as(author, () => executeIntent(harness, ['doneTask', 't2', true]));
+
+    await harness.as(author, async () => {
+      const db = TestBed.inject(OperationLogStoreService);
+      const originals = (await db.getUnsynced()).map(({ op }) => op);
+      const store = TestBed.inject(Store<{ pluginUserData: PluginUserDataState }>);
+      const edit = TaskSharedActions.setDeadline({
+        taskId: 't2',
+        deadlineDay: '2026-11-20',
+      });
+      let editScheduled = false;
+      let editWasDeferred = false;
+      const subscription = store.subscribe((state) => {
+        if (editScheduled || !state.pluginUserData.length) return;
+        editScheduled = true;
+        // Delivery dispatch schedules this before replayOperationBatch's own
+        // event-loop yield. The real apply window must buffer this user edit.
+        setTimeout(() => {
+          store.dispatch(edit);
+          editWasDeferred = getDeferredActions().includes(edit);
+        }, 0);
+      });
+      try {
+        await TestBed.inject(
+          SupersededOperationResolverService,
+        ).resolveSupersededLocalOps(originals.map((op) => ({ opId: op.id, op })));
+        expect(editWasDeferred).toBeTrue();
+        // Assert inside the device turn: harness.as() drains leftovers later,
+        // which would otherwise hide the missing production drain.
+        expect(getDeferredActions()).toEqual([]);
+        const persistedEdit = (await db.getUnsynced()).find(
+          ({ op }) => op.actionType === edit.type,
+        );
+        expect(persistedEdit).toBeDefined();
+        if (!persistedEdit) return;
+        const envelope = extractActionPayload(persistedEdit.op.payload)[
+          'taskHistory'
+        ] as TaskHistoryEnvelope;
+        expect(envelope.events.map((event) => [event.field, event.after])).toEqual([
+          ['deadline', { kind: 'day', value: '2026-11-20' }],
+        ]);
+      } finally {
+        subscription.unsubscribe();
+      }
+    });
     expect(harness.events).toEqual([]);
   }, 60_000);
 });

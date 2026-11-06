@@ -6,6 +6,7 @@ import {
 import { inject, Injectable, Injector } from '@angular/core';
 import { OperationApplierService } from '../apply/operation-applier.service';
 import { TaskHistoryDeliveryService } from './task-history-delivery.service';
+import { processDeferredActionsAfterRemoteApply } from './process-deferred-actions-flush.util';
 import { OperationLogStoreService } from '../persistence/operation-log-store.service';
 import {
   ActionType,
@@ -975,14 +976,20 @@ export class SupersededOperationResolverService {
           .map(({ op }) => op)
           .filter((op) => deliveryIds.has(op.id));
         if (deliveriesToApply.length) {
-          const applied = await this._injector
-            .get(OperationApplierService)
-            .applyOperations(deliveriesToApply, {
-              isLocalHydration: true,
-              skipDeferredLocalActions: true,
-            });
-          if (applied.failedOp || applied.reducerFailures?.length) {
-            throw new Error('Failed to apply durable task history deliveries');
+          try {
+            const applied = await this._injector
+              .get(OperationApplierService)
+              .applyOperations(deliveriesToApply, {
+                isLocalHydration: true,
+                skipDeferredLocalActions: true,
+              });
+            if (applied.failedOp || applied.reducerFailures?.length) {
+              throw new Error('Failed to apply durable task history deliveries');
+            }
+          } finally {
+            // Replay yields with local capture deferred. Persist those edits
+            // under our existing lock, even if no further upload will run.
+            await processDeferredActionsAfterRemoteApply(this._injector, true);
           }
         }
         for (const { op } of written) {
