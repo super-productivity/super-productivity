@@ -29,23 +29,14 @@
                 T.F.SYNC.D_DEVICES.LAST_SEEN
                   | translate
                     : {
-                        date: dateTimeFormatService.isoTextLocale()
-                          ? (device.lastSeenAt
-                              | localeDate
-                                : 'mediumDate'
-                                : undefined
-                                : dateTimeFormatService.textLocale()) +
-                            ' ' +
-                            (device.lastSeenAt
-                              | localeDate
-                                : 'mediumTime'
-                                : undefined
-                                : dateTimeFormatService.currentLocale())
-                          : (device.lastSeenAt
-                            | localeDate
-                              : 'medium'
-                              : undefined
-                              : dateTimeFormatService.currentLocale()),
+                        date:
+                          device.lastSeenAt
+                          | localeDate
+                            : (dateTimeFormatService.isoTextLocale()
+                                ? 'd MMM y HH:mm:ss'
+                                : 'medium')
+                            : undefined
+                            : dateTimeFormatService.textLocale(),
                       }
               }}
             </div>
