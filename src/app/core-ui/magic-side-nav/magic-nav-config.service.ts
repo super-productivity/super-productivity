@@ -40,6 +40,7 @@ import { AppFeaturesConfig } from '../../features/config/global-config.model';
 import { SnackService } from '../../core/snack/snack.service';
 import { IS_DONATION_UI_RESTRICTED } from '../../app.constants';
 import { DIALOG_AUTO_FOCUS_TYPING } from '../../util/dialog-auto-focus';
+import { openBuildPluginDialog } from '../../plugins/ui/dialog-build-plugin/open-build-plugin-dialog';
 
 @Injectable({
   providedIn: 'root',
@@ -315,6 +316,13 @@ export class MagicNavConfigService {
             label: T.MH.HM.REDDIT_COMMUNITY,
             icon: 'forum',
             href: 'https://www.reddit.com/r/superProductivity/',
+          },
+          {
+            type: 'action',
+            id: 'help-build-plugin',
+            label: T.MH.HM.BUILD_PLUGIN,
+            icon: 'extension',
+            action: () => openBuildPluginDialog(this._matDialog),
           },
           {
             type: 'action',

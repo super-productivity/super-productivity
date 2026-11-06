@@ -146,7 +146,7 @@
   width: 4px;
   cursor: col-resize;
   z-index: var(--z-right-panel-resize-handle);
-  transition: background-color 0.2s ease;
+  transition: background-color var(--transition-duration-m) ease;
   background: transparent;
 
   &:focus,

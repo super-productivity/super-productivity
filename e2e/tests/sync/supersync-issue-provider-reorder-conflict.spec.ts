@@ -232,7 +232,10 @@ const provider = (id: string, index: number, providerKey: ProviderKey): IssuePro
         availableTransitions: [],
         userToAssignOnDone: null,
       }
-    : {
+    : // GitLab as the current client holds it after the load-time migration: legacy
+      // top-level fields kept for released clients, plus pluginId/pluginConfig. Seeding
+      // the legacy shape alone would make every reload migrate it and change state.
+      ({
         ...common,
         issueProviderKey: 'GITLAB',
         project: `synthetic/provider-${index}`,
@@ -242,7 +245,17 @@ const provider = (id: string, index: number, providerKey: ProviderKey): IssuePro
         scope: 'all',
         filter: 'state=opened',
         isEnableTimeTracking: false,
-      };
+        pluginId: 'gitlab-issue-provider',
+        pluginConfig: {
+          project: `synthetic/provider-${index}`,
+          token: 'synthetic-only-not-a-credential',
+          gitlabBaseUrl: 'https://issues.example.invalid/',
+          scope: 'all',
+          filterUsername: 'synthetic-user',
+          filter: 'state=opened',
+          isSubmitWorklogOnFinishDay: false,
+        },
+      } as unknown as IssueProvider);
 };
 const mockProviderRequests = async (page: Page): Promise<void> => {
   await page.route('https://*.example.invalid/**', (route) =>
@@ -297,7 +310,6 @@ interface Scenario {
   remoteNewer: boolean;
   interrupted?: boolean;
   compact?: boolean;
-  providerKey?: ProviderKey;
   pinnedSearch?: boolean;
 }
 const scenarios: Scenario[] = [
@@ -308,15 +320,11 @@ const scenarios: Scenario[] = [
   { pendingOrder: true, remoteNewer: true, interrupted: true },
   { pendingOrder: false, remoteNewer: true, interrupted: true },
   { pendingOrder: true, remoteNewer: true, interrupted: true, compact: true },
-  { pendingOrder: true, remoteNewer: true, providerKey: 'JIRA' },
-  { pendingOrder: false, remoteNewer: true, providerKey: 'JIRA' },
-  { pendingOrder: true, remoteNewer: false, providerKey: 'JIRA' },
-  { pendingOrder: false, remoteNewer: false, providerKey: 'JIRA' },
   { pendingOrder: true, remoteNewer: true, pinnedSearch: true },
   { pendingOrder: false, remoteNewer: false, pinnedSearch: true },
 ];
 for (const scenario of scenarios) {
-  test(`@supersync provider ${scenario.pendingOrder ? 'local-order' : 'local-edit'} / ${scenario.remoteNewer ? 'remote-newer' : 'local-newer'}${scenario.providerKey ? ' / ' + scenario.providerKey : ''}${scenario.pinnedSearch ? ' / pinned search' : ''}${scenario.compact ? ' / compacted missing proof' : scenario.interrupted ? ' / interrupted upload retry' : ''}`, async ({
+  test(`@supersync provider ${scenario.pendingOrder ? 'local-order' : 'local-edit'} / ${scenario.remoteNewer ? 'remote-newer' : 'local-newer'}${scenario.pinnedSearch ? ' / pinned search' : ''}${scenario.compact ? ' / compacted missing proof' : scenario.interrupted ? ' / interrupted upload retry' : ''}`, async ({
     browser,
     baseURL,
     testRunId,
@@ -350,7 +358,9 @@ for (const scenario of scenarios) {
       const ids = ['provider-a', 'provider-b', 'provider-witness'].map(
         (id) => `${id}-${testRunId}`,
       );
-      await seedProviders(a.page, ids, scenario.providerKey);
+      // The edited/pinned provider (index 0) must be built-in: GitLab is a bundled
+      // plugin now, and the E2E build (plugin-dev build-all.js) does not ship it.
+      await seedProviders(a.page, ids, 'JIRA');
       await a.workView.addTask('baseline witness');
       if (scenario.compact) await a.workView.addTask('Compaction activity');
       await sync(a);

@@ -39,7 +39,8 @@ import { LanguageService } from './core/language/language.service';
 import { WorkContextService } from './features/work-context/work-context.service';
 import { SyncTriggerService } from './imex/sync/sync-trigger.service';
 import { ActivatedRoute, RouterOutlet } from '@angular/router';
-import { first, take } from 'rxjs/operators';
+import { first, map, take } from 'rxjs/operators';
+import { BreakpointObserver } from '@angular/cdk/layout';
 
 import { recordSearchNavDebug } from './util/search-nav-debug';
 import { warpAnimation, warpInAnimation } from './ui/animations/warp.ani';
@@ -220,10 +221,21 @@ export class AppComponent implements OnDestroy, AfterViewInit {
     return this._isDisableAnimations();
   }
 
-  private _isDisableAnimations = computed(() => {
-    const misc = this._globalConfigService.misc();
-    return misc?.isDisableAnimations ?? false;
-  });
+  // The OS setting turns off motion like the in-app setting does. Material
+  // components follow it on their own; the rest of the Angular animations
+  // (route changes, expand, slide-ins) only stop through this binding.
+  private _isReducedMotion = toSignal(
+    inject(BreakpointObserver)
+      .observe('(prefers-reduced-motion: reduce)')
+      .pipe(map((state) => state.matches)),
+    { requireSync: true },
+  );
+
+  private _isDisableAnimations = computed(
+    () =>
+      this._isReducedMotion() ||
+      (this._globalConfigService.misc()?.isDisableAnimations ?? false),
+  );
 
   // Experimental: vertical action strip on the right edge instead of the
   // horizontal top header. Switches the DOM layout live (see template).
