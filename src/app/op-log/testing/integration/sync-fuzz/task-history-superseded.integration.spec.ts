@@ -55,8 +55,8 @@ describe('Task history during superseded-operation recovery', () => {
     });
     expect((await taskState(author)).taskHistory!.t2).toEqual(expected);
 
-    // Retired originals are omitted on hydration. Delivery must preserve the
-    // exact IDs, before/after values and original timestamps, not make new facts.
+    // Local hydration can still replay rejected originals, but fresh clients
+    // cannot download them. Delivery must preserve their exact author facts.
     await harness.restart(author);
     expect((await taskState(author)).taskHistory!.t2).toEqual(expected);
     expect(await harness.sync(author)).toBeTrue();
