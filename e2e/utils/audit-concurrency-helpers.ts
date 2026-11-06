@@ -293,8 +293,9 @@ export const syncWithHeldUpload = async <T>(
  * Move a task in the list with Ctrl+Shift+Arrow. A centre click enters title
  * editing, where the shortcut never fires, so the task host is focused instead
  * (pattern: webdav-sync-today-tag.spec.ts). Each press waits for the move to
- * land: TaskService.moveUp/moveDown read the order asynchronously, so a press
- * sent before the previous move is applied can compute the same move and be lost.
+ * land: back-to-back presses dropped one in CI (run 42253979119), likely while
+ * the moved task is re-rendered and refocused. `times` must be achievable — a
+ * move past the list edge times out.
  */
 export const moveTaskWithKeyboard = async (
   task: Locator,
