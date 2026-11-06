@@ -73,6 +73,17 @@ E2E_BASE_URL=http://localhost:4242 npm run e2e:file -- e2e/tests/task-basic/task
 when source files change. Add `--grep "test name"` to run only the scenario you
 are working on. Provider tests still need their provider-specific commands.
 
+### Production PWA tests
+
+The update and worker-migration tests use [controlled-reload.ts](pwa/controlled-reload.ts)
+to start a controlled document. Legacy-worker setup uses the `ngsw-bypass` header
+for scripts as well as the navigation, so a broken cached script stream cannot
+prevent the initial update check from running. Current-worker setup keeps cached
+asset loading. The helper waits for the worker's completion message, clears any
+bypass header and fetches the cached manifest to assign the document's version
+before the update, data-preservation and offline-reload checks. The controlled-reload
+regression injects broken cached script streams and verifies both bypass and cleanup.
+
 ### WebDAV Sync Tests
 
 ```bash
