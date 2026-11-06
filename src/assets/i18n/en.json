@@ -1021,7 +1021,6 @@
       },
       "FORM_BASIC": {
         "L_ENABLE_BACKLOG": "Enable Project Backlog",
-        "L_IS_HIDDEN_FROM_MENU": "Hide project from sidebar",
         "L_TITLE": "Project Name",
         "TITLE": "Basic Settings"
       },
@@ -1084,7 +1083,7 @@
         "PLACEHOLDER": "Select folder"
       },
       "TOOLTIP_CREATE": "Create project folder",
-      "TOOLTIP_VISIBILITY": "Show/hide projects",
+      "TOOLTIP_VISIBILITY": "Show/hide in sidebar",
       "ADD_SUBFOLDER": "Add subfolder",
       "ADD_PROJECT": "Add project"
     },
