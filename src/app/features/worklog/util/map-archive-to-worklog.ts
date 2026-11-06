@@ -20,18 +20,17 @@ const _getTimeSpentOnDay = (
   entities: Dictionary<Task>,
   task: Task,
 ): { [key: string]: number } => {
+  // Tag-specific worklogs can include a subtask without its differently tagged parent.
+  const parent = task.parentId ? entities[task.parentId] : undefined;
   const isTimeSpentTracked =
     task.timeSpentOnDay && !!Object.keys(task.timeSpentOnDay).length;
   if (isTimeSpentTracked) {
     return task.timeSpentOnDay;
-  } else if (task.parentId) {
-    const parentSpentOnDay = task.parentId && entities[task.parentId]!.timeSpentOnDay;
+  } else if (parent) {
+    const parentSpentOnDay = parent.timeSpentOnDay;
     const parentLogEntryDate =
       parentSpentOnDay &&
-      (Object.keys(parentSpentOnDay)[0] ||
-        getDbDateStr(
-          entities[task.parentId]!.doneOn || entities[task.parentId]!.created,
-        ));
+      (Object.keys(parentSpentOnDay)[0] || getDbDateStr(parent.doneOn || parent.created));
     return { [parentLogEntryDate]: 1 };
   } else {
     return { [getDbDateStr(task.doneOn || task.created)]: 1 };

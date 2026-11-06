@@ -1,5 +1,18 @@
 [
   {
+    "name": "Task Colors",
+    "shortDescription": "Choose colors for tasks and subtasks, or apply them automatically by priority. Includes a configurable palette, bulk application and recovery; requires Super Productivity 19.3.1.",
+    "url": "https://github.com/Zombiehamser/sp-task-color-plugin",
+    "author": "Zombiehamser",
+    "authorUrl": "https://github.com/Zombiehamser",
+    "id": "sp-task-color-plugin",
+    "release": {
+      "version": "0.3.0",
+      "downloadUrl": "https://github.com/Zombiehamser/sp-task-color-plugin/releases/download/v0.3.0/sp-task-color-plugin-0.3.0.zip",
+      "sha256": "1e031b01fbe318d5d72345d7ee8e0f494eb8bb76f64aef1337a96c9cdcb7ed0b"
+    }
+  },
+  {
     "name": "Markdown Notes",
     "shortDescription": "Read-only viewer for Markdown and Obsidian notes from a local folder, grouped by directory and rendered in a side panel.",
     "url": "https://github.com/Zoriot/sp-markdown-notes",
@@ -232,9 +245,48 @@
     "authorUrl": "https://github.com/AshrafByte",
     "id": "sp-timesheet",
     "release": {
-      "version": "2.0.1",
-      "downloadUrl": "https://github.com/AshrafByte/sp-timesheet/releases/download/v2.0.1/sp-timesheet-v2.0.1.zip",
-      "sha256": "627d56200730436d0cc70586422ad30512d49da80c041e4e6eb1cf405f4471d0"
+      "version": "2.2.0",
+      "downloadUrl": "https://github.com/AshrafByte/sp-timesheet/releases/download/v2.2.0/sp-timesheet-v2.2.0.zip",
+      "sha256": "6322b69ae3b08bb31d75b1dd630cb96be0076fec677a8810da92d46ac2129306"
+    }
+  },
+  {
+    "name": "Daily Quest",
+    "shortDescription": "Experimental: an adventure map from a buff to your boss task to a recovery break, with the boss's subtasks as steps along the trail.",
+    "url": "https://github.com/super-productivity/ridonculous/tree/main/plugins/daily-quest",
+    "author": "super-productivity",
+    "authorUrl": "https://github.com/super-productivity",
+    "id": "ridonculous-daily-quest",
+    "release": {
+      "version": "0.3.0",
+      "downloadUrl": "https://github.com/super-productivity/ridonculous/releases/download/daily-quest-v0.3.0/ridonculous-daily-quest-0.3.0.zip",
+      "sha256": "22c91f677dd93faed17a7fb78af682da3d13f3c0d8cea293d9cbd9c7c991c9c4"
+    }
+  },
+  {
+    "name": "Stadium Mode",
+    "shortDescription": "Experimental: a roaring crowd and a stadium announcer for every task you start, finish, postpone or delete. An optional neural voice downloads about 110 MB after you confirm.",
+    "url": "https://github.com/super-productivity/ridonculous/tree/main/plugins/stadium-mode",
+    "author": "super-productivity",
+    "authorUrl": "https://github.com/super-productivity",
+    "id": "ridonculous-stadium-mode",
+    "release": {
+      "version": "0.4.0",
+      "downloadUrl": "https://github.com/super-productivity/ridonculous/releases/download/stadium-mode-v0.4.0/ridonculous-stadium-mode-0.4.0.zip",
+      "sha256": "bc0b07947d2be371471fc50ac2359683c54deff4ffc0d8deb737d96f0d7d69a8"
+    }
+  },
+  {
+    "name": "Deadlines",
+    "shortDescription": "List, Calendar, and Timeline views for deadlines and fixed dates in Super Productivity.",
+    "url": "https://github.com/Jontata/deadlines-plugin",
+    "author": "Jontata",
+    "authorUrl": "https://github.com/Jontata",
+    "id": "deadlines-view",
+    "release": {
+      "version": "0.0.1",
+      "downloadUrl": "https://github.com/Jontata/deadlines-plugin/releases/download/v0.0.1/deadlines-plugin-0.0.1.zip",
+      "sha256": "e7b147b25dbda9b232fff0bdb51b773a11a528d647e93bc34e2bf5e02d2ec6b7"
     }
   }
 ]

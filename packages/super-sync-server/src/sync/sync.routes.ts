@@ -1,5 +1,5 @@
 import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { SuperSyncDownloadOpsQuerySchema } from '@sp/shared-schema';
+import { SuperSyncDownloadOpsQuerySchema } from '@sp/shared-schema/supersync-http-contract';
 import { authenticate, getAuthUser } from '../middleware';
 import { getSyncService } from './sync.service';
 import { parseAppVersion } from './checkpoint-gate';

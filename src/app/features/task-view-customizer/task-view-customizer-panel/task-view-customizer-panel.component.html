@@ -47,6 +47,17 @@
 
   <mat-divider></mat-divider>
 
+  <!-- Only when there is something to save; also while Views are off: saving one turns them on -->
+  @if (customizerService.isCustomized()) {
+    <button
+      mat-menu-item
+      (click)="saveAsView()"
+    >
+      <mat-icon>bookmark_add</mat-icon>
+      <span>{{ T.F.BOARDS.V.SAVE_AS_VIEW | translate }}</span>
+    </button>
+  }
+
   <!-- Reset All -->
   <button
     mat-menu-item

@@ -8,6 +8,7 @@ import {
   createProjectReliably,
   type SimulatedE2EClient,
 } from '../../utils/supersync-helpers';
+import { getLiveIds, getTaskIdByTitle } from '../../utils/audit-archive-helpers';
 
 /**
  * SuperSync Cross-Entity Cascade Delete E2E Tests
@@ -133,6 +134,14 @@ test.describe('@supersync Cross-Entity Cascade Delete', () => {
       await navigateToProject(clientB.page, projectName);
       await waitForTask(clientB.page, taskA1);
       await waitForTask(clientB.page, taskA2);
+      // Positive anchor in the store: B's live state holds both tasks (same ids
+      // as on A) before the deletion. The absence checks below read the same
+      // store, so they cannot pass on a store that never had the tasks.
+      const cascadeTaskIds = [
+        await getTaskIdByTitle(clientA, taskA1),
+        await getTaskIdByTitle(clientA, taskA2),
+      ];
+      expect(await getLiveIds(clientB, cascadeTaskIds)).toEqual(cascadeTaskIds);
       console.log('[CascadeDelete] Client B has project and tasks');
 
       // Navigate Client B to Today before deletion sync to avoid stale view
@@ -181,6 +190,15 @@ test.describe('@supersync Cross-Entity Cascade Delete', () => {
       await expect(taskA1OnB).not.toBeVisible({ timeout: 10000 });
       await expect(taskA2OnB).not.toBeVisible({ timeout: 10000 });
       console.log('[CascadeDelete] Tasks gone from Client B');
+
+      // The work view only shows TODAY: a task the cascade failed to remove can
+      // stay in the store, still in a (now missing) project. Check the store.
+      for (const client of [clientA, clientB]) {
+        await expect
+          .poll(() => getLiveIds(client, cascadeTaskIds), { timeout: 15000 })
+          .toEqual([]);
+      }
+      console.log('[CascadeDelete] Tasks gone from both stores');
 
       console.log('[CascadeDelete] Cascade delete test PASSED!');
     } finally {

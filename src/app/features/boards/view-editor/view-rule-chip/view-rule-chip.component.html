@@ -1,0 +1,188 @@
+<!-- Menu styles: src/styles/components/_view-editor-menus.scss (overlay). -->
+<span
+  class="chip"
+  [class.chip--warn]="!!part().missingCount"
+>
+  @if (kind() === 'flag') {
+    <span class="chip-main">
+      <view-rule-value [part]="part()"></view-rule-value>
+    </span>
+  } @else {
+    <button
+      class="chip-main focus-ring"
+      type="button"
+      [matMenuTriggerFor]="menu"
+      (menuOpened)="onMenuOpened()"
+    >
+      <view-rule-value
+        [part]="part()"
+        [items]="items()"
+      ></view-rule-value>
+    </button>
+  }
+  <button
+    class="chip-remove focus-ring"
+    type="button"
+    [attr.aria-label]="
+      (T.F.BOARDS.EDITOR.REMOVE_RULE | translate) + ': ' + (part().label | translate)
+    "
+    (click)="remove.emit()"
+  >
+    <mat-icon aria-hidden="true">close</mat-icon>
+  </button>
+</span>
+
+<mat-menu
+  #menu="matMenu"
+  class="view-editor-menu"
+>
+  <ng-template matMenuContent>
+    @switch (kind()) {
+      @case ('select') {
+        @if (value() === OTHER_VALUE) {
+          <button
+            mat-menu-item
+            role="menuitemradio"
+            aria-checked="true"
+          >
+            <mat-icon>radio_button_checked</mat-icon>
+            {{ T.F.BOARDS.EDITOR.OTHER_KEPT | translate }}
+          </button>
+        }
+        @for (option of options(); track option.value) {
+          <button
+            mat-menu-item
+            role="menuitemradio"
+            [attr.aria-checked]="option.value === value()"
+            (click)="setValue(option.value)"
+          >
+            <mat-icon>{{
+              option.value === value() ? 'radio_button_checked' : 'radio_button_unchecked'
+            }}</mat-icon>
+            {{ option.label | translate }}
+          </button>
+        }
+      }
+      @case ('tags') {
+        <ng-container
+          *ngTemplateOutlet="
+            filterField;
+            context: { placeholder: T.F.BOARDS.EDITOR.FILTER_TAGS }
+          "
+        ></ng-container>
+        <!-- Toggling keeps the menu open (its click doesn't reach the menu). -->
+        @for (row of tagRows(); track row.tag.id) {
+          <button
+            mat-menu-item
+            role="menuitemcheckbox"
+            [attr.aria-checked]="row.isSelected"
+            [disabled]="row.isDisabled"
+            (click)="$event.stopPropagation(); toggleTag(row.tag.id)"
+          >
+            <select-option-row
+              [title]="row.tag.title"
+              [icon]="row.tag.icon ?? undefined"
+              defaultIcon="label"
+              [color]="row.color"
+              [isSelected]="row.isSelected"
+              [showCheckbox]="true"
+            ></select-option-row>
+          </button>
+        }
+        @if (newTagTitle()) {
+          <button
+            mat-menu-item
+            (click)="$event.stopPropagation(); createTag()"
+          >
+            <mat-icon>add</mat-icon>
+            {{ T.F.BOARDS.EDITOR.CREATE_TAG | translate: { title: newTagTitle() } }}
+          </button>
+        }
+        <mat-divider></mat-divider>
+        @for (option of matchOptions(); track option.value) {
+          <button
+            mat-menu-item
+            role="menuitemradio"
+            [attr.aria-checked]="option.value === match()"
+            (click)="$event.stopPropagation(); setMatch(option.value)"
+          >
+            <mat-icon>{{
+              option.value === match() ? 'radio_button_checked' : 'radio_button_unchecked'
+            }}</mat-icon>
+            {{ option.label | translate }}
+          </button>
+        }
+        <mat-divider></mat-divider>
+        <ng-container *ngTemplateOutlet="removeItem"></ng-container>
+      }
+      @case ('project') {
+        @if (isProjectFilterShown()) {
+          <ng-container
+            *ngTemplateOutlet="
+              filterField;
+              context: { placeholder: T.F.TASK_VIEW.CUSTOMIZER.ENTER_PROJECT }
+            "
+          ></ng-container>
+        }
+        @for (row of projectRows(); track row.project.id) {
+          <button
+            mat-menu-item
+            role="menuitemcheckbox"
+            [attr.aria-checked]="row.isSelected"
+            (click)="$event.stopPropagation(); toggleProject(row.project.id)"
+          >
+            <select-option-row
+              [title]="row.project.title"
+              [icon]="row.project.icon ?? undefined"
+              [defaultIcon]="DEFAULT_PROJECT_ICON"
+              [color]="row.project.theme?.primary"
+              [folderPath]="row.folderPath"
+              [isSelected]="row.isSelected"
+              [showCheckbox]="true"
+            ></select-option-row>
+          </button>
+        }
+        <mat-divider></mat-divider>
+        <ng-container *ngTemplateOutlet="removeItem"></ng-container>
+      }
+    }
+  </ng-template>
+</mat-menu>
+
+<ng-template #removeItem>
+  <button
+    mat-menu-item
+    (click)="remove.emit()"
+  >
+    <mat-icon>delete_outline</mat-icon>
+    {{ T.F.BOARDS.EDITOR.REMOVE_RULE | translate }}
+  </button>
+</ng-template>
+
+<!-- Inside the menu: clicks and typing stay in the field (see onFilterKeydown). -->
+<ng-template
+  #filterField
+  let-placeholder="placeholder"
+>
+  <div
+    class="menu-filter"
+    (click)="$event.stopPropagation()"
+  >
+    <mat-form-field
+      class="menu-filter-field"
+      subscriptSizing="dynamic"
+    >
+      <input
+        #filterInput
+        matInput
+        type="search"
+        autocomplete="off"
+        [attr.aria-label]="placeholder | translate"
+        [placeholder]="placeholder | translate"
+        [value]="filter()"
+        (input)="setFilter($event)"
+        (keydown)="onFilterKeydown($event)"
+      />
+    </mat-form-field>
+  </div>
+</ng-template>

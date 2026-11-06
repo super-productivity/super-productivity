@@ -3056,8 +3056,8 @@
       "PLANNER": "Planifică zilele următoare în {{plannerIcon}} <b>Planificator</b>",
       "TASK_MENU_TOUCH": "Glisează o sarcină spre stînga pentru meniul ei: {{playIcon}} <b>Începe contorizarea timpului</b>, {{subtaskIcon}} <b>Adaugă subsarcină</b>",
       "TASK_MENU_TOUCH_NO_TRACKING": "Glisează o sarcină spre stînga pentru meniul ei, de ex. {{subtaskIcon}} <b>Adaugă subsarcină</b>",
-      "TIMER_RUNNING": "Cronometrul rulează. Apasă din nou {{playIcon}} sau <kbd>{{key}}</kbd> pentru pauză.",
-      "TIMER_RUNNING_TOUCH": "Cronometrul rulează. Atinge {{playIcon}} din partea de sus pentru pauză.",
+      "TIMER_RUNNING": "Cronometrul rulează. Apasă din nou {{pauseIcon}} sau <kbd>{{key}}</kbd> pentru pauză.",
+      "TIMER_RUNNING_TOUCH": "Cronometrul rulează. Atinge {{pauseIcon}} din partea de sus pentru pauză.",
       "TRACK_TIME": "Treci cu mouse-ul peste sarcină și apasă {{playIcon}} pentru a contoriza timpul"
     },
     "WANT_MORE": {

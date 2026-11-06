@@ -3066,8 +3066,8 @@
       "PLANNER": "Planera de kommande dagarna i {{plannerIcon}} <b>Planerare</b>",
       "TASK_MENU_TOUCH": "Svep en uppgift åt vänster för dess meny: {{playIcon}} <b>Börja spåra tid</b>, {{subtaskIcon}} <b>Lägg till underuppgift</b>",
       "TASK_MENU_TOUCH_NO_TRACKING": "Svep en uppgift åt vänster för dess meny, t.ex. {{subtaskIcon}} <b>Lägg till underuppgift</b>",
-      "TIMER_RUNNING": "Timern går. Tryck på {{playIcon}} igen eller <kbd>{{key}}</kbd> för att pausa.",
-      "TIMER_RUNNING_TOUCH": "Timern går. Tryck på {{playIcon}} högst upp för att pausa.",
+      "TIMER_RUNNING": "Timern går. Tryck på {{pauseIcon}} igen eller <kbd>{{key}}</kbd> för att pausa.",
+      "TIMER_RUNNING_TOUCH": "Timern går. Tryck på {{pauseIcon}} högst upp för att pausa.",
       "TRACK_TIME": "Håll muspekaren över uppgiften och tryck på {{playIcon}} för att spåra tid"
     },
     "WANT_MORE": {

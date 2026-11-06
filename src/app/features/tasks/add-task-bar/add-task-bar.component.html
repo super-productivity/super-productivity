@@ -197,6 +197,22 @@
       <ng-container [ngTemplateOutlet]="inlineActionControls"></ng-container>
     </add-task-bar-actions>
 
+    @if (isHiddenInView()) {
+      <div
+        class="view-hidden-note"
+        role="status"
+      >
+        <mat-icon>visibility_off</mat-icon>
+        <span>{{ T.F.TASK.ADD_TASK_BAR.HIDDEN_BY_VIEW | translate }}</span>
+        <button
+          mat-button
+          (click)="applyViewPrefill(); focusInput()"
+        >
+          {{ T.F.TASK.ADD_TASK_BAR.ADD_BACK_VIEW_VALUES | translate }}
+        </button>
+      </div>
+    }
+
     @if (stateService.isNoteExpanded()) {
       <div
         class="note-input-section"

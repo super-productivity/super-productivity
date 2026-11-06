@@ -115,7 +115,8 @@ export class TakeABreakService {
 
   // the dialog checkbox is the single source of truth for resetting; it
   // auto-defaults to checked when a break is tracked, so an unchecked value
-  // means the user explicitly opted out of the reset
+  // means the user explicitly opted out of the reset ("Taking a break" mode
+  // has no checkbox and always resets)
   private _triggerIdleDialogReset$: Observable<unknown> = this._actions$.pipe(
     ofType(idleDialogResult),
     filter(({ isResetBreakTimer }) => isResetBreakTimer),

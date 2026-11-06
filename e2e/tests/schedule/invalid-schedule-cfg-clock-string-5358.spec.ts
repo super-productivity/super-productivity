@@ -1,4 +1,5 @@
 import { expect, test } from '../../fixtures/test.fixture';
+import { allowDevErrorsInCurrentTest } from '../../utils/runtime-errors';
 
 /**
  * Bug: https://github.com/super-productivity/super-productivity/issues/5358
@@ -87,6 +88,11 @@ test.describe('Schedule with a corrupt schedule config (#5358)', () => {
     workViewPage,
   }) => {
     await workViewPage.waitForTaskList();
+    // The corrupt config is the input under test; the schedule reports it
+    // through devError() while it falls back to rendering without work hours.
+    allowDevErrorsInCurrentTest(
+      /Invalid (work start\/end|lunch break) time in schedule config/,
+    );
 
     // At least one task is required: mapToScheduleDays early-returns [] when
     // tasks, scheduled tasks, repeat cfgs, calendar items and planner days are

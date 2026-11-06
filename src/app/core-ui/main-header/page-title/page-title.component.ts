@@ -10,7 +10,7 @@ import { MatRipple } from '@angular/material/core';
 import { MatTooltip } from '@angular/material/tooltip';
 import { MatIconButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
-import { MatMenu, MatMenuContent, MatMenuTrigger } from '@angular/material/menu';
+import { MatMenuTrigger } from '@angular/material/menu';
 import { WorkContextMenuComponent } from '../../work-context-menu/work-context-menu.component';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { T } from '../../../t.const';
@@ -33,6 +33,16 @@ import { KeyboardConfig } from '@sp/keyboard-config';
 import { PluginBridgeService } from '../../../plugins/plugin-bridge.service';
 import { PluginService } from '../../../plugins/plugin.service';
 import { PluginIconComponent } from '../../../plugins/ui/plugin-icon/plugin-icon.component';
+import { selectAllBoards } from '../../../features/boards/store/boards.selectors';
+import {
+  getViewIcon,
+  getViewLayoutSwitch,
+  translateViewTitle,
+} from '../../../features/boards/boards.util';
+import { BoardCfg } from '../../../features/boards/boards.model';
+import { ViewMenuComponent } from '../../../features/boards/view-menu/view-menu.component';
+import { BoardsService } from '../../../features/boards/boards.service';
+import { LayoutService } from '../../layout/layout.service';
 
 @Component({
   selector: 'page-title',
@@ -43,21 +53,32 @@ import { PluginIconComponent } from '../../../plugins/ui/plugin-icon/plugin-icon
     MatTooltip,
     MatIconButton,
     MatIcon,
-    MatMenu,
-    MatMenuContent,
     MatMenuTrigger,
     WorkContextMenuComponent,
+    ViewMenuComponent,
     TaskViewCustomizerPanelComponent,
     TranslatePipe,
     PluginIconComponent,
   ],
   template: `
     @if (activeWorkContextTypeAndId()) {
+      <!-- On a view page the title opens the view's editor and stays put;
+           elsewhere it links to the task list. One element either way: the
+           static tabindex makes it a tab stop on every page (RouterLink leaves
+           a static tabindex alone), and a null routerLink lets the click
+           through to onTitleClick(). -->
       <div
-        [matTooltip]="T.MH.GO_TO_TASK_LIST | translate"
+        [matTooltip]="
+          (viewBoard() ? T.F.BOARDS.V.EDIT_BOARD : T.MH.GO_TO_TASK_LIST) | translate
+        "
         class="page-title"
         mat-ripple
-        routerLink="/active/tasks"
+        tabindex="0"
+        [routerLink]="viewBoard() ? null : '/active/tasks'"
+        [attr.role]="viewBoard() ? 'button' : null"
+        (click)="onTitleClick()"
+        (keydown.enter)="onTitleClick()"
+        (keydown.space)="onTitleClick($event)"
       >
         @if (sectionIcon(); as icon) {
           <!-- Same icon the side nav shows for this section; it inherits the
@@ -93,7 +114,7 @@ import { PluginIconComponent } from '../../../plugins/ui/plugin-icon/plugin-icon
             </button>
           }
           <button
-            [mat-menu-trigger-for]="activeWorkContextMenu"
+            [matMenuTriggerFor]="workContextMenu.menu()"
             [matTooltip]="T.MH.PROJECT_MENU | translate"
             [attr.aria-label]="T.MH.PROJECT_MENU | translate"
             class="project-settings-btn"
@@ -101,6 +122,13 @@ import { PluginIconComponent } from '../../../plugins/ui/plugin-icon/plugin-icon
           >
             <mat-icon>more_vert</mat-icon>
           </button>
+          <!-- In its trigger's block, for the same reason as the customizer
+               panel's below. -->
+          <work-context-menu
+            #workContextMenu
+            [contextId]="activeWorkContextTypeAndId()!.activeId"
+            [contextType]="activeWorkContextTypeAndId()!.activeType"
+          ></work-context-menu>
           @if (isWorkViewPage()) {
             <button
               #customizerMenuTrigger
@@ -133,14 +161,59 @@ import { PluginIconComponent } from '../../../plugins/ui/plugin-icon/plugin-icon
           }
         </div>
       }
-      <mat-menu #activeWorkContextMenu="matMenu">
-        <ng-template matMenuContent>
-          <work-context-menu
-            [contextId]="activeWorkContextTypeAndId()!.activeId"
-            [contextType]="activeWorkContextTypeAndId()!.activeType"
-          ></work-context-menu>
-        </ng-template>
-      </mat-menu>
+      @if (!isXxxs() && viewBoard(); as board) {
+        <div class="page-title-actions">
+          <!-- List/Board: first, so it stays under the pointer when the
+               list-only filter button comes or goes. These blocks stay
+               rendered across the switch (their aliases update), so the
+               button keeps the focus. Phones show every view as a list and
+               keep the title bar to the view's name and its ⋮ menu: more
+               buttons left the title a word ("Open …") at 360px. The title
+               opens the editor, which also sets the layout. -->
+          @if (!isXs() && viewLayoutSwitch(); as layoutSwitch) {
+            <button
+              class="view-layout-btn"
+              (click)="toggleViewLayout(board)"
+              [matTooltip]="layoutSwitch.label | translate"
+              [attr.aria-label]="layoutSwitch.label | translate"
+              mat-icon-button
+            >
+              <mat-icon>{{ layoutSwitch.icon }}</mat-icon>
+            </button>
+          }
+          <!-- Where a list has its filter/sort button, a list-layout view
+               has one that opens the view editor, like its title: the
+               editor covers every rule. Boards with several columns use
+               their title and column titles; phones the title. -->
+          @if (board.cols <= 1 && !isXs()) {
+            <button
+              class="task-filter-btn"
+              (click)="editView(board)"
+              [attr.aria-label]="T.F.BOARDS.V.EDIT_BOARD | translate"
+              mat-icon-button
+              matTooltip="{{ T.F.BOARDS.V.EDIT_BOARD | translate }} {{
+                kb.toggleTaskViewCustomizerPanel
+                  ? '[' + kb.toggleTaskViewCustomizerPanel + ']'
+                  : ''
+              }}"
+            >
+              <mat-icon>filter_list</mat-icon>
+            </button>
+          }
+          <button
+            [matMenuTriggerFor]="viewMenu.menu()"
+            [matTooltip]="T.G.MORE_ACTIONS | translate"
+            [attr.aria-label]="T.G.MORE_ACTIONS | translate"
+            mat-icon-button
+          >
+            <mat-icon>more_vert</mat-icon>
+          </button>
+          <view-menu
+            #viewMenu
+            [board]="board"
+          ></view-menu>
+        </div>
+      }
     }
   `,
   styles: [
@@ -218,6 +291,12 @@ import { PluginIconComponent } from '../../../plugins/ui/plugin-icon/plugin-icon
 
         &:focus {
           outline: none;
+        }
+
+        /* Inset: the header row clips anything drawn outside the title box. */
+        &:focus-visible {
+          outline: var(--focus-ring-width) solid var(--focus-ring-color);
+          outline-offset: calc(-1 * var(--focus-ring-width));
         }
       }
 
@@ -349,22 +428,36 @@ export class PageTitleComponent {
   private readonly _configService = inject(GlobalConfigService);
   private _translateService = inject(TranslateService);
   private _store = inject(Store);
+  private _boards = this._store.selectSignal(selectAllBoards);
   private _plainspaceShareService = inject(PlainspaceShareService);
   private _pluginBridge = inject(PluginBridgeService);
   private _pluginService = inject(PluginService);
+  private _boardsService = inject(BoardsService);
 
   readonly T = T;
 
-  // Absent off the work view (and on xxxs screens), where the shortcut then
-  // does nothing — matching the button not being there to click.
+  private _langChange = toSignal(this._translateService.onLangChange, {
+    initialValue: null,
+  });
+
+  // On the work view; absent elsewhere (and on xxxs screens), where the
+  // shortcut then does nothing — matching the button not being there to click.
   private _customizerMenuTrigger = viewChild('customizerMenuTrigger', {
     read: MatMenuTrigger,
   });
 
   constructor() {
+    // On a list-layout view the shortcut does what its filter button does.
     this.taskViewCustomizerService.openMenuRequest$
       .pipe(takeUntilDestroyed())
-      .subscribe(() => this._customizerMenuTrigger()?.openMenu());
+      .subscribe(() => {
+        const board = this.viewBoard();
+        if (board && board.cols <= 1 && !this.isXxxs()) {
+          this.editView(board);
+        } else {
+          this._customizerMenuTrigger()?.openMenu();
+        }
+      });
   }
 
   // Get data directly from services instead of inputs
@@ -408,7 +501,8 @@ export class PageTitleComponent {
   > = [
     [/schedule$/, T.MH.SCHEDULE, NAV_SECTION_ICON.SCHEDULE],
     [/planner$/, T.MH.PLANNER, NAV_SECTION_ICON.PLANNER],
-    [/boards$/, T.MH.BOARDS, NAV_SECTION_ICON.BOARDS],
+    // `/boards` or one view, `/boards/<id>` (titled with the view, see below).
+    [/^\/boards(\/[^/]+)?$/, T.MH.BOARDS, NAV_SECTION_ICON.BOARDS],
     [/habits$/, T.MH.HABITS, NAV_SECTION_ICON.HABITS],
     [/search$/, T.MH.SEARCH, NAV_SECTION_ICON.SEARCH],
     [/scheduled-list$/, T.WW.RECURRING_TASKS, NAV_SECTION_ICON.RECURRING_TASKS],
@@ -421,7 +515,10 @@ export class PageTitleComponent {
     PageTitleComponent._ROUTE_SECTIONS.find(([re]) => re.test(this._url())),
   );
   private _routeTitleKey = computed(() => this._routeSection()?.[1]);
-  sectionIcon = computed(() => this._routeSection()?.[2]);
+  sectionIcon = computed(() => {
+    const viewBoard = this.viewBoard();
+    return viewBoard ? getViewIcon(viewBoard) : this._routeSection()?.[2];
+  });
 
   // Plugin pages are titled like the built-in sections, with the label and
   // icon of the plugin's nav entry.
@@ -438,12 +535,27 @@ export class PageTitleComponent {
     return icon && !/\.svg$/i.test(icon) ? icon : 'extension';
   });
 
+  // The view (board) a `/boards/<id>` page shows: titled with its own title
+  // (default views use keys) and icon, with its menu in the title bar.
+  viewBoard = computed(() => {
+    const id = this._url().match(/^\/boards\/([^/]+)$/)?.[1];
+    return id
+      ? this._boards().find((board) => board.id === decodeURIComponent(id))
+      : undefined;
+  });
+  private _boardTitle = computed(() => this.viewBoard()?.title);
+
   isSpecialSection = computed(() => !!this._routeSection() || !!this.pluginId());
   isWorkViewPage = computed(() => /tasks$/.test(this._url()));
 
   displayTitle = computed(() => {
+    const boardTitle = this._boardTitle();
+    if (boardTitle) {
+      return translateViewTitle(boardTitle, (k) => this._translateService.instant(k));
+    }
     const key = this._routeTitleKey();
     if (key) {
+      this._langChange();
       return this._translateService.instant(key);
     }
     const pluginId = this.pluginId();
@@ -492,9 +604,42 @@ export class PageTitleComponent {
   isXxxs = toSignal(this._isXxxs$.pipe(map((result) => result.matches)), {
     initialValue: false,
   });
+  // Phones (the bottom-nav layout), from the real viewport on the first
+  // render: a view's title bar is its name and its ⋮ menu only.
+  readonly isXs = inject(LayoutService).isXs;
+
+  /** The List/Board switch of the open view: the other mode. */
+  viewLayoutSwitch = computed(() => {
+    const board = this.viewBoard();
+    return board ? getViewLayoutSwitch(board) : undefined;
+  });
 
   get kb(): KeyboardConfig {
     return (this._configService.cfg()?.keyboard as KeyboardConfig) || {};
+  }
+
+  /**
+   * Click, Enter or Space on the title: opens the editor on a view page,
+   * where the title is a button; elsewhere the router link (click) is all.
+   */
+  onTitleClick(ev?: Event): void {
+    const board = this.viewBoard();
+    if (!board) {
+      return;
+    }
+    // Space would scroll the page.
+    ev?.preventDefault();
+    void this._boardsService.editBoard(board);
+  }
+
+  /** A list-layout view's filter button (and its shortcut): the editor. */
+  editView(board: BoardCfg): void {
+    void this._boardsService.editBoard(board);
+  }
+
+  /** The title bar's List/Board button: the open view in the other mode. */
+  toggleViewLayout(board: BoardCfg): void {
+    this._boardsService.setViewLayout(board, getViewLayoutSwitch(board).layout);
   }
 
   openInPlainspace(): void {

@@ -20,6 +20,7 @@ import { SnackService } from '../../core/snack/snack.service';
 import { TaskService } from '../../features/tasks/task.service';
 import { TagService } from '../../features/tag/tag.service';
 import { sortTagLabels } from './plugin-tag-utils';
+import { extractPluginSyncValues } from './plugin-sync-values';
 import { getDbDateStr } from '../../util/get-db-date-str';
 import { T } from '../../t.const';
 import { PluginLog } from '../../core/log';
@@ -155,7 +156,7 @@ export class PluginIssueProviderAdapterService implements IssueServiceInterface 
     }
 
     const issue = issueData as PluginIssue;
-    const syncValues = this._extractSyncValues(issue, provider);
+    const syncValues = extractPluginSyncValues(provider.definition, issue);
     const tagIds = this._extractInitialTagIds(provider, syncValues, pluginCfg, issue);
 
     return {
@@ -358,7 +359,10 @@ export class PluginIssueProviderAdapterService implements IssueServiceInterface 
       issue.lastUpdated != null && issue.lastUpdated > (task.issueLastUpdated || 0);
     if (isUpdated) {
       // Compute sync values once and pass through to avoid redundant calls
-      const issueLastSyncedValues = this._extractSyncValues(issue, resolved.provider);
+      const issueLastSyncedValues = extractPluginSyncValues(
+        resolved.provider.definition,
+        issue,
+      );
 
       // _buildBaseIssueTask emits content fields — title, isDone, and a due
       // date when the issue carries one — straight from the raw issue. Two
@@ -458,35 +462,6 @@ export class PluginIssueProviderAdapterService implements IssueServiceInterface 
   private _getIssueNumber(issue: PluginIssue): number | undefined {
     const n = (issue as { number?: unknown }).number;
     return typeof n === 'number' ? n : undefined;
-  }
-
-  private _extractSyncValues(
-    issue: PluginIssue,
-    provider: RegisteredPluginIssueProvider,
-  ): Record<string, unknown> {
-    const fieldMappings = provider.definition.fieldMappings;
-    if (!fieldMappings?.length) {
-      return {};
-    }
-
-    const data = provider.definition.extractSyncValues
-      ? provider.definition.extractSyncValues(issue)
-      : (issue as Record<string, unknown>);
-    const issueRecord = issue as Record<string, unknown>;
-    const result: Record<string, unknown> = {};
-
-    for (const mapping of fieldMappings) {
-      const value = Object.prototype.hasOwnProperty.call(data, mapping.issueField)
-        ? data[mapping.issueField]
-        : issueRecord[mapping.issueField];
-      if (value === undefined) {
-        continue;
-      }
-      result[mapping.issueField] =
-        mapping.taskField === 'tagIds' ? sortTagLabels(value) : value;
-    }
-
-    return result;
   }
 
   /**

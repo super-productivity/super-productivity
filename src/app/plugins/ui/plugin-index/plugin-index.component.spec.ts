@@ -10,6 +10,8 @@ import { PluginService } from '../../plugin.service';
 import { PluginBridgeService } from '../../plugin-bridge.service';
 import { PluginCleanupService } from '../../plugin-cleanup.service';
 import { LayoutService } from '../../../core-ui/layout/layout.service';
+import { GlobalThemeService } from '../../../core/theme/global-theme.service';
+import { CustomThemeService } from '../../../core/theme/custom-theme.service';
 
 const PLUGIN_ID = 'test-plugin';
 
@@ -64,6 +66,8 @@ describe('PluginIndexComponent', () => {
         { provide: PluginBridgeService, useValue: pluginBridge },
         { provide: PluginCleanupService, useValue: cleanupService },
         { provide: LayoutService, useValue: { isPanelResizing: signal(false) } },
+        { provide: GlobalThemeService, useValue: { isDarkTheme: signal(false) } },
+        { provide: CustomThemeService, useValue: { appliedThemeVersion: signal(0) } },
         { provide: ActivatedRoute, useValue: { paramMap: EMPTY } },
         { provide: Router, useValue: jasmine.createSpyObj('Router', ['navigate']) },
       ],
@@ -117,6 +121,24 @@ describe('PluginIndexComponent', () => {
       if (descriptor) Object.defineProperty(crypto, 'randomUUID', descriptor);
       else Reflect.deleteProperty(crypto, 'randomUUID');
     }
+  });
+
+  // A theme switch between building srcdoc and its load hits about:blank, so
+  // the load itself must re-copy the tokens.
+  it('re-copies the theme tokens when the plugin iframe loads', async () => {
+    await setup();
+    const iframe = getIframe();
+    const getThemeStyle = (): HTMLElement | null | undefined =>
+      iframe.contentDocument?.getElementById('injected-theme-vars');
+    const start = Date.now();
+    while (!getThemeStyle() && Date.now() - start < 2000) {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+    getThemeStyle()!.textContent = 'stale';
+
+    component.onIframeLoad();
+
+    expect(getThemeStyle()!.textContent).toContain(':root');
   });
 
   // Enabling a plugin flips isEnabled before its assets are fetched; opening the

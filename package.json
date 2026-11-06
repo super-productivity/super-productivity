@@ -78,12 +78,13 @@
     "screenshots:capture": "npx playwright test --config e2e/playwright.store-screenshots.config.ts",
     "screenshots:capture:desktop": "npx playwright test --config e2e/playwright.store-screenshots.config.ts --project=desktopMaster",
     "screenshots:capture:mobile": "npx playwright test --config e2e/playwright.store-screenshots.config.ts --project=iphone69 --project=ipad13 --project=androidPhone --project=android7Tablet --project=android10Tablet",
-    "screenshots:build": "TS_NODE_COMPILER_OPTIONS='{\"module\":\"commonjs\",\"moduleResolution\":\"node\"}' npx ts-node --transpile-only e2e/store-screenshots/build-store-assets.ts",
+    "screenshots:build": "TS_NODE_COMPILER_OPTIONS='{\"module\":\"commonjs\",\"moduleResolution\":\"node\",\"ignoreDeprecations\":\"6.0\",\"rootDir\":\".\"}' npx ts-node --transpile-only e2e/store-screenshots/build-store-assets.ts",
     "screenshots:build:flathub": "SP_SCREENSHOTS_STORE=flathub npm run screenshots:build",
     "screenshots:capture:electron": "npm run electron:build && SCREENSHOT_MODE=electron npx playwright test --config e2e/playwright.store-screenshots.electron.config.ts",
     "screenshots:capture:flathub": "SP_SCREENSHOT_BG_DISABLE=1 npm run screenshots:capture:electron",
     "screenshots:electron": "npm run screenshots:capture:electron && npm run screenshots:build",
     "screenshots:flathub": "npm run screenshots:capture:flathub && npm run screenshots:build:flathub",
+    "screenshots:flathub:native": "node -e \"require('fs').rmSync('dist/screenshots/_master_electron',{recursive:true,force:true})\" && SP_SCREENSHOT_NATIVE=1 SP_SCREENSHOT_FORCE_THEME=light npm run screenshots:capture:flathub && SP_SCREENSHOT_NATIVE=1 npm run screenshots:build:flathub",
     "video": "npm run video:capture && npm run video:build && npm run video:open",
     "video:capture": "npx playwright test --config e2e/playwright.store-video.config.ts",
     "video:kit-test": "npx playwright test --config e2e/playwright.video-kit.config.ts",
@@ -193,11 +194,8 @@
     "plugin-api:build:watch": "cd packages/plugin-api && npm run build:watch",
     "vite-plugin:build": "cd packages/vite-plugin && npm run build",
     "plugins:build": "npm run plugin-api:build && npm run vite-plugin:build && cd packages/plugin-dev && npm run build:all",
-    "plugins:build:silent": "npm run vite-plugin:build && cd packages/plugin-dev && npm run build:all:silent"
-  },
-  "resolutions": {
-    "sass": "1.32.6",
-    "@ctrl/tinycolor": "4.1.0"
+    "plugins:build:silent": "npm run vite-plugin:build && cd packages/plugin-dev && npm run build:all:silent",
+    "plugin-starter:check": "node tools/check-plugin-starter.js"
   },
   "dependencies": {
     "@capacitor/browser": "^8.0.5",
@@ -217,27 +215,27 @@
     "uuidv7": "^1.2.1"
   },
   "devDependencies": {
-    "@angular-devkit/build-angular": "^22.2.2",
+    "@angular-devkit/build-angular": "^22.2.5",
     "@angular-eslint/builder": "^22.6.0",
     "@angular-eslint/eslint-plugin": "^22.6.0",
     "@angular-eslint/eslint-plugin-template": "^22.6.0",
     "@angular-eslint/schematics": "^22.6.0",
     "@angular-eslint/template-parser": "^22.6.0",
-    "@angular/animations": "^22.2.2",
-    "@angular/cdk": "^22.2.2",
-    "@angular/cli": "^22.2.2",
-    "@angular/common": "^22.2.2",
-    "@angular/compiler": "^22.2.2",
-    "@angular/compiler-cli": "^22.2.2",
-    "@angular/core": "^22.2.2",
-    "@angular/forms": "^22.2.2",
-    "@angular/language-service": "^22.2.2",
-    "@angular/material": "^22.2.2",
-    "@angular/platform-browser": "^22.2.2",
-    "@angular/platform-browser-dynamic": "^22.2.2",
-    "@angular/platform-server": "^22.2.2",
-    "@angular/router": "^22.2.2",
-    "@angular/service-worker": "^22.2.2",
+    "@angular/animations": "^22.2.4",
+    "@angular/cdk": "^22.2.5",
+    "@angular/cli": "^22.2.5",
+    "@angular/common": "^22.2.4",
+    "@angular/compiler": "^22.2.4",
+    "@angular/compiler-cli": "^22.2.4",
+    "@angular/core": "^22.2.4",
+    "@angular/forms": "^22.2.4",
+    "@angular/language-service": "^22.2.4",
+    "@angular/material": "^22.2.5",
+    "@angular/platform-browser": "^22.2.4",
+    "@angular/platform-browser-dynamic": "^22.2.4",
+    "@angular/platform-server": "^22.2.4",
+    "@angular/router": "^22.2.4",
+    "@angular/service-worker": "^22.2.4",
     "@capacitor/android": "^8.5.3",
     "@capacitor/app": "^8.1.2",
     "@capacitor/cli": "^8.6.0",
@@ -268,7 +266,7 @@
     "@ngx-translate/core": "^17.0.0",
     "@ngx-translate/http-loader": "^17.0.0",
     "@playwright/test": "^1.59.1",
-    "@schematics/angular": "^22.2.2",
+    "@schematics/angular": "^22.2.5",
     "@types/electron": "^1.6.12",
     "@types/electron-localshortcut": "^3.1.3",
     "@types/file-saver": "^2.0.7",
@@ -304,7 +302,7 @@
     "fflate": "^0.8.2",
     "file-saver": "^2.0.5",
     "fs-extra": "^11.3.4",
-    "glob": "^13.0.6",
+    "glob": "^14.0.3",
     "http-server": "^14.1.1",
     "husky": "^9.1.7",
     "ical.js": "^2.2.1",
@@ -328,7 +326,7 @@
     "playwright": "^1.59.1",
     "prettier": "^3.8.3",
     "pretty-quick": "^4.2.2",
-    "query-string": "^7.1.3",
+    "query-string": "^10.0.0",
     "rxjs": "^7.8.2",
     "shepherd.js": "^11.2.0",
     "stacktrace-js": "^2.0.2",
@@ -354,25 +352,29 @@
       "undici": "7.29.1"
     },
     "node-gyp": {
-      "undici": "6.27.0"
+      "undici": "6.29.1"
     },
     "sockjs": {
       "uuid": "11.1.1"
     },
     "ws": "8.21.0",
-    "esbuild": "0.28.2"
+    "esbuild": "0.28.2",
+    "karma": {
+      "qs": "6.16.2"
+    }
   },
   "optionalDependencies": {
     "@lmdb/lmdb-darwin-x64": "^3.5.4",
-    "@lmdb/lmdb-linux-x64": "^3.5.4",
+    "@lmdb/lmdb-linux-x64": "^3.5.9",
     "@lmdb/lmdb-win32-x64": "^3.5.4",
-    "@rollup/rollup-darwin-x64": "4.60.2",
-    "@rollup/rollup-linux-x64-gnu": "4.60.2",
-    "@rollup/rollup-win32-x64-msvc": "4.60.2"
+    "@rollup/rollup-darwin-x64": "4.66.0",
+    "@rollup/rollup-linux-x64-gnu": "4.66.0",
+    "@rollup/rollup-win32-x64-msvc": "4.66.0"
   },
   "workspaces": [
     "packages/*",
-    "!packages/plugin-dev"
+    "!packages/plugin-dev",
+    "!packages/plugin-starter"
   ],
   "publish": [
     {
