@@ -232,8 +232,9 @@ const provider = (id: string, index: number, providerKey: ProviderKey): IssuePro
         availableTransitions: [],
         userToAssignOnDone: null,
       }
-    : // legacy built-in GitLab shape: released clients still create and sync it,
-      // the current client migrates it to the plugin shape only on load
+    : // GitLab as the current client holds it after the load-time migration: legacy
+      // top-level fields kept for released clients, plus pluginId/pluginConfig. Seeding
+      // the legacy shape alone would make every reload migrate it and change state.
       ({
         ...common,
         issueProviderKey: 'GITLAB',
@@ -244,6 +245,16 @@ const provider = (id: string, index: number, providerKey: ProviderKey): IssuePro
         scope: 'all',
         filter: 'state=opened',
         isEnableTimeTracking: false,
+        pluginId: 'gitlab-issue-provider',
+        pluginConfig: {
+          project: `synthetic/provider-${index}`,
+          token: 'synthetic-only-not-a-credential',
+          gitlabBaseUrl: 'https://issues.example.invalid/',
+          scope: 'all',
+          filterUsername: 'synthetic-user',
+          filter: 'state=opened',
+          isSubmitWorklogOnFinishDay: false,
+        },
       } as unknown as IssueProvider);
 };
 const mockProviderRequests = async (page: Page): Promise<void> => {
