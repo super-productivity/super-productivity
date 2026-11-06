@@ -177,7 +177,15 @@ snapcraft:
     # With the GNOME extension active, content snaps (gnome-46-2404, gpu-2404,
     # themes) are added automatically — only list custom plugs here. The old
     # gnome-3-28-1804 → gnome-42-2204 override is obsolete on core24.
+    #
+    # Setting `plugs` at all disables electron-builder's browser-support
+    # auto-inject. Without that interface Chromium cannot create files in
+    # /dev/shm and aborts (Permission denied, then SIGTRAP). allow-sandbox
+    # keeps Chromium's sandbox; otherwise electron-builder passes --no-sandbox.
     plugs:
+      - browser-support:
+          interface: browser-support
+          allow-sandbox: true
       - password-manager-service
       - system-observe
       - login-session-observe
