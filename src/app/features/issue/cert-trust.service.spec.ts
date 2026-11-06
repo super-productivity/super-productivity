@@ -53,6 +53,15 @@ describe('CertTrustService', () => {
     expect(emitted).toEqual([[]]);
   });
 
+  it('does not trust the default Plainspace server', () => {
+    store.overrideSelector(selectEnabledIssueProviders, [
+      { id: 'p', host: 'https://plainspace.org' },
+    ] as never);
+    store.refreshState();
+
+    expect(emitted.at(-1)).toEqual([]);
+  });
+
   it('emits only when the host list changes', () => {
     privateCfg$.next({
       providerId: 'WebDAV',

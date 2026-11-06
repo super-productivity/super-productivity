@@ -64,12 +64,13 @@ test('toTrustedHostSet keeps only plausible host strings', () => {
   const set = toTrustedHostSet([
     'nas.lan',
     'gitea.example.org:3000',
+    'my_nas.lan',
     42,
     '',
     'a/b',
     'x'.repeat(300),
   ]);
-  assert.deepEqual([...set].sort(), ['gitea.example.org:3000', 'nas.lan']);
+  assert.deepEqual([...set].sort(), ['gitea.example.org:3000', 'my_nas.lan', 'nas.lan']);
 });
 
 test('toTrustedHostSet returns an empty set for a non-array payload', () => {

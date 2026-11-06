@@ -4,7 +4,7 @@
 
 const MAX_HOSTS = 200;
 // URL.host output: lowercase hostname / IPv6 literal, optional :port
-const HOST_PATTERN = /^[a-z0-9.\-[\]:]{1,260}$/;
+const HOST_PATTERN = /^[a-z0-9._\-[\]:]{1,260}$/;
 
 const getHttpHost = (value: unknown): string | null => {
   if (typeof value !== 'string' || !/^https?:\/\//i.test(value)) {

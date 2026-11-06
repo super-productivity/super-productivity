@@ -8,11 +8,12 @@ import { selectEnabledIssueProviders } from './store/issue-provider.selectors';
 import { SyncProviderManager } from '../../op-log/sync-providers/provider-manager.service';
 import { getConfiguredHosts } from '../../../../electron/shared-with-frontend/cert-trust-hosts';
 import { DEFAULT_GLOBAL_CONFIG } from '../config/default-global-config.const';
+import { DEFAULT_PLAINSPACE_CFG } from './providers/plainspace/plainspace-cfg-form.const';
 
-// The official SuperSync server is the form default, not a user-chosen host.
-const [DEFAULT_SUPER_SYNC_HOST] = getConfiguredHosts([
-  DEFAULT_GLOBAL_CONFIG.sync.superSync,
-]);
+// Providers' public default servers are form defaults, not user-chosen hosts.
+const DEFAULT_PUBLIC_HOSTS = new Set(
+  getConfiguredHosts([DEFAULT_GLOBAL_CONFIG.sync.superSync, DEFAULT_PLAINSPACE_CFG]),
+);
 
 /**
  * Tells the Electron main process which hosts may present invalid (e.g.
@@ -32,7 +33,7 @@ export class CertTrustService {
   ]).pipe(
     map(([issueProviders, syncCfg]) =>
       getConfiguredHosts([...issueProviders, syncCfg?.privateCfg])
-        .filter((host) => host !== DEFAULT_SUPER_SYNC_HOST)
+        .filter((host) => !DEFAULT_PUBLIC_HOSTS.has(host))
         .sort(),
     ),
     distinctUntilChanged((a, b) => a.join() === b.join()),
