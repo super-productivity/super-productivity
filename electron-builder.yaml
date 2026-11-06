@@ -1,6 +1,7 @@
 appId: superProductivity
 productName: Super Productivity
 artifactName: ${name}-${arch}.${ext}
+publish: github
 
 files:
   - electron/**/*
@@ -45,6 +46,8 @@ beforePack: ./tools/beforePack.js
 # See tools/afterPack.js + build/linux/snap-wrapper.sh and
 # docs/research/snap-wayland-gpu-fix-research.md.
 afterPack: ./tools/afterPack.js
+artifactBuildCompleted: ./tools/appimage-artifact-built.js
+afterAllArtifactBuild: ./tools/afterAllArtifactBuild.js
 
 win:
   target:
