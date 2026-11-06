@@ -27,6 +27,8 @@ import { TaskService } from '../tasks/task.service';
 import { startWith } from 'rxjs/operators';
 import { parseDbDateStr } from '../../util/parse-db-date-str';
 import { anchorContextNow } from './anchor-context-now';
+import { DateTimeFormatService } from '../../core/date-time-format/date-time-format.service';
+import { getLocaleWeekendDays } from '../../util/get-locale-weekend-days';
 
 @Injectable({
   providedIn: 'root',
@@ -37,6 +39,7 @@ export class ScheduleService {
   private _calendarIntegrationService = inject(CalendarIntegrationService);
   private _hiddenCalendarProviders = inject(HiddenCalendarProvidersService);
   private _taskService = inject(TaskService);
+  private _dateTimeFormatService = inject(DateTimeFormatService);
 
   private _timelineTasks = toSignal(this._store.select(selectTimelineTasks));
   private _taskRepeatCfgs = toSignal(
@@ -132,6 +135,9 @@ export class ScheduleService {
       timelineCfg?.isLunchBreakEnabled ? createLunchBreakCfg(timelineCfg) : undefined,
       realNow,
       this._startOfNextDayDiffMs() ?? 0,
+      // the locale's weekend (dateTimeLocale override, else the browser locale),
+      // not a setting: see #9418
+      getLocaleWeekendDays(this._dateTimeFormatService.currentLocale()),
     );
   }
 

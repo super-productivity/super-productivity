@@ -34,8 +34,9 @@ export const createScheduleDays = (
   workStartEndCfg: ScheduleWorkStartEndCfg | undefined,
   now: number,
   realNow?: number, // Actual current time for determining "current week"
+  weekendDays?: readonly number[], // ISO weekdays untimed work must not flow onto
 ): ScheduleDay[] => {
-  let viewEntriesPushedToNextDay: SVEEntryForNextDay[];
+  let viewEntriesPushedToNextDay: SVEEntryForNextDay[] = [];
   let flowTasksLeftAfterDay: ScheduleFlowTask[] = nonScheduledTasks.map((task) => {
     if (task.timeEstimate === 0 && task.timeSpent === 0) {
       return {
@@ -119,6 +120,18 @@ export const createScheduleDays = (
 
     const blockerBlocksForDay = blockerBlocksDayMap[dayDate] || [];
 
+    // Untimed work cut off by the end of a day resumes on the next one, but not
+    // on the locale's weekend (#9418): what would land on a weekend day is held
+    // for the next weekday instead. Only carried-over work is held; a repeat
+    // that is due on a weekend day in its own right still projects there. The
+    // last rendered day never holds: a range can end on a weekend day (a week
+    // view opened on Sunday or Monday, most month grids), and work held there
+    // would vanish instead of being shown on that day as before.
+    // Date#getDay() counts 0 = Sunday … 6 = Saturday, weekendDays 1 = Mon … 7 = Sun
+    const isWeekendDay =
+      i < dayDates.length - 1 && !!weekendDays?.includes(dayStartDate.getDay() || 7);
+    const entriesHeldOverWeekend = isWeekendDay ? viewEntriesPushedToNextDay : [];
+
     const nonScheduledBudgetForDay = getBudgetLeftForDay(
       blockerBlocksForDay,
       i === 0 ? now : undefined,
@@ -187,7 +200,7 @@ export const createScheduleDays = (
       repeatCfgsToProjectForDay,
       within,
       blockerBlocksForDay,
-      viewEntriesPushedToNextDay,
+      isWeekendDay ? [] : viewEntriesPushedToNextDay,
     );
     beyondBudgetTasks = dayAssignedBeyondBudgetTasks;
     // For the current week (days within 7 days from today), include all tasks including unscheduled ones
@@ -205,7 +218,8 @@ export const createScheduleDays = (
     ]);
 
     const viewEntriesToRenderForDay: SVE[] = [];
-    viewEntriesPushedToNextDay = [];
+    // held entries first: they were cut off on an earlier day
+    viewEntriesPushedToNextDay = [...entriesHeldOverWeekend];
     viewEntries.forEach((entry) => {
       const taskId = getEntryTaskId(entry);
       if (taskId && overBudgetTaskIds.has(taskId)) {

@@ -29,6 +29,9 @@ export const mapToScheduleDays = (
   lunchBreakCfg?: ScheduleLunchBreakCfg,
   realNow?: number,
   startOfNextDayDiffMs: number = 0,
+  // ISO weekdays (1 = Mon … 7 = Sun) untimed work must not flow onto; the
+  // service passes the locale's weekend. Empty: flow onto every day.
+  weekendDays: readonly number[] = [],
 ): ScheduleDay[] => {
   // NOTE to use for failing test cases
   // const params = {
@@ -103,6 +106,7 @@ export const mapToScheduleDays = (
     workStartEndCfg,
     now,
     realNow,
+    weekendDays,
   );
 
   return v;

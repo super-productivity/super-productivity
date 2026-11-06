@@ -20,16 +20,22 @@ import { HiddenCalendarProvidersService } from '../calendar-integration/hidden-c
 import { TaskService } from '../tasks/task.service';
 import { ScheduleCalendarMapEntry, ScheduleEvent } from './schedule.model';
 import { SVEType } from './schedule.const';
+import { ScheduleConfig } from '../config/global-config.model';
+import { DateTimeFormatService } from '../../core/date-time-format/date-time-format.service';
 
 describe('ScheduleService', () => {
   let service: ScheduleService;
   let dateService: DateService;
+  // the effective date/time locale; the schedule derives the weekend from it
+  let localeSig: ReturnType<typeof signal<string>>;
 
   beforeEach(() => {
+    localeSig = signal('en-US');
     TestBed.configureTestingModule({
       providers: [
         ScheduleService,
         DateService,
+        { provide: DateTimeFormatService, useValue: { currentLocale: localeSig } },
         provideMockStore({
           selectors: [
             { selector: selectTimelineTasks, value: { unPlanned: [], planned: [] } },
@@ -582,6 +588,64 @@ describe('ScheduleService', () => {
       // Should work without throwing
       expect(result).toBeDefined();
     });
+
+    describe('weekend of the date/time locale (#9418)', () => {
+      // 2026-01-21 is a Wednesday; the week view opened on it runs Wed..Tue. The
+      // repeat is due on Thursday: the app never projects today, its instance
+      // for today already exists (lastTaskCreationDay = today).
+      const WEDNESDAY = '2026-01-21';
+      const WEEK = [
+        WEDNESDAY,
+        '2026-01-22',
+        '2026-01-23',
+        '2026-01-24',
+        '2026-01-25',
+        '2026-01-26',
+        '2026-01-27',
+      ];
+      const now = new Date(2026, 0, 21, 9, 0).getTime();
+      // untimed, Thursday only, longer than the 9-17 work day
+      const thursdayRepeat: TaskRepeatCfg = {
+        ...DEFAULT_TASK_REPEAT_CFG,
+        id: 'R_THU',
+        startDate: '2025-01-01',
+        lastTaskCreationDay: WEDNESDAY,
+        monday: false,
+        tuesday: false,
+        wednesday: false,
+        friday: false,
+        defaultEstimate: 12 * 60 * 60 * 1000,
+      };
+
+      const continuationDay = (): string | undefined =>
+        service
+          .buildScheduleDays({
+            now,
+            realNow: now,
+            daysToShow: WEEK,
+            timelineTasks: { unPlanned: [], planned: [] },
+            taskRepeatCfgs: { withStartTime: [], withoutStartTime: [thursdayRepeat] },
+            calendarEvents: [],
+            plannerDayMap: {},
+            timelineCfg: {
+              isWorkStartEndEnabled: true,
+              workStart: '9:00',
+              workEnd: '17:00',
+              isLunchBreakEnabled: false,
+            } as ScheduleConfig,
+            currentTaskId: null,
+          })
+          .find((day) =>
+            day.entries.some(
+              (e) => e.type === SVEType.RepeatProjectionSplitContinuedLast,
+            ),
+          )?.dayDate;
+
+      it('resumes cut-off work on Sunday for a Friday/Saturday weekend', () => {
+        localeSig.set('ar-EG');
+        expect(continuationDay()).toBe('2026-01-25');
+      });
+    });
   });
 
   describe('getDayClass', () => {
@@ -906,6 +970,10 @@ describe('ScheduleService – calendar visibility filter', () => {
         {
           provide: HiddenCalendarProvidersService,
           useValue: { hiddenProviderIds },
+        },
+        {
+          provide: DateTimeFormatService,
+          useValue: { currentLocale: signal('en-US') },
         },
       ],
     });
