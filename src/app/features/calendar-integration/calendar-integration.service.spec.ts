@@ -1172,6 +1172,51 @@ END:VCALENDAR`;
     });
   });
 
+  describe('skipCalendarEvents', () => {
+    const buildEvent = (id: string, legacyIds?: string[]): CalendarIntegrationEvent => ({
+      id,
+      legacyIds,
+      calProviderId: 'test-provider',
+      issueProviderKey: 'ICAL',
+      title: id,
+      start: Date.now(),
+      duration: 60 * 60 * 1000,
+    });
+
+    it('should add the ids and persist them for today', () => {
+      service.skipCalendarEvents(['restored']);
+
+      expect(service.skippedEventIds$.getValue()).toEqual(['restored']);
+      expect(localStorage.getItem('SUP_CALENDER_EVENTS_SKIPPED_TODAY')).toBe(
+        JSON.stringify(['restored']),
+      );
+      expect(localStorage.getItem('SUP_CALENDER_EVENTS_LAST_SKIP_DAY')).toBe(
+        getDbDateStr(),
+      );
+    });
+
+    it('should also skip the legacy id of a modified recurring instance', () => {
+      const instance = buildEvent('series_2026-05-20', ['series']);
+      const sibling = buildEvent('series_2026-05-21', ['series']);
+      localStorage.setItem(
+        'SUP_CAL_EVENTS_CACHE',
+        JSON.stringify([{ items: [instance, sibling] }]),
+      );
+
+      service.skipCalendarEvents([instance.id]);
+
+      expect(service.skippedEventIds$.getValue()).toEqual([instance.id, 'series']);
+    });
+
+    it('should not add ids that are already skipped', () => {
+      service.skipCalendarEvent(buildEvent('kept'));
+
+      service.skipCalendarEvents(['kept']);
+
+      expect(service.skippedEventIds$.getValue()).toEqual(['kept']);
+    });
+  });
+
   describe('testConnection', () => {
     it('should return true when connection succeeds', async () => {
       const cfg = createMockProvider();

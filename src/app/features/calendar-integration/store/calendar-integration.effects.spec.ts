@@ -37,6 +37,7 @@ describe('CalendarIntegrationEffects pollChanges$ startup guard', () => {
   let isInitialSyncDoneSyncSpy: jasmine.Spy;
   let isInSyncWindowSpy: jasmine.Spy;
   let unskipCalendarEventsSpy: jasmine.Spy;
+  let skipCalendarEventsSpy: jasmine.Spy;
   let localActions$: Subject<Action>;
   let taskStateForSelector: TaskState & {
     dismissedCalendarAutoImportEventIdsByProvider?: Record<string, string[]>;
@@ -94,6 +95,7 @@ describe('CalendarIntegrationEffects pollChanges$ startup guard', () => {
     isInSyncWindowSpy = jasmine.createSpy('isInSyncWindow').and.returnValue(false);
     getCachedEventsSpy = jasmine.createSpy('getCachedEvents').and.returnValue([]);
     unskipCalendarEventsSpy = jasmine.createSpy('unskipCalendarEvents');
+    skipCalendarEventsSpy = jasmine.createSpy('skipCalendarEvents');
     localActions$ = new Subject<Action>();
     isOnline$ = new BehaviorSubject<boolean>(true);
 
@@ -134,6 +136,7 @@ describe('CalendarIntegrationEffects pollChanges$ startup guard', () => {
             requestEvents$: requestEvents$Spy,
             getCachedEvents: getCachedEventsSpy,
             unskipCalendarEvents: unskipCalendarEventsSpy,
+            skipCalendarEvents: skipCalendarEventsSpy,
             skippedEventIds$: new BehaviorSubject<string[]>([]),
           },
         },
@@ -457,6 +460,50 @@ describe('CalendarIntegrationEffects pollChanges$ startup guard', () => {
       localActions$.next(TaskSharedActions.deleteTasks({ taskIds: ['a', 'b'], tasks }));
 
       expect(unskipCalendarEventsSpy).toHaveBeenCalledOnceWith(['a-issue']);
+    });
+  });
+
+  describe('skipEventsOfRestoredTasks$', () => {
+    const buildTask = (id: string, issueType?: 'ICAL' | 'JIRA'): Task =>
+      ({
+        id,
+        issueId: `${id}-issue`,
+        issueType,
+        issueProviderId: issueType && PROVIDER_ID,
+      }) as Task;
+
+    const restore = (task: TaskWithSubTasks): void => {
+      localActions$.next(
+        TaskSharedActions.restoreDeletedTask({
+          task,
+          tagTaskIdMap: {},
+          deletedTaskEntities: { [task.id]: task },
+        }),
+      );
+    };
+
+    beforeEach(() => {
+      sub = effects.skipEventsOfRestoredTasks$.subscribe();
+    });
+
+    it('skips the events of a restored task and its subtasks', () => {
+      const task = {
+        ...buildTask('parent', 'ICAL'),
+        subTasks: [buildTask('sub', 'ICAL'), buildTask('other', 'JIRA')],
+      } as TaskWithSubTasks;
+
+      restore(task);
+
+      expect(skipCalendarEventsSpy).toHaveBeenCalledOnceWith([
+        'parent-issue',
+        'sub-issue',
+      ]);
+    });
+
+    it('handles a restored task without a subTasks array', () => {
+      restore(buildTask('parent', 'ICAL') as TaskWithSubTasks);
+
+      expect(skipCalendarEventsSpy).toHaveBeenCalledOnceWith(['parent-issue']);
     });
   });
 

@@ -277,6 +277,24 @@ export class CalendarIntegrationEffects {
     { dispatch: false },
   );
 
+  /**
+   * Undo puts the task back, so skip its event again. The due-event banner only
+   * checks the skip list, and a restored task would otherwise show it.
+   */
+  skipEventsOfRestoredTasks$ = createEffect(
+    () =>
+      this._actions$.pipe(
+        ofType(TaskSharedActions.restoreDeletedTask),
+        tap(({ task }) => {
+          const tasks = [task, ...(task.subTasks ?? [])];
+          this._calendarIntegrationService.skipCalendarEvents(
+            getCalendarAutoImportDismissals(tasks).map(({ issueId }) => issueId),
+          );
+        }),
+      ),
+    { dispatch: false },
+  );
+
   private _currentlyShownBanners$ = new BehaviorSubject<
     { id: string; calEv: CalendarIntegrationEvent; calProvider: IssueProviderCalendar }[]
   >([]);
