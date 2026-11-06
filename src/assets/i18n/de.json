@@ -197,7 +197,7 @@
         "ADD_NEW_BOARD": "Neues Board hinzufügen",
         "CONFIRM_DELETE": "Möchtest du dieses Board wirklich löschen?",
         "CREATE_NEW_TAG_BTN": "Tag erstellen",
-        "CREATE_NEW_TAG_MSG": "1 neuer Tag muss erstellt werden, damit dieses Board funktioniert",
+        "CREATE_NEW_TAG_MSG": "1 neues Tag muss erstellt werden, damit dieses Board funktioniert",
         "CREATE_NEW_TAGS_BTN": "Tags erstellen",
         "CREATE_NEW_TAGS_MSG": "{{nr}} neue Tags müssen erstellt werden, damit dieses Board funktioniert",
         "EDIT_BOARD": "Board bearbeiten",
@@ -1729,27 +1729,27 @@
     },
     "TAG": {
       "D_CREATE": {
-        "CREATE": "Stichwort erstellen"
+        "CREATE": "Tag erstellen"
       },
       "D_DELETE": {
-        "CONFIRM_MSG": "Möchtest du das Stichwort \"{{tagName}}\" wirklich löschen? Es wird aus allen Aufgaben entfernt. Das kann nicht rückgängig gemacht werden."
+        "CONFIRM_MSG": "Möchtest du das Tag \"{{tagName}}\" wirklich löschen? Es wird aus allen Aufgaben entfernt. Das kann nicht rückgängig gemacht werden."
       },
       "D_EDIT": {
-        "ADD": "Stichworte für \"{{title}}\" hinzufügen",
-        "EDIT": "Stichworte für \"{{title}}\" bearbeiten",
-        "LABEL": "Stichworte",
-        "PLACEHOLDER": "+ Stichwort hinzufügen"
+        "ADD": "Tags für \"{{title}}\" hinzufügen",
+        "EDIT": "Tags für \"{{title}}\" bearbeiten",
+        "LABEL": "Tags",
+        "PLACEHOLDER": "+ Tag hinzufügen"
       },
       "FORM_BASIC": {
         "D_COLOR": "Wenn nicht gesetzt, wird standardmäßig die Primärfarbe des Themes verwendet.",
         "L_COLOR": "Farbe (wenn undefinierte primäre Themenfarbe verwendet wird)",
         "L_ICON": "Symbol",
-        "L_TITLE": "Stichwortname",
+        "L_TITLE": "Tag-Name",
         "TITLE": "Grundeinstellungen"
       },
       "S": {
-        "ARCHIVE_CLEANUP_FAILED": "Bereinigung archivierter Daten für gelöschten Tag fehlgeschlagen",
-        "UPDATED": "Die Stichwort-Einstellungen wurden aktualisiert"
+        "ARCHIVE_CLEANUP_FAILED": "Bereinigung archivierter Daten für gelöschtes Tag fehlgeschlagen",
+        "UPDATED": "Die Tag-Einstellungen wurden aktualisiert"
       },
       "TTL": {
         "ADD_NEW_TAG": "Neues Tag hinzufügen"
@@ -1778,15 +1778,15 @@
     "TASK": {
       "ADD_TASK_BAR": {
         "ADD_EXISTING_TASK": "Vorhandene Aufgabe hinzufügen \"{{taskTitle}}\"",
-        "CREATE_NEW_TAGS": "Neue Stichworte erstellen",
+        "CREATE_NEW_TAGS": "Neue Tags erstellen",
         "DUE_BUTTON": "Planen",
         "ESTIMATE_BUTTON": "Schätzung",
         "NOTE_PLACEHOLDER": "Notiz hinzufügen… (Ctrl+Enter, um Aufgabe hinzuzufügen)",
-        "PLACEHOLDER_CREATE": "Ein Aufgabentitel #Stichwort @16:00",
+        "PLACEHOLDER_CREATE": "Ein Aufgabentitel #Tag @16:00",
         "PLACEHOLDER_SEARCH": "Vorhandene Aufgabe oder Vorgänge hinzufügen...",
         "REPEAT_BUTTON": "Wiederholen",
         "SEARCH_INFO_TEXT": "Suchen und Hinzufügen von Vorgängen und Aufgaben aus dem Archiv und anderen Projekten",
-        "TAGS_BUTTON": "Stichworte",
+        "TAGS_BUTTON": "Tags",
         "TODAY": "Heute",
         "TOGGLE_ADD_TOP_OR_BOTTOM": "Umschalten: Aufgabe oben oder unten in der Liste hinzufügen",
         "TOGGLE_ADD_TO_BACKLOG_TODAY": "Umschalten: Aufgabe zum Backlog / zur heutigen Liste hinzufügen",
@@ -1800,7 +1800,7 @@
         "TOOLTIP_CLEAR_DEADLINE": "Clear deadline",
         "TOOLTIP_CLEAR_ESTIMATE": "Schätzung löschen",
         "TOOLTIP_CLEAR_REPEAT": "Wiederholungseinstellung löschen",
-        "TOOLTIP_CLEAR_TAGS": "Stichworte löschen",
+        "TOOLTIP_CLEAR_TAGS": "Tags löschen",
         "TOOLTIP_DISABLE_SEARCH": "Vorgangssuche deaktivieren (Ctrl+2)",
         "TOOLTIP_ENABLE_SEARCH": "Vorgangssuche aktivieren (Ctrl+2)",
         "TOOLTIP_NOTE": "Notiz (Ctrl+2)"
@@ -2141,7 +2141,7 @@
         "ADVANCED_CFG": "Erweiterte Konfiguration",
         "EDIT": "Bearbeite Einstellung der wiederkehrenden Aufgabe",
         "HEATMAP_LABEL": "Aktivität",
-        "TAG_LABEL": "Stichwörter zum Hinzufügen",
+        "TAG_LABEL": "Tags zum Hinzufügen",
         "TIME_SPENT_THIS_MONTH": "Diesen Monat",
         "TIME_SPENT_THIS_WEEK": "Diese Woche",
         "TIME_SPENT_TOTAL": "Gesamt"
@@ -2382,7 +2382,7 @@
           "PARENT_TASK_TITLES_ONLY": "Nur übergeordnete Aufgabentitel",
           "PROJECTS": "Projektnamen",
           "STARTED_WORKING": "Angefangen zu arbeiten",
-          "TAGS": "Stichworte",
+          "TAGS": "Tags",
           "TASK_SUBTASK": "Aufgabe / Unteraufgabe",
           "TIME_AS_CLOCK": "Aufgewandte Zeit im Uhrzeit Format (z. B. 5:23)",
           "TIME_AS_MILLISECONDS": "Aufgewandte Zeit in Millisekunden",
@@ -2668,7 +2668,7 @@
       "TASK_ADD_SUB_TASK": "Unteraufgabe hinzufügen",
       "TASK_DELETE": "Aufgabe löschen",
       "TASK_DUPLICATE": "Aufgabe duplizieren",
-      "TASK_EDIT_TAGS": "Stichworte bearbeiten",
+      "TASK_EDIT_TAGS": "Tags bearbeiten",
       "TASK_EDIT_TITLE": "Titel bearbeiten",
       "TASK_MOVE_TO_PROJECT": "Öffne die Aufgabe zum Verschieben in das Projektmenü",
       "TASK_OPEN_CONTEXT_MENU": "Öffne das Aufgabenkontextmenü",
@@ -2960,11 +2960,11 @@
     "BOARDS": "Boards",
     "COPY_TASK_LIST_MARKDOWN": "In die Zwischenablage kopieren",
     "CREATE_PROJECT": "Projekt erstellen",
-    "CREATE_TAG": "Stichwort erstellen",
+    "CREATE_TAG": "Tag erstellen",
     "ARCHIVE_PROJECT": "Projekt archivieren",
     "COMPLETE_PROJECT": "Projekt abschließen",
     "DELETE_PROJECT": "Projekt löschen",
-    "DELETE_TAG": "Stichwort löschen",
+    "DELETE_TAG": "Tag löschen",
     "DISABLE_FEATURE": "Funktion deaktivieren",
     "DONATE": "Unterstütze uns",
     "DUPLICATE_PROJECT": "Duplikat",
@@ -3014,7 +3014,7 @@
       "OFFLINE": "Du bist offline – Synchronisierung wird fortgesetzt, wenn wieder online",
       "SYNCING": "Synchronisierung läuft…"
     },
-    "TAGS": "Stichworte",
+    "TAGS": "Tags",
     "TASK_LIST": "Aufgabenliste",
     "TASKS": "Aufgaben",
     "TOGGLE_SHOW_BOOKMARKS": "Lesezeichen ein-/ausblenden",
@@ -3087,9 +3087,9 @@
       "ADD_SUBTASK": "Teile sie auf: Rechtsklick auf die Aufgabe und {{subtaskIcon}} <b>Unteraufgabe hinzufügen</b> wählen",
       "COUNTER": "{{nr}} von {{total}}",
       "NEXT": "Weiter ›",
-      "ORGANIZE": "Lege ein eigenes <b>Projekt</b> an, um Aufgaben zu gruppieren, oder ein <b>Stichwort</b>, um sie zu markieren. Erstelle eines mit +",
-      "ORGANIZE_COLLAPSED": "Lege ein eigenes <b>Projekt</b> an, um Aufgaben zu gruppieren, oder ein <b>Stichwort</b>, um sie zu markieren. Klappe die Seitenleiste mit {{expandIcon}} aus, um eines zu erstellen",
-      "ORGANIZE_PHONE": "Projekte und Stichworte findest du unter ☰. Lege ein eigenes <b>Projekt</b> an, um Aufgaben zu gruppieren, oder ein <b>Stichwort</b>, um sie zu markieren",
+      "ORGANIZE": "Lege ein eigenes <b>Projekt</b> an, um Aufgaben zu gruppieren, oder ein <b>Tag</b>, um sie zu markieren. Erstelle eines mit +",
+      "ORGANIZE_COLLAPSED": "Lege ein eigenes <b>Projekt</b> an, um Aufgaben zu gruppieren, oder ein <b>Tag</b>, um sie zu markieren. Klappe die Seitenleiste mit {{expandIcon}} aus, um eines zu erstellen",
+      "ORGANIZE_PHONE": "Projekte und Tags findest du unter ☰. Lege ein eigenes <b>Projekt</b> an, um Aufgaben zu gruppieren, oder ein <b>Tag</b>, um sie zu markieren",
       "PLANNER": "Plane die nächsten Tage im {{plannerIcon}} <b>Planer</b>",
       "TASK_MENU_TOUCH": "Wische eine Aufgabe nach links für ihr Menü: {{playIcon}} <b>Starte die Erfassung der Zeit</b>, {{subtaskIcon}} <b>Unteraufgabe hinzufügen</b>",
       "TASK_MENU_TOUCH_NO_TRACKING": "Wische eine Aufgabe nach links für ihr Menü, z. B. {{subtaskIcon}} <b>Unteraufgabe hinzufügen</b>",
@@ -3282,7 +3282,7 @@
     "SETUP_ISSUE_PROVIDER": "Im Ticket-Anbieter-Panel einrichten",
     "SIDE_PANEL_LABEL_REQUIRED": "Beschriftung der Schaltfläche im Seitenbereich ist erforderlich",
     "SIDE_PANEL_ONCLICK_REQUIRED": "Seitenpanel-Schaltfläche onClick-Handler ist erforderlich",
-    "TAGS_DO_NOT_EXIST": "Ein oder mehrere Stichworte existieren nicht.",
+    "TAGS_DO_NOT_EXIST": "Ein oder mehrere Tags existieren nicht.",
     "TASK_NOT_FOUND": "Aufgabe mit ID '{{taskId}}' nicht gefunden",
     "TASKS_NOT_IN_PROJECT": "Eine oder mehrere Aufgaben sind nicht im Projekt '{{contextId}}'",
     "TASKS_NOT_SUBTASKS": "Eine oder mehrere Aufgaben sind keine Unteraufgaben von '{{contextId}}'",
@@ -3333,7 +3333,7 @@
       "TASKS": "Aufgaben",
       "TIME_TRACKING": "Zeit & Tracking"
     },
-    "TAG_SETTINGS": "Stichwort-spezifische Einstellungen",
+    "TAG_SETTINGS": "Tag-spezifische Einstellungen",
     "TOGGLE_DARK_MODE": "Dunkelmodus umschalten",
     "UPDATE_APP": "App aktualisieren"
   },
