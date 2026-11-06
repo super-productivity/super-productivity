@@ -64,37 +64,46 @@ describe('DialogSyncDevicesComponent last seen date', () => {
     fixture.detectChanges();
   });
 
-  for (const [locale, expected] of [
-    ['en', '25 Oct 2026 14:03:00'],
-    ['sv', '25 okt. 2026 14:03:00'],
-    ['de', '25 Okt. 2026 14:03:00'],
-    ['ja', '25 10月 2026 14:03:00'],
-    ['zh', '25 10月 2026 14:03:00'],
-  ]) {
-    it(`uses ${locale} month names and a 24-hour clock under ISO 8601`, () => {
+  for (const locale of ['en', 'sv', 'de', 'ja', 'zh']) {
+    it(`uses a numeric ISO timestamp with the ${locale} UI language`, () => {
       textLocale.set(locale);
       fixture.detectChanges();
-      expect(lastSeen().trim()).toBe(`Last seen ${expected}`);
+      expect(lastSeen().trim()).toBe('Last seen 2026-10-25 14:03:00');
     });
   }
 
-  it('updates month names when the UI language changes under ISO 8601', () => {
-    expect(lastSeen()).toContain('Oct');
-    expect(lastSeen()).not.toContain('okt.');
-    expect(lastSeen()).toContain('14:03:00');
-    expect(lastSeen()).not.toContain('PM');
+  it('keeps the ISO timestamp when the UI language changes', () => {
+    expect(lastSeen().trim()).toBe('Last seen 2026-10-25 14:03:00');
 
     textLocale.set('sv');
     fixture.detectChanges();
-    expect(lastSeen()).toContain('okt.');
+    expect(lastSeen().trim()).toBe('Last seen 2026-10-25 14:03:00');
   });
 
-  it('keeps the configured medium timestamp outside ISO 8601', () => {
+  it('zero-pads the numeric ISO date and clock fields', () => {
+    fixture.componentInstance.devices.update((devices) =>
+      devices.map((device) => ({
+        ...device,
+        lastSeenAt: new Date(2026, 0, 5, 4, 3, 9).getTime(),
+      })),
+    );
+    fixture.detectChanges();
+    expect(lastSeen().trim()).toBe('Last seen 2026-01-05 04:03:09');
+  });
+
+  it('keeps the configured medium timestamp when changing non-ISO locales', () => {
     currentLocale.set('en-US');
     textLocale.set('en-US');
     fixture.detectChanges();
     expect(lastSeen()).toContain(
       new DatePipe('en-US').transform(new Date(2026, 9, 25, 14, 3).getTime(), 'medium')!,
+    );
+
+    currentLocale.set('de');
+    textLocale.set('de');
+    fixture.detectChanges();
+    expect(lastSeen()).toContain(
+      new DatePipe('de').transform(new Date(2026, 9, 25, 14, 3).getTime(), 'medium')!,
     );
   });
 });

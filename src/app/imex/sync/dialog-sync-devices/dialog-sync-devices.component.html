@@ -33,10 +33,10 @@
                           device.lastSeenAt
                           | localeDate
                             : (dateTimeFormatService.isoTextLocale()
-                                ? 'd MMM y HH:mm:ss'
+                                ? 'yyyy-MM-dd HH:mm:ss'
                                 : 'medium')
                             : undefined
-                            : dateTimeFormatService.textLocale(),
+                            : dateTimeFormatService.currentLocale(),
                       }
               }}
             </div>
